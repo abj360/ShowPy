@@ -75,3 +75,11 @@ the checker receives.
 ## References
 
 - ADR 0001; CLAUDE.md rule 5; reference sections "stage.choreo.engine" and "paths".
+
+## Addendum 2026-11-11: probe density for segments
+
+A Hypothesis property test checks the segment error at nine points per segment, not just at
+the probes. It found a deviation of 0.0113 m against a 0.01 m tolerance when only ¼, ½ and ¾
+were probed. Subdivision now probes at every eighth (7 points) and accepts a segment only
+when every probe is within `tol / 2`. That leaves margin for the error between probes. 150
+random rows (delays, easing, waypoints, curves) now pass at 9 points per segment.

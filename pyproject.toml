@@ -52,6 +52,7 @@ convention = "google"
 # RUF012: pydantic copies field defaults per instance, so {} defaults are safe.
 [tool.ruff.lint.per-file-ignores]
 "stage/**/models.py" = ["RUF012"]
+"stage/**/*_models.py" = ["RUF012"]
 "tests/**" = ["D"]
 
 [tool.ruff.format]

@@ -1,0 +1,328 @@
+#!/usr/bin/env python3
+
+"""
+engine.py --- PathEngine, the only code that turns path instructions into positions over time
+
+The canvas, checker, exports and analysis all ask this engine, so they never disagree.
+See ADR 0002 for the compile rules.
+
+Contains:
+    PathEngine: compiles a show's transitions and answers where, how and how fast spots move
+    PathEngine.compile(): builds every plan of one transition
+    PathEngine.compile_all(): builds every transition of the show
+    PathEngine.locate(): maps a global count to (transition, local count)
+    PathEngine.position(): returns a spot's position at a count
+    PathEngine.positions(): returns many spots' positions at a count
+    PathEngine.facing_at(): returns a spot's facing at a count
+    PathEngine.velocity_at(): returns a spot's velocity in meters per count
+    PathEngine.on_field_at(): reports whether a spot is on the field at a count
+    PathEngine.state_at(): returns a spot's full state at a count
+    PathEngine.sample(): returns every spot's state at a count
+    PathEngine.frames(): yields frames between two counts, per count or per second
+    PathEngine.segments(): returns time-linear segments for exact collision checks
+    PathEngine.path_geometry(): returns a spot's drawn path for the canvas
+    PathEngine.invalidate(): clears cached compiles
+"""
+
+import bisect
+import itertools
+from collections.abc import Iterable, Iterator, Sequence
+
+import numpy as np
+
+from stage.choreo.engine_compile import compile_plan, plan_positions
+from stage.choreo.engine_facing import FacingContext, plan_facing, validate_facing
+from stage.choreo.engine_models import (
+    CompiledTransition,
+    EntityState,
+    Frame,
+    MotionPlan,
+    MotionSegment,
+)
+from stage.choreo.models import FacingOverride
+from stage.choreo.motion import DEFAULT_MOTIONS, MotionRegistry, turn
+from stage.core.errors import UnknownRefError
+from stage.core.ids import SetId, SpotId, TransitionId
+from stage.core.selection import Selection
+from stage.core.types import Count, Degrees, Point, Points
+from stage.core.util import close_matches
+from stage.show.models import Show
+from stage.time.clock import count_to_seconds, seconds_to_count
+
+DEFAULT_CURVE_TOL = 0.01
+DEFAULT_SEGMENT_TOL = 0.02
+VELOCITY_STEP = 1e-4
+MOVING_SPEED = 1e-9
+MAX_SEGMENT_DEPTH = 20
+PROBE_SHARES = np.arange(1, 8) / 8
+PROBE_TOL_SHARE = 0.5
+ALL = "all"
+
+
+class PathEngine:
+    """Compiles a show's transitions and answers where, how and how fast spots move.
+
+    Attributes:
+        show: The show being animated; frozen, so caches never go stale.
+        curve_tol: Chord tolerance for drawn paths.
+        motions: Registry that resolves custom motion names.
+    """
+
+    def __init__(
+        self,
+        show: Show,
+        curve_tol: float = DEFAULT_CURVE_TOL,
+        cache: bool = True,
+        motions: MotionRegistry = DEFAULT_MOTIONS,
+    ) -> None:
+        self.show = show
+        self.curve_tol = curve_tol
+        self.motions = motions
+        self._use_cache = cache
+        self._cache: dict[TransitionId, CompiledTransition] = {}
+        self._starts = list(itertools.accumulate((s.counts for s in show.sets[1:]), initial=0.0))
+        self._ids = show.cast.ids() or (show.sets[0].entity_ids() if show.sets else ())
+
+    def _set_start(self, set_id: SetId) -> Count:
+        return self._starts[self.show.set_index(set_id)]
+
+    def compile(self, tid: TransitionId) -> CompiledTransition:
+        """Builds every plan of one transition; raises ContinuityError on a missed target."""
+        if self._use_cache and tid in self._cache:
+            return self._cache[tid]
+        spec = self.show.transition(tid)
+        a, b = self.show.set(tid[0]), self.show.set(tid[1])
+        plans = {}
+        for entity in self._ids:
+            plan = compile_plan(spec.row(entity), spec, a.get(entity), b.get(entity), self.motions)
+            validate_facing(plan)
+            plans[entity] = plan
+        compiled = CompiledTransition(
+            id=tid, counts=spec.counts, t_global0=self._set_start(tid[0]), plans=plans
+        )
+        if self._use_cache:
+            self._cache[tid] = compiled
+        return compiled
+
+    def compile_all(self) -> dict[TransitionId, CompiledTransition]:
+        """Builds every transition of the show, in show order."""
+        return {tid: self.compile(tid) for tid in self.show.transition_ids()}
+
+    def locate(self, t: Count) -> tuple[TransitionId | None, float]:
+        """Maps a global count to (transition, local count); None before or after the show."""
+        tids = self.show.transition_ids()
+        if not tids or t < 0 or t > self._starts[-1]:
+            return None, 0.0
+        index = max(bisect.bisect_left(self._starts, t), 1)
+        return tids[index - 1], t - self._starts[index - 1]
+
+    def _plan(self, entity: SpotId, tid: TransitionId) -> MotionPlan:
+        plans = self.compile(tid).plans
+        if entity not in plans:
+            close = close_matches(entity, plans)
+            raise UnknownRefError(
+                f"unknown spot {entity!r}",
+                hint=f"did you mean {', '.join(close)}?" if close else "check the spot id",
+                context={"entity": entity},
+            )
+        return plans[entity]
+
+    def _resolve(self, t: Count, local: TransitionId | None) -> tuple[TransitionId | None, float]:
+        return (local, t) if local is not None else self.locate(t)
+
+    def _static_set(self, t: Count) -> int:
+        return 0 if t <= 0 else len(self.show.sets) - 1
+
+    def _static_point(self, entity: SpotId, t: Count) -> Point:
+        return self.show.sets[self._static_set(t)].get(entity).point
+
+    def position(self, entity: SpotId, t: Count, local: TransitionId | None = None) -> Points:
+        """Returns a spot's position (shape (2,)) at a global count, or a local one with `local`."""
+        tid, tau = self._resolve(t, local)
+        if tid is None:
+            return np.asarray(self._static_point(entity, t), dtype=float)
+        point: Points = plan_positions(self._plan(entity, tid), np.array([tau]))[0]
+        return point
+
+    def positions(self, t: Count, sel: str | Sequence[SpotId] | Selection = ALL) -> Points:
+        """Returns positions (N, 2) at a global count, in selection order."""
+        ids = self._ids if sel == ALL else tuple(sel)
+        return np.array([self.position(e, t) for e in ids]).reshape(-1, 2)
+
+    def _point_at(self, entity: str, t: Count) -> Point:
+        p = self.position(entity, t)
+        return float(p[0]), float(p[1])
+
+    def _path_facing(self, entity: SpotId, tid: TransitionId, tau: float) -> Degrees:
+        compiled = self.compile(tid)
+        ctx = FacingContext(self._point_at, compiled.t_global0, compiled.counts)
+        return plan_facing(self._plan(entity, tid), tau, ctx)
+
+    def facing_at(self, entity: SpotId, t: Count, local: TransitionId | None = None) -> Degrees:
+        """Returns a spot's facing; facing overrides win inside their count ranges."""
+        tid, tau = self._resolve(t, local)
+        if tid is None:
+            return self.show.sets[self._static_set(t)].get(entity).facing
+        base = self._path_facing(entity, tid, tau)
+        t_global = self.compile(tid).t_global0 + tau
+        for override in self.show.facing_overrides:
+            if entity in self._override_ids(override):
+                base = self._apply_override(override, entity, t_global, base)
+        return base
+
+    def _override_ids(self, override: FacingOverride) -> tuple[SpotId, ...]:
+        if override.entities == ALL:
+            return self._ids
+        if isinstance(override.entities, str):
+            return (override.entities,)
+        return tuple(override.entities)
+
+    def _apply_override(
+        self, override: FacingOverride, entity: SpotId, t: Count, base: Degrees
+    ) -> Degrees:
+        span = override.turn_counts
+        if t < override.start or t > override.end + span:
+            return base
+        forced = self._override_facing(override, entity, min(t, override.end), base)
+        if t > override.end:
+            return turn(forced, base, (t - override.end) / span) if span > 0 else base
+        if span > 0 and t - override.start < span:
+            return turn(base, forced, (t - override.start) / span)
+        return forced
+
+    def _override_facing(
+        self, override: FacingOverride, entity: SpotId, t: Count, base: Degrees
+    ) -> Degrees:
+        tid, tau = self.locate(t)
+        if tid is None:
+            return base
+        plan = self._plan(entity, tid).model_copy(
+            update={"facing_mode": override.mode, "facing_value": override.value}
+        )
+        compiled = self.compile(tid)
+        validate_facing(plan)
+        ctx = FacingContext(self._point_at, compiled.t_global0, compiled.counts)
+        start, end = plan.window
+        inside = min(max(tau, start + VELOCITY_STEP), end - VELOCITY_STEP)
+        from_mode = plan.model_copy(update={"turn_counts": 0.0})
+        return plan_facing(from_mode, inside, ctx) if plan.curve is not None else base
+
+    def velocity_at(self, entity: SpotId, t: Count, local: TransitionId | None = None) -> Points:
+        """Returns velocity in meters per count by a central difference of the plan's positions."""
+        tid, tau = self._resolve(t, local)
+        if tid is None:
+            return np.zeros(2)
+        counts = self.compile(tid).counts
+        lo, hi = max(tau - VELOCITY_STEP, 0.0), min(tau + VELOCITY_STEP, counts)
+        if hi <= lo:
+            return np.zeros(2)
+        pts = plan_positions(self._plan(entity, tid), np.array([lo, hi]))
+        velocity: Points = (pts[1] - pts[0]) / (hi - lo)
+        return velocity
+
+    def on_field_at(self, entity: SpotId, t: Count, local: TransitionId | None = None) -> bool:
+        """Reports whether a spot is on the field: previous set, either while moving, next set."""
+        tid, tau = self._resolve(t, local)
+        if tid is None:
+            return self.show.sets[self._static_set(t)].get(entity).on_field
+        plan = self._plan(entity, tid)
+        start, end = plan.window
+        if tau <= start:
+            return plan.start.on_field
+        if tau >= end:
+            return plan.end.on_field
+        return plan.start.on_field or plan.end.on_field
+
+    def state_at(self, entity: SpotId, t: Count, local: TransitionId | None = None) -> EntityState:
+        """Returns a spot's position, facing, velocity and field state."""
+        p = self.position(entity, t, local)
+        v = self.velocity_at(entity, t, local)
+        return EntityState(
+            entity=entity,
+            position=(float(p[0]), float(p[1])),
+            facing=self.facing_at(entity, t, local),
+            velocity=(float(v[0]), float(v[1])),
+            moving=bool(np.linalg.norm(v) > MOVING_SPEED),
+            on_field=self.on_field_at(entity, t, local),
+        )
+
+    def sample(self, t: Count) -> Frame:
+        """Returns every spot's state at a global count."""
+        tid, tau = self.locate(t)
+        return Frame(t=t, tid=tid, tau=tau, states=tuple(self.state_at(e, t) for e in self._ids))
+
+    def frames(
+        self, t0: Count, t1: Count, per_count: int = 8, fps: float | None = None
+    ) -> Iterator[Frame]:
+        """Yields frames from t0 to t1 inclusive, per count or, with fps, per second of music."""
+        if fps is None:
+            steps = max(round((t1 - t0) * per_count), 0)
+            times = np.linspace(t0, t1, steps + 1)
+        else:
+            s0, s1 = (
+                count_to_seconds(self.show.timeline, t0),
+                count_to_seconds(self.show.timeline, t1),
+            )
+            seconds = np.linspace(s0, s1, max(round((s1 - s0) * fps), 0) + 1)
+            times = np.array([seconds_to_count(self.show.timeline, float(s)) for s in seconds])
+        for t in times:
+            yield self.sample(float(t))
+
+    def segments(self, tid: TransitionId, tol: float = DEFAULT_SEGMENT_TOL) -> list[MotionSegment]:
+        """Returns contiguous time-linear segments per spot, accurate to `tol` meters."""
+        compiled = self.compile(tid)
+        out: list[MotionSegment] = []
+        for entity, plan in compiled.plans.items():
+            stations = self._stations(plan, compiled.counts, tol)
+            pts = plan_positions(plan, np.array(stations))
+            for (t0, t1), (p0, p1) in zip(
+                itertools.pairwise(stations), itertools.pairwise(pts), strict=True
+            ):
+                out.append(
+                    MotionSegment(
+                        entity=entity, tid=tid, t0=t0, t1=t1,
+                        p0=(float(p0[0]), float(p0[1])), p1=(float(p1[0]), float(p1[1])),
+                    )
+                )  # fmt: skip
+        return out
+
+    def _stations(self, plan: MotionPlan, counts: float, tol: float) -> list[float]:
+        if not plan.moves:
+            return [0.0, counts]
+        edges = sorted({0.0, counts, *plan.knots_t})
+        stations = [edges[0]]
+        for lo, hi in itertools.pairwise(edges):
+            stations.extend(self._subdivide(plan, lo, hi, tol, 0))
+        return stations
+
+    def _subdivide(
+        self, plan: MotionPlan, lo: float, hi: float, tol: float, depth: int
+    ) -> list[float]:
+        probes = lo + PROBE_SHARES * (hi - lo)
+        pts = plan_positions(plan, np.concatenate([[lo, hi], probes]))
+        linear = pts[0] + np.outer(PROBE_SHARES, pts[1] - pts[0])
+        if (
+            depth >= MAX_SEGMENT_DEPTH
+            or np.max(np.linalg.norm(pts[2:] - linear, axis=1)) <= tol * PROBE_TOL_SHARE
+        ):
+            return [hi]
+        mid = (lo + hi) / 2
+        return self._subdivide(plan, lo, mid, tol, depth + 1) + self._subdivide(
+            plan, mid, hi, tol, depth + 1
+        )
+
+    def path_geometry(self, entity: SpotId, tid: TransitionId) -> Points:
+        """Returns the drawn path of a spot in a transition, start to end."""
+        plan = self._plan(entity, tid)
+        if plan.curve is None:
+            return np.asarray([plan.start.point], dtype=float)
+        return plan.curve.to_polyline(self.curve_tol)
+
+    def invalidate(
+        self, sets: Iterable[SetId] = (), transitions: Iterable[TransitionId] = ()
+    ) -> None:
+        """Clears cached compiles touching the given sets or transitions."""
+        set_ids = set(sets)
+        for tid in list(self._cache):
+            if tid in set(transitions) or set_ids & set(tid):
+                del self._cache[tid]
