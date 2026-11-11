@@ -11,9 +11,11 @@ Contains:
     EntityState: holds everything about one spot at one moment
     Frame: holds every spot's state at one moment
     MotionStats: summarizes how varied the movement of a transition is
+    GapInfo: describes the tightest moment between two spots
+    Fix: describes one suggested change that opens a gap
 """
 
-from typing import Literal
+from typing import Any, Literal
 
 from stage.choreo.models import Easing, FacingMode, PathStyle, Placement, TurnDirection
 from stage.core.ids import SpotId, TransitionId
@@ -166,3 +168,36 @@ class MotionStats(FrozenModel):
     moving_share: float
     speed_spread: float
     direction_variety: float
+
+
+class GapInfo(FrozenModel):
+    """Describes the tightest moment between two spots in a transition.
+
+    Attributes:
+        a: First spot (sorted order).
+        b: Second spot.
+        tau: Local count of closest approach.
+        gap: Meters between footprints; negative means they overlap.
+    """
+
+    a: SpotId
+    b: SpotId
+    tau: float
+    gap: Meters
+
+
+class Fix(FrozenModel):
+    """Describes one suggested change that opens a gap; advisory, the checker decides.
+
+    Attributes:
+        kind: delay, waypoint, reassign or stagger.
+        params: Arguments for apply_fix (entity, counts, point, at, order, step).
+        new_gap: Gap between the pair after the change.
+        max_speed_after: Fastest instant speed of the changed spot after the change, m/count.
+    """
+
+    kind: Literal["delay", "waypoint", "reassign", "stagger"]
+    # Any: parameters differ by fix kind (spot ids, counts, points).
+    params: dict[str, Any]
+    new_gap: Meters
+    max_speed_after: float
