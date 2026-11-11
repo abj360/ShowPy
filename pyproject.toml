@@ -42,6 +42,7 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
+allowed-confusables = ["–"]
 select = ["E", "W", "F", "I", "B", "UP", "N", "SIM", "RUF", "C4", "PT", "D"]
 ignore = ["D203", "D213", "D105", "D107", "D104", "D401", "D200", "D212", "D415", "D400", "D205"]
 
