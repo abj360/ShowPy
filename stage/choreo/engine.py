@@ -33,6 +33,7 @@ from collections.abc import Iterable, Iterator, Sequence
 
 import numpy as np
 
+from stage.cast.select import select
 from stage.choreo.engine_compile import compile_plan, plan_positions
 from stage.choreo.engine_facing import FacingContext, plan_facing, validate_facing
 from stage.choreo.engine_models import (
@@ -84,6 +85,7 @@ class PathEngine:
         self.motions = motions
         self._use_cache = cache
         self._cache: dict[TransitionId, CompiledTransition] = {}
+        self._override_cache: dict[int, tuple[SpotId, ...]] = {}
         self._starts = list(itertools.accumulate((s.counts for s in show.sets[1:]), initial=0.0))
         self._ids = show.cast.ids() or (show.sets[0].entity_ids() if show.sets else ())
 
@@ -169,17 +171,17 @@ class PathEngine:
             return self.show.sets[self._static_set(t)].get(entity).facing
         base = self._path_facing(entity, tid, tau)
         t_global = self.compile(tid).t_global0 + tau
-        for override in self.show.facing_overrides:
-            if entity in self._override_ids(override):
+        for index, override in enumerate(self.show.facing_overrides):
+            if entity in self._override_ids(index, override):
                 base = self._apply_override(override, entity, t_global, base)
         return base
 
-    def _override_ids(self, override: FacingOverride) -> tuple[SpotId, ...]:
-        if override.entities == ALL:
-            return self._ids
-        if isinstance(override.entities, str):
-            return (override.entities,)
-        return tuple(override.entities)
+    def _override_ids(self, index: int, override: FacingOverride) -> tuple[SpotId, ...]:
+        if index not in self._override_cache:
+            entities = override.entities
+            ids = self._ids if entities == ALL else select(self.show, entities).ids
+            self._override_cache[index] = ids
+        return self._override_cache[index]
 
     def _apply_override(
         self, override: FacingOverride, entity: SpotId, t: Count, base: Degrees

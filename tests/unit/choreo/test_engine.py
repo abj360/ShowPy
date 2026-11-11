@@ -306,3 +306,13 @@ def test_compile_all_and_invalidate() -> None:
     assert set(compiled[TID].plans) == {"T1", "T2", "T3", "T4"}
     engine.invalidate(transitions=[TID])
     assert engine.compile(TID).counts == 8.0
+
+
+def test_facing_override_resolves_selection_expressions() -> None:
+    base = with_rows({"T1": PathRow(entity="T1", facing_mode=FacingMode.TRAVEL)})
+    override = FacingOverride(
+        entities="T1-T2", mode=FacingMode.FIXED, value=270.0, start=2.0, end=4.0
+    )
+    engine = PathEngine(base.model_copy(update={"facing_overrides": (override,)}))
+    assert approx_equal(engine.facing_at("T2", 3.0), 270.0)
+    assert approx_equal(engine.facing_at("T3", 3.0), 0.0)
