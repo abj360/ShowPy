@@ -3,12 +3,11 @@
 """
 ids.py --- ID aliases plus parsing and formatting of sheet references and transition IDs
 
-Args:
+Contains:
     parse_ref(): reads `kind:id@version` into its parts
     format_ref(): writes a reference from its parts
     parse_tid(): reads `12→13` or `12->13` into a TransitionId
     format_tid(): writes a TransitionId as `12→13`
-
 """
 
 import re
@@ -40,7 +39,6 @@ def parse_ref(text: str) -> tuple[str, str, str | None]:
 
     >>> parse_ref("sheet:gym@1")
     ('sheet', 'gym', '1')
-
     """
     match = REF_PATTERN.match(text.strip())
     if match is None:

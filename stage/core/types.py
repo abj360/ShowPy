@@ -3,12 +3,11 @@
 """
 types.py --- shared type aliases plus the JSON-safe Box2, Box3 and Region models
 
-Args:
-    FrozenModel: base for every immutable, strict data class in the library
-    Box2: a 2D bounding box with size and center
-    Box3: a 3D bounding box
-    Region: an area stored as exterior and hole rings, convertible to Shapely
-
+Contains:
+    FrozenModel: provides the immutable, strict base for every data class
+    Box2: bounds stage-plane points and reports size and center
+    Box3: bounds world points
+    Region: stores an area as exterior and hole rings, convertible to Shapely
 """
 
 from typing import Self
@@ -44,7 +43,6 @@ class Box2(FrozenModel):
     Attributes:
         min: Lower-left corner.
         max: Upper-right corner.
-
     """
 
     min: Point
@@ -67,7 +65,6 @@ class Box3(FrozenModel):
     Attributes:
         min: Lowest corner.
         max: Highest corner.
-
     """
 
     min: Point3
@@ -80,7 +77,6 @@ class Region(FrozenModel):
     Attributes:
         exterior: Outer ring, not repeating the first point.
         holes: Inner rings cut out of the area.
-
     """
 
     exterior: Ring

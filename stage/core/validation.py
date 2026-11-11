@@ -3,11 +3,10 @@
 """
 validation.py --- ValidationIssue and ValidationReport shared by every structural validator
 
-Args:
-    ValidationIssue: one error or warning with location and hint
-    ValidationReport: issues plus an ok flag, rendered one line per issue
+Contains:
+    ValidationIssue: describes one error or warning with location and hint
+    ValidationReport: collects issues, reports ok, renders one line per issue
     ValidationReport.merge(): combines several reports into one
-
 """
 
 from typing import Literal
@@ -26,7 +25,6 @@ class ValidationIssue(FrozenModel):
         where: Location, e.g. `set 12` or `12→13 T4`.
         message: What is wrong.
         hint: What would make it valid.
-
     """
 
     level: Literal["error", "warning"]
@@ -45,7 +43,6 @@ class ValidationReport(FrozenModel):
 
     Attributes:
         issues: Every issue found, in discovery order.
-
     """
 
     issues: tuple[ValidationIssue, ...] = ()

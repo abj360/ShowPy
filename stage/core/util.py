@@ -3,7 +3,7 @@
 """
 util.py --- small shared helpers: ID ranges, float comparison, seeded randomness, hashing
 
-Args:
+Contains:
     natural_sort(): sorts IDs so T2 comes before T10
     parse_range(): expands `T1-T8` into IDs
     format_ranges(): compacts IDs into `T1–T4, T7`
@@ -15,7 +15,6 @@ Args:
     log(): emits a structured log line on the `stage` logger
     timer(): measures elapsed time of a block
     Timer: holds the elapsed milliseconds measured by timer()
-
 """
 
 import hashlib
@@ -198,7 +197,6 @@ class Timer:
 
     Attributes:
         elapsed_ms: Milliseconds between entering and leaving the block.
-
     """
 
     elapsed_ms: float = 0.0

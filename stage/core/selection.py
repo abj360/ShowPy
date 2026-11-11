@@ -3,9 +3,8 @@
 """
 selection.py --- Selection, the ordered duplicate-free set of spot IDs, and the Selector alias
 
-Args:
-    Selection: ordered unique IDs supporting |, &, -, len, iteration and `in`
-
+Contains:
+    Selection: holds ordered unique IDs and supports |, &, -, len, iteration and `in`
 """
 
 from collections.abc import Iterator, Sequence
@@ -22,7 +21,6 @@ class Selection(FrozenModel):
     Attributes:
         ids: Spot IDs in selection order.
         description: How the selection was made, for display.
-
     """
 
     ids: tuple[str, ...]

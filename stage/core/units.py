@@ -3,8 +3,8 @@
 """
 units.py --- the only unit conversion point, plus angle helpers for facings
 
-Args:
-    UnitRegistry: immutable map of unit names to meters per unit
+Contains:
+    UnitRegistry: maps unit names to meters per unit, immutably
     convert(): converts a length between two registered units
     register_unit(): returns a registry extended with one unit
     units(): lists the default units
@@ -13,7 +13,6 @@ Args:
     facing_vector(): converts a facing to a unit direction
     vector_facing(): converts a direction to a facing
     round_to(): rounds half away from zero to a precision
-
 """
 
 import math
@@ -31,7 +30,6 @@ class UnitRegistry(FrozenModel):
 
     Attributes:
         meters_per_unit: Unit name to meters per one unit.
-
     """
 
     meters_per_unit: dict[str, float]
@@ -75,7 +73,6 @@ def convert(
 
     >>> round(convert(3.0, "ft", "yd"), 6)
     1.0
-
     """
     return value * registry.factor(from_unit) / registry.factor(to_unit)
 

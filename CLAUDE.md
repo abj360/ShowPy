@@ -70,6 +70,8 @@ Each package: `models.py` holds data classes; other files hold functions.
 
 ## Writing code here
 
+- **Module headers** follow the user-level `~/.claude/CLAUDE.md`: shebang, blank line, then a docstring whose first line is `<filename> --- <role>` and whose index section is titled `Contains:` (never `Args:`), one verb-first line per exported item.
+
 - **Public functions** need full type hints, a docstring with a runnable `>>>` example, and `@api(category=..., panel=...)` so they appear in the index.
 - **New data classes** go in the package's `models.py` and must be JSON-serializable; update `schemas/` and bump the schema version if a stored model changes.
 - **Coordinates in field language** (e.g. "2 outside the 35") belong in the pack's `PositionLanguage`, never in core modules.

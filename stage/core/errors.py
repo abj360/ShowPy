@@ -3,26 +3,25 @@
 """
 errors.py --- the StageError family: every library error carries code, message, context, hint
 
-Args:
-    StageError: base error with a machine code and a hint that says what is allowed
-    UnknownRefError: an ID or name does not resolve
-    VersionError: a pinned version is missing or incompatible
-    SchemaError: data fails its schema or a text format
-    GeometryError: a shape is degenerate
-    ZeroLengthError: the direction of a zero vector was requested
-    SpacingError: items do not fit
-    TimeRangeError: times are outside range or start >= end
-    TimelineError: tempo, measure or hold data is inconsistent
-    SurfaceError: a point is off the sheet
-    MatchError: no feasible assignment exists
-    PathError: a path instruction is invalid
-    ContinuityError: a path does not end on its target placement
-    LockedError: an edit touches a pinned or locked item
-    StorageError: persistence failed
-    ConflictError: a concurrent edit landed first
-    ValidationError: structural integrity failed
-    DeprecatedWarning: a deprecated API was used
-
+Contains:
+    StageError: reports a library failure with a code and a hint that says what is allowed
+    UnknownRefError: reports an ID, name or unit that does not resolve
+    VersionError: reports a pinned version that is missing or incompatible
+    SchemaError: reports data that fails its schema or text format
+    GeometryError: reports a degenerate shape
+    ZeroLengthError: reports a request for the direction of a zero vector
+    SpacingError: reports items that do not fit
+    TimeRangeError: reports times outside range or start >= end
+    TimelineError: reports inconsistent tempo, measure or hold data
+    SurfaceError: reports a point that is off the sheet
+    MatchError: reports an assignment problem with no feasible solution
+    PathError: reports an invalid path instruction
+    ContinuityError: reports a path that misses its target placement
+    LockedError: reports an edit that touches a pinned or locked item
+    StorageError: reports a persistence failure
+    ConflictError: reports a concurrent edit that landed first
+    ValidationError: reports a structural integrity failure
+    DeprecatedWarning: warns that a deprecated API was used
 """
 
 from collections.abc import Mapping
@@ -37,7 +36,6 @@ class StageError(Exception):
         message: What went wrong.
         context: Values that help debug the failure without reproducing it.
         hint: What the caller is allowed to do instead.
-
     """
 
     default_code: ClassVar[str] = "STAGE"
