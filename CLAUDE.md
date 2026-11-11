@@ -4,6 +4,8 @@ Eight is an AI-assisted choreography design tool. Designers draw spots on a 2D s
 
 Source of truth for the API: *Stage Library: API Reference* (`docs/stage-library-api-reference.md`). If code and the reference disagree, flag it; do not silently pick one.
 
+Product overview (problem, scope, non-goals, decision rules): @docs/project-overview.md
+
 ## Commands
 
 ```bash
