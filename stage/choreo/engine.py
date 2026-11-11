@@ -9,6 +9,7 @@ See ADR 0002 for the compile rules.
 Contains:
     PathEngine: compiles a show's transitions and answers where, how and how fast spots move
     PathEngine.compile(): builds every plan of one transition
+    PathEngine.compile_entity(): builds one spot's plan, uncached
     PathEngine.compile_all(): builds every transition of the show
     PathEngine.locate(): maps a global count to (transition, local count)
     PathEngine.position(): returns a spot's position at a count
@@ -96,19 +97,24 @@ class PathEngine:
         """Builds every plan of one transition; raises ContinuityError on a missed target."""
         if self._use_cache and tid in self._cache:
             return self._cache[tid]
-        spec = self.show.transition(tid)
-        a, b = self.show.set(tid[0]), self.show.set(tid[1])
-        plans = {}
-        for entity in self._ids:
-            plan = compile_plan(spec.row(entity), spec, a.get(entity), b.get(entity), self.motions)
-            validate_facing(plan)
-            plans[entity] = plan
+        plans = {entity: self.compile_entity(entity, tid) for entity in self._ids}
         compiled = CompiledTransition(
-            id=tid, counts=spec.counts, t_global0=self._set_start(tid[0]), plans=plans
+            id=tid,
+            counts=self.show.transition(tid).counts,
+            t_global0=self._set_start(tid[0]),
+            plans=plans,
         )
         if self._use_cache:
             self._cache[tid] = compiled
         return compiled
+
+    def compile_entity(self, entity: SpotId, tid: TransitionId) -> MotionPlan:
+        """Builds one spot's plan without caching, so callers can report errors per spot."""
+        spec = self.show.transition(tid)
+        a, b = self.show.set(tid[0]).get(entity), self.show.set(tid[1]).get(entity)
+        plan = compile_plan(spec.row(entity), spec, a, b, self.motions)
+        validate_facing(plan)
+        return plan
 
     def compile_all(self) -> dict[TransitionId, CompiledTransition]:
         """Builds every transition of the show, in show order."""
