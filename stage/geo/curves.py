@@ -11,7 +11,7 @@ Contains:
     Segment: draws a straight line between two points
     Polyline: connects points with straight pieces, optionally closed
     ArcCurve: draws a circular arc; the sweep sign gives the direction
-    CircleCurve: draws a full counter-clockwise circle
+    CircleCurve: draws a full circle in either direction
     EllipseCurve: draws a rotated oval
     SplineCurve: passes a centripetal Catmull–Rom spline through points
     BezierCurve: draws a Bézier curve of any degree from control points
@@ -189,18 +189,20 @@ class ArcCurve(CurveModel):
 
 
 class CircleCurve(CurveModel):
-    """Draws a full counter-clockwise circle.
+    """Draws a full circle, counter-clockwise unless `ccw` is False.
 
     Attributes:
         center: Circle center.
         radius: Radius in meters, above 0.
         start_deg: Angle of the start point, counter-clockwise from +x.
+        ccw: Travel direction; mirroring a circle flips it.
     """
 
     kind: Literal["circle"] = "circle"
     center: Point
     radius: Meters
     start_deg: Degrees = 0.0
+    ccw: bool = True
     closed: Literal[True] = True
 
     @model_validator(mode="after")
@@ -212,15 +214,18 @@ class CircleCurve(CurveModel):
         """Returns the circumference."""
         return 2 * math.pi * self.radius
 
+    def _sign(self) -> float:
+        return 1.0 if self.ccw else -1.0
+
     def _theta(self, s: FloatArray) -> FloatArray:
-        theta: FloatArray = self.start_deg + 360.0 * s / self.length()
+        theta: FloatArray = self.start_deg + self._sign() * 360.0 * s / self.length()
         return theta
 
     def _points(self, s: FloatArray) -> Points:
         return _arc_points(self.center, self.radius, self._theta(s))
 
     def _tangents(self, s: FloatArray) -> Points:
-        return _arc_tangents(self._theta(s), 1.0)
+        return _arc_tangents(self._theta(s), self._sign())
 
 
 class EllipseCurve(CurveModel):

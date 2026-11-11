@@ -6,6 +6,7 @@ curve_base.py --- the Curve protocol and the arc-length machinery every curve sh
 Contains:
     Curve: describes the interface every stage-plane curve implements
     CurveBase: implements arc-length sampling, projection and polyline export generically
+    CurveBase.model_copy(): returns a validated copy without stale caches
     CurveBase.point_at(): returns points at arc lengths, wrapping closed curves
     CurveBase.tangent_at(): returns unit tangents at arc lengths
     CurveBase.normal_at(): returns unit left normals at arc lengths
@@ -16,8 +17,9 @@ Contains:
 """
 
 import itertools
+from collections.abc import Mapping
 from functools import cached_property
-from typing import Any, Protocol, overload, runtime_checkable
+from typing import Any, Protocol, Self, overload, runtime_checkable
 
 import numpy as np
 import numpy.typing as npt
@@ -94,6 +96,11 @@ class CurveBase(FrozenModel):
     """
 
     closed: bool = False
+
+    # Any: update values are arbitrary field values, validated by the rebuilt model.
+    def model_copy(self, *, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
+        """Returns a validated copy; cached arc-length tables never leak into the copy."""
+        return self.model_validate({**self.model_dump(), **(update or {})})
 
     def _native(self, t: FloatArray) -> Points:
         raise NotImplementedError

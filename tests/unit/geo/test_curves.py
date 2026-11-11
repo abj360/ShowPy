@@ -156,3 +156,10 @@ def test_composite_concatenates_parts() -> None:
     corner = CompositeCurve(parts=(SEG, Segment(a=(4, 0), b=(4, 4))))
     assert approx_equal(corner.length(), 8.0)
     assert approx_equal(corner.point_at(6.0), (4.0, 2.0))
+
+
+def test_regression_model_copy_drops_cached_arc_length_table() -> None:
+    small = SpiralCurve(center=(0.0, 0.0), r0=1.0, r1=2.0, turns=1.0)
+    small.length()
+    bigger = small.model_copy(update={"r1": 6.0})
+    assert bigger.length() > small.length() * 2
