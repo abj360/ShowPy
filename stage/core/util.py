@@ -12,11 +12,13 @@ Contains:
     as_points(): normalizes point-like inputs to an (N, 2) array
     content_hash(): hashes a model, mapping, string or bytes canonically
     chunk_counts(): splits counts into equal parts that sum exactly
+    close_matches(): suggests known names close to a misspelled one
     log(): emits a structured log line on the `stage` logger
     timer(): measures elapsed time of a block
     Timer: holds the elapsed milliseconds measured by timer()
 """
 
+import difflib
 import hashlib
 import json
 import logging
@@ -39,6 +41,8 @@ NATURAL_CHUNK = re.compile(r"(\d+)")
 RANGE_PATTERN = re.compile(r"^([A-Za-z_]+)(\d+)-([A-Za-z_]+)(\d+)$")
 RANGE_DASH = "–"
 LOGGER = logging.getLogger("stage")
+CLOSE_MATCH_COUNT = 3
+CLOSE_MATCH_CUTOFF = 0.4
 
 
 def _natural_key(text: str) -> tuple[tuple[int, int | str], ...]:
@@ -183,6 +187,17 @@ def chunk_counts(total: float, parts: int) -> list[float]:
     size = total / parts
     chunks = [size] * (parts - 1)
     return [*chunks, total - sum(chunks)]
+
+
+def close_matches(name: str, candidates: Iterable[str]) -> list[str]:
+    """Suggests up to three known names close to `name`, best first, for error hints.
+
+    >>> close_matches("T3", ["T1", "B7"])
+    ['T1']
+    """
+    return difflib.get_close_matches(
+        name, list(candidates), n=CLOSE_MATCH_COUNT, cutoff=CLOSE_MATCH_CUTOFF
+    )
 
 
 def log(msg: str, **fields: object) -> None:

@@ -16,6 +16,7 @@ from stage.core.util import (
     approx_equal,
     as_points,
     chunk_counts,
+    close_matches,
     content_hash,
     format_ranges,
     log,
@@ -126,3 +127,8 @@ def test_timer_measures_elapsed_ms() -> None:
     with timer() as clock:
         sum(range(1000))
     assert clock.elapsed_ms >= 0.0
+
+
+def test_close_matches_finds_short_ids() -> None:
+    assert close_matches("T3", ["T1", "B7", "T12"]) == ["T1", "T12"]
+    assert close_matches("zzz", ["T1"]) == []

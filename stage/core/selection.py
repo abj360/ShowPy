@@ -5,6 +5,8 @@ selection.py --- Selection, the ordered duplicate-free set of spot IDs, and the 
 
 Contains:
     Selection: holds ordered unique IDs and supports |, &, -, len, iteration and `in`
+    Selector: names anything that picks spots: an expression, a list of IDs or a Selection
+    SelectorField: names the JSON-safe form of Selector stored on models
 """
 
 from collections.abc import Iterator, Sequence
@@ -63,3 +65,4 @@ class Selection(FrozenModel):
 
 
 type Selector = str | Sequence[str] | Selection
+type SelectorField = str | tuple[str, ...] | Selection
