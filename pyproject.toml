@@ -62,6 +62,6 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "stage"]
-addopts = "--doctest-modules -q --strict-markers"
+addopts = "--doctest-modules -q --strict-markers --import-mode=importlib"
 markers = ["golden: replays real shows against reviewed fixtures"]
 filterwarnings = ["error"]
