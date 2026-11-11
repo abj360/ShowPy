@@ -11,6 +11,7 @@ Contains:
     Anchor.on_area(): anchors to an area
     Anchor.on_spots(): anchors to spots
     Note: holds one design note
+    DraftedNote: holds one note an agent proposes, before it gets an ID and time stamp
 """
 
 from collections.abc import Sequence
@@ -32,6 +33,7 @@ PAYLOAD_BY_KIND = {
 }
 
 type AnchorKind = Literal["set", "transition", "point", "area", "spots"]
+type NoteKind = Literal["goal", "idea", "todo", "warning"]
 
 
 class Anchor(FrozenModel):
@@ -105,8 +107,22 @@ class Note(FrozenModel):
 
     id: str
     text: str
-    kind: Literal["goal", "idea", "todo", "warning"] = "idea"
+    kind: NoteKind = "idea"
     anchor: Anchor
     author: str
     created_at: datetime
     visible: bool = True
+
+
+class DraftedNote(FrozenModel):
+    """Holds one note an agent proposes; draft_notes() gives it an ID, author and time.
+
+    Attributes:
+        text: Note body.
+        kind: goal, idea, todo or warning.
+        anchor: What the note is attached to.
+    """
+
+    text: str
+    kind: NoteKind = "idea"
+    anchor: Anchor
