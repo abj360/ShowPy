@@ -2,7 +2,7 @@
 
 Eight is an AI-assisted choreography design tool. Designers draw spots on a 2D sheet (a field, stage or floor), build a show set by set, and publish it so performers can claim their spot. This repo holds `stage`, the Python library behind the canvas, and `stagecheck`, the locked checker that verifies every design.
 
-Source of truth for the API: *Stage Library: API Reference*. If code and the reference disagree, flag it; do not silently pick one.
+Source of truth for the API: *Stage Library: API Reference* (`docs/stage-library-api-reference.md`). If code and the reference disagree, flag it; do not silently pick one.
 
 ## Commands
 
