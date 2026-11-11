@@ -6,7 +6,6 @@ test_replace.py --- tests sheet replacement: fits, placements, forms, paths, loc
 
 import numpy as np
 import pytest
-from stage.sheet.replace import replace_sheet, similarity_fit
 
 from stage.choreo.models import Form, PathRow, PathStyle, TransitionSpec, Waypoint
 from stage.core.errors import GeometryError, LockedError, SchemaError
@@ -15,6 +14,7 @@ from stage.core.util import approx_equal
 from stage.geo.affine import rotation_matrix
 from stage.geo.curves import Segment, curve_from_construction
 from stage.sheet.models import Landmark, Sheet, Zone, ZoneKind
+from stage.sheet.replace import replace_sheet, similarity_fit
 from stage.sheet.templates import add_zone, blank_sheet
 from stage.show.models import Show
 from tests.fixtures.shows import field_sheet, two_set_show

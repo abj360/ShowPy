@@ -316,3 +316,11 @@ def test_facing_override_resolves_selection_expressions() -> None:
     engine = PathEngine(base.model_copy(update={"facing_overrides": (override,)}))
     assert approx_equal(engine.facing_at("T2", 3.0), 270.0)
     assert approx_equal(engine.facing_at("T3", 3.0), 0.0)
+
+
+def test_regression_steps_easing_is_not_aliased_by_segment_probes() -> None:
+    row = PathRow(entity="T1", end=1.0, easing=Easing(kind="steps", strength=4.0))
+    engine = _engine(T1=row)
+    segments = [s for s in engine.segments(TID, tol=0.01) if s.entity == "T1"]
+    moving = [s for s in segments if s.t1 <= 1.0]
+    assert len(moving) >= 4

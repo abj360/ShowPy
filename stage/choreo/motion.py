@@ -9,6 +9,7 @@ move still starts and ends on its placements. Custom motions must return `start`
 
 Contains:
     ease(): maps time shares to distance shares through an Easing
+    easing_breaks(): returns the time shares where an easing has kinks or pauses
     turn(): interpolates a facing in a chosen turn direction
     MotionFn: describes a pure custom motion function
     MotionInfo: describes one registered motion for listings
@@ -95,6 +96,30 @@ def ease(easing: Easing, u: FloatArray) -> FloatArray:
     times, shares = zip(*easing.points, strict=True)
     custom: FloatArray = np.interp(u, times, shares)
     return custom
+
+
+def easing_breaks(easing: Easing) -> list[float]:
+    """Returns the time shares inside (0, 1) where an easing has a kink or a pause.
+
+    Segment sampling splits at these so periodic easings cannot alias the probes.
+
+    >>> easing_breaks(Easing(kind="steps", strength=2.0))
+    [0.5]
+    """
+    k = max(easing.strength, 1.0)
+    breaks: list[float] = []
+    if easing.kind == "steps":
+        n = max(round(k), 1)
+        breaks = [i / n for i in range(1, n)]
+    elif easing.kind == "hold_then_burst":
+        breaks = [1.0 - 1.0 / k]
+    elif easing.kind == "burst_then_settle":
+        breaks = [1.0 / k]
+    elif easing.kind == "ease_in_out":
+        breaks = [0.5]
+    elif easing.kind == "custom":
+        breaks = [t for t, _ in easing.points]
+    return [b for b in breaks if 0.0 < b < 1.0]
 
 
 def _steps(u: FloatArray, n: int) -> FloatArray:

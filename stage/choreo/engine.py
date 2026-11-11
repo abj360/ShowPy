@@ -44,7 +44,7 @@ from stage.choreo.engine_models import (
     MotionSegment,
 )
 from stage.choreo.models import FacingOverride
-from stage.choreo.motion import DEFAULT_MOTIONS, MotionRegistry, turn
+from stage.choreo.motion import DEFAULT_MOTIONS, MotionRegistry, easing_breaks, turn
 from stage.core.errors import UnknownRefError
 from stage.core.ids import SetId, SpotId, TransitionId
 from stage.core.selection import Selection
@@ -295,7 +295,9 @@ class PathEngine:
     def _stations(self, plan: MotionPlan, counts: float, tol: float) -> list[float]:
         if not plan.moves:
             return [0.0, counts]
-        edges = sorted({0.0, counts, *plan.knots_t})
+        start, end = plan.window
+        kinks = (start + share * (end - start) for share in easing_breaks(plan.easing))
+        edges = sorted({0.0, counts, *plan.knots_t, *kinks})
         stations = [edges[0]]
         for lo, hi in itertools.pairwise(edges):
             stations.extend(self._subdivide(plan, lo, hi, tol, 0))

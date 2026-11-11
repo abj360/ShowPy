@@ -17,6 +17,7 @@ from stage.choreo.motion import (
     DEFAULT_MOTIONS,
     FloatArray,
     ease,
+    easing_breaks,
     motions,
     register_motion,
     turn,
@@ -123,3 +124,10 @@ def test_unknown_motion_suggests() -> None:
 def test_motions_lists_names_with_summaries() -> None:
     listing = {m.name: m.summary for m in motions(DEFAULT_MOTIONS)}
     assert listing["weave"]
+
+
+def test_easing_breaks_mark_kinks() -> None:
+    assert easing_breaks(Easing(kind="steps", strength=4.0)) == [0.25, 0.5, 0.75]
+    assert easing_breaks(Easing(kind="hold_then_burst", strength=2.0)) == [0.5]
+    assert easing_breaks(Easing(kind="burst_then_settle", strength=4.0)) == [0.25]
+    assert easing_breaks(Easing()) == []
