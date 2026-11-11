@@ -1,0 +1,67 @@
+[project]
+name = "stage"
+version = "0.1.0"
+description = "Choreography library behind the Eight show canvas: sheets, spots, sets, forms and motion."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "imageio==2.38.1",
+    "imageio-ffmpeg==0.8.1",
+    "numpy==2.5.4",
+    "pandas==3.1.1",
+    "pillow==13.0.0",
+    "pydantic==2.14.3",
+    "scipy==1.18.1",
+    "segno==1.6.6",
+    "shapely==2.2.0",
+]
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["stage"]
+
+[dependency-groups]
+dev = [
+    "hypothesis==6.170.15",
+    "mypy==2.4.1",
+    "pandas-stubs==3.1.0.261029",
+    "pip-audit==2.10.1",
+    "pre-commit==4.7.0",
+    "pytest==9.2.0",
+    "ruff==0.17.4",
+    "scipy-stubs==1.18.1.1",
+    "types-shapely==2.1.0.20261030",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "N", "SIM", "RUF", "C4", "PT", "D"]
+ignore = ["D203", "D213", "D105", "D107", "D104", "D401", "D200", "D212", "D415", "D400", "D205"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+strict = true
+python_version = "3.14"
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["segno", "segno.*", "imageio", "imageio.*", "imageio_ffmpeg"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "stage"]
+addopts = "--doctest-modules -q --strict-markers"
+markers = ["golden: replays real shows against reviewed fixtures"]
+filterwarnings = ["error"]
