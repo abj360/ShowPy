@@ -83,3 +83,11 @@ the probes. It found a deviation of 0.0113 m against a 0.01 m tolerance when onl
 were probed. Subdivision now probes at every eighth (7 points) and accepts a segment only
 when every probe is within `tol / 2`. That leaves margin for the error between probes. 150
 random rows (delays, easing, waypoints, curves) now pass at 9 points per segment.
+
+## Addendum 2026-11-11: time-based measures live in stage.choreo
+
+`position_at`, `speed`, `speeds`, `direction_of_travel`, `motion_contrast`, `energy_curve` and
+`phrase_profile` need the PathEngine, so they live in `stage.choreo.motion_stats`, not in
+`stage.geo.measure` / `stage.geo.analysis`. `stage.geo` stays static geometry and never
+imports the engine. `PathEngine.speed` sums time-linear segment lengths, so speeds use exactly
+the motion the checker sees.

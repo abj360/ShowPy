@@ -10,6 +10,7 @@ Contains:
     MotionSegment: holds a straight, time-linear piece for exact collision checks
     EntityState: holds everything about one spot at one moment
     Frame: holds every spot's state at one moment
+    MotionStats: summarizes how varied the movement of a transition is
 """
 
 from typing import Literal
@@ -151,3 +152,17 @@ class Frame(FrozenModel):
     tid: TransitionId | None
     tau: float
     states: tuple[EntityState, ...]
+
+
+class MotionStats(FrozenModel):
+    """Summarizes how varied the movement of a transition is; feedback, not a rule.
+
+    Attributes:
+        moving_share: Share of on-field spots that move.
+        speed_spread: Coefficient of variation of moving spots' mean speeds.
+        direction_variety: Circular variance of net travel directions, 0 (all alike) to 1.
+    """
+
+    moving_share: float
+    speed_spread: float
+    direction_variety: float

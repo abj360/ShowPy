@@ -20,12 +20,15 @@ Contains:
     PathEngine.sample(): returns every spot's state at a count
     PathEngine.frames(): yields frames between two counts, per count or per second
     PathEngine.segments(): returns time-linear segments for exact collision checks
+    PathEngine.entity_segments(): returns one spot's time-linear segments
+    PathEngine.speed(): returns a spot's movement demand in a transition
     PathEngine.path_geometry(): returns a spot's drawn path for the canvas
     PathEngine.invalidate(): clears cached compiles
 """
 
 import bisect
 import itertools
+import math
 from collections.abc import Iterable, Iterator, Sequence
 
 import numpy as np
@@ -46,6 +49,7 @@ from stage.core.ids import SetId, SpotId, TransitionId
 from stage.core.selection import Selection
 from stage.core.types import Count, Degrees, Point, Points
 from stage.core.util import close_matches
+from stage.geo.models import SpeedStats
 from stage.show.models import Show
 from stage.time.clock import count_to_seconds, seconds_to_count
 
@@ -270,21 +274,21 @@ class PathEngine:
 
     def segments(self, tid: TransitionId, tol: float = DEFAULT_SEGMENT_TOL) -> list[MotionSegment]:
         """Returns contiguous time-linear segments per spot, accurate to `tol` meters."""
-        compiled = self.compile(tid)
-        out: list[MotionSegment] = []
-        for entity, plan in compiled.plans.items():
-            stations = self._stations(plan, compiled.counts, tol)
-            pts = plan_positions(plan, np.array(stations))
+        return [seg for e in self.compile(tid).plans for seg in self.entity_segments(e, tid, tol)]
+
+    def entity_segments(
+        self, entity: SpotId, tid: TransitionId, tol: float = DEFAULT_SEGMENT_TOL
+    ) -> list[MotionSegment]:
+        """Returns one spot's contiguous time-linear segments in a transition."""
+        plan = self._plan(entity, tid)
+        stations = self._stations(plan, self.compile(tid).counts, tol)
+        pts = plan_positions(plan, np.array(stations))
+        return [
+            MotionSegment(entity=entity, tid=tid, t0=t0, t1=t1, p0=_pt(p0), p1=_pt(p1))
             for (t0, t1), (p0, p1) in zip(
                 itertools.pairwise(stations), itertools.pairwise(pts), strict=True
-            ):
-                out.append(
-                    MotionSegment(
-                        entity=entity, tid=tid, t0=t0, t1=t1,
-                        p0=(float(p0[0]), float(p0[1])), p1=(float(p1[0]), float(p1[1])),
-                    )
-                )  # fmt: skip
-        return out
+            )
+        ]
 
     def _stations(self, plan: MotionPlan, counts: float, tol: float) -> list[float]:
         if not plan.moves:
@@ -311,6 +315,45 @@ class PathEngine:
             plan, mid, hi, tol, depth + 1
         )
 
+    def speed(
+        self, entity: SpotId, tid: TransitionId, window: tuple[float, float] | None = None
+    ) -> SpeedStats:
+        """Returns movement demand over a local window; counts and seconds cover moving time."""
+        compiled = self.compile(tid)
+        lo, hi = window or (0.0, compiled.counts)
+        distance = moving_counts = seconds = fastest = 0.0
+        for seg in self._clipped(entity, tid, lo, hi):
+            length, span = math.dist(seg.p0, seg.p1), seg.t1 - seg.t0
+            if length <= MOVING_SPEED * span or span <= 0:
+                continue
+            g0, g1 = compiled.t_global0 + seg.t0, compiled.t_global0 + seg.t1
+            distance += length
+            moving_counts += span
+            seconds += count_to_seconds(self.show.timeline, g1) - count_to_seconds(
+                self.show.timeline, g0
+            )
+            fastest = max(fastest, length / span)
+        return SpeedStats(
+            distance=distance,
+            counts=moving_counts,
+            m_per_count=distance / moving_counts if moving_counts else 0.0,
+            m_per_s=distance / seconds if seconds else 0.0,
+            max_instant=fastest,
+        )
+
+    def _clipped(
+        self, entity: SpotId, tid: TransitionId, lo: float, hi: float
+    ) -> list[MotionSegment]:
+        plan = self._plan(entity, tid)
+        out = []
+        for seg in self.entity_segments(entity, tid):
+            t0, t1 = max(seg.t0, lo), min(seg.t1, hi)
+            if t1 <= t0:
+                continue
+            p0, p1 = plan_positions(plan, np.array([t0, t1]))
+            out.append(seg.model_copy(update={"t0": t0, "t1": t1, "p0": _pt(p0), "p1": _pt(p1)}))
+        return out
+
     def path_geometry(self, entity: SpotId, tid: TransitionId) -> Points:
         """Returns the drawn path of a spot in a transition, start to end."""
         plan = self._plan(entity, tid)
@@ -326,3 +369,7 @@ class PathEngine:
         for tid in list(self._cache):
             if tid in set(transitions) or set_ids & set(tid):
                 del self._cache[tid]
+
+
+def _pt(p: Points) -> Point:
+    return float(p[0]), float(p[1])
