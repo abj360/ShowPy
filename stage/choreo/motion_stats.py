@@ -16,6 +16,7 @@ Contains:
     phrase_profile(): returns change, energy and density per musical phrase
 """
 
+import itertools
 import math
 
 import numpy as np
@@ -154,7 +155,7 @@ def phrase_profile(show: Show, t0: Count, t1: Count) -> pd.DataFrame:
     engine = PathEngine(show)
     cuts = sorted({t0, t1, *(m.at_count for m in show.timeline.markers if t0 < m.at_count < t1)})
     rows = []
-    for a, b in zip(cuts[:-1], cuts[1:], strict=True):
+    for a, b in itertools.pairwise(cuts):
         moved = engine.positions(b) - engine.positions(a)
         rows.append(
             {
