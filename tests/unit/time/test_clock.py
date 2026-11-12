@@ -190,3 +190,11 @@ def test_describe_count_rounds_into_next_minute() -> None:
 
 def test_describe_count_rounds_ramp_tempo() -> None:
     assert describe_count(_ramp(60.0, 61.0, 3.0), 1.0).endswith("60.3 cpm")
+
+
+def test_regression_describe_count_rounds_tenths_half_away_from_zero() -> None:
+    from stage.time.clock import describe_count
+    from stage.time.timeline import new_timeline
+
+    timeline = new_timeline(TimelineMode.COUNTS, counts_per_minute=240.0)
+    assert "0:07.3" in describe_count(timeline, 29.0)

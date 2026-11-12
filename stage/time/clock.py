@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 from stage.core.errors import TimelineError, TimeRangeError
 from stage.core.types import Count, CountsPerMinute, Seconds
+from stage.core.units import round_to
 from stage.time.measures import count_to_measure
 from stage.time.models import TempoSection, Timeline, TimelineMode
 
@@ -212,7 +213,7 @@ def seconds_per_count(tl: Timeline, c: Count) -> Seconds:
 
 
 def _clock_text(s: Seconds) -> str:
-    tenths = round(s * TENTHS_PER_SECOND)
+    tenths = int(round_to(s * TENTHS_PER_SECOND, 1.0))
     minutes, rest = divmod(tenths, TENTHS_PER_MINUTE)
     whole, tenth = divmod(rest, TENTHS_PER_SECOND)
     return f"{minutes}:{whole:02d}.{tenth}"
