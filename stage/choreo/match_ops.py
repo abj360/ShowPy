@@ -7,6 +7,7 @@ Every edit returns a new Show. Moving a spot's target invalidates its stored pat
 the touching transitions, so those rows are dropped and the spot moves straight by default.
 
 Contains:
+    with_set(): returns a show with one set replaced by ID
     clear_rows(): drops stored path rows of some spots in one transition, respecting locks
     apply_match(): writes a match result's targets into a transition's destination set
     swap(): swaps two spots' places in one set, keeping forms and paths consistent
@@ -33,7 +34,14 @@ GAIN_TOL = 1e-9
 SWAPPED_FIELDS = ("x", "y", "facing", "form", "order", "on_field")
 
 
-def _replace_set(show: Show, new: Set) -> Show:
+def with_set(show: Show, new: Set) -> Show:
+    """Returns a show with the set of the same ID replaced by `new`.
+
+    >>> from tests.fixtures.shows import two_set_show
+    >>> show = two_set_show()
+    >>> with_set(show, show.set("2").model_copy(update={"label": "B"})).set("2").label
+    'B'
+    """
     sets = tuple(new if s.id == new.id else s for s in show.sets)
     return show.model_copy(update={"sets": sets})
 
@@ -89,7 +97,7 @@ def apply_match(show: Show, tid: TransitionId, result: MatchResult, force: bool 
         moved = abs(current.x - x) > SAME_POSITION_TOL or abs(current.y - y) > SAME_POSITION_TOL
         if moved or not current.on_field:
             updates[entity] = {"x": x, "y": y, "on_field": True}
-    edited = _replace_set(show, dest.with_placements(updates, force=force))
+    edited = with_set(show, dest.with_placements(updates, force=force))
     return clear_rows(edited, tid, list(updates), force)
 
 
@@ -125,7 +133,7 @@ def swap(show: Show, set_id: SetId, a: SpotId, b: SpotId, force: bool = False) -
     target = show.set(set_id)
     pa, pb = target.get(a), target.get(b)
     updates = {a: _spot_fields(pb), b: _spot_fields(pa)}
-    edited = _replace_set(show, target.with_placements(updates, force))
+    edited = with_set(show, target.with_placements(updates, force))
     edited = _swap_forms(edited, set_id, a, b, force)
     for tid in _neighbour_tids(edited, set_id):
         edited = clear_rows(edited, tid, [a, b], force)

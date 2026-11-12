@@ -37,6 +37,7 @@ Contains:
     generated_form(): builds a form from a registered shape generator
     edit_params(): returns a generated form with changed generator parameters
     slots(): returns a form's slot positions
+    slot_poses(): returns every slot's position and facing
     placements(): regenerates placements for a form's members
 """
 
@@ -429,25 +430,37 @@ def _stored_facings(form: Form) -> list[Degrees] | None:
     return [float(f) for f in form.geometry["facings"]]
 
 
+def slot_poses(
+    form: Form, registry: FormFnRegistry = DEFAULT_FORM_FNS
+) -> tuple[Points, list[Degrees]]:
+    """Returns every slot's position and facing, members or not.
+
+    >>> pts, facings = slot_poses(circle_form("f", [], (0, 0), 1.0, n=2))
+    >>> facings
+    [90.0, 270.0]
+    """
+    lay = layout(form, registry)
+    return lay.points, _stored_facings(form) or member_facings(form.facing, lay)
+
+
 def placements(form: Form, registry: FormFnRegistry = DEFAULT_FORM_FNS) -> list[Placement]:
     """Regenerates one placement per member from the form's recipe, spacing and facing.
 
     >>> [(p.entity, p.x, p.order) for p in placements(line_form("f", ["A", "B"], (0, 0), (2, 0)))]
     [('A', 0.0, 0), ('B', 2.0, 1)]
     """
-    lay = layout(form, registry)
-    if len(form.members) > len(lay.points):
+    pts, facings = slot_poses(form, registry)
+    if len(form.members) > len(pts):
         raise SpacingError(
-            f"form {form.id} has {len(form.members)} members but {len(lay.points)} slots",
-            hint=f"use at most {len(lay.points)} members or enlarge the shape",
-            context={"form": form.id, "max_fit": len(lay.points)},
+            f"form {form.id} has {len(form.members)} members but {len(pts)} slots",
+            hint=f"use at most {len(pts)} members or enlarge the shape",
+            context={"form": form.id, "max_fit": len(pts)},
         )
-    facings = _stored_facings(form) or member_facings(form.facing, lay)
     return [
         Placement(
             entity=member,
-            x=float(lay.points[i, 0]),
-            y=float(lay.points[i, 1]),
+            x=float(pts[i, 0]),
+            y=float(pts[i, 1]),
             facing=facings[i],
             form=form.id,
             order=i,
