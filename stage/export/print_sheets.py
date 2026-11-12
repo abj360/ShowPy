@@ -25,7 +25,6 @@ from stage.cast.select import select
 from stage.choreo.engine import PathEngine
 from stage.choreo.engine_models import MotionPlan
 from stage.choreo.models import PathRow, PathStyle, Placement
-from stage.core.errors import TimelineError
 from stage.core.ids import SetId, SpotId, TransitionId
 from stage.core.selection import Selection
 from stage.core.types import Count, Point
@@ -36,6 +35,7 @@ from stage.sheet.models import GuideLine
 from stage.show.models import Show
 from stage.time.clock import count_to_seconds, seconds_to_count
 from stage.time.measures import count_to_measure
+from stage.time.models import TimelineMode
 from stage.time.timeline import cue_to_seconds
 
 OFF_FIELD = "off field"
@@ -257,18 +257,17 @@ def chart(show: Show, set_id: SetId, publication: Publication | None = None) -> 
     return Chart(set_id=set_id, rows=tuple(rows))
 
 
+def _clock_known(show: Show) -> bool:
+    """Reports whether counts convert to seconds; a cue-mode timeline without tempo cannot."""
+    return bool(show.timeline.tempos) or show.timeline.mode is not TimelineMode.CUES
+
+
 def _seconds(show: Show, count: Count) -> float:
-    try:
-        return count_to_seconds(show.timeline, count)
-    except TimelineError:
-        return math.nan
+    return count_to_seconds(show.timeline, count) if _clock_known(show) else math.nan
 
 
 def _count(show: Show, seconds: float) -> float:
-    try:
-        return seconds_to_count(show.timeline, seconds)
-    except TimelineError:
-        return math.nan
+    return seconds_to_count(show.timeline, seconds) if _clock_known(show) else math.nan
 
 
 def _measure_text(show: Show, count: float) -> str:
@@ -328,7 +327,7 @@ def _cue_entries(show: Show) -> list[_CueEntry]:
 def cue_sheet(show: Show) -> pd.DataFrame:
     """Lists set labels and cues, timeline markers and cue-mode cues in count order.
 
-    Seconds and counts that the timeline cannot convert (cue mode without a tempo) are NaN.
+    In cue mode without a tempo, counts and seconds cannot convert and show as NaN.
 
     >>> from tests.fixtures.shows import two_set_show
     >>> list(cue_sheet(two_set_show()).columns)
