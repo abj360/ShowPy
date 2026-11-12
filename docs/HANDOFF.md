@@ -44,45 +44,21 @@ Use `uv` only, never pip.
 
 ## In flight
 
-An agent was building `stage/export/{models,data,print,publish}.py` in a git worktree under
-`.claude/worktrees/` (branch `worktree-agent-…`). Its spec:
-
-- `CoordinateSheet` instead of `Sheet`.
-- Claims stored inside an immutable `Publication`.
-- A dependency-free PDF writer.
-- `segno` for QR codes.
-- `export_json` tagged `stage.show.v1`.
-
-If its branch exists:
-
-1. Run `git merge --no-ff` on it.
-2. Resolve `stage/export/__init__.py` if both sides added it (keep the docstring-only version).
-3. Run the gates.
-4. Remove the worktree and branch.
-
-If the branch is gone or half done, rebuild from that spec. `git worktree list` shows its state.
+- **API reference rewrite.** An agent is working in `.claude/worktrees/agent-ab17bb0302cd0a89a` (branch `worktree-agent-ab17bb0302cd0a89a`) to align `docs/stage-library-api-reference.md` with the code, export sections included. When it is done:
+  1. Merge with `git merge --no-ff`.
+  2. Remove `docs/stage-library-api-reference.md` from `.prettierignore` and run Prettier.
+  3. Remove the worktree.
+- **Study guide PDF.** An agent is writing it directly on this branch under `docs/guide/` (uncommitted until it finishes): `docs/guide/build_guide.py` produces `docs/guide/stage-library-guide.pdf`.
 
 ## Remaining work, in order
 
 1. Done 2026-11-11: `stage/show/build.py` (`build_set`, `build_all`, `stale`, `new_set_script`, `run_script`).
 2. Done 2026-11-11: `stage/choreo/paths_store.py` (`save_paths`, `load_paths`).
-3. **`stage/__init__.py`**: re-export the public API. Names must not clash; ADR 0001 renamed the clashing ones. Add a test that every re-export resolves and that `__all__` is unique.
+3. Done 2026-11-11: `stage/__init__.py` lazily re-exports 533 names (PEP 562). Internal modules are excluded and the motion `spiral` is `spiral_motion`. Tested by `tests/unit/test_public_api.py`.
 4. Done 2026-11-11: `schemas/stage.show.v1.json`, guarded by `tests/unit/show/test_schema.py` (regenerate with `STAGE_UPDATE_SCHEMA=1`).
 5. **Update `docs/stage-library-api-reference.md`**, which the user asked for ("fix every contradiction"). Apply ADR 0001's table and every agent deviation listed below, section by section. Keep the doc's format.
-6. **`README.md`**, in the order from the user's global CLAUDE.md:
-   1. pitch
-   2. why, with numbers
-   3. features
-   4. one-command dockerized quickstart, with a ports comment
-   5. usage
-   6. ASCII architecture diagram
-   7. config table
-   8. structure tree
-   9. development
-   10. testing and CI
-   11. docs list
-   12. MIT license, "Maintained by abj360"
-7. **Prettier** on Markdown, YAML and JSON. No system Node: put the vendored Node `bin/` on `PATH` first, per the user's global notes.
+6. Done 2026-11-11: `README.md`, `.env.example` and the dockerized quickstart (Docker run: 1492 passed).
+7. Done 2026-11-11: Prettier (`npx --yes prettier@3.6.2`, Node at `/home/uapb-ai/.nvm/versions/node/v22.23.5/bin`), gated in pre-commit and CI.
 8. **Final gates and Docker run**, then a summary to the user: what changed, tests run, open items.
 
 ## Deviations already made (put these into the reference doc)
@@ -144,7 +120,9 @@ If the branch is gone or half done, rebuild from that spec. `git worktree list` 
 - **Stale curve caches.** `model_copy` on a curve kept a stale `cached_property` table. `CurveBase.model_copy` now revalidates. Never bypass it.
 - **Segment aliasing.** Probes landing exactly on periodic easings (`steps`) aliased the segments. Segment edges now include `easing_breaks`. Keep the property test at 9 points per segment.
 - **Mangled doctests.** Bulk `str.replace` on import lines also edits `>>>` doctest lines, so check doctests after scripted edits.
-- **Doctests import the test folder.** Many library doctests import `tests.fixtures.shows`, which works because pytest has `pythonpath = ["."]`. This is known coupling. Fixing it means a small `stage` example-show helper.
+- **Doctests import the test folder.** Fixed 2026-11-11: library doctests import `stage.examples`, and `tests/fixtures` re-exports it.
+- **Ruff formats Python inside Markdown.** Run `ruff format` on `README.md` too.
+- **Docker copies only what it is given.** The Dockerfile copies `stage/`, `tests/` and `schemas/`; any new top-level data folder that tests read must be added to it.
 
 ## Working rules used on this branch
 
