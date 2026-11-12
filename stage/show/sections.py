@@ -253,6 +253,25 @@ def _merged_forms(a: Show, b: Show) -> dict[str, Form]:
     return {**a.forms, **b.forms}
 
 
+def _redundant(previous: TempoSection, current: TempoSection) -> bool:
+    if current.ramp_to is not None:
+        return False
+    if previous.ramp_to is None:
+        return previous.counts_per_minute == current.counts_per_minute
+    ramp_end = previous.at_count + (previous.ramp_counts or 0.0)
+    return ramp_end <= current.at_count + TOL and previous.ramp_to == current.counts_per_minute
+
+
+def _merge_tempos(tempos: tuple[TempoSection, ...]) -> tuple[TempoSection, ...]:
+    """Drops tempo sections that restate the tempo already in force at their count."""
+    kept: list[TempoSection] = []
+    for section in tempos:
+        if kept and _redundant(kept[-1], section):
+            continue
+        kept.append(section)
+    return tuple(kept)
+
+
 def _joined_timeline(a: Timeline, b: Timeline, offset: Count) -> Timeline:
     def moved(count: Count) -> Count:
         return count + offset
@@ -261,9 +280,11 @@ def _joined_timeline(a: Timeline, b: Timeline, offset: Count) -> Timeline:
     total = None if a.total_counts is None or b.total_counts is None else offset + b.total_counts
     return a.model_copy(
         update={
-            "tempos": (
-                *a.tempos,
-                *(t.model_copy(update={"at_count": moved(t.at_count)}) for t in b.tempos),
+            "tempos": _merge_tempos(
+                (
+                    *a.tempos,
+                    *(t.model_copy(update={"at_count": moved(t.at_count)}) for t in b.tempos),
+                )
             ),
             "holds": (
                 *a.holds,

@@ -18,6 +18,7 @@ from stage.show.sections import join_sections, split_section
 from stage.time.clock import count_to_seconds
 from stage.time.models import AudioTrack, Hold, Marker, MeasureSetting, TempoSection
 from tests.fixtures.shows import two_set_show
+from tests.golden.opener import opener_show
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 TOL = 1e-9
@@ -126,3 +127,8 @@ def test_join_disjoint_sections_and_clashes() -> None:
     with pytest.raises(SchemaError):
         join_sections(first, bad_boundary)
     assert approx_equal(index(joined).total_counts, 20.0, TOL)
+
+
+def test_regression_join_after_split_restores_the_show() -> None:
+    show = opener_show()
+    assert join_sections(*split_section(show, "2")) == show
