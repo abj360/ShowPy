@@ -96,3 +96,19 @@ def test_process_isolation_must_be_requested_explicitly(monkeypatch: pytest.Monk
         two_set_show(), "def main(ctx):\n    return 1\n", isolation="process"
     )
     assert result.result == 1
+
+
+def test_regression_bwrap_binds_every_import_directory_but_not_the_repo() -> None:
+    import sys
+
+    import stage
+
+    command = sandbox._bwrap_command("bwrap")
+    bound = {command[i + 1] for i, arg in enumerate(command) if arg == "--ro-bind"}
+    package = Path(stage.__file__).parent
+    for entry in sys.path:
+        path = Path(entry)
+        if not path.is_dir() or package.is_relative_to(path):
+            continue
+        assert any(path == Path(b) or path.is_relative_to(b) for b in bound), entry
+    assert str(package.parent) not in bound

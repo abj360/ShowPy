@@ -153,11 +153,27 @@ def _bind_args(path: str) -> list[str]:
     return ["--ro-bind", path, path] if target.exists() else []
 
 
+def _import_dirs() -> list[str]:
+    """Lists the directories the child needs: prefixes, sys.path entries, the stage package.
+
+    An entry that contains the stage package (the repo root, from an editable install) is
+    replaced by the package directory itself, so the rest of the repo stays invisible.
+    """
+    package = Path(stage.__file__).resolve().parent
+    wanted = {Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve(), package}
+    for entry in sys.path:
+        path = Path(entry or ".").resolve()
+        if path.is_dir() and not package.is_relative_to(path):
+            wanted.add(path)
+    minimal = [p for p in wanted if not any(p != q and p.is_relative_to(q) for q in wanted)]
+    return sorted(str(p) for p in minimal)
+
+
 def _bwrap_command(bwrap: str) -> list[str]:
     binds: list[str] = []
     for path in SYSTEM_DIRS:
         binds += _bind_args(path)
-    for path in {sys.prefix, sys.base_prefix, str(Path(stage.__file__).parent)}:
+    for path in _import_dirs():
         binds += ["--ro-bind", path, path]
     flags = ["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp"]
     flags += ["--unshare-all", "--die-with-parent", "--new-session", "--clearenv"]
