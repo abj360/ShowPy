@@ -5,7 +5,7 @@ build.py --- builds sets from their workspace scripts and runs analysis scripts
 
 Scripts are the source and placements are the result: each set's `/sets/<id>/set.py`
 defines build(ctx), which runs in the sandbox (show/sandbox.py). A set is stale when its
-script's hash differs from the set's source_hash, or when an earlier set it follows is stale.
+script-plus-input hash differs from the set's source_hash, or when an earlier set is stale.
 
 Contains:
     SCRIPT_TEMPLATES: holds the starting scripts new_set_script writes
@@ -22,11 +22,15 @@ from typing import Literal
 from stage.choreo.models import Form
 from stage.core.errors import SchemaError, ValidationError
 from stage.core.ids import SetId
-from stage.core.util import content_hash
 from stage.show.build_models import BuildResult, ScriptResult
 from stage.show.documents import SCRIPT_NAME, script_doc
 from stage.show.models import Show
-from stage.show.sandbox import DEFAULT_TIMEOUT_S, run_analysis_script, run_set_script
+from stage.show.sandbox import (
+    DEFAULT_TIMEOUT_S,
+    run_analysis_script,
+    run_set_script,
+    script_hash,
+)
 from stage.show.storage import Workspace, load_show, save_show
 from stage.show.validate import validate_set
 
@@ -93,10 +97,12 @@ def build_set(
             hint="fix the script so every spot is placed once",
         )
     sets = tuple(result.set if s.id == set_id else s for s in show.sets)
-    save_show(ws, show.model_copy(update={"sets": sets}), at, message=f"build set {set_id}")
-    later = show.set_ids()[show.set_index(set_id) + 1 :]
+    saved = show.model_copy(update={"sets": sets})
+    save_show(ws, saved, at, message=f"build set {set_id}")
+    after = show.set_ids()[show.set_index(set_id) + 1 :]
+    dependents = tuple(s for s in _stale_ids(ws, saved) if s in after)
     warnings = tuple(str(issue) for issue in report.issues)
-    return result.model_copy(update={"warnings": warnings, "stale_dependents": tuple(later[:1])})
+    return result.model_copy(update={"warnings": warnings, "stale_dependents": dependents})
 
 
 def _with_forms(show: Show, set_id: SetId, forms: tuple[Form, ...]) -> Show:
@@ -113,7 +119,7 @@ def _stale_ids(ws: Workspace, show: Show) -> list[SetId]:
         source = _script(ws, s.id)
         if source is None:
             continue
-        if upstream_changed or content_hash(source) != s.source_hash:
+        if upstream_changed or script_hash(show, s.id, source) != s.source_hash:
             out.append(s.id)
             upstream_changed = True
     return out

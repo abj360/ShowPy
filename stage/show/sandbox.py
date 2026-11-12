@@ -16,6 +16,7 @@ Contains:
     ALLOWED_MODULES: lists the module roots a script may import
     Isolation: names the two ways to run a script: `bwrap` (default) or bare `process`
     check_script(): rejects scripts that break the policy, naming the offending line
+    script_hash(): hashes a script with the set it builds from, for staleness
     run_set_script(): builds one set by running a script's build(ctx) in a subprocess
     run_analysis_script(): runs a script's main(ctx) in a subprocess and captures its output
 """
@@ -218,6 +219,20 @@ def _run_child(payload: dict[str, Any], timeout_s: float, isolation: Isolation) 
     return reply
 
 
+def script_hash(show: Show, set_id: SetId, source: str) -> str:
+    """Hashes a set script together with the previous set it builds from.
+
+    A set is up to date only while both its script and its input are unchanged.
+
+    >>> from stage.examples import two_set_show
+    >>> len(script_hash(two_set_show(), "2", "def build(ctx): return ctx.prev"))
+    64
+    """
+    index = show.set_index(set_id)
+    previous = show.sets[index - 1] if index > 0 else None
+    return content_hash({"source": source, "input": content_hash(previous) if previous else ""})
+
+
 def run_set_script(
     show: Show,
     set_id: SetId,
@@ -242,7 +257,7 @@ def run_set_script(
     }
     reply = _run_child(payload, timeout_s, isolation)
     built = Set.model_validate(reply["set"]).model_copy(
-        update={"source_hash": content_hash(source)}
+        update={"source_hash": script_hash(show, set_id, source)}
     )
     if built.id != set_id:
         raise ValidationError(

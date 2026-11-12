@@ -13,8 +13,9 @@ from stage.choreo.paths import delay
 from stage.choreo.paths_store import load_paths, save_paths
 from stage.core.errors import SchemaError, ValidationError
 from stage.show.build import build_all, build_set, new_set_script, run_script, stale
+from stage.show.manage import add_set
 from stage.show.repositories import InMemoryRepository
-from stage.show.storage import Workspace, load_show, open_workspace
+from stage.show.storage import Workspace, load_show, open_workspace, save_show
 from tests.fixtures.shows import two_set_show
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
@@ -105,3 +106,18 @@ def test_save_and_load_paths_round_trip() -> None:
     spec = delay(TransitionSpec(id=("1", "2"), counts=8.0), ["T1"], 2.0)
     save_paths(ws, spec, at=AT)
     assert load_paths(ws, ("1", "2")) == spec
+
+
+def test_regression_rebuilding_an_earlier_set_marks_later_sets_stale() -> None:
+    ws = _workspace()
+    ws.write("/sets/2/set.py", UPSTAGE, at=AT)
+    build_set(ws, "2", at=AT)
+    designer = open_workspace(ws.repo, SHOW_ID, "designer")
+    save_show(designer, add_set(load_show(ws), "3", 8.0), AT)
+    ws.refresh()
+    ws.write("/sets/3/set.py", UPSTAGE, at=AT)
+    build_set(ws, "3", at=AT)
+    assert stale(ws) == []
+    ws.write("/sets/2/set.py", UPSTAGE.replace("2.0", "3.0"), at=AT)
+    build_set(ws, "2", at=AT)
+    assert stale(ws) == ["3"]
