@@ -3,13 +3,18 @@
 """
 sandbox.py --- checks set scripts against a policy and runs them in an isolated subprocess
 
-Defense in depth, not a security boundary: an AST policy rejects unsafe constructs, then the
-script runs in a separate interpreter (`python -I`) with restricted builtins, an import
-allowlist, CPU and memory limits, a wall-clock timeout and an empty environment. Scripts
-can never import stagecheck (CLAUDE.md rule 4).
+Three layers, strongest last. An AST policy rejects unsafe constructs. The script then runs
+in a separate interpreter (`python -I`) with restricted builtins, an import allowlist, CPU and
+memory limits, a wall-clock timeout and an empty environment. Finally, by default, that
+interpreter runs under bubblewrap: no network, a read-only filesystem holding only the
+interpreter, the virtualenv and the `stage` package, and a private /tmp. The Python layers
+alone are defense in depth (numpy can read files, for example); bubblewrap is the boundary.
+Without bubblewrap, running a script needs an explicit `isolation="process"`. Scripts can
+never import stagecheck (CLAUDE.md rule 4).
 
 Contains:
     ALLOWED_MODULES: lists the module roots a script may import
+    Isolation: names the two ways to run a script: `bwrap` (default) or bare `process`
     check_script(): rejects scripts that break the policy, naming the offending line
     run_set_script(): builds one set by running a script's build(ctx) in a subprocess
     run_analysis_script(): runs a script's main(ctx) in a subprocess and captures its output
@@ -18,14 +23,17 @@ Contains:
 import ast
 import json
 import resource
+import shutil
 import signal
 import subprocess
 import sys
 import time
-from typing import Any
+from pathlib import Path
+from typing import Any, Literal
 
+import stage
 from stage.choreo.models import Form, Set
-from stage.core.errors import SchemaError, TimeRangeError, ValidationError
+from stage.core.errors import SchemaError, StorageError, TimeRangeError, ValidationError
 from stage.core.ids import SetId
 from stage.core.util import content_hash
 from stage.show.build_models import BuildResult, ScriptResult
@@ -36,7 +44,10 @@ ALLOWED_MODULES = frozenset(
 )
 BLOCKED_STAGE_MODULES = (
     "stage.show.storage",
+    "stage.show.repositories",
+    "stage.show.file_repository",
     "stage.show.sandbox",
+    "stage.show.sandbox_child",
     "stage.show.build",
     "stage.export.video",
 )
@@ -52,7 +63,11 @@ DEFAULT_TIMEOUT_S = 60.0
 MEMORY_LIMIT_BYTES = 2 * 1024**3
 CPU_GRACE_S = 1
 ENTRY_POINTS = {"set": "build", "analysis": "main"}
-CPU_LIMIT_SIGNALS = (-signal.SIGXCPU, -signal.SIGKILL)
+CPU_LIMIT_SIGNALS = (-signal.SIGXCPU, -signal.SIGKILL, 128 + signal.SIGXCPU, 128 + signal.SIGKILL)
+BWRAP = "bwrap"
+SYSTEM_DIRS = ("/usr", "/lib", "/lib64", "/bin", "/sbin")
+
+type Isolation = Literal["bwrap", "process"]
 
 
 def _module_allowed(name: str) -> bool:
@@ -126,11 +141,47 @@ def _limits(timeout_s: float) -> None:
     resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu))
 
 
+def _bwrap_path() -> str | None:
+    return shutil.which(BWRAP)
+
+
+def _bind_args(path: str) -> list[str]:
+    target = Path(path)
+    if target.is_symlink():
+        return ["--symlink", str(target.readlink()), path]
+    return ["--ro-bind", path, path] if target.exists() else []
+
+
+def _bwrap_command(bwrap: str) -> list[str]:
+    binds: list[str] = []
+    for path in SYSTEM_DIRS:
+        binds += _bind_args(path)
+    for path in {sys.prefix, sys.base_prefix, str(Path(stage.__file__).parent)}:
+        binds += ["--ro-bind", path, path]
+    flags = ["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp"]
+    flags += ["--unshare-all", "--die-with-parent", "--new-session", "--clearenv"]
+    return [bwrap, *binds, *flags, "--"]
+
+
+def _command(isolation: Isolation) -> list[str]:
+    child = [sys.executable, "-I", "-m", CHILD_MODULE]
+    if isolation == "process":
+        return child
+    bwrap = _bwrap_path()
+    if bwrap is None:
+        raise StorageError(
+            "bubblewrap is not installed, so scripts cannot run isolated",
+            hint="install it (apt install bubblewrap) or pass isolation='process' to run "
+            "without filesystem and network isolation",
+        )
+    return [*_bwrap_command(bwrap), *child]
+
+
 # Any: the child protocol exchanges JSON objects.
-def _run_child(payload: dict[str, Any], timeout_s: float) -> dict[str, Any]:
+def _run_child(payload: dict[str, Any], timeout_s: float, isolation: Isolation) -> dict[str, Any]:
     try:
         completed = subprocess.run(
-            [sys.executable, "-I", "-m", CHILD_MODULE],
+            _command(isolation),
             input=json.dumps(payload),
             capture_output=True,
             text=True,
@@ -168,12 +219,17 @@ def _run_child(payload: dict[str, Any], timeout_s: float) -> dict[str, Any]:
 
 
 def run_set_script(
-    show: Show, set_id: SetId, source: str, timeout_s: float = DEFAULT_TIMEOUT_S
+    show: Show,
+    set_id: SetId,
+    source: str,
+    timeout_s: float = DEFAULT_TIMEOUT_S,
+    isolation: Isolation = "bwrap",
 ) -> BuildResult:
     """Builds one set by running `build(ctx)` in an isolated subprocess.
 
     build(ctx) returns a Set with the requested id, or a list of Forms that the child places
     with stage.choreo.form_place.place; the result is stamped with the source hash.
+    `isolation="process"` skips bubblewrap and must be chosen deliberately.
     """
     check_script(source)
     show.set_index(set_id)
@@ -184,7 +240,7 @@ def run_set_script(
         "set_id": set_id,
         "source": source,
     }
-    reply = _run_child(payload, timeout_s)
+    reply = _run_child(payload, timeout_s, isolation)
     built = Set.model_validate(reply["set"]).model_copy(
         update={"source_hash": content_hash(source)}
     )
@@ -201,7 +257,10 @@ def run_set_script(
 
 
 def run_analysis_script(
-    show: Show, source: str, timeout_s: float = DEFAULT_TIMEOUT_S
+    show: Show,
+    source: str,
+    timeout_s: float = DEFAULT_TIMEOUT_S,
+    isolation: Isolation = "bwrap",
 ) -> ScriptResult:
     """Runs `main(ctx)` in an isolated subprocess and returns its JSON result and printed output."""
     check_script(source, ENTRY_POINTS["analysis"])
@@ -212,6 +271,6 @@ def run_analysis_script(
         "set_id": None,
         "source": source,
     }
-    reply = _run_child(payload, timeout_s)
+    reply = _run_child(payload, timeout_s, isolation)
     duration = (time.perf_counter() - started) * 1000.0
     return ScriptResult(stdout=reply["stdout"], result=reply["result"], duration_ms=duration)
