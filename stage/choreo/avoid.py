@@ -241,8 +241,8 @@ def separate_in_time(
     """Staggers starts `gap_counts` apart along an order.
 
     >>> from stage.choreo.models import TransitionSpec
-        >>> separate_in_time(TransitionSpec(id=("1", "2"), counts=8.0), ["A", "B"]).row("B").start
-        1.0
+    >>> separate_in_time(TransitionSpec(id=("1", "2"), counts=8.0), ["A", "B"]).row("B").start
+    1.0
     """
     return stagger(spec, ordered_sel, step=gap_counts)
 
@@ -251,10 +251,10 @@ def apply_fix(spec: TransitionSpec, fix: Fix) -> TransitionSpec:
     """Applies a delay, waypoint or stagger fix; a reassignment must go through apply_match.
 
     >>> from stage.choreo.models import TransitionSpec
-        >>> params = {"entity": "A", "counts": 2.0}
-        >>> fix = Fix(kind="delay", params=params, new_gap=1.0, max_speed_after=1.0)
-        >>> apply_fix(TransitionSpec(id=("1", "2"), counts=8.0), fix).row("A").start
-        2.0
+    >>> params = {"entity": "A", "counts": 2.0}
+    >>> fix = Fix(kind="delay", params=params, new_gap=1.0, max_speed_after=1.0)
+    >>> apply_fix(TransitionSpec(id=("1", "2"), counts=8.0), fix).row("A").start
+    2.0
     """
     p = fix.params
     if fix.kind == "delay":
