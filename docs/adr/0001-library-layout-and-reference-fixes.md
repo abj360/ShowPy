@@ -105,3 +105,21 @@ The reference doc is updated to match this table in the same branch.
 
 - `docs/stage-library-api-reference.md` (2026-11-08)
 - `CLAUDE.md`, rules 1 to 7
+
+## Addendum 2026-11-11: corrections after the first build
+
+The API reference rewrite compared this ADR against the code. It found four places where the
+ADR is now stale. The code is right in each case:
+
+- **Item 12.** `Set.table()` columns are `entity, x, y, facing, form, order, pinned, on_field,
+note`. A `Set` has no group information; join with `show.cast` for it.
+- **Item 4.** `position_at` lives in `stage.choreo.motion_stats`, not `stage.geo.measure`; see
+  the ADR 0002 addendum. `stage.geo` stays static geometry.
+- **Decision 2.** The import example should read `from stage.geo.shapes import line`;
+  constructors live in `shapes`, and curve classes in `curves`.
+- **Item 7.** The export modules are `models`, `data`, `positions`, `print_sheets`, `pdf`,
+  `publish` and `video`.
+
+Also: `import stage` lazily re-exports 533 public names (PEP 562), so the top-level
+re-export that decision 2 avoided now exists without the import-cycle risk. Library examples
+live in `stage.examples`.
