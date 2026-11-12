@@ -23,6 +23,7 @@ the checker receives.
    Position is `curve.point_at(map(ease(u)))`, where `u = (τ − start)/(end − start)`,
    clamped. Easing is a monotone map from [0, 1] onto itself with `e(0) = 0` and
    `e(1) = 1`, so every style stays continuous and still ends on its target.
+
 2. **Outside the window, the spot stands still.** Before `start` it is at the previous set's
    placement; after `end` it is at the next set's placement. `on_field` comes from the previous
    set before the window and from the next set after it. During the window it is the OR of the

@@ -48,12 +48,12 @@ docker compose -f docker/docker-compose.yml up --build
 
 ## Testing
 
-| Suite | Where | Command |
-| --- | --- | --- |
-| Unit | `tests/unit/<package>/` mirrors `stage/` | `uv run pytest tests/unit` |
-| Property (Hypothesis) | `tests/property/` | `uv run pytest tests/property` |
-| Golden replays | `tests/golden/` | `uv run pytest -m golden` |
-| Doctests | every public function | included in `uv run pytest` |
+| Suite                 | Where                                    | Command                        |
+| --------------------- | ---------------------------------------- | ------------------------------ |
+| Unit                  | `tests/unit/<package>/` mirrors `stage/` | `uv run pytest tests/unit`     |
+| Property (Hypothesis) | `tests/property/`                        | `uv run pytest tests/property` |
+| Golden replays        | `tests/golden/`                          | `uv run pytest -m golden`      |
+| Doctests              | every public function                    | included in `uv run pytest`    |
 
 - Tests assert real behavior and must be able to fail. Mocks must be able to fail too.
 - Every bug fix starts with a failing regression test whose name begins with `test_regression_`. Never delete it.

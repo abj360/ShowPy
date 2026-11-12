@@ -6,7 +6,7 @@
 
 ## Context
 
-The *Stage Library: API Reference* (2026-11-08) describes about 350 public items across 14
+The _Stage Library: API Reference_ (2026-11-08) describes about 350 public items across 14
 modules. Read as an implementation spec it has name clashes, import cycles, stateful functions
 in a library that promises purity, wall-clock reads in a library that promises determinism,
 3D concepts in the 2D core, and several undefined conventions (where the origin is, where count
@@ -45,32 +45,32 @@ in a library that promises purity, wall-clock reads in a library that promises d
 
 **Fixes to clashes and contradictions.**
 
-| # | Reference says | Problem | Fix |
-| --- | --- | --- | --- |
-| 1 | `Sheet` in `stage.sheet` and `Sheet{entity, rows}` in export | Same name, two things | Export type is `CoordinateSheet` |
-| 2 | `SheetRef` is an ID format and a sheet data class | Duplicate | `SheetRef` is a `str` alias in `core.ids` only |
-| 3 | `templates()` in `sheet` and in `choreo.forms` | Clash on re-export | `sheet_templates()`, `form_templates()` |
-| 4 | `where()` in `cast.select` and `geo.measure` | Clash, different meaning | `geo.measure.position_at(show, entity, t)` |
-| 5 | `describe(tl, c)` in `time` | Clash with `PositionLanguage.describe` | `describe_count(tl, c)` |
-| 6 | `replace_sheet` in `sheet` and `show.manage` | Duplicate | Lives in `stage.sheet.replace` only |
-| 7 | Export under `stage.show.export`, CLAUDE.md says `stage/export/` | Two layouts | `stage.export.{data,print,publish,video}` |
-| 8 | `stage.show/1` export tag vs `stage.show.v1` schema | Two version strings | `stage.show.v1` |
-| 9 | `ValidationReport` defined in `show.validate`, returned by `time` | Upward import | `stage.core.validation` |
-| 10 | `Selector` in `core.types` names `Selection` from `cast` | Upward import | `Selection` model lives in `stage.core.selection`; `cast.select` re-exports |
-| 11 | Actions, poses, `stage.choreo.contact` in 2D storage, history, export | 3D concepts in 2D core | Removed from the 2D API; `facing_overrides` is `tuple[FacingOverride, ...]` |
-| 12 | `Set.table()` columns `kind`, `pose` | No such fields | Columns: `entity, group, x, y, facing, form, order, pinned, on_field` |
-| 13 | `claim_spot`, `save_sheet`, `accept` mutate hidden state | Breaks the purity rule | Claims are fields of an immutable `Publication`; claim functions return a new one. Sheets save through an injected `SheetStore`. `accept(ws, proposal)` |
-| 14 | `face_audience(target, ...)` takes a `Set` *or* a time range | Ambiguous polymorphism | `face_*` act on a `Set`; time ranges go through `add_facing_override` |
-| 15 | Show derived member `index` | Model would import manage logic | `stage.show.manage.index(show)`; `Show.set(id)` and `Show.transition(tid)` stay |
-| 16 | `TransitionSpec.counts` and `Set.counts` | Two sources of truth | The destination set's `counts` wins. `set_counts` updates both; validation flags a mismatch |
-| 17 | `LabelScheme.prefixes` and `Group.label_prefix` | Which wins? | The scheme overrides; a missing key falls back to the group prefix |
-| 18 | `snap` "result carries a `SnapReport`" | Return shape undefined | Returns `(obj, SnapReport)` |
-| 19 | `Note.anchor`, `Comment.anchor` untagged unions of `str`, tuples and polygons | Not round-trippable in JSON | Tagged `Anchor` model (`kind` + payload) |
-| 20 | `publish(show, notify=True)` sends notifications | Side effect in a pure function | Removed `notify`; `notify_changes` returns the message list |
-| 21 | `coordinate_sheet` "worded by the pack language" | Packs are out of scope | Worded by the show's `CoordinateSystem`; packs can override later |
-| 22 | `replace_sheet` "re-runs checks" | Would import the locked checker | Report has no `checks`; callers run `stagecheck` |
-| 23 | `balance(set, axis)` | Centre undefined | `balance(set, sheet, axis)` |
-| 24 | `draft_notes(show, concept)` | Hidden LLM call | Takes an injected `NoteDrafter` protocol |
+| #   | Reference says                                                                | Problem                                | Fix                                                                                                                                                     |
+| --- | ----------------------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `Sheet` in `stage.sheet` and `Sheet{entity, rows}` in export                  | Same name, two things                  | Export type is `CoordinateSheet`                                                                                                                        |
+| 2   | `SheetRef` is an ID format and a sheet data class                             | Duplicate                              | `SheetRef` is a `str` alias in `core.ids` only                                                                                                          |
+| 3   | `templates()` in `sheet` and in `choreo.forms`                                | Clash on re-export                     | `sheet_templates()`, `form_templates()`                                                                                                                 |
+| 4   | `where()` in `cast.select` and `geo.measure`                                  | Clash, different meaning               | `geo.measure.position_at(show, entity, t)`                                                                                                              |
+| 5   | `describe(tl, c)` in `time`                                                   | Clash with `PositionLanguage.describe` | `describe_count(tl, c)`                                                                                                                                 |
+| 6   | `replace_sheet` in `sheet` and `show.manage`                                  | Duplicate                              | Lives in `stage.sheet.replace` only                                                                                                                     |
+| 7   | Export under `stage.show.export`, CLAUDE.md says `stage/export/`              | Two layouts                            | `stage.export.{data,print,publish,video}`                                                                                                               |
+| 8   | `stage.show/1` export tag vs `stage.show.v1` schema                           | Two version strings                    | `stage.show.v1`                                                                                                                                         |
+| 9   | `ValidationReport` defined in `show.validate`, returned by `time`             | Upward import                          | `stage.core.validation`                                                                                                                                 |
+| 10  | `Selector` in `core.types` names `Selection` from `cast`                      | Upward import                          | `Selection` model lives in `stage.core.selection`; `cast.select` re-exports                                                                             |
+| 11  | Actions, poses, `stage.choreo.contact` in 2D storage, history, export         | 3D concepts in 2D core                 | Removed from the 2D API; `facing_overrides` is `tuple[FacingOverride, ...]`                                                                             |
+| 12  | `Set.table()` columns `kind`, `pose`                                          | No such fields                         | Columns: `entity, group, x, y, facing, form, order, pinned, on_field`                                                                                   |
+| 13  | `claim_spot`, `save_sheet`, `accept` mutate hidden state                      | Breaks the purity rule                 | Claims are fields of an immutable `Publication`; claim functions return a new one. Sheets save through an injected `SheetStore`. `accept(ws, proposal)` |
+| 14  | `face_audience(target, ...)` takes a `Set` _or_ a time range                  | Ambiguous polymorphism                 | `face_*` act on a `Set`; time ranges go through `add_facing_override`                                                                                   |
+| 15  | Show derived member `index`                                                   | Model would import manage logic        | `stage.show.manage.index(show)`; `Show.set(id)` and `Show.transition(tid)` stay                                                                         |
+| 16  | `TransitionSpec.counts` and `Set.counts`                                      | Two sources of truth                   | The destination set's `counts` wins. `set_counts` updates both; validation flags a mismatch                                                             |
+| 17  | `LabelScheme.prefixes` and `Group.label_prefix`                               | Which wins?                            | The scheme overrides; a missing key falls back to the group prefix                                                                                      |
+| 18  | `snap` "result carries a `SnapReport`"                                        | Return shape undefined                 | Returns `(obj, SnapReport)`                                                                                                                             |
+| 19  | `Note.anchor`, `Comment.anchor` untagged unions of `str`, tuples and polygons | Not round-trippable in JSON            | Tagged `Anchor` model (`kind` + payload)                                                                                                                |
+| 20  | `publish(show, notify=True)` sends notifications                              | Side effect in a pure function         | Removed `notify`; `notify_changes` returns the message list                                                                                             |
+| 21  | `coordinate_sheet` "worded by the pack language"                              | Packs are out of scope                 | Worded by the show's `CoordinateSystem`; packs can override later                                                                                       |
+| 22  | `replace_sheet` "re-runs checks"                                              | Would import the locked checker        | Report has no `checks`; callers run `stagecheck`                                                                                                        |
+| 23  | `balance(set, axis)`                                                          | Centre undefined                       | `balance(set, sheet, axis)`                                                                                                                             |
+| 24  | `draft_notes(show, concept)`                                                  | Hidden LLM call                        | Takes an injected `NoteDrafter` protocol                                                                                                                |
 
 The reference doc is updated to match this table in the same branch.
 

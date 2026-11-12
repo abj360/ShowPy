@@ -2,7 +2,7 @@
 
 Eight is an AI-assisted choreography design tool. Designers draw spots on a 2D sheet (a field, stage or floor), build a show set by set, and publish it so performers can claim their spot. This repo holds `stage`, the Python library behind the canvas, and `stagecheck`, the locked checker that verifies every design.
 
-Source of truth for the API: *Stage Library: API Reference* (`docs/stage-library-api-reference.md`). If code and the reference disagree, flag it; do not silently pick one.
+Source of truth for the API: _Stage Library: API Reference_ (`docs/stage-library-api-reference.md`). If code and the reference disagree, flag it; do not silently pick one.
 
 Product overview (problem, scope, non-goals, decision rules): @docs/project-overview.md
 
@@ -52,7 +52,7 @@ Each package: `models.py` holds data classes; other files hold functions.
 - **Shape**: a spot's footprint, `circle` or `rectangle` (rectangles rotate with facing). Used for display and collisions.
 - **Set**: a snapshot of every spot's placement at one moment. **Transition**: the movement between two sets, described by sparse `PathRow`s (missing row = straight, full counts).
 - **Form**: a stored shape construction plus ordered members. Placements are regenerated from forms; edit the form, not the dots.
-- **PathEngine**: the *only* code that turns path instructions into positions. The canvas, checker and exports all use it. Never compute motion anywhere else.
+- **PathEngine**: the _only_ code that turns path instructions into positions. The canvas, checker and exports all use it. Never compute motion anywhere else.
 - **Timeline**: counts are the unit. Tempo sections, holds, markers and cues define timing. Audio is a playback asset with a sync point and **never** changes timing.
 - **Sheet**: the 2D design surface (template + customizations). The coordinate system is a display layer: changing it changes labels, never stored positions.
 

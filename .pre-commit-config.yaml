@@ -23,3 +23,8 @@ repos:
         language: system
         pass_filenames: false
         types: [python]
+      - id: prettier
+        name: prettier (md, yaml, json)
+        entry: npx --yes prettier@3.6.2 --check
+        language: system
+        types_or: [markdown, yaml, json]

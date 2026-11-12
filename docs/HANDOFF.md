@@ -7,15 +7,16 @@ Last updated: 2026-11-11
 
 ## Where things stand
 
-| Item | Value |
-| --- | --- |
-| Branch | `feat/stage-library` (from `chore/add-claude-md`; no local `main`) |
-| Gates | `uv run pytest` about 1380 green (doctests, warnings as errors); ruff and mypy `--strict` clean |
-| Docker | `docker compose -f docker/docker-compose.yml up --build` passed |
-| Out of scope | `stagecheck`, `stage.packs` and `stage.index`, by the user's decision (2026-11-11) |
-| Not pushed | Pushing needs explicit approval |
+| Item         | Value                                                                                           |
+| ------------ | ----------------------------------------------------------------------------------------------- |
+| Branch       | `feat/stage-library` (from `chore/add-claude-md`; no local `main`)                              |
+| Gates        | `uv run pytest` about 1380 green (doctests, warnings as errors); ruff and mypy `--strict` clean |
+| Docker       | `docker compose -f docker/docker-compose.yml up --build` passed                                 |
+| Out of scope | `stagecheck`, `stage.packs` and `stage.index`, by the user's decision (2026-11-11)              |
+| Not pushed   | Pushing needs explicit approval                                                                 |
 
 The user's instructions, in their words:
+
 - "the reference is just a suggestion, if there's a much better algorithm or material to strengthen this library then build it"
 - "fix every contradiction"
 
@@ -29,22 +30,23 @@ Use `uv` only, never pip.
 
 ## Module map (what exists)
 
-| Package | Modules |
-| --- | --- |
-| `core` | errors, ids, types (`FrozenModel`, `Region`, `Box2`), units (immutable `UnitRegistry`), util (`close_matches`, `content_hash`, `seeded_rng`), selection, validation |
-| `geo` | curve_base, curves (11 kinds, arc-length param), svg, text (stroke font), shapes, regions, spacing (Bridson scatter), affine, transforms + transform_base + snapping, measure, analysis, models |
-| `time` | models, timeline, clock (ramps and holds, analytic inverse), measures, validate |
-| `cast` | models, spots, select (expression grammar), rewrite (renames IDs everywhere) |
-| `sheet` | models, templates + surfaces (NFHS, NCAA and NFL fields, stage, gym), coords, bounds, replace, render (`SheetCanvas`, `draw_sheet`) |
-| `notes` | models (tagged `Anchor`), notes (`draft_notes` takes an injected `NoteDrafter`) |
-| `choreo` | models, motion (easing, `MotionRegistry`), engine, engine_compile, engine_facing, engine_models, paths, routes, facing, avoid, motion_stats, forms, form_fns, form_layout, form_ops, form_fit, form_place, match, match_cost, match_solve, match_ops |
-| `show` | models (`Show`, `Pin`, `ShowIndex`, diffs, `Revision`, `CanvasEvent`, `Proposal`), manage, sections, storage, repositories, file_repository, documents, files, history, collab, pinning, changes, locks, validate, sandbox, sandbox_child, build_models |
-| `export` | video only so far (see in-flight work) |
+| Package  | Modules                                                                                                                                                                                                                                                 |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core`   | errors, ids, types (`FrozenModel`, `Region`, `Box2`), units (immutable `UnitRegistry`), util (`close_matches`, `content_hash`, `seeded_rng`), selection, validation                                                                                     |
+| `geo`    | curve_base, curves (11 kinds, arc-length param), svg, text (stroke font), shapes, regions, spacing (Bridson scatter), affine, transforms + transform_base + snapping, measure, analysis, models                                                         |
+| `time`   | models, timeline, clock (ramps and holds, analytic inverse), measures, validate                                                                                                                                                                         |
+| `cast`   | models, spots, select (expression grammar), rewrite (renames IDs everywhere)                                                                                                                                                                            |
+| `sheet`  | models, templates + surfaces (NFHS, NCAA and NFL fields, stage, gym), coords, bounds, replace, render (`SheetCanvas`, `draw_sheet`)                                                                                                                     |
+| `notes`  | models (tagged `Anchor`), notes (`draft_notes` takes an injected `NoteDrafter`)                                                                                                                                                                         |
+| `choreo` | models, motion (easing, `MotionRegistry`), engine, engine_compile, engine_facing, engine_models, paths, routes, facing, avoid, motion_stats, forms, form_fns, form_layout, form_ops, form_fit, form_place, match, match_cost, match_solve, match_ops    |
+| `show`   | models (`Show`, `Pin`, `ShowIndex`, diffs, `Revision`, `CanvasEvent`, `Proposal`), manage, sections, storage, repositories, file_repository, documents, files, history, collab, pinning, changes, locks, validate, sandbox, sandbox_child, build_models |
+| `export` | video only so far (see in-flight work)                                                                                                                                                                                                                  |
 
 ## In flight
 
 An agent was building `stage/export/{models,data,print,publish}.py` in a git worktree under
 `.claude/worktrees/` (branch `worktree-agent-…`). Its spec:
+
 - `CoordinateSheet` instead of `Sheet`.
 - Claims stored inside an immutable `Publication`.
 - A dependency-free PDF writer.
@@ -52,6 +54,7 @@ An agent was building `stage/export/{models,data,print,publish}.py` in a git wor
 - `export_json` tagged `stage.show.v1`.
 
 If its branch exists:
+
 1. Run `git merge --no-ff` on it.
 2. Resolve `stage/export/__init__.py` if both sides added it (keep the docstring-only version).
 3. Run the gates.

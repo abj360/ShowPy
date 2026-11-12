@@ -1,0 +1,6 @@
+schemas/
+tests/golden/fixtures/
+uv.lock
+.venv/
+.claude/
+docs/stage-library-api-reference.md
