@@ -10,7 +10,7 @@ Last updated: 2026-11-11
 | Item | Value |
 | --- | --- |
 | Branch | `feat/stage-library` (from `chore/add-claude-md`; no local `main`) |
-| Gates | `uv run pytest` 1368 green (doctests, warnings as errors); ruff and mypy `--strict` clean |
+| Gates | `uv run pytest` about 1380 green (doctests, warnings as errors); ruff and mypy `--strict` clean |
 | Docker | `docker compose -f docker/docker-compose.yml up --build` passed |
 | Out of scope | `stagecheck`, `stage.packs` and `stage.index`, by the user's decision (2026-11-11) |
 | Not pushed | Pushing needs explicit approval |
@@ -61,17 +61,10 @@ If the branch is gone or half done, rebuild from that spec. `git worktree list` 
 
 ## Remaining work, in order
 
-1. **`stage/show/build.py`** (the sandbox already exists in `show/sandbox.py`):
-   - `build_set(ws, set_id)`: read `/sets/<id>/set.py`, run `run_set_script`, `validate_set`, then store via the workspace. Also report `stale_dependents`.
-   - `build_all(ws, from_set=None)`.
-   - `stale(ws)`: a set is stale when its script hash ≠ `Set.source_hash`, or the previous set changed.
-   - `new_set_script(ws, set_id, template="copy_prev"|"hold"|"from_forms"|"blank")`.
-   - `run_script(ws, path, timeout_s=60)`.
-   - Read the `Workspace` API in `show/storage.py` first; it is stateful, with `refresh`, `commit` and `write(..., at=, message=)`.
-   - Let scripts return `list[Form]` too, and route those through `choreo.form_place.place`.
-2. **`choreo.paths.save_paths(ws, spec)` / `load_paths(ws, tid)`**: path `/transitions/<a>-<b>/paths.json`.
+1. Done 2026-11-11: `stage/show/build.py` (`build_set`, `build_all`, `stale`, `new_set_script`, `run_script`).
+2. Done 2026-11-11: `stage/choreo/paths_store.py` (`save_paths`, `load_paths`).
 3. **`stage/__init__.py`**: re-export the public API. Names must not clash; ADR 0001 renamed the clashing ones. Add a test that every re-export resolves and that `__all__` is unique.
-4. **`schemas/`**: JSON schemas for stored models (`stage.show.v1`), generated from Pydantic. Add a test that the committed schema matches `Show.model_json_schema()`.
+4. Done 2026-11-11: `schemas/stage.show.v1.json`, guarded by `tests/unit/show/test_schema.py` (regenerate with `STAGE_UPDATE_SCHEMA=1`).
 5. **Update `docs/stage-library-api-reference.md`**, which the user asked for ("fix every contradiction"). Apply ADR 0001's table and every agent deviation listed below, section by section. Keep the doc's format.
 6. **`README.md`**, in the order from the user's global CLAUDE.md:
    1. pitch
