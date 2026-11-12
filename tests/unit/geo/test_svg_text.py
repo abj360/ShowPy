@@ -71,3 +71,11 @@ def test_text_outline_unknown_font_or_glyph() -> None:
         text_outline("A", "comic", 1.0, (0, 0))
     with pytest.raises(UnknownRefError):
         text_outline("~", "simplex", 1.0, (0, 0))
+
+
+def test_regression_parse_path_accepts_packed_arc_flags() -> None:
+    packed = parse_path("M0 0 a1 1 0 011 1")
+    spaced = parse_path("M0 0 a1 1 0 0 1 1 1")
+    assert len(packed[0].pieces) == 1
+    assert packed[0].pieces[0] == spaced[0].pieces[0]
+    assert approx_equal(packed[0].pieces[0].end, (1.0, 1.0))

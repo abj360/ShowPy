@@ -10,6 +10,7 @@ Contains:
     ArcPiece: evaluates an elliptical arc piece in center parameterization
     Subpath: holds the pieces of one M…(Z) run and writes them back as absolute path data
     parse_path(): parses path data into subpaths, supporting M L H V C S Q T A Z
+    _unpack_arc_flags(): splits packed arc flags into single digits
 """
 
 import math
@@ -28,6 +29,7 @@ type FloatArray = npt.NDArray[np.float64]
 TOKEN = re.compile(r"([MmLlHhVvCcSsQqTtAaZz])|([-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?)")
 COMMAND_ARITY = {"M": 2, "L": 2, "H": 1, "V": 1, "C": 6, "S": 4, "Q": 4, "T": 2, "A": 7, "Z": 0}
 SEPARATORS = re.compile(r"[\s,]+")
+ARC_FLAG_SLOTS = (3, 4)
 
 
 @dataclass(frozen=True)
@@ -339,6 +341,19 @@ def _angle(u: tuple[float, float], v: tuple[float, float]) -> float:
     return math.degrees(math.atan2(u[0] * v[1] - u[1] * v[0], u[0] * v[0] + u[1] * v[1]))
 
 
+def _unpack_arc_flags(tokens: list[str], index: int) -> list[str]:
+    """Splits packed arc flags such as `011` into `0`, `1`, `1`; SVG flags are single digits."""
+    out = list(tokens)
+    for slot in ARC_FLAG_SLOTS:
+        position = index + slot
+        if position >= len(out):
+            return out
+        token = out[position]
+        if len(token) > 1 and token[0] in "01" and token[1] not in ".eE":
+            out[position : position + 1] = [token[0], token[1:]]
+    return out
+
+
 def parse_path(d: str) -> list[Subpath]:
     """Parses SVG path data into subpaths of evaluable pieces.
 
@@ -356,6 +371,8 @@ def parse_path(d: str) -> list[Subpath]:
         elif not command:
             raise SchemaError("path data must start with M", hint="begin with M x y")
         arity = COMMAND_ARITY[command.upper()]
+        if command in "Aa":
+            tokens = _unpack_arc_flags(tokens, index)
         args = [float(t) for t in tokens[index : index + arity]]
         if len(args) < arity or any(t.isalpha() for t in tokens[index : index + arity]):
             raise SchemaError(
