@@ -139,8 +139,8 @@ def test_parentheses_group() -> None:
     assert ids(mixed_cast(), "T1 + (T2 & T2)") == ("T1", "T2")
 
 
-def test_operators_without_spaces_around_symbols() -> None:
-    assert ids(mixed_cast(), "T1+T2&(T2)") == ("T2",)
+def test_operators_next_to_parentheses_need_no_spaces() -> None:
+    assert ids(mixed_cast(), "(T1)+(T2)&(T2)") == ("T2",)
     assert ids(mixed_cast(), "(T*)-(T2)") == ("T1", "T10")
 
 
@@ -296,3 +296,13 @@ def test_mirror_pairs_uses_optimal_assignment() -> None:
 def test_mirror_pairs_respects_axis() -> None:
     assert mirror_pairs(spatial_set(), ["E", "F"], axis_x=1.0, tol=0.5) == []
     assert mirror_pairs(spatial_set(), ["C", "B"], axis_x=1.0, tol=0.1) == []
+
+
+def test_regression_glued_operators_raise_instead_of_misparsing() -> None:
+    with pytest.raises(SchemaError) as info:
+        select(mixed_cast(), "T1+T2-T10")
+    assert info.value.context["position"] == 2
+    with pytest.raises(SchemaError):
+        select(mixed_cast(), "T1 +T2")
+    assert ids(mixed_cast(), "T1 + T2 - T2") == ("T1",)
+    assert ids(mixed_cast(), "T1-T2") == ("T1", "T2")

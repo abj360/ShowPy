@@ -45,7 +45,7 @@ TOKEN_PATTERN = re.compile(r"[+\-&()]|[^\s+&()\-][^\s+&()]*")
 VALID_FORMS = (
     "use T4, T1-T8, T*, all, group:<key>, form:<id>, tag:<tag>, shape:circle|rectangle or "
     "sel:<name>, joined by + (union), - (difference), & (intersection) and parentheses; "
-    "put spaces around - when it means difference"
+    "put spaces or parentheses around operators (T1 + T2 - T3); T2-T3 without spaces is a range"
 )
 OPERATORS = ("+", "-", "&")
 ALL_WORD = "all"
@@ -83,8 +83,21 @@ def _bad_token(message: str, position: int, expr: str) -> SchemaError:
     )
 
 
+def _glued(expr: str, position: int) -> bool:
+    neighbours = (expr[position - 1 : position], expr[position + 1 : position + 2])
+    return any(c and not c.isspace() and c not in "()" for c in neighbours)
+
+
 def _tokenize(expr: str) -> list[_Token]:
-    return [_Token(match[0], match.start()) for match in TOKEN_PATTERN.finditer(expr)]
+    tokens = [_Token(match[0], match.start()) for match in TOKEN_PATTERN.finditer(expr)]
+    for token in tokens:
+        if token.text in OPERATORS and _glued(expr, token.position):
+            raise _bad_token(
+                f"operator {token.text!r} must be separated by spaces or parentheses",
+                token.position,
+                expr,
+            )
+    return tokens
 
 
 def _set_forms(set_: Set) -> dict[FormId, tuple[SpotId, ...]]:
