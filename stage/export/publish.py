@@ -1,0 +1,468 @@
+#!/usr/bin/env python3
+
+"""
+publish.py --- publishing a show as a live link, claims on its spots and performer views
+
+Every function is pure: claims live inside the immutable Publication (ADR 0001 item 13),
+edits return a new Publication, and every time stamp is an explicit `at` (item 8).
+Notifications are returned, never sent (item 20).
+
+Contains:
+    publish(): publishes a show revision, carrying forward claims that still qualify
+    unpublish(): closes a publication
+    pause(): pauses a publication
+    qr_code(): renders the publication link as a PNG QR code
+    claim_spot(): puts a performer on a spot, one each way, locked on claim
+    claims(): lists every claim
+    who_is_on(): returns the performer holding a spot
+    unclaimed(): lists claimable spots nobody holds yet
+    swap_claims(): swaps the performers of two claimed spots, as the designer
+    reassign(): moves a performer onto a spot, as the designer
+    release(): frees a spot, as the designer
+    performer_view(): builds a performer's own view of the show
+    notify_changes(): lists performers whose part changed, with a terse summary each
+"""
+
+import io
+import math
+from datetime import datetime
+from urllib.parse import quote
+
+import segno
+from PIL import Image
+
+from stage.cast.models import Spot
+from stage.choreo.models import Placement, Set
+from stage.core.errors import LockedError, SchemaError, UnknownRefError, ValidationError
+from stage.core.ids import SpotId, TransitionId, format_tid
+from stage.core.units import angle_diff
+from stage.core.util import close_matches, content_hash, format_ranges, natural_sort
+from stage.export.models import Claim, Performer, PerformerView, Publication, PublicationStatus
+from stage.export.print_sheets import OFF_FIELD
+from stage.sheet.coords import to_coords
+from stage.show.models import Show
+
+QR_ERROR_LEVEL = "m"
+# The QR standard requires a quiet zone four modules wide around the symbol.
+QR_QUIET_MODULES = 4
+DARK, LIGHT = 0, 255
+POSITION_TOL = 1e-6
+FACING_TOL = 1e-6
+PATH_SEGMENT = "spots"
+PATH_SUFFIX = "path"
+PART_SEPARATOR = "; "
+SPOT_REMOVED = "spot removed"
+
+
+def _require_aware(at: datetime) -> None:
+    if at.tzinfo is None or at.utcoffset() is None:
+        raise SchemaError(
+            f"time stamp {at.isoformat()} has no time zone",
+            hint="pass an aware datetime, e.g. datetime(2026, 11, 11, tzinfo=UTC)",
+            context={"at": at.isoformat()},
+        )
+
+
+def _sorted(claims_: list[Claim]) -> tuple[Claim, ...]:
+    order = {spot: i for i, spot in enumerate(natural_sort(c.spot for c in claims_))}
+    return tuple(sorted(claims_, key=lambda c: order[c.spot]))
+
+
+def _may_claim(spot: Spot, performer: Performer) -> bool:
+    return spot.active and spot.claimable == performer.role
+
+
+def _still_valid(show: Show, claim: Claim) -> bool:
+    return claim.spot in show.cast.ids() and _may_claim(show.cast.spot(claim.spot), claim.performer)
+
+
+def publish(
+    show: Show,
+    publication_id: str,
+    base_url: str,
+    at: datetime,
+    previous: Publication | None = None,
+) -> Publication:
+    """Publishes the show's current revision as a live link.
+
+    Args:
+        show: Show to publish.
+        publication_id: Stable ID; republishing reuses it.
+        base_url: Public URL prefix the link is built on.
+        at: Publication time; must carry a time zone.
+        previous: The publication being updated; its claims carry over when the spot still
+            exists and is still claimable by that performer's role.
+
+    Returns:
+        publication: A live publication of the show's revision (its content hash when unsaved).
+
+    >>> from datetime import UTC, datetime
+    >>> from tests.fixtures.shows import two_set_show
+    >>> publish(two_set_show(), "p1", "https://x.example", datetime(2026, 1, 1, tzinfo=UTC)).link
+    'https://x.example/p1'
+    """
+    _require_aware(at)
+    if not base_url.strip() or not publication_id.strip():
+        raise SchemaError(
+            "publication needs a base URL and an ID",
+            hint="pass base_url like https://eight.example/p and a non-blank publication_id",
+            context={"base_url": base_url, "publication_id": publication_id},
+        )
+    if previous is not None and (previous.id, previous.show_id) != (publication_id, show.id):
+        raise ValidationError(
+            f"publication {previous.id} of {previous.show_id} cannot be republished as "
+            f"{publication_id} of {show.id}",
+            hint="republish with the same publication ID and show",
+            context={"previous": previous.id, "publication_id": publication_id},
+        )
+    kept = [c for c in previous.claims if _still_valid(show, c)] if previous else []
+    return Publication(
+        id=publication_id,
+        show_id=show.id,
+        revision=show.revision or content_hash(show),
+        link=f"{base_url.strip().rstrip('/')}/{quote(publication_id, safe='')}",
+        published_at=at,
+        claims=_sorted(kept),
+    )
+
+
+def _with_status(pub: Publication, status: PublicationStatus) -> Publication:
+    return pub.model_copy(update={"status": status})
+
+
+def unpublish(pub: Publication) -> Publication:
+    """Closes a publication; claims stay on record.
+
+    >>> from tests.fixtures.export_shows import live_publication
+    >>> from tests.fixtures.shows import two_set_show
+    >>> unpublish(live_publication(two_set_show())).status
+    'closed'
+    """
+    return _with_status(pub, "closed")
+
+
+def pause(pub: Publication) -> Publication:
+    """Pauses a publication: the link stays but nobody can claim.
+
+    >>> from tests.fixtures.export_shows import live_publication
+    >>> from tests.fixtures.shows import two_set_show
+    >>> pause(live_publication(two_set_show())).status
+    'paused'
+    """
+    return _with_status(pub, "paused")
+
+
+def qr_code(pub: Publication, size: int = 512) -> bytes:
+    r"""Renders the publication link as a square PNG QR code of `size` pixels.
+
+    Modules are whole pixels, centered with the standard quiet zone, so the code stays sharp.
+
+    >>> from tests.fixtures.export_shows import live_publication
+    >>> from tests.fixtures.shows import two_set_show
+    >>> qr_code(live_publication(two_set_show()), size=128)[:4]
+    b'\x89PNG'
+    """
+    code = segno.make(pub.link, error=QR_ERROR_LEVEL, micro=False)
+    rows = [
+        tuple(bool(m) for m in row) for row in code.matrix_iter(scale=1, border=QR_QUIET_MODULES)
+    ]
+    modules = len(rows)
+    if size < modules:
+        raise SchemaError(
+            f"QR code needs at least {modules} pixels, got {size}",
+            hint=f"pass size >= {modules}",
+            context={"size": size, "modules": modules},
+        )
+    symbol = Image.new("L", (modules, modules), LIGHT)
+    symbol.putdata([DARK if dark else LIGHT for row in rows for dark in row])
+    scaled = size // modules * modules
+    canvas = Image.new("L", (size, size), LIGHT)
+    offset = (size - scaled) // 2
+    canvas.paste(symbol.resize((scaled, scaled), Image.Resampling.NEAREST), (offset, offset))
+    out = io.BytesIO()
+    canvas.save(out, format="PNG")
+    return out.getvalue()
+
+
+def claims(pub: Publication) -> list[Claim]:
+    """Lists every claim in natural spot order.
+
+    >>> from tests.fixtures.export_shows import live_publication
+    >>> from tests.fixtures.shows import two_set_show
+    >>> claims(live_publication(two_set_show()))
+    []
+    """
+    return list(pub.claims)
+
+
+def _claim_on(pub: Publication, spot: SpotId) -> Claim | None:
+    return next((c for c in pub.claims if c.spot == spot), None)
+
+
+def who_is_on(pub: Publication, spot: SpotId) -> Performer | None:
+    """Returns the performer holding a spot, or None when it is free.
+
+    >>> from tests.fixtures.export_shows import live_publication
+    >>> from tests.fixtures.shows import two_set_show
+    >>> who_is_on(live_publication(two_set_show()), "T1") is None
+    True
+    """
+    claim = _claim_on(pub, spot)
+    return None if claim is None else claim.performer
+
+
+def unclaimed(pub: Publication, show: Show) -> list[SpotId]:
+    """Lists active, claimable spots nobody holds yet, in cast order.
+
+    >>> from tests.fixtures.export_shows import live_publication
+    >>> from tests.fixtures.shows import two_set_show
+    >>> unclaimed(live_publication(two_set_show()), two_set_show())
+    ['T1', 'T2', 'T3', 'T4']
+    """
+    held = {c.spot for c in pub.claims}
+    return [
+        s.id for s in show.cast.spots if s.active and s.claimable != "none" and s.id not in held
+    ]
+
+
+def _require_claimable(pub: Publication, show: Show, performer: Performer, spot: Spot) -> None:
+    holder = who_is_on(pub, spot.id)
+    if holder is not None:
+        free = format_ranges(unclaimed(pub, show)) or "none"
+        raise LockedError(
+            f"{spot.id} is already claimed",
+            hint=f"pick a free spot: {free}",
+            context={"spot": spot.id, "holder": holder.id},
+        )
+    mine = next((c.spot for c in pub.claims if c.performer.id == performer.id), None)
+    if mine is not None:
+        raise LockedError(
+            f"{performer.name} already holds {mine}",
+            hint="one spot per performer; ask the designer to reassign you",
+            context={"performer": performer.id, "spot": mine},
+        )
+    if not _may_claim(spot, performer):
+        raise ValidationError(
+            f"{spot.id} cannot be claimed by a {performer.role}",
+            hint=f"{performer.role}s may claim active spots marked {performer.role}",
+            context={"spot": spot.id, "claimable": spot.claimable, "active": spot.active},
+        )
+
+
+def claim_spot(
+    pub: Publication, show: Show, performer: Performer, spot: SpotId, at: datetime
+) -> tuple[Publication, Claim]:
+    """Puts a performer on a spot: one spot per performer, one performer per spot.
+
+    Args:
+        pub: Live publication of `show`.
+        show: The published show, for spot roles.
+        performer: Who claims; only spots whose `claimable` matches their role qualify.
+        spot: Spot to claim.
+        at: Claim time.
+
+    Returns:
+        result: The new publication and the locked claim.
+
+    >>> from tests.fixtures.export_shows import AT, live_publication, performer
+    >>> from tests.fixtures.shows import two_set_show
+    >>> show = two_set_show()
+    >>> claim_spot(live_publication(show), show, performer("Ada"), "T1", AT)[1].locked
+    True
+    """
+    if pub.show_id != show.id:
+        raise ValidationError(
+            f"publication {pub.id} is of show {pub.show_id}, not {show.id}",
+            hint="pass the show the publication was made from",
+            context={"publication": pub.id, "show": show.id},
+        )
+    if pub.status != "live":
+        raise LockedError(
+            f"publication {pub.id} is {pub.status}",
+            hint="claims open only while the publication is live",
+            context={"status": pub.status},
+        )
+    _require_claimable(pub, show, performer, show.cast.spot(spot))
+    claim = Claim(spot=spot, performer=performer, claimed_at=at)
+    return pub.model_copy(update={"claims": _sorted([*pub.claims, claim])}), claim
+
+
+def _require_open(pub: Publication) -> None:
+    if pub.status == "closed":
+        raise LockedError(
+            f"publication {pub.id} is closed",
+            hint="republish the show before changing claims",
+            context={"publication": pub.id},
+        )
+
+
+def _require_claimed(pub: Publication, spot: SpotId) -> Claim:
+    claim = _claim_on(pub, spot)
+    if claim is None:
+        held = [c.spot for c in pub.claims]
+        close = close_matches(spot, held)
+        raise UnknownRefError(
+            f"nobody holds {spot}",
+            hint=f"did you mean {', '.join(close)}?" if close else f"claimed: {held or 'none'}",
+            context={"spot": spot},
+        )
+    return claim
+
+
+def swap_claims(pub: Publication, a: SpotId, b: SpotId) -> Publication:
+    """Swaps the performers of two claimed spots, as the designer; roles must match.
+
+    >>> from tests.fixtures.export_shows import AT, live_publication, performer
+    >>> from tests.fixtures.shows import two_set_show
+    >>> show = two_set_show()
+    >>> pub, _ = claim_spot(live_publication(show), show, performer("Ada"), "T1", AT)
+    >>> pub, _ = claim_spot(pub, show, performer("Bo"), "T2", AT)
+    >>> who_is_on(swap_claims(pub, "T1", "T2"), "T1").name
+    'Bo'
+    """
+    _require_open(pub)
+    first, second = _claim_on(pub, a), _claim_on(pub, b)
+    if first is None or second is None:
+        raise ValidationError(
+            f"swap needs both {a} and {b} claimed",
+            hint="use reassign() to move a performer onto an empty spot",
+            context={"a": a, "b": b},
+        )
+    if first.performer.role != second.performer.role:
+        raise ValidationError(
+            f"{a} and {b} are held by a {first.performer.role} and a {second.performer.role}",
+            hint="swap performers of the same role",
+            context={"a": a, "b": b},
+        )
+    others = [c for c in pub.claims if c.spot not in (a, b)]
+    swapped = [first.model_copy(update={"spot": b}), second.model_copy(update={"spot": a})]
+    return pub.model_copy(update={"claims": _sorted(others + swapped)})
+
+
+def reassign(pub: Publication, spot: SpotId, performer: Performer, at: datetime) -> Publication:
+    """Moves a performer onto a spot, as the designer; whoever held the spot is unassigned.
+
+    >>> from tests.fixtures.export_shows import AT, live_publication, performer
+    >>> from tests.fixtures.shows import two_set_show
+    >>> pub = reassign(live_publication(two_set_show()), "T3", performer("Ada"), AT)
+    >>> who_is_on(pub, "T3").name
+    'Ada'
+    """
+    _require_open(pub)
+    kept = [c for c in pub.claims if c.spot != spot and c.performer.id != performer.id]
+    claim = Claim(spot=spot, performer=performer, claimed_at=at)
+    return pub.model_copy(update={"claims": _sorted([*kept, claim])})
+
+
+def release(pub: Publication, spot: SpotId) -> Publication:
+    """Frees a claimed spot, as the designer.
+
+    >>> from tests.fixtures.export_shows import AT, live_publication, performer
+    >>> from tests.fixtures.shows import two_set_show
+    >>> pub = reassign(live_publication(two_set_show()), "T3", performer("Ada"), AT)
+    >>> who_is_on(release(pub, "T3"), "T3") is None
+    True
+    """
+    _require_open(pub)
+    _require_claimed(pub, spot)
+    return pub.model_copy(update={"claims": tuple(c for c in pub.claims if c.spot != spot)})
+
+
+def performer_view(pub: Publication, show: Show, performer: Performer) -> PerformerView:
+    """Builds a performer's own view: their spot's position text and counts in every set.
+
+    >>> from tests.fixtures.export_shows import AT, live_publication, performer
+    >>> from tests.fixtures.shows import two_set_show
+    >>> show = two_set_show()
+    >>> pub, _ = claim_spot(live_publication(show), show, performer("Ada"), "T1", AT)
+    >>> performer_view(pub, show, performer("Ada")).sets[1][2]
+    8.0
+    """
+    claim = next((c for c in pub.claims if c.performer.id == performer.id), None)
+    if claim is None:
+        raise UnknownRefError(
+            f"{performer.name} holds no spot in publication {pub.id}",
+            hint=f"claim one first; free spots: {format_ranges(unclaimed(pub, show)) or 'none'}",
+            context={"performer": performer.id},
+        )
+    rows = []
+    for current in show.sets:
+        placement = current.get(claim.spot)
+        text = to_coords(show, placement.point) if placement.on_field else OFF_FIELD
+        rows.append((current.id, text, current.counts))
+    url = f"{pub.link}/{PATH_SEGMENT}/{quote(claim.spot, safe='')}/{PATH_SUFFIX}"
+    return PerformerView(
+        performer=claim.performer, spot=claim.spot, sets=tuple(rows), path_animation_url=url
+    )
+
+
+def _placement(current: Set, spot: SpotId) -> Placement | None:
+    return next((p for p in current.placements if p.entity == spot), None)
+
+
+def _set_changes(old: Show, new: Show, spot: SpotId) -> tuple[list[str], list[str]]:
+    moved, turned = [], []
+    old_sets = {s.id: s for s in old.sets}
+    for current in new.sets:
+        before = _placement(old_sets[current.id], spot) if current.id in old_sets else None
+        after = _placement(current, spot)
+        if before is None or after is None:
+            continue
+        if math.dist(before.point, after.point) > POSITION_TOL or before.on_field != after.on_field:
+            moved.append(current.id)
+        if abs(angle_diff(before.facing, after.facing)) > FACING_TOL:
+            turned.append(current.id)
+    return moved, turned
+
+
+def _path_key(show: Show, tid: TransitionId, spot: SpotId) -> tuple[object, ...]:
+    spec = show.transition(tid)
+    row = spec.row(spot)
+    return row, spec.routes.get(row.route) if row.route else None, spec.counts
+
+
+def _path_changes(old: Show, new: Show, spot: SpotId) -> list[str]:
+    shared = [tid for tid in new.transition_ids() if tid in old.transition_ids()]
+    return [
+        format_tid(tid) for tid in shared if _path_key(old, tid, spot) != _path_key(new, tid, spot)
+    ]
+
+
+def _phrase(what: str, places: list[str], noun: str | None = None) -> str | None:
+    if not places:
+        return None
+    label = "" if noun is None else f"{noun}{'' if len(places) == 1 else 's'} "
+    return f"{what} in {label}{', '.join(places)}"
+
+
+def _summary(old: Show, new: Show, spot: SpotId) -> str:
+    if spot not in new.cast.ids():
+        return SPOT_REMOVED
+    moved, turned = _set_changes(old, new, spot)
+    parts = [
+        _phrase("moved", moved, "set"),
+        _phrase("facing changed", turned, "set"),
+        _phrase("path changed", _path_changes(old, new, spot)),
+    ]
+    return PART_SEPARATOR.join(p for p in parts if p)
+
+
+def notify_changes(pub: Publication, old_show: Show, new_show: Show) -> list[tuple[Performer, str]]:
+    """Lists performers whose spot moved, turned, lost its path or was removed, with a summary.
+
+    Nothing is sent; callers deliver the messages.
+
+    >>> from tests.fixtures.export_shows import AT, live_publication, performer
+    >>> from tests.fixtures.motion_shows import with_targets
+    >>> from tests.fixtures.shows import two_set_show
+    >>> show = two_set_show()
+    >>> pub, _ = claim_spot(live_publication(show), show, performer("Ada"), "T1", AT)
+    >>> notify_changes(pub, show, with_targets({"T1": {"x": 3.0}}))[0][1]
+    'moved in set 2'
+    """
+    notices = []
+    for claim in pub.claims:
+        summary = _summary(old_show, new_show, claim.spot)
+        if summary:
+            notices.append((claim.performer, summary))
+    return notices
