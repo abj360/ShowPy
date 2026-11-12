@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
 
 """
-export --- publishing with claims, printouts, data interchange and 2D video
+export --- how a show leaves the app: data interchange, printouts, PDF and publishing
 """
