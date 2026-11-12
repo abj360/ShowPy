@@ -6,10 +6,12 @@ Source of truth for the API: *Stage Library: API Reference* (`docs/stage-library
 
 Product overview (problem, scope, non-goals, decision rules): @docs/project-overview.md
 
+Work in progress on `feat/stage-library`: read the handoff notes before continuing: @docs/HANDOFF.md
+
 ## Commands
 
 ```bash
-uv sync                          # install workspace (stage + stagecheck)
+uv sync                          # install the stage package (stagecheck not built yet)
 uv run pytest                    # all tests
 uv run pytest tests/unit/choreo  # one area
 uv run pytest -m golden          # real marchable drill regression
