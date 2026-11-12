@@ -95,3 +95,10 @@ def test_suggest_reassignment_uncrosses_a_swap() -> None:
     targets = dict(zip(result.entities, result.target_points().tolist(), strict=True))
     assert approx_equal(targets["T1"], (0.0, 9.0))
     assert approx_equal(targets["T2"], (4.0, 9.0))
+
+
+def test_regression_reassign_hint_names_the_real_module() -> None:
+    fix = Fix(kind="reassign", params={}, new_gap=1.0, max_speed_after=0.5)
+    with pytest.raises(PathError) as info:
+        apply_fix(crossing_show().transition(TID), fix)
+    assert "stage.choreo.match_ops.apply_match" in info.value.hint

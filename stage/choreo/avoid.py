@@ -266,5 +266,5 @@ def apply_fix(spec: TransitionSpec, fix: Fix) -> TransitionSpec:
         return stagger(spec, p["order"], step=p["step"])
     raise PathError(
         "a reassignment changes the next set, not the paths",
-        hint="apply it with stage.choreo.match.apply_match(show, tid, result)",
+        hint="apply it with stage.choreo.match_ops.apply_match(show, tid, result)",
     )
