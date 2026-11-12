@@ -103,7 +103,7 @@ stage.core.errors.PathError: PATH: rotate paths need pivot, sweep_deg (hint: pas
 row, so T1 has no stored row at all. The `ease_in` ripple starts five spots at `4·u²` for `u = 0, ¼, ½, ¾, 1`: 0, 0.25, 1, 2.25, 4.
 The first spots leave close together, the last ones far apart.
 
-`stage.choreo.paths_store.save_paths(ws, spec, at)` and `load_paths(ws, tid)` read and write
+`stage.show.paths_store.save_paths(ws, spec, at)` and `load_paths(ws, tid)` read and write
 one transition's paths as `/transitions/<a>-<b>/paths.json` in a workspace (chapter 13).
 
 ## Easing: motion.py

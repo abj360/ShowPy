@@ -211,10 +211,6 @@ if TYPE_CHECKING:
         unlock,
         window,
     )
-    from stage.choreo.paths_store import (
-        load_paths,
-        save_paths,
-    )
     from stage.choreo.routes import (
         counter_march,
         follow,
@@ -616,6 +612,10 @@ if TYPE_CHECKING:
         Show,
         ShowIndex,
         ShowIndexEntry,
+    )
+    from stage.show.paths_store import (
+        load_paths,
+        save_paths,
     )
     from stage.show.pinning import (
         pin,
@@ -1023,7 +1023,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "line": ("stage.geo.shapes", "line"),
     "line_form": ("stage.choreo.forms", "line_form"),
     "line_landmark": ("stage.sheet.surfaces", "line_landmark"),
-    "load_paths": ("stage.choreo.paths_store", "load_paths"),
+    "load_paths": ("stage.show.paths_store", "load_paths"),
     "load_show": ("stage.show.storage", "load_show"),
     "lock": ("stage.choreo.paths", "lock"),
     "log": ("stage.core.util", "log"),
@@ -1127,7 +1127,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "run_analysis_script": ("stage.show.sandbox", "run_analysis_script"),
     "run_script": ("stage.show.build", "run_script"),
     "run_set_script": ("stage.show.sandbox", "run_set_script"),
-    "save_paths": ("stage.choreo.paths_store", "save_paths"),
+    "save_paths": ("stage.show.paths_store", "save_paths"),
     "save_sheet": ("stage.sheet.templates", "save_sheet"),
     "save_show": ("stage.show.storage", "save_show"),
     "scale": ("stage.geo.transforms", "scale"),

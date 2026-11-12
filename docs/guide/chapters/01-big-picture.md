@@ -109,9 +109,9 @@ Two rules from ADR 0001 keep the graph clean.
   `sheet.coords` and `notes.notes`. They import `Show` only for type checking. They edit a
   show with `show.model_copy(update=...)`, which does not need the class at run time.
 
-One module breaks the logic rule today: `stage/choreo/paths_store.py` imports
-`stage.show.storage` and `stage.show.documents`, which are logic one layer up. It works,
-because there is no cycle, but it belongs in `stage.show`.
+Saving and loading paths through the workspace lives in `stage/show/paths_store.py`, not in
+`stage.choreo`, because it needs `stage.show.storage`, which is one layer up. The rule holds:
+no package imports a package above it.
 
 ```pycon
 >>> import stage

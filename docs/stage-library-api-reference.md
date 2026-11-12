@@ -225,7 +225,7 @@ Spots are drawn directly on the sheet; there is no roster to import. A new spot 
 
 **`Selection`** is re-exported from `stage.core.selection`.
 
-Expression grammar for `select`: IDs `T4`, ranges `T1-T8`, prefixes `T*` (labels whose prefix before the trailing number is exactly `T`), `all`, `group:trumpets`, `form:arc1`, `tag:soloist`, `shape:rectangle`, `sel:<name>` (a named selection), combined with `+` (union), `-` (difference), `&` (intersection) and parentheses. Operators apply left to right with equal precedence. `-` as an operator needs a space before it, since `T1-T8` is a range. A `Set` cannot resolve `group`, `tag`, `shape` or `sel` words; a `Cast` cannot resolve `form` words.
+Expression grammar for `select`: IDs `T4`, ranges `T1-T8`, prefixes `T*` (labels whose prefix before the trailing number is exactly `T`), `all`, `group:trumpets`, `form:arc1`, `tag:soloist`, `shape:rectangle`, `sel:<name>` (a named selection), combined with `+` (union), `-` (difference), `&` (intersection) and parentheses. Operators apply left to right with equal precedence. Operators need spaces or parentheses on both sides (`T1 + T2 - T3`, `(T*)-(T2)`); a glued operator such as `T1+T2` raises `SchemaError` with its position, because `T1-T8` without spaces is a range. A `Set` cannot resolve `group`, `tag`, `shape` or `sel` words; a `Cast` cannot resolve `form` words.
 
 | Function                                       | Inputs                                            | Output                        | Purpose                                                                  |
 | ---------------------------------------------- | ------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------ |
@@ -652,7 +652,7 @@ The path models live in `stage.choreo.models`.
 
 ### stage.choreo.paths — editing functions (pure; return `TransitionSpec` unless noted)
 
-`sel` is a list of spot IDs or a `Selection`; resolve expressions first with `stage.cast.select.select`. Every function except `default_paths`, `lock`, `unlock`, `paths_table` and the route builders takes `force=False` and raises `LockedError` on a locked row unless forced. Show-aware builders live in `stage.choreo.routes`, persistence in `stage.choreo.paths_store`.
+`sel` is a list of spot IDs or a `Selection`; resolve expressions first with `stage.cast.select.select`. Every function except `default_paths`, `lock`, `unlock`, `paths_table` and the route builders takes `force=False` and raises `LockedError` on a locked row unless forced. Show-aware builders live in `stage.choreo.routes`, persistence in `stage.show.paths_store`.
 
 | Function                                                                                   | Inputs                                                 | Purpose                                                                                                                      |
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -862,7 +862,7 @@ The other show models (`Revision`, `SetDiff`, `PathDiff`, `Comment`, `CanvasEven
 
 ### stage.show.build
 
-Builds run each script in a sandbox (`stage.show.sandbox`): an AST policy, then a separate interpreter (`python -I`) with restricted builtins, an import allowlist, CPU and memory limits, a wall-clock timeout and an empty environment. It is defense in depth, not a security boundary. Scripts can never import `stagecheck`.
+Builds run each script in a sandbox (`stage.show.sandbox`) with three layers: an AST policy; a separate interpreter (`python -I`) with restricted builtins, an import allowlist, CPU and memory limits, a wall-clock timeout and an empty environment; and, by default, bubblewrap, which removes the network and shows the script a read-only filesystem holding only the interpreter, the virtualenv and the `stage` package. The Python layers alone are defense in depth; bubblewrap is the boundary. Without bubblewrap installed, `run_set_script` and `run_analysis_script` raise `StorageError` unless called with `isolation="process"`, which must be chosen deliberately. Scripts can never import `stagecheck`.
 
 | Item                                                                                                     | Inputs / fields                                                                                                                               | Output                         | Purpose                                                                             |
 | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------- |

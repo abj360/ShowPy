@@ -10,10 +10,10 @@ import pytest
 
 from stage.choreo.models import TransitionSpec
 from stage.choreo.paths import delay
-from stage.choreo.paths_store import load_paths, save_paths
 from stage.core.errors import SchemaError, ValidationError
 from stage.show.build import build_all, build_set, new_set_script, run_script, stale
 from stage.show.manage import add_set
+from stage.show.paths_store import load_paths, save_paths
 from stage.show.repositories import InMemoryRepository
 from stage.show.storage import Workspace, load_show, open_workspace, save_show
 from tests.fixtures.shows import two_set_show
