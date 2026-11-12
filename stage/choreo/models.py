@@ -25,17 +25,21 @@ Contains:
     Route: holds a shared path for follow-the-leader
     TransitionSpec: holds every path instruction for one transition
     TransitionSpec.row(): returns a spot's row, defaulting to straight
+    MatchOptions: holds the constraints, objective and penalties for matching spots to slots
+    MatchResult: holds who goes where, with move statistics and an explanation
+    MatchResult.target_points(): returns targets as an (N, 2) array in entity order
+    FormFnInfo: describes one registered shape generator
 """
 
 import itertools
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from enum import StrEnum
 from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from stage.core.errors import LockedError, PathError, SchemaError, UnknownRefError
 from stage.core.ids import FormId, RouteId, SetId, SpotId, TransitionId
@@ -44,6 +48,7 @@ from stage.core.types import Count, Degrees, FrozenModel, Meters, Point, Points
 
 TABLE_COLUMNS = ("entity", "x", "y", "facing", "form", "order", "pinned", "on_field", "note")
 DEFAULT_EASING_STRENGTH = 2.0
+MATCH_WEIGHT_KEYS = ("backward", "crossing", "group_spread", "turn")
 
 
 class ApprovalState(StrEnum):
@@ -235,7 +240,8 @@ class FacingSpec(FrozenModel):
 
     Attributes:
         mode: `fixed`, `audience`, `toward_point`, `along`, `normal` or `outward`.
-        value: Degrees for fixed, a point for toward_point, ignored otherwise.
+        value: Degrees for fixed, a point for toward_point; for along, normal and outward an
+            optional offset in degrees added to the computed facing.
     """
 
     mode: Literal["fixed", "audience", "toward_point", "along", "normal", "outward"] = "audience"
@@ -518,3 +524,112 @@ class TransitionSpec(FrozenModel):
     def row(self, entity: SpotId) -> PathRow:
         """Returns the spot's row, or a default straight row when it has none."""
         return self.rows.get(entity) or PathRow(entity=entity)
+
+
+type MatchObjective = Literal["sum", "sum_squares", "bottleneck", "bottleneck_then_sum"]
+type CostFn = Callable[[SpotId, int, Point, Point], float]
+
+
+class MatchOptions(FrozenModel):
+    """Holds the constraints, objective and penalties for matching spots to slots.
+
+    Penalties are in meters and add to a move's length before the objective is applied.
+
+    Attributes:
+        keep_groups: Spots only take slots labeled with their own group.
+        group_slots: Group key to the slot indexes reserved for it.
+        pinned: Forced assignments, spot to slot index.
+        forbid: Disallowed (spot, slot index) pairs.
+        no_backward: True forbids travel against facing; a number adds that many meters.
+        max_speed: Fastest allowed move in meters per count; needs `counts`.
+        objective: `sum`, `sum_squares`, `bottleneck` or `bottleneck_then_sum`.
+        power: Exponent applied to move costs by the `sum` objective.
+        preserve_order: Spots, in the order given, take slots in increasing index order.
+        weights: Penalties: `backward` (per meter against facing), `turn` (per degree of turn
+            toward the travel direction), `crossing` (per crossing), `group_spread` (per meter
+            of mean distance from the group's target centroid).
+        cost_fn: Extra cost per (spot, slot index, start, target); infinity forbids the pair.
+            Not serialized.
+        counts: Counts the move takes, for speed limits and reporting.
+    """
+
+    keep_groups: bool = True
+    group_slots: dict[str, tuple[int, ...]] | None = None
+    pinned: dict[SpotId, int] = {}
+    forbid: tuple[tuple[SpotId, int], ...] = ()
+    no_backward: bool | float = False
+    max_speed: float | None = None
+    objective: MatchObjective = "bottleneck_then_sum"
+    power: float = 1.0
+    preserve_order: bool = False
+    weights: dict[str, float] = {}
+    cost_fn: CostFn | None = Field(default=None, exclude=True)
+    counts: float | None = None
+
+    @model_validator(mode="after")
+    def _valid(self) -> "MatchOptions":
+        unknown = sorted(set(self.weights) - set(MATCH_WEIGHT_KEYS))
+        if unknown:
+            raise SchemaError(
+                f"unknown match weight {unknown[0]!r}",
+                hint=f"use weights from {', '.join(MATCH_WEIGHT_KEYS)}",
+                context={"weights": sorted(self.weights)},
+            )
+        positive = {"power": self.power, "max_speed": self.max_speed, "counts": self.counts}
+        for name, value in positive.items():
+            if value is not None and not value > 0:
+                raise SchemaError(f"{name} must be above 0", hint=f"give a positive {name}")
+        if any(w < 0 for w in self.weights.values()):
+            raise SchemaError("match weights must be >= 0", hint="use non-negative weights")
+        return self
+
+
+class MatchResult(FrozenModel):
+    """Holds who goes where, with move statistics and an explanation.
+
+    Attributes:
+        entities: Matched spots, in the order the solver used.
+        assignment: Spot to slot index.
+        targets: Each spot's slot position, aligned with `entities`.
+        total_distance: Sum of straight-line move lengths.
+        max_distance: Longest straight-line move.
+        max_speed: Longest move divided by counts; None when counts are unknown.
+        crossings: Pairs of straight-line moves that cross.
+        unassigned_slots: Slot indexes nobody takes.
+        explain: Plain-language lines describing the result.
+    """
+
+    entities: tuple[SpotId, ...] = ()
+    assignment: dict[SpotId, int] = {}
+    targets: tuple[Point, ...] = ()
+    total_distance: Meters = 0.0
+    max_distance: Meters = 0.0
+    max_speed: float | None = None
+    crossings: int = 0
+    unassigned_slots: tuple[int, ...] = ()
+    explain: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _aligned(self) -> "MatchResult":
+        if len(self.entities) != len(self.targets) or set(self.entities) != set(self.assignment):
+            raise SchemaError(
+                "match result entities, targets and assignment disagree",
+                hint="give one target and one slot per entity",
+            )
+        return self
+
+    def target_points(self) -> Points:
+        """Returns targets as an (N, 2) array in entity order."""
+        return np.asarray(self.targets, dtype=float).reshape(-1, 2)
+
+
+class FormFnInfo(FrozenModel):
+    """Describes one registered shape generator.
+
+    Attributes:
+        name: Registered name used in a generated form's recipe.
+        summary: First line of the generator's docstring.
+    """
+
+    name: str
+    summary: str
