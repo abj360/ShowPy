@@ -41,7 +41,6 @@ def count_to_measure(tl: Timeline, c: Count) -> MeasureLabel | None:
     is measure `k + floor((c - s) / m)`, count `(c - s) mod m + 1`.
 
     >>> from stage.time.models import TimelineMode
-    >>> from stage.time.models import TimelineMode
     >>> four = MeasureSetting(counts_per_measure=4.0)
     >>> tl = Timeline(mode=TimelineMode.SECONDS, measures=four)
     >>> count_to_measure(tl, 130.0)
@@ -65,7 +64,6 @@ def count_to_measure(tl: Timeline, c: Count) -> MeasureLabel | None:
 def measure_to_count(tl: Timeline, measure: int, count_in_measure: float = 1.0) -> Count:
     """Finds the count where `measure`, `count_in_measure` (both 1-based) falls.
 
-    >>> from stage.time.models import TimelineMode
     >>> from stage.time.models import TimelineMode
     >>> four = MeasureSetting(counts_per_measure=4.0)
     >>> tl = Timeline(mode=TimelineMode.SECONDS, measures=four)
