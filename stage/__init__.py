@@ -5,8 +5,9 @@ __init__.py --- the public API of stage, the choreography library behind the Eig
 
 Every public function and class of the library is importable from here, lazily: a name
 is imported on first use (PEP 562). Internal helper modules (engine compilation, matching
-cost and solver internals, workspace documents) are not re-exported. One name clashes and is renamed: the motion function spiral is
-`spiral_motion`; `spiral` is the geometric spiral curve. Package layout: docs/HANDOFF.md.
+cost and solver internals, workspace documents) are not re-exported. One name clashes and
+is renamed: the motion function spiral is `spiral_motion`; `spiral` is the geometric spiral
+curve. Package layout: docs/HANDOFF.md.
 
 Contains:
     __all__: lists every re-exported name

@@ -10,6 +10,7 @@ RUN uv sync --locked --no-install-project
 
 COPY stage ./stage
 COPY tests ./tests
+COPY schemas ./schemas
 RUN uv sync --locked
 
 CMD ["uv", "run", "pytest"]
