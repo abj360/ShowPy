@@ -324,3 +324,9 @@ def test_regression_steps_easing_is_not_aliased_by_segment_probes() -> None:
     segments = [s for s in engine.segments(TID, tol=0.01) if s.entity == "T1"]
     moving = [s for s in segments if s.t1 <= 1.0]
     assert len(moving) >= 4
+
+
+def test_regression_positions_resolves_selection_expressions() -> None:
+    engine = PathEngine(two_set_show())
+    assert approx_equal(engine.positions(4.0, "T1-T2"), [[0.0, 7.0], [2.0, 7.0]])
+    assert approx_equal(engine.positions(4.0, "group:trumpets").shape, (4, 2))

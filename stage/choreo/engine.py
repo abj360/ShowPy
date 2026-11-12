@@ -157,8 +157,11 @@ class PathEngine:
         return point
 
     def positions(self, t: Count, sel: str | Sequence[SpotId] | Selection = ALL) -> Points:
-        """Returns positions (N, 2) at a global count, in selection order."""
-        ids = self._ids if sel == ALL else tuple(sel)
+        """Returns positions (N, 2) at a global count, in selection order.
+
+        `sel` is "all", a selection expression, a list of IDs or a Selection.
+        """
+        ids = self._ids if sel == ALL else select(self.show, sel).ids
         return np.array([self.position(e, t) for e in ids]).reshape(-1, 2)
 
     def _point_at(self, entity: str, t: Count) -> Point:
