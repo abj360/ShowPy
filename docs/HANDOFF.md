@@ -129,3 +129,24 @@ Use `uv` only, never pip.
 - TDD: write the test, watch it fail, implement, run the gates, commit one atomic change.
 - Parallel agents work in isolated worktrees (`Agent` with `isolation: "worktree"`). The shared brief was in the session scratchpad; its rules are the "Read first" list above plus: no global mutable state, registries are immutable, `at: datetime` is explicit, and agents edit only their own files.
 - Merge agent branches with `git merge --no-ff`, then run all gates, then remove the worktree.
+
+## Open bugs found by the study-guide pass (2026-11-11, not fixed yet)
+
+Fix each test-first, with a `test_regression_` test.
+
+1. **Security: the sandbox is too open.**
+   - `numpy` file functions (`loadtxt`, `save`, ...) can read and write host files.
+   - `stage.show.file_repository` is importable, so a script can write files.
+   - Nothing blocks the network.
+
+   Fix: block `numpy` I/O attributes, or allow only the numpy submodules scripts need. Block `stage.show.file_repository` and `stage.show.repositories`. Run the child with no network (Linux namespaces or seccomp, when available).
+
+2. **`PathEngine.positions(t, sel)` splits a string `sel` into characters.** Resolve strings with `stage.cast.select.select`.
+3. **`avoid.apply_fix` names the wrong module in its hint.** It says `stage.choreo.match`; it should say `stage.choreo.match_ops.apply_match`.
+4. **`choreo/paths_store.py` reaches up a layer** into `stage.show.storage` and `stage.show.documents`. Move it to `stage.show`.
+5. **`join_sections(split_section(...))` adds a redundant tempo section at the cut.** Merge equal adjacent tempo sections.
+6. **`stale()` forgets downstream sets after one `build_set`.** Track upstream source hashes per set.
+7. **`describe_count` rounds tenths with `round`, which rounds half to even.** Use `round_to`.
+8. **The SVG tokenizer misreads packed arc flags** such as `a1 1 0 011 1`. Parse flags as single characters.
+9. **`stage/time/measures.py` has a duplicated doctest import line.**
+10. **The selection grammar reads `T1+T2-T3` as a range, `T2-T3`, without any error.** Either require spaces around binary operators or document this loudly; ask the designer which.
