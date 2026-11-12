@@ -24,7 +24,7 @@ import sys
 import time
 from typing import Any
 
-from stage.choreo.models import Set
+from stage.choreo.models import Form, Set
 from stage.core.errors import SchemaError, TimeRangeError, ValidationError
 from stage.core.ids import SetId
 from stage.core.util import content_hash
@@ -172,7 +172,8 @@ def run_set_script(
 ) -> BuildResult:
     """Builds one set by running `build(ctx)` in an isolated subprocess.
 
-    The returned set must be a Set with the requested id; it is stamped with the source hash.
+    build(ctx) returns a Set with the requested id, or a list of Forms that the child places
+    with stage.choreo.form_place.place; the result is stamped with the source hash.
     """
     check_script(source)
     show.set_index(set_id)
@@ -193,7 +194,10 @@ def run_set_script(
             hint="return a set with id ctx.set_id",
         )
     duration = (time.perf_counter() - started) * 1000.0
-    return BuildResult(set_id=set_id, set=built, logs=tuple(reply["logs"]), duration_ms=duration)
+    forms = tuple(Form.model_validate(f) for f in reply.get("forms", []))
+    return BuildResult(
+        set_id=set_id, set=built, forms=forms, logs=tuple(reply["logs"]), duration_ms=duration
+    )
 
 
 def run_analysis_script(

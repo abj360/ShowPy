@@ -26,7 +26,8 @@ from typing import Any
 
 from stage.cast.select import select
 from stage.choreo.engine import PathEngine
-from stage.choreo.models import Set
+from stage.choreo.form_place import place
+from stage.choreo.models import Form, Set
 from stage.show.build_models import BuildContext
 from stage.show.models import Show
 from stage.show.sandbox import _module_allowed
@@ -101,13 +102,18 @@ def execute(request: Mapping[str, Any]) -> dict[str, Any]:
 def _reply(mode: str, result: object, ctx: BuildContext, stdout: str) -> dict[str, Any]:
     if mode == "analysis":
         return {"ok": True, "result": result, "stdout": stdout[:MAX_STDOUT], "logs": ctx.logs}
+    forms: list[Form] = []
+    if isinstance(result, list) and result and all(isinstance(f, Form) for f in result):
+        forms = [f.model_copy(update={"set": ctx.set_id}) for f in result]
+        result = place(ctx.show, ctx.set_id, forms)
     if not isinstance(result, Set):
         return {
             "ok": False,
-            "error": f"build(ctx) returned {type(result).__name__}, not a Set",
+            "error": f"build(ctx) returned {type(result).__name__}, not a Set or list of Forms",
             "logs": ctx.logs,
         }
-    return {"ok": True, "set": result.model_dump(mode="json"), "logs": ctx.logs}
+    dumped = [f.model_dump(mode="json") for f in forms]
+    return {"ok": True, "set": result.model_dump(mode="json"), "forms": dumped, "logs": ctx.logs}
 
 
 def main() -> None:

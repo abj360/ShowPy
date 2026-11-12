@@ -96,3 +96,15 @@ def test_imports_outside_policy_fail_at_runtime_too() -> None:
     source = "def build(ctx):\n    import stage.show.storage\n    return ctx.prev\n"
     with pytest.raises(SchemaError):
         check_script(source)
+
+
+def test_run_set_script_places_returned_forms() -> None:
+    source = (
+        "from stage.choreo.forms import line_form\n\n"
+        "def build(ctx):\n"
+        "    form = line_form('f2', ['T1', 'T2', 'T3', 'T4'], (0.0, 12.0), (6.0, 12.0))\n"
+        "    return [form]\n"
+    )
+    result = run_set_script(two_set_show(), "2", source)
+    assert result.set.get("T4").point == (6.0, 12.0)
+    assert result.set.get("T1").form == "f2"

@@ -19,6 +19,7 @@ Contains:
 from datetime import datetime
 from typing import Literal
 
+from stage.choreo.models import Form
 from stage.core.errors import SchemaError, ValidationError
 from stage.core.ids import SetId
 from stage.core.util import content_hash
@@ -29,7 +30,7 @@ from stage.show.sandbox import DEFAULT_TIMEOUT_S, run_analysis_script, run_set_s
 from stage.show.storage import Workspace, load_show, save_show
 from stage.show.validate import validate_set
 
-type Template = Literal["copy_prev", "hold", "blank"]
+type Template = Literal["copy_prev", "hold", "from_forms", "blank"]
 
 SCRIPT_TEMPLATES: dict[str, str] = {
     "copy_prev": '''def build(ctx):
@@ -41,6 +42,17 @@ SCRIPT_TEMPLATES: dict[str, str] = {
     released = {p.entity: {"form": None, "order": None} for p in ctx.prev.placements}
     still = ctx.prev.with_placements(released)
     return still.model_copy(update={"id": ctx.set_id, "counts": ctx.counts, "forms": ()})
+''',
+    "from_forms": '''from stage.choreo.forms import line_form
+
+
+def build(ctx):
+    """Places every spot on one line form 2 m upstage of the previous set's center."""
+    ids = [p.entity for p in ctx.prev.placements]
+    pts = ctx.prev.positions(ids)
+    y = float(pts[:, 1].mean()) + 2.0
+    left, right = (float(pts[:, 0].min()), y), (float(pts[:, 0].max()), y)
+    return [line_form("form-" + ctx.set_id, ids, left, right)]
 ''',
     "blank": '''from stage.choreo.models import Set
 
@@ -73,6 +85,7 @@ def build_set(
             f"set {set_id} has no script", hint=f"write {script_doc(set_id)} or use new_set_script"
         )
     result = run_set_script(show, set_id, source, timeout_s)
+    show = _with_forms(show, set_id, result.forms)
     report = validate_set(show, result.set)
     if not report.ok:
         raise ValidationError(
@@ -84,6 +97,13 @@ def build_set(
     later = show.set_ids()[show.set_index(set_id) + 1 :]
     warnings = tuple(str(issue) for issue in report.issues)
     return result.model_copy(update={"warnings": warnings, "stale_dependents": tuple(later[:1])})
+
+
+def _with_forms(show: Show, set_id: SetId, forms: tuple[Form, ...]) -> Show:
+    if not forms:
+        return show
+    kept = {k: f for k, f in show.forms.items() if f.set != set_id}
+    return show.model_copy(update={"forms": {**kept, **{f.id: f for f in forms}}})
 
 
 def _stale_ids(ws: Workspace, show: Show) -> list[SetId]:

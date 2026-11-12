@@ -16,7 +16,7 @@ from typing import Any
 
 from stage.cast.models import Cast
 from stage.choreo.engine import PathEngine
-from stage.choreo.models import Set
+from stage.choreo.models import Form, Set
 from stage.core.ids import SetId
 from stage.core.selection import Selection, Selector
 from stage.core.types import FrozenModel
@@ -49,6 +49,7 @@ class BuildResult(FrozenModel):
     Attributes:
         set_id: Set built.
         set: The built set, stamped with the script's source hash.
+        forms: Forms the script returned, stamped with the set id; empty for Set results.
         logs: Structured log lines the script emitted.
         warnings: Validation warnings for the built set.
         duration_ms: Wall time of the build.
@@ -57,6 +58,7 @@ class BuildResult(FrozenModel):
 
     set_id: SetId
     set: Set
+    forms: tuple[Form, ...] = ()
     logs: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
     duration_ms: float

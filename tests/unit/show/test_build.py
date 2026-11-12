@@ -79,6 +79,14 @@ def test_new_set_script_templates_build() -> None:
         new_set_script(ws, "2", template="nope", at=AT)  # type: ignore[arg-type]
 
 
+def test_from_forms_template_places_a_line() -> None:
+    ws = _workspace()
+    new_set_script(ws, "2", template="from_forms", at=AT)
+    built = build_set(ws, "2", at=AT)
+    assert built.set.get("T1").y == 7.0
+    assert built.set.get("T1").form == "form-2"
+
+
 def test_build_all_builds_every_scripted_set_in_order() -> None:
     ws = _workspace()
     ws.write("/sets/2/set.py", UPSTAGE, at=AT)
