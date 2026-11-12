@@ -130,7 +130,7 @@ def new_show(
     Returns:
         show: Show with one 0-count set and `dependencies[kind:id] = version`.
 
-    >>> from tests.fixtures.shows import field_sheet, two_set_show
+    >>> from stage.examples import field_sheet, two_set_show
     >>> show = new_show("s", "Opener", field_sheet(), two_set_show().timeline)
     >>> show.set_ids(), show.dependencies
     (['1'], {'sheet:test-field': '1'})
@@ -185,7 +185,7 @@ def add_set(
         placements: Placements for some or all spots.
         force: Allows dropping locked paths between `after` and its successor.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show = add_set(two_set_show(), "3", 4.0)
     >>> show.set_ids(), show.set("3").get("T1").y
     (['1', '2', '3'], 9.0)
@@ -231,7 +231,7 @@ def insert_subset(
     Returns:
         result: Edited show and the new set ID, e.g. `12A`.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show, new_id = insert_subset(two_set_show(), "1", 3.0)
     >>> new_id, [s.counts for s in show.sets]
     ('1A', [0.0, 3.0, 5.0])
@@ -284,7 +284,7 @@ def remove_set(show: Show, set_id: SetId, merge_counts: bool = True, force: bool
     Returns:
         show: Edited show; when the first set goes, the new first set gets 0 counts.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> remove_set(two_set_show(), "2").set_ids()
     ['1']
     """
@@ -360,7 +360,7 @@ def set_counts(
     Returns:
         show: Edited show; raises PathError when stored paths would run past the new counts.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> set_counts(two_set_show(), "2", 12.0).set("2").counts
     12.0
     """
@@ -406,7 +406,7 @@ def renumber(show: Show, scheme: str = SEQUENTIAL) -> tuple[Show, dict[SetId, Se
     Returns:
         result: Edited show and the old-to-new ID mapping for every set.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show, _ = insert_subset(two_set_show(), "1", 2.0)
     >>> renumber(show)[1]
     {'1': '1', '1A': '2', '2': '3'}
@@ -442,7 +442,7 @@ def renumber(show: Show, scheme: str = SEQUENTIAL) -> tuple[Show, dict[SetId, Se
 def transitions(show: Show) -> list[TransitionId]:
     """Lists consecutive set pairs in show order.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> transitions(two_set_show())
     [('1', '2')]
     """
@@ -452,7 +452,7 @@ def transitions(show: Show) -> list[TransitionId]:
 def index(show: Show) -> ShowIndex:
     """Computes each set's start count, measure label and seconds; the first set starts at 0.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> [(e.set, e.start_count, e.seconds) for e in index(two_set_show()).entries]
     [('1', 0.0, 0.0), ('2', 8.0, 4.0)]
     """
@@ -476,7 +476,7 @@ def index(show: Show) -> ShowIndex:
 def set_at_count(show: Show, c: Count) -> SetId | None:
     """Returns the set reached exactly at count `c`, or None while moving between sets.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> set_at_count(two_set_show(), 8.0)
     '2'
     """
@@ -486,7 +486,7 @@ def set_at_count(show: Show, c: Count) -> SetId | None:
 def transition_at_count(show: Show, c: Count) -> tuple[TransitionId, Count] | None:
     """Returns the transition count `c` lies in, `start(a) < c < start(b)`, plus local count tau.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> transition_at_count(two_set_show(), 2.0)
     (('1', '2'), 2.0)
     """
@@ -505,7 +505,7 @@ def upgrade_dependency(show: Show, ref: str, version: str, sheet: Sheet | None =
         version: Version to pin.
         sheet: The sheet at that version, to adopt it now.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> upgrade_dependency(two_set_show(), "sheet:test-field", "2").dependencies
     {'sheet:test-field': '2'}
     """

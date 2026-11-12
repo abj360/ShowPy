@@ -236,7 +236,7 @@ def import_positions(
     Returns:
         show: The merged show.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> csv_text = "set,counts,entity,x,y\n3,4,T1,1,1\n"
     >>> import_positions(two_set_show(), csv_text, "trumpets").set("3").get("T2").point
     (2.0, 9.0)

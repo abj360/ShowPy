@@ -99,7 +99,7 @@ def pin(show: Show, target: PinTarget, pin_id: str, reason: str = "", by: str = 
     every form of the set; form pins lock the form; transition pins lock a row for every spot.
     Only the designer pins: an agent's save that changes pins raises LockedError.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> pinned = pin(two_set_show(), "entity", "T1", "soloist")
     >>> [s.get("T1").pinned for s in pinned.sets], pinned.pins[0].reason
     ([True, True], 'soloist')
@@ -115,7 +115,7 @@ def pin(show: Show, target: PinTarget, pin_id: str, reason: str = "", by: str = 
 def unpin(show: Show, target: PinTarget, pin_id: str) -> Show:
     """Removes a lock; flags another remaining pin still covers stay set.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> unpin(pin(two_set_show(), "set", "2"), "set", "2") == two_set_show()
     True
     """

@@ -73,7 +73,7 @@ def apply_change(show: Show, change: Sequence[ChangeOp], force: bool = False) ->
         show: Edited show; paths always take the destination set's counts.
 
     >>> from stage.choreo.models import Placement
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> op = PlacementOp(set_id="2", placement=Placement(entity="T1", x=-2.0, y=9.0))
     >>> apply_change(two_set_show(), [op]).set("2").get("T1").x
     -2.0

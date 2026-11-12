@@ -97,7 +97,7 @@ def publish(
         publication: A live publication of the show's revision (its content hash when unsaved).
 
     >>> from datetime import UTC, datetime
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> publish(two_set_show(), "p1", "https://x.example", datetime(2026, 1, 1, tzinfo=UTC)).link
     'https://x.example/p1'
     """
@@ -133,8 +133,8 @@ def _with_status(pub: Publication, status: PublicationStatus) -> Publication:
 def unpublish(pub: Publication) -> Publication:
     """Closes a publication; claims stay on record.
 
-    >>> from tests.fixtures.export_shows import live_publication
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import live_publication
+    >>> from stage.examples import two_set_show
     >>> unpublish(live_publication(two_set_show())).status
     'closed'
     """
@@ -144,8 +144,8 @@ def unpublish(pub: Publication) -> Publication:
 def pause(pub: Publication) -> Publication:
     """Pauses a publication: the link stays but nobody can claim.
 
-    >>> from tests.fixtures.export_shows import live_publication
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import live_publication
+    >>> from stage.examples import two_set_show
     >>> pause(live_publication(two_set_show())).status
     'paused'
     """
@@ -157,8 +157,8 @@ def qr_code(pub: Publication, size: int = 512) -> bytes:
 
     Modules are whole pixels, centered with the standard quiet zone, so the code stays sharp.
 
-    >>> from tests.fixtures.export_shows import live_publication
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import live_publication
+    >>> from stage.examples import two_set_show
     >>> qr_code(live_publication(two_set_show()), size=128)[:4]
     b'\x89PNG'
     """
@@ -187,8 +187,8 @@ def qr_code(pub: Publication, size: int = 512) -> bytes:
 def claims(pub: Publication) -> list[Claim]:
     """Lists every claim in natural spot order.
 
-    >>> from tests.fixtures.export_shows import live_publication
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import live_publication
+    >>> from stage.examples import two_set_show
     >>> claims(live_publication(two_set_show()))
     []
     """
@@ -202,8 +202,8 @@ def _claim_on(pub: Publication, spot: SpotId) -> Claim | None:
 def who_is_on(pub: Publication, spot: SpotId) -> Performer | None:
     """Returns the performer holding a spot, or None when it is free.
 
-    >>> from tests.fixtures.export_shows import live_publication
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import live_publication
+    >>> from stage.examples import two_set_show
     >>> who_is_on(live_publication(two_set_show()), "T1") is None
     True
     """
@@ -214,8 +214,8 @@ def who_is_on(pub: Publication, spot: SpotId) -> Performer | None:
 def unclaimed(pub: Publication, show: Show) -> list[SpotId]:
     """Lists active, claimable spots nobody holds yet, in cast order.
 
-    >>> from tests.fixtures.export_shows import live_publication
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import live_publication
+    >>> from stage.examples import two_set_show
     >>> unclaimed(live_publication(two_set_show()), two_set_show())
     ['T1', 'T2', 'T3', 'T4']
     """
@@ -264,8 +264,8 @@ def claim_spot(
     Returns:
         result: The new publication and the locked claim.
 
-    >>> from tests.fixtures.export_shows import AT, live_publication, performer
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import EXAMPLE_TIME as AT, live_publication, performer
+    >>> from stage.examples import two_set_show
     >>> show = two_set_show()
     >>> claim_spot(live_publication(show), show, performer("Ada"), "T1", AT)[1].locked
     True
@@ -312,8 +312,8 @@ def _require_claimed(pub: Publication, spot: SpotId) -> Claim:
 def swap_claims(pub: Publication, a: SpotId, b: SpotId) -> Publication:
     """Swaps the performers of two claimed spots, as the designer; roles must match.
 
-    >>> from tests.fixtures.export_shows import AT, live_publication, performer
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import EXAMPLE_TIME as AT, live_publication, performer
+    >>> from stage.examples import two_set_show
     >>> show = two_set_show()
     >>> pub, _ = claim_spot(live_publication(show), show, performer("Ada"), "T1", AT)
     >>> pub, _ = claim_spot(pub, show, performer("Bo"), "T2", AT)
@@ -342,8 +342,8 @@ def swap_claims(pub: Publication, a: SpotId, b: SpotId) -> Publication:
 def reassign(pub: Publication, spot: SpotId, performer: Performer, at: datetime) -> Publication:
     """Moves a performer onto a spot, as the designer; whoever held the spot is unassigned.
 
-    >>> from tests.fixtures.export_shows import AT, live_publication, performer
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import EXAMPLE_TIME as AT, live_publication, performer
+    >>> from stage.examples import two_set_show
     >>> pub = reassign(live_publication(two_set_show()), "T3", performer("Ada"), AT)
     >>> who_is_on(pub, "T3").name
     'Ada'
@@ -357,8 +357,8 @@ def reassign(pub: Publication, spot: SpotId, performer: Performer, at: datetime)
 def release(pub: Publication, spot: SpotId) -> Publication:
     """Frees a claimed spot, as the designer.
 
-    >>> from tests.fixtures.export_shows import AT, live_publication, performer
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import EXAMPLE_TIME as AT, live_publication, performer
+    >>> from stage.examples import two_set_show
     >>> pub = reassign(live_publication(two_set_show()), "T3", performer("Ada"), AT)
     >>> who_is_on(release(pub, "T3"), "T3") is None
     True
@@ -371,8 +371,8 @@ def release(pub: Publication, spot: SpotId) -> Publication:
 def performer_view(pub: Publication, show: Show, performer: Performer) -> PerformerView:
     """Builds a performer's own view: their spot's position text and counts in every set.
 
-    >>> from tests.fixtures.export_shows import AT, live_publication, performer
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import EXAMPLE_TIME as AT, live_publication, performer
+    >>> from stage.examples import two_set_show
     >>> show = two_set_show()
     >>> pub, _ = claim_spot(live_publication(show), show, performer("Ada"), "T1", AT)
     >>> performer_view(pub, show, performer("Ada")).sets[1][2]
@@ -452,9 +452,9 @@ def notify_changes(pub: Publication, old_show: Show, new_show: Show) -> list[tup
 
     Nothing is sent; callers deliver the messages.
 
-    >>> from tests.fixtures.export_shows import AT, live_publication, performer
-    >>> from tests.fixtures.motion_shows import with_targets
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import EXAMPLE_TIME as AT, live_publication, performer
+    >>> from stage.examples import with_targets
+    >>> from stage.examples import two_set_show
     >>> show = two_set_show()
     >>> pub, _ = claim_spot(live_publication(show), show, performer("Ada"), "T1", AT)
     >>> notify_changes(pub, show, with_targets({"T1": {"x": 3.0}}))[0][1]

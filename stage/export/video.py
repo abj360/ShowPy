@@ -49,7 +49,7 @@ OUTPUT_NAME = "out.mp4"
 def video_canvas(show: Show, px_per_m: float = DEFAULT_PX_PER_M) -> SheetCanvas:
     """Builds a canvas over the show's sheet whose pixel size is even (H.264 needs it).
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> [n % 2 for n in video_canvas(two_set_show(), 7.0).size]
     [0, 0]
     """
@@ -85,7 +85,7 @@ def _draw_state(
 def render_frame(show: Show, frame: Frame, canvas: SheetCanvas) -> Image.Image:
     """Draws one engine frame over the sheet; off-field spots are not drawn.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show = two_set_show()
     >>> render_frame(show, PathEngine(show).sample(0.0), video_canvas(show)).mode
     'RGB'
@@ -171,7 +171,7 @@ def export_video(
     With `audio` (track file URI to bytes), the timeline's first track is muxed, starting at
     its sync offset plus the range start in seconds. Without it the video is silent.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> export_video(two_set_show(), (0.0, 1.0), fps=2, px_per_m=4.0)[4:8]
     b'ftyp'
     """

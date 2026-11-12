@@ -341,7 +341,7 @@ def replace_sheet(
         report: What moved, what lands off the sheet or in a restricted zone, form notes.
 
     >>> from stage.sheet.templates import blank_sheet
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> replace_sheet(two_set_show(), blank_sheet(80, 40), "scale")[1].moved["T2"]
     ((2.0, 9.0), (4.0, 18.0))
     """

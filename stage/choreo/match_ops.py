@@ -37,7 +37,7 @@ SWAPPED_FIELDS = ("x", "y", "facing", "form", "order", "on_field")
 def with_set(show: Show, new: Set) -> Show:
     """Returns a show with the set of the same ID replaced by `new`.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show = two_set_show()
     >>> with_set(show, show.set("2").model_copy(update={"label": "B"})).set("2").label
     'B'
@@ -51,7 +51,7 @@ def clear_rows(
 ) -> Show:
     """Drops stored path rows of `entities` in transition `tid`; locked rows need force.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> clear_rows(two_set_show(), ("1", "2"), ["T1"]).transitions
     ()
     """
@@ -83,7 +83,7 @@ def apply_match(show: Show, tid: TransitionId, result: MatchResult, force: bool 
     moving a pinned spot or dropping a locked path row needs force=True.
 
     >>> from stage.choreo.match import match
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show = two_set_show()
     >>> r = match(show.set("1"), [(0, 3), (2, 3), (4, 3), (6, 3)])
     >>> apply_match(show, ("1", "2"), r).set("2").get("T4").point
@@ -126,7 +126,7 @@ def swap(show: Show, set_id: SetId, a: SpotId, b: SpotId, force: bool = False) -
     Form members are swapped too, so regenerating a form keeps the swap, and both spots'
     path rows into and out of the set are dropped. Pins and locks need force=True.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> swap(two_set_show(), "2", "T1", "T4").set("2").get("T1").x
     6.0
     """
@@ -207,7 +207,7 @@ def suggest_swaps(
     Returns:
         swaps: Up to k (a, b, gain) tuples, gain being the largest-move reduction in meters.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> [(a, b, round(g, 2)) for a, b, g in
     ...     suggest_swaps(swap(two_set_show(), "2", "T1", "T4"), ("1", "2"), k=1)]
     [('T1', 'T4', 3.21)]

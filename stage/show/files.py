@@ -207,7 +207,7 @@ def read_file(path: str, show: Show | None, tree: Mapping[str, bytes]) -> str | 
 def show_changes(show: Show, tree: Mapping[str, bytes]) -> dict[str, bytes | None]:
     """Lists the writes and deletes that store `show` over `tree`, including removed sets' files.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> changes = show_changes(two_set_show(), {"/sets/9/set.py": b""})
     >>> changes["/sets/9/set.py"], len(changes)
     (None, 7)

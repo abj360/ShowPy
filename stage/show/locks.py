@@ -77,7 +77,7 @@ def locked_changes(before: Show, after: Show) -> list[str]:
     Returns:
         touched: Readable names such as `placement T1 in set 2`, in show order.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show = two_set_show()
     >>> pinned = show.sets[1].with_placements({"T1": {"pinned": True}})
     >>> before = show.model_copy(update={"sets": (show.sets[0], pinned)})
@@ -97,7 +97,7 @@ def locked_changes(before: Show, after: Show) -> list[str]:
 def require_unlocked(before: Show, after: Show, force: bool = False) -> None:
     """Raises LockedError when `after` touches what `before` pins or locks, unless forced.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> require_unlocked(two_set_show(), two_set_show()) is None
     True
     """

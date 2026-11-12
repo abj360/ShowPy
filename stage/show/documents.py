@@ -149,7 +149,7 @@ def _require_storable(show: Show) -> None:
 def encode_show(show: Show) -> dict[str, bytes]:
     """Splits a show into documents; empty forms and stored-path documents are left out.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> sorted(encode_show(two_set_show()))[:3]
     ['/sets/1/set.json', '/sets/2/set.json', '/show/notes.json']
     """
@@ -251,7 +251,7 @@ def decode_show(docs: Mapping[str, bytes], revision: str = "") -> Show:
     Returns:
         show: The assembled show, raising SchemaError when a document does not fit.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> decode_show(encode_show(two_set_show())) == two_set_show()
     True
     """

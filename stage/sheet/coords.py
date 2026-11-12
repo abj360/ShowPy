@@ -112,7 +112,7 @@ def _origin(sheet: Sheet, system: CoordinateSystem) -> Point:
 def set_coordinates(show: "Show", system: CoordinateSystem) -> "Show":
     """Returns the show with a new coordinate system; stored positions never move.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> set_coordinates(two_set_show(), CoordinateSystem(units="ft")).coordinates.units
     'ft'
     """
@@ -170,7 +170,7 @@ def to_coords(show: "Show", p: Point, style: CoordStyle = "long") -> str:
     Returns:
         text: The worded position; from_coords() reads it back.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> to_coords(two_set_show(), (3.5, 2.0))
     '3.50 m right of center, 2.00 m upstage of front edge'
     """
@@ -240,7 +240,7 @@ def from_coords(show: "Show", text: str) -> Point:
 
     Long style may name any registered unit; short style uses the system's unit.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> from_coords(two_set_show(), "L3.50 U2.00")
     (-3.5, 2.0)
     """

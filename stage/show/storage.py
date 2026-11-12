@@ -274,7 +274,7 @@ class Workspace:
         """Returns a file: text for documents, bytes for binary renders and exports.
 
         >>> from stage.show.repositories import InMemoryRepository
-        >>> from tests.fixtures.shows import two_set_show
+        >>> from stage.examples import two_set_show
         >>> from datetime import datetime, UTC
         >>> repo = InMemoryRepository()
         >>> _ = repo.put_show("show-1", two_set_show(), expected_revision="", actor="designer",
@@ -434,7 +434,7 @@ def save_show(ws: Workspace, show: Show, at: datetime, message: str = SAVE_MESSA
     agent sees what the designer changed; reload, reapply and save again.
 
     >>> from stage.show.repositories import InMemoryRepository
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> from datetime import datetime, UTC
     >>> ws = open_workspace(InMemoryRepository(), "show-1", "designer")
     >>> save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC)).parent

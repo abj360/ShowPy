@@ -122,7 +122,7 @@ def add_spot(show: "Show", point: Point, group: str, set_id: SetId) -> "Show":
     The label is the lowest free number under the group's prefix (the label scheme's
     override wins); the footprint is a circle of the group's default radius.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show = add_spot(two_set_show(), (1.0, 2.0), "trumpets", "2")
     >>> show.cast.ids()[-1], show.set("1").get("T5").on_field
     ('T5', False)
@@ -133,7 +133,7 @@ def add_spot(show: "Show", point: Point, group: str, set_id: SetId) -> "Show":
 def add_spots_along(show: "Show", curve: Curve, n: int, group: str, set_id: SetId) -> "Show":
     """Adds n spots spaced evenly by arc length along a curve, in curve order.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> from stage.geo.shapes import line
     >>> len(add_spots_along(two_set_show(), line((0, 0), (4, 0)), 3, "trumpets", "1").cast.spots)
     7
@@ -200,7 +200,7 @@ def fill_spots(
         interval: Grid spacing in meters.
         n: Number of spots.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> from stage.geo.regions import region
     >>> square = region([(0, 0), (2, 0), (2, 2), (0, 2)])
     >>> len(fill_spots(two_set_show(), square, "trumpets", "1", n=5).cast.spots)
@@ -225,7 +225,7 @@ def duplicate_spots(show: "Show", sel: Selector, offset: Point, set_id: SetId) -
 
     Copies keep group, tags, footprint and claimability; they enter the field at `set_id`.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> duplicate_spots(two_set_show(), ["T1"], (0.0, 1.0), "1").set("1").get("T5").point
     (0.0, 6.0)
     """
@@ -277,7 +277,7 @@ def delete_spots(show: "Show", sel: Selector, force: bool = False) -> "Show":
     Pinned placements, locked forms and locked paths raise LockedError unless `force=True`.
     Spots that other spots face raise ValidationError until those facings change.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> delete_spots(two_set_show(), "T2-T3").cast.ids()
     ('T1', 'T4')
     """
@@ -316,7 +316,7 @@ def regroup(show: "Show", sel: Selector, group: str) -> tuple["Show", dict[SpotI
         show: The edited show.
         mapping: Old label to new label, for every spot whose label changed.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show = add_group(two_set_show(), Group(key="brass", label_prefix="B"))
     >>> regroup(show, ["T4"], "brass")[1]
     {'T4': 'B1'}
@@ -334,7 +334,7 @@ def regroup(show: "Show", sel: Selector, group: str) -> tuple["Show", dict[SpotI
 def add_group(show: "Show", group: Group) -> "Show":
     """Adds a group; its key must be new.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> sorted(add_group(two_set_show(), Group(key="flags", label_prefix="F")).cast.groups)
     ['flags', 'trumpets']
     """
@@ -351,7 +351,7 @@ def add_group(show: "Show", group: Group) -> "Show":
 def edit_group(show: "Show", key: str, /, **changes: Any) -> "Show":
     """Changes a group's fields; the key is fixed, and spot labels stay until relabel().
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> edit_group(two_set_show(), "trumpets", moves=False).cast.groups["trumpets"].moves
     False
     """
@@ -382,7 +382,7 @@ def remove_group(
         show: The edited show.
         mapping: Old label to new label for the moved spots whose label changed.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show = add_group(two_set_show(), Group(key="flags", label_prefix="F"))
     >>> sorted(remove_group(show, "flags")[0].cast.groups)
     ['trumpets']
@@ -425,7 +425,7 @@ def relabel(show: "Show", scheme: LabelScheme) -> tuple["Show", dict[SpotId, Spo
         show: The relabeled show, carrying `scheme`.
         mapping: Old label to new label, for history renames; unchanged labels are left out.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> relabel(two_set_show(), LabelScheme(pad=2))[1]["T1"]
     'T01'
     """
@@ -444,7 +444,7 @@ def relabel(show: "Show", scheme: LabelScheme) -> tuple["Show", dict[SpotId, Spo
 def define_selection(show: "Show", name: str, sel: Selector) -> "Show":
     """Stores a named selection, usable later as `sel:<name>`; an existing name is replaced.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> sorted(define_selection(two_set_show(), "ends", "T1 + T4").cast.selections["ends"])
     ['T1', 'T4']
     """
@@ -471,7 +471,7 @@ def _edit_spots(show: "Show", sel: Selector, **changes: Any) -> "Show":
 def set_shape(show: "Show", sel: Selector, shape: Shape) -> "Show":
     """Sets the footprint of spots.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> set_shape(two_set_show(), "T1", Shape(kind="rectangle")).cast.spot("T1").shape.kind
     'rectangle'
     """
@@ -481,7 +481,7 @@ def set_shape(show: "Show", sel: Selector, shape: Shape) -> "Show":
 def set_claimable(show: "Show", sel: Selector, value: Claimable) -> "Show":
     """Sets who may claim spots once the show is published: performer, crew or none.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> set_claimable(two_set_show(), "T1", "crew").cast.spot("T1").claimable
     'crew'
     """

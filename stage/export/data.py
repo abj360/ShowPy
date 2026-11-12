@@ -73,7 +73,7 @@ def export_json(show: Show, include: Iterable[str] | None = None) -> dict[str, A
     Returns:
         document: `{"schema": "stage.show.v1", "show": {...}}`.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> sorted(export_json(two_set_show(), include=["title"])["show"])
     ['id', 'title']
     """
@@ -95,7 +95,7 @@ def export_json(show: Show, include: Iterable[str] | None = None) -> dict[str, A
 def import_json(d: Mapping[str, Any]) -> Show:
     """Loads a show from a tagged document, refusing a wrong or missing schema tag.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> import_json(export_json(two_set_show())).id
     'show-1'
     """
@@ -140,7 +140,7 @@ def export_frames_csv(show: Show, per_count: int = 1) -> str:
     Returns:
         text: Rows of count, seconds, entity, x, y, facing and on_field.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> export_frames_csv(two_set_show()).splitlines()[1]
     '0,0,T1,0,5,0,true'
     """
@@ -241,7 +241,7 @@ def _frame_table(frame: pd.DataFrame) -> TextTable:
 def as_table(obj: Tabular) -> TextTable:
     """Turns a coordinate sheet, chart or DataFrame into a titled table of display strings.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> from stage.export.print_sheets import chart
     >>> as_table(chart(two_set_show(), "1")).rows[0][:2]
     ('T1', 'trumpets')

@@ -305,7 +305,7 @@ def select(source: "Show | Set | Cast", expr: Selector) -> Selection:
     Returns:
         selection: The picked spots.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> select(two_set_show(), "T1-T4 - (T2 + T3)").ids
     ('T1', 'T4')
     """

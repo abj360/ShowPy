@@ -49,7 +49,7 @@ def rewrite_spot_ids(show: "Show", rename: Rename) -> "Show":
     selectors that name labels are frozen to the rewritten ID list; others stay as written.
     Callers check that the result keeps IDs unique.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> rewrite_spot_ids(two_set_show(), lambda i: None if i == "T1" else i).cast.ids()
     ('T2', 'T3', 'T4')
     """

@@ -79,7 +79,7 @@ def make_route(
     spot and every member travels the leader's distance, so spacing along the route is kept.
     Without waypoints the leader heads to its placement in the next set.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> make_route(two_set_show(), ("1", "2"), "T4", [(6.0, 15.0)], ["T4", "T3"]).travel
     10.0
     """
@@ -111,7 +111,7 @@ def follow(
 ) -> TransitionSpec:
     """Stores the route with its window and assigns FOLLOW rows to its members.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> route = make_route(two_set_show(), ("1", "2"), "T4", [(6.0, 15.0)])
     >>> follow(TransitionSpec(id=("1", "2"), counts=8.0), route).row("T4").style.value
     'follow'
@@ -126,7 +126,7 @@ def follow_and_set_targets(
 ) -> Show:
     """Writes every member's end on the route into the next set, then assigns FOLLOW rows.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show = two_set_show()
     >>> route = make_route(show, ("1", "2"), "T4", [(6.0, 15.0)])
     >>> follow_and_set_targets(show, ("1", "2"), route).set("2").get("T4").point
@@ -192,7 +192,7 @@ def counter_march(
     the file; the last member finishes just out of the turn, so the file ends reversed. Facing
     follows travel, blended over `counts_per_turn`.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> s = counter_march(two_set_show(), ("1", "2"), ["T4", "T3", "T2", "T1"], (6.0, 8.0))
     >>> round(s.set("2").get("T1").point[1], 6)
     8.0
@@ -230,7 +230,7 @@ def two_part(
 ) -> TransitionSpec:
     """Makes L-shaped moves through a corner, reached at local count `split` when given.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show = two_set_show()
     >>> two_part(show, show.transition(("1", "2")), ["T1"], "x_first").row("T1").style.value
     'polyline'
@@ -262,7 +262,7 @@ def rotate_path(
 ) -> TransitionSpec:
     """Rotates spots about a pivot; "center" uses the centroid of their starting spots.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show = two_set_show()
     >>> rotate_path(show, show.transition(("1", "2")), ["T1"], (0.0, 0.0), 90.0).row("T1").pivot
     (0.0, 0.0)

@@ -74,7 +74,7 @@ def diff_sets(a: Set, b: Set, tol: float = 1e-6) -> SetDiff:
         diff: Moved (position or on-field change), turned, added and removed spots, and forms
             declared or re-membered differently.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> first, second = two_set_show().sets
     >>> diff_sets(first, second).moved
     ('T1', 'T2', 'T3', 'T4')
@@ -153,7 +153,7 @@ def diff_show(a: Show, b: Show) -> dict[str, Any]:
     Keys: `title`, `sets` (added, removed, changed, counts, order_changed), `forms`, `paths`,
     `cast`, `notes`, `pins` and one flag per changed whole field (`sheet`, `timeline`, ...).
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> diff_show(two_set_show(), two_set_show().model_copy(update={"title": "B"}))
     {'title': ['Test show', 'B']}
     """
@@ -178,7 +178,7 @@ def snapshot(ws: Workspace, message: str, at: datetime) -> Revision:
     >>> from datetime import UTC
     >>> from stage.show.repositories import InMemoryRepository
     >>> from stage.show.storage import open_workspace, save_show
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> ws = open_workspace(InMemoryRepository(), "s", "designer")
     >>> _ = save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC))
     >>> snapshot(ws, "before finale", datetime(2026, 11, 11, tzinfo=UTC)).changed
@@ -342,7 +342,7 @@ def rename_entities(show: Show, mapping: Mapping[SpotId, SpotId]) -> Show:
     and pins. Renaming relabels spots without moving them, so pins do not block it. Swaps are
     allowed; a new ID that another spot keeps raises SchemaError.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> renamed = rename_entities(two_set_show(), {"T1": "S1"})
     >>> renamed.cast.ids(), renamed.sets[1].entity_ids()[0]
     (('S1', 'T2', 'T3', 'T4'), 'S1')
@@ -394,7 +394,7 @@ def changelog(ws: Workspace, since: str = ROOT_REVISION) -> str:
     >>> from datetime import UTC
     >>> from stage.show.repositories import InMemoryRepository
     >>> from stage.show.storage import open_workspace, save_show
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> ws = open_workspace(InMemoryRepository(), "s", "designer")
     >>> _ = save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC), "create")
     >>> changelog(ws).split(" ", 1)[1]

@@ -156,7 +156,7 @@ def zones_at(show: "Show", p: Point, t: Count | None = None) -> list[Zone]:
     Returns:
         zones: Covering zones, sheet zones first, each in stored order.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> [z.id for z in zones_at(two_set_show(), (0.0, -1.0))]
     ['pit']
     """

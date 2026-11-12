@@ -38,7 +38,7 @@ SPEED_COLUMNS = ["entity", "distance", "counts", "m_per_count", "m_per_s", "max_
 def position_at(show: Show, entity: SpotId, t: Count) -> Points:
     """Returns a spot's position at a global count.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> position_at(two_set_show(), "T1", 4.0).tolist()
     [0.0, 7.0]
     """
@@ -50,7 +50,7 @@ def speed(
 ) -> SpeedStats:
     """Returns a spot's movement demand over a local window of a transition.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> speed(two_set_show(), "T1", ("1", "2")).m_per_count
     0.5
     """
@@ -60,7 +60,7 @@ def speed(
 def speeds(show: Show, tid: TransitionId) -> pd.DataFrame:
     """Ranks every spot of a transition by peak then mean speed, hardest first.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> len(speeds(two_set_show(), ("1", "2")))
     4
     """
@@ -78,7 +78,7 @@ def direction_of_travel(
 ) -> Degrees | None:
     """Returns the facing a spot's travel points at local count tau, or None when still.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> direction_of_travel(two_set_show(), "T1", ("1", "2"), 4.0)
     180.0
     """
@@ -91,7 +91,7 @@ def direction_of_travel(
 def motion_contrast(show: Show, tid: TransitionId) -> MotionStats:
     """Summarizes moving share, speed spread and direction variety of a transition.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> motion_contrast(two_set_show(), ("1", "2")).moving_share
     1.0
     """
@@ -121,7 +121,7 @@ def _mean_speed(engine: PathEngine, t: Count) -> float:
 def energy_curve(show: Show, per_count: int = 1) -> pd.Series:
     """Returns mean on-field speed (m/count) through the show, indexed by global count.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> round(float(energy_curve(two_set_show()).loc[4.0]), 6)
     0.5
     """
@@ -146,7 +146,7 @@ def phrase_profile(show: Show, t0: Count, t1: Count) -> pd.DataFrame:
     Phrases split at timeline markers inside the range. Change is mean displacement over the
     phrase, energy is mean speed, density is mean nearest-neighbour distance at its middle.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> phrase_profile(two_set_show(), 0.0, 8.0)["change"].tolist()
     [4.0]
     """

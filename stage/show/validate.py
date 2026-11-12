@@ -132,7 +132,7 @@ def _facings(candidate: Set) -> list[ValidationIssue]:
 def validate_set(show: Show, candidate: Set) -> ValidationReport:
     """Checks a candidate set: every spot once, known IDs, facing range, forms, pins unchanged.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show = two_set_show()
     >>> validate_set(show, show.set("1")).ok
     True
@@ -191,7 +191,7 @@ def _compile_rows(show: Show, spec: TransitionSpec, where: str) -> list[Validati
 def validate_paths(show: Show, spec: TransitionSpec) -> ValidationReport:
     """Checks a transition's paths: known spots, counts, windows, style params, continuity.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show = two_set_show()
     >>> validate_paths(show, show.transition(("1", "2"))).ok
     True
@@ -215,7 +215,7 @@ def validate_paths(show: Show, spec: TransitionSpec) -> ValidationReport:
 def validate_dependencies(show: Show, store: SheetStore | None = None) -> ValidationReport:
     """Checks that the sheet reference resolves and its version is pinned in dependencies.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> [i.code for i in validate_dependencies(two_set_show()).issues]
     ['UNKNOWN_SHEET']
     """
@@ -274,7 +274,7 @@ def _all(reports: Iterable[ValidationReport]) -> ValidationReport:
 def validate_show(show: Show, store: SheetStore | None = None) -> ValidationReport:
     """Checks sets, paths, dependencies (when a store is given), sequence and timeline.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> validate_show(two_set_show()).ok
     True
     """

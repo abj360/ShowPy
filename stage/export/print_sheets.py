@@ -203,7 +203,7 @@ def coordinate_sheet(
     Returns:
         sheet: The spot's rows in show order.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> [r.behavior for r in coordinate_sheet(two_set_show(), "T1").rows]
     ['start', 'move 8']
     """
@@ -219,7 +219,7 @@ def coordinate_sheets(
 ) -> list[CoordinateSheet]:
     """Builds the coordinate sheets of every selected spot, sharing one engine.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> [s.entity for s in coordinate_sheets(two_set_show(), "T1-T2")]
     ['T1', 'T2']
     """
@@ -231,7 +231,7 @@ def coordinate_sheets(
 def chart(show: Show, set_id: SetId, publication: Publication | None = None) -> Chart:
     """Builds the designer chart of one set: every spot's position, facing and form.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> [r.xy for r in chart(two_set_show(), "2").rows][:2]
     [(0.0, 9.0), (2.0, 9.0)]
     """
@@ -329,7 +329,7 @@ def cue_sheet(show: Show) -> pd.DataFrame:
 
     In cue mode without a tempo, counts and seconds cannot convert and show as NaN.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> list(cue_sheet(two_set_show()).columns)
     ['count', 'seconds', 'measure', 'kind', 'label', 'detail']
     """

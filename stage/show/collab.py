@@ -80,7 +80,7 @@ def apply_event(show: Show, event: CanvasEvent) -> Show:
     Comment and highlight events leave the show unchanged.
 
     >>> from datetime import UTC
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> event = CanvasEvent(id="e1", at=datetime(2026, 11, 11, tzinfo=UTC), actor="designer",
     ...                     kind="set_counts", payload={"op": "counts", "set_id": "2", "counts": 6})
     >>> apply_event(two_set_show(), event).set("2").counts
@@ -237,7 +237,7 @@ def pins(show: Show) -> list[Pin]:
 def propose(show: Show, change: Sequence[ChangeOp], note: str, proposal_id: str) -> Proposal:
     """Wraps change ops as a suggestion against the show's revision; checks they apply.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> propose(two_set_show(), [CountsOp(set_id="2", counts=12)], "slower", "p1").state
     'open'
     """
@@ -249,7 +249,7 @@ def preview_proposal(show: Show, proposal: Proposal) -> ProposalPreview:
     """Computes what a proposal would produce, for ghosts on the canvas.
 
     >>> from stage.choreo.models import Placement
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> op = PlacementOp(set_id="2", placement=Placement(entity="T1", x=-2.0, y=9.0))
     >>> preview = preview_proposal(two_set_show(), propose(two_set_show(), [op], "", "p"))
     >>> [p.entity for p in preview.placements["2"]], preview.blocked

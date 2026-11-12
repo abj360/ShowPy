@@ -119,7 +119,7 @@ def place(
     (read it back with filled_forms()).
 
     >>> from stage.choreo.forms import line_form
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show = two_set_show()
     >>> row = line_form("row", ["T1", "T2"], (0, 12), (12, 12), n=4)
     >>> placed = place(show, "2", [row])
@@ -142,7 +142,7 @@ def filled_forms(placed: Set, forms: Sequence[Form]) -> list[Form]:
     """Returns forms whose members are read back from a placed set, in slot order.
 
     >>> from stage.choreo.forms import line_form
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show = two_set_show()
     >>> row = line_form("row", ["T1"], (0, 12), (12, 12), n=4)
     >>> filled_forms(place(show, "2", [row]), [row])[0].members
@@ -186,7 +186,7 @@ def rebuild(
     need force=True.
 
     >>> from stage.choreo.forms import line_form
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> show = two_set_show()
     >>> row = line_form("row", ["T1", "T2", "T3", "T4"], (0, 12), (6, 12), set_id="2")
     >>> rebuild(show.model_copy(update={"forms": {"row": row}}), "row").set("2").get("T4").y

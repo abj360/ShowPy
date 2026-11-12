@@ -109,7 +109,7 @@ def min_gaps(
 
     A bounding-box broadphase skips pairs that cannot beat the current top list.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> round(min_gaps(two_set_show(), ("1", "2"), top=1)[0].gap, 6)
     1.4
     """
@@ -157,7 +157,7 @@ def suggest_delays(
 
     Only delays that widen the gap are returned; ties prefer the shorter delay.
 
-    >>> from tests.fixtures.crossing_shows import crossing_show
+    >>> from stage.examples import crossing_show
     >>> suggest_delays(crossing_show(), ("1", "2"), ("T1", "T2"))[0].new_gap > 0
     True
     """
@@ -184,7 +184,7 @@ def suggest_waypoint(
 
     Two candidates sit `clearance` beyond both footprints, on either side of `around`.
 
-    >>> from tests.fixtures.crossing_shows import crossing_show
+    >>> from stage.examples import crossing_show
     >>> suggest_waypoint(crossing_show(), ("1", "2"), "T1", "T2")[0].kind
     'waypoint'
     """
@@ -225,7 +225,7 @@ def suggest_reassignment(
 
     Apply the result with stage.choreo.match_ops.apply_match.
 
-    >>> from tests.fixtures.crossing_shows import crossing_show
+    >>> from stage.examples import crossing_show
     >>> suggest_reassignment(crossing_show(), ("1", "2"), ["T1", "T2"]).crossings
     0
     """

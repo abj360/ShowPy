@@ -59,7 +59,7 @@ def _set_facings(target: Set, facings: dict[SpotId, Degrees], force: bool) -> Se
 def face_direction(target: Set, sel: Sel, deg: Degrees, force: bool = False) -> Set:
     """Gives spots a fixed facing; pinned spots raise LockedError unless forced.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> face_direction(two_set_show().set("1"), ["T1"], 90.0).get("T1").facing
     90.0
     """
@@ -69,7 +69,7 @@ def face_direction(target: Set, sel: Sel, deg: Degrees, force: bool = False) -> 
 def face_audience(target: Set, sel: Sel, force: bool = False) -> Set:
     """Faces spots toward the audience.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> face_audience(two_set_show().set("1"), ["T1"]).get("T1").facing
     0.0
     """
@@ -84,7 +84,7 @@ def _toward(origin: Point, point: Point, fallback: Degrees) -> Degrees:
 def face_point(target: Set, sel: Sel, point: Point, force: bool = False) -> Set:
     """Faces spots toward a point; a spot on the point keeps its facing.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> face_point(two_set_show().set("1"), ["T1"], (5.0, 5.0)).get("T1").facing
     90.0
     """
@@ -97,7 +97,7 @@ def face_entity(target: Set, sel: Sel, entity: SpotId, force: bool = False) -> S
 
     Over time, use a TOWARD_ENTITY path facing or override, which tracks the spot as it moves.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> face_entity(two_set_show().set("1"), ["T1"], "T2").get("T1").facing
     90.0
     """
@@ -145,7 +145,7 @@ def face_along(
 ) -> Set:
     """Faces form members along the form's curve, in travel direction unless reversed.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> from stage.geo.shapes import line
     >>> show = two_set_show()
     >>> recipe = {"curve": line((0, 5), (6, 5)).construction()}
@@ -165,7 +165,7 @@ def face_normal(
 
     For a counter-clockwise circle the right of travel points away from the center.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> from stage.geo.shapes import line
     >>> show = two_set_show()
     >>> recipe = {"curve": line((0, 5), (6, 5)).construction()}
@@ -182,7 +182,7 @@ def face_normal(
 def add_facing_override(show: Show, override: FacingOverride) -> Show:
     """Adds a timed facing override; its range must lie within the show's counts.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> from stage.choreo.models import FacingMode
     >>> o = FacingOverride(entities="all", mode=FacingMode.AUDIENCE, start=0.0, end=4.0)
     >>> len(add_facing_override(two_set_show(), o).facing_overrides)

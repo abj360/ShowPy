@@ -192,7 +192,7 @@ def split_section(show: Show, at: SetId) -> tuple[Show, Show]:
     Returns:
         sections: The first and second show.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> from stage.show.manage import add_set
     >>> first, second = split_section(add_set(two_set_show(), "3", 4.0), "2")
     >>> first.set_ids(), second.set_ids(), second.sets[0].counts
@@ -289,7 +289,7 @@ def join_sections(a: Show, b: Show) -> Show:
     Otherwise set IDs must not repeat, and `b`'s first set keeps its counts (0), so retime it
     with set_counts(). `b`'s tempos, holds, markers and facing overrides shift by `a`'s length.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> from stage.show.manage import add_set
     >>> whole = add_set(two_set_show(), "3", 4.0)
     >>> join_sections(*split_section(whole, "2")).sets == whole.sets

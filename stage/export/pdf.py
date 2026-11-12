@@ -221,7 +221,7 @@ def to_pdf(obj: Printable, layout: Layout = "sheet") -> bytes:
     Returns:
         pdf: The document; rows that overflow a page continue on the next.
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> from stage.export.print_sheets import coordinate_sheet
     >>> to_pdf(coordinate_sheet(two_set_show(), "T1"))[:8]
     b'%PDF-1.4'

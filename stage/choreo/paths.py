@@ -99,7 +99,7 @@ def _require_fits(row: PathRow, counts: float) -> None:
 def default_paths(show: "Show", tid: TransitionId) -> TransitionSpec:
     """Returns straight moves over the full counts for everyone (no stored rows).
 
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> default_paths(two_set_show(), ("1", "2")).rows
     {}
     """

@@ -10,16 +10,16 @@ Contains:
     live_publication(): returns a live publication of a show with no claims
 """
 
-from datetime import UTC, datetime
-
 from stage.choreo.models import PathRow, PathStyle
-from stage.export.models import Performer, PerformerRole, Publication
+from stage.examples import EXAMPLE_TIME as AT
+from stage.examples import live_publication, performer
 from stage.sheet.models import GuideLine
 from stage.show.models import Show
 from tests.fixtures.motion_shows import with_rows, with_targets
 from tests.fixtures.shows import two_set_show
 
-AT = datetime(2026, 11, 11, 18, 0, tzinfo=UTC)
+__all__ = ["AT", "guided_show", "live_publication", "performer"]
+
 GUIDE_Y = 7.0
 HALF_WIDTH = 20.0
 
@@ -45,19 +45,3 @@ def guided_show() -> Show:
         "T4": PathRow(entity="T4", style=PathStyle.ROTATE, pivot=(6.0, GUIDE_Y), sweep_deg=180.0),
     }
     return with_rows(rows, show=show)
-
-
-def performer(name: str, role: PerformerRole = "performer") -> Performer:
-    """Builds a performer whose ID is the lower-case name."""
-    return Performer(id=name.lower(), name=name, role=role)
-
-
-def live_publication(show: Show) -> Publication:
-    """Returns a live publication of `show` with no claims."""
-    return Publication(
-        id="pub-1",
-        show_id=show.id,
-        revision="r1",
-        link="https://eight.example/p/pub-1",
-        published_at=AT,
-    )

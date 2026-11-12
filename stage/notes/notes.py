@@ -113,7 +113,7 @@ def add_note(
         kind: goal, idea, todo or warning.
 
     >>> from datetime import UTC, datetime
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> at = datetime(2026, 11, 11, tzinfo=UTC)
     >>> add_note(two_set_show(), "go big", Anchor.on_set("2"), "n1", at, "pat").notes[0].text
     'go big'
@@ -128,7 +128,7 @@ def edit_note(show: "Show", note_id: str, /, **changes: Any) -> "Show":
     """Changes a note's fields; the ID is fixed.
 
     >>> from datetime import UTC, datetime
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> at = datetime(2026, 11, 11, tzinfo=UTC)
     >>> show = add_note(two_set_show(), "go", Anchor.on_set("2"), "n1", at, "pat")
     >>> edit_note(show, "n1", kind="todo").notes[0].kind
@@ -151,7 +151,7 @@ def remove_note(show: "Show", note_id: str) -> "Show":
     """Removes a note.
 
     >>> from datetime import UTC, datetime
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> at = datetime(2026, 11, 11, tzinfo=UTC)
     >>> show = add_note(two_set_show(), "go", Anchor.on_set("2"), "n1", at, "pat")
     >>> remove_note(show, "n1").notes
@@ -169,7 +169,7 @@ def notes_for(
     Hidden notes, such as unaccepted drafts, are left out unless `include_hidden` is set.
 
     >>> from datetime import UTC, datetime
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> at = datetime(2026, 11, 11, tzinfo=UTC)
     >>> show = add_note(two_set_show(), "go", Anchor.on_set("2"), "n1", at, "pat")
     >>> [n.id for n in notes_for(show, "2")]
@@ -214,7 +214,7 @@ def notes_near(
     when any anchored spot's on-field placement in any set (or only in `set_id`) is close.
 
     >>> from datetime import UTC, datetime
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> at = datetime(2026, 11, 11, tzinfo=UTC)
     >>> show = add_note(two_set_show(), "lead", Anchor.on_spots(["T1"]), "n1", at, "pat")
     >>> [n.id for n in notes_near(show, (0.0, 5.5), 1.0)]
@@ -298,7 +298,7 @@ def draft_notes(show: "Show", concept: str, drafter: NoteDrafter, at: datetime) 
     MAX_DRAFTED_NOTES drafts reject the whole batch.
 
     >>> from datetime import UTC, datetime
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> class Drafter:
     ...     def draft(self, show_summary: str, concept: str) -> list[DraftedNote]:
     ...         return [DraftedNote(text=concept, kind="goal", anchor=Anchor.on_set("1"))]
@@ -326,7 +326,7 @@ def accept_draft(show: "Show", draft: Note) -> "Show":
     """Adds a drafted note to the show and makes it visible.
 
     >>> from datetime import UTC, datetime
-    >>> from tests.fixtures.shows import two_set_show
+    >>> from stage.examples import two_set_show
     >>> at = datetime(2026, 11, 11, tzinfo=UTC)
     >>> draft = Note(id="draft-1", text="go", anchor=Anchor.on_set("1"), author="agent",
     ...              created_at=at, visible=False)
