@@ -12,6 +12,7 @@ from stage.choreo.avoid import (
     min_gaps,
     separate_in_time,
     suggest_delays,
+    suggest_reassignment,
     suggest_waypoint,
 )
 from stage.choreo.engine_models import Fix
@@ -86,3 +87,11 @@ def test_apply_reassign_fix_is_refused() -> None:
     fix = Fix(kind="reassign", params={}, new_gap=1.0, max_speed_after=0.5)
     with pytest.raises(PathError):
         apply_fix(crossing_show().transition(TID), fix)
+
+
+def test_suggest_reassignment_uncrosses_a_swap() -> None:
+    result = suggest_reassignment(crossing_show(), TID, ["T1", "T2"])
+    assert result.crossings == 0
+    targets = dict(zip(result.entities, result.target_points().tolist(), strict=True))
+    assert approx_equal(targets["T1"], (0.0, 9.0))
+    assert approx_equal(targets["T2"], (4.0, 9.0))

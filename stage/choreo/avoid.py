@@ -12,6 +12,7 @@ Contains:
     min_gaps(): lists the tightest pairs of a transition
     suggest_delays(): suggests delays that open a pair's gap
     suggest_waypoint(): suggests a bend that routes one spot around another
+    suggest_reassignment(): re-matches spots to their own targets with a crossing penalty
     separate_in_time(): staggers starts along an order
     apply_fix(): applies a suggested fix to a transition's paths
 """
@@ -24,7 +25,8 @@ import numpy.typing as npt
 
 from stage.choreo.engine import PathEngine
 from stage.choreo.engine_models import Fix, GapInfo
-from stage.choreo.models import TransitionSpec
+from stage.choreo.match import match
+from stage.choreo.models import MatchOptions, MatchResult, TransitionSpec
 from stage.choreo.paths import add_waypoint, delay, stagger
 from stage.core.errors import PathError
 from stage.core.ids import SpotId, TransitionId
@@ -34,6 +36,7 @@ from stage.show.models import Show
 type FloatArray = npt.NDArray[np.float64]
 
 DELAY_STEP = 0.5
+CROSSING_WEIGHT = 10.0
 ZERO_TOL = 1e-12
 ALL = "all"
 
@@ -215,14 +218,31 @@ def _away(here: Points, other: Points, velocity: Points) -> Points:
     return np.array([1.0, 0.0])
 
 
+def suggest_reassignment(
+    show: Show, tid: TransitionId, sel: Sequence[SpotId], crossing_weight: float = CROSSING_WEIGHT
+) -> MatchResult:
+    """Re-matches the selected spots to their own next-set targets, penalizing crossings.
+
+    Apply the result with stage.choreo.match_ops.apply_match.
+
+    >>> from tests.fixtures.crossing_shows import crossing_show
+    >>> suggest_reassignment(crossing_show(), ("1", "2"), ["T1", "T2"]).crossings
+    0
+    """
+    ids = list(sel)
+    targets = show.set(tid[1]).positions(ids)
+    options = MatchOptions(keep_groups=False, weights={"crossing": crossing_weight})
+    return match(show.set(tid[0]), targets, entities=ids, options=options)
+
+
 def separate_in_time(
     spec: TransitionSpec, ordered_sel: Sequence[SpotId], gap_counts: float = 1.0
 ) -> TransitionSpec:
     """Staggers starts `gap_counts` apart along an order.
 
     >>> from stage.choreo.models import TransitionSpec
-    >>> separate_in_time(TransitionSpec(id=("1", "2"), counts=8.0), ["A", "B"]).row("B").start
-    1.0
+        >>> separate_in_time(TransitionSpec(id=("1", "2"), counts=8.0), ["A", "B"]).row("B").start
+        1.0
     """
     return stagger(spec, ordered_sel, step=gap_counts)
 
@@ -231,10 +251,10 @@ def apply_fix(spec: TransitionSpec, fix: Fix) -> TransitionSpec:
     """Applies a delay, waypoint or stagger fix; a reassignment must go through apply_match.
 
     >>> from stage.choreo.models import TransitionSpec
-    >>> params = {"entity": "A", "counts": 2.0}
-    >>> fix = Fix(kind="delay", params=params, new_gap=1.0, max_speed_after=1.0)
-    >>> apply_fix(TransitionSpec(id=("1", "2"), counts=8.0), fix).row("A").start
-    2.0
+        >>> params = {"entity": "A", "counts": 2.0}
+        >>> fix = Fix(kind="delay", params=params, new_gap=1.0, max_speed_after=1.0)
+        >>> apply_fix(TransitionSpec(id=("1", "2"), counts=8.0), fix).row("A").start
+        2.0
     """
     p = fix.params
     if fix.kind == "delay":
