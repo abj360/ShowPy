@@ -56,7 +56,7 @@ def _second_revision(repo: FileRepository, parent: str) -> str:
 @pytest.mark.defect("UP-9.7-03")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-03")
 def test_regression_next_link_to_outside_path_is_refused(tmp_path: Path) -> None:
-    """Refuses a next/ file naming a path outside the tree store (audit 9.7 item 3; P0 #2)."""
+    """Refuses a next/ file naming a path outside the tree store (audit 9.7 item 3; P0 #3)."""
     repo, rev, base = _saved(tmp_path)
     record = json.loads((base / "trees" / f"{rev}.json").read_text())
     decoy = tmp_path / "repo" / f"{DECOY_NAME}.json"
@@ -71,7 +71,7 @@ def test_regression_next_link_to_outside_path_is_refused(tmp_path: Path) -> None
 @pytest.mark.timeout(5, method="signal")
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_next_link_cycle_is_refused(tmp_path: Path) -> None:
-    """Refuses a cycle in next/ instead of looping forever (audit 9.7 item 3; P0 #2)."""
+    """Refuses a cycle in next/ instead of looping forever (audit 9.7 item 3; P0 #3, #7)."""
     repo, rev, base = _saved(tmp_path)
     (base / "next" / rev).write_text(rev)
     with pytest.raises(ShowPyError):
@@ -81,7 +81,7 @@ def test_regression_next_link_cycle_is_refused(tmp_path: Path) -> None:
 @pytest.mark.defect("UP-9.7-05")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-05")
 def test_regression_tree_digest_path_traversal_is_refused(tmp_path: Path) -> None:
-    """Refuses a tree entry whose digest is a path outside objects/ (audit 9.7 item 3)."""
+    """Refuses a tree entry whose digest is a path outside objects/ (audit 9.7 item 3; P0 #3)."""
     repo, rev, base = _saved(tmp_path)
     secret = tmp_path / "repo" / "secret.txt"
     secret.write_bytes(b"outside")

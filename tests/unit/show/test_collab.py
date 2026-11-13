@@ -279,7 +279,7 @@ def _with_path_row(show: Show) -> Show:
 @pytest.mark.defect("UP-9.7-32")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-32")
 def test_regression_counts_only_change_is_not_reported_as_a_paths_edit() -> None:
-    """Reports a counts-only retime as set_counts, not edit_paths (audit 9.7 collab; P0 #4)."""
+    """Reports a counts-only retime as set_counts, not edit_paths (audit 9.7 collab)."""
     _, agent, designer = open_session(_with_path_row(two_set_show()), AT)
     base_revision = designer.revision
     retimed = set_counts(load_show(designer), "2", RETIMED_COUNTS)

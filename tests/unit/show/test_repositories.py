@@ -91,7 +91,7 @@ def _race_winners() -> tuple[list[str], set[str]]:
 @pytest.mark.timeout(5, method="signal")
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_memory_commit_has_one_winner_per_parent() -> None:
-    """Lands exactly one of many threads racing on one parent (audit 9.7 item 2; P0 #3)."""
+    """Lands exactly one of many threads racing on one parent (audit 9.7 item 2; P0 #2)."""
     winners, stored = _race_winners()
     assert len(winners) == 1
     assert set(winners) <= stored
@@ -101,7 +101,7 @@ def test_regression_memory_commit_has_one_winner_per_parent() -> None:
 @pytest.mark.defect("UP-9.7-12")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-12")
 def test_regression_repository_refuses_agent_pinned_move() -> None:
-    """Refuses an agent put_set that moves a pinned spot (audit 9.7 item 7)."""
+    """Refuses an agent put_set that moves a pinned spot (audit 9.7 item 7; P0 #5)."""
     repo = InMemoryRepository()
     rev = repo.put_show(
         SHOW_ID,
@@ -119,7 +119,7 @@ def test_regression_repository_refuses_agent_pinned_move() -> None:
 @pytest.mark.defect("UP-9.7-13")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-13")
 def test_regression_repository_refuses_agent_limits_write() -> None:
-    """Refuses an agent transaction that writes the designer's limits file (audit 9.7 item 7)."""
+    """Refuses an agent transaction that writes the limits file (audit 9.7 item 7; P0 #5)."""
     repo = InMemoryRepository()
     rev = _create(repo)
     with pytest.raises(LockedError):

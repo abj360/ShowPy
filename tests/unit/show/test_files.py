@@ -89,7 +89,7 @@ def test_regression_agent_cannot_empty_cast_through_show_json() -> None:
 @pytest.mark.defect("UP-9.7-10")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-10")
 def test_regression_agent_cannot_change_show_id_through_show_json() -> None:
-    """Refuses an agent rewrite of show.json that changes the show ID (audit 9.7 item 5)."""
+    """Refuses an agent show.json rewrite that changes the show ID (audit 9.7 item 5; P0 #5)."""
     agent, _ = _session()
     body = _show_json(agent) | {"id": "hijacked"}
     with pytest.raises(ShowPyError):
@@ -99,7 +99,7 @@ def test_regression_agent_cannot_change_show_id_through_show_json() -> None:
 @pytest.mark.defect("UP-9.7-11")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-11")
 def test_regression_agent_cannot_forge_designer_comments() -> None:
-    """Keeps an agent from writing a comment authored by the designer (audit 9.7 item 6)."""
+    """Keeps an agent from writing a designer-authored comment (audit 9.7 item 6; P0 #5)."""
     agent, _ = _session()
     forged = Comment(id="c1", anchor=Anchor.on_set("2"), text="approved", author="designer")
     try:
