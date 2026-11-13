@@ -22,7 +22,7 @@ jobs:
           uv run ruff format --check . && uv run ruff check .
           npx --yes prettier@3.6.2 --check "**/*.{md,yml,yaml,json}"
       - name: Type-check
-        run: uv run mypy src tests
+        run: uv run mypy stage tests
       - name: Test
         run: uv run pytest
       - name: Dependency scan

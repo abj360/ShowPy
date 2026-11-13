@@ -22,7 +22,7 @@ requires = ["hatchling==1.27.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/stage"]
+packages = ["stage"]
 
 [dependency-groups]
 dev = [
@@ -51,8 +51,8 @@ convention = "google"
 
 # RUF012: pydantic copies field defaults per instance, so {} defaults are safe.
 [tool.ruff.lint.per-file-ignores]
-"src/stage/**/models.py" = ["RUF012"]
-"src/stage/**/*_models.py" = ["RUF012"]
+"stage/**/models.py" = ["RUF012"]
+"stage/**/*_models.py" = ["RUF012"]
 "tests/**" = ["D"]
 
 [tool.ruff.format]
@@ -63,14 +63,13 @@ strict = true
 python_version = "3.14"
 plugins = ["pydantic.mypy"]
 explicit_package_bases = true
-mypy_path = "src"
 
 [[tool.mypy.overrides]]
 module = ["segno", "segno.*", "imageio", "imageio.*", "imageio_ffmpeg"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "src"]
+testpaths = ["tests", "stage"]
 pythonpath = ["."]
 addopts = "--doctest-modules -q --strict-markers --import-mode=importlib"
 markers = ["golden: replays real shows against reviewed fixtures"]

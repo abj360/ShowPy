@@ -103,13 +103,13 @@ Why the layering exists:
 Two rules from ADR 0001 keep the graph clean.
 
 - Subpackage `__init__.py` files hold only a docstring. Code always imports the submodule, as
-  in `from stage.geo.curves import Segment`. The top-level `src/stage/__init__.py` re-exports the
+  in `from stage.geo.curves import Segment`. The top-level `stage/__init__.py` re-exports the
   public API lazily, so `import stage; stage.PathEngine` also works.
 - A few modules act on a `Show` but sit below `show`, for example `cast.spots`,
   `sheet.coords` and `notes.notes`. They import `Show` only for type checking. They edit a
   show with `show.model_copy(update=...)`, which does not need the class at run time.
 
-Saving and loading paths through the workspace lives in `src/stage/show/paths_store.py`, not in
+Saving and loading paths through the workspace lives in `stage/show/paths_store.py`, not in
 `stage.choreo`, because it needs `stage.show.storage`, which is one layer up. The rule holds:
 no package imports a package above it.
 
@@ -121,7 +121,7 @@ no package imports a package above it.
 518
 ```
 
-Under the hood: `import stage` runs only `src/stage/__init__.py`. That file holds a table from
+Under the hood: `import stage` runs only `stage/__init__.py`. That file holds a table from
 public name to submodule. The first time you touch `stage.PathEngine`, a module-level
 `__getattr__` imports `stage.choreo.engine` and returns the class. Nothing else loads early.
 

@@ -146,3 +146,11 @@ The package now lives at `src/stage/`, not `stage/`. The import name is unchange
 stage`. Paths named in the sections above (`stage/__init__.py`, `stage/core/...`) now sit
 under `src/`. A src layout means tests import the installed package rather than the checkout
 by accident. Type-check with `uv run mypy src tests`.
+
+## Addendum 2026-11-12: flat layout restored
+
+The src layout was reverted the same day at the designer's request. The package is back at
+`stage/` in the repo root, and the paths in the sections above are current again. The cost:
+because pytest runs from the repo root, tests can import the checkout even when the built
+wheel is missing a file. `tests/unit/test_public_api.py` checks that `py.typed` ships, and the
+Docker build installs the package before testing.
