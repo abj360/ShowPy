@@ -6,9 +6,12 @@ test_pdf.py --- tests the dependency-free PDF writer and its four layouts
 Also holds the audited print defects (UP-9.5-36 to UP-9.5-38) as strict xfails.
 
 Contains:
-    test_regression_wide_table_stays_on_the_page(): Keeps every text run of a 40-column cue sheet
-    test_regression_long_title_is_clipped_to_the_page(): Clips or wraps a title wider than the
-    test_regression_non_latin_names_are_not_replaced_by_question_marks(): Prints Cyrillic, CJK,
+    test_placed_text_decodes_hex_runs_through_the_tounicode_map(): decodes hex runs via a CMap
+    test_placed_text_refuses_a_hex_run_without_a_tounicode_map(): fails clearly without a CMap
+    test_placed_text_reads_literal_runs(): reads literal text runs
+    test_regression_wide_table_stays_on_the_page(): keeps a 40-column table inside the page width
+    test_regression_long_title_is_clipped_to_the_page(): clips or wraps a title wider than the page
+    test_regression_non_latin_names_are_not_replaced_by_question_marks(): prints non-Latin names
 """
 
 import re

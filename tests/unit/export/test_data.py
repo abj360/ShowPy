@@ -6,15 +6,15 @@ test_data.py --- tests JSON interchange, frame CSV, position import, tables and 
 Also holds the audited data and CSV defects (UP-9.5-27 to UP-9.5-35) as strict xfails.
 
 Contains:
-    test_regression_import_json_reads_legacy_stage_tag(): Prefixes a quote to a performer name that
-    test_regression_csv_neutralizes_every_formula_trigger(): Prefixes a quote to cells starting
-    test_regression_csv_writes_large_floats_without_exponent(): Writes 1234567.0 in full; the `:g`
-    test_regression_csv_keeps_cue_seconds_above_one_thousand_exact(): Keeps the precision of cue
-    test_regression_coordinate_sheet_csv_names_the_entity_and_performer(): Carries the entity and
-    test_regression_to_text_drops_tabs_and_carriage_returns(): Replaces tab and carriage return in
-    test_regression_to_text_aligns_wide_cjk_characters(): Pads by display width so the next column
-    test_regression_export_json_include_accepts_a_single_field_name(): Treats `include="title"` as
-    test_regression_import_json_rejects_a_non_mapping_with_schema_error(): Raises SchemaError for
+    test_regression_chart_csv_neutralizes_formula_names(): quotes a formula-like performer name
+    test_regression_csv_neutralizes_every_formula_trigger(): quotes cells led by + - @ tab or CR
+    test_regression_csv_writes_large_floats_without_exponent(): writes 1234567.0 in full
+    test_regression_csv_keeps_cue_seconds_above_one_thousand_exact(): keeps seconds past 1,000 exact
+    test_regression_coordinate_sheet_csv_names_the_entity_and_performer(): adds entity and performer
+    test_regression_to_text_drops_tabs_and_carriage_returns(): drops tab and CR from text cells
+    test_regression_to_text_aligns_wide_cjk_characters(): pads wide characters by display width
+    test_regression_export_json_include_accepts_a_single_field_name(): treats a string as one field
+    test_regression_import_json_rejects_a_non_mapping_with_schema_error(): raises SchemaError
 """
 
 import csv

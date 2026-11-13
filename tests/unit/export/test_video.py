@@ -6,19 +6,19 @@ test_video.py --- tests 2D frame rendering and MP4 export with optional audio
 Also holds the audited video defects (UP-9.5-45 to UP-9.5-57) as strict xfails.
 
 Contains:
-    test_regression_short_audio_does_not_truncate_the_video(): Keeps the whole 2 s video when the
-    test_regression_sync_offset_past_the_audio_raises(): Raises instead of returning a corrupt file
-    test_regression_track_gain_is_applied(): Plays a track at its `gain`; a quarter gain must be
-    test_regression_frames_cover_the_half_open_range(): Renders fps x duration frames over [t0,
-    test_regression_adjacent_ranges_do_not_duplicate_the_boundary_frame(): Gives the same frame
-    test_regression_mp4_is_faststart(): Puts the moov atom before mdat so web playback starts
-    test_regression_mp4_carries_bt709_colour_tags(): Tags the stream BT.709 so players do not guess
-    test_regression_video_canvas_caps_the_pixel_count(): Rejects `px_per_m=1000`, a 42,000 x 25,000
-    test_regression_frames_do_not_rebuild_the_cast_ids_per_spot(): Builds the cast ID list at most
-    test_regression_ffmpeg_start_failure_is_wrapped(): Raises StorageError when the ffmpeg writer
-    test_regression_audio_mux_has_a_timeout(): Passes a timeout to the ffmpeg mux so a stuck
-    test_regression_negative_sync_offset_delays_the_audio(): Starts the music 1 s into the video
-    test_regression_audio_section_limits_playback(): Keeps a track silent before its `section`
+    test_regression_short_audio_does_not_truncate_the_video(): keeps the video longer than the audio
+    test_regression_sync_offset_past_the_audio_raises(): raises when the offset passes the audio
+    test_regression_track_gain_is_applied(): plays a track at its gain
+    test_regression_frames_cover_the_half_open_range(): renders frames over [t0, t1)
+    test_regression_adjacent_ranges_do_not_duplicate_the_boundary_frame(): avoids a doubled frame
+    test_regression_mp4_is_faststart(): puts the moov atom before mdat
+    test_regression_mp4_carries_bt709_colour_tags(): tags the stream BT.709
+    test_regression_video_canvas_caps_the_pixel_count(): rejects a 42,000 px wide canvas
+    test_regression_frames_do_not_rebuild_the_cast_ids_per_spot(): builds the ID list once a frame
+    test_regression_ffmpeg_start_failure_is_wrapped(): wraps a failed ffmpeg start in StorageError
+    test_regression_audio_mux_has_a_timeout(): passes a timeout to the ffmpeg mux
+    test_regression_negative_sync_offset_delays_the_audio(): delays music for a negative offset
+    test_regression_audio_section_limits_playback(): keeps a track silent before its section
 """
 
 import array

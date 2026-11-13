@@ -6,8 +6,8 @@ test_print_sheets.py --- tests coordinate sheets, set charts and the cue sheet
 Also holds the audited crossing-label defects (UP-9.5-39, UP-9.5-40) as strict xfails.
 
 Contains:
-    test_regression_crossing_labels_tell_both_sides_apart(): Lists two distinct labels when a path
-    test_regression_out_and_back_crossing_is_reported_twice(): Reports both crossings of a loop
+    test_regression_crossing_labels_tell_both_sides_apart(): lists two labels for two `30` lines
+    test_regression_out_and_back_crossing_is_reported_twice(): reports both crossings of a loop
 """
 
 import math

@@ -6,32 +6,33 @@ test_publish.py --- tests publishing, QR codes, claims, designer actions, views 
 Also holds the audited publishing defects (UP-9.5-01 to UP-9.5-26) as strict xfails.
 
 Contains:
-    test_regression_publish_link_carries_a_caller_supplied_join_token(): Puts a caller-supplied
-    test_regression_publication_snapshot_excludes_contact_details(): Keeps performer contact data
-    test_regression_claims_and_notices_return_redacted_performers(): Returns performers without
-    test_regression_publish_rejects_non_http_base_urls(): Rejects a script or data scheme as the
-    test_regression_publish_requires_https_base_url(): Requires an https base URL
-    test_regression_publish_does_not_mangle_a_base_url_query(): Rejects a query string in the base
-    test_regression_qr_code_caps_the_image_size(): Rejects a 100,000 px QR size instead of
-    test_regression_qr_code_wraps_an_overlong_link_error(): Raises a ShowPyError, not
-    test_regression_qr_code_keeps_the_documented_error_level(): Renders at error level M as
-    test_regression_pause_cannot_reopen_a_closed_publication(): Refuses to pause a closed
-    test_regression_republish_from_closed_does_not_go_live(): Refuses to republish a closed
-    test_regression_claim_spot_rejects_a_naive_time(): Rejects a claim time without a time zone
-    test_regression_claim_spot_rejects_a_time_before_publication(): Rejects a claim dated before
-    test_regression_reassign_rejects_a_naive_time(): Rejects a reassignment time without a time zone
-    test_regression_reassign_rejects_a_time_before_publication(): Rejects a reassignment dated
-    test_regression_reassign_rejects_an_unknown_spot(): Refuses to move a performer onto a spot the
-    test_regression_reassign_rejects_crew_on_a_performer_spot(): Refuses to put crew on a spot only
-    test_regression_reassign_rejects_an_inactive_spot(): Refuses to move a performer onto an
-    test_regression_republish_after_a_spot_rename_keeps_the_claim(): Carries a claim over a spot
-    test_regression_notify_changes_reports_a_deleted_set(): Tells a performer when a set they had a
-    test_regression_notify_changes_reports_a_new_set(): Tells a performer when a set was added
-    test_regression_notify_changes_reports_a_coordinate_system_change(): Tells performers when the
-    test_regression_performer_view_needs_a_live_publication(): Refuses to build a view from a
-    test_regression_performer_view_checks_the_show_matches_the_publication(): Refuses a view built
-    test_regression_performer_view_after_deletion_gives_a_performer_hint(): Gives a non-empty
-    test_regression_publication_version_detects_concurrent_claims(): Bumps a monotonic version on
+    test_qr_code_matches_the_reference_symbol(): checks the QR PNG against segno's module grid
+    test_regression_publish_link_carries_a_caller_supplied_join_token(): adds a join token
+    test_regression_publication_snapshot_excludes_contact_details(): hides contacts
+    test_regression_claims_and_notices_return_redacted_performers(): redacts contacts in claims
+    test_regression_publish_rejects_non_http_base_urls(): rejects script and data base URLs
+    test_regression_publish_requires_https_base_url(): rejects an http base URL
+    test_regression_publish_does_not_mangle_a_base_url_query(): keeps a base URL query intact
+    test_regression_qr_code_caps_the_image_size(): rejects a QR size that needs gigabytes
+    test_regression_qr_code_wraps_an_overlong_link_error(): wraps the QR overflow in a ShowPyError
+    test_regression_qr_code_keeps_the_documented_error_level(): renders error level M as documented
+    test_regression_pause_cannot_reopen_a_closed_publication(): refuses to pause a closed one
+    test_regression_republish_from_closed_does_not_go_live(): refuses to republish a closed one
+    test_regression_claim_spot_rejects_a_naive_time(): rejects a claim time without a time zone
+    test_regression_claim_spot_rejects_a_time_before_publication(): rejects a claim too early
+    test_regression_reassign_rejects_a_naive_time(): rejects a reassign time without a time zone
+    test_regression_reassign_rejects_a_time_before_publication(): rejects a reassign too early
+    test_regression_reassign_rejects_an_unknown_spot(): rejects a spot the show lacks
+    test_regression_reassign_rejects_crew_on_a_performer_spot(): rejects crew on a performer spot
+    test_regression_reassign_rejects_an_inactive_spot(): rejects an inactive spot
+    test_regression_republish_after_a_spot_rename_keeps_the_claim(): carries claims over a rename
+    test_regression_notify_changes_reports_a_deleted_set(): reports a deleted set
+    test_regression_notify_changes_reports_a_new_set(): reports a new set
+    test_regression_notify_changes_reports_a_coordinate_system_change(): reports a coordinate change
+    test_regression_performer_view_needs_a_live_publication(): refuses a closed publication
+    test_regression_performer_view_checks_the_show_matches_the_publication(): rejects a wrong show
+    test_regression_performer_view_after_deletion_gives_a_performer_hint(): gives a performer hint
+    test_regression_publication_version_detects_concurrent_claims(): bumps a version on each claim
 """
 
 import hashlib

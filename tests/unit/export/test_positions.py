@@ -6,10 +6,10 @@ test_positions.py --- tests merging CSV positions into a show
 Also holds the audited import defects (UP-9.5-41 to UP-9.5-44) as strict xfails.
 
 Contains:
-    test_regression_import_positions_reads_a_utf8_bom(): Reads a CSV that starts with a UTF-8 byte
-    test_regression_import_positions_reads_semicolon_delimited_csv(): Reads a semicolon-delimited
-    test_regression_import_positions_normalizes_facing(): Stores facing 720 as 0 instead of keeping
-    test_regression_import_positions_rejects_ids_with_spaces(): Rejects an entity ID that contains
+    test_regression_import_positions_reads_a_utf8_bom(): reads a CSV with a byte order mark
+    test_regression_import_positions_reads_semicolon_delimited_csv(): reads semicolon CSV
+    test_regression_import_positions_normalizes_facing(): stores facing 720 as 0
+    test_regression_import_positions_rejects_ids_with_spaces(): rejects an entity ID with a space
 """
 
 import pytest
