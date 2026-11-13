@@ -6,10 +6,17 @@ test_templates.py --- tests built-in sheet templates, lookup, customization, edi
 
 import pytest
 
-from showpy.core.errors import ConflictError, SchemaError, UnknownRefError, VersionError
+from showpy.core.errors import (
+    ConflictError,
+    SchemaError,
+    ShowPyError,
+    UnknownRefError,
+    VersionError,
+)
 from showpy.core.types import Region
 from showpy.core.units import convert
 from showpy.core.util import approx_equal
+from showpy.sheet.bounds import on_surface
 from showpy.sheet.models import Grid, GuideLine, Landmark, SurfaceType, Zone, ZoneKind
 from showpy.sheet.templates import (
     InMemorySheetStore,
@@ -234,3 +241,81 @@ def test_store_versionless_get_returns_latest() -> None:
     found = store.get(sheet.ref.split("@")[0])
     assert found is not None
     assert found.ref == latest
+
+
+RESIZED = (4.0, 6.0)
+OFF_SHEET_ZONE = Region(exterior=((4.0, 1.0), (4.5, 1.0), (4.5, 2.0), (4.0, 2.0)))
+HS_ID_REF = "sheet:hs-football"
+
+
+@pytest.mark.defect("UP-9.4-30")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-30")
+def test_regression_blank_sheets_with_different_content_get_different_refs() -> None:
+    """Gives blank sheets that differ in content different refs (audit 9.4)."""
+    by_grid = blank_sheet(10, 6, grid_spacing=2)
+    by_units = blank_sheet(10, 6, units="ft")
+    assert by_grid == by_units or by_grid.ref != by_units.ref
+
+
+@pytest.mark.defect("UP-9.4-31")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-31")
+def test_regression_blank_sheet_rejects_infinite_width() -> None:
+    """Rejects an infinite width instead of building a sheet (audit 9.4)."""
+    with pytest.raises(SchemaError):
+        blank_sheet(float("inf"), 5.0)
+
+
+@pytest.mark.defect("UP-9.4-32")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-32")
+def test_regression_customize_rejects_non_numeric_size() -> None:
+    """Rejects a non-numeric size with a ShowPyError, not ValueError (audit 9.4)."""
+    with pytest.raises(ShowPyError):
+        customize(blank_sheet(10, 6), size=("wide", "deep"))
+
+
+@pytest.mark.defect("UP-9.4-33")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-33")
+def test_regression_customize_rejects_bad_name_type() -> None:
+    """Rejects a non-string name with a ShowPyError, not a pydantic error (audit 9.4)."""
+    with pytest.raises(ShowPyError):
+        customize(blank_sheet(10, 6), name=5)
+
+
+@pytest.mark.defect("UP-9.4-34")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-34")
+def test_regression_customize_resize_updates_ref_and_name() -> None:
+    """Refreshes the ref and name of a resized sheet instead of keeping stale ones (audit 9.4)."""
+    original = blank_sheet(10, 6)
+    resized = customize(original, size=(12.0, 6.0))
+    assert resized.ref != original.ref
+    assert resized.name != original.name
+
+
+@pytest.mark.defect("UP-9.4-35")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-35")
+def test_regression_customize_resize_does_not_keep_items_off_the_sheet() -> None:
+    """Rejects or drops zones that lie off the sheet after a resize (audit 9.4)."""
+    sheet = add_zone(blank_sheet(10, 6), Zone(id="far", kind=ZoneKind.PIT, polygon=OFF_SHEET_ZONE))
+    try:
+        resized = customize(sheet, size=RESIZED)
+    except ShowPyError:
+        return
+    for zone in resized.zones:
+        assert all(on_surface(resized, corner) for corner in zone.polygon.exterior)
+
+
+@pytest.mark.defect("UP-9.4-36")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-36")
+def test_regression_get_sheet_without_version_returns_latest_saved() -> None:
+    """Returns the latest saved version for a versionless ref, as documented (audit 9.4)."""
+    store = InMemorySheetStore()
+    saved = save_sheet(store, get_sheet(HS_ID_REF))
+    assert get_sheet(HS_ID_REF, store).ref == saved
+
+
+@pytest.mark.defect("UP-9.4-37")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-37")
+def test_regression_sheet_templates_rejects_unknown_surface_type() -> None:
+    """Rejects an unknown surface type instead of returning an empty list (audit 9.4)."""
+    with pytest.raises(ShowPyError):
+        sheet_templates("nope")  # type: ignore[arg-type]
