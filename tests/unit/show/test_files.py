@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from showpy.core.errors import ShowPyError
+from showpy.core.errors import LockedError, ShowPyError
 from showpy.notes.models import Anchor
 from showpy.show.documents import SHOW_DOC, dump_json
 from showpy.show.files import COMMENTS_DOC
@@ -72,7 +72,7 @@ def test_regression_agent_cannot_delete_sets_through_show_json() -> None:
     """Refuses an agent rewrite of show.json that drops sets (audit 9.7 item 5; P0 #5)."""
     agent, _ = _session()
     body = _show_json(agent) | {"sets": ["1"]}
-    with pytest.raises(ShowPyError):
+    with pytest.raises(LockedError):
         agent.write(SHOW_DOC, dump_json(body), at=LATER)
 
 
@@ -82,7 +82,7 @@ def test_regression_agent_cannot_empty_cast_through_show_json() -> None:
     """Refuses an agent rewrite of show.json that empties the cast (audit 9.7 item 5; P0 #5)."""
     agent, _ = _session()
     body = _show_json(agent) | {"cast": {"groups": {}, "spots": []}}
-    with pytest.raises(ShowPyError):
+    with pytest.raises(LockedError):
         agent.write(SHOW_DOC, dump_json(body), at=LATER)
 
 
@@ -92,7 +92,7 @@ def test_regression_agent_cannot_change_show_id_through_show_json() -> None:
     """Refuses an agent show.json rewrite that changes the show ID (audit 9.7 item 5; P0 #5)."""
     agent, _ = _session()
     body = _show_json(agent) | {"id": "hijacked"}
-    with pytest.raises(ShowPyError):
+    with pytest.raises(LockedError):
         agent.write(SHOW_DOC, dump_json(body), at=LATER)
 
 
@@ -104,7 +104,7 @@ def test_regression_agent_cannot_forge_designer_comments() -> None:
     forged = Comment(id="c1", anchor=Anchor.on_set("2"), text="approved", author="designer")
     try:
         agent.write(COMMENTS_DOC, dump_json([forged.model_dump(mode="python")]), at=LATER)
-    except ShowPyError:
+    except LockedError:
         return
     stored = json.loads(agent.read(COMMENTS_DOC))
     assert {c["author"] for c in stored} == {"agent"}
