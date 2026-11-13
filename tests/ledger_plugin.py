@@ -4,10 +4,14 @@
 ledger_plugin.py --- enforces the defect ledger: every defect test is a strict xfail on its ID
 
 Contains:
+    DEFECT_MARKER: the marker name ledger tests carry
+    OPEN_COUNT_KEY: config stash key holding the selected defect count
+    LEDGER_USAGE: the hint appended to every ledger violation
     DEFECT_ID_PATTERN: the shape a ledger ID must have
     find_problem(): names what is wrong with a defect test's markers
     pytest_configure(): registers the defect marker
-    pytest_collection_modifyitems(): rejects rule-breaking defect tests, counts open ones
+    pytest_collection_modifyitems(): rejects rule-breaking defect tests
+    pytest_collection_finish(): counts the defect tests still selected
     pytest_terminal_summary(): prints the Ledger: N open line
 """
 
@@ -45,14 +49,18 @@ def find_problem(item: pytest.Item) -> str | None:
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Rejects defect tests that break the ledger rules and counts the open ones."""
+    """Rejects defect tests that break the ledger rules."""
     problems = [
         f"{item.nodeid}: {problem}" for item in items if (problem := find_problem(item)) is not None
     ]
     if problems:
         raise pytest.UsageError("\n".join([*problems, LEDGER_USAGE]))
-    config.stash[OPEN_COUNT_KEY] = sum(
-        1 for item in items if item.get_closest_marker(DEFECT_MARKER) is not None
+
+
+def pytest_collection_finish(session: pytest.Session) -> None:
+    """Counts the defect tests still selected after -m and -k deselection."""
+    session.config.stash[OPEN_COUNT_KEY] = sum(
+        1 for item in session.items if item.get_closest_marker(DEFECT_MARKER) is not None
     )
 
 
