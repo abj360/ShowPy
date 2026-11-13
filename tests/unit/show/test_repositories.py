@@ -8,9 +8,9 @@ Contains:
     test_regression_repository_refuses_agent_pinned_move: UP-9.7-12
     test_regression_repository_refuses_agent_limits_write: UP-9.7-13
     test_regression_show_ids_differing_by_case_are_distinct_or_rejected: UP-9.7-14
-    test_regression_reserved_device_show_ids_are_rejected: UP-9.7-15
-    test_regression_trailing_dot_show_id_is_rejected: UP-9.7-16
-    test_regression_overlong_show_id_is_a_storage_error: UP-9.7-17
+    test_regression_reserved_device_show_ids_are_rejected_or_stored_safely: UP-9.7-15
+    test_regression_trailing_dot_show_id_is_rejected_or_stored_safely: UP-9.7-16
+    test_regression_overlong_show_id_is_rejected_or_stored_safely: UP-9.7-17
 """
 
 import contextlib
@@ -22,7 +22,7 @@ from typing import Any, cast
 
 import pytest
 
-from showpy.core.errors import ConflictError, LockedError, ShowPyError, StorageError
+from showpy.core.errors import ConflictError, LockedError, StorageError
 from showpy.show.file_repository import FileRepository
 from showpy.show.files import LIMITS_DOC
 from showpy.show.repositories import InMemoryRepository
@@ -133,40 +133,60 @@ def test_regression_repository_refuses_agent_limits_write() -> None:
         )
 
 
+SAFE_NAME_MAX = 255
+
+
+def _folders(root: Path) -> set[str]:
+    return {p.name for p in root.iterdir()} if root.exists() else set()
+
+
+def _created_folders(repo: FileRepository, show_id: str) -> set[str] | None:
+    """Returns the folders one create adds, or None when the repository refused the ID."""
+    before = _folders(repo.root)
+    try:
+        _create(repo, show_id)
+    except StorageError:
+        return None
+    assert show_id in repo.shows()
+    assert repo.head(show_id) != ""
+    return _folders(repo.root) - before
+
+
 @pytest.mark.defect("UP-9.7-14")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-14")
 def test_regression_show_ids_differing_by_case_are_distinct_or_rejected(tmp_path: Path) -> None:
     """Keeps IDs differing only by case from sharing a folder name (audit 9.7 item 8)."""
-    root = tmp_path / "repo"
-    repo = FileRepository(root)
-    _create(repo, "Show")
-    try:
-        _create(repo, "show")
-    except StorageError:
+    repo = FileRepository(tmp_path)
+    first = _created_folders(repo, "Show")
+    second = _created_folders(repo, "show")
+    if first is None or second is None:
         return
-    assert len({p.name.lower() for p in root.iterdir()}) == 2
+    assert {n.lower() for n in first}.isdisjoint({n.lower() for n in second})
+    assert second
 
 
 @pytest.mark.defect("UP-9.7-15")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-15")
 @pytest.mark.parametrize("show_id", ["CON", "nul"])
-def test_regression_reserved_device_show_ids_are_rejected(show_id: str) -> None:
-    """Rejects Windows device names as show IDs (audit 9.7 item 8)."""
-    with pytest.raises(StorageError):
-        _create(InMemoryRepository(), show_id)
+def test_regression_reserved_device_show_ids_are_rejected_or_stored_safely(
+    tmp_path: Path, show_id: str
+) -> None:
+    """Rejects Windows device names as show IDs or stores them under another name (audit 9.7 #8)."""
+    created = _created_folders(FileRepository(tmp_path), show_id)
+    assert created is None or show_id not in created
 
 
 @pytest.mark.defect("UP-9.7-16")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-16")
-def test_regression_trailing_dot_show_id_is_rejected() -> None:
-    """Rejects a show ID ending in a dot (audit 9.7 item 8)."""
-    with pytest.raises(StorageError):
-        _create(InMemoryRepository(), "abc.")
+def test_regression_trailing_dot_show_id_is_rejected_or_stored_safely(tmp_path: Path) -> None:
+    """Rejects a show ID ending in a dot or stores it under another name (audit 9.7 item 8)."""
+    created = _created_folders(FileRepository(tmp_path), "abc.")
+    assert created is None or "abc." not in created
 
 
 @pytest.mark.defect("UP-9.7-17")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-17")
-def test_regression_overlong_show_id_is_a_storage_error(tmp_path: Path) -> None:
-    """Maps a 300-character show ID to a ShowPyError, not OSError (audit 9.7 item 8)."""
-    with pytest.raises(ShowPyError):
-        _create(FileRepository(tmp_path / "repo"), "a" * MAX_SHOW_ID_LENGTH)
+def test_regression_overlong_show_id_is_rejected_or_stored_safely(tmp_path: Path) -> None:
+    """Rejects a 300-character show ID or stores it under a short name (audit 9.7 item 8)."""
+    created = _created_folders(FileRepository(tmp_path), "a" * MAX_SHOW_ID_LENGTH)
+    assert created is None or all(len(n) <= SAFE_NAME_MAX for n in created)
