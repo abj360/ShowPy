@@ -2,20 +2,33 @@
 
 """
 test_replace.py --- tests sheet replacement: fits, placements, forms, paths, locks and the report
+
+Contains:
+    Existing behavior tests, unlisted
+    test_regression_football_template_swap_keeps_positions()
+    test_regression_similarity_fit_rejects_mirrored_landmarks()
+    test_regression_similarity_fit_rejects_coincident_targets()
+    test_regression_similarity_fit_empty_input_raises_without_warning()
+    test_regression_similarity_fit_rejects_nan_input()
+    test_regression_similarity_fit_rejects_wrong_shape()
+    test_regression_scale_mapping_rejects_zero_size_sheet()
+    test_regression_fit_ignores_same_named_centers_with_different_meaning()
 """
+
+import warnings
 
 import numpy as np
 import pytest
 
 from showpy.choreo.models import Form, PathRow, PathStyle, TransitionSpec, Waypoint
-from showpy.core.errors import GeometryError, LockedError, SchemaError
+from showpy.core.errors import GeometryError, LockedError, SchemaError, ShowPyError
 from showpy.core.types import Region
 from showpy.core.util import approx_equal
 from showpy.geo.affine import rotation_matrix
 from showpy.geo.curves import Segment, curve_from_construction
 from showpy.sheet.models import Landmark, Sheet, Zone, ZoneKind
 from showpy.sheet.replace import replace_sheet, similarity_fit
-from showpy.sheet.templates import add_zone, blank_sheet
+from showpy.sheet.templates import add_zone, blank_sheet, get_sheet
 from showpy.show.models import Show
 from tests.fixtures.shows import field_sheet, two_set_show
 
@@ -167,3 +180,95 @@ def test_input_show_is_untouched() -> None:
 def test_similarity_fit_needs_spread_points() -> None:
     with pytest.raises(GeometryError):
         similarity_fit(np.array([[1.0, 1.0], [1.0, 1.0]]), np.array([[0.0, 0.0], [2.0, 2.0]]))
+
+
+SPOT_TOL = 1e-6
+
+
+@pytest.mark.defect("UP-9.4-01")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-01")
+def test_regression_football_template_swap_keeps_positions() -> None:
+    """Keeps every spot still when swapping football fields (audit 9.4; P0 #11)."""
+    show = two_set_show().model_copy(update={"sheet": get_sheet("sheet:hs-football")})
+    replaced, report = replace_sheet(show, get_sheet("sheet:nfl-football"))
+    assert report.moved == {}
+    for before, after in zip(show.sets, replaced.sets, strict=True):
+        for a, b in zip(before.placements, after.placements, strict=True):
+            assert approx_equal(a.point, b.point, SPOT_TOL)
+
+
+@pytest.mark.defect("UP-9.4-02")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-02")
+def test_regression_similarity_fit_rejects_mirrored_landmarks() -> None:
+    """Rejects a mirrored landmark set instead of fitting a wrong scale (audit 9.4; P0 #11)."""
+    src = np.array([[0.0, 0.0], [4.0, 0.0], [0.0, 3.0]])
+    dst = np.array([[0.0, 0.0], [-4.0, 0.0], [0.0, 3.0]])
+    with pytest.raises(GeometryError):
+        similarity_fit(src, dst)
+
+
+@pytest.mark.defect("UP-9.4-03")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-03")
+def test_regression_similarity_fit_rejects_coincident_targets() -> None:
+    """Rejects coincident target landmarks instead of collapsing the show (audit 9.4)."""
+    src = np.array([[0.0, 0.0], [4.0, 0.0]])
+    dst = np.array([[1.0, 1.0], [1.0, 1.0]])
+    with pytest.raises(GeometryError):
+        similarity_fit(src, dst)
+
+
+@pytest.mark.defect("UP-9.4-04")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-04")
+def test_regression_similarity_fit_empty_input_raises_without_warning() -> None:
+    """Raises GeometryError for no matches without a numpy RuntimeWarning (audit 9.4)."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        with pytest.raises(GeometryError):
+            similarity_fit(np.empty((0, 2)), np.empty((0, 2)))
+
+
+@pytest.mark.defect("UP-9.4-05")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-05")
+def test_regression_similarity_fit_rejects_nan_input() -> None:
+    """Raises GeometryError for NaN points instead of leaking LinAlgError (audit 9.4)."""
+    src = np.array([[0.0, 0.0], [4.0, 0.0]])
+    dst = np.array([[np.nan, 0.0], [1.0, 0.0]])
+    with pytest.raises(GeometryError):
+        similarity_fit(src, dst)
+
+
+@pytest.mark.defect("UP-9.4-06")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-06")
+def test_regression_similarity_fit_rejects_wrong_shape() -> None:
+    """Raises GeometryError for non-2D points instead of leaking numpy errors (audit 9.4)."""
+    src = np.array([[0.0, 0.0, 0.0], [4.0, 0.0, 0.0]])
+    with pytest.raises(GeometryError):
+        similarity_fit(src, src.copy())
+
+
+@pytest.mark.defect("UP-9.4-07")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-07")
+def test_regression_scale_mapping_rejects_zero_size_sheet() -> None:
+    """Raises a ShowPyError for a zero-size source sheet, not ZeroDivisionError (audit 9.4)."""
+    flat = blank_sheet(10, 6).model_copy(update={"size_m": (0.0, 0.0)})
+    show = two_set_show().model_copy(update={"sheet": flat})
+    with pytest.raises(ShowPyError):
+        replace_sheet(show, blank_sheet(20, 12), "scale")
+
+
+@pytest.mark.defect("UP-9.4-43")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-43")
+def test_regression_fit_ignores_same_named_centers_with_different_meaning() -> None:
+    """Keeps positions when only "center" differs in meaning between equal-size sheets.
+
+    Audit 9.4: "center" is three different points across template families; the audit measured
+    blank to stage scaling by 0.45, this run measured 0.6 on a 20 x 15 m blank sheet.
+    """
+    old = blank_sheet(12.0, 9.0)
+    shifted = Landmark(id="center", name="center", kind="point", geometry=((0.0, 2.0),))
+    new = old.model_copy(
+        update={"ref": "sheet:odd-center@1", "landmarks": (old.landmarks[0], shifted)}
+    )
+    show = two_set_show().model_copy(update={"sheet": old})
+    _, report = replace_sheet(show, new)
+    assert report.moved == {}

@@ -2,13 +2,32 @@
 
 """
 test_coords.py --- tests coordinate presets, wording, parsing and audience-side handling
+
+Contains:
+    Existing behavior tests, unlisted
+    test_regression_zero_precision_is_rejected_not_division_by_zero()
+    test_regression_to_coords_rejects_infinite_point()
+    test_regression_to_coords_rejects_nan_point()
+    test_regression_to_coords_rejects_unknown_style()
+    test_regression_short_label_with_digit_round_trips_or_is_rejected()
+    test_regression_colliding_direction_labels_round_trip_or_are_rejected()
+    test_regression_from_coords_reads_negative_long_number()
+    test_regression_from_coords_reads_leading_dot_number()
+    test_regression_from_coords_reads_exponent_number()
+    test_regression_from_coords_reads_number_glued_to_unit()
 """
 
 import pytest
 
-from showpy.core.errors import SchemaError, UnknownRefError
+from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
 from showpy.core.util import approx_equal
-from showpy.sheet.coords import coordinate_presets, from_coords, set_coordinates, to_coords
+from showpy.sheet.coords import (
+    CoordStyle,
+    coordinate_presets,
+    from_coords,
+    set_coordinates,
+    to_coords,
+)
 from showpy.sheet.models import CoordinateKind, CoordinateSystem
 from showpy.sheet.templates import get_sheet
 from showpy.show.models import Show
@@ -120,3 +139,96 @@ def test_presets_start_with_the_sheet_default_and_are_distinct() -> None:
     assert len(presets) == len({p.model_dump_json() for p in presets})
     assert any(p.kind == CoordinateKind.STAGE for p in presets)
     assert any(p.origin == "center-stage" for p in presets)
+
+
+ROUND_TRIP_POINT = (1.0, 2.0)
+
+
+def _assert_round_trips_or_rejects(system: CoordinateSystem, style: CoordStyle) -> None:
+    try:
+        show = _with(system)
+        text = to_coords(show, ROUND_TRIP_POINT, style)
+    except ShowPyError:
+        return
+    assert approx_equal(from_coords(show, text), ROUND_TRIP_POINT, TOL)
+
+
+def _word_with_precision(precision: float) -> str:
+    system = CoordinateSystem(precision=precision)
+    return to_coords(two_set_show().model_copy(update={"coordinates": system}), (1.0, 1.0))
+
+
+@pytest.mark.defect("UP-9.4-15")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-15")
+def test_regression_zero_precision_is_rejected_not_division_by_zero() -> None:
+    """Rejects precision=0 with a ShowPyError, however the system gets into a show (audit 9.4)."""
+    with pytest.raises(ShowPyError):
+        _word_with_precision(0.0)
+
+
+@pytest.mark.defect("UP-9.4-16")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-16")
+def test_regression_to_coords_rejects_infinite_point() -> None:
+    """Rejects an infinite point with a ShowPyError, not decimal.InvalidOperation (audit 9.4)."""
+    with pytest.raises(ShowPyError):
+        to_coords(two_set_show(), (float("inf"), 0.0))
+
+
+@pytest.mark.defect("UP-9.4-17")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-17")
+def test_regression_to_coords_rejects_nan_point() -> None:
+    """Rejects a NaN point instead of printing "nan m right of center" (audit 9.4)."""
+    with pytest.raises(ShowPyError):
+        to_coords(two_set_show(), (float("nan"), 0.0))
+
+
+@pytest.mark.defect("UP-9.4-18")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-18")
+def test_regression_to_coords_rejects_unknown_style() -> None:
+    """Rejects an unknown style instead of silently using long style (audit 9.4)."""
+    with pytest.raises(SchemaError):
+        to_coords(two_set_show(), (1.0, 1.0), style="bogus")  # type: ignore[arg-type]
+
+
+@pytest.mark.defect("UP-9.4-19")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-19")
+def test_regression_short_label_with_digit_round_trips_or_is_rejected() -> None:
+    """Round-trips a short direction label holding a digit, or rejects it (audit 9.4)."""
+    _assert_round_trips_or_rejects(CoordinateSystem(labels={"right_short": "R2"}), "short")
+
+
+@pytest.mark.defect("UP-9.4-20")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-20")
+def test_regression_colliding_direction_labels_round_trip_or_are_rejected() -> None:
+    """Round-trips two directions sharing one label, or rejects them (audit 9.4)."""
+    _assert_round_trips_or_rejects(CoordinateSystem(labels={"up": "right"}), "long")
+
+
+@pytest.mark.defect("UP-9.4-21")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-21")
+def test_regression_from_coords_reads_negative_long_number() -> None:
+    """Reads "-3.5 m right of center" as 3.5 m to the left (audit 9.4)."""
+    text = "-3.5 m right of center, 2.00 m upstage of front edge"
+    assert approx_equal(from_coords(two_set_show(), text), (-3.5, 2.0), TOL)
+
+
+@pytest.mark.defect("UP-9.4-22")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-22")
+def test_regression_from_coords_reads_leading_dot_number() -> None:
+    """Reads the short code "R.5" as 0.5 m right (audit 9.4)."""
+    assert approx_equal(from_coords(two_set_show(), "R.5 U2"), (0.5, 2.0), TOL)
+
+
+@pytest.mark.defect("UP-9.4-23")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-23")
+def test_regression_from_coords_reads_exponent_number() -> None:
+    """Reads the short code "R1e3" as 1000 m right (audit 9.4)."""
+    assert approx_equal(from_coords(two_set_show(), "R1e3 U2"), (1000.0, 2.0), TOL)
+
+
+@pytest.mark.defect("UP-9.4-24")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-24")
+def test_regression_from_coords_reads_number_glued_to_unit() -> None:
+    """Reads "3m right of center" with no space before the unit (audit 9.4)."""
+    text = "3m right of center, 2.00 m upstage of front edge"
+    assert approx_equal(from_coords(two_set_show(), text), (3.0, 2.0), TOL)
