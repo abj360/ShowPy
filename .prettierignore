@@ -1,0 +1,5 @@
+schemas/
+tests/golden/fixtures/
+uv.lock
+.venv/
+.claude/

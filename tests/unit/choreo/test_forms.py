@@ -1,0 +1,266 @@
+#!/usr/bin/env python3
+
+"""
+test_forms.py --- tests form constructors, the recipe contract, slot spacing and facings
+"""
+
+import json
+import math
+
+import numpy as np
+import pytest
+
+from stage.choreo.form_fns import DEFAULT_FORM_FNS, register_form_fn
+from stage.choreo.forms import (
+    arc_form,
+    block_form,
+    circle_form,
+    curve_form,
+    custom_form,
+    edit_params,
+    fill_form,
+    generated_form,
+    line_form,
+    placements,
+    polyline_form,
+    scatter_form,
+    slots,
+    svg_form,
+    wedge_form,
+)
+from stage.choreo.models import FacingSpec, Form, SpacingSpec
+from stage.core.errors import LockedError, SchemaError, SpacingError, UnknownRefError
+from stage.core.types import Box2, Points
+from stage.core.util import approx_equal
+from stage.geo.curves import curve_from_construction
+
+TOL = 1e-6
+MEMBERS = ["A", "B", "C", "D", "E"]
+
+
+def _facings(form: Form) -> list[float]:
+    return [p.facing for p in placements(form)]
+
+
+def test_curve_kinds_store_a_rebuildable_curve_recipe() -> None:
+    forms = [
+        line_form("a", MEMBERS, (0, 0), (4, 0)),
+        arc_form("b", MEMBERS, (0, 0), 2.0, 0.0, 180.0),
+        curve_form("c", MEMBERS, (0, 0), (2, 2), (4, 0)),
+        circle_form("d", MEMBERS, (0, 5), 3.0),
+        wedge_form("e", MEMBERS, (0, 5), 3.0, 90.0),
+        polyline_form("f", MEMBERS, (0, 0), (2, 0), (2, 2)),
+    ]
+    for form in forms:
+        assert set(form.geometry) == {"curve"}
+        curve_from_construction(form.geometry["curve"])
+        assert Form.model_validate_json(form.model_dump_json()) == form
+        json.dumps(form.model_dump(mode="json"))
+
+
+def test_non_curve_recipes_follow_the_contract() -> None:
+    square = [(0, 0), (4, 0), (4, 4), (0, 4)]
+    assert set(block_form("b", [], (0, 5), 2, 3, 1.0).geometry) == {
+        "origin", "rows", "cols", "interval", "facing", "anchor", "n",
+    }  # fmt: skip
+    assert set(fill_form("f", [], square, 1.0).geometry) == {
+        "outline", "interval", "pattern", "angle_deg",
+    }  # fmt: skip
+    assert set(scatter_form("s", ["A"], square, 1.0).geometry) == {"region", "min_gap", "seed"}
+    assert set(custom_form("c", [], [(0, 0)]).geometry) == {"points", "facings", "n"}
+    assert generated_form("g", ["A"], "spiral", turns=2.0).geometry == {
+        "fn": "spiral",
+        "params": {"turns": 2.0},
+    }
+
+
+def test_line_count_spacing_includes_ends() -> None:
+    assert approx_equal(slots(line_form("f", MEMBERS, (0, 0), (8, 0)))[:, 0], [0, 2, 4, 6, 8])
+
+
+def test_spacing_window_start_and_end() -> None:
+    spec = SpacingSpec(start=2.0, end=6.0)
+    pts = slots(line_form("f", ["A", "B", "C"], (0, 0), (8, 0), spec))
+    assert approx_equal(pts[:, 0], [2, 4, 6])
+
+
+def test_spacing_window_outside_shape_raises() -> None:
+    with pytest.raises(SpacingError):
+        slots(line_form("f", ["A", "B"], (0, 0), (4, 0), SpacingSpec(end=9.0)))
+
+
+def test_interval_spacing_aligns_and_fits() -> None:
+    line = ((0.0, 0.0), (10.0, 0.0))
+    start = SpacingSpec(mode="interval", interval=2.0)
+    assert approx_equal(slots(line_form("f", ["A", "B"], *line, start))[:, 0], [0, 2])
+    end = start.model_copy(update={"align": "end"})
+    assert approx_equal(slots(line_form("f", ["A", "B"], *line, end))[:, 0], [8, 10])
+    center = start.model_copy(update={"align": "center"})
+    assert approx_equal(slots(line_form("f", ["A", "B"], *line, center))[:, 0], [4, 6])
+    assert len(slots(line_form("f", [], *line, start))) == 6
+    with pytest.raises(SpacingError, match="do not fit"):
+        slots(line_form("f", list("ABCDEFG"), *line, start))
+
+
+def test_gaps_add_room_after_members() -> None:
+    spec = SpacingSpec(gaps=((0, 2.0),))
+    pts = slots(line_form("f", ["A", "B", "C"], (0, 0), (10, 0), spec))
+    assert approx_equal(pts[:, 0], [0, 6, 10])
+    with pytest.raises(SpacingError):
+        slots(line_form("f", ["A", "B"], (0, 0), (10, 0), SpacingSpec(gaps=((5, 1.0),))))
+
+
+def test_interval_spacing_with_gaps() -> None:
+    spec = SpacingSpec(mode="interval", interval=1.0, gaps=((0, 2.0),))
+    pts = slots(line_form("f", ["A", "B", "C"], (0, 0), (10, 0), spec))
+    assert approx_equal(pts[:, 0], [0, 3, 4])
+
+
+def test_closed_curve_never_repeats_its_start() -> None:
+    pts = slots(circle_form("f", ["A", "B", "C", "D"], (0, 0), 1.0))
+    assert approx_equal(pts, [[1, 0], [0, 1], [-1, 0], [0, -1]], TOL)
+
+
+def test_slot_count_n_without_members() -> None:
+    form = line_form("f", [], (0, 0), (4, 0), n=3)
+    assert len(slots(form)) == 3
+    assert placements(form) == []
+    with pytest.raises(SpacingError, match="no members"):
+        slots(scatter_form("s", [], [(0, 0), (4, 0), (4, 4)], 1.0))
+
+
+def test_members_beyond_slots_raise() -> None:
+    with pytest.raises(SpacingError, match="slots"):
+        placements(line_form("f", MEMBERS, (0, 0), (4, 0), n=2))
+
+
+def test_proportional_spacing_shares_svg_subpaths_by_length() -> None:
+    form = svg_form("f", [], "M0 0 L1 0 M0 1 L3 1", Box2(min=(0, 0), max=(3, 1)), n=6)
+    pts = slots(form)
+    assert len(pts) == 6
+    lower = pts[:, 1] < 0.5
+    assert sorted([int(lower.sum()), int((~lower).sum())]) == [2, 4]
+
+
+def test_block_and_fill_and_scatter_slots() -> None:
+    assert len(slots(block_form("b", [], (0, 5), 2, 3, 1.0))) == 6
+    square = [(0, 0), (2, 0), (2, 2), (0, 2)]
+    assert len(slots(fill_form("f", [], square, 1.0))) == 9
+    assert len(slots(fill_form("f", ["A", "B"], square, 1.0))) == 2
+    pts = slots(scatter_form("s", MEMBERS, [(0, 0), (8, 0), (8, 8), (0, 8)], 1.5, seed=3))
+    gaps = np.linalg.norm(pts[:, None] - pts[None], axis=2)[np.triu_indices(5, 1)]
+    assert gaps.min() >= 1.5 - TOL
+    again = scatter_form("s", MEMBERS, [(0, 0), (8, 0), (8, 8), (0, 8)], 1.5, seed=3)
+    assert approx_equal(slots(again), pts)
+
+
+def test_placements_carry_form_order_and_positions() -> None:
+    rows = placements(line_form("f", ["A", "B"], (0, 0), (2, 0), set_id="3"))
+    assert [(p.entity, p.form, p.order, p.x) for p in rows] == [
+        ("A", "f", 0, 0.0),
+        ("B", "f", 1, 2.0),
+    ]
+
+
+def test_facing_modes() -> None:
+    line = ((0.0, 0.0), (4.0, 0.0))
+    assert _facings(line_form("f", ["A"], *line)) == [0.0]
+    assert _facings(line_form("f", ["A"], *line, facing=FacingSpec(mode="fixed", value=45.0))) == [
+        45.0
+    ]
+    along = FacingSpec(mode="along")
+    assert approx_equal(_facings(line_form("f", ["A", "B"], *line, facing=along)), [90.0, 90.0])
+    normal = FacingSpec(mode="normal")
+    assert approx_equal(_facings(line_form("f", ["A", "B"], *line, facing=normal)), [180.0, 180.0])
+    toward = FacingSpec(mode="toward_point", value=(0.0, -5.0))
+    assert approx_equal(_facings(line_form("f", ["A"], (0, 0), (0, 2), facing=toward)), [0.0])
+
+
+def test_offset_value_turns_computed_facings() -> None:
+    spec = FacingSpec(mode="along", value=180.0)
+    assert approx_equal(_facings(line_form("f", ["A"], (0, 0), (4, 0), facing=spec)), [270.0])
+
+
+def test_circle_faces_outward_and_arc_uses_its_center() -> None:
+    assert approx_equal(_facings(circle_form("f", ["A", "B"], (0, 5), 2.0)), [90.0, 270.0])
+    inward_arc = arc_form(
+        "a", ["A", "B"], (0, 0), 3.0, 0.0, 90.0, facing=FacingSpec(mode="outward")
+    )
+    assert approx_equal(_facings(inward_arc), [90.0, 180.0], TOL)
+
+
+def test_outward_on_centroid_spot_faces_the_audience() -> None:
+    block = block_form("b", list("ABC"), (0, 5), 1, 3, 1.0, facing=FacingSpec(mode="outward"))
+    assert approx_equal(_facings(block), [270.0, 0.0, 90.0])
+
+
+def test_along_on_non_curve_kinds_uses_neighbouring_slots() -> None:
+    block = block_form("b", list("ABC"), (0, 5), 1, 3, 1.0, facing=FacingSpec(mode="along"))
+    assert approx_equal(_facings(block), [90.0, 90.0, 90.0])
+
+
+def test_block_faces_its_direction_by_default() -> None:
+    assert _facings(block_form("b", ["A"], (0, 5), 1, 1, 1.0, direction_deg=30.0)) == [30.0]
+
+
+def test_wedge_apex_is_the_middle_slot() -> None:
+    pts = slots(wedge_form("w", list("ABC"), (0, 5), 2.0, 90.0))
+    assert approx_equal(pts[1], [0, 5])
+
+
+def test_custom_form_keeps_points_and_facings() -> None:
+    form = custom_form("c", ["A", "B"], [(1, 2), (3, 4)], facings=[10.0, 20.0])
+    assert [(p.x, p.y, p.facing) for p in placements(form)] == [(1.0, 2.0, 10.0), (3.0, 4.0, 20.0)]
+    with pytest.raises(SchemaError):
+        custom_form("c", [], [(1, 2)], facings=[1.0, 2.0])
+
+
+def test_generated_form_uses_registered_generator_and_keeps_params() -> None:
+    def dots(params: dict[str, float], n: int) -> Points:
+        step = float(params.get("step", 1.0))
+        return np.stack([np.arange(n) * step, np.zeros(n)], axis=1)
+
+    registry = register_form_fn(DEFAULT_FORM_FNS, "dots", dots)  # type: ignore[arg-type]
+    form = generated_form("g", ["A", "B", "C"], "dots", registry=registry, step=2.0)
+    assert approx_equal(slots(form, registry)[:, 0], [0, 2, 4])
+    wider = edit_params(form, registry=registry, step=3.0)
+    assert approx_equal(slots(wider, registry)[:, 0], [0, 3, 6])
+    assert form.geometry["params"] == {"step": 2.0}
+
+
+def test_generated_form_rejects_unknown_generator_with_suggestion() -> None:
+    with pytest.raises(UnknownRefError, match="spiral"):
+        generated_form("g", ["A"], "spirall")
+
+
+def test_edit_params_respects_lock_and_kind() -> None:
+    form = generated_form("g", ["A"], "spiral").model_copy(update={"locked": True})
+    with pytest.raises(LockedError):
+        edit_params(form, turns=1.0)
+    assert edit_params(form, force=True, turns=1.0).geometry["params"]["turns"] == 1.0
+    with pytest.raises(SchemaError, match="not generated"):
+        edit_params(line_form("f", ["A"], (0, 0), (1, 0)), turns=1.0)
+
+
+def test_missing_recipe_key_raises_schema_error() -> None:
+    broken = Form(id="b", set="1", kind="block", geometry={"rows": 1}, members=("A",))
+    with pytest.raises(SchemaError, match="origin"):
+        slots(broken)
+
+
+def test_transform_key_maps_non_curve_points() -> None:
+    form = custom_form("c", ["A"], [(1, 0)])
+    moved = form.model_copy(
+        update={"geometry": {**form.geometry, "transform": [[1, 0, 2], [0, 1, 3], [0, 0, 1]]}}
+    )
+    assert approx_equal(slots(moved), [[3, 3]])
+
+
+def test_arc_slot_positions_are_on_the_circle() -> None:
+    pts = slots(arc_form("a", MEMBERS, (1, 2), 3.0, 30.0, 120.0))
+    assert approx_equal(np.linalg.norm(pts - [1, 2], axis=1), [3.0] * 5, TOL)
+    angles = np.degrees(np.arctan2(pts[:, 1] - 2, pts[:, 0] - 1))
+    assert approx_equal(angles, [30, 60, 90, 120, 150], TOL)
+    assert math.isclose(
+        float(np.linalg.norm(pts[0] - pts[1])), float(np.linalg.norm(pts[3] - pts[4]))
+    )

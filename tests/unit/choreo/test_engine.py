@@ -1,0 +1,332 @@
+#!/usr/bin/env python3
+
+"""
+test_engine.py --- tests PathEngine positions, styles, timing, facing, segments and frames
+"""
+
+import itertools
+import math
+
+import numpy as np
+import pytest
+
+from stage.choreo.engine import PathEngine
+from stage.choreo.models import (
+    Easing,
+    FacingMode,
+    FacingOverride,
+    PathRow,
+    PathStyle,
+    Route,
+    Waypoint,
+)
+from stage.core.errors import ContinuityError, PathError, UnknownRefError
+from stage.core.util import approx_equal
+from stage.geo.shapes import line
+from tests.fixtures.motion_shows import TID, with_rows, with_targets
+from tests.fixtures.shows import two_set_show
+
+
+def _engine(**rows: PathRow) -> PathEngine:
+    return PathEngine(with_rows(rows))
+
+
+def test_default_straight_move_is_linear_in_time() -> None:
+    engine = PathEngine(two_set_show())
+    assert approx_equal(engine.position("T1", 0.0), (0.0, 5.0))
+    assert approx_equal(engine.position("T1", 4.0), (0.0, 7.0))
+    assert approx_equal(engine.position("T1", 8.0), (0.0, 9.0))
+
+
+def test_times_outside_the_show_clamp_to_first_and_last_sets() -> None:
+    engine = PathEngine(two_set_show())
+    assert approx_equal(engine.position("T2", -3.0), (2.0, 5.0))
+    assert approx_equal(engine.position("T2", 99.0), (2.0, 9.0))
+
+
+def test_local_time_within_a_transition() -> None:
+    assert approx_equal(PathEngine(two_set_show()).position("T1", 2.0, local=TID), (0.0, 6.0))
+
+
+def test_unknown_entity_raises() -> None:
+    with pytest.raises(UnknownRefError):
+        PathEngine(two_set_show()).position("Z9", 1.0)
+
+
+def test_delayed_start_holds_then_moves_faster() -> None:
+    engine = _engine(T1=PathRow(entity="T1", start=4.0))
+    assert approx_equal(engine.position("T1", 4.0), (0.0, 5.0))
+    assert approx_equal(engine.position("T1", 6.0), (0.0, 7.0))
+
+
+def test_early_arrival_holds_at_target() -> None:
+    engine = _engine(T1=PathRow(entity="T1", end=4.0))
+    assert approx_equal(engine.position("T1", 6.0), (0.0, 9.0))
+
+
+def test_timed_waypoint_is_reached_at_its_count() -> None:
+    row = PathRow(
+        entity="T1", style=PathStyle.POLYLINE, waypoints=(Waypoint(x=4.0, y=5.0, at=2.0),)
+    )
+    engine = _engine(T1=row)
+    assert approx_equal(engine.position("T1", 2.0), (4.0, 5.0))
+    assert approx_equal(engine.position("T1", 1.0), (2.0, 5.0))
+    assert approx_equal(engine.position("T1", 8.0), (0.0, 9.0))
+
+
+def test_untimed_waypoint_keeps_constant_speed() -> None:
+    row = PathRow(entity="T1", style=PathStyle.POLYLINE, waypoints=(Waypoint(x=4.0, y=5.0),))
+    engine = _engine(T1=row)
+    total = 4.0 + math.hypot(4.0, 4.0)
+    expected_at_4 = 4.0 * total / 8.0
+    assert approx_equal(engine.position("T1", 4.0)[0], 4.0 - (expected_at_4 - 4.0) / math.sqrt(2))
+
+
+def test_waypoint_times_must_increase_within_window() -> None:
+    row = PathRow(entity="T1", style=PathStyle.POLYLINE, waypoints=(Waypoint(x=4, y=5, at=9.0),))
+    with pytest.raises(PathError):
+        _engine(T1=row).compile(TID)
+
+
+def test_curve_passes_through_waypoints() -> None:
+    row = PathRow(entity="T1", style=PathStyle.CURVE, waypoints=(Waypoint(x=2.0, y=7.0, at=4.0),))
+    assert approx_equal(_engine(T1=row).position("T1", 4.0), (2.0, 7.0), tol=1e-6)
+
+
+def test_hold_requires_target_equal_to_start() -> None:
+    with pytest.raises(ContinuityError):
+        _engine(T1=PathRow(entity="T1", style=PathStyle.HOLD)).compile(TID)
+    show = with_targets({"T1": {"y": 5.0}})
+    engine = PathEngine(with_rows({"T1": PathRow(entity="T1", style=PathStyle.HOLD)}, show=show))
+    assert approx_equal(engine.position("T1", 4.0), (0.0, 5.0))
+
+
+def test_rotate_follows_arc_about_pivot() -> None:
+    show = with_targets({"T2": {"x": 0.0, "y": 7.0}})
+    row = PathRow(entity="T2", style=PathStyle.ROTATE, pivot=(0.0, 5.0), sweep_deg=90.0)
+    engine = PathEngine(with_rows({"T2": row}, show=show))
+    mid = engine.position("T2", 4.0)
+    assert approx_equal(mid, (math.sqrt(2), 5.0 + math.sqrt(2)))
+
+
+def test_rotate_that_misses_target_raises() -> None:
+    row = PathRow(entity="T2", style=PathStyle.ROTATE, pivot=(0.0, 5.0), sweep_deg=45.0)
+    with pytest.raises(ContinuityError):
+        _engine(T2=row).compile(TID)
+
+
+def test_rotate_without_pivot_raises() -> None:
+    with pytest.raises(PathError):
+        _engine(T2=PathRow(entity="T2", style=PathStyle.ROTATE)).compile(TID)
+
+
+def _follow_show() -> PathEngine:
+    route_curve = line((0.0, 5.0), (0.0, 15.0))
+    show = with_targets({"T1": {"x": 0.0, "y": 9.0}, "T2": {"x": 0.0, "y": 7.0}})
+    first = show.sets[0].with_placements({"T2": {"x": 0.0, "y": 3.0}})
+    show = show.model_copy(update={"sets": (first, show.sets[1])})
+    route = Route(
+        id="r",
+        curve=route_curve.construction(),
+        members=("T1", "T2"),
+        offsets=(0.0, -2.0),
+        travel=4.0,
+    )
+    rows = {e: PathRow(entity=e, style=PathStyle.FOLLOW, route="r") for e in ("T1", "T2")}
+    return PathEngine(with_rows(rows, {"r": route}, show=show))
+
+
+def test_follow_member_off_its_route_raises() -> None:
+    with pytest.raises(PathError):
+        _follow_show().compile(TID)
+
+
+def test_follow_on_route_curve() -> None:
+    route_curve = line((0.0, 3.0), (0.0, 15.0))
+    show = with_targets({"T1": {"x": 0.0, "y": 9.0}, "T2": {"x": 0.0, "y": 7.0}})
+    first = show.sets[0].with_placements({"T1": {"x": 0.0, "y": 5.0}, "T2": {"x": 0.0, "y": 3.0}})
+    show = show.model_copy(update={"sets": (first, show.sets[1])})
+    route = Route(
+        id="r",
+        curve=route_curve.construction(),
+        members=("T1", "T2"),
+        offsets=(2.0, 0.0),
+        travel=4.0,
+    )
+    rows = {e: PathRow(entity=e, style=PathStyle.FOLLOW, route="r") for e in ("T1", "T2")}
+    engine = PathEngine(with_rows(rows, {"r": route}, show=show))
+    assert approx_equal(engine.position("T2", 4.0), (0.0, 5.0))
+    assert approx_equal(engine.position("T1", 4.0), (0.0, 7.0))
+
+
+def test_custom_motion_leaves_the_line_and_lands_on_target() -> None:
+    row = PathRow(
+        entity="T1",
+        style=PathStyle.CUSTOM,
+        motion_fn="weave",
+        motion_params={"amplitude": 1.0, "cycles": 0.5},
+    )
+    engine = _engine(T1=row)
+    assert abs(engine.position("T1", 4.0)[0]) > 0.9
+    assert approx_equal(engine.position("T1", 8.0), (0.0, 9.0))
+
+
+def test_custom_motion_needs_registered_name() -> None:
+    with pytest.raises(UnknownRefError):
+        _engine(T1=PathRow(entity="T1", style=PathStyle.CUSTOM, motion_fn="nope")).compile(TID)
+
+
+def test_easing_changes_timing_not_path() -> None:
+    engine = _engine(T1=PathRow(entity="T1", easing=Easing(kind="ease_in")))
+    assert approx_equal(engine.position("T1", 4.0), (0.0, 6.0))
+
+
+def test_window_beyond_counts_raises() -> None:
+    with pytest.raises(PathError):
+        _engine(T1=PathRow(entity="T1", end=12.0)).compile(TID)
+
+
+def test_default_facing_snaps_to_target_when_move_starts() -> None:
+    engine = PathEngine(with_targets({"T1": {"facing": 90.0}}))
+    assert approx_equal(engine.facing_at("T1", 0.0), 0.0)
+    assert approx_equal(engine.facing_at("T1", 0.5), 90.0)
+
+
+def test_turn_counts_blend_the_facing() -> None:
+    show = with_targets({"T1": {"facing": 90.0}})
+    engine = PathEngine(with_rows({"T1": PathRow(entity="T1", turn_counts=2.0)}, show=show))
+    assert approx_equal(engine.facing_at("T1", 1.0), 45.0)
+
+
+def test_travel_facing_points_along_motion() -> None:
+    engine = _engine(T1=PathRow(entity="T1", facing_mode=FacingMode.TRAVEL))
+    assert approx_equal(engine.facing_at("T1", 4.0), 180.0)
+    against = _engine(T1=PathRow(entity="T1", facing_mode=FacingMode.AGAINST_TRAVEL))
+    assert approx_equal(against.facing_at("T1", 4.0), 0.0)
+
+
+def test_toward_point_and_entity_facing() -> None:
+    point = _engine(
+        T1=PathRow(entity="T1", facing_mode=FacingMode.TOWARD_POINT, facing_value=(10.0, 7.0))
+    )
+    assert approx_equal(point.facing_at("T1", 4.0), 90.0)
+    entity = _engine(
+        T1=PathRow(entity="T1", facing_mode=FacingMode.TOWARD_ENTITY, facing_value="T2")
+    )
+    assert approx_equal(entity.facing_at("T1", 4.0), 90.0)
+
+
+def test_fixed_facing_needs_degrees() -> None:
+    with pytest.raises(PathError):
+        _engine(T1=PathRow(entity="T1", facing_mode=FacingMode.FIXED)).compile(TID)
+
+
+def test_facing_override_wins_inside_its_range() -> None:
+    base = with_rows({"T1": PathRow(entity="T1", facing_mode=FacingMode.TRAVEL)})
+    override = FacingOverride(
+        entities=("T1",), mode=FacingMode.FIXED, value=270.0, start=2.0, end=4.0
+    )
+    engine = PathEngine(base.model_copy(update={"facing_overrides": (override,)}))
+    assert approx_equal(engine.facing_at("T1", 3.0), 270.0)
+    assert approx_equal(engine.facing_at("T1", 6.0), 180.0)
+
+
+def test_velocity_and_state() -> None:
+    engine = PathEngine(two_set_show())
+    assert approx_equal(engine.velocity_at("T1", 4.0), (0.0, 0.5), tol=1e-6)
+    state = engine.state_at("T1", 4.0)
+    assert state.moving
+    assert state.on_field
+    assert not PathEngine(two_set_show()).state_at("T1", 9.0).moving
+
+
+def test_entrance_is_on_field_while_walking_on() -> None:
+    base = two_set_show()
+    first = base.sets[0].with_placements({"T1": {"on_field": False}})
+    engine = PathEngine(base.model_copy(update={"sets": (first, base.sets[1])}))
+    assert not engine.state_at("T1", 0.0).on_field
+    assert engine.state_at("T1", 4.0).on_field
+
+
+def test_positions_vectorized_in_selection_order() -> None:
+    pts = PathEngine(two_set_show()).positions(4.0, ["T2", "T1"])
+    assert approx_equal(pts, [[2.0, 7.0], [0.0, 7.0]])
+    assert PathEngine(two_set_show()).positions(4.0).shape == (4, 2)
+
+
+def test_sample_reports_transition_and_tau() -> None:
+    frame = PathEngine(two_set_show()).sample(3.0)
+    assert frame.tid == TID
+    assert approx_equal(frame.tau, 3.0)
+    assert len(frame.states) == 4
+
+
+def test_frames_per_count_and_fps() -> None:
+    engine = PathEngine(two_set_show())
+    assert len(list(engine.frames(0.0, 8.0, per_count=2))) == 17
+    assert len(list(engine.frames(0.0, 8.0, fps=4))) == 17
+
+
+def test_straight_linear_move_is_one_segment() -> None:
+    segments = [s for s in PathEngine(two_set_show()).segments(TID) if s.entity == "T1"]
+    assert len(segments) == 1
+    assert approx_equal(segments[0].p1, (0.0, 9.0))
+
+
+def test_eased_segments_stay_within_tolerance() -> None:
+    engine = _engine(T1=PathRow(entity="T1", easing=Easing(kind="ease_in_out", strength=3.0)))
+    segments = [s for s in engine.segments(TID, tol=0.01) if s.entity == "T1"]
+    assert len(segments) > 1
+    for seg in segments:
+        mid_t = (seg.t0 + seg.t1) / 2
+        expected = (np.asarray(seg.p0) + np.asarray(seg.p1)) / 2
+        assert np.linalg.norm(engine.position("T1", mid_t, local=TID) - expected) <= 0.01 + 1e-9
+
+
+def test_segments_are_contiguous_in_time() -> None:
+    row = PathRow(
+        entity="T1", style=PathStyle.CURVE, waypoints=(Waypoint(x=3.0, y=7.0),), start=1.0
+    )
+    segments = [s for s in _engine(T1=row).segments(TID) if s.entity == "T1"]
+    assert segments[0].t0 == 0.0
+    assert segments[-1].t1 == 8.0
+    assert all(a.t1 == b.t0 for a, b in itertools.pairwise(segments))
+
+
+def test_path_geometry_runs_start_to_end() -> None:
+    pts = PathEngine(two_set_show()).path_geometry("T1", TID)
+    assert approx_equal(pts[0], (0.0, 5.0))
+    assert approx_equal(pts[-1], (0.0, 9.0))
+
+
+def test_compile_all_and_invalidate() -> None:
+    engine = PathEngine(two_set_show())
+    compiled = engine.compile_all()
+    assert list(compiled) == [TID]
+    assert set(compiled[TID].plans) == {"T1", "T2", "T3", "T4"}
+    engine.invalidate(transitions=[TID])
+    assert engine.compile(TID).counts == 8.0
+
+
+def test_facing_override_resolves_selection_expressions() -> None:
+    base = with_rows({"T1": PathRow(entity="T1", facing_mode=FacingMode.TRAVEL)})
+    override = FacingOverride(
+        entities="T1-T2", mode=FacingMode.FIXED, value=270.0, start=2.0, end=4.0
+    )
+    engine = PathEngine(base.model_copy(update={"facing_overrides": (override,)}))
+    assert approx_equal(engine.facing_at("T2", 3.0), 270.0)
+    assert approx_equal(engine.facing_at("T3", 3.0), 0.0)
+
+
+def test_regression_steps_easing_is_not_aliased_by_segment_probes() -> None:
+    row = PathRow(entity="T1", end=1.0, easing=Easing(kind="steps", strength=4.0))
+    engine = _engine(T1=row)
+    segments = [s for s in engine.segments(TID, tol=0.01) if s.entity == "T1"]
+    moving = [s for s in segments if s.t1 <= 1.0]
+    assert len(moving) >= 4
+
+
+def test_regression_positions_resolves_selection_expressions() -> None:
+    engine = PathEngine(two_set_show())
+    assert approx_equal(engine.positions(4.0, "T1-T2"), [[0.0, 7.0], [2.0, 7.0]])
+    assert approx_equal(engine.positions(4.0, "group:trumpets").shape, (4, 2))

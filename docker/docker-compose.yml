@@ -1,0 +1,13 @@
+# No ports: stage is a library; the service runs the full check suite.
+services:
+  stage:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    env_file: ../.env
+    # Set scripts run under bubblewrap, which needs user namespaces. Docker's default seccomp
+    # profile blocks the unshare/clone flags for that, so the sandbox tests would fail; the
+    # container is still confined by Docker itself.
+    security_opt:
+      - seccomp=unconfined
+    command: ["sh", "-c", "uv run ruff check . && uv run mypy stage tests && uv run pytest"]

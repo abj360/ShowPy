@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+
+"""
+test_schema.py --- keeps the committed stage.show.v1 JSON schema equal to the Show model
+
+A stored-model change must regenerate the schema deliberately: run with
+STAGE_UPDATE_SCHEMA=1, review the diff, and bump the version if old files no longer load.
+"""
+
+import json
+import os
+from pathlib import Path
+
+from stage.show.models import Show
+
+SCHEMA_PATH = Path(__file__).parents[3] / "schemas" / "stage.show.v1.json"
+SCHEMA_ID = "stage.show.v1"
+UPDATE_FLAG = "STAGE_UPDATE_SCHEMA"
+
+
+def _schema() -> dict[str, object]:
+    return {"$id": SCHEMA_ID, **Show.model_json_schema()}
+
+
+def test_committed_schema_matches_show_model() -> None:
+    if os.environ.get(UPDATE_FLAG) == "1":
+        SCHEMA_PATH.write_text(json.dumps(_schema(), indent=2, sort_keys=True) + "\n")
+    assert json.loads(SCHEMA_PATH.read_text()) == _schema()
