@@ -168,14 +168,12 @@ and `on_field` into an `EntityState`; `sample(t)` returns a `Frame` of every spo
 >>> len(frames), frames[4].t, frames[4].tid, frames[4].states[0].position
 (9, 4.0, ('1', '2'), (0.0, 7.0))
 >>> PathEngine(two_set_show()).positions(4.0, "T1-T2")
-Traceback (most recent call last):
-  ...
-stage.core.errors.UnknownRefError: UNKNOWN_REF: unknown spot 'T' (hint: did you mean T4, T3, T2?)
+array([[0., 7.],
+       [2., 7.]])
 ```
 
-**Pitfall (a bug).** `positions(t, sel)` accepts a string, but only `"all"` works. Any other
-string is turned into a tuple of characters, so `"T1-T2"` asks for spots `T`, `1`, `-`, ...
-Pass a list, or resolve the expression first: `positions(t, select(show, "T1-T2").ids)`.
+`positions(t, sel)` accepts `"all"`, a selection expression, a list of IDs or a `Selection`;
+strings are resolved with `stage.cast.select.select`, so `"T1-T2"` is the range T1 to T2.
 
 ## Segments for exact collision checks
 
@@ -367,11 +365,11 @@ it.
 ... )
 Traceback (most recent call last):
   ...
-stage.core.errors.PathError: PATH: a reassignment changes the next set, not the paths (hint: apply it with stage.choreo.match.apply_match(show, tid, result))
+stage.core.errors.PathError: PATH: a reassignment changes the next set, not the paths (hint: apply it with stage.choreo.match_ops.apply_match(show, tid, result))
 ```
 
-**A mismatch to know about.** The hint above names `stage.choreo.match.apply_match`, but
-`apply_match` lives in `stage.choreo.match_ops`. Import it from there.
+The hint names where to go next: a reassignment changes the next set, so apply it with
+`stage.choreo.match_ops.apply_match`, not with `apply_fix`.
 
 ## Caching and invalidate
 

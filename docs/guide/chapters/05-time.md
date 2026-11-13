@@ -176,7 +176,7 @@ A `Hold(at_count=h, seconds=d)` stops the counts at `h` for `d` seconds. The rul
 >>> [seconds_to_count(held, s) for s in (4.0, 5.5, 7.0, 7.25)]
 [8.0, 8.0, 8.0, 8.5]
 >>> describe_count(held, 8.5)
-'count 8.5, 0:07.2, 120 cpm'
+'count 8.5, 0:07.3, 120 cpm'
 >>> count_to_seconds(held, -1.0)
 Traceback (most recent call last):
   ...
@@ -193,9 +193,8 @@ each hold and each piece's full duration until the remaining seconds fall inside
 calls `piece.count_after(remaining)`, the analytic inverse.
 
 `describe_count(tl, c)` renders `count 8.5, 0:07.2, 120 cpm` (plus `(m. 3)` when measures are
-on). The clock text rounds to tenths with Python's `round`, which sends a half to the even
-digit: 7.25 s prints as `0:07.2`, not `0:07.3`. That differs from `round_to`'s half-away-from-
-zero rule in chapter 3; it only affects display. It was renamed from the reference's `describe` to avoid
+on). The clock text rounds to tenths with `round_to` (chapter 3), half away from zero, so
+7.25 s prints as `0:07.3`, the same rule as every other displayed number. It was renamed from the reference's `describe` to avoid
 clashing with the pack language's `describe` (ADR 0001 fix 5).
 
 ## Measures: measures.py

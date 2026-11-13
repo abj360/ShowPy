@@ -76,9 +76,9 @@ its count 0 is `at`. `join_sections` reverses it.
 (['1', '2'], ['2', '3'], 0.0)
 >>> joined = join_sections(first, second)
 >>> joined.sets == show.sets, joined == show
-(True, False)
+(True, True)
 >>> [(t.at_count, t.counts_per_minute) for t in joined.timeline.tempos]
-[(0.0, 120.0), (8.0, 120.0)]
+[(0.0, 120.0)]
 >>> set_counts(show, "1", 4.0)
 Traceback (most recent call last):
   ...
@@ -104,10 +104,11 @@ shows, by name; `require_unlocked(before, after, force)` raises if the list is n
 **diff-based** guard is the safety net: whatever code made the edit, the comparison of
 before and after catches it.
 
-`join_sections` is the inverse of `split_section` **for sets and paths**, as its docstring
-says, but not for the whole show: the joined timeline gains a second tempo section at the
-boundary count (here a redundant 120 cpm at count 8). Timing is identical; only the data
-differs, so `joined == show` is false.
+`join_sections` reverses `split_section`. When it glues the two timelines together it drops
+any tempo section that only restates the tempo already in force (`_merge_tempos`), so
+splitting and joining a constant-tempo show gives back an equal show. One case still differs
+in data but not in timing: a split in the middle of a tempo ramp leaves that ramp written as
+two sections.
 
 ```pycon
 >>> from stage.choreo.models import Placement
@@ -354,28 +355,30 @@ The agent works by writing short scripts, one per set: `/sets/<id>/set.py` defin
 either a `Set` with `id == ctx.set_id`, or a **list of Forms**, which the build places with
 `place()` and stores on the show.
 
-| Function                                   | Does                                                                                                                   |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `new_set_script(ws, set_id, at, template)` | writes a starting script: `copy_prev`, `hold`, `from_forms` or `blank`                                                 |
-| `build_set(ws, set_id, at, timeout_s)`     | runs the script in the sandbox, validates the set, saves it, returns a `BuildResult`                                   |
-| `stale(ws)`                                | scripted sets whose script hash differs from the set's `source_hash`, and every scripted set after the first stale one |
-| `build_all(ws, at, from_set)`              | rebuilds from `from_set` or the first stale set, in show order                                                         |
-| `run_script(ws, path)`                     | runs an analysis script's `main(ctx)` and returns its JSON result and printed output                                   |
+| Function                                   | Does                                                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `new_set_script(ws, set_id, at, template)` | writes a starting script: `copy_prev`, `hold`, `from_forms` or `blank`                                             |
+| `build_set(ws, set_id, at, timeout_s)`     | runs the script in the sandbox, validates the set, saves it, returns a `BuildResult`                               |
+| `stale(ws)`                                | scripted sets whose script-plus-input hash differs from the set's `source_hash`, and every scripted set after them |
+| `build_all(ws, at, from_set)`              | rebuilds from `from_set` or the first stale set, in show order                                                     |
+| `run_script(ws, path)`                     | runs an analysis script's `main(ctx)` and returns its JSON result and printed output                               |
 
-**Pitfall: staleness after a single build.** `stale()` compares each script with the
-`source_hash` stamped on its set. After `build_set(ws, "2")`, set 3's own hash still matches,
-so `stale()` no longer lists set 3, even though it was built from the old set 2.
-`BuildResult.stale_dependents` names the next set to warn you. Use `build_all` to rebuild a
-chain.
+**How staleness is tracked.** `source_hash` is `script_hash(show, set_id, source)`: a hash of
+the script **and** of the previous set it builds from. After `build_set(ws, "2")` changes set
+2, set 3's stored hash no longer matches its input, so `stale()` lists set 3, and
+`BuildResult.stale_dependents` names every later set that now needs a rebuild. Use
+`build_all` to rebuild the chain in order.
 
-### The sandbox: defense in depth, not a boundary
+### The sandbox: Python guards, then an OS boundary
 
 Scripts are code, and code from an agent must be contained. `sandbox.py` layers several
-guards; none of them alone is a hard security boundary, and together they are still not one:
+guards. The first five are Python-level and only defense in depth; the sixth, bubblewrap, is
+the real boundary:
 
 1. **An AST policy** (`check_script`) rejects, before running: imports outside
    `math, itertools, functools, collections, dataclasses, typing, numpy, stage`; any import of
-   `stagecheck`; the `stage` modules `show.storage`, `show.sandbox`, `show.build` and
+   `stagecheck`; the `stage` modules `show.storage`, `show.repositories`,
+   `show.file_repository`, `show.sandbox`, `show.sandbox_child`, `show.build` and
    `export.video`; names like `eval`, `exec`, `open`, `getattr`, `__import__`; and every
    dunder attribute (`x.__class__`), which closes the usual escape through `object`'s
    subclasses.
@@ -387,12 +390,21 @@ guards; none of them alone is a hard security boundary, and together they are st
    (`setrlimit`), plus a wall-clock timeout; stdout is capped at 20,000 characters.
 5. The child exchanges JSON only: the show goes in as JSON, a set (or forms) comes out as
    JSON and is validated again outside.
+6. **Bubblewrap** (`bwrap`) runs the child with every namespace unshared, so it has **no
+   network**. Its filesystem is read-only and holds only the system libraries, the
+   interpreter, the Python packages on `sys.path` and the `stage` package itself (not the rest
+   of the repository), plus an empty private `/tmp`.
 
-What it does **not** stop, measured on this code: NumPy's own file functions (for example
-`numpy.load`, `numpy.loadtxt`, `numpy.save`) are allowed, so a script can read and write files
-the process can reach. Allowed `stage` modules such as `stage.show.file_repository` can also
-write files. Network access is not blocked by the sandbox itself. Run builds as a user with
-least privilege, in a container, if scripts are untrusted.
+Why layer 6 matters: the Python guards alone do not stop NumPy's file functions
+(`numpy.loadtxt`, `numpy.save`), and `numpy.loadtxt` even fetches `http://` URLs. Before
+2026-11-12 a script could read and write host files and reach the network this way. Inside
+bubblewrap those calls fail, because the files and the network are simply not there; the
+regression tests in `tests/unit/show/test_sandbox_isolation.py` try each of them.
+
+If bubblewrap is not installed, `run_set_script` raises `StorageError` instead of running
+unprotected. Passing `isolation="process"` skips it on purpose, for trusted scripts only. In
+Docker, bubblewrap needs the container's seccomp profile relaxed
+(`security_opt: [seccomp=unconfined]` in `docker/docker-compose.yml`).
 
 ```pycon
 >>> from stage.show.sandbox import check_script
@@ -410,7 +422,8 @@ stage.core.errors.SchemaError: SCHEMA: line 2: dunder attribute __class__ is not
 True
 ```
 
-The last line shows the gap: the policy accepts a script that reaches `numpy.loadtxt`.
+The last line shows why layer 6 exists: the policy accepts a script that reaches
+`numpy.loadtxt`, so only the filesystem and network isolation stop it from doing harm.
 
 The tutorial (chapter 15, step 9) writes a script that returns forms and builds it for real.
 
@@ -420,7 +433,8 @@ The tutorial (chapter 15, step 9) writes a script that returns forms and builds 
 > **Check your understanding 13.b.** An agent loads the show, the designer saves, then the
 > agent saves. What happens, and what should the agent do?
 >
-> **Check your understanding 13.c.** Name two things the sandbox does not prevent.
+> **Check your understanding 13.c.** The AST policy allows `import numpy`, and `numpy.loadtxt`
+> can read files and URLs. What stops a script from reading `/etc/passwd` or fetching a URL?
 
 ## Exercises
 

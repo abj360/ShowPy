@@ -380,9 +380,10 @@ Traceback (most recent call last):
 stage.core.errors.SchemaError: SCHEMA: L needs 2 numbers (hint: check the path data argument counts)
 ```
 
-**Pitfall: packed flags.** SVG allows `a1 1 0 011 1`, where the flags `0`, `1` and the next
-number `1` run together. This tokenizer reads `011` as one number, so such paths fail with an
-argument-count error. Write flags with spaces.
+**Packed flags.** SVG allows `a1 1 0 011 1`, where the flags `0`, `1` and the next number
+`1` run together. The tokenizer first reads `011` as one number, then `_unpack_arc_flags`
+splits any multi-digit token in a flag slot into single digits, because SVG flags are always
+one digit. `a1 1 0 011 1` and `a1 1 0 0 1 1 1` parse to the same arc.
 
 `SvgCurve(d, transform)` wraps one subpath as a curve. `svg_outline` (next section) fits
 whole SVG drawings into a box and returns one `SvgCurve` per subpath.

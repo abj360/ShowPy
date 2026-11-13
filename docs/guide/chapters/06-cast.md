@@ -135,8 +135,9 @@ set operations there is no standard order anyway.
    operator or parenthesis is one token. A word starts with any character except space, an
    operator or a parenthesis, and continues until space, `+`, `&` or a parenthesis. A word
    may contain `-` after its first character, so `T1-T8` stays one word (a range). Hence the
-   rule: **put a space before `-` when it means difference.** `T1-T4 -T2` works (the `-`
-   after a space starts a new token), but `T1+T2-T3` reads `T2-T3` as a range.
+   rule: **put spaces (or parentheses) around every operator.** `T1-T4 - T2` is a range minus
+   T2. A glued operator, as in `T1+T2`, is rejected with a `SchemaError` that gives its
+   position, because the same text glued to `-` would otherwise be read as a range.
 2. **Parse** with a small recursive-descent parser `_Parser`:
    - `_expression()` reads a term, then loops while the next token is an operator, reading the
      operator and the next term and combining them with `|`, `-` or `&` on `Selection`.
@@ -168,10 +169,12 @@ union appends new IDs after the left side's IDs.
 What if you get it wrong?
 
 ```pycon
->>> select(show, "T1+T2-T3").ids
-('T1', 'T2', 'T3')
->>> select(show, "T1+T2 -T3").ids
+>>> select(show, "T1 + T2 - T3").ids
 ('T1', 'T2')
+>>> select(show, "T1+T2-T3").ids
+Traceback (most recent call last):
+  ...
+stage.core.errors.SchemaError: SCHEMA: operator '+' must be separated by spaces or parentheses (hint: use T4, T1-T8, T*, all, group:<key>, form:<id>, tag:<tag>, shape:circle|rectangle or sel:<name>, joined by + (union), - (difference), & (intersection) and parentheses; put spaces or parentheses around operators (T1 + T2 - T3); T2-T3 without spaces is a range)
 >>> select(show, "group:trumpet")
 Traceback (most recent call last):
   ...
@@ -179,7 +182,7 @@ stage.core.errors.UnknownRefError: UNKNOWN_REF: unknown group 'trumpet' (hint: d
 >>> select(show, "(T1 + T2")
 Traceback (most recent call last):
   ...
-stage.core.errors.SchemaError: SCHEMA: expression ended, expected ) (hint: use T4, T1-T8, T*, all, group:<key>, form:<id>, tag:<tag>, shape:circle|rectangle or sel:<name>, joined by + (union), - (difference), & (intersection) and parentheses; put spaces around - when it means difference)
+stage.core.errors.SchemaError: SCHEMA: expression ended, expected ) (hint: use T4, T1-T8, T*, all, group:<key>, form:<id>, tag:<tag>, shape:circle|rectangle or sel:<name>, joined by + (union), - (difference), & (intersection) and parentheses; put spaces or parentheses around operators (T1 + T2 - T3); T2-T3 without spaces is a range)
 >>> select(show.set("1"), "group:trumpets")
 Traceback (most recent call last):
   ...
@@ -193,9 +196,11 @@ stage.core.errors.SchemaError: SCHEMA: group: needs the cast, which a Set does n
 
 Reading these:
 
-- `T1+T2-T3` gave no error but the wrong answer: `T2-T3` is a range, so the result is
-  `T1, T2, T3`. With a space before the minus, `T1+T2 -T3` means `(T1 + T2) - T3`. This is the
-  one trap of the grammar that raises nothing.
+- `T1 + T2 - T3` with spaces means `(T1 + T2) - T3`. Written without spaces, `T1+T2-T3` could
+  be read as `T1 + (T2-T3 range)`, which is a different selection, so the parser refuses it
+  and points at the first glued operator (position 2). Until 2026-11-12 it silently returned
+  the range reading; the regression test `test_regression_glued_operators_raise_instead_of_misparsing`
+  keeps it from coming back.
 - Misspelled names get close matches in the hint.
 - The `SchemaError` hint lists the whole grammar.
 - `context["position"]` is the character offset of the bad token (here `T9` starts at

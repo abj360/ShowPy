@@ -62,7 +62,7 @@ Answers to every "Check your understanding" question, then a worked solution to 
 
 **13.b** The agent's save raises `ConflictError`, listing what landed. The agent should refresh, reload, reapply its edit and save again.
 
-**13.c** NumPy's file functions (for example `numpy.loadtxt`) and allowed `stage` modules that write files, such as `stage.show.file_repository`. Network access is not blocked by the sandbox either.
+**13.c** Bubblewrap, not the Python policy. The child runs with its network namespace unshared, so there is no network at all, and its filesystem holds only the system libraries, the Python packages and the `stage` package, read-only. `/etc/passwd` and any URL are simply unreachable, so `numpy.loadtxt` fails. The Python layers are only defense in depth.
 
 **14.a** Purity and determinism: a value can be passed around, tested and stored, and no hidden registry can depend on call order or on which process ran first.
 
