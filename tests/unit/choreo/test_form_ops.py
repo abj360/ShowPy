@@ -7,6 +7,7 @@ test_form_ops.py --- tests form edits, reordering, split and merge, morphs and e
 import numpy as np
 import pytest
 
+from showpy.choreo.form_layout import slot_count
 from showpy.choreo.form_ops import (
     edit,
     form_templates,
@@ -31,8 +32,8 @@ from showpy.choreo.forms import (
     slot_poses,
     slots,
 )
-from showpy.choreo.models import FacingSpec, Form, Placement, Set
-from showpy.core.errors import LockedError, SchemaError, UnknownRefError
+from showpy.choreo.models import FacingSpec, Form, Placement, Set, SpacingSpec
+from showpy.core.errors import LockedError, SchemaError, ShowPyError, UnknownRefError
 from showpy.core.types import Points
 from showpy.core.util import approx_equal
 from showpy.geo.affine import (
@@ -252,3 +253,114 @@ def test_form_templates_cover_every_kind() -> None:
         "line", "arc", "curve", "circle", "block", "wedge", "polyline", "svg", "fill",
         "scatter", "custom", "generated",
     }  # fmt: skip
+
+
+SLOT_TOL = 1e-6
+SKEW_MATRIX = np.array([[1.0, 0.8, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+DOUBLE_MATRIX = np.diag([2.0, 2.0, 1.0])
+QUARTER_TURN = 90.0
+WINDOW_START = 2.0
+WINDOW_END = 8.0
+LINE_LENGTH = 30.0
+SPOT_GAP = 6.0
+
+
+@pytest.mark.defect("UP-9.6-11")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-11")
+def test_regression_edit_block_rows_updates_slot_count() -> None:
+    """Keeps a block's slot count in step with its edited rows (audit 9.6)."""
+    edited = edit(block_form("b", [], (0, 0), 2, 2, 1.0), rows=3)
+    assert slot_count(edited) == len(slots(edited))
+
+
+@pytest.mark.defect("UP-9.6-12")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-12")
+def test_regression_edit_custom_points_updates_slot_count() -> None:
+    """Keeps a custom form's slot count in step with its edited points (audit 9.6)."""
+    edited = edit(
+        custom_form("c", [], [(0, 0), (1, 0), (2, 0)]), points=[(0, 0), (1, 0), (2, 0), (3, 0)]
+    )
+    assert slot_count(edited) == len(slots(edited))
+
+
+@pytest.mark.defect("UP-9.6-13")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-13")
+def test_regression_edit_n_none_clears_slot_count_on_curve_forms() -> None:
+    """Clears a curve form's n when edit(n=None) asks for it (audit 9.6)."""
+    form = line_form("l", ["A", "B"], (0, 0), (4, 0), n=4)
+    assert slot_count(edit(form, n=None)) == len(form.members)
+
+
+@pytest.mark.defect("UP-9.6-14")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-14")
+def test_regression_edit_rejects_more_members_than_slots() -> None:
+    """Rejects members beyond the form's slots instead of accepting them (audit 9.6)."""
+    form = line_form("l", ["A"], (0, 0), (4, 0), n=2)
+    with pytest.raises(ShowPyError):
+        edit(form, members=("A", "B", "C"))
+
+
+@pytest.mark.defect("UP-9.6-15")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-15")
+def test_regression_transform_form_skewed_circle_slots_map_exactly() -> None:
+    """Places a skewed circle's slots exactly where the matrix maps them (audit 9.6)."""
+    circle = circle_form("c", ["A", "B", "C", "D"], (0, 5), 3.0)
+    expected = transform_points(slots(circle), SKEW_MATRIX)
+    assert approx_equal(slots(transform_form(circle, SKEW_MATRIX)), expected, SLOT_TOL)
+
+
+@pytest.mark.defect("UP-9.6-16")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-16")
+def test_regression_transform_form_scales_windowed_spacing() -> None:
+    """Scales a spacing window with a uniform scale of the form (audit 9.6)."""
+    spacing = SpacingSpec(start=WINDOW_START, end=WINDOW_END)
+    form = line_form("l", ["A", "B", "C"], (0, 0), (10, 0), spacing=spacing)
+    expected = slots(form) * 2.0
+    assert approx_equal(slots(transform_form(form, DOUBLE_MATRIX)), expected, SLOT_TOL)
+
+
+@pytest.mark.defect("UP-9.6-17")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-17")
+def test_regression_transform_form_scales_interval_spacing() -> None:
+    """Keeps the slot count of an interval-spaced line under a uniform scale (audit 9.6)."""
+    spacing = SpacingSpec(mode="interval", interval=SPOT_GAP)
+    form = line_form("l", [], (0, 0), (LINE_LENGTH, 0), spacing=spacing)
+    assert len(slots(transform_form(form, DOUBLE_MATRIX))) == len(slots(form))
+
+
+@pytest.mark.defect("UP-9.6-18")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-18")
+def test_regression_transform_form_maps_audience_facings() -> None:
+    """Maps audience facings through the matrix like fixed ones (audit 9.6)."""
+    form = line_form("l", ["A", "B"], (0, 0), (4, 0))
+    matrix = rotation_matrix(QUARTER_TURN, (0, 0))
+    expected = [transform_facing(p.facing, matrix) for p in placements(form)]
+    mapped = [p.facing for p in placements(transform_form(form, matrix))]
+    assert approx_equal(mapped, expected, SLOT_TOL)
+
+
+@pytest.mark.defect("UP-9.6-56")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-56")
+def test_regression_morph_targets_rejects_members_without_slots() -> None:
+    """Raises a ShowPyError, not IndexError, when the target has fewer slots (audit 9.6)."""
+    source = line_form("a", ["A", "B"], (0, 0), (1, 0))
+    target = line_form("b", ["B", "A"], (0, 5), (1, 5), n=1)
+    with pytest.raises(ShowPyError):
+        morph_targets(source, target)
+
+
+@pytest.mark.defect("UP-9.6-57")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-57")
+def test_regression_reorder_by_x_rejects_members_without_slots() -> None:
+    """Raises a ShowPyError, not ValueError, when members outnumber slots (audit 9.6)."""
+    form = line_form("l", ["A", "B", "C"], (0, 0), (4, 0), n=2)
+    with pytest.raises(ShowPyError):
+        reorder(form, "by_x")
+
+
+@pytest.mark.defect("UP-9.6-59")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-59")
+def test_regression_edit_rejects_non_numeric_radius_with_show_py_error() -> None:
+    """Raises a ShowPyError, not a pydantic error, for edit(radius="abc") (audit 9.6)."""
+    with pytest.raises(ShowPyError):
+        edit(circle_form("c", ["A", "B"], (0, 5), 2.0), radius="abc")
