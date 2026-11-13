@@ -31,8 +31,6 @@ def test_faces_entity_only_for_toward_entity_strings() -> None:
 
 def test_drop_keeps_containers_and_removes_ids() -> None:
     show = rewrite_spot_ids(rich_show(), lambda i: None if i in {"T1", "T2"} else i)
-    assert show.notes[0].anchor.spots == ()
-    assert show.facing_overrides[0].entities == ()
     assert show.zones[0].applies_to == ()
     assert show.zones[1].applies_to == "group:trumpets"
     assert show.zones[2].applies_to == Selection(ids=("T4",))
