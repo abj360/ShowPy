@@ -4,14 +4,23 @@
 test_util.py --- tests ID sorting, ranges, float comparison, hashing and point normalization
 """
 
+import math
+import subprocess
+import sys
+import time
+import tracemalloc
+from collections.abc import Callable
+
 import numpy as np
 import pytest
 import shapely
 from hypothesis import given
 from hypothesis import strategies as st
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-from showpy.core.errors import SchemaError
+from showpy.cast.models import Cast, Group, Spot
+from showpy.cast.select import label_prefix, select
+from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
 from showpy.core.util import (
     approx_equal,
     as_points,
@@ -132,3 +141,297 @@ def test_timer_measures_elapsed_ms() -> None:
 def test_close_matches_finds_short_ids() -> None:
     assert close_matches("T3", ["T1", "B7", "T12"]) == ["T1", "T12"]
     assert close_matches("zzz", ["T1"]) == []
+
+
+HASH_SEEDS = ("1", "2", "3")
+SUBPROCESS_TIMEOUT_S = 20
+BIG_ARRAY_SIZE = 2000
+BIG_ID_LENGTH = 20000
+QUADRATIC_BUDGET_S = 0.25
+RANGE_PEAK_BUDGET_BYTES = 5_000_000
+HUGE_RANGE_END = 1_000_000
+NAN = float("nan")
+HASH_TIES_SCRIPT = (
+    "from showpy.core.util import format_ranges\n"
+    "print(format_ranges({'T02', 'T2', 'T1', 'T01', 'T3'}))\n"
+)
+
+
+def run_under_seeds(script: str) -> list[str]:
+    """Runs a script once per PYTHONHASHSEED and returns each combined output."""
+    outputs = []
+    for seed in HASH_SEEDS:
+        done = subprocess.run(
+            [sys.executable, "-c", script],
+            env={"PYTHONHASHSEED": seed},
+            capture_output=True,
+            text=True,
+            timeout=SUBPROCESS_TIMEOUT_S,
+            check=False,
+        )
+        outputs.append(done.stdout + done.stderr[-200:])
+    return outputs
+
+
+class _ArrayModel(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
+
+    values: np.ndarray  # type: ignore[type-arg]
+
+
+def _big_arrays() -> tuple[np.ndarray, np.ndarray]:  # type: ignore[type-arg]
+    first = np.zeros(BIG_ARRAY_SIZE)
+    second = np.zeros(BIG_ARRAY_SIZE)
+    second[BIG_ARRAY_SIZE // 2] = 1.0
+    return first, second
+
+
+def _points_or_rejection(obj: object) -> np.ndarray:  # type: ignore[type-arg]
+    try:
+        return as_points(obj)
+    except ShowPyError:
+        return np.zeros((0, 2))
+
+
+def _best_of(call: Callable[[], object], trials: int = 3) -> float:
+    best = math.inf
+    for _ in range(trials):
+        start = time.perf_counter()
+        call()
+        best = min(best, time.perf_counter() - start)
+    return best
+
+
+@pytest.mark.defect("UP-9.3-01")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-01")
+def test_regression_format_ranges_ties_ignore_hash_seed() -> None:
+    """Orders natural-sort ties the same under every hash seed (audit 9.3; P0 #9)."""
+    outputs = run_under_seeds(HASH_TIES_SCRIPT)
+    assert len(set(outputs)) == 1, outputs
+
+
+@pytest.mark.defect("UP-9.3-02")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-02")
+def test_regression_seeded_rng_rejects_none() -> None:
+    """Rejects a missing seed instead of returning an unseeded generator (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        seeded_rng(None)  # type: ignore[arg-type]
+
+
+@pytest.mark.defect("UP-9.3-03")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-03")
+def test_regression_seeded_rng_rejects_negative_seed() -> None:
+    """Rejects a negative seed instead of leaking numpy's ValueError (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        seeded_rng(-1)
+
+
+@pytest.mark.defect("UP-9.3-04")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-04")
+def test_regression_content_hash_equal_for_signed_zero() -> None:
+    """Hashes 0.0 and -0.0 alike (audit 9.3)."""
+    assert content_hash({"x": 0.0}) == content_hash({"x": -0.0})
+
+
+@pytest.mark.defect("UP-9.3-05")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-05")
+def test_regression_content_hash_equal_for_int_and_float_one() -> None:
+    """Hashes 1 and 1.0 alike (audit 9.3)."""
+    assert content_hash({"x": 1}) == content_hash({"x": 1.0})
+
+
+@pytest.mark.defect("UP-9.3-06")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-06")
+def test_regression_content_hash_separates_string_from_object() -> None:
+    """Keeps the string '{"a":1}' and the object {"a": 1} apart (audit 9.3)."""
+    assert content_hash('{"a":1}') != content_hash({"a": 1})
+
+
+@pytest.mark.defect("UP-9.3-07")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-07")
+def test_regression_content_hash_separates_int_keys_from_string_keys() -> None:
+    """Keeps {1: "a"} and {"1": "a"} apart (audit 9.3)."""
+    assert content_hash({1: "a"}) != content_hash({"1": "a"})
+
+
+@pytest.mark.defect("UP-9.3-08")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-08")
+def test_regression_content_hash_mixed_key_types_never_leak_type_error() -> None:
+    """Hashes or rejects mixed key types with a ShowPyError, never a TypeError (audit 9.3)."""
+    try:
+        content_hash({1: "a", "b": 2})
+    except ShowPyError:
+        return
+
+
+@pytest.mark.defect("UP-9.3-09")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-09")
+def test_regression_content_hash_distinguishes_large_arrays() -> None:
+    """Tells two different 2,000-element arrays apart (audit 9.3)."""
+    first, second = _big_arrays()
+    assert content_hash({"a": first}) != content_hash({"a": second})
+
+
+@pytest.mark.defect("UP-9.3-10")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-10")
+def test_regression_content_hash_hashes_nested_models_by_content() -> None:
+    """Hashes a nested model by its fields, not by a truncated repr (audit 9.3)."""
+    first, second = _big_arrays()
+    left = content_hash({"m": _ArrayModel(values=first)})
+    right = content_hash({"m": _ArrayModel(values=second)})
+    assert left != right
+
+
+@pytest.mark.defect("UP-9.3-11")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-11")
+def test_regression_content_hash_rejects_nan() -> None:
+    """Rejects NaN, which has no standard JSON form (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        content_hash({"x": NAN})
+
+
+@pytest.mark.defect("UP-9.3-12")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-12")
+def test_regression_content_hash_rejects_lone_surrogate() -> None:
+    """Rejects a lone surrogate with a ShowPyError, not UnicodeEncodeError (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        content_hash("\ud800")
+
+
+@pytest.mark.defect("UP-9.3-13")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-13")
+def test_regression_as_points_drops_z_of_3d_linestring() -> None:
+    """Keeps x and y of each 3D vertex instead of scrambling the flat coordinates (audit 9.3)."""
+    points = as_points(shapely.LineString([(0, 0, 5), (1, 1, 7)]))
+    assert approx_equal(points, np.array([[0.0, 0.0], [1.0, 1.0]]))
+
+
+@pytest.mark.defect("UP-9.3-14")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-14")
+def test_regression_as_points_accepts_3d_point() -> None:
+    """Reads a 3D Shapely point as one (x, y) row (audit 9.3)."""
+    assert approx_equal(as_points(shapely.Point(1, 2, 3)), np.array([[1.0, 2.0]]))
+
+
+@pytest.mark.defect("UP-9.3-15")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-15")
+def test_regression_as_points_multipart_geometry_is_handled() -> None:
+    """Flattens or rejects multi-part geometry with a ShowPyError (audit 9.3)."""
+    points = _points_or_rejection(shapely.MultiPoint([(0, 0), (1, 1)]))
+    assert points.shape in {(0, 2), (2, 2)}
+
+
+@pytest.mark.defect("UP-9.3-16")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-16")
+def test_regression_as_points_returns_a_copy() -> None:
+    """Returns data the caller can mutate without corrupting its own array (audit 9.3)."""
+    original = np.zeros((2, 2))
+    as_points(original)[:] += 1.0
+    assert approx_equal(original, np.zeros((2, 2)))
+
+
+@pytest.mark.defect("UP-9.3-17")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-17")
+def test_regression_natural_sort_survives_unicode_digits() -> None:
+    """Sorts IDs holding non-ASCII digits such as superscript two (audit 9.3)."""
+    assert len(natural_sort(["T1²", "T1"])) == 2
+
+
+@pytest.mark.defect("UP-9.3-18")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-18")
+def test_regression_natural_sort_survives_huge_numbers() -> None:
+    """Sorts IDs whose number has over 4,300 digits (audit 9.3)."""
+    huge = "T" + "9" * 5000
+    assert natural_sort([huge, "T1"]) == ["T1", huge]
+
+
+@pytest.mark.defect("UP-9.3-19")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-19")
+def test_regression_approx_equal_treats_equal_infinities_as_equal() -> None:
+    """Treats inf and inf as equal without a RuntimeWarning (audit 9.3)."""
+    assert approx_equal(math.inf, math.inf)
+
+
+@pytest.mark.defect("UP-9.3-20")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-20")
+def test_regression_chunk_counts_sum_exactly_to_total() -> None:
+    """Splits so the parts sum exactly to the total (audit 9.3)."""
+    total = 0.7000000000000001
+    assert math.fsum(chunk_counts(total, 7)) == total
+
+
+@pytest.mark.defect("UP-9.3-21")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-21")
+def test_regression_chunk_counts_rejects_nan_total() -> None:
+    """Rejects a NaN total (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        chunk_counts(NAN, 4)
+
+
+@pytest.mark.defect("UP-9.3-22")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-22")
+def test_regression_id_split_is_linear_on_long_ids() -> None:
+    """Splits a 20,000-character ID in linear time (audit 9.3; P0 #8)."""
+    long_id = "1" * BIG_ID_LENGTH + "x"
+    assert _best_of(lambda: label_prefix(long_id)) < QUADRATIC_BUDGET_S
+
+
+@pytest.mark.defect("UP-9.3-23")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-23")
+def test_regression_range_check_happens_before_expansion() -> None:
+    """Checks range endpoints before building a million strings (audit 9.3; P0 #8)."""
+    cast = Cast(
+        groups={"t": Group(key="t", label_prefix="T")},
+        spots=(Spot(id="T1", group="t"), Spot(id="T2", group="t")),
+    )
+    tracemalloc.start()
+    try:
+        with pytest.raises(UnknownRefError):
+            select(cast, f"T1-T{HUGE_RANGE_END}")
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < RANGE_PEAK_BUDGET_BYTES
+
+
+@pytest.mark.defect("UP-9.3-24")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-24")
+def test_regression_parse_range_reads_ranges_with_digits_in_the_prefix() -> None:
+    """Expands `P1x1-P1x3` whose prefix holds a digit (audit 9.3)."""
+    assert parse_range("P1x1-P1x3") == ["P1x1", "P1x2", "P1x3"]
+
+
+@pytest.mark.defect("UP-9.3-25")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-25")
+def test_regression_parse_range_reads_ranges_with_dash_prefixes() -> None:
+    """Expands `flag-1-flag-3` the way `flag-*` already matches (audit 9.3)."""
+    assert parse_range("flag-1-flag-3") == ["flag-1", "flag-2", "flag-3"]
+
+
+@pytest.mark.defect("UP-9.3-26")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-26")
+def test_regression_parse_range_does_not_read_unicode_digits_as_ascii() -> None:
+    """Does not read the Arabic-Indic digit three as 3 (audit 9.3)."""
+    try:
+        expanded = parse_range("T٣-T5")
+    except ShowPyError:
+        return
+    assert "T3" not in expanded
+
+
+@pytest.mark.defect("UP-9.3-27")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-27")
+def test_regression_format_ranges_output_parses_back() -> None:
+    """Writes ranges that parse_range reads back to the same IDs (audit 9.3)."""
+    assert parse_range(format_ranges(["T1", "T2", "T3"])) == ["T1", "T2", "T3"]
+
+
+@pytest.mark.defect("UP-9.3-28")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-28")
+def test_regression_parse_range_honors_padding_of_the_last_endpoint() -> None:
+    """Keeps the spelling of the last endpoint or rejects mixed padding (audit 9.3)."""
+    try:
+        expanded = parse_range("T1-T010")
+    except ShowPyError:
+        return
+    assert expanded[-1] == "T010"
