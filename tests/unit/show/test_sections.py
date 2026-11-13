@@ -16,7 +16,7 @@ from showpy.show.manage import add_set, index, renumber
 from showpy.show.models import Pin, Show
 from showpy.show.sections import join_sections, split_section
 from showpy.time.clock import count_to_seconds
-from showpy.time.models import AudioTrack, Hold, Marker, MeasureSetting, TempoSection
+from showpy.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting, TempoSection
 from tests.fixtures.shows import two_set_show
 from tests.golden.opener import opener_show
 
@@ -193,3 +193,23 @@ def test_regression_split_does_not_leave_a_ramp_longer_than_its_section() -> Non
     first, _ = split_section(_three_sets_with(tempos=(ramp,)), SPLIT_SET)
     longest = max(t.at_count + (t.ramp_counts or 0.0) for t in first.timeline.tempos)
     assert longest <= index(first).total_counts + TOL
+
+
+@pytest.mark.defect("UP-9.7-86")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-86")
+def test_regression_split_drops_audio_whose_section_starts_after_the_half_ends() -> None:
+    """Keeps an audio track out of a half that ends before the track's section (audit 9.7)."""
+    late_track = AudioTrack(file="late.wav", label="late", section=(14.0, 20.0))
+    first, _ = split_section(_three_sets_with(audio=(late_track,)), SPLIT_SET)
+    length = index(first).total_counts
+    stranded = [t.label for t in first.timeline.audio if t.section and t.section[0] >= length]
+    assert stranded == []
+
+
+@pytest.mark.defect("UP-9.7-87")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-87")
+def test_regression_split_puts_a_cue_in_one_half_only() -> None:
+    """Keeps cue c1 in a single half of a split (audit 9.7 sections)."""
+    cue = Cue(label="c1", order=1, estimated_seconds=2.0)
+    first, second = split_section(_three_sets_with(cues=(cue,)), SPLIT_SET)
+    assert not (cue in first.timeline.cues and cue in second.timeline.cues)
