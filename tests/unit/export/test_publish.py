@@ -88,6 +88,7 @@ HUGE_QR_SIZE = 100_000
 QR_MEMORY_CAP_BYTES = 1_500_000_000
 OVERLONG_PATH = "a" * 8000
 CONTACT = "ada@example.com"
+DESIGNER_HINT = "check the spot id or add the spot first"
 
 
 def _published(show: Show | None = None) -> Publication:
@@ -638,7 +639,8 @@ def test_regression_performer_view_after_deletion_gives_a_performer_hint() -> No
         performer_view(pub, gone, performer("Ada"))
     hint = caught.value.hint.lower()
     assert hint
-    assert "add the spot" not in hint
+    assert hint != DESIGNER_HINT
+    assert "spot id" not in hint
 
 
 @pytest.mark.defect("UP-9.5-26")
