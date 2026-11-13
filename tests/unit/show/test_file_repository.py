@@ -7,12 +7,12 @@ Contains:
     test_regression_next_link_to_outside_path_is_refused: UP-9.7-03
     test_regression_next_link_cycle_is_refused: UP-9.7-04
     test_regression_tree_digest_path_traversal_is_refused: UP-9.7-05
-    test_regression_missing_object_is_a_storage_error: UP-9.7-21
-    test_regression_truncated_tree_is_a_storage_error: UP-9.7-22
-    test_regression_missing_hard_links_are_a_storage_error: UP-9.7-23
-    test_regression_swapped_blob_is_reported_corrupt: UP-9.7-25
-    test_regression_commit_cleans_stale_temp_files: UP-9.7-26
-    test_regression_losing_commit_leaves_no_orphan_tree: UP-9.7-27
+    test_regression_missing_object_is_a_storage_error: UP-9.7-22
+    test_regression_truncated_tree_is_a_storage_error: UP-9.7-23
+    test_regression_missing_hard_links_are_a_storage_error: UP-9.7-24
+    test_regression_swapped_blob_is_reported_corrupt: UP-9.7-26
+    test_regression_commit_cleans_stale_temp_files: UP-9.7-27
+    test_regression_losing_commit_leaves_no_orphan_tree: UP-9.7-28
 """
 
 import json
@@ -93,8 +93,8 @@ def test_regression_tree_digest_path_traversal_is_refused(tmp_path: Path) -> Non
         repo.read(SHOW_ID, SHOW_DOC)
 
 
-@pytest.mark.defect("UP-9.7-21")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-21")
+@pytest.mark.defect("UP-9.7-22")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-22")
 def test_regression_missing_object_is_a_storage_error(tmp_path: Path) -> None:
     """Maps a missing object file to StorageError, not FileNotFoundError (audit 9.7 item 9)."""
     repo, _, base = _saved(tmp_path)
@@ -103,8 +103,8 @@ def test_regression_missing_object_is_a_storage_error(tmp_path: Path) -> None:
         repo.get_show(SHOW_ID)
 
 
-@pytest.mark.defect("UP-9.7-22")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-22")
+@pytest.mark.defect("UP-9.7-23")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-23")
 def test_regression_truncated_tree_is_a_storage_error(tmp_path: Path) -> None:
     """Maps a truncated tree file to StorageError, not JSONDecodeError (audit 9.7 item 9)."""
     repo, rev, base = _saved(tmp_path)
@@ -114,8 +114,8 @@ def test_regression_truncated_tree_is_a_storage_error(tmp_path: Path) -> None:
         repo.revisions(SHOW_ID)
 
 
-@pytest.mark.defect("UP-9.7-23")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-23")
+@pytest.mark.defect("UP-9.7-24")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-24")
 def test_regression_missing_hard_links_are_a_storage_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -129,8 +129,8 @@ def test_regression_missing_hard_links_are_a_storage_error(
         _saved(tmp_path)
 
 
-@pytest.mark.defect("UP-9.7-25")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-25")
+@pytest.mark.defect("UP-9.7-26")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-26")
 def test_regression_swapped_blob_is_reported_corrupt(tmp_path: Path) -> None:
     """Reports a swapped blob as corrupt by verifying its hash on read (audit 9.7 item 10)."""
     repo, _, base = _saved(tmp_path)
@@ -140,8 +140,8 @@ def test_regression_swapped_blob_is_reported_corrupt(tmp_path: Path) -> None:
         repo.read(SHOW_ID, SHOW_DOC)
 
 
-@pytest.mark.defect("UP-9.7-26")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-26")
+@pytest.mark.defect("UP-9.7-27")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-27")
 def test_regression_commit_cleans_stale_temp_files(tmp_path: Path) -> None:
     """Removes `.tmp-*` files left by crashed writers on the next commit (audit 9.7 item 10)."""
     repo, rev, base = _saved(tmp_path)
@@ -152,8 +152,8 @@ def test_regression_commit_cleans_stale_temp_files(tmp_path: Path) -> None:
     assert not list(base.rglob(".tmp-*"))
 
 
-@pytest.mark.defect("UP-9.7-27")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-27")
+@pytest.mark.defect("UP-9.7-28")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-28")
 def test_regression_losing_commit_leaves_no_orphan_tree(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

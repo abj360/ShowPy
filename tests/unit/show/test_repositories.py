@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 
 """
-test_repositories.py --- encodes audited repository defects (UP-9.7-02, -11 to -16) as strict xfails
+test_repositories.py --- encodes audited repository defects (UP-9.7-02, -12 to -17) as strict xfails
 
 Contains:
     test_regression_memory_commit_has_one_winner_per_parent: UP-9.7-02
-    test_regression_repository_refuses_agent_pinned_move: UP-9.7-11
-    test_regression_repository_refuses_agent_limits_write: UP-9.7-12
-    test_regression_show_ids_differing_by_case_are_distinct_or_rejected: UP-9.7-13
-    test_regression_reserved_device_show_ids_are_rejected: UP-9.7-14
-    test_regression_trailing_dot_show_id_is_rejected: UP-9.7-15
-    test_regression_overlong_show_id_is_a_storage_error: UP-9.7-16
+    test_regression_repository_refuses_agent_pinned_move: UP-9.7-12
+    test_regression_repository_refuses_agent_limits_write: UP-9.7-13
+    test_regression_show_ids_differing_by_case_are_distinct_or_rejected: UP-9.7-14
+    test_regression_reserved_device_show_ids_are_rejected: UP-9.7-15
+    test_regression_trailing_dot_show_id_is_rejected: UP-9.7-16
+    test_regression_overlong_show_id_is_a_storage_error: UP-9.7-17
 """
 
 import contextlib
@@ -98,8 +98,8 @@ def test_regression_memory_commit_has_one_winner_per_parent() -> None:
     assert len(stored) == 1
 
 
-@pytest.mark.defect("UP-9.7-11")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-11")
+@pytest.mark.defect("UP-9.7-12")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-12")
 def test_regression_repository_refuses_agent_pinned_move() -> None:
     """Refuses an agent put_set that moves a pinned spot (audit 9.7 item 7)."""
     repo = InMemoryRepository()
@@ -116,8 +116,8 @@ def test_regression_repository_refuses_agent_pinned_move() -> None:
         repo.put_set(SHOW_ID, moved, expected_revision=rev, actor="agent", at=AT, message="m")
 
 
-@pytest.mark.defect("UP-9.7-12")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-12")
+@pytest.mark.defect("UP-9.7-13")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-13")
 def test_regression_repository_refuses_agent_limits_write() -> None:
     """Refuses an agent transaction that writes the designer's limits file (audit 9.7 item 7)."""
     repo = InMemoryRepository()
@@ -133,8 +133,8 @@ def test_regression_repository_refuses_agent_limits_write() -> None:
         )
 
 
-@pytest.mark.defect("UP-9.7-13")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-13")
+@pytest.mark.defect("UP-9.7-14")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-14")
 def test_regression_show_ids_differing_by_case_are_distinct_or_rejected(tmp_path: Path) -> None:
     """Keeps IDs differing only by case from sharing a folder name (audit 9.7 item 8)."""
     root = tmp_path / "repo"
@@ -147,8 +147,8 @@ def test_regression_show_ids_differing_by_case_are_distinct_or_rejected(tmp_path
     assert len({p.name.lower() for p in root.iterdir()}) == 2
 
 
-@pytest.mark.defect("UP-9.7-14")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-14")
+@pytest.mark.defect("UP-9.7-15")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-15")
 @pytest.mark.parametrize("show_id", ["CON", "nul"])
 def test_regression_reserved_device_show_ids_are_rejected(show_id: str) -> None:
     """Rejects Windows device names as show IDs (audit 9.7 item 8)."""
@@ -156,16 +156,16 @@ def test_regression_reserved_device_show_ids_are_rejected(show_id: str) -> None:
         _create(InMemoryRepository(), show_id)
 
 
-@pytest.mark.defect("UP-9.7-15")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-15")
+@pytest.mark.defect("UP-9.7-16")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-16")
 def test_regression_trailing_dot_show_id_is_rejected() -> None:
     """Rejects a show ID ending in a dot (audit 9.7 item 8)."""
     with pytest.raises(StorageError):
         _create(InMemoryRepository(), "abc.")
 
 
-@pytest.mark.defect("UP-9.7-16")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-16")
+@pytest.mark.defect("UP-9.7-17")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-17")
 def test_regression_overlong_show_id_is_a_storage_error(tmp_path: Path) -> None:
     """Maps a 300-character show ID to a ShowPyError, not OSError (audit 9.7 item 8)."""
     with pytest.raises(ShowPyError):
