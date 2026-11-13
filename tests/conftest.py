@@ -4,6 +4,7 @@
 conftest.py --- shared pytest setup: Hypothesis profiles and the benchmark size tier
 
 Contains:
+    pytest_plugins: loads the defect ledger plugin
     HYPOTHESIS_PROFILES: settings for the ci (default), nightly and dev profiles
     TIERS: benchmark tier name to (spots, sets)
     BenchTier: the chosen benchmark tier's name and size
@@ -18,6 +19,8 @@ from typing import Any
 
 import pytest
 from hypothesis import settings
+
+pytest_plugins = ["tests.ledger_plugin"]
 
 PROFILE_ENV = "HYPOTHESIS_PROFILE"
 DEFAULT_PROFILE = "ci"

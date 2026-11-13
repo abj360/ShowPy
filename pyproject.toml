@@ -109,6 +109,7 @@ addopts = "--doctest-modules -q --strict-markers --import-mode=importlib -m 'not
 markers = [
     "golden: replays real shows against reviewed fixtures",
     "bench: performance budget benchmarks; run with nox -s bench",
+    "defect(id): open audited defect; must be xfail(strict=True) with reason equal to the ID",
     "slow: generated-show properties and the large golden; run with nox -s slow",
 ]
 filterwarnings = ["error"]
