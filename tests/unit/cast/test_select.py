@@ -5,6 +5,7 @@ test_select.py --- tests the selection grammar and the spatial, ordering and pai
 
 Contains:
     test_*(): one behavior of showpy.cast.select each
+    test_regression_*(): one audited grammar defect each (inputs, nesting, pairing, split)
 """
 
 import subprocess

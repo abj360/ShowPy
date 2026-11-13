@@ -2,6 +2,10 @@
 
 """
 test_validate.py --- tests that validate_timeline reports each structural problem by code
+
+Contains:
+    test_*(): one behavior of showpy.time.validate each
+    test_regression_*(): one audited validation gap each (values and orders it passes)
 """
 
 import math
@@ -154,6 +158,7 @@ def _rejected_or_flagged(build: Callable[[], Timeline]) -> None:
     assert not validate_timeline(timeline).ok
 
 
+# Any: fields are arbitrary Timeline fields, validated by the model under test.
 def _counts_with(**fields: Any) -> Timeline:
     return Timeline(mode=TimelineMode.COUNTS, tempos=(BASE_TEMPO,), **fields)
 

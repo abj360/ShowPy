@@ -2,6 +2,10 @@
 
 """
 test_util.py --- tests ID sorting, ranges, float comparison, hashing and point normalization
+
+Contains:
+    test_*(): one behavior of showpy.core.util each
+    test_regression_*(): one audited util defect each (hash seed, hashing, points, ranges)
 """
 
 import math

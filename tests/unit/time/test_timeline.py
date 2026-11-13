@@ -2,6 +2,10 @@
 
 """
 test_timeline.py --- tests timeline construction, pure edits, lookups and JSON persistence
+
+Contains:
+    test_*(): one behavior of showpy.time.timeline each
+    test_regression_*(): one audited edit defect each (NaN, ramps, removal, cue order)
 """
 
 import math

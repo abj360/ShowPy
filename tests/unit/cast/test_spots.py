@@ -5,6 +5,7 @@ test_spots.py --- tests creating, copying, deleting, regrouping and relabeling s
 
 Contains:
     test_*(): one behavior of showpy.cast.spots each
+    test_regression_*(): one audited lock defect each (pinned sets, renames, force)
 """
 
 from datetime import UTC, datetime

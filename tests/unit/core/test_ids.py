@@ -2,6 +2,10 @@
 
 """
 test_ids.py --- tests reference and transition ID parsing and formatting
+
+Contains:
+    test_*(): one behavior of showpy.core.ids each
+    test_regression_*(): one audited defect each (path separators in refs, tid arity)
 """
 
 import pytest

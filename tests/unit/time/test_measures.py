@@ -2,6 +2,10 @@
 
 """
 test_measures.py --- tests 1-based measure labels, measure lookups and mid-show length changes
+
+Contains:
+    test_*(): one behavior of showpy.time.measures each
+    test_regression_*(): one audited measure defect each (zero, NaN, negative, duplicates)
 """
 
 import math

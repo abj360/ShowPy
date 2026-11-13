@@ -2,6 +2,10 @@
 
 """
 test_selection.py --- tests the Selection set algebra
+
+Contains:
+    test_*(): one behavior of showpy.core.selection each
+    test_regression_*(): one audited Selection defect each (bare string, copy, equality)
 """
 
 import pytest

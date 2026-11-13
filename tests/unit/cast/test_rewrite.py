@@ -5,6 +5,7 @@ test_rewrite.py --- tests rewriting and dropping spot IDs across a whole show
 
 Contains:
     test_*(): one behavior of showpy.cast.rewrite each
+    test_regression_*(): one audited rewrite defect each (pins, zones, empties, renames)
 """
 
 import pytest

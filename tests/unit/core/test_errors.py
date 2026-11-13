@@ -2,6 +2,10 @@
 
 """
 test_errors.py --- tests the ShowPyError family: fields, codes, hierarchy and rendering
+
+Contains:
+    test_*(): one behavior of showpy.core.errors each
+    test_regression_*(): one audited defect each (pickling and deep copy of every error)
 """
 
 import copy

@@ -2,6 +2,10 @@
 
 """
 test_models.py --- tests Shape, Group, Spot, LabelScheme and Cast
+
+Contains:
+    test_*(): one behavior of showpy.cast.models each
+    test_regression_*(): one audited model defect each (hash order, mutability, constraints)
 """
 
 import math

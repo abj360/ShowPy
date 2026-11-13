@@ -2,6 +2,10 @@
 
 """
 test_types.py --- tests the JSON-safe Region and Box2 models
+
+Contains:
+    test_*(): one behavior of showpy.core.types each
+    test_regression_*(): one audited Region defect each (few points, NaN, self-crossing)
 """
 
 import pytest

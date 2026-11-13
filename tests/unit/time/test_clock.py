@@ -2,6 +2,10 @@
 
 """
 test_clock.py --- tests tempo lookup, count/seconds conversion with ramps and holds, and labels
+
+Contains:
+    test_*(): one behavior of showpy.time.clock each
+    test_regression_*(): one audited clock defect each (unsorted tempos, NaN, large counts)
 """
 
 import math

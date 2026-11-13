@@ -6,6 +6,7 @@ test_notes.py --- tests adding, editing, finding and drafting design notes
 Contains:
     FakeDrafter: records calls and returns canned drafts, or raises a canned error
     test_*(): one behavior of showpy.notes.notes each
+    test_regression_*(): one audited note defect each (area anchor, drafts, naive time)
 """
 
 from datetime import UTC, datetime

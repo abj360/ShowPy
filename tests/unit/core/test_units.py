@@ -2,6 +2,10 @@
 
 """
 test_units.py --- tests unit conversion, unit registries and angle helpers
+
+Contains:
+    test_*(): one behavior of showpy.core.units each
+    test_regression_*(): one audited units defect each (registry, round_to, angle edges)
 """
 
 import math
