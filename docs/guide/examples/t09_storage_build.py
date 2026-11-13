@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
 """
-t09_storage_build.py --- tutorial step 9: saves the show, meets a conflict, builds set 3 by script
+t09_storage_build.py --- tutorial step 9: saves the show, meets a conflict, saves a wider set 3
 
 Contains:
-    SET_3_SCRIPT: holds the build script that returns set 3's arc form, now wider
-    main(): saves, edits from two workspaces, writes a script, builds and lists the history
+    widen_arc(): returns the show with set 3's arc form widened and its set placed again
+    main(): saves, edits from two workspaces, saves the wider set 3 and lists the history
 """
 
 import tempfile
@@ -14,23 +14,20 @@ from datetime import UTC, datetime, timedelta
 from t05_paths import build_tutorial_show
 from t08_notes_validate import add_notes
 
+from stage.choreo.form_ops import edit
+from stage.choreo.form_place import filled_forms, place
+from stage.choreo.match_ops import with_set
 from stage.core.errors import ConflictError
-from stage.show.build import build_set, stale
+from stage.show.changes import apply_change
 from stage.show.file_repository import FileRepository
 from stage.show.history import changelog
 from stage.show.manage import set_counts
+from stage.show.models import FormOp, Show
 from stage.show.storage import load_show, open_workspace, save_show
+from stage.show.validate import validate_show
 
 START = datetime(2026, 11, 11, 10, 0, tzinfo=UTC)
-SET_3_SCRIPT = '''from stage.choreo.forms import arc_form
-
-
-def build(ctx):
-    """Puts the set 3 arc members on a wider arc of radius 16 m; the build places it."""
-    members = ctx.show.forms["arc"].members
-    ctx.log("arc rebuilt", radius=16.0, members=len(members))
-    return [arc_form("arc", members, (0.0, 6.0), 16.0, 135.0, -90.0)]
-'''
+WIDER_RADIUS = 16.0
 
 
 def minutes(n: int) -> datetime:
@@ -38,8 +35,17 @@ def minutes(n: int) -> datetime:
     return START + timedelta(minutes=n)
 
 
+def widen_arc(show: Show) -> Show:
+    """Returns the show with set 3's arc form widened and its set placed again from it."""
+    wider = edit(show.forms["arc"], radius=WIDER_RADIUS)
+    placed = place(show, "3", [wider])
+    return apply_change(
+        with_set(show, placed), [FormOp(form=f) for f in filled_forms(placed, [wider])]
+    )
+
+
 def main() -> None:
-    """Runs the storage and build workflow against a file repository in a temporary folder."""
+    """Runs the storage workflow against a file repository in a temporary folder."""
     with tempfile.TemporaryDirectory() as folder:
         repo = FileRepository(folder)
         designer = open_workspace(repo, "opener", "designer")
@@ -59,16 +65,15 @@ def main() -> None:
             "agent now reads", agent.revision[:7], "set 3 counts", load_show(agent).set("3").counts
         )
 
-        agent.write("/sets/3/set.py", SET_3_SCRIPT, at=minutes(3), message="script set 3")
-        print("stale before build:", stale(agent))
-        result = build_set(agent, "3", minutes(4))
-        print("build logs:", list(result.logs))
-        print("stale after build:", stale(agent))
-        rebuilt = load_show(agent)
-        t1 = rebuilt.set("3").get("T1")
+        wider = widen_arc(load_show(agent))
+        print("valid before saving:", validate_show(wider).ok)
+        revision = save_show(agent, wider, minutes(3), "widen the arc to 16 m")
+        print("agent saved", revision.id[:7], "changing", list(revision.changed))
+        saved = load_show(agent)
+        t1 = saved.set("3").get("T1")
         print(
             f"T1 now at ({t1.x:.3f}, {t1.y:.3f}), form radius",
-            rebuilt.forms["arc"].geometry["curve"]["radius"],
+            saved.forms["arc"].geometry["curve"]["radius"],
         )
         print(changelog(agent).replace(folder, "<repo>"))
 

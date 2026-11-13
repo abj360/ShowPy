@@ -2,7 +2,8 @@
 
 `stage.show` holds the `Show` aggregate and everything that manages a whole show: adding and
 retiming sets, splitting a show into movements, storing it as versioned documents, undo and
-redo, live collaboration, pins, validation and building sets from scripts.
+redo, live collaboration, pins and validation. Set scripts and the script sandbox live in the
+separate Eight-agent repo.
 
 ## The Show and its index: models.py
 
@@ -169,7 +170,7 @@ splits it:
 | `/time/timeline.json`                  | the timeline                                                                            |
 | `/sets/<id>/set.json`                  | one set's placements (internal: a workspace lists the derived `placements.csv` instead) |
 | `/sets/<id>/forms.json`                | that set's forms (only when it has any)                                                 |
-| `/sets/<id>/set.py`                    | the set's build script (written by scripts, not by encode)                              |
+| `/sets/<id>/set.py`                    | the set's build script, stored as text (written with `ws.write`, not by encode)         |
 | `/transitions/<a>-<b>/paths.json`      | one transition's stored paths (only when not default)                                   |
 
 `dump_json` writes canonically: sorted keys, two-space indent, sets and frozensets sorted. So
@@ -308,7 +309,7 @@ The canvas is shared by the designer and the agent.
 
 - `events_since(ws, revision)` derives `CanvasEvent`s (moves, form edits, path edits,
   retimes) from the revisions after `revision`, by comparing stored states. Replaying them
-  with `apply_event` reproduces each edit. `summarize_events` renders them tersely.
+  with `apply_event` reproduces each edit.
 - `propose(show, ops, note, proposal_id)` wraps ops as a `Proposal` against the show's
   revision, after checking they apply. `preview_proposal` computes the ghost placements and
   paths for the canvas, and lists pinned items the proposal would touch.
@@ -319,122 +320,23 @@ The canvas is shared by the designer and the agent.
   nothing. `selection(ws)` reads what the designer has selected. `pins(show)` lists locks.
 
 ```pycon
->>> from stage.show.collab import accept, preview_proposal, propose, summarize_events
->>> from stage.show.models import CanvasEvent
+>>> from stage.show.collab import accept, events_since, preview_proposal, propose
 >>> proposal = propose(load_show(designer), [move], "open the left side", "p1")
 >>> preview = preview_proposal(load_show(designer), proposal)
 >>> [p.entity for p in preview.placements["2"]], preview.blocked
 (['T1'], ())
+>>> before = designer.revision
 >>> accept(designer, proposal, at).message
 'accept proposal p1: open the left side'
->>> summarize_events(
-...     [
-...         CanvasEvent(
-...             id="e",
-...             at=at,
-...             actor="agent",
-...             kind="move",
-...             payload={"set_id": "2", "placement": {"entity": e}},
-...         )
-...         for e in ("T1", "T2")
-...     ]
-... )
-'agent moved T1–T2 in set 2'
+>>> [(e.actor, e.kind, e.payload["set_id"]) for e in events_since(designer, before)]
+[('designer', 'move', '2')]
 ```
-
-## Building sets from scripts: build.py and the sandbox
-
-### Scripts are the source
-
-The agent works by writing short scripts, one per set: `/sets/<id>/set.py` defines
-`build(ctx)`. Placements are the result. This keeps work exact, repeatable and reviewable.
-
-`build(ctx)` gets a read-only `BuildContext`: `show`, `prev` (the previous set), `set_id`,
-`counts`, `surface`, `timeline`, `cast`, `select` (resolves expressions against the show),
-`engine` (a `PathEngine` over the show before this build) and `log(msg, **fields)`. It returns
-either a `Set` with `id == ctx.set_id`, or a **list of Forms**, which the build places with
-`place()` and stores on the show.
-
-| Function                                   | Does                                                                                                               |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `new_set_script(ws, set_id, at, template)` | writes a starting script: `copy_prev`, `hold`, `from_forms` or `blank`                                             |
-| `build_set(ws, set_id, at, timeout_s)`     | runs the script in the sandbox, validates the set, saves it, returns a `BuildResult`                               |
-| `stale(ws)`                                | scripted sets whose script-plus-input hash differs from the set's `source_hash`, and every scripted set after them |
-| `build_all(ws, at, from_set)`              | rebuilds from `from_set` or the first stale set, in show order                                                     |
-| `run_script(ws, path)`                     | runs an analysis script's `main(ctx)` and returns its JSON result and printed output                               |
-
-**How staleness is tracked.** `source_hash` is `script_hash(show, set_id, source)`: a hash of
-the script **and** of the previous set it builds from. After `build_set(ws, "2")` changes set
-2, set 3's stored hash no longer matches its input, so `stale()` lists set 3, and
-`BuildResult.stale_dependents` names every later set that now needs a rebuild. Use
-`build_all` to rebuild the chain in order.
-
-### The sandbox: Python guards, then an OS boundary
-
-Scripts are code, and code from an agent must be contained. `sandbox.py` layers several
-guards. The first five are Python-level and only defense in depth; the sixth, bubblewrap, is
-the real boundary:
-
-1. **An AST policy** (`check_script`) rejects, before running: imports outside
-   `math, itertools, functools, collections, dataclasses, typing, numpy, stage`; any import of
-   `stagecheck`; the `stage` modules `show.storage`, `show.repositories`,
-   `show.file_repository`, `show.sandbox`, `show.sandbox_child`, `show.build` and
-   `export.video`; names like `eval`, `exec`, `open`, `getattr`, `__import__`; and every
-   dunder attribute (`x.__class__`), which closes the usual escape through `object`'s
-   subclasses.
-2. **A separate interpreter**, `python -I -m stage.show.sandbox_child`, with an empty
-   environment, so no inherited secrets or paths.
-3. **Restricted builtins** inside the child and an import hook (`guarded_import`) that
-   re-checks every import at run time, including imports made by `from x import y` forms.
-4. **Resource limits**: 2 GiB of address space and a CPU limit of `timeout_s + 1` seconds
-   (`setrlimit`), plus a wall-clock timeout; stdout is capped at 20,000 characters.
-5. The child exchanges JSON only: the show goes in as JSON, a set (or forms) comes out as
-   JSON and is validated again outside.
-6. **Bubblewrap** (`bwrap`) runs the child with every namespace unshared, so it has **no
-   network**. Its filesystem is read-only and holds only the system libraries, the
-   interpreter, the Python packages on `sys.path` and the `stage` package itself (not the rest
-   of the repository), plus an empty private `/tmp`.
-
-Why layer 6 matters: the Python guards alone do not stop NumPy's file functions
-(`numpy.loadtxt`, `numpy.save`), and `numpy.loadtxt` even fetches `http://` URLs. Before
-2026-11-12 a script could read and write host files and reach the network this way. Inside
-bubblewrap those calls fail, because the files and the network are simply not there; the
-regression tests in `tests/unit/show/test_sandbox_isolation.py` try each of them.
-
-If bubblewrap is not installed, `run_set_script` raises `StorageError` instead of running
-unprotected. Passing `isolation="process"` skips it on purpose, for trusted scripts only. In
-Docker, bubblewrap needs the container's seccomp profile relaxed
-(`security_opt: [seccomp=unconfined]` in `docker/docker-compose.yml`).
-
-```pycon
->>> from stage.show.sandbox import check_script
->>> check_script("import os" + chr(10) + "def build(ctx):" + chr(10) + "    return ctx.prev")
-Traceback (most recent call last):
-  ...
-stage.core.errors.SchemaError: SCHEMA: line 1: import of 'os' is not allowed (hint: import only from ['collections', 'dataclasses', 'functools', 'itertools', 'math', 'numpy', 'stage', 'typing'])
->>> check_script("def build(ctx):" + chr(10) + "    return ctx.__class__")
-Traceback (most recent call last):
-  ...
-stage.core.errors.SchemaError: SCHEMA: line 2: dunder attribute __class__ is not allowed (hint: use public attributes only)
->>> check_script(
-...     "import numpy" + chr(10) + "def build(ctx):" + chr(10) + "    return numpy.loadtxt"
-... ) is None
-True
-```
-
-The last line shows why layer 6 exists: the policy accepts a script that reaches
-`numpy.loadtxt`, so only the filesystem and network isolation stop it from doing harm.
-
-The tutorial (chapter 15, step 9) writes a script that returns forms and builds it for real.
 
 > **Check your understanding 13.a.** Why are undo and redo stacks derived from history
 > instead of stored?
 >
 > **Check your understanding 13.b.** An agent loads the show, the designer saves, then the
 > agent saves. What happens, and what should the agent do?
->
-> **Check your understanding 13.c.** The AST policy allows `import numpy`, and `numpy.loadtxt`
-> can read files and URLs. What stops a script from reading `/etc/passwd` or fetching a URL?
 
 ## Exercises
 
@@ -448,6 +350,7 @@ read back from the head.
 **Exercise 13.3.** Pin `T2` (entity pin) in `two_set_show()` and return the names
 `locked_changes` reports after you force-move T2 in both sets.
 
-**Exercise 13.4 (harder).** Write a set script for set 2 of `two_set_show()` that returns a
-list with one `line_form` placing T1–T4 on `y = 12` from `x = 0` to `x = 6`. Save the show,
-write the script, build it, and return the built set's positions.
+**Exercise 13.4 (harder).** Save `two_set_show()` to an `InMemoryRepository` as the designer.
+Then, from a second workspace opened as the `agent`, place T1–T4 of set 2 on a `line_form` on
+`y = 12` from `x = 0` to `x = 6`, store the form, and save. Return set 2's positions read back
+from the head and the paths the agent's revision changed.

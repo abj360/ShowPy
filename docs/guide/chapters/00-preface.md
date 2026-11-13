@@ -14,7 +14,7 @@ not assume you know drill writing, computational geometry or assignment algorith
   `sheet`, `notes`, four chapters on `choreo`, then `show` and `export`. Every public function
   and class is listed with what it does, its inputs and outputs, an example and its pitfalls.
 - Chapter 15 is an end-to-end tutorial. It builds a three-set show, inspects it, stores it,
-  rebuilds a set from a script, exports it and publishes it.
+  saves an edit from a second workspace, exports it and publishes it.
 - Chapter 16 covers the tests and quality gates.
 - Chapter 17 is a glossary and a "where is X?" index.
 - Chapter 18 is a capstone project: a four-set show with its own check script.

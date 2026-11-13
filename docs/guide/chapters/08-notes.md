@@ -2,7 +2,7 @@
 
 Designers and the agent leave notes for rehearsal and for each other: "block locks in on
 count 16", "watch T4 and T5 here". `stage.notes` stores them on the show, finds them by set,
-transition or place, and lets an injected service draft suggestions.
+transition or place, and lets the designer accept notes the agent drafted.
 
 ## The data: models.py
 
@@ -19,8 +19,8 @@ read back from JSON without guessing. An `Anchor` has a `kind` and exactly one p
 | `spots`      | `spots`             | `Anchor.on_spots(["T4", "T5"])`    |
 
 A `Note` has `id`, `text`, `kind` (`goal`, `idea`, `todo`, `warning`), `anchor`, `author`,
-`created_at` and `visible`. A `DraftedNote` is what a drafter proposes: text, kind and anchor,
-before it gets an ID and a time stamp.
+`created_at` and `visible`. A hidden note (`visible=False`) is a draft: it waits for the
+designer to accept it.
 
 ```pycon
 >>> from stage.notes.models import Anchor
@@ -41,8 +41,7 @@ stage.core.errors.SchemaError: SCHEMA: set anchor needs only set_id (hint: use t
 | `remove_note(show, note_id)`                                     | removes a note                                                        |
 | `notes_for(show, target, include_hidden=False)`                  | notes on a set (an ID) or a transition (a pair)                       |
 | `notes_near(show, p, radius, set_id=None, include_hidden=False)` | notes at or around a point                                            |
-| `draft_notes(show, concept, drafter, at)`                        | asks a `NoteDrafter` for suggestions; returns hidden notes            |
-| `accept_draft(show, draft)`                                      | adds a drafted note, visible                                          |
+| `accept_draft(show, draft)`                                      | adds a hidden draft note to the show, visible                         |
 
 `notes_near` matches by geometry: point anchors by distance, area anchors by distance to the
 area, and spot anchors when any anchored spot's on-field placement (in any set, or only in
@@ -72,29 +71,27 @@ stage.core.errors.SchemaError: SCHEMA: note 'n1' already exists (hint: pick a ne
 
 `T1` stands at `(0, 9)` in set 2, so the note anchored to it is found near that point.
 
-### Drafting notes through an injected service
+### Accepting drafted notes
 
-`draft_notes(show, concept, drafter, at)` turns a designer's concept ("calm opener, big
-hit at 48") into suggested notes. The drafter is anything with a
-`draft(show_summary, concept) -> list[DraftedNote]` method: in production an LLM client
-behind a protocol, in tests a plain class. The library never calls a model itself (ADR 0001
-fix 24). The drafts come back with IDs `draft-1`, `draft-2`, ... (skipping IDs in use),
-author `agent`, the time `at` and `visible=False`. They are **not** added to the show; the
-designer accepts them one by one with `accept_draft`. Malformed drafts, unknown anchors or
-more than `MAX_DRAFTED_NOTES = 50` reject the whole batch.
+The agent proposes notes as plain `Note`s with `author="agent"` and `visible=False`. They are
+**not** on the show yet: the designer accepts them one by one with `accept_draft`, which adds
+the note and makes it visible. The library never calls a model itself.
 
 ```pycon
->>> from stage.notes.models import DraftedNote
->>> from stage.notes.notes import accept_draft, draft_notes
->>> class EchoDrafter:
-...     def draft(self, show_summary, concept):
-...         return [DraftedNote(text=concept, kind="goal", anchor=Anchor.on_set("1"))]
->>> drafts = draft_notes(show, "calm opener", EchoDrafter(), at)
->>> [(d.id, d.author, d.visible) for d in drafts], len(show.notes)
-([('draft-1', 'agent', False)], 2)
->>> accepted = accept_draft(show, drafts[0])
->>> [(n.id, n.visible) for n in accepted.notes]
-[('n1', True), ('n2', True), ('draft-1', True)]
+>>> from stage.notes.models import Note
+>>> from stage.notes.notes import accept_draft
+>>> draft = Note(
+...     id="draft-1",
+...     text="calm opener",
+...     kind="goal",
+...     anchor=Anchor.on_set("1"),
+...     author="agent",
+...     created_at=at,
+...     visible=False,
+... )
+>>> accepted = accept_draft(show, draft)
+>>> [(n.id, n.author, n.visible) for n in accepted.notes], len(show.notes)
+([('n1', 'pat', True), ('n2', 'pat', True), ('draft-1', 'agent', True)], 2)
 ```
 
 > **Check your understanding 8.a.** Why must a note's `created_at` be passed in rather than
@@ -108,6 +105,7 @@ more than `MAX_DRAFTED_NOTES = 50` reject the whole batch.
 **Exercise 8.2.** Add a point note at `(5, 7)` and return the IDs of notes within 1 m of
 `(5.5, 7.5)` and within 0.5 m (as two lists).
 
-**Exercise 8.3 (harder).** Write a drafter class whose `draft` returns one `warning` note per
-transition of the show, anchored on that transition. Return the hidden drafts produced for
-`two_set_show()`.
+**Exercise 8.3 (harder).** Add set `3` (8 counts) to `two_set_show()`. Draft one hidden
+`warning` note per transition by hand, with IDs `draft-1`, `draft-2`, ..., text "check
+spacing", author `agent` and time 2026-11-11 10:00 UTC. Accept only the draft on transition
+`2→3` and return the show.

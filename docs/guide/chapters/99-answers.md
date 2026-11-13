@@ -62,8 +62,6 @@ Answers to every "Check your understanding" question, then a worked solution to 
 
 **13.b** The agent's save raises `ConflictError`, listing what landed. The agent should refresh, reload, reapply its edit and save again.
 
-**13.c** Bubblewrap, not the Python policy. The child runs with its network namespace unshared, so there is no network at all, and its filesystem holds only the system libraries, the Python packages and the `stage` package, read-only. `/etc/passwd` and any URL are simply unreachable, so `numpy.loadtxt` fails. The Python layers are only defense in depth.
-
 **14.a** Purity and determinism: a value can be passed around, tested and stored, and no hidden registry can depend on call order or on which process ran first.
 
 **14.b** 3 s × 30 frames per second = 90 frames, all showing the held positions.
@@ -320,7 +318,7 @@ The point note is 0.707 m away: inside 1 m, outside 0.5 m.
 
 ### Exercise 8.3
 
-The drafter is any object with a `draft` method; `draft_notes` gives each draft an ID and hides it.
+A draft is a plain hidden `Note` by the agent; `accept_draft` adds only the chosen one, visible.
 
 {{code: exercises/answers/ch08_ex3.py}}
 
@@ -480,7 +478,7 @@ An entity pin covers the spot's placement in every set; both moves are reported.
 
 ### Exercise 13.4
 
-A script may return forms; `build_set` places them, validates and saves.
+The agent's workspace starts at the designer's revision, so the save lands; it writes only set 2's placements and its new form.
 
 {{code: exercises/answers/ch13_ex4.py}}
 

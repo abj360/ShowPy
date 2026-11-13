@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 
 """
-ch13_ex4.py --- your solution to exercise 13.4: a script that returns forms
+ch13_ex4.py --- your solution to exercise 13.4: an agent saves a form-built set
 
 Contains:
-    SCRIPT: the set script source you write; build(ctx) returns a list of forms
-    solve(): returns the built set 2 positions after building a forms script
+    solve(): returns set 2 positions at the head and the paths the agent's save changed
 """
 
-SCRIPT = ""
 
-
-def solve() -> list[list[float]]:
-    """Returns the built set 2 positions after building a forms script."""
+def solve() -> tuple[list[list[float]], list[str]]:
+    """Returns set 2 positions at the head and the paths the agent's save changed."""
     raise NotImplementedError("TODO")

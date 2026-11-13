@@ -49,7 +49,7 @@ Here is the life of a show in the order the tutorial in chapter 15 follows.
 6. Add paths: delays, staggers, curves, follow-the-leader routes, rotations, easing.
 7. Ask the engine where everyone is at any count, how they face and how fast they go.
 8. Find tight gaps and try suggested fixes. The checker makes the final call.
-9. Add notes, validate the structure, save to a repository and rebuild sets from scripts.
+9. Add notes, validate the structure, save to a repository and merge edits from others.
 10. Export: video frames, coordinate sheets, data. Publish a link so performers claim spots.
 
 ## How the packages depend on each other
@@ -64,7 +64,7 @@ The same picture in text:
 ```text
             export      video, print sheets, data, pdf, publish
               |
-             show       Show, manage, storage, history, collab, build, sandbox
+             show       Show, manage, storage, history, collab, validate
               |
             choreo      sets, forms, matching, paths, motion, PathEngine, avoid
            /  |   \
@@ -118,7 +118,7 @@ no package imports a package above it.
 >>> stage.PathEngine.__module__
 'stage.choreo.engine'
 >>> len(stage.__all__)
-533
+518
 ```
 
 Under the hood: `import stage` runs only `stage/__init__.py`. That file holds a table from
@@ -134,6 +134,7 @@ public name to submodule. The first time you touch `stage.PathEngine`, a module-
 
 - `stagecheck`, the locked checker, is a separate package. The library never imports it.
   Collision limits, step-size limits and waivers belong to the designer and the checker.
+- Set scripts, the script sandbox and agent note drafting live in the separate Eight-agent repo.
 - `stage.packs` (marching rules and field wording) and `stage.index` (the API registry) are
   out of scope for this build.
 - There is no 3D. The 2D core must never depend on 3D.
