@@ -8,7 +8,7 @@ offered only when the spot already stands still, and ROTATE pivots on the perpen
 bisector of the move so the arc lands on the target.
 
 Contains:
-    ROW_STYLES: the path styles a single row can take without a stored route
+    ROW_STYLES: the path styles a row can take without a stored route; FOLLOW needs one
     edited_row(): applies drawn window, style, facing, easing and pace edits to one spot's row
     path_rows(): draws one compiling path row for a spot of a transition of the show
 """
@@ -143,7 +143,10 @@ def _custom(draw: st.DrawFn, spec: TransitionSpec, entity: str) -> TransitionSpe
 def _styled(draw: st.DrawFn, show: Show, spec: TransitionSpec, entity: str) -> TransitionSpec:
     a, b = _ends(show, spec.id, entity)
     allowed = [s for s in ROW_STYLES if s is not PathStyle.HOLD or _is_still(a, b)]
-    style = draw(st.sampled_from(allowed))
+    routes = sorted(r.id for r in spec.routes.values() if entity in r.members)
+    style = draw(st.sampled_from(allowed + ([PathStyle.FOLLOW] if routes else [])))
+    if style is PathStyle.FOLLOW:
+        return set_style(spec, [entity], style, route=draw(st.sampled_from(routes)))
     if style in (PathStyle.CURVE, PathStyle.POLYLINE):
         return draw(_bent(show, spec, entity))
     if style is PathStyle.ROTATE:
@@ -210,9 +213,9 @@ def edited_row(draw: st.DrawFn, show: Show, spec: TransitionSpec, entity: str) -
 def path_rows(draw: st.DrawFn, show: Show, tid: TransitionId | None = None) -> PathRow:
     """Draws a path row for one spot of transition `tid` that compiles against `show`.
 
-    The spot's stored row is dropped first. FOLLOW rows need a route stored on the
-    transition, so this strategy draws the other six styles; `with_paths` in
-    tests.strategies.show adds routes.
+    The spot's stored row is dropped first. FOLLOW is offered only to members of a route
+    already stored on the transition (`with_paths` in tests.strategies.show adds routes and
+    sets their targets), and HOLD only to spots that stand still.
 
     Args:
         draw: Hypothesis draw function.
