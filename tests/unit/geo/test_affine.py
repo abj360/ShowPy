@@ -88,3 +88,25 @@ def test_rotation_adds_to_facing(theta: float, deg: float) -> None:
 def test_mirror_across_vertical_axis_reflects_facing() -> None:
     assert approx_equal(transform_facing(90.0, mirror_matrix((0, 0), (0, 1))), 270.0)
     assert approx_equal(transform_facing(0.0, mirror_matrix((0, 0), (0, 1))), 0.0)
+
+
+LARGE_SCALE = 1e5
+SMALL_SCALE = 1e-5
+ROTATION_DEG = 30.0
+
+
+@pytest.mark.defect("UP-9.1-17")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-17")
+def test_regression_is_similarity_accepts_large_rotations_with_scale() -> None:
+    """Accepts a 30 degree rotation scaled by 1e5 instead of judging it by absolute error."""
+    c, s = math.cos(math.radians(ROTATION_DEG)), math.sin(math.radians(ROTATION_DEG))
+    matrix = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+    matrix[:2, :2] *= LARGE_SCALE
+    assert is_similarity(matrix)
+
+
+@pytest.mark.defect("UP-9.1-18")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-18")
+def test_regression_is_similarity_rejects_small_non_uniform_scales() -> None:
+    """Rejects a 1e-5 by 2e-5 scale instead of treating it as uniform (audit 9.1)."""
+    assert not is_similarity(scale_matrix(SMALL_SCALE, 2 * SMALL_SCALE, (0.0, 0.0)))
