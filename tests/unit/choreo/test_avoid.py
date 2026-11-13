@@ -21,12 +21,13 @@ from showpy.choreo.avoid import (
     suggest_waypoint,
 )
 from showpy.choreo.engine import PathEngine
-from showpy.choreo.engine_models import Fix, GapInfo
+from showpy.choreo.engine_models import Fix
 from showpy.choreo.models import Easing, PathRow, PathStyle
-from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray
+from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, MotionRegistry
 from showpy.core.errors import PathError, ShowPyError
 from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
+from showpy.show.models import Show
 from tests.fixtures.crossing_shows import crossing_show
 from tests.fixtures.motion_shows import TID, with_rows
 from tests.fixtures.shows import two_set_show
@@ -183,16 +184,30 @@ def _stay_on_the_line(u: FloatArray, start: Point, end: Point, params: object) -
     return np.linspace(start, end, len(u))
 
 
+type MotionsCall = Callable[[Show, MotionRegistry], object]
+
+
+# motions= is the keyword the audit proposes; the current signatures have none.
+def _gaps_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], min_gaps)(show, TID, top=3, motions=motions)
+
+
+def _delays_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], suggest_delays)(show, TID, ("T1", "T2"), motions=motions)
+
+
+def _waypoint_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], suggest_waypoint)(show, TID, "T1", "T2", motions=motions)
+
+
 @defect("UP-9.2-31")
-def test_regression_min_gaps_accepts_a_custom_motion_registry() -> None:
-    """Measures gaps in a show that uses a custom-registered motion (audit 9.2)."""
+@pytest.mark.parametrize("call", [_gaps_call, _delays_call, _waypoint_call])
+def test_regression_avoid_helpers_accept_a_custom_motion_registry(call: MotionsCall) -> None:
+    """Analyses a show that uses a custom-registered motion (audit 9.2)."""
     registry = DEFAULT_MOTIONS.with_motion("probe", _stay_on_the_line)
     row = PathRow(entity="T1", style=PathStyle.CUSTOM, motion_fn="probe")
-    show = with_rows({"T1": row})
-    # motions= is the keyword the audit proposes; the current signature has none.
-    gaps_with_motions = cast(Callable[..., list[GapInfo]], min_gaps)
-    gaps = gaps_with_motions(show, TID, top=1, motions=registry)
-    assert approx_equal(gaps[0].gap, 2.0 - FOOTPRINTS, tol=1e-6)
+    custom = with_rows({"T1": row}, show=crossing_show())
+    assert repr(call(custom, registry)) == repr(call(crossing_show(), DEFAULT_MOTIONS))
 
 
 @defect("UP-9.2-35")
