@@ -46,7 +46,6 @@
 | Sheet            | The 2D design surface.                                                                                                               |
 | Slot             | A position a form generates; members stand on slots, open slots are filled by matching.                                              |
 | Spot             | One dot that lasts the whole show, later claimed by a performer.                                                                     |
-| Stale set        | A scripted set whose script changed since it was built.                                                                              |
 | Tempo section    | Counts per minute from a count on, optionally ramping linearly.                                                                      |
 | Transition       | The movement between two consecutive sets, written `a→b`.                                                                            |
 | Waiver           | A designer-approved exception to a checker finding.                                                                                  |
@@ -86,7 +85,7 @@
 | word a position                      | `stage.sheet.coords`         | `to_coords`, `from_coords`                               |
 | draw a sheet                         | `stage.sheet.render`         | `render_sheet`, `SheetCanvas`, `draw_sheet`              |
 | move a show to another sheet         | `stage.sheet.replace`        | `replace_sheet`                                          |
-| add notes                            | `stage.notes.notes`          | `add_note`, `notes_for`, `notes_near`, `draft_notes`     |
+| add notes                            | `stage.notes.notes`          | `add_note`, `notes_for`, `notes_near`, `accept_draft`    |
 | build a form                         | `stage.choreo.forms`         | `line_form`, `arc_form`, `block_form`, ...               |
 | get slots and facings                | `stage.choreo.forms`         | `slots`, `slot_poses`, `placements`                      |
 | edit a form                          | `stage.choreo.form_ops`      | `edit`, `reorder`, `gate`, `transform_form`              |
@@ -113,7 +112,6 @@
 | keep history on disk                 | `stage.show.file_repository` | `FileRepository`                                         |
 | undo, redo, diff                     | `stage.show.history`         | `undo`, `redo`, `diff_show`, `changelog`                 |
 | propose and accept edits             | `stage.show.collab`          | `propose`, `preview_proposal`, `accept`                  |
-| build sets from scripts              | `stage.show.build`           | `new_set_script`, `build_set`, `build_all`, `stale`      |
 | print coordinate sheets              | `stage.export.print_sheets`  | `coordinate_sheet`, `chart`, `cue_sheet`                 |
 | make a PDF                           | `stage.export.pdf`           | `to_pdf`                                                 |
 | export or import data                | `stage.export.data`          | `export_json`, `import_json`, `export_frames_csv`        |
@@ -128,9 +126,10 @@ top-level API.
 >>> import stage
 >>> for name in ("closest_approach", "space_along", "similarity_fit", "spot_counts"):
 ...     print(name, "->", getattr(stage, name).__module__)
-Traceback (most recent call last):
-  ...
-AttributeError: module 'stage' has no attribute 'spot_counts'. Did you mean: 'set_counts'?
+closest_approach -> stage.choreo.avoid
+space_along -> stage.geo.spacing
+similarity_fit -> stage.sheet.replace
+spot_counts -> stage.show.counts
 ```
 
 ## Exercises

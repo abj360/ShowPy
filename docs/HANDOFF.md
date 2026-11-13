@@ -1,19 +1,25 @@
 # Handoff: building the `stage` library
 
-Audience: the next agent or engineer continuing this branch. Scope: state of work, what is
+Audience: the next agent or engineer continuing this repository. Scope: state of work, what is
 left, and the traps already hit.
 
-Last updated: 2026-11-11
+Last updated: 2026-11-12
 
 ## Where things stand
 
-| Item         | Value                                                                                           |
-| ------------ | ----------------------------------------------------------------------------------------------- |
-| Branch       | `feat/stage-library` (from `chore/add-claude-md`; no local `main`)                              |
-| Gates        | `uv run pytest` about 1380 green (doctests, warnings as errors); ruff and mypy `--strict` clean |
-| Docker       | `docker compose -f docker/docker-compose.yml up --build` passed                                 |
-| Out of scope | `stagecheck`, `stage.packs` and `stage.index`, by the user's decision (2026-11-11)              |
-| Not pushed   | Pushing needs explicit approval                                                                 |
+| Item         | Value                                                                                     |
+| ------------ | ----------------------------------------------------------------------------------------- |
+| Repository   | `abj360/stage` (private); split from `abj360/Eight` on 2026-11-12 with full history       |
+| Gates        | `uv run pytest` green (doctests, warnings as errors); ruff and mypy `--strict` clean      |
+| CI           | lint, types, tests, dependency scan, docker build, on every pull request and push to main |
+| Out of scope | `stagecheck`, `stage.packs` and `stage.index`, by the user's decision (2026-11-11)        |
+| Pushing      | needs explicit approval                                                                   |
+
+**Repository split (2026-11-12).** Agent-only code moved to `abj360/Eight-agent` with its
+history: set-script builds and the bubblewrap sandbox (`show/build.py`, `build_models.py`,
+`sandbox.py`, `sandbox_child.py`), agent note drafting (`draft_notes`, `NoteDrafter`,
+`DraftedNote`) and `summarize_events`. Product docs stay in `abj360/Eight`. `stage` must never
+import from either; they pin a `stage` release tag.
 
 The user's instructions, in their words:
 
@@ -30,17 +36,17 @@ Use `uv` only, never pip.
 
 ## Module map (what exists)
 
-| Package  | Modules                                                                                                                                                                                                                                                 |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `core`   | errors, ids, types (`FrozenModel`, `Region`, `Box2`), units (immutable `UnitRegistry`), util (`close_matches`, `content_hash`, `seeded_rng`), selection, validation                                                                                     |
-| `geo`    | curve_base, curves (11 kinds, arc-length param), svg, text (stroke font), shapes, regions, spacing (Bridson scatter), affine, transforms + transform_base + snapping, measure, analysis, models                                                         |
-| `time`   | models, timeline, clock (ramps and holds, analytic inverse), measures, validate                                                                                                                                                                         |
-| `cast`   | models, spots, select (expression grammar), rewrite (renames IDs everywhere)                                                                                                                                                                            |
-| `sheet`  | models, templates + surfaces (NFHS, NCAA and NFL fields, stage, gym), coords, bounds, replace, render (`SheetCanvas`, `draw_sheet`)                                                                                                                     |
-| `notes`  | models (tagged `Anchor`), notes (`draft_notes` takes an injected `NoteDrafter`)                                                                                                                                                                         |
-| `choreo` | models, motion (easing, `MotionRegistry`), engine, engine_compile, engine_facing, engine_models, paths, routes, facing, avoid, motion_stats, forms, form_fns, form_layout, form_ops, form_fit, form_place, match, match_cost, match_solve, match_ops    |
-| `show`   | models (`Show`, `Pin`, `ShowIndex`, diffs, `Revision`, `CanvasEvent`, `Proposal`), manage, sections, storage, repositories, file_repository, documents, files, history, collab, pinning, changes, locks, validate, sandbox, sandbox_child, build_models |
-| `export` | video only so far (see in-flight work)                                                                                                                                                                                                                  |
+| Package  | Modules                                                                                                                                                                                                                                              |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core`   | errors, ids, types (`FrozenModel`, `Region`, `Box2`), units (immutable `UnitRegistry`), util (`close_matches`, `content_hash`, `seeded_rng`), selection, validation                                                                                  |
+| `geo`    | curve_base, curves (11 kinds, arc-length param), svg, text (stroke font), shapes, regions, spacing (Bridson scatter), affine, transforms + transform_base + snapping, measure, analysis, models                                                      |
+| `time`   | models, timeline, clock (ramps and holds, analytic inverse), measures, validate                                                                                                                                                                      |
+| `cast`   | models, spots, select (expression grammar), rewrite (renames IDs everywhere)                                                                                                                                                                         |
+| `sheet`  | models, templates + surfaces (NFHS, NCAA and NFL fields, stage, gym), coords, bounds, replace, render (`SheetCanvas`, `draw_sheet`)                                                                                                                  |
+| `notes`  | models (tagged `Anchor`), notes (add, edit, find, `accept_draft`)                                                                                                                                                                                    |
+| `choreo` | models, motion (easing, `MotionRegistry`), engine, engine_compile, engine_facing, engine_models, paths, routes, facing, avoid, motion_stats, forms, form_fns, form_layout, form_ops, form_fit, form_place, match, match_cost, match_solve, match_ops |
+| `show`   | models (`Show`, `Pin`, `ShowIndex`, diffs, `Revision`, `CanvasEvent`, `Proposal`), manage, sections, storage, repositories, file_repository, documents, files, history, collab, pinning, changes, locks, validate, paths_store, counts               |
+| `export` | video only so far (see in-flight work)                                                                                                                                                                                                               |
 
 ## In flight
 
@@ -52,9 +58,9 @@ Use `uv` only, never pip.
 
 ## Remaining work, in order
 
-1. Done 2026-11-11: `stage/show/build.py` (`build_set`, `build_all`, `stale`, `new_set_script`, `run_script`).
-2. Done 2026-11-11: `stage/choreo/paths_store.py` (`save_paths`, `load_paths`).
-3. Done 2026-11-11: `stage/__init__.py` lazily re-exports 533 names (PEP 562). Internal modules are excluded and the motion `spiral` is `spiral_motion`. Tested by `tests/unit/test_public_api.py`.
+1. Done 2026-11-11, moved to Eight-agent 2026-11-12: set-script builds (`build_set`, `build_all`, `stale`, `new_set_script`, `run_script`).
+2. Done 2026-11-11: `src/stage/choreo/paths_store.py` (`save_paths`, `load_paths`).
+3. Done 2026-11-11: `src/stage/__init__.py` lazily re-exports 533 names (PEP 562). Internal modules are excluded and the motion `spiral` is `spiral_motion`. Tested by `tests/unit/test_public_api.py`.
 4. Done 2026-11-11: `schemas/stage.show.v1.json`, guarded by `tests/unit/show/test_schema.py` (regenerate with `STAGE_UPDATE_SCHEMA=1`).
 5. **Update `docs/stage-library-api-reference.md`**, which the user asked for ("fix every contradiction"). Apply ADR 0001's table and every agent deviation listed below, section by section. Keep the doc's format.
 6. Done 2026-11-11: `README.md`, `.env.example` and the dockerized quickstart (Docker run: 1492 passed).
@@ -89,7 +95,6 @@ Use `uv` only, never pip.
   - In the grammar, `-` as an operator needs a space before it, `T*` matches the exact prefix, and `sel:<name>` names a selection.
 - **notes**:
   - `add_note` needs `note_id`, `at` and `author`.
-  - `draft_notes(show, concept, drafter, at)`.
   - `accept_draft` was added.
 - **choreo**:
   - Engine timing:
@@ -142,5 +147,5 @@ Each fix has a `test_regression_` test.
 6. A set's `source_hash` covers its script and the previous set; rebuilding an earlier set marks later scripted sets stale.
 7. `describe_count` rounds tenths with `round_to`.
 8. The SVG tokenizer unpacks packed arc flags.
-9. The duplicated doctest import in `stage/time/measures.py` is gone.
+9. The duplicated doctest import in `src/stage/time/measures.py` is gone.
 10. Selection operators must be separated by spaces or parentheses; a glued `+`, `-` or `&` raises `SchemaError` with its position. This was a designer call: it removes the silent misparse of `T1+T2-T3` at the cost of rejecting `T1+T2`.

@@ -1,4 +1,4 @@
-link: https://eight.example/p/opener-live status: live revision: 457513967331
+link: https://eight.example/p/opener-live status: live revision: 59fb6289d584
 claim: T1 Ada locked: True
 crew on a performer spot: ValidationError
 T1 is now: Bo | unclaimed: 10

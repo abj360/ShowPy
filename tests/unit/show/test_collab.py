@@ -29,7 +29,6 @@ from stage.show.collab import (
     propose,
     reject,
     selection,
-    summarize_events,
 )
 from stage.show.documents import dump_json
 from stage.show.files import COMMENTS_DOC
@@ -172,7 +171,6 @@ def test_events_since_reports_comments() -> None:
     (event,) = events_since(agent, start)
     assert event.kind == "comment"
     assert Comment.model_validate(event.payload) == comment
-    assert summarize_events([event]) == "designer commented: tighten the line"
 
 
 def test_apply_event_rules() -> None:
@@ -198,16 +196,6 @@ def test_apply_event_rules() -> None:
         apply_event(pinned, agent_move)
     note = CanvasEvent(id="e", at=AT, actor="agent", kind="comment", payload={"text": "x"})
     assert apply_event(pinned, note) == pinned
-
-
-def test_summarize_events_groups_moves() -> None:
-    agent, designer = _session()
-    start = designer.revision
-    base = load_show(designer)
-    moved = apply_change(base, [_move("T1", 1.0), _move("T2", 3.0), _move("T3", 5.0)])
-    save_show(designer, moved, AT + STEP, "moves")
-    text = summarize_events(events_since(agent, start))
-    assert text == "designer moved T1–T3 in set 2"
 
 
 def test_propose_preview_and_reject() -> None:

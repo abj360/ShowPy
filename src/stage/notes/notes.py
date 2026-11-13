@@ -1,47 +1,33 @@
 #!/usr/bin/env python3
 
 """
-notes.py --- adds, edits, finds and drafts design notes on sets, transitions, spots and areas
+notes.py --- adds, edits and finds design notes on sets, transitions, spots and areas
 
 Contains:
-    NoteDrafter: describes an injected service that proposes notes from a show concept
     add_note(): adds a note with an explicit ID and time stamp
     edit_note(): changes a note's fields
     remove_note(): removes a note
     notes_for(): returns the notes anchored to a set or a transition
     notes_near(): returns the notes anchored at or around a point
-    draft_notes(): asks a drafter for suggested notes, returned hidden
     accept_draft(): adds a drafted note to the show, visible
 """
 
 import math
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 import shapely
 from pydantic import ValidationError as PydanticValidationError
 
 from stage.cast.select import select
-from stage.core.errors import GeometryError, SchemaError, UnknownRefError, ValidationError
-from stage.core.ids import SetId, TransitionId, format_tid
+from stage.core.errors import GeometryError, SchemaError, UnknownRefError
+from stage.core.ids import SetId, TransitionId
 from stage.core.types import Meters, Point
 from stage.core.util import close_matches
-from stage.notes.models import Anchor, DraftedNote, Note, NoteKind
+from stage.notes.models import Anchor, Note, NoteKind
 
 if TYPE_CHECKING:
     from stage.show.models import Show
-
-AGENT_AUTHOR = "agent"
-DRAFT_ID_PREFIX = "draft"
-MAX_DRAFTED_NOTES = 50
-
-
-class NoteDrafter(Protocol):
-    """Describes an injected service, such as an LLM client, that proposes design notes."""
-
-    def draft(self, show_summary: str, concept: str) -> list[DraftedNote]:
-        """Returns proposed notes for a show, given its summary and the designer's concept."""
-        ...
 
 
 def _check_anchor(show: "Show", anchor: Anchor) -> None:
@@ -230,95 +216,6 @@ def notes_near(
         n
         for n in show.notes
         if (n.visible or include_hidden) and _is_near(show, n, p, radius, set_id)
-    ]
-
-
-def _summary(show: "Show") -> str:
-    sets = ", ".join(f"{s.id} ({s.counts:g} counts)" for s in show.sets) or "none"
-    groups = ", ".join(
-        f"{g.key} x{sum(1 for s in show.cast.spots if s.group == g.key)}"
-        for g in show.cast.groups.values()
-    )
-    lines = [f"show: {show.title}", f"sets: {sets}", f"groups: {groups or 'none'}"]
-    lines += [f"note [{n.kind}] {_where(n.anchor)}: {n.text}" for n in show.notes if n.visible]
-    return "\n".join(lines)
-
-
-def _where(anchor: Anchor) -> str:
-    if anchor.set_id is not None:
-        return f"set {anchor.set_id}"
-    if anchor.tid is not None:
-        return f"transition {format_tid(anchor.tid)}"
-    if anchor.spots is not None:
-        return f"spots {', '.join(anchor.spots)}"
-    return anchor.kind
-
-
-def _draft_ids(show: "Show", count: int) -> list[str]:
-    taken = {n.id for n in show.notes}
-    ids: list[str] = []
-    number = 1
-    while len(ids) < count:
-        candidate = f"{DRAFT_ID_PREFIX}-{number}"
-        if candidate not in taken:
-            ids.append(candidate)
-        number += 1
-    return ids
-
-
-def _checked_drafts(show: "Show", drafted: object) -> list[DraftedNote]:
-    if not isinstance(drafted, list | tuple):
-        raise SchemaError(
-            f"drafter returned a {type(drafted).__name__}",
-            hint="drafters must return a list of DraftedNote objects",
-        )
-    if len(drafted) > MAX_DRAFTED_NOTES:
-        raise ValidationError(
-            f"drafter returned {len(drafted)} notes",
-            hint=f"drafters may return at most {MAX_DRAFTED_NOTES} notes",
-            context={"count": len(drafted)},
-        )
-    for index, draft in enumerate(drafted):
-        if not isinstance(draft, DraftedNote):
-            raise SchemaError(
-                f"draft {index} is a {type(draft).__name__}, not a DraftedNote",
-                hint="drafters must return DraftedNote objects",
-                context={"index": index},
-            )
-        _check_anchor(show, draft.anchor)
-    return [d for d in drafted if isinstance(d, DraftedNote)]
-
-
-def draft_notes(show: "Show", concept: str, drafter: NoteDrafter, at: datetime) -> list[Note]:
-    """Asks a drafter for suggested set goals and ideas; returns them hidden, not in the show.
-
-    Drafts get IDs `draft-1`, `draft-2`, ... (skipping IDs in use), author "agent", time
-    stamp `at` and `visible=False`; accept_draft() adds one to the show. Errors raised by
-    the drafter propagate; malformed drafts, unknown anchors or more than
-    MAX_DRAFTED_NOTES drafts reject the whole batch.
-
-    >>> from datetime import UTC, datetime
-    >>> from stage.examples import two_set_show
-    >>> class Drafter:
-    ...     def draft(self, show_summary: str, concept: str) -> list[DraftedNote]:
-    ...         return [DraftedNote(text=concept, kind="goal", anchor=Anchor.on_set("1"))]
-    >>> at = datetime(2026, 11, 11, tzinfo=UTC)
-    >>> [(n.id, n.visible) for n in draft_notes(two_set_show(), "calm", Drafter(), at)]
-    [('draft-1', False)]
-    """
-    drafted = _checked_drafts(show, drafter.draft(_summary(show), concept))
-    ids = _draft_ids(show, len(drafted))
-    return [
-        _build_note(
-            {
-                **dict(draft),
-                "id": note_id,
-                "author": AGENT_AUTHOR,
-                "created_at": at,
-                "visible": False,
-            }
-        )
-        for note_id, draft in zip(ids, drafted, strict=True)
     ]
 
 

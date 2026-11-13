@@ -132,7 +132,7 @@ def packages() -> None:
         ("sheet", "templates · coords · bounds · render", 2),
         ("notes", "anchors · notes · drafts", 2),
         ("choreo", "sets · forms · match · paths · motion · PathEngine · avoid", 3),
-        ("show", "Show · manage · storage · history · collab · build · sandbox", 4),
+        ("show", "Show · manage · storage · history · collab · validate", 4),
         ("export", "video · print · data · pdf · publish", 5),
     ]
     rows: dict[int, list[tuple[str, str]]] = {}

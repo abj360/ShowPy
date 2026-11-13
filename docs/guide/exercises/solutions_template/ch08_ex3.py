@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 
 """
-ch08_ex3.py --- your solution to exercise 8.3: a drafter for every transition
+ch08_ex3.py --- your solution to exercise 8.3: hidden drafts, one accepted
 
 Contains:
-    solve(): returns hidden warning drafts, one per transition of the example show
+    solve(): drafts one hidden warning per transition and accepts only the one on 2→3
 """
 
-from stage.notes.models import Note
+from stage.show.models import Show
 
 
-def solve() -> list[Note]:
-    """Returns hidden warning drafts, one per transition of the example show."""
+def solve() -> Show:
+    """Drafts one hidden warning per transition and accepts only the one on 2→3."""
     raise NotImplementedError("TODO")

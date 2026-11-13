@@ -2,8 +2,8 @@
 
 This chapter builds a small show from nothing: eight trumpets and four flags on a high-school
 football field, three sets, staggered and curved paths and a follow-the-leader route. Then it
-inspects the show with the engine, hunts tight gaps, adds notes, stores the show, rebuilds a
-set from a script, exports it and publishes it.
+inspects the show with the engine, hunts tight gaps, adds notes, stores the show, saves an edit
+from a second workspace, exports it and publishes it.
 
 Every step is a real file in `docs/guide/examples/`. Each file imports the previous steps, so
 you can run any step on its own from the repository root, for example
@@ -226,7 +226,7 @@ here is a different stagger order, or matching the block so paths do not cross.
 compile and end on target, the timeline is sound): it is `ok`. Note that it passes even with
 the overlaps of step 7: collisions are the checker's job, not validation's.
 
-## Step 9: save, meet a conflict, build from a script
+## Step 9: save, meet a conflict, save a wider arc
 
 {{code: examples/t09_storage_build.py}}
 
@@ -240,13 +240,13 @@ What happened, in order:
 3. The agent tried to save its stale view. The repository saw that the head had moved and
    raised `ConflictError`, listing what landed: the designer's message and the two paths it
    changed. The agent refreshed instead of overwriting.
-4. The agent wrote `/sets/3/set.py`. Its `build(ctx)` returns a **list of forms**: the arc,
-   now with radius 16. `stale()` listed set 3, because the script's hash did not match the
-   set's `source_hash`.
-5. `build_set` ran the script in the sandboxed subprocess, placed the returned form with
-   `place()`, validated the set, stamped the script's hash on it and saved a revision. The
-   form itself was stored too, which is why the build revision changed 2 paths.
-6. `changelog` shows the four revisions, oldest first.
+4. The agent edited the form, not the dots: `edit` set the stored arc's radius to 16, `place()`
+   stood the arc members on the new slots, and `FormOp` stored the edited form.
+   `validate_show` confirmed the structure before saving.
+5. `save_show` wrote only the documents that differ from the head: set 3's placements and its
+   forms, 2 paths. The agent's revision landed on top of the designer's retime, so set 3
+   keeps its 24 counts.
+6. `changelog` shows the three revisions, oldest first.
 
 ## Step 10: export frames, video, data and printouts
 

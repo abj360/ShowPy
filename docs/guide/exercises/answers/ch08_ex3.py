@@ -1,32 +1,36 @@
 #!/usr/bin/env python3
 
 """
-ch08_ex3.py --- reference answer to exercise 8.3: a drafter for every transition
+ch08_ex3.py --- reference answer to exercise 8.3: hidden drafts, one accepted
 
 Contains:
-    solve(): returns hidden warning drafts, one per transition of the example show
+    solve(): drafts one hidden warning per transition and accepts only the one on 2→3
 """
 
 from datetime import UTC, datetime
 
 from stage.examples import two_set_show
-from stage.notes.models import Anchor, DraftedNote, Note
-from stage.notes.notes import draft_notes
+from stage.notes.models import Anchor, Note
+from stage.notes.notes import accept_draft
+from stage.show.manage import add_set
+from stage.show.models import Show
 
 
-def solve() -> list[Note]:
-    """Returns hidden warning drafts, one per transition of the example show."""
-    show = two_set_show()
-
-    class PerTransition:
-        """Drafts one warning per transition of the show."""
-
-        def draft(self, show_summary: str, concept: str) -> list[DraftedNote]:
-            """Returns one warning note anchored on every transition."""
-            return [
-                DraftedNote(text=concept, kind="warning", anchor=Anchor.on_transition(tid))
-                for tid in show.transition_ids()
-            ]
-
+def solve() -> Show:
+    """Drafts one hidden warning per transition and accepts only the one on 2→3."""
     at = datetime(2026, 11, 11, 10, 0, tzinfo=UTC)
-    return draft_notes(show, "check spacing", PerTransition(), at)
+    show = add_set(two_set_show(), "3", 8.0)
+    drafts = [
+        Note(
+            id=f"draft-{n}",
+            text="check spacing",
+            kind="warning",
+            anchor=Anchor.on_transition(tid),
+            author="agent",
+            created_at=at,
+            visible=False,
+        )
+        for n, tid in enumerate(show.transition_ids(), start=1)
+    ]
+    chosen = next(d for d in drafts if d.anchor.tid == ("2", "3"))
+    return accept_draft(show, chosen)

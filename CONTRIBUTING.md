@@ -33,7 +33,7 @@ docker compose -f docker/docker-compose.yml up --build
 
 ## Code standards
 
-- **Units.** Use meters on the stage plane, degrees for facing (0 = facing the audience, counter-clockwise positive) and counts for time. Convert only in `stage/core/units.py` and `stage/sheet/coords.py`.
+- **Units.** Use meters on the stage plane, degrees for facing (0 = facing the audience, counter-clockwise positive) and counts for time. Convert only in `src/stage/core/units.py` and `src/stage/sheet/coords.py`.
 - **Purity.** Data classes are frozen Pydantic models. Edit functions return new objects and raise `LockedError` on pinned or locked items unless the caller passes `force=True`.
 - **Determinism.** Randomness only goes through `stage.core.util.seeded_rng`. Time stamps are passed in as arguments; the library never reads the clock.
 - **One source of motion.** Anything that needs positions over time calls `stage.choreo.engine.PathEngine`. Never interpolate motion anywhere else.
@@ -63,7 +63,7 @@ docker compose -f docker/docker-compose.yml up --build
 ## Pre-merge checklist
 
 - [ ] `uv run ruff format --check . && uv run ruff check .` clean
-- [ ] `uv run mypy stage tests` clean (strict)
+- [ ] `uv run mypy src tests` clean (strict)
 - [ ] `uv run pytest` green, and `uv run pytest -m golden` green
 - [ ] New functions and classes have verb-first docstrings with Args, Returns or Attributes where relevant
 - [ ] No commented-out code and no comments restating the obvious

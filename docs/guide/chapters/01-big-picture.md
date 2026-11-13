@@ -49,7 +49,7 @@ Here is the life of a show in the order the tutorial in chapter 15 follows.
 6. Add paths: delays, staggers, curves, follow-the-leader routes, rotations, easing.
 7. Ask the engine where everyone is at any count, how they face and how fast they go.
 8. Find tight gaps and try suggested fixes. The checker makes the final call.
-9. Add notes, validate the structure, save to a repository and rebuild sets from scripts.
+9. Add notes, validate the structure, save to a repository and merge edits from others.
 10. Export: video frames, coordinate sheets, data. Publish a link so performers claim spots.
 
 ## How the packages depend on each other
@@ -64,7 +64,7 @@ The same picture in text:
 ```text
             export      video, print sheets, data, pdf, publish
               |
-             show       Show, manage, storage, history, collab, build, sandbox
+             show       Show, manage, storage, history, collab, validate
               |
             choreo      sets, forms, matching, paths, motion, PathEngine, avoid
            /  |   \
@@ -103,13 +103,13 @@ Why the layering exists:
 Two rules from ADR 0001 keep the graph clean.
 
 - Subpackage `__init__.py` files hold only a docstring. Code always imports the submodule, as
-  in `from stage.geo.curves import Segment`. The top-level `stage/__init__.py` re-exports the
+  in `from stage.geo.curves import Segment`. The top-level `src/stage/__init__.py` re-exports the
   public API lazily, so `import stage; stage.PathEngine` also works.
 - A few modules act on a `Show` but sit below `show`, for example `cast.spots`,
   `sheet.coords` and `notes.notes`. They import `Show` only for type checking. They edit a
   show with `show.model_copy(update=...)`, which does not need the class at run time.
 
-Saving and loading paths through the workspace lives in `stage/show/paths_store.py`, not in
+Saving and loading paths through the workspace lives in `src/stage/show/paths_store.py`, not in
 `stage.choreo`, because it needs `stage.show.storage`, which is one layer up. The rule holds:
 no package imports a package above it.
 
@@ -118,10 +118,10 @@ no package imports a package above it.
 >>> stage.PathEngine.__module__
 'stage.choreo.engine'
 >>> len(stage.__all__)
-533
+518
 ```
 
-Under the hood: `import stage` runs only `stage/__init__.py`. That file holds a table from
+Under the hood: `import stage` runs only `src/stage/__init__.py`. That file holds a table from
 public name to submodule. The first time you touch `stage.PathEngine`, a module-level
 `__getattr__` imports `stage.choreo.engine` and returns the class. Nothing else loads early.
 
@@ -134,6 +134,7 @@ public name to submodule. The first time you touch `stage.PathEngine`, a module-
 
 - `stagecheck`, the locked checker, is a separate package. The library never imports it.
   Collision limits, step-size limits and waivers belong to the designer and the checker.
+- Set scripts, the script sandbox and agent note drafting live in the separate Eight-agent repo.
 - `stage.packs` (marching rules and field wording) and `stage.index` (the API registry) are
   out of scope for this build.
 - There is no 3D. The 2D core must never depend on 3D.

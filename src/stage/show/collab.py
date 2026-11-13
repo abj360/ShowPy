@@ -6,7 +6,6 @@ collab.py --- live collaboration: change ops, canvas events, pins, proposals, hi
 Contains:
     apply_event(): replays one canvas event as a model operation
     events_since(): derives the canvas events of every revision after a revision
-    summarize_events(): renders events as terse lines for the agent
     pins(): lists the designer's locks
     propose(): wraps change ops as a suggestion for the designer
     preview_proposal(): computes the ghost placements and paths a proposal would produce
@@ -16,7 +15,6 @@ Contains:
     selection(): returns what the designer has selected
 """
 
-import json
 from collections.abc import Sequence
 from datetime import datetime
 
@@ -30,7 +28,6 @@ from stage.core.errors import (
 )
 from stage.core.ids import ZoneId, format_tid
 from stage.core.selection import Selection
-from stage.core.util import format_ranges
 from stage.notes.models import Anchor
 from stage.show.changes import apply_change
 from stage.show.files import COMMENTS_ADAPTER, COMMENTS_DOC, SELECTION_DOC
@@ -183,50 +180,6 @@ def events_since(ws: Workspace, revision: str) -> list[CanvasEvent]:
         ws.repo.get_revision(ws.show_id, revision)
         log = log[[r.id for r in log].index(revision) + 1 :]
     return [event for r in log for event in _revision_events(ws, r)]
-
-
-def _event_line(event: CanvasEvent) -> str:
-    body = event.payload
-    match event.kind:
-        case "edit_form":
-            return f"edited form {body['form']['id']} in set {body['form']['set']}"
-        case "edit_paths":
-            return f"edited paths {format_tid(tuple(body['spec']['id']))}"
-        case "set_counts":
-            return f"set counts of set {body['set_id']} to {body['counts']:g}"
-        case "pin" | "unpin":
-            reason = f": {body['reason']}" if body.get("reason") else ""
-            return f"{event.kind}ned {body['target']} {body['id']}{reason}"
-        case "comment":
-            return f"commented: {body['text']}"
-        case "highlight":
-            return f"highlighted {json.dumps(body, sort_keys=True)}"
-    return f"{event.kind} {json.dumps(body, sort_keys=True)}"
-
-
-def summarize_events(events: Sequence[CanvasEvent]) -> str:
-    """Renders events as terse lines; moves group per actor and set.
-
-    >>> from datetime import UTC
-    >>> at = datetime(2026, 11, 11, tzinfo=UTC)
-    >>> moves = [CanvasEvent(id=str(i), at=at, actor="designer", kind="move", payload={
-    ...     "set_id": "2", "placement": {"entity": f"T{i}"}}) for i in (1, 2, 3)]
-    >>> summarize_events(moves)
-    'designer moved T1–T3 in set 2'
-    """
-    lines: list[str] = []
-    moves: dict[tuple[str, str], list[str]] = {}
-    for event in events:
-        if event.kind != "move":
-            lines.append(f"{event.actor} {_event_line(event)}")
-            continue
-        key = (event.actor, str(event.payload["set_id"]))
-        if key not in moves:
-            moves[key] = []
-            lines.append(f"\0{len(moves) - 1}")
-        moves[key].append(str(event.payload["placement"]["entity"]))
-    rendered = [f"{a} moved {format_ranges(ids)} in set {s}" for (a, s), ids in moves.items()]
-    return "\n".join(rendered[int(line[1:])] if line.startswith("\0") else line for line in lines)
 
 
 def pins(show: Show) -> list[Pin]:
