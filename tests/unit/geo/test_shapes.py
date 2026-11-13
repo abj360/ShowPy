@@ -2,6 +2,22 @@
 
 """
 test_shapes.py --- tests curve constructors, joins, offsets and prefab outlines
+
+Contains:
+    test_regression_offset_honours_clockwise_circles: grows a clockwise circle when offsetting to
+        its left, the outward side
+    test_regression_offset_rejects_unknown_side: raises UnknownRefError for side="up" instead of
+        treating it as "right"
+    test_regression_outward_offset_of_closed_curve_stays_closed: keeps the ring closed when
+        offsetting a closed polyline outward
+    test_regression_arc_through_is_accurate_far_from_the_origin: recovers a 1 km radius within 1 um
+        when the arc sits 10,000 km from the origin
+    test_regression_text_outline_loops_are_closed_without_repeated_start: emits glyph loops as
+        closed polylines that do not repeat their start point
+    test_regression_regular_polygon_rejects_fractional_sides: raises a ShowPyError for n=3.5 instead
+        of leaking TypeError
+    test_regression_rect_rejects_nan_width: rejects a NaN width instead of building a polygon of NaN
+        points
 """
 
 import math

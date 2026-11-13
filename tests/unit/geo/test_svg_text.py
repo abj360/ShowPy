@@ -2,6 +2,40 @@
 
 """
 test_svg_text.py --- tests SVG path import and the built-in stroke font
+
+Contains:
+    test_regression_parse_path_accepts_packed_arc_flags: parses packed arc flags the same as spaced
+        ones
+    test_regression_parse_path_scales_linearly_with_arc_count: parses twice the arcs in under 3x the
+        time; a quadratic parser takes about 4x
+    test_regression_svg_outline_stretches_a_degenerate_span: fits a flat line across the full 20 m
+        box width instead of leaving it 5 m
+    test_regression_svg_outline_ignores_data_d_attributes: reads only the d attribute, not data-d,
+        so one path gives one curve
+    test_regression_svg_outline_applies_the_transform_attribute: applies transform="scale(4 1)" so a
+        unit triangle fits as 8 x 2 m
+    test_regression_svg_outline_honours_the_viewbox: maps a shape at 10..20 of a 100-unit viewBox to
+        1..2 m in a 10 m box
+    test_regression_svg_outline_expands_use_elements: draws one curve per <use> and none for the
+        <defs> template
+    test_regression_svg_outline_reads_basic_shapes: outlines a <rect> element as one closed curve
+    test_regression_parse_path_rejects_closepath_with_missing_arguments: raises SchemaError for "M0
+        0 L1 Z" instead of leaking ValueError
+    test_regression_parse_path_accepts_packed_flags_before_a_fraction: parses "a1 1 0 01.5.5" as
+        flags 0 and 1 then the point (0.5, 0.5)
+    test_regression_parse_path_rejects_arc_flag_two: rejects the arc flag 2, which SVG allows only
+        as 0 or 1
+    test_regression_parse_path_rejects_fractional_arc_flag: rejects the arc flag 0.5, which SVG
+        allows only as 0 or 1
+    test_regression_parse_path_rejects_overflowing_numbers: rejects 1e400 instead of turning it into
+        infinity
+    test_regression_parse_path_rejects_unicode_digits: rejects the Arabic-Indic digit three instead
+        of reading it as 3
+    test_regression_parse_path_requires_a_leading_move: rejects path data that does not start with M
+    test_regression_svg_outline_rejects_empty_data: raises a ShowPyError for empty data instead of
+        leaking ValueError
+    test_regression_svg_outline_rejects_bad_path_index: raises a ShowPyError for an out-of-range
+        path_index instead of leaking IndexError
 """
 
 import math

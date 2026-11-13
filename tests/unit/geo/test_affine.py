@@ -2,6 +2,12 @@
 
 """
 test_affine.py --- tests exact affine mapping of curves, points and facings
+
+Contains:
+    test_regression_is_similarity_accepts_large_rotations_with_scale: accepts a 30 degree rotation
+        scaled by 1e5 instead of judging it by absolute error
+    test_regression_is_similarity_rejects_small_non_uniform_scales: rejects a 1e-5 by 2e-5 scale
+        instead of treating it as uniform
 """
 
 import math

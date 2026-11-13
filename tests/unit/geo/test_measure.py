@@ -2,6 +2,10 @@
 
 """
 test_measure.py --- tests lengths, extents, spacing stats, neighbours and symmetry measures
+
+Contains:
+    test_regression_symmetry_error_matches_spots_one_to_one: reports the unmatched spots of a
+        10-versus-1 picture instead of a tiny gap
 """
 
 import math

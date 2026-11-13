@@ -2,6 +2,44 @@
 
 """
 test_spacing.py --- tests even spacing along curves, area fills, blocks, rings and scatter
+
+Contains:
+    test_regression_scatter_rejects_negative_min_gap: rejects a negative gap instead of looping
+        forever
+    test_regression_fill_caps_the_lattice_size: rejects a 100-million-point fill instead of building
+        the lattice
+    test_regression_space_by_interval_caps_the_point_count: rejects a 100-million-point spacing
+        instead of allocating it
+    test_regression_space_by_interval_closed_curve_has_no_seam_duplicate: places L/10 spots on a
+        circle without a coincident first and last spot
+    test_regression_space_with_gaps_closed_curve_does_not_repeat_start: keeps the last spot off the
+        first spot on a closed curve
+    test_regression_space_along_closed_curve_wraps_from_a_later_start: spaces spots evenly around a
+        circle even when start > 0
+    test_regression_space_along_rejects_end_before_start: rejects end < start instead of silently
+        reversing the spots
+    test_regression_space_along_rejects_end_past_length: rejects end > L instead of stacking spots
+        on the clamped end
+    test_regression_scatter_reaches_every_polygon_component: seeds each component of a MultiPolygon
+        so the second square gets spots
+    test_regression_scatter_fills_thin_regions: places 20 spots 1 m apart along a 100 x 0.05 m strip
+        that fill() fills with 101
+    test_regression_scatter_does_not_crowd_the_edge: keeps at most 8 of 20 spots within 1 m of the
+        edge of a 20 m square
+    test_regression_space_by_interval_rejects_unknown_align: raises UnknownRefError for
+        align="middle" instead of leaking KeyError
+    test_regression_block_rejects_unknown_anchor: raises UnknownRefError for anchor="middle" instead
+        of leaking KeyError
+    test_regression_space_proportional_rejects_zero_length_curves: raises SpacingError for all-zero
+        lengths instead of leaking ZeroDivisionError
+    test_regression_fill_rejects_zero_interval: raises SpacingError for interval=0 instead of
+        leaking ZeroDivisionError
+    test_regression_scatter_rejects_zero_min_gap: raises SpacingError for min_gap=0 instead of
+        leaking ZeroDivisionError
+    test_regression_scatter_rejects_fractional_seed: raises a ShowPyError for seed=1.5 instead of
+        leaking TypeError
+    test_regression_fill_rejects_empty_area: raises a ShowPyError for an empty area instead of
+        leaking GEOSException
 """
 
 import math

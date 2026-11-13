@@ -2,6 +2,10 @@
 
 """
 test_transforms.py --- tests every transform on points, curves and sets, including pins and facings
+
+Contains:
+    test_regression_affine_accepts_tiny_but_invertible_scales: applies a uniform 1e-7 scale instead
+        of calling the plane collapsed
 """
 
 import math

@@ -2,6 +2,36 @@
 
 """
 test_curves.py --- tests the Curve implementations: length, sampling, projection, trimming
+
+Contains:
+    test_regression_model_copy_drops_cached_arc_length_table: drops the cached arc-length table when
+        model_copy changes a spiral radius
+    test_regression_spiral_rejects_unbounded_turns: rejects 1e7 turns instead of tabulating 1e10
+        samples
+    test_regression_spiral_rejects_infinite_turns: rejects infinite turns with a ShowPyError instead
+        of leaking OverflowError
+    test_regression_trimmed_curve_rejects_out_of_range_arc_lengths: rejects s0/s1 outside [0, L] of
+        an open base instead of reporting length 15
+    test_regression_composite_rejects_gapped_parts: rejects parts whose ends do not meet instead of
+        jumping across the gap
+    test_regression_composite_rejects_false_closure: rejects closed=True when the last part does not
+        end on the first start
+    test_regression_svg_curve_rejects_closed_flag_on_open_path: rejects closed=True on an open path
+        instead of wrapping it
+    test_regression_svg_curve_rejects_open_flag_on_closed_path: rejects closed=False on a path
+        ending with Z instead of ignoring the Z
+    test_regression_svg_curve_rejects_wrong_transform_shape: rejects a 1-row transform instead of
+        returning wrong lengths and point shapes
+    test_regression_model_copy_update_raises_showpy_error: raises a ShowPyError for an invalid
+        model_copy update, not a pydantic error
+    test_regression_construction_with_unknown_kind_raises_showpy_error: raises a ShowPyError for an
+        unknown curve kind, not a pydantic error
+    test_regression_polyline_with_text_points_raises_showpy_error: raises a ShowPyError for text
+        points, not a pydantic error
+    test_regression_bezier_degree_past_overflow_raises_showpy_error: rejects a degree-1099 Bezier
+        instead of returning NaN with RuntimeWarnings
+    test_regression_arc_rejects_infinite_radius: rejects an infinite radius instead of building an
+        arc of infinite length
 """
 
 import math

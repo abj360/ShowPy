@@ -2,6 +2,14 @@
 
 """
 test_analysis.py --- tests density, coverage, balance, symmetry and change design measures
+
+Contains:
+    test_regression_density_map_caps_the_grid_size: rejects a 1e-5 m cell (8e12 cells on the field)
+        instead of allocating it
+    test_regression_symmetry_score_matches_spots_one_to_one: scores ten spots on one side against
+        one on the other below 0.5, not 0.993
+    test_regression_coverage_rejects_infinite_radius: raises a ShowPyError for radius=inf instead of
+        leaking GEOSException
 """
 
 import math
