@@ -5,11 +5,15 @@ test_motion_stats.py --- tests speed, travel direction and motion analysis over 
 """
 
 import math
+from collections.abc import Callable
+from typing import TypeVar, cast
 
+import numpy as np
 import pytest
 
 from showpy.choreo.engine import PathEngine
-from showpy.choreo.models import PathRow
+from showpy.choreo.models import PathRow, PathStyle
+from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, MotionRegistry
 from showpy.choreo.motion_stats import (
     direction_of_travel,
     energy_curve,
@@ -19,8 +23,10 @@ from showpy.choreo.motion_stats import (
     speed,
     speeds,
 )
-from showpy.core.errors import TimeRangeError
+from showpy.core.errors import ShowPyError, TimeRangeError
+from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
+from showpy.show.models import Show
 from showpy.time.models import Marker, MarkerKind
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
 from tests.fixtures.shows import two_set_show
@@ -100,3 +106,70 @@ def test_phrase_profile_splits_on_markers() -> None:
 def test_phrase_profile_rejects_empty_range() -> None:
     with pytest.raises(TimeRangeError):
         phrase_profile(two_set_show(), 4.0, 4.0)
+
+
+F = TypeVar("F", bound=Callable[..., object])
+type MotionsCall = Callable[[Show, MotionRegistry], object]
+BAD_PER_COUNT = -1
+MID_MOVE = 2.0
+
+
+def defect(defect_id: str) -> Callable[[F], F]:
+    """Marks a test as an open audited defect: a strict xfail keyed on its ID."""
+
+    def decorate(test: F) -> F:
+        marked = pytest.mark.defect(defect_id)(test)
+        return cast(F, pytest.mark.xfail(strict=True, reason=defect_id)(marked))
+
+    return decorate
+
+
+def _line_motion(u: FloatArray, start: Point, end: Point, params: object) -> Points:
+    return np.linspace(start, end, len(u))
+
+
+# motions= is the keyword the audit proposes; the current helpers have no such parameter.
+def _speed_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], speed)(show, "T1", TID, motions=motions)
+
+
+def _speeds_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], speeds)(show, TID, motions=motions)
+
+
+def _contrast_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], motion_contrast)(show, TID, motions=motions)
+
+
+def _position_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], position_at)(show, "T1", MID_MOVE, motions=motions)
+
+
+def _direction_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], direction_of_travel)(
+        show, "T1", TID, MID_MOVE, motions=motions
+    )
+
+
+def _energy_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], energy_curve)(show, motions=motions)
+
+
+@defect("UP-9.2-32")
+@pytest.mark.parametrize(
+    "call",
+    [_speed_call, _speeds_call, _contrast_call, _position_call, _direction_call, _energy_call],
+)
+def test_regression_motion_helpers_accept_a_custom_motion_registry(call: MotionsCall) -> None:
+    """Analyses a show that uses a custom-registered motion (audit 9.2)."""
+    registry = DEFAULT_MOTIONS.with_motion("probe", _line_motion)
+    row = PathRow(entity="T1", style=PathStyle.CUSTOM, motion_fn="probe")
+    plain = call(two_set_show(), DEFAULT_MOTIONS)
+    assert repr(call(with_rows({"T1": row}), registry)) == repr(plain)
+
+
+@defect("UP-9.2-36")
+def test_regression_energy_curve_rejects_negative_resolution() -> None:
+    """Raises a ShowPyError, not numpy ValueError, for a negative per_count (audit 9.2)."""
+    with pytest.raises(ShowPyError):
+        energy_curve(two_set_show(), per_count=BAD_PER_COUNT)
