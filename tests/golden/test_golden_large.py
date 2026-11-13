@@ -31,6 +31,8 @@ from showpy.export.video import render_frame, video_canvas
 from showpy.show.models import Show
 from tests.fixtures.generators import GROUPS, seeded_show
 
+pytestmark = pytest.mark.slow
+
 FIXTURES = Path(__file__).parent / "fixtures" / "large"
 UPDATE_FLAG = "SHOWPY_UPDATE_GOLDEN"
 SEED, SPOTS, SETS = 7, 240, 24

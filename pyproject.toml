@@ -105,10 +105,11 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests", "showpy"]
 pythonpath = ["."]
-addopts = "--doctest-modules -q --strict-markers --import-mode=importlib -m 'not bench'"
+addopts = "--doctest-modules -q --strict-markers --import-mode=importlib -m 'not bench and not slow'"
 markers = [
     "golden: replays real shows against reviewed fixtures",
     "bench: performance budget benchmarks; run with nox -s bench",
+    "slow: generated-show properties and the large golden; run with nox -s slow",
 ]
 filterwarnings = ["error"]
 

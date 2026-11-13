@@ -6,6 +6,7 @@ test_generated_shows.py --- checks that generated shows validate, match the sche
 
 import json
 
+import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 from jsonschema import Draft202012Validator
@@ -17,6 +18,8 @@ from showpy.show.models import PathsOp, Show
 from showpy.show.validate import validate_paths, validate_show
 from tests.strategies.paths import path_rows
 from tests.strategies.show import shows
+
+pytestmark = pytest.mark.slow
 
 SCHEMA_NAME = "showpy.show.v1.json"
 

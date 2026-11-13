@@ -9,6 +9,7 @@ Contains:
     pyright: runs pyright over the library (not a default session yet)
     tests: runs the full pytest suite under a fixed hash seed
     hashseeds: runs the full pytest suite under each non-default seed in HASH_SEEDS
+    slow: runs the slow tests under each seed in SLOW_HASH_SEEDS
     audit: scans the locked dependencies for known vulnerabilities
     wheel: builds the wheel, installs it in a clean venv and runs the README usage example
     bench: runs the budget benchmarks; at tier M fails on a >20% min-time regression
@@ -25,6 +26,7 @@ import nox
 
 PRETTIER_GLOB = "**/*.{md,yml,yaml,json}"
 HASH_SEEDS = ("1", "2")
+SLOW_HASH_SEEDS = ("0", "1")
 DEFAULT_HASH_SEED = "0"
 NO_SYNC_ENV = "NOX_UV_NO_SYNC"
 
@@ -47,7 +49,7 @@ GATED_TIER = "M"
 BENCH_MACHINE_WARNING = "ignore::pytest_benchmark.logger.PytestBenchmarkWarning"
 TIER_FLAG = "--tier"
 
-nox.options.sessions = ["lint", "types", "tests", "hashseeds", "audit"]
+nox.options.sessions = ["lint", "types", "tests", "hashseeds", "slow", "audit"]
 nox.options.default_venv_backend = "none"
 
 
@@ -101,6 +103,18 @@ def hashseeds(session: nox.Session) -> None:
     for seed in HASH_SEEDS:
         session.env["PYTHONHASHSEED"] = seed
         _uv_run(session, "pytest", *session.posargs)
+
+
+@nox.session
+def slow(session: nox.Session) -> None:
+    """Runs the slow tests (generated-show properties, the large golden) under two seeds.
+
+    They are left out of the per-leg `tests` gate; one extra seed still checks the large golden
+    does not depend on hash order.
+    """
+    for seed in SLOW_HASH_SEEDS:
+        session.env["PYTHONHASHSEED"] = seed
+        _uv_run(session, "pytest", "-m", "slow", *session.posargs)
 
 
 @nox.session
