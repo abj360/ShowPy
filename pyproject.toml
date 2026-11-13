@@ -26,12 +26,19 @@ packages = ["stage"]
 
 [dependency-groups]
 dev = [
+    "deptry==0.25.1",
     "hypothesis==6.170.15",
     "mypy==2.4.1",
+    "nox==2026.10.20",
     "pandas-stubs==3.1.0.261029",
     "pip-audit==2.10.1",
     "pre-commit==4.7.0",
+    "pyright==1.1.414",
     "pytest==9.2.0",
+    "pytest-benchmark==5.3.1",
+    "pytest-cov==7.1.0",
+    "pytest-timeout==2.4.0",
+    "pytest-xdist==3.8.0",
     "ruff==0.17.4",
     "scipy-stubs==1.18.1.1",
     "types-shapely==2.1.0.20261030",
