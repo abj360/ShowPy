@@ -225,8 +225,8 @@ written against the old name.
 
 - Move: `stage/` → `showpy/` (`git mv`, so history follows)
 - Modify:
-  - Every `.py` file under `showpy/`, `tests/`, `scripts/`, `docs/guide/` and `noxfile.py`
-    (imports and doctest `>>>` lines)
+  - Every `.py` file under `showpy/`, `tests/`, `scripts/` and `noxfile.py` (imports and
+    doctest `>>>` lines). `docs/guide/` is left as it is (user decision 2026-11-13).
   - `pyproject.toml`
   - `docker/Dockerfile` and `docker/docker-compose.yml`
   - `.github/workflows/*.yml`
@@ -293,6 +293,56 @@ stage. Review every hit by hand, and never use a blind `sed`.
   - `feat(export): read legacy stage.show.v1 documents`
 
   The first message carries a `BREAKING CHANGE:` footer.
+
+### Task 3c: make ShowPy independent of Eight
+
+User decision 2026-11-13: ShowPy is a standalone library. Its own docs and code stop describing
+it as part of the Eight product, and stop naming Eight, Eight-agent or `stagecheck` as its
+context. Downstream apps, agents and checkers become generic "consumers".
+
+**Files:**
+
+- Rewrite: `CLAUDE.md`
+- Modify (remove Eight framing):
+  - `README.md`, `CONTRIBUTING.md`, `pyproject.toml` (`description`) and
+    `showpy/__init__.py` (module docstring)
+  - `docs/HANDOFF.md`
+  - `docs/stage-library-api-reference.md`
+- The guide stays: `docs/guide/` is not edited (user decision 2026-11-13).
+- History stays: in `docs/adr/0001-*.md`, append a dated addendum only. Leave
+  `docs/upgrade-plan.md` (the dated audit) unedited.
+
+**`CLAUDE.md` requirements (exact):**
+
+- Title `# CLAUDE.md — ShowPy`. Open with a pitch of what ShowPy is: a Python choreography
+  library for designing shows on a 2D sheet (spots, groups, sets, forms, motion, timeline,
+  export and publishing). Do not mention any product.
+- Drop the four-repository table. In its place, one paragraph says: consumers (apps, agents,
+  checkers) depend on tagged ShowPy releases through the public API only; ShowPy never imports
+  a consumer; a breaking change to a public name needs a version bump and a release-notes entry.
+- Rewrite rule 4 ("`stagecheck` is locked") as **Checks are never weakened**: never weaken a
+  validation check, threshold or default to make a test pass, and limits are user-owned
+  configuration that library code never edits.
+- Rewrite rule 8 ("No agent-only code here") as **Shared domain logic only**: code specific to
+  one consumer (UI, prompts, agent sandboxes, drafting) stays out of ShowPy.
+- Name the source of truth: the code wins, and the API reference trails it until the generated
+  docs land in Phase 6. If the two disagree, flag the disagreement.
+- Use the package `showpy` and the repo `https://github.com/abj360/ShowPy` throughout. Keep
+  every other rule, the layout (now `showpy/`), the commands, the core concepts, the tests
+  section, the releases section, the commits section and the glossary. Keep the shebang carve-out
+  added in Task 7, if it is already present.
+- Run Prettier on it.
+
+- [ ] **Step 1:** Write
+      `tests/unit/test_docs.py::test_regression_docs_do_not_name_eight`. It asserts that `\bEight\b`
+      does not appear in `CLAUDE.md`, `README.md`, `CONTRIBUTING.md`, `pyproject.toml`, the
+      docstrings under `showpy/`. Run it and watch it fail.
+- [ ] **Step 2:** Rewrite `CLAUDE.md` per the requirements, then edit the other files. Replace
+      product framing with neutral wording ("an app built on ShowPy", "a consumer"). Do not invent
+      features.
+- [ ] **Step 3:** Run `set -o pipefail; uv run nox -s lint types tests`. Expected: green, and the
+      new test passes.
+- [ ] **Step 4:** Commit `docs: describe ShowPy as a standalone library`.
 
 ### Task 4: test infrastructure, generators, goldens and benchmarks
 
