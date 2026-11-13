@@ -1,6 +1,6 @@
 # ShowPy
 
-ShowPy (import name `showpy`) is the Python choreography library behind Eight. With it you draw spots on a 2D sheet, build a show set by set from stored shapes, move every performer between sets with one exact motion engine, and publish the result so performers can claim their spot.
+ShowPy (import name `showpy`) is a Python choreography library. With it you draw spots on a 2D sheet, build a show set by set from stored shapes, move every performer between sets with one exact motion engine, and publish the result so performers can claim their spot.
 
 ## Why
 
@@ -74,7 +74,7 @@ showpy.min_gaps(show, ("1", "2"), top=1)[0].gap  # 1.4 m between footprints
 showpy.validate_show(show).ok  # True
 ```
 
-Every public function has a runnable `>>>` example in its docstring. The full API is in `docs/stage-library-api-reference.md`.
+Every public function has a runnable `>>>` example in its docstring. The full API is in `docs/showpy-api-reference.md`.
 
 ## Architecture
 
@@ -98,7 +98,7 @@ Every public function has a runnable `>>>` example in its docstring. The full AP
      export                        publish, print, PDF, data, video
 ```
 
-Lower layers never import higher ones. `stagecheck` (the locked checker) reads shows through storage and the same `PathEngine`; it is not built yet.
+Lower layers never import higher ones. A consumer such as a checker reads shows through storage and the same `PathEngine`.
 
 ## Config
 
@@ -156,7 +156,7 @@ Read `CLAUDE.md`, `CONTRIBUTING.md` and the ADRs before changing anything. The P
 ## Docs
 
 - `docs/project-overview.md`: the product, problem and scope
-- `docs/stage-library-api-reference.md`: the full API reference
+- `docs/showpy-api-reference.md`: the full API reference
 - `docs/adr/`: architecture decisions (layout and reference fixes; the PathEngine)
 - `docs/HANDOFF.md`: current state and next steps
 - `docs/guide/`: the study guide (PDF)

@@ -1,4 +1,4 @@
-# Contributing to Eight
+# Contributing to ShowPy
 
 Thanks for helping make choreography exact, safe and fast to write.
 
@@ -18,7 +18,7 @@ docker compose -f docker/docker-compose.yml up --build
 ## Workflow
 
 1. Branch from `main` as `<type>/<short-desc>`, e.g. `feat/arc-spacing`. One logical change per branch.
-2. Read `docs/stage-library-api-reference.md` and `docs/adr/` for the area you touch. If the code and the reference disagree, flag it in the PR. Don't silently pick one.
+2. Read `docs/showpy-api-reference.md` and `docs/adr/` for the area you touch. If the code and the reference disagree, flag it in the PR. Don't silently pick one.
 3. Write an ADR in `docs/adr/` before any architecturally load-bearing code.
 4. Write the failing test first, run it, and watch it fail for the right reason.
 5. Write the smallest change that makes it pass, then refactor while green.
@@ -37,7 +37,7 @@ docker compose -f docker/docker-compose.yml up --build
 - **Purity.** Data classes are frozen Pydantic models. Edit functions return new objects and raise `LockedError` on pinned or locked items unless the caller passes `force=True`.
 - **Determinism.** Randomness only goes through `showpy.core.util.seeded_rng`. Time stamps are passed in as arguments; the library never reads the clock.
 - **One source of motion.** Anything that needs positions over time calls `showpy.choreo.engine.PathEngine`. Never interpolate motion anywhere else.
-- **`stagecheck` is locked.** Never import it from `showpy`, and never weaken a check to make a test pass.
+- **Checks are never weakened.** Never weaken a validation check, threshold or default to make a test pass. Limits are user-owned configuration that library code never edits.
 - **Errors.** Raise `ShowPyError` subclasses with `code`, `message`, `context` and a `hint` that says what is allowed.
 - **Style.**
   - Every file opens with a shebang and a module docstring: `<file> --- <role>`, then a `Contains:` index.

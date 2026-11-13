@@ -164,3 +164,11 @@ now sit under `showpy/`. `StageError` is `ShowPyError`, the `STAGE_UPDATE_*` tes
 still reads documents tagged `stage.show.v1` (`LEGACY_SCHEMA_TAGS`); `export_json` writes only
 the new tag. The domain word stage (the sheet kind, the template, text about a theater stage)
 is unchanged.
+
+## Addendum 2026-11-13: standalone library
+
+ShowPy is a standalone library. Its own docs and code no longer describe it as part of a
+product, and the repository split above is history only. Apps, agents and checkers are
+consumers: they pin a tagged release and use the public API; ShowPy never imports one. The API
+reference moved to `docs/showpy-api-reference.md`. Where the sections above say "locked
+checker", read "a consumer's checks"; the rule that ShowPy never weakens a check stays.

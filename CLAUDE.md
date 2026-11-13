@@ -1,17 +1,10 @@
 # CLAUDE.md — ShowPy
 
-ShowPy (import name `showpy`) is the Python choreography library behind Eight, an AI-assisted choreography design tool. Designers draw spots on a 2D sheet (a field, stage or floor), build a show set by set, and publish it so performers can claim their spot. This repo holds only the library.
+ShowPy (import name `showpy`, repo `https://github.com/abj360/ShowPy`) is a Python choreography library for designing shows on a 2D sheet (a field, stage or floor): spots, groups, sets, forms, motion, a count timeline, export and publishing. This repo holds only the library.
 
-| Repository           | Holds                                                                                                  |
-| -------------------- | ------------------------------------------------------------------------------------------------------ |
-| `abj360/ShowPy`      | this library                                                                                           |
-| `abj360/Eight`       | the product: overview, scope, decision rules, and later the app                                        |
-| `abj360/Eight-agent` | agent-only code: set-script builds and the bubblewrap sandbox, agent note drafting, `summarize_events` |
-| `stagecheck`         | the locked checker (not built yet; its own repo, depending on a pinned `showpy` release)               |
+Consumers (apps, agents, checkers) depend on tagged ShowPy releases through the public API only. ShowPy never imports a consumer. A breaking change to a public name needs a version bump and a release-notes entry.
 
-`showpy` never imports from Eight-agent or `stagecheck`. They depend on tagged `showpy` releases through its public API, so breaking a public name is a breaking change: bump the version and say so in the release notes.
-
-Source of truth for the API: _ShowPy Library: API Reference_ (`docs/stage-library-api-reference.md`). If code and the reference disagree, flag it; do not silently pick one. Read the handoff notes before continuing work: @docs/HANDOFF.md
+Source of truth for the API: the code. _ShowPy Library: API Reference_ (`docs/showpy-api-reference.md`) trails it until the generated docs land in Phase 6. If the two disagree, flag the disagreement; do not silently pick one. Read the handoff notes before continuing work: @docs/HANDOFF.md
 
 ## Commands
 
@@ -55,7 +48,7 @@ Each package: `models.py` holds data classes; other files hold functions. Subpac
 - **Shape**: a spot's footprint, `circle` or `rectangle` (rectangles rotate with facing). Used for display and collisions.
 - **Set**: a snapshot of every spot's placement at one moment. **Transition**: the movement between two sets, described by sparse `PathRow`s (missing row = straight, full counts).
 - **Form**: a stored shape construction plus ordered members. Placements are regenerated from forms; edit the form, not the dots.
-- **PathEngine**: the _only_ code that turns path instructions into positions. The canvas, checker and exports all use it. Never compute motion anywhere else.
+- **PathEngine**: the _only_ code that turns path instructions into positions. Every consumer and every export uses it. Never compute motion anywhere else.
 - **Timeline**: counts are the unit. Tempo sections, holds, markers and cues define timing. Audio is a playback asset with a sync point and **never** changes timing.
 - **Sheet**: the 2D design surface (template + customizations). The coordinate system is a display layer: changing it changes labels, never stored positions.
 
@@ -64,14 +57,13 @@ Each package: `models.py` holds data classes; other files hold functions. Subpac
 1. **One internal unit system.** Meters on the stage plane (x audience-left → right, y away from the audience, origin at the sheet's front-center), degrees (0 = facing the audience, counter-clockwise positive), counts for time. Convert only in `core/units.py`, `sheet/coords.py` and pack language modules.
 2. **Pure functions.** Data classes are frozen Pydantic v2 models. "Edit" functions return new objects; never mutate inputs.
 3. **Determinism.** Same inputs → same outputs. Randomness only through `core.util.seeded_rng(seed)`. No wall-clock reads in library logic; time stamps are explicit `at` arguments.
-4. **`stagecheck` is locked.**
-   - Never import it from `showpy`.
-   - Never weaken a check, threshold or default to make a test pass.
-   - Limits belong to the designer (`/config/limits.yaml`); never edit them in code paths the agent runs.
+4. **Checks are never weakened.**
+   - Never weaken a validation check, threshold or default to make a test pass.
+   - Limits are user-owned configuration; library code never edits them.
 5. **Single motion source.** Anything needing positions over time calls `PathEngine`. If a feature seems to need its own interpolation, extend the engine instead.
 6. **Respect locks and pins.** Functions that edit sets, forms or paths must raise `LockedError` on pinned items unless `force=True` is passed explicitly by the caller.
 7. **Errors teach.** Raise `ShowPyError` subclasses with `code`, `message`, `context` and a `hint` that says what is allowed. No bare `ValueError` in public APIs.
-8. **No agent-only code here.** Code only an agent uses (script builds, sandboxes, drafting, prompt-shaped summaries) belongs in Eight-agent. `showpy` keeps what designer and agent share.
+8. **Shared domain logic only.** Code specific to one consumer (UI, prompts, agent sandboxes, drafting) stays out of ShowPy.
 
 ## Writing code here
 
@@ -93,7 +85,7 @@ Each package: `models.py` holds data classes; other files hold functions. Subpac
 
 ## Releases
 
-- Tag releases `vMAJOR.MINOR.PATCH` on `main` after CI passes. Eight-agent and `stagecheck` pin a tag; a breaking change to a public name needs a major bump while above 1.0, a minor bump before.
+- Tag releases `vMAJOR.MINOR.PATCH` on `main` after CI passes. Consumers pin a tag; a breaking change to a public name needs a major bump while above 1.0, a minor bump before.
 
 ## Commits
 
@@ -104,9 +96,9 @@ Each package: `models.py` holds data classes; other files hold functions. Subpac
 ## When unsure
 
 - Check the API Reference first, then `docs/adr/`.
-- If a request conflicts with a rule above (especially the checker or units), stop and ask rather than working around it.
+- If a request conflicts with a rule above (especially checks or units), stop and ask rather than working around it.
 - Summaries at the end of a task: what changed, which tests ran, anything left open.
 
 ## Glossary
 
-Spot · Group · Shape · Set · Transition · PathRow · Form · Placement · Sheet · CoordinateSystem · Timeline (counts, tempo, holds, markers, cues) · Pack (domain rules and wording) · Claim (a performer on a spot after publishing) · Finding (a checker result) · Waiver (designer-approved exception)
+Spot · Group · Shape · Set · Transition · PathRow · Form · Placement · Sheet · CoordinateSystem · Timeline (counts, tempo, holds, markers, cues) · Pack (domain rules and wording) · Claim (a performer on a spot after publishing) · Finding (a validation result) · Waiver (designer-approved exception)

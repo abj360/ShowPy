@@ -9,17 +9,17 @@ Last updated: 2026-11-12
 
 | Item         | Value                                                                                     |
 | ------------ | ----------------------------------------------------------------------------------------- |
-| Repository   | `abj360/ShowPy` (private); split from `abj360/Eight` on 2026-11-12 with full history      |
+| Repository   | `abj360/ShowPy` (private); split into its own repository on 2026-11-12 with full history  |
 | Gates        | `uv run pytest` green (doctests, warnings as errors); ruff and mypy `--strict` clean      |
 | CI           | lint, types, tests, dependency scan, docker build, on every pull request and push to main |
 | Out of scope | `stagecheck`, `showpy.packs` and `showpy.index`, by the user's decision (2026-11-11)      |
 | Pushing      | needs explicit approval                                                                   |
 
-**Repository split (2026-11-12).** Agent-only code moved to `abj360/Eight-agent` with its
-history: set-script builds and the bubblewrap sandbox (`show/build.py`, `build_models.py`,
+**Repository split (2026-11-12).** Agent-only code moved to a separate consumer repository with
+its history: set-script builds and the bubblewrap sandbox (`show/build.py`, `build_models.py`,
 `sandbox.py`, `sandbox_child.py`), agent note drafting (`draft_notes`, `NoteDrafter`,
-`DraftedNote`) and `summarize_events`. Product docs stay in `abj360/Eight`. `showpy` must never
-import from either; they pin a `showpy` release tag.
+`DraftedNote`) and `summarize_events`. `showpy` must never import from a consumer; consumers pin
+a `showpy` release tag.
 
 The user's instructions, in their words:
 
@@ -50,19 +50,19 @@ Use `uv` only, never pip.
 
 ## In flight
 
-- **API reference rewrite.** An agent is working in `.claude/worktrees/agent-ab17bb0302cd0a89a` (branch `worktree-agent-ab17bb0302cd0a89a`) to align `docs/stage-library-api-reference.md` with the code, export sections included. When it is done:
+- **API reference rewrite.** An agent is working in `.claude/worktrees/agent-ab17bb0302cd0a89a` (branch `worktree-agent-ab17bb0302cd0a89a`) to align `docs/showpy-api-reference.md` with the code, export sections included. When it is done:
   1. Merge with `git merge --no-ff`.
-  2. Remove `docs/stage-library-api-reference.md` from `.prettierignore` and run Prettier.
+  2. Remove `docs/showpy-api-reference.md` from `.prettierignore` and run Prettier.
   3. Remove the worktree.
 - **Study guide PDF.** An agent is writing it directly on this branch under `docs/guide/` (uncommitted until it finishes): `docs/guide/build_guide.py` produces `docs/guide/stage-library-guide.pdf`.
 
 ## Remaining work, in order
 
-1. Done 2026-11-11, moved to Eight-agent 2026-11-12: set-script builds (`build_set`, `build_all`, `stale`, `new_set_script`, `run_script`).
+1. Done 2026-11-11, moved to a separate consumer repository 2026-11-12: set-script builds (`build_set`, `build_all`, `stale`, `new_set_script`, `run_script`).
 2. Done 2026-11-11: `showpy/choreo/paths_store.py` (`save_paths`, `load_paths`).
 3. Done 2026-11-11: `showpy/__init__.py` lazily re-exports 533 names (PEP 562). Internal modules are excluded and the motion `spiral` is `spiral_motion`. Tested by `tests/unit/test_public_api.py`.
 4. Done 2026-11-11: `schemas/showpy.show.v1.json`, guarded by `tests/unit/show/test_schema.py` (regenerate with `SHOWPY_UPDATE_SCHEMA=1`).
-5. **Update `docs/stage-library-api-reference.md`**, which the user asked for ("fix every contradiction"). Apply ADR 0001's table and every agent deviation listed below, section by section. Keep the doc's format.
+5. **Update `docs/showpy-api-reference.md`**, which the user asked for ("fix every contradiction"). Apply ADR 0001's table and every agent deviation listed below, section by section. Keep the doc's format.
 6. Done 2026-11-11: `README.md`, `.env.example` and the dockerized quickstart (Docker run: 1492 passed).
 7. Done 2026-11-11: Prettier (`npx --yes prettier@3.6.2`, Node at `/home/uapb-ai/.nvm/versions/node/v22.23.5/bin`), gated in pre-commit and CI.
 8. **Final gates and Docker run**, then a summary to the user: what changed, tests run, open items.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-__init__.py --- the public API of showpy, the choreography library behind the Eight canvas
+__init__.py --- the public API of showpy, the choreography library
 
 Every public function and class of the library is importable from here, lazily: a name
 is imported on first use (PEP 562). Internal helper modules (engine compilation, matching

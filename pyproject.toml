@@ -1,7 +1,7 @@
 [project]
 name = "ShowPy"
 dynamic = ["version"]
-description = "Choreography library behind the Eight show canvas: sheets, spots, sets, forms and motion."
+description = "Choreography library: sheets, spots, sets, forms and motion."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
