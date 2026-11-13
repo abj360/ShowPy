@@ -83,6 +83,7 @@ def test_cast_round_trips_json() -> None:
 
 
 REJECTED = (ShowPyError, PydanticValidationError)
+EXPECTED_FAILURES = ("ValidationError", "SchemaError", "ShowPyError")
 HASH_SEEDS = ("1", "2", "3")
 SUBPROCESS_TIMEOUT_S = 20
 HUGE_PAD = 10**7
@@ -112,6 +113,8 @@ def _under_seeds(body: str) -> list[str]:
             timeout=SUBPROCESS_TIMEOUT_S,
             check=False,
         )
+        if done.returncode != 0:
+            assert any(name in done.stderr for name in EXPECTED_FAILURES), done.stderr[-300:]
         outputs.append(done.stdout + done.stderr[-200:])
     return outputs
 

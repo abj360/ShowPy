@@ -318,6 +318,7 @@ NESTING_DEPTH = 500
 HUGE_PARTS = 10**5
 SPLIT_PEAK_BUDGET_BYTES = 5_000_000
 MIRROR_TOL_M = 0.1
+EXPECTED_FAILURES = ("ValidationError", "SchemaError", "ShowPyError")
 HASH_SEEDS = ("1", "2", "3")
 SUBPROCESS_TIMEOUT_S = 20
 SET_SELECT_SCRIPT = (
@@ -420,5 +421,7 @@ def test_regression_select_set_input_ignores_hash_seed() -> None:
             timeout=SUBPROCESS_TIMEOUT_S,
             check=False,
         )
+        if done.returncode != 0:
+            assert any(name in done.stderr for name in EXPECTED_FAILURES), done.stderr[-300:]
         outputs.append(done.stdout + done.stderr[-200:])
     assert len(set(outputs)) == 1, outputs
