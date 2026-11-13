@@ -2,8 +2,16 @@
 
 """
 test_form_fns.py --- tests the shape generator registry and the built-in generators
+
+Contains:
+    test_regression_default_registry_cannot_be_mutated: leaves the global registry unchanged when a
+    test_regression_spiral_rejects_text_turns_with_schema_error: raises SchemaError, not ValueError,
+    test_regression_spiral_rejects_none_turns_with_schema_error: raises SchemaError, not TypeError,
+    test_regression_sine_wave_rejects_zero_wavelength: raises SchemaError for wavelength=0 instead
+    test_regression_register_form_fn_wraps_probe_crashes: raises SchemaError when the registration
 """
 
+import contextlib
 from collections.abc import Mapping
 
 import numpy as np
@@ -84,3 +92,55 @@ def test_rose_points_never_coincide_or_reach_the_center() -> None:
     gaps = np.linalg.norm(pts[:, None] - pts[None], axis=2)[np.triu_indices(24, 1)]
     assert gaps.min() > 0.1
     assert np.linalg.norm(pts, axis=1).min() >= 1.0 - TOL
+
+
+PROBE_SPOTS = 3
+EVIL_NAME = "evil"
+
+
+def _crashing_generator(params: Mapping[str, object], n: int) -> Points:
+    raise RuntimeError("generator crashed")
+
+
+@pytest.mark.defect("UP-9.6-20")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-20")
+def test_regression_default_registry_cannot_be_mutated() -> None:
+    """Leaves the global registry unchanged when a caller edits its fns (audit 9.6)."""
+    try:
+        with contextlib.suppress(TypeError):
+            DEFAULT_FORM_FNS.fns[EVIL_NAME] = spiral_points
+        assert EVIL_NAME not in DEFAULT_FORM_FNS.fns
+    finally:
+        DEFAULT_FORM_FNS.fns.pop(EVIL_NAME, None)
+
+
+@pytest.mark.defect("UP-9.6-51")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-51")
+def test_regression_spiral_rejects_text_turns_with_schema_error() -> None:
+    """Raises SchemaError, not ValueError, for turns="x" (audit 9.6)."""
+    with pytest.raises(SchemaError):
+        spiral_points({"turns": "x"}, PROBE_SPOTS)
+
+
+@pytest.mark.defect("UP-9.6-52")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-52")
+def test_regression_spiral_rejects_none_turns_with_schema_error() -> None:
+    """Raises SchemaError, not TypeError, for turns=None (audit 9.6)."""
+    with pytest.raises(SchemaError):
+        spiral_points({"turns": None}, PROBE_SPOTS)
+
+
+@pytest.mark.defect("UP-9.6-53")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-53")
+def test_regression_sine_wave_rejects_zero_wavelength() -> None:
+    """Raises SchemaError for wavelength=0 instead of dividing by zero (audit 9.6)."""
+    with pytest.raises(SchemaError):
+        sine_wave_points({"wavelength": 0}, PROBE_SPOTS)
+
+
+@pytest.mark.defect("UP-9.6-54")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-54")
+def test_regression_register_form_fn_wraps_probe_crashes() -> None:
+    """Raises SchemaError when the registration probe makes the generator crash (audit 9.6)."""
+    with pytest.raises(SchemaError):
+        register_form_fn(DEFAULT_FORM_FNS, "crashing", _crashing_generator)

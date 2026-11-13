@@ -2,6 +2,14 @@
 
 """
 test_form_fit.py --- tests line, circle and arc recognition of imported spots
+
+Contains:
+    test_regression_detect_form_keeps_every_spot_within_tolerance: returns slots within tol of every
+    test_regression_detect_form_does_not_call_a_2x2_block_a_circle: refuses to classify four block
+    test_regression_detect_form_does_not_call_a_triangle_an_arc: refuses to classify three triangle
+    test_regression_detect_form_tolerates_one_outlier_on_a_clean_circle: recognizes the circle of 12
+    test_regression_fit_line_rejects_empty_input_with_schema_error: raises SchemaError for no
+    test_regression_fit_circle_rejects_collinear_points: raises SchemaError for collinear points
 """
 
 import math
@@ -104,3 +112,64 @@ def test_loose_tolerance_accepts_rough_line() -> None:
     assert detect_form(rough, tol=0.1).kind != "line"
     assert detect_form(rough, tol=0.5).kind == "line"
     assert math.isfinite(fit_line(rough)[2])
+
+
+FIT_TOL = 0.1
+UNEVEN_LINE = [(0.0, 0.0), (1.0, 0.0), (10.0, 0.0)]
+SQUARE_BLOCK = [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0)]
+TRIANGLE = [(0.0, 0.0), (4.0, 0.0), (0.0, 3.0)]
+RING_SPOTS = 12
+RING_RADIUS = 5.0
+OUTLIER = (20.0, 20.0)
+COLLINEAR = [(0.0, 0.0), (1.0, 0.0), (2.0, 0.0), (3.0, 0.0)]
+
+
+@pytest.mark.defect("UP-9.6-27")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-27")
+def test_regression_detect_form_keeps_every_spot_within_tolerance() -> None:
+    """Returns slots within tol of every input spot, else a custom form (audit 9.6)."""
+    form = detect_form(UNEVEN_LINE, tol=FIT_TOL)
+    gaps = np.linalg.norm(np.asarray(UNEVEN_LINE)[:, None, :] - slots(form)[None, :, :], axis=2)
+    assert float(gaps.min(axis=1).max()) <= FIT_TOL
+
+
+@pytest.mark.defect("UP-9.6-28")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-28")
+def test_regression_detect_form_does_not_call_a_2x2_block_a_circle() -> None:
+    """Refuses to classify four block corners as a circle (audit 9.6)."""
+    assert detect_form(SQUARE_BLOCK).kind != "circle"
+
+
+@pytest.mark.defect("UP-9.6-29")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-29")
+def test_regression_detect_form_does_not_call_a_triangle_an_arc() -> None:
+    """Refuses to classify three triangle corners as an arc (audit 9.6)."""
+    assert detect_form(TRIANGLE).kind != "arc"
+
+
+@pytest.mark.defect("UP-9.6-30")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-30")
+def test_regression_detect_form_tolerates_one_outlier_on_a_clean_circle() -> None:
+    """Recognizes the circle of 12 ring spots despite one far outlier (audit 9.6)."""
+    pts = _ring((0.0, 0.0), RING_RADIUS, [i * 360 / RING_SPOTS for i in range(RING_SPOTS)])
+    form = detect_form(np.vstack([pts, OUTLIER]), tol=FIT_TOL)
+    assert form.kind == "circle"
+    curve = form.geometry["curve"]
+    assert approx_equal(curve["center"], (0.0, 0.0), FIT_TOL)
+    assert approx_equal(curve["radius"], RING_RADIUS, FIT_TOL)
+
+
+@pytest.mark.defect("UP-9.6-31")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-31")
+def test_regression_fit_line_rejects_empty_input_with_schema_error() -> None:
+    """Raises SchemaError for no points, with no numpy warning or ValueError (audit 9.6)."""
+    with pytest.raises(SchemaError):
+        fit_line([])
+
+
+@pytest.mark.defect("UP-9.6-32")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-32")
+def test_regression_fit_circle_rejects_collinear_points() -> None:
+    """Raises SchemaError for collinear points instead of a garbage circle (audit 9.6)."""
+    with pytest.raises(SchemaError):
+        fit_circle(COLLINEAR)
