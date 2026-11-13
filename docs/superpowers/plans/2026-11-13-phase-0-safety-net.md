@@ -215,6 +215,85 @@ tests-0`. If a lower bound fails, raise that bound. Never pin it.
 - [ ] **Step 9:** Commit `build: package as ShowPy with version from the tag and ranged
 dependencies`.
 
+### Task 3b: rename the library to `showpy`
+
+User decision 2026-11-13: the whole library becomes `showpy`, including the import name. It is a
+clean break with no `stage` compatibility shim. This task does it before any new test code is
+written against the old name.
+
+**Files:**
+
+- Move: `stage/` → `showpy/` (`git mv`, so history follows)
+- Modify:
+  - Every `.py` file under `showpy/`, `tests/`, `scripts/`, `docs/guide/` and `noxfile.py`
+    (imports and doctest `>>>` lines)
+  - `pyproject.toml`
+  - `docker/Dockerfile` and `docker/docker-compose.yml`
+  - `.github/workflows/*.yml`
+  - `.pre-commit-config.yaml`
+  - `README.md`, `CLAUDE.md`, `CONTRIBUTING.md` and `docs/HANDOFF.md`
+  - The `showpy/schemas/` file name
+  - `tests/unit/show/test_schema.py` and `tests/unit/test_public_api.py`
+- ADRs: **do not rewrite earlier sections.** Append a dated addendum
+  (`## Addendum 2026-11-13: package renamed to showpy`) to `docs/adr/0001-*.md`.
+
+**Rename map (exact):**
+
+| Old                                                                       | New                                                                 |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| package `stage`, `import stage`, `from stage.…`                           | `showpy`                                                            |
+| `StageError`                                                              | `ShowPyError`                                                       |
+| `StageValidationError` (a local alias in `cast/spots.py`)                 | `ShowPyValidationError`                                             |
+| env vars `STAGE_UPDATE_GOLDEN`, `STAGE_UPDATE_SCHEMA`, `STAGE_UPDATE_API` | `SHOWPY_UPDATE_GOLDEN`, `SHOWPY_UPDATE_SCHEMA`, `SHOWPY_UPDATE_API` |
+| `SCHEMA_TAG = "stage.show.v1"` (`export/data.py`)                         | `"showpy.show.v1"`                                                  |
+| schema file `stage.show.v1.json`, `$id` `stage.show.v1`                   | `showpy.show.v1.json`, `showpy.show.v1`                             |
+| repo URLs `abj360/stage`                                                  | `abj360/ShowPy` (`https://github.com/abj360/ShowPy`)                |
+| prose "the `stage` library"                                               | "ShowPy" (the distribution) or `showpy` (the package)               |
+
+**Never rename** the domain word stage. That covers the sheet template and kind (`"stage"`,
+`SheetKind.STAGE`), the `STAGE_WIDTH_M`, `STAGE_DEPTH_M`, `STAGE_Y_M`, `STAGE_THIRD_X_M`,
+`STAGE_AREAS`, `STAGE_REF`, `STAGE_WORDS` and `STAGE_DIR` constants, and text about a theater
+stage. Review every hit by hand, and never use a blind `sed`.
+
+**Interfaces:**
+
+- Produces:
+  - The package `showpy` and the error base class `showpy.core.errors.ShowPyError`.
+  - `showpy.export.data.SCHEMA_TAG == "showpy.show.v1"`.
+  - `showpy.export.data.LEGACY_SCHEMA_TAGS == ("stage.show.v1",)`.
+
+- [ ] **Step 1:** Write the failing tests:
+  - `tests/unit/test_packaging.py::test_import_name_is_showpy`: `import showpy`, and
+    `importlib.util.find_spec("stage") is None`.
+  - `tests/unit/export/test_data.py::test_regression_import_json_reads_legacy_stage_tag`: a
+    document tagged `{"schema": "stage.show.v1", ...}` loads to the same `Show` as one tagged
+    `showpy.show.v1`.
+  - `test_export_json_writes_showpy_tag`.
+
+  Run them and watch them fail.
+
+- [ ] **Step 2:** `git mv stage showpy`. Rewrite the imports with an AST-aware or anchored-regex
+      script (`^(\s*)(from|import) stage\b` and `>>> (from|import) stage\b`). Then grep for
+      leftovers with `grep -rnw stage --include=*.py`. Review each hit as either a domain word or a
+      missed rename (HANDOFF trap: scripted edits mangle doctests).
+- [ ] **Step 3:** Apply the rest of the rename map. `import_json` accepts `SCHEMA_TAG` and
+      `LEGACY_SCHEMA_TAGS`, and `export_json` writes only `SCHEMA_TAG`. Regenerate the schema with
+      `SHOWPY_UPDATE_SCHEMA=1 uv run pytest tests/unit/show/test_schema.py`.
+- [ ] **Step 4:** Update the configs and docs: `pyproject.toml` (`packages = ["showpy"]`, ruff,
+      mypy, pytest `testpaths`, pyright, deptry, the hatch build targets), the Dockerfile,
+      compose, workflows (CodeQL paths), pre-commit, README, CLAUDE.md (layout, commands, rules,
+      glossary), CONTRIBUTING and HANDOFF. Add the ADR 0001 addendum.
+- [ ] **Step 5:** Run `set -o pipefail; uv run nox -s lint types tests hashseeds wheel`, then the
+      Docker run `docker compose -f docker/docker-compose.yml up --build --exit-code-from showpy`
+      (also rename the compose service to `showpy`). Expected: every gate green with the same test
+      count plus the new tests, and `grep -rn "import stage\|from stage\|StageError" .` (excluding
+      `.venv`, `.nox` and `uv.lock`) returns nothing.
+- [ ] **Step 6:** Commit in this order:
+  - `refactor!: rename the package from stage to showpy`
+  - `feat(export): read legacy stage.show.v1 documents`
+
+  The first message carries a `BREAKING CHANGE:` footer.
+
 ### Task 4: test infrastructure, generators, goldens and benchmarks
 
 **Files:**
