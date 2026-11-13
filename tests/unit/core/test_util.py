@@ -151,6 +151,7 @@ QUADRATIC_BUDGET_S = 0.1
 RANGE_PEAK_BUDGET_BYTES = 5_000_000
 HUGE_RANGE_END = 300_000
 NAN = float("nan")
+SHA256_HEX_LENGTH = 64
 HASH_TIES_SCRIPT = (
     "from showpy.core.util import format_ranges\n"
     "print(format_ranges({'T02', 'T2', 'T1', 'T01', 'T3'}))\n"
@@ -257,11 +258,17 @@ def test_regression_content_hash_separates_int_keys_from_string_keys() -> None:
 @pytest.mark.defect("UP-9.3-08")
 @pytest.mark.xfail(strict=True, reason="UP-9.3-08")
 def test_regression_content_hash_mixed_key_types_never_leak_type_error() -> None:
-    """Hashes or rejects mixed key types with a ShowPyError, never a TypeError (audit 9.3)."""
+    """Hashes (order-independently) or rejects mixed key types, never a TypeError (audit 9.3).
+
+    The audit allows reject or accept; an accepted hash must not depend on insertion order.
+    """
+    mixed = {1: "a", "b": 2}
     try:
-        content_hash({1: "a", "b": 2})
+        digest = content_hash(mixed)
     except ShowPyError:
         return
+    assert len(digest) == SHA256_HEX_LENGTH
+    assert digest == content_hash({"b": 2, 1: "a"})
 
 
 @pytest.mark.defect("UP-9.3-09")

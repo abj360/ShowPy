@@ -177,11 +177,15 @@ def test_regression_round_to_rejects_zero_precision_cleanly() -> None:
 @pytest.mark.defect("UP-9.3-48")
 @pytest.mark.xfail(strict=True, reason="UP-9.3-48")
 def test_regression_round_to_handles_bools_cleanly() -> None:
-    """Rounds or rejects a bool without leaking decimal.InvalidOperation (audit 9.3)."""
+    """Rounds a bool to 1.0 or rejects it, never leaking decimal.InvalidOperation (audit 9.3).
+
+    The audit allows reject or accept; an accepted result must be the numeric value.
+    """
     try:
-        round_to(True)
+        rounded = round_to(True)
     except ShowPyError:
         return
+    assert approx_equal(rounded, 1.0)
 
 
 @pytest.mark.defect("UP-9.3-49")

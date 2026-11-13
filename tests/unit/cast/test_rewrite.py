@@ -13,7 +13,7 @@ from showpy.cast.models import LabelScheme
 from showpy.cast.rewrite import faces_entity, rewrite_spot_ids
 from showpy.cast.spots import delete_spots, relabel
 from showpy.choreo.models import FacingMode
-from showpy.core.errors import SchemaError
+from showpy.core.errors import ShowPyError, UnknownRefError
 from showpy.core.selection import Selection
 from showpy.core.types import Region
 from showpy.sheet.models import Zone, ZoneKind
@@ -133,8 +133,9 @@ def test_regression_dropping_all_anchored_spots_drops_the_note_anchor() -> None:
 
 @pytest.mark.defect("UP-9.3-87")
 @pytest.mark.xfail(strict=True, reason="UP-9.3-87")
-def test_regression_many_to_one_rename_is_a_schema_error() -> None:
-    """Reports a rename that maps two spots to one ID as a SchemaError with context (audit 9.3)."""
-    with pytest.raises(SchemaError) as excinfo:
+def test_regression_many_to_one_rename_is_reported_with_the_duplicate_target() -> None:
+    """Reports a rename mapping two spots to one ID by name, not as UnknownRefError (audit 9.3)."""
+    with pytest.raises(ShowPyError) as excinfo:
         rewrite_spot_ids(two_set_show(), lambda i: "T9" if i in {"T1", "T2"} else i)
-    assert excinfo.value.context
+    assert not isinstance(excinfo.value, UnknownRefError)
+    assert "T9" in str(excinfo.value.context)
