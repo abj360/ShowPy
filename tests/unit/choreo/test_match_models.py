@@ -75,4 +75,4 @@ def test_regression_match_options_rejects_negative_no_backward() -> None:
 def test_regression_match_options_rejects_bool_slot_index() -> None:
     """Rejects True as a pinned slot index instead of pinning to slot 1 (audit 9.6)."""
     with pytest.raises(SchemaError):
-        MatchOptions(pinned={"A": True})  # type: ignore[dict-item]
+        MatchOptions(pinned={"A": True})

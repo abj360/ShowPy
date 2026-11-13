@@ -308,7 +308,7 @@ def _failing_cost(entity: SpotId, slot: int, start: Point, target: Point) -> flo
 def test_regression_match_by_order_rejects_duplicate_spots() -> None:
     """Rejects a repeated spot instead of collapsing it to one (audit 9.6)."""
     with pytest.raises(ShowPyError):
-        match_by_order(["A", "A"], PAIR_SLOTS)
+        match_by_order(["A", "A"], np.asarray(PAIR_SLOTS))
 
 
 @pytest.mark.defect("UP-9.6-55")
