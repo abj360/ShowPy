@@ -8,6 +8,7 @@ Contains:
     test_regression_decode_wrong_shape_forms_json_is_a_library_error: UP-9.7-20
     test_regression_decode_rejects_string_set_order: UP-9.7-21
     test_regression_show_json_carries_a_format_version: UP-9.7-29
+    test_regression_decode_names_the_minimum_version_for_a_newer_document: UP-9.7-92
     test_regression_encode_never_writes_non_finite_numbers: UP-9.7-30
     test_regression_negative_zero_encodes_like_zero: UP-9.7-31
 """
@@ -17,11 +18,12 @@ import math
 
 import pytest
 
-from showpy.core.errors import ShowPyError
+from showpy.core.errors import ShowPyError, VersionError
 from showpy.show.documents import SHOW_DOC, decode_show, encode_show, forms_doc
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 
+FUTURE_VERSION = 999
 VERSION_KEYS = ("format", "version", "schema_version", "layout_version")
 
 
@@ -61,6 +63,15 @@ def test_regression_show_json_carries_a_format_version() -> None:
     """Stamps show.json with a format and layout version (audit 9.7 item 11)."""
     body = json.loads(_docs()[SHOW_DOC])
     assert any(key in body for key in VERSION_KEYS)
+
+
+@pytest.mark.defect("UP-9.7-92")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-92")
+def test_regression_decode_names_the_minimum_version_for_a_newer_document() -> None:
+    """Raises VersionError for a document written by a newer library (audit 9.7 item 11)."""
+    body = json.loads(_docs()[SHOW_DOC]) | {"version": FUTURE_VERSION}
+    with pytest.raises(VersionError):
+        decode_show({**_docs(), SHOW_DOC: json.dumps(body).encode()})
 
 
 def _reject_constant(name: str) -> float:

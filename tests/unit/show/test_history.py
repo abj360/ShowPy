@@ -278,7 +278,11 @@ def test_regression_undo_does_not_leave_a_path_row_for_a_removed_spot() -> None:
 @pytest.mark.defect("UP-9.7-37")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-37")
 def test_regression_undoing_the_first_save_keeps_a_loadable_show() -> None:
-    """Refuses to undo the first save, or leaves a loadable show (audit 9.7 history)."""
+    """Refuses to undo the first save, or leaves a loadable show (audit 9.7 history).
+
+    A third legitimate fix, an explicit empty-root state that load_show names, would need this
+    assertion relaxed.
+    """
     ws = open_workspace(InMemoryRepository(), "s", "designer")
     save_show(ws, two_set_show(), AT)
     try:
