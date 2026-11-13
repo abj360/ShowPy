@@ -2,11 +2,23 @@
 
 """
 test_models.py --- tests sheet data classes: landmarks, zones, grids, coordinate systems
+
+Contains:
+    Existing behavior tests, unlisted
+    test_regression_sheet_rejects_negative_size()
+    test_regression_sheet_rejects_one_point_outline()
+    test_regression_sheet_rejects_malformed_ref()
+    test_regression_sheet_rejects_duplicate_landmark_ids()
+    test_regression_region_rejects_two_point_ring()
+    test_regression_region_rejects_bow_tie_ring()
+    test_regression_guide_line_rejects_no_points()
+    test_regression_sheet_rejects_landmark_alias_colliding_with_name()
+    test_regression_show_rejects_zone_id_shared_with_sheet()
 """
 
 import pytest
 
-from showpy.core.errors import GeometryError, ShowPyError, TimeRangeError
+from showpy.core.errors import GeometryError, SchemaError, ShowPyError, TimeRangeError
 from showpy.core.types import Region
 from showpy.examples import two_set_show
 from showpy.sheet.models import CoordinateSystem, GuideLine, Landmark, Sheet, Zone, ZoneKind
@@ -49,7 +61,7 @@ def _sheet_with(**changes: object) -> Sheet:
 @pytest.mark.xfail(strict=True, reason="UP-9.4-08")
 def test_regression_sheet_rejects_negative_size() -> None:
     """Rejects a negative sheet size at construction (audit 9.4)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(SchemaError):
         _sheet_with(size_m=(-10.0, 6.0))
 
 
@@ -57,7 +69,7 @@ def test_regression_sheet_rejects_negative_size() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.4-09")
 def test_regression_sheet_rejects_one_point_outline() -> None:
     """Rejects an outline with fewer than three points at construction (audit 9.4)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(GeometryError):
         _sheet_with(outline=((0.0, 0.0),))
 
 
@@ -65,7 +77,7 @@ def test_regression_sheet_rejects_one_point_outline() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.4-10")
 def test_regression_sheet_rejects_malformed_ref() -> None:
     """Rejects the ref "nonsense" at construction (audit 9.4)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(SchemaError):
         _sheet_with(ref="nonsense")
 
 
@@ -75,7 +87,7 @@ def test_regression_sheet_rejects_duplicate_landmark_ids() -> None:
     """Rejects two landmarks sharing an ID at construction (audit 9.4)."""
     mark = Landmark(id="dup", name="first", kind="point", geometry=((1.0, 1.0),))
     other = Landmark(id="dup", name="second", kind="point", geometry=((2.0, 2.0),))
-    with pytest.raises(ShowPyError):
+    with pytest.raises(SchemaError):
         _sheet_with(landmarks=(mark, other))
 
 
@@ -111,7 +123,7 @@ def test_regression_sheet_rejects_landmark_alias_colliding_with_name() -> None:
     second = Landmark(
         id="b", name="other", kind="point", geometry=((2.0, 2.0),), aliases=("Spike",)
     )
-    with pytest.raises(ShowPyError):
+    with pytest.raises(SchemaError):
         _sheet_with(landmarks=(first, second))
 
 
@@ -122,5 +134,5 @@ def test_regression_show_rejects_zone_id_shared_with_sheet() -> None:
     base = two_set_show()
     sheet_zone = base.sheet.zones[0]
     clash = Zone(id=sheet_zone.id, kind=ZoneKind.CUSTOM, polygon=SQUARE)
-    with pytest.raises(ShowPyError):
+    with pytest.raises(SchemaError):
         Show.model_validate({**base.model_dump(), "zones": (clash,)})

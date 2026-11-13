@@ -2,11 +2,19 @@
 
 """
 test_bounds.py --- tests surface and walkable tests, landmark lookup, nearest landmarks, zones
+
+Contains:
+    Existing behavior tests, unlisted
+    test_regression_landmark_anchor_ignores_repeated_closing_vertex()
+    test_regression_landmark_anchor_is_the_area_centroid()
+    test_regression_nearest_landmarks_rejects_fractional_k()
+    test_regression_nearest_landmarks_rejects_nan_point()
+    test_regression_nearest_landmarks_rejects_unknown_kind()
 """
 
 import pytest
 
-from showpy.core.errors import ShowPyError, UnknownRefError
+from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
 from showpy.core.types import Region
 from showpy.core.util import approx_equal
 from showpy.sheet.bounds import (
@@ -113,7 +121,7 @@ def test_regression_landmark_anchor_is_the_area_centroid() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.4-27")
 def test_regression_nearest_landmarks_rejects_fractional_k() -> None:
     """Rejects k=1.5 with a ShowPyError, not TypeError (audit 9.4)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(SchemaError):
         nearest_landmarks(field_sheet(), NEAR_POINT, k=1.5)  # type: ignore[arg-type]
 
 

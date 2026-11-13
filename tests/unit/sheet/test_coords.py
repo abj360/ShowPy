@@ -2,6 +2,19 @@
 
 """
 test_coords.py --- tests coordinate presets, wording, parsing and audience-side handling
+
+Contains:
+    Existing behavior tests, unlisted
+    test_regression_zero_precision_is_rejected_not_division_by_zero()
+    test_regression_to_coords_rejects_infinite_point()
+    test_regression_to_coords_rejects_nan_point()
+    test_regression_to_coords_rejects_unknown_style()
+    test_regression_short_label_with_digit_round_trips_or_is_rejected()
+    test_regression_colliding_direction_labels_round_trip_or_are_rejected()
+    test_regression_from_coords_reads_negative_long_number()
+    test_regression_from_coords_reads_leading_dot_number()
+    test_regression_from_coords_reads_exponent_number()
+    test_regression_from_coords_reads_number_glued_to_unit()
 """
 
 import pytest

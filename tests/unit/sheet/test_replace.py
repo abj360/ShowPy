@@ -2,6 +2,17 @@
 
 """
 test_replace.py --- tests sheet replacement: fits, placements, forms, paths, locks and the report
+
+Contains:
+    Existing behavior tests, unlisted
+    test_regression_football_template_swap_keeps_positions()
+    test_regression_similarity_fit_rejects_mirrored_landmarks()
+    test_regression_similarity_fit_rejects_coincident_targets()
+    test_regression_similarity_fit_empty_input_raises_without_warning()
+    test_regression_similarity_fit_rejects_nan_input()
+    test_regression_similarity_fit_rejects_wrong_shape()
+    test_regression_scale_mapping_rejects_zero_size_sheet()
+    test_regression_fit_ignores_same_named_centers_with_different_meaning()
 """
 
 import warnings
@@ -247,8 +258,17 @@ def test_regression_scale_mapping_rejects_zero_size_sheet() -> None:
 
 @pytest.mark.defect("UP-9.4-43")
 @pytest.mark.xfail(strict=True, reason="UP-9.4-43")
-def test_regression_blank_to_stage_does_not_match_unrelated_centers() -> None:
-    """Keeps positions when blank and stage centers mean different points (audit 9.4)."""
-    show = two_set_show().model_copy(update={"sheet": blank_sheet(20.0, 15.0)})
-    _, report = replace_sheet(show, get_sheet("sheet:proscenium-stage"))
+def test_regression_fit_ignores_same_named_centers_with_different_meaning() -> None:
+    """Keeps positions when only "center" differs in meaning between equal-size sheets.
+
+    Audit 9.4: "center" is three different points across template families; the audit measured
+    blank to stage scaling by 0.45, this run measured 0.6 on a 20 x 15 m blank sheet.
+    """
+    old = blank_sheet(12.0, 9.0)
+    shifted = Landmark(id="center", name="center", kind="point", geometry=((0.0, 2.0),))
+    new = old.model_copy(
+        update={"ref": "sheet:odd-center@1", "landmarks": (old.landmarks[0], shifted)}
+    )
+    show = two_set_show().model_copy(update={"sheet": old})
+    _, report = replace_sheet(show, new)
     assert report.moved == {}

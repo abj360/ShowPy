@@ -2,6 +2,18 @@
 
 """
 test_templates.py --- tests built-in sheet templates, lookup, customization, edits and saving
+
+Contains:
+    Existing behavior tests, unlisted
+    test_regression_blank_sheets_with_different_content_get_different_refs()
+    test_regression_blank_sheet_rejects_infinite_width()
+    test_regression_customize_rejects_non_numeric_size()
+    test_regression_customize_rejects_bad_name_type()
+    test_regression_customize_resize_updates_ref_and_name()
+    test_regression_customize_resize_does_not_keep_items_off_the_sheet()
+    test_regression_get_sheet_without_version_returns_latest_saved()
+    test_regression_sheet_templates_rejects_unknown_surface_type()
+    test_regression_customize_resize_does_not_keep_landmarks_off_the_sheet()
 """
 
 import pytest
@@ -277,7 +289,7 @@ def test_regression_customize_rejects_non_numeric_size() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.4-33")
 def test_regression_customize_rejects_bad_name_type() -> None:
     """Rejects a non-string name with a ShowPyError, not a pydantic error (audit 9.4)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(SchemaError):
         customize(blank_sheet(10, 6), name=5)
 
 
@@ -309,8 +321,11 @@ def test_regression_customize_resize_does_not_keep_items_off_the_sheet() -> None
 def test_regression_get_sheet_without_version_returns_latest_saved() -> None:
     """Returns the latest saved version for a versionless ref, as documented (audit 9.4)."""
     store = InMemorySheetStore()
-    saved = save_sheet(store, get_sheet(HS_ID_REF))
-    assert get_sheet(HS_ID_REF, store).ref == saved
+    template = get_sheet(HS_ID_REF)
+    saved = save_sheet(store, template.model_copy(update={"name": "my field"}))
+    found = get_sheet(HS_ID_REF, store)
+    assert found.ref == saved
+    assert found.name == "my field"
 
 
 @pytest.mark.defect("UP-9.4-37")
@@ -319,3 +334,17 @@ def test_regression_sheet_templates_rejects_unknown_surface_type() -> None:
     """Rejects an unknown surface type instead of returning an empty list (audit 9.4)."""
     with pytest.raises(ShowPyError):
         sheet_templates("nope")  # type: ignore[arg-type]
+
+
+@pytest.mark.defect("UP-9.4-46")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-46")
+def test_regression_customize_resize_does_not_keep_landmarks_off_the_sheet() -> None:
+    """Rejects or drops landmarks that lie off the sheet after a resize (audit 9.4)."""
+    mark = Landmark(id="far", name="far prop", kind="point", geometry=((4.5, 1.0),))
+    sheet = add_landmark(blank_sheet(10, 6), mark)
+    try:
+        resized = customize(sheet, size=RESIZED)
+    except ShowPyError:
+        return
+    for kept in resized.landmarks:
+        assert all(on_surface(resized, point) for point in kept.geometry)
