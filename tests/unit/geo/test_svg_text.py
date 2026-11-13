@@ -22,8 +22,9 @@ BOX = Box2(min=(0.0, 0.0), max=(10.0, 10.0))
 WIDE_BOX = Box2(min=(0.0, 0.0), max=(20.0, 2.0))
 SCALED_BOX = Box2(min=(0.0, 0.0), max=(8.0, 8.0))
 SIGNAL_TIMEOUT_S = 5
-ARC_COUNT = 20_000
-MAX_PARSE_S = 1.5
+ARC_COUNT = 3_000
+TIMING_RUNS = 3
+MAX_SCALING_RATIO = 3.0
 FIT_TOL_M = 1e-6
 FLATTEN_TOL_M = 0.001
 BAD_PATH_INDEX = 5
@@ -106,16 +107,25 @@ def _bounds(curves: list[SvgCurve]) -> tuple[float, float, float, float]:
     )
 
 
+def _best_parse_time(arc_count: int) -> float:
+    path = "M0 0 " + "a1 1 0 011 1 " * arc_count
+    times = []
+    for _ in range(TIMING_RUNS):
+        started = time.perf_counter()
+        parse_path(path)
+        times.append(time.perf_counter() - started)
+    return min(times)
+
+
 @pytest.mark.defect("UP-9.1-09")
 @pytest.mark.xfail(strict=True, reason="UP-9.1-09")
 @pytest.mark.timeout(SIGNAL_TIMEOUT_S, method="signal")
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_parse_path_scales_linearly_with_arc_count() -> None:
-    """Parses 20,000 arcs in linear time instead of about 3.5 s of quadratic work (P0 #8)."""
-    path = "M0 0 " + "a1 1 0 011 1 " * ARC_COUNT
-    started = time.perf_counter()
-    parse_path(path)
-    assert time.perf_counter() - started < MAX_PARSE_S
+    """Parses twice the arcs in under 3x the time; a quadratic parser takes about 4x (P0 #8)."""
+    small = _best_parse_time(ARC_COUNT)
+    large = _best_parse_time(2 * ARC_COUNT)
+    assert large / small < MAX_SCALING_RATIO
 
 
 @pytest.mark.defect("UP-9.1-37")
