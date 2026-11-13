@@ -6,3 +6,9 @@ dist/
 node_modules/
 **/__pycache__
 .claude/
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.hypothesis
+.nox
+.superpowers

@@ -116,7 +116,10 @@ def audit(session: nox.Session) -> None:
 
 @nox.session
 def wheel(session: nox.Session) -> None:
-    """Builds the wheel, installs it in a clean venv and runs the README usage example."""
+    """Builds the wheel, installs it in a clean venv and runs the README usage example.
+
+    Not a default session: it builds and creates a venv, so it runs on demand and in CI.
+    """
     root = Path.cwd()
     work = Path(session.create_tmp()).resolve()
     dist, venv = work / "dist", work / "venv"
