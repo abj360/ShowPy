@@ -2,10 +2,24 @@
 
 """
 test_engine.py --- tests PathEngine positions, styles, timing, facing, segments and frames
+
+Contains:
+    test_regression_segments_stay_within_tolerance_on_periodic_motion: UP-9.2-01
+    test_regression_speed_distance_matches_traced_path_length: UP-9.2-02
+    test_regression_facing_override_applies_to_holding_spot: UP-9.2-07
+    test_regression_toward_entity_override_uses_query_time_position: UP-9.2-08
+    test_regression_invalidate_accepts_a_one_shot_iterable: UP-9.2-22
+    test_regression_invalidate_clears_override_selection_cache: UP-9.2-23
+    test_regression_spot_query_on_show_without_sets_raises_showpy_error: UP-9.2-24
+    test_regression_zero_count_transition_compiles_to_a_step: UP-9.2-25
+    test_regression_missing_placement_does_not_fail_other_spots: UP-9.2-26
+    test_regression_velocity_is_full_speed_near_a_window_kink: UP-9.2-34
 """
 
 import itertools
 import math
+from collections.abc import Callable
+from typing import TypeVar, cast
 
 import numpy as np
 import pytest
@@ -20,9 +34,11 @@ from showpy.choreo.models import (
     Route,
     Waypoint,
 )
-from showpy.core.errors import ContinuityError, PathError, UnknownRefError
+from showpy.core.errors import ContinuityError, PathError, ShowPyError, UnknownRefError
+from showpy.core.units import vector_facing
 from showpy.core.util import approx_equal
 from showpy.geo.shapes import line
+from showpy.show.models import Show
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
 from tests.fixtures.shows import two_set_show
 
@@ -276,7 +292,11 @@ def test_straight_linear_move_is_one_segment() -> None:
 def test_eased_segments_stay_within_tolerance() -> None:
     engine = _engine(T1=PathRow(entity="T1", easing=Easing(kind="ease_in_out", strength=3.0)))
     segments = [s for s in engine.segments(TID, tol=0.01) if s.entity == "T1"]
-    assert len(segments) > 1
+    assert approx_equal(segments[0].t0, 0.0)
+    assert approx_equal(segments[-1].t1, 8.0)
+    midway = [s for s in segments if approx_equal(s.t0, 4.0)]
+    assert len(midway) == 1
+    assert approx_equal(midway[0].p0, (0.0, 7.0))
     for seg in segments:
         mid_t = (seg.t0 + seg.t1) / 2
         expected = (np.asarray(seg.p0) + np.asarray(seg.p1)) / 2
@@ -323,10 +343,153 @@ def test_regression_steps_easing_is_not_aliased_by_segment_probes() -> None:
     engine = _engine(T1=row)
     segments = [s for s in engine.segments(TID, tol=0.01) if s.entity == "T1"]
     moving = [s for s in segments if s.t1 <= 1.0]
-    assert len(moving) >= 4
+    starts = {round(s.t0, 9): s.p0 for s in moving}
+    for share, y in ((0.25, 6.0), (0.5, 7.0), (0.75, 8.0)):
+        assert approx_equal(starts[share], (0.0, y))
+    assert approx_equal(moving[-1].p1, (0.0, 9.0))
 
 
 def test_regression_positions_resolves_selection_expressions() -> None:
     engine = PathEngine(two_set_show())
     assert approx_equal(engine.positions(4.0, "T1-T2"), [[0.0, 7.0], [2.0, 7.0]])
     assert approx_equal(engine.positions(4.0, "group:trumpets").shape, (4, 2))
+
+
+F = TypeVar("F", bound=Callable[..., object])
+SEGMENT_TOL = 0.02
+PROBES_PER_SEGMENT = 25
+TRACE_SAMPLES = 4001
+WEAVE_ROW = PathRow(
+    entity="T1", style=PathStyle.CUSTOM, motion_fn="weave", motion_params={"cycles": 4}
+)
+
+
+def defect(defect_id: str) -> Callable[[F], F]:
+    """Marks a test as an open audited defect: a strict xfail keyed on its ID."""
+
+    def decorate(test: F) -> F:
+        marked = pytest.mark.defect(defect_id)(test)
+        return cast(F, pytest.mark.xfail(strict=True, reason=defect_id)(marked))
+
+    return decorate
+
+
+def _segment_deviation(engine: PathEngine, entity: str) -> float:
+    worst = 0.0
+    for seg in engine.entity_segments(entity, TID):
+        for share in np.linspace(0.0, 1.0, PROBES_PER_SEGMENT):
+            t = seg.t0 + share * (seg.t1 - seg.t0)
+            linear = np.array(seg.p0) + share * (np.array(seg.p1) - np.array(seg.p0))
+            true = engine.position(entity, t, local=TID)
+            worst = max(worst, float(np.linalg.norm(linear - true)))
+    return worst
+
+
+def _traced_length(engine: PathEngine, entity: str) -> float:
+    taus = np.linspace(0.0, 8.0, TRACE_SAMPLES)
+    pts = np.array([engine.position(entity, float(t), local=TID) for t in taus])
+    return float(np.linalg.norm(np.diff(pts, axis=0), axis=1).sum())
+
+
+@defect("UP-9.2-01")
+def test_regression_segments_stay_within_tolerance_on_periodic_motion() -> None:
+    """Keeps every segment within 0.02 m of the true path on a 4-cycle weave (audit 9.2; P0 #6)."""
+    engine = _engine(T1=WEAVE_ROW)
+    assert _segment_deviation(engine, "T1") <= SEGMENT_TOL + 1e-9
+
+
+@defect("UP-9.2-02")
+def test_regression_speed_distance_matches_traced_path_length() -> None:
+    """Reports the travelled distance of a 4-cycle weave, not its 4 m chord (audit 9.2; P0 #6)."""
+    engine = _engine(T1=WEAVE_ROW)
+    assert approx_equal(engine.speed("T1", TID).distance, _traced_length(engine, "T1"), tol=0.2)
+
+
+def _override_show(rows: dict[str, PathRow], override: FacingOverride, y_hold: bool) -> Show:
+    show = with_targets({"T1": {"y": 5.0}} if y_hold else {})
+    return with_rows(rows, show=show).model_copy(update={"facing_overrides": (override,)})
+
+
+@defect("UP-9.2-07")
+def test_regression_facing_override_applies_to_holding_spot() -> None:
+    """Applies a facing override to a spot on a HOLD row (audit 9.2)."""
+    override = FacingOverride(
+        entities=["T1"], mode=FacingMode.FIXED, value=90.0, start=2.0, end=6.0
+    )
+    rows = {"T1": PathRow(entity="T1", style=PathStyle.HOLD)}
+    show = _override_show(rows, override, y_hold=True)
+    assert approx_equal(PathEngine(show).facing_at("T1", 4.0), 90.0, tol=1e-6)
+
+
+@defect("UP-9.2-08")
+def test_regression_toward_entity_override_uses_query_time_position() -> None:
+    """Faces the other spot where it is at the query count, not at the row window (audit 9.2)."""
+    override = FacingOverride(
+        entities=["T1"], mode=FacingMode.TOWARD_ENTITY, value="T4", start=0.0, end=8.0
+    )
+    show = _override_show({"T1": PathRow(entity="T1", start=4.0)}, override, y_hold=False)
+    engine = PathEngine(show)
+    query = 1.0
+    offset = engine.position("T4", query) - engine.position("T1", query)
+    expected = vector_facing((float(offset[0]), float(offset[1])))
+    assert approx_equal(engine.facing_at("T1", query), expected, tol=0.5)
+
+
+def _three_set_show() -> Show:
+    base = two_set_show()
+    third = base.sets[1].model_copy(update={"id": "3"})
+    return base.model_copy(update={"sets": (*base.sets, third)})
+
+
+@defect("UP-9.2-22")
+def test_regression_invalidate_accepts_a_one_shot_iterable() -> None:
+    """Drops every named transition even when they come from a generator (audit 9.2)."""
+    engine = PathEngine(_three_set_show())
+    engine.compile_all()
+    engine.invalidate(transitions=iter([TID, ("2", "3")]))
+    assert engine._cache == {}
+
+
+@defect("UP-9.2-23")
+def test_regression_invalidate_clears_override_selection_cache() -> None:
+    """Clears the cached facing-override selections when caches are invalidated (audit 9.2)."""
+    override = FacingOverride(entities="all", mode=FacingMode.FIXED, value=90.0, start=0.0, end=4.0)
+    engine = PathEngine(two_set_show().model_copy(update={"facing_overrides": (override,)}))
+    engine.facing_at("T1", 2.0)
+    engine.invalidate(sets=["1", "2"])
+    assert engine._override_cache == {}
+
+
+@defect("UP-9.2-24")
+def test_regression_spot_query_on_show_without_sets_raises_showpy_error() -> None:
+    """Raises a ShowPyError, not IndexError, for a cast spot in a show with no sets (audit 9.2)."""
+    engine = PathEngine(two_set_show().model_copy(update={"sets": ()}))
+    with pytest.raises(ShowPyError):
+        engine.position("T1", 1.0)
+
+
+@defect("UP-9.2-25")
+def test_regression_zero_count_transition_compiles_to_a_step() -> None:
+    """Compiles and segments a 0-count transition instead of raising PathError (audit 9.2)."""
+    base = two_set_show()
+    instant = base.sets[1].model_copy(update={"counts": 0.0})
+    engine = PathEngine(base.model_copy(update={"sets": (base.sets[0], instant)}))
+    assert list(engine.compile_all()) == [TID]
+    assert engine.segments(TID) == []
+
+
+@defect("UP-9.2-26")
+def test_regression_missing_placement_does_not_fail_other_spots() -> None:
+    """Keeps other spots queryable when one spot lacks a placement in the next set (audit 9.2)."""
+    base = two_set_show()
+    broken = base.sets[1].model_copy(update={"placements": base.sets[1].placements[1:]})
+    engine = PathEngine(base.model_copy(update={"sets": (base.sets[0], broken)}))
+    assert approx_equal(engine.position("T2", 4.0), (2.0, 7.0))
+
+
+@defect("UP-9.2-34")
+def test_regression_velocity_is_full_speed_near_a_window_kink() -> None:
+    """Reports the moving speed just after a window start, not half of it (audit 9.2)."""
+    engine = _engine(T1=PathRow(entity="T1", start=2.0, end=6.0))
+    velocity = engine.velocity_at("T1", 2.00005, local=TID)
+    assert approx_equal(float(np.linalg.norm(velocity)), 1.0, tol=1e-3)

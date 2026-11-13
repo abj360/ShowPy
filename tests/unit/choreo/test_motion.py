@@ -2,10 +2,16 @@
 
 """
 test_motion.py --- tests easing curves, facing turns and the custom motion registry
+
+Contains:
+    test_regression_nan_easing_strength_is_rejected: UP-9.2-12
+    test_regression_infinite_steps_strength_raises_showpy_error: UP-9.2-13
+    test_regression_easing_strength_below_one_is_not_clamped_silently: UP-9.2-14
+    test_regression_steps_strength_has_a_cap: UP-9.2-15
 """
 
-from collections.abc import Mapping
-from typing import Any
+from collections.abc import Callable, Mapping
+from typing import Any, TypeVar, cast
 
 import numpy as np
 import pytest
@@ -22,7 +28,7 @@ from showpy.choreo.motion import (
     register_motion,
     turn,
 )
-from showpy.core.errors import PathError, UnknownRefError
+from showpy.core.errors import PathError, ShowPyError, UnknownRefError
 from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
 
@@ -131,3 +137,46 @@ def test_easing_breaks_mark_kinks() -> None:
     assert easing_breaks(Easing(kind="hold_then_burst", strength=2.0)) == [0.5]
     assert easing_breaks(Easing(kind="burst_then_settle", strength=4.0)) == [0.25]
     assert easing_breaks(Easing()) == []
+
+
+F = TypeVar("F", bound=Callable[..., object])
+SHARES = np.array([0.0, 0.25, 0.5, 1.0])
+OVERSIZED_STEP_COUNT = 10_000.0
+
+
+def defect(defect_id: str) -> Callable[[F], F]:
+    """Marks a test as an open audited defect: a strict xfail keyed on its ID."""
+
+    def decorate(test: F) -> F:
+        marked = pytest.mark.defect(defect_id)(test)
+        return cast(F, pytest.mark.xfail(strict=True, reason=defect_id)(marked))
+
+    return decorate
+
+
+@defect("UP-9.2-12")
+def test_regression_nan_easing_strength_is_rejected() -> None:
+    """Rejects a NaN easing strength instead of producing NaN positions (audit 9.2)."""
+    with pytest.raises(ShowPyError):
+        ease(Easing(kind="ease_in", strength=float("nan")), SHARES)
+
+
+@defect("UP-9.2-13")
+def test_regression_infinite_steps_strength_raises_showpy_error() -> None:
+    """Raises a ShowPyError, not OverflowError, for infinite step counts (audit 9.2)."""
+    with pytest.raises(ShowPyError):
+        ease(Easing(kind="steps", strength=float("inf")), SHARES)
+
+
+@defect("UP-9.2-14")
+def test_regression_easing_strength_below_one_is_not_clamped_silently() -> None:
+    """Rejects a strength below 1 instead of clamping it to 1 (audit 9.2)."""
+    with pytest.raises(ShowPyError):
+        ease(Easing(kind="ease_in", strength=0.5), SHARES)
+
+
+@defect("UP-9.2-15")
+def test_regression_steps_strength_has_a_cap() -> None:
+    """Rejects a 10,000-step easing instead of building 9,999 edges (audit 9.2)."""
+    with pytest.raises(ShowPyError):
+        easing_breaks(Easing(kind="steps", strength=OVERSIZED_STEP_COUNT))

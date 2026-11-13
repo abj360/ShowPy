@@ -2,14 +2,21 @@
 
 """
 test_routes.py --- tests show-aware path builders: routes, follow, counter-march, L-moves, rotation
+
+Contains:
+    test_regression_two_part_respects_locked_rows: UP-9.2-21
+    test_regression_make_route_with_single_vertex_raises_path_error: UP-9.2-27
 """
 
 import math
+from collections.abc import Callable
+from typing import TypeVar, cast
 
 import pytest
 
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.models import PathStyle, TransitionSpec
+from showpy.choreo.paths import lock
 from showpy.choreo.routes import (
     counter_march,
     follow,
@@ -94,3 +101,34 @@ def test_rotate_path_about_center() -> None:
     engine = PathEngine(show.model_copy(update={"transitions": (spec,)}))
     mid = engine.position("T1", 4.0)
     assert approx_equal(math.dist(mid, pivot), 3.0)
+
+
+F = TypeVar("F", bound=Callable[..., object])
+
+
+def defect(defect_id: str) -> Callable[[F], F]:
+    """Marks a test as an open audited defect: a strict xfail keyed on its ID."""
+
+    def decorate(test: F) -> F:
+        marked = pytest.mark.defect(defect_id)(test)
+        return cast(F, pytest.mark.xfail(strict=True, reason=defect_id)(marked))
+
+    return decorate
+
+
+@defect("UP-9.2-21")
+def test_regression_two_part_respects_locked_rows() -> None:
+    """Raises LockedError for a locked row instead of rewriting it (audit 9.2; P0 #13)."""
+    show = two_set_show()
+    locked = lock(show.transition(TID), ["T1"])
+    with pytest.raises(LockedError):
+        two_part(show, locked, ["T1"], "x_first")
+
+
+@defect("UP-9.2-27")
+def test_regression_make_route_with_single_vertex_raises_path_error() -> None:
+    """Raises a PathError, not IndexError, when the whole route is one point (audit 9.2)."""
+    show = two_set_show()
+    start = show.set("1").get("T1").point
+    with pytest.raises(PathError):
+        make_route(show, TID, "T1", [start])
