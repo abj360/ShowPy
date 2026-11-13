@@ -8,8 +8,10 @@ Contains:
     test_regression_*(): one audited grammar defect each (inputs, nesting, pairing, split)
 """
 
+import contextlib
 import subprocess
 import sys
+import tracemalloc
 
 import pytest
 import shapely
@@ -313,7 +315,8 @@ def test_regression_glued_operators_raise_instead_of_misparsing() -> None:
 
 
 NESTING_DEPTH = 500
-HUGE_PARTS = 3 * 10**6
+HUGE_PARTS = 10**5
+SPLIT_PEAK_BUDGET_BYTES = 5_000_000
 MIRROR_TOL_M = 0.1
 HASH_SEEDS = ("1", "2", "3")
 SUBPROCESS_TIMEOUT_S = 20
@@ -392,12 +395,15 @@ def test_regression_mirror_pairs_finds_every_pair_within_tolerance() -> None:
 @pytest.mark.timeout(5, method="signal")
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_split_rejects_absurd_part_counts_quickly() -> None:
-    """Rejects an absurd part count instead of building millions of groups (audit 9.3; P0 #8)."""
+    """Rejects an absurd part count instead of building 100,000 empty groups (audit 9.3; P0 #8)."""
+    tracemalloc.start()
     try:
-        parts = split(["a"], HUGE_PARTS)
-    except ShowPyError:
-        return
-    assert len(parts) == HUGE_PARTS
+        with contextlib.suppress(ShowPyError):
+            split(["a"], HUGE_PARTS)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < SPLIT_PEAK_BUDGET_BYTES
 
 
 @pytest.mark.defect("UP-9.3-78")
