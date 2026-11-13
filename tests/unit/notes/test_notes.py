@@ -11,8 +11,9 @@ Contains:
 from datetime import UTC, datetime
 
 import pytest
+from pydantic import ValidationError as PydanticValidationError
 
-from showpy.core.errors import GeometryError, SchemaError, UnknownRefError
+from showpy.core.errors import GeometryError, SchemaError, ShowPyError, UnknownRefError
 from showpy.core.types import Region
 from showpy.notes.models import Anchor, Note
 from showpy.notes.notes import (
@@ -145,3 +146,49 @@ def test_accept_draft_adds_it_visible() -> None:
     assert show.notes[-1].visible
     assert show.notes[-1].author == "agent"
     assert [n.id for n in notes_for(show, "2")] == ["draft-1"]
+
+
+REJECTED = (ShowPyError, PydanticValidationError)
+NAIVE_TIME = datetime(2026, 11, 11)
+
+
+@pytest.mark.defect("UP-9.30-23")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-23")
+def test_regression_degenerate_area_anchor_never_leaks_shapely_errors() -> None:
+    """Rejects a two-point area anchor, or finds it without a Shapely ValueError (audit 9.3)."""
+    try:
+        anchor = Anchor.on_area(Region(exterior=((0.0, 0.0), (1.0, 1.0))))
+        show = add_note(two_set_show(), "area", anchor, "n1", AT, "pat")
+        notes_near(show, (0.0, 0.0), 1.0)
+    except REJECTED:
+        return
+
+
+@pytest.mark.defect("UP-9.30-24")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-24")
+def test_regression_accept_draft_accepts_a_hidden_draft_already_in_the_show() -> None:
+    """Makes a hidden draft that is already in the show visible (audit 9.3)."""
+    draft = Note(
+        id="d1", text="go", anchor=Anchor.on_set("1"), author="agent", created_at=AT, visible=False
+    )
+    hidden = two_set_show().model_copy(update={"notes": (draft,)})
+    assert accept_draft(hidden, draft).notes[0].visible
+
+
+@pytest.mark.defect("UP-9.30-25")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-25")
+def test_regression_accept_draft_rejects_blank_text() -> None:
+    """Rejects a draft whose text is blank, as add_note does (audit 9.3)."""
+    draft = Note(
+        id="d1", text="   ", anchor=Anchor.on_set("1"), author="agent", created_at=AT, visible=False
+    )
+    with pytest.raises(SchemaError):
+        accept_draft(two_set_show(), draft)
+
+
+@pytest.mark.defect("UP-9.30-26")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-26")
+def test_regression_note_rejects_a_naive_datetime() -> None:
+    """Rejects a created_at without a time zone, which cannot be compared (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        Note(id="n1", text="go", anchor=Anchor.on_set("1"), author="pat", created_at=NAIVE_TIME)
