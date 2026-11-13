@@ -139,3 +139,10 @@ agent share: the workspace, proposals, pins, `accept_draft` and `events_since`.
 `stage` imports nothing from Eight-agent. Eight-agent uses `stage` only through a pinned
 release and its public API. `stagecheck` will be a fourth repository that also depends on a
 pinned `stage` release.
+
+## Addendum 2026-11-12: src layout
+
+The package now lives at `src/stage/`, not `stage/`. The import name is unchanged: `import
+stage`. Paths named in the sections above (`stage/__init__.py`, `stage/core/...`) now sit
+under `src/`. A src layout means tests import the installed package rather than the checkout
+by accident. Type-check with `uv run mypy src tests`.

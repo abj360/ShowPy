@@ -113,7 +113,7 @@ Lower layers never import higher ones. `stagecheck` (the locked checker) reads s
 ## Structure
 
 ```
-stage/
+src/stage/
   core/     units, ids, errors, types, selection, validation, util
   geo/      curves, shapes, svg, text, regions, spacing, affine, transforms, measure, analysis
   time/     models, timeline, clock, measures, validate
@@ -136,7 +136,7 @@ docker/     Dockerfile, docker-compose.yml
 uv sync
 uv run pre-commit install
 uv run ruff format . && uv run ruff check .
-uv run mypy stage tests
+uv run mypy src tests
 uv run pytest
 ```
 
@@ -147,7 +147,7 @@ Read `CLAUDE.md`, `CONTRIBUTING.md` and the ADRs before changing anything. The P
 | Gate            | Command                                                                                          | CI  |
 | --------------- | ------------------------------------------------------------------------------------------------ | --- |
 | Format, lint    | `uv run ruff format --check . && uv run ruff check .`, then Prettier for Markdown, YAML and JSON | yes |
-| Types           | `uv run mypy stage tests` (strict)                                                               | yes |
+| Types           | `uv run mypy src tests` (strict)                                                                 | yes |
 | Tests           | `uv run pytest` (unit, property, golden, doctests; warnings are errors)                          | yes |
 | Golden          | `uv run pytest -m golden`                                                                        | yes |
 | Dependency scan | `pip-audit --strict --require-hashes` on the exported lockfile                                   | yes |
