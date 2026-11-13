@@ -28,6 +28,7 @@ import signal
 import subprocess
 import sys
 import time
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Literal
 
@@ -169,15 +170,40 @@ def _import_dirs() -> list[str]:
     return sorted(str(p) for p in minimal)
 
 
+def _link_args(executable: str, bound: Sequence[str] = ()) -> list[str]:
+    """Recreates every symlink met while resolving the interpreter path, hop by hop.
+
+    uv points a venv's python through a symlinked version directory; binding only the
+    resolved target would leave that path missing inside the sandbox. Symlinks inside an
+    already-bound directory exist there already and are skipped.
+    """
+    roots = [Path(b) for b in bound]
+    args: list[str] = []
+    pending, seen = [Path(executable)], set()
+    while pending:
+        path = pending.pop()
+        for prefix in (*reversed(path.parents), path):
+            if prefix in seen or not prefix.is_symlink():
+                continue
+            seen.add(prefix)
+            target = prefix.readlink()
+            target = target if target.is_absolute() else prefix.parent / target
+            if not any(prefix.parent.is_relative_to(root) for root in roots):
+                args += ["--symlink", str(target), str(prefix)]
+            pending.append(target)
+    return args
+
+
 def _bwrap_command(bwrap: str) -> list[str]:
-    binds: list[str] = []
+    mounts = ["--tmpfs", "/tmp", "--proc", "/proc", "--dev", "/dev"]
     for path in SYSTEM_DIRS:
-        binds += _bind_args(path)
-    for path in _import_dirs():
-        binds += ["--ro-bind", path, path]
-    flags = ["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp"]
-    flags += ["--unshare-all", "--die-with-parent", "--new-session", "--clearenv"]
-    return [bwrap, *binds, *flags, "--"]
+        mounts += _bind_args(path)
+    bound = _import_dirs()
+    for path in bound:
+        mounts += ["--ro-bind", path, path]
+    mounts += _link_args(sys.executable, [*bound, *SYSTEM_DIRS])
+    flags = ["--unshare-all", "--die-with-parent", "--new-session", "--clearenv"]
+    return [bwrap, *mounts, *flags, "--"]
 
 
 def _command(isolation: Isolation) -> list[str]:

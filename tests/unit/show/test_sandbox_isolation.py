@@ -124,3 +124,22 @@ def test_regression_child_crash_message_includes_its_stderr(
     with pytest.raises(ValidationError) as info:
         run_analysis_script(two_set_show(), "def main(ctx):\n    return 1\n")
     assert "boom-7f3a" in info.value.message
+
+
+def test_regression_private_tmp_is_mounted_before_the_binds() -> None:
+    command = sandbox._bwrap_command("bwrap")
+    first_bind = command.index("--ro-bind")
+    assert command.index("--tmpfs") < first_bind
+
+
+def test_regression_symlinks_on_the_interpreter_path_are_recreated(tmp_path: Path) -> None:
+    real = tmp_path / "cpython-3.14.7" / "bin"
+    real.mkdir(parents=True)
+    (real / "python3.14").write_text("")
+    (tmp_path / "cpython-3.14").symlink_to(tmp_path / "cpython-3.14.7")
+    venv_bin = tmp_path / "venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "python").symlink_to(tmp_path / "cpython-3.14" / "bin" / "python3.14")
+    args = sandbox._link_args(str(venv_bin / "python"))
+    pairs = {(args[i + 1], args[i + 2]) for i, a in enumerate(args) if a == "--symlink"}
+    assert (str(tmp_path / "cpython-3.14.7"), str(tmp_path / "cpython-3.14")) in pairs
