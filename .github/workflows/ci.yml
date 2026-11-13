@@ -17,6 +17,8 @@ jobs:
     name: check (${{ matrix.os }}, py${{ matrix.python }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      UV_PYTHON: ${{ matrix.python }}
     strategy:
       fail-fast: false
       matrix:
@@ -30,7 +32,9 @@ jobs:
         with:
           version: "0.12.9"
           enable-cache: true
-      - run: uv run --python ${{ matrix.python }} nox -s tests
+      - name: Check interpreter version
+        run: uv run --locked python -c "import sys; v='%d.%d'%sys.version_info[:2]; assert v=='${{ matrix.python }}', v; print(v)"
+      - run: uv run --locked nox -s tests
 
   lint-types:
     runs-on: ubuntu-24.04
