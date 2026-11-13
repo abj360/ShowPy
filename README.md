@@ -39,7 +39,6 @@ Drill design is slow because every dot, every move and every check is manual. `s
   - Set management and a show index.
   - Validation, versioned storage (in memory or files) and a workspace file view.
   - History with undo and redo, pins, proposals and canvas events.
-  - Sandboxed set scripts.
 - **Export:**
   - Publishing with performer claims and QR codes.
   - Coordinate sheets, charts and cue sheets.
@@ -109,7 +108,6 @@ Lower layers never import higher ones. `stagecheck` (the locked checker) reads s
 | `STAGE_UPDATE_SCHEMA` | env, tests                 | unset          | `1` regenerates `schemas/stage.show.v1.json`  |
 | `curve_tol`           | `PathEngine(...)`          | 0.01 m         | Chord error for drawn paths                   |
 | `tol`                 | `PathEngine.segments(...)` | 0.02 m         | Segment error for collision checks            |
-| `timeout_s`           | `build_set`, `run_script`  | 60 s           | Sandbox time limit                            |
 | `/config/limits.yaml` | workspace                  | designer-owned | Checker limits; agents cannot write it        |
 
 ## Structure
@@ -123,7 +121,7 @@ stage/
   sheet/    models, templates, surfaces, coords, bounds, replace, render
   notes/    models, notes
   choreo/   models, forms*, match*, paths, routes, motion, engine*, facing, avoid, motion_stats
-  show/     models, manage, sections, storage, repositories, history, collab, validate, build, sandbox
+  show/     models, manage, sections, storage, repositories, history, collab, validate
   export/   models, publish, print_sheets, pdf, data, positions, video
   examples.py  deterministic example shows
 schemas/    stage.show.v1.json

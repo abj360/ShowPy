@@ -1,8 +1,5 @@
 FROM python:3.14-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends bubblewrap=0.12.0-1~deb13u1 \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY --from=ghcr.io/astral-sh/uv:0.12.9 /uv /usr/local/bin/uv
 
 WORKDIR /app

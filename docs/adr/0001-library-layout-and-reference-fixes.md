@@ -123,3 +123,19 @@ note`. A `Set` has no group information; join with `show.cast` for it.
 Also: `import stage` lazily re-exports 533 public names (PEP 562), so the top-level
 re-export that decision 2 avoided now exists without the import-cycle risk. Library examples
 live in `stage.examples`.
+
+## Addendum 2026-11-12: three repositories
+
+Eight is now three private repositories with separate histories:
+
+- **`stage`** (this one): the library.
+- **`Eight`**: the product.
+- **`Eight-agent`**: agent-only code, namely set-script builds and the bubblewrap sandbox,
+  agent note drafting (`draft_notes`, `NoteDrafter`, `DraftedNote`) and `summarize_events`.
+
+Item 24's injected drafter therefore lives in Eight-agent. `stage` keeps only what designer and
+agent share: the workspace, proposals, pins, `accept_draft` and `events_since`.
+
+`stage` imports nothing from Eight-agent. Eight-agent uses `stage` only through a pinned
+release and its public API. `stagecheck` will be a fourth repository that also depends on a
+pinned `stage` release.
