@@ -275,8 +275,7 @@ Run with `pytest-benchmark` or `asv` on a fixed runner; fail on a 20% regression
 - **Version from the tag** (`hatch-vcs`) and `stage.__version__`. Today `pyproject.toml` says 0.1.0
   while HEAD is tagged v0.1.1.
 - **Distribution name: ShowPy** (decided 2026-11-13). Set `name = "ShowPy"` in `pyproject.toml`
-  (normalized `showpy` on the index; `pip install showpy`). The import name stays `stage`. Check
-  the name is free on the chosen index before the first release.
+  (normalized `showpy` on the index; `pip install showpy`). The import name stays `stage`. The name is free on PyPI.
 - **Metadata**: authors, keywords, classifiers (Python versions, `Typing :: Typed`, licence, OS),
   project URLs, `license-files`.
 - **Wheel and sdist contents**: ship the JSON schemas inside the package and load them with
