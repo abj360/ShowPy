@@ -3,10 +3,10 @@
 """
 test_golden_large.py --- replays a 240-spot seeded show and compares outputs to reviewed fixtures
 
-The show is seeded_show(7, 240, 24) and uses every path style. Large outputs are stored as
-exact counts, tolerance-compared sums and evenly spaced samples, so the fixtures stay small
-and survive last-digit float noise across platforms. Set SHOWPY_UPDATE_GOLDEN=1 to rewrite
-tests/golden/fixtures/large/; the diff then needs human review.
+The show is seeded_show(7, 240, 24): every path style, plus spots exiting and re-entering.
+Large outputs are stored as exact counts, tolerance-compared sums and evenly spaced samples,
+so the fixtures stay small and survive last-digit float noise across platforms. Set
+SHOWPY_UPDATE_GOLDEN=1 to rewrite tests/golden/fixtures/large/; the diff needs human review.
 """
 
 import csv
@@ -98,10 +98,16 @@ def _assert_close(got: Snapshot, want: Snapshot, where: str) -> None:
 
 
 @pytest.mark.golden
-def test_large_show_uses_every_path_style(show: Show) -> None:
+def test_large_show_uses_every_path_style_entrances_and_exits(show: Show) -> None:
     styles = {row.style for spec in show.transitions for row in spec.rows.values()}
     assert styles == set(PathStyle)
     assert len(show.cast.spots) == SPOTS
+    changes = {
+        (before.get(p.entity).on_field, p.on_field)
+        for before, after in zip(show.sets, show.sets[1:], strict=False)
+        for p in after.placements
+    }
+    assert {(True, False), (False, True)} <= changes
 
 
 @pytest.mark.golden
@@ -150,12 +156,8 @@ def _pdf_text(pdf: bytes) -> list[str]:
 @pytest.mark.golden
 def test_large_pdf_text_matches_fixture(show: Show) -> None:
     firsts = [next(s.id for s in show.cast.spots if s.group == key) for key in GROUPS]
-    current = {
-        entity: [
-            m.decode("latin-1") for m in PDF_TEXT.findall(to_pdf(coordinate_sheet(show, entity)))
-        ]
-        for entity in firsts
-    }
+    exiting = show.cast.ids()[-1]
+    current = {e: _pdf_text(to_pdf(coordinate_sheet(show, e))) for e in [*firsts, exiting]}
     assert current == _snapshot("pdf_text", current)
 
 

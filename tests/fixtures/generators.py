@@ -4,9 +4,11 @@
 generators.py --- deterministic seeded shows of any size, for benchmarks and golden files
 
 Every set after the first puts all groups but one into forms; the remaining group holds,
-except for a file that follows a route. Moving spots cycle through the other path styles,
-so every transition with enough spots uses all seven. Tempo ramps and holds sit on set
-boundaries. All randomness comes from seeded_rng(seed).
+except for a file that follows a route. Every EXIT_EVERY-th set, the last EXITING held spots
+leave the field where they stand; they enter again in the next set, when their group is
+placed into a form. Moving spots cycle through the other path styles, so every transition
+with enough spots uses all seven. Tempo ramps and holds sit on set boundaries. All
+randomness comes from seeded_rng(seed).
 
 Contains:
     GROUPS: group keys and label prefixes of seeded shows
@@ -64,6 +66,8 @@ FORM_GAP_M = 1.5
 ARC_SWEEP_DEG = 180.0
 WEDGE_SPREAD_DEG = 90.0
 FOLLOW_FILE = 3
+EXIT_EVERY = 3
+EXITING = 2
 FOLLOW_STEP_M = 4.0
 CURVE_BEND_M = 2.0
 REACH_M = 3.0
@@ -155,7 +159,13 @@ def _follow_and_hold(show: Show, tid: TransitionId, ids: list[str]) -> Show:
     rest = ids[FOLLOW_FILE:]
     if not rest:
         return show
-    return store_paths(show, PathsOp(spec=hold(show.transition(tid), rest)))
+    show = store_paths(show, PathsOp(spec=hold(show.transition(tid), rest)))
+    return _exit(show, tid[1], rest[-EXITING:]) if int(tid[1]) % EXIT_EVERY == 0 else show
+
+
+def _exit(show: Show, set_id: str, leaving: list[str]) -> Show:
+    off = {e: {"on_field": False} for e in leaving}
+    return with_set(show, show.set(set_id).with_placements(off))
 
 
 def _bend(a: Point, b: Point, sign: float) -> Point:

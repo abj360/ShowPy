@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_generators.py --- checks that seeded shows are deterministic, valid and use every path style
+test_generators.py --- checks seeded shows are deterministic, valid, varied in style and entrances
 """
 
 from showpy.choreo.models import PathStyle
@@ -33,3 +33,14 @@ def test_seeded_show_uses_every_path_style_ramps_and_holds() -> None:
     assert styles == set(PathStyle)
     assert any(t.ramp_to is not None for t in show.timeline.tempos)
     assert show.timeline.holds
+
+
+def test_seeded_show_has_entrances_and_exits() -> None:
+    show = seeded_show(SEED, SPOTS, SETS)
+    moves = [
+        (before.get(p.entity).on_field, p.on_field)
+        for before, after in zip(show.sets, show.sets[1:], strict=False)
+        for p in after.placements
+    ]
+    assert (True, False) in moves
+    assert (False, True) in moves
