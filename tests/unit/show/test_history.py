@@ -8,6 +8,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from showpy.cast.models import Group
+from showpy.cast.spots import add_spot
 from showpy.choreo.models import (
     FacingMode,
     FacingOverride,
@@ -19,6 +21,7 @@ from showpy.choreo.models import (
 from showpy.core.errors import (
     ConflictError,
     SchemaError,
+    ShowPyError,
     StorageError,
     UnknownRefError,
 )
@@ -36,7 +39,10 @@ from showpy.show.history import (
 )
 from showpy.show.manage import add_set
 from showpy.show.models import Pin, Show
+from showpy.show.pinning import pin, unpin
+from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import load_show, open_workspace, save_show
+from showpy.show.validate import validate_show
 from tests.fixtures.shows import two_set_show
 from tests.helpers import open_session
 
@@ -229,3 +235,120 @@ def test_changelog_lines_since_revision() -> None:
     assert lines[0].endswith("2026-11-11 12:01 agent: script 1 (1 path)")
     assert len(changelog(agent).splitlines()) == 2
     assert changelog(agent, agent.revision) == ""
+
+
+def _with_set_two(show: Show, **fields: object) -> Show:
+    edited = show.sets[1].model_copy(update=fields)
+    return show.model_copy(update={"sets": (show.sets[0], edited, *show.sets[2:])})
+
+
+@pytest.mark.defect("UP-9.7-36")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-36")
+def test_regression_undo_does_not_leave_a_path_row_for_a_removed_spot() -> None:
+    """Refuses or repairs an undo that would orphan the agent's path row (audit 9.7 history)."""
+    _, agent, designer = open_session(two_set_show(), AT)
+    save_show(
+        designer, add_spot(load_show(designer), (0.0, 5.0), "trumpets", "1"), AT + STEP, "add"
+    )
+    new_spot = load_show(designer).cast.ids()[-1]
+    agent.refresh()
+    row = TransitionSpec(
+        id=("1", "2"), counts=8.0, rows={new_spot: PathRow(entity=new_spot, start=1)}
+    )
+    save_show(agent, load_show(agent).model_copy(update={"transitions": (row,)}), AT + 2 * STEP)
+    try:
+        undo(designer, AT + 3 * STEP)
+    except ShowPyError:
+        return
+    assert validate_show(load_show(designer)).ok
+
+
+@pytest.mark.defect("UP-9.7-37")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-37")
+def test_regression_undoing_the_first_save_keeps_a_loadable_show() -> None:
+    """Refuses to undo the first save, or leaves a loadable show (audit 9.7 history)."""
+    ws = open_workspace(InMemoryRepository(), "s", "designer")
+    save_show(ws, two_set_show(), AT)
+    try:
+        undo(ws, AT + STEP)
+    except ShowPyError:
+        return
+    assert load_show(ws).sets
+
+
+@pytest.mark.defect("UP-9.7-38")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-38")
+def test_regression_diff_show_reports_a_new_group() -> None:
+    """Reports a group added to the cast (audit 9.7 history)."""
+    base = two_set_show()
+    groups = {**base.cast.groups, "extra": Group(key="extra", label_prefix="E")}
+    edited = base.model_copy(update={"cast": base.cast.model_copy(update={"groups": groups})})
+    assert diff_show(base, edited)
+
+
+@pytest.mark.defect("UP-9.7-39")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-39")
+def test_regression_diff_show_reports_a_pack_change() -> None:
+    """Reports a changed pack key (audit 9.7 history)."""
+    base = two_set_show()
+    assert diff_show(base, base.model_copy(update={"pack": "marching"}))
+
+
+@pytest.mark.defect("UP-9.7-40")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-40")
+def test_regression_diff_show_reports_a_set_cue_change() -> None:
+    """Reports a changed set cue (audit 9.7 history)."""
+    base = two_set_show()
+    assert diff_show(base, _with_set_two(base, cue="hit"))
+
+
+@pytest.mark.defect("UP-9.7-41")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-41")
+def test_regression_diff_show_reports_a_set_label_change() -> None:
+    """Reports a changed set label (audit 9.7 history)."""
+    base = two_set_show()
+    assert diff_show(base, _with_set_two(base, label="Pose"))
+
+
+@pytest.mark.defect("UP-9.7-42")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-42")
+def test_regression_diff_show_reports_a_placement_note_change() -> None:
+    """Reports a changed placement note (audit 9.7 history)."""
+    base = two_set_show()
+    noted = base.sets[1].with_placements({"T1": {"note": "hold"}}, force=True)
+    assert diff_show(base, _with_set_two(base, placements=noted.placements))
+
+
+@pytest.mark.defect("UP-9.7-43")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-43")
+def test_regression_diff_show_reports_a_selection_change() -> None:
+    """Reports a changed named selection (audit 9.7 history)."""
+    base = two_set_show()
+    selections = {"front": frozenset({"T1", "T2"})}
+    edited = base.model_copy(
+        update={"cast": base.cast.model_copy(update={"selections": selections})}
+    )
+    assert diff_show(base, edited)
+
+
+@pytest.mark.defect("UP-9.7-44")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-44")
+def test_regression_rename_entities_rewrites_expression_selectors() -> None:
+    """Rewrites spot IDs inside expression selectors, as cast.rewrite does (audit 9.7 history)."""
+    base = two_set_show()
+    override = FacingOverride(entities="T1 + T2", mode=FacingMode.TO_TARGET, start=1.0, end=2.0)
+    renamed = rename_entities(
+        base.model_copy(update={"facing_overrides": (override,)}), {"T1": "S1"}
+    )
+    entities = renamed.facing_overrides[0].entities
+    assert isinstance(entities, str)
+    assert "S1" in entities
+    assert "T1" not in entities
+
+
+@pytest.mark.defect("UP-9.7-45")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-45")
+def test_regression_unpin_normalizes_transition_ids_like_pin() -> None:
+    """Accepts `1->2` in unpin as pin does (audit 9.7 history)."""
+    pinned = pin(two_set_show(), "transition", "1->2", "hold")
+    assert unpin(pinned, "transition", "1->2").pins == ()
