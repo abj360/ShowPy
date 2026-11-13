@@ -43,6 +43,11 @@ def _show_json(ws: Workspace) -> dict[str, object]:
     return document
 
 
+def _store_then_read(ws: Workspace, path: str, raw: bytes) -> None:
+    ws.commit({path: raw}, at=LATER, message="store")
+    ws.read(path)
+
+
 @pytest.mark.defect("UP-9.7-06")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-06")
 def test_regression_commit_refuses_garbage_show_document() -> None:
@@ -117,8 +122,7 @@ def test_regression_reading_root_is_a_library_error() -> None:
 @pytest.mark.defect("UP-9.7-25")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-25")
 def test_regression_invalid_utf8_text_file_is_a_library_error() -> None:
-    """Maps invalid UTF-8 in a text file to a ShowPyError, not UnicodeDecodeError (audit 9.7 #9)."""
+    """Maps invalid UTF-8 in a text file to a ShowPyError (audit 9.7 item 9)."""
     _, designer = _session()
     with pytest.raises(ShowPyError):
-        designer.commit({"/renders/a.txt": INVALID_UTF8}, at=LATER, message="bad text")
-        designer.read("/renders/a.txt")
+        _store_then_read(designer, "/renders/a.txt", INVALID_UTF8)
