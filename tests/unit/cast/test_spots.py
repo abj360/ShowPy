@@ -4,7 +4,7 @@
 test_spots.py --- tests creating, copying, deleting, regrouping and relabeling spots in a show
 
 Contains:
-    test_*(): one behavior of stage.cast.spots each
+    test_*(): one behavior of showpy.cast.spots each
 """
 
 from datetime import UTC, datetime
@@ -12,8 +12,8 @@ from datetime import UTC, datetime
 import pytest
 import shapely
 
-from stage.cast.models import Group, LabelScheme, Shape
-from stage.cast.spots import (
+from showpy.cast.models import Group, LabelScheme, Shape
+from showpy.cast.spots import (
     _rename_everywhere,
     add_group,
     add_spot,
@@ -29,22 +29,22 @@ from stage.cast.spots import (
     set_claimable,
     set_shape,
 )
-from stage.choreo.models import (
+from showpy.choreo.models import (
     FacingMode,
     PathRow,
 )
-from stage.core.errors import (
+from showpy.core.errors import (
     LockedError,
     SchemaError,
     SpacingError,
     UnknownRefError,
     ValidationError,
 )
-from stage.core.selection import Selection
-from stage.core.types import Region
-from stage.core.util import approx_equal
-from stage.geo.shapes import line
-from stage.show.models import Show
+from showpy.core.selection import Selection
+from showpy.core.types import Region
+from showpy.core.util import approx_equal
+from showpy.geo.shapes import line
+from showpy.show.models import Show
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.shows import two_set_show
 

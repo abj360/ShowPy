@@ -3,5 +3,5 @@
     "prettier": "3.6.2"
   },
   "private": true,
-  "name": "stage-tooling"
+  "name": "showpy-tooling"
 }

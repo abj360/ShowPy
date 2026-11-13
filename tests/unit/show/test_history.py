@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from stage.choreo.models import (
+from showpy.choreo.models import (
     FacingMode,
     FacingOverride,
     Form,
@@ -16,14 +16,14 @@ from stage.choreo.models import (
     Route,
     TransitionSpec,
 )
-from stage.core.errors import (
+from showpy.core.errors import (
     ConflictError,
     SchemaError,
     StorageError,
     UnknownRefError,
 )
-from stage.notes.models import Anchor, Note
-from stage.show.history import (
+from showpy.notes.models import Anchor, Note
+from showpy.show.history import (
     changelog,
     diff_paths,
     diff_sets,
@@ -34,10 +34,10 @@ from stage.show.history import (
     snapshot,
     undo,
 )
-from stage.show.manage import add_set
-from stage.show.models import Pin, Show
-from stage.show.repositories import InMemoryRepository
-from stage.show.storage import Workspace, load_show, open_workspace, save_show
+from showpy.show.manage import add_set
+from showpy.show.models import Pin, Show
+from showpy.show.repositories import InMemoryRepository
+from showpy.show.storage import Workspace, load_show, open_workspace, save_show
 from tests.fixtures.shows import two_set_show
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)

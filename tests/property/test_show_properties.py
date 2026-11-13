@@ -7,11 +7,11 @@ test_show_properties.py --- checks set, index, storage and rename invariants on 
 from hypothesis import given
 from hypothesis import strategies as st
 
-from stage.core.util import approx_equal
-from stage.show.documents import decode_show, encode_show
-from stage.show.history import rename_entities
-from stage.show.manage import add_set, index, insert_subset, renumber
-from stage.show.models import Show
+from showpy.core.util import approx_equal
+from showpy.show.documents import decode_show, encode_show
+from showpy.show.history import rename_entities
+from showpy.show.manage import add_set, index, insert_subset, renumber
+from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 
 TOL = 1e-9

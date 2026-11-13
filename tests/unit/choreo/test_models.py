@@ -6,7 +6,7 @@ test_models.py --- tests Placement, Set editing and locks, forms specs and path 
 
 import pytest
 
-from stage.choreo.models import (
+from showpy.choreo.models import (
     ApprovalState,
     Easing,
     FacingMode,
@@ -20,9 +20,9 @@ from stage.choreo.models import (
     TransitionSpec,
     Waypoint,
 )
-from stage.core.errors import LockedError, PathError, SchemaError, UnknownRefError
-from stage.core.selection import Selection
-from stage.core.util import approx_equal
+from showpy.core.errors import LockedError, PathError, SchemaError, UnknownRefError
+from showpy.core.selection import Selection
+from showpy.core.util import approx_equal
 
 
 def _set() -> Set:

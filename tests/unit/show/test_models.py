@@ -6,9 +6,9 @@ test_models.py --- tests the Show aggregate: set and transition lookup, JSON rou
 
 import pytest
 
-from stage.choreo.models import PathRow, TransitionSpec
-from stage.core.errors import SchemaError, UnknownRefError
-from stage.show.models import Show
+from showpy.choreo.models import PathRow, TransitionSpec
+from showpy.core.errors import SchemaError, UnknownRefError
+from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 
 

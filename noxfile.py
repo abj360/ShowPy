@@ -31,11 +31,11 @@ PYTHON_FOR_WHEEL = "3.14"
 USAGE_BLOCK = re.compile(r"^## Usage\n.*?```python\n(.*?)```", re.DOTALL | re.MULTILINE)
 WHEEL_CHECK = """
 import importlib.resources as resources
-import stage
-assert resources.files("stage").joinpath("py.typed").is_file(), "py.typed missing"
-assert stage.schema_path("stage.show.v1.json").is_file(), "schema missing"
-assert "site-packages" in stage.__file__, stage.__file__
-print("Found stage", stage.__version__)
+import showpy
+assert resources.files("showpy").joinpath("py.typed").is_file(), "py.typed missing"
+assert showpy.schema_path("showpy.show.v1.json").is_file(), "schema missing"
+assert "site-packages" in showpy.__file__, showpy.__file__
+print("Found showpy", showpy.__version__)
 """
 
 nox.options.sessions = ["lint", "types", "tests", "hashseeds", "audit"]
@@ -70,7 +70,7 @@ def lint(session: nox.Session) -> None:
 @nox.session
 def types(session: nox.Session) -> None:
     """Runs mypy --strict over the library and tests."""
-    _uv_run(session, "mypy", "stage", "tests")
+    _uv_run(session, "mypy", "showpy", "tests")
 
 
 @nox.session

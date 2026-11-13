@@ -6,8 +6,8 @@ test_match_models.py --- tests MatchOptions validation, MatchResult alignment an
 
 import pytest
 
-from stage.choreo.models import FormFnInfo, MatchOptions, MatchResult
-from stage.core.errors import SchemaError
+from showpy.choreo.models import FormFnInfo, MatchOptions, MatchResult
+from showpy.core.errors import SchemaError
 
 
 def test_match_options_defaults_follow_the_reference() -> None:

@@ -154,3 +154,13 @@ The src layout was reverted the same day at the designer's request. The package 
 because pytest runs from the repo root, tests can import the checkout even when the built
 wheel is missing a file. `tests/unit/test_public_api.py` checks that `py.typed` ships, and the
 Docker build installs the package before testing.
+
+## Addendum 2026-11-13: package renamed to showpy
+
+The library is now ShowPy, and the import name is `showpy`. It is a clean break with no `stage`
+compatibility shim. Paths named in the sections above (`stage/__init__.py`, `stage/core/...`)
+now sit under `showpy/`. `StageError` is `ShowPyError`, the `STAGE_UPDATE_*` test switches are
+`SHOWPY_UPDATE_*`, and the interchange tag `stage.show.v1` is `showpy.show.v1`. `import_json`
+still reads documents tagged `stage.show.v1` (`LEGACY_SCHEMA_TAGS`); `export_json` writes only
+the new tag. The domain word stage (the sheet kind, the template, text about a theater stage)
+is unchanged.

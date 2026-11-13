@@ -11,8 +11,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import BaseModel
 
-from stage.core.errors import SchemaError
-from stage.core.util import (
+from showpy.core.errors import SchemaError
+from showpy.core.util import (
     approx_equal,
     as_points,
     chunk_counts,
@@ -118,7 +118,7 @@ def test_chunk_counts_rejects_zero_parts() -> None:
 
 
 def test_log_emits_structured_record(caplog: pytest.LogCaptureFixture) -> None:
-    caplog.set_level("INFO", logger="stage")
+    caplog.set_level("INFO", logger="showpy")
     log("built set", set_id="12")
     assert caplog.records[0].getMessage() == "built set set_id=12"
 

@@ -11,9 +11,9 @@ import json
 import pandas as pd
 import pytest
 
-from stage.core.errors import SchemaError, UnknownRefError
-from stage.core.util import approx_equal
-from stage.export.data import (
+from showpy.core.errors import SchemaError, UnknownRefError
+from showpy.core.util import approx_equal
+from showpy.export.data import (
     DEFAULT_FORMATS,
     SCHEMA_TAG,
     as_table,
@@ -26,9 +26,9 @@ from stage.export.data import (
     to_csv,
     to_text,
 )
-from stage.export.models import Chart, ChartRow, CoordinateSheet, SheetRow
-from stage.export.print_sheets import chart, coordinate_sheet, cue_sheet
-from stage.show.models import Show
+from showpy.export.models import Chart, ChartRow, CoordinateSheet, SheetRow
+from showpy.export.print_sheets import chart, coordinate_sheet, cue_sheet
+from showpy.show.models import Show
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.export_shows import guided_show
 from tests.fixtures.shows import two_set_show
@@ -38,7 +38,7 @@ TOL = 1e-9
 
 def test_export_json_is_tagged_and_json_safe() -> None:
     exported = export_json(rich_show())
-    assert exported["schema"] == SCHEMA_TAG == "stage.show.v1"
+    assert exported["schema"] == SCHEMA_TAG == "showpy.show.v1"
     assert json.loads(json.dumps(exported)) == exported
 
 
@@ -62,9 +62,9 @@ def test_include_refuses_unknown_fields() -> None:
     "document",
     [
         {"show": {}},
-        {"schema": "stage.show/1", "show": {}},
-        {"schema": "stage.show.v1"},
-        {"schema": "stage.show.v1", "show": {"id": "x"}},
+        {"schema": "showpy.show/1", "show": {}},
+        {"schema": "showpy.show.v1"},
+        {"schema": "showpy.show.v1", "show": {"id": "x"}},
     ],
 )
 def test_import_json_refuses_wrong_or_missing_schema(document: dict[str, object]) -> None:
@@ -165,3 +165,8 @@ def test_format_registry_is_immutable() -> None:
         DEFAULT_FORMATS.exporter("shout")
     with pytest.raises(SchemaError):
         register_exporter(DEFAULT_FORMATS, " ", shout)
+
+
+def test_export_json_writes_showpy_tag() -> None:
+    assert export_json(two_set_show())["schema"] == "showpy.show.v1"
+    assert SCHEMA_TAG == "showpy.show.v1"

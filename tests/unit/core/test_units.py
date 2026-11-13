@@ -10,8 +10,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from stage.core.errors import UnknownRefError, ZeroLengthError
-from stage.core.units import (
+from showpy.core.errors import UnknownRefError, ZeroLengthError
+from showpy.core.units import (
     DEFAULT_UNITS,
     angle_diff,
     convert,
@@ -22,7 +22,7 @@ from stage.core.units import (
     units,
     vector_facing,
 )
-from stage.core.util import approx_equal
+from showpy.core.util import approx_equal
 
 
 def test_convert_feet_to_meters() -> None:

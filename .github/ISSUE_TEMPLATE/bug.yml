@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a defect in stage
+description: Report a defect in ShowPy
 labels: [bug]
 body:
   - type: markdown
@@ -22,6 +22,6 @@ body:
     id: versions
     attributes:
       label: Versions
-      description: stage, Python and OS
+      description: showpy, Python and OS
     validations:
       required: true

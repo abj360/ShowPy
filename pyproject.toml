@@ -30,9 +30,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/abj360/stage"
-Repository = "https://github.com/abj360/stage"
-Issues = "https://github.com/abj360/stage/issues"
+Homepage = "https://github.com/abj360/ShowPy"
+Repository = "https://github.com/abj360/ShowPy"
+Issues = "https://github.com/abj360/ShowPy/issues"
 
 [build-system]
 requires = ["hatchling==1.27.0", "hatch-vcs==0.5.0"]
@@ -45,7 +45,7 @@ source = "vcs"
 exclude = ["docs/", "tests/", ".claude/", "node_modules/"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["stage"]
+packages = ["showpy"]
 
 [dependency-groups]
 dev = [
@@ -67,7 +67,9 @@ dev = [
     "types-shapely==2.1.0.20261030",
 ]
 
+# The study guide is frozen and still imports the old `stage` name.
 [tool.ruff]
+extend-exclude = ["docs/guide"]
 line-length = 100
 target-version = "py312"
 
@@ -81,8 +83,8 @@ convention = "google"
 
 # RUF012: pydantic copies field defaults per instance, so {} defaults are safe.
 [tool.ruff.lint.per-file-ignores]
-"stage/**/models.py" = ["RUF012"]
-"stage/**/*_models.py" = ["RUF012"]
+"showpy/**/models.py" = ["RUF012"]
+"showpy/**/*_models.py" = ["RUF012"]
 "tests/**" = ["D"]
 
 [tool.ruff.format]
@@ -99,7 +101,7 @@ module = ["segno", "segno.*", "imageio", "imageio.*", "imageio_ffmpeg"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "stage"]
+testpaths = ["tests", "showpy"]
 pythonpath = ["."]
 addopts = "--doctest-modules -q --strict-markers --import-mode=importlib"
 markers = ["golden: replays real shows against reviewed fixtures"]
@@ -107,7 +109,7 @@ filterwarnings = ["error"]
 
 [tool.deptry]
 extend_exclude = ["docs"]
-known_first_party = ["stage"]
+known_first_party = ["showpy"]
 
 # Pillow installs the PIL module.
 [tool.deptry.package_module_name_map]

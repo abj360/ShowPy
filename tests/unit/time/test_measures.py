@@ -6,11 +6,11 @@ test_measures.py --- tests 1-based measure labels, measure lookups and mid-show 
 
 import pytest
 
-from stage.core.errors import TimelineError, TimeRangeError
-from stage.core.util import approx_equal
-from stage.time.measures import count_to_measure, measure_to_count
-from stage.time.models import MeasureLabel, MeasureSetting, Timeline, TimelineMode
-from stage.time.timeline import new_timeline, set_measures
+from showpy.core.errors import TimelineError, TimeRangeError
+from showpy.core.util import approx_equal
+from showpy.time.measures import count_to_measure, measure_to_count
+from showpy.time.models import MeasureLabel, MeasureSetting, Timeline, TimelineMode
+from showpy.time.timeline import new_timeline, set_measures
 
 TOL = 1e-9
 

@@ -10,8 +10,8 @@ import math
 import numpy as np
 import pytest
 
-from stage.choreo.form_fns import DEFAULT_FORM_FNS, register_form_fn
-from stage.choreo.forms import (
+from showpy.choreo.form_fns import DEFAULT_FORM_FNS, register_form_fn
+from showpy.choreo.forms import (
     arc_form,
     block_form,
     circle_form,
@@ -28,11 +28,11 @@ from stage.choreo.forms import (
     svg_form,
     wedge_form,
 )
-from stage.choreo.models import FacingSpec, Form, SpacingSpec
-from stage.core.errors import LockedError, SchemaError, SpacingError, UnknownRefError
-from stage.core.types import Box2, Points
-from stage.core.util import approx_equal
-from stage.geo.curves import curve_from_construction
+from showpy.choreo.models import FacingSpec, Form, SpacingSpec
+from showpy.core.errors import LockedError, SchemaError, SpacingError, UnknownRefError
+from showpy.core.types import Box2, Points
+from showpy.core.util import approx_equal
+from showpy.geo.curves import curve_from_construction
 
 TOL = 1e-6
 MEMBERS = ["A", "B", "C", "D", "E"]

@@ -8,18 +8,18 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from stage.choreo.models import Form, PathRow, Placement, TransitionSpec
-from stage.core.errors import (
+from showpy.choreo.models import Form, PathRow, Placement, TransitionSpec
+from showpy.core.errors import (
     ConflictError,
     LockedError,
     SchemaError,
     TimeRangeError,
     UnknownRefError,
 )
-from stage.core.selection import Selection
-from stage.notes.models import Anchor
-from stage.show.changes import apply_change
-from stage.show.collab import (
+from showpy.core.selection import Selection
+from showpy.notes.models import Anchor
+from showpy.show.changes import apply_change
+from showpy.show.collab import (
     accept,
     apply_event,
     events_since,
@@ -30,10 +30,10 @@ from stage.show.collab import (
     reject,
     selection,
 )
-from stage.show.documents import dump_json
-from stage.show.files import COMMENTS_DOC
-from stage.show.manage import add_set
-from stage.show.models import (
+from showpy.show.documents import dump_json
+from showpy.show.files import COMMENTS_DOC
+from showpy.show.manage import add_set
+from showpy.show.models import (
     CanvasEvent,
     Comment,
     CountsOp,
@@ -43,9 +43,9 @@ from stage.show.models import (
     PlacementOp,
     Show,
 )
-from stage.show.pinning import pin, unpin
-from stage.show.repositories import InMemoryRepository
-from stage.show.storage import Workspace, load_show, open_workspace, save_show
+from showpy.show.pinning import pin, unpin
+from showpy.show.repositories import InMemoryRepository
+from showpy.show.storage import Workspace, load_show, open_workspace, save_show
 from tests.fixtures.shows import two_set_show
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)

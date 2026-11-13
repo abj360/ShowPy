@@ -8,15 +8,15 @@ from datetime import UTC, datetime
 
 import pytest
 
-from stage.choreo.models import FacingMode, FacingOverride, Form, TransitionSpec
-from stage.core.errors import SchemaError, TimelineError
-from stage.core.util import approx_equal
-from stage.notes.models import Anchor, Note
-from stage.show.manage import add_set, index, renumber
-from stage.show.models import Pin, Show
-from stage.show.sections import join_sections, split_section
-from stage.time.clock import count_to_seconds
-from stage.time.models import AudioTrack, Hold, Marker, MeasureSetting, TempoSection
+from showpy.choreo.models import FacingMode, FacingOverride, Form, TransitionSpec
+from showpy.core.errors import SchemaError, TimelineError
+from showpy.core.util import approx_equal
+from showpy.notes.models import Anchor, Note
+from showpy.show.manage import add_set, index, renumber
+from showpy.show.models import Pin, Show
+from showpy.show.sections import join_sections, split_section
+from showpy.time.clock import count_to_seconds
+from showpy.time.models import AudioTrack, Hold, Marker, MeasureSetting, TempoSection
 from tests.fixtures.shows import two_set_show
 from tests.golden.opener import opener_show
 

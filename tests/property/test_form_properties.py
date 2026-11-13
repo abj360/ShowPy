@@ -8,12 +8,12 @@ import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from stage.choreo.form_ops import gate, merge_forms, split_form, transform_form
-from stage.choreo.forms import arc_form, circle_form, line_form, placements, slots
-from stage.choreo.models import Form
-from stage.core.types import Points
-from stage.core.util import approx_equal
-from stage.geo.affine import rotation_matrix
+from showpy.choreo.form_ops import gate, merge_forms, split_form, transform_form
+from showpy.choreo.forms import arc_form, circle_form, line_form, placements, slots
+from showpy.choreo.models import Form
+from showpy.core.types import Points
+from showpy.core.util import approx_equal
+from showpy.geo.affine import rotation_matrix
 
 TOL = 1e-6
 coords = st.floats(min_value=-20.0, max_value=20.0)

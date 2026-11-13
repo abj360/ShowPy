@@ -9,12 +9,12 @@ import math
 import numpy as np
 import pytest
 
-from stage.choreo.forms import line_form
-from stage.choreo.match import bottleneck_value, cost_matrix, match, match_by_order
-from stage.choreo.models import MatchOptions, Placement, Set
-from stage.core.errors import MatchError, SchemaError, UnknownRefError
-from stage.core.types import Point
-from stage.core.util import approx_equal
+from showpy.choreo.forms import line_form
+from showpy.choreo.match import bottleneck_value, cost_matrix, match, match_by_order
+from showpy.choreo.models import MatchOptions, Placement, Set
+from showpy.core.errors import MatchError, SchemaError, UnknownRefError
+from showpy.core.types import Point
+from showpy.core.util import approx_equal
 
 TOL = 1e-9
 

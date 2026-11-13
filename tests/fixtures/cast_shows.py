@@ -9,7 +9,7 @@ Contains:
 
 from datetime import UTC, datetime
 
-from stage.choreo.models import (
+from showpy.choreo.models import (
     FacingMode,
     FacingOverride,
     Form,
@@ -18,11 +18,11 @@ from stage.choreo.models import (
     Route,
     TransitionSpec,
 )
-from stage.core.selection import Selection
-from stage.core.types import Region
-from stage.notes.models import Anchor, Note
-from stage.sheet.models import Zone, ZoneKind
-from stage.show.models import Show
+from showpy.core.selection import Selection
+from showpy.core.types import Region
+from showpy.notes.models import Anchor, Note
+from showpy.sheet.models import Zone, ZoneKind
+from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)

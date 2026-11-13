@@ -11,8 +11,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from stage.core.util import approx_equal
-from stage.geo.affine import (
+from showpy.core.util import approx_equal
+from showpy.geo.affine import (
     is_similarity,
     mirror_matrix,
     rotation_matrix,
@@ -22,8 +22,8 @@ from stage.geo.affine import (
     transform_points,
     translation_matrix,
 )
-from stage.geo.curves import ArcCurve, CircleCurve, Polyline, SplineCurve
-from stage.geo.shapes import arc, bezier, circle, curve_through, ellipse, join, line, spiral
+from showpy.geo.curves import ArcCurve, CircleCurve, Polyline, SplineCurve
+from showpy.geo.shapes import arc, bezier, circle, curve_through, ellipse, join, line, spiral
 
 CURVES = [
     line((0, 0), (4, 1)),

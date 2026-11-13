@@ -6,12 +6,12 @@ test_coords.py --- tests coordinate presets, wording, parsing and audience-side 
 
 import pytest
 
-from stage.core.errors import SchemaError, UnknownRefError
-from stage.core.util import approx_equal
-from stage.sheet.coords import coordinate_presets, from_coords, set_coordinates, to_coords
-from stage.sheet.models import CoordinateKind, CoordinateSystem
-from stage.sheet.templates import get_sheet
-from stage.show.models import Show
+from showpy.core.errors import SchemaError, UnknownRefError
+from showpy.core.util import approx_equal
+from showpy.sheet.coords import coordinate_presets, from_coords, set_coordinates, to_coords
+from showpy.sheet.models import CoordinateKind, CoordinateSystem
+from showpy.sheet.templates import get_sheet
+from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 
 TOL = 1e-9

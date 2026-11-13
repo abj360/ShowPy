@@ -8,9 +8,9 @@ import math
 
 import pytest
 
-from stage.choreo.engine import PathEngine
-from stage.choreo.models import PathStyle, TransitionSpec
-from stage.choreo.routes import (
+from showpy.choreo.engine import PathEngine
+from showpy.choreo.models import PathStyle, TransitionSpec
+from showpy.choreo.routes import (
     counter_march,
     follow,
     follow_and_set_targets,
@@ -18,8 +18,8 @@ from stage.choreo.routes import (
     rotate_path,
     two_part,
 )
-from stage.core.errors import LockedError, PathError
-from stage.core.util import approx_equal
+from showpy.core.errors import LockedError, PathError
+from showpy.core.util import approx_equal
 from tests.fixtures.motion_shows import TID, with_targets
 from tests.fixtures.shows import two_set_show
 

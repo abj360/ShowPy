@@ -9,9 +9,9 @@ import math
 import numpy as np
 import pytest
 
-from stage.core.errors import GeometryError
-from stage.core.util import approx_equal
-from stage.geo.shapes import (
+from showpy.core.errors import GeometryError
+from showpy.core.util import approx_equal
+from showpy.geo.shapes import (
     arc,
     arc_from_chord,
     arc_through,

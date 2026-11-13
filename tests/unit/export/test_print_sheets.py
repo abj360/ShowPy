@@ -8,13 +8,13 @@ import math
 
 import pytest
 
-from stage.choreo.models import PathRow, Placement, Set
-from stage.core.errors import SchemaError, UnknownRefError
-from stage.core.util import approx_equal
-from stage.export.models import Claim
-from stage.export.print_sheets import chart, coordinate_sheet, coordinate_sheets, cue_sheet
-from stage.show.models import Show
-from stage.time.models import Cue, Marker, MeasureSetting, Timeline, TimelineMode
+from showpy.choreo.models import PathRow, Placement, Set
+from showpy.core.errors import SchemaError, UnknownRefError
+from showpy.core.util import approx_equal
+from showpy.export.models import Claim
+from showpy.export.print_sheets import chart, coordinate_sheet, coordinate_sheets, cue_sheet
+from showpy.show.models import Show
+from showpy.time.models import Cue, Marker, MeasureSetting, Timeline, TimelineMode
 from tests.fixtures.export_shows import AT, guided_show, live_publication, performer
 from tests.fixtures.motion_shows import with_rows
 from tests.fixtures.shows import two_set_show

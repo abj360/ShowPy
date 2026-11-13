@@ -4,12 +4,12 @@
 test_rewrite.py --- tests rewriting and dropping spot IDs across a whole show
 
 Contains:
-    test_*(): one behavior of stage.cast.rewrite each
+    test_*(): one behavior of showpy.cast.rewrite each
 """
 
-from stage.cast.rewrite import faces_entity, rewrite_spot_ids
-from stage.choreo.models import FacingMode
-from stage.core.selection import Selection
+from showpy.cast.rewrite import faces_entity, rewrite_spot_ids
+from showpy.choreo.models import FacingMode
+from showpy.core.selection import Selection
 from tests.fixtures.cast_shows import rich_show
 
 

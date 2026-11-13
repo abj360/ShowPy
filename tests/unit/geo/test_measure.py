@@ -10,10 +10,10 @@ import numpy as np
 import pytest
 import shapely
 
-from stage.choreo.models import Placement, Set
-from stage.core.errors import GeometryError, UnknownRefError
-from stage.core.util import approx_equal
-from stage.geo.measure import (
+from showpy.choreo.models import Placement, Set
+from showpy.core.errors import GeometryError, UnknownRefError
+from showpy.core.util import approx_equal
+from showpy.geo.measure import (
     bounds,
     center,
     centroid,
@@ -29,7 +29,7 @@ from stage.geo.measure import (
     reachable_region,
     symmetry_error,
 )
-from stage.geo.shapes import arc, circle, line
+from showpy.geo.shapes import arc, circle, line
 
 TOL = 1e-6
 

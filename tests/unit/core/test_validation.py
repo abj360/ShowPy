@@ -6,7 +6,7 @@ test_validation.py --- tests ValidationReport status and one-line rendering
 
 from typing import Literal
 
-from stage.core.validation import ValidationIssue, ValidationReport
+from showpy.core.validation import ValidationIssue, ValidationReport
 
 
 def _issue(level: Literal["error", "warning"]) -> ValidationIssue:

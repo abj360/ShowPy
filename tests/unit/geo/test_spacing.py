@@ -10,11 +10,11 @@ import shapely
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from stage.core.errors import SpacingError
-from stage.core.util import approx_equal
-from stage.geo.regions import region
-from stage.geo.shapes import arc, circle, line, rect
-from stage.geo.spacing import (
+from showpy.core.errors import SpacingError
+from showpy.core.util import approx_equal
+from showpy.geo.regions import region
+from showpy.geo.shapes import arc, circle, line, rect
+from showpy.geo.spacing import (
     block,
     concentric,
     distribute_on_points,

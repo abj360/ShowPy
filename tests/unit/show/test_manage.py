@@ -8,9 +8,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from stage.cast.models import Cast, Group, Spot
-from stage.choreo.models import Form, PathRow, Placement, Route, TransitionSpec, Waypoint
-from stage.core.errors import (
+from showpy.cast.models import Cast, Group, Spot
+from showpy.choreo.models import Form, PathRow, Placement, Route, TransitionSpec, Waypoint
+from showpy.core.errors import (
     LockedError,
     PathError,
     SchemaError,
@@ -18,9 +18,9 @@ from stage.core.errors import (
     UnknownRefError,
     VersionError,
 )
-from stage.core.util import approx_equal
-from stage.notes.models import Anchor, Note
-from stage.show.manage import (
+from showpy.core.util import approx_equal
+from showpy.notes.models import Anchor, Note
+from showpy.show.manage import (
     add_set,
     index,
     insert_subset,
@@ -33,8 +33,8 @@ from stage.show.manage import (
     transitions,
     upgrade_dependency,
 )
-from stage.show.models import Pin, Show
-from stage.time.models import Hold, MeasureSetting
+from showpy.show.models import Pin, Show
+from showpy.time.models import Hold, MeasureSetting
 from tests.fixtures.shows import field_sheet, two_set_show
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)

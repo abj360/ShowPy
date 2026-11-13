@@ -4,7 +4,7 @@
 test_validate.py --- tests that validate_timeline reports each structural problem by code
 """
 
-from stage.time.models import (
+from showpy.time.models import (
     AudioTrack,
     Cue,
     Hold,
@@ -14,8 +14,8 @@ from stage.time.models import (
     Timeline,
     TimelineMode,
 )
-from stage.time.timeline import new_timeline
-from stage.time.validate import validate_timeline
+from showpy.time.timeline import new_timeline
+from showpy.time.validate import validate_timeline
 
 
 def _codes(tl: Timeline) -> list[str]:

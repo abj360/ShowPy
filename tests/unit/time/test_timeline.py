@@ -6,8 +6,8 @@ test_timeline.py --- tests timeline construction, pure edits, lookups and JSON p
 
 import pytest
 
-from stage.core.errors import SchemaError, TimelineError, TimeRangeError, UnknownRefError
-from stage.time.models import (
+from showpy.core.errors import SchemaError, TimelineError, TimeRangeError, UnknownRefError
+from showpy.time.models import (
     AudioTrack,
     Cue,
     Hold,
@@ -18,7 +18,7 @@ from stage.time.models import (
     Timeline,
     TimelineMode,
 )
-from stage.time.timeline import (
+from showpy.time.timeline import (
     add_cue,
     add_hold,
     add_marker,

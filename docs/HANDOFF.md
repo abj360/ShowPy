@@ -1,4 +1,4 @@
-# Handoff: building the `stage` library
+# Handoff: building the `showpy` library
 
 Audience: the next agent or engineer continuing this repository. Scope: state of work, what is
 left, and the traps already hit.
@@ -9,17 +9,17 @@ Last updated: 2026-11-12
 
 | Item         | Value                                                                                     |
 | ------------ | ----------------------------------------------------------------------------------------- |
-| Repository   | `abj360/stage` (private); split from `abj360/Eight` on 2026-11-12 with full history       |
+| Repository   | `abj360/ShowPy` (private); split from `abj360/Eight` on 2026-11-12 with full history      |
 | Gates        | `uv run pytest` green (doctests, warnings as errors); ruff and mypy `--strict` clean      |
 | CI           | lint, types, tests, dependency scan, docker build, on every pull request and push to main |
-| Out of scope | `stagecheck`, `stage.packs` and `stage.index`, by the user's decision (2026-11-11)        |
+| Out of scope | `stagecheck`, `showpy.packs` and `showpy.index`, by the user's decision (2026-11-11)      |
 | Pushing      | needs explicit approval                                                                   |
 
 **Repository split (2026-11-12).** Agent-only code moved to `abj360/Eight-agent` with its
 history: set-script builds and the bubblewrap sandbox (`show/build.py`, `build_models.py`,
 `sandbox.py`, `sandbox_child.py`), agent note drafting (`draft_notes`, `NoteDrafter`,
-`DraftedNote`) and `summarize_events`. Product docs stay in `abj360/Eight`. `stage` must never
-import from either; they pin a `stage` release tag.
+`DraftedNote`) and `summarize_events`. Product docs stay in `abj360/Eight`. `showpy` must never
+import from either; they pin a `showpy` release tag.
 
 The user's instructions, in their words:
 
@@ -32,7 +32,7 @@ Use `uv` only, never pip.
 
 1. `CLAUDE.md` (project) and `~/.claude/CLAUDE.md` (user style: file headers with a `Contains:` section, verb-first docstrings, no AI trailers on commits).
 2. `docs/adr/0001-library-layout-and-reference-fixes.md`: 24 fixes to the reference, the origin convention (front-center), the facing vector `(sin θ, −cos θ)`, and why subpackage `__init__` files are empty.
-3. `docs/adr/0002-path-engine.md`, plus its two addenda: segment probe density, and time-based measures living in `stage.choreo`.
+3. `docs/adr/0002-path-engine.md`, plus its two addenda: segment probe density, and time-based measures living in `showpy.choreo`.
 
 ## Module map (what exists)
 
@@ -59,9 +59,9 @@ Use `uv` only, never pip.
 ## Remaining work, in order
 
 1. Done 2026-11-11, moved to Eight-agent 2026-11-12: set-script builds (`build_set`, `build_all`, `stale`, `new_set_script`, `run_script`).
-2. Done 2026-11-11: `stage/choreo/paths_store.py` (`save_paths`, `load_paths`).
-3. Done 2026-11-11: `stage/__init__.py` lazily re-exports 533 names (PEP 562). Internal modules are excluded and the motion `spiral` is `spiral_motion`. Tested by `tests/unit/test_public_api.py`.
-4. Done 2026-11-11: `schemas/stage.show.v1.json`, guarded by `tests/unit/show/test_schema.py` (regenerate with `STAGE_UPDATE_SCHEMA=1`).
+2. Done 2026-11-11: `showpy/choreo/paths_store.py` (`save_paths`, `load_paths`).
+3. Done 2026-11-11: `showpy/__init__.py` lazily re-exports 533 names (PEP 562). Internal modules are excluded and the motion `spiral` is `spiral_motion`. Tested by `tests/unit/test_public_api.py`.
+4. Done 2026-11-11: `schemas/showpy.show.v1.json`, guarded by `tests/unit/show/test_schema.py` (regenerate with `SHOWPY_UPDATE_SCHEMA=1`).
 5. **Update `docs/stage-library-api-reference.md`**, which the user asked for ("fix every contradiction"). Apply ADR 0001's table and every agent deviation listed below, section by section. Keep the doc's format.
 6. Done 2026-11-11: `README.md`, `.env.example` and the dockerized quickstart (Docker run: 1492 passed).
 7. Done 2026-11-11: Prettier (`npx --yes prettier@3.6.2`, Node at `/home/uapb-ai/.nvm/versions/node/v22.23.5/bin`), gated in pre-commit and CI.
@@ -125,9 +125,9 @@ Use `uv` only, never pip.
 - **Stale curve caches.** `model_copy` on a curve kept a stale `cached_property` table. `CurveBase.model_copy` now revalidates. Never bypass it.
 - **Segment aliasing.** Probes landing exactly on periodic easings (`steps`) aliased the segments. Segment edges now include `easing_breaks`. Keep the property test at 9 points per segment.
 - **Mangled doctests.** Bulk `str.replace` on import lines also edits `>>>` doctest lines, so check doctests after scripted edits.
-- **Doctests import the test folder.** Fixed 2026-11-11: library doctests import `stage.examples`, and `tests/fixtures` re-exports it.
+- **Doctests import the test folder.** Fixed 2026-11-11: library doctests import `showpy.examples`, and `tests/fixtures` re-exports it.
 - **Ruff formats Python inside Markdown.** Run `ruff format` on `README.md` too.
-- **Docker copies only what it is given.** The Dockerfile copies `stage/`, `tests/` and `schemas/`; any new top-level data folder that tests read must be added to it.
+- **Docker copies only what it is given.** The Dockerfile copies `showpy/`, `tests/` and `schemas/`; any new top-level data folder that tests read must be added to it.
 
 ## Working rules used on this branch
 
@@ -139,13 +139,13 @@ Use `uv` only, never pip.
 
 Each fix has a `test_regression_` test.
 
-1. **Sandbox.** Scripts now run under bubblewrap (`unshare-all`, read-only binds of only the interpreter, venv and `stage`, private `/tmp`). `stage.show.repositories` and `stage.show.file_repository` are blocked. Without bubblewrap, running scripts needs an explicit `isolation="process"`. Docker needs `security_opt: seccomp=unconfined` for bubblewrap's namespaces; compose sets it.
+1. **Sandbox.** Scripts now run under bubblewrap (`unshare-all`, read-only binds of only the interpreter, venv and `showpy`, private `/tmp`). `showpy.show.repositories` and `showpy.show.file_repository` are blocked. Without bubblewrap, running scripts needs an explicit `isolation="process"`. Docker needs `security_opt: seccomp=unconfined` for bubblewrap's namespaces; compose sets it.
 2. `PathEngine.positions(t, sel)` resolves strings with the selection grammar.
-3. `apply_fix` hint names `stage.choreo.match_ops.apply_match`.
-4. `paths_store` moved to `stage.show.paths_store`.
+3. `apply_fix` hint names `showpy.choreo.match_ops.apply_match`.
+4. `paths_store` moved to `showpy.show.paths_store`.
 5. `join_sections` merges tempo sections that restate the tempo in force; join after split round-trips a constant-tempo show. A split in the middle of a tempo ramp still leaves the ramp expressed as two sections.
 6. A set's `source_hash` covers its script and the previous set; rebuilding an earlier set marks later scripted sets stale.
 7. `describe_count` rounds tenths with `round_to`.
 8. The SVG tokenizer unpacks packed arc flags.
-9. The duplicated doctest import in `stage/time/measures.py` is gone.
+9. The duplicated doctest import in `showpy/time/measures.py` is gone.
 10. Selection operators must be separated by spaces or parentheses; a glued `+`, `-` or `&` raises `SchemaError` with its position. This was a designer call: it removes the silent misparse of `T1+T2-T3` at the cost of rejecting `T1+T2`.

@@ -5,17 +5,17 @@ test_notes.py --- tests adding, editing, finding and drafting design notes
 
 Contains:
     FakeDrafter: records calls and returns canned drafts, or raises a canned error
-    test_*(): one behavior of stage.notes.notes each
+    test_*(): one behavior of showpy.notes.notes each
 """
 
 from datetime import UTC, datetime
 
 import pytest
 
-from stage.core.errors import GeometryError, SchemaError, UnknownRefError
-from stage.core.types import Region
-from stage.notes.models import Anchor, Note
-from stage.notes.notes import (
+from showpy.core.errors import GeometryError, SchemaError, UnknownRefError
+from showpy.core.types import Region
+from showpy.notes.models import Anchor, Note
+from showpy.notes.notes import (
     accept_draft,
     add_note,
     edit_note,
@@ -23,7 +23,7 @@ from stage.notes.notes import (
     notes_near,
     remove_note,
 )
-from stage.show.models import Show
+from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 
 AT = datetime(2026, 11, 11, 9, 30, tzinfo=UTC)

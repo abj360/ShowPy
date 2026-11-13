@@ -9,11 +9,11 @@ import math
 import numpy as np
 import pytest
 
-from stage.core.errors import SchemaError, UnknownRefError
-from stage.core.types import Box2
-from stage.core.util import approx_equal
-from stage.geo.shapes import svg_outline, text_outline
-from stage.geo.svg import parse_path
+from showpy.core.errors import SchemaError, UnknownRefError
+from showpy.core.types import Box2
+from showpy.core.util import approx_equal
+from showpy.geo.shapes import svg_outline, text_outline
+from showpy.geo.svg import parse_path
 
 BOX = Box2(min=(0.0, 0.0), max=(10.0, 10.0))
 

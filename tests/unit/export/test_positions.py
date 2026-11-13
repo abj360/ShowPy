@@ -6,8 +6,8 @@ test_positions.py --- tests merging CSV positions into a show
 
 import pytest
 
-from stage.core.errors import LockedError, SchemaError, UnknownRefError
-from stage.export.positions import import_positions
+from showpy.core.errors import LockedError, SchemaError, UnknownRefError
+from showpy.export.positions import import_positions
 from tests.fixtures.shows import two_set_show
 
 IMPORT_TEXT = """set,counts,entity,x,y,facing

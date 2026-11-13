@@ -10,7 +10,7 @@ ENV SETUPTOOLS_SCM_PRETEND_VERSION=${SETUPTOOLS_SCM_PRETEND_VERSION}
 
 WORKDIR /src
 COPY pyproject.toml README.md LICENSE ./
-COPY stage ./stage
+COPY showpy ./showpy
 RUN uv build --wheel --out-dir /dist
 
 FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS runtime
@@ -35,4 +35,4 @@ COPY tests ./tests
 RUN chown -R 10001:10001 /app
 USER 10001
 
-CMD ["uv", "run", "--no-sync", "nox", "-s", "tests", "--", "tests", "--pyargs", "stage"]
+CMD ["uv", "run", "--no-sync", "nox", "-s", "tests", "--", "tests", "--pyargs", "showpy"]

@@ -11,10 +11,10 @@ from pathlib import Path
 
 import pytest
 
-from stage.core.errors import SchemaError
-from stage.export.models import CoordinateSheet, SheetRow
-from stage.export.pdf import escape_text, to_pdf
-from stage.export.print_sheets import chart, coordinate_sheet, coordinate_sheets, cue_sheet
+from showpy.core.errors import SchemaError
+from showpy.export.models import CoordinateSheet, SheetRow
+from showpy.export.pdf import escape_text, to_pdf
+from showpy.export.print_sheets import chart, coordinate_sheet, coordinate_sheets, cue_sheet
 from tests.fixtures.export_shows import guided_show
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -124,8 +124,8 @@ def test_pillow_is_not_needed() -> None:
     script = (
         "import sys\n"
         "sys.modules['PIL'] = None\n"
-        "from stage.export.models import CoordinateSheet\n"
-        "from stage.export.pdf import to_pdf\n"
+        "from showpy.export.models import CoordinateSheet\n"
+        "from showpy.export.pdf import to_pdf\n"
         "sys.stdout.write(to_pdf(CoordinateSheet(entity='T1'))[:8].decode())\n"
     )
     result = subprocess.run(

@@ -6,12 +6,12 @@ test_templates.py --- tests built-in sheet templates, lookup, customization, edi
 
 import pytest
 
-from stage.core.errors import ConflictError, SchemaError, UnknownRefError, VersionError
-from stage.core.types import Region
-from stage.core.units import convert
-from stage.core.util import approx_equal
-from stage.sheet.models import Grid, GuideLine, Landmark, SurfaceType, Zone, ZoneKind
-from stage.sheet.templates import (
+from showpy.core.errors import ConflictError, SchemaError, UnknownRefError, VersionError
+from showpy.core.types import Region
+from showpy.core.units import convert
+from showpy.core.util import approx_equal
+from showpy.sheet.models import Grid, GuideLine, Landmark, SurfaceType, Zone, ZoneKind
+from showpy.sheet.templates import (
     InMemorySheetStore,
     add_guide,
     add_landmark,

@@ -12,8 +12,8 @@ import shapely
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from stage.core.util import approx_equal
-from stage.geo.curves import (
+from showpy.core.util import approx_equal
+from showpy.geo.curves import (
     ArcCurve,
     BezierCurve,
     CircleCurve,

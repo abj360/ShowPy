@@ -6,8 +6,8 @@ test_models.py --- tests Shape, Group, Spot, LabelScheme and Cast
 
 import pytest
 
-from stage.cast.models import Cast, Group, LabelScheme, Shape, Spot
-from stage.core.errors import GeometryError, UnknownRefError
+from showpy.cast.models import Cast, Group, LabelScheme, Shape, Spot
+from showpy.core.errors import GeometryError, UnknownRefError
 
 
 def test_group_name_defaults_from_key() -> None:

@@ -10,11 +10,11 @@ from datetime import datetime, timedelta
 import pytest
 from PIL import Image
 
-from stage.cast.models import Spot
-from stage.choreo.models import PathRow
-from stage.core.errors import LockedError, SchemaError, UnknownRefError, ValidationError
-from stage.export.models import Publication
-from stage.export.publish import (
+from showpy.cast.models import Spot
+from showpy.choreo.models import PathRow
+from showpy.core.errors import LockedError, SchemaError, UnknownRefError, ValidationError
+from showpy.export.models import Publication
+from showpy.export.publish import (
     claim_spot,
     claims,
     notify_changes,
@@ -29,7 +29,7 @@ from stage.export.publish import (
     unpublish,
     who_is_on,
 )
-from stage.show.models import Show
+from showpy.show.models import Show
 from tests.fixtures.export_shows import AT, guided_show, performer
 from tests.fixtures.motion_shows import with_rows, with_targets
 from tests.fixtures.shows import two_set_show

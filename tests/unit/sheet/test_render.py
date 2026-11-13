@@ -10,10 +10,10 @@ import xml.etree.ElementTree as ET
 import pytest
 from PIL import Image, ImageDraw
 
-from stage.core.errors import SchemaError
-from stage.core.util import approx_equal
-from stage.sheet.render import SheetCanvas, draw_sheet, render_sheet
-from stage.sheet.templates import get_sheet
+from showpy.core.errors import SchemaError
+from showpy.core.util import approx_equal
+from showpy.sheet.render import SheetCanvas, draw_sheet, render_sheet
+from showpy.sheet.templates import get_sheet
 from tests.fixtures.shows import field_sheet
 
 TOL = 1e-9

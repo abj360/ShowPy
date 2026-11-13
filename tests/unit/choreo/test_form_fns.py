@@ -9,7 +9,7 @@ from collections.abc import Mapping
 import numpy as np
 import pytest
 
-from stage.choreo.form_fns import (
+from showpy.choreo.form_fns import (
     DEFAULT_FORM_FNS,
     form_fns,
     register_form_fn,
@@ -17,9 +17,9 @@ from stage.choreo.form_fns import (
     sine_wave_points,
     spiral_points,
 )
-from stage.core.errors import SchemaError, UnknownRefError
-from stage.core.types import Points
-from stage.core.util import approx_equal
+from showpy.core.errors import SchemaError, UnknownRefError
+from showpy.core.types import Points
+from showpy.core.util import approx_equal
 
 TOL = 1e-6
 

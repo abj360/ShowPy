@@ -8,17 +8,17 @@ import math
 
 import pytest
 
-from stage.core.errors import TimelineError, TimeRangeError
-from stage.core.util import approx_equal
-from stage.time.clock import (
+from showpy.core.errors import TimelineError, TimeRangeError
+from showpy.core.util import approx_equal
+from showpy.time.clock import (
     count_to_seconds,
     describe_count,
     seconds_per_count,
     seconds_to_count,
     tempo_at,
 )
-from stage.time.models import Hold, MeasureSetting, TempoSection, Timeline, TimelineMode
-from stage.time.timeline import add_hold, add_tempo, new_timeline, set_measures
+from showpy.time.models import Hold, MeasureSetting, TempoSection, Timeline, TimelineMode
+from showpy.time.timeline import add_hold, add_tempo, new_timeline, set_measures
 
 TOL = 1e-9
 LN2 = math.log(2.0)
@@ -193,8 +193,8 @@ def test_describe_count_rounds_ramp_tempo() -> None:
 
 
 def test_regression_describe_count_rounds_tenths_half_away_from_zero() -> None:
-    from stage.time.clock import describe_count
-    from stage.time.timeline import new_timeline
+    from showpy.time.clock import describe_count
+    from showpy.time.timeline import new_timeline
 
     timeline = new_timeline(TimelineMode.COUNTS, counts_per_minute=240.0)
     assert "0:07.3" in describe_count(timeline, 29.0)

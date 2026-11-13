@@ -9,12 +9,12 @@ import math
 import numpy as np
 import pytest
 
-from stage.choreo.models import Placement, Set
-from stage.core.errors import GeometryError, LockedError, SchemaError, UnknownRefError
-from stage.core.util import approx_equal
-from stage.geo.curves import ArcCurve, CompositeCurve, Polyline, Segment
-from stage.geo.shapes import arc, circle, join, line, polyline
-from stage.geo.transforms import (
+from showpy.choreo.models import Placement, Set
+from showpy.core.errors import GeometryError, LockedError, SchemaError, UnknownRefError
+from showpy.core.util import approx_equal
+from showpy.geo.curves import ArcCurve, CompositeCurve, Polyline, Segment
+from showpy.geo.shapes import arc, circle, join, line, polyline
+from showpy.geo.transforms import (
     affine,
     align,
     contract,
@@ -32,7 +32,7 @@ from stage.geo.transforms import (
     snap_to_guides,
     symmetrize,
 )
-from stage.sheet.models import GuideLine
+from showpy.sheet.models import GuideLine
 from tests.fixtures.shows import field_sheet
 
 TOL = 1e-9

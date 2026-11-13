@@ -10,11 +10,11 @@ import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from stage.choreo.match import bottleneck_value, match
-from stage.choreo.match_solve import FloatArray, count_crossings
-from stage.choreo.models import MatchOptions, MatchResult
-from stage.core.types import Points
-from stage.core.util import approx_equal, seeded_rng
+from showpy.choreo.match import bottleneck_value, match
+from showpy.choreo.match_solve import FloatArray, count_crossings
+from showpy.choreo.models import MatchOptions, MatchResult
+from showpy.core.types import Points
+from showpy.core.util import approx_equal, seeded_rng
 
 TOL = 1e-9
 MAX_SPOTS = 5

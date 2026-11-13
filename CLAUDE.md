@@ -1,27 +1,27 @@
-# CLAUDE.md — stage
+# CLAUDE.md — ShowPy
 
-`stage` is the Python choreography library behind Eight, an AI-assisted choreography design tool. Designers draw spots on a 2D sheet (a field, stage or floor), build a show set by set, and publish it so performers can claim their spot. This repo holds only the library.
+ShowPy (import name `showpy`) is the Python choreography library behind Eight, an AI-assisted choreography design tool. Designers draw spots on a 2D sheet (a field, stage or floor), build a show set by set, and publish it so performers can claim their spot. This repo holds only the library.
 
 | Repository           | Holds                                                                                                  |
 | -------------------- | ------------------------------------------------------------------------------------------------------ |
-| `abj360/stage`       | this library                                                                                           |
+| `abj360/ShowPy`      | this library                                                                                           |
 | `abj360/Eight`       | the product: overview, scope, decision rules, and later the app                                        |
 | `abj360/Eight-agent` | agent-only code: set-script builds and the bubblewrap sandbox, agent note drafting, `summarize_events` |
-| `stagecheck`         | the locked checker (not built yet; its own repo, depending on a pinned `stage` release)                |
+| `stagecheck`         | the locked checker (not built yet; its own repo, depending on a pinned `showpy` release)               |
 
-`stage` never imports from Eight-agent or `stagecheck`. They depend on tagged `stage` releases through its public API, so breaking a public name is a breaking change: bump the version and say so in the release notes.
+`showpy` never imports from Eight-agent or `stagecheck`. They depend on tagged `showpy` releases through its public API, so breaking a public name is a breaking change: bump the version and say so in the release notes.
 
-Source of truth for the API: _Stage Library: API Reference_ (`docs/stage-library-api-reference.md`). If code and the reference disagree, flag it; do not silently pick one. Read the handoff notes before continuing work: @docs/HANDOFF.md
+Source of truth for the API: _ShowPy Library: API Reference_ (`docs/stage-library-api-reference.md`). If code and the reference disagree, flag it; do not silently pick one. Read the handoff notes before continuing work: @docs/HANDOFF.md
 
 ## Commands
 
 ```bash
-uv sync                          # install the stage package and dev tools
+uv sync                          # install the showpy package and dev tools
 uv run pytest                    # all tests (doctests included, warnings are errors)
 uv run pytest tests/unit/choreo  # one area
 uv run pytest -m golden          # real marchable drill regression
 uv run ruff check . && uv run ruff format .
-uv run mypy stage tests          # strict typing, must pass
+uv run mypy showpy tests          # strict typing, must pass
 docker compose -f docker/docker-compose.yml up --build   # full suite in a clean container
 ```
 
@@ -30,7 +30,7 @@ Run tests, ruff and mypy before calling any task done. Prettier formats Markdown
 ## Layout
 
 ```
-stage/
+showpy/
   core/     types, ids, units, errors, util, selection, validation
   geo/      curves, shapes, svg, text, regions, spacing, affine, transforms, measure, analysis
   time/     count timeline: tempo, holds, markers, cues, measures, audio sync
@@ -41,12 +41,12 @@ stage/
   show/     Show, manage, sections, storage, repositories, history, collab, validate, paths_store
   export/   publish (claims), print sheets, PDF, data, positions, video (2D)
   examples.py  deterministic example shows for docs and tests
-schemas/    versioned JSON schemas (stage.show.v1)
+schemas/    versioned JSON schemas (showpy.show.v1)
 tests/      unit/ property/ golden/ fixtures/
 docs/       API reference, ADRs, handoff notes, study guide
 ```
 
-Each package: `models.py` holds data classes; other files hold functions. Subpackage `__init__.py` files hold only a docstring; `stage/__init__.py` re-exports the public API lazily.
+Each package: `models.py` holds data classes; other files hold functions. Subpackage `__init__.py` files hold only a docstring; `showpy/__init__.py` re-exports the public API lazily.
 
 ## Core concepts (read before editing)
 
@@ -65,20 +65,20 @@ Each package: `models.py` holds data classes; other files hold functions. Subpac
 2. **Pure functions.** Data classes are frozen Pydantic v2 models. "Edit" functions return new objects; never mutate inputs.
 3. **Determinism.** Same inputs → same outputs. Randomness only through `core.util.seeded_rng(seed)`. No wall-clock reads in library logic; time stamps are explicit `at` arguments.
 4. **`stagecheck` is locked.**
-   - Never import it from `stage`.
+   - Never import it from `showpy`.
    - Never weaken a check, threshold or default to make a test pass.
    - Limits belong to the designer (`/config/limits.yaml`); never edit them in code paths the agent runs.
 5. **Single motion source.** Anything needing positions over time calls `PathEngine`. If a feature seems to need its own interpolation, extend the engine instead.
 6. **Respect locks and pins.** Functions that edit sets, forms or paths must raise `LockedError` on pinned items unless `force=True` is passed explicitly by the caller.
-7. **Errors teach.** Raise `StageError` subclasses with `code`, `message`, `context` and a `hint` that says what is allowed. No bare `ValueError` in public APIs.
-8. **No agent-only code here.** Code only an agent uses (script builds, sandboxes, drafting, prompt-shaped summaries) belongs in Eight-agent. `stage` keeps what designer and agent share.
+7. **Errors teach.** Raise `ShowPyError` subclasses with `code`, `message`, `context` and a `hint` that says what is allowed. No bare `ValueError` in public APIs.
+8. **No agent-only code here.** Code only an agent uses (script builds, sandboxes, drafting, prompt-shaped summaries) belongs in Eight-agent. `showpy` keeps what designer and agent share.
 
 ## Writing code here
 
 - **Module headers** follow the user-level `~/.claude/CLAUDE.md`: shebang, blank line, then a docstring whose first line is `<filename> --- <role>` and whose index section is titled `Contains:` (never `Args:`), one verb-first line per exported item.
-- **Public functions** need full type hints and a docstring with a runnable `>>>` example; examples import `stage.examples`, never the `tests/` folder. Once `stage.index` exists, they also need `@api(category=..., panel=...)`.
-- **New public names** must be added to the lazy export table in `stage/__init__.py`; `tests/unit/test_public_api.py` guards it.
-- **New data classes** go in the package's `models.py` and must be JSON-serializable; regenerate `schemas/` with `STAGE_UPDATE_SCHEMA=1 uv run pytest tests/unit/show/test_schema.py` and bump the schema version if a stored model changes incompatibly.
+- **Public functions** need full type hints and a docstring with a runnable `>>>` example; examples import `showpy.examples`, never the `tests/` folder. Once `showpy.index` exists, they also need `@api(category=..., panel=...)`.
+- **New public names** must be added to the lazy export table in `showpy/__init__.py`; `tests/unit/test_public_api.py` guards it.
+- **New data classes** go in the package's `models.py` and must be JSON-serializable; regenerate `schemas/` with `SHOWPY_UPDATE_SCHEMA=1 uv run pytest tests/unit/show/test_schema.py` and bump the schema version if a stored model changes incompatibly.
 - **Coordinates in field language** (e.g. "2 outside the 35") belong in the pack's `PositionLanguage`, never in core modules.
 - **Prefer extending existing primitives** (curves, spacing, transforms, path styles) over adding parallel ones. Custom movement = register a `MotionFn`; custom shapes = `register_form_fn`.
 - Keep modules small and focused; if a file passes ~500 lines, split by responsibility.
@@ -86,8 +86,8 @@ Each package: `models.py` holds data classes; other files hold functions. Subpac
 ## Tests
 
 - Every bug fix starts with a failing test named `test_regression_...`.
-- `tests/unit/` mirrors `stage/`. `tests/property/` uses Hypothesis for invariants (spacing is even, 360° rotation is identity, paths end on targets, count↔seconds round-trips).
-- `tests/golden/` replays real marchable shows; a diff in output requires a human-reviewed fixture update (`STAGE_UPDATE_GOLDEN=1`).
+- `tests/unit/` mirrors `showpy/`. `tests/property/` uses Hypothesis for invariants (spacing is even, 360° rotation is identity, paths end on targets, count↔seconds round-trips).
+- `tests/golden/` replays real marchable shows; a diff in output requires a human-reviewed fixture update (`SHOWPY_UPDATE_GOLDEN=1`).
 - Numeric comparisons use `approx_equal` with explicit tolerances.
 - Run every gate with `set -o pipefail`; piping pytest into `tail` hides failures otherwise.
 

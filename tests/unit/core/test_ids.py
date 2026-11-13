@@ -6,8 +6,8 @@ test_ids.py --- tests reference and transition ID parsing and formatting
 
 import pytest
 
-from stage.core.errors import SchemaError
-from stage.core.ids import format_ref, format_tid, parse_ref, parse_tid
+from showpy.core.errors import SchemaError
+from showpy.core.ids import format_ref, format_tid, parse_ref, parse_tid
 
 
 def test_parse_ref_with_version() -> None:

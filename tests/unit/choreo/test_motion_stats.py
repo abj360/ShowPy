@@ -8,9 +8,9 @@ import math
 
 import pytest
 
-from stage.choreo.engine import PathEngine
-from stage.choreo.models import PathRow
-from stage.choreo.motion_stats import (
+from showpy.choreo.engine import PathEngine
+from showpy.choreo.models import PathRow
+from showpy.choreo.motion_stats import (
     direction_of_travel,
     energy_curve,
     motion_contrast,
@@ -19,9 +19,9 @@ from stage.choreo.motion_stats import (
     speed,
     speeds,
 )
-from stage.core.errors import TimeRangeError
-from stage.core.util import approx_equal
-from stage.time.models import Marker, MarkerKind
+from showpy.core.errors import TimeRangeError
+from showpy.core.util import approx_equal
+from showpy.time.models import Marker, MarkerKind
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
 from tests.fixtures.shows import two_set_show
 

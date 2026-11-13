@@ -4,7 +4,7 @@
 test_selection.py --- tests the Selection set algebra
 """
 
-from stage.core.selection import Selection
+from showpy.core.selection import Selection
 
 
 def test_selection_dedupes_and_keeps_order() -> None:

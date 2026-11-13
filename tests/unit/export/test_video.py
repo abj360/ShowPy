@@ -13,10 +13,10 @@ import wave
 import imageio_ffmpeg
 import pytest
 
-from stage.choreo.engine import PathEngine
-from stage.core.errors import SchemaError, TimeRangeError, UnknownRefError
-from stage.export.video import export_video, render_frame, video_canvas
-from stage.time.models import AudioTrack
+from showpy.choreo.engine import PathEngine
+from showpy.core.errors import SchemaError, TimeRangeError, UnknownRefError
+from showpy.export.video import export_video, render_frame, video_canvas
+from showpy.time.models import AudioTrack
 from tests.fixtures.shows import two_set_show
 
 SAMPLE_RATE = 8000

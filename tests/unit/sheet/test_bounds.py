@@ -6,12 +6,12 @@ test_bounds.py --- tests surface and walkable tests, landmark lookup, nearest la
 
 import pytest
 
-from stage.core.errors import UnknownRefError
-from stage.core.types import Region
-from stage.core.util import approx_equal
-from stage.sheet.bounds import landmark, nearest_landmarks, on_surface, walkable, zones_at
-from stage.sheet.models import Landmark, Zone, ZoneKind
-from stage.sheet.templates import add_landmark, get_sheet
+from showpy.core.errors import UnknownRefError
+from showpy.core.types import Region
+from showpy.core.util import approx_equal
+from showpy.sheet.bounds import landmark, nearest_landmarks, on_surface, walkable, zones_at
+from showpy.sheet.models import Landmark, Zone, ZoneKind
+from showpy.sheet.templates import add_landmark, get_sheet
 from tests.fixtures.shows import field_sheet, two_set_show
 
 TOL = 1e-9

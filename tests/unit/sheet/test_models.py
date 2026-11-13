@@ -6,9 +6,9 @@ test_models.py --- tests sheet data classes: landmarks, zones, grids, coordinate
 
 import pytest
 
-from stage.core.errors import GeometryError, TimeRangeError
-from stage.core.types import Region
-from stage.sheet.models import CoordinateSystem, Landmark, Zone, ZoneKind
+from showpy.core.errors import GeometryError, TimeRangeError
+from showpy.core.types import Region
+from showpy.sheet.models import CoordinateSystem, Landmark, Zone, ZoneKind
 
 SQUARE = Region(exterior=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)))
 

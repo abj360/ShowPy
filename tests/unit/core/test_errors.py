@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 
 """
-test_errors.py --- tests the StageError family: fields, codes, hierarchy and rendering
+test_errors.py --- tests the ShowPyError family: fields, codes, hierarchy and rendering
 """
 
 import pytest
 
-from stage.core.errors import (
+from showpy.core.errors import (
     ConflictError,
     ContinuityError,
     GeometryError,
     LockedError,
     PathError,
-    StageError,
+    ShowPyError,
     StorageError,
     ZeroLengthError,
 )
@@ -32,11 +32,11 @@ def test_error_string_includes_code_and_hint() -> None:
 
 
 def test_custom_code_overrides_default() -> None:
-    assert StageError("x", hint="y", code="CUSTOM").code == "CUSTOM"
+    assert ShowPyError("x", hint="y", code="CUSTOM").code == "CUSTOM"
 
 
 def test_context_defaults_to_empty_dict() -> None:
-    assert StageError("x", hint="y").context == {}
+    assert ShowPyError("x", hint="y").context == {}
 
 
 @pytest.mark.parametrize(
@@ -45,8 +45,8 @@ def test_context_defaults_to_empty_dict() -> None:
         (ZeroLengthError, GeometryError),
         (ContinuityError, PathError),
         (ConflictError, StorageError),
-        (PathError, StageError),
+        (PathError, ShowPyError),
     ],
 )
-def test_hierarchy(child: type[StageError], parent: type[StageError]) -> None:
+def test_hierarchy(child: type[ShowPyError], parent: type[ShowPyError]) -> None:
     assert issubclass(child, parent)

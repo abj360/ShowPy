@@ -1,4 +1,4 @@
-stage/schemas/
+showpy/schemas/
 tests/golden/fixtures/
 uv.lock
 .venv/

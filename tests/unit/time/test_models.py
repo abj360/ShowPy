@@ -7,7 +7,7 @@ test_models.py --- tests timeline data class defaults, immutability and JSON saf
 import pydantic
 import pytest
 
-from stage.time.models import (
+from showpy.time.models import (
     AudioTrack,
     Hold,
     Marker,

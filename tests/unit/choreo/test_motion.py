@@ -12,8 +12,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from stage.choreo.models import Easing, TurnDirection
-from stage.choreo.motion import (
+from showpy.choreo.models import Easing, TurnDirection
+from showpy.choreo.motion import (
     DEFAULT_MOTIONS,
     FloatArray,
     ease,
@@ -22,9 +22,9 @@ from stage.choreo.motion import (
     register_motion,
     turn,
 )
-from stage.core.errors import PathError, UnknownRefError
-from stage.core.types import Point, Points
-from stage.core.util import approx_equal
+from showpy.core.errors import PathError, UnknownRefError
+from showpy.core.types import Point, Points
+from showpy.core.util import approx_equal
 
 KINDS = [
     "linear",

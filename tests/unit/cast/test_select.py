@@ -4,14 +4,14 @@
 test_select.py --- tests the selection grammar and the spatial, ordering and pairing picks
 
 Contains:
-    test_*(): one behavior of stage.cast.select each
+    test_*(): one behavior of showpy.cast.select each
 """
 
 import pytest
 import shapely
 
-from stage.cast.models import Cast, Group, Shape, Spot
-from stage.cast.select import (
+from showpy.cast.models import Cast, Group, Shape, Spot
+from showpy.cast.select import (
     Selection,
     alternate,
     in_region,
@@ -23,11 +23,11 @@ from stage.cast.select import (
     split,
     where,
 )
-from stage.choreo.models import Form, Placement, Set
-from stage.core.errors import GeometryError, SchemaError, UnknownRefError
-from stage.core.types import Region
-from stage.geo.shapes import line
-from stage.show.models import Show
+from showpy.choreo.models import Form, Placement, Set
+from showpy.core.errors import GeometryError, SchemaError, UnknownRefError
+from showpy.core.types import Region
+from showpy.geo.shapes import line
+from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 
 RECT = Shape(kind="rectangle", width_m=1.0, depth_m=0.5)

@@ -6,13 +6,13 @@ test_form_place.py --- tests building sets from forms, reading members back and 
 
 import pytest
 
-from stage.choreo.form_place import filled_forms, place, rebuild
-from stage.choreo.forms import circle_form, line_form
-from stage.choreo.match_ops import with_set
-from stage.choreo.models import MatchOptions, PathRow, PathStyle, TransitionSpec, Waypoint
-from stage.core.errors import LockedError, MatchError, SchemaError, UnknownRefError
-from stage.core.util import approx_equal
-from stage.show.models import Show
+from showpy.choreo.form_place import filled_forms, place, rebuild
+from showpy.choreo.forms import circle_form, line_form
+from showpy.choreo.match_ops import with_set
+from showpy.choreo.models import MatchOptions, PathRow, PathStyle, TransitionSpec, Waypoint
+from showpy.core.errors import LockedError, MatchError, SchemaError, UnknownRefError
+from showpy.core.util import approx_equal
+from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 
 TID = ("1", "2")

@@ -10,8 +10,8 @@ import math
 import numpy as np
 import pytest
 
-from stage.choreo.engine import PathEngine
-from stage.choreo.models import (
+from showpy.choreo.engine import PathEngine
+from showpy.choreo.models import (
     Easing,
     FacingMode,
     FacingOverride,
@@ -20,9 +20,9 @@ from stage.choreo.models import (
     Route,
     Waypoint,
 )
-from stage.core.errors import ContinuityError, PathError, UnknownRefError
-from stage.core.util import approx_equal
-from stage.geo.shapes import line
+from showpy.core.errors import ContinuityError, PathError, UnknownRefError
+from showpy.core.util import approx_equal
+from showpy.geo.shapes import line
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
 from tests.fixtures.shows import two_set_show
 

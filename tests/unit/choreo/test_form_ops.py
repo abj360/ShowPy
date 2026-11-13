@@ -7,7 +7,7 @@ test_form_ops.py --- tests form edits, reordering, split and merge, morphs and e
 import numpy as np
 import pytest
 
-from stage.choreo.form_ops import (
+from showpy.choreo.form_ops import (
     edit,
     form_templates,
     gate,
@@ -18,7 +18,7 @@ from stage.choreo.form_ops import (
     split_form,
     transform_form,
 )
-from stage.choreo.forms import (
+from showpy.choreo.forms import (
     arc_form,
     block_form,
     circle_form,
@@ -31,11 +31,11 @@ from stage.choreo.forms import (
     slot_poses,
     slots,
 )
-from stage.choreo.models import FacingSpec, Form, Placement, Set
-from stage.core.errors import LockedError, SchemaError, UnknownRefError
-from stage.core.types import Points
-from stage.core.util import approx_equal
-from stage.geo.affine import (
+from showpy.choreo.models import FacingSpec, Form, Placement, Set
+from showpy.core.errors import LockedError, SchemaError, UnknownRefError
+from showpy.core.types import Points
+from showpy.core.util import approx_equal
+from showpy.geo.affine import (
     Matrix,
     mirror_matrix,
     rotation_matrix,

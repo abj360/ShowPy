@@ -4,8 +4,8 @@
 test_counts.py --- tests on-field spot counts per set for the set strip
 """
 
-from stage.examples import two_set_show
-from stage.show.counts import spot_counts
+from showpy.examples import two_set_show
+from showpy.show.counts import spot_counts
 
 
 def test_counts_every_set_and_flags_changes() -> None:

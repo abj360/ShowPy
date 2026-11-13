@@ -1,15 +1,15 @@
-# stage
+# ShowPy
 
-`stage` is the Python choreography library behind Eight. With it you draw spots on a 2D sheet, build a show set by set from stored shapes, move every performer between sets with one exact motion engine, and publish the result so performers can claim their spot.
+ShowPy (import name `showpy`) is the Python choreography library behind Eight. With it you draw spots on a 2D sheet, build a show set by set from stored shapes, move every performer between sets with one exact motion engine, and publish the result so performers can claim their spot.
 
 ## Why
 
-Drill design is slow because every dot, every move and every check is manual. `stage` makes the mechanics exact and repeatable, so the designer only makes the creative choices.
+Drill design is slow because every dot, every move and every check is manual. ShowPy makes the mechanics exact and repeatable, so the designer only makes the creative choices.
 
 - **One source of motion.** The canvas, the checks, the exports and the video all read positions from one `PathEngine`, so they never disagree. Its collision segments stay within 0.02 m of the true path. A Hypothesis property test probes 9 points per segment across 150 random paths to check this.
 - **Exact and deterministic.** Arc-length curves are exact for lines and arcs. Tempo ramps convert analytically, both ways. Randomness is seeded, and no library code reads the clock.
 - **Verified.** 1492 tests (unit, property, golden replay and doctests) run with warnings as errors, under `mypy --strict` and ruff.
-- **Light to import.** `import stage` takes 2.5 ms; names load lazily.
+- **Light to import.** `import showpy` takes 2.5 ms; names load lazily.
 
 ## Features
 
@@ -47,7 +47,7 @@ Drill design is slow because every dot, every move and every check is manual. `s
 ## Quickstart (one command, fully dockerized)
 
 ```bash
-# No ports: stage is a library. The container runs ruff, mypy --strict and the full test suite.
+# No ports: showpy is a library. The container runs ruff, mypy --strict and the full test suite.
 cp .env.example .env && docker compose -f docker/docker-compose.yml up --build
 ```
 
@@ -60,18 +60,18 @@ uv sync && uv run pytest
 ## Usage
 
 ```python
-import stage
-from stage.examples import two_set_show
+import showpy
+from showpy.examples import two_set_show
 
 show = two_set_show()  # 4 trumpets, 8 counts, 120 cpm
-spec = stage.stagger(show.transition(("1", "2")), ["T1", "T2", "T3", "T4"], step=1.0)
+spec = showpy.stagger(show.transition(("1", "2")), ["T1", "T2", "T3", "T4"], step=1.0)
 show = show.model_copy(update={"transitions": (spec,)})
 
-engine = stage.PathEngine(show)
+engine = showpy.PathEngine(show)
 engine.position("T4", 6.0)  # array([6. , 7.4]): T4 starts 3 counts late
 engine.speed("T4", ("1", "2")).m_per_s  # 1.6
-stage.min_gaps(show, ("1", "2"), top=1)[0].gap  # 1.4 m between footprints
-stage.validate_show(show).ok  # True
+showpy.min_gaps(show, ("1", "2"), top=1)[0].gap  # 1.4 m between footprints
+showpy.validate_show(show).ok  # True
 ```
 
 Every public function has a runnable `>>>` example in its docstring. The full API is in `docs/stage-library-api-reference.md`.
@@ -102,18 +102,18 @@ Lower layers never import higher ones. `stagecheck` (the locked checker) reads s
 
 ## Config
 
-| Setting               | Where                      | Default        | Meaning                                            |
-| --------------------- | -------------------------- | -------------- | -------------------------------------------------- |
-| `STAGE_UPDATE_GOLDEN` | env, tests                 | unset          | `1` rewrites golden fixtures for human review      |
-| `STAGE_UPDATE_SCHEMA` | env, tests                 | unset          | `1` regenerates `stage/schemas/stage.show.v1.json` |
-| `curve_tol`           | `PathEngine(...)`          | 0.01 m         | Chord error for drawn paths                        |
-| `tol`                 | `PathEngine.segments(...)` | 0.02 m         | Segment error for collision checks                 |
-| `/config/limits.yaml` | workspace                  | designer-owned | Checker limits; agents cannot write it             |
+| Setting                | Where                      | Default        | Meaning                                              |
+| ---------------------- | -------------------------- | -------------- | ---------------------------------------------------- |
+| `SHOWPY_UPDATE_GOLDEN` | env, tests                 | unset          | `1` rewrites golden fixtures for human review        |
+| `SHOWPY_UPDATE_SCHEMA` | env, tests                 | unset          | `1` regenerates `showpy/schemas/showpy.show.v1.json` |
+| `curve_tol`            | `PathEngine(...)`          | 0.01 m         | Chord error for drawn paths                          |
+| `tol`                  | `PathEngine.segments(...)` | 0.02 m         | Segment error for collision checks                   |
+| `/config/limits.yaml`  | workspace                  | designer-owned | Checker limits; agents cannot write it               |
 
 ## Structure
 
 ```
-stage/
+showpy/
   core/     units, ids, errors, types, selection, validation, util
   geo/      curves, shapes, svg, text, regions, spacing, affine, transforms, measure, analysis
   time/     models, timeline, clock, measures, validate
@@ -124,7 +124,7 @@ stage/
   show/     models, manage, sections, storage, repositories, history, collab, validate
   export/   models, publish, print_sheets, pdf, data, positions, video
   examples.py  deterministic example shows
-stage/schemas/ stage.show.v1.json
+showpy/schemas/ showpy.show.v1.json
 tests/      unit/ property/ golden/ fixtures/
 docs/       API reference, ADRs, handoff notes, study guide
 docker/     Dockerfile, docker-compose.yml
@@ -136,7 +136,7 @@ docker/     Dockerfile, docker-compose.yml
 uv sync
 uv run pre-commit install
 uv run ruff format . && uv run ruff check .
-uv run mypy stage tests
+uv run mypy showpy tests
 uv run pytest
 ```
 
@@ -147,7 +147,7 @@ Read `CLAUDE.md`, `CONTRIBUTING.md` and the ADRs before changing anything. The P
 | Gate            | Command                                                                                          | CI  |
 | --------------- | ------------------------------------------------------------------------------------------------ | --- |
 | Format, lint    | `uv run ruff format --check . && uv run ruff check .`, then Prettier for Markdown, YAML and JSON | yes |
-| Types           | `uv run mypy stage tests` (strict)                                                               | yes |
+| Types           | `uv run mypy showpy tests` (strict)                                                              | yes |
 | Tests           | `uv run pytest` (unit, property, golden, doctests; warnings are errors)                          | yes |
 | Golden          | `uv run pytest -m golden`                                                                        | yes |
 | Dependency scan | `pip-audit --strict --require-hashes` on the exported lockfile                                   | yes |

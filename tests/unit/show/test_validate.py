@@ -4,10 +4,10 @@
 test_validate.py --- tests structural validation of sets, paths, dependencies and whole shows
 """
 
-from stage.choreo.models import Form, PathRow, PathStyle, Placement, Set, TransitionSpec
-from stage.core.validation import ValidationReport
-from stage.sheet.templates import InMemorySheetStore
-from stage.show.validate import (
+from showpy.choreo.models import Form, PathRow, PathStyle, Placement, Set, TransitionSpec
+from showpy.core.validation import ValidationReport
+from showpy.sheet.templates import InMemorySheetStore
+from showpy.show.validate import (
     validate_dependencies,
     validate_paths,
     validate_set,

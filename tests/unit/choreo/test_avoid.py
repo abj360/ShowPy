@@ -6,7 +6,7 @@ test_avoid.py --- tests advisory gap finding and fix suggestions
 
 import pytest
 
-from stage.choreo.avoid import (
+from showpy.choreo.avoid import (
     apply_fix,
     closest_approach,
     min_gaps,
@@ -15,9 +15,9 @@ from stage.choreo.avoid import (
     suggest_reassignment,
     suggest_waypoint,
 )
-from stage.choreo.engine_models import Fix
-from stage.core.errors import PathError
-from stage.core.util import approx_equal
+from showpy.choreo.engine_models import Fix
+from showpy.core.errors import PathError
+from showpy.core.util import approx_equal
 from tests.fixtures.crossing_shows import crossing_show
 from tests.fixtures.motion_shows import TID
 from tests.fixtures.shows import two_set_show
@@ -101,4 +101,4 @@ def test_regression_reassign_hint_names_the_real_module() -> None:
     fix = Fix(kind="reassign", params={}, new_gap=1.0, max_speed_after=0.5)
     with pytest.raises(PathError) as info:
         apply_fix(crossing_show().transition(TID), fix)
-    assert "stage.choreo.match_ops.apply_match" in info.value.hint
+    assert "showpy.choreo.match_ops.apply_match" in info.value.hint

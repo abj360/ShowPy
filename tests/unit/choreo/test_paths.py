@@ -6,8 +6,8 @@ test_paths.py --- tests the pure path-row editing functions
 
 import pytest
 
-from stage.choreo.models import Easing, FacingMode, PathRow, PathStyle, TransitionSpec
-from stage.choreo.paths import (
+from showpy.choreo.models import Easing, FacingMode, PathRow, PathStyle, TransitionSpec
+from showpy.choreo.paths import (
     add_waypoint,
     arrive_early,
     clear_waypoints,
@@ -28,8 +28,8 @@ from stage.choreo.paths import (
     unlock,
     window,
 )
-from stage.core.errors import LockedError, PathError, UnknownRefError
-from stage.core.util import approx_equal
+from showpy.core.errors import LockedError, PathError, UnknownRefError
+from showpy.core.util import approx_equal
 from tests.fixtures.motion_shows import TID
 from tests.fixtures.shows import two_set_show
 

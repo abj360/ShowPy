@@ -1,4 +1,4 @@
-# Stage Library: API Reference
+# ShowPy Library: API Reference
 
 Nov 11, 2026 · @Peter
 
@@ -6,9 +6,9 @@ Last updated: 2026-11-11
 
 ## How to read this reference
 
-This is the complete API of `stage`, the choreography library behind the Show Canvas (2D sheet; the 3D layer has its own reference), listed module by module: every data class with its fields, and every function with its inputs, output and purpose. Spots are the dots designed on the sheet, claimed by real performers after publishing.
+This is the complete API of `showpy`, the choreography library behind the Show Canvas (2D sheet; the 3D layer has its own reference), listed module by module: every data class with its fields, and every function with its inputs, output and purpose. Spots are the dots designed on the sheet, claimed by real performers after publishing.
 
-The first build covers every module except `stagecheck`, `stage.packs` and `stage.index`; their sections describe the planned design. Where this reference and the code disagree, the code and the ADRs in `docs/adr/` win; ADR 0001 lists the fixes made to the 2026-11-08 version of this document.
+The first build covers every module except `stagecheck`, `showpy.packs` and `showpy.index`; their sections describe the planned design. Where this reference and the code disagree, the code and the ADRs in `docs/adr/` win; ADR 0001 lists the fixes made to the 2026-11-08 version of this document.
 
 **Conventions used in every table**
 
@@ -19,33 +19,33 @@ The first build covers every module except `stagecheck`, `stage.packs` and `stag
 - All data classes are frozen Pydantic v2 models with JSON schemas. Stored geometry is JSON-safe: models hold `Point` tuples, `Ring`s and `Region`s, never NumPy arrays or Shapely objects; functions accept and return `Points` and Shapely polygons.
 - Functions are pure: "edit" functions return a new object, and functions that edit pinned or locked items raise `LockedError` unless the caller passes `force=True`. The library never reads the clock: every time stamp is an explicit `at: datetime` argument. Stores and services (`SheetStore`, `NoteDrafter`, `Repository`, `AssetStore`) are injected, and registries are immutable: registering returns a new registry.
 - `Points` = NumPy array of shape (N, 2), float64. `Selector` = selection expression, list of IDs, or `Selection`.
-- `import stage` re-exports the public API lazily (PEP 562): a name is imported on first use, e.g. `stage.line`. Internal helper modules (engine compilation, matching cost and solver internals, workspace documents) are not re-exported. One name clashes and is renamed: the motion function `spiral` is `stage.spiral_motion`; `stage.spiral` is the geometric spiral curve. Subpackage `__init__` files hold only a docstring, and library code imports from the submodule, e.g. `from stage.geo.shapes import line`.
-- `stage.examples` holds small, deterministic example shows for docs, doctests and tests: `field_sheet()`, `two_set_show()`, `with_rows(rows, routes=None, show=None)`, `with_targets(updates, show=None)`, `crossing_show()`, `performer(name, role="performer")`, `live_publication(show)`, plus `EXAMPLE_TIME` and `EXAMPLE_TID`.
+- `import showpy` re-exports the public API lazily (PEP 562): a name is imported on first use, e.g. `showpy.line`. Internal helper modules (engine compilation, matching cost and solver internals, workspace documents) are not re-exported. One name clashes and is renamed: the motion function `spiral` is `stage.spiral_motion`; `stage.spiral` is the geometric spiral curve. Subpackage `__init__` files hold only a docstring, and library code imports from the submodule, e.g. `from showpy.geo.shapes import line`.
+- `showpy.examples` holds small, deterministic example shows for docs, doctests and tests: `field_sheet()`, `two_set_show()`, `with_rows(rows, routes=None, show=None)`, `with_targets(updates, show=None)`, `crossing_show()`, `performer(name, role="performer")`, `live_publication(show)`, plus `EXAMPLE_TIME` and `EXAMPLE_TID`.
 - `→ X` means the function returns X. Optional arguments show their defaults.
 
 **Module map**
 
-| Module           | Panel                | What it holds                                                                                                     |
-| ---------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `stage.core`     | all                  | Units, IDs and types, errors, validation reports, the selection model, utilities                                  |
-| `stage.cast`     | Show Canvas          | Groups, spots, cast, selection language, spot ID rewriting                                                        |
-| `stage.sheet`    | Canvas               | The 2D design sheet: templates, customization, coordinate systems, bounds, replacement, rendering                 |
-| `stage.notes`    | Canvas               | Design notes on sets, transitions, points, areas and spots                                                        |
-| `stage.time`     | Show Canvas, Preview | Count timeline: tempo, holds, markers, cues, measures, audio sync                                                 |
-| `stage.geo`      | Show Canvas          | Curves, shapes, regions, SVG and text outlines, spacing, affine maps, transforms, static measurement and analysis |
-| `stage.choreo`   | Show Canvas          | Sets, forms, matching, paths, routes, engine, facing, avoidance, time-based measures                              |
-| `stage.show`     | Show Canvas          | Show model, set management, sections, storage, collaboration, history, validation                                 |
-| `stage.export`   | Show Canvas          | Coordinate sheets, charts, PDF, JSON and CSV data, position import, publishing and claims, video                  |
-| `stage.examples` | docs, tests          | Deterministic example shows for doctests and tests                                                                |
-| `stagecheck`     | all (locked)         | Limits and checks, run only through a tool; not built yet                                                         |
-| `stage.packs`    | all                  | Domain packs, starting with marching band; not built yet                                                          |
-| `stage.index`    | agent                | API index and promotion of agent-written code; not built yet                                                      |
+| Module            | Panel                | What it holds                                                                                                     |
+| ----------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `showpy.core`     | all                  | Units, IDs and types, errors, validation reports, the selection model, utilities                                  |
+| `showpy.cast`     | Show Canvas          | Groups, spots, cast, selection language, spot ID rewriting                                                        |
+| `showpy.sheet`    | Canvas               | The 2D design sheet: templates, customization, coordinate systems, bounds, replacement, rendering                 |
+| `showpy.notes`    | Canvas               | Design notes on sets, transitions, points, areas and spots                                                        |
+| `showpy.time`     | Show Canvas, Preview | Count timeline: tempo, holds, markers, cues, measures, audio sync                                                 |
+| `showpy.geo`      | Show Canvas          | Curves, shapes, regions, SVG and text outlines, spacing, affine maps, transforms, static measurement and analysis |
+| `showpy.choreo`   | Show Canvas          | Sets, forms, matching, paths, routes, engine, facing, avoidance, time-based measures                              |
+| `showpy.show`     | Show Canvas          | Show model, set management, sections, storage, collaboration, history, validation                                 |
+| `showpy.export`   | Show Canvas          | Coordinate sheets, charts, PDF, JSON and CSV data, position import, publishing and claims, video                  |
+| `showpy.examples` | docs, tests          | Deterministic example shows for doctests and tests                                                                |
+| `stagecheck`      | all (locked)         | Limits and checks, run only through a tool; not built yet                                                         |
+| `showpy.packs`    | all                  | Domain packs, starting with marching band; not built yet                                                          |
+| `showpy.index`    | agent                | API index and promotion of agent-written code; not built yet                                                      |
 
-## stage.core
+## showpy.core
 
 The foundation every other module imports: one unit system, shared types and IDs, one error family, validation reports, the selection model and small utilities.
 
-### stage.core.types (type aliases and base models)
+### showpy.core.types (type aliases and base models)
 
 | Name                                                       | Definition                                                                                  | Represents                                                    |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
@@ -61,16 +61,16 @@ The foundation every other module imports: one unit system, shared types and IDs
 | `Box2` / `Box3`                                            | `{min, max}` model; `Box2.size`, `Box2.center`                                              | 2D or 3D bounding box                                         |
 | `Region`                                                   | `{exterior: Ring, holes: tuple[Ring, ...]}` model; `Region.from_shapely(p)`, `to_shapely()` | An area stored JSON-safe                                      |
 
-### stage.core.selection
+### showpy.core.selection
 
-**`Selection`** — ordered, duplicate-free `ids: tuple[SpotId, ...]` plus `description: str`; supports `|`, `&`, `-`, `len`, iteration and `in`. `stage.cast.select` re-exports it.
+**`Selection`** — ordered, duplicate-free `ids: tuple[SpotId, ...]` plus `description: str`; supports `|`, `&`, `-`, `len`, iteration and `in`. `showpy.cast.select` re-exports it.
 
 | Name            | Definition                            | Represents                                                                             |
 | --------------- | ------------------------------------- | -------------------------------------------------------------------------------------- |
 | `Selector`      | `str \| Sequence[str] \| Selection`   | Who an operation applies to                                                            |
 | `SelectorField` | `str \| tuple[str, ...] \| Selection` | The JSON-safe selector stored on models (`Zone.applies_to`, `FacingOverride.entities`) |
 
-### stage.core.ids
+### showpy.core.ids
 
 | Name                                        | Format                                 | Represents                                         |
 | ------------------------------------------- | -------------------------------------- | -------------------------------------------------- |
@@ -87,7 +87,7 @@ The foundation every other module imports: one unit system, shared types and IDs
 | `parse_tid(text)`                        | `"12→13"` or `"12->13"` | `TransitionId`                | Read a transition ID                           |
 | `format_tid(tid)`                        | `TransitionId`          | `str`                         | Write one as `12→13`                           |
 
-### stage.core.units
+### showpy.core.units
 
 **`UnitRegistry`** — `meters_per_unit: dict[str, float]`; `factor(name)` raises `UnknownRefError` for unknown names. `DEFAULT_UNITS` knows `m`, `cm`, `mm`, `in`, `ft` and `yd`.
 
@@ -102,39 +102,39 @@ The foundation every other module imports: one unit system, shared types and IDs
 | `vector_facing(v)`                                           | `Point`                        | `Degrees` in \[0, 360)    | Direction to facing; raises `ZeroLengthError` on (0, 0)          |
 | `round_to(value, precision=0.01)`                            | `float`, `float`               | `float`                   | Display rounding, half away from zero                            |
 
-### stage.core.errors
+### showpy.core.errors
 
-Every error has `code: str`, `message: str`, `context: dict`, `hint: str`, and is raised as `StageError(message, *, hint, context=None, code=None)`; `code` defaults to the class's own code (`UNKNOWN_REF`, `LOCKED`, ...). `str(error)` reads `CODE: message (hint: ...)`.
+Every error has `code: str`, `message: str`, `context: dict`, `hint: str`, and is raised as `ShowPyError(message, *, hint, context=None, code=None)`; `code` defaults to the class's own code (`UNKNOWN_REF`, `LOCKED`, ...). `str(error)` reads `CODE: message (hint: ...)`.
 
 | Class               | Parent          | Raised when                                                        |
 | ------------------- | --------------- | ------------------------------------------------------------------ |
-| `StageError`        | `Exception`     | Base of all library errors                                         |
-| `UnknownRefError`   | `StageError`    | An ID, name or unit does not resolve; hint lists close matches     |
-| `VersionError`      | `StageError`    | A pinned version is missing or incompatible                        |
-| `SchemaError`       | `StageError`    | Data fails its JSON schema or text format; names the field         |
-| `GeometryError`     | `StageError`    | Degenerate shape (zero radius, open polygon, collinear arc points) |
+| `ShowPyError`       | `Exception`     | Base of all library errors                                         |
+| `UnknownRefError`   | `ShowPyError`   | An ID, name or unit does not resolve; hint lists close matches     |
+| `VersionError`      | `ShowPyError`   | A pinned version is missing or incompatible                        |
+| `SchemaError`       | `ShowPyError`   | Data fails its JSON schema or text format; names the field         |
+| `GeometryError`     | `ShowPyError`   | Degenerate shape (zero radius, open polygon, collinear arc points) |
 | `ZeroLengthError`   | `GeometryError` | Direction of a zero vector requested                               |
-| `SpacingError`      | `StageError`    | Items do not fit; reports the maximum that fits                    |
-| `TimeRangeError`    | `StageError`    | Times outside range or start ≥ end                                 |
-| `TimelineError`     | `StageError`    | Inconsistent tempo, measure or hold data                           |
-| `SurfaceError`      | `StageError`    | A point is off the sheet                                           |
-| `MatchError`        | `StageError`    | No feasible assignment; names the blocking constraint              |
-| `PathError`         | `StageError`    | Invalid path instruction                                           |
+| `SpacingError`      | `ShowPyError`   | Items do not fit; reports the maximum that fits                    |
+| `TimeRangeError`    | `ShowPyError`   | Times outside range or start ≥ end                                 |
+| `TimelineError`     | `ShowPyError`   | Inconsistent tempo, measure or hold data                           |
+| `SurfaceError`      | `ShowPyError`   | A point is off the sheet                                           |
+| `MatchError`        | `ShowPyError`   | No feasible assignment; names the blocking constraint              |
+| `PathError`         | `ShowPyError`   | Invalid path instruction                                           |
 | `ContinuityError`   | `PathError`     | A path does not end on its target placement                        |
-| `LockedError`       | `StageError`    | Edit touches something the designer locked                         |
-| `StorageError`      | `StageError`    | Persistence failure                                                |
+| `LockedError`       | `ShowPyError`   | Edit touches something the designer locked                         |
+| `StorageError`      | `ShowPyError`   | Persistence failure                                                |
 | `ConflictError`     | `StorageError`  | A concurrent edit landed first; lists what changed                 |
-| `ValidationError`   | `StageError`    | Structural integrity failure                                       |
+| `ValidationError`   | `ShowPyError`   | Structural integrity failure                                       |
 | `DeprecatedWarning` | `UserWarning`   | Deprecated API used; names the replacement                         |
 
-### stage.core.validation
+### showpy.core.validation
 
 | Data class         | Fields                                                                                                          | Represents                                                                                |
 | ------------------ | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `ValidationIssue`  | `level: "error" \| "warning", code: str, where: str, message: str, hint: str`                                   | One structural problem, printed as `E: <code> <where>: <message> (hint: ...)` or `W: ...` |
 | `ValidationReport` | `issues: tuple[ValidationIssue, ...]`; property `ok` (no error-level issue); `ValidationReport.merge(*reports)` | Every problem found, printed one line per issue                                           |
 
-### stage.core.util
+### showpy.core.util
 
 | Function                          | Inputs                                           | Output                                       | Purpose                                                                |
 | --------------------------------- | ------------------------------------------------ | -------------------------------------------- | ---------------------------------------------------------------------- |
@@ -147,14 +147,14 @@ Every error has `code: str`, `message: str`, `context: dict`, `hint: str`, and i
 | `content_hash(obj)`               | any model or bytes                               | `str` (SHA-256 hex)                          | Detect stale builds and changes                                        |
 | `chunk_counts(total, parts)`      | `float`, `int`                                   | `list[float]`                                | Split counts evenly; the parts sum exactly to `total`                  |
 | `close_matches(name, candidates)` | `str`, `Iterable[str]`                           | `list[str]`                                  | Up to three close names, best first, for error hints                   |
-| `log(msg, **fields)`              |                                                  | `None`                                       | `msg key=value ...` at INFO on the `stage` logger, captured by builds  |
+| `log(msg, **fields)`              |                                                  | `None`                                       | `msg key=value ...` at INFO on the `showpy` logger, captured by builds |
 | `timer()`                         |                                                  | context manager yielding `Timer{elapsed_ms}` | Measure script timing; never feeds library logic                       |
 
-## stage.cast
+## showpy.cast
 
 Who is in a show: groups, spots, labeling rules, named selections, and the selection language used everywhere to pick them.
 
-### stage.cast.models
+### showpy.cast.models
 
 **`Group`** — a designer-made set of spots with shared defaults.
 
@@ -195,7 +195,7 @@ Who is in a show: groups, spots, labeling rules, named selections, and the selec
 
 Methods: `spot(id) → Spot`, `ids() → tuple[SpotId, ...]`.
 
-### stage.cast.spots (creating spots on the sheet)
+### showpy.cast.spots (creating spots on the sheet)
 
 Spots are drawn directly on the sheet; there is no roster to import. A new spot exists in every set: sets before the one it was created in mark it off the field until an entrance is designed.
 
@@ -214,16 +214,16 @@ Spots are drawn directly on the sheet; there is no roster to import. A new spot 
 | `set_shape(show, sel, shape)`                                    | `Shape`                           | `Show`                   | Circle or rectangle, size and rotation                                      |
 | `set_claimable(show, sel, value)`                                | `"performer" \| "crew" \| "none"` | `Show`                   | Who can claim these spots when published                                    |
 
-### stage.cast.rewrite
+### showpy.cast.rewrite
 
 | Function                         | Inputs                            | Output           | Purpose                                                          |
 | -------------------------------- | --------------------------------- | ---------------- | ---------------------------------------------------------------- |
 | `rewrite_spot_ids(show, rename)` | `rename(SpotId) → SpotId \| None` | `Show`           | Apply a rename to every spot reference; None drops the reference |
 | `faces_entity(mode, value)`      | `FacingMode`, facing value        | `SpotId \| None` | The spot a facing aims at, if any                                |
 
-### stage.cast.select
+### showpy.cast.select
 
-**`Selection`** is re-exported from `stage.core.selection`.
+**`Selection`** is re-exported from `showpy.core.selection`.
 
 Expression grammar for `select`: IDs `T4`, ranges `T1-T8`, prefixes `T*` (labels whose prefix before the trailing number is exactly `T`), `all`, `group:trumpets`, `form:arc1`, `tag:soloist`, `shape:rectangle`, `sel:<name>` (a named selection), combined with `+` (union), `-` (difference), `&` (intersection) and parentheses. Operators apply left to right with equal precedence. Operators need spaces or parentheses on both sides (`T1 + T2 - T3`, `(T*)-(T2)`); a glued operator such as `T1+T2` raises `SchemaError` with its position, because `T1-T8` without spaces is a range. A `Set` cannot resolve `group`, `tag`, `shape` or `sel` words; a `Cast` cannot resolve `form` words.
 
@@ -240,29 +240,29 @@ Expression grammar for `select`: IDs `T4`, ranges `T1-T8`, prefixes `T*` (labels
 | `alternate(sel, k=2)`                          |                                                   | `list[Selection]`             | Every k-th spot                                                          |
 | `mirror_pairs(set_, sel, axis_x=0.0, tol=0.1)` |                                                   | `list[tuple[SpotId, SpotId]]` | Symmetry partners across a vertical axis                                 |
 
-## stage.sheet
+## showpy.sheet
 
 Used for the 2D design surface every show is drawn on. There is one standard sheet; a template fills it in (size, lines, landmarks, zones, grid), and a coordinate system on top only changes labels and dot-sheet wording, never the design.
 
-### stage.sheet.models
+### showpy.sheet.models
 
 **Enums**: `SurfaceType` = `FOOTBALL_FIELD`, `STAGE`, `GYM_FLOOR`, `ARENA`, `STREET`, `BLANK`. `ZoneKind` = `RESTRICTED`, `PIT`, `WINGS`, `STAGING`, `AUDIENCE`, `SAFETY`, `CUSTOM`. `CoordinateKind` = `MARCHING`, `STAGE`, `DANCE_FLOOR`, `GRID`.
 
-| Data class              | Fields                                                                                                                                                                                                                                                                                                                    | Represents                                                                                 |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `Grid`                  | `origin: Point = (0, 0), spacing: tuple[Meters, Meters] = (1, 1), major_every: int = 5, rotation_deg: Degrees = 0, unit_name: str = "m"`                                                                                                                                                                                  | Background grid                                                                            |
-| `GuideLine`             | `id: str, kind: "yard" \| "hash" \| "sideline" \| "center" \| "edge" \| "spike" \| "custom", points: Ring, label: str`                                                                                                                                                                                                    | A line drawn on the sheet                                                                  |
-| `Landmark`              | `id: LandmarkId, name: str, kind: "point" \| "line" \| "area", geometry: Ring, aliases: tuple[str, ...]`; property `point`                                                                                                                                                                                                | Named reference ("front hash", "center stage")                                             |
-| `Zone`                  | `id: ZoneId, kind: ZoneKind, polygon: Region, applies_to: SelectorField = "all", active: tuple[tuple[Count, Count], ...] \| None, note: str`; `is_active(t)`                                                                                                                                                              | An area with rules                                                                         |
-| `Sheet`                 | `ref: SheetRef, name: str, surface_type: SurfaceType, size_m: tuple[Meters, Meters], outline: Ring, walkable: Region, guides: tuple[GuideLine, ...], landmarks: tuple[Landmark, ...], zones: tuple[Zone, ...], grid: Grid, default_coordinates: CoordinateSystem, based_on: SheetRef \| None, owner: str, thumbnail: str` | The 2D design surface; (0, 0) is its front-center                                          |
-| `CoordinateSystem`      | `kind: CoordinateKind = GRID, origin: Point \| LandmarkId = (0, 0), audience_side: "front" \| "back" \| "left" \| "right" = "front", units: str = "m", precision: float = 0.01, labels: dict[str, str]`                                                                                                                   | How positions are labeled and worded (display only)                                        |
-| `SheetReplaceReport`    | `mapping: "landmarks" \| "origin" \| "scale", moved: dict[SpotId, tuple[Point, Point]], outside: tuple[SpotId, ...], in_zones: tuple[tuple[SpotId, ZoneId], ...], form_notes: tuple[str, ...]`                                                                                                                            | What changed when a sheet was replaced; no check results                                   |
-| `SheetStore` (protocol) | `get(ref) → Sheet \| None`, `put(sheet, scope) → SheetRef`; `InMemorySheetStore` implements it                                                                                                                                                                                                                            | Where saved sheets live; injected, never global                                            |
-| `SheetCanvas`           | `min_x, min_y, max_x, max_y: float, px_per_m: float`; `SheetCanvas.for_sheet(sheet, px_per_m=20.0, margin_m=1.0)`, `size`, `to_px(p)`, `from_px(q)`, `ring_px(ring)`                                                                                                                                                      | Meter-to-pixel mapping with the audience at the bottom of the image (`stage.sheet.render`) |
+| Data class              | Fields                                                                                                                                                                                                                                                                                                                    | Represents                                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `Grid`                  | `origin: Point = (0, 0), spacing: tuple[Meters, Meters] = (1, 1), major_every: int = 5, rotation_deg: Degrees = 0, unit_name: str = "m"`                                                                                                                                                                                  | Background grid                                                                             |
+| `GuideLine`             | `id: str, kind: "yard" \| "hash" \| "sideline" \| "center" \| "edge" \| "spike" \| "custom", points: Ring, label: str`                                                                                                                                                                                                    | A line drawn on the sheet                                                                   |
+| `Landmark`              | `id: LandmarkId, name: str, kind: "point" \| "line" \| "area", geometry: Ring, aliases: tuple[str, ...]`; property `point`                                                                                                                                                                                                | Named reference ("front hash", "center stage")                                              |
+| `Zone`                  | `id: ZoneId, kind: ZoneKind, polygon: Region, applies_to: SelectorField = "all", active: tuple[tuple[Count, Count], ...] \| None, note: str`; `is_active(t)`                                                                                                                                                              | An area with rules                                                                          |
+| `Sheet`                 | `ref: SheetRef, name: str, surface_type: SurfaceType, size_m: tuple[Meters, Meters], outline: Ring, walkable: Region, guides: tuple[GuideLine, ...], landmarks: tuple[Landmark, ...], zones: tuple[Zone, ...], grid: Grid, default_coordinates: CoordinateSystem, based_on: SheetRef \| None, owner: str, thumbnail: str` | The 2D design surface; (0, 0) is its front-center                                           |
+| `CoordinateSystem`      | `kind: CoordinateKind = GRID, origin: Point \| LandmarkId = (0, 0), audience_side: "front" \| "back" \| "left" \| "right" = "front", units: str = "m", precision: float = 0.01, labels: dict[str, str]`                                                                                                                   | How positions are labeled and worded (display only)                                         |
+| `SheetReplaceReport`    | `mapping: "landmarks" \| "origin" \| "scale", moved: dict[SpotId, tuple[Point, Point]], outside: tuple[SpotId, ...], in_zones: tuple[tuple[SpotId, ZoneId], ...], form_notes: tuple[str, ...]`                                                                                                                            | What changed when a sheet was replaced; no check results                                    |
+| `SheetStore` (protocol) | `get(ref) → Sheet \| None`, `put(sheet, scope) → SheetRef`; `InMemorySheetStore` implements it                                                                                                                                                                                                                            | Where saved sheets live; injected, never global                                             |
+| `SheetCanvas`           | `min_x, min_y, max_x, max_y: float, px_per_m: float`; `SheetCanvas.for_sheet(sheet, px_per_m=20.0, margin_m=1.0)`, `size`, `to_px(p)`, `from_px(q)`, `ring_px(ring)`                                                                                                                                                      | Meter-to-pixel mapping with the audience at the bottom of the image (`showpy.sheet.render`) |
 
-### stage.sheet functions
+### showpy.sheet functions
 
-Templates and sheet edits live in `stage.sheet.templates` (built-in surfaces in `stage.sheet.surfaces`), coordinates in `stage.sheet.coords`, bounds and landmark lookup in `stage.sheet.bounds`, replacement in `stage.sheet.replace`, and rendering in `stage.sheet.render`.
+Templates and sheet edits live in `showpy.sheet.templates` (built-in surfaces in `showpy.sheet.surfaces`), coordinates in `showpy.sheet.coords`, bounds and landmark lookup in `showpy.sheet.bounds`, replacement in `showpy.sheet.replace`, and rendering in `showpy.sheet.render`.
 
 | Function                                                                                                | Inputs                                          | Output                       | Purpose                                                                                                                                                                                              |
 | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -286,9 +286,9 @@ Templates and sheet edits live in `stage.sheet.templates` (built-in surfaces in 
 | `render_sheet(sheet, fmt="svg", px_per_m=20.0)`                                                         | `svg`, `png`, `pdf`                             | `bytes`                      | Printable blank sheet                                                                                                                                                                                |
 | `draw_sheet(draw, canvas, sheet)`                                                                       | PIL drawing, `SheetCanvas`                      | `None`                       | Paint outline, walkable area, zones, guides and landmarks; shared with video export                                                                                                                  |
 
-## stage.notes
+## showpy.notes
 
-Used for design notes on the canvas, replacing a separate plan: a goal for each set, sticky notes on spots or groups, and ideas the agent drafts from your concept. Review discussion stays in comments (stage.show.collab).
+Used for design notes on the canvas, replacing a separate plan: a goal for each set, sticky notes on spots or groups, and ideas the agent drafts from your concept. Review discussion stays in comments (showpy.show.collab).
 
 | Data class | Fields                                                                                                                                                                                                                               | Represents                                                                   |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
@@ -303,11 +303,11 @@ Used for design notes on the canvas, replacing a separate plan: a goal for each 
 | `notes_near(show, p, radius, set_id=None, include_hidden=False)`        |                                      | `list[Note]` | Sticky notes around a point                               |
 | `accept_draft(show, draft)`                                             | drafted `Note`                       | `Show`       | Add a drafted note and make it visible                    |
 
-## stage.time
+## showpy.time
 
 Used for choreography timing: when each count happens, so sets land at the right moments, speed checks know real time, and the preview stays in sync with the audio. The music itself is only a playback asset; it never changes the timeline. The designer sets the tempo; the agent can read an uploaded track and suggest markers or tempo changes, but only accepted suggestions change anything.
 
-### stage.time.models
+### showpy.time.models
 
 **Enums**: `TimelineMode` = `COUNTS` (most music-driven shows), `SECONDS` (clock-timed shows), `CUES` (theater-style shows). `MarkerKind` = `REHEARSAL`, `CUE`, `CUSTOM`.
 
@@ -322,9 +322,9 @@ Used for choreography timing: when each count happens, so sets land at the right
 | `AudioTrack`     | `file: str, label: str, sync_offset_s: Seconds = 0, gain: float = 1, section: tuple[Count, Count] \| None`                                                                                                                        | Music or sound that plays alongside the show; never changes timing                     |
 | `Timeline`       | `mode: TimelineMode, tempos: tuple[TempoSection, ...], holds: tuple[Hold, ...], markers: tuple[Marker, ...], measures: MeasureSetting \| None, cues: tuple[Cue, ...], audio: tuple[AudioTrack, ...], total_counts: Count \| None` | The whole show timeline                                                                |
 
-### stage.time functions
+### showpy.time functions
 
-Editing, markers, cues and persistence live in `stage.time.timeline`; tempo and conversions in `stage.time.clock`; measures in `stage.time.measures`; validation in `stage.time.validate`.
+Editing, markers, cues and persistence live in `showpy.time.timeline`; tempo and conversions in `showpy.time.clock`; measures in `showpy.time.measures`; validation in `showpy.time.validate`.
 
 | Function                                                 | Inputs               | Output                                     | Purpose                                                                                                          |
 | -------------------------------------------------------- | -------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
@@ -348,13 +348,13 @@ Editing, markers, cues and persistence live in `stage.time.timeline`; tempo and 
 | `to_json(tl)` / `from_json(d)`                           |                      | `dict` / `Timeline`                        | Persistence; `from_json` raises `SchemaError`                                                                    |
 | `validate_timeline(tl)`                                  |                      | `ValidationReport`                         | Tempos positive and ordered, holds don't overlap, markers within the show, audio sections in range; never raises |
 
-## stage.geo
+## showpy.geo
 
-The drawing toolkit on the stage plane: curves and regions, spots spaced along or inside them, transforms that move whole shapes, and static measurements. Transforms and measurements accept `Points`, a curve or a `Set` with a selector and return the same type; forms go through `stage.choreo.form_ops.transform_form`. `stage.geo` never imports the PathEngine: measures over time live in `stage.choreo.motion_stats`.
+The drawing toolkit on the stage plane: curves and regions, spots spaced along or inside them, transforms that move whole shapes, and static measurements. Transforms and measurements accept `Points`, a curve or a `Set` with a selector and return the same type; forms go through `showpy.choreo.form_ops.transform_form`. `showpy.geo` never imports the PathEngine: measures over time live in `showpy.choreo.motion_stats`.
 
-### stage.geo.curves (with shapes, regions, svg, text, affine)
+### showpy.geo.curves (with shapes, regions, svg, text, affine)
 
-The `Curve` protocol is in `stage.geo.curve_base`, the curve models in `stage.geo.curves`, constructors in `stage.geo.shapes`, area operations in `stage.geo.regions`, SVG path parsing in `stage.geo.svg`, the built-in stroke font in `stage.geo.text`, and affine matrices in `stage.geo.affine`. Arc angles use the math convention: degrees counter-clockwise from +x.
+The `Curve` protocol is in `showpy.geo.curve_base`, the curve models in `showpy.geo.curves`, constructors in `showpy.geo.shapes`, area operations in `showpy.geo.regions`, SVG path parsing in `showpy.geo.svg`, the built-in stroke font in `showpy.geo.text`, and affine matrices in `showpy.geo.affine`. Arc angles use the math convention: degrees counter-clockwise from +x.
 
 **`Curve`** (protocol, implemented by every curve model)
 
@@ -388,33 +388,33 @@ Every curve model is a frozen Pydantic model with a `kind` discriminator; `AnyCu
 | `SpiralCurve`    | `center, r0, r1, turns, start_deg`                                      | Archimedean spiral                                    |
 | `TrimmedCurve`   | `base: AnyCurve, s0: Meters, s1: Meters`                                | A piece of another curve, reversed when s0 > s1       |
 
-| Constructor                                                                  | Inputs                                                             | Output                      | Purpose                                                           |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------- | ----------------------------------------------------------------- |
-| `line(a, b)`                                                                 | two `Point`                                                        | `Segment`                   | The ends must differ                                              |
-| `polyline(*pts, closed=False)`                                               | points                                                             | `Polyline`                  |                                                                   |
-| `arc(center, radius, start_deg, sweep_deg)`                                  |                                                                    | `ArcCurve`                  |                                                                   |
-| `arc_through(a, m, b)`                                                       | three points                                                       | `ArcCurve`                  | Raises on collinear points                                        |
-| `arc_from_chord(a, b, bulge)`                                                | ends, sagitta in meters                                            | `ArcCurve`                  | "Bow this line by 2 m"; positive bows to the left of a→b          |
-| `circle(center, radius, start_deg=0)`                                        |                                                                    | `CircleCurve`               | Counter-clockwise                                                 |
-| `ellipse(center, rx, ry, rotation_deg=0)`                                    |                                                                    | `EllipseCurve`              |                                                                   |
-| `curve_through(*pts, closed=False, alpha=0.5)`                               |                                                                    | `SplineCurve`               | Smooth curve through control points                               |
-| `bezier(*control)`                                                           |                                                                    | `BezierCurve`               |                                                                   |
-| `spiral(center, r0, r1, turns, start_deg=0)`                                 |                                                                    | `SpiralCurve`               |                                                                   |
-| `rect(center, w, d, rotation_deg=0)`                                         |                                                                    | closed `Polyline`           | Rectangle outline, corners counter-clockwise from front-left      |
-| `wedge(apex, length, spread_deg, facing_deg=0)`                              |                                                                    | `Polyline`                  | V or arrow; the apex leads toward `facing_deg`                    |
-| `regular_polygon(center, radius, n, rotation_deg=0)`                         |                                                                    | closed `Polyline`           | First vertex points upstage before rotation                       |
-| `star(center, r_outer, r_inner, n, rotation_deg=0)`                          |                                                                    | closed `Polyline`           |                                                                   |
-| `svg_outline(svg, fit, path_index=None, keep_aspect=True, flip_y=True)`      | a `d` string or SVG text (not a file path), target `Box2`          | `list[SvgCurve]`            | Pictures and logos, one curve per subpath                         |
-| `text_outline(text, font, height, at)`                                       | font `"simplex"` (built-in stroke font); `at` is the baseline-left | `list[Polyline]`            | Letters                                                           |
-| `join(*curves, bridge=False)`                                                |                                                                    | `CompositeCurve`            | Raises if ends do not meet unless bridged                         |
-| `offset(curve, distance, side="left")`                                       |                                                                    | `Curve`                     | Parallel curve                                                    |
-| `curve_from_construction(recipe)`                                            | `construction()` dict                                              | `AnyCurve`                  | Rebuild a stored curve                                            |
-| `region(outline)`                                                            | closed `Curve` or ring of points                                   | `Polygon`                   | Area; raises `GeometryError` on self-intersections                |
-| `buffer(area, d)`, `union(*areas)`, `difference(a, b)`, `intersection(a, b)` |                                                                    | `Polygon` or `MultiPolygon` | Area operations; a negative `d` shrinks                           |
-| `parse_path(d)`                                                              | SVG path data                                                      | `list[Subpath]`             | Evaluable line, quadratic, cubic and arc pieces (`stage.geo.svg`) |
-| `glyph_strokes(char, font)`                                                  |                                                                    | strokes on a 4 × 6 grid     | One letter of a stroke font (`stage.geo.text`)                    |
+| Constructor                                                                  | Inputs                                                             | Output                      | Purpose                                                            |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------ | --------------------------- | ------------------------------------------------------------------ |
+| `line(a, b)`                                                                 | two `Point`                                                        | `Segment`                   | The ends must differ                                               |
+| `polyline(*pts, closed=False)`                                               | points                                                             | `Polyline`                  |                                                                    |
+| `arc(center, radius, start_deg, sweep_deg)`                                  |                                                                    | `ArcCurve`                  |                                                                    |
+| `arc_through(a, m, b)`                                                       | three points                                                       | `ArcCurve`                  | Raises on collinear points                                         |
+| `arc_from_chord(a, b, bulge)`                                                | ends, sagitta in meters                                            | `ArcCurve`                  | "Bow this line by 2 m"; positive bows to the left of a→b           |
+| `circle(center, radius, start_deg=0)`                                        |                                                                    | `CircleCurve`               | Counter-clockwise                                                  |
+| `ellipse(center, rx, ry, rotation_deg=0)`                                    |                                                                    | `EllipseCurve`              |                                                                    |
+| `curve_through(*pts, closed=False, alpha=0.5)`                               |                                                                    | `SplineCurve`               | Smooth curve through control points                                |
+| `bezier(*control)`                                                           |                                                                    | `BezierCurve`               |                                                                    |
+| `spiral(center, r0, r1, turns, start_deg=0)`                                 |                                                                    | `SpiralCurve`               |                                                                    |
+| `rect(center, w, d, rotation_deg=0)`                                         |                                                                    | closed `Polyline`           | Rectangle outline, corners counter-clockwise from front-left       |
+| `wedge(apex, length, spread_deg, facing_deg=0)`                              |                                                                    | `Polyline`                  | V or arrow; the apex leads toward `facing_deg`                     |
+| `regular_polygon(center, radius, n, rotation_deg=0)`                         |                                                                    | closed `Polyline`           | First vertex points upstage before rotation                        |
+| `star(center, r_outer, r_inner, n, rotation_deg=0)`                          |                                                                    | closed `Polyline`           |                                                                    |
+| `svg_outline(svg, fit, path_index=None, keep_aspect=True, flip_y=True)`      | a `d` string or SVG text (not a file path), target `Box2`          | `list[SvgCurve]`            | Pictures and logos, one curve per subpath                          |
+| `text_outline(text, font, height, at)`                                       | font `"simplex"` (built-in stroke font); `at` is the baseline-left | `list[Polyline]`            | Letters                                                            |
+| `join(*curves, bridge=False)`                                                |                                                                    | `CompositeCurve`            | Raises if ends do not meet unless bridged                          |
+| `offset(curve, distance, side="left")`                                       |                                                                    | `Curve`                     | Parallel curve                                                     |
+| `curve_from_construction(recipe)`                                            | `construction()` dict                                              | `AnyCurve`                  | Rebuild a stored curve                                             |
+| `region(outline)`                                                            | closed `Curve` or ring of points                                   | `Polygon`                   | Area; raises `GeometryError` on self-intersections                 |
+| `buffer(area, d)`, `union(*areas)`, `difference(a, b)`, `intersection(a, b)` |                                                                    | `Polygon` or `MultiPolygon` | Area operations; a negative `d` shrinks                            |
+| `parse_path(d)`                                                              | SVG path data                                                      | `list[Subpath]`             | Evaluable line, quadratic, cubic and arc pieces (`showpy.geo.svg`) |
+| `glyph_strokes(char, font)`                                                  |                                                                    | strokes on a 4 × 6 grid     | One letter of a stroke font (`showpy.geo.text`)                    |
 
-| Function (`stage.geo.affine`)                                                                | Inputs     | Output       | Purpose                                                            |
+| Function (`showpy.geo.affine`)                                                               | Inputs     | Output       | Purpose                                                            |
 | -------------------------------------------------------------------------------------------- | ---------- | ------------ | ------------------------------------------------------------------ |
 | `translation_matrix(dx, dy)` / `rotation_matrix(deg, about)` / `scale_matrix(sx, sy, about)` |            | 3 × 3 matrix | Basic maps; rotation is counter-clockwise                          |
 | `mirror_matrix(a, b)` / `skew_matrix(deg_x, deg_y, about)`                                   |            | 3 × 3 matrix | Reflection across the line a–b; shear                              |
@@ -423,7 +423,7 @@ Every curve model is a frozen Pydantic model with a `kind` discriminator; `AnyCu
 | `transform_facing(theta, matrix)`                                                            | `Degrees`  | `Degrees`    | Map a facing through the linear part                               |
 | `transform_curve(curve, matrix)`                                                             | `AnyCurve` | `AnyCurve`   | Map a curve, keeping its family whenever the map allows it exactly |
 
-### stage.geo.spacing
+### showpy.geo.spacing
 
 | Function                                                                           | Inputs                       | Output            | Purpose                                  |
 | ---------------------------------------------------------------------------------- | ---------------------------- | ----------------- | ---------------------------------------- |
@@ -438,9 +438,9 @@ Every curve model is a frozen Pydantic model with a `kind` discriminator; `AnyCu
 | `scatter(area, n, min_gap, seed=0)`                                                |                              | `Points`          | Organic scatter (Bridson Poisson disk)   |
 | `distribute_on_points(candidates, n, method="farthest", seed=0)`                   | `farthest` or `random`       | `Points`          | Pick well-spread spots                   |
 
-### stage.geo.transforms
+### showpy.geo.transforms
 
-Every transform takes `Points`, a curve or a `Set` and returns the same kind, and also takes `sel="all"` and `force=False`. On a set only the selected on-field placements move, facings follow affine maps, and pinned placements raise `LockedError` unless forced; `sel` and `force` are ignored for points and curves. `snap`, `snap_to_guides`, `align` and `distribute` live in `stage.geo.snapping` and are re-exported here. Forms use `stage.choreo.form_ops.transform_form`.
+Every transform takes `Points`, a curve or a `Set` and returns the same kind, and also takes `sel="all"` and `force=False`. On a set only the selected on-field placements move, facings follow affine maps, and pinned placements raise `LockedError` unless forced; `sel` and `force` are ignored for points and curves. `snap`, `snap_to_guides`, `align` and `distribute` live in `showpy.geo.snapping` and are re-exported here. Forms use `showpy.choreo.form_ops.transform_form`.
 
 | Function                                                                            | Inputs                                                                                                                                              | Purpose                                                       |
 | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
@@ -460,9 +460,9 @@ Every transform takes `Points`, a curve or a `Set` and returns the same kind, an
 | `distribute(obj, axis, start=None, end=None)`                                       |                                                                                                                                                     | Even out along an axis, keeping order                         |
 | `interpolate_forms(a, b, u)`                                                        | equal-length `Points`                                                                                                                               | In-between preview                                            |
 
-### stage.geo.measure
+### showpy.geo.measure
 
-Static measures only; positions and speeds over time are in `stage.choreo.motion_stats`.
+Static measures only; positions and speeds over time are in `showpy.choreo.motion_stats`.
 
 | Function                                     | Inputs                                 | Output                                                            | Purpose                                                          |
 | -------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
@@ -479,16 +479,16 @@ Static measures only; positions and speeds over time are in `stage.choreo.motion
 | `form_metrics(points)`                       |                                        | `FormMetrics{length, intervals, curvature_range, symmetry_error}` | Form quality                                                     |
 | `symmetry_error(s, sel="all", axis_x=0.0)`   |                                        | `Meters`                                                          | Largest mirror mismatch                                          |
 
-| Data class (`stage.geo.models`) | Fields                                                                                                   | Represents                                      |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `SnapReport`                    | `moved: int, max_shift: Meters`                                                                          | What a snap moved                               |
-| `IntervalStats`                 | `mean, min, max, std: Meters, gaps: tuple[Meters, ...]`                                                  | Gaps between spots                              |
-| `FormMetrics`                   | `length: Meters, intervals: IntervalStats, curvature_range: tuple[float, float], symmetry_error: Meters` | Shape quality of a form's points                |
-| `SpeedStats`                    | `distance: Meters, counts: float, m_per_count: float, m_per_s: float, max_instant: float`                | Movement demand of one spot over one transition |
+| Data class (`showpy.geo.models`) | Fields                                                                                                   | Represents                                      |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `SnapReport`                     | `moved: int, max_shift: Meters`                                                                          | What a snap moved                               |
+| `IntervalStats`                  | `mean, min, max, std: Meters, gaps: tuple[Meters, ...]`                                                  | Gaps between spots                              |
+| `FormMetrics`                    | `length: Meters, intervals: IntervalStats, curvature_range: tuple[float, float], symmetry_error: Meters` | Shape quality of a form's points                |
+| `SpeedStats`                     | `distance: Meters, counts: float, m_per_count: float, m_per_s: float, max_instant: float`                | Movement demand of one spot over one transition |
 
-### stage.geo.analysis (design feedback, not rules)
+### showpy.geo.analysis (design feedback, not rules)
 
-Measures that help the agent and designer judge whether a picture is interesting, not just possible. Nothing here passes or fails; results are numbers and heat maps to inform design. Motion feedback (`motion_contrast`, `energy_curve`, `phrase_profile`) is in `stage.choreo.motion_stats`.
+Measures that help the agent and designer judge whether a picture is interesting, not just possible. Nothing here passes or fails; results are numbers and heat maps to inform design. Motion feedback (`motion_contrast`, `energy_curve`, `phrase_profile`) is in `showpy.choreo.motion_stats`.
 
 | Function                          | Inputs   | Output             | Purpose                                                                    |
 | --------------------------------- | -------- | ------------------ | -------------------------------------------------------------------------- |
@@ -498,11 +498,11 @@ Measures that help the agent and designer judge whether a picture is interesting
 | `symmetry_score(s, axis_x=0.0)`   |          | `float` 0..1       | How mirrored the picture is                                                |
 | `change_amount(a, b)`             | two sets | `Meters`           | Mean distance moved by spots on the field in both sets                     |
 
-## stage.choreo (part 1): placements, sets, forms, matching
+## showpy.choreo (part 1): placements, sets, forms, matching
 
 A set is a snapshot of where every spot is; forms are the stored shapes that generate those positions; matching decides who takes which spot.
 
-### stage.choreo.models
+### showpy.choreo.models
 
 **`ApprovalState`** (enum): `DRAFT`, `PROPOSED`, `APPROVED`.
 
@@ -541,11 +541,11 @@ Property: `point → Point`.
 | `get(entity)`                           |                           | `Placement`                                                             | One row                                   |
 | `with_placements(updates, force=False)` | `{id: Placement or dict}` | `Set`                                                                   | Edit; raises `LockedError` on pinned rows |
 
-**Spot counts.** `SpotCount{set_id, on_field: int, off_field: int, changed: bool}` describes one set for the set strip, which warns when the number of spots on the field changes unexpectedly between sets. `stage.show.counts.spot_counts(show) → list[SpotCount]` computes it.
+**Spot counts.** `SpotCount{set_id, on_field: int, off_field: int, changed: bool}` describes one set for the set strip, which warns when the number of spots on the field changes unexpectedly between sets. `showpy.show.counts.spot_counts(show) → list[SpotCount]` computes it.
 
-### stage.choreo.forms
+### showpy.choreo.forms
 
-Constructors and slot generation live in `stage.choreo.forms`; registered generators in `form_fns`; layout in `form_layout`; editing in `form_ops`; fitting in `form_fit`; placing forms into sets in `form_place`. A form stores how to rebuild its shape, never the dots: member i stands on slot i, and slots past the last member are open for `place` to fill.
+Constructors and slot generation live in `showpy.choreo.forms`; registered generators in `form_fns`; layout in `form_layout`; editing in `form_ops`; fitting in `form_fit`; placing forms into sets in `form_place`. A form stores how to rebuild its shape, never the dots: member i stands on slot i, and slots past the last member are open for `place` to fill.
 
 | Data class    | Fields                                                                                                                                                                                                 | Represents                                                                                                                            |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -597,7 +597,7 @@ Functions that read a recipe also take `registry=DEFAULT_FORM_FNS`.
 | `edit_params(form, force=False, registry=DEFAULT_FORM_FNS, **params)`                                                        |                                                                      | `Form`                            | Tweak a custom shape, e.g. `edit_params(f, turns=3)`                                                  |
 | `form_fns(registry=DEFAULT_FORM_FNS)`                                                                                        |                                                                      | `list[FormFnInfo{name, summary}]` | Available shape generators                                                                            |
 
-### stage.choreo.match
+### showpy.choreo.match
 
 **`MatchOptions`**
 
@@ -621,22 +621,22 @@ Functions that read a recipe also take `registry=DEFAULT_FORM_FNS`.
 | Function                                                                                   | Inputs                                                                 | Output               | Purpose                                                                                     |
 | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------- |
 | `match(from_, to_slots, entities=None, options=None, groups=None, slot_groups=None)`       | `Set` or `Points`; `Points` or forms; spot → group key; group per slot | `MatchResult`        | Who goes where (SciPy assignment; threshold search for bottleneck); exact and deterministic |
-| `apply_match(show, tid, result, force=False)`                                              |                                                                        | `Show`               | Write targets into the next set and reset those path rows (`stage.choreo.match_ops`)        |
+| `apply_match(show, tid, result, force=False)`                                              |                                                                        | `Show`               | Write targets into the next set and reset those path rows (`showpy.choreo.match_ops`)       |
 | `cost_matrix(from_, to_slots, options=None, entities=None, groups=None, slot_groups=None)` |                                                                        | ndarray              | Inspect costs: meters plus penalties, infinity where forbidden                              |
 | `bottleneck_value(cost)`                                                                   |                                                                        | `float`              | Smallest possible largest cost                                                              |
 | `match_by_order(ordered_sel, form, from_=None)`                                            | `Form` or `Points`; starting `Set` for distances                       | `MatchResult`        | i-th spot to i-th slot                                                                      |
 | `swap(show, set_id, a, b, force=False)`                                                    |                                                                        | `Show`               | Manual swap with facing and form slot, keeping paths valid                                  |
 | `suggest_swaps(show, tid, k=5, same_group=True)`                                           |                                                                        | `list[(a, b, gain)]` | Swaps that reduce the largest move or crossings                                             |
 
-`stage.choreo.match_cost` builds the problem and cost matrices; `stage.choreo.match_solve` holds the solvers (`solve_sum`, `min_max_threshold`, `solve_ordered`, `improve_by_swaps`) and `count_crossings(starts, ends)`.
+`showpy.choreo.match_cost` builds the problem and cost matrices; `showpy.choreo.match_solve` holds the solvers (`solve_sum`, `min_max_threshold`, `solve_ordered`, `improve_by_swaps`) and `count_crossings(starts, ends)`.
 
-## stage.choreo (part 2): paths, engine, avoidance
+## showpy.choreo (part 2): paths, engine, avoidance
 
 Path rows are instructions for how each spot travels between two sets; the path engine is the single piece of code that turns them into exact positions, facings and states at any moment, used by the canvas, checker, preview and exports.
 
-### stage.choreo.paths — models
+### showpy.choreo.paths — models
 
-The path models live in `stage.choreo.models`.
+The path models live in `showpy.choreo.models`.
 
 **Enums**: `PathStyle` = `STRAIGHT`, `HOLD`, `CURVE`, `POLYLINE`, `FOLLOW`, `ROTATE`, `CUSTOM` (registered motion function). `FacingMode` = `FIXED`, `TO_TARGET`, `TRAVEL`, `AGAINST_TRAVEL`, `TOWARD_POINT`, `TOWARD_ENTITY`, `AUDIENCE`, `INTERPOLATE`. `TurnDirection` = `SHORTEST`, `CLOCKWISE`, `COUNTERCLOCKWISE`.
 
@@ -647,9 +647,9 @@ The path models live in `stage.choreo.models`.
 | `Route`          | `id: RouteId, curve: dict, members: tuple[SpotId, ...] (leader first), offsets: tuple[Meters, ...], travel: Meters, start: float = 0, end: float \| None`                                                                                                                                                                                                                                                                                                                 | Shared path for follow-the-leader                                                 |
 | `TransitionSpec` | `id: TransitionId, counts: float, rows: dict[SpotId, PathRow] (sparse; missing = straight full counts), routes: dict[RouteId, Route], notes: str, source_hash: str`; `row(entity)` defaults to straight                                                                                                                                                                                                                                                                   | All instructions for one transition; `counts` equals the destination set's counts |
 
-### stage.choreo.paths — editing functions (pure; return `TransitionSpec` unless noted)
+### showpy.choreo.paths — editing functions (pure; return `TransitionSpec` unless noted)
 
-`sel` is a list of spot IDs or a `Selection`; resolve expressions first with `stage.cast.select.select`. Every function except `default_paths`, `lock`, `unlock`, `paths_table` and the route builders takes `force=False` and raises `LockedError` on a locked row unless forced. Show-aware builders live in `stage.choreo.routes`, persistence in `stage.show.paths_store`.
+`sel` is a list of spot IDs or a `Selection`; resolve expressions first with `showpy.cast.select.select`. Every function except `default_paths`, `lock`, `unlock`, `paths_table` and the route builders takes `force=False` and raises `LockedError` on a locked row unless forced. Show-aware builders live in `showpy.choreo.routes`, persistence in `showpy.show.paths_store`.
 
 | Function                                                                                   | Inputs                                                 | Purpose                                                                                                                      |
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -677,7 +677,7 @@ The path models live in `stage.choreo.models`.
 | `load_paths(ws, tid)`                                                                      |                                                        | → `TransitionSpec`; a transition without a document moves straight                                                           |
 | `paths_table(spec)`                                                                        |                                                        | → DataFrame of non-default rows                                                                                              |
 
-### stage.choreo.paths — custom motion, timing and height
+### showpy.choreo.paths — custom motion, timing and height
 
 Two additions free movement from the built-in list: custom path styles and non-even timing. `PathRow` also has these fields:
 
@@ -691,10 +691,10 @@ Two additions free movement from the built-in list: custom path styles and non-e
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | `Easing`              | `kind: "linear" \| "ease_in" \| "ease_out" \| "ease_in_out" \| "hold_then_burst" \| "burst_then_settle" \| "steps" \| "custom", strength: float = 2.0, points: tuple[tuple[float, float], ...] (custom curve: time share → distance share)` | How progress through a move maps to time                        |
 | `MotionFn` (protocol) | `__call__(u: ndarray, start: Point, end: Point, params: Mapping) → Points`                                                                                                                                                                  | Pure custom motion; must return `start` at u=0 and `end` at u=1 |
-| `MotionRegistry`      | `get(name)`, `names()`, `with_motion(name, fn)`; `DEFAULT_MOTIONS` holds `weave`, `zigzag`, `figure_eight`, `spiral` (exported from `stage` as `spiral_motion`)                                                                             | Named motions; immutable, passed to `PathEngine(motions=...)`   |
+| `MotionRegistry`      | `get(name)`, `names()`, `with_motion(name, fn)`; `DEFAULT_MOTIONS` holds `weave`, `zigzag`, `figure_eight`, `spiral` (exported from `showpy` as `spiral_motion`)                                                                            | Named motions; immutable, passed to `PathEngine(motions=...)`   |
 | `MotionInfo`          | `name: str, summary: str`                                                                                                                                                                                                                   | One registered motion for listings                              |
 
-Motion functions live in `stage.choreo.motion`.
+Motion functions live in `showpy.choreo.motion`.
 
 | Function                                                                          | Inputs                       | Output             | Purpose                                                                                                       |
 | --------------------------------------------------------------------------------- | ---------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------- |
@@ -708,9 +708,9 @@ Motion functions live in `stage.choreo.motion`.
 
 Engine rules for these: progress u passes through the easing curve before positions are computed; `CUSTOM` motions are sampled by the engine at 257 points, then simplified into a polyline within `curve_tol`, so the checker works unchanged. Height (jumps, lifts, flight) belongs to the 3D layer.
 
-### stage.choreo.engine
+### showpy.choreo.engine
 
-Engine data classes live in `stage.choreo.engine_models`; compiling in `engine_compile` and facing in `engine_facing`.
+Engine data classes live in `showpy.choreo.engine_models`; compiling in `engine_compile` and facing in `engine_facing`.
 
 | Data class           | Fields                                                                                                                                                                                                                                                                                        | Represents                                             |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
@@ -746,9 +746,9 @@ Engine data classes live in `stage.choreo.engine_models`; compiling in `engine_c
 
 Compile rules (ADR 0002): each move compiles to a curve plus a piecewise-linear time map from local count to arc length, with knots at the window ends and every timed waypoint. Position is `curve.point_at(map(ease(u)))` with u = (tau − start)/(end − start), clamped. The curve is a segment, polyline, centripetal Catmull–Rom spline, arc about the pivot, trimmed route, or sampled custom polyline. Outside its window a spot stands at the previous or next placement; `on_field` comes from the previous set before the window, the next set after it, and is the OR of both during it. Facing runs in three phases: the previous facing, then the row's `FacingMode` blended in over `turn_counts`, then the next set's facing; `FacingOverride`s win inside their range. HOLD, ROTATE, FOLLOW and CUSTOM must end within 1e-6 m of the target. `segments` subdivides time adaptively from every knot and window edge, probing every eighth of a segment until each probe is within `tol / 2`, so closest-approach checks are exact to `tol`, including crossings between counts.
 
-### stage.choreo.avoid (advisory; the locked checker decides)
+### showpy.choreo.avoid (advisory; the locked checker decides)
 
-`GapInfo` and `Fix` live in `stage.choreo.engine_models`.
+`GapInfo` and `Fix` live in `showpy.choreo.engine_models`.
 
 | Data class / function                                        | Inputs                                                                                                          | Output             | Purpose                                                                           |
 | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------- |
@@ -762,13 +762,13 @@ Compile rules (ADR 0002): each move compiles to a curve plus a piecewise-linear 
 | `separate_in_time(spec, ordered_sel, gap_counts=1.0)`        |                                                                                                                 | `TransitionSpec`   | Automatic stagger                                                                 |
 | `apply_fix(spec, fix)`                                       |                                                                                                                 | `TransitionSpec`   | Apply a delay, waypoint or stagger fix; a reassignment goes through `apply_match` |
 
-## stage.choreo (part 3): facing
+## showpy.choreo (part 3): facing
 
-Facing tools for sets and time ranges. Actions, moves and objects over time belong to the 3D layer (Stage Library: 3D Layer Reference).
+Facing tools for sets and time ranges. Actions, moves and objects over time belong to the 3D layer (ShowPy Library: 3D Layer Reference).
 
-**`FacingOverride`** (`stage.choreo.models`) — `entities: SelectorField, mode: FacingMode, value: Degrees | Point | SpotId | None, start: Count, end: Count, turn_counts: float = 0`. Facing for a global count range regardless of paths, stored in `Show.facing_overrides`.
+**`FacingOverride`** (`showpy.choreo.models`) — `entities: SelectorField, mode: FacingMode, value: Degrees | Point | SpotId | None, start: Count, end: Count, turn_counts: float = 0`. Facing for a global count range regardless of paths, stored in `Show.facing_overrides`.
 
-### stage.choreo.facing
+### showpy.choreo.facing
 
 The `face_*` tools edit placements in one `Set` and raise `LockedError` on pinned placements unless `force=True`; facing over a time range goes through `add_facing_override`.
 
@@ -781,13 +781,13 @@ The `face_*` tools edit placements in one `Set` and raise `LockedError` on pinne
 | `face_along(show, set_id, form_id, reverse=False, force=False)` |                            | `Set`     | Follow the form's line                                                     |
 | `face_normal(show, set_id, form_id, outward=True, force=False)` |                            | `Set`     | Perpendicular to the form; outward is the right of travel                  |
 | `add_facing_override(show, override)`                           | `FacingOverride`           | `Show`    | Facing over a time range within the show's counts                          |
-| `turn(start, end, u, direction=SHORTEST)`                       | `Degrees`, `Degrees`, 0..1 | `Degrees` | Interpolate facing (from `stage.choreo.motion`)                            |
+| `turn(start, end, u, direction=SHORTEST)`                       | `Degrees`, `Degrees`, 0..1 | `Degrees` | Interpolate facing (from `showpy.choreo.motion`)                           |
 
-## stage.choreo (part 4): measures over time
+## showpy.choreo (part 4): measures over time
 
-### stage.choreo.motion_stats
+### showpy.choreo.motion_stats
 
-Measures that need the PathEngine. They live here, not in `stage.geo`, so geometry never imports the engine. Speeds use exactly the motion the checker sees.
+Measures that need the PathEngine. They live here, not in `showpy.geo`, so geometry never imports the engine. Speeds use exactly the motion the checker sees.
 
 | Function                                      | Inputs         | Output                                                            | Purpose                                                         |
 | --------------------------------------------- | -------------- | ----------------------------------------------------------------- | --------------------------------------------------------------- |
@@ -799,11 +799,11 @@ Measures that need the PathEngine. They live here, not in `stage.geo`, so geomet
 | `energy_curve(show, per_count=1)`             |                | `pandas.Series` indexed by global count                           | Mean on-field speed through the show, to compare with the music |
 | `phrase_profile(show, t0, t1)`                |                | DataFrame by phrase                                               | Change, energy and density per musical phrase                   |
 
-## stage.show
+## showpy.show
 
-The show as a living document: the aggregate model, set management, sections, storage exposed to the agent as files, live collaboration, history and structural validation. Exports live in `stage.export`.
+The show as a living document: the aggregate model, set management, sections, storage exposed to the agent as files, live collaboration, history and structural validation. Exports live in `showpy.export`.
 
-### stage.show.models
+### showpy.show.models
 
 **`Show`**
 
@@ -813,7 +813,7 @@ The show as a living document: the aggregate model, set management, sections, st
 | `pack`             | `str`                        | Domain pack key; empty until packs exist                                    |
 | `sheet`            | `Sheet`                      | The 2D design surface (template plus customizations)                        |
 | `coordinates`      | `CoordinateSystem`           | How positions are labeled and worded; display only                          |
-| `notes`            | `tuple[Note, ...]`           | Design notes (stage.notes)                                                  |
+| `notes`            | `tuple[Note, ...]`           | Design notes (showpy.notes)                                                 |
 | `cast`             | `Cast`                       | Spots and groups                                                            |
 | `timeline`         | `Timeline`                   | Show clock                                                                  |
 | `sets`             | `tuple[Set, ...]`            | In order                                                                    |
@@ -825,7 +825,7 @@ The show as a living document: the aggregate model, set management, sections, st
 | `pins`             | `tuple[Pin, ...]`            | Designer locks, in the order they were made                                 |
 | `revision`         | `str`                        | Storage revision the show was loaded at                                     |
 
-Methods: `set_ids()`, `set_index(id)`, `set(id) → Set`, `transition_ids()`, `transition(tid) → TransitionSpec` (straight moves when none are stored). The index is computed by `stage.show.manage.index(show)`; pick spots with `stage.cast.select.select(show, sel)`.
+Methods: `set_ids()`, `set_index(id)`, `set(id) → Set`, `transition_ids()`, `transition(tid) → TransitionSpec` (straight moves when none are stored). The index is computed by `showpy.show.manage.index(show)`; pick spots with `showpy.cast.select.select(show, sel)`.
 
 **`ShowIndexEntry`** — `set: SetId, counts: float, start_count: Count, measure: MeasureLabel | None, seconds: Seconds, cue: str | None`. **`ShowIndex`** — `entries` plus `set_at(count) → SetId | None`, `transition_at(count) → (TransitionId, tau) | None`, `next(set_id)`, `prev(set_id)`, `total_counts`.
 
@@ -833,7 +833,7 @@ Methods: `set_ids()`, `set_index(id)`, `set(id) → Set`, `transition_ids()`, `t
 
 The other show models (`Revision`, `SetDiff`, `PathDiff`, `Comment`, `CanvasEvent`, `Proposal`, `ProposalPreview` and the change ops) are listed with the functions that use them below.
 
-### stage.show.manage
+### showpy.show.manage
 
 | Function                                                                  | Inputs                           | Output                                          | Purpose                                                                                          |
 | ------------------------------------------------------------------------- | -------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------ |
@@ -848,18 +848,18 @@ The other show models (`Revision`, `SetDiff`, `PathDiff`, `Comment`, `CanvasEven
 | `set_at_count(show, c)` / `transition_at_count(show, c)`                  |                                  | `SetId \| None` / `(TransitionId, tau) \| None` | Time lookups                                                                                     |
 | `upgrade_dependency(show, ref, version, sheet=None)`                      |                                  | `Show`                                          | Adopt a newer sheet version, swapping in the sheet when given                                    |
 
-`replace_sheet` lives only in `stage.sheet.replace`.
+`replace_sheet` lives only in `showpy.sheet.replace`.
 
-### stage.show.sections
+### showpy.show.sections
 
 | Function                  | Inputs  | Output         | Purpose                                                                          |
 | ------------------------- | ------- | -------------- | -------------------------------------------------------------------------------- |
 | `split_section(show, at)` | `SetId` | `(Show, Show)` | Movements or scenes; both shows hold `at`, and the second starts its clock there |
 | `join_sections(a, b)`     |         | `Show`         | Append `b` after `a`; the inverse of `split_section` for sets and paths          |
 
-Set scripts, their builds and the script sandbox live in the separate Eight-agent repo; `stage` only stores a set's `source_hash`.
+Set scripts, their builds and the script sandbox live in the separate Eight-agent repo; `showpy` only stores a set's `source_hash`.
 
-### stage.show.storage
+### showpy.show.storage
 
 | Item                                                                                                                                                                                            | Inputs                                                                                                                                                                                                                                                                                                                                                                                                                                         | Output                                                                 | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -870,29 +870,29 @@ Set scripts, their builds and the script sandbox live in the separate Eight-agen
 | `Workspace.read(path)` / `write(path, data, expected_revision=None, *, at, message="")` / `commit(changes, *, at, message, expected_revision=None)` / `ls(path="/")` / `revision` / `refresh()` |                                                                                                                                                                                                                                                                                                                                                                                                                                                | `str \| bytes` / `Revision` / `Revision` / `list[str]` / `str` / `str` | Agent file access: `/show/show.json`, `/show/sheet.json`, `/show/notes.json`, `/show/index.csv` (derived, read-only), `/time/timeline.json`, `/sets/<id>/set.py`, `/sets/<id>/placements.csv` (derived, read-only), `/sets/<id>/forms.json`, `/transitions/<a>-<b>/paths.json`, `/canvas/selection.json`, `/canvas/comments.json`, `/config/limits.yaml`, `/config/waivers.yaml`, `/publish/claims.json` (limits, waivers, selection and claims are designer-owned), `/renders/`, `/exports/`, `/lib/drafts/` |
 | `load_show(ws)` / `save_show(ws, show, at, message=...)`                                                                                                                                        |                                                                                                                                                                                                                                                                                                                                                                                                                                                | `Show` / `Revision`                                                    | Whole-show access against `show.revision`; `ConflictError` lists each landed revision's actor, message and paths                                                                                                                                                                                                                                                                                                                                                                                              |
 
-`stage.show.documents` splits a show into documents and back (`encode_show`, `decode_show`); `stage.show.files` maps workspace paths onto them.
+`showpy.show.documents` splits a show into documents and back (`encode_show`, `decode_show`); `showpy.show.files` maps workspace paths onto them.
 
-### stage.show.collab
+### showpy.show.collab
 
-| Item                                                                                                 | Inputs / fields                                                                                                                                                    | Output                        | Purpose                                                                                |
-| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- | -------------------------------------------------------------------------------------- |
-| `CanvasEvent`                                                                                        | `id, at, actor: "agent" \| "designer" \| "system", kind: move \| edit_form \| pin \| unpin \| edit_paths \| comment \| set_counts \| highlight, payload, revision` |                               | One edit or pointer from either side                                                   |
-| `Comment`                                                                                            | `id, anchor: Anchor, text, resolved, author`                                                                                                                       |                               | A note on the canvas                                                                   |
-| Change ops                                                                                           | `PlacementOp{set_id, placement}`, `FormOp{form}`, `PathsOp{spec}`, `CountsOp{set_id, counts, rescale}`, tagged by `op`                                             |                               | One model edit in a proposal or event                                                  |
-| `Proposal`                                                                                           | `id, base_revision, change: tuple[ChangeOp, ...], note, state: open \| accepted \| rejected, reason`                                                               |                               | An agent suggestion                                                                    |
-| `ProposalPreview`                                                                                    | `proposal_id, placements, paths, counts, forms, blocked`                                                                                                           |                               | Ghost placements and paths                                                             |
-| `apply_event(show, event)`                                                                           |                                                                                                                                                                    | `Show`                        | Replay an edit as a model operation; designer and system events may touch pinned items |
-| `apply_change(show, change, force=False)`                                                            | change ops                                                                                                                                                         | `Show`                        | Apply ops in order, refusing a result that touches pinned items (`stage.show.changes`) |
-| `events_since(ws, revision)`                                                                         |                                                                                                                                                                    | `list[CanvasEvent]`           | What changed, derived from revisions                                                   |
-| `pin(show, target, pin_id, reason="", by="designer")` / `unpin(show, target, pin_id)` / `pins(show)` |                                                                                                                                                                    | `Show` / `Show` / `list[Pin]` | Locks (`pin` and `unpin` in `stage.show.pinning`)                                      |
-| `locked_changes(before, after)` / `require_unlocked(before, after, force=False)`                     |                                                                                                                                                                    | `list[str]` / `None`          | What an edit would change under a pin or lock (`stage.show.locks`)                     |
-| `propose(show, change, note, proposal_id)`                                                           |                                                                                                                                                                    | `Proposal`                    | Suggest instead of overwrite; checks the ops apply                                     |
-| `preview_proposal(show, proposal)`                                                                   |                                                                                                                                                                    | `ProposalPreview`             | Show suggestion on the canvas                                                          |
-| `accept(ws, proposal, at)` / `reject(proposal, reason)`                                              |                                                                                                                                                                    | `Revision` / `Proposal`       | Designer decision                                                                      |
-| `highlight(target, ttl_s=30, *, at, event_id)`                                                       | `Anchor` or `ZoneId`                                                                                                                                               | `CanvasEvent`                 | Point the designer at something                                                        |
-| `selection(ws)`                                                                                      |                                                                                                                                                                    | `Selection`                   | What the designer has selected                                                         |
+| Item                                                                                                 | Inputs / fields                                                                                                                                                    | Output                        | Purpose                                                                                 |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------- | --------------------------------------------------------------------------------------- |
+| `CanvasEvent`                                                                                        | `id, at, actor: "agent" \| "designer" \| "system", kind: move \| edit_form \| pin \| unpin \| edit_paths \| comment \| set_counts \| highlight, payload, revision` |                               | One edit or pointer from either side                                                    |
+| `Comment`                                                                                            | `id, anchor: Anchor, text, resolved, author`                                                                                                                       |                               | A note on the canvas                                                                    |
+| Change ops                                                                                           | `PlacementOp{set_id, placement}`, `FormOp{form}`, `PathsOp{spec}`, `CountsOp{set_id, counts, rescale}`, tagged by `op`                                             |                               | One model edit in a proposal or event                                                   |
+| `Proposal`                                                                                           | `id, base_revision, change: tuple[ChangeOp, ...], note, state: open \| accepted \| rejected, reason`                                                               |                               | An agent suggestion                                                                     |
+| `ProposalPreview`                                                                                    | `proposal_id, placements, paths, counts, forms, blocked`                                                                                                           |                               | Ghost placements and paths                                                              |
+| `apply_event(show, event)`                                                                           |                                                                                                                                                                    | `Show`                        | Replay an edit as a model operation; designer and system events may touch pinned items  |
+| `apply_change(show, change, force=False)`                                                            | change ops                                                                                                                                                         | `Show`                        | Apply ops in order, refusing a result that touches pinned items (`showpy.show.changes`) |
+| `events_since(ws, revision)`                                                                         |                                                                                                                                                                    | `list[CanvasEvent]`           | What changed, derived from revisions                                                    |
+| `pin(show, target, pin_id, reason="", by="designer")` / `unpin(show, target, pin_id)` / `pins(show)` |                                                                                                                                                                    | `Show` / `Show` / `list[Pin]` | Locks (`pin` and `unpin` in `showpy.show.pinning`)                                      |
+| `locked_changes(before, after)` / `require_unlocked(before, after, force=False)`                     |                                                                                                                                                                    | `list[str]` / `None`          | What an edit would change under a pin or lock (`showpy.show.locks`)                     |
+| `propose(show, change, note, proposal_id)`                                                           |                                                                                                                                                                    | `Proposal`                    | Suggest instead of overwrite; checks the ops apply                                      |
+| `preview_proposal(show, proposal)`                                                                   |                                                                                                                                                                    | `ProposalPreview`             | Show suggestion on the canvas                                                           |
+| `accept(ws, proposal, at)` / `reject(proposal, reason)`                                              |                                                                                                                                                                    | `Revision` / `Proposal`       | Designer decision                                                                       |
+| `highlight(target, ttl_s=30, *, at, event_id)`                                                       | `Anchor` or `ZoneId`                                                                                                                                               | `CanvasEvent`                 | Point the designer at something                                                         |
+| `selection(ws)`                                                                                      |                                                                                                                                                                    | `Selection`                   | What the designer has selected                                                          |
 
-### stage.show.history
+### showpy.show.history
 
 | Function                                                                                      | Inputs               | Output                                                          | Purpose                                                        |
 | --------------------------------------------------------------------------------------------- | -------------------- | --------------------------------------------------------------- | -------------------------------------------------------------- |
@@ -903,7 +903,7 @@ Set scripts, their builds and the script sandbox live in the separate Eight-agen
 | `rename_entities(show, mapping)`                                                              | old → new IDs        | `Show`                                                          | Rewrite everywhere after relabeling                            |
 | `changelog(ws, since="")`                                                                     |                      | `str`                                                           | Readable history, one line per revision                        |
 
-### stage.show.validate
+### showpy.show.validate
 
 | Function                                  | Output             | Checks                                                                                              |
 | ----------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------- |
@@ -912,11 +912,11 @@ Set scripts, their builds and the script sandbox live in the separate Eight-agen
 | `validate_dependencies(show, store=None)` | `ValidationReport` | The sheet ref resolves and its version is pinned                                                    |
 | `validate_show(show, store=None)`         | `ValidationReport` | Everything plus set sequence and timeline; dependencies only when a store is given                  |
 
-`ValidationReport` and `ValidationIssue` are defined in `stage.core.validation`.
+`ValidationReport` and `ValidationIssue` are defined in `showpy.core.validation`.
 
-## stage.export
+## showpy.export
 
-How a show leaves the app: printed sheets, data files, a live published link, and video. Data classes live in `stage.export.models`; sheets and charts in `stage.export.print_sheets`; PDF output in `stage.export.pdf`; JSON, CSV and text in `stage.export.data`; position import in `stage.export.positions`; publishing in `stage.export.publish`; video in `stage.export.video`.
+How a show leaves the app: printed sheets, data files, a live published link, and video. Data classes live in `showpy.export.models`; sheets and charts in `showpy.export.print_sheets`; PDF output in `showpy.export.pdf`; JSON, CSV and text in `showpy.export.data`; position import in `showpy.export.positions`; publishing in `showpy.export.publish`; video in `showpy.export.video`.
 
 ### Print and data
 
@@ -936,7 +936,7 @@ How a show leaves the app: printed sheets, data files, a live published link, an
 | `cue_sheet(show)`                                                                                       |                                                                                                          | DataFrame                                                    | Set labels and cues, timeline markers and cue-mode cues in count order                                                                               |
 | `to_pdf(obj, layout="sheet")`                                                                           | `sheet`, `book`, `chart_pages`, `cue_sheet`; a sheet, chart, DataFrame or a sequence of sheets or charts | `bytes`                                                      | Printable output from a dependency-free PDF 1.4 writer: US Letter landscape, Helvetica, deterministic bytes; characters outside WinAnsi print as `?` |
 | `to_csv(obj)` / `to_text(obj)` / `as_table(obj)`                                                        | `CoordinateSheet`, `Chart` or DataFrame                                                                  | `str` / `str` / `TextTable`                                  | Data and plain-text sheets                                                                                                                           |
-| `export_json(show, include=None)` / `import_json(d)`                                                    | top-level fields to keep (the ID always stays)                                                           | `{"schema": "stage.show.v1", "show": {...}}` / `Show`        | Native interchange; `import_json` refuses a wrong or missing schema tag                                                                              |
+| `export_json(show, include=None)` / `import_json(d)`                                                    | top-level fields to keep (the ID always stays)                                                           | `{"schema": "showpy.show.v1", "show": {...}}` / `Show`       | Native interchange; `import_json` refuses a wrong or missing schema tag                                                                              |
 | `export_frames_csv(show, per_count=1)`                                                                  |                                                                                                          | `str`                                                        | Positions per count for any tool, sampled through the PathEngine                                                                                     |
 | `import_positions(base, text, group, columns=None, force=False)`                                        | CSV of `set, counts, entity, x, y` and optional `facing`; header renames                                 | `Show`                                                       | Bring in existing shows; missing sets are created and new spots join `group`                                                                         |
 | `register_exporter(registry, name, fn)` / `register_importer(registry, name, fn)` / `formats(registry)` | `FormatRegistry`                                                                                         | `FormatRegistry` / `FormatRegistry` / `dict[str, list[str]]` | Format plugins; `DEFAULT_FORMATS` holds `json` and `frames_csv` exporters and a `json` importer                                                      |
@@ -1042,7 +1042,7 @@ A waiver records that the designer deliberately allows something the checker wou
 | `list_waivers(ws, scope=None)`                                                     |                 | `list[Waiver]`    | Current exceptions                                   |
 | `revoke_waiver(ws, id)`                                                            |                 | `None`            | Remove an exception                                  |
 
-Waived findings are reported as `WAIVED` lines with the reason instead of errors, never silently hidden. If `expires_on_change` is true, editing the waived transition voids the waiver. Contacts from `stage.choreo.contact` are honored automatically and need no waiver. Waivers live in `/config/waivers.yaml`, which the agent can read but not write.
+Waived findings are reported as `WAIVED` lines with the reason instead of errors, never silently hidden. If `expires_on_change` is true, editing the waived transition voids the waiver. Contacts from `showpy.choreo.contact` are honored automatically and need no waiver. Waivers live in `/config/waivers.yaml`, which the agent can read but not write.
 
 ### Tool and hook contract
 
@@ -1053,13 +1053,13 @@ Waived findings are reported as `WAIVED` lines with the reason instead of errors
 | Before-tool hook  | any write or script                  | Denies writes to `limits.yaml` and pinned items, and scripts that import `stagecheck` |
 | Stop hook         | agent tries to finish                | Blocks while error findings remain in its changes, unless waived by the designer      |
 
-## stage.packs
+## showpy.packs
 
 Not built yet (out of scope for the first build, 2026-11-11).
 
 Domain packs add a discipline's units, venues, groups, position language, rules and printouts without changing the core. Marching band is the first pack.
 
-### stage.packs.base
+### showpy.packs.base
 
 **`PositionLanguage`** (protocol)
 
@@ -1096,7 +1096,7 @@ Domain packs add a discipline's units, venues, groups, position language, rules 
 | `describe_position(show, point, style="long")` |              | `str`                      | Pack wording through a show                        |
 | `parse_position(show, text)`                   |              | `Point`                    | Pack parsing through a show                        |
 
-### stage.packs.marching
+### showpy.packs.marching
 
 | Item                                        | Inputs                                                                                                                                 | Output                           | Purpose                                                                                              |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -1114,42 +1114,42 @@ Domain packs add a discipline's units, venues, groups, position language, rules 
 
 Other packs (`theater`, `guard`, `dance`, `cheer`, `parade`) implement the same `DomainPack` interface with their own venues, language and printouts.
 
-## stage.index
+## showpy.index
 
 Not built yet (out of scope for the first build, 2026-11-11).
 
 How the agent finds and learns the library, and how its own reusable code is reviewed and promoted.
 
-### stage.index.models
+### showpy.index.models
 
 **`ApiStatus`** (enum): `DRAFT`, `REVIEWED`, `STABLE`, `DEPRECATED`.
 
 **`ApiEntry`**
 
-| Field        | Type              | Meaning                              |
-| ------------ | ----------------- | ------------------------------------ |
-| `qualname`   | `str`             | e.g. `stage.geo.spacing.space_along` |
-| `signature`  | `str`             | Typed signature                      |
-| `summary`    | `str`             | First docstring line                 |
-| `category`   | `str`             | Module group                         |
-| `panel`      | `str`             | Canvas, Export, or all               |
-| `status`     | `ApiStatus`       | Lifecycle                            |
-| `since`      | `str`             | Version added                        |
-| `deprecated` | `str \| None`     | Replacement qualname                 |
-| `tags`       | `tuple[str, ...]` | Search terms                         |
-| `example`    | `str`             | Runnable example                     |
+| Field        | Type              | Meaning                               |
+| ------------ | ----------------- | ------------------------------------- |
+| `qualname`   | `str`             | e.g. `showpy.geo.spacing.space_along` |
+| `signature`  | `str`             | Typed signature                       |
+| `summary`    | `str`             | First docstring line                  |
+| `category`   | `str`             | Module group                          |
+| `panel`      | `str`             | Canvas, Export, or all                |
+| `status`     | `ApiStatus`       | Lifecycle                             |
+| `since`      | `str`             | Version added                         |
+| `deprecated` | `str \| None`     | Replacement qualname                  |
+| `tags`       | `tuple[str, ...]` | Search terms                          |
+| `example`    | `str`             | Runnable example                      |
 
-### stage.index functions
+### showpy.index functions
 
-| Function                                                           | Inputs                             | Output           | Purpose                                                                       |
-| ------------------------------------------------------------------ | ---------------------------------- | ---------------- | ----------------------------------------------------------------------------- |
-| `@api(category, panel="all", status=STABLE, since="1.0", tags=())` |                                    | decorator        | Register a function in the index                                              |
-| `@deprecated(replacement, since, remove_in)`                       |                                    | decorator        | Warn and point to the replacement                                             |
-| `api_index(category=None, panel=None, status_min=REVIEWED)`        |                                    | `str`            | Compact one-line-per-function listing                                         |
-| `describe(qualname)`                                               |                                    | `str`            | Full docstring, signature, example, related functions                         |
-| `search_api(query, k=10)`                                          |                                    | `list[ApiEntry]` | Keyword and tag search                                                        |
-| `categories()` / `panels()`                                        |                                    | `list[str]`      | Navigation                                                                    |
-| `register_draft(ws, path)`                                         | path in `/lib/drafts`              | `list[ApiEntry]` | Load agent code as `[draft]`; must be pure, typed, documented with an example |
-| `review_draft(qualname, reviewer, approve, notes)`                 |                                    | `ApiEntry`       | Doctests and generated tests must pass; a human approves; becomes REVIEWED    |
-| `promote(qualname, target_module)`                                 | `stage.contrib.<module>` or a pack | `ApiEntry`       | Becomes STABLE and indexed; core modules stay maintainer-only                 |
-| `retire(qualname, replacement)`                                    |                                    | `ApiEntry`       | Deprecate with a pointer                                                      |
+| Function                                                           | Inputs                              | Output           | Purpose                                                                       |
+| ------------------------------------------------------------------ | ----------------------------------- | ---------------- | ----------------------------------------------------------------------------- |
+| `@api(category, panel="all", status=STABLE, since="1.0", tags=())` |                                     | decorator        | Register a function in the index                                              |
+| `@deprecated(replacement, since, remove_in)`                       |                                     | decorator        | Warn and point to the replacement                                             |
+| `api_index(category=None, panel=None, status_min=REVIEWED)`        |                                     | `str`            | Compact one-line-per-function listing                                         |
+| `describe(qualname)`                                               |                                     | `str`            | Full docstring, signature, example, related functions                         |
+| `search_api(query, k=10)`                                          |                                     | `list[ApiEntry]` | Keyword and tag search                                                        |
+| `categories()` / `panels()`                                        |                                     | `list[str]`      | Navigation                                                                    |
+| `register_draft(ws, path)`                                         | path in `/lib/drafts`               | `list[ApiEntry]` | Load agent code as `[draft]`; must be pure, typed, documented with an example |
+| `review_draft(qualname, reviewer, approve, notes)`                 |                                     | `ApiEntry`       | Doctests and generated tests must pass; a human approves; becomes REVIEWED    |
+| `promote(qualname, target_module)`                                 | `showpy.contrib.<module>` or a pack | `ApiEntry`       | Becomes STABLE and indexed; core modules stay maintainer-only                 |
+| `retire(qualname, replacement)`                                    |                                     | `ApiEntry`       | Deprecate with a pointer                                                      |

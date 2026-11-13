@@ -6,7 +6,7 @@ test_types.py --- tests the JSON-safe Region and Box2 models
 
 import shapely
 
-from stage.core.types import Box2, Region
+from showpy.core.types import Box2, Region
 
 
 def test_region_round_trips_through_shapely() -> None:

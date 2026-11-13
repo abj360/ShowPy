@@ -6,12 +6,12 @@ test_match_ops.py --- tests applying matches, swapping spots and swap suggestion
 
 import pytest
 
-from stage.choreo.forms import line_form
-from stage.choreo.match import match
-from stage.choreo.match_ops import apply_match, clear_rows, suggest_swaps, swap
-from stage.choreo.models import PathRow, PathStyle, TransitionSpec, Waypoint
-from stage.core.errors import LockedError, UnknownRefError
-from stage.show.models import Show
+from showpy.choreo.forms import line_form
+from showpy.choreo.match import match
+from showpy.choreo.match_ops import apply_match, clear_rows, suggest_swaps, swap
+from showpy.choreo.models import PathRow, PathStyle, TransitionSpec, Waypoint
+from showpy.core.errors import LockedError, UnknownRefError
+from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 
 TID = ("1", "2")

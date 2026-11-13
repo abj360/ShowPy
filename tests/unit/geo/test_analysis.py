@@ -8,10 +8,10 @@ import math
 
 import pytest
 
-from stage.choreo.models import Placement, Set
-from stage.core.errors import GeometryError, UnknownRefError
-from stage.core.util import approx_equal
-from stage.geo.analysis import balance, change_amount, coverage, density_map, symmetry_score
+from showpy.choreo.models import Placement, Set
+from showpy.core.errors import GeometryError, UnknownRefError
+from showpy.core.util import approx_equal
+from showpy.geo.analysis import balance, change_amount, coverage, density_map, symmetry_score
 from tests.fixtures.shows import field_sheet, two_set_show
 
 TOL = 1e-9
