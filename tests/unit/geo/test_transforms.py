@@ -9,7 +9,6 @@ import math
 import numpy as np
 import pytest
 
-from showpy.choreo.models import Placement, Set
 from showpy.core.errors import GeometryError, LockedError, SchemaError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.geo.curves import ArcCurve, CompositeCurve, Polyline, Segment
@@ -34,21 +33,10 @@ from showpy.geo.transforms import (
 )
 from showpy.sheet.models import GuideLine
 from tests.fixtures.shows import field_sheet
+from tests.helpers import make_facing_set
 
 TOL = 1e-9
 SQUARE = np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]])
-
-
-def _set(
-    *rows: tuple[str, float, float, float],
-    off: tuple[str, ...] = (),
-    pinned: tuple[str, ...] = (),
-) -> Set:
-    placements = tuple(
-        Placement(entity=e, x=x, y=y, facing=f, on_field=e not in off, pinned=e in pinned)
-        for e, x, y, f in rows
-    )
-    return Set(id="1", counts=0.0, placements=placements)
 
 
 def test_shift_points_curve_and_set() -> None:
@@ -56,19 +44,19 @@ def test_shift_points_curve_and_set() -> None:
     moved = shift(line((0, 0), (1, 0)), 0.0, 2.0)
     assert isinstance(moved, Segment)
     assert moved.a == (0.0, 2.0)
-    s = shift(_set(("A", 0, 0, 0), ("B", 1, 0, 0)), 1.0, 0.0, sel=["B"])
+    s = shift(make_facing_set(("A", 0, 0, 0), ("B", 1, 0, 0)), 1.0, 0.0, sel=["B"])
     assert s.get("A").x == 0.0
     assert s.get("B").x == 2.0
 
 
 def test_set_transforms_skip_off_field_spots() -> None:
-    s = shift(_set(("A", 0, 0, 0), ("B", 1, 0, 0), off=("B",)), 3.0, 0.0)
+    s = shift(make_facing_set(("A", 0, 0, 0), ("B", 1, 0, 0), off=("B",)), 3.0, 0.0)
     assert s.get("A").x == 3.0
     assert s.get("B").x == 1.0
 
 
 def test_pinned_spots_raise_unless_forced() -> None:
-    s = _set(("A", 0, 0, 0), ("B", 1, 0, 0), pinned=("B",))
+    s = make_facing_set(("A", 0, 0, 0), ("B", 1, 0, 0), pinned=("B",))
     with pytest.raises(LockedError):
         shift(s, 1.0, 0.0)
     assert shift(s, 1.0, 0.0, force=True).get("B").x == 2.0
@@ -83,7 +71,7 @@ def test_inputs_are_not_mutated() -> None:
 
 def test_string_selector_must_be_all() -> None:
     with pytest.raises(SchemaError):
-        shift(_set(("A", 0, 0, 0)), 1.0, 0.0, sel="A")
+        shift(make_facing_set(("A", 0, 0, 0)), 1.0, 0.0, sel="A")
 
 
 @pytest.mark.parametrize(
@@ -114,7 +102,7 @@ def test_move_to_centroid_and_unknown_anchor() -> None:
 def test_rotate_about_center_point_and_facings() -> None:
     assert approx_equal(rotate(SQUARE, 90.0)[0], (2.0, 0.0), tol=TOL)
     assert approx_equal(rotate(SQUARE, 90.0, about=(0.0, 0.0))[1], (0.0, 2.0), tol=TOL)
-    s = rotate(_set(("A", 1, 0, 10.0), ("B", -1, 0, 0.0)), 90.0)
+    s = rotate(make_facing_set(("A", 1, 0, 10.0), ("B", -1, 0, 0.0)), 90.0)
     assert approx_equal(s.get("A").point, (0.0, 1.0), tol=TOL)
     assert approx_equal(s.get("A").facing, 100.0, tol=1e-9)
 
@@ -167,7 +155,7 @@ def test_set_interval_follows_a_bend() -> None:
 
 
 def test_set_interval_on_a_set_uses_selection_order() -> None:
-    s = _set(("A", 0, 0, 0), ("B", 4, 0, 0), ("C", 2, 0, 0))
+    s = make_facing_set(("A", 0, 0, 0), ("B", 4, 0, 0), ("C", 2, 0, 0))
     out = set_interval(s, 1.0, sel=["A", "C", "B"])
     assert [out.get(i).x for i in ("A", "C", "B")] == [1.0, 2.0, 3.0]
     with pytest.raises(GeometryError):
@@ -184,13 +172,13 @@ def test_mirror_axes(axis: object, expected_first: tuple[float, float]) -> None:
 
 
 def test_mirror_reflects_facings() -> None:
-    s = mirror(_set(("A", 1, 0, 90.0)), "x")
+    s = mirror(make_facing_set(("A", 1, 0, 90.0)), "x")
     assert s.get("A").point == (-1.0, 0.0)
     assert approx_equal(s.get("A").facing, 270.0, tol=1e-9)
 
 
 def test_symmetrize_pairs_by_assignment() -> None:
-    s = _set(
+    s = make_facing_set(
         ("L1", -1, 0, 30.0),
         ("L2", -3, 1, 0.0),
         ("R1", 3.2, 1.1, 0.0),
@@ -206,7 +194,7 @@ def test_symmetrize_pairs_by_assignment() -> None:
 
 
 def test_symmetrize_with_explicit_pairs_and_right_source() -> None:
-    s = _set(("L", -1, 0, 0.0), ("R", 4, 4, 0.0))
+    s = make_facing_set(("L", -1, 0, 0.0), ("R", 4, 4, 0.0))
     assert symmetrize(s, pairs={"L": "R"}).get("R").point == (1.0, 0.0)
     assert symmetrize(s, source_side="right").get("L").point == (-4.0, 4.0)
     with pytest.raises(SchemaError):
@@ -214,7 +202,7 @@ def test_symmetrize_with_explicit_pairs_and_right_source() -> None:
 
 
 def test_symmetrize_respects_pins() -> None:
-    s = _set(("L", -1, 0, 0.0), ("R", 4, 4, 0.0), pinned=("R",))
+    s = make_facing_set(("L", -1, 0, 0.0), ("R", 4, 4, 0.0), pinned=("R",))
     with pytest.raises(LockedError):
         symmetrize(s)
 
@@ -247,7 +235,7 @@ def test_snap_modes_and_report() -> None:
 
 
 def test_snap_set_and_curve() -> None:
-    s, report = snap(_set(("A", 0.4, 0.6, 0.0)), 1.0)
+    s, report = snap(make_facing_set(("A", 0.4, 0.6, 0.0)), 1.0)
     assert s.get("A").point == (0.0, 1.0)
     assert report.moved == 1
     seg, _ = snap(line((0.1, 0.1), (2.9, 0.0)), 1.0)

@@ -8,26 +8,14 @@ import pytest
 
 from showpy.choreo.form_place import filled_forms, place, rebuild
 from showpy.choreo.forms import circle_form, line_form
-from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import MatchOptions, PathRow, PathStyle, TransitionSpec, Waypoint
+from showpy.choreo.models import MatchOptions
 from showpy.core.errors import LockedError, MatchError, SchemaError, UnknownRefError
 from showpy.core.util import approx_equal
-from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
+from tests.helpers import pin_spot, with_curve_rows
 
 TID = ("1", "2")
-
-
-def _pin(show: Show, set_id: str, entity: str) -> Show:
-    return with_set(show, show.set(set_id).with_placements({entity: {"pinned": True}}))
-
-
-def _rows(show: Show, locked: bool = False) -> Show:
-    rows = {
-        e: PathRow(entity=e, style=PathStyle.CURVE, waypoints=(Waypoint(x=1, y=7),), locked=locked)
-        for e in ("T1", "T3")
-    }
-    return show.model_copy(update={"transitions": (TransitionSpec(id=TID, counts=8.0, rows=rows),)})
+ROW_SPOTS = ("T1", "T3")
 
 
 def test_place_puts_members_on_their_slots() -> None:
@@ -51,7 +39,7 @@ def test_place_passes_match_options() -> None:
 
 
 def test_place_leaves_pinned_placements_alone() -> None:
-    show = _pin(two_set_show(), "2", "T1")
+    show = pin_spot(two_set_show(), "2", "T1")
     placed = place(show, "2", [line_form("f", ["T1", "T2"], (0, 15), (2, 15))])
     assert placed.get("T1").point == (0.0, 9.0)
     assert placed.get("T2").point == (2.0, 15.0)
@@ -95,7 +83,7 @@ def test_filled_forms_reads_members_back_in_slot_order() -> None:
 
 def test_rebuild_regenerates_and_drops_neighbouring_rows() -> None:
     form = line_form("row", ["T1", "T2", "T3", "T4"], (0, 14), (6, 14), set_id="2")
-    show = _rows(two_set_show()).model_copy(update={"forms": {"row": form}})
+    show = with_curve_rows(two_set_show(), ROW_SPOTS).model_copy(update={"forms": {"row": form}})
     rebuilt = rebuild(show, "row")
     assert approx_equal([rebuilt.set("2").get(e).y for e in ("T1", "T4")], [14.0, 14.0])
     assert rebuilt.transition(TID).rows == {}
@@ -103,11 +91,15 @@ def test_rebuild_regenerates_and_drops_neighbouring_rows() -> None:
 
 def test_rebuild_respects_pins_and_locked_rows() -> None:
     form = line_form("row", ["T1", "T2", "T3", "T4"], (0, 14), (6, 14), set_id="2")
-    pinned = _pin(_rows(two_set_show()), "2", "T1").model_copy(update={"forms": {"row": form}})
+    pinned = pin_spot(with_curve_rows(two_set_show(), ROW_SPOTS), "2", "T1").model_copy(
+        update={"forms": {"row": form}}
+    )
     rebuilt = rebuild(pinned, "row")
     assert rebuilt.set("2").get("T1").point == (0.0, 9.0)
     assert list(rebuilt.transition(TID).rows) == ["T1"]
-    locked = _rows(two_set_show(), locked=True).model_copy(update={"forms": {"row": form}})
+    locked = with_curve_rows(two_set_show(), ROW_SPOTS, locked=True).model_copy(
+        update={"forms": {"row": form}}
+    )
     with pytest.raises(LockedError):
         rebuild(locked, "row")
     assert rebuild(locked, "row", force=True).transition(TID).rows == {}

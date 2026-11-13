@@ -23,17 +23,11 @@ from showpy.choreo.models import (
 from showpy.core.errors import LockedError, PathError, SchemaError, UnknownRefError
 from showpy.core.selection import Selection
 from showpy.core.util import approx_equal
+from tests.helpers import make_facing_set
 
 
 def _set() -> Set:
-    return Set(
-        id="1",
-        counts=0.0,
-        placements=(
-            Placement(entity="T1", x=0.0, y=0.0),
-            Placement(entity="T2", x=2.0, y=0.0, pinned=True),
-        ),
-    )
+    return make_facing_set(("T1", 0.0, 0.0, 0.0), ("T2", 2.0, 0.0, 0.0), pinned=("T2",))
 
 
 def test_set_defaults() -> None:

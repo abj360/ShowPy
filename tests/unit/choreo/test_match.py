@@ -11,20 +11,13 @@ import pytest
 
 from showpy.choreo.forms import line_form
 from showpy.choreo.match import bottleneck_value, cost_matrix, match, match_by_order
-from showpy.choreo.models import MatchOptions, Placement, Set
+from showpy.choreo.models import MatchOptions
 from showpy.core.errors import MatchError, SchemaError, UnknownRefError
 from showpy.core.types import Point
 from showpy.core.util import approx_equal
+from tests.helpers import make_facing_set
 
 TOL = 1e-9
-
-
-def _set(*rows: tuple[str, float, float, float]) -> Set:
-    return Set(
-        id="1",
-        counts=0.0,
-        placements=tuple(Placement(entity=e, x=x, y=y, facing=f) for e, x, y, f in rows),
-    )
 
 
 def test_bottleneck_then_sum_minimizes_largest_move_first() -> None:
@@ -83,7 +76,7 @@ def test_result_does_not_depend_on_input_order() -> None:
 
 
 def test_from_set_uses_on_field_spots_and_facings() -> None:
-    src = _set(("A", 0.0, 0.0, 0.0), ("B", 5.0, 0.0, 0.0))
+    src = make_facing_set(("A", 0.0, 0.0, 0.0), ("B", 5.0, 0.0, 0.0))
     off = src.with_placements({"B": {"on_field": False}})
     result = match(off, [(0.0, 1.0), (5.0, 1.0)])
     assert result.entities == ("A",)
@@ -139,7 +132,7 @@ def test_infeasible_names_only_the_constraint_whose_removal_helps() -> None:
 
 
 def test_no_backward_forbids_travel_against_facing() -> None:
-    src = _set(("A", 0.0, 5.0, 0.0), ("B", 1.0, 5.0, 0.0))
+    src = make_facing_set(("A", 0.0, 5.0, 0.0), ("B", 1.0, 5.0, 0.0))
     slots = [(0.0, 3.0), (1.0, 7.0), (5.0, 3.0)]
     free = match(src, slots, options=MatchOptions(objective="sum"))
     assert free.assignment["B"] == 1
@@ -148,13 +141,13 @@ def test_no_backward_forbids_travel_against_facing() -> None:
 
 
 def test_no_backward_penalty_adds_meters() -> None:
-    src = _set(("A", 0.0, 5.0, 0.0))
+    src = make_facing_set(("A", 0.0, 5.0, 0.0))
     cost = cost_matrix(src, [(0.0, 6.0), (0.0, 4.0)], MatchOptions(no_backward=2.5))
     assert approx_equal(cost, [[3.5, 1.0]], TOL)
 
 
 def test_backward_and_turn_weights() -> None:
-    src = _set(("A", 0.0, 5.0, 0.0))
+    src = make_facing_set(("A", 0.0, 5.0, 0.0))
     back = cost_matrix(src, [(0.0, 7.0)], MatchOptions(weights={"backward": 1.0}))
     assert approx_equal(back, [[4.0]], TOL)
     turn = cost_matrix(src, [(2.0, 5.0)], MatchOptions(weights={"turn": 0.01}))
@@ -292,7 +285,7 @@ def test_empty_problem_returns_empty_result() -> None:
 
 
 def test_match_by_order_reports_distances_from_set() -> None:
-    src = _set(("A", 0.0, 0.0, 0.0), ("B", 2.0, 0.0, 0.0))
+    src = make_facing_set(("A", 0.0, 0.0, 0.0), ("B", 2.0, 0.0, 0.0))
     form = line_form("f", [], (0, 3), (2, 3), n=2)
     result = match_by_order(["B", "A"], form, src)
     assert result.assignment == {"B": 0, "A": 1}

@@ -36,9 +36,9 @@ from showpy.show.history import (
 )
 from showpy.show.manage import add_set
 from showpy.show.models import Pin, Show
-from showpy.show.repositories import InMemoryRepository
-from showpy.show.storage import Workspace, load_show, open_workspace, save_show
+from showpy.show.storage import load_show, open_workspace, save_show
 from tests.fixtures.shows import two_set_show
+from tests.helpers import open_session
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 STEP = timedelta(minutes=1)
@@ -47,13 +47,6 @@ STEP = timedelta(minutes=1)
 def _moved(show: Show, entity: str, x: float) -> Show:
     edited = show.sets[1].with_placements({entity: {"x": x}}, force=True)
     return show.model_copy(update={"sets": (show.sets[0], edited, *show.sets[2:])})
-
-
-def _session() -> tuple[InMemoryRepository, Workspace, Workspace]:
-    repo = InMemoryRepository()
-    designer = open_workspace(repo, "s", "designer")
-    save_show(designer, two_set_show(), AT, "create")
-    return repo, open_workspace(repo, "s", "agent"), designer
 
 
 def test_diff_sets_reports_moves_turns_adds_removes_and_forms() -> None:
@@ -109,14 +102,14 @@ def test_diff_show_summarizes_structure_and_paths() -> None:
 
 
 def test_snapshot_records_empty_revision() -> None:
-    repo, _, designer = _session()
+    repo, _, designer = open_session(two_set_show(), AT)
     rev = snapshot(designer, "before finale", AT + STEP)
     assert (rev.kind, rev.changed, rev.message) == ("snapshot", (), "before finale")
     assert len(repo.revisions("s")) == 2
 
 
 def test_revert_restores_earlier_documents() -> None:
-    _, _, designer = _session()
+    _, _, designer = open_session(two_set_show(), AT)
     first = designer.revision
     save_show(designer, _moved(load_show(designer), "T1", 7.0), AT + STEP, "move")
     rev = revert(designer, first, AT + 2 * STEP)
@@ -128,7 +121,7 @@ def test_revert_restores_earlier_documents() -> None:
 
 
 def test_agent_revert_leaves_designer_files() -> None:
-    _, agent, designer = _session()
+    _, agent, designer = open_session(two_set_show(), AT)
     first = designer.revision
     designer.write("/config/limits.yaml", "max: 1\n", at=AT + STEP)
     agent.refresh()
@@ -139,7 +132,7 @@ def test_agent_revert_leaves_designer_files() -> None:
 
 
 def test_undo_redo_are_per_principal_and_derived_from_history() -> None:
-    _, agent, designer = _session()
+    _, agent, designer = open_session(two_set_show(), AT)
     agent.write("/sets/1/set.py", "a = 1\n", at=AT + STEP)
     designer.refresh()
     designer.write("/sets/2/set.py", "b = 2\n", at=AT + 2 * STEP)
@@ -160,7 +153,7 @@ def test_undo_redo_are_per_principal_and_derived_from_history() -> None:
 
 
 def test_new_edit_clears_redo_and_conflicting_undo_raises() -> None:
-    _, agent, designer = _session()
+    _, agent, designer = open_session(two_set_show(), AT)
     agent.write("/sets/1/set.py", "a = 1\n", at=AT + STEP)
     undo(agent, AT + 2 * STEP)
     agent.write("/sets/2/set.py", "c = 3\n", at=AT + 3 * STEP)
@@ -173,7 +166,7 @@ def test_new_edit_clears_redo_and_conflicting_undo_raises() -> None:
 
 
 def test_agent_undo_refuses_after_designer_pinned_the_same_set() -> None:
-    _, agent, designer = _session()
+    _, agent, designer = open_session(two_set_show(), AT)
     save_show(agent, _moved(load_show(agent), "T1", 3.0), AT + STEP, "agent move")
     designer.refresh()
     current = load_show(designer)
@@ -228,7 +221,7 @@ def test_rename_entities_swaps_and_collisions() -> None:
 
 
 def test_changelog_lines_since_revision() -> None:
-    _, agent, _ = _session()
+    _, agent, _ = open_session(two_set_show(), AT)
     first = agent.revision
     agent.write("/sets/1/set.py", "a = 1\n", at=AT + STEP, message="script 1")
     lines = changelog(agent, first).splitlines()

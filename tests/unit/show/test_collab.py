@@ -44,9 +44,9 @@ from showpy.show.models import (
     Show,
 )
 from showpy.show.pinning import pin, unpin
-from showpy.show.repositories import InMemoryRepository
-from showpy.show.storage import Workspace, load_show, open_workspace, save_show
+from showpy.show.storage import Workspace, load_show, save_show
 from tests.fixtures.shows import two_set_show
+from tests.helpers import open_session
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 STEP = timedelta(minutes=1)
@@ -56,13 +56,6 @@ FORM = Form(id="f1", set="2", kind="line", geometry={"len": 6}, members=("T1", "
 def _move(entity: str, x: float, set_id: str = "2") -> PlacementOp:
     y = 9.0 if set_id == "2" else 5.0
     return PlacementOp(set_id=set_id, placement=Placement(entity=entity, x=x, y=y))
-
-
-def _session() -> tuple[Workspace, Workspace]:
-    repo = InMemoryRepository()
-    designer = open_workspace(repo, "s", "designer")
-    save_show(designer, add_set(two_set_show(), "3", 4.0), AT, "create")
-    return open_workspace(repo, "s", "agent"), designer
 
 
 def test_apply_change_applies_every_op_kind() -> None:
@@ -146,7 +139,7 @@ def _designer_edits(designer: Workspace) -> Show:
 
 
 def test_events_since_replay_reproduces_head() -> None:
-    agent, designer = _session()
+    _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
     base_revision = designer.revision
     base = load_show(designer)
     _designer_edits(designer)
@@ -164,7 +157,7 @@ def test_events_since_replay_reproduces_head() -> None:
 
 
 def test_events_since_reports_comments() -> None:
-    agent, designer = _session()
+    _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
     start = designer.revision
     comment = Comment(id="c1", anchor=Anchor.on_set("2"), text="tighten the line")
     designer.write(COMMENTS_DOC, dump_json([comment.model_dump(mode="python")]), at=AT + STEP)
@@ -216,7 +209,7 @@ def test_propose_preview_and_reject() -> None:
 
 
 def test_accept_applies_as_designer() -> None:
-    agent, designer = _session()
+    _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
     proposal = propose(load_show(agent), [_move("T3", -1.0)], "shift", "p1")
     with pytest.raises(LockedError):
         accept(agent, proposal, AT)
@@ -226,7 +219,7 @@ def test_accept_applies_as_designer() -> None:
 
 
 def test_accept_rebases_when_unrelated_items_moved() -> None:
-    agent, designer = _session()
+    _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
     proposal = propose(load_show(agent), [_move("T3", -1.0)], "shift", "p1")
     other = apply_change(load_show(designer), [_move("T1", 8.0)])
     save_show(designer, other, AT + STEP, "unrelated")
@@ -236,7 +229,7 @@ def test_accept_rebases_when_unrelated_items_moved() -> None:
 
 
 def test_accept_conflicts_when_same_items_moved() -> None:
-    agent, designer = _session()
+    _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
     proposal = propose(load_show(agent), [_move("T1", -1.0)], "shift", "p1")
     save_show(designer, apply_change(load_show(designer), [_move("T1", 8.0)]), AT + STEP, "mine")
     with pytest.raises(ConflictError) as info:
@@ -245,7 +238,7 @@ def test_accept_conflicts_when_same_items_moved() -> None:
 
 
 def test_accept_respects_pins() -> None:
-    agent, designer = _session()
+    _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
     proposal = propose(load_show(agent), [_move("T1", -1.0)], "shift", "p1")
     save_show(designer, pin(load_show(designer), "entity", "T2"), AT + STEP, "pin T2")
     accept(designer, proposal, AT + 2 * STEP)
@@ -266,7 +259,7 @@ def test_highlight_and_selection() -> None:
     assert tid_event.payload["anchor"]["tid"] == ["1", "2"]
     with pytest.raises(TimeRangeError):
         highlight("pit", 0.0, at=AT, event_id="h3")
-    agent, designer = _session()
+    _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
     assert selection(agent).ids == ()
     designer.write("/canvas/selection.json", Selection(ids=("T2", "T1")).model_dump_json(), at=AT)
     agent.refresh()

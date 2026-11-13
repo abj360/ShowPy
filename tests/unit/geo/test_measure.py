@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 import shapely
 
-from showpy.choreo.models import Placement, Set
 from showpy.core.errors import GeometryError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.geo.measure import (
@@ -30,13 +29,9 @@ from showpy.geo.measure import (
     symmetry_error,
 )
 from showpy.geo.shapes import arc, circle, line
+from tests.helpers import make_set
 
 TOL = 1e-6
-
-
-def _set(*rows: tuple[str, float, float], off: tuple[str, ...] = ()) -> Set:
-    placements = tuple(Placement(entity=e, x=x, y=y, on_field=e not in off) for e, x, y in rows)
-    return Set(id="1", counts=0.0, placements=placements)
 
 
 def test_length_of_points_and_curves() -> None:
@@ -90,23 +85,23 @@ def test_distance_and_matrix() -> None:
 
 
 def test_neighbors_skip_off_field_and_break_ties_by_id() -> None:
-    s = _set(("T1", 0, 0), ("T10", 1, 0), ("T2", -1, 0), ("T3", 0.5, 0), off=("T3",))
+    s = make_set(("T1", 0, 0), ("T10", 1, 0), ("T2", -1, 0), ("T3", 0.5, 0), off=("T3",))
     assert neighbors(s, "T1", k=2) == [("T2", 1.0), ("T10", 1.0)]
 
 
 def test_neighbors_unknown_entity() -> None:
     with pytest.raises(UnknownRefError):
-        neighbors(_set(("T1", 0, 0)), "T9")
+        neighbors(make_set(("T1", 0, 0)), "T9")
 
 
 def test_nearest_to_a_point() -> None:
-    s = _set(("A", 0, 0), ("B", 5, 0), ("C", 2, 0), off=("C",))
+    s = make_set(("A", 0, 0), ("B", 5, 0), ("C", 2, 0), off=("C",))
     assert nearest(s, (1.0, 0.0)) == [("A", 1.0)]
     assert [e for e, _ in nearest(s, (1.0, 0.0), k=5)] == ["A", "B"]
 
 
 def test_on_field_ids_keeps_selection_order() -> None:
-    s = _set(("A", 0, 0), ("B", 1, 0), ("C", 2, 0), off=("B",))
+    s = make_set(("A", 0, 0), ("B", 1, 0), ("C", 2, 0), off=("B",))
     assert on_field_ids(s) == ("A", "C")
     assert on_field_ids(s, ["C", "B", "A"]) == ("C", "A")
 
@@ -147,6 +142,6 @@ def test_form_metrics_curvature_of_circle_samples() -> None:
 def test_mirror_gaps_and_symmetry_error() -> None:
     pts = np.array([[-1.0, 0.0], [1.0, 0.0], [2.0, 3.0]])
     assert approx_equal(mirror_gaps(pts, 0.0), [0.0, 0.0, math.hypot(1, 3)], tol=TOL)
-    s = _set(("A", -1, 0), ("B", 1, 0), ("C", 2, 3), ("D", 9, 9), off=("D",))
+    s = make_set(("A", -1, 0), ("B", 1, 0), ("C", 2, 3), ("D", 9, 9), off=("D",))
     assert approx_equal(symmetry_error(s, axis_x=0.0), math.hypot(1, 3), tol=TOL)
     assert symmetry_error(s, ["A", "B"], axis_x=0.0) == 0.0
