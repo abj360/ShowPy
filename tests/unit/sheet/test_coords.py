@@ -140,13 +140,17 @@ def _assert_round_trips_or_rejects(system: CoordinateSystem, style: CoordStyle) 
     assert approx_equal(from_coords(show, text), ROUND_TRIP_POINT, TOL)
 
 
+def _word_with_precision(precision: float) -> str:
+    system = CoordinateSystem(precision=precision)
+    return to_coords(two_set_show().model_copy(update={"coordinates": system}), (1.0, 1.0))
+
+
 @pytest.mark.defect("UP-9.4-15")
 @pytest.mark.xfail(strict=True, reason="UP-9.4-15")
 def test_regression_zero_precision_is_rejected_not_division_by_zero() -> None:
     """Rejects precision=0 with a ShowPyError, however the system gets into a show (audit 9.4)."""
     with pytest.raises(ShowPyError):
-        show = two_set_show().model_copy(update={"coordinates": CoordinateSystem(precision=0.0)})
-        to_coords(show, (1.0, 1.0))
+        _word_with_precision(0.0)
 
 
 @pytest.mark.defect("UP-9.4-16")
