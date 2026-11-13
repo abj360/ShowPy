@@ -9,8 +9,9 @@ import math
 import numpy as np
 import pytest
 
-from showpy.core.errors import GeometryError
+from showpy.core.errors import GeometryError, ShowPyError, UnknownRefError
 from showpy.core.util import approx_equal
+from showpy.geo.curves import CircleCurve
 from showpy.geo.shapes import (
     arc,
     arc_from_chord,
@@ -27,8 +28,20 @@ from showpy.geo.shapes import (
     regular_polygon,
     spiral,
     star,
+    text_outline,
     wedge,
 )
+
+OFFSET_M = 1.0
+CIRCLE_RADIUS_M = 2.0
+FAR_CENTER_M = 1e7
+FAR_RADIUS_M = 1000.0
+FAR_ARC_ANGLES_DEG = (0.0, 45.0, 90.0)
+RADIUS_TOL_M = 1e-6
+LOOP_GLYPHS = ["O", "0", "8", "D", "Q"]
+GLYPH_HEIGHT_M = 2.0
+FRACTIONAL_SIDES = 3.5
+SQUARE_SIDE_M = 4.0
 
 
 def test_line_and_polyline() -> None:
@@ -132,3 +145,69 @@ def test_offset_ccw_arc_left_moves_inward() -> None:
 def test_offset_through_center_raises() -> None:
     with pytest.raises(GeometryError):
         offset(circle((0, 0), 1.0), 1.0, side="left")
+
+
+@pytest.mark.defect("UP-9.1-13")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-13")
+def test_regression_offset_honours_clockwise_circles() -> None:
+    """Grows a clockwise circle when offsetting to its left, the outward side (audit 9.1)."""
+    clockwise = CircleCurve(center=(0.0, 0.0), radius=CIRCLE_RADIUS_M, ccw=False)
+    result = offset(clockwise, OFFSET_M, "left")
+    assert isinstance(result, CircleCurve)
+    assert approx_equal(result.radius, CIRCLE_RADIUS_M + OFFSET_M, tol=1e-9)
+
+
+@pytest.mark.defect("UP-9.1-14")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-14")
+def test_regression_offset_rejects_unknown_side() -> None:
+    """Raises UnknownRefError for side="up" instead of treating it as "right" (audit 9.1)."""
+    with pytest.raises(UnknownRefError):
+        offset(line((0.0, 0.0), (1.0, 0.0)), OFFSET_M, "up")
+
+
+@pytest.mark.defect("UP-9.1-15")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-15")
+def test_regression_outward_offset_of_closed_curve_stays_closed() -> None:
+    """Keeps the ring closed when offsetting a closed polyline outward (audit 9.1)."""
+    outward = offset(rect((0.0, 0.0), SQUARE_SIDE_M, SQUARE_SIDE_M), OFFSET_M, "right")
+    assert outward.closed
+
+
+@pytest.mark.defect("UP-9.1-16")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-16")
+def test_regression_arc_through_is_accurate_far_from_the_origin() -> None:
+    """Recovers a 1 km radius within 1 um when the arc sits 10,000 km from the origin."""
+    points = [
+        (
+            FAR_CENTER_M + FAR_RADIUS_M * math.cos(math.radians(d)),
+            FAR_CENTER_M + FAR_RADIUS_M * math.sin(math.radians(d)),
+        )
+        for d in FAR_ARC_ANGLES_DEG
+    ]
+    assert abs(arc_through(*points).radius - FAR_RADIUS_M) < RADIUS_TOL_M
+
+
+@pytest.mark.defect("UP-9.1-28")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-28")
+@pytest.mark.parametrize("glyph", LOOP_GLYPHS)
+def test_regression_text_outline_loops_are_closed_without_repeated_start(glyph: str) -> None:
+    """Emits glyph loops as closed polylines that do not repeat their start point (audit 9.1)."""
+    strokes = text_outline(glyph, "simplex", GLYPH_HEIGHT_M, (0.0, 0.0))
+    assert any(stroke.closed for stroke in strokes)
+    assert all(stroke.closed or stroke.points[0] != stroke.points[-1] for stroke in strokes)
+
+
+@pytest.mark.defect("UP-9.1-60")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-60")
+def test_regression_regular_polygon_rejects_fractional_sides() -> None:
+    """Raises a ShowPyError for n=3.5 instead of leaking TypeError (audit 9.1)."""
+    with pytest.raises(ShowPyError):
+        regular_polygon((0.0, 0.0), 1.0, FRACTIONAL_SIDES)  # type: ignore[arg-type]
+
+
+@pytest.mark.defect("UP-9.1-66")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-66")
+def test_regression_rect_rejects_nan_width() -> None:
+    """Rejects a NaN width instead of building a polygon of NaN points (audit 9.1)."""
+    with pytest.raises(GeometryError):
+        rect((0.0, 0.0), float("nan"), 1.0)
