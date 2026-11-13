@@ -2,6 +2,14 @@
 
 """
 test_form_fit.py --- tests line, circle and arc recognition of imported spots
+
+Contains:
+    test_regression_detect_form_keeps_every_spot_within_tolerance: returns slots within tol of every
+    test_regression_detect_form_does_not_call_a_2x2_block_a_circle: refuses to classify four block
+    test_regression_detect_form_does_not_call_a_triangle_an_arc: refuses to classify three triangle
+    test_regression_detect_form_tolerates_one_outlier_on_a_clean_circle: recognizes the circle of 12
+    test_regression_fit_line_rejects_empty_input_with_schema_error: raises SchemaError for no
+    test_regression_fit_circle_rejects_collinear_points: raises SchemaError for collinear points
 """
 
 import math
@@ -142,10 +150,13 @@ def test_regression_detect_form_does_not_call_a_triangle_an_arc() -> None:
 @pytest.mark.defect("UP-9.6-30")
 @pytest.mark.xfail(strict=True, reason="UP-9.6-30")
 def test_regression_detect_form_tolerates_one_outlier_on_a_clean_circle() -> None:
-    """Still recognizes a clean circle when one extra spot lies far off it (audit 9.6)."""
+    """Recognizes the circle of 12 ring spots despite one far outlier (audit 9.6)."""
     pts = _ring((0.0, 0.0), RING_RADIUS, [i * 360 / RING_SPOTS for i in range(RING_SPOTS)])
-    noisy = np.vstack([pts, OUTLIER])
-    assert detect_form(noisy, tol=FIT_TOL).kind == "circle"
+    form = detect_form(np.vstack([pts, OUTLIER]), tol=FIT_TOL)
+    assert form.kind == "circle"
+    curve = form.geometry["curve"]
+    assert approx_equal(curve["center"], (0.0, 0.0), FIT_TOL)
+    assert approx_equal(curve["radius"], RING_RADIUS, FIT_TOL)
 
 
 @pytest.mark.defect("UP-9.6-31")

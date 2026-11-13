@@ -2,6 +2,11 @@
 
 """
 test_match_ops.py --- tests applying matches, swapping spots and swap suggestions on a show
+
+Contains:
+    test_regression_apply_match_updates_order_and_facing_of_formed_spots: rewrites order and facing
+    test_regression_apply_match_updates_form_members_like_swap: keeps Form.members in step with the
+    test_regression_clear_rows_keeps_transition_order: leaves show.transitions in their original
 """
 
 import pytest
@@ -135,7 +140,7 @@ def test_regression_apply_match_updates_order_and_facing_of_formed_spots() -> No
 @pytest.mark.defect("UP-9.6-02")
 @pytest.mark.xfail(strict=True, reason="UP-9.6-02")
 def test_regression_apply_match_updates_form_members_like_swap() -> None:
-    """Keeps Form.members in step with the matched slots, so rebuild keeps the match (P0 #12)."""
+    """Keeps Form.members in step with matched slots so rebuild keeps them (audit 9.6; P0 #12)."""
     show, _ = _ring_show()
     ring = show.forms["ring"]
     result = match_by_order(REVERSED_RING, ring, show.set("1"))

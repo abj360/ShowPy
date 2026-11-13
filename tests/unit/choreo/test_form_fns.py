@@ -2,6 +2,13 @@
 
 """
 test_form_fns.py --- tests the shape generator registry and the built-in generators
+
+Contains:
+    test_regression_default_registry_cannot_be_mutated: leaves the global registry unchanged when a
+    test_regression_spiral_rejects_text_turns_with_schema_error: raises SchemaError, not ValueError,
+    test_regression_spiral_rejects_none_turns_with_schema_error: raises SchemaError, not TypeError,
+    test_regression_sine_wave_rejects_zero_wavelength: raises SchemaError for wavelength=0 instead
+    test_regression_register_form_fn_wraps_probe_crashes: raises SchemaError when the registration
 """
 
 import contextlib

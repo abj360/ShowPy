@@ -2,6 +2,11 @@
 
 """
 test_match_models.py --- tests MatchOptions validation, MatchResult alignment and FormFnInfo
+
+Contains:
+    test_regression_match_options_rejects_nan_weights: rejects a NaN penalty weight
+    test_regression_match_options_rejects_negative_no_backward: rejects a negative no_backward
+    test_regression_match_options_rejects_bool_slot_index: rejects True as a pinned slot index
 """
 
 import math
