@@ -14,6 +14,8 @@ Contains:
 import re
 import subprocess
 import sys
+import unicodedata
+import zlib
 from pathlib import Path
 
 import pandas as pd
@@ -28,9 +30,19 @@ from tests.fixtures.export_shows import guided_show
 REPO_ROOT = Path(__file__).resolve().parents[3]
 XREF_ENTRY = re.compile(rb"^(\d{10}) (\d{5}) ([nf]) ?\r?$")
 TEXT_RUN = re.compile(
-    rb"/F\d ([\d.]+) Tf\n1 0 0 1 ([\d.]+) [\d.]+ Tm\n(?:\((.*)\)|<([0-9A-Fa-f]*)>) Tj"
+    rb"/(\w+) ([\d.]+) Tf\n1 0 0 1 ([\d.]+) [\d.]+ Tm\n(?:\((.*)\)|<([0-9A-Fa-f]*)>) Tj"
 )
-HEX_DIGITS_PER_GLYPH = 4
+OBJECT = re.compile(rb"(\d+) 0 obj\n(.*?)\nendobj", re.DOTALL)
+FONT_ENTRY = re.compile(rb"/(\w+) (\d+) 0 R")
+TO_UNICODE = re.compile(rb"/ToUnicode (\d+) 0 R")
+LENGTH = re.compile(rb"/Length (\d+)")
+BF_CHAR_SECTION = re.compile(rb"beginbfchar(.*?)endbfchar", re.DOTALL)
+BF_RANGE_SECTION = re.compile(rb"beginbfrange(.*?)endbfrange", re.DOTALL)
+HEX_TOKEN = re.compile(rb"<([0-9A-Fa-f]+)>")
+HEX_PAIR = re.compile(rb"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>")
+BF_RANGE = re.compile(rb"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*(<[0-9A-Fa-f]+>|\[[^\]]*\])")
+CID_BYTES = 2
+UNMAPPED = "\ufffd"
 PAGE_WIDTH = 792.0
 EM_WIDTH = 0.6
 WIDE_COLUMNS = 40
@@ -155,18 +167,108 @@ def test_pillow_is_not_needed() -> None:
     assert result.stdout == "%PDF-1.4"
 
 
-def _placed_text(pdf: bytes) -> list[tuple[float, float, bytes]]:
-    """Lists (x, font size, string) for every literal or hex text run; fails when none exist.
+def _objects(pdf: bytes) -> dict[int, bytes]:
+    return {int(m[1]): m[2] for m in OBJECT.finditer(pdf)}
 
-    A hex run (two bytes per glyph in a Type0 font) is returned as one placeholder byte per
-    glyph, so widths stay comparable.
+
+def _stream(body: bytes) -> bytes:
+    """Returns an object's stream data, inflated when the dictionary says FlateDecode."""
+    start = body.index(b"stream\n") + len(b"stream\n")
+    length = LENGTH.search(body)
+    assert length is not None, "stream object has no /Length"
+    data = body[start : start + int(length[1])]
+    return zlib.decompress(data) if b"/FlateDecode" in body[:start] else data
+
+
+def _utf16(hex_text: bytes) -> str:
+    return bytes.fromhex(hex_text.decode()).decode("utf-16-be")
+
+
+def _parse_cmap(cmap: bytes) -> dict[int, str]:
+    """Reads `beginbfchar` and `beginbfrange` sections of a ToUnicode CMap into CID -> text."""
+    mapping: dict[int, str] = {}
+    for section in BF_CHAR_SECTION.finditer(cmap):
+        for source, target in HEX_PAIR.findall(section[1]):
+            mapping[int(source, 16)] = _utf16(target)
+    for section in BF_RANGE_SECTION.finditer(cmap):
+        for low, high, target in BF_RANGE.findall(section[1]):
+            codes = range(int(low, 16), int(high, 16) + 1)
+            if target.startswith(b"["):
+                targets = [_utf16(t) for t in HEX_TOKEN.findall(target)]
+            else:
+                first = _utf16(target.strip(b"<>"))
+                targets = [first[:-1] + chr(ord(first[-1]) + i) for i in range(len(codes))]
+            mapping.update(zip(codes, targets, strict=True))
+    return mapping
+
+
+def _font_maps(pdf: bytes) -> dict[bytes, dict[int, str]]:
+    """Maps each font resource name to its ToUnicode CID map; fonts without one are omitted."""
+    objects = _objects(pdf)
+    maps = {}
+    for name, number in FONT_ENTRY.findall(pdf):
+        link = TO_UNICODE.search(objects.get(int(number), b""))
+        if link is not None:
+            maps[name] = _parse_cmap(_stream(objects[int(link[1])]))
+    return maps
+
+
+def _placed_text(pdf: bytes) -> list[tuple[float, float, str]]:
+    """Lists (x, font size, text) for every text run; fails when none exist.
+
+    Hex runs (two-byte CIDs of a Type0 font) are decoded through the font's ToUnicode CMap;
+    a hex run whose font has no CMap fails the test with a clear message.
     """
+    maps = _font_maps(pdf)
     runs = []
     for match in TEXT_RUN.finditer(pdf):
-        text = match[3] if match[3] is not None else b"." * (len(match[4]) // HEX_DIGITS_PER_GLYPH)
-        runs.append((float(match[2]), float(match[1]), text))
+        if match[4] is not None:
+            text = match[4].decode("latin-1")
+        else:
+            assert match[1] in maps, f"hex text in font /{match[1].decode()} has no ToUnicode map"
+            raw = bytes.fromhex(match[5].decode())
+            cids = [int.from_bytes(raw[i : i + CID_BYTES]) for i in range(0, len(raw), CID_BYTES)]
+            text = "".join(maps[match[1]].get(cid, UNMAPPED) for cid in cids)
+        runs.append((float(match[3]), float(match[2]), text))
     assert runs, "no text runs found in the PDF content"
     return runs
+
+
+def _minimal_type0_pdf(*, flate: bool, to_unicode: bool) -> bytes:
+    cmap = (
+        b"1 begincodespacerange <0000> <FFFF> endcodespacerange\n"
+        b"1 beginbfchar <0001> <0418> endbfchar\n"
+        b"1 beginbfrange <0002> <0003> <0438> endbfrange\n"
+        b"1 beginbfrange <0004> <0005> [<0041> <D83DDE00>] endbfrange\n"
+    )
+    data = zlib.compress(cmap) if flate else cmap
+    filter_ = b" /Filter /FlateDecode" if flate else b""
+    link = b" /ToUnicode 2 0 R" if to_unicode else b""
+    bodies = {
+        1: b"<< /Type /Font /Subtype /Type0 /BaseFont /X" + link + b" >>",
+        2: b"<< /Length %d%s >>\nstream\n" % (len(data), filter_) + data + b"\nendstream",
+        3: b"<< /Font << /F1 1 0 R >> >>",
+        4: b"<< /Length 0 >>\nstream\nBT\n/F1 8.00 Tf\n1 0 0 1 36.00 500.00 Tm\n"
+        b"<000100020003000400050009> Tj\nET\nendstream",
+    }
+    return b"".join(b"%d 0 obj\n%s\nendobj\n" % (n, body) for n, body in bodies.items())
+
+
+def test_placed_text_decodes_hex_runs_through_the_tounicode_map() -> None:
+    expected = "\u0418\u0438\u0439A\U0001f600" + UNMAPPED
+    for flate in (False, True):
+        runs = _placed_text(_minimal_type0_pdf(flate=flate, to_unicode=True))
+        assert runs == [(36.0, 8.0, expected)]
+
+
+def test_placed_text_refuses_a_hex_run_without_a_tounicode_map() -> None:
+    with pytest.raises(AssertionError, match="no ToUnicode map"):
+        _placed_text(_minimal_type0_pdf(flate=False, to_unicode=False))
+
+
+def test_placed_text_reads_literal_runs() -> None:
+    pdf = to_pdf(pd.DataFrame({"name": ["Ada"]}), layout="cue_sheet")
+    assert "Ada" in [text for _, _, text in _placed_text(pdf)]
 
 
 def _wide_cue_table(columns: int) -> pd.DataFrame:
@@ -209,8 +311,7 @@ def test_regression_non_latin_names_are_not_replaced_by_question_marks() -> None
     """
     names = ["Иван", "李雷", "محمد", "Nguyễn", "😀"]
     pdf = to_pdf(pd.DataFrame({"name": names}), layout="cue_sheet")
-    runs = [text for _, _, text in _placed_text(pdf)]
-    assert len(runs) >= len(names) + 1
-    assert b"?" not in b"".join(runs)
-    # A Type0 font stores glyph IDs, so a later fix cannot be checked for the names' text here;
-    # run count (header, one per name, footer) and the absence of `?` is the portable check.
+    printed = unicodedata.normalize("NFC", " ".join(text for _, _, text in _placed_text(pdf)))
+    assert "?" not in printed
+    for name in names:
+        assert unicodedata.normalize("NFC", name) in printed
