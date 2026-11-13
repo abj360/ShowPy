@@ -8,19 +8,16 @@ Contains:
     test_*(): one behavior of stage.notes.notes each
 """
 
-from collections.abc import Sequence
 from datetime import UTC, datetime
 
 import pytest
 
-from stage.core.errors import GeometryError, SchemaError, UnknownRefError, ValidationError
+from stage.core.errors import GeometryError, SchemaError, UnknownRefError
 from stage.core.types import Region
-from stage.notes.models import Anchor, DraftedNote, Note
+from stage.notes.models import Anchor, Note
 from stage.notes.notes import (
-    MAX_DRAFTED_NOTES,
     accept_draft,
     add_note,
-    draft_notes,
     edit_note,
     notes_for,
     notes_near,
@@ -30,27 +27,6 @@ from stage.show.models import Show
 from tests.fixtures.shows import two_set_show
 
 AT = datetime(2026, 11, 11, 9, 30, tzinfo=UTC)
-
-
-class FakeDrafter:
-    """Records calls and returns canned drafts, or raises a canned error.
-
-    Attributes:
-        drafts: What draft() returns.
-        error: Raised by draft() instead of returning, when set.
-        calls: (summary, concept) pairs received.
-    """
-
-    def __init__(self, drafts: Sequence[object] = (), error: Exception | None = None) -> None:
-        self.drafts = list(drafts)
-        self.error = error
-        self.calls: list[tuple[str, str]] = []
-
-    def draft(self, show_summary: str, concept: str) -> list[DraftedNote]:
-        self.calls.append((show_summary, concept))
-        if self.error is not None:
-            raise self.error
-        return self.drafts  # type: ignore[return-value]
 
 
 def noted_show() -> Show:
@@ -156,53 +132,15 @@ def test_notes_near_rejects_negative_radius() -> None:
         notes_near(noted_show(), (0.0, 0.0), -1.0)
 
 
-def test_draft_notes_returns_hidden_agent_notes() -> None:
-    drafter = FakeDrafter([DraftedNote(text="build", kind="goal", anchor=Anchor.on_set("2"))])
-    drafts = draft_notes(noted_show(), "a storm rolls in", drafter, AT)
-    assert [(n.id, n.author, n.visible, n.created_at) for n in drafts] == [
-        ("draft-1", "agent", False, AT)
-    ]
-    summary, concept = drafter.calls[0]
-    assert concept == "a storm rolls in"
-    assert "Test show" in summary
-    assert "trumpets" in summary
-    assert "open wide" in summary
-
-
-def test_draft_ids_skip_existing_ids() -> None:
-    show = add_note(two_set_show(), "x", Anchor.on_set("1"), "draft-1", AT, "pat")
-    drafter = FakeDrafter([DraftedNote(text="a", anchor=Anchor.on_set("1"))] * 2)
-    assert [n.id for n in draft_notes(show, "c", drafter, AT)] == ["draft-2", "draft-3"]
-
-
-def test_draft_notes_propagates_drafter_failure() -> None:
-    with pytest.raises(TimeoutError):
-        draft_notes(two_set_show(), "c", FakeDrafter(error=TimeoutError("slow")), AT)
-
-
-def test_draft_notes_rejects_malformed_drafts() -> None:
-    with pytest.raises(SchemaError):
-        draft_notes(two_set_show(), "c", FakeDrafter(["not a note"]), AT)
-    blank = DraftedNote(text=" ", anchor=Anchor.on_set("1"))
-    with pytest.raises(SchemaError):
-        draft_notes(two_set_show(), "c", FakeDrafter([blank]), AT)
-
-
-def test_draft_notes_rejects_unknown_anchor() -> None:
-    drafter = FakeDrafter([DraftedNote(text="a", anchor=Anchor.on_spots(["X1"]))])
-    with pytest.raises(UnknownRefError):
-        draft_notes(two_set_show(), "c", drafter, AT)
-
-
-def test_draft_notes_caps_the_count() -> None:
-    many = [DraftedNote(text="a", anchor=Anchor.on_set("1"))] * (MAX_DRAFTED_NOTES + 1)
-    with pytest.raises(ValidationError):
-        draft_notes(two_set_show(), "c", FakeDrafter(many), AT)
-
-
 def test_accept_draft_adds_it_visible() -> None:
-    drafter = FakeDrafter([DraftedNote(text="build", anchor=Anchor.on_set("2"))])
-    draft = draft_notes(two_set_show(), "c", drafter, AT)[0]
+    draft = Note(
+        id="draft-1",
+        text="build",
+        anchor=Anchor.on_set("2"),
+        author="agent",
+        created_at=AT,
+        visible=False,
+    )
     show = accept_draft(two_set_show(), draft)
     assert show.notes[-1].visible
     assert show.notes[-1].author == "agent"
