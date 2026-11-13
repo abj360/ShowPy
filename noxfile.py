@@ -11,10 +11,11 @@ Contains:
     hashseeds: runs the full pytest suite under each non-default seed in HASH_SEEDS
     audit: scans the locked dependencies for known vulnerabilities
     wheel: builds the wheel, installs it in a clean venv and runs the README usage example
-    bench: placeholder until the benchmark gate lands
+    bench: runs the budget benchmarks; at tier M fails on a >20% min-time regression
     docs: placeholder until the docs build lands
 """
 
+import itertools
 import os
 import re
 import shutil
@@ -37,6 +38,14 @@ assert showpy.schema_path("showpy.show.v1.json").is_file(), "schema missing"
 assert "site-packages" in showpy.__file__, showpy.__file__
 print("Found showpy", showpy.__version__)
 """
+
+BENCH_PATH = "tests/bench"
+BENCH_BASELINE = "benchmarks/baseline-2026-11-13.json"
+BENCH_REGRESSION = "min:20%"
+GATED_TIER = "M"
+# The baseline comes from another machine than most runs, so pytest-benchmark always warns.
+BENCH_MACHINE_WARNING = "ignore::pytest_benchmark.logger.PytestBenchmarkWarning"
+TIER_FLAG = "--tier"
 
 nox.options.sessions = ["lint", "types", "tests", "hashseeds", "audit"]
 nox.options.default_venv_backend = "none"
@@ -139,10 +148,33 @@ def wheel(session: nox.Session) -> None:
     session.run(str(python), "-I", str(example), external=True)
 
 
+def _tier(posargs: list[str]) -> str:
+    """Returns the --tier value passed after `--`, or the gated tier when none is given."""
+    for flag, value in itertools.pairwise(posargs):
+        if flag == TIER_FLAG:
+            return value
+    for arg in posargs:
+        if arg.startswith(f"{TIER_FLAG}="):
+            return arg.split("=", 1)[1]
+    return GATED_TIER
+
+
 @nox.session
 def bench(session: nox.Session) -> None:
-    """Reports that the benchmark gate is not built yet."""
-    session.log("W: bench gate not implemented")
+    """Runs the budget benchmarks; at tier M fails on a >20% min-time regression.
+
+    Pass a tier with `nox -s bench -- --tier L`. Only tier M compares against the baseline:
+    larger tiers on shared runners are too noisy to block on, so they only report.
+    """
+    args = ["pytest", "-m", "bench", BENCH_PATH]
+    if _tier(session.posargs) == GATED_TIER:
+        args += [
+            f"--benchmark-compare={BENCH_BASELINE}",
+            f"--benchmark-compare-fail={BENCH_REGRESSION}",
+            "-W",
+            BENCH_MACHINE_WARNING,
+        ]
+    _uv_run(session, *args, *session.posargs)
 
 
 @nox.session

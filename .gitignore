@@ -13,3 +13,4 @@ build/
 .claude/
 node_modules/
 .nox/
+.benchmarks/

@@ -44,11 +44,12 @@ from showpy.choreo.paths import (
 from showpy.choreo.routes import rotate_path, two_part
 from showpy.core.ids import TransitionId
 from showpy.show.models import Show
+from tests.helpers import bisector_rotation
 from tests.strategies.sheet import headings, points_on
 
 STILL_TOL_M = 1e-6
-FULL_TURN = 360.0
-HALF_TURN = 180.0
+MIN_REACH_M = 0.5
+MAX_REACH_M = 4.0
 WAYPOINT_STEPS = 20
 MAX_WAYPOINTS = 3
 MAX_TURN_COUNTS = 2.0
@@ -116,27 +117,12 @@ def _bent(draw: st.DrawFn, show: Show, spec: TransitionSpec, entity: str) -> Tra
     return spec
 
 
-def _angle(origin: tuple[float, float], p: tuple[float, float]) -> float:
-    return math.degrees(math.atan2(p[1] - origin[1], p[0] - origin[0]))
-
-
 @st.composite
 def _rotated(draw: st.DrawFn, show: Show, spec: TransitionSpec, entity: str) -> TransitionSpec:
     a, b = _ends(show, spec.id, entity)
-    reach = draw(st.floats(min_value=0.5, max_value=4.0, allow_nan=False))
-    if _is_still(a, b):
-        pivot = (a.x + reach, a.y)
-        return rotate_path(
-            show, spec, [entity], pivot, draw(st.sampled_from((FULL_TURN, -FULL_TURN)))
-        )
-    mid = ((a.x + b.x) / 2, (a.y + b.y) / 2)
-    chord = math.dist(a.point, b.point)
-    normal = (-(b.y - a.y) / chord, (b.x - a.x) / chord)
-    offset = reach * draw(st.sampled_from((-1.0, 1.0)))
-    pivot = (mid[0] + offset * normal[0], mid[1] + offset * normal[1])
-    sweep = (_angle(pivot, b.point) - _angle(pivot, a.point) + HALF_TURN) % FULL_TURN - HALF_TURN
-    if draw(st.booleans()):
-        sweep -= math.copysign(FULL_TURN, sweep)
+    reach = draw(st.floats(min_value=MIN_REACH_M, max_value=MAX_REACH_M, allow_nan=False))
+    side = draw(st.sampled_from((-1.0, 1.0)))
+    pivot, sweep = bisector_rotation(a.point, b.point, side * reach, draw(st.booleans()))
     return rotate_path(show, spec, [entity], pivot, sweep)
 
 

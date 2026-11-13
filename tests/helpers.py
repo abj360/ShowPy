@@ -9,13 +9,16 @@ Contains:
     pin_spot(): pins one spot's placement in one set of a show
     with_curve_rows(): gives the spots curved path rows through (1, 7) in transition 1 -> 2
     open_session(): saves a show to a fresh repository and opens agent and designer workspaces
+    bisector_rotation(): returns a pivot and sweep whose arc carries one point onto another
 """
 
+import math
 from collections.abc import Iterable
 from datetime import datetime
 
 from showpy.choreo.match_ops import with_set
 from showpy.choreo.models import PathRow, PathStyle, Placement, Set, TransitionSpec, Waypoint
+from showpy.core.types import Point
 from showpy.show.models import Show
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import Workspace, open_workspace, save_show
@@ -26,6 +29,9 @@ CURVE_COUNTS = 8.0
 CURVE_WAYPOINT = Waypoint(x=1, y=7)
 SHOW_ID = "s"
 CREATE_MESSAGE = "create"
+STILL_TOL_M = 1e-6
+FULL_TURN = 360.0
+HALF_TURN = 180.0
 
 
 def make_set(*rows: tuple[str, float, float], off: tuple[str, ...] = ()) -> Set:
@@ -89,3 +95,35 @@ def open_session(show: Show, at: datetime) -> tuple[InMemoryRepository, Workspac
     designer = open_workspace(repo, SHOW_ID, "designer")
     save_show(designer, show, at, CREATE_MESSAGE)
     return repo, open_workspace(repo, SHOW_ID, "agent"), designer
+
+
+def _angle(origin: Point, p: Point) -> float:
+    return math.degrees(math.atan2(p[1] - origin[1], p[0] - origin[0]))
+
+
+def bisector_rotation(a: Point, b: Point, reach: float, long_way: bool) -> tuple[Point, float]:
+    """Returns a pivot and sweep whose arc carries `a` onto `b`, so a ROTATE path ends on target.
+
+    The pivot sits on the perpendicular bisector of a-b, `reach` meters from its midpoint
+    (negative reach picks the other side). When a and b coincide the pivot sits `reach`
+    meters to the side and the sweep is a full turn.
+
+    Args:
+        a: Start point.
+        b: Target point.
+        reach: Signed distance of the pivot from the midpoint, nonzero.
+        long_way: Sweeps the long way around instead of the short way.
+
+    Returns:
+        rotation: The pivot point and the signed sweep in degrees.
+    """
+    chord = math.dist(a, b)
+    if chord <= STILL_TOL_M:
+        return (a[0] + reach, a[1]), -FULL_TURN if long_way else FULL_TURN
+    normal = (-(b[1] - a[1]) / chord, (b[0] - a[0]) / chord)
+    mid = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+    pivot = (mid[0] + reach * normal[0], mid[1] + reach * normal[1])
+    sweep = (_angle(pivot, b) - _angle(pivot, a) + HALF_TURN) % FULL_TURN - HALF_TURN
+    if long_way:
+        sweep -= math.copysign(FULL_TURN, sweep)
+    return pivot, sweep
