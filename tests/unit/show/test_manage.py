@@ -335,8 +335,8 @@ def test_regression_renumber_then_save_keeps_scripts_with_their_sets() -> None:
     assert repo.read("s", "/sets/3/set.py") == SCRIPT_OLD_TWO
 
 
-@pytest.mark.defect("UP-9.7-51")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-51")
+@pytest.mark.defect("UP-9.7-52")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-52")
 def test_regression_remove_set_leaves_no_note_on_the_removed_set() -> None:
     """Drops or reports notes anchored to a removed set (audit 9.7 sets defects)."""
     note = Note(id="n", text="t", anchor=Anchor.on_set("2"), author="d", created_at=AT)
@@ -346,8 +346,8 @@ def test_regression_remove_set_leaves_no_note_on_the_removed_set() -> None:
     assert not still_anchored or not validate_show(edited).ok
 
 
-@pytest.mark.defect("UP-9.7-52")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-52")
+@pytest.mark.defect("UP-9.7-53")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-53")
 def test_regression_remove_set_leaves_no_note_on_a_vanished_transition() -> None:
     """Drops or reports notes anchored to a transition that no longer exists (audit 9.7)."""
     note = Note(
@@ -359,8 +359,8 @@ def test_regression_remove_set_leaves_no_note_on_a_vanished_transition() -> None
     assert not stale or not validate_show(edited).ok
 
 
-@pytest.mark.defect("UP-9.7-53")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-53")
+@pytest.mark.defect("UP-9.7-54")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-54")
 def test_regression_remove_last_set_with_merge_counts_keeps_total_time() -> None:
     """Keeps total counts, or refuses, when merging the last set's counts (audit 9.7)."""
     show = _three_set_show()
@@ -372,8 +372,8 @@ def test_regression_remove_last_set_with_merge_counts_keeps_total_time() -> None
     assert approx_equal(sum(s.counts for s in edited.sets), total, 1e-9)
 
 
-@pytest.mark.defect("UP-9.7-54")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-54")
+@pytest.mark.defect("UP-9.7-55")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-55")
 def test_regression_add_set_rejects_two_placements_for_one_spot() -> None:
     """Rejects two placements for one spot instead of keeping the last (audit 9.7)."""
     rows = (Placement(entity="T1", x=1.0, y=1.0), Placement(entity="T1", x=2.0, y=2.0))
@@ -381,8 +381,8 @@ def test_regression_add_set_rejects_two_placements_for_one_spot() -> None:
         add_set(two_set_show(), "3", 4.0, placements=rows)
 
 
-@pytest.mark.defect("UP-9.7-55")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-55")
+@pytest.mark.defect("UP-9.7-56")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-56")
 def test_regression_insert_subset_after_a_names_a_subset_of_a() -> None:
     """Names the subset after set "A" with "A" as its base, not "B" (audit 9.7 sets defects)."""
     base = two_set_show()
@@ -393,8 +393,8 @@ def test_regression_insert_subset_after_a_names_a_subset_of_a() -> None:
     assert new_id.startswith("A")
 
 
-@pytest.mark.defect("UP-9.7-56")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-56")
+@pytest.mark.defect("UP-9.7-57")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-57")
 def test_regression_form_keys_equal_form_ids_across_a_round_trip() -> None:
     """Rejects a form key that differs from its ID, or keeps keys stable (audit 9.7)."""
     form = Form(id="f1", set="2", kind="line", geometry={}, members=("T1",))
@@ -406,8 +406,8 @@ def test_regression_form_keys_equal_form_ids_across_a_round_trip() -> None:
     assert set(decode_show(encode_show(show)).forms) == set(show.forms)
 
 
-@pytest.mark.defect("UP-9.7-57")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-57")
+@pytest.mark.defect("UP-9.7-58")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-58")
 def test_regression_frozen_show_forms_cannot_be_mutated() -> None:
     """Refuses `show.forms[...] = form` on a frozen show (audit 9.7 sets defects)."""
     form = Form(id="zz", set="2", kind="line", geometry={}, members=("T1",))
@@ -416,15 +416,15 @@ def test_regression_frozen_show_forms_cannot_be_mutated() -> None:
         show.forms["zz"] = form
 
 
-@pytest.mark.defect("UP-9.7-58")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-58")
+@pytest.mark.defect("UP-9.7-59")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-59")
 def test_regression_frozen_show_is_hashable() -> None:
     """Hashes a frozen show (audit 9.7 sets defects)."""
     assert isinstance(hash(two_set_show()), int)
 
 
-@pytest.mark.defect("UP-9.7-59")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-59")
+@pytest.mark.defect("UP-9.7-60")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-60")
 @pytest.mark.timeout(5, method="signal")
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_stale_save_conflict_message_is_bounded() -> None:
@@ -455,8 +455,8 @@ def test_regression_stale_save_conflict_message_is_bounded() -> None:
     assert len(str(excinfo.value)) <= MAX_CONFLICT_MESSAGE_CHARS
 
 
-@pytest.mark.defect("UP-9.7-60")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-60")
+@pytest.mark.defect("UP-9.7-61")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-61")
 def test_regression_set_counts_rescale_shifts_facing_overrides_and_zone_windows() -> None:
     """Shifts later facing overrides and zone windows when a set is rescaled (audit 9.7)."""
     show = _three_set_show()
