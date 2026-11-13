@@ -2,6 +2,8 @@
 
 """
 test_pdf.py --- tests the dependency-free PDF writer and its four layouts
+
+Also holds the audited print defects (UP-9.5-36 to UP-9.5-38) as strict xfails.
 """
 
 import re
@@ -9,6 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from showpy.core.errors import SchemaError
@@ -19,6 +22,11 @@ from tests.fixtures.export_shows import guided_show
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 XREF_ENTRY = re.compile(rb"^(\d{10}) (\d{5}) ([nf]) ?\r?$")
+TEXT_RUN = re.compile(rb"/F\d ([\d.]+) Tf\n1 0 0 1 ([\d.]+) [\d.]+ Tm\n\((.*)\) Tj")
+PAGE_WIDTH = 792.0
+EM_WIDTH = 0.6
+WIDE_COLUMNS = 40
+LONG_TITLE_REPEATS = 40
 
 
 def _long_sheet(rows: int) -> CoordinateSheet:
@@ -137,3 +145,54 @@ def test_pillow_is_not_needed() -> None:
     )
     assert result.returncode == 0, result.stderr
     assert result.stdout == "%PDF-1.4"
+
+
+def _placed_text(pdf: bytes) -> list[tuple[float, float, bytes]]:
+    """Lists (x, font size, string) for every text run in the page content."""
+    runs = []
+    for match in TEXT_RUN.finditer(pdf):
+        runs.append((float(match[2]), float(match[1]), match[3]))
+    return runs
+
+
+def _wide_cue_table(columns: int) -> pd.DataFrame:
+    frame = pd.DataFrame({f"column {i}": [f"value {i}"] for i in range(columns)})
+    frame.attrs["title"] = "wide cue sheet"
+    return frame
+
+
+def _right_edges(pdf: bytes) -> list[float]:
+    return [x + len(text) * EM_WIDTH * size for x, size, text in _placed_text(pdf)]
+
+
+@pytest.mark.defect("UP-9.5-36")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-36")
+def test_regression_wide_table_stays_on_the_page() -> None:
+    """Keeps every text run of a 40-column cue sheet inside the 792 pt page width.
+
+    Today the font stops shrinking at 5 pt and text is placed at x = 3,070 pt (audit 9.5).
+    """
+    pdf = to_pdf(_wide_cue_table(WIDE_COLUMNS), layout="cue_sheet")
+    assert max(x for x, _, _ in _placed_text(pdf)) < PAGE_WIDTH
+    assert max(_right_edges(pdf)) <= PAGE_WIDTH
+
+
+@pytest.mark.defect("UP-9.5-37")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-37")
+def test_regression_long_title_is_clipped_to_the_page() -> None:
+    """Clips or wraps a title wider than the page; titles are never clipped today."""
+    frame = _wide_cue_table(2)
+    frame.attrs["title"] = "very long title " * LONG_TITLE_REPEATS
+    assert max(_right_edges(to_pdf(frame, layout="cue_sheet"))) <= PAGE_WIDTH
+
+
+@pytest.mark.defect("UP-9.5-38")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-38")
+def test_regression_non_latin_names_are_not_replaced_by_question_marks() -> None:
+    """Prints Cyrillic, CJK, Arabic, Vietnamese and emoji names without losing them (audit 9.5).
+
+    The writer encodes cp1252 with replacement, so every such character prints as `?`.
+    """
+    names = ["Иван", "李雷", "محمد", "Nguyễn", "😀"]
+    pdf = to_pdf(pd.DataFrame({"name": names}), layout="cue_sheet")
+    assert b"?" not in b"".join(text for _, _, text in _placed_text(pdf))
