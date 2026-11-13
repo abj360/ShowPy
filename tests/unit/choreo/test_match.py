@@ -12,7 +12,8 @@ import pytest
 from showpy.choreo.forms import line_form
 from showpy.choreo.match import bottleneck_value, cost_matrix, match, match_by_order
 from showpy.choreo.models import MatchOptions
-from showpy.core.errors import MatchError, SchemaError, UnknownRefError
+from showpy.core.errors import MatchError, SchemaError, ShowPyError, UnknownRefError
+from showpy.core.ids import SpotId
 from showpy.core.types import Point
 from showpy.core.util import approx_equal
 from tests.helpers import make_facing_set
@@ -292,3 +293,35 @@ def test_match_by_order_reports_distances_from_set() -> None:
     assert approx_equal(result.max_distance, math.hypot(2, 3), TOL)
     with pytest.raises(MatchError):
         match_by_order(["A", "B", "C"], form)
+
+
+PAIR_STARTS = [(0.0, 0.0), (1.0, 0.0)]
+PAIR_SLOTS = [(0.0, 1.0), (1.0, 1.0)]
+
+
+def _failing_cost(entity: SpotId, slot: int, start: Point, target: Point) -> float:
+    raise RuntimeError(f"cost of {entity} for slot {slot} failed")
+
+
+@pytest.mark.defect("UP-9.6-25")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-25")
+def test_regression_match_by_order_rejects_duplicate_spots() -> None:
+    """Rejects a repeated spot instead of collapsing it to one (audit 9.6)."""
+    with pytest.raises(ShowPyError):
+        match_by_order(["A", "A"], PAIR_SLOTS)
+
+
+@pytest.mark.defect("UP-9.6-55")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-55")
+def test_regression_match_wraps_a_failing_cost_fn() -> None:
+    """Raises MatchError when a cost_fn callback raises (audit 9.6)."""
+    with pytest.raises(MatchError):
+        match(PAIR_STARTS, PAIR_SLOTS, options=MatchOptions(cost_fn=_failing_cost))
+
+
+@pytest.mark.defect("UP-9.6-61")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-61")
+def test_regression_match_rejects_nan_starts_with_schema_error() -> None:
+    """Names the non-finite start instead of an empty MatchError (audit 9.6)."""
+    with pytest.raises(SchemaError):
+        match([(math.nan, 0.0), (1.0, 0.0)], PAIR_SLOTS)
