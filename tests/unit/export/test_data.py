@@ -15,6 +15,7 @@ from showpy.core.errors import SchemaError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.export.data import (
     DEFAULT_FORMATS,
+    LEGACY_SCHEMA_TAGS,
     SCHEMA_TAG,
     as_table,
     export_frames_csv,
@@ -170,3 +171,11 @@ def test_format_registry_is_immutable() -> None:
 def test_export_json_writes_showpy_tag() -> None:
     assert export_json(two_set_show())["schema"] == "showpy.show.v1"
     assert SCHEMA_TAG == "showpy.show.v1"
+
+
+def test_regression_import_json_reads_legacy_stage_tag() -> None:
+    show = rich_show()
+    current = json.loads(json.dumps(export_json(show)))
+    legacy = {**current, "schema": "stage.show.v1"}
+    assert LEGACY_SCHEMA_TAGS == ("stage.show.v1",)
+    assert import_json(legacy) == import_json(current) == show
