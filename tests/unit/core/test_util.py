@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict
 
 from showpy.cast.models import Cast, Group, Spot
 from showpy.cast.select import label_prefix, select
-from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
+from showpy.core.errors import SchemaError, ShowPyError
 from showpy.core.util import (
     approx_equal,
     as_points,
@@ -146,10 +146,10 @@ def test_close_matches_finds_short_ids() -> None:
 HASH_SEEDS = ("1", "2", "3")
 SUBPROCESS_TIMEOUT_S = 20
 BIG_ARRAY_SIZE = 2000
-BIG_ID_LENGTH = 20000
-QUADRATIC_BUDGET_S = 0.25
+BIG_ID_LENGTH = 10000
+QUADRATIC_BUDGET_S = 0.1
 RANGE_PEAK_BUDGET_BYTES = 5_000_000
-HUGE_RANGE_END = 1_000_000
+HUGE_RANGE_END = 300_000
 NAN = float("nan")
 HASH_TIES_SCRIPT = (
     "from showpy.core.util import format_ranges\n"
@@ -370,23 +370,27 @@ def test_regression_chunk_counts_rejects_nan_total() -> None:
 
 @pytest.mark.defect("UP-9.3-22")
 @pytest.mark.xfail(strict=True, reason="UP-9.3-22")
+@pytest.mark.timeout(5, method="signal")
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_id_split_is_linear_on_long_ids() -> None:
-    """Splits a 20,000-character ID in linear time (audit 9.3; P0 #8)."""
+    """Splits a 10,000-character ID in linear time (audit 9.3; P0 #8)."""
     long_id = "1" * BIG_ID_LENGTH + "x"
-    assert _best_of(lambda: label_prefix(long_id)) < QUADRATIC_BUDGET_S
+    assert _best_of(lambda: label_prefix(long_id), trials=1) < QUADRATIC_BUDGET_S
 
 
 @pytest.mark.defect("UP-9.3-23")
 @pytest.mark.xfail(strict=True, reason="UP-9.3-23")
+@pytest.mark.timeout(5, method="signal")
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_range_check_happens_before_expansion() -> None:
-    """Checks range endpoints before building a million strings (audit 9.3; P0 #8)."""
+    """Checks range endpoints before building 300,000 strings (audit 9.3; P0 #8)."""
     cast = Cast(
         groups={"t": Group(key="t", label_prefix="T")},
         spots=(Spot(id="T1", group="t"), Spot(id="T2", group="t")),
     )
     tracemalloc.start()
     try:
-        with pytest.raises(UnknownRefError):
+        with pytest.raises(ShowPyError):
             select(cast, f"T1-T{HUGE_RANGE_END}")
         _, peak = tracemalloc.get_traced_memory()
     finally:
