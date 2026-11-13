@@ -179,6 +179,7 @@ def bench(session: nox.Session) -> None:
 
     Pass a tier with `nox -s bench -- --tier L`. Only tier M compares against the baseline:
     larger tiers on shared runners are too noisy to block on, so they only report.
+    The baseline is machine-specific: re-record it on the runner class before any hosted gate.
     """
     args = ["pytest", "-m", "bench", BENCH_PATH]
     if _tier(session.posargs) == GATED_TIER:
