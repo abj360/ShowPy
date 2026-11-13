@@ -6,6 +6,8 @@ test_spacing.py --- tests even spacing along curves, area fills, blocks, rings a
 
 import math
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import numpy as np
 import pytest
@@ -33,9 +35,10 @@ from showpy.geo.spacing import (
 
 SIGNAL_TIMEOUT_S = 5
 SQUARE_SIDE_M = 10.0
-TINY_FILL_INTERVAL_M = 0.005
+TINY_FILL_INTERVAL_M = 1e-3
 TINY_LINE_INTERVAL_M = 1e-5
-TINY_LINE_LENGTH_M = 50.0
+LONG_LINE_LENGTH_M = 1000.0
+ALLOCATION_HEADROOM_BYTES = 256 * 2**20
 SEAM_SPOTS = 10
 GAP_EXTRA_M = 0.5
 RING_SPOTS = 4
@@ -196,6 +199,21 @@ def test_distribute_on_points_random_is_seeded() -> None:
     assert np.array_equal(a, distribute_on_points(candidates, 3, method="random", seed=1))
 
 
+@contextmanager
+def capped_address_space() -> Iterator[None]:
+    """Lowers RLIMIT_AS to the current size plus headroom so a runaway allocation fails fast."""
+    import resource  # POSIX only; imported here so Windows can still collect this module
+
+    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+    with open("/proc/self/statm", encoding="ascii") as statm:
+        used = int(statm.read().split()[0]) * resource.getpagesize()
+    resource.setrlimit(resource.RLIMIT_AS, (used + ALLOCATION_HEADROOM_BYTES, hard))
+    try:
+        yield
+    finally:
+        resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
+
+
 def _square(origin_x: float = 0.0, side: float = SQUARE_SIDE_M) -> shapely.Polygon:
     return region([(origin_x, 0), (origin_x + side, 0), (origin_x + side, side), (origin_x, side)])
 
@@ -213,21 +231,22 @@ def test_regression_scatter_rejects_negative_min_gap() -> None:
 @pytest.mark.defect("UP-9.1-07")
 @pytest.mark.xfail(strict=True, reason="UP-9.1-07")
 @pytest.mark.timeout(SIGNAL_TIMEOUT_S, method="signal")
-@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+@pytest.mark.skipif(sys.platform != "linux", reason="needs signal timeout and RLIMIT_AS")
 def test_regression_fill_caps_the_lattice_size() -> None:
-    """Rejects a 4-million-point fill instead of running for 20 s (audit 9.1; P0 #8)."""
-    with pytest.raises(SpacingError):
+    """Rejects a 100-million-point fill instead of building the lattice (audit 9.1; P0 #8)."""
+    with capped_address_space(), pytest.raises(SpacingError):
         fill(_square(), TINY_FILL_INTERVAL_M, anchor=(0.0, 0.0))
 
 
 @pytest.mark.defect("UP-9.1-08")
 @pytest.mark.xfail(strict=True, reason="UP-9.1-08")
 @pytest.mark.timeout(SIGNAL_TIMEOUT_S, method="signal")
-@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+@pytest.mark.skipif(sys.platform != "linux", reason="needs signal timeout and RLIMIT_AS")
 def test_regression_space_by_interval_caps_the_point_count() -> None:
-    """Rejects a 5-million-point spacing instead of allocating it (audit 9.1; P0 #8)."""
-    with pytest.raises(SpacingError):
-        space_by_interval(line((0.0, 0.0), (TINY_LINE_LENGTH_M, 0.0)), TINY_LINE_INTERVAL_M)
+    """Rejects a 100-million-point spacing instead of allocating it (audit 9.1; P0 #8)."""
+    tiny_interval_line = line((0.0, 0.0), (LONG_LINE_LENGTH_M, 0.0))
+    with capped_address_space(), pytest.raises(SpacingError):
+        space_by_interval(tiny_interval_line, TINY_LINE_INTERVAL_M)
 
 
 @pytest.mark.defect("UP-9.1-26")

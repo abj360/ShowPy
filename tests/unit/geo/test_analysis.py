@@ -6,6 +6,8 @@ test_analysis.py --- tests density, coverage, balance, symmetry and change desig
 
 import math
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import pytest
 
@@ -17,11 +19,27 @@ from tests.helpers import make_set
 
 TOL = 1e-9
 SIGNAL_TIMEOUT_S = 5
-TINY_CELL_M = 0.005
+TINY_CELL_M = 1e-5
+ALLOCATION_HEADROOM_BYTES = 256 * 2**20
 LEFT_CLUSTER_SIZE = 10
 CLUSTER_SPACING_M = 0.001
 MIRROR_X_M = 2.0
 MAX_MANY_TO_ONE_SCORE = 0.5
+
+
+@contextmanager
+def capped_address_space() -> Iterator[None]:
+    """Lowers RLIMIT_AS to the current size plus headroom so a runaway allocation fails fast."""
+    import resource  # POSIX only; imported here so Windows can still collect this module
+
+    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+    with open("/proc/self/statm", encoding="ascii") as statm:
+        used = int(statm.read().split()[0]) * resource.getpagesize()
+    resource.setrlimit(resource.RLIMIT_AS, (used + ALLOCATION_HEADROOM_BYTES, hard))
+    try:
+        yield
+    finally:
+        resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
 
 
 def test_density_map_counts_on_field_spots_per_cell() -> None:
@@ -81,10 +99,10 @@ def test_change_amount_uses_spots_in_both_sets() -> None:
 @pytest.mark.defect("UP-9.1-06")
 @pytest.mark.xfail(strict=True, reason="UP-9.1-06")
 @pytest.mark.timeout(SIGNAL_TIMEOUT_S, method="signal")
-@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+@pytest.mark.skipif(sys.platform != "linux", reason="needs signal timeout and RLIMIT_AS")
 def test_regression_density_map_caps_the_grid_size() -> None:
-    """Rejects a 32-million-cell grid instead of allocating it (audit 9.1; P0 #8)."""
-    with pytest.raises(GeometryError):
+    """Rejects a 1e-5 m cell (8e12 cells on the field) instead of allocating it (P0 #8)."""
+    with capped_address_space(), pytest.raises(GeometryError):
         density_map(make_set(("A", 0, 1)), field_sheet(), cell=TINY_CELL_M)
 
 
