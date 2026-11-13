@@ -124,7 +124,10 @@ def _small_cast() -> Cast:
 @pytest.mark.defect("UP-9.3-53")
 @pytest.mark.xfail(strict=True, reason="UP-9.3-53")
 def test_regression_spot_tags_serialize_in_a_stable_order() -> None:
-    """Dumps Spot.tags in the same order under every hash seed (audit 9.3; P0 #9)."""
+    """Dumps Spot.tags identically under every hash seed (audit 9.3; P0 #9).
+
+    A fix must store a sorted, deduplicated tuple or reject set input.
+    """
     outputs = _under_seeds("print(cast.spots[0].model_dump_json())\n")
     assert len(set(outputs)) == 1, outputs
 
@@ -132,7 +135,10 @@ def test_regression_spot_tags_serialize_in_a_stable_order() -> None:
 @pytest.mark.defect("UP-9.3-54")
 @pytest.mark.xfail(strict=True, reason="UP-9.3-54")
 def test_regression_cast_selections_serialize_in_a_stable_order() -> None:
-    """Dumps Cast.selections in the same order under every hash seed (audit 9.3; P0 #9)."""
+    """Dumps Cast.selections identically under every hash seed (audit 9.3; P0 #9).
+
+    A fix must store a sorted, deduplicated tuple or reject set input.
+    """
     outputs = _under_seeds("print(cast.model_dump_json())\n")
     assert len(set(outputs)) == 1, outputs
 
@@ -140,7 +146,10 @@ def test_regression_cast_selections_serialize_in_a_stable_order() -> None:
 @pytest.mark.defect("UP-9.3-55")
 @pytest.mark.xfail(strict=True, reason="UP-9.3-55")
 def test_regression_cast_content_hash_ignores_hash_seed() -> None:
-    """Gives one content hash for a cast under every hash seed (audit 9.3; P0 #9)."""
+    """Gives one content hash for a cast under every hash seed (audit 9.3; P0 #9).
+
+    A fix must store a sorted, deduplicated tuple or reject set input.
+    """
     outputs = _under_seeds("print(content_hash(cast))\n")
     assert len(set(outputs)) == 1, outputs
 
