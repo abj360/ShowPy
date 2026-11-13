@@ -36,7 +36,7 @@ def test_len_iter_contains() -> None:
 def test_regression_selection_rejects_a_bare_string() -> None:
     """Rejects `ids="T12"` instead of splitting it into characters (audit 9.3)."""
     with pytest.raises((ShowPyError, PydanticValidationError)):
-        Selection(ids="T12")  # type: ignore[arg-type]
+        Selection(ids="T12")
 
 
 @pytest.mark.defect("UP-9.3-34")

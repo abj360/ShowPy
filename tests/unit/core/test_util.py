@@ -176,17 +176,17 @@ def run_under_seeds(script: str) -> list[str]:
 class _ArrayModel(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
 
-    values: np.ndarray  # type: ignore[type-arg]
+    values: np.ndarray
 
 
-def _big_arrays() -> tuple[np.ndarray, np.ndarray]:  # type: ignore[type-arg]
+def _big_arrays() -> tuple[np.ndarray, np.ndarray]:
     first = np.zeros(BIG_ARRAY_SIZE)
     second = np.zeros(BIG_ARRAY_SIZE)
     second[BIG_ARRAY_SIZE // 2] = 1.0
     return first, second
 
 
-def _points_or_rejection(obj: object) -> np.ndarray:  # type: ignore[type-arg]
+def _points_or_rejection(obj: object) -> np.ndarray:
     try:
         return as_points(obj)
     except ShowPyError:
