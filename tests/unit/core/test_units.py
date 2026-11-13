@@ -2,17 +2,23 @@
 
 """
 test_units.py --- tests unit conversion, unit registries and angle helpers
+
+Contains:
+    test_*(): one behavior of showpy.core.units each
+    test_regression_*(): one audited units defect each (registry, round_to, angle edges)
 """
 
 import math
 
+import numpy as np
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.core.errors import UnknownRefError, ZeroLengthError
+from showpy.core.errors import ShowPyError, UnknownRefError, ZeroLengthError
 from showpy.core.units import (
     DEFAULT_UNITS,
+    UnitRegistry,
     angle_diff,
     convert,
     facing_vector,
@@ -95,3 +101,122 @@ def test_angle_diff_in_half_open_range(a: float, b: float) -> None:
 )
 def test_round_to_half_away_from_zero(value: float, precision: float, expected: float) -> None:
     assert round_to(value, precision) == expected
+
+
+@pytest.mark.defect("UP-9.3-39")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-39")
+def test_regression_default_units_cannot_be_mutated() -> None:
+    """Refuses in-place edits to the process-wide default registry (audit 9.3)."""
+    try:
+        with pytest.raises((TypeError, ShowPyError)):
+            DEFAULT_UNITS.meters_per_unit["hack"] = 9.0
+    finally:
+        DEFAULT_UNITS.meters_per_unit.pop("hack", None)
+
+
+@pytest.mark.defect("UP-9.3-40")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-40")
+def test_regression_zero_factor_registry_never_divides_by_zero() -> None:
+    """Rejects a zero unit factor with a ShowPyError (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        convert(1.0, "m", "zero", UnitRegistry(meters_per_unit={"m": 1.0, "zero": 0.0}))
+
+
+@pytest.mark.defect("UP-9.3-41")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-41")
+def test_regression_register_unit_refuses_to_redefine_meters() -> None:
+    """Refuses to redefine the base unit `m` (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        register_unit(DEFAULT_UNITS, "m", 2.0)
+
+
+@pytest.mark.defect("UP-9.3-42")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-42")
+def test_regression_register_unit_rejects_infinite_size() -> None:
+    """Rejects an infinite unit size (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        register_unit(DEFAULT_UNITS, "far", math.inf)
+
+
+@pytest.mark.defect("UP-9.3-43")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-43")
+def test_regression_register_unit_rejects_an_empty_name() -> None:
+    """Rejects an empty unit name (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        register_unit(DEFAULT_UNITS, "", 1.0)
+
+
+@pytest.mark.defect("UP-9.3-44")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-44")
+def test_regression_register_unit_bad_size_is_not_an_unknown_ref() -> None:
+    """Reports a bad size as a schema problem, not an unknown reference (audit 9.3)."""
+    with pytest.raises(ShowPyError) as excinfo:
+        register_unit(DEFAULT_UNITS, "bad", 0.0)
+    assert not isinstance(excinfo.value, UnknownRefError)
+
+
+@pytest.mark.defect("UP-9.3-45")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-45")
+def test_regression_round_to_accepts_numpy_scalars() -> None:
+    """Rounds a numpy float like a Python float (audit 9.3)."""
+    assert approx_equal(round_to(np.float64(2.345)), 2.35)
+
+
+@pytest.mark.defect("UP-9.3-46")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-46")
+def test_regression_round_to_rejects_infinity_cleanly() -> None:
+    """Rejects an infinite value with a ShowPyError, not decimal.InvalidOperation (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        round_to(math.inf)
+
+
+@pytest.mark.defect("UP-9.3-47")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-47")
+def test_regression_round_to_rejects_zero_precision_cleanly() -> None:
+    """Rejects a zero precision with a ShowPyError, not decimal.InvalidOperation (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        round_to(1.0, 0.0)
+
+
+@pytest.mark.defect("UP-9.3-48")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-48")
+def test_regression_round_to_handles_bools_cleanly() -> None:
+    """Rounds a bool to 1.0 or rejects it, never leaking decimal.InvalidOperation (audit 9.3).
+
+    The audit allows reject or accept; an accepted result must be the numeric value.
+    """
+    try:
+        rounded = round_to(True)
+    except ShowPyError:
+        return
+    assert approx_equal(rounded, 1.0)
+
+
+@pytest.mark.defect("UP-9.3-49")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-49")
+def test_regression_round_to_never_returns_negative_zero() -> None:
+    """Returns 0.0, not -0.0, for a small negative value (audit 9.3)."""
+    assert math.copysign(1.0, round_to(-0.001)) > 0
+
+
+@pytest.mark.defect("UP-9.3-50")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-50")
+def test_regression_normalize_angle_never_returns_negative_zero() -> None:
+    """Returns 0.0, not -0.0, for -0.0 (audit 9.3)."""
+    assert math.copysign(1.0, normalize_angle(-0.0)) > 0
+
+
+@pytest.mark.defect("UP-9.3-51")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-51")
+def test_regression_normalize_angle_rejects_infinity_cleanly() -> None:
+    """Rejects an infinite angle with a ShowPyError, not ValueError (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        normalize_angle(math.inf)
+
+
+@pytest.mark.defect("UP-9.3-52")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-52")
+def test_regression_normalize_angle_rejects_nan() -> None:
+    """Rejects a NaN angle instead of passing it through (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        normalize_angle(math.nan)
