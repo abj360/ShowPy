@@ -1,8 +1,10 @@
 [default]
 extend-ignore-re = ["PNGs", "FlateDecode"]
 
-[default.extend-words]
-radiu = "radiu"
-
 [files]
-extend-exclude = ["uv.lock", "package-lock.json", "*.pdf", "tests/golden/fixtures"]
+extend-exclude = [
+    "uv.lock",
+    "package-lock.json",
+    "*.pdf",
+    "tests/golden/fixtures",
+]

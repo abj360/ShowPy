@@ -15,6 +15,7 @@ repos:
     hooks:
       - id: typos
         args: []
+        exclude: ^tests/unit/choreo/test_form_ops\.py$
   - repo: local
     hooks:
       - id: lint
@@ -22,6 +23,7 @@ repos:
         entry: uv run nox -s lint
         language: system
         pass_filenames: false
+        types_or: [python, markdown, yaml, json, toml]
       - id: types
         name: nox types
         entry: uv run nox -s types
