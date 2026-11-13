@@ -2,6 +2,18 @@
 
 """
 test_engine.py --- tests PathEngine positions, styles, timing, facing, segments and frames
+
+Contains:
+    test_regression_segments_stay_within_tolerance_on_periodic_motion: UP-9.2-01
+    test_regression_speed_distance_matches_traced_path_length: UP-9.2-02
+    test_regression_facing_override_applies_to_holding_spot: UP-9.2-07
+    test_regression_toward_entity_override_uses_query_time_position: UP-9.2-08
+    test_regression_invalidate_accepts_a_one_shot_iterable: UP-9.2-22
+    test_regression_invalidate_clears_override_selection_cache: UP-9.2-23
+    test_regression_spot_query_on_show_without_sets_raises_showpy_error: UP-9.2-24
+    test_regression_zero_count_transition_compiles_to_a_step: UP-9.2-25
+    test_regression_missing_placement_does_not_fail_other_spots: UP-9.2-26
+    test_regression_velocity_is_full_speed_near_a_window_kink: UP-9.2-34
 """
 
 import itertools

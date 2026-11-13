@@ -2,6 +2,15 @@
 
 """
 test_paths.py --- tests the pure path-row editing functions
+
+Contains:
+    test_regression_switching_to_straight_drops_the_bend: UP-9.2-04
+    test_regression_add_waypoint_clears_parameters_of_the_old_style: UP-9.2-06
+    test_regression_delay_applies_to_follow_rows: UP-9.2-18
+    test_regression_delay_rejects_a_waypoint_pushed_outside_the_window: UP-9.2-19
+    test_regression_stagger_and_ripple_errors_hint_at_the_step: UP-9.2-20
+    test_regression_add_waypoint_on_a_held_row_clears_old_parameters: UP-9.2-37
+    test_regression_ripple_rejects_a_waypoint_pushed_outside_the_window: UP-9.2-38
 """
 
 from collections.abc import Callable
@@ -162,6 +171,8 @@ F = TypeVar("F", bound=Callable[..., object])
 BEND: Point = (1.0, 7.0)
 TWO_COUNT_DELAY = 2.0
 LATE_STEP = 3.0
+RIPPLE_TOTAL_PAST_END = 9.0
+RIPPLE_TOTAL_INSIDE = 3.0
 STALE_FIELDS = ("pivot", "sweep_deg", "motion_fn", "route")
 
 
@@ -249,9 +260,41 @@ def test_regression_delay_rejects_a_waypoint_pushed_outside_the_window() -> None
         delay(timed, ["T1"], TWO_COUNT_DELAY)
 
 
+def _overflowing_stagger() -> TransitionSpec:
+    return stagger(SPEC, ["T1", "T2", "T3", "T4"], step=LATE_STEP)
+
+
+def _overflowing_ripple() -> TransitionSpec:
+    return ripple(SPEC, ["T1", "T2"], total=RIPPLE_TOTAL_PAST_END)
+
+
 @defect("UP-9.2-20")
-def test_regression_stagger_error_hints_at_the_step() -> None:
-    """Names the step size in the error when a stagger pushes a spot past the end (audit 9.2)."""
+@pytest.mark.parametrize("shift", [_overflowing_stagger, _overflowing_ripple])
+def test_regression_stagger_and_ripple_errors_hint_at_the_step(
+    shift: Callable[[], TransitionSpec],
+) -> None:
+    """Names the step size in the error when a stagger or ripple pushes a spot past the end."""
     with pytest.raises(PathError) as excinfo:
-        stagger(SPEC, ["T1", "T2", "T3", "T4"], step=LATE_STEP)
+        shift()
     assert "step" in excinfo.value.hint
+
+
+@defect("UP-9.2-37")
+def test_regression_add_waypoint_on_a_held_row_clears_old_parameters() -> None:
+    """Rejects or cleans a HOLD row, left over from a ROTATE row, that a bend turns POLYLINE."""
+    held = hold(_rotate_row(), ["T1"])
+    try:
+        row = add_waypoint(held, "T1", BEND).row("T1")
+    except PathError:
+        return
+    stale = {name: getattr(row, name) for name in STALE_FIELDS if getattr(row, name) is not None}
+    assert row.style == PathStyle.POLYLINE
+    assert stale == {}
+
+
+@defect("UP-9.2-38")
+def test_regression_ripple_rejects_a_waypoint_pushed_outside_the_window() -> None:
+    """Rejects, at edit time, a ripple that starts a spot after its timed waypoint."""
+    timed = add_waypoint(SPEC, "T2", BEND, at=1.0)
+    with pytest.raises(PathError):
+        ripple(timed, ["T1", "T2"], total=RIPPLE_TOTAL_INSIDE)

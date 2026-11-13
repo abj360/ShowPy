@@ -2,6 +2,12 @@
 
 """
 test_motion.py --- tests easing curves, facing turns and the custom motion registry
+
+Contains:
+    test_regression_nan_easing_strength_is_rejected: UP-9.2-12
+    test_regression_infinite_steps_strength_raises_showpy_error: UP-9.2-13
+    test_regression_easing_strength_below_one_is_not_clamped_silently: UP-9.2-14
+    test_regression_steps_strength_has_a_cap: UP-9.2-15
 """
 
 from collections.abc import Callable, Mapping

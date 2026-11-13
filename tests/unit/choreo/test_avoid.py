@@ -2,6 +2,14 @@
 
 """
 test_avoid.py --- tests advisory gap finding and fix suggestions
+
+Contains:
+    test_regression_suggested_waypoint_is_reached_at_its_count_on_eased_rows: UP-9.2-17
+    test_regression_min_gaps_with_top_zero_returns_nothing: UP-9.2-28
+    test_regression_min_gaps_ignores_spots_before_their_entrance: UP-9.2-29
+    test_regression_suggested_waypoints_never_shrink_the_gap: UP-9.2-30
+    test_regression_avoid_helpers_accept_a_custom_motion_registry: UP-9.2-31
+    test_regression_closest_approach_of_empty_track_raises_showpy_error: UP-9.2-35
 """
 
 import math

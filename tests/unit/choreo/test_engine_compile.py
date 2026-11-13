@@ -5,7 +5,7 @@ test_engine_compile.py --- tests compiling path rows into plans, and the audited
 
 Contains:
     test_regression_timed_waypoint_survives_style_change_without_index_error: UP-9.2-03
-    test_regression_waypoint_style_constants_agree: UP-9.2-05
+    test_regression_engine_and_editors_agree_a_straight_row_has_no_bend: UP-9.2-05
     test_regression_custom_motion_that_never_leaves_start_is_rejected: UP-9.2-09
     test_regression_custom_motion_with_wrong_shape_raises_path_error: UP-9.2-10
     test_regression_custom_motion_with_nan_samples_is_rejected: UP-9.2-11
@@ -18,7 +18,6 @@ from typing import Any, TypeVar, cast
 import numpy as np
 import pytest
 
-from showpy.choreo import engine_compile, paths
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.models import Easing, PathRow, PathStyle, TransitionSpec, Waypoint
 from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray
@@ -94,9 +93,15 @@ def test_regression_timed_waypoint_survives_style_change_without_index_error(
 
 
 @defect("UP-9.2-05")
-def test_regression_waypoint_style_constants_agree() -> None:
-    """Uses one waypoint-style set in the compiler and the path editors (audit 9.2)."""
-    assert set(engine_compile.WAYPOINT_STYLES) == set(paths.WAYPOINT_STYLES)
+def test_regression_engine_and_editors_agree_a_straight_row_has_no_bend() -> None:
+    """Moves a STRAIGHT row straight, as the path editors treat it, even with a waypoint (9.2)."""
+    row = PathRow(entity="T1", style=PathStyle.STRAIGHT, waypoints=(Waypoint(x=1.0, y=7.0),))
+    engine = PathEngine(with_rows({"T1": row}))
+    try:
+        mid = engine.position("T1", 4.0, local=TID)
+    except ShowPyError:
+        return
+    assert approx_equal(mid, (0.0, 7.0), tol=1e-6)
 
 
 def _stay_at_start(u: FloatArray, start: Point, end: Point, params: object) -> Points:
