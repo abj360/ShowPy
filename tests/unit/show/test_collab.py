@@ -339,3 +339,19 @@ def test_regression_rescale_proposal_conflicts_with_a_newer_row_of_the_same_tran
     save_show(designer, designer_show, AT + STEP, "designer row")
     with pytest.raises(ConflictError):
         accept(designer, proposal, AT + 2 * STEP)
+
+
+@pytest.mark.defect("UP-9.7-91")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-91")
+def test_regression_accepting_a_form_edit_does_not_resurrect_a_deleted_form() -> None:
+    """Refuses, or keeps the form deleted, when accepting an edit of a deleted form (audit 9.7)."""
+    with_form = two_set_show().model_copy(update={"forms": {"f1": FORM}})
+    _, agent, designer = open_session(with_form, AT)
+    edited_form = FORM.model_copy(update={"geometry": {"len": 9}})
+    proposal = propose(load_show(agent), [FormOp(form=edited_form)], "longer", "p1")
+    save_show(designer, load_show(designer).model_copy(update={"forms": {}}), AT + STEP, "drop")
+    try:
+        accept(designer, proposal, AT + 2 * STEP)
+    except ShowPyError:
+        return
+    assert "f1" not in load_show(designer).forms
