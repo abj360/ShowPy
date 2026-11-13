@@ -2,19 +2,52 @@
 
 """
 test_analysis.py --- tests density, coverage, balance, symmetry and change design measures
+
+Contains:
+    test_regression_density_map_caps_the_grid_size: rejects a 1e-5 m cell (8e12 cells on the field)
+        instead of allocating it
+    test_regression_symmetry_score_matches_spots_one_to_one: scores ten spots on one side against
+        one on the other below 0.5, not 0.993
+    test_regression_coverage_rejects_infinite_radius: raises a ShowPyError for radius=inf instead of
+        leaking GEOSException
 """
 
 import math
+import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import pytest
 
-from showpy.core.errors import GeometryError, UnknownRefError
+from showpy.core.errors import GeometryError, ShowPyError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.geo.analysis import balance, change_amount, coverage, density_map, symmetry_score
 from tests.fixtures.shows import field_sheet, two_set_show
 from tests.helpers import make_set
 
 TOL = 1e-9
+SIGNAL_TIMEOUT_S = 5
+TINY_CELL_M = 1e-5
+ALLOCATION_HEADROOM_BYTES = 256 * 2**20
+LEFT_CLUSTER_SIZE = 10
+CLUSTER_SPACING_M = 0.001
+MIRROR_X_M = 2.0
+MAX_MANY_TO_ONE_SCORE = 0.5
+
+
+@contextmanager
+def capped_address_space() -> Iterator[None]:
+    """Lowers RLIMIT_AS to the current size plus headroom so a runaway allocation fails fast."""
+    import resource  # POSIX only; imported here so Windows can still collect this module
+
+    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+    with open("/proc/self/statm", encoding="ascii") as statm:
+        used = int(statm.read().split()[0]) * resource.getpagesize()
+    resource.setrlimit(resource.RLIMIT_AS, (used + ALLOCATION_HEADROOM_BYTES, hard))
+    try:
+        yield
+    finally:
+        resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
 
 
 def test_density_map_counts_on_field_spots_per_cell() -> None:
@@ -69,3 +102,30 @@ def test_change_amount_uses_spots_in_both_sets() -> None:
     b = make_set(("A", 3, 4), ("C", 100, 0))
     assert change_amount(a, b) == 5.0
     assert change_amount(make_set(("A", 0, 0)), make_set(("B", 1, 1))) == 0.0
+
+
+@pytest.mark.defect("UP-9.1-06")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-06")
+@pytest.mark.timeout(SIGNAL_TIMEOUT_S, method="signal")
+@pytest.mark.skipif(sys.platform != "linux", reason="needs signal timeout and RLIMIT_AS")
+def test_regression_density_map_caps_the_grid_size() -> None:
+    """Rejects a 1e-5 m cell (8e12 cells on the field) instead of allocating it (P0 #8)."""
+    with capped_address_space(), pytest.raises(GeometryError):
+        density_map(make_set(("A", 0, 1)), field_sheet(), cell=TINY_CELL_M)
+
+
+@pytest.mark.defect("UP-9.1-36")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-36")
+def test_regression_symmetry_score_matches_spots_one_to_one() -> None:
+    """Scores ten spots on one side against one on the other below 0.5, not 0.993 (audit 9.1)."""
+    left = [(f"L{i}", -MIRROR_X_M - CLUSTER_SPACING_M * i, 1.0) for i in range(LEFT_CLUSTER_SIZE)]
+    lopsided = make_set(*left, ("R", MIRROR_X_M, 1.0))
+    assert symmetry_score(lopsided) < MAX_MANY_TO_ONE_SCORE
+
+
+@pytest.mark.defect("UP-9.1-63")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-63")
+def test_regression_coverage_rejects_infinite_radius() -> None:
+    """Raises a ShowPyError for radius=inf instead of leaking GEOSException (audit 9.1)."""
+    with pytest.raises(ShowPyError):
+        coverage(make_set(("A", 0, 10)), field_sheet(), radius=math.inf)

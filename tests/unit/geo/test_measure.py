@@ -2,6 +2,10 @@
 
 """
 test_measure.py --- tests lengths, extents, spacing stats, neighbours and symmetry measures
+
+Contains:
+    test_regression_symmetry_error_matches_spots_one_to_one: reports the unmatched spots of a
+        10-versus-1 picture instead of a tiny gap
 """
 
 import math
@@ -32,6 +36,10 @@ from showpy.geo.shapes import arc, circle, line
 from tests.helpers import make_set
 
 TOL = 1e-6
+LEFT_CLUSTER_SIZE = 10
+CLUSTER_SPACING_M = 0.001
+MIRROR_X_M = 2.0
+MIN_UNMATCHED_ERROR_M = 0.5
 
 
 def test_length_of_points_and_curves() -> None:
@@ -145,3 +153,12 @@ def test_mirror_gaps_and_symmetry_error() -> None:
     s = make_set(("A", -1, 0), ("B", 1, 0), ("C", 2, 3), ("D", 9, 9), off=("D",))
     assert approx_equal(symmetry_error(s, axis_x=0.0), math.hypot(1, 3), tol=TOL)
     assert symmetry_error(s, ["A", "B"], axis_x=0.0) == 0.0
+
+
+@pytest.mark.defect("UP-9.1-35")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-35")
+def test_regression_symmetry_error_matches_spots_one_to_one() -> None:
+    """Reports the unmatched spots of a 10-versus-1 picture instead of a tiny gap (audit 9.1)."""
+    left = [(f"L{i}", -MIRROR_X_M - CLUSTER_SPACING_M * i, 1.0) for i in range(LEFT_CLUSTER_SIZE)]
+    lopsided = make_set(*left, ("R", MIRROR_X_M, 1.0))
+    assert symmetry_error(lopsided) > MIN_UNMATCHED_ERROR_M

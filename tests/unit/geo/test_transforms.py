@@ -2,6 +2,10 @@
 
 """
 test_transforms.py --- tests every transform on points, curves and sets, including pins and facings
+
+Contains:
+    test_regression_affine_accepts_tiny_but_invertible_scales: applies a uniform 1e-7 scale instead
+        of calling the plane collapsed
 """
 
 import math
@@ -297,3 +301,15 @@ def test_composite_curves_keep_their_parts() -> None:
     grown = expand(curve, 1.0, about=(0.0, 0.0))
     assert isinstance(grown, CompositeCurve)
     assert len(grown.parts) == 2
+
+
+TINY_UNIFORM_SCALE = 1e-7
+
+
+@pytest.mark.defect("UP-9.1-19")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-19")
+def test_regression_affine_accepts_tiny_but_invertible_scales() -> None:
+    """Applies a uniform 1e-7 scale instead of calling the plane collapsed (audit 9.1)."""
+    pts = np.array([[0.0, 0.0], [1.0, 2.0]])
+    matrix = [[TINY_UNIFORM_SCALE, 0.0, 0.0], [0.0, TINY_UNIFORM_SCALE, 0.0]]
+    assert approx_equal(affine(pts, matrix), pts * TINY_UNIFORM_SCALE, tol=1e-15)
