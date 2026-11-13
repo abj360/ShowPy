@@ -2,6 +2,18 @@
 
 """
 test_history.py --- tests set, path and show diffs, snapshots, revert, undo/redo, renames, changelog
+
+Contains:
+    test_regression_undo_does_not_leave_a_path_row_for_a_removed_spot: UP-9.7-36
+    test_regression_undoing_the_first_save_keeps_a_loadable_show: UP-9.7-37
+    test_regression_diff_show_reports_a_new_group: UP-9.7-38
+    test_regression_diff_show_reports_a_pack_change: UP-9.7-39
+    test_regression_diff_show_reports_a_set_cue_change: UP-9.7-40
+    test_regression_diff_show_reports_a_set_label_change: UP-9.7-41
+    test_regression_diff_show_reports_a_placement_note_change: UP-9.7-42
+    test_regression_diff_show_reports_a_selection_change: UP-9.7-43
+    test_regression_rename_entities_rewrites_expression_selectors: UP-9.7-44
+    test_regression_unpin_normalizes_transition_ids_like_pin: UP-9.7-45
 """
 
 from datetime import UTC, datetime, timedelta

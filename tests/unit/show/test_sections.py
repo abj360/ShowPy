@@ -2,6 +2,14 @@
 
 """
 test_sections.py --- tests splitting shows into movements and joining them back
+
+Contains:
+    test_regression_join_after_split_keeps_a_zone_window_across_the_split: UP-9.7-47
+    test_regression_join_after_split_keeps_markers_that_repeat_a_label: UP-9.7-48
+    test_regression_join_after_split_keeps_one_facing_override_across_the_split: UP-9.7-49
+    test_regression_split_does_not_leave_a_ramp_longer_than_its_section: UP-9.7-50
+    test_regression_split_drops_audio_whose_section_starts_after_the_half_ends: UP-9.7-86
+    test_regression_split_puts_a_cue_in_one_half_only: UP-9.7-87
 """
 
 from datetime import UTC, datetime

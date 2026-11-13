@@ -2,6 +2,14 @@
 
 """
 test_collab.py --- tests change ops, pins, derived canvas events, proposals, highlights, selection
+
+Contains:
+    test_regression_counts_only_change_is_not_reported_as_a_paths_edit: UP-9.7-32
+    test_regression_events_since_replay_reproduces_a_form_deletion: UP-9.7-33
+    test_regression_accepting_twice_says_the_proposal_was_accepted: UP-9.7-34
+    test_regression_proposal_against_unsaved_show_can_be_accepted: UP-9.7-35
+    test_regression_rescale_proposal_conflicts_with_a_newer_row_of_the_same_transition: UP-9.7-46
+    test_regression_accepting_a_form_edit_does_not_resurrect_a_deleted_form: UP-9.7-91
 """
 
 from datetime import UTC, datetime, timedelta

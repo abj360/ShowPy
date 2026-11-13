@@ -2,6 +2,35 @@
 
 """
 test_validate.py --- tests structural validation of sets, paths, dependencies and whole shows
+
+Contains:
+    test_regression_validate_show_reports_form_members_naming_unknown_spots: UP-9.7-61
+    test_regression_validate_show_reports_forms_of_a_missing_set: UP-9.7-62
+    test_regression_validate_show_reports_sets_declaring_missing_forms: UP-9.7-63
+    test_regression_validate_show_reports_form_keys_that_differ_from_ids: UP-9.7-64
+    test_regression_validate_show_reports_members_whose_placements_do_not_point_back: UP-9.7-65
+    test_regression_validate_show_reports_pins_naming_missing_items: UP-9.7-66
+    test_regression_validate_show_reports_pins_on_unparsable_transitions: UP-9.7-67
+    test_regression_validate_show_reports_pins_that_disagree_with_placement_flags: UP-9.7-68
+    test_regression_validate_show_reports_notes_anchored_to_missing_items: UP-9.7-69
+    test_regression_validate_show_reports_duplicate_note_ids: UP-9.7-70
+    test_regression_validate_show_reports_facing_overrides_naming_unknown_spots: UP-9.7-71
+    test_regression_validate_show_reports_facing_overrides_past_the_show: UP-9.7-72
+    test_regression_validate_show_reports_zone_selectors_naming_unknown_spots: UP-9.7-73
+    test_regression_validate_show_reports_degenerate_zones: UP-9.7-74
+    test_regression_validate_show_reports_selections_naming_unknown_spots: UP-9.7-75
+    test_regression_validate_show_reports_infinite_set_counts: UP-9.7-76
+    test_regression_validate_show_reports_non_finite_tempo: UP-9.7-77
+    test_regression_validate_show_reports_non_finite_waypoints: UP-9.7-78
+    test_regression_validate_show_warns_about_placements_far_off_the_sheet: UP-9.7-79
+    test_regression_validate_show_reports_unpinned_sheet_without_a_store: UP-9.7-80
+    test_regression_validate_show_reports_empty_ids: UP-9.7-81
+    test_regression_validate_show_reports_set_ids_that_cannot_be_stored: UP-9.7-82
+    test_regression_validate_show_reports_placements_of_inactive_spots: UP-9.7-83
+    test_regression_validate_show_reports_a_nonzero_first_set_count: UP-9.7-84
+    test_regression_validate_show_reports_nan_counts_on_the_first_set: UP-9.7-88
+    test_regression_validate_show_reports_nan_waypoints: UP-9.7-89
+    test_regression_validate_show_reports_comments_anchored_to_missing_items: UP-9.7-90
 """
 
 import math

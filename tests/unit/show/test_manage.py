@@ -2,6 +2,20 @@
 
 """
 test_manage.py --- tests show creation, set insertion, removal, retiming, renumbering, indexing
+
+Contains:
+    test_regression_renumber_then_save_keeps_scripts_with_their_sets: UP-9.7-01
+    test_regression_remove_set_leaves_no_note_on_the_removed_set: UP-9.7-51
+    test_regression_remove_set_leaves_no_note_on_a_vanished_transition: UP-9.7-52
+    test_regression_remove_last_set_with_merge_counts_keeps_total_time: UP-9.7-53
+    test_regression_add_set_rejects_two_placements_for_one_spot: UP-9.7-54
+    test_regression_insert_subset_after_a_names_a_subset_of_a: UP-9.7-55
+    test_regression_form_keys_equal_form_ids_across_a_round_trip: UP-9.7-56
+    test_regression_frozen_show_forms_cannot_be_mutated: UP-9.7-57
+    test_regression_frozen_show_is_hashable: UP-9.7-58
+    test_regression_stale_save_conflict_message_is_bounded: UP-9.7-59
+    test_regression_set_counts_rescale_shifts_facing_overrides_and_zone_windows: UP-9.7-60
+    test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair: UP-9.7-85
 """
 
 import sys
