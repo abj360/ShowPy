@@ -469,3 +469,12 @@ def test_regression_set_counts_rescale_shifts_facing_overrides_and_zone_windows(
     shifted = (LATER_WINDOW[0] + SHIFT_COUNTS, LATER_WINDOW[1] + SHIFT_COUNTS)
     assert (edited.facing_overrides[0].start, edited.facing_overrides[0].end) == shifted
     assert edited.zones[0].active == (shifted,)
+
+
+@pytest.mark.defect("UP-9.7-85")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-85")
+def test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair() -> None:
+    """Drops or reports a transition pin on a pair that no longer exists (audit 9.7 sets)."""
+    show = _three_set_show().model_copy(update={"pins": (Pin(target="transition", id="2->3"),)})
+    edited = remove_set(show, "2")
+    assert not edited.pins or not validate_show(edited).ok
