@@ -65,6 +65,7 @@ CPU_GRACE_S = 1
 ENTRY_POINTS = {"set": "build", "analysis": "main"}
 CPU_LIMIT_SIGNALS = (-signal.SIGXCPU, -signal.SIGKILL, 128 + signal.SIGXCPU, 128 + signal.SIGKILL)
 BWRAP = "bwrap"
+STDERR_IN_MESSAGE = 300
 SYSTEM_DIRS = ("/usr", "/lib", "/lib64", "/bin", "/sbin")
 
 type Isolation = Literal["bwrap", "process"]
@@ -219,8 +220,9 @@ def _run_child(payload: dict[str, Any], timeout_s: float, isolation: Isolation) 
             context={"timeout_s": timeout_s},
         )
     if completed.returncode != 0 or not completed.stdout.strip():
+        tail = completed.stderr.strip()[-STDERR_IN_MESSAGE:]
         raise ValidationError(
-            "script process failed",
+            f"script process failed (exit {completed.returncode}): {tail}",
             hint="check the script for crashes or memory use",
             context={"stderr": completed.stderr[-1000:]},
         )

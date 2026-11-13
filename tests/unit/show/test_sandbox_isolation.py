@@ -112,3 +112,15 @@ def test_regression_bwrap_binds_every_import_directory_but_not_the_repo() -> Non
             continue
         assert any(path == Path(b) or path.is_relative_to(b) for b in bound), entry
     assert str(package.parent) not in bound
+
+
+def test_regression_child_crash_message_includes_its_stderr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sys
+
+    crash = [sys.executable, "-c", "import sys; sys.stderr.write('boom-7f3a'); sys.exit(3)"]
+    monkeypatch.setattr(sandbox, "_command", lambda isolation: crash)
+    with pytest.raises(ValidationError) as info:
+        run_analysis_script(two_set_show(), "def main(ctx):\n    return 1\n")
+    assert "boom-7f3a" in info.value.message
