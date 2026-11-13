@@ -391,7 +391,7 @@ def _override_show(rows: dict[str, PathRow], override: FacingOverride, y_hold: b
     return with_rows(rows, show=show).model_copy(update={"facing_overrides": (override,)})
 
 
-@defect("UP-9.2-03")
+@defect("UP-9.2-07")
 def test_regression_facing_override_applies_to_holding_spot() -> None:
     """Applies a facing override to a spot on a HOLD row (audit 9.2)."""
     override = FacingOverride(
@@ -402,7 +402,7 @@ def test_regression_facing_override_applies_to_holding_spot() -> None:
     assert approx_equal(PathEngine(show).facing_at("T1", 4.0), 90.0, tol=1e-6)
 
 
-@defect("UP-9.2-04")
+@defect("UP-9.2-08")
 def test_regression_toward_entity_override_uses_query_time_position() -> None:
     """Faces the other spot where it is at the query count, not at the row window (audit 9.2)."""
     override = FacingOverride(
@@ -422,7 +422,7 @@ def _three_set_show() -> Show:
     return base.model_copy(update={"sets": (*base.sets, third)})
 
 
-@defect("UP-9.2-05")
+@defect("UP-9.2-22")
 def test_regression_invalidate_accepts_a_one_shot_iterable() -> None:
     """Drops every named transition even when they come from a generator (audit 9.2)."""
     engine = PathEngine(_three_set_show())
@@ -431,7 +431,7 @@ def test_regression_invalidate_accepts_a_one_shot_iterable() -> None:
     assert engine._cache == {}
 
 
-@defect("UP-9.2-06")
+@defect("UP-9.2-23")
 def test_regression_invalidate_clears_override_selection_cache() -> None:
     """Clears the cached facing-override selections when caches are invalidated (audit 9.2)."""
     override = FacingOverride(entities="all", mode=FacingMode.FIXED, value=90.0, start=0.0, end=4.0)
@@ -441,7 +441,7 @@ def test_regression_invalidate_clears_override_selection_cache() -> None:
     assert engine._override_cache == {}
 
 
-@defect("UP-9.2-07")
+@defect("UP-9.2-24")
 def test_regression_spot_query_on_show_without_sets_raises_showpy_error() -> None:
     """Raises a ShowPyError, not IndexError, for a cast spot in a show with no sets (audit 9.2)."""
     engine = PathEngine(two_set_show().model_copy(update={"sets": ()}))
@@ -449,7 +449,7 @@ def test_regression_spot_query_on_show_without_sets_raises_showpy_error() -> Non
         engine.position("T1", 1.0)
 
 
-@defect("UP-9.2-08")
+@defect("UP-9.2-25")
 def test_regression_zero_count_transition_compiles_to_a_step() -> None:
     """Compiles and segments a 0-count transition instead of raising PathError (audit 9.2)."""
     base = two_set_show()
@@ -459,7 +459,7 @@ def test_regression_zero_count_transition_compiles_to_a_step() -> None:
     assert engine.segments(TID) == []
 
 
-@defect("UP-9.2-09")
+@defect("UP-9.2-26")
 def test_regression_missing_placement_does_not_fail_other_spots() -> None:
     """Keeps other spots queryable when one spot lacks a placement in the next set (audit 9.2)."""
     base = two_set_show()
@@ -468,7 +468,7 @@ def test_regression_missing_placement_does_not_fail_other_spots() -> None:
     assert approx_equal(engine.position("T2", 4.0), (2.0, 7.0))
 
 
-@defect("UP-9.2-10")
+@defect("UP-9.2-34")
 def test_regression_velocity_is_full_speed_near_a_window_kink() -> None:
     """Reports the moving speed just after a window start, not half of it (audit 9.2)."""
     engine = _engine(T1=PathRow(entity="T1", start=2.0, end=6.0))
