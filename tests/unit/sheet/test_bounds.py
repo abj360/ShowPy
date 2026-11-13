@@ -6,10 +6,17 @@ test_bounds.py --- tests surface and walkable tests, landmark lookup, nearest la
 
 import pytest
 
-from showpy.core.errors import UnknownRefError
+from showpy.core.errors import ShowPyError, UnknownRefError
 from showpy.core.types import Region
 from showpy.core.util import approx_equal
-from showpy.sheet.bounds import landmark, nearest_landmarks, on_surface, walkable, zones_at
+from showpy.sheet.bounds import (
+    landmark,
+    landmark_anchor,
+    nearest_landmarks,
+    on_surface,
+    walkable,
+    zones_at,
+)
 from showpy.sheet.models import Landmark, Zone, ZoneKind
 from showpy.sheet.templates import add_landmark, get_sheet
 from tests.fixtures.shows import field_sheet, two_set_show
@@ -76,3 +83,51 @@ def test_zones_at_merges_show_zones_and_filters_by_count() -> None:
     assert [z.id for z in zones_at(show, (0.0, -1.5))] == ["pit", "timed"]
     assert [z.id for z in zones_at(show, (0.0, -1.5), t=8.0)] == ["pit"]
     assert zones_at(show, (10.0, 10.0)) == []
+
+
+CENTER_TOL = 1e-9
+SQUARE_SIDE = 4.0
+NEAR_POINT = (1.0, 1.0)
+
+
+@pytest.mark.defect("UP-9.4-25")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-25")
+def test_regression_landmark_anchor_ignores_repeated_closing_vertex() -> None:
+    """Counts a repeated closing vertex once when anchoring an area (audit 9.4)."""
+    side = SQUARE_SIDE
+    ring = ((0.0, 0.0), (side, 0.0), (side, side), (0.0, side), (0.0, 0.0))
+    area = Landmark(id="box", name="box", kind="area", geometry=ring)
+    assert approx_equal(landmark_anchor(area), (side / 2, side / 2), CENTER_TOL)
+
+
+@pytest.mark.defect("UP-9.4-26")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-26")
+def test_regression_landmark_anchor_is_the_area_centroid() -> None:
+    """Anchors an area at its centroid, not the mean of its vertices (audit 9.4)."""
+    ring = ((0.0, 0.0), (1.0, 0.0), (2.0, 0.0), (3.0, 0.0), (4.0, 0.0), (4.0, 2.0), (0.0, 2.0))
+    area = Landmark(id="strip", name="strip", kind="area", geometry=ring)
+    assert approx_equal(landmark_anchor(area), (2.0, 1.0), CENTER_TOL)
+
+
+@pytest.mark.defect("UP-9.4-27")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-27")
+def test_regression_nearest_landmarks_rejects_fractional_k() -> None:
+    """Rejects k=1.5 with a ShowPyError, not TypeError (audit 9.4)."""
+    with pytest.raises(ShowPyError):
+        nearest_landmarks(field_sheet(), NEAR_POINT, k=1.5)  # type: ignore[arg-type]
+
+
+@pytest.mark.defect("UP-9.4-28")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-28")
+def test_regression_nearest_landmarks_rejects_nan_point() -> None:
+    """Rejects a NaN point instead of returning arbitrary distances (audit 9.4)."""
+    with pytest.raises(ShowPyError):
+        nearest_landmarks(field_sheet(), (float("nan"), 0.0))
+
+
+@pytest.mark.defect("UP-9.4-29")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-29")
+def test_regression_nearest_landmarks_rejects_unknown_kind() -> None:
+    """Rejects an unknown landmark kind instead of returning an empty list (audit 9.4)."""
+    with pytest.raises(ShowPyError):
+        nearest_landmarks(field_sheet(), NEAR_POINT, kinds=["blob"])  # type: ignore[list-item]
