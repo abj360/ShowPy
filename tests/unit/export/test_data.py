@@ -4,6 +4,17 @@
 test_data.py --- tests JSON interchange, frame CSV, position import, tables and format plugins
 
 Also holds the audited data and CSV defects (UP-9.5-27 to UP-9.5-35) as strict xfails.
+
+Contains:
+    test_regression_import_json_reads_legacy_stage_tag(): Prefixes a quote to a performer name that
+    test_regression_csv_neutralizes_every_formula_trigger(): Prefixes a quote to cells starting
+    test_regression_csv_writes_large_floats_without_exponent(): Writes 1234567.0 in full; the `:g`
+    test_regression_csv_keeps_cue_seconds_above_one_thousand_exact(): Keeps the precision of cue
+    test_regression_coordinate_sheet_csv_names_the_entity_and_performer(): Carries the entity and
+    test_regression_to_text_drops_tabs_and_carriage_returns(): Replaces tab and carriage return in
+    test_regression_to_text_aligns_wide_cjk_characters(): Pads by display width so the next column
+    test_regression_export_json_include_accepts_a_single_field_name(): Treats `include="title"` as
+    test_regression_import_json_rejects_a_non_mapping_with_schema_error(): Raises SchemaError for
 """
 
 import csv
@@ -218,8 +229,8 @@ def test_regression_chart_csv_neutralizes_formula_names() -> None:
 def test_regression_csv_neutralizes_every_formula_trigger(lead: str) -> None:
     """Prefixes a quote to cells starting with + - @ tab or carriage return (audit 9.5)."""
     cell = f"{lead}1+1"
-    rows = _csv_rows(to_csv(pd.DataFrame({"name": [cell]})))
-    assert rows[1] == [f"'{cell}"]
+    rows = _csv_rows(to_csv(pd.DataFrame({"name": [cell], "offset": ["-5"]})))
+    assert rows[1] == [f"'{cell}", "-5"]
 
 
 @pytest.mark.defect("UP-9.5-29")
@@ -227,7 +238,8 @@ def test_regression_csv_neutralizes_every_formula_trigger(lead: str) -> None:
 def test_regression_csv_writes_large_floats_without_exponent() -> None:
     """Writes 1234567.0 in full; the `:g` format turns it into 1.23457e+06 (audit 9.5)."""
     rows = _csv_rows(to_csv(pd.DataFrame({"count": [1234567.0]})))
-    assert rows[1] == ["1234567"]
+    assert float(rows[1][0]) == 1234567.0
+    assert "e" not in rows[1][0].lower()
 
 
 @pytest.mark.defect("UP-9.5-30")

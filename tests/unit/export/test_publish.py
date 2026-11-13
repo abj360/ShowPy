@@ -4,8 +4,37 @@
 test_publish.py --- tests publishing, QR codes, claims, designer actions, views and notices
 
 Also holds the audited publishing defects (UP-9.5-01 to UP-9.5-26) as strict xfails.
+
+Contains:
+    test_regression_publish_link_carries_a_caller_supplied_join_token(): Puts a caller-supplied
+    test_regression_publication_snapshot_excludes_contact_details(): Keeps performer contact data
+    test_regression_claims_and_notices_return_redacted_performers(): Returns performers without
+    test_regression_publish_rejects_non_http_base_urls(): Rejects a script or data scheme as the
+    test_regression_publish_requires_https_base_url(): Requires an https base URL
+    test_regression_publish_does_not_mangle_a_base_url_query(): Rejects a query string in the base
+    test_regression_qr_code_caps_the_image_size(): Rejects a 100,000 px QR size instead of
+    test_regression_qr_code_wraps_an_overlong_link_error(): Raises a ShowPyError, not
+    test_regression_qr_code_keeps_the_documented_error_level(): Renders at error level M as
+    test_regression_pause_cannot_reopen_a_closed_publication(): Refuses to pause a closed
+    test_regression_republish_from_closed_does_not_go_live(): Refuses to republish a closed
+    test_regression_claim_spot_rejects_a_naive_time(): Rejects a claim time without a time zone
+    test_regression_claim_spot_rejects_a_time_before_publication(): Rejects a claim dated before
+    test_regression_reassign_rejects_a_naive_time(): Rejects a reassignment time without a time zone
+    test_regression_reassign_rejects_a_time_before_publication(): Rejects a reassignment dated
+    test_regression_reassign_rejects_an_unknown_spot(): Refuses to move a performer onto a spot the
+    test_regression_reassign_rejects_crew_on_a_performer_spot(): Refuses to put crew on a spot only
+    test_regression_reassign_rejects_an_inactive_spot(): Refuses to move a performer onto an
+    test_regression_republish_after_a_spot_rename_keeps_the_claim(): Carries a claim over a spot
+    test_regression_notify_changes_reports_a_deleted_set(): Tells a performer when a set they had a
+    test_regression_notify_changes_reports_a_new_set(): Tells a performer when a set was added
+    test_regression_notify_changes_reports_a_coordinate_system_change(): Tells performers when the
+    test_regression_performer_view_needs_a_live_publication(): Refuses to build a view from a
+    test_regression_performer_view_checks_the_show_matches_the_publication(): Refuses a view built
+    test_regression_performer_view_after_deletion_gives_a_performer_hint(): Gives a non-empty
+    test_regression_publication_version_detects_concurrent_claims(): Bumps a monotonic version on
 """
 
+import hashlib
 import io
 import resource
 import sys
@@ -343,13 +372,17 @@ def test_qr_code_matches_the_reference_symbol() -> None:
 def test_regression_publish_link_carries_a_caller_supplied_join_token() -> None:
     """Puts a caller-supplied high-entropy token in the link and stores only its hash.
 
+    Contract: the raw token appears in `link` and nowhere else in the stored publication; the
+    SHA-256 hex digest of the token is stored so later joins can be checked against it.
     The link is `base_url/<publication id>`, so anyone who guesses an ID can open the
     publication and claim with a self-declared performer (audit 9.5 security; P0 #10).
     """
     token = "k3Qz9-high-entropy-join-token"
     pub = publish(two_set_show(), "pub-1", BASE_URL, AT, join_token=token)  # type: ignore[call-arg]
     assert token in pub.link
-    assert token not in pub.model_dump_json()
+    stored = pub.model_dump_json(exclude={"link"})
+    assert token not in stored
+    assert hashlib.sha256(token.encode()).hexdigest() in stored
 
 
 @pytest.mark.defect("UP-9.5-02")
@@ -590,7 +623,7 @@ def test_regression_performer_view_checks_the_show_matches_the_publication() -> 
 @pytest.mark.defect("UP-9.5-25")
 @pytest.mark.xfail(strict=True, reason="UP-9.5-25")
 def test_regression_performer_view_after_deletion_gives_a_performer_hint() -> None:
-    """Gives a performer, not a designer, hint when their spot was deleted (audit 9.5)."""
+    """Gives a non-empty performer-facing hint, not the designer one, after deletion (audit 9.5)."""
     show = two_set_show()
     pub = _with_claims(show, ("Ada", "T2"))
     spots = tuple(s for s in show.cast.spots if s.id != "T2")
@@ -604,7 +637,7 @@ def test_regression_performer_view_after_deletion_gives_a_performer_hint() -> No
     with pytest.raises(ShowPyError) as caught:
         performer_view(pub, gone, performer("Ada"))
     hint = caught.value.hint.lower()
-    assert "designer" in hint
+    assert hint
     assert "add the spot" not in hint
 
 

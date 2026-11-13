@@ -4,6 +4,11 @@
 test_pdf.py --- tests the dependency-free PDF writer and its four layouts
 
 Also holds the audited print defects (UP-9.5-36 to UP-9.5-38) as strict xfails.
+
+Contains:
+    test_regression_wide_table_stays_on_the_page(): Keeps every text run of a 40-column cue sheet
+    test_regression_long_title_is_clipped_to_the_page(): Clips or wraps a title wider than the
+    test_regression_non_latin_names_are_not_replaced_by_question_marks(): Prints Cyrillic, CJK,
 """
 
 import re
@@ -22,7 +27,10 @@ from tests.fixtures.export_shows import guided_show
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 XREF_ENTRY = re.compile(rb"^(\d{10}) (\d{5}) ([nf]) ?\r?$")
-TEXT_RUN = re.compile(rb"/F\d ([\d.]+) Tf\n1 0 0 1 ([\d.]+) [\d.]+ Tm\n\((.*)\) Tj")
+TEXT_RUN = re.compile(
+    rb"/F\d ([\d.]+) Tf\n1 0 0 1 ([\d.]+) [\d.]+ Tm\n(?:\((.*)\)|<([0-9A-Fa-f]*)>) Tj"
+)
+HEX_DIGITS_PER_GLYPH = 4
 PAGE_WIDTH = 792.0
 EM_WIDTH = 0.6
 WIDE_COLUMNS = 40
@@ -148,10 +156,16 @@ def test_pillow_is_not_needed() -> None:
 
 
 def _placed_text(pdf: bytes) -> list[tuple[float, float, bytes]]:
-    """Lists (x, font size, string) for every text run in the page content."""
+    """Lists (x, font size, string) for every literal or hex text run; fails when none exist.
+
+    A hex run (two bytes per glyph in a Type0 font) is returned as one placeholder byte per
+    glyph, so widths stay comparable.
+    """
     runs = []
     for match in TEXT_RUN.finditer(pdf):
-        runs.append((float(match[2]), float(match[1]), match[3]))
+        text = match[3] if match[3] is not None else b"." * (len(match[4]) // HEX_DIGITS_PER_GLYPH)
+        runs.append((float(match[2]), float(match[1]), text))
+    assert runs, "no text runs found in the PDF content"
     return runs
 
 
@@ -195,4 +209,8 @@ def test_regression_non_latin_names_are_not_replaced_by_question_marks() -> None
     """
     names = ["Иван", "李雷", "محمد", "Nguyễn", "😀"]
     pdf = to_pdf(pd.DataFrame({"name": names}), layout="cue_sheet")
-    assert b"?" not in b"".join(text for _, _, text in _placed_text(pdf))
+    runs = [text for _, _, text in _placed_text(pdf)]
+    assert len(runs) >= len(names) + 1
+    assert b"?" not in b"".join(runs)
+    # A Type0 font stores glyph IDs, so a later fix cannot be checked for the names' text here;
+    # run count (header, one per name, footer) and the absence of `?` is the portable check.

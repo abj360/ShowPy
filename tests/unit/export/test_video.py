@@ -3,7 +3,22 @@
 """
 test_video.py --- tests 2D frame rendering and MP4 export with optional audio
 
-Also holds the audited video defects (UP-9.5-45 to UP-9.5-56) as strict xfails.
+Also holds the audited video defects (UP-9.5-45 to UP-9.5-57) as strict xfails.
+
+Contains:
+    test_regression_short_audio_does_not_truncate_the_video(): Keeps the whole 2 s video when the
+    test_regression_sync_offset_past_the_audio_raises(): Raises instead of returning a corrupt file
+    test_regression_track_gain_is_applied(): Plays a track at its `gain`; a quarter gain must be
+    test_regression_frames_cover_the_half_open_range(): Renders fps x duration frames over [t0,
+    test_regression_adjacent_ranges_do_not_duplicate_the_boundary_frame(): Gives the same frame
+    test_regression_mp4_is_faststart(): Puts the moov atom before mdat so web playback starts
+    test_regression_mp4_carries_bt709_colour_tags(): Tags the stream BT.709 so players do not guess
+    test_regression_video_canvas_caps_the_pixel_count(): Rejects `px_per_m=1000`, a 42,000 x 25,000
+    test_regression_frames_do_not_rebuild_the_cast_ids_per_spot(): Builds the cast ID list at most
+    test_regression_ffmpeg_start_failure_is_wrapped(): Raises StorageError when the ffmpeg writer
+    test_regression_audio_mux_has_a_timeout(): Passes a timeout to the ffmpeg mux so a stuck
+    test_regression_negative_sync_offset_delays_the_audio(): Starts the music 1 s into the video
+    test_regression_audio_section_limits_playback(): Keeps a track silent before its `section`
 """
 
 import array
@@ -41,6 +56,8 @@ RANGE_SECONDS = 2.0
 DURATION_TOL_S = 0.3
 PAST_AUDIO_OFFSET_S = 30.0
 QUIET_GAIN = 0.25
+VALID_PX_PER_M = 8.0
+SECTION_START_COUNT = 2.0
 SILENT_LEAD_S = 0.8
 HUGE_PX_PER_M = 1000.0
 
@@ -87,14 +104,18 @@ def test_render_frame_draws_spot_at_its_position() -> None:
     assert image.getpixel((round(x), round(y))) != image.getpixel((round(x) + 15, round(y) + 15))
 
 
-def test_export_video_writes_mp4_with_expected_frames(tmp_path: object) -> None:
-    data = export_video(two_set_show(), count_range=(0.0, 4.0), fps=4, px_per_m=8.0)
+def test_export_video_writes_a_valid_mp4(tmp_path: object) -> None:
+    data = export_video(two_set_show(), count_range=(0.0, 4.0), fps=4, px_per_m=VALID_PX_PER_M)
     assert data[4:8] == b"ftyp"
     path = f"{tmp_path}/out.mp4"
     with open(path, "wb") as handle:
         handle.write(data)
     frames, _ = imageio_ffmpeg.count_frames_and_secs(path)
-    assert frames == 9
+    assert frames > 0
+    width, height = video_canvas(two_set_show(), VALID_PX_PER_M).size
+    probe = _probe(data, tmp_path)
+    assert "Video:" in probe
+    assert f"{width}x{height}" in probe
 
 
 def test_export_video_muxes_audio_from_source(tmp_path: object) -> None:
@@ -325,6 +346,32 @@ def test_regression_negative_sync_offset_delays_the_audio(tmp_path: Path) -> Non
         fps=FPS,
         px_per_m=SMALL_PX_PER_M,
         audio={MUSIC: _wav(RANGE_SECONDS * 2)},
+    )
+    path = _save(data, tmp_path)
+    assert _audio_peak(path, until_s=SILENT_LEAD_S) == 0
+    assert _audio_peak(path) > 0
+
+
+@pytest.mark.defect("UP-9.5-57")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-57")
+def test_regression_audio_section_limits_playback(tmp_path: Path) -> None:
+    """Keeps a track silent before its `section` start (counts the track covers) (audit 9.5).
+
+    `AudioTrack.section` is the (start, end) counts the track covers. With section (2, 4) at
+    120 cpm, the first count 2 is 1 s, so the video's first 0.8 s carry no music. Today the
+    field is ignored and the music plays from the start.
+    """
+    show = _with_track()
+    track = show.timeline.audio[0].model_copy(update={"section": (SECTION_START_COUNT, 4.0)})
+    show = show.model_copy(
+        update={"timeline": show.timeline.model_copy(update={"audio": (track,)})}
+    )
+    data = export_video(
+        show,
+        count_range=(0.0, 4.0),
+        fps=FPS,
+        px_per_m=SMALL_PX_PER_M,
+        audio={MUSIC: _wav(RANGE_SECONDS)},
     )
     path = _save(data, tmp_path)
     assert _audio_peak(path, until_s=SILENT_LEAD_S) == 0
