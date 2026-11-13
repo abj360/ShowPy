@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from showpy.core.errors import ConflictError, ShowPyError, StorageError
+from showpy.core.errors import ConflictError, StorageError
 from showpy.show.file_repository import FileRepository
 from tests.fixtures.shows import two_set_show
 
@@ -59,10 +59,10 @@ def test_regression_next_link_to_outside_path_is_refused(tmp_path: Path) -> None
     """Refuses a next/ file naming a path outside the tree store (audit 9.7 item 3; P0 #3)."""
     repo, rev, base = _saved(tmp_path)
     record = json.loads((base / "trees" / f"{rev}.json").read_text())
-    decoy = tmp_path / "repo" / f"{DECOY_NAME}.json"
+    decoy = tmp_path / f"{DECOY_NAME}.json"
     decoy.write_text(json.dumps(record))
-    (base / "next" / rev).write_text(f"../../{DECOY_NAME}")
-    with pytest.raises(ShowPyError):
+    (base / "next" / rev).write_text(f"../../../{DECOY_NAME}")
+    with pytest.raises(StorageError):
         repo.revisions(SHOW_ID)
 
 
@@ -74,7 +74,7 @@ def test_regression_next_link_cycle_is_refused(tmp_path: Path) -> None:
     """Refuses a cycle in next/ instead of looping forever (audit 9.7 item 3; P0 #3, #7)."""
     repo, rev, base = _saved(tmp_path)
     (base / "next" / rev).write_text(rev)
-    with pytest.raises(ShowPyError):
+    with pytest.raises(StorageError):
         repo.revisions(SHOW_ID)
 
 
@@ -83,13 +83,13 @@ def test_regression_next_link_cycle_is_refused(tmp_path: Path) -> None:
 def test_regression_tree_digest_path_traversal_is_refused(tmp_path: Path) -> None:
     """Refuses a tree entry whose digest is a path outside objects/ (audit 9.7 item 3; P0 #3)."""
     repo, rev, base = _saved(tmp_path)
-    secret = tmp_path / "repo" / "secret.txt"
+    secret = tmp_path / "secret.txt"
     secret.write_bytes(b"outside")
     tree_file = base / "trees" / f"{rev}.json"
     record = json.loads(tree_file.read_text())
-    record["tree"][SHOW_DOC] = "../../secret.txt"
+    record["tree"][SHOW_DOC] = "../../../secret.txt"
     tree_file.write_text(json.dumps(record))
-    with pytest.raises(ShowPyError):
+    with pytest.raises(StorageError):
         repo.read(SHOW_ID, SHOW_DOC)
 
 
