@@ -10,13 +10,17 @@ is renamed: the motion function spiral is `spiral_motion`; `spiral` is the geome
 curve. Package layout: docs/HANDOFF.md.
 
 Contains:
+    __version__: reports the installed ShowPy distribution version
     __all__: lists every re-exported name
     __getattr__(): imports a public name on first use
     __dir__(): lists the public API
 """
 
 import importlib
+from importlib.metadata import version
 from typing import TYPE_CHECKING
+
+__version__: str = version("ShowPy")
 
 if TYPE_CHECKING:
     from stage.cast.models import (
@@ -245,6 +249,7 @@ if TYPE_CHECKING:
         parse_ref,
         parse_tid,
     )
+    from stage.core.resources import schema_path
     from stage.core.selection import (
         Selection,
     )
@@ -1101,6 +1106,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "scale_matrix": ("stage.geo.affine", "scale_matrix"),
     "scatter": ("stage.geo.spacing", "scatter"),
     "scatter_form": ("stage.choreo.forms", "scatter_form"),
+    "schema_path": ("stage.core.resources", "schema_path"),
     "seconds_per_count": ("stage.time.clock", "seconds_per_count"),
     "seconds_to_count": ("stage.time.clock", "seconds_to_count"),
     "seeded_rng": ("stage.core.util", "seeded_rng"),
@@ -1622,6 +1628,7 @@ __all__ = [
     "scale_matrix",
     "scatter",
     "scatter_form",
+    "schema_path",
     "seconds_per_count",
     "seconds_to_count",
     "seeded_rng",

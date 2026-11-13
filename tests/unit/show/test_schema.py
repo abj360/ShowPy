@@ -11,9 +11,11 @@ import json
 import os
 from pathlib import Path
 
+from stage.core.resources import schema_path
 from stage.show.models import Show
 
-SCHEMA_PATH = Path(__file__).parents[3] / "schemas" / "stage.show.v1.json"
+SCHEMA_NAME = "stage.show.v1.json"
+SCHEMA_PATH = Path(__file__).parents[3] / "stage" / "schemas" / SCHEMA_NAME
 SCHEMA_ID = "stage.show.v1"
 UPDATE_FLAG = "STAGE_UPDATE_SCHEMA"
 
@@ -25,4 +27,4 @@ def _schema() -> dict[str, object]:
 def test_committed_schema_matches_show_model() -> None:
     if os.environ.get(UPDATE_FLAG) == "1":
         SCHEMA_PATH.write_text(json.dumps(_schema(), indent=2, sort_keys=True) + "\n")
-    assert json.loads(SCHEMA_PATH.read_text()) == _schema()
+    assert json.loads(schema_path(SCHEMA_NAME).read_text()) == _schema()

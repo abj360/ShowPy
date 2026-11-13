@@ -617,19 +617,6 @@ wheels = [
 ]
 
 [[package]]
-name = "imageio"
-version = "2.38.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "numpy" },
-    { name = "pillow" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/f3/cd/69e4ac55b6dafdd2b5f32075236841a3945dea7323d0232d80f28c37cea8/imageio-2.38.1.tar.gz", hash = "sha256:6769f1f01c4dd46448307863a787c9a22fa4dbe11c0c88f525c6e410fdfd7983", size = 403667, upload-time = "2026-10-08T14:35:32.961Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/7d/8a/3b7f62b9df56460959f1b9bef094248d2a4d7f393c5b0d2da8efcdf0e40e/imageio-2.38.1-py3-none-any.whl", hash = "sha256:36d23eb7423d2fb63f637098758edb3d2df3687f7125e0a5ce8596572022dcf9", size = 328389, upload-time = "2026-10-08T14:35:31.075Z" },
-]
-
-[[package]]
 name = "imageio-ffmpeg"
 version = "0.8.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1862,25 +1849,15 @@ wheels = [
 ]
 
 [[package]]
-name = "sortedcontainers"
-version = "2.4.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/e8/c4/ba2f8066cceb6f23394729afe52f3bf7adec04bf9ed2c820b39e19299111/sortedcontainers-2.4.0.tar.gz", hash = "sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88", size = 30594, upload-time = "2021-05-16T22:03:42.897Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/32/46/9cb0e58b2deb7f82b84065f37f3bffeb12413f947f9388e4cac22c4621ce/sortedcontainers-2.4.0-py2.py3-none-any.whl", hash = "sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0", size = 29575, upload-time = "2021-05-16T22:03:41.177Z" },
-]
-
-[[package]]
-name = "stage"
-version = "0.1.0"
+name = "showpy"
 source = { editable = "." }
 dependencies = [
-    { name = "imageio" },
     { name = "imageio-ffmpeg" },
     { name = "numpy" },
     { name = "pandas" },
     { name = "pillow" },
     { name = "pydantic" },
+    { name = "pydantic-core" },
     { name = "scipy" },
     { name = "segno" },
     { name = "shapely" },
@@ -1908,15 +1885,15 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "imageio", specifier = "==2.38.1" },
-    { name = "imageio-ffmpeg", specifier = "==0.8.1" },
-    { name = "numpy", specifier = "==2.5.4" },
-    { name = "pandas", specifier = "==3.1.1" },
-    { name = "pillow", specifier = "==13.0.0" },
-    { name = "pydantic", specifier = "==2.14.3" },
-    { name = "scipy", specifier = "==1.18.1" },
-    { name = "segno", specifier = "==1.6.6" },
-    { name = "shapely", specifier = "==2.2.0" },
+    { name = "imageio-ffmpeg", specifier = ">=0.8.1" },
+    { name = "numpy", specifier = ">=2.5.4" },
+    { name = "pandas", specifier = ">=3.1.1" },
+    { name = "pillow", specifier = ">=13.0.0" },
+    { name = "pydantic", specifier = ">=2.14.3" },
+    { name = "pydantic-core", specifier = ">=2.50.4" },
+    { name = "scipy", specifier = ">=1.18.1" },
+    { name = "segno", specifier = ">=1.6.6" },
+    { name = "shapely", specifier = ">=2.2.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -1937,6 +1914,15 @@ dev = [
     { name = "ruff", specifier = "==0.17.4" },
     { name = "scipy-stubs", specifier = "==1.18.1.1" },
     { name = "types-shapely", specifier = "==2.1.0.20261030" },
+]
+
+[[package]]
+name = "sortedcontainers"
+version = "2.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e8/c4/ba2f8066cceb6f23394729afe52f3bf7adec04bf9ed2c820b39e19299111/sortedcontainers-2.4.0.tar.gz", hash = "sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88", size = 30594, upload-time = "2021-05-16T22:03:42.897Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/32/46/9cb0e58b2deb7f82b84065f37f3bffeb12413f947f9388e4cac22c4621ce/sortedcontainers-2.4.0-py2.py3-none-any.whl", hash = "sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0", size = 29575, upload-time = "2021-05-16T22:03:41.177Z" },
 ]
 
 [[package]]

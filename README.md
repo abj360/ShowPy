@@ -102,13 +102,13 @@ Lower layers never import higher ones. `stagecheck` (the locked checker) reads s
 
 ## Config
 
-| Setting               | Where                      | Default        | Meaning                                       |
-| --------------------- | -------------------------- | -------------- | --------------------------------------------- |
-| `STAGE_UPDATE_GOLDEN` | env, tests                 | unset          | `1` rewrites golden fixtures for human review |
-| `STAGE_UPDATE_SCHEMA` | env, tests                 | unset          | `1` regenerates `schemas/stage.show.v1.json`  |
-| `curve_tol`           | `PathEngine(...)`          | 0.01 m         | Chord error for drawn paths                   |
-| `tol`                 | `PathEngine.segments(...)` | 0.02 m         | Segment error for collision checks            |
-| `/config/limits.yaml` | workspace                  | designer-owned | Checker limits; agents cannot write it        |
+| Setting               | Where                      | Default        | Meaning                                            |
+| --------------------- | -------------------------- | -------------- | -------------------------------------------------- |
+| `STAGE_UPDATE_GOLDEN` | env, tests                 | unset          | `1` rewrites golden fixtures for human review      |
+| `STAGE_UPDATE_SCHEMA` | env, tests                 | unset          | `1` regenerates `stage/schemas/stage.show.v1.json` |
+| `curve_tol`           | `PathEngine(...)`          | 0.01 m         | Chord error for drawn paths                        |
+| `tol`                 | `PathEngine.segments(...)` | 0.02 m         | Segment error for collision checks                 |
+| `/config/limits.yaml` | workspace                  | designer-owned | Checker limits; agents cannot write it             |
 
 ## Structure
 
@@ -124,7 +124,7 @@ stage/
   show/     models, manage, sections, storage, repositories, history, collab, validate
   export/   models, publish, print_sheets, pdf, data, positions, video
   examples.py  deterministic example shows
-schemas/    stage.show.v1.json
+stage/schemas/ stage.show.v1.json
 tests/      unit/ property/ golden/ fixtures/
 docs/       API reference, ADRs, handoff notes, study guide
 docker/     Dockerfile, docker-compose.yml

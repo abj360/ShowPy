@@ -1,25 +1,48 @@
 [project]
-name = "stage"
-version = "0.1.0"
+name = "ShowPy"
+dynamic = ["version"]
 description = "Choreography library behind the Eight show canvas: sheets, spots, sets, forms and motion."
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
 dependencies = [
-    "imageio==2.38.1",
-    "imageio-ffmpeg==0.8.1",
-    "numpy==2.5.4",
-    "pandas==3.1.1",
-    "pillow==13.0.0",
-    "pydantic==2.14.3",
-    "scipy==1.18.1",
-    "segno==1.6.6",
-    "shapely==2.2.0",
+    "imageio-ffmpeg>=0.8.1",
+    "numpy>=2.5.4",
+    "pandas>=3.1.1",
+    "pillow>=13.0.0",
+    "pydantic>=2.14.3",
+    "pydantic-core>=2.50.4",
+    "scipy>=1.18.1",
+    "segno>=1.6.6",
+    "shapely>=2.2.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/abj360/stage"
+Repository = "https://github.com/abj360/stage"
+Issues = "https://github.com/abj360/stage/issues"
+
 [build-system]
-requires = ["hatchling==1.27.0"]
+requires = ["hatchling==1.27.0", "hatch-vcs==0.5.0"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.sdist]
+exclude = ["docs/", "tests/", ".claude/", "node_modules/"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["stage"]
@@ -81,3 +104,15 @@ pythonpath = ["."]
 addopts = "--doctest-modules -q --strict-markers --import-mode=importlib"
 markers = ["golden: replays real shows against reviewed fixtures"]
 filterwarnings = ["error"]
+
+[tool.deptry]
+extend_exclude = ["docs"]
+known_first_party = ["stage"]
+
+# Pillow installs the PIL module.
+[tool.deptry.package_module_name_map]
+pillow = "PIL"
+
+# noxfile.py is dev tooling, not shipped code.
+[tool.deptry.per_rule_ignores]
+DEP004 = ["nox"]

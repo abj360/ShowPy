@@ -1,4 +1,4 @@
-schemas/
+stage/schemas/
 tests/golden/fixtures/
 uv.lock
 .venv/
