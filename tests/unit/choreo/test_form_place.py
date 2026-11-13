@@ -8,9 +8,11 @@ import pytest
 
 from showpy.choreo.form_place import filled_forms, place, rebuild
 from showpy.choreo.forms import circle_form, line_form
+from showpy.choreo.match_ops import with_set
 from showpy.choreo.models import MatchOptions
 from showpy.core.errors import LockedError, MatchError, SchemaError, UnknownRefError
 from showpy.core.util import approx_equal
+from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 from tests.helpers import pin_spot, with_curve_rows
 
@@ -111,3 +113,86 @@ def test_rebuild_unknown_form_suggests_close_id() -> None:
     with pytest.raises(UnknownRefError) as caught:
         rebuild(show, "rows")
     assert "row" in caught.value.hint
+
+
+UPSTAGE_ROW_Y = 12.0
+SPARSE_SLOTS = 6
+FORM_COORD_TOL = 1e-6
+
+
+def _row_show() -> Show:
+    row = line_form("row", ["T1", "T2", "T3", "T4"], (0, 9), (6, 9), set_id="2")
+    return two_set_show().model_copy(update={"forms": {"row": row}})
+
+
+@pytest.mark.defect("UP-9.6-04")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-04")
+def test_regression_place_clears_references_to_forms_no_longer_placed() -> None:
+    """Leaves no spot pointing at a form the set no longer places (audit 9.6; P0 #12)."""
+    show = two_set_show()
+    first = place(show, "2", [line_form("a", ["T1", "T2", "T3", "T4"], (0, 9), (6, 9))])
+    again = place(with_set(show, first), "2", [line_form("b", ["T3", "T4"], (0, 12), (2, 12))])
+    referenced = {p.form for p in again.placements if p.form is not None}
+    assert referenced <= set(again.forms)
+    assert "a" not in referenced
+
+
+@pytest.mark.defect("UP-9.6-05")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-05")
+def test_regression_filled_forms_accepts_a_pinned_member_slot_left_open() -> None:
+    """Reads a form back when a pinned member left its slot open (audit 9.6; P0 #12)."""
+    show = pin_spot(two_set_show(), "2", "T1")
+    form = line_form("f", ["T1", "T2"], (0, 15), (2, 15))
+    filled = filled_forms(place(show, "2", [form]), [form])
+    assert "T2" in filled[0].members
+
+
+@pytest.mark.defect("UP-9.6-06")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-06")
+def test_regression_filled_forms_accepts_matched_spots_in_nearest_open_slots() -> None:
+    """Reads a form back when matched spots took non-lowest open slots (audit 9.6; P0 #12)."""
+    form = line_form("f", ["T1"], (10, 9), (0, 9), n=SPARSE_SLOTS)
+    placed = place(two_set_show(), "2", [form])
+    orders = sorted(p.order for p in placed.placements if p.order is not None)
+    assert orders != list(range(len(orders)))
+    assert filled_forms(placed, [form])[0].members[0] == "T1"
+
+
+@pytest.mark.defect("UP-9.6-07")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-07")
+def test_regression_place_returns_the_set_and_the_filled_forms() -> None:
+    """Returns the placed set together with its filled forms (audit 9.6; P0 #12)."""
+    form = line_form("f", [], (6, 12), (0, 12), n=4)
+    result = place(two_set_show(), "2", [form])
+    assert isinstance(result, tuple)
+    _, filled = result
+    assert filled[0].members == ("T4", "T3", "T2", "T1")
+
+
+@pytest.mark.defect("UP-9.6-08")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-08")
+def test_regression_rebuild_keeps_path_rows_of_members_that_did_not_move() -> None:
+    """Keeps stored path rows of members that stay put (audit 9.6)."""
+    show = with_curve_rows(_row_show(), ROW_SPOTS)
+    rows = rebuild(show, "row").transition(TID).rows
+    assert set(rows) == set(ROW_SPOTS)
+
+
+@pytest.mark.defect("UP-9.6-09")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-09")
+def test_regression_rebuild_ignores_locked_rows_when_nothing_moves() -> None:
+    """Does not raise LockedError for a locked row of a member that does not move (audit 9.6)."""
+    show = with_curve_rows(_row_show(), ROW_SPOTS, locked=True)
+    rows = rebuild(show, "row").transition(TID).rows
+    assert set(rows) == set(ROW_SPOTS)
+
+
+@pytest.mark.defect("UP-9.6-10")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-10")
+def test_regression_rebuild_force_moves_pinned_members() -> None:
+    """Moves a pinned member when the caller passes force=True (audit 9.6; P0 #13)."""
+    show = pin_spot(_row_show(), "2", "T1")
+    moved = line_form("row", ["T1", "T2", "T3", "T4"], (0, UPSTAGE_ROW_Y), (6, UPSTAGE_ROW_Y))
+    show = show.model_copy(update={"forms": {"row": moved.model_copy(update={"set": "2"})}})
+    placed = rebuild(show, "row", force=True).set("2")
+    assert approx_equal(placed.get("T1").point, (0.0, UPSTAGE_ROW_Y), FORM_COORD_TOL)
