@@ -5,6 +5,7 @@ test_validate.py --- tests structural validation of sets, paths, dependencies an
 """
 
 import math
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 import pytest
@@ -24,7 +25,7 @@ from showpy.core.types import Region
 from showpy.core.validation import ValidationReport
 from showpy.notes.models import Anchor, Note
 from showpy.sheet.templates import InMemorySheetStore
-from showpy.show.models import Pin, Show
+from showpy.show.models import Comment, Pin, Show
 from showpy.show.validate import (
     validate_dependencies,
     validate_paths,
@@ -405,3 +406,32 @@ def test_regression_validate_show_reports_a_nonzero_first_set_count() -> None:
     show = two_set_show()
     first = show.sets[0].model_copy(update={"counts": 3.5})
     assert _mentions(_edited(sets=(first, show.sets[1])), "3.5")
+
+
+@pytest.mark.defect("UP-9.7-88")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-88")
+def test_regression_validate_show_reports_nan_counts_on_the_first_set() -> None:
+    """Reports NaN counts on the first set by name (audit 9.7 validation gaps)."""
+    show = two_set_show()
+    first = show.sets[0].model_copy(update={"counts": math.nan})
+    assert _mentions(_edited(sets=(first, show.sets[1])), "nan")
+
+
+@pytest.mark.defect("UP-9.7-89")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-89")
+def test_regression_validate_show_reports_nan_waypoints() -> None:
+    """Reports a path waypoint with a NaN coordinate (audit 9.7 validation gaps)."""
+    waypoint = Waypoint(x=1.0, y=1.0).model_copy(update={"y": math.nan})
+    row = PathRow(entity="T1").model_copy(update={"waypoints": (waypoint,)})
+    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": row})
+    assert _mentions(_edited(transitions=(spec,)), "nan")
+
+
+@pytest.mark.defect("UP-9.7-90")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-90")
+def test_regression_validate_show_reports_comments_anchored_to_missing_items() -> None:
+    """Reports a comment anchored to a set that does not exist (audit 9.7 validation gaps)."""
+    validate: Callable[..., ValidationReport] = validate_show  # comments= is the audit's new API
+    comment = Comment(id="c1", anchor=Anchor.on_set(GHOST), text="check")
+    report = validate(two_set_show(), comments=(comment,))
+    assert any(GHOST in f"{i.where} {i.message}" for i in report.issues)
