@@ -4,9 +4,19 @@
 test_timeline.py --- tests timeline construction, pure edits, lookups and JSON persistence
 """
 
-import pytest
+import math
 
-from showpy.core.errors import SchemaError, TimelineError, TimeRangeError, UnknownRefError
+import pytest
+from pydantic import ValidationError as PydanticValidationError
+
+from showpy.core.errors import (
+    SchemaError,
+    ShowPyError,
+    TimelineError,
+    TimeRangeError,
+    UnknownRefError,
+)
+from showpy.time.clock import count_to_seconds
 from showpy.time.models import (
     AudioTrack,
     Cue,
@@ -239,3 +249,98 @@ def test_from_json_rejects_bad_payload_with_schema_error() -> None:
     with pytest.raises(SchemaError) as info:
         from_json({"mode": "dance"})
     assert "mode" in str(info.value.context)
+
+
+REJECTED = (ShowPyError, PydanticValidationError)
+
+
+def _steady() -> Timeline:
+    return new_timeline(TimelineMode.COUNTS, 120.0)
+
+
+@pytest.mark.defect("UP-9.30-01")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-01")
+def test_regression_add_tempo_rejects_nan_count() -> None:
+    """Rejects a tempo section at a NaN count (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        add_tempo(_steady(), TempoSection(at_count=math.nan, counts_per_minute=90.0))
+
+
+@pytest.mark.defect("UP-9.30-02")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-02")
+def test_regression_add_hold_rejects_nan_seconds() -> None:
+    """Rejects a hold of NaN seconds (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        add_hold(_steady(), Hold(at_count=8.0, seconds=math.nan))
+
+
+@pytest.mark.defect("UP-9.30-03")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-03")
+def test_regression_add_marker_rejects_nan_count() -> None:
+    """Rejects a marker at a NaN count (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        add_marker(_steady(), Marker(label="hit", at_count=math.nan))
+
+
+@pytest.mark.defect("UP-9.30-04")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-04")
+def test_regression_new_timeline_rejects_nan_total() -> None:
+    """Rejects a NaN show length (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        new_timeline(TimelineMode.COUNTS, 120.0, total=math.nan)
+
+
+@pytest.mark.defect("UP-9.30-05")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-05")
+def test_regression_add_tempo_rejects_infinite_tempo() -> None:
+    """Rejects an infinite counts-per-minute (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        add_tempo(_steady(), TempoSection(at_count=8.0, counts_per_minute=math.inf))
+
+
+@pytest.mark.defect("UP-9.30-06")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-06")
+def test_regression_add_tempo_rejects_negative_ramp_target() -> None:
+    """Rejects a ramp toward a negative tempo (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        add_tempo(
+            _steady(),
+            TempoSection(at_count=8.0, counts_per_minute=90.0, ramp_to=-5.0, ramp_counts=4.0),
+        )
+
+
+@pytest.mark.defect("UP-9.30-07")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-07")
+def test_regression_add_tempo_rejects_ramp_counts_without_target() -> None:
+    """Rejects `ramp_counts` given without `ramp_to` (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        add_tempo(_steady(), TempoSection(at_count=8.0, counts_per_minute=90.0, ramp_counts=4.0))
+
+
+@pytest.mark.defect("UP-9.30-08")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-08")
+def test_regression_remove_tempo_at_zero_keeps_a_convertible_timeline() -> None:
+    """Refuses to drop the count-0 tempo, or leaves a timeline that still converts (audit 9.3)."""
+    try:
+        trimmed = remove_tempo(_steady(), 0.0)
+    except ShowPyError:
+        return
+    assert math.isfinite(count_to_seconds(trimmed, 4.0))
+
+
+@pytest.mark.defect("UP-9.30-09")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-09")
+def test_regression_duplicate_cue_order_is_rejected_or_ordered() -> None:
+    """Rejects two cues with one order, or starts them at different times (audit 9.3)."""
+    try:
+        timeline = Timeline(
+            mode=TimelineMode.CUES,
+            cues=(
+                Cue(label="a", order=1, estimated_seconds=2.0),
+                Cue(label="b", order=1, estimated_seconds=3.0),
+            ),
+        )
+        starts = {cue_to_seconds(timeline, label) for label in ("a", "b")}
+    except REJECTED:
+        return
+    assert len(starts) == 2

@@ -4,9 +4,12 @@
 test_measures.py --- tests 1-based measure labels, measure lookups and mid-show length changes
 """
 
-import pytest
+import math
 
-from showpy.core.errors import TimelineError, TimeRangeError
+import pytest
+from pydantic import ValidationError as PydanticValidationError
+
+from showpy.core.errors import ShowPyError, TimelineError, TimeRangeError
 from showpy.core.util import approx_equal
 from showpy.time.measures import count_to_measure, measure_to_count
 from showpy.time.models import MeasureLabel, MeasureSetting, Timeline, TimelineMode
@@ -103,3 +106,70 @@ def test_measure_to_count_rejects_count_past_short_measure() -> None:
 def test_count_to_measure_rejects_negative_count() -> None:
     with pytest.raises(TimeRangeError):
         count_to_measure(_measured(FOUR), -1.0)
+
+
+REJECTED = (ShowPyError, PydanticValidationError)
+
+
+def _with_measures(setting: MeasureSetting) -> Timeline:
+    return Timeline(mode=TimelineMode.SECONDS, measures=setting)
+
+
+def _with_changes(changes: tuple[tuple[float, float], ...]) -> Timeline:
+    return _with_measures(MeasureSetting(counts_per_measure=4.0, changes=changes))
+
+
+@pytest.mark.defect("UP-9.30-10")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-10")
+def test_regression_zero_measure_length_is_a_clean_error() -> None:
+    """Rejects `counts_per_measure=0` with a ShowPyError, not ZeroDivisionError (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        count_to_measure(_with_measures(MeasureSetting(counts_per_measure=0.0)), 4.0)
+
+
+@pytest.mark.defect("UP-9.30-11")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-11")
+def test_regression_nan_measure_length_is_a_clean_error() -> None:
+    """Rejects a NaN measure length with a ShowPyError, not ValueError (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        count_to_measure(_with_measures(MeasureSetting(counts_per_measure=math.nan)), 4.0)
+
+
+@pytest.mark.defect("UP-9.30-12")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-12")
+def test_regression_negative_measure_length_is_rejected() -> None:
+    """Rejects a negative measure length instead of labeling measure -1 (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        count_to_measure(_with_measures(MeasureSetting(counts_per_measure=-4.0)), 4.0)
+
+
+@pytest.mark.defect("UP-9.30-13")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-13")
+def test_regression_duplicate_change_counts_follow_input_order() -> None:
+    """Rejects two changes at one count, or lets the later one win (audit 9.3)."""
+    probe = 14.0
+    try:
+        first = count_to_measure(
+            _with_measures(
+                MeasureSetting(counts_per_measure=4.0, changes=((8.0, 3.0), (8.0, 5.0)))
+            ),
+            probe,
+        )
+        second = count_to_measure(
+            _with_measures(
+                MeasureSetting(counts_per_measure=4.0, changes=((8.0, 5.0), (8.0, 3.0)))
+            ),
+            probe,
+        )
+    except REJECTED:
+        return
+    assert first != second
+
+
+@pytest.mark.defect("UP-9.30-14")
+@pytest.mark.xfail(strict=True, reason="UP-9.30-14")
+def test_regression_fractional_measure_numbers_are_rejected() -> None:
+    """Rejects measure 2.5 instead of computing a count for it (audit 9.3)."""
+    timeline = _with_measures(MeasureSetting(counts_per_measure=4.0))
+    with pytest.raises(ShowPyError):
+        measure_to_count(timeline, 2.5)  # type: ignore[arg-type]
