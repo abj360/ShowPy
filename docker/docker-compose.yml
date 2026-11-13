@@ -1,8 +1,9 @@
-# No ports: stage is a library; the service runs the full check suite.
+# No ports: stage is a library; the service runs the test suite against the installed wheel.
 services:
   stage:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    env_file: ../.env
-    command: ["uv", "run", "nox"]
+    env_file:
+      - path: ../.env
+        required: false

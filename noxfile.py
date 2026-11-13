@@ -15,19 +15,26 @@ Contains:
     docs: placeholder until the docs build lands
 """
 
+import os
+
 import nox
 
 PRETTIER_GLOB = "**/*.{md,yml,yaml,json}"
 HASH_SEEDS = ("1", "2")
 DEFAULT_HASH_SEED = "0"
+NO_SYNC_ENV = "NOX_UV_NO_SYNC"
 
 nox.options.sessions = ["lint", "types", "tests", "hashseeds", "audit"]
 nox.options.default_venv_backend = "none"
 
 
 def _uv_run(session: nox.Session, *args: str) -> None:
-    """Runs a command inside the uv-managed project environment."""
-    session.run("uv", "run", "--locked", *args, external=True)
+    """Runs a command inside the uv-managed project environment.
+
+    The Docker image sets NOX_UV_NO_SYNC so the installed wheel is tested, not a source tree.
+    """
+    sync_flag = "--no-sync" if os.environ.get(NO_SYNC_ENV) == "1" else "--locked"
+    session.run("uv", "run", sync_flag, *args, external=True)
 
 
 @nox.session
