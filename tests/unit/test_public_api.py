@@ -24,3 +24,9 @@ def test_key_entry_points_are_exported() -> None:
 def test_clashing_names_are_disambiguated() -> None:
     assert stage.spiral.__module__ == "stage.geo.shapes"
     assert stage.spiral_motion.__module__ == "stage.choreo.motion"
+
+
+def test_package_ships_a_py_typed_marker() -> None:
+    from importlib.resources import files
+
+    assert files("stage").joinpath("py.typed").is_file()
