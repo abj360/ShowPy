@@ -4,8 +4,10 @@
 test_forms.py --- tests form constructors, the recipe contract, slot spacing and facings
 """
 
+import contextlib
 import json
 import math
+import sys
 
 import numpy as np
 import pytest
@@ -29,7 +31,7 @@ from showpy.choreo.forms import (
     wedge_form,
 )
 from showpy.choreo.models import FacingSpec, Form, SpacingSpec
-from showpy.core.errors import LockedError, SchemaError, SpacingError, UnknownRefError
+from showpy.core.errors import LockedError, SchemaError, ShowPyError, SpacingError, UnknownRefError
 from showpy.core.types import Box2, Points
 from showpy.core.util import approx_equal
 from showpy.geo.curves import curve_from_construction
@@ -264,3 +266,94 @@ def test_arc_slot_positions_are_on_the_circle() -> None:
     assert math.isclose(
         float(np.linalg.norm(pts[0] - pts[1])), float(np.linalg.norm(pts[3] - pts[4]))
     )
+
+
+SQUARE_AREA = [(0.0, 0.0), (6.0, 0.0), (6.0, 6.0), (0.0, 6.0)]
+BLOCK_RECIPE = {"origin": [0.0, 0.0], "rows": 1, "cols": 2, "interval": 1.0}
+OVERLAPPING_SWEEP_DEG = 720.0
+FRACTIONAL_SLOT_COUNT = 2.5
+TIMEOUT_S = 5
+
+
+@pytest.mark.defect("UP-9.6-42")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-42")
+def test_regression_fill_form_rejects_zero_interval() -> None:
+    """Raises SpacingError, not ZeroDivisionError, for fill_form(interval=0) (audit 9.6)."""
+    with pytest.raises(SpacingError):
+        slots(fill_form("f", [], SQUARE_AREA, 0.0))
+
+
+@pytest.mark.defect("UP-9.6-43")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-43")
+def test_regression_scatter_form_rejects_zero_min_gap() -> None:
+    """Raises SpacingError, not ZeroDivisionError, for scatter_form(min_gap=0) (audit 9.6)."""
+    with pytest.raises(SpacingError):
+        slots(scatter_form("f", ["A", "B"], SQUARE_AREA, 0.0))
+
+
+@pytest.mark.defect("UP-9.6-44")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-44")
+@pytest.mark.timeout(TIMEOUT_S, method="signal")
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+def test_regression_scatter_form_rejects_negative_min_gap_without_hanging() -> None:
+    """Raises SpacingError for scatter_form(min_gap=-1) instead of hanging (audit 9.6; P0 #7)."""
+    with pytest.raises(SpacingError):
+        slots(scatter_form("f", ["A", "B"], SQUARE_AREA, -1.0))
+
+
+@pytest.mark.defect("UP-9.6-45")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-45")
+def test_regression_misspelled_recipe_key_is_rejected() -> None:
+    """Raises SchemaError for an unknown recipe key such as "anchr" (audit 9.6)."""
+    recipe = {**BLOCK_RECIPE, "anchr": "front-left"}
+    with pytest.raises(SchemaError):
+        slots(Form(id="f", set="1", kind="block", geometry=recipe, members=()))
+
+
+@pytest.mark.defect("UP-9.6-46")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-46")
+def test_regression_misspelled_fill_pattern_is_rejected() -> None:
+    """Raises SchemaError for an unknown fill pattern such as "hexx" (audit 9.6)."""
+    with pytest.raises(SchemaError):
+        slots(fill_form("f", [], SQUARE_AREA, 1.0, pattern="hexx"))  # type: ignore[arg-type]
+
+
+@pytest.mark.defect("UP-9.6-47")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-47")
+def test_regression_bad_block_anchor_raises_schema_error() -> None:
+    """Raises SchemaError, not KeyError, for an unknown block anchor (audit 9.6)."""
+    with pytest.raises(SchemaError):
+        slots(block_form("f", [], (0, 0), 1, 2, 1.0, anchor=""))  # type: ignore[arg-type]
+
+
+@pytest.mark.defect("UP-9.6-48")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-48")
+def test_regression_arc_form_rejects_sweeps_that_overlap_themselves() -> None:
+    """Rejects an arc past 360 degrees instead of producing coincident slots (audit 9.6)."""
+    with pytest.raises(ShowPyError):
+        slots(arc_form("a", ["A", "B", "C"], (0, 0), 5.0, 0.0, OVERLAPPING_SWEEP_DEG))
+
+
+@pytest.mark.defect("UP-9.6-49")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-49")
+def test_regression_form_rejects_fractional_slot_count() -> None:
+    """Rejects n=2.5 instead of truncating it to 2 (audit 9.6)."""
+    with pytest.raises(SchemaError):
+        slots(line_form("l", [], (0, 0), (4, 0), n=FRACTIONAL_SLOT_COUNT))  # type: ignore[arg-type]
+
+
+@pytest.mark.defect("UP-9.6-58")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-58")
+def test_regression_svg_form_rejects_empty_svg() -> None:
+    """Raises a ShowPyError, not ValueError, for svg_form("") (audit 9.6)."""
+    with pytest.raises(ShowPyError):
+        svg_form("f", [], "", Box2(min=(0, 0), max=(1, 1)))
+
+
+@pytest.mark.defect("UP-9.6-60")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-60")
+def test_regression_generated_form_with_numpy_params_serializes_or_is_rejected() -> None:
+    """Serializes numpy generator params, or rejects them with a ShowPyError (audit 9.6)."""
+    center = np.array([0.0, 1.0])
+    with contextlib.suppress(ShowPyError):
+        json.loads(generated_form("g", ["A"], "spiral", center=center).model_dump_json())
