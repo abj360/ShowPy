@@ -75,7 +75,7 @@ class Group(FrozenModel):
         symbol: Sheet glyph.
         color: Hex color.
         default_radius: Footprint radius for new spots.
-        limits: Per-group limit overrides read by stagecheck.
+        limits: Per-group limit overrides read by a consumer checker.
         moves: False for stationary groups such as a pit.
     """
 

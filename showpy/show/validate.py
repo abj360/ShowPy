@@ -4,7 +4,7 @@
 validate.py --- structural validation of sets, paths, dependencies and whole shows
 
 Validators never raise on bad data: every problem becomes a ValidationIssue with a code,
-a location and a hint. Safety rules (collisions, speed, bounds) belong to stagecheck.
+a location and a hint. Safety rules (collisions, speed, bounds) belong to a consumer checker.
 
 Contains:
     validate_set(): checks a candidate set against the show

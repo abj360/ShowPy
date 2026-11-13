@@ -8,7 +8,7 @@ Last updated: 2026-11-11
 
 This is the complete API of `showpy`, the choreography library behind the Show Canvas (2D sheet; the 3D layer has its own reference), listed module by module: every data class with its fields, and every function with its inputs, output and purpose. Spots are the dots designed on the sheet, claimed by real performers after publishing.
 
-The first build covers every module except `stagecheck`, `showpy.packs` and `showpy.index`; their sections describe the planned design. Where this reference and the code disagree, the code and the ADRs in `docs/adr/` win; ADR 0001 lists the fixes made to the 2026-11-08 version of this document.
+The first build covers every module except the consumer checker (below), `showpy.packs` and `showpy.index`; their sections describe the planned design. Where this reference and the code disagree, the code and the ADRs in `docs/adr/` win; ADR 0001 lists the fixes made to the 2026-11-08 version of this document.
 
 **Conventions used in every table**
 
@@ -25,21 +25,21 @@ The first build covers every module except `stagecheck`, `showpy.packs` and `sho
 
 **Module map**
 
-| Module            | Panel                | What it holds                                                                                                     |
-| ----------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `showpy.core`     | all                  | Units, IDs and types, errors, validation reports, the selection model, utilities                                  |
-| `showpy.cast`     | Show Canvas          | Groups, spots, cast, selection language, spot ID rewriting                                                        |
-| `showpy.sheet`    | Canvas               | The 2D design sheet: templates, customization, coordinate systems, bounds, replacement, rendering                 |
-| `showpy.notes`    | Canvas               | Design notes on sets, transitions, points, areas and spots                                                        |
-| `showpy.time`     | Show Canvas, Preview | Count timeline: tempo, holds, markers, cues, measures, audio sync                                                 |
-| `showpy.geo`      | Show Canvas          | Curves, shapes, regions, SVG and text outlines, spacing, affine maps, transforms, static measurement and analysis |
-| `showpy.choreo`   | Show Canvas          | Sets, forms, matching, paths, routes, engine, facing, avoidance, time-based measures                              |
-| `showpy.show`     | Show Canvas          | Show model, set management, sections, storage, collaboration, history, validation                                 |
-| `showpy.export`   | Show Canvas          | Coordinate sheets, charts, PDF, JSON and CSV data, position import, publishing and claims, video                  |
-| `showpy.examples` | docs, tests          | Deterministic example shows for doctests and tests                                                                |
-| `stagecheck`      | all (locked)         | Limits and checks, run only through a tool; not built yet                                                         |
-| `showpy.packs`    | all                  | Domain packs, starting with marching band; not built yet                                                          |
-| `showpy.index`    | agent                | API index and promotion of agent-written code; not built yet                                                      |
+| Module             | Panel                | What it holds                                                                                                     |
+| ------------------ | -------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `showpy.core`      | all                  | Units, IDs and types, errors, validation reports, the selection model, utilities                                  |
+| `showpy.cast`      | Show Canvas          | Groups, spots, cast, selection language, spot ID rewriting                                                        |
+| `showpy.sheet`     | Canvas               | The 2D design sheet: templates, customization, coordinate systems, bounds, replacement, rendering                 |
+| `showpy.notes`     | Canvas               | Design notes on sets, transitions, points, areas and spots                                                        |
+| `showpy.time`      | Show Canvas, Preview | Count timeline: tempo, holds, markers, cues, measures, audio sync                                                 |
+| `showpy.geo`       | Show Canvas          | Curves, shapes, regions, SVG and text outlines, spacing, affine maps, transforms, static measurement and analysis |
+| `showpy.choreo`    | Show Canvas          | Sets, forms, matching, paths, routes, engine, facing, avoidance, time-based measures                              |
+| `showpy.show`      | Show Canvas          | Show model, set management, sections, storage, collaboration, history, validation                                 |
+| `showpy.export`    | Show Canvas          | Coordinate sheets, charts, PDF, JSON and CSV data, position import, publishing and claims, video                  |
+| `showpy.examples`  | docs, tests          | Deterministic example shows for doctests and tests                                                                |
+| Checker (consumer) | all                  | Limits and checks, a separate package pinned to a ShowPy release; not built yet                                   |
+| `showpy.packs`     | all                  | Domain packs, starting with marching band; not built yet                                                          |
+| `showpy.index`     | agent                | API index and promotion of agent-written code; not built yet                                                      |
 
 ## showpy.core
 
@@ -158,15 +158,15 @@ Who is in a show: groups, spots, labeling rules, named selections, and the selec
 
 **`Group`** — a designer-made set of spots with shared defaults.
 
-| Field             | Type               | Default             | Meaning                                    |
-| ----------------- | ------------------ | ------------------- | ------------------------------------------ |
-| `key`             | `str`              | required            | e.g. `trumpets`, `front-guard`             |
-| `name`            | `str`              | key in title case   | Display name                               |
-| `label_prefix`    | `str`              | required            | e.g. `T` gives T1, T2                      |
-| `symbol`, `color` | `str`              | `circle`, `#808080` | 2D sheet glyph and hex color               |
-| `default_radius`  | `Meters`           | 0.3                 | Footprint radius for new spots             |
-| `limits`          | `dict[str, float]` | {}                  | Per-group limit overrides (see stagecheck) |
-| `moves`           | `bool`             | True                | False for stationary groups (pit)          |
+| Field             | Type               | Default             | Meaning                                     |
+| ----------------- | ------------------ | ------------------- | ------------------------------------------- |
+| `key`             | `str`              | required            | e.g. `trumpets`, `front-guard`              |
+| `name`            | `str`              | key in title case   | Display name                                |
+| `label_prefix`    | `str`              | required            | e.g. `T` gives T1, T2                       |
+| `symbol`, `color` | `str`              | `circle`, `#808080` | 2D sheet glyph and hex color                |
+| `default_radius`  | `Meters`           | 0.3                 | Footprint radius for new spots              |
+| `limits`          | `dict[str, float]` | {}                  | Per-group limit overrides (see the checker) |
+| `moves`           | `bool`             | True                | False for stationary groups (pit)           |
 
 **`Spot`** — a dot designed on the sheet that persists through the whole show.
 
@@ -264,27 +264,27 @@ Used for the 2D design surface every show is drawn on. There is one standard she
 
 Templates and sheet edits live in `showpy.sheet.templates` (built-in surfaces in `showpy.sheet.surfaces`), coordinates in `showpy.sheet.coords`, bounds and landmark lookup in `showpy.sheet.bounds`, replacement in `showpy.sheet.replace`, and rendering in `showpy.sheet.render`.
 
-| Function                                                                                                | Inputs                                          | Output                       | Purpose                                                                                                                                                                                              |
-| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sheet_templates(surface_type=None)`                                                                    | `SurfaceType`                                   | `list[Sheet]`                | Built-in templates: blank 20 × 15 m, NFHS, NCAA and NFL football fields, proscenium stage 12 × 9 m, gym floor (basketball court)                                                                     |
-| `get_sheet(ref, store=None)`                                                                            | `SheetRef`, `SheetStore`                        | `Sheet`                      | Resolve against the templates first, then the injected store                                                                                                                                         |
-| `blank_sheet(width_m, depth_m, grid_spacing=1.0, units="m")`                                            |                                                 | `Sheet`                      | Plain rectangle with a center line, for unusual spaces                                                                                                                                               |
-| `customize(sheet, **changes)`                                                                           | `name`, `grid`, `size` (blank sheets only)      | `Sheet`                      | Adjust a sheet without replacing it                                                                                                                                                                  |
-| `add_zone(sheet, item)` / `add_landmark(sheet, item)` / `add_guide(sheet, item)`                        | `Zone`, `Landmark`, `GuideLine`                 | `Sheet`                      | Mark pit areas, props areas, custom references                                                                                                                                                       |
-| `remove_zone(sheet, zone_id)` / `remove_landmark(sheet, landmark_id)` / `remove_guide(sheet, guide_id)` |                                                 | `Sheet`                      |                                                                                                                                                                                                      |
-| `save_sheet(store, sheet, scope="mine")`                                                                | `SheetStore`; `"mine"` or `"team"`              | `SheetRef`                   | Keep a customized sheet (e.g. "Lincoln HS home field") under the next free version, recording `based_on`                                                                                             |
-| `coordinate_presets(sheet)`                                                                             |                                                 | `list[CoordinateSystem]`     | Systems that suit this sheet, its default first                                                                                                                                                      |
-| `set_coordinates(show, system)`                                                                         | `CoordinateSystem`                              | `Show`                       | Change wording, origin or audience side; positions do not move                                                                                                                                       |
-| `to_coords(show, p, style="long")` / `from_coords(show, text)`                                          | `"long"` or `"short"`                           | `str` / `Point`              | Position in the chosen system and back (either part first)                                                                                                                                           |
-| `replace_sheet(show, sheet, mapping="landmarks", force=False)`                                          | `Sheet`; `"landmarks"`, `"origin"` or `"scale"` | `(Show, SheetReplaceReport)` | Swap the sheet through one affine map applied to placements, facings, forms, paths, routes and show zones; flags problems and re-pins the dependency; callers run `stagecheck`; undo through history |
-| `similarity_fit(src, dst)`                                                                              | two `Points`                                    | 3 × 3 matrix                 | Least-squares rotation, uniform scale and translation (Umeyama), used by the `landmarks` mapping                                                                                                     |
-| `on_surface(sheet, p)` / `walkable(sheet, p)`                                                           | `Point`                                         | `bool`                       | Bounds tests; the outline counts as on the surface                                                                                                                                                   |
-| `landmark(sheet, name)`                                                                                 | name, ID or alias, case-insensitive             | `Landmark`                   | Look up a reference                                                                                                                                                                                  |
-| `landmark_anchor(mark)`                                                                                 | `Landmark`                                      | `Point`                      | The point a landmark stands for                                                                                                                                                                      |
-| `nearest_landmarks(sheet, p, k=3, kinds=None)`                                                          |                                                 | `list[(Landmark, Meters)]`   | Closest references, for wording; ties by ID                                                                                                                                                          |
-| `zones_at(show, p, t=None)`                                                                             |                                                 | `list[Zone]`                 | Sheet zones, then show zones, covering a point; with `t`, only zones active then                                                                                                                     |
-| `render_sheet(sheet, fmt="svg", px_per_m=20.0)`                                                         | `svg`, `png`, `pdf`                             | `bytes`                      | Printable blank sheet                                                                                                                                                                                |
-| `draw_sheet(draw, canvas, sheet)`                                                                       | PIL drawing, `SheetCanvas`                      | `None`                       | Paint outline, walkable area, zones, guides and landmarks; shared with video export                                                                                                                  |
+| Function                                                                                                | Inputs                                          | Output                       | Purpose                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sheet_templates(surface_type=None)`                                                                    | `SurfaceType`                                   | `list[Sheet]`                | Built-in templates: blank 20 × 15 m, NFHS, NCAA and NFL football fields, proscenium stage 12 × 9 m, gym floor (basketball court)                                                                      |
+| `get_sheet(ref, store=None)`                                                                            | `SheetRef`, `SheetStore`                        | `Sheet`                      | Resolve against the templates first, then the injected store                                                                                                                                          |
+| `blank_sheet(width_m, depth_m, grid_spacing=1.0, units="m")`                                            |                                                 | `Sheet`                      | Plain rectangle with a center line, for unusual spaces                                                                                                                                                |
+| `customize(sheet, **changes)`                                                                           | `name`, `grid`, `size` (blank sheets only)      | `Sheet`                      | Adjust a sheet without replacing it                                                                                                                                                                   |
+| `add_zone(sheet, item)` / `add_landmark(sheet, item)` / `add_guide(sheet, item)`                        | `Zone`, `Landmark`, `GuideLine`                 | `Sheet`                      | Mark pit areas, props areas, custom references                                                                                                                                                        |
+| `remove_zone(sheet, zone_id)` / `remove_landmark(sheet, landmark_id)` / `remove_guide(sheet, guide_id)` |                                                 | `Sheet`                      |                                                                                                                                                                                                       |
+| `save_sheet(store, sheet, scope="mine")`                                                                | `SheetStore`; `"mine"` or `"team"`              | `SheetRef`                   | Keep a customized sheet (e.g. "Lincoln HS home field") under the next free version, recording `based_on`                                                                                              |
+| `coordinate_presets(sheet)`                                                                             |                                                 | `list[CoordinateSystem]`     | Systems that suit this sheet, its default first                                                                                                                                                       |
+| `set_coordinates(show, system)`                                                                         | `CoordinateSystem`                              | `Show`                       | Change wording, origin or audience side; positions do not move                                                                                                                                        |
+| `to_coords(show, p, style="long")` / `from_coords(show, text)`                                          | `"long"` or `"short"`                           | `str` / `Point`              | Position in the chosen system and back (either part first)                                                                                                                                            |
+| `replace_sheet(show, sheet, mapping="landmarks", force=False)`                                          | `Sheet`; `"landmarks"`, `"origin"` or `"scale"` | `(Show, SheetReplaceReport)` | Swap the sheet through one affine map applied to placements, facings, forms, paths, routes and show zones; flags problems and re-pins the dependency; callers run their checker; undo through history |
+| `similarity_fit(src, dst)`                                                                              | two `Points`                                    | 3 × 3 matrix                 | Least-squares rotation, uniform scale and translation (Umeyama), used by the `landmarks` mapping                                                                                                      |
+| `on_surface(sheet, p)` / `walkable(sheet, p)`                                                           | `Point`                                         | `bool`                       | Bounds tests; the outline counts as on the surface                                                                                                                                                    |
+| `landmark(sheet, name)`                                                                                 | name, ID or alias, case-insensitive             | `Landmark`                   | Look up a reference                                                                                                                                                                                   |
+| `landmark_anchor(mark)`                                                                                 | `Landmark`                                      | `Point`                      | The point a landmark stands for                                                                                                                                                                       |
+| `nearest_landmarks(sheet, p, k=3, kinds=None)`                                                          |                                                 | `list[(Landmark, Meters)]`   | Closest references, for wording; ties by ID                                                                                                                                                           |
+| `zones_at(show, p, t=None)`                                                                             |                                                 | `list[Zone]`                 | Sheet zones, then show zones, covering a point; with `t`, only zones active then                                                                                                                      |
+| `render_sheet(sheet, fmt="svg", px_per_m=20.0)`                                                         | `svg`, `png`, `pdf`                             | `bytes`                      | Printable blank sheet                                                                                                                                                                                 |
+| `draw_sheet(draw, canvas, sheet)`                                                                       | PIL drawing, `SheetCanvas`                      | `None`                       | Paint outline, walkable area, zones, guides and landmarks; shared with video export                                                                                                                   |
 
 ## showpy.notes
 
@@ -632,7 +632,7 @@ Functions that read a recipe also take `registry=DEFAULT_FORM_FNS`.
 
 ## showpy.choreo (part 2): paths, engine, avoidance
 
-Path rows are instructions for how each spot travels between two sets; the path engine is the single piece of code that turns them into exact positions, facings and states at any moment, used by the canvas, checker, preview and exports.
+Path rows are instructions for how each spot travels between two sets; the path engine is the single piece of code that turns them into exact positions, facings and states at any moment, used by every consumer, preview and exports.
 
 ### showpy.choreo.paths — models
 
@@ -746,7 +746,7 @@ Engine data classes live in `showpy.choreo.engine_models`; compiling in `engine_
 
 Compile rules (ADR 0002): each move compiles to a curve plus a piecewise-linear time map from local count to arc length, with knots at the window ends and every timed waypoint. Position is `curve.point_at(map(ease(u)))` with u = (tau − start)/(end − start), clamped. The curve is a segment, polyline, centripetal Catmull–Rom spline, arc about the pivot, trimmed route, or sampled custom polyline. Outside its window a spot stands at the previous or next placement; `on_field` comes from the previous set before the window, the next set after it, and is the OR of both during it. Facing runs in three phases: the previous facing, then the row's `FacingMode` blended in over `turn_counts`, then the next set's facing; `FacingOverride`s win inside their range. HOLD, ROTATE, FOLLOW and CUSTOM must end within 1e-6 m of the target. `segments` subdivides time adaptively from every knot and window edge, probing every eighth of a segment until each probe is within `tol / 2`, so closest-approach checks are exact to `tol`, including crossings between counts.
 
-### showpy.choreo.avoid (advisory; the locked checker decides)
+### showpy.choreo.avoid (advisory; a consumer checker decides)
 
 `GapInfo` and `Fix` live in `showpy.choreo.engine_models`.
 
@@ -976,13 +976,13 @@ A live link and QR code. Performers claim one spot each and get their own view o
 | `export_video(show, count_range=None, fps=30, audio=None, px_per_m=10.0)` | `(start, end)` global counts; `audio` is `Mapping[uri, bytes]` | `bytes` (MP4)             | Animated 2D sheet with music, for rehearsal or sharing (3D video comes with the 3D layer); the timeline's first track is muxed from its sync offset, and without `audio` the video is silent |
 | `video_canvas(show, px_per_m=10.0)` / `render_frame(show, frame, canvas)` | `Frame` from the PathEngine                                    | `SheetCanvas` / PIL image | One frame over the sheet, even pixel size for H.264; off-field spots are not drawn                                                                                                           |
 
-## stagecheck (locked)
+## Checker (consumer, planned)
 
 Not built yet (out of scope for the first build, 2026-11-11).
 
-A separate package run in its own process. The agent cannot import or edit it; it is reached only through the `run_checks` tool and hooks. It reads the show through the `Repository` and computes motion with the same `PathEngine`.
+A separate consumer package, run in its own process and depending on a pinned ShowPy release. ShowPy never imports it; it is reached only through the `run_checks` tool and hooks. It reads the show through the `Repository` and computes motion with the same `PathEngine`.
 
-### stagecheck.models
+### Checker models
 
 **Enums**: `Severity` = `ERROR`, `WARNING`, `INFO`. `CheckName` = `COLLISIONS`, `NEAR_MISSES`, `SPEED`, `TURN_RATE`, `CONTINUITY`, `INTERVAL`, `BOUNDS`, `ZONES`, `FACING` (object, behavior, contact and sightline checks are added by the 3D layer).
 
@@ -1009,7 +1009,7 @@ A separate package run in its own process. The agent cannot import or edit it; i
 
 **Shapes in checks.** Collisions use each spot's shape: circle to circle, circle to rectangle and rectangle to rectangle, with rectangles rotated by the spot's facing at that moment.
 
-### stagecheck functions
+### Checker functions
 
 | Function                                                    | Inputs                                              | Output          | Purpose                                                                                                             |
 | ----------------------------------------------------------- | --------------------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -1026,7 +1026,7 @@ A separate package run in its own process. The agent cannot import or edit it; i
 | `format_report(report, max_lines=50)`                       |                                                     | `str`           | Sorted lines plus `SUMMARY`, e.g. `COLLISION 12→13: T4 & M2, count 6.4, gap 0.12 m`                                 |
 | `register_check(name, fn, reviewed_by)`                     |                                                     | `None`          | Packs add reviewed checks                                                                                           |
 
-### stagecheck.waivers (breaking rules on purpose)
+### Checker waivers (breaking rules on purpose)
 
 A waiver records that the designer deliberately allows something the checker would flag, such as a tight weave or a crowded moment. Only the designer can create one; the agent may request it.
 
@@ -1046,12 +1046,12 @@ Waived findings are reported as `WAIVED` lines with the reason instead of errors
 
 ### Tool and hook contract
 
-| Interface         | Input                                | Output / effect                                                                       |
-| ----------------- | ------------------------------------ | ------------------------------------------------------------------------------------- |
-| `run_checks` tool | `{scope, checks?, max_lines?}`       | Formatted report text; never stack traces                                             |
-| After-save hook   | writes to sets, transitions, actions | Runs `scope="changed"`, appends the summary to the tool result                        |
-| Before-tool hook  | any write or script                  | Denies writes to `limits.yaml` and pinned items, and scripts that import `stagecheck` |
-| Stop hook         | agent tries to finish                | Blocks while error findings remain in its changes, unless waived by the designer      |
+| Interface         | Input                                | Output / effect                                                                      |
+| ----------------- | ------------------------------------ | ------------------------------------------------------------------------------------ |
+| `run_checks` tool | `{scope, checks?, max_lines?}`       | Formatted report text; never stack traces                                            |
+| After-save hook   | writes to sets, transitions, actions | Runs `scope="changed"`, appends the summary to the tool result                       |
+| Before-tool hook  | any write or script                  | Denies writes to `limits.yaml` and pinned items, and scripts that import the checker |
+| Stop hook         | agent tries to finish                | Blocks while error findings remain in its changes, unless waived by the designer     |
 
 ## showpy.packs
 
@@ -1085,7 +1085,7 @@ Domain packs add a discipline's units, venues, groups, position language, rules 
 | `form_templates`         | `Mapping[str, Callable]`  | Prefab shapes                                                                                          |
 | `sheets`                 | `Mapping[str, Callable]`  | Printouts                                                                                              |
 | `skills`                 | `list[str]`               | Agent skill files                                                                                      |
-| `extra_checks`           | `list[str]`               | Reviewed checks registered in `stagecheck`                                                             |
+| `extra_checks`           | `list[str]`               | Reviewed checks registered in the checker                                                              |
 | `default_timeline_mode`  | `TimelineMode`            | Default timing for new shows: counts for marching and dance, cues for theater, seconds for drone shows |
 
 | Function                                       | Inputs       | Output                     | Purpose                                            |

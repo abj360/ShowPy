@@ -5,7 +5,7 @@ replace.py --- swaps a show's sheet, carrying every position over through one af
 
 The map is fitted once per replacement and applied to placements, facings, form curves, path
 waypoints, pivots, facing targets, route curves and show zones. Checks are not run here; the
-caller runs stagecheck on the result.
+caller runs a checker on the result.
 
 Contains:
     SheetMapping: names the ways positions are carried to the new sheet

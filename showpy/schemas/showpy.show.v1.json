@@ -578,7 +578,7 @@
     },
     "Group": {
       "additionalProperties": false,
-      "description": "Holds a designer-made set of spots with shared defaults.\n\nAttributes:\n    key: Stable group key, e.g. `trumpets`.\n    name: Display name; defaults to the key in title case.\n    label_prefix: Prefix for spot labels, e.g. `T` gives T1, T2.\n    symbol: Sheet glyph.\n    color: Hex color.\n    default_radius: Footprint radius for new spots.\n    limits: Per-group limit overrides read by stagecheck.\n    moves: False for stationary groups such as a pit.",
+      "description": "Holds a designer-made set of spots with shared defaults.\n\nAttributes:\n    key: Stable group key, e.g. `trumpets`.\n    name: Display name; defaults to the key in title case.\n    label_prefix: Prefix for spot labels, e.g. `T` gives T1, T2.\n    symbol: Sheet glyph.\n    color: Hex color.\n    default_radius: Footprint radius for new spots.\n    limits: Per-group limit overrides read by a consumer checker.\n    moves: False for stationary groups such as a pit.",
       "properties": {
         "color": {
           "default": "#808080",
