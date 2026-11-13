@@ -2,24 +2,31 @@
 
 """
 test_print_sheets.py --- tests coordinate sheets, set charts and the cue sheet
+
+Also holds the audited crossing-label defects (UP-9.5-39, UP-9.5-40) as strict xfails.
 """
 
 import math
 
 import pytest
 
-from showpy.choreo.models import PathRow, Placement, Set
+from showpy.choreo.models import PathRow, PathStyle, Placement, Set
 from showpy.core.errors import SchemaError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.export.models import Claim
 from showpy.export.print_sheets import chart, coordinate_sheet, coordinate_sheets, cue_sheet
+from showpy.sheet.models import GuideLine
 from showpy.show.models import Show
 from showpy.time.models import Cue, Marker, MeasureSetting, Timeline, TimelineMode
 from tests.fixtures.export_shows import AT, guided_show, live_publication, performer
-from tests.fixtures.motion_shows import with_rows
+from tests.fixtures.motion_shows import with_rows, with_targets
 from tests.fixtures.shows import two_set_show
 
 TOL = 1e-9
+GUIDE_SPAN = 50.0
+GUIDE_Y = 7.0
+FULL_TURN = 360.0
+TWO_CROSSINGS = 2
 
 
 def _three_set_show() -> Show:
@@ -196,3 +203,39 @@ def test_single_set_show_has_start_rows_only() -> None:
     rows = coordinate_sheet(show, "T1").rows
     assert [(r.set, r.behavior, r.crossings) for r in rows] == [("1", "start", ())]
     assert rows[0].xy == Placement(entity="T1", x=0.0, y=5.0).point
+
+
+def _twin_guides_show() -> Show:
+    """Returns the two-set show with guides labelled `30` at x=-1 and x=1; T2 crosses both."""
+    show = with_targets({"T2": {"x": -3.0}})
+    guides = tuple(
+        GuideLine(
+            id=f"yard-{side}", kind="yard", points=((x, -GUIDE_SPAN), (x, GUIDE_SPAN)), label="30"
+        )
+        for side, x in (("left", -1.0), ("right", 1.0))
+    )
+    return show.model_copy(update={"sheet": show.sheet.model_copy(update={"guides": guides})})
+
+
+@pytest.mark.defect("UP-9.5-39")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-39")
+def test_regression_crossing_labels_tell_both_sides_apart() -> None:
+    """Lists two distinct labels when a path crosses both `30` lines of the field (audit 9.5).
+
+    The label is deduplicated by text, so the home and away 30 collapse into one `30`.
+    """
+    crossings = coordinate_sheet(_twin_guides_show(), "T2").rows[1].crossings
+    assert len(set(crossings)) == TWO_CROSSINGS
+
+
+@pytest.mark.defect("UP-9.5-40")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-40")
+def test_regression_out_and_back_crossing_is_reported_twice() -> None:
+    """Reports both crossings of a loop that cuts the same guide twice (audit 9.5).
+
+    A full turn about a pivot on the guide crosses it going out and coming back; only the
+    first crossing is reported today.
+    """
+    loop = PathRow(entity="T1", style=PathStyle.ROTATE, pivot=(0.0, GUIDE_Y), sweep_deg=FULL_TURN)
+    show = with_rows({"T1": loop}, show=with_targets({"T1": {"y": 5.0}}, show=guided_show()))
+    assert len(coordinate_sheet(show, "T1").rows[1].crossings) == TWO_CROSSINGS
