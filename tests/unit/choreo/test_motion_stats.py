@@ -154,10 +154,22 @@ def _energy_call(show: Show, motions: MotionRegistry) -> object:
     return cast(Callable[..., object], energy_curve)(show, motions=motions)
 
 
+def _phrase_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], phrase_profile)(show, 0.0, 8.0, motions=motions)
+
+
 @defect("UP-9.2-32")
 @pytest.mark.parametrize(
     "call",
-    [_speed_call, _speeds_call, _contrast_call, _position_call, _direction_call, _energy_call],
+    [
+        _speed_call,
+        _speeds_call,
+        _contrast_call,
+        _position_call,
+        _direction_call,
+        _energy_call,
+        _phrase_call,
+    ],
 )
 def test_regression_motion_helpers_accept_a_custom_motion_registry(call: MotionsCall) -> None:
     """Analyses a show that uses a custom-registered motion (audit 9.2)."""
