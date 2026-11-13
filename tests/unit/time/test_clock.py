@@ -210,8 +210,8 @@ def _steady(cpm: float = 120.0) -> Timeline:
     return new_timeline(TimelineMode.COUNTS, cpm)
 
 
-@pytest.mark.defect("UP-9.3-96")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-96")
+@pytest.mark.defect("UP-9.3-95")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-95")
 def test_regression_unsorted_tempo_sections_are_sorted_or_rejected() -> None:
     """Converts counts as if sections were sorted, or rejects them (audit 9.3)."""
     try:
@@ -229,24 +229,24 @@ def test_regression_unsorted_tempo_sections_are_sorted_or_rejected() -> None:
     assert approx_equal(seconds, SIX_SECONDS, tol=1e-9)
 
 
-@pytest.mark.defect("UP-9.3-97")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-97")
+@pytest.mark.defect("UP-9.3-96")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-96")
 def test_regression_seconds_to_count_rejects_nan() -> None:
     """Rejects NaN seconds instead of returning 0.0 (audit 9.3)."""
     with pytest.raises(ShowPyError):
         seconds_to_count(_steady(), math.nan)
 
 
-@pytest.mark.defect("UP-9.3-98")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-98")
+@pytest.mark.defect("UP-9.3-97")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-97")
 def test_regression_tempo_at_rejects_nan() -> None:
     """Rejects a NaN count with a ShowPyError, not an IndexError (audit 9.3)."""
     with pytest.raises(ShowPyError):
         tempo_at(_steady(), math.nan)
 
 
-@pytest.mark.defect("UP-9.3-99")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-99")
+@pytest.mark.defect("UP-9.3-98")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-98")
 def test_regression_describe_count_prints_large_counts_in_full() -> None:
     """Prints 1234567.5 rather than `1.23457e+06` (audit 9.3)."""
     assert "count 1234567.5," in describe_count(_steady(), BIG_COUNT)

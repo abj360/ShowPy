@@ -307,7 +307,7 @@ def test_set_shape_and_set_claimable() -> None:
         set_claimable(show, ["T3"], "audience")  # type: ignore[arg-type]
 
 
-EDITS_THAT_NEED_FORCE = (add_spot, add_spots_along, fill_spots, duplicate_spots, regroup, relabel)
+EDITS_THAT_NEED_FORCE = (add_spot, add_spots_along, fill_spots, duplicate_spots)
 PREFIX_X = LabelScheme(prefixes={"trumpets": "X"})
 UNIT_SQUARE = region([(0, 0), (2, 0), (2, 2), (0, 2)])
 
@@ -352,38 +352,51 @@ def test_regression_duplicate_spots_refuses_a_pinned_set() -> None:
         duplicate_spots(_with_pinned_set(), ["T1"], (0.0, 1.0), "1")
 
 
+def _pinned_coordinates(show: Show, spot_id: str) -> list[tuple[float, float]]:
+    return [p.point for s in show.sets for p in s.placements if p.entity == spot_id and p.pinned]
+
+
+def _assert_pin_follows(before: Show, after: Show, mapping: dict[str, str]) -> None:
+    new_id = mapping.get("T1", "T1")
+    assert [p.id for p in after.pins] == [new_id]
+    assert _pinned_coordinates(after, new_id) == _pinned_coordinates(before, "T1")
+    assert _pinned_coordinates(before, "T1") != []
+
+
 @pytest.mark.defect("UP-9.3-92")
 @pytest.mark.xfail(strict=True, reason="UP-9.3-92")
-def test_regression_regroup_refuses_a_pinned_spot() -> None:
-    """Refuses to regroup a pinned spot (audit 9.3; P0 #13)."""
-    show = _with_second_group(pin(two_set_show(), "entity", "T1"))
-    with pytest.raises(LockedError):
-        regroup(show, ["T1"], "brass")
+def test_regression_regroup_keeps_a_pinned_spot_protected() -> None:
+    """Refuses to regroup a pinned spot, or regroups it with the pin following (audit 9.3; P0 #13).
+
+    The rename policy is open (draft ADR: renames allowed, positions protected), so both
+    LockedError and a successful regroup with an intact pin are accepted.
+    """
+    before = _with_second_group(pin(two_set_show(), "entity", "T1"))
+    try:
+        after, mapping = regroup(before, ["T1"], "brass")
+    except LockedError:
+        return
+    _assert_pin_follows(before, after, mapping)
 
 
 @pytest.mark.defect("UP-9.3-93")
 @pytest.mark.xfail(strict=True, reason="UP-9.3-93")
-def test_regression_relabel_refuses_a_pinned_spot() -> None:
-    """Raises LockedError when relabel renames a pinned spot, absent force (audit 9.3; P0 #13).
+def test_regression_relabel_keeps_a_pinned_spot_protected() -> None:
+    """Refuses to relabel a pinned spot, or relabels it with the pin following (audit 9.3).
 
-    Assumes the stricter policy; the audit leaves "renames allowed" open.
+    The rename policy is open (draft ADR: renames allowed, positions protected), so both
+    LockedError and a successful relabel with an intact pin are accepted.
     """
-    with pytest.raises(LockedError):
-        relabel(pin(two_set_show(), "entity", "T1"), PREFIX_X)
+    before = pin(two_set_show(), "entity", "T1")
+    try:
+        after, mapping = relabel(before, PREFIX_X)
+    except LockedError:
+        return
+    _assert_pin_follows(before, after, mapping)
 
 
 @pytest.mark.defect("UP-9.3-94")
 @pytest.mark.xfail(strict=True, reason="UP-9.3-94")
-def test_regression_relabel_refuses_a_locked_form_member() -> None:
-    """Raises LockedError when relabel renames a member of a locked form (audit 9.3; P0 #13)."""
-    show = rich_show()
-    locked = show.forms["line1"].model_copy(update={"locked": True})
-    with pytest.raises(LockedError):
-        relabel(show.model_copy(update={"forms": {"line1": locked}}), PREFIX_X)
-
-
-@pytest.mark.defect("UP-9.3-95")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-95")
 def test_regression_cast_edits_accept_force() -> None:
     """Gives every cast edit a `force` parameter like delete_spots (audit 9.3; P0 #13)."""
     missing = [
