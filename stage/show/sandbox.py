@@ -9,8 +9,7 @@ memory limits, a wall-clock timeout and an empty environment. Finally, by defaul
 interpreter runs under bubblewrap: no network, a read-only filesystem holding only the
 interpreter, the virtualenv and the `stage` package, and a private /tmp. The Python layers
 alone are defense in depth (numpy can read files, for example); bubblewrap is the boundary.
-Without bubblewrap, running a script needs an explicit `isolation="process"`. Scripts can
-never import stagecheck (CLAUDE.md rule 4).
+Without bubblewrap, running a script needs an explicit `isolation="process"`.
 
 Contains:
     ALLOWED_MODULES: lists the module roots a script may import
