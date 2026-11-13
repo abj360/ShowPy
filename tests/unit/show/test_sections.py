@@ -132,3 +132,64 @@ def test_join_disjoint_sections_and_clashes() -> None:
 def test_regression_join_after_split_restores_the_show() -> None:
     show = opener_show()
     assert join_sections(*split_section(show, "2")) == show
+
+
+SPLIT_SET = "3"
+WINDOW_ACROSS_SPLIT = (4.0, 16.0)
+RAMP_COUNTS = 16.0
+
+
+def _round_trip(show: Show) -> Show:
+    return join_sections(*split_section(show, SPLIT_SET))
+
+
+def _three_sets_with(**timeline_fields: object) -> Show:
+    show = add_set(add_set(two_set_show(), "3", 4.0), "4", 8.0)
+    return show.model_copy(update={"timeline": show.timeline.model_copy(update=timeline_fields)})
+
+
+@pytest.mark.defect("UP-9.7-47")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-47")
+def test_regression_join_after_split_keeps_a_zone_window_across_the_split() -> None:
+    """Rejoins a zone window cut by a split into the original window (audit 9.7 sections)."""
+    show = _three_sets_with()
+    zone = show.sheet.zones[0].model_copy(update={"id": "late", "active": (WINDOW_ACROSS_SPLIT,)})
+    show = show.model_copy(update={"zones": (zone,)})
+    assert _round_trip(show).zones[0].active == (WINDOW_ACROSS_SPLIT,)
+
+
+@pytest.mark.defect("UP-9.7-48")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-48")
+def test_regression_join_after_split_keeps_markers_that_repeat_a_label() -> None:
+    """Keeps a marker whose label repeats at another count across split and join (audit 9.7)."""
+    markers = (Marker(label="hit", at_count=4.0), Marker(label="hit", at_count=14.0))
+    show = _three_sets_with(markers=markers)
+    assert _round_trip(show).timeline.markers == markers
+
+
+@pytest.mark.defect("UP-9.7-49")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-49")
+def test_regression_join_after_split_keeps_one_facing_override_across_the_split() -> None:
+    """Rejoins a facing override cut by a split into one override (audit 9.7 sections)."""
+    show = _three_sets_with()
+    override = FacingOverride(
+        entities=("T1",),
+        mode=FacingMode.FIXED,
+        value=90.0,
+        start=WINDOW_ACROSS_SPLIT[0],
+        end=WINDOW_ACROSS_SPLIT[1],
+    )
+    show = show.model_copy(update={"facing_overrides": (override,)})
+    assert _round_trip(show).facing_overrides == (override,)
+
+
+@pytest.mark.defect("UP-9.7-50")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-50")
+def test_regression_split_does_not_leave_a_ramp_longer_than_its_section() -> None:
+    """Clips a tempo ramp to the length of the section it ends up in (audit 9.7 sections)."""
+    ramp = TempoSection(
+        at_count=0.0, counts_per_minute=120.0, ramp_to=60.0, ramp_counts=RAMP_COUNTS
+    )
+    first, _ = split_section(_three_sets_with(tempos=(ramp,)), SPLIT_SET)
+    longest = max(t.at_count + (t.ramp_counts or 0.0) for t in first.timeline.tempos)
+    assert longest <= index(first).total_counts + TOL
