@@ -8,6 +8,7 @@ Contains:
 """
 
 from datetime import UTC, datetime
+from inspect import signature
 
 import pytest
 import shapely
@@ -43,8 +44,10 @@ from showpy.core.errors import (
 from showpy.core.selection import Selection
 from showpy.core.types import Region
 from showpy.core.util import approx_equal
+from showpy.geo.regions import region
 from showpy.geo.shapes import line
 from showpy.show.models import Show
+from showpy.show.pinning import pin
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.shows import two_set_show
 
@@ -302,3 +305,88 @@ def test_set_shape_and_set_claimable() -> None:
     assert show.cast.spot("T3").claimable == "crew"
     with pytest.raises(SchemaError):
         set_claimable(show, ["T3"], "audience")  # type: ignore[arg-type]
+
+
+EDITS_THAT_NEED_FORCE = (add_spot, add_spots_along, fill_spots, duplicate_spots, regroup, relabel)
+PREFIX_X = LabelScheme(prefixes={"trumpets": "X"})
+UNIT_SQUARE = region([(0, 0), (2, 0), (2, 2), (0, 2)])
+
+
+def _with_pinned_set() -> Show:
+    return pin(two_set_show(), "set", "2")
+
+
+def _with_second_group(show: Show) -> Show:
+    return add_group(show, Group(key="brass", label_prefix="B"))
+
+
+@pytest.mark.defect("UP-9.3-88")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-88")
+def test_regression_add_spot_refuses_a_pinned_set() -> None:
+    """Refuses an unpinned placement in a pinned set (audit 9.3; P0 #13)."""
+    with pytest.raises(LockedError):
+        add_spot(_with_pinned_set(), (1.0, 2.0), "trumpets", "2")
+
+
+@pytest.mark.defect("UP-9.3-89")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-89")
+def test_regression_add_spots_along_refuses_a_pinned_set() -> None:
+    """Raises LockedError for a curve fill into a pinned set (audit 9.3; P0 #13)."""
+    with pytest.raises(LockedError):
+        add_spots_along(_with_pinned_set(), line((0, 0), (4, 0)), 3, "trumpets", "1")
+
+
+@pytest.mark.defect("UP-9.3-90")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-90")
+def test_regression_fill_spots_refuses_a_pinned_set() -> None:
+    """Raises LockedError for an area fill into a pinned set (audit 9.3; P0 #13)."""
+    with pytest.raises(LockedError):
+        fill_spots(_with_pinned_set(), UNIT_SQUARE, "trumpets", "1", interval=1.0)
+
+
+@pytest.mark.defect("UP-9.3-91")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-91")
+def test_regression_duplicate_spots_refuses_a_pinned_set() -> None:
+    """Raises LockedError for copies written into a pinned set (audit 9.3; P0 #13)."""
+    with pytest.raises(LockedError):
+        duplicate_spots(_with_pinned_set(), ["T1"], (0.0, 1.0), "1")
+
+
+@pytest.mark.defect("UP-9.3-92")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-92")
+def test_regression_regroup_refuses_a_pinned_spot() -> None:
+    """Refuses to regroup a pinned spot (audit 9.3; P0 #13)."""
+    show = _with_second_group(pin(two_set_show(), "entity", "T1"))
+    with pytest.raises(LockedError):
+        regroup(show, ["T1"], "brass")
+
+
+@pytest.mark.defect("UP-9.3-93")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-93")
+def test_regression_relabel_refuses_a_pinned_spot() -> None:
+    """Raises LockedError when relabel renames a pinned spot, absent force (audit 9.3; P0 #13).
+
+    Assumes the stricter policy; the audit leaves "renames allowed" open.
+    """
+    with pytest.raises(LockedError):
+        relabel(pin(two_set_show(), "entity", "T1"), PREFIX_X)
+
+
+@pytest.mark.defect("UP-9.3-94")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-94")
+def test_regression_relabel_refuses_a_locked_form_member() -> None:
+    """Raises LockedError when relabel renames a member of a locked form (audit 9.3; P0 #13)."""
+    show = rich_show()
+    locked = show.forms["line1"].model_copy(update={"locked": True})
+    with pytest.raises(LockedError):
+        relabel(show.model_copy(update={"forms": {"line1": locked}}), PREFIX_X)
+
+
+@pytest.mark.defect("UP-9.3-95")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-95")
+def test_regression_cast_edits_accept_force() -> None:
+    """Gives every cast edit a `force` parameter like delete_spots (audit 9.3; P0 #13)."""
+    missing = [
+        fn.__name__ for fn in EDITS_THAT_NEED_FORCE if "force" not in signature(fn).parameters
+    ]
+    assert missing == []

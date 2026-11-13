@@ -341,7 +341,7 @@ def _line_cast() -> Cast:
 def test_regression_select_generator_is_not_silently_empty() -> None:
     """Selects the IDs a generator yields, or rejects it, never returns nothing (audit 9.3)."""
     try:
-        picked = select(_line_cast(), (i for i in ["T1", "T2"]))
+        picked = select(_line_cast(), (i for i in ["T1", "T2"]))  # type: ignore[arg-type]
     except ShowPyError:
         return
     assert picked.ids == ("T1", "T2")
