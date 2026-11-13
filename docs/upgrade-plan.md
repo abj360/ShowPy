@@ -269,13 +269,14 @@ Run with `pytest-benchmark` or `asv` on a fixed runner; fail on a 20% regression
 
 - **Dependency ranges, not pins.** Exact `==` runtime pins break every consumer's resolver. Use
   tested lower bounds and a lowest-direct CI job; keep exact versions only in `uv.lock`.
-- **Extras.** Core: numpy, scipy, shapely, pydantic. `stage[video]` (imageio-ffmpeg, which bundles
-  a large ffmpeg binary; drop `imageio`, which is unused), `stage[qr]` (segno), `stage[render]`
-  (Pillow), `stage[tables]` (pandas). Missing extras raise a `StageError` naming the extra.
+- **Extras.** Core: numpy, scipy, shapely, pydantic. `showpy[video]` (imageio-ffmpeg, which bundles
+  a large ffmpeg binary; drop `imageio`, which is unused), `showpy[qr]` (segno), `showpy[render]`
+  (Pillow), `showpy[tables]` (pandas). Missing extras raise a `StageError` naming the extra.
 - **Version from the tag** (`hatch-vcs`) and `stage.__version__`. Today `pyproject.toml` says 0.1.0
   while HEAD is tagged v0.1.1.
-- **Distribution name.** `stage` is very likely taken on PyPI (not checked); choose a distinct
-  distribution name and keep `import stage`.
+- **Distribution name: ShowPy** (decided 2026-11-13). Set `name = "ShowPy"` in `pyproject.toml`
+  (normalized `showpy` on the index; `pip install showpy`). The import name stays `stage`. Check
+  the name is free on the chosen index before the first release.
 - **Metadata**: authors, keywords, classifiers (Python versions, `Typing :: Typed`, licence, OS),
   project URLs, `license-files`.
 - **Wheel and sdist contents**: ship the JSON schemas inside the package and load them with
@@ -1483,7 +1484,7 @@ Exit: each capability has a tutorial or how-to page and scenario coverage.
 ### Phase 6: 1.0
 
 Generated, versioned documentation site with the Diátaxis structure; all policies published;
-release workflow with provenance and SBOM; extras finalized; distribution name settled; the
+release workflow with provenance and SBOM; extras finalized; published as ShowPy; the
 public API snapshot frozen under semantic versioning.
 
 Exit: section 2 holds in full and is checked by CI.
@@ -1493,7 +1494,8 @@ Exit: section 2 holds in full and is checked by CI.
 These change public behaviour or stored data. Each needs an explicit decision, recorded in an ADR,
 before its phase starts.
 
-1. Distribution name on the package index.
+1. ~~Distribution name on the package index.~~ Decided 2026-11-13: **ShowPy** (import name
+   stays `stage`).
 2. Default matching objective (`sum_squares` or `bottleneck_then_sum_squares`) and removal or
    redefinition of pure `bottleneck`.
 3. Selection operator precedence (`&` above `+` and `-`), or rejecting mixed operators without
