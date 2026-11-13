@@ -65,8 +65,7 @@ def test_position_at_and_direction_of_travel() -> None:
     show = two_set_show()
     assert approx_equal(position_at(show, "T2", 4.0), (2.0, 7.0))
     heading = direction_of_travel(show, "T2", TID, 4.0)
-    assert heading is not None
-    assert approx_equal(heading, 180.0)
+    assert heading == pytest.approx(180.0)
     held = with_targets({"T2": {"y": 5.0}})
     assert direction_of_travel(held, "T2", TID, 4.0) is None
 

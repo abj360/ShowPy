@@ -4,6 +4,7 @@
 test_avoid.py --- tests advisory gap finding and fix suggestions
 """
 
+import math
 from collections.abc import Callable
 from typing import TypeVar, cast
 
@@ -72,14 +73,20 @@ def test_suggest_delays_opens_the_gap() -> None:
     assert fixes
     best = fixes[0]
     assert best.kind == "delay"
-    assert best.new_gap > 0.0
-    assert best.max_speed_after >= 0.5
+    assert best.params == {"entity": "T1", "counts": 4.0}
+    assert approx_equal(best.new_gap, 4.0 / math.sqrt(10.0) - FOOTPRINTS, tol=1e-6)
+    assert approx_equal(best.max_speed_after, math.sqrt(2.0), tol=1e-6)
 
 
 def test_suggest_waypoint_routes_around() -> None:
     fixes = suggest_waypoint(crossing_show(), TID, "T1", "T2", clearance=0.8)
-    assert fixes[0].kind == "waypoint"
-    assert fixes[0].new_gap > 0.0
+    best = fixes[0]
+    assert best.kind == "waypoint"
+    assert approx_equal(best.params["at"], 4.0)
+    offset = 1.4 / math.sqrt(2.0)
+    assert approx_equal(best.params["point"], (2.0 + offset, 7.0 - offset), tol=1e-6)
+    assert approx_equal(best.new_gap, 0.178385, tol=1e-5)
+    assert approx_equal(best.max_speed_after, 0.788987, tol=1e-5)
 
 
 def test_apply_fix_and_separate_in_time() -> None:

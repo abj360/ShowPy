@@ -280,7 +280,11 @@ def test_straight_linear_move_is_one_segment() -> None:
 def test_eased_segments_stay_within_tolerance() -> None:
     engine = _engine(T1=PathRow(entity="T1", easing=Easing(kind="ease_in_out", strength=3.0)))
     segments = [s for s in engine.segments(TID, tol=0.01) if s.entity == "T1"]
-    assert len(segments) > 1
+    assert approx_equal(segments[0].t0, 0.0)
+    assert approx_equal(segments[-1].t1, 8.0)
+    midway = [s for s in segments if approx_equal(s.t0, 4.0)]
+    assert len(midway) == 1
+    assert approx_equal(midway[0].p0, (0.0, 7.0))
     for seg in segments:
         mid_t = (seg.t0 + seg.t1) / 2
         expected = (np.asarray(seg.p0) + np.asarray(seg.p1)) / 2
@@ -327,7 +331,10 @@ def test_regression_steps_easing_is_not_aliased_by_segment_probes() -> None:
     engine = _engine(T1=row)
     segments = [s for s in engine.segments(TID, tol=0.01) if s.entity == "T1"]
     moving = [s for s in segments if s.t1 <= 1.0]
-    assert len(moving) >= 4
+    starts = {round(s.t0, 9): s.p0 for s in moving}
+    for share, y in ((0.25, 6.0), (0.5, 7.0), (0.75, 8.0)):
+        assert approx_equal(starts[share], (0.0, y))
+    assert approx_equal(moving[-1].p1, (0.0, 9.0))
 
 
 def test_regression_positions_resolves_selection_expressions() -> None:
