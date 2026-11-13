@@ -15,7 +15,7 @@ On 2026-11-11, `uv run pytest --co -q` collected 1,496 tests: 413 doctests insid
 | Doctests       | the `>>>` examples in every public docstring under `stage/` | the documented example really runs and prints that    |
 | Property tests | `tests/property/` (Hypothesis)                              | invariants hold for **any** valid input               |
 | Golden tests   | `tests/golden/`                                             | a real show replays exactly as a human reviewed it    |
-| Fixtures       | `src/stage/examples.py`, re-exported by `tests/fixtures/`   | small, fully specified shows shared by tests and docs |
+| Fixtures       | `stage/examples.py`, re-exported by `tests/fixtures/`       | small, fully specified shows shared by tests and docs |
 
 `pyproject.toml` sets the pytest options: `--doctest-modules` (so docstrings run),
 `--strict-markers`, `--import-mode=importlib`, `testpaths = ["tests", "stage"]`,

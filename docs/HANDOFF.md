@@ -59,8 +59,8 @@ Use `uv` only, never pip.
 ## Remaining work, in order
 
 1. Done 2026-11-11, moved to Eight-agent 2026-11-12: set-script builds (`build_set`, `build_all`, `stale`, `new_set_script`, `run_script`).
-2. Done 2026-11-11: `src/stage/choreo/paths_store.py` (`save_paths`, `load_paths`).
-3. Done 2026-11-11: `src/stage/__init__.py` lazily re-exports 533 names (PEP 562). Internal modules are excluded and the motion `spiral` is `spiral_motion`. Tested by `tests/unit/test_public_api.py`.
+2. Done 2026-11-11: `stage/choreo/paths_store.py` (`save_paths`, `load_paths`).
+3. Done 2026-11-11: `stage/__init__.py` lazily re-exports 533 names (PEP 562). Internal modules are excluded and the motion `spiral` is `spiral_motion`. Tested by `tests/unit/test_public_api.py`.
 4. Done 2026-11-11: `schemas/stage.show.v1.json`, guarded by `tests/unit/show/test_schema.py` (regenerate with `STAGE_UPDATE_SCHEMA=1`).
 5. **Update `docs/stage-library-api-reference.md`**, which the user asked for ("fix every contradiction"). Apply ADR 0001's table and every agent deviation listed below, section by section. Keep the doc's format.
 6. Done 2026-11-11: `README.md`, `.env.example` and the dockerized quickstart (Docker run: 1492 passed).
@@ -147,5 +147,5 @@ Each fix has a `test_regression_` test.
 6. A set's `source_hash` covers its script and the previous set; rebuilding an earlier set marks later scripted sets stale.
 7. `describe_count` rounds tenths with `round_to`.
 8. The SVG tokenizer unpacks packed arc flags.
-9. The duplicated doctest import in `src/stage/time/measures.py` is gone.
+9. The duplicated doctest import in `stage/time/measures.py` is gone.
 10. Selection operators must be separated by spaces or parentheses; a glued `+`, `-` or `&` raises `SchemaError` with its position. This was a designer call: it removes the silent misparse of `T1+T2-T3` at the cost of rejecting `T1+T2`.

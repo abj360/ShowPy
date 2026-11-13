@@ -21,7 +21,7 @@ uv run pytest                    # all tests (doctests included, warnings are er
 uv run pytest tests/unit/choreo  # one area
 uv run pytest -m golden          # real marchable drill regression
 uv run ruff check . && uv run ruff format .
-uv run mypy src tests          # strict typing, must pass
+uv run mypy stage tests          # strict typing, must pass
 docker compose -f docker/docker-compose.yml up --build   # full suite in a clean container
 ```
 
@@ -30,7 +30,7 @@ Run tests, ruff and mypy before calling any task done. Prettier formats Markdown
 ## Layout
 
 ```
-src/stage/
+stage/
   core/     types, ids, units, errors, util, selection, validation
   geo/      curves, shapes, svg, text, regions, spacing, affine, transforms, measure, analysis
   time/     count timeline: tempo, holds, markers, cues, measures, audio sync
@@ -46,7 +46,7 @@ tests/      unit/ property/ golden/ fixtures/
 docs/       API reference, ADRs, handoff notes, study guide
 ```
 
-Each package: `models.py` holds data classes; other files hold functions. Subpackage `__init__.py` files hold only a docstring; `src/stage/__init__.py` re-exports the public API lazily.
+Each package: `models.py` holds data classes; other files hold functions. Subpackage `__init__.py` files hold only a docstring; `stage/__init__.py` re-exports the public API lazily.
 
 ## Core concepts (read before editing)
 
@@ -77,7 +77,7 @@ Each package: `models.py` holds data classes; other files hold functions. Subpac
 
 - **Module headers** follow the user-level `~/.claude/CLAUDE.md`: shebang, blank line, then a docstring whose first line is `<filename> --- <role>` and whose index section is titled `Contains:` (never `Args:`), one verb-first line per exported item.
 - **Public functions** need full type hints and a docstring with a runnable `>>>` example; examples import `stage.examples`, never the `tests/` folder. Once `stage.index` exists, they also need `@api(category=..., panel=...)`.
-- **New public names** must be added to the lazy export table in `src/stage/__init__.py`; `tests/unit/test_public_api.py` guards it.
+- **New public names** must be added to the lazy export table in `stage/__init__.py`; `tests/unit/test_public_api.py` guards it.
 - **New data classes** go in the package's `models.py` and must be JSON-serializable; regenerate `schemas/` with `STAGE_UPDATE_SCHEMA=1 uv run pytest tests/unit/show/test_schema.py` and bump the schema version if a stored model changes incompatibly.
 - **Coordinates in field language** (e.g. "2 outside the 35") belong in the pack's `PositionLanguage`, never in core modules.
 - **Prefer extending existing primitives** (curves, spacing, transforms, path styles) over adding parallel ones. Custom movement = register a `MotionFn`; custom shapes = `register_form_fn`.
