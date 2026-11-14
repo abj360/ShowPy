@@ -9,6 +9,7 @@ Contains:
 """
 
 import math
+from typing import cast
 
 import pytest
 from pydantic import ValidationError as PydanticValidationError
@@ -53,6 +54,8 @@ from showpy.time.timeline import (
     set_sync,
     to_json,
 )
+
+UNPARSEABLE_OFFSET = "soon"
 
 
 def _counts(cpm: float = 120.0) -> Timeline:
@@ -348,3 +351,15 @@ def test_regression_duplicate_cue_order_is_rejected_or_ordered() -> None:
     except REJECTED:
         return
     assert len(starts) == 2
+
+
+@pytest.mark.defect("UP-4.4-02")
+@pytest.mark.xfail(strict=True, reason="UP-4.4-02")
+def test_regression_set_sync_validates_the_offset() -> None:
+    """Rejects an offset AudioTrack itself rejects; model_copy skips that check (audit 4.4).
+
+    The cast stands in for an untyped caller, such as JSON from an agent.
+    """
+    tl = attach_audio(_counts(), AudioTrack(file="a.wav", label="a"))
+    with pytest.raises(ShowPyError):
+        set_sync(tl, "a", cast(float, UNPARSEABLE_OFFSET))
