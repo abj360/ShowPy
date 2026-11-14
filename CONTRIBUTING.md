@@ -61,6 +61,7 @@ docker compose -f docker/docker-compose.yml up --build
 - Every bug fix starts with a failing regression test whose name begins with `test_regression_`. Never delete it.
 - Golden fixtures change only on purpose: `SHOWPY_UPDATE_GOLDEN=1 uv run pytest -m golden`, then a human reviews the diff.
 - Warnings are errors.
+- Branch coverage of `showpy` has a floor in `COVERAGE_FLOOR` in `noxfile.py`, enforced by `nox -s tests`: 96% (measured 96.34% on 2026-11-14, rounded down). The floor never decreases: raise it when coverage rises, and add tests instead of lowering it.
 
 ## Pre-merge checklist
 
