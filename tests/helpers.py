@@ -13,19 +13,21 @@ Contains:
     defect(): marks a test as an open audited defect, a strict xfail keyed on its ID
     capped_address_space(): caps the address space so a runaway allocation fails fast
     EXPECTED_FAILURES: exception names a hash-seed subprocess may end with
+    TIMEOUT_METHOD: picks pytest-timeout's signal method where SIGALRM exists, else thread
     outputs_under_hash_seeds(): runs one script under each hash seed and collects its output
     TAGGED_SHOW_SCRIPT: script head building two_set_show() with spot tags and a selection
     digests_under_hash_seeds(): hashes one output of the tagged show twice per hash seed
 """
 
 import math
+import signal
 import subprocess
 import sys
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import TypeVar, cast
+from typing import Literal, TypeVar, cast
 
 import pytest
 
@@ -46,6 +48,9 @@ STILL_TOL_M = 1e-6
 FULL_TURN = 360.0
 HALF_TURN = 180.0
 ALLOCATION_HEADROOM_BYTES = 256 * 2**20
+# pytest-timeout arms its timer before skip markers run, so a signal timeout on a test
+# skipped on Windows still crashes the run there; Windows has no SIGALRM.
+TIMEOUT_METHOD: Literal["signal", "thread"] = "signal" if hasattr(signal, "SIGALRM") else "thread"
 EXPECTED_FAILURES = ("ValidationError", "SchemaError", "ShowPyError")
 HASH_SEEDS = ("1", "2", "3")
 SUBPROCESS_TIMEOUT_S = 20

@@ -85,6 +85,7 @@ from showpy.core.util import (
     seeded_rng,
     timer,
 )
+from tests.helpers import TIMEOUT_METHOD
 
 
 def test_natural_sort_orders_numbers_numerically() -> None:
@@ -428,7 +429,7 @@ def test_regression_chunk_counts_rejects_nan_total() -> None:
 
 @pytest.mark.defect("UP-9.3-22")
 @pytest.mark.xfail(strict=True, reason="UP-9.3-22")
-@pytest.mark.timeout(5, method="signal")
+@pytest.mark.timeout(5, method=TIMEOUT_METHOD)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_id_split_is_linear_on_long_ids() -> None:
     """Splits a 10,000-character ID in linear time (audit 9.3; P0 #8)."""
@@ -438,7 +439,7 @@ def test_regression_id_split_is_linear_on_long_ids() -> None:
 
 @pytest.mark.defect("UP-9.3-23")
 @pytest.mark.xfail(strict=True, reason="UP-9.3-23")
-@pytest.mark.timeout(5, method="signal")
+@pytest.mark.timeout(5, method=TIMEOUT_METHOD)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_range_check_happens_before_expansion() -> None:
     """Checks range endpoints before building 300,000 strings (audit 9.3; P0 #8)."""

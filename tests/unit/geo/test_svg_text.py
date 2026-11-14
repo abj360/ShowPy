@@ -52,6 +52,7 @@ from showpy.core.util import approx_equal
 from showpy.geo.curves import SvgCurve
 from showpy.geo.shapes import svg_outline, text_outline
 from showpy.geo.svg import parse_path
+from tests.helpers import TIMEOUT_METHOD
 
 BOX = Box2(min=(0.0, 0.0), max=(10.0, 10.0))
 WIDE_BOX = Box2(min=(0.0, 0.0), max=(20.0, 2.0))
@@ -164,7 +165,7 @@ def _median_parse_times(arc_count: int) -> tuple[float, float]:
 @pytest.mark.slow
 @pytest.mark.defect("UP-9.1-09")
 @pytest.mark.xfail(strict=True, reason="UP-9.1-09")
-@pytest.mark.timeout(SCALING_TIMEOUT_S, method="signal")
+@pytest.mark.timeout(SCALING_TIMEOUT_S, method=TIMEOUT_METHOD)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_parse_path_scales_linearly_with_arc_count() -> None:
     """Parses twice the arcs in under 3x the time; a quadratic parser takes about 4x (P0 #8)."""

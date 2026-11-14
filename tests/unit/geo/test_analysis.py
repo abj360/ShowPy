@@ -21,7 +21,7 @@ from showpy.core.errors import GeometryError, ShowPyError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.geo.analysis import balance, change_amount, coverage, density_map, symmetry_score
 from tests.fixtures.shows import field_sheet, two_set_show
-from tests.helpers import capped_address_space, make_set
+from tests.helpers import TIMEOUT_METHOD, capped_address_space, make_set
 
 TOL = 1e-9
 SIGNAL_TIMEOUT_S = 5
@@ -88,7 +88,7 @@ def test_change_amount_uses_spots_in_both_sets() -> None:
 
 @pytest.mark.defect("UP-9.1-06")
 @pytest.mark.xfail(strict=True, reason="UP-9.1-06")
-@pytest.mark.timeout(SIGNAL_TIMEOUT_S, method="signal")
+@pytest.mark.timeout(SIGNAL_TIMEOUT_S, method=TIMEOUT_METHOD)
 @pytest.mark.skipif(sys.platform != "linux", reason="needs signal timeout and RLIMIT_AS")
 def test_regression_density_map_caps_the_grid_size() -> None:
     """Rejects a 1e-5 m cell (8e12 cells on the field) instead of allocating it (P0 #8)."""

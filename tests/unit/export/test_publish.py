@@ -78,6 +78,7 @@ from showpy.show.models import Show
 from tests.fixtures.export_shows import AT, guided_show, performer
 from tests.fixtures.motion_shows import with_rows, with_targets
 from tests.fixtures.shows import two_set_show
+from tests.helpers import TIMEOUT_METHOD
 
 BASE_URL = "https://eight.example/p/"
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -445,7 +446,7 @@ def test_regression_publish_does_not_mangle_a_base_url_query() -> None:
 
 @pytest.mark.defect("UP-9.5-07")
 @pytest.mark.xfail(strict=True, reason="UP-9.5-07")
-@pytest.mark.timeout(5, method="signal")
+@pytest.mark.timeout(5, method=TIMEOUT_METHOD)
 @pytest.mark.skipif(sys.platform != "linux", reason="RLIMIT_AS cap and signal timeout need Linux")
 def test_regression_qr_code_caps_the_image_size() -> None:
     """Rejects a 100,000 px QR size instead of allocating a 10 GB image (audit 9.5; P0 #8).

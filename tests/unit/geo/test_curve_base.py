@@ -19,6 +19,7 @@ import pytest
 from showpy.core.errors import GeometryError
 from showpy.geo.curve_base import Curve
 from showpy.geo.shapes import arc, circle, polyline, spiral
+from tests.helpers import TIMEOUT_METHOD
 
 SIGNAL_TIMEOUT_S = 5
 TURNS = 32
@@ -34,7 +35,7 @@ ZIGZAG_PROBE = (15.2, 0.0)
 DENSE_SAMPLES = 400_001
 PROJECT_TOL_M = 1e-3
 
-timeout_on_hang = pytest.mark.timeout(SIGNAL_TIMEOUT_S, method="signal")
+timeout_on_hang = pytest.mark.timeout(SIGNAL_TIMEOUT_S, method=TIMEOUT_METHOD)
 skip_without_signals = pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 
 

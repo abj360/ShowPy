@@ -36,6 +36,7 @@ from showpy.show.file_repository import FileRepository
 from showpy.show.models import Revision
 from showpy.show.repositories import digest
 from tests.fixtures.shows import two_set_show
+from tests.helpers import TIMEOUT_METHOD
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 SHOW_ID = "show-1"
@@ -78,7 +79,7 @@ def test_regression_next_link_to_outside_path_is_refused(tmp_path: Path) -> None
 
 @pytest.mark.defect("UP-9.7-04")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-04")
-@pytest.mark.timeout(5, method="signal")
+@pytest.mark.timeout(5, method=TIMEOUT_METHOD)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_next_link_cycle_is_refused(tmp_path: Path) -> None:
     """Refuses a cycle in next/ instead of looping forever (audit 9.7 item 3; P0 #3, #7)."""

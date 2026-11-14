@@ -66,7 +66,7 @@ from showpy.geo.curves import (
     curve_from_construction,
 )
 from showpy.geo.shapes import arc, bezier, circle, line, spiral
-from tests.helpers import capped_address_space
+from tests.helpers import TIMEOUT_METHOD, capped_address_space
 
 SIGNAL_TIMEOUT_S = 5
 HUGE_TURNS = 1e7
@@ -215,7 +215,7 @@ def test_regression_model_copy_drops_cached_arc_length_table() -> None:
 
 @pytest.mark.defect("UP-9.1-04")
 @pytest.mark.xfail(strict=True, reason="UP-9.1-04")
-@pytest.mark.timeout(SIGNAL_TIMEOUT_S, method="signal")
+@pytest.mark.timeout(SIGNAL_TIMEOUT_S, method=TIMEOUT_METHOD)
 @pytest.mark.skipif(sys.platform != "linux", reason="needs signal timeout and RLIMIT_AS")
 def test_regression_spiral_rejects_unbounded_turns() -> None:
     """Rejects 1e7 turns instead of tabulating 1e10 samples (audit 9.1; P0 #8).
