@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Spell any text that the bundled single-line fonts cover, as an editable `text` form with an exact spot count, placed anywhere on the sheet.
+**Goal:** Spell any text that the bundled single-line fonts cover, as an editable `text` form with an exact spot count (or one derived from a spacing between spots), placed anywhere on the sheet.
 
-**Architecture:** A build script converts commit-pinned, checksummed Hershey and Relief SingleLine sources into one JSON font format (`showpy.font.v1`). The converted files are committed under `showpy/fonts/` with their licences. A frozen `FontRegistry` identifies each font by `asset:sha256:<hex>` of its exact bytes. `showpy.geo.text_layout` turns text into stroke curves: a per-character fallback chain, lines, alignment, anchor, spacing and rotation, with no shaping. `showpy.choreo.form_text` spreads exactly `n` slots over the strokes in reading order, and the `text` form kind, `edit` and `export_json`/`import_fonts` build on those two modules.
+**Architecture:** A build script converts commit-pinned, checksummed Hershey and Relief SingleLine sources into one JSON font format (`showpy.font.v1`). The converted files are committed under `showpy/fonts/` with their licences. A frozen `FontRegistry` identifies each font by `asset:sha256:<hex>` of its exact bytes. `showpy.geo.text_layout` turns text into stroke curves: a per-character fallback chain, lines, alignment, anchor, spacing and rotation, with no shaping. `showpy.choreo.form_text` spreads exactly `n` slots over the strokes in reading order (with `spacing=`, `n` is derived from the total stroke length and stored), and the `text` form kind, `edit` and `export_json`/`import_fonts` build on those two modules.
 
 **Tech Stack:** Python 3.12+, Pydantic v2 frozen models, numpy, the existing curve and SVG-path machinery (`showpy.geo.svg`, `SvgCurve`, `Polyline`), stdlib `json`/`base64`/`hashlib`/`unicodedata`/`importlib.resources`. The build script also uses stdlib `urllib` and `xml.etree`.
 
@@ -17,14 +17,15 @@
 - The library never downloads anything and never looks a font up in the operating system. Fonts come from `showpy/fonts/` (via `importlib.resources`) or from bytes the caller passes.
 - Font files get into the repository once, through `scripts/build_fonts.py`. The script downloads commit-pinned URLs and verifies each one's SHA-256 before converting. Its output is byte-deterministic (`json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=True)` plus `"\n"`) and is committed. CI never runs the script.
 - Font identity is `asset:sha256:<64 hex>`: the SHA-256 of the exact font file bytes, the same URI `InMemoryAssetStore.put(data)` returns. A recipe stores URIs, never names.
-- Error codes (rule 7, all `ShowPyError` subclasses with `code`, `message`, `context`, `hint`): `MISSING_GLYPH` (`GlyphError`), `MISSING_FONT` (`MissingFontError`), `BAD_FONT`, `FONT_NAME_TAKEN` and `FONT_HASH_MISMATCH` (`FontError`), `TOO_FEW_SPOTS` (`SpacingError`) and `COINCIDENT_SLOTS` (`GeometryError`). The legibility notice is a `LegibilityWarning` (a `UserWarning`), not an error. pytest runs with `filterwarnings = error`, so:
+- Error codes (rule 7, all `ShowPyError` subclasses with `code`, `message`, `context`, `hint`): `MISSING_GLYPH` (`GlyphError`), `MISSING_FONT` (`MissingFontError`), `BAD_FONT`, `FONT_NAME_TAKEN` and `FONT_HASH_MISMATCH` (`FontError`), `TOO_FEW_SPOTS` and `TOO_MANY_SPOTS` (`SpacingError`), `N_OR_SPACING` (`SchemaError`) and `COINCIDENT_SLOTS` (`GeometryError`). The legibility notice is a `LegibilityWarning` (a `UserWarning`), not an error. pytest runs with `filterwarnings = error`, so:
   - The dedicated warning tests assert it with `pytest.warns`.
   - Any other test that builds text at or near its minimum count is marked `@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")`. This covers the golden, the minimum-count tests and the tiny-font tests.
   - Doctests use counts that never trigger it. If one does, raise its `n`; never filter in a doctest.
 - Per-stroke minimum spots: 2 for an open stroke, 3 for a closed one. Closed loops never place two spots on one point.
 - Units: `height` is the cap height in meters. `rotation` is in degrees, counter-clockwise positive, and 0 reads left to right toward +x as the audience sees it. Glyph y-up maps to stage +y (upstage). `letter_spacing` and `line_spacing` are fractions of the first font's em, where `em_m = height * units_per_em / cap`.
 - Slot order is reading order: lines top to bottom, glyphs in logical order, strokes in font order, each stroke from its start.
-- `edit(form, text=...)` keeps the same members and the same count (maintainer decision of 2026-11-14). Member i stands on slot i.
+- `edit(form, text=...)` keeps the same members and the same count (maintainer decision of 2026-11-14). Member i stands on slot i. A text form gets exactly one of `n` (spots) or `spacing` (meters between spots along strokes). With `spacing`, the derived count is stored as the recipe's `n`. Only an explicit `n=` or `spacing=` edit changes the count (Task 10).
+- Every `text_form` call passes `n=` (or, from Task 10, `spacing=`). Tests in Tasks 8 and 9 always pass `n=`.
 - `simplex` keeps its glyph geometry, 4 × 6 grid, advance 5 and case folding. The one visible change is the fix for UP-9.1-28: loop strokes come out `closed=True` without a repeated end point. `simplex` is its own bundled font, not an alias for a Hershey face.
 - The stored schema stays `showpy.show.v1`. Adding `"text"` to `FormKind` only widens the enum, so every old file still loads (`tests/unit/show/test_schema.py` rule: bump only when old files no longer load). Regenerate with `SHOWPY_UPDATE_SCHEMA=1`.
 - `PathEngine` is untouched. Existing form kinds ignore the font registry, and their outputs do not change.
@@ -47,27 +48,28 @@
 3. **A user-font text form reaching code that does not take `font_registry`** (`gate`, `reorder`, `match`, `form_place`). Expected: `MissingFontError` naming the hash. Never a substitute font, never a `KeyError`. Test in Task 8.
 4. **Transforming a text form** (`transform_form`, `gate`, `pinwheel`, mirror). These store a `"transform"` matrix in the recipe. Expected: slots and tangents both map through it, so `along` facings turn with the text. Test in Task 8.
 5. **Mixing fonts in one string through the fallback chain.** Each font has its own `units_per_em` and cap height. Expected: every glyph's cap height equals `height`, and each glyph advances by its own font's advance. Test in Task 4.
+6. **A `spacing` far from the letter size.** A spacing wider than a letter would leave a stroke with fewer spots than its minimum; a microscopic one would ask for millions of spots. Expected: the count is clamped up to the per-stroke minimums, and the `LegibilityWarning` fires as it does for a small `n`. Below the cap, the count raises `TOO_MANY_SPOTS` (`MAX_TEXT_SPOTS = 10_000`) before anything is allocated. Tests in Task 10.
 
 ---
 
 ## Files
 
-| File                                                      | Responsibility                                                                      |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `docs/adr/0003-fonts-as-content-hashed-assets.md`         | Font format and identity decision                                                   |
-| `scripts/build_fonts.py`                                  | One-time fetch, checksum, conversion and contact sheets                             |
-| `showpy/fonts/*.json`, `licenses/*.txt`, `NOTICE.txt`     | Bundled font data and licences (shipped in the wheel)                               |
-| `docs/research/2026-11-14-bundled-fonts.md`               | Sources, commits, checksums, licences, coverage                                     |
-| `showpy/core/errors.py`, `util.py`, `resources.py`        | Font errors and warning, `asset_uri`, `font_path`                                   |
-| `showpy/geo/models.py`                                    | `Font`, `FontGlyph`, `LaidGlyph`, `TextAlign`, `TextAnchor`, `DEFAULT_LINE_SPACING` |
-| `showpy/geo/fonts.py`                                     | `FontRegistry`, `load_font`, `register_font`, `bundled_fonts`, `BUNDLED_FONTS`      |
-| `showpy/geo/text_layout.py`                               | `layout_text`: fallback chain, lines, align, anchor, spacing, rotation              |
-| `showpy/geo/text.py`, `shapes.py`                         | Frozen `simplex` tables; `text_outline` on the registry                             |
-| `showpy/geo/spacing.py`                                   | `apportion` with per-curve minimums                                                 |
-| `showpy/choreo/models.py`                                 | `FormKind` gains `"text"`; `TextRecipe`                                             |
-| `showpy/choreo/form_text.py`                              | Exact-`n` slots on strokes, minimums, coincidence rule, legibility warning          |
-| `showpy/choreo/form_layout.py`, `forms.py`, `form_ops.py` | `text` dispatch, `text_form`, `font_registry` threading, `edit`                     |
-| `showpy/export/data.py`                                   | Fonts embedded by `export_json`; `import_fonts`                                     |
+| File                                                      | Responsibility                                                                                     |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `docs/adr/0003-fonts-as-content-hashed-assets.md`         | Font format and identity decision                                                                  |
+| `scripts/build_fonts.py`                                  | One-time fetch, checksum, conversion and contact sheets                                            |
+| `showpy/fonts/*.json`, `licenses/*.txt`, `NOTICE.txt`     | Bundled font data and licences (shipped in the wheel)                                              |
+| `docs/research/2026-11-14-bundled-fonts.md`               | Sources, commits, checksums, licences, coverage                                                    |
+| `showpy/core/errors.py`, `util.py`, `resources.py`        | Font errors and warning, `asset_uri`, `font_path`                                                  |
+| `showpy/geo/models.py`                                    | `Font`, `FontGlyph`, `LaidGlyph`, `TextAlign`, `TextAnchor`, `DEFAULT_LINE_SPACING`                |
+| `showpy/geo/fonts.py`                                     | `FontRegistry`, `load_font`, `register_font`, `bundled_fonts`, `BUNDLED_FONTS`                     |
+| `showpy/geo/text_layout.py`                               | `layout_text`: fallback chain, lines, align, anchor, spacing, rotation                             |
+| `showpy/geo/text.py`, `shapes.py`                         | Frozen `simplex` tables; `text_outline` on the registry                                            |
+| `showpy/geo/spacing.py`                                   | `apportion` with per-curve minimums                                                                |
+| `showpy/choreo/models.py`                                 | `FormKind` gains `"text"`; `TextRecipe`                                                            |
+| `showpy/choreo/form_text.py`                              | Exact-`n` slots on strokes, spacing-derived counts, minimums, coincidence rule, legibility warning |
+| `showpy/choreo/form_layout.py`, `forms.py`, `form_ops.py` | `text` dispatch, `text_form`, `font_registry` threading, `edit`                                    |
+| `showpy/export/data.py`                                   | Fonts embedded by `export_json`; `import_fonts`                                                    |
 
 ---
 
@@ -359,7 +361,7 @@ The cap-fallback test checks `Font.cap()` three ways: with `cap_height` set; wit
   - `resolve` and `get` raise `MissingFontError`. The context holds `font` (and `known`, for names). The hint names `register_font` and `import_fonts`, plus close names from `close_matches`.
   - `bundled_fonts` registers the five files named in `BUNDLED_FONTS` through `font_path`.
 - [ ] **Step 4: Run the tests to see them pass.** Same command as Step 2. Expected: PASS.
-- [ ] **Step 5: API change procedure, then commit both commits.** Commit `feat(core): add `FontError`, `MissingFontError`, `GlyphError`, `LegibilityWarning`and`asset_uri`` (errors, util, repositories). Then commit `feat(geo): add `FontRegistry`, `Font`, `FontGlyph`, `BUNDLED_FONTS`, `bundled_fonts`, `load_font`, `register_font` and `font_path``. Run the procedure once per commit.
+- [ ] **Step 5: API change procedure, then commit both commits.** Commit ``feat(core): add `FontError`, `MissingFontError`, `GlyphError`, `LegibilityWarning` and `asset_uri` `` (errors, util, repositories). Then commit ``feat(geo): add `FontRegistry`, `Font`, `FontGlyph`, `BUNDLED_FONTS`, `bundled_fonts`, `load_font`, `register_font` and `font_path` ``. Run the procedure once per commit.
 
 ### Task 4: Text layout with a per-character fallback chain
 
@@ -404,7 +406,7 @@ The cap-fallback test checks `Font.cap()` three ways: with `cap_height` set; wit
   - Anchor offsets: `baseline` 0, `top` −height, `middle` −(height + last baseline)/2.
   - Rotate about the origin, then translate by `at`.
 - [ ] **Step 4: Run the tests to see them pass.** Same command. Expected: PASS.
-- [ ] **Step 5: API change procedure, then commit** `feat(geo): add `layout_text`and`LaidGlyph` for multi-line text with font fallback`. Also list `TextAlign`, `TextAnchor` and `DEFAULT_LINE_SPACING` if the snapshot does.
+- [ ] **Step 5: API change procedure, then commit** ``feat(geo): add `layout_text` and `LaidGlyph` for multi-line text with font fallback``. Also list `TextAlign`, `TextAnchor` and `DEFAULT_LINE_SPACING` if the snapshot does.
 
 ### Task 5: `text_outline` on the registry; closed glyph loops (UP-9.1-28)
 
@@ -425,7 +427,7 @@ The cap-fallback test checks `Font.cap()` three ways: with `cap_height` set; wit
 - [ ] **Step 2: Run the tests to see them fail.** Run: `uv run pytest tests/unit/geo/test_shapes.py tests/unit/geo/test_svg_text.py -q`. Expected: the five UP-9.1-28 cases and the new tests FAIL. The existing `test_text_outline_unknown_font_or_glyph` passes before and after, since both new errors are `UnknownRefError`s.
 - [ ] **Step 3: Rewrite `text_outline` on top of `layout_text`.** Drop its import of `ADVANCE`, `GLYPH_HEIGHT` and `glyph_strokes`. Update its doctest so it counts `HI` strokes as 6.
 - [ ] **Step 4: Run the tests to see them pass.** Same command. Expected: PASS. The gates report `Ledger: 523 open`.
-- [ ] **Step 5: API change procedure, then commit** `fix(geo): close glyph loops and spell `text_outline` from the font registry`.
+- [ ] **Step 5: API change procedure, then commit** ``fix(geo): close glyph loops and spell `text_outline` from the font registry``.
 
 ### Task 6: Apportion with per-curve minimums
 
@@ -449,7 +451,7 @@ The cap-fallback test checks `Font.cap()` three ways: with `cap_height` set; wit
 - [ ] **Step 2: Run the tests to see them fail.** Run: `uv run pytest tests/unit/geo/test_spacing.py -q`. Expected: FAIL with an ImportError.
 - [ ] **Step 3: Implement `apportion`.** Have `space_proportional` call it.
 - [ ] **Step 4: Run the tests to see them pass.** Same command. Expected: PASS, and the existing `space_proportional` doctest still prints `[2, 4]`.
-- [ ] **Step 5: API change procedure, then commit** `feat(geo): add `apportion` with per-curve minimums`.
+- [ ] **Step 5: API change procedure, then commit** ``feat(geo): add `apportion` with per-curve minimums``.
 
 ### Task 7: The text recipe and exact-`n` slots on strokes
 
@@ -506,7 +508,7 @@ The cap-fallback test checks `Font.cap()` three ways: with `cap_height` set; wit
   - Tangents come from `curve.tangent_at(stations)`.
   - Warn with `LegibilityWarning` when the largest per-stroke spacing (L/(k−1) for an open stroke, L/k for a closed one) exceeds `LEGIBLE_SPACING_SHARE × height`. The message is `W: text spots are up to {s:.2f} m apart on {h:.2f} m letters; raise n`.
 - [ ] **Step 4: Run the tests to see them pass.** Same command. Expected: PASS.
-- [ ] **Step 5: API change procedure, then commit** `feat(choreo): add `TextRecipe` and exact-count text slots on strokes`. Leave `form_text` functions out of `_api_table.py`: they are internal, like `form_layout`.
+- [ ] **Step 5: API change procedure, then commit** ``feat(choreo): add `TextRecipe` and exact-count text slots on strokes``. Leave `form_text` functions out of `_api_table.py`: they are internal, like `form_layout`.
 
 ### Task 8: The `text` form kind, `text_form` and `font_registry` threading
 
@@ -526,18 +528,18 @@ The cap-fallback test checks `Font.cap()` three ways: with `cap_height` set; wit
 
 - Consumes: `text_recipe` and `text_slots` (Task 7).
 - Produces:
-  - `text_form(form_id: FormId, members: Sequence[SpotId], text: str, *, fonts: Sequence[str], height: Meters, at: Point, rotation: Degrees = 0.0, align: TextAlign = "left", anchor: TextAnchor = "baseline", letter_spacing: float = 0.0, line_spacing: float = DEFAULT_LINE_SPACING, facing: FacingSpec | None = None, set_id: SetId = "", n: int | None = None, font_registry: FontRegistry | None = None) -> Form`. It resolves font names to URIs, stores `TextRecipe(...).model_dump(mode="json")` (plus `"n"` when given) and validates by building the layout when the slot count is known, as `generated_form` does.
+  - `text_form(form_id: FormId, members: Sequence[SpotId], text: str, *, fonts: Sequence[str], height: Meters, at: Point, rotation: Degrees = 0.0, align: TextAlign = "left", anchor: TextAnchor = "baseline", letter_spacing: float = 0.0, line_spacing: float = DEFAULT_LINE_SPACING, facing: FacingSpec | None = None, set_id: SetId = "", n: int, font_registry: FontRegistry | None = None) -> Form`. `n` is a required keyword until Task 10 adds `spacing` as its alternative. It resolves font names to URIs, stores `TextRecipe(...).model_dump(mode="json")` plus `"n"`, and validates by building the layout, as `generated_form` does.
   - `slots`, `slot_poses` and `placements` each gain `*, font_registry: FontRegistry | None = None`.
   - The text branch of `layout`: `n = _required_count(form)`; `pts, tangents = text_slots(text_recipe(form.geometry), n, font_registry)`. A stored `"transform"` maps points through `transform_points` and tangents through its 2 × 2 linear part. It returns `FormLayout(pts, tangents)`.
 
 - [ ] **Step 1: Write the failing tests.**
-  - The `text_form` doctest: `len(slots(text_form("go", [f"S{i}" for i in range(24)], "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10))))` prints `24`.
+  - The `text_form` doctest: `len(slots(text_form("go", [f"S{i}" for i in range(24)], "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10), n=24)))` prints `24`.
   - `test_text_form_stores_uris_not_names`: `geometry["fonts"] == [BUNDLED_FONTS["hershey-roman"]]`.
   - `test_text_form_placements_follow_reading_order`: members `A…` stand on slots in order.
   - `test_existing_kinds_ignore_the_font_registry`: `slots(line_form(...), font_registry=EMPTY)` equals `slots(line_form(...))`.
   - `test_text_form_with_a_user_font_needs_its_registry`: with `TINY` registered, `slots(f, font_registry=reg)` works. `gate(f, "start", 90.0)` (Review Focus 3) raises `MissingFontError` whose `context["font"]` is the tiny URI.
   - `test_transformed_text_moves_slots_and_facings` (Review Focus 4): `transform_form(f, translation_matrix(0, 3))` shifts every slot by (0, 3) within 1e-9. `transform_form(f, rotation_matrix(90.0, (0, 0)))` with `FacingSpec(mode="along")` turns every facing by 90° (mod 360) within 1e-9.
-  - `tests/strategies/forms.py` gets a `_text` builder: `text_form(d.form_id, d.members, "-", fonts=["simplex"], height=draw(sizes), at=d.center, facing=d.facing, set_id=d.set_id)`. Simplex `-` is one open stroke (minimum 2), which fits `MIN_MEMBERS = 2`, and it never reaches the legibility threshold. Add `"text"` to `FORM_KINDS` and `BUILDERS`.
+  - `tests/strategies/forms.py` gets a `_text` builder: `text_form(d.form_id, d.members, "-", fonts=["simplex"], height=draw(sizes), at=d.center, facing=d.facing, set_id=d.set_id, n=len(d.members))`. Simplex `-` is one open stroke (minimum 2), which fits `MIN_MEMBERS = 2`, and it never reaches the legibility threshold. Add `"text"` to `FORM_KINDS` and `BUILDERS`.
   - Golden `test_text_slots_match_reviewed_fixture`, marked `golden`. Every entry uses height 4.0 at (0, 10). It holds:
     - `"GO TEAM"` in hershey-roman with n = 60
     - `"Équipe 2026!"` in relief with n = 90, rotation 15, `align="center"`, `anchor="middle"`
@@ -548,7 +550,7 @@ The cap-fallback test checks `Font.cap()` three ways: with `cap_height` set; wit
 - [ ] **Step 2: Run the tests to see them fail.** Run: `uv run pytest tests/unit/choreo tests/property/test_strategy_coverage.py tests/golden/test_golden_text.py -q`. Expected: FAIL.
 - [ ] **Step 3: Implement.** Then run `SHOWPY_UPDATE_SCHEMA=1 uv run pytest tests/unit/show/test_schema.py`. Check that the schema diff is only `"text"` added to the form kind enum, and keep `showpy.show.v1`. Run `SHOWPY_UPDATE_GOLDEN=1 uv run pytest tests/golden/test_golden_text.py` once, and look over the fixture: 180 rows, no NaN.
 - [ ] **Step 4: Run the tests to see them pass.** Same command, plus `uv run pytest tests/property -q`. Expected: PASS.
-- [ ] **Step 5: API change procedure, then commit** `feat(choreo): add the `text`form kind with`text_form`; `slots`, `slot_poses`and`placements`take`font_registry``. If the snapshot lists `Form`or`form_templates`, name them as well.
+- [ ] **Step 5: API change procedure, then commit** ``feat(choreo): add the `text` form kind with `text_form`; `slots`, `slot_poses` and `placements` take `font_registry` ``. If the snapshot lists `Form` or `form_templates`, name them as well.
 
 ### Task 9: `edit(form, text=...)` keeps the same members
 
@@ -560,11 +562,11 @@ The cap-fallback test checks `Font.cap()` three ways: with `cap_height` set; wit
 **Interfaces:**
 
 - Consumes: `text_form` (Task 8).
-- Produces: `edit(form: Form, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS, *, font_registry: FontRegistry | None = None, **changes: Any) -> Form`. Members and `n` never change through a recipe edit.
+- Produces: `edit(form: Form, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS, *, font_registry: FontRegistry | None = None, **changes: Any) -> Form`. A text, font or layout edit never changes the members or `n`. Count edits arrive in Task 10.
 
 - [ ] **Step 1: Write the failing tests.**
-  - `test_edit_text_keeps_members_in_reading_order`: `f = text_form("t", members_60, "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10))`, then `g = edit(f, text="GO TEAM")`. Then `g.members == f.members`, `len(slots(g)) == 60`, and `placements(g)[0]` stands on the first stroke start of the `G`.
-  - `test_edit_text_too_long_for_the_count_names_the_minimum`: a 12-member simplex `"HI"` edited to `"HIHI"` raises `SpacingError` with code `TOO_FEW_SPOTS` and `context["min_n"] == 24`.
+  - `test_edit_text_keeps_members_in_reading_order`: `f = text_form("t", members_60, "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10), n=60)`, then `g = edit(f, text="GO TEAM")`. Then `g.members == f.members`, `len(slots(g)) == 60`, and `placements(g)[0]` stands on the first stroke start of the `G`.
+  - `test_edit_text_too_long_for_the_count_names_the_minimum`: a 12-member simplex `"HI"` with `n=12`, edited to `"HIHI"`, raises `SpacingError` with code `TOO_FEW_SPOTS` and `context["min_n"] == 24`.
   - `test_edit_text_resolves_font_names`: `edit(f, fonts=["relief-singleline"]).geometry["fonts"] == [BUNDLED_FONTS["relief-singleline"]]`.
   - `test_edit_text_suggests_the_field_for_a_typo`: `edit(f, txt="A")` raises `SchemaError`, and `"text"` is in the hint.
   - `test_edit_locked_text_form_needs_force`: raises `LockedError`.
@@ -572,9 +574,53 @@ The cap-fallback test checks `Font.cap()` three ways: with `cap_height` set; wit
 - [ ] **Step 2: Run the tests to see them fail.** Run: `uv run pytest tests/unit/choreo/test_form_ops.py -q`. Expected: FAIL. The `text` key is missing from `RECIPE_KEYS`, and `edit` has no `font_registry`.
 - [ ] **Step 3: Implement.** `edit` passes `font_registry` to `layout`.
 - [ ] **Step 4: Run the tests to see them pass.** Same command. Expected: PASS.
-- [ ] **Step 5: API change procedure, then commit** `feat(choreo): regenerate text forms through `edit` with the same members`.
+- [ ] **Step 5: API change procedure, then commit** ``feat(choreo): regenerate text forms through `edit` with the same members``.
 
-### Task 10: Fonts travel with exported shows
+### Task 10: Spot counts from a spacing along strokes
+
+**Files:**
+
+- Modify: `showpy/choreo/models.py` (`TextRecipe.spacing`), `showpy/choreo/form_text.py` (`MAX_TEXT_SPOTS`, `spacing_count`), `showpy/choreo/forms.py` (`text_form` takes `n` or `spacing`), `showpy/choreo/form_ops.py` (count edits on text forms)
+- Test: `tests/unit/choreo/test_form_text.py`, `tests/unit/choreo/test_forms.py`, `tests/unit/choreo/test_form_ops.py`
+
+**Interfaces:**
+
+- Consumes: `text_strokes`, `min_text_spots` and `text_slots` (Task 7), `apportion` (Task 6), `text_form` (Task 8) and `edit` (Task 9).
+- Produces:
+  - `TextRecipe.spacing: Meters | None = None`, > 0 and finite when set. It records the spacing that last set the count; `text_recipe` still ignores `n`.
+  - In `showpy.choreo.form_text`:
+    - `MAX_TEXT_SPOTS = 10_000`
+    - `spacing_count(strokes: Sequence[Curve], spacing: Meters) -> int`
+  - `text_form(..., n: int | None = None, spacing: Meters | None = None, font_registry: FontRegistry | None = None) -> Form`. Exactly one of `n` and `spacing` must be given. With `spacing`, the recipe stores `spacing` and `"n" = spacing_count(text_strokes(recipe), spacing)`.
+  - `edit` on a text form:
+    - `text=`, `fonts=` and the layout fields keep `n` and `spacing` as stored.
+    - `spacing=s` re-derives `n` from the recipe after this call's other changes, and stores both.
+    - `n=k` stores `k` and sets `spacing` to `None`.
+    - `n=` and `spacing=` together raise `SchemaError(code="N_OR_SPACING")`.
+    - Members never change.
+- The count rule. Each open stroke spans L/s gaps, so it holds L/s + 1 spots; each closed stroke holds L/s. So `ideal = ΣL / s + open_strokes`, and `n = max(min_text_spots(strokes), floor(ideal + 0.5))`. Half rounds up, which is deterministic. Per-stroke counts then come from the same `apportion(lengths, n, minimums)` call as the `n` path, so the minimums, the coincidence rule and the legibility warning apply unchanged. If `n > MAX_TEXT_SPOTS`, raise `SpacingError(code="TOO_MANY_SPOTS")` with context `n`, `max_n` and `spacing`, and the hint `use spacing >= {ΣL / (MAX_TEXT_SPOTS - open_strokes):.3f} m`. Raise it before any slot is placed.
+
+- [ ] **Step 1: Write the failing tests.** Simplex `"L"` at height 6 is one open stroke of 10 m (6 m down, 4 m across). Simplex `"O"` at height 6 is one closed stroke of 12 + 4√2 ≈ 17.657 m.
+  - `test_spacing_count_follows_total_stroke_length`: `"L"` with spacing 1.0 gives 11. `text_form(..., spacing=1.0)` stores `geometry["n"] == 11` and `geometry["spacing"] == 1.0`.
+  - `test_spacing_count_rounds_half_up`: `"L"` with spacing 4.0 gives `floor(2.5 + 1 + 0.5) == 4`. Mark it with the `LegibilityWarning` filter, since 10/3 m > 3 m.
+  - `test_spacing_count_respects_stroke_minimums` (Review Focus 6): `"O"` with spacing 100.0 gives 3, the closed minimum, and slot building warns: `pytest.warns(LegibilityWarning)`.
+  - `test_tiny_spacing_hits_the_spot_cap` (Review Focus 6): `"L"` with spacing 1e-6 raises `SpacingError` with code `TOO_MANY_SPOTS` and `context["max_n"] == 10_000`.
+  - `test_regression_spacing_never_doubles_a_spot_on_closed_loops`: `"O0D8Q6B"` in simplex and in relief, height 2.0, spacing 0.3: `min_gap > COINCIDENT_TOL_M`.
+  - `test_text_form_needs_exactly_one_of_n_and_spacing`: both missing, and both given, each raise `SchemaError` with code `N_OR_SPACING`. The hint names `n=` and `spacing=`.
+  - `test_text_recipe_rejects_bad_spacing`: spacing 0, −1 and NaN each raise `SchemaError` with `context["field"] == "spacing"`.
+  - `test_edit_text_keeps_the_derived_count`: `f = text_form("t", [], "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10), spacing=0.5)`, then `edit(f, text="GOGO")` keeps `geometry["n"]` and `geometry["spacing"]`, and its members equal `f.members`.
+  - `test_edit_spacing_rederives_the_count`: `edit(f, spacing=1.0).geometry["n"]` equals `spacing_count(text_strokes(text_recipe(f.geometry)), 1.0)`. `edit(f, text="GO TEAM", spacing=1.0)` derives the count from `"GO TEAM"`.
+  - `test_edit_n_clears_spacing`: `edit(f, n=30)` gives `geometry["n"] == 30` and `geometry["spacing"] is None`.
+  - `test_edit_n_and_spacing_together_is_rejected`: raises `SchemaError` with code `N_OR_SPACING`.
+- [ ] **Step 2: Run the tests to see them fail.** Run: `uv run pytest tests/unit/choreo -q`. Expected: the new tests FAIL. `spacing_count` is missing, and `text_form` has no `spacing`.
+- [ ] **Step 3: Implement.**
+  - `text_form` and `edit` share one helper in `form_text.py`, `count_recipe(geometry: Mapping[str, Any], n: int | None, spacing: Meters | None, font_registry: FontRegistry | None) -> dict[str, Any]`. It applies the exactly-one rule and returns the geometry with `n` and `spacing` set.
+  - Update the `text_form` doctest to `n=24` or `spacing=`, whichever keeps it free of warnings.
+  - Update the recipe contract in the `forms.py` module docstring: `spacing` is a request, and `n` is the stored count.
+- [ ] **Step 4: Run the tests to see them pass.** Run: `uv run pytest tests/unit/choreo tests/property tests/golden/test_golden_text.py -q`. Expected: PASS. The golden is unchanged, since it uses `n`.
+- [ ] **Step 5: API change procedure, then commit** ``feat(choreo): derive text spot counts from `spacing` in `text_form` and `edit` ``. Also name `TextRecipe` if the snapshot lists it.
+
+### Task 11: Fonts travel with exported shows
 
 **Files:**
 
@@ -601,17 +647,17 @@ The cap-fallback test checks `Font.cap()` three ways: with `cap_height` set; wit
 - [ ] **Step 2: Run the tests to see them fail.** Run: `uv run pytest tests/unit/export/test_data.py tests/property/test_export_properties.py -q`. Expected: the new tests FAIL.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run the tests to see them pass.** Same command. Expected: PASS, with the export property tests still green.
-- [ ] **Step 5: API change procedure, then commit** `feat(export): embed text fonts in `export_json`and add`import_fonts``.
+- [ ] **Step 5: API change procedure, then commit** ``feat(export): embed text fonts in `export_json` and add `import_fonts` ``.
 
-### Task 11: Documents, changelog and full gate
+### Task 12: Documents, changelog and full gate
 
 **Files:**
 
 - Modify: `docs/showpy-api-reference.md` (the `showpy.geo` text rows, plus a "Text forms" subsection under `showpy.choreo.forms`), `docs/HANDOFF.md` (module map, a status line, deviations), `CHANGELOG.md`
 
 - [ ] **Step 1: Update the docs.**
-  - **Reference.** Document `text_outline`, `layout_text`, `FontRegistry`, `register_font`, `bundled_fonts`, `text_form`, `TextRecipe`, `edit(text=)` and `import_fonts`, with an error-code table.
-  - **HANDOFF deviations.** `simplex` is its own font, not an alias; fonts are imported with `import_fonts`, not inside `import_json`; Hershey Cyrillic is deferred; `spacing=` (meters between spots) is not in stage 1.
+  - **Reference.** Document `text_outline`, `layout_text`, `FontRegistry`, `register_font`, `bundled_fonts`, `text_form` (`n=` or `spacing=`), `TextRecipe`, `edit(text=)`, the count edits (`edit(n=)`, `edit(spacing=)`) and `import_fonts`, with an error-code table.
+  - **HANDOFF deviations.** `simplex` is its own font, not an alias; fonts are imported with `import_fonts`, not inside `import_json`; Hershey Cyrillic is deferred; `spacing=` stores its derived count as `n`, so a text edit keeps the count.
   - **HANDOFF next steps.** Plans for stage 2 and stage 3, and for threading `font_registry` through `match`, `reorder`, `gate`, `split_form`, `merge_forms` and `form_place`.
   - Run Prettier on both files.
 - [ ] **Step 2: Regenerate the changelog.** Run `uv run nox -s changelog`, which replaces the `()` placeholders with real SHAs. Then run `uv run pytest tests/unit/test_api_snapshot.py`. Expected: PASS.
@@ -622,4 +668,4 @@ The cap-fallback test checks `Font.cap()` three ways: with `cap_height` set; wit
 
 - **Stage 2.** User TTF/OTF/WOFF/WOFF2 through fontTools (a new runtime dependency, pinned in the lock and ranged in `pyproject.toml`). `register_font` dispatches on the magic bytes. Adds the `outline` and `fill` modes, the skeleton `centerline` with automatic fallback to `outline`, the build report, and the research note on skeleton thresholds.
 - **Stage 3.** Kerning (`GPOS`/`kern`), text `along` a curve, and the `showpy[shaping]` extra (HarfBuzz and bidi).
-- **Follow-ups found while planning.** Thread `font_registry` through every function that rebuilds slots. Add a verified Cyrillic single-line source. Add the `spacing=` mode. Consider one spot for dot-sized strokes (`.`, `i` dots), which today take 2 or 3 spots within centimeters.
+- **Follow-ups found while planning.** Thread `font_registry` through every function that rebuilds slots. Add a verified Cyrillic single-line source. Consider one spot for dot-sized strokes (`.`, `i` dots), which today take 2 or 3 spots within centimeters.
