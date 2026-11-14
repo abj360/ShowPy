@@ -1,0 +1,1427 @@
+{
+  "Anchor": {
+    "model": {
+      "area": "showpy.core.types.Region | None",
+      "kind": "AnchorKind",
+      "point": "Point | None",
+      "set_id": "SetId | None",
+      "spots": "tuple[SpotId, ...] | None",
+      "tid": "TransitionId | None"
+    }
+  },
+  "ApprovalState": {
+    "enum": {
+      "APPROVED": "'approved'",
+      "DRAFT": "'draft'",
+      "PROPOSED": "'proposed'"
+    }
+  },
+  "ArcCurve": {
+    "model": {
+      "center": "Point",
+      "closed": "Literal[False]",
+      "kind": "Literal['arc']",
+      "radius": "Meters",
+      "start_deg": "Degrees",
+      "sweep_deg": "Degrees"
+    }
+  },
+  "ArcPiece": "(start: Point, end: Point, center: Point, rx: float, ry: float, phi_deg: float, theta1_deg: float, dtheta_deg: float) -> None",
+  "AssetStore": {
+    "protocol": {
+      "get": "(self, uri: str) -> bytes",
+      "put": "(self, data: bytes) -> str"
+    }
+  },
+  "AudioTrack": {
+    "model": {
+      "file": "str",
+      "gain": "float",
+      "label": "str",
+      "section": "tuple[Count, Count] | None",
+      "sync_offset_s": "Seconds"
+    }
+  },
+  "BezierCurve": {
+    "model": {
+      "closed": "Literal[False]",
+      "control": "tuple[Point, ...]",
+      "kind": "Literal['bezier']"
+    }
+  },
+  "Box2": {
+    "model": {
+      "max": "Point",
+      "min": "Point"
+    }
+  },
+  "Box3": {
+    "model": {
+      "max": "Point3",
+      "min": "Point3"
+    }
+  },
+  "CanvasEvent": {
+    "model": {
+      "actor": "Principal",
+      "at": "datetime.datetime",
+      "id": "str",
+      "kind": "EventKind",
+      "payload": "dict[str, Any]",
+      "revision": "str"
+    }
+  },
+  "Cast": {
+    "model": {
+      "groups": "dict[str, showpy.cast.models.Group]",
+      "label_scheme": "showpy.cast.models.LabelScheme",
+      "selections": "dict[str, frozenset[SpotId]]",
+      "spots": "tuple[showpy.cast.models.Spot, ...]"
+    }
+  },
+  "Chart": {
+    "model": {
+      "rows": "tuple[showpy.export.models.ChartRow, ...]",
+      "set_id": "SetId"
+    }
+  },
+  "ChartRow": {
+    "model": {
+      "entity": "SpotId",
+      "facing": "Degrees",
+      "form": "str | None",
+      "group": "str",
+      "note": "str | None",
+      "on_field": "bool",
+      "performer_name": "str | None",
+      "position_text": "str",
+      "xy": "Point"
+    }
+  },
+  "CircleCurve": {
+    "model": {
+      "ccw": "bool",
+      "center": "Point",
+      "closed": "Literal[True]",
+      "kind": "Literal['circle']",
+      "radius": "Meters",
+      "start_deg": "Degrees"
+    }
+  },
+  "Claim": {
+    "model": {
+      "claimed_at": "datetime.datetime",
+      "locked": "bool",
+      "performer": "showpy.export.models.Performer",
+      "spot": "SpotId"
+    }
+  },
+  "Comment": {
+    "model": {
+      "anchor": "showpy.notes.models.Anchor",
+      "author": "str",
+      "id": "str",
+      "resolved": "bool",
+      "text": "str"
+    }
+  },
+  "CompiledTransition": {
+    "model": {
+      "counts": "float",
+      "id": "TransitionId",
+      "plans": "dict[SpotId, showpy.choreo.engine_models.MotionPlan]",
+      "t_global0": "Count",
+      "warnings": "tuple[str, ...]"
+    }
+  },
+  "CompositeCurve": {
+    "model": {
+      "closed": "bool",
+      "kind": "Literal['composite']",
+      "parts": "tuple[AnyCurve, ...]"
+    }
+  },
+  "ConflictError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "ContinuityError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "CoordinateKind": {
+    "enum": {
+      "DANCE_FLOOR": "'dance_floor'",
+      "GRID": "'grid'",
+      "MARCHING": "'marching'",
+      "STAGE": "'stage'"
+    }
+  },
+  "CoordinateSheet": {
+    "model": {
+      "entity": "SpotId",
+      "performer_name": "str | None",
+      "rows": "tuple[showpy.export.models.SheetRow, ...]"
+    }
+  },
+  "CoordinateSystem": {
+    "model": {
+      "audience_side": "Literal['front', 'back', 'left', 'right']",
+      "kind": "showpy.sheet.models.CoordinateKind",
+      "labels": "dict[str, str]",
+      "origin": "Point | LandmarkId",
+      "precision": "float",
+      "units": "str"
+    }
+  },
+  "CountsOp": {
+    "model": {
+      "counts": "float",
+      "op": "Literal['counts']",
+      "rescale": "bool",
+      "set_id": "SetId"
+    }
+  },
+  "CubicPiece": "(start: Point, c1: Point, c2: Point, end: Point) -> None",
+  "Cue": {
+    "model": {
+      "estimated_seconds": "Seconds",
+      "label": "str",
+      "order": "int"
+    }
+  },
+  "Curve": {
+    "protocol": {
+      "construction": "(self) -> dict[str, Any]",
+      "length": "(self) -> Meters",
+      "normal_at": "(self, s: ArrayLike) -> Points",
+      "point_at": "(self, s: ArrayLike) -> Points",
+      "point_at_u": "(self, u: ArrayLike) -> Points",
+      "project": "(self, p: Point) -> Meters",
+      "tangent_at": "(self, s: ArrayLike) -> Points",
+      "to_polyline": "(self, tol: float = 0.01) -> Points",
+      "to_shapely": "(self, tol: float = 0.01) -> shapely.geometry.linestring.LineString"
+    }
+  },
+  "CurveBase": {
+    "model": {
+      "closed": "bool"
+    }
+  },
+  "CurveModel": {
+    "model": {
+      "closed": "bool"
+    }
+  },
+  "DeprecatedWarning": "(*args)",
+  "DocumentRepository": "(backend: showpy.show.repositories.RepositoryBackend)",
+  "Easing": {
+    "model": {
+      "kind": "Literal['linear', 'ease_in', 'ease_out', 'ease_in_out', 'hold_then_burst', 'burst_then_settle', 'steps', 'custom']",
+      "points": "tuple[tuple[float, float], ...]",
+      "strength": "float"
+    }
+  },
+  "EllipseCurve": {
+    "model": {
+      "center": "Point",
+      "closed": "Literal[True]",
+      "kind": "Literal['ellipse']",
+      "rotation_deg": "Degrees",
+      "rx": "Meters",
+      "ry": "Meters"
+    }
+  },
+  "EntityState": {
+    "model": {
+      "entity": "SpotId",
+      "facing": "Degrees",
+      "moving": "bool",
+      "on_field": "bool",
+      "position": "Point",
+      "velocity": "Point"
+    }
+  },
+  "FacingMode": {
+    "enum": {
+      "AGAINST_TRAVEL": "'against_travel'",
+      "AUDIENCE": "'audience'",
+      "FIXED": "'fixed'",
+      "INTERPOLATE": "'interpolate'",
+      "TOWARD_ENTITY": "'toward_entity'",
+      "TOWARD_POINT": "'toward_point'",
+      "TO_TARGET": "'to_target'",
+      "TRAVEL": "'travel'"
+    }
+  },
+  "FacingOverride": {
+    "model": {
+      "end": "Count",
+      "entities": "SelectorField",
+      "mode": "showpy.choreo.models.FacingMode",
+      "start": "Count",
+      "turn_counts": "float",
+      "value": "Degrees | Point | SpotId | None"
+    }
+  },
+  "FacingSpec": {
+    "model": {
+      "mode": "Literal['fixed', 'audience', 'toward_point', 'along', 'normal', 'outward']",
+      "value": "Degrees | Point | None"
+    }
+  },
+  "FileRepository": "(root: str | pathlib.Path)",
+  "Fix": {
+    "model": {
+      "kind": "Literal['delay', 'waypoint', 'reassign', 'stagger']",
+      "max_speed_after": "float",
+      "new_gap": "Meters",
+      "params": "dict[str, Any]"
+    }
+  },
+  "Form": {
+    "model": {
+      "facing": "showpy.choreo.models.FacingSpec",
+      "geometry": "dict[str, Any]",
+      "id": "FormId",
+      "kind": "FormKind",
+      "locked": "bool",
+      "members": "tuple[SpotId, ...]",
+      "meta": "dict[str, str]",
+      "set": "SetId",
+      "spacing": "showpy.choreo.models.SpacingSpec"
+    }
+  },
+  "FormFnInfo": {
+    "model": {
+      "name": "str",
+      "summary": "str"
+    }
+  },
+  "FormFnRegistry": {
+    "model": {
+      "fns": "dict[str, FormFn]"
+    }
+  },
+  "FormMetrics": {
+    "model": {
+      "curvature_range": "tuple[float, float]",
+      "intervals": "showpy.geo.models.IntervalStats",
+      "length": "Meters",
+      "symmetry_error": "Meters"
+    }
+  },
+  "FormOp": {
+    "model": {
+      "form": "showpy.choreo.models.Form",
+      "op": "Literal['form']"
+    }
+  },
+  "FormatRegistry": "(exporters: collections.abc.Mapping[str, Exporter], importers: collections.abc.Mapping[str, Importer])",
+  "Frame": {
+    "model": {
+      "states": "tuple[showpy.choreo.engine_models.EntityState, ...]",
+      "t": "Count",
+      "tau": "float",
+      "tid": "TransitionId | None"
+    }
+  },
+  "FrozenModel": {
+    "model": {}
+  },
+  "GapInfo": {
+    "model": {
+      "a": "SpotId",
+      "b": "SpotId",
+      "gap": "Meters",
+      "tau": "float"
+    }
+  },
+  "GeometryError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "Grid": {
+    "model": {
+      "major_every": "int",
+      "origin": "Point",
+      "rotation_deg": "Degrees",
+      "spacing": "tuple[Meters, Meters]",
+      "unit_name": "str"
+    }
+  },
+  "Group": {
+    "model": {
+      "color": "str",
+      "default_radius": "Meters",
+      "key": "str",
+      "label_prefix": "str",
+      "limits": "dict[str, float]",
+      "moves": "bool",
+      "name": "str",
+      "symbol": "str"
+    }
+  },
+  "GuideLine": {
+    "model": {
+      "id": "str",
+      "kind": "Literal['yard', 'hash', 'sideline', 'center', 'edge', 'spike', 'custom']",
+      "label": "str",
+      "points": "Ring"
+    }
+  },
+  "Hold": {
+    "model": {
+      "at_count": "Count",
+      "note": "str | None",
+      "seconds": "Seconds"
+    }
+  },
+  "InMemoryAssetStore": "() -> None",
+  "InMemoryRepository": "() -> None",
+  "InMemorySheetStore": "() -> None",
+  "IntervalStats": {
+    "model": {
+      "gaps": "tuple[Meters, ...]",
+      "max": "Meters",
+      "mean": "Meters",
+      "min": "Meters",
+      "std": "Meters"
+    }
+  },
+  "LabelScheme": {
+    "model": {
+      "pad": "int",
+      "prefixes": "dict[str, str]",
+      "start": "int"
+    }
+  },
+  "Landmark": {
+    "model": {
+      "aliases": "tuple[str, ...]",
+      "geometry": "Ring",
+      "id": "LandmarkId",
+      "kind": "Literal['point', 'line', 'area']",
+      "name": "str"
+    }
+  },
+  "LinePiece": "(start: Point, end: Point) -> None",
+  "LockedError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "Marker": {
+    "model": {
+      "at_count": "Count",
+      "kind": "showpy.time.models.MarkerKind",
+      "label": "str"
+    }
+  },
+  "MarkerKind": {
+    "enum": {
+      "CUE": "'cue'",
+      "CUSTOM": "'custom'",
+      "REHEARSAL": "'rehearsal'"
+    }
+  },
+  "MatchError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "MatchOptions": {
+    "model": {
+      "cost_fn": "CostFn | None",
+      "counts": "float | None",
+      "forbid": "tuple[tuple[SpotId, int], ...]",
+      "group_slots": "dict[str, tuple[int, ...]] | None",
+      "keep_groups": "bool",
+      "max_speed": "float | None",
+      "no_backward": "bool | float",
+      "objective": "MatchObjective",
+      "pinned": "dict[SpotId, int]",
+      "power": "float",
+      "preserve_order": "bool",
+      "weights": "dict[str, float]"
+    }
+  },
+  "MatchResult": {
+    "model": {
+      "assignment": "dict[SpotId, int]",
+      "crossings": "int",
+      "entities": "tuple[SpotId, ...]",
+      "explain": "tuple[str, ...]",
+      "max_distance": "Meters",
+      "max_speed": "float | None",
+      "targets": "tuple[Point, ...]",
+      "total_distance": "Meters",
+      "unassigned_slots": "tuple[int, ...]"
+    }
+  },
+  "MeasureLabel": {
+    "model": {
+      "count_in_measure": "float",
+      "measure": "int"
+    }
+  },
+  "MeasureSetting": {
+    "model": {
+      "changes": "tuple[tuple[Count, float], ...]",
+      "counts_per_measure": "float",
+      "start_measure": "int"
+    }
+  },
+  "MotionFn": {
+    "protocol": {}
+  },
+  "MotionInfo": {
+    "model": {
+      "name": "str",
+      "summary": "str"
+    }
+  },
+  "MotionPiece": {
+    "model": {
+      "kind": "Literal['hold', 'line', 'arc', 'curve', 'route', 'custom']",
+      "length": "Meters",
+      "params": "dict[str, float]",
+      "t0": "float",
+      "t1": "float"
+    }
+  },
+  "MotionPlan": {
+    "model": {
+      "curve": "AnyCurve | None",
+      "easing": "showpy.choreo.models.Easing",
+      "end": "showpy.choreo.models.Placement",
+      "entity": "SpotId",
+      "facing_mode": "showpy.choreo.models.FacingMode",
+      "facing_value": "Degrees | Point | SpotId | None",
+      "knots_s": "tuple[float, ...]",
+      "knots_t": "tuple[float, ...]",
+      "pieces": "tuple[showpy.choreo.engine_models.MotionPiece, ...]",
+      "start": "showpy.choreo.models.Placement",
+      "style": "showpy.choreo.models.PathStyle",
+      "turn_counts": "float",
+      "turn_direction": "showpy.choreo.models.TurnDirection",
+      "window": "tuple[float, float]"
+    }
+  },
+  "MotionRegistry": "(fns: collections.abc.Mapping[str, showpy.choreo.motion.MotionFn]) -> None",
+  "MotionSegment": {
+    "model": {
+      "entity": "SpotId",
+      "p0": "Point",
+      "p1": "Point",
+      "t0": "float",
+      "t1": "float",
+      "tid": "TransitionId"
+    }
+  },
+  "MotionStats": {
+    "model": {
+      "direction_variety": "float",
+      "moving_share": "float",
+      "speed_spread": "float"
+    }
+  },
+  "Note": {
+    "model": {
+      "anchor": "showpy.notes.models.Anchor",
+      "author": "str",
+      "created_at": "datetime.datetime",
+      "id": "str",
+      "kind": "NoteKind",
+      "text": "str",
+      "visible": "bool"
+    }
+  },
+  "PathDiff": {
+    "model": {
+      "changed_rows": "tuple[SpotId, ...]",
+      "routes_changed": "tuple[RouteId, ...]"
+    }
+  },
+  "PathEngine": "(show: showpy.show.models.Show, curve_tol: float = 0.01, cache: bool = True, motions: showpy.choreo.motion.MotionRegistry = ...) -> None",
+  "PathError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "PathRow": {
+    "model": {
+      "easing": "showpy.choreo.models.Easing",
+      "end": "float | None",
+      "entity": "SpotId",
+      "facing_mode": "showpy.choreo.models.FacingMode",
+      "facing_value": "Degrees | Point | SpotId | None",
+      "locked": "bool",
+      "motion_fn": "str | None",
+      "motion_params": "dict[str, Any]",
+      "note": "str | None",
+      "pace": "float",
+      "pivot": "Point | None",
+      "route": "RouteId | None",
+      "start": "float",
+      "style": "showpy.choreo.models.PathStyle",
+      "sweep_deg": "Degrees | None",
+      "turn_counts": "float",
+      "turn_direction": "showpy.choreo.models.TurnDirection",
+      "waypoints": "tuple[showpy.choreo.models.Waypoint, ...]"
+    }
+  },
+  "PathStyle": {
+    "enum": {
+      "CURVE": "'curve'",
+      "CUSTOM": "'custom'",
+      "FOLLOW": "'follow'",
+      "HOLD": "'hold'",
+      "POLYLINE": "'polyline'",
+      "ROTATE": "'rotate'",
+      "STRAIGHT": "'straight'"
+    }
+  },
+  "PathsOp": {
+    "model": {
+      "op": "Literal['paths']",
+      "spec": "showpy.choreo.models.TransitionSpec"
+    }
+  },
+  "Performer": {
+    "model": {
+      "contact": "str | None",
+      "id": "str",
+      "name": "str",
+      "role": "PerformerRole"
+    }
+  },
+  "PerformerView": {
+    "model": {
+      "path_animation_url": "str",
+      "performer": "showpy.export.models.Performer",
+      "sets": "tuple[tuple[SetId, str, float], ...]",
+      "spot": "SpotId"
+    }
+  },
+  "Pin": {
+    "model": {
+      "by": "str",
+      "id": "str",
+      "reason": "str",
+      "target": "PinTarget"
+    }
+  },
+  "Placement": {
+    "model": {
+      "entity": "SpotId",
+      "facing": "Degrees",
+      "form": "FormId | None",
+      "note": "str | None",
+      "on_field": "bool",
+      "order": "int | None",
+      "pinned": "bool",
+      "x": "Meters",
+      "y": "Meters"
+    }
+  },
+  "PlacementOp": {
+    "model": {
+      "op": "Literal['placement']",
+      "placement": "showpy.choreo.models.Placement",
+      "set_id": "SetId"
+    }
+  },
+  "Polyline": {
+    "model": {
+      "closed": "bool",
+      "kind": "Literal['polyline']",
+      "points": "tuple[Point, ...]"
+    }
+  },
+  "Proposal": {
+    "model": {
+      "base_revision": "str",
+      "change": "tuple[ChangeOp, ...]",
+      "id": "str",
+      "note": "str",
+      "reason": "str",
+      "state": "ProposalState"
+    }
+  },
+  "ProposalPreview": {
+    "model": {
+      "blocked": "tuple[str, ...]",
+      "counts": "dict[SetId, float]",
+      "forms": "tuple[showpy.choreo.models.Form, ...]",
+      "paths": "tuple[showpy.choreo.models.TransitionSpec, ...]",
+      "placements": "dict[SetId, tuple[showpy.choreo.models.Placement, ...]]",
+      "proposal_id": "str"
+    }
+  },
+  "Publication": {
+    "model": {
+      "claims": "tuple[showpy.export.models.Claim, ...]",
+      "id": "str",
+      "link": "str",
+      "published_at": "datetime.datetime",
+      "revision": "str",
+      "show_id": "str",
+      "status": "PublicationStatus"
+    }
+  },
+  "QuadPiece": "(start: Point, control: Point, end: Point) -> None",
+  "Region": {
+    "model": {
+      "exterior": "Ring",
+      "holes": "tuple[Ring, ...]"
+    }
+  },
+  "Repository": {
+    "protocol": {
+      "get_forms": "(self, show_id: str, set_id: SetId) -> tuple[showpy.choreo.models.Form, ...]",
+      "get_limits": "(self, show_id: str) -> str",
+      "get_paths": "(self, show_id: str, tid: TransitionId) -> showpy.choreo.models.TransitionSpec",
+      "get_revision": "(self, show_id: str, revision_id: str) -> showpy.show.models.Revision",
+      "get_script": "(self, show_id: str, set_id: SetId) -> str",
+      "get_set": "(self, show_id: str, set_id: SetId) -> showpy.choreo.models.Set",
+      "get_show": "(self, show_id: str, revision: str | None = None) -> showpy.show.models.Show",
+      "get_timeline": "(self, show_id: str) -> showpy.time.models.Timeline",
+      "get_waivers": "(self, show_id: str) -> str",
+      "head": "(self, show_id: str) -> str",
+      "list_sets": "(self, show_id: str) -> list[SetId]",
+      "paths": "(self, show_id: str, revision: str | None = None) -> list[str]",
+      "put_forms": "(self, show_id: str, set_id: SetId, forms: tuple[showpy.choreo.models.Form, ...], *, expected_revision: str, actor: Principal, at: datetime.datetime, message: str) -> showpy.show.models.Revision",
+      "put_paths": "(self, show_id: str, spec: showpy.choreo.models.TransitionSpec, *, expected_revision: str, actor: Principal, at: datetime.datetime, message: str) -> showpy.show.models.Revision",
+      "put_script": "(self, show_id: str, set_id: SetId, source: str, *, expected_revision: str, actor: Principal, at: datetime.datetime, message: str) -> showpy.show.models.Revision",
+      "put_set": "(self, show_id: str, new_set: showpy.choreo.models.Set, *, expected_revision: str, actor: Principal, at: datetime.datetime, message: str) -> showpy.show.models.Revision",
+      "put_show": "(self, show_id: str, show: showpy.show.models.Show, *, expected_revision: str, actor: Principal, at: datetime.datetime, message: str) -> showpy.show.models.Revision",
+      "read": "(self, show_id: str, path: str, revision: str | None = None) -> bytes | None",
+      "revisions": "(self, show_id: str) -> list[showpy.show.models.Revision]",
+      "shows": "(self) -> list[str]",
+      "transaction": "(self, show_id: str, changes: collections.abc.Mapping[str, bytes | None], *, expected_revision: str, actor: Principal, at: datetime.datetime, message: str, kind: RevisionKind = 'edit', target: str | None = None) -> showpy.show.models.Revision"
+    }
+  },
+  "RepositoryBackend": {
+    "protocol": {
+      "blob": "(self, show_id: str, digest: str) -> bytes",
+      "commit": "(self, show_id: str, revision: showpy.show.models.Revision, tree: dict[str, str], blobs: dict[str, bytes]) -> None",
+      "log": "(self, show_id: str) -> list[showpy.show.models.Revision]",
+      "show_ids": "(self) -> list[str]",
+      "tree": "(self, show_id: str, revision_id: str) -> dict[str, str]"
+    }
+  },
+  "Revision": {
+    "model": {
+      "actor": "Principal",
+      "at": "datetime.datetime",
+      "changed": "tuple[str, ...]",
+      "id": "str",
+      "kind": "RevisionKind",
+      "message": "str",
+      "parent": "str",
+      "target": "str | None"
+    }
+  },
+  "Route": {
+    "model": {
+      "curve": "dict[str, Any]",
+      "end": "float | None",
+      "id": "RouteId",
+      "members": "tuple[SpotId, ...]",
+      "offsets": "tuple[Meters, ...]",
+      "start": "float",
+      "travel": "Meters"
+    }
+  },
+  "SchemaError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "Segment": {
+    "model": {
+      "a": "Point",
+      "b": "Point",
+      "closed": "Literal[False]",
+      "kind": "Literal['segment']"
+    }
+  },
+  "Selection": {
+    "model": {
+      "description": "str",
+      "ids": "tuple[str, ...]"
+    }
+  },
+  "Set": {
+    "model": {
+      "counts": "float",
+      "cue": "str | None",
+      "forms": "tuple[FormId, ...]",
+      "id": "SetId",
+      "label": "str | None",
+      "placements": "tuple[showpy.choreo.models.Placement, ...]",
+      "source_hash": "str",
+      "state": "showpy.choreo.models.ApprovalState"
+    }
+  },
+  "SetDiff": {
+    "model": {
+      "added": "tuple[SpotId, ...]",
+      "facing_changed": "tuple[SpotId, ...]",
+      "forms_changed": "tuple[FormId, ...]",
+      "moved": "tuple[SpotId, ...]",
+      "removed": "tuple[SpotId, ...]"
+    }
+  },
+  "Shape": {
+    "model": {
+      "depth_m": "Meters",
+      "kind": "Literal['circle', 'rectangle']",
+      "radius_m": "Meters",
+      "rotation_deg": "Degrees",
+      "width_m": "Meters"
+    }
+  },
+  "Sheet": {
+    "model": {
+      "based_on": "SheetRef | None",
+      "default_coordinates": "showpy.sheet.models.CoordinateSystem",
+      "grid": "showpy.sheet.models.Grid",
+      "guides": "tuple[showpy.sheet.models.GuideLine, ...]",
+      "landmarks": "tuple[showpy.sheet.models.Landmark, ...]",
+      "name": "str",
+      "outline": "Ring",
+      "owner": "str",
+      "ref": "SheetRef",
+      "size_m": "tuple[Meters, Meters]",
+      "surface_type": "showpy.sheet.models.SurfaceType",
+      "thumbnail": "str",
+      "walkable": "showpy.core.types.Region",
+      "zones": "tuple[showpy.sheet.models.Zone, ...]"
+    }
+  },
+  "SheetCanvas": {
+    "model": {
+      "max_x": "float",
+      "max_y": "float",
+      "min_x": "float",
+      "min_y": "float",
+      "px_per_m": "float"
+    }
+  },
+  "SheetReplaceReport": {
+    "model": {
+      "form_notes": "tuple[str, ...]",
+      "in_zones": "tuple[tuple[SpotId, ZoneId], ...]",
+      "mapping": "Literal['landmarks', 'origin', 'scale']",
+      "moved": "dict[SpotId, tuple[Point, Point]]",
+      "outside": "tuple[SpotId, ...]"
+    }
+  },
+  "SheetRow": {
+    "model": {
+      "behavior": "str",
+      "counts": "float",
+      "crossings": "tuple[str, ...]",
+      "cumulative": "Count",
+      "facing": "Degrees",
+      "measure": "showpy.time.models.MeasureLabel | None",
+      "note": "str | None",
+      "position_text": "str",
+      "set": "SetId",
+      "xy": "Point"
+    }
+  },
+  "SheetStore": {
+    "protocol": {
+      "get": "(self, ref: SheetRef) -> showpy.sheet.models.Sheet | None",
+      "put": "(self, sheet: showpy.sheet.models.Sheet, scope: SheetScope) -> SheetRef"
+    }
+  },
+  "Show": {
+    "model": {
+      "cast": "showpy.cast.models.Cast",
+      "coordinates": "showpy.sheet.models.CoordinateSystem",
+      "dependencies": "dict[str, str]",
+      "facing_overrides": "tuple[showpy.choreo.models.FacingOverride, ...]",
+      "forms": "dict[FormId, showpy.choreo.models.Form]",
+      "id": "str",
+      "notes": "tuple[showpy.notes.models.Note, ...]",
+      "pack": "str",
+      "pins": "tuple[showpy.show.models.Pin, ...]",
+      "revision": "str",
+      "sets": "tuple[showpy.choreo.models.Set, ...]",
+      "sheet": "showpy.sheet.models.Sheet",
+      "timeline": "showpy.time.models.Timeline",
+      "title": "str",
+      "transitions": "tuple[showpy.choreo.models.TransitionSpec, ...]",
+      "zones": "tuple[showpy.sheet.models.Zone, ...]"
+    }
+  },
+  "ShowIndex": {
+    "model": {
+      "entries": "tuple[showpy.show.models.ShowIndexEntry, ...]"
+    }
+  },
+  "ShowIndexEntry": {
+    "model": {
+      "counts": "float",
+      "cue": "str | None",
+      "measure": "showpy.time.models.MeasureLabel | None",
+      "seconds": "Seconds",
+      "set": "SetId",
+      "start_count": "Count"
+    }
+  },
+  "ShowPyError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "SnapReport": {
+    "model": {
+      "max_shift": "Meters",
+      "moved": "int"
+    }
+  },
+  "SpacingError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "SpacingSpec": {
+    "model": {
+      "align": "Literal['start', 'end', 'center']",
+      "end": "Meters | None",
+      "gaps": "tuple[tuple[int, Meters], ...]",
+      "interval": "Meters | None",
+      "mode": "Literal['count', 'interval', 'proportional']",
+      "start": "Meters"
+    }
+  },
+  "SpeedStats": {
+    "model": {
+      "counts": "float",
+      "distance": "Meters",
+      "m_per_count": "float",
+      "m_per_s": "float",
+      "max_instant": "float"
+    }
+  },
+  "SpiralCurve": {
+    "model": {
+      "center": "Point",
+      "closed": "Literal[False]",
+      "kind": "Literal['spiral']",
+      "r0": "Meters",
+      "r1": "Meters",
+      "start_deg": "Degrees",
+      "turns": "float"
+    }
+  },
+  "SplineCurve": {
+    "model": {
+      "alpha": "float",
+      "closed": "bool",
+      "kind": "Literal['spline']",
+      "points": "tuple[Point, ...]"
+    }
+  },
+  "Spot": {
+    "model": {
+      "active": "bool",
+      "claimable": "Claimable",
+      "color": "str | None",
+      "group": "str",
+      "id": "SpotId",
+      "shape": "showpy.cast.models.Shape",
+      "symbol": "str | None",
+      "tags": "frozenset[str]"
+    }
+  },
+  "SpotCount": {
+    "model": {
+      "changed": "bool",
+      "off_field": "int",
+      "on_field": "int",
+      "set_id": "SetId"
+    }
+  },
+  "StorageError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "Subpath": "(start: Point, pieces: tuple[Piece, ...], closed: bool) -> None",
+  "SurfaceError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "SurfaceType": {
+    "enum": {
+      "ARENA": "'arena'",
+      "BLANK": "'blank'",
+      "FOOTBALL_FIELD": "'football_field'",
+      "GYM_FLOOR": "'gym_floor'",
+      "STAGE": "'stage'",
+      "STREET": "'street'"
+    }
+  },
+  "SvgCurve": {
+    "model": {
+      "closed": "bool",
+      "d": "str",
+      "kind": "Literal['svg']",
+      "transform": "tuple[tuple[float, float, float], ...]"
+    }
+  },
+  "TempoSection": {
+    "model": {
+      "at_count": "Count",
+      "counts_per_minute": "CountsPerMinute",
+      "ramp_counts": "Count | None",
+      "ramp_to": "CountsPerMinute | None"
+    }
+  },
+  "TextTable": {
+    "model": {
+      "header": "tuple[str, ...]",
+      "rows": "tuple[tuple[str, ...], ...]",
+      "title": "str"
+    }
+  },
+  "TimeRangeError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "Timeline": {
+    "model": {
+      "audio": "tuple[showpy.time.models.AudioTrack, ...]",
+      "cues": "tuple[showpy.time.models.Cue, ...]",
+      "holds": "tuple[showpy.time.models.Hold, ...]",
+      "markers": "tuple[showpy.time.models.Marker, ...]",
+      "measures": "showpy.time.models.MeasureSetting | None",
+      "mode": "showpy.time.models.TimelineMode",
+      "tempos": "tuple[showpy.time.models.TempoSection, ...]",
+      "total_counts": "Count | None"
+    }
+  },
+  "TimelineError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "TimelineMode": {
+    "enum": {
+      "COUNTS": "'counts'",
+      "CUES": "'cues'",
+      "SECONDS": "'seconds'"
+    }
+  },
+  "Timer": "(elapsed_ms: float = 0.0) -> None",
+  "TransitionSpec": {
+    "model": {
+      "counts": "float",
+      "id": "TransitionId",
+      "notes": "str",
+      "routes": "dict[RouteId, showpy.choreo.models.Route]",
+      "rows": "dict[SpotId, showpy.choreo.models.PathRow]",
+      "source_hash": "str"
+    }
+  },
+  "TrimmedCurve": {
+    "model": {
+      "base": "AnyCurve",
+      "closed": "Literal[False]",
+      "kind": "Literal['trimmed']",
+      "s0": "Meters",
+      "s1": "Meters"
+    }
+  },
+  "TurnDirection": {
+    "enum": {
+      "CLOCKWISE": "'clockwise'",
+      "COUNTERCLOCKWISE": "'counterclockwise'",
+      "SHORTEST": "'shortest'"
+    }
+  },
+  "UnitRegistry": {
+    "model": {
+      "meters_per_unit": "dict[str, float]"
+    }
+  },
+  "UnknownRefError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "ValidationError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "ValidationIssue": {
+    "model": {
+      "code": "str",
+      "hint": "str",
+      "level": "Literal['error', 'warning']",
+      "message": "str",
+      "where": "str"
+    }
+  },
+  "ValidationReport": {
+    "model": {
+      "issues": "tuple[showpy.core.validation.ValidationIssue, ...]"
+    }
+  },
+  "VersionError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "Waypoint": {
+    "model": {
+      "at": "float | None",
+      "x": "Meters",
+      "y": "Meters"
+    }
+  },
+  "Workspace": "(repo: showpy.show.storage.Repository, show_id: str, principal: Principal, revision: str)",
+  "ZeroLengthError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "Zone": {
+    "model": {
+      "active": "tuple[tuple[Count, Count], ...] | None",
+      "applies_to": "SelectorField",
+      "id": "ZoneId",
+      "kind": "showpy.sheet.models.ZoneKind",
+      "note": "str",
+      "polygon": "showpy.core.types.Region"
+    }
+  },
+  "ZoneKind": {
+    "enum": {
+      "AUDIENCE": "'audience'",
+      "CUSTOM": "'custom'",
+      "PIT": "'pit'",
+      "RESTRICTED": "'restricted'",
+      "SAFETY": "'safety'",
+      "STAGING": "'staging'",
+      "WINGS": "'wings'"
+    }
+  },
+  "accept": "(ws: showpy.show.storage.Workspace, proposal: showpy.show.models.Proposal, at: datetime.datetime) -> showpy.show.models.Revision",
+  "accept_draft": "(show: 'Show', draft: showpy.notes.models.Note) -> 'Show'",
+  "add_cue": "(tl: showpy.time.models.Timeline, cue: showpy.time.models.Cue) -> showpy.time.models.Timeline",
+  "add_facing_override": "(show: showpy.show.models.Show, override: showpy.choreo.models.FacingOverride) -> showpy.show.models.Show",
+  "add_group": "(show: 'Show', group: showpy.cast.models.Group) -> 'Show'",
+  "add_guide": "(sheet: showpy.sheet.models.Sheet, item: showpy.sheet.models.GuideLine) -> showpy.sheet.models.Sheet",
+  "add_hold": "(tl: showpy.time.models.Timeline, hold: showpy.time.models.Hold) -> showpy.time.models.Timeline",
+  "add_landmark": "(sheet: showpy.sheet.models.Sheet, item: showpy.sheet.models.Landmark) -> showpy.sheet.models.Sheet",
+  "add_marker": "(tl: showpy.time.models.Timeline, marker: showpy.time.models.Marker) -> showpy.time.models.Timeline",
+  "add_note": "(show: 'Show', text: str, anchor: showpy.notes.models.Anchor, note_id: str, at: datetime.datetime, author: str, kind: NoteKind = 'idea') -> 'Show'",
+  "add_set": "(show: showpy.show.models.Show, set_id: SetId, counts: float, after: SetId | None = None, placements: collections.abc.Sequence[showpy.choreo.models.Placement] | None = None, force: bool = False) -> showpy.show.models.Show",
+  "add_spot": "(show: 'Show', point: Point, group: str, set_id: SetId) -> 'Show'",
+  "add_spots_along": "(show: 'Show', curve: showpy.geo.curve_base.Curve, n: int, group: str, set_id: SetId) -> 'Show'",
+  "add_tempo": "(tl: showpy.time.models.Timeline, section: showpy.time.models.TempoSection) -> showpy.time.models.Timeline",
+  "add_waypoint": "(spec: showpy.choreo.models.TransitionSpec, entity: SpotId, point: Point, at: float | None = None, index: int | None = None, force: bool = False) -> showpy.choreo.models.TransitionSpec",
+  "add_zone": "(sheet: showpy.sheet.models.Sheet, item: showpy.sheet.models.Zone) -> showpy.sheet.models.Sheet",
+  "affine": "(obj: T, matrix: ArrayLike, sel: SetSelector = 'all', force: bool = False) -> T",
+  "align": "(obj: T, axis: Axis, value: float | Literal['mean', 'min', 'max'], sel: SetSelector = 'all', force: bool = False) -> T",
+  "alternate": "(sel: showpy.core.selection.Selection | collections.abc.Sequence[SpotId], k: int = 2) -> list[showpy.core.selection.Selection]",
+  "angle_diff": "(a: Degrees, b: Degrees) -> Degrees",
+  "apply_change": "(show: showpy.show.models.Show, change: collections.abc.Sequence[ChangeOp], force: bool = False) -> showpy.show.models.Show",
+  "apply_event": "(show: showpy.show.models.Show, event: showpy.show.models.CanvasEvent) -> showpy.show.models.Show",
+  "apply_fix": "(spec: showpy.choreo.models.TransitionSpec, fix: showpy.choreo.engine_models.Fix) -> showpy.choreo.models.TransitionSpec",
+  "apply_match": "(show: showpy.show.models.Show, tid: TransitionId, result: showpy.choreo.models.MatchResult, force: bool = False) -> showpy.show.models.Show",
+  "approx_equal": "(a: ArrayLike, b: ArrayLike, tol: float = 1e-06) -> bool",
+  "arc": "(center: Point, radius: Meters, start_deg: Degrees, sweep_deg: Degrees) -> showpy.geo.curves.ArcCurve",
+  "arc_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], center: Point, radius: Meters, start_deg: Degrees, sweep_deg: Degrees, spacing: showpy.choreo.models.SpacingSpec | None = None, facing: showpy.choreo.models.FacingSpec | None = None, *, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",
+  "arc_from_chord": "(a: Point, b: Point, bulge: Meters) -> showpy.geo.curves.ArcCurve",
+  "arc_through": "(a: Point, m: Point, b: Point) -> showpy.geo.curves.ArcCurve",
+  "arrive_early": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel, counts: float, force: bool = False) -> showpy.choreo.models.TransitionSpec",
+  "as_points": "(obj: object) -> Points",
+  "as_table": "(obj: Tabular) -> showpy.export.models.TextTable",
+  "attach_audio": "(tl: showpy.time.models.Timeline, track: showpy.time.models.AudioTrack) -> showpy.time.models.Timeline",
+  "balance": "(s: showpy.choreo.models.Set, sheet: showpy.sheet.models.Sheet, axis: Literal['x', 'y'] = 'x') -> float",
+  "bezier": "(*control: Point) -> showpy.geo.curves.BezierCurve",
+  "blank_sheet": "(width_m: float, depth_m: float, grid_spacing: float = 1.0, units: str = 'm') -> showpy.sheet.models.Sheet",
+  "block": "(origin: Point, rows: int, cols: int, interval: Meters, facing: Degrees = 0.0, anchor: BlockAnchor = 'center') -> Points",
+  "block_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], origin: Point, rows: int, cols: int, interval: Meters, direction_deg: Degrees = 0.0, anchor: BlockAnchor = 'center', facing: showpy.choreo.models.FacingSpec | None = None, *, set_id: SetId = '') -> showpy.choreo.models.Form",
+  "bottleneck_value": "(cost: object) -> float",
+  "bounds": "(obj: Points | showpy.geo.curve_base.Curve) -> showpy.core.types.Box2",
+  "buffer": "(area: Area, d: float) -> Area",
+  "center": "(obj: Points | showpy.geo.curve_base.Curve) -> Point",
+  "centroid": "(obj: Points | showpy.geo.curve_base.Curve) -> Point",
+  "change_amount": "(a: showpy.choreo.models.Set, b: showpy.choreo.models.Set) -> Meters",
+  "changelog": "(ws: showpy.show.storage.Workspace, since: str = '') -> str",
+  "chart": "(show: showpy.show.models.Show, set_id: SetId, publication: showpy.export.models.Publication | None = None) -> showpy.export.models.Chart",
+  "check_unlocked": "(form: showpy.choreo.models.Form, force: bool) -> None",
+  "chunk_counts": "(total: float, parts: int) -> list[float]",
+  "circle": "(center: Point, radius: Meters, start_deg: Degrees = 0.0) -> showpy.geo.curves.CircleCurve",
+  "circle_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], center: Point, radius: Meters, start_deg: Degrees = 0.0, spacing: showpy.choreo.models.SpacingSpec | None = None, facing: showpy.choreo.models.FacingSpec | None = None, *, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",
+  "claim_spot": "(pub: showpy.export.models.Publication, show: showpy.show.models.Show, performer: showpy.export.models.Performer, spot: SpotId, at: datetime.datetime) -> tuple[showpy.export.models.Publication, showpy.export.models.Claim]",
+  "claims": "(pub: showpy.export.models.Publication) -> list[showpy.export.models.Claim]",
+  "clear_measures": "(tl: showpy.time.models.Timeline) -> showpy.time.models.Timeline",
+  "clear_rows": "(show: showpy.show.models.Show, tid: TransitionId, entities: collections.abc.Iterable[SpotId], force: bool = False) -> showpy.show.models.Show",
+  "clear_waypoints": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel, force: bool = False) -> showpy.choreo.models.TransitionSpec",
+  "close_matches": "(name: str, candidates: collections.abc.Iterable[str]) -> list[str]",
+  "closest_approach": "(times_a: collections.abc.Sequence[float], points_a: collections.abc.Sequence[Point] | Points, times_b: collections.abc.Sequence[float], points_b: collections.abc.Sequence[Point] | Points) -> tuple[float, float]",
+  "concentric": "(center: Point, radii: collections.abc.Sequence[Meters], counts: collections.abc.Sequence[int], start_deg: Degrees = 0.0) -> list[Points]",
+  "conflict_error": "(show_id: str, expected: str, landed: list[showpy.show.models.Revision]) -> showpy.core.errors.ConflictError",
+  "content_hash": "(obj: object) -> str",
+  "contract": "(obj: T, d: Meters, about: About = 'center', sel: SetSelector = 'all', force: bool = False) -> T",
+  "convert": "(value: float, from_unit: str, to_unit: str, registry: showpy.core.units.UnitRegistry = ...) -> float",
+  "coordinate_presets": "(sheet: showpy.sheet.models.Sheet) -> list[showpy.sheet.models.CoordinateSystem]",
+  "coordinate_sheet": "(show: showpy.show.models.Show, entity: SpotId, precision: float | None = None, publication: showpy.export.models.Publication | None = None) -> showpy.export.models.CoordinateSheet",
+  "coordinate_sheets": "(show: showpy.show.models.Show, sel: str | collections.abc.Sequence[SpotId] | showpy.core.selection.Selection = 'all', publication: showpy.export.models.Publication | None = None, precision: float | None = None) -> list[showpy.export.models.CoordinateSheet]",
+  "cost_matrix": "(from_: Source, to_slots: SlotSource, options: showpy.choreo.models.MatchOptions | None = None, entities: collections.abc.Sequence[SpotId] | None = None, groups: collections.abc.Mapping[SpotId, str] | None = None, slot_groups: collections.abc.Sequence[str | None] | None = None) -> FloatArray",
+  "count_to_measure": "(tl: showpy.time.models.Timeline, c: Count) -> showpy.time.models.MeasureLabel | None",
+  "count_to_seconds": "(tl: showpy.time.models.Timeline, c: Count) -> Seconds",
+  "counter_march": "(show: showpy.show.models.Show, tid: TransitionId, sel: collections.abc.Sequence[SpotId], turn_at: Point, counts_per_turn: float = 2.0) -> showpy.show.models.Show",
+  "counts_from_markers": "(tl: showpy.time.models.Timeline, labels: collections.abc.Sequence[str]) -> list[Count]",
+  "coverage": "(s: showpy.choreo.models.Set, sheet: showpy.sheet.models.Sheet, radius: Meters = 1.0) -> float",
+  "cue_sheet": "(show: showpy.show.models.Show) -> pandas.DataFrame",
+  "cue_to_seconds": "(tl: showpy.time.models.Timeline, label: str) -> Seconds",
+  "curve_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], *pts: Point, closed: bool = False, spacing: showpy.choreo.models.SpacingSpec | None = None, facing: showpy.choreo.models.FacingSpec | None = None, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",
+  "curve_from_construction": "(recipe: dict[str, Any]) -> AnyCurve",
+  "curve_path": "(spec: showpy.choreo.models.TransitionSpec, entity: SpotId, *control: Point, force: bool = False) -> showpy.choreo.models.TransitionSpec",
+  "curve_through": "(*pts: Point, closed: bool = False, alpha: float = 0.5) -> showpy.geo.curves.SplineCurve",
+  "custom_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], points: object, facings: collections.abc.Sequence[Degrees] | None = None, *, set_id: SetId = '') -> showpy.choreo.models.Form",
+  "custom_path": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel, motion: str, registry: showpy.choreo.motion.MotionRegistry = ..., force: bool = False, **params: Any) -> showpy.choreo.models.TransitionSpec",
+  "customize": "(sheet: showpy.sheet.models.Sheet, **changes: object) -> showpy.sheet.models.Sheet",
+  "default_paths": "(show: 'Show', tid: TransitionId) -> showpy.choreo.models.TransitionSpec",
+  "define_selection": "(show: 'Show', name: str, sel: Selector) -> 'Show'",
+  "delay": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel, counts: float, keep_end: bool = True, force: bool = False) -> showpy.choreo.models.TransitionSpec",
+  "delete_spots": "(show: 'Show', sel: Selector, force: bool = False) -> 'Show'",
+  "density_map": "(s: showpy.choreo.models.Set, sheet: showpy.sheet.models.Sheet, cell: Meters = 1.0) -> NDArray[numpy.int64]",
+  "describe_count": "(tl: showpy.time.models.Timeline, c: Count) -> str",
+  "detect_form": "(points: object, tol: Meters = 0.1, form_id: FormId = 'detected', members: collections.abc.Sequence[SpotId] = ()) -> showpy.choreo.models.Form",
+  "diff_paths": "(a: showpy.choreo.models.TransitionSpec, b: showpy.choreo.models.TransitionSpec) -> showpy.show.models.PathDiff",
+  "diff_sets": "(a: showpy.choreo.models.Set, b: showpy.choreo.models.Set, tol: float = 1e-06) -> showpy.show.models.SetDiff",
+  "diff_show": "(a: showpy.show.models.Show, b: showpy.show.models.Show) -> dict[str, Any]",
+  "difference": "(a: Area, b: Area) -> Area",
+  "digest": "(data: bytes) -> str",
+  "direction_of_travel": "(show: showpy.show.models.Show, entity: SpotId, tid: TransitionId, tau: float) -> Degrees | None",
+  "distance": "(a: Point, b: Point) -> Meters",
+  "distance_matrix": "(a: Points, b: Points) -> Points",
+  "distribute": "(obj: S, axis: Axis, start: float | None = None, end: float | None = None, sel: SetSelector = 'all', force: bool = False) -> S",
+  "distribute_on_points": "(candidates: object, n: int, method: Literal['farthest', 'random'] = 'farthest', seed: int = 0) -> Points",
+  "draw_sheet": "(draw: PIL.ImageDraw.ImageDraw, canvas: showpy.sheet.render.SheetCanvas, sheet: showpy.sheet.models.Sheet) -> None",
+  "duplicate_spots": "(show: 'Show', sel: Selector, offset: Point, set_id: SetId) -> 'Show'",
+  "ease": "(easing: showpy.choreo.models.Easing, u: FloatArray) -> FloatArray",
+  "easing_breaks": "(easing: showpy.choreo.models.Easing) -> list[float]",
+  "edit": "(form: showpy.choreo.models.Form, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., **changes: Any) -> showpy.choreo.models.Form",
+  "edit_group": "(show: 'Show', key: str, /, **changes: Any) -> 'Show'",
+  "edit_note": "(show: 'Show', note_id: str, /, **changes: Any) -> 'Show'",
+  "edit_params": "(form: showpy.choreo.models.Form, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., **params: Any) -> showpy.choreo.models.Form",
+  "ellipse": "(center: Point, rx: Meters, ry: Meters, rotation_deg: Degrees = 0.0) -> showpy.geo.curves.EllipseCurve",
+  "energy_curve": "(show: showpy.show.models.Show, per_count: int = 1) -> pandas.Series",
+  "escape_text": "(text: str) -> bytes",
+  "events_since": "(ws: showpy.show.storage.Workspace, revision: str) -> list[showpy.show.models.CanvasEvent]",
+  "expand": "(obj: T, d: Meters, about: About = 'center', sel: SetSelector = 'all', force: bool = False) -> T",
+  "export_frames_csv": "(show: showpy.show.models.Show, per_count: int = 1) -> str",
+  "export_json": "(show: showpy.show.models.Show, include: collections.abc.Iterable[str] | None = None) -> dict[str, Any]",
+  "export_video": "(show: showpy.show.models.Show, count_range: tuple[Count, Count] | None = None, fps: float = 30, audio: collections.abc.Mapping[str, bytes] | None = None, px_per_m: float = 10.0) -> bytes",
+  "face_along": "(show: showpy.show.models.Show, set_id: SetId, form_id: FormId, reverse: bool = False, force: bool = False) -> showpy.choreo.models.Set",
+  "face_audience": "(target: showpy.choreo.models.Set, sel: Sel, force: bool = False) -> showpy.choreo.models.Set",
+  "face_direction": "(target: showpy.choreo.models.Set, sel: Sel, deg: Degrees, force: bool = False) -> showpy.choreo.models.Set",
+  "face_entity": "(target: showpy.choreo.models.Set, sel: Sel, entity: SpotId, force: bool = False) -> showpy.choreo.models.Set",
+  "face_normal": "(show: showpy.show.models.Show, set_id: SetId, form_id: FormId, outward: bool = True, force: bool = False) -> showpy.choreo.models.Set",
+  "face_point": "(target: showpy.choreo.models.Set, sel: Sel, point: Point, force: bool = False) -> showpy.choreo.models.Set",
+  "facing_vector": "(theta: Degrees) -> Point",
+  "figure_eight": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, Any]) -> Points",
+  "fill": "(area: Area, interval: Meters, pattern: FillPattern = 'grid', angle_deg: Degrees = 0.0, anchor: Point | None = None, n: int | None = None, margin: Meters = 0.0) -> Points",
+  "fill_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], outline: showpy.core.types.Region | shapely.geometry.polygon.Polygon | showpy.geo.curve_base.Curve | object, interval: Meters, pattern: FillPattern = 'grid', angle_deg: Degrees = 0.0, facing: showpy.choreo.models.FacingSpec | None = None, *, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",
+  "fill_spots": "(show: 'Show', region: Area | showpy.core.types.Region, group: str, set_id: SetId, interval: Meters | None = None, n: int | None = None) -> 'Show'",
+  "filled_forms": "(placed: showpy.choreo.models.Set, forms: collections.abc.Sequence[showpy.choreo.models.Form]) -> list[showpy.choreo.models.Form]",
+  "fit_circle": "(points: object) -> tuple[Point, Meters, float]",
+  "fit_line": "(points: object) -> tuple[Point, Point, float]",
+  "follow": "(spec: showpy.choreo.models.TransitionSpec, route: showpy.choreo.models.Route, start: float = 0.0, end: float | None = None) -> showpy.choreo.models.TransitionSpec",
+  "follow_and_set_targets": "(show: showpy.show.models.Show, tid: TransitionId, route: showpy.choreo.models.Route, start: float = 0.0, end: float | None = None) -> showpy.show.models.Show",
+  "football_field": "(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> showpy.sheet.models.Sheet",
+  "form_fns": "(registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> list[showpy.choreo.models.FormFnInfo]",
+  "form_metrics": "(points: Points) -> showpy.geo.models.FormMetrics",
+  "form_templates": "() -> dict[str, collections.abc.Callable[..., showpy.choreo.models.Form]]",
+  "format_ranges": "(ids: collections.abc.Iterable[str]) -> str",
+  "format_ref": "(kind: str, ref_id: str, version: str | None = None) -> str",
+  "format_tid": "(tid: TransitionId) -> str",
+  "formats": "(registry: showpy.export.data.FormatRegistry) -> dict[str, list[str]]",
+  "from_coords": "(show: 'Show', text: str) -> Point",
+  "from_json": "(d: dict[str, Any]) -> showpy.time.models.Timeline",
+  "gate": "(form: showpy.choreo.models.Form, hinge: Literal['start', 'end'] | int, deg: Degrees, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> showpy.choreo.models.Form",
+  "generated_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], fn: str, spacing: showpy.choreo.models.SpacingSpec | None = None, facing: showpy.choreo.models.FacingSpec | None = None, registry: showpy.choreo.form_fns.FormFnRegistry = ..., *, set_id: SetId = '', n: int | None = None, **params: Any) -> showpy.choreo.models.Form",
+  "get_sheet": "(ref: SheetRef, store: showpy.sheet.templates.SheetStore | None = None) -> showpy.sheet.models.Sheet",
+  "glyph_strokes": "(char: str, font: str) -> Glyph",
+  "gym_floor": "() -> showpy.sheet.models.Sheet",
+  "highlight": "(target: showpy.notes.models.Anchor | ZoneId, ttl_s: float = 30.0, *, at: datetime.datetime, event_id: str) -> showpy.show.models.CanvasEvent",
+  "hold": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel, until: float | None = None, from_: float | None = None, force: bool = False) -> showpy.choreo.models.TransitionSpec",
+  "import_json": "(d: collections.abc.Mapping[str, Any]) -> showpy.show.models.Show",
+  "import_positions": "(base: showpy.show.models.Show, text: str, group: str, columns: collections.abc.Mapping[str, str] | None = None, force: bool = False) -> showpy.show.models.Show",
+  "in_region": "(set_: showpy.choreo.models.Set, shape: RegionLike) -> showpy.core.selection.Selection",
+  "index": "(show: showpy.show.models.Show) -> showpy.show.models.ShowIndex",
+  "insert_subset": "(show: showpy.show.models.Show, after: SetId, counts: float, force: bool = False) -> tuple[showpy.show.models.Show, SetId]",
+  "interpolate_forms": "(a: Points, b: Points, u: float) -> Points",
+  "intersection": "(a: Area, b: Area) -> Area",
+  "interval": "(points: Points, ordered: bool = True) -> showpy.geo.models.IntervalStats",
+  "is_label_dependent": "(expr: str) -> bool",
+  "is_similarity": "(matrix: Matrix) -> bool",
+  "join": "(*curves: AnyCurve, bridge: bool = False) -> showpy.geo.curves.CompositeCurve",
+  "join_sections": "(a: showpy.show.models.Show, b: showpy.show.models.Show) -> showpy.show.models.Show",
+  "label_prefix": "(spot_id: SpotId) -> str | None",
+  "landmark": "(sheet: showpy.sheet.models.Sheet, name: str) -> showpy.sheet.models.Landmark",
+  "landmark_anchor": "(mark: showpy.sheet.models.Landmark) -> Point",
+  "landmark_keys": "(mark: showpy.sheet.models.Landmark) -> tuple[str, ...]",
+  "length": "(obj: Points | showpy.geo.curve_base.Curve) -> Meters",
+  "line": "(a: Point, b: Point) -> showpy.geo.curves.Segment",
+  "line_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], a: Point, b: Point, spacing: showpy.choreo.models.SpacingSpec | None = None, facing: showpy.choreo.models.FacingSpec | None = None, *, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",
+  "line_landmark": "(mark_id: str, name: str, a: Point, b: Point, *aliases: str) -> showpy.sheet.models.Landmark",
+  "load_paths": "(ws: showpy.show.storage.Workspace, tid: TransitionId) -> showpy.choreo.models.TransitionSpec",
+  "load_show": "(ws: showpy.show.storage.Workspace) -> showpy.show.models.Show",
+  "lock": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel) -> showpy.choreo.models.TransitionSpec",
+  "log": "(msg: str, **fields: object) -> None",
+  "make_route": "(show: showpy.show.models.Show, tid: TransitionId, leader: SpotId, waypoints: collections.abc.Sequence[Point], members: collections.abc.Sequence[SpotId] | None = None, spacing: Literal['keep'] = 'keep', route_id: str = 'route') -> showpy.choreo.models.Route",
+  "marker_to_count": "(tl: showpy.time.models.Timeline, label: str) -> Count",
+  "match": "(from_: Source, to_slots: SlotSource, entities: collections.abc.Sequence[SpotId] | None = None, options: showpy.choreo.models.MatchOptions | None = None, groups: collections.abc.Mapping[SpotId, str] | None = None, slot_groups: collections.abc.Sequence[str | None] | None = None) -> showpy.choreo.models.MatchResult",
+  "match_by_order": "(ordered_sel: collections.abc.Sequence[SpotId], form: showpy.choreo.models.Form | Points, from_: showpy.choreo.models.Set | None = None) -> showpy.choreo.models.MatchResult",
+  "measure_to_count": "(tl: showpy.time.models.Timeline, measure: int, count_in_measure: float = 1.0) -> Count",
+  "merge_forms": "(a: showpy.choreo.models.Form, b: showpy.choreo.models.Form, form_id: FormId, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> showpy.choreo.models.Form",
+  "min_gaps": "(show: showpy.show.models.Show, tid: TransitionId, sel: str | collections.abc.Sequence[SpotId] = 'all', top: int = 10) -> list[showpy.choreo.engine_models.GapInfo]",
+  "mirror": "(obj: T, axis: MirrorAxis, sel: SetSelector = 'all', force: bool = False) -> T",
+  "mirror_gaps": "(points: Points, axis_x: float) -> Points",
+  "mirror_matrix": "(a: Point, b: Point) -> Matrix",
+  "mirror_pairs": "(set_: showpy.choreo.models.Set, sel: Selector, axis_x: Meters = 0.0, tol: Meters = 0.1) -> list[tuple[SpotId, SpotId]]",
+  "morph_targets": "(a: showpy.choreo.models.Form, b: showpy.choreo.models.Form, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> Points",
+  "motion_contrast": "(show: showpy.show.models.Show, tid: TransitionId) -> showpy.choreo.engine_models.MotionStats",
+  "motions": "(registry: showpy.choreo.motion.MotionRegistry) -> list[showpy.choreo.motion.MotionInfo]",
+  "move_to": "(obj: T, anchor: Anchor, to: Point, sel: SetSelector = 'all', force: bool = False) -> T",
+  "natural_sort": "(ids: collections.abc.Iterable[str]) -> list[str]",
+  "near": "(set_: showpy.choreo.models.Set, point: Point, radius: Meters) -> showpy.core.selection.Selection",
+  "nearest": "(s: showpy.choreo.models.Set, point: Point, k: int = 1) -> list[tuple[SpotId, Meters]]",
+  "nearest_landmarks": "(sheet: showpy.sheet.models.Sheet, p: Point, k: int = 3, kinds: collections.abc.Iterable[LandmarkKind] | None = None) -> list[tuple[showpy.sheet.models.Landmark, Meters]]",
+  "neighbors": "(s: showpy.choreo.models.Set, entity: SpotId, k: int = 2) -> list[tuple[SpotId, Meters]]",
+  "new_show": "(show_id: str, title: str, sheet: showpy.sheet.models.Sheet, timeline: showpy.time.models.Timeline, cast: showpy.cast.models.Cast | None = None, pack: str = '') -> showpy.show.models.Show",
+  "new_timeline": "(mode: showpy.time.models.TimelineMode, counts_per_minute: CountsPerMinute | None = None, total: Count | None = None) -> showpy.time.models.Timeline",
+  "normalize_angle": "(a: Degrees) -> Degrees",
+  "notes_for": "(show: 'Show', target: SetId | TransitionId, include_hidden: bool = False) -> list[showpy.notes.models.Note]",
+  "notes_near": "(show: 'Show', p: Point, radius: Meters, set_id: SetId | None = None, include_hidden: bool = False) -> list[showpy.notes.models.Note]",
+  "notify_changes": "(pub: showpy.export.models.Publication, old_show: showpy.show.models.Show, new_show: showpy.show.models.Show) -> list[tuple[showpy.export.models.Performer, str]]",
+  "offset": "(curve: showpy.geo.curve_base.Curve, distance: Meters, side: str = 'left') -> showpy.geo.curve_base.Curve",
+  "on_field_ids": "(s: showpy.choreo.models.Set, sel: SetSelector = 'all') -> tuple[SpotId, ...]",
+  "on_surface": "(sheet: showpy.sheet.models.Sheet, p: Point) -> bool",
+  "open_workspace": "(repo: showpy.show.storage.Repository, show_id: str, principal: Principal) -> showpy.show.storage.Workspace",
+  "ordered_along": "(set_: showpy.choreo.models.Set, sel: Selector, by: OrderBy = 'form') -> showpy.core.selection.Selection",
+  "parse_path": "(d: str) -> list[showpy.geo.svg.Subpath]",
+  "parse_range": "(text: str) -> list[str]",
+  "parse_ref": "(text: str) -> tuple[str, str, str | None]",
+  "parse_tid": "(text: str) -> TransitionId",
+  "paths_table": "(spec: showpy.choreo.models.TransitionSpec) -> pandas.DataFrame",
+  "pause": "(pub: showpy.export.models.Publication) -> showpy.export.models.Publication",
+  "performer_view": "(pub: showpy.export.models.Publication, show: showpy.show.models.Show, performer: showpy.export.models.Performer) -> showpy.export.models.PerformerView",
+  "phrase_profile": "(show: showpy.show.models.Show, t0: Count, t1: Count) -> pandas.DataFrame",
+  "pin": "(show: showpy.show.models.Show, target: PinTarget, pin_id: str, reason: str = '', by: str = 'designer') -> showpy.show.models.Show",
+  "pins": "(show: showpy.show.models.Show) -> list[showpy.show.models.Pin]",
+  "pinwheel": "(forms: collections.abc.Sequence[showpy.choreo.models.Form], center: Point, deg: Degrees, force: bool = False) -> list[showpy.choreo.models.Form]",
+  "place": "(show: showpy.show.models.Show, set_id: SetId, forms: collections.abc.Sequence[showpy.choreo.models.Form], match_options: showpy.choreo.models.MatchOptions | None = None, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> showpy.choreo.models.Set",
+  "placements": "(form: showpy.choreo.models.Form, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> list[showpy.choreo.models.Placement]",
+  "point_landmark": "(mark_id: str, name: str, p: Point, *aliases: str) -> showpy.sheet.models.Landmark",
+  "polyline": "(*pts: Point, closed: bool = False) -> showpy.geo.curves.Polyline",
+  "polyline_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], *pts: Point, closed: bool = False, spacing: showpy.choreo.models.SpacingSpec | None = None, facing: showpy.choreo.models.FacingSpec | None = None, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",
+  "position_at": "(show: showpy.show.models.Show, entity: SpotId, t: Count) -> Points",
+  "preview_proposal": "(show: showpy.show.models.Show, proposal: showpy.show.models.Proposal) -> showpy.show.models.ProposalPreview",
+  "propose": "(show: showpy.show.models.Show, change: collections.abc.Sequence[ChangeOp], note: str, proposal_id: str) -> showpy.show.models.Proposal",
+  "proscenium_stage": "() -> showpy.sheet.models.Sheet",
+  "publish": "(show: showpy.show.models.Show, publication_id: str, base_url: str, at: datetime.datetime, previous: showpy.export.models.Publication | None = None) -> showpy.export.models.Publication",
+  "qr_code": "(pub: showpy.export.models.Publication, size: int = 512) -> bytes",
+  "ranks_and_files": "(points: Points, rows: int, cols: int) -> list[list[int]]",
+  "reachable_region": "(start: Point, counts: Count, max_speed: float) -> Polygon",
+  "reassign": "(pub: showpy.export.models.Publication, spot: SpotId, performer: showpy.export.models.Performer, at: datetime.datetime) -> showpy.export.models.Publication",
+  "rebuild": "(show: showpy.show.models.Show, form_id: FormId, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> showpy.show.models.Show",
+  "rect": "(center: Point, w: Meters, d: Meters, rotation_deg: Degrees = 0.0) -> showpy.geo.curves.Polyline",
+  "rect_ring": "(x0: float, y0: float, x1: float, y1: float) -> Ring",
+  "redo": "(ws: showpy.show.storage.Workspace, at: datetime.datetime) -> showpy.show.models.Revision",
+  "region": "(outline: showpy.geo.curve_base.Curve | object) -> shapely.geometry.polygon.Polygon",
+  "register_exporter": "(registry: showpy.export.data.FormatRegistry, name: str, fn: Exporter) -> showpy.export.data.FormatRegistry",
+  "register_form_fn": "(registry: showpy.choreo.form_fns.FormFnRegistry, name: str, fn: FormFn) -> showpy.choreo.form_fns.FormFnRegistry",
+  "register_importer": "(registry: showpy.export.data.FormatRegistry, name: str, fn: Importer) -> showpy.export.data.FormatRegistry",
+  "register_motion": "(registry: showpy.choreo.motion.MotionRegistry, name: str, fn: showpy.choreo.motion.MotionFn) -> showpy.choreo.motion.MotionRegistry",
+  "register_unit": "(registry: showpy.core.units.UnitRegistry, name: str, meters_per_unit: float) -> showpy.core.units.UnitRegistry",
+  "regroup": "(show: 'Show', sel: Selector, group: str) -> tuple['Show', dict[SpotId, SpotId]]",
+  "regular_polygon": "(center: Point, radius: Meters, n: int, rotation_deg: Degrees = 0.0) -> showpy.geo.curves.Polyline",
+  "reject": "(proposal: showpy.show.models.Proposal, reason: str) -> showpy.show.models.Proposal",
+  "relabel": "(show: 'Show', scheme: showpy.cast.models.LabelScheme) -> tuple['Show', dict[SpotId, SpotId]]",
+  "release": "(pub: showpy.export.models.Publication, spot: SpotId) -> showpy.export.models.Publication",
+  "remove_audio": "(tl: showpy.time.models.Timeline, label: str) -> showpy.time.models.Timeline",
+  "remove_cue": "(tl: showpy.time.models.Timeline, label: str) -> showpy.time.models.Timeline",
+  "remove_group": "(show: 'Show', key: str, reassign_to: str | None = None) -> tuple['Show', dict[SpotId, SpotId]]",
+  "remove_guide": "(sheet: showpy.sheet.models.Sheet, guide_id: str) -> showpy.sheet.models.Sheet",
+  "remove_hold": "(tl: showpy.time.models.Timeline, at_count: Count) -> showpy.time.models.Timeline",
+  "remove_landmark": "(sheet: showpy.sheet.models.Sheet, landmark_id: str) -> showpy.sheet.models.Sheet",
+  "remove_marker": "(tl: showpy.time.models.Timeline, label: str) -> showpy.time.models.Timeline",
+  "remove_note": "(show: 'Show', note_id: str) -> 'Show'",
+  "remove_set": "(show: showpy.show.models.Show, set_id: SetId, merge_counts: bool = True, force: bool = False) -> showpy.show.models.Show",
+  "remove_tempo": "(tl: showpy.time.models.Timeline, at_count: Count) -> showpy.time.models.Timeline",
+  "remove_waypoint": "(spec: showpy.choreo.models.TransitionSpec, entity: SpotId, index: int, force: bool = False) -> showpy.choreo.models.TransitionSpec",
+  "remove_zone": "(sheet: showpy.sheet.models.Sheet, zone_id: str) -> showpy.sheet.models.Sheet",
+  "rename_entities": "(show: showpy.show.models.Show, mapping: collections.abc.Mapping[SpotId, SpotId]) -> showpy.show.models.Show",
+  "render_frame": "(show: showpy.show.models.Show, frame: showpy.choreo.engine_models.Frame, canvas: showpy.sheet.render.SheetCanvas) -> PIL.Image.Image",
+  "render_sheet": "(sheet: showpy.sheet.models.Sheet, fmt: SheetFormat = 'svg', px_per_m: float = 20.0) -> bytes",
+  "renumber": "(show: showpy.show.models.Show, scheme: str = 'sequential') -> tuple[showpy.show.models.Show, dict[SetId, SetId]]",
+  "reorder": "(form: showpy.choreo.models.Form, order: Order, prev_set: showpy.choreo.models.Set | None = None, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> showpy.choreo.models.Form",
+  "replace_sheet": "(show: 'Show', sheet: showpy.sheet.models.Sheet, mapping: SheetMapping = 'landmarks', force: bool = False) -> tuple['Show', showpy.sheet.models.SheetReplaceReport]",
+  "revert": "(ws: showpy.show.storage.Workspace, revision_id: str, at: datetime.datetime) -> showpy.show.models.Revision",
+  "ripple": "(spec: showpy.choreo.models.TransitionSpec, ordered_sel: Sel, total: float, curve: Literal['linear', 'ease_in', 'ease_out', 'ease_in_out'] = 'linear', force: bool = False) -> showpy.choreo.models.TransitionSpec",
+  "rose_points": "(params: collections.abc.Mapping[str, Any], n: int) -> Points",
+  "rotate": "(obj: T, deg: Degrees, about: About = 'center', sel: SetSelector = 'all', force: bool = False) -> T",
+  "rotate_path": "(show: showpy.show.models.Show, spec: showpy.choreo.models.TransitionSpec, sel: collections.abc.Sequence[SpotId], pivot: Point | Literal['center'], deg: float) -> showpy.choreo.models.TransitionSpec",
+  "rotation_matrix": "(deg: Degrees, about: Point) -> Matrix",
+  "round_to": "(value: float, precision: float = 0.01) -> float",
+  "save_paths": "(ws: showpy.show.storage.Workspace, spec: showpy.choreo.models.TransitionSpec, at: datetime.datetime) -> str",
+  "save_sheet": "(store: showpy.sheet.templates.SheetStore, sheet: showpy.sheet.models.Sheet, scope: SheetScope = 'mine') -> SheetRef",
+  "save_show": "(ws: showpy.show.storage.Workspace, show: showpy.show.models.Show, at: datetime.datetime, message: str = 'save show') -> showpy.show.models.Revision",
+  "scale": "(obj: T, sx: float, sy: float | None = None, about: About = 'center', sel: SetSelector = 'all', force: bool = False) -> T",
+  "scale_matrix": "(sx: float, sy: float, about: Point) -> Matrix",
+  "scatter": "(area: Area, n: int, min_gap: Meters, seed: int = 0) -> Points",
+  "scatter_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], area: showpy.core.types.Region | shapely.geometry.polygon.Polygon | showpy.geo.curve_base.Curve | object, min_gap: Meters, seed: int = 0, facing: showpy.choreo.models.FacingSpec | None = None, *, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",
+  "schema_path": "(name: str) -> importlib.resources.abc.Traversable",
+  "seconds_per_count": "(tl: showpy.time.models.Timeline, c: Count) -> Seconds",
+  "seconds_to_count": "(tl: showpy.time.models.Timeline, s: Seconds) -> Count",
+  "seeded_rng": "(seed: int) -> numpy.random.Generator",
+  "select": "(source: 'Show | Set | Cast', expr: Selector) -> showpy.core.selection.Selection",
+  "selection": "(ws: showpy.show.storage.Workspace) -> showpy.core.selection.Selection",
+  "separate_in_time": "(spec: showpy.choreo.models.TransitionSpec, ordered_sel: collections.abc.Sequence[SpotId], gap_counts: float = 1.0) -> showpy.choreo.models.TransitionSpec",
+  "set_at_count": "(show: showpy.show.models.Show, c: Count) -> SetId | None",
+  "set_claimable": "(show: 'Show', sel: Selector, value: Claimable) -> 'Show'",
+  "set_coordinates": "(show: 'Show', system: showpy.sheet.models.CoordinateSystem) -> 'Show'",
+  "set_counts": "(show: showpy.show.models.Show, set_id: SetId, counts: float, rescale: bool = False, force: bool = False) -> showpy.show.models.Show",
+  "set_easing": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel, easing: showpy.choreo.models.Easing | str, force: bool = False) -> showpy.choreo.models.TransitionSpec",
+  "set_facing": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel, mode: showpy.choreo.models.FacingMode, value: Degrees | Point | SpotId | None = None, turn_counts: float = 0.0, direction: showpy.choreo.models.TurnDirection = <TurnDirection.SHORTEST: 'shortest'>, force: bool = False) -> showpy.choreo.models.TransitionSpec",
+  "set_interval": "(obj: S, interval: Meters, anchor: Literal['start', 'center', 'end'] = 'center', sel: SetSelector = 'all', force: bool = False) -> S",
+  "set_measures": "(tl: showpy.time.models.Timeline, setting: showpy.time.models.MeasureSetting) -> showpy.time.models.Timeline",
+  "set_pace": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel, pace: float, force: bool = False) -> showpy.choreo.models.TransitionSpec",
+  "set_shape": "(show: 'Show', sel: Selector, shape: showpy.cast.models.Shape) -> 'Show'",
+  "set_style": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel, style: showpy.choreo.models.PathStyle, force: bool = False, **params: Any) -> showpy.choreo.models.TransitionSpec",
+  "set_sync": "(tl: showpy.time.models.Timeline, label: str, offset_s: Seconds) -> showpy.time.models.Timeline",
+  "sheet_templates": "(surface_type: showpy.sheet.models.SurfaceType | None = None) -> list[showpy.sheet.models.Sheet]",
+  "shift": "(obj: T, dx: Meters, dy: Meters, sel: SetSelector = 'all', force: bool = False) -> T",
+  "similarity_fit": "(src: Points, dst: Points) -> Matrix",
+  "sine_wave_points": "(params: collections.abc.Mapping[str, Any], n: int) -> Points",
+  "skew": "(obj: T, deg_x: Degrees = 0.0, deg_y: Degrees = 0.0, about: About = 'center', sel: SetSelector = 'all', force: bool = False) -> T",
+  "skew_matrix": "(deg_x: Degrees, deg_y: Degrees, about: Point) -> Matrix",
+  "slot_poses": "(form: showpy.choreo.models.Form, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> tuple[Points, list[Degrees]]",
+  "slots": "(form: showpy.choreo.models.Form, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> Points",
+  "snap": "(obj: T, precision: Meters, mode: Literal['round', 'floor', 'ceil'] = 'round', axes: Literal['x', 'y', 'xy'] = 'xy', sel: SetSelector = 'all', force: bool = False) -> tuple[T, showpy.geo.models.SnapReport]",
+  "snap_to_guides": "(obj: T, sheet: showpy.sheet.models.Sheet, tol: Meters, kinds: collections.abc.Sequence[str] | None = None, sel: SetSelector = 'all', force: bool = False) -> T",
+  "snapshot": "(ws: showpy.show.storage.Workspace, message: str, at: datetime.datetime) -> showpy.show.models.Revision",
+  "space_along": "(curve: showpy.geo.curve_base.Curve, n: int, start: Meters = 0.0, end: Meters | None = None, endpoints: bool = True) -> Points",
+  "space_by_interval": "(curve: showpy.geo.curve_base.Curve, interval: Meters, start: Meters = 0.0, n: int | None = None, align: Literal['start', 'end', 'center'] = 'start') -> Points",
+  "space_proportional": "(curves: collections.abc.Sequence[showpy.geo.curve_base.Curve], n: int) -> list[Points]",
+  "space_with_gaps": "(curve: showpy.geo.curve_base.Curve, n: int, gaps: collections.abc.Sequence[tuple[int, Meters]]) -> Points",
+  "speed": "(show: showpy.show.models.Show, entity: SpotId, tid: TransitionId, window: tuple[float, float] | None = None) -> showpy.geo.models.SpeedStats",
+  "speeds": "(show: showpy.show.models.Show, tid: TransitionId) -> pandas.DataFrame",
+  "spiral": "(center: Point, r0: Meters, r1: Meters, turns: float, start_deg: Degrees = 0.0) -> showpy.geo.curves.SpiralCurve",
+  "spiral_motion": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, Any]) -> Points",
+  "spiral_points": "(params: collections.abc.Mapping[str, Any], n: int) -> Points",
+  "split": "(sel: showpy.core.selection.Selection | collections.abc.Sequence[SpotId], k: int) -> list[showpy.core.selection.Selection]",
+  "split_form": "(form: showpy.choreo.models.Form, at: int | SpotId, ids: tuple[FormId, FormId] | None = None, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> tuple[showpy.choreo.models.Form, showpy.choreo.models.Form]",
+  "split_section": "(show: showpy.show.models.Show, at: SetId) -> tuple[showpy.show.models.Show, showpy.show.models.Show]",
+  "spot_counts": "(show: showpy.show.models.Show) -> list[showpy.choreo.models.SpotCount]",
+  "stagger": "(spec: showpy.choreo.models.TransitionSpec, ordered_sel: Sel, step: float = 1.0, direction: Literal['start', 'end'] = 'start', keep_end: bool = True, force: bool = False) -> showpy.choreo.models.TransitionSpec",
+  "star": "(center: Point, r_outer: Meters, r_inner: Meters, n: int, rotation_deg: Degrees = 0.0) -> showpy.geo.curves.Polyline",
+  "store_paths": "(show: showpy.show.models.Show, op: showpy.show.models.PathsOp) -> showpy.show.models.Show",
+  "suggest_delays": "(show: showpy.show.models.Show, tid: TransitionId, pair: tuple[SpotId, SpotId], max_delay: float = 4.0) -> list[showpy.choreo.engine_models.Fix]",
+  "suggest_reassignment": "(show: showpy.show.models.Show, tid: TransitionId, sel: collections.abc.Sequence[SpotId], crossing_weight: float = 10.0) -> showpy.choreo.models.MatchResult",
+  "suggest_swaps": "(show: showpy.show.models.Show, tid: TransitionId, k: int = 5, same_group: bool = True) -> list[tuple[SpotId, SpotId, float]]",
+  "suggest_waypoint": "(show: showpy.show.models.Show, tid: TransitionId, entity: SpotId, around: SpotId, clearance: float = 0.8) -> list[showpy.choreo.engine_models.Fix]",
+  "svg_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], svg: str, fit: showpy.core.types.Box2, keep_aspect: bool = True, spacing: showpy.choreo.models.SpacingSpec | None = None, facing: showpy.choreo.models.FacingSpec | None = None, *, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",
+  "svg_outline": "(svg: str, fit: showpy.core.types.Box2, path_index: int | None = None, keep_aspect: bool = True, flip_y: bool = True) -> list[showpy.geo.curves.SvgCurve]",
+  "swap": "(show: showpy.show.models.Show, set_id: SetId, a: SpotId, b: SpotId, force: bool = False) -> showpy.show.models.Show",
+  "swap_claims": "(pub: showpy.export.models.Publication, a: SpotId, b: SpotId) -> showpy.export.models.Publication",
+  "symmetrize": "(s: showpy.choreo.models.Set, sel: SetSelector = 'all', source_side: Literal['left', 'right'] = 'left', pairs: collections.abc.Mapping[SpotId, SpotId] | None = None, axis_x: float = 0.0, force: bool = False) -> showpy.choreo.models.Set",
+  "symmetry_error": "(s: showpy.choreo.models.Set, sel: SetSelector = 'all', axis_x: float = 0.0) -> Meters",
+  "symmetry_score": "(s: showpy.choreo.models.Set, axis_x: float = 0.0) -> float",
+  "template_ref": "(ref_id: str) -> SheetRef",
+  "tempo_at": "(tl: showpy.time.models.Timeline, c: Count) -> CountsPerMinute",
+  "text_outline": "(text: str, font: str, height: Meters, at: Point) -> list[showpy.geo.curves.Polyline]",
+  "timer": "() -> collections.abc.Iterator[showpy.core.util.Timer]",
+  "to_coords": "(show: 'Show', p: Point, style: CoordStyle = 'long') -> str",
+  "to_csv": "(obj: Tabular) -> str",
+  "to_json": "(tl: showpy.time.models.Timeline) -> dict[str, Any]",
+  "to_pdf": "(obj: Printable, layout: Layout = 'sheet') -> bytes",
+  "to_text": "(obj: Tabular) -> str",
+  "transform_curve": "(curve: AnyCurve, matrix: Matrix) -> AnyCurve",
+  "transform_facing": "(theta: Degrees, matrix: Matrix) -> Degrees",
+  "transform_form": "(form: showpy.choreo.models.Form, matrix: Matrix, force: bool = False) -> showpy.choreo.models.Form",
+  "transform_points": "(points: Points, matrix: Matrix) -> Points",
+  "transition_at_count": "(show: showpy.show.models.Show, c: Count) -> tuple[TransitionId, Count] | None",
+  "transitions": "(show: showpy.show.models.Show) -> list[TransitionId]",
+  "translation_matrix": "(dx: float, dy: float) -> Matrix",
+  "turn": "(start: Degrees, end: Degrees, u: float, direction: showpy.choreo.models.TurnDirection = <TurnDirection.SHORTEST: 'shortest'>) -> Degrees",
+  "two_part": "(show: showpy.show.models.Show, spec: showpy.choreo.models.TransitionSpec, sel: collections.abc.Sequence[SpotId], corner: Literal['x_first', 'y_first'] | Point, split: float | None = None) -> showpy.choreo.models.TransitionSpec",
+  "unclaimed": "(pub: showpy.export.models.Publication, show: showpy.show.models.Show) -> list[SpotId]",
+  "undo": "(ws: showpy.show.storage.Workspace, at: datetime.datetime) -> showpy.show.models.Revision",
+  "union": "(*areas: Area) -> Area",
+  "units": "() -> dict[str, float]",
+  "unlock": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel) -> showpy.choreo.models.TransitionSpec",
+  "unpin": "(show: showpy.show.models.Show, target: PinTarget, pin_id: str) -> showpy.show.models.Show",
+  "unpublish": "(pub: showpy.export.models.Publication) -> showpy.export.models.Publication",
+  "upgrade_dependency": "(show: showpy.show.models.Show, ref: str, version: str, sheet: showpy.sheet.models.Sheet | None = None) -> showpy.show.models.Show",
+  "validate_dependencies": "(show: showpy.show.models.Show, store: showpy.sheet.templates.SheetStore | None = None) -> showpy.core.validation.ValidationReport",
+  "validate_paths": "(show: showpy.show.models.Show, spec: showpy.choreo.models.TransitionSpec) -> showpy.core.validation.ValidationReport",
+  "validate_set": "(show: showpy.show.models.Show, candidate: showpy.choreo.models.Set) -> showpy.core.validation.ValidationReport",
+  "validate_show": "(show: showpy.show.models.Show, store: showpy.sheet.templates.SheetStore | None = None) -> showpy.core.validation.ValidationReport",
+  "validate_timeline": "(tl: showpy.time.models.Timeline) -> showpy.core.validation.ValidationReport",
+  "vector_facing": "(v: Point) -> Degrees",
+  "video_canvas": "(show: showpy.show.models.Show, px_per_m: float = 10.0) -> showpy.sheet.render.SheetCanvas",
+  "walkable": "(sheet: showpy.sheet.models.Sheet, p: Point) -> bool",
+  "weave": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, Any]) -> Points",
+  "wedge": "(apex: Point, length: Meters, spread_deg: Degrees, facing_deg: Degrees = 0.0) -> showpy.geo.curves.Polyline",
+  "wedge_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], apex: Point, length: Meters, spread_deg: Degrees, direction_deg: Degrees = 0.0, spacing: showpy.choreo.models.SpacingSpec | None = None, facing: showpy.choreo.models.FacingSpec | None = None, *, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",
+  "where": "(set_: showpy.choreo.models.Set, predicate: collections.abc.Callable[[showpy.choreo.models.Placement], bool]) -> showpy.core.selection.Selection",
+  "who_is_on": "(pub: showpy.export.models.Publication, spot: SpotId) -> showpy.export.models.Performer | None",
+  "window": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel, start: float, end: float, force: bool = False) -> showpy.choreo.models.TransitionSpec",
+  "with_set": "(show: showpy.show.models.Show, new: showpy.choreo.models.Set) -> showpy.show.models.Show",
+  "zigzag": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, Any]) -> Points",
+  "zones_at": "(show: 'Show', p: Point, t: Count | None = None) -> list[showpy.sheet.models.Zone]"
+}
