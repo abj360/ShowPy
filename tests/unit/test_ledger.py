@@ -8,6 +8,7 @@ Contains:
     test_defect_marker_requires_matching_reason: rejects an xfail reason that differs from the ID
     test_defect_marker_rejects_bad_id: rejects an ID that does not match UP-<section>-<nn>
     test_defect_marker_accepts_strict_xfail_with_matching_reason: accepts a valid ledger test
+    test_defect_marker_accepts_three_digit_id: accepts an ID numbered past 99
     test_defect_marker_rejects_non_strict_xfail: rejects xfail without strict=True
     test_defect_marker_accepts_parametrized_marks: accepts defect marks inside pytest.param
     test_ledger_counts_only_selected_tests: leaves deselected defect tests out of the count
@@ -94,6 +95,24 @@ def test_defect_marker_accepts_strict_xfail_with_matching_reason(
         @pytest.mark.defect("UP-9.1-01")
         @pytest.mark.xfail(strict=True, reason="UP-9.1-01")
         def test_regression_open_defect() -> None:
+            assert False
+        """,
+    )
+    assert result.ret == 0
+    result.assert_outcomes(xfailed=1)
+    result.stdout.fnmatch_lines(["Ledger: 1 open"])
+
+
+def test_defect_marker_accepts_three_digit_id(pytester: pytest.Pytester) -> None:
+    """Accepts a defect ID whose number has three digits."""
+    result = run_ledger_case(
+        pytester,
+        """
+        import pytest
+
+        @pytest.mark.defect("UP-1.1-100")
+        @pytest.mark.xfail(strict=True, reason="UP-1.1-100")
+        def test_regression_three_digit_id() -> None:
             assert False
         """,
     )

@@ -20,7 +20,7 @@ import re
 import pytest
 
 DEFECT_MARKER = "defect"
-DEFECT_ID_PATTERN = re.compile(r"^UP-(\d+(\.\d+)?)-\d{2}$")
+DEFECT_ID_PATTERN = re.compile(r"^UP-(\d+(\.\d+)?)-\d{2,3}$")
 OPEN_COUNT_KEY = pytest.StashKey[int]()
 LEDGER_USAGE = 'use @pytest.mark.defect("UP-<section>-<nn>") with xfail(strict=True, reason=<id>)'
 

@@ -123,32 +123,32 @@ def _with_changes(changes: tuple[tuple[float, float], ...]) -> Timeline:
     return _with_measures(MeasureSetting(counts_per_measure=4.0, changes=changes))
 
 
-@pytest.mark.defect("UP-9.30-10")
-@pytest.mark.xfail(strict=True, reason="UP-9.30-10")
+@pytest.mark.defect("UP-9.3-109")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-109")
 def test_regression_zero_measure_length_is_a_clean_error() -> None:
     """Rejects `counts_per_measure=0` with a ShowPyError, not ZeroDivisionError (audit 9.3)."""
     with pytest.raises(REJECTED):
         count_to_measure(_with_measures(MeasureSetting(counts_per_measure=0.0)), 4.0)
 
 
-@pytest.mark.defect("UP-9.30-11")
-@pytest.mark.xfail(strict=True, reason="UP-9.30-11")
+@pytest.mark.defect("UP-9.3-110")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-110")
 def test_regression_nan_measure_length_is_a_clean_error() -> None:
     """Rejects a NaN measure length with a ShowPyError, not ValueError (audit 9.3)."""
     with pytest.raises(REJECTED):
         count_to_measure(_with_measures(MeasureSetting(counts_per_measure=math.nan)), 4.0)
 
 
-@pytest.mark.defect("UP-9.30-12")
-@pytest.mark.xfail(strict=True, reason="UP-9.30-12")
+@pytest.mark.defect("UP-9.3-111")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-111")
 def test_regression_negative_measure_length_is_rejected() -> None:
     """Rejects a negative measure length instead of labeling measure -1 (audit 9.3)."""
     with pytest.raises(REJECTED):
         count_to_measure(_with_measures(MeasureSetting(counts_per_measure=-4.0)), 4.0)
 
 
-@pytest.mark.defect("UP-9.30-13")
-@pytest.mark.xfail(strict=True, reason="UP-9.30-13")
+@pytest.mark.defect("UP-9.3-112")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-112")
 def test_regression_duplicate_change_counts_follow_input_order() -> None:
     """Rejects two changes at one count, or lets the later one win (audit 9.3)."""
     probe = 14.0
@@ -170,8 +170,8 @@ def test_regression_duplicate_change_counts_follow_input_order() -> None:
     assert first != second
 
 
-@pytest.mark.defect("UP-9.30-14")
-@pytest.mark.xfail(strict=True, reason="UP-9.30-14")
+@pytest.mark.defect("UP-9.3-113")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-113")
 def test_regression_fractional_measure_numbers_are_rejected() -> None:
     """Rejects measure 2.5 instead of computing a count for it (audit 9.3)."""
     timeline = _with_measures(MeasureSetting(counts_per_measure=4.0))
