@@ -162,7 +162,8 @@ def test_regression_show_ids_differing_by_case_are_distinct_or_rejected(tmp_path
     if first is None or second is None:
         return
     assert {n.lower() for n in first}.isdisjoint({n.lower() for n in second})
-    assert second
+    lowered = [str(p).lower() for p in tmp_path.rglob("*")]
+    assert len(lowered) == len(set(lowered))
 
 
 @pytest.mark.defect("UP-9.7-15")
