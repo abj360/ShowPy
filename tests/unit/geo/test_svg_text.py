@@ -39,6 +39,7 @@ Contains:
 """
 
 import math
+import statistics
 import sys
 import time
 
@@ -56,8 +57,10 @@ BOX = Box2(min=(0.0, 0.0), max=(10.0, 10.0))
 WIDE_BOX = Box2(min=(0.0, 0.0), max=(20.0, 2.0))
 SCALED_BOX = Box2(min=(0.0, 0.0), max=(8.0, 8.0))
 SIGNAL_TIMEOUT_S = 5
-ARC_COUNT = 3_000
-TIMING_RUNS = 3
+# 5 500 arcs take about 0.25 s today, so scheduler noise cannot swing one sample's ratio.
+ARC_COUNT = 5_500
+TIMING_RUNS = 5
+SCALING_TIMEOUT_S = 10
 MAX_SCALING_RATIO = 3.0
 FIT_TOL_M = 1e-6
 FLATTEN_TOL_M = 0.001
@@ -141,24 +144,31 @@ def _bounds(curves: list[SvgCurve]) -> tuple[float, float, float, float]:
     )
 
 
-def _best_parse_time(arc_count: int) -> float:
-    path = "M0 0 " + "a1 1 0 011 1 " * arc_count
-    times = []
+def _median_parse_times(arc_count: int) -> tuple[float, float]:
+    """Times parse_path on `arc_count` and twice as many arcs, interleaved, median of each.
+
+    Interleaving puts both sizes under the same background load.
+    """
+    small_path = "M0 0 " + "a1 1 0 011 1 " * arc_count
+    large_path = "M0 0 " + "a1 1 0 011 1 " * (2 * arc_count)
+    small_times: list[float] = []
+    large_times: list[float] = []
     for _ in range(TIMING_RUNS):
-        started = time.perf_counter()
-        parse_path(path)
-        times.append(time.perf_counter() - started)
-    return min(times)
+        for path, times in ((small_path, small_times), (large_path, large_times)):
+            started = time.perf_counter()
+            parse_path(path)
+            times.append(time.perf_counter() - started)
+    return statistics.median(small_times), statistics.median(large_times)
 
 
+@pytest.mark.slow
 @pytest.mark.defect("UP-9.1-09")
 @pytest.mark.xfail(strict=True, reason="UP-9.1-09")
-@pytest.mark.timeout(SIGNAL_TIMEOUT_S, method="signal")
+@pytest.mark.timeout(SCALING_TIMEOUT_S, method="signal")
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_parse_path_scales_linearly_with_arc_count() -> None:
     """Parses twice the arcs in under 3x the time; a quadratic parser takes about 4x (P0 #8)."""
-    small = _best_parse_time(ARC_COUNT)
-    large = _best_parse_time(2 * ARC_COUNT)
+    small, large = _median_parse_times(ARC_COUNT)
     assert large / small < MAX_SCALING_RATIO
 
 
