@@ -220,4 +220,6 @@ def test_regression_split_puts_a_cue_in_one_half_only() -> None:
     """Keeps cue c1 in a single half of a split (audit 9.7 sections)."""
     cue = Cue(label="c1", order=1, estimated_seconds=2.0)
     first, second = split_section(_three_sets_with(cues=(cue,)), SPLIT_SET)
-    assert not (cue in first.timeline.cues and cue in second.timeline.cues)
+    in_first = "c1" in {c.label for c in first.timeline.cues}
+    in_second = "c1" in {c.label for c in second.timeline.cues}
+    assert in_first != in_second
