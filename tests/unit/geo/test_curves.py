@@ -32,10 +32,13 @@ Contains:
         instead of returning NaN with RuntimeWarnings
     test_regression_arc_rejects_infinite_radius: rejects an infinite radius instead of building an
         arc of infinite length
+    test_regression_substring_of_unknown_curve_kind_raises_geometry_error: raises a GeometryError
+        for a curve subclass outside AnyCurve, not a pydantic error
 """
 
 import math
 import sys
+from typing import Literal
 
 import numpy as np
 import pytest
@@ -50,6 +53,7 @@ from showpy.geo.curves import (
     BezierCurve,
     CircleCurve,
     CompositeCurve,
+    CurveModel,
     EllipseCurve,
     Polyline,
     Segment,
@@ -312,3 +316,13 @@ def test_regression_arc_rejects_infinite_radius() -> None:
     """Rejects an infinite radius instead of building an arc of infinite length (audit 9.1)."""
     with pytest.raises(GeometryError):
         arc((0.0, 0.0), math.inf, 0.0, 90.0).length()
+
+
+class _UnlistedCurve(CurveModel):
+    kind: Literal["unlisted"] = "unlisted"
+
+
+def test_regression_substring_of_unknown_curve_kind_raises_geometry_error() -> None:
+    """Raises a GeometryError for a curve subclass outside AnyCurve, not a pydantic error."""
+    with pytest.raises(GeometryError):
+        _UnlistedCurve().substring(0.0, 1.0)

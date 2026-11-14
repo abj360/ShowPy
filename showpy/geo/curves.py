@@ -46,11 +46,11 @@ class CurveModel(CurveBase):
 
     def substring(self, s0: Meters, s1: Meters) -> "TrimmedCurve":
         """Returns the piece between arc lengths s0 and s1, reversed when s0 > s1."""
-        return TrimmedCurve(base=self, s0=s0, s1=s1)
+        return TrimmedCurve(base=_as_any_curve(self), s0=s0, s1=s1)
 
     def reversed(self) -> "TrimmedCurve":
         """Returns the same curve travelled end to start."""
-        return TrimmedCurve(base=self, s0=self.length(), s1=0.0)
+        return TrimmedCurve(base=_as_any_curve(self), s0=self.length(), s1=0.0)
 
 
 class Segment(CurveModel):
@@ -520,9 +520,32 @@ type AnyCurve = Annotated[
     Field(discriminator="kind"),
 ]
 
+CURVE_TYPES = (
+    Segment,
+    Polyline,
+    ArcCurve,
+    CircleCurve,
+    EllipseCurve,
+    SplineCurve,
+    BezierCurve,
+    SvgCurve,
+    SpiralCurve,
+    CompositeCurve,
+    TrimmedCurve,
+)
+
 CompositeCurve.model_rebuild()
 TrimmedCurve.model_rebuild()
 CURVE_ADAPTER: TypeAdapter[AnyCurve] = TypeAdapter(AnyCurve)
+
+
+def _as_any_curve(curve: CurveModel) -> AnyCurve:
+    if not isinstance(curve, CURVE_TYPES):
+        raise GeometryError(
+            f"{type(curve).__name__} is not a known curve kind",
+            hint=f"use one of {', '.join(t.__name__ for t in CURVE_TYPES)}",
+        )
+    return curve
 
 
 # Any: recipes are JSON objects whose fields depend on the curve kind.
