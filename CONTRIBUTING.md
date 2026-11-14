@@ -5,8 +5,8 @@ Thanks for helping make choreography exact, safe and fast to write.
 ## Setup
 
 ```bash
-uv sync                              # Python 3.14 env with every pinned dependency
-uv run pre-commit install            # ruff, mypy --strict and pytest on every commit
+uv sync                              # Python 3.12+ env (3.14 by default) with every pinned dependency
+uv run pre-commit install --hook-type pre-commit --hook-type pre-push  # lint and types per commit, pytest per push
 ```
 
 Or run everything in a clean container:
@@ -63,7 +63,7 @@ docker compose -f docker/docker-compose.yml up --build
 ## Pre-merge checklist
 
 - [ ] `uv run ruff format --check . && uv run ruff check .` clean
-- [ ] `uv run mypy showpy tests` clean (strict)
+- [ ] `uv run nox -s types` clean (mypy `--strict` and pyright basic)
 - [ ] `uv run pytest` green, and `uv run pytest -m golden` green
 - [ ] New functions and classes have verb-first docstrings with Args, Returns or Attributes where relevant
 - [ ] No commented-out code and no comments restating the obvious

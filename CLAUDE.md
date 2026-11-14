@@ -14,11 +14,11 @@ uv run pytest                    # all tests (doctests included, warnings are er
 uv run pytest tests/unit/choreo  # one area
 uv run pytest -m golden          # real marchable drill regression
 uv run ruff check . && uv run ruff format .
-uv run mypy showpy tests          # strict typing, must pass
+uv run nox -s types              # mypy --strict and pyright basic, must pass
 docker compose -f docker/docker-compose.yml up --build   # full suite in a clean container
 ```
 
-Run tests, ruff and mypy before calling any task done. Prettier formats Markdown, YAML and JSON (`npx --yes prettier@3.6.2`; Node is under `~/.nvm/versions/node/v22.23.5/bin`).
+Run tests, ruff and both type checkers before calling any task done. Prettier formats Markdown, YAML and JSON (`npm ci` installs the pinned `prettier` 3.6.2; `uv run nox -s lint` checks it). Node is under `~/.nvm/versions/node/v22.23.5/bin`; put that `bin/` on `PATH` first.
 
 ## Layout
 

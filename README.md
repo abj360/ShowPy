@@ -8,7 +8,7 @@ Drill design is slow because every dot, every move and every check is manual. Sh
 
 - **One source of motion.** The canvas, the checks, the exports and the video all read positions from one `PathEngine`, so they never disagree. Its collision segments stay within 0.02 m of the true path. A Hypothesis property test probes 9 points per segment across 150 random paths to check this.
 - **Exact and deterministic.** Arc-length curves are exact for lines and arcs. Tempo ramps convert analytically, both ways. Randomness is seeded, and no library code reads the clock.
-- **Verified.** 1492 tests (unit, property, golden replay and doctests) run with warnings as errors, under `mypy --strict` and ruff.
+- **Verified.** 1513 tests (unit, property, golden replay and doctests) pass with warnings as errors, under `mypy --strict`, pyright and ruff. 528 more are strict-xfail tests that pin open audited defects.
 - **Light to import.** `import showpy` takes 2.5 ms; names load lazily.
 
 ## Features
@@ -47,7 +47,7 @@ Drill design is slow because every dot, every move and every check is manual. Sh
 ## Quickstart (one command, fully dockerized)
 
 ```bash
-# No ports: showpy is a library. The container runs ruff, mypy --strict and the full test suite.
+# No ports: showpy is a library. The container installs the wheel and runs the full test suite.
 cp .env.example .env && docker compose -f docker/docker-compose.yml up --build
 ```
 
@@ -136,7 +136,7 @@ docker/     Dockerfile, docker-compose.yml
 uv sync
 uv run pre-commit install
 uv run ruff format . && uv run ruff check .
-uv run mypy showpy tests
+uv run nox -s types
 uv run pytest
 ```
 
@@ -147,7 +147,7 @@ Read `CLAUDE.md`, `CONTRIBUTING.md` and the ADRs before changing anything. The P
 | Gate            | Command                                                                                          | CI  |
 | --------------- | ------------------------------------------------------------------------------------------------ | --- |
 | Format, lint    | `uv run ruff format --check . && uv run ruff check .`, then Prettier for Markdown, YAML and JSON | yes |
-| Types           | `uv run mypy showpy tests` (strict)                                                              | yes |
+| Types           | `uv run nox -s types` (mypy `--strict`, then pyright basic)                                      | yes |
 | Tests           | `uv run pytest` (unit, property, golden, doctests; warnings are errors)                          | yes |
 | Golden          | `uv run pytest -m golden`                                                                        | yes |
 | Dependency scan | `pip-audit --strict --require-hashes` on the exported lockfile                                   | yes |
@@ -155,7 +155,7 @@ Read `CLAUDE.md`, `CONTRIBUTING.md` and the ADRs before changing anything. The P
 
 ## Docs
 
-- `docs/project-overview.md`: the product, problem and scope
+- `docs/upgrade-plan.md`: the upgrade program, phase by phase
 - `docs/showpy-api-reference.md`: the full API reference
 - `docs/adr/`: architecture decisions (layout and reference fixes; the PathEngine)
 - `docs/HANDOFF.md`: current state and next steps

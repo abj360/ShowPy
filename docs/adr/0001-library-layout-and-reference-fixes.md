@@ -178,3 +178,9 @@ checker", read "a consumer's checks"; the rule that ShowPy never weakens a check
 The earlier addendum's legacy reading of `stage.show.v1` is withdrawn by the maintainer's decision.
 `import_json` accepts only `showpy.show.v1`, and a document tagged `stage.show.v1` is rejected like
 any other unknown tag. Re-tag old documents before import.
+
+## Addendum 2026-11-13: export count
+
+The 2026-11-11 addendum counted 533 lazily re-exported names. After the repository split moved
+agent-only code out, `import showpy` re-exports 519 names, generated from
+`showpy/_api_table.py` and pinned by `tests/fixtures/api_snapshot.json`.

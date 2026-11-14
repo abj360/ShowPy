@@ -3,18 +3,18 @@
 Audience: the next agent or engineer continuing this repository. Scope: state of work, what is
 left, and the traps already hit.
 
-Last updated: 2026-11-12
+Last updated: 2026-11-13
 
 ## Where things stand
 
-| Item          | Value                                                                                     |
-| ------------- | ----------------------------------------------------------------------------------------- |
-| Repository    | `abj360/ShowPy` (private); split into its own repository on 2026-11-12 with full history  |
-| Gates         | `uv run pytest` green (doctests, warnings as errors); ruff and mypy `--strict` clean      |
-| CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main |
-| Defect ledger | `Ledger: 529 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-13)   |
-| Out of scope  | `stagecheck`, `showpy.packs` and `showpy.index`, by the user's decision (2026-11-11)      |
-| Pushing       | needs explicit approval                                                                   |
+| Item          | Value                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------- |
+| Repository    | `abj360/ShowPy` (private); split into its own repository on 2026-11-12 with full history    |
+| Gates         | `nox -s tests`: 1513 passed, 528 xfailed (2026-11-13); ruff, mypy `--strict`, pyright clean |
+| CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main   |
+| Defect ledger | `Ledger: 528 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-13)     |
+| Out of scope  | `stagecheck`, `showpy.packs` and `showpy.index`, by the user's decision (2026-11-11)        |
+| Pushing       | needs explicit approval                                                                     |
 
 **Repository split (2026-11-12).** Agent-only code moved to a separate consumer repository with
 its history: set-script builds and the bubblewrap sandbox (`show/build.py`, `build_models.py`,
@@ -33,7 +33,8 @@ Use `uv` only, never pip.
 
 1. `CLAUDE.md` (project) and `~/.claude/CLAUDE.md` (user style: file headers with a `Contains:` section, verb-first docstrings, no AI trailers on commits).
 2. `docs/adr/0001-library-layout-and-reference-fixes.md`: 24 fixes to the reference, the origin convention (front-center), the facing vector `(sin θ, −cos θ)`, and why subpackage `__init__` files are empty.
-3. `docs/adr/0002-path-engine.md`, plus its two addenda: segment probe density, and time-based measures living in `showpy.choreo`.
+3. `docs/adr/0002-path-engine.md`, plus its three addenda: segment probe density, time-based measures living in `showpy.choreo`, and the `min_gaps` hotspot forecast.
+4. `docs/upgrade-plan.md` and `docs/superpowers/plans/2026-11-13-phase-0-safety-net.md`: the upgrade program and its first phase.
 
 ## Module map (what exists)
 
@@ -47,26 +48,38 @@ Use `uv` only, never pip.
 | `notes`  | models (tagged `Anchor`), notes (add, edit, find, `accept_draft`)                                                                                                                                                                                    |
 | `choreo` | models, motion (easing, `MotionRegistry`), engine, engine_compile, engine_facing, engine_models, paths, routes, facing, avoid, motion_stats, forms, form_fns, form_layout, form_ops, form_fit, form_place, match, match_cost, match_solve, match_ops |
 | `show`   | models (`Show`, `Pin`, `ShowIndex`, diffs, `Revision`, `CanvasEvent`, `Proposal`), manage, sections, storage, repositories, file_repository, documents, files, history, collab, pinning, changes, locks, validate, paths_store, counts               |
-| `export` | video only so far (see in-flight work)                                                                                                                                                                                                               |
+| `export` | models, data (JSON, CSV, format registry), positions, print_sheets, pdf, publish (claims, QR codes), video                                                                                                                                           |
 
-## In flight
+## Upgrade program
 
-- **API reference rewrite.** An agent is working in `.claude/worktrees/agent-ab17bb0302cd0a89a` (branch `worktree-agent-ab17bb0302cd0a89a`) to align `docs/showpy-api-reference.md` with the code, export sections included. When it is done:
-  1. Merge with `git merge --no-ff`.
-  2. Remove `docs/showpy-api-reference.md` from `.prettierignore` and run Prettier.
-  3. Remove the worktree.
-- **Study guide PDF.** An agent is writing it directly on this branch under `docs/guide/` (uncommitted until it finishes): `docs/guide/build_guide.py` produces `docs/guide/stage-library-guide.pdf`.
+The library is being upgraded in phases; `docs/upgrade-plan.md` holds the program and
+`docs/superpowers/plans/2026-11-13-phase-0-safety-net.md` the Phase 0 plan.
 
-## Remaining work, in order
+**Phase 0, safety net: implemented 2026-11-13** on branch `chore/phase-0-safety-net`; the
+branch review, the merge and the `v0.2.0` tag are still to come.
 
-1. Done 2026-11-11, moved to a separate consumer repository 2026-11-12: set-script builds (`build_set`, `build_all`, `stale`, `new_set_script`, `run_script`).
-2. Done 2026-11-11: `showpy/choreo/paths_store.py` (`save_paths`, `load_paths`).
-3. Done 2026-11-11: `showpy/__init__.py` lazily re-exports 533 names (PEP 562). Internal modules are excluded and the motion `spiral` is `spiral_motion`. Tested by `tests/unit/test_public_api.py`.
-4. Done 2026-11-11: `schemas/showpy.show.v1.json`, guarded by `tests/unit/show/test_schema.py` (regenerate with `SHOWPY_UPDATE_SCHEMA=1`).
-5. **Update `docs/showpy-api-reference.md`**, which the user asked for ("fix every contradiction"). Apply ADR 0001's table and every agent deviation listed below, section by section. Keep the doc's format.
-6. Done 2026-11-11: `README.md`, `.env.example` and the dockerized quickstart (Docker run: 1492 passed).
-7. Done 2026-11-11: Prettier (`npx --yes prettier@3.6.2`, Node at `/home/uapb-ai/.nvm/versions/node/v22.23.5/bin`), gated in pre-commit and CI.
-8. **Final gates and Docker run**, then a summary to the user: what changed, tests run, open items.
+1. One task runner: `noxfile.py` drives every local, hook and CI gate.
+2. CI matrix: Python 3.12 to 3.14 on Linux, macOS and Windows, plus hash seeds, slow tests, the
+   wheel smoke test, a lowest-direct resolution job and the Docker run.
+3. Defect ledger: every audited defect is a strict xfail keyed `UP-<section>-<nn>`;
+   `tests/ledger_plugin.py` rejects malformed markers and prints the open count.
+4. Benchmarks with a baseline (`nox -s bench`), a public API snapshot and a generated
+   `showpy/__init__.py`, and a changelog generated from Conventional Commits.
+5. Stronger gates: ruff adds `EXE PIE PGH RSE ISC LOG DTZ PTH FURB ARG PERF C90 TID` (McCabe
+   limit 12, no function over it today) and bans importing `tests` from the library;
+   `nox -s types` runs pyright basic after `mypy --strict`. Library modules carry no shebang.
+6. Pyright's real findings are fixed with `test_regression_` tests: a one-point route
+   (`make_route`, closes UP-9.2-27), a counter-march with no members, and trimming a curve
+   class outside `AnyCurve`.
+
+**Next: Phase 1, Priority 0.** Make the Priority 0 ledger tests pass: storage data loss and
+traversal, principal enforcement, guaranteed segment bounds, hangs and unbounded allocations,
+hash-seed determinism, publication tokens, sheet replacement, form consistency after matching,
+and every lock and pin bypass. Removing a fixed test's `defect` and `xfail` markers is part of
+the fix.
+
+Still open from the original build: align `docs/showpy-api-reference.md` with the code and the
+deviations below (the code is the source of truth until generated docs land in Phase 6).
 
 ## Deviations already made (put these into the reference doc)
 
@@ -138,7 +151,8 @@ Use `uv` only, never pip.
 
 ## Bugs found by the study-guide pass (2026-11-11), fixed 2026-11-12
 
-Each fix has a `test_regression_` test.
+Fixes 1 (sandbox) and 6 (set-script `source_hash`) moved to the consumer repository on
+2026-11-12 with their tests. Each of the other eight has a `test_regression_` test here.
 
 1. **Sandbox.** Scripts now run under bubblewrap (`unshare-all`, read-only binds of only the interpreter, venv and `showpy`, private `/tmp`). `showpy.show.repositories` and `showpy.show.file_repository` are blocked. Without bubblewrap, running scripts needs an explicit `isolation="process"`. Docker needs `security_opt: seccomp=unconfined` for bubblewrap's namespaces; compose sets it.
 2. `PathEngine.positions(t, sel)` resolves strings with the selection grammar.
