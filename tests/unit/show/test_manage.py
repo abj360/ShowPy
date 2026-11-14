@@ -491,7 +491,11 @@ def test_regression_set_counts_rescale_shifts_facing_overrides_and_zone_windows(
 @pytest.mark.defect("UP-9.7-85")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-85")
 def test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair() -> None:
-    """Drops or reports a transition pin on a pair that no longer exists (audit 9.7 sets)."""
+    """Drops or reports a transition pin on a vanished pair (audit 9.7 sets).
+
+    The pin ID `2->3` is non-canonical (canonical is `2→3`), so this overlaps the
+    normalization defects 45 and 67; canonical pins are already dropped.
+    """
     show = _three_set_show().model_copy(update={"pins": (Pin(target="transition", id="2->3"),)})
-    edited = remove_set(show, "2")
+    edited = remove_set(show, "2", force=True)
     assert not edited.pins or not validate_show(edited).ok
