@@ -8,10 +8,9 @@ Contains:
     shows(): draws a valid show with groups, sets, forms, paths, tempo changes and holds
 """
 
-import math
 from typing import Literal
 
-from hypothesis import assume
+from hypothesis import reject
 from hypothesis import strategies as st
 
 from showpy.choreo.facing import add_facing_override
@@ -19,8 +18,8 @@ from showpy.choreo.match_ops import with_set
 from showpy.choreo.models import FacingMode, FacingOverride, TransitionSpec
 from showpy.choreo.paths import hold, ripple, stagger
 from showpy.choreo.routes import follow_and_set_targets, make_route
+from showpy.core.errors import PathError
 from showpy.core.ids import TransitionId
-from showpy.core.types import Point
 from showpy.show.changes import store_paths
 from showpy.show.manage import new_show
 from showpy.show.models import PathsOp, Show
@@ -31,7 +30,6 @@ from tests.strategies.placements import with_next_set
 from tests.strategies.sheet import points_on, sheets
 from tests.strategies.time import timelines
 
-ROUTE_GAP_M = 1e-9
 SHOW_ID = "generated"
 TITLE = "Generated show"
 FIRST_SET = "1"
@@ -55,19 +53,14 @@ def _formed(show: Show, set_id: str) -> set[str]:
     return {p.entity for p in show.set(set_id).placements if p.form is not None}
 
 
-def _is_one_point(show: Show, tid: TransitionId, file: list[str], ahead: list[Point]) -> bool:
-    ends = ahead or [show.set(tid[1]).get(file[0]).point]
-    points = [show.set(tid[0]).get(m).point for m in file] + list(ends)
-    return all(math.dist(points[0], p) <= ROUTE_GAP_M for p in points)
-
-
 @st.composite
 def _followed(draw: st.DrawFn, show: Show, tid: TransitionId, free: list[str]) -> Show:
     file = draw(st.lists(st.sampled_from(free), min_size=1, max_size=MAX_FILE, unique=True))
     ahead = draw(st.lists(points_on(show.sheet), max_size=MAX_ROUTE_WAYPOINTS))
-    # make_route rejects a route whose file and waypoints are one point (UP-9.2-27).
-    assume(not _is_one_point(show, tid, file, ahead))
-    route = make_route(show, tid, file[0], ahead, members=file)
+    try:
+        route = make_route(show, tid, file[0], ahead, members=file)
+    except PathError:
+        reject()
     first = draw(st.integers(0, WAYPOINT_STEPS // 2))
     last = draw(st.integers(first + 1, WAYPOINT_STEPS))
     counts = show.set(tid[1]).counts
