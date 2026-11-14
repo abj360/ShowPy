@@ -17,10 +17,6 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
-
-from showpy._api_table import PUBLIC_API  # noqa: E402
-
 INIT_PATH = ROOT / "showpy" / "__init__.py"
 FIX_COMMAND = "uv run python scripts/gen_public_api.py"
 
@@ -68,6 +64,15 @@ def __dir__() -> list[str]:
 '''
 
 
+def _public_api() -> tuple[tuple[str, str, str], ...]:
+    """Loads PUBLIC_API lazily so importing this script has no side effects."""
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from showpy._api_table import PUBLIC_API
+
+    return PUBLIC_API
+
+
 def _import_order(name: str) -> tuple[int, str]:
     """Returns the isort order-by-type key: constants, then classes, then everything else."""
     if name.isupper():
@@ -81,7 +86,7 @@ def _render_type_checking_block() -> str:
     """Renders the `if TYPE_CHECKING:` block, one import statement per module."""
     plain: dict[str, list[str]] = defaultdict(list)
     aliased: dict[str, list[tuple[str, str]]] = defaultdict(list)
-    for name, module, attribute in PUBLIC_API:
+    for name, module, attribute in _public_api():
         if name == attribute:
             plain[module].append(name)
         else:
@@ -102,9 +107,9 @@ def _render_type_checking_block() -> str:
 def _render_tables() -> str:
     """Renders the `_EXPORTS` mapping and the `__all__` list."""
     exports = [
-        f'    "{name}": ("{module}", "{attribute}"),' for name, module, attribute in PUBLIC_API
+        f'    "{name}": ("{module}", "{attribute}"),' for name, module, attribute in _public_api()
     ]
-    names = [f'    "{name}",' for name, _, _ in PUBLIC_API]
+    names = [f'    "{name}",' for name, _, _ in _public_api()]
     return "\n".join(
         ["_EXPORTS: dict[str, tuple[str, str]] = {", *exports, "}", "", "__all__ = [", *names, "]"]
     )

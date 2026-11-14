@@ -12,6 +12,7 @@ Contains:
     test_diff_snapshots_reports_each_kind_of_change: checks the diff on a synthetic pair
     test_unreleased_section_stops_at_the_next_release: checks the changelog slicing
     test_names_missing_from_changelog_flags_unlisted_names: checks the changelog gate can fail
+    test_names_missing_from_changelog_ignores_prose_mentions: checks plain words do not count
     test_snapshot_is_stable_across_python_versions: checks reprs carry no version-only text
 """
 
@@ -186,9 +187,9 @@ def unreleased_section(changelog: str) -> str:
 
 
 def names_missing_from_changelog(names: list[str], changelog: str) -> list[str]:
-    """Lists the names that the Unreleased section of the changelog never mentions."""
+    """Lists the names the Unreleased section never mentions as a backticked identifier."""
     section = unreleased_section(changelog)
-    return [name for name in names if not re.search(rf"\b{re.escape(name)}\b", section)]
+    return [name for name in names if f"`{name}`" not in section]
 
 
 def _format_failure(diff: dict[str, list[str]], unlisted: list[str]) -> str:
@@ -202,6 +203,7 @@ def _format_failure(diff: dict[str, list[str]], unlisted: list[str]) -> str:
 
 
 def _write_snapshot(snapshot: dict[str, JsonValue]) -> None:
+    """Writes the snapshot as sorted, indented JSON with a trailing newline."""
     SNAPSHOT_PATH.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
 
 
@@ -218,6 +220,12 @@ def test_public_api_matches_snapshot() -> None:
     changed = [name for names in diff.values() for name in names]
     if not changed:
         return
+    if not CHANGELOG_PATH.exists():
+        pytest.fail(
+            f"E: public API drifted and {CHANGELOG_PATH.name} is absent; "
+            f"run from a source checkout: {UPDATE_COMMAND}",
+            pytrace=False,
+        )
     unlisted = names_missing_from_changelog(changed, CHANGELOG_PATH.read_text())
     if is_updating:
         _write_snapshot(current)
@@ -239,8 +247,13 @@ def test_unreleased_section_stops_at_the_next_release() -> None:
 
 
 def test_names_missing_from_changelog_flags_unlisted_names() -> None:
-    changelog = "## Unreleased\n\n- `alpha` renamed\n\n## [0.1.1] - 2026-01-01\n\n- beta\n"
+    changelog = "## Unreleased\n\n- `alpha` renamed\n\n## [0.1.1] - 2026-01-01\n\n- `beta`\n"
     assert names_missing_from_changelog(["alpha", "beta", "alph"], changelog) == ["beta", "alph"]
+
+
+def test_names_missing_from_changelog_ignores_prose_mentions() -> None:
+    changelog = "## Unreleased\n\n- select the best option from the list\n"
+    assert names_missing_from_changelog(["select", "list"], changelog) == ["select", "list"]
 
 
 def test_snapshot_is_stable_across_python_versions() -> None:
