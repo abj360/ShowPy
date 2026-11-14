@@ -12,6 +12,7 @@ Contains:
     test_regression_wide_table_stays_on_the_page(): keeps a 40-column table inside the page width
     test_regression_long_title_is_clipped_to_the_page(): clips or wraps a title wider than the page
     test_regression_non_latin_names_are_not_replaced_by_question_marks(): prints non-Latin names
+    test_coordinate_sheet_pdf_ignores_hash_seed(): writes one PDF per show under any hash seed
 """
 
 import re
@@ -29,6 +30,7 @@ from showpy.export.models import CoordinateSheet, SheetRow
 from showpy.export.pdf import escape_text, to_pdf
 from showpy.export.print_sheets import chart, coordinate_sheet, coordinate_sheets, cue_sheet
 from tests.fixtures.export_shows import guided_show
+from tests.helpers import digests_under_hash_seeds
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 XREF_ENTRY = re.compile(rb"^(\d{10}) (\d{5}) ([nf]) ?\r?$")
@@ -133,6 +135,17 @@ def test_chart_pages_and_cue_sheet_layouts() -> None:
 def test_output_is_deterministic() -> None:
     sheet = coordinate_sheet(guided_show(), "T4")
     assert to_pdf(sheet) == to_pdf(sheet)
+
+
+def test_coordinate_sheet_pdf_ignores_hash_seed() -> None:
+    """Writes the same coordinate-sheet PDF twice in one run and under two hash seeds (4.3)."""
+    digests = digests_under_hash_seeds(
+        "from showpy.export.pdf import to_pdf\n"
+        "from showpy.export.print_sheets import coordinate_sheet",
+        "to_pdf(coordinate_sheet(show, 'T1'))",
+    )
+    assert all(first == second for first, second in digests), digests
+    assert len({first for first, _ in digests}) == 1, digests
 
 
 def test_layout_and_object_must_match() -> None:

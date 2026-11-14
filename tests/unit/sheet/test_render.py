@@ -25,6 +25,7 @@ from showpy.sheet.models import GuideLine, Landmark, Sheet, Zone, ZoneKind
 from showpy.sheet.render import SheetCanvas, draw_sheet, render_sheet
 from showpy.sheet.templates import add_guide, add_landmark, add_zone, blank_sheet, get_sheet
 from tests.fixtures.shows import field_sheet
+from tests.helpers import digests_under_hash_seeds
 
 TOL = 1e-9
 SVG_NS = "{http://www.w3.org/2000/svg}"
@@ -91,6 +92,15 @@ def test_render_is_deterministic() -> None:
     sheet = field_sheet()
     assert render_sheet(sheet, fmt="png") == render_sheet(sheet, fmt="png")
     assert render_sheet(sheet) == render_sheet(sheet)
+
+
+def test_png_render_ignores_hash_seed() -> None:
+    """Renders the same PNG twice in one run and under two hash seeds (audit 4.3)."""
+    digests = digests_under_hash_seeds(
+        "from showpy.sheet.render import render_sheet", "render_sheet(show.sheet, fmt='png')"
+    )
+    assert all(first == second for first, second in digests), digests
+    assert len({first for first, _ in digests}) == 1, digests
 
 
 FRONT_ENSEMBLE_Y = -2.0

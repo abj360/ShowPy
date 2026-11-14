@@ -16,6 +16,9 @@ Contains:
     test_regression_export_json_include_accepts_a_single_field_name(): treats a string as one field
     test_regression_import_json_rejects_a_non_mapping_with_schema_error(): raises SchemaError
     test_import_json_rejects_the_old_stage_tag(): refuses a document tagged stage.show.v1
+    test_frames_csv_is_byte_identical_across_runs_and_hash_seeds(): writes one CSV per show
+    test_regression_export_json_ignores_hash_seed(): dumps spot tags and selections in one order
+        under every hash seed
 """
 
 import csv
@@ -47,6 +50,7 @@ from showpy.show.models import Show
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.export_shows import AT, guided_show, live_publication, performer
 from tests.fixtures.shows import two_set_show
+from tests.helpers import digests_under_hash_seeds
 
 TOL = 1e-9
 WIDE_CELL = 2
@@ -294,3 +298,24 @@ def test_regression_import_json_rejects_a_non_mapping_with_schema_error() -> Non
     """Raises SchemaError for `[1]`; today an AttributeError leaks from `.get`."""
     with pytest.raises(SchemaError):
         import_json([1])  # type: ignore[arg-type]
+
+
+def test_frames_csv_is_byte_identical_across_runs_and_hash_seeds() -> None:
+    """Writes the same frames CSV twice in one run and under two hash seeds (audit 4.3)."""
+    digests = digests_under_hash_seeds(
+        "from showpy.export.data import export_frames_csv", "export_frames_csv(show).encode()"
+    )
+    assert all(first == second for first, second in digests), digests
+    assert len({first for first, _ in digests}) == 1, digests
+
+
+@pytest.mark.defect("UP-4.3-01")
+@pytest.mark.xfail(strict=True, reason="UP-4.3-01")
+def test_regression_export_json_ignores_hash_seed() -> None:
+    """Dumps the same JSON export under every hash seed, spot tags included (audit 4.3; P0 #9)."""
+    digests = digests_under_hash_seeds(
+        "from showpy.export.data import export_json",
+        "json.dumps(export_json(show), sort_keys=True).encode()",
+    )
+    assert all(first == second for first, second in digests), digests
+    assert len({first for first, _ in digests}) == 1, digests

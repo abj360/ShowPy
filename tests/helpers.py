@@ -14,6 +14,8 @@ Contains:
     capped_address_space(): caps the address space so a runaway allocation fails fast
     EXPECTED_FAILURES: exception names a hash-seed subprocess may end with
     outputs_under_hash_seeds(): runs one script under each hash seed and collects its output
+    TAGGED_SHOW_SCRIPT: script head building two_set_show() with spot tags and a selection
+    digests_under_hash_seeds(): hashes one output of the tagged show twice per hash seed
 """
 
 import math
@@ -48,6 +50,22 @@ HASH_SEEDS = ("1", "2", "3")
 SUBPROCESS_TIMEOUT_S = 20
 STDERR_CHECK_TAIL = 300
 STDERR_KEPT_TAIL = 200
+TWO_HASH_SEEDS = ("1", "2")
+TAGGED_SHOW_SCRIPT = (
+    "import hashlib, json\n"
+    "from showpy.cast.models import Cast, Spot\n"
+    "from showpy.cast.spots import define_selection\n"
+    "from showpy.examples import two_set_show\n"
+    "from showpy.show.models import Show\n"
+    "tags = ['alpha', 'beta', 'gamma', 'delta', 'epsilon']\n"
+    "base = two_set_show()\n"
+    "spots = [Spot.model_validate({**s.model_dump(), 'tags': tags}) for s in base.cast.spots]\n"
+    "cast = Cast.model_validate({**base.cast.model_dump(), 'spots': spots})\n"
+    "show = Show.model_validate({**base.model_dump(), 'cast': cast})\n"
+    "show = define_selection(show, 'pair', ['T1', 'T4'])\n"
+    "def digest(data):\n"
+    "    return hashlib.sha256(data).hexdigest()\n"
+)
 
 MarkedTest = TypeVar("MarkedTest", bound=Callable[..., object])
 
@@ -199,3 +217,17 @@ def outputs_under_hash_seeds(script: str, seeds: Iterable[str] = HASH_SEEDS) -> 
             assert any(name in done.stderr for name in EXPECTED_FAILURES), tail
         outputs.append(done.stdout + done.stderr[-STDERR_KEPT_TAIL:])
     return outputs
+
+
+def digests_under_hash_seeds(imports: str, output: str) -> list[list[str]]:
+    """Hashes one output of the tagged show twice in each of two hash-seeded interpreters.
+
+    Args:
+        imports: Import lines the output expression needs.
+        output: Python expression over `show` that evaluates to bytes.
+
+    Returns:
+        digests: Per seed, the SHA-256 of the first and the second evaluation.
+    """
+    script = f"{TAGGED_SHOW_SCRIPT}{imports}\nprint(digest({output}), digest({output}))\n"
+    return [line.split() for line in outputs_under_hash_seeds(script, TWO_HASH_SEEDS)]
