@@ -65,7 +65,7 @@ def _is_one_point(show: Show, tid: TransitionId, file: list[str], ahead: list[Po
 def _followed(draw: st.DrawFn, show: Show, tid: TransitionId, free: list[str]) -> Show:
     file = draw(st.lists(st.sampled_from(free), min_size=1, max_size=MAX_FILE, unique=True))
     ahead = draw(st.lists(points_on(show.sheet), max_size=MAX_ROUTE_WAYPOINTS))
-    # UP-TBD: make_route raises IndexError, not PathError, when file and route are one point.
+    # UP-9.2-27: make_route raises IndexError, not PathError, when file and route are one point.
     assume(not _is_one_point(show, tid, file, ahead))
     route = make_route(show, tid, file[0], ahead, members=file)
     first = draw(st.integers(0, WAYPOINT_STEPS // 2))
