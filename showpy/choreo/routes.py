@@ -90,6 +90,12 @@ def make_route(
     starts = [start_set.get(m).point for m in reversed(file)]
     ahead = list(waypoints) or [show.set(tid[1]).get(leader).point]
     vertices = _dedupe([*starts, *ahead])
+    if len(vertices) < 2:
+        raise PathError(
+            "the route is a single point",
+            hint="give a waypoint away from the leader's start",
+            context={"leader": leader},
+        )
     lengths = _cumulative(vertices)
     offsets = tuple(lengths[vertices.index(_dedupe([start_set.get(m).point])[0])] for m in file)
     curve = (

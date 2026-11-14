@@ -113,7 +113,6 @@ def test_regression_two_part_respects_locked_rows() -> None:
         two_part(show, locked, ["T1"], "x_first")
 
 
-@defect("UP-9.2-27")
 def test_regression_make_route_with_single_vertex_raises_path_error() -> None:
     """Raises a PathError, not IndexError, when the whole route is one point (audit 9.2)."""
     show = two_set_show()
