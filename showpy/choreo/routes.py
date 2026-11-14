@@ -158,6 +158,8 @@ def _pt(v: np.ndarray) -> Point:
 
 
 def _u_turn(file_points: tuple[Point, ...], turn_at: Point) -> tuple[AnyCurve, float]:
+    if len(file_points) == 0:
+        raise PathError("a counter-march needs at least one member", hint="pass the file")
     leader = np.asarray(file_points[-1])
     heading = np.asarray(turn_at) - leader
     approach = float(np.linalg.norm(heading))

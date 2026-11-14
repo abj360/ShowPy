@@ -8,6 +8,8 @@ Contains:
         rewriting it
     test_regression_make_route_with_single_vertex_raises_path_error: raises a PathError, not
         IndexError, when the whole route is one point
+    test_regression_counter_march_with_no_members_raises_path_error: raises a PathError, not
+        IndexError, for an empty file
 """
 
 import math
@@ -119,3 +121,9 @@ def test_regression_make_route_with_single_vertex_raises_path_error() -> None:
     start = show.set("1").get("T1").point
     with pytest.raises(PathError):
         make_route(show, TID, "T1", [start])
+
+
+def test_regression_counter_march_with_no_members_raises_path_error() -> None:
+    """Raises a PathError, not IndexError, for an empty file."""
+    with pytest.raises(PathError):
+        counter_march(two_set_show(), TID, [], turn_at=(6.0, 8.0))
