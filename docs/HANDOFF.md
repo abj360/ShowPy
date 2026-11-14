@@ -141,7 +141,7 @@ deviations below (the code is the source of truth until generated docs land in P
 - **Mangled doctests.** Bulk `str.replace` on import lines also edits `>>>` doctest lines, so check doctests after scripted edits.
 - **Doctests import the test folder.** Fixed 2026-11-11: library doctests import `showpy.examples`, and `tests/fixtures` re-exports it.
 - **Ruff formats Python inside Markdown.** Run `ruff format` on `README.md` too.
-- **Docker copies only what it is given.** The Dockerfile copies `showpy/`, `tests/` and `schemas/`; any new top-level data folder that tests read must be added to it.
+- **Docker copies only what it is given.** The Dockerfile copies `pyproject.toml`, `uv.lock`, `.python-version`, `README.md`, `LICENSE`, `showpy/`, `noxfile.py`, `tests/` and `scripts/`; any new top-level file or folder that tests or gates read must be added to it.
 
 ## Working rules used on this branch
 
