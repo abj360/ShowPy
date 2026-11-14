@@ -6,7 +6,7 @@ Thanks for helping make choreography exact, safe and fast to write.
 
 ```bash
 uv sync                              # Python 3.12+ env (3.14 by default) with every pinned dependency
-uv run pre-commit install --hook-type pre-commit --hook-type pre-push  # lint and types per commit, pytest per push
+uv run pre-commit install            # lint and types per commit, pytest per push
 ```
 
 Or run everything in a clean container:
