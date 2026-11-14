@@ -327,6 +327,9 @@ REVISION_FLOOD = 1000
 MAX_CONFLICT_MESSAGE_CHARS = 4096
 LATER_WINDOW = (9.0, 11.0)
 SHIFT_COUNTS = 8.0
+LONG_INPUT_CHARS = 10_000
+# Audit 4.2 truncates echoed input to about 80 characters; the message frame needs the rest.
+MAX_ECHOING_MESSAGE_CHARS = 200
 
 
 @pytest.mark.defect("UP-9.7-01")
@@ -499,3 +502,12 @@ def test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair() -> 
     show = _three_set_show().model_copy(update={"pins": (Pin(target="transition", id="2->3"),)})
     edited = remove_set(show, "2", force=True)
     assert not edited.pins or not validate_show(edited).ok
+
+
+@pytest.mark.defect("UP-4.2-01")
+@pytest.mark.xfail(strict=True, reason="UP-4.2-01")
+def test_regression_error_messages_truncate_echoed_input() -> None:
+    """Echoes at most about 80 characters of a 10,000-character scheme name (audit 4.2)."""
+    with pytest.raises(UnknownRefError) as excinfo:
+        renumber(two_set_show(), "x" * LONG_INPUT_CHARS)
+    assert len(excinfo.value.message) <= MAX_ECHOING_MESSAGE_CHARS
