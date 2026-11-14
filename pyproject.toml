@@ -42,7 +42,22 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.targets.sdist]
-exclude = ["docs/", "tests/", ".claude/", "node_modules/"]
+exclude = [
+    "docs/",
+    "tests/",
+    ".claude/",
+    "node_modules/",
+    "CLAUDE.md",
+    ".github/",
+    "benchmarks/",
+    "typings/",
+    "package.json",
+    "package-lock.json",
+    ".superpowers/",
+    "_typos.toml",
+    "cliff.toml",
+    "noxfile.py",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["showpy"]

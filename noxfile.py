@@ -4,7 +4,7 @@
 noxfile.py --- single task runner for every local, hook and CI gate
 
 Contains:
-    lint: checks formatting, lint rules and Prettier formatting
+    lint: checks formatting, lint rules, dependency declarations and Prettier formatting
     types: runs mypy --strict and pyright (basic) over the library, tests and scripts
     tests: runs the full pytest suite under a fixed hash seed
     hashseeds: runs the full pytest suite under each non-default seed in HASH_SEEDS
@@ -72,9 +72,10 @@ def _uv_run(session: nox.Session, *args: str) -> None:
 
 @nox.session
 def lint(session: nox.Session) -> None:
-    """Checks ruff formatting, ruff lint rules and Prettier formatting."""
+    """Checks ruff formatting, ruff lint rules, dependency declarations and Prettier formatting."""
     _uv_run(session, "ruff", "format", "--check", ".")
     _uv_run(session, "ruff", "check", ".")
+    _uv_run(session, "deptry", ".")
     session.run("npx", "--no-install", "prettier", "--check", PRETTIER_GLOB, external=True)
 
 
