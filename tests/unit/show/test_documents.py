@@ -70,8 +70,10 @@ def test_regression_show_json_carries_a_format_version() -> None:
 def test_regression_decode_names_the_minimum_version_for_a_newer_document() -> None:
     """Raises VersionError for a document written by a newer library (audit 9.7 item 11)."""
     body = json.loads(_docs()[SHOW_DOC]) | {"version": FUTURE_VERSION}
-    with pytest.raises(VersionError):
+    with pytest.raises(VersionError) as excinfo:
         decode_show({**_docs(), SHOW_DOC: json.dumps(body).encode()})
+    message = str(excinfo.value).lower()
+    assert str(FUTURE_VERSION) in message or "minimum" in message
 
 
 def _reject_constant(name: str) -> float:
