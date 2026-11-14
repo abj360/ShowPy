@@ -20,6 +20,7 @@ import itertools
 import os
 import re
 import shutil
+import sys
 from pathlib import Path
 
 import nox
@@ -68,7 +69,19 @@ def _uv_run(session: nox.Session, *args: str) -> None:
     The Docker image sets NOX_UV_NO_SYNC so the installed wheel is tested, not a source tree.
     """
     sync_flag = "--no-sync" if os.environ.get(NO_SYNC_ENV) == "1" else "--locked"
-    session.run("uv", "run", sync_flag, *args, external=True)
+    # Pin the nested run to nox's own interpreter: without it the nested uv re-resolved the
+    # Python from .python-version and rebuilt .venv, so CI's 3.12/3.13 legs ran on 3.14.
+    session.run("uv", "run", sync_flag, "--python", sys.executable, *args, external=True)
+
+
+def _require_same_python(session: nox.Session) -> None:
+    """Fails the session when the nested environment's Python differs from nox's own."""
+    expected = f"{sys.version_info.major}.{sys.version_info.minor}"
+    check = (
+        "import sys; v = f'{sys.version_info.major}.{sys.version_info.minor}'; "
+        f"assert v == {expected!r}, f'tests would run on Python {{v}}, not {expected}'"
+    )
+    _uv_run(session, "python", "-c", check)
 
 
 @nox.session
@@ -91,6 +104,7 @@ def types(session: nox.Session) -> None:
 def tests(session: nox.Session) -> None:
     """Runs the full pytest suite under a fixed hash seed and enforces the branch-coverage floor."""
     session.env["PYTHONHASHSEED"] = DEFAULT_HASH_SEED
+    _require_same_python(session)
     _uv_run(
         session,
         "pytest",
@@ -105,6 +119,7 @@ def tests(session: nox.Session) -> None:
 @nox.session
 def hashseeds(session: nox.Session) -> None:
     """Runs the full pytest suite under each seed in HASH_SEEDS."""
+    _require_same_python(session)
     for seed in HASH_SEEDS:
         session.env["PYTHONHASHSEED"] = seed
         _uv_run(session, "pytest", *session.posargs)
@@ -117,6 +132,7 @@ def slow(session: nox.Session) -> None:
     They are left out of the per-leg `tests` gate; one extra seed still checks the large golden
     does not depend on hash order.
     """
+    _require_same_python(session)
     for seed in SLOW_HASH_SEEDS:
         session.env["PYTHONHASHSEED"] = seed
         _uv_run(session, "pytest", "-m", "slow", *session.posargs)
