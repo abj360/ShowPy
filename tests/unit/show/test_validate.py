@@ -177,10 +177,11 @@ def _formed(
     form_set: str = SET_TWO,
     points_back: bool = True,
     declares: bool = True,
+    form_id: str = FORM_ID,
 ) -> Show:
     """Builds a show with one form of set 2 that is valid unless a parameter breaks it."""
     show = two_set_show()
-    form = Form(id=FORM_ID, set=form_set, kind="line", geometry={}, members=members)
+    form = Form(id=form_id, set=form_set, kind="line", geometry={}, members=members)
     rows = tuple(
         p.model_copy(update={"form": key, "order": members.index(p.entity)})
         if points_back and p.entity in members
@@ -400,7 +401,7 @@ def test_regression_validate_show_reports_unpinned_sheet_without_a_store() -> No
 @pytest.mark.xfail(strict=True, reason="UP-9.7-81")
 def test_regression_validate_show_reports_empty_ids() -> None:
     """Reports an empty show, note or form ID, each alone (audit 9.7 validation gaps)."""
-    empty_form = _formed(key="").model_copy(update={"id": "x"})
+    empty_form = _formed(key="", form_id="")
     variants = {
         "show": _edited(id=""),
         "note": _edited(notes=(_note(note_id=""),)),
@@ -443,7 +444,13 @@ def test_regression_validate_show_reports_nan_counts_on_the_first_set() -> None:
     """Reports NaN counts on the first set by name (audit 9.7 validation gaps)."""
     show = two_set_show()
     first = show.sets[0].model_copy(update={"counts": math.nan})
-    assert _mentions(_edited(sets=(first, show.sets[1])), "nan")
+    report = validate_show(_edited(sets=(first, show.sets[1])))
+    nonzero_first = _edited(sets=(show.sets[0].model_copy(update={"counts": 3.5}), show.sets[1]))
+    known_codes = _codes(validate_show(nonzero_first))
+    assert any(
+        "nan" in f"{i.message} {i.hint}".lower() and i.code not in known_codes
+        for i in report.issues
+    )
 
 
 @pytest.mark.defect("UP-9.7-89")
