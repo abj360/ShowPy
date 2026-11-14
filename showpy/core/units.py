@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 units.py --- the only unit conversion point, plus angle helpers for facings
 

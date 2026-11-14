@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 models.py --- export data classes: coordinate sheets, charts, text tables and publications
 

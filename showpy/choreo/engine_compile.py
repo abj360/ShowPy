@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 engine_compile.py --- compiles one path row into a MotionPlan: a curve plus a time map
 

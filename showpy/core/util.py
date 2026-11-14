@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 util.py --- small shared helpers: ID ranges, float comparison, seeded randomness, hashing
 

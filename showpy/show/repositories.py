@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 repositories.py --- the shared repository logic, the in-memory repository and asset store
 

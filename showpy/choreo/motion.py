@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 motion.py --- easing curves, facing turns and the immutable registry of custom motions
 

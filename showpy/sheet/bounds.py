@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 bounds.py --- bounds tests, landmark lookup, nearest landmarks and zones at a point
 

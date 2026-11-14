@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 svg.py --- parses SVG path data into evaluable line, quadratic, cubic and elliptical pieces
 

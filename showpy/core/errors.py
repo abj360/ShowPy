@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 errors.py --- the ShowPyError family: every library error carries code, message, context, hint
 

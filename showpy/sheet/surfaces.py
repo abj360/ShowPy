@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 surfaces.py --- builds the built-in surfaces: football fields, a proscenium stage, a gym floor
 

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 changes.py --- applies placement, form, paths and counts ops to a show
 

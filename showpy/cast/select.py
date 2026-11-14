@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 select.py --- the selection language plus spatial picks, ordering, splitting and mirror pairing
 

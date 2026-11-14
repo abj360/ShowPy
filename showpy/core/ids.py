@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 ids.py --- ID aliases plus parsing and formatting of sheet references and transition IDs
 

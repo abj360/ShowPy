@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 avoid.py --- advisory collision help: tightest gaps and fixes that open them
 

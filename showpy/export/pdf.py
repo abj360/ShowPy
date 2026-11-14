@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 pdf.py --- a small dependency-free PDF 1.4 writer for sheets, books, charts and cue sheets
 

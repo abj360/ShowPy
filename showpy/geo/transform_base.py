@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 transform_base.py --- dispatches a map over points, curves and set selections, keeping the kind
 

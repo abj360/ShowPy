@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 form_ops.py --- edits forms: reshape, reorder, split, merge, morph, gate, pinwheel, transform
 

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 engine.py --- PathEngine, the only code that turns path instructions into positions over time
 

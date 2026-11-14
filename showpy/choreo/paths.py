@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 paths.py --- pure editing functions for a transition's path rows
 

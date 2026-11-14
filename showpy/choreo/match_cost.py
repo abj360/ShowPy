@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 match_cost.py --- builds matching problems and their cost matrices, one mask per constraint
 

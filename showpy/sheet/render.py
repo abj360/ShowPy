@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 render.py --- draws a blank sheet as SVG, PNG or PDF, with a meters-to-pixels canvas to reuse
 

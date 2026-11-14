@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 forms.py --- form constructors plus slot and placement generation from stored recipes
 

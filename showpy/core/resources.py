@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 resources.py --- locates data files that ship inside the installed showpy package
 

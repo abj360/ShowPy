@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 form_place.py --- builds sets from forms and regenerates a form's placements in its show
 

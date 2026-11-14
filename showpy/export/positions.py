@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 positions.py --- merges positions from CSV (set, counts, entity, x, y, facing) into a show
 

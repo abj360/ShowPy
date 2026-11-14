@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 examples.py --- small, fully specified example shows for docs, doctests and tests
 

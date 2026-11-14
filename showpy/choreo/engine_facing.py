@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 engine_facing.py --- computes a spot's facing from its plan, in three phases (ADR 0002)
 

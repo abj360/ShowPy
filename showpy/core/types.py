@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 types.py --- shared type aliases plus the JSON-safe Box2, Box3 and Region models
 

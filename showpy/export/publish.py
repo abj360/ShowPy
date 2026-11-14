@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 publish.py --- publishing a show as a live link, claims on its spots and performer views
 

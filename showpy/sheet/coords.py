@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 coords.py --- coordinate presets and generic position wording, plus its exact inverse
 

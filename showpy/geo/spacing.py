@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 spacing.py --- places spots evenly along curves, inside areas, in blocks, rings and scatters
 

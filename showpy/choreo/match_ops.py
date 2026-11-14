@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 match_ops.py --- applies matches to a show: writes targets, swaps spots, suggests swaps
 

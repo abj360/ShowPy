@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 replace.py --- swaps a show's sheet, carrying every position over through one affine map
 

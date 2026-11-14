@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 curve_base.py --- the Curve protocol and the arc-length machinery every curve shares
 

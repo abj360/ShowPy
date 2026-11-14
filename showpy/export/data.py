@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 data.py --- native JSON interchange, per-count frames, text tables and format plugins
 

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 file_repository.py --- a repository that keeps every revision as files under a root directory
 

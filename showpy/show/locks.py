@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 locks.py --- finds edits that touch pinned placements, locked forms, locked path rows or pins
 

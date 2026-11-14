@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 video.py --- renders the animated 2D sheet to MP4, with the show's audio when supplied
 

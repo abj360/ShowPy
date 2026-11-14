@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 transforms.py --- moves, turns, resizes, mirrors and snaps points, curves and set selections
 

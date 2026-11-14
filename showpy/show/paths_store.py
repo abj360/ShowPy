@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 paths_store.py --- saves and loads a transition's paths through the workspace
 

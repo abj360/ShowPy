@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 spots.py --- draws spots on the sheet and manages groups, labels, named selections and footprints
 

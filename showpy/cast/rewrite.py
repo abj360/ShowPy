@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 rewrite.py --- rewrites or drops spot IDs in every place a show refers to them
 

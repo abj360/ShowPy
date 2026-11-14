@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 models.py --- cast data classes: groups, spot footprints, spots, label rules and the cast
 

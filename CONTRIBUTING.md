@@ -40,7 +40,7 @@ docker compose -f docker/docker-compose.yml up --build
 - **Checks are never weakened.** Never weaken a validation check, threshold or default to make a test pass. Limits are user-owned configuration that library code never edits.
 - **Errors.** Raise `ShowPyError` subclasses with `code`, `message`, `context` and a `hint` that says what is allowed.
 - **Style.**
-  - Every file opens with a shebang and a module docstring: `<file> --- <role>`, then a `Contains:` index.
+  - Every file opens with a module docstring: `<file> --- <role>`, then a `Contains:` index. Library modules under `showpy/` have no shebang; scripts and tests open with one.
   - Every public function has a verb-first docstring and a runnable `>>>` example.
   - Lines are at most 100 characters, with double quotes.
   - Comments only for genuinely non-obvious reasons.

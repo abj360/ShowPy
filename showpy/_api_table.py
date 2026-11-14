@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 _api_table.py --- the one hand-edited list of showpy's public names
 

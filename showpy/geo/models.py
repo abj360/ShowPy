@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 models.py --- geometry result data classes: snap reports, spacing stats, form and speed metrics
 

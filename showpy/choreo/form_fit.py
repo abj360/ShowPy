@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 form_fit.py --- recognizes imported spots as a line, arc or circle form
 

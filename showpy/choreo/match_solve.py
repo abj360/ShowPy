@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 match_solve.py --- exact assignment solvers: min-sum, bottleneck, order-preserving, swap repair
 

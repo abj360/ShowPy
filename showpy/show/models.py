@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 models.py --- the Show aggregate, its index, and the storage, history and collaboration records
 

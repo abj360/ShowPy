@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 validate.py --- reports structural problems in a timeline without raising
 

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 motion_stats.py --- measurements over time, all computed by the PathEngine
 

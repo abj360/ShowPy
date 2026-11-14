@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 validate.py --- structural validation of sets, paths, dependencies and whole shows
 

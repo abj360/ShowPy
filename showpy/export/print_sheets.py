@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 print_sheets.py --- builds coordinate sheets, set charts and the cue sheet of a show
 

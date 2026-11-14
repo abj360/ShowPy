@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 files.py --- maps workspace file paths to show documents: what each path reads, writes and owns
 

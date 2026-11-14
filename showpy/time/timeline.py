@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 timeline.py --- builds timelines, edits them purely, looks up markers and cues, persists to JSON
 

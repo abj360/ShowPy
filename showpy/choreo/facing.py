@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 facing.py --- facing tools for sets, plus timed facing overrides on a show
 

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 text.py --- a built-in single-stroke font so letters can be spelled with spots
 

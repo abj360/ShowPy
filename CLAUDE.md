@@ -67,7 +67,7 @@ Each package: `models.py` holds data classes; other files hold functions. Subpac
 
 ## Writing code here
 
-- **Module headers** follow the user-level `~/.claude/CLAUDE.md`: shebang, blank line, then a docstring whose first line is `<filename> --- <role>` and whose index section is titled `Contains:` (never `Args:`), one verb-first line per exported item.
+- **Module headers** follow the user-level `~/.claude/CLAUDE.md`, except that library modules under `showpy/` have no shebang; scripts and tests keep it (shebang, blank line). The module docstring's first line is `<filename> --- <role>` and its index section is titled `Contains:` (never `Args:`), one verb-first line per exported item.
 - **Public functions** need full type hints and a docstring with a runnable `>>>` example; examples import `showpy.examples`, never the `tests/` folder. Once `showpy.index` exists, they also need `@api(category=..., panel=...)`.
 - **New public names** must be added to the lazy export table in `showpy/__init__.py`; `tests/unit/test_public_api.py` guards it.
 - **New data classes** go in the package's `models.py` and must be JSON-serializable; regenerate `schemas/` with `SHOWPY_UPDATE_SCHEMA=1 uv run pytest tests/unit/show/test_schema.py` and bump the schema version if a stored model changes incompatibly.

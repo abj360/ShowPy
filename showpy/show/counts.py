@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 counts.py --- counts spots on and off the field in every set, for the set strip
 

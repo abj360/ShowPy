@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 documents.py --- splits a Show into canonical JSON documents at workspace paths and back
 

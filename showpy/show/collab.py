@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 collab.py --- live collaboration: change ops, canvas events, pins, proposals, highlights, selection
 

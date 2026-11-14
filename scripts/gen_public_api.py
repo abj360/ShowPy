@@ -20,9 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INIT_PATH = ROOT / "showpy" / "__init__.py"
 FIX_COMMAND = "uv run python scripts/gen_public_api.py"
 
-HEADER = '''#!/usr/bin/env python3
-
-"""
+HEADER = '''"""
 __init__.py --- the public API of showpy, the choreography library
 
 Every public function and class of the library is importable from here, lazily: a name

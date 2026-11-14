@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 curves.py --- concrete curve models: exact lines and arcs, sampled splines, joins and trims
 

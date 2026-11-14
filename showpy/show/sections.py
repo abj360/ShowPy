@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 sections.py --- splits a show into movements at a set and joins movements back into one show
 

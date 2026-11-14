@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 regions.py --- areas on the stage plane: building them from outlines and combining them
 

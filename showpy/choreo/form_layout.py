@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 form_layout.py --- turns a form's stored recipe into slot points, travel directions and facings
 

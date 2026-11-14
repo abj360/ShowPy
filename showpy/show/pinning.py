@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 pinning.py --- designer locks: records pins and sets the flags they cover
 

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 history.py --- diffs sets, paths and shows; snapshots, reverts, undo and redo; spot renames
 

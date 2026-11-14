@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 validation.py --- ValidationIssue and ValidationReport shared by every structural validator
 

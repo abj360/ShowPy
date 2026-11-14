@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 match.py --- decides who goes where: deterministic, exact assignment of spots to slots
 

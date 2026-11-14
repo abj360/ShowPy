@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 clock.py --- converts counts to seconds and back through tempo sections, linear ramps and holds
 

@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 measures.py --- converts counts to 1-based measure labels and back, honouring length changes
 

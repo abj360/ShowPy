@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 shapes.py --- constructors that validate input and build curves, outlines, letters and logos
 

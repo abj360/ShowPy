@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 manage.py --- creates shows and adds, removes, retimes, renumbers and indexes their sets
 

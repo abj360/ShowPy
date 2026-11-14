@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 models.py --- note data classes: the tagged Anchor and the Note
 

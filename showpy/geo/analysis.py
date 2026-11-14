@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 analysis.py --- design feedback on a picture: crowding, coverage, balance, symmetry, change
 

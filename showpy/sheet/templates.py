@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 templates.py --- built-in sheet templates, sheet lookup and storage, customization and edits
 

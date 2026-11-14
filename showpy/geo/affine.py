@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 affine.py --- builds 3x3 affine matrices and maps points, facings and curves through them
 

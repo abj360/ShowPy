@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 engine_models.py --- data classes the PathEngine produces: plans, segments, states, frames
 

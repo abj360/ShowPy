@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 storage.py --- the repository and asset protocols plus the agent's file view of a show
 

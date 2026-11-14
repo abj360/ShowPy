@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 models.py --- sheet data classes: grid, guide lines, landmarks, zones, coordinates, the sheet
 

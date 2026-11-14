@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 __init__.py --- the public API of showpy, the choreography library
 

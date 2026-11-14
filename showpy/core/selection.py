@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 selection.py --- Selection, the ordered duplicate-free set of spot IDs, and the Selector alias
 

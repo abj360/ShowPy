@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 form_fns.py --- the immutable registry of shape generators behind `generated` forms
 

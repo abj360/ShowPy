@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 measure.py --- static measures of points, curves and sets: extents, spacing, neighbours, symmetry
 

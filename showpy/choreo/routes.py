@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 routes.py --- show-aware path builders: follow-the-leader routes, counter-marches, L-moves, rotation
 

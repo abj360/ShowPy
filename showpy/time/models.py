@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 models.py --- frozen timeline data classes: tempo, holds, markers, measures, cues, audio
 

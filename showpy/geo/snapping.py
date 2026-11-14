@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 snapping.py --- snaps points to a grid or guide lines, lines them up and evens them out
 

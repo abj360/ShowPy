@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 """
 models.py --- choreography data classes: placements, sets, forms, path rows and transitions
 
