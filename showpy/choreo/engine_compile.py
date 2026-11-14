@@ -12,7 +12,7 @@ import math
 import numpy as np
 import numpy.typing as npt
 
-from showpy.choreo.engine_models import MotionPiece, MotionPlan
+from showpy.choreo.engine_models import MotionPiece, MotionPlan, PieceKind
 from showpy.choreo.models import PathRow, PathStyle, Placement, Route, TransitionSpec
 from showpy.choreo.motion import MotionRegistry, ease
 from showpy.core.errors import ContinuityError, PathError
@@ -31,7 +31,7 @@ type FloatArray = npt.NDArray[np.float64]
 
 CONTINUITY_TOL = 1e-6
 CUSTOM_SAMPLES = 257
-PIECE_KIND = {
+PIECE_KIND: dict[PathStyle, PieceKind] = {
     PathStyle.STRAIGHT: "line",
     PathStyle.POLYLINE: "line",
     PathStyle.CURVE: "curve",
@@ -193,7 +193,7 @@ def _knots(
 
 
 def _pieces(
-    plan_kind: str, counts: float, times: tuple[float, ...], dists: tuple[float, ...]
+    plan_kind: PieceKind, counts: float, times: tuple[float, ...], dists: tuple[float, ...]
 ) -> tuple[MotionPiece, ...]:
     pieces = []
     if times[0] > 0:

@@ -132,7 +132,9 @@ def _edit_ops(before: Show, after: Show) -> list[ChangeOp]:
 
 
 def _show_events(before: Show, after: Show) -> list[tuple[EventKind, dict[str, object]]]:
-    edits = [(OP_KIND[type(op)], op.model_dump(mode="json")) for op in _edit_ops(before, after)]
+    edits: list[tuple[EventKind, dict[str, object]]] = [
+        (OP_KIND[type(op)], op.model_dump(mode="json")) for op in _edit_ops(before, after)
+    ]
     return [*_pin_events(before, after), *edits]
 
 

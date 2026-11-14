@@ -298,7 +298,7 @@ def test_regression_construction_with_unknown_kind_raises_showpy_error() -> None
 def test_regression_polyline_with_text_points_raises_showpy_error() -> None:
     """Raises a ShowPyError for text points, not a pydantic error (audit 9.1)."""
     with pytest.raises(ShowPyError):
-        Polyline(points="abc")
+        Polyline(points="abc")  # pyright: ignore[reportArgumentType] - deliberately invalid input
 
 
 @pytest.mark.defect("UP-9.1-64")

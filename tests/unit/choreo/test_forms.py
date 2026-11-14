@@ -241,7 +241,7 @@ def test_custom_form_keeps_points_and_facings() -> None:
 def test_generated_form_uses_registered_generator_and_keeps_params() -> None:
     def dots(params: dict[str, float], n: int) -> Points:
         step = float(params.get("step", 1.0))
-        return np.stack([np.arange(n) * step, np.zeros(n)], axis=1)
+        return np.stack([np.arange(n) * step, np.zeros(n)], axis=1, dtype=np.float64)
 
     registry = register_form_fn(DEFAULT_FORM_FNS, "dots", dots)  # type: ignore[arg-type]
     form = generated_form("g", ["A", "B", "C"], "dots", registry=registry, step=2.0)

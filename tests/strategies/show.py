@@ -129,7 +129,7 @@ def _with_override(draw: st.DrawFn, show: Show, total: float) -> Show:
     mode = draw(st.sampled_from(OVERRIDE_MODES))
     value = OVERRIDE_FIXED_DEG if mode is FacingMode.FIXED else None
     override = FacingOverride(
-        entities=entities,
+        entities=tuple(entities),
         mode=mode,
         value=value,
         start=total * first / WAYPOINT_STEPS,

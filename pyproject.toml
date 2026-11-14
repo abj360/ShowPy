@@ -114,10 +114,17 @@ strict = true
 python_version = "3.14"
 plugins = ["pydantic.mypy"]
 explicit_package_bases = true
+mypy_path = "typings"
 
 [[tool.mypy.overrides]]
-module = ["segno", "segno.*", "imageio", "imageio.*", "imageio_ffmpeg"]
+module = ["segno", "segno.*", "imageio", "imageio.*"]
 ignore_missing_imports = true
+
+[tool.pyright]
+include = ["showpy", "tests", "scripts"]
+typeCheckingMode = "basic"
+pythonVersion = "3.12"
+stubPath = "typings"
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "showpy"]

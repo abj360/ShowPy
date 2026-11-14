@@ -5,8 +5,7 @@ noxfile.py --- single task runner for every local, hook and CI gate
 
 Contains:
     lint: checks formatting, lint rules and Prettier formatting
-    types: runs mypy --strict over the library, tests and scripts
-    pyright: runs pyright over the library (not a default session yet)
+    types: runs mypy --strict and pyright (basic) over the library, tests and scripts
     tests: runs the full pytest suite under a fixed hash seed
     hashseeds: runs the full pytest suite under each non-default seed in HASH_SEEDS
     slow: runs the slow tests under each seed in SLOW_HASH_SEEDS
@@ -81,13 +80,8 @@ def lint(session: nox.Session) -> None:
 
 @nox.session
 def types(session: nox.Session) -> None:
-    """Runs mypy --strict over the library, tests and scripts."""
+    """Runs mypy --strict and pyright (basic) over the library, tests and scripts."""
     _uv_run(session, "mypy", "showpy", "tests", "scripts")
-
-
-@nox.session
-def pyright(session: nox.Session) -> None:
-    """Runs pyright over the library."""
     _uv_run(session, "pyright")
 
 

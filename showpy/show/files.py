@@ -106,7 +106,7 @@ def directories(show: Show | None, tree: Mapping[str, bytes]) -> set[str]:
     >>> sorted(directories(None, {"/lib/drafts/x/y.py": b""}))[:3]
     ['/', '/canvas/', '/config/']
     """
-    found = set(FIXED_DIRS)
+    found: set[str] = set(FIXED_DIRS)
     for path in all_files(show, tree):
         parts = path.split("/")[1:-1]
         found.update("/" + "".join(f"{p}/" for p in parts[:n]) for n in range(1, len(parts) + 1))

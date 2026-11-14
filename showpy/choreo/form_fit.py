@@ -111,7 +111,8 @@ def _round_form(
     angles = np.round(raw, ANGLE_DECIMALS) % FULL_TURN
     order = [int(i) for i in np.argsort(angles, kind="stable")]
     sorted_angles = angles[order]
-    gaps = np.diff(np.concatenate([sorted_angles, [sorted_angles[0] + FULL_TURN]]))
+    wrapped = np.concatenate([sorted_angles, [sorted_angles[0] + FULL_TURN]], dtype=np.float64)
+    gaps = np.diff(wrapped)
     widest = int(np.argmax(gaps))
     if gaps[widest] <= ARC_GAP_FACTOR * float(np.median(gaps)):
         start = float(angles[order[0]])

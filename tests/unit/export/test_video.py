@@ -112,6 +112,7 @@ def test_export_video_writes_a_valid_mp4(tmp_path: object) -> None:
     path = f"{tmp_path}/out.mp4"
     Path(path).write_bytes(data)
     frames, _ = imageio_ffmpeg.count_frames_and_secs(path)
+    assert frames is not None
     assert frames > 0
     width, height = video_canvas(two_set_show(), VALID_PX_PER_M).size
     probe = _probe(data, tmp_path)
@@ -186,7 +187,9 @@ def _audio_peak(path: Path, until_s: float = 60.0) -> int:
 
 def _frame_count(show: Show, tmp_path: Path, count_range: tuple[float, float]) -> int:
     data = export_video(show, count_range=count_range, fps=FPS, px_per_m=SMALL_PX_PER_M)
-    return int(imageio_ffmpeg.count_frames_and_secs(str(_save(data, tmp_path)))[0])
+    frames, _ = imageio_ffmpeg.count_frames_and_secs(str(_save(data, tmp_path)))
+    assert frames is not None
+    return frames
 
 
 @pytest.mark.defect("UP-9.5-45")

@@ -47,6 +47,10 @@ from showpy.core.types import Count, Degrees, FrozenModel, Meters, Point, Points
 TABLE_COLUMNS = ("entity", "x", "y", "facing", "form", "order", "pinned", "on_field", "note")
 DEFAULT_EASING_STRENGTH = 2.0
 MATCH_WEIGHT_KEYS = ("backward", "crossing", "group_spread", "turn")
+EasingKind = Literal[
+    "linear", "ease_in", "ease_out", "ease_in_out", "hold_then_burst", "burst_then_settle",
+    "steps", "custom",
+]  # fmt: skip
 
 
 class ApprovalState(StrEnum):
@@ -378,10 +382,7 @@ class Easing(FrozenModel):
         points: Custom curve as (time share, distance share) pairs from (0, 0) to (1, 1).
     """
 
-    kind: Literal[
-        "linear", "ease_in", "ease_out", "ease_in_out", "hold_then_burst", "burst_then_settle",
-        "steps", "custom",
-    ] = "linear"  # fmt: skip
+    kind: EasingKind = "linear"
     strength: float = DEFAULT_EASING_STRENGTH
     points: tuple[tuple[float, float], ...] = ()
 

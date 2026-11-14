@@ -20,6 +20,8 @@ from showpy.core.ids import SpotId, TransitionId
 from showpy.core.types import Count, Degrees, FrozenModel, Meters, Point
 from showpy.geo.curves import AnyCurve
 
+PieceKind = Literal["hold", "line", "arc", "curve", "route", "custom"]
+
 
 class MotionPiece(FrozenModel):
     """Describes one piece of motion in local counts.
@@ -34,7 +36,7 @@ class MotionPiece(FrozenModel):
 
     t0: float
     t1: float
-    kind: Literal["hold", "line", "arc", "curve", "route", "custom"]
+    kind: PieceKind
     params: dict[str, float] = {}
     length: Meters = 0.0
 

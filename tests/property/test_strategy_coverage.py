@@ -37,7 +37,7 @@ SEARCH = settings(
     phases=[Phase.generate],
     database=None,
     deadline=None,
-    suppress_health_check=list(HealthCheck),
+    suppress_health_check=[check for check in HealthCheck if isinstance(check, HealthCheck)],
 )
 EASING_KINDS: tuple[str, ...] = get_args(Easing.model_fields["kind"].annotation)
 FORM_FACING_MODES: tuple[str, ...] = get_args(FacingSpec.model_fields["mode"].annotation)

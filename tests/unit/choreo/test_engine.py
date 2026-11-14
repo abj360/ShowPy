@@ -418,7 +418,7 @@ def _override_show(rows: dict[str, PathRow], override: FacingOverride, y_hold: b
 def test_regression_facing_override_applies_to_holding_spot() -> None:
     """Applies a facing override to a spot on a HOLD row (audit 9.2)."""
     override = FacingOverride(
-        entities=["T1"], mode=FacingMode.FIXED, value=90.0, start=2.0, end=6.0
+        entities=("T1",), mode=FacingMode.FIXED, value=90.0, start=2.0, end=6.0
     )
     rows = {"T1": PathRow(entity="T1", style=PathStyle.HOLD)}
     show = _override_show(rows, override, y_hold=True)
@@ -429,7 +429,7 @@ def test_regression_facing_override_applies_to_holding_spot() -> None:
 def test_regression_toward_entity_override_uses_query_time_position() -> None:
     """Faces the other spot where it is at the query count, not at the row window (audit 9.2)."""
     override = FacingOverride(
-        entities=["T1"], mode=FacingMode.TOWARD_ENTITY, value="T4", start=0.0, end=8.0
+        entities=("T1",), mode=FacingMode.TOWARD_ENTITY, value="T4", start=0.0, end=8.0
     )
     show = _override_show({"T1": PathRow(entity="T1", start=4.0)}, override, y_hold=False)
     engine = PathEngine(show)

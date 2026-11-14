@@ -22,7 +22,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.choreo.models import Easing, TurnDirection
+from showpy.choreo.models import Easing, EasingKind, TurnDirection
 from showpy.choreo.motion import (
     DEFAULT_MOTIONS,
     FloatArray,
@@ -37,7 +37,7 @@ from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
 from tests.helpers import defect
 
-KINDS = [
+KINDS: list[EasingKind] = [
     "linear",
     "ease_in",
     "ease_out",
@@ -49,14 +49,14 @@ KINDS = [
 
 
 @pytest.mark.parametrize("kind", KINDS)
-def test_easing_endpoints(kind: str) -> None:
+def test_easing_endpoints(kind: EasingKind) -> None:
     e = Easing(kind=kind, strength=3.0)
     assert approx_equal(ease(e, np.array([0.0, 1.0])), [0.0, 1.0])
 
 
 @pytest.mark.parametrize("kind", KINDS)
 @given(st.floats(min_value=1.0, max_value=6.0))
-def test_easing_is_monotone(kind: str, strength: float) -> None:
+def test_easing_is_monotone(kind: EasingKind, strength: float) -> None:
     u = np.linspace(0.0, 1.0, 401)
     out = ease(Easing(kind=kind, strength=strength), u)
     assert np.all(np.diff(out) >= -1e-12)
