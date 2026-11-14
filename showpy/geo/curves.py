@@ -544,6 +544,7 @@ def _as_any_curve(curve: CurveModel) -> AnyCurve:
         raise GeometryError(
             f"{type(curve).__name__} is not a known curve kind",
             hint=f"use one of {', '.join(t.__name__ for t in CURVE_TYPES)}",
+            context={"kind": getattr(curve, "kind", None)},
         )
     return curve
 

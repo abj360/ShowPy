@@ -30,7 +30,7 @@ from showpy.choreo.models import (
 )
 from showpy.choreo.paths import set_style
 from showpy.core.errors import PathError
-from showpy.core.ids import SpotId, TransitionId
+from showpy.core.ids import SpotId, TransitionId, format_tid
 from showpy.core.types import Point
 from showpy.geo.curves import (
     AnyCurve,
@@ -158,9 +158,8 @@ def _pt(v: np.ndarray) -> Point:
 
 
 def _u_turn(file_points: tuple[Point, ...], turn_at: Point) -> tuple[AnyCurve, float]:
-    if len(file_points) == 0:
-        raise PathError("a counter-march needs at least one member", hint="pass the file")
-    leader = np.asarray(file_points[-1])
+    last = file_points[-1]
+    leader = np.asarray(last)
     heading = np.asarray(turn_at) - leader
     approach = float(np.linalg.norm(heading))
     if approach <= MIN_GAP:
@@ -173,7 +172,7 @@ def _u_turn(file_points: tuple[Point, ...], turn_at: Point) -> tuple[AnyCurve, f
     lead_in = (
         Polyline(points=(*file_points, turn_at))
         if len(file_points) > 1
-        else Segment(a=file_points[0], b=turn_at)
+        else Segment(a=last, b=turn_at)
     )
     arc = ArcCurve(
         center=_pt(np.asarray(turn_at) + left * radius),
@@ -204,6 +203,12 @@ def counter_march(
     8.0
     """
     file = list(sel)
+    if not file:
+        raise PathError(
+            "a counter-march needs at least one member",
+            hint="pass at least one spot id, leader first",
+            context={"transition": format_tid(tid)},
+        )
     start_set = show.set(tid[0])
     file_points = _dedupe([start_set.get(m).point for m in reversed(file)])
     curve, turn_length = _u_turn(file_points, (float(turn_at[0]), float(turn_at[1])))

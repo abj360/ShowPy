@@ -38,7 +38,7 @@ Contains:
 
 import math
 import sys
-from typing import Literal
+from typing import Literal, get_args
 
 import numpy as np
 import pytest
@@ -49,6 +49,8 @@ from hypothesis import strategies as st
 from showpy.core.errors import GeometryError, ShowPyError
 from showpy.core.util import approx_equal
 from showpy.geo.curves import (
+    CURVE_TYPES,
+    AnyCurve,
     ArcCurve,
     BezierCurve,
     CircleCurve,
@@ -324,5 +326,11 @@ class _UnlistedCurve(CurveModel):
 
 def test_regression_substring_of_unknown_curve_kind_raises_geometry_error() -> None:
     """Raises a GeometryError for a curve subclass outside AnyCurve, not a pydantic error."""
-    with pytest.raises(GeometryError):
+    with pytest.raises(GeometryError) as raised:
         _UnlistedCurve().substring(0.0, 1.0)
+    assert raised.value.context == {"kind": "unlisted"}
+
+
+def test_curve_types_list_every_member_of_any_curve() -> None:
+    union, _ = get_args(AnyCurve.__value__)
+    assert set(get_args(union)) == set(CURVE_TYPES)

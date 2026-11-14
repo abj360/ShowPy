@@ -28,6 +28,7 @@ from showpy.choreo.routes import (
     two_part,
 )
 from showpy.core.errors import LockedError, PathError
+from showpy.core.ids import format_tid
 from showpy.core.util import approx_equal
 from tests.fixtures.motion_shows import TID, with_targets
 from tests.fixtures.shows import two_set_show
@@ -119,11 +120,13 @@ def test_regression_make_route_with_single_vertex_raises_path_error() -> None:
     """Raises a PathError, not IndexError, when the whole route is one point (audit 9.2)."""
     show = two_set_show()
     start = show.set("1").get("T1").point
-    with pytest.raises(PathError):
+    with pytest.raises(PathError) as raised:
         make_route(show, TID, "T1", [start])
+    assert raised.value.context == {"leader": "T1"}
 
 
 def test_regression_counter_march_with_no_members_raises_path_error() -> None:
     """Raises a PathError, not IndexError, for an empty file."""
-    with pytest.raises(PathError):
+    with pytest.raises(PathError) as raised:
         counter_march(two_set_show(), TID, [], turn_at=(6.0, 8.0))
+    assert raised.value.context == {"transition": format_tid(TID)}
