@@ -37,7 +37,6 @@ Contains:
 
 import hashlib
 import io
-import resource
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -353,6 +352,8 @@ def _claimed_with_contact() -> tuple[Show, Publication]:
 
 @contextmanager
 def _address_space_cap(limit: int) -> Iterator[None]:
+    import resource  # POSIX only; imported here so Windows can still collect this module
+
     soft, hard = resource.getrlimit(resource.RLIMIT_AS)
     resource.setrlimit(resource.RLIMIT_AS, (limit, hard))
     try:
@@ -445,7 +446,7 @@ def test_regression_publish_does_not_mangle_a_base_url_query() -> None:
 @pytest.mark.defect("UP-9.5-07")
 @pytest.mark.xfail(strict=True, reason="UP-9.5-07")
 @pytest.mark.timeout(5, method="signal")
-@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+@pytest.mark.skipif(sys.platform != "linux", reason="RLIMIT_AS cap and signal timeout need Linux")
 def test_regression_qr_code_caps_the_image_size() -> None:
     """Rejects a 100,000 px QR size instead of allocating a 10 GB image (audit 9.5; P0 #8).
 
