@@ -49,6 +49,8 @@ commit_preprocessors = [
 BREAKING CHANGE: the distribution is named ShowPy (was stage); install it as ShowPy.""" },
 ]
 commit_parsers = [
+    # 0f8a28a reverted this behavior before any release; the entry would contradict the shipped code.
+    { message = '^feat\(export\): read legacy stage\.show\.v1 documents$', sha = "e0b7ad172d724db5b72fb0c6d1d7faad530c4d92", skip = true },
     { message = "^merge", skip = true },
     { message = "^feat", group = "<!-- 0 -->Features" },
     { message = "^fix", group = "<!-- 1 -->Bug fixes" },
