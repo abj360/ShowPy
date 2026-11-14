@@ -9,7 +9,6 @@ Contains:
 """
 
 import contextlib
-import subprocess
 import sys
 import tracemalloc
 
@@ -35,6 +34,7 @@ from showpy.core.types import Region
 from showpy.geo.shapes import line
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
+from tests.helpers import outputs_under_hash_seeds
 
 RECT = Shape(kind="rectangle", width_m=1.0, depth_m=0.5)
 
@@ -318,9 +318,6 @@ NESTING_DEPTH = 500
 HUGE_PARTS = 10**5
 SPLIT_PEAK_BUDGET_BYTES = 5_000_000
 MIRROR_TOL_M = 0.1
-EXPECTED_FAILURES = ("ValidationError", "SchemaError", "ShowPyError")
-HASH_SEEDS = ("1", "2", "3")
-SUBPROCESS_TIMEOUT_S = 20
 SET_SELECT_SCRIPT = (
     "from showpy.cast.models import Cast, Group, Spot\n"
     "from showpy.cast.select import select\n"
@@ -411,17 +408,5 @@ def test_regression_split_rejects_absurd_part_counts_quickly() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.3-78")
 def test_regression_select_set_input_ignores_hash_seed() -> None:
     """Returns one order for a Python set under every hash seed (audit 9.3; P0 #9)."""
-    outputs = []
-    for seed in HASH_SEEDS:
-        done = subprocess.run(
-            [sys.executable, "-c", SET_SELECT_SCRIPT],
-            env={"PYTHONHASHSEED": seed},
-            capture_output=True,
-            text=True,
-            timeout=SUBPROCESS_TIMEOUT_S,
-            check=False,
-        )
-        if done.returncode != 0:
-            assert any(name in done.stderr for name in EXPECTED_FAILURES), done.stderr[-300:]
-        outputs.append(done.stdout + done.stderr[-200:])
+    outputs = outputs_under_hash_seeds(SET_SELECT_SCRIPT)
     assert len(set(outputs)) == 1, outputs

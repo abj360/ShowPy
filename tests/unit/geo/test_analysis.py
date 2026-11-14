@@ -14,8 +14,6 @@ Contains:
 
 import math
 import sys
-from collections.abc import Iterator
-from contextlib import contextmanager
 
 import pytest
 
@@ -23,31 +21,15 @@ from showpy.core.errors import GeometryError, ShowPyError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.geo.analysis import balance, change_amount, coverage, density_map, symmetry_score
 from tests.fixtures.shows import field_sheet, two_set_show
-from tests.helpers import make_set
+from tests.helpers import capped_address_space, make_set
 
 TOL = 1e-9
 SIGNAL_TIMEOUT_S = 5
 TINY_CELL_M = 1e-5
-ALLOCATION_HEADROOM_BYTES = 256 * 2**20
 LEFT_CLUSTER_SIZE = 10
 CLUSTER_SPACING_M = 0.001
 MIRROR_X_M = 2.0
 MAX_MANY_TO_ONE_SCORE = 0.5
-
-
-@contextmanager
-def capped_address_space() -> Iterator[None]:
-    """Lowers RLIMIT_AS to the current size plus headroom so a runaway allocation fails fast."""
-    import resource  # POSIX only; imported here so Windows can still collect this module
-
-    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
-    with open("/proc/self/statm", encoding="ascii") as statm:
-        used = int(statm.read().split()[0]) * resource.getpagesize()
-    resource.setrlimit(resource.RLIMIT_AS, (used + ALLOCATION_HEADROOM_BYTES, hard))
-    try:
-        yield
-    finally:
-        resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
 
 
 def test_density_map_counts_on_field_spots_per_cell() -> None:

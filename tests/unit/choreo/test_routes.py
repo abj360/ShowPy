@@ -9,8 +9,6 @@ Contains:
 """
 
 import math
-from collections.abc import Callable
-from typing import TypeVar, cast
 
 import pytest
 
@@ -29,6 +27,7 @@ from showpy.core.errors import LockedError, PathError
 from showpy.core.util import approx_equal
 from tests.fixtures.motion_shows import TID, with_targets
 from tests.fixtures.shows import two_set_show
+from tests.helpers import defect
 
 FILE = ["T4", "T3", "T2", "T1"]
 
@@ -101,19 +100,6 @@ def test_rotate_path_about_center() -> None:
     engine = PathEngine(show.model_copy(update={"transitions": (spec,)}))
     mid = engine.position("T1", 4.0)
     assert approx_equal(math.dist(mid, pivot), 3.0)
-
-
-F = TypeVar("F", bound=Callable[..., object])
-
-
-def defect(defect_id: str) -> Callable[[F], F]:
-    """Marks a test as an open audited defect: a strict xfail keyed on its ID."""
-
-    def decorate(test: F) -> F:
-        marked = pytest.mark.defect(defect_id)(test)
-        return cast(F, pytest.mark.xfail(strict=True, reason=defect_id)(marked))
-
-    return decorate
 
 
 @defect("UP-9.2-21")

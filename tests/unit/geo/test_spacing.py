@@ -44,8 +44,6 @@ Contains:
 
 import math
 import sys
-from collections.abc import Iterator
-from contextlib import contextmanager
 
 import numpy as np
 import pytest
@@ -70,13 +68,13 @@ from showpy.geo.spacing import (
     space_proportional,
     space_with_gaps,
 )
+from tests.helpers import capped_address_space
 
 SIGNAL_TIMEOUT_S = 5
 SQUARE_SIDE_M = 10.0
 TINY_FILL_INTERVAL_M = 1e-3
 TINY_LINE_INTERVAL_M = 1e-5
 LONG_LINE_LENGTH_M = 1000.0
-ALLOCATION_HEADROOM_BYTES = 256 * 2**20
 SEAM_SPOTS = 10
 GAP_EXTRA_M = 0.5
 RING_SPOTS = 4
@@ -235,21 +233,6 @@ def test_distribute_on_points_random_is_seeded() -> None:
     candidates = np.arange(20, dtype=float).reshape(10, 2)
     a = distribute_on_points(candidates, 3, method="random", seed=1)
     assert np.array_equal(a, distribute_on_points(candidates, 3, method="random", seed=1))
-
-
-@contextmanager
-def capped_address_space() -> Iterator[None]:
-    """Lowers RLIMIT_AS to the current size plus headroom so a runaway allocation fails fast."""
-    import resource  # POSIX only; imported here so Windows can still collect this module
-
-    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
-    with open("/proc/self/statm", encoding="ascii") as statm:
-        used = int(statm.read().split()[0]) * resource.getpagesize()
-    resource.setrlimit(resource.RLIMIT_AS, (used + ALLOCATION_HEADROOM_BYTES, hard))
-    try:
-        yield
-    finally:
-        resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
 
 
 def _square(origin_x: float = 0.0, side: float = SQUARE_SIDE_M) -> shapely.Polygon:

@@ -10,7 +10,7 @@ Contains:
 
 import math
 from collections.abc import Callable
-from typing import TypeVar, cast
+from typing import cast
 
 import numpy as np
 import pytest
@@ -34,6 +34,7 @@ from showpy.show.models import Show
 from showpy.time.models import Marker, MarkerKind
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
 from tests.fixtures.shows import two_set_show
+from tests.helpers import defect
 
 
 def test_engine_speed_reports_distance_rate_and_seconds() -> None:
@@ -111,20 +112,9 @@ def test_phrase_profile_rejects_empty_range() -> None:
         phrase_profile(two_set_show(), 4.0, 4.0)
 
 
-F = TypeVar("F", bound=Callable[..., object])
 type MotionsCall = Callable[[Show, MotionRegistry], object]
 BAD_PER_COUNT = -1
 MID_MOVE = 2.0
-
-
-def defect(defect_id: str) -> Callable[[F], F]:
-    """Marks a test as an open audited defect: a strict xfail keyed on its ID."""
-
-    def decorate(test: F) -> F:
-        marked = pytest.mark.defect(defect_id)(test)
-        return cast(F, pytest.mark.xfail(strict=True, reason=defect_id)(marked))
-
-    return decorate
 
 
 def _line_motion(u: FloatArray, start: Point, end: Point, params: object) -> Points:

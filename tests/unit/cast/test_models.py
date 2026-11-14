@@ -9,7 +9,6 @@ Contains:
 """
 
 import math
-import subprocess
 import sys
 
 import pytest
@@ -17,6 +16,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from showpy.cast.models import Cast, Group, LabelScheme, Shape, Spot
 from showpy.core.errors import GeometryError, ShowPyError, UnknownRefError
+from tests.helpers import outputs_under_hash_seeds
 
 
 def test_group_name_defaults_from_key() -> None:
@@ -83,9 +83,6 @@ def test_cast_round_trips_json() -> None:
 
 
 REJECTED = (ShowPyError, PydanticValidationError)
-EXPECTED_FAILURES = ("ValidationError", "SchemaError", "ShowPyError")
-HASH_SEEDS = ("1", "2", "3")
-SUBPROCESS_TIMEOUT_S = 20
 HUGE_PAD = 10**7
 CAST_SCRIPT_HEAD = (
     "from showpy.cast.models import Cast, Group, Spot\n"
@@ -103,20 +100,7 @@ CAST_SCRIPT_HEAD = (
 
 
 def _under_seeds(body: str) -> list[str]:
-    outputs = []
-    for seed in HASH_SEEDS:
-        done = subprocess.run(
-            [sys.executable, "-c", CAST_SCRIPT_HEAD + body],
-            env={"PYTHONHASHSEED": seed},
-            capture_output=True,
-            text=True,
-            timeout=SUBPROCESS_TIMEOUT_S,
-            check=False,
-        )
-        if done.returncode != 0:
-            assert any(name in done.stderr for name in EXPECTED_FAILURES), done.stderr[-300:]
-        outputs.append(done.stdout + done.stderr[-200:])
-    return outputs
+    return outputs_under_hash_seeds(CAST_SCRIPT_HEAD + body)
 
 
 def _small_cast() -> Cast:

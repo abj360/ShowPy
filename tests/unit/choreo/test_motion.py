@@ -10,8 +10,8 @@ Contains:
     test_regression_steps_strength_has_a_cap: UP-9.2-15
 """
 
-from collections.abc import Callable, Mapping
-from typing import Any, TypeVar, cast
+from collections.abc import Mapping
+from typing import Any
 
 import numpy as np
 import pytest
@@ -31,6 +31,7 @@ from showpy.choreo.motion import (
 from showpy.core.errors import PathError, ShowPyError, UnknownRefError
 from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
+from tests.helpers import defect
 
 KINDS = [
     "linear",
@@ -139,19 +140,8 @@ def test_easing_breaks_mark_kinks() -> None:
     assert easing_breaks(Easing()) == []
 
 
-F = TypeVar("F", bound=Callable[..., object])
 SHARES = np.array([0.0, 0.25, 0.5, 1.0])
 OVERSIZED_STEP_COUNT = 10_000.0
-
-
-def defect(defect_id: str) -> Callable[[F], F]:
-    """Marks a test as an open audited defect: a strict xfail keyed on its ID."""
-
-    def decorate(test: F) -> F:
-        marked = pytest.mark.defect(defect_id)(test)
-        return cast(F, pytest.mark.xfail(strict=True, reason=defect_id)(marked))
-
-    return decorate
 
 
 @defect("UP-9.2-12")

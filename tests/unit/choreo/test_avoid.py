@@ -14,7 +14,7 @@ Contains:
 
 import math
 from collections.abc import Callable
-from typing import TypeVar, cast
+from typing import cast
 
 import numpy as np
 import pytest
@@ -39,6 +39,7 @@ from showpy.show.models import Show
 from tests.fixtures.crossing_shows import crossing_show
 from tests.fixtures.motion_shows import TID, with_rows
 from tests.fixtures.shows import two_set_show
+from tests.helpers import defect
 
 FOOTPRINTS = 0.6
 
@@ -128,18 +129,7 @@ def test_regression_reassign_hint_names_the_real_module() -> None:
     assert "showpy.choreo.match_ops.apply_match" in info.value.hint
 
 
-F = TypeVar("F", bound=Callable[..., object])
 PARKED_UNTIL = 7.0
-
-
-def defect(defect_id: str) -> Callable[[F], F]:
-    """Marks a test as an open audited defect: a strict xfail keyed on its ID."""
-
-    def decorate(test: F) -> F:
-        marked = pytest.mark.defect(defect_id)(test)
-        return cast(F, pytest.mark.xfail(strict=True, reason=defect_id)(marked))
-
-    return decorate
 
 
 @defect("UP-9.2-17")

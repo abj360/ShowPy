@@ -13,7 +13,7 @@ Contains:
 """
 
 from collections.abc import Callable
-from typing import Any, TypeVar, cast
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -29,22 +29,12 @@ from showpy.core.util import approx_equal
 from showpy.show.models import Show
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
 from tests.fixtures.shows import two_set_show
+from tests.helpers import defect
 
-F = TypeVar("F", bound=Callable[..., object])
 BEND: Point = (1.0, 7.0)
 BEND_COUNT = 4.0
 SWEEP_FULL_TURN = 360.0
 NAN_SAMPLE_INDEX = 10
-
-
-def defect(defect_id: str) -> Callable[[F], F]:
-    """Marks a test as an open audited defect: a strict xfail keyed on its ID."""
-
-    def decorate(test: F) -> F:
-        marked = pytest.mark.defect(defect_id)(test)
-        return cast(F, pytest.mark.xfail(strict=True, reason=defect_id)(marked))
-
-    return decorate
 
 
 def _stored(show: Show, spec: TransitionSpec) -> Show:

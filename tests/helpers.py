@@ -10,11 +10,21 @@ Contains:
     with_curve_rows(): gives the spots curved path rows through (1, 7) in transition 1 -> 2
     open_session(): saves a show to a fresh repository and opens agent and designer workspaces
     bisector_rotation(): returns a pivot and sweep whose arc carries one point onto another
+    defect(): marks a test as an open audited defect, a strict xfail keyed on its ID
+    capped_address_space(): caps the address space so a runaway allocation fails fast
+    EXPECTED_FAILURES: exception names a hash-seed subprocess may end with
+    outputs_under_hash_seeds(): runs one script under each hash seed and collects its output
 """
 
 import math
-from collections.abc import Iterable
+import subprocess
+import sys
+from collections.abc import Callable, Iterable, Iterator
+from contextlib import contextmanager
 from datetime import datetime
+from typing import TypeVar, cast
+
+import pytest
 
 from showpy.choreo.match_ops import with_set
 from showpy.choreo.models import PathRow, PathStyle, Placement, Set, TransitionSpec, Waypoint
@@ -32,6 +42,14 @@ CREATE_MESSAGE = "create"
 STILL_TOL_M = 1e-6
 FULL_TURN = 360.0
 HALF_TURN = 180.0
+ALLOCATION_HEADROOM_BYTES = 256 * 2**20
+EXPECTED_FAILURES = ("ValidationError", "SchemaError", "ShowPyError")
+HASH_SEEDS = ("1", "2", "3")
+SUBPROCESS_TIMEOUT_S = 20
+STDERR_CHECK_TAIL = 300
+STDERR_KEPT_TAIL = 200
+
+MarkedTest = TypeVar("MarkedTest", bound=Callable[..., object])
 
 
 def make_set(*rows: tuple[str, float, float], off: tuple[str, ...] = ()) -> Set:
@@ -127,3 +145,57 @@ def bisector_rotation(a: Point, b: Point, reach: float, long_way: bool) -> tuple
     if long_way:
         sweep -= math.copysign(FULL_TURN, sweep)
     return pivot, sweep
+
+
+def defect(defect_id: str) -> Callable[[MarkedTest], MarkedTest]:
+    """Marks a test as an open audited defect: a strict xfail keyed on its ID."""
+
+    def decorate(test: MarkedTest) -> MarkedTest:
+        marked = pytest.mark.defect(defect_id)(test)
+        return cast(MarkedTest, pytest.mark.xfail(strict=True, reason=defect_id)(marked))
+
+    return decorate
+
+
+@contextmanager
+def capped_address_space() -> Iterator[None]:
+    """Lowers RLIMIT_AS to the current size plus headroom so a runaway allocation fails fast."""
+    import resource  # POSIX only; imported here so Windows can still collect callers
+
+    soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+    with open("/proc/self/statm", encoding="ascii") as statm:
+        used = int(statm.read().split()[0]) * resource.getpagesize()
+    resource.setrlimit(resource.RLIMIT_AS, (used + ALLOCATION_HEADROOM_BYTES, hard))
+    try:
+        yield
+    finally:
+        resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
+
+
+def outputs_under_hash_seeds(script: str, seeds: Iterable[str] = HASH_SEEDS) -> list[str]:
+    """Runs `script` in a fresh interpreter under each PYTHONHASHSEED and collects its output.
+
+    A run may fail only with one of EXPECTED_FAILURES; any other crash fails the caller.
+
+    Args:
+        script: Python source passed to `python -c`.
+        seeds: Hash seeds to run under, one subprocess each.
+
+    Returns:
+        outputs: Per seed, stdout plus the tail of stderr.
+    """
+    outputs = []
+    for seed in seeds:
+        done = subprocess.run(
+            [sys.executable, "-c", script],
+            env={"PYTHONHASHSEED": seed},
+            capture_output=True,
+            text=True,
+            timeout=SUBPROCESS_TIMEOUT_S,
+            check=False,
+        )
+        if done.returncode != 0:
+            tail = done.stderr[-STDERR_CHECK_TAIL:]
+            assert any(name in done.stderr for name in EXPECTED_FAILURES), tail
+        outputs.append(done.stdout + done.stderr[-STDERR_KEPT_TAIL:])
+    return outputs

@@ -18,8 +18,6 @@ Contains:
 
 import itertools
 import math
-from collections.abc import Callable
-from typing import TypeVar, cast
 
 import numpy as np
 import pytest
@@ -41,6 +39,7 @@ from showpy.geo.shapes import line
 from showpy.show.models import Show
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
 from tests.fixtures.shows import two_set_show
+from tests.helpers import defect
 
 
 def _engine(**rows: PathRow) -> PathEngine:
@@ -355,23 +354,12 @@ def test_regression_positions_resolves_selection_expressions() -> None:
     assert approx_equal(engine.positions(4.0, "group:trumpets").shape, (4, 2))
 
 
-F = TypeVar("F", bound=Callable[..., object])
 SEGMENT_TOL = 0.02
 PROBES_PER_SEGMENT = 25
 TRACE_SAMPLES = 4001
 WEAVE_ROW = PathRow(
     entity="T1", style=PathStyle.CUSTOM, motion_fn="weave", motion_params={"cycles": 4}
 )
-
-
-def defect(defect_id: str) -> Callable[[F], F]:
-    """Marks a test as an open audited defect: a strict xfail keyed on its ID."""
-
-    def decorate(test: F) -> F:
-        marked = pytest.mark.defect(defect_id)(test)
-        return cast(F, pytest.mark.xfail(strict=True, reason=defect_id)(marked))
-
-    return decorate
 
 
 def _segment_deviation(engine: PathEngine, entity: str) -> float:

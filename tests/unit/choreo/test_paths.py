@@ -14,7 +14,6 @@ Contains:
 """
 
 from collections.abc import Callable
-from typing import TypeVar, cast
 
 import pytest
 
@@ -48,6 +47,7 @@ from showpy.core.util import approx_equal
 from showpy.show.models import Show
 from tests.fixtures.motion_shows import TID
 from tests.fixtures.shows import two_set_show
+from tests.helpers import defect
 
 SPEC = TransitionSpec(id=TID, counts=8.0)
 
@@ -167,23 +167,12 @@ def test_paths_table_lists_only_non_default_rows() -> None:
     assert approx_equal(table.iloc[0]["start"], 1.0)
 
 
-F = TypeVar("F", bound=Callable[..., object])
 BEND: Point = (1.0, 7.0)
 TWO_COUNT_DELAY = 2.0
 LATE_STEP = 3.0
 RIPPLE_TOTAL_PAST_END = 9.0
 RIPPLE_TOTAL_INSIDE = 3.0
 STALE_FIELDS = ("pivot", "sweep_deg", "motion_fn", "route")
-
-
-def defect(defect_id: str) -> Callable[[F], F]:
-    """Marks a test as an open audited defect: a strict xfail keyed on its ID."""
-
-    def decorate(test: F) -> F:
-        marked = pytest.mark.defect(defect_id)(test)
-        return cast(F, pytest.mark.xfail(strict=True, reason=defect_id)(marked))
-
-    return decorate
 
 
 @defect("UP-9.2-04")
