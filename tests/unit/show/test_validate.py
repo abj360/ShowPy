@@ -271,8 +271,8 @@ def test_regression_validate_show_reports_members_whose_placements_do_not_point_
 @pytest.mark.defect("UP-9.7-66")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-66")
 def test_regression_validate_show_reports_pins_naming_missing_items() -> None:
-    """Reports a pin on a spot that does not exist (audit 9.7 validation gaps)."""
-    assert _mentions(_with_pin(two_set_show(), Pin(target="entity", id="ZZ")), "ZZ")
+    """Reports a form pin on a form that does not exist (audit 9.7 validation gaps)."""
+    assert _mentions(_with_pin(two_set_show(), Pin(target="form", id="ghost-form")), "ghost-form")
 
 
 @pytest.mark.defect("UP-9.7-67")
