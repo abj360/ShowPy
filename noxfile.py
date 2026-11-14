@@ -13,6 +13,7 @@ Contains:
     audit: scans the locked dependencies for known vulnerabilities
     wheel: builds the wheel, installs it in a clean venv and runs the README usage example
     bench: runs the budget benchmarks; at tier M fails on a >20% min-time regression
+    changelog: regenerates CHANGELOG.md with git-cliff and formats it with Prettier
     docs: placeholder until the docs build lands
 """
 
@@ -190,6 +191,13 @@ def bench(session: nox.Session) -> None:
             BENCH_MACHINE_WARNING,
         ]
     _uv_run(session, *args, *session.posargs)
+
+
+@nox.session
+def changelog(session: nox.Session) -> None:
+    """Regenerates CHANGELOG.md from Conventional Commits and formats it with Prettier."""
+    _uv_run(session, "git-cliff", "--config", "cliff.toml", "--output", "CHANGELOG.md")
+    session.run("npx", "--no-install", "prettier", "--write", "CHANGELOG.md", external=True)
 
 
 @nox.session
