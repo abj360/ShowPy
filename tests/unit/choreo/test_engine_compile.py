@@ -4,12 +4,18 @@
 test_engine_compile.py --- tests compiling path rows into plans, and the audited compile defects
 
 Contains:
-    test_regression_timed_waypoint_survives_style_change_without_index_error: UP-9.2-03
-    test_regression_engine_and_editors_agree_a_straight_row_has_no_bend: UP-9.2-05
-    test_regression_custom_motion_that_never_leaves_start_is_rejected: UP-9.2-09
-    test_regression_custom_motion_with_wrong_shape_raises_path_error: UP-9.2-10
-    test_regression_custom_motion_with_nan_samples_is_rejected: UP-9.2-11
-    test_regression_timed_waypoint_is_reached_at_its_count_under_easing: UP-9.2-16
+    test_regression_timed_waypoint_survives_style_change_without_index_error: compiles or rejects a
+        timed waypoint kept through a style change, never IndexError (9.2)
+    test_regression_engine_and_editors_agree_a_straight_row_has_no_bend: moves a STRAIGHT row
+        straight, as the path editors treat it, even with a waypoint
+    test_regression_custom_motion_that_never_leaves_start_is_rejected: raises ContinuityError for a
+        custom motion that stays put but has a distant target (9.2)
+    test_regression_custom_motion_with_wrong_shape_raises_path_error: raises PathError for a custom
+        motion that returns the wrong output shape
+    test_regression_custom_motion_with_nan_samples_is_rejected: rejects NaN samples from a custom
+        motion instead of dropping them silently
+    test_regression_timed_waypoint_is_reached_at_its_count_under_easing: reaches a waypoint timed
+        "at 2" at count 2 even when the row is eased
 """
 
 from collections.abc import Callable
@@ -84,7 +90,7 @@ def test_regression_timed_waypoint_survives_style_change_without_index_error(
 
 @defect("UP-9.2-05")
 def test_regression_engine_and_editors_agree_a_straight_row_has_no_bend() -> None:
-    """Moves a STRAIGHT row straight, as the path editors treat it, even with a waypoint (9.2)."""
+    """Moves a STRAIGHT row straight, as the path editors do, even with a waypoint (audit 9.2)."""
     row = PathRow(entity="T1", style=PathStyle.STRAIGHT, waypoints=(Waypoint(x=1.0, y=7.0),))
     engine = PathEngine(with_rows({"T1": row}))
     try:

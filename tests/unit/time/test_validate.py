@@ -5,7 +5,19 @@ test_validate.py --- tests that validate_timeline reports each structural proble
 
 Contains:
     test_*(): one behavior of showpy.time.validate each
-    test_regression_*(): one audited validation gap each (values and orders it passes)
+    test_regression_validate_flags_negative_total_counts: rejects or reports a negative show length
+    test_regression_validate_flags_nan_hold: rejects or reports a hold of NaN seconds
+    test_regression_validate_flags_unsorted_holds: rejects or reports holds that are not sorted by
+        count
+    test_regression_validate_flags_a_hold_past_the_end: rejects or reports a hold after the last
+        count
+    test_regression_validate_flags_duplicate_cue_orders: rejects or reports two cues sharing one
+        order
+    test_regression_validate_flags_nan_gain: rejects or reports an audio track with NaN gain
+    test_regression_validate_flags_infinite_sync_offset: rejects or reports an audio track with an
+        infinite sync offset
+    test_regression_overlapping_holds_have_one_policy: makes the clock reject overlapping holds
+        exactly when validation does
 """
 
 import math

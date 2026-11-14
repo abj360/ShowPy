@@ -3,22 +3,24 @@
 """
 test_data.py --- tests JSON interchange, frame CSV, position import, tables and format plugins
 
-Also holds the audited data and CSV defects (UP-9.5-27 to UP-9.5-35) as strict xfails.
+Also holds the audited data and CSV defects (UP-9.5-27 to UP-9.5-35, UP-4.3-01) as strict xfails.
 
 Contains:
     test_regression_chart_csv_neutralizes_formula_names(): quotes a formula-like performer name
     test_regression_csv_neutralizes_every_formula_trigger(): quotes cells led by + - @ tab or CR
-    test_regression_csv_writes_large_floats_without_exponent(): writes 1234567.0 in full
+    test_regression_csv_writes_large_floats_without_exponent(): writes 1234567.0 in full; the `:g`
+        format turns it into 1.23457e+06
     test_regression_csv_keeps_cue_seconds_above_one_thousand_exact(): keeps seconds past 1,000 exact
     test_regression_coordinate_sheet_csv_names_the_entity_and_performer(): adds entity and performer
     test_regression_to_text_drops_tabs_and_carriage_returns(): drops tab and CR from text cells
     test_regression_to_text_aligns_wide_cjk_characters(): pads wide characters by display width
     test_regression_export_json_include_accepts_a_single_field_name(): treats a string as one field
-    test_regression_import_json_rejects_a_non_mapping_with_schema_error(): raises SchemaError
-    test_import_json_rejects_the_old_stage_tag(): refuses a document tagged stage.show.v1
-    test_frames_csv_is_byte_identical_across_runs_and_hash_seeds(): writes one CSV per show
+    test_regression_import_json_rejects_a_non_mapping_with_schema_error(): raises SchemaError for
+        `[1]`; today an AttributeError leaks from `.get`
     test_regression_export_json_ignores_hash_seed(): dumps spot tags and selections in one order
         under every hash seed
+    test_import_json_rejects_the_old_stage_tag(): refuses a document tagged stage.show.v1
+    test_frames_csv_is_byte_identical_across_runs_and_hash_seeds(): writes one CSV per show
 """
 
 import csv

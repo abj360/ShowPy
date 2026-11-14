@@ -5,7 +5,10 @@ test_ids.py --- tests reference and transition ID parsing and formatting
 
 Contains:
     test_*(): one behavior of showpy.core.ids each
-    test_regression_*(): one audited defect each (path separators in refs, tid arity)
+    test_regression_parse_ref_rejects_path_separators: rejects `..` and `/` in reference IDs, which
+        would escape a directory
+    test_regression_format_tid_rejects_a_third_element: rejects a three-part transition ID instead
+        of dropping the third
 """
 
 import pytest

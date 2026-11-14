@@ -4,16 +4,19 @@
 test_history.py --- tests set, path and show diffs, snapshots, revert, undo/redo, renames, changelog
 
 Contains:
-    test_regression_undo_does_not_leave_a_path_row_for_a_removed_spot: UP-9.7-36
-    test_regression_undoing_the_first_save_keeps_a_loadable_show: UP-9.7-37
-    test_regression_diff_show_reports_a_new_group: UP-9.7-38
-    test_regression_diff_show_reports_a_pack_change: UP-9.7-39
-    test_regression_diff_show_reports_a_set_cue_change: UP-9.7-40
-    test_regression_diff_show_reports_a_set_label_change: UP-9.7-41
-    test_regression_diff_show_reports_a_placement_note_change: UP-9.7-42
-    test_regression_diff_show_reports_a_selection_change: UP-9.7-43
-    test_regression_rename_entities_rewrites_expression_selectors: UP-9.7-44
-    test_regression_unpin_normalizes_transition_ids_like_pin: UP-9.7-45
+    test_regression_undo_does_not_leave_a_path_row_for_a_removed_spot: refuses or repairs an undo
+        that would orphan the agent's path row
+    test_regression_undoing_the_first_save_keeps_a_loadable_show: refuses to undo the first save, or
+        leaves a loadable show
+    test_regression_diff_show_reports_a_new_group: reports a group added to the cast
+    test_regression_diff_show_reports_a_pack_change: reports a changed pack key
+    test_regression_diff_show_reports_a_set_cue_change: reports a changed set cue
+    test_regression_diff_show_reports_a_set_label_change: reports a changed set label
+    test_regression_diff_show_reports_a_placement_note_change: reports a changed placement note
+    test_regression_diff_show_reports_a_selection_change: reports a changed named selection
+    test_regression_rename_entities_rewrites_expression_selectors: rewrites spot IDs inside
+        expression selectors, as cast.rewrite does
+    test_regression_unpin_normalizes_transition_ids_like_pin: accepts `1->2` in unpin as pin does
 """
 
 from datetime import UTC, datetime, timedelta

@@ -5,11 +5,17 @@ test_form_fit.py --- tests line, circle and arc recognition of imported spots
 
 Contains:
     test_regression_detect_form_keeps_every_spot_within_tolerance: returns slots within tol of every
+        inlier spot, else a custom form
     test_regression_detect_form_does_not_call_a_2x2_block_a_circle: refuses to classify four block
+        corners as a circle
     test_regression_detect_form_does_not_call_a_triangle_an_arc: refuses to classify three triangle
+        corners as an arc
     test_regression_detect_form_tolerates_one_outlier_on_a_clean_circle: recognizes the circle of 12
+        ring spots despite one far outlier
     test_regression_fit_line_rejects_empty_input_with_schema_error: raises SchemaError for no
+        points, with no numpy warning or ValueError
     test_regression_fit_circle_rejects_collinear_points: raises SchemaError for collinear points
+        instead of a garbage circle
 """
 
 import math
@@ -127,7 +133,7 @@ COLLINEAR = [(0.0, 0.0), (1.0, 0.0), (2.0, 0.0), (3.0, 0.0)]
 @pytest.mark.defect("UP-9.6-27")
 @pytest.mark.xfail(strict=True, reason="UP-9.6-27")
 def test_regression_detect_form_keeps_every_spot_within_tolerance() -> None:
-    """Returns slots within tol of every input spot, else a custom form (audit 9.6)."""
+    """Returns slots within tol of every inlier spot, else a custom form (audit 9.6)."""
     form = detect_form(UNEVEN_LINE, tol=FIT_TOL)
     gaps = np.linalg.norm(np.asarray(UNEVEN_LINE)[:, None, :] - slots(form)[None, :, :], axis=2)
     assert float(gaps.min(axis=1).max()) <= FIT_TOL

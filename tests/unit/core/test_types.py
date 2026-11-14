@@ -6,9 +6,10 @@ test_types.py --- tests the JSON-safe Region and Box2 models and the FrozenModel
 Contains:
     NON_FINITE_MODELS: builders that put NaN or infinity into one float field per model family
     test_*(): one behavior of showpy.core.types each
-    test_regression_region_rejects_fewer_than_three_points: rejects a two-point region
+    test_regression_region_rejects_fewer_than_three_points: rejects a two-point region, which has no
+        area
     test_regression_region_rejects_nan_points: rejects NaN ring coordinates
-    test_regression_region_rejects_self_intersection: rejects a bow-tie ring
+    test_regression_region_rejects_self_intersection: rejects a bow-tie ring that crosses itself
     test_regression_frozen_models_reject_non_finite_floats: rejects NaN and infinity in Box2,
         TempoSection, Waypoint, Shape and Landmark fields
 """

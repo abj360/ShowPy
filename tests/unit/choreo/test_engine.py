@@ -4,16 +4,30 @@
 test_engine.py --- tests PathEngine positions, styles, timing, facing, segments and frames
 
 Contains:
-    test_regression_segments_stay_within_tolerance_on_periodic_motion: UP-9.2-01
-    test_regression_speed_distance_matches_traced_path_length: UP-9.2-02
-    test_regression_facing_override_applies_to_holding_spot: UP-9.2-07
-    test_regression_toward_entity_override_uses_query_time_position: UP-9.2-08
-    test_regression_invalidate_accepts_a_one_shot_iterable: UP-9.2-22
-    test_regression_invalidate_clears_override_selection_cache: UP-9.2-23
-    test_regression_spot_query_on_show_without_sets_raises_showpy_error: UP-9.2-24
-    test_regression_zero_count_transition_compiles_to_a_step: UP-9.2-25
-    test_regression_missing_placement_does_not_fail_other_spots: UP-9.2-26
-    test_regression_velocity_is_full_speed_near_a_window_kink: UP-9.2-34
+    test_regression_steps_easing_is_not_aliased_by_segment_probes: starts a segment on every step of
+        a steps easing instead of aliasing between probes
+    test_regression_positions_resolves_selection_expressions: resolves selection expressions such as
+        "T1-T2" and "group:trumpets" in positions()
+    test_regression_segments_stay_within_tolerance_on_periodic_motion: keeps every segment within
+        0.02 m of the true path on a 4-cycle weave
+    test_regression_speed_distance_matches_traced_path_length: reports the travelled distance of a
+        4-cycle weave, not its 4 m chord
+    test_regression_facing_override_applies_to_holding_spot: applies a facing override to a spot on
+        a HOLD row
+    test_regression_toward_entity_override_uses_query_time_position: faces the other spot where it
+        is at the query count, not at the row window
+    test_regression_invalidate_accepts_a_one_shot_iterable: drops every named transition even when
+        they come from a generator
+    test_regression_invalidate_clears_override_selection_cache: clears the cached facing-override
+        selections when caches are invalidated
+    test_regression_spot_query_on_show_without_sets_raises_showpy_error: raises a ShowPyError, not
+        IndexError, for a cast spot in a show with no sets
+    test_regression_zero_count_transition_compiles_to_a_step: compiles and segments a 0-count
+        transition instead of raising PathError
+    test_regression_missing_placement_does_not_fail_other_spots: keeps other spots queryable when
+        one spot lacks a placement in the next set
+    test_regression_velocity_is_full_speed_near_a_window_kink: reports the moving speed just after a
+        window start, not half of it
 """
 
 import itertools
@@ -338,6 +352,7 @@ def test_facing_override_resolves_selection_expressions() -> None:
 
 
 def test_regression_steps_easing_is_not_aliased_by_segment_probes() -> None:
+    """Starts a segment on every step of a steps easing instead of aliasing between probes."""
     row = PathRow(entity="T1", end=1.0, easing=Easing(kind="steps", strength=4.0))
     engine = _engine(T1=row)
     segments = [s for s in engine.segments(TID, tol=0.01) if s.entity == "T1"]
@@ -349,6 +364,7 @@ def test_regression_steps_easing_is_not_aliased_by_segment_probes() -> None:
 
 
 def test_regression_positions_resolves_selection_expressions() -> None:
+    """Resolves selection expressions such as "T1-T2" and "group:trumpets" in positions()."""
     engine = PathEngine(two_set_show())
     assert approx_equal(engine.positions(4.0, "T1-T2"), [[0.0, 7.0], [2.0, 7.0]])
     assert approx_equal(engine.positions(4.0, "group:trumpets").shape, (4, 2))

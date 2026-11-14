@@ -5,7 +5,14 @@ test_clock.py --- tests tempo lookup, count/seconds conversion with ramps and ho
 
 Contains:
     test_*(): one behavior of showpy.time.clock each
-    test_regression_*(): one audited clock defect each (unsorted tempos, NaN, large counts)
+    test_regression_describe_count_rounds_tenths_half_away_from_zero: rounds tenths of a second half
+        away from zero, so 7.25 s prints as 0:07.3
+    test_regression_unsorted_tempo_sections_are_sorted_or_rejected: converts counts as if sections
+        were sorted, or rejects them
+    test_regression_seconds_to_count_rejects_nan: rejects NaN seconds instead of returning 0.0
+    test_regression_tempo_at_rejects_nan: rejects a NaN count with a ShowPyError, not an IndexError
+    test_regression_describe_count_prints_large_counts_in_full: prints 1234567.5 rather than
+        `1.23457e+06`
 """
 
 import math
@@ -198,6 +205,7 @@ def test_describe_count_rounds_ramp_tempo() -> None:
 
 
 def test_regression_describe_count_rounds_tenths_half_away_from_zero() -> None:
+    """Rounds tenths of a second half away from zero, so 7.25 s prints as 0:07.3."""
     from showpy.time.clock import describe_count
     from showpy.time.timeline import new_timeline
 

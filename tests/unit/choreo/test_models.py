@@ -5,17 +5,24 @@ test_models.py --- tests Placement, Set editing and locks, forms specs and path 
 
 Contains:
     test_regression_form_geometry_is_immutable: keeps a frozen form's recipe unchanged when the
+        caller edits its geometry
     test_regression_form_is_hashable: hashes equal forms to equal values
     test_regression_frozen_model_replace_revalidates_negative_counts: rejects a negative count
+        through FrozenModel.replace
     test_regression_frozen_model_replace_revalidates_duplicate_placements: rejects duplicated
+        placements through FrozenModel.replace
     test_regression_transition_spec_checks_route_keys_against_route_ids: rejects a route stored
+        under a key that differs from its ID
     test_regression_set_rejects_non_finite_counts: rejects NaN and infinite Set.counts
     test_regression_path_row_rejects_nan_start: rejects a NaN PathRow.start
     test_regression_facing_spec_rejects_nan_point: rejects a toward_point facing whose point is NaN
     test_regression_transition_spec_rejects_negative_counts: rejects negative TransitionSpec.counts
     test_regression_spacing_spec_rejects_negative_gaps: rejects a negative extra gap in
+        SpacingSpec.gaps
     test_regression_placement_normalizes_facing: wraps a placement facing of 720 degrees into [0,
+        360)
     test_regression_facing_spec_normalizes_fixed_value: wraps a fixed facing of 720 degrees into [0,
+        360)
 """
 
 import contextlib

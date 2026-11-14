@@ -4,14 +4,21 @@
 test_files.py --- encodes audited workspace-file and ownership defects as strict xfails
 
 Contains:
-    test_regression_commit_refuses_garbage_show_document: UP-9.7-06
-    test_regression_commit_refuses_unknown_root: UP-9.7-07
-    test_regression_agent_cannot_delete_sets_through_show_json: UP-9.7-08
-    test_regression_agent_cannot_empty_cast_through_show_json: UP-9.7-09
-    test_regression_agent_cannot_change_show_id_through_show_json: UP-9.7-10
-    test_regression_agent_cannot_forge_designer_comments: UP-9.7-11
-    test_regression_reading_root_is_a_library_error: UP-9.7-18
-    test_regression_invalid_utf8_text_file_is_a_library_error: UP-9.7-25
+    test_regression_commit_refuses_garbage_show_document: refuses a commit of bytes that are not a
+        show document
+    test_regression_commit_refuses_unknown_root: refuses a commit under a root no reader can open
+    test_regression_agent_cannot_delete_sets_through_show_json: refuses an agent rewrite of
+        show.json that drops sets
+    test_regression_agent_cannot_empty_cast_through_show_json: refuses an agent rewrite of show.json
+        that empties the cast
+    test_regression_agent_cannot_change_show_id_through_show_json: refuses an agent show.json
+        rewrite that changes the show ID
+    test_regression_agent_cannot_forge_designer_comments: keeps an agent from writing a
+        designer-authored comment
+    test_regression_reading_root_is_a_library_error: raises a ShowPyError, not IndexError, when
+        reading the root path
+    test_regression_invalid_utf8_text_file_is_a_library_error: maps invalid UTF-8 in a text file to
+        a ShowPyError
 """
 
 import json

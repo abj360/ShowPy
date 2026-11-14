@@ -5,7 +5,20 @@ test_timeline.py --- tests timeline construction, pure edits, lookups and JSON p
 
 Contains:
     test_*(): one behavior of showpy.time.timeline each
-    test_regression_*(): one audited edit defect each (NaN, ramps, removal, cue order)
+    test_regression_add_tempo_rejects_nan_count: rejects a tempo section at a NaN count
+    test_regression_add_hold_rejects_nan_seconds: rejects a hold of NaN seconds
+    test_regression_add_marker_rejects_nan_count: rejects a marker at a NaN count
+    test_regression_new_timeline_rejects_nan_total: rejects a NaN show length
+    test_regression_add_tempo_rejects_infinite_tempo: rejects an infinite counts-per-minute
+    test_regression_add_tempo_rejects_negative_ramp_target: rejects a ramp toward a negative tempo
+    test_regression_add_tempo_rejects_ramp_counts_without_target: rejects `ramp_counts` given
+        without `ramp_to`
+    test_regression_remove_tempo_at_zero_keeps_a_convertible_timeline: refuses to drop the count-0
+        tempo, or leaves a timeline that still converts
+    test_regression_duplicate_cue_order_is_rejected_or_ordered: rejects two cues with one order, or
+        starts them at different times
+    test_regression_set_sync_validates_the_offset: rejects an offset AudioTrack itself rejects;
+        model_copy skips that check
 """
 
 import math

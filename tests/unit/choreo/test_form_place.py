@@ -5,12 +5,19 @@ test_form_place.py --- tests building sets from forms, reading members back and 
 
 Contains:
     test_regression_place_clears_references_to_forms_no_longer_placed: leaves no spot pointing at a
+        form the set no longer places
     test_regression_filled_forms_accepts_a_pinned_member_slot_left_open: reads a form back when a
+        pinned member left its slot open
     test_regression_filled_forms_accepts_matched_spots_in_nearest_open_slots: reads a form back when
+        matched spots took non-lowest open slots
     test_regression_place_returns_the_set_and_the_filled_forms: returns the placed set together with
+        its filled forms
     test_regression_rebuild_keeps_path_rows_of_members_that_did_not_move: keeps stored path rows of
+        members that stay put
     test_regression_rebuild_ignores_locked_rows_when_nothing_moves: does not raise LockedError for a
+        locked row of a member that does not move
     test_regression_rebuild_force_moves_pinned_members: moves a pinned member when the caller passes
+        force=True
 """
 
 import pytest

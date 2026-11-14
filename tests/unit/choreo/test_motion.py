@@ -4,10 +4,14 @@
 test_motion.py --- tests easing curves, facing turns and the custom motion registry
 
 Contains:
-    test_regression_nan_easing_strength_is_rejected: UP-9.2-12
-    test_regression_infinite_steps_strength_raises_showpy_error: UP-9.2-13
-    test_regression_easing_strength_below_one_is_not_clamped_silently: UP-9.2-14
-    test_regression_steps_strength_has_a_cap: UP-9.2-15
+    test_regression_nan_easing_strength_is_rejected: rejects a NaN easing strength instead of
+        producing NaN positions
+    test_regression_infinite_steps_strength_raises_showpy_error: raises a ShowPyError, not
+        OverflowError, for infinite step counts
+    test_regression_easing_strength_below_one_is_not_clamped_silently: rejects a strength below 1
+        instead of clamping it to 1
+    test_regression_steps_strength_has_a_cap: rejects a 10,000-step easing instead of building 9,999
+        edges
 """
 
 from collections.abc import Mapping

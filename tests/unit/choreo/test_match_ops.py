@@ -5,8 +5,11 @@ test_match_ops.py --- tests applying matches, swapping spots and swap suggestion
 
 Contains:
     test_regression_apply_match_updates_order_and_facing_of_formed_spots: rewrites order and facing
-    test_regression_apply_match_updates_form_members_like_swap: keeps Form.members in step with the
+        with the new slot, not only x and y
+    test_regression_apply_match_updates_form_members_like_swap: keeps Form.members in step with
+        matched slots so rebuild keeps them
     test_regression_clear_rows_keeps_transition_order: leaves show.transitions in their original
+        order when rows are cleared
 """
 
 import pytest

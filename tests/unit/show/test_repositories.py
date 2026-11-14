@@ -4,13 +4,20 @@
 test_repositories.py --- encodes audited repository defects (UP-9.7-02, -12 to -17) as strict xfails
 
 Contains:
-    test_regression_memory_commit_has_one_winner_per_parent: UP-9.7-02
-    test_regression_repository_refuses_agent_pinned_move: UP-9.7-12
-    test_regression_repository_refuses_agent_limits_write: UP-9.7-13
-    test_regression_show_ids_differing_by_case_are_distinct_or_rejected: UP-9.7-14
-    test_regression_reserved_device_show_ids_are_rejected_or_stored_safely: UP-9.7-15
-    test_regression_trailing_dot_show_id_is_rejected_or_stored_safely: UP-9.7-16
-    test_regression_overlong_show_id_is_rejected_or_stored_safely: UP-9.7-17
+    test_regression_memory_commit_has_one_winner_per_parent: lands exactly one of many threads
+        racing on one parent
+    test_regression_repository_refuses_agent_pinned_move: refuses an agent put_set that moves a
+        pinned spot
+    test_regression_repository_refuses_agent_limits_write: refuses an agent transaction that writes
+        the limits file
+    test_regression_show_ids_differing_by_case_are_distinct_or_rejected: keeps IDs differing only by
+        case from sharing a folder name
+    test_regression_reserved_device_show_ids_are_rejected_or_stored_safely: rejects Windows device
+        names as show IDs or stores them under another name
+    test_regression_trailing_dot_show_id_is_rejected_or_stored_safely: rejects a show ID ending in a
+        dot or stores it under another name
+    test_regression_overlong_show_id_is_rejected_or_stored_safely: rejects a 300-character show ID
+        or stores it under a short name
 """
 
 import contextlib

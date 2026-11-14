@@ -5,7 +5,28 @@ test_units.py --- tests unit conversion, unit registries and angle helpers
 
 Contains:
     test_*(): one behavior of showpy.core.units each
-    test_regression_*(): one audited units defect each (registry, round_to, angle edges)
+    test_regression_default_units_cannot_be_mutated: refuses in-place edits to the process-wide
+        default registry
+    test_regression_zero_factor_registry_never_divides_by_zero: rejects a zero unit factor with a
+        ShowPyError
+    test_regression_register_unit_refuses_to_redefine_meters: refuses to redefine the base unit `m`
+    test_regression_register_unit_rejects_infinite_size: rejects an infinite unit size
+    test_regression_register_unit_rejects_an_empty_name: rejects an empty unit name
+    test_regression_register_unit_bad_size_is_not_an_unknown_ref: reports a bad size as a schema
+        problem, not an unknown reference
+    test_regression_round_to_accepts_numpy_scalars: rounds a numpy float like a Python float
+    test_regression_round_to_rejects_infinity_cleanly: rejects an infinite value with a ShowPyError,
+        not decimal.InvalidOperation
+    test_regression_round_to_rejects_zero_precision_cleanly: rejects a zero precision with a
+        ShowPyError, not decimal.InvalidOperation
+    test_regression_round_to_handles_bools_cleanly: rounds a bool to 1.0 or rejects it, never
+        leaking decimal.InvalidOperation
+    test_regression_round_to_never_returns_negative_zero: returns 0.0, not -0.0, for a small
+        negative value
+    test_regression_normalize_angle_never_returns_negative_zero: returns 0.0, not -0.0, for -0.0
+    test_regression_normalize_angle_rejects_infinity_cleanly: rejects an infinite angle with a
+        ShowPyError, not ValueError
+    test_regression_normalize_angle_rejects_nan: rejects a NaN angle instead of passing it through
 """
 
 import math

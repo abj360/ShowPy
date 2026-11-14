@@ -4,8 +4,10 @@
 test_routes.py --- tests show-aware path builders: routes, follow, counter-march, L-moves, rotation
 
 Contains:
-    test_regression_two_part_respects_locked_rows: UP-9.2-21
-    test_regression_make_route_with_single_vertex_raises_path_error: UP-9.2-27
+    test_regression_two_part_respects_locked_rows: raises LockedError for a locked row instead of
+        rewriting it
+    test_regression_make_route_with_single_vertex_raises_path_error: raises a PathError, not
+        IndexError, when the whole route is one point
 """
 
 import math

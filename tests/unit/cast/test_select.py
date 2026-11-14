@@ -5,7 +5,22 @@ test_select.py --- tests the selection grammar and the spatial, ordering and pai
 
 Contains:
     test_*(): one behavior of showpy.cast.select each
-    test_regression_*(): one audited grammar defect each (inputs, nesting, pairing, split)
+    test_regression_glued_operators_raise_instead_of_misparsing: rejects glued +, - and & operators
+        at their position instead of misparsing them
+    test_regression_select_generator_is_not_silently_empty: selects the IDs a generator yields, or
+        rejects it, never returns nothing
+    test_regression_select_rejects_a_non_selector_type: rejects an int selector with a ShowPyError,
+        not a TypeError
+    test_regression_select_rejects_non_string_ids_in_a_list: rejects a list holding a non-string
+        with a ShowPyError, not an AttributeError
+    test_regression_select_deep_nesting_raises_schema_error: rejects 500 nested parentheses with a
+        SchemaError, not RecursionError
+    test_regression_mirror_pairs_finds_every_pair_within_tolerance: pairs spots within tolerance
+        even when the min-sum plan misses them
+    test_regression_split_rejects_absurd_part_counts_quickly: rejects an absurd part count instead
+        of building 100,000 empty groups
+    test_regression_select_set_input_ignores_hash_seed: returns one order for a Python set under
+        every hash seed
 """
 
 import contextlib
@@ -305,6 +320,7 @@ def test_mirror_pairs_respects_axis() -> None:
 
 
 def test_regression_glued_operators_raise_instead_of_misparsing() -> None:
+    """Rejects glued +, - and & operators at their position instead of misparsing them."""
     with pytest.raises(SchemaError) as info:
         select(mixed_cast(), "T1+T2-T10")
     assert info.value.context["position"] == 2

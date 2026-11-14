@@ -4,17 +4,26 @@
 test_coords.py --- tests coordinate presets, wording, parsing and audience-side handling
 
 Contains:
-    Existing behavior tests, unlisted
-    test_regression_zero_precision_is_rejected_not_division_by_zero()
-    test_regression_to_coords_rejects_infinite_point()
-    test_regression_to_coords_rejects_nan_point()
-    test_regression_to_coords_rejects_unknown_style()
-    test_regression_short_label_with_digit_round_trips_or_is_rejected()
-    test_regression_colliding_direction_labels_round_trip_or_are_rejected()
-    test_regression_from_coords_reads_negative_long_number()
-    test_regression_from_coords_reads_leading_dot_number()
-    test_regression_from_coords_reads_exponent_number()
-    test_regression_from_coords_reads_number_glued_to_unit()
+    test_*(): one behavior of showpy.sheet.coords each
+    test_regression_zero_precision_is_rejected_not_division_by_zero(): rejects precision=0 with a
+        ShowPyError, however the system gets into a show
+    test_regression_to_coords_rejects_infinite_point(): rejects an infinite point with a
+        ShowPyError, not decimal.InvalidOperation
+    test_regression_to_coords_rejects_nan_point(): rejects a NaN point instead of printing "nan m
+        right of center"
+    test_regression_to_coords_rejects_unknown_style(): rejects an unknown style instead of silently
+        using long style
+    test_regression_short_label_with_digit_round_trips_or_is_rejected(): round-trips a short
+        direction label holding a digit, or rejects it
+    test_regression_colliding_direction_labels_round_trip_or_are_rejected(): round-trips two
+        directions sharing one label, or rejects them
+    test_regression_from_coords_reads_negative_long_number(): reads "-3.5 m right of center" as 3.5
+        m to the left
+    test_regression_from_coords_reads_leading_dot_number(): reads the short code "R.5" as 0.5 m
+        right
+    test_regression_from_coords_reads_exponent_number(): reads the short code "R1e3" as 1000 m right
+    test_regression_from_coords_reads_number_glued_to_unit(): reads "3m right of center" with no
+        space before the unit
 """
 
 import pytest

@@ -5,8 +5,10 @@ test_match.py --- tests spot-to-slot matching: objectives, constraints, penaltie
 
 Contains:
     test_regression_match_by_order_rejects_duplicate_spots: rejects a repeated spot instead of
+        collapsing it to one
     test_regression_match_wraps_a_failing_cost_fn: raises MatchError when a cost_fn callback raises
     test_regression_match_names_the_nan_start: raises SchemaError, or a MatchError naming the NaN
+        start, not an empty one
 """
 
 import math

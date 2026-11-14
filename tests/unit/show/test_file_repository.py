@@ -4,15 +4,23 @@
 test_file_repository.py --- encodes audited file-repository defects as strict xfails
 
 Contains:
-    test_regression_next_link_to_outside_path_is_refused: UP-9.7-03
-    test_regression_next_link_cycle_is_refused: UP-9.7-04
-    test_regression_tree_digest_path_traversal_is_refused: UP-9.7-05
-    test_regression_missing_object_is_a_storage_error: UP-9.7-22
-    test_regression_truncated_tree_is_a_storage_error: UP-9.7-23
-    test_regression_missing_hard_links_are_a_storage_error: UP-9.7-24
-    test_regression_swapped_blob_is_reported_corrupt: UP-9.7-26
-    test_regression_commit_cleans_stale_temp_files: UP-9.7-27
-    test_regression_losing_commit_leaves_no_orphan_tree: UP-9.7-28
+    test_regression_next_link_to_outside_path_is_refused: refuses a next/ file naming a path outside
+        the tree store
+    test_regression_next_link_cycle_is_refused: refuses a cycle in next/ instead of looping forever
+    test_regression_tree_digest_path_traversal_is_refused: refuses a tree entry whose digest is a
+        path outside objects/
+    test_regression_missing_object_is_a_storage_error: maps a missing object file to StorageError,
+        not FileNotFoundError
+    test_regression_truncated_tree_is_a_storage_error: maps a truncated tree file to StorageError,
+        not JSONDecodeError
+    test_regression_missing_hard_links_are_a_storage_error: maps a file system without hard links to
+        StorageError, or commits anyway
+    test_regression_swapped_blob_is_reported_corrupt: reports a swapped blob as corrupt by verifying
+        its hash on read
+    test_regression_commit_cleans_stale_temp_files: removes `.tmp-*` files left by crashed writers
+        on the next commit
+    test_regression_losing_commit_leaves_no_orphan_tree: removes the tree file of a commit that lost
+        the race
 """
 
 import json

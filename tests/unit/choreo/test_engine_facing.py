@@ -4,7 +4,8 @@
 test_engine_facing.py --- tests facing blends at the edges of a move window
 
 Contains:
-    test_regression_facing_does_not_snap_at_window_end: UP-9.2-33
+    test_regression_facing_does_not_snap_at_window_end: blends facing into the next set instead of
+        jumping at the window end
 """
 
 from showpy.choreo.engine import PathEngine

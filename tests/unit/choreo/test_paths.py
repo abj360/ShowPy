@@ -4,13 +4,20 @@
 test_paths.py --- tests the pure path-row editing functions
 
 Contains:
-    test_regression_switching_to_straight_drops_the_bend: UP-9.2-04
-    test_regression_add_waypoint_clears_parameters_of_the_old_style: UP-9.2-06
-    test_regression_delay_applies_to_follow_rows: UP-9.2-18
-    test_regression_delay_rejects_a_waypoint_pushed_outside_the_window: UP-9.2-19
-    test_regression_stagger_and_ripple_errors_hint_at_the_step: UP-9.2-20
-    test_regression_add_waypoint_on_a_held_row_clears_old_parameters: UP-9.2-37
-    test_regression_ripple_rejects_a_waypoint_pushed_outside_the_window: UP-9.2-38
+    test_regression_switching_to_straight_drops_the_bend: clears waypoints when a POLYLINE row
+        becomes STRAIGHT
+    test_regression_add_waypoint_clears_parameters_of_the_old_style: rejects or cleans a ROTATE,
+        CUSTOM or FOLLOW row turned POLYLINE by a bend
+    test_regression_delay_applies_to_follow_rows: holds a FOLLOW spot at its start through a delay,
+        stagger or ripple
+    test_regression_delay_rejects_a_waypoint_pushed_outside_the_window: rejects, at edit time, a
+        delay that pushes a timed waypoint before the window
+    test_regression_stagger_and_ripple_errors_hint_at_the_step: names the step size in the error
+        when a stagger or ripple pushes a spot past the end
+    test_regression_add_waypoint_on_a_held_row_clears_old_parameters: rejects or cleans a HOLD row,
+        left over from a ROTATE row, that a bend turns POLYLINE
+    test_regression_ripple_rejects_a_waypoint_pushed_outside_the_window: rejects, at edit time, a
+        ripple that starts a spot after its timed waypoint
 """
 
 from collections.abc import Callable
@@ -262,7 +269,7 @@ def _overflowing_ripple() -> TransitionSpec:
 def test_regression_stagger_and_ripple_errors_hint_at_the_step(
     shift: Callable[[], TransitionSpec],
 ) -> None:
-    """Names the step size in the error when a stagger or ripple pushes a spot past the end."""
+    """Names the step size when a stagger or ripple pushes a spot past the end (audit 9.2)."""
     with pytest.raises(PathError) as excinfo:
         shift()
     assert "step" in excinfo.value.hint
@@ -270,7 +277,7 @@ def test_regression_stagger_and_ripple_errors_hint_at_the_step(
 
 @defect("UP-9.2-37")
 def test_regression_add_waypoint_on_a_held_row_clears_old_parameters() -> None:
-    """Rejects or cleans a HOLD row, left over from a ROTATE row, that a bend turns POLYLINE."""
+    """Rejects or cleans a HOLD row, left from ROTATE, that a bend turns POLYLINE (audit 9.2)."""
     held = hold(_rotate_row(), ["T1"])
     try:
         row = add_waypoint(held, "T1", BEND).row("T1")
@@ -283,7 +290,7 @@ def test_regression_add_waypoint_on_a_held_row_clears_old_parameters() -> None:
 
 @defect("UP-9.2-38")
 def test_regression_ripple_rejects_a_waypoint_pushed_outside_the_window() -> None:
-    """Rejects, at edit time, a ripple that starts a spot after its timed waypoint."""
+    """Rejects, at edit time, a ripple that starts a spot after its timed waypoint (audit 9.2)."""
     timed = add_waypoint(SPEC, "T2", BEND, at=1.0)
     with pytest.raises(PathError):
         ripple(timed, ["T1", "T2"], total=RIPPLE_TOTAL_INSIDE)

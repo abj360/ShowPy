@@ -4,18 +4,31 @@
 test_manage.py --- tests show creation, set insertion, removal, retiming, renumbering, indexing
 
 Contains:
-    test_regression_renumber_then_save_keeps_scripts_with_their_sets: UP-9.7-01
-    test_regression_remove_set_leaves_no_note_on_the_removed_set: UP-9.7-51
-    test_regression_remove_set_leaves_no_note_on_a_vanished_transition: UP-9.7-52
-    test_regression_remove_last_set_with_merge_counts_keeps_total_time: UP-9.7-53
-    test_regression_add_set_rejects_two_placements_for_one_spot: UP-9.7-54
-    test_regression_insert_subset_after_a_names_a_subset_of_a: UP-9.7-55
-    test_regression_form_keys_equal_form_ids_across_a_round_trip: UP-9.7-56
-    test_regression_frozen_show_forms_cannot_be_mutated: UP-9.7-57
-    test_regression_frozen_show_is_hashable: UP-9.7-58
-    test_regression_stale_save_conflict_message_is_bounded: UP-9.7-59
-    test_regression_set_counts_rescale_shifts_facing_overrides_and_zone_windows: UP-9.7-60
-    test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair: UP-9.7-85
+    test_regression_renumber_then_save_keeps_scripts_with_their_sets: moves each set's build script
+        with the set across renumber and save
+    test_regression_remove_set_leaves_no_note_on_the_removed_set: drops or reports notes anchored to
+        a removed set
+    test_regression_remove_set_leaves_no_note_on_a_vanished_transition: drops or reports notes
+        anchored to a transition that no longer exists
+    test_regression_remove_last_set_with_merge_counts_keeps_total_time: keeps total counts, or
+        refuses, when merging the last set's counts
+    test_regression_add_set_rejects_two_placements_for_one_spot: rejects two placements for one spot
+        instead of keeping the last
+    test_regression_insert_subset_after_a_names_a_subset_of_a: names the subset after set "A" with
+        "A" as its base, not "B"
+    test_regression_form_keys_equal_form_ids_across_a_round_trip: rejects a form key that differs
+        from its ID, or keeps keys stable
+    test_regression_frozen_show_forms_cannot_be_mutated: refuses `show.forms[...] = form` on a
+        frozen show
+    test_regression_frozen_show_is_hashable: hashes a frozen show
+    test_regression_stale_save_conflict_message_is_bounded: caps the ConflictError text after many
+        landed revisions
+    test_regression_set_counts_rescale_shifts_facing_overrides_and_zone_windows: shifts later facing
+        overrides and zone windows when a set is rescaled
+    test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair: drops or reports a
+        transition pin on a vanished pair
+    test_regression_error_messages_truncate_echoed_input: echoes at most about 80 characters of a
+        10,000-character scheme name
 """
 
 import sys

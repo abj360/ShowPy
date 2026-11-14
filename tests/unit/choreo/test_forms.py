@@ -5,15 +5,24 @@ test_forms.py --- tests form constructors, the recipe contract, slot spacing and
 
 Contains:
     test_regression_fill_form_rejects_zero_interval: raises SpacingError, not ZeroDivisionError, for
+        fill_form(interval=0)
     test_regression_scatter_form_rejects_zero_min_gap: raises SpacingError, not ZeroDivisionError,
+        for scatter_form(min_gap=0)
     test_regression_scatter_form_rejects_negative_min_gap_without_hanging: raises SpacingError for
+        scatter_form(min_gap=-1) instead of hanging
     test_regression_misspelled_recipe_key_is_rejected: raises SchemaError for an unknown recipe key
+        such as "anchr"
     test_regression_misspelled_fill_pattern_is_rejected: raises SchemaError for an unknown fill
+        pattern such as "hexx"
     test_regression_bad_block_anchor_raises_schema_error: raises SchemaError, not KeyError, for an
+        unknown block anchor
     test_regression_arc_form_rejects_sweeps_that_overlap_themselves: rejects an arc past 360 degrees
+        instead of producing coincident slots
     test_regression_form_rejects_fractional_slot_count: rejects n=2.5 instead of truncating it to 2
     test_regression_svg_form_rejects_empty_svg: raises a ShowPyError, not ValueError, for
+        svg_form("")
     test_regression_generated_form_with_numpy_params_serializes_or_is_rejected: serializes numpy
+        generator params, or rejects them with a ShowPyError
 """
 
 import contextlib

@@ -5,7 +5,23 @@ test_rewrite.py --- tests rewriting and dropping spot IDs across a whole show
 
 Contains:
     test_*(): one behavior of showpy.cast.rewrite each
-    test_regression_*(): one audited rewrite defect each (pins, zones, empties, renames)
+    test_regression_relabel_rewrites_pins: renames the spot a pin names when the spot is relabeled
+    test_regression_forced_delete_drops_pins_on_the_spot: leaves no pin naming a spot that
+        `delete_spots(force=True)` removed
+    test_regression_relabel_rewrites_sheet_zones: rewrites `applies_to` of zones stored on the sheet
+        when spots are relabeled
+    test_regression_stale_selector_does_not_block_unrelated_delete: deletes T1 although a zone names
+        the long-gone spot T9
+    test_regression_old_glued_selector_does_not_block_relabel: relabels a show whose zone still uses
+        the pre-2026-11-12 syntax `T1+T2`
+    test_regression_dropping_all_route_members_drops_the_route: drops or flags a route left without
+        members
+    test_regression_dropping_all_override_entities_drops_the_override: drops or flags a facing
+        override left without entities
+    test_regression_dropping_all_anchored_spots_drops_the_note_anchor: drops or flags a note
+        anchored to no spots
+    test_regression_many_to_one_rename_is_reported_with_the_duplicate_target: reports a rename
+        mapping two spots to one ID by name, not as UnknownRefError
 """
 
 import pytest

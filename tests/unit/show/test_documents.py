@@ -4,13 +4,20 @@
 test_documents.py --- encodes audited document encode and decode defects as strict xfails
 
 Contains:
-    test_regression_decode_wrong_shape_show_json_is_a_library_error: UP-9.7-19
-    test_regression_decode_wrong_shape_forms_json_is_a_library_error: UP-9.7-20
-    test_regression_decode_rejects_string_set_order: UP-9.7-21
-    test_regression_show_json_carries_a_format_version: UP-9.7-29
-    test_regression_decode_names_the_minimum_version_for_a_newer_document: UP-9.7-92
-    test_regression_encode_never_writes_non_finite_numbers: UP-9.7-30
-    test_regression_negative_zero_encodes_like_zero: UP-9.7-31
+    test_regression_decode_wrong_shape_show_json_is_a_library_error: raises a ShowPyError, not
+        TypeError, for a show.json of the wrong shape
+    test_regression_decode_wrong_shape_forms_json_is_a_library_error: raises a ShowPyError, not
+        TypeError, for a forms.json of the wrong shape
+    test_regression_decode_rejects_string_set_order: rejects `"sets": "12"` instead of decoding it
+        as sets 1 and 2
+    test_regression_show_json_carries_a_format_version: stamps show.json with a format and layout
+        version
+    test_regression_decode_names_the_minimum_version_for_a_newer_document: raises VersionError for a
+        document written by a newer library
+    test_regression_encode_never_writes_non_finite_numbers: refuses or avoids non-standard
+        `Infinity` in stored JSON
+    test_regression_negative_zero_encodes_like_zero: writes equal bytes for -0.0 and 0.0, which are
+        equal models
 """
 
 import json

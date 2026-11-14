@@ -5,7 +5,19 @@ test_spots.py --- tests creating, copying, deleting, regrouping and relabeling s
 
 Contains:
     test_*(): one behavior of showpy.cast.spots each
-    test_regression_*(): one audited lock defect each (pinned sets, renames, force)
+    test_regression_add_spot_refuses_a_pinned_set: refuses an unpinned placement in a pinned set
+    test_regression_add_spots_along_refuses_a_pinned_set: raises LockedError for a curve fill into a
+        pinned set
+    test_regression_fill_spots_refuses_a_pinned_set: raises LockedError for an area fill into a
+        pinned set
+    test_regression_duplicate_spots_refuses_a_pinned_set: raises LockedError for copies written into
+        a pinned set
+    test_regression_regroup_keeps_a_pinned_spot_protected: refuses to regroup a pinned spot, or
+        regroups it with the pin following
+    test_regression_relabel_keeps_a_pinned_spot_protected: refuses to relabel a pinned spot, or
+        relabels it with the pin following
+    test_regression_cast_edits_accept_force: gives every cast edit a `force` parameter like
+        delete_spots
 """
 
 from datetime import UTC, datetime

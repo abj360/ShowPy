@@ -4,8 +4,10 @@
 test_motion_stats.py --- tests speed, travel direction and motion analysis over time
 
 Contains:
-    test_regression_motion_helpers_accept_a_custom_motion_registry: UP-9.2-32
-    test_regression_energy_curve_rejects_negative_resolution: UP-9.2-36
+    test_regression_motion_helpers_accept_a_custom_motion_registry: analyses a show that uses a
+        custom-registered motion
+    test_regression_energy_curve_rejects_negative_resolution: raises a ShowPyError, not numpy
+        ValueError, for a negative per_count
 """
 
 import math

@@ -6,7 +6,14 @@ test_notes.py --- tests adding, editing, finding and drafting design notes
 Contains:
     FakeDrafter: records calls and returns canned drafts, or raises a canned error
     test_*(): one behavior of showpy.notes.notes each
-    test_regression_*(): one audited note defect each (area anchor, drafts, naive time)
+    test_regression_degenerate_area_anchor_never_leaks_shapely_errors: rejects a two-point area
+        anchor, or finds it without a Shapely ValueError
+    test_regression_accept_draft_accepts_a_hidden_draft_already_in_the_show: makes a hidden draft
+        that is already in the show visible
+    test_regression_accept_draft_rejects_blank_text: rejects a draft whose text is blank, as
+        add_note does
+    test_regression_note_rejects_a_naive_datetime: rejects a created_at without a time zone, which
+        cannot be compared
 """
 
 from datetime import UTC, datetime

@@ -5,7 +5,12 @@ test_selection.py --- tests the Selection set algebra
 
 Contains:
     test_*(): one behavior of showpy.core.selection each
-    test_regression_*(): one audited Selection defect each (bare string, copy, equality)
+    test_regression_selection_rejects_a_bare_string: rejects `ids="T12"` instead of splitting it
+        into characters
+    test_regression_selection_model_copy_keeps_ids_unique: deduplicates IDs on model_copy as the
+        constructor does
+    test_regression_selection_equality_ignores_the_description: compares selections by IDs, not by
+        how they were described
 """
 
 import pytest

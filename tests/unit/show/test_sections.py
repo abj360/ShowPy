@@ -4,12 +4,19 @@
 test_sections.py --- tests splitting shows into movements and joining them back
 
 Contains:
-    test_regression_join_after_split_keeps_a_zone_window_across_the_split: UP-9.7-47
-    test_regression_join_after_split_keeps_markers_that_repeat_a_label: UP-9.7-48
-    test_regression_join_after_split_keeps_one_facing_override_across_the_split: UP-9.7-49
-    test_regression_split_does_not_leave_a_ramp_longer_than_its_section: UP-9.7-50
-    test_regression_split_drops_audio_whose_section_starts_after_the_half_ends: UP-9.7-86
-    test_regression_split_puts_a_cue_in_one_half_only: UP-9.7-87
+    test_regression_join_after_split_restores_the_show: restores the show exactly when its two split
+        sections are joined again
+    test_regression_join_after_split_keeps_a_zone_window_across_the_split: rejoins a zone window cut
+        by a split into the original window
+    test_regression_join_after_split_keeps_markers_that_repeat_a_label: keeps a marker whose label
+        repeats at another count across split and join
+    test_regression_join_after_split_keeps_one_facing_override_across_the_split: rejoins a facing
+        override cut by a split into one override
+    test_regression_split_does_not_leave_a_ramp_longer_than_its_section: clips a tempo ramp to the
+        length of the section it ends up in
+    test_regression_split_drops_audio_whose_section_starts_after_the_half_ends: keeps an audio track
+        out of a half that ends before the track's section
+    test_regression_split_puts_a_cue_in_one_half_only: keeps cue c1 in a single half of a split
 """
 
 from datetime import UTC, datetime
@@ -138,6 +145,7 @@ def test_join_disjoint_sections_and_clashes() -> None:
 
 
 def test_regression_join_after_split_restores_the_show() -> None:
+    """Restores the show exactly when its two split sections are joined again."""
     show = opener_show()
     assert join_sections(*split_section(show, "2")) == show
 

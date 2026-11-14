@@ -5,7 +5,16 @@ test_measures.py --- tests 1-based measure labels, measure lookups and mid-show 
 
 Contains:
     test_*(): one behavior of showpy.time.measures each
-    test_regression_*(): one audited measure defect each (zero, NaN, negative, duplicates)
+    test_regression_zero_measure_length_is_a_clean_error: rejects `counts_per_measure=0` with a
+        ShowPyError, not ZeroDivisionError
+    test_regression_nan_measure_length_is_a_clean_error: rejects a NaN measure length with a
+        ShowPyError, not ValueError
+    test_regression_negative_measure_length_is_rejected: rejects a negative measure length instead
+        of labeling measure -1
+    test_regression_duplicate_change_counts_follow_input_order: rejects two changes at one count, or
+        lets the later one win
+    test_regression_fractional_measure_numbers_are_rejected: rejects measure 2.5 instead of
+        computing a count for it
 """
 
 import math

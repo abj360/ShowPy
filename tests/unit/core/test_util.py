@@ -5,7 +5,54 @@ test_util.py --- tests ID sorting, ranges, float comparison, hashing and point n
 
 Contains:
     test_*(): one behavior of showpy.core.util each
-    test_regression_*(): one audited util defect each (hash seed, hashing, points, ranges)
+    test_regression_format_ranges_ties_ignore_hash_seed: orders natural-sort ties the same under
+        every hash seed
+    test_regression_seeded_rng_rejects_none: rejects a missing seed instead of returning an unseeded
+        generator
+    test_regression_seeded_rng_rejects_negative_seed: rejects a negative seed instead of leaking
+        numpy's ValueError
+    test_regression_content_hash_equal_for_signed_zero: hashes 0.0 and -0.0 alike
+    test_regression_content_hash_equal_for_int_and_float_one: hashes 1 and 1.0 alike
+    test_regression_content_hash_separates_string_from_object: keeps the string '{"a":1}' and the
+        object {"a": 1} apart
+    test_regression_content_hash_separates_int_keys_from_string_keys: keeps {1: "a"} and {"1": "a"}
+        apart
+    test_regression_content_hash_mixed_key_types_never_leak_type_error: hashes (order-independently)
+        or rejects mixed key types, never a TypeError
+    test_regression_content_hash_distinguishes_large_arrays: tells two different 2,000-element
+        arrays apart
+    test_regression_content_hash_hashes_nested_models_by_content: hashes a nested model by its
+        fields, not by a truncated repr
+    test_regression_content_hash_rejects_nan: rejects NaN, which has no standard JSON form
+    test_regression_content_hash_rejects_lone_surrogate: rejects a lone surrogate with a
+        ShowPyError, not UnicodeEncodeError
+    test_regression_as_points_drops_z_of_3d_linestring: keeps x and y of each 3D vertex instead of
+        scrambling the flat coordinates
+    test_regression_as_points_accepts_3d_point: reads a 3D Shapely point as one (x, y) row
+    test_regression_as_points_multipart_geometry_is_handled: flattens or rejects multi-part geometry
+        with a ShowPyError
+    test_regression_as_points_returns_a_copy: returns data the caller can mutate without corrupting
+        its own array
+    test_regression_natural_sort_survives_unicode_digits: sorts IDs holding non-ASCII digits such as
+        superscript two
+    test_regression_natural_sort_survives_huge_numbers: sorts IDs whose number has over 4,300 digits
+    test_regression_approx_equal_treats_equal_infinities_as_equal: treats inf and inf as equal
+        without a RuntimeWarning
+    test_regression_chunk_counts_sum_exactly_to_total: splits so the parts sum exactly to the total
+    test_regression_chunk_counts_rejects_nan_total: rejects a NaN total
+    test_regression_id_split_is_linear_on_long_ids: splits a 10,000-character ID in linear time
+    test_regression_range_check_happens_before_expansion: checks range endpoints before building
+        300,000 strings
+    test_regression_parse_range_reads_ranges_with_digits_in_the_prefix: expands `P1x1-P1x3` whose
+        prefix holds a digit
+    test_regression_parse_range_reads_ranges_with_dash_prefixes: expands `flag-1-flag-3` the way
+        `flag-*` already matches
+    test_regression_parse_range_does_not_read_unicode_digits_as_ascii: does not read the
+        Arabic-Indic digit three as 3
+    test_regression_format_ranges_output_parses_back: writes ranges that parse_range reads back to
+        the same IDs
+    test_regression_parse_range_honors_padding_of_the_last_endpoint: keeps the spelling of the last
+        endpoint or rejects mixed padding
 """
 
 import math

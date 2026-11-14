@@ -11,12 +11,15 @@ Contains:
     test_regression_track_gain_is_applied(): plays a track at its gain
     test_regression_frames_cover_the_half_open_range(): renders frames over [t0, t1)
     test_regression_adjacent_ranges_do_not_duplicate_the_boundary_frame(): avoids a doubled frame
-    test_regression_mp4_is_faststart(): puts the moov atom before mdat
-    test_regression_mp4_carries_bt709_colour_tags(): tags the stream BT.709
+    test_regression_mp4_is_faststart(): puts the moov atom before mdat so web playback starts
+        without the whole file
+    test_regression_mp4_carries_bt709_colour_tags(): tags the stream BT.709 so players do not guess
+        the colour matrix
     test_regression_video_canvas_caps_the_pixel_count(): rejects a 42,000 px wide canvas
     test_regression_frames_do_not_rebuild_the_cast_ids_per_spot(): builds the ID list once a frame
     test_regression_ffmpeg_start_failure_is_wrapped(): wraps a failed ffmpeg start in StorageError
-    test_regression_audio_mux_has_a_timeout(): passes a timeout to the ffmpeg mux
+    test_regression_audio_mux_has_a_timeout(): passes a timeout to the ffmpeg mux so a stuck process
+        cannot hang the export
     test_regression_negative_sync_offset_delays_the_audio(): delays music for a negative offset
     test_regression_audio_section_limits_playback(): keeps a track silent before its section
 """

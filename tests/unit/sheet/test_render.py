@@ -4,12 +4,17 @@
 test_render.py --- tests the sheet canvas mapping and SVG, PNG and PDF rendering
 
 Contains:
-    Existing behavior tests, unlisted
-    test_regression_pdf_embeds_no_wall_clock_dates()
-    test_regression_svg_is_well_formed_with_control_characters_in_names()
-    test_regression_svg_draws_zone_holes()
-    test_regression_png_draws_zone_holes()
-    test_regression_canvas_shows_a_front_ensemble_below_the_sheet()
+    test_*(): one behavior of showpy.sheet.render each
+    test_regression_pdf_embeds_no_wall_clock_dates(): writes no clock-derived CreationDate or
+        ModDate into the PDF
+    test_regression_svg_is_well_formed_with_control_characters_in_names(): keeps the SVG parseable
+        when names and labels hold control characters
+    test_regression_svg_draws_zone_holes(): draws zone holes in the SVG, so a holed zone differs
+        from a solid one
+    test_regression_png_draws_zone_holes(): draws zone holes in the PNG, so a holed zone differs
+        from a solid one
+    test_regression_canvas_shows_a_front_ensemble_below_the_sheet(): fits a point 2 m in front of
+        the sheet inside the default canvas
 """
 
 import io

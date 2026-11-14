@@ -4,12 +4,20 @@
 test_avoid.py --- tests advisory gap finding and fix suggestions
 
 Contains:
-    test_regression_suggested_waypoint_is_reached_at_its_count_on_eased_rows: UP-9.2-17
-    test_regression_min_gaps_with_top_zero_returns_nothing: UP-9.2-28
-    test_regression_min_gaps_ignores_spots_before_their_entrance: UP-9.2-29
-    test_regression_suggested_waypoints_never_shrink_the_gap: UP-9.2-30
-    test_regression_avoid_helpers_accept_a_custom_motion_registry: UP-9.2-31
-    test_regression_closest_approach_of_empty_track_raises_showpy_error: UP-9.2-35
+    test_regression_reassign_hint_names_the_real_module: names showpy.choreo.match_ops.apply_match
+        in the hint for a reassign fix
+    test_regression_suggested_waypoint_is_reached_at_its_count_on_eased_rows: puts a suggested bend
+        where it says, at the count it names, on an eased row
+    test_regression_min_gaps_with_top_zero_returns_nothing: returns an empty list, or a ShowPyError,
+        for top=0 instead of IndexError
+    test_regression_min_gaps_ignores_spots_before_their_entrance: skips the time a spot is parked
+        off the field, so it cannot collide there
+    test_regression_suggested_waypoints_never_shrink_the_gap: returns only waypoint fixes that widen
+        the pair's gap
+    test_regression_avoid_helpers_accept_a_custom_motion_registry: analyses a show that uses a
+        custom-registered motion
+    test_regression_closest_approach_of_empty_track_raises_showpy_error: raises a ShowPyError, not
+        IndexError, for an empty track
 """
 
 import math
@@ -123,6 +131,7 @@ def test_suggest_reassignment_uncrosses_a_swap() -> None:
 
 
 def test_regression_reassign_hint_names_the_real_module() -> None:
+    """Names showpy.choreo.match_ops.apply_match in the hint for a reassign fix."""
     fix = Fix(kind="reassign", params={}, new_gap=1.0, max_speed_after=0.5)
     with pytest.raises(PathError) as info:
         apply_fix(crossing_show().transition(TID), fix)

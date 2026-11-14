@@ -5,7 +5,38 @@ test_models.py --- tests Shape, Group, Spot, LabelScheme and Cast
 
 Contains:
     test_*(): one behavior of showpy.cast.models each
-    test_regression_*(): one audited model defect each (hash order, mutability, constraints)
+    test_regression_spot_tags_serialize_in_a_stable_order: dumps Spot.tags identically under every
+        hash seed
+    test_regression_cast_selections_serialize_in_a_stable_order: dumps Cast.selections identically
+        under every hash seed
+    test_regression_cast_content_hash_ignores_hash_seed: gives one content hash for a cast under
+        every hash seed
+    test_regression_group_limits_are_immutable: refuses in-place edits to Group.limits of a frozen
+        model
+    test_regression_cast_groups_are_immutable: refuses `cast.groups.pop(...)` on a frozen cast
+    test_regression_cast_selections_are_immutable: refuses in-place edits to Cast.selections
+    test_regression_label_scheme_prefixes_are_immutable: refuses in-place edits to
+        LabelScheme.prefixes
+    test_regression_group_rejects_negative_default_radius: rejects a negative default radius
+    test_regression_group_rejects_invalid_color: rejects a color that is not a hex string
+    test_regression_group_rejects_nan_limits: rejects a NaN limit override
+    test_regression_shape_rejects_negative_size_on_the_inactive_kind: rejects a negative rectangle
+        width on a circle
+    test_regression_label_scheme_rejects_negative_pad: rejects pad=-3 with a ShowPyError, not a bare
+        ValueError from formatting
+    test_regression_label_scheme_rejects_huge_pad: rejects pad=10**7 instead of building 10 MB
+        labels
+    test_regression_cast_rejects_group_key_mismatch: rejects a group stored under a key that is not
+        its own
+    test_regression_cast_rejects_selections_naming_missing_spots: rejects a named selection that
+        holds a spot the cast lacks
+    test_regression_cast_rejects_prefixes_for_unknown_groups: rejects a label-scheme prefix that
+        names no group
+    test_regression_spot_rejects_empty_id: rejects an empty spot ID, which no selector can name
+    test_regression_spot_rejects_ids_with_spaces_or_operators: rejects IDs holding spaces,
+        parentheses or operators
+    test_regression_spot_rejects_reserved_selector_words: rejects IDs that collide with selector
+        syntax such as `all`
 """
 
 import math

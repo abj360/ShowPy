@@ -4,12 +4,17 @@
 test_bounds.py --- tests surface and walkable tests, landmark lookup, nearest landmarks, zones
 
 Contains:
-    Existing behavior tests, unlisted
-    test_regression_landmark_anchor_ignores_repeated_closing_vertex()
-    test_regression_landmark_anchor_is_the_area_centroid()
-    test_regression_nearest_landmarks_rejects_fractional_k()
-    test_regression_nearest_landmarks_rejects_nan_point()
-    test_regression_nearest_landmarks_rejects_unknown_kind()
+    test_*(): one behavior of showpy.sheet.bounds each
+    test_regression_landmark_anchor_ignores_repeated_closing_vertex(): counts a repeated closing
+        vertex once when anchoring an area
+    test_regression_landmark_anchor_is_the_area_centroid(): anchors an area at its centroid, not the
+        mean of its vertices
+    test_regression_nearest_landmarks_rejects_fractional_k(): rejects k=1.5 with a ShowPyError, not
+        TypeError
+    test_regression_nearest_landmarks_rejects_nan_point(): rejects a NaN point instead of returning
+        arbitrary distances
+    test_regression_nearest_landmarks_rejects_unknown_kind(): rejects an unknown landmark kind
+        instead of returning an empty list
 """
 
 import pytest

@@ -4,16 +4,25 @@
 test_templates.py --- tests built-in sheet templates, lookup, customization, edits and saving
 
 Contains:
-    Existing behavior tests, unlisted
-    test_regression_blank_sheets_with_different_content_get_different_refs()
-    test_regression_blank_sheet_rejects_infinite_width()
-    test_regression_customize_rejects_non_numeric_size()
-    test_regression_customize_rejects_bad_name_type()
-    test_regression_customize_resize_updates_ref_and_name()
-    test_regression_customize_resize_does_not_keep_items_off_the_sheet()
-    test_regression_get_sheet_without_version_returns_latest_saved()
-    test_regression_sheet_templates_rejects_unknown_surface_type()
-    test_regression_customize_resize_does_not_keep_landmarks_off_the_sheet()
+    test_*(): one behavior of showpy.sheet.templates each
+    test_regression_blank_sheets_with_different_content_get_different_refs(): gives blank sheets
+        that differ in content different refs
+    test_regression_blank_sheet_rejects_infinite_width(): rejects an infinite width instead of
+        building a sheet
+    test_regression_customize_rejects_non_numeric_size(): rejects a non-numeric size with a
+        ShowPyError, not ValueError
+    test_regression_customize_rejects_bad_name_type(): rejects a non-string name with a ShowPyError,
+        not a pydantic error
+    test_regression_customize_resize_updates_ref_and_name(): refreshes the ref and name of a resized
+        sheet instead of keeping stale ones
+    test_regression_customize_resize_does_not_keep_items_off_the_sheet(): rejects or drops zones
+        that lie off the sheet after a resize
+    test_regression_get_sheet_without_version_returns_latest_saved(): returns the latest saved
+        version for a versionless ref, as documented
+    test_regression_sheet_templates_rejects_unknown_surface_type(): rejects an unknown surface type
+        instead of returning an empty list
+    test_regression_customize_resize_does_not_keep_landmarks_off_the_sheet(): rejects or drops
+        landmarks that lie off the sheet after a resize
 """
 
 import pytest

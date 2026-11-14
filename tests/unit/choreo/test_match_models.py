@@ -6,7 +6,9 @@ test_match_models.py --- tests MatchOptions validation, MatchResult alignment an
 Contains:
     test_regression_match_options_rejects_nan_weights: rejects a NaN penalty weight
     test_regression_match_options_rejects_negative_no_backward: rejects a negative no_backward
+        penalty
     test_regression_match_options_rejects_bool_slot_index: rejects True as a pinned slot index
+        instead of pinning to slot 1
 """
 
 import math

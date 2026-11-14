@@ -5,16 +5,27 @@ test_form_ops.py --- tests form edits, reordering, split and merge, morphs and e
 
 Contains:
     test_regression_edit_block_rows_updates_slot_count: keeps a block's slot count in step with its
+        edited rows
     test_regression_edit_custom_points_updates_slot_count: keeps a custom form's slot count in step
+        with its edited points
     test_regression_edit_n_none_clears_slot_count_on_curve_forms: clears a curve form's n when
+        edit(n=None) asks for it
     test_regression_edit_rejects_more_members_than_slots: rejects members beyond the form's slots
+        instead of accepting them
     test_regression_transform_form_skewed_circle_slots_map_exactly: places a skewed circle's slots
+        exactly where the matrix maps them
     test_regression_transform_form_scales_windowed_spacing: scales a spacing window with a uniform
+        scale of the form
     test_regression_transform_form_scales_interval_spacing: keeps the slot count of an
+        interval-spaced line under a uniform scale
     test_regression_transform_form_maps_audience_facings: maps audience facings through the matrix
+        like fixed ones
     test_regression_morph_targets_rejects_members_without_slots: raises a ShowPyError, not
+        IndexError, when the target has fewer slots
     test_regression_reorder_by_x_rejects_members_without_slots: raises a ShowPyError, not
+        ValueError, when members outnumber slots
     test_regression_edit_rejects_non_numeric_radius_with_show_py_error: raises a ShowPyError, not a
+        pydantic error, for edit(radius="abc")
 """
 
 import numpy as np

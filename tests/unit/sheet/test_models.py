@@ -4,16 +4,22 @@
 test_models.py --- tests sheet data classes: landmarks, zones, grids, coordinate systems
 
 Contains:
-    Existing behavior tests, unlisted
-    test_regression_sheet_rejects_negative_size()
-    test_regression_sheet_rejects_one_point_outline()
-    test_regression_sheet_rejects_malformed_ref()
-    test_regression_sheet_rejects_duplicate_landmark_ids()
-    test_regression_region_rejects_two_point_ring()
-    test_regression_region_rejects_bow_tie_ring()
-    test_regression_guide_line_rejects_no_points()
-    test_regression_sheet_rejects_landmark_alias_colliding_with_name()
-    test_regression_show_rejects_zone_id_shared_with_sheet()
+    test_*(): one behavior of showpy.sheet.models each
+    test_regression_sheet_rejects_negative_size(): rejects a negative sheet size at construction
+    test_regression_sheet_rejects_one_point_outline(): rejects an outline with fewer than three
+        points at construction
+    test_regression_sheet_rejects_malformed_ref(): rejects the ref "nonsense" at construction
+    test_regression_sheet_rejects_duplicate_landmark_ids(): rejects two landmarks sharing an ID at
+        construction
+    test_regression_region_rejects_two_point_ring(): rejects a two-point region ring, which has no
+        area
+    test_regression_region_rejects_bow_tie_ring(): rejects a self-intersecting bow-tie ring
+    test_regression_guide_line_rejects_no_points(): rejects a guide line with no points at
+        construction
+    test_regression_sheet_rejects_landmark_alias_colliding_with_name(): rejects landmarks whose name
+        and alias collide instead of resolving by order
+    test_regression_show_rejects_zone_id_shared_with_sheet(): rejects a show zone reusing a sheet
+        zone ID
 """
 
 import pytest

@@ -4,33 +4,58 @@
 test_validate.py --- tests structural validation of sets, paths, dependencies and whole shows
 
 Contains:
-    test_regression_validate_show_reports_form_members_naming_unknown_spots: UP-9.7-61
-    test_regression_validate_show_reports_forms_of_a_missing_set: UP-9.7-62
-    test_regression_validate_show_reports_sets_declaring_missing_forms: UP-9.7-63
-    test_regression_validate_show_reports_form_keys_that_differ_from_ids: UP-9.7-64
-    test_regression_validate_show_reports_members_whose_placements_do_not_point_back: UP-9.7-65
-    test_regression_validate_show_reports_pins_naming_missing_items: UP-9.7-66
-    test_regression_validate_show_reports_pins_on_unparsable_transitions: UP-9.7-67
-    test_regression_validate_show_reports_pins_that_disagree_with_placement_flags: UP-9.7-68
-    test_regression_validate_show_reports_notes_anchored_to_missing_items: UP-9.7-69
-    test_regression_validate_show_reports_duplicate_note_ids: UP-9.7-70
-    test_regression_validate_show_reports_facing_overrides_naming_unknown_spots: UP-9.7-71
-    test_regression_validate_show_reports_facing_overrides_past_the_show: UP-9.7-72
-    test_regression_validate_show_reports_zone_selectors_naming_unknown_spots: UP-9.7-73
-    test_regression_validate_show_reports_degenerate_zones: UP-9.7-74
-    test_regression_validate_show_reports_selections_naming_unknown_spots: UP-9.7-75
-    test_regression_validate_show_reports_infinite_set_counts: UP-9.7-76
-    test_regression_validate_show_reports_non_finite_tempo: UP-9.7-77
-    test_regression_validate_show_reports_non_finite_waypoints: UP-9.7-78
-    test_regression_validate_show_warns_about_placements_far_off_the_sheet: UP-9.7-79
-    test_regression_validate_show_reports_unpinned_sheet_without_a_store: UP-9.7-80
-    test_regression_validate_show_reports_empty_ids: UP-9.7-81
-    test_regression_validate_show_reports_set_ids_that_cannot_be_stored: UP-9.7-82
-    test_regression_validate_show_reports_placements_of_inactive_spots: UP-9.7-83
-    test_regression_validate_show_reports_a_nonzero_first_set_count: UP-9.7-84
-    test_regression_validate_show_reports_nan_counts_on_the_first_set: UP-9.7-88
-    test_regression_validate_show_reports_nan_waypoints: UP-9.7-89
-    test_regression_validate_show_reports_comments_anchored_to_missing_items: UP-9.7-90
+    test_regression_validate_show_reports_form_members_naming_unknown_spots: reports a form member
+        that is not in the cast
+    test_regression_validate_show_reports_forms_of_a_missing_set: reports a form whose set does not
+        exist
+    test_regression_validate_show_reports_sets_declaring_missing_forms: reports a set that lists a
+        form that does not exist
+    test_regression_validate_show_reports_form_keys_that_differ_from_ids: reports a form stored
+        under a key other than its ID
+    test_regression_validate_show_reports_members_whose_placements_do_not_point_back: reports a form
+        member whose placement names no form
+    test_regression_validate_show_reports_pins_naming_missing_items: reports a form pin on a form
+        that does not exist
+    test_regression_validate_show_reports_pins_on_unparsable_transitions: reports a transition pin
+        whose ID does not parse
+    test_regression_validate_show_reports_pins_that_disagree_with_placement_flags: reports a pin
+        record whose placements are not flagged pinned
+    test_regression_validate_show_reports_notes_anchored_to_missing_items: reports a note anchored
+        to a set that does not exist
+    test_regression_validate_show_reports_duplicate_note_ids: reports two notes with one ID
+    test_regression_validate_show_reports_facing_overrides_naming_unknown_spots: reports a facing
+        override on a spot that does not exist
+    test_regression_validate_show_reports_facing_overrides_past_the_show: reports a facing override
+        that starts after the show ends
+    test_regression_validate_show_reports_zone_selectors_naming_unknown_spots: reports a zone that
+        applies to a spot that does not exist
+    test_regression_validate_show_reports_degenerate_zones: reports a zone whose polygon has no area
+    test_regression_validate_show_reports_selections_naming_unknown_spots: reports a named selection
+        holding a spot that does not exist
+    test_regression_validate_show_reports_infinite_set_counts: reports a set whose counts are
+        infinite
+    test_regression_validate_show_reports_non_finite_tempo: reports a tempo section whose tempo is
+        infinite
+    test_regression_validate_show_reports_non_finite_waypoints: reports a path waypoint with an
+        infinite coordinate
+    test_regression_validate_show_warns_about_placements_far_off_the_sheet: warns about a placement
+        a million meters off the sheet
+    test_regression_validate_show_reports_unpinned_sheet_without_a_store: reports an unpinned sheet
+        even when no sheet store is passed
+    test_regression_validate_show_reports_empty_ids: reports an empty show, note or form ID, each
+        alone
+    test_regression_validate_show_reports_set_ids_that_cannot_be_stored: reports a set ID that no
+        workspace path can hold
+    test_regression_validate_show_reports_placements_of_inactive_spots: reports an on-field
+        placement of a spot marked inactive
+    test_regression_validate_show_reports_a_nonzero_first_set_count: reports a first set that has
+        counts
+    test_regression_validate_show_reports_nan_counts_on_the_first_set: reports NaN counts on the
+        first set by name
+    test_regression_validate_show_reports_nan_waypoints: reports a path waypoint with a NaN
+        coordinate
+    test_regression_validate_show_reports_comments_anchored_to_missing_items: reports a comment
+        anchored to a set that does not exist
 """
 
 import math

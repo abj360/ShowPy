@@ -4,15 +4,23 @@
 test_replace.py --- tests sheet replacement: fits, placements, forms, paths, locks and the report
 
 Contains:
-    Existing behavior tests, unlisted
-    test_regression_football_template_swap_keeps_positions()
-    test_regression_similarity_fit_rejects_mirrored_landmarks()
-    test_regression_similarity_fit_rejects_coincident_targets()
-    test_regression_similarity_fit_empty_input_raises_without_warning()
-    test_regression_similarity_fit_rejects_nan_input()
-    test_regression_similarity_fit_rejects_wrong_shape()
-    test_regression_scale_mapping_rejects_zero_size_sheet()
-    test_regression_fit_ignores_same_named_centers_with_different_meaning()
+    test_*(): one behavior of showpy.sheet.replace each
+    test_regression_football_template_swap_keeps_positions(): keeps every spot still when swapping
+        football fields
+    test_regression_similarity_fit_rejects_mirrored_landmarks(): rejects a mirrored landmark set
+        instead of fitting a wrong scale
+    test_regression_similarity_fit_rejects_coincident_targets(): rejects coincident target landmarks
+        instead of collapsing the show
+    test_regression_similarity_fit_empty_input_raises_without_warning(): raises GeometryError for no
+        matches without a numpy RuntimeWarning
+    test_regression_similarity_fit_rejects_nan_input(): raises GeometryError for NaN points instead
+        of leaking LinAlgError
+    test_regression_similarity_fit_rejects_wrong_shape(): raises GeometryError for non-2D points
+        instead of leaking numpy errors
+    test_regression_scale_mapping_rejects_zero_size_sheet(): raises a ShowPyError for a zero-size
+        source sheet, not ZeroDivisionError
+    test_regression_fit_ignores_same_named_centers_with_different_meaning(): keeps positions when
+        only "center" differs in meaning between equal-size sheets
 """
 
 import warnings

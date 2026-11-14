@@ -10,7 +10,8 @@ Contains:
     test_placed_text_refuses_a_hex_run_without_a_tounicode_map(): fails clearly without a CMap
     test_placed_text_reads_literal_runs(): reads literal text runs
     test_regression_wide_table_stays_on_the_page(): keeps a 40-column table inside the page width
-    test_regression_long_title_is_clipped_to_the_page(): clips or wraps a title wider than the page
+    test_regression_long_title_is_clipped_to_the_page(): clips or wraps a title wider than the page;
+        titles are never clipped today
     test_regression_non_latin_names_are_not_replaced_by_question_marks(): prints non-Latin names
     test_coordinate_sheet_pdf_ignores_hash_seed(): writes one PDF per show under any hash seed
 """

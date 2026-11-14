@@ -5,7 +5,9 @@ test_errors.py --- tests the ShowPyError family: fields, codes, hierarchy and re
 
 Contains:
     test_*(): one behavior of showpy.core.errors each
-    test_regression_*(): one audited defect each (pickling and deep copy of every error)
+    test_regression_every_error_survives_pickling: round-trips every ShowPyError subclass through
+        pickle
+    test_regression_every_error_survives_deepcopy: deep-copies every ShowPyError subclass
 """
 
 import copy
