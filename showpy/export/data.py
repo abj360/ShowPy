@@ -5,7 +5,6 @@ data.py --- native JSON interchange, per-count frames, text tables and format pl
 
 Contains:
     SCHEMA_TAG: names the interchange format, `showpy.show.v1`
-    LEGACY_SCHEMA_TAGS: lists older tags `import_json()` still reads
     export_json(): dumps a show to a tagged JSON-safe document
     import_json(): loads a show from a tagged document, refusing unknown schemas
     export_frames_csv(): samples every spot through the engine, per count, as CSV
@@ -38,7 +37,6 @@ from showpy.show.models import Show
 from showpy.time.clock import count_to_seconds
 
 SCHEMA_TAG = "showpy.show.v1"
-LEGACY_SCHEMA_TAGS = ("stage.show.v1",)
 SCHEMA_KEY = "schema"
 SHOW_KEY = "show"
 ALWAYS_EXPORTED = "id"
@@ -102,7 +100,7 @@ def import_json(d: Mapping[str, Any]) -> Show:
     'show-1'
     """
     tag = d.get(SCHEMA_KEY)
-    if tag != SCHEMA_TAG and tag not in LEGACY_SCHEMA_TAGS:
+    if tag != SCHEMA_TAG:
         raise SchemaError(
             f"document schema is {tag!r}, not {SCHEMA_TAG!r}",
             hint=f'export with export_json(); documents start {{"schema": "{SCHEMA_TAG}"}}',

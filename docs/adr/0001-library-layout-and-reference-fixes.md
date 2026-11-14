@@ -172,3 +172,9 @@ product, and the repository split above is history only. Apps, agents and checke
 consumers: they pin a tagged release and use the public API; ShowPy never imports one. The API
 reference moved to `docs/showpy-api-reference.md`. Where the sections above say "locked
 checker", read "a consumer's checks"; the rule that ShowPy never weakens a check stays.
+
+## Addendum 2026-11-13: no legacy interchange tag
+
+The earlier addendum's legacy reading of `stage.show.v1` is withdrawn by the maintainer's decision.
+`import_json` accepts only `showpy.show.v1`, and a document tagged `stage.show.v1` is rejected like
+any other unknown tag. Re-tag old documents before import.

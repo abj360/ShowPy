@@ -15,6 +15,7 @@ Contains:
     test_regression_to_text_aligns_wide_cjk_characters(): pads wide characters by display width
     test_regression_export_json_include_accepts_a_single_field_name(): treats a string as one field
     test_regression_import_json_rejects_a_non_mapping_with_schema_error(): raises SchemaError
+    test_import_json_rejects_the_old_stage_tag(): refuses a document tagged stage.show.v1
 """
 
 import csv
@@ -29,7 +30,6 @@ from showpy.core.errors import SchemaError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.export.data import (
     DEFAULT_FORMATS,
-    LEGACY_SCHEMA_TAGS,
     SCHEMA_TAG,
     as_table,
     export_frames_csv,
@@ -189,12 +189,12 @@ def test_export_json_writes_showpy_tag() -> None:
     assert SCHEMA_TAG == "showpy.show.v1"
 
 
-def test_regression_import_json_reads_legacy_stage_tag() -> None:
-    show = rich_show()
-    current = json.loads(json.dumps(export_json(show)))
-    legacy = {**current, "schema": "stage.show.v1"}
-    assert LEGACY_SCHEMA_TAGS == ("stage.show.v1",)
-    assert import_json(legacy) == import_json(current) == show
+def test_import_json_rejects_the_old_stage_tag() -> None:
+    document = {**json.loads(json.dumps(export_json(rich_show()))), "schema": "stage.show.v1"}
+    with pytest.raises(SchemaError) as caught:
+        import_json(document)
+    assert "showpy.show.v1" in str(caught.value)
+    assert "showpy.show.v1" in (caught.value.hint or "")
 
 
 def _csv_rows(text: str) -> list[list[str]]:
