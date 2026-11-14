@@ -152,6 +152,8 @@ def _created_folders(repo: FileRepository, show_id: str) -> set[str] | None:
     before = _folders(repo.root)
     try:
         _create(repo, show_id)
+    except ConflictError:
+        raise  # colliding with an existing show is the defect, not a deliberate refusal
     except StorageError:
         return None
     assert show_id in repo.shows()
@@ -189,7 +191,8 @@ def test_regression_reserved_device_show_ids_are_rejected_or_stored_safely(
 def test_regression_trailing_dot_show_id_is_rejected_or_stored_safely(tmp_path: Path) -> None:
     """Rejects a show ID ending in a dot or stores it under another name (audit 9.7 item 8)."""
     created = _created_folders(FileRepository(tmp_path), "abc.")
-    assert created is None or "abc." not in created
+    # Windows silently strips a trailing dot, so "abc" is the raw ID stored unsafely too.
+    assert created is None or not any(name.rstrip(". ") == "abc" for name in created)
 
 
 @pytest.mark.defect("UP-9.7-17")
