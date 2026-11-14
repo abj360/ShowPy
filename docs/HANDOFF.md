@@ -7,14 +7,14 @@ Last updated: 2026-11-13
 
 ## Where things stand
 
-| Item          | Value                                                                                       |
-| ------------- | ------------------------------------------------------------------------------------------- |
-| Repository    | `abj360/ShowPy` (private); split into its own repository on 2026-11-12 with full history    |
-| Gates         | `nox -s tests`: 1513 passed, 528 xfailed (2026-11-13); ruff, mypy `--strict`, pyright clean |
-| CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main   |
-| Defect ledger | `Ledger: 528 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-13)     |
-| Out of scope  | `stagecheck`, `showpy.packs` and `showpy.index`, by the user's decision (2026-11-11)        |
-| Pushing       | needs explicit approval                                                                     |
+| Item          | Value                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------- |
+| Repository    | `abj360/ShowPy` (private); split into its own repository on 2026-11-12 with full history                  |
+| Gates         | `nox -s tests`: about 1,500 passed, `Ledger: 528 open` (2026-11-13); ruff, mypy `--strict`, pyright clean |
+| CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main                 |
+| Defect ledger | `Ledger: 528 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-13)                   |
+| Out of scope  | `stagecheck`, `showpy.packs` and `showpy.index`, by the user's decision (2026-11-11)                      |
+| Pushing       | needs explicit approval                                                                                   |
 
 **Repository split (2026-11-12).** Agent-only code moved to a separate consumer repository with
 its history: set-script builds and the bubblewrap sandbox (`show/build.py`, `build_models.py`,

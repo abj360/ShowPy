@@ -543,10 +543,10 @@ PERF, C90, TID`. Set `mccabe.max-complexity = 12`; ban `tests` with
 ### Phase exit
 
 - [ ] Run `superpowers:verification-before-completion`: the full nox gate, plus
-      `docker compose -f docker/docker-compose.yml up --build --exit-code-from stage`.
+      `docker compose -f docker/docker-compose.yml up --build --exit-code-from showpy`.
 - [ ] Run `code-review` at medium on the branch, then the
       `superpowers:finishing-a-development-branch` PR. The body has three parts: What (the safety
       net before the Phase 1 fixes), How tested, and Checklist.
 - [ ] Ask the user before pushing. After CI is green on all 9 matrix cells, merge and tag
       `v0.2.0`, with release notes calling out the distribution rename to ShowPy and the new
-      `stage.__version__`.
+      `showpy.__version__`.

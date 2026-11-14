@@ -8,7 +8,7 @@ Drill design is slow because every dot, every move and every check is manual. Sh
 
 - **One source of motion.** The canvas, the checks, the exports and the video all read positions from one `PathEngine`, so they never disagree. Its collision segments stay within 0.02 m of the true path. A Hypothesis property test probes 9 points per segment across 150 random paths to check this.
 - **Exact and deterministic.** Arc-length curves are exact for lines and arcs. Tempo ramps convert analytically, both ways. Randomness is seeded, and no library code reads the clock.
-- **Verified.** 1513 tests (unit, property, golden replay and doctests) pass with warnings as errors, under `mypy --strict`, pyright and ruff. 528 more are strict-xfail tests that pin open audited defects.
+- **Verified.** About 1,500 tests (unit, property, golden replay and doctests) pass with warnings as errors, under `mypy --strict`, pyright and ruff. Hundreds more are strict-xfail tests that pin open audited defects; the plugin prints the exact count (`Ledger: 528 open` on 2026-11-13).
 - **Light to import.** `import showpy` takes 2.5 ms; names load lazily.
 
 ## Features
@@ -93,7 +93,7 @@ Every public function has a runnable `>>>` example in its docstring. The full AP
        |
      choreo                        forms, match, paths, PathEngine, facing, avoid
        |
-      show                         manage, storage, history, collab, validate, build
+      show                         manage, storage, history, collab, validate
        |
      export                        publish, print, PDF, data, video
 ```
@@ -133,6 +133,8 @@ docker/     Dockerfile, docker-compose.yml
 ## Development
 
 ```bash
+export PATH=~/.nvm/versions/node/v22.23.5/bin:$PATH   # Node's bin/ first; no system node
+npm ci                      # pinned Prettier, used by the lint gate
 uv sync
 uv run pre-commit install
 uv run ruff format . && uv run ruff check .
@@ -151,7 +153,11 @@ Read `CLAUDE.md`, `CONTRIBUTING.md` and the ADRs before changing anything. The P
 | Tests           | `uv run pytest` (unit, property, golden, doctests; warnings are errors)                          | yes |
 | Golden          | `uv run pytest -m golden`                                                                        | yes |
 | Dependency scan | `pip-audit --strict --require-hashes` on the exported lockfile                                   | yes |
-| Docker          | `docker compose -f docker/docker-compose.yml build`                                              | yes |
+| Hash seeds      | `uv run nox -s hashseeds` (full suite under seeds 1 and 2)                                       | yes |
+| Slow            | `uv run nox -s slow` (generated-show properties, large golden, two seeds)                        | yes |
+| Wheel           | `uv run nox -s wheel` (build, install in a clean venv, run the Usage example)                    | yes |
+| Lowest          | `uv sync --resolution lowest-direct`, then `uv run --no-sync nox -s tests`                       | yes |
+| Docker          | `docker compose -f docker/docker-compose.yml up --build --exit-code-from showpy`                 | yes |
 
 ## Docs
 
