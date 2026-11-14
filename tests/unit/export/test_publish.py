@@ -88,6 +88,7 @@ QR_QUIET_MODULES = 4
 HUGE_QR_SIZE = 100_000
 QR_MEMORY_CAP_BYTES = 1_500_000_000
 OVERLONG_PATH = "a" * 8000
+NAIVE_TIME = datetime(2026, 11, 12, 9, 0)  # noqa: DTZ001 - the tests check it is rejected
 CONTACT = "ada@example.com"
 DESIGNER_HINT = "check the spot id or add the spot first"
 
@@ -129,7 +130,7 @@ def test_publish_uses_the_stored_revision_and_is_deterministic() -> None:
 
 def test_publish_refuses_a_naive_time_or_blank_url() -> None:
     with pytest.raises(SchemaError):
-        publish(two_set_show(), "p", BASE_URL, datetime(2026, 1, 1))
+        publish(two_set_show(), "p", BASE_URL, NAIVE_TIME)
     with pytest.raises(SchemaError):
         publish(two_set_show(), "p", " ", AT)
 
@@ -495,7 +496,7 @@ def test_regression_claim_spot_rejects_a_naive_time() -> None:
     """Rejects a claim time without a time zone (audit 9.5)."""
     show = two_set_show()
     with pytest.raises(SchemaError):
-        claim_spot(_published(show), show, performer("Ada"), "T1", datetime(2026, 11, 12, 9, 0))
+        claim_spot(_published(show), show, performer("Ada"), "T1", NAIVE_TIME)
 
 
 @pytest.mark.defect("UP-9.5-13")
@@ -512,7 +513,7 @@ def test_regression_claim_spot_rejects_a_time_before_publication() -> None:
 def test_regression_reassign_rejects_a_naive_time() -> None:
     """Rejects a reassignment time without a time zone (audit 9.5)."""
     with pytest.raises(SchemaError):
-        reassign(_published(), "T1", performer("Ada"), datetime(2026, 11, 12, 9, 0))
+        reassign(_published(), "T1", performer("Ada"), NAIVE_TIME)
 
 
 @pytest.mark.defect("UP-9.5-15")

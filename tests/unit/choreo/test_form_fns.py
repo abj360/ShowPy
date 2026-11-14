@@ -37,12 +37,12 @@ from showpy.core.util import approx_equal
 TOL = 1e-6
 
 
-def _row(params: Mapping[str, float], n: int) -> Points:
+def _row(_params: Mapping[str, float], n: int) -> Points:
     """Places n spots on the x axis, one meter apart."""
     return np.stack([np.arange(n, dtype=float), np.zeros(n)], axis=1)
 
 
-def _wrong_shape(params: Mapping[str, float], n: int) -> Points:
+def _wrong_shape(_params: Mapping[str, float], n: int) -> Points:
     return np.zeros((n, 3))
 
 
@@ -103,7 +103,7 @@ PROBE_SPOTS = 3
 EVIL_NAME = "evil"
 
 
-def _crashing_generator(params: Mapping[str, object], n: int) -> Points:
+def _crashing_generator(_params: Mapping[str, object], _n: int) -> Points:
     raise RuntimeError("generator crashed")
 
 

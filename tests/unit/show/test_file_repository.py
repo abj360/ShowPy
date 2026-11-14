@@ -131,7 +131,7 @@ def test_regression_missing_hard_links_are_a_storage_error(
 ) -> None:
     """Maps a file system without hard links to StorageError, or commits anyway (audit 9.7 #9)."""
 
-    def refuse(src: object, dst: object) -> None:
+    def refuse(*_args: object) -> None:
         raise PermissionError(1, "Operation not permitted")
 
     monkeypatch.setattr(os, "link", refuse)

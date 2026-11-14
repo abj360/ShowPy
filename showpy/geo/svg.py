@@ -228,25 +228,25 @@ class _PathBuilder:
         relative = command.islower()
         ox, oy = self.current if relative else (0.0, 0.0)
         handler = HANDLERS[upper]
-        handler(self, args, ox, oy, relative)
+        handler(self, args, ox, oy)
         self.last_command = upper
 
 
-def _move(b: _PathBuilder, a: list[float], ox: float, oy: float, rel: bool) -> None:
+def _move(b: _PathBuilder, a: list[float], ox: float, oy: float) -> None:
     b.flush(closed=False)
     b.start = b.current = (a[0] + ox, a[1] + oy)
     b.last_control = None
 
 
-def _line(b: _PathBuilder, a: list[float], ox: float, oy: float, rel: bool) -> None:
+def _line(b: _PathBuilder, a: list[float], ox: float, oy: float) -> None:
     b.add(LinePiece(b.current, (a[0] + ox, a[1] + oy)))
 
 
-def _horizontal(b: _PathBuilder, a: list[float], ox: float, oy: float, rel: bool) -> None:
+def _horizontal(b: _PathBuilder, a: list[float], ox: float, _oy: float) -> None:
     b.add(LinePiece(b.current, (a[0] + ox, b.current[1])))
 
 
-def _vertical(b: _PathBuilder, a: list[float], ox: float, oy: float, rel: bool) -> None:
+def _vertical(b: _PathBuilder, a: list[float], _ox: float, oy: float) -> None:
     b.add(LinePiece(b.current, (b.current[0], a[0] + oy)))
 
 
@@ -256,27 +256,27 @@ def _reflect(b: _PathBuilder, kinds: str) -> Point:
     return 2 * b.current[0] - b.last_control[0], 2 * b.current[1] - b.last_control[1]
 
 
-def _cubic(b: _PathBuilder, a: list[float], ox: float, oy: float, rel: bool) -> None:
+def _cubic(b: _PathBuilder, a: list[float], ox: float, oy: float) -> None:
     c2 = (a[2] + ox, a[3] + oy)
     b.add(CubicPiece(b.current, (a[0] + ox, a[1] + oy), c2, (a[4] + ox, a[5] + oy)), c2)
 
 
-def _smooth_cubic(b: _PathBuilder, a: list[float], ox: float, oy: float, rel: bool) -> None:
+def _smooth_cubic(b: _PathBuilder, a: list[float], ox: float, oy: float) -> None:
     c2 = (a[0] + ox, a[1] + oy)
     b.add(CubicPiece(b.current, _reflect(b, "CS"), c2, (a[2] + ox, a[3] + oy)), c2)
 
 
-def _quad(b: _PathBuilder, a: list[float], ox: float, oy: float, rel: bool) -> None:
+def _quad(b: _PathBuilder, a: list[float], ox: float, oy: float) -> None:
     control = (a[0] + ox, a[1] + oy)
     b.add(QuadPiece(b.current, control, (a[2] + ox, a[3] + oy)), control)
 
 
-def _smooth_quad(b: _PathBuilder, a: list[float], ox: float, oy: float, rel: bool) -> None:
+def _smooth_quad(b: _PathBuilder, a: list[float], ox: float, oy: float) -> None:
     control = _reflect(b, "QT")
     b.add(QuadPiece(b.current, control, (a[0] + ox, a[1] + oy)), control)
 
 
-def _arc(b: _PathBuilder, a: list[float], ox: float, oy: float, rel: bool) -> None:
+def _arc(b: _PathBuilder, a: list[float], ox: float, oy: float) -> None:
     end = (a[5] + ox, a[6] + oy)
     if math.dist(b.current, end) == 0:
         return
@@ -286,14 +286,14 @@ def _arc(b: _PathBuilder, a: list[float], ox: float, oy: float, rel: bool) -> No
     b.add(_arc_piece(b.current, end, abs(a[0]), abs(a[1]), a[2], bool(a[3]), bool(a[4])))
 
 
-def _close(b: _PathBuilder, a: list[float], ox: float, oy: float, rel: bool) -> None:
+def _close(b: _PathBuilder, _a: list[float], _ox: float, _oy: float) -> None:
     if math.dist(b.current, b.start) > 0:
         b.add(LinePiece(b.current, b.start))
     b.flush(closed=True)
     b.current = b.start
 
 
-HANDLERS: dict[str, Callable[[_PathBuilder, list[float], float, float, bool], None]] = {
+HANDLERS: dict[str, Callable[[_PathBuilder, list[float], float, float], None]] = {
     "M": _move,
     "L": _line,
     "H": _horizontal,

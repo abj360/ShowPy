@@ -48,7 +48,7 @@ def find_problem(item: pytest.Item) -> str | None:
     return None
 
 
-def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     """Rejects defect tests that break the ledger rules."""
     problems = [
         f"{item.nodeid}: {problem}" for item in items if (problem := find_problem(item)) is not None

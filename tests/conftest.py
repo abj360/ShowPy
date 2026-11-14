@@ -71,7 +71,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
 
 
-def pytest_configure(config: pytest.Config) -> None:
+def pytest_configure() -> None:
     """Registers the Hypothesis profiles and loads the one HYPOTHESIS_PROFILE names."""
     for name, values in HYPOTHESIS_PROFILES.items():
         settings.register_profile(name, **values)

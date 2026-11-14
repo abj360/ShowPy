@@ -17,7 +17,7 @@ Contains:
 import itertools
 from collections.abc import Mapping
 from functools import cached_property
-from typing import Any, Protocol, Self, overload, runtime_checkable
+from typing import Any, Protocol, Self, overload, override, runtime_checkable
 
 import numpy as np
 import numpy.typing as npt
@@ -96,6 +96,7 @@ class CurveBase(FrozenModel):
     closed: bool = False
 
     # Any: update values are arbitrary field values, validated by the rebuilt model.
+    @override
     def model_copy(self, *, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
         """Returns a validated copy; cached arc-length tables never leak into the copy."""
         return self.model_validate({**self.model_dump(), **(update or {})})

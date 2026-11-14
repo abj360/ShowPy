@@ -274,10 +274,14 @@ def _svg(sheet: Sheet, px_per_m: float) -> bytes:
         f'<svg xmlns="{SVG_NS}" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
         f"<title>{escape(sheet.name)}</title>",
         f'<rect width="{width}" height="{height}" fill="{BACKGROUND}"/>',
-        f'<polygon id="outline" points={_points_attr(canvas, sheet.outline)}'
-        f' fill="{OFF_WALKABLE}"/>',
-        f'<path id="walkable" d="{_walkable_path(canvas, sheet)}" fill="{surface}"'
-        ' fill-rule="evenodd"/>',
+        (
+            f'<polygon id="outline" points={_points_attr(canvas, sheet.outline)}'
+            f' fill="{OFF_WALKABLE}"/>'
+        ),
+        (
+            f'<path id="walkable" d="{_walkable_path(canvas, sheet)}" fill="{surface}"'
+            ' fill-rule="evenodd"/>'
+        ),
         '<g id="zones">',
         *(_svg_zone(canvas, z) for z in sheet.zones),
         '</g><g id="landmark-traces">',

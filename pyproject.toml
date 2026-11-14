@@ -78,17 +78,33 @@ target-version = "py312"
 
 [tool.ruff.lint]
 allowed-confusables = ["–"]
-select = ["E", "W", "F", "I", "B", "UP", "N", "SIM", "RUF", "C4", "PT", "D"]
+select = [
+    "E", "W", "F", "I", "B", "UP", "N", "SIM", "RUF", "C4", "PT", "D",
+    "EXE", "PIE", "PGH", "RSE", "ISC", "LOG", "DTZ", "PTH", "FURB", "ARG", "PERF", "C90", "TID",
+]
 ignore = ["D105", "D107", "D104", "D200", "D212", "D401", "D413", "D415"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.mccabe]
+max-complexity = 12
+
+# Library code and its doctests never import the test folder (HANDOFF trap, 2026-11-11).
+[tool.ruff.lint.flake8-tidy-imports]
+banned-module-level-imports = ["tests"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"tests".msg = "showpy never imports the test folder; use showpy.examples"
+
 # RUF012: pydantic copies field defaults per instance, so {} defaults are safe.
 [tool.ruff.lint.per-file-ignores]
 "showpy/**/models.py" = ["RUF012"]
 "showpy/**/*_models.py" = ["RUF012"]
-"tests/**" = ["D"]
+"tests/**" = ["D", "EXE001", "TID251", "TID253"]
+"scripts/**" = ["EXE001"]
+# Test motions implement MotionFn, whose parameter names are part of the protocol.
+"tests/unit/choreo/test_{avoid,engine_compile,motion,motion_stats}.py" = ["ARG001"]
 
 [tool.ruff.format]
 quote-style = "double"

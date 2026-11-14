@@ -196,7 +196,7 @@ def _region(form: Form, key: str) -> shapely.Polygon:
     return Region.model_validate(recipe_value(form, key)).to_shapely()
 
 
-def _block_points(form: Form, registry: FormFnRegistry) -> Points:
+def _block_points(form: Form, _registry: FormFnRegistry) -> Points:
     g = form.geometry
     origin = as_points(recipe_value(form, "origin"))[0]
     return block(
@@ -209,20 +209,20 @@ def _block_points(form: Form, registry: FormFnRegistry) -> Points:
     )
 
 
-def _fill_points(form: Form, registry: FormFnRegistry) -> Points:
+def _fill_points(form: Form, _registry: FormFnRegistry) -> Points:
     g = form.geometry
     interval = float(recipe_value(form, "interval"))
     pattern, angle = g.get("pattern", "grid"), float(g.get("angle_deg", 0.0))
     return fill(_region(form, "outline"), interval, pattern, angle, n=slot_count(form))
 
 
-def _scatter_points(form: Form, registry: FormFnRegistry) -> Points:
+def _scatter_points(form: Form, _registry: FormFnRegistry) -> Points:
     min_gap = float(recipe_value(form, "min_gap"))
     seed = int(form.geometry.get("seed", 0))
     return scatter(_region(form, "region"), _required_count(form), min_gap, seed)
 
 
-def _custom_points(form: Form, registry: FormFnRegistry) -> Points:
+def _custom_points(form: Form, _registry: FormFnRegistry) -> Points:
     return as_points(recipe_value(form, "points"))
 
 

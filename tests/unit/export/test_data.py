@@ -176,7 +176,7 @@ def test_format_registry_is_immutable() -> None:
     def shout(show: Show) -> str:
         return show.title.upper()
 
-    def blank(text: str) -> Show:
+    def blank(_text: str) -> Show:
         return two_set_show()
 
     extended = register_importer(register_exporter(DEFAULT_FORMATS, "shout", shout), "x", blank)

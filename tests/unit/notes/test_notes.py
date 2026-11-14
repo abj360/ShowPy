@@ -157,7 +157,7 @@ def test_accept_draft_adds_it_visible() -> None:
 
 
 REJECTED = (ShowPyError, PydanticValidationError)
-NAIVE_TIME = datetime(2026, 11, 11)
+NAIVE_TIME = datetime(2026, 11, 11)  # noqa: DTZ001 - the tests check it is rejected
 
 
 @pytest.mark.defect("UP-9.3-122")

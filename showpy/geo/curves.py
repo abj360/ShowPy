@@ -23,7 +23,7 @@ Contains:
 
 import math
 from functools import cached_property
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, override
 
 import numpy as np
 from pydantic import Field, TypeAdapter, model_validator
@@ -132,6 +132,7 @@ class Polyline(CurveModel):
     def _breaks(self) -> FloatArray:
         return self._cumulative
 
+    @override
     def to_polyline(self, tol: float = 0.01) -> Points:
         """Returns the vertices themselves, closing the loop when closed."""
         return self._vertices.copy()

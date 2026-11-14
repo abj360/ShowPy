@@ -126,7 +126,7 @@ def set_style(
             hint=f"pass {', '.join(missing)}",
             context={"style": style.value},
         )
-    return _edit(spec, sel, lambda row: {"style": style, **params}, force)
+    return _edit(spec, sel, lambda _row: {"style": style, **params}, force)
 
 
 def delay(
@@ -158,13 +158,13 @@ def hold(
     3.0
     """
     if until is None and from_ is None:
-        return _edit(spec, sel, lambda row: {"style": PathStyle.HOLD}, force)
+        return _edit(spec, sel, lambda _row: {"style": PathStyle.HOLD}, force)
     change: dict[str, Any] = {}
     if until is not None:
         change["start"] = until
     if from_ is not None:
         change["end"] = from_
-    return _edit(spec, sel, lambda row: change, force)
+    return _edit(spec, sel, lambda _row: change, force)
 
 
 def arrive_early(
@@ -186,7 +186,7 @@ def window(
     >>> window(TransitionSpec(id=("1", "2"), counts=8.0), ["A"], 1.0, 5.0).row("A").window(8.0)
     (1.0, 5.0)
     """
-    return _edit(spec, sel, lambda row: {"start": start, "end": end}, force)
+    return _edit(spec, sel, lambda _row: {"start": start, "end": end}, force)
 
 
 def add_waypoint(
@@ -234,7 +234,7 @@ def remove_waypoint(
             context={"entity": entity, "index": index},
         )
     del waypoints[index]
-    return _edit(spec, [entity], lambda row: {"waypoints": tuple(waypoints)}, force)
+    return _edit(spec, [entity], lambda _row: {"waypoints": tuple(waypoints)}, force)
 
 
 def clear_waypoints(spec: TransitionSpec, sel: Sel, force: bool = False) -> TransitionSpec:
@@ -262,7 +262,7 @@ def curve_path(
     """
     waypoints = tuple(Waypoint(x=p[0], y=p[1]) for p in control)
     return _edit(
-        spec, [entity], lambda row: {"style": PathStyle.CURVE, "waypoints": waypoints}, force
+        spec, [entity], lambda _row: {"style": PathStyle.CURVE, "waypoints": waypoints}, force
     )
 
 
@@ -316,7 +316,7 @@ def ripple(
 
 
 def _setter(field: str, value: float) -> Callable[[PathRow], dict[str, Any]]:
-    return lambda row: {field: value}
+    return lambda _row: {field: value}
 
 
 def set_facing(
@@ -340,7 +340,7 @@ def set_facing(
         "turn_counts": turn_counts,
         "turn_direction": direction,
     }
-    return _edit(spec, sel, lambda row: change, force)
+    return _edit(spec, sel, lambda _row: change, force)
 
 
 def set_pace(spec: TransitionSpec, sel: Sel, pace: float, force: bool = False) -> TransitionSpec:
@@ -349,7 +349,7 @@ def set_pace(spec: TransitionSpec, sel: Sel, pace: float, force: bool = False) -
     >>> set_pace(TransitionSpec(id=("1", "2"), counts=8.0), ["A"], 0.5).row("A").pace
     0.5
     """
-    return _edit(spec, sel, lambda row: {"pace": pace}, force)
+    return _edit(spec, sel, lambda _row: {"pace": pace}, force)
 
 
 # Any: motion parameters are JSON values defined by each registered motion.
@@ -368,7 +368,7 @@ def custom_path(
     """
     registry.get(motion)
     change = {"style": PathStyle.CUSTOM, "motion_fn": motion, "motion_params": params}
-    return _edit(spec, sel, lambda row: change, force)
+    return _edit(spec, sel, lambda _row: change, force)
 
 
 def set_easing(
@@ -381,7 +381,7 @@ def set_easing(
     'ease_out'
     """
     chosen = easing if isinstance(easing, Easing) else Easing.model_validate({"kind": easing})
-    return _edit(spec, sel, lambda row: {"easing": chosen}, force)
+    return _edit(spec, sel, lambda _row: {"easing": chosen}, force)
 
 
 def lock(spec: TransitionSpec, sel: Sel) -> TransitionSpec:
@@ -390,7 +390,7 @@ def lock(spec: TransitionSpec, sel: Sel) -> TransitionSpec:
     >>> lock(TransitionSpec(id=("1", "2"), counts=8.0), ["A"]).row("A").locked
     True
     """
-    return _edit(spec, sel, lambda row: {"locked": True}, force=True)
+    return _edit(spec, sel, lambda _row: {"locked": True}, force=True)
 
 
 def unlock(spec: TransitionSpec, sel: Sel) -> TransitionSpec:
@@ -399,7 +399,7 @@ def unlock(spec: TransitionSpec, sel: Sel) -> TransitionSpec:
     >>> unlock(lock(TransitionSpec(id=("1", "2"), counts=8.0), ["A"]), ["A"]).row("A").locked
     False
     """
-    return _edit(spec, sel, lambda row: {"locked": False}, force=True)
+    return _edit(spec, sel, lambda _row: {"locked": False}, force=True)
 
 
 def paths_table(spec: TransitionSpec) -> pd.DataFrame:

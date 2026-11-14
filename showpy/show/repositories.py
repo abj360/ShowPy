@@ -13,7 +13,7 @@ import hashlib
 import re
 from collections.abc import Mapping
 from datetime import datetime
-from typing import Protocol
+from typing import Protocol, override
 
 from showpy.choreo.models import Form, Set, TransitionSpec
 from showpy.core.errors import ConflictError, SchemaError, StorageError, UnknownRefError
@@ -406,7 +406,7 @@ class DocumentRepository:
         return (self.read(show_id, WAIVERS_DOC) or b"").decode()
 
 
-class _MemoryBackend:
+class _MemoryBackend(RepositoryBackend):
     def __init__(self) -> None:
         self._logs: dict[str, list[Revision]] = {}
         self._trees: dict[tuple[str, str], dict[str, str]] = {}
@@ -421,6 +421,7 @@ class _MemoryBackend:
     def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
         return dict(self._trees[(show_id, revision_id)])
 
+    @override
     def blob(self, show_id: str, digest: str) -> bytes:
         return self._blobs[digest]
 

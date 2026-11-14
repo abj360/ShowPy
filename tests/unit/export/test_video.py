@@ -81,8 +81,7 @@ def _wav(seconds: float) -> bytes:
 
 def _probe(data: bytes, tmp_path: object) -> str:
     path = f"{tmp_path}/probe.mp4"
-    with open(path, "wb") as handle:
-        handle.write(data)
+    Path(path).write_bytes(data)
     result = subprocess.run(
         [imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-i", path],
         capture_output=True,
@@ -111,8 +110,7 @@ def test_export_video_writes_a_valid_mp4(tmp_path: object) -> None:
     data = export_video(two_set_show(), count_range=(0.0, 4.0), fps=4, px_per_m=VALID_PX_PER_M)
     assert data[4:8] == b"ftyp"
     path = f"{tmp_path}/out.mp4"
-    with open(path, "wb") as handle:
-        handle.write(data)
+    Path(path).write_bytes(data)
     frames, _ = imageio_ffmpeg.count_frames_and_secs(path)
     assert frames > 0
     width, height = video_canvas(two_set_show(), VALID_PX_PER_M).size

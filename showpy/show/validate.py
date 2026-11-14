@@ -68,19 +68,17 @@ def _pins(show: Show, candidate: Set) -> list[ValidationIssue]:
     if candidate.id not in show.set_ids():
         return []
     stored = show.set(candidate.id)
-    issues = []
-    for p in stored.placements:
-        if p.pinned and p.entity in candidate.entity_ids() and candidate.get(p.entity) != p:
-            issues.append(
-                _issue(
-                    ERROR,
-                    "PINNED_CHANGED",
-                    f"set {candidate.id} {p.entity}",
-                    "a pinned placement changed",
-                    "unpin it before editing",
-                )
-            )
-    return issues
+    return [
+        _issue(
+            ERROR,
+            "PINNED_CHANGED",
+            f"set {candidate.id} {p.entity}",
+            "a pinned placement changed",
+            "unpin it before editing",
+        )
+        for p in stored.placements
+        if p.pinned and p.entity in candidate.entity_ids() and candidate.get(p.entity) != p
+    ]
 
 
 def _forms(show: Show, candidate: Set) -> list[ValidationIssue]:
@@ -238,31 +236,30 @@ def validate_dependencies(show: Show, store: SheetStore | None = None) -> Valida
 
 
 def _sequence(show: Show) -> list[ValidationIssue]:
-    issues = []
-    for s in show.sets[1:]:
-        if s.counts == 0:
-            issues.append(
-                _issue(
-                    WARNING,
-                    "ZERO_COUNTS",
-                    f"set {s.id}",
-                    "set arrives in 0 counts",
-                    "give the set counts > 0",
-                )
-            )
+    zero_counts = [
+        _issue(
+            WARNING,
+            "ZERO_COUNTS",
+            f"set {s.id}",
+            "set arrives in 0 counts",
+            "give the set counts > 0",
+        )
+        for s in show.sets[1:]
+        if s.counts == 0
+    ]
     valid = set(show.transition_ids())
-    for spec in show.transitions:
-        if spec.id not in valid:
-            issues.append(
-                _issue(
-                    ERROR,
-                    "STALE_TRANSITION",
-                    format_tid(spec.id),
-                    "paths for sets that are not consecutive",
-                    "delete or re-create these paths",
-                )
-            )
-    return issues
+    stale = [
+        _issue(
+            ERROR,
+            "STALE_TRANSITION",
+            format_tid(spec.id),
+            "paths for sets that are not consecutive",
+            "delete or re-create these paths",
+        )
+        for spec in show.transitions
+        if spec.id not in valid
+    ]
+    return zero_counts + stale
 
 
 def _all(reports: Iterable[ValidationReport]) -> ValidationReport:

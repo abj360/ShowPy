@@ -237,7 +237,7 @@ def test_preserve_order_infeasible_names_order() -> None:
 
 
 def test_cost_fn_adds_cost_and_infinity_forbids() -> None:
-    def avoid_slot_zero(entity: str, slot: int, start: Point, target: Point) -> float:
+    def avoid_slot_zero(_entity: str, slot: int, _start: Point, _target: Point) -> float:
         return math.inf if slot == 0 else 0.0
 
     result = match(
@@ -253,7 +253,7 @@ def test_cost_fn_rejects_negative_costs() -> None:
 
 
 def test_crossing_weight_untangles_a_cheaper_crossing() -> None:
-    def favour_crossing(entity: str, slot: int, start: Point, target: Point) -> float:
+    def favour_crossing(entity: str, slot: int, _start: Point, _target: Point) -> float:
         return 1.0 if (entity, slot) in {("0", 1), ("1", 0)} else 0.0
 
     starts = [(0.0, 0.0), (2.0, 0.0)]
@@ -306,7 +306,7 @@ PAIR_STARTS = [(0.0, 0.0), (1.0, 0.0)]
 PAIR_SLOTS = [(0.0, 1.0), (1.0, 1.0)]
 
 
-def _failing_cost(entity: SpotId, slot: int, start: Point, target: Point) -> float:
+def _failing_cost(entity: SpotId, slot: int, _start: Point, _target: Point) -> float:
     raise RuntimeError(f"cost of {entity} for slot {slot} failed")
 
 

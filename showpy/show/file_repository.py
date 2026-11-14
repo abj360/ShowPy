@@ -33,7 +33,7 @@ def _temp_copy(directory: Path, data: bytes) -> Path:
 def _atomic_write(path: Path, data: bytes) -> None:
     temp = _temp_copy(path.parent, data)
     try:
-        os.replace(temp, path)
+        temp.replace(path)
     finally:
         temp.unlink(missing_ok=True)
 

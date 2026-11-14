@@ -24,6 +24,7 @@ import sys
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import TypeVar, cast
 
 import pytest
@@ -181,8 +182,8 @@ def capped_address_space() -> Iterator[None]:
     import resource  # POSIX only; imported here so Windows can still collect callers
 
     soft, hard = resource.getrlimit(resource.RLIMIT_AS)
-    with open("/proc/self/statm", encoding="ascii") as statm:
-        used = int(statm.read().split()[0]) * resource.getpagesize()
+    pages = int(Path("/proc/self/statm").read_text(encoding="ascii").split()[0])
+    used = pages * resource.getpagesize()
     resource.setrlimit(resource.RLIMIT_AS, (used + ALLOCATION_HEADROOM_BYTES, hard))
     try:
         yield
