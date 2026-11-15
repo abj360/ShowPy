@@ -61,8 +61,6 @@ def test_form_fn_info_holds_name_and_summary() -> None:
 NEGATIVE_PENALTY_M = -1.0
 
 
-@pytest.mark.defect("UP-9.6-35")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-35")
 def test_regression_match_options_rejects_nan_weights() -> None:
     """Rejects a NaN penalty weight (audit 9.6)."""
     with pytest.raises(SchemaError):

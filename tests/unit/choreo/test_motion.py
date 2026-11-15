@@ -148,14 +148,12 @@ SHARES = np.array([0.0, 0.25, 0.5, 1.0])
 OVERSIZED_STEP_COUNT = 10_000.0
 
 
-@defect("UP-9.2-12")
 def test_regression_nan_easing_strength_is_rejected() -> None:
     """Rejects a NaN easing strength instead of producing NaN positions (audit 9.2)."""
     with pytest.raises(ShowPyError):
         ease(Easing(kind="ease_in", strength=float("nan")), SHARES)
 
 
-@defect("UP-9.2-13")
 def test_regression_infinite_steps_strength_raises_showpy_error() -> None:
     """Raises a ShowPyError, not OverflowError, for infinite step counts (audit 9.2)."""
     with pytest.raises(ShowPyError):

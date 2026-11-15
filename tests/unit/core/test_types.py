@@ -69,8 +69,6 @@ def test_regression_region_rejects_fewer_than_three_points() -> None:
         Region(exterior=((0.0, 0.0), (1.0, 1.0)))
 
 
-@pytest.mark.defect("UP-9.3-37")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-37")
 def test_regression_region_rejects_nan_points() -> None:
     """Rejects NaN coordinates (audit 9.3)."""
     with pytest.raises((ShowPyError, PydanticValidationError)):
@@ -85,8 +83,6 @@ def test_regression_region_rejects_self_intersection() -> None:
         Region(exterior=((0.0, 0.0), (2.0, 2.0), (2.0, 0.0), (0.0, 2.0)))
 
 
-@pytest.mark.defect("UP-4.1-01")
-@pytest.mark.xfail(strict=True, reason="UP-4.1-01")
 @pytest.mark.parametrize("build", NON_FINITE_MODELS.values(), ids=NON_FINITE_MODELS.keys())
 def test_regression_frozen_models_reject_non_finite_floats(
     build: Callable[[], FrozenModel],

@@ -37,7 +37,7 @@ class FrozenModel(BaseModel):
     Construction and validation raise SchemaError, chained from the pydantic error.
     """
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", allow_inf_nan=False)
 
     # Any: pydantic's own keyword signature, forwarded unchanged.
     def __init__(self, /, **data: Any) -> None:

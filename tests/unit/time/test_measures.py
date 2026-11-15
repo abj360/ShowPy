@@ -140,8 +140,6 @@ def test_regression_zero_measure_length_is_a_clean_error() -> None:
         count_to_measure(_with_measures(MeasureSetting(counts_per_measure=0.0)), 4.0)
 
 
-@pytest.mark.defect("UP-9.3-110")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-110")
 def test_regression_nan_measure_length_is_a_clean_error() -> None:
     """Rejects a NaN measure length with a ShowPyError, not ValueError (audit 9.3)."""
     with pytest.raises(REJECTED):

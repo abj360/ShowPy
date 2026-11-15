@@ -219,8 +219,6 @@ def test_regression_transition_spec_checks_route_keys_against_route_ids() -> Non
         TransitionSpec(id=("1", "2"), counts=NEIGHBOUR_COUNTS, routes={"x": route})
 
 
-@pytest.mark.defect("UP-9.6-33")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-33")
 @pytest.mark.parametrize("counts", [math.nan, math.inf])
 def test_regression_set_rejects_non_finite_counts(counts: float) -> None:
     """Rejects NaN and infinite Set.counts (audit 9.6)."""
@@ -236,8 +234,6 @@ def test_regression_path_row_rejects_nan_start() -> None:
         PathRow(entity="A", start=math.nan)
 
 
-@pytest.mark.defect("UP-9.6-36")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-36")
 def test_regression_facing_spec_rejects_nan_point() -> None:
     """Rejects a toward_point facing whose point is NaN (audit 9.6)."""
     with pytest.raises(SchemaError):

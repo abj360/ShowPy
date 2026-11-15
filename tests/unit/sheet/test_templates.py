@@ -278,8 +278,6 @@ def test_regression_blank_sheets_with_different_content_get_different_refs() -> 
     assert by_grid == by_units or by_grid.ref != by_units.ref
 
 
-@pytest.mark.defect("UP-9.4-31")
-@pytest.mark.xfail(strict=True, reason="UP-9.4-31")
 def test_regression_blank_sheet_rejects_infinite_width() -> None:
     """Rejects an infinite width instead of building a sheet (audit 9.4)."""
     with pytest.raises(SchemaError):

@@ -228,8 +228,6 @@ def test_regression_group_rejects_invalid_color() -> None:
         Group(key="g", label_prefix="T", color="not-a-color")
 
 
-@pytest.mark.defect("UP-9.3-62")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-62")
 def test_regression_group_rejects_nan_limits() -> None:
     """Rejects a NaN limit override (audit 9.3)."""
     with pytest.raises(REJECTED):

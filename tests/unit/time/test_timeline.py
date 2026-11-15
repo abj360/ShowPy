@@ -278,40 +278,30 @@ def _steady() -> Timeline:
     return new_timeline(TimelineMode.COUNTS, 120.0)
 
 
-@pytest.mark.defect("UP-9.3-100")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-100")
 def test_regression_add_tempo_rejects_nan_count() -> None:
     """Rejects a tempo section at a NaN count (audit 9.3)."""
     with pytest.raises(REJECTED):
         add_tempo(_steady(), TempoSection(at_count=math.nan, counts_per_minute=90.0))
 
 
-@pytest.mark.defect("UP-9.3-101")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-101")
 def test_regression_add_hold_rejects_nan_seconds() -> None:
     """Rejects a hold of NaN seconds (audit 9.3)."""
     with pytest.raises(REJECTED):
         add_hold(_steady(), Hold(at_count=8.0, seconds=math.nan))
 
 
-@pytest.mark.defect("UP-9.3-102")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-102")
 def test_regression_add_marker_rejects_nan_count() -> None:
     """Rejects a marker at a NaN count (audit 9.3)."""
     with pytest.raises(REJECTED):
         add_marker(_steady(), Marker(label="hit", at_count=math.nan))
 
 
-@pytest.mark.defect("UP-9.3-103")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-103")
 def test_regression_new_timeline_rejects_nan_total() -> None:
     """Rejects a NaN show length (audit 9.3)."""
     with pytest.raises(REJECTED):
         new_timeline(TimelineMode.COUNTS, 120.0, total=math.nan)
 
 
-@pytest.mark.defect("UP-9.3-104")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-104")
 def test_regression_add_tempo_rejects_infinite_tempo() -> None:
     """Rejects an infinite counts-per-minute (audit 9.3)."""
     with pytest.raises(REJECTED):

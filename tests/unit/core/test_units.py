@@ -151,8 +151,6 @@ def test_regression_register_unit_refuses_to_redefine_meters() -> None:
         register_unit(DEFAULT_UNITS, "m", 2.0)
 
 
-@pytest.mark.defect("UP-9.3-42")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-42")
 def test_regression_register_unit_rejects_infinite_size() -> None:
     """Rejects an infinite unit size (audit 9.3)."""
     with pytest.raises(ShowPyError):
