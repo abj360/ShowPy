@@ -14,7 +14,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from showpy.choreo.form_place import rebuild
-from showpy.choreo.forms import circle_form, line_form
+from showpy.choreo.forms import block_form, circle_form, line_form
 from showpy.choreo.match import bottleneck_value, match, match_by_order
 from showpy.choreo.match_ops import apply_match
 from showpy.choreo.match_solve import FloatArray, count_crossings
@@ -148,7 +148,7 @@ def _fillable_form(kind: str) -> Form:
         return line_form("f", [], (0, 12), (6, 12), n=len(SPOTS), set_id="2")
     if kind == "arc":
         return circle_form("f", [], (3, 10), 3.0, n=len(SPOTS), set_id="2")
-    return line_form("f", [], (0, 14), (9, 14), n=len(SPOTS), set_id="2")
+    return block_form("f", [], (3, 14), 2, 2, 2.0, set_id="2")
 
 
 @settings(max_examples=40, deadline=None)
