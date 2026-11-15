@@ -223,6 +223,10 @@ if TYPE_CHECKING:
         rotate_path,
         two_part,
     )
+    from showpy.core.canonical import (
+        canonical_value,
+        jcs,
+    )
     from showpy.core.caps import (
         MAX_DEPTH,
         MAX_GRID_CELLS,
@@ -907,6 +911,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "bottleneck_value": ("showpy.choreo.match", "bottleneck_value"),
     "bounds": ("showpy.geo.measure", "bounds"),
     "buffer": ("showpy.geo.regions", "buffer"),
+    "canonical_value": ("showpy.core.canonical", "canonical_value"),
     "center": ("showpy.geo.measure", "center"),
     "centroid": ("showpy.geo.measure", "centroid"),
     "change_amount": ("showpy.geo.analysis", "change_amount"),
@@ -1024,6 +1029,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "interval": ("showpy.geo.measure", "interval"),
     "is_label_dependent": ("showpy.cast.select", "is_label_dependent"),
     "is_similarity": ("showpy.geo.affine", "is_similarity"),
+    "jcs": ("showpy.core.canonical", "jcs"),
     "join": ("showpy.geo.shapes", "join"),
     "join_sections": ("showpy.show.sections", "join_sections"),
     "label_prefix": ("showpy.cast.select", "label_prefix"),
@@ -1444,6 +1450,7 @@ __all__ = [
     "bottleneck_value",
     "bounds",
     "buffer",
+    "canonical_value",
     "center",
     "centroid",
     "change_amount",
@@ -1561,6 +1568,7 @@ __all__ = [
     "interval",
     "is_label_dependent",
     "is_similarity",
+    "jcs",
     "join",
     "join_sections",
     "label_prefix",
