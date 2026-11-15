@@ -97,6 +97,7 @@ def space_by_interval(
     4
     """
     require_finite_as(SpacingError, interval, name="interval", low=0.0, low_open=True)
+    require_finite_as(SpacingError, start, name="start")
     available = curve.length() - start
     if not math.isfinite(available / interval):
         raise SpacingError(

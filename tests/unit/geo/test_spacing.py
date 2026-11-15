@@ -60,6 +60,16 @@ Contains:
     test_regression_fill_estimate_bounds_the_lattice: estimates at least the lattice the builder
         generates
     test_regression_fill_refuses_a_lattice_just_over_the_cap: refuses a 1,162,049-point lattice
+    test_regression_space_by_interval_rejects_non_finite_start: names a non-finite start
+    test_regression_fill_rejects_non_finite_angle: raises ShowPyError for NaN or inf angle_deg
+        (UP-9.1-68)
+    test_regression_fill_rejects_non_finite_margin: raises ShowPyError for NaN or inf margin
+        (UP-9.1-69)
+    test_regression_fill_rejects_non_finite_anchor: raises ShowPyError for a NaN or inf anchor
+        (UP-9.1-70)
+    test_regression_block_rejects_infinite_facing: raises ShowPyError for an inf facing (UP-9.1-71)
+    test_regression_scatter_on_a_field_finishes_or_refuses_within_ten_seconds: bounds a field-size
+        scatter near the cap to 10 s (UP-9.1-72)
 """
 
 import math
@@ -95,7 +105,7 @@ from showpy.geo.spacing import (
     space_proportional,
     space_with_gaps,
 )
-from tests.helpers import capped_address_space, fails_after
+from tests.helpers import capped_address_space, defect, fails_after
 
 SIGNAL_TIMEOUT_S = 5
 SQUARE_SIDE_M = 10.0
@@ -528,3 +538,68 @@ def test_regression_fill_refuses_a_lattice_just_over_the_cap() -> None:
     """Refuses bounds whose lattice has 1,162,049 points, over the cap of 1,000,000."""
     with pytest.raises(SpacingError):
         _require_lattice_size((-0.01, -0.01, 166000.01, 2.01), 1.0, "grid")
+
+
+NON_FINITE_PARAMETER = [math.nan, math.inf, -math.inf]
+SCATTER_DEADLINE_S = 10
+FIELD_LENGTH_M = 109.7
+FIELD_WIDTH_M = 48.8
+NEAR_CAP_GAP_M = 0.11
+
+
+@pytest.mark.parametrize("start", NON_FINITE_PARAMETER)
+def test_regression_space_by_interval_rejects_non_finite_start(start: float) -> None:
+    """Names a non-finite start in the message instead of calling the interval too small."""
+    with pytest.raises(SpacingError, match="start"):
+        space_by_interval(LINE, 1.0, start=start)
+
+
+@defect("UP-9.1-68")
+@pytest.mark.parametrize("angle_deg", NON_FINITE_PARAMETER)
+def test_regression_fill_rejects_non_finite_angle(angle_deg: float) -> None:
+    """Raises a SpacingError for a NaN or infinite angle_deg instead of leaking."""
+    with pytest.raises(ShowPyError):
+        fill(_square(), 1.0, angle_deg=angle_deg)
+
+
+@defect("UP-9.1-69")
+@pytest.mark.parametrize("margin", NON_FINITE_PARAMETER)
+def test_regression_fill_rejects_non_finite_margin(margin: float) -> None:
+    """Raises a SpacingError for a NaN or infinite margin instead of leaking."""
+    with pytest.raises(ShowPyError):
+        fill(_square(), 1.0, margin=margin)
+
+
+@defect("UP-9.1-70")
+@pytest.mark.parametrize("coordinate", NON_FINITE_PARAMETER)
+def test_regression_fill_rejects_non_finite_anchor(coordinate: float) -> None:
+    """Raises a SpacingError for a NaN or infinite anchor instead of leaking GEOSException."""
+    with pytest.raises(ShowPyError):
+        fill(_square(), 1.0, anchor=(coordinate, 0.0))
+
+
+@defect("UP-9.1-71")
+@pytest.mark.parametrize("facing", [math.inf, -math.inf])
+def test_regression_block_rejects_infinite_facing(facing: float) -> None:
+    """Raises a SpacingError for an infinite facing instead of leaking ValueError."""
+    with pytest.raises(ShowPyError):
+        block((0.0, 0.0), 2, 2, 1.0, facing=facing)
+
+
+@defect("UP-9.1-72")
+@pytest.mark.slow
+@fails_after(SCATTER_DEADLINE_S)
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+def test_regression_scatter_on_a_field_finishes_or_refuses_within_ten_seconds() -> None:
+    """Finishes or refuses a field-size scatter at gap 0.11 m within 10 s, not minutes.
+
+    The sample bound at this gap is about 885,000, just under MAX_POINTS. Ten seconds is the
+    longest an interactive caller waits on one placement.
+    """
+    field = region(
+        [(0, 0), (FIELD_LENGTH_M, 0), (FIELD_LENGTH_M, FIELD_WIDTH_M), (0, FIELD_WIDTH_M)]
+    )
+    try:
+        scatter(field, 5, NEAR_CAP_GAP_M)
+    except SpacingError:
+        return
