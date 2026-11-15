@@ -1,61 +1,31 @@
 """
-examples.py --- small, fully specified example shows for docs, doctests and tests
+shows.py --- small, fully specified example shows for docs, doctests and tests
 
 These are deterministic so examples print stable output. Tests re-export them from
 tests/fixtures, so there is one definition of each example.
 
 Contains:
-    EXAMPLE_TIME: fixed time stamp for examples that need one
     EXAMPLE_TID: the transition between the two example sets
-    field_sheet(): builds a 40 x 20 m sheet with a center landmark and a front pit zone
+    TEMPO: tempo of the example timeline in counts per minute
+    COUNTS: length of the example transition in counts
     two_set_show(): builds four trumpets moving 4 m upstage over 8 counts
     with_rows(): returns the example show with path rows stored for transition 1→2
     with_targets(): returns the example show with set 2 placements patched
     crossing_show(): returns two spots whose straight moves cross at count 4
-    performer(): builds a performer whose ID is the lower-case name
-    live_publication(): returns a live, unclaimed publication of a show
 """
 
 from collections.abc import Mapping
-from datetime import UTC, datetime
 from typing import Any
 
 from showpy.cast.models import Cast, Group, Spot
 from showpy.choreo.models import PathRow, Placement, Route, Set, TransitionSpec
-from showpy.core.types import Region
-from showpy.export.models import Performer, PerformerRole, Publication
-from showpy.sheet.models import Landmark, Sheet, SurfaceType, Zone, ZoneKind
+from showpy.examples.sheets import field_sheet
 from showpy.show.models import Show
 from showpy.time.models import TempoSection, Timeline, TimelineMode
 
-EXAMPLE_TIME = datetime(2026, 11, 11, 18, 0, tzinfo=UTC)
 EXAMPLE_TID = ("1", "2")
-WIDTH = 40.0
-DEPTH = 20.0
 TEMPO = 120.0
 COUNTS = 8.0
-EXAMPLE_LINK = "https://eight.example/p/pub-1"
-
-
-def field_sheet() -> Sheet:
-    """Builds a 40 x 20 m sheet: origin front-center, a center landmark, a front pit zone.
-
-    >>> field_sheet().size_m
-    (40.0, 20.0)
-    """
-    half = WIDTH / 2
-    ring = ((-half, 0.0), (half, 0.0), (half, DEPTH), (-half, DEPTH))
-    pit = Region(exterior=((-4.0, -3.0), (4.0, -3.0), (4.0, -0.5), (-4.0, -0.5)))
-    return Sheet(
-        ref="sheet:test-field@1",
-        name="Test field",
-        surface_type=SurfaceType.BLANK,
-        size_m=(WIDTH, DEPTH),
-        outline=ring,
-        walkable=Region(exterior=ring),
-        landmarks=(Landmark(id="c", name="center", kind="point", geometry=((0.0, 10.0),)),),
-        zones=(Zone(id="pit", kind=ZoneKind.PIT, polygon=pit),),
-    )
 
 
 def two_set_show() -> Show:
@@ -124,23 +94,3 @@ def crossing_show() -> Show:
         "T4": {"x": 12.0, "y": 5.0},
     }
     return with_targets(targets, show=show)
-
-
-def performer(name: str, role: PerformerRole = "performer") -> Performer:
-    """Builds a performer whose ID is the lower-case name.
-
-    >>> performer("Ada").id
-    'ada'
-    """
-    return Performer(id=name.lower(), name=name, role=role)
-
-
-def live_publication(show: Show) -> Publication:
-    """Returns a live publication of `show` with no claims.
-
-    >>> live_publication(two_set_show()).status
-    'live'
-    """
-    return Publication(
-        id="pub-1", show_id=show.id, revision="r1", link=EXAMPLE_LINK, published_at=EXAMPLE_TIME
-    )

@@ -123,7 +123,7 @@ showpy/
   choreo/   models, forms*, match*, paths, routes, motion, engine*, facing, avoid, motion_stats
   show/     models, manage, sections, storage, repositories, history, collab, validate
   export/   models, publish, print_sheets, pdf, data, positions, video
-  examples.py  deterministic example shows
+  examples/ sheets, shows, publishing (deterministic example shows)
 showpy/schemas/ showpy.show.v1.json
 tests/      unit/ property/ golden/ fixtures/
 docs/       API reference, ADRs, handoff notes
