@@ -3,6 +3,7 @@ types.py --- shared type aliases plus the JSON-safe Box2, Box3 and Region models
 
 Contains:
     FrozenModel: provides the immutable, strict base that raises SchemaError on bad data
+    FrozenModel.replace(): returns a revalidated copy with some fields changed
     Box2: bounds stage-plane points and reports size and center
     Box3: bounds world points
     Region: stores an area as exterior and hole rings, convertible to Shapely
@@ -65,6 +66,25 @@ class FrozenModel(BaseModel):
             return super().model_validate_json(json_data, **options)
         except ValidationError as exc:
             raise schema_error_from(exc, model=cls.__name__) from exc
+
+    def replace(self, **changes: object) -> Self:
+        """Returns a copy with `changes` applied, run through every validator.
+
+        Unlike `model_copy(update=)`, a result that breaks a field or model rule raises
+        SchemaError, as does an unknown field name. Nested models are not revalidated.
+
+        >>> from showpy.core.types import Box2
+        >>> Box2(min=(0.0, 0.0), max=(1.0, 1.0)).replace(max=(2.0, 2.0)).max
+        (2.0, 2.0)
+
+        Args:
+            changes: New values keyed by field name.
+
+        Returns:
+            edited_model: A new instance of the same class holding the merged fields.
+        """
+        current = {name: getattr(self, name) for name in type(self).model_fields}
+        return type(self).model_validate(current | changes)
 
 
 class Box2(FrozenModel):

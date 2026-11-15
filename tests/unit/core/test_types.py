@@ -12,6 +12,9 @@ Contains:
     test_regression_region_rejects_self_intersection: rejects a bow-tie ring that crosses itself
     test_regression_frozen_models_reject_non_finite_floats: rejects NaN and infinity in Box2,
         TempoSection, Waypoint, Shape and Landmark fields
+    test_regression_replace_revalidates: rejects a negative Set.counts passed to replace()
+    test_replace_returns_a_new_model_with_the_change: keeps the original and applies the change
+    test_replace_rejects_an_unknown_field: raises SchemaError for a field the model lacks
 """
 
 import math
@@ -22,7 +25,7 @@ import shapely
 from pydantic import ValidationError as PydanticValidationError
 
 from showpy.cast.models import Shape
-from showpy.choreo.models import Waypoint
+from showpy.choreo.models import Set, Waypoint
 from showpy.core.errors import SchemaError, ShowPyError
 from showpy.core.types import Box2, FrozenModel, Region
 from showpy.sheet.models import Landmark
@@ -124,3 +127,25 @@ def test_regression_library_model_reports_dotted_loc() -> None:
     with pytest.raises(SchemaError) as info:
         Box2.model_validate({"min": ("x", 0), "max": (1, 1)})
     assert info.value.context["errors"][0]["loc"] == "min.0"
+
+
+NEGATIVE_COUNTS = -4.0
+
+
+def test_regression_replace_revalidates() -> None:
+    """Rejects an edit that breaks a model validator, instead of copying it unchecked."""
+    with pytest.raises(SchemaError):
+        Set(id="1", counts=0.0).replace(counts=NEGATIVE_COUNTS)
+
+
+def test_replace_returns_a_new_model_with_the_change() -> None:
+    box = Box2(min=(0.0, 0.0), max=(1.0, 1.0))
+    moved = box.replace(max=(2.0, 3.0))
+    assert moved.max == (2.0, 3.0)
+    assert moved.min == box.min
+    assert box.max == (1.0, 1.0)
+
+
+def test_replace_rejects_an_unknown_field() -> None:
+    with pytest.raises(SchemaError):
+        Box2(min=(0.0, 0.0), max=(1.0, 1.0)).replace(centre=(0.0, 0.0))
