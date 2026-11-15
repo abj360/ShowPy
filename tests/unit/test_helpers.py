@@ -7,6 +7,9 @@ Contains:
     test_regression_hang_timeout_never_interrupts_coverage_code(): defers the alarm past coverage
     test_regression_hang_timeout_survives_a_swallowed_alarm(): keeps alarming after a lost one
     test_regression_hang_timeout_never_raises_inside_a_finalizer(): defers the alarm past one
+    test_regression_hang_timeout_leaves_no_open_file_behind(): frees what the alarm cut off
+    test_regression_hang_timeout_drops_leaks_it_caused(): hides a file freed after the alarm
+    test_hang_timeout_still_reports_leaks_before_the_deadline(): forwards a leak by the test
     test_hang_timeout_lets_a_quick_test_finish(): returns normally and restores the old handler
 """
 
@@ -15,6 +18,7 @@ import sys
 import time
 import weakref
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 
@@ -138,6 +142,76 @@ def test_regression_hang_timeout_never_raises_inside_a_finalizer(
     with pytest.raises(pytest.fail.Exception, match="Timeout"):
         hanging_test()
     assert finished == [True]
+
+
+@posix_only
+def test_regression_hang_timeout_leaves_no_open_file_behind(tmp_path: Path) -> None:
+    """Frees a file the alarm cut off before it closed (cycle test teardown error 2026-11-15).
+
+    The alarm can land between opening a file and closing it. The traceback kept the handle
+    alive, and its ResourceWarning surfaced later as an unraisable error in teardown.
+    """
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"x")
+
+    @fails_after(DEADLINE_S)
+    def hanging_test() -> None:
+        end = time.monotonic() + HANG_BOUND_S
+        while time.monotonic() < end:
+            handle = source.open("rb")
+            _spin(FINALIZER_SPIN_S)
+            handle.close()
+
+    with pytest.raises(pytest.fail.Exception, match="Timeout"):
+        hanging_test()
+
+
+def _leak_open_file(path: Path) -> None:
+    path.open("rb")  # dropped unclosed on purpose
+
+
+@posix_only
+def test_regression_hang_timeout_drops_leaks_it_caused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Drops the ResourceWarning of a file freed after the alarm (cycle test teardown 2026-11-15).
+
+    An alarm inside io.open() frees the half-built file at once; its unraisable ResourceWarning
+    failed the hang test's teardown.
+    """
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"x")
+    seen: list[type[BaseException]] = []
+    monkeypatch.setattr(sys, "unraisablehook", lambda unraisable: seen.append(unraisable.exc_type))
+
+    @fails_after(DEADLINE_S)
+    def hanging_test() -> None:
+        try:
+            _spin(HANG_BOUND_S)
+        finally:
+            _leak_open_file(source)
+
+    with pytest.raises(pytest.fail.Exception, match="Timeout"):
+        hanging_test()
+    assert seen == []
+
+
+@posix_only
+def test_hang_timeout_still_reports_leaks_before_the_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Forwards a ResourceWarning the test causes itself, before any alarm fires."""
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"x")
+    seen: list[type[BaseException]] = []
+    monkeypatch.setattr(sys, "unraisablehook", lambda unraisable: seen.append(unraisable.exc_type))
+
+    @fails_after(HANG_BOUND_S)
+    def leaking_test() -> None:
+        _leak_open_file(source)
+
+    leaking_test()
+    assert seen == [ResourceWarning]
 
 
 @posix_only

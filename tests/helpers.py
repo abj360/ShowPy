@@ -26,6 +26,8 @@ import math
 import signal
 import subprocess
 import sys
+import traceback
+import warnings
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from datetime import datetime
@@ -232,6 +234,44 @@ def _may_interrupt(frame: FrameType | None, guard: FrameType | None) -> bool:
     return False
 
 
+@contextmanager
+def _resource_warnings_dropped_after(timed_out: list[bool]) -> Iterator[None]:
+    """Drops unraisable ResourceWarnings once the hang alarm has fired, forwarding all others.
+
+    An alarm landing inside io.open() makes CPython free the half-built file at once, and its
+    ResourceWarning would fail the hang test's teardown. Before the alarm fires, every leak
+    still reaches pytest.
+
+    Args:
+        timed_out: Non-empty once the alarm has raised its timeout.
+    """
+    forward = sys.unraisablehook
+
+    # Quoted: sys.UnraisableHookArgs exists only for type checkers before Python 3.14.
+    def hook(unraisable: "sys.UnraisableHookArgs") -> None:
+        if timed_out and issubclass(unraisable.exc_type, ResourceWarning):
+            return
+        forward(unraisable)
+
+    sys.unraisablehook = hook
+    try:
+        yield
+    finally:
+        sys.unraisablehook = forward
+
+
+def _release_interrupted_frames(timeout: BaseException) -> None:
+    """Frees what the hang alarm cut off mid-use, such as a file opened but not yet closed.
+
+    Their ResourceWarnings belong to the interruption, not to the code under test, and would
+    otherwise surface later as unraisable errors in a teardown.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ResourceWarning)
+        traceback.clear_frames(timeout.__traceback__)
+        gc.collect()
+
+
 def fails_after(
     seconds: float,
 ) -> Callable[[Callable[TestParams, None]], Callable[TestParams, None]]:
@@ -255,17 +295,26 @@ def fails_after(
         def guarded(*args: TestParams.args, **kwargs: TestParams.kwargs) -> None:
             own_frame = inspect.currentframe()
 
+            timed_out: list[bool] = []
+
             def interrupt(_signum: int, frame: FrameType | None) -> None:
                 if _may_interrupt(frame, own_frame):
+                    timed_out.append(True)
                     pytest.fail(f"Timeout >{seconds}s", pytrace=False)
 
             previous = signal.signal(signal.SIGALRM, interrupt)
             signal.setitimer(signal.ITIMER_REAL, seconds, HANG_RETRY_S)
-            try:
-                test(*args, **kwargs)
-            finally:
-                signal.setitimer(signal.ITIMER_REAL, 0)
-                signal.signal(signal.SIGALRM, previous)
+            with _resource_warnings_dropped_after(timed_out):
+                try:
+                    try:
+                        test(*args, **kwargs)
+                    finally:
+                        signal.setitimer(signal.ITIMER_REAL, 0)
+                        signal.signal(signal.SIGALRM, previous)
+                except pytest.fail.Exception as failure:
+                    if timed_out:
+                        _release_interrupted_frames(failure)
+                    raise
 
         return guarded
 
