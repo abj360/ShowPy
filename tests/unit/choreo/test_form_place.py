@@ -184,6 +184,7 @@ def test_regression_place_returns_the_set_and_the_filled_forms() -> None:
     """Returns the placed set together with its filled forms (audit 9.6; P0 #12)."""
     form = line_form("f", [], (6, 12), (0, 12), n=4)
     result = place(two_set_show(), "2", [form])
+    assert isinstance(result, tuple)
     _, filled = result
     assert filled[0].members == ("T4", "T3", "T2", "T1")
 
