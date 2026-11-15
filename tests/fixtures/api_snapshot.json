@@ -1145,7 +1145,7 @@
   "closest_approach": "(times_a: collections.abc.Sequence[float], points_a: collections.abc.Sequence[Point] | Points, times_b: collections.abc.Sequence[float], points_b: collections.abc.Sequence[Point] | Points) -> tuple[float, float]",
   "concentric": "(center: Point, radii: collections.abc.Sequence[Meters], counts: collections.abc.Sequence[int], start_deg: Degrees = 0.0) -> list[Points]",
   "conflict_error": "(show_id: str, expected: str, landed: list[showpy.show.models.Revision]) -> showpy.core.errors.ConflictError",
-  "content_hash": "(obj: object) -> str",
+  "content_hash": "(obj: object, *, domain: str = 'showpy.content') -> str",
   "contract": "(obj: T, d: Meters, about: About = 'center', sel: SetSelector = 'all', force: bool = False) -> T",
   "convert": "(value: float, from_unit: str, to_unit: str, registry: showpy.core.units.UnitRegistry = ...) -> float",
   "coordinate_presets": "(sheet: showpy.sheet.models.Sheet) -> list[showpy.sheet.models.CoordinateSystem]",

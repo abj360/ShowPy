@@ -27,6 +27,7 @@ from showpy.time.models import Timeline
 
 SHOW_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]*$")
 ASSET_PREFIX = "asset:sha256:"
+REVISION_HASH_DOMAIN = "showpy.revision"
 SHORT_ID = 7
 
 
@@ -218,7 +219,7 @@ class DocumentRepository:
             "changes": {p: new.get(p) for p in changed},
         }
         revision = Revision(
-            id=content_hash(body),
+            id=content_hash(body, domain=REVISION_HASH_DOMAIN),
             parent=expected_revision,
             at=at,
             actor=actor,

@@ -8,7 +8,7 @@ Contains:
     approx_equal(): compares floats or arrays with an absolute tolerance
     seeded_rng(): returns the only allowed random generator
     as_points(): normalizes point-like inputs to an (N, 2) array
-    content_hash(): hashes a model, mapping, string or bytes canonically
+    content_hash(): hashes bytes, text or canonical JSON under a domain tag
     chunk_counts(): splits counts into equal parts that sum exactly
     close_matches(): suggests known names close to a misspelled one
     log(): emits a structured log line on the `showpy` logger
@@ -18,7 +18,6 @@ Contains:
 
 import difflib
 import hashlib
-import json
 import logging
 import re
 import time
@@ -29,8 +28,8 @@ from dataclasses import dataclass
 import numpy as np
 import numpy.typing as npt
 import shapely
-from pydantic import BaseModel
 
+from showpy.core.canonical import canonical_value, jcs
 from showpy.core.errors import SchemaError
 from showpy.core.types import Points
 
@@ -39,6 +38,7 @@ NATURAL_CHUNK = re.compile(r"(\d+)")
 RANGE_PATTERN = re.compile(r"^([A-Za-z_]+)(\d+)-([A-Za-z_]+)(\d+)$")
 RANGE_DASH = "–"
 LOGGER = logging.getLogger("showpy")
+HASH_PREFIX = "showpy-hash/1"
 CLOSE_MATCH_COUNT = 3
 CLOSE_MATCH_CUTOFF = 0.4
 
@@ -155,21 +155,32 @@ def as_points(obj: object) -> Points:
     return array
 
 
-def content_hash(obj: object) -> str:
-    """Returns a SHA-256 hex digest of canonical content.
+def content_hash(obj: object, *, domain: str = "showpy.content") -> str:
+    """Hashes a value as SHA-256 over domain-tagged canonical JSON (ADR 0014).
 
-    >>> content_hash({"a": 1}) == content_hash({"a": 1})
+    Bytes and text hash as themselves under their own kind tag, so the string `'{"a":1}'` and
+    the object `{"a": 1}` never collide. Everything else hashes as RFC 8785 JSON.
+
+    Args:
+        obj: Bytes, text or any value `canonical_value` accepts.
+        domain: Name of what the hash identifies, so equal content in two domains differs.
+
+    Returns:
+        digest: 64 lowercase hex characters.
+
+    >>> content_hash({"a": 1}) == content_hash({"a": 1.0})
     True
+    >>> content_hash({"a": 1}) == content_hash({"a": 1}, domain="showpy.revision")
+    False
     """
     if isinstance(obj, bytes):
-        payload = obj
+        kind, payload = "bytes", obj
     elif isinstance(obj, str):
-        payload = obj.encode()
+        kind, payload = "str", str(canonical_value(obj)).encode()
     else:
-        if isinstance(obj, BaseModel):
-            obj = obj.model_dump(mode="json")
-        payload = json.dumps(obj, sort_keys=True, separators=(",", ":"), default=str).encode()
-    return hashlib.sha256(payload).hexdigest()
+        kind, payload = "json", jcs(obj)
+    head = f"{HASH_PREFIX}\n{domain}\n{kind}\n".encode()
+    return hashlib.sha256(head + payload).hexdigest()
 
 
 def chunk_counts(total: float, parts: int) -> list[float]:

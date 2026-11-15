@@ -8,6 +8,8 @@ Contains:
     test_jcs_*(): one serialization rule of RFC 8785 each
     test_canonical_value_*(): one normalization rule of ADR 0014 decision 1 each
     test_*_rejects_*(): one input that must raise SchemaError each
+    test_canonical_value_dumps_numpy_model_fields_in_full: keeps every element of an array field
+    test_canonical_value_rejects_unsupported_model_fields: raises on a model field of unknown type
     test_jcs_matches_the_rfc8785_package(): compares jcs with the rfc8785 reference encoder
 """
 
@@ -19,7 +21,7 @@ import pytest
 import rfc8785
 from hypothesis import given
 from hypothesis import strategies as st
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from showpy.core.canonical import JsonValue, canonical_value, jcs
 from showpy.core.errors import SchemaError
@@ -32,6 +34,14 @@ class Inner(BaseModel):
     """Holds one float, to test nested model normalization."""
 
     value: float
+
+
+class Holder(BaseModel):
+    """Holds an arbitrary object, to test model fields of numpy and unsupported types."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    content: object
 
 
 class Outer(BaseModel):
@@ -312,3 +322,15 @@ def test_jcs_matches_the_rfc8785_package(value: JsonValue) -> None:
     IntegerDomainError, while jcs keeps Python ints exact at any size.
     """
     assert jcs(value) == rfc8785.dumps(value)
+
+
+def test_canonical_value_dumps_numpy_model_fields_in_full() -> None:
+    long_array = np.arange(LONG_ARRAY_LENGTH, dtype=float)
+
+    assert canonical_value(Holder(content=long_array)) == {"content": long_array.tolist()}
+    assert canonical_value(Holder(content=np.int64(4))) == {"content": 4}
+
+
+def test_canonical_value_rejects_unsupported_model_fields() -> None:
+    with pytest.raises(SchemaError):
+        canonical_value(Holder(content=object()))

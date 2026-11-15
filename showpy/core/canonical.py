@@ -95,7 +95,7 @@ def _normalize(obj: object, depth: int) -> JsonValue:
     if obj is None or isinstance(obj, bool | str | int | float):
         return _normalize_scalar(obj)
     if isinstance(obj, BaseModel):
-        return _normalize(obj.model_dump(mode="json"), depth)
+        return _normalize(obj.model_dump(mode="json", fallback=_numpy_content), depth)
     if isinstance(obj, np.ndarray | np.generic):
         return _normalize(obj.tolist() if isinstance(obj, np.ndarray) else obj.item(), depth)
     if isinstance(obj, Mapping):
@@ -108,6 +108,19 @@ def _normalize(obj: object, depth: int) -> JsonValue:
         f"cannot canonicalize a value of type {type(obj).__name__}",
         hint=SUPPORTED_HINT,
         context={"type": type(obj).__qualname__},
+    )
+
+
+def _numpy_content(value: object) -> object:
+    """Dumps a numpy value held by a model field in full; any other unknown type is rejected."""
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    raise SchemaError(
+        f"cannot canonicalize a model field of type {type(value).__name__}",
+        hint=SUPPORTED_HINT,
+        context={"type": type(value).__qualname__},
     )
 
 
