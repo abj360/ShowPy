@@ -22,9 +22,11 @@ from PIL import Image, ImageDraw
 
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import EntityState, Frame
+from showpy.core.caps import MAX_VIDEO_PIXELS, require_size
 from showpy.core.errors import SchemaError, StorageError, TimeRangeError, UnknownRefError
 from showpy.core.types import Count, Point
 from showpy.core.units import facing_vector
+from showpy.core.validation import require_finite
 from showpy.sheet.render import BACKGROUND, SheetCanvas, draw_sheet
 from showpy.show.models import Show
 from showpy.time.clock import count_to_seconds
@@ -51,8 +53,10 @@ def video_canvas(show: Show, px_per_m: float = DEFAULT_PX_PER_M) -> SheetCanvas:
     >>> [n % 2 for n in video_canvas(two_set_show(), 7.0).size]
     [0, 0]
     """
+    px_per_m = require_finite(px_per_m, name="px_per_m", low=0, low_open=True)
     canvas = SheetCanvas.for_sheet(show.sheet, px_per_m=px_per_m)
     width, height = canvas.size
+    require_size((width + width % 2) * (height + height % 2), MAX_VIDEO_PIXELS, what="video pixels")
     pad_x = (width % 2) / px_per_m
     pad_y = (height % 2) / px_per_m
     return canvas.replace(max_x=canvas.max_x + pad_x, max_y=canvas.max_y + pad_y)

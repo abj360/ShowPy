@@ -31,6 +31,9 @@ Contains:
     test_regression_publish_does_not_mangle_a_base_url_query(): keeps a base URL query intact
     test_regression_qr_code_caps_the_image_size(): rejects a QR size that needs gigabytes
     test_regression_qr_code_wraps_an_overlong_link_error(): wraps the QR overflow in a ShowPyError
+    test_regression_qr_code_rejects_a_non_positive_or_non_integer_size(): rejects 0, negative, bool
+    test_regression_qr_code_rejects_a_size_just_over_the_pixel_cap(): rejects 6,325 px
+    test_regression_qr_code_overflow_error_hides_the_join_token(): keeps the token out of errors
     test_regression_qr_code_keeps_the_documented_error_level(): renders error level M as documented
     test_regression_pause_cannot_reopen_a_closed_publication(): refuses to pause a closed one
     test_regression_republish_from_closed_does_not_go_live(): refuses to republish a closed one
@@ -548,8 +551,6 @@ def test_regression_publish_does_not_mangle_a_base_url_query() -> None:
     assert pub.link == "https://eight.example/p/pub-1?ref=1"
 
 
-@pytest.mark.defect("UP-9.5-07")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-07")
 @fails_after(5)
 @pytest.mark.skipif(sys.platform != "linux", reason="RLIMIT_AS cap and signal timeout need Linux")
 def test_regression_qr_code_caps_the_image_size() -> None:
@@ -562,13 +563,36 @@ def test_regression_qr_code_caps_the_image_size() -> None:
         qr_code(pub, size=HUGE_QR_SIZE)
 
 
-@pytest.mark.defect("UP-9.5-08")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-08")
 def test_regression_qr_code_wraps_an_overlong_link_error() -> None:
     """Raises a ShowPyError, not segno.DataOverflowError, for a link too long for a QR code."""
     pub = _published().model_copy(update={"link": f"https://eight.example/{OVERLONG_PATH}"})
     with pytest.raises(ShowPyError):
         qr_code(pub)
+
+
+@pytest.mark.parametrize("size", [0, -5, True, 1.5, "512"])
+def test_regression_qr_code_rejects_a_non_positive_or_non_integer_size(size: Any) -> None:
+    """Rejects a size that is zero, negative, a bool or not an int."""
+    with pytest.raises(SchemaError):
+        qr_code(_published(), size=size)
+
+
+def test_regression_qr_code_rejects_a_size_just_over_the_pixel_cap() -> None:
+    """Rejects size 6,325 (40,005,625 pixels), one step over MAX_IMAGE_PIXELS."""
+    with pytest.raises(SchemaError, match="QR code pixels"):
+        qr_code(_published(), size=6325)
+
+
+def test_regression_qr_code_overflow_error_hides_the_join_token() -> None:
+    """Keeps the link, and so the join token, out of the overflow message and context."""
+    pub = _published().model_copy(
+        update={"link": f"https://eight.example/{OVERLONG_PATH}?t=SECRET"}
+    )
+    with pytest.raises(SchemaError) as caught:
+        qr_code(pub)
+    assert "SECRET" not in str(caught.value)
+    assert "SECRET" not in repr(caught.value.context)
+    assert isinstance(caught.value.__cause__, segno.DataOverflowError)
 
 
 def test_regression_qr_code_keeps_the_documented_error_level() -> None:

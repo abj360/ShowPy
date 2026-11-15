@@ -36,6 +36,7 @@ from PIL import Image
 
 from showpy.cast.models import Spot
 from showpy.choreo.models import Placement, Set
+from showpy.core.caps import MAX_IMAGE_PIXELS, require_size
 from showpy.core.errors import LockedError, SchemaError, UnknownRefError, ValidationError
 from showpy.core.ids import SpotId, TransitionId, format_tid
 from showpy.core.units import angle_diff
@@ -253,6 +254,27 @@ def pause(pub: Publication) -> Publication:
     return _with_status(pub, "paused")
 
 
+def _require_pixel_size(size: int) -> None:
+    if isinstance(size, bool) or not isinstance(size, int) or size < 1:
+        raise SchemaError(
+            f"QR code size must be a whole number of pixels, at least 1, got {size!r}",
+            hint="pass e.g. size=512",
+            context={"size": repr(size)},
+        )
+    require_size(size * size, MAX_IMAGE_PIXELS, what="QR code pixels")
+
+
+def _make_code(link: str) -> segno.QRCode:
+    try:
+        return segno.make(link, error=QR_ERROR_LEVEL, micro=False, boost_error=False)
+    except segno.DataOverflowError as err:
+        raise SchemaError(
+            "the publication link is too long for a QR code",
+            hint="shorten the base URL or the publication ID",
+            context={"link_length": len(link)},
+        ) from err
+
+
 def qr_code(pub: Publication, size: int = 512) -> bytes:
     r"""Renders the publication link as a square PNG QR code of `size` pixels.
 
@@ -263,7 +285,8 @@ def qr_code(pub: Publication, size: int = 512) -> bytes:
     >>> qr_code(live_publication(two_set_show()), size=128)[:4]
     b'\x89PNG'
     """
-    code = segno.make(pub.link, error=QR_ERROR_LEVEL, micro=False, boost_error=False)
+    _require_pixel_size(size)
+    code = _make_code(pub.link)
     rows = [
         tuple(bool(m) for m in row) for row in code.matrix_iter(scale=1, border=QR_QUIET_MODULES)
     ]
