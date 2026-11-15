@@ -12,3 +12,4 @@ node_modules/
 .hypothesis
 .nox
 .superpowers
+tests/bench/.results
