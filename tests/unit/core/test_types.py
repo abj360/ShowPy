@@ -212,3 +212,16 @@ def test_base_number_aliases_reject_non_finite_outside_models(
 def test_non_negative_types_reject_negative(field: str) -> None:
     with pytest.raises(SchemaError):
         _Constrained(**{field: -0.5})
+
+
+def test_regression_model_validate_strings_raises_schema_error() -> None:
+    with pytest.raises(SchemaError) as caught:
+        TempoSection.model_validate_strings({"at_count": "soon", "counts_per_minute": "120"})
+    assert caught.value.context["model"] == "TempoSection"
+    assert caught.value.context["errors"][0]["loc"] == "at_count"
+    assert isinstance(caught.value.__cause__, PydanticValidationError)
+
+
+def test_model_validate_strings_parses_valid_text() -> None:
+    tempo = TempoSection.model_validate_strings({"at_count": "8", "counts_per_minute": "120"})
+    assert (tempo.at_count, tempo.counts_per_minute) == (8.0, 120.0)

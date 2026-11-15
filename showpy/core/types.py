@@ -77,6 +77,14 @@ class FrozenModel(BaseModel):
         except ValidationError as exc:
             raise schema_error_from(exc, model=cls.__name__) from exc
 
+    @classmethod
+    def model_validate_strings(cls, obj: Any, **options: Any) -> Self:  # Any: pydantic passthrough
+        """Validates string-leaved data into this model, raising SchemaError on bad data."""
+        try:
+            return super().model_validate_strings(obj, **options)
+        except ValidationError as exc:
+            raise schema_error_from(exc, model=cls.__name__) from exc
+
     def replace(self, **changes: object) -> Self:
         """Returns a copy with `changes` applied, run through every validator.
 
