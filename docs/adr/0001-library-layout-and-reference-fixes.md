@@ -184,3 +184,8 @@ any other unknown tag. Re-tag old documents before import.
 The 2026-11-11 addendum counted 533 lazily re-exported names. After the repository split moved
 agent-only code out, `import showpy` re-exports 519 names, generated from
 `showpy/_api_table.py` and pinned by `tests/fixtures/api_snapshot.json`.
+
+## Addendum 2026-11-15: sheet replacement removed
+
+ADR 0017 removes `replace_sheet` and `SheetReplaceReport`: a show keeps the sheet it was created
+on. Rows 6 and 22 above describe a function that no longer exists from v0.3.0.
