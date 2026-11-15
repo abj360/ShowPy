@@ -85,6 +85,7 @@ PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 LATER = AT + timedelta(minutes=5)
 EARLIER = AT - timedelta(days=1)
 QR_QUIET_MODULES = 4
+DARK_MODULE, LIGHT_MODULE, ROW_BREAK = "#", ".", "|"
 HUGE_QR_SIZE = 100_000
 QR_MEMORY_CAP_BYTES = 1_500_000_000
 OVERLONG_PATH = "a" * 8000
@@ -344,6 +345,17 @@ def _module_grid(png: bytes, link: str) -> list[list[bool]]:
         ]
 
 
+def _grid_text(grid: list[list[bool]]) -> str:
+    """Spells a module grid as one line, rows split by "|", for an exact comparison.
+
+    Comparing the nested lists made pytest's CI-mode full diff run difflib's ndiff over every
+    row; before Python 3.14 that took about a minute per failing comparison.
+    """
+    return ROW_BREAK.join(
+        "".join(DARK_MODULE if dark else LIGHT_MODULE for dark in row) for row in grid
+    )
+
+
 def _claimed_with_contact() -> tuple[Show, Publication]:
     show = two_set_show()
     ada = performer("Ada").model_copy(update={"contact": CONTACT})
@@ -369,7 +381,8 @@ def _notified(old: Show, new: Show) -> list[tuple[Performer, str]]:
 
 def test_qr_code_matches_the_reference_symbol() -> None:
     pub = _published()
-    assert _module_grid(qr_code(pub), pub.link) == _reference_grid(pub.link, boost=True)
+    expected = _grid_text(_reference_grid(pub.link, boost=True))
+    assert _grid_text(_module_grid(qr_code(pub), pub.link)) == expected
 
 
 @pytest.mark.defect("UP-9.5-01")
@@ -472,7 +485,8 @@ def test_regression_qr_code_wraps_an_overlong_link_error() -> None:
 def test_regression_qr_code_keeps_the_documented_error_level() -> None:
     """Renders at error level M as documented; segno silently boosts it to Q by default."""
     pub = _published()
-    assert _module_grid(qr_code(pub), pub.link) == _reference_grid(pub.link, boost=False)
+    expected = _grid_text(_reference_grid(pub.link, boost=False))
+    assert _grid_text(_module_grid(qr_code(pub), pub.link)) == expected
 
 
 @pytest.mark.defect("UP-9.5-10")
