@@ -144,7 +144,14 @@ stubPath = "typings"
 [tool.pytest.ini_options]
 testpaths = ["tests", "showpy"]
 pythonpath = ["."]
-addopts = "--doctest-modules -q --strict-markers --import-mode=importlib -m 'not bench and not slow and not fuzz'"
+addopts = [
+    "--doctest-modules",
+    "-q",
+    "--strict-markers",
+    "--import-mode=importlib",
+    "-m",
+    "not bench and not slow and not fuzz",
+]
 markers = [
     "golden: replays real shows against reviewed fixtures",
     "bench: performance budget benchmarks; run with nox -s bench",
