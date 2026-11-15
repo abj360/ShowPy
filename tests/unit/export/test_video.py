@@ -16,7 +16,7 @@ Contains:
     test_regression_mp4_carries_bt709_colour_tags(): tags the stream BT.709 so players do not guess
         the colour matrix
     test_regression_video_canvas_caps_the_pixel_count(): rejects a 42,000 px wide canvas
-    test_regression_video_canvas_rejects_a_bad_scale(): rejects NaN, infinite, zero, negative or 1e308
+    test_regression_video_canvas_rejects_a_bad_scale(): rejects NaN, infinite, zero, or 1e308 scale
     test_regression_export_video_checks_the_size_before_ffmpeg(): fails before ffmpeg starts
     test_regression_frames_do_not_rebuild_the_cast_ids_per_spot(): builds the ID list once a frame
     test_regression_ffmpeg_start_failure_is_wrapped(): wraps a failed ffmpeg start in StorageError
