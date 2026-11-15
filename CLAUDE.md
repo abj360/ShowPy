@@ -36,8 +36,10 @@ showpy/
   examples.py  deterministic example shows for docs and tests
   schemas/  versioned JSON schemas (showpy.show.v1), shipped in the wheel
 tests/      unit/ property/ golden/ fixtures/
-docs/       API reference, ADRs, handoff notes, study guide
+docs/       API reference, ADRs, handoff notes
 ```
+
+The study guide lives in the private repository `https://github.com/abj360/ShowPy-guide`.
 
 Each package: `models.py` holds data classes; other files hold functions. Subpackage `__init__.py` files hold only a docstring; `showpy/__init__.py` re-exports the public API lazily.
 

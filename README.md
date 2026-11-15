@@ -126,7 +126,7 @@ showpy/
   examples.py  deterministic example shows
 showpy/schemas/ showpy.show.v1.json
 tests/      unit/ property/ golden/ fixtures/
-docs/       API reference, ADRs, handoff notes, study guide
+docs/       API reference, ADRs, handoff notes
 docker/     Dockerfile, docker-compose.yml
 ```
 
@@ -165,7 +165,7 @@ Read `CLAUDE.md`, `CONTRIBUTING.md` and the ADRs before changing anything. The P
 - `docs/showpy-api-reference.md`: the full API reference
 - `docs/adr/`: architecture decisions (layout and reference fixes; the PathEngine)
 - `docs/HANDOFF.md`: current state and next steps
-- `docs/guide/`: the study guide (PDF)
+- The study guide lives in the private repository <https://github.com/abj360/ShowPy-guide>
 - `CONTRIBUTING.md`: workflow and standards
 
 ## License
