@@ -46,6 +46,8 @@ Contains:
         radii instead of returning NaN angles
     test_regression_svg_outline_rejects_arcs_with_non_finite_geometry: raises SchemaError for 1e80
         radii instead of leaking IndexError
+    test_regression_svg_outline_rejects_a_path_with_too_many_pieces: raises a ShowPyError for
+        50,000 pieces
 """
 
 import math
@@ -268,6 +270,12 @@ def test_regression_svg_outline_rejects_arcs_with_non_finite_geometry() -> None:
     """Raises SchemaError for 1e80 radii instead of leaking IndexError and a RuntimeWarning."""
     with pytest.raises(SchemaError):
         svg_outline(NAN_ARC_PATH + " L2 0", BOX)
+
+
+def test_regression_svg_outline_rejects_a_path_with_too_many_pieces() -> None:
+    """Raises a ShowPyError for 50,000 pieces instead of building a 12.8-million-sample table."""
+    with pytest.raises(ShowPyError):
+        svg_outline("M0 0" + "h1" * 50_000, BOX)
 
 
 @pytest.mark.defect("UP-9.1-44")

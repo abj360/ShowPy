@@ -23,7 +23,7 @@ import numpy as np
 import numpy.typing as npt
 import shapely
 
-from showpy.core.caps import MAX_POINTS, require_size
+from showpy.core.caps import MAX_POINTS, MAX_TABLE, require_size
 from showpy.core.errors import GeometryError, ZeroLengthError
 from showpy.core.types import FrozenModel, Meters, Point, Points
 from showpy.geo.checks import require_finite_as
@@ -111,6 +111,7 @@ class CurveBase(FrozenModel):
 
     @cached_property
     def _table(self) -> tuple[FloatArray, FloatArray]:
+        require_size(self._table_size(), MAX_TABLE, what="curve table samples", error=GeometryError)
         t = np.linspace(0.0, 1.0, self._table_size())
         pts = self._native(t)
         s = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(pts, axis=0), axis=1))])
