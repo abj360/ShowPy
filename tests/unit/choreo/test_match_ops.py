@@ -13,6 +13,7 @@ Contains:
     test_regression_apply_match_rejects_leaving_an_interior_slot_empty: raises MatchError
         when a matched spot leaves a hole between members
     test_regression_apply_match_respects_locked_forms: needs force to change a locked form
+    test_regression_apply_match_rejects_a_form_of_another_set: raises MatchError before writing
     test_regression_apply_match_rejects_an_unknown_form: raises UnknownRefError
     test_apply_match_leaves_unchanged_slots_alone: skips spots already in their slot
     test_apply_match_trims_trailing_empty_slots: drops trailing holes from members
@@ -188,6 +189,15 @@ def test_regression_apply_match_respects_locked_forms() -> None:
     with pytest.raises(LockedError):
         apply_match(show, TID, result)
     assert apply_match(show, TID, result, force=True).forms["ring"].members == tuple(REVERSED_RING)
+
+
+def test_regression_apply_match_rejects_a_form_of_another_set() -> None:
+    """Refuses slots of a form outside the destination set, writing nothing (audit 9.6; P0 #12)."""
+    show, ring = _ring_show()
+    show = show.replace(forms={"ring": ring.replace(set="1")})
+    result = match_by_order(REVERSED_RING, show.forms["ring"], show.set("1"))
+    with pytest.raises(MatchError):
+        apply_match(show, TID, result)
 
 
 def test_regression_apply_match_rejects_an_unknown_form() -> None:

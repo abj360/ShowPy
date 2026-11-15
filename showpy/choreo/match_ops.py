@@ -76,7 +76,7 @@ def _neighbour_tids(show: Show, set_id: SetId) -> list[TransitionId]:
     return [tid for tid in show.transition_ids() if set_id in tid]
 
 
-def _slot_targets(show: Show, result: MatchResult) -> dict[SpotId, Placement]:
+def _slot_targets(show: Show, set_id: SetId, result: MatchResult) -> dict[SpotId, Placement]:
     poses: dict[FormId, tuple[Points, list[float]]] = {}
     targets = {}
     for entity, (form_id, slot) in result.slots.items():
@@ -87,6 +87,12 @@ def _slot_targets(show: Show, result: MatchResult) -> dict[SpotId, Placement]:
                     f"match result names unknown form {form_id!r}",
                     hint="match onto forms of this show, or match onto points",
                     context={"form": form_id, "forms": sorted(show.forms)},
+                )
+            if form.set != set_id:
+                raise MatchError(
+                    f"form {form_id} belongs to set {form.set}, not {set_id}",
+                    hint=f"match onto forms of set {set_id}",
+                    context={"form": form_id, "form_set": form.set, "set": set_id},
                 )
             poses[form_id] = slot_poses(form)
         points, facings = poses[form_id]
@@ -190,7 +196,7 @@ def apply_match(show: Show, tid: TransitionId, result: MatchResult, force: bool 
         updates = _point_updates(dest, result)
         edited = with_set(show, dest.with_placements(updates, force=force))
         return clear_rows(edited, tid, list(updates), force)
-    slot_updates = _slot_updates(dest, _slot_targets(show, result))
+    slot_updates = _slot_updates(dest, _slot_targets(show, tid[1], result))
     forms_edited = _matched_forms(show, tid[1], result, force)
     edited = with_set(forms_edited, dest.with_placements(slot_updates, force=force))
     relocated = [e for e, p in slot_updates.items() if _is_elsewhere(dest.get(e), p.x, p.y)]
