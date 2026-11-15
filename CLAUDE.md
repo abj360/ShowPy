@@ -33,13 +33,16 @@ showpy/
   choreo/   Placement, Set, forms, match, paths, routes, motion, engine, facing, avoid, motion_stats
   show/     Show, manage, sections, storage, repositories, history, collab, validate, paths_store
   export/   publish (claims), print sheets, PDF, data, positions, video (2D)
-  examples.py  deterministic example shows for docs and tests
+  examples/ deterministic example shows for docs and tests: sheets, shows, publishing
   schemas/  versioned JSON schemas (showpy.show.v1), shipped in the wheel
 tests/      unit/ property/ golden/ fixtures/
-docs/       API reference, ADRs, handoff notes, study guide
+docs/       API reference, ADRs, handoff notes
 ```
 
+The study guide lives in the public repository `https://github.com/abj360/ShowPy-guide`.
+
 Each package: `models.py` holds data classes; other files hold functions. Subpackage `__init__.py` files hold only a docstring; `showpy/__init__.py` re-exports the public API lazily.
+Exception: `showpy/examples/__init__.py` re-exports its names, so `from showpy.examples import two_set_show` stays one import path.
 
 ## Core concepts (read before editing)
 

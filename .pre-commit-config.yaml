@@ -9,7 +9,6 @@ repos:
       - id: trailing-whitespace
       - id: check-added-large-files
         args: ["--maxkb=1024"]
-        exclude: ^docs/guide/stage-library-guide\.pdf$
       - id: check-merge-conflict
   - repo: https://github.com/crate-ci/typos
     rev: v1.52.2
