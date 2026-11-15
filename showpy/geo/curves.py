@@ -31,6 +31,7 @@ from scipy.special import comb
 
 from showpy.core.errors import GeometryError, schema_error_from
 from showpy.core.types import Degrees, Meters, Point, Points
+from showpy.geo.checks import require_finite_as
 from showpy.geo.curve_base import CurveBase, FloatArray, _unit
 from showpy.geo.svg import Subpath, parse_path
 
@@ -135,6 +136,7 @@ class Polyline(CurveModel):
     @override
     def to_polyline(self, tol: float = 0.01) -> Points:
         """Returns the vertices themselves, closing the loop when closed."""
+        require_finite_as(GeometryError, tol, name="tol", low=0.0, low_open=True)
         return self._vertices.copy()
 
 
