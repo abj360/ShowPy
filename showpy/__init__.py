@@ -361,6 +361,7 @@ if TYPE_CHECKING:
         swap_claims,
         unclaimed,
         unpublish,
+        verify_join_token,
         who_is_on,
     )
     from showpy.export.video import (
@@ -1236,6 +1237,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "validate_show": ("showpy.show.validate", "validate_show"),
     "validate_timeline": ("showpy.time.validate", "validate_timeline"),
     "vector_facing": ("showpy.core.units", "vector_facing"),
+    "verify_join_token": ("showpy.export.publish", "verify_join_token"),
     "video_canvas": ("showpy.export.video", "video_canvas"),
     "walkable": ("showpy.sheet.bounds", "walkable"),
     "weave": ("showpy.choreo.motion", "weave"),
@@ -1774,6 +1776,7 @@ __all__ = [
     "validate_show",
     "validate_timeline",
     "vector_facing",
+    "verify_join_token",
     "video_canvas",
     "walkable",
     "weave",

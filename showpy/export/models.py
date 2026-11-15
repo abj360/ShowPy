@@ -13,14 +13,19 @@ Contains:
     PerformerView: holds what one performer sees: their spot in every set and their path
 """
 
+import re
 from datetime import datetime
 from typing import Literal
+
+from pydantic import field_validator
 
 from showpy.core.ids import SetId, SpotId
 from showpy.core.types import Count, Degrees, FrozenModel, Point
 from showpy.time.models import MeasureLabel
 
 type PublicationStatus = Literal["live", "paused", "closed"]
+SHA256_HEX = re.compile(r"[0-9a-f]{64}")
+
 type PerformerRole = Literal["performer", "crew"]
 
 
@@ -157,7 +162,8 @@ class Publication(FrozenModel):
         id: Publication ID, stable across republishing.
         show_id: Show published.
         revision: Show revision the publication shows.
-        link: Public link performers open.
+        link: Public link performers open; it carries the join token as `?t=<token>`.
+        join_token_sha256: SHA-256 hex digest of the join token; the raw token is never stored.
         status: `live`, `paused` or `closed`.
         published_at: When this revision was published.
         claims: Claims in natural spot order.
@@ -167,9 +173,17 @@ class Publication(FrozenModel):
     show_id: str
     revision: str
     link: str
+    join_token_sha256: str | None = None
     status: PublicationStatus = "live"
     published_at: datetime
     claims: tuple[Claim, ...] = ()
+
+    @field_validator("join_token_sha256")
+    @classmethod
+    def _check_digest(cls, value: str | None) -> str | None:
+        if value is not None and SHA256_HEX.fullmatch(value) is None:
+            raise ValueError("join_token_sha256 must be 64 lowercase hex characters")
+        return value
 
 
 class PerformerView(FrozenModel):

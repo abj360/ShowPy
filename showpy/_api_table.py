@@ -533,6 +533,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("validate_show", "showpy.show.validate", "validate_show"),
     ("validate_timeline", "showpy.time.validate", "validate_timeline"),
     ("vector_facing", "showpy.core.units", "vector_facing"),
+    ("verify_join_token", "showpy.export.publish", "verify_join_token"),
     ("video_canvas", "showpy.export.video", "video_canvas"),
     ("walkable", "showpy.sheet.bounds", "walkable"),
     ("weave", "showpy.choreo.motion", "weave"),
