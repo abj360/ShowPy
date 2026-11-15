@@ -57,6 +57,7 @@ import sys
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from typing import Any
 
 import pytest
 import segno
@@ -433,10 +434,17 @@ def test_regression_claims_and_notices_return_redacted_performers() -> None:
     assert all(who.contact is None for who, _ in notices)
 
 
+def _require_contacts(stored: dict[str, Any]) -> None:
+    claims_ = stored["claims"]
+    assert claims_
+    assert all(c["performer"]["contact"] == CONTACT for c in claims_)
+
+
 def _legacy_publication() -> tuple[Show, Publication]:
     show, pub = _claimed_with_contact()
     stored = pub.model_dump(mode="json")
     stored["claims"][0]["performer"]["contact"] = CONTACT
+    _require_contacts(stored)
     return show, Publication.model_validate(stored)
 
 
@@ -481,6 +489,7 @@ def _three_claim_legacy() -> tuple[Show, Publication]:
     stored = _with_claims(show, ("Ada", "T1"), ("Bo", "T2"), ("Cy", "T3")).model_dump(mode="json")
     for claim in stored["claims"]:
         claim["performer"]["contact"] = CONTACT
+    _require_contacts(stored)
     return show, Publication.model_validate(stored)
 
 
