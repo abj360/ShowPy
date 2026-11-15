@@ -21,6 +21,8 @@ Contains:
         alone and does not refuse the match because of it
     test_regression_apply_match_rejects_slots_of_a_form_the_set_no_longer_places: raises
         MatchError instead of writing a stale form
+    test_regression_swap_ignores_a_form_the_set_no_longer_places: neither swaps the members of a
+        stale form nor raises LockedError for a locked one
     test_apply_match_leaves_unchanged_slots_alone: skips spots already in their slot
     test_apply_match_trims_trailing_empty_slots: drops trailing holes from members
     test_regression_clear_rows_keeps_transition_order: leaves show.transitions in their original
@@ -241,6 +243,16 @@ def test_regression_apply_match_rejects_slots_of_a_form_the_set_no_longer_places
     with pytest.raises(MatchError) as caught:
         apply_match(show, TID, result)
     assert caught.value.context == {"form": "a", "set": "2", "set_forms": ["b"]}
+
+
+def test_regression_swap_ignores_a_form_the_set_no_longer_places() -> None:
+    """Swaps only forms the set lists, even when a stale form is locked (lane G review)."""
+    show = replaced_form_show()
+    stale = show.forms["a"].replace(locked=True)
+    show = show.replace(forms={**show.forms, "a": stale})
+    swapped = swap(show, "2", "T2", "T3")
+    assert swapped.forms["a"] == stale
+    assert swapped.forms["b"].members == ("T3", "T2")
 
 
 def test_apply_match_leaves_unchanged_slots_alone() -> None:

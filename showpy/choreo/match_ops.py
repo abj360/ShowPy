@@ -257,8 +257,8 @@ def _swap_members(members: tuple[SpotId, ...], a: SpotId, b: SpotId) -> tuple[Sp
 
 def _swap_forms(show: Show, set_id: SetId, a: SpotId, b: SpotId, force: bool) -> Show:
     forms = dict(show.forms)
-    for form_id, form in show.forms.items():
-        if form.set != set_id or not {a, b} & set(form.members):
+    for form_id, form in forms_of_set(show, set_id).items():
+        if not {a, b} & set(form.members):
             continue
         check_unlocked(form, force)
         members = _swap_members(form.members, a, b)
@@ -273,8 +273,9 @@ def _spot_fields(placement: Placement) -> dict[str, object]:
 def swap(show: Show, set_id: SetId, a: SpotId, b: SpotId, force: bool = False) -> Show:
     """Swaps where two spots stand in one set, with facing and form slot.
 
-    Form members are swapped too, so regenerating a form keeps the swap, and both spots'
-    path rows into and out of the set are dropped. Pins and locks need force=True.
+    Members of the set's forms (`forms_of_set`) are swapped too, so regenerating a form keeps
+    the swap, and both spots' path rows into and out of the set are dropped. Pins and locks
+    need force=True.
 
     >>> from showpy.examples import two_set_show
     >>> swap(two_set_show(), "2", "T1", "T4").set("2").get("T1").x
