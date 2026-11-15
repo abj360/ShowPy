@@ -78,7 +78,7 @@ hold old `source_hash` values. The change must not lose or rewrite any of that.
      first `normalize` revision on (below).
    - **Stored documents** written by v0.1 or v0.2 can differ from today's canonical bytes (`-0.0`,
      frozenset order). The first save after the upgrade commits a separate revision of kind
-     `normalize`, by `system`, holding only the re-encoded documents, and then the edit on top.
+     `normalize`, holding only the re-encoded documents, and then the edit on top.
      Its decoded show equals the stored show, so `diff_show` is empty; `events_since` and
      proposals skip `normalize` revisions. A second save adds none.
    - **Hashes held outside ShowPy** (consumer `source_hash`, publication `revision` of an unsaved

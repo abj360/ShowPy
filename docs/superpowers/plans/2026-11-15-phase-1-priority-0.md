@@ -73,8 +73,8 @@ Master plan: `/home/uapb-ai/.claude/plans/look-at-the-upgrade-nifty-kay.md` ("Ph
    revision IDs are never rewritten, the first save writes exactly one `normalize` revision and a
    second save none, and consumer-held hashes (`Set.source_hash`, unsaved-show publication
    revisions) mismatch exactly once. Pinned by L0.9's fixture and A6's tests.
-2. **Consumers pinned to v0.2.0.** Agent writes are no longer refused, canvas events need an
-   explicit `force`, `replace_sheet` and `SheetReplaceReport` are gone, and `place()`'s return
+2. **Consumers pinned to v0.2.0.** Agent writes are no longer refused, `actor=` and
+   `principal` are gone, undo is shared per show, canvas events need an explicit `force`, `replace_sheet` and `SheetReplaceReport` are gone, and `place()`'s return
    type, `frozenset` tags and selections, `content_hash` values and `publish(join_token=)` all
    change. Expected: removed or re-typed names appear in the API snapshot diff and the
    changelog. Pinned by A4's tests, F1 and X3's release notes.
@@ -509,7 +509,7 @@ truncated object or tree) with `context={"show", "path"}`.
   `require_valid_tree(before: Mapping[str, bytes], after: Mapping[str, bytes]) -> Show | None`:
   raises `StorageError` code `BAD_PATH` for a path outside `KNOWN_ROOTS`; when any
   show document changed, decodes `after` (raising `SchemaError` on failure) and returns it.
-- `DocumentRepository.transaction` calls it before `backend.commit`, for every actor alike.
+- `DocumentRepository.transaction` calls it before `backend.commit`, for every caller alike.
 
 - [ ] **Step 1:** Run both tests with `--runxfail`; expect the garbage commit and the unknown
       root to land.
@@ -520,7 +520,7 @@ truncated object or tree) with `context={"show", "path"}`.
       body.
 - [ ] **Step 5:** Commit `fix(show): validate every commit before it lands`.
 
-### Task A4: remove the half-built permission checks (ADR 0003)
+### Task A4: remove the permission checks and the actor record (ADR 0003)
 
 **Deletes:** UP-9.7-08, UP-9.7-09, UP-9.7-10, UP-9.7-11, UP-9.7-12, UP-9.7-13 (out of scope by ADR
 0003). **Files:** Modify `showpy/show/storage.py` (drop `DESIGNER_PRINCIPALS`,
@@ -530,22 +530,29 @@ assert an agent refusal.
 
 **Interfaces:**
 
-- `actor=`, `open_workspace(repo, show_id, principal)`, `Workspace.principal` and
-  `Revision.actor` stay as recorded labels; no code in `showpy/` branches on their value
-  (checked by `grep -rn '"agent"' showpy/` returning only docstrings and examples).
+- Removes `Principal`, `actor=` from the six `DocumentRepository` writes and every helper that
+  passes it, the `principal` argument of `open_workspace`, `Workspace.principal`,
+  `Revision.actor` and `CanvasEvent.actor`. `open_workspace(repo, show_id) -> Workspace`.
+- Decoding stored revision records and events drops a legacy `actor` key (v0.1 and v0.2
+  repositories), so `FrozenModel`'s `extra="forbid"` still holds for new data.
+- `undo` and `redo` use one stack per show (`_stacks(log)`), and `changelog` lines read
+  `<short id> <at> <message> (<paths>)`.
+- `grep -rnE 'actor|principal|Principal' showpy/` returns nothing.
 - `collab.py`: `_require_designer` and the agent refusal in `accept_proposal` are removed;
   applying a canvas event takes keyword-only `force: bool = False` from the caller instead of
   `force=event.actor != "agent"`.
 
-- [ ] **Step 1:** Write `test_regression_agent_write_is_recorded_not_judged`: an `actor="agent"`
-      workspace commit that writes `/config/limits.yaml` lands, and its revision's `actor` is
-      `agent`. Write `test_canvas_event_needs_explicit_force`: a designer event that moves a
+- [ ] **Step 1:** Write `test_any_valid_write_lands`: a workspace commit that writes
+      `/config/limits.yaml` lands. Write `test_regression_v02_revisions_load_without_actor`: L0.9's
+      fixture loads, and its revisions have no `actor`. Write `test_undo_is_shared_per_show`: two
+      workspaces edit in turn, and `undo` from either reverses the latest edit. Write `test_canvas_event_needs_explicit_force`: a designer event that moves a
       pinned spot raises `LockedError` without `force=True` and lands with it. Run; expect FAIL.
 - [ ] **Step 2:** Implement. Delete the six ledger tests and every other test that asserts an
       agent refusal, listing each deleted test name in the commit body.
 - [ ] **Step 3:** Regenerate the API table and snapshot if a public name changed.
 - [ ] **Step 4:** Commit `feat(show)!: leave permissions to the host` with a `BREAKING CHANGE:`
-      footer: agent writes are no longer refused; canvas events need an explicit `force`.
+      footer: agent writes are no longer refused; `actor`, `principal` and `Principal` are
+      removed; undo is shared per show; canvas events need an explicit `force`.
 
 ### Task A5: stable set keys (ADR 0004, ADR 0006)
 
@@ -581,7 +588,7 @@ assert an agent refusal.
 `normalize`). Test `tests/unit/show/test_legacy_repository.py`.
 
 **Interfaces:** `save_show` re-encodes the decoded base tree; when any show document differs from
-its stored bytes, it first commits those documents as `kind="normalize"`, actor `system`,
+its stored bytes, it first commits those documents as `kind="normalize"`,
 message `normalize stored documents`, then the edit on top.
 
 - [ ] **Step 1:** Tests on L0.9's fixture: after `save_show` of the unchanged head there is
@@ -1035,13 +1042,14 @@ Branch `chore/p1-exit`.
 (the changed names only).
 
 - [ ] **Step 1:** `uv run nox -s changelog`; check every breaking name is listed: agent writes no
-      longer refused, canvas-event `force=`, `replace_sheet` and `SheetReplaceReport` (removed),
+      longer refused, `actor=`, `principal`, `Principal`, `Revision.actor`, `CanvasEvent.actor`
+      (removed), shared undo, canvas-event `force=`, `replace_sheet` and `SheetReplaceReport` (removed),
       `Set.key`, `RevisionKind "normalize"`, `Spot.tags`,
       `Cast.selections`, `content_hash` (values and `domain=`), `FrozenModel.replace`, `force=`
       on four cast edits and `two_part`, `publish(join_token=)`, `place()`'s return type,
       `similarity_fit` reflections, `to_csv(neutralize=)`, the caps.
 - [ ] **Step 2:** Write the release notes used for the tag message and the GitHub release body,
-      with a "Migrating from v0.2" section: permissions in the host, a new show instead of
+      with a "Migrating from v0.2" section: permissions and authorship in the host, a new show instead of
       `replace_sheet`, contacts in the host's roster, hashes stale once, set keys after a renumber, `place()` returning a tuple.
 - [ ] **Step 3:** Update `docs/HANDOFF.md`: ledger count, Phase 1 done, Phase 2 next.
 - [ ] **Step 4:** Commit `chore(release): prepare v0.3.0`. The controller asks the maintainer to

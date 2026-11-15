@@ -1,4 +1,4 @@
-# ADR 0003: Authorization belongs to the host; ShowPy validates and records
+# ADR 0003: Authorization and authorship belong to the host; ShowPy validates
 
 - Status: Accepted (2026-11-15)
 - Date: 2026-11-15
@@ -43,9 +43,20 @@ maintainer will build it there (2026-11-15).
    - `collab.py` drops its agent checks (`_require_designer`, the agent refusal in
      `accept_proposal`) and the implicit `force=event.actor != "agent"`: applying a canvas event
      takes an explicit keyword `force: bool = False` from the caller, like every other edit.
-3. **ShowPy still records who made each change.** `actor=` on repository writes, the
-   `principal` of `open_workspace` and `Revision.actor` stay, as a label for history, blame and
-   conflict messages. ShowPy never branches on its value.
+3. **ShowPy does not record who made a change** (maintainer's decision, 2026-11-15). The host
+   app keeps authorship, keyed by revision ID.
+   - Removed: the `Principal` type, `actor=` on the six repository writes, the `principal`
+     argument of `open_workspace`, `Workspace.principal`, `Revision.actor` and
+     `CanvasEvent.actor`.
+   - A `Revision` keeps `id`, `parent`, `at` (date and time), `message`, `changed` (the paths it
+     altered), `kind` and `target`.
+   - Undo and redo become one shared stack per show: `undo` reverses the latest undoable
+     revision, whoever made it. A host that wants per-user undo calls `revert(ws, revision_id, at)`
+     on the revisions it knows its user made.
+   - Reading a v0.1 or v0.2 repository drops the stored `actor` key from revision records and
+     events; nothing on disk is rewritten.
+   - Comment and note `author` fields stay: they are part of what the comment says, not a record
+     of who saved it.
 4. **ShowPy still guards the data, for every caller.**
    - Every commit is validated in `DocumentRepository.transaction`, the one write funnel: paths
      must sit under a known root (`/show`, `/time`, `/sets`, `/transitions`, `/canvas`,
@@ -65,17 +76,20 @@ maintainer will build it there (2026-11-15).
   product, which will enforce them itself, and rule 8 keeps consumer logic out of the library.
 - **Keep today's partial checks.** Rejected: they look like protection and are bypassed six ways
   (UP-9.7-08 to UP-9.7-13). A half-enforced rule is worse than none, because a host may trust it.
-- **Remove the `actor` label too.** Rejected: history, blame and conflict messages need to say
-  who made a change, and that is shared domain data.
+- **Keep `actor` as a recorded label (the second draft of this ADR).** Rejected by the
+  maintainer, 2026-11-15: three fixed values (`designer`, `agent`, `system`) cannot name a person
+  or an agent run, ShowPy cannot verify them, and the app already knows who is acting.
 - **Make every permission check opt-in through a policy hook.** Rejected for now: no second
   consumer needs it. Revisit if two hosts end up writing the same rules.
 
 ## Consequences
 
-- Breaking for consumers that relied on the agent refusals (release notes, v0.3.0): an
-  `actor="agent"` write that used to be refused now lands if the data is valid. The host must
-  refuse it first.
+- Breaking for consumers (release notes, v0.3.0): agent writes that used to be refused now land
+  if the data is valid, so the host must refuse them first; every write and `open_workspace`
+  lose their actor argument; undo is shared per show.
 - Canvas events no longer get `force` from their actor; callers pass `force=True` explicitly.
+- Conflict messages and `changelog` lines name the revision, time, message and paths, not a
+  person.
 - The six permission ledger tests (UP-9.7-08 to UP-9.7-13) are deleted as out of scope, with this
   ADR as the reason. UP-9.7-06 and UP-9.7-07 stay and are fixed.
 - Commits that touch show documents decode the after tree once: about 70 ms at 300 spots x 60
@@ -90,6 +104,7 @@ maintainer will build it there (2026-11-15).
 | Measure                                               | Today                   | After       |
 | ----------------------------------------------------- | ----------------------- | ----------- |
 | Write paths that branch on the principal              | 3 (workspace, 2 collab) | 0           |
+| Stored fields naming who saved (`Revision`, event)    | 2                       | 0           |
 | Write paths that validate the committed tree          | 0 of 7                  | 7 of 7      |
 | Permission ledger tests                               | 6 open                  | 0 (deleted) |
 | Validity ledger tests (UP-9.7-06, UP-9.7-07) passing  | 0 of 2                  | 2 of 2      |
