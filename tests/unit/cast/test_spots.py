@@ -59,8 +59,9 @@ from showpy.core.types import Region
 from showpy.core.util import approx_equal
 from showpy.geo.regions import region
 from showpy.geo.shapes import line
+from showpy.show.manage import add_set
 from showpy.show.models import Show
-from showpy.show.pinning import pin
+from showpy.show.pinning import pin, unpin
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.shows import two_set_show
 
@@ -380,6 +381,26 @@ def test_regression_add_spot_refusal_names_the_pinned_set() -> None:
     with pytest.raises(LockedError) as info:
         add_spot(_with_pinned_set(), (1.0, 2.0), "trumpets", "2")
     assert "set 2" in info.value.message
+
+
+def test_regression_forced_add_into_pinned_set_stays_protected() -> None:
+    """Flags a forced addition to a pinned set, so an unforced delete refuses it."""
+    added = add_spot(_with_pinned_set(), (1.0, 2.0), "trumpets", "2", force=True)
+    assert added.set("2").get("T5").pinned
+    with pytest.raises(LockedError):
+        delete_spots(added, "T5")
+    assert "T5" not in delete_spots(added, "T5", force=True).cast.ids()
+    assert not unpin(added, "set", "2").set("2").get("T5").pinned
+
+
+def test_regression_spot_entering_before_two_pinned_sets_names_both() -> None:
+    """Names every pinned set a new spot would enter."""
+    show = add_set(two_set_show(), "3", 4.0)
+    pinned = pin(pin(show, "set", "2"), "set", "3")
+    with pytest.raises(LockedError) as info:
+        add_spot(pinned, (1.0, 2.0), "trumpets", "1")
+    assert "set 2" in info.value.message
+    assert "set 3" in info.value.message
 
 
 def _pinned_coordinates(show: Show, spot_id: str) -> list[tuple[float, float]]:

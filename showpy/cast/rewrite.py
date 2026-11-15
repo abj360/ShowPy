@@ -44,8 +44,8 @@ def rewrite_spot_ids(show: "Show", rename: Rename) -> "Show":
 
     Covers the cast, named selections, placements, forms, path rows (keys, entities and
     entity facings), routes, note anchors, facing overrides, entity pins and zones of the
-    show and its sheet. String
-    selectors that name labels are frozen to the rewritten ID list; others stay as written.
+    show and its sheet. String selectors that name labels are frozen to the rewritten ID
+    list; others stay as written.
     Callers check that the result keeps IDs unique.
 
     >>> from showpy.examples import two_set_show

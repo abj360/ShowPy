@@ -92,8 +92,13 @@ def _default_shape(group: Group) -> Shape:
     return Shape(radius_m=radius, width_m=2 * radius, depth_m=2 * radius)
 
 
-def _new_placements(entries: Sequence[tuple[Spot, Point]], on_field: bool) -> tuple[Placement, ...]:
-    return tuple(Placement(entity=s.id, x=p[0], y=p[1], on_field=on_field) for s, p in entries)
+def _new_placements(
+    entries: Sequence[tuple[Spot, Point]], on_field: bool, is_pinned: bool
+) -> tuple[Placement, ...]:
+    return tuple(
+        Placement(entity=s.id, x=p[0], y=p[1], on_field=on_field, pinned=is_pinned)
+        for s, p in entries
+    )
 
 
 def _pinned_set_ids(show: "Show") -> frozenset[SetId]:
@@ -118,7 +123,9 @@ def _require_pictures_kept(
     """Raises LockedError when `after` changes a pinned picture of `before` beyond `rename`."""
     if force:
         return
-    renamed = rewrite_spot_ids(before, lambda spot_id: rename.get(spot_id, spot_id))
+    renamed = (
+        rewrite_spot_ids(before, lambda spot_id: rename.get(spot_id, spot_id)) if rename else before
+    )
     require_unlocked(renamed, after)
     entered = _entered_pinned_sets(renamed, after)
     if entered:
@@ -134,8 +141,12 @@ def _insert_spots(
     show: "Show", entries: Sequence[tuple[Spot, Point]], set_id: SetId, force: bool
 ) -> "Show":
     created_at = show.set_index(set_id)
+    pinned_sets = _pinned_set_ids(show)
     sets = tuple(
-        s.replace(placements=s.placements + _new_placements(entries, index >= created_at))
+        s.replace(
+            placements=s.placements
+            + _new_placements(entries, index >= created_at, s.id in pinned_sets)
+        )
         for index, s in enumerate(show.sets)
     )
     new_spots = tuple(spot for spot, _ in entries)
