@@ -74,6 +74,7 @@ SHORT_TOKEN = re.compile(r"^(?P<code>[A-Za-z]+)(?P<num>\d+(?:\.\d+)?)$")
 OF = " of "
 POINT_SIZE = 2
 NUMBER_PREVIEW = 20
+TEXT_PREVIEW = 40
 
 
 def coordinate_presets(sheet: Sheet) -> list[CoordinateSystem]:
@@ -294,7 +295,10 @@ def from_coords(show: "Show", text: str) -> Point:
         raise _bad(text, text, f"add the {missing[0]} part")
     (ox, oy), (right, ahead) = _origin(show.sheet, system), _frame(system)
     across, depth = values["across"], values["depth"]
-    return (
+    point = (
         ox + across * right[0] + depth * ahead[0] + 0.0,
         oy + across * right[1] + depth * ahead[1] + 0.0,
     )
+    if not all(math.isfinite(axis) for axis in point):
+        raise _bad(text[:TEXT_PREVIEW], text, "use smaller numbers or a nearer origin")
+    return point

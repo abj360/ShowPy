@@ -17,6 +17,8 @@ Contains:
         float instead of returning an infinite point
     test_regression_unvalidated_origin_is_rejected(): rejects a NaN, infinite or malformed origin
         instead of returning or printing garbage
+    test_regression_from_coords_rejects_overflowing_result(): rejects a point whose sum with a huge
+        origin overflows, instead of returning an infinite point
     test_regression_unvalidated_audience_side_is_rejected(): rejects an audience side outside the
         four sides with a ShowPyError, not KeyError
     test_regression_to_coords_rejects_unknown_style(): rejects an unknown style instead of silently
@@ -288,3 +290,10 @@ def test_regression_unvalidated_audience_side_is_rejected() -> None:
         from_coords(show, "R1 U1")
     with pytest.raises(ShowPyError):
         to_coords(show, (1.0, 1.0))
+
+
+def test_regression_from_coords_rejects_overflowing_result() -> None:
+    """Rejects "R999..9 U1" (308 digits) from origin 1.7e308, not (inf, 1.0) (UP-9.4-51)."""
+    show = set_coordinates(two_set_show(), CoordinateSystem(origin=(1.7e308, 0.0)))
+    with pytest.raises(ShowPyError):
+        from_coords(show, "R" + "9" * 308 + " U1")

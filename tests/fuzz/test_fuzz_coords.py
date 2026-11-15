@@ -7,6 +7,8 @@ Contains:
     test_fuzz_from_coords_text(): reads arbitrary text, long or short style
     test_fuzz_from_coords_unicode_digits(): reads text built from digits of every script
     test_fuzz_from_coords_long_numbers(): reads digit runs far beyond float range
+    test_fuzz_from_coords_huge_origin(): reads huge numbers from a huge finite origin
+    test_fuzz_to_coords_huge_origin(): words huge points from a huge finite origin
     test_fuzz_from_coords_systems(): reads text under any coordinate system, valid or not
     test_fuzz_to_coords_floats(): words arbitrary floats, NaN, infinities and huge values included
     test_fuzz_to_coords_systems(): words a point under any coordinate system, valid or not
@@ -95,6 +97,29 @@ LONG_NUMBER_TEXT = st.one_of(
     DIGIT_RUNS.map(lambda number: f"{number} m right of center, 1 m upstage of front edge"),
     DIGIT_RUNS.map(lambda number: f"1 m right of center, {number} ft upstage of front edge"),
 )
+
+
+HUGE_ORIGIN_SHOW = SHOW.model_copy(
+    update={"coordinates": CoordinateSystem(origin=(1.7e308, -1.7e308))}
+)
+
+
+@given(
+    digits=st.integers(300, 309),
+    unit_code=st.sampled_from(["R", "L", "U", "D"]),
+    sign_flip=st.booleans(),
+)
+def test_fuzz_from_coords_huge_origin(digits: int, unit_code: str, sign_flip: bool) -> None:
+    """Reads large numbers from a huge finite origin without returning an infinite point."""
+    text = f"{unit_code}{'9' * digits} {'U' if unit_code in 'RL' else 'R'}1"
+    show = HUGE_ORIGIN_SHOW if sign_flip else SHOW
+    _only_errors_or_finite(show, text, text)
+
+
+@given(x=st.sampled_from([1.7e308, -1.7e308, 1e300]), y=st.sampled_from([1.7e308, -1.7e308, 0.0]))
+def test_fuzz_to_coords_huge_origin(x: float, y: float) -> None:
+    """Words huge finite points from a huge finite origin; only ShowPyError may escape."""
+    only_showpy_errors(lambda: to_coords(HUGE_ORIGIN_SHOW, (x, y)), (x, y))
 
 
 @given(text=st.one_of(st.text(), st.text(min_size=2000, max_size=6000)))
