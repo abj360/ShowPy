@@ -57,6 +57,9 @@ Contains:
         and fill
     test_scatter_sample_bound_counts_the_exact_multiple_cell: bounds samples by floor(w / cell) + 1
         per axis
+    test_regression_fill_estimate_bounds_the_lattice: estimates at least the lattice the builder
+        generates
+    test_regression_fill_refuses_a_lattice_just_over_the_cap: refuses a 1,162,049-point lattice
 """
 
 import math
@@ -76,7 +79,11 @@ from showpy.geo.curves import Segment
 from showpy.geo.regions import region
 from showpy.geo.shapes import arc, circle, line, rect
 from showpy.geo.spacing import (
+    FillPattern,
+    _lattice_axes,
+    _lattice_estimate,
     _poisson_sample_bound,
+    _require_lattice_size,
     block,
     concentric,
     distribute_on_points,
@@ -495,3 +502,29 @@ def test_scatter_sample_bound_counts_the_exact_multiple_cell() -> None:
     """Bounds samples by floor(w / cell) + 1 per axis, so an exact multiple gains a cell."""
     cell_m = 2.0
     assert _poisson_sample_bound(_square(side=4.0), cell_m * math.sqrt(2)) == 3 * 3
+
+
+LATTICE_BOUNDS = [
+    (-0.01, -0.01, 2.01, 2.01),
+    (-0.001, -0.001, 997.9, 997.9),
+    (0.5, 0.5, 1.5, 1.5),
+    (-3.2, -7.9, 11.1, 5.05),
+    (0.0, 0.0, 3.0, 3.0),
+    (-0.01, -0.01, 166000.01, 2.01),
+]
+
+
+@pytest.mark.parametrize("pattern", ["grid", "offset", "hex"])
+@pytest.mark.parametrize("bounds", LATTICE_BOUNDS)
+def test_regression_fill_estimate_bounds_the_lattice(
+    bounds: tuple[float, ...], pattern: FillPattern
+) -> None:
+    """Estimates at least the rows times columns that the lattice builder generates."""
+    _, rows, cols = _lattice_axes(bounds, 1.0, pattern)
+    assert _lattice_estimate(bounds, 1.0, pattern) >= len(rows) * len(cols)
+
+
+def test_regression_fill_refuses_a_lattice_just_over_the_cap() -> None:
+    """Refuses bounds whose lattice has 1,162,049 points, over the cap of 1,000,000."""
+    with pytest.raises(SpacingError):
+        _require_lattice_size((-0.01, -0.01, 166000.01, 2.01), 1.0, "grid")

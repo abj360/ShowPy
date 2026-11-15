@@ -35,8 +35,8 @@ from showpy.geo.regions import Area
 BRIDSON_ATTEMPTS = 30
 HEX_ROW_FACTOR = math.sqrt(3) / 2
 FIT_EPS = 1e-9
-LATTICE_ROW_PAD = 4
-LATTICE_COL_PAD = 6
+LATTICE_ROW_PAD = 5
+LATTICE_COL_PAD = 7
 
 type FillPattern = Literal["grid", "offset", "hex"]
 type BlockAnchor = Literal[
@@ -167,17 +167,18 @@ def space_with_gaps(curve: Curve, n: int, gaps: Sequence[tuple[int, Meters]]) ->
     return curve.point_at(stations)
 
 
+def _lattice_estimate(bounds: tuple[float, ...], interval: Meters, pattern: FillPattern) -> float:
+    minx, miny, maxx, maxy = bounds
+    row_step = interval * HEX_ROW_FACTOR if pattern == "hex" else interval
+    rows = maxy / row_step - miny / row_step + LATTICE_ROW_PAD
+    cols = maxx / interval - minx / interval + LATTICE_COL_PAD
+    return rows * cols
+
+
 def _require_lattice_size(
     bounds: tuple[float, ...], interval: Meters, pattern: FillPattern
 ) -> None:
-    minx, miny, maxx, maxy = bounds
-    row_step = interval * HEX_ROW_FACTOR if pattern == "hex" else interval
-    edges = (miny / row_step, maxy / row_step, minx / interval, maxx / interval)
-    if not all(math.isfinite(edge) for edge in edges):
-        _require_points(math.inf, "lattice points")
-    rows = edges[1] - edges[0] + LATTICE_ROW_PAD
-    cols = edges[3] - edges[2] + LATTICE_COL_PAD
-    _require_points(rows * cols, "lattice points")
+    _require_points(_lattice_estimate(bounds, interval, pattern), "lattice points")
 
 
 def _lattice_axes(
