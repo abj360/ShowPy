@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 
 """
-test_curve_base.py --- encodes the audited CurveBase defects as strict xfails
+test_curve_base.py --- tests CurveBase polylines, caps, tables and projection, with open defects
 
 Contains:
     test_regression_to_polyline_rejects_nonpositive_tol: rejects tol <= 0 instead of hanging
     test_regression_to_polyline_rejects_nan_tol: rejects a NaN tol instead of hanging
     test_regression_to_polyline_caps_its_output: rejects a polyline over the point cap
+    test_regression_to_polyline_cap_hint_says_to_pass_a_larger_tol: names tol in the cap hint
+    test_regression_to_polyline_refuses_a_tiny_tol_quickly: refuses tol=1e-300 within 1 s
     test_regression_polyline_to_polyline_rejects_bad_tol: validates tol on the exact override
     test_to_polyline_matches_recursive_subdivision: keeps the stations of the recursive version
     test_regression_to_polyline_keeps_periodic_curves: keeps the length of a 32-turn arc
@@ -24,9 +26,10 @@ from showpy.core.errors import GeometryError
 from showpy.geo import curve_base
 from showpy.geo.curve_base import INITIAL_SPLITS, MAX_SUBDIVISION_DEPTH, Curve, CurveBase
 from showpy.geo.shapes import arc, circle, polyline, spiral
-from tests.helpers import fails_after
+from tests.helpers import defect, fails_after
 
 SIGNAL_TIMEOUT_S = 5
+TINY_TOL_DEADLINE_S = 1
 POLYLINE_TEST_CAP = 200
 TURNS = 32
 FULL_TURN_DEG = 360.0
@@ -77,6 +80,26 @@ def test_regression_to_polyline_caps_its_output(monkeypatch: pytest.MonkeyPatch)
     assert len(curve.to_polyline(tol=0.01)) <= POLYLINE_TEST_CAP
     with pytest.raises(GeometryError, match="polyline points"):
         curve.to_polyline(tol=1e-9)
+
+
+def test_regression_to_polyline_cap_hint_says_to_pass_a_larger_tol(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Tells the caller to pass a larger tol when the polyline would pass the point cap."""
+    monkeypatch.setattr(curve_base, "MAX_POINTS", POLYLINE_TEST_CAP)
+    with pytest.raises(GeometryError) as caught:
+        circle((0.0, 0.0), 1.0).to_polyline(tol=1e-9)
+    assert caught.value.hint == "pass a larger tol"
+    assert caught.value.context["cap"] == POLYLINE_TEST_CAP
+
+
+@defect("UP-9.1-67")
+@fails_after(TINY_TOL_DEADLINE_S)
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+def test_regression_to_polyline_refuses_a_tiny_tol_quickly() -> None:
+    """Refuses tol=1e-300 within 1 s; it runs 20 to 27 s before the point cap stops it."""
+    with pytest.raises(GeometryError):
+        circle((0.0, 0.0), 1.0).to_polyline(tol=1e-300)
 
 
 def _recursive_stations(

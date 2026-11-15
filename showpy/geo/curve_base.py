@@ -216,7 +216,7 @@ class CurveBase(FrozenModel):
             lo, hi, depth = pending.pop()
             if depth >= MAX_SUBDIVISION_DEPTH or self._chord_error(lo, hi) <= tol:
                 stations.append(hi)
-                require_size(len(stations), MAX_POINTS, what="polyline points", error=GeometryError)
+                _require_polyline_size(len(stations))
                 continue
             mid = (lo + hi) / 2
             pending.append((mid, hi, depth + 1))
@@ -237,6 +237,13 @@ class CurveBase(FrozenModel):
     def construction(self) -> dict[str, Any]:
         """Returns the JSON recipe that rebuilds this curve."""
         return self.model_dump(mode="json")
+
+
+def _require_polyline_size(count: int) -> None:
+    try:
+        require_size(count, MAX_POINTS, what="polyline points", error=GeometryError)
+    except GeometryError as exc:
+        raise GeometryError(exc.message, hint="pass a larger tol", context=exc.context) from exc
 
 
 def _pairs(values: FloatArray) -> list[tuple[float, float]]:
