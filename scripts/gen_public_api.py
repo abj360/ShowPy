@@ -107,7 +107,8 @@ def _render_tables() -> str:
     exports = [
         f'    "{name}": ("{module}", "{attribute}"),' for name, module, attribute in _public_api()
     ]
-    names = [f'    "{name}",' for name, _, _ in _public_api()]
+    ordered = sorted((name for name, _, _ in _public_api()), key=lambda name: not name.isupper())
+    names = [f'    "{name}",' for name in ordered]
     return "\n".join(
         ["_EXPORTS: dict[str, tuple[str, str]] = {", *exports, "}", "", "__all__ = [", *names, "]"]
     )

@@ -223,6 +223,17 @@ if TYPE_CHECKING:
         rotate_path,
         two_part,
     )
+    from showpy.core.caps import (
+        MAX_DEPTH,
+        MAX_GRID_CELLS,
+        MAX_IMAGE_PIXELS,
+        MAX_POINTS,
+        MAX_RANGE,
+        MAX_TABLE,
+        MAX_TEXT_CHARS,
+        MAX_VIDEO_PIXELS,
+        require_size,
+    )
     from showpy.core.errors import (
         ConflictError,
         ContinuityError,
@@ -754,6 +765,14 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Landmark": ("showpy.sheet.models", "Landmark"),
     "LinePiece": ("showpy.geo.svg", "LinePiece"),
     "LockedError": ("showpy.core.errors", "LockedError"),
+    "MAX_DEPTH": ("showpy.core.caps", "MAX_DEPTH"),
+    "MAX_GRID_CELLS": ("showpy.core.caps", "MAX_GRID_CELLS"),
+    "MAX_IMAGE_PIXELS": ("showpy.core.caps", "MAX_IMAGE_PIXELS"),
+    "MAX_POINTS": ("showpy.core.caps", "MAX_POINTS"),
+    "MAX_RANGE": ("showpy.core.caps", "MAX_RANGE"),
+    "MAX_TABLE": ("showpy.core.caps", "MAX_TABLE"),
+    "MAX_TEXT_CHARS": ("showpy.core.caps", "MAX_TEXT_CHARS"),
+    "MAX_VIDEO_PIXELS": ("showpy.core.caps", "MAX_VIDEO_PIXELS"),
     "Marker": ("showpy.time.models", "Marker"),
     "MarkerKind": ("showpy.time.models", "MarkerKind"),
     "MatchError": ("showpy.core.errors", "MatchError"),
@@ -1099,6 +1118,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "reorder": ("showpy.choreo.form_ops", "reorder"),
     "replace_sheet": ("showpy.sheet.replace", "replace_sheet"),
     "require_finite": ("showpy.core.validation", "require_finite"),
+    "require_size": ("showpy.core.caps", "require_size"),
     "revert": ("showpy.show.history", "revert"),
     "ripple": ("showpy.choreo.paths", "ripple"),
     "rose_points": ("showpy.choreo.form_fns", "rose_points"),
@@ -1216,6 +1236,14 @@ _EXPORTS: dict[str, tuple[str, str]] = {
 }
 
 __all__ = [
+    "MAX_DEPTH",
+    "MAX_GRID_CELLS",
+    "MAX_IMAGE_PIXELS",
+    "MAX_POINTS",
+    "MAX_RANGE",
+    "MAX_TABLE",
+    "MAX_TEXT_CHARS",
+    "MAX_VIDEO_PIXELS",
     "Anchor",
     "ApprovalState",
     "ArcCurve",
@@ -1622,6 +1650,7 @@ __all__ = [
     "reorder",
     "replace_sheet",
     "require_finite",
+    "require_size",
     "revert",
     "ripple",
     "rose_points",
