@@ -3,8 +3,9 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to
 > implement this plan task by task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Fix the thirteen Priority 0 defects of the audit (54 ledger tests) plus 64 companion
-ledger tests that share their root causes, so that no Priority 0 test is open, no parser hangs or
+**Goal:** Fix the thirteen Priority 0 defects of the audit (47 ledger tests; ADRs 0003 and 0017
+put 7 more out of scope and delete them) plus 63 companion ledger tests that share their root
+causes, so that no Priority 0 test is open, no parser hangs or
 leaks a non-`ShowPyError`, and a 300-spot x 60-set show passes the scenario checks. Ends with
 release v0.3.0.
 
@@ -13,7 +14,7 @@ release v0.3.0.
 `FrozenModel.replace`, size caps, picklable errors, the ID checker, the canonical JSON encoder and
 the hash built on it, a v0.2.0 repository fixture and the fuzz harness). Seven lanes then run in
 parallel worktrees, each
-owning disjoint files: A show, storage and authorization; B engine; C geometry; D core and cast;
+owning disjoint files: A show and storage; B engine; C geometry; D core and cast;
 E export and publishing; F sheets; G forms and matching. Every fix flips its ledger test
 in the same commit. A final serial lane checks the exit criteria and prepares the release.
 
@@ -22,7 +23,7 @@ in the same commit. A final serial lane checks the exit criteria and prepares th
 3.6.2, GitHub Actions.
 
 **Spec:** `docs/upgrade-plan.md` sections 3, 4.1 to 4.3, 5.2.3, 9.1 to 9.7 and 10 ("Phase 1").
-Decisions: ADRs 0003, 0004, 0005, 0006 and 0014 (all `Proposed` until the maintainer approves).
+Decisions: ADRs 0003, 0004, 0005, 0006, 0014 and 0017, accepted by the maintainer on 2026-11-15.
 Master plan: `/home/uapb-ai/.claude/plans/look-at-the-upgrade-nifty-kay.md` ("Phase 1").
 
 ## Global constraints
@@ -71,21 +72,21 @@ Master plan: `/home/uapb-ai/.claude/plans/look-at-the-upgrade-nifty-kay.md` ("Ph
 1. **Repositories written by v0.1.x and v0.2.0.** Expected: they load with no data loss, stored
    revision IDs are never rewritten, the first save writes exactly one `normalize` revision and a
    second save none, and consumer-held hashes (`Set.source_hash`, unsaved-show publication
-   revisions) mismatch exactly once. Pinned by L0.9's fixture and A7's tests.
-2. **Consumers pinned to v0.2.0.** `Repository.put_*(actor=)`, `open_workspace(principal)`,
-   `place()`'s return type, `frozenset` tags and selections, `content_hash` values and
-   `publish(join_token=)` all change. Expected: deprecated paths warn and still work, removed or
-   re-typed names appear in the API snapshot diff and the changelog. Pinned by A5's
-   deprecation tests and X3's release notes.
+   revisions) mismatch exactly once. Pinned by L0.9's fixture and A6's tests.
+2. **Consumers pinned to v0.2.0.** Agent writes are no longer refused, canvas events need an
+   explicit `force`, `replace_sheet` and `SheetReplaceReport` are gone, and `place()`'s return
+   type, `frozenset` tags and selections, `content_hash` values and `publish(join_token=)` all
+   change. Expected: removed or re-typed names appear in the API snapshot diff and the
+   changelog. Pinned by A4's tests, F1 and X3's release notes.
 3. **Agents addressing sets by display ID after a renumber.** Expected: `/sets/2/set.py` in a
-   workspace means display ID 2 before and after storage moves to set keys. Pinned by A6.
+   workspace means display ID 2 before and after storage moves to set keys. Pinned by A5.
 4. **Windows and case-insensitive file systems.** Expected: hard-link and name-length failures
    raise `StorageError` with code `NO_HARDLINKS` or `NAME_TOO_LONG`, never `OSError`. Pinned by
-   A8 (Windows-marked tests run in the CI matrix).
-5. **Cost of the new checks at 300 spots x 60 sets.** `replace()` revalidation and the policy
-   decode on every show-document commit. Expected: `nox -s bench` M tier stays within 20% of the
-   baseline, and a one-spot agent edit stays under 450 ms (198 ms today plus about 2 x 70 ms
-   decode, ADR 0003). Pinned by L0.3 and A4 bench steps.
+   A7 (Windows-marked tests run in the CI matrix).
+5. **Cost of the new checks at 300 spots x 60 sets.** `replace()` revalidation and the commit
+   validation decode on every show-document commit. Expected: `nox -s bench` M tier stays within
+   20% of the baseline, and a one-spot edit stays under 300 ms (198 ms today plus about 70 ms
+   decode, ADR 0003). Pinned by L0.3 and A3 bench steps.
 
 ---
 
@@ -94,12 +95,12 @@ Master plan: `/home/uapb-ai/.claude/plans/look-at-the-upgrade-nifty-kay.md` ("Ph
 ```
 L0.1 → L0.2 → … → L0.11          (serial, one worktree)
         │
-        ├── A  show/storage/auth   gate: ADR 0003, 0004, 0006, 0014
+        ├── A  show/storage        gate: ADR 0003, 0004, 0006, 0014
         ├── B  engine              no ADR gate (adds an ADR 0002 addendum)
         ├── C  geometry            no ADR gate
         ├── D  core/cast           gate: ADR 0005 (D3), ADR 0006 (D2)
         ├── E  export/publish      no ADR gate
-        ├── F  sheets              no ADR gate
+        ├── F  sheets              gate: ADR 0017
         └── G  forms/match         no ADR gate
                     │
                     ▼
@@ -120,7 +121,7 @@ L0.1 → L0.2 → … → L0.11          (serial, one worktree)
 | Lane | Owns (source)                                                                                                                                                                                                                                                          | Owns (tests)                                                                                                                                                                                                    |
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | L0   | `showpy/core/{types,errors,validation,caps,ids,canonical}.py`, `content_hash` in `showpy/core/util.py` and its revision call, every `model_copy(update=)` call site, `noxfile.py`, `pyproject.toml`, `.github/workflows/nightly.yml`, `scripts/make_legacy_fixture.py` | `tests/unit/core/test_{types,errors,validation,caps,ids,canonical}.py`, `tests/unit/test_library_rules.py`, `tests/fixtures/repos/`, `tests/fuzz/conftest.py`, `tests/helpers.py`, `tests/unit/test_helpers.py` |
-| A    | `showpy/show/*`, `showpy/choreo/models.py` (`Set.key` only), new `showpy/show/{policy,session}.py`                                                                                                                                                                     | `tests/unit/show/*`, `tests/fuzz/test_fuzz_show.py`                                                                                                                                                             |
+| A    | `showpy/show/*`, `showpy/choreo/models.py` (`Set.key` only), new `showpy/show/integrity.py`                                                                                                                                                                            | `tests/unit/show/*`, `tests/fuzz/test_fuzz_show.py`                                                                                                                                                             |
 | B    | `showpy/choreo/{engine,engine_compile,engine_facing,engine_models,routes,paths}.py`, `docs/adr/0002-path-engine.md` (addendum)                                                                                                                                         | `tests/unit/choreo/test_{engine,engine_compile,routes,paths}.py`                                                                                                                                                |
 | C    | `showpy/geo/*`, `showpy/choreo/form_fns.py`                                                                                                                                                                                                                            | `tests/unit/geo/*`, `tests/fuzz/test_fuzz_svg.py`                                                                                                                                                               |
 | D    | `showpy/core/util.py`, `showpy/cast/*`                                                                                                                                                                                                                                 | `tests/unit/core/test_util.py`, `tests/unit/cast/*`, `tests/fuzz/test_fuzz_select.py`                                                                                                                           |
@@ -131,22 +132,26 @@ L0.1 → L0.2 → … → L0.11          (serial, one worktree)
 
 ## Ledger coverage
 
-| Lane | Priority 0 IDs (54)                                                                        | Companion IDs (64)                                                                             |
+| Lane | Priority 0 IDs (47)                                                                        | Companion IDs (63)                                                                             |
 | ---- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
 | L0   | —                                                                                          | UP-4.1-01; UP-9.3-04 to -12, -29, -30, -37, -62, -100 to -104, -110, -115; UP-9.6-22, -23 (23) |
-| A    | UP-9.7-01 to UP-9.7-13 (13)                                                                | UP-9.7-17, -18, -19, -20, -22, -23, -24, -25, -30, -31 (10)                                    |
+| A    | UP-9.7-01 to UP-9.7-07 (7)                                                                 | UP-9.7-17, -18, -19, -20, -22, -23, -24, -25, -30, -31 (10)                                    |
 | B    | UP-9.2-01, -02, -21 (3)                                                                    | —                                                                                              |
 | C    | UP-9.1-01, -02, -03, -04, -06, -07, -08, -09; UP-9.6-44 (9)                                | UP-9.1-05, -43, -58, -59; UP-9.6-42, -43 (6)                                                   |
 | D    | UP-4.3-01; UP-9.3-01, -22, -23, -53, -54, -55, -77, -78, -88, -89, -90, -91, -92, -94 (15) | UP-9.3-02, -03, -17, -18, -73, -74, -75, -79, -80, -93 (10)                                    |
 | E    | UP-9.5-01, -02, -07, -27, -53 (5)                                                          | UP-9.5-03, -04, -05, -08, -28, -35 (6)                                                         |
-| F    | UP-9.4-01, -02 (2)                                                                         | UP-9.4-03, -04, -05, -06, -15, -16, -43 (7)                                                    |
+| F    | UP-9.4-02 (1)                                                                              | UP-9.4-03, -04, -05, -06, -15, -16 (6)                                                         |
 | G    | UP-9.6-01, -02, -04, -05, -06, -07, -10 (7)                                                | UP-9.6-08, -09 (2)                                                                             |
 
 L0.2's ten NaN and infinity IDs (UP-4.1-01, UP-9.3-37, -62, -100 to -104, -110, -115) were measured
 on 2026-11-15 by setting `allow_inf_nan=False` on `main` at `e48e4b6`; L0.2 re-measures after
-L0.1 and unmarks exactly what flips. Fuzz tasks (A9, C4, D2, E5, F3) list the leak IDs known to
+L0.1 and unmarks exactly what flips. Fuzz tasks (A8, C4, D2, E5, F3) list the leak IDs known to
 fall inside their targets; any extra leak the fuzzers find gets a new ledger ID and a fix in the
 same lane.
+
+Deleted as out of scope (not fixed): UP-9.7-08 to UP-9.7-13 by ADR 0003 (permissions belong to
+the host), and UP-9.4-01, UP-9.4-07, UP-9.4-43 by ADR 0017 (no sheet replacement). Each deletion
+lands in the task that removes the code, with the ADR named in the commit body.
 
 ---
 
@@ -382,7 +387,7 @@ It raises `error` with the message `"<what> would need <requested>, over the cap
 **Files:** Create `scripts/make_legacy_fixture.py`, `tests/fixtures/repos/v0.2.0/` (a
 `FileRepository` root plus `expected.json`), `tests/unit/show/test_legacy_repository.py`.
 
-**Interfaces:** Produces the fixture A7 and L0.10 test against. `expected.json` holds
+**Interfaces:** Produces the fixture A6 and L0.10 test against. `expected.json` holds
 `{"show_id", "head", "revisions": [ids…], "legacy_content_hash", "show": <Show JSON>}`.
 
 - [ ] **Step 1:** Write the script against the v0.2.0 API: `seeded_show(seed=7, spots=24, sets=6)`,
@@ -456,9 +461,9 @@ ADR 0014 decision 3; 64 lowercase hex characters.
 
 ---
 
-## Lane A: show layer, storage and authorization
+## Lane A: show layer and storage
 
-Branch `fix/p1-a-show-storage-auth`. **Gate:** ADRs 0003, 0004, 0006 and 0014 accepted. Skills
+Branch `fix/p1-a-show-storage`. **Gate:** ADRs 0003, 0004, 0006 and 0014 accepted. Skills
 on top of the loop: `superpowers:systematic-debugging` for races, stateful property tests,
 `differential-review` and `security-review` before the lane PR.
 
@@ -493,8 +498,8 @@ truncated object or tree) with `context={"show", "path"}`.
 
 ### Task A3: every commit is validated, whoever makes it
 
-**Fixes:** UP-9.7-06, UP-9.7-07. **Files:** Create `showpy/show/policy.py`; modify
-`showpy/show/repositories.py` (`transaction`).
+**Fixes:** UP-9.7-06, UP-9.7-07. **Files:** Create `showpy/show/integrity.py`; modify
+`showpy/show/repositories.py` (`transaction`). Test `tests/unit/show/test_integrity.py`.
 
 **Interfaces:**
 
@@ -504,94 +509,45 @@ truncated object or tree) with `context={"show", "path"}`.
   `require_valid_tree(before: Mapping[str, bytes], after: Mapping[str, bytes]) -> Show | None`:
   raises `StorageError` code `BAD_PATH` for a path outside `KNOWN_ROOTS`; when any
   show document changed, decodes `after` (raising `SchemaError` on failure) and returns it.
-- `DocumentRepository.transaction` calls it before `backend.commit`.
+- `DocumentRepository.transaction` calls it before `backend.commit`, for every actor alike.
 
 - [ ] **Step 1:** Run both tests with `--runxfail`; expect the garbage commit and the unknown
       root to land.
-- [ ] **Step 2:** Implement. **Step 3:** Ledger flip procedure.
-- [ ] **Step 4:** Commit `fix(show): validate every commit before it lands`.
-
-### Task A4: one authorization policy in the write funnel (ADR 0003, ADR 0004)
-
-**Fixes:** UP-9.7-08, UP-9.7-09, UP-9.7-10, UP-9.7-11, UP-9.7-12, UP-9.7-13.
-**Files:** Modify `showpy/show/policy.py`, `showpy/show/repositories.py`,
-`showpy/show/storage.py` (drop `_require_allowed` and `_require_pins_kept`, now in the policy),
-`showpy/show/files.py` (`DESIGNER_PATHS` moves to the policy). Test
-`tests/unit/show/test_policy.py`.
-
-**Interfaces:**
-
-- Produces
-  `DESIGNER_FIELDS = ("id", "title", "pack", "coordinates", "cast", "dependencies", "pins")` and
-  `AGENT_FIELDS = ("facing_overrides", "zones")` (ADR 0004 table).
-- Produces `authorize`:
-
-  ```python
-  def authorize(
-      principal: Principal,
-      before: Mapping[str, bytes],
-      after: Mapping[str, bytes],
-      revision: str,
-  ) -> None: ...
-  ```
-
-  It runs `require_valid_tree`; then, for agents only, it checks designer paths, designer
-  fields, the insert-only set order (every existing key kept, same relative order, same display
-  ID), `locks.require_unlocked(before_show, after_show)` and comment authorship (new or changed
-  comments have `author == "agent"`; others' comments unchanged). It raises `LockedError` naming
-  every refused path or field.
-
-- `DocumentRepository.transaction(…, actor=…)` calls
-  `authorize(actor, old_docs, new_docs, expected_revision)`.
-
-- [ ] **Step 1:** New unit tests in `test_policy.py`: an agent inserting a set between `1` and
-      `2` passes; an agent renaming set `2` is refused; a designer writing `/config/limits.yaml`
-      passes; an agent editing its own comment passes; an agent editing a designer comment is
-      refused.
-- [ ] **Step 2:** Run them and the six ledger tests with `--runxfail`; expect FAIL.
-- [ ] **Step 3:** Implement. Decode only when a show document changes; reuse the decoded
-      `after` from `require_valid_tree`.
-- [ ] **Step 4:** Ledger flip procedure for the six IDs.
-- [ ] **Step 5:** Bench: time a one-spot agent edit on `seeded_show(seed=3, spots=300, sets=60)`
-      through a workspace; expect under 450 ms (Review focus 5); record the number in the commit
+- [ ] **Step 2:** Implement. Decode only when a show document changes.
+- [ ] **Step 3:** Ledger flip procedure.
+- [ ] **Step 4:** Bench: time a one-spot edit on `seeded_show(seed=3, spots=300, sets=60)`
+      through a workspace; expect under 300 ms (Review focus 5); record the number in the commit
       body.
-- [ ] **Step 6:** Commit `fix(show): enforce principal rules in the repository write funnel`.
+- [ ] **Step 5:** Commit `fix(show): validate every commit before it lands`.
 
-### Task A5: host-issued `Session`, deprecated `actor=` writes (ADR 0003)
+### Task A4: remove the half-built permission checks (ADR 0003)
 
-**Files:** Create `showpy/show/session.py`. Modify `showpy/show/storage.py` (`Workspace` holds a
-`Session`; `Workspace.repo` removed; `open_workspace` deprecated), `showpy/show/repositories.py`
-(`actor=` writes deprecated), `showpy/_api_table.py`, `tests/helpers.py` (`open_session` builds
-sessions), every test that writes through `actor=`. Test `tests/unit/show/test_session.py`.
+**Deletes:** UP-9.7-08, UP-9.7-09, UP-9.7-10, UP-9.7-11, UP-9.7-12, UP-9.7-13 (out of scope by ADR
+0003). **Files:** Modify `showpy/show/storage.py` (drop `DESIGNER_PRINCIPALS`,
+`_require_allowed`, `_require_pins_kept`), `showpy/show/files.py` (drop `DESIGNER_PATHS`),
+`showpy/show/collab.py`, `showpy/_api_table.py` if a removed name is public; the tests that
+assert an agent refusal.
 
 **Interfaces:**
 
-- Produces `SessionIssuer(repo: DocumentRepository)` with
-  `open(self, show_id: str, principal: Principal) -> Session` (unknown principal raises
-  `UnknownRefError`).
-- Produces `Session` with read-only `show_id` and `principal`, and methods `head() -> str`,
-  `revisions() -> list[Revision]`, `read(path: str, revision: str | None = None) -> bytes | None`,
-  `get_show(revision: str | None = None) -> Show`, `commit(...) -> Revision` (the parameters of
-  `Workspace.commit`, with `expected_revision` required), `put_show`, `put_set`, `put_script`,
-  `put_paths` and `put_forms` (the
-  `DocumentRepository` signatures minus `show_id` and `actor`), and `workspace() -> Workspace`. No
-  public attribute returns the repository or the issuer.
-- Deprecation: the six `DocumentRepository` writes with `actor=` and
-  `open_workspace(repo, show_id, principal)` emit `DeprecationWarning` naming the `Session`
-  replacement and "removed in v0.5.0"; behavior is unchanged (the A4 policy already applies).
+- `actor=`, `open_workspace(repo, show_id, principal)`, `Workspace.principal` and
+  `Revision.actor` stay as recorded labels; no code in `showpy/` branches on their value
+  (checked by `grep -rn '"agent"' showpy/` returning only docstrings and examples).
+- `collab.py`: `_require_designer` and the agent refusal in `accept_proposal` are removed;
+  applying a canvas event takes keyword-only `force: bool = False` from the caller instead of
+  `force=event.actor != "agent"`.
 
-- [ ] **Step 1:** Tests: a `Session` opened as `agent` refuses the UP-9.7-13 write; `vars()` of a
-      `Session` and of its `Workspace` expose no `DocumentRepository` under a public name;
-      `pytest.warns(DeprecationWarning)` on `repo.put_show(…, actor="designer")` and on
-      `open_workspace(…)`.
-- [ ] **Step 2:** Run; expect FAIL. **Step 3:** Implement; migrate tests and doctests to
-      sessions (warnings are errors, so every remaining `actor=` call must be inside
-      `pytest.warns`). UP-9.7-12 and UP-9.7-13 stay as written, inside `pytest.warns`.
-- [ ] **Step 4:** Regenerate the API table and snapshot. **Step 5:** Commit
-      `feat(show)!: issue capability sessions; deprecate actor= writes` with a
-      `BREAKING CHANGE:` footer naming `Workspace.repo`.
+- [ ] **Step 1:** Write `test_regression_agent_write_is_recorded_not_judged`: an `actor="agent"`
+      workspace commit that writes `/config/limits.yaml` lands, and its revision's `actor` is
+      `agent`. Write `test_canvas_event_needs_explicit_force`: a designer event that moves a
+      pinned spot raises `LockedError` without `force=True` and lands with it. Run; expect FAIL.
+- [ ] **Step 2:** Implement. Delete the six ledger tests and every other test that asserts an
+      agent refusal, listing each deleted test name in the commit body.
+- [ ] **Step 3:** Regenerate the API table and snapshot if a public name changed.
+- [ ] **Step 4:** Commit `feat(show)!: leave permissions to the host` with a `BREAKING CHANGE:`
+      footer: agent writes are no longer refused; canvas events need an explicit `force`.
 
-### Task A6: stable set keys (ADR 0004, ADR 0006)
+### Task A5: stable set keys (ADR 0004, ADR 0006)
 
 **Fixes:** UP-9.7-01. **Files:** Modify `showpy/choreo/models.py` (`Set.key`),
 `showpy/show/documents.py`, `showpy/show/files.py`, `showpy/show/storage.py` (path mapping),
@@ -617,7 +573,7 @@ sessions), every test that writes through `actor=`. Test `tests/unit/show/test_s
 - [ ] **Step 3:** Implement. **Step 4:** Ledger flip procedure; regenerate schemas.
 - [ ] **Step 5:** Commit `fix(show): key set folders by a stable set key`.
 
-### Task A7: canonical documents and one `normalize` revision (ADR 0014)
+### Task A6: canonical documents and one `normalize` revision (ADR 0014)
 
 **Fixes:** UP-9.7-30, UP-9.7-31. **Files:** Modify `showpy/show/documents.py` (`dump_json` uses
 `canonical_value`), `showpy/show/models.py` (`RevisionKind` gains `"normalize"`),
@@ -636,7 +592,7 @@ message `normalize stored documents`, then the edit on top.
       (UP-9.7-30, UP-9.7-31). **Step 5:** Commit
       `fix(show): write canonical documents and normalize old ones once`.
 
-### Task A8: storage failures map to `StorageError` codes
+### Task A7: storage failures map to `StorageError` codes
 
 **Fixes:** UP-9.7-17, UP-9.7-24. **Files:** Modify `showpy/show/file_repository.py`. Test
 `tests/unit/show/test_file_repository.py` (new tests marked
@@ -651,7 +607,7 @@ each with `context={"show", "path", "errno"}`.
 - [ ] **Step 3:** Ledger flip procedure. **Step 4:** Commit
       `fix(show): map file-system failures to StorageError codes`.
 
-### Task A9: fuzz the show decoders and workspace paths
+### Task A8: fuzz the show decoders and workspace paths
 
 **Fixes (expected):** UP-9.7-18, UP-9.7-19, UP-9.7-20, UP-9.7-25.
 **Files:** Create `tests/fuzz/test_fuzz_show.py`; modify `showpy/show/{documents,files,storage}.py`.
@@ -945,25 +901,24 @@ untouched; `neutralize=False` is the machine-pipeline opt-out.
 
 ## Lane F: sheets
 
-Branch `fix/p1-f-sheet-replace`. No ADR gate. Skills: `mattpocock-skills:research` (RANSAC and
-Huber fitting) before F1.
+Branch `fix/p1-f-sheets`. **Gate:** ADR 0017 accepted.
 
-### Task F1: football swaps fit on structural landmarks, robustly
+### Task F1: remove sheet replacement (ADR 0017)
 
-**Fixes:** UP-9.4-01, UP-9.4-43. **Files:** Create `docs/research/robust-landmark-fit.md`;
-modify `showpy/sheet/replace.py`, `showpy/sheet/models.py` (a `structural: bool` landmark flag,
-default `True`), `showpy/sheet/surfaces.py` (hash points `structural=False`).
+**Deletes:** UP-9.4-01, UP-9.4-07, UP-9.4-43 (out of scope by ADR 0017). **Files:** Modify
+`showpy/sheet/replace.py` (keep `similarity_fit` only), `showpy/sheet/models.py` (drop
+`SheetReplaceReport`), `showpy/_api_table.py`, `CLAUDE.md` (layout line), `docs/HANDOFF.md`
+(module map and deviations); delete the `replace_sheet` tests in
+`tests/unit/sheet/test_replace.py` and `tests/property/test_purity_properties.py`.
 
-**Interfaces:** `replace_sheet` short-circuits to identity when both sheets come from one
-template family with equal structural landmarks; otherwise it fits on structural landmarks with
-RANSAC (seeded through `seeded_rng(0)`) then least squares on inliers. `SheetReplaceReport` gains
-`residuals: dict[LandmarkId, float]` and `rms: float`; above `REPLACE_RMS_LIMIT = 0.25` m it
-raises `GeometryError` unless `force=True`.
-
-- [ ] **Step 1:** Research note; **Step 2:** run both with `--runxfail` (HS to NFL moves spots
-      up to 2.57 m today).
-- [ ] **Step 3:** Implement. **Step 4:** Ledger flip procedure. **Step 5:** Commit
-      `fix(sheet): fit sheet swaps on structural landmarks with RANSAC`.
+- [ ] **Step 1:** Remove `replace_sheet`, `SheetMapping`, `RESTRICTED_ZONE_KINDS`,
+      `SheetReplaceReport` and the private helpers only they use; update the module docstring's
+      `Contains:` block.
+- [ ] **Step 2:** Delete the three ledger tests and every other `replace_sheet` test, listing
+      each deleted test name in the commit body. Keep every `similarity_fit` test.
+- [ ] **Step 3:** Regenerate `showpy/__init__.py` and the API snapshot; run every gate.
+- [ ] **Step 4:** Commit `feat(sheet)!: remove replace_sheet; a show keeps its sheet` with a
+      `BREAKING CHANGE:` footer naming `replace_sheet` and `SheetReplaceReport`.
 
 ### Task F2: similarity fits refuse reflections and degenerate input
 
@@ -1048,8 +1003,8 @@ Branch `chore/p1-exit`.
 
 - [ ] **Step 1:** Build `seeded_show(seed=11, spots=300, sets=60)`, then: pin 20 spots and set
       12; insert a subset and renumber; regroup and relabel through the cast edits; save through
-      a designer session and run 10 agent edits through an agent session; publish with a join
-      token and claim 30 spots.
+      a workspace and run 10 more edits through a second workspace; publish with a join token
+      and claim 30 spots.
 - [ ] **Step 2:** Assert the section 5.2.3 checks: `validate_show(show).ok`; the stored documents
       validate against `showpy/schemas/showpy.show.v1.json`; positions continuous within 1e-6 m
       at every set boundary; every `segments()` piece within 0.02 m of `position()` at 9 probes;
@@ -1079,15 +1034,15 @@ Branch `chore/p1-exit`.
 **Files:** Modify `CHANGELOG.md` (generated), `docs/HANDOFF.md`, `docs/showpy-api-reference.md`
 (the changed names only).
 
-- [ ] **Step 1:** `uv run nox -s changelog`; check every breaking name is listed: `Session`,
-      `SessionIssuer`, `Workspace.repo` (removed), `actor=` and `open_workspace(principal)`
-      (deprecated, removed in v0.5.0), `Set.key`, `RevisionKind "normalize"`, `Spot.tags`,
+- [ ] **Step 1:** `uv run nox -s changelog`; check every breaking name is listed: agent writes no
+      longer refused, canvas-event `force=`, `replace_sheet` and `SheetReplaceReport` (removed),
+      `Set.key`, `RevisionKind "normalize"`, `Spot.tags`,
       `Cast.selections`, `content_hash` (values and `domain=`), `FrozenModel.replace`, `force=`
       on four cast edits and `two_part`, `publish(join_token=)`, `place()`'s return type,
       `similarity_fit` reflections, `to_csv(neutralize=)`, the caps.
 - [ ] **Step 2:** Write the release notes used for the tag message and the GitHub release body,
-      with a "Migrating from v0.2" section: sessions instead of `actor=`, contacts in the host's
-      roster, hashes stale once, set keys after a renumber, `place()` returning a tuple.
+      with a "Migrating from v0.2" section: permissions in the host, a new show instead of
+      `replace_sheet`, contacts in the host's roster, hashes stale once, set keys after a renumber, `place()` returning a tuple.
 - [ ] **Step 3:** Update `docs/HANDOFF.md`: ledger count, Phase 1 done, Phase 2 next.
 - [ ] **Step 4:** Commit `chore(release): prepare v0.3.0`. The controller asks the maintainer to
       approve the push, the merge and the `v0.3.0` tag.
@@ -1095,7 +1050,7 @@ Branch `chore/p1-exit`.
 ## Phase 1 exit criteria
 
 - Every Priority 0 ledger test passes; `test_no_priority_zero_defect_remains` guards it, and the
-  64 companion IDs above are unmarked.
+  63 companion IDs above are unmarked.
 - `nox -s fuzz` under the nightly profile finds no hang and no non-`ShowPyError` in any parser
   (selection grammar, SVG paths, references, transition IDs, ranges, coordinate wording,
   positions CSV, JSON import, show documents, workspace paths).
