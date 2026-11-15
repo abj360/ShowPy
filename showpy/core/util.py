@@ -3,6 +3,7 @@ util.py --- small shared helpers: ID ranges, float comparison, seeded randomness
 
 Contains:
     natural_sort(): sorts IDs so T2 comes before T10
+    split_id(): splits an ID into its prefix and trailing number
     parse_range(): expands `T1-T8` into IDs
     format_ranges(): compacts IDs into `T1–T4, T7`
     approx_equal(): compares floats or arrays with an absolute tolerance
@@ -30,12 +31,14 @@ import numpy.typing as npt
 import shapely
 
 from showpy.core.canonical import canonical_value, jcs
+from showpy.core.caps import MAX_RANGE, require_size
 from showpy.core.errors import MAX_ECHOED_INPUT_CHARS, SchemaError
+from showpy.core.ids import ID_MAX_LENGTH
 from showpy.core.types import Points
 
-ID_PARTS = re.compile(r"^(?P<prefix>.*?)(?P<number>\d+)$")
-NATURAL_CHUNK = re.compile(r"(\d+)")
-RANGE_PATTERN = re.compile(r"^([A-Za-z_]+)(\d+)-([A-Za-z_]+)(\d+)$")
+ASCII_DIGITS = "0123456789"
+NATURAL_CHUNK = re.compile(r"([0-9]+)")
+RANGE_PATTERN = re.compile(r"^([A-Za-z_]+)([0-9]+)-([A-Za-z_]+)([0-9]+)$")
 RANGE_DASH = "–"
 LOGGER = logging.getLogger("showpy")
 HASH_PREFIX = "showpy-hash/1"
@@ -45,11 +48,12 @@ CLOSE_MATCH_COUNT = 3
 CLOSE_MATCH_CUTOFF = 0.4
 
 
-def _natural_key(text: str) -> tuple[tuple[tuple[int, int | str], ...], str]:
+def _natural_key(text: str) -> tuple[tuple[tuple[int, int, str], ...], str]:
     chunks = tuple(
-        (0, int(chunk)) if chunk.isdigit() else (1, chunk)
-        for chunk in NATURAL_CHUNK.split(text)
+        (0, len(stripped), stripped) if index % 2 else (1, 0, chunk)
+        for index, chunk in enumerate(NATURAL_CHUNK.split(text))
         if chunk
+        for stripped in (chunk.lstrip("0"),)
     )
     return chunks, text
 
@@ -63,9 +67,34 @@ def natural_sort(ids: Iterable[str]) -> list[str]:
     return sorted(ids, key=_natural_key)
 
 
-def _split_id(text: str) -> tuple[str, str] | None:
-    match = ID_PARTS.match(text)
-    return None if match is None else (match["prefix"], match["number"])
+def split_id(text: str) -> tuple[str, int | None]:
+    """Splits an ID into its prefix and trailing ASCII number, in time linear in its length.
+
+    Args:
+        text: The ID to split.
+
+    Returns:
+        parts: The text before the trailing digits and their value, or `(text, None)` without
+            trailing digits.
+
+    >>> split_id("flag-12"), split_id("lead")
+    (('flag-', 12), ('lead', None))
+    """
+    prefix = text.rstrip(ASCII_DIGITS)
+    digits = text[len(prefix) :]
+    if not digits:
+        return text, None
+    _require_digit_run(digits, text)
+    return prefix, int(digits)
+
+
+def _require_digit_run(digits: str, text: str) -> None:
+    if len(digits) > ID_MAX_LENGTH:
+        raise SchemaError(
+            f"number in {text[:ID_MAX_LENGTH]!r}... has {len(digits)} digits",
+            hint=f"IDs hold at most {ID_MAX_LENGTH} characters, so no number is longer",
+            context={"digits": len(digits), "max": ID_MAX_LENGTH},
+        )
 
 
 def parse_range(text: str) -> list[str]:
@@ -83,14 +112,18 @@ def parse_range(text: str) -> list[str]:
             )
         return [stripped]
     prefix, first, last_prefix, last = match.groups()
-    if prefix != last_prefix or int(first) > int(last):
+    _require_digit_run(first, text)
+    _require_digit_run(last, text)
+    low, high = int(first), int(last)
+    if prefix != last_prefix or low > high:
         raise SchemaError(
             f"bad range {text!r}",
             hint="use one prefix and an ascending range, e.g. T1-T8",
             context={"text": text},
         )
+    require_size(high - low + 1, MAX_RANGE, what="range IDs")
     width = len(first) if first.startswith("0") else 0
-    return [f"{prefix}{n:0{width}d}" for n in range(int(first), int(last) + 1)]
+    return [f"{prefix}{n:0{width}d}" for n in range(low, high + 1)]
 
 
 def format_ranges(ids: Iterable[str]) -> str:
@@ -109,8 +142,13 @@ def format_ranges(ids: Iterable[str]) -> str:
 
 
 def _continues(previous: str, current: str) -> bool:
-    a, b = _split_id(previous), _split_id(current)
-    return a is not None and b is not None and a[0] == b[0] and int(b[1]) == int(a[1]) + 1
+    (left, left_number), (right, right_number) = split_id(previous), split_id(current)
+    return (
+        left_number is not None
+        and right_number is not None
+        and left == right
+        and right_number == left_number + 1
+    )
 
 
 def approx_equal(a: npt.ArrayLike, b: npt.ArrayLike, tol: float = 1e-6) -> bool:

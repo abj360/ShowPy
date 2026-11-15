@@ -52,6 +52,14 @@ Contains:
     test_regression_id_split_is_linear_on_long_ids: splits a 10,000-character ID in linear time
     test_regression_range_check_happens_before_expansion: checks range endpoints before building
         300,000 strings
+    test_split_id_*(): splits IDs into a prefix and a trailing ASCII number
+    test_regression_split_id_rejects_digit_runs_no_id_can_hold: rejects a 5,000-digit tail with a
+        ShowPyError
+    test_regression_parse_range_rejects_oversized_ranges: rejects a range over MAX_RANGE before
+        expanding it
+    test_regression_parse_range_ignores_unicode_digits: treats an Arabic-Indic digit range as one ID
+    test_regression_parse_range_rejects_huge_endpoints: rejects a 5,000-digit endpoint with a
+        ShowPyError
     test_regression_parse_range_reads_ranges_with_digits_in_the_prefix: expands `P1x1-P1x3` whose
         prefix holds a digit
     test_regression_parse_range_reads_ranges_with_dash_prefixes: expands `flag-1-flag-3` the way
@@ -94,6 +102,7 @@ from showpy.core.util import (
     natural_sort,
     parse_range,
     seeded_rng,
+    split_id,
     timer,
 )
 from tests.helpers import digests_under_hash_seeds, fails_after
@@ -396,15 +405,11 @@ def test_regression_as_points_returns_a_copy() -> None:
     assert approx_equal(original, np.zeros((2, 2)))
 
 
-@pytest.mark.defect("UP-9.3-17")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-17")
 def test_regression_natural_sort_survives_unicode_digits() -> None:
     """Sorts IDs holding non-ASCII digits such as superscript two (audit 9.3)."""
     assert len(natural_sort(["T1²", "T1"])) == 2
 
 
-@pytest.mark.defect("UP-9.3-18")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-18")
 def test_regression_natural_sort_survives_huge_numbers() -> None:
     """Sorts IDs whose number has over 4,300 digits (audit 9.3)."""
     huge = "T" + "9" * 5000
@@ -434,8 +439,6 @@ def test_regression_chunk_counts_rejects_nan_total() -> None:
         chunk_counts(NAN, 4)
 
 
-@pytest.mark.defect("UP-9.3-22")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-22")
 @fails_after(5)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_id_split_is_linear_on_long_ids() -> None:
@@ -444,8 +447,6 @@ def test_regression_id_split_is_linear_on_long_ids() -> None:
     assert _best_of(lambda: label_prefix(long_id), trials=1) < QUADRATIC_BUDGET_S
 
 
-@pytest.mark.defect("UP-9.3-23")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-23")
 @fails_after(5)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_range_check_happens_before_expansion() -> None:
@@ -478,8 +479,6 @@ def test_regression_parse_range_reads_ranges_with_dash_prefixes() -> None:
     assert parse_range("flag-1-flag-3") == ["flag-1", "flag-2", "flag-3"]
 
 
-@pytest.mark.defect("UP-9.3-26")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-26")
 def test_regression_parse_range_does_not_read_unicode_digits_as_ascii() -> None:
     """Does not read the Arabic-Indic digit three as 3 (audit 9.3)."""
     try:
@@ -546,3 +545,38 @@ def test_regression_content_hash_rejects_a_domain_outside_its_alphabet(domain: s
     with pytest.raises(SchemaError) as caught:
         content_hash({"a": 1}, domain=domain)
     assert caught.value.context["domain"] == domain
+
+
+def test_split_id_splits_prefix_and_number() -> None:
+    assert split_id("flag-12") == ("flag-", 12)
+    assert split_id("T007") == ("T", 7)
+    assert split_id("lead") == ("lead", None)
+    assert split_id("") == ("", None)
+
+
+def test_split_id_ignores_non_ascii_digits() -> None:
+    assert split_id("T\u0663") == ("T\u0663", None)
+
+
+def test_regression_split_id_rejects_digit_runs_no_id_can_hold() -> None:
+    """Rejects a 5,000-digit tail with a ShowPyError, not ValueError from int()."""
+    with pytest.raises(SchemaError):
+        split_id("T" + "9" * 5000)
+
+
+def test_regression_parse_range_rejects_oversized_ranges() -> None:
+    """Rejects a range over MAX_RANGE before expanding it."""
+    with pytest.raises(SchemaError):
+        parse_range("T1-T10001")
+    assert len(parse_range("T1-T10000")) == 10_000
+
+
+def test_regression_parse_range_ignores_unicode_digits() -> None:
+    """Treats a range written in Arabic-Indic digits as one ID, not a range."""
+    assert parse_range("T\u0663-T\u0665") == ["T\u0663-T\u0665"]
+
+
+def test_regression_parse_range_rejects_huge_endpoints() -> None:
+    """Rejects a 5,000-digit endpoint with a ShowPyError, not ValueError from int()."""
+    with pytest.raises(SchemaError):
+        parse_range("T1-T" + "9" * 5000)

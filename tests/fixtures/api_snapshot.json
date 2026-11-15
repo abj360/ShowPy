@@ -1404,6 +1404,7 @@
   "spiral_points": "(params: collections.abc.Mapping[str, Any], n: int) -> Points",
   "split": "(sel: showpy.core.selection.Selection | collections.abc.Sequence[SpotId], k: int) -> list[showpy.core.selection.Selection]",
   "split_form": "(form: showpy.choreo.models.Form, at: int | SpotId, ids: tuple[FormId, FormId] | None = None, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> tuple[showpy.choreo.models.Form, showpy.choreo.models.Form]",
+  "split_id": "(text: str) -> tuple[str, int | None]",
   "split_section": "(show: showpy.show.models.Show, at: SetId) -> tuple[showpy.show.models.Show, showpy.show.models.Show]",
   "spot_counts": "(show: showpy.show.models.Show) -> list[showpy.choreo.models.SpotCount]",
   "stagger": "(spec: showpy.choreo.models.TransitionSpec, ordered_sel: Sel, step: float = 1.0, direction: Literal['start', 'end'] = 'start', keep_end: bool = True, force: bool = False) -> showpy.choreo.models.TransitionSpec",

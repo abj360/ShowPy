@@ -19,6 +19,11 @@ Contains:
         even when the min-sum plan misses them
     test_regression_split_rejects_absurd_part_counts_quickly: rejects an absurd part count instead
         of building 100,000 empty groups
+    test_regression_select_rejects_non_string_ids_in_a_set: rejects a set holding a non-string with
+        a ShowPyError, not a TypeError
+    test_regression_select_rejects_over_long_expressions: rejects text over MAX_TEXT_CHARS
+    test_regression_split_rejects_more_parts_than_spots: rejects k above the selection size
+    test_select_accepts_nesting_at_the_depth_cap: parses MAX_DEPTH nested parentheses
     test_regression_select_set_input_ignores_hash_seed: returns one order for a Python set under
         every hash seed
 """
@@ -44,6 +49,7 @@ from showpy.cast.select import (
     where,
 )
 from showpy.choreo.models import Form, Placement, Set
+from showpy.core.caps import MAX_DEPTH, MAX_TEXT_CHARS
 from showpy.core.errors import GeometryError, SchemaError, ShowPyError, UnknownRefError
 from showpy.core.types import Region
 from showpy.geo.shapes import line
@@ -354,8 +360,6 @@ def _line_cast() -> Cast:
     )
 
 
-@pytest.mark.defect("UP-9.3-72")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-72")
 def test_regression_select_generator_is_not_silently_empty() -> None:
     """Selects the IDs a generator yields, or rejects it, never returns nothing (audit 9.3)."""
     try:
@@ -365,24 +369,18 @@ def test_regression_select_generator_is_not_silently_empty() -> None:
     assert picked.ids == ("T1", "T2")
 
 
-@pytest.mark.defect("UP-9.3-73")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-73")
 def test_regression_select_rejects_a_non_selector_type() -> None:
     """Rejects an int selector with a ShowPyError, not a TypeError (audit 9.3)."""
     with pytest.raises(ShowPyError):
         select(_line_cast(), 5)  # type: ignore[arg-type]
 
 
-@pytest.mark.defect("UP-9.3-74")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-74")
 def test_regression_select_rejects_non_string_ids_in_a_list() -> None:
     """Rejects a list holding a non-string with a ShowPyError, not an AttributeError (audit 9.3)."""
     with pytest.raises(ShowPyError):
         select(_line_cast(), ["T1", 3])  # type: ignore[list-item]
 
 
-@pytest.mark.defect("UP-9.3-75")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-75")
 def test_regression_select_deep_nesting_raises_schema_error() -> None:
     """Rejects 500 nested parentheses with a SchemaError, not RecursionError (audit 9.3)."""
     expression = "(" * NESTING_DEPTH + "T1" + ")" * NESTING_DEPTH
@@ -404,8 +402,6 @@ def test_regression_mirror_pairs_finds_every_pair_within_tolerance() -> None:
     assert len(mirror_pairs(set_, "all", tol=MIRROR_TOL_M)) >= 1
 
 
-@pytest.mark.defect("UP-9.3-77")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-77")
 @fails_after(5)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_split_rejects_absurd_part_counts_quickly() -> None:
@@ -424,3 +420,29 @@ def test_regression_select_set_input_ignores_hash_seed() -> None:
     """Returns one order for a Python set under every hash seed (audit 9.3; P0 #9)."""
     outputs = outputs_under_hash_seeds(SET_SELECT_SCRIPT)
     assert len(set(outputs)) == 1, outputs
+
+
+def test_select_accepts_nesting_at_the_depth_cap() -> None:
+    expression = "(" * MAX_DEPTH + "T1" + ")" * MAX_DEPTH
+    assert select(_line_cast(), expression).ids == ("T1",)
+    with pytest.raises(SchemaError):
+        select(_line_cast(), "(" + expression + ")")
+
+
+def test_regression_select_rejects_non_string_ids_in_a_set() -> None:
+    """Rejects a set holding a non-string with a ShowPyError, not a TypeError."""
+    with pytest.raises(ShowPyError):
+        select(_line_cast(), {"T1", 3})  # type: ignore[arg-type]
+
+
+def test_regression_select_rejects_over_long_expressions() -> None:
+    """Rejects text over MAX_TEXT_CHARS before tokenizing it."""
+    with pytest.raises(SchemaError):
+        select(_line_cast(), "T1 " * MAX_TEXT_CHARS)
+
+
+def test_regression_split_rejects_more_parts_than_spots() -> None:
+    """Rejects k above the selection size instead of padding with empty groups."""
+    with pytest.raises(SchemaError):
+        split(["A", "B"], 3)
+    assert [p.ids for p in split([], 1)] == [()]

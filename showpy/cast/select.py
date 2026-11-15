@@ -18,7 +18,7 @@ Contains:
 
 import math
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 import numpy as np
@@ -27,12 +27,19 @@ from scipy.optimize import linear_sum_assignment
 
 from showpy.cast.models import Cast
 from showpy.choreo.models import Placement, Set
+from showpy.core.caps import MAX_DEPTH, MAX_RANGE, MAX_TEXT_CHARS, require_size
 from showpy.core.errors import GeometryError, SchemaError, UnknownRefError
 from showpy.core.ids import FormId, SpotId
 from showpy.core.selection import Selection as Selection
 from showpy.core.selection import Selector as Selector
 from showpy.core.types import Meters, Point, Points, Region
-from showpy.core.util import ID_PARTS, RANGE_PATTERN, close_matches, natural_sort, parse_range
+from showpy.core.util import (
+    RANGE_PATTERN,
+    close_matches,
+    natural_sort,
+    parse_range,
+    split_id,
+)
 from showpy.geo.curve_base import Curve
 from showpy.geo.regions import Area, region
 
@@ -87,6 +94,7 @@ def _glued(expr: str, position: int) -> bool:
 
 
 def _tokenize(expr: str) -> list[_Token]:
+    require_size(len(expr), MAX_TEXT_CHARS, what="expression characters")
     tokens = [_Token(match[0], match.start()) for match in TOKEN_PATTERN.finditer(expr)]
     for token in tokens:
         if token.text in OPERATORS and _glued(expr, token.position):
@@ -137,8 +145,8 @@ def label_prefix(spot_id: SpotId) -> str | None:
     >>> label_prefix("flag-12"), label_prefix("lead")
     ('flag-', None)
     """
-    match = ID_PARTS.match(spot_id)
-    return None if match is None else match["prefix"]
+    prefix, number = split_id(spot_id)
+    return None if number is None else prefix
 
 
 def _resolve_prefix(universe: _Universe, token: _Token) -> tuple[SpotId, ...]:
@@ -245,6 +253,7 @@ class _Parser:
         self.universe = universe
         self.expr = expr
         self.index = 0
+        self.depth = 0
 
     def _next(self, expected: str) -> _Token:
         if self.index >= len(self.tokens):
@@ -279,7 +288,10 @@ class _Parser:
             return _resolve_word(self.universe, token, self.expr)
         if token.text != "(":
             raise _bad_token(f"unexpected {token.text!r}", token.position, self.expr)
+        self.depth += 1
+        require_size(self.depth, MAX_DEPTH, what="nesting depth")
         inner = self._expression()
+        self.depth -= 1
         if self._next(")").text != ")":
             closing = self.tokens[self.index - 1]
             raise _bad_token("expected )", closing.position, self.expr)
@@ -297,6 +309,24 @@ def _validated(universe: _Universe, ids: Sequence[SpotId]) -> Selection:
                 context={"spot": spot_id},
             )
     return Selection(ids=tuple(ids))
+
+
+def _id_sequence(expr: object) -> tuple[SpotId, ...]:
+    if not isinstance(expr, Iterable):
+        raise SchemaError(
+            f"cannot select with {type(expr).__name__}",
+            hint="pass an expression string, a list of spot IDs or a Selection",
+            context={"type": type(expr).__name__},
+        )
+    ids = tuple(expr)
+    for spot_id in ids:
+        if not isinstance(spot_id, str):
+            raise SchemaError(
+                f"spot IDs must be strings, got {type(spot_id).__name__}",
+                hint="pass a list of ID strings such as ['T1', 'T2']",
+                context={"value": repr(spot_id)},
+            )
+    return tuple(natural_sort(ids)) if isinstance(expr, set | frozenset) else ids
 
 
 def select(source: "Show | Set | Cast", expr: Selector) -> Selection:
@@ -323,10 +353,8 @@ def select(source: "Show | Set | Cast", expr: Selector) -> Selection:
     universe = _universe(source)
     if isinstance(expr, Selection):
         return _validated(universe, expr.ids).replace(description=expr.description)
-    if isinstance(expr, set | frozenset):
-        return _validated(universe, natural_sort(expr))
     if not isinstance(expr, str):
-        return _validated(universe, expr)
+        return _validated(universe, _id_sequence(expr))
     tokens = _tokenize(expr)
     result = _Parser(tokens, universe, expr).parse()
     return result.replace(description=expr)
@@ -444,21 +472,23 @@ def ordered_along(set_: Set, sel: Selector, by: OrderBy = "form") -> Selection:
     return Selection(ids=tuple(p.entity for p in ordered), description=chosen.description)
 
 
-def _require_parts(k: int) -> None:
+def _require_parts(k: int, limit: int = MAX_RANGE) -> None:
     if k < 1:
         raise SchemaError("k must be at least 1", hint="pass k >= 1", context={"k": k})
+    require_size(k, min(limit, MAX_RANGE), what="parts")
 
 
 def split(sel: Selection | Sequence[SpotId], k: int) -> list[Selection]:
     """Cuts a selection into k consecutive groups whose sizes differ by at most one.
 
-    Larger groups come first; when k exceeds the size, trailing groups are empty.
+    Larger groups come first. k is at most the number of spots (1 for an empty selection)
+    and at most 10,000.
 
     >>> [p.ids for p in split(["A", "B", "C"], 2)]
     [('A', 'B'), ('C',)]
     """
-    _require_parts(k)
     ids = tuple(sel)
+    _require_parts(k, max(len(ids), 1))
     size, extra = divmod(len(ids), k)
     parts, start = [], 0
     for index in range(k):

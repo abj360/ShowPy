@@ -304,6 +304,7 @@ if TYPE_CHECKING:
         natural_sort,
         parse_range,
         seeded_rng,
+        split_id,
         timer,
     )
     from showpy.core.validation import (
@@ -1190,6 +1191,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "spiral_points": ("showpy.choreo.form_fns", "spiral_points"),
     "split": ("showpy.cast.select", "split"),
     "split_form": ("showpy.choreo.form_ops", "split_form"),
+    "split_id": ("showpy.core.util", "split_id"),
     "split_section": ("showpy.show.sections", "split_section"),
     "spot_counts": ("showpy.show.counts", "spot_counts"),
     "stagger": ("showpy.choreo.paths", "stagger"),
@@ -1729,6 +1731,7 @@ __all__ = [
     "spiral_points",
     "split",
     "split_form",
+    "split_id",
     "split_section",
     "spot_counts",
     "stagger",
