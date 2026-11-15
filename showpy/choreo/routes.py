@@ -40,6 +40,7 @@ from showpy.geo.curves import (
     Segment,
     curve_from_construction,
 )
+from showpy.show.locks import require_unlocked
 from showpy.show.models import Show
 
 MIN_GAP = 1e-9
@@ -236,8 +237,21 @@ def two_part(
     sel: Sequence[SpotId],
     corner: Literal["x_first", "y_first"] | Point,
     split: float | None = None,
+    *,
+    force: bool = False,
 ) -> TransitionSpec:
     """Makes L-shaped moves through a corner, reached at local count `split` when given.
+
+    Args:
+        show: Show that holds the sets the moves run between.
+        spec: Transition whose rows are edited.
+        sel: Spots that get an L-shaped move.
+        corner: Corner of the L: x first, y first, or an explicit point.
+        split: Local count at which the corner is reached.
+        force: Edits locked rows instead of raising LockedError.
+
+    Returns:
+        edited_spec: The transition with the selected rows rewritten.
 
     >>> from showpy.examples import two_set_show
     >>> show = two_set_show()
@@ -259,7 +273,19 @@ def two_part(
         rows[entity] = PathRow.model_validate(
             {**row.model_dump(), "style": PathStyle.POLYLINE, "waypoints": (waypoint,)}
         )
-    return spec.replace(rows=rows)
+    edited = spec.replace(rows=rows)
+    _require_rows_unlocked(show, spec, edited, force)
+    return edited
+
+
+def _require_rows_unlocked(
+    show: Show, spec: TransitionSpec, edited: TransitionSpec, force: bool
+) -> None:
+    """Raises LockedError when `edited` changes a locked row of `spec`, unless forced."""
+    others = tuple(t for t in show.transitions if t.id != spec.id)
+    before = show.replace(transitions=(*others, spec))
+    after = show.replace(transitions=(*others, edited))
+    require_unlocked(before, after, force=force)
 
 
 def rotate_path(

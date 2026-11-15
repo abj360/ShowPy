@@ -1437,7 +1437,7 @@
   "transitions": "(show: showpy.show.models.Show) -> list[TransitionId]",
   "translation_matrix": "(dx: float, dy: float) -> Matrix",
   "turn": "(start: Degrees, end: Degrees, u: float, direction: showpy.choreo.models.TurnDirection = <TurnDirection.SHORTEST: 'shortest'>) -> Degrees",
-  "two_part": "(show: showpy.show.models.Show, spec: showpy.choreo.models.TransitionSpec, sel: collections.abc.Sequence[SpotId], corner: Literal['x_first', 'y_first'] | Point, split: float | None = None) -> showpy.choreo.models.TransitionSpec",
+  "two_part": "(show: showpy.show.models.Show, spec: showpy.choreo.models.TransitionSpec, sel: collections.abc.Sequence[SpotId], corner: Literal['x_first', 'y_first'] | Point, split: float | None = None, *, force: bool = False) -> showpy.choreo.models.TransitionSpec",
   "unclaimed": "(pub: showpy.export.models.Publication, show: showpy.show.models.Show) -> list[SpotId]",
   "undo": "(ws: showpy.show.storage.Workspace, at: datetime.datetime) -> showpy.show.models.Revision",
   "union": "(*areas: Area) -> Area",

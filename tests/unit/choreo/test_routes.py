@@ -6,6 +6,8 @@ test_routes.py --- tests show-aware path builders: routes, follow, counter-march
 Contains:
     test_regression_two_part_respects_locked_rows: raises LockedError for a locked row instead of
         rewriting it
+    test_regression_two_part_force_rewrites_locked_row: rewrites a locked row when forced
+    test_regression_two_part_edits_unlocked_row_of_stored_transition: edits unlocked rows freely
     test_regression_make_route_with_single_vertex_raises_path_error: raises a PathError, not
         IndexError, when the whole route is one point
     test_regression_counter_march_with_no_members_raises_path_error: raises a PathError, not
@@ -32,7 +34,6 @@ from showpy.core.ids import format_tid
 from showpy.core.util import approx_equal
 from tests.fixtures.motion_shows import TID, with_targets
 from tests.fixtures.shows import two_set_show
-from tests.helpers import defect
 
 FILE = ["T4", "T3", "T2", "T1"]
 
@@ -107,13 +108,30 @@ def test_rotate_path_about_center() -> None:
     assert approx_equal(math.dist(mid, pivot), 3.0)
 
 
-@defect("UP-9.2-21")
 def test_regression_two_part_respects_locked_rows() -> None:
     """Raises LockedError for a locked row instead of rewriting it (audit 9.2; P0 #13)."""
     show = two_set_show()
     locked = lock(show.transition(TID), ["T1"])
     with pytest.raises(LockedError):
         two_part(show, locked, ["T1"], "x_first")
+
+
+def test_regression_two_part_force_rewrites_locked_row() -> None:
+    """Rewrites a locked row when the caller passes force=True."""
+    show = two_set_show()
+    locked = lock(show.transition(TID), ["T1"])
+    rewritten = two_part(show, locked, ["T1"], "x_first", force=True)
+    assert rewritten.row("T1").style == PathStyle.POLYLINE
+
+
+def test_regression_two_part_edits_unlocked_row_of_stored_transition() -> None:
+    """Edits an unlocked row of a stored transition without force."""
+    show = two_set_show()
+    stored = lock(show.transition(TID), ["T2"])
+    show = show.replace(transitions=(stored,))
+    edited = two_part(show, stored, ["T1"], "x_first")
+    assert edited.row("T1").style == PathStyle.POLYLINE
+    assert edited.row("T2").locked
 
 
 def test_regression_make_route_with_single_vertex_raises_path_error() -> None:
