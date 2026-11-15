@@ -7,6 +7,7 @@ Contains:
     test_regression_require_size_rejects_over_cap: raises SchemaError carrying what, requested
         and cap
     test_require_size_accepts_at_cap: lets a request equal to the cap through
+    test_regression_require_size_rejects_a_negative_request: raises SchemaError for a size below 0
     test_require_size_honors_error_type: raises the error class the caller names
     test_caps_have_approved_values: pins every cap to its maintainer-approved value
 """
@@ -54,3 +55,9 @@ def test_caps_have_approved_values() -> None:
     assert MAX_TEXT_CHARS == 1_000_000
     assert MAX_IMAGE_PIXELS == 40_000_000
     assert MAX_VIDEO_PIXELS == 3840 * 2160
+
+
+def test_regression_require_size_rejects_a_negative_request() -> None:
+    with pytest.raises(SchemaError) as caught:
+        require_size(-1, MAX_POINTS, what="points")
+    assert caught.value.context == {"what": "points", "requested": -1, "cap": MAX_POINTS}

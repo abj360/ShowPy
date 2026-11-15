@@ -10,7 +10,7 @@ Contains:
     MAX_TEXT_CHARS: bounds the characters of one parser input
     MAX_IMAGE_PIXELS: bounds the pixels of one raster image
     MAX_VIDEO_PIXELS: bounds the pixels of one video frame
-    require_size(): rejects a requested size that is over its cap
+    require_size(): rejects a requested size that is negative or over its cap
 """
 
 from showpy.core.errors import SchemaError, ShowPyError
@@ -28,10 +28,11 @@ MAX_VIDEO_PIXELS = 3840 * 2160
 def require_size(
     requested: int, cap: int, *, what: str, error: type[ShowPyError] = SchemaError
 ) -> None:
-    """Rejects a requested size that is over its cap, before the caller allocates it.
+    """Rejects a requested size that is negative or over its cap, before the caller allocates it.
 
     Args:
-        requested: Size the caller is about to allocate, such as width times height.
+        requested: Size the caller is about to allocate, such as width times height; a negative
+            size is rejected too.
         cap: Largest size allowed.
         what: Name of the thing being sized, used in the message.
         error: Error class to raise.
@@ -45,8 +46,14 @@ def require_size(
         showpy.core.errors.SchemaError: SCHEMA: points would need 1000001, over the cap of \
 1000000 (hint: ask for fewer points or use a coarser setting)
     """
-    if requested <= cap:
+    if 0 <= requested <= cap:
         return
+    if requested < 0:
+        raise error(
+            f"{what} would need {requested}, which is negative",
+            hint=f"ask for zero or more {what}",
+            context={"what": what, "requested": requested, "cap": cap},
+        )
     raise error(
         f"{what} would need {requested}, over the cap of {cap}",
         hint=f"ask for fewer {what} or use a coarser setting",
