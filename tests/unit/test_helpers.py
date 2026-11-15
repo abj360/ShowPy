@@ -6,6 +6,10 @@ test_helpers.py --- checks the shared test helpers that guard the suite itself
 Contains:
     test_regression_hang_timeout_never_interrupts_coverage_code(): defers the alarm past coverage
     test_regression_hang_timeout_survives_a_swallowed_alarm(): keeps alarming after a lost one
+    test_regression_hang_timeout_never_raises_inside_a_finalizer(): defers the alarm past one
+    test_regression_hang_timeout_leaves_no_open_file_behind(): frees what the alarm cut off
+    test_regression_hang_timeout_drops_leaks_it_caused(): hides a file freed after the alarm
+    test_hang_timeout_still_reports_leaks_before_the_deadline(): forwards a leak by the test
     test_hang_timeout_lets_a_quick_test_finish(): returns normally and restores the old handler
 """
 
@@ -13,6 +17,8 @@ import signal
 import sys
 import time
 import weakref
+from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 
@@ -70,13 +76,13 @@ def _spin(seconds: float) -> None:
 
 
 @posix_only
-@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 def test_regression_hang_timeout_survives_a_swallowed_alarm() -> None:
     """Fails a hang whose alarm lands in a finalizer that swallows it (CI hang 2026-11-15).
 
     An exception raised inside a finalizer or GC callback is reported as unraisable and dropped,
     so a one-shot alarm there let the next-link cycle test loop until the runner ran out of
-    memory. The alarm now repeats until the test frame unwinds.
+    memory. The alarm now repeats until the test frame unwinds, and no tick may leave an
+    unraisable exception behind.
     """
 
     @fails_after(DEADLINE_S)
@@ -88,6 +94,124 @@ def test_regression_hang_timeout_survives_a_swallowed_alarm() -> None:
 
     with pytest.raises(pytest.fail.Exception, match="Timeout"):
         hanging_test()
+
+
+class _SpinsOnDelete:
+    """Runs a slow `__del__`, the finalizer shape that does not go through weakref."""
+
+    def __init__(self, finished: list[bool]) -> None:
+        self.finished = finished
+
+    def __del__(self) -> None:
+        _spin(COVERAGE_FRAME_S)
+        self.finished.append(True)
+
+
+def _finish_after_spin(finished: list[bool]) -> None:
+    _spin(COVERAGE_FRAME_S)
+    finished.append(True)
+
+
+def _drop_weakref_finalized(finished: list[bool]) -> None:
+    weakref.finalize(_Garbage(), _finish_after_spin, finished)
+
+
+def _drop_dunder_del(finished: list[bool]) -> None:
+    _SpinsOnDelete(finished)
+
+
+@posix_only
+@pytest.mark.parametrize("drop_garbage", [_drop_weakref_finalized, _drop_dunder_del])
+def test_regression_hang_timeout_never_raises_inside_a_finalizer(
+    drop_garbage: Callable[[list[bool]], None],
+) -> None:
+    """Defers the alarm while a finalizer runs, then fails the hang (macOS 3.12 CI 2026-11-15).
+
+    A tick raised inside a finalizer was swallowed, the next tick landed in pytest's
+    unraisable hook, and the run failed with "Failed to process unraisable exception".
+    """
+    finished: list[bool] = []
+
+    @fails_after(DEADLINE_S)
+    def hanging_test() -> None:
+        drop_garbage(finished)
+        end = time.monotonic() + HANG_BOUND_S
+        while time.monotonic() < end:
+            pass
+
+    with pytest.raises(pytest.fail.Exception, match="Timeout"):
+        hanging_test()
+    assert finished == [True]
+
+
+@posix_only
+def test_regression_hang_timeout_leaves_no_open_file_behind(tmp_path: Path) -> None:
+    """Frees a file the alarm cut off before it closed (cycle test teardown error 2026-11-15).
+
+    The alarm can land between opening a file and closing it. The traceback kept the handle
+    alive, and its ResourceWarning surfaced later as an unraisable error in teardown.
+    """
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"x")
+
+    @fails_after(DEADLINE_S)
+    def hanging_test() -> None:
+        end = time.monotonic() + HANG_BOUND_S
+        while time.monotonic() < end:
+            handle = source.open("rb")
+            _spin(FINALIZER_SPIN_S)
+            handle.close()
+
+    with pytest.raises(pytest.fail.Exception, match="Timeout"):
+        hanging_test()
+
+
+def _leak_open_file(path: Path) -> None:
+    path.open("rb")  # dropped unclosed on purpose
+
+
+@posix_only
+def test_regression_hang_timeout_drops_leaks_it_caused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Drops the ResourceWarning of a file freed after the alarm (cycle test teardown 2026-11-15).
+
+    An alarm inside io.open() frees the half-built file at once; its unraisable ResourceWarning
+    failed the hang test's teardown.
+    """
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"x")
+    seen: list[type[BaseException]] = []
+    monkeypatch.setattr(sys, "unraisablehook", lambda unraisable: seen.append(unraisable.exc_type))
+
+    @fails_after(DEADLINE_S)
+    def hanging_test() -> None:
+        try:
+            _spin(HANG_BOUND_S)
+        finally:
+            _leak_open_file(source)
+
+    with pytest.raises(pytest.fail.Exception, match="Timeout"):
+        hanging_test()
+    assert seen == []
+
+
+@posix_only
+def test_hang_timeout_still_reports_leaks_before_the_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Forwards a ResourceWarning the test causes itself, before any alarm fires."""
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"x")
+    seen: list[type[BaseException]] = []
+    monkeypatch.setattr(sys, "unraisablehook", lambda unraisable: seen.append(unraisable.exc_type))
+
+    @fails_after(HANG_BOUND_S)
+    def leaking_test() -> None:
+        _leak_open_file(source)
+
+    leaking_test()
+    assert seen == [ResourceWarning]
 
 
 @posix_only
