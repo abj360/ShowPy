@@ -15,6 +15,8 @@ Contains:
     test_regression_apply_match_respects_locked_forms: needs force to change a locked form
     test_regression_apply_match_rejects_a_form_of_another_set: raises MatchError before writing
     test_regression_apply_match_rejects_an_unknown_form: raises UnknownRefError
+    test_regression_apply_match_rejects_an_out_of_range_slot: raises MatchError for a slot past
+        the form's last slot or below zero
     test_apply_match_leaves_unchanged_slots_alone: skips spots already in their slot
     test_apply_match_trims_trailing_empty_slots: drops trailing holes from members
     test_regression_clear_rows_keeps_transition_order: leaves show.transitions in their original
@@ -207,6 +209,16 @@ def test_regression_apply_match_rejects_an_unknown_form() -> None:
     result = result.replace(slots={e: ("ghost", i) for e, (_, i) in result.slots.items()})
     with pytest.raises(UnknownRefError):
         apply_match(show, TID, result)
+
+
+@pytest.mark.parametrize("slot", [len(REVERSED_RING), -1])
+def test_regression_apply_match_rejects_an_out_of_range_slot(slot: int) -> None:
+    """Names the form, slot and slot count instead of leaking an IndexError (lane G review)."""
+    show, ring = _ring_show()
+    result = match_by_order(["T1"], ring, show.set("1")).replace(slots={"T1": ("ring", slot)})
+    with pytest.raises(MatchError) as caught:
+        apply_match(show, TID, result)
+    assert caught.value.context == {"form": "ring", "slot": slot, "slots": len(REVERSED_RING)}
 
 
 def test_apply_match_leaves_unchanged_slots_alone() -> None:

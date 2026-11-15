@@ -77,26 +77,40 @@ def _neighbour_tids(show: Show, set_id: SetId) -> list[TransitionId]:
     return [tid for tid in show.transition_ids() if set_id in tid]
 
 
+def _form_poses(show: Show, set_id: SetId, form_id: FormId) -> tuple[Points, list[float]]:
+    form = show.forms.get(form_id)
+    if form is None:
+        raise UnknownRefError(
+            f"match result names unknown form {form_id!r}",
+            hint="match onto forms of this show, or match onto points",
+            context={"form": form_id, "forms": sorted(show.forms)},
+        )
+    if form.set != set_id:
+        raise MatchError(
+            f"form {form_id} belongs to set {form.set}, not {set_id}",
+            hint=f"match onto forms of set {set_id}",
+            context={"form": form_id, "form_set": form.set, "set": set_id},
+        )
+    return slot_poses(form)
+
+
+def _check_slot(form_id: FormId, slot: int, slot_count: int) -> None:
+    if not 0 <= slot < slot_count:
+        raise MatchError(
+            f"form {form_id} has no slot {slot}; its slots are 0 to {slot_count - 1}",
+            hint="match onto an existing slot of the form, or add slots with n=",
+            context={"form": form_id, "slot": slot, "slots": slot_count},
+        )
+
+
 def _slot_targets(show: Show, set_id: SetId, result: MatchResult) -> dict[SpotId, Placement]:
     poses: dict[FormId, tuple[Points, list[float]]] = {}
     targets = {}
     for entity, (form_id, slot) in result.slots.items():
         if form_id not in poses:
-            form = show.forms.get(form_id)
-            if form is None:
-                raise UnknownRefError(
-                    f"match result names unknown form {form_id!r}",
-                    hint="match onto forms of this show, or match onto points",
-                    context={"form": form_id, "forms": sorted(show.forms)},
-                )
-            if form.set != set_id:
-                raise MatchError(
-                    f"form {form_id} belongs to set {form.set}, not {set_id}",
-                    hint=f"match onto forms of set {set_id}",
-                    context={"form": form_id, "form_set": form.set, "set": set_id},
-                )
-            poses[form_id] = slot_poses(form)
+            poses[form_id] = _form_poses(show, set_id, form_id)
         points, facings = poses[form_id]
+        _check_slot(form_id, slot, len(points))
         x, y = (float(v) for v in points[slot])
         targets[entity] = Placement(
             entity=entity, x=x, y=y, facing=facings[slot], form=form_id, order=slot
