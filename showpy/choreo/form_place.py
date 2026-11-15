@@ -2,7 +2,7 @@
 form_place.py --- builds sets from forms and regenerates a form's placements in its show
 
 Contains:
-    place(): builds a set's placements from forms, matching spots into open slots
+    place(): builds a set from forms, matching spots into open slots, and returns the filled forms
     filled_forms(): returns forms whose members are read back from a placed set
     rebuild(): regenerates one form's placements and resets its neighbouring paths
 """
