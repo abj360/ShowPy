@@ -596,6 +596,7 @@ class MatchResult(FrozenModel):
         crossings: Pairs of straight-line moves that cross.
         unassigned_slots: Slot indexes nobody takes.
         explain: Plain-language lines describing the result.
+        slots: Spot to (form id, slot index in that form); empty when matched onto points.
     """
 
     entities: tuple[SpotId, ...] = ()
@@ -607,10 +608,14 @@ class MatchResult(FrozenModel):
     crossings: int = 0
     unassigned_slots: tuple[int, ...] = ()
     explain: tuple[str, ...] = ()
+    slots: dict[SpotId, tuple[FormId, int]] = {}
 
     @model_validator(mode="after")
     def _aligned(self) -> "MatchResult":
-        if len(self.entities) != len(self.targets) or set(self.entities) != set(self.assignment):
+        is_misaligned = len(self.entities) != len(self.targets) or set(self.entities) != set(
+            self.assignment
+        )
+        if is_misaligned or (self.slots and set(self.slots) != set(self.assignment)):
             raise SchemaError(
                 "match result entities, targets and assignment disagree",
                 hint="give one target and one slot per entity",

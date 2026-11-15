@@ -12,6 +12,8 @@ Contains:
     bottleneck_value(): returns the smallest possible largest cost of a full assignment
     match(): assigns spots to slots under the options' constraints and objective
     match_by_order(): assigns the i-th spot to the i-th slot
+
+Results onto forms carry `MatchResult.slots`, so `apply_match` can update form members.
 """
 
 from collections.abc import Mapping, Sequence
@@ -43,7 +45,7 @@ from showpy.choreo.match_solve import (
 )
 from showpy.choreo.models import Form, MatchOptions, MatchResult, Set
 from showpy.core.errors import MatchError
-from showpy.core.ids import SpotId
+from showpy.core.ids import FormId, SpotId
 from showpy.core.types import Points
 from showpy.core.util import as_points, natural_sort
 
@@ -178,8 +180,26 @@ def _explain(
     return tuple(lines)
 
 
+def _column_slots(to_slots: SlotSource) -> tuple[tuple[FormId, int], ...]:
+    if not (isinstance(to_slots, Sequence) and to_slots):
+        return ()
+    if not all(isinstance(f, Form) for f in to_slots):
+        return ()
+    return tuple(
+        (form.id, local)
+        for form in to_slots
+        if isinstance(form, Form)
+        for local in range(len(form_slots(form)))
+    )
+
+
 def _result(
-    p: MatchProblem, costs: MatchCosts, cols: IntArray, options: MatchOptions, swaps: int
+    p: MatchProblem,
+    costs: MatchCosts,
+    cols: IntArray,
+    options: MatchOptions,
+    swaps: int,
+    column_slots: tuple[tuple[FormId, int], ...] = (),
 ) -> MatchResult:
     rows = np.arange(len(cols))
     moves = costs.distance[rows, cols] if len(cols) else np.zeros(0)
@@ -197,6 +217,9 @@ def _result(
         crossings=count_crossings(p.starts, targets),
         unassigned_slots=unassigned,
         explain=_explain(options, largest, total, swaps, len(unassigned)),
+        slots={e: column_slots[int(c)] for e, c in zip(p.entities, cols, strict=True)}
+        if column_slots
+        else {},
     )
 
 
@@ -225,6 +248,12 @@ def match(
     >>> r = match([(0, 0), (10, 0)], [(10, 1), (0, 1)])
     >>> r.assignment, r.max_distance
     ({'0': 1, '1': 0}, 1.0)
+
+    When `to_slots` is a list of forms, `result.slots` maps each spot to (form id, slot).
+
+    >>> from showpy.choreo.forms import line_form
+    >>> match([(0, 0)], [line_form("f", [], (0, 0), (2, 0), n=2)]).slots
+    {'0': ('f', 0)}
     """
     opts = options or MatchOptions()
     p = build_problem(from_, to_slots, entities, groups, slot_groups)
@@ -235,7 +264,7 @@ def match(
     _require_feasible(p, costs, opts.preserve_order)
     cols, cap = _solve(costs.cost, opts)
     cols, swaps = _improve(p, costs.cost, cols, cap, opts)
-    return _result(p, costs, cols, opts, swaps)
+    return _result(p, costs, cols, opts, swaps, _column_slots(to_slots))
 
 
 def match_by_order(
@@ -258,7 +287,9 @@ def match_by_order(
     starts = slots[: len(ids)] if from_ is None else from_.positions(list(ids))
     p = MatchProblem(ids, starts, None, slots, {}, (None,) * len(slots))
     costs = build_costs(p, MatchOptions(keep_groups=False))
-    result = _result(p, costs, np.arange(len(ids), dtype=np.intp), MatchOptions(), 0)
+    column_slots = tuple((form.id, i) for i in range(len(slots))) if isinstance(form, Form) else ()
+    cols = np.arange(len(ids), dtype=np.intp)
+    result = _result(p, costs, cols, MatchOptions(), 0, column_slots)
     if from_ is None:
         note = "no starting set given; distances are reported as 0"
         return result.replace(explain=(*result.explain, note))

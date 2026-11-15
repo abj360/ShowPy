@@ -54,6 +54,17 @@ def test_match_result_round_trips_and_checks_alignment() -> None:
         MatchResult(entities=("A",), assignment={"B": 0}, targets=((1.0, 2.0),))
 
 
+def test_match_result_slots_must_cover_the_assigned_spots() -> None:
+    kept = MatchResult(
+        entities=("A",), assignment={"A": 0}, targets=((1.0, 2.0),), slots={"A": ("f", 0)}
+    )
+    assert MatchResult.model_validate_json(kept.model_dump_json()) == kept
+    with pytest.raises(SchemaError):
+        MatchResult(
+            entities=("A",), assignment={"A": 0}, targets=((1.0, 2.0),), slots={"B": ("f", 0)}
+        )
+
+
 def test_form_fn_info_holds_name_and_summary() -> None:
     assert FormFnInfo(name="spiral", summary="Spaces spots").name == "spiral"
 

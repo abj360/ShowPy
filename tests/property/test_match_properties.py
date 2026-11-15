@@ -2,6 +2,9 @@
 
 """
 test_match_properties.py --- checks matching against brute force on small seeded random instances
+
+Contains:
+    test_applied_matches_survive_a_form_rebuild: rebuilding a form after apply_match moves nobody
 """
 
 import itertools
@@ -10,11 +13,15 @@ import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from showpy.choreo.match import bottleneck_value, match
+from showpy.choreo.form_place import rebuild
+from showpy.choreo.forms import circle_form, line_form
+from showpy.choreo.match import bottleneck_value, match, match_by_order
+from showpy.choreo.match_ops import apply_match
 from showpy.choreo.match_solve import FloatArray, count_crossings
-from showpy.choreo.models import MatchObjective, MatchOptions, MatchResult
+from showpy.choreo.models import Form, MatchObjective, MatchOptions, MatchResult
 from showpy.core.types import Points
 from showpy.core.util import approx_equal, seeded_rng
+from tests.fixtures.shows import two_set_show
 
 TOL = 1e-9
 MAX_SPOTS = 5
@@ -129,3 +136,32 @@ def test_preserve_order_equals_brute_force_over_increasing_assignments(
 def test_match_is_deterministic(case: tuple[Points, Points]) -> None:
     starts, slots = case
     assert match(starts, slots) == match(starts, slots)
+
+
+MOVE_TOL = 1e-6
+TID = ("1", "2")
+SPOTS = ("T1", "T2", "T3", "T4")
+
+
+def _fillable_form(kind: str) -> Form:
+    if kind == "line":
+        return line_form("f", [], (0, 12), (6, 12), n=len(SPOTS), set_id="2")
+    if kind == "arc":
+        return circle_form("f", [], (3, 10), 3.0, n=len(SPOTS), set_id="2")
+    return line_form("f", [], (0, 14), (9, 14), n=len(SPOTS), set_id="2")
+
+
+@settings(max_examples=40, deadline=None)
+@given(st.sampled_from(("line", "arc", "block")), st.permutations(SPOTS))
+def test_applied_matches_survive_a_form_rebuild(kind: str, order: list[str]) -> None:
+    form = _fillable_form(kind)
+    show = two_set_show().replace(forms={"f": form})
+    permuted = match_by_order(order, form, show.set("1"))
+    applied = apply_match(show, TID, permuted)
+    rebuilt = rebuild(applied, "f")
+    for spot in SPOTS:
+        assert approx_equal(
+            np.array(rebuilt.set("2").get(spot).point),
+            np.array(applied.set("2").get(spot).point),
+            MOVE_TOL,
+        )

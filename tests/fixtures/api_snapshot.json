@@ -467,6 +467,7 @@
       "explain": "tuple[str, ...]",
       "max_distance": "Meters",
       "max_speed": "float | None",
+      "slots": "dict[SpotId, tuple[FormId, int]]",
       "targets": "tuple[Point, ...]",
       "total_distance": "Meters",
       "unassigned_slots": "tuple[int, ...]"

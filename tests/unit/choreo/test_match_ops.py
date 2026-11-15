@@ -8,6 +8,14 @@ Contains:
         with the new slot, not only x and y
     test_regression_apply_match_updates_form_members_like_swap: keeps Form.members in step with
         matched slots so rebuild keeps them
+    test_regression_apply_match_rejects_a_slot_held_by_an_unmatched_member: raises MatchError
+        instead of putting two spots in one slot
+    test_regression_apply_match_rejects_leaving_an_interior_slot_empty: raises MatchError
+        when a matched spot leaves a hole between members
+    test_regression_apply_match_respects_locked_forms: needs force to change a locked form
+    test_regression_apply_match_rejects_an_unknown_form: raises UnknownRefError
+    test_apply_match_leaves_unchanged_slots_alone: skips spots already in their slot
+    test_apply_match_trims_trailing_empty_slots: drops trailing holes from members
     test_regression_clear_rows_keeps_transition_order: leaves show.transitions in their original
         order when rows are cleared
 """
@@ -19,7 +27,7 @@ from showpy.choreo.forms import circle_form, line_form, slot_poses
 from showpy.choreo.match import match, match_by_order
 from showpy.choreo.match_ops import apply_match, clear_rows, suggest_swaps, swap
 from showpy.choreo.models import FacingSpec, Form, TransitionSpec
-from showpy.core.errors import LockedError, UnknownRefError
+from showpy.core.errors import LockedError, MatchError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
@@ -127,8 +135,6 @@ def _ring_show() -> tuple[Show, Form]:
     return rebuild(show, "ring"), ring
 
 
-@pytest.mark.defect("UP-9.6-01")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-01")
 def test_regression_apply_match_updates_order_and_facing_of_formed_spots() -> None:
     """Rewrites order and facing with the new slot, not only x and y (audit 9.6; P0 #12)."""
     show, ring = _ring_show()
@@ -140,8 +146,6 @@ def test_regression_apply_match_updates_order_and_facing_of_formed_spots() -> No
         assert approx_equal(placed.get(entity).facing, poses[slot], POSE_TOL)
 
 
-@pytest.mark.defect("UP-9.6-02")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-02")
 def test_regression_apply_match_updates_form_members_like_swap() -> None:
     """Keeps Form.members in step with matched slots so rebuild keeps them (audit 9.6; P0 #12)."""
     show, _ = _ring_show()
@@ -151,6 +155,66 @@ def test_regression_apply_match_updates_form_members_like_swap() -> None:
     assert matched.forms["ring"].members == tuple(REVERSED_RING)
     kept = matched.set("2").get("T1").point
     assert approx_equal(rebuild(matched, "ring").set("2").get("T1").point, kept, POSE_TOL)
+
+
+def _ring_without(member: str) -> tuple[Show, Form]:
+    show, ring = _ring_show()
+    smaller = ring.replace(members=tuple(m for m in ring.members if m != member))
+    return show.replace(forms={"ring": smaller}), smaller
+
+
+def test_regression_apply_match_rejects_a_slot_held_by_an_unmatched_member() -> None:
+    """Refuses to stack two spots on one slot (audit 9.6; P0 #12)."""
+    show, ring = _ring_show()
+    result = match_by_order(["T2"], ring, show.set("1")).replace(slots={"T2": ("ring", 0)})
+    with pytest.raises(MatchError):
+        apply_match(show, TID, result)
+
+
+def test_regression_apply_match_rejects_leaving_an_interior_slot_empty() -> None:
+    """Refuses a match that opens a hole inside a form's members (audit 9.6; P0 #12)."""
+    show, ring = _ring_show()
+    result = match(show.set("1"), [ring], entities=["T1"])
+    moved = result.replace(assignment={"T1": 3}, slots={"T1": ("ring", 3)})
+    with pytest.raises(MatchError):
+        apply_match(show, TID, moved)
+
+
+def test_regression_apply_match_respects_locked_forms() -> None:
+    """Needs force=True to change members of a locked form (audit 9.6; P0 #12)."""
+    show, ring = _ring_show()
+    show = show.replace(forms={"ring": ring.replace(locked=True)})
+    result = match_by_order(REVERSED_RING, ring, show.set("1"))
+    with pytest.raises(LockedError):
+        apply_match(show, TID, result)
+    assert apply_match(show, TID, result, force=True).forms["ring"].members == tuple(REVERSED_RING)
+
+
+def test_regression_apply_match_rejects_an_unknown_form() -> None:
+    """Names the missing form instead of writing a dangling reference (audit 9.6; P0 #12)."""
+    show, ring = _ring_show()
+    result = match_by_order(REVERSED_RING, ring, show.set("1"))
+    result = result.replace(slots={e: ("ghost", i) for e, (_, i) in result.slots.items()})
+    with pytest.raises(UnknownRefError):
+        apply_match(show, TID, result)
+
+
+def test_apply_match_leaves_unchanged_slots_alone() -> None:
+    show, ring = _ring_show()
+    pinned = pin_spot(show, "2", "T1")
+    result = match_by_order(["T1", "T2"], ring, show.set("1"))
+    assert apply_match(pinned, TID, result).forms["ring"].members == ring.members
+
+
+def test_apply_match_trims_trailing_empty_slots() -> None:
+    show, smaller = _ring_without("T4")
+    row = line_form("row", [], (0, 14), (2, 14), n=2, set_id="2")
+    show = show.replace(forms={"ring": smaller, "row": row})
+    result = match_by_order(["T3"], row, show.set("1"))
+    matched = apply_match(show, TID, result)
+    assert matched.forms["ring"].members == ("T1", "T2")
+    assert matched.forms["row"].members == ("T3",)
+    assert matched.set("2").get("T3").form == "row"
 
 
 @pytest.mark.defect("UP-9.6-24")
