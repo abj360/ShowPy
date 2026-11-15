@@ -1,6 +1,6 @@
 # ADR 0005: Cast edits may rename pinned spots, but never change a pinned picture without force
 
-- Status: Proposed
+- Status: Accepted (2026-11-15)
 - Date: 2026-11-15
 - Deciders: the maintainer (abj360)
 
@@ -43,9 +43,9 @@ ledger tests for regroup and relabel were written policy-neutral: each accepts e
    cannot change a placement (`relabel`, `regroup`, `edit_group`, `set_shape`,
    `set_claimable`, `define_selection`) take no `force`, because there is nothing to force.
    `delete_spots(force=True)` also drops the pins on the deleted spots.
-5. **Who may call these is ADR 0004's business.** The cast is designer-owned, so an agent's cast
-   edit is refused at the session layer whatever this policy says. This ADR governs the pure
-   edit functions, which the designer app and scripts call directly.
+5. **Who may call these is the host's business (ADR 0003).** ShowPy enforces no permissions; a
+   host that keeps agents away from the cast refuses their cast edits itself. This ADR governs the
+   pure edit functions, which apply to every caller alike.
 6. **The ledger tests tighten once this is accepted.** UP-9.3-92 and UP-9.3-93 keep their names;
    the fix drops the `except LockedError: return` branch, so they assert the rename-with-pin
    outcome only.
