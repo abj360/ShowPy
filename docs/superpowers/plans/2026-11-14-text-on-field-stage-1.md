@@ -17,14 +17,14 @@
 - The library never downloads anything and never looks a font up in the operating system. Fonts come from `showpy/fonts/` (via `importlib.resources`) or from bytes the caller passes.
 - Font files get into the repository once, through `scripts/build_fonts.py`. The script downloads commit-pinned URLs and verifies each one's SHA-256 before converting. Its output is byte-deterministic (`json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=True)` plus `"\n"`) and is committed. CI never runs the script.
 - Font identity is `asset:sha256:<64 hex>`: the SHA-256 of the exact font file bytes, the same URI `InMemoryAssetStore.put(data)` returns. A recipe stores URIs, never names.
-- Error codes (rule 7, all `ShowPyError` subclasses with `code`, `message`, `context`, `hint`): `MISSING_GLYPH` (`GlyphError`), `MISSING_FONT` (`MissingFontError`), `BAD_FONT`, `FONT_NAME_TAKEN` and `FONT_HASH_MISMATCH` (`FontError`), `TOO_FEW_SPOTS` and `TOO_MANY_SPOTS` (`SpacingError`), `N_OR_SPACING` (`SchemaError`) and `COINCIDENT_SLOTS` (`GeometryError`). The legibility notice is a `LegibilityWarning` (a `UserWarning`), not an error. pytest runs with `filterwarnings = error`, so:
+- Error codes (rule 7, all `ShowPyError` subclasses with `code`, `message`, `context`, `hint`): `MISSING_GLYPH` (`GlyphError`), `MISSING_FONT` (`MissingFontError`), `BAD_FONT`, `FONT_NAME_TAKEN` and `FONT_HASH_MISMATCH` (`FontError`), `TOO_FEW_SPOTS`, `TOO_MANY_SPOTS` and `MEMBER_COUNT_MISMATCH` (`SpacingError`), `N_OR_SPACING`, `TEXT_COUNT_EDIT`, `ALREADY_MEMBER`, `NOT_A_MEMBER` and `NOT_A_TEXT_FORM` (`SchemaError`) and `COINCIDENT_SLOTS` (`GeometryError`). The legibility notice is a `LegibilityWarning` (a `UserWarning`), not an error. pytest runs with `filterwarnings = error`, so:
   - The dedicated warning tests assert it with `pytest.warns`.
   - Any other test that builds text at or near its minimum count is marked `@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")`. This covers the golden, the minimum-count tests and the tiny-font tests.
   - Doctests use counts that never trigger it. If one does, raise its `n`; never filter in a doctest.
 - Per-stroke minimum spots: 2 for an open stroke, 3 for a closed one. Closed loops never place two spots on one point.
 - Units: `height` is the cap height in meters. `rotation` is in degrees, counter-clockwise positive, and 0 reads left to right toward +x as the audience sees it. Glyph y-up maps to stage +y (upstage). `letter_spacing` and `line_spacing` are fractions of the first font's em, where `em_m = height * units_per_em / cap`.
 - Slot order is reading order: lines top to bottom, glyphs in logical order, strokes in font order, each stroke from its start.
-- `edit(form, text=...)` keeps the same members and the same count (maintainer decision of 2026-11-14). Member i stands on slot i. A text form gets exactly one of `n` (spots) or `spacing` (meters between spots along strokes). With `spacing`, the derived count is stored as the recipe's `n`. Only an explicit `n=` or `spacing=` edit changes the count (Task 10).
+- `edit(form, text=...)` keeps the same members and the same count (maintainer decision of 2026-11-14). Member i stands on slot i. A text form gets exactly one of `n` (spots) or `spacing` (meters between spots along strokes). With `spacing`, the derived count is stored as the recipe's `n`. Changing the count is a separate, explicit edit, `edit_text_count(form, add=..., remove=..., n=... | spacing=...)`, that names the spots to add or remove (maintainer decision of 2026-11-14, Task 10). `edit(form, n=...)` and `edit(form, spacing=...)` on a text form raise `SchemaError(code="TEXT_COUNT_EDIT")` that points to it (Task 9). A text form's member count equals its stored `n` after every edit.
 - Every `text_form` call passes `n=` (or, from Task 10, `spacing=`). Tests in Tasks 8 and 9 always pass `n=`.
 - `simplex` keeps its glyph geometry, 4 × 6 grid, advance 5 and case folding. The one visible change is the fix for UP-9.1-28: loop strokes come out `closed=True` without a repeated end point. `simplex` is its own bundled font, not an alias for a Hershey face.
 - The stored schema stays `showpy.show.v1`. Adding `"text"` to `FormKind` only widens the enum, so every old file still loads (`tests/unit/show/test_schema.py` rule: bump only when old files no longer load). Regenerate with `SHOWPY_UPDATE_SCHEMA=1`.
@@ -49,6 +49,7 @@
 4. **Transforming a text form** (`transform_form`, `gate`, `pinwheel`, mirror). These store a `"transform"` matrix in the recipe. Expected: slots and tangents both map through it, so `along` facings turn with the text. Test in Task 8.
 5. **Mixing fonts in one string through the fallback chain.** Each font has its own `units_per_em` and cap height. Expected: every glyph's cap height equals `height`, and each glyph advances by its own font's advance. Test in Task 4.
 6. **A `spacing` far from the letter size.** A spacing wider than a letter would leave a stroke with fewer spots than its minimum; a microscopic one would ask for millions of spots. Expected: the count is clamped up to the per-stroke minimums, and the `LegibilityWarning` fires as it does for a small `n`. Below the cap, the count raises `TOO_MANY_SPOTS` (`MAX_TEXT_SPOTS = 10_000`) before anything is allocated. Tests in Task 10.
+7. **Count edits that name the wrong spots**: adding a spot already in the form, removing one that is not, naming the same spot twice, or naming too few or too many for the new count. Expected: a teaching error that says which spots are wrong or how many to add or remove, and the original form untouched. Tests in Task 10.
 
 ---
 
@@ -552,7 +553,7 @@ The cap-fallback test checks `Font.cap()` three ways: with `cap_height` set; wit
 - [ ] **Step 4: Run the tests to see them pass.** Same command, plus `uv run pytest tests/property -q`. Expected: PASS.
 - [ ] **Step 5: API change procedure, then commit** ``feat(choreo): add the `text` form kind with `text_form`; `slots`, `slot_poses` and `placements` take `font_registry` ``. If the snapshot lists `Form` or `form_templates`, name them as well.
 
-### Task 9: `edit(form, text=...)` keeps the same members
+### Task 9: `edit(form, text=...)` keeps the same members and count
 
 **Files:**
 
@@ -562,7 +563,7 @@ The cap-fallback test checks `Font.cap()` three ways: with `cap_height` set; wit
 **Interfaces:**
 
 - Consumes: `text_form` (Task 8).
-- Produces: `edit(form: Form, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS, *, font_registry: FontRegistry | None = None, **changes: Any) -> Form`. A text, font or layout edit never changes the members or `n`. Count edits arrive in Task 10.
+- Produces: `edit(form: Form, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS, *, font_registry: FontRegistry | None = None, **changes: Any) -> Form`. A text, font or layout edit never changes the members or `n`. `n=` and `spacing=` on a text form raise `SchemaError(code="TEXT_COUNT_EDIT")`, whose hint is `use edit_text_count(form, add=[...], remove=[...], n=...) to change the count`; the context holds `form` and `field`. `edit_text_count` arrives in Task 10.
 
 - [ ] **Step 1: Write the failing tests.**
   - `test_edit_text_keeps_members_in_reading_order`: `f = text_form("t", members_60, "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10), n=60)`, then `g = edit(f, text="GO TEAM")`. Then `g.members == f.members`, `len(slots(g)) == 60`, and `placements(g)[0]` stands on the first stroke start of the `G`.
@@ -570,34 +571,37 @@ The cap-fallback test checks `Font.cap()` three ways: with `cap_height` set; wit
   - `test_edit_text_resolves_font_names`: `edit(f, fonts=["relief-singleline"]).geometry["fonts"] == [BUNDLED_FONTS["relief-singleline"]]`.
   - `test_edit_text_suggests_the_field_for_a_typo`: `edit(f, txt="A")` raises `SchemaError`, and `"text"` is in the hint.
   - `test_edit_locked_text_form_needs_force`: raises `LockedError`.
+  - `test_edit_text_form_rejects_count_changes`: `edit(f, n=30)` and `edit(f, spacing=1.0)` each raise `SchemaError` with code `TEXT_COUNT_EDIT`, `context["field"]` equal to `"n"` or `"spacing"`, and `"edit_text_count"` in the hint. `f` is unchanged.
   - `test_edit_text_with_a_user_font_takes_the_registry`: with the tiny registry, `edit(f, text="II", font_registry=reg)` works, and without the registry it raises `MissingFontError`.
 - [ ] **Step 2: Run the tests to see them fail.** Run: `uv run pytest tests/unit/choreo/test_form_ops.py -q`. Expected: FAIL. The `text` key is missing from `RECIPE_KEYS`, and `edit` has no `font_registry`.
-- [ ] **Step 3: Implement.** `edit` passes `font_registry` to `layout`.
+- [ ] **Step 3: Implement.** `edit` passes `font_registry` to `layout`, and rejects `n` and `spacing` in the change set of a text form before anything else.
 - [ ] **Step 4: Run the tests to see them pass.** Same command. Expected: PASS.
 - [ ] **Step 5: API change procedure, then commit** ``feat(choreo): regenerate text forms through `edit` with the same members``.
 
-### Task 10: Spot counts from a spacing along strokes
+### Task 10: Spot counts from a spacing, and explicit count edits
 
 **Files:**
 
-- Modify: `showpy/choreo/models.py` (`TextRecipe.spacing`), `showpy/choreo/form_text.py` (`MAX_TEXT_SPOTS`, `spacing_count`), `showpy/choreo/forms.py` (`text_form` takes `n` or `spacing`), `showpy/choreo/form_ops.py` (count edits on text forms)
+- Modify: `showpy/choreo/models.py` (`TextRecipe.spacing`), `showpy/choreo/form_text.py` (`MAX_TEXT_SPOTS`, `spacing_count`), `showpy/choreo/forms.py` (`text_form` takes `n` or `spacing`), `showpy/choreo/form_ops.py` (`edit_text_count`)
 - Test: `tests/unit/choreo/test_form_text.py`, `tests/unit/choreo/test_forms.py`, `tests/unit/choreo/test_form_ops.py`
 
 **Interfaces:**
 
-- Consumes: `text_strokes`, `min_text_spots` and `text_slots` (Task 7), `apportion` (Task 6), `text_form` (Task 8) and `edit` (Task 9).
+- Consumes: `text_strokes`, `min_text_spots` and `text_slots` (Task 7), `apportion` (Task 6), `text_form` (Task 8) and `edit` (Task 9; its `TEXT_COUNT_EDIT` error names `edit_text_count`).
 - Produces:
   - `TextRecipe.spacing: Meters | None = None`, > 0 and finite when set. It records the spacing that last set the count; `text_recipe` still ignores `n`.
   - In `showpy.choreo.form_text`:
     - `MAX_TEXT_SPOTS = 10_000`
     - `spacing_count(strokes: Sequence[Curve], spacing: Meters) -> int`
   - `text_form(..., n: int | None = None, spacing: Meters | None = None, font_registry: FontRegistry | None = None) -> Form`. Exactly one of `n` and `spacing` must be given. With `spacing`, the recipe stores `spacing` and `"n" = spacing_count(text_strokes(recipe), spacing)`.
-  - `edit` on a text form:
-    - `text=`, `fonts=` and the layout fields keep `n` and `spacing` as stored.
-    - `spacing=s` re-derives `n` from the recipe after this call's other changes, and stores both.
-    - `n=k` stores `k` and sets `spacing` to `None`.
-    - `n=` and `spacing=` together raise `SchemaError(code="N_OR_SPACING")`.
-    - Members never change.
+  - `edit_text_count(form: Form, *, add: Sequence[SpotId] = (), remove: Sequence[SpotId] = (), n: int | None = None, spacing: Meters | None = None, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS, font_registry: FontRegistry | None = None) -> Form` in `showpy/choreo/form_ops.py`. It is the only way to change a text form's count. It takes the one form-edit shape the module already uses (`check_unlocked(form, force)`, a new `Form` back), but its change set is explicit instead of `**changes`.
+    - New members are `form.members` without `remove`, then `add` appended in the order given.
+    - The new slot count is `n` when given; the count derived from `spacing` for this recipe when that is given; else the new member count. The result stores `n`, and stores `spacing` as given, or `None` for `n=` or neither.
+    - The new member count must equal the new slot count. Otherwise raise `SpacingError(code="MEMBER_COUNT_MISMATCH")` with context `form`, `n`, `members`, and the hint `add {k} more spots` or `remove {k} spots`.
+    - Adding a spot that is already a member, or twice in `add`, raises `SchemaError(code="ALREADY_MEMBER")`. Removing a non-member, or twice in `remove`, raises `SchemaError(code="NOT_A_MEMBER")`. The context holds `form` and `spots`, and the hint lists the current members that may be removed or the spots that may be added.
+    - `n=` and `spacing=` together raise `SchemaError(code="N_OR_SPACING")`. A non-text form raises `SchemaError(code="NOT_A_TEXT_FORM")` with the hint `use edit() for other kinds`.
+    - A locked form raises `LockedError` unless `force=True`. The result is validated by building its slots, so `TOO_FEW_SPOTS` and `TOO_MANY_SPOTS` apply. The input form is never changed.
+  - `edit(form, text=..., fonts=..., ...)` keeps `n`, `spacing` and the members as stored.
 - The count rule. Each open stroke spans L/s gaps, so it holds L/s + 1 spots; each closed stroke holds L/s. So `ideal = ΣL / s + open_strokes`, and `n = max(min_text_spots(strokes), floor(ideal + 0.5))`. Half rounds up, which is deterministic. Per-stroke counts then come from the same `apportion(lengths, n, minimums)` call as the `n` path, so the minimums, the coincidence rule and the legibility warning apply unchanged. If `n > MAX_TEXT_SPOTS`, raise `SpacingError(code="TOO_MANY_SPOTS")` with context `n`, `max_n` and `spacing`, and the hint `use spacing >= {ΣL / (MAX_TEXT_SPOTS - open_strokes):.3f} m`. Raise it before any slot is placed.
 
 - [ ] **Step 1: Write the failing tests.** Simplex `"L"` at height 6 is one open stroke of 10 m (6 m down, 4 m across). Simplex `"O"` at height 6 is one closed stroke of 12 + 4√2 ≈ 17.657 m.
@@ -608,17 +612,26 @@ The cap-fallback test checks `Font.cap()` three ways: with `cap_height` set; wit
   - `test_regression_spacing_never_doubles_a_spot_on_closed_loops`: `"O0D8Q6B"` in simplex and in relief, height 2.0, spacing 0.3: `min_gap > COINCIDENT_TOL_M`.
   - `test_text_form_needs_exactly_one_of_n_and_spacing`: both missing, and both given, each raise `SchemaError` with code `N_OR_SPACING`. The hint names `n=` and `spacing=`.
   - `test_text_recipe_rejects_bad_spacing`: spacing 0, −1 and NaN each raise `SchemaError` with `context["field"] == "spacing"`.
-  - `test_edit_text_keeps_the_derived_count`: `f = text_form("t", [], "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10), spacing=0.5)`, then `edit(f, text="GOGO")` keeps `geometry["n"]` and `geometry["spacing"]`, and its members equal `f.members`.
-  - `test_edit_spacing_rederives_the_count`: `edit(f, spacing=1.0).geometry["n"]` equals `spacing_count(text_strokes(text_recipe(f.geometry)), 1.0)`. `edit(f, text="GO TEAM", spacing=1.0)` derives the count from `"GO TEAM"`.
-  - `test_edit_n_clears_spacing`: `edit(f, n=30)` gives `geometry["n"] == 30` and `geometry["spacing"] is None`.
-  - `test_edit_n_and_spacing_together_is_rejected`: raises `SchemaError` with code `N_OR_SPACING`.
+  - `test_edit_text_keeps_the_derived_count`: `f = text_form("t", members_for(spacing_form), "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10), spacing=0.5)`, where `members_for` makes exactly the derived count of spots. `edit(f, text="GOGO")` keeps `geometry["n"]`, `geometry["spacing"]` and `members`.
+  - `test_edit_text_count_adds_named_spots`: `f` has 60 members `S0…S59` and `n=60`. `g = edit_text_count(f, add=["X1", "X2"], n=62)` gives `g.members == f.members + ("X1", "X2")`, `g.geometry["n"] == 62` and `g.geometry["spacing"] is None`, and `len(slots(g)) == 62`. `f` is unchanged.
+  - `test_edit_text_count_removes_named_spots`: `edit_text_count(f, remove=["S3", "S10"], n=58).members` equals `f.members` without those two, in the same order.
+  - `test_edit_text_count_swaps_spots_at_the_same_count`: `edit_text_count(f, add=["X1"], remove=["S0"], n=60)` keeps 60 members, with `X1` last and `S0` gone. With neither `n` nor `spacing`, the same call stores `n == 60`.
+  - `test_edit_text_count_from_spacing_needs_matching_members`: `edit_text_count(f, spacing=1.0)` with 60 members raises `SpacingError` with code `MEMBER_COUNT_MISMATCH`. Its `context["n"]` equals `spacing_count(text_strokes(text_recipe(f.geometry)), 1.0)`, and its hint says `add` or `remove` with the exact difference. Passing `add` or `remove` that makes the count match succeeds and stores `spacing == 1.0` and the derived `n`.
+  - `test_edit_text_count_wrong_number_of_spots_says_how_many`: `edit_text_count(f, add=["X1"], n=63)` raises `MEMBER_COUNT_MISMATCH` with the hint `add 2 more spots`. `edit_text_count(f, remove=["S0"], n=50)` has the hint `remove 9 spots`.
+  - `test_edit_text_count_rejects_an_existing_member`: `add=["S5"]` and `add=["X1", "X1"]` each raise `SchemaError` with code `ALREADY_MEMBER` and `context["spots"]` naming the culprit.
+  - `test_edit_text_count_rejects_a_non_member`: `remove=["Z9"]` and `remove=["S1", "S1"]` each raise `SchemaError` with code `NOT_A_MEMBER` and `context["spots"]` naming the culprit.
+  - `test_edit_text_count_n_and_spacing_together_is_rejected`: raises `SchemaError` with code `N_OR_SPACING`.
+  - `test_edit_text_count_rejects_other_kinds`: a `circle_form` raises `SchemaError` with code `NOT_A_TEXT_FORM`.
+  - `test_edit_text_count_locked_form_needs_force`: raises `LockedError`; with `force=True` it works.
+  - `test_edit_text_count_below_the_minimum_names_it`: simplex `"HI"` at 12 members, `remove` 8 of them with `n=4`, raises `SpacingError` with code `TOO_FEW_SPOTS` and `context["min_n"] == 12`.
+  - `test_regression_edit_text_count_matches_slots_and_members`: Hypothesis over `add` counts 0–5 and `remove` counts 0–5 on a 30-member form. Whenever the call succeeds, `len(g.members) == g.geometry["n"] == len(slots(g))`; otherwise it raises `SpacingError` with code `MEMBER_COUNT_MISMATCH`.
 - [ ] **Step 2: Run the tests to see them fail.** Run: `uv run pytest tests/unit/choreo -q`. Expected: the new tests FAIL. `spacing_count` is missing, and `text_form` has no `spacing`.
 - [ ] **Step 3: Implement.**
-  - `text_form` and `edit` share one helper in `form_text.py`, `count_recipe(geometry: Mapping[str, Any], n: int | None, spacing: Meters | None, font_registry: FontRegistry | None) -> dict[str, Any]`. It applies the exactly-one rule and returns the geometry with `n` and `spacing` set.
+  - `text_form` and `edit_text_count` share one helper in `form_text.py`, `count_recipe(geometry: Mapping[str, Any], n: int | None, spacing: Meters | None, font_registry: FontRegistry | None) -> dict[str, Any]`. For `text_form`, it applies the exactly-one rule and returns the geometry with `n` and `spacing` set. `edit_text_count` calls it with the at-most-one rule, then checks the member arithmetic.
   - Update the `text_form` doctest to `n=24` or `spacing=`, whichever keeps it free of warnings.
   - Update the recipe contract in the `forms.py` module docstring: `spacing` is a request, and `n` is the stored count.
 - [ ] **Step 4: Run the tests to see them pass.** Run: `uv run pytest tests/unit/choreo tests/property tests/golden/test_golden_text.py -q`. Expected: PASS. The golden is unchanged, since it uses `n`.
-- [ ] **Step 5: API change procedure, then commit** ``feat(choreo): derive text spot counts from `spacing` in `text_form` and `edit` ``. Also name `TextRecipe` if the snapshot lists it.
+- [ ] **Step 5: API change procedure, then commit** ``feat(choreo): derive text spot counts from `spacing` and add `edit_text_count` ``. Also name `TextRecipe` if the snapshot lists it.
 
 ### Task 11: Fonts travel with exported shows
 
@@ -656,8 +669,8 @@ The cap-fallback test checks `Font.cap()` three ways: with `cap_height` set; wit
 - Modify: `docs/showpy-api-reference.md` (the `showpy.geo` text rows, plus a "Text forms" subsection under `showpy.choreo.forms`), `docs/HANDOFF.md` (module map, a status line, deviations), `CHANGELOG.md`
 
 - [ ] **Step 1: Update the docs.**
-  - **Reference.** Document `text_outline`, `layout_text`, `FontRegistry`, `register_font`, `bundled_fonts`, `text_form` (`n=` or `spacing=`), `TextRecipe`, `edit(text=)`, the count edits (`edit(n=)`, `edit(spacing=)`) and `import_fonts`, with an error-code table.
-  - **HANDOFF deviations.** `simplex` is its own font, not an alias; fonts are imported with `import_fonts`, not inside `import_json`; Hershey Cyrillic is deferred; `spacing=` stores its derived count as `n`, so a text edit keeps the count.
+  - **Reference.** Document `text_outline`, `layout_text`, `FontRegistry`, `register_font`, `bundled_fonts`, `text_form` (`n=` or `spacing=`), `TextRecipe`, `edit(text=)`, `edit_text_count` (add, remove, `n=` or `spacing=`) and `import_fonts`, with an error-code table.
+  - **HANDOFF deviations.** `simplex` is its own font, not an alias; fonts are imported with `import_fonts`, not inside `import_json`; Hershey Cyrillic is deferred; `spacing=` stores its derived count as `n`, so a text edit keeps the count; changing the count is `edit_text_count`, which names the spots to add or remove, and `edit(n=)`/`edit(spacing=)` raise `TEXT_COUNT_EDIT`.
   - **HANDOFF next steps.** Plans for stage 2 and stage 3, and for threading `font_registry` through `match`, `reorder`, `gate`, `split_form`, `merge_forms` and `form_place`.
   - Run Prettier on both files.
 - [ ] **Step 2: Regenerate the changelog.** Run `uv run nox -s changelog`, which replaces the `()` placeholders with real SHAs. Then run `uv run pytest tests/unit/test_api_snapshot.py`. Expected: PASS.

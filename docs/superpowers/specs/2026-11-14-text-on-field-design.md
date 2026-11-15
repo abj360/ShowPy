@@ -165,7 +165,7 @@ substitutes), `n` too small, complex script without the shaping extra, degenerat
   raises a teaching error. (Claude's call; build stage 3.)
 - **Changing the text** (`edit(form, text=...)`, maintainer's decision 2026-11-14): the spot
   count stays the same and the same members spread over the new letters, in reading order.
-  Changing the count is a separate, explicit edit that names the spots to add or remove. If the
+  Changing the count is a separate, explicit edit, `edit_text_count(form, *, add, remove, n, spacing)`, that names the spots to add or remove: the resulting member count must equal the new slot count, adding a member or removing a non-member is an error, and `edit(form, n=...)` or `edit(form, spacing=...)` on a text form raises a teaching error that points to it. If the
   kept count cannot give every stroke its minimum, the edit raises the `n`-too-small error with
   the minimum count for the new text.
 
