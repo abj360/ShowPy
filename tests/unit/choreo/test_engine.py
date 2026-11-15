@@ -20,6 +20,8 @@ Contains:
         far fewer segments than its 256 sample pieces
     test_regression_unreachable_segment_bound_raises_path_error: raises SEGMENT_BOUND instead of
         accepting a segment it cannot bring within tol
+    test_regression_segment_bound_hint_names_an_accepted_tol: names a tol that a retry accepts, for
+        a probed motion too
     test_regression_segments_reject_a_tolerance_that_is_not_positive: rejects a zero, negative or
         non-finite segment tolerance instead of looping on it
     test_regression_facing_override_applies_to_holding_spot: applies a facing override to a spot on
@@ -42,11 +44,12 @@ Contains:
 
 import itertools
 import math
+import re
 
 import numpy as np
 import pytest
 
-from showpy.choreo.engine import PathEngine
+from showpy.choreo.engine import PROBE_TOL_SHARE, PathEngine
 from showpy.choreo.models import (
     Easing,
     FacingMode,
@@ -385,6 +388,7 @@ PROBES_PER_SEGMENT = 25
 TRACE_SAMPLES = 4001
 EIGHT_TURNS = 8 * 360.0
 MAX_ONE_CYCLE_SEGMENTS = 32
+HINT_TOL_MARGIN = 1.01
 WEAVE_ROW = PathRow(
     entity="T1", style=PathStyle.CUSTOM, motion_fn="weave", motion_params={"cycles": 4}
 )
@@ -454,6 +458,16 @@ def test_regression_unreachable_segment_bound_raises_path_error() -> None:
         _eight_turn_engine().entity_segments("T2", TID, tol=1e-15)
     assert info.value.code == "SEGMENT_BOUND"
     assert set(info.value.context) == {"entity", "tid", "tol", "error"}
+
+
+def test_regression_segment_bound_hint_names_an_accepted_tol() -> None:
+    """Names, for a probed motion, a tol under which the failing segment is accepted."""
+    row = PathRow(entity="T1", style=PathStyle.CURVE, waypoints=(Waypoint(x=2.0, y=7.0),))
+    with pytest.raises(PathError) as info:
+        _engine(T1=row).entity_segments("T1", TID, tol=1e-15)
+    named = re.search(r"tol above ([0-9.e+-]+) m", info.value.hint)
+    assert named is not None
+    assert float(named.group(1)) * HINT_TOL_MARGIN * PROBE_TOL_SHARE >= info.value.context["error"]
 
 
 @pytest.mark.parametrize("tol", [0.0, -0.02, math.nan, math.inf])

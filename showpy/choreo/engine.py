@@ -416,9 +416,10 @@ class _SegmentFit:
         if error <= limit:
             return [hi]
         if depth >= MAX_SEGMENT_DEPTH:
+            accepted_tol = error / limit * self.tol
             raise PathError(
                 f"segment {lo:g}-{hi:g} of {self.plan.entity} stays {error:.3g} m off its motion",
-                hint=f"pass a tol above {error:.3g} m or give the motion fewer turns",
+                hint=f"pass a tol above {accepted_tol:.3g} m or give the motion fewer turns",
                 context={
                     "entity": self.plan.entity,
                     "tid": self.tid,
