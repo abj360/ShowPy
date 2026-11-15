@@ -152,6 +152,9 @@ markers = [
     "slow: generated-show properties and the large golden; run with nox -s slow",
 ]
 filterwarnings = ["error"]
+# A test still running after this many seconds dumps every thread's stack, so a CI hang
+# names its test before the job is cancelled.
+faulthandler_timeout = 60
 
 [tool.deptry]
 extend_exclude = ["docs"]
