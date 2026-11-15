@@ -46,6 +46,18 @@ AUDIO_NAME = "audio.bin"
 OUTPUT_NAME = "out.mp4"
 
 
+def _require_finite_extent(canvas: SheetCanvas) -> None:
+    extent_x = (canvas.max_x - canvas.min_x) * canvas.px_per_m
+    extent_y = (canvas.max_y - canvas.min_y) * canvas.px_per_m
+    if math.isfinite(extent_x) and math.isfinite(extent_y):
+        return
+    raise SchemaError(
+        "video pixels would overflow",
+        hint="ask for fewer video pixels or use a coarser setting",
+        context={"what": "video pixels", "cap": MAX_VIDEO_PIXELS},
+    )
+
+
 def video_canvas(show: Show, px_per_m: float = DEFAULT_PX_PER_M) -> SheetCanvas:
     """Builds a canvas over the show's sheet whose pixel size is even (H.264 needs it).
 
@@ -55,6 +67,7 @@ def video_canvas(show: Show, px_per_m: float = DEFAULT_PX_PER_M) -> SheetCanvas:
     """
     px_per_m = require_finite(px_per_m, name="px_per_m", low=0, low_open=True)
     canvas = SheetCanvas.for_sheet(show.sheet, px_per_m=px_per_m)
+    _require_finite_extent(canvas)
     width, height = canvas.size
     require_size((width + width % 2) * (height + height % 2), MAX_VIDEO_PIXELS, what="video pixels")
     pad_x = (width % 2) / px_per_m
