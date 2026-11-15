@@ -12,6 +12,7 @@ Contains:
         ID uses the domain-tagged scheme while stored IDs and the head chain stay as written
 """
 
+import hashlib
 import json
 import shutil
 from datetime import UTC, datetime
@@ -65,7 +66,20 @@ def test_commit_on_v020_repository_gets_a_new_scheme_id(tmp_path: Path) -> None:
         at=COMMITTED_AT,
         message="rename",
     )
-    assert revision.id not in expected["revisions"]
+    tree = repo.backend.tree(show_id, revision.id)
+    body = {
+        "parent": expected["head"],
+        "at": COMMITTED_AT.isoformat(),
+        "actor": "designer",
+        "message": "rename",
+        "kind": revision.kind,
+        "target": revision.target,
+        "changes": {path: tree.get(path) for path in revision.changed},
+    }
+    legacy_scheme = json.dumps(body, sort_keys=True, separators=(",", ":"), default=str).encode()
+    assert revision.changed
+    assert revision.id == content_hash(body, domain="showpy.revision")
+    assert revision.id != hashlib.sha256(legacy_scheme).hexdigest()
     assert len(revision.id) == HEX_LENGTH
     assert [r.id for r in repo.revisions(show_id)] == [*expected["revisions"], revision.id]
     assert repo.get_show(show_id, expected["head"]) == Show.model_validate(expected["show"])
