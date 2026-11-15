@@ -8,7 +8,8 @@ Contains:
         instead of allocating it
     test_regression_density_map_rejects_non_finite_or_subnormal_cells: raises GeometryError for
         inf, NaN and 1e-320 cells instead of overflowing
-    test_regression_density_map_accepts_a_grid_at_the_cap: builds a grid just under the cell cap
+    test_regression_density_map_accepts_a_grid_under_the_cap: builds a 500,000-cell grid
+        under the cap
     test_regression_symmetry_score_matches_spots_one_to_one: scores ten spots on one side against
         one on the other below 0.5, not 0.993
     test_regression_coverage_rejects_infinite_radius: raises a ShowPyError for radius=inf instead of
@@ -105,8 +106,8 @@ def test_regression_density_map_rejects_non_finite_or_subnormal_cells(cell: floa
         density_map(make_set(("A", 0, 1)), field_sheet(), cell=cell)
 
 
-def test_regression_density_map_accepts_a_grid_at_the_cap() -> None:
-    """Builds a grid of 1,000,000 cells, under the cap of MAX_GRID_CELLS."""
+def test_regression_density_map_accepts_a_grid_under_the_cap() -> None:
+    """Builds a grid of 500,000 cells, under the MAX_GRID_CELLS cap of 4,000,000."""
     grid = density_map(make_set(("A", 0, 1)), field_sheet(), cell=0.04)
     assert grid.size == 500 * 1000
 
