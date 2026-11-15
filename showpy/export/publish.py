@@ -196,7 +196,7 @@ def publish(
             hint="republish with the same publication ID and show",
             context={"previous": previous.id, "publication_id": publication_id},
         )
-    kept = [_redacted(c) for c in previous.claims if _still_valid(show, c)] if previous else []
+    kept = [c for c in previous.claims if _still_valid(show, c)] if previous else []
     return Publication(
         id=publication_id,
         show_id=show.id,
@@ -293,11 +293,7 @@ def claims(pub: Publication) -> list[Claim]:
     >>> claims(live_publication(two_set_show()))
     []
     """
-    return [_redacted(c) for c in pub.claims]
-
-
-def _redacted(claim: Claim) -> Claim:
-    return claim.replace(performer=claim.performer.replace(contact=None))
+    return list(pub.claims)
 
 
 def _claim_on(pub: Publication, spot: SpotId) -> Claim | None:
@@ -313,7 +309,7 @@ def who_is_on(pub: Publication, spot: SpotId) -> Performer | None:
     True
     """
     claim = _claim_on(pub, spot)
-    return None if claim is None else _redacted(claim).performer
+    return None if claim is None else claim.performer
 
 
 def unclaimed(pub: Publication, show: Show) -> list[SpotId]:
@@ -388,7 +384,7 @@ def claim_spot(
             context={"status": pub.status},
         )
     _require_claimable(pub, show, performer, show.cast.spot(spot))
-    claim = _redacted(Claim(spot=spot, performer=performer, claimed_at=at))
+    claim = Claim(spot=spot, performer=performer, claimed_at=at)
     return pub.replace(claims=_sorted([*pub.claims, claim])), claim
 
 
@@ -440,7 +436,7 @@ def swap_claims(pub: Publication, a: SpotId, b: SpotId) -> Publication:
             context={"a": a, "b": b},
         )
     others = [c for c in pub.claims if c.spot not in (a, b)]
-    swapped = [_redacted(first.replace(spot=b)), _redacted(second.replace(spot=a))]
+    swapped = [first.replace(spot=b), second.replace(spot=a)]
     return pub.replace(claims=_sorted(others + swapped))
 
 
@@ -455,7 +451,7 @@ def reassign(pub: Publication, spot: SpotId, performer: Performer, at: datetime)
     """
     _require_open(pub)
     kept = [c for c in pub.claims if c.spot != spot and c.performer.id != performer.id]
-    claim = _redacted(Claim(spot=spot, performer=performer, claimed_at=at))
+    claim = Claim(spot=spot, performer=performer, claimed_at=at)
     return pub.replace(claims=_sorted([*kept, claim]))
 
 
@@ -499,7 +495,7 @@ def performer_view(pub: Publication, show: Show, performer: Performer) -> Perfor
     root = urlunsplit(link._replace(query="", fragment="")).rstrip("/")
     url = f"{root}/{PATH_SEGMENT}/{quote(claim.spot, safe='')}/{PATH_SUFFIX}"
     return PerformerView(
-        performer=_redacted(claim).performer,
+        performer=claim.performer,
         spot=claim.spot,
         sets=tuple(rows),
         path_animation_url=url,
@@ -574,5 +570,5 @@ def notify_changes(pub: Publication, old_show: Show, new_show: Show) -> list[tup
     for claim in pub.claims:
         summary = _summary(old_show, new_show, claim.spot)
         if summary:
-            notices.append((_redacted(claim).performer, summary))
+            notices.append((claim.performer, summary))
     return notices

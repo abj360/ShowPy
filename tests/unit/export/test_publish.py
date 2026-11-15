@@ -13,6 +13,8 @@ Contains:
     test_regression_republish_drops_contacts_held_by_a_legacy_publication(): strips carry-over
     test_regression_swap_claims_drops_contacts_held_by_a_legacy_publication(): strips on swap
     test_regression_readers_redact_contacts_of_a_legacy_publication(): redacts every reader
+    test_regression_loading_a_legacy_publication_drops_contacts(): strips contacts on load
+    test_regression_every_mutator_drops_contacts_of_a_legacy_publication(): strips on each edit
     test_regression_publish_rejects_a_short_or_malformed_join_token(): rejects weak tokens
     test_regression_publish_rejects_base_urls_with_credentials_or_fragments(): rejects them
     test_regression_publish_rejects_unsafe_base_url(): rejects every malformed or ambiguous URL
@@ -52,7 +54,7 @@ Contains:
 import hashlib
 import io
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 
@@ -448,7 +450,6 @@ def test_regression_reassign_stores_performers_without_contact() -> None:
 def test_regression_republish_drops_contacts_held_by_a_legacy_publication() -> None:
     """Strips a v0.2.0 contact when republishing carries its claim over."""
     show, legacy = _legacy_publication()
-    assert CONTACT in legacy.model_dump_json()
     pub = publish(show, "pub-1", BASE_URL, LATER, legacy, join_token=JOIN_TOKEN)
     assert [c.spot for c in pub.claims] == ["T1"]
     assert CONTACT not in pub.model_dump_json()
@@ -473,6 +474,42 @@ def test_regression_readers_redact_contacts_of_a_legacy_publication() -> None:
     assert CONTACT not in view.model_dump_json()
     new = with_targets({"T1": {"x": 3.0}}, show=show)
     assert all(who.contact is None for who, _ in notify_changes(legacy, show, new))
+
+
+def _three_claim_legacy() -> tuple[Show, Publication]:
+    show = two_set_show()
+    stored = _with_claims(show, ("Ada", "T1"), ("Bo", "T2"), ("Cy", "T3")).model_dump(mode="json")
+    for claim in stored["claims"]:
+        claim["performer"]["contact"] = CONTACT
+    return show, Publication.model_validate(stored)
+
+
+def test_regression_loading_a_legacy_publication_drops_contacts() -> None:
+    """Drops contacts at validation, so a v0.2.0 snapshot is clean as soon as it loads."""
+    _, legacy = _three_claim_legacy()
+    assert CONTACT not in legacy.model_dump_json()
+    assert all(c.performer.contact is None for c in legacy.claims)
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        lambda show, pub: claim_spot(pub, show, performer("Di"), "T4", AT)[0],
+        lambda _show, pub: reassign(pub, "T4", performer("Di"), AT),
+        lambda _show, pub: release(pub, "T1"),
+        lambda _show, pub: swap_claims(pub, "T1", "T2"),
+        lambda _show, pub: pause(pub),
+        lambda _show, pub: unpublish(pub),
+        lambda show, pub: publish(show, "pub-1", BASE_URL, LATER, pub, join_token=JOIN_TOKEN),
+    ],
+    ids=["claim_spot", "reassign", "release", "swap_claims", "pause", "unpublish", "republish"],
+)
+def test_regression_every_mutator_drops_contacts_of_a_legacy_publication(
+    edit: Callable[[Show, Publication], Publication],
+) -> None:
+    """Keeps every untouched legacy claim contact-free whichever edit runs."""
+    show, legacy = _three_claim_legacy()
+    assert CONTACT not in edit(show, legacy).model_dump_json()
 
 
 @pytest.mark.parametrize("base_url", ["javascript:alert(1)", "data:text/html,x"])

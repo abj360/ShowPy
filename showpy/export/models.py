@@ -141,11 +141,13 @@ class Performer(FrozenModel):
 
 
 class Claim(FrozenModel):
-    """Records a performer on a spot.
+    """Records a performer on a spot; the performer's contact is dropped on every construction.
+
+    Hosts keep contacts in their own roster keyed by `Performer.id`.
 
     Attributes:
         spot: Spot claimed.
-        performer: Who holds it.
+        performer: Who holds it, without a contact.
         claimed_at: When the claim was made.
         locked: True once claimed; only the designer can move a locked claim.
     """
@@ -154,6 +156,11 @@ class Claim(FrozenModel):
     performer: Performer
     claimed_at: datetime
     locked: bool = True
+
+    @field_validator("performer")
+    @classmethod
+    def _drop_contact(cls, value: Performer) -> Performer:
+        return value if value.contact is None else value.replace(contact=None)
 
 
 class Publication(FrozenModel):
