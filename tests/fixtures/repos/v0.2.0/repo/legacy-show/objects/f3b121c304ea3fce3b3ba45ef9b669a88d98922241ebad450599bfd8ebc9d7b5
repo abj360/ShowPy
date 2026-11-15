@@ -1,0 +1,129 @@
+[
+  {
+    "facing": {
+      "mode": "audience",
+      "value": null
+    },
+    "geometry": {
+      "curve": {
+        "center": [
+          -23.2369804966278,
+          26.53223638656242
+        ],
+        "closed": false,
+        "kind": "arc",
+        "radius": 10.379665402930666,
+        "start_deg": 112.93972992080779,
+        "sweep_deg": 180.0
+      }
+    },
+    "id": "brass-6",
+    "kind": "arc",
+    "locked": false,
+    "members": [
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "B5",
+      "B6"
+    ],
+    "meta": {},
+    "set": "6",
+    "spacing": {
+      "align": "start",
+      "end": null,
+      "gaps": [],
+      "interval": null,
+      "mode": "count",
+      "start": 0.0
+    }
+  },
+  {
+    "facing": {
+      "mode": "fixed",
+      "value": 229.94998776795703
+    },
+    "geometry": {
+      "curve": {
+        "closed": false,
+        "kind": "polyline",
+        "points": [
+          [
+            23.69836613166514,
+            9.388556021474272
+          ],
+          [
+            22.957243194115094,
+            17.94565139663493
+          ],
+          [
+            31.51433856927575,
+            18.68677433418497
+          ]
+        ]
+      }
+    },
+    "id": "guard-6",
+    "kind": "wedge",
+    "locked": false,
+    "members": [
+      "G1",
+      "G2",
+      "G3",
+      "G4",
+      "G5",
+      "G6"
+    ],
+    "meta": {},
+    "set": "6",
+    "spacing": {
+      "align": "start",
+      "end": null,
+      "gaps": [],
+      "interval": null,
+      "mode": "count",
+      "start": 0.0
+    }
+  },
+  {
+    "facing": {
+      "mode": "outward",
+      "value": null
+    },
+    "geometry": {
+      "curve": {
+        "ccw": true,
+        "center": [
+          21.76855409512408,
+          29.942538256922596
+        ],
+        "closed": true,
+        "kind": "circle",
+        "radius": 5.033103531794598,
+        "start_deg": 276.0692964257359
+      }
+    },
+    "id": "woodwinds-6",
+    "kind": "circle",
+    "locked": false,
+    "members": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6"
+    ],
+    "meta": {},
+    "set": "6",
+    "spacing": {
+      "align": "start",
+      "end": null,
+      "gaps": [],
+      "interval": null,
+      "mode": "count",
+      "start": 0.0
+    }
+  }
+]

@@ -116,6 +116,8 @@ banned-module-level-imports = ["tests"]
 "showpy/**/*_models.py" = ["RUF012"]
 "tests/**" = ["D", "EXE001", "TID251", "TID253"]
 "scripts/**" = ["EXE001"]
+# The fixture script runs in a v0.2.0 checkout and takes its seeded show from the test helpers.
+"scripts/make_legacy_fixture.py" = ["TID251", "TID253"]
 # Test motions implement MotionFn, whose parameter names are part of the protocol.
 "tests/unit/choreo/test_{avoid,engine_compile,motion,motion_stats}.py" = ["ARG001"]
 

@@ -1,0 +1,639 @@
+{
+  "counts": 12.0,
+  "id": [
+    "2",
+    "3"
+  ],
+  "notes": "",
+  "routes": {
+    "route": {
+      "curve": {
+        "closed": false,
+        "kind": "polyline",
+        "points": [
+          [
+            -16.31510195508525,
+            22.90152611765293
+          ],
+          [
+            -19.529656383750698,
+            22.90152611765293
+          ],
+          [
+            -22.74421081241615,
+            22.90152611765293
+          ],
+          [
+            -18.74421081241615,
+            22.90152611765293
+          ]
+        ]
+      },
+      "end": null,
+      "id": "route",
+      "members": [
+        "G1",
+        "G2",
+        "G3"
+      ],
+      "offsets": [
+        6.429108857330899,
+        3.2145544286654477,
+        0.0
+      ],
+      "start": 0.0,
+      "travel": 4.0
+    }
+  },
+  "rows": {
+    "B1": {
+      "easing": {
+        "kind": "ease_in",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "B1",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": [
+        6.4051741735700665,
+        28.48532000081016
+      ],
+      "route": null,
+      "start": 0.0,
+      "style": "rotate",
+      "sweep_deg": 159.0263421010514,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": []
+    },
+    "B2": {
+      "easing": {
+        "kind": "ease_in",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "B2",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": "weave",
+      "motion_params": {
+        "amplitude": 0.5,
+        "cycles": 2.0
+      },
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": null,
+      "start": 0.0,
+      "style": "custom",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": []
+    },
+    "B4": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "B4",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": null,
+      "start": 3.0,
+      "style": "curve",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": [
+        {
+          "at": null,
+          "x": 4.204809939728415,
+          "y": 26.357483713099263
+        }
+      ]
+    },
+    "B5": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "B5",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": null,
+      "start": 0.0,
+      "style": "polyline",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": [
+        {
+          "at": null,
+          "x": 17.080485473302904,
+          "y": 31.812997431440103
+        }
+      ]
+    },
+    "B6": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "B6",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": [
+        -0.13838788686551884,
+        20.771282763190147
+      ],
+      "route": null,
+      "start": 0.0,
+      "style": "rotate",
+      "sweep_deg": -158.3817488530268,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": []
+    },
+    "G1": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "G1",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": "route",
+      "start": 0.0,
+      "style": "follow",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": []
+    },
+    "G2": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "G2",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": "route",
+      "start": 0.0,
+      "style": "follow",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": []
+    },
+    "G3": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "G3",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": "route",
+      "start": 0.0,
+      "style": "follow",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": []
+    },
+    "G4": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "G4",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": null,
+      "start": 0.0,
+      "style": "hold",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": []
+    },
+    "G5": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "G5",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": null,
+      "start": 0.0,
+      "style": "hold",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": []
+    },
+    "G6": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "G6",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": null,
+      "start": 0.0,
+      "style": "hold",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": []
+    },
+    "P1": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "P1",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": null,
+      "start": 3.0,
+      "style": "straight",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": []
+    },
+    "P2": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "P2",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": null,
+      "start": 0.0,
+      "style": "curve",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": [
+        {
+          "at": null,
+          "x": -6.58159189980393,
+          "y": 15.395639618295233
+        }
+      ]
+    },
+    "P3": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "P3",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": null,
+      "start": 0.0,
+      "style": "polyline",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": [
+        {
+          "at": null,
+          "x": -5.025189245675118,
+          "y": 8.0
+        }
+      ]
+    },
+    "P4": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "P4",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": [
+        -3.591664654448948,
+        12.620264950826106
+      ],
+      "route": null,
+      "start": 0.0,
+      "style": "rotate",
+      "sweep_deg": 123.51836736456221,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": []
+    },
+    "P5": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "P5",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": "weave",
+      "motion_params": {
+        "amplitude": 0.5,
+        "cycles": 2.0
+      },
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": null,
+      "start": 0.0,
+      "style": "custom",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": []
+    },
+    "W1": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "W1",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": "weave",
+      "motion_params": {
+        "amplitude": 0.5,
+        "cycles": 2.0
+      },
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": null,
+      "start": 0.0,
+      "style": "custom",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": []
+    },
+    "W2": {
+      "easing": {
+        "kind": "ease_in",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "W2",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": null,
+      "start": 0.0,
+      "style": "straight",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": []
+    },
+    "W3": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "W3",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": null,
+      "start": 3.0,
+      "style": "curve",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": [
+        {
+          "at": null,
+          "x": 13.978560599082428,
+          "y": 23.619113133315615
+        }
+      ]
+    },
+    "W4": {
+      "easing": {
+        "kind": "ease_in",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "W4",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": null,
+      "start": 3.0,
+      "style": "polyline",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": [
+        {
+          "at": null,
+          "x": 4.445710059802004,
+          "y": 24.096768632873324
+        }
+      ]
+    },
+    "W5": {
+      "easing": {
+        "kind": "ease_in",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "W5",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": null,
+      "motion_params": {},
+      "note": null,
+      "pace": 1.0,
+      "pivot": [
+        9.127009339078793,
+        28.71051775828888
+      ],
+      "route": null,
+      "start": 0.0,
+      "style": "rotate",
+      "sweep_deg": -140.46717276868998,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": []
+    },
+    "W6": {
+      "easing": {
+        "kind": "linear",
+        "points": [],
+        "strength": 2.0
+      },
+      "end": null,
+      "entity": "W6",
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "locked": false,
+      "motion_fn": "weave",
+      "motion_params": {
+        "amplitude": 0.5,
+        "cycles": 2.0
+      },
+      "note": null,
+      "pace": 1.0,
+      "pivot": null,
+      "route": null,
+      "start": 0.0,
+      "style": "custom",
+      "sweep_deg": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "waypoints": []
+    }
+  },
+  "source_hash": ""
+}

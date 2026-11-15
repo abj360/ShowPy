@@ -1,0 +1,476 @@
+{
+  "cast": {
+    "groups": {
+      "brass": {
+        "color": "#808080",
+        "default_radius": 0.3,
+        "key": "brass",
+        "label_prefix": "B",
+        "limits": {},
+        "moves": true,
+        "name": "Brass",
+        "symbol": "circle"
+      },
+      "guard": {
+        "color": "#808080",
+        "default_radius": 0.3,
+        "key": "guard",
+        "label_prefix": "G",
+        "limits": {},
+        "moves": true,
+        "name": "Guard",
+        "symbol": "circle"
+      },
+      "percussion": {
+        "color": "#808080",
+        "default_radius": 0.3,
+        "key": "percussion",
+        "label_prefix": "P",
+        "limits": {},
+        "moves": true,
+        "name": "Percussion",
+        "symbol": "circle"
+      },
+      "woodwinds": {
+        "color": "#808080",
+        "default_radius": 0.3,
+        "key": "woodwinds",
+        "label_prefix": "W",
+        "limits": {},
+        "moves": true,
+        "name": "Woodwinds",
+        "symbol": "circle"
+      }
+    },
+    "label_scheme": {
+      "pad": 0,
+      "prefixes": {},
+      "start": 1
+    },
+    "selections": {
+      "front-four": [
+        "B1",
+        "B2",
+        "B3",
+        "B4"
+      ]
+    },
+    "spots": [
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "brass",
+        "id": "B1",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "brass",
+        "id": "B2",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": [
+          "horn",
+          "lead"
+        ]
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "brass",
+        "id": "B3",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "brass",
+        "id": "B4",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "brass",
+        "id": "B5",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "brass",
+        "id": "B6",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "woodwinds",
+        "id": "W1",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "woodwinds",
+        "id": "W2",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "woodwinds",
+        "id": "W3",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "woodwinds",
+        "id": "W4",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "woodwinds",
+        "id": "W5",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "woodwinds",
+        "id": "W6",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "percussion",
+        "id": "P1",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "percussion",
+        "id": "P2",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "percussion",
+        "id": "P3",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "percussion",
+        "id": "P4",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "percussion",
+        "id": "P5",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "percussion",
+        "id": "P6",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "guard",
+        "id": "G1",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "guard",
+        "id": "G2",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "guard",
+        "id": "G3",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "guard",
+        "id": "G4",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "guard",
+        "id": "G5",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "guard",
+        "id": "G6",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      }
+    ]
+  },
+  "coordinates": {
+    "audience_side": "front",
+    "kind": "marching",
+    "labels": {},
+    "origin": [
+      0.0,
+      0.0
+    ],
+    "precision": 0.01,
+    "units": "m"
+  },
+  "dependencies": {
+    "sheet:college-football": "1"
+  },
+  "facing_overrides": [],
+  "id": "seeded",
+  "pack": "",
+  "pins": [],
+  "sets": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+  ],
+  "title": "Seeded show",
+  "zones": []
+}
