@@ -30,8 +30,6 @@ from showpy.geo.affine import translation_matrix
 from showpy.geo.transforms import shift
 from showpy.notes.models import Anchor
 from showpy.notes.notes import add_note
-from showpy.sheet.replace import replace_sheet
-from showpy.sheet.templates import blank_sheet
 from showpy.show.manage import add_set, set_counts
 from showpy.show.models import Show
 from showpy.time.models import Hold
@@ -52,7 +50,6 @@ NEW_SET_COUNTS = 4.0
 RETIMED_COUNTS = 6.0
 SHIFT_M = 0.5
 HOLD_SECONDS = 1.5
-WIDE_SHEET_M = (60.0, 30.0)
 AT = datetime(2026, 11, 13, tzinfo=UTC)
 
 
@@ -80,10 +77,6 @@ def _timeline(show: Show) -> object:
     return add_hold(show.timeline, Hold(at_count=show.sets[-1].counts, seconds=HOLD_SECONDS))
 
 
-def _sheet(show: Show) -> object:
-    return replace_sheet(show, blank_sheet(*WIDE_SHEET_M), mapping="scale", force=True)
-
-
 def _notes(show: Show) -> object:
     return add_note(show, "hit", Anchor.on_set(show.sets[-1].id), NOTE_ID, AT, "designer")
 
@@ -99,7 +92,6 @@ EDITS: dict[str, Callable[[Show], object]] = {
     "forms": _forms,
     "paths": _paths,
     "timeline": _timeline,
-    "sheet": _sheet,
     "notes": _notes,
     "manage": _manage,
 }

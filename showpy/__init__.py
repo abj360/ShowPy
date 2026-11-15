@@ -531,7 +531,6 @@ if TYPE_CHECKING:
         GuideLine,
         Landmark,
         Sheet,
-        SheetReplaceReport,
         SurfaceType,
         Zone,
         ZoneKind,
@@ -542,7 +541,6 @@ if TYPE_CHECKING:
         render_sheet,
     )
     from showpy.sheet.replace import (
-        replace_sheet,
         similarity_fit,
     )
     from showpy.sheet.surfaces import (
@@ -830,7 +828,6 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Shape": ("showpy.cast.models", "Shape"),
     "Sheet": ("showpy.sheet.models", "Sheet"),
     "SheetCanvas": ("showpy.sheet.render", "SheetCanvas"),
-    "SheetReplaceReport": ("showpy.sheet.models", "SheetReplaceReport"),
     "SheetRow": ("showpy.export.models", "SheetRow"),
     "SheetStore": ("showpy.sheet.templates", "SheetStore"),
     "Show": ("showpy.show.models", "Show"),
@@ -1133,7 +1130,6 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "render_sheet": ("showpy.sheet.render", "render_sheet"),
     "renumber": ("showpy.show.manage", "renumber"),
     "reorder": ("showpy.choreo.form_ops", "reorder"),
-    "replace_sheet": ("showpy.sheet.replace", "replace_sheet"),
     "require_finite": ("showpy.core.validation", "require_finite"),
     "require_size": ("showpy.core.caps", "require_size"),
     "revert": ("showpy.show.history", "revert"),
@@ -1370,7 +1366,6 @@ __all__ = [
     "Shape",
     "Sheet",
     "SheetCanvas",
-    "SheetReplaceReport",
     "SheetRow",
     "SheetStore",
     "Show",
@@ -1673,7 +1668,6 @@ __all__ = [
     "render_sheet",
     "renumber",
     "reorder",
-    "replace_sheet",
     "require_finite",
     "require_size",
     "revert",
