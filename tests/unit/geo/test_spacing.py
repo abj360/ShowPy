@@ -40,6 +40,13 @@ Contains:
         leaking TypeError
     test_regression_fill_rejects_empty_area: raises a ShowPyError for an empty area instead of
         leaking GEOSException
+    test_regression_scatter_rejects_n_over_the_cap: rejects n over MAX_POINTS before sampling
+    test_regression_scatter_rejects_sample_bound_over_the_cap: rejects a gap whose sample bound is
+        over MAX_POINTS before sampling
+    test_regression_scatter_rejects_non_finite_min_gap: rejects NaN and infinite gaps
+    test_regression_fill_rejects_non_finite_interval: rejects NaN and infinite intervals
+    test_regression_space_by_interval_rejects_non_finite_interval: rejects NaN and infinite
+        intervals
 """
 
 import math
@@ -51,6 +58,7 @@ import shapely
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from showpy.core.caps import MAX_POINTS
 from showpy.core.errors import ShowPyError, SpacingError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.geo.curves import Segment
@@ -89,6 +97,8 @@ EDGE_BAND_M = 1.0
 MAX_EDGE_SPOTS = 8
 WIDE_SPOTS = 20
 FRACTIONAL_SEED = 1.5
+OVER_CAP_SPOTS = MAX_POINTS + 1
+NON_FINITE = [math.nan, math.inf, -math.inf]
 
 LINE = line((0.0, 0.0), (10.0, 0.0))
 
@@ -239,8 +249,6 @@ def _square(origin_x: float = 0.0, side: float = SQUARE_SIDE_M) -> shapely.Polyg
     return region([(origin_x, 0), (origin_x + side, 0), (origin_x + side, side), (origin_x, side)])
 
 
-@pytest.mark.defect("UP-9.1-03")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-03")
 @fails_after(SIGNAL_TIMEOUT_S)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_scatter_rejects_negative_min_gap() -> None:
@@ -249,8 +257,6 @@ def test_regression_scatter_rejects_negative_min_gap() -> None:
         scatter(_square(), 5, -1.0)
 
 
-@pytest.mark.defect("UP-9.1-07")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-07")
 @fails_after(SIGNAL_TIMEOUT_S)
 @pytest.mark.skipif(sys.platform != "linux", reason="needs signal timeout and RLIMIT_AS")
 def test_regression_fill_caps_the_lattice_size() -> None:
@@ -259,8 +265,6 @@ def test_regression_fill_caps_the_lattice_size() -> None:
         fill(_square(), TINY_FILL_INTERVAL_M, anchor=(0.0, 0.0))
 
 
-@pytest.mark.defect("UP-9.1-08")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-08")
 @fails_after(SIGNAL_TIMEOUT_S)
 @pytest.mark.skipif(sys.platform != "linux", reason="needs signal timeout and RLIMIT_AS")
 def test_regression_space_by_interval_caps_the_point_count() -> None:
@@ -366,16 +370,12 @@ def test_regression_space_proportional_rejects_zero_length_curves() -> None:
         space_proportional(dots, 4)
 
 
-@pytest.mark.defect("UP-9.1-58")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-58")
 def test_regression_fill_rejects_zero_interval() -> None:
     """Raises SpacingError for interval=0 instead of leaking ZeroDivisionError (audit 9.1)."""
     with pytest.raises(SpacingError):
         fill(_square(), 0.0)
 
 
-@pytest.mark.defect("UP-9.1-59")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-59")
 def test_regression_scatter_rejects_zero_min_gap() -> None:
     """Raises SpacingError for min_gap=0 instead of leaking ZeroDivisionError (audit 9.1)."""
     with pytest.raises(SpacingError):
@@ -396,3 +396,38 @@ def test_regression_fill_rejects_empty_area() -> None:
     """Raises a ShowPyError for an empty area instead of leaking GEOSException (audit 9.1)."""
     with pytest.raises(ShowPyError):
         fill(shapely.Polygon(), 1.0)
+
+
+def test_regression_scatter_rejects_n_over_the_cap() -> None:
+    """Rejects n over MAX_POINTS with SpacingError before any sampling."""
+    with pytest.raises(SpacingError):
+        scatter(_square(), OVER_CAP_SPOTS, 1.0)
+
+
+@fails_after(SIGNAL_TIMEOUT_S)
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+def test_regression_scatter_rejects_sample_bound_over_the_cap() -> None:
+    """Rejects a gap whose Poisson-disk sample bound passes MAX_POINTS, before sampling."""
+    with pytest.raises(SpacingError):
+        scatter(_square(), 5, TINY_FILL_INTERVAL_M)
+
+
+@pytest.mark.parametrize("min_gap", NON_FINITE)
+def test_regression_scatter_rejects_non_finite_min_gap(min_gap: float) -> None:
+    """Rejects NaN and infinite gaps with SpacingError."""
+    with pytest.raises(SpacingError):
+        scatter(_square(), 3, min_gap)
+
+
+@pytest.mark.parametrize("interval", NON_FINITE)
+def test_regression_fill_rejects_non_finite_interval(interval: float) -> None:
+    """Rejects NaN and infinite intervals with SpacingError."""
+    with pytest.raises(SpacingError):
+        fill(_square(), interval)
+
+
+@pytest.mark.parametrize("interval", NON_FINITE)
+def test_regression_space_by_interval_rejects_non_finite_interval(interval: float) -> None:
+    """Rejects NaN and infinite intervals with SpacingError."""
+    with pytest.raises(SpacingError):
+        space_by_interval(LINE, interval)
