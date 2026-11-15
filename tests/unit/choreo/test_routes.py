@@ -19,7 +19,7 @@ import math
 import pytest
 
 from showpy.choreo.engine import PathEngine
-from showpy.choreo.models import PathStyle, TransitionSpec
+from showpy.choreo.models import FacingMode, PathStyle, TransitionSpec
 from showpy.choreo.paths import lock
 from showpy.choreo.routes import (
     counter_march,
@@ -32,6 +32,7 @@ from showpy.choreo.routes import (
 from showpy.core.errors import LockedError, PathError
 from showpy.core.ids import format_tid
 from showpy.core.util import approx_equal
+from showpy.show.models import Show
 from tests.fixtures.motion_shows import TID, with_targets
 from tests.fixtures.shows import two_set_show
 
@@ -148,3 +149,65 @@ def test_regression_counter_march_with_no_members_raises_path_error() -> None:
     with pytest.raises(PathError) as raised:
         counter_march(two_set_show(), TID, [], turn_at=(6.0, 8.0))
     assert raised.value.context == {"transition": format_tid(TID)}
+
+
+def _locked_show(entity: str = "T1") -> Show:
+    show = two_set_show()
+    return show.replace(transitions=(lock(show.transition(TID), [entity]),))
+
+
+def test_regression_rotate_path_refuses_locked_row() -> None:
+    show = _locked_show()
+    with pytest.raises(LockedError):
+        rotate_path(show, show.transition(TID), ["T1"], (0.0, 0.0), 90.0)
+
+
+def test_regression_rotate_path_force_rewrites_locked_row() -> None:
+    show = _locked_show()
+    spec = rotate_path(show, show.transition(TID), ["T1"], (0.0, 0.0), 90.0, force=True)
+    assert spec.row("T1").style == PathStyle.ROTATE
+
+
+def test_regression_follow_and_set_targets_refuses_locked_row() -> None:
+    show = _locked_show()
+    route = make_route(show, TID, "T4", [(6.0, 15.0)], members=FILE)
+    with pytest.raises(LockedError):
+        follow_and_set_targets(show, TID, route)
+
+
+def test_regression_follow_and_set_targets_force_rewrites_locked_row() -> None:
+    show = _locked_show()
+    route = make_route(show, TID, "T4", [(6.0, 15.0)], members=FILE)
+    moved = follow_and_set_targets(show, TID, route, force=True)
+    assert moved.transition(TID).row("T1").style == PathStyle.FOLLOW
+
+
+def test_regression_follow_and_set_targets_force_moves_pinned_placement() -> None:
+    show = with_targets({"T1": {"pinned": True}})
+    route = make_route(show, TID, "T4", [(6.0, 15.0)], members=FILE)
+    moved = follow_and_set_targets(show, TID, route, force=True)
+    assert approx_equal(moved.set("2").get("T1").point, (6.0, 9.0))
+
+
+def test_regression_counter_march_refuses_locked_row() -> None:
+    with pytest.raises(LockedError):
+        counter_march(_locked_show(), TID, FILE, turn_at=(6.0, 8.0))
+
+
+def test_regression_counter_march_refuses_pinned_placement() -> None:
+    show = with_targets({"T1": {"pinned": True}})
+    with pytest.raises(LockedError):
+        counter_march(show, TID, FILE, turn_at=(6.0, 8.0))
+
+
+def test_regression_counter_march_force_rewrites_locked_row_and_facing() -> None:
+    moved = counter_march(_locked_show(), TID, FILE, turn_at=(6.0, 8.0), force=True)
+    row = moved.transition(TID).row("T1")
+    assert row.style == PathStyle.FOLLOW
+    assert row.facing_mode == FacingMode.TRAVEL
+
+
+def test_regression_counter_march_force_moves_pinned_placement() -> None:
+    show = with_targets({"T1": {"pinned": True}})
+    moved = counter_march(show, TID, FILE, turn_at=(6.0, 8.0), force=True)
+    assert moved.set("2").get("T1").point != show.set("2").get("T1").point
