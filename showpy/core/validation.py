@@ -10,8 +10,10 @@ Contains:
 """
 
 import math
+from numbers import Real
 from typing import Literal
 
+import numpy as np
 from pydantic import BaseModel, ValidationError
 
 from showpy.core.errors import SchemaError, schema_error_from
@@ -96,7 +98,8 @@ def require_finite(
     """Checks a numeric parameter is finite and inside optional bounds.
 
     Args:
-        value: The number to check; bools and non-numbers are rejected.
+        value: The number to check; any real number, numpy scalars included. Bools, non-numbers
+            and ints too large for a float are rejected.
         name: Parameter name, echoed in the error context.
         low: Lower bound, or None for no lower bound.
         low_open: Whether `low` itself is rejected.
@@ -109,9 +112,12 @@ def require_finite(
     2.0
     """
     context = {"name": name, "value": value, "low": low, "high": high}
-    if isinstance(value, bool) or not isinstance(value, int | float):
+    if isinstance(value, bool | np.bool_) or not isinstance(value, Real):
         raise SchemaError(f"{name} must be a number", hint="pass an int or float", context=context)
-    number = float(value)
+    try:
+        number = float(value)
+    except OverflowError:
+        number = math.inf
     if not math.isfinite(number):
         raise SchemaError(f"{name} must be finite", hint="pass a finite number", context=context)
     if low is not None and (number < low or (low_open and number == low)):

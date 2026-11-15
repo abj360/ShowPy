@@ -9,6 +9,7 @@ Contains:
 
 from typing import Literal
 
+import numpy as np
 import pytest
 from pydantic import BaseModel
 
@@ -95,3 +96,22 @@ def test_require_finite_bounds() -> None:
         require_finite(-0.1, name="n", low=0.0)
     with pytest.raises(SchemaError):
         require_finite(1.1, name="n", high=1.0)
+
+
+def test_regression_require_finite_rejects_an_int_too_large_for_float() -> None:
+    with pytest.raises(SchemaError) as caught:
+        require_finite(10**400, name="n")
+    assert caught.value.context["name"] == "n"
+    assert "finite" in caught.value.message
+
+
+def test_require_finite_accepts_numpy_scalars_and_returns_python_float() -> None:
+    for scalar in (np.int64(3), np.float32(0.5)):
+        result = require_finite(scalar, name="n")  # type: ignore[arg-type]
+        assert type(result) is float
+        assert result == float(scalar)
+
+
+def test_require_finite_rejects_numpy_bool() -> None:
+    with pytest.raises(SchemaError):
+        require_finite(np.bool_(True), name="n")  # type: ignore[arg-type]
