@@ -9,6 +9,10 @@ Contains:
     test_regression_publish_link_carries_a_caller_supplied_join_token(): adds a join token
     test_regression_publication_snapshot_excludes_contact_details(): hides contacts
     test_regression_claims_and_notices_return_redacted_performers(): redacts contacts in claims
+    test_regression_reassign_stores_performers_without_contact(): drops contact on reassign
+    test_regression_republish_drops_contacts_held_by_a_legacy_publication(): strips carry-over
+    test_regression_swap_claims_drops_contacts_held_by_a_legacy_publication(): strips on swap
+    test_regression_readers_redact_contacts_of_a_legacy_publication(): redacts every reader
     test_regression_publish_rejects_a_short_or_malformed_join_token(): rejects weak tokens
     test_regression_publish_rejects_base_urls_with_credentials_or_fragments(): rejects them
     test_regression_publish_rejects_unsafe_base_url(): rejects every malformed or ambiguous URL
@@ -408,8 +412,6 @@ def test_regression_publish_link_carries_a_caller_supplied_join_token() -> None:
     assert hashlib.sha256(token.encode()).hexdigest() in stored
 
 
-@pytest.mark.defect("UP-9.5-02")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-02")
 def test_regression_publication_snapshot_excludes_contact_details() -> None:
     """Keeps performer contact data out of the serialized publication (audit 9.5; P0 #10).
 
@@ -419,8 +421,6 @@ def test_regression_publication_snapshot_excludes_contact_details() -> None:
     assert CONTACT not in pub.model_dump_json()
 
 
-@pytest.mark.defect("UP-9.5-03")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-03")
 def test_regression_claims_and_notices_return_redacted_performers() -> None:
     """Returns performers without contact data from claims() and notify_changes() (audit 9.5)."""
     old, pub = _claimed_with_contact()
@@ -429,6 +429,50 @@ def test_regression_claims_and_notices_return_redacted_performers() -> None:
     notices = notify_changes(pub, old, new)
     assert notices
     assert all(who.contact is None for who, _ in notices)
+
+
+def _legacy_publication() -> tuple[Show, Publication]:
+    show, pub = _claimed_with_contact()
+    stored = pub.model_dump(mode="json")
+    stored["claims"][0]["performer"]["contact"] = CONTACT
+    return show, Publication.model_validate(stored)
+
+
+def test_regression_reassign_stores_performers_without_contact() -> None:
+    """Drops the contact when the designer moves a performer onto a spot."""
+    ada = performer("Ada").model_copy(update={"contact": CONTACT})
+    pub = reassign(_published(), "T3", ada, AT)
+    assert CONTACT not in pub.model_dump_json()
+
+
+def test_regression_republish_drops_contacts_held_by_a_legacy_publication() -> None:
+    """Strips a v0.2.0 contact when republishing carries its claim over."""
+    show, legacy = _legacy_publication()
+    assert CONTACT in legacy.model_dump_json()
+    pub = publish(show, "pub-1", BASE_URL, LATER, legacy, join_token=JOIN_TOKEN)
+    assert [c.spot for c in pub.claims] == ["T1"]
+    assert CONTACT not in pub.model_dump_json()
+
+
+def test_regression_swap_claims_drops_contacts_held_by_a_legacy_publication() -> None:
+    """Strips a v0.2.0 contact from claims rebuilt by a swap."""
+    show, legacy = _legacy_publication()
+    pub, _ = claim_spot(legacy, show, performer("Bo"), "T2", AT)
+    assert CONTACT not in swap_claims(pub, "T1", "T2").model_dump_json()
+
+
+def test_regression_readers_redact_contacts_of_a_legacy_publication() -> None:
+    """Returns contact-free performers from every read path of a v0.2.0 publication."""
+    show, legacy = _legacy_publication()
+    assert all(c.performer.contact is None for c in claims(legacy))
+    holder = who_is_on(legacy, "T1")
+    assert holder is not None
+    assert holder.contact is None
+    view = performer_view(legacy, show, performer("Ada"))
+    assert view.performer.contact is None
+    assert CONTACT not in view.model_dump_json()
+    new = with_targets({"T1": {"x": 3.0}}, show=show)
+    assert all(who.contact is None for who, _ in notify_changes(legacy, show, new))
 
 
 @pytest.mark.parametrize("base_url", ["javascript:alert(1)", "data:text/html,x"])

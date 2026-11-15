@@ -129,7 +129,8 @@ class Performer(FrozenModel):
     Attributes:
         id: Stable performer ID.
         name: Display name.
-        contact: How to reach the performer, when given.
+        contact: How to reach the performer. Publications never keep it; the host keeps contacts
+            in its own roster keyed by `Performer.id`.
         role: `performer` or `crew`; decides which spots the person may claim.
     """
 
