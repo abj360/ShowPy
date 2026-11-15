@@ -2,15 +2,25 @@
 
 """
 test_motion_stats.py --- tests speed, travel direction and motion analysis over time
+
+Contains:
+    test_regression_motion_helpers_accept_a_custom_motion_registry: analyses a show that uses a
+        custom-registered motion
+    test_regression_energy_curve_rejects_negative_resolution: raises a ShowPyError, not numpy
+        ValueError, for a negative per_count
 """
 
 import math
+from collections.abc import Callable
+from typing import cast
 
+import numpy as np
 import pytest
 
-from stage.choreo.engine import PathEngine
-from stage.choreo.models import PathRow
-from stage.choreo.motion_stats import (
+from showpy.choreo.engine import PathEngine
+from showpy.choreo.models import PathRow, PathStyle
+from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, MotionRegistry
+from showpy.choreo.motion_stats import (
     direction_of_travel,
     energy_curve,
     motion_contrast,
@@ -19,11 +29,14 @@ from stage.choreo.motion_stats import (
     speed,
     speeds,
 )
-from stage.core.errors import TimeRangeError
-from stage.core.util import approx_equal
-from stage.time.models import Marker, MarkerKind
+from showpy.core.errors import ShowPyError, TimeRangeError
+from showpy.core.types import Point, Points
+from showpy.core.util import approx_equal
+from showpy.show.models import Show
+from showpy.time.models import Marker, MarkerKind
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
 from tests.fixtures.shows import two_set_show
+from tests.helpers import defect
 
 
 def test_engine_speed_reports_distance_rate_and_seconds() -> None:
@@ -59,8 +72,7 @@ def test_position_at_and_direction_of_travel() -> None:
     show = two_set_show()
     assert approx_equal(position_at(show, "T2", 4.0), (2.0, 7.0))
     heading = direction_of_travel(show, "T2", TID, 4.0)
-    assert heading is not None
-    assert approx_equal(heading, 180.0)
+    assert heading == pytest.approx(180.0)
     held = with_targets({"T2": {"y": 5.0}})
     assert direction_of_travel(held, "T2", TID, 4.0) is None
 
@@ -100,3 +112,71 @@ def test_phrase_profile_splits_on_markers() -> None:
 def test_phrase_profile_rejects_empty_range() -> None:
     with pytest.raises(TimeRangeError):
         phrase_profile(two_set_show(), 4.0, 4.0)
+
+
+type MotionsCall = Callable[[Show, MotionRegistry], object]
+BAD_PER_COUNT = -1
+MID_MOVE = 2.0
+
+
+def _line_motion(u: FloatArray, start: Point, end: Point, params: object) -> Points:
+    return np.linspace(start, end, len(u))
+
+
+# motions= is the keyword the audit proposes; the current helpers have no such parameter.
+def _speed_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], speed)(show, "T1", TID, motions=motions)
+
+
+def _speeds_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], speeds)(show, TID, motions=motions)
+
+
+def _contrast_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], motion_contrast)(show, TID, motions=motions)
+
+
+def _position_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], position_at)(show, "T1", MID_MOVE, motions=motions)
+
+
+def _direction_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], direction_of_travel)(
+        show, "T1", TID, MID_MOVE, motions=motions
+    )
+
+
+def _energy_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], energy_curve)(show, motions=motions)
+
+
+def _phrase_call(show: Show, motions: MotionRegistry) -> object:
+    return cast(Callable[..., object], phrase_profile)(show, 0.0, 8.0, motions=motions)
+
+
+@defect("UP-9.2-32")
+@pytest.mark.parametrize(
+    "call",
+    [
+        _speed_call,
+        _speeds_call,
+        _contrast_call,
+        _position_call,
+        _direction_call,
+        _energy_call,
+        _phrase_call,
+    ],
+)
+def test_regression_motion_helpers_accept_a_custom_motion_registry(call: MotionsCall) -> None:
+    """Analyses a show that uses a custom-registered motion (audit 9.2)."""
+    registry = DEFAULT_MOTIONS.with_motion("probe", _line_motion)
+    row = PathRow(entity="T1", style=PathStyle.CUSTOM, motion_fn="probe")
+    plain = call(two_set_show(), DEFAULT_MOTIONS)
+    assert repr(call(with_rows({"T1": row}), registry)) == repr(plain)
+
+
+@defect("UP-9.2-36")
+def test_regression_energy_curve_rejects_negative_resolution() -> None:
+    """Raises a ShowPyError, not numpy ValueError, for a negative per_count (audit 9.2)."""
+    with pytest.raises(ShowPyError):
+        energy_curve(two_set_show(), per_count=BAD_PER_COUNT)

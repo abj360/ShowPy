@@ -154,3 +154,33 @@ The src layout was reverted the same day at the designer's request. The package 
 because pytest runs from the repo root, tests can import the checkout even when the built
 wheel is missing a file. `tests/unit/test_public_api.py` checks that `py.typed` ships, and the
 Docker build installs the package before testing.
+
+## Addendum 2026-11-13: package renamed to showpy
+
+The library is now ShowPy, and the import name is `showpy`. It is a clean break with no `stage`
+compatibility shim. Paths named in the sections above (`stage/__init__.py`, `stage/core/...`)
+now sit under `showpy/`. `StageError` is `ShowPyError`, the `STAGE_UPDATE_*` test switches are
+`SHOWPY_UPDATE_*`, and the interchange tag `stage.show.v1` is `showpy.show.v1`. `import_json`
+still reads documents tagged `stage.show.v1` (`LEGACY_SCHEMA_TAGS`); `export_json` writes only
+the new tag. The domain word stage (the sheet kind, the template, text about a theater stage)
+is unchanged.
+
+## Addendum 2026-11-13: standalone library
+
+ShowPy is a standalone library. Its own docs and code no longer describe it as part of a
+product, and the repository split above is history only. Apps, agents and checkers are
+consumers: they pin a tagged release and use the public API; ShowPy never imports one. The API
+reference moved to `docs/showpy-api-reference.md`. Where the sections above say "locked
+checker", read "a consumer's checks"; the rule that ShowPy never weakens a check stays.
+
+## Addendum 2026-11-13: no legacy interchange tag
+
+The earlier addendum's legacy reading of `stage.show.v1` is withdrawn by the maintainer's decision.
+`import_json` accepts only `showpy.show.v1`, and a document tagged `stage.show.v1` is rejected like
+any other unknown tag. Re-tag old documents before import.
+
+## Addendum 2026-11-13: export count
+
+The 2026-11-11 addendum counted 533 lazily re-exported names. After the repository split moved
+agent-only code out, `import showpy` re-exports 519 names, generated from
+`showpy/_api_table.py` and pinned by `tests/fixtures/api_snapshot.json`.

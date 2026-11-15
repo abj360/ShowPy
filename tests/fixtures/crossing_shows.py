@@ -7,6 +7,6 @@ Contains:
     crossing_show(): returns T1 and T2 swapping places through the same point at count 4
 """
 
-from stage.examples import crossing_show
+from showpy.examples import crossing_show
 
 __all__ = ["crossing_show"]

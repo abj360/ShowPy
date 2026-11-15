@@ -2,6 +2,16 @@
 
 """
 test_motion.py --- tests easing curves, facing turns and the custom motion registry
+
+Contains:
+    test_regression_nan_easing_strength_is_rejected: rejects a NaN easing strength instead of
+        producing NaN positions
+    test_regression_infinite_steps_strength_raises_showpy_error: raises a ShowPyError, not
+        OverflowError, for infinite step counts
+    test_regression_easing_strength_below_one_is_not_clamped_silently: rejects a strength below 1
+        instead of clamping it to 1
+    test_regression_steps_strength_has_a_cap: rejects a 10,000-step easing instead of building 9,999
+        edges
 """
 
 from collections.abc import Mapping
@@ -12,8 +22,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from stage.choreo.models import Easing, TurnDirection
-from stage.choreo.motion import (
+from showpy.choreo.models import Easing, EasingKind, TurnDirection
+from showpy.choreo.motion import (
     DEFAULT_MOTIONS,
     FloatArray,
     ease,
@@ -22,11 +32,12 @@ from stage.choreo.motion import (
     register_motion,
     turn,
 )
-from stage.core.errors import PathError, UnknownRefError
-from stage.core.types import Point, Points
-from stage.core.util import approx_equal
+from showpy.core.errors import PathError, ShowPyError, UnknownRefError
+from showpy.core.types import Point, Points
+from showpy.core.util import approx_equal
+from tests.helpers import defect
 
-KINDS = [
+KINDS: list[EasingKind] = [
     "linear",
     "ease_in",
     "ease_out",
@@ -38,14 +49,14 @@ KINDS = [
 
 
 @pytest.mark.parametrize("kind", KINDS)
-def test_easing_endpoints(kind: str) -> None:
+def test_easing_endpoints(kind: EasingKind) -> None:
     e = Easing(kind=kind, strength=3.0)
     assert approx_equal(ease(e, np.array([0.0, 1.0])), [0.0, 1.0])
 
 
 @pytest.mark.parametrize("kind", KINDS)
 @given(st.floats(min_value=1.0, max_value=6.0))
-def test_easing_is_monotone(kind: str, strength: float) -> None:
+def test_easing_is_monotone(kind: EasingKind, strength: float) -> None:
     u = np.linspace(0.0, 1.0, 401)
     out = ease(Easing(kind=kind, strength=strength), u)
     assert np.all(np.diff(out) >= -1e-12)
@@ -131,3 +142,35 @@ def test_easing_breaks_mark_kinks() -> None:
     assert easing_breaks(Easing(kind="hold_then_burst", strength=2.0)) == [0.5]
     assert easing_breaks(Easing(kind="burst_then_settle", strength=4.0)) == [0.25]
     assert easing_breaks(Easing()) == []
+
+
+SHARES = np.array([0.0, 0.25, 0.5, 1.0])
+OVERSIZED_STEP_COUNT = 10_000.0
+
+
+@defect("UP-9.2-12")
+def test_regression_nan_easing_strength_is_rejected() -> None:
+    """Rejects a NaN easing strength instead of producing NaN positions (audit 9.2)."""
+    with pytest.raises(ShowPyError):
+        ease(Easing(kind="ease_in", strength=float("nan")), SHARES)
+
+
+@defect("UP-9.2-13")
+def test_regression_infinite_steps_strength_raises_showpy_error() -> None:
+    """Raises a ShowPyError, not OverflowError, for infinite step counts (audit 9.2)."""
+    with pytest.raises(ShowPyError):
+        ease(Easing(kind="steps", strength=float("inf")), SHARES)
+
+
+@defect("UP-9.2-14")
+def test_regression_easing_strength_below_one_is_not_clamped_silently() -> None:
+    """Rejects a strength below 1 instead of clamping it to 1 (audit 9.2)."""
+    with pytest.raises(ShowPyError):
+        ease(Easing(kind="ease_in", strength=0.5), SHARES)
+
+
+@defect("UP-9.2-15")
+def test_regression_steps_strength_has_a_cap() -> None:
+    """Rejects a 10,000-step easing instead of building 9,999 edges (audit 9.2)."""
+    with pytest.raises(ShowPyError):
+        easing_breaks(Easing(kind="steps", strength=OVERSIZED_STEP_COUNT))

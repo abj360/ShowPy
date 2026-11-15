@@ -8,7 +8,7 @@ Contains:
     with_targets(): returns the example show with set 2 placements patched
 """
 
-from stage.examples import EXAMPLE_TID as TID
-from stage.examples import with_rows, with_targets
+from showpy.examples import EXAMPLE_TID as TID
+from showpy.examples import with_rows, with_targets
 
 __all__ = ["TID", "with_rows", "with_targets"]

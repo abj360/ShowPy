@@ -2,18 +2,38 @@
 
 """
 test_data.py --- tests JSON interchange, frame CSV, position import, tables and format plugins
+
+Also holds the audited data and CSV defects (UP-9.5-27 to UP-9.5-35, UP-4.3-01) as strict xfails.
+
+Contains:
+    test_regression_chart_csv_neutralizes_formula_names(): quotes a formula-like performer name
+    test_regression_csv_neutralizes_every_formula_trigger(): quotes cells led by + - @ tab or CR
+    test_regression_csv_writes_large_floats_without_exponent(): writes 1234567.0 in full; the `:g`
+        format turns it into 1.23457e+06
+    test_regression_csv_keeps_cue_seconds_above_one_thousand_exact(): keeps seconds past 1,000 exact
+    test_regression_coordinate_sheet_csv_names_the_entity_and_performer(): adds entity and performer
+    test_regression_to_text_drops_tabs_and_carriage_returns(): drops tab and CR from text cells
+    test_regression_to_text_aligns_wide_cjk_characters(): pads wide characters by display width
+    test_regression_export_json_include_accepts_a_single_field_name(): treats a string as one field
+    test_regression_import_json_rejects_a_non_mapping_with_schema_error(): raises SchemaError for
+        `[1]`; today an AttributeError leaks from `.get`
+    test_regression_export_json_ignores_hash_seed(): dumps spot tags and selections in one order
+        under every hash seed
+    test_import_json_rejects_the_old_stage_tag(): refuses a document tagged stage.show.v1
+    test_frames_csv_is_byte_identical_across_runs_and_hash_seeds(): writes one CSV per show
 """
 
 import csv
 import io
 import json
+import unicodedata
 
 import pandas as pd
 import pytest
 
-from stage.core.errors import SchemaError, UnknownRefError
-from stage.core.util import approx_equal
-from stage.export.data import (
+from showpy.core.errors import SchemaError, UnknownRefError
+from showpy.core.util import approx_equal
+from showpy.export.data import (
     DEFAULT_FORMATS,
     SCHEMA_TAG,
     as_table,
@@ -26,19 +46,22 @@ from stage.export.data import (
     to_csv,
     to_text,
 )
-from stage.export.models import Chart, ChartRow, CoordinateSheet, SheetRow
-from stage.export.print_sheets import chart, coordinate_sheet, cue_sheet
-from stage.show.models import Show
+from showpy.export.models import Chart, ChartRow, Claim, CoordinateSheet, SheetRow
+from showpy.export.print_sheets import chart, coordinate_sheet, cue_sheet
+from showpy.show.models import Show
 from tests.fixtures.cast_shows import rich_show
-from tests.fixtures.export_shows import guided_show
+from tests.fixtures.export_shows import AT, guided_show, live_publication, performer
 from tests.fixtures.shows import two_set_show
+from tests.helpers import digests_under_hash_seeds
 
 TOL = 1e-9
+WIDE_CELL = 2
+FORMULA_NAME = '=HYPERLINK("http://evil")'
 
 
 def test_export_json_is_tagged_and_json_safe() -> None:
     exported = export_json(rich_show())
-    assert exported["schema"] == SCHEMA_TAG == "stage.show.v1"
+    assert exported["schema"] == SCHEMA_TAG == "showpy.show.v1"
     assert json.loads(json.dumps(exported)) == exported
 
 
@@ -62,9 +85,9 @@ def test_include_refuses_unknown_fields() -> None:
     "document",
     [
         {"show": {}},
-        {"schema": "stage.show/1", "show": {}},
-        {"schema": "stage.show.v1"},
-        {"schema": "stage.show.v1", "show": {"id": "x"}},
+        {"schema": "showpy.show/1", "show": {}},
+        {"schema": "showpy.show.v1"},
+        {"schema": "showpy.show.v1", "show": {"id": "x"}},
     ],
 )
 def test_import_json_refuses_wrong_or_missing_schema(document: dict[str, object]) -> None:
@@ -153,7 +176,7 @@ def test_format_registry_is_immutable() -> None:
     def shout(show: Show) -> str:
         return show.title.upper()
 
-    def blank(text: str) -> Show:
+    def blank(_text: str) -> Show:
         return two_set_show()
 
     extended = register_importer(register_exporter(DEFAULT_FORMATS, "shout", shout), "x", blank)
@@ -165,3 +188,136 @@ def test_format_registry_is_immutable() -> None:
         DEFAULT_FORMATS.exporter("shout")
     with pytest.raises(SchemaError):
         register_exporter(DEFAULT_FORMATS, " ", shout)
+
+
+def test_export_json_writes_showpy_tag() -> None:
+    assert export_json(two_set_show())["schema"] == "showpy.show.v1"
+    assert SCHEMA_TAG == "showpy.show.v1"
+
+
+def test_import_json_rejects_the_old_stage_tag() -> None:
+    document = {**json.loads(json.dumps(export_json(rich_show()))), "schema": "stage.show.v1"}
+    with pytest.raises(SchemaError) as caught:
+        import_json(document)
+    assert "showpy.show.v1" in str(caught.value)
+    assert "showpy.show.v1" in (caught.value.hint or "")
+
+
+def _csv_rows(text: str) -> list[list[str]]:
+    return list(csv.reader(io.StringIO(text, newline="")))
+
+
+def _display_width(text: str) -> int:
+    return sum(WIDE_CELL if unicodedata.east_asian_width(c) in "WF" else 1 for c in text)
+
+
+@pytest.mark.defect("UP-9.5-27")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-27")
+def test_regression_chart_csv_neutralizes_formula_names() -> None:
+    """Prefixes a quote to a performer name that spreadsheets would run as a formula.
+
+    A name like `=HYPERLINK("http://evil")` lands in the chart CSV unchanged, and Excel or
+    Sheets then evaluates it (OWASP CSV injection; audit 9.5 security; P0 #10).
+    """
+    show = guided_show()
+    pub = live_publication(show)
+    claim = Claim(spot="T1", performer=performer(FORMULA_NAME), claimed_at=AT)
+    pub = pub.model_copy(update={"claims": (claim,)})
+    rows = _csv_rows(to_csv(chart(show, "1", publication=pub)))
+    cells = [cell for row in rows[1:] for cell in row]
+    assert f"'{FORMULA_NAME}" in cells
+    assert FORMULA_NAME not in cells
+
+
+@pytest.mark.defect("UP-9.5-28")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-28")
+@pytest.mark.parametrize("lead", ["+", "-", "@", "\t", "\r"])
+def test_regression_csv_neutralizes_every_formula_trigger(lead: str) -> None:
+    """Prefixes a quote to cells starting with + - @ tab or carriage return (audit 9.5)."""
+    cell = f"{lead}1+1"
+    rows = _csv_rows(to_csv(pd.DataFrame({"name": [cell], "offset": ["-5"]})))
+    assert rows[1] == [f"'{cell}", "-5"]
+
+
+@pytest.mark.defect("UP-9.5-29")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-29")
+def test_regression_csv_writes_large_floats_without_exponent() -> None:
+    """Writes 1234567.0 in full; the `:g` format turns it into 1.23457e+06 (audit 9.5)."""
+    rows = _csv_rows(to_csv(pd.DataFrame({"count": [1234567.0]})))
+    assert float(rows[1][0]) == 1234567.0
+    assert "e" not in rows[1][0].lower()
+
+
+@pytest.mark.defect("UP-9.5-30")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-30")
+def test_regression_csv_keeps_cue_seconds_above_one_thousand_exact() -> None:
+    """Keeps the precision of cue seconds past 1,000 s; `:g` keeps six significant digits."""
+    seconds = 1234.5678
+    rows = _csv_rows(to_csv(pd.DataFrame({"seconds": [seconds]})))
+    assert approx_equal(float(rows[1][0]), seconds, TOL)
+
+
+@pytest.mark.defect("UP-9.5-31")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-31")
+def test_regression_coordinate_sheet_csv_names_the_entity_and_performer() -> None:
+    """Carries the entity and performer in every row so concatenated sheets stay apart."""
+    header = _csv_rows(to_csv(coordinate_sheet(guided_show(), "T1")))[0]
+    assert {"entity", "performer"} <= set(header)
+
+
+@pytest.mark.defect("UP-9.5-32")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-32")
+def test_regression_to_text_drops_tabs_and_carriage_returns() -> None:
+    """Replaces tab and carriage return in cells so the aligned text keeps its columns."""
+    text = to_text(pd.DataFrame({"a": ["x\ty\rz"], "b": ["w"]}))
+    assert "\t" not in text
+    assert "\r" not in text
+
+
+@pytest.mark.defect("UP-9.5-33")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-33")
+def test_regression_to_text_aligns_wide_cjk_characters() -> None:
+    """Pads by display width so the next column lines up under double-width characters."""
+    lines = to_text(pd.DataFrame({"name": ["李雷", "ab"], "x": ["1", "2"]})).splitlines()
+    starts = [
+        _display_width(line[: line.rindex(value)])
+        for line, value in zip(lines[1:], "12", strict=True)
+    ]
+    assert starts[0] == starts[1]
+
+
+@pytest.mark.defect("UP-9.5-34")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-34")
+def test_regression_export_json_include_accepts_a_single_field_name() -> None:
+    """Treats `include="title"` as one field; today it iterates the characters of the string."""
+    document = export_json(two_set_show(), include="title")
+    assert sorted(document["show"]) == ["id", "title"]
+
+
+@pytest.mark.defect("UP-9.5-35")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-35")
+def test_regression_import_json_rejects_a_non_mapping_with_schema_error() -> None:
+    """Raises SchemaError for `[1]`; today an AttributeError leaks from `.get`."""
+    with pytest.raises(SchemaError):
+        import_json([1])  # type: ignore[arg-type]
+
+
+def test_frames_csv_is_byte_identical_across_runs_and_hash_seeds() -> None:
+    """Writes the same frames CSV twice in one run and under two hash seeds (audit 4.3)."""
+    digests = digests_under_hash_seeds(
+        "from showpy.export.data import export_frames_csv", "export_frames_csv(show).encode()"
+    )
+    assert all(first == second for first, second in digests), digests
+    assert len({first for first, _ in digests}) == 1, digests
+
+
+@pytest.mark.defect("UP-4.3-01")
+@pytest.mark.xfail(strict=True, reason="UP-4.3-01")
+def test_regression_export_json_ignores_hash_seed() -> None:
+    """Dumps the same JSON export under every hash seed, spot tags included (audit 4.3; P0 #9)."""
+    digests = digests_under_hash_seeds(
+        "from showpy.export.data import export_json",
+        "json.dumps(export_json(show), sort_keys=True).encode()",
+    )
+    assert all(first == second for first, second in digests), digests
+    assert len({first for first, _ in digests}) == 1, digests

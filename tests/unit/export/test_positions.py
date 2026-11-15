@@ -2,14 +2,26 @@
 
 """
 test_positions.py --- tests merging CSV positions into a show
+
+Also holds the audited import defects (UP-9.5-41 to UP-9.5-44) as strict xfails.
+
+Contains:
+    test_regression_import_positions_reads_a_utf8_bom(): reads a CSV with a byte order mark
+    test_regression_import_positions_reads_semicolon_delimited_csv(): reads semicolon CSV
+    test_regression_import_positions_normalizes_facing(): stores facing 720 as 0 instead of keeping
+        it unnormalized
+    test_regression_import_positions_rejects_ids_with_spaces(): rejects an entity ID with a space
 """
 
 import pytest
 
-from stage.core.errors import LockedError, SchemaError, UnknownRefError
-from stage.export.positions import import_positions
+from showpy.core.errors import LockedError, SchemaError, UnknownRefError
+from showpy.core.util import approx_equal
+from showpy.export.positions import import_positions
 from tests.fixtures.shows import two_set_show
 
+TOL = 1e-9
+FULL_TURN = 360.0
 IMPORT_TEXT = """set,counts,entity,x,y,facing
 1,0,T1,0,5,0
 1,0,N1,10,5,
@@ -90,3 +102,42 @@ def test_import_positions_inserts_new_sets_where_the_file_puts_them() -> None:
     assert import_positions(two_set_show(), leading, "trumpets").set_ids() == ["0", "1", "2"]
     appended = "set,counts,entity,x,y\n3,4,T1,0,1\n"
     assert import_positions(two_set_show(), appended, "trumpets").set_ids() == ["1", "2", "3"]
+
+
+SIMPLE_TEXT = "set,counts,entity,x,y\n3,4,T1,1,1\n"
+
+
+@pytest.mark.defect("UP-9.5-41")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-41")
+def test_regression_import_positions_reads_a_utf8_bom() -> None:
+    """Reads a CSV that starts with a UTF-8 byte order mark, as Excel writes it (audit 9.5)."""
+    plain = import_positions(two_set_show(), SIMPLE_TEXT, group="trumpets")
+    bom = import_positions(two_set_show(), "﻿" + SIMPLE_TEXT, group="trumpets")
+    assert bom == plain
+
+
+@pytest.mark.defect("UP-9.5-42")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-42")
+def test_regression_import_positions_reads_semicolon_delimited_csv() -> None:
+    """Reads a semicolon-delimited CSV, as Excel writes in many locales (audit 9.5)."""
+    plain = import_positions(two_set_show(), SIMPLE_TEXT, group="trumpets")
+    semicolons = import_positions(two_set_show(), SIMPLE_TEXT.replace(",", ";"), "trumpets")
+    assert semicolons == plain
+
+
+@pytest.mark.defect("UP-9.5-43")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-43")
+def test_regression_import_positions_normalizes_facing() -> None:
+    """Stores facing 720 as 0 instead of keeping it unnormalized (audit 9.5)."""
+    text = "set,counts,entity,x,y,facing\n3,4,T1,1,1,720\n"
+    facing = import_positions(two_set_show(), text, group="trumpets").set("3").get("T1").facing
+    assert 0.0 <= facing < FULL_TURN
+    assert approx_equal(facing, 0.0, TOL)
+
+
+@pytest.mark.defect("UP-9.5-44")
+@pytest.mark.xfail(strict=True, reason="UP-9.5-44")
+def test_regression_import_positions_rejects_ids_with_spaces() -> None:
+    """Rejects an entity ID that contains a space instead of creating a spot with it."""
+    with pytest.raises(SchemaError):
+        import_positions(two_set_show(), "set,counts,entity,x,y\n3,4,T 9,1,1\n", "trumpets")

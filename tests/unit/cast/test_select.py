@@ -4,14 +4,34 @@
 test_select.py --- tests the selection grammar and the spatial, ordering and pairing picks
 
 Contains:
-    test_*(): one behavior of stage.cast.select each
+    test_*(): one behavior of showpy.cast.select each
+    test_regression_glued_operators_raise_instead_of_misparsing: rejects glued +, - and & operators
+        at their position instead of misparsing them
+    test_regression_select_generator_is_not_silently_empty: selects the IDs a generator yields, or
+        rejects it, never returns nothing
+    test_regression_select_rejects_a_non_selector_type: rejects an int selector with a ShowPyError,
+        not a TypeError
+    test_regression_select_rejects_non_string_ids_in_a_list: rejects a list holding a non-string
+        with a ShowPyError, not an AttributeError
+    test_regression_select_deep_nesting_raises_schema_error: rejects 500 nested parentheses with a
+        SchemaError, not RecursionError
+    test_regression_mirror_pairs_finds_every_pair_within_tolerance: pairs spots within tolerance
+        even when the min-sum plan misses them
+    test_regression_split_rejects_absurd_part_counts_quickly: rejects an absurd part count instead
+        of building 100,000 empty groups
+    test_regression_select_set_input_ignores_hash_seed: returns one order for a Python set under
+        every hash seed
 """
+
+import contextlib
+import sys
+import tracemalloc
 
 import pytest
 import shapely
 
-from stage.cast.models import Cast, Group, Shape, Spot
-from stage.cast.select import (
+from showpy.cast.models import Cast, Group, Shape, Spot
+from showpy.cast.select import (
     Selection,
     alternate,
     in_region,
@@ -23,12 +43,13 @@ from stage.cast.select import (
     split,
     where,
 )
-from stage.choreo.models import Form, Placement, Set
-from stage.core.errors import GeometryError, SchemaError, UnknownRefError
-from stage.core.types import Region
-from stage.geo.shapes import line
-from stage.show.models import Show
+from showpy.choreo.models import Form, Placement, Set
+from showpy.core.errors import GeometryError, SchemaError, ShowPyError, UnknownRefError
+from showpy.core.types import Region
+from showpy.geo.shapes import line
+from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
+from tests.helpers import fails_after, outputs_under_hash_seeds
 
 RECT = Shape(kind="rectangle", width_m=1.0, depth_m=0.5)
 
@@ -299,6 +320,7 @@ def test_mirror_pairs_respects_axis() -> None:
 
 
 def test_regression_glued_operators_raise_instead_of_misparsing() -> None:
+    """Rejects glued +, - and & operators at their position instead of misparsing them."""
     with pytest.raises(SchemaError) as info:
         select(mixed_cast(), "T1+T2-T10")
     assert info.value.context["position"] == 2
@@ -306,3 +328,101 @@ def test_regression_glued_operators_raise_instead_of_misparsing() -> None:
         select(mixed_cast(), "T1 +T2")
     assert ids(mixed_cast(), "T1 + T2 - T2") == ("T1",)
     assert ids(mixed_cast(), "T1-T2") == ("T1", "T2")
+
+
+NESTING_DEPTH = 500
+HUGE_PARTS = 10**5
+SPLIT_PEAK_BUDGET_BYTES = 5_000_000
+MIRROR_TOL_M = 0.1
+SET_SELECT_SCRIPT = (
+    "from showpy.cast.models import Cast, Group, Spot\n"
+    "from showpy.cast.select import select\n"
+    "ids = [f'T{i}' for i in range(1, 7)]\n"
+    "cast = Cast(groups={'g': Group(key='g', label_prefix='T')},\n"
+    "            spots=tuple(Spot(id=i, group='g') for i in ids))\n"
+    "try:\n"
+    "    print(select(cast, set(ids)).ids)\n"
+    "except Exception as error:\n"
+    "    print(type(error).__name__)\n"
+)
+
+
+def _line_cast() -> Cast:
+    return Cast(
+        groups={"g": Group(key="g", label_prefix="T")},
+        spots=tuple(Spot(id=f"T{i}", group="g") for i in range(1, 5)),
+    )
+
+
+@pytest.mark.defect("UP-9.3-72")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-72")
+def test_regression_select_generator_is_not_silently_empty() -> None:
+    """Selects the IDs a generator yields, or rejects it, never returns nothing (audit 9.3)."""
+    try:
+        picked = select(_line_cast(), (i for i in ["T1", "T2"]))  # type: ignore[arg-type]
+    except ShowPyError:
+        return
+    assert picked.ids == ("T1", "T2")
+
+
+@pytest.mark.defect("UP-9.3-73")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-73")
+def test_regression_select_rejects_a_non_selector_type() -> None:
+    """Rejects an int selector with a ShowPyError, not a TypeError (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        select(_line_cast(), 5)  # type: ignore[arg-type]
+
+
+@pytest.mark.defect("UP-9.3-74")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-74")
+def test_regression_select_rejects_non_string_ids_in_a_list() -> None:
+    """Rejects a list holding a non-string with a ShowPyError, not an AttributeError (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        select(_line_cast(), ["T1", 3])  # type: ignore[list-item]
+
+
+@pytest.mark.defect("UP-9.3-75")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-75")
+def test_regression_select_deep_nesting_raises_schema_error() -> None:
+    """Rejects 500 nested parentheses with a SchemaError, not RecursionError (audit 9.3)."""
+    expression = "(" * NESTING_DEPTH + "T1" + ")" * NESTING_DEPTH
+    with pytest.raises(SchemaError):
+        select(_line_cast(), expression)
+
+
+@pytest.mark.defect("UP-9.3-76")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-76")
+def test_regression_mirror_pairs_finds_every_pair_within_tolerance() -> None:
+    """Pairs spots within tolerance even when the min-sum plan misses them (audit 9.3)."""
+    placements = (
+        Placement(entity="A", x=-1.0, y=0.0),
+        Placement(entity="B", x=-1.0, y=-0.4),
+        Placement(entity="R1", x=1.09, y=0.0),
+        Placement(entity="R2", x=1.0, y=0.3),
+    )
+    set_ = Set(id="1", counts=0.0, placements=placements)
+    assert len(mirror_pairs(set_, "all", tol=MIRROR_TOL_M)) >= 1
+
+
+@pytest.mark.defect("UP-9.3-77")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-77")
+@fails_after(5)
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+def test_regression_split_rejects_absurd_part_counts_quickly() -> None:
+    """Rejects an absurd part count instead of building 100,000 empty groups (audit 9.3; P0 #8)."""
+    tracemalloc.start()
+    try:
+        with contextlib.suppress(ShowPyError):
+            split(["a"], HUGE_PARTS)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < SPLIT_PEAK_BUDGET_BYTES
+
+
+@pytest.mark.defect("UP-9.3-78")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-78")
+def test_regression_select_set_input_ignores_hash_seed() -> None:
+    """Returns one order for a Python set under every hash seed (audit 9.3; P0 #9)."""
+    outputs = outputs_under_hash_seeds(SET_SELECT_SCRIPT)
+    assert len(set(outputs)) == 1, outputs

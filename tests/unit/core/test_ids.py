@@ -2,12 +2,19 @@
 
 """
 test_ids.py --- tests reference and transition ID parsing and formatting
+
+Contains:
+    test_*(): one behavior of showpy.core.ids each
+    test_regression_parse_ref_rejects_path_separators: rejects `..` and `/` in reference IDs, which
+        would escape a directory
+    test_regression_format_tid_rejects_a_third_element: rejects a three-part transition ID instead
+        of dropping the third
 """
 
 import pytest
 
-from stage.core.errors import SchemaError
-from stage.core.ids import format_ref, format_tid, parse_ref, parse_tid
+from showpy.core.errors import SchemaError
+from showpy.core.ids import format_ref, format_tid, parse_ref, parse_tid
 
 
 def test_parse_ref_with_version() -> None:
@@ -42,3 +49,20 @@ def test_parse_tid_rejects_malformed(text: str) -> None:
 
 def test_format_tid_uses_arrow() -> None:
     assert format_tid(("12A", "13")) == "12A→13"
+
+
+@pytest.mark.defect("UP-9.3-31")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-31")
+@pytest.mark.parametrize("text", ["sheet:..", "sheet:../etc", "sheet:a/b"])
+def test_regression_parse_ref_rejects_path_separators(text: str) -> None:
+    """Rejects `..` and `/` in reference IDs, which would escape a directory (audit 9.3)."""
+    with pytest.raises(SchemaError):
+        parse_ref(text)
+
+
+@pytest.mark.defect("UP-9.3-32")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-32")
+def test_regression_format_tid_rejects_a_third_element() -> None:
+    """Rejects a three-part transition ID instead of dropping the third (audit 9.3)."""
+    with pytest.raises(SchemaError):
+        format_tid(("1", "2", "3"))  # type: ignore[arg-type]

@@ -10,17 +10,18 @@ import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from stage.choreo.match import bottleneck_value, match
-from stage.choreo.match_solve import FloatArray, count_crossings
-from stage.choreo.models import MatchOptions, MatchResult
-from stage.core.types import Points
-from stage.core.util import approx_equal, seeded_rng
+from showpy.choreo.match import bottleneck_value, match
+from showpy.choreo.match_solve import FloatArray, count_crossings
+from showpy.choreo.models import MatchObjective, MatchOptions, MatchResult
+from showpy.core.types import Points
+from showpy.core.util import approx_equal, seeded_rng
 
 TOL = 1e-9
 MAX_SPOTS = 5
 EXTRA_SLOTS = 2
 FIELD = 10.0
 INTEGER_GRID = 6
+OBJECTIVES: tuple[MatchObjective, ...] = ("sum", "sum_squares", "bottleneck", "bottleneck_then_sum")
 
 
 @st.composite
@@ -90,9 +91,9 @@ def test_sum_equals_brute_force(case: tuple[Points, Points]) -> None:
 
 
 @settings(max_examples=60, deadline=None)
-@given(instances(), st.sampled_from(["sum", "sum_squares", "bottleneck", "bottleneck_then_sum"]))
+@given(instances(), st.sampled_from(OBJECTIVES))
 def test_result_is_a_valid_one_to_one_assignment(
-    case: tuple[Points, Points], objective: str
+    case: tuple[Points, Points], objective: MatchObjective
 ) -> None:
     starts, slots = case
     result = match(starts, slots, options=MatchOptions(objective=objective))

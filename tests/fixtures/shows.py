@@ -8,6 +8,6 @@ Contains:
     two_set_show(): builds four trumpets moving 4 m upstage over 8 counts
 """
 
-from stage.examples import COUNTS, DEPTH, TEMPO, WIDTH, field_sheet, two_set_show
+from showpy.examples import COUNTS, DEPTH, TEMPO, WIDTH, field_sheet, two_set_show
 
 __all__ = ["COUNTS", "DEPTH", "TEMPO", "WIDTH", "field_sheet", "two_set_show"]

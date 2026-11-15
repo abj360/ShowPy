@@ -2,6 +2,12 @@
 
 """
 test_affine.py --- tests exact affine mapping of curves, points and facings
+
+Contains:
+    test_regression_is_similarity_accepts_large_rotations_with_scale: accepts a 30 degree rotation
+        scaled by 1e5 instead of judging it by absolute error
+    test_regression_is_similarity_rejects_small_non_uniform_scales: rejects a 1e-5 by 2e-5 scale
+        instead of treating it as uniform
 """
 
 import math
@@ -11,8 +17,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from stage.core.util import approx_equal
-from stage.geo.affine import (
+from showpy.core.util import approx_equal
+from showpy.geo.affine import (
     is_similarity,
     mirror_matrix,
     rotation_matrix,
@@ -22,8 +28,8 @@ from stage.geo.affine import (
     transform_points,
     translation_matrix,
 )
-from stage.geo.curves import ArcCurve, CircleCurve, Polyline, SplineCurve
-from stage.geo.shapes import arc, bezier, circle, curve_through, ellipse, join, line, spiral
+from showpy.geo.curves import ArcCurve, CircleCurve, Polyline, SplineCurve
+from showpy.geo.shapes import arc, bezier, circle, curve_through, ellipse, join, line, spiral
 
 CURVES = [
     line((0, 0), (4, 1)),
@@ -88,3 +94,25 @@ def test_rotation_adds_to_facing(theta: float, deg: float) -> None:
 def test_mirror_across_vertical_axis_reflects_facing() -> None:
     assert approx_equal(transform_facing(90.0, mirror_matrix((0, 0), (0, 1))), 270.0)
     assert approx_equal(transform_facing(0.0, mirror_matrix((0, 0), (0, 1))), 0.0)
+
+
+LARGE_SCALE = 1e5
+SMALL_SCALE = 1e-5
+ROTATION_DEG = 30.0
+
+
+@pytest.mark.defect("UP-9.1-17")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-17")
+def test_regression_is_similarity_accepts_large_rotations_with_scale() -> None:
+    """Accepts a 30 degree rotation scaled by 1e5 instead of judging it by absolute error."""
+    c, s = math.cos(math.radians(ROTATION_DEG)), math.sin(math.radians(ROTATION_DEG))
+    matrix = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+    matrix[:2, :2] *= LARGE_SCALE
+    assert is_similarity(matrix)
+
+
+@pytest.mark.defect("UP-9.1-18")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-18")
+def test_regression_is_similarity_rejects_small_non_uniform_scales() -> None:
+    """Rejects a 1e-5 by 2e-5 scale instead of treating it as uniform (audit 9.1)."""
+    assert not is_similarity(scale_matrix(SMALL_SCALE, 2 * SMALL_SCALE, (0.0, 0.0)))

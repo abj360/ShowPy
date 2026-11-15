@@ -1,0 +1,2139 @@
+{
+  "$defs": {
+    "Anchor": {
+      "additionalProperties": false,
+      "description": "Tags what a note or comment is attached to; exactly the field for `kind` is set.\n\nAttributes:\n    kind: What the anchor points at.\n    set_id: Set, for kind `set`.\n    tid: Transition, for kind `transition`.\n    point: Sheet point, for kind `point`.\n    area: Sheet area, for kind `area`.\n    spots: Spot IDs, for kind `spots`.",
+      "properties": {
+        "area": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Region"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "$ref": "#/$defs/AnchorKind"
+        },
+        "point": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Point"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "set_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SetId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "spots": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/SpotId"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Spots"
+        },
+        "tid": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TransitionId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Anchor",
+      "type": "object"
+    },
+    "AnchorKind": {
+      "enum": [
+        "set",
+        "transition",
+        "point",
+        "area",
+        "spots"
+      ],
+      "type": "string"
+    },
+    "ApprovalState": {
+      "description": "Names the collaboration states of a set.",
+      "enum": [
+        "draft",
+        "proposed",
+        "approved"
+      ],
+      "title": "ApprovalState",
+      "type": "string"
+    },
+    "AudioTrack": {
+      "additionalProperties": false,
+      "description": "Describes music or sound that plays alongside the show.\n\nAttributes:\n    file: Path or URI of the audio asset.\n    label: Unique name of the track.\n    sync_offset_s: Audio time that plays at count 0.\n    gain: Linear playback gain.\n    section: (start, end) counts the track covers, or None for the whole show.",
+      "properties": {
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "gain": {
+          "default": 1.0,
+          "title": "Gain",
+          "type": "number"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/Count"
+                },
+                {
+                  "$ref": "#/$defs/Count"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "sync_offset_s": {
+          "$ref": "#/$defs/Seconds",
+          "default": 0.0
+        }
+      },
+      "required": [
+        "file",
+        "label"
+      ],
+      "title": "AudioTrack",
+      "type": "object"
+    },
+    "Cast": {
+      "additionalProperties": false,
+      "description": "Holds every group and spot in the show.\n\nAttributes:\n    groups: Group key to group.\n    spots: Every spot, in creation order.\n    selections: Named selections of spot IDs.\n    label_scheme: Labeling rules.",
+      "properties": {
+        "groups": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Group"
+          },
+          "default": {},
+          "title": "Groups",
+          "type": "object"
+        },
+        "label_scheme": {
+          "$ref": "#/$defs/LabelScheme",
+          "default": {
+            "pad": 0,
+            "prefixes": {},
+            "start": 1
+          }
+        },
+        "selections": {
+          "additionalProperties": {
+            "items": {
+              "$ref": "#/$defs/SpotId"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "default": {},
+          "title": "Selections",
+          "type": "object"
+        },
+        "spots": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Spot"
+          },
+          "title": "Spots",
+          "type": "array"
+        }
+      },
+      "title": "Cast",
+      "type": "object"
+    },
+    "Claimable": {
+      "enum": [
+        "performer",
+        "crew",
+        "none"
+      ],
+      "type": "string"
+    },
+    "CoordinateKind": {
+      "description": "Names the coordinate wording families.",
+      "enum": [
+        "marching",
+        "stage",
+        "dance_floor",
+        "grid"
+      ],
+      "title": "CoordinateKind",
+      "type": "string"
+    },
+    "CoordinateSystem": {
+      "additionalProperties": false,
+      "description": "Describes how positions are labeled and worded; it never moves stored positions.\n\nAttributes:\n    kind: Wording family.\n    origin: Point or landmark ID that reads as zero.\n    audience_side: Edge of the sheet where the audience sits, as drawn.\n    units: Unit positions are written in.\n    precision: Rounding step in `units`.\n    labels: Words used for directions, e.g. {\"left\": \"stage right\"}.",
+      "properties": {
+        "audience_side": {
+          "default": "front",
+          "enum": [
+            "front",
+            "back",
+            "left",
+            "right"
+          ],
+          "title": "Audience Side",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/CoordinateKind",
+          "default": "grid"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "title": "Labels",
+          "type": "object"
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Point"
+            },
+            {
+              "$ref": "#/$defs/LandmarkId"
+            }
+          ],
+          "default": [
+            0.0,
+            0.0
+          ],
+          "title": "Origin"
+        },
+        "precision": {
+          "default": 0.01,
+          "title": "Precision",
+          "type": "number"
+        },
+        "units": {
+          "default": "m",
+          "title": "Units",
+          "type": "string"
+        }
+      },
+      "title": "CoordinateSystem",
+      "type": "object"
+    },
+    "Count": {
+      "type": "number"
+    },
+    "CountsPerMinute": {
+      "type": "number"
+    },
+    "Cue": {
+      "additionalProperties": false,
+      "description": "Describes one moment in cue mode.\n\nAttributes:\n    label: Unique name of the cue.\n    order: Position in the running order.\n    estimated_seconds: Estimated duration, so previews can play.",
+      "properties": {
+        "estimated_seconds": {
+          "$ref": "#/$defs/Seconds"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "order": {
+          "title": "Order",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "label",
+        "order",
+        "estimated_seconds"
+      ],
+      "title": "Cue",
+      "type": "object"
+    },
+    "Degrees": {
+      "type": "number"
+    },
+    "Easing": {
+      "additionalProperties": false,
+      "description": "Maps progress through a move (time share) to progress along it (distance share).\n\nAttributes:\n    kind: Easing family; `custom` uses `points`.\n    strength: Exponent or step count, depending on the kind.\n    points: Custom curve as (time share, distance share) pairs from (0, 0) to (1, 1).",
+      "properties": {
+        "kind": {
+          "default": "linear",
+          "enum": [
+            "linear",
+            "ease_in",
+            "ease_out",
+            "ease_in_out",
+            "hold_then_burst",
+            "burst_then_settle",
+            "steps",
+            "custom"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "points": {
+          "default": [],
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "strength": {
+          "default": 2.0,
+          "title": "Strength",
+          "type": "number"
+        }
+      },
+      "title": "Easing",
+      "type": "object"
+    },
+    "FacingMode": {
+      "description": "Names how a spot faces while it moves.",
+      "enum": [
+        "fixed",
+        "to_target",
+        "travel",
+        "against_travel",
+        "toward_point",
+        "toward_entity",
+        "audience",
+        "interpolate"
+      ],
+      "title": "FacingMode",
+      "type": "string"
+    },
+    "FacingOverride": {
+      "additionalProperties": false,
+      "description": "Forces a facing on spots over a global count range, regardless of paths.\n\nAttributes:\n    entities: Spots affected.\n    mode: Facing mode during the range.\n    value: Degrees, point or spot ID, depending on the mode.\n    start: Global count where the override starts.\n    end: Global count where it ends.\n    turn_counts: Counts spent turning into and out of the override.",
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/Count"
+        },
+        "entities": {
+          "$ref": "#/$defs/SelectorField"
+        },
+        "mode": {
+          "$ref": "#/$defs/FacingMode"
+        },
+        "start": {
+          "$ref": "#/$defs/Count"
+        },
+        "turn_counts": {
+          "default": 0.0,
+          "title": "Turn Counts",
+          "type": "number"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Degrees"
+            },
+            {
+              "$ref": "#/$defs/Point"
+            },
+            {
+              "$ref": "#/$defs/SpotId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "entities",
+        "mode",
+        "start",
+        "end"
+      ],
+      "title": "FacingOverride",
+      "type": "object"
+    },
+    "FacingSpec": {
+      "additionalProperties": false,
+      "description": "Describes how form members face.\n\nAttributes:\n    mode: `fixed`, `audience`, `toward_point`, `along`, `normal` or `outward`.\n    value: Degrees for fixed, a point for toward_point; for along, normal and outward an\n        optional offset in degrees added to the computed facing.",
+      "properties": {
+        "mode": {
+          "default": "audience",
+          "enum": [
+            "fixed",
+            "audience",
+            "toward_point",
+            "along",
+            "normal",
+            "outward"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Degrees"
+            },
+            {
+              "$ref": "#/$defs/Point"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "title": "FacingSpec",
+      "type": "object"
+    },
+    "Form": {
+      "additionalProperties": false,
+      "description": "Holds a stored shape construction plus its ordered members.\n\nAttributes:\n    id: Form ID, unique across the show.\n    set: Set the form belongs to.\n    kind: Shape family.\n    geometry: JSON construction recipe the slots are generated from.\n    members: Spots in slot order.\n    spacing: How members are spaced on the shape.\n    facing: How members face.\n    locked: Designer lock; edits need force=True.\n    meta: Free designer metadata.",
+      "properties": {
+        "facing": {
+          "$ref": "#/$defs/FacingSpec",
+          "default": {
+            "mode": "audience",
+            "value": null
+          }
+        },
+        "geometry": {
+          "additionalProperties": true,
+          "title": "Geometry",
+          "type": "object"
+        },
+        "id": {
+          "$ref": "#/$defs/FormId"
+        },
+        "kind": {
+          "$ref": "#/$defs/FormKind"
+        },
+        "locked": {
+          "default": false,
+          "title": "Locked",
+          "type": "boolean"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/SpotId"
+          },
+          "title": "Members",
+          "type": "array"
+        },
+        "meta": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "title": "Meta",
+          "type": "object"
+        },
+        "set": {
+          "$ref": "#/$defs/SetId"
+        },
+        "spacing": {
+          "$ref": "#/$defs/SpacingSpec",
+          "default": {
+            "align": "start",
+            "end": null,
+            "gaps": [],
+            "interval": null,
+            "mode": "count",
+            "start": 0.0
+          }
+        }
+      },
+      "required": [
+        "id",
+        "set",
+        "kind",
+        "geometry",
+        "members"
+      ],
+      "title": "Form",
+      "type": "object"
+    },
+    "FormId": {
+      "type": "string"
+    },
+    "FormKind": {
+      "enum": [
+        "line",
+        "arc",
+        "curve",
+        "circle",
+        "block",
+        "wedge",
+        "polyline",
+        "svg",
+        "fill",
+        "scatter",
+        "custom",
+        "generated"
+      ],
+      "type": "string"
+    },
+    "Grid": {
+      "additionalProperties": false,
+      "description": "Describes the background grid.\n\nAttributes:\n    origin: A grid intersection.\n    spacing: Cell size along x and y.\n    major_every: Every n-th line is drawn heavier.\n    rotation_deg: Counter-clockwise grid rotation.\n    unit_name: Unit the grid is labeled in.",
+      "properties": {
+        "major_every": {
+          "default": 5,
+          "title": "Major Every",
+          "type": "integer"
+        },
+        "origin": {
+          "$ref": "#/$defs/Point",
+          "default": [
+            0.0,
+            0.0
+          ]
+        },
+        "rotation_deg": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        },
+        "spacing": {
+          "default": [
+            1.0,
+            1.0
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/Meters"
+            },
+            {
+              "$ref": "#/$defs/Meters"
+            }
+          ],
+          "title": "Spacing",
+          "type": "array"
+        },
+        "unit_name": {
+          "default": "m",
+          "title": "Unit Name",
+          "type": "string"
+        }
+      },
+      "title": "Grid",
+      "type": "object"
+    },
+    "Group": {
+      "additionalProperties": false,
+      "description": "Holds a designer-made set of spots with shared defaults.\n\nAttributes:\n    key: Stable group key, e.g. `trumpets`.\n    name: Display name; defaults to the key in title case.\n    label_prefix: Prefix for spot labels, e.g. `T` gives T1, T2.\n    symbol: Sheet glyph.\n    color: Hex color.\n    default_radius: Footprint radius for new spots.\n    limits: Per-group limit overrides read by a consumer checker.\n    moves: False for stationary groups such as a pit.",
+      "properties": {
+        "color": {
+          "default": "#808080",
+          "title": "Color",
+          "type": "string"
+        },
+        "default_radius": {
+          "$ref": "#/$defs/Meters",
+          "default": 0.3
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "label_prefix": {
+          "title": "Label Prefix",
+          "type": "string"
+        },
+        "limits": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "default": {},
+          "title": "Limits",
+          "type": "object"
+        },
+        "moves": {
+          "default": true,
+          "title": "Moves",
+          "type": "boolean"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "symbol": {
+          "default": "circle",
+          "title": "Symbol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "label_prefix"
+      ],
+      "title": "Group",
+      "type": "object"
+    },
+    "GuideLine": {
+      "additionalProperties": false,
+      "description": "Holds one line drawn on the sheet.\n\nAttributes:\n    id: Guide ID.\n    kind: yard, hash, sideline, center, edge, spike or custom.\n    points: Vertices of the line.\n    label: Text drawn with the line.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "yard",
+            "hash",
+            "sideline",
+            "center",
+            "edge",
+            "spike",
+            "custom"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "default": "",
+          "title": "Label",
+          "type": "string"
+        },
+        "points": {
+          "$ref": "#/$defs/Ring"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "points"
+      ],
+      "title": "GuideLine",
+      "type": "object"
+    },
+    "Hold": {
+      "additionalProperties": false,
+      "description": "Pauses the counts: time reaches `at_count`, waits `seconds`, then continues.\n\nAttributes:\n    at_count: Count where the pause happens.\n    seconds: Length of the pause.\n    note: Designer note such as \"fermata\".",
+      "properties": {
+        "at_count": {
+          "$ref": "#/$defs/Count"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "seconds": {
+          "$ref": "#/$defs/Seconds"
+        }
+      },
+      "required": [
+        "at_count",
+        "seconds"
+      ],
+      "title": "Hold",
+      "type": "object"
+    },
+    "LabelScheme": {
+      "additionalProperties": false,
+      "description": "Holds labeling rules; a group missing from `prefixes` uses its own label_prefix.\n\nAttributes:\n    prefixes: Group key to label prefix overrides.\n    start: First number in each group.\n    pad: Zero-pad numbers to this width.",
+      "properties": {
+        "pad": {
+          "default": 0,
+          "title": "Pad",
+          "type": "integer"
+        },
+        "prefixes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "title": "Prefixes",
+          "type": "object"
+        },
+        "start": {
+          "default": 1,
+          "title": "Start",
+          "type": "integer"
+        }
+      },
+      "title": "LabelScheme",
+      "type": "object"
+    },
+    "Landmark": {
+      "additionalProperties": false,
+      "description": "Holds a named reference such as \"front hash\" or \"center stage\".\n\nAttributes:\n    id: Landmark ID.\n    name: Display name.\n    kind: point (1 point), line (2+ points) or area (3+ points, a ring).\n    geometry: Points of the landmark.\n    aliases: Other names that resolve to it.",
+      "properties": {
+        "aliases": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "geometry": {
+          "$ref": "#/$defs/Ring"
+        },
+        "id": {
+          "$ref": "#/$defs/LandmarkId"
+        },
+        "kind": {
+          "enum": [
+            "point",
+            "line",
+            "area"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "geometry"
+      ],
+      "title": "Landmark",
+      "type": "object"
+    },
+    "LandmarkId": {
+      "type": "string"
+    },
+    "Marker": {
+      "additionalProperties": false,
+      "description": "Names one moment, such as \"the hit\" or \"letter B\".\n\nAttributes:\n    label: Unique name of the moment.\n    at_count: Count where it happens.\n    kind: What the marker is for.",
+      "properties": {
+        "at_count": {
+          "$ref": "#/$defs/Count"
+        },
+        "kind": {
+          "$ref": "#/$defs/MarkerKind",
+          "default": "custom"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "at_count"
+      ],
+      "title": "Marker",
+      "type": "object"
+    },
+    "MarkerKind": {
+      "description": "Classifies a marker.",
+      "enum": [
+        "rehearsal",
+        "cue",
+        "custom"
+      ],
+      "title": "MarkerKind",
+      "type": "string"
+    },
+    "MeasureSetting": {
+      "additionalProperties": false,
+      "description": "Configures measure numbering for designers who talk in measures.\n\nAttributes:\n    counts_per_measure: Measure length from count 0.\n    start_measure: Number of the measure that starts at count 0.\n    changes: (count, new length) pairs; each starts a new measure at its count.",
+      "properties": {
+        "changes": {
+          "default": [],
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "$ref": "#/$defs/Count"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Changes",
+          "type": "array"
+        },
+        "counts_per_measure": {
+          "title": "Counts Per Measure",
+          "type": "number"
+        },
+        "start_measure": {
+          "default": 1,
+          "title": "Start Measure",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "counts_per_measure"
+      ],
+      "title": "MeasureSetting",
+      "type": "object"
+    },
+    "Meters": {
+      "type": "number"
+    },
+    "Note": {
+      "additionalProperties": false,
+      "description": "Holds one design note.\n\nAttributes:\n    id: Note ID.\n    text: Note body.\n    kind: goal, idea, todo or warning.\n    anchor: What the note is attached to.\n    author: User name, or \"agent\".\n    created_at: When the note was written; passed in, never read from the clock.\n    visible: Whether the canvas shows it.",
+      "properties": {
+        "anchor": {
+          "$ref": "#/$defs/Anchor"
+        },
+        "author": {
+          "title": "Author",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/NoteKind",
+          "default": "idea"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "visible": {
+          "default": true,
+          "title": "Visible",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "anchor",
+        "author",
+        "created_at"
+      ],
+      "title": "Note",
+      "type": "object"
+    },
+    "NoteKind": {
+      "enum": [
+        "goal",
+        "idea",
+        "todo",
+        "warning"
+      ],
+      "type": "string"
+    },
+    "PathRow": {
+      "additionalProperties": false,
+      "description": "Holds one spot's instructions for one transition; times are local counts.\n\nAttributes:\n    entity: Spot ID.\n    style: Path style.\n    start: Local count the move starts.\n    end: Local count the move ends; None means the end of the transition.\n    waypoints: Points passed on the way, for CURVE and POLYLINE.\n    route: Route followed, for FOLLOW.\n    pivot: Rotation center, for ROTATE.\n    sweep_deg: Signed rotation, for ROTATE; positive is counter-clockwise.\n    facing_mode: How the spot faces during the move.\n    facing_value: Degrees, point or spot ID, depending on the facing mode.\n    turn_counts: Counts spent turning into and out of the move's facing.\n    turn_direction: Which way turns go.\n    pace: Step pace multiplier for step-size reporting; positions ignore it.\n    locked: Designer lock.\n    note: Free text.\n    motion_fn: Registered motion function, for CUSTOM.\n    motion_params: Parameters for the motion function.\n    easing: How progress maps to time across the window.",
+      "properties": {
+        "easing": {
+          "$ref": "#/$defs/Easing",
+          "default": {
+            "kind": "linear",
+            "points": [],
+            "strength": 2.0
+          }
+        },
+        "end": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "entity": {
+          "$ref": "#/$defs/SpotId"
+        },
+        "facing_mode": {
+          "$ref": "#/$defs/FacingMode",
+          "default": "to_target"
+        },
+        "facing_value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Degrees"
+            },
+            {
+              "$ref": "#/$defs/Point"
+            },
+            {
+              "$ref": "#/$defs/SpotId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Facing Value"
+        },
+        "locked": {
+          "default": false,
+          "title": "Locked",
+          "type": "boolean"
+        },
+        "motion_fn": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Motion Fn"
+        },
+        "motion_params": {
+          "additionalProperties": true,
+          "default": {},
+          "title": "Motion Params",
+          "type": "object"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "pace": {
+          "default": 1.0,
+          "title": "Pace",
+          "type": "number"
+        },
+        "pivot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Point"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "route": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RouteId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "start": {
+          "default": 0.0,
+          "title": "Start",
+          "type": "number"
+        },
+        "style": {
+          "$ref": "#/$defs/PathStyle",
+          "default": "straight"
+        },
+        "sweep_deg": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Degrees"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "turn_counts": {
+          "default": 0.0,
+          "title": "Turn Counts",
+          "type": "number"
+        },
+        "turn_direction": {
+          "$ref": "#/$defs/TurnDirection",
+          "default": "shortest"
+        },
+        "waypoints": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Waypoint"
+          },
+          "title": "Waypoints",
+          "type": "array"
+        }
+      },
+      "required": [
+        "entity"
+      ],
+      "title": "PathRow",
+      "type": "object"
+    },
+    "PathStyle": {
+      "description": "Names the built-in path styles.",
+      "enum": [
+        "straight",
+        "hold",
+        "curve",
+        "polyline",
+        "follow",
+        "rotate",
+        "custom"
+      ],
+      "title": "PathStyle",
+      "type": "string"
+    },
+    "Pin": {
+      "additionalProperties": false,
+      "description": "Records one designer lock; the flags it sets live on placements, forms and path rows.\n\nAttributes:\n    target: What is locked.\n    id: Spot, form or set ID, or a transition written as `a\u2192b`.\n    by: Who pinned it.\n    reason: Why, shown to the agent when an edit is refused.",
+      "properties": {
+        "by": {
+          "default": "designer",
+          "title": "By",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/PinTarget"
+        }
+      },
+      "required": [
+        "target",
+        "id"
+      ],
+      "title": "Pin",
+      "type": "object"
+    },
+    "PinTarget": {
+      "enum": [
+        "entity",
+        "form",
+        "set",
+        "transition"
+      ],
+      "type": "string"
+    },
+    "Placement": {
+      "additionalProperties": false,
+      "description": "Holds one spot's state at one set.\n\nAttributes:\n    entity: Spot ID.\n    x: Meters from the center line, audience-left negative.\n    y: Meters upstage from the front edge.\n    facing: Degrees, 0 toward the audience, counter-clockwise positive.\n    form: Form the spot belongs to in this set.\n    order: Index along that form.\n    pinned: Designer lock; edits need force=True.\n    note: Text printed on sheets.\n    on_field: False before an entrance or after an exit; not drawn or collision-checked.",
+      "properties": {
+        "entity": {
+          "$ref": "#/$defs/SpotId"
+        },
+        "facing": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        },
+        "form": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FormId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "on_field": {
+          "default": true,
+          "title": "On Field",
+          "type": "boolean"
+        },
+        "order": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Order"
+        },
+        "pinned": {
+          "default": false,
+          "title": "Pinned",
+          "type": "boolean"
+        },
+        "x": {
+          "$ref": "#/$defs/Meters"
+        },
+        "y": {
+          "$ref": "#/$defs/Meters"
+        }
+      },
+      "required": [
+        "entity",
+        "x",
+        "y"
+      ],
+      "title": "Placement",
+      "type": "object"
+    },
+    "Point": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "type": "array"
+    },
+    "Region": {
+      "additionalProperties": false,
+      "description": "Stores an area on the stage plane as rings, so it survives JSON round-trips.\n\nAttributes:\n    exterior: Outer ring, not repeating the first point.\n    holes: Inner rings cut out of the area.",
+      "properties": {
+        "exterior": {
+          "$ref": "#/$defs/Ring"
+        },
+        "holes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Ring"
+          },
+          "title": "Holes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "exterior"
+      ],
+      "title": "Region",
+      "type": "object"
+    },
+    "Ring": {
+      "items": {
+        "$ref": "#/$defs/Point"
+      },
+      "type": "array"
+    },
+    "Route": {
+      "additionalProperties": false,
+      "description": "Holds a shared path for follow-the-leader.\n\nMembers start on the route at arc lengths `offsets` and all advance `travel` meters.\n\nAttributes:\n    id: Route ID.\n    curve: JSON construction recipe of the route curve.\n    members: Spots on the route, leader first.\n    offsets: Each member's starting arc length on the route.\n    travel: Meters every member advances.\n    start: Local count the move starts.\n    end: Local count the move ends; None means the end of the transition.",
+      "properties": {
+        "curve": {
+          "additionalProperties": true,
+          "title": "Curve",
+          "type": "object"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "id": {
+          "$ref": "#/$defs/RouteId"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/SpotId"
+          },
+          "title": "Members",
+          "type": "array"
+        },
+        "offsets": {
+          "items": {
+            "$ref": "#/$defs/Meters"
+          },
+          "title": "Offsets",
+          "type": "array"
+        },
+        "start": {
+          "default": 0.0,
+          "title": "Start",
+          "type": "number"
+        },
+        "travel": {
+          "$ref": "#/$defs/Meters"
+        }
+      },
+      "required": [
+        "id",
+        "curve",
+        "members",
+        "offsets",
+        "travel"
+      ],
+      "title": "Route",
+      "type": "object"
+    },
+    "RouteId": {
+      "type": "string"
+    },
+    "Seconds": {
+      "type": "number"
+    },
+    "Selection": {
+      "additionalProperties": false,
+      "description": "Holds an ordered, duplicate-free set of spot IDs.\n\nAttributes:\n    ids: Spot IDs in selection order.\n    description: How the selection was made, for display.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ids"
+      ],
+      "title": "Selection",
+      "type": "object"
+    },
+    "SelectorField": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "$ref": "#/$defs/Selection"
+        }
+      ]
+    },
+    "Set": {
+      "additionalProperties": false,
+      "description": "Holds a snapshot of every spot's placement at one moment.\n\nAttributes:\n    id: Set ID, e.g. `12` or `12A`.\n    counts: Counts since the previous set; 0 for the first.\n    placements: One placement per spot in the cast.\n    forms: Forms present in this set.\n    label: Designer label.\n    cue: Rehearsal mark or cue.\n    source_hash: Hash of the script that built the set.\n    state: Collaboration state.",
+      "properties": {
+        "counts": {
+          "title": "Counts",
+          "type": "number"
+        },
+        "cue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cue"
+        },
+        "forms": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/FormId"
+          },
+          "title": "Forms",
+          "type": "array"
+        },
+        "id": {
+          "$ref": "#/$defs/SetId"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "placements": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Placement"
+          },
+          "title": "Placements",
+          "type": "array"
+        },
+        "source_hash": {
+          "default": "",
+          "title": "Source Hash",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/ApprovalState",
+          "default": "draft"
+        }
+      },
+      "required": [
+        "id",
+        "counts"
+      ],
+      "title": "Set",
+      "type": "object"
+    },
+    "SetId": {
+      "type": "string"
+    },
+    "Shape": {
+      "additionalProperties": false,
+      "description": "Describes a spot's footprint for display and collisions.\n\nAttributes:\n    kind: `circle` or `rectangle`.\n    radius_m: Circle radius.\n    width_m: Rectangle size across the facing direction.\n    depth_m: Rectangle size along the facing direction.\n    rotation_deg: Extra rotation added to the spot's facing for rectangles.",
+      "properties": {
+        "depth_m": {
+          "$ref": "#/$defs/Meters",
+          "default": 0.6
+        },
+        "kind": {
+          "default": "circle",
+          "enum": [
+            "circle",
+            "rectangle"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "radius_m": {
+          "$ref": "#/$defs/Meters",
+          "default": 0.3
+        },
+        "rotation_deg": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        },
+        "width_m": {
+          "$ref": "#/$defs/Meters",
+          "default": 0.6
+        }
+      },
+      "title": "Shape",
+      "type": "object"
+    },
+    "Sheet": {
+      "additionalProperties": false,
+      "description": "Holds the 2D design surface; (0, 0) is the front-center of the sheet.\n\nAttributes:\n    ref: Sheet reference, `sheet:<id>@<version>`.\n    name: Display name.\n    surface_type: Surface family.\n    size_m: Width and depth in meters.\n    outline: Sheet edge ring.\n    walkable: Area performers may use.\n    guides: Lines drawn on the sheet.\n    landmarks: Named references.\n    zones: Rule-bearing areas.\n    grid: Background grid.\n    default_coordinates: Coordinate system new shows start with.\n    based_on: Template this sheet was customized from.\n    owner: Who saved the sheet.\n    thumbnail: Asset URI of a preview image.",
+      "properties": {
+        "based_on": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SheetRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "default_coordinates": {
+          "$ref": "#/$defs/CoordinateSystem",
+          "default": {
+            "audience_side": "front",
+            "kind": "grid",
+            "labels": {},
+            "origin": [
+              0.0,
+              0.0
+            ],
+            "precision": 0.01,
+            "units": "m"
+          }
+        },
+        "grid": {
+          "$ref": "#/$defs/Grid",
+          "default": {
+            "major_every": 5,
+            "origin": [
+              0.0,
+              0.0
+            ],
+            "rotation_deg": 0.0,
+            "spacing": [
+              1.0,
+              1.0
+            ],
+            "unit_name": "m"
+          }
+        },
+        "guides": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/GuideLine"
+          },
+          "title": "Guides",
+          "type": "array"
+        },
+        "landmarks": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Landmark"
+          },
+          "title": "Landmarks",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "outline": {
+          "$ref": "#/$defs/Ring"
+        },
+        "owner": {
+          "default": "",
+          "title": "Owner",
+          "type": "string"
+        },
+        "ref": {
+          "$ref": "#/$defs/SheetRef"
+        },
+        "size_m": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/Meters"
+            },
+            {
+              "$ref": "#/$defs/Meters"
+            }
+          ],
+          "title": "Size M",
+          "type": "array"
+        },
+        "surface_type": {
+          "$ref": "#/$defs/SurfaceType"
+        },
+        "thumbnail": {
+          "default": "",
+          "title": "Thumbnail",
+          "type": "string"
+        },
+        "walkable": {
+          "$ref": "#/$defs/Region"
+        },
+        "zones": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Zone"
+          },
+          "title": "Zones",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ref",
+        "name",
+        "surface_type",
+        "size_m",
+        "outline",
+        "walkable"
+      ],
+      "title": "Sheet",
+      "type": "object"
+    },
+    "SheetRef": {
+      "type": "string"
+    },
+    "SpacingSpec": {
+      "additionalProperties": false,
+      "description": "Describes how members are spaced on a form's shape.\n\nAttributes:\n    mode: `count` (even over the window), `interval` (fixed gap) or `proportional`.\n    interval: Gap in meters for interval mode.\n    start: Arc length where spacing starts.\n    end: Arc length where spacing ends; None means the end of the shape.\n    align: `start`, `end` or `center` for interval mode.\n    gaps: Extra meters after member indexes.",
+      "properties": {
+        "align": {
+          "default": "start",
+          "enum": [
+            "start",
+            "end",
+            "center"
+          ],
+          "title": "Align",
+          "type": "string"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Meters"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "gaps": {
+          "default": [],
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer"
+              },
+              {
+                "$ref": "#/$defs/Meters"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Gaps",
+          "type": "array"
+        },
+        "interval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Meters"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mode": {
+          "default": "count",
+          "enum": [
+            "count",
+            "interval",
+            "proportional"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "start": {
+          "$ref": "#/$defs/Meters",
+          "default": 0.0
+        }
+      },
+      "title": "SpacingSpec",
+      "type": "object"
+    },
+    "Spot": {
+      "additionalProperties": false,
+      "description": "Describes one dot that persists through the whole show.\n\nAttributes:\n    id: Label shown on the sheet, stable all show.\n    group: Key of the owning group.\n    symbol: Sheet glyph; None inherits the group's.\n    color: Hex color; None inherits the group's.\n    tags: Free tags such as `soloist`.\n    active: False excludes the spot from forms and checks.\n    shape: Footprint on the sheet and for collisions.\n    claimable: Who may claim the spot once the show is published.",
+      "properties": {
+        "active": {
+          "default": true,
+          "title": "Active",
+          "type": "boolean"
+        },
+        "claimable": {
+          "$ref": "#/$defs/Claimable",
+          "default": "performer"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "group": {
+          "title": "Group",
+          "type": "string"
+        },
+        "id": {
+          "$ref": "#/$defs/SpotId"
+        },
+        "shape": {
+          "$ref": "#/$defs/Shape",
+          "default": {
+            "depth_m": 0.6,
+            "kind": "circle",
+            "radius_m": 0.3,
+            "rotation_deg": 0.0,
+            "width_m": 0.6
+          }
+        },
+        "symbol": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Symbol"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "id",
+        "group"
+      ],
+      "title": "Spot",
+      "type": "object"
+    },
+    "SpotId": {
+      "type": "string"
+    },
+    "SurfaceType": {
+      "description": "Names the kinds of surface a sheet represents.",
+      "enum": [
+        "football_field",
+        "stage",
+        "gym_floor",
+        "arena",
+        "street",
+        "blank"
+      ],
+      "title": "SurfaceType",
+      "type": "string"
+    },
+    "TempoSection": {
+      "additionalProperties": false,
+      "description": "Sets how fast counts go from a count onward.\n\nAttributes:\n    at_count: Count where the section starts.\n    counts_per_minute: Tempo at the start of the section.\n    ramp_to: Tempo reached at the end of the ramp, or None for a steady tempo.\n    ramp_counts: Counts the ramp takes, changing tempo linearly in counts.",
+      "properties": {
+        "at_count": {
+          "$ref": "#/$defs/Count"
+        },
+        "counts_per_minute": {
+          "$ref": "#/$defs/CountsPerMinute"
+        },
+        "ramp_counts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Count"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ramp_to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CountsPerMinute"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "at_count",
+        "counts_per_minute"
+      ],
+      "title": "TempoSection",
+      "type": "object"
+    },
+    "Timeline": {
+      "additionalProperties": false,
+      "description": "Holds the whole show timeline.\n\nAttributes:\n    mode: How the show is timed.\n    tempos: Tempo sections sorted by count; the first starts at count 0.\n    holds: Pauses sorted by count.\n    markers: Named moments sorted by count.\n    measures: Measure numbering, or None when measures are off.\n    cues: Cue-mode moments sorted by order.\n    audio: Playback tracks.\n    total_counts: Length of the show in counts, when known.",
+      "properties": {
+        "audio": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AudioTrack"
+          },
+          "title": "Audio",
+          "type": "array"
+        },
+        "cues": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Cue"
+          },
+          "title": "Cues",
+          "type": "array"
+        },
+        "holds": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Hold"
+          },
+          "title": "Holds",
+          "type": "array"
+        },
+        "markers": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Marker"
+          },
+          "title": "Markers",
+          "type": "array"
+        },
+        "measures": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeasureSetting"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mode": {
+          "$ref": "#/$defs/TimelineMode"
+        },
+        "tempos": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TempoSection"
+          },
+          "title": "Tempos",
+          "type": "array"
+        },
+        "total_counts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Count"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "Timeline",
+      "type": "object"
+    },
+    "TimelineMode": {
+      "description": "Names how a show is timed.",
+      "enum": [
+        "counts",
+        "seconds",
+        "cues"
+      ],
+      "title": "TimelineMode",
+      "type": "string"
+    },
+    "TransitionId": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/SetId"
+        },
+        {
+          "$ref": "#/$defs/SetId"
+        }
+      ],
+      "type": "array"
+    },
+    "TransitionSpec": {
+      "additionalProperties": false,
+      "description": "Holds every path instruction for one transition.\n\nRows are sparse: a spot without a row moves straight over the full counts.\n\nAttributes:\n    id: (from set, to set).\n    counts: Length of the transition; equals the destination set's counts.\n    rows: Spot ID to path row.\n    routes: Route ID to route.\n    notes: Free text.\n    source_hash: Hash of the script that wrote the paths.",
+      "properties": {
+        "counts": {
+          "title": "Counts",
+          "type": "number"
+        },
+        "id": {
+          "$ref": "#/$defs/TransitionId"
+        },
+        "notes": {
+          "default": "",
+          "title": "Notes",
+          "type": "string"
+        },
+        "routes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Route"
+          },
+          "default": {},
+          "propertyNames": {
+            "$ref": "#/$defs/RouteId"
+          },
+          "title": "Routes",
+          "type": "object"
+        },
+        "rows": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PathRow"
+          },
+          "default": {},
+          "propertyNames": {
+            "$ref": "#/$defs/SpotId"
+          },
+          "title": "Rows",
+          "type": "object"
+        },
+        "source_hash": {
+          "default": "",
+          "title": "Source Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "counts"
+      ],
+      "title": "TransitionSpec",
+      "type": "object"
+    },
+    "TurnDirection": {
+      "description": "Names which way a facing turn goes.",
+      "enum": [
+        "shortest",
+        "clockwise",
+        "counterclockwise"
+      ],
+      "title": "TurnDirection",
+      "type": "string"
+    },
+    "Waypoint": {
+      "additionalProperties": false,
+      "description": "Holds a point a path passes through.\n\nAttributes:\n    x: Meters.\n    y: Meters.\n    at: Local count to pass the point; None keeps constant speed.",
+      "properties": {
+        "at": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "At"
+        },
+        "x": {
+          "$ref": "#/$defs/Meters"
+        },
+        "y": {
+          "$ref": "#/$defs/Meters"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "Waypoint",
+      "type": "object"
+    },
+    "Zone": {
+      "additionalProperties": false,
+      "description": "Holds an area with rules.\n\nAttributes:\n    id: Zone ID.\n    kind: What the area is for.\n    polygon: The area.\n    applies_to: Spots the rules apply to.\n    active: Global count windows when the zone applies; None means always.\n    note: Designer note.",
+      "properties": {
+        "active": {
+          "anyOf": [
+            {
+              "items": {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "$ref": "#/$defs/Count"
+                  },
+                  {
+                    "$ref": "#/$defs/Count"
+                  }
+                ],
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active"
+        },
+        "applies_to": {
+          "$ref": "#/$defs/SelectorField",
+          "default": "all"
+        },
+        "id": {
+          "$ref": "#/$defs/ZoneId"
+        },
+        "kind": {
+          "$ref": "#/$defs/ZoneKind"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "polygon": {
+          "$ref": "#/$defs/Region"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "polygon"
+      ],
+      "title": "Zone",
+      "type": "object"
+    },
+    "ZoneId": {
+      "type": "string"
+    },
+    "ZoneKind": {
+      "description": "Names the kinds of rule-bearing area.",
+      "enum": [
+        "restricted",
+        "pit",
+        "wings",
+        "staging",
+        "audience",
+        "safety",
+        "custom"
+      ],
+      "title": "ZoneKind",
+      "type": "string"
+    }
+  },
+  "$id": "showpy.show.v1",
+  "additionalProperties": false,
+  "description": "Holds a whole show.\n\nTransitions are stored sparsely: a consecutive pair without a stored spec moves every\nspot straight over the destination set's counts.\n\nAttributes:\n    id: Show ID.\n    title: Display title.\n    pack: Domain pack key; empty when no pack applies.\n    sheet: The 2D design surface.\n    coordinates: How positions are labeled; display only.\n    notes: Design notes.\n    cast: Groups and spots.\n    timeline: Show clock.\n    sets: Sets in show order.\n    forms: Form ID to form, across every set.\n    transitions: Stored path instructions for consecutive set pairs.\n    facing_overrides: Facings forced over global count ranges.\n    zones: Show-specific zones, on top of the sheet's.\n    dependencies: Sheet reference (without version) to pinned version.\n    pins: Designer locks with their reasons.\n    revision: Storage revision this show was loaded at.",
+  "properties": {
+    "cast": {
+      "$ref": "#/$defs/Cast",
+      "default": {
+        "groups": {},
+        "label_scheme": {
+          "pad": 0,
+          "prefixes": {},
+          "start": 1
+        },
+        "selections": {},
+        "spots": []
+      }
+    },
+    "coordinates": {
+      "$ref": "#/$defs/CoordinateSystem",
+      "default": {
+        "audience_side": "front",
+        "kind": "grid",
+        "labels": {},
+        "origin": [
+          0.0,
+          0.0
+        ],
+        "precision": 0.01,
+        "units": "m"
+      }
+    },
+    "dependencies": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {},
+      "title": "Dependencies",
+      "type": "object"
+    },
+    "facing_overrides": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/FacingOverride"
+      },
+      "title": "Facing Overrides",
+      "type": "array"
+    },
+    "forms": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Form"
+      },
+      "default": {},
+      "propertyNames": {
+        "$ref": "#/$defs/FormId"
+      },
+      "title": "Forms",
+      "type": "object"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "notes": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Note"
+      },
+      "title": "Notes",
+      "type": "array"
+    },
+    "pack": {
+      "default": "",
+      "title": "Pack",
+      "type": "string"
+    },
+    "pins": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Pin"
+      },
+      "title": "Pins",
+      "type": "array"
+    },
+    "revision": {
+      "default": "",
+      "title": "Revision",
+      "type": "string"
+    },
+    "sets": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Set"
+      },
+      "title": "Sets",
+      "type": "array"
+    },
+    "sheet": {
+      "$ref": "#/$defs/Sheet"
+    },
+    "timeline": {
+      "$ref": "#/$defs/Timeline"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "transitions": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/TransitionSpec"
+      },
+      "title": "Transitions",
+      "type": "array"
+    },
+    "zones": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Zone"
+      },
+      "title": "Zones",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "sheet",
+    "timeline"
+  ],
+  "title": "Show",
+  "type": "object"
+}

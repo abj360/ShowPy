@@ -92,3 +92,14 @@ random rows (delays, easing, waypoints, curves) now pass at 9 points per segment
 `stage.geo.measure` / `stage.geo.analysis`. `stage.geo` stays static geometry and never
 imports the engine. `PathEngine.speed` sums time-linear segment lengths, so speeds use exactly
 the motion the checker sees.
+
+## Addendum 2026-11-13: hotspot forecast
+
+The forecast under "What would change our mind" named `segments` as the likely hotspot. The
+upgrade audit measured otherwise: `min_gaps` dominates check time. One 16-count transition takes
+1.84 s at 100 spots, 8.18 s at 200 and 21.44 s at 300; the audit saw up to 90 s at 300 spots.
+`compile()` of the same transition takes 7 to 48 ms. `min_gaps` grows slightly faster than
+O(N²) because `_pair_gap` rebuilds both spots' segments for every pair. Analytic segments for
+straight moves would not remove that, so the lever is building each spot's segments once per
+transition and pruning far pairs before the exact check. The budget is under 1 s at 300 spots
+(`docs/upgrade-plan.md`, "Measured performance" and section 5.3).

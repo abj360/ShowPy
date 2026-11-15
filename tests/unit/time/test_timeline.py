@@ -2,12 +2,40 @@
 
 """
 test_timeline.py --- tests timeline construction, pure edits, lookups and JSON persistence
+
+Contains:
+    test_*(): one behavior of showpy.time.timeline each
+    test_regression_add_tempo_rejects_nan_count: rejects a tempo section at a NaN count
+    test_regression_add_hold_rejects_nan_seconds: rejects a hold of NaN seconds
+    test_regression_add_marker_rejects_nan_count: rejects a marker at a NaN count
+    test_regression_new_timeline_rejects_nan_total: rejects a NaN show length
+    test_regression_add_tempo_rejects_infinite_tempo: rejects an infinite counts-per-minute
+    test_regression_add_tempo_rejects_negative_ramp_target: rejects a ramp toward a negative tempo
+    test_regression_add_tempo_rejects_ramp_counts_without_target: rejects `ramp_counts` given
+        without `ramp_to`
+    test_regression_remove_tempo_at_zero_keeps_a_convertible_timeline: refuses to drop the count-0
+        tempo, or leaves a timeline that still converts
+    test_regression_duplicate_cue_order_is_rejected_or_ordered: rejects two cues with one order, or
+        starts them at different times
+    test_regression_set_sync_validates_the_offset: rejects an offset AudioTrack itself rejects;
+        model_copy skips that check
 """
 
-import pytest
+import math
+from typing import cast
 
-from stage.core.errors import SchemaError, TimelineError, TimeRangeError, UnknownRefError
-from stage.time.models import (
+import pytest
+from pydantic import ValidationError as PydanticValidationError
+
+from showpy.core.errors import (
+    SchemaError,
+    ShowPyError,
+    TimelineError,
+    TimeRangeError,
+    UnknownRefError,
+)
+from showpy.time.clock import count_to_seconds
+from showpy.time.models import (
     AudioTrack,
     Cue,
     Hold,
@@ -18,7 +46,7 @@ from stage.time.models import (
     Timeline,
     TimelineMode,
 )
-from stage.time.timeline import (
+from showpy.time.timeline import (
     add_cue,
     add_hold,
     add_marker,
@@ -39,6 +67,8 @@ from stage.time.timeline import (
     set_sync,
     to_json,
 )
+
+UNPARSEABLE_OFFSET = "soon"
 
 
 def _counts(cpm: float = 120.0) -> Timeline:
@@ -239,3 +269,110 @@ def test_from_json_rejects_bad_payload_with_schema_error() -> None:
     with pytest.raises(SchemaError) as info:
         from_json({"mode": "dance"})
     assert "mode" in str(info.value.context)
+
+
+REJECTED = (ShowPyError, PydanticValidationError)
+
+
+def _steady() -> Timeline:
+    return new_timeline(TimelineMode.COUNTS, 120.0)
+
+
+@pytest.mark.defect("UP-9.3-100")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-100")
+def test_regression_add_tempo_rejects_nan_count() -> None:
+    """Rejects a tempo section at a NaN count (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        add_tempo(_steady(), TempoSection(at_count=math.nan, counts_per_minute=90.0))
+
+
+@pytest.mark.defect("UP-9.3-101")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-101")
+def test_regression_add_hold_rejects_nan_seconds() -> None:
+    """Rejects a hold of NaN seconds (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        add_hold(_steady(), Hold(at_count=8.0, seconds=math.nan))
+
+
+@pytest.mark.defect("UP-9.3-102")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-102")
+def test_regression_add_marker_rejects_nan_count() -> None:
+    """Rejects a marker at a NaN count (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        add_marker(_steady(), Marker(label="hit", at_count=math.nan))
+
+
+@pytest.mark.defect("UP-9.3-103")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-103")
+def test_regression_new_timeline_rejects_nan_total() -> None:
+    """Rejects a NaN show length (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        new_timeline(TimelineMode.COUNTS, 120.0, total=math.nan)
+
+
+@pytest.mark.defect("UP-9.3-104")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-104")
+def test_regression_add_tempo_rejects_infinite_tempo() -> None:
+    """Rejects an infinite counts-per-minute (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        add_tempo(_steady(), TempoSection(at_count=8.0, counts_per_minute=math.inf))
+
+
+@pytest.mark.defect("UP-9.3-105")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-105")
+def test_regression_add_tempo_rejects_negative_ramp_target() -> None:
+    """Rejects a ramp toward a negative tempo (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        add_tempo(
+            _steady(),
+            TempoSection(at_count=8.0, counts_per_minute=90.0, ramp_to=-5.0, ramp_counts=4.0),
+        )
+
+
+@pytest.mark.defect("UP-9.3-106")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-106")
+def test_regression_add_tempo_rejects_ramp_counts_without_target() -> None:
+    """Rejects `ramp_counts` given without `ramp_to` (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        add_tempo(_steady(), TempoSection(at_count=8.0, counts_per_minute=90.0, ramp_counts=4.0))
+
+
+@pytest.mark.defect("UP-9.3-107")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-107")
+def test_regression_remove_tempo_at_zero_keeps_a_convertible_timeline() -> None:
+    """Refuses to drop the count-0 tempo, or leaves a timeline that still converts (audit 9.3)."""
+    try:
+        trimmed = remove_tempo(_steady(), 0.0)
+    except ShowPyError:
+        return
+    assert math.isfinite(count_to_seconds(trimmed, 4.0))
+
+
+@pytest.mark.defect("UP-9.3-108")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-108")
+def test_regression_duplicate_cue_order_is_rejected_or_ordered() -> None:
+    """Rejects two cues with one order, or starts them at different times (audit 9.3)."""
+    try:
+        timeline = Timeline(
+            mode=TimelineMode.CUES,
+            cues=(
+                Cue(label="a", order=1, estimated_seconds=2.0),
+                Cue(label="b", order=1, estimated_seconds=3.0),
+            ),
+        )
+        starts = {cue_to_seconds(timeline, label) for label in ("a", "b")}
+    except REJECTED:
+        return
+    assert len(starts) == 2
+
+
+@pytest.mark.defect("UP-4.4-02")
+@pytest.mark.xfail(strict=True, reason="UP-4.4-02")
+def test_regression_set_sync_validates_the_offset() -> None:
+    """Rejects an offset AudioTrack itself rejects; model_copy skips that check (audit 4.4).
+
+    The cast stands in for an untyped caller, such as JSON from an agent.
+    """
+    tl = attach_audio(_counts(), AudioTrack(file="a.wav", label="a"))
+    with pytest.raises(ShowPyError):
+        set_sync(tl, "a", cast(float, UNPARSEABLE_OFFSET))

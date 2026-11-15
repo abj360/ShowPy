@@ -8,8 +8,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from stage.core.errors import SchemaError
-from stage.notes.models import Anchor, Note
+from showpy.core.errors import SchemaError
+from showpy.notes.models import Anchor, Note
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 

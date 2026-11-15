@@ -7,14 +7,14 @@ Contains:
     opener_show(): builds the eight-trumpet, three-set golden show deterministically
 """
 
-from stage.cast.models import Cast, Group, Spot
-from stage.choreo.models import Placement, Set, TransitionSpec
-from stage.choreo.paths import curve_path, set_easing, stagger
-from stage.core.types import Points
-from stage.geo.shapes import arc, line
-from stage.geo.spacing import block, space_along
-from stage.show.models import Show
-from stage.time.models import TempoSection, Timeline, TimelineMode
+from showpy.cast.models import Cast, Group, Spot
+from showpy.choreo.models import Placement, Set, TransitionSpec
+from showpy.choreo.paths import curve_path, set_easing, stagger
+from showpy.core.types import Points
+from showpy.geo.shapes import arc, line
+from showpy.geo.spacing import block, space_along
+from showpy.show.models import Show
+from showpy.time.models import TempoSection, Timeline, TimelineMode
 from tests.fixtures.shows import field_sheet
 
 IDS = tuple(f"T{i}" for i in range(1, 9))

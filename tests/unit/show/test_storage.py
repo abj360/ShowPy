@@ -11,21 +11,21 @@ from pathlib import Path
 
 import pytest
 
-from stage.choreo.models import Form, PathRow, TransitionSpec
-from stage.core.errors import (
+from showpy.choreo.models import Form, PathRow, TransitionSpec
+from showpy.core.errors import (
     ConflictError,
     LockedError,
     SchemaError,
     StorageError,
     UnknownRefError,
 )
-from stage.notes.models import Anchor, Note
-from stage.show.documents import decode_show, dump_json, encode_show, split_path
-from stage.show.file_repository import FileRepository
-from stage.show.manage import add_set
-from stage.show.models import Pin, Show
-from stage.show.repositories import InMemoryAssetStore, InMemoryRepository
-from stage.show.storage import Repository, Workspace, load_show, open_workspace, save_show
+from showpy.notes.models import Anchor, Note
+from showpy.show.documents import decode_show, dump_json, encode_show, split_path
+from showpy.show.file_repository import FileRepository
+from showpy.show.manage import add_set
+from showpy.show.models import Pin, Show
+from showpy.show.repositories import InMemoryAssetStore, InMemoryRepository
+from showpy.show.storage import Repository, Workspace, load_show, open_workspace, save_show
 from tests.fixtures.shows import two_set_show
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)

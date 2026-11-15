@@ -2,15 +2,24 @@
 
 """
 test_routes.py --- tests show-aware path builders: routes, follow, counter-march, L-moves, rotation
+
+Contains:
+    test_regression_two_part_respects_locked_rows: raises LockedError for a locked row instead of
+        rewriting it
+    test_regression_make_route_with_single_vertex_raises_path_error: raises a PathError, not
+        IndexError, when the whole route is one point
+    test_regression_counter_march_with_no_members_raises_path_error: raises a PathError, not
+        IndexError, for an empty file
 """
 
 import math
 
 import pytest
 
-from stage.choreo.engine import PathEngine
-from stage.choreo.models import PathStyle, TransitionSpec
-from stage.choreo.routes import (
+from showpy.choreo.engine import PathEngine
+from showpy.choreo.models import PathStyle, TransitionSpec
+from showpy.choreo.paths import lock
+from showpy.choreo.routes import (
     counter_march,
     follow,
     follow_and_set_targets,
@@ -18,10 +27,12 @@ from stage.choreo.routes import (
     rotate_path,
     two_part,
 )
-from stage.core.errors import LockedError, PathError
-from stage.core.util import approx_equal
+from showpy.core.errors import LockedError, PathError
+from showpy.core.ids import format_tid
+from showpy.core.util import approx_equal
 from tests.fixtures.motion_shows import TID, with_targets
 from tests.fixtures.shows import two_set_show
+from tests.helpers import defect
 
 FILE = ["T4", "T3", "T2", "T1"]
 
@@ -94,3 +105,28 @@ def test_rotate_path_about_center() -> None:
     engine = PathEngine(show.model_copy(update={"transitions": (spec,)}))
     mid = engine.position("T1", 4.0)
     assert approx_equal(math.dist(mid, pivot), 3.0)
+
+
+@defect("UP-9.2-21")
+def test_regression_two_part_respects_locked_rows() -> None:
+    """Raises LockedError for a locked row instead of rewriting it (audit 9.2; P0 #13)."""
+    show = two_set_show()
+    locked = lock(show.transition(TID), ["T1"])
+    with pytest.raises(LockedError):
+        two_part(show, locked, ["T1"], "x_first")
+
+
+def test_regression_make_route_with_single_vertex_raises_path_error() -> None:
+    """Raises a PathError, not IndexError, when the whole route is one point (audit 9.2)."""
+    show = two_set_show()
+    start = show.set("1").get("T1").point
+    with pytest.raises(PathError) as raised:
+        make_route(show, TID, "T1", [start])
+    assert raised.value.context == {"leader": "T1"}
+
+
+def test_regression_counter_march_with_no_members_raises_path_error() -> None:
+    """Raises a PathError, not IndexError, for an empty file."""
+    with pytest.raises(PathError) as raised:
+        counter_march(two_set_show(), TID, [], turn_at=(6.0, 8.0))
+    assert raised.value.context == {"transition": format_tid(TID)}

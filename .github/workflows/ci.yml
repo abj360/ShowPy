@@ -5,33 +5,128 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
-    runs-on: ubuntu-24.04
+    name: check (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      UV_PYTHON: ${{ matrix.python }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+        python: ["3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.12.9"
-      - run: uv sync --locked
-      - uses: actions/setup-node@v4
+          enable-cache: true
+      - name: Check interpreter version
+        run: uv run --locked python -c "import sys; v='%d.%d'%sys.version_info[:2]; assert v=='${{ matrix.python }}', v; print(v)"
+      - run: uv run --locked nox -s tests
+
+  lint-types:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.12.9"
+          enable-cache: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "22"
-      - name: Lint
-        run: |
-          uv run ruff format --check . && uv run ruff check .
-          npx --yes prettier@3.6.2 --check "**/*.{md,yml,yaml,json}"
-      - name: Type-check
-        run: uv run mypy stage tests
-      - name: Test
-        run: uv run pytest
-      - name: Dependency scan
-        run: |
-          uv export --format requirements-txt --no-emit-project > requirements.txt
-          uv run pip-audit --strict --disable-pip --require-hashes -r requirements.txt
+      - run: uv sync --locked
+      - run: npm ci
+      - run: uv run nox -s lint types audit
+
+  hashseed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.12.9"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run nox -s hashseeds
+
+  slow:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      UV_PYTHON: "3.14"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.12.9"
+          enable-cache: true
+      - run: uv run --locked nox -s slow
+
+  lowest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      NOX_UV_NO_SYNC: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.12.9"
+          enable-cache: true
+      - run: uv sync --resolution lowest-direct
+      - run: uv run --no-sync nox -s tests
+
+  wheel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      UV_PYTHON: "3.14"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.12.9"
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run --locked nox -s wheel
 
   docker:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - run: docker compose -f docker/docker-compose.yml build
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: cp .env.example .env
+      - run: docker compose -f docker/docker-compose.yml up --build --exit-code-from showpy

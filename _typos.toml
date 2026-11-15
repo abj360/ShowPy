@@ -1,0 +1,17 @@
+# Commit hashes in CHANGELOG.md, numpy's NDArray and the truncated "alph" name in the changelog
+# check are not words.
+[default]
+extend-ignore-re = ["PNGs", "FlateDecode", "\\([0-9a-f]{7,40}\\)", "NDArray", "\"alph\""]
+
+# flate: the PDF Flate filter. unparseable: the spelling used in error-test names.
+[default.extend-words]
+flate = "flate"
+unparseable = "unparseable"
+
+[files]
+extend-exclude = [
+    "uv.lock",
+    "package-lock.json",
+    "*.pdf",
+    "tests/golden/fixtures",
+]

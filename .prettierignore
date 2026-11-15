@@ -1,5 +1,8 @@
-schemas/
+showpy/schemas/
 tests/golden/fixtures/
 uv.lock
 .venv/
 .claude/
+node_modules/
+.nox/
+.superpowers/

@@ -8,12 +8,19 @@ import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from stage.choreo.engine import PathEngine
-from stage.choreo.models import Easing, PathRow, PathStyle, Waypoint
-from stage.core.util import approx_equal
+from showpy.choreo.engine import PathEngine
+from showpy.choreo.models import Easing, EasingKind, PathRow, PathStyle, Waypoint
+from showpy.core.util import approx_equal
 from tests.fixtures.motion_shows import TID, with_rows
 
-EASINGS = ["linear", "ease_in", "ease_out", "ease_in_out", "hold_then_burst", "steps"]
+EASINGS: list[EasingKind] = [
+    "linear",
+    "ease_in",
+    "ease_out",
+    "ease_in_out",
+    "hold_then_burst",
+    "steps",
+]
 TOL = 0.01
 
 

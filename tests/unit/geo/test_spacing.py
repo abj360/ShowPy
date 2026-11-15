@@ -2,7 +2,48 @@
 
 """
 test_spacing.py --- tests even spacing along curves, area fills, blocks, rings and scatter
+
+Contains:
+    test_regression_scatter_rejects_negative_min_gap: rejects a negative gap instead of looping
+        forever
+    test_regression_fill_caps_the_lattice_size: rejects a 100-million-point fill instead of building
+        the lattice
+    test_regression_space_by_interval_caps_the_point_count: rejects a 100-million-point spacing
+        instead of allocating it
+    test_regression_space_by_interval_closed_curve_has_no_seam_duplicate: places L/10 spots on a
+        circle without a coincident first and last spot
+    test_regression_space_with_gaps_closed_curve_does_not_repeat_start: keeps the last spot off the
+        first spot on a closed curve
+    test_regression_space_along_closed_curve_wraps_from_a_later_start: spaces spots evenly around a
+        circle even when start > 0
+    test_regression_space_along_rejects_end_before_start: rejects end < start instead of silently
+        reversing the spots
+    test_regression_space_along_rejects_end_past_length: rejects end > L instead of stacking spots
+        on the clamped end
+    test_regression_scatter_reaches_every_polygon_component: seeds each component of a MultiPolygon
+        so the second square gets spots
+    test_regression_scatter_fills_thin_regions: places 20 spots 1 m apart along a 100 x 0.05 m strip
+        that fill() fills with 101
+    test_regression_scatter_does_not_crowd_the_edge: keeps at most 8 of 20 spots within 1 m of the
+        edge of a 20 m square
+    test_regression_space_by_interval_rejects_unknown_align: raises UnknownRefError for
+        align="middle" instead of leaking KeyError
+    test_regression_block_rejects_unknown_anchor: raises UnknownRefError for anchor="middle" instead
+        of leaking KeyError
+    test_regression_space_proportional_rejects_zero_length_curves: raises SpacingError for all-zero
+        lengths instead of leaking ZeroDivisionError
+    test_regression_fill_rejects_zero_interval: raises SpacingError for interval=0 instead of
+        leaking ZeroDivisionError
+    test_regression_scatter_rejects_zero_min_gap: raises SpacingError for min_gap=0 instead of
+        leaking ZeroDivisionError
+    test_regression_scatter_rejects_fractional_seed: raises a ShowPyError for seed=1.5 instead of
+        leaking TypeError
+    test_regression_fill_rejects_empty_area: raises a ShowPyError for an empty area instead of
+        leaking GEOSException
 """
+
+import math
+import sys
 
 import numpy as np
 import pytest
@@ -10,11 +51,12 @@ import shapely
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from stage.core.errors import SpacingError
-from stage.core.util import approx_equal
-from stage.geo.regions import region
-from stage.geo.shapes import arc, circle, line, rect
-from stage.geo.spacing import (
+from showpy.core.errors import ShowPyError, SpacingError, UnknownRefError
+from showpy.core.util import approx_equal
+from showpy.geo.curves import Segment
+from showpy.geo.regions import region
+from showpy.geo.shapes import arc, circle, line, rect
+from showpy.geo.spacing import (
     block,
     concentric,
     distribute_on_points,
@@ -26,6 +68,27 @@ from stage.geo.spacing import (
     space_proportional,
     space_with_gaps,
 )
+from tests.helpers import capped_address_space, fails_after
+
+SIGNAL_TIMEOUT_S = 5
+SQUARE_SIDE_M = 10.0
+TINY_FILL_INTERVAL_M = 1e-3
+TINY_LINE_INTERVAL_M = 1e-5
+LONG_LINE_LENGTH_M = 1000.0
+SEAM_SPOTS = 10
+GAP_EXTRA_M = 0.5
+RING_SPOTS = 4
+RING_START_M = 1.0
+CLEAR_SEPARATION_M = 1e-3
+SECOND_SQUARE_SHIFT_M = 100.0
+SECOND_SQUARE_SPOTS = 10
+STRIP_LENGTH_M = 100.0
+STRIP_WIDTH_M = 0.05
+FIELD_SIDE_M = 20.0
+EDGE_BAND_M = 1.0
+MAX_EDGE_SPOTS = 8
+WIDE_SPOTS = 20
+FRACTIONAL_SEED = 1.5
 
 LINE = line((0.0, 0.0), (10.0, 0.0))
 
@@ -170,3 +233,166 @@ def test_distribute_on_points_random_is_seeded() -> None:
     candidates = np.arange(20, dtype=float).reshape(10, 2)
     a = distribute_on_points(candidates, 3, method="random", seed=1)
     assert np.array_equal(a, distribute_on_points(candidates, 3, method="random", seed=1))
+
+
+def _square(origin_x: float = 0.0, side: float = SQUARE_SIDE_M) -> shapely.Polygon:
+    return region([(origin_x, 0), (origin_x + side, 0), (origin_x + side, side), (origin_x, side)])
+
+
+@pytest.mark.defect("UP-9.1-03")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-03")
+@fails_after(SIGNAL_TIMEOUT_S)
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+def test_regression_scatter_rejects_negative_min_gap() -> None:
+    """Rejects a negative gap instead of looping forever (audit 9.1; P0 #7)."""
+    with pytest.raises(SpacingError):
+        scatter(_square(), 5, -1.0)
+
+
+@pytest.mark.defect("UP-9.1-07")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-07")
+@fails_after(SIGNAL_TIMEOUT_S)
+@pytest.mark.skipif(sys.platform != "linux", reason="needs signal timeout and RLIMIT_AS")
+def test_regression_fill_caps_the_lattice_size() -> None:
+    """Rejects a 100-million-point fill instead of building the lattice (audit 9.1; P0 #8)."""
+    with capped_address_space(), pytest.raises(SpacingError):
+        fill(_square(), TINY_FILL_INTERVAL_M, anchor=(0.0, 0.0))
+
+
+@pytest.mark.defect("UP-9.1-08")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-08")
+@fails_after(SIGNAL_TIMEOUT_S)
+@pytest.mark.skipif(sys.platform != "linux", reason="needs signal timeout and RLIMIT_AS")
+def test_regression_space_by_interval_caps_the_point_count() -> None:
+    """Rejects a 100-million-point spacing instead of allocating it (audit 9.1; P0 #8)."""
+    tiny_interval_line = line((0.0, 0.0), (LONG_LINE_LENGTH_M, 0.0))
+    with capped_address_space(), pytest.raises(SpacingError):
+        space_by_interval(tiny_interval_line, TINY_LINE_INTERVAL_M)
+
+
+@pytest.mark.defect("UP-9.1-26")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-26")
+def test_regression_space_by_interval_closed_curve_has_no_seam_duplicate() -> None:
+    """Places L/10 spots on a circle without a coincident first and last spot (audit 9.1)."""
+    ring = circle((0.0, 0.0), 1.0)
+    pts = space_by_interval(ring, ring.length() / SEAM_SPOTS)
+    assert float(np.linalg.norm(pts[0] - pts[-1])) > CLEAR_SEPARATION_M
+
+
+@pytest.mark.defect("UP-9.1-27")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-27")
+def test_regression_space_with_gaps_closed_curve_does_not_repeat_start() -> None:
+    """Keeps the last spot off the first spot on a closed curve (audit 9.1)."""
+    pts = space_with_gaps(circle((0.0, 0.0), 1.0), 5, [(0, GAP_EXTRA_M)])
+    assert float(np.linalg.norm(pts[0] - pts[-1])) > CLEAR_SEPARATION_M
+
+
+@pytest.mark.defect("UP-9.1-29")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-29")
+def test_regression_space_along_closed_curve_wraps_from_a_later_start() -> None:
+    """Spaces spots evenly around a circle even when start > 0 (audit 9.1)."""
+    pts = space_along(circle((0.0, 0.0), 1.0), RING_SPOTS, start=RING_START_M)
+    gaps = np.linalg.norm(pts - np.roll(pts, -1, axis=0), axis=1)
+    assert approx_equal(gaps, [math.sqrt(2.0)] * RING_SPOTS, tol=1e-9)
+
+
+@pytest.mark.defect("UP-9.1-30")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-30")
+def test_regression_space_along_rejects_end_before_start() -> None:
+    """Rejects end < start instead of silently reversing the spots (audit 9.1)."""
+    with pytest.raises(SpacingError):
+        space_along(LINE, 3, start=8.0, end=2.0)
+
+
+@pytest.mark.defect("UP-9.1-31")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-31")
+def test_regression_space_along_rejects_end_past_length() -> None:
+    """Rejects end > L instead of stacking spots on the clamped end (audit 9.1)."""
+    with pytest.raises(SpacingError):
+        space_along(LINE, 3, end=20.0)
+
+
+@pytest.mark.defect("UP-9.1-32")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-32")
+def test_regression_scatter_reaches_every_polygon_component() -> None:
+    """Seeds each component of a MultiPolygon so the second square gets spots (audit 9.1)."""
+    two_squares = shapely.MultiPolygon([_square(), _square(SECOND_SQUARE_SHIFT_M)])
+    pts = scatter(two_squares, SECOND_SQUARE_SPOTS, 1.0)
+    in_second = int((pts[:, 0] > SQUARE_SIDE_M).sum())
+    assert in_second >= SECOND_SQUARE_SPOTS // 4
+
+
+@pytest.mark.defect("UP-9.1-33")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-33")
+def test_regression_scatter_fills_thin_regions() -> None:
+    """Places 20 spots 1 m apart along a 100 x 0.05 m strip that fill() fills with 101."""
+    strip = region(
+        [(0, 0), (STRIP_LENGTH_M, 0), (STRIP_LENGTH_M, STRIP_WIDTH_M), (0, STRIP_WIDTH_M)]
+    )
+    assert len(scatter(strip, WIDE_SPOTS, 1.0)) == WIDE_SPOTS
+
+
+@pytest.mark.defect("UP-9.1-34")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-34")
+def test_regression_scatter_does_not_crowd_the_edge() -> None:
+    """Keeps at most 8 of 20 spots within 1 m of the edge of a 20 m square (audit 9.1)."""
+    pts = scatter(_square(side=FIELD_SIDE_M), WIDE_SPOTS, 1.0)
+    near_edge = (pts.min(axis=1) < EDGE_BAND_M) | (pts.max(axis=1) > FIELD_SIDE_M - EDGE_BAND_M)
+    assert int(near_edge.sum()) <= MAX_EDGE_SPOTS
+
+
+@pytest.mark.defect("UP-9.1-53")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-53")
+def test_regression_space_by_interval_rejects_unknown_align() -> None:
+    """Raises UnknownRefError for align="middle" instead of leaking KeyError (audit 9.1)."""
+    with pytest.raises(UnknownRefError):
+        space_by_interval(LINE, 1.0, align="middle")  # type: ignore[arg-type]
+
+
+@pytest.mark.defect("UP-9.1-54")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-54")
+def test_regression_block_rejects_unknown_anchor() -> None:
+    """Raises UnknownRefError for anchor="middle" instead of leaking KeyError (audit 9.1)."""
+    with pytest.raises(UnknownRefError):
+        block((0.0, 0.0), 2, 2, 1.0, anchor="middle")  # type: ignore[arg-type]
+
+
+@pytest.mark.defect("UP-9.1-57")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-57")
+def test_regression_space_proportional_rejects_zero_length_curves() -> None:
+    """Raises SpacingError for all-zero lengths instead of leaking ZeroDivisionError."""
+    dots = [Segment(a=(0.0, 0.0), b=(0.0, 0.0)), Segment(a=(1.0, 1.0), b=(1.0, 1.0))]
+    with pytest.raises(SpacingError):
+        space_proportional(dots, 4)
+
+
+@pytest.mark.defect("UP-9.1-58")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-58")
+def test_regression_fill_rejects_zero_interval() -> None:
+    """Raises SpacingError for interval=0 instead of leaking ZeroDivisionError (audit 9.1)."""
+    with pytest.raises(SpacingError):
+        fill(_square(), 0.0)
+
+
+@pytest.mark.defect("UP-9.1-59")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-59")
+def test_regression_scatter_rejects_zero_min_gap() -> None:
+    """Raises SpacingError for min_gap=0 instead of leaking ZeroDivisionError (audit 9.1)."""
+    with pytest.raises(SpacingError):
+        scatter(_square(), 3, 0.0)
+
+
+@pytest.mark.defect("UP-9.1-61")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-61")
+def test_regression_scatter_rejects_fractional_seed() -> None:
+    """Raises a ShowPyError for seed=1.5 instead of leaking TypeError (audit 9.1)."""
+    with pytest.raises(ShowPyError):
+        scatter(_square(), 3, 1.0, seed=FRACTIONAL_SEED)  # type: ignore[arg-type]
+
+
+@pytest.mark.defect("UP-9.1-62")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-62")
+def test_regression_fill_rejects_empty_area() -> None:
+    """Raises a ShowPyError for an empty area instead of leaking GEOSException (audit 9.1)."""
+    with pytest.raises(ShowPyError):
+        fill(shapely.Polygon(), 1.0)

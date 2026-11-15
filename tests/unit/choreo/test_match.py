@@ -2,6 +2,13 @@
 
 """
 test_match.py --- tests spot-to-slot matching: objectives, constraints, penalties and errors
+
+Contains:
+    test_regression_match_by_order_rejects_duplicate_spots: rejects a repeated spot instead of
+        collapsing it to one
+    test_regression_match_wraps_a_failing_cost_fn: raises MatchError when a cost_fn callback raises
+    test_regression_match_names_the_nan_start: raises SchemaError, or a MatchError naming the NaN
+        start, not an empty one
 """
 
 import math
@@ -9,22 +16,16 @@ import math
 import numpy as np
 import pytest
 
-from stage.choreo.forms import line_form
-from stage.choreo.match import bottleneck_value, cost_matrix, match, match_by_order
-from stage.choreo.models import MatchOptions, Placement, Set
-from stage.core.errors import MatchError, SchemaError, UnknownRefError
-from stage.core.types import Point
-from stage.core.util import approx_equal
+from showpy.choreo.forms import line_form
+from showpy.choreo.match import bottleneck_value, cost_matrix, match, match_by_order
+from showpy.choreo.models import MatchOptions
+from showpy.core.errors import MatchError, SchemaError, ShowPyError, UnknownRefError
+from showpy.core.ids import SpotId
+from showpy.core.types import Point
+from showpy.core.util import approx_equal
+from tests.helpers import make_facing_set
 
 TOL = 1e-9
-
-
-def _set(*rows: tuple[str, float, float, float]) -> Set:
-    return Set(
-        id="1",
-        counts=0.0,
-        placements=tuple(Placement(entity=e, x=x, y=y, facing=f) for e, x, y, f in rows),
-    )
 
 
 def test_bottleneck_then_sum_minimizes_largest_move_first() -> None:
@@ -83,7 +84,7 @@ def test_result_does_not_depend_on_input_order() -> None:
 
 
 def test_from_set_uses_on_field_spots_and_facings() -> None:
-    src = _set(("A", 0.0, 0.0, 0.0), ("B", 5.0, 0.0, 0.0))
+    src = make_facing_set(("A", 0.0, 0.0, 0.0), ("B", 5.0, 0.0, 0.0))
     off = src.with_placements({"B": {"on_field": False}})
     result = match(off, [(0.0, 1.0), (5.0, 1.0)])
     assert result.entities == ("A",)
@@ -139,7 +140,7 @@ def test_infeasible_names_only_the_constraint_whose_removal_helps() -> None:
 
 
 def test_no_backward_forbids_travel_against_facing() -> None:
-    src = _set(("A", 0.0, 5.0, 0.0), ("B", 1.0, 5.0, 0.0))
+    src = make_facing_set(("A", 0.0, 5.0, 0.0), ("B", 1.0, 5.0, 0.0))
     slots = [(0.0, 3.0), (1.0, 7.0), (5.0, 3.0)]
     free = match(src, slots, options=MatchOptions(objective="sum"))
     assert free.assignment["B"] == 1
@@ -148,13 +149,13 @@ def test_no_backward_forbids_travel_against_facing() -> None:
 
 
 def test_no_backward_penalty_adds_meters() -> None:
-    src = _set(("A", 0.0, 5.0, 0.0))
+    src = make_facing_set(("A", 0.0, 5.0, 0.0))
     cost = cost_matrix(src, [(0.0, 6.0), (0.0, 4.0)], MatchOptions(no_backward=2.5))
     assert approx_equal(cost, [[3.5, 1.0]], TOL)
 
 
 def test_backward_and_turn_weights() -> None:
-    src = _set(("A", 0.0, 5.0, 0.0))
+    src = make_facing_set(("A", 0.0, 5.0, 0.0))
     back = cost_matrix(src, [(0.0, 7.0)], MatchOptions(weights={"backward": 1.0}))
     assert approx_equal(back, [[4.0]], TOL)
     turn = cost_matrix(src, [(2.0, 5.0)], MatchOptions(weights={"turn": 0.01}))
@@ -236,7 +237,7 @@ def test_preserve_order_infeasible_names_order() -> None:
 
 
 def test_cost_fn_adds_cost_and_infinity_forbids() -> None:
-    def avoid_slot_zero(entity: str, slot: int, start: Point, target: Point) -> float:
+    def avoid_slot_zero(_entity: str, slot: int, _start: Point, _target: Point) -> float:
         return math.inf if slot == 0 else 0.0
 
     result = match(
@@ -252,7 +253,7 @@ def test_cost_fn_rejects_negative_costs() -> None:
 
 
 def test_crossing_weight_untangles_a_cheaper_crossing() -> None:
-    def favour_crossing(entity: str, slot: int, start: Point, target: Point) -> float:
+    def favour_crossing(entity: str, slot: int, _start: Point, _target: Point) -> float:
         return 1.0 if (entity, slot) in {("0", 1), ("1", 0)} else 0.0
 
     starts = [(0.0, 0.0), (2.0, 0.0)]
@@ -292,10 +293,44 @@ def test_empty_problem_returns_empty_result() -> None:
 
 
 def test_match_by_order_reports_distances_from_set() -> None:
-    src = _set(("A", 0.0, 0.0, 0.0), ("B", 2.0, 0.0, 0.0))
+    src = make_facing_set(("A", 0.0, 0.0, 0.0), ("B", 2.0, 0.0, 0.0))
     form = line_form("f", [], (0, 3), (2, 3), n=2)
     result = match_by_order(["B", "A"], form, src)
     assert result.assignment == {"B": 0, "A": 1}
     assert approx_equal(result.max_distance, math.hypot(2, 3), TOL)
     with pytest.raises(MatchError):
         match_by_order(["A", "B", "C"], form)
+
+
+PAIR_STARTS = [(0.0, 0.0), (1.0, 0.0)]
+PAIR_SLOTS = [(0.0, 1.0), (1.0, 1.0)]
+
+
+def _failing_cost(entity: SpotId, slot: int, _start: Point, _target: Point) -> float:
+    raise RuntimeError(f"cost of {entity} for slot {slot} failed")
+
+
+@pytest.mark.defect("UP-9.6-25")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-25")
+def test_regression_match_by_order_rejects_duplicate_spots() -> None:
+    """Rejects a repeated spot instead of collapsing it to one (audit 9.6)."""
+    with pytest.raises(ShowPyError):
+        match_by_order(["A", "A"], np.asarray(PAIR_SLOTS))
+
+
+@pytest.mark.defect("UP-9.6-55")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-55")
+def test_regression_match_wraps_a_failing_cost_fn() -> None:
+    """Raises MatchError when a cost_fn callback raises (audit 9.6)."""
+    with pytest.raises(MatchError):
+        match(PAIR_STARTS, PAIR_SLOTS, options=MatchOptions(cost_fn=_failing_cost))
+
+
+@pytest.mark.defect("UP-9.6-61")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-61")
+def test_regression_match_names_the_nan_start() -> None:
+    """Raises SchemaError, or a MatchError naming the NaN start, not an empty one (audit 9.6)."""
+    with pytest.raises((SchemaError, MatchError)) as excinfo:
+        match([(math.nan, 0.0), (1.0, 0.0)], PAIR_SLOTS)
+    if isinstance(excinfo.value, MatchError):
+        assert "nan" in str(excinfo.value).lower()

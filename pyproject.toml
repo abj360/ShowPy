@@ -1,59 +1,125 @@
 [project]
-name = "stage"
-version = "0.1.0"
-description = "Choreography library behind the Eight show canvas: sheets, spots, sets, forms and motion."
+name = "ShowPy"
+dynamic = ["version"]
+description = "Choreography library: sheets, spots, sets, forms and motion."
 readme = "README.md"
 license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
 dependencies = [
-    "imageio==2.38.1",
-    "imageio-ffmpeg==0.8.1",
-    "numpy==2.5.4",
-    "pandas==3.1.1",
-    "pillow==13.0.0",
-    "pydantic==2.14.3",
-    "scipy==1.18.1",
-    "segno==1.6.6",
-    "shapely==2.2.0",
+    "imageio-ffmpeg>=0.8.1",
+    "numpy>=2.5.4",
+    "pandas>=3.1.1",
+    "pillow>=13.0.0",
+    "pydantic>=2.14.3",
+    "pydantic-core>=2.50.4",
+    "scipy>=1.18.1",
+    "segno>=1.6.6",
+    "shapely>=2.2.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/abj360/ShowPy"
+Repository = "https://github.com/abj360/ShowPy"
+Issues = "https://github.com/abj360/ShowPy/issues"
+
 [build-system]
-requires = ["hatchling==1.27.0"]
+requires = ["hatchling==1.27.0", "hatch-vcs==0.5.0"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "docs/",
+    "tests/",
+    ".claude/",
+    "node_modules/",
+    "CLAUDE.md",
+    ".github/",
+    "benchmarks/",
+    "typings/",
+    "package.json",
+    "package-lock.json",
+    ".superpowers/",
+    "_typos.toml",
+    "cliff.toml",
+    "noxfile.py",
+]
+
 [tool.hatch.build.targets.wheel]
-packages = ["stage"]
+packages = ["showpy"]
 
 [dependency-groups]
 dev = [
+    "deptry==0.25.1",
+    "git-cliff==2.10.1",
     "hypothesis==6.170.15",
+    "jsonschema==4.26.0",
     "mypy==2.4.1",
+    "nox==2026.10.20",
     "pandas-stubs==3.1.0.261029",
     "pip-audit==2.10.1",
     "pre-commit==4.7.0",
+    "pyright==1.1.414",
     "pytest==9.2.0",
+    "pytest-benchmark==5.3.1",
+    "pytest-cov==7.1.0",
+    "pytest-timeout==2.4.0",
+    "pytest-xdist==3.8.0",
     "ruff==0.17.4",
     "scipy-stubs==1.18.1.1",
+    "types-jsonschema==4.26.0.20261006",
     "types-shapely==2.1.0.20261030",
 ]
 
+# The study guide is frozen and still imports the old `stage` name.
 [tool.ruff]
+extend-exclude = ["docs/guide"]
 line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
 allowed-confusables = ["–"]
-select = ["E", "W", "F", "I", "B", "UP", "N", "SIM", "RUF", "C4", "PT", "D"]
+select = [
+    "E", "W", "F", "I", "B", "UP", "N", "SIM", "RUF", "C4", "PT", "D",
+    "EXE", "PIE", "PGH", "RSE", "ISC", "LOG", "DTZ", "PTH", "FURB", "ARG", "PERF", "C90", "TID",
+]
 ignore = ["D105", "D107", "D104", "D200", "D212", "D401", "D413", "D415"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.mccabe]
+max-complexity = 12
+
+# Library code and its doctests never import the test folder (HANDOFF trap, 2026-11-11).
+[tool.ruff.lint.flake8-tidy-imports]
+banned-module-level-imports = ["tests"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"tests".msg = "showpy never imports the test folder; use showpy.examples"
+
 # RUF012: pydantic copies field defaults per instance, so {} defaults are safe.
 [tool.ruff.lint.per-file-ignores]
-"stage/**/models.py" = ["RUF012"]
-"stage/**/*_models.py" = ["RUF012"]
-"tests/**" = ["D"]
+"showpy/**/models.py" = ["RUF012"]
+"showpy/**/*_models.py" = ["RUF012"]
+"tests/**" = ["D", "EXE001", "TID251", "TID253"]
+"scripts/**" = ["EXE001"]
+# Test motions implement MotionFn, whose parameter names are part of the protocol.
+"tests/unit/choreo/test_{avoid,engine_compile,motion,motion_stats}.py" = ["ARG001"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -63,14 +129,41 @@ strict = true
 python_version = "3.14"
 plugins = ["pydantic.mypy"]
 explicit_package_bases = true
+mypy_path = "typings"
 
 [[tool.mypy.overrides]]
-module = ["segno", "segno.*", "imageio", "imageio.*", "imageio_ffmpeg"]
+module = ["segno", "segno.*", "imageio", "imageio.*"]
 ignore_missing_imports = true
 
+[tool.pyright]
+include = ["showpy", "tests", "scripts"]
+typeCheckingMode = "basic"
+pythonVersion = "3.12"
+stubPath = "typings"
+
 [tool.pytest.ini_options]
-testpaths = ["tests", "stage"]
+testpaths = ["tests", "showpy"]
 pythonpath = ["."]
-addopts = "--doctest-modules -q --strict-markers --import-mode=importlib"
-markers = ["golden: replays real shows against reviewed fixtures"]
+addopts = "--doctest-modules -q --strict-markers --import-mode=importlib -m 'not bench and not slow'"
+markers = [
+    "golden: replays real shows against reviewed fixtures",
+    "bench: performance budget benchmarks; run with nox -s bench",
+    "defect(id): open audited defect; must be xfail(strict=True) with reason equal to the ID",
+    "slow: generated-show properties and the large golden; run with nox -s slow",
+]
 filterwarnings = ["error"]
+# A test still running after this many seconds dumps every thread's stack, so a CI hang
+# names its test before the job is cancelled.
+faulthandler_timeout = 60
+
+[tool.deptry]
+extend_exclude = ["docs"]
+known_first_party = ["showpy"]
+
+# Pillow installs the PIL module.
+[tool.deptry.package_module_name_map]
+pillow = "PIL"
+
+# noxfile.py is dev tooling, not shipped code.
+[tool.deptry.per_rule_ignores]
+DEP004 = ["nox"]

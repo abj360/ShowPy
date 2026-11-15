@@ -15,8 +15,8 @@ Contains:
 from hypothesis import given
 from hypothesis import strategies as st
 
-from stage.cast.models import Cast, Group, Spot
-from stage.cast.select import select
+from showpy.cast.models import Cast, Group, Spot
+from showpy.cast.select import select
 
 GROUPS = {"trumpets": "T", "tubas": "TB", "flags": "F"}
 TAGS = ("soloist", "leader")

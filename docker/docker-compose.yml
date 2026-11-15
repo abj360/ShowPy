@@ -1,8 +1,9 @@
-# No ports: stage is a library; the service runs the full check suite.
+# No ports: showpy is a library; the service runs the test suite against the installed wheel.
 services:
-  stage:
+  showpy:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    env_file: ../.env
-    command: ["sh", "-c", "uv run ruff check . && uv run mypy stage tests && uv run pytest"]
+    env_file:
+      - path: ../.env
+        required: false

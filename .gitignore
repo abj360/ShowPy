@@ -11,3 +11,6 @@ build/
 *.egg-info/
 .env
 .claude/
+node_modules/
+.nox/
+.benchmarks/

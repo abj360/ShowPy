@@ -6,7 +6,7 @@ test_facing.py --- tests set facing tools and timed facing overrides
 
 import pytest
 
-from stage.choreo.facing import (
+from showpy.choreo.facing import (
     add_facing_override,
     face_along,
     face_audience,
@@ -16,11 +16,11 @@ from stage.choreo.facing import (
     face_point,
     turn,
 )
-from stage.choreo.models import FacingMode, FacingOverride, Form
-from stage.core.errors import GeometryError, LockedError, TimeRangeError, UnknownRefError
-from stage.core.util import approx_equal
-from stage.geo.shapes import circle, line
-from stage.show.models import Show
+from showpy.choreo.models import FacingMode, FacingOverride, Form
+from showpy.core.errors import GeometryError, LockedError, TimeRangeError, UnknownRefError
+from showpy.core.util import approx_equal
+from showpy.geo.shapes import circle, line
+from showpy.show.models import Show
 from tests.fixtures.motion_shows import with_targets
 from tests.fixtures.shows import two_set_show
 

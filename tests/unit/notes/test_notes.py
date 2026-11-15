@@ -5,17 +5,26 @@ test_notes.py --- tests adding, editing, finding and drafting design notes
 
 Contains:
     FakeDrafter: records calls and returns canned drafts, or raises a canned error
-    test_*(): one behavior of stage.notes.notes each
+    test_*(): one behavior of showpy.notes.notes each
+    test_regression_degenerate_area_anchor_never_leaks_shapely_errors: rejects a two-point area
+        anchor, or finds it without a Shapely ValueError
+    test_regression_accept_draft_accepts_a_hidden_draft_already_in_the_show: makes a hidden draft
+        that is already in the show visible
+    test_regression_accept_draft_rejects_blank_text: rejects a draft whose text is blank, as
+        add_note does
+    test_regression_note_rejects_a_naive_datetime: rejects a created_at without a time zone, which
+        cannot be compared
 """
 
 from datetime import UTC, datetime
 
 import pytest
+from pydantic import ValidationError as PydanticValidationError
 
-from stage.core.errors import GeometryError, SchemaError, UnknownRefError
-from stage.core.types import Region
-from stage.notes.models import Anchor, Note
-from stage.notes.notes import (
+from showpy.core.errors import GeometryError, SchemaError, ShowPyError, UnknownRefError
+from showpy.core.types import Region
+from showpy.notes.models import Anchor, Note
+from showpy.notes.notes import (
     accept_draft,
     add_note,
     edit_note,
@@ -23,7 +32,7 @@ from stage.notes.notes import (
     notes_near,
     remove_note,
 )
-from stage.show.models import Show
+from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 
 AT = datetime(2026, 11, 11, 9, 30, tzinfo=UTC)
@@ -145,3 +154,49 @@ def test_accept_draft_adds_it_visible() -> None:
     assert show.notes[-1].visible
     assert show.notes[-1].author == "agent"
     assert [n.id for n in notes_for(show, "2")] == ["draft-1"]
+
+
+REJECTED = (ShowPyError, PydanticValidationError)
+NAIVE_TIME = datetime(2026, 11, 11)  # noqa: DTZ001 - the tests check it is rejected
+
+
+@pytest.mark.defect("UP-9.3-122")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-122")
+def test_regression_degenerate_area_anchor_never_leaks_shapely_errors() -> None:
+    """Rejects a two-point area anchor, or finds it without a Shapely ValueError (audit 9.3)."""
+    try:
+        anchor = Anchor.on_area(Region(exterior=((0.0, 0.0), (1.0, 1.0))))
+        show = add_note(two_set_show(), "area", anchor, "n1", AT, "pat")
+        notes_near(show, (0.0, 0.0), 1.0)
+    except REJECTED:
+        return
+
+
+@pytest.mark.defect("UP-9.3-123")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-123")
+def test_regression_accept_draft_accepts_a_hidden_draft_already_in_the_show() -> None:
+    """Makes a hidden draft that is already in the show visible (audit 9.3)."""
+    draft = Note(
+        id="d1", text="go", anchor=Anchor.on_set("1"), author="agent", created_at=AT, visible=False
+    )
+    hidden = two_set_show().model_copy(update={"notes": (draft,)})
+    assert accept_draft(hidden, draft).notes[0].visible
+
+
+@pytest.mark.defect("UP-9.3-124")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-124")
+def test_regression_accept_draft_rejects_blank_text() -> None:
+    """Rejects a draft whose text is blank, as add_note does (audit 9.3)."""
+    draft = Note(
+        id="d1", text="   ", anchor=Anchor.on_set("1"), author="agent", created_at=AT, visible=False
+    )
+    with pytest.raises(SchemaError):
+        accept_draft(two_set_show(), draft)
+
+
+@pytest.mark.defect("UP-9.3-125")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-125")
+def test_regression_note_rejects_a_naive_datetime() -> None:
+    """Rejects a created_at without a time zone, which cannot be compared (audit 9.3)."""
+    with pytest.raises(REJECTED):
+        Note(id="n1", text="go", anchor=Anchor.on_set("1"), author="pat", created_at=NAIVE_TIME)

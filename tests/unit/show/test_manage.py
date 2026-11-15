@@ -2,25 +2,65 @@
 
 """
 test_manage.py --- tests show creation, set insertion, removal, retiming, renumbering, indexing
+
+Contains:
+    test_regression_renumber_then_save_keeps_scripts_with_their_sets: moves each set's build script
+        with the set across renumber and save
+    test_regression_remove_set_leaves_no_note_on_the_removed_set: drops or reports notes anchored to
+        a removed set
+    test_regression_remove_set_leaves_no_note_on_a_vanished_transition: drops or reports notes
+        anchored to a transition that no longer exists
+    test_regression_remove_last_set_with_merge_counts_keeps_total_time: keeps total counts, or
+        refuses, when merging the last set's counts
+    test_regression_add_set_rejects_two_placements_for_one_spot: rejects two placements for one spot
+        instead of keeping the last
+    test_regression_insert_subset_after_a_names_a_subset_of_a: names the subset after set "A" with
+        "A" as its base, not "B"
+    test_regression_form_keys_equal_form_ids_across_a_round_trip: rejects a form key that differs
+        from its ID, or keeps keys stable
+    test_regression_frozen_show_forms_cannot_be_mutated: refuses `show.forms[...] = form` on a
+        frozen show
+    test_regression_frozen_show_is_hashable: hashes a frozen show
+    test_regression_stale_save_conflict_message_is_bounded: caps the ConflictError text after many
+        landed revisions
+    test_regression_set_counts_rescale_shifts_facing_overrides_and_zone_windows: shifts later facing
+        overrides and zone windows when a set is rescaled
+    test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair: drops or reports a
+        transition pin on a vanished pair
+    test_regression_error_messages_truncate_echoed_input: echoes at most about 80 characters of a
+        10,000-character scheme name
 """
 
+import sys
 from datetime import UTC, datetime
 
 import pytest
 
-from stage.cast.models import Cast, Group, Spot
-from stage.choreo.models import Form, PathRow, Placement, Route, TransitionSpec, Waypoint
-from stage.core.errors import (
+from showpy.cast.models import Cast, Group, Spot
+from showpy.choreo.models import (
+    FacingMode,
+    FacingOverride,
+    Form,
+    PathRow,
+    Placement,
+    Route,
+    TransitionSpec,
+    Waypoint,
+)
+from showpy.core.errors import (
+    ConflictError,
     LockedError,
     PathError,
     SchemaError,
+    ShowPyError,
     TimeRangeError,
     UnknownRefError,
     VersionError,
 )
-from stage.core.util import approx_equal
-from stage.notes.models import Anchor, Note
-from stage.show.manage import (
+from showpy.core.util import approx_equal
+from showpy.notes.models import Anchor, Note
+from showpy.show.documents import decode_show, encode_show
+from showpy.show.manage import (
     add_set,
     index,
     insert_subset,
@@ -33,9 +73,13 @@ from stage.show.manage import (
     transitions,
     upgrade_dependency,
 )
-from stage.show.models import Pin, Show
-from stage.time.models import Hold, MeasureSetting
+from showpy.show.models import Pin, Show
+from showpy.show.repositories import InMemoryRepository
+from showpy.show.storage import load_show, open_workspace, save_show
+from showpy.show.validate import validate_show
+from showpy.time.models import Hold, MeasureSetting
 from tests.fixtures.shows import field_sheet, two_set_show
+from tests.helpers import fails_after
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 TOL = 1e-9
@@ -289,3 +333,195 @@ def test_new_show_with_empty_cast() -> None:
     assert new_show("s", "t", field_sheet(), two_set_show().timeline, spot_cast).sets[
         0
     ].entity_ids() == ("G1",)
+
+
+SCRIPT_OLD_ONE_A = b"# script of 1A\n"
+SCRIPT_OLD_TWO = b"# script of 2\n"
+REVISION_FLOOD = 1000
+MAX_CONFLICT_MESSAGE_CHARS = 4096
+LATER_WINDOW = (9.0, 11.0)
+SHIFT_COUNTS = 8.0
+LONG_INPUT_CHARS = 10_000
+# Audit 4.2 truncates echoed input to about 80 characters; the message frame needs the rest.
+MAX_ECHOING_MESSAGE_CHARS = 200
+
+
+@pytest.mark.defect("UP-9.7-01")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-01")
+def test_regression_renumber_then_save_keeps_scripts_with_their_sets() -> None:
+    """Moves each set's build script with the set across renumber and save (audit 9.7 #1; P0 #1)."""
+    repo = InMemoryRepository()
+    ws = open_workspace(repo, "s", "designer")
+    inserted, _ = insert_subset(two_set_show(), "1", 2.0)
+    save_show(ws, inserted, AT)
+    ws.commit(
+        {"/sets/1A/set.py": SCRIPT_OLD_ONE_A, "/sets/2/set.py": SCRIPT_OLD_TWO},
+        at=AT,
+        message="scripts",
+    )
+    renumbered, mapping = renumber(load_show(ws))
+    save_show(ws, renumbered, AT, "renumber")
+    assert mapping == {"1": "1", "1A": "2", "2": "3"}
+    assert repo.read("s", "/sets/2/set.py") == SCRIPT_OLD_ONE_A
+    assert repo.read("s", "/sets/3/set.py") == SCRIPT_OLD_TWO
+
+
+@pytest.mark.defect("UP-9.7-51")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-51")
+def test_regression_remove_set_leaves_no_note_on_the_removed_set() -> None:
+    """Drops or reports notes anchored to a removed set (audit 9.7 sets defects)."""
+    note = Note(id="n", text="t", anchor=Anchor.on_set("2"), author="d", created_at=AT)
+    show = _three_set_show().model_copy(update={"notes": (note,)})
+    edited = remove_set(show, "2")
+    still_anchored = [n for n in edited.notes if n.anchor.set_id == "2"]
+    assert not still_anchored or not validate_show(edited).ok
+
+
+@pytest.mark.defect("UP-9.7-52")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-52")
+def test_regression_remove_set_leaves_no_note_on_a_vanished_transition() -> None:
+    """Drops or reports notes anchored to a transition that no longer exists (audit 9.7)."""
+    note = Note(
+        id="n", text="t", anchor=Anchor.on_transition(("2", "3")), author="d", created_at=AT
+    )
+    show = _three_set_show().model_copy(update={"notes": (note,)})
+    edited = remove_set(show, "2")
+    stale = [n for n in edited.notes if n.anchor.tid not in (None, *edited.transition_ids())]
+    assert not stale or not validate_show(edited).ok
+
+
+@pytest.mark.defect("UP-9.7-53")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-53")
+def test_regression_remove_last_set_with_merge_counts_keeps_total_time() -> None:
+    """Keeps total counts, or refuses, when merging the last set's counts (audit 9.7)."""
+    show = _three_set_show()
+    total = sum(s.counts for s in show.sets)
+    try:
+        edited = remove_set(show, "3", merge_counts=True)
+    except ShowPyError:
+        return
+    assert approx_equal(sum(s.counts for s in edited.sets), total, 1e-9)
+
+
+@pytest.mark.defect("UP-9.7-54")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-54")
+def test_regression_add_set_rejects_two_placements_for_one_spot() -> None:
+    """Rejects two placements for one spot instead of keeping the last (audit 9.7)."""
+    rows = (Placement(entity="T1", x=1.0, y=1.0), Placement(entity="T1", x=2.0, y=2.0))
+    with pytest.raises(SchemaError):
+        add_set(two_set_show(), "3", 4.0, placements=rows)
+
+
+@pytest.mark.defect("UP-9.7-55")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-55")
+def test_regression_insert_subset_after_a_names_a_subset_of_a() -> None:
+    """Names the subset after set "A" with "A" as its base, not "B" (audit 9.7 sets defects)."""
+    base = two_set_show()
+    renamed = base.model_copy(
+        update={"sets": (base.sets[0].model_copy(update={"id": "A"}), base.sets[1])}
+    )
+    try:
+        _, new_id = insert_subset(renamed, "A", 3.0)
+    except SchemaError:
+        return
+    assert new_id.startswith("A")
+
+
+@pytest.mark.defect("UP-9.7-56")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-56")
+def test_regression_form_keys_equal_form_ids_across_a_round_trip() -> None:
+    """Rejects a form key that differs from its ID, or keeps keys stable (audit 9.7)."""
+    form = Form(id="f1", set="2", kind="line", geometry={}, members=("T1",))
+    try:
+        show = two_set_show().model_copy(update={"forms": {"zz": form}})
+        Show.model_validate(show.model_dump())
+    except ShowPyError:
+        return
+    assert set(decode_show(encode_show(show)).forms) == set(show.forms)
+
+
+@pytest.mark.defect("UP-9.7-57")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-57")
+def test_regression_frozen_show_forms_cannot_be_mutated() -> None:
+    """Refuses `show.forms[...] = form` on a frozen show (audit 9.7 sets defects)."""
+    form = Form(id="zz", set="2", kind="line", geometry={}, members=("T1",))
+    show = two_set_show()
+    with pytest.raises(TypeError):
+        show.forms["zz"] = form
+
+
+@pytest.mark.defect("UP-9.7-58")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-58")
+def test_regression_frozen_show_is_hashable() -> None:
+    """Hashes a frozen show (audit 9.7 sets defects)."""
+    assert isinstance(hash(two_set_show()), int)
+
+
+@pytest.mark.defect("UP-9.7-59")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-59")
+@fails_after(5)
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+def test_regression_stale_save_conflict_message_is_bounded() -> None:
+    """Caps the ConflictError text after many landed revisions (audit 9.7 sets defects)."""
+    repo = InMemoryRepository()
+    first = repo.put_show(
+        "s", two_set_show(), expected_revision="", actor="designer", at=AT, message="create"
+    ).id
+    head = first
+    for n in range(REVISION_FLOOD):
+        head = repo.transaction(
+            "s",
+            {"/renders/a.txt": str(n).encode()},
+            expected_revision=head,
+            actor="agent",
+            at=AT,
+            message=f"render {n}",
+        ).id
+    with pytest.raises(ConflictError) as excinfo:
+        repo.transaction(
+            "s",
+            {"/renders/b.txt": b"late"},
+            expected_revision=first,
+            actor="agent",
+            at=AT,
+            message="stale",
+        )
+    assert len(str(excinfo.value)) <= MAX_CONFLICT_MESSAGE_CHARS
+
+
+@pytest.mark.defect("UP-9.7-60")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-60")
+def test_regression_set_counts_rescale_shifts_facing_overrides_and_zone_windows() -> None:
+    """Shifts later facing overrides and zone windows when a set is rescaled (audit 9.7)."""
+    show = _three_set_show()
+    override = FacingOverride(
+        entities="all", mode=FacingMode.TO_TARGET, start=LATER_WINDOW[0], end=LATER_WINDOW[1]
+    )
+    zone = show.sheet.zones[0].model_copy(update={"id": "late", "active": (LATER_WINDOW,)})
+    show = show.model_copy(update={"facing_overrides": (override,), "zones": (zone,)})
+    edited = set_counts(show, "2", 16.0, rescale=True)
+    shifted = (LATER_WINDOW[0] + SHIFT_COUNTS, LATER_WINDOW[1] + SHIFT_COUNTS)
+    assert (edited.facing_overrides[0].start, edited.facing_overrides[0].end) == shifted
+    assert edited.zones[0].active == (shifted,)
+
+
+@pytest.mark.defect("UP-9.7-85")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-85")
+def test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair() -> None:
+    """Drops or reports a transition pin on a vanished pair (audit 9.7 sets).
+
+    The pin ID `2->3` is non-canonical (canonical is `2→3`), so this overlaps the
+    normalization defects 45 and 67; canonical pins are already dropped.
+    """
+    show = _three_set_show().model_copy(update={"pins": (Pin(target="transition", id="2->3"),)})
+    edited = remove_set(show, "2", force=True)
+    assert not edited.pins or not validate_show(edited).ok
+
+
+@pytest.mark.defect("UP-4.2-01")
+@pytest.mark.xfail(strict=True, reason="UP-4.2-01")
+def test_regression_error_messages_truncate_echoed_input() -> None:
+    """Echoes at most about 80 characters of a 10,000-character scheme name (audit 4.2)."""
+    with pytest.raises(UnknownRefError) as excinfo:
+        renumber(two_set_show(), "x" * LONG_INPUT_CHARS)
+    assert len(excinfo.value.message) <= MAX_ECHOING_MESSAGE_CHARS

@@ -2,12 +2,21 @@
 
 """
 test_match_models.py --- tests MatchOptions validation, MatchResult alignment and FormFnInfo
+
+Contains:
+    test_regression_match_options_rejects_nan_weights: rejects a NaN penalty weight
+    test_regression_match_options_rejects_negative_no_backward: rejects a negative no_backward
+        penalty
+    test_regression_match_options_rejects_bool_slot_index: rejects True as a pinned slot index
+        instead of pinning to slot 1
 """
+
+import math
 
 import pytest
 
-from stage.choreo.models import FormFnInfo, MatchOptions, MatchResult
-from stage.core.errors import SchemaError
+from showpy.choreo.models import FormFnInfo, MatchOptions, MatchResult
+from showpy.core.errors import SchemaError
 
 
 def test_match_options_defaults_follow_the_reference() -> None:
@@ -47,3 +56,30 @@ def test_match_result_round_trips_and_checks_alignment() -> None:
 
 def test_form_fn_info_holds_name_and_summary() -> None:
     assert FormFnInfo(name="spiral", summary="Spaces spots").name == "spiral"
+
+
+NEGATIVE_PENALTY_M = -1.0
+
+
+@pytest.mark.defect("UP-9.6-35")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-35")
+def test_regression_match_options_rejects_nan_weights() -> None:
+    """Rejects a NaN penalty weight (audit 9.6)."""
+    with pytest.raises(SchemaError):
+        MatchOptions(weights={"turn": math.nan})
+
+
+@pytest.mark.defect("UP-9.6-37")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-37")
+def test_regression_match_options_rejects_negative_no_backward() -> None:
+    """Rejects a negative no_backward penalty (audit 9.6)."""
+    with pytest.raises(SchemaError):
+        MatchOptions(no_backward=NEGATIVE_PENALTY_M)
+
+
+@pytest.mark.defect("UP-9.6-50")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-50")
+def test_regression_match_options_rejects_bool_slot_index() -> None:
+    """Rejects True as a pinned slot index instead of pinning to slot 1 (audit 9.6)."""
+    with pytest.raises(SchemaError):
+        MatchOptions(pinned={"A": True})

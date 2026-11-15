@@ -8,12 +8,12 @@ import numpy as np
 from hypothesis import given
 from hypothesis import strategies as st
 
-from stage.core.units import convert
-from stage.core.util import approx_equal
-from stage.geo.affine import rotation_matrix, scale_matrix, transform_points, translation_matrix
-from stage.sheet.coords import from_coords, set_coordinates, to_coords
-from stage.sheet.models import CoordinateKind, CoordinateSystem
-from stage.sheet.replace import similarity_fit
+from showpy.core.units import convert
+from showpy.core.util import approx_equal
+from showpy.geo.affine import rotation_matrix, scale_matrix, transform_points, translation_matrix
+from showpy.sheet.coords import from_coords, set_coordinates, to_coords
+from showpy.sheet.models import CoordinateKind, CoordinateSystem
+from showpy.sheet.replace import similarity_fit
 from tests.fixtures.shows import two_set_show
 
 FIT_TOL = 1e-6

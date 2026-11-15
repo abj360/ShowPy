@@ -2,23 +2,35 @@
 
 """
 test_clock.py --- tests tempo lookup, count/seconds conversion with ramps and holds, and labels
+
+Contains:
+    test_*(): one behavior of showpy.time.clock each
+    test_regression_describe_count_rounds_tenths_half_away_from_zero: rounds tenths of a second half
+        away from zero, so 7.25 s prints as 0:07.3
+    test_regression_unsorted_tempo_sections_are_sorted_or_rejected: converts counts as if sections
+        were sorted, or rejects them
+    test_regression_seconds_to_count_rejects_nan: rejects NaN seconds instead of returning 0.0
+    test_regression_tempo_at_rejects_nan: rejects a NaN count with a ShowPyError, not an IndexError
+    test_regression_describe_count_prints_large_counts_in_full: prints 1234567.5 rather than
+        `1.23457e+06`
 """
 
 import math
 
 import pytest
+from pydantic import ValidationError as PydanticValidationError
 
-from stage.core.errors import TimelineError, TimeRangeError
-from stage.core.util import approx_equal
-from stage.time.clock import (
+from showpy.core.errors import ShowPyError, TimelineError, TimeRangeError
+from showpy.core.util import approx_equal
+from showpy.time.clock import (
     count_to_seconds,
     describe_count,
     seconds_per_count,
     seconds_to_count,
     tempo_at,
 )
-from stage.time.models import Hold, MeasureSetting, TempoSection, Timeline, TimelineMode
-from stage.time.timeline import add_hold, add_tempo, new_timeline, set_measures
+from showpy.time.models import Hold, MeasureSetting, TempoSection, Timeline, TimelineMode
+from showpy.time.timeline import add_hold, add_tempo, new_timeline, set_measures
 
 TOL = 1e-9
 LN2 = math.log(2.0)
@@ -193,8 +205,60 @@ def test_describe_count_rounds_ramp_tempo() -> None:
 
 
 def test_regression_describe_count_rounds_tenths_half_away_from_zero() -> None:
-    from stage.time.clock import describe_count
-    from stage.time.timeline import new_timeline
+    """Rounds tenths of a second half away from zero, so 7.25 s prints as 0:07.3."""
+    from showpy.time.clock import describe_count
+    from showpy.time.timeline import new_timeline
 
     timeline = new_timeline(TimelineMode.COUNTS, counts_per_minute=240.0)
     assert "0:07.3" in describe_count(timeline, 29.0)
+
+
+REJECTED = (ShowPyError, PydanticValidationError)
+SIX_SECONDS = 6.0
+BIG_COUNT = 1234567.5
+
+
+def _steady(cpm: float = 120.0) -> Timeline:
+    return new_timeline(TimelineMode.COUNTS, cpm)
+
+
+@pytest.mark.defect("UP-9.3-95")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-95")
+def test_regression_unsorted_tempo_sections_are_sorted_or_rejected() -> None:
+    """Converts counts as if sections were sorted, or rejects them (audit 9.3)."""
+    try:
+        timeline = Timeline(
+            mode=TimelineMode.COUNTS,
+            tempos=(
+                TempoSection(at_count=0.0, counts_per_minute=120.0),
+                TempoSection(at_count=16.0, counts_per_minute=60.0),
+                TempoSection(at_count=8.0, counts_per_minute=240.0),
+            ),
+        )
+        seconds = count_to_seconds(timeline, 16.0)
+    except REJECTED:
+        return
+    assert approx_equal(seconds, SIX_SECONDS, tol=1e-9)
+
+
+@pytest.mark.defect("UP-9.3-96")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-96")
+def test_regression_seconds_to_count_rejects_nan() -> None:
+    """Rejects NaN seconds instead of returning 0.0 (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        seconds_to_count(_steady(), math.nan)
+
+
+@pytest.mark.defect("UP-9.3-97")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-97")
+def test_regression_tempo_at_rejects_nan() -> None:
+    """Rejects a NaN count with a ShowPyError, not an IndexError (audit 9.3)."""
+    with pytest.raises(ShowPyError):
+        tempo_at(_steady(), math.nan)
+
+
+@pytest.mark.defect("UP-9.3-98")
+@pytest.mark.xfail(strict=True, reason="UP-9.3-98")
+def test_regression_describe_count_prints_large_counts_in_full() -> None:
+    """Prints 1234567.5 rather than `1.23457e+06` (audit 9.3)."""
+    assert "count 1234567.5," in describe_count(_steady(), BIG_COUNT)

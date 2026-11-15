@@ -2,21 +2,36 @@
 
 """
 test_sections.py --- tests splitting shows into movements and joining them back
+
+Contains:
+    test_regression_join_after_split_restores_the_show: restores the show exactly when its two split
+        sections are joined again
+    test_regression_join_after_split_keeps_a_zone_window_across_the_split: rejoins a zone window cut
+        by a split into the original window
+    test_regression_join_after_split_keeps_markers_that_repeat_a_label: keeps a marker whose label
+        repeats at another count across split and join
+    test_regression_join_after_split_keeps_one_facing_override_across_the_split: rejoins a facing
+        override cut by a split into one override
+    test_regression_split_does_not_leave_a_ramp_longer_than_its_section: clips a tempo ramp to the
+        length of the section it ends up in
+    test_regression_split_drops_audio_whose_section_starts_after_the_half_ends: keeps an audio track
+        out of a half that ends before the track's section
+    test_regression_split_puts_a_cue_in_one_half_only: keeps cue c1 in a single half of a split
 """
 
 from datetime import UTC, datetime
 
 import pytest
 
-from stage.choreo.models import FacingMode, FacingOverride, Form, TransitionSpec
-from stage.core.errors import SchemaError, TimelineError
-from stage.core.util import approx_equal
-from stage.notes.models import Anchor, Note
-from stage.show.manage import add_set, index, renumber
-from stage.show.models import Pin, Show
-from stage.show.sections import join_sections, split_section
-from stage.time.clock import count_to_seconds
-from stage.time.models import AudioTrack, Hold, Marker, MeasureSetting, TempoSection
+from showpy.choreo.models import FacingMode, FacingOverride, Form, TransitionSpec
+from showpy.core.errors import SchemaError, TimelineError
+from showpy.core.util import approx_equal
+from showpy.notes.models import Anchor, Note
+from showpy.show.manage import add_set, index, renumber
+from showpy.show.models import Pin, Show
+from showpy.show.sections import join_sections, split_section
+from showpy.time.clock import count_to_seconds
+from showpy.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting, TempoSection
 from tests.fixtures.shows import two_set_show
 from tests.golden.opener import opener_show
 
@@ -130,5 +145,89 @@ def test_join_disjoint_sections_and_clashes() -> None:
 
 
 def test_regression_join_after_split_restores_the_show() -> None:
+    """Restores the show exactly when its two split sections are joined again."""
     show = opener_show()
     assert join_sections(*split_section(show, "2")) == show
+
+
+SPLIT_SET = "3"
+WINDOW_ACROSS_SPLIT = (4.0, 16.0)
+RAMP_COUNTS = 16.0
+
+
+def _round_trip(show: Show) -> Show:
+    return join_sections(*split_section(show, SPLIT_SET))
+
+
+def _three_sets_with(**timeline_fields: object) -> Show:
+    show = add_set(add_set(two_set_show(), "3", 4.0), "4", 8.0)
+    return show.model_copy(update={"timeline": show.timeline.model_copy(update=timeline_fields)})
+
+
+@pytest.mark.defect("UP-9.7-47")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-47")
+def test_regression_join_after_split_keeps_a_zone_window_across_the_split() -> None:
+    """Rejoins a zone window cut by a split into the original window (audit 9.7 sections)."""
+    show = _three_sets_with()
+    zone = show.sheet.zones[0].model_copy(update={"id": "late", "active": (WINDOW_ACROSS_SPLIT,)})
+    show = show.model_copy(update={"zones": (zone,)})
+    assert _round_trip(show).zones[0].active == (WINDOW_ACROSS_SPLIT,)
+
+
+@pytest.mark.defect("UP-9.7-48")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-48")
+def test_regression_join_after_split_keeps_markers_that_repeat_a_label() -> None:
+    """Keeps a marker whose label repeats at another count across split and join (audit 9.7)."""
+    markers = (Marker(label="hit", at_count=4.0), Marker(label="hit", at_count=14.0))
+    show = _three_sets_with(markers=markers)
+    assert _round_trip(show).timeline.markers == markers
+
+
+@pytest.mark.defect("UP-9.7-49")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-49")
+def test_regression_join_after_split_keeps_one_facing_override_across_the_split() -> None:
+    """Rejoins a facing override cut by a split into one override (audit 9.7 sections)."""
+    show = _three_sets_with()
+    override = FacingOverride(
+        entities=("T1",),
+        mode=FacingMode.FIXED,
+        value=90.0,
+        start=WINDOW_ACROSS_SPLIT[0],
+        end=WINDOW_ACROSS_SPLIT[1],
+    )
+    show = show.model_copy(update={"facing_overrides": (override,)})
+    assert _round_trip(show).facing_overrides == (override,)
+
+
+@pytest.mark.defect("UP-9.7-50")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-50")
+def test_regression_split_does_not_leave_a_ramp_longer_than_its_section() -> None:
+    """Clips a tempo ramp to the length of the section it ends up in (audit 9.7 sections)."""
+    ramp = TempoSection(
+        at_count=0.0, counts_per_minute=120.0, ramp_to=60.0, ramp_counts=RAMP_COUNTS
+    )
+    first, _ = split_section(_three_sets_with(tempos=(ramp,)), SPLIT_SET)
+    longest = max(t.at_count + (t.ramp_counts or 0.0) for t in first.timeline.tempos)
+    assert longest <= index(first).total_counts + TOL
+
+
+@pytest.mark.defect("UP-9.7-86")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-86")
+def test_regression_split_drops_audio_whose_section_starts_after_the_half_ends() -> None:
+    """Keeps an audio track out of a half that ends before the track's section (audit 9.7)."""
+    late_track = AudioTrack(file="late.wav", label="late", section=(14.0, 20.0))
+    first, _ = split_section(_three_sets_with(audio=(late_track,)), SPLIT_SET)
+    length = index(first).total_counts
+    stranded = [t.label for t in first.timeline.audio if t.section and t.section[0] >= length]
+    assert stranded == []
+
+
+@pytest.mark.defect("UP-9.7-87")
+@pytest.mark.xfail(strict=True, reason="UP-9.7-87")
+def test_regression_split_puts_a_cue_in_one_half_only() -> None:
+    """Keeps cue c1 in a single half of a split (audit 9.7 sections)."""
+    cue = Cue(label="c1", order=1, estimated_seconds=2.0)
+    first, second = split_section(_three_sets_with(cues=(cue,)), SPLIT_SET)
+    in_first = "c1" in {c.label for c in first.timeline.cues}
+    in_second = "c1" in {c.label for c in second.timeline.cues}
+    assert in_first != in_second
