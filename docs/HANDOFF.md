@@ -3,13 +3,13 @@
 Audience: the next agent or engineer continuing this repository. Scope: state of work, what is
 left, and the traps already hit.
 
-Last updated: 2026-11-13
+Last updated: 2026-11-15
 
 ## Where things stand
 
 | Item          | Value                                                                                                     |
 | ------------- | --------------------------------------------------------------------------------------------------------- |
-| Repository    | `abj360/ShowPy` (private); split into its own repository on 2026-11-12 with full history                  |
+| Repository    | `abj360/ShowPy` (public since 2026-11-15); split into its own repository on 2026-11-12 with full history  |
 | Gates         | `nox -s tests`: about 1,500 passed, `Ledger: 528 open` (2026-11-13); ruff, mypy `--strict`, pyright clean |
 | CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main                 |
 | Defect ledger | `Ledger: 528 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-13)                   |
@@ -55,8 +55,7 @@ Use `uv` only, never pip.
 The library is being upgraded in phases; `docs/upgrade-plan.md` holds the program and
 `docs/superpowers/plans/2026-11-13-phase-0-safety-net.md` the Phase 0 plan.
 
-**Phase 0, safety net: implemented 2026-11-13** on branch `chore/phase-0-safety-net`; the
-branch review, the merge and the `v0.2.0` tag are still to come.
+**Phase 0, safety net: merged and tagged `v0.2.0` on 2026-11-15** (PR #3, merge commit `89d676f`).
 
 1. One task runner: `noxfile.py` drives every local, hook and CI gate.
 2. CI matrix: Python 3.12 to 3.14 on Linux, macOS and Windows, plus hash seeds, slow tests, the

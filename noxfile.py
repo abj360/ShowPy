@@ -44,7 +44,8 @@ print("Found showpy", showpy.__version__)
 """
 
 BENCH_PATH = "tests/bench"
-BENCH_BASELINE = "benchmarks/baseline-2026-11-13.json"
+BENCH_BASELINE = "tests/bench/baseline-2026-11-13.json"
+BENCH_STORAGE = "tests/bench/.results"
 BENCH_REGRESSION = "min:20%"
 GATED_TIER = "M"
 # The baseline comes from another machine than most runs, so pytest-benchmark always warns.
@@ -202,7 +203,7 @@ def bench(session: nox.Session) -> None:
     larger tiers on shared runners are too noisy to block on, so they only report.
     The baseline is machine-specific: re-record it on the runner class before any hosted gate.
     """
-    args = ["pytest", "-m", "bench", BENCH_PATH]
+    args = ["pytest", "-m", "bench", BENCH_PATH, f"--benchmark-storage={BENCH_STORAGE}"]
     if _tier(session.posargs) == GATED_TIER:
         args += [
             f"--benchmark-compare={BENCH_BASELINE}",

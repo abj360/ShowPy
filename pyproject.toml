@@ -49,7 +49,6 @@ exclude = [
     "node_modules/",
     "CLAUDE.md",
     ".github/",
-    "benchmarks/",
     "typings/",
     "package.json",
     "package-lock.json",
@@ -85,9 +84,7 @@ dev = [
     "types-shapely==2.1.0.20261030",
 ]
 
-# The study guide is frozen and still imports the old `stage` name.
 [tool.ruff]
-extend-exclude = ["docs/guide"]
 line-length = 100
 target-version = "py312"
 
@@ -157,7 +154,6 @@ filterwarnings = ["error"]
 faulthandler_timeout = 60
 
 [tool.deptry]
-extend_exclude = ["docs"]
 known_first_party = ["showpy"]
 
 # Pillow installs the PIL module.

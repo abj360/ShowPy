@@ -5,7 +5,7 @@ test_budgets.py --- one benchmark per performance budget row of docs/upgrade-pla
 
 Sizes come from --tier (default M). Each row records its budget in extra_info; the budgets are
 targets, not gates. `nox -s bench` fails only on a >20% regression of the min time against
-benchmarks/baseline-2026-11-13.json, and only at tier M. Heavy rows use fixed rounds
+tests/bench/baseline-2026-11-13.json, and only at tier M. Heavy rows use fixed rounds
 (HEAVY_ROUNDS) so the M run stays short.
 """
 
