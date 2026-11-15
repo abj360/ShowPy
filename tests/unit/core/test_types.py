@@ -15,6 +15,8 @@ Contains:
     test_regression_replace_revalidates: rejects a negative Set.counts passed to replace()
     test_replace_returns_a_new_model_with_the_change: keeps the original and applies the change
     test_replace_rejects_an_unknown_field: raises SchemaError for a field the model lacks
+    test_regression_constrained_number_types_reject_out_of_range: rejects zero, negative, NaN and
+        infinity in a positive field and the finite-only base aliases in a plain TypeAdapter
 """
 
 import math
@@ -22,12 +24,27 @@ from collections.abc import Callable
 
 import pytest
 import shapely
+from pydantic import TypeAdapter
 from pydantic import ValidationError as PydanticValidationError
 
 from showpy.cast.models import Shape
 from showpy.choreo.models import Set, Waypoint
 from showpy.core.errors import SchemaError, ShowPyError
-from showpy.core.types import Box2, FrozenModel, Region
+from showpy.core.types import (
+    Box2,
+    Count,
+    CountsPerMinute,
+    Degrees,
+    FrozenModel,
+    Meters,
+    NonNegCount,
+    NonNegFinite,
+    NonNegSeconds,
+    PositiveFinite,
+    PositiveMeters,
+    Region,
+    Seconds,
+)
 from showpy.sheet.models import Landmark
 from showpy.time.models import TempoSection
 
@@ -149,3 +166,49 @@ def test_replace_returns_a_new_model_with_the_change() -> None:
 def test_replace_rejects_an_unknown_field() -> None:
     with pytest.raises(SchemaError):
         Box2(min=(0.0, 0.0), max=(1.0, 1.0)).replace(centre=(0.0, 0.0))
+
+
+class _Constrained(FrozenModel):
+    positive_meters: PositiveMeters = 1.0
+    positive_finite: PositiveFinite = 1.0
+    non_neg_finite: NonNegFinite = 0.0
+    non_neg_count: NonNegCount = 0.0
+    non_neg_seconds: NonNegSeconds = 0.0
+    tempo: CountsPerMinute = 120.0
+
+
+@pytest.mark.parametrize("field", ["positive_meters", "positive_finite"])
+@pytest.mark.parametrize("bad", [0.0, -1.0, math.inf, math.nan])
+def test_regression_constrained_number_types_reject_out_of_range(field: str, bad: float) -> None:
+    with pytest.raises(SchemaError):
+        _Constrained(**{field: bad})
+
+
+@pytest.mark.parametrize("field", ["non_neg_finite", "non_neg_count", "non_neg_seconds", "tempo"])
+@pytest.mark.parametrize("bad", [math.inf, math.nan])
+def test_non_negative_types_reject_non_finite(field: str, bad: float) -> None:
+    with pytest.raises(SchemaError):
+        _Constrained(**{field: bad})
+
+
+def test_non_negative_types_accept_zero() -> None:
+    assert _Constrained(non_neg_finite=0.0, non_neg_count=0.0, non_neg_seconds=0.0)
+
+
+@pytest.mark.parametrize(
+    "adapter",
+    [TypeAdapter(Meters), TypeAdapter(Seconds), TypeAdapter(Count), TypeAdapter(Degrees)],
+)
+@pytest.mark.parametrize("bad", [math.inf, -math.inf, math.nan])
+def test_base_number_aliases_reject_non_finite_outside_models(
+    adapter: TypeAdapter[float], bad: float
+) -> None:
+    with pytest.raises(PydanticValidationError):
+        adapter.validate_python(bad)
+    assert adapter.validate_python(-3.5) == -3.5
+
+
+@pytest.mark.parametrize("field", ["non_neg_finite", "non_neg_count", "non_neg_seconds"])
+def test_non_negative_types_reject_negative(field: str) -> None:
+    with pytest.raises(SchemaError):
+        _Constrained(**{field: -0.5})

@@ -2,6 +2,10 @@
 types.py --- shared type aliases plus the JSON-safe Box2, Box3 and Region models
 
 Contains:
+    Finite, NonNegFinite, PositiveFinite: constrain a float to be finite, non-negative or positive
+    Meters, Seconds, Count, Degrees: finite floats in the library's one unit system
+    NonNegCount, NonNegSeconds, PositiveMeters: range-limited unit aliases
+    CountsPerMinute: finite tempo alias (positivity stays a timeline rule until Phase 2)
     FrozenModel: provides the immutable, strict base that raises SchemaError on bad data
     FrozenModel.replace(): returns a revalidated copy with some fields changed
     Box2: bounds stage-plane points and reports size and center
@@ -9,20 +13,26 @@ Contains:
     Region: stores an area as exterior and hole rings, convertible to Shapely
 """
 
-from typing import Any, Self
+from typing import Annotated, Any, Self
 
 import numpy as np
 import shapely
 from numpy.typing import NDArray
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from showpy.core.errors import schema_error_from
 
-type Meters = float
-type Seconds = float
-type Count = float
-type Degrees = float
-type CountsPerMinute = float
+type Finite = Annotated[float, Field(allow_inf_nan=False)]
+type NonNegFinite = Annotated[float, Field(ge=0, allow_inf_nan=False)]
+type PositiveFinite = Annotated[float, Field(gt=0, allow_inf_nan=False)]
+type Meters = Annotated[float, Field(allow_inf_nan=False)]
+type Seconds = Annotated[float, Field(allow_inf_nan=False)]
+type Count = Annotated[float, Field(allow_inf_nan=False)]
+type Degrees = Annotated[float, Field(allow_inf_nan=False)]
+type NonNegCount = Annotated[float, Field(ge=0, allow_inf_nan=False)]
+type NonNegSeconds = Annotated[float, Field(ge=0, allow_inf_nan=False)]
+type PositiveMeters = Annotated[float, Field(gt=0, allow_inf_nan=False)]
+type CountsPerMinute = Annotated[float, Field(allow_inf_nan=False)]
 type Point = tuple[float, float]
 type Point3 = tuple[float, float, float]
 type Ring = tuple[Point, ...]

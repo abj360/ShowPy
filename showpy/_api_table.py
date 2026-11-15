@@ -414,6 +414,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("renumber", "showpy.show.manage", "renumber"),
     ("reorder", "showpy.choreo.form_ops", "reorder"),
     ("replace_sheet", "showpy.sheet.replace", "replace_sheet"),
+    ("require_finite", "showpy.core.validation", "require_finite"),
     ("revert", "showpy.show.history", "revert"),
     ("ripple", "showpy.choreo.paths", "ripple"),
     ("rose_points", "showpy.choreo.form_fns", "rose_points"),

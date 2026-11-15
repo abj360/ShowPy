@@ -289,6 +289,7 @@ if TYPE_CHECKING:
     from showpy.core.validation import (
         ValidationIssue,
         ValidationReport,
+        require_finite,
     )
     from showpy.export.data import (
         FormatRegistry,
@@ -1097,6 +1098,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "renumber": ("showpy.show.manage", "renumber"),
     "reorder": ("showpy.choreo.form_ops", "reorder"),
     "replace_sheet": ("showpy.sheet.replace", "replace_sheet"),
+    "require_finite": ("showpy.core.validation", "require_finite"),
     "revert": ("showpy.show.history", "revert"),
     "ripple": ("showpy.choreo.paths", "ripple"),
     "rose_points": ("showpy.choreo.form_fns", "rose_points"),
@@ -1619,6 +1621,7 @@ __all__ = [
     "renumber",
     "reorder",
     "replace_sheet",
+    "require_finite",
     "revert",
     "ripple",
     "rose_points",

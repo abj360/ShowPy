@@ -1310,6 +1310,7 @@
   "renumber": "(show: showpy.show.models.Show, scheme: str = 'sequential') -> tuple[showpy.show.models.Show, dict[SetId, SetId]]",
   "reorder": "(form: showpy.choreo.models.Form, order: Order, prev_set: showpy.choreo.models.Set | None = None, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> showpy.choreo.models.Form",
   "replace_sheet": "(show: 'Show', sheet: showpy.sheet.models.Sheet, mapping: SheetMapping = 'landmarks', force: bool = False) -> tuple['Show', showpy.sheet.models.SheetReplaceReport]",
+  "require_finite": "(value: float, *, name: str, low: float | None = None, low_open: bool = False, high: float | None = None) -> float",
   "revert": "(ws: showpy.show.storage.Workspace, revision_id: str, at: datetime.datetime) -> showpy.show.models.Revision",
   "ripple": "(spec: showpy.choreo.models.TransitionSpec, ordered_sel: Sel, total: float, curve: Literal['linear', 'ease_in', 'ease_out', 'ease_in_out'] = 'linear', force: bool = False) -> showpy.choreo.models.TransitionSpec",
   "rose_points": "(params: collections.abc.Mapping[str, Any], n: int) -> Points",

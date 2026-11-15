@@ -6,13 +6,15 @@ Contains:
     ValidationReport: collects issues, reports ok, renders one line per issue
     ValidationReport.merge(): combines several reports into one
     validate_or_schema_error(): validates data against any pydantic model, raising SchemaError
+    require_finite(): checks a numeric parameter is finite and inside optional bounds
 """
 
+import math
 from typing import Literal
 
 from pydantic import BaseModel, ValidationError
 
-from showpy.core.errors import schema_error_from
+from showpy.core.errors import SchemaError, schema_error_from
 from showpy.core.types import FrozenModel
 
 LEVEL_PREFIX = {"error": "E", "warning": "W"}
@@ -81,3 +83,46 @@ def validate_or_schema_error[M: BaseModel](model: type[M], data: object) -> M:
         return model.model_validate(data)
     except ValidationError as exc:
         raise schema_error_from(exc, model=model.__name__) from exc
+
+
+def require_finite(
+    value: float,
+    *,
+    name: str,
+    low: float | None = None,
+    low_open: bool = False,
+    high: float | None = None,
+) -> float:
+    """Checks a numeric parameter is finite and inside optional bounds.
+
+    Args:
+        value: The number to check; bools and non-numbers are rejected.
+        name: Parameter name, echoed in the error context.
+        low: Lower bound, or None for no lower bound.
+        low_open: Whether `low` itself is rejected.
+        high: Inclusive upper bound, or None for no upper bound.
+
+    Returns:
+        number: The value as a float.
+
+    >>> require_finite(2, name="tol", low=0.0, low_open=True)
+    2.0
+    """
+    context = {"name": name, "value": value, "low": low, "high": high}
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise SchemaError(f"{name} must be a number", hint="pass an int or float", context=context)
+    number = float(value)
+    if not math.isfinite(number):
+        raise SchemaError(f"{name} must be finite", hint="pass a finite number", context=context)
+    if low is not None and (number < low or (low_open and number == low)):
+        relation = ">" if low_open else ">="
+        raise SchemaError(
+            f"{name} must be {relation} {low}",
+            hint=f"pass {name} {relation} {low}",
+            context=context,
+        )
+    if high is not None and number > high:
+        raise SchemaError(
+            f"{name} must be <= {high}", hint=f"pass {name} <= {high}", context=context
+        )
+    return number
