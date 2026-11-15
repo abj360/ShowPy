@@ -144,11 +144,12 @@ stubPath = "typings"
 [tool.pytest.ini_options]
 testpaths = ["tests", "showpy"]
 pythonpath = ["."]
-addopts = "--doctest-modules -q --strict-markers --import-mode=importlib -m 'not bench and not slow'"
+addopts = "--doctest-modules -q --strict-markers --import-mode=importlib -m 'not bench and not slow and not fuzz'"
 markers = [
     "golden: replays real shows against reviewed fixtures",
     "bench: performance budget benchmarks; run with nox -s bench",
     "defect(id): open audited defect; must be xfail(strict=True) with reason equal to the ID",
+    "fuzz: hostile-input fuzz targets; run with nox -s fuzz",
     "slow: generated-show properties and the large golden; run with nox -s slow",
 ]
 filterwarnings = ["error"]

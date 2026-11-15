@@ -9,6 +9,7 @@ Contains:
     tests: runs the full pytest suite under a fixed hash seed with a branch-coverage floor
     hashseeds: runs the full pytest suite under each non-default seed in HASH_SEEDS
     slow: runs the slow tests under each seed in SLOW_HASH_SEEDS
+    fuzz: runs the fuzz targets under the nightly Hypothesis profile
     audit: scans the locked dependencies for known vulnerabilities
     wheel: builds the wheel, installs it in a clean venv and runs the README usage example
     bench: runs the budget benchmarks; at tier M fails on a >20% min-time regression
@@ -29,6 +30,8 @@ PRETTIER_GLOB = "**/*.{md,yml,yaml,json}"
 HASH_SEEDS = ("1", "2")
 SLOW_HASH_SEEDS = ("0", "1")
 DEFAULT_HASH_SEED = "0"
+FUZZ_PROFILE = "nightly"
+NO_TESTS_EXIT = 5
 COVERAGE_FLOOR = "96"
 NO_SYNC_ENV = "NOX_UV_NO_SYNC"
 
@@ -64,7 +67,7 @@ def _readme_usage_block(readme: Path) -> str:
     return match.group(1)
 
 
-def _uv_run(session: nox.Session, *args: str) -> None:
+def _uv_run(session: nox.Session, *args: str, success_codes: list[int] | None = None) -> None:
     """Runs a command inside the uv-managed project environment.
 
     The Docker image sets NOX_UV_NO_SYNC so the installed wheel is tested, not a source tree.
@@ -72,7 +75,16 @@ def _uv_run(session: nox.Session, *args: str) -> None:
     sync_flag = "--no-sync" if os.environ.get(NO_SYNC_ENV) == "1" else "--locked"
     # Pin the nested run to nox's own interpreter: without it the nested uv re-resolved the
     # Python from .python-version and rebuilt .venv, so CI's 3.12/3.13 legs ran on 3.14.
-    session.run("uv", "run", sync_flag, "--python", sys.executable, *args, external=True)
+    session.run(
+        "uv",
+        "run",
+        sync_flag,
+        "--python",
+        sys.executable,
+        *args,
+        external=True,
+        success_codes=success_codes,
+    )
 
 
 def _require_same_python(session: nox.Session) -> None:
@@ -112,8 +124,8 @@ def tests(session: nox.Session) -> None:
         "--cov=showpy",
         "--cov-branch",
         "--cov-report=term:skip-covered",
-        f"--cov-fail-under={COVERAGE_FLOOR}",
         *session.posargs,
+        f"--cov-fail-under={COVERAGE_FLOOR}",
     )
 
 
@@ -137,6 +149,19 @@ def slow(session: nox.Session) -> None:
     for seed in SLOW_HASH_SEEDS:
         session.env["PYTHONHASHSEED"] = seed
         _uv_run(session, "pytest", "-m", "slow", *session.posargs)
+
+
+@nox.session
+def fuzz(session: nox.Session) -> None:
+    """Runs the fuzz targets under the nightly Hypothesis profile unless one is already set.
+
+    Not a default session: it is slow and runs on demand and in the nightly workflow. Skips
+    cleanly when no target exists yet.
+    """
+    _require_same_python(session)
+    session.env.setdefault("HYPOTHESIS_PROFILE", FUZZ_PROFILE)
+    session.env["PYTHONHASHSEED"] = DEFAULT_HASH_SEED
+    _uv_run(session, "pytest", "-m", "fuzz", *session.posargs, success_codes=[0, NO_TESTS_EXIT])
 
 
 @nox.session

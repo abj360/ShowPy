@@ -34,4 +34,6 @@ jobs:
         run: uv run nox -s slow
         env:
           HYPOTHESIS_PROFILE: nightly
+      - name: fuzz
+        run: uv run nox -s fuzz
       - run: uv run nox -s bench -- --tier L

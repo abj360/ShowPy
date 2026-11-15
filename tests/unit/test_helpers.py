@@ -11,6 +11,10 @@ Contains:
     test_regression_hang_timeout_drops_leaks_it_caused(): hides a file freed after the alarm
     test_hang_timeout_still_reports_leaks_before_the_deadline(): forwards a leak by the test
     test_hang_timeout_lets_a_quick_test_finish(): returns normally and restores the old handler
+    test_only_showpy_errors_rejects_a_builtin_error(): fails a call that raises KeyError
+    test_only_showpy_errors_accepts_a_showpy_error(): lets a ShowPyError and a normal return pass
+    test_only_showpy_errors_names_the_input(): puts the sample input in the failure message
+    test_only_showpy_errors_fails_a_hang(): fails a call that outlasts the 5 s budget
 """
 
 import signal
@@ -22,7 +26,8 @@ from pathlib import Path
 
 import pytest
 
-from tests.helpers import fails_after
+from showpy.core.errors import ShowPyError
+from tests.helpers import fails_after, only_showpy_errors
 
 DEADLINE_S = 0.05
 COVERAGE_FRAME_S = 0.3
@@ -228,3 +233,45 @@ def test_hang_timeout_lets_a_quick_test_finish() -> None:
     assert calls == [1]
     assert signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0)
     assert signal.getsignal(signal.SIGALRM) == previous
+
+
+def _raise_key_error() -> None:
+    raise KeyError("missing")
+
+
+def _raise_showpy_error() -> None:
+    raise ShowPyError("bad input", hint="send good input")
+
+
+@posix_only
+def test_only_showpy_errors_rejects_a_builtin_error() -> None:
+    """Fails the test when the call raises an error that is not a ShowPyError."""
+    with pytest.raises(pytest.fail.Exception, match="KeyError"):
+        only_showpy_errors(_raise_key_error)
+
+
+@posix_only
+def test_only_showpy_errors_accepts_a_showpy_error() -> None:
+    """Returns for a call that raises a ShowPyError or finishes normally."""
+    only_showpy_errors(_raise_showpy_error)
+    only_showpy_errors(lambda: None)
+
+
+@posix_only
+def test_only_showpy_errors_names_the_input() -> None:
+    """Puts the input that broke the call into the failure message."""
+    with pytest.raises(pytest.fail.Exception, match="'odd input'"):
+        only_showpy_errors(_raise_key_error, sample="odd input")
+
+
+@posix_only
+def test_only_showpy_errors_fails_a_hang() -> None:
+    """Fails a call that runs past the 5 s budget instead of letting it hang."""
+
+    def spin() -> None:
+        end = time.monotonic() + 2 * HANG_BOUND_S
+        while time.monotonic() < end:
+            pass
+
+    with pytest.raises(pytest.fail.Exception, match="Timeout"):
+        only_showpy_errors(spin)
