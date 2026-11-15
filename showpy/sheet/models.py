@@ -23,7 +23,16 @@ from pydantic import model_validator
 from showpy.core.errors import GeometryError, TimeRangeError
 from showpy.core.ids import LandmarkId, SheetRef, ZoneId
 from showpy.core.selection import SelectorField
-from showpy.core.types import Count, Degrees, FrozenModel, Meters, Point, Region, Ring
+from showpy.core.types import (
+    Count,
+    Degrees,
+    FrozenModel,
+    Meters,
+    Point,
+    PositiveFinite,
+    Region,
+    Ring,
+)
 
 MIN_POINTS_BY_KIND = {"point": 1, "line": 2, "area": 3}
 
@@ -180,7 +189,7 @@ class CoordinateSystem(FrozenModel):
     origin: Point | LandmarkId = (0.0, 0.0)
     audience_side: Literal["front", "back", "left", "right"] = "front"
     units: str = "m"
-    precision: float = 0.01
+    precision: PositiveFinite = 0.01
     labels: dict[str, str] = {}
 
 

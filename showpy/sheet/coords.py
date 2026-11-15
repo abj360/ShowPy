@@ -15,12 +15,13 @@ Contains:
 """
 
 import re
-from decimal import Decimal
+from decimal import Decimal, DecimalException
 from typing import TYPE_CHECKING, Literal
 
 from showpy.core.errors import SchemaError, UnknownRefError
 from showpy.core.types import Point
 from showpy.core.units import convert, round_to
+from showpy.core.validation import require_finite
 from showpy.sheet.bounds import landmark, landmark_anchor
 from showpy.sheet.models import CoordinateKind, CoordinateSystem, Sheet, SurfaceType
 
@@ -149,10 +150,21 @@ def _local(sheet: Sheet, system: CoordinateSystem, p: Point) -> tuple[float, flo
     return dx * right[0] + dy * right[1], dx * ahead[0] + dy * ahead[1]
 
 
+def _rounded(value_m: float, system: CoordinateSystem) -> float:
+    try:
+        return round_to(convert(value_m, "m", system.units), system.precision)
+    except DecimalException as error:
+        raise SchemaError(
+            f"cannot round {value_m} m to a step of {system.precision} {system.units}",
+            hint="use a point within about 1e15 steps of the origin",
+            context={"value": value_m, "precision": system.precision, "units": system.units},
+        ) from error
+
+
 def _part(
     value_m: float, system: CoordinateSystem, positive: str, negative: str
 ) -> tuple[str, str]:
-    shown = round_to(convert(value_m, "m", system.units), system.precision)
+    shown = _rounded(value_m, system)
     text = f"{abs(shown):.{_decimals(system.precision)}f}"
     return text, negative if shown < 0 else positive
 
@@ -173,6 +185,9 @@ def to_coords(show: "Show", p: Point, style: CoordStyle = "long") -> str:
     '3.50 m right of center, 2.00 m upstage of front edge'
     """
     system = show.coordinates
+    require_finite(system.precision, name="precision", low=0.0, low_open=True)
+    require_finite(p[0], name="p.x")
+    require_finite(p[1], name="p.y")
     words = _words(show.sheet, system)
     across, depth = _local(show.sheet, system, p)
     a_num, a_dir = _part(across, system, "right", "left")

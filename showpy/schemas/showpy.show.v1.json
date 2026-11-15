@@ -249,9 +249,8 @@
           "title": "Origin"
         },
         "precision": {
-          "default": 0.01,
-          "title": "Precision",
-          "type": "number"
+          "$ref": "#/$defs/PositiveFinite",
+          "default": 0.01
         },
         "units": {
           "default": "m",
@@ -1182,6 +1181,10 @@
         }
       ],
       "type": "array"
+    },
+    "PositiveFinite": {
+      "exclusiveMinimum": 0,
+      "type": "number"
     },
     "Region": {
       "additionalProperties": false,

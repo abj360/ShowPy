@@ -9,6 +9,8 @@ Contains:
         ShowPyError, however the system gets into a show
     test_regression_to_coords_rejects_infinite_point(): rejects an infinite point with a
         ShowPyError, not decimal.InvalidOperation
+    test_regression_to_coords_rejects_unrepresentable_magnitude(): rejects a finite point too
+        large to round with a ShowPyError, not decimal.InvalidOperation
     test_regression_to_coords_rejects_nan_point(): rejects a NaN point instead of printing "nan m
         right of center"
     test_regression_to_coords_rejects_unknown_style(): rejects an unknown style instead of silently
@@ -167,24 +169,24 @@ def _word_with_precision(precision: float) -> str:
     return to_coords(two_set_show().model_copy(update={"coordinates": system}), (1.0, 1.0))
 
 
-@pytest.mark.defect("UP-9.4-15")
-@pytest.mark.xfail(strict=True, reason="UP-9.4-15")
 def test_regression_zero_precision_is_rejected_not_division_by_zero() -> None:
     """Rejects precision=0 with a ShowPyError, however the system gets into a show (audit 9.4)."""
     with pytest.raises(ShowPyError):
         _word_with_precision(0.0)
 
 
-@pytest.mark.defect("UP-9.4-16")
-@pytest.mark.xfail(strict=True, reason="UP-9.4-16")
 def test_regression_to_coords_rejects_infinite_point() -> None:
     """Rejects an infinite point with a ShowPyError, not decimal.InvalidOperation (audit 9.4)."""
     with pytest.raises(ShowPyError):
         to_coords(two_set_show(), (float("inf"), 0.0))
 
 
-@pytest.mark.defect("UP-9.4-17")
-@pytest.mark.xfail(strict=True, reason="UP-9.4-17")
+def test_regression_to_coords_rejects_unrepresentable_magnitude() -> None:
+    """Rejects the finite point (0.0, 1e26), too large to round, with a ShowPyError (fuzz)."""
+    with pytest.raises(ShowPyError):
+        to_coords(two_set_show(), (0.0, 1e26))
+
+
 def test_regression_to_coords_rejects_nan_point() -> None:
     """Rejects a NaN point instead of printing "nan m right of center" (audit 9.4)."""
     with pytest.raises(ShowPyError):
