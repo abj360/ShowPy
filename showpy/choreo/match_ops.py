@@ -6,6 +6,7 @@ the touching transitions, so those rows are dropped and the spot moves straight 
 
 Contains:
     with_set(): returns a show with one set replaced by ID
+    is_elsewhere(): tells whether a placement differs in position or presence from a target
     clear_rows(): drops stored path rows of some spots in one transition, respecting locks
     apply_match(): writes a match result into a transition's destination set, forms included
     swap(): swaps two spots' places in one set, keeping forms and paths consistent
@@ -142,7 +143,13 @@ def _matched_forms(show: Show, set_id: SetId, result: MatchResult, force: bool) 
     return show.replace(forms=forms)
 
 
-def _is_elsewhere(current: Placement, x: float, y: float) -> bool:
+def is_elsewhere(current: Placement, x: float, y: float) -> bool:
+    """Tells whether `current` is off the field or more than `SAME_POSITION_TOL` from (x, y).
+
+    >>> from showpy.examples import two_set_show
+    >>> is_elsewhere(two_set_show().set("2").get("T1"), 0.0, 99.0)
+    True
+    """
     return (
         abs(current.x - x) > SAME_POSITION_TOL
         or abs(current.y - y) > SAME_POSITION_TOL
@@ -155,7 +162,7 @@ def _slot_updates(dest: Set, targets: dict[SpotId, Placement]) -> dict[SpotId, P
     for entity, wanted in targets.items():
         current = dest.get(entity)
         is_same_slot = (current.form, current.order) == (wanted.form, wanted.order)
-        is_same_pose = not _is_elsewhere(current, wanted.x, wanted.y) and (
+        is_same_pose = not is_elsewhere(current, wanted.x, wanted.y) and (
             abs(angle_diff(current.facing, wanted.facing)) <= FACING_TOL
         )
         if not (is_same_slot and is_same_pose):
@@ -169,7 +176,7 @@ def _slot_updates(dest: Set, targets: dict[SpotId, Placement]) -> dict[SpotId, P
 def _point_updates(dest: Set, result: MatchResult) -> dict[SpotId, dict[str, object]]:
     updates: dict[SpotId, dict[str, object]] = {}
     for entity, (x, y) in zip(result.entities, result.targets, strict=True):
-        if _is_elsewhere(dest.get(entity), x, y):
+        if is_elsewhere(dest.get(entity), x, y):
             updates[entity] = {"x": x, "y": y, "on_field": True}
     return updates
 
@@ -199,7 +206,7 @@ def apply_match(show: Show, tid: TransitionId, result: MatchResult, force: bool 
     slot_updates = _slot_updates(dest, _slot_targets(show, tid[1], result))
     forms_edited = _matched_forms(show, tid[1], result, force)
     edited = with_set(forms_edited, dest.with_placements(slot_updates, force=force))
-    relocated = [e for e, p in slot_updates.items() if _is_elsewhere(dest.get(e), p.x, p.y)]
+    relocated = [e for e, p in slot_updates.items() if is_elsewhere(dest.get(e), p.x, p.y)]
     return clear_rows(edited, tid, relocated, force)
 
 
