@@ -47,10 +47,21 @@ Contains:
     test_regression_fill_rejects_non_finite_interval: rejects NaN and infinite intervals
     test_regression_space_by_interval_rejects_non_finite_interval: rejects NaN and infinite
         intervals
+    test_regression_spacing_rejects_subnormal_gaps: raises SpacingError, not OverflowError, for a
+        1e-320 gap or interval
+    test_regression_fill_rejects_tiny_interval_without_overflow: raises SpacingError for a 1e-300
+        interval
+    test_regression_spacing_rejects_huge_area_with_small_gap: raises SpacingError for a 1e308 m
+        area
+    test_regression_spacing_rejects_empty_area: raises SpacingError for an empty area in scatter
+        and fill
+    test_scatter_sample_bound_counts_the_exact_multiple_cell: bounds samples by floor(w / cell) + 1
+        per axis
 """
 
 import math
 import sys
+from collections.abc import Callable
 
 import numpy as np
 import pytest
@@ -65,6 +76,7 @@ from showpy.geo.curves import Segment
 from showpy.geo.regions import region
 from showpy.geo.shapes import arc, circle, line, rect
 from showpy.geo.spacing import (
+    _poisson_sample_bound,
     block,
     concentric,
     distribute_on_points,
@@ -98,6 +110,9 @@ MAX_EDGE_SPOTS = 8
 WIDE_SPOTS = 20
 FRACTIONAL_SEED = 1.5
 OVER_CAP_SPOTS = MAX_POINTS + 1
+SUBNORMAL_GAP_M = 1e-320
+TINY_GAP_M = 1e-300
+HUGE_SIDE_M = 1e308
 NON_FINITE = [math.nan, math.inf, -math.inf]
 
 LINE = line((0.0, 0.0), (10.0, 0.0))
@@ -431,3 +446,52 @@ def test_regression_space_by_interval_rejects_non_finite_interval(interval: floa
     """Rejects NaN and infinite intervals with SpacingError."""
     with pytest.raises(SpacingError):
         space_by_interval(LINE, interval)
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: fill(_square(), SUBNORMAL_GAP_M, anchor=(0.0, 0.0)),
+        lambda: scatter(_square(), 3, SUBNORMAL_GAP_M),
+        lambda: space_by_interval(LINE, SUBNORMAL_GAP_M),
+    ],
+    ids=["fill", "scatter", "space_by_interval"],
+)
+def test_regression_spacing_rejects_subnormal_gaps(call: Callable[[], object]) -> None:
+    """Raises SpacingError, not OverflowError, when the gap divides to infinity."""
+    with pytest.raises(SpacingError):
+        call()
+
+
+def test_regression_fill_rejects_tiny_interval_without_overflow() -> None:
+    """Raises SpacingError, not OverflowError, when the lattice count exceeds a C ssize_t."""
+    with pytest.raises(SpacingError):
+        fill(_square(), TINY_GAP_M, anchor=(0.0, 0.0))
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: scatter(_square(side=HUGE_SIDE_M), 3, 1e-5),
+        lambda: fill(_square(side=HUGE_SIDE_M), 1e-5, anchor=(0.0, 0.0)),
+    ],
+    ids=["scatter", "fill"],
+)
+def test_regression_spacing_rejects_huge_area_with_small_gap(call: Callable[[], object]) -> None:
+    """Raises SpacingError, not OverflowError, for an area with 1e308 m sides."""
+    with pytest.raises(SpacingError):
+        call()
+
+
+def test_regression_spacing_rejects_empty_area() -> None:
+    """Raises SpacingError, not a leaked error, when the area has NaN bounds."""
+    with pytest.raises(SpacingError):
+        scatter(shapely.Polygon(), 3, 1.0)
+    with pytest.raises(SpacingError):
+        fill(shapely.Polygon(), 1.0, anchor=(0.0, 0.0))
+
+
+def test_scatter_sample_bound_counts_the_exact_multiple_cell() -> None:
+    """Bounds samples by floor(w / cell) + 1 per axis, so an exact multiple gains a cell."""
+    cell_m = 2.0
+    assert _poisson_sample_bound(_square(side=4.0), cell_m * math.sqrt(2)) == 3 * 3

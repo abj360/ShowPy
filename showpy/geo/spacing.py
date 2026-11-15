@@ -35,11 +35,23 @@ from showpy.geo.regions import Area
 BRIDSON_ATTEMPTS = 30
 HEX_ROW_FACTOR = math.sqrt(3) / 2
 FIT_EPS = 1e-9
+LATTICE_ROW_PAD = 4
+LATTICE_COL_PAD = 6
 
 type FillPattern = Literal["grid", "offset", "hex"]
 type BlockAnchor = Literal[
     "center", "front-left", "front-center", "front-right", "back-left", "back-center", "back-right"
 ]
+
+
+def _require_points(estimate: float, what: str) -> None:
+    if not math.isfinite(estimate):
+        raise SpacingError(
+            f"{what} count is not finite",
+            hint="use a larger gap or a finite area",
+            context={"what": what},
+        )
+    require_size(math.ceil(estimate), MAX_POINTS, what=what, error=SpacingError)
 
 
 def _require_count(n: int) -> None:
@@ -86,6 +98,12 @@ def space_by_interval(
     """
     require_finite_as(SpacingError, interval, name="interval", low=0.0, low_open=True)
     available = curve.length() - start
+    if not math.isfinite(available / interval):
+        raise SpacingError(
+            f"interval {interval} m is too small for {available:.2f} m",
+            hint="use a larger interval",
+            context={"interval": interval},
+        )
     max_fit = math.floor(available / interval + FIT_EPS) + 1
     count = max_fit if n is None else n
     if count > max_fit:
@@ -149,6 +167,19 @@ def space_with_gaps(curve: Curve, n: int, gaps: Sequence[tuple[int, Meters]]) ->
     return curve.point_at(stations)
 
 
+def _require_lattice_size(
+    bounds: tuple[float, ...], interval: Meters, pattern: FillPattern
+) -> None:
+    minx, miny, maxx, maxy = bounds
+    row_step = interval * HEX_ROW_FACTOR if pattern == "hex" else interval
+    edges = (miny / row_step, maxy / row_step, minx / interval, maxx / interval)
+    if not all(math.isfinite(edge) for edge in edges):
+        _require_points(math.inf, "lattice points")
+    rows = edges[1] - edges[0] + LATTICE_ROW_PAD
+    cols = edges[3] - edges[2] + LATTICE_COL_PAD
+    _require_points(rows * cols, "lattice points")
+
+
 def _lattice_axes(
     bounds: tuple[float, ...], interval: Meters, pattern: FillPattern
 ) -> tuple[Meters, range, range]:
@@ -200,10 +231,7 @@ def fill(
     local_area = shapely.affinity.rotate(usable, -angle_deg, origin=origin)
     minx, miny, maxx, maxy = local_area.bounds
     shifted = (minx - origin[0], miny - origin[1], maxx - origin[0], maxy - origin[1])
-    _, row_range, col_range = _lattice_axes(shifted, interval, pattern)
-    require_size(
-        len(row_range) * len(col_range), MAX_POINTS, what="lattice points", error=SpacingError
-    )
+    _require_lattice_size(shifted, interval, pattern)
     lattice = _lattice(shifted, interval, pattern) + np.asarray(origin)
     inside = prep(local_area.buffer(FIT_EPS))
     kept = np.array([p for p in lattice if inside.contains(shapely.Point(p))]).reshape(-1, 2)
@@ -330,10 +358,16 @@ def _bridson(area: Area, min_gap: Meters, seed: int) -> Points:
     return np.asarray(accepted, dtype=float)
 
 
-def _poisson_sample_bound(area: Area, min_gap: Meters) -> int:
+def _poisson_sample_bound(area: Area, min_gap: Meters) -> float:
     minx, miny, maxx, maxy = area.bounds
     cell = min_gap / math.sqrt(2)
-    return max(math.ceil((maxx - minx) / cell), 1) * max(math.ceil((maxy - miny) / cell), 1)
+    return _axis_cells((maxx - minx) / cell) * _axis_cells((maxy - miny) / cell)
+
+
+def _axis_cells(extent_in_cells: float) -> float:
+    if not math.isfinite(extent_in_cells):
+        return extent_in_cells
+    return math.floor(extent_in_cells) + 1.0
 
 
 def scatter(area: Area, n: int, min_gap: Meters, seed: int = 0) -> Points:
@@ -341,7 +375,8 @@ def scatter(area: Area, n: int, min_gap: Meters, seed: int = 0) -> Points:
 
     Bridson's Poisson-disk sampling fills the area, then farthest-point selection keeps n.
     Each cell of the `min_gap / sqrt(2)` background grid holds at most one sample, so the cells
-    covering the bounding box bound the sample count; a bound over MAX_POINTS is rejected.
+    covering the bounding box, floor(w / cell) + 1 per axis, bound the sample count; a bound
+    over MAX_POINTS is rejected.
 
     >>> from showpy.geo.regions import region
     >>> len(scatter(region([(0, 0), (10, 0), (10, 10), (0, 10)]), 5, 1.0))
@@ -350,9 +385,7 @@ def scatter(area: Area, n: int, min_gap: Meters, seed: int = 0) -> Points:
     _require_count(n)
     require_finite_as(SpacingError, min_gap, name="min_gap", low=0.0, low_open=True)
     require_size(n, MAX_POINTS, what="spots", error=SpacingError)
-    require_size(
-        _poisson_sample_bound(area, min_gap), MAX_POINTS, what="samples", error=SpacingError
-    )
+    _require_points(_poisson_sample_bound(area, min_gap), "samples")
     candidates = _bridson(area, min_gap, seed)
     if n > len(candidates):
         raise SpacingError(
