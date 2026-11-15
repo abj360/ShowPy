@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 
 """
-test_validation.py --- tests ValidationReport status and one-line rendering
+test_validation.py --- tests validation reports, validate_or_schema_error and require_finite
 
 Contains:
-    test_*(): one behavior of showpy.core.validation each
+    test_report_*(), test_merge_concatenates_issues: status, rendering and merging of reports
+    test_validate_or_schema_error_*(): one behavior of the SchemaError-raising validator each
+    test_require_finite_*(): one rule of the finite-number check each
+    test_regression_require_finite_rejects_an_int_too_large_for_float: rejects 10**400 instead of
+        leaking OverflowError
     test_regression_require_finite_echoes_a_huge_int_by_its_bit_count: says a 5,000-digit int is
         too large for a float and keeps the error context printable
 """

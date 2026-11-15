@@ -12,11 +12,22 @@ Contains:
     test_regression_region_rejects_self_intersection: rejects a bow-tie ring that crosses itself
     test_regression_frozen_models_reject_non_finite_floats: rejects NaN and infinity in Box2,
         TempoSection, Waypoint, Shape and Landmark fields
+    test_regression_nested_model_error_keeps_outer_locs: reports every nested field error under
+        the outer model with dotted locs
+    test_regression_nested_construction_error_names_the_outermost_model: names the outer model,
+        not the nested one, when a constructor fails inside a nested model
+    test_regression_library_model_reports_dotted_loc: reports a bad Box2 corner as `min.0`
     test_regression_replace_revalidates: rejects a negative Set.counts passed to replace()
     test_replace_returns_a_new_model_with_the_change: keeps the original and applies the change
     test_replace_rejects_an_unknown_field: raises SchemaError for a field the model lacks
     test_regression_constrained_number_types_reject_out_of_range: rejects zero, negative, NaN and
-        infinity in a positive field and the finite-only base aliases in a plain TypeAdapter
+        infinity in a positive field
+    test_base_number_aliases_reject_non_finite_outside_models: rejects NaN and infinity in the
+        finite-only base aliases through a plain TypeAdapter
+    test_non_negative_types_*(): one rule of the non-negative aliases each
+    test_regression_model_validate_strings_raises_schema_error: converts the pydantic error of
+        `model_validate_strings`, keeping the cause
+    test_model_validate_strings_parses_valid_text: builds a model from string-leaved data
 """
 
 import math
