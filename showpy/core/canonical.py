@@ -13,8 +13,9 @@ from collections.abc import Mapping
 
 import numpy as np
 from pydantic import BaseModel
+from pydantic_core import PydanticSerializationError
 
-from showpy.core.errors import SchemaError
+from showpy.core.errors import SchemaError, bounded_repr
 
 type JsonValue = bool | int | float | str | list[JsonValue] | dict[str, JsonValue] | None
 type JsonScalar = bool | int | float | str | None
@@ -54,6 +55,11 @@ def canonical_value(obj: object) -> JsonValue:
     Models dump in JSON mode, tuples become lists, sets become lists sorted by canonical bytes,
     `-0.0` becomes `0.0`, and a mapping with any non-string key becomes the tagged form
     `{"$showpy:map": [[key, value], ...]}` sorted by the canonical bytes of each pair.
+
+    A set held by a model field is dumped by pydantic in iteration order, before this function
+    sees it, so it is not sorted; that order can change with `PYTHONHASHSEED` until stored
+    models hold tuples instead (UP-9.3-55). Containers nest at most 100 levels and ints stay
+    under 10**640 (ADR 0014, addendum 2026-11-15).
 
     Args:
         obj: Value to normalize.
@@ -95,7 +101,7 @@ def _normalize(obj: object, depth: int) -> JsonValue:
     if obj is None or isinstance(obj, bool | str | int | float):
         return _normalize_scalar(obj)
     if isinstance(obj, BaseModel):
-        return _normalize(obj.model_dump(mode="json", fallback=_numpy_content), depth)
+        return _normalize(_dumped(obj), depth)
     if isinstance(obj, np.ndarray | np.generic):
         return _normalize(obj.tolist() if isinstance(obj, np.ndarray) else obj.item(), depth)
     if isinstance(obj, Mapping):
@@ -109,6 +115,18 @@ def _normalize(obj: object, depth: int) -> JsonValue:
         hint=SUPPORTED_HINT,
         context={"type": type(obj).__qualname__},
     )
+
+
+def _dumped(model: BaseModel) -> object:
+    """Dumps a model in JSON mode, turning serializer failures and reference cycles into errors."""
+    try:
+        return model.model_dump(mode="json", fallback=_numpy_content)
+    except (PydanticSerializationError, ValueError) as exc:
+        raise SchemaError(
+            f"cannot dump a {type(model).__name__} model to canonicalize it",
+            hint="pass a model whose fields serialize to JSON and hold no reference cycle",
+            context={"model": type(model).__name__, "reason": bounded_repr(str(exc))},
+        ) from exc
 
 
 def _numpy_content(value: object) -> object:

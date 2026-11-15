@@ -11,23 +11,35 @@ Contains:
     test_canonical_value_dumps_numpy_model_fields_in_full: keeps every element of an array field
     test_canonical_value_rejects_unsupported_model_fields: raises on a model field of unknown type
     test_jcs_matches_the_rfc8785_package(): compares jcs with the rfc8785 reference encoder
+    test_regression_canonical_value_turns_a_failing_serializer_into_schema_error: converts the
+        PydanticSerializationError of a model field serializer
+    test_regression_canonical_value_turns_a_model_cycle_into_schema_error: converts the
+        circular-reference ValueError of a model dump
+    test_canonical_value_accepts_the_nesting_cap_and_rejects_one_more: accepts 100 levels of lists
+        or tagged maps and rejects 101
+    test_canonical_value_accepts_the_int_cap_and_rejects_one_more: accepts 10**640 - 1 and rejects
+        10**640
+    test_jcs_keeps_an_int_beyond_2_53_distinct_from_its_float: pins `jcs(2**60)` apart from
+        `jcs(float(2**60))`
 """
 
 import struct
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 
 import numpy as np
 import pytest
 import rfc8785
 from hypothesis import given
 from hypothesis import strategies as st
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_serializer
 
 from showpy.core.canonical import JsonValue, canonical_value, jcs
 from showpy.core.errors import SchemaError
 
 RFC_SAFE_INT = 2**53 - 1
 LONG_ARRAY_LENGTH = 2_000
+NESTING_CAP = 100
+INT_CAP = 10**640
 
 
 class Inner(BaseModel):
@@ -42,6 +54,16 @@ class Holder(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     content: object
+
+
+class FailingSerializer(BaseModel):
+    """Holds one int whose field serializer raises, to test serialization failures."""
+
+    value: int
+
+    @field_serializer("value")
+    def _explode(self, value: int) -> int:
+        raise RuntimeError(f"cannot serialize {value}")
 
 
 class Outer(BaseModel):
@@ -334,3 +356,55 @@ def test_canonical_value_dumps_numpy_model_fields_in_full() -> None:
 def test_canonical_value_rejects_unsupported_model_fields() -> None:
     with pytest.raises(SchemaError):
         canonical_value(Holder(content=object()))
+
+
+def _nested_lists(levels: int) -> object:
+    nested: object = 0
+    for _ in range(levels):
+        nested = [nested]
+    return nested
+
+
+def _nested_int_maps(levels: int) -> object:
+    nested: object = 0
+    for _ in range(levels):
+        nested = {1: nested}
+    return nested
+
+
+def test_regression_canonical_value_turns_a_failing_serializer_into_schema_error() -> None:
+    with pytest.raises(SchemaError) as caught:
+        canonical_value(FailingSerializer(value=1))
+    assert caught.value.context["model"] == "FailingSerializer"
+
+
+def test_regression_canonical_value_turns_a_model_cycle_into_schema_error() -> None:
+    cyclic: dict[str, object] = {}
+    cyclic["self"] = cyclic
+    holder = Holder(content=cyclic)
+
+    with pytest.raises(SchemaError) as caught:
+        canonical_value(holder)
+    assert caught.value.context["model"] == "Holder"
+
+
+@pytest.mark.parametrize("build", [_nested_lists, _nested_int_maps])
+def test_canonical_value_accepts_the_nesting_cap_and_rejects_one_more(
+    build: Callable[[int], object],
+) -> None:
+    assert jcs(build(NESTING_CAP))
+    with pytest.raises(SchemaError):
+        canonical_value(build(NESTING_CAP + 1))
+
+
+def test_canonical_value_accepts_the_int_cap_and_rejects_one_more() -> None:
+    assert canonical_value(INT_CAP - 1) == INT_CAP - 1
+    assert canonical_value(-(INT_CAP - 1)) == -(INT_CAP - 1)
+    for bad in (INT_CAP, -INT_CAP):
+        with pytest.raises(SchemaError):
+            canonical_value(bad)
+
+
+def test_jcs_keeps_an_int_beyond_2_53_distinct_from_its_float() -> None:
+    assert jcs(2**60) == b"1152921504606846976"
+    assert jcs(float(2**60)) == b"1152921504606847000"
