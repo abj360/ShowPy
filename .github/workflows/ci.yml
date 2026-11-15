@@ -31,7 +31,7 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          version: "0.12.9"
+          version: "0.13.8"
           enable-cache: true
       - name: Check interpreter version
         run: uv run --locked python -c "import sys; v='%d.%d'%sys.version_info[:2]; assert v=='${{ matrix.python }}', v; print(v)"
@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          version: "0.12.9"
+          version: "0.13.8"
           enable-cache: true
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -66,7 +66,7 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          version: "0.12.9"
+          version: "0.13.8"
           enable-cache: true
       - run: uv sync --locked
       - run: uv run nox -s hashseeds
@@ -83,7 +83,7 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          version: "0.12.9"
+          version: "0.13.8"
           enable-cache: true
       - run: uv run --locked nox -s slow
 
@@ -99,7 +99,7 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          version: "0.12.9"
+          version: "0.13.8"
           enable-cache: true
       - run: uv sync --resolution lowest-direct
       - run: uv run --no-sync nox -s tests
@@ -116,7 +116,7 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
-          version: "0.12.9"
+          version: "0.13.8"
           enable-cache: true
       - run: uv sync --locked
       - run: uv run --locked nox -s wheel
