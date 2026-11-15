@@ -12,6 +12,22 @@ Contains:
         IndexError, when the whole route is one point
     test_regression_counter_march_with_no_members_raises_path_error: raises a PathError, not
         IndexError, for an empty file
+    test_regression_rotate_path_refuses_locked_row: raises LockedError for a locked row
+    test_regression_rotate_path_force_rewrites_locked_row: rewrites a locked row when forced
+    test_regression_follow_and_set_targets_refuses_locked_row: raises LockedError for a locked row
+    test_regression_follow_and_set_targets_force_rewrites_locked_row: rewrites a locked row when
+        forced
+    test_regression_follow_and_set_targets_force_moves_pinned_placement: moves a pinned placement
+        when forced
+    test_regression_counter_march_refuses_locked_row: raises LockedError for a locked row
+    test_regression_counter_march_refuses_pinned_placement: raises LockedError for a pinned
+        placement
+    test_regression_counter_march_force_rewrites_locked_row_and_facing: rewrites a locked row and
+        its facing when forced
+    test_regression_counter_march_force_moves_pinned_placement: moves a pinned placement when
+        forced
+    test_regression_follow_cannot_replace_the_route_of_a_locked_row: raises LockedError when a
+        locked row follows the route being replaced (open defect UP-9.2-39)
 """
 
 import math
@@ -35,6 +51,7 @@ from showpy.core.util import approx_equal
 from showpy.show.models import Show
 from tests.fixtures.motion_shows import TID, with_targets
 from tests.fixtures.shows import two_set_show
+from tests.helpers import defect
 
 FILE = ["T4", "T3", "T2", "T1"]
 
@@ -157,18 +174,21 @@ def _locked_show(entity: str = "T1") -> Show:
 
 
 def test_regression_rotate_path_refuses_locked_row() -> None:
+    """Raises LockedError when `rotate_path` meets a locked row."""
     show = _locked_show()
     with pytest.raises(LockedError):
         rotate_path(show, show.transition(TID), ["T1"], (0.0, 0.0), 90.0)
 
 
 def test_regression_rotate_path_force_rewrites_locked_row() -> None:
+    """Rewrites a locked row as ROTATE when `force=True`."""
     show = _locked_show()
     spec = rotate_path(show, show.transition(TID), ["T1"], (0.0, 0.0), 90.0, force=True)
     assert spec.row("T1").style == PathStyle.ROTATE
 
 
 def test_regression_follow_and_set_targets_refuses_locked_row() -> None:
+    """Raises LockedError when a member row is locked."""
     show = _locked_show()
     route = make_route(show, TID, "T4", [(6.0, 15.0)], members=FILE)
     with pytest.raises(LockedError):
@@ -176,6 +196,7 @@ def test_regression_follow_and_set_targets_refuses_locked_row() -> None:
 
 
 def test_regression_follow_and_set_targets_force_rewrites_locked_row() -> None:
+    """Rewrites a locked member row as FOLLOW when forced."""
     show = _locked_show()
     route = make_route(show, TID, "T4", [(6.0, 15.0)], members=FILE)
     moved = follow_and_set_targets(show, TID, route, force=True)
@@ -183,6 +204,7 @@ def test_regression_follow_and_set_targets_force_rewrites_locked_row() -> None:
 
 
 def test_regression_follow_and_set_targets_force_moves_pinned_placement() -> None:
+    """Moves a pinned member onto the route when forced."""
     show = with_targets({"T1": {"pinned": True}})
     route = make_route(show, TID, "T4", [(6.0, 15.0)], members=FILE)
     moved = follow_and_set_targets(show, TID, route, force=True)
@@ -190,17 +212,20 @@ def test_regression_follow_and_set_targets_force_moves_pinned_placement() -> Non
 
 
 def test_regression_counter_march_refuses_locked_row() -> None:
+    """Raises LockedError when a file member row is locked."""
     with pytest.raises(LockedError):
         counter_march(_locked_show(), TID, FILE, turn_at=(6.0, 8.0))
 
 
 def test_regression_counter_march_refuses_pinned_placement() -> None:
+    """Raises LockedError when a file member is pinned."""
     show = with_targets({"T1": {"pinned": True}})
     with pytest.raises(LockedError):
         counter_march(show, TID, FILE, turn_at=(6.0, 8.0))
 
 
 def test_regression_counter_march_force_rewrites_locked_row_and_facing() -> None:
+    """Rewrites a locked row and its facing when forced."""
     moved = counter_march(_locked_show(), TID, FILE, turn_at=(6.0, 8.0), force=True)
     row = moved.transition(TID).row("T1")
     assert row.style == PathStyle.FOLLOW
@@ -208,6 +233,20 @@ def test_regression_counter_march_force_rewrites_locked_row_and_facing() -> None
 
 
 def test_regression_counter_march_force_moves_pinned_placement() -> None:
+    """Moves a pinned file member when forced."""
     show = with_targets({"T1": {"pinned": True}})
     moved = counter_march(show, TID, FILE, turn_at=(6.0, 8.0), force=True)
-    assert moved.set("2").get("T1").point != show.set("2").get("T1").point
+    assert approx_equal(moved.set("2").get("T1").point, (5.0, 8.0))
+
+
+@defect("UP-9.2-39")
+def test_regression_follow_cannot_replace_the_route_of_a_locked_row() -> None:
+    """Raises LockedError when `follow` replaces the route a locked row follows."""
+    show = follow_and_set_targets(
+        two_set_show(), TID, make_route(two_set_show(), TID, "T4", [(6.0, 15.0)], members=FILE)
+    )
+    show = show.replace(transitions=(lock(show.transition(TID), ["T1"]),))
+    route = show.transition(TID).routes
+    detour = make_route(show, TID, "T4", [(6.0, 12.0)], members=["T4"])
+    with pytest.raises(LockedError):
+        follow(show.transition(TID), detour.replace(id=next(iter(route))))
