@@ -15,6 +15,13 @@ Contains:
         of leaking LinAlgError
     test_regression_similarity_fit_rejects_wrong_shape(): raises GeometryError for non-2D points
         instead of leaking numpy errors
+    test_regression_similarity_fit_rejects_shape_mismatch(): rejects src and dst of different shape
+    test_regression_similarity_fit_rejects_infinite_input(): rejects infinite coordinates
+    test_regression_similarity_fit_rejects_one_point(): rejects a single matched point
+    test_regression_similarity_fit_error_codes(): reports a stable code for each refusal
+    test_similarity_fit_accepts_two_points_and_collinear_points(): fits input with no handedness
+    test_regression_similarity_fit_collinear_mirror_is_not_refused(): does not call float noise a
+        reflection
 """
 
 import warnings
@@ -31,8 +38,6 @@ def test_similarity_fit_needs_spread_points() -> None:
         similarity_fit(np.array([[1.0, 1.0], [1.0, 1.0]]), np.array([[0.0, 0.0], [2.0, 2.0]]))
 
 
-@pytest.mark.defect("UP-9.4-02")
-@pytest.mark.xfail(strict=True, reason="UP-9.4-02")
 def test_regression_similarity_fit_rejects_mirrored_landmarks() -> None:
     """Rejects a mirrored landmark set instead of fitting a wrong scale (audit 9.4; P0 #11)."""
     src = np.array([[0.0, 0.0], [4.0, 0.0], [0.0, 3.0]])
@@ -41,8 +46,6 @@ def test_regression_similarity_fit_rejects_mirrored_landmarks() -> None:
         similarity_fit(src, dst)
 
 
-@pytest.mark.defect("UP-9.4-03")
-@pytest.mark.xfail(strict=True, reason="UP-9.4-03")
 def test_regression_similarity_fit_rejects_coincident_targets() -> None:
     """Rejects coincident target landmarks instead of collapsing the show (audit 9.4)."""
     src = np.array([[0.0, 0.0], [4.0, 0.0]])
@@ -51,8 +54,6 @@ def test_regression_similarity_fit_rejects_coincident_targets() -> None:
         similarity_fit(src, dst)
 
 
-@pytest.mark.defect("UP-9.4-04")
-@pytest.mark.xfail(strict=True, reason="UP-9.4-04")
 def test_regression_similarity_fit_empty_input_raises_without_warning() -> None:
     """Raises GeometryError for no matches without a numpy RuntimeWarning (audit 9.4)."""
     with warnings.catch_warnings():
@@ -61,8 +62,6 @@ def test_regression_similarity_fit_empty_input_raises_without_warning() -> None:
             similarity_fit(np.empty((0, 2)), np.empty((0, 2)))
 
 
-@pytest.mark.defect("UP-9.4-05")
-@pytest.mark.xfail(strict=True, reason="UP-9.4-05")
 def test_regression_similarity_fit_rejects_nan_input() -> None:
     """Raises GeometryError for NaN points instead of leaking LinAlgError (audit 9.4)."""
     src = np.array([[0.0, 0.0], [4.0, 0.0]])
@@ -71,10 +70,67 @@ def test_regression_similarity_fit_rejects_nan_input() -> None:
         similarity_fit(src, dst)
 
 
-@pytest.mark.defect("UP-9.4-06")
-@pytest.mark.xfail(strict=True, reason="UP-9.4-06")
 def test_regression_similarity_fit_rejects_wrong_shape() -> None:
     """Raises GeometryError for non-2D points instead of leaking numpy errors (audit 9.4)."""
     src = np.array([[0.0, 0.0, 0.0], [4.0, 0.0, 0.0]])
     with pytest.raises(GeometryError):
         similarity_fit(src, src.copy())
+
+
+def test_regression_similarity_fit_rejects_shape_mismatch() -> None:
+    """Rejects src and dst of different shapes with BAD_SHAPE."""
+    with pytest.raises(GeometryError) as info:
+        similarity_fit(np.array([[0.0, 0.0], [4.0, 0.0]]), np.zeros((3, 2)))
+    assert info.value.code == "BAD_SHAPE"
+
+
+def test_regression_similarity_fit_rejects_infinite_input() -> None:
+    """Rejects infinite coordinates with NOT_FINITE."""
+    src = np.array([[0.0, 0.0], [4.0, 0.0]])
+    with pytest.raises(GeometryError) as info:
+        similarity_fit(src, np.array([[np.inf, 0.0], [1.0, 0.0]]))
+    assert info.value.code == "NOT_FINITE"
+
+
+def test_regression_similarity_fit_rejects_one_point() -> None:
+    """Rejects a single matched point with TOO_FEW_POINTS."""
+    with pytest.raises(GeometryError) as info:
+        similarity_fit(np.array([[1.0, 2.0]]), np.array([[3.0, 4.0]]))
+    assert info.value.code == "TOO_FEW_POINTS"
+
+
+@pytest.mark.parametrize(
+    ("src", "dst", "code"),
+    [
+        (np.zeros((2, 3)), np.zeros((2, 3)), "BAD_SHAPE"),
+        (np.empty((0, 2)), np.empty((0, 2)), "TOO_FEW_POINTS"),
+        ([[0.0, 0.0], [4.0, 0.0]], [[np.nan, 0.0], [1.0, 0.0]], "NOT_FINITE"),
+        ([[0.0, 0.0], [4.0, 0.0]], [[1.0, 1.0], [1.0, 1.0]], "DEGENERATE"),
+        ([[1.0, 1.0], [1.0, 1.0]], [[0.0, 0.0], [4.0, 0.0]], "DEGENERATE"),
+        ([[0.0, 0.0], [4.0, 0.0], [0.0, 3.0]], [[0.0, 0.0], [-4.0, 0.0], [0.0, 3.0]], "REFLECTION"),
+    ],
+)
+def test_regression_similarity_fit_error_codes(
+    src: list[list[float]], dst: list[list[float]], code: str
+) -> None:
+    """Reports a stable code and a hint for each refusal."""
+    with pytest.raises(GeometryError) as info:
+        similarity_fit(np.asarray(src), np.asarray(dst))
+    assert info.value.code == code
+    assert info.value.hint
+
+
+def test_similarity_fit_accepts_two_points_and_collinear_points() -> None:
+    """Fits two-point and collinear input, which have no handedness."""
+    two = similarity_fit(np.array([[0.0, 0.0], [1.0, 0.0]]), np.array([[0.0, 0.0], [0.0, 2.0]]))
+    assert two[:2, :2].round(9).tolist() == [[0.0, -2.0], [2.0, 0.0]]
+    line = np.array([[0.0, 0.0], [1.0, 0.0], [3.0, 0.0]])
+    three = similarity_fit(line, line * 2.0)
+    assert three[:2, :2].round(9).tolist() == [[2.0, 0.0], [0.0, 2.0]]
+
+
+def test_regression_similarity_fit_collinear_mirror_is_not_refused() -> None:
+    """Does not call float noise on collinear input a reflection."""
+    line = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]])
+    fit = similarity_fit(line, np.array([[0.0, 0.0], [-1.0, 0.0], [-2.0, 0.0]]))
+    assert np.isfinite(fit).all()
