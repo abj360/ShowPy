@@ -1,6 +1,6 @@
 # ADR 0006: One ID pattern, ASCII and grammar-safe, for every ID kind
 
-- Status: Proposed
+- Status: Accepted (2026-11-15)
 - Date: 2026-11-15
 - Deciders: the maintainer (abj360)
 

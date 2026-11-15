@@ -1,6 +1,6 @@
 # ADR 0014: Content hashes are SHA-256 over domain-tagged RFC 8785 canonical JSON
 
-- Status: Proposed
+- Status: Accepted (2026-11-15)
 - Date: 2026-11-15
 - Deciders: the maintainer (abj360)
 
