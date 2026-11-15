@@ -17,11 +17,14 @@ Contains:
         tempo, or leaves a timeline that still converts
     test_regression_duplicate_cue_order_is_rejected_or_ordered: rejects two cues with one order, or
         starts them at different times
-    test_regression_set_sync_validates_the_offset: rejects an offset AudioTrack itself rejects;
-        model_copy skips that check
+    test_regression_set_sync_validates_the_offset: rejects an offset AudioTrack itself rejects,
+        which model_copy used to skip
+    test_regression_set_sync_never_returns_a_timeline_its_validators_reject: rejects an infinite
+        offset instead of returning a timeline that fails revalidation
 """
 
 import math
+from typing import cast
 
 import pytest
 from pydantic import ValidationError as PydanticValidationError
@@ -353,6 +356,16 @@ def test_regression_duplicate_cue_order_is_rejected_or_ordered() -> None:
     except REJECTED:
         return
     assert len(starts) == 2
+
+
+def test_regression_set_sync_validates_the_offset() -> None:
+    """Rejects an offset AudioTrack itself rejects; model_copy skipped that check (audit 4.4).
+
+    The cast stands in for an untyped caller, such as JSON from an agent.
+    """
+    tl = attach_audio(_counts(), AudioTrack(file="a.wav", label="a"))
+    with pytest.raises(SchemaError):
+        set_sync(tl, "a", cast(float, UNPARSEABLE_OFFSET))
 
 
 def test_regression_set_sync_never_returns_a_timeline_its_validators_reject() -> None:
