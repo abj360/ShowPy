@@ -321,3 +321,12 @@ def test_regression_export_json_ignores_hash_seed() -> None:
     )
     assert all(first == second for first, second in digests), digests
     assert len({first for first, _ in digests}) == 1, digests
+
+
+def test_regression_import_json_keeps_the_duplicate_set_id_error() -> None:
+    document = export_json(two_set_show())
+    sets = document["show"]["sets"]
+    document["show"]["sets"] = [*sets, sets[0]]
+    with pytest.raises(SchemaError) as info:
+        import_json(document)
+    assert info.value.message == "set ids repeat"

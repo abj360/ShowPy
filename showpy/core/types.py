@@ -46,6 +46,10 @@ class FrozenModel(BaseModel):
         except ValidationError as exc:
             raise schema_error_from(exc, model=type(self).__name__) from exc
 
+    # Makes pydantic validate nested models through its core validator, so only the outermost
+    # call converts and the error keeps the outer model name and dotted locs.
+    __init__.__pydantic_base_init__ = True  # type: ignore[attr-defined]  # pyright: ignore[reportFunctionMemberAccess]
+
     @classmethod
     def model_validate(cls, obj: Any, **options: Any) -> Self:  # Any: pydantic passthrough
         """Validates an object into this model, raising SchemaError on bad data."""

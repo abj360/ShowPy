@@ -376,3 +376,15 @@ def test_regression_set_sync_validates_the_offset() -> None:
     tl = attach_audio(_counts(), AudioTrack(file="a.wav", label="a"))
     with pytest.raises(ShowPyError):
         set_sync(tl, "a", cast(float, UNPARSEABLE_OFFSET))
+
+
+def test_regression_from_json_keeps_a_validator_schema_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def reject(*_: object, **__: object) -> None:
+        raise SchemaError("timeline rule broken", hint="follow the rule")
+
+    monkeypatch.setattr(Timeline, "model_validate", reject)
+    with pytest.raises(SchemaError) as info:
+        from_json({})
+    assert info.value.message == "timeline rule broken"

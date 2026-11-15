@@ -25,7 +25,7 @@ from typing import Any
 import pandas as pd
 
 from showpy.choreo.engine import PathEngine
-from showpy.core.errors import SchemaError, UnknownRefError
+from showpy.core.errors import SchemaError, UnknownRefError, field_errors
 from showpy.core.types import Point
 from showpy.core.units import round_to
 from showpy.core.util import close_matches
@@ -109,12 +109,13 @@ def import_json(d: Mapping[str, Any]) -> Show:
     try:
         return Show.model_validate(body)
     except SchemaError as error:
-        first = error.context["errors"][0]
+        errors = field_errors(error)
+        first = errors[0]
         field = first["loc"]
         raise SchemaError(
             f"show field {field or '(root)'} is invalid: {first['msg']}",
             hint=f"fix {field or 'the show'} to match {SCHEMA_TAG}",
-            context={"field": field, "errors": len(error.context["errors"])},
+            context={"field": field, "errors": len(errors)},
         ) from error
 
 

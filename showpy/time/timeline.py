@@ -26,7 +26,13 @@ Contains:
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
-from showpy.core.errors import SchemaError, TimelineError, TimeRangeError, UnknownRefError
+from showpy.core.errors import (
+    SchemaError,
+    TimelineError,
+    TimeRangeError,
+    UnknownRefError,
+    field_errors,
+)
 from showpy.core.types import Count, CountsPerMinute, Seconds
 from showpy.time.models import (
     AudioTrack,
@@ -365,5 +371,5 @@ def from_json(d: dict[str, Any]) -> Timeline:
         raise SchemaError(
             "timeline JSON does not match the Timeline schema",
             hint="pass a dict produced by to_json()",
-            context={"errors": exc.context["errors"]},
+            context={"errors": field_errors(exc)},
         ) from exc

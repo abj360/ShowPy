@@ -416,3 +416,15 @@ def test_regression_cast_edits_accept_force() -> None:
         fn.__name__ for fn in EDITS_THAT_NEED_FORCE if "force" not in signature(fn).parameters
     ]
     assert missing == []
+
+
+def test_regression_edit_group_keeps_a_validator_schema_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def reject(*_: object, **__: object) -> None:
+        raise SchemaError("group rule broken", hint="follow the rule")
+
+    monkeypatch.setattr(Group, "model_validate", reject)
+    with pytest.raises(SchemaError) as info:
+        edit_group(rich_show(), "trumpets", moves=False)
+    assert info.value.message == "group rule broken"

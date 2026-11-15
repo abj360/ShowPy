@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 import shapely
 
 from showpy.cast.select import select
-from showpy.core.errors import GeometryError, SchemaError, UnknownRefError
+from showpy.core.errors import GeometryError, SchemaError, UnknownRefError, field_errors
 from showpy.core.ids import SetId, TransitionId
 from showpy.core.types import Meters, Point
 from showpy.core.util import close_matches
@@ -55,7 +55,7 @@ def _build_note(fields: dict[str, Any]) -> Note:
         note = Note.model_validate(fields)
     except SchemaError as error:
         raise SchemaError(
-            f"bad note: {error.context['errors'][0]['msg']}",
+            f"bad note: {field_errors(error)[0]['msg']}",
             hint=f"give only these fields: {', '.join(Note.model_fields)}",
             context={"fields": sorted(fields)},
         ) from error

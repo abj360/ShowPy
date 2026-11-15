@@ -23,7 +23,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from showpy.cast.models import Shape
 from showpy.choreo.models import Waypoint
-from showpy.core.errors import ShowPyError
+from showpy.core.errors import SchemaError, ShowPyError
 from showpy.core.types import Box2, FrozenModel, Region
 from showpy.sheet.models import Landmark
 from showpy.time.models import TempoSection
@@ -98,3 +98,33 @@ def test_regression_frozen_models_reject_non_finite_floats(
     """
     with pytest.raises((ShowPyError, PydanticValidationError)):
         build()
+
+
+class _Inner(FrozenModel):
+    a: int
+    b: int
+
+
+class _Outer(FrozenModel):
+    inner: _Inner
+    n: int
+
+
+def test_regression_nested_model_error_keeps_outer_locs() -> None:
+    with pytest.raises(SchemaError) as info:
+        _Outer.model_validate({"inner": {"a": "x", "b": "y"}, "n": "z"})
+    assert info.value.context["model"] == "_Outer"
+    assert [e["loc"] for e in info.value.context["errors"]] == ["inner.a", "inner.b", "n"]
+
+
+def test_regression_nested_construction_error_names_the_outermost_model() -> None:
+    with pytest.raises(SchemaError) as info:
+        _Outer(inner={"a": "x", "b": 1}, n="z")  # pyright: ignore[reportArgumentType]
+    assert info.value.context["model"] == "_Outer"
+    assert [e["loc"] for e in info.value.context["errors"]] == ["inner.a", "n"]
+
+
+def test_regression_library_model_reports_dotted_loc() -> None:
+    with pytest.raises(SchemaError) as info:
+        Box2.model_validate({"min": ("x", 0), "max": (1, 1)})
+    assert info.value.context["errors"][0]["loc"] == "min.0"

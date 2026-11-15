@@ -7,6 +7,7 @@ Contains:
     VersionError: reports a pinned version that is missing or incompatible
     SchemaError: reports data that fails its schema or text format
     schema_error_from(): converts a pydantic ValidationError into a SchemaError
+    field_errors(): returns the per-field errors of a converted SchemaError or re-raises it
     GeometryError: reports a degenerate shape
     ZeroLengthError: reports a request for the direction of a zero vector
     SpacingError: reports items that do not fit
@@ -115,6 +116,27 @@ def schema_error_from(exc: PydanticValidationError, *, model: str) -> SchemaErro
         hint=SCHEMA_ERROR_HINT,
         context={"model": model, "errors": errors},
     )
+
+
+def field_errors(error: SchemaError) -> list[dict[str, Any]]:
+    """Returns the per-field errors of a converted pydantic error, or re-raises the error.
+
+    A SchemaError raised by a model validator carries no field errors; it already teaches, so
+    it propagates unchanged.
+
+    Args:
+        error: SchemaError caught around a model validation call.
+
+    Returns:
+        errors: The `context["errors"]` list that `schema_error_from` produced.
+
+    >>> field_errors(SchemaError("x", hint="y", context={"errors": []}))
+    []
+    """
+    if "errors" not in error.context:
+        raise error
+    errors: list[dict[str, Any]] = error.context["errors"]
+    return errors
 
 
 def _truncate(text: str) -> str:
