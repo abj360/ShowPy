@@ -42,12 +42,6 @@ filter_commits = false
 tag_pattern = "v[0-9]*"
 sort_commits = "oldest"
 topo_order = false
-# d1f16d3 renamed the distribution without a breaking-change footer; history is not rewritten.
-commit_preprocessors = [
-    { pattern = '^build: (package as ShowPy with version from the tag and ranged dependencies)\s*$', replace = """build!: $1
-
-BREAKING CHANGE: the distribution is named ShowPy (was stage); install it as ShowPy.""" },
-]
 commit_parsers = [
     # 0f8a28a reverted this behavior before any release; the entry would contradict the shipped code.
     { message = '^feat\(export\): read legacy stage\.show\.v1 documents$', sha = "e0b7ad172d724db5b72fb0c6d1d7faad530c4d92", skip = true },
@@ -63,3 +57,32 @@ commit_parsers = [
     { message = "^chore", group = "<!-- 8 -->Chores" },
     { message = "^style", group = "<!-- 9 -->Style" },
 ]
+
+# Commits that changed public behavior without a breaking-change footer. History is not
+# rewritten (ruling R14 of the phase 1 plan), so these rewrite the messages git-cliff reads.
+
+# d1f16d3 renamed the distribution.
+[[git.commit_preprocessors]]
+pattern = '^build: (package as ShowPy with version from the tag and ranged dependencies)\s*$'
+replace = """build!: $1
+
+BREAKING CHANGE: the distribution is named ShowPy (was stage); install it as ShowPy."""
+
+# b1e12ed changed the error every model raises.
+[[git.commit_preprocessors]]
+pattern = '(?s)^fix\(core\): (raise SchemaError from every model constructor)\n(.*)$'
+replace = """fix(core)!: $1
+${2}
+
+BREAKING CHANGE: `FrozenModel` constructors, `model_validate` and `model_validate_json` \
+raise `SchemaError` instead of `pydantic.ValidationError`; `SchemaError` is not a \
+`ValueError`, so `except ValueError` no longer catches invalid model data."""
+
+# ea9832c stopped models from holding NaN and infinity.
+[[git.commit_preprocessors]]
+pattern = '(?s)^fix\(core\): (reject NaN and infinity in every model)\n(.*)$'
+replace = """fix(core)!: $1
+${2}
+
+BREAKING CHANGE: `FrozenModel` rejects NaN and infinity in every float field, so v0.2.0 \
+documents that hold `NaN` or `Infinity` no longer decode; they raise `SchemaError`."""
