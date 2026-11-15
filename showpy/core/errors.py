@@ -71,6 +71,11 @@ class ShowPyError(Exception):
         return f"{self.code}: {self.message} (hint: {self.hint})"
 
     def __reduce__(self) -> tuple[Callable[..., "ShowPyError"], tuple[object, ...]]:
+        """Pickles the error as its class, message, hint, context and code.
+
+        The cause, context chain and traceback are dropped by design: they can hold objects
+        that do not pickle, and the four fields already say what failed and what is allowed.
+        """
         return _rebuild, (type(self), self.message, self.hint, self.context, self.code)
 
 

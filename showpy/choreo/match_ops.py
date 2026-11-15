@@ -37,7 +37,7 @@ def with_set(show: Show, new: Set) -> Show:
 
     >>> from showpy.examples import two_set_show
     >>> show = two_set_show()
-    >>> with_set(show, show.set("2").model_copy(update={"label": "B"})).set("2").label
+    >>> with_set(show, show.set("2").replace(label="B")).set("2").label
     'B'
     """
     sets = tuple(new if s.id == new.id else s for s in show.sets)
