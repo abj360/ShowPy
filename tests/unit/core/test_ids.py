@@ -10,10 +10,20 @@ Contains:
     test_regression_format_tid_rejects_a_third_element: rejects a three-part transition ID instead
         of dropping the third
     test_check_id_*(): one rule of the ADR 0006 ID pattern each
+    test_regression_check_id_error_names_the_pattern: puts the ID pattern in the context and `..`
+        in the hint, as ADR 0006 decision 5 requires
+    test_regression_check_id_rejects_a_trailing_newline: rejects `a\\n`, which `ID_PATTERN.match`
+        accepts
+    test_check_id_agrees_with_the_pattern_on_unreserved_text: accepts exactly what
+        `ID_PATTERN.fullmatch` accepts, outside reserved names and `..`
     test_find_case_clashes_*(): one behavior of the case-clash finder each
 """
 
+import unicodedata
+
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from showpy.core.errors import SchemaError
 from showpy.core.ids import (
@@ -26,6 +36,11 @@ from showpy.core.ids import (
     format_tid,
     parse_ref,
     parse_tid,
+)
+
+ID_CANDIDATES = st.from_regex(ID_PATTERN, fullmatch=True) | st.text(
+    alphabet=st.characters(max_codepoint=0x7F) | st.sampled_from("\u00e9\u0663\u212a"),
+    max_size=ID_MAX_LENGTH + 2,
 )
 
 
@@ -138,3 +153,30 @@ def test_find_case_clashes_pairs_ids_equal_ignoring_case() -> None:
 def test_find_case_clashes_is_sorted_and_empty_without_clashes() -> None:
     assert find_case_clashes(["b", "A", "B", "a"]) == [("A", "a"), ("B", "b")]
     assert find_case_clashes(["T1", "T2"]) == []
+
+
+def test_regression_check_id_error_names_the_pattern() -> None:
+    with pytest.raises(SchemaError) as caught:
+        check_id("a b", kind="spot")
+    assert caught.value.context["pattern"] == ID_PATTERN.pattern
+    assert ".." in caught.value.hint
+
+
+def test_regression_check_id_rejects_a_trailing_newline() -> None:
+    assert ID_PATTERN.match("a\n") is not None
+    with pytest.raises(SchemaError) as caught:
+        check_id("a\n", kind="spot")
+    assert caught.value.context["position"] == 1
+
+
+@given(ID_CANDIDATES)
+def test_check_id_agrees_with_the_pattern_on_unreserved_text(text: str) -> None:
+    normalized = unicodedata.normalize("NFC", text)
+    if normalized.casefold() in RESERVED_IDS or ".." in normalized:
+        return
+    try:
+        check_id(text, kind="spot")
+    except SchemaError:
+        assert ID_PATTERN.fullmatch(normalized) is None
+    else:
+        assert ID_PATTERN.fullmatch(normalized) is not None

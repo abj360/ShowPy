@@ -1,12 +1,12 @@
 """
-ids.py --- ID aliases plus parsing and formatting of sheet references and transition IDs
+ids.py --- ID aliases, the ADR 0006 ID check, and sheet-reference and transition-ID parsing
 
 Contains:
     parse_ref(): reads `kind:id@version` into its parts
     format_ref(): writes a reference from its parts
     parse_tid(): reads `12→13` or `12->13` into a TransitionId
     format_tid(): writes a TransitionId as `12→13`
-    ID_PATTERN: matches the one ID shape of ADR 0006
+    ID_PATTERN: matches the one ID shape of ADR 0006; check with fullmatch, never match
     ID_MAX_LENGTH: bounds the characters of one ID
     RESERVED_IDS: names no ID may take, compared ignoring case
     check_id(): validates one ID and returns its NFC-normalized text
@@ -34,6 +34,8 @@ REF_PATTERN = re.compile(r"^(?P<kind>[A-Za-z][\w-]*):(?P<id>[^@:\s]+)(?:@(?P<ver
 ARROWS = ("→", "->")
 ARROW = "→"
 
+# `$` also matches before a final newline, so `ID_PATTERN.match("a\n")` succeeds: validate with
+# check_id or ID_PATTERN.fullmatch, never match or search.
 ID_PATTERN = re.compile(r"^[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,62}[A-Za-z0-9_])?$")
 ID_MAX_LENGTH = 64
 RESERVED_IDS = frozenset(
@@ -44,7 +46,8 @@ RESERVED_IDS = frozenset(
 ID_CONTEXT_TEXT_CHARS = 80
 ID_BODY_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.")
 ID_HINT = (
-    "use 1 to 64 ASCII letters, digits, _ and . (no leading or trailing .), not a reserved name"
+    "use 1 to 64 ASCII letters, digits, _ and . (no leading or trailing . and no ..),"
+    " not a reserved name"
 )
 
 
@@ -131,6 +134,7 @@ def check_id(text: str, *, kind: str) -> str:
             "kind": kind,
             "text": normalized[:ID_CONTEXT_TEXT_CHARS],
             "position": position,
+            "pattern": ID_PATTERN.pattern,
         },
     )
 
@@ -145,7 +149,7 @@ def _first_bad_position(text: str) -> int | None:
     doubled = text.find("..")
     if doubled != -1:
         return doubled + 1
-    if text.casefold() in RESERVED_IDS or ID_PATTERN.match(text) is None:
+    if text.casefold() in RESERVED_IDS or ID_PATTERN.fullmatch(text) is None:
         return _edge_position(text)
     return None
 
