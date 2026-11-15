@@ -20,6 +20,7 @@ Contains:
 """
 
 import functools
+import inspect
 import math
 import signal
 import subprocess
@@ -51,7 +52,7 @@ FULL_TURN = 360.0
 HALF_TURN = 180.0
 ALLOCATION_HEADROOM_BYTES = 256 * 2**20
 COVERAGE_PACKAGE = "coverage"
-HANG_RETRY_S = 0.01
+HANG_RETRY_S = 0.05
 EXPECTED_FAILURES = ("ValidationError", "SchemaError", "ShowPyError")
 HASH_SEEDS = ("1", "2", "3")
 SUBPROCESS_TIMEOUT_S = 20
@@ -212,10 +213,12 @@ def fails_after(
 ) -> Callable[[Callable[TestParams, None]], Callable[TestParams, None]]:
     """Fails the decorated test when it is still running after `seconds`, via SIGALRM (POSIX).
 
-    pytest-timeout's signal method raises wherever the alarm lands. Landing in coverage's
+    pytest-timeout's signal method raises once, wherever the alarm lands. Landing in coverage's
     C-tracer callback between its data lock's acquire and release left the lock held, and the
-    next traced file deadlocked the whole run (CI on Python 3.12/3.13, 2026-11-14). The alarm
-    is therefore re-armed while coverage code is on the stack.
+    next traced file deadlocked the run (CI on Python 3.12/3.13, 2026-11-14); landing in a
+    finalizer or GC callback dropped the exception as unraisable, and the hang ran on until the
+    runner ran out of memory (CI, 2026-11-15). So the alarm repeats every HANG_RETRY_S until the
+    test unwinds, and it skips ticks while coverage code or this wrapper is running.
 
     Args:
         seconds: Wall-clock budget before the test fails as a hang.
@@ -224,14 +227,15 @@ def fails_after(
     def decorate(test: Callable[TestParams, None]) -> Callable[TestParams, None]:
         @functools.wraps(test)
         def guarded(*args: TestParams.args, **kwargs: TestParams.kwargs) -> None:
+            own_frame = inspect.currentframe()
+
             def interrupt(_signum: int, frame: FrameType | None) -> None:
-                if _inside_coverage(frame):
-                    signal.setitimer(signal.ITIMER_REAL, HANG_RETRY_S)
+                if frame is own_frame or _inside_coverage(frame):
                     return
                 pytest.fail(f"Timeout >{seconds}s", pytrace=False)
 
             previous = signal.signal(signal.SIGALRM, interrupt)
-            signal.setitimer(signal.ITIMER_REAL, seconds)
+            signal.setitimer(signal.ITIMER_REAL, seconds, HANG_RETRY_S)
             try:
                 test(*args, **kwargs)
             finally:
