@@ -159,7 +159,7 @@ def fuzz(session: nox.Session) -> None:
     cleanly when no target exists yet.
     """
     _require_same_python(session)
-    session.env.setdefault("HYPOTHESIS_PROFILE", FUZZ_PROFILE)
+    session.env["HYPOTHESIS_PROFILE"] = os.environ.get("HYPOTHESIS_PROFILE", FUZZ_PROFILE)
     session.env["PYTHONHASHSEED"] = DEFAULT_HASH_SEED
     _uv_run(session, "pytest", "-m", "fuzz", *session.posargs, success_codes=[0, NO_TESTS_EXIT])
 

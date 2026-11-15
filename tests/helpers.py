@@ -57,6 +57,7 @@ FULL_TURN = 360.0
 HALF_TURN = 180.0
 ALLOCATION_HEADROOM_BYTES = 256 * 2**20
 FUZZ_BUDGET_S = 5.0
+SAMPLE_REPR_CHARS = 200
 # Code running here is a tracer, finalizer or error hook: an exception raised in it is lost
 # or corrupts the hook, so a hang alarm waits for the next tick instead.
 NO_ALARM_MODULES = frozenset(
@@ -336,6 +337,14 @@ def fails_after(
     return decorate
 
 
+def _shortened(sample: object) -> str:
+    """Returns the repr of `sample`, cut to SAMPLE_REPR_CHARS characters."""
+    text = repr(sample)
+    if len(text) <= SAMPLE_REPR_CHARS:
+        return text
+    return f"{text[:SAMPLE_REPR_CHARS]}... ({len(text)} chars)"
+
+
 def only_showpy_errors(call: Callable[[], object], sample: object = None) -> None:
     """Runs `call` under a 5 s hang alarm and fails the test on any non-ShowPyError exception.
 
@@ -356,7 +365,8 @@ def only_showpy_errors(call: Callable[[], object], sample: object = None) -> Non
             return
         except Exception as error:
             pytest.fail(
-                f"{type(error).__name__} escaped on input {sample!r}: {error}", pytrace=False
+                f"{type(error).__name__} escaped on input {_shortened(sample)}: {error}",
+                pytrace=False,
             )
 
     _run_under_hang_alarm(FUZZ_BUDGET_S, guarded_call)

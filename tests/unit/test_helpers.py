@@ -14,6 +14,7 @@ Contains:
     test_only_showpy_errors_rejects_a_builtin_error(): fails a call that raises KeyError
     test_only_showpy_errors_accepts_a_showpy_error(): lets a ShowPyError and a normal return pass
     test_only_showpy_errors_names_the_input(): puts the sample input in the failure message
+    test_only_showpy_errors_truncates_a_large_input(): bounds the input shown in the message
     test_only_showpy_errors_fails_a_hang(): fails a call that outlasts the 5 s budget
 """
 
@@ -275,3 +276,11 @@ def test_only_showpy_errors_fails_a_hang() -> None:
 
     with pytest.raises(pytest.fail.Exception, match="Timeout"):
         only_showpy_errors(spin)
+
+
+@posix_only
+def test_only_showpy_errors_truncates_a_large_input() -> None:
+    """Keeps the failure message short however large the generated input is."""
+    with pytest.raises(pytest.fail.Exception) as failure:
+        only_showpy_errors(_raise_key_error, sample="x" * 100_000)
+    assert len(str(failure.value)) < 400
