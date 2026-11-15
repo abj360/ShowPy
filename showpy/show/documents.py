@@ -24,7 +24,7 @@ from typing import Any
 from pydantic_core import to_jsonable_python
 
 from showpy.choreo.models import Form, Set, TransitionSpec
-from showpy.core.errors import SchemaError, StorageError
+from showpy.core.errors import SchemaError, StorageError, field_errors
 from showpy.core.ids import SetId, TransitionId
 from showpy.show.manage import SET_ID_PATTERN
 from showpy.show.models import Show
@@ -255,10 +255,9 @@ def decode_show(docs: Mapping[str, bytes], revision: str = "") -> Show:
     try:
         return _assemble(docs, revision)
     except SchemaError as exc:
-        if "errors" not in exc.context:
-            raise
+        errors = field_errors(exc)
         raise SchemaError(
             "show documents do not match the Show schema",
             hint="write documents produced by save_show(), or fix the fields named in context",
-            context={"errors": exc.context["errors"]},
+            context={"errors": errors},
         ) from exc

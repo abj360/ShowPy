@@ -115,7 +115,7 @@ def import_json(d: Mapping[str, Any]) -> Show:
         raise SchemaError(
             f"show field {field} is invalid: {first['msg']}",
             hint=f"fix {'the show' if field == ROOT_LOC else field} to match {SCHEMA_TAG}",
-            context={"field": field, "errors": len(errors)},
+            context={"field": field, "error_count": len(errors)},
         ) from error
 
 

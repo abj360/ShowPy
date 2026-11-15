@@ -20,6 +20,8 @@ Contains:
     test_regression_export_json_ignores_hash_seed(): dumps spot tags and selections in one order
         under every hash seed
     test_import_json_rejects_the_old_stage_tag(): refuses a document tagged stage.show.v1
+    test_regression_import_json_counts_field_errors_under_error_count(): stores the number of
+        failing fields as `error_count`, not as an int under `errors`
     test_frames_csv_is_byte_identical_across_runs_and_hash_seeds(): writes one CSV per show
 """
 
@@ -330,3 +332,10 @@ def test_regression_import_json_keeps_the_duplicate_set_id_error() -> None:
     with pytest.raises(SchemaError) as info:
         import_json(document)
     assert info.value.message == "set ids repeat"
+
+
+def test_regression_import_json_counts_field_errors_under_error_count() -> None:
+    with pytest.raises(SchemaError) as caught:
+        import_json({"schema": SCHEMA_TAG, "show": {"id": "x"}})
+    assert "errors" not in caught.value.context
+    assert caught.value.context["error_count"] >= 1
