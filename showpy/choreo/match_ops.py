@@ -6,6 +6,7 @@ the touching transitions, so those rows are dropped and the spot moves straight 
 
 Contains:
     with_set(): returns a show with one set replaced by ID
+    forms_of_set(): returns the forms a set places, ignoring stale forms it no longer lists
     is_elsewhere(): tells whether a placement differs in position or presence from a target
     clear_rows(): drops stored path rows of some spots in one transition, respecting locks
     apply_match(): writes a match result into a transition's destination set, forms included
@@ -45,6 +46,27 @@ def with_set(show: Show, new: Set) -> Show:
     """
     sets = tuple(new if s.id == new.id else s for s in show.sets)
     return show.replace(sets=sets)
+
+
+def forms_of_set(show: Show, set_id: SetId) -> dict[FormId, Form]:
+    """Returns the forms stamped with `set_id` that the set lists in `Set.forms`.
+
+    A form the set no longer lists (it was re-placed without it) is stale and left out. A set
+    that lists no forms, because its forms were stored without `place`, owns every form
+    stamped with its ID.
+
+    >>> from showpy.choreo.forms import line_form
+    >>> from showpy.examples import two_set_show
+    >>> row = line_form("row", ["T1"], (0, 12), (2, 12), set_id="2")
+    >>> list(forms_of_set(two_set_show().replace(forms={"row": row}), "2"))
+    ['row']
+    """
+    listed = show.set(set_id).forms
+    return {
+        form_id: form
+        for form_id, form in show.forms.items()
+        if form.set == set_id and (not listed or form_id in listed)
+    }
 
 
 def clear_rows(
@@ -90,6 +112,12 @@ def _form_poses(show: Show, set_id: SetId, form_id: FormId) -> tuple[Points, lis
             f"form {form_id} belongs to set {form.set}, not {set_id}",
             hint=f"match onto forms of set {set_id}",
             context={"form": form_id, "form_set": form.set, "set": set_id},
+        )
+    if form_id not in forms_of_set(show, set_id):
+        raise MatchError(
+            f"set {set_id} no longer places form {form_id}",
+            hint=f"match onto forms set {set_id} lists, or re-place the set with this form",
+            context={"form": form_id, "set": set_id, "set_forms": list(show.set(set_id).forms)},
         )
     return slot_poses(form)
 
@@ -146,9 +174,8 @@ def _matched_members(form: Form, result: MatchResult) -> tuple[SpotId, ...]:
 def _matched_forms(show: Show, set_id: SetId, result: MatchResult, force: bool) -> Show:
     touched = {form_id for form_id, _ in result.slots.values()}
     forms = dict(show.forms)
-    for form_id, form in show.forms.items():
-        involved = form_id in touched or bool(set(form.members) & set(result.slots))
-        if form.set != set_id or not involved:
+    for form_id, form in forms_of_set(show, set_id).items():
+        if form_id not in touched and not set(form.members) & set(result.slots):
             continue
         members = _matched_members(form, result)
         if members != form.members:

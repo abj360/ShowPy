@@ -7,6 +7,7 @@ Contains:
     make_set(): builds set "1" from (entity, x, y) rows, with some spots off the field
     make_facing_set(): builds set "1" from (entity, x, y, facing) rows, with off and pinned spots
     pin_spot(): pins one spot's placement in one set of a show
+    replaced_form_show(): places form a on set "2", then re-places the set with form b only
     with_curve_rows(): gives the spots curved path rows through (1, 7) in transition 1 -> 2
     open_session(): saves a show to a fresh repository and opens agent and designer workspaces
     bisector_rotation(): returns a pivot and sweep whose arc carries one point onto another
@@ -38,10 +39,13 @@ from typing import ParamSpec, TypeVar, cast
 
 import pytest
 
+from showpy.choreo.form_place import place
+from showpy.choreo.forms import line_form
 from showpy.choreo.match_ops import with_set
 from showpy.choreo.models import PathRow, PathStyle, Placement, Set, TransitionSpec, Waypoint
 from showpy.core.errors import ShowPyError
 from showpy.core.types import Point
+from showpy.examples import two_set_show
 from showpy.show.models import Show
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import Workspace, open_workspace, save_show
@@ -124,6 +128,18 @@ def make_facing_set(
 def pin_spot(show: Show, set_id: str, entity: str) -> Show:
     """Pins the placement of `entity` in set `set_id`."""
     return with_set(show, show.set(set_id).with_placements({entity: {"pinned": True}}))
+
+
+def replaced_form_show() -> Show:
+    """Stores form a (T1..T4) on set "2", then re-places the set with form b (T2, T3) only.
+
+    Both forms stay in `Show.forms`, but the set lists only b, so a is stale.
+    """
+    show = two_set_show()
+    first, (stale,) = place(show, "2", [line_form("a", ["T1", "T2", "T3", "T4"], (0, 9), (6, 9))])
+    show = with_set(show, first).replace(forms={"a": stale})
+    second, (current,) = place(show, "2", [line_form("b", ["T2", "T3"], (0, 12), (2, 12))])
+    return with_set(show, second).replace(forms={"a": stale, "b": current})
 
 
 def with_curve_rows(show: Show, entities: Iterable[str], locked: bool = False) -> Show:

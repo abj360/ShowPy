@@ -14,9 +14,9 @@ import numpy as np
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
 from showpy.choreo.forms import placements, slot_poses
 from showpy.choreo.match import match
-from showpy.choreo.match_ops import clear_rows, is_elsewhere, with_set
+from showpy.choreo.match_ops import clear_rows, forms_of_set, is_elsewhere, with_set
 from showpy.choreo.models import Form, MatchOptions, Placement, Set
-from showpy.core.errors import MatchError, SchemaError, UnknownRefError
+from showpy.core.errors import MatchError, SchemaError, ShowPyError, UnknownRefError
 from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.types import Degrees, Points
 from showpy.core.util import close_matches
@@ -217,6 +217,17 @@ def _form_of(forms: Mapping[FormId, Form], form_id: FormId) -> Form:
     )
 
 
+def _check_placed(show: Show, form: Form) -> None:
+    if form.id not in forms_of_set(show, form.set):
+        listed = list(show.set(form.set).forms)
+        raise ShowPyError(
+            f"set {form.set} no longer places form {form.id}; it places {', '.join(listed)}",
+            hint="re-place the set with this form, or delete the form",
+            context={"form": form.id, "set": form.set, "set_forms": listed},
+            code="STALE_FORM",
+        )
+
+
 def rebuild(
     show: Show, form_id: FormId, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS
 ) -> Show:
@@ -228,6 +239,7 @@ def rebuild(
     are dropped, so they move straight; rows of unmoved members are kept, since a facing
     change does not alter a row's geometry. A locked row of a moved member needs force=True.
     Pinned members stay where they are unless force=True moves them; they keep their pin.
+    A form its set no longer lists (the set was re-placed without it) raises STALE_FORM.
 
     >>> from showpy.choreo.forms import line_form
     >>> from showpy.examples import two_set_show
@@ -237,6 +249,7 @@ def rebuild(
     12.0
     """
     form = _form_of(show.forms, form_id)
+    _check_placed(show, form)
     target = show.set(form.set)
     fresh = [p for p in placements(form, registry) if force or not target.get(p.entity).pinned]
     updates = {p.entity: _placement(target.get(p.entity), p) for p in fresh}

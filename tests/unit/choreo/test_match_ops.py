@@ -17,6 +17,10 @@ Contains:
     test_regression_apply_match_rejects_an_unknown_form: raises UnknownRefError
     test_regression_apply_match_rejects_an_out_of_range_slot: raises MatchError for a slot past
         the form's last slot or below zero
+    test_regression_apply_match_ignores_a_form_the_set_no_longer_places: leaves a stale form
+        alone and does not refuse the match because of it
+    test_regression_apply_match_rejects_slots_of_a_form_the_set_no_longer_places: raises
+        MatchError instead of writing a stale form
     test_apply_match_leaves_unchanged_slots_alone: skips spots already in their slot
     test_apply_match_trims_trailing_empty_slots: drops trailing holes from members
     test_regression_clear_rows_keeps_transition_order: leaves show.transitions in their original
@@ -34,7 +38,7 @@ from showpy.core.errors import LockedError, MatchError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
-from tests.helpers import pin_spot, with_curve_rows
+from tests.helpers import pin_spot, replaced_form_show, with_curve_rows
 
 TID = ("1", "2")
 ROW_SPOTS = ("T1", "T2")
@@ -219,6 +223,24 @@ def test_regression_apply_match_rejects_an_out_of_range_slot(slot: int) -> None:
     with pytest.raises(MatchError) as caught:
         apply_match(show, TID, result)
     assert caught.value.context == {"form": "ring", "slot": slot, "slots": len(REVERSED_RING)}
+
+
+def test_regression_apply_match_ignores_a_form_the_set_no_longer_places() -> None:
+    """Matches onto the set's current form while a stale form still names it (lane G review)."""
+    show = replaced_form_show()
+    matched = apply_match(show, TID, match_by_order(["T3", "T2"], show.forms["b"], show.set("1")))
+    assert matched.forms["a"] == show.forms["a"]
+    assert matched.forms["b"].members == ("T3", "T2")
+    assert matched.set("2").get("T3").point == (0.0, 12.0)
+
+
+def test_regression_apply_match_rejects_slots_of_a_form_the_set_no_longer_places() -> None:
+    """Refuses slots of a form the set no longer lists, writing nothing (lane G review)."""
+    show = replaced_form_show()
+    result = match_by_order(["T1"], show.forms["a"], show.set("1"))
+    with pytest.raises(MatchError) as caught:
+        apply_match(show, TID, result)
+    assert caught.value.context == {"form": "a", "set": "2", "set_forms": ["b"]}
 
 
 def test_apply_match_leaves_unchanged_slots_alone() -> None:

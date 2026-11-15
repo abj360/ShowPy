@@ -28,6 +28,8 @@ Contains:
         without force when the member of a locked row moves
     test_regression_rebuild_regenerates_facing_and_keeps_rows_of_unmoved_members: regenerates
         the facing of a member whose position did not change, and keeps its rows
+    test_regression_rebuild_refuses_a_form_the_set_no_longer_places: raises STALE_FORM instead
+        of pulling spots back onto a form the set dropped
 """
 
 import pytest
@@ -36,11 +38,17 @@ from showpy.choreo.form_place import filled_forms, place, rebuild
 from showpy.choreo.forms import circle_form, line_form
 from showpy.choreo.match_ops import with_set
 from showpy.choreo.models import MatchOptions
-from showpy.core.errors import LockedError, MatchError, SchemaError, UnknownRefError
+from showpy.core.errors import (
+    LockedError,
+    MatchError,
+    SchemaError,
+    ShowPyError,
+    UnknownRefError,
+)
 from showpy.core.util import approx_equal
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
-from tests.helpers import pin_spot, with_curve_rows
+from tests.helpers import pin_spot, replaced_form_show, with_curve_rows
 
 TID = ("1", "2")
 ROW_SPOTS = ("T1", "T3")
@@ -273,3 +281,12 @@ def test_regression_rebuild_regenerates_facing_and_keeps_rows_of_unmoved_members
     assert set(rebuilt.transition(TID).rows) == set(ROW_SPOTS)
     assert rebuilt.set("2").get("T1").facing == expected
     assert rebuilt.set("2").get("T1").note == "n"
+
+
+def test_regression_rebuild_refuses_a_form_the_set_no_longer_places() -> None:
+    """Refuses to pull spots back onto a form its set dropped (lane G review)."""
+    show = replaced_form_show()
+    with pytest.raises(ShowPyError) as caught:
+        rebuild(show, "a")
+    assert caught.value.code == "STALE_FORM"
+    assert caught.value.context == {"form": "a", "set": "2", "set_forms": ["b"]}
