@@ -30,6 +30,8 @@ Contains:
         the facing of a member whose position did not change, and keeps its rows
     test_regression_rebuild_refuses_a_form_the_set_no_longer_places: raises STALE_FORM instead
         of pulling spots back onto a form the set dropped
+    test_regression_rebuild_after_place_moves_nobody_on_a_sparse_form: keeps every spot where
+        place() put it when the filled sparse form is rebuilt
 """
 
 import pytest
@@ -290,3 +292,16 @@ def test_regression_rebuild_refuses_a_form_the_set_no_longer_places() -> None:
         rebuild(show, "a")
     assert caught.value.code == "STALE_FORM"
     assert caught.value.context == {"form": "a", "set": "2", "set_forms": ["b"]}
+
+
+@pytest.mark.defect("UP-9.6-62")
+@pytest.mark.xfail(strict=True, reason="UP-9.6-62")
+def test_regression_rebuild_after_place_moves_nobody_on_a_sparse_form() -> None:
+    """Keeps every spot in place when a filled sparse form is rebuilt (lane G review; G-R4)."""
+    show = two_set_show()
+    form = line_form("f", ["T1"], (0, UPSTAGE_ROW_Y), (12, UPSTAGE_ROW_Y), n=SPARSE_SLOTS)
+    placed, (filled,) = place(show, "2", [form], MatchOptions(pinned={"T4": 4}))
+    stored = with_set(show, placed).replace(forms={"f": filled})
+    rebuilt = rebuild(stored, "f").set("2")
+    for before in placed.placements:
+        assert approx_equal(rebuilt.get(before.entity).point, before.point, FORM_COORD_TOL)
