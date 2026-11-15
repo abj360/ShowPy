@@ -30,7 +30,7 @@ import numpy.typing as npt
 import shapely
 
 from showpy.core.canonical import canonical_value, jcs
-from showpy.core.errors import SchemaError
+from showpy.core.errors import MAX_ECHOED_INPUT_CHARS, SchemaError
 from showpy.core.types import Points
 
 ID_PARTS = re.compile(r"^(?P<prefix>.*?)(?P<number>\d+)$")
@@ -39,6 +39,8 @@ RANGE_PATTERN = re.compile(r"^([A-Za-z_]+)(\d+)-([A-Za-z_]+)(\d+)$")
 RANGE_DASH = "–"
 LOGGER = logging.getLogger("showpy")
 HASH_PREFIX = "showpy-hash/1"
+# The domain is one line of the hash header, so it may not hold a newline or forge a kind line.
+HASH_DOMAIN_PATTERN = re.compile(r"[a-z0-9_.]+")
 CLOSE_MATCH_COUNT = 3
 CLOSE_MATCH_CUTOFF = 0.4
 
@@ -163,7 +165,8 @@ def content_hash(obj: object, *, domain: str = "showpy.content") -> str:
 
     Args:
         obj: Bytes, text or any value `canonical_value` accepts.
-        domain: Name of what the hash identifies, so equal content in two domains differs.
+        domain: Name of what the hash identifies, so equal content in two domains differs;
+            only lowercase ASCII letters, digits, `_` and `.`.
 
     Returns:
         digest: 64 lowercase hex characters.
@@ -173,6 +176,12 @@ def content_hash(obj: object, *, domain: str = "showpy.content") -> str:
     >>> content_hash({"a": 1}) == content_hash({"a": 1}, domain="showpy.revision")
     False
     """
+    if HASH_DOMAIN_PATTERN.fullmatch(domain) is None:
+        raise SchemaError(
+            f"hash domain {domain[:MAX_ECHOED_INPUT_CHARS]!r} is not allowed",
+            hint="use lowercase ASCII letters, digits, _ and . only, as in showpy.revision",
+            context={"domain": domain[:MAX_ECHOED_INPUT_CHARS]},
+        )
     if isinstance(obj, bytes):
         kind, payload = "bytes", obj
     elif isinstance(obj, str):

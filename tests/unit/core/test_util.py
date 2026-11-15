@@ -15,6 +15,8 @@ Contains:
     test_content_hash_separates_domains_and_kinds: gives equal content different hashes per
         domain, and bytes, text and JSON different hashes
     test_content_hash_ignores_hash_seed: hashes the example show alike under two hash seeds
+    test_regression_content_hash_rejects_a_domain_outside_its_alphabet: rejects a newline or any
+        character outside `[a-z0-9_.]`, which could forge the kind line of the hash header
     test_regression_content_hash_equal_for_signed_zero: hashes 0.0 and -0.0 alike
     test_regression_content_hash_equal_for_int_and_float_one: hashes 1 and 1.0 alike
     test_regression_content_hash_separates_string_from_object: keeps the string '{"a":1}' and the
@@ -520,3 +522,10 @@ def test_content_hash_ignores_hash_seed() -> None:
     )
     assert all(first == second for first, second in digests), digests
     assert len({first for first, _ in digests}) == 1, digests
+
+
+@pytest.mark.parametrize("domain", ["", "a\njson", "Showpy.content", "showpy-content", "a b"])
+def test_regression_content_hash_rejects_a_domain_outside_its_alphabet(domain: str) -> None:
+    with pytest.raises(SchemaError) as caught:
+        content_hash({"a": 1}, domain=domain)
+    assert caught.value.context["domain"] == domain
