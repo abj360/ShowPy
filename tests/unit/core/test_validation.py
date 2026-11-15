@@ -5,6 +5,8 @@ test_validation.py --- tests ValidationReport status and one-line rendering
 
 Contains:
     test_*(): one behavior of showpy.core.validation each
+    test_regression_require_finite_echoes_a_huge_int_by_its_bit_count: says a 5,000-digit int is
+        too large for a float and keeps the error context printable
 """
 
 from typing import Literal
@@ -69,7 +71,7 @@ def test_require_finite_returns_float() -> None:
 def test_require_finite_names_the_parameter_in_context() -> None:
     with pytest.raises(SchemaError) as caught:
         require_finite(0.0, name="tol", low=0.0, low_open=True)
-    assert caught.value.context == {"name": "tol", "value": 0.0, "low": 0.0, "high": None}
+    assert caught.value.context == {"name": "tol", "value": "0.0", "low": 0.0, "high": None}
 
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
@@ -115,3 +117,12 @@ def test_require_finite_accepts_numpy_scalars_and_returns_python_float() -> None
 def test_require_finite_rejects_numpy_bool() -> None:
     with pytest.raises(SchemaError):
         require_finite(np.bool_(True), name="n")  # type: ignore[arg-type]
+
+
+def test_regression_require_finite_echoes_a_huge_int_by_its_bit_count() -> None:
+    huge = 10**5000
+    with pytest.raises(SchemaError) as caught:
+        require_finite(huge, name="n")
+    assert "too large for a float" in caught.value.message
+    assert caught.value.context["value"] == f"<int of {huge.bit_length()} bits>"
+    assert "bits" in repr(caught.value.context)

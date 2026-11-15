@@ -16,7 +16,7 @@ from typing import Literal
 import numpy as np
 from pydantic import BaseModel, ValidationError
 
-from showpy.core.errors import SchemaError, schema_error_from
+from showpy.core.errors import SchemaError, bounded_repr, schema_error_from
 from showpy.core.types import FrozenModel
 
 LEVEL_PREFIX = {"error": "E", "warning": "W"}
@@ -99,7 +99,8 @@ def require_finite(
 
     Args:
         value: The number to check; any real number, numpy scalars included. Bools, non-numbers
-            and ints too large for a float are rejected.
+            and ints too large for a float are rejected. The error context echoes it as text
+            through `bounded_repr`.
         name: Parameter name, echoed in the error context.
         low: Lower bound, or None for no lower bound.
         low_open: Whether `low` itself is rejected.
@@ -111,13 +112,17 @@ def require_finite(
     >>> require_finite(2, name="tol", low=0.0, low_open=True)
     2.0
     """
-    context = {"name": name, "value": value, "low": low, "high": high}
+    context = {"name": name, "value": bounded_repr(value), "low": low, "high": high}
     if isinstance(value, bool | np.bool_) or not isinstance(value, Real):
         raise SchemaError(f"{name} must be a number", hint="pass an int or float", context=context)
     try:
         number = float(value)
-    except OverflowError:
-        number = math.inf
+    except OverflowError as exc:
+        raise SchemaError(
+            f"{name} must be finite; it is too large for a float",
+            hint="pass a finite number",
+            context=context,
+        ) from exc
     if not math.isfinite(number):
         raise SchemaError(f"{name} must be finite", hint="pass a finite number", context=context)
     if low is not None and (number < low or (low_open and number == low)):

@@ -11,16 +11,26 @@ Contains:
     test_regression_converted_schema_error_survives_pickling: round-trips a schema_error_from error
     test_regression_model_construction_raises_schema_error: rejects a bad Placement with SchemaError
     test_regression_schema_error_truncates_echoed_input: caps each echoed input at 80 characters
+    test_regression_box_with_a_huge_int_corner_raises_a_printable_schema_error: echoes a
+        5,000-digit coordinate by its bit count
+    test_regression_spot_with_a_huge_int_id_raises_a_printable_schema_error: echoes a 5,000-digit
+        spot ID by its bit count
+    test_regression_root_level_schema_error_names_the_root: renders an empty loc as `(root)`
+    test_regression_bounded_repr_prints_ints_below_the_digit_floor: echoes a 640-digit int under
+        the lowest interpreter digit limit
 """
 
 import copy
 import pickle
+import sys
 
 import pytest
 from pydantic import ValidationError
 
+from showpy.cast.models import Spot
 from showpy.choreo.models import Placement
 from showpy.core.errors import (
+    MAX_ECHOED_INPUT_CHARS,
     ConflictError,
     ContinuityError,
     GeometryError,
@@ -30,7 +40,13 @@ from showpy.core.errors import (
     ShowPyError,
     StorageError,
     ZeroLengthError,
+    bounded_repr,
 )
+from showpy.core.types import Box2
+
+HUGE_INT = 10**5000
+HUGE_INT_ECHO = f"<int of {HUGE_INT.bit_length()} bits>"
+LOWEST_INT_DIGIT_LIMIT = 640
 
 
 def test_error_carries_code_message_context_and_hint() -> None:
@@ -124,3 +140,43 @@ def test_regression_schema_error_truncates_echoed_input() -> None:
         Placement(entity="A", x="a" * 10_000, y=0)  # pyright: ignore[reportArgumentType]
     assert len(info.value.context["errors"][0]["input"]) <= 80
     assert "a" * 81 not in str(info.value)
+
+
+def test_regression_box_with_a_huge_int_corner_raises_a_printable_schema_error() -> None:
+    with pytest.raises(SchemaError) as info:
+        Box2(min=(HUGE_INT, 0), max=(1, 1))
+    assert info.value.context["errors"][0]["input"] == HUGE_INT_ECHO
+    assert HUGE_INT_ECHO in repr(info.value.context)
+
+
+def test_regression_spot_with_a_huge_int_id_raises_a_printable_schema_error() -> None:
+    with pytest.raises(SchemaError) as info:
+        Spot(id=HUGE_INT, group="g")  # pyright: ignore[reportArgumentType]
+    assert info.value.context["errors"][0]["input"] == HUGE_INT_ECHO
+    assert HUGE_INT_ECHO in repr(info.value.context)
+
+
+def test_regression_root_level_schema_error_names_the_root() -> None:
+    with pytest.raises(SchemaError) as info:
+        Box2.model_validate("not a box")
+    assert info.value.context["errors"][0]["loc"] == "(root)"
+    assert "(root):" in info.value.message
+
+
+def test_regression_bounded_repr_prints_ints_below_the_digit_floor() -> None:
+    largest_printed = 10**LOWEST_INT_DIGIT_LIMIT - 1
+    previous_limit = sys.get_int_max_str_digits()
+    sys.set_int_max_str_digits(LOWEST_INT_DIGIT_LIMIT)
+    try:
+        assert bounded_repr(largest_printed) == "9" * MAX_ECHOED_INPUT_CHARS
+        assert bounded_repr(-largest_printed - 1).startswith("<int of ")
+    finally:
+        sys.set_int_max_str_digits(previous_limit)
+
+
+def test_bounded_repr_survives_a_container_too_long_to_print() -> None:
+    assert bounded_repr((HUGE_INT,)) == "<unprintable tuple>"
+
+
+def test_bounded_repr_keeps_text_unquoted_and_cut() -> None:
+    assert bounded_repr("a" * 200) == "a" * MAX_ECHOED_INPUT_CHARS

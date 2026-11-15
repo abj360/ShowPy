@@ -8,6 +8,7 @@ Contains:
     SchemaError: reports data that fails its schema or text format
     schema_error_from(): converts a pydantic ValidationError into a SchemaError
     field_errors(): returns the per-field errors of a converted SchemaError or re-raises it
+    bounded_repr(): renders a value for an error context in at most 80 characters, never raising
     GeometryError: reports a degenerate shape
     ZeroLengthError: reports a request for the direction of a zero vector
     SpacingError: reports items that do not fit
@@ -31,6 +32,11 @@ from pydantic import ValidationError as PydanticValidationError
 
 MAX_LISTED_ERRORS = 5
 MAX_ECHOED_INPUT_CHARS = 80
+# CPython refuses to print ints longer than sys.int_max_str_digits, which the environment can
+# lower to 640 and no further; ints at or past this bound echo by size so every environment
+# prints the same text.
+ECHO_INT_LIMIT = 10**640
+ROOT_LOC = "(root)"
 SCHEMA_ERROR_HINT = "fix the fields named in context"
 
 
@@ -115,11 +121,9 @@ def schema_error_from(exc: PydanticValidationError, *, model: str) -> SchemaErro
     """
     errors = [
         {
-            "loc": ".".join(str(part) for part in item["loc"]),
+            "loc": ".".join(str(part) for part in item["loc"]) or ROOT_LOC,
             "msg": item["msg"],
-            "input": _truncate(
-                repr(item["input"]) if not isinstance(item["input"], str) else item["input"]
-            ),
+            "input": bounded_repr(item["input"]),
         }
         for item in exc.errors(include_url=False, include_context=False)
     ]
@@ -152,7 +156,29 @@ def field_errors(error: SchemaError) -> list[dict[str, Any]]:
     return errors
 
 
-def _truncate(text: str) -> str:
+def bounded_repr(value: object) -> str:
+    """Renders a value for an error context in at most 80 characters, never raising on size.
+
+    Text echoes as itself, ints of 640 or more digits as their bit count, and anything else as
+    its `repr`, or as its type name when the repr holds an int too long to print.
+
+    Args:
+        value: Input to echo, as received from the caller.
+
+    Returns:
+        echo: Printable text of at most 80 characters.
+
+    >>> bounded_repr(10**700)
+    '<int of 2326 bits>'
+    >>> bounded_repr([1.5, "a"])
+    "[1.5, 'a']"
+    """
+    if isinstance(value, int) and abs(value) >= ECHO_INT_LIMIT:
+        return f"<int of {value.bit_length()} bits>"
+    try:
+        text = value if isinstance(value, str) else repr(value)
+    except ValueError:
+        text = f"<unprintable {type(value).__name__}>"
     return text[:MAX_ECHOED_INPUT_CHARS]
 
 
