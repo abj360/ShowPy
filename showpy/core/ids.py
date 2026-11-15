@@ -8,7 +8,7 @@ Contains:
     format_tid(): writes a TransitionId as `12→13`
     ID_PATTERN: matches the one ID shape of ADR 0006; check with fullmatch, never match
     ID_MAX_LENGTH: bounds the characters of one ID
-    RESERVED_IDS: names no ID may take, compared ignoring case
+    RESERVED_IDS: names no ID may take, compared ignoring case; device names also bar `con.5`
     check_id(): validates one ID and returns its NFC-normalized text
     find_case_clashes(): lists pairs of IDs that differ only by case
 """
@@ -38,16 +38,20 @@ ARROW = "→"
 # check_id or ID_PATTERN.fullmatch, never match or search.
 ID_PATTERN = re.compile(r"^[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,62}[A-Za-z0-9_])?$")
 ID_MAX_LENGTH = 64
-RESERVED_IDS = frozenset(
-    {"all", "con", "prn", "aux", "nul"}
+GRAMMAR_KEYWORD = "all"
+# Microsoft's "Naming Files, Paths, and Namespaces" lists COM1 to COM9 and LPT1 to LPT9, not
+# COM0 or LPT0 (ADR 0006, addendum 2026-11-15).
+WINDOWS_DEVICE_NAMES = frozenset(
+    {"con", "prn", "aux", "nul"}
     | {f"com{n}" for n in range(1, 10)}
     | {f"lpt{n}" for n in range(1, 10)}
 )
+RESERVED_IDS = frozenset({GRAMMAR_KEYWORD}) | WINDOWS_DEVICE_NAMES
 ID_CONTEXT_TEXT_CHARS = 80
 ID_BODY_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.")
 ID_HINT = (
     "use 1 to 64 ASCII letters, digits, _ and . (no leading or trailing . and no ..),"
-    " not a reserved name"
+    " not all or a Windows device name (con, com1, con.txt)"
 )
 
 
@@ -113,12 +117,16 @@ def format_tid(tid: TransitionId) -> str:
 def check_id(text: str, *, kind: str) -> str:
     """Validates one ID against the ADR 0006 pattern and returns its NFC-normalized text.
 
+    Reserved names are rejected, and so is a Windows device name followed by an extension
+    (`con.5`), which Windows opens as the device.
+
     Args:
         text: Candidate ID as typed or stored.
         kind: What the ID names (`spot`, `set`, `form`), used in the message and context.
 
     Returns:
-        normalized_id: The ID after NFC normalization.
+        normalized_id: The ID after NFC normalization. Store this, not `text`: NFC can turn
+            non-ASCII input into a valid ID (the Kelvin sign becomes `K`).
 
     >>> check_id("12A", kind="set")
     '12A'
@@ -149,14 +157,20 @@ def _first_bad_position(text: str) -> int | None:
     doubled = text.find("..")
     if doubled != -1:
         return doubled + 1
-    if text.casefold() in RESERVED_IDS or ID_PATTERN.fullmatch(text) is None:
+    if _is_reserved(text) or ID_PATTERN.fullmatch(text) is None:
         return _edge_position(text)
     return None
 
 
+def _is_reserved(text: str) -> bool:
+    """Tells whether an ID is reserved, or is a Windows device name followed by an extension."""
+    folded = text.casefold()
+    return folded in RESERVED_IDS or folded.partition(".")[0] in WINDOWS_DEVICE_NAMES
+
+
 def _edge_position(text: str) -> int:
     """Finds the index that breaks the pattern or reserved-word rule in an otherwise clean ID."""
-    if not text or text.startswith(".") or text.casefold() in RESERVED_IDS:
+    if not text or text.startswith(".") or _is_reserved(text):
         return 0
     return len(text) - 1
 

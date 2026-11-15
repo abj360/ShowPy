@@ -16,6 +16,12 @@ Contains:
         accepts
     test_check_id_agrees_with_the_pattern_on_unreserved_text: accepts exactly what
         `ID_PATTERN.fullmatch` accepts, outside reserved names and `..`
+    test_regression_check_id_rejects_a_device_name_before_an_extension: rejects `con.5`, which
+        Windows opens as the console device
+    test_check_id_accepts_names_that_only_start_like_a_device: accepts `cons.5`, `com10` and
+        `all.1`
+    test_check_id_returns_the_ascii_id_nfc_makes: turns the Kelvin sign into `K`, so callers store
+        the returned ID
     test_find_case_clashes_*(): one behavior of the case-clash finder each
 """
 
@@ -172,7 +178,8 @@ def test_regression_check_id_rejects_a_trailing_newline() -> None:
 @given(ID_CANDIDATES)
 def test_check_id_agrees_with_the_pattern_on_unreserved_text(text: str) -> None:
     normalized = unicodedata.normalize("NFC", text)
-    if normalized.casefold() in RESERVED_IDS or ".." in normalized:
+    stem = normalized.casefold().partition(".")[0]
+    if normalized.casefold() in RESERVED_IDS or stem in RESERVED_IDS or ".." in normalized:
         return
     try:
         check_id(text, kind="spot")
@@ -180,3 +187,20 @@ def test_check_id_agrees_with_the_pattern_on_unreserved_text(text: str) -> None:
         assert ID_PATTERN.fullmatch(normalized) is None
     else:
         assert ID_PATTERN.fullmatch(normalized) is not None
+
+
+@pytest.mark.parametrize("text", ["con.5", "AUX.txt", "lpt1.2", "Nul.tar.gz", "COM9.x"])
+def test_regression_check_id_rejects_a_device_name_before_an_extension(text: str) -> None:
+    with pytest.raises(SchemaError) as caught:
+        check_id(text, kind="spot")
+    assert caught.value.context["position"] == 0
+
+
+@pytest.mark.parametrize("text", ["cons.5", "com10", "com0.1", "all.1", "a.con", "auxiliary"])
+def test_check_id_accepts_names_that_only_start_like_a_device(text: str) -> None:
+    assert check_id(text, kind="spot") == text
+
+
+def test_check_id_returns_the_ascii_id_nfc_makes() -> None:
+    kelvin_one = "\u212a1"
+    assert check_id(kelvin_one, kind="spot") == "K1"

@@ -127,3 +127,22 @@ Audit decision 4 asks for the pattern and the reserved words.
 - Code: `showpy/core/ids.py`, `showpy/core/util.py` (`ID_PARTS`, `RANGE_PATTERN`),
   `showpy/show/manage.py`, `showpy/show/repositories.py`, `showpy/show/documents.py`.
 - Related: ADR 0004 (set keys), ADR 0007 (format v2 migration), ADR 0008 (selection precedence).
+
+## Addendum 2026-11-15: device names before an extension, COM0 and LPT0, and NFC
+
+- **A reserved device name followed by an extension is reserved too.** Windows treats `NUL.txt`
+  and `NUL.tar.gz` as `NUL`, so `con.5`, `AUX.txt` and `lpt1.2` cannot be folder names either.
+  `check_id` now rejects an ID when the part before its first `.`, compared ignoring case, is a
+  Windows device name. `all` stays a whole-ID rule: `all.1` is not the grammar keyword and names
+  no device, so it is accepted. Names that only start with a device name, such as `cons.5` or
+  `com10`, are accepted. The error position is 0, as for a bare reserved name.
+- **COM0 and LPT0 are not reserved.** Microsoft's "Naming Files, Paths, and Namespaces" (Win32
+  docs, `ms.date` 2024-08-28, read 2026-11-15) lists `CON`, `PRN`, `AUX`, `NUL`, `COM1` to `COM9`,
+  `COM¹`, `COM²`, `COM³`, `LPT1` to `LPT9`, `LPT¹`, `LPT²` and `LPT³`. `COM0` appears there only
+  as an example symlink in the NT `Global??` namespace, not in the reserved list, so
+  `RESERVED_IDS` keeps its 23 names. The superscript forms need no entry: `¹`, `²` and `³` are
+  outside the ASCII character set and already rejected.
+- **NFC can turn non-ASCII input into a valid ID.** Decision 4 says NFC changes no valid ID; it
+  can still change an invalid one into a valid one. `check_id("\u212a1")` (U+212A KELVIN SIGN,
+  then `1`) returns `"K1"`, because the Kelvin sign's canonical decomposition is ASCII `K`.
+  Callers must store the returned value, never the text they passed in.
