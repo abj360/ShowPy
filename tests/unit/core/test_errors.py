@@ -8,6 +8,7 @@ Contains:
     test_regression_every_error_survives_pickling: round-trips every ShowPyError subclass through
         pickle
     test_regression_every_error_survives_deepcopy: deep-copies every ShowPyError subclass
+    test_regression_converted_schema_error_survives_pickling: round-trips a schema_error_from error
     test_regression_model_construction_raises_schema_error: rejects a bad Placement with SchemaError
     test_regression_schema_error_truncates_echoed_input: caps each echoed input at 80 characters
 """
@@ -80,8 +81,6 @@ def _sample(error_class: type[ShowPyError]) -> ShowPyError:
     return error_class("boom", hint="fix it", context={"key": 1}, code="X")
 
 
-@pytest.mark.defect("UP-9.3-29")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-29")
 def test_regression_every_error_survives_pickling() -> None:
     """Round-trips every ShowPyError subclass through pickle (audit 9.3)."""
     for error_class in _every_error_class():
@@ -91,13 +90,25 @@ def test_regression_every_error_survives_pickling() -> None:
         assert clone.context == {"key": 1}
 
 
-@pytest.mark.defect("UP-9.3-30")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-30")
 def test_regression_every_error_survives_deepcopy() -> None:
     """Deep-copies every ShowPyError subclass (audit 9.3)."""
     for error_class in _every_error_class():
         clone = copy.deepcopy(_sample(error_class))
         assert (clone.code, clone.message, clone.hint) == ("X", "boom", "fix it")
+
+
+def test_regression_converted_schema_error_survives_pickling() -> None:
+    with pytest.raises(SchemaError) as info:
+        Placement(entity="A", x="abc", y=0)  # pyright: ignore[reportArgumentType]
+    clone = pickle.loads(pickle.dumps(info.value))
+    assert type(clone) is SchemaError
+    assert clone.context == info.value.context
+    assert (clone.code, clone.message, clone.hint) == (
+        info.value.code,
+        info.value.message,
+        info.value.hint,
+    )
+    assert clone.__cause__ is None
 
 
 def test_regression_model_construction_raises_schema_error() -> None:

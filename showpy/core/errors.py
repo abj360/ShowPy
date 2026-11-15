@@ -24,7 +24,7 @@ Contains:
     DeprecatedWarning: warns that a deprecated API was used
 """
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any, ClassVar
 
 from pydantic import ValidationError as PydanticValidationError
@@ -63,6 +63,19 @@ class ShowPyError(Exception):
 
     def __str__(self) -> str:
         return f"{self.code}: {self.message} (hint: {self.hint})"
+
+    def __reduce__(self) -> tuple[Callable[..., "ShowPyError"], tuple[object, ...]]:
+        return _rebuild, (type(self), self.message, self.hint, self.context, self.code)
+
+
+def _rebuild(
+    error_class: type[ShowPyError],
+    message: str,
+    hint: str,
+    context: Mapping[str, Any],
+    code: str,
+) -> ShowPyError:
+    return error_class(message, hint=hint, context=context, code=code)
 
 
 class UnknownRefError(ShowPyError):
