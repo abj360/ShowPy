@@ -368,6 +368,12 @@
       "seconds": "Seconds"
     }
   },
+  "ID_MAX_LENGTH": {
+    "constant": "64"
+  },
+  "ID_PATTERN": {
+    "constant": "re.compile('^[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,62}[A-Za-z0-9_])?$')"
+  },
   "InMemoryAssetStore": "() -> None",
   "InMemoryRepository": "() -> None",
   "InMemorySheetStore": "() -> None",
@@ -674,6 +680,9 @@
     }
   },
   "QuadPiece": "(start: Point, control: Point, end: Point) -> None",
+  "RESERVED_IDS": {
+    "constant": "['all', 'aux', 'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9', 'con', 'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9', 'nul', 'prn']"
+  },
   "Region": {
     "model": {
       "exterior": "Ring",
@@ -1121,6 +1130,7 @@
   "change_amount": "(a: showpy.choreo.models.Set, b: showpy.choreo.models.Set) -> Meters",
   "changelog": "(ws: showpy.show.storage.Workspace, since: str = '') -> str",
   "chart": "(show: showpy.show.models.Show, set_id: SetId, publication: showpy.export.models.Publication | None = None) -> showpy.export.models.Chart",
+  "check_id": "(text: str, *, kind: str) -> str",
   "check_unlocked": "(form: showpy.choreo.models.Form, force: bool) -> None",
   "chunk_counts": "(total: float, parts: int) -> list[float]",
   "circle": "(center: Point, radius: Meters, start_deg: Degrees = 0.0) -> showpy.geo.curves.CircleCurve",
@@ -1200,6 +1210,7 @@
   "fill_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], outline: showpy.core.types.Region | shapely.geometry.polygon.Polygon | showpy.geo.curve_base.Curve | object, interval: Meters, pattern: FillPattern = 'grid', angle_deg: Degrees = 0.0, facing: showpy.choreo.models.FacingSpec | None = None, *, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",
   "fill_spots": "(show: 'Show', region: Area | showpy.core.types.Region, group: str, set_id: SetId, interval: Meters | None = None, n: int | None = None) -> 'Show'",
   "filled_forms": "(placed: showpy.choreo.models.Set, forms: collections.abc.Sequence[showpy.choreo.models.Form]) -> list[showpy.choreo.models.Form]",
+  "find_case_clashes": "(ids: collections.abc.Iterable[str]) -> list[tuple[str, str]]",
   "fit_circle": "(points: object) -> tuple[Point, Meters, float]",
   "fit_line": "(points: object) -> tuple[Point, Point, float]",
   "follow": "(spec: showpy.choreo.models.TransitionSpec, route: showpy.choreo.models.Route, start: float = 0.0, end: float | None = None) -> showpy.choreo.models.TransitionSpec",

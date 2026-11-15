@@ -6,9 +6,18 @@ Contains:
     format_ref(): writes a reference from its parts
     parse_tid(): reads `12→13` or `12->13` into a TransitionId
     format_tid(): writes a TransitionId as `12→13`
+    ID_PATTERN: matches the one ID shape of ADR 0006
+    ID_MAX_LENGTH: bounds the characters of one ID
+    RESERVED_IDS: names no ID may take, compared ignoring case
+    check_id(): validates one ID and returns its NFC-normalized text
+    find_case_clashes(): lists pairs of IDs that differ only by case
 """
 
 import re
+import unicodedata
+from collections import defaultdict
+from collections.abc import Iterable
+from itertools import combinations
 
 from showpy.core.errors import SchemaError
 
@@ -24,6 +33,19 @@ type LandmarkId = str
 REF_PATTERN = re.compile(r"^(?P<kind>[A-Za-z][\w-]*):(?P<id>[^@:\s]+)(?:@(?P<version>[^@\s]+))?$")
 ARROWS = ("→", "->")
 ARROW = "→"
+
+ID_PATTERN = re.compile(r"^[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,62}[A-Za-z0-9_])?$")
+ID_MAX_LENGTH = 64
+RESERVED_IDS = frozenset(
+    {"all", "con", "prn", "aux", "nul"}
+    | {f"com{n}" for n in range(1, 10)}
+    | {f"lpt{n}" for n in range(1, 10)}
+)
+ID_CONTEXT_TEXT_CHARS = 80
+ID_BODY_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.")
+ID_HINT = (
+    "use 1 to 64 ASCII letters, digits, _ and . (no leading or trailing .), not a reserved name"
+)
 
 
 def parse_ref(text: str) -> tuple[str, str, str | None]:
@@ -83,3 +105,71 @@ def format_tid(tid: TransitionId) -> str:
     '12→13'
     """
     return f"{tid[0]}{ARROW}{tid[1]}"
+
+
+def check_id(text: str, *, kind: str) -> str:
+    """Validates one ID against the ADR 0006 pattern and returns its NFC-normalized text.
+
+    Args:
+        text: Candidate ID as typed or stored.
+        kind: What the ID names (`spot`, `set`, `form`), used in the message and context.
+
+    Returns:
+        normalized_id: The ID after NFC normalization.
+
+    >>> check_id("12A", kind="set")
+    '12A'
+    """
+    normalized = unicodedata.normalize("NFC", text)
+    position = _first_bad_position(normalized)
+    if position is None:
+        return normalized
+    raise SchemaError(
+        f"bad {kind} id {normalized[:ID_CONTEXT_TEXT_CHARS]!r}",
+        hint=ID_HINT,
+        context={
+            "kind": kind,
+            "text": normalized[:ID_CONTEXT_TEXT_CHARS],
+            "position": position,
+        },
+    )
+
+
+def _first_bad_position(text: str) -> int | None:
+    """Finds the index of the first character that breaks the ID rules, or None if none does."""
+    for index, char in enumerate(text):
+        if char not in ID_BODY_CHARS:
+            return index
+    if len(text) > ID_MAX_LENGTH:
+        return ID_MAX_LENGTH
+    doubled = text.find("..")
+    if doubled != -1:
+        return doubled + 1
+    if text.casefold() in RESERVED_IDS or ID_PATTERN.match(text) is None:
+        return _edge_position(text)
+    return None
+
+
+def _edge_position(text: str) -> int:
+    """Finds the index that breaks the pattern or reserved-word rule in an otherwise clean ID."""
+    if not text or text.startswith(".") or text.casefold() in RESERVED_IDS:
+        return 0
+    return len(text) - 1
+
+
+def find_case_clashes(ids: Iterable[str]) -> list[tuple[str, str]]:
+    """Lists pairs of distinct IDs that are equal once case is folded.
+
+    Args:
+        ids: IDs of one namespace, such as the spots of a cast.
+
+    Returns:
+        clashes: Sorted pairs `(a, b)` with `a < b` and `a.casefold() == b.casefold()`.
+
+    >>> find_case_clashes(["T1", "t1", "B2"])
+    [('T1', 't1')]
+    """
+    folded: defaultdict[str, set[str]] = defaultdict(set)
+    for item in ids:
+        folded[item.casefold()].add(item)
+    return sorted(pair for group in folded.values() for pair in combinations(sorted(group), 2))

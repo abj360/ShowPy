@@ -151,6 +151,8 @@ def describe_public_object(obj: object) -> JsonValue:
         return {"protocol": _protocol_members(obj)}
     if callable(obj):
         return _signature_text(obj)
+    if isinstance(obj, frozenset | set):
+        return {"constant": repr(sorted(obj, key=repr))}
     return {"constant": repr(obj)}
 
 
