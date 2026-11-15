@@ -232,5 +232,5 @@ def with_form(draw: st.DrawFn, show: Show, set_id: str, form_id: str) -> Show:
     members = draw(st.lists(st.sampled_from(ids), min_size=MIN_MEMBERS, unique=True))
     kind = draw(st.sampled_from(FORM_KINDS))
     form = draw(forms_of(kind, form_id, members, show.sheet, set_id))
-    placed = with_set(show, place(show, set_id, [form]))
-    return apply_change(placed, [FormOp(form=form)])
+    placed_set, (filled,) = place(show, set_id, [form])
+    return apply_change(with_set(show, placed_set), [FormOp(form=filled)])

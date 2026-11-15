@@ -1292,7 +1292,7 @@
   "pin": "(show: showpy.show.models.Show, target: PinTarget, pin_id: str, reason: str = '', by: str = 'designer') -> showpy.show.models.Show",
   "pins": "(show: showpy.show.models.Show) -> list[showpy.show.models.Pin]",
   "pinwheel": "(forms: collections.abc.Sequence[showpy.choreo.models.Form], center: Point, deg: Degrees, force: bool = False) -> list[showpy.choreo.models.Form]",
-  "place": "(show: showpy.show.models.Show, set_id: SetId, forms: collections.abc.Sequence[showpy.choreo.models.Form], match_options: showpy.choreo.models.MatchOptions | None = None, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> showpy.choreo.models.Set",
+  "place": "(show: showpy.show.models.Show, set_id: SetId, forms: collections.abc.Sequence[showpy.choreo.models.Form], match_options: showpy.choreo.models.MatchOptions | None = None, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> tuple[showpy.choreo.models.Set, list[showpy.choreo.models.Form]]",
   "placements": "(form: showpy.choreo.models.Form, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> list[showpy.choreo.models.Placement]",
   "point_landmark": "(mark_id: str, name: str, p: Point, *aliases: str) -> showpy.sheet.models.Landmark",
   "polyline": "(*pts: Point, closed: bool = False) -> showpy.geo.curves.Polyline",
