@@ -14,7 +14,7 @@ import numpy as np
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
 from showpy.choreo.forms import placements, slot_poses
 from showpy.choreo.match import match
-from showpy.choreo.match_ops import SAME_POSITION_TOL, clear_rows, with_set
+from showpy.choreo.match_ops import clear_rows, is_elsewhere, with_set
 from showpy.choreo.models import Form, MatchOptions, Placement, Set
 from showpy.core.errors import MatchError, SchemaError, UnknownRefError
 from showpy.core.ids import FormId, SetId, SpotId
@@ -65,14 +65,6 @@ def _previous(show: Show, set_id: SetId) -> Set:
 
 def _placement(current: Placement, update: Placement) -> Placement:
     return update.replace(note=current.note, pinned=current.pinned, on_field=True)
-
-
-def _has_moved(current: Placement, fresh: Placement) -> bool:
-    return (
-        abs(current.x - fresh.x) > SAME_POSITION_TOL
-        or abs(current.y - fresh.y) > SAME_POSITION_TOL
-        or not current.on_field
-    )
 
 
 def _matched(
@@ -230,11 +222,12 @@ def rebuild(
 ) -> Show:
     """Regenerates a form's placements in its set and resets its members' neighbouring paths.
 
-    A member moved when its x or y changes by more than `SAME_POSITION_TOL` or it was off the
-    field; members that did not move are not rewritten, and keep their path rows. Stored path
-    rows of the moved members in the transitions into and out of the set are dropped, so they
-    move straight; a locked row of a moved member needs force=True. Pinned members stay where
-    they are unless force=True moves them; they keep their pin.
+    Every non-pinned member takes its regenerated pose, form and order, keeping its note. A
+    member moved when its x or y changes by more than `SAME_POSITION_TOL` or it was off the
+    field. Stored path rows of the moved members in the transitions into and out of the set
+    are dropped, so they move straight; rows of unmoved members are kept, since a facing
+    change does not alter a row's geometry. A locked row of a moved member needs force=True.
+    Pinned members stay where they are unless force=True moves them; they keep their pin.
 
     >>> from showpy.choreo.forms import line_form
     >>> from showpy.examples import two_set_show
@@ -246,13 +239,10 @@ def rebuild(
     form = _form_of(show.forms, form_id)
     target = show.set(form.set)
     fresh = [p for p in placements(form, registry) if force or not target.get(p.entity).pinned]
-    updates = {
-        p.entity: _placement(target.get(p.entity), p)
-        for p in fresh
-        if _has_moved(target.get(p.entity), p)
-    }
+    updates = {p.entity: _placement(target.get(p.entity), p) for p in fresh}
+    moved = [e for e, p in updates.items() if is_elsewhere(target.get(e), p.x, p.y)]
     edited = with_set(show, target.with_placements(updates, force=force))
     for tid in edited.transition_ids():
         if form.set in tid:
-            edited = clear_rows(edited, tid, list(updates), force)
+            edited = clear_rows(edited, tid, moved, force)
     return edited

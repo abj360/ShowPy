@@ -26,8 +26,8 @@ Contains:
         member that a forced rebuild moved
     test_regression_rebuild_raises_for_a_locked_row_of_a_moved_member: still raises LockedError
         without force when the member of a locked row moves
-    test_regression_rebuild_facing_only_change_keeps_rows: keeps rows and facing of a member whose
-        position did not change
+    test_regression_rebuild_regenerates_facing_and_keeps_rows_of_unmoved_members: regenerates
+        the facing of a member whose position did not change, and keeps its rows
 """
 
 import pytest
@@ -263,10 +263,12 @@ def test_regression_rebuild_raises_for_a_locked_row_of_a_moved_member() -> None:
     assert set(rebuild(show, "row", force=True).transition(TID).rows) == set()
 
 
-def test_regression_rebuild_facing_only_change_keeps_rows() -> None:
-    """Keeps rows and facing of members whose position did not change (G-R6)."""
+def test_regression_rebuild_regenerates_facing_and_keeps_rows_of_unmoved_members() -> None:
+    """Regenerates facing of members whose position did not change, keeping their rows (G-R11)."""
     base = with_curve_rows(_row_show(), ROW_SPOTS)
-    turned = with_set(base, base.set("2").with_placements({"T1": {"facing": 45.0}}))
+    expected = base.set("2").get("T1").facing
+    turned = with_set(base, base.set("2").with_placements({"T1": {"facing": 45.0, "note": "n"}}))
     rebuilt = rebuild(turned, "row")
     assert set(rebuilt.transition(TID).rows) == set(ROW_SPOTS)
-    assert rebuilt.set("2").get("T1").facing == 45.0
+    assert rebuilt.set("2").get("T1").facing == expected
+    assert rebuilt.set("2").get("T1").note == "n"
