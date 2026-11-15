@@ -30,9 +30,9 @@ for one field is designed for that field; carrying it to another is a new design
 3. **Sheet customizations stay editable.** Zones, landmarks and the coordinate display are part
    of the same field and can change; they never move stored positions (project rule 1).
 4. **Moving drill to another field means a new show.** The designer creates a show on the new
-   sheet and copies forms into it. ShowPy has no dedicated copy function today; a form is plain
-   data, and its members must exist in the new show's cast. A helper that copies forms between
-   shows is a separate feature, decided when it is needed.
+   sheet and places the old forms in it with `place(new_show, set_id, forms)`. A form is plain
+   data; choosing which spot of the new cast fills each member is the designer's or the host's
+   call, so ShowPy adds no copy helper.
 
 ## Alternatives
 
@@ -63,8 +63,8 @@ for one field is designed for that field; carrying it to another is a new design
 ## What would change our mind
 
 - Designers routinely re-staging one show at venues with different fields, with drill that should
-  survive the move unchanged: then a copy-forms helper comes first, and a whole-show swap only if
-  that proves too coarse.
+  survive the move unchanged: then a whole-show swap is reconsidered with those venues as test
+  cases.
 
 ## References
 
