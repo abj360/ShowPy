@@ -34,7 +34,7 @@ Use `uv` only, never pip.
 1. `CLAUDE.md` (project) and `~/.claude/CLAUDE.md` (user style: file headers with a `Contains:` section, verb-first docstrings, no AI trailers on commits).
 2. `docs/adr/0001-library-layout-and-reference-fixes.md`: 24 fixes to the reference, the origin convention (front-center), the facing vector `(sin θ, −cos θ)`, and why subpackage `__init__` files are empty.
 3. `docs/adr/0002-path-engine.md`, plus its three addenda: segment probe density, time-based measures living in `showpy.choreo`, and the `min_gaps` hotspot forecast.
-4. `docs/upgrade-plan.md` and `docs/superpowers/plans/2026-11-13-phase-0-safety-net.md`: the upgrade program and its first phase.
+4. `docs/upgrade-plan.md` and `docs/superpowers/plans/2026-11-15-phase-1-priority-0.md`: the upgrade program and the current phase's plan, with its ADRs 0003 to 0006, 0014 and 0017.
 
 ## Module map (what exists)
 
@@ -53,7 +53,8 @@ Use `uv` only, never pip.
 ## Upgrade program
 
 The library is being upgraded in phases; `docs/upgrade-plan.md` holds the program and
-`docs/superpowers/plans/2026-11-13-phase-0-safety-net.md` the Phase 0 plan.
+`docs/superpowers/plans/` the current phase's plan. A phase's plan is deleted once its release
+is tagged; the tag and git history keep it.
 
 **Phase 0, safety net: merged and tagged `v0.2.0` on 2026-11-15** (PR #3, merge commit `89d676f`).
 
@@ -72,10 +73,11 @@ The library is being upgraded in phases; `docs/upgrade-plan.md` holds the progra
    class outside `AnyCurve`.
 
 **Next: Phase 1, Priority 0.** Make the Priority 0 ledger tests pass: storage data loss and
-traversal, principal enforcement, guaranteed segment bounds, hangs and unbounded allocations,
-hash-seed determinism, publication tokens, sheet replacement, form consistency after matching,
-and every lock and pin bypass. Removing a fixed test's `defect` and `xfail` markers is part of
-the fix.
+traversal, commit validation, guaranteed segment bounds, hangs and unbounded allocations,
+hash-seed determinism, publication tokens, form consistency after matching, and every lock and
+pin bypass. Removing a fixed test's `defect` and `xfail` markers is part of the fix. By the
+maintainer's decisions of 2026-11-15, permissions, authorship, commit messages and undo move to
+the host app (ADR 0003), and sheet replacement is removed (ADR 0017).
 
 Still open from the original build: align `docs/showpy-api-reference.md` with the code and the
 deviations below (the code is the source of truth until generated docs land in Phase 6).
