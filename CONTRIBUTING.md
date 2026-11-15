@@ -79,4 +79,4 @@ docker compose -f docker/docker-compose.yml up --build
 - Answer review comments with follow-up commits, not force-pushes.
 - CI (lint, types, tests, dependency scan, docker build) must be green before merge.
 - After a merge to `main`, confirm CI is green before merging anything else.
-- Report security issues privately to the maintainer, never in a public issue.
+- Report security issues through private vulnerability reporting (see `SECURITY.md`), never in a public issue.

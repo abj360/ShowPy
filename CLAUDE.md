@@ -39,7 +39,7 @@ tests/      unit/ property/ golden/ fixtures/
 docs/       API reference, ADRs, handoff notes
 ```
 
-The study guide lives in the private repository `https://github.com/abj360/ShowPy-guide`.
+The study guide lives in the public repository `https://github.com/abj360/ShowPy-guide`.
 
 Each package: `models.py` holds data classes; other files hold functions. Subpackage `__init__.py` files hold only a docstring; `showpy/__init__.py` re-exports the public API lazily.
 Exception: `showpy/examples/__init__.py` re-exports its names, so `from showpy.examples import two_set_show` stays one import path.

@@ -165,7 +165,7 @@ Read `CLAUDE.md`, `CONTRIBUTING.md` and the ADRs before changing anything. The P
 - `docs/showpy-api-reference.md`: the full API reference
 - `docs/adr/`: architecture decisions (layout and reference fixes; the PathEngine)
 - `docs/HANDOFF.md`: current state and next steps
-- The study guide lives in the private repository <https://github.com/abj360/ShowPy-guide>
+- The study guide lives in the public repository <https://github.com/abj360/ShowPy-guide>
 - `CONTRIBUTING.md`: workflow and standards
 
 ## License
