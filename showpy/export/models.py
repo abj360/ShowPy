@@ -17,7 +17,7 @@ import re
 from datetime import datetime
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from showpy.core.ids import SetId, SpotId
 from showpy.core.types import Count, Degrees, FrozenModel, Point
@@ -162,8 +162,10 @@ class Publication(FrozenModel):
         id: Publication ID, stable across republishing.
         show_id: Show published.
         revision: Show revision the publication shows.
-        link: Public link performers open; it carries the join token as `?t=<token>`.
-        join_token_sha256: SHA-256 hex digest of the join token; the raw token is never stored.
+        link: Public link performers open. It carries the join secret as `?t=<token>`: share it
+            only with performers and do not persist it where viewers can read it.
+        join_token_sha256: SHA-256 hex digest of the join token; hosts verify a join against it
+            with `verify_join_token` instead of comparing raw tokens.
         status: `live`, `paused` or `closed`.
         published_at: When this revision was published.
         claims: Claims in natural spot order.
@@ -172,7 +174,7 @@ class Publication(FrozenModel):
     id: str
     show_id: str
     revision: str
-    link: str
+    link: str = Field(repr=False)
     join_token_sha256: str | None = None
     status: PublicationStatus = "live"
     published_at: datetime

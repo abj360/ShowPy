@@ -6,12 +6,15 @@ test_publish.py --- tests publishing, QR codes, claims, designer actions, views 
 Also holds the audited publishing defects (UP-9.5-01 to UP-9.5-26) as strict xfails.
 
 Contains:
-    test_qr_code_matches_the_reference_symbol(): checks the QR PNG against segno's module grid
     test_regression_publish_link_carries_a_caller_supplied_join_token(): adds a join token
     test_regression_publication_snapshot_excludes_contact_details(): hides contacts
     test_regression_claims_and_notices_return_redacted_performers(): redacts contacts in claims
     test_regression_publish_rejects_a_short_or_malformed_join_token(): rejects weak tokens
     test_regression_publish_rejects_base_urls_with_credentials_or_fragments(): rejects them
+    test_regression_publish_rejects_unsafe_base_url(): rejects every malformed or ambiguous URL
+    test_publish_accepts_well_formed_https_base_urls(): keeps valid hosts, ports and IPs
+    test_regression_verify_join_token_returns_false_for_non_strings(): never raises on bad input
+    test_regression_publication_repr_omits_the_join_token(): hides the link secret from repr
     test_regression_publish_errors_do_not_echo_the_join_token(): keeps the token out of errors
     test_regression_verify_join_token_checks_the_stored_hash(): accepts only the issued token
     test_regression_verify_join_token_fails_closed_without_a_hash(): rejects when none is stored
@@ -63,6 +66,7 @@ from showpy.core.errors import (
     UnknownRefError,
     ValidationError,
 )
+from showpy.examples import live_publication
 from showpy.export.models import Performer, Publication
 from showpy.export.publish import (
     claim_spot,
@@ -388,12 +392,6 @@ def _notified(old: Show, new: Show) -> list[tuple[Performer, str]]:
     return notify_changes(_with_claims(old, ("Ada", "T1")), old, new)
 
 
-def test_qr_code_matches_the_reference_symbol() -> None:
-    pub = _published()
-    expected = _grid_text(_reference_grid(pub.link, boost=True))
-    assert _grid_text(_module_grid(qr_code(pub), pub.link)) == expected
-
-
 def test_regression_publish_link_carries_a_caller_supplied_join_token() -> None:
     """Puts a caller-supplied high-entropy token in the link and stores only its hash.
 
@@ -485,8 +483,10 @@ def test_regression_qr_code_wraps_an_overlong_link_error() -> None:
 
 def test_regression_qr_code_keeps_the_documented_error_level() -> None:
     """Renders at error level M as documented; segno silently boosts it to Q by default."""
-    pub = _published()
+    pub = live_publication(two_set_show())
+    boosted = _grid_text(_reference_grid(pub.link, boost=True))
     expected = _grid_text(_reference_grid(pub.link, boost=False))
+    assert boosted != expected
     assert _grid_text(_module_grid(qr_code(pub), pub.link)) == expected
 
 
@@ -743,3 +743,73 @@ def test_regression_publication_rejects_a_malformed_token_hash(digest: str) -> N
     """Requires exactly 64 lowercase hex characters in the stored digest."""
     with pytest.raises(SchemaError):
         _published().replace(join_token_sha256=digest)
+
+
+UNSAFE_BASE_URLS = [
+    "https://eight.example:99999/p",
+    "https://eight.example:80x/p",
+    "https://eight.example:/p",
+    "https://eight.example:0/p",
+    "https://a.example\\.evil.example/p",
+    "https://eight.example/p\\q",
+    "https://eight .example/p",
+    "https://eight.example/p q",
+    "https://eight.example/p\x00",
+    "https://eight.exam\tple/p",
+    "https://eight.example/p\r\n",
+    "https://\u00e9ight.example/p",
+    "https://%61.example/p",
+    "https://.",
+    "https://./p",
+    "https://a..b/p",
+    "https://-a.example/p",
+    "https://a-.example/p",
+    "https://" + "a" * 64 + ".example/p",
+    "https://" + ".".join(["a" * 60] * 5) + "/p",
+    "https://999.1.1.1:x/p",
+    "https://[::1/p",
+    "https://[zz::1]/p",
+    "https://eight.example/./p",
+    "https://eight.example/p/../q",
+    "https://eight.example/..",
+    "https://eight.example/p?x=1",
+    "https://eight.example/p#x",
+    "https://u:p@eight.example/p",
+    "http://eight.example/p",
+    "",
+]
+
+
+@pytest.mark.parametrize("base_url", UNSAFE_BASE_URLS)
+def test_regression_publish_rejects_unsafe_base_url(base_url: str) -> None:
+    """Rejects ports, hosts, characters and path segments that urlsplit would alter or accept."""
+    with pytest.raises(SchemaError) as caught:
+        publish(two_set_show(), "pub-1", base_url, AT, join_token=JOIN_TOKEN)
+    assert base_url not in str(caught.value.context) or not base_url
+
+
+@pytest.mark.parametrize(
+    ("base_url", "link_root"),
+    [
+        ("https://eight.example/p", "https://eight.example/p"),
+        ("https://eight.example:8443/p/", "https://eight.example:8443/p"),
+        ("https://[2001:db8::1]/p", "https://[2001:db8::1]/p"),
+        ("https://192.0.2.1/p", "https://192.0.2.1/p"),
+        ("https://eight.example/p%20q", "https://eight.example/p%20q"),
+    ],
+)
+def test_publish_accepts_well_formed_https_base_urls(base_url: str, link_root: str) -> None:
+    """Accepts DNS, IPv4 and bracketed IPv6 hosts, explicit ports and escaped paths."""
+    pub = publish(two_set_show(), "pub-1", base_url, AT, join_token=JOIN_TOKEN)
+    assert pub.link == f"{link_root}/pub-1?t={JOIN_TOKEN}"
+
+
+@pytest.mark.parametrize("token", [None, b"Zk3Qz9-high-entropy_join-token", 123])
+def test_regression_verify_join_token_returns_false_for_non_strings(token: object) -> None:
+    """Returns False instead of raising when the token is not a string."""
+    assert not verify_join_token(_published(), token)  # type: ignore[arg-type]
+
+
+def test_regression_publication_repr_omits_the_join_token() -> None:
+    """Keeps the link secret out of repr, which logs and tracebacks print."""
+    assert JOIN_TOKEN not in repr(_published())

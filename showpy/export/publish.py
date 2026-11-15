@@ -25,10 +25,11 @@ Contains:
 import hashlib
 import hmac
 import io
+import ipaddress
 import math
 import re
 from datetime import datetime
-from urllib.parse import quote, urlsplit, urlunsplit
+from urllib.parse import SplitResult, quote, urlsplit, urlunsplit
 
 import segno
 from PIL import Image
@@ -46,6 +47,11 @@ from showpy.show.models import Show
 
 JOIN_TOKEN_FORMAT = re.compile(r"[A-Za-z0-9_-]{22,}")
 BASE_URL_SCHEME = "https"
+PRINTABLE_ASCII = re.compile(r"[\x21-\x7e]*")
+HOST_LABEL = re.compile(r"[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
+HOST_MAX_LENGTH = 253
+PORT_MAX = 65535
+DOT_SEGMENTS = (".", "..")
 QR_ERROR_LEVEL = "m"
 # The QR standard requires a quiet zone four modules wide around the symbol.
 QR_QUIET_MODULES = 4
@@ -89,23 +95,57 @@ def _require_join_token(join_token: str) -> None:
         )
 
 
-def _require_https_base_url(base_url: str) -> str:
+def _reject_base_url(reason: str, parts_scheme: str = "", host: str | None = None) -> SchemaError:
+    return SchemaError(
+        f"base URL {reason}",
+        hint="pass base_url like https://eight.example/p",
+        context={"scheme": parts_scheme, "host": host},
+    )
+
+
+def _is_valid_host(host: str) -> bool:
     try:
-        parts = urlsplit(base_url.strip())
-        host, has_userinfo = parts.hostname, "@" in parts.netloc
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        return True
+    labels = host.split(".")
+    return len(host) <= HOST_MAX_LENGTH and all(HOST_LABEL.fullmatch(label) for label in labels)
+
+
+def _split_base_url(base_url: str) -> SplitResult:
+    if PRINTABLE_ASCII.fullmatch(base_url) is None or "\\" in base_url:
+        raise _reject_base_url("has whitespace, control, non-ASCII or backslash characters")
+    try:
+        parts = urlsplit(base_url)
+        parts.port  # noqa: B018 - raises ValueError on a bad port
     except ValueError as error:
-        raise SchemaError(
-            "base URL does not parse",
-            hint="pass base_url like https://eight.example/p",
-            context={"error": str(error)},
-        ) from error
-    is_plain = not (has_userinfo or "?" in base_url or "#" in base_url)
-    if parts.scheme != BASE_URL_SCHEME or not host or not is_plain:
-        raise SchemaError(
-            "base URL must be https with a host and no credentials, query or fragment",
-            hint="pass base_url like https://eight.example/p",
-            context={"scheme": parts.scheme, "host": host},
+        raise _reject_base_url("does not parse") from error
+    return parts
+
+
+def _require_https_base_url(base_url: str) -> str:
+    parts = _split_base_url(base_url)
+    host = parts.hostname
+    scheme = parts.scheme
+    if scheme != BASE_URL_SCHEME or not host:
+        raise _reject_base_url("must be https with a host", scheme, host)
+    if "@" in parts.netloc or "%" in parts.netloc or parts.netloc.endswith(":"):
+        raise _reject_base_url(
+            "has credentials, escapes or an empty port in its host", scheme, host
         )
+    if parts.query or parts.fragment or "?" in base_url or "#" in base_url:
+        raise _reject_base_url("has a query or fragment", scheme, host)
+    is_bracketed = parts.netloc.startswith("[")
+    if not is_bracketed and not _is_valid_host(host):
+        raise _reject_base_url("has an invalid host", scheme, host)
+    if is_bracketed and ":" not in host:
+        raise _reject_base_url("has an invalid IPv6 host", scheme, host)
+    if parts.port is not None and not 0 < parts.port <= PORT_MAX:
+        raise _reject_base_url("has a port outside 1-65535", scheme, host)
+    if any(segment in DOT_SEGMENTS for segment in parts.path.split("/")):
+        raise _reject_base_url("has a dot segment in its path", scheme, host)
     return urlunsplit(parts).rstrip("/")
 
 
@@ -179,7 +219,9 @@ def verify_join_token(pub: Publication, token: str) -> bool:
     >>> verify_join_token(pub, token), verify_join_token(pub, "wrong")
     (True, False)
     """
-    if pub.join_token_sha256 is None or JOIN_TOKEN_FORMAT.fullmatch(token) is None:
+    if not isinstance(token, str) or pub.join_token_sha256 is None:
+        return False
+    if JOIN_TOKEN_FORMAT.fullmatch(token) is None:
         return False
     digest = hashlib.sha256(token.encode()).hexdigest()
     return hmac.compare_digest(digest, pub.join_token_sha256)
