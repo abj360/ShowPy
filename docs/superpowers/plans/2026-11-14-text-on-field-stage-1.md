@@ -57,7 +57,7 @@
 
 | File                                                      | Responsibility                                                                                     |
 | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `docs/adr/0003-fonts-as-content-hashed-assets.md`         | Font format and identity decision                                                                  |
+| `docs/adr/0016-fonts-as-content-hashed-assets.md`         | Font format and identity decision                                                                  |
 | `scripts/build_fonts.py`                                  | One-time fetch, checksum, conversion and contact sheets                                            |
 | `showpy/fonts/*.json`, `licenses/*.txt`, `NOTICE.txt`     | Bundled font data and licences (shipped in the wheel)                                              |
 | `docs/research/2026-11-14-bundled-fonts.md`               | Sources, commits, checksums, licences, coverage                                                    |
@@ -78,7 +78,7 @@
 
 **Files:**
 
-- Create: `docs/adr/0003-fonts-as-content-hashed-assets.md`, `scripts/build_fonts.py`
+- Create: `docs/adr/0016-fonts-as-content-hashed-assets.md`, `scripts/build_fonts.py`
 - Test: `tests/unit/test_build_fonts.py` (load the script with `importlib.util.spec_from_file_location`, as `tests/unit/test_public_api.py` does)
 
 **Interfaces:**
@@ -99,7 +99,7 @@
   `{"format", "name", "family", "license", "source", "units_per_em", "cap_height", "ascender", "descender", "glyphs": {"<one character>": {"advance": float, "strokes": ["<one absolute SVG subpath>", ...]}}}`.
   Coordinates are font units, y up, baseline at 0, x measured from the glyph origin. Each stroke is written by `showpy.geo.svg.Subpath.to_d()` after rounding coordinates with `round(v, 6) + 0.0`. A closed stroke ends in `Z` and does not repeat its start point.
 
-- [ ] **Step 1: Write the ADR.** `docs/adr/0003-fonts-as-content-hashed-assets.md`, with the ADR sections from `~/.claude/CLAUDE.md`. Decision: one JSON stroke format for all bundled fonts; identity is the SHA-256 of the file bytes, as an asset URI; data is built once from pinned sources and committed; fonts never come from the OS; licences ship inside the package. Alternatives: "**Ship the original .jhf/.svg files and parse them at runtime.** Rejected: two parsers in the library and an XML parser on untrusted input"; "**Look fonts up by name.** Rejected: anti-goal, shows rebuild differently per machine". Numbers: the source sizes from Task 2 (Relief SVG 176,600 bytes; each Hershey .jhf about 3.5 KB).
+- [ ] **Step 1: Write the ADR.** `docs/adr/0016-fonts-as-content-hashed-assets.md`, with the ADR sections from `~/.claude/CLAUDE.md`. Decision: one JSON stroke format for all bundled fonts; identity is the SHA-256 of the file bytes, as an asset URI; data is built once from pinned sources and committed; fonts never come from the OS; licences ship inside the package. Alternatives: "**Ship the original .jhf/.svg files and parse them at runtime.** Rejected: two parsers in the library and an XML parser on untrusted input"; "**Look fonts up by name.** Rejected: anti-goal, shows rebuild differently per machine". Numbers: the source sizes from Task 2 (Relief SVG 176,600 bytes; each Hershey .jhf about 3.5 KB).
 
 - [ ] **Step 2: Write the failing tests**
 
