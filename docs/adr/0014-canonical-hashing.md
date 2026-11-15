@@ -73,14 +73,14 @@ hold old `source_hash` values. The change must not lose or rewrite any of that.
    stored bytes, as today.
 5. **Old hashes are read once as stale; nothing is rewritten.**
    - **Revision IDs** are names. Stored IDs are never recomputed or rewritten, the `next/` chain
-     and trees stay as they are, and every old revision stays readable, undoable and revertible.
-     New revisions get new-scheme IDs. Phase 3's `fsck` verifies revision IDs only from the
-     first `normalize` revision on (below).
+     and trees stay as they are, and every old revision stays readable and revertible. New
+     revisions get new-scheme IDs. Phase 3's `fsck` checks each revision ID against the new
+     scheme and accepts the v0.2 scheme only for revisions before the first new-scheme one.
    - **Stored documents** written by v0.1 or v0.2 can differ from today's canonical bytes (`-0.0`,
-     frozenset order). The first save after the upgrade commits a separate revision of kind
-     `normalize`, holding only the re-encoded documents, and then the edit on top.
-     Its decoded show equals the stored show, so `diff_show` is empty; `events_since` and
-     proposals skip `normalize` revisions. A second save adds none.
+     frozenset order). The first save after the upgrade commits a separate normalizing
+     revision, holding only the re-encoded documents, and then the edit on top. Its decoded show
+     equals the stored show, so `diff_show` is empty, and `events_since` and proposal overlap,
+     which both compare content, see nothing in it. A second save adds none.
    - **Hashes held outside ShowPy** (consumer `source_hash`, publication `revision` of an unsaved
      show, golden fixtures) mismatch exactly once. Consumers treat a mismatch as stale and
      recompute: each scripted set rebuilds once, an unsaved-show publication reports the show as
@@ -119,22 +119,22 @@ hold old `source_hash` values. The change must not lose or rewrite any of that.
 - `content_hash(1) == content_hash(1.0)` and `content_hash(0.0) == content_hash(-0.0)`; booleans
   stay distinct from numbers.
 - Every hash value changes once. Release notes for v0.3.0 say so and name the stale-once rule.
-- A new `RevisionKind`, `normalize`, joins the stored model. v0.2 readers cannot read a history
-  that contains one; downgrade is not supported before 1.0.
+- The normalizing revision is an ordinary revision. Downgrade is not supported before 1.0
+  (ADR 0003 also changes the revision record).
 - Sets and frozensets leave stored models (lane D turns `Spot.tags` and `Cast.selections` into
   ordered, deduplicated tuples); the normalization still sorts sets passed in by callers.
 
 ## Numbers
 
-| Measure                                             | Today  | After                   |
-| --------------------------------------------------- | ------ | ----------------------- |
-| Confirmed `content_hash` failure classes            | 9      | 0                       |
-| Hash-seed values under which a show hashes the same | 1 of 3 | 3 of 3                  |
-| Canonical forms in the library                      | 2      | 1                       |
-| Stored revisions rewritten by the upgrade           | —      | 0                       |
-| Extra revisions written per upgraded show           | —      | at most 1 (`normalize`) |
-| Times each consumer-held hash mismatches            | —      | exactly 1               |
-| Hash output length                                  | 64 hex | 64 hex                  |
+| Measure                                             | Today  | After     |
+| --------------------------------------------------- | ------ | --------- |
+| Confirmed `content_hash` failure classes            | 9      | 0         |
+| Hash-seed values under which a show hashes the same | 1 of 3 | 3 of 3    |
+| Canonical forms in the library                      | 2      | 1         |
+| Stored revisions rewritten by the upgrade           | —      | 0         |
+| Extra revisions written per upgraded show           | —      | at most 1 |
+| Times each consumer-held hash mismatches            | —      | exactly 1 |
+| Hash output length                                  | 64 hex | 64 hex    |
 
 ## What would change our mind
 

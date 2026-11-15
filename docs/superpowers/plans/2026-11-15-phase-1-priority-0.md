@@ -70,19 +70,21 @@ Master plan: `/home/uapb-ai/.claude/plans/look-at-the-upgrade-nifty-kay.md` ("Ph
 ## Review focus
 
 1. **Repositories written by v0.1.x and v0.2.0.** Expected: they load with no data loss, stored
-   revision IDs are never rewritten, the first save writes exactly one `normalize` revision and a
+   revision IDs are never rewritten, the first save writes exactly one normalizing revision and a
    second save none, and consumer-held hashes (`Set.source_hash`, unsaved-show publication
-   revisions) mismatch exactly once. Pinned by L0.9's fixture and A6's tests.
+   revisions) mismatch exactly once. Pinned by L0.9's fixture and A7's tests.
 2. **Consumers pinned to v0.2.0.** Agent writes are no longer refused, `actor=` and
-   `principal` are gone, undo is shared per show, canvas events need an explicit `force`, `replace_sheet` and `SheetReplaceReport` are gone, and `place()`'s return
-   type, `frozenset` tags and selections, `content_hash` values and `publish(join_token=)` all
-   change. Expected: removed or re-typed names appear in the API snapshot diff and the
-   changelog. Pinned by A4's tests, F1 and X3's release notes.
+   `principal` are gone, revisions keep only what changed and when, `undo`, `redo` and
+   `snapshot` are gone, canvas events need an explicit `force`, `replace_sheet` and
+   `SheetReplaceReport` are gone, and `place()`'s return type, `frozenset` tags and selections,
+   `content_hash` values and `publish(join_token=)` all change. Expected: removed or re-typed
+   names appear in the API snapshot diff and the changelog. Pinned by A4's and A5's tests, F1
+   and X3's release notes.
 3. **Agents addressing sets by display ID after a renumber.** Expected: `/sets/2/set.py` in a
-   workspace means display ID 2 before and after storage moves to set keys. Pinned by A5.
+   workspace means display ID 2 before and after storage moves to set keys. Pinned by A6.
 4. **Windows and case-insensitive file systems.** Expected: hard-link and name-length failures
    raise `StorageError` with code `NO_HARDLINKS` or `NAME_TOO_LONG`, never `OSError`. Pinned by
-   A7 (Windows-marked tests run in the CI matrix).
+   A8 (Windows-marked tests run in the CI matrix).
 5. **Cost of the new checks at 300 spots x 60 sets.** `replace()` revalidation and the commit
    validation decode on every show-document commit. Expected: `nox -s bench` M tier stays within
    20% of the baseline, and a one-spot edit stays under 300 ms (198 ms today plus about 70 ms
@@ -145,7 +147,7 @@ L0.1 → L0.2 → … → L0.11          (serial, one worktree)
 
 L0.2's ten NaN and infinity IDs (UP-4.1-01, UP-9.3-37, -62, -100 to -104, -110, -115) were measured
 on 2026-11-15 by setting `allow_inf_nan=False` on `main` at `e48e4b6`; L0.2 re-measures after
-L0.1 and unmarks exactly what flips. Fuzz tasks (A8, C4, D2, E5, F3) list the leak IDs known to
+L0.1 and unmarks exactly what flips. Fuzz tasks (A9, C4, D2, E5, F3) list the leak IDs known to
 fall inside their targets; any extra leak the fuzzers find gets a new ledger ID and a fix in the
 same lane.
 
@@ -387,7 +389,7 @@ It raises `error` with the message `"<what> would need <requested>, over the cap
 **Files:** Create `scripts/make_legacy_fixture.py`, `tests/fixtures/repos/v0.2.0/` (a
 `FileRepository` root plus `expected.json`), `tests/unit/show/test_legacy_repository.py`.
 
-**Interfaces:** Produces the fixture A6 and L0.10 test against. `expected.json` holds
+**Interfaces:** Produces the fixture A7 and L0.10 test against. `expected.json` holds
 `{"show_id", "head", "revisions": [ids…], "legacy_content_hash", "show": <Show JSON>}`.
 
 - [ ] **Step 1:** Write the script against the v0.2.0 API: `seeded_show(seed=7, spots=24, sets=6)`,
@@ -520,7 +522,7 @@ truncated object or tree) with `context={"show", "path"}`.
       body.
 - [ ] **Step 5:** Commit `fix(show): validate every commit before it lands`.
 
-### Task A4: remove the permission checks and the actor record (ADR 0003)
+### Task A4: remove the permission checks (ADR 0003)
 
 **Deletes:** UP-9.7-08, UP-9.7-09, UP-9.7-10, UP-9.7-11, UP-9.7-12, UP-9.7-13 (out of scope by ADR
 0003). **Files:** Modify `showpy/show/storage.py` (drop `DESIGNER_PRINCIPALS`,
@@ -528,33 +530,55 @@ truncated object or tree) with `context={"show", "path"}`.
 `showpy/show/collab.py`, `showpy/_api_table.py` if a removed name is public; the tests that
 assert an agent refusal.
 
-**Interfaces:**
+**Interfaces:** `collab.py` drops `_require_designer` and the agent refusal in
+`accept_proposal`; applying a canvas event takes keyword-only `force: bool = False` from the
+caller instead of `force=event.actor != "agent"`.
 
-- Removes `Principal`, `actor=` from the six `DocumentRepository` writes and every helper that
-  passes it, the `principal` argument of `open_workspace`, `Workspace.principal`,
-  `Revision.actor` and `CanvasEvent.actor`. `open_workspace(repo, show_id) -> Workspace`.
-- Decoding stored revision records and events drops a legacy `actor` key (v0.1 and v0.2
-  repositories), so `FrozenModel`'s `extra="forbid"` still holds for new data.
-- `undo` and `redo` use one stack per show (`_stacks(log)`), and `changelog` lines read
-  `<short id> <at> <message> (<paths>)`.
-- `grep -rnE 'actor|principal|Principal' showpy/` returns nothing.
-- `collab.py`: `_require_designer` and the agent refusal in `accept_proposal` are removed;
-  applying a canvas event takes keyword-only `force: bool = False` from the caller instead of
-  `force=event.actor != "agent"`.
-
-- [ ] **Step 1:** Write `test_any_valid_write_lands`: a workspace commit that writes
-      `/config/limits.yaml` lands. Write `test_regression_v02_revisions_load_without_actor`: L0.9's
-      fixture loads, and its revisions have no `actor`. Write `test_undo_is_shared_per_show`: two
-      workspaces edit in turn, and `undo` from either reverses the latest edit. Write `test_canvas_event_needs_explicit_force`: a designer event that moves a
-      pinned spot raises `LockedError` without `force=True` and lands with it. Run; expect FAIL.
+- [ ] **Step 1:** Write `test_any_valid_write_lands`: an agent workspace commit that writes
+      `/config/limits.yaml` lands. Write `test_canvas_event_needs_explicit_force`: an event that
+      moves a pinned spot raises `LockedError` without `force=True` and lands with it. Run;
+      expect FAIL.
 - [ ] **Step 2:** Implement. Delete the six ledger tests and every other test that asserts an
       agent refusal, listing each deleted test name in the commit body.
 - [ ] **Step 3:** Regenerate the API table and snapshot if a public name changed.
 - [ ] **Step 4:** Commit `feat(show)!: leave permissions to the host` with a `BREAKING CHANGE:`
-      footer: agent writes are no longer refused; `actor`, `principal` and `Principal` are
-      removed; undo is shared per show; canvas events need an explicit `force`.
+      footer: agent writes are no longer refused; canvas events need an explicit `force`.
 
-### Task A5: stable set keys (ADR 0004, ADR 0006)
+### Task A5: revisions record only what changed and when (ADR 0003)
+
+**Files:** Modify `showpy/show/models.py`, `showpy/show/repositories.py`,
+`showpy/show/file_repository.py`, `showpy/show/storage.py`, `showpy/show/history.py`,
+`showpy/show/collab.py`, `showpy/show/manage.py`, `showpy/_api_table.py`; every test and doctest
+that passes `actor=`, `principal`, `message=` or `kind=`, or calls `undo`, `redo` or `snapshot`.
+
+**Interfaces:**
+
+- `Revision` holds `id`, `parent`, `at`, `changed` only. Removed: `Principal`, `RevisionKind`,
+  `Revision.actor`, `.message`, `.kind`, `.target`, `CanvasEvent.actor`; the `actor=` and
+  `message=` arguments of the six `DocumentRepository` writes, `Workspace.commit`,
+  `Workspace.write`, `save_show` and every helper that passes them; the `principal` argument of
+  `open_workspace` (now `open_workspace(repo, show_id) -> Workspace`) and `Workspace.principal`;
+  `undo`, `redo` and `snapshot` with their private helpers.
+- `revert(ws, revision_id, at) -> Revision` stays: it commits the tree of `revision_id` as a new
+  revision. Hosts build undo on it.
+- `changelog` lines read `<short id> <at> (<paths>)`; `ConflictError` lists each landed
+  revision's short ID, time and paths.
+- Decoding stored revision records and events drops the legacy keys `actor`, `message`, `kind`
+  and `target` (v0.1 and v0.2 repositories); nothing on disk is rewritten, and
+  `FrozenModel`'s `extra="forbid"` still holds for new data.
+- `grep -rnE 'actor|principal|Principal|RevisionKind' showpy/` returns nothing.
+
+- [ ] **Step 1:** Write `test_regression_v02_revisions_load_without_authorship`: L0.9's fixture
+      loads, every revision has only `id`, `parent`, `at` and `changed`, and every stored revision
+      ID is still listed. Write `test_revert_restores_an_earlier_show`: after two edits,
+      `revert` to the first gives its show back as a new revision. Run; expect FAIL.
+- [ ] **Step 2:** Implement; migrate tests and doctests. Delete the `undo`, `redo` and
+      `snapshot` tests, listing each name in the commit body.
+- [ ] **Step 3:** Regenerate the API table, snapshot and schemas.
+- [ ] **Step 4:** Commit `feat(show)!: keep only what changed and when in revisions` with a
+      `BREAKING CHANGE:` footer naming every removed name above.
+
+### Task A6: stable set keys (ADR 0004, ADR 0006)
 
 **Fixes:** UP-9.7-01. **Files:** Modify `showpy/choreo/models.py` (`Set.key`),
 `showpy/show/documents.py`, `showpy/show/files.py`, `showpy/show/storage.py` (path mapping),
@@ -580,26 +604,26 @@ assert an agent refusal.
 - [ ] **Step 3:** Implement. **Step 4:** Ledger flip procedure; regenerate schemas.
 - [ ] **Step 5:** Commit `fix(show): key set folders by a stable set key`.
 
-### Task A6: canonical documents and one `normalize` revision (ADR 0014)
+### Task A7: canonical documents and one normalizing revision (ADR 0014)
 
 **Fixes:** UP-9.7-30, UP-9.7-31. **Files:** Modify `showpy/show/documents.py` (`dump_json` uses
-`canonical_value`), `showpy/show/models.py` (`RevisionKind` gains `"normalize"`),
-`showpy/show/storage.py` (`save_show`), `showpy/show/collab.py` (`events_since` skips
-`normalize`). Test `tests/unit/show/test_legacy_repository.py`.
+`canonical_value`), `showpy/show/storage.py` (`save_show`). Test
+`tests/unit/show/test_legacy_repository.py`.
 
 **Interfaces:** `save_show` re-encodes the decoded base tree; when any show document differs from
-its stored bytes, it first commits those documents as `kind="normalize"`,
-message `normalize stored documents`, then the edit on top.
+its stored bytes, it first commits those documents as a revision of their own, then the edit on
+top. That revision's decoded show equals the stored one, so it yields no events and no proposal
+overlap, both of which compare content.
 
 - [ ] **Step 1:** Tests on L0.9's fixture: after `save_show` of the unchanged head there is
-      exactly one new revision, of kind `normalize`, and `diff_show(before, after) == {}`; a
+      exactly one new revision, and `diff_show(before, after) == {}`; a
       second save adds no revision; every original revision ID is still listed;
       `events_since(<pre-upgrade head>)` returns no events.
 - [ ] **Step 2:** Run; expect FAIL. **Step 3:** Implement. **Step 4:** Ledger flip procedure
       (UP-9.7-30, UP-9.7-31). **Step 5:** Commit
       `fix(show): write canonical documents and normalize old ones once`.
 
-### Task A7: storage failures map to `StorageError` codes
+### Task A8: storage failures map to `StorageError` codes
 
 **Fixes:** UP-9.7-17, UP-9.7-24. **Files:** Modify `showpy/show/file_repository.py`. Test
 `tests/unit/show/test_file_repository.py` (new tests marked
@@ -614,7 +638,7 @@ each with `context={"show", "path", "errno"}`.
 - [ ] **Step 3:** Ledger flip procedure. **Step 4:** Commit
       `fix(show): map file-system failures to StorageError codes`.
 
-### Task A8: fuzz the show decoders and workspace paths
+### Task A9: fuzz the show decoders and workspace paths
 
 **Fixes (expected):** UP-9.7-18, UP-9.7-19, UP-9.7-20, UP-9.7-25.
 **Files:** Create `tests/fuzz/test_fuzz_show.py`; modify `showpy/show/{documents,files,storage}.py`.
@@ -1015,9 +1039,9 @@ Branch `chore/p1-exit`.
 - [ ] **Step 2:** Assert the section 5.2.3 checks: `validate_show(show).ok`; the stored documents
       validate against `showpy/schemas/showpy.show.v1.json`; positions continuous within 1e-6 m
       at every set boundary; every `segments()` piece within 0.02 m of `position()` at 9 probes;
-      JSON and document round trips equal; `events_since` replay equals head; undo then redo is
-      identity; two runs produce byte-identical `encode_show` and `content_hash`; no input
-      mutated (compare `model_dump_json` before and after every call).
+      JSON and document round trips equal; `events_since` replay equals head; `revert` to an
+      earlier revision restores its show; two runs produce byte-identical `encode_show` and
+      `content_hash`; no input mutated (compare `model_dump_json` before and after every call).
 - [ ] **Step 3:** Run `uv run nox -s slow`; expect PASS. **Step 4:** Commit
       `test: add the phase 1 300-spot scenario`.
 
@@ -1042,15 +1066,17 @@ Branch `chore/p1-exit`.
 (the changed names only).
 
 - [ ] **Step 1:** `uv run nox -s changelog`; check every breaking name is listed: agent writes no
-      longer refused, `actor=`, `principal`, `Principal`, `Revision.actor`, `CanvasEvent.actor`
-      (removed), shared undo, canvas-event `force=`, `replace_sheet` and `SheetReplaceReport` (removed),
-      `Set.key`, `RevisionKind "normalize"`, `Spot.tags`,
+      longer refused, A5's removed names (`Principal`, `RevisionKind`, `actor=`, `message=`,
+      `principal`, `undo`, `redo`, `snapshot`, four `Revision` fields, `CanvasEvent.actor`),
+      canvas-event `force=`, `replace_sheet` and `SheetReplaceReport` (removed), `Set.key`,
+      `Spot.tags`,
       `Cast.selections`, `content_hash` (values and `domain=`), `FrozenModel.replace`, `force=`
       on four cast edits and `two_part`, `publish(join_token=)`, `place()`'s return type,
       `similarity_fit` reflections, `to_csv(neutralize=)`, the caps.
 - [ ] **Step 2:** Write the release notes used for the tag message and the GitHub release body,
-      with a "Migrating from v0.2" section: permissions and authorship in the host, a new show instead of
-      `replace_sheet`, contacts in the host's roster, hashes stale once, set keys after a renumber, `place()` returning a tuple.
+      with a "Migrating from v0.2" section: permissions, authorship, messages and undo in the
+      host (built on `revert`), a new show instead of `replace_sheet`, contacts in the host's
+      roster, hashes stale once, set keys after a renumber, `place()` returning a tuple.
 - [ ] **Step 3:** Update `docs/HANDOFF.md`: ledger count, Phase 1 done, Phase 2 next.
 - [ ] **Step 4:** Commit `chore(release): prepare v0.3.0`. The controller asks the maintainer to
       approve the push, the merge and the `v0.3.0` tag.

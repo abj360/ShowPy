@@ -1,4 +1,4 @@
-# ADR 0003: Authorization and authorship belong to the host; ShowPy validates
+# ADR 0003: Permissions and authorship belong to the host; ShowPy validates
 
 - Status: Accepted (2026-11-15)
 - Date: 2026-11-15
@@ -43,18 +43,18 @@ maintainer will build it there (2026-11-15).
    - `collab.py` drops its agent checks (`_require_designer`, the agent refusal in
      `accept_proposal`) and the implicit `force=event.actor != "agent"`: applying a canvas event
      takes an explicit keyword `force: bool = False` from the caller, like every other edit.
-3. **ShowPy does not record who made a change** (maintainer's decision, 2026-11-15). The host
-   app keeps authorship, keyed by revision ID.
-   - Removed: the `Principal` type, `actor=` on the six repository writes, the `principal`
-     argument of `open_workspace`, `Workspace.principal`, `Revision.actor` and
-     `CanvasEvent.actor`.
-   - A `Revision` keeps `id`, `parent`, `at` (date and time), `message`, `changed` (the paths it
-     altered), `kind` and `target`.
-   - Undo and redo become one shared stack per show: `undo` reverses the latest undoable
-     revision, whoever made it. A host that wants per-user undo calls `revert(ws, revision_id, at)`
-     on the revisions it knows its user made.
-   - Reading a v0.1 or v0.2 repository drops the stored `actor` key from revision records and
-     events; nothing on disk is rewritten.
+3. **ShowPy records only what changed and when** (maintainer's decision, 2026-11-15). Who made
+   a change, why, and how a user undoes it belong to the host app, keyed by revision ID.
+   - A `Revision` holds `id`, `parent`, `at` (date and time) and `changed` (the paths it
+     altered).
+   - Removed: the `Principal` type, `actor=` and `message=` on every write, the `principal`
+     argument of `open_workspace`, `Workspace.principal`, `CanvasEvent.actor`, the `actor`,
+     `message`, `kind` and `target` fields of `Revision`, `RevisionKind`, and `undo`, `redo` and
+     `snapshot`.
+   - `revert(ws, revision_id, at)` stays: it restores any earlier version as a new revision. A
+     host builds per-user undo on it, since only the host knows which revisions its user made.
+   - Reading a v0.1 or v0.2 repository drops the stored `actor`, `message`, `kind` and `target`
+     keys from revision records and events; nothing on disk is rewritten.
    - Comment and note `author` fields stay: they are part of what the comment says, not a record
      of who saved it.
 4. **ShowPy still guards the data, for every caller.**
@@ -79,6 +79,9 @@ maintainer will build it there (2026-11-15).
 - **Keep `actor` as a recorded label (the second draft of this ADR).** Rejected by the
   maintainer, 2026-11-15: three fixed values (`designer`, `agent`, `system`) cannot name a person
   or an agent run, ShowPy cannot verify them, and the app already knows who is acting.
+- **Keep `message`, `kind` and a shared undo stack in ShowPy.** Rejected by the maintainer,
+  2026-11-15: messages are the app's words, and an undo that cannot tell users apart reverses
+  someone else's work. `kind` existed only to drive that undo.
 - **Make every permission check opt-in through a policy hook.** Rejected for now: no second
   consumer needs it. Revisit if two hosts end up writing the same rules.
 
@@ -86,10 +89,10 @@ maintainer will build it there (2026-11-15).
 
 - Breaking for consumers (release notes, v0.3.0): agent writes that used to be refused now land
   if the data is valid, so the host must refuse them first; every write and `open_workspace`
-  lose their actor argument; undo is shared per show.
+  lose their `actor` and `message` arguments; `undo`, `redo` and `snapshot` are removed in
+  favor of `revert`.
 - Canvas events no longer get `force` from their actor; callers pass `force=True` explicitly.
-- Conflict messages and `changelog` lines name the revision, time, message and paths, not a
-  person.
+- Conflict messages and `changelog` lines name the revision, time and paths only.
 - The six permission ledger tests (UP-9.7-08 to UP-9.7-13) are deleted as out of scope, with this
   ADR as the reason. UP-9.7-06 and UP-9.7-07 stay and are fixed.
 - Commits that touch show documents decode the after tree once: about 70 ms at 300 spots x 60
@@ -104,7 +107,7 @@ maintainer will build it there (2026-11-15).
 | Measure                                               | Today                   | After       |
 | ----------------------------------------------------- | ----------------------- | ----------- |
 | Write paths that branch on the principal              | 3 (workspace, 2 collab) | 0           |
-| Stored fields naming who saved (`Revision`, event)    | 2                       | 0           |
+| `Revision` fields                                     | 8                       | 4           |
 | Write paths that validate the committed tree          | 0 of 7                  | 7 of 7      |
 | Permission ledger tests                               | 6 open                  | 0 (deleted) |
 | Validity ledger tests (UP-9.7-06, UP-9.7-07) passing  | 0 of 2                  | 2 of 2      |
