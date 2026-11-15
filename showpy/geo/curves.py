@@ -26,10 +26,10 @@ from functools import cached_property
 from typing import Annotated, Any, Literal, override
 
 import numpy as np
-from pydantic import Field, TypeAdapter, model_validator
+from pydantic import Field, TypeAdapter, ValidationError, model_validator
 from scipy.special import comb
 
-from showpy.core.errors import GeometryError
+from showpy.core.errors import GeometryError, schema_error_from
 from showpy.core.types import Degrees, Meters, Point, Points
 from showpy.geo.curve_base import CurveBase, FloatArray, _unit
 from showpy.geo.svg import Subpath, parse_path
@@ -556,7 +556,10 @@ def curve_from_construction(recipe: dict[str, Any]) -> AnyCurve:
     >>> curve_from_construction(Segment(a=(0, 0), b=(1, 0)).construction()).length()
     1.0
     """
-    return CURVE_ADAPTER.validate_python(recipe)
+    try:
+        return CURVE_ADAPTER.validate_python(recipe)
+    except ValidationError as exc:
+        raise schema_error_from(exc, model="Curve") from exc
 
 
 def _require_positive(name: str, value: float) -> None:

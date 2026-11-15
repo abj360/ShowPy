@@ -294,8 +294,6 @@ def test_regression_customize_rejects_non_numeric_size() -> None:
         customize(blank_sheet(10, 6), size=("wide", "deep"))
 
 
-@pytest.mark.defect("UP-9.4-33")
-@pytest.mark.xfail(strict=True, reason="UP-9.4-33")
 def test_regression_customize_rejects_bad_name_type() -> None:
     """Rejects a non-string name with a ShowPyError, not a pydantic error (audit 9.4)."""
     with pytest.raises(SchemaError):

@@ -382,8 +382,6 @@ def test_regression_reorder_by_x_rejects_members_without_slots() -> None:
         reorder(form, "by_x")
 
 
-@pytest.mark.defect("UP-9.6-59")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-59")
 def test_regression_edit_rejects_non_numeric_radius_with_show_py_error() -> None:
     """Raises a ShowPyError, not a pydantic error, for edit(radius="abc") (audit 9.6)."""
     with pytest.raises(ShowPyError):

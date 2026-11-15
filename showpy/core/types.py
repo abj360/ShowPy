@@ -2,18 +2,20 @@
 types.py --- shared type aliases plus the JSON-safe Box2, Box3 and Region models
 
 Contains:
-    FrozenModel: provides the immutable, strict base for every data class
+    FrozenModel: provides the immutable, strict base that raises SchemaError on bad data
     Box2: bounds stage-plane points and reports size and center
     Box3: bounds world points
     Region: stores an area as exterior and hole rings, convertible to Shapely
 """
 
-from typing import Self
+from typing import Any, Self
 
 import numpy as np
 import shapely
 from numpy.typing import NDArray
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
+
+from showpy.core.errors import schema_error_from
 
 type Meters = float
 type Seconds = float
@@ -30,9 +32,35 @@ type Polygon = shapely.Polygon
 
 
 class FrozenModel(BaseModel):
-    """Provides the immutable, extra-forbidding base every data class inherits."""
+    """Provides the immutable, extra-forbidding base every data class inherits.
+
+    Construction and validation raise SchemaError, chained from the pydantic error.
+    """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+
+    # Any: pydantic's own keyword signature, forwarded unchanged.
+    def __init__(self, /, **data: Any) -> None:
+        try:
+            super().__init__(**data)
+        except ValidationError as exc:
+            raise schema_error_from(exc, model=type(self).__name__) from exc
+
+    @classmethod
+    def model_validate(cls, obj: Any, **options: Any) -> Self:  # Any: pydantic passthrough
+        """Validates an object into this model, raising SchemaError on bad data."""
+        try:
+            return super().model_validate(obj, **options)
+        except ValidationError as exc:
+            raise schema_error_from(exc, model=cls.__name__) from exc
+
+    @classmethod
+    def model_validate_json(cls, json_data: str | bytes | bytearray, **options: Any) -> Self:
+        """Validates JSON text into this model, raising SchemaError on bad data."""
+        try:
+            return super().model_validate_json(json_data, **options)
+        except ValidationError as exc:
+            raise schema_error_from(exc, model=cls.__name__) from exc
 
 
 class Box2(FrozenModel):

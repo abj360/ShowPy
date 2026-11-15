@@ -26,8 +26,6 @@ Contains:
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
-from pydantic import ValidationError as PydanticValidationError
-
 from showpy.core.errors import SchemaError, TimelineError, TimeRangeError, UnknownRefError
 from showpy.core.types import Count, CountsPerMinute, Seconds
 from showpy.time.models import (
@@ -363,9 +361,9 @@ def from_json(d: dict[str, Any]) -> Timeline:
     """
     try:
         return Timeline.model_validate(d)
-    except PydanticValidationError as exc:
+    except SchemaError as exc:
         raise SchemaError(
             "timeline JSON does not match the Timeline schema",
             hint="pass a dict produced by to_json()",
-            context={"errors": exc.errors(include_url=False)},
+            context={"errors": exc.context["errors"]},
         ) from exc

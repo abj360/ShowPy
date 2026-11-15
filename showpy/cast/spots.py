@@ -23,8 +23,6 @@ from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, get_args
 
-from pydantic import ValidationError as PydanticValidationError
-
 from showpy.cast.models import Cast, Claimable, Group, LabelScheme, Shape, Spot
 from showpy.cast.rewrite import faces_entity, rewrite_spot_ids
 from showpy.cast.select import label_prefix, select
@@ -362,9 +360,9 @@ def edit_group(show: "Show", key: str, /, **changes: Any) -> "Show":
         )
     try:
         edited = Group.model_validate({**current.model_dump(), **changes})
-    except PydanticValidationError as error:
+    except SchemaError as error:
         raise SchemaError(
-            f"bad change to group {key!r}: {error.errors()[0]['msg']}",
+            f"bad change to group {key!r}: {error.context['errors'][0]['msg']}",
             hint=f"change only these fields: {', '.join(sorted(Group.model_fields))}",
             context={"group": key, "changes": sorted(changes)},
         ) from error

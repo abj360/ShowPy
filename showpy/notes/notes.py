@@ -15,7 +15,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import shapely
-from pydantic import ValidationError as PydanticValidationError
 
 from showpy.cast.select import select
 from showpy.core.errors import GeometryError, SchemaError, UnknownRefError
@@ -54,9 +53,9 @@ def _note_index(show: "Show", note_id: str) -> int:
 def _build_note(fields: dict[str, Any]) -> Note:
     try:
         note = Note.model_validate(fields)
-    except PydanticValidationError as error:
+    except SchemaError as error:
         raise SchemaError(
-            f"bad note: {error.errors()[0]['msg']}",
+            f"bad note: {error.context['errors'][0]['msg']}",
             hint=f"give only these fields: {', '.join(Note.model_fields)}",
             context={"fields": sorted(fields)},
         ) from error

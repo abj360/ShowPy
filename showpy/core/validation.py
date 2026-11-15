@@ -5,10 +5,14 @@ Contains:
     ValidationIssue: describes one error or warning with location and hint
     ValidationReport: collects issues, reports ok, renders one line per issue
     ValidationReport.merge(): combines several reports into one
+    validate_or_schema_error(): validates data against any pydantic model, raising SchemaError
 """
 
 from typing import Literal
 
+from pydantic import BaseModel, ValidationError
+
+from showpy.core.errors import schema_error_from
 from showpy.core.types import FrozenModel
 
 LEVEL_PREFIX = {"error": "E", "warning": "W"}
@@ -57,3 +61,23 @@ class ValidationReport(FrozenModel):
 
     def __str__(self) -> str:
         return "\n".join(str(issue) for issue in self.issues)
+
+
+def validate_or_schema_error[M: BaseModel](model: type[M], data: object) -> M:
+    """Validates data against a model, raising SchemaError instead of a pydantic error.
+
+    Args:
+        model: Pydantic model class to validate against.
+        data: Raw value to validate.
+
+    Returns:
+        instance: The validated model instance.
+
+    >>> from showpy.core.types import Box2
+    >>> validate_or_schema_error(Box2, {"min": (0, 0), "max": (1, 1)}).max
+    (1.0, 1.0)
+    """
+    try:
+        return model.model_validate(data)
+    except ValidationError as exc:
+        raise schema_error_from(exc, model=model.__name__) from exc

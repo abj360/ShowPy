@@ -16,7 +16,6 @@ import math
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
-import pydantic
 
 from showpy.choreo.models import (
     FacingMode,
@@ -172,11 +171,11 @@ def _locked(what: str) -> LockedError:
 def _map_recipe(recipe: dict[str, object], matrix: Matrix, owner: str) -> dict[str, object]:
     try:
         curve = curve_from_construction(recipe)
-    except pydantic.ValidationError as error:
+    except SchemaError as error:
         raise SchemaError(
             f"{owner} holds a curve recipe that does not parse",
             hint="store curves as curve.construction() recipes",
-            context={"owner": owner, "errors": error.errors()},
+            context={"owner": owner, "errors": error.context.get("errors", [])},
         ) from error
     return transform_curve(curve, matrix).construction()
 

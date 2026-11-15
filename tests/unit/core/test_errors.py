@@ -8,19 +8,24 @@ Contains:
     test_regression_every_error_survives_pickling: round-trips every ShowPyError subclass through
         pickle
     test_regression_every_error_survives_deepcopy: deep-copies every ShowPyError subclass
+    test_regression_model_construction_raises_schema_error: rejects a bad Placement with SchemaError
+    test_regression_schema_error_truncates_echoed_input: caps each echoed input at 80 characters
 """
 
 import copy
 import pickle
 
 import pytest
+from pydantic import ValidationError
 
+from showpy.choreo.models import Placement
 from showpy.core.errors import (
     ConflictError,
     ContinuityError,
     GeometryError,
     LockedError,
     PathError,
+    SchemaError,
     ShowPyError,
     StorageError,
     ZeroLengthError,
@@ -93,3 +98,18 @@ def test_regression_every_error_survives_deepcopy() -> None:
     for error_class in _every_error_class():
         clone = copy.deepcopy(_sample(error_class))
         assert (clone.code, clone.message, clone.hint) == ("X", "boom", "fix it")
+
+
+def test_regression_model_construction_raises_schema_error() -> None:
+    with pytest.raises(SchemaError) as info:
+        Placement(entity="A", x="abc", y=0)  # pyright: ignore[reportArgumentType]
+    assert info.value.context["model"] == "Placement"
+    assert info.value.context["errors"][0]["loc"] == "x"
+    assert isinstance(info.value.__cause__, ValidationError)
+
+
+def test_regression_schema_error_truncates_echoed_input() -> None:
+    with pytest.raises(SchemaError) as info:
+        Placement(entity="A", x="a" * 10_000, y=0)  # pyright: ignore[reportArgumentType]
+    assert len(info.value.context["errors"][0]["input"]) <= 80
+    assert "a" * 81 not in str(info.value)

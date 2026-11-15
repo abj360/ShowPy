@@ -23,7 +23,6 @@ from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 import pandas as pd
-import pydantic
 
 from showpy.choreo.engine import PathEngine
 from showpy.core.errors import SchemaError, UnknownRefError
@@ -109,13 +108,13 @@ def import_json(d: Mapping[str, Any]) -> Show:
         raise SchemaError("document has no show object", hint=f"put the show under {SHOW_KEY!r}")
     try:
         return Show.model_validate(body)
-    except pydantic.ValidationError as error:
-        first = error.errors()[0]
-        field = ".".join(str(part) for part in first["loc"])
+    except SchemaError as error:
+        first = error.context["errors"][0]
+        field = first["loc"]
         raise SchemaError(
             f"show field {field or '(root)'} is invalid: {first['msg']}",
             hint=f"fix {field or 'the show'} to match {SCHEMA_TAG}",
-            context={"field": field, "errors": error.error_count()},
+            context={"field": field, "errors": len(error.context["errors"])},
         ) from error
 
 

@@ -2,11 +2,18 @@
 
 """
 test_validation.py --- tests ValidationReport status and one-line rendering
+
+Contains:
+    test_*(): one behavior of showpy.core.validation each
 """
 
 from typing import Literal
 
-from showpy.core.validation import ValidationIssue, ValidationReport
+import pytest
+from pydantic import BaseModel
+
+from showpy.core.errors import SchemaError
+from showpy.core.validation import ValidationIssue, ValidationReport, validate_or_schema_error
 
 
 def _issue(level: Literal["error", "warning"]) -> ValidationIssue:
@@ -31,3 +38,18 @@ def test_merge_concatenates_issues() -> None:
         ValidationReport(issues=(_issue("error"),)), ValidationReport(issues=())
     )
     assert len(merged.issues) == 1
+
+
+class _Plain(BaseModel):
+    size: int
+
+
+def test_validate_or_schema_error_returns_the_model() -> None:
+    assert validate_or_schema_error(_Plain, {"size": 3}).size == 3
+
+
+def test_validate_or_schema_error_names_the_failing_field() -> None:
+    with pytest.raises(SchemaError) as info:
+        validate_or_schema_error(_Plain, {"size": "big"})
+    assert info.value.context["model"] == "_Plain"
+    assert info.value.context["errors"][0]["loc"] == "size"

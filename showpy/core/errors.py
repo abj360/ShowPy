@@ -6,6 +6,7 @@ Contains:
     UnknownRefError: reports an ID, name or unit that does not resolve
     VersionError: reports a pinned version that is missing or incompatible
     SchemaError: reports data that fails its schema or text format
+    schema_error_from(): converts a pydantic ValidationError into a SchemaError
     GeometryError: reports a degenerate shape
     ZeroLengthError: reports a request for the direction of a zero vector
     SpacingError: reports items that do not fit
@@ -24,6 +25,12 @@ Contains:
 
 from collections.abc import Mapping
 from typing import Any, ClassVar
+
+from pydantic import ValidationError as PydanticValidationError
+
+MAX_LISTED_ERRORS = 5
+MAX_ECHOED_INPUT_CHARS = 80
+SCHEMA_ERROR_HINT = "fix the fields named in context"
 
 
 class ShowPyError(Exception):
@@ -73,6 +80,45 @@ class SchemaError(ShowPyError):
     """Reports data that fails its schema or text format."""
 
     default_code = "SCHEMA"
+
+
+def schema_error_from(exc: PydanticValidationError, *, model: str) -> SchemaError:
+    """Converts a pydantic ValidationError into a SchemaError that echoes bounded input.
+
+    Args:
+        exc: The pydantic error raised while validating the model.
+        model: Name of the model that rejected the data.
+
+    Returns:
+        error: A SchemaError listing at most five failing fields, each input cut to 80 characters.
+
+    >>> from pydantic import TypeAdapter, ValidationError
+    >>> try:
+    ...     TypeAdapter(int).validate_python("abc")
+    ... except ValidationError as exc:
+    ...     print(schema_error_from(exc, model="Count").context["model"])
+    Count
+    """
+    errors = [
+        {
+            "loc": ".".join(str(part) for part in item["loc"]),
+            "msg": item["msg"],
+            "input": _truncate(
+                repr(item["input"]) if not isinstance(item["input"], str) else item["input"]
+            ),
+        }
+        for item in exc.errors(include_url=False, include_context=False)
+    ]
+    listed = "; ".join(f"{item['loc']}: {item['msg']}" for item in errors[:MAX_LISTED_ERRORS])
+    return SchemaError(
+        f"{model} rejects {len(errors)} field(s): {listed}",
+        hint=SCHEMA_ERROR_HINT,
+        context={"model": model, "errors": errors},
+    )
+
+
+def _truncate(text: str) -> str:
+    return text[:MAX_ECHOED_INPUT_CHARS]
 
 
 class GeometryError(ShowPyError):

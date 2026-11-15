@@ -21,7 +21,6 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from pydantic import ValidationError as PydanticValidationError
 from pydantic_core import to_jsonable_python
 
 from showpy.choreo.models import Form, Set, TransitionSpec
@@ -255,9 +254,11 @@ def decode_show(docs: Mapping[str, bytes], revision: str = "") -> Show:
     """
     try:
         return _assemble(docs, revision)
-    except PydanticValidationError as exc:
+    except SchemaError as exc:
+        if "errors" not in exc.context:
+            raise
         raise SchemaError(
             "show documents do not match the Show schema",
             hint="write documents produced by save_show(), or fix the fields named in context",
-            context={"errors": exc.errors(include_url=False, include_context=False)},
+            context={"errors": exc.context["errors"]},
         ) from exc
