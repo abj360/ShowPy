@@ -31,7 +31,14 @@ def _checked_points(src: Points, dst: Points) -> tuple[Points, Points]:
     Returns:
         points: The two arrays as float, both (N, 2) with N >= 2, finite and spread out.
     """
-    src_a, dst_a = np.asarray(src, dtype=float), np.asarray(dst, dtype=float)
+    try:
+        src_a, dst_a = np.asarray(src, dtype=float), np.asarray(dst, dtype=float)
+    except (ValueError, TypeError) as error:
+        raise _refuse(
+            "BAD_SHAPE",
+            "similarity fit needs two numeric (N, 2) arrays",
+            "pass matched (N, 2) arrays of numbers with the same N",
+        ) from error
     if src_a.ndim != 2 or src_a.shape[1] != 2 or src_a.shape != dst_a.shape:
         raise _refuse(
             "BAD_SHAPE",
@@ -64,6 +71,36 @@ def _checked_points(src: Points, dst: Points) -> tuple[Points, Points]:
     return src_a, dst_a
 
 
+def _fit_matrix(src: Points, dst: Points) -> Matrix:
+    """Computes the Umeyama similarity for validated landmark arrays.
+
+    Args:
+        src: Validated (N, 2) points on the old sheet.
+        dst: Validated (N, 2) matching points on the new sheet.
+
+    Returns:
+        matrix: 3x3 affine map.
+    """
+    mu_src, mu_dst = src.mean(axis=0), dst.mean(axis=0)
+    spread = float(((src - mu_src) ** 2).sum()) / len(src)
+    covariance = (dst - mu_dst).T @ (src - mu_src) / len(src)
+    u, singular, vt = np.linalg.svd(covariance)
+    is_mirrored = np.linalg.det(u) * np.linalg.det(vt) < 0
+    if is_mirrored and singular[1] > RANK_ONE_RATIO * singular[0]:
+        raise _refuse(
+            "REFLECTION",
+            "landmarks are mirrored between the sheets",
+            "similarity fits keep handedness; check the landmark pairing or flip the sheet first",
+        )
+    keep_handedness = np.diag([1.0, -1.0 if is_mirrored else 1.0])
+    rotation = u @ keep_handedness @ vt
+    scale = float(np.trace(np.diag(singular) @ keep_handedness)) / spread
+    matrix = np.eye(3)
+    matrix[:2, :2] = scale * rotation
+    matrix[:2, 2] = mu_dst - scale * rotation @ mu_src
+    return matrix
+
+
 def similarity_fit(src: Points, dst: Points) -> Matrix:
     """Fits the rotation, uniform scale and translation that best maps `src` onto `dst`.
 
@@ -82,22 +119,19 @@ def similarity_fit(src: Points, dst: Points) -> Matrix:
     >>> fit.round(6).tolist()
     [[2.0, 0.0, 0.0], [0.0, 2.0, 1.0], [0.0, 0.0, 1.0]]
     """
-    src, dst = _checked_points(src, dst)
-    mu_src, mu_dst = src.mean(axis=0), dst.mean(axis=0)
-    spread = float(((src - mu_src) ** 2).sum()) / len(src)
-    covariance = (dst - mu_dst).T @ (src - mu_src) / len(src)
-    u, singular, vt = np.linalg.svd(covariance)
-    is_mirrored = np.linalg.det(u) * np.linalg.det(vt) < 0
-    if is_mirrored and singular[1] > RANK_ONE_RATIO * singular[0]:
+    try:
+        with np.errstate(over="raise", invalid="raise"):
+            matrix = _fit_matrix(*_checked_points(src, dst))
+    except FloatingPointError as error:
         raise _refuse(
-            "REFLECTION",
-            "landmarks are mirrored between the sheets",
-            "similarity fits keep handedness; check the landmark pairing or flip the sheet first",
+            "NOT_FINITE",
+            "similarity fit overflowed on these coordinates",
+            "use coordinates in meters on the sheet, well below 1e150",
+        ) from error
+    if not np.isfinite(matrix).all():
+        raise _refuse(
+            "NOT_FINITE",
+            "similarity fit produced a non-finite matrix",
+            "use coordinates in meters on the sheet, well below 1e150",
         )
-    keep_handedness = np.diag([1.0, -1.0 if is_mirrored else 1.0])
-    rotation = u @ keep_handedness @ vt
-    scale = float(np.trace(np.diag(singular) @ keep_handedness)) / spread
-    matrix = np.eye(3)
-    matrix[:2, :2] = scale * rotation
-    matrix[:2, 2] = mu_dst - scale * rotation @ mu_src
     return matrix

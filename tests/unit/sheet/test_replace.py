@@ -22,6 +22,11 @@ Contains:
     test_similarity_fit_accepts_two_points_and_collinear_points(): fits input with no handedness
     test_regression_similarity_fit_collinear_mirror_is_not_refused(): does not call float noise a
         reflection
+    test_regression_similarity_fit_rejects_ragged_input(): rejects ragged rows with BAD_SHAPE
+    test_regression_similarity_fit_rejects_non_numeric_input(): rejects strings with BAD_SHAPE
+    test_regression_similarity_fit_rejects_overflowing_coordinates(): refuses huge coordinates
+        with NOT_FINITE instead of returning a non-finite matrix
+    test_similarity_fit_handles_large_finite_coordinates(): still fits coordinates near 1e150
 """
 
 import warnings
@@ -133,4 +138,38 @@ def test_regression_similarity_fit_collinear_mirror_is_not_refused() -> None:
     """Does not call float noise on collinear input a reflection."""
     line = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]])
     fit = similarity_fit(line, np.array([[0.0, 0.0], [-1.0, 0.0], [-2.0, 0.0]]))
+    assert np.isfinite(fit).all()
+
+
+def test_regression_similarity_fit_rejects_ragged_input() -> None:
+    """Rejects ragged rows with BAD_SHAPE instead of leaking a numpy ValueError."""
+    with pytest.raises(GeometryError) as info:
+        similarity_fit([[0.0, 0.0], [1.0]], [[0.0, 0.0], [1.0, 1.0]])  # type: ignore[arg-type]
+    assert info.value.code == "BAD_SHAPE"
+
+
+def test_regression_similarity_fit_rejects_non_numeric_input() -> None:
+    """Rejects strings with BAD_SHAPE instead of leaking a numpy ValueError."""
+    with pytest.raises(GeometryError) as info:
+        similarity_fit("ab", "cd")  # type: ignore[arg-type]
+    assert info.value.code == "BAD_SHAPE"
+
+
+@pytest.mark.parametrize("magnitude", [1e160, 1e200])
+def test_regression_similarity_fit_rejects_overflowing_coordinates(magnitude: float) -> None:
+    """Refuses huge coordinates with NOT_FINITE instead of returning a non-finite matrix."""
+    src = np.array([[0.0, 0.0], [magnitude, 0.0]])
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        with pytest.raises(GeometryError) as info:
+            similarity_fit(src, src)
+    assert info.value.code == "NOT_FINITE"
+
+
+def test_similarity_fit_handles_large_finite_coordinates() -> None:
+    """Still fits coordinates near 1e150, whose squares stay finite."""
+    src = np.array([[0.0, 0.0], [1e150, 0.0]])
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        fit = similarity_fit(src, src)
     assert np.isfinite(fit).all()
