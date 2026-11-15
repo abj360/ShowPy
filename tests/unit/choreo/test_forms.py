@@ -56,7 +56,7 @@ from showpy.core.errors import LockedError, SchemaError, ShowPyError, SpacingErr
 from showpy.core.types import Box2, Points
 from showpy.core.util import approx_equal
 from showpy.geo.curves import curve_from_construction
-from tests.helpers import TIMEOUT_METHOD
+from tests.helpers import fails_after
 
 TOL = 1e-6
 MEMBERS = ["A", "B", "C", "D", "E"]
@@ -315,7 +315,7 @@ def test_regression_scatter_form_rejects_zero_min_gap() -> None:
 
 @pytest.mark.defect("UP-9.6-44")
 @pytest.mark.xfail(strict=True, reason="UP-9.6-44")
-@pytest.mark.timeout(TIMEOUT_S, method=TIMEOUT_METHOD)
+@fails_after(TIMEOUT_S)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_scatter_form_rejects_negative_min_gap_without_hanging() -> None:
     """Raises SpacingError for scatter_form(min_gap=-1) instead of hanging (audit 9.6; P0 #7)."""

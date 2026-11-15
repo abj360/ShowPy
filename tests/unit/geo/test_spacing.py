@@ -68,7 +68,7 @@ from showpy.geo.spacing import (
     space_proportional,
     space_with_gaps,
 )
-from tests.helpers import TIMEOUT_METHOD, capped_address_space
+from tests.helpers import capped_address_space, fails_after
 
 SIGNAL_TIMEOUT_S = 5
 SQUARE_SIDE_M = 10.0
@@ -241,7 +241,7 @@ def _square(origin_x: float = 0.0, side: float = SQUARE_SIDE_M) -> shapely.Polyg
 
 @pytest.mark.defect("UP-9.1-03")
 @pytest.mark.xfail(strict=True, reason="UP-9.1-03")
-@pytest.mark.timeout(SIGNAL_TIMEOUT_S, method=TIMEOUT_METHOD)
+@fails_after(SIGNAL_TIMEOUT_S)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_scatter_rejects_negative_min_gap() -> None:
     """Rejects a negative gap instead of looping forever (audit 9.1; P0 #7)."""
@@ -251,7 +251,7 @@ def test_regression_scatter_rejects_negative_min_gap() -> None:
 
 @pytest.mark.defect("UP-9.1-07")
 @pytest.mark.xfail(strict=True, reason="UP-9.1-07")
-@pytest.mark.timeout(SIGNAL_TIMEOUT_S, method=TIMEOUT_METHOD)
+@fails_after(SIGNAL_TIMEOUT_S)
 @pytest.mark.skipif(sys.platform != "linux", reason="needs signal timeout and RLIMIT_AS")
 def test_regression_fill_caps_the_lattice_size() -> None:
     """Rejects a 100-million-point fill instead of building the lattice (audit 9.1; P0 #8)."""
@@ -261,7 +261,7 @@ def test_regression_fill_caps_the_lattice_size() -> None:
 
 @pytest.mark.defect("UP-9.1-08")
 @pytest.mark.xfail(strict=True, reason="UP-9.1-08")
-@pytest.mark.timeout(SIGNAL_TIMEOUT_S, method=TIMEOUT_METHOD)
+@fails_after(SIGNAL_TIMEOUT_S)
 @pytest.mark.skipif(sys.platform != "linux", reason="needs signal timeout and RLIMIT_AS")
 def test_regression_space_by_interval_caps_the_point_count() -> None:
     """Rejects a 100-million-point spacing instead of allocating it (audit 9.1; P0 #8)."""

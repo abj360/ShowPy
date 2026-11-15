@@ -79,7 +79,7 @@ from showpy.show.storage import load_show, open_workspace, save_show
 from showpy.show.validate import validate_show
 from showpy.time.models import Hold, MeasureSetting
 from tests.fixtures.shows import field_sheet, two_set_show
-from tests.helpers import TIMEOUT_METHOD
+from tests.helpers import fails_after
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 TOL = 1e-9
@@ -459,7 +459,7 @@ def test_regression_frozen_show_is_hashable() -> None:
 
 @pytest.mark.defect("UP-9.7-59")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-59")
-@pytest.mark.timeout(5, method=TIMEOUT_METHOD)
+@fails_after(5)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_stale_save_conflict_message_is_bounded() -> None:
     """Caps the ConflictError text after many landed revisions (audit 9.7 sets defects)."""

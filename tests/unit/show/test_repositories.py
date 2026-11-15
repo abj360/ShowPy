@@ -35,7 +35,7 @@ from showpy.show.files import LIMITS_DOC
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import Repository
 from tests.fixtures.shows import two_set_show
-from tests.helpers import TIMEOUT_METHOD, pin_spot
+from tests.helpers import fails_after, pin_spot
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 SHOW_ID = "show-1"
@@ -95,7 +95,7 @@ def _race_winners() -> tuple[list[str], set[str]]:
 
 @pytest.mark.defect("UP-9.7-02")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-02")
-@pytest.mark.timeout(5, method=TIMEOUT_METHOD)
+@fails_after(5)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_memory_commit_has_one_winner_per_parent() -> None:
     """Lands exactly one of many threads racing on one parent (audit 9.7 item 2; P0 #2)."""

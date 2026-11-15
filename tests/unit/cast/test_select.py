@@ -49,7 +49,7 @@ from showpy.core.types import Region
 from showpy.geo.shapes import line
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
-from tests.helpers import TIMEOUT_METHOD, outputs_under_hash_seeds
+from tests.helpers import fails_after, outputs_under_hash_seeds
 
 RECT = Shape(kind="rectangle", width_m=1.0, depth_m=0.5)
 
@@ -406,7 +406,7 @@ def test_regression_mirror_pairs_finds_every_pair_within_tolerance() -> None:
 
 @pytest.mark.defect("UP-9.3-77")
 @pytest.mark.xfail(strict=True, reason="UP-9.3-77")
-@pytest.mark.timeout(5, method=TIMEOUT_METHOD)
+@fails_after(5)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_split_rejects_absurd_part_counts_quickly() -> None:
     """Rejects an absurd part count instead of building 100,000 empty groups (audit 9.3; P0 #8)."""

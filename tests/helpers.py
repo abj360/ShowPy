@@ -12,13 +12,14 @@ Contains:
     bisector_rotation(): returns a pivot and sweep whose arc carries one point onto another
     defect(): marks a test as an open audited defect, a strict xfail keyed on its ID
     capped_address_space(): caps the address space so a runaway allocation fails fast
+    fails_after(): fails a test still running after a deadline, never inside coverage code
     EXPECTED_FAILURES: exception names a hash-seed subprocess may end with
-    TIMEOUT_METHOD: picks pytest-timeout's signal method where SIGALRM exists, else thread
     outputs_under_hash_seeds(): runs one script under each hash seed and collects its output
     TAGGED_SHOW_SCRIPT: script head building two_set_show() with spot tags and a selection
     digests_under_hash_seeds(): hashes one output of the tagged show twice per hash seed
 """
 
+import functools
 import math
 import signal
 import subprocess
@@ -27,7 +28,8 @@ from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Literal, TypeVar, cast
+from types import FrameType
+from typing import ParamSpec, TypeVar, cast
 
 import pytest
 
@@ -48,9 +50,8 @@ STILL_TOL_M = 1e-6
 FULL_TURN = 360.0
 HALF_TURN = 180.0
 ALLOCATION_HEADROOM_BYTES = 256 * 2**20
-# pytest-timeout arms its timer before skip markers run, so a signal timeout on a test
-# skipped on Windows still crashes the run there; Windows has no SIGALRM.
-TIMEOUT_METHOD: Literal["signal", "thread"] = "signal" if hasattr(signal, "SIGALRM") else "thread"
+COVERAGE_PACKAGE = "coverage"
+HANG_RETRY_S = 0.01
 EXPECTED_FAILURES = ("ValidationError", "SchemaError", "ShowPyError")
 HASH_SEEDS = ("1", "2", "3")
 SUBPROCESS_TIMEOUT_S = 20
@@ -74,6 +75,7 @@ TAGGED_SHOW_SCRIPT = (
 )
 
 MarkedTest = TypeVar("MarkedTest", bound=Callable[..., object])
+TestParams = ParamSpec("TestParams")
 
 
 def make_set(*rows: tuple[str, float, float], off: tuple[str, ...] = ()) -> Set:
@@ -194,6 +196,51 @@ def capped_address_space() -> Iterator[None]:
         yield
     finally:
         resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
+
+
+def _inside_coverage(frame: FrameType | None) -> bool:
+    """Tells whether any frame on the interrupted stack belongs to coverage.py."""
+    while frame is not None:
+        if str(frame.f_globals.get("__name__", "")).partition(".")[0] == COVERAGE_PACKAGE:
+            return True
+        frame = frame.f_back
+    return False
+
+
+def fails_after(
+    seconds: float,
+) -> Callable[[Callable[TestParams, None]], Callable[TestParams, None]]:
+    """Fails the decorated test when it is still running after `seconds`, via SIGALRM (POSIX).
+
+    pytest-timeout's signal method raises wherever the alarm lands. Landing in coverage's
+    C-tracer callback between its data lock's acquire and release left the lock held, and the
+    next traced file deadlocked the whole run (CI on Python 3.12/3.13, 2026-11-14). The alarm
+    is therefore re-armed while coverage code is on the stack.
+
+    Args:
+        seconds: Wall-clock budget before the test fails as a hang.
+    """
+
+    def decorate(test: Callable[TestParams, None]) -> Callable[TestParams, None]:
+        @functools.wraps(test)
+        def guarded(*args: TestParams.args, **kwargs: TestParams.kwargs) -> None:
+            def interrupt(_signum: int, frame: FrameType | None) -> None:
+                if _inside_coverage(frame):
+                    signal.setitimer(signal.ITIMER_REAL, HANG_RETRY_S)
+                    return
+                pytest.fail(f"Timeout >{seconds}s", pytrace=False)
+
+            previous = signal.signal(signal.SIGALRM, interrupt)
+            signal.setitimer(signal.ITIMER_REAL, seconds)
+            try:
+                test(*args, **kwargs)
+            finally:
+                signal.setitimer(signal.ITIMER_REAL, 0)
+                signal.signal(signal.SIGALRM, previous)
+
+        return guarded
+
+    return decorate
 
 
 def outputs_under_hash_seeds(script: str, seeds: Iterable[str] = HASH_SEEDS) -> list[str]:

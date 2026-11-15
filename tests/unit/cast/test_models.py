@@ -47,7 +47,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from showpy.cast.models import Cast, Group, LabelScheme, Shape, Spot
 from showpy.core.errors import GeometryError, ShowPyError, UnknownRefError
-from tests.helpers import TIMEOUT_METHOD, outputs_under_hash_seeds
+from tests.helpers import fails_after, outputs_under_hash_seeds
 
 
 def test_group_name_defaults_from_key() -> None:
@@ -254,7 +254,7 @@ def test_regression_label_scheme_rejects_negative_pad() -> None:
 
 @pytest.mark.defect("UP-9.3-65")
 @pytest.mark.xfail(strict=True, reason="UP-9.3-65")
-@pytest.mark.timeout(5, method=TIMEOUT_METHOD)
+@fails_after(5)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_label_scheme_rejects_huge_pad() -> None:
     """Rejects pad=10**7 instead of building 10 MB labels (audit 9.3)."""
