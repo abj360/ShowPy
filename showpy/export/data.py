@@ -19,6 +19,7 @@ Contains:
 import csv
 import io
 import math
+import re
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
@@ -45,6 +46,9 @@ FULL_TURN = 360.0
 COLUMN_GAP = "  "
 TITLE_SEPARATOR = " — "
 LIST_SEPARATOR = ", "
+FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
+FORMULA_GUARD = "'"
+PLAIN_DECIMAL = re.compile(r"[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?", re.ASCII)
 TRUE_TEXT, FALSE_TEXT = "true", "false"
 SHEET_HEADER = (
     "set", "counts", "cumulative", "measure", "position", "x", "y", "facing", "behavior",
@@ -257,18 +261,36 @@ def as_table(obj: Tabular) -> TextTable:
     )
 
 
-def to_csv(obj: Tabular) -> str:
+def _neutralized(cell: str) -> str:
+    if not cell.startswith(FORMULA_TRIGGERS) or PLAIN_DECIMAL.fullmatch(cell):
+        return cell
+    return FORMULA_GUARD + cell
+
+
+def to_csv(obj: Tabular, *, neutralize: bool = True) -> str:
     """Writes a coordinate sheet, chart or DataFrame as CSV; the csv module quotes every cell.
 
+    Neutralizes formula cells per OWASP: a header or body cell that starts with `=`, `+`, `-`, `@`,
+    tab or carriage return and is not a plain decimal literal gets a leading `'`, so spreadsheets
+    show it as text. Pass `neutralize=False` for machine pipelines that read the cells back as-is.
+
+    Args:
+        obj: Table source to write.
+        neutralize: Whether to prefix formula cells with a quote.
+
+    Returns:
+        text: The CSV document.
+
     >>> import pandas as pd
-    >>> to_csv(pd.DataFrame({"a": ["x, y"]})).splitlines()
-    ['a', '"x, y"']
+    >>> to_csv(pd.DataFrame({"a": ["x, y", "=1+1", "-5"]})).splitlines()
+    ['a', '"x, y"', "'=1+1", '-5']
     """
     table = as_table(obj)
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
-    writer.writerow(table.header)
-    writer.writerows(table.rows)
+    guard = _neutralized if neutralize else str
+    writer.writerow(guard(cell) for cell in table.header)
+    writer.writerows([guard(cell) for cell in row] for row in table.rows)
     return out.getvalue()
 
 

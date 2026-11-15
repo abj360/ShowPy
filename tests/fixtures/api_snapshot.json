@@ -1418,7 +1418,7 @@
   "text_outline": "(text: str, font: str, height: Meters, at: Point) -> list[showpy.geo.curves.Polyline]",
   "timer": "() -> collections.abc.Iterator[showpy.core.util.Timer]",
   "to_coords": "(show: 'Show', p: Point, style: CoordStyle = 'long') -> str",
-  "to_csv": "(obj: Tabular) -> str",
+  "to_csv": "(obj: Tabular, *, neutralize: bool = True) -> str",
   "to_json": "(tl: showpy.time.models.Timeline) -> dict[str, Any]",
   "to_pdf": "(obj: Printable, layout: Layout = 'sheet') -> bytes",
   "to_text": "(obj: Tabular) -> str",

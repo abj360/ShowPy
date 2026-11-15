@@ -63,7 +63,7 @@ def test_json_round_trip_is_exact(show: Show) -> None:
 
 @given(st.text())
 def test_csv_cells_survive_any_text(text: str) -> None:
-    written = to_csv(pd.DataFrame({"cell": [text]}))
+    written = to_csv(pd.DataFrame({"cell": [text]}), neutralize=False)
     parsed = list(csv.reader(io.StringIO(written, newline="")))
     assert parsed == [["cell"], [text]]
 

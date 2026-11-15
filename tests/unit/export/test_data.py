@@ -8,6 +8,10 @@ Also holds the audited data and CSV defects (UP-9.5-27 to UP-9.5-35, UP-4.3-01) 
 Contains:
     test_regression_chart_csv_neutralizes_formula_names(): quotes a formula-like performer name
     test_regression_csv_neutralizes_every_formula_trigger(): quotes cells led by + - @ tab or CR
+    test_regression_csv_neutralizes_header_cells(): quotes a formula-like column name
+    test_regression_csv_leaves_numeric_literals_untouched(): keeps -5, +3, 1.5e3 and -.5 as is
+    test_regression_csv_prefixes_a_non_numeric_minus_cell(): quotes `-x` and `-1+1`
+    test_regression_csv_opt_out_leaves_formula_cells_unchanged(): writes cells raw when asked
     test_regression_csv_writes_large_floats_without_exponent(): writes 1234567.0 in full; the `:g`
         format turns it into 1.23457e+06
     test_regression_csv_keeps_cue_seconds_above_one_thousand_exact(): keeps seconds past 1,000 exact
@@ -213,8 +217,6 @@ def _display_width(text: str) -> int:
     return sum(WIDE_CELL if unicodedata.east_asian_width(c) in "WF" else 1 for c in text)
 
 
-@pytest.mark.defect("UP-9.5-27")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-27")
 def test_regression_chart_csv_neutralizes_formula_names() -> None:
     """Prefixes a quote to a performer name that spreadsheets would run as a formula.
 
@@ -231,14 +233,33 @@ def test_regression_chart_csv_neutralizes_formula_names() -> None:
     assert FORMULA_NAME not in cells
 
 
-@pytest.mark.defect("UP-9.5-28")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-28")
 @pytest.mark.parametrize("lead", ["+", "-", "@", "\t", "\r"])
 def test_regression_csv_neutralizes_every_formula_trigger(lead: str) -> None:
     """Prefixes a quote to cells starting with + - @ tab or carriage return (audit 9.5)."""
     cell = f"{lead}1+1"
     rows = _csv_rows(to_csv(pd.DataFrame({"name": [cell], "offset": ["-5"]})))
     assert rows[1] == [f"'{cell}", "-5"]
+
+
+def test_regression_csv_neutralizes_header_cells() -> None:
+    rows = _csv_rows(to_csv(pd.DataFrame({"=SUM(A1)": ["ok"]})))
+    assert rows[0] == ["'=SUM(A1)"]
+
+
+@pytest.mark.parametrize("literal", ["-5", "+3", "1.5e3", "-.5"])
+def test_regression_csv_leaves_numeric_literals_untouched(literal: str) -> None:
+    rows = _csv_rows(to_csv(pd.DataFrame({"n": [literal]})))
+    assert rows[1] == [literal]
+
+
+def test_regression_csv_prefixes_a_non_numeric_minus_cell() -> None:
+    rows = _csv_rows(to_csv(pd.DataFrame({"n": ["-x", "-1+1"]})))
+    assert [row[0] for row in rows[1:]] == ["'-x", "'-1+1"]
+
+
+def test_regression_csv_opt_out_leaves_formula_cells_unchanged() -> None:
+    rows = _csv_rows(to_csv(pd.DataFrame({"n": [FORMULA_NAME]}), neutralize=False))
+    assert rows[1] == [FORMULA_NAME]
 
 
 @pytest.mark.defect("UP-9.5-29")
