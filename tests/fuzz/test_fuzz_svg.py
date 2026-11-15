@@ -21,7 +21,9 @@ MAX_TOKENS = 40
 
 signs = st.sampled_from(["", "-", "+"])
 plain_numbers = st.from_regex(r"\d{1,4}(\.\d{1,4})?|\.\d{1,4}|\d{1,3}\.", fullmatch=True)
-exponents = st.sampled_from(["", "e2", "E-3", "e+1", "e400", "e-400", "e300", "e154", "e"])
+exponents = st.sampled_from(
+    ["", "e2", "E-3", "e+1", "e400", "e-400", "e300", "e154", "e80", "e100", "e"]
+)
 numbers = st.builds(lambda s, n, e: s + n + e, signs, plain_numbers, exponents)
 packed_numbers = st.builds(lambda a, b: a + b, numbers, st.from_regex(r"\.\d{1,3}", fullmatch=True))
 flags = st.sampled_from(["0", "1", "2", "01", "10", "11", "00", "011", "01.5", "0.5", "1e1"])

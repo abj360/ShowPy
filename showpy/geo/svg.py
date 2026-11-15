@@ -8,7 +8,6 @@ Contains:
     ArcPiece: evaluates an elliptical arc piece in center parameterization
     Subpath: holds the pieces of one M…(Z) run and writes them back as absolute path data
     parse_path(): parses path data into subpaths, supporting M L H V C S Q T A Z
-    _unpack_arc_flags(): splits packed arc flags into single digits in one pass
 """
 
 import math
@@ -277,6 +276,14 @@ def _smooth_quad(b: _PathBuilder, a: list[float], ox: float, oy: float) -> None:
     b.add(QuadPiece(b.current, control, (a[0] + ox, a[1] + oy)), control)
 
 
+def _arc_error(end: Point) -> SchemaError:
+    return SchemaError(
+        "arc radii or coordinates are too large or too small to evaluate",
+        hint="use smaller arc radii or coordinates",
+        context={"command": "A", "end": end},
+    )
+
+
 def _arc(b: _PathBuilder, a: list[float], ox: float, oy: float) -> None:
     end = (a[5] + ox, a[6] + oy)
     if math.dist(b.current, end) == 0:
@@ -287,11 +294,9 @@ def _arc(b: _PathBuilder, a: list[float], ox: float, oy: float) -> None:
     try:
         piece = _arc_piece(b.current, end, abs(a[0]), abs(a[1]), a[2], bool(a[3]), bool(a[4]))
     except (OverflowError, ZeroDivisionError, ValueError) as exc:
-        raise SchemaError(
-            "arc radii or coordinates are too large or too small to evaluate",
-            hint="keep arc numbers between 1e-150 and 1e150 in magnitude",
-            context={"command": "A", "end": end},
-        ) from exc
+        raise _arc_error(end) from exc
+    if not all(math.isfinite(v) for v in (*piece.center, piece.theta1_deg, piece.dtheta_deg)):
+        raise _arc_error(end)
     b.add(piece)
 
 

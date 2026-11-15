@@ -42,6 +42,10 @@ Contains:
         leaking ValueError
     test_regression_svg_outline_rejects_bad_path_index: raises a ShowPyError for an out-of-range
         path_index instead of leaking IndexError
+    test_regression_parse_path_rejects_arcs_with_non_finite_geometry: raises SchemaError for 1e80
+        radii instead of returning NaN angles
+    test_regression_svg_outline_rejects_arcs_with_non_finite_geometry: raises SchemaError for 1e80
+        radii instead of leaking IndexError
 """
 
 import math
@@ -249,6 +253,21 @@ def test_regression_parse_path_rejects_arcs_that_overflow() -> None:
     """Raises SchemaError for an arc ending at 1e300 instead of leaking OverflowError."""
     with pytest.raises(SchemaError):
         parse_path("M0 0 A.1 .1 0 0 1 .1e300 .1")
+
+
+NAN_ARC_PATH = "M0 0 A1e80 1e80 0 0 1 1 1"
+
+
+def test_regression_parse_path_rejects_arcs_with_non_finite_geometry() -> None:
+    """Raises SchemaError for 1e80 radii instead of returning an arc with NaN angles."""
+    with pytest.raises(SchemaError):
+        parse_path(NAN_ARC_PATH)
+
+
+def test_regression_svg_outline_rejects_arcs_with_non_finite_geometry() -> None:
+    """Raises SchemaError for 1e80 radii instead of leaking IndexError and a RuntimeWarning."""
+    with pytest.raises(SchemaError):
+        svg_outline(NAN_ARC_PATH + " L2 0", BOX)
 
 
 @pytest.mark.defect("UP-9.1-44")
