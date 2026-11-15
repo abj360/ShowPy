@@ -35,7 +35,7 @@ Repository = "https://github.com/abj360/ShowPy"
 Issues = "https://github.com/abj360/ShowPy/issues"
 
 [build-system]
-requires = ["hatchling==1.27.0", "hatch-vcs==0.5.0"]
+requires = ["hatchling==1.33.0", "hatch-vcs==0.5.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
