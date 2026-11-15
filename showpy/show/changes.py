@@ -20,18 +20,16 @@ def _replace_set(show: Show, op: PlacementOp) -> Show:
     current = show.sets[position]
     current.get(op.placement.entity)
     edited = current.with_placements({op.placement.entity: op.placement}, force=True)
-    return show.model_copy(
-        update={"sets": (*show.sets[:position], edited, *show.sets[position + 1 :])}
-    )
+    return show.replace(sets=(*show.sets[:position], edited, *show.sets[position + 1 :]))
 
 
 def _replace_form(show: Show, op: FormOp) -> Show:
     position = show.set_index(op.form.set)
     owner = show.sets[position]
     if op.form.id not in owner.forms:
-        owner = owner.model_copy(update={"forms": (*owner.forms, op.form.id)})
+        owner = owner.replace(forms=(*owner.forms, op.form.id))
     sets = (*show.sets[:position], owner, *show.sets[position + 1 :])
-    return show.model_copy(update={"forms": {**show.forms, op.form.id: op.form}, "sets": sets})
+    return show.replace(forms={**show.forms, op.form.id: op.form}, sets=sets)
 
 
 def _is_default(spec: TransitionSpec) -> bool:
@@ -41,12 +39,12 @@ def _is_default(spec: TransitionSpec) -> bool:
 def store_paths(show: Show, op: PathsOp) -> Show:
     """Stores a transition's paths in show order; default (empty) paths are not stored."""
     counts = show.transition(op.spec.id).counts
-    spec = op.spec.model_copy(update={"counts": counts})
+    spec = op.spec.replace(counts=counts)
     kept = [s for s in show.transitions if s.id != spec.id]
     stored = kept if _is_default(spec) else [*kept, spec]
     order = show.transition_ids()
     stored.sort(key=lambda s: order.index(s.id))
-    return show.model_copy(update={"transitions": tuple(stored)})
+    return show.replace(transitions=tuple(stored))
 
 
 def _apply_op(show: Show, op: ChangeOp) -> Show:

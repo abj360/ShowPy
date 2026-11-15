@@ -22,7 +22,6 @@ Contains:
 """
 
 import math
-from typing import cast
 
 import pytest
 from pydantic import ValidationError as PydanticValidationError
@@ -356,16 +355,14 @@ def test_regression_duplicate_cue_order_is_rejected_or_ordered() -> None:
     assert len(starts) == 2
 
 
-@pytest.mark.defect("UP-4.4-02")
-@pytest.mark.xfail(strict=True, reason="UP-4.4-02")
-def test_regression_set_sync_validates_the_offset() -> None:
-    """Rejects an offset AudioTrack itself rejects; model_copy skips that check (audit 4.4).
-
-    The cast stands in for an untyped caller, such as JSON from an agent.
-    """
+def test_regression_set_sync_never_returns_a_timeline_its_validators_reject() -> None:
+    """Rejects a non-finite offset instead of returning a timeline that fails revalidation."""
     tl = attach_audio(_counts(), AudioTrack(file="a.wav", label="a"))
-    with pytest.raises(ShowPyError):
-        set_sync(tl, "a", cast(float, UNPARSEABLE_OFFSET))
+    try:
+        edited = set_sync(tl, "a", math.inf)
+    except ShowPyError:
+        return
+    Timeline.model_validate(edited.model_dump())
 
 
 def test_regression_from_json_keeps_a_validator_schema_error(

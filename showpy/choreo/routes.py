@@ -120,8 +120,8 @@ def follow(
     >>> follow(TransitionSpec(id=("1", "2"), counts=8.0), route).row("T4").style.value
     'follow'
     """
-    timed = route.model_copy(update={"start": start, "end": end})
-    spec = spec.model_copy(update={"routes": {**spec.routes, route.id: timed}})
+    timed = route.replace(start=start, end=end)
+    spec = spec.replace(routes={**spec.routes, route.id: timed})
     return set_style(spec, list(route.members), PathStyle.FOLLOW, route=route.id)
 
 
@@ -150,7 +150,7 @@ def follow_and_set_targets(
 def _store(show: Show, tid: TransitionId, spec: TransitionSpec, target: Set) -> Show:
     sets = tuple(target if s.id == tid[1] else s for s in show.sets)
     others = tuple(t for t in show.transitions if t.id != tid)
-    return show.model_copy(update={"sets": sets, "transitions": (*others, spec)})
+    return show.replace(sets=sets, transitions=(*others, spec))
 
 
 def _pt(v: np.ndarray) -> Point:
@@ -223,12 +223,10 @@ def counter_march(
     moved = follow_and_set_targets(show, tid, route)
     spec = moved.transition(tid)
     rows = {
-        e: spec.row(e).model_copy(
-            update={"facing_mode": FacingMode.TRAVEL, "turn_counts": counts_per_turn}
-        )
+        e: spec.row(e).replace(facing_mode=FacingMode.TRAVEL, turn_counts=counts_per_turn)
         for e in file
     }
-    spec = spec.model_copy(update={"rows": {**spec.rows, **rows}})
+    spec = spec.replace(rows={**spec.rows, **rows})
     return _store(moved, tid, spec, moved.set(tid[1]))
 
 
@@ -261,7 +259,7 @@ def two_part(
         rows[entity] = PathRow.model_validate(
             {**row.model_dump(), "style": PathStyle.POLYLINE, "waypoints": (waypoint,)}
         )
-    return spec.model_copy(update={"rows": rows})
+    return spec.replace(rows=rows)
 
 
 def rotate_path(

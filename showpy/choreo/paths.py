@@ -81,7 +81,7 @@ def _edit(
         updated = PathRow.model_validate({**row.model_dump(), **change(row)})
         _require_fits(updated, spec.counts)
         rows[entity] = updated
-    return spec.model_copy(update={"rows": rows})
+    return spec.replace(rows=rows)
 
 
 def _require_fits(row: PathRow, counts: float) -> None:

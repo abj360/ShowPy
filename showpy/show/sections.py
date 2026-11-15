@@ -38,7 +38,7 @@ def _clip_overrides(
     for item in items:
         window = _clip((item.start, item.end), low, high, shift)
         if window is not None:
-            kept.append(item.model_copy(update={"start": window[0], "end": window[1]}))
+            kept.append(item.replace(start=window[0], end=window[1]))
     return tuple(kept)
 
 
@@ -50,7 +50,7 @@ def _clip_zones(zones: Sequence[Zone], low: Count, high: Count, shift: Count) ->
             continue
         windows = tuple(w for w in (_clip(w, low, high, shift) for w in zone.active) if w)
         if windows:
-            kept.append(zone.model_copy(update={"active": windows}))
+            kept.append(zone.replace(active=windows))
     return tuple(kept)
 
 
@@ -61,13 +61,9 @@ def _tempo_from(tl: Timeline, offset: Count) -> tuple[TempoSection, ...]:
     start = TempoSection(at_count=0.0, counts_per_minute=tempo_at(tl, offset))
     ramp_end = active.at_count + (active.ramp_counts or 0.0)
     if active.ramp_to is not None and ramp_end - offset > TOL:
-        start = start.model_copy(
-            update={"ramp_to": active.ramp_to, "ramp_counts": ramp_end - offset}
-        )
+        start = start.replace(ramp_to=active.ramp_to, ramp_counts=ramp_end - offset)
     later = [
-        t.model_copy(update={"at_count": t.at_count - offset})
-        for t in tl.tempos
-        if t.at_count > offset + TOL
+        t.replace(at_count=t.at_count - offset) for t in tl.tempos if t.at_count > offset + TOL
     ]
     return (start, *later)
 
@@ -98,44 +94,34 @@ def _audio_from(tl: Timeline, offset: Count) -> tuple[AudioTrack, ...]:
         )
         if track.section is not None and section is None:
             continue
-        tracks.append(
-            track.model_copy(
-                update={"sync_offset_s": track.sync_offset_s + shift_s, "section": section}
-            )
-        )
+        tracks.append(track.replace(sync_offset_s=track.sync_offset_s + shift_s, section=section))
     return tuple(tracks)
 
 
 def _timeline_until(tl: Timeline, offset: Count) -> Timeline:
-    return tl.model_copy(
-        update={
-            "tempos": tuple(t for t in tl.tempos if t.at_count < offset - TOL or t.at_count == 0),
-            "holds": tuple(h for h in tl.holds if h.at_count < offset - TOL),
-            "markers": tuple(m for m in tl.markers if m.at_count <= offset + TOL),
-            "total_counts": offset,
-        }
+    return tl.replace(
+        tempos=tuple(t for t in tl.tempos if t.at_count < offset - TOL or t.at_count == 0),
+        holds=tuple(h for h in tl.holds if h.at_count < offset - TOL),
+        markers=tuple(m for m in tl.markers if m.at_count <= offset + TOL),
+        total_counts=offset,
     )
 
 
 def _timeline_from(tl: Timeline, offset: Count) -> Timeline:
     total = None if tl.total_counts is None else max(tl.total_counts - offset, 0.0)
-    return tl.model_copy(
-        update={
-            "tempos": _tempo_from(tl, offset),
-            "holds": tuple(
-                h.model_copy(update={"at_count": h.at_count - offset})
-                for h in tl.holds
-                if h.at_count >= offset - TOL
-            ),
-            "markers": tuple(
-                m.model_copy(update={"at_count": m.at_count - offset})
-                for m in tl.markers
-                if m.at_count >= offset - TOL
-            ),
-            "measures": _measures_from(tl, offset),
-            "audio": _audio_from(tl, offset),
-            "total_counts": total,
-        }
+    return tl.replace(
+        tempos=_tempo_from(tl, offset),
+        holds=tuple(
+            h.replace(at_count=h.at_count - offset) for h in tl.holds if h.at_count >= offset - TOL
+        ),
+        markers=tuple(
+            m.replace(at_count=m.at_count - offset)
+            for m in tl.markers
+            if m.at_count >= offset - TOL
+        ),
+        measures=_measures_from(tl, offset),
+        audio=_audio_from(tl, offset),
+        total_counts=total,
     )
 
 
@@ -162,18 +148,16 @@ def _section(show: Show, sets: Sequence[Set], timeline: Timeline, low: Count, hi
     ids = {s.id for s in sets}
     forms = {k: f for k, f in show.forms.items() if f.set in ids}
     pairs = {(a.id, b.id) for a, b in itertools.pairwise(sets)}
-    return show.model_copy(
-        update={
-            "sets": tuple(sets),
-            "forms": forms,
-            "transitions": tuple(t for t in show.transitions if t.id in pairs),
-            "notes": tuple(n for n in show.notes if _note_in(n, ids)),
-            "pins": tuple(p for p in show.pins if _pin_in(p, ids, forms)),
-            "facing_overrides": _clip_overrides(show.facing_overrides, low, high, low),
-            "zones": _clip_zones(show.zones, low, high, low),
-            "timeline": timeline,
-            "revision": "",
-        }
+    return show.replace(
+        sets=tuple(sets),
+        forms=forms,
+        transitions=tuple(t for t in show.transitions if t.id in pairs),
+        notes=tuple(n for n in show.notes if _note_in(n, ids)),
+        pins=tuple(p for p in show.pins if _pin_in(p, ids, forms)),
+        facing_overrides=_clip_overrides(show.facing_overrides, low, high, low),
+        zones=_clip_zones(show.zones, low, high, low),
+        timeline=timeline,
+        revision="",
     )
 
 
@@ -199,7 +183,7 @@ def split_section(show: Show, at: SetId) -> tuple[Show, Show]:
     position = show.set_index(at)
     offset = index(show).entries[position].start_count
     head = list(show.sets[: position + 1])
-    tail = [show.sets[position].model_copy(update={"counts": 0.0}), *show.sets[position + 1 :]]
+    tail = [show.sets[position].replace(counts=0.0), *show.sets[position + 1 :]]
     first = _section(show, head, _timeline_until(show.timeline, offset), 0.0, offset)
     second = _section(show, tail, _timeline_from(show.timeline, offset), offset, float("inf"))
     return first, second
@@ -276,28 +260,22 @@ def _joined_timeline(a: Timeline, b: Timeline, offset: Count) -> Timeline:
 
     labels = {m.label for m in a.markers}
     total = None if a.total_counts is None or b.total_counts is None else offset + b.total_counts
-    return a.model_copy(
-        update={
-            "tempos": _merge_tempos(
-                (
-                    *a.tempos,
-                    *(t.model_copy(update={"at_count": moved(t.at_count)}) for t in b.tempos),
-                )
-            ),
-            "holds": (
-                *a.holds,
-                *(h.model_copy(update={"at_count": moved(h.at_count)}) for h in b.holds),
-            ),
-            "markers": (
-                *a.markers,
-                *(
-                    m.model_copy(update={"at_count": moved(m.at_count)})
-                    for m in b.markers
-                    if m.label not in labels
-                ),
-            ),
-            "total_counts": total,
-        }
+    return a.replace(
+        tempos=_merge_tempos(
+            (
+                *a.tempos,
+                *(t.replace(at_count=moved(t.at_count)) for t in b.tempos),
+            )
+        ),
+        holds=(
+            *a.holds,
+            *(h.replace(at_count=moved(h.at_count)) for h in b.holds),
+        ),
+        markers=(
+            *a.markers,
+            *(m.replace(at_count=moved(m.at_count)) for m in b.markers if m.label not in labels),
+        ),
+        total_counts=total,
     )
 
 
@@ -319,20 +297,18 @@ def join_sections(a: Show, b: Show) -> Show:
     zones = {z.id: z for z in a.zones}
     for zone in _clip_zones(b.zones, 0.0, float("inf"), -offset):
         zones.setdefault(zone.id, zone)
-    return a.model_copy(
-        update={
-            "sets": (*a.sets, *_tail_sets(a, b)),
-            "forms": _merged_forms(a, b),
-            "transitions": (*a.transitions, *b.transitions),
-            "notes": (*a.notes, *(n for n in b.notes if n not in a.notes)),
-            "pins": (*a.pins, *(p for p in b.pins if p not in a.pins)),
-            "facing_overrides": (
-                *a.facing_overrides,
-                *_clip_overrides(b.facing_overrides, 0.0, float("inf"), -offset),
-            ),
-            "zones": tuple(zones.values()),
-            "dependencies": {**a.dependencies, **b.dependencies},
-            "timeline": _joined_timeline(a.timeline, b.timeline, offset),
-            "revision": "",
-        }
+    return a.replace(
+        sets=(*a.sets, *_tail_sets(a, b)),
+        forms=_merged_forms(a, b),
+        transitions=(*a.transitions, *b.transitions),
+        notes=(*a.notes, *(n for n in b.notes if n not in a.notes)),
+        pins=(*a.pins, *(p for p in b.pins if p not in a.pins)),
+        facing_overrides=(
+            *a.facing_overrides,
+            *_clip_overrides(b.facing_overrides, 0.0, float("inf"), -offset),
+        ),
+        zones=tuple(zones.values()),
+        dependencies={**a.dependencies, **b.dependencies},
+        timeline=_joined_timeline(a.timeline, b.timeline, offset),
+        revision="",
     )

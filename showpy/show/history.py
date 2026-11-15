@@ -101,7 +101,7 @@ def diff_paths(a: TransitionSpec, b: TransitionSpec) -> PathDiff:
 
     >>> from showpy.choreo.models import PathRow
     >>> plain = TransitionSpec(id=("1", "2"), counts=8.0)
-    >>> late = plain.model_copy(update={"rows": {"T1": PathRow(entity="T1", start=2.0)}})
+    >>> late = plain.replace(rows={"T1": PathRow(entity="T1", start=2.0)})
     >>> diff_paths(plain, late).changed_rows
     ('T1',)
     """
@@ -152,7 +152,7 @@ def diff_show(a: Show, b: Show) -> dict[str, Any]:
     `cast`, `notes`, `pins` and one flag per changed whole field (`sheet`, `timeline`, ...).
 
     >>> from showpy.examples import two_set_show
-    >>> diff_show(two_set_show(), two_set_show().model_copy(update={"title": "B"}))
+    >>> diff_show(two_set_show(), two_set_show().replace(title="B"))
     {'title': ['Test show', 'B']}
     """
     found: dict[str, Any] = {
@@ -291,7 +291,7 @@ def _selector(value: SelectorField, rename: Callable[[str], str]) -> SelectorFie
     if isinstance(value, str):
         return rename(value)
     if isinstance(value, Selection):
-        return value.model_copy(update={"ids": tuple(map(rename, value.ids))})
+        return value.replace(ids=tuple(map(rename, value.ids)))
     return tuple(map(rename, value))
 
 
@@ -299,38 +299,33 @@ def _row(row: PathRow, rename: Callable[[str], str]) -> PathRow:
     value = row.facing_value
     if row.facing_mode is FacingMode.TOWARD_ENTITY and isinstance(value, str):
         value = rename(value)
-    return row.model_copy(update={"entity": rename(row.entity), "facing_value": value})
+    return row.replace(entity=rename(row.entity), facing_value=value)
 
 
 def _spec(spec: TransitionSpec, rename: Callable[[str], str]) -> TransitionSpec:
     rows = {rename(e): _row(r, rename) for e, r in spec.rows.items()}
-    routes = {
-        k: r.model_copy(update={"members": tuple(map(rename, r.members))})
-        for k, r in spec.routes.items()
-    }
-    return spec.model_copy(update={"rows": rows, "routes": routes})
+    routes = {k: r.replace(members=tuple(map(rename, r.members))) for k, r in spec.routes.items()}
+    return spec.replace(rows=rows, routes=routes)
 
 
 def _override(item: FacingOverride, rename: Callable[[str], str]) -> FacingOverride:
     value = item.value
     if item.mode is FacingMode.TOWARD_ENTITY and isinstance(value, str):
         value = rename(value)
-    return item.model_copy(update={"entities": _selector(item.entities, rename), "value": value})
+    return item.replace(entities=_selector(item.entities, rename), value=value)
 
 
 def _note(note: Note, rename: Callable[[str], str]) -> Note:
     spots = note.anchor.spots
     if spots is None:
         return note
-    anchor = note.anchor.model_copy(update={"spots": tuple(map(rename, spots))})
-    return note.model_copy(update={"anchor": anchor})
+    anchor = note.anchor.replace(spots=tuple(map(rename, spots)))
+    return note.replace(anchor=anchor)
 
 
 def _placements(s: Set, rename: Callable[[str], str]) -> Set:
-    rows: tuple[Placement, ...] = tuple(
-        p.model_copy(update={"entity": rename(p.entity)}) for p in s.placements
-    )
-    return s.model_copy(update={"placements": rows})
+    rows: tuple[Placement, ...] = tuple(p.replace(entity=rename(p.entity)) for p in s.placements)
+    return s.replace(placements=rows)
 
 
 def rename_entities(show: Show, mapping: Mapping[SpotId, SpotId]) -> Show:
@@ -350,32 +345,19 @@ def rename_entities(show: Show, mapping: Mapping[SpotId, SpotId]) -> Show:
     def rename(spot: str) -> str:
         return mapping.get(spot, spot)
 
-    cast = show.cast.model_copy(
-        update={
-            "spots": tuple(s.model_copy(update={"id": rename(s.id)}) for s in show.cast.spots),
-            "selections": {k: frozenset(map(rename, v)) for k, v in show.cast.selections.items()},
-        }
+    cast = show.cast.replace(
+        spots=tuple(s.replace(id=rename(s.id)) for s in show.cast.spots),
+        selections={k: frozenset(map(rename, v)) for k, v in show.cast.selections.items()},
     )
-    return show.model_copy(
-        update={
-            "cast": cast,
-            "sets": tuple(_placements(s, rename) for s in show.sets),
-            "forms": {
-                k: f.model_copy(update={"members": tuple(map(rename, f.members))})
-                for k, f in show.forms.items()
-            },
-            "transitions": tuple(_spec(spec, rename) for spec in show.transitions),
-            "notes": tuple(_note(n, rename) for n in show.notes),
-            "facing_overrides": tuple(_override(o, rename) for o in show.facing_overrides),
-            "zones": tuple(
-                z.model_copy(update={"applies_to": _selector(z.applies_to, rename)})
-                for z in show.zones
-            ),
-            "pins": tuple(
-                p.model_copy(update={"id": rename(p.id)}) if p.target == "entity" else p
-                for p in show.pins
-            ),
-        }
+    return show.replace(
+        cast=cast,
+        sets=tuple(_placements(s, rename) for s in show.sets),
+        forms={k: f.replace(members=tuple(map(rename, f.members))) for k, f in show.forms.items()},
+        transitions=tuple(_spec(spec, rename) for spec in show.transitions),
+        notes=tuple(_note(n, rename) for n in show.notes),
+        facing_overrides=tuple(_override(o, rename) for o in show.facing_overrides),
+        zones=tuple(z.replace(applies_to=_selector(z.applies_to, rename)) for z in show.zones),
+        pins=tuple(p.replace(id=rename(p.id)) if p.target == "entity" else p for p in show.pins),
     )
 
 

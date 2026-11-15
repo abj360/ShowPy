@@ -64,7 +64,7 @@ def _previous(show: Show, set_id: SetId) -> Set:
 
 
 def _placement(current: Placement, update: Placement) -> Placement:
-    return update.model_copy(update={"note": current.note, "on_field": True})
+    return update.replace(note=current.note, on_field=True)
 
 
 def _matched(
@@ -125,7 +125,7 @@ def place(
     [('T1', 0.0, 0), ('T2', 4.0, 1), ('T3', 8.0, 2), ('T4', 12.0, 3)]
     """
     target = show.set(set_id)
-    stamped = [form.model_copy(update={"set": set_id}) for form in forms]
+    stamped = [form.replace(set=set_id) for form in forms]
     _check_disjoint(stamped)
     pinned = {p.entity for p in target.placements if p.pinned}
     rows = [p for form in stamped for p in placements(form, registry) if p.entity not in pinned]
@@ -133,7 +133,7 @@ def place(
     updates = {p.entity: _placement(target.get(p.entity), p) for p in rows}
     form_ids = tuple(dict.fromkeys((*target.forms, *(f.id for f in stamped))))
     placed = target.with_placements(updates)
-    return placed.model_copy(update={"forms": form_ids})
+    return placed.replace(forms=form_ids)
 
 
 def filled_forms(placed: Set, forms: Sequence[Form]) -> list[Form]:
@@ -159,7 +159,7 @@ def filled_forms(placed: Set, forms: Sequence[Form]) -> list[Form]:
                 context={"form": form.id, "orders": [p.order for p in rows]},
             )
         members = tuple(p.entity for p in rows)
-        filled.append(form.model_copy(update={"set": placed.id, "members": members}))
+        filled.append(form.replace(set=placed.id, members=members))
     return filled
 
 
@@ -187,7 +187,7 @@ def rebuild(
     >>> from showpy.examples import two_set_show
     >>> show = two_set_show()
     >>> row = line_form("row", ["T1", "T2", "T3", "T4"], (0, 12), (6, 12), set_id="2")
-    >>> rebuild(show.model_copy(update={"forms": {"row": row}}), "row").set("2").get("T4").y
+    >>> rebuild(show.replace(forms={"row": row}), "row").set("2").get("T4").y
     12.0
     """
     form = _form_of(show.forms, form_id)

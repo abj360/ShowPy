@@ -166,13 +166,8 @@ def _map_round(curve: ArcCurve | CircleCurve | SpiralCurve, matrix: Matrix) -> A
         )
     if flips:
         return _fallback(curve, matrix)
-    return curve.model_copy(
-        update={
-            "center": center,
-            "r0": curve.r0 * scale,
-            "r1": curve.r1 * scale,
-            "start_deg": start_deg,
-        }
+    return curve.replace(
+        center=center, r0=curve.r0 * scale, r1=curve.r1 * scale, start_deg=start_deg
     )
 
 
@@ -194,13 +189,13 @@ def transform_curve(curve: AnyCurve, matrix: Matrix) -> AnyCurve:
     if isinstance(curve, Segment):
         return Segment(a=_point(curve.a, matrix), b=_point(curve.b, matrix))
     if isinstance(curve, Polyline | SplineCurve):
-        return curve.model_copy(update={"points": _ring(curve.points, matrix)})
+        return curve.replace(points=_ring(curve.points, matrix))
     if isinstance(curve, BezierCurve):
         return BezierCurve(control=_ring(curve.control, matrix))
     if isinstance(curve, SvgCurve):
         composed = matrix @ np.asarray(curve.transform)
         rows = tuple((float(r[0]), float(r[1]), float(r[2])) for r in composed)
-        return curve.model_copy(update={"transform": rows})
+        return curve.replace(transform=rows)
     if isinstance(curve, CompositeCurve):
         return CompositeCurve(parts=tuple(transform_curve(p, matrix) for p in curve.parts))
     if isinstance(curve, TrimmedCurve) and similar:

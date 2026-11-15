@@ -322,12 +322,12 @@ def select(source: "Show | Set | Cast", expr: Selector) -> Selection:
     """
     universe = _universe(source)
     if isinstance(expr, Selection):
-        return _validated(universe, expr.ids).model_copy(update={"description": expr.description})
+        return _validated(universe, expr.ids).replace(description=expr.description)
     if not isinstance(expr, str):
         return _validated(universe, expr)
     tokens = _tokenize(expr)
     result = _Parser(tokens, universe, expr).parse()
-    return result.model_copy(update={"description": expr})
+    return result.replace(description=expr)
 
 
 def is_label_dependent(expr: str) -> bool:

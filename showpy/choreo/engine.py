@@ -209,15 +209,15 @@ class PathEngine:
         tid, tau = self.locate(t)
         if tid is None:
             return base
-        plan = self._plan(entity, tid).model_copy(
-            update={"facing_mode": override.mode, "facing_value": override.value}
+        plan = self._plan(entity, tid).replace(
+            facing_mode=override.mode, facing_value=override.value
         )
         compiled = self.compile(tid)
         validate_facing(plan)
         ctx = FacingContext(self._point_at, compiled.t_global0, compiled.counts)
         start, end = plan.window
         inside = min(max(tau, start + VELOCITY_STEP), end - VELOCITY_STEP)
-        from_mode = plan.model_copy(update={"turn_counts": 0.0})
+        from_mode = plan.replace(turn_counts=0.0)
         return plan_facing(from_mode, inside, ctx) if plan.curve is not None else base
 
     def velocity_at(self, entity: SpotId, t: Count, local: TransitionId | None = None) -> Points:
@@ -362,7 +362,7 @@ class PathEngine:
             if t1 <= t0:
                 continue
             p0, p1 = plan_positions(plan, np.array([t0, t1]))
-            out.append(seg.model_copy(update={"t0": t0, "t1": t1, "p0": _pt(p0), "p1": _pt(p1)}))
+            out.append(seg.replace(t0=t0, t1=t1, p0=_pt(p0), p1=_pt(p1)))
         return out
 
     def path_geometry(self, entity: SpotId, tid: TransitionId) -> Points:

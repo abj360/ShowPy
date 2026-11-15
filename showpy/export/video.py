@@ -55,7 +55,7 @@ def video_canvas(show: Show, px_per_m: float = DEFAULT_PX_PER_M) -> SheetCanvas:
     width, height = canvas.size
     pad_x = (width % 2) / px_per_m
     pad_y = (height % 2) / px_per_m
-    return canvas.model_copy(update={"max_x": canvas.max_x + pad_x, "max_y": canvas.max_y + pad_y})
+    return canvas.replace(max_x=canvas.max_x + pad_x, max_y=canvas.max_y + pad_y)
 
 
 def _color(show: Show, entity: str) -> str:

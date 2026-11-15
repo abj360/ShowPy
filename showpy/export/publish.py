@@ -125,7 +125,7 @@ def publish(
 
 
 def _with_status(pub: Publication, status: PublicationStatus) -> Publication:
-    return pub.model_copy(update={"status": status})
+    return pub.replace(status=status)
 
 
 def unpublish(pub: Publication) -> Publication:
@@ -282,7 +282,7 @@ def claim_spot(
         )
     _require_claimable(pub, show, performer, show.cast.spot(spot))
     claim = Claim(spot=spot, performer=performer, claimed_at=at)
-    return pub.model_copy(update={"claims": _sorted([*pub.claims, claim])}), claim
+    return pub.replace(claims=_sorted([*pub.claims, claim])), claim
 
 
 def _require_open(pub: Publication) -> None:
@@ -333,8 +333,8 @@ def swap_claims(pub: Publication, a: SpotId, b: SpotId) -> Publication:
             context={"a": a, "b": b},
         )
     others = [c for c in pub.claims if c.spot not in (a, b)]
-    swapped = [first.model_copy(update={"spot": b}), second.model_copy(update={"spot": a})]
-    return pub.model_copy(update={"claims": _sorted(others + swapped)})
+    swapped = [first.replace(spot=b), second.replace(spot=a)]
+    return pub.replace(claims=_sorted(others + swapped))
 
 
 def reassign(pub: Publication, spot: SpotId, performer: Performer, at: datetime) -> Publication:
@@ -349,7 +349,7 @@ def reassign(pub: Publication, spot: SpotId, performer: Performer, at: datetime)
     _require_open(pub)
     kept = [c for c in pub.claims if c.spot != spot and c.performer.id != performer.id]
     claim = Claim(spot=spot, performer=performer, claimed_at=at)
-    return pub.model_copy(update={"claims": _sorted([*kept, claim])})
+    return pub.replace(claims=_sorted([*kept, claim]))
 
 
 def release(pub: Publication, spot: SpotId) -> Publication:
@@ -363,7 +363,7 @@ def release(pub: Publication, spot: SpotId) -> Publication:
     """
     _require_open(pub)
     _require_claimed(pub, spot)
-    return pub.model_copy(update={"claims": tuple(c for c in pub.claims if c.spot != spot)})
+    return pub.replace(claims=tuple(c for c in pub.claims if c.spot != spot))
 
 
 def performer_view(pub: Publication, show: Show, performer: Performer) -> PerformerView:

@@ -72,7 +72,7 @@ def _insert(show: "Show", note: Note) -> "Show":
             context={"note": note.id},
         )
     _check_anchor(show, note.anchor)
-    return show.model_copy(update={"notes": (*show.notes, note)})
+    return show.replace(notes=(*show.notes, note))
 
 
 def add_note(
@@ -127,7 +127,7 @@ def edit_note(show: "Show", note_id: str, /, **changes: Any) -> "Show":
     edited = _build_note({**dict(show.notes[index]), **changes})
     _check_anchor(show, edited.anchor)
     notes = (*show.notes[:index], edited, *show.notes[index + 1 :])
-    return show.model_copy(update={"notes": notes})
+    return show.replace(notes=notes)
 
 
 def remove_note(show: "Show", note_id: str) -> "Show":
@@ -141,7 +141,7 @@ def remove_note(show: "Show", note_id: str) -> "Show":
     ()
     """
     index = _note_index(show, note_id)
-    return show.model_copy(update={"notes": (*show.notes[:index], *show.notes[index + 1 :])})
+    return show.replace(notes=(*show.notes[:index], *show.notes[index + 1 :]))
 
 
 def notes_for(
@@ -227,4 +227,4 @@ def accept_draft(show: "Show", draft: Note) -> "Show":
     >>> accept_draft(two_set_show(), draft).notes[0].visible
     True
     """
-    return _insert(show, draft.model_copy(update={"visible": True}))
+    return _insert(show, draft.replace(visible=True))

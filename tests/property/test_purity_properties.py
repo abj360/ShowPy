@@ -5,8 +5,10 @@ test_purity_properties.py --- checks that edit functions never mutate the show t
 
 Contains:
     EDITS: one representative edit per package, keyed by package name
-    test_edits_leave_their_input_show_unchanged: serializes a generated show before and after one
-        edit and requires the bytes to match (audit 4.4)
+    assert_edit_is_pure(): serializes a show before and after one edit and requires equal bytes
+    test_edits_leave_their_input_show_unchanged: applies assert_edit_is_pure to each generated
+        show (audit 4.4)
+    test_purity_check_fails_for_a_mutating_edit: negative control that a mutating edit is caught
 """
 
 import contextlib
@@ -23,6 +25,7 @@ from showpy.choreo.form_ops import transform_form
 from showpy.choreo.models import PathStyle
 from showpy.choreo.paths import default_paths, set_style
 from showpy.core.errors import ShowPyError
+from showpy.examples import two_set_show
 from showpy.geo.affine import translation_matrix
 from showpy.geo.transforms import shift
 from showpy.notes.models import Anchor
@@ -102,6 +105,19 @@ EDITS: dict[str, Callable[[Show], object]] = {
 }
 
 
+def assert_edit_is_pure(edit: Callable[[Show], object], show: Show) -> None:
+    """Requires `show` to serialize identically after `edit`, even when the edit rejects it."""
+    before = show.model_dump_json()
+    with contextlib.suppress(ShowPyError):
+        edit(show)
+    assert show.model_dump_json() == before
+
+
+def _retitle_in_place(show: Show) -> object:
+    object.__setattr__(show, "title", "mutated")
+    return show
+
+
 @pytest.mark.parametrize("edit", EDITS.values(), ids=EDITS.keys())
 @settings(max_examples=PURITY_EXAMPLES, deadline=None)
 @given(data=st.data())
@@ -111,7 +127,10 @@ def test_edits_leave_their_input_show_unchanged(
     """Leaves the input show byte-identical after one edit, even when the edit rejects it."""
     show = data.draw(shows(max_spots=MAX_SPOTS, max_sets=MAX_SETS, min_sets=MIN_SETS))
     show = data.draw(with_form(show, show.sets[0].id, FORM_ID))
-    before = show.model_dump_json()
-    with contextlib.suppress(ShowPyError):
-        edit(show)
-    assert show.model_dump_json() == before
+    assert_edit_is_pure(edit, show)
+
+
+def test_purity_check_fails_for_a_mutating_edit() -> None:
+    """Fails the purity check for an edit that rewrites its input in place."""
+    with pytest.raises(AssertionError):
+        assert_edit_is_pure(_retitle_in_place, two_set_show())

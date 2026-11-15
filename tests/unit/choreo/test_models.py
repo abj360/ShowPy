@@ -192,22 +192,18 @@ def test_regression_form_is_hashable() -> None:
     assert hash(_custom_form()) == hash(_custom_form())
 
 
-@pytest.mark.defect("UP-9.6-22")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-22")
 def test_regression_frozen_model_replace_revalidates_negative_counts() -> None:
     """Rejects a negative count through FrozenModel.replace (audit 9.6)."""
     with pytest.raises(SchemaError):
-        Set(id="1", counts=0.0).replace(counts=NEGATIVE_COUNTS)  # type: ignore[attr-defined]
+        Set(id="1", counts=0.0).replace(counts=NEGATIVE_COUNTS)
 
 
-@pytest.mark.defect("UP-9.6-23")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-23")
 def test_regression_frozen_model_replace_revalidates_duplicate_placements() -> None:
     """Rejects duplicated placements through FrozenModel.replace (audit 9.6)."""
     placed = Set(id="1", counts=0.0, placements=(Placement(entity="A", x=0.0, y=0.0),))
     twice = placed.placements * 2
     with pytest.raises(SchemaError):
-        placed.replace(placements=twice)  # type: ignore[attr-defined]
+        placed.replace(placements=twice)
 
 
 @pytest.mark.defect("UP-9.6-26")

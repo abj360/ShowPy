@@ -143,7 +143,7 @@ def map_curve(curve: CurveModel, fn: PointMap) -> AnyCurve:
         a, b = fn(np.array([curve.a, curve.b], dtype=float))
         return Segment(a=(float(a[0]), float(a[1])), b=(float(b[0]), float(b[1])))
     if isinstance(curve, Polyline | SplineCurve):
-        return curve.model_copy(update={"points": _ring(fn(np.asarray(curve.points, float)))})
+        return curve.replace(points=_ring(fn(np.asarray(curve.points, float))))
     if isinstance(curve, BezierCurve):
         return BezierCurve(control=_ring(fn(np.asarray(curve.control, dtype=float))))
     if isinstance(curve, CompositeCurve):

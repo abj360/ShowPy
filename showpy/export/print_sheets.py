@@ -63,7 +63,7 @@ def _counts_text(value: float) -> str:
 def _with_precision(show: Show, precision: float | None) -> Show:
     if precision is None:
         return show
-    return set_coordinates(show, show.coordinates.model_copy(update={"precision": precision}))
+    return set_coordinates(show, show.coordinates.replace(precision=precision))
 
 
 def _claimed_names(publication: Publication | None) -> dict[SpotId, str]:

@@ -143,7 +143,7 @@ def _evaluate(
     moved: SpotId,
 ) -> tuple[float, float]:
     others = tuple(t for t in show.transitions if t.id != tid)
-    trial = show.model_copy(update={"transitions": (*others, changed)})
+    trial = show.replace(transitions=(*others, changed))
     engine = PathEngine(trial)
     return _pair_gap(engine, tid, *pair).gap, engine.speed(moved, tid).max_instant
 

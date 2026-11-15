@@ -78,9 +78,9 @@ def locked_changes(before: Show, after: Show) -> list[str]:
     >>> from showpy.examples import two_set_show
     >>> show = two_set_show()
     >>> pinned = show.sets[1].with_placements({"T1": {"pinned": True}})
-    >>> before = show.model_copy(update={"sets": (show.sets[0], pinned)})
+    >>> before = show.replace(sets=(show.sets[0], pinned))
     >>> moved = pinned.with_placements({"T1": {"x": 9.0}}, force=True)
-    >>> locked_changes(before, before.model_copy(update={"sets": (show.sets[0], moved)}))
+    >>> locked_changes(before, before.replace(sets=(show.sets[0], moved)))
     ['placement T1 in set 2']
     """
     pins = [PINS_LABEL] if before.pins != after.pins else []

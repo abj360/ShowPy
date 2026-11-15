@@ -223,7 +223,7 @@ def _assemble(docs: Mapping[str, bytes], revision: str) -> Show:
     pairs = list(itertools.pairwise(order))
     specs = [spec for tid in pairs for spec in _paths(docs, tid)]
     counts = {s.id: s.counts for s in sets}
-    specs = [spec.model_copy(update={"counts": counts[spec.id[1]]}) for spec in specs]
+    specs = [spec.replace(counts=counts[spec.id[1]]) for spec in specs]
     return Show.model_validate(
         {
             **meta,

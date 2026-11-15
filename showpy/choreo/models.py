@@ -180,7 +180,7 @@ class Set(FrozenModel):
                     context={"set": self.id, "entity": entity},
                 )
             rows[index[entity]] = _apply_change(current, change)
-        return self.model_copy(update={"placements": tuple(rows)})
+        return self.replace(placements=tuple(rows))
 
 
 # Any: a partial update may touch any placement field.

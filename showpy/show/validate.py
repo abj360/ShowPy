@@ -139,7 +139,7 @@ def validate_set(show: Show, candidate: Set) -> ValidationReport:
 
 def _with_spec(show: Show, spec: TransitionSpec) -> Show:
     others = tuple(t for t in show.transitions if t.id != spec.id)
-    return show.model_copy(update={"transitions": (*others, spec)})
+    return show.replace(transitions=(*others, spec))
 
 
 def _path_rows(show: Show, spec: TransitionSpec, where: str) -> list[ValidationIssue]:
