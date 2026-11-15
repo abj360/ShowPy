@@ -226,7 +226,7 @@ written against the old name.
 - Move: `stage/` → `showpy/` (`git mv`, so history follows)
 - Modify:
   - Every `.py` file under `showpy/`, `tests/`, `scripts/` and `noxfile.py` (imports and
-    doctest `>>>` lines). `docs/guide/` is left as it is (user decision 2026-11-13).
+    doctest `>>>` lines). the study guide is left as it is (user decision 2026-11-13).
   - `pyproject.toml`
   - `docker/Dockerfile` and `docker/docker-compose.yml`
   - `.github/workflows/*.yml`
@@ -308,7 +308,7 @@ context. Downstream apps, agents and checkers become generic "consumers".
     `showpy/__init__.py` (module docstring)
   - `docs/HANDOFF.md`
   - `docs/stage-library-api-reference.md`
-- The guide stays: `docs/guide/` is not edited (user decision 2026-11-13).
+- The guide stays: the study guide is not edited (user decision 2026-11-13).
 - History stays: in `docs/adr/0001-*.md`, append a dated addendum only. Leave
   `docs/upgrade-plan.md` (the dated audit) unedited.
 
