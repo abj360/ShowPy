@@ -6,6 +6,9 @@ test_analysis.py --- tests density, coverage, balance, symmetry and change desig
 Contains:
     test_regression_density_map_caps_the_grid_size: rejects a 1e-5 m cell (8e12 cells on the field)
         instead of allocating it
+    test_regression_density_map_rejects_non_finite_or_subnormal_cells: raises GeometryError for
+        inf, NaN and 1e-320 cells instead of overflowing
+    test_regression_density_map_accepts_a_grid_at_the_cap: builds a grid just under the cell cap
     test_regression_symmetry_score_matches_spots_one_to_one: scores ten spots on one side against
         one on the other below 0.5, not 0.993
     test_regression_coverage_rejects_infinite_radius: raises a ShowPyError for radius=inf instead of
@@ -26,6 +29,7 @@ from tests.helpers import capped_address_space, fails_after, make_set
 TOL = 1e-9
 SIGNAL_TIMEOUT_S = 5
 TINY_CELL_M = 1e-5
+SUBNORMAL_CELL_M = 1e-320
 LEFT_CLUSTER_SIZE = 10
 CLUSTER_SPACING_M = 0.001
 MIRROR_X_M = 2.0
@@ -86,14 +90,25 @@ def test_change_amount_uses_spots_in_both_sets() -> None:
     assert change_amount(make_set(("A", 0, 0)), make_set(("B", 1, 1))) == 0.0
 
 
-@pytest.mark.defect("UP-9.1-06")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-06")
 @fails_after(SIGNAL_TIMEOUT_S)
 @pytest.mark.skipif(sys.platform != "linux", reason="needs signal timeout and RLIMIT_AS")
 def test_regression_density_map_caps_the_grid_size() -> None:
     """Rejects a 1e-5 m cell (8e12 cells on the field) instead of allocating it (P0 #8)."""
     with capped_address_space(), pytest.raises(GeometryError):
         density_map(make_set(("A", 0, 1)), field_sheet(), cell=TINY_CELL_M)
+
+
+@pytest.mark.parametrize("cell", [math.inf, math.nan, SUBNORMAL_CELL_M])
+def test_regression_density_map_rejects_non_finite_or_subnormal_cells(cell: float) -> None:
+    """Raises GeometryError for inf, NaN and 1e-320 cells instead of overflowing."""
+    with pytest.raises(GeometryError):
+        density_map(make_set(("A", 0, 1)), field_sheet(), cell=cell)
+
+
+def test_regression_density_map_accepts_a_grid_at_the_cap() -> None:
+    """Builds a grid of 1,000,000 cells, under the cap of MAX_GRID_CELLS."""
+    grid = density_map(make_set(("A", 0, 1)), field_sheet(), cell=0.04)
+    assert grid.size == 500 * 1000
 
 
 @pytest.mark.defect("UP-9.1-36")

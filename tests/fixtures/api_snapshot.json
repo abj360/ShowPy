@@ -917,7 +917,7 @@
       "r0": "Meters",
       "r1": "Meters",
       "start_deg": "Degrees",
-      "turns": "float"
+      "turns": "PositiveFinite"
     }
   },
   "SplineCurve": {
