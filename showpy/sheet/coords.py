@@ -14,6 +14,7 @@ Contains:
     from_coords(): reads worded coordinates back into a point
 """
 
+import math
 import re
 from decimal import Decimal, DecimalException
 from typing import TYPE_CHECKING, Literal
@@ -71,6 +72,8 @@ FEET_PRECISION = 0.5
 LONG_CLAUSE = re.compile(r"^(?P<num>\d+(?:\.\d+)?)\s+(?P<unit>\S+)\s+(?P<rest>.+)$")
 SHORT_TOKEN = re.compile(r"^(?P<code>[A-Za-z]+)(?P<num>\d+(?:\.\d+)?)$")
 OF = " of "
+POINT_SIZE = 2
+NUMBER_PREVIEW = 20
 
 
 def coordinate_presets(sheet: Sheet) -> list[CoordinateSystem]:
@@ -105,7 +108,26 @@ def coordinate_presets(sheet: Sheet) -> list[CoordinateSystem]:
 def _origin(sheet: Sheet, system: CoordinateSystem) -> Point:
     if isinstance(system.origin, str):
         return landmark_anchor(landmark(sheet, system.origin))
-    return system.origin
+    if len(system.origin) != POINT_SIZE:
+        raise SchemaError(
+            f"origin must hold {POINT_SIZE} numbers, got {len(system.origin)}",
+            hint="give the origin as (x, y) in meters or as a landmark ID",
+            context={"origin": system.origin},
+        )
+    return (
+        require_finite(system.origin[0], name="origin.x"),
+        require_finite(system.origin[1], name="origin.y"),
+    )
+
+
+def _frame(system: CoordinateSystem) -> tuple[Point, Point]:
+    if system.audience_side not in FRAMES:
+        raise SchemaError(
+            f"unknown audience side {system.audience_side!r}",
+            hint=f"use one of {', '.join(FRAMES)}",
+            context={"audience_side": system.audience_side},
+        )
+    return FRAMES[system.audience_side]
 
 
 def set_coordinates(show: "Show", system: CoordinateSystem) -> "Show":
@@ -145,7 +167,7 @@ def _decimals(precision: float) -> int:
 
 def _local(sheet: Sheet, system: CoordinateSystem, p: Point) -> tuple[float, float]:
     ox, oy = _origin(sheet, system)
-    right, ahead = FRAMES[system.audience_side]
+    right, ahead = _frame(system)
     dx, dy = p[0] - ox, p[1] - oy
     return dx * right[0] + dy * right[1], dx * ahead[0] + dy * ahead[1]
 
@@ -207,9 +229,12 @@ def _bad(token: str, text: str, hint: str) -> SchemaError:
 
 def _meters(num: str, unit: str, text: str) -> float:
     try:
-        return convert(float(num), unit, "m")
+        meters = convert(float(num), unit, "m")
     except UnknownRefError as error:
         raise _bad(unit, text, error.hint) from error
+    if not math.isfinite(meters):
+        raise _bad(num[:NUMBER_PREVIEW] + "...", text, "write a number a float can hold")
+    return meters
 
 
 def _long_part(clause: str, text: str, words: dict[str, str]) -> tuple[Axis, float]:
@@ -267,7 +292,7 @@ def from_coords(show: "Show", text: str) -> Point:
     missing = [axis for axis in ("across", "depth") if axis not in values]
     if missing:
         raise _bad(text, text, f"add the {missing[0]} part")
-    (ox, oy), (right, ahead) = _origin(show.sheet, system), FRAMES[system.audience_side]
+    (ox, oy), (right, ahead) = _origin(show.sheet, system), _frame(system)
     across, depth = values["across"], values["depth"]
     return (
         ox + across * right[0] + depth * ahead[0] + 0.0,
