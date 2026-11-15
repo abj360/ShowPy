@@ -443,8 +443,8 @@ def define_selection(show: "Show", name: str, sel: Selector) -> "Show":
     """Stores a named selection, usable later as `sel:<name>`; an existing name is replaced.
 
     >>> from showpy.examples import two_set_show
-    >>> sorted(define_selection(two_set_show(), "ends", "T1 + T4").cast.selections["ends"])
-    ['T1', 'T4']
+    >>> define_selection(two_set_show(), "ends", "T1 + T4").cast.selections["ends"]
+    ('T1', 'T4')
     """
     if not name or not set(name) <= SELECTION_NAME_CHARS:
         raise SchemaError(
@@ -452,7 +452,7 @@ def define_selection(show: "Show", name: str, sel: Selector) -> "Show":
             hint="use letters, digits, _, . and - only",
             context={"name": name},
         )
-    ids = frozenset(select(show, sel))
+    ids = select(show, sel).ids
     return _with_cast(show, selections={**show.cast.selections, name: ids})
 
 

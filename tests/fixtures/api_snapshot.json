@@ -75,7 +75,7 @@
     "model": {
       "groups": "dict[str, showpy.cast.models.Group]",
       "label_scheme": "showpy.cast.models.LabelScheme",
-      "selections": "dict[str, frozenset[SpotId]]",
+      "selections": "dict[str, tuple[SpotId, ...]]",
       "spots": "tuple[showpy.cast.models.Spot, ...]"
     }
   },
@@ -937,7 +937,7 @@
       "id": "SpotId",
       "shape": "showpy.cast.models.Shape",
       "symbol": "str | None",
-      "tags": "frozenset[str]"
+      "tags": "tuple[str, ...]"
     }
   },
   "SpotCount": {

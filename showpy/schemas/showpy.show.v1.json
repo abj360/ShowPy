@@ -146,7 +146,7 @@
     },
     "Cast": {
       "additionalProperties": false,
-      "description": "Holds every group and spot in the show.\n\nAttributes:\n    groups: Group key to group.\n    spots: Every spot, in creation order.\n    selections: Named selections of spot IDs.\n    label_scheme: Labeling rules.",
+      "description": "Holds every group and spot in the show.\n\nAttributes:\n    groups: Group key to group.\n    spots: Every spot, in creation order.\n    selections: Named selections of spot IDs, deduplicated in first-seen order.\n    label_scheme: Labeling rules.",
       "properties": {
         "groups": {
           "additionalProperties": {
@@ -169,8 +169,7 @@
             "items": {
               "$ref": "#/$defs/SpotId"
             },
-            "type": "array",
-            "uniqueItems": true
+            "type": "array"
           },
           "default": {},
           "title": "Selections",
@@ -1616,7 +1615,7 @@
     },
     "Spot": {
       "additionalProperties": false,
-      "description": "Describes one dot that persists through the whole show.\n\nAttributes:\n    id: Label shown on the sheet, stable all show.\n    group: Key of the owning group.\n    symbol: Sheet glyph; None inherits the group's.\n    color: Hex color; None inherits the group's.\n    tags: Free tags such as `soloist`.\n    active: False excludes the spot from forms and checks.\n    shape: Footprint on the sheet and for collisions.\n    claimable: Who may claim the spot once the show is published.",
+      "description": "Describes one dot that persists through the whole show.\n\nAttributes:\n    id: Label shown on the sheet, stable all show.\n    group: Key of the owning group.\n    symbol: Sheet glyph; None inherits the group's.\n    color: Hex color; None inherits the group's.\n    tags: Free tags such as `soloist`, deduplicated in first-seen order; a set is sorted.\n    active: False excludes the spot from forms and checks.\n    shape: Footprint on the sheet and for collisions.\n    claimable: Who may claim the spot once the show is published.",
       "properties": {
         "active": {
           "default": true,
@@ -1674,8 +1673,7 @@
             "type": "string"
           },
           "title": "Tags",
-          "type": "array",
-          "uniqueItems": true
+          "type": "array"
         }
       },
       "required": [

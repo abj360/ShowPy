@@ -61,14 +61,14 @@ def mixed_cast() -> Cast:
         "flags": Group(key="flags", label_prefix="flag-"),
     }
     spots = (
-        Spot(id="T1", group="trumpets", tags=frozenset({"soloist"})),
+        Spot(id="T1", group="trumpets", tags=("soloist",)),
         Spot(id="T2", group="trumpets"),
         Spot(id="T10", group="trumpets"),
         Spot(id="TB1", group="tubas", shape=RECT),
         Spot(id="flag-1", group="flags", shape=RECT),
-        Spot(id="flag-2", group="flags", tags=frozenset({"soloist"})),
+        Spot(id="flag-2", group="flags", tags=("soloist",)),
     )
-    return Cast(groups=groups, spots=spots, selections={"front": frozenset({"T2", "flag-1"})})
+    return Cast(groups=groups, spots=spots, selections={"front": ("T2", "flag-1")})
 
 
 def mixed_show() -> Show:
@@ -420,8 +420,6 @@ def test_regression_split_rejects_absurd_part_counts_quickly() -> None:
     assert peak < SPLIT_PEAK_BUDGET_BYTES
 
 
-@pytest.mark.defect("UP-9.3-78")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-78")
 def test_regression_select_set_input_ignores_hash_seed() -> None:
     """Returns one order for a Python set under every hash seed (audit 9.3; P0 #9)."""
     outputs = outputs_under_hash_seeds(SET_SELECT_SCRIPT)

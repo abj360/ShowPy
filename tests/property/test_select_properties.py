@@ -29,7 +29,7 @@ def property_cast() -> Cast:
         Spot(
             id=f"{prefix}{n}",
             group=key,
-            tags=frozenset({TAGS[n % len(TAGS)]}) if n % 3 else frozenset(),
+            tags=(TAGS[n % len(TAGS)],) if n % 3 else (),
         )
         for key, prefix in GROUPS.items()
         for n in range(1, SPOTS_PER_GROUP + 1)

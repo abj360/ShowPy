@@ -53,9 +53,7 @@ def rewrite_spot_ids(show: "Show", rename: Rename) -> "Show":
     """
     cast = show.cast
     spots = tuple(s.replace(id=new) for s in cast.spots if (new := rename(s.id)) is not None)
-    selections = {
-        name: frozenset(_keep(sorted(ids), rename)) for name, ids in cast.selections.items()
-    }
+    selections = {name: _keep(ids, rename) for name, ids in cast.selections.items()}
     updates = {
         "sets": tuple(_rewrite_set(s, rename) for s in show.sets),
         "forms": {fid: _rewrite_form(f, rename) for fid, f in show.forms.items()},

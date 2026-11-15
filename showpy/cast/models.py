@@ -13,18 +13,28 @@ Contains:
 import math
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 
 from showpy.core.errors import GeometryError, UnknownRefError
 from showpy.core.ids import SpotId
 from showpy.core.types import Degrees, FrozenModel, Meters
-from showpy.core.util import close_matches
+from showpy.core.util import close_matches, natural_sort
 
 DEFAULT_RADIUS_M = 0.3
 DEFAULT_SYMBOL = "circle"
 DEFAULT_COLOR = "#808080"
 
 type Claimable = Literal["performer", "crew", "none"]
+
+
+def _sort_unordered(value: object) -> object:
+    if isinstance(value, set | frozenset) and all(isinstance(item, str) for item in value):
+        return natural_sort(value)
+    return value
+
+
+def _dedupe_in_order(items: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(items))
 
 
 class Shape(FrozenModel):
@@ -103,7 +113,7 @@ class Spot(FrozenModel):
         group: Key of the owning group.
         symbol: Sheet glyph; None inherits the group's.
         color: Hex color; None inherits the group's.
-        tags: Free tags such as `soloist`.
+        tags: Free tags such as `soloist`, deduplicated in first-seen order; a set is sorted.
         active: False excludes the spot from forms and checks.
         shape: Footprint on the sheet and for collisions.
         claimable: Who may claim the spot once the show is published.
@@ -113,10 +123,13 @@ class Spot(FrozenModel):
     group: str
     symbol: str | None = None
     color: str | None = None
-    tags: frozenset[str] = frozenset()
+    tags: tuple[str, ...] = ()
     active: bool = True
     shape: Shape = Shape()
     claimable: Claimable = "performer"
+
+    _ordered_tags = field_validator("tags", mode="before")(_sort_unordered)
+    _unique_tags = field_validator("tags", mode="after")(_dedupe_in_order)
 
 
 class LabelScheme(FrozenModel):
@@ -147,14 +160,28 @@ class Cast(FrozenModel):
     Attributes:
         groups: Group key to group.
         spots: Every spot, in creation order.
-        selections: Named selections of spot IDs.
+        selections: Named selections of spot IDs, deduplicated in first-seen order.
         label_scheme: Labeling rules.
     """
 
     groups: dict[str, Group] = {}
     spots: tuple[Spot, ...] = ()
-    selections: dict[str, frozenset[SpotId]] = {}
+    selections: dict[str, tuple[SpotId, ...]] = {}
     label_scheme: LabelScheme = LabelScheme()
+
+    @field_validator("selections", mode="before")
+    @classmethod
+    def _order_selections(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        return {name: _sort_unordered(ids) for name, ids in value.items()}
+
+    @field_validator("selections", mode="after")
+    @classmethod
+    def _dedupe_selections(
+        cls, value: dict[str, tuple[SpotId, ...]]
+    ) -> dict[str, tuple[SpotId, ...]]:
+        return {name: _dedupe_in_order(ids) for name, ids in value.items()}
 
     @model_validator(mode="after")
     def _consistent(self) -> "Cast":

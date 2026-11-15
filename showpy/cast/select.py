@@ -306,7 +306,7 @@ def select(source: "Show | Set | Cast", expr: Selector) -> Selection:
     keep range order and skip missing middle labels; other words keep creation order (cast
     order, or placement order for a Set); `form:` keeps member order. `T*` matches labels
     whose prefix before the trailing number is exactly `T`. ID lists and Selections pass
-    through after every ID is checked.
+    through after every ID is checked; a set is natural-sorted first.
 
     Args:
         source: Show, Set or Cast to resolve against; a Set cannot resolve group, tag,
@@ -323,6 +323,8 @@ def select(source: "Show | Set | Cast", expr: Selector) -> Selection:
     universe = _universe(source)
     if isinstance(expr, Selection):
         return _validated(universe, expr.ids).replace(description=expr.description)
+    if isinstance(expr, set | frozenset):
+        return _validated(universe, natural_sort(expr))
     if not isinstance(expr, str):
         return _validated(universe, expr)
     tokens = _tokenize(expr)

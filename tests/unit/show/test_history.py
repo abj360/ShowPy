@@ -218,7 +218,7 @@ def test_rename_entities_rewrites_everything() -> None:
     )
     renamed = rename_entities(show, {"T1": "S1", "T2": "S2"})
     assert renamed.cast.ids()[:2] == ("S1", "S2")
-    assert renamed.cast.selections == {"lead": frozenset({"S1"})}
+    assert renamed.cast.selections == {"lead": ("S1",)}
     assert renamed.sets[0].entity_ids()[:2] == ("S1", "S2")
     assert renamed.forms["f"].members == ("S1", "S2")
     new_spec = renamed.transitions[0]

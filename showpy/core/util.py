@@ -45,16 +45,17 @@ CLOSE_MATCH_COUNT = 3
 CLOSE_MATCH_CUTOFF = 0.4
 
 
-def _natural_key(text: str) -> tuple[tuple[int, int | str], ...]:
-    return tuple(
+def _natural_key(text: str) -> tuple[tuple[tuple[int, int | str], ...], str]:
+    chunks = tuple(
         (0, int(chunk)) if chunk.isdigit() else (1, chunk)
         for chunk in NATURAL_CHUNK.split(text)
         if chunk
     )
+    return chunks, text
 
 
 def natural_sort(ids: Iterable[str]) -> list[str]:
-    """Sorts IDs with embedded numbers compared numerically.
+    """Sorts IDs with embedded numbers compared numerically; ties fall back to the text.
 
     >>> natural_sort(["T10", "T2"])
     ['T2', 'T10']
@@ -125,10 +126,22 @@ def approx_equal(a: npt.ArrayLike, b: npt.ArrayLike, tol: float = 1e-6) -> bool:
 def seeded_rng(seed: int) -> np.random.Generator:
     """Returns a deterministic generator; the only randomness allowed in the library.
 
+    Args:
+        seed: Non-negative integer seed; None, booleans and negatives are rejected.
+
+    Returns:
+        rng: A PCG64 generator that yields the same stream for the same seed.
+
     >>> float(seeded_rng(1).integers(0, 10)) >= 0
     True
     """
-    return np.random.default_rng(seed)
+    if isinstance(seed, bool) or not isinstance(seed, int | np.integer) or seed < 0:
+        raise SchemaError(
+            f"seed must be a non-negative integer, got {seed!r}",
+            hint="pass an int such as 0 or 42; None and negative seeds are not allowed",
+            context={"seed": repr(seed)},
+        )
+    return np.random.Generator(np.random.PCG64(int(seed)))
 
 
 def as_points(obj: object) -> Points:

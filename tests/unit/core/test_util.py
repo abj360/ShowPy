@@ -5,6 +5,9 @@ test_util.py --- tests ID sorting, ranges, float comparison, hashing and point n
 
 Contains:
     test_*(): one behavior of showpy.core.util each
+    test_regression_natural_sort_breaks_numeric_ties_by_original_text: orders T02 and T2 by text
+    test_regression_seeded_rng_rejects_non_integer_or_negative_seeds: rejects bad seeds with hint
+    test_regression_seeded_rng_keeps_the_default_rng_stream: matches numpy's default_rng stream
     test_regression_format_ranges_ties_ignore_hash_seed: orders natural-sort ties the same under
         every hash seed
     test_regression_seeded_rng_rejects_none: rejects a missing seed instead of returning an unseeded
@@ -263,28 +266,42 @@ def _best_of(call: Callable[[], object], trials: int = 3) -> float:
     return best
 
 
-@pytest.mark.defect("UP-9.3-01")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-01")
 def test_regression_format_ranges_ties_ignore_hash_seed() -> None:
     """Orders natural-sort ties the same under every hash seed (audit 9.3; P0 #9)."""
     outputs = run_under_seeds(HASH_TIES_SCRIPT)
     assert len(set(outputs)) == 1, outputs
 
 
-@pytest.mark.defect("UP-9.3-02")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-02")
 def test_regression_seeded_rng_rejects_none() -> None:
     """Rejects a missing seed instead of returning an unseeded generator (audit 9.3)."""
     with pytest.raises(ShowPyError):
         seeded_rng(None)  # type: ignore[arg-type]
 
 
-@pytest.mark.defect("UP-9.3-03")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-03")
 def test_regression_seeded_rng_rejects_negative_seed() -> None:
     """Rejects a negative seed instead of leaking numpy's ValueError (audit 9.3)."""
     with pytest.raises(ShowPyError):
         seeded_rng(-1)
+
+
+def test_regression_natural_sort_breaks_numeric_ties_by_original_text() -> None:
+    """Orders T02 and T2 by text, whatever order they arrive in."""
+    assert natural_sort(["T2", "T02"]) == natural_sort(["T02", "T2"]) == ["T02", "T2"]
+
+
+@pytest.mark.parametrize("seed", [None, True, -1, 1.5, "1"])
+def test_regression_seeded_rng_rejects_non_integer_or_negative_seeds(seed: object) -> None:
+    """Rejects None, booleans, negatives and non-integers with a hint."""
+    with pytest.raises(SchemaError) as caught:
+        seeded_rng(seed)  # type: ignore[arg-type]
+    assert caught.value.hint
+
+
+def test_regression_seeded_rng_keeps_the_default_rng_stream() -> None:
+    """Draws the same stream as numpy's default_rng for int and numpy integer seeds."""
+    expected = np.random.default_rng(7).random(5)
+    assert np.array_equal(seeded_rng(7).random(5), expected)
+    assert np.array_equal(seeded_rng(np.int64(7)).random(5), expected)  # type: ignore[arg-type]
 
 
 def test_regression_content_hash_equal_for_signed_zero() -> None:

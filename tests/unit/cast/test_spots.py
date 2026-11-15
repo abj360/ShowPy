@@ -168,7 +168,7 @@ def test_delete_spots_removes_every_reference() -> None:
     assert "T4" not in spec.rows
     assert spec.routes["r1"].members == ("T3",)
     assert spec.routes["r1"].offsets == (0.0,)
-    assert show.cast.selections["pair"] == frozenset({"T1"})
+    assert show.cast.selections["pair"] == ("T1",)
     assert show.zones[2].applies_to == Selection(ids=())
 
 
@@ -269,7 +269,7 @@ def test_rename_everywhere_rewrites_every_reference() -> None:
     override = show.facing_overrides[0]
     assert override.entities == ("A1", "A2")
     assert override.value == "A3"
-    assert show.cast.selections["pair"] == frozenset({"A1", "A4"})
+    assert show.cast.selections["pair"] == ("A1", "A4")
     assert [z.applies_to for z in show.zones] == [
         ("A1", "A2"),
         "group:trumpets",
@@ -306,7 +306,7 @@ def test_rename_everywhere_with_empty_mapping_is_identity() -> None:
 
 def test_define_selection_stores_resolved_ids() -> None:
     show = define_selection(two_set_show(), "ends", "T1 + T4")
-    assert show.cast.selections["ends"] == frozenset({"T1", "T4"})
+    assert show.cast.selections["ends"] == ("T1", "T4")
     with pytest.raises(SchemaError):
         define_selection(two_set_show(), "bad name", "T1")
 

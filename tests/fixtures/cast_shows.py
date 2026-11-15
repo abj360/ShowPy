@@ -49,7 +49,7 @@ def rich_show() -> Show:
         Zone(id="z-group", kind=ZoneKind.CUSTOM, polygon=SQUARE, applies_to="group:trumpets"),
         Zone(id="z-sel", kind=ZoneKind.CUSTOM, polygon=SQUARE, applies_to=Selection(ids=("T4",))),
     )
-    cast = show.cast.model_copy(update={"selections": {"pair": frozenset({"T1", "T4"})}})
+    cast = show.cast.replace(selections={"pair": frozenset({"T1", "T4"})})
     return show.model_copy(
         update={
             "cast": cast,
