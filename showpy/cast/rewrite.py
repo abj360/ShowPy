@@ -17,10 +17,10 @@ from showpy.core.ids import SpotId
 from showpy.core.selection import Selection, SelectorField
 from showpy.core.types import Point
 from showpy.notes.models import Note
-from showpy.sheet.models import Zone
+from showpy.sheet.models import Sheet, Zone
 
 if TYPE_CHECKING:
-    from showpy.show.models import Show
+    from showpy.show.models import Pin, Show
 
 type Rename = Callable[[SpotId], SpotId | None]
 type FacingValue = float | Point | SpotId | None
@@ -43,7 +43,8 @@ def rewrite_spot_ids(show: "Show", rename: Rename) -> "Show":
     """Applies `rename` to every spot reference in a show; None drops the reference.
 
     Covers the cast, named selections, placements, forms, path rows (keys, entities and
-    entity facings), routes, note anchors, facing overrides and show zones. String
+    entity facings), routes, note anchors, facing overrides, entity pins and zones of the
+    show and its sheet. String
     selectors that name labels are frozen to the rewritten ID list; others stay as written.
     Callers check that the result keeps IDs unique.
 
@@ -63,6 +64,8 @@ def rewrite_spot_ids(show: "Show", rename: Rename) -> "Show":
             _rewrite_override(show, o, rename) for o in show.facing_overrides
         ),
         "zones": tuple(_rewrite_zone(show, z, rename) for z in show.zones),
+        "pins": _rewrite_pins(show.pins, rename),
+        "sheet": _rewrite_sheet(show, rename),
     }
     new_cast = Cast.model_validate({**dict(cast), "spots": spots, "selections": selections})
     return show.replace(cast=new_cast, **updates)
@@ -130,3 +133,18 @@ def _rewrite_override(show: "Show", override: FacingOverride, rename: Rename) ->
 
 def _rewrite_zone(show: "Show", zone: Zone, rename: Rename) -> Zone:
     return zone.replace(applies_to=_rewrite_selector(show, zone.applies_to, rename))
+
+
+def _rewrite_pins(pins: "tuple[Pin, ...]", rename: Rename) -> "tuple[Pin, ...]":
+    kept = []
+    for pin in pins:
+        if pin.target != "entity":
+            kept.append(pin)
+        elif (new := rename(pin.id)) is not None:
+            kept.append(pin.replace(id=new))
+    return tuple(kept)
+
+
+def _rewrite_sheet(show: "Show", rename: Rename) -> Sheet:
+    zones = tuple(_rewrite_zone(show, z, rename) for z in show.sheet.zones)
+    return show.sheet.replace(zones=zones)

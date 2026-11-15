@@ -333,36 +333,53 @@ def _with_second_group(show: Show) -> Show:
     return add_group(show, Group(key="brass", label_prefix="B"))
 
 
-@pytest.mark.defect("UP-9.3-88")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-88")
 def test_regression_add_spot_refuses_a_pinned_set() -> None:
     """Refuses an unpinned placement in a pinned set (audit 9.3; P0 #13)."""
     with pytest.raises(LockedError):
         add_spot(_with_pinned_set(), (1.0, 2.0), "trumpets", "2")
 
 
-@pytest.mark.defect("UP-9.3-89")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-89")
 def test_regression_add_spots_along_refuses_a_pinned_set() -> None:
     """Raises LockedError for a curve fill into a pinned set (audit 9.3; P0 #13)."""
     with pytest.raises(LockedError):
         add_spots_along(_with_pinned_set(), line((0, 0), (4, 0)), 3, "trumpets", "1")
 
 
-@pytest.mark.defect("UP-9.3-90")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-90")
 def test_regression_fill_spots_refuses_a_pinned_set() -> None:
     """Raises LockedError for an area fill into a pinned set (audit 9.3; P0 #13)."""
     with pytest.raises(LockedError):
         fill_spots(_with_pinned_set(), UNIT_SQUARE, "trumpets", "1", interval=1.0)
 
 
-@pytest.mark.defect("UP-9.3-91")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-91")
 def test_regression_duplicate_spots_refuses_a_pinned_set() -> None:
     """Raises LockedError for copies written into a pinned set (audit 9.3; P0 #13)."""
     with pytest.raises(LockedError):
         duplicate_spots(_with_pinned_set(), ["T1"], (0.0, 1.0), "1")
+
+
+def test_regression_add_spot_entering_after_a_pinned_set_needs_no_force() -> None:
+    """Adds a spot that first appears on-field after every pinned set (ADR 0005 item 3)."""
+    show = two_set_show()
+    pinned = pin(show, "set", "1")
+    after = add_spot(pinned, (1.0, 2.0), "trumpets", "2")
+    assert after.cast.ids()[-1] == "T5"
+    assert [p.on_field for s in after.sets for p in s.placements if p.entity == "T5"] == [
+        False,
+        True,
+    ]
+
+
+def test_regression_forced_add_spot_enters_a_pinned_set() -> None:
+    """Lets the designer add an on-field spot to a pinned set with force=True."""
+    after = add_spot(_with_pinned_set(), (1.0, 2.0), "trumpets", "2", force=True)
+    assert after.set("2").get("T5").on_field
+
+
+def test_regression_add_spot_refusal_names_the_pinned_set() -> None:
+    """Names the pinned set in the LockedError of a refused addition."""
+    with pytest.raises(LockedError) as info:
+        add_spot(_with_pinned_set(), (1.0, 2.0), "trumpets", "2")
+    assert "set 2" in info.value.message
 
 
 def _pinned_coordinates(show: Show, spot_id: str) -> list[tuple[float, float]]:
@@ -376,40 +393,20 @@ def _assert_pin_follows(before: Show, after: Show, mapping: dict[str, str]) -> N
     assert _pinned_coordinates(before, "T1") != []
 
 
-@pytest.mark.defect("UP-9.3-92")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-92")
 def test_regression_regroup_keeps_a_pinned_spot_protected() -> None:
-    """Refuses to regroup a pinned spot, or regroups it with the pin following (audit 9.3; P0 #13).
-
-    The rename policy is open (draft ADR: renames allowed, positions protected), so both
-    LockedError and a successful regroup with an intact pin are accepted.
-    """
+    """Regroups a pinned spot with the pin following (audit 9.3; ADR 0005 item 6)."""
     before = _with_second_group(pin(two_set_show(), "entity", "T1"))
-    try:
-        after, mapping = regroup(before, ["T1"], "brass")
-    except LockedError:
-        return
+    after, mapping = regroup(before, ["T1"], "brass")
     _assert_pin_follows(before, after, mapping)
 
 
-@pytest.mark.defect("UP-9.3-93")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-93")
 def test_regression_relabel_keeps_a_pinned_spot_protected() -> None:
-    """Refuses to relabel a pinned spot, or relabels it with the pin following (audit 9.3).
-
-    The rename policy is open (draft ADR: renames allowed, positions protected), so both
-    LockedError and a successful relabel with an intact pin are accepted.
-    """
+    """Relabels a pinned spot with the pin following (audit 9.3; ADR 0005 item 6)."""
     before = pin(two_set_show(), "entity", "T1")
-    try:
-        after, mapping = relabel(before, PREFIX_X)
-    except LockedError:
-        return
+    after, mapping = relabel(before, PREFIX_X)
     _assert_pin_follows(before, after, mapping)
 
 
-@pytest.mark.defect("UP-9.3-94")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-94")
 def test_regression_cast_edits_accept_force() -> None:
     """Gives every cast edit a `force` parameter like delete_spots (audit 9.3; P0 #13)."""
     missing = [

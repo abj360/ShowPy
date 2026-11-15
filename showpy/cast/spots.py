@@ -42,6 +42,7 @@ from showpy.core.util import close_matches, natural_sort
 from showpy.geo.curve_base import Curve
 from showpy.geo.regions import Area
 from showpy.geo.spacing import fill, space_along
+from showpy.show.locks import require_unlocked
 
 if TYPE_CHECKING:
     from showpy.show.models import Show
@@ -95,17 +96,57 @@ def _new_placements(entries: Sequence[tuple[Spot, Point]], on_field: bool) -> tu
     return tuple(Placement(entity=s.id, x=p[0], y=p[1], on_field=on_field) for s, p in entries)
 
 
-def _insert_spots(show: "Show", entries: Sequence[tuple[Spot, Point]], set_id: SetId) -> "Show":
+def _pinned_set_ids(show: "Show") -> frozenset[SetId]:
+    return frozenset(pin.id for pin in show.pins if pin.target == "set")
+
+
+def _entered_pinned_sets(before: "Show", after: "Show") -> list[str]:
+    pinned = _pinned_set_ids(before)
+    known = {s.id: {p.entity for p in s.placements} for s in before.sets}
+    return [
+        f"{p.entity} enters set {s.id}"
+        for s in after.sets
+        if s.id in pinned
+        for p in s.placements
+        if p.on_field and p.entity not in known.get(s.id, set())
+    ]
+
+
+def _require_pictures_kept(
+    before: "Show", after: "Show", rename: Mapping[SpotId, SpotId], force: bool
+) -> None:
+    """Raises LockedError when `after` changes a pinned picture of `before` beyond `rename`."""
+    if force:
+        return
+    renamed = rewrite_spot_ids(before, lambda spot_id: rename.get(spot_id, spot_id))
+    require_unlocked(renamed, after)
+    entered = _entered_pinned_sets(renamed, after)
+    if entered:
+        raise LockedError(
+            f"edit puts spots on the field of pinned sets: {', '.join(entered)}",
+            hint="enter the spots in a later set, unpin the set, or pass force=True as the "
+            "designer",
+            context={"entered": entered},
+        )
+
+
+def _insert_spots(
+    show: "Show", entries: Sequence[tuple[Spot, Point]], set_id: SetId, force: bool
+) -> "Show":
     created_at = show.set_index(set_id)
     sets = tuple(
         s.replace(placements=s.placements + _new_placements(entries, index >= created_at))
         for index, s in enumerate(show.sets)
     )
     new_spots = tuple(spot for spot, _ in entries)
-    return _with_cast(show, spots=show.cast.spots + new_spots).replace(sets=sets)
+    after = _with_cast(show, spots=show.cast.spots + new_spots).replace(sets=sets)
+    _require_pictures_kept(show, after, {}, force)
+    return after
 
 
-def _add_points(show: "Show", points: Sequence[Point], group: str, set_id: SetId) -> "Show":
+def _add_points(
+    show: "Show", points: Sequence[Point], group: str, set_id: SetId, force: bool
+) -> "Show":
     show.set_index(set_id)
     shape = _default_shape(_group(show.cast, group))
     labels = _allocate_labels(show.cast, [group] * len(points))
@@ -113,24 +154,29 @@ def _add_points(show: "Show", points: Sequence[Point], group: str, set_id: SetId
         (Spot(id=label, group=group, shape=shape), (float(p[0]), float(p[1])))
         for label, p in zip(labels, points, strict=True)
     ]
-    return _insert_spots(show, entries, set_id)
+    return _insert_spots(show, entries, set_id, force)
 
 
-def add_spot(show: "Show", point: Point, group: str, set_id: SetId) -> "Show":
+def add_spot(
+    show: "Show", point: Point, group: str, set_id: SetId, *, force: bool = False
+) -> "Show":
     """Adds one spot at `point`, on the field from `set_id` on and off it before.
 
     The label is the lowest free number under the group's prefix (the label scheme's
-    override wins); the footprint is a circle of the group's default radius.
+    override wins); the footprint is a circle of the group's default radius. A spot that
+    would stand on-field in a pinned set raises LockedError unless `force=True`.
 
     >>> from showpy.examples import two_set_show
     >>> show = add_spot(two_set_show(), (1.0, 2.0), "trumpets", "2")
     >>> show.cast.ids()[-1], show.set("1").get("T5").on_field
     ('T5', False)
     """
-    return _add_points(show, [point], group, set_id)
+    return _add_points(show, [point], group, set_id, force)
 
 
-def add_spots_along(show: "Show", curve: Curve, n: int, group: str, set_id: SetId) -> "Show":
+def add_spots_along(
+    show: "Show", curve: Curve, n: int, group: str, set_id: SetId, *, force: bool = False
+) -> "Show":
     """Adds n spots spaced evenly by arc length along a curve, in curve order.
 
     >>> from showpy.examples import two_set_show
@@ -139,7 +185,7 @@ def add_spots_along(show: "Show", curve: Curve, n: int, group: str, set_id: SetI
     7
     """
     points = space_along(curve, n)
-    return _add_points(show, [(p[0], p[1]) for p in points.tolist()], group, set_id)
+    return _add_points(show, [(p[0], p[1]) for p in points.tolist()], group, set_id, force)
 
 
 def _fill_count(area: Area, interval: Meters) -> int:
@@ -186,6 +232,8 @@ def fill_spots(
     set_id: SetId,
     interval: Meters | None = None,
     n: int | None = None,
+    *,
+    force: bool = False,
 ) -> "Show":
     """Fills an area with a grid of spots, given either the interval or the count.
 
@@ -199,6 +247,7 @@ def fill_spots(
         set_id: Set where the spots enter the field.
         interval: Grid spacing in meters.
         n: Number of spots.
+        force: Allow spots to enter the field in a pinned set.
 
     >>> from showpy.examples import two_set_show
     >>> from showpy.geo.regions import region
@@ -217,10 +266,12 @@ def fill_spots(
             hint="pass interval=<meters> or n=<count>",
             context={"interval": interval, "n": n},
         )
-    return _add_points(show, [(p[0], p[1]) for p in points.tolist()], group, set_id)
+    return _add_points(show, [(p[0], p[1]) for p in points.tolist()], group, set_id, force)
 
 
-def duplicate_spots(show: "Show", sel: Selector, offset: Point, set_id: SetId) -> "Show":
+def duplicate_spots(
+    show: "Show", sel: Selector, offset: Point, set_id: SetId, *, force: bool = False
+) -> "Show":
     """Copies spots, shifted by `offset` from their placement in `set_id`, under new labels.
 
     Copies keep group, tags, footprint and claimability; they enter the field at `set_id`.
@@ -236,7 +287,7 @@ def duplicate_spots(show: "Show", sel: Selector, offset: Point, set_id: SetId) -
     for spot, label in zip(originals, labels, strict=True):
         x, y = source.get(spot.id).point
         entries.append((spot.replace(id=label), (x + offset[0], y + offset[1])))
-    return _insert_spots(show, entries, set_id)
+    return _insert_spots(show, entries, set_id, force)
 
 
 def _locked_items(show: "Show", ids: frozenset[SpotId]) -> list[str]:
