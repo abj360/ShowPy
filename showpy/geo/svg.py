@@ -8,7 +8,7 @@ Contains:
     ArcPiece: evaluates an elliptical arc piece in center parameterization
     Subpath: holds the pieces of one M…(Z) run and writes them back as absolute path data
     parse_path(): parses path data into subpaths, supporting M L H V C S Q T A Z
-    _unpack_arc_flags(): splits packed arc flags into single digits
+    _unpack_arc_flags(): splits packed arc flags into single digits in one pass
 """
 
 import math
@@ -19,6 +19,7 @@ from dataclasses import dataclass
 import numpy as np
 import numpy.typing as npt
 
+from showpy.core.caps import MAX_TEXT_CHARS, require_size
 from showpy.core.errors import SchemaError
 from showpy.core.types import Point, Points
 
@@ -283,7 +284,15 @@ def _arc(b: _PathBuilder, a: list[float], ox: float, oy: float) -> None:
     if a[0] == 0 or a[1] == 0:
         b.add(LinePiece(b.current, end))
         return
-    b.add(_arc_piece(b.current, end, abs(a[0]), abs(a[1]), a[2], bool(a[3]), bool(a[4])))
+    try:
+        piece = _arc_piece(b.current, end, abs(a[0]), abs(a[1]), a[2], bool(a[3]), bool(a[4]))
+    except (OverflowError, ZeroDivisionError, ValueError) as exc:
+        raise SchemaError(
+            "arc radii or coordinates are too large or too small to evaluate",
+            hint="keep arc numbers between 1e-150 and 1e150 in magnitude",
+            context={"command": "A", "end": end},
+        ) from exc
+    b.add(piece)
 
 
 def _close(b: _PathBuilder, _a: list[float], _ox: float, _oy: float) -> None:
@@ -339,17 +348,46 @@ def _angle(u: tuple[float, float], v: tuple[float, float]) -> float:
     return math.degrees(math.atan2(u[0] * v[1] - u[1] * v[0], u[0] * v[0] + u[1] * v[1]))
 
 
-def _unpack_arc_flags(tokens: list[str], index: int) -> list[str]:
-    """Splits packed arc flags such as `011` into `0`, `1`, `1`; SVG flags are single digits."""
-    out = list(tokens)
-    for slot in ARC_FLAG_SLOTS:
-        position = index + slot
-        if position >= len(out):
-            return out
-        token = out[position]
-        if len(token) > 1 and token[0] in "01" and token[1] not in ".eE":
-            out[position : position + 1] = [token[0], token[1:]]
+def _unpack_arc_flags(tokens: list[str]) -> list[str]:
+    """Splits packed arc flags such as `011` into `0`, `1`, `1` in one pass over the tokens.
+
+    SVG flags are single digits, so a flag slot holding `01.5` reads as the flag `0` then `1.5`.
+    """
+    out: list[str] = []
+    in_arc = False
+    slot = 0
+    for token in tokens:
+        if token.isalpha():
+            in_arc = token in "Aa"
+            slot = 0
+            out.append(token)
+            continue
+        pending = token
+        while True:
+            if in_arc and slot in ARC_FLAG_SLOTS and _is_packed_flag(pending):
+                out.append(pending[0])
+                pending = pending[1:]
+            else:
+                out.append(pending)
+                break
+            slot = (slot + 1) % COMMAND_ARITY["A"]
+        slot = (slot + 1) % COMMAND_ARITY["A"]
     return out
+
+
+def _number(token: str, command: str) -> float:
+    value = float(token)
+    if not math.isfinite(value):
+        raise SchemaError(
+            f"{command} has a number outside the float range: {token}",
+            hint="use numbers below 1e308 in magnitude",
+            context={"command": command, "token": token},
+        )
+    return value
+
+
+def _is_packed_flag(token: str) -> bool:
+    return len(token) > 1 and token[0] in "01" and token[1] not in ".eE"
 
 
 def parse_path(d: str) -> list[Subpath]:
@@ -358,8 +396,9 @@ def parse_path(d: str) -> list[Subpath]:
     >>> [len(s.pieces) for s in parse_path("M0 0 L1 0 L1 1 Z")]
     [3]
     """
+    require_size(len(d), MAX_TEXT_CHARS, what="SVG path data characters")
     builder = _PathBuilder()
-    tokens = _tokenize(d)
+    tokens = _unpack_arc_flags(_tokenize(d))
     index = 0
     command = ""
     while index < len(tokens):
@@ -369,16 +408,14 @@ def parse_path(d: str) -> list[Subpath]:
         elif not command:
             raise SchemaError("path data must start with M", hint="begin with M x y")
         arity = COMMAND_ARITY[command.upper()]
-        if command in "Aa":
-            tokens = _unpack_arc_flags(tokens, index)
-        args = [float(t) for t in tokens[index : index + arity]]
-        if len(args) < arity or any(t.isalpha() for t in tokens[index : index + arity]):
+        words = tokens[index : index + arity]
+        if len(words) < arity or any(t.isalpha() for t in words):
             raise SchemaError(
                 f"{command} needs {arity} numbers",
                 hint="check the path data argument counts",
                 context={"command": command},
             )
-        builder.apply(command, args)
+        builder.apply(command, [_number(t, command) for t in words])
         index += arity
         if command in "Mm":
             command = "l" if command == "m" else "L"
