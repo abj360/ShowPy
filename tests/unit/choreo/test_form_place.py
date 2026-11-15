@@ -22,6 +22,12 @@ Contains:
         locked row of a member that does not move
     test_regression_rebuild_force_moves_pinned_members: moves a pinned member when the caller passes
         force=True
+    test_regression_rebuild_keeps_the_pin_flag_of_a_forced_member: keeps pinned=True on a pinned
+        member that a forced rebuild moved
+    test_regression_rebuild_raises_for_a_locked_row_of_a_moved_member: still raises LockedError
+        without force when the member of a locked row moves
+    test_regression_rebuild_facing_only_change_keeps_rows: keeps rows and facing of a member whose
+        position did not change
 """
 
 import pytest
@@ -214,8 +220,6 @@ def test_filled_forms_rejects_two_spots_on_one_slot() -> None:
         filled_forms(clash, [form])
 
 
-@pytest.mark.defect("UP-9.6-08")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-08")
 def test_regression_rebuild_keeps_path_rows_of_members_that_did_not_move() -> None:
     """Keeps stored path rows of members that stay put (audit 9.6)."""
     show = with_curve_rows(_row_show(), ROW_SPOTS)
@@ -223,8 +227,6 @@ def test_regression_rebuild_keeps_path_rows_of_members_that_did_not_move() -> No
     assert set(rows) == set(ROW_SPOTS)
 
 
-@pytest.mark.defect("UP-9.6-09")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-09")
 def test_regression_rebuild_ignores_locked_rows_when_nothing_moves() -> None:
     """Does not raise LockedError for a locked row of a member that does not move (audit 9.6)."""
     show = with_curve_rows(_row_show(), ROW_SPOTS, locked=True)
@@ -232,8 +234,6 @@ def test_regression_rebuild_ignores_locked_rows_when_nothing_moves() -> None:
     assert set(rows) == set(ROW_SPOTS)
 
 
-@pytest.mark.defect("UP-9.6-10")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-10")
 def test_regression_rebuild_force_moves_pinned_members() -> None:
     """Moves a pinned member when the caller passes force=True (audit 9.6; P0 #13)."""
     show = pin_spot(_row_show(), "2", "T1")
@@ -241,3 +241,32 @@ def test_regression_rebuild_force_moves_pinned_members() -> None:
     show = show.model_copy(update={"forms": {"row": moved.model_copy(update={"set": "2"})}})
     placed = rebuild(show, "row", force=True).set("2")
     assert approx_equal(placed.get("T1").point, (0.0, UPSTAGE_ROW_Y), FORM_COORD_TOL)
+
+
+def test_regression_rebuild_keeps_the_pin_flag_of_a_forced_member() -> None:
+    """Keeps pinned=True on a pinned member that a forced rebuild moved (G-R7)."""
+    show = pin_spot(_row_show(), "2", "T1")
+    moved = line_form("row", ["T1", "T2", "T3", "T4"], (0, UPSTAGE_ROW_Y), (6, UPSTAGE_ROW_Y))
+    show = show.replace(forms={"row": moved.replace(set="2")})
+    placed = rebuild(show, "row", force=True).set("2")
+    assert placed.get("T1").y == UPSTAGE_ROW_Y
+    assert placed.get("T1").pinned
+
+
+def test_regression_rebuild_raises_for_a_locked_row_of_a_moved_member() -> None:
+    """Raises LockedError without force when the member of a locked row moves (G-R6)."""
+    show = with_curve_rows(_row_show(), ROW_SPOTS, locked=True)
+    moved = line_form("row", ["T1", "T2", "T3", "T4"], (0, UPSTAGE_ROW_Y), (6, UPSTAGE_ROW_Y))
+    show = show.replace(forms={"row": moved.replace(set="2")})
+    with pytest.raises(LockedError):
+        rebuild(show, "row")
+    assert set(rebuild(show, "row", force=True).transition(TID).rows) == set()
+
+
+def test_regression_rebuild_facing_only_change_keeps_rows() -> None:
+    """Keeps rows and facing of members whose position did not change (G-R6)."""
+    base = with_curve_rows(_row_show(), ROW_SPOTS)
+    turned = with_set(base, base.set("2").with_placements({"T1": {"facing": 45.0}}))
+    rebuilt = rebuild(turned, "row")
+    assert set(rebuilt.transition(TID).rows) == set(ROW_SPOTS)
+    assert rebuilt.set("2").get("T1").facing == 45.0
