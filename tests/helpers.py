@@ -12,7 +12,7 @@ Contains:
     bisector_rotation(): returns a pivot and sweep whose arc carries one point onto another
     defect(): marks a test as an open audited defect, a strict xfail keyed on its ID
     capped_address_space(): caps the address space so a runaway allocation fails fast
-    fails_after(): fails a test still running after a deadline, never inside coverage code
+    fails_after(): fails a test still running after a deadline, never inside coverage or a hook
     EXPECTED_FAILURES: exception names a hash-seed subprocess may end with
     outputs_under_hash_seeds(): runs one script under each hash seed and collects its output
     TAGGED_SHOW_SCRIPT: script head building two_set_show() with spot tags and a selection
@@ -20,11 +20,14 @@ Contains:
 """
 
 import functools
+import gc
 import inspect
 import math
 import signal
 import subprocess
 import sys
+import traceback
+import warnings
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
 from datetime import datetime
@@ -51,7 +54,12 @@ STILL_TOL_M = 1e-6
 FULL_TURN = 360.0
 HALF_TURN = 180.0
 ALLOCATION_HEADROOM_BYTES = 256 * 2**20
-COVERAGE_PACKAGE = "coverage"
+# Code running here is a tracer, finalizer or error hook: an exception raised in it is lost
+# or corrupts the hook, so a hang alarm waits for the next tick instead.
+NO_ALARM_MODULES = frozenset(
+    {"coverage", "weakref", "_weakrefset", "_pytest.unraisableexception", "_pytest.threadexception"}
+)
+FINALIZER_NAME = "__del__"
 HANG_RETRY_S = 0.05
 EXPECTED_FAILURES = ("ValidationError", "SchemaError", "ShowPyError")
 HASH_SEEDS = ("1", "2", "3")
@@ -199,13 +207,69 @@ def capped_address_space() -> Iterator[None]:
         resource.setrlimit(resource.RLIMIT_AS, (soft, hard))
 
 
-def _inside_coverage(frame: FrameType | None) -> bool:
-    """Tells whether any frame on the interrupted stack belongs to coverage.py."""
+def _is_hook_frame(frame: FrameType) -> bool:
+    """Tells whether a frame runs a tracer, finalizer, GC callback or error hook."""
+    module = str(frame.f_globals.get("__name__", ""))
+    if module in NO_ALARM_MODULES or module.partition(".")[0] in NO_ALARM_MODULES:
+        return True
+    hook_codes = {getattr(callback, "__code__", None) for callback in gc.callbacks}
+    return frame.f_code.co_name == FINALIZER_NAME or frame.f_code in hook_codes
+
+
+def _may_interrupt(frame: FrameType | None, guard: FrameType | None) -> bool:
+    """Tells whether a hang alarm may raise here: inside the guarded call, outside every hook.
+
+    Args:
+        frame: Frame the alarm interrupted.
+        guard: Frame of the fails_after wrapper; the alarm raises only in frames it called.
+    """
+    if frame is None or frame is guard:
+        return False
     while frame is not None:
-        if str(frame.f_globals.get("__name__", "")).partition(".")[0] == COVERAGE_PACKAGE:
+        if frame is guard:
             return True
+        if _is_hook_frame(frame):
+            return False
         frame = frame.f_back
     return False
+
+
+@contextmanager
+def _resource_warnings_dropped_after(timed_out: list[bool]) -> Iterator[None]:
+    """Drops unraisable ResourceWarnings once the hang alarm has fired, forwarding all others.
+
+    An alarm landing inside io.open() makes CPython free the half-built file at once, and its
+    ResourceWarning would fail the hang test's teardown. Before the alarm fires, every leak
+    still reaches pytest.
+
+    Args:
+        timed_out: Non-empty once the alarm has raised its timeout.
+    """
+    forward = sys.unraisablehook
+
+    # Quoted: sys.UnraisableHookArgs exists only for type checkers before Python 3.14.
+    def hook(unraisable: "sys.UnraisableHookArgs") -> None:
+        if timed_out and issubclass(unraisable.exc_type, ResourceWarning):
+            return
+        forward(unraisable)
+
+    sys.unraisablehook = hook
+    try:
+        yield
+    finally:
+        sys.unraisablehook = forward
+
+
+def _release_interrupted_frames(timeout: BaseException) -> None:
+    """Frees what the hang alarm cut off mid-use, such as a file opened but not yet closed.
+
+    Their ResourceWarnings belong to the interruption, not to the code under test, and would
+    otherwise surface later as unraisable errors in a teardown.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ResourceWarning)
+        traceback.clear_frames(timeout.__traceback__)
+        gc.collect()
 
 
 def fails_after(
@@ -217,8 +281,10 @@ def fails_after(
     C-tracer callback between its data lock's acquire and release left the lock held, and the
     next traced file deadlocked the run (CI on Python 3.12/3.13, 2026-11-14); landing in a
     finalizer or GC callback dropped the exception as unraisable, and the hang ran on until the
-    runner ran out of memory (CI, 2026-11-15). So the alarm repeats every HANG_RETRY_S until the
-    test unwinds, and it skips ticks while coverage code or this wrapper is running.
+    runner ran out of memory (CI, 2026-11-15); a later tick inside pytest's unraisable hook then
+    broke the hook (macOS 3.12 CI, 2026-11-15). So the alarm repeats every HANG_RETRY_S, raises
+    only inside the guarded call, and skips ticks that land in hook frames (`_is_hook_frame`).
+    A callback that C code registered with a bare weakref.ref is not detectable.
 
     Args:
         seconds: Wall-clock budget before the test fails as a hang.
@@ -229,18 +295,26 @@ def fails_after(
         def guarded(*args: TestParams.args, **kwargs: TestParams.kwargs) -> None:
             own_frame = inspect.currentframe()
 
+            timed_out: list[bool] = []
+
             def interrupt(_signum: int, frame: FrameType | None) -> None:
-                if frame is own_frame or _inside_coverage(frame):
-                    return
-                pytest.fail(f"Timeout >{seconds}s", pytrace=False)
+                if _may_interrupt(frame, own_frame):
+                    timed_out.append(True)
+                    pytest.fail(f"Timeout >{seconds}s", pytrace=False)
 
             previous = signal.signal(signal.SIGALRM, interrupt)
             signal.setitimer(signal.ITIMER_REAL, seconds, HANG_RETRY_S)
-            try:
-                test(*args, **kwargs)
-            finally:
-                signal.setitimer(signal.ITIMER_REAL, 0)
-                signal.signal(signal.SIGALRM, previous)
+            with _resource_warnings_dropped_after(timed_out):
+                try:
+                    try:
+                        test(*args, **kwargs)
+                    finally:
+                        signal.setitimer(signal.ITIMER_REAL, 0)
+                        signal.signal(signal.SIGALRM, previous)
+                except pytest.fail.Exception as failure:
+                    if timed_out:
+                        _release_interrupted_frames(failure)
+                    raise
 
         return guarded
 
