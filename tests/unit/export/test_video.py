@@ -4,6 +4,7 @@
 test_video.py --- tests 2D frame rendering and MP4 export with optional audio
 
 Also holds the audited video defects (UP-9.5-45 to UP-9.5-57) as strict xfails.
+Also holds UP-9.5-59, found by the whole-lane security review.
 
 Contains:
     test_regression_short_audio_does_not_truncate_the_video(): keeps the video longer than the audio
@@ -24,6 +25,10 @@ Contains:
         cannot hang the export
     test_regression_negative_sync_offset_delays_the_audio(): delays music for a negative offset
     test_regression_audio_section_limits_playback(): keeps a track silent before its section
+    test_regression_export_video_refuses_a_degenerate_canvas(): raises for a scale that gives an
+        odd or empty canvas
+    test_regression_export_video_refuses_an_empty_encoder_output(): raises when ffmpeg writes
+        nothing
 """
 
 import array
@@ -402,3 +407,23 @@ def test_regression_audio_section_limits_playback(tmp_path: Path) -> None:
     path = _save(data, tmp_path)
     assert _audio_peak(path, until_s=SILENT_LEAD_S) == 0
     assert _audio_peak(path) > 0
+
+
+@pytest.mark.parametrize("px_per_m", [1e-11, 1e-300])
+def test_regression_export_video_refuses_a_degenerate_canvas(px_per_m: float) -> None:
+    """Raises SchemaError for a scale that leaves an odd or empty canvas; 0 bytes came back."""
+    with pytest.raises(SchemaError, match="video"):
+        export_video(two_set_show(), (0.0, 1.0), fps=FPS, px_per_m=px_per_m)
+
+
+def test_regression_export_video_refuses_an_empty_encoder_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Raises StorageError when the encoder leaves an empty file instead of returning b""."""
+
+    def write_nothing(_show: Show, path: Path, *_rest: object) -> None:
+        path.write_bytes(b"")
+
+    monkeypatch.setattr("showpy.export.video._write_frames", write_nothing)
+    with pytest.raises(StorageError):
+        export_video(two_set_show(), (0.0, 1.0), fps=FPS, px_per_m=SMALL_PX_PER_M)

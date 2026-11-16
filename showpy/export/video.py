@@ -72,7 +72,14 @@ def video_canvas(show: Show, px_per_m: float = DEFAULT_PX_PER_M) -> SheetCanvas:
     require_size((width + width % 2) * (height + height % 2), MAX_VIDEO_PIXELS, what="video pixels")
     pad_x = (width % 2) / px_per_m
     pad_y = (height % 2) / px_per_m
-    return canvas.replace(max_x=canvas.max_x + pad_x, max_y=canvas.max_y + pad_y)
+    padded = canvas.replace(max_x=canvas.max_x + pad_x, max_y=canvas.max_y + pad_y)
+    if any(n % 2 for n in padded.size):
+        raise SchemaError(
+            f"px_per_m {px_per_m} leaves an odd video canvas {padded.size}, which H.264 rejects",
+            hint="use a larger px_per_m, such as the default 10.0",
+            context={"px_per_m": px_per_m, "size": padded.size},
+        )
+    return padded
 
 
 def _color(show: Show, entity: str) -> str:
@@ -124,6 +131,17 @@ def _range(show: Show, count_range: tuple[Count, Count] | None) -> tuple[Count, 
             context={"start": t0, "end": t1},
         )
     return t0, t1
+
+
+def _read_encoded(path: Path) -> bytes:
+    data = path.read_bytes()
+    if data:
+        return data
+    raise StorageError(
+        "ffmpeg wrote an empty video",
+        hint="check the px_per_m and fps settings",
+        context={"file": path.name},
+    )
 
 
 def _write_frames(
@@ -198,9 +216,9 @@ def export_video(
         root = Path(folder)
         _write_frames(show, root / VIDEO_NAME, t0, t1, fps, px_per_m)
         if source is None:
-            return (root / VIDEO_NAME).read_bytes()
+            return _read_encoded(root / VIDEO_NAME)
         track, data = source
         (root / AUDIO_NAME).write_bytes(data)
         start_s = track.sync_offset_s + count_to_seconds(show.timeline, t0)
         _mux(root / VIDEO_NAME, root / AUDIO_NAME, root / OUTPUT_NAME, start_s)
-        return (root / OUTPUT_NAME).read_bytes()
+        return _read_encoded(root / OUTPUT_NAME)
