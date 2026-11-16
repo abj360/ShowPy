@@ -277,6 +277,7 @@ def join_link(pub: Publication, token: str) -> str:
     """Builds the joinable link `<pub.link>?t=<token>` once the token matches the stored digest.
 
     The publication never holds the token, so the host passes the one it issued at publish.
+    A stored link that already has a query or fragment is refused; republishing rebuilds it.
 
     Args:
         pub: Publication whose link performers join through.
@@ -294,6 +295,12 @@ def join_link(pub: Publication, token: str) -> str:
     'https://x.example/p1?t=k3Qz9-high-entropy-join-token'
     """
     _require_join_token(token)
+    if "?" in pub.link or "#" in pub.link:
+        raise ValidationError(
+            f"publication {pub.id} link has a query or fragment, so no token can follow it",
+            hint="republish it with publish(..., previous=pub) to rebuild the link",
+            context={"publication": pub.id},
+        )
     if pub.join_token_sha256 is None:
         raise ValidationError(
             f"publication {pub.id} stores no join token digest, so nobody can join it",

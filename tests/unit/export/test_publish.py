@@ -67,6 +67,7 @@ Contains:
     test_regression_loading_an_e1_publication_keeps_other_query_parameters(): strips only `t`
     test_regression_invalid_e1_publication_errors_omit_the_join_token(): keeps errors clean
     test_regression_publication_refuses_a_non_text_link_without_echoing_it(): hides the token
+    test_regression_join_link_refuses_a_link_with_a_query_or_fragment(): refuses a mangled link
     test_publish_accepts_join_tokens_at_the_length_bounds(): accepts 22 and 256 characters
     test_publish_accepts_rfc3986_sub_delimiters_in_the_base_url_path(): keeps `~ ! $ & ( ) * + , ;
         = : @` in the path
@@ -1174,3 +1175,15 @@ def test_regression_publication_refuses_a_non_text_link_without_echoing_it(kind:
         with pytest.raises(SchemaError) as caught:
             load()
         assert JOIN_TOKEN not in _error_text(caught.value)
+
+
+@pytest.mark.parametrize(
+    "link", [f"{LINK}?ref=1", f"{LINK}#top", "https://e.example/p?a=1/pub-1#top"]
+)
+def test_regression_join_link_refuses_a_link_with_a_query_or_fragment(link: str) -> None:
+    """Refuses to append `?t=` to a stored link that already has a query or fragment."""
+    pub = _published().replace(link=link)
+    with pytest.raises(ValidationError) as caught:
+        join_link(pub, JOIN_TOKEN)
+    assert "republish" in caught.value.hint
+    assert JOIN_TOKEN not in _error_text(caught.value)
