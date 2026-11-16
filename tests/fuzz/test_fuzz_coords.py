@@ -104,6 +104,12 @@ HUGE_ORIGIN_SHOW = SHOW.model_copy(
 )
 
 
+def _assert_finite_wording(show: Show, point: tuple[float, float], style: str) -> None:
+    text = to_coords(show, point, style)  # type: ignore[arg-type]
+    assert "nan" not in text.casefold()
+    assert "inf" not in text.casefold()
+
+
 @given(
     digits=st.integers(300, 309),
     unit_code=st.sampled_from(["R", "L", "U", "D"]),
@@ -119,7 +125,7 @@ def test_fuzz_from_coords_huge_origin(digits: int, unit_code: str, sign_flip: bo
 @given(x=st.sampled_from([1.7e308, -1.7e308, 1e300]), y=st.sampled_from([1.7e308, -1.7e308, 0.0]))
 def test_fuzz_to_coords_huge_origin(x: float, y: float) -> None:
     """Words huge finite points from a huge finite origin; only ShowPyError may escape."""
-    only_showpy_errors(lambda: to_coords(HUGE_ORIGIN_SHOW, (x, y)), (x, y))
+    only_showpy_errors(lambda: _assert_finite_wording(HUGE_ORIGIN_SHOW, (x, y), "long"), (x, y))
 
 
 @given(text=st.one_of(st.text(), st.text(min_size=2000, max_size=6000)))
@@ -150,7 +156,7 @@ def test_fuzz_from_coords_systems(system: CoordinateSystem, text: str) -> None:
 @given(x=FLOATS, y=FLOATS, style=st.sampled_from(["long", "short"]))
 def test_fuzz_to_coords_floats(x: float, y: float, style: str) -> None:
     """Words arbitrary floats, NaN, infinities and huge values included."""
-    only_showpy_errors(lambda: to_coords(SHOW, (x, y), style), (x, y))  # type: ignore[arg-type]
+    only_showpy_errors(lambda: _assert_finite_wording(SHOW, (x, y), style), (x, y))
 
 
 @given(system=SYSTEMS, x=FLOATS, y=FLOATS, style=st.sampled_from(["long", "short"]))
@@ -159,7 +165,7 @@ def test_fuzz_to_coords_systems(system: CoordinateSystem, x: float, y: float, st
     show = SHOW.model_copy(update={"coordinates": system})
 
     def run() -> None:
-        to_coords(show, (x, y), style)  # type: ignore[arg-type]
+        _assert_finite_wording(show, (x, y), style)
 
     only_showpy_errors(run, (system, x, y))
 

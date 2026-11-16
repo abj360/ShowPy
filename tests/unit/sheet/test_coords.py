@@ -192,7 +192,7 @@ def test_regression_to_coords_rejects_infinite_point() -> None:
 
 
 def test_regression_to_coords_rejects_unrepresentable_magnitude() -> None:
-    """Rejects the finite point (0.0, 1e26), too large to round, with a ShowPyError (fuzz)."""
+    """Rejects the finite point (0.0, 1e26), too large to round, with a ShowPyError (UP-9.4-47)."""
     with pytest.raises(ShowPyError):
         to_coords(two_set_show(), (0.0, 1e26))
 
@@ -297,3 +297,21 @@ def test_regression_from_coords_rejects_overflowing_result() -> None:
     show = set_coordinates(two_set_show(), CoordinateSystem(origin=(1.7e308, 0.0)))
     with pytest.raises(ShowPyError):
         from_coords(show, "R" + "9" * 308 + " U1")
+
+
+def test_regression_to_coords_rejects_non_finite_wording() -> None:
+    """Rejects points whose local offset or rounded value is nan or inf (UP-9.4-52)."""
+    shifted = set_coordinates(two_set_show(), CoordinateSystem(origin=(1.7e308, -1.7e308)))
+    with pytest.raises(ShowPyError):
+        to_coords(shifted, (-1.7e308, 1.7e308))
+    coarse = two_set_show().model_copy(update={"coordinates": CoordinateSystem(precision=1e308)})
+    with pytest.raises(ShowPyError):
+        to_coords(coarse, (1.7976931348623157e308, 0.0))
+
+
+def test_regression_to_coords_rounding_failure_hint_names_precision() -> None:
+    """Teaches the precision as a possible cause when rounding exceeds Decimal's digits."""
+    show = two_set_show().model_copy(update={"coordinates": CoordinateSystem(precision=1e-300)})
+    with pytest.raises(ShowPyError) as raised:
+        to_coords(show, (1.0, 0.0))
+    assert "precision" in raised.value.hint

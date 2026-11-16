@@ -72,6 +72,9 @@ FEET_PRECISION = 0.5
 LONG_CLAUSE = re.compile(r"^(?P<num>\d+(?:\.\d+)?)\s+(?P<unit>\S+)\s+(?P<rest>.+)$")
 SHORT_TOKEN = re.compile(r"^(?P<code>[A-Za-z]+)(?P<num>\d+(?:\.\d+)?)$")
 OF = " of "
+ROUNDING_HINT = (
+    "keep each offset under about 1e27 rounding steps: use a coarser precision or a nearer origin"
+)
 POINT_SIZE = 2
 NUMBER_PREVIEW = 20
 TEXT_PREVIEW = 40
@@ -174,14 +177,22 @@ def _local(sheet: Sheet, system: CoordinateSystem, p: Point) -> tuple[float, flo
 
 
 def _rounded(value_m: float, system: CoordinateSystem) -> float:
+    context = {"value": value_m, "precision": system.precision, "units": system.units}
     try:
-        return round_to(convert(value_m, "m", system.units), system.precision)
+        shown = round_to(convert(value_m, "m", system.units), system.precision)
     except DecimalException as error:
         raise SchemaError(
             f"cannot round {value_m} m to a step of {system.precision} {system.units}",
-            hint="use a point within about 1e15 steps of the origin",
-            context={"value": value_m, "precision": system.precision, "units": system.units},
+            hint=ROUNDING_HINT,
+            context=context,
         ) from error
+    if not math.isfinite(shown):
+        raise SchemaError(
+            f"{value_m} m is not a finite offset at a step of {system.precision} {system.units}",
+            hint=ROUNDING_HINT,
+            context=context,
+        )
+    return shown
 
 
 def _part(
