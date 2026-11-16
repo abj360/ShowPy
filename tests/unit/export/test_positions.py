@@ -22,20 +22,20 @@ Contains:
 
 import math
 import sys
-import time
 
 import pytest
 
 from showpy.core.caps import MAX_POINTS, MAX_TEXT_CHARS
 from showpy.core.errors import LockedError, SchemaError, UnknownRefError
 from showpy.core.util import approx_equal
+from showpy.export import positions
 from showpy.export.positions import import_positions
 from tests.fixtures.shows import two_set_show
 from tests.helpers import fails_after
 
 TOL = 1e-9
 FIRST_NEW_SET = 3
-FAST_SECONDS = 1.0
+HANG_BACKSTOP_SECONDS = 3.0
 MANY_NEW_SETS = 32_000
 FULL_TURN = 360.0
 IMPORT_TEXT = """set,counts,entity,x,y,facing
@@ -165,14 +165,26 @@ def test_regression_import_positions_rejects_a_bare_carriage_return_with_schema_
         import_positions(two_set_show(), "\r0", "trumpets")
 
 
-def test_regression_import_positions_caps_the_placement_count() -> None:
+def _refuse_set_ordering(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Makes ordering sets fail the test, so a refusal proves the cap ran before it."""
+
+    def ordered_too_early(*_args: object) -> list[str]:
+        raise AssertionError("sets were ordered before the placement cap")
+
+    monkeypatch.setattr(positions, "_set_order", ordered_too_early)
+
+
+@fails_after(HANG_BACKSTOP_SECONDS)
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+def test_regression_import_positions_caps_the_placement_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Refuses rows that would build over MAX_POINTS placements; 400 rows took 1 s (UP-9.5-60)."""
+    _refuse_set_ordering(monkeypatch)
     side = math.isqrt(MAX_POINTS) + 1
     rows = "".join(f"{FIRST_NEW_SET + i},4,E{i},1,1\n" for i in range(side))
-    started = time.perf_counter()
     with pytest.raises(SchemaError, match="placements"):
         import_positions(two_set_show(), "set,counts,entity,x,y\n" + rows, "trumpets")
-    assert time.perf_counter() - started < FAST_SECONDS
 
 
 def test_regression_import_positions_caps_the_text_size() -> None:
@@ -181,14 +193,17 @@ def test_regression_import_positions_caps_the_text_size() -> None:
         import_positions(two_set_show(), "set\n" + "x" * MAX_TEXT_CHARS, "trumpets")
 
 
-@fails_after(FAST_SECONDS)
+@fails_after(HANG_BACKSTOP_SECONDS)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
-def test_regression_import_positions_caps_placements_before_ordering_sets() -> None:
-    """Refuses 32,000 new sets in under 1 s; ordering them first took 7.6 s (UP-9.5-60).
+def test_regression_import_positions_caps_placements_before_ordering_sets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Refuses 32,000 new sets before ordering them; ordering first took 7.6 s (UP-9.5-60).
 
     The 586 KB CSV fits the text cap; each row adds a set and a spot, so the placements
     (32,002 sets by 32,004 spots) exceed MAX_POINTS long before any set is ordered.
     """
+    _refuse_set_ordering(monkeypatch)
     rows = "".join(f"{FIRST_NEW_SET + i},4,E{i},1,1\n" for i in range(MANY_NEW_SETS))
     with pytest.raises(SchemaError, match="placements"):
         import_positions(two_set_show(), "set,counts,entity,x,y\n" + rows, "trumpets")
