@@ -66,6 +66,9 @@ Contains:
     test_regression_loading_an_e1_publication_strips_the_join_token(): drops `?t=` on load
     test_regression_loading_an_e1_publication_keeps_other_query_parameters(): strips only `t`
     test_regression_invalid_e1_publication_errors_omit_the_join_token(): keeps errors clean
+    test_publish_accepts_join_tokens_at_the_length_bounds(): accepts 22 and 256 characters
+    test_publish_accepts_rfc3986_sub_delimiters_in_the_base_url_path(): keeps `~ ! $ & ( ) * + , ;
+        = : @` in the path
 """
 
 import hashlib
@@ -1119,3 +1122,20 @@ def test_regression_invalid_e1_publication_errors_omit_the_join_token() -> None:
     with pytest.raises(SchemaError) as caught:
         Publication.model_validate(stored)
     assert JOIN_TOKEN not in _error_text(caught.value)
+
+
+@pytest.mark.parametrize("token", ["a" * 22, "A1_-" * 64], ids=["22", "256"])
+def test_publish_accepts_join_tokens_at_the_length_bounds(token: str) -> None:
+    """Accepts tokens of exactly 22 and 256 characters, the bounds 21 and 257 fall outside."""
+    pub = publish(two_set_show(), "pub-1", BASE_URL, AT, join_token=token)
+    assert verify_join_token(pub, token)
+    assert join_link(pub, token) == f"{LINK}?t={token}"
+
+
+@pytest.mark.parametrize("char", list("~!$&()*+,;=:@"))
+def test_publish_accepts_rfc3986_sub_delimiters_in_the_base_url_path(char: str) -> None:
+    """Accepts each unreserved or sub-delimiter character RFC 3986 allows in a path segment."""
+    base_url = f"https://eight.example/p{char}q"
+    pub = publish(two_set_show(), "pub-1", base_url, AT, join_token=JOIN_TOKEN)
+    assert pub.link == f"{base_url}/pub-1"
+    assert join_link(pub, JOIN_TOKEN) == f"{base_url}/pub-1?t={JOIN_TOKEN}"
