@@ -66,6 +66,7 @@ Contains:
     test_regression_loading_an_e1_publication_strips_the_join_token(): drops `?t=` on load
     test_regression_loading_an_e1_publication_keeps_other_query_parameters(): strips only `t`
     test_regression_invalid_e1_publication_errors_omit_the_join_token(): keeps errors clean
+    test_regression_publication_refuses_a_non_text_link_without_echoing_it(): hides the token
     test_publish_accepts_join_tokens_at_the_length_bounds(): accepts 22 and 256 characters
     test_publish_accepts_rfc3986_sub_delimiters_in_the_base_url_path(): keeps `~ ! $ & ( ) * + , ;
         = : @` in the path
@@ -1100,6 +1101,9 @@ def test_regression_loading_an_e1_publication_strips_the_join_token() -> None:
         (f"{LINK}?ref=1&t={JOIN_TOKEN}", f"{LINK}?ref=1"),
         (f"{LINK}?t={JOIN_TOKEN}&ref=1&t={OTHER_TOKEN}", f"{LINK}?ref=1"),
         (f"{LINK}?t={JOIN_TOKEN}#top", f"{LINK}#top"),
+        (f"{LINK}?T={JOIN_TOKEN}", LINK),
+        (f"{LINK}#top?t={JOIN_TOKEN}&x=1", f"{LINK}#top?x=1"),
+        (f"{LINK}?t={JOIN_TOKEN}#?T={JOIN_TOKEN}", f"{LINK}#"),
         (f"{LINK}?t=", LINK),
         (f"{LINK}?", LINK),
         (LINK, LINK),
@@ -1139,3 +1143,34 @@ def test_publish_accepts_rfc3986_sub_delimiters_in_the_base_url_path(char: str) 
     pub = publish(two_set_show(), "pub-1", base_url, AT, join_token=JOIN_TOKEN)
     assert pub.link == f"{base_url}/pub-1"
     assert join_link(pub, JOIN_TOKEN) == f"{base_url}/pub-1?t={JOIN_TOKEN}"
+
+
+def _legacy_link_as(kind: str) -> object:
+    link = f"{LINK}?t={JOIN_TOKEN}"
+    shapes: dict[str, object] = {
+        "bytes": link.encode(),
+        "bytearray": bytearray(link.encode()),
+        "list": [link],
+        "dict": {"href": link},
+    }
+    return shapes[kind]
+
+
+@pytest.mark.parametrize("kind", ["bytes", "bytearray", "list", "dict"])
+def test_regression_publication_refuses_a_non_text_link_without_echoing_it(kind: str) -> None:
+    """Refuses a link that is not text before pydantic coerces or echoes it with the token.
+
+    Pydantic's lax mode turned bytes into text after the token was stripped, and a wrong-type
+    link was echoed, token included, in the error's input field.
+    """
+    stored = {**_published().model_dump(mode="json"), "link": _legacy_link_as(kind)}
+    loaders: list[Callable[[], Publication]] = [
+        lambda: Publication.model_validate(stored),
+        lambda: Publication(**stored),
+    ]
+    if kind in ("list", "dict"):
+        loaders.append(lambda: Publication.model_validate_json(json.dumps(stored)))
+    for load in loaders:
+        with pytest.raises(SchemaError) as caught:
+            load()
+        assert JOIN_TOKEN not in _error_text(caught.value)
