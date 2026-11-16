@@ -8,7 +8,12 @@ Contains:
     diff_snapshots(): lists the names added, removed and changed between two snapshots
     unreleased_section(): extracts the Unreleased section of a changelog
     names_missing_from_changelog(): lists changed names the Unreleased section never mentions
+    check_snapshot(): compares the API with the stored snapshot and refreshes it when allowed
     test_public_api_matches_snapshot: fails on any signature drift and checks the changelog
+    test_regression_refresh_refuses_a_change_missing_from_the_changelog: fails and keeps the old
+        snapshot when refresh mode meets a changed name that Unreleased never names
+    test_refresh_writes_a_change_the_changelog_names: rewrites the snapshot when every changed
+        name is in Unreleased
     test_diff_snapshots_reports_each_kind_of_change: checks the diff on a synthetic pair
     test_unreleased_section_stops_at_the_next_release: checks the changelog slicing
     test_names_missing_from_changelog_flags_unlisted_names: checks the changelog gate can fail
@@ -204,35 +209,54 @@ def _format_failure(diff: dict[str, list[str]], unlisted: list[str]) -> str:
     return "\n".join(lines)
 
 
-def _write_snapshot(snapshot: dict[str, JsonValue]) -> None:
+def _write_snapshot(snapshot: dict[str, JsonValue], path: Path) -> None:
     """Writes the snapshot as sorted, indented JSON with a trailing newline."""
-    SNAPSHOT_PATH.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
+    path.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
 
 
-def test_public_api_matches_snapshot() -> None:
-    current = build_snapshot()
-    is_updating = os.environ.get(UPDATE_ENV) == "1"
-    if not SNAPSHOT_PATH.exists() and is_updating:
-        _write_snapshot(current)
-        return
-    if not SNAPSHOT_PATH.exists():
-        pytest.fail(f"E: {SNAPSHOT_PATH.name} is missing; run {UPDATE_COMMAND}", pytrace=False)
-    stored: dict[str, JsonValue] = json.loads(SNAPSHOT_PATH.read_text())
+def check_snapshot(
+    current: dict[str, JsonValue], snapshot_path: Path, changelog_path: Path, *, is_updating: bool
+) -> str | None:
+    """Compares the API with the stored snapshot, rewriting it in refresh mode when allowed.
+
+    Args:
+        current: The snapshot of the current code.
+        snapshot_path: Where the stored snapshot lives.
+        changelog_path: The changelog whose Unreleased section must name every changed name.
+        is_updating: Whether refresh mode (`SHOWPY_UPDATE_API=1`) is on.
+
+    Returns:
+        failure: The failure message, or None when the API matches or the refresh succeeded.
+    """
+    if not snapshot_path.exists() and is_updating:
+        _write_snapshot(current, snapshot_path)
+        return None
+    if not snapshot_path.exists():
+        return f"E: {snapshot_path.name} is missing; run {UPDATE_COMMAND}"
+    stored: dict[str, JsonValue] = json.loads(snapshot_path.read_text())
     diff = diff_snapshots(stored, current)
     changed = [name for names in diff.values() for name in names]
     if not changed:
-        return
-    if not CHANGELOG_PATH.exists():
-        pytest.fail(
-            f"E: public API drifted and {CHANGELOG_PATH.name} is absent; "
-            f"run from a source checkout: {UPDATE_COMMAND}",
-            pytrace=False,
+        return None
+    if not changelog_path.exists():
+        return (
+            f"E: public API drifted and {changelog_path.name} is absent; "
+            f"run from a source checkout: {UPDATE_COMMAND}"
         )
-    unlisted = names_missing_from_changelog(changed, CHANGELOG_PATH.read_text())
-    if is_updating:
-        _write_snapshot(current)
+    unlisted = names_missing_from_changelog(changed, changelog_path.read_text())
     if unlisted or not is_updating:
-        pytest.fail(_format_failure(diff, unlisted), pytrace=False)
+        return _format_failure(diff, unlisted)
+    _write_snapshot(current, snapshot_path)
+    return None
+
+
+def test_public_api_matches_snapshot() -> None:
+    is_updating = os.environ.get(UPDATE_ENV) == "1"
+    failure = check_snapshot(
+        build_snapshot(), SNAPSHOT_PATH, CHANGELOG_PATH, is_updating=is_updating
+    )
+    if failure is not None:
+        pytest.fail(failure, pytrace=False)
 
 
 def test_diff_snapshots_reports_each_kind_of_change() -> None:
@@ -266,3 +290,34 @@ def test_snapshot_is_stable_across_python_versions() -> None:
         if any(token in json.dumps(value) for token in forbidden)
     ]
     assert offenders == []
+
+
+STORED_API: dict[str, JsonValue] = {"alpha": "(a)"}
+CHANGED_API: dict[str, JsonValue] = {"alpha": "(a, b)", "beta": "()"}
+
+
+def _api_files(tmp_path: Path, changelog: str) -> tuple[Path, Path]:
+    snapshot_path = tmp_path / "api_snapshot.json"
+    changelog_path = tmp_path / "CHANGELOG.md"
+    _write_snapshot(STORED_API, snapshot_path)
+    changelog_path.write_text(changelog)
+    return snapshot_path, changelog_path
+
+
+def test_regression_refresh_refuses_a_change_missing_from_the_changelog(tmp_path: Path) -> None:
+    snapshot_path, changelog_path = _api_files(tmp_path, "## Unreleased\n\n- `alpha` grows b\n")
+    before = snapshot_path.read_text()
+
+    failure = check_snapshot(CHANGED_API, snapshot_path, changelog_path, is_updating=True)
+
+    assert failure is not None
+    assert "not in CHANGELOG.md Unreleased: beta" in failure
+    assert snapshot_path.read_text() == before
+
+
+def test_refresh_writes_a_change_the_changelog_names(tmp_path: Path) -> None:
+    changelog = "## Unreleased\n\n- `alpha` grows b\n- add `beta`\n"
+    snapshot_path, changelog_path = _api_files(tmp_path, changelog)
+
+    assert check_snapshot(CHANGED_API, snapshot_path, changelog_path, is_updating=True) is None
+    assert json.loads(snapshot_path.read_text()) == CHANGED_API
