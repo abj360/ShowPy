@@ -12,6 +12,18 @@ Contains:
         0.02 m of the true path on a 4-cycle weave
     test_regression_speed_distance_matches_traced_path_length: reports the travelled distance of a
         4-cycle weave, not its 4 m chord
+    test_regression_multi_turn_rotate_is_not_aliased_by_segment_probes: keeps an 8-turn rotate
+        within tolerance though every eighth of it is the start point
+    test_regression_polyline_corner_is_a_segment_end: ends a segment exactly on an untimed polyline
+        corner under a non-linear easing
+    test_regression_custom_motion_samples_are_not_forced_segment_ends: fits a 1-cycle weave with
+        far fewer segments than its 256 sample pieces
+    test_regression_unreachable_segment_bound_raises_path_error: raises SEGMENT_BOUND instead of
+        accepting a segment it cannot bring within tol
+    test_regression_segment_bound_hint_names_an_accepted_tol: names a tol that a retry accepts, for
+        a probed motion too
+    test_regression_segments_reject_a_tolerance_that_is_not_positive: rejects a zero, negative or
+        non-finite segment tolerance instead of looping on it
     test_regression_facing_override_applies_to_holding_spot: applies a facing override to a spot on
         a HOLD row
     test_regression_toward_entity_override_uses_query_time_position: faces the other spot where it
@@ -32,11 +44,12 @@ Contains:
 
 import itertools
 import math
+import re
 
 import numpy as np
 import pytest
 
-from showpy.choreo.engine import PathEngine
+from showpy.choreo.engine import PROBE_TOL_SHARE, PathEngine
 from showpy.choreo.models import (
     Easing,
     FacingMode,
@@ -373,6 +386,9 @@ def test_regression_positions_resolves_selection_expressions() -> None:
 SEGMENT_TOL = 0.02
 PROBES_PER_SEGMENT = 25
 TRACE_SAMPLES = 4001
+EIGHT_TURNS = 8 * 360.0
+MAX_ONE_CYCLE_SEGMENTS = 32
+HINT_TOL_MARGIN = 1.01
 WEAVE_ROW = PathRow(
     entity="T1", style=PathStyle.CUSTOM, motion_fn="weave", motion_params={"cycles": 4}
 )
@@ -395,18 +411,70 @@ def _traced_length(engine: PathEngine, entity: str) -> float:
     return float(np.linalg.norm(np.diff(pts, axis=0), axis=1).sum())
 
 
-@defect("UP-9.2-01")
 def test_regression_segments_stay_within_tolerance_on_periodic_motion() -> None:
     """Keeps every segment within 0.02 m of the true path on a 4-cycle weave (audit 9.2; P0 #6)."""
     engine = _engine(T1=WEAVE_ROW)
     assert _segment_deviation(engine, "T1") <= SEGMENT_TOL + 1e-9
 
 
-@defect("UP-9.2-02")
 def test_regression_speed_distance_matches_traced_path_length() -> None:
     """Reports the travelled distance of a 4-cycle weave, not its 4 m chord (audit 9.2; P0 #6)."""
     engine = _engine(T1=WEAVE_ROW)
     assert approx_equal(engine.speed("T1", TID).distance, _traced_length(engine, "T1"), tol=0.2)
+
+
+def _eight_turn_engine() -> PathEngine:
+    show = with_targets({"T2": {"x": 2.0, "y": 5.0}})
+    row = PathRow(entity="T2", style=PathStyle.ROTATE, pivot=(0.0, 5.0), sweep_deg=EIGHT_TURNS)
+    return PathEngine(with_rows({"T2": row}, show=show))
+
+
+def test_regression_multi_turn_rotate_is_not_aliased_by_segment_probes() -> None:
+    """Keeps an 8-turn rotate within tolerance though every eighth of it is the start point."""
+    assert _segment_deviation(_eight_turn_engine(), "T2") <= SEGMENT_TOL + 1e-9
+
+
+def test_regression_polyline_corner_is_a_segment_end() -> None:
+    """Ends a segment exactly on an untimed polyline corner under a non-linear easing."""
+    row = PathRow(
+        entity="T1",
+        style=PathStyle.POLYLINE,
+        waypoints=(Waypoint(x=3.0, y=6.0),),
+        easing=Easing(kind="ease_in_out", strength=3.0),
+    )
+    ends = [seg.p1 for seg in _engine(T1=row).entity_segments("T1", TID)]
+    assert any(approx_equal(end, (3.0, 6.0), tol=1e-9) for end in ends)
+
+
+def test_regression_custom_motion_samples_are_not_forced_segment_ends() -> None:
+    """Fits a 1-cycle weave with far fewer segments than its 256 sample pieces."""
+    row = WEAVE_ROW.replace(motion_params={"cycles": 1})
+    assert len(_engine(T1=row).entity_segments("T1", TID)) <= MAX_ONE_CYCLE_SEGMENTS
+
+
+def test_regression_unreachable_segment_bound_raises_path_error() -> None:
+    """Raises SEGMENT_BOUND instead of accepting a segment it cannot bring within tol."""
+    with pytest.raises(PathError) as info:
+        _eight_turn_engine().entity_segments("T2", TID, tol=1e-15)
+    assert info.value.code == "SEGMENT_BOUND"
+    assert set(info.value.context) == {"entity", "tid", "tol", "error"}
+
+
+def test_regression_segment_bound_hint_names_an_accepted_tol() -> None:
+    """Names, for a probed motion, a tol under which the failing segment is accepted."""
+    row = PathRow(entity="T1", style=PathStyle.CURVE, waypoints=(Waypoint(x=2.0, y=7.0),))
+    with pytest.raises(PathError) as info:
+        _engine(T1=row).entity_segments("T1", TID, tol=1e-15)
+    named = re.search(r"tol above ([0-9.e+-]+) m", info.value.hint)
+    assert named is not None
+    assert float(named.group(1)) * HINT_TOL_MARGIN * PROBE_TOL_SHARE >= info.value.context["error"]
+
+
+@pytest.mark.parametrize("tol", [0.0, -0.02, math.nan, math.inf])
+def test_regression_segments_reject_a_tolerance_that_is_not_positive(tol: float) -> None:
+    """Rejects a zero, negative or non-finite segment tolerance instead of looping on it."""
+    with pytest.raises(ShowPyError):
+        PathEngine(two_set_show()).segments(TID, tol=tol)
 
 
 def _override_show(rows: dict[str, PathRow], override: FacingOverride, y_hold: bool) -> Show:

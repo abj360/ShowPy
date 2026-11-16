@@ -26,6 +26,7 @@ Contains:
 """
 
 import bisect
+import hashlib
 import itertools
 import math
 from collections.abc import Iterable, Iterator, Sequence
@@ -33,7 +34,14 @@ from collections.abc import Iterable, Iterator, Sequence
 import numpy as np
 
 from showpy.cast.select import select
-from showpy.choreo.engine_compile import compile_plan, plan_positions
+from showpy.choreo.engine_compile import (
+    compile_plan,
+    curvature_bound,
+    easing_chord_error,
+    plan_breaks,
+    plan_positions,
+    plan_progress,
+)
 from showpy.choreo.engine_facing import FacingContext, plan_facing, validate_facing
 from showpy.choreo.engine_models import (
     CompiledTransition,
@@ -43,12 +51,14 @@ from showpy.choreo.engine_models import (
     MotionSegment,
 )
 from showpy.choreo.models import FacingOverride
-from showpy.choreo.motion import DEFAULT_MOTIONS, MotionRegistry, easing_breaks, turn
-from showpy.core.errors import UnknownRefError
+from showpy.choreo.motion import DEFAULT_MOTIONS, MotionRegistry, ease, turn
+from showpy.core.errors import PathError, UnknownRefError
 from showpy.core.ids import SetId, SpotId, TransitionId
 from showpy.core.selection import Selection
 from showpy.core.types import Count, Degrees, Point, Points
-from showpy.core.util import close_matches
+from showpy.core.util import close_matches, seeded_rng
+from showpy.core.validation import require_finite
+from showpy.geo.curves import Polyline
 from showpy.geo.models import SpeedStats
 from showpy.show.models import Show
 from showpy.time.clock import count_to_seconds, seconds_to_count
@@ -58,8 +68,9 @@ DEFAULT_SEGMENT_TOL = 0.02
 VELOCITY_STEP = 1e-4
 MOVING_SPEED = 1e-9
 MAX_SEGMENT_DEPTH = 20
-PROBE_SHARES = np.arange(1, 8) / 8
+PROBES_PER_SEGMENT = 9
 PROBE_TOL_SHARE = 0.5
+SEED_BYTES = 8
 ALL = "all"
 
 
@@ -282,15 +293,21 @@ class PathEngine:
             yield self.sample(float(t))
 
     def segments(self, tid: TransitionId, tol: float = DEFAULT_SEGMENT_TOL) -> list[MotionSegment]:
-        """Returns contiguous time-linear segments per spot, accurate to `tol` meters."""
+        """Returns contiguous time-linear segments per spot, accurate to `tol` meters.
+
+        Raises PathError code SEGMENT_BOUND when a spot's motion cannot be brought within
+        `tol` before the depth cap.
+        """
+        require_finite(tol, name="tol", low=0.0, low_open=True)
         return [seg for e in self.compile(tid).plans for seg in self.entity_segments(e, tid, tol)]
 
     def entity_segments(
         self, entity: SpotId, tid: TransitionId, tol: float = DEFAULT_SEGMENT_TOL
     ) -> list[MotionSegment]:
         """Returns one spot's contiguous time-linear segments in a transition."""
+        tol = require_finite(tol, name="tol", low=0.0, low_open=True)
         plan = self._plan(entity, tid)
-        stations = self._stations(plan, self.compile(tid).counts, tol)
+        stations = _SegmentFit(plan, tid, tol).stations(self.compile(tid).counts)
         pts = plan_positions(plan, np.array(stations))
         return [
             MotionSegment(entity=entity, tid=tid, t0=t0, t1=t1, p0=_pt(p0), p1=_pt(p1))
@@ -298,33 +315,6 @@ class PathEngine:
                 itertools.pairwise(stations), itertools.pairwise(pts), strict=True
             )
         ]
-
-    def _stations(self, plan: MotionPlan, counts: float, tol: float) -> list[float]:
-        if not plan.moves:
-            return [0.0, counts]
-        start, end = plan.window
-        kinks = (start + share * (end - start) for share in easing_breaks(plan.easing))
-        edges = sorted({0.0, counts, *plan.knots_t, *kinks})
-        stations = [edges[0]]
-        for lo, hi in itertools.pairwise(edges):
-            stations.extend(self._subdivide(plan, lo, hi, tol, 0))
-        return stations
-
-    def _subdivide(
-        self, plan: MotionPlan, lo: float, hi: float, tol: float, depth: int
-    ) -> list[float]:
-        probes = lo + PROBE_SHARES * (hi - lo)
-        pts = plan_positions(plan, np.concatenate([[lo, hi], probes]))
-        linear = pts[0] + np.outer(PROBE_SHARES, pts[1] - pts[0])
-        if (
-            depth >= MAX_SEGMENT_DEPTH
-            or np.max(np.linalg.norm(pts[2:] - linear, axis=1)) <= tol * PROBE_TOL_SHARE
-        ):
-            return [hi]
-        mid = (lo + hi) / 2
-        return self._subdivide(plan, lo, mid, tol, depth + 1) + self._subdivide(
-            plan, mid, hi, tol, depth + 1
-        )
 
     def speed(
         self, entity: SpotId, tid: TransitionId, window: tuple[float, float] | None = None
@@ -384,3 +374,105 @@ class PathEngine:
 
 def _pt(p: Points) -> Point:
     return float(p[0]), float(p[1])
+
+
+def _probe_seed(entity: SpotId, tid: TransitionId) -> int:
+    key = f"{tid[0]}->{tid[1]}:{entity}".encode()
+    return int.from_bytes(hashlib.blake2b(key, digest_size=SEED_BYTES).digest(), "big")
+
+
+class _SegmentFit:
+    """Splits one plan's motion into time-linear segments that stay within `tol` of it.
+
+    Pieces on curves with a known curvature bound are accepted by the closed-form chord bound
+    of docs/research/segment-chord-bounds.md; other curves are probed at seeded jittered shares.
+
+    Attributes:
+        plan: Plan being segmented.
+        tid: Transition of the plan, for errors and the probe seed.
+        tol: Largest allowed distance between a segment and the motion, meters.
+    """
+
+    def __init__(self, plan: MotionPlan, tid: TransitionId, tol: float) -> None:
+        self.plan, self.tid, self.tol = plan, tid, tol
+        self._kappa = None if plan.curve is None else curvature_bound(plan.curve)
+        self._rng: np.random.Generator | None = None
+        self._corners = plan.curve if isinstance(plan.curve, Polyline) else None
+
+    def stations(self, counts: float) -> list[float]:
+        """Returns segment end counts from 0 to `counts`, every motion kink among them."""
+        if not self.plan.moves:
+            return [0.0, counts]
+        edges = np.unique(
+            np.clip(np.concatenate([[0.0, counts], plan_breaks(self.plan)]), 0, counts)
+        )
+        stations = [float(edges[0])]
+        for lo, hi in itertools.pairwise(edges):
+            stations.extend(self._split(float(lo), float(hi), 0))
+        return stations
+
+    def _split(self, lo: float, hi: float, depth: int) -> list[float]:
+        error, limit = self._error(lo, hi)
+        if error <= limit:
+            return [hi]
+        if depth >= MAX_SEGMENT_DEPTH:
+            accepted_tol = error / limit * self.tol
+            raise PathError(
+                f"segment {lo:g}-{hi:g} of {self.plan.entity} stays {error:.3g} m off its motion",
+                hint=f"pass a tol above {accepted_tol:.3g} m or give the motion fewer turns",
+                context={
+                    "entity": self.plan.entity,
+                    "tid": self.tid,
+                    "tol": self.tol,
+                    "error": error,
+                },
+                code="SEGMENT_BOUND",
+            )
+        mid = (lo + hi) / 2
+        return self._split(lo, mid, depth + 1) + self._split(mid, hi, depth + 1)
+
+    def _error(self, lo: float, hi: float) -> tuple[float, float]:
+        if self._kappa is not None:
+            return self._bounded_error(lo, hi, self._kappa), self.tol
+        return self._probed_error(lo, hi), self.tol * PROBE_TOL_SHARE
+
+    def _bounded_error(self, lo: float, hi: float, kappa: float) -> float:
+        start, end = self.plan.window
+        shares = np.clip((np.array([lo, hi]) - start) / (end - start), 0.0, 1.0)
+        eased = ease(self.plan.easing, shares)
+        if eased[1] <= eased[0]:
+            return 0.0
+        s0, s1 = plan_progress(self.plan, np.array([lo, hi]))
+        travel = abs(float(s1 - s0))
+        gap = easing_chord_error(self.plan.easing, float(shares[0]), float(shares[1]))
+        bend = kappa * travel * travel / 8 + self._corner_error(float(s0), float(s1))
+        return travel * gap / float(eased[1] - eased[0]) + bend
+
+    def _corner_error(self, s0: float, s1: float) -> float:
+        """Returns the exact gap between a constant-speed walk along a polyline and its chord.
+
+        The gap is piecewise linear in time, so it peaks on a corner strictly inside [s0, s1].
+        """
+        curve = self._corners
+        if curve is None or s1 <= s0:
+            return 0.0
+        arc = curve._breaks()
+        inside = slice(np.searchsorted(arc, s0, "right"), np.searchsorted(arc, s1, "left"))
+        if inside.start >= inside.stop:
+            return 0.0
+        pts = curve.point_at(np.concatenate([[s0, s1], arc[inside]]))
+        shares = (arc[inside] - s0) / (s1 - s0)
+        chord = pts[0] + np.outer(shares, pts[1] - pts[0])
+        return float(np.max(np.linalg.norm(pts[2:] - chord, axis=1)))
+
+    def _probe_rng(self) -> np.random.Generator:
+        if self._rng is None:
+            self._rng = seeded_rng(_probe_seed(self.plan.entity, self.tid))
+        return self._rng
+
+    def _probed_error(self, lo: float, hi: float) -> float:
+        jitter = self._probe_rng().random(PROBES_PER_SEGMENT)
+        shares = (np.arange(PROBES_PER_SEGMENT) + jitter) / PROBES_PER_SEGMENT
+        pts = plan_positions(self.plan, np.concatenate([[lo, hi], lo + shares * (hi - lo)]))
+        linear = pts[0] + np.outer(shares, pts[1] - pts[0])
+        return float(np.max(np.linalg.norm(pts[2:] - linear, axis=1)))

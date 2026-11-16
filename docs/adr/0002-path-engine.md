@@ -103,3 +103,39 @@ O(N²) because `_pair_gap` rebuilds both spots' segments for every pair. Analyti
 straight moves would not remove that, so the lever is building each spot's segments once per
 transition and pruning far pairs before the exact check. The budget is under 1 s at 300 spots
 (`docs/upgrade-plan.md`, "Measured performance" and section 5.3).
+
+## Addendum 2026-11-15: decision 5 holds for every motion
+
+Decision 5 did not hold for periodic motions. Probes at fixed eighths aliased a 4-cycle `weave`:
+every probe sat on the straight line, so one segment stood for the whole move, 0.689 m off the
+path at 25 probes per segment (UP-9.2-01), and `speed().distance` reported 4.0 m for a path the
+engine traces at 16.75 m (UP-9.2-02). An 8-turn `ROTATE` was off by 3.46 m the same way.
+
+`segments` now proves its bound where it can and probes only where it cannot
+(`docs/research/segment-chord-bounds.md`):
+
+1. Segment ends start from the window edges, the time knots, every easing break and smoothstep
+   inflection, and every curve break (polyline corners, spline knots, joins) mapped through
+   the inverse time map. A custom motion's 257 sample vertices are not breaks.
+2. On a curve with exact arc length (segment, polyline, arc, circle, trims and composites of
+   them) a piece is accepted when
+   `|Δs|·C_e/Δe + κ_max·Δs²/8 + corner gap ≤ tol`: the easing's closed-form chord gap, the
+   curvature term, and, on a polyline, the exact gap at its interior corners. This is a proof,
+   not a probe, so it needs no `tol / 2` margin. STRAIGHT with linear easing is two stations.
+3. Table-based curves (spline, ellipse, Bézier, SVG, spiral) are probed at 9 jittered shares
+   per piece, `(i + U_i)/9`, from `seeded_rng` keyed on a BLAKE2b digest of the transition and
+   the spot, and keep the `tol / 2` margin of the 2026-11-11 addendum. A period cannot hide
+   from jittered probes, and the same show still gives the same segments.
+4. A piece is halved until it passes. At depth 20 `segments` raises `PathError` code
+   `SEGMENT_BOUND` with the spot, transition, `tol` and the error, instead of accepting it.
+   `tol` must be finite and above 0.
+
+Numbers, tier M bench show (100 spots, 20 sets), interleaved runs on one loaded machine:
+segments for every transition 2.96 to 3.17 s before, 3.27 to 3.67 s after; segment count
+45,280 before, 34,031 after; `min_gaps` on the middle transition 8.9 to 9.5 s before, 8.1 to
+8.6 s after. The large golden show's segment fixture changes with it (fewer segments, gaps up
+to 0.0102 m different), which needs a reviewed fixture update.
+
+Limitation: the bound is exact against the compiled 257-point polyline of a custom motion,
+not against the motion function. A motion with more than about 64 cycles aliases at compile
+time, before segments exist.

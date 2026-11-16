@@ -16,8 +16,13 @@ Contains:
         motion instead of dropping them silently
     test_regression_timed_waypoint_is_reached_at_its_count_under_easing: reaches a waypoint timed
         "at 2" at count 2 even when the row is eased
+    test_regression_easing_chord_error_matches_a_dense_scan: computes the closed-form easing gap
+        to within 1e-6 of a 20,001-point scan on pieces between easing edges
+    test_curvature_bound_is_known_only_for_exact_arc_length_curves: bounds lines, arcs, circles,
+        trims and composites of them, and leaves table-based curves opaque
 """
 
+import itertools
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -25,13 +30,23 @@ import numpy as np
 import pytest
 
 from showpy.choreo.engine import PathEngine
+from showpy.choreo.engine_compile import curvature_bound, easing_chord_error
 from showpy.choreo.models import Easing, PathRow, PathStyle, TransitionSpec, Waypoint
-from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray
+from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, ease, easing_breaks
 from showpy.choreo.paths import add_waypoint, set_style
 from showpy.choreo.routes import follow, make_route
 from showpy.core.errors import ContinuityError, PathError, ShowPyError
 from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
+from showpy.geo.curves import (
+    ArcCurve,
+    CircleCurve,
+    CompositeCurve,
+    Polyline,
+    Segment,
+    SplineCurve,
+    TrimmedCurve,
+)
 from showpy.show.models import Show
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
 from tests.fixtures.shows import two_set_show
@@ -41,6 +56,20 @@ BEND: Point = (1.0, 7.0)
 BEND_COUNT = 4.0
 SWEEP_FULL_TURN = 360.0
 NAN_SAMPLE_INDEX = 10
+SCAN_SAMPLES = 20_001
+CHORD_ERROR_TOL = 1e-6
+PIECE_SHARES = ((0.0, 1.0), (0.0, 0.3), (0.2, 0.9), (0.6, 0.61), (0.97, 1.0))
+CHORD_EASINGS = [
+    Easing(kind="linear"),
+    Easing(kind="ease_in", strength=1.5),
+    Easing(kind="ease_in", strength=3.7),
+    Easing(kind="ease_out", strength=2.0),
+    Easing(kind="ease_in_out", strength=3.0),
+    Easing(kind="hold_then_burst", strength=2.0),
+    Easing(kind="burst_then_settle", strength=3.0),
+    Easing(kind="steps", strength=3.0),
+    Easing(kind="custom", points=((0.0, 0.0), (0.4, 0.1), (1.0, 1.0))),
+]
 
 
 def _stored(show: Show, spec: TransitionSpec) -> Show:
@@ -153,3 +182,44 @@ def test_regression_timed_waypoint_is_reached_at_its_count_under_easing() -> Non
     )
     engine = PathEngine(with_rows({"T1": row}))
     assert approx_equal(engine.position("T1", 2.0, local=TID), (bend.x, bend.y), tol=1e-6)
+
+
+def _easing_edges(easing: Easing) -> list[float]:
+    inflections = []
+    if easing.kind == "steps":
+        n = round(easing.strength)
+        inflections = [(i + 0.5) / n for i in range(n)]
+    return sorted({0.0, 1.0, *easing_breaks(easing), *inflections})
+
+
+def _scanned_gap(easing: Easing, u0: float, u1: float) -> float:
+    u = np.linspace(u0, u1, SCAN_SAMPLES)
+    e = ease(easing, u)
+    chord = e[0] + (u - u0) / (u1 - u0) * (e[-1] - e[0])
+    return float(np.max(np.abs(e - chord)))
+
+
+@pytest.mark.parametrize("easing", CHORD_EASINGS, ids=lambda e: f"{e.kind}-{e.strength}")
+def test_regression_easing_chord_error_matches_a_dense_scan(easing: Easing) -> None:
+    """Computes the closed-form easing gap to within 1e-6 of a 20,001-point scan per piece."""
+    edges = _easing_edges(easing)
+    for a, b in itertools.pairwise(edges):
+        for f0, f1 in PIECE_SHARES:
+            u0, u1 = a + f0 * (b - a), a + f1 * (b - a)
+            gap = easing_chord_error(easing, u0, u1)
+            assert gap == pytest.approx(_scanned_gap(easing, u0, u1), abs=CHORD_ERROR_TOL)
+
+
+def test_curvature_bound_is_known_only_for_exact_arc_length_curves() -> None:
+    """Bounds lines, arcs, circles, trims and composites of them; leaves table curves opaque."""
+    arc = ArcCurve(center=(0.0, 0.0), radius=4.0, start_deg=0.0, sweep_deg=720.0)
+    circle = CircleCurve(center=(0.0, 0.0), radius=0.5)
+    line = Segment(a=(4.0, 0.0), b=(5.0, 0.0))
+    spline = SplineCurve(points=((0.0, 0.0), (1.0, 1.0), (2.0, 0.0)))
+    assert curvature_bound(line) == 0.0
+    assert curvature_bound(Polyline(points=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0)))) == 0.0
+    assert curvature_bound(arc) == 0.25
+    assert curvature_bound(TrimmedCurve(base=circle, s0=0.0, s1=1.0)) == 2.0
+    assert curvature_bound(CompositeCurve(parts=(arc, line))) == 0.25
+    assert curvature_bound(spline) is None
+    assert curvature_bound(CompositeCurve(parts=(line, spline))) is None

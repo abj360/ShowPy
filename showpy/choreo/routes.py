@@ -40,6 +40,7 @@ from showpy.geo.curves import (
     Segment,
     curve_from_construction,
 )
+from showpy.show.locks import require_unlocked
 from showpy.show.models import Show
 
 MIN_GAP = 1e-9
@@ -111,9 +112,24 @@ def make_route(
 
 
 def follow(
-    spec: TransitionSpec, route: Route, start: float = 0.0, end: float | None = None
+    spec: TransitionSpec,
+    route: Route,
+    start: float = 0.0,
+    end: float | None = None,
+    *,
+    force: bool = False,
 ) -> TransitionSpec:
     """Stores the route with its window and assigns FOLLOW rows to its members.
+
+    Args:
+        spec: Transition that receives the route and the rows.
+        route: Route the members follow.
+        start: Local count at which the route window opens.
+        end: Local count at which the route window closes; the transition end when None.
+        force: Rewrites locked rows instead of raising LockedError.
+
+    Returns:
+        edited_spec: The transition with the route stored and member rows set to FOLLOW.
 
     >>> from showpy.examples import two_set_show
     >>> route = make_route(two_set_show(), ("1", "2"), "T4", [(6.0, 15.0)])
@@ -122,13 +138,30 @@ def follow(
     """
     timed = route.replace(start=start, end=end)
     spec = spec.replace(routes={**spec.routes, route.id: timed})
-    return set_style(spec, list(route.members), PathStyle.FOLLOW, route=route.id)
+    return set_style(spec, list(route.members), PathStyle.FOLLOW, force=force, route=route.id)
 
 
 def follow_and_set_targets(
-    show: Show, tid: TransitionId, route: Route, start: float = 0.0, end: float | None = None
+    show: Show,
+    tid: TransitionId,
+    route: Route,
+    start: float = 0.0,
+    end: float | None = None,
+    *,
+    force: bool = False,
 ) -> Show:
     """Writes every member's end on the route into the next set, then assigns FOLLOW rows.
+
+    Args:
+        show: Show that holds the transition and its sets.
+        tid: Transition whose target set and rows are edited.
+        route: Route the members follow.
+        start: Local count at which the route window opens.
+        end: Local count at which the route window closes; the transition end when None.
+        force: Edits pinned placements and locked rows instead of raising LockedError.
+
+    Returns:
+        edited_show: The show with member targets moved and FOLLOW rows assigned.
 
     >>> from showpy.examples import two_set_show
     >>> show = two_set_show()
@@ -142,8 +175,8 @@ def follow_and_set_targets(
     for member, offset in zip(route.members, route.offsets, strict=True):
         p = curve.point_at(offset + route.travel)
         updates[member] = {"x": float(p[0]), "y": float(p[1])}
-    new_target = target.with_placements(updates)
-    spec = follow(show.transition(tid), route, start, end)
+    new_target = target.with_placements(updates, force=force)
+    spec = follow(show.transition(tid), route, start, end, force=force)
     return _store(show, tid, spec, new_target)
 
 
@@ -190,12 +223,25 @@ def counter_march(
     sel: Sequence[SpotId],
     turn_at: Point,
     counts_per_turn: float = 2.0,
+    *,
+    force: bool = False,
 ) -> Show:
     """Turns a file (leader first) back on itself, passing 1 m to the leader's left.
 
     Every member walks to `turn_at`, turns left through a half circle and comes back alongside
     the file; the last member finishes just out of the turn, so the file ends reversed. Facing
     follows travel, blended over `counts_per_turn`.
+
+    Args:
+        show: Show that holds the transition and its sets.
+        tid: Transition the counter-march runs in.
+        sel: Spots of the file, leader first.
+        turn_at: Point where the leader starts the turn.
+        counts_per_turn: Counts over which facing blends to the direction of travel.
+        force: Edits pinned placements and locked rows instead of raising LockedError.
+
+    Returns:
+        edited_show: The show with the file's targets and rows rewritten.
 
     >>> from showpy.examples import two_set_show
     >>> s = counter_march(two_set_show(), ("1", "2"), ["T4", "T3", "T2", "T1"], (6.0, 8.0))
@@ -220,7 +266,7 @@ def counter_march(
         offsets=tuple(reversed(lengths)),
         travel=lengths[-1] + turn_length,
     )
-    moved = follow_and_set_targets(show, tid, route)
+    moved = follow_and_set_targets(show, tid, route, force=force)
     spec = moved.transition(tid)
     rows = {
         e: spec.row(e).replace(facing_mode=FacingMode.TRAVEL, turn_counts=counts_per_turn)
@@ -236,8 +282,21 @@ def two_part(
     sel: Sequence[SpotId],
     corner: Literal["x_first", "y_first"] | Point,
     split: float | None = None,
+    *,
+    force: bool = False,
 ) -> TransitionSpec:
     """Makes L-shaped moves through a corner, reached at local count `split` when given.
+
+    Args:
+        show: Show that holds the sets the moves run between.
+        spec: Transition whose rows are edited.
+        sel: Spots that get an L-shaped move.
+        corner: Corner of the L: x first, y first, or an explicit point.
+        split: Local count at which the corner is reached.
+        force: Edits locked rows instead of raising LockedError.
+
+    Returns:
+        edited_spec: The transition with the selected rows rewritten.
 
     >>> from showpy.examples import two_set_show
     >>> show = two_set_show()
@@ -259,7 +318,19 @@ def two_part(
         rows[entity] = PathRow.model_validate(
             {**row.model_dump(), "style": PathStyle.POLYLINE, "waypoints": (waypoint,)}
         )
-    return spec.replace(rows=rows)
+    edited = spec.replace(rows=rows)
+    _require_rows_unlocked(show, spec, edited, force)
+    return edited
+
+
+def _require_rows_unlocked(
+    show: Show, spec: TransitionSpec, edited: TransitionSpec, force: bool
+) -> None:
+    """Raises LockedError when `edited` changes a locked row of `spec`, unless forced."""
+    others = tuple(t for t in show.transitions if t.id != spec.id)
+    before = show.replace(transitions=(*others, spec))
+    after = show.replace(transitions=(*others, edited))
+    require_unlocked(before, after, force=force)
 
 
 def rotate_path(
@@ -268,8 +339,21 @@ def rotate_path(
     sel: Sequence[SpotId],
     pivot: Point | Literal["center"],
     deg: float,
+    *,
+    force: bool = False,
 ) -> TransitionSpec:
     """Rotates spots about a pivot; "center" uses the centroid of their starting spots.
+
+    Args:
+        show: Show that holds the sets the rotation runs between.
+        spec: Transition whose rows are edited.
+        sel: Spots that rotate.
+        pivot: Point to rotate about, or "center" for the centroid of the starting spots.
+        deg: Sweep in degrees, counter-clockwise positive.
+        force: Edits locked rows instead of raising LockedError.
+
+    Returns:
+        edited_spec: The transition with the selected rows set to ROTATE.
 
     >>> from showpy.examples import two_set_show
     >>> show = two_set_show()
@@ -281,4 +365,4 @@ def rotate_path(
         pts = show.set(spec.id[0]).positions(ids)
         center = pts.mean(axis=0)
         pivot = (float(center[0]), float(center[1]))
-    return set_style(spec, ids, PathStyle.ROTATE, pivot=pivot, sweep_deg=deg)
+    return set_style(spec, ids, PathStyle.ROTATE, force=force, pivot=pivot, sweep_deg=deg)
