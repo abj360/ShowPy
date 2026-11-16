@@ -148,7 +148,7 @@ def _extend_cast(base: Show, rows: list[_PositionRow], group: str) -> Cast:
     known = set(base.cast.ids())
     new_ids = [r.entity for r in rows if r.entity not in known]
     added = tuple(Spot(id=e, group=group) for e in dict.fromkeys(new_ids))
-    return base.cast.model_copy(update={"spots": base.cast.spots + added})
+    return base.cast.replace(spots=base.cast.spots + added)
 
 
 @dataclass(frozen=True)
@@ -195,7 +195,7 @@ def _merged_set(merge: _Merge, set_id: SetId, previous: dict[SpotId, Placement])
     current = merge.base.set(set_id) if stored else Set(id=set_id, counts=merge.counts[set_id])
     kept = {p.entity: p for p in current.placements}
     placements = tuple(kept.get(e) or _carried(merge, e, previous) for e in merge.cast_ids)
-    filled = current.model_copy(update={"placements": placements})
+    filled = current.replace(placements=placements)
     updates = {}
     for entity in merge.cast_ids:
         row = merge.rows.get((set_id, entity))
@@ -204,7 +204,7 @@ def _merged_set(merge: _Merge, set_id: SetId, previous: dict[SpotId, Placement])
         old = filled.get(entity)
         facing = old.facing if row.facing is None else row.facing
         x, y = row.point
-        new = old.model_copy(update={"x": x, "y": y, "facing": facing, "on_field": True})
+        new = old.replace(x=x, y=y, facing=facing, on_field=True)
         if new != old:
             updates[entity] = new
     return filled.with_placements(updates, force=merge.force)
@@ -255,4 +255,4 @@ def import_positions(
     for set_id in order:
         previous = {p.entity: p for p in sets[-1].placements} if sets else {}
         sets.append(_merged_set(merge, set_id, previous))
-    return base.model_copy(update={"cast": cast, "sets": tuple(sets)})
+    return base.replace(cast=cast, sets=tuple(sets))

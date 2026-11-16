@@ -282,7 +282,7 @@ def svg_outline(
     pts = np.vstack([curve.to_polyline(SVG_FIT_TOL) for curve in raw])
     bounds = (pts[:, 0].min(), pts[:, 1].min(), pts[:, 0].max(), pts[:, 1].max())
     matrix = _fit_matrix(tuple(map(float, bounds)), fit, keep_aspect, flip_y)  # type: ignore[arg-type]
-    return [curve.model_copy(update={"transform": matrix}) for curve in raw]
+    return [curve.replace(transform=matrix) for curve in raw]
 
 
 def text_outline(text: str, font: str, height: Meters, at: Point) -> list[Polyline]:
@@ -346,7 +346,7 @@ def offset(curve: Curve, distance: Meters, side: str = "left") -> Curve:
                 hint="use a smaller offset distance",
                 context={"radius": curve.radius, "distance": distance},
             )
-        return curve.model_copy(update={"radius": radius})
+        return curve.replace(radius=radius)
     return _offset_polyline(curve, signed)
 
 

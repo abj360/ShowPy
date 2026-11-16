@@ -182,8 +182,6 @@ def test_regression_validate_flags_negative_total_counts() -> None:
     _rejected_or_flagged(lambda: _counts_with(total_counts=-5.0))
 
 
-@pytest.mark.defect("UP-9.3-115")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-115")
 def test_regression_validate_flags_nan_hold() -> None:
     """Rejects or reports a hold of NaN seconds (audit 9.3)."""
     _rejected_or_flagged(lambda: _counts_with(holds=(Hold(at_count=4.0, seconds=math.nan),)))

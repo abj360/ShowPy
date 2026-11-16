@@ -302,7 +302,7 @@ def reject(proposal: Proposal, reason: str) -> Proposal:
     'rejected'
     """
     _require_open(proposal)
-    return proposal.model_copy(update={"state": "rejected", "reason": reason})
+    return proposal.replace(state="rejected", reason=reason)
 
 
 def highlight(

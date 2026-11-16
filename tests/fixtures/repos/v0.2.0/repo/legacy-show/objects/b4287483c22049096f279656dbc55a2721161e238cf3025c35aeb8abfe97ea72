@@ -1,0 +1,129 @@
+[
+  {
+    "facing": {
+      "mode": "fixed",
+      "value": 212.3970094838197
+    },
+    "geometry": {
+      "anchor": "center",
+      "cols": 6,
+      "facing": 212.3970094838197,
+      "interval": 1.5,
+      "n": 6,
+      "origin": [
+        18.98028622914454,
+        21.58892343100625
+      ],
+      "rows": 1
+    },
+    "id": "brass-3",
+    "kind": "block",
+    "locked": false,
+    "members": [
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "B5",
+      "B6"
+    ],
+    "meta": {},
+    "set": "3",
+    "spacing": {
+      "align": "start",
+      "end": null,
+      "gaps": [],
+      "interval": null,
+      "mode": "count",
+      "start": 0.0
+    }
+  },
+  {
+    "facing": {
+      "mode": "audience",
+      "value": null
+    },
+    "geometry": {
+      "curve": {
+        "a": [
+          -10.8011783535406,
+          18.791279236590466
+        ],
+        "b": [
+          3.6387944161231056,
+          18.791279236590466
+        ],
+        "closed": false,
+        "kind": "segment"
+      }
+    },
+    "id": "percussion-3",
+    "kind": "line",
+    "locked": false,
+    "members": [
+      "P1",
+      "P2",
+      "P3",
+      "P4",
+      "P5",
+      "P6"
+    ],
+    "meta": {},
+    "set": "3",
+    "spacing": {
+      "align": "start",
+      "end": null,
+      "gaps": [],
+      "interval": null,
+      "mode": "count",
+      "start": 0.0
+    }
+  },
+  {
+    "facing": {
+      "mode": "fixed",
+      "value": 54.283686900612736
+    },
+    "geometry": {
+      "curve": {
+        "closed": false,
+        "kind": "polyline",
+        "points": [
+          [
+            4.785068877326224,
+            36.048257465712034
+          ],
+          [
+            6.3033752297910794,
+            26.759931615766646
+          ],
+          [
+            -2.984950620154306,
+            25.241625263301792
+          ]
+        ]
+      }
+    },
+    "id": "woodwinds-3",
+    "kind": "wedge",
+    "locked": false,
+    "members": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6"
+    ],
+    "meta": {},
+    "set": "3",
+    "spacing": {
+      "align": "start",
+      "end": null,
+      "gaps": [],
+      "interval": null,
+      "mode": "count",
+      "start": 0.0
+    }
+  }
+]

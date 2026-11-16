@@ -56,18 +56,18 @@ def _flag_placements(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
             or (scope.target == "set" and current.id == scope.id)
         }
         sets.append(current.with_placements(updates, force=True))
-    return show.model_copy(update={"sets": tuple(sets)})
+    return show.replace(sets=tuple(sets))
 
 
 def _flag_forms(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
     forms = {
-        k: f.model_copy(update={"locked": _covers_form(held, k, f.set)})
+        k: f.replace(locked=_covers_form(held, k, f.set))
         if (scope.target == "form" and k == scope.id)
         or (scope.target == "set" and f.set == scope.id)
         else f
         for k, f in show.forms.items()
     }
-    return show.model_copy(update={"forms": forms})
+    return show.replace(forms=forms)
 
 
 def _flag_paths(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
@@ -75,14 +75,14 @@ def _flag_paths(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
     spec = show.transition(tid)
     is_locked = any(p.target == "transition" and parse_tid(p.id) == tid for p in held)
     entities = dict.fromkeys([*show.set(tid[1]).entity_ids(), *spec.rows])
-    rows = {e: spec.row(e).model_copy(update={"locked": is_locked}) for e in entities}
+    rows = {e: spec.row(e).replace(locked=is_locked) for e in entities}
     if not is_locked:
         rows = {e: r for e, r in rows.items() if r != PathRow(entity=e)}
-    return store_paths(show, PathsOp(spec=spec.model_copy(update={"rows": rows})))
+    return store_paths(show, PathsOp(spec=spec.replace(rows=rows)))
 
 
 def _reflag(show: Show, held: tuple[Pin, ...], scope: Pin) -> Show:
-    flagged = show.model_copy(update={"pins": held})
+    flagged = show.replace(pins=held)
     if scope.target == "transition":
         return _flag_paths(flagged, held, scope)
     if scope.target in ("entity", "set"):

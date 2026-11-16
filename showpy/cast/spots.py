@@ -23,13 +23,17 @@ from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, get_args
 
-from pydantic import ValidationError as PydanticValidationError
-
 from showpy.cast.models import Cast, Claimable, Group, LabelScheme, Shape, Spot
 from showpy.cast.rewrite import faces_entity, rewrite_spot_ids
 from showpy.cast.select import label_prefix, select
 from showpy.choreo.models import Placement
-from showpy.core.errors import LockedError, SchemaError, SpacingError, UnknownRefError
+from showpy.core.errors import (
+    LockedError,
+    SchemaError,
+    SpacingError,
+    UnknownRefError,
+    field_errors,
+)
 from showpy.core.errors import ValidationError as ShowPyValidationError
 from showpy.core.ids import SetId, SpotId
 from showpy.core.selection import Selector
@@ -62,7 +66,7 @@ def _group(cast: Cast, key: str) -> Group:
 # Any: changes are arbitrary Cast fields, validated by the rebuilt model.
 def _with_cast(show: "Show", **changes: Any) -> "Show":
     cast = Cast.model_validate({**dict(show.cast), **changes})
-    return show.model_copy(update={"cast": cast})
+    return show.replace(cast=cast)
 
 
 def _allocate_labels(cast: Cast, group_keys: Sequence[str]) -> list[SpotId]:
@@ -94,13 +98,11 @@ def _new_placements(entries: Sequence[tuple[Spot, Point]], on_field: bool) -> tu
 def _insert_spots(show: "Show", entries: Sequence[tuple[Spot, Point]], set_id: SetId) -> "Show":
     created_at = show.set_index(set_id)
     sets = tuple(
-        s.model_copy(
-            update={"placements": s.placements + _new_placements(entries, index >= created_at)}
-        )
+        s.replace(placements=s.placements + _new_placements(entries, index >= created_at))
         for index, s in enumerate(show.sets)
     )
     new_spots = tuple(spot for spot, _ in entries)
-    return _with_cast(show, spots=show.cast.spots + new_spots).model_copy(update={"sets": sets})
+    return _with_cast(show, spots=show.cast.spots + new_spots).replace(sets=sets)
 
 
 def _add_points(show: "Show", points: Sequence[Point], group: str, set_id: SetId) -> "Show":
@@ -233,7 +235,7 @@ def duplicate_spots(show: "Show", sel: Selector, offset: Point, set_id: SetId) -
     entries = []
     for spot, label in zip(originals, labels, strict=True):
         x, y = source.get(spot.id).point
-        entries.append((spot.model_copy(update={"id": label}), (x + offset[0], y + offset[1])))
+        entries.append((spot.replace(id=label), (x + offset[0], y + offset[1])))
     return _insert_spots(show, entries, set_id)
 
 
@@ -323,9 +325,7 @@ def regroup(show: "Show", sel: Selector, group: str) -> tuple["Show", dict[SpotI
     moved = [i for i in select(show, sel) if show.cast.spot(i).group != group]
     mapping = _relabel_targets(show.cast, moved, target)
     moved_set = set(moved)
-    spots = tuple(
-        s.model_copy(update={"group": group}) if s.id in moved_set else s for s in show.cast.spots
-    )
+    spots = tuple(s.replace(group=group) if s.id in moved_set else s for s in show.cast.spots)
     return _rename_everywhere(_with_cast(show, spots=spots), mapping), mapping
 
 
@@ -362,9 +362,9 @@ def edit_group(show: "Show", key: str, /, **changes: Any) -> "Show":
         )
     try:
         edited = Group.model_validate({**current.model_dump(), **changes})
-    except PydanticValidationError as error:
+    except SchemaError as error:
         raise SchemaError(
-            f"bad change to group {key!r}: {error.errors()[0]['msg']}",
+            f"bad change to group {key!r}: {field_errors(error)[0]['msg']}",
             hint=f"change only these fields: {', '.join(sorted(Group.model_fields))}",
             context={"group": key, "changes": sorted(changes)},
         ) from error
@@ -399,7 +399,7 @@ def remove_group(
     scheme = show.cast.label_scheme
     prefixes = {k: v for k, v in scheme.prefixes.items() if k != key}
     groups = {k: g for k, g in show.cast.groups.items() if k != key}
-    new_scheme = scheme.model_copy(update={"prefixes": prefixes})
+    new_scheme = scheme.replace(prefixes=prefixes)
     return _with_cast(show, groups=groups, label_scheme=new_scheme), mapping
 
 

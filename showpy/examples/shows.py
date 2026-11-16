@@ -36,7 +36,7 @@ def two_set_show() -> Show:
     """
     spots = tuple(Spot(id=f"T{i}", group="trumpets") for i in range(1, 5))
     first = tuple(Placement(entity=s.id, x=2.0 * i, y=5.0) for i, s in enumerate(spots))
-    second = tuple(p.model_copy(update={"y": 9.0}) for p in first)
+    second = tuple(p.replace(y=9.0) for p in first)
     return Show(
         id="show-1",
         title="Test show",
@@ -63,7 +63,7 @@ def with_rows(
     """
     base = show or two_set_show()
     spec = TransitionSpec(id=EXAMPLE_TID, counts=COUNTS, rows=dict(rows), routes=dict(routes or {}))
-    return base.model_copy(update={"transitions": (spec,)})
+    return base.replace(transitions=(spec,))
 
 
 # Any: target updates are partial placement dicts.
@@ -75,7 +75,7 @@ def with_targets(updates: Mapping[str, Mapping[str, Any]], show: Show | None = N
     """
     base = show or two_set_show()
     second = base.sets[1].with_placements(updates)
-    return base.model_copy(update={"sets": (base.sets[0], second)})
+    return base.replace(sets=(base.sets[0], second))
 
 
 def crossing_show() -> Show:
@@ -86,7 +86,7 @@ def crossing_show() -> Show:
     """
     base = two_set_show()
     first = base.sets[0].with_placements({"T2": {"x": 4.0}, "T3": {"x": 8.0}, "T4": {"x": 12.0}})
-    show = base.model_copy(update={"sets": (first, base.sets[1])})
+    show = base.replace(sets=(first, base.sets[1]))
     targets = {
         "T1": {"x": 4.0, "y": 9.0},
         "T2": {"x": 0.0, "y": 9.0},

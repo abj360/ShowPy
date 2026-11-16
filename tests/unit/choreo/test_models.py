@@ -192,22 +192,18 @@ def test_regression_form_is_hashable() -> None:
     assert hash(_custom_form()) == hash(_custom_form())
 
 
-@pytest.mark.defect("UP-9.6-22")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-22")
 def test_regression_frozen_model_replace_revalidates_negative_counts() -> None:
     """Rejects a negative count through FrozenModel.replace (audit 9.6)."""
     with pytest.raises(SchemaError):
-        Set(id="1", counts=0.0).replace(counts=NEGATIVE_COUNTS)  # type: ignore[attr-defined]
+        Set(id="1", counts=0.0).replace(counts=NEGATIVE_COUNTS)
 
 
-@pytest.mark.defect("UP-9.6-23")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-23")
 def test_regression_frozen_model_replace_revalidates_duplicate_placements() -> None:
     """Rejects duplicated placements through FrozenModel.replace (audit 9.6)."""
     placed = Set(id="1", counts=0.0, placements=(Placement(entity="A", x=0.0, y=0.0),))
     twice = placed.placements * 2
     with pytest.raises(SchemaError):
-        placed.replace(placements=twice)  # type: ignore[attr-defined]
+        placed.replace(placements=twice)
 
 
 @pytest.mark.defect("UP-9.6-26")
@@ -219,8 +215,6 @@ def test_regression_transition_spec_checks_route_keys_against_route_ids() -> Non
         TransitionSpec(id=("1", "2"), counts=NEIGHBOUR_COUNTS, routes={"x": route})
 
 
-@pytest.mark.defect("UP-9.6-33")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-33")
 @pytest.mark.parametrize("counts", [math.nan, math.inf])
 def test_regression_set_rejects_non_finite_counts(counts: float) -> None:
     """Rejects NaN and infinite Set.counts (audit 9.6)."""
@@ -236,8 +230,6 @@ def test_regression_path_row_rejects_nan_start() -> None:
         PathRow(entity="A", start=math.nan)
 
 
-@pytest.mark.defect("UP-9.6-36")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-36")
 def test_regression_facing_spec_rejects_nan_point() -> None:
     """Rejects a toward_point facing whose point is NaN (audit 9.6)."""
     with pytest.raises(SchemaError):

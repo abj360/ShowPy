@@ -37,11 +37,11 @@ def with_set(show: Show, new: Set) -> Show:
 
     >>> from showpy.examples import two_set_show
     >>> show = two_set_show()
-    >>> with_set(show, show.set("2").model_copy(update={"label": "B"})).set("2").label
+    >>> with_set(show, show.set("2").replace(label="B")).set("2").label
     'B'
     """
     sets = tuple(new if s.id == new.id else s for s in show.sets)
-    return show.model_copy(update={"sets": sets})
+    return show.replace(sets=sets)
 
 
 def clear_rows(
@@ -65,9 +65,9 @@ def clear_rows(
             context={"tid": tid, "entities": locked},
         )
     rows = {e: row for e, row in spec.rows.items() if e not in doomed}
-    new_spec = spec.model_copy(update={"rows": rows})
+    new_spec = spec.replace(rows=rows)
     others = tuple(t for t in show.transitions if t.id != tid)
-    return show.model_copy(update={"transitions": (*others, new_spec)})
+    return show.replace(transitions=(*others, new_spec))
 
 
 def _neighbour_tids(show: Show, set_id: SetId) -> list[TransitionId]:
@@ -110,8 +110,8 @@ def _swap_forms(show: Show, set_id: SetId, a: SpotId, b: SpotId, force: bool) ->
             continue
         check_unlocked(form, force)
         members = _swap_members(form.members, a, b)
-        forms[form_id] = form.model_copy(update={"members": members})
-    return show.model_copy(update={"forms": forms})
+        forms[form_id] = form.replace(members=members)
+    return show.replace(forms=forms)
 
 
 def _spot_fields(placement: Placement) -> dict[str, object]:

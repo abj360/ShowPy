@@ -155,3 +155,30 @@ hold old `source_hash` values. The change must not lose or rewrite any of that.
 - Code: `showpy/core/util.py`, `showpy/show/documents.py`, `showpy/show/repositories.py`,
   `showpy/export/publish.py`.
 - Master plan review focus 1 (stored shows from v0.1.x and v0.2.x).
+
+## Addendum 2026-11-15: caps, the value tie-break, exact ints and set order
+
+- **Two caps.** `canonical_value` accepts containers nested at most 100 levels: 100 levels of
+  lists, or of tagged maps such as `{1: {1: ...}}`, normalize and encode, and 101 raise
+  `SchemaError`. One input level can become three output levels (tagged map, pair list, pair)
+  and the encoder recurses once per output level, so 100 stays under CPython's default
+  recursion limit of 1000; a reference cycle hits the same cap. Ints must satisfy
+  `abs(n) < 10**640`: `10**640 - 1` is accepted, `10**640` raises. The environment can lower
+  `sys.int_max_str_digits` to 640 and no further, so every environment prints the same bytes or
+  raises the same error.
+- **Tagged pairs tie-break on value bytes.** Pairs sort by the canonical bytes of the key, then
+  of the value. Distinct keys can share canonical bytes (the tuple `(1,)` and the frozenset
+  `{1}` both become `[1]`), so the value decides and insertion order never does.
+- **Ints stay exact beyond ±2\*\*53.** `jcs` writes every digit of an int (`jcs(2**64 + 1)` is
+  `18446744073709551617`). This departs from RFC 8785 and I-JSON (RFC 7493), which limit numbers
+  to IEEE 754 doubles; a JavaScript verifier parsing these bytes would round them. Distinct ints
+  never collide, at a price: `content_hash(n) == content_hash(float(n))` holds only for
+  `abs(n) <= 2**53`, and `jcs(2**60)` (`1152921504606846976`) differs from `jcs(float(2**60))`
+  (`1152921504606847000`). The `rfc8785` differential test draws ints within ±(2\*\*53 − 1).
+- **Sets held by model fields dump in iteration order.** `model_dump(mode="json")` turns a `set`
+  or `frozenset` field into a list before `canonical_value` sees it, so that list is not sorted
+  and, for strings, depends on `PYTHONHASHSEED`. Sets passed directly are still sorted. This
+  lasts until lane D turns `Spot.tags` and `Cast.selections` into ordered tuples (UP-9.3-55).
+- **Dump failures raise `SchemaError`.** A model whose field serializer fails
+  (`PydanticSerializationError`) or whose fields hold a reference cycle (pydantic's
+  circular-reference `ValueError`) raises `SchemaError` naming the model.

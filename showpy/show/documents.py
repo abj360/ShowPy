@@ -21,11 +21,10 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from pydantic import ValidationError as PydanticValidationError
 from pydantic_core import to_jsonable_python
 
 from showpy.choreo.models import Form, Set, TransitionSpec
-from showpy.core.errors import SchemaError, StorageError
+from showpy.core.errors import SchemaError, StorageError, field_errors
 from showpy.core.ids import SetId, TransitionId
 from showpy.show.manage import SET_ID_PATTERN
 from showpy.show.models import Show
@@ -224,7 +223,7 @@ def _assemble(docs: Mapping[str, bytes], revision: str) -> Show:
     pairs = list(itertools.pairwise(order))
     specs = [spec for tid in pairs for spec in _paths(docs, tid)]
     counts = {s.id: s.counts for s in sets}
-    specs = [spec.model_copy(update={"counts": counts[spec.id[1]]}) for spec in specs]
+    specs = [spec.replace(counts=counts[spec.id[1]]) for spec in specs]
     return Show.model_validate(
         {
             **meta,
@@ -255,9 +254,10 @@ def decode_show(docs: Mapping[str, bytes], revision: str = "") -> Show:
     """
     try:
         return _assemble(docs, revision)
-    except PydanticValidationError as exc:
+    except SchemaError as exc:
+        errors = field_errors(exc)
         raise SchemaError(
             "show documents do not match the Show schema",
             hint="write documents produced by save_show(), or fix the fields named in context",
-            context={"errors": exc.errors(include_url=False, include_context=False)},
+            context={"errors": errors},
         ) from exc

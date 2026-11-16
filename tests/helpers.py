@@ -13,6 +13,7 @@ Contains:
     defect(): marks a test as an open audited defect, a strict xfail keyed on its ID
     capped_address_space(): caps the address space so a runaway allocation fails fast
     fails_after(): fails a test still running after a deadline, never inside coverage or a hook
+    only_showpy_errors(): runs a fuzz target; only a ShowPyError may escape, within 5 s
     EXPECTED_FAILURES: exception names a hash-seed subprocess may end with
     outputs_under_hash_seeds(): runs one script under each hash seed and collects its output
     TAGGED_SHOW_SCRIPT: script head building two_set_show() with spot tags and a selection
@@ -39,6 +40,7 @@ import pytest
 
 from showpy.choreo.match_ops import with_set
 from showpy.choreo.models import PathRow, PathStyle, Placement, Set, TransitionSpec, Waypoint
+from showpy.core.errors import ShowPyError
 from showpy.core.types import Point
 from showpy.show.models import Show
 from showpy.show.repositories import InMemoryRepository
@@ -54,6 +56,8 @@ STILL_TOL_M = 1e-6
 FULL_TURN = 360.0
 HALF_TURN = 180.0
 ALLOCATION_HEADROOM_BYTES = 256 * 2**20
+FUZZ_BUDGET_S = 5.0
+SAMPLE_REPR_CHARS = 200
 # Code running here is a tracer, finalizer or error hook: an exception raised in it is lost
 # or corrupts the hook, so a hang alarm waits for the next tick instead.
 NO_ALARM_MODULES = frozenset(
@@ -272,6 +276,39 @@ def _release_interrupted_frames(timeout: BaseException) -> None:
         gc.collect()
 
 
+def _run_under_hang_alarm(seconds: float, call: Callable[[], None]) -> None:
+    """Runs `call`, failing the test when it is still running after `seconds`.
+
+    Holds the whole alarm mechanism described on `fails_after`; this frame is the guard that
+    ticks must land under.
+
+    Args:
+        seconds: Wall-clock budget before the call fails as a hang.
+        call: Zero-argument callable to run under the alarm.
+    """
+    own_frame = inspect.currentframe()
+    timed_out: list[bool] = []
+
+    def interrupt(_signum: int, frame: FrameType | None) -> None:
+        if _may_interrupt(frame, own_frame):
+            timed_out.append(True)
+            pytest.fail(f"Timeout >{seconds}s", pytrace=False)
+
+    previous = signal.signal(signal.SIGALRM, interrupt)
+    signal.setitimer(signal.ITIMER_REAL, seconds, HANG_RETRY_S)
+    with _resource_warnings_dropped_after(timed_out):
+        try:
+            try:
+                call()
+            finally:
+                signal.setitimer(signal.ITIMER_REAL, 0)
+                signal.signal(signal.SIGALRM, previous)
+        except pytest.fail.Exception as failure:
+            if timed_out:
+                _release_interrupted_frames(failure)
+            raise
+
+
 def fails_after(
     seconds: float,
 ) -> Callable[[Callable[TestParams, None]], Callable[TestParams, None]]:
@@ -293,32 +330,46 @@ def fails_after(
     def decorate(test: Callable[TestParams, None]) -> Callable[TestParams, None]:
         @functools.wraps(test)
         def guarded(*args: TestParams.args, **kwargs: TestParams.kwargs) -> None:
-            own_frame = inspect.currentframe()
-
-            timed_out: list[bool] = []
-
-            def interrupt(_signum: int, frame: FrameType | None) -> None:
-                if _may_interrupt(frame, own_frame):
-                    timed_out.append(True)
-                    pytest.fail(f"Timeout >{seconds}s", pytrace=False)
-
-            previous = signal.signal(signal.SIGALRM, interrupt)
-            signal.setitimer(signal.ITIMER_REAL, seconds, HANG_RETRY_S)
-            with _resource_warnings_dropped_after(timed_out):
-                try:
-                    try:
-                        test(*args, **kwargs)
-                    finally:
-                        signal.setitimer(signal.ITIMER_REAL, 0)
-                        signal.signal(signal.SIGALRM, previous)
-                except pytest.fail.Exception as failure:
-                    if timed_out:
-                        _release_interrupted_frames(failure)
-                    raise
+            _run_under_hang_alarm(seconds, lambda: test(*args, **kwargs))
 
         return guarded
 
     return decorate
+
+
+def _shortened(sample: object) -> str:
+    """Returns the repr of `sample`, cut to SAMPLE_REPR_CHARS characters."""
+    text = repr(sample)
+    if len(text) <= SAMPLE_REPR_CHARS:
+        return text
+    return f"{text[:SAMPLE_REPR_CHARS]}... ({len(text)} chars)"
+
+
+def only_showpy_errors(call: Callable[[], object], sample: object = None) -> None:
+    """Runs `call` under a 5 s hang alarm and fails the test on any non-ShowPyError exception.
+
+    Meant for fuzz targets: hostile input may be rejected with a ShowPyError, never crash with
+    a builtin error or hang. Skips on Windows, where SIGALRM does not exist.
+
+    Args:
+        call: Zero-argument callable that feeds one generated input to the code under test.
+        sample: The generated input, named in the failure message.
+    """
+    if sys.platform == "win32":
+        pytest.skip("SIGALRM is POSIX only")
+
+    def guarded_call() -> None:
+        try:
+            call()
+        except ShowPyError:
+            return
+        except Exception as error:
+            pytest.fail(
+                f"{type(error).__name__} escaped on input {_shortened(sample)}: {error}",
+                pytrace=False,
+            )
+
+    _run_under_hang_alarm(FUZZ_BUDGET_S, guarded_call)
 
 
 def outputs_under_hash_seeds(script: str, seeds: Iterable[str] = HASH_SEEDS) -> list[str]:

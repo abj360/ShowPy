@@ -11,6 +11,12 @@ Contains:
         generator
     test_regression_seeded_rng_rejects_negative_seed: rejects a negative seed instead of leaking
         numpy's ValueError
+    test_content_hash_is_domain_tagged_sha256: matches a hand-built tagged SHA-256 for each kind
+    test_content_hash_separates_domains_and_kinds: gives equal content different hashes per
+        domain, and bytes, text and JSON different hashes
+    test_content_hash_ignores_hash_seed: hashes the example show alike under two hash seeds
+    test_regression_content_hash_rejects_a_domain_outside_its_alphabet: rejects a newline or any
+        character outside `[a-z0-9_.]`, which could forge the kind line of the hash header
     test_regression_content_hash_equal_for_signed_zero: hashes 0.0 and -0.0 alike
     test_regression_content_hash_equal_for_int_and_float_one: hashes 1 and 1.0 alike
     test_regression_content_hash_separates_string_from_object: keeps the string '{"a":1}' and the
@@ -55,6 +61,7 @@ Contains:
         endpoint or rejects mixed padding
 """
 
+import hashlib
 import math
 import subprocess
 import sys
@@ -71,6 +78,7 @@ from pydantic import BaseModel, ConfigDict
 
 from showpy.cast.models import Cast, Group, Spot
 from showpy.cast.select import label_prefix, select
+from showpy.core.canonical import jcs
 from showpy.core.errors import SchemaError, ShowPyError
 from showpy.core.util import (
     approx_equal,
@@ -85,7 +93,7 @@ from showpy.core.util import (
     seeded_rng,
     timer,
 )
-from tests.helpers import fails_after
+from tests.helpers import digests_under_hash_seeds, fails_after
 
 
 def test_natural_sort_orders_numbers_numerically() -> None:
@@ -279,36 +287,26 @@ def test_regression_seeded_rng_rejects_negative_seed() -> None:
         seeded_rng(-1)
 
 
-@pytest.mark.defect("UP-9.3-04")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-04")
 def test_regression_content_hash_equal_for_signed_zero() -> None:
     """Hashes 0.0 and -0.0 alike (audit 9.3)."""
     assert content_hash({"x": 0.0}) == content_hash({"x": -0.0})
 
 
-@pytest.mark.defect("UP-9.3-05")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-05")
 def test_regression_content_hash_equal_for_int_and_float_one() -> None:
     """Hashes 1 and 1.0 alike (audit 9.3)."""
     assert content_hash({"x": 1}) == content_hash({"x": 1.0})
 
 
-@pytest.mark.defect("UP-9.3-06")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-06")
 def test_regression_content_hash_separates_string_from_object() -> None:
     """Keeps the string '{"a":1}' and the object {"a": 1} apart (audit 9.3)."""
     assert content_hash('{"a":1}') != content_hash({"a": 1})
 
 
-@pytest.mark.defect("UP-9.3-07")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-07")
 def test_regression_content_hash_separates_int_keys_from_string_keys() -> None:
     """Keeps {1: "a"} and {"1": "a"} apart (audit 9.3)."""
     assert content_hash({1: "a"}) != content_hash({"1": "a"})
 
 
-@pytest.mark.defect("UP-9.3-08")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-08")
 def test_regression_content_hash_mixed_key_types_never_leak_type_error() -> None:
     """Hashes (order-independently) or rejects mixed key types, never a TypeError (audit 9.3).
 
@@ -323,16 +321,12 @@ def test_regression_content_hash_mixed_key_types_never_leak_type_error() -> None
     assert digest == content_hash({"b": 2, 1: "a"})
 
 
-@pytest.mark.defect("UP-9.3-09")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-09")
 def test_regression_content_hash_distinguishes_large_arrays() -> None:
     """Tells two different 2,000-element arrays apart (audit 9.3)."""
     first, second = _big_arrays()
     assert content_hash({"a": first}) != content_hash({"a": second})
 
 
-@pytest.mark.defect("UP-9.3-10")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-10")
 def test_regression_content_hash_hashes_nested_models_by_content() -> None:
     """Hashes a nested model by its fields, not by a truncated repr (audit 9.3)."""
     first, second = _big_arrays()
@@ -341,16 +335,12 @@ def test_regression_content_hash_hashes_nested_models_by_content() -> None:
     assert left != right
 
 
-@pytest.mark.defect("UP-9.3-11")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-11")
 def test_regression_content_hash_rejects_nan() -> None:
     """Rejects NaN, which has no standard JSON form (audit 9.3)."""
     with pytest.raises(ShowPyError):
         content_hash({"x": NAN})
 
 
-@pytest.mark.defect("UP-9.3-12")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-12")
 def test_regression_content_hash_rejects_lone_surrogate() -> None:
     """Rejects a lone surrogate with a ShowPyError, not UnicodeEncodeError (audit 9.3)."""
     with pytest.raises(ShowPyError):
@@ -498,3 +488,44 @@ def test_regression_parse_range_honors_padding_of_the_last_endpoint() -> None:
     except ShowPyError:
         return
     assert expanded[-1] == "T010"
+
+
+def _tagged(domain: str, kind: str, payload: bytes) -> str:
+    head = f"showpy-hash/1\n{domain}\n{kind}\n".encode()
+    return hashlib.sha256(head + payload).hexdigest()
+
+
+def test_content_hash_is_domain_tagged_sha256() -> None:
+    assert content_hash(b"abc") == _tagged("showpy.content", "bytes", b"abc")
+    assert content_hash("abc") == _tagged("showpy.content", "str", b"abc")
+    value = {"b": 1.0, "a": [True]}
+    assert content_hash(value, domain="d") == _tagged("d", "json", jcs(value))
+    assert content_hash(value, domain="d") == _tagged("d", "json", b'{"a":[true],"b":1}')
+
+
+def test_content_hash_separates_domains_and_kinds() -> None:
+    assert content_hash({"a": 1}) != content_hash({"a": 1}, domain="showpy.revision")
+    assert len({content_hash(b'"a"'), content_hash("a"), content_hash(["a"])}) == 3
+    assert content_hash(True) != content_hash(1)
+
+
+def test_content_hash_ignores_hash_seed() -> None:
+    """Hashes `two_set_show()`, which holds no multi-element frozenset (ruling R11).
+
+    The helper's tagged `show` carries frozenset tags, so the example show is built directly;
+    hashing a show with multi-element frozensets stays seed dependent until UP-9.3-55 is fixed.
+    The helper covers hash seeds 1 and 2; seed 0 disables hash randomization, so it adds nothing.
+    """
+    digests = digests_under_hash_seeds(
+        "from showpy.core.util import content_hash",
+        "content_hash(two_set_show()).encode()",
+    )
+    assert all(first == second for first, second in digests), digests
+    assert len({first for first, _ in digests}) == 1, digests
+
+
+@pytest.mark.parametrize("domain", ["", "a\njson", "Showpy.content", "showpy-content", "a b"])
+def test_regression_content_hash_rejects_a_domain_outside_its_alphabet(domain: str) -> None:
+    with pytest.raises(SchemaError) as caught:
+        content_hash({"a": 1}, domain=domain)
+    assert caught.value.context["domain"] == domain

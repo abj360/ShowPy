@@ -261,5 +261,5 @@ def match_by_order(
     result = _result(p, costs, np.arange(len(ids), dtype=np.intp), MatchOptions(), 0)
     if from_ is None:
         note = "no starting set given; distances are reported as 0"
-        return result.model_copy(update={"explain": (*result.explain, note)})
+        return result.replace(explain=(*result.explain, note))
     return result

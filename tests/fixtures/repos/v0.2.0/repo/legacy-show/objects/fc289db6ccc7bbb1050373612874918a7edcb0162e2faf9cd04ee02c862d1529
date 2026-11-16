@@ -1,0 +1,279 @@
+{
+  "counts": 16.0,
+  "cue": null,
+  "forms": [
+    "brass-5",
+    "percussion-5",
+    "guard-5"
+  ],
+  "id": "5",
+  "label": null,
+  "placements": [
+    {
+      "entity": "B1",
+      "facing": 0.0,
+      "form": "brass-5",
+      "note": null,
+      "on_field": true,
+      "order": 0,
+      "pinned": false,
+      "x": -27.946858838746767,
+      "y": 32.309287942478164
+    },
+    {
+      "entity": "B2",
+      "facing": 0.0,
+      "form": "brass-5",
+      "note": null,
+      "on_field": true,
+      "order": 1,
+      "pinned": false,
+      "x": -23.658318623839918,
+      "y": 32.309287942478164
+    },
+    {
+      "entity": "B3",
+      "facing": 0.0,
+      "form": "brass-5",
+      "note": null,
+      "on_field": true,
+      "order": 2,
+      "pinned": false,
+      "x": -19.369778408933072,
+      "y": 32.309287942478164
+    },
+    {
+      "entity": "B4",
+      "facing": 0.0,
+      "form": "brass-5",
+      "note": null,
+      "on_field": true,
+      "order": 3,
+      "pinned": false,
+      "x": -15.081238194026225,
+      "y": 32.309287942478164
+    },
+    {
+      "entity": "B5",
+      "facing": 0.0,
+      "form": "brass-5",
+      "note": null,
+      "on_field": true,
+      "order": 4,
+      "pinned": false,
+      "x": -10.792697979119378,
+      "y": 32.309287942478164
+    },
+    {
+      "entity": "B6",
+      "facing": 0.0,
+      "form": "brass-5",
+      "note": null,
+      "on_field": true,
+      "order": 5,
+      "pinned": false,
+      "x": -6.5041577642125326,
+      "y": 32.309287942478164
+    },
+    {
+      "entity": "W1",
+      "facing": 0.0,
+      "form": null,
+      "note": null,
+      "on_field": true,
+      "order": null,
+      "pinned": false,
+      "x": -14.797152444817456,
+      "y": 24.381969729919803
+    },
+    {
+      "entity": "W2",
+      "facing": 0.0,
+      "form": null,
+      "note": null,
+      "on_field": true,
+      "order": null,
+      "pinned": false,
+      "x": -18.748360818326184,
+      "y": 24.381969729919803
+    },
+    {
+      "entity": "W3",
+      "facing": 0.0,
+      "form": null,
+      "note": null,
+      "on_field": true,
+      "order": null,
+      "pinned": false,
+      "x": -14.699569191834911,
+      "y": 24.381969729919803
+    },
+    {
+      "entity": "W4",
+      "facing": 0.0,
+      "form": null,
+      "note": null,
+      "on_field": true,
+      "order": null,
+      "pinned": false,
+      "x": -6.650777565343638,
+      "y": 24.381969729919803
+    },
+    {
+      "entity": "W5",
+      "facing": 0.0,
+      "form": null,
+      "note": null,
+      "on_field": true,
+      "order": null,
+      "pinned": false,
+      "x": -2.6019859388523656,
+      "y": 24.381969729919803
+    },
+    {
+      "entity": "W6",
+      "facing": 0.0,
+      "form": null,
+      "note": null,
+      "on_field": true,
+      "order": null,
+      "pinned": false,
+      "x": 1.446805687638907,
+      "y": 24.381969729919803
+    },
+    {
+      "entity": "P1",
+      "facing": 327.3390023792628,
+      "form": "percussion-5",
+      "note": null,
+      "on_field": true,
+      "order": 0,
+      "pinned": false,
+      "x": 1.5006159471300355,
+      "y": 16.211198051179313
+    },
+    {
+      "entity": "P2",
+      "facing": 27.339002379262762,
+      "form": "percussion-5",
+      "note": null,
+      "on_field": true,
+      "order": 1,
+      "pinned": false,
+      "x": 10.248651807528546,
+      "y": 15.80461916776093
+    },
+    {
+      "entity": "P3",
+      "facing": 87.33900237926277,
+      "form": "percussion-5",
+      "note": null,
+      "on_field": true,
+      "order": 2,
+      "pinned": false,
+      "x": 14.974777379410437,
+      "y": 23.177351014374107
+    },
+    {
+      "entity": "P4",
+      "facing": 147.33900237926275,
+      "form": "percussion-5",
+      "note": null,
+      "on_field": true,
+      "order": 3,
+      "pinned": false,
+      "x": 10.952867090893818,
+      "y": 30.95666174440567
+    },
+    {
+      "entity": "P5",
+      "facing": 207.33900237926275,
+      "form": "percussion-5",
+      "note": null,
+      "on_field": true,
+      "order": 4,
+      "pinned": false,
+      "x": 2.2048312304953015,
+      "y": 31.36324062782406
+    },
+    {
+      "entity": "P6",
+      "facing": 267.33900237926275,
+      "form": "percussion-5",
+      "note": null,
+      "on_field": true,
+      "order": 5,
+      "pinned": false,
+      "x": -2.5212943413865894,
+      "y": 23.990508781210877
+    },
+    {
+      "entity": "G1",
+      "facing": 226.11630775136646,
+      "form": "guard-5",
+      "note": null,
+      "on_field": true,
+      "order": 0,
+      "pinned": false,
+      "x": -9.00094286884923,
+      "y": 35.92982354946233
+    },
+    {
+      "entity": "G2",
+      "facing": 226.11630775136646,
+      "form": "guard-5",
+      "note": null,
+      "on_field": true,
+      "order": 1,
+      "pinned": false,
+      "x": -10.040737939976612,
+      "y": 34.84870088756905
+    },
+    {
+      "entity": "G3",
+      "facing": 226.11630775136646,
+      "form": "guard-5",
+      "note": null,
+      "on_field": true,
+      "order": 2,
+      "pinned": false,
+      "x": -11.080533011103993,
+      "y": 33.76757822567578
+    },
+    {
+      "entity": "G4",
+      "facing": 226.11630775136646,
+      "form": "guard-5",
+      "note": null,
+      "on_field": true,
+      "order": 3,
+      "pinned": false,
+      "x": -12.120328082231376,
+      "y": 32.6864555637825
+    },
+    {
+      "entity": "G5",
+      "facing": 226.11630775136646,
+      "form": "guard-5",
+      "note": null,
+      "on_field": true,
+      "order": 4,
+      "pinned": false,
+      "x": -13.160123153358757,
+      "y": 31.605332901889227
+    },
+    {
+      "entity": "G6",
+      "facing": 226.11630775136646,
+      "form": "guard-5",
+      "note": null,
+      "on_field": true,
+      "order": 5,
+      "pinned": false,
+      "x": -14.19991822448614,
+      "y": 30.524210239995952
+    }
+  ],
+  "source_hash": "",
+  "state": "draft"
+}

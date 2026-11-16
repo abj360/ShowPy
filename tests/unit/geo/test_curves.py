@@ -283,24 +283,18 @@ def test_regression_svg_curve_rejects_wrong_transform_shape() -> None:
         SvgCurve(d="M0 0 L1 0", transform=((1.0, 0.0, 0.0),))
 
 
-@pytest.mark.defect("UP-9.1-50")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-50")
 def test_regression_model_copy_update_raises_showpy_error() -> None:
     """Raises a ShowPyError for an invalid model_copy update, not a pydantic error (audit 9.1)."""
     with pytest.raises(ShowPyError):
         circle((0.0, 0.0), 1.0).model_copy(update={"radius": "wide"})
 
 
-@pytest.mark.defect("UP-9.1-51")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-51")
 def test_regression_construction_with_unknown_kind_raises_showpy_error() -> None:
     """Raises a ShowPyError for an unknown curve kind, not a pydantic error (audit 9.1)."""
     with pytest.raises(ShowPyError):
         curve_from_construction({"kind": "nope"})
 
 
-@pytest.mark.defect("UP-9.1-52")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-52")
 def test_regression_polyline_with_text_points_raises_showpy_error() -> None:
     """Raises a ShowPyError for text points, not a pydantic error (audit 9.1)."""
     with pytest.raises(ShowPyError):

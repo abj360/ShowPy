@@ -16,7 +16,6 @@ import math
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
-import pydantic
 
 from showpy.choreo.models import (
     FacingMode,
@@ -172,11 +171,11 @@ def _locked(what: str) -> LockedError:
 def _map_recipe(recipe: dict[str, object], matrix: Matrix, owner: str) -> dict[str, object]:
     try:
         curve = curve_from_construction(recipe)
-    except pydantic.ValidationError as error:
+    except SchemaError as error:
         raise SchemaError(
             f"{owner} holds a curve recipe that does not parse",
             hint="store curves as curve.construction() recipes",
-            context={"owner": owner, "errors": error.errors()},
+            context={"owner": owner, "errors": error.context.get("errors", [])},
         ) from error
     return transform_curve(curve, matrix).construction()
 
@@ -189,7 +188,7 @@ def _map_form(form: Form, matrix: Matrix, force: bool) -> tuple[Form, str | None
     if form.locked and not force:
         raise _locked(f"form {form.id}")
     mapped = _map_recipe(recipe, matrix, f"form {form.id}")
-    return form.model_copy(update={"geometry": {**form.geometry, CURVE_KEY: mapped}}), None
+    return form.replace(geometry={**form.geometry, CURVE_KEY: mapped}), None
 
 
 def _map_target(
@@ -208,12 +207,10 @@ def _map_waypoint(waypoint: Waypoint, matrix: Matrix) -> Waypoint:
 
 
 def _map_row(row: PathRow, matrix: Matrix, force: bool) -> PathRow:
-    mapped = row.model_copy(
-        update={
-            "waypoints": tuple(_map_waypoint(wp, matrix) for wp in row.waypoints),
-            "pivot": None if row.pivot is None else _point(row.pivot, matrix),
-            "facing_value": _map_target(row.facing_mode, row.facing_value, matrix),
-        }
+    mapped = row.replace(
+        waypoints=tuple(_map_waypoint(wp, matrix) for wp in row.waypoints),
+        pivot=None if row.pivot is None else _point(row.pivot, matrix),
+        facing_value=_map_target(row.facing_mode, row.facing_value, matrix),
     )
     if mapped != row and row.locked and not force:
         raise _locked(f"path of {row.entity}")
@@ -221,21 +218,19 @@ def _map_row(row: PathRow, matrix: Matrix, force: bool) -> PathRow:
 
 
 def _map_route(route: Route, matrix: Matrix) -> Route:
-    return route.model_copy(update={"curve": _map_recipe(route.curve, matrix, f"route {route.id}")})
+    return route.replace(curve=_map_recipe(route.curve, matrix, f"route {route.id}"))
 
 
 def _map_transition(spec: TransitionSpec, matrix: Matrix, force: bool) -> TransitionSpec:
-    return spec.model_copy(
-        update={
-            "rows": {k: _map_row(row, matrix, force) for k, row in spec.rows.items()},
-            "routes": {k: _map_route(route, matrix) for k, route in spec.routes.items()},
-        }
+    return spec.replace(
+        rows={k: _map_row(row, matrix, force) for k, row in spec.rows.items()},
+        routes={k: _map_route(route, matrix) for k, route in spec.routes.items()},
     )
 
 
 def _map_override(override: FacingOverride, matrix: Matrix) -> FacingOverride:
     value = _map_target(override.mode, override.value, matrix)
-    return override.model_copy(update={"value": value})
+    return override.replace(value=value)
 
 
 def _map_ring(ring: Ring, matrix: Matrix) -> Ring:
@@ -245,7 +240,7 @@ def _map_ring(ring: Ring, matrix: Matrix) -> Ring:
 def _map_zone(zone: Zone, matrix: Matrix) -> Zone:
     exterior = _map_ring(zone.polygon.exterior, matrix)
     holes = tuple(_map_ring(hole, matrix) for hole in zone.polygon.holes)
-    return zone.model_copy(update={"polygon": Region(exterior=exterior, holes=holes)})
+    return zone.replace(polygon=Region(exterior=exterior, holes=holes))
 
 
 def _dependencies(show: "Show", sheet: Sheet) -> dict[str, str]:
@@ -279,14 +274,12 @@ def _mapped_show(show: "Show", matrix: Matrix, force: bool) -> tuple["Show", tup
     for form_id, form in show.forms.items():
         forms[form_id], note = _map_form(form, matrix, force)
         notes += [note] if note else []
-    mapped = show.model_copy(
-        update={
-            "sets": tuple(_map_set(s, matrix, force) for s in show.sets),
-            "forms": forms,
-            "transitions": tuple(_map_transition(t, matrix, force) for t in show.transitions),
-            "facing_overrides": tuple(_map_override(o, matrix) for o in show.facing_overrides),
-            "zones": tuple(_map_zone(z, matrix) for z in show.zones),
-        }
+    mapped = show.replace(
+        sets=tuple(_map_set(s, matrix, force) for s in show.sets),
+        forms=forms,
+        transitions=tuple(_map_transition(t, matrix, force) for t in show.transitions),
+        facing_overrides=tuple(_map_override(o, matrix) for o in show.facing_overrides),
+        zones=tuple(_map_zone(z, matrix) for z in show.zones),
     )
     return mapped, tuple(notes)
 
@@ -361,8 +354,8 @@ def replace_sheet(
     if not np.allclose(matrix, np.eye(3), rtol=0.0, atol=IDENTITY_TOL):
         moved_show, form_notes = _mapped_show(show, matrix, force)
     coordinates, coordinate_notes = _coordinates_note(show, sheet)
-    replaced = moved_show.model_copy(
-        update={"sheet": sheet, "dependencies": _dependencies(show, sheet), **coordinates}
+    replaced = moved_show.replace(
+        sheet=sheet, dependencies=_dependencies(show, sheet), **coordinates
     )
     outside, in_zones = _flags(replaced)
     report = SheetReplaceReport(

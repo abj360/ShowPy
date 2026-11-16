@@ -26,9 +26,13 @@ Contains:
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any
 
-from pydantic import ValidationError as PydanticValidationError
-
-from showpy.core.errors import SchemaError, TimelineError, TimeRangeError, UnknownRefError
+from showpy.core.errors import (
+    SchemaError,
+    TimelineError,
+    TimeRangeError,
+    UnknownRefError,
+    field_errors,
+)
 from showpy.core.types import Count, CountsPerMinute, Seconds
 from showpy.time.models import (
     AudioTrack,
@@ -129,7 +133,7 @@ def add_tempo(tl: Timeline, section: TempoSection) -> Timeline:
     _require_positive_tempo(section.counts_per_minute)
     others = [s for s in tl.tempos if s.at_count != section.at_count]
     tempos = tuple(sorted([*others, section], key=lambda s: s.at_count))
-    return tl.model_copy(update={"tempos": tempos})
+    return tl.replace(tempos=tempos)
 
 
 def remove_tempo(tl: Timeline, at_count: Count) -> Timeline:
@@ -141,7 +145,7 @@ def remove_tempo(tl: Timeline, at_count: Count) -> Timeline:
     1
     """
     tempos = _drop(tl.tempos, lambda s: s.at_count == at_count, "tempo section", at_count)
-    return tl.model_copy(update={"tempos": tempos})
+    return tl.replace(tempos=tempos)
 
 
 def add_hold(tl: Timeline, hold: Hold) -> Timeline:
@@ -160,7 +164,7 @@ def add_hold(tl: Timeline, hold: Hold) -> Timeline:
         )
     others = [h for h in tl.holds if h.at_count != hold.at_count]
     holds = tuple(sorted([*others, hold], key=lambda h: h.at_count))
-    return tl.model_copy(update={"holds": holds})
+    return tl.replace(holds=holds)
 
 
 def remove_hold(tl: Timeline, at_count: Count) -> Timeline:
@@ -172,7 +176,7 @@ def remove_hold(tl: Timeline, at_count: Count) -> Timeline:
     ()
     """
     holds = _drop(tl.holds, lambda h: h.at_count == at_count, "hold", at_count)
-    return tl.model_copy(update={"holds": holds})
+    return tl.replace(holds=holds)
 
 
 def add_marker(tl: Timeline, marker: Marker) -> Timeline:
@@ -185,7 +189,7 @@ def add_marker(tl: Timeline, marker: Marker) -> Timeline:
     _require_count(marker.at_count, "marker")
     _require_new_label((m.label for m in tl.markers), marker.label, "marker")
     markers = tuple(sorted([*tl.markers, marker], key=lambda m: m.at_count))
-    return tl.model_copy(update={"markers": markers})
+    return tl.replace(markers=markers)
 
 
 def remove_marker(tl: Timeline, label: str) -> Timeline:
@@ -197,7 +201,7 @@ def remove_marker(tl: Timeline, label: str) -> Timeline:
     ()
     """
     markers = _drop(tl.markers, lambda m: m.label == label, "marker", label)
-    return tl.model_copy(update={"markers": markers})
+    return tl.replace(markers=markers)
 
 
 def add_cue(tl: Timeline, cue: Cue) -> Timeline:
@@ -215,7 +219,7 @@ def add_cue(tl: Timeline, cue: Cue) -> Timeline:
         )
     _require_new_label((c.label for c in tl.cues), cue.label, "cue")
     cues = tuple(sorted([*tl.cues, cue], key=lambda c: c.order))
-    return tl.model_copy(update={"cues": cues})
+    return tl.replace(cues=cues)
 
 
 def remove_cue(tl: Timeline, label: str) -> Timeline:
@@ -227,7 +231,7 @@ def remove_cue(tl: Timeline, label: str) -> Timeline:
     ()
     """
     cues = _drop(tl.cues, lambda c: c.label == label, "cue", label)
-    return tl.model_copy(update={"cues": cues})
+    return tl.replace(cues=cues)
 
 
 def set_measures(tl: Timeline, setting: MeasureSetting) -> Timeline:
@@ -246,7 +250,7 @@ def set_measures(tl: Timeline, setting: MeasureSetting) -> Timeline:
         )
     for at_count, _ in setting.changes:
         _require_count(at_count, "measure change")
-    return tl.model_copy(update={"measures": setting})
+    return tl.replace(measures=setting)
 
 
 def clear_measures(tl: Timeline) -> Timeline:
@@ -255,7 +259,7 @@ def clear_measures(tl: Timeline) -> Timeline:
     >>> clear_measures(new_timeline(TimelineMode.COUNTS, 120.0)).measures is None
     True
     """
-    return tl.model_copy(update={"measures": None})
+    return tl.replace(measures=None)
 
 
 def attach_audio(tl: Timeline, track: AudioTrack) -> Timeline:
@@ -266,7 +270,7 @@ def attach_audio(tl: Timeline, track: AudioTrack) -> Timeline:
     'a.wav'
     """
     _require_new_label((t.label for t in tl.audio), track.label, "audio track")
-    return tl.model_copy(update={"audio": (*tl.audio, track)})
+    return tl.replace(audio=(*tl.audio, track))
 
 
 def remove_audio(tl: Timeline, label: str) -> Timeline:
@@ -278,7 +282,7 @@ def remove_audio(tl: Timeline, label: str) -> Timeline:
     ()
     """
     audio = _drop(tl.audio, lambda t: t.label == label, "audio track", label)
-    return tl.model_copy(update={"audio": audio})
+    return tl.replace(audio=audio)
 
 
 def set_sync(tl: Timeline, label: str, offset_s: Seconds) -> Timeline:
@@ -291,11 +295,8 @@ def set_sync(tl: Timeline, label: str, offset_s: Seconds) -> Timeline:
     """
     if label not in {t.label for t in tl.audio}:
         raise _unknown("audio track", label, [t.label for t in tl.audio])
-    audio = tuple(
-        t.model_copy(update={"sync_offset_s": offset_s}) if t.label == label else t
-        for t in tl.audio
-    )
-    return tl.model_copy(update={"audio": audio})
+    audio = tuple(t.replace(sync_offset_s=offset_s) if t.label == label else t for t in tl.audio)
+    return tl.replace(audio=audio)
 
 
 def _unknown(what: str, label: str, known: Sequence[str]) -> UnknownRefError:
@@ -363,9 +364,9 @@ def from_json(d: dict[str, Any]) -> Timeline:
     """
     try:
         return Timeline.model_validate(d)
-    except PydanticValidationError as exc:
+    except SchemaError as exc:
         raise SchemaError(
             "timeline JSON does not match the Timeline schema",
             hint="pass a dict produced by to_json()",
-            context={"errors": exc.errors(include_url=False)},
+            context={"errors": field_errors(exc)},
         ) from exc

@@ -7,6 +7,7 @@ test_models.py --- tests timeline data class defaults, immutability and JSON saf
 import pydantic
 import pytest
 
+from showpy.core.errors import SchemaError
 from showpy.time.models import (
     AudioTrack,
     Hold,
@@ -62,5 +63,5 @@ def test_measure_changes_round_trip_through_json() -> None:
 
 
 def test_unknown_fields_are_rejected() -> None:
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(SchemaError):
         Hold.model_validate({"at_count": 1.0, "seconds": 1.0, "colour": "red"})

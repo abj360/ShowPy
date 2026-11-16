@@ -407,7 +407,7 @@ def edit_params(
             context={"form": form.id, "kind": form.kind},
         )
     merged = {**form.geometry.get("params", {}), **params}
-    edited = form.model_copy(update={"geometry": {**form.geometry, "params": merged}})
+    edited = form.replace(geometry={**form.geometry, "params": merged})
     if slot_count(edited) is not None:
         layout(edited, registry)
     return edited

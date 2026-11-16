@@ -88,9 +88,9 @@ def coordinate_presets(sheet: Sheet) -> list[CoordinateSystem]:
     if sheet.surface_type == SurfaceType.STAGE:
         candidates.append(CoordinateSystem(kind=CoordinateKind.STAGE))
     if sheet.grid.unit_name != "m":
-        candidates.append(default.model_copy(update={"units": sheet.grid.unit_name}))
+        candidates.append(default.replace(units=sheet.grid.unit_name))
     candidates += [
-        default.model_copy(update={"origin": mark.id})
+        default.replace(origin=mark.id)
         for mark in sheet.landmarks
         if mark.id in CENTER_LANDMARKS and mark.kind == "point"
     ]
@@ -122,7 +122,7 @@ def set_coordinates(show: "Show", system: CoordinateSystem) -> "Show":
         )
     convert(1.0, system.units, "m")
     _origin(show.sheet, system)
-    return show.model_copy(update={"coordinates": system})
+    return show.replace(coordinates=system)
 
 
 def _words(sheet: Sheet, system: CoordinateSystem) -> dict[str, str]:

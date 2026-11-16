@@ -188,7 +188,7 @@ def reorder(
         members = _nearest_prev(form, prev_set, registry)
     else:
         members = _explicit(form, order)
-    return form.model_copy(update={"members": tuple(members)})
+    return form.replace(members=tuple(members))
 
 
 def _split_index(form: Form, at: int | SpotId) -> int:
@@ -205,7 +205,7 @@ def _split_index(form: Form, at: int | SpotId) -> int:
 def _custom_part(form: Form, part_id: FormId, lo: int, hi: int, registry: FormFnRegistry) -> Form:
     pts, facings = slot_poses(form, registry)
     part = custom_form(part_id, form.members[lo:hi], pts[lo:hi], facings[lo:hi], set_id=form.set)
-    return part.model_copy(update={"meta": dict(form.meta)})
+    return part.replace(meta=dict(form.meta))
 
 
 def _trimmable(form: Form, lo: int, hi: int) -> bool:
@@ -223,13 +223,11 @@ def _trimmed_part(form: Form, part_id: FormId, lo: int, hi: int) -> Form:
     curve = curve_from_construction(form.geometry["curve"])
     stations = curve_stations(curve, form.spacing, slot_count(form))
     trimmed = TrimmedCurve(base=curve, s0=float(stations[lo]), s1=float(stations[hi - 1]))
-    return form.model_copy(
-        update={
-            "id": part_id,
-            "geometry": {"curve": trimmed.construction()},
-            "members": form.members[lo:hi],
-            "spacing": form.spacing.model_copy(update={"start": 0.0, "end": None}),
-        }
+    return form.replace(
+        id=part_id,
+        geometry={"curve": trimmed.construction()},
+        members=form.members[lo:hi],
+        spacing=form.spacing.replace(start=0.0, end=None),
     )
 
 
@@ -313,13 +311,13 @@ def morph_targets(a: Form, b: Form, registry: FormFnRegistry = DEFAULT_FORM_FNS)
 def _mapped_facing(spec: FacingSpec, matrix: Matrix) -> FacingSpec:
     flips = bool(np.linalg.det(matrix[:2, :2]) < 0)
     if spec.mode == "fixed" and isinstance(spec.value, int | float):
-        return spec.model_copy(update={"value": transform_facing(float(spec.value), matrix)})
+        return spec.replace(value=transform_facing(float(spec.value), matrix))
     if spec.mode == "toward_point" and isinstance(spec.value, tuple):
         q = transform_points(np.asarray([spec.value], dtype=float), matrix)[0]
-        return spec.model_copy(update={"value": (float(q[0]), float(q[1]))})
+        return spec.replace(value=(float(q[0]), float(q[1])))
     if spec.mode == "normal" and flips:
         offset = float(spec.value) if isinstance(spec.value, int | float) else 0.0
-        return spec.model_copy(update={"value": normalize_angle(offset + HALF_TURN)})
+        return spec.replace(value=normalize_angle(offset + HALF_TURN))
     return spec
 
 
@@ -366,11 +364,8 @@ def transform_form(form: Form, matrix: Matrix, force: bool = False) -> Form:
     [[0.0, 3.0], [2.0, 3.0]]
     """
     check_unlocked(form, force)
-    return form.model_copy(
-        update={
-            "geometry": _mapped_geometry(form, matrix),
-            "facing": _mapped_facing(form.facing, matrix),
-        }
+    return form.replace(
+        geometry=_mapped_geometry(form, matrix), facing=_mapped_facing(form.facing, matrix)
     )
 
 

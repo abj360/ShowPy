@@ -87,22 +87,20 @@ def _carried(show: Show, previous: Set | None, entity: SpotId) -> Placement:
     if previous is None or entity not in previous.entity_ids():
         return _off_field(entity, pinned)
     source = previous.get(entity)
-    return source.model_copy(update={"form": None, "order": None, "pinned": pinned})
+    return source.replace(form=None, order=None, pinned=pinned)
 
 
 def _sync_transitions(show: Show) -> Show:
     pairs = set(show.transition_ids())
     counts = {s.id: s.counts for s in show.sets}
     kept = tuple(
-        spec.model_copy(update={"counts": counts[spec.id[1]]})
-        for spec in show.transitions
-        if spec.id in pairs
+        spec.replace(counts=counts[spec.id[1]]) for spec in show.transitions if spec.id in pairs
     )
-    return show.model_copy(update={"transitions": kept})
+    return show.replace(transitions=kept)
 
 
 def _with_sets(show: Show, sets: Sequence[Set], force: bool, **update: object) -> Show:
-    edited = _sync_transitions(show.model_copy(update={"sets": tuple(sets), **update}))
+    edited = _sync_transitions(show.replace(sets=tuple(sets), **update))
     require_unlocked(show, edited, force)
     return edited
 
@@ -251,7 +249,7 @@ def insert_subset(
     new_id = _subset_id(show, after)
     rows = tuple(_carried(show, show.sets[position], e) for e in show.cast.ids())
     new = Set(id=new_id, counts=counts, placements=rows)
-    shortened = following.model_copy(update={"counts": following.counts - counts})
+    shortened = following.replace(counts=following.counts - counts)
     sets = [*show.sets[: position + 1], new, shortened, *show.sets[position + 2 :]]
     return _with_sets(show, sets, force), new_id
 
@@ -291,9 +289,9 @@ def remove_set(show: Show, set_id: SetId, merge_counts: bool = True, force: bool
     sets = [s for s in show.sets if s.id != set_id]
     if merge_counts and position < len(sets):
         following = sets[position]
-        sets[position] = following.model_copy(update={"counts": following.counts + removed.counts})
+        sets[position] = following.replace(counts=following.counts + removed.counts)
     if position == 0 and sets:
-        sets[0] = sets[0].model_copy(update={"counts": 0.0})
+        sets[0] = sets[0].replace(counts=0.0)
     forms = {f: form for f, form in show.forms.items() if form.set != set_id}
     pins = _pins_without_set(show, set_id)
     return _with_sets(show, sets, force, forms=forms, pins=pins)
@@ -301,7 +299,7 @@ def remove_set(show: Show, set_id: SetId, merge_counts: bool = True, force: bool
 
 def _scale_route(route: Route, factor: float) -> Route:
     end = None if route.end is None else route.end * factor
-    return route.model_copy(update={"start": route.start * factor, "end": end})
+    return route.replace(start=route.start * factor, end=end)
 
 
 def _scale_spec(spec: TransitionSpec, factor: float) -> TransitionSpec:
@@ -311,11 +309,9 @@ def _scale_spec(spec: TransitionSpec, factor: float) -> TransitionSpec:
             w if w.at is None else Waypoint(x=w.x, y=w.y, at=w.at * factor) for w in row.waypoints
         )
         end = None if row.end is None else row.end * factor
-        rows[entity] = row.model_copy(
-            update={"start": row.start * factor, "end": end, "waypoints": waypoints}
-        )
+        rows[entity] = row.replace(start=row.start * factor, end=end, waypoints=waypoints)
     routes = {key: _scale_route(route, factor) for key, route in spec.routes.items()}
-    return spec.model_copy(update={"rows": rows, "routes": routes})
+    return spec.replace(rows=rows, routes=routes)
 
 
 def _overruns(spec: TransitionSpec, counts: float) -> list[str]:
@@ -340,7 +336,7 @@ def _retimed_spec(spec: TransitionSpec, counts: float, rescale: bool) -> Transit
             hint="pass rescale=True to scale the paths, or shorten them first",
             context={"tid": spec.id, "late": late},
         )
-    return spec.model_copy(update={"counts": counts})
+    return spec.replace(counts=counts)
 
 
 def set_counts(
@@ -365,7 +361,7 @@ def set_counts(
     position = show.set_index(set_id)
     _require_counts(counts, is_first=position == 0)
     sets = list(show.sets)
-    sets[position] = sets[position].model_copy(update={"counts": counts})
+    sets[position] = sets[position].replace(counts=counts)
     specs = tuple(
         _retimed_spec(spec, counts, rescale) if spec.id[1] == set_id else spec
         for spec in show.transitions
@@ -384,14 +380,14 @@ def _renamed_anchor(anchor: Anchor, mapping: Mapping[SetId, SetId]) -> Anchor:
 
 def _renamed_pin(pin: Pin, mapping: Mapping[SetId, SetId], tids: Mapping[str, str]) -> Pin:
     if pin.target == "set":
-        return pin.model_copy(update={"id": mapping.get(pin.id, pin.id)})
+        return pin.replace(id=mapping.get(pin.id, pin.id))
     if pin.target == "transition":
-        return pin.model_copy(update={"id": tids.get(pin.id, pin.id)})
+        return pin.replace(id=tids.get(pin.id, pin.id))
     return pin
 
 
 def _renamed_note(note: Note, mapping: Mapping[SetId, SetId]) -> Note:
-    return note.model_copy(update={"anchor": _renamed_anchor(note.anchor, mapping)})
+    return note.replace(anchor=_renamed_anchor(note.anchor, mapping))
 
 
 def renumber(show: Show, scheme: str = SEQUENTIAL) -> tuple[Show, dict[SetId, SetId]]:
@@ -419,20 +415,16 @@ def renumber(show: Show, scheme: str = SEQUENTIAL) -> tuple[Show, dict[SetId, Se
     tids = {
         format_tid(t): format_tid((mapping[t[0]], mapping[t[1]])) for t in show.transition_ids()
     }
-    renamed = show.model_copy(
-        update={
-            "sets": tuple(s.model_copy(update={"id": mapping[s.id]}) for s in show.sets),
-            "transitions": tuple(
-                spec.model_copy(update={"id": (mapping[spec.id[0]], mapping[spec.id[1]])})
-                for spec in show.transitions
-            ),
-            "forms": {
-                f: form.model_copy(update={"set": mapping.get(form.set, form.set)})
-                for f, form in show.forms.items()
-            },
-            "notes": tuple(_renamed_note(n, mapping) for n in show.notes),
-            "pins": tuple(_renamed_pin(p, mapping, tids) for p in show.pins),
-        }
+    renamed = show.replace(
+        sets=tuple(s.replace(id=mapping[s.id]) for s in show.sets),
+        transitions=tuple(
+            spec.replace(id=(mapping[spec.id[0]], mapping[spec.id[1]])) for spec in show.transitions
+        ),
+        forms={
+            f: form.replace(set=mapping.get(form.set, form.set)) for f, form in show.forms.items()
+        },
+        notes=tuple(_renamed_note(n, mapping) for n in show.notes),
+        pins=tuple(_renamed_pin(p, mapping, tids) for p in show.pins),
     )
     return renamed, mapping
 
@@ -525,4 +517,4 @@ def upgrade_dependency(show: Show, ref: str, version: str, sheet: Sheet | None =
                 context={"sheet": sheet.ref, "ref": key, "version": version},
             )
         update["sheet"] = sheet
-    return show.model_copy(update=update)
+    return show.replace(**update)

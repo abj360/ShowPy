@@ -1,0 +1,43 @@
+{
+  "revision": {
+    "actor": "designer",
+    "at": "2026-11-13T12:00:00Z",
+    "changed": [
+      "/sets/1/set.json",
+      "/sets/2/set.json",
+      "/sets/3/set.json",
+      "/sets/4/set.json",
+      "/sets/5/set.json",
+      "/sets/6/set.json",
+      "/show/show.json"
+    ],
+    "id": "1c28ac27c7c51ca3d0467184ea801ef31e9f0b6e4b9f598c7092e7c2cce701da",
+    "kind": "edit",
+    "message": "Pin",
+    "parent": "e495e63364bc88166877423db5547bc4cad04adc93d962311e2b127a14f11ecc",
+    "target": null
+  },
+  "tree": {
+    "/sets/1/set.json": "ae5c5e88e2005b767189fec899f0d87a1985711be42e7493a3f154ef61480a87",
+    "/sets/2/forms.json": "efae290aa4e0e37c37917ba016159e01dfc951d1541451438f47934d4f4a8e96",
+    "/sets/2/set.json": "a5a1e61ef0596ef15b02505a36db2a7c90a174799c4fbecf05bc6e79224b0925",
+    "/sets/2/set.py": "9c42227695b491fd1bfd7c9d7c40ff37680bd762f95fdf7ece57fde6cf44b6cc",
+    "/sets/3/forms.json": "b4287483c22049096f279656dbc55a2721161e238cf3025c35aeb8abfe97ea72",
+    "/sets/3/set.json": "12c1fefca21c4ab99fc6c22f07e28ae756123e43057dd273c155ee2c489dd6f7",
+    "/sets/4/forms.json": "9b6357f3afe6c648425291851e12f5dcf2608f7d74c856209b0d625a35d6bb38",
+    "/sets/4/set.json": "1e21fc7820637d1ff6abb386b40c462f9386c106b32eeefe497a8f82be39488d",
+    "/sets/5/forms.json": "153bf908585418e5b8446c71542d708c7506b798f5ca946199b4573147d17edf",
+    "/sets/5/set.json": "ee2e1fc284f790498420cdb93dbcb2ce2887f0c2dd8e23d2a40a348a5d806a47",
+    "/sets/6/forms.json": "f3b121c304ea3fce3b3ba45ef9b669a88d98922241ebad450599bfd8ebc9d7b5",
+    "/sets/6/set.json": "75a59d43addf66bfc3ec1dc4d48cc9cec664fc9cc9607abde81601a85ec54f79",
+    "/show/notes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "/show/sheet.json": "1d60638ce0cfd2149bf50d046418cbbd14578046611715f25ca0d59c22ff4056",
+    "/show/show.json": "7cb85ecc47fbf410a5b4fe38088cc153090e785772efc8508e46e9242494c901",
+    "/time/timeline.json": "187becd135804411f5388d406413ec0eb06b94d91740f42dd6262f4211a76f29",
+    "/transitions/1-2/paths.json": "0fa336fc5846986a5e828c780cb0046ce039b58df9e46c59c955534849bb2826",
+    "/transitions/2-3/paths.json": "5a6f00cd9bc54ba9c1a664b0786c712eaf9940b18b9c37284f02979754e6ace0",
+    "/transitions/3-4/paths.json": "29b001402ada526aec9412669faf9a9e8aa97032e1ccc57cf903ab18dabc1470",
+    "/transitions/4-5/paths.json": "a5f597437f229a44789e7c01feac2c402ba36f11ff26d7a8e3d27af771790417",
+    "/transitions/5-6/paths.json": "9fd1942225f468630efb7f6d78bcc7eba4026f95d8a579f9e27f889b8261eb98"
+  }
+}

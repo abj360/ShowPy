@@ -368,6 +368,12 @@
       "seconds": "Seconds"
     }
   },
+  "ID_MAX_LENGTH": {
+    "constant": "64"
+  },
+  "ID_PATTERN": {
+    "constant": "re.compile('^[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,62}[A-Za-z0-9_])?$')"
+  },
   "InMemoryAssetStore": "() -> None",
   "InMemoryRepository": "() -> None",
   "InMemorySheetStore": "() -> None",
@@ -398,6 +404,30 @@
   },
   "LinePiece": "(start: Point, end: Point) -> None",
   "LockedError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "MAX_DEPTH": {
+    "constant": "64"
+  },
+  "MAX_GRID_CELLS": {
+    "constant": "4000000"
+  },
+  "MAX_IMAGE_PIXELS": {
+    "constant": "40000000"
+  },
+  "MAX_POINTS": {
+    "constant": "1000000"
+  },
+  "MAX_RANGE": {
+    "constant": "10000"
+  },
+  "MAX_TABLE": {
+    "constant": "1000000"
+  },
+  "MAX_TEXT_CHARS": {
+    "constant": "1000000"
+  },
+  "MAX_VIDEO_PIXELS": {
+    "constant": "8294400"
+  },
   "Marker": {
     "model": {
       "at_count": "Count",
@@ -650,6 +680,9 @@
     }
   },
   "QuadPiece": "(start: Point, control: Point, end: Point) -> None",
+  "RESERVED_IDS": {
+    "constant": "['all', 'aux', 'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9', 'con', 'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9', 'nul', 'prn']"
+  },
   "Region": {
     "model": {
       "exterior": "Ring",
@@ -1092,11 +1125,13 @@
   "bottleneck_value": "(cost: object) -> float",
   "bounds": "(obj: Points | showpy.geo.curve_base.Curve) -> showpy.core.types.Box2",
   "buffer": "(area: Area, d: float) -> Area",
+  "canonical_value": "(obj: object) -> JsonValue",
   "center": "(obj: Points | showpy.geo.curve_base.Curve) -> Point",
   "centroid": "(obj: Points | showpy.geo.curve_base.Curve) -> Point",
   "change_amount": "(a: showpy.choreo.models.Set, b: showpy.choreo.models.Set) -> Meters",
   "changelog": "(ws: showpy.show.storage.Workspace, since: str = '') -> str",
   "chart": "(show: showpy.show.models.Show, set_id: SetId, publication: showpy.export.models.Publication | None = None) -> showpy.export.models.Chart",
+  "check_id": "(text: str, *, kind: str) -> str",
   "check_unlocked": "(form: showpy.choreo.models.Form, force: bool) -> None",
   "chunk_counts": "(total: float, parts: int) -> list[float]",
   "circle": "(center: Point, radius: Meters, start_deg: Degrees = 0.0) -> showpy.geo.curves.CircleCurve",
@@ -1110,7 +1145,7 @@
   "closest_approach": "(times_a: collections.abc.Sequence[float], points_a: collections.abc.Sequence[Point] | Points, times_b: collections.abc.Sequence[float], points_b: collections.abc.Sequence[Point] | Points) -> tuple[float, float]",
   "concentric": "(center: Point, radii: collections.abc.Sequence[Meters], counts: collections.abc.Sequence[int], start_deg: Degrees = 0.0) -> list[Points]",
   "conflict_error": "(show_id: str, expected: str, landed: list[showpy.show.models.Revision]) -> showpy.core.errors.ConflictError",
-  "content_hash": "(obj: object) -> str",
+  "content_hash": "(obj: object, *, domain: str = 'showpy.content') -> str",
   "contract": "(obj: T, d: Meters, about: About = 'center', sel: SetSelector = 'all', force: bool = False) -> T",
   "convert": "(value: float, from_unit: str, to_unit: str, registry: showpy.core.units.UnitRegistry = ...) -> float",
   "coordinate_presets": "(sheet: showpy.sheet.models.Sheet) -> list[showpy.sheet.models.CoordinateSystem]",
@@ -1176,6 +1211,7 @@
   "fill_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], outline: showpy.core.types.Region | shapely.geometry.polygon.Polygon | showpy.geo.curve_base.Curve | object, interval: Meters, pattern: FillPattern = 'grid', angle_deg: Degrees = 0.0, facing: showpy.choreo.models.FacingSpec | None = None, *, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",
   "fill_spots": "(show: 'Show', region: Area | showpy.core.types.Region, group: str, set_id: SetId, interval: Meters | None = None, n: int | None = None) -> 'Show'",
   "filled_forms": "(placed: showpy.choreo.models.Set, forms: collections.abc.Sequence[showpy.choreo.models.Form]) -> list[showpy.choreo.models.Form]",
+  "find_case_clashes": "(ids: collections.abc.Iterable[str]) -> list[tuple[str, str]]",
   "fit_circle": "(points: object) -> tuple[Point, Meters, float]",
   "fit_line": "(points: object) -> tuple[Point, Point, float]",
   "follow": "(spec: showpy.choreo.models.TransitionSpec, route: showpy.choreo.models.Route, start: float = 0.0, end: float | None = None) -> showpy.choreo.models.TransitionSpec",
@@ -1207,6 +1243,7 @@
   "interval": "(points: Points, ordered: bool = True) -> showpy.geo.models.IntervalStats",
   "is_label_dependent": "(expr: str) -> bool",
   "is_similarity": "(matrix: Matrix) -> bool",
+  "jcs": "(obj: object) -> bytes",
   "join": "(*curves: AnyCurve, bridge: bool = False) -> showpy.geo.curves.CompositeCurve",
   "join_sections": "(a: showpy.show.models.Show, b: showpy.show.models.Show) -> showpy.show.models.Show",
   "label_prefix": "(spot_id: SpotId) -> str | None",
@@ -1310,6 +1347,8 @@
   "renumber": "(show: showpy.show.models.Show, scheme: str = 'sequential') -> tuple[showpy.show.models.Show, dict[SetId, SetId]]",
   "reorder": "(form: showpy.choreo.models.Form, order: Order, prev_set: showpy.choreo.models.Set | None = None, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> showpy.choreo.models.Form",
   "replace_sheet": "(show: 'Show', sheet: showpy.sheet.models.Sheet, mapping: SheetMapping = 'landmarks', force: bool = False) -> tuple['Show', showpy.sheet.models.SheetReplaceReport]",
+  "require_finite": "(value: float, *, name: str, low: float | None = None, low_open: bool = False, high: float | None = None) -> float",
+  "require_size": "(requested: int, cap: int, *, what: str, error: type[showpy.core.errors.ShowPyError] = ...) -> None",
   "revert": "(ws: showpy.show.storage.Workspace, revision_id: str, at: datetime.datetime) -> showpy.show.models.Revision",
   "ripple": "(spec: showpy.choreo.models.TransitionSpec, ordered_sel: Sel, total: float, curve: Literal['linear', 'ease_in', 'ease_out', 'ease_in_out'] = 'linear', force: bool = False) -> showpy.choreo.models.TransitionSpec",
   "rose_points": "(params: collections.abc.Mapping[str, Any], n: int) -> Points",

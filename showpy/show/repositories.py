@@ -27,6 +27,7 @@ from showpy.time.models import Timeline
 
 SHOW_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]*$")
 ASSET_PREFIX = "asset:sha256:"
+REVISION_HASH_DOMAIN = "showpy.revision"
 SHORT_ID = 7
 
 
@@ -218,7 +219,7 @@ class DocumentRepository:
             "changes": {p: new.get(p) for p in changed},
         }
         revision = Revision(
-            id=content_hash(body),
+            id=content_hash(body, domain=REVISION_HASH_DOMAIN),
             parent=expected_revision,
             at=at,
             actor=actor,
@@ -287,7 +288,7 @@ class DocumentRepository:
         sets = (*show.sets[:position], new_set, *show.sets[position + 1 :])
         return self.put_show(
             show_id,
-            show.model_copy(update={"sets": sets}),
+            show.replace(sets=sets),
             expected_revision=expected_revision,
             actor=actor,
             at=at,
@@ -344,11 +345,11 @@ class DocumentRepository:
     ) -> Revision:
         """Replaces a transition's paths; counts follow the destination set (ADR 0001 item 16)."""
         show = self.get_show(show_id, expected_revision or None)
-        stored = spec.model_copy(update={"counts": show.transition(spec.id).counts})
+        stored = spec.replace(counts=show.transition(spec.id).counts)
         specs = (*(s for s in show.transitions if s.id != spec.id), stored)
         return self.put_show(
             show_id,
-            show.model_copy(update={"transitions": specs}),
+            show.replace(transitions=specs),
             expected_revision=expected_revision,
             actor=actor,
             at=at,
@@ -383,7 +384,7 @@ class DocumentRepository:
         show = self.get_show(show_id, expected_revision or None)
         show.set(set_id)
         kept = {k: f for k, f in show.forms.items() if f.set != set_id}
-        edited = show.model_copy(update={"forms": {**kept, **{f.id: f for f in forms}}})
+        edited = show.replace(forms={**kept, **{f.id: f for f in forms}})
         return self.put_show(
             show_id,
             edited,

@@ -200,3 +200,17 @@ def test_regression_note_rejects_a_naive_datetime() -> None:
     """Rejects a created_at without a time zone, which cannot be compared (audit 9.3)."""
     with pytest.raises(REJECTED):
         Note(id="n1", text="go", anchor=Anchor.on_set("1"), author="pat", created_at=NAIVE_TIME)
+
+
+def test_regression_add_note_keeps_the_anchor_payload_error() -> None:
+    bad_anchor = {"kind": "set", "set_id": "1", "point": (0.0, 0.0)}
+    with pytest.raises(SchemaError) as info:
+        add_note(
+            two_set_show(),
+            "text",
+            bad_anchor,  # type: ignore[arg-type]  # pyright: ignore[reportArgumentType]
+            "n1",
+            datetime(2026, 1, 1, tzinfo=UTC),
+            "me",
+        )
+    assert info.value.message == "set anchor needs only set_id"

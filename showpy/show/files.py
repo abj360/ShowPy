@@ -245,7 +245,7 @@ def _require_valid(path: str, raw: bytes) -> None:
             COMMENTS_ADAPTER.validate_json(text)
         elif path.endswith(".json"):
             json.loads(text)
-    except (UnicodeDecodeError, json.JSONDecodeError, PydanticValidationError) as exc:
+    except (UnicodeDecodeError, json.JSONDecodeError, SchemaError, PydanticValidationError) as exc:
         raise SchemaError(
             f"{path} does not hold valid content: {exc}",
             hint="write UTF-8 text; JSON files must parse and match their model",

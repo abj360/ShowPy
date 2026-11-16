@@ -1,0 +1,122 @@
+[
+  {
+    "facing": {
+      "mode": "audience",
+      "value": null
+    },
+    "geometry": {
+      "curve": {
+        "a": [
+          -27.946858838746767,
+          32.309287942478164
+        ],
+        "b": [
+          -6.5041577642125326,
+          32.309287942478164
+        ],
+        "closed": false,
+        "kind": "segment"
+      }
+    },
+    "id": "brass-5",
+    "kind": "line",
+    "locked": false,
+    "members": [
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "B5",
+      "B6"
+    ],
+    "meta": {},
+    "set": "5",
+    "spacing": {
+      "align": "start",
+      "end": null,
+      "gaps": [],
+      "interval": null,
+      "mode": "count",
+      "start": 0.0
+    }
+  },
+  {
+    "facing": {
+      "mode": "fixed",
+      "value": 226.11630775136646
+    },
+    "geometry": {
+      "anchor": "center",
+      "cols": 6,
+      "facing": 226.11630775136646,
+      "interval": 1.5,
+      "n": 6,
+      "origin": [
+        -11.600430546667685,
+        33.22701689472914
+      ],
+      "rows": 1
+    },
+    "id": "guard-5",
+    "kind": "block",
+    "locked": false,
+    "members": [
+      "G1",
+      "G2",
+      "G3",
+      "G4",
+      "G5",
+      "G6"
+    ],
+    "meta": {},
+    "set": "5",
+    "spacing": {
+      "align": "start",
+      "end": null,
+      "gaps": [],
+      "interval": null,
+      "mode": "count",
+      "start": 0.0
+    }
+  },
+  {
+    "facing": {
+      "mode": "outward",
+      "value": null
+    },
+    "geometry": {
+      "curve": {
+        "ccw": true,
+        "center": [
+          6.226741519011924,
+          23.583929897792494
+        ],
+        "closed": true,
+        "kind": "circle",
+        "radius": 8.757478963906228,
+        "start_deg": 237.33900237926278
+      }
+    },
+    "id": "percussion-5",
+    "kind": "circle",
+    "locked": false,
+    "members": [
+      "P1",
+      "P2",
+      "P3",
+      "P4",
+      "P5",
+      "P6"
+    ],
+    "meta": {},
+    "set": "5",
+    "spacing": {
+      "align": "start",
+      "end": null,
+      "gaps": [],
+      "interval": null,
+      "mode": "count",
+      "start": 0.0
+    }
+  }
+]

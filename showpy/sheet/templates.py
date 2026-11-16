@@ -227,14 +227,12 @@ def _resized(sheet: Sheet, size: object) -> Sheet:
     if not (isinstance(size, Sequence) and len(size) == 2):
         raise SchemaError("size must be (width_m, depth_m)", hint="pass size=(20.0, 15.0)")
     fresh = blank_sheet(float(size[0]), float(size[1]))
-    return sheet.model_copy(
-        update={
-            "size_m": fresh.size_m,
-            "outline": fresh.outline,
-            "walkable": fresh.walkable,
-            "guides": _merge_built_ins(fresh.guides, sheet.guides),
-            "landmarks": _merge_built_ins(fresh.landmarks, sheet.landmarks),
-        }
+    return sheet.replace(
+        size_m=fresh.size_m,
+        outline=fresh.outline,
+        walkable=fresh.walkable,
+        guides=_merge_built_ins(fresh.guides, sheet.guides),
+        landmarks=_merge_built_ins(fresh.landmarks, sheet.landmarks),
     )
 
 
@@ -271,7 +269,7 @@ def _add(sheet: Sheet, field: str, item: SheetItem) -> Sheet:
             hint=f"pick an unused id or remove_{field[:-1]}() first",
             context={"ref": sheet.ref, "id": item.id},
         )
-    return sheet.model_copy(update={field: (*items, item)})
+    return sheet.replace(**{field: (*items, item)})
 
 
 def _remove(sheet: Sheet, field: str, item_id: str) -> Sheet:
@@ -283,7 +281,7 @@ def _remove(sheet: Sheet, field: str, item_id: str) -> Sheet:
             hint=f"did you mean {', '.join(close)}?" if close else f"known: {_ids(items)}",
             context={"ref": sheet.ref, "id": item_id},
         )
-    return sheet.model_copy(update={field: tuple(i for i in items if i.id != item_id)})
+    return sheet.replace(**{field: tuple(i for i in items if i.id != item_id)})
 
 
 def add_zone(sheet: Sheet, item: Zone) -> Sheet:
@@ -378,9 +376,7 @@ def save_sheet(store: SheetStore, sheet: Sheet, scope: SheetScope = "mine") -> S
     kind, ref_id, _ = parse_ref(sheet.ref)
     first = _version_number(sheet.ref) + 1
     for number in range(first, first + MAX_SAVE_ATTEMPTS):
-        candidate = sheet.model_copy(
-            update={"ref": format_ref(kind, ref_id, str(number)), "based_on": sheet.ref}
-        )
+        candidate = sheet.replace(ref=format_ref(kind, ref_id, str(number)), based_on=sheet.ref)
         existing = store.get(candidate.ref)
         if existing is None or existing == candidate:
             return store.put(candidate, scope)

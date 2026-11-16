@@ -148,7 +148,7 @@ def face_along(
     >>> show = two_set_show()
     >>> recipe = {"curve": line((0, 5), (6, 5)).construction()}
     >>> form = Form(id="f", set="1", kind="line", members=("T1",), geometry=recipe)
-    >>> show = show.model_copy(update={"forms": {"f": form}})
+    >>> show = show.replace(forms={"f": form})
     >>> round(face_along(show, "1", "f").get("T1").facing)
     90
     """
@@ -168,7 +168,7 @@ def face_normal(
     >>> show = two_set_show()
     >>> recipe = {"curve": line((0, 5), (6, 5)).construction()}
     >>> form = Form(id="f", set="1", kind="line", members=("T1",), geometry=recipe)
-    >>> show = show.model_copy(update={"forms": {"f": form}})
+    >>> show = show.replace(forms={"f": form})
     >>> round(face_normal(show, "1", "f").get("T1").facing)
     0
     """
@@ -193,4 +193,4 @@ def add_facing_override(show: Show, override: FacingOverride) -> Show:
             hint=f"keep the range within 0–{total} counts",
             context={"start": override.start, "end": override.end, "total": total},
         )
-    return show.model_copy(update={"facing_overrides": (*show.facing_overrides, override)})
+    return show.replace(facing_overrides=(*show.facing_overrides, override))
