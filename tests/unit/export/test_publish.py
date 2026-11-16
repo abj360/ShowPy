@@ -15,7 +15,7 @@ Contains:
     test_regression_readers_redact_contacts_of_a_legacy_publication(): redacts every reader
     test_regression_loading_a_legacy_publication_drops_contacts(): strips contacts on load
     test_regression_every_mutator_drops_contacts_of_a_legacy_publication(): strips on each edit
-    test_regression_publish_rejects_a_short_or_malformed_join_token(): rejects weak tokens
+    test_regression_publish_rejects_a_short_or_malformed_join_token(): rejects weak or huge tokens
     test_regression_publish_rejects_base_urls_with_credentials_or_fragments(): rejects them
     test_regression_publish_rejects_unsafe_base_url(): rejects every malformed or ambiguous URL
     test_publish_accepts_well_formed_https_base_urls(): keeps valid hosts, ports and IPs
@@ -794,7 +794,7 @@ def test_regression_publication_version_detects_concurrent_claims() -> None:
 
 
 @pytest.mark.parametrize(
-    "token", ["", "short", "a" * 21, "a" * 22 + "!", "a" * 22 + "\n", "é" * 22]
+    "token", ["", "short", "a" * 21, "a" * 22 + "!", "a" * 22 + "\n", "é" * 22, "a" * 257]
 )
 def test_regression_publish_rejects_a_short_or_malformed_join_token(token: str) -> None:
     """Rejects a join token under 22 characters or outside the base64url alphabet."""
@@ -888,6 +888,8 @@ UNSAFE_BASE_URLS = [
     "https://eight.example/..",
     "https://eight.example/p?x=1",
     "https://eight.example/p#x",
+    *[f"https://eight.example/p{char}q" for char in "\"<>'`{|}^"],
+    "https://eight.example/p%zz",
     "https://u:p@eight.example/p",
     "http://eight.example/p",
     "",

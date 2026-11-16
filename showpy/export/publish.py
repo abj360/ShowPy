@@ -46,9 +46,10 @@ from showpy.export.print_sheets import OFF_FIELD
 from showpy.sheet.coords import to_coords
 from showpy.show.models import Show
 
-JOIN_TOKEN_FORMAT = re.compile(r"[A-Za-z0-9_-]{22,}")
+JOIN_TOKEN_FORMAT = re.compile(r"[A-Za-z0-9_-]{22,256}")
 BASE_URL_SCHEME = "https"
 PRINTABLE_ASCII = re.compile(r"[\x21-\x7e]*")
+PATH_CHARS = re.compile(r"(?:[A-Za-z0-9._~!$&()*+,;=:@/-]|%[0-9A-Fa-f]{2})*")
 HOST_LABEL = re.compile(r"[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
 HOST_MAX_LENGTH = 253
 PORT_MAX = 65535
@@ -90,7 +91,7 @@ def _still_valid(show: Show, claim: Claim) -> bool:
 def _require_join_token(join_token: str) -> None:
     if JOIN_TOKEN_FORMAT.fullmatch(join_token) is None:
         raise SchemaError(
-            "join token must be at least 22 characters of A-Z, a-z, 0-9, _ or -",
+            "join token must be 22 to 256 characters of A-Z, a-z, 0-9, _ or -",
             hint="generate one with `secrets.token_urlsafe(16)`",
             context={"length": len(join_token)},
         )
@@ -145,6 +146,8 @@ def _require_https_base_url(base_url: str) -> str:
         raise _reject_base_url("has an invalid IPv6 host", scheme, host)
     if parts.port is not None and not 0 < parts.port <= PORT_MAX:
         raise _reject_base_url("has a port outside 1-65535", scheme, host)
+    if PATH_CHARS.fullmatch(parts.path) is None:
+        raise _reject_base_url("has characters outside RFC 3986 path characters", scheme, host)
     if any(segment in DOT_SEGMENTS for segment in parts.path.split("/")):
         raise _reject_base_url("has a dot segment in its path", scheme, host)
     return urlunsplit(parts).rstrip("/")
@@ -168,7 +171,7 @@ def publish(
         at: Publication time; must carry a time zone.
         previous: The publication being updated; its claims carry over when the spot still
             exists and is still claimable by that performer's role.
-        join_token: Secret of at least 22 characters of `[A-Za-z0-9_-]`; it appears only in the
+        join_token: Secret of 22 to 256 characters of `[A-Za-z0-9_-]`; it appears only in the
             link, and the publication stores its SHA-256 digest.
 
     Returns:
@@ -211,6 +214,16 @@ def publish(
 
 def verify_join_token(pub: Publication, token: str) -> bool:
     """Checks a join token against the publication's stored hash; False when none is stored.
+
+    Ignores the publication's status: `claim_spot` is what gates on `live`. Tokens should come
+    from `secrets.token_urlsafe(16)`.
+
+    Args:
+        pub: Publication holding the stored SHA-256 digest.
+        token: Token presented by a performer.
+
+    Returns:
+        is_match: Whether the token is well formed and hashes to the stored digest.
 
     >>> from showpy.examples import two_set_show
     >>> from datetime import UTC, datetime
