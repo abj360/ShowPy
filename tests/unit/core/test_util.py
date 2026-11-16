@@ -528,8 +528,8 @@ def test_content_hash_separates_domains_and_kinds() -> None:
 def test_content_hash_ignores_hash_seed() -> None:
     """Hashes `two_set_show()`, which holds no multi-element frozenset (ruling R11).
 
-    The helper's tagged `show` carries frozenset tags, so the example show is built directly;
-    hashing a show with multi-element frozensets stays seed dependent until UP-9.3-55 is fixed.
+    The helper's tagged `show` carries frozenset tags, so the example show is built directly.
+    Hashing a show with multi-element frozensets is seed independent since UP-9.3-55 was fixed.
     The helper covers hash seeds 1 and 2; seed 0 disables hash randomization, so it adds nothing.
     """
     digests = digests_under_hash_seeds(
