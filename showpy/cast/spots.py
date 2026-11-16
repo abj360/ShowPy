@@ -190,6 +190,8 @@ def add_spots_along(
 ) -> "Show":
     """Adds n spots spaced evenly by arc length along a curve, in curve order.
 
+    Spots that would stand on-field in a pinned set raise LockedError unless `force=True`.
+
     >>> from showpy.examples import two_set_show
     >>> from showpy.geo.shapes import line
     >>> len(add_spots_along(two_set_show(), line((0, 0), (4, 0)), 3, "trumpets", "1").cast.spots)
@@ -286,6 +288,7 @@ def duplicate_spots(
     """Copies spots, shifted by `offset` from their placement in `set_id`, under new labels.
 
     Copies keep group, tags, footprint and claimability; they enter the field at `set_id`.
+    Copies that would stand on-field in a pinned set raise LockedError unless `force=True`.
 
     >>> from showpy.examples import two_set_show
     >>> duplicate_spots(two_set_show(), ["T1"], (0.0, 1.0), "1").set("1").get("T5").point
@@ -333,10 +336,11 @@ def _facing_targets(show: "Show", ids: frozenset[SpotId]) -> list[str]:
     return rows + overrides
 
 
-def delete_spots(show: "Show", sel: Selector, force: bool = False) -> "Show":
+def delete_spots(show: "Show", sel: Selector, *, force: bool = False) -> "Show":
     """Removes spots from the cast, every set, forms, paths, routes, notes and selections.
 
     Pinned placements, locked forms and locked paths raise LockedError unless `force=True`.
+    A forced delete also drops the pins on the deleted spots.
     Spots that other spots face raise ValidationError until those facings change.
 
     >>> from showpy.examples import two_set_show

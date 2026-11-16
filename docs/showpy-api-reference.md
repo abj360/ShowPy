@@ -205,7 +205,7 @@ Spots are drawn directly on the sheet; there is no roster to import. A new spot 
 | `add_spots_along(show, curve, n, group, set_id)`                 | `Curve`, count                    | `Show`                   | Dots evenly by arc length along a line or curve                             |
 | `fill_spots(show, region, group, set_id, interval=None, n=None)` | Shapely area or `Region`          | `Show`                   | Fill an area with a grid of dots, given the interval or the count           |
 | `duplicate_spots(show, sel, offset, set_id)`                     | selection, `Point`                | `Show`                   | Copy dots under new labels                                                  |
-| `delete_spots(show, sel, force=False)`                           |                                   | `Show`                   | Remove from the cast, every set, forms, paths, routes, notes and selections |
+| `delete_spots(show, sel, *, force=False)`                        |                                   | `Show`                   | Remove from the cast, every set, forms, paths, routes, notes and selections |
 | `regroup(show, sel, group)`                                      |                                   | `(Show, dict[old, new])` | Move to another group and relabel to its prefix                             |
 | `add_group(show, group)` / `edit_group(show, key, /, **changes)` | `Group`                           | `Show`                   | Manage groups; the key is fixed and labels stay until `relabel`             |
 | `remove_group(show, key, reassign_to=None)`                      |                                   | `(Show, dict[old, new])` | Remove a group, first moving its spots as `regroup` does                    |

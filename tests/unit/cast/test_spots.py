@@ -21,7 +21,7 @@ Contains:
 """
 
 from datetime import UTC, datetime
-from inspect import signature
+from inspect import Parameter, signature
 
 import pytest
 import shapely
@@ -321,7 +321,7 @@ def test_set_shape_and_set_claimable() -> None:
         set_claimable(show, ["T3"], "audience")  # type: ignore[arg-type]
 
 
-EDITS_THAT_NEED_FORCE = (add_spot, add_spots_along, fill_spots, duplicate_spots)
+EDITS_THAT_NEED_FORCE = (add_spot, add_spots_along, fill_spots, duplicate_spots, delete_spots)
 PREFIX_X = LabelScheme(prefixes={"trumpets": "X"})
 UNIT_SQUARE = region([(0, 0), (2, 0), (2, 2), (0, 2)])
 
@@ -429,11 +429,14 @@ def test_regression_relabel_keeps_a_pinned_spot_protected() -> None:
 
 
 def test_regression_cast_edits_accept_force() -> None:
-    """Gives every cast edit a `force` parameter like delete_spots (audit 9.3; P0 #13)."""
-    missing = [
-        fn.__name__ for fn in EDITS_THAT_NEED_FORCE if "force" not in signature(fn).parameters
+    """Gives every cast edit a keyword-only `force` parameter (audit 9.3; ADR 0005 item 4)."""
+    not_keyword_only = [
+        fn.__name__
+        for fn in EDITS_THAT_NEED_FORCE
+        if "force" not in signature(fn).parameters
+        or signature(fn).parameters["force"].kind is not Parameter.KEYWORD_ONLY
     ]
-    assert missing == []
+    assert not_keyword_only == []
 
 
 def test_regression_edit_group_keeps_a_validator_schema_error(

@@ -1169,7 +1169,7 @@
   "default_paths": "(show: 'Show', tid: TransitionId) -> showpy.choreo.models.TransitionSpec",
   "define_selection": "(show: 'Show', name: str, sel: Selector) -> 'Show'",
   "delay": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel, counts: float, keep_end: bool = True, force: bool = False) -> showpy.choreo.models.TransitionSpec",
-  "delete_spots": "(show: 'Show', sel: Selector, force: bool = False) -> 'Show'",
+  "delete_spots": "(show: 'Show', sel: Selector, *, force: bool = False) -> 'Show'",
   "density_map": "(s: showpy.choreo.models.Set, sheet: showpy.sheet.models.Sheet, cell: Meters = 1.0) -> NDArray[numpy.int64]",
   "describe_count": "(tl: showpy.time.models.Timeline, c: Count) -> str",
   "detect_form": "(points: object, tol: Meters = 0.1, form_id: FormId = 'detected', members: collections.abc.Sequence[SpotId] = ()) -> showpy.choreo.models.Form",
