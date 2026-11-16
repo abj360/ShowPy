@@ -3,7 +3,8 @@
 """
 test_data.py --- tests JSON interchange, frame CSV, position import, tables and format plugins
 
-Also holds the audited data and CSV defects (UP-9.5-27 to UP-9.5-35, UP-4.3-01) as strict xfails.
+Also holds the audited data and CSV defects (UP-9.5-29 to UP-9.5-34, UP-4.3-01) as strict xfails.
+UP-9.5-35 is fixed; its test below passes.
 
 Contains:
     test_regression_chart_csv_neutralizes_formula_names(): quotes a formula-like performer name
@@ -20,7 +21,7 @@ Contains:
     test_regression_to_text_aligns_wide_cjk_characters(): pads wide characters by display width
     test_regression_export_json_include_accepts_a_single_field_name(): treats a string as one field
     test_regression_import_json_rejects_a_non_mapping_with_schema_error(): raises SchemaError for
-        `[1]`; today an AttributeError leaks from `.get`
+        `[1]` (UP-9.5-35; an AttributeError used to leak)
     test_regression_export_json_ignores_hash_seed(): dumps spot tags and selections in one order
         under every hash seed
     test_import_json_rejects_the_old_stage_tag(): refuses a document tagged stage.show.v1
@@ -318,7 +319,7 @@ def test_regression_export_json_include_accepts_a_single_field_name() -> None:
 
 
 def test_regression_import_json_rejects_a_non_mapping_with_schema_error() -> None:
-    """Raises SchemaError for `[1]`; today an AttributeError leaks from `.get`."""
+    """Raises SchemaError for `[1]`; an AttributeError used to leak from `.get` (UP-9.5-35)."""
     with pytest.raises(SchemaError):
         import_json([1])  # type: ignore[arg-type]
 
