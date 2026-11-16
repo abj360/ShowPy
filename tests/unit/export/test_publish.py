@@ -430,11 +430,11 @@ def _notified(old: Show, new: Show) -> list[tuple[Performer, str]]:
 def test_regression_publish_link_carries_a_caller_supplied_join_token() -> None:
     """Puts a caller-supplied high-entropy token in the joinable link and stores only its hash.
 
-    Contract: the raw token appears in `join_link(pub, token)` and nowhere in the stored
-    publication; the SHA-256 hex digest of the token is stored so later joins can be checked
-    against it (ADR 0018). The link is `base_url/<publication id>`, so anyone who guesses an ID
-    can open the publication and claim with a self-declared performer (audit 9.5 security;
-    P0 #10).
+    The audited defect: the link was `base_url/<publication id>` alone, so anyone who guessed an
+    ID could open the publication and claim with a self-declared performer (audit 9.5 security;
+    P0 #10). The stored link is still `base_url/<publication id>` (ADR 0018), but joining needs
+    the token, which only `join_link(pub, token)` adds after verifying it: the raw token is in
+    that link and nowhere in the stored publication, which keeps only its SHA-256 hex digest.
     """
     token = "k3Qz9-high-entropy-join-token"
     pub = publish(two_set_show(), "pub-1", BASE_URL, AT, join_token=token)

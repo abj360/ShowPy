@@ -30,11 +30,12 @@ The maintainer chose on 2026-11-16 to fix this in the release that already break
    `<base_url>/<publication id>`, and `Publication` stores only `join_token_sha256`. Nothing
    ShowPy persists, exports or renders contains the raw token: `model_dump`, `export_json`,
    print sheets, `repr`, error messages and error contexts.
-2. **`join_link(pub, token) -> str` is the only builder of the joinable link.** It verifies the
-   token against `pub.join_token_sha256` with `verify_join_token` (constant time) and returns
-   `<pub.link>?t=<token>`, the link format E1 used. A malformed token raises `SchemaError`; a
-   wrong token, or a publication that stores no digest, raises `ValidationError`. It fails
-   closed and never echoes the token.
+2. **`join_link(pub, token) -> str` builds the joinable link,** and `qr_code` builds it through
+   `join_link`. It verifies the token against `pub.join_token_sha256` with `verify_join_token`
+   (constant time) and returns `<pub.link>?t=<token>`, the link format E1 used. A malformed
+   token raises `SchemaError`; a wrong token, a publication that stores no digest, or a stored
+   link that already has a query or fragment raises `ValidationError`. It fails closed and
+   never echoes the token.
 3. **`qr_code(pub, token, size=512)` takes the token,** verifies it the same way and encodes
    `join_link(pub, token)`. Its size caps and error level are unchanged. `performer_view` keeps
    building its animation URL from the tokenless `link`; print sheets, charts and
@@ -45,9 +46,12 @@ The maintainer chose on 2026-11-16 to fix this in the release that already break
    `previous.join_token_sha256`; passing a token rotates the digest. A republish of a
    publication that stores no digest (v0.2.0) requires a token, since there is nothing to keep.
 5. **E1-era records load tokenless.** A stored `Publication` whose `link` carries `?t=<token>`
-   loses the `t` parameter when it is validated, before any field is checked, so neither the
-   loaded model nor a validation error echoes it. The digest is kept, so the issued token still
-   joins.
+   loses the `t` parameter (any case, in the query or in a query inside the fragment) when it
+   is validated, before any field is checked, so neither the loaded model nor a validation
+   error echoes it. A `link` that is not text (bytes, a list) is refused with a `SchemaError`
+   that names only its type, since pydantic would coerce bytes after the strip or echo the
+   value. The digest is kept, so the issued token still joins. `model_copy(update=)` skips
+   validators, so it is a host-side gap; `replace` strips.
 
 ## Alternatives
 
