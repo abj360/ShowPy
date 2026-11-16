@@ -68,6 +68,7 @@ Contains:
     test_regression_fill_rejects_non_finite_anchor: raises ShowPyError for a NaN or inf anchor
         (UP-9.1-70)
     test_regression_block_rejects_infinite_facing: raises ShowPyError for an inf facing (UP-9.1-71)
+    test_regression_block_rejects_nan_facing: raises ShowPyError for a NaN facing (UP-9.1-73)
     test_regression_scatter_on_a_field_finishes_or_refuses_within_ten_seconds: bounds a field-size
         scatter near the cap to 10 s (UP-9.1-72)
 """
@@ -584,6 +585,13 @@ def test_regression_block_rejects_infinite_facing(facing: float) -> None:
     """Raises a SpacingError for an infinite facing instead of leaking ValueError."""
     with pytest.raises(ShowPyError):
         block((0.0, 0.0), 2, 2, 1.0, facing=facing)
+
+
+@defect("UP-9.1-73")
+def test_regression_block_rejects_nan_facing() -> None:
+    """Raises a ShowPyError for a NaN facing instead of returning NaN points."""
+    with pytest.raises(ShowPyError):
+        block((0.0, 0.0), 2, 2, 1.0, facing=math.nan)
 
 
 @defect("UP-9.1-72")
