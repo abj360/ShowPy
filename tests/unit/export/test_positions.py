@@ -16,9 +16,12 @@ Contains:
         csv.Error in SchemaError
     test_regression_import_positions_caps_the_placement_count(): refuses a placement blowup
     test_regression_import_positions_caps_the_text_size(): refuses a CSV over the character cap
+    test_regression_import_positions_caps_placements_before_ordering_sets(): refuses 32,000 new
+        sets fast
 """
 
 import math
+import sys
 import time
 
 import pytest
@@ -28,10 +31,12 @@ from showpy.core.errors import LockedError, SchemaError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.export.positions import import_positions
 from tests.fixtures.shows import two_set_show
+from tests.helpers import fails_after
 
 TOL = 1e-9
 FIRST_NEW_SET = 3
 FAST_SECONDS = 1.0
+MANY_NEW_SETS = 32_000
 FULL_TURN = 360.0
 IMPORT_TEXT = """set,counts,entity,x,y,facing
 1,0,T1,0,5,0
@@ -174,3 +179,16 @@ def test_regression_import_positions_caps_the_text_size() -> None:
     """Refuses a CSV text over MAX_TEXT_CHARS before parsing it."""
     with pytest.raises(SchemaError, match="characters"):
         import_positions(two_set_show(), "set\n" + "x" * MAX_TEXT_CHARS, "trumpets")
+
+
+@fails_after(FAST_SECONDS)
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+def test_regression_import_positions_caps_placements_before_ordering_sets() -> None:
+    """Refuses 32,000 new sets in under 1 s; ordering them first took 7.6 s (UP-9.5-60).
+
+    The 586 KB CSV fits the text cap; each row adds a set and a spot, so the placements
+    (32,002 sets by 32,004 spots) exceed MAX_POINTS long before any set is ordered.
+    """
+    rows = "".join(f"{FIRST_NEW_SET + i},4,E{i},1,1\n" for i in range(MANY_NEW_SETS))
+    with pytest.raises(SchemaError, match="placements"):
+        import_positions(two_set_show(), "set,counts,entity,x,y\n" + rows, "trumpets")

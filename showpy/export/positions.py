@@ -132,19 +132,39 @@ def _set_counts(base: Show, rows: list[_PositionRow]) -> dict[SetId, float]:
     return counts
 
 
-def _insert_at(order: list[SetId], file_ids: list[SetId], position: int) -> int:
-    previous = file_ids[position - 1] if position > 0 else None
-    if previous is not None:
-        return order.index(previous) + 1
-    later = [s for s in file_ids[position + 1 :] if s in order]
-    return order.index(later[0]) if later else len(order)
+def _require_placement_cap(base: Show, rows: list[_PositionRow]) -> None:
+    set_ids = {*base.set_ids(), *(r.set_id for r in rows)}
+    spot_ids = {*base.cast.ids(), *(r.entity for r in rows)}
+    require_size(len(set_ids) * len(spot_ids), MAX_POINTS, what="placements")
+
+
+def _chain(first: SetId, follower: dict[SetId, SetId]) -> list[SetId]:
+    chain = [first]
+    while chain[-1] in follower:
+        chain.append(follower[chain[-1]])
+    return chain
 
 
 def _set_order(base: Show, file_ids: list[SetId]) -> list[SetId]:
-    order = base.set_ids()
-    for position, set_id in enumerate(file_ids):
-        if set_id not in order:
-            order.insert(_insert_at(order, file_ids, position), set_id)
+    """Places each new set right after the set before it in the file, in linear time.
+
+    A new set that opens the file goes before the first stored set the file names later, or
+    last when the file names none.
+    """
+    stored = base.set_ids()
+    known = set(stored)
+    follower = {
+        file_ids[i - 1]: set_id for i, set_id in enumerate(file_ids) if i and set_id not in known
+    }
+    leading = file_ids[0] if file_ids and file_ids[0] not in known else None
+    before = next((s for s in file_ids if s in known), None) if leading else None
+    order: list[SetId] = []
+    for set_id in stored:
+        if leading is not None and set_id == before:
+            order += _chain(leading, follower)
+        order += _chain(set_id, follower)
+    if leading is not None and before is None:
+        order += _chain(leading, follower)
     return order
 
 
@@ -252,10 +272,10 @@ def import_positions(
     """
     require_size(len(text), MAX_TEXT_CHARS, what="positions CSV characters")
     rows = _read_rows(text, columns)
+    _require_placement_cap(base, rows)
     counts = _set_counts(base, rows)
     cast = _extend_cast(base, rows, group)
     order = _set_order(base, list(counts))
-    require_size(len(order) * len(cast.ids()), MAX_POINTS, what="placements")
     merge = _Merge(
         base=base,
         cast_ids=cast.ids(),
