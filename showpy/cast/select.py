@@ -209,7 +209,8 @@ def _resolve_spot_kind(cast: Cast, kind: str, name: str, token: _Token) -> tuple
         return tuple(s.id for s in cast.spots if s.shape.kind == name)
     if name not in cast.selections:
         raise _unknown("selection", name, list(cast.selections), token)
-    return tuple(i for i in cast.ids() if i in cast.selections[name])
+    members = set(cast.selections[name])
+    return tuple(i for i in cast.ids() if i in members)
 
 
 def _resolve_kind(universe: _Universe, token: _Token, expr: str) -> tuple[SpotId, ...]:
