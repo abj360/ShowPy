@@ -9,6 +9,9 @@ are the ones v0.2.0 wrote:
     PYTHONPATH=. uv run python <repo>/scripts/make_legacy_fixture.py \
         --out <repo>/tests/fixtures/repos/v0.2.0
 
+Models are edited through full validation and the expected.json oracle lists every set sorted,
+so the oracle does not depend on PYTHONHASHSEED. Only APIs that exist in v0.2.0 are used.
+
 Contains:
     build_fixture(): writes a three-revision repository and its expected.json under a directory
     main(): parses --out and builds the fixture
@@ -19,6 +22,9 @@ import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+
+from pydantic import BaseModel
+from pydantic_core import to_jsonable_python
 
 from showpy.choreo.models import PathRow, PathStyle, Waypoint
 from showpy.core.util import content_hash
@@ -47,23 +53,47 @@ EXPECTED_FILE = "expected.json"
 REPO_DIR = "repo"
 
 
+def _validated[M: BaseModel](model: M, **changes: object) -> M:
+    """Returns a copy of `model` with `changes`, run through every validator.
+
+    v0.2.0 has no `FrozenModel.replace`, and `model_copy(update=)` skips validation.
+    """
+    fields = {name: getattr(model, name) for name in type(model).model_fields}
+    return type(model).model_validate(fields | changes)
+
+
+def _sorted_sets(value: object) -> object:
+    """Turns every set inside a model dump into a list sorted by its JSON text."""
+    if isinstance(value, set | frozenset):
+        items = [_sorted_sets(item) for item in value]
+        return sorted(items, key=lambda item: json.dumps(to_jsonable_python(item), sort_keys=True))
+    if isinstance(value, dict):
+        return {key: _sorted_sets(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_sorted_sets(item) for item in value]
+    return value
+
+
+def _oracle_json(show: Show) -> object:
+    """Dumps a show as JSON data with every set sorted, so the oracle ignores the hash seed."""
+    return to_jsonable_python(_sorted_sets(show.model_dump()))
+
+
 def _edited_show() -> Show:
     """Builds the seeded show plus a negative-zero placement, tags and a named selection."""
     show = seeded_show(seed=SEED, spots=SPOT_COUNT, sets=SET_COUNT)
     spots = list(show.cast.spots)
-    spots[TAGGED_SPOT_INDEX] = spots[TAGGED_SPOT_INDEX].model_copy(
-        update={"tags": frozenset({"lead", "horn"})}
+    spots[TAGGED_SPOT_INDEX] = _validated(
+        spots[TAGGED_SPOT_INDEX], tags=frozenset({"lead", "horn"})
     )
     selection = frozenset(s.id for s in spots[:SELECTION_SIZE])
-    cast = show.cast.model_copy(
-        update={"spots": tuple(spots), "selections": {SELECTION_NAME: selection}}
-    )
+    cast = _validated(show.cast, spots=tuple(spots), selections={SELECTION_NAME: selection})
     first = show.set(NEGATIVE_ZERO_SET)
     placements = list(first.placements)
-    placements[0] = placements[0].model_copy(update={"x": -0.0})
-    edited = first.model_copy(update={"placements": tuple(placements)})
+    placements[0] = _validated(placements[0], x=-0.0)
+    edited = _validated(first, placements=tuple(placements))
     sets = tuple(edited if s.id == first.id else s for s in show.sets)
-    return show.model_copy(update={"cast": cast, "sets": sets})
+    return _validated(show, cast=cast, sets=sets)
 
 
 def _path_edit(show: Show) -> Show:
@@ -71,9 +101,9 @@ def _path_edit(show: Show) -> Show:
     spec = show.transition(PATH_TRANSITION)
     entity = show.cast.spots[0].id
     row = PathRow(entity=entity, style=PathStyle.CURVE, waypoints=(PATH_WAYPOINT,))
-    edited = spec.model_copy(update={"rows": {**spec.rows, entity: row}})
+    edited = _validated(spec, rows={**spec.rows, entity: row})
     others = tuple(t for t in show.transitions if t.id != spec.id)
-    return show.model_copy(update={"transitions": (*others, edited)})
+    return _validated(show, transitions=(*others, edited))
 
 
 def build_fixture(out: Path) -> None:
@@ -103,7 +133,7 @@ def build_fixture(out: Path) -> None:
         "head": third.id,
         "revisions": [first.id, second.id, third.id],
         "legacy_content_hash": content_hash(head),
-        "show": head.model_dump(mode="json"),
+        "show": _oracle_json(head),
     }
     (out / EXPECTED_FILE).write_text(json.dumps(expected, indent=2, sort_keys=True) + "\n")
 
