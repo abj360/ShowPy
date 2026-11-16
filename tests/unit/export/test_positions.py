@@ -4,6 +4,7 @@
 test_positions.py --- tests merging CSV positions into a show
 
 Also holds the audited import defects (UP-9.5-41 to UP-9.5-44) as strict xfails.
+Also holds UP-9.5-58, found by the importer fuzzers.
 
 Contains:
     test_regression_import_positions_reads_a_utf8_bom(): reads a CSV with a byte order mark
@@ -11,6 +12,8 @@ Contains:
     test_regression_import_positions_normalizes_facing(): stores facing 720 as 0 instead of keeping
         it unnormalized
     test_regression_import_positions_rejects_ids_with_spaces(): rejects an entity ID with a space
+    test_regression_import_positions_rejects_a_bare_carriage_return_with_schema_error(): wraps a
+        csv.Error in SchemaError
 """
 
 import pytest
@@ -141,3 +144,9 @@ def test_regression_import_positions_rejects_ids_with_spaces() -> None:
     """Rejects an entity ID that contains a space instead of creating a spot with it."""
     with pytest.raises(SchemaError):
         import_positions(two_set_show(), "set,counts,entity,x,y\n3,4,T 9,1,1\n", "trumpets")
+
+
+def test_regression_import_positions_rejects_a_bare_carriage_return_with_schema_error() -> None:
+    """Raises SchemaError for an unquoted bare CR; csv.Error used to leak (UP-9.5-58)."""
+    with pytest.raises(SchemaError, match="malformed"):
+        import_positions(two_set_show(), "\r0", "trumpets")

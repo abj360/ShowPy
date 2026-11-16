@@ -88,7 +88,17 @@ def _parse_row(
 
 def _read_rows(text: str, columns: Mapping[str, str] | None) -> list[_PositionRow]:
     reader = csv.DictReader(io.StringIO(text))
-    mapping = _header_map(reader.fieldnames or (), columns)
+    try:
+        return _collect_rows(reader, _header_map(reader.fieldnames or (), columns))
+    except csv.Error as error:
+        raise SchemaError(
+            f"line {reader.line_num}: CSV is malformed: {error}",
+            hint="quote cells that hold line breaks and write one record per line",
+            context={"line": reader.line_num},
+        ) from error
+
+
+def _collect_rows(reader: csv.DictReader[str], mapping: dict[str, str]) -> list[_PositionRow]:
     rows: list[_PositionRow] = []
     seen: set[tuple[SetId, SpotId]] = set()
     for record in reader:

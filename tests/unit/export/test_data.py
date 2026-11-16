@@ -317,8 +317,6 @@ def test_regression_export_json_include_accepts_a_single_field_name() -> None:
     assert sorted(document["show"]) == ["id", "title"]
 
 
-@pytest.mark.defect("UP-9.5-35")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-35")
 def test_regression_import_json_rejects_a_non_mapping_with_schema_error() -> None:
     """Raises SchemaError for `[1]`; today an AttributeError leaks from `.get`."""
     with pytest.raises(SchemaError):

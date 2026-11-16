@@ -100,6 +100,12 @@ def import_json(d: Mapping[str, Any]) -> Show:
     >>> import_json(export_json(two_set_show())).id
     'show-1'
     """
+    if not isinstance(d, Mapping):
+        raise SchemaError(
+            f"document is a {type(d).__name__}, not an object",
+            hint=f'documents are JSON objects: {{"schema": "{SCHEMA_TAG}", "show": {{...}}}}',
+            context={"type": type(d).__name__},
+        )
     tag = d.get(SCHEMA_KEY)
     if tag != SCHEMA_TAG:
         raise SchemaError(
