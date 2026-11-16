@@ -164,7 +164,7 @@
       "kind": "showpy.sheet.models.CoordinateKind",
       "labels": "dict[str, str]",
       "origin": "Point | LandmarkId",
-      "precision": "PositiveFinite",
+      "precision": "float",
       "units": "str"
     }
   },

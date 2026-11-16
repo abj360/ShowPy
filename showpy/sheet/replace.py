@@ -90,7 +90,8 @@ def _fit_matrix(src: Points, dst: Points) -> Matrix:
         raise _refuse(
             "REFLECTION",
             "landmarks are mirrored between the sheets",
-            "similarity fits keep handedness; check the landmark pairing or flip the sheet first",
+            "similarity fits keep handedness; check the landmark pairing; to fit a deliberate "
+            "mirror, reflect one set first with showpy.geo.transforms.mirror",
         )
     keep_handedness = np.diag([1.0, -1.0 if is_mirrored else 1.0])
     rotation = u @ keep_handedness @ vt

@@ -29,7 +29,6 @@ from showpy.core.types import (
     FrozenModel,
     Meters,
     Point,
-    PositiveFinite,
     Region,
     Ring,
 )
@@ -189,7 +188,7 @@ class CoordinateSystem(FrozenModel):
     origin: Point | LandmarkId = (0.0, 0.0)
     audience_side: Literal["front", "back", "left", "right"] = "front"
     units: str = "m"
-    precision: PositiveFinite = 0.01
+    precision: float = 0.01
     labels: dict[str, str] = {}
 
 
