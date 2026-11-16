@@ -11,6 +11,7 @@ Contains:
 
 import hashlib
 import re
+import threading
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Protocol, override
@@ -412,29 +413,35 @@ class _MemoryBackend(RepositoryBackend):
         self._logs: dict[str, list[Revision]] = {}
         self._trees: dict[tuple[str, str], dict[str, str]] = {}
         self._blobs: dict[str, bytes] = {}
+        self._lock = threading.Lock()
 
     def show_ids(self) -> list[str]:
-        return list(self._logs)
+        with self._lock:
+            return list(self._logs)
 
     def log(self, show_id: str) -> list[Revision]:
-        return list(self._logs.get(show_id, []))
+        with self._lock:
+            return list(self._logs.get(show_id, []))
 
     def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
-        return dict(self._trees[(show_id, revision_id)])
+        with self._lock:
+            return dict(self._trees[(show_id, revision_id)])
 
     @override
     def blob(self, show_id: str, digest: str) -> bytes:
-        return self._blobs[digest]
+        with self._lock:
+            return self._blobs[digest]
 
     def commit(
         self, show_id: str, revision: Revision, tree: dict[str, str], blobs: dict[str, bytes]
     ) -> None:
-        log = self._logs.setdefault(show_id, [])
-        if (log[-1].id if log else ROOT_REVISION) != revision.parent:
-            raise conflict_error(show_id, revision.parent, log)
-        self._blobs.update(blobs)
-        self._trees[(show_id, revision.id)] = dict(tree)
-        log.append(revision)
+        with self._lock:
+            log = self._logs.setdefault(show_id, [])
+            if (log[-1].id if log else ROOT_REVISION) != revision.parent:
+                raise conflict_error(show_id, revision.parent, log)
+            self._blobs.update(blobs)
+            self._trees[(show_id, revision.id)] = dict(tree)
+            log.append(revision)
 
 
 class InMemoryRepository(DocumentRepository):

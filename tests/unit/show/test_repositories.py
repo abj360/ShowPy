@@ -93,8 +93,6 @@ def _race_winners() -> tuple[list[str], set[str]]:
     return winners, {r.id for r in repo.revisions(SHOW_ID)}
 
 
-@pytest.mark.defect("UP-9.7-02")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-02")
 @fails_after(5)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_memory_commit_has_one_winner_per_parent() -> None:
