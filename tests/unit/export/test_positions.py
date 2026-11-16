@@ -4,7 +4,7 @@
 test_positions.py --- tests merging CSV positions into a show
 
 Also holds the audited import defects (UP-9.5-41 to UP-9.5-44) as strict xfails.
-Also holds UP-9.5-58, found by the importer fuzzers.
+Also holds UP-9.5-58, found by the importer fuzzers, and UP-9.5-60, found by the final review.
 
 Contains:
     test_regression_import_positions_reads_a_utf8_bom(): reads a CSV with a byte order mark
@@ -14,16 +14,24 @@ Contains:
     test_regression_import_positions_rejects_ids_with_spaces(): rejects an entity ID with a space
     test_regression_import_positions_rejects_a_bare_carriage_return_with_schema_error(): wraps a
         csv.Error in SchemaError
+    test_regression_import_positions_caps_the_placement_count(): refuses a placement blowup
+    test_regression_import_positions_caps_the_text_size(): refuses a CSV over the character cap
 """
+
+import math
+import time
 
 import pytest
 
+from showpy.core.caps import MAX_POINTS, MAX_TEXT_CHARS
 from showpy.core.errors import LockedError, SchemaError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.export.positions import import_positions
 from tests.fixtures.shows import two_set_show
 
 TOL = 1e-9
+FIRST_NEW_SET = 3
+FAST_SECONDS = 1.0
 FULL_TURN = 360.0
 IMPORT_TEXT = """set,counts,entity,x,y,facing
 1,0,T1,0,5,0
@@ -150,3 +158,19 @@ def test_regression_import_positions_rejects_a_bare_carriage_return_with_schema_
     """Raises SchemaError for an unquoted bare CR; csv.Error used to leak (UP-9.5-58)."""
     with pytest.raises(SchemaError, match="malformed"):
         import_positions(two_set_show(), "\r0", "trumpets")
+
+
+def test_regression_import_positions_caps_the_placement_count() -> None:
+    """Refuses rows that would build over MAX_POINTS placements; 400 rows took 1 s (UP-9.5-60)."""
+    side = math.isqrt(MAX_POINTS) + 1
+    rows = "".join(f"{FIRST_NEW_SET + i},4,E{i},1,1\n" for i in range(side))
+    started = time.perf_counter()
+    with pytest.raises(SchemaError, match="placements"):
+        import_positions(two_set_show(), "set,counts,entity,x,y\n" + rows, "trumpets")
+    assert time.perf_counter() - started < FAST_SECONDS
+
+
+def test_regression_import_positions_caps_the_text_size() -> None:
+    """Refuses a CSV text over MAX_TEXT_CHARS before parsing it."""
+    with pytest.raises(SchemaError, match="characters"):
+        import_positions(two_set_show(), "set\n" + "x" * MAX_TEXT_CHARS, "trumpets")

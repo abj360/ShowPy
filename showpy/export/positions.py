@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from showpy.cast.models import Cast, Spot
 from showpy.choreo.models import Placement, Set
+from showpy.core.caps import MAX_POINTS, MAX_TEXT_CHARS, require_size
 from showpy.core.errors import SchemaError, UnknownRefError, ValidationError
 from showpy.core.ids import SetId, SpotId
 from showpy.core.types import Point
@@ -249,10 +250,12 @@ def import_positions(
     >>> import_positions(two_set_show(), csv_text, "trumpets").set("3").get("T2").point
     (2.0, 9.0)
     """
+    require_size(len(text), MAX_TEXT_CHARS, what="positions CSV characters")
     rows = _read_rows(text, columns)
     counts = _set_counts(base, rows)
     cast = _extend_cast(base, rows, group)
     order = _set_order(base, list(counts))
+    require_size(len(order) * len(cast.ids()), MAX_POINTS, what="placements")
     merge = _Merge(
         base=base,
         cast_ids=cast.ids(),
