@@ -326,6 +326,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("is_similarity", "showpy.geo.affine", "is_similarity"),
     ("jcs", "showpy.core.canonical", "jcs"),
     ("join", "showpy.geo.shapes", "join"),
+    ("join_link", "showpy.export.publish", "join_link"),
     ("join_sections", "showpy.show.sections", "join_sections"),
     ("label_prefix", "showpy.cast.select", "label_prefix"),
     ("landmark", "showpy.sheet.bounds", "landmark"),

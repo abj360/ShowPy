@@ -8,9 +8,10 @@ Notifications are returned, never sent (item 20).
 Contains:
     publish(): publishes a show revision, carrying forward claims that still qualify
     verify_join_token(): checks a join token against the publication's stored hash
+    join_link(): builds the joinable link from a verified join token
     unpublish(): closes a publication
     pause(): pauses a publication
-    qr_code(): renders the publication link as a PNG QR code
+    qr_code(): renders the joinable link of a verified token as a PNG QR code
     claim_spot(): puts a performer on a spot, one each way, locked on claim
     claims(): lists every claim
     who_is_on(): returns the performer holding a spot
@@ -41,7 +42,14 @@ from showpy.core.errors import LockedError, SchemaError, UnknownRefError, Valida
 from showpy.core.ids import SpotId, TransitionId, format_tid
 from showpy.core.units import angle_diff
 from showpy.core.util import close_matches, content_hash, format_ranges, natural_sort
-from showpy.export.models import Claim, Performer, PerformerView, Publication, PublicationStatus
+from showpy.export.models import (
+    JOIN_PARAMETER,
+    Claim,
+    Performer,
+    PerformerView,
+    Publication,
+    PublicationStatus,
+)
 from showpy.export.print_sheets import OFF_FIELD
 from showpy.sheet.coords import to_coords
 from showpy.show.models import Show
@@ -88,13 +96,34 @@ def _still_valid(show: Show, claim: Claim) -> bool:
     return claim.spot in show.cast.ids() and _may_claim(show.cast.spot(claim.spot), claim.performer)
 
 
-def _require_join_token(join_token: str) -> None:
-    if JOIN_TOKEN_FORMAT.fullmatch(join_token) is None:
+def _require_join_token(join_token: object) -> None:
+    if not isinstance(join_token, str) or JOIN_TOKEN_FORMAT.fullmatch(join_token) is None:
         raise SchemaError(
             "join token must be 22 to 256 characters of A-Z, a-z, 0-9, _ or -",
             hint="generate one with `secrets.token_urlsafe(16)`",
-            context={"length": len(join_token)},
+            context={
+                "type": type(join_token).__name__,
+                "length": len(join_token) if isinstance(join_token, str) else None,
+            },
         )
+
+
+def _token_digest(join_token: str) -> str:
+    return hashlib.sha256(join_token.encode()).hexdigest()
+
+
+def _issued_digest(
+    publication_id: str, previous: Publication | None, join_token: str | None
+) -> str:
+    if join_token is not None:
+        return _token_digest(join_token)
+    if previous is not None and previous.join_token_sha256 is not None:
+        return previous.join_token_sha256
+    raise SchemaError(
+        f"publication {publication_id} needs a join token: it has no stored digest to keep",
+        hint="pass join_token=secrets.token_urlsafe(16); a republish may omit it to keep the token",
+        context={"publication_id": publication_id, "has_previous": previous is not None},
+    )
 
 
 def _reject_base_url(reason: str, parts_scheme: str = "", host: str | None = None) -> SchemaError:
@@ -160,9 +189,9 @@ def publish(
     at: datetime,
     previous: Publication | None = None,
     *,
-    join_token: str,
+    join_token: str | None = None,
 ) -> Publication:
-    """Publishes the show's current revision as a live link that carries a join token.
+    """Publishes the show's current revision as a live link that only a join token opens.
 
     Args:
         show: Show to publish.
@@ -171,21 +200,24 @@ def publish(
         at: Publication time; must carry a time zone.
         previous: The publication being updated; its claims carry over when the spot still
             exists and is still claimable by that performer's role.
-        join_token: Secret of 22 to 256 characters of `[A-Za-z0-9_-]`; it appears only in the
-            link, and the publication stores its SHA-256 digest.
+        join_token: Secret of 22 to 256 characters of `[A-Za-z0-9_-]`, required on the first
+            publish. The publication stores only its SHA-256 digest; `join_link` builds the
+            joinable link. On a republish, None keeps the previous digest and a token rotates it.
 
     Returns:
-        publication: A live publication of the show's revision (its content hash when unsaved).
+        publication: A live publication of the show's revision (its content hash when unsaved),
+            holding no join token.
 
     >>> from datetime import UTC, datetime
     >>> from showpy.examples import two_set_show
     >>> token = "k3Qz9-high-entropy-join-token"
     >>> at = datetime(2026, 1, 1, tzinfo=UTC)
     >>> publish(two_set_show(), "p1", "https://x.example", at, join_token=token).link
-    'https://x.example/p1?t=k3Qz9-high-entropy-join-token'
+    'https://x.example/p1'
     """
     _require_aware(at)
-    _require_join_token(join_token)
+    if join_token is not None:
+        _require_join_token(join_token)
     if not publication_id.strip():
         raise SchemaError(
             "publication needs an ID",
@@ -200,13 +232,14 @@ def publish(
             hint="republish with the same publication ID and show",
             context={"previous": previous.id, "publication_id": publication_id},
         )
+    digest = _issued_digest(publication_id, previous, join_token)
     kept = [c for c in previous.claims if _still_valid(show, c)] if previous else []
     return Publication(
         id=publication_id,
         show_id=show.id,
         revision=show.revision or content_hash(show),
-        link=f"{root}/{quote(publication_id, safe='')}?t={join_token}",
-        join_token_sha256=hashlib.sha256(join_token.encode()).hexdigest(),
+        link=f"{root}/{quote(publication_id, safe='')}",
+        join_token_sha256=digest,
         published_at=at,
         claims=_sorted(kept),
     )
@@ -237,8 +270,43 @@ def verify_join_token(pub: Publication, token: str) -> bool:
         return False
     if JOIN_TOKEN_FORMAT.fullmatch(token) is None:
         return False
-    digest = hashlib.sha256(token.encode()).hexdigest()
-    return hmac.compare_digest(digest, pub.join_token_sha256)
+    return hmac.compare_digest(_token_digest(token), pub.join_token_sha256)
+
+
+def join_link(pub: Publication, token: str) -> str:
+    """Builds the joinable link `<pub.link>?t=<token>` once the token matches the stored digest.
+
+    The publication never holds the token, so the host passes the one it issued at publish.
+
+    Args:
+        pub: Publication whose link performers join through.
+        token: Join token issued with `publish(..., join_token=)`.
+
+    Returns:
+        link: The link performers open, carrying the token.
+
+    >>> from showpy.examples import two_set_show
+    >>> from datetime import UTC, datetime
+    >>> token = "k3Qz9-high-entropy-join-token"
+    >>> at = datetime(2026, 1, 1, tzinfo=UTC)
+    >>> pub = publish(two_set_show(), "p1", "https://x.example", at, join_token=token)
+    >>> join_link(pub, token)
+    'https://x.example/p1?t=k3Qz9-high-entropy-join-token'
+    """
+    _require_join_token(token)
+    if pub.join_token_sha256 is None:
+        raise ValidationError(
+            f"publication {pub.id} stores no join token digest, so nobody can join it",
+            hint="republish it with join_token=secrets.token_urlsafe(16) to issue one",
+            context={"publication": pub.id},
+        )
+    if not verify_join_token(pub, token):
+        raise ValidationError(
+            f"join token does not match publication {pub.id}",
+            hint="pass the token issued at publish; republish with a new join_token if it is lost",
+            context={"publication": pub.id},
+        )
+    return f"{pub.link}?{JOIN_PARAMETER}={token}"
 
 
 def _with_status(pub: Publication, status: PublicationStatus) -> Publication:
@@ -288,18 +356,30 @@ def _make_code(link: str) -> segno.QRCode:
         ) from err
 
 
-def qr_code(pub: Publication, size: int = 512) -> bytes:
-    r"""Renders the publication link as a square PNG QR code of `size` pixels.
+def qr_code(pub: Publication, token: str, size: int = 512) -> bytes:
+    r"""Renders `join_link(pub, token)` as a square PNG QR code of `size` pixels.
 
     Modules are whole pixels, centered with the standard quiet zone, so the code stays sharp.
 
-    >>> from showpy.examples import live_publication
+    Args:
+        pub: Publication whose joinable link is encoded.
+        token: Join token issued at publish; a token that does not verify raises.
+        size: Width and height of the image in pixels.
+
+    Returns:
+        png: The PNG bytes of the code.
+
     >>> from showpy.examples import two_set_show
-    >>> qr_code(live_publication(two_set_show()), size=128)[:4]
+    >>> from datetime import UTC, datetime
+    >>> token = "k3Qz9-high-entropy-join-token"
+    >>> at = datetime(2026, 1, 1, tzinfo=UTC)
+    >>> pub = publish(two_set_show(), "p1", "https://x.example", at, join_token=token)
+    >>> qr_code(pub, token, size=128)[:4]
     b'\x89PNG'
     """
+    link = join_link(pub, token)
     _require_pixel_size(size)
-    code = _make_code(pub.link)
+    code = _make_code(link)
     rows = [
         tuple(bool(m) for m in row) for row in code.matrix_iter(scale=1, border=QR_QUIET_MODULES)
     ]

@@ -7,6 +7,7 @@ Contains:
     ChartRow: holds one spot on a set chart
     Chart: holds every spot of one set, for the designer
     TextTable: holds a titled table of display strings, shared by CSV, text and PDF output
+    JOIN_PARAMETER: names the query parameter that carries the join token in a joinable link
     Performer: describes a real person who joins through a publication link
     Claim: records a performer on a spot
     Publication: holds one published revision of a show and the claims made on it
@@ -14,10 +15,11 @@ Contains:
 """
 
 import re
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from showpy.core.ids import SetId, SpotId
 from showpy.core.types import Count, Degrees, FrozenModel, Point
@@ -25,6 +27,8 @@ from showpy.time.models import MeasureLabel
 
 type PublicationStatus = Literal["live", "paused", "closed"]
 SHA256_HEX = re.compile(r"[0-9a-f]{64}")
+JOIN_PARAMETER = "t"
+LINK_FIELD = "link"
 
 type PerformerRole = Literal["performer", "crew"]
 
@@ -163,15 +167,22 @@ class Claim(FrozenModel):
         return value if value.contact is None else value.replace(contact=None)
 
 
+def _without_join_token(link: str) -> str:
+    head, hash_mark, fragment = link.partition("#")
+    path, _, query = head.partition("?")
+    kept = [p for p in query.split("&") if p and p.partition("=")[0] != JOIN_PARAMETER]
+    return f"{path}{'?' if kept else ''}{'&'.join(kept)}{hash_mark}{fragment}"
+
+
 class Publication(FrozenModel):
-    """Holds one published revision of a show and the claims made on it.
+    """Holds one published revision of a show and the claims made on it; never the join token.
 
     Attributes:
         id: Publication ID, stable across republishing.
         show_id: Show published.
         revision: Show revision the publication shows.
-        link: Public link performers open. It carries the join secret as `?t=<token>`: share it
-            only with performers and do not persist it where viewers can read it.
+        link: Join URL without the token, `<base_url>/<publication id>`; `join_link` adds the
+            token. A `t` parameter in a stored E1-era link is dropped on load (ADR 0018).
         join_token_sha256: SHA-256 hex digest of the join token; hosts verify a join against it
             with `verify_join_token` instead of comparing raw tokens.
         status: `live`, `paused` or `closed`.
@@ -187,6 +198,14 @@ class Publication(FrozenModel):
     status: PublicationStatus = "live"
     published_at: datetime
     claims: tuple[Claim, ...] = ()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_join_token(cls, data: object) -> object:
+        # Runs before field checks, so an error echoing the input record never shows the token.
+        if isinstance(data, Mapping) and isinstance(data.get(LINK_FIELD), str):
+            return {**data, LINK_FIELD: _without_join_token(data[LINK_FIELD])}
+        return data
 
     @field_validator("join_token_sha256")
     @classmethod
