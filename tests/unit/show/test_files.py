@@ -17,6 +17,7 @@ Contains:
         a ShowPyError
     test_regression_index_csv_neutralizes_formula_cues: quotes every formula-looking cue cell
     test_regression_placements_csv_neutralizes_formula_notes: quotes every formula-looking note
+    test_regression_placements_csv_keeps_negative_numbers_unquoted: keeps a negative x a number
     test_regression_bad_comments_file_is_a_schema_error: raises SchemaError for comments files of
         the wrong shape, invalid JSON or invalid UTF-8
 """
@@ -93,6 +94,19 @@ def test_regression_placements_csv_neutralizes_formula_notes(lead: str) -> None:
     note_column = rows[0].index("note")
     assert rows[1][note_column] == f"'{note}"
     assert rows[1][rows[0].index("x")] == "0.0"
+
+
+def test_regression_placements_csv_keeps_negative_numbers_unquoted() -> None:
+    """Leaves a negative x coordinate a plain number while a note beside it is quoted."""
+    show = two_set_show()
+    first = show.sets[0]
+    entity = first.placements[0].entity
+    moved = first.with_placements({entity: {"x": -3.5, "note": "=1+1"}})
+    show = show.model_copy(update={"sets": (moved, show.sets[1])})
+    _, agent, _ = open_session(show, AT)
+    rows = _rows(agent.read("/sets/1/placements.csv"))
+    assert rows[1][rows[0].index("x")] == "-3.5"
+    assert rows[1][rows[0].index("note")] == "'=1+1"
 
 
 def test_regression_commit_refuses_garbage_show_document() -> None:
