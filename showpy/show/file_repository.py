@@ -193,6 +193,17 @@ class _FileBackend:
             raise self._corrupt(show_id, source, f"{value!r} is not a 64-digit hex id")
         return value
 
+    def _caller_id(self, show_id: str, value: str, role: str) -> str:
+        if not REVISION_ID_PATTERN.fullmatch(value):
+            raise StorageError(
+                f"{role} {value!r} is not a revision ID",
+                hint="revision IDs are 64 lowercase hex digits made by "
+                "DocumentRepository.transaction",
+                context={"show": show_id, role: value},
+                code="BAD_REVISION_ID",
+            )
+        return value
+
     def _guard_dirs(self, show_id: str) -> None:
         base = self._dir(show_id)
         for directory in (base, base / OBJECT_DIR, base / TREE_DIR, base / LINK_DIR):
@@ -322,9 +333,9 @@ class _FileBackend:
     ) -> None:
         self._guard_dirs(show_id)
         base = self._dir(show_id)
-        tree_name = self._checked_id(show_id, revision.id, base / TREE_DIR)
+        tree_name = self._caller_id(show_id, revision.id, "revision id")
         if revision.parent:
-            self._checked_id(show_id, revision.parent, base / LINK_DIR)
+            self._caller_id(show_id, revision.parent, "parent id")
         _require_readable_sizes(show_id, tree, blobs)
         for digest, data in blobs.items():
             target = base / OBJECT_DIR / self._checked_id(show_id, digest, base / OBJECT_DIR)

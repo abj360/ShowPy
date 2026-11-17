@@ -51,11 +51,14 @@ Contains:
     test_regression_swapped_blob_is_corrupt_naming_its_file: reports a blob whose bytes miss their
         digest as CORRUPT with the object path
     test_regression_backend_refuses_a_traversal_revision_id: refuses a revision ID that would put
-        its tree file outside the repository, writing nothing
+        its tree file outside the repository with BAD_REVISION_ID, writing nothing
     test_regression_oversized_blob_is_refused_before_it_is_written: refuses a blob over the read
         cap at commit, so the show stays readable
     test_regression_object_swapped_after_lstat_is_refused: refuses a symlink or FIFO swapped in
         between the lstat check and the open, without following or blocking on it
+    test_regression_backend_refuses_a_malformed_parent_id: blames the caller for a malformed parent
+        ID passed to commit
+    test_regression_stored_malformed_id_stays_corrupt: keeps CORRUPT for a malformed stored ID
 """
 
 import errno
@@ -566,10 +569,29 @@ def test_regression_backend_refuses_a_traversal_revision_id(tmp_path: Path) -> N
     raw = b"escaped"
     escaped = Revision(id=TRAVERSAL_ID, parent=rev, at=AT, changed=("/renders/b.txt",))
     tree = {**repo.backend.tree(SHOW_ID, rev), "/renders/b.txt": digest(raw)}
-    _assert_corrupt(lambda: repo.backend.commit(SHOW_ID, escaped, tree, {digest(raw): raw}))
+    with pytest.raises(StorageError) as caught:
+        repo.backend.commit(SHOW_ID, escaped, tree, {digest(raw): raw})
+    assert caught.value.code == "BAD_REVISION_ID"
+    assert "64 lowercase hex digits" in caught.value.hint
     assert _all_files(tmp_path) == before
     assert not (base / "trees" / f"{TRAVERSAL_ID}.json").resolve().exists()
     assert repo.head(SHOW_ID) == rev
+
+
+def test_regression_backend_refuses_a_malformed_parent_id(tmp_path: Path) -> None:
+    """Blames the caller, not the repository, for a malformed parent ID passed to commit."""
+    repo, rev, _ = _saved(tmp_path)
+    child = Revision(id=HEX_ID, parent=TRAVERSAL_ID, at=AT, changed=())
+    with pytest.raises(StorageError) as caught:
+        repo.backend.commit(SHOW_ID, child, repo.backend.tree(SHOW_ID, rev), {})
+    assert caught.value.code == "BAD_REVISION_ID"
+
+
+def test_regression_stored_malformed_id_stays_corrupt(tmp_path: Path) -> None:
+    """Keeps CORRUPT for a malformed ID read from the repository folder."""
+    repo, _, base = _saved(tmp_path)
+    (base / "next" / "root").write_text(TRAVERSAL_ID)
+    _assert_corrupt(lambda: repo.backend.log(SHOW_ID))
 
 
 SMALL_BLOB_CAP = 100_000
