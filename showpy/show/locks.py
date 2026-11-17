@@ -105,7 +105,6 @@ def require_unlocked(before: Show, after: Show, force: bool = False) -> None:
     if touched:
         raise LockedError(
             f"edit touches pinned or locked items: {', '.join(touched)}",
-            hint="leave pinned items as they are, ask the designer to unpin, or pass force=True "
-            "as the designer",
+            hint="leave pinned items as they are, unpin them first, or pass force=True",
             context={"touched": touched},
         )

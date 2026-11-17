@@ -63,7 +63,6 @@
   },
   "CanvasEvent": {
     "model": {
-      "actor": "Principal",
       "at": "datetime.datetime",
       "id": "str",
       "kind": "EventKind",
@@ -705,15 +704,15 @@
       "head": "(self, show_id: str) -> str",
       "list_sets": "(self, show_id: str) -> list[SetId]",
       "paths": "(self, show_id: str, revision: str | None = None) -> list[str]",
-      "put_forms": "(self, show_id: str, set_id: SetId, forms: tuple[showpy.choreo.models.Form, ...], *, expected_revision: str, actor: Principal, at: datetime.datetime, message: str) -> showpy.show.models.Revision",
-      "put_paths": "(self, show_id: str, spec: showpy.choreo.models.TransitionSpec, *, expected_revision: str, actor: Principal, at: datetime.datetime, message: str) -> showpy.show.models.Revision",
-      "put_script": "(self, show_id: str, set_id: SetId, source: str, *, expected_revision: str, actor: Principal, at: datetime.datetime, message: str) -> showpy.show.models.Revision",
-      "put_set": "(self, show_id: str, new_set: showpy.choreo.models.Set, *, expected_revision: str, actor: Principal, at: datetime.datetime, message: str) -> showpy.show.models.Revision",
-      "put_show": "(self, show_id: str, show: showpy.show.models.Show, *, expected_revision: str, actor: Principal, at: datetime.datetime, message: str) -> showpy.show.models.Revision",
+      "put_forms": "(self, show_id: str, set_id: SetId, forms: tuple[showpy.choreo.models.Form, ...], *, expected_revision: str, at: datetime.datetime) -> showpy.show.models.Revision",
+      "put_paths": "(self, show_id: str, spec: showpy.choreo.models.TransitionSpec, *, expected_revision: str, at: datetime.datetime) -> showpy.show.models.Revision",
+      "put_script": "(self, show_id: str, set_id: SetId, source: str, *, expected_revision: str, at: datetime.datetime) -> showpy.show.models.Revision",
+      "put_set": "(self, show_id: str, new_set: showpy.choreo.models.Set, *, expected_revision: str, at: datetime.datetime) -> showpy.show.models.Revision",
+      "put_show": "(self, show_id: str, show: showpy.show.models.Show, *, expected_revision: str, at: datetime.datetime) -> showpy.show.models.Revision",
       "read": "(self, show_id: str, path: str, revision: str | None = None) -> bytes | None",
       "revisions": "(self, show_id: str) -> list[showpy.show.models.Revision]",
       "shows": "(self) -> list[str]",
-      "transaction": "(self, show_id: str, changes: collections.abc.Mapping[str, bytes | None], *, expected_revision: str, actor: Principal, at: datetime.datetime, message: str, kind: RevisionKind = 'edit', target: str | None = None) -> showpy.show.models.Revision"
+      "transaction": "(self, show_id: str, changes: collections.abc.Mapping[str, bytes | None], *, expected_revision: str, at: datetime.datetime) -> showpy.show.models.Revision"
     }
   },
   "RepositoryBackend": {
@@ -727,14 +726,10 @@
   },
   "Revision": {
     "model": {
-      "actor": "Principal",
       "at": "datetime.datetime",
       "changed": "tuple[str, ...]",
       "id": "str",
-      "kind": "RevisionKind",
-      "message": "str",
-      "parent": "str",
-      "target": "str | None"
+      "parent": "str"
     }
   },
   "Route": {
@@ -1054,7 +1049,7 @@
       "y": "Meters"
     }
   },
-  "Workspace": "(repo: showpy.show.storage.Repository, show_id: str, principal: Principal, revision: str)",
+  "Workspace": "(repo: showpy.show.storage.Repository, show_id: str, revision: str)",
   "ZeroLengthError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
   "Zone": {
     "model": {
@@ -1281,7 +1276,7 @@
   "offset": "(curve: showpy.geo.curve_base.Curve, distance: Meters, side: str = 'left') -> showpy.geo.curve_base.Curve",
   "on_field_ids": "(s: showpy.choreo.models.Set, sel: SetSelector = 'all') -> tuple[SpotId, ...]",
   "on_surface": "(sheet: showpy.sheet.models.Sheet, p: Point) -> bool",
-  "open_workspace": "(repo: showpy.show.storage.Repository, show_id: str, principal: Principal) -> showpy.show.storage.Workspace",
+  "open_workspace": "(repo: showpy.show.storage.Repository, show_id: str) -> showpy.show.storage.Workspace",
   "ordered_along": "(set_: showpy.choreo.models.Set, sel: Selector, by: OrderBy = 'form') -> showpy.core.selection.Selection",
   "parse_path": "(d: str) -> list[showpy.geo.svg.Subpath]",
   "parse_range": "(text: str) -> list[str]",
@@ -1311,7 +1306,6 @@
   "rebuild": "(show: showpy.show.models.Show, form_id: FormId, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> showpy.show.models.Show",
   "rect": "(center: Point, w: Meters, d: Meters, rotation_deg: Degrees = 0.0) -> showpy.geo.curves.Polyline",
   "rect_ring": "(x0: float, y0: float, x1: float, y1: float) -> Ring",
-  "redo": "(ws: showpy.show.storage.Workspace, at: datetime.datetime) -> showpy.show.models.Revision",
   "region": "(outline: showpy.geo.curve_base.Curve | object) -> shapely.geometry.polygon.Polygon",
   "register_exporter": "(registry: showpy.export.data.FormatRegistry, name: str, fn: Exporter) -> showpy.export.data.FormatRegistry",
   "register_form_fn": "(registry: showpy.choreo.form_fns.FormFnRegistry, name: str, fn: FormFn) -> showpy.choreo.form_fns.FormFnRegistry",
@@ -1351,7 +1345,7 @@
   "round_to": "(value: float, precision: float = 0.01) -> float",
   "save_paths": "(ws: showpy.show.storage.Workspace, spec: showpy.choreo.models.TransitionSpec, at: datetime.datetime) -> str",
   "save_sheet": "(store: showpy.sheet.templates.SheetStore, sheet: showpy.sheet.models.Sheet, scope: SheetScope = 'mine') -> SheetRef",
-  "save_show": "(ws: showpy.show.storage.Workspace, show: showpy.show.models.Show, at: datetime.datetime, message: str = 'save show') -> showpy.show.models.Revision",
+  "save_show": "(ws: showpy.show.storage.Workspace, show: showpy.show.models.Show, at: datetime.datetime) -> showpy.show.models.Revision",
   "scale": "(obj: T, sx: float, sy: float | None = None, about: About = 'center', sel: SetSelector = 'all', force: bool = False) -> T",
   "scale_matrix": "(sx: float, sy: float, about: Point) -> Matrix",
   "scatter": "(area: Area, n: int, min_gap: Meters, seed: int = 0) -> Points",
@@ -1385,7 +1379,6 @@
   "slots": "(form: showpy.choreo.models.Form, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> Points",
   "snap": "(obj: T, precision: Meters, mode: Literal['round', 'floor', 'ceil'] = 'round', axes: Literal['x', 'y', 'xy'] = 'xy', sel: SetSelector = 'all', force: bool = False) -> tuple[T, showpy.geo.models.SnapReport]",
   "snap_to_guides": "(obj: T, sheet: showpy.sheet.models.Sheet, tol: Meters, kinds: collections.abc.Sequence[str] | None = None, sel: SetSelector = 'all', force: bool = False) -> T",
-  "snapshot": "(ws: showpy.show.storage.Workspace, message: str, at: datetime.datetime) -> showpy.show.models.Revision",
   "space_along": "(curve: showpy.geo.curve_base.Curve, n: int, start: Meters = 0.0, end: Meters | None = None, endpoints: bool = True) -> Points",
   "space_by_interval": "(curve: showpy.geo.curve_base.Curve, interval: Meters, start: Meters = 0.0, n: int | None = None, align: Literal['start', 'end', 'center'] = 'start') -> Points",
   "space_proportional": "(curves: collections.abc.Sequence[showpy.geo.curve_base.Curve], n: int) -> list[Points]",
@@ -1433,7 +1426,6 @@
   "turn": "(start: Degrees, end: Degrees, u: float, direction: showpy.choreo.models.TurnDirection = <TurnDirection.SHORTEST: 'shortest'>) -> Degrees",
   "two_part": "(show: showpy.show.models.Show, spec: showpy.choreo.models.TransitionSpec, sel: collections.abc.Sequence[SpotId], corner: Literal['x_first', 'y_first'] | Point, split: float | None = None, *, force: bool = False) -> showpy.choreo.models.TransitionSpec",
   "unclaimed": "(pub: showpy.export.models.Publication, show: showpy.show.models.Show) -> list[SpotId]",
-  "undo": "(ws: showpy.show.storage.Workspace, at: datetime.datetime) -> showpy.show.models.Revision",
   "union": "(*areas: Area) -> Area",
   "units": "() -> dict[str, float]",
   "unlock": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel) -> showpy.choreo.models.TransitionSpec",

@@ -105,11 +105,11 @@ def _one_spot_edit(show: Show, x: float) -> Show:
 
 def _history(base: Show, revisions: int) -> Workspace:
     repo = InMemoryRepository()
-    save_show(open_workspace(repo, SHOW_ID, "designer"), base, AT)
+    save_show(open_workspace(repo, SHOW_ID), base, AT)
     for n in range(revisions):
-        ws = open_workspace(repo, SHOW_ID, "designer")
+        ws = open_workspace(repo, SHOW_ID)
         save_show(ws, _one_spot_edit(load_show(ws), float(n % 2)), AT + STEP * (n + 1))
-    return open_workspace(repo, SHOW_ID, "designer")
+    return open_workspace(repo, SHOW_ID)
 
 
 def test_min_gaps_one_transition(
@@ -151,9 +151,9 @@ def test_validate_show(benchmark: BenchmarkFixture, tier: BenchTier, show: Show)
 
 def test_one_spot_edit_save(benchmark: BenchmarkFixture, tier: BenchTier, show: Show) -> None:
     def fresh() -> tuple[tuple[Workspace, Show, datetime], dict[str, Any]]:
-        ws = open_workspace(InMemoryRepository(), SHOW_ID, "designer")
+        ws = open_workspace(InMemoryRepository(), SHOW_ID)
         save_show(ws, show, AT)
-        loaded = load_show(open_workspace(ws.repo, SHOW_ID, "designer"))
+        loaded = load_show(open_workspace(ws.repo, SHOW_ID))
         return (ws, _one_spot_edit(loaded, -1.0), AT + STEP), {}
 
     _record(benchmark, tier, budget_s=BUDGET_S["one_spot_save"])

@@ -43,7 +43,7 @@ def _show_json(ws: Workspace) -> dict[str, object]:
 
 
 def _store_then_read(ws: Workspace, path: str, raw: bytes) -> None:
-    ws.commit({path: raw}, at=LATER, message="store")
+    ws.commit({path: raw}, at=LATER)
     ws.read(path)
 
 
@@ -51,14 +51,14 @@ def test_regression_commit_refuses_garbage_show_document() -> None:
     """Refuses a commit of bytes that are not a show document (audit 9.7 item 4; P0 #4)."""
     _, designer = _session()
     with pytest.raises(ShowPyError):
-        designer.commit({SHOW_DOC: b"garbage"}, at=LATER, message="oops")
+        designer.commit({SHOW_DOC: b"garbage"}, at=LATER)
 
 
 def test_regression_commit_refuses_unknown_root() -> None:
     """Refuses a commit under a root no reader can open (audit 9.7 item 4; P0 #4)."""
     _, designer = _session()
     with pytest.raises(ShowPyError):
-        designer.commit({"/mystery/x.txt": b"1"}, at=LATER, message="oops")
+        designer.commit({"/mystery/x.txt": b"1"}, at=LATER)
 
 
 def test_any_valid_write_lands() -> None:

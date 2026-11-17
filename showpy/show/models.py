@@ -45,8 +45,6 @@ from showpy.time.models import MeasureLabel, Timeline
 INDEX_TOL = 1e-9
 
 type PinTarget = Literal["entity", "form", "set", "transition"]
-type Principal = Literal["agent", "designer", "system"]
-type RevisionKind = Literal["edit", "snapshot", "revert", "undo", "redo"]
 type EventKind = Literal[
     "move", "edit_form", "pin", "unpin", "edit_paths", "comment", "set_counts", "highlight"
 ]
@@ -301,27 +299,19 @@ class PathDiff(FrozenModel):
 
 
 class Revision(FrozenModel):
-    """Records one saved state of a show; the ID hashes the parent plus the change.
+    """Records one saved state of a show: what changed and when, never who or why (ADR 0003).
 
     Attributes:
-        id: Content hash of parent, change and metadata.
+        id: Content hash of parent, time and change.
         parent: Previous revision; empty for the first.
         at: When it was saved; passed in, never read from the clock.
-        actor: Who saved it.
-        message: What the change was for.
         changed: Workspace paths written or deleted, sorted.
-        kind: Plain edit, empty snapshot, revert, undo or redo.
-        target: Revision an undo, redo or revert acts on.
     """
 
     id: str
     parent: str
     at: datetime
-    actor: Principal
-    message: str
     changed: tuple[str, ...] = ()
-    kind: RevisionKind = "edit"
-    target: str | None = None
 
 
 class Comment(FrozenModel):
@@ -408,7 +398,6 @@ class CanvasEvent(FrozenModel):
     Attributes:
         id: Event ID.
         at: When it happened.
-        actor: Who made it.
         kind: What happened.
         payload: JSON body for the kind.
         revision: Revision that holds the edit; empty for pointers such as highlights.
@@ -416,7 +405,6 @@ class CanvasEvent(FrozenModel):
 
     id: str
     at: datetime
-    actor: Principal
     kind: EventKind
     # Any: payloads are JSON objects whose fields depend on the kind.
     payload: dict[str, Any]

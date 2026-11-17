@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_storage.py --- tests documents, repositories, assets, the workspace file view and ownership
+test_storage.py --- tests documents, repositories, assets and the workspace file view
 """
 
 import json
@@ -54,9 +54,7 @@ def _saved(repo: Repository, show: Show | None = None) -> str:
         SHOW_ID,
         show or two_set_show(),
         expected_revision="",
-        actor="designer",
         at=AT,
-        message="create",
     )
     return rev.id
 
@@ -106,7 +104,7 @@ def test_repository_round_trip_and_revision_fields(make_repo: RepoFactory) -> No
     loaded = repo.get_show(SHOW_ID)
     assert loaded == _rich_show().model_copy(update={"revision": rev})
     (revision,) = repo.revisions(SHOW_ID)
-    assert (revision.parent, revision.actor, revision.at) == ("", "designer", AT)
+    assert (revision.parent, revision.at) == ("", AT)
     assert "/show/show.json" in revision.changed
     assert repo.shows() == [SHOW_ID]
 
@@ -120,24 +118,19 @@ def test_revision_ids_are_deterministic(tmp_path: Path) -> None:
 def test_stale_write_raises_conflict_listing_changes(make_repo: RepoFactory) -> None:
     repo = make_repo()
     base = _saved(repo)
-    repo.put_script(
-        SHOW_ID, "1", "x = 1\n", expected_revision=base, actor="designer", at=LATER, message="m"
-    )
+    landed = repo.put_script(SHOW_ID, "1", "x = 1\n", expected_revision=base, at=LATER)
     with pytest.raises(ConflictError) as info:
-        repo.put_script(
-            SHOW_ID, "2", "y = 2\n", expected_revision=base, actor="agent", at=LATER, message="n"
-        )
+        repo.put_script(SHOW_ID, "2", "y = 2\n", expected_revision=base, at=LATER)
     changes = info.value.context["changes"]
-    assert [c["actor"] for c in changes] == ["designer"]
+    assert [c["id"] for c in changes] == [landed.id]
     assert changes[0]["changed"] == ["/sets/1/set.py"]
+    assert f"{landed.id[:7]} {LATER.isoformat()} (/sets/1/set.py)" in info.value.message
 
 
 def test_identical_write_is_idempotent(make_repo: RepoFactory) -> None:
     repo = make_repo()
     base = _saved(repo)
-    again = repo.put_show(
-        SHOW_ID, two_set_show(), expected_revision=base, actor="agent", at=LATER, message="same"
-    )
+    again = repo.put_show(SHOW_ID, two_set_show(), expected_revision=base, at=LATER)
     assert again.id == base
     assert len(repo.revisions(SHOW_ID)) == 1
 
@@ -146,24 +139,16 @@ def test_typed_accessors(make_repo: RepoFactory) -> None:
     repo = make_repo()
     rev = _saved(repo)
     moved = repo.get_set(SHOW_ID, "2").with_placements({"T1": {"x": -5.0}})
-    rev = repo.put_set(
-        SHOW_ID, moved, expected_revision=rev, actor="agent", at=LATER, message="move"
-    ).id
+    rev = repo.put_set(SHOW_ID, moved, expected_revision=rev, at=LATER).id
     assert repo.get_set(SHOW_ID, "2").get("T1").x == -5.0
     spec = TransitionSpec(id=("1", "2"), counts=99.0, rows={"T2": PathRow(entity="T2", end=4)})
-    rev = repo.put_paths(
-        SHOW_ID, spec, expected_revision=rev, actor="agent", at=LATER, message="paths"
-    ).id
+    rev = repo.put_paths(SHOW_ID, spec, expected_revision=rev, at=LATER).id
     assert repo.get_paths(SHOW_ID, ("1", "2")).counts == 8.0
     form = Form(id="f", set="2", kind="line", geometry={}, members=("T1",))
-    rev = repo.put_forms(
-        SHOW_ID, "2", (form,), expected_revision=rev, actor="agent", at=LATER, message="forms"
-    ).id
+    rev = repo.put_forms(SHOW_ID, "2", (form,), expected_revision=rev, at=LATER).id
     assert repo.get_forms(SHOW_ID, "2") == (form,)
     with pytest.raises(SchemaError):
-        repo.put_forms(
-            SHOW_ID, "1", (form,), expected_revision=rev, actor="agent", at=LATER, message="x"
-        )
+        repo.put_forms(SHOW_ID, "1", (form,), expected_revision=rev, at=LATER)
     assert repo.list_sets(SHOW_ID) == ["1", "2"]
     assert repo.get_timeline(SHOW_ID) == two_set_show().timeline
     assert (repo.get_limits(SHOW_ID), repo.get_waivers(SHOW_ID)) == ("", "")
@@ -174,12 +159,8 @@ def test_typed_accessors(make_repo: RepoFactory) -> None:
 def test_put_show_deletes_removed_set_documents(make_repo: RepoFactory) -> None:
     repo = make_repo()
     rev = _saved(repo, add_set(two_set_show(), "3", 4.0))
-    rev = repo.put_script(
-        SHOW_ID, "3", "pass\n", expected_revision=rev, actor="agent", at=AT, message="s"
-    ).id
-    repo.put_show(
-        SHOW_ID, two_set_show(), expected_revision=rev, actor="agent", at=LATER, message="drop"
-    )
+    rev = repo.put_script(SHOW_ID, "3", "pass\n", expected_revision=rev, at=AT).id
+    repo.put_show(SHOW_ID, two_set_show(), expected_revision=rev, at=LATER)
     assert not [p for p in repo.paths(SHOW_ID) if p.startswith("/sets/3/")]
 
 
@@ -207,11 +188,9 @@ def test_file_repository_race_lets_only_one_writer_land(tmp_path: Path) -> None:
     root = tmp_path / "repo"
     base = _saved(FileRepository(root))
     one, two = FileRepository(root), FileRepository(root)
-    one.put_script(SHOW_ID, "1", "a\n", expected_revision=base, actor="agent", at=AT, message="a")
+    one.put_script(SHOW_ID, "1", "a\n", expected_revision=base, at=AT)
     with pytest.raises(ConflictError):
-        two.put_script(
-            SHOW_ID, "1", "b\n", expected_revision=base, actor="designer", at=AT, message="b"
-        )
+        two.put_script(SHOW_ID, "1", "b\n", expected_revision=base, at=AT)
     assert len(FileRepository(root).revisions(SHOW_ID)) == 2
 
 
@@ -228,7 +207,7 @@ def test_asset_store() -> None:
 
 def _workspaces(repo: Repository) -> tuple[Workspace, Workspace]:
     _saved(repo)
-    return open_workspace(repo, SHOW_ID, "agent"), open_workspace(repo, SHOW_ID, "designer")
+    return open_workspace(repo, SHOW_ID), open_workspace(repo, SHOW_ID)
 
 
 def test_workspace_reads_documents_and_derived_tables() -> None:
@@ -327,10 +306,10 @@ def test_workspace_write_validates_content() -> None:
 
 def test_stale_workspace_write_lists_designer_changes() -> None:
     agent, designer = _workspaces(InMemoryRepository())
-    designer.write("/sets/1/set.py", "pass\n", at=AT, message="designer tweak")
+    landed = designer.write("/sets/1/set.py", "pass\n", at=AT)
     with pytest.raises(ConflictError) as info:
         agent.write("/sets/2/set.py", "pass\n", at=LATER)
-    assert info.value.context["changes"][0]["message"] == "designer tweak"
+    assert info.value.context["changes"][0]["id"] == landed.id
     agent.refresh()
     agent.write("/sets/2/set.py", "pass\n", at=LATER)
 
@@ -340,10 +319,10 @@ def test_save_show_conflict_lists_designer_changes() -> None:
     mine = load_show(agent)
     theirs = load_show(designer)
     moved = theirs.sets[1].with_placements({"T2": {"x": 10.0}})
-    save_show(designer, theirs.model_copy(update={"sets": (theirs.sets[0], moved)}), AT, "move")
+    landed = save_show(designer, theirs.model_copy(update={"sets": (theirs.sets[0], moved)}), AT)
     with pytest.raises(ConflictError) as info:
         save_show(agent, mine.model_copy(update={"title": "New"}), LATER)
-    assert info.value.context["changes"][0]["actor"] == "designer"
+    assert info.value.context["changes"][0]["changed"] == list(landed.changed)
     agent.refresh()
     fresh = load_show(agent)
     save_show(agent, fresh.model_copy(update={"title": "New"}), LATER)
@@ -354,7 +333,7 @@ def test_workspace_save_lands_edits_to_pinned_items() -> None:
     agent, designer = _workspaces(InMemoryRepository())
     show = load_show(designer)
     pinned = show.sets[1].with_placements({"T1": {"pinned": True}})
-    save_show(designer, show.model_copy(update={"sets": (show.sets[0], pinned)}), AT, "pin")
+    save_show(designer, show.model_copy(update={"sets": (show.sets[0], pinned)}), AT)
     agent.refresh()
     current = load_show(agent)
     moved = current.sets[1].with_placements({"T1": {"x": 3.0}}, force=True)
@@ -363,7 +342,7 @@ def test_workspace_save_lands_edits_to_pinned_items() -> None:
 
 
 def test_open_workspace_before_first_save() -> None:
-    ws = open_workspace(InMemoryRepository(), "fresh", "designer")
+    ws = open_workspace(InMemoryRepository(), "fresh")
     assert ws.revision == ""
     assert "show/" in ws.ls("/")
     with pytest.raises(StorageError):

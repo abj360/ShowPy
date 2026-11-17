@@ -1,21 +1,21 @@
 """
-storage.py --- the repository and asset protocols plus the agent's file view of a show
+storage.py --- the repository and asset protocols plus the file view of a show
 
 Contains:
     ROOT_REVISION: names the revision before the first save
     Repository: versions a show's documents; every write checks the expected revision
     AssetStore: stores binary assets under content-hash URIs
-    Workspace: exposes one show as files to one principal, with ownership rules
+    Workspace: exposes one show as files, reading at its own revision like a working copy
     Workspace.read(): returns a file's text or bytes
     Workspace.write(): validates and saves one file
     Workspace.ls(): lists a directory
-    Workspace.commit(): saves a batch of document changes under the principal's rules
+    Workspace.commit(): saves a batch of document changes as one revision
     Workspace.refresh(): moves the workspace to the head revision
     Workspace.show_at(): returns the show at a revision, or None before the first save
     Workspace.tree_at(): returns the stored documents at a revision
     open_workspace(): opens a workspace at the head revision
     load_show(): reads the whole show at the workspace revision
-    save_show(): writes the whole show, refusing when the designer changed it meanwhile
+    save_show(): writes the whole show, refusing when another write landed meanwhile
 """
 
 from collections.abc import Mapping
@@ -34,11 +34,10 @@ from showpy.show.files import (
     show_changes,
     staged_changes,
 )
-from showpy.show.models import Principal, Revision, RevisionKind, Show
+from showpy.show.models import Revision, Show
 from showpy.time.models import Timeline
 
 ROOT_REVISION = ""
-SAVE_MESSAGE = "save show"
 
 
 class Repository(Protocol):
@@ -78,16 +77,11 @@ class Repository(Protocol):
         changes: Mapping[str, bytes | None],
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
-        kind: RevisionKind = "edit",
-        target: str | None = None,
     ) -> Revision:
         """Writes (bytes) or deletes (None) documents atomically as one revision.
 
-        An edit that changes nothing returns the head revision unchanged (idempotent upsert);
-        a `snapshot` records an empty revision.
+        An edit that changes nothing returns the head revision unchanged (idempotent upsert).
         """
         ...
 
@@ -101,9 +95,7 @@ class Repository(Protocol):
         show: Show,
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
     ) -> Revision:
         """Writes the whole show, deleting documents of sets and paths it no longer has."""
         ...
@@ -122,9 +114,7 @@ class Repository(Protocol):
         new_set: Set,
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
     ) -> Revision:
         """Replaces one existing set."""
         ...
@@ -140,9 +130,7 @@ class Repository(Protocol):
         source: str,
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
     ) -> Revision:
         """Replaces a set's build script."""
         ...
@@ -157,9 +145,7 @@ class Repository(Protocol):
         spec: TransitionSpec,
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
     ) -> Revision:
         """Replaces a transition's paths; counts follow the destination set."""
         ...
@@ -175,9 +161,7 @@ class Repository(Protocol):
         forms: tuple[Form, ...],
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
     ) -> Revision:
         """Replaces a set's forms."""
         ...
@@ -208,24 +192,21 @@ class AssetStore(Protocol):
 
 
 class Workspace:
-    """Exposes one show as files to one principal.
+    """Exposes one show as files.
 
     The workspace reads at its own revision, like a working copy. Writes default to expecting
     that revision, so an edit made against a stale view raises ConflictError instead of
-    overwriting the designer. `refresh()` moves to the head; each successful write moves to
-    the revision it created. Agents may not write designer-owned files or touch pins and
-    pinned items.
+    overwriting a newer save. `refresh()` moves to the head; each successful write moves to
+    the revision it created. Who may write what is the host's decision (ADR 0003).
 
     Attributes:
         repo: Storage backend.
         show_id: Show being edited.
-        principal: Who is editing.
     """
 
-    def __init__(self, repo: Repository, show_id: str, principal: Principal, revision: str):
+    def __init__(self, repo: Repository, show_id: str, revision: str):
         self.repo = repo
         self.show_id = show_id
-        self.principal: Principal = principal
         self._revision = revision
         self._trees: dict[str, dict[str, bytes]] = {}
         self._shows: dict[str, Show | None] = {}
@@ -272,9 +253,9 @@ class Workspace:
         >>> from showpy.examples import two_set_show
         >>> from datetime import datetime, UTC
         >>> repo = InMemoryRepository()
-        >>> _ = repo.put_show("show-1", two_set_show(), expected_revision="", actor="designer",
-        ...                   at=datetime(2026, 11, 11, tzinfo=UTC), message="create")
-        >>> open_workspace(repo, "show-1", "agent").read("/sets/2/placements.csv").splitlines()[1]
+        >>> _ = repo.put_show("show-1", two_set_show(), expected_revision="",
+        ...                   at=datetime(2026, 11, 11, tzinfo=UTC))
+        >>> open_workspace(repo, "show-1").read("/sets/2/placements.csv").splitlines()[1]
         'T1,0.0,9.0,0.0,,,False,True,'
         """
         split_path(path)
@@ -305,20 +286,14 @@ class Workspace:
         changes: Mapping[str, bytes | None],
         *,
         at: datetime,
-        message: str,
         expected_revision: str | None = None,
-        kind: RevisionKind = "edit",
-        target: str | None = None,
     ) -> Revision:
         """Saves document changes as one revision.
 
         Args:
             changes: Path to new bytes, or None to delete.
             at: Time stamp of the revision.
-            message: What the change is for.
             expected_revision: Revision the change was made against; default the workspace's.
-            kind: Revision kind, for undo and redo bookkeeping.
-            target: Revision an undo, redo or revert acts on.
 
         Returns:
             revision: The new head; the workspace moves to it.
@@ -328,11 +303,7 @@ class Workspace:
             self.show_id,
             changes,
             expected_revision=base,
-            actor=self.principal,
             at=at,
-            message=message,
-            kind=kind,
-            target=target,
         )
         self._revision = revision.id
         return revision
@@ -344,7 +315,6 @@ class Workspace:
         expected_revision: str | None = None,
         *,
         at: datetime,
-        message: str = "",
     ) -> Revision:
         """Validates and saves one file.
 
@@ -353,7 +323,6 @@ class Workspace:
             data: New content; text files take UTF-8.
             expected_revision: Revision the edit was made against; default the workspace's.
             at: Time stamp of the revision.
-            message: What the change is for; default `write <path>`.
 
         Returns:
             revision: The new head.
@@ -361,25 +330,17 @@ class Workspace:
         split_path(path)
         raw = data.encode() if isinstance(data, str) else data
         changes = staged_changes(path, raw, self._show(), self._tree())
-        return self.commit(
-            changes, at=at, message=message or f"write {path}", expected_revision=expected_revision
-        )
+        return self.commit(changes, at=at, expected_revision=expected_revision)
 
 
-def open_workspace(repo: Repository, show_id: str, principal: Principal) -> Workspace:
+def open_workspace(repo: Repository, show_id: str) -> Workspace:
     """Opens a workspace on a show at its head revision.
 
     >>> from showpy.show.repositories import InMemoryRepository
-    >>> open_workspace(InMemoryRepository(), "new-show", "designer").revision
+    >>> open_workspace(InMemoryRepository(), "new-show").revision
     ''
     """
-    if principal not in ("agent", "designer", "system"):
-        raise UnknownRefError(
-            f"unknown principal {principal!r}",
-            hint="use agent, designer or system",
-            context={"principal": principal},
-        )
-    return Workspace(repo, show_id, principal, repo.head(show_id))
+    return Workspace(repo, show_id, repo.head(show_id))
 
 
 def load_show(ws: Workspace) -> Show:
@@ -394,18 +355,18 @@ def load_show(ws: Workspace) -> Show:
     return show
 
 
-def save_show(ws: Workspace, show: Show, at: datetime, message: str = SAVE_MESSAGE) -> Revision:
+def save_show(ws: Workspace, show: Show, at: datetime) -> Revision:
     """Writes the whole show against `show.revision`, the revision it was loaded at.
 
-    Raises ConflictError listing every revision (actor, message, paths) saved since, so the
-    agent sees what the designer changed; reload, reapply and save again.
+    Raises ConflictError listing every revision (short ID, time, paths) saved since, so the
+    caller sees what changed meanwhile; reload, reapply and save again.
 
     >>> from showpy.show.repositories import InMemoryRepository
     >>> from showpy.examples import two_set_show
     >>> from datetime import datetime, UTC
-    >>> ws = open_workspace(InMemoryRepository(), "show-1", "designer")
+    >>> ws = open_workspace(InMemoryRepository(), "show-1")
     >>> save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC)).parent
     ''
     """
     changes = show_changes(show, ws.tree_at(show.revision))
-    return ws.commit(changes, at=at, message=message, expected_revision=show.revision)
+    return ws.commit(changes, at=at, expected_revision=show.revision)

@@ -74,8 +74,8 @@ def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
 
     >>> from datetime import UTC
     >>> from showpy.examples import two_set_show
-    >>> event = CanvasEvent(id="e1", at=datetime(2026, 11, 11, tzinfo=UTC), actor="designer",
-    ...                     kind="set_counts", payload={"op": "counts", "set_id": "2", "counts": 6})
+    >>> event = CanvasEvent(id="e1", at=datetime(2026, 11, 11, tzinfo=UTC), kind="set_counts",
+    ...                     payload={"op": "counts", "set_id": "2", "counts": 6})
     >>> apply_event(two_set_show(), event).set("2").counts
     6.0
     """
@@ -156,7 +156,6 @@ def _revision_events(ws: Workspace, r: Revision) -> list[CanvasEvent]:
         CanvasEvent(
             id=f"{r.id[:EVENT_ID_LENGTH]}-{n}",
             at=r.at,
-            actor=r.actor,
             kind=kind,
             payload=payload,
             revision=r.id,
@@ -283,7 +282,7 @@ def accept(ws: Workspace, proposal: Proposal, at: datetime) -> Revision:
     head = load_show(ws)
     _require_no_overlap(ws, proposal, head)
     edited = apply_change(head, proposal.change)
-    return save_show(ws, edited, at, f"accept proposal {proposal.id}: {proposal.note}")
+    return save_show(ws, edited, at)
 
 
 def reject(proposal: Proposal, reason: str) -> Proposal:
@@ -320,9 +319,7 @@ def highlight(
         if isinstance(target, Anchor)
         else {"zone": target}
     )
-    return CanvasEvent(
-        id=event_id, at=at, actor="agent", kind="highlight", payload={**pointed, "ttl_s": ttl_s}
-    )
+    return CanvasEvent(id=event_id, at=at, kind="highlight", payload={**pointed, "ttl_s": ttl_s})
 
 
 def selection(ws: Workspace) -> Selection:

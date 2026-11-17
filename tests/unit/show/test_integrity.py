@@ -81,17 +81,13 @@ def _repo() -> tuple[InMemoryRepository, str]:
         SHOW_ID,
         encode_show(two_set_show()),
         expected_revision="",
-        actor="designer",
         at=AT,
-        message="create",
     )
     return repo, revision.id
 
 
 def _commit(repo: InMemoryRepository, head: str, changes: dict[str, bytes | None]) -> None:
-    repo.transaction(
-        SHOW_ID, changes, expected_revision=head, actor="designer", at=AT, message="edit"
-    )
+    repo.transaction(SHOW_ID, changes, expected_revision=head, at=AT)
 
 
 @pytest.mark.parametrize(
@@ -273,15 +269,15 @@ def _count_decodes(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 def test_one_spot_edit_decodes_only_changed_documents(monkeypatch: pytest.MonkeyPatch) -> None:
     """Counts decodes on a warm cache: a cast edit decodes none, a set edit decodes one set."""
     repo = InMemoryRepository()
-    ws = open_workspace(repo, SHOW_ID, "designer")
+    ws = open_workspace(repo, SHOW_ID)
     save_show(ws, seeded_show(3, 30, 8), AT)
     calls = _count_decodes(monkeypatch)
-    show = load_show(open_workspace(repo, SHOW_ID, "designer"))
+    show = load_show(open_workspace(repo, SHOW_ID))
     calls.clear()
     shape = Shape(kind="rectangle")
     save_show(ws, set_shape(show, show.cast.spots[0].id, shape), AT)
     assert calls == []
-    ws = open_workspace(repo, SHOW_ID, "designer")
+    ws = open_workspace(repo, SHOW_ID)
     show = load_show(ws)
     calls.clear()
     renamed = tuple(s.replace(label="renamed") if s.id == "3" else s for s in show.sets)
@@ -349,8 +345,8 @@ def test_removing_a_set_deletes_its_documents() -> None:
     """Keeps save_show from leaving the removed set's documents behind."""
     show = seeded_show(3, 10, 4)
     repo = InMemoryRepository()
-    save_show(open_workspace(repo, SHOW_ID, "designer"), show, AT)
-    ws = open_workspace(repo, SHOW_ID, "designer")
+    save_show(open_workspace(repo, SHOW_ID), show, AT)
+    ws = open_workspace(repo, SHOW_ID)
     save_show(ws, remove_set(load_show(ws), "2", force=True), AT)
     stored = repo.paths(SHOW_ID)
     assert not [p for p in stored if p.startswith("/sets/2/")]

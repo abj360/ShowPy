@@ -23,7 +23,7 @@ from showpy.show.decode_cache import DecodeCache
 from showpy.show.documents import decode_show, script_doc, split_path
 from showpy.show.files import LIMITS_DOC, WAIVERS_DOC, show_changes
 from showpy.show.integrity import blob_digest, require_known_path, require_valid_digests
-from showpy.show.models import Principal, Revision, RevisionKind, Show
+from showpy.show.models import Revision, Show
 from showpy.show.storage import ROOT_REVISION
 from showpy.time.models import Timeline
 
@@ -75,8 +75,10 @@ class RepositoryBackend(Protocol):
 
 
 def conflict_error(show_id: str, expected: str, landed: list[Revision]) -> ConflictError:
-    """Builds the ConflictError listing each landed revision's actor, message and paths."""
-    summary = "; ".join(f"{r.actor} {r.message} ({', '.join(r.changed)})" for r in landed)
+    """Builds the ConflictError listing each landed revision's short ID, time and paths."""
+    summary = "; ".join(
+        f"{r.id[:SHORT_ID]} {r.at.isoformat()} ({', '.join(r.changed)})" for r in landed
+    )
     return ConflictError(
         f"{len(landed)} revision(s) landed on {show_id} since {expected[:SHORT_ID] or 'the start'}:"
         f" {summary}",
@@ -177,11 +179,7 @@ class DocumentRepository:
         changes: Mapping[str, bytes | None],
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
-        kind: RevisionKind = "edit",
-        target: str | None = None,
     ) -> Revision:
         """Writes or deletes documents atomically as one revision with a deterministic ID.
 
@@ -189,11 +187,7 @@ class DocumentRepository:
             show_id: Show written.
             changes: Path to new bytes, or None to delete.
             expected_revision: Head the caller read at; ConflictError when the head moved.
-            actor: Who writes.
             at: Time stamp.
-            message: What the change is for.
-            kind: Revision kind.
-            target: Revision an undo, redo or revert acts on.
 
         Returns:
             revision: The new head, or the unchanged head when nothing differs.
@@ -201,10 +195,8 @@ class DocumentRepository:
         >>> from datetime import UTC
         >>> repo = InMemoryRepository()
         >>> at = datetime(2026, 11, 11, tzinfo=UTC)
-        >>> rev = repo.transaction("s", {"/renders/a.txt": b"hi"}, expected_revision="",
-        ...                        actor="agent", at=at, message="render")
-        >>> repo.transaction("s", {"/renders/a.txt": b"hi"}, expected_revision=rev.id,
-        ...                  actor="agent", at=at, message="again") == rev
+        >>> rev = repo.transaction("s", {"/renders/a.txt": b"hi"}, expected_revision="", at=at)
+        >>> repo.transaction("s", {"/renders/a.txt": b"hi"}, expected_revision=rev.id, at=at) == rev
         True
         """
         for path in changes:
@@ -217,7 +209,7 @@ class DocumentRepository:
         for path in (p for p, d in changes.items() if d is None):
             new.pop(path, None)
         changed = tuple(sorted(p for p in set(old) | set(new) if old.get(p) != new.get(p)))
-        if not changed and kind != "snapshot":
+        if not changed:
             if not log:
                 raise StorageError(
                     f"nothing to save for {show_id}",
@@ -228,21 +220,13 @@ class DocumentRepository:
         body = {
             "parent": expected_revision,
             "at": at.isoformat(),
-            "actor": actor,
-            "message": message,
-            "kind": kind,
-            "target": target,
             "changes": {p: new.get(p) for p in changed},
         }
         revision = Revision(
             id=content_hash(body, domain=REVISION_HASH_DOMAIN),
             parent=expected_revision,
             at=at,
-            actor=actor,
-            message=message,
             changed=changed,
-            kind=kind,
-            target=target,
         )
         self._require_valid_tree(show_id, old, new, blobs)
         self.backend.commit(show_id, revision, new, blobs)
@@ -267,18 +251,14 @@ class DocumentRepository:
         show: Show,
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
     ) -> Revision:
         """Writes the whole show, deleting documents of sets and paths it no longer has."""
         return self.transaction(
             show_id,
             show_changes(show, self._documents(show_id, expected_revision)),
             expected_revision=expected_revision,
-            actor=actor,
             at=at,
-            message=message,
         )
 
     def list_sets(self, show_id: str) -> list[SetId]:
@@ -295,9 +275,7 @@ class DocumentRepository:
         new_set: Set,
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
     ) -> Revision:
         """Replaces one existing set; add sets through put_show()."""
         show = self.get_show(show_id, expected_revision or None)
@@ -307,9 +285,7 @@ class DocumentRepository:
             show_id,
             show.replace(sets=sets),
             expected_revision=expected_revision,
-            actor=actor,
             at=at,
-            message=message,
         )
 
     def get_script(self, show_id: str, set_id: SetId) -> str:
@@ -331,9 +307,7 @@ class DocumentRepository:
         source: str,
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
     ) -> Revision:
         """Replaces a set's build script."""
         self.get_show(show_id, expected_revision or None).set(set_id)
@@ -341,9 +315,7 @@ class DocumentRepository:
             show_id,
             {script_doc(set_id): source.encode()},
             expected_revision=expected_revision,
-            actor=actor,
             at=at,
-            message=message,
         )
 
     def get_paths(self, show_id: str, tid: TransitionId) -> TransitionSpec:
@@ -356,9 +328,7 @@ class DocumentRepository:
         spec: TransitionSpec,
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
     ) -> Revision:
         """Replaces a transition's paths; counts follow the destination set (ADR 0001 item 16)."""
         show = self.get_show(show_id, expected_revision or None)
@@ -368,9 +338,7 @@ class DocumentRepository:
             show_id,
             show.replace(transitions=specs),
             expected_revision=expected_revision,
-            actor=actor,
             at=at,
-            message=message,
         )
 
     def get_forms(self, show_id: str, set_id: SetId) -> tuple[Form, ...]:
@@ -386,9 +354,7 @@ class DocumentRepository:
         forms: tuple[Form, ...],
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
     ) -> Revision:
         """Replaces a set's forms; every form must name that set."""
         wrong = [f.id for f in forms if f.set != set_id]
@@ -406,9 +372,7 @@ class DocumentRepository:
             show_id,
             edited,
             expected_revision=expected_revision,
-            actor=actor,
             at=at,
-            message=message,
         )
 
     def get_timeline(self, show_id: str) -> Timeline:

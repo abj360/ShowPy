@@ -3,6 +3,7 @@ file_repository.py --- a repository that keeps every revision as files under a r
 
 Contains:
     REVISION_ID_PATTERN: matches the 64-digit hex IDs allowed in next/ links and tree digests
+    LEGACY_REVISION_KEYS: names the authorship keys v0.1 and v0.2 stored in revision records
     FileRepository: keeps every revision as JSON and blob files under a root directory
 """
 
@@ -24,6 +25,7 @@ LINK_DIR = "next"
 OBJECT_DIR = "objects"
 TEMP_PREFIX = ".tmp-"
 REVISION_ID_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+LEGACY_REVISION_KEYS = frozenset({"actor", "message", "kind", "target"})
 
 
 def _temp_copy(directory: Path, data: bytes) -> Path:
@@ -137,10 +139,20 @@ class _FileBackend:
             if current in seen:
                 raise self._corrupt(show_id, link, "next/ links form a cycle")
             seen.add(current)
-            revision = Revision.model_validate(self._record(show_id, current, link)["revision"])
+            revision = self._stored_revision(show_id, current, link)
             self._check_revision(show_id, revision, current, previous, link)
             log.append(revision)
         return log
+
+    def _stored_revision(self, show_id: str, revision_id: str, source: Path) -> Revision:
+        """Decodes a stored revision; v0.1 and v0.2 records lose their authorship keys (ADR 0003).
+
+        The file is never rewritten: its ID still hashes the dropped keys, and stays as stored.
+        """
+        stored = self._record(show_id, revision_id, source)["revision"]
+        if isinstance(stored, dict):
+            stored = {k: v for k, v in stored.items() if k not in LEGACY_REVISION_KEYS}
+        return Revision.model_validate(stored)
 
     def _check_revision(
         self, show_id: str, revision: Revision, expected_id: str, parent: str, source: Path

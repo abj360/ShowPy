@@ -9,7 +9,7 @@ Contains:
     pin_spot(): pins one spot's placement in one set of a show
     replaced_form_show(): places form a on set "2", then re-places the set with form b only
     with_curve_rows(): gives the spots curved path rows through (1, 7) in transition 1 -> 2
-    open_session(): saves a show to a fresh repository and opens agent and designer workspaces
+    open_session(): saves a show to a fresh repository and opens two independent workspaces on it
     bisector_rotation(): returns a pivot and sweep whose arc carries one point onto another
     defect(): marks a test as an open audited defect, a strict xfail keyed on its ID
     capped_address_space(): caps the address space so a runaway allocation fails fast
@@ -55,7 +55,6 @@ FIRST_TRANSITION = ("1", "2")
 CURVE_COUNTS = 8.0
 CURVE_WAYPOINT = Waypoint(x=1, y=7)
 SHOW_ID = "s"
-CREATE_MESSAGE = "create"
 STILL_TOL_M = 1e-6
 FULL_TURN = 360.0
 HALF_TURN = 180.0
@@ -159,15 +158,17 @@ def with_curve_rows(show: Show, entities: Iterable[str], locked: bool = False) -
 
 
 def open_session(show: Show, at: datetime) -> tuple[InMemoryRepository, Workspace, Workspace]:
-    """Saves `show` as the designer, then opens an agent workspace on the same repository.
+    """Saves `show` through one workspace, then opens a second one on the same repository.
+
+    Two working copies let a test write through one while the other holds a stale view.
 
     Returns:
-        session: The repository, the agent workspace and the designer workspace.
+        session: The repository, the second workspace and the workspace that saved the show.
     """
     repo = InMemoryRepository()
-    designer = open_workspace(repo, SHOW_ID, "designer")
-    save_show(designer, show, at, CREATE_MESSAGE)
-    return repo, open_workspace(repo, SHOW_ID, "agent"), designer
+    saver = open_workspace(repo, SHOW_ID)
+    save_show(saver, show, at)
+    return repo, open_workspace(repo, SHOW_ID), saver
 
 
 def _angle(origin: Point, p: Point) -> float:

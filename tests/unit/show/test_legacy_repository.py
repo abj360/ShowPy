@@ -10,6 +10,12 @@ Contains:
         revision record
     test_commit_on_v020_repository_gets_a_new_scheme_id: commits on a copy and checks that the new
         ID uses the domain-tagged scheme while stored IDs and the head chain stay as written
+    test_regression_v02_revisions_load_without_authorship: loads the fixture's revisions with only
+        id, parent, at and changed, every stored ID still listed and nothing on disk rewritten
+    test_new_records_carrying_authorship_are_refused: refuses actor on a new Revision or
+        CanvasEvent
+    test_stored_record_with_an_unknown_key_is_refused: drops only the legacy keys from a stored
+        record, so any other extra key still fails
 """
 
 import hashlib
@@ -19,12 +25,16 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import pytest
+
+from showpy.core.errors import SchemaError
 from showpy.core.util import content_hash
 from showpy.show.file_repository import FileRepository
-from showpy.show.models import Show
+from showpy.show.models import CanvasEvent, Revision, Show
 
 FIXTURE = Path(__file__).resolve().parents[2] / "fixtures" / "repos" / "v0.2.0"
 LEGACY_KEYS = {"actor", "message", "kind"}
+REVISION_FIELDS = {"id", "parent", "at", "changed"}
 COMMITTED_AT = datetime(2026, 11, 16, 9, 0, tzinfo=UTC)
 HEX_LENGTH = 64
 
@@ -62,18 +72,12 @@ def test_commit_on_v020_repository_gets_a_new_scheme_id(tmp_path: Path) -> None:
         show_id,
         head_show.model_copy(update={"title": f"{head_show.title} v2"}),
         expected_revision=expected["head"],
-        actor="designer",
         at=COMMITTED_AT,
-        message="rename",
     )
     tree = repo.backend.tree(show_id, revision.id)
     body = {
         "parent": expected["head"],
         "at": COMMITTED_AT.isoformat(),
-        "actor": "designer",
-        "message": "rename",
-        "kind": revision.kind,
-        "target": revision.target,
         "changes": {path: tree.get(path) for path in revision.changed},
     }
     legacy_scheme = json.dumps(body, sort_keys=True, separators=(",", ":"), default=str).encode()
@@ -84,3 +88,37 @@ def test_commit_on_v020_repository_gets_a_new_scheme_id(tmp_path: Path) -> None:
     assert [r.id for r in repo.revisions(show_id)] == [*expected["revisions"], revision.id]
     assert repo.get_show(show_id, expected["head"]) == Show.model_validate(expected["show"])
     assert content_hash(head_show) != expected["legacy_content_hash"]
+
+
+def test_regression_v02_revisions_load_without_authorship(tmp_path: Path) -> None:
+    expected = _expected()
+    shutil.copytree(FIXTURE / "repo", tmp_path / "repo")
+    before = {p: p.read_bytes() for p in (tmp_path / "repo").rglob("*") if p.is_file()}
+    revisions = FileRepository(tmp_path / "repo").revisions(expected["show_id"])
+    assert [r.id for r in revisions] == expected["revisions"]
+    for revision in revisions:
+        assert set(type(revision).model_fields) == REVISION_FIELDS
+        assert set(revision.model_dump()) == REVISION_FIELDS
+    assert {p: p.read_bytes() for p in (tmp_path / "repo").rglob("*") if p.is_file()} == before
+
+
+def test_new_records_carrying_authorship_are_refused() -> None:
+    with pytest.raises(SchemaError):
+        Revision.model_validate(
+            {"id": "a", "parent": "", "at": COMMITTED_AT, "changed": [], "actor": "designer"}
+        )
+    with pytest.raises(SchemaError):
+        CanvasEvent.model_validate(
+            {"id": "e", "at": COMMITTED_AT, "kind": "comment", "payload": {}, "actor": "agent"}
+        )
+
+
+def test_stored_record_with_an_unknown_key_is_refused(tmp_path: Path) -> None:
+    expected = _expected()
+    shutil.copytree(FIXTURE / "repo", tmp_path / "repo")
+    record_path = tmp_path / "repo" / expected["show_id"] / "trees" / f"{expected['head']}.json"
+    record = json.loads(record_path.read_text())
+    record["revision"]["author"] = "pat"
+    record_path.write_text(json.dumps(record))
+    with pytest.raises(SchemaError):
+        FileRepository(tmp_path / "repo").revisions(expected["show_id"])

@@ -95,7 +95,6 @@ def pin(show: Show, target: PinTarget, pin_id: str, reason: str = "", by: str = 
 
     Entity pins pin the spot's placement in every set; set pins pin every placement and lock
     every form of the set; form pins lock the form; transition pins lock a row for every spot.
-    Only the designer pins: an agent's save that changes pins raises LockedError.
 
     >>> from showpy.examples import two_set_show
     >>> pinned = pin(two_set_show(), "entity", "T1", "soloist")

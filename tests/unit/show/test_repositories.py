@@ -40,9 +40,7 @@ MAX_SHOW_ID_LENGTH = 300
 
 
 def _create(repo: Repository, show_id: str = SHOW_ID) -> str:
-    return repo.put_show(
-        show_id, two_set_show(), expected_revision="", actor="designer", at=AT, message="create"
-    ).id
+    return repo.put_show(show_id, two_set_show(), expected_revision="", at=AT).id
 
 
 class _SyncedBlobs(dict[str, bytes]):
@@ -71,9 +69,7 @@ def _race_winners() -> tuple[list[str], set[str]]:
                 SHOW_ID,
                 {f"/renders/{n}.txt": f"x{n}".encode()},
                 expected_revision="",
-                actor="agent",
                 at=AT,
-                message=f"w{n}",
             )
         except ConflictError:
             return

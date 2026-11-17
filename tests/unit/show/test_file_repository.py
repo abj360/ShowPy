@@ -63,9 +63,7 @@ SHOW_DOC = "/show/show.json"
 
 def _saved(tmp_path: Path) -> tuple[FileRepository, str, Path]:
     repo = FileRepository(tmp_path / "repo")
-    rev = repo.put_show(
-        SHOW_ID, two_set_show(), expected_revision="", actor="designer", at=AT, message="create"
-    )
+    rev = repo.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT)
     return repo, rev.id, tmp_path / "repo" / SHOW_ID
 
 
@@ -74,9 +72,7 @@ def _second_revision(repo: FileRepository, parent: str) -> str:
         SHOW_ID,
         {"/renders/a.txt": b"hi"},
         expected_revision=parent,
-        actor="agent",
         at=AT,
-        message="render",
     ).id
 
 
@@ -183,8 +179,6 @@ def test_regression_losing_commit_leaves_no_orphan_tree(tmp_path: Path) -> None:
         id="loser",
         parent=rev,
         at=AT,
-        actor="agent",
-        message="late",
         changed=("/renders/b.txt",),
     )
     tree = {"/renders/b.txt": digest(loser_blob)}

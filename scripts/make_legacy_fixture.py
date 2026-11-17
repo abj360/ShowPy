@@ -13,6 +13,8 @@ Models are edited through full validation and the expected.json oracle lists eve
 so the oracle does not depend on PYTHONHASHSEED. Only APIs that exist in v0.2.0 are used.
 
 Contains:
+    oracle_json(): dumps a show as JSON data with every set sorted
+    fixture_shows(): builds the shows of the three revisions: the save, a path edit and a pin
     build_fixture(): writes a three-revision repository and its expected.json under a directory
     main(): parses --out and builds the fixture
 """
@@ -74,7 +76,7 @@ def _sorted_sets(value: object) -> object:
     return value
 
 
-def _oracle_json(show: Show) -> object:
+def oracle_json(show: Show) -> object:
     """Dumps a show as JSON data with every set sorted, so the oracle ignores the hash seed."""
     return to_jsonable_python(_sorted_sets(show.model_dump()))
 
@@ -106,6 +108,18 @@ def _path_edit(show: Show) -> Show:
     return _validated(show, transitions=(*others, edited))
 
 
+def fixture_shows() -> tuple[Show, Show, Show]:
+    """Builds the shows the three revisions save: the seeded show, a path edit and a pin.
+
+    Returns:
+        shows: The show of each revision, oldest first.
+    """
+    saved = _edited_show()
+    edited = _path_edit(saved)
+    pinned = pin(edited, "entity", edited.cast.spots[PINNED_SPOT_INDEX].id, "soloist")
+    return saved, edited, pinned
+
+
 def build_fixture(out: Path) -> None:
     """Writes the three-revision repository and expected.json under `out`.
 
@@ -113,19 +127,33 @@ def build_fixture(out: Path) -> None:
         out: Empty or missing directory that receives the repository and expected.json.
     """
     repo = FileRepository(out / REPO_DIR)
-    show = _edited_show()
-    changes = show_changes(show, {})
+    saved, edited, pinned = fixture_shows()
+    changes = show_changes(saved, {})
     changes[script_doc(SCRIPT_SET)] = SCRIPT_SOURCE.encode()
-    first = repo.transaction(
-        SHOW_ID, changes, expected_revision="", actor="designer", at=STAMP, message="Save"
+    # This script runs from tag v0.2.0, so its writes use the v0.2.0 API (actor= and message=).
+    first = repo.transaction(  # type: ignore[call-arg]
+        SHOW_ID,
+        changes,
+        expected_revision="",
+        actor="designer",  # pyright: ignore[reportCallIssue]
+        at=STAMP,
+        message="Save",  # pyright: ignore[reportCallIssue]
     )
-    show = _path_edit(show)
-    second = repo.put_show(
-        SHOW_ID, show, expected_revision=first.id, actor="agent", at=STAMP, message="Edit paths"
+    second = repo.put_show(  # type: ignore[call-arg]
+        SHOW_ID,
+        edited,
+        expected_revision=first.id,
+        actor="agent",  # pyright: ignore[reportCallIssue]
+        at=STAMP,
+        message="Edit paths",  # pyright: ignore[reportCallIssue]
     )
-    show = pin(show, "entity", show.cast.spots[PINNED_SPOT_INDEX].id, "soloist")
-    third = repo.put_show(
-        SHOW_ID, show, expected_revision=second.id, actor="designer", at=STAMP, message="Pin"
+    third = repo.put_show(  # type: ignore[call-arg]
+        SHOW_ID,
+        pinned,
+        expected_revision=second.id,
+        actor="designer",  # pyright: ignore[reportCallIssue]
+        at=STAMP,
+        message="Pin",  # pyright: ignore[reportCallIssue]
     )
     head = repo.get_show(SHOW_ID)
     expected = {
@@ -133,7 +161,7 @@ def build_fixture(out: Path) -> None:
         "head": third.id,
         "revisions": [first.id, second.id, third.id],
         "legacy_content_hash": content_hash(head),
-        "show": _oracle_json(head),
+        "show": oracle_json(head),
     }
     (out / EXPECTED_FILE).write_text(json.dumps(expected, indent=2, sort_keys=True) + "\n")
 
