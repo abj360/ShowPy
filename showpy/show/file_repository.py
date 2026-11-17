@@ -7,7 +7,7 @@ Contains:
     NO_HARDLINK_ERRNOS: lists the errno values meaning the file system cannot hard-link
     LINK_MAX_BYTES: caps the size of a next/ link file read
     TREE_MAX_BYTES: caps the size of a tree record read
-    BLOB_MAX_BYTES: caps the size of a blob read
+    BLOB_MAX_BYTES: caps the size of a blob written or read
     FileRepository: keeps every revision as JSON and blob files under a root directory
 """
 
@@ -131,6 +131,20 @@ def _lstat_mode(show_id: str, path: Path) -> int | None:
             return os.lstat(path).st_mode
         except FileNotFoundError:
             return None
+
+
+def _require_readable_sizes(show_id: str, tree: dict[str, str], blobs: dict[str, bytes]) -> None:
+    """Refuses blobs over BLOB_MAX_BYTES before any write, since reads would refuse them."""
+    oversized = {d for d, data in blobs.items() if len(data) > BLOB_MAX_BYTES}
+    if not oversized:
+        return
+    paths = sorted(p for p, d in tree.items() if d in oversized)
+    raise StorageError(
+        f"files of {show_id} over the {BLOB_MAX_BYTES}-byte cap: {', '.join(paths)}",
+        hint="keep each file under the cap; store larger media outside the repository",
+        context={"show": show_id, "paths": paths, "cap": BLOB_MAX_BYTES},
+        code="TOO_LARGE",
+    )
 
 
 class _FileBackend:
@@ -286,6 +300,7 @@ class _FileBackend:
         tree_name = self._checked_id(show_id, revision.id, base / TREE_DIR)
         if revision.parent:
             self._checked_id(show_id, revision.parent, base / LINK_DIR)
+        _require_readable_sizes(show_id, tree, blobs)
         for digest, data in blobs.items():
             target = base / OBJECT_DIR / self._checked_id(show_id, digest, base / OBJECT_DIR)
             mode = _lstat_mode(show_id, target)

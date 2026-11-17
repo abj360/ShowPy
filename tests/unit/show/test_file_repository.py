@@ -52,6 +52,8 @@ Contains:
         digest as CORRUPT with the object path
     test_regression_backend_refuses_a_traversal_revision_id: refuses a revision ID that would put
         its tree file outside the repository, writing nothing
+    test_regression_oversized_blob_is_refused_before_it_is_written: refuses a blob over the read
+        cap at commit, so the show stays readable
 """
 
 import errno
@@ -69,6 +71,7 @@ from typing import Any, NoReturn
 
 import pytest
 
+import showpy.show.file_repository as file_repository
 from showpy.core.errors import ConflictError, StorageError
 from showpy.show.file_repository import (
     BLOB_MAX_BYTES,
@@ -565,3 +568,28 @@ def test_regression_backend_refuses_a_traversal_revision_id(tmp_path: Path) -> N
     assert _all_files(tmp_path) == before
     assert not (base / "trees" / f"{TRAVERSAL_ID}.json").resolve().exists()
     assert repo.head(SHOW_ID) == rev
+
+
+SMALL_BLOB_CAP = 100_000
+OVERSIZED_PATH = "/renders/video.mp4"
+
+
+def test_regression_oversized_blob_is_refused_before_it_is_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Refuses a blob over the read cap at commit; a blob at the cap lands and reads back."""
+    monkeypatch.setattr(file_repository, "BLOB_MAX_BYTES", SMALL_BLOB_CAP)
+    repo, rev, _ = _saved(tmp_path)
+    before = _all_files(tmp_path)
+    with pytest.raises(StorageError) as caught:
+        repo.transaction(
+            SHOW_ID, {OVERSIZED_PATH: b"\0" * (SMALL_BLOB_CAP + 1)}, expected_revision=rev, at=AT
+        )
+    assert caught.value.code == "TOO_LARGE"
+    assert caught.value.context["paths"] == [OVERSIZED_PATH]
+    assert _all_files(tmp_path) == before
+    assert repo.head(SHOW_ID) == rev
+    repo.get_show(SHOW_ID)
+    at_cap = b"\0" * SMALL_BLOB_CAP
+    repo.transaction(SHOW_ID, {OVERSIZED_PATH: at_cap}, expected_revision=rev, at=AT)
+    assert repo.read(SHOW_ID, OVERSIZED_PATH) == at_cap
