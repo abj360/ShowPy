@@ -7,15 +7,15 @@ Last updated: 2026-11-16
 
 ## Where things stand
 
-| Item          | Value                                                                                                      |
-| ------------- | ---------------------------------------------------------------------------------------------------------- |
-| Repository    | `abj360/ShowPy` (public since 2026-11-15); split into its own repository on 2026-11-12 with full history   |
-| Gates         | `nox -s tests`: 2,368 passed, `Ledger: 424 open` (2026-11-16); ruff, mypy `--strict`, pyright clean        |
-| CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main                  |
-| Defect ledger | `Ledger: 424 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-16)                    |
-| Out of scope  | `stagecheck`, `showpy.packs` and `showpy.index`, by the user's decision (2026-11-11)                       |
-| Text feature  | branch `feat/text-on-field`, stage 1 complete, awaiting merge; stages 2 and 3 are not started (2026-11-16) |
-| Pushing       | needs explicit approval                                                                                    |
+| Item          | Value                                                                                                                    |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Repository    | `abj360/ShowPy` (public since 2026-11-15); split into its own repository on 2026-11-12 with full history                 |
+| Gates         | `nox -s tests`: 2,390 passed, `Ledger: 424 open` (2026-11-16); ruff, mypy `--strict`, pyright clean                      |
+| CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main                                |
+| Defect ledger | `Ledger: 424 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-16)                                  |
+| Out of scope  | `stagecheck`, `showpy.packs` and `showpy.index`, by the user's decision (2026-11-11)                                     |
+| Text feature  | branch `feat/text-on-field`, stage 1 under final fixes; two merge blockers open; stages 2 and 3 not started (2026-11-16) |
+| Pushing       | needs explicit approval                                                                                                  |
 
 **Repository split (2026-11-12).** Agent-only code moved to a separate consumer repository with
 its history: set-script builds and the bubblewrap sandbox (`show/build.py`, `build_models.py`,
@@ -85,14 +85,17 @@ deviations below (the code is the source of truth until generated docs land in P
 
 ## Next: text on the field
 
-Stage 1 (bundled single-line fonts, user fonts as `showpy.font.v1` JSON, `centerline` text forms) is done on `feat/text-on-field`. Open follow-ups, in order:
+Stage 1 (bundled single-line fonts, user fonts as `showpy.font.v1` JSON, `centerline` text forms) is on `feat/text-on-field`. Open follow-ups, in order:
 
-1. **Maintainer's eye on the golden.** The GO TEAM (n = 60) and Équipe (n = 90) fixtures render sparse: "TEAM" and Γ read, "GO" and "Équipe" barely. `LegibilityWarning` fires as designed. Review before `SHOWPY_UPDATE_GOLDEN`.
-2. **Thread `font_registry`** through `match`, `reorder`, `gate`, `split_form`, `merge_forms` and `form_place`, so user-font text forms work there. Then `split_form` and `merge_forms` can keep the text recipe.
-3. **Stage 2.** User TTF, OTF, WOFF and WOFF2 through fontTools (a new runtime dependency, pinned in `uv.lock` and ranged in `pyproject.toml`). `register_font` dispatches on the magic bytes. Adds `outline` and `fill` modes, the skeleton `centerline` with automatic fallback to `outline`, a build report and a research note on skeleton thresholds.
-4. **Stage 3.** Kerning (`GPOS`, `kern`), text `along` a curve, and a `showpy[shaping]` extra (HarfBuzz and bidi).
-5. **Smaller items.** A verified Cyrillic single-line source. One spot for dot-sized strokes (`.`, `i` dots), which take 2 or 3 spots within centimeters today. A `MIN_LAYOUT_HEIGHT_M` (heights near 1e-14 m pass layout, then fail in `tangent_at`). Split `choreo/forms.py` (567 lines) and `choreo/models.py` (682 lines).
-6. **Parked, pre-existing.** `curve_base` `_table` overflows with a raw `RuntimeWarning` for coordinates past about 1e154, for every curve kind.
+1. **Merge blocker: junction gap (final review I1).** Slots where strokes touch can sit 0.2 mm apart (relief `E`, n = 56). The ruled fix (every slot at least 0.25 of the smaller local stroke spacing from every earlier slot) cannot hold for every bundled glyph: hershey-script `!` at its minimum count has three strokes converging in a 1-unit strip, and six spots at 0.25 of a 13-unit spacing do not fit. With extra spreads (quarter shifts and a spread that avoids earlier slots), 73 of 28,800 glyph and count cases (n = min to min + 39) still fail, most on Hershey doubled strokes. It needs a maintainer decision: accept `COINCIDENT_SLOTS` for those cases, merge doubled strokes at build time, or count closely parallel strokes as one. Until then slots only keep `COINCIDENT_TOL_M` (1e-6 m) apart.
+2. **Merge blocker: golden refresh (I8), after item 1.** Refresh `tests/golden/fixtures/text_slots.json` once with GO TEAM n = 120, Équipe 2026! n = 200 and ΑΒΓ n = 45. None of these counts warns today, then get the maintainer's sign-off. The fixture now holds sparse counts (60, 90, 30).
+3. **Thread `font_registry`** through `match`, `reorder`, `gate`, `split_form`, `merge_forms`, `form_place` (`place`, `rebuild`), `apply_match`, `swap` and `morph_targets`, so user-font text forms work there. Then `split_form` and `merge_forms` can keep the text recipe.
+4. **Repositories store fonts (spec, deferred to stage 2; final review I5).** Put each text form's font bytes in the injected `AssetStore` on save and register them on load. Until then a reopened show needs the caller's registry; it fails closed with `MissingFontError`.
+5. **`SvgCurve` table cost.** `SvgCurve._native` loops over pieces for every sample, so measuring a stroke costs about the square of its pieces: 1,000 glyphs of 512 cubic pieces (the caps) take about 160 s. Vectorize it before raising `MAX_GLYPH_PIECES`.
+6. **Stage 2.** User TTF, OTF, WOFF and WOFF2 through fontTools (a new runtime dependency, pinned in `uv.lock` and ranged in `pyproject.toml`). `register_font` dispatches on the magic bytes. Adds `outline` and `fill` modes, the skeleton `centerline` with automatic fallback to `outline`, a build report and a research note on skeleton thresholds.
+7. **Stage 3.** Kerning (`GPOS`, `kern`), text `along` a curve, and a `showpy[shaping]` extra (HarfBuzz and bidi).
+8. **Smaller items.** A verified Cyrillic single-line source. One spot for dot-sized strokes (`.`, `i` dots), which take 2 or 3 spots within centimeters today. A `MIN_LAYOUT_HEIGHT_M` (heights near 1e-14 m pass layout, then fail in `tangent_at`). Split `choreo/forms.py` (567 lines) and `choreo/models.py` (682 lines).
+9. **Parked, pre-existing.** `curve_base` `_table` overflows with a raw `RuntimeWarning` for coordinates past about 1e154, for every curve kind.
 
 ## Deviations already made (put these into the reference doc)
 
@@ -109,7 +112,8 @@ Stage 1 (bundled single-line fonts, user fonts as `showpy.font.v1` JSON, `center
   - Text on the field, stage 1 (ADR 0016; modules `fonts`, `font_strokes`, `text_layout`):
     - `simplex` is its own bundled font, not a Hershey alias. Bundled: `relief-singleline`, `hershey-roman`, `hershey-script`, `hershey-greek`, `simplex`. Hershey Cyrillic is deferred.
     - `text_outline(text, font, height, at, *, font_registry=None)` takes a font chain and returns `list[Polyline | SvgCurve]`. Loops close without a repeated start point (closes UP-9.1-28). `\n` starts a new line (it used to raise). Non-finite `height` or `at` is rejected. A missing glyph or font raises `GlyphError` or `MissingFontError` (both `UnknownRefError`).
-    - Caps: `MAX_LAYOUT_CHARS = 1_000` raw characters, `MAX_LAYOUT_EXTENT_M = 1e6` m laid extent, `MAX_FONT_BYTES` 8 MiB. `layout_text` drops trailing empty lines.
+    - Caps: `MAX_LAYOUT_CHARS = 1_000` raw characters, `MAX_LAYOUT_EXTENT_M = 1e6` m laid extent, `MAX_FONT_BYTES` 8 MiB, `MAX_GLYPH_PIECES = 512` path pieces per glyph (in `load_font`) and `MAX_LAYOUT_PIECES = 512_000` per laid text, about 10 times the bundled maxima (hershey-script `8`, 51 pieces). `layout_text` drops trailing empty lines and parses each distinct glyph once.
+    - Font names are a convenience; URIs are identity. `register_font(..., if_name_taken="keep")` registers a font by URI when its name points at other bytes, and `import_fonts` uses it, so documents with an older release of a bundled font still import. `register_font` alone still raises `FONT_NAME_TAKEN`. `FontRegistry.model_validate` loads every font from its bytes and rejects one that differs (`FONT_HASH_MISMATCH`).
     - `core/readonly.py` adds `ReadOnly` and `ReadOnlyMap`: read-only, JSON-serializable mappings that keep the cached `bundled_fonts()` registry immutable. `Font.glyphs` and `FontRegistry.fonts`, `sources` and `names` are such mappings.
     - `apportion` is public and uses exact integer arithmetic. `space_proportional` rejects all-zero lengths (closes UP-9.1-57), and `n` below the curve count now has code `TOO_FEW_SPOTS`.
   - `density_map`, `coverage` and `balance` take `sheet`.
@@ -151,11 +155,13 @@ Stage 1 (bundled single-line fonts, user fonts as `showpy.font.v1` JSON, `center
 - **export**: `export_video(show, count_range, fps, audio: Mapping[uri, bytes], px_per_m)`.
   - `export_json(show, include=None, *, font_registry=None)` embeds the fonts of text forms (base64, keyed by URI). `import_json` ignores the `fonts` key; fonts are imported with `import_fonts(d, font_registry=None)`, which verifies each hash and rejects more than `MAX_IMPORT_FONTS = 64`.
 - **choreo, text forms** (`form_text`, `text_count`, `text_edit`; `TextRecipe` in `models`):
-  - Text forms never have open slots. `text_form` and every text edit require `len(members) == n`, else `MEMBER_COUNT_MISMATCH` with an add or remove hint. `place()` rejects a text form short of members (after cast `delete_spots`) and points at `edit_text_count`.
-  - `spacing=` stores its derived count as `n`. A text edit keeps `n`, spacing and members; the stored spacing is the request that last set the count, not the current spacing.
+  - Text forms never have open slots. `text_form` and every text edit require `len(members) == n`, else `MEMBER_COUNT_MISMATCH` with an add or remove hint. `placements` (so `place` and `rebuild`) and `apply_match` reject a text form short of members (after cast `delete_spots`) and point at `edit_text_count`; `delete_spots` itself still deletes.
+  - `spacing=` stores its derived count as `n`, measured after the stored `transform` in stage meters. `text_spot_count(text, *, fonts, height, spacing, ...)` returns that count before the form exists. A text edit keeps `n`, spacing and members; the stored spacing is the request that last set the count, not the current spacing.
   - The count changes only through `edit_text_count(form, add=, remove=, n=|spacing=)`, which names the spots to add or remove. `edit(n=)` and `edit(spacing=)` raise `TEXT_COUNT_EDIT`.
-  - `MAX_TEXT_SPOTS = 10_000`, checked before allocation.
-  - Stage-1 limits: `gate`, `split_form`, `merge_forms`, `match`, `reorder` and `place` take no `font_registry`, so a text form with a user font fails closed there with `MissingFontError`. `split_form` and `merge_forms` on a text form return custom forms (recipe dropped).
+  - `MAX_TEXT_SPOTS = 10_000`, checked before allocation. `TextRecipe.fonts` holds 1 to `MAX_TEXT_FONTS = 16` URIs.
+  - After `edit(text=...)`, the `TOO_FEW_SPOTS` hint names `edit_text_count` and the number of spots to add; the `LegibilityWarning` ends "raise n, or add spots with edit_text_count".
+  - Stage-1 limits: `gate`, `split_form`, `merge_forms`, `match`, `reorder`, `place`, `rebuild`, `apply_match`, `swap` and `morph_targets` take no `font_registry`, so a text form with a user font fails closed there with `MissingFontError`. `split_form` and `merge_forms` on a text form return custom forms (recipe dropped).
+  - Spec deviation (final review I5): the spec says repositories store fonts in the asset store; stage 1 does not. A show reopened from a repository rebuilds a user-font text form only with a registry that holds the font, else `MissingFontError`, never a substitute. `export_json` and `import_fonts` carry fonts today; repository storage moves to stage 2.
 
 ## Traps already hit (each has a regression test)
 
