@@ -8,6 +8,8 @@ Contains:
     test_regression_bundled_registry_is_read_only: refuses writes through the cached registry's
         mappings and a font's glyph table
     test_regression_font_dumps_to_json: dumps and reloads Font and FontRegistry without warnings
+    test_regression_font_registry_rejects_mismatched_sources: refuses a registry whose URIs, bytes
+        or names disagree
     test_regression_font_cap_falls_back_to_h_then_ascender: reads the cap height from the field,
         then from the ink of H, then from the ascender
 """
@@ -213,3 +215,31 @@ def test_regression_font_dumps_to_json() -> None:
 def test_font_registry_survives_deepcopy() -> None:
     registry, uri = register_font(EMPTY, tiny_bytes())
     assert copy.deepcopy(registry).get(uri) == registry.get(uri)
+
+
+def _tiny_parts() -> tuple[str, Font, bytes]:
+    registry, uri = register_font(EMPTY, tiny_bytes())
+    return uri, registry.get(uri), registry.source(uri)
+
+
+def test_regression_font_registry_rejects_mismatched_sources() -> None:
+    uri, font, data = _tiny_parts()
+    other_uri = asset_uri(b"other")
+    with pytest.raises(FontError) as swapped:
+        FontRegistry.model_validate({"fonts": {uri: font}, "sources": {uri: b"x"}, "names": {}})
+    assert swapped.value.code == "FONT_HASH_MISMATCH"
+    assert swapped.value.context["uri"] == uri
+    cases = [
+        {"fonts": {uri: font}, "sources": {}, "names": {"tiny": uri}},
+        {"fonts": {uri: font}, "sources": {uri: data}, "names": {}},
+        {"fonts": {uri: font}, "sources": {uri: data}, "names": {"tiny": other_uri}},
+        {"fonts": {uri: font}, "sources": {uri: data}, "names": {"tiny": uri, "extra": uri}},
+        {"fonts": {}, "sources": {}, "names": {"tiny": uri}},
+    ]
+    for case in cases:
+        with pytest.raises(FontError) as info:
+            FontRegistry.model_validate(case)
+        assert info.value.code == "BAD_FONT", case
+    good = {"fonts": {uri: font}, "sources": {uri: data}, "names": {"tiny": uri}}
+    assert FontRegistry.model_validate(good).get(uri) == font
+    assert FontRegistry(**good).source(uri) == data

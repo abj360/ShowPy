@@ -4,7 +4,8 @@ fonts.py --- loads, validates and registers stroke fonts by SHA-256 asset URI
 Contains:
     MAX_FONT_BYTES: bounds the size of one font file
     BUNDLED_FONTS: maps each bundled font's name to the URI of its exact file bytes
-    FontRegistry: holds loaded fonts, their source bytes and their names, all read-only
+    FontRegistry: holds loaded fonts, their source bytes and their names, all read-only; checks
+        on construction that every URI hashes its bytes and every name maps back to its font
     FontRegistry.get(): returns the font stored under a URI
     FontRegistry.resolve(): turns a font name or URI into a URI
     FontRegistry.source(): returns the exact bytes a font was loaded from
@@ -17,9 +18,10 @@ import functools
 import json
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Annotated
+from typing import Annotated, Self
 
 import numpy as np
+from pydantic import model_validator
 
 from showpy.core.caps import require_size
 from showpy.core.errors import (
@@ -28,7 +30,7 @@ from showpy.core.errors import (
     SchemaError,
     field_errors,
 )
-from showpy.core.readonly import ReadOnly
+from showpy.core.readonly import ReadOnly, ReadOnlyMap
 from showpy.core.resources import font_path
 from showpy.core.types import FrozenModel
 from showpy.core.util import ASSET_PREFIX, asset_uri, close_matches
@@ -63,6 +65,44 @@ class FontRegistry(FrozenModel):
     fonts: Annotated[Mapping[str, Font], ReadOnly()]
     sources: Annotated[Mapping[str, bytes], ReadOnly()]
     names: Annotated[Mapping[str, str], ReadOnly()]
+
+    @model_validator(mode="after")
+    def _check_consistency(self) -> Self:
+        if set(self.fonts) != set(self.sources):
+            raise _bad_font(
+                "registry fonts and sources hold different URIs",
+                hint="give every font its source bytes, and every source its font",
+                fonts_only=sorted(set(self.fonts) - set(self.sources)),
+                sources_only=sorted(set(self.sources) - set(self.fonts)),
+            )
+        for uri, data in self.sources.items():
+            if asset_uri(data) != uri:
+                raise FontError(
+                    f"font bytes do not hash to {uri}",
+                    hint="key each font by asset_uri(its bytes), or use register_font",
+                    context={"uri": uri, "actual": asset_uri(data)},
+                    code="FONT_HASH_MISMATCH",
+                )
+        self._check_names()
+        return self
+
+    def _check_names(self) -> None:
+        for name, uri in self.names.items():
+            if uri not in self.fonts or self.fonts[uri].name != name:
+                raise _bad_font(
+                    f"registry name {name!r} does not name the font at {uri}",
+                    hint="map each font's own name to its URI",
+                    font=name,
+                    uri=uri,
+                )
+        for uri, font in self.fonts.items():
+            if self.names.get(font.name) != uri:
+                raise _bad_font(
+                    f"font {font.name!r} at {uri} is not in the registry names",
+                    hint="map each font's own name to its URI",
+                    font=font.name,
+                    uri=uri,
+                )
 
     def get(self, uri: str) -> Font:
         """Returns the font stored under a URI.
@@ -236,10 +276,12 @@ def register_font(registry: FontRegistry, data: bytes) -> tuple[FontRegistry, st
             context={"font": font.name, "taken_by": taken, "uri": uri},
             code="FONT_NAME_TAKEN",
         )
-    extended = FontRegistry(
-        fonts={**registry.fonts, uri: font},
-        sources={**registry.sources, uri: data},
-        names={**registry.names, font.name: uri},
+    # model_construct skips the consistency validator: this font was just hashed and loaded, and
+    # re-hashing the rest on every call would be quadratic in the registry size.
+    extended = FontRegistry.model_construct(
+        fonts=ReadOnlyMap({**registry.fonts, uri: font}),
+        sources=ReadOnlyMap({**registry.sources, uri: data}),
+        names=ReadOnlyMap({**registry.names, font.name: uri}),
     )
     return extended, uri
 

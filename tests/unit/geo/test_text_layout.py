@@ -20,6 +20,7 @@ from showpy.core.errors import (
     MissingFontError,
     SchemaError,
 )
+from showpy.core.readonly import ReadOnlyMap
 from showpy.core.types import Points
 from showpy.core.util import approx_equal
 from showpy.geo.curves import Polyline, SvgCurve
@@ -50,7 +51,11 @@ def _points(glyphs: Iterable[LaidGlyph]) -> Points:
 
 def _unchecked_registry(**changes: object) -> FontRegistry:
     font = Font.model_validate({**TINY, **changes})
-    return FontRegistry(fonts={TINY_URI: font}, sources={}, names={"tiny": TINY_URI})
+    return FontRegistry.model_construct(
+        fonts=ReadOnlyMap({TINY_URI: font}),
+        sources=ReadOnlyMap({}),
+        names=ReadOnlyMap({"tiny": TINY_URI}),
+    )
 
 
 def _line(glyphs: Iterable[LaidGlyph], line: int) -> list[LaidGlyph]:
