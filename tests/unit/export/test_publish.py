@@ -6,15 +6,34 @@ test_publish.py --- tests publishing, QR codes, claims, designer actions, views 
 Also holds the audited publishing defects (UP-9.5-01 to UP-9.5-26) as strict xfails.
 
 Contains:
-    test_qr_code_matches_the_reference_symbol(): checks the QR PNG against segno's module grid
     test_regression_publish_link_carries_a_caller_supplied_join_token(): adds a join token
     test_regression_publication_snapshot_excludes_contact_details(): hides contacts
     test_regression_claims_and_notices_return_redacted_performers(): redacts contacts in claims
+    test_regression_reassign_stores_performers_without_contact(): drops contact on reassign
+    test_regression_republish_drops_contacts_held_by_a_legacy_publication(): strips carry-over
+    test_regression_swap_claims_drops_contacts_held_by_a_legacy_publication(): strips on swap
+    test_regression_readers_redact_contacts_of_a_legacy_publication(): redacts every reader
+    test_regression_loading_a_legacy_publication_drops_contacts(): strips contacts on load
+    test_regression_every_mutator_drops_contacts_of_a_legacy_publication(): strips on each edit
+    test_regression_publish_rejects_a_short_or_malformed_join_token(): rejects weak or huge tokens
+    test_regression_publish_rejects_base_urls_with_credentials_or_fragments(): rejects them
+    test_regression_publish_rejects_unsafe_base_url(): rejects every malformed or ambiguous URL
+    test_publish_accepts_well_formed_https_base_urls(): keeps valid hosts, ports and IPs
+    test_regression_verify_join_token_returns_false_for_non_strings(): never raises on bad input
+    test_regression_publication_repr_omits_the_join_token(): hides the link secret from repr
+    test_regression_publish_errors_do_not_echo_the_join_token(): keeps the token out of errors
+    test_regression_verify_join_token_checks_the_stored_hash(): accepts only the issued token
+    test_regression_verify_join_token_fails_closed_without_a_hash(): rejects when none is stored
+    test_regression_performer_view_url_omits_join_token(): keeps the token off the view URL
+    test_regression_publication_rejects_a_malformed_token_hash(): validates the stored digest
     test_regression_publish_rejects_non_http_base_urls(): rejects script and data base URLs
     test_regression_publish_requires_https_base_url(): rejects an http base URL
     test_regression_publish_does_not_mangle_a_base_url_query(): keeps a base URL query intact
     test_regression_qr_code_caps_the_image_size(): rejects a QR size that needs gigabytes
     test_regression_qr_code_wraps_an_overlong_link_error(): wraps the QR overflow in a ShowPyError
+    test_regression_qr_code_rejects_a_non_positive_or_non_integer_size(): rejects 0, negative, bool
+    test_regression_qr_code_rejects_a_size_just_over_the_pixel_cap(): rejects 6,325 px
+    test_regression_qr_code_overflow_error_hides_the_join_token(): keeps the token out of errors
     test_regression_qr_code_keeps_the_documented_error_level(): renders error level M as documented
     test_regression_pause_cannot_reopen_a_closed_publication(): refuses to pause a closed one
     test_regression_republish_from_closed_does_not_go_live(): refuses to republish a closed one
@@ -33,14 +52,35 @@ Contains:
     test_regression_performer_view_checks_the_show_matches_the_publication(): rejects a wrong show
     test_regression_performer_view_after_deletion_gives_a_performer_hint(): gives a performer hint
     test_regression_publication_version_detects_concurrent_claims(): bumps a version on each claim
+    test_regression_stored_publication_holds_no_join_token(): keeps the token out of every output
+    test_regression_join_link_round_trips_the_issued_token(): appends only the verified token
+    test_regression_join_link_rejects_a_malformed_token(): refuses a token of the wrong shape
+    test_regression_join_link_rejects_a_wrong_token(): refuses a token that does not match
+    test_regression_join_link_fails_closed_without_a_digest(): refuses a v0.2.0 publication
+    test_regression_qr_code_encodes_the_join_link(): encodes the verified joinable link
+    test_regression_qr_code_rejects_a_wrong_token(): refuses to encode an unverified token
+    test_regression_first_publish_requires_a_join_token(): refuses to publish without a token
+    test_regression_republish_without_a_token_keeps_the_digest(): keeps the issued token valid
+    test_regression_republish_with_a_token_rotates_the_digest(): revokes the old token
+    test_regression_republish_without_a_digest_requires_a_token(): refuses a dead v0.2.0 link
+    test_regression_loading_an_e1_publication_strips_the_join_token(): drops `?t=` on load
+    test_regression_loading_an_e1_publication_keeps_other_query_parameters(): strips only `t`
+    test_regression_invalid_e1_publication_errors_omit_the_join_token(): keeps errors clean
+    test_regression_publication_refuses_a_non_text_link_without_echoing_it(): hides the token
+    test_regression_join_link_refuses_a_link_with_a_query_or_fragment(): refuses a mangled link
+    test_publish_accepts_join_tokens_at_the_length_bounds(): accepts 22 and 256 characters
+    test_publish_accepts_rfc3986_sub_delimiters_in_the_base_url_path(): keeps `~ ! $ & ( ) * + , ;
+        = : @` in the path
 """
 
 import hashlib
 import io
+import json
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from typing import Any
 
 import pytest
 import segno
@@ -56,10 +96,13 @@ from showpy.core.errors import (
     UnknownRefError,
     ValidationError,
 )
+from showpy.export.data import export_json
 from showpy.export.models import Performer, Publication
+from showpy.export.print_sheets import chart, coordinate_sheets
 from showpy.export.publish import (
     claim_spot,
     claims,
+    join_link,
     notify_changes,
     pause,
     performer_view,
@@ -70,6 +113,7 @@ from showpy.export.publish import (
     swap_claims,
     unclaimed,
     unpublish,
+    verify_join_token,
     who_is_on,
 )
 from showpy.sheet.coords import set_coordinates
@@ -81,6 +125,10 @@ from tests.fixtures.shows import two_set_show
 from tests.helpers import fails_after
 
 BASE_URL = "https://eight.example/p/"
+JOIN_TOKEN = "Zk3Qz9-high-entropy_join-token"
+OTHER_TOKEN = "Qp7Lm2-second_high-entropy-token"
+SHORT_JOIN_TOKEN = "Zk3Qz9_join-token-22ch"
+LINK = "https://eight.example/p/pub-1"
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 LATER = AT + timedelta(minutes=5)
 EARLIER = AT - timedelta(days=1)
@@ -95,11 +143,11 @@ DESIGNER_HINT = "check the spot id or add the spot first"
 
 
 def _published(show: Show | None = None) -> Publication:
-    return publish(show or two_set_show(), "pub-1", BASE_URL, AT)
+    return publish(show or two_set_show(), "pub-1", BASE_URL, AT, join_token=JOIN_TOKEN)
 
 
 def _with_claims(show: Show, *pairs: tuple[str, str]) -> Publication:
-    pub = publish(show, "pub-1", BASE_URL, AT)
+    pub = publish(show, "pub-1", BASE_URL, AT, join_token=JOIN_TOKEN)
     for name, spot in pairs:
         pub, _ = claim_spot(pub, show, performer(name), spot, AT)
     return pub
@@ -118,22 +166,22 @@ def _crew_show() -> Show:
 
 def test_publish_builds_a_live_link() -> None:
     pub = _published()
-    assert pub.link == "https://eight.example/p/pub-1"
+    assert pub.link == LINK
     assert (pub.status, pub.show_id, pub.published_at, pub.claims) == ("live", "show-1", AT, ())
     assert pub.revision
 
 
 def test_publish_uses_the_stored_revision_and_is_deterministic() -> None:
     show = two_set_show().model_copy(update={"revision": "rev-9"})
-    assert publish(show, "p", BASE_URL, AT).revision == "rev-9"
+    assert publish(show, "p", BASE_URL, AT, join_token=JOIN_TOKEN).revision == "rev-9"
     assert _published() == _published()
 
 
 def test_publish_refuses_a_naive_time_or_blank_url() -> None:
     with pytest.raises(SchemaError):
-        publish(two_set_show(), "p", BASE_URL, NAIVE_TIME)
+        publish(two_set_show(), "p", BASE_URL, NAIVE_TIME, join_token=JOIN_TOKEN)
     with pytest.raises(SchemaError):
-        publish(two_set_show(), "p", " ", AT)
+        publish(two_set_show(), "p", " ", AT, join_token=JOIN_TOKEN)
 
 
 def test_pause_and_unpublish_return_new_publications() -> None:
@@ -144,19 +192,19 @@ def test_pause_and_unpublish_return_new_publications() -> None:
 
 
 def test_qr_code_is_a_png_of_the_requested_size() -> None:
-    png = qr_code(_published(), size=300)
+    png = qr_code(_published(), JOIN_TOKEN, size=300)
     assert png.startswith(PNG_SIGNATURE)
     with Image.open(io.BytesIO(png)) as image:
         assert image.size == (300, 300)
         assert image.convert("L").getextrema() == (0, 255)
-    assert qr_code(_published()) == qr_code(_published())
-    other = publish(two_set_show(), "pub-2", BASE_URL, AT)
-    assert qr_code(other) != qr_code(_published())
+    assert qr_code(_published(), JOIN_TOKEN) == qr_code(_published(), JOIN_TOKEN)
+    other = publish(two_set_show(), "pub-2", BASE_URL, AT, join_token=JOIN_TOKEN)
+    assert qr_code(other, JOIN_TOKEN) != qr_code(_published(), JOIN_TOKEN)
 
 
 def test_qr_code_refuses_a_size_too_small_for_the_code() -> None:
     with pytest.raises(SchemaError):
-        qr_code(_published(), size=10)
+        qr_code(_published(), JOIN_TOKEN, size=10)
 
 
 def test_claim_spot_locks_the_spot_for_the_performer() -> None:
@@ -227,11 +275,11 @@ def test_republish_keeps_claims_on_spots_that_still_qualify() -> None:
             ),
         }
     )
-    again = publish(edited, "pub-1", BASE_URL, LATER, previous=pub)
+    again = publish(edited, "pub-1", BASE_URL, LATER, previous=pub, join_token=JOIN_TOKEN)
     assert [c.spot for c in again.claims] == ["T1"]
     assert again.published_at == LATER
     with pytest.raises(ValidationError):
-        publish(edited, "pub-2", BASE_URL, LATER, previous=pub)
+        publish(edited, "pub-2", BASE_URL, LATER, previous=pub, join_token=JOIN_TOKEN)
 
 
 def test_swap_reassign_and_release_are_designer_edits() -> None:
@@ -379,32 +427,23 @@ def _notified(old: Show, new: Show) -> list[tuple[Performer, str]]:
     return notify_changes(_with_claims(old, ("Ada", "T1")), old, new)
 
 
-def test_qr_code_matches_the_reference_symbol() -> None:
-    pub = _published()
-    expected = _grid_text(_reference_grid(pub.link, boost=True))
-    assert _grid_text(_module_grid(qr_code(pub), pub.link)) == expected
-
-
-@pytest.mark.defect("UP-9.5-01")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-01")
 def test_regression_publish_link_carries_a_caller_supplied_join_token() -> None:
-    """Puts a caller-supplied high-entropy token in the link and stores only its hash.
+    """Puts a caller-supplied high-entropy token in the joinable link and stores only its hash.
 
-    Contract: the raw token appears in `link` and nowhere else in the stored publication; the
-    SHA-256 hex digest of the token is stored so later joins can be checked against it.
-    The link is `base_url/<publication id>`, so anyone who guesses an ID can open the
-    publication and claim with a self-declared performer (audit 9.5 security; P0 #10).
+    The audited defect: the link was `base_url/<publication id>` alone, so anyone who guessed an
+    ID could open the publication and claim with a self-declared performer (audit 9.5 security;
+    P0 #10). The stored link is still `base_url/<publication id>` (ADR 0018), but joining needs
+    the token, which only `join_link(pub, token)` adds after verifying it: the raw token is in
+    that link and nowhere in the stored publication, which keeps only its SHA-256 hex digest.
     """
     token = "k3Qz9-high-entropy-join-token"
-    pub = publish(two_set_show(), "pub-1", BASE_URL, AT, join_token=token)  # type: ignore[call-arg]
-    assert token in pub.link
-    stored = pub.model_dump_json(exclude={"link"})
+    pub = publish(two_set_show(), "pub-1", BASE_URL, AT, join_token=token)
+    assert token in join_link(pub, token)
+    stored = pub.model_dump_json()
     assert token not in stored
     assert hashlib.sha256(token.encode()).hexdigest() in stored
 
 
-@pytest.mark.defect("UP-9.5-02")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-02")
 def test_regression_publication_snapshot_excludes_contact_details() -> None:
     """Keeps performer contact data out of the serialized publication (audit 9.5; P0 #10).
 
@@ -414,8 +453,6 @@ def test_regression_publication_snapshot_excludes_contact_details() -> None:
     assert CONTACT not in pub.model_dump_json()
 
 
-@pytest.mark.defect("UP-9.5-03")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-03")
 def test_regression_claims_and_notices_return_redacted_performers() -> None:
     """Returns performers without contact data from claims() and notify_changes() (audit 9.5)."""
     old, pub = _claimed_with_contact()
@@ -426,8 +463,93 @@ def test_regression_claims_and_notices_return_redacted_performers() -> None:
     assert all(who.contact is None for who, _ in notices)
 
 
-@pytest.mark.defect("UP-9.5-04")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-04")
+def _require_contacts(stored: dict[str, Any]) -> None:
+    claims_ = stored["claims"]
+    assert claims_
+    assert all(c["performer"]["contact"] == CONTACT for c in claims_)
+
+
+def _legacy_publication() -> tuple[Show, Publication]:
+    show, pub = _claimed_with_contact()
+    stored = pub.model_dump(mode="json")
+    stored["claims"][0]["performer"]["contact"] = CONTACT
+    _require_contacts(stored)
+    return show, Publication.model_validate(stored)
+
+
+def test_regression_reassign_stores_performers_without_contact() -> None:
+    """Drops the contact when the designer moves a performer onto a spot."""
+    ada = performer("Ada").model_copy(update={"contact": CONTACT})
+    pub = reassign(_published(), "T3", ada, AT)
+    assert CONTACT not in pub.model_dump_json()
+
+
+def test_regression_republish_drops_contacts_held_by_a_legacy_publication() -> None:
+    """Strips a v0.2.0 contact when republishing carries its claim over."""
+    show, legacy = _legacy_publication()
+    pub = publish(show, "pub-1", BASE_URL, LATER, legacy, join_token=JOIN_TOKEN)
+    assert [c.spot for c in pub.claims] == ["T1"]
+    assert CONTACT not in pub.model_dump_json()
+
+
+def test_regression_swap_claims_drops_contacts_held_by_a_legacy_publication() -> None:
+    """Strips a v0.2.0 contact from claims rebuilt by a swap."""
+    show, legacy = _legacy_publication()
+    pub, _ = claim_spot(legacy, show, performer("Bo"), "T2", AT)
+    assert CONTACT not in swap_claims(pub, "T1", "T2").model_dump_json()
+
+
+def test_regression_readers_redact_contacts_of_a_legacy_publication() -> None:
+    """Returns contact-free performers from every read path of a v0.2.0 publication."""
+    show, legacy = _legacy_publication()
+    assert all(c.performer.contact is None for c in claims(legacy))
+    holder = who_is_on(legacy, "T1")
+    assert holder is not None
+    assert holder.contact is None
+    view = performer_view(legacy, show, performer("Ada"))
+    assert view.performer.contact is None
+    assert CONTACT not in view.model_dump_json()
+    new = with_targets({"T1": {"x": 3.0}}, show=show)
+    assert all(who.contact is None for who, _ in notify_changes(legacy, show, new))
+
+
+def _three_claim_legacy() -> tuple[Show, Publication]:
+    show = two_set_show()
+    stored = _with_claims(show, ("Ada", "T1"), ("Bo", "T2"), ("Cy", "T3")).model_dump(mode="json")
+    for claim in stored["claims"]:
+        claim["performer"]["contact"] = CONTACT
+    _require_contacts(stored)
+    return show, Publication.model_validate(stored)
+
+
+def test_regression_loading_a_legacy_publication_drops_contacts() -> None:
+    """Drops contacts at validation, so a v0.2.0 snapshot is clean as soon as it loads."""
+    _, legacy = _three_claim_legacy()
+    assert CONTACT not in legacy.model_dump_json()
+    assert all(c.performer.contact is None for c in legacy.claims)
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        lambda show, pub: claim_spot(pub, show, performer("Di"), "T4", AT)[0],
+        lambda _show, pub: reassign(pub, "T4", performer("Di"), AT),
+        lambda _show, pub: release(pub, "T1"),
+        lambda _show, pub: swap_claims(pub, "T1", "T2"),
+        lambda _show, pub: pause(pub),
+        lambda _show, pub: unpublish(pub),
+        lambda show, pub: publish(show, "pub-1", BASE_URL, LATER, pub, join_token=JOIN_TOKEN),
+    ],
+    ids=["claim_spot", "reassign", "release", "swap_claims", "pause", "unpublish", "republish"],
+)
+def test_regression_every_mutator_drops_contacts_of_a_legacy_publication(
+    edit: Callable[[Show, Publication], Publication],
+) -> None:
+    """Keeps every untouched legacy claim contact-free whichever edit runs."""
+    show, legacy = _three_claim_legacy()
+    assert CONTACT not in edit(show, legacy).model_dump_json()
+
+
 @pytest.mark.parametrize("base_url", ["javascript:alert(1)", "data:text/html,x"])
 def test_regression_publish_rejects_non_http_base_urls(base_url: str) -> None:
     """Rejects a script or data scheme as the base URL instead of building a link on it.
@@ -435,30 +557,26 @@ def test_regression_publish_rejects_non_http_base_urls(base_url: str) -> None:
     A `javascript:` link rendered as an anchor runs script in the viewer (audit 9.5).
     """
     with pytest.raises(SchemaError):
-        publish(two_set_show(), "pub-1", base_url, AT)
+        publish(two_set_show(), "pub-1", base_url, AT, join_token=JOIN_TOKEN)
 
 
-@pytest.mark.defect("UP-9.5-05")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-05")
 def test_regression_publish_requires_https_base_url() -> None:
     """Requires an https base URL (audit 9.5)."""
     with pytest.raises(SchemaError):
-        publish(two_set_show(), "pub-1", "http://eight.example/p", AT)
+        publish(two_set_show(), "pub-1", "http://eight.example/p", AT, join_token=JOIN_TOKEN)
 
 
-@pytest.mark.defect("UP-9.5-06")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-06")
 def test_regression_publish_does_not_mangle_a_base_url_query() -> None:
     """Rejects a query string in the base URL or keeps it after the path (audit 9.5)."""
     try:
-        pub = publish(two_set_show(), "pub-1", "https://eight.example/p?ref=1", AT)
+        pub = publish(
+            two_set_show(), "pub-1", "https://eight.example/p?ref=1", AT, join_token=JOIN_TOKEN
+        )
     except SchemaError:
         return
     assert pub.link == "https://eight.example/p/pub-1?ref=1"
 
 
-@pytest.mark.defect("UP-9.5-07")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-07")
 @fails_after(5)
 @pytest.mark.skipif(sys.platform != "linux", reason="RLIMIT_AS cap and signal timeout need Linux")
 def test_regression_qr_code_caps_the_image_size() -> None:
@@ -468,25 +586,50 @@ def test_regression_qr_code_caps_the_image_size() -> None:
     """
     pub = _published()
     with _address_space_cap(QR_MEMORY_CAP_BYTES), pytest.raises(SchemaError):
-        qr_code(pub, size=HUGE_QR_SIZE)
+        qr_code(pub, JOIN_TOKEN, size=HUGE_QR_SIZE)
 
 
-@pytest.mark.defect("UP-9.5-08")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-08")
 def test_regression_qr_code_wraps_an_overlong_link_error() -> None:
     """Raises a ShowPyError, not segno.DataOverflowError, for a link too long for a QR code."""
     pub = _published().model_copy(update={"link": f"https://eight.example/{OVERLONG_PATH}"})
     with pytest.raises(ShowPyError):
-        qr_code(pub)
+        qr_code(pub, JOIN_TOKEN)
 
 
-@pytest.mark.defect("UP-9.5-09")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-09")
+@pytest.mark.parametrize("size", [0, -5, True, 1.5, "512"])
+def test_regression_qr_code_rejects_a_non_positive_or_non_integer_size(size: Any) -> None:
+    """Rejects a size that is zero, negative, a bool or not an int."""
+    with pytest.raises(SchemaError):
+        qr_code(_published(), JOIN_TOKEN, size=size)
+
+
+def test_regression_qr_code_rejects_a_size_just_over_the_pixel_cap() -> None:
+    """Rejects size 6,325 (40,005,625 pixels), one step over MAX_IMAGE_PIXELS."""
+    with pytest.raises(SchemaError, match="QR code pixels"):
+        qr_code(_published(), JOIN_TOKEN, size=6325)
+
+
+def test_regression_qr_code_overflow_error_hides_the_join_token() -> None:
+    """Keeps the joinable link, and so the join token, out of the overflow message and context."""
+    pub = _published().model_copy(update={"link": f"https://eight.example/{OVERLONG_PATH}"})
+    with pytest.raises(SchemaError) as caught:
+        qr_code(pub, JOIN_TOKEN)
+    assert JOIN_TOKEN not in str(caught.value)
+    assert JOIN_TOKEN not in repr(caught.value.context)
+    assert isinstance(caught.value.__cause__, segno.DataOverflowError)
+
+
 def test_regression_qr_code_keeps_the_documented_error_level() -> None:
-    """Renders at error level M as documented; segno silently boosts it to Q by default."""
-    pub = _published()
-    expected = _grid_text(_reference_grid(pub.link, boost=False))
-    assert _grid_text(_module_grid(qr_code(pub), pub.link)) == expected
+    """Renders at error level M as documented; segno silently boosts it to Q by default.
+
+    The 45-character joinable link fits version 4 at level Q, so segno's default would boost.
+    """
+    pub = publish(two_set_show(), "p1", "https://x.example", AT, join_token=SHORT_JOIN_TOKEN)
+    link = join_link(pub, SHORT_JOIN_TOKEN)
+    boosted = _grid_text(_reference_grid(link, boost=True))
+    expected = _grid_text(_reference_grid(link, boost=False))
+    assert boosted != expected
+    assert _grid_text(_module_grid(qr_code(pub, SHORT_JOIN_TOKEN), link)) == expected
 
 
 @pytest.mark.defect("UP-9.5-10")
@@ -503,7 +646,7 @@ def test_regression_republish_from_closed_does_not_go_live() -> None:
     """Refuses to republish a closed publication unless reopened explicitly (audit 9.5)."""
     closed = unpublish(_published())
     with pytest.raises(LockedError):
-        publish(two_set_show(), "pub-1", BASE_URL, LATER, previous=closed)
+        publish(two_set_show(), "pub-1", BASE_URL, LATER, previous=closed, join_token=JOIN_TOKEN)
 
 
 @pytest.mark.defect("UP-9.5-12")
@@ -585,6 +728,7 @@ def test_regression_republish_after_a_spot_rename_keeps_the_claim() -> None:
         BASE_URL,
         LATER,
         previous=pub,
+        join_token=JOIN_TOKEN,
         renames={"T1": "X1"},  # type: ignore[call-arg]
     )
     assert [(c.spot, c.performer.name) for c in again.claims] == [("X1", "Ada")]
@@ -675,3 +819,371 @@ def test_regression_publication_version_detects_concurrent_claims() -> None:
     second, _ = claim_spot(base, show, performer("Bo"), "T2", AT)
     assert first.version == base.version + 1  # type: ignore[attr-defined]
     assert second.version == first.version  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize(
+    "token", ["", "short", "a" * 21, "a" * 22 + "!", "a" * 22 + "\n", "é" * 22, "a" * 257]
+)
+def test_regression_publish_rejects_a_short_or_malformed_join_token(token: str) -> None:
+    """Rejects a join token under 22 characters or outside the base64url alphabet."""
+    with pytest.raises(SchemaError):
+        publish(two_set_show(), "pub-1", BASE_URL, AT, join_token=token)
+
+
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "https://user:pw@eight.example/p",
+        "https://user@eight.example/p",
+        "https://eight.example/p#frag",
+        "https:///p",
+        "https://eight.example/p?",
+    ],
+)
+def test_regression_publish_rejects_base_urls_with_credentials_or_fragments(base_url: str) -> None:
+    """Rejects userinfo, fragments, empty queries and missing hosts in the base URL."""
+    with pytest.raises(SchemaError) as caught:
+        publish(two_set_show(), "pub-1", base_url, AT, join_token=JOIN_TOKEN)
+    assert "pw" not in str(caught.value.context)
+
+
+def test_regression_publish_errors_do_not_echo_the_join_token() -> None:
+    """Keeps the raw token out of every error message and context."""
+    bad_token = "bad token with spaces and more"
+    with pytest.raises(SchemaError) as caught:
+        publish(two_set_show(), "pub-1", BASE_URL, AT, join_token=bad_token)
+    assert bad_token not in f"{caught.value} {caught.value.context} {caught.value.hint}"
+
+
+def test_regression_verify_join_token_checks_the_stored_hash() -> None:
+    """Accepts only the token that was issued; a malformed one returns False."""
+    pub = _published()
+    assert pub.join_token_sha256 == hashlib.sha256(JOIN_TOKEN.encode()).hexdigest()
+    assert verify_join_token(pub, JOIN_TOKEN)
+    assert not verify_join_token(pub, "Zk3Qz9-high-entropy_join-tokeX")
+    assert not verify_join_token(pub, "")
+    assert not verify_join_token(pub, "\u00e9" * 30)
+
+
+def test_regression_verify_join_token_fails_closed_without_a_hash() -> None:
+    """Rejects every token when the publication stores no hash."""
+    pub = _published().replace(join_token_sha256=None)
+    assert not verify_join_token(pub, JOIN_TOKEN)
+
+
+def test_regression_performer_view_url_omits_join_token() -> None:
+    """Builds the path animation URL from the link without its query."""
+    show = guided_show()
+    pub = _with_claims(show, ("Ada", "T2"))
+    view = performer_view(pub, show, performer("Ada"))
+    assert JOIN_TOKEN not in view.path_animation_url
+    assert view.path_animation_url == "https://eight.example/p/pub-1/spots/T2/path"
+
+
+@pytest.mark.parametrize("digest", ["abc", "A" * 64, "g" * 64, "a" * 65])
+def test_regression_publication_rejects_a_malformed_token_hash(digest: str) -> None:
+    """Requires exactly 64 lowercase hex characters in the stored digest."""
+    with pytest.raises(SchemaError):
+        _published().replace(join_token_sha256=digest)
+
+
+UNSAFE_BASE_URLS = [
+    "https://eight.example:99999/p",
+    "https://eight.example:80x/p",
+    "https://eight.example:/p",
+    "https://eight.example:0/p",
+    "https://a.example\\.evil.example/p",
+    "https://eight.example/p\\q",
+    "https://eight .example/p",
+    "https://eight.example/p q",
+    "https://eight.example/p\x00",
+    "https://eight.exam\tple/p",
+    "https://eight.example/p\r\n",
+    "https://\u00e9ight.example/p",
+    "https://%61.example/p",
+    "https://.",
+    "https://./p",
+    "https://a..b/p",
+    "https://-a.example/p",
+    "https://a-.example/p",
+    "https://" + "a" * 64 + ".example/p",
+    "https://" + ".".join(["a" * 60] * 5) + "/p",
+    "https://999.1.1.1:x/p",
+    "https://[::1/p",
+    "https://[zz::1]/p",
+    "https://eight.example/./p",
+    "https://eight.example/p/../q",
+    "https://eight.example/..",
+    "https://eight.example/p?x=1",
+    "https://eight.example/p#x",
+    *[f"https://eight.example/p{char}q" for char in "\"<>'`{|}^"],
+    "https://eight.example/p%zz",
+    "https://u:p@eight.example/p",
+    "http://eight.example/p",
+    "",
+]
+
+
+@pytest.mark.parametrize("base_url", UNSAFE_BASE_URLS)
+def test_regression_publish_rejects_unsafe_base_url(base_url: str) -> None:
+    """Rejects ports, hosts, characters and path segments that urlsplit would alter or accept."""
+    with pytest.raises(SchemaError) as caught:
+        publish(two_set_show(), "pub-1", base_url, AT, join_token=JOIN_TOKEN)
+    assert base_url not in str(caught.value.context) or not base_url
+
+
+@pytest.mark.parametrize(
+    ("base_url", "link_root"),
+    [
+        ("https://eight.example/p", "https://eight.example/p"),
+        ("https://eight.example:8443/p/", "https://eight.example:8443/p"),
+        ("https://[2001:db8::1]/p", "https://[2001:db8::1]/p"),
+        ("https://192.0.2.1/p", "https://192.0.2.1/p"),
+        ("https://eight.example/p%20q", "https://eight.example/p%20q"),
+    ],
+)
+def test_publish_accepts_well_formed_https_base_urls(base_url: str, link_root: str) -> None:
+    """Accepts DNS, IPv4 and bracketed IPv6 hosts, explicit ports and escaped paths."""
+    pub = publish(two_set_show(), "pub-1", base_url, AT, join_token=JOIN_TOKEN)
+    assert pub.link == f"{link_root}/pub-1"
+
+
+@pytest.mark.parametrize("token", [None, b"Zk3Qz9-high-entropy_join-token", 123])
+def test_regression_verify_join_token_returns_false_for_non_strings(token: object) -> None:
+    """Returns False instead of raising when the token is not a string."""
+    assert not verify_join_token(_published(), token)  # type: ignore[arg-type]
+
+
+def test_regression_publication_repr_omits_the_join_token() -> None:
+    """Keeps the link secret out of repr, which logs and tracebacks print."""
+    assert JOIN_TOKEN not in repr(_published())
+
+
+def _error_text(error: BaseException) -> str:
+    """Spells every part of an error a log or traceback could print, its cause included."""
+    parts = [str(error), repr(error), str(error.__cause__), repr(error.__cause__)]
+    if isinstance(error, ShowPyError):
+        parts += [error.hint, repr(error.context)]
+    return " ".join(parts)
+
+
+def test_regression_stored_publication_holds_no_join_token() -> None:
+    """Keeps the raw token out of dumps, repr, exports, print sheets and join_link errors."""
+    show = guided_show()
+    pub = _with_claims(show, ("Ada", "T2"))
+    outputs = [
+        pub.model_dump_json(),
+        json.dumps(pub.model_dump(mode="json")),
+        repr(pub),
+        str(pub),
+        json.dumps(export_json(show)),
+        *(sheet.model_dump_json() for sheet in coordinate_sheets(show, publication=pub)),
+        chart(show, "2", pub).model_dump_json(),
+        performer_view(pub, show, performer("Ada")).model_dump_json(),
+    ]
+    assert not [text for text in outputs if JOIN_TOKEN in text]
+    for presented in (f"{JOIN_TOKEN}x", f"{JOIN_TOKEN}!", JOIN_TOKEN[:-1] + "X"):
+        with pytest.raises(ShowPyError) as caught:
+            join_link(pub, presented)
+        assert JOIN_TOKEN not in _error_text(caught.value)
+    with pytest.raises(ShowPyError) as caught:
+        join_link(pub.replace(join_token_sha256=None), JOIN_TOKEN)
+    assert JOIN_TOKEN not in _error_text(caught.value)
+
+
+def test_regression_join_link_round_trips_the_issued_token() -> None:
+    """Appends the issued token to the stored link in the format E1 used."""
+    pub = _published()
+    assert join_link(pub, JOIN_TOKEN) == f"{LINK}?t={JOIN_TOKEN}"
+    assert verify_join_token(pub, join_link(pub, JOIN_TOKEN).rpartition("?t=")[2])
+
+
+@pytest.mark.parametrize("token", ["", "short", "a" * 21, "a" * 257, f"{JOIN_TOKEN}!", None, 7])
+def test_regression_join_link_rejects_a_malformed_token(token: Any) -> None:
+    """Refuses a token outside 22 to 256 characters of `[A-Za-z0-9_-]`, or not a string."""
+    with pytest.raises(SchemaError):
+        join_link(_published(), token)
+
+
+@pytest.mark.parametrize("token", [OTHER_TOKEN, JOIN_TOKEN[:-1] + "X", JOIN_TOKEN.upper()])
+def test_regression_join_link_rejects_a_wrong_token(token: str) -> None:
+    """Refuses a well-formed token whose digest is not the stored one."""
+    with pytest.raises(ValidationError) as caught:
+        join_link(_published(), token)
+    assert token not in _error_text(caught.value)
+
+
+def test_regression_join_link_fails_closed_without_a_digest() -> None:
+    """Refuses every token for a publication that stores no digest, as v0.2.0 ones do."""
+    with pytest.raises(ValidationError) as caught:
+        join_link(_published().replace(join_token_sha256=None), JOIN_TOKEN)
+    assert "join_token" in caught.value.hint
+
+
+def test_regression_qr_code_encodes_the_join_link() -> None:
+    """Encodes the verified joinable link, token included, at error level M."""
+    pub = _published()
+    link = join_link(pub, JOIN_TOKEN)
+    expected = _grid_text(_reference_grid(link, boost=False))
+    assert _grid_text(_module_grid(qr_code(pub, JOIN_TOKEN), link)) == expected
+
+
+@pytest.mark.parametrize("token", [OTHER_TOKEN, "short"])
+def test_regression_qr_code_rejects_a_wrong_token(token: str) -> None:
+    """Refuses to encode a token that does not verify against the stored digest."""
+    with pytest.raises(ShowPyError) as caught:
+        qr_code(_published(), token)
+    assert token not in _error_text(caught.value)
+
+
+def test_regression_first_publish_requires_a_join_token() -> None:
+    """Refuses a first publish without a join token, so no publication is born unjoinable."""
+    with pytest.raises(SchemaError) as caught:
+        publish(two_set_show(), "pub-1", BASE_URL, AT)
+    assert "join_token" in caught.value.hint
+
+
+def test_regression_republish_without_a_token_keeps_the_digest() -> None:
+    """Keeps the issued token valid when a republish passes no token."""
+    first = _published()
+    again = publish(two_set_show(), "pub-1", BASE_URL, LATER, previous=first)
+    assert again.join_token_sha256 == first.join_token_sha256
+    assert join_link(again, JOIN_TOKEN) == f"{LINK}?t={JOIN_TOKEN}"
+
+
+def test_regression_republish_with_a_token_rotates_the_digest() -> None:
+    """Replaces the stored digest when a republish passes a new token, revoking the old one."""
+    first = _published()
+    again = publish(
+        two_set_show(), "pub-1", BASE_URL, LATER, previous=first, join_token=OTHER_TOKEN
+    )
+    assert again.join_token_sha256 == hashlib.sha256(OTHER_TOKEN.encode()).hexdigest()
+    assert join_link(again, OTHER_TOKEN) == f"{LINK}?t={OTHER_TOKEN}"
+    with pytest.raises(ValidationError):
+        join_link(again, JOIN_TOKEN)
+
+
+def test_regression_republish_without_a_digest_requires_a_token() -> None:
+    """Refuses to republish a digest-less v0.2.0 publication without issuing a token."""
+    legacy = _published().replace(join_token_sha256=None)
+    with pytest.raises(SchemaError):
+        publish(two_set_show(), "pub-1", BASE_URL, LATER, previous=legacy)
+    again = publish(
+        two_set_show(), "pub-1", BASE_URL, LATER, previous=legacy, join_token=JOIN_TOKEN
+    )
+    assert verify_join_token(again, JOIN_TOKEN)
+
+
+def _e1_stored(link: str) -> dict[str, Any]:
+    """Builds a publication record shaped as E1-era code stored it, token in the link."""
+    stored = _published().model_dump(mode="json")
+    stored["link"] = link
+    return stored
+
+
+def test_regression_loading_an_e1_publication_strips_the_join_token() -> None:
+    """Drops `?t=<token>` from an E1-era link on load and keeps the digest, so the token joins."""
+    stored = _e1_stored(f"{LINK}?t={JOIN_TOKEN}")
+    assert JOIN_TOKEN in json.dumps(stored)
+    for loaded in (
+        Publication.model_validate(stored),
+        Publication.model_validate_json(json.dumps(stored)),
+        Publication(**stored),
+    ):
+        assert loaded.link == LINK
+        assert loaded.join_token_sha256 == hashlib.sha256(JOIN_TOKEN.encode()).hexdigest()
+        assert JOIN_TOKEN not in f"{loaded.model_dump_json()} {loaded!r}"
+        assert join_link(loaded, JOIN_TOKEN) == f"{LINK}?t={JOIN_TOKEN}"
+
+
+@pytest.mark.parametrize(
+    ("link", "expected"),
+    [
+        (f"{LINK}?ref=1&t={JOIN_TOKEN}", f"{LINK}?ref=1"),
+        (f"{LINK}?t={JOIN_TOKEN}&ref=1&t={OTHER_TOKEN}", f"{LINK}?ref=1"),
+        (f"{LINK}?t={JOIN_TOKEN}#top", f"{LINK}#top"),
+        (f"{LINK}?T={JOIN_TOKEN}", LINK),
+        (f"{LINK}#top?t={JOIN_TOKEN}&x=1", f"{LINK}#top?x=1"),
+        (f"{LINK}?t={JOIN_TOKEN}#?T={JOIN_TOKEN}", f"{LINK}#"),
+        (f"{LINK}?t=", LINK),
+        (f"{LINK}?", LINK),
+        (LINK, LINK),
+    ],
+)
+def test_regression_loading_an_e1_publication_keeps_other_query_parameters(
+    link: str, expected: str
+) -> None:
+    """Strips every `t` parameter from a stored link and keeps the rest of it unchanged."""
+    assert Publication.model_validate(_e1_stored(link)).link == expected
+
+
+def test_regression_invalid_e1_publication_errors_omit_the_join_token() -> None:
+    """Keeps the token out of the error when an E1-era record fails validation elsewhere.
+
+    A missing field makes pydantic echo the whole input record, link included.
+    """
+    stored = _e1_stored(f"{LINK}?t={JOIN_TOKEN}")
+    del stored["published_at"]
+    with pytest.raises(SchemaError) as caught:
+        Publication.model_validate(stored)
+    assert JOIN_TOKEN not in _error_text(caught.value)
+
+
+@pytest.mark.parametrize("token", ["a" * 22, "A1_-" * 64], ids=["22", "256"])
+def test_publish_accepts_join_tokens_at_the_length_bounds(token: str) -> None:
+    """Accepts tokens of exactly 22 and 256 characters, the bounds 21 and 257 fall outside."""
+    pub = publish(two_set_show(), "pub-1", BASE_URL, AT, join_token=token)
+    assert verify_join_token(pub, token)
+    assert join_link(pub, token) == f"{LINK}?t={token}"
+
+
+@pytest.mark.parametrize("char", list("~!$&()*+,;=:@"))
+def test_publish_accepts_rfc3986_sub_delimiters_in_the_base_url_path(char: str) -> None:
+    """Accepts each unreserved or sub-delimiter character RFC 3986 allows in a path segment."""
+    base_url = f"https://eight.example/p{char}q"
+    pub = publish(two_set_show(), "pub-1", base_url, AT, join_token=JOIN_TOKEN)
+    assert pub.link == f"{base_url}/pub-1"
+    assert join_link(pub, JOIN_TOKEN) == f"{base_url}/pub-1?t={JOIN_TOKEN}"
+
+
+def _legacy_link_as(kind: str) -> object:
+    link = f"{LINK}?t={JOIN_TOKEN}"
+    shapes: dict[str, object] = {
+        "bytes": link.encode(),
+        "bytearray": bytearray(link.encode()),
+        "list": [link],
+        "dict": {"href": link},
+    }
+    return shapes[kind]
+
+
+@pytest.mark.parametrize("kind", ["bytes", "bytearray", "list", "dict"])
+def test_regression_publication_refuses_a_non_text_link_without_echoing_it(kind: str) -> None:
+    """Refuses a link that is not text before pydantic coerces or echoes it with the token.
+
+    Pydantic's lax mode turned bytes into text after the token was stripped, and a wrong-type
+    link was echoed, token included, in the error's input field.
+    """
+    stored = {**_published().model_dump(mode="json"), "link": _legacy_link_as(kind)}
+    loaders: list[Callable[[], Publication]] = [
+        lambda: Publication.model_validate(stored),
+        lambda: Publication(**stored),
+    ]
+    if kind in ("list", "dict"):
+        loaders.append(lambda: Publication.model_validate_json(json.dumps(stored)))
+    for load in loaders:
+        with pytest.raises(SchemaError) as caught:
+            load()
+        assert JOIN_TOKEN not in _error_text(caught.value)
+
+
+@pytest.mark.parametrize(
+    "link", [f"{LINK}?ref=1", f"{LINK}#top", "https://e.example/p?a=1/pub-1#top"]
+)
+def test_regression_join_link_refuses_a_link_with_a_query_or_fragment(link: str) -> None:
+    """Refuses to append `?t=` to a stored link that already has a query or fragment."""
+    pub = _published().replace(link=link)
+    with pytest.raises(ValidationError) as caught:
+        join_link(pub, JOIN_TOKEN)
+    assert "republish" in caught.value.hint
+    assert JOIN_TOKEN not in _error_text(caught.value)

@@ -3,11 +3,16 @@
 """
 test_data.py --- tests JSON interchange, frame CSV, position import, tables and format plugins
 
-Also holds the audited data and CSV defects (UP-9.5-27 to UP-9.5-35, UP-4.3-01) as strict xfails.
+Also holds the audited data and CSV defects (UP-9.5-29 to UP-9.5-34, UP-4.3-01) as strict xfails.
+UP-9.5-35 is fixed; its test below passes.
 
 Contains:
     test_regression_chart_csv_neutralizes_formula_names(): quotes a formula-like performer name
     test_regression_csv_neutralizes_every_formula_trigger(): quotes cells led by + - @ tab or CR
+    test_regression_csv_neutralizes_header_cells(): quotes a formula-like column name
+    test_regression_csv_leaves_numeric_literals_untouched(): keeps -5, +3, 1.5e3 and -.5 as is
+    test_regression_csv_prefixes_a_non_numeric_minus_cell(): quotes `-x` and `-1+1`
+    test_regression_csv_opt_out_leaves_formula_cells_unchanged(): writes cells raw when asked
     test_regression_csv_writes_large_floats_without_exponent(): writes 1234567.0 in full; the `:g`
         format turns it into 1.23457e+06
     test_regression_csv_keeps_cue_seconds_above_one_thousand_exact(): keeps seconds past 1,000 exact
@@ -16,7 +21,7 @@ Contains:
     test_regression_to_text_aligns_wide_cjk_characters(): pads wide characters by display width
     test_regression_export_json_include_accepts_a_single_field_name(): treats a string as one field
     test_regression_import_json_rejects_a_non_mapping_with_schema_error(): raises SchemaError for
-        `[1]`; today an AttributeError leaks from `.get`
+        `[1]` (UP-9.5-35; an AttributeError used to leak)
     test_regression_export_json_ignores_hash_seed(): dumps spot tags and selections in one order
         under every hash seed
     test_import_json_rejects_the_old_stage_tag(): refuses a document tagged stage.show.v1
@@ -213,8 +218,6 @@ def _display_width(text: str) -> int:
     return sum(WIDE_CELL if unicodedata.east_asian_width(c) in "WF" else 1 for c in text)
 
 
-@pytest.mark.defect("UP-9.5-27")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-27")
 def test_regression_chart_csv_neutralizes_formula_names() -> None:
     """Prefixes a quote to a performer name that spreadsheets would run as a formula.
 
@@ -231,14 +234,33 @@ def test_regression_chart_csv_neutralizes_formula_names() -> None:
     assert FORMULA_NAME not in cells
 
 
-@pytest.mark.defect("UP-9.5-28")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-28")
 @pytest.mark.parametrize("lead", ["+", "-", "@", "\t", "\r"])
 def test_regression_csv_neutralizes_every_formula_trigger(lead: str) -> None:
     """Prefixes a quote to cells starting with + - @ tab or carriage return (audit 9.5)."""
     cell = f"{lead}1+1"
     rows = _csv_rows(to_csv(pd.DataFrame({"name": [cell], "offset": ["-5"]})))
     assert rows[1] == [f"'{cell}", "-5"]
+
+
+def test_regression_csv_neutralizes_header_cells() -> None:
+    rows = _csv_rows(to_csv(pd.DataFrame({"=SUM(A1)": ["ok"]})))
+    assert rows[0] == ["'=SUM(A1)"]
+
+
+@pytest.mark.parametrize("literal", ["-5", "+3", "1.5e3", "-.5"])
+def test_regression_csv_leaves_numeric_literals_untouched(literal: str) -> None:
+    rows = _csv_rows(to_csv(pd.DataFrame({"n": [literal]})))
+    assert rows[1] == [literal]
+
+
+def test_regression_csv_prefixes_a_non_numeric_minus_cell() -> None:
+    rows = _csv_rows(to_csv(pd.DataFrame({"n": ["-x", "-1+1"]})))
+    assert [row[0] for row in rows[1:]] == ["'-x", "'-1+1"]
+
+
+def test_regression_csv_opt_out_leaves_formula_cells_unchanged() -> None:
+    rows = _csv_rows(to_csv(pd.DataFrame({"n": [FORMULA_NAME]}), neutralize=False))
+    assert rows[1] == [FORMULA_NAME]
 
 
 @pytest.mark.defect("UP-9.5-29")
@@ -296,10 +318,8 @@ def test_regression_export_json_include_accepts_a_single_field_name() -> None:
     assert sorted(document["show"]) == ["id", "title"]
 
 
-@pytest.mark.defect("UP-9.5-35")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-35")
 def test_regression_import_json_rejects_a_non_mapping_with_schema_error() -> None:
-    """Raises SchemaError for `[1]`; today an AttributeError leaks from `.get`."""
+    """Raises SchemaError for `[1]`; an AttributeError used to leak from `.get` (UP-9.5-35)."""
     with pytest.raises(SchemaError):
         import_json([1])  # type: ignore[arg-type]
 

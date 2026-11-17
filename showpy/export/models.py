@@ -7,20 +7,30 @@ Contains:
     ChartRow: holds one spot on a set chart
     Chart: holds every spot of one set, for the designer
     TextTable: holds a titled table of display strings, shared by CSV, text and PDF output
+    JOIN_PARAMETER: names the query parameter that carries the join token in a joinable link
     Performer: describes a real person who joins through a publication link
     Claim: records a performer on a spot
     Publication: holds one published revision of a show and the claims made on it
     PerformerView: holds what one performer sees: their spot in every set and their path
 """
 
+import re
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Literal
 
+from pydantic import Field, field_validator, model_validator
+
+from showpy.core.errors import SchemaError
 from showpy.core.ids import SetId, SpotId
 from showpy.core.types import Count, Degrees, FrozenModel, Point
 from showpy.time.models import MeasureLabel
 
 type PublicationStatus = Literal["live", "paused", "closed"]
+SHA256_HEX = re.compile(r"[0-9a-f]{64}")
+JOIN_PARAMETER = "t"
+LINK_FIELD = "link"
+
 type PerformerRole = Literal["performer", "crew"]
 
 
@@ -124,7 +134,8 @@ class Performer(FrozenModel):
     Attributes:
         id: Stable performer ID.
         name: Display name.
-        contact: How to reach the performer, when given.
+        contact: How to reach the performer. Publications never keep it; the host keeps contacts
+            in its own roster keyed by `Performer.id`.
         role: `performer` or `crew`; decides which spots the person may claim.
     """
 
@@ -135,11 +146,13 @@ class Performer(FrozenModel):
 
 
 class Claim(FrozenModel):
-    """Records a performer on a spot.
+    """Records a performer on a spot; the performer's contact is dropped on every construction.
+
+    Hosts keep contacts in their own roster keyed by `Performer.id`.
 
     Attributes:
         spot: Spot claimed.
-        performer: Who holds it.
+        performer: Who holds it, without a contact.
         claimed_at: When the claim was made.
         locked: True once claimed; only the designer can move a locked claim.
     """
@@ -149,15 +162,36 @@ class Claim(FrozenModel):
     claimed_at: datetime
     locked: bool = True
 
+    @field_validator("performer")
+    @classmethod
+    def _drop_contact(cls, value: Performer) -> Performer:
+        return value if value.contact is None else value.replace(contact=None)
+
+
+def _without_join_parameter(part: str) -> str:
+    head, _, query = part.partition("?")
+    kept = [p for p in query.split("&") if p and p.partition("=")[0].lower() != JOIN_PARAMETER]
+    return f"{head}{'?' if kept else ''}{'&'.join(kept)}"
+
+
+def _without_join_token(link: str) -> str:
+    # Fragments are stripped too: client-side routers read `#/path?t=` like a query.
+    head, hash_mark, fragment = link.partition("#")
+    return f"{_without_join_parameter(head)}{hash_mark}{_without_join_parameter(fragment)}"
+
 
 class Publication(FrozenModel):
-    """Holds one published revision of a show and the claims made on it.
+    """Holds one published revision of a show and the claims made on it; never the join token.
 
     Attributes:
         id: Publication ID, stable across republishing.
         show_id: Show published.
         revision: Show revision the publication shows.
-        link: Public link performers open.
+        link: Join URL without the token, `<base_url>/<publication id>`; `join_link` adds the
+            token. A `t` parameter in a stored E1-era link is dropped on load (ADR 0018);
+            `model_copy(update=)` skips that step, so hosts edit with `replace` instead.
+        join_token_sha256: SHA-256 hex digest of the join token; hosts verify a join against it
+            with `verify_join_token` instead of comparing raw tokens.
         status: `live`, `paused` or `closed`.
         published_at: When this revision was published.
         claims: Claims in natural spot order.
@@ -166,10 +200,33 @@ class Publication(FrozenModel):
     id: str
     show_id: str
     revision: str
-    link: str
+    link: str = Field(repr=False)
+    join_token_sha256: str | None = None
     status: PublicationStatus = "live"
     published_at: datetime
     claims: tuple[Claim, ...] = ()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_join_token(cls, data: object) -> object:
+        # Runs before field checks, so an error echoing the input record never shows the token.
+        if not isinstance(data, Mapping) or LINK_FIELD not in data:
+            return data
+        link = data[LINK_FIELD]
+        if not isinstance(link, str):
+            raise SchemaError(
+                f"publication link is a {type(link).__name__}, not text",
+                hint="store link as text, e.g. https://eight.example/p/pub-1",
+                context={"type": type(link).__name__},
+            )
+        return {**data, LINK_FIELD: _without_join_token(link)}
+
+    @field_validator("join_token_sha256")
+    @classmethod
+    def _check_digest(cls, value: str | None) -> str | None:
+        if value is not None and SHA256_HEX.fullmatch(value) is None:
+            raise ValueError("join_token_sha256 must be 64 lowercase hex characters")
+        return value
 
 
 class PerformerView(FrozenModel):

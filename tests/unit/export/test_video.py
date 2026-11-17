@@ -4,6 +4,7 @@
 test_video.py --- tests 2D frame rendering and MP4 export with optional audio
 
 Also holds the audited video defects (UP-9.5-45 to UP-9.5-57) as strict xfails.
+Also holds UP-9.5-59, found by the whole-lane security review.
 
 Contains:
     test_regression_short_audio_does_not_truncate_the_video(): keeps the video longer than the audio
@@ -16,12 +17,18 @@ Contains:
     test_regression_mp4_carries_bt709_colour_tags(): tags the stream BT.709 so players do not guess
         the colour matrix
     test_regression_video_canvas_caps_the_pixel_count(): rejects a 42,000 px wide canvas
+    test_regression_video_canvas_rejects_a_bad_scale(): rejects NaN, infinite, zero, or 1e308 scale
+    test_regression_export_video_checks_the_size_before_ffmpeg(): fails before ffmpeg starts
     test_regression_frames_do_not_rebuild_the_cast_ids_per_spot(): builds the ID list once a frame
     test_regression_ffmpeg_start_failure_is_wrapped(): wraps a failed ffmpeg start in StorageError
     test_regression_audio_mux_has_a_timeout(): passes a timeout to the ffmpeg mux so a stuck process
         cannot hang the export
     test_regression_negative_sync_offset_delays_the_audio(): delays music for a negative offset
     test_regression_audio_section_limits_playback(): keeps a track silent before its section
+    test_regression_export_video_refuses_a_degenerate_canvas(): raises for a scale that gives an
+        odd or empty canvas
+    test_regression_export_video_refuses_an_empty_encoder_output(): raises when ffmpeg writes
+        nothing
 """
 
 import array
@@ -34,6 +41,7 @@ import wave
 from pathlib import Path
 
 import imageio_ffmpeg
+import numpy as np
 import pytest
 
 from showpy.cast.models import Cast
@@ -276,12 +284,31 @@ def test_regression_mp4_carries_bt709_colour_tags(tmp_path: Path) -> None:
     assert "bt709" in _probe(data, tmp_path)
 
 
-@pytest.mark.defect("UP-9.5-53")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-53")
 def test_regression_video_canvas_caps_the_pixel_count() -> None:
     """Rejects `px_per_m=1000`, a 42,000 x 25,000 px canvas, with SchemaError (P0 #8)."""
     with pytest.raises(SchemaError):
         video_canvas(two_set_show(), HUGE_PX_PER_M)
+
+
+@pytest.mark.parametrize("px_per_m", [math.nan, math.inf, 0.0, -4.0, 1e308, np.float64(1e308)])
+def test_regression_video_canvas_rejects_a_bad_scale(px_per_m: float) -> None:
+    """Rejects NaN, infinite, zero and negative px_per_m with SchemaError."""
+    with pytest.raises(SchemaError):
+        video_canvas(two_set_show(), px_per_m)
+
+
+def test_regression_export_video_checks_the_size_before_ffmpeg(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Raises SchemaError for a huge px_per_m before any writer or ffmpeg process starts."""
+
+    def fail(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("ffmpeg started before the size check")
+
+    monkeypatch.setattr(imageio_ffmpeg, "write_frames", fail)
+    monkeypatch.setattr(subprocess, "run", fail)
+    with pytest.raises(SchemaError):
+        export_video(two_set_show(), count_range=(0.0, 1.0), fps=FPS, px_per_m=HUGE_PX_PER_M)
 
 
 @pytest.mark.defect("UP-9.5-54")
@@ -380,3 +407,23 @@ def test_regression_audio_section_limits_playback(tmp_path: Path) -> None:
     path = _save(data, tmp_path)
     assert _audio_peak(path, until_s=SILENT_LEAD_S) == 0
     assert _audio_peak(path) > 0
+
+
+@pytest.mark.parametrize("px_per_m", [1e-11, 1e-300])
+def test_regression_export_video_refuses_a_degenerate_canvas(px_per_m: float) -> None:
+    """Raises SchemaError for a scale that leaves an odd or empty canvas; 0 bytes came back."""
+    with pytest.raises(SchemaError, match="video"):
+        export_video(two_set_show(), (0.0, 1.0), fps=FPS, px_per_m=px_per_m)
+
+
+def test_regression_export_video_refuses_an_empty_encoder_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Raises StorageError when the encoder leaves an empty file instead of returning b""."""
+
+    def write_nothing(_show: Show, path: Path, *_rest: object) -> None:
+        path.write_bytes(b"")
+
+    monkeypatch.setattr("showpy.export.video._write_frames", write_nothing)
+    with pytest.raises(StorageError):
+        export_video(two_set_show(), (0.0, 1.0), fps=FPS, px_per_m=SMALL_PX_PER_M)
