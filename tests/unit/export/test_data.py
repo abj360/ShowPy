@@ -38,6 +38,8 @@ Contains:
     test_import_json_still_loads_a_document_with_fonts(): ignores the fonts key
     test_regression_import_fonts_rejects_hostile_documents(): raises BAD_FONT, never TypeError,
         for non-mapping fonts, non-string or non-ASCII entries, oversize entries and too many fonts
+    test_regression_import_fonts_accepts_an_older_font_under_a_taken_name(): registers an
+        exported font by URI when a newer font holds its name, and rebuilds the same slots
 """
 
 import base64
@@ -53,6 +55,7 @@ import pytest
 
 from showpy.choreo.forms import slots, text_form
 from showpy.core.errors import FontError, MissingFontError, SchemaError, UnknownRefError
+from showpy.core.resources import font_path
 from showpy.core.util import approx_equal, asset_uri
 from showpy.export.data import (
     DEFAULT_FORMATS,
@@ -476,3 +479,19 @@ def test_regression_import_fonts_rejects_hostile_documents() -> None:
     with pytest.raises(FontError):
         import_fonts([1])  # type: ignore[arg-type]
     assert import_fonts({FONTS_KEY: _entry(tiny_bytes())}).names["tiny"] == asset_uri(tiny_bytes())
+
+
+def _older_simplex() -> bytes:
+    document = json.loads(font_path("simplex.json").read_bytes())
+    return json.dumps({**document, "family": "Simplex, an older release"}).encode()
+
+
+def test_regression_import_fonts_accepts_an_older_font_under_a_taken_name() -> None:
+    older, uri = register_font(EMPTY_FONTS, _older_simplex())
+    form = text_form("old", [f"S{i}" for i in range(36)], "HI", fonts=[uri], height=2.0,
+                     at=(0, 5), n=36, font_registry=older)  # fmt: skip
+    document = export_json(two_set_show().replace(forms={"old": form}), font_registry=older)
+    imported = import_fonts(document)
+    assert imported.names["simplex"] == bundled_fonts().resolve("simplex")
+    assert imported.source(uri) == _older_simplex()
+    assert np.array_equal(slots(form, font_registry=imported), slots(form, font_registry=older))

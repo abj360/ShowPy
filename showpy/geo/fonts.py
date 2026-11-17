@@ -5,7 +5,7 @@ Contains:
     MAX_FONT_BYTES: bounds the size of one font file
     BUNDLED_FONTS: maps each bundled font's name to the URI of its exact file bytes
     FontRegistry: holds loaded fonts, their source bytes and their names, all read-only; checks
-        on construction that every URI hashes its bytes and every name maps back to its font
+        on construction that every URI hashes its bytes and every name names its font
     FontRegistry.get(): returns the font stored under a URI
     FontRegistry.resolve(): turns a font name or URI into a URI
     FontRegistry.source(): returns the exact bytes a font was loaded from
@@ -18,7 +18,7 @@ import functools
 import json
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 
 import numpy as np
 from pydantic import model_validator
@@ -52,14 +52,19 @@ BUNDLED_FONTS: Mapping[str, str] = MappingProxyType(
 )
 MISSING_FONT_HINT = "register it with register_font(registry, data) or import_fonts(...)"
 
+type NameTaken = Literal["raise", "keep"]
+
 
 class FontRegistry(FrozenModel):
     """Holds loaded fonts, their source bytes and their names, all read-only.
 
+    A URI is a font's identity; a name is a convenience. A font whose name is bound to other
+    bytes, such as an older release imported from a document, is reachable by URI only.
+
     Attributes:
         fonts: Loaded fonts keyed by `asset:sha256:<hex>` URI.
         sources: Exact bytes of each font file keyed by URI.
-        names: URI of each font keyed by its short name.
+        names: URI of a font keyed by its short name; at most one font per name.
     """
 
     fonts: Annotated[Mapping[str, Font], ReadOnly()]
@@ -93,14 +98,6 @@ class FontRegistry(FrozenModel):
                     f"registry name {name!r} does not name the font at {uri}",
                     hint="map each font's own name to its URI",
                     font=name,
-                    uri=uri,
-                )
-        for uri, font in self.fonts.items():
-            if self.names.get(font.name) != uri:
-                raise _bad_font(
-                    f"font {font.name!r} at {uri} is not in the registry names",
-                    hint="map each font's own name to its URI",
-                    font=font.name,
                     uri=uri,
                 )
 
@@ -247,12 +244,16 @@ def load_font(data: bytes) -> Font:
     return font
 
 
-def register_font(registry: FontRegistry, data: bytes) -> tuple[FontRegistry, str]:
+def register_font(
+    registry: FontRegistry, data: bytes, *, if_name_taken: NameTaken = "raise"
+) -> tuple[FontRegistry, str]:
     """Returns a registry that also holds the font in `data`, and the font's URI.
 
     Args:
         registry: Registry to extend; it is not changed.
         data: Bytes of a `showpy.font.v1` JSON file.
+        if_name_taken: What to do when the font's name is bound to other bytes: `"raise"`
+            FONT_NAME_TAKEN, or `"keep"` that binding and register the font by URI only.
 
     Returns:
         registered: The extended registry, or `registry` itself when it already holds these
@@ -266,22 +267,23 @@ def register_font(registry: FontRegistry, data: bytes) -> tuple[FontRegistry, st
     """
     font = load_font(data)
     uri = asset_uri(data)
-    taken = registry.names.get(font.name)
-    if taken == uri:
+    if uri in registry.fonts:
         return registry, uri
-    if taken is not None:
+    taken = registry.names.get(font.name)
+    if taken is not None and if_name_taken != "keep":
         raise FontError(
             f"font name {font.name!r} is already bound to {taken}",
             hint="rename the font in its file, or use the registered one",
             context={"font": font.name, "taken_by": taken, "uri": uri},
             code="FONT_NAME_TAKEN",
         )
+    names = registry.names if taken is not None else {**registry.names, font.name: uri}
     # model_construct skips the consistency validator: this font was just hashed and loaded, and
     # re-hashing the rest on every call would be quadratic in the registry size.
     extended = FontRegistry.model_construct(
         fonts=ReadOnlyMap({**registry.fonts, uri: font}),
         sources=ReadOnlyMap({**registry.sources, uri: data}),
-        names=ReadOnlyMap({**registry.names, font.name: uri}),
+        names=ReadOnlyMap(names),
     )
     return extended, uri
 

@@ -212,6 +212,9 @@ def _decode_font(uri: object, encoded: object) -> bytes:
 def import_fonts(d: Mapping[str, Any], font_registry: FontRegistry | None = None) -> FontRegistry:
     """Registers the fonts embedded in a document, checking each against its URI.
 
+    Recipes name fonts by URI, so an embedded font whose name is bound to other bytes, such as
+    an older release of a bundled font, is registered by URI and the binding is left alone.
+
     Args:
         d: A document from `export_json`; one without a `fonts` key changes nothing.
         font_registry: Registry to extend; None means the bundled fonts. It is not changed.
@@ -241,7 +244,7 @@ def import_fonts(d: Mapping[str, Any], font_registry: FontRegistry | None = None
             context={"type": type(fonts).__name__},
         )
     for uri, encoded in fonts.items():
-        registry, _ = register_font(registry, _decode_font(uri, encoded))
+        registry, _ = register_font(registry, _decode_font(uri, encoded), if_name_taken="keep")
     return registry
 
 

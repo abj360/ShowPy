@@ -12,6 +12,8 @@ Contains:
         or names disagree
     test_regression_font_cap_falls_back_to_h_then_ascender: reads the cap height from the field,
         then from the ink of H, then from the ascender
+    test_regression_register_font_can_keep_a_taken_name: registers a font by URI only when its
+        name is bound to other bytes, and the registry still validates from its dump
 """
 
 import copy
@@ -231,7 +233,6 @@ def test_regression_font_registry_rejects_mismatched_sources() -> None:
     assert swapped.value.context["uri"] == uri
     cases = [
         {"fonts": {uri: font}, "sources": {}, "names": {"tiny": uri}},
-        {"fonts": {uri: font}, "sources": {uri: data}, "names": {}},
         {"fonts": {uri: font}, "sources": {uri: data}, "names": {"tiny": other_uri}},
         {"fonts": {uri: font}, "sources": {uri: data}, "names": {"tiny": uri, "extra": uri}},
         {"fonts": {}, "sources": {}, "names": {"tiny": uri}},
@@ -243,3 +244,16 @@ def test_regression_font_registry_rejects_mismatched_sources() -> None:
     good = {"fonts": {uri: font}, "sources": {uri: data}, "names": {"tiny": uri}}
     assert FontRegistry.model_validate(good).get(uri) == font
     assert FontRegistry(**good).source(uri) == data
+
+
+def test_regression_register_font_can_keep_a_taken_name() -> None:
+    once, uri = register_font(EMPTY, tiny_bytes())
+    other = tiny_bytes(family="Tiny, another release")
+    kept, other_uri = register_font(once, other, if_name_taken="keep")
+    assert kept.names == {"tiny": uri}
+    assert kept.get(other_uri).family == "Tiny, another release"
+    assert FontRegistry.model_validate(kept.model_dump()) == kept
+    assert register_font(EMPTY, other, if_name_taken="keep")[0].names == {"tiny": other_uri}
+    with pytest.raises(FontError) as raised:
+        register_font(once, other)
+    assert raised.value.code == "FONT_NAME_TAKEN"

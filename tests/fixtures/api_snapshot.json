@@ -1390,7 +1390,7 @@
   "rect_ring": "(x0: float, y0: float, x1: float, y1: float) -> Ring",
   "region": "(outline: showpy.geo.curve_base.Curve | object) -> shapely.geometry.polygon.Polygon",
   "register_exporter": "(registry: showpy.export.data.FormatRegistry, name: str, fn: Exporter) -> showpy.export.data.FormatRegistry",
-  "register_font": "(registry: showpy.geo.fonts.FontRegistry, data: bytes) -> tuple[showpy.geo.fonts.FontRegistry, str]",
+  "register_font": "(registry: showpy.geo.fonts.FontRegistry, data: bytes, *, if_name_taken: NameTaken = 'raise') -> tuple[showpy.geo.fonts.FontRegistry, str]",
   "register_form_fn": "(registry: showpy.choreo.form_fns.FormFnRegistry, name: str, fn: FormFn) -> showpy.choreo.form_fns.FormFnRegistry",
   "register_importer": "(registry: showpy.export.data.FormatRegistry, name: str, fn: Importer) -> showpy.export.data.FormatRegistry",
   "register_motion": "(registry: showpy.choreo.motion.MotionRegistry, name: str, fn: showpy.choreo.motion.MotionFn) -> showpy.choreo.motion.MotionRegistry",
