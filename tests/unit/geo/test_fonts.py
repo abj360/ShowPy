@@ -13,7 +13,6 @@ Contains:
 """
 
 import copy
-import json
 import pickle
 import warnings
 from typing import Any
@@ -33,24 +32,9 @@ from showpy.geo.fonts import (
 )
 from showpy.geo.models import Font
 from showpy.show.repositories import InMemoryAssetStore
+from tests.fixtures.fonts import TINY, tiny_bytes
 
-TINY: dict[str, Any] = {
-    "format": "showpy.font.v1",
-    "name": "tiny",
-    "family": "Tiny",
-    "license": "MIT",
-    "source": "tests",
-    "units_per_em": 10,
-    "cap_height": 10,
-    "ascender": 10,
-    "descender": 0,
-    "glyphs": {"I": {"advance": 4, "strokes": ["M2 0 L2 10"]}},
-}
 EMPTY = FontRegistry(fonts={}, sources={}, names={})
-
-
-def _tiny(**changes: Any) -> bytes:
-    return json.dumps({**TINY, **changes}).encode()
 
 
 def _glyphs(**glyphs: Any) -> dict[str, Any]:
@@ -62,18 +46,18 @@ BAD_FONT_BYTES = [
     b"\xff\xfe",
     b"[]",
     b"[" * 100_000,
-    _tiny(format="other"),
-    _tiny(name="Bad Name"),
-    _tiny(name="x" * 65),
-    _tiny(**_glyphs(AB={"advance": 1, "strokes": []})),
-    _tiny(**_glyphs(**{"": {"advance": 1, "strokes": []}})),
-    _tiny(**_glyphs(A={"advance": -1, "strokes": []})),
-    _tiny(**_glyphs(A={"advance": 1, "strokes": ["M0 0"]})),
-    _tiny(**_glyphs(A={"advance": 1, "strokes": ["M0 0 L0 0"]})),
-    _tiny(**_glyphs(A={"advance": 1, "strokes": ["M0 0 L1 0 M2 0 L3 0"]})),
-    _tiny(**_glyphs(A={"advance": 1, "strokes": ["bogus"]})),
-    _tiny(units_per_em=0),
-    _tiny(cap_height=0),
+    tiny_bytes(format="other"),
+    tiny_bytes(name="Bad Name"),
+    tiny_bytes(name="x" * 65),
+    tiny_bytes(**_glyphs(AB={"advance": 1, "strokes": []})),
+    tiny_bytes(**_glyphs(**{"": {"advance": 1, "strokes": []}})),
+    tiny_bytes(**_glyphs(A={"advance": -1, "strokes": []})),
+    tiny_bytes(**_glyphs(A={"advance": 1, "strokes": ["M0 0"]})),
+    tiny_bytes(**_glyphs(A={"advance": 1, "strokes": ["M0 0 L0 0"]})),
+    tiny_bytes(**_glyphs(A={"advance": 1, "strokes": ["M0 0 L1 0 M2 0 L3 0"]})),
+    tiny_bytes(**_glyphs(A={"advance": 1, "strokes": ["bogus"]})),
+    tiny_bytes(units_per_em=0),
+    tiny_bytes(cap_height=0),
     b" " * (MAX_FONT_BYTES + 1),
 ]
 
@@ -124,7 +108,7 @@ def test_get_unknown_uri_names_the_hash() -> None:
 
 
 def test_register_font_returns_a_new_registry_and_the_store_uri() -> None:
-    data = _tiny()
+    data = tiny_bytes()
     registry, uri = register_font(EMPTY, data)
     assert uri == InMemoryAssetStore().put(data)
     assert registry.resolve("tiny") == uri
@@ -136,13 +120,13 @@ def test_register_font_returns_a_new_registry_and_the_store_uri() -> None:
 
 
 def test_register_font_is_idempotent() -> None:
-    once, uri = register_font(EMPTY, _tiny())
-    assert register_font(once, _tiny()) == (once, uri)
+    once, uri = register_font(EMPTY, tiny_bytes())
+    assert register_font(once, tiny_bytes()) == (once, uri)
 
 
 def test_register_font_rejects_a_taken_name() -> None:
-    once, _ = register_font(EMPTY, _tiny())
-    other = _tiny(**_glyphs(L={"advance": 4, "strokes": ["M0 0 L0 10"]}))
+    once, _ = register_font(EMPTY, tiny_bytes())
+    other = tiny_bytes(**_glyphs(L={"advance": 4, "strokes": ["M0 0 L0 10"]}))
     with pytest.raises(FontError) as raised:
         register_font(once, other)
     assert raised.value.code == "FONT_NAME_TAKEN"
@@ -151,7 +135,7 @@ def test_register_font_rejects_a_taken_name() -> None:
 
 def test_register_font_cannot_shadow_a_bundled_name() -> None:
     with pytest.raises(FontError) as raised:
-        register_font(bundled_fonts(), _tiny(name="simplex"))
+        register_font(bundled_fonts(), tiny_bytes(name="simplex"))
     assert raised.value.code == "FONT_NAME_TAKEN"
 
 
@@ -169,20 +153,20 @@ def test_load_font_rejects_bad_bytes(data: bytes) -> None:
 
 def test_load_font_names_the_failing_field() -> None:
     with pytest.raises(FontError) as raised:
-        load_font(_tiny(units_per_em=0))
+        load_font(tiny_bytes(units_per_em=0))
     assert raised.value.context["field"] == "units_per_em"
     assert isinstance(raised.value.__cause__, SchemaError)
 
 
 def test_load_font_names_the_failing_stroke() -> None:
     with pytest.raises(FontError) as raised:
-        load_font(_tiny(**_glyphs(A={"advance": 1, "strokes": ["M0 0 L1 0", "M0 0"]})))
+        load_font(tiny_bytes(**_glyphs(A={"advance": 1, "strokes": ["M0 0 L1 0", "M0 0"]})))
     assert raised.value.context["glyph"] == "A"
     assert raised.value.context["stroke"] == 1
 
 
 def test_font_registry_survives_pickling() -> None:
-    registry, uri = register_font(EMPTY, _tiny())
+    registry, uri = register_font(EMPTY, tiny_bytes())
     assert pickle.loads(pickle.dumps(registry)).get(uri) == registry.get(uri)
 
 
@@ -209,12 +193,12 @@ def test_regression_bundled_registry_is_read_only() -> None:
 
 
 def test_regression_font_dumps_to_json() -> None:
-    font = load_font(_tiny())
+    font = load_font(tiny_bytes())
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         dumped = font.model_dump()
         text = font.model_dump_json()
-        registry, uri = register_font(EMPTY, _tiny())
+        registry, uri = register_font(EMPTY, tiny_bytes())
         registry_dump = registry.model_dump()
         registry_text = registry.model_dump_json()
     assert dumped["glyphs"]["I"]["advance"] == 4
@@ -227,5 +211,5 @@ def test_regression_font_dumps_to_json() -> None:
 
 
 def test_font_registry_survives_deepcopy() -> None:
-    registry, uri = register_font(EMPTY, _tiny())
+    registry, uri = register_font(EMPTY, tiny_bytes())
     assert copy.deepcopy(registry).get(uri) == registry.get(uri)

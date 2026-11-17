@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_fuzz_fonts.py --- fuzzes load_font and register_font with arbitrary bytes and font dicts
+test_fuzz_fonts.py --- fuzzes font loading and text layout with arbitrary bytes, font dicts and text
 
 Contains:
     FONT_DICTS: draws font-shaped dicts with valid and hostile fields
@@ -9,6 +9,8 @@ Contains:
     test_fuzz_load_font_font_shaped_json: raises only ShowPyError for font-shaped JSON
     test_fuzz_register_font_font_shaped_json: raises only ShowPyError and never changes the
         registry it extends
+    test_fuzz_layout_text_arbitrary_text: raises only ShowPyError for arbitrary Unicode text laid
+        out with the bundled fallback chain
 """
 
 import json
@@ -18,9 +20,16 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from showpy.geo.fonts import FontRegistry, load_font, register_font
+from showpy.geo.text_layout import MAX_LAYOUT_CHARS, layout_text
 from tests.helpers import only_showpy_errors
 
 EMPTY = FontRegistry(fonts={}, sources={}, names={})
+BUNDLED_CHAIN = ["simplex", "hershey-roman", "relief-singleline"]
+LAYOUT_TEXT = st.one_of(
+    st.text(max_size=40),
+    st.text(alphabet="AHOae\u0301 \r\n!☃", max_size=40),
+    st.text(min_size=MAX_LAYOUT_CHARS - 2, max_size=MAX_LAYOUT_CHARS + 2),
+)
 STROKES = st.one_of(
     st.sampled_from(["M0 0 L1 1", "M0 0 L0 0", "M0 0", "M0 0 L1 0 M2 0 L3 0", "M0 0 L1 0 Z", ""]),
     st.text(alphabet="MLCQAZ0123456789 .,-e", max_size=40),
@@ -76,3 +85,9 @@ def test_fuzz_register_font_font_shaped_json(document: dict[str, Any]) -> None:
     data = _encode(document)
     only_showpy_errors(lambda: register_font(EMPTY, data), data)
     assert EMPTY.fonts == {}
+
+
+@given(LAYOUT_TEXT)
+def test_fuzz_layout_text_arbitrary_text(text: str) -> None:
+    """Raises only ShowPyError for arbitrary Unicode text laid out with the bundled chain."""
+    only_showpy_errors(lambda: layout_text(text, BUNDLED_CHAIN, 1.0, (0.0, 0.0)), text)

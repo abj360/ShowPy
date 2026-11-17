@@ -9,6 +9,10 @@ Contains:
     FontGlyph: holds the advance and stroke path data of one character
     Font: holds a stroke font's metrics and glyph table
     Font.cap(): returns the font's cap height
+    TextAlign: names how each line sits horizontally on the layout point
+    TextAnchor: names which line of the text block sits vertically on the layout point
+    DEFAULT_LINE_SPACING: baseline-to-baseline distance in ems of the first font
+    LaidGlyph: holds one laid-out character's font, line and strokes in stage meters
 """
 
 from collections.abc import Mapping
@@ -19,12 +23,18 @@ from pydantic import Field, field_validator
 
 from showpy.core.readonly import ReadOnly
 from showpy.core.types import FrozenModel, Meters
+from showpy.geo.curves import Polyline, SvgCurve
 from showpy.geo.font_strokes import sample_stroke
 
 FONT_FORMAT = "showpy.font.v1"
 FONT_NAME_PATTERN = r"^[a-z0-9][a-z0-9-]*$"
 FONT_NAME_MAX_LENGTH = 64
 CAP_REFERENCE_GLYPH = "H"
+DEFAULT_LINE_SPACING = 1.2
+
+type TextAlign = Literal["left", "center", "right"]
+type TextAnchor = Literal["baseline", "middle", "top"]
+type LaidStroke = Annotated[Polyline | SvgCurve, Field(discriminator="kind")]
 
 
 class SnapReport(FrozenModel):
@@ -159,3 +169,19 @@ class Font(FrozenModel):
             return self.ascender
         heights = np.asarray(points)[:, 1]
         return float(heights.max() - heights.min())
+
+
+class LaidGlyph(FrozenModel):
+    """Holds one laid-out character: the font it came from, its line and its strokes.
+
+    Attributes:
+        char: The character after NFC normalization.
+        font: URI of the font in the chain that drew it.
+        line: Zero-based line index, top line first.
+        strokes: Strokes in stage meters, in font order; empty for a space.
+    """
+
+    char: str = Field(min_length=1, max_length=1)
+    font: str
+    line: int = Field(ge=0)
+    strokes: tuple[LaidStroke, ...] = ()

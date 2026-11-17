@@ -438,12 +438,16 @@ if TYPE_CHECKING:
         symmetry_error,
     )
     from showpy.geo.models import (
+        DEFAULT_LINE_SPACING,
         Font,
         FontGlyph,
         FormMetrics,
         IntervalStats,
+        LaidGlyph,
         SnapReport,
         SpeedStats,
+        TextAlign,
+        TextAnchor,
     )
     from showpy.geo.regions import (
         buffer,
@@ -500,6 +504,10 @@ if TYPE_CHECKING:
     )
     from showpy.geo.text import (
         glyph_strokes,
+    )
+    from showpy.geo.text_layout import (
+        MAX_LAYOUT_CHARS,
+        layout_text,
     )
     from showpy.geo.transforms import (
         affine,
@@ -757,6 +765,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Curve": ("showpy.geo.curve_base", "Curve"),
     "CurveBase": ("showpy.geo.curve_base", "CurveBase"),
     "CurveModel": ("showpy.geo.curves", "CurveModel"),
+    "DEFAULT_LINE_SPACING": ("showpy.geo.models", "DEFAULT_LINE_SPACING"),
     "DeprecatedWarning": ("showpy.core.errors", "DeprecatedWarning"),
     "DocumentRepository": ("showpy.show.repositories", "DocumentRepository"),
     "Easing": ("showpy.choreo.models", "Easing"),
@@ -793,6 +802,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "InMemorySheetStore": ("showpy.sheet.templates", "InMemorySheetStore"),
     "IntervalStats": ("showpy.geo.models", "IntervalStats"),
     "LabelScheme": ("showpy.cast.models", "LabelScheme"),
+    "LaidGlyph": ("showpy.geo.models", "LaidGlyph"),
     "Landmark": ("showpy.sheet.models", "Landmark"),
     "LegibilityWarning": ("showpy.core.errors", "LegibilityWarning"),
     "LinePiece": ("showpy.geo.svg", "LinePiece"),
@@ -800,6 +810,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "MAX_DEPTH": ("showpy.core.caps", "MAX_DEPTH"),
     "MAX_GRID_CELLS": ("showpy.core.caps", "MAX_GRID_CELLS"),
     "MAX_IMAGE_PIXELS": ("showpy.core.caps", "MAX_IMAGE_PIXELS"),
+    "MAX_LAYOUT_CHARS": ("showpy.geo.text_layout", "MAX_LAYOUT_CHARS"),
     "MAX_POINTS": ("showpy.core.caps", "MAX_POINTS"),
     "MAX_RANGE": ("showpy.core.caps", "MAX_RANGE"),
     "MAX_TABLE": ("showpy.core.caps", "MAX_TABLE"),
@@ -871,6 +882,8 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "SurfaceType": ("showpy.sheet.models", "SurfaceType"),
     "SvgCurve": ("showpy.geo.curves", "SvgCurve"),
     "TempoSection": ("showpy.time.models", "TempoSection"),
+    "TextAlign": ("showpy.geo.models", "TextAlign"),
+    "TextAnchor": ("showpy.geo.models", "TextAnchor"),
     "TextTable": ("showpy.export.models", "TextTable"),
     "TimeRangeError": ("showpy.core.errors", "TimeRangeError"),
     "Timeline": ("showpy.time.models", "Timeline"),
@@ -1062,6 +1075,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "landmark": ("showpy.sheet.bounds", "landmark"),
     "landmark_anchor": ("showpy.sheet.bounds", "landmark_anchor"),
     "landmark_keys": ("showpy.sheet.bounds", "landmark_keys"),
+    "layout_text": ("showpy.geo.text_layout", "layout_text"),
     "length": ("showpy.geo.measure", "length"),
     "line": ("showpy.geo.shapes", "line"),
     "line_form": ("showpy.choreo.forms", "line_form"),
@@ -1279,11 +1293,13 @@ _EXPORTS: dict[str, tuple[str, str]] = {
 
 __all__ = [
     "BUNDLED_FONTS",
+    "DEFAULT_LINE_SPACING",
     "ID_MAX_LENGTH",
     "ID_PATTERN",
     "MAX_DEPTH",
     "MAX_GRID_CELLS",
     "MAX_IMAGE_PIXELS",
+    "MAX_LAYOUT_CHARS",
     "MAX_POINTS",
     "MAX_RANGE",
     "MAX_TABLE",
@@ -1353,6 +1369,7 @@ __all__ = [
     "InMemorySheetStore",
     "IntervalStats",
     "LabelScheme",
+    "LaidGlyph",
     "Landmark",
     "LegibilityWarning",
     "LinePiece",
@@ -1422,6 +1439,8 @@ __all__ = [
     "SurfaceType",
     "SvgCurve",
     "TempoSection",
+    "TextAlign",
+    "TextAnchor",
     "TextTable",
     "TimeRangeError",
     "Timeline",
@@ -1613,6 +1632,7 @@ __all__ = [
     "landmark",
     "landmark_anchor",
     "landmark_keys",
+    "layout_text",
     "length",
     "line",
     "line_form",

@@ -209,6 +209,9 @@
       "closed": "bool"
     }
   },
+  "DEFAULT_LINE_SPACING": {
+    "constant": "1.2"
+  },
   "DeprecatedWarning": "(*args)",
   "DocumentRepository": "(backend: showpy.show.repositories.RepositoryBackend)",
   "Easing": {
@@ -424,6 +427,14 @@
       "start": "int"
     }
   },
+  "LaidGlyph": {
+    "model": {
+      "char": "str",
+      "font": "str",
+      "line": "int",
+      "strokes": "tuple[LaidStroke, ...]"
+    }
+  },
   "Landmark": {
     "model": {
       "aliases": "tuple[str, ...]",
@@ -444,6 +455,9 @@
   },
   "MAX_IMAGE_PIXELS": {
     "constant": "40000000"
+  },
+  "MAX_LAYOUT_CHARS": {
+    "constant": "1000"
   },
   "MAX_POINTS": {
     "constant": "1000000"
@@ -1000,6 +1014,12 @@
       "ramp_to": "CountsPerMinute | None"
     }
   },
+  "TextAlign": {
+    "constant": "TextAlign"
+  },
+  "TextAnchor": {
+    "constant": "TextAnchor"
+  },
   "TextTable": {
     "model": {
       "header": "tuple[str, ...]",
@@ -1278,6 +1298,7 @@
   "landmark": "(sheet: showpy.sheet.models.Sheet, name: str) -> showpy.sheet.models.Landmark",
   "landmark_anchor": "(mark: showpy.sheet.models.Landmark) -> Point",
   "landmark_keys": "(mark: showpy.sheet.models.Landmark) -> tuple[str, ...]",
+  "layout_text": "(text: str, fonts: collections.abc.Sequence[str], height: Meters, at: Point, *, rotation: Degrees = 0.0, align: TextAlign = 'left', anchor: TextAnchor = 'baseline', letter_spacing: float = 0.0, line_spacing: float = 1.2, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> tuple[showpy.geo.models.LaidGlyph, ...]",
   "length": "(obj: Points | showpy.geo.curve_base.Curve) -> Meters",
   "line": "(a: Point, b: Point) -> showpy.geo.curves.Segment",
   "line_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], a: Point, b: Point, spacing: showpy.choreo.models.SpacingSpec | None = None, facing: showpy.choreo.models.FacingSpec | None = None, *, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",
