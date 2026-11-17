@@ -109,10 +109,12 @@ def _storage_error(show_id: str, error: OSError, fallback: Path, is_link: bool) 
     path = str(error.filename or fallback)
     context: dict[str, object] = {"show": show_id, "path": path, "errno": error.errno}
     if _is_name_too_long(error, path):
+        winerror = getattr(error, "winerror", None)
         return StorageError(
             f"name too long for {show_id}: {path}",
             hint="use a shorter show ID or a repository root with a shorter path",
-            context={**context, "errno": errno.ENAMETOOLONG},
+            context={**context, "errno": errno.ENAMETOOLONG}
+            | ({"winerror": winerror} if winerror is not None else {}),
             code="NAME_TOO_LONG",
         )
     if is_link and (isinstance(error, PermissionError) or error.errno in NO_HARDLINK_ERRNOS):

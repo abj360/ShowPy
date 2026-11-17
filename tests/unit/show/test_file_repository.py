@@ -407,7 +407,8 @@ def test_regression_long_names_are_name_too_long(
     for caught in (written.value, read.value):
         assert caught.code == "NAME_TOO_LONG"
         assert caught.context["errno"] == errno.ENAMETOOLONG
-        assert set(caught.context) == {"show", "path", "errno"}
+        assert set(caught.context) - {"winerror"} == {"show", "path", "errno"}
+        assert caught.context.get("winerror") in (None, ERROR_INVALID_NAME)
 
 
 def test_regression_other_os_errors_are_io(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -792,6 +793,7 @@ def test_regression_windows_overlong_component_is_name_too_long(
             call()
         assert caught.value.code == "NAME_TOO_LONG"
         assert caught.value.context["errno"] == errno.ENAMETOOLONG
+        assert caught.value.context["winerror"] == ERROR_INVALID_NAME
 
 
 def test_regression_windows_invalid_short_name_stays_io(
