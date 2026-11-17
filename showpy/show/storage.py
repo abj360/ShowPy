@@ -18,7 +18,7 @@ Contains:
     save_show(): writes the whole show, refusing when another write landed meanwhile
 """
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from datetime import datetime
 from typing import Protocol
 
@@ -26,7 +26,7 @@ from showpy.choreo.models import Form, Set, TransitionSpec
 from showpy.core.errors import StorageError, UnknownRefError
 from showpy.core.ids import SetId, TransitionId
 from showpy.core.util import close_matches
-from showpy.show.documents import SHOW_DOC, decode_show, encode_documents, split_path
+from showpy.show.documents import SHOW_DOC, decode_show, encode_documents, is_show_doc, split_path
 from showpy.show.files import (
     all_files,
     directories,
@@ -214,6 +214,7 @@ class Workspace:
         self._revision = revision
         self._trees: dict[str, dict[str, bytes]] = {}
         self._shows: dict[str, Show | None] = {}
+        self._canonical_revisions: set[str] = set()
 
     @property
     def revision(self) -> str:
@@ -345,31 +346,66 @@ class Workspace:
         *,
         at: datetime,
         expected_revision: str | None = None,
+        is_complete: bool = False,
     ) -> Revision:
         """Saves stored-document changes after re-encoding non-canonical documents on their own.
 
-        When a stored show document the change rewrites is not canonical, a revision holding only
-        those re-encoded documents lands first and the change follows, so the change's own
-        revision lists only what it edits (ADR 0014). If the change then conflicts, the
-        normalizing revision stays; it changes no content.
+        When any stored show document of the base revision is not canonical, one revision holding
+        only those re-encoded documents lands first and the change follows, so the change's own
+        revision lists only what it edits and later writes add no second one (ADR 0014). If the
+        change then conflicts, the normalizing revision stays; it changes no content. A revision
+        found or made canonical is remembered, so the check runs once per revision.
 
         Args:
             changes: Stored path to new bytes, or None to delete.
             at: Time stamp of the revisions.
             expected_revision: Revision the change was made against; default the workspace's.
+            is_complete: Whether `changes` holds every show document that differs from the
+                canonical encoding of the edited show, as show_changes() lists them; then only
+                those documents need re-encoding to find the non-canonical ones.
 
         Returns:
             revision: The new head; the workspace moves to it.
         """
         base = self._revision if expected_revision is None else expected_revision
-        edited = {p: d for p, d in changes.items() if d is not None}
-        normalizing = _normalizing_changes(self.show_at(base), self.tree_at(base), edited)
+        normalizing = self._normalizing_for(base, changes, is_complete)
         if not normalizing:
-            return self._commit_stored(changes, at=at, expected_revision=base)
+            return self._remembered(
+                self._commit_stored(changes, at=at, expected_revision=base), changes, is_complete
+            )
         normalized = self._commit_stored(normalizing, at=at, expected_revision=base)
+        self._canonical_revisions.add(normalized.id)
         stored = self.tree_at(normalized.id)
         remaining = {p: d for p, d in changes.items() if d is None or stored.get(p) != d}
-        return self._commit_stored(remaining, at=at, expected_revision=normalized.id)
+        return self._remembered(
+            self._commit_stored(remaining, at=at, expected_revision=normalized.id),
+            changes,
+            is_complete,
+        )
+
+    def _normalizing_for(
+        self, base: str, changes: Mapping[str, bytes | None], is_complete: bool
+    ) -> dict[str, bytes | None]:
+        """Lists the re-encodings a change over `base` needs first, empty for a known revision."""
+        if base in self._canonical_revisions:
+            return {}
+        tree = self.tree_at(base)
+        if is_complete:
+            paths = [p for p, d in changes.items() if d is not None and p in tree and tree[p] != d]
+        else:
+            paths = [p for p in tree if is_show_doc(p)]
+        normalizing = _normalizing_changes(self.show_at(base), tree, paths)
+        if not normalizing:
+            self._canonical_revisions.add(base)
+        return normalizing
+
+    def _remembered(
+        self, revision: Revision, changes: Mapping[str, bytes | None], is_complete: bool
+    ) -> Revision:
+        """Remembers a new revision as canonical when its change wrote only canonical documents."""
+        if is_complete or not any(is_show_doc(p) for p in changes):
+            self._canonical_revisions.add(revision.id)
+        return revision
 
     def write(
         self,
@@ -393,7 +429,9 @@ class Workspace:
         split_path(path)
         raw = data.encode() if isinstance(data, str) else data
         changes = staged_changes(path, raw, self._show(), self._tree())
-        return self._commit_normalizing(changes, at=at, expected_revision=expected_revision)
+        return self._commit_normalizing(
+            changes, at=at, expected_revision=expected_revision, is_complete=is_show_doc(path)
+        )
 
 
 def open_workspace(repo: Repository, show_id: str) -> Workspace:
@@ -434,20 +472,18 @@ def save_show(ws: Workspace, show: Show, at: datetime) -> Revision:
     ''
     """
     changes = show_changes(show, ws.tree_at(show.revision))
-    return ws._commit_normalizing(changes, at=at, expected_revision=show.revision)
+    return ws._commit_normalizing(changes, at=at, expected_revision=show.revision, is_complete=True)
 
 
 def _normalizing_changes(
-    stored: Show | None, tree: Mapping[str, bytes], edited: Mapping[str, bytes]
+    stored: Show | None, tree: Mapping[str, bytes], paths: Collection[str]
 ) -> dict[str, bytes | None]:
-    """Lists stored show documents whose bytes differ from their canonical re-encoding.
+    """Lists the named stored show documents whose bytes differ from their canonical encoding.
 
     Only documents are listed, never scripts or other files, and nothing is deleted, so the
-    decoded show is the same before and after (ADR 0014 item 5). A document the edited show
-    encodes to its stored bytes is canonical already, so only the others are re-encoded.
+    decoded show is the same before and after (ADR 0014 item 5).
     """
     if stored is None:
         return {}
-    differing = [p for p, d in edited.items() if p in tree and tree[p] != d]
-    canonical = encode_documents(stored, differing)
+    canonical = encode_documents(stored, paths)
     return {p: d for p, d in canonical.items() if tree[p] != d}

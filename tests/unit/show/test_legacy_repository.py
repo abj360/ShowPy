@@ -26,8 +26,18 @@ Contains:
     test_regression_workspace_commit_normalizes_first_then_edits: normalizes the one document a
         commit rewrites, then commits the edit of it
     test_regression_second_workspace_write_adds_no_normalizing_revision: adds one revision only
-    test_regression_conflict_after_normalizing_leaves_content_unchanged: refuses a stale write
+    test_regression_stale_write_on_a_legacy_repository_lands_nothing: refuses a stale write
         with ConflictError, adds no revision and leaves the show as it was
+    test_regression_writes_to_different_documents_normalize_once: adds normalizing plus two edits
+        for two writes to different show documents, then nothing more for a save_show
+    test_regression_commits_to_different_documents_normalize_once: does the same for two raw
+        commits, which name only the documents they rewrite
+    test_regression_script_write_normalizes_every_show_document: normalizes all documents on the
+        first write of any kind
+    test_regression_edit_conflicting_after_normalizing_keeps_it_and_retries_on_top: keeps the
+        normalizing revision when a competing writer lands before the edit, then retries on top
+    test_regression_commit_of_the_canonical_form_adds_only_the_normalizing_revision: returns the
+        head, with no empty revision, when nothing remains after normalizing
     test_new_records_carrying_authorship_are_refused: refuses actor on a new Revision or
         CanvasEvent
     test_stored_record_with_an_unknown_key_is_refused: drops only the legacy keys from a stored
@@ -292,7 +302,7 @@ def test_regression_second_workspace_write_adds_no_normalizing_revision(tmp_path
     assert len(repo.revisions(expected["show_id"])) == len(expected["revisions"]) + 3
 
 
-def test_regression_conflict_after_normalizing_leaves_content_unchanged(tmp_path: Path) -> None:
+def test_regression_stale_write_on_a_legacy_repository_lands_nothing(tmp_path: Path) -> None:
     repo, ws, expected = _fixture_workspace(tmp_path)
     before = load_show(ws)
     raw = _retitled(ws, "Renamed")
@@ -303,3 +313,119 @@ def test_regression_conflict_after_normalizing_leaves_content_unchanged(tmp_path
     assert len(repo.revisions(expected["show_id"])) == len(expected["revisions"])
     ws.refresh()
     assert load_show(ws) == before
+
+
+def _revision_count(repo: FileRepository, expected: dict[str, Any]) -> int:
+    return len(repo.revisions(expected["show_id"])) - len(expected["revisions"])
+
+
+STALE_DOCS = {"/sets/1/set.json", "/show/sheet.json"}
+
+
+def _two_stale_documents(tmp_path: Path) -> tuple[FileRepository, Workspace, int]:
+    """Copies the fixture and reformats its sheet document, so two documents are non-canonical."""
+    repo, ws, expected = _fixture_workspace(tmp_path)
+    sheet = json.loads(ws.tree_at(expected["head"])["/show/sheet.json"])
+    repo.transaction(
+        expected["show_id"],
+        {"/show/sheet.json": json.dumps(sheet, indent=4).encode()},
+        expected_revision=expected["head"],
+        at=COMMITTED_AT,
+    )
+    ws.refresh()
+    return repo, ws, len(repo.revisions(expected["show_id"]))
+
+
+def _after(repo: FileRepository, ws: Workspace, count: int) -> list[Revision]:
+    return repo.revisions(ws.show_id)[count:]
+
+
+def _timeline(ws: Workspace) -> bytes:
+    document = json.loads(ws.read("/time/timeline.json"))
+    document["total_counts"] = 100.0
+    return json.dumps(document).encode()
+
+
+def test_regression_writes_to_different_documents_normalize_once(tmp_path: Path) -> None:
+    repo, ws, count = _two_stale_documents(tmp_path)
+    ws.write("/show/show.json", _retitled(ws, "Renamed"), at=COMMITTED_AT)
+    ws.write("/time/timeline.json", _timeline(ws), at=COMMITTED_AT)
+    assert [set(r.changed) for r in _after(repo, ws, count)] == [
+        STALE_DOCS,
+        {"/show/show.json"},
+        {"/time/timeline.json"},
+    ]
+    save_show(ws, load_show(ws), COMMITTED_AT)
+    assert len(_after(repo, ws, count)) == 3
+
+
+def test_regression_commits_to_different_documents_normalize_once(tmp_path: Path) -> None:
+    repo, ws, count = _two_stale_documents(tmp_path)
+    tree = ws.tree_at(ws.revision)
+    first = json.loads(tree["/show/show.json"])
+    first["title"] = "Renamed"
+    second = json.loads(tree["/transitions/4-5/paths.json"])
+    second["notes"] = "slow"
+    ws.commit({"/show/show.json": dump_json(first)}, at=COMMITTED_AT)
+    ws.commit({"/transitions/4-5/paths.json": dump_json(second)}, at=COMMITTED_AT)
+    assert [set(r.changed) for r in _after(repo, ws, count)] == [
+        STALE_DOCS,
+        {"/show/show.json"},
+        {"/transitions/4-5/paths.json"},
+    ]
+    save_show(ws, load_show(ws), COMMITTED_AT)
+    assert len(_after(repo, ws, count)) == 3
+
+
+def test_regression_script_write_normalizes_every_show_document(tmp_path: Path) -> None:
+    repo, ws, count = _two_stale_documents(tmp_path)
+    ws.write("/sets/2/set.py", b"# changed\n", at=COMMITTED_AT)
+    assert [set(r.changed) for r in _after(repo, ws, count)] == [STALE_DOCS, {"/sets/2/set.py"}]
+
+
+def _competing_writer_lands_before_second_commit(repo: FileRepository, ws: Workspace) -> None:
+    original = ws._commit_stored
+    calls: list[int] = []
+
+    def commit(*args: Any, **kwargs: Any) -> Revision:
+        calls.append(1)
+        if len(calls) == 2:
+            rival = open_workspace(repo, ws.show_id)
+            rival.write("/sets/2/set.py", b"# rival\n", at=COMMITTED_AT)
+        return original(*args, **kwargs)
+
+    ws._commit_stored = commit  # type: ignore[method-assign]
+
+
+def test_regression_edit_conflicting_after_normalizing_keeps_it_and_retries_on_top(
+    tmp_path: Path,
+) -> None:
+    repo, ws, expected = _fixture_workspace(tmp_path)
+    before = load_show(ws)
+    _competing_writer_lands_before_second_commit(repo, ws)
+    raw = _retitled(ws, "Renamed")
+    with pytest.raises(ConflictError):
+        ws.write("/show/show.json", raw, at=COMMITTED_AT)
+    log = repo.revisions(expected["show_id"])[len(expected["revisions"]) :]
+    assert len(log) == 2
+    assert set(log[0].changed) == _negative_zero_paths(ws.tree_at(expected["head"]))
+    assert log[1].changed == ("/sets/2/set.py",)
+    kept = repo.get_show(expected["show_id"], log[0].id)
+    assert diff_show(before, kept) == {}
+    del ws._commit_stored
+    ws.refresh()
+    retry = ws.write("/show/show.json", raw, at=COMMITTED_AT)
+    assert retry.changed == ("/show/show.json",)
+    assert _revision_count(repo, expected) == 3
+
+
+def test_regression_commit_of_the_canonical_form_adds_only_the_normalizing_revision(
+    tmp_path: Path,
+) -> None:
+    repo, ws, expected = _fixture_workspace(tmp_path)
+    canonical = NEGATIVE_ZERO.sub(b"0.0", ws.tree_at(expected["head"])["/sets/1/set.json"])
+    head = ws.commit({"/sets/1/set.json": canonical}, at=COMMITTED_AT)
+    log = repo.revisions(expected["show_id"])[len(expected["revisions"]) :]
+    assert [r.id for r in log] == [head.id]
+    assert repo.head(expected["show_id"]) == head.id
+    assert set(head.changed) == _negative_zero_paths(ws.tree_at(expected["head"]))
