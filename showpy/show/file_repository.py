@@ -57,9 +57,10 @@ def _link_exclusive(show_id: str, path: Path, data: bytes) -> bool:
     temp = _temp_copy(path.parent, data)
     try:
         with _mapped_io(show_id, path, is_link=True):
-            os.link(temp, path)
-    except FileExistsError:
-        return False
+            try:
+                os.link(temp, path)
+            except FileExistsError:
+                return False
     finally:
         temp.unlink(missing_ok=True)
     return True
@@ -110,6 +111,15 @@ def _guarded[F: Callable[..., Any]](method: F) -> F:  # Any: decorator keeps eac
     return cast(F, wrapper)
 
 
+def _lstat_mode(show_id: str, path: Path) -> int | None:
+    """Returns the lstat mode of `path`, or None if absent; ENAMETOOLONG is never hidden."""
+    with _mapped_io(show_id, path):
+        try:
+            return os.lstat(path).st_mode
+        except FileNotFoundError:
+            return None
+
+
 class _FileBackend:
     """Lays out `<root>/<show>/objects/<sha256>`, `trees/<rev>.json` and `next/<parent>`.
 
@@ -145,14 +155,16 @@ class _FileBackend:
     def _guard_dirs(self, show_id: str) -> None:
         base = self._dir(show_id)
         for directory in (base, base / OBJECT_DIR, base / TREE_DIR, base / LINK_DIR):
-            if directory.is_symlink():
+            mode = _lstat_mode(show_id, directory)
+            if mode is not None and stat.S_ISLNK(mode):
                 raise self._corrupt(show_id, directory, "directory is a symbolic link")
 
     def _read(self, show_id: str, path: Path) -> bytes:
         try:
-            if path.is_symlink():
+            mode = path.lstat().st_mode
+            if stat.S_ISLNK(mode):
                 raise self._corrupt(show_id, path, "file is a symbolic link")
-            if not stat.S_ISREG(path.lstat().st_mode):
+            if not stat.S_ISREG(mode):
                 raise self._corrupt(show_id, path, "file is missing or not a regular file")
             return path.read_bytes()
         except (FileNotFoundError, IsADirectoryError) as error:
@@ -187,7 +199,7 @@ class _FileBackend:
         log: list[Revision] = []
         seen: set[str] = set()
         current = ROOT_LINK
-        while os.path.lexists(links / current):
+        while _lstat_mode(show_id, links / current) is not None:
             link = links / current
             previous = "" if current == ROOT_LINK else current
             current = self._checked_id(show_id, self._read_link(show_id, link), link)
@@ -246,9 +258,10 @@ class _FileBackend:
             self._checked_id(show_id, revision.parent, base / LINK_DIR)
         for digest, data in blobs.items():
             target = base / OBJECT_DIR / self._checked_id(show_id, digest, base / OBJECT_DIR)
-            if target.is_symlink():
+            mode = _lstat_mode(show_id, target)
+            if mode is not None and stat.S_ISLNK(mode):
                 raise self._corrupt(show_id, target, "file is a symbolic link")
-            if not target.exists():
+            if mode is None:
                 _atomic_write(target, data)
         record = {"revision": revision.model_dump(mode="json"), "tree": tree}
         _atomic_write(base / TREE_DIR / f"{revision.id}.json", dump_json(record))

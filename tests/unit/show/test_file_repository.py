@@ -39,6 +39,8 @@ Contains:
     test_regression_temp_file_failure_is_io_not_no_hardlinks: keeps a failing temp write out of
         NO_HARDLINKS
     test_regression_long_names_are_name_too_long: maps ENAMETOOLONG on writes and reads
+    test_regression_losing_commit_race_is_a_conflict: keeps a lost link race a ConflictError
+    test_regression_overlong_show_id_reads_raise_name_too_long: refuses reads of a 300-character ID
     test_regression_other_os_errors_are_io: maps stray OSErrors on read paths and show_ids() to IO
 """
 
@@ -48,6 +50,7 @@ import os
 import shutil
 import sys
 import tempfile
+import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -67,6 +70,7 @@ SHOW_ID = "show-1"
 STALE_AGE_S = 7 * 24 * 3600
 DECOY_NAME = "decoy"
 SHOW_DOC = "/show/show.json"
+RACERS = 8
 
 
 def _saved(tmp_path: Path) -> tuple[FileRepository, str, Path]:
@@ -367,7 +371,7 @@ def test_regression_long_names_are_name_too_long(
 
 def test_regression_other_os_errors_are_io(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Maps stray OSErrors on read paths and show_ids() to IO."""
-    repo, rev, base = _saved(tmp_path)
+    repo, _, base = _saved(tmp_path)
     shutil.rmtree(base / "trees")
     (base / "trees").write_bytes(b"not a directory")
     with pytest.raises(StorageError) as not_dir:
@@ -383,7 +387,6 @@ def test_regression_other_os_errors_are_io(tmp_path: Path, monkeypatch: pytest.M
         repo.shows()
     assert listing.value.code == "IO"
     assert listing.value.context["errno"] == errno.EACCES
-    assert rev
 
 
 def test_regression_permission_denied_read_is_io(
@@ -400,3 +403,50 @@ def test_regression_permission_denied_read_is_io(
         repo.revisions(SHOW_ID)
     assert caught.value.code == "IO"
     assert caught.value.context["errno"] == errno.EACCES
+
+
+def test_regression_losing_commit_race_is_a_conflict(tmp_path: Path) -> None:
+    """Keeps a lost os.link race a ConflictError, never IO or NO_HARDLINKS."""
+    repo, rev, _ = _saved(tmp_path)
+    repo.transaction(SHOW_ID, {"/renders/a.txt": b"a"}, expected_revision=rev, at=AT)
+    with pytest.raises(ConflictError):
+        repo.transaction(SHOW_ID, {"/renders/b.txt": b"b"}, expected_revision=rev, at=AT)
+
+
+def test_regression_threaded_commit_race_has_one_winner(tmp_path: Path) -> None:
+    """Lands exactly one of several threads racing on one parent; the rest get ConflictError."""
+    repo, rev, _ = _saved(tmp_path)
+    outcomes: list[object] = []
+
+    def attempt(index: int) -> None:
+        try:
+            outcomes.append(
+                repo.transaction(
+                    SHOW_ID, {f"/renders/{index}.txt": b"x"}, expected_revision=rev, at=AT
+                )
+            )
+        except StorageError as error:
+            outcomes.append(error)
+
+    threads = [threading.Thread(target=attempt, args=(n,)) for n in range(RACERS)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    losers = [o for o in outcomes if isinstance(o, StorageError)]
+    assert len(outcomes) - len(losers) == 1
+    assert all(isinstance(o, ConflictError) for o in losers)
+
+
+def test_regression_overlong_show_id_reads_raise_name_too_long(tmp_path: Path) -> None:
+    """Refuses reads of a 300-character ID instead of reporting an empty show."""
+    repo, _, _ = _saved(tmp_path)
+    long_id = "a" * 300
+    for read in (
+        lambda: repo.revisions(long_id),
+        lambda: repo.head(long_id),
+        lambda: repo.read(long_id, SHOW_DOC),
+    ):
+        with pytest.raises(StorageError) as caught:
+            read()
+        assert caught.value.code == "NAME_TOO_LONG"
