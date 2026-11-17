@@ -23,10 +23,16 @@ from showpy.core.errors import (
 from showpy.core.readonly import ReadOnlyMap
 from showpy.core.types import Points
 from showpy.core.util import approx_equal
+from showpy.geo import text_layout
 from showpy.geo.curves import Polyline, SvgCurve
-from showpy.geo.fonts import FontRegistry, bundled_fonts, register_font
+from showpy.geo.fonts import MAX_GLYPH_PIECES, FontRegistry, bundled_fonts, register_font
 from showpy.geo.models import Font, LaidGlyph, TextAlign, TextAnchor
-from showpy.geo.text_layout import MAX_LAYOUT_CHARS, MAX_LAYOUT_EXTENT_M, layout_text
+from showpy.geo.text_layout import (
+    MAX_LAYOUT_CHARS,
+    MAX_LAYOUT_EXTENT_M,
+    MAX_LAYOUT_PIECES,
+    layout_text,
+)
 from tests.fixtures.fonts import TINY, tiny_bytes
 
 TOL = 1e-12
@@ -215,6 +221,32 @@ def test_layout_caps_the_text_length() -> None:
     with pytest.raises(SchemaError) as caught:
         layout_text("☃" * (MAX_LAYOUT_CHARS + 1), SIMPLEX, 1.0, (0.0, 0.0))
     assert caught.value.context["cap"] == MAX_LAYOUT_CHARS
+
+
+def _zigzag(pieces: int) -> str:
+    return "M0 0 " + " ".join(f"L{i % 2} {i + 1}" for i in range(pieces))
+
+
+def _refuse_strokes(*_args: object, **_kwargs: object) -> None:
+    raise AssertionError("a stroke was built before the piece cap was checked")
+
+
+def test_regression_layout_text_caps_the_laid_pieces(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rejects text whose glyphs hold over MAX_LAYOUT_PIECES pieces before building a stroke.
+
+    U+0344 normalizes to two combining marks, so text under MAX_LAYOUT_CHARS can lay out more
+    glyphs than it has characters.
+    """
+    heavy = {"advance": 4, "strokes": [_zigzag(MAX_GLYPH_PIECES)]}
+    glyphs = {"\u0308": heavy, "\u0301": heavy}
+    registry, _ = register_font(bundled_fonts(), tiny_bytes(glyphs=glyphs))
+    copies = MAX_LAYOUT_PIECES // (2 * MAX_GLYPH_PIECES) + 1
+    monkeypatch.setattr(text_layout, "Polyline", _refuse_strokes)
+    with pytest.raises(SchemaError) as caught:
+        layout_text("\u0344" * copies, ["tiny"], 1.0, (0.0, 0.0), font_registry=registry)
+    assert caught.value.context["requested"] == 2 * copies * MAX_GLYPH_PIECES
+    assert caught.value.context["cap"] == MAX_LAYOUT_PIECES
+    assert "shorten the text" in caught.value.hint
 
 
 def test_layout_round_trips_through_json() -> None:

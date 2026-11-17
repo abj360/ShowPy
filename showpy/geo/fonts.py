@@ -3,6 +3,7 @@ fonts.py --- loads, validates and registers stroke fonts by SHA-256 asset URI
 
 Contains:
     MAX_FONT_BYTES: bounds the size of one font file
+    MAX_GLYPH_PIECES: bounds the path pieces of one glyph, over all its strokes
     BUNDLED_FONTS: maps each bundled font's name to the URI of its exact file bytes
     FontRegistry: holds loaded fonts, their source bytes and their names, all read-only; checks
         on construction that every URI hashes its bytes, every font is what its bytes load to,
@@ -17,7 +18,7 @@ Contains:
 
 import functools
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import Annotated, Literal, Self
 
@@ -35,10 +36,15 @@ from showpy.core.readonly import ReadOnly, ReadOnlyMap
 from showpy.core.resources import font_path
 from showpy.core.types import FrozenModel
 from showpy.core.util import ASSET_PREFIX, asset_uri, close_matches
-from showpy.geo.font_strokes import sample_stroke, stroke_length
+from showpy.geo.font_strokes import sample_subpaths, stroke_length
 from showpy.geo.models import Font
+from showpy.geo.svg import Subpath, parse_path
 
 MAX_FONT_BYTES = 8 * 1024 * 1024
+# The most complex bundled glyph, hershey-script "8", has 51 path pieces (measured 2026-11-16);
+# the cap is about 10 times that. SvgCurve tables cost grows with the square of a stroke's
+# pieces: 512 cubic pieces take about 0.16 s to measure.
+MAX_GLYPH_PIECES = 512
 BUNDLED_FONT_HASHES = MappingProxyType(
     {
         "relief-singleline": "fd67c5b12e38ab886258f5bc16611b3f61f0bcc2d5711dc5ddf8fd42bc8f4b55",
@@ -188,32 +194,56 @@ def _bad_font(message: str, *, hint: str, **context: object) -> FontError:
 
 def _check_strokes(font: Font) -> None:
     for char, glyph in font.glyphs.items():
-        for index, stroke in enumerate(glyph.strokes):
-            _check_stroke(font.name, char, index, stroke)
+        parsed = _parse_glyph(font.name, char, glyph.strokes)
+        for index, subpaths in enumerate(parsed):
+            _check_stroke(font.name, char, index, subpaths)
 
 
-def _check_stroke(name: str, char: str, index: int, stroke: str) -> None:
-    where = {"font": name, "glyph": char, "stroke": index, "field": "glyphs"}
-    try:
-        subpaths = sample_stroke(stroke)
-    except SchemaError as exc:
-        raise _bad_font(
-            f"glyph {char!r} stroke {index} does not parse: {exc.message}",
-            hint="write each stroke as SVG path data",
-            **where,
-        ) from exc
+def _parse_glyph(name: str, char: str, strokes: Sequence[str]) -> list[list[Subpath]]:
+    """Parses a glyph's strokes, rejecting one that does not parse or too many pieces in all."""
+    parsed = []
+    pieces = 0
+    for index, stroke in enumerate(strokes):
+        try:
+            subpaths = parse_path(stroke)
+        except SchemaError as exc:
+            raise _bad_font(
+                f"glyph {char!r} stroke {index} does not parse: {exc.message}",
+                hint="write each stroke as SVG path data",
+                **_where(name, char, index),
+            ) from exc
+        pieces += sum(len(subpath.pieces) for subpath in subpaths)
+        try:
+            require_size(pieces, MAX_GLYPH_PIECES, what="glyph path pieces", error=FontError)
+        except FontError as exc:
+            raise _bad_font(
+                f"glyph {char!r} has over {MAX_GLYPH_PIECES} path pieces",
+                hint=f"simplify glyph {char!r} to at most {MAX_GLYPH_PIECES} path pieces in all",
+                **exc.context,
+                **_where(name, char, index),
+            ) from exc
+        parsed.append(subpaths)
+    return parsed
+
+
+def _where(name: str, char: str, index: int) -> dict[str, object]:
+    return {"font": name, "glyph": char, "stroke": index, "field": "glyphs"}
+
+
+def _check_stroke(name: str, char: str, index: int, subpaths: Sequence[Subpath]) -> None:
     if len(subpaths) != 1:
         raise _bad_font(
             f"glyph {char!r} stroke {index} has {len(subpaths)} subpaths",
             hint="write each stroke as one subpath starting with M",
-            **where,
+            **_where(name, char, index),
         )
-    length = stroke_length(subpaths[0])
-    if not np.isfinite(subpaths[0]).all() or not 0 < length < float("inf"):
+    (points,) = sample_subpaths(subpaths)
+    length = stroke_length(points)
+    if not np.isfinite(points).all() or not 0 < length < float("inf"):
         raise _bad_font(
             f"glyph {char!r} stroke {index} has no finite positive length",
             hint="give each stroke at least two distinct points",
-            **where,
+            **_where(name, char, index),
         )
 
 
@@ -224,7 +254,9 @@ def load_font(data: bytes) -> Font:
         data: UTF-8 JSON of a `showpy.font.v1` file, at most `MAX_FONT_BYTES` long.
 
     Returns:
-        font: The validated font, every stroke one subpath of positive length.
+        font: The validated font, every stroke one subpath of positive length, and no glyph
+            with more than `MAX_GLYPH_PIECES` path pieces; each count is checked before the
+            glyph is sampled.
 
     Examples:
         >>> from showpy.core.resources import font_path

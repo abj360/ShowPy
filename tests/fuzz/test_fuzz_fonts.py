@@ -9,6 +9,10 @@ Contains:
     test_fuzz_load_font_font_shaped_json: raises only ShowPyError for font-shaped JSON
     test_fuzz_register_font_font_shaped_json: raises only ShowPyError and never changes the
         registry it extends
+    test_fuzz_load_font_glyph_piece_cap: raises only ShowPyError for glyphs near the piece cap,
+        split over several strokes, and accepts none over it
+    test_fuzz_layout_text_piece_cap: raises only ShowPyError laying out heavy glyphs that
+        normalization doubles, and lays out none over the piece cap
     test_fuzz_import_fonts_arbitrary_documents: raises only ShowPyError for JSON-like documents
     test_fuzz_import_fonts_corrupted_base64: raises only ShowPyError for a real font entry with
         corrupted base64, a wrong URI or flipped bytes, and never registers a mismatched font
@@ -23,15 +27,15 @@ import json
 from collections.abc import Iterable
 from typing import Any
 
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from showpy.core.errors import ShowPyError
+from showpy.core.errors import FontError, SchemaError, ShowPyError
 from showpy.core.util import asset_uri
 from showpy.export.data import FONTS_KEY, import_fonts
-from showpy.geo.fonts import FontRegistry, load_font, register_font
+from showpy.geo.fonts import MAX_GLYPH_PIECES, FontRegistry, bundled_fonts, load_font, register_font
 from showpy.geo.models import LaidGlyph
-from showpy.geo.text_layout import MAX_LAYOUT_CHARS, layout_text
+from showpy.geo.text_layout import MAX_LAYOUT_CHARS, MAX_LAYOUT_PIECES, layout_text
 from tests.fixtures.fonts import tiny_bytes
 from tests.helpers import only_showpy_errors
 
@@ -87,6 +91,10 @@ JSON_VALUES = st.recursive(
     max_leaves=12,
 )
 TINY_BYTES = tiny_bytes()
+NEAR_CAP = 3
+# U+0344 normalizes to U+0308 U+0301, so each character lays out two glyphs.
+EXPANDING = "\u0344"
+HEAVY_EXAMPLES = 40
 TINY_URI = asset_uri(TINY_BYTES)
 
 
@@ -157,6 +165,55 @@ def test_fuzz_layout_text_extreme_numbers(
             )
         ),
         (text, height, at, letter_spacing, line_spacing, rotation),
+    )
+
+
+def _zigzag(pieces: int) -> str:
+    return "M0 0 " + " ".join(f"L{i % 2} {i + 1}" for i in range(pieces))
+
+
+def _loads_only_under_the_cap(data: bytes, pieces: int) -> None:
+    try:
+        load_font(data)
+    except FontError:
+        assert pieces > MAX_GLYPH_PIECES
+        return
+    assert pieces <= MAX_GLYPH_PIECES
+
+
+@given(
+    st.integers(MAX_GLYPH_PIECES - NEAR_CAP, MAX_GLYPH_PIECES + NEAR_CAP),
+    st.integers(1, 4),
+)
+def test_fuzz_load_font_glyph_piece_cap(pieces: int, strokes: int) -> None:
+    """Raises only ShowPyError near the glyph piece cap, and accepts no glyph over it."""
+    shares = [pieces // strokes + (index < pieces % strokes) for index in range(strokes)]
+    glyphs = {"I": {"advance": 4, "strokes": [_zigzag(share) for share in shares]}}
+    data = tiny_bytes(glyphs=glyphs)
+    only_showpy_errors(lambda: _loads_only_under_the_cap(data, pieces), (pieces, strokes))
+
+
+def _lays_only_under_the_cap(text: str, registry: FontRegistry, pieces: int) -> None:
+    try:
+        layout_text(text, ["tiny"], 1.0, (0.0, 0.0), font_registry=registry)
+    except SchemaError:
+        assert pieces > MAX_LAYOUT_PIECES
+        return
+    assert pieces <= MAX_LAYOUT_PIECES
+
+
+@settings(max_examples=HEAVY_EXAMPLES)
+@given(st.integers(1, MAX_GLYPH_PIECES), st.integers(-NEAR_CAP, NEAR_CAP))
+def test_fuzz_layout_text_piece_cap(pieces: int, offset: int) -> None:
+    """Raises only ShowPyError for heavy text normalization doubles; lays none over the cap."""
+    heavy = {"advance": 4, "strokes": [_zigzag(pieces)]}
+    registry, _ = register_font(
+        bundled_fonts(), tiny_bytes(glyphs={"\u0308": heavy, "\u0301": heavy})
+    )
+    copies = min(MAX_LAYOUT_CHARS, max(1, MAX_LAYOUT_PIECES // (2 * pieces) + offset))
+    laid = 2 * copies * pieces
+    only_showpy_errors(
+        lambda: _lays_only_under_the_cap(EXPANDING * copies, registry, laid), (pieces, copies)
     )
 
 

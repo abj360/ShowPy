@@ -8,11 +8,12 @@ characters are laid out one by one in logical order.
 Contains:
     MAX_LAYOUT_CHARS: bounds the characters of one laid-out text
     MAX_LAYOUT_EXTENT_M: bounds how far from the origin a laid stroke may reach
+    MAX_LAYOUT_PIECES: bounds the path pieces of all laid glyphs together
     layout_text(): lays multi-line text out as glyph strokes on the stage plane
 """
 
 import unicodedata
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
@@ -44,11 +45,16 @@ from showpy.geo.svg import ArcPiece, CubicPiece, LinePiece, Piece, QuadPiece, Su
 MAX_LAYOUT_CHARS = 1_000
 # A stage is ~100 m; squared coordinates stay far below the float range the curve tables square.
 MAX_LAYOUT_EXTENT_M = 1e6
+# MAX_LAYOUT_CHARS copies of the most complex bundled glyph (hershey-script "8", 51 pieces)
+# lay 51,000 pieces (measured 2026-11-16); the cap is about 10 times that.
+MAX_LAYOUT_PIECES = 512_000
 LINE_BREAKS = (("\r\n", "\n"), ("\r", "\n"))
 ALIGN_SHARE: Mapping[TextAlign, float] = MappingProxyType(
     {"left": 0.0, "center": 0.5, "right": 1.0}
 )
 ORIGIN = (0.0, 0.0)
+
+type GlyphKey = tuple[str, str]
 
 
 @dataclass(frozen=True)
@@ -194,8 +200,8 @@ def _require_within_extent(subpath: Subpath, matrix: Matrix, placed: _Placed) ->
     )
 
 
-def _glyph_strokes(placed: _Placed, matrix: Matrix) -> tuple[Polyline | SvgCurve, ...]:
-    """Maps every stroke of a placed glyph, rejecting one that is not one subpath or too far."""
+def _parse_strokes(placed: _Placed) -> tuple[tuple[Subpath, str], ...]:
+    """Parses each stroke of a placed glyph, rejecting one that is not one subpath."""
     strokes = []
     for d in placed.glyph.strokes:
         subpaths = parse_path(d)
@@ -205,9 +211,41 @@ def _glyph_strokes(placed: _Placed, matrix: Matrix) -> tuple[Polyline | SvgCurve
                 hint="write each stroke as one subpath starting with M",
                 context={"font": placed.source.uri, "glyph": placed.char, "stroke": d},
             )
-        _require_within_extent(subpaths[0], matrix, placed)
-        strokes.append(_stroke(subpaths[0], matrix, d))
+        strokes.append((subpaths[0], d))
     return tuple(strokes)
+
+
+def _parse_glyphs(placed: Iterable[_Placed]) -> dict[GlyphKey, tuple[tuple[Subpath, str], ...]]:
+    """Parses each distinct glyph once, then rejects text over `MAX_LAYOUT_PIECES` pieces.
+
+    Returns:
+        parsed: Each glyph's subpaths with their path data, keyed by font URI and character.
+    """
+    parsed: dict[GlyphKey, tuple[tuple[Subpath, str], ...]] = {}
+    pieces = 0
+    for item in placed:
+        key = (item.source.uri, item.char)
+        if key not in parsed:
+            parsed[key] = _parse_strokes(item)
+        pieces += sum(len(subpath.pieces) for subpath, _ in parsed[key])
+    try:
+        require_size(pieces, MAX_LAYOUT_PIECES, what="laid path pieces")
+    except SchemaError as exc:
+        raise SchemaError(
+            f"the text's glyphs hold over {MAX_LAYOUT_PIECES} path pieces",
+            hint="shorten the text, or use a font with simpler glyphs",
+            context=exc.context,
+        ) from exc
+    return parsed
+
+
+def _glyph_strokes(
+    placed: _Placed, matrix: Matrix, strokes: Sequence[tuple[Subpath, str]]
+) -> tuple[Polyline | SvgCurve, ...]:
+    """Maps every parsed stroke of a placed glyph, rejecting one that reaches too far."""
+    for subpath, _ in strokes:
+        _require_within_extent(subpath, matrix, placed)
+    return tuple(_stroke(subpath, matrix, d) for subpath, d in strokes)
 
 
 def _split_lines(text: str) -> list[str]:
@@ -221,7 +259,11 @@ def _split_lines(text: str) -> list[str]:
 
 
 def _lay_line(
-    placed: Sequence[_Placed], index: int, origin: Point, turn: Matrix
+    placed: Sequence[_Placed],
+    index: int,
+    origin: Point,
+    turn: Matrix,
+    parsed: Mapping[GlyphKey, Sequence[tuple[Subpath, str]]],
 ) -> list[LaidGlyph]:
     laid = []
     for item in placed:
@@ -230,7 +272,7 @@ def _lay_line(
         matrix = turn @ shift @ scale_matrix(scale, scale, ORIGIN)
         if not np.isfinite(matrix).all():
             raise FloatingPointError("glyph matrix is not finite")
-        strokes = _glyph_strokes(item, matrix)
+        strokes = _glyph_strokes(item, matrix, parsed[(item.source.uri, item.char)])
         laid.append(LaidGlyph(char=item.char, font=item.source.uri, line=index, strokes=strokes))
     return laid
 
@@ -260,10 +302,11 @@ def layout_text(
 
     `MAX_LAYOUT_CHARS` bounds the raw input characters, checked before NFC normalization, which
     at most triples them. Then `\r\n` or `\r` count as one line break, and empty lines at the
-    end of the text are dropped; interior empty lines stay as spacing. Every font in the chain
-    is resolved, even one no character uses. No laid stroke may reach farther than
-    `MAX_LAYOUT_EXTENT_M` from the origin on either axis, so every returned curve evaluates
-    without overflow.
+    end of the text are dropped; interior empty lines stay as spacing. Each distinct glyph is
+    parsed once, and `MAX_LAYOUT_PIECES` bounds the path pieces of all laid glyphs together,
+    checked before any stroke is built. Every font in the chain is resolved, even one no
+    character uses. No laid stroke may reach farther than `MAX_LAYOUT_EXTENT_M` from the origin
+    on either axis, so every returned curve evaluates without overflow.
 
     Args:
         text: Characters to lay out; `\n` starts a new line.
@@ -300,10 +343,11 @@ def layout_text(
     laid: list[LaidGlyph] = []
     try:
         with np.errstate(over="raise", invalid="raise", divide="raise"):
-            for index, line in enumerate(lines):
-                placed, width = _place_line(line, chain, fonts, letter_spacing * em)
+            rows = [_place_line(line, chain, fonts, letter_spacing * em) for line in lines]
+            parsed = _parse_glyphs(item for placed, _ in rows for item in placed)
+            for index, (placed, width) in enumerate(rows):
                 origin = (-ALIGN_SHARE[align] * width, lift - index * pitch)
-                laid.extend(_lay_line(placed, index, origin, turn))
+                laid.extend(_lay_line(placed, index, origin, turn, parsed))
     except FloatingPointError as exc:
         raise GeometryError(
             "laid-out text overflows the float range",

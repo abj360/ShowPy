@@ -14,6 +14,8 @@ Contains:
         then from the ink of H, then from the ascender
     test_regression_font_registry_rejects_fonts_that_differ_from_their_bytes: refuses a registry
         that serves glyphs its URI's bytes do not hold
+    test_regression_load_font_caps_the_pieces_of_one_glyph: refuses a glyph whose strokes hold
+        more than MAX_GLYPH_PIECES path pieces in all
     test_regression_register_font_can_keep_a_taken_name: registers a font by URI only when its
         name is bound to other bytes, and the registry still validates from its dump
 """
@@ -31,6 +33,7 @@ from showpy.core.util import asset_uri
 from showpy.geo.fonts import (
     BUNDLED_FONTS,
     MAX_FONT_BYTES,
+    MAX_GLYPH_PIECES,
     FontRegistry,
     bundled_fonts,
     load_font,
@@ -275,3 +278,20 @@ def test_regression_font_registry_rejects_fonts_that_differ_from_their_bytes() -
     assert info.value.code == "FONT_HASH_MISMATCH"
     assert info.value.context["uri"] == simplex
     assert FontRegistry.model_validate(bundled.model_dump()) == bundled
+
+
+def _zigzag(pieces: int) -> str:
+    return "M0 0 " + " ".join(f"L{i % 2} {i + 1}" for i in range(pieces))
+
+
+def test_regression_load_font_caps_the_pieces_of_one_glyph() -> None:
+    whole = _glyphs(I={"advance": 4, "strokes": [_zigzag(MAX_GLYPH_PIECES)]})
+    assert len(load_font(tiny_bytes(**whole)).glyphs["I"].strokes) == 1
+    half = MAX_GLYPH_PIECES // 2 + 1
+    for strokes in ([_zigzag(MAX_GLYPH_PIECES + 1)], [_zigzag(half), _zigzag(half)]):
+        with pytest.raises(FontError) as info:
+            load_font(tiny_bytes(**_glyphs(I={"advance": 4, "strokes": strokes})))
+        assert info.value.code == "BAD_FONT"
+        assert info.value.context["glyph"] == "I"
+        assert info.value.context["cap"] == MAX_GLYPH_PIECES
+        assert "simplify glyph 'I'" in info.value.hint
