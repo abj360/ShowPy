@@ -33,6 +33,10 @@ Contains:
     test_regression_show_id_with_trailing_newline_is_refused: refuses a show id ending in a newline
     test_regression_missing_show_document_is_a_schema_error: raises SchemaError for a commit
         without show.json
+    test_regression_commit_refuses_bad_structured_file: refuses invalid UTF-8 or wrong-shaped
+        JSON at structured paths and invalid UTF-8 at text paths
+    test_structured_check_decodes_only_changed_structured_blobs: loads no blob for show
+        documents or raw-byte paths
 """
 
 import json
@@ -365,3 +369,38 @@ def test_regression_show_id_with_trailing_newline_is_refused() -> None:
     with pytest.raises(StorageError) as caught:
         InMemoryRepository().revisions("s\n")
     assert caught.value.code == "BAD_PATH"
+
+
+BAD_STRUCTURED = [
+    ("/canvas/comments.json", b"\xff\xfe"),
+    ("/canvas/comments.json", b'{"id": "c1"}'),
+    ("/canvas/comments.json", b"["),
+    ("/canvas/selection.json", b'{"ids": 3}'),
+    ("/publish/claims.json", b"{"),
+    ("/config/limits.yaml", b"\xff\xfe"),
+    ("/sets/1/set.py", b"\xff\xfe"),
+    ("/lib/drafts/a.py", b"\xff\xfe"),
+]
+
+
+@pytest.mark.parametrize(("path", "raw"), BAD_STRUCTURED)
+def test_regression_commit_refuses_bad_structured_file(path: str, raw: bytes) -> None:
+    """Refuses a commit of undecodable or wrong-shaped content at a structured path."""
+    repo, head = _repo()
+    with pytest.raises(SchemaError) as caught:
+        _commit(repo, head, {path: raw})
+    assert caught.value.context["path"] == path
+
+
+def test_structured_check_decodes_only_changed_structured_blobs() -> None:
+    docs = encode_show(two_set_show())
+    after = {**docs, "/renders/a.png": b"png", "/canvas/comments.json": b"[]"}
+    by_digest = {blob_digest(raw): raw for raw in after.values()}
+    loaded: list[bytes] = []
+
+    def blob(digest: str) -> bytes:
+        loaded.append(by_digest[digest])
+        return by_digest[digest]
+
+    require_valid_digests(_digests(docs), _digests(after), blob)
+    assert loaded == [b"[]"]

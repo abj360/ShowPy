@@ -46,7 +46,6 @@ from showpy.show.collab import (
     selection,
 )
 from showpy.show.documents import dump_json
-from showpy.show.files import COMMENTS_DOC
 from showpy.show.manage import add_set, set_counts
 from showpy.show.models import (
     CanvasEvent,
@@ -60,6 +59,7 @@ from showpy.show.models import (
 )
 from showpy.show.pinning import pin, unpin
 from showpy.show.storage import Workspace, load_show, save_show
+from showpy.show.structured import COMMENTS_DOC
 from tests.fixtures.shows import two_set_show
 from tests.helpers import open_session
 

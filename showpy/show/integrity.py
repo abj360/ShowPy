@@ -3,6 +3,7 @@ integrity.py --- checks that every commit lands a known path layout and a decoda
 
 Contains:
     KNOWN_ROOTS: the path prefixes a repository accepts documents under
+    require_structured_files(): checks changed text files decode as their readers decode them
     require_known_path(): refuses a path outside KNOWN_ROOTS, including look-alike paths
     blob_digest(): returns the SHA-256 hex digest blobs are addressed by
     require_new_set_keys(): checks every set key a commit stores in a folder the base lacks
@@ -27,6 +28,7 @@ from showpy.show.documents import (
 )
 from showpy.show.models import Show
 from showpy.show.set_keys import PAIR_SEPARATOR, SETS_ROOT, TRANSITIONS_ROOT
+from showpy.show.structured import TEXT_SUFFIXES, require_structured
 
 KNOWN_ROOTS = (
     "/show/",
@@ -159,6 +161,26 @@ def require_new_set_keys(before: Iterable[str], written: Iterable[str]) -> None:
             )
 
 
+def require_structured_files(
+    changed: Iterable[str], after: Mapping[str, str], blob: Callable[[str], bytes]
+) -> None:
+    """Checks every changed text file outside the show documents, loading only those blobs.
+
+    Show documents are decoded with the show; files read as raw bytes are never loaded.
+
+    Args:
+        changed: Paths the commit touches.
+        after: Path to blob digest the commit would leave.
+        blob: Returns the bytes of a digest.
+
+    >>> require_structured_files(["/canvas/comments.json"], {"/canvas/comments.json": "d"},
+    ...                         lambda digest: b"[]")
+    """
+    for path in sorted(changed):
+        if path in after and path.endswith(TEXT_SUFFIXES) and not is_show_doc(path):
+            require_structured(path, blob(after[path]))
+
+
 def require_valid_digests(
     before: Mapping[str, str],
     after: Mapping[str, str],
@@ -186,6 +208,7 @@ def require_valid_digests(
     for path in sorted(changed):
         require_known_path(path)
     require_new_set_keys(before, [p for p in changed if p in after])
+    require_structured_files(changed, after, blob)
     if not any(is_show_doc(p) for p in changed):
         return None
     _require_required_docs(after)

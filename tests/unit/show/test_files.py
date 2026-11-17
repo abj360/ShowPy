@@ -26,8 +26,8 @@ import pytest
 
 from showpy.core.errors import LockedError, SchemaError, ShowPyError, StorageError
 from showpy.show.documents import SHOW_DOC
-from showpy.show.files import decode_comments
 from showpy.show.storage import Workspace
+from showpy.show.structured import decode_comments
 from tests.fixtures.shows import two_set_show
 from tests.helpers import open_session
 

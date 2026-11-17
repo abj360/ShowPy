@@ -28,7 +28,6 @@ from showpy.core.selection import Selection
 from showpy.core.validation import validate_adapter
 from showpy.notes.models import Anchor
 from showpy.show.changes import apply_change
-from showpy.show.files import COMMENTS_DOC, SELECTION_DOC, decode_comments
 from showpy.show.locks import locked_changes
 from showpy.show.models import (
     CanvasEvent,
@@ -47,6 +46,7 @@ from showpy.show.models import (
 )
 from showpy.show.pinning import pin, unpin
 from showpy.show.storage import ROOT_REVISION, Workspace, load_show, save_show
+from showpy.show.structured import COMMENTS_DOC, SELECTION_DOC, decode_comments
 
 OP_ADAPTER: TypeAdapter[ChangeOp] = TypeAdapter(ChangeOp)
 OP_KIND: dict[type, EventKind] = {

@@ -28,10 +28,11 @@ from hypothesis import strategies as st
 
 from showpy.show.collab import apply_event
 from showpy.show.documents import SHOW_DOC, decode_show, encode_show, split_path
-from showpy.show.files import all_files, decode_comments, staged_changes
+from showpy.show.files import all_files, staged_changes
 from showpy.show.manage import insert_subset, renumber
 from showpy.show.models import CanvasEvent, EventKind, Show
 from showpy.show.storage import Workspace
+from showpy.show.structured import decode_comments
 from tests.fixtures.shows import two_set_show
 from tests.helpers import only_showpy_errors, open_session
 

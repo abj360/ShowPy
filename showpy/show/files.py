@@ -8,12 +8,9 @@ Contains:
     INDEX_DOC: names the derived set index table
     LIMITS_DOC: names the designer's limits file
     WAIVERS_DOC: names the designer's waivers file
-    SELECTION_DOC: names the designer's current canvas selection
-    COMMENTS_DOC: names the canvas comment list
     CLAIMS_DOC: names the published claims file
     all_files(): lists every readable file path
     directories(): lists every directory path, each ending in `/`
-    decode_comments(): decodes a comments file into its comments
     read_file(): returns a file's text or bytes
     show_changes(): lists the stored-document writes and deletes that store a show
     staged_changes(): validates one file write and returns the stored-document changes it makes
@@ -21,17 +18,12 @@ Contains:
 
 import csv
 import io
-import json
 from collections.abc import Mapping
 
-from pydantic import TypeAdapter
-from pydantic import ValidationError as PydanticValidationError
-
-from showpy.core.errors import LockedError, SchemaError, StorageError, UnknownRefError
+from showpy.core.errors import LockedError, StorageError, UnknownRefError
 from showpy.core.ids import TransitionId
 from showpy.core.selection import Selection
 from showpy.core.util import close_matches
-from showpy.core.validation import validate_adapter_json
 from showpy.show.documents import (
     FORMS_NAME,
     NOTES_DOC,
@@ -53,21 +45,25 @@ from showpy.show.documents import (
     split_path,
 )
 from showpy.show.manage import index
-from showpy.show.models import Comment, Show
+from showpy.show.models import Show
 from showpy.show.set_keys import SetFolders, set_key, to_stored_path
+from showpy.show.structured import (
+    COMMENTS_DOC,
+    SELECTION_DOC,
+    TEXT_SUFFIXES,
+    decode_text,
+    require_structured,
+)
 
 INDEX_DOC = "/show/index.csv"
 LIMITS_DOC = "/config/limits.yaml"
 WAIVERS_DOC = "/config/waivers.yaml"
-SELECTION_DOC = "/canvas/selection.json"
-COMMENTS_DOC = "/canvas/comments.json"
 CLAIMS_DOC = "/publish/claims.json"
 FREE_ROOTS = ("/renders/", "/exports/", "/lib/drafts/")
 FIXED_DIRS = (
     "/", "/canvas/", "/config/", "/exports/", "/lib/", "/lib/drafts/", "/publish/", "/renders/",
     "/sets/", "/show/", "/time/", "/transitions/",
 )  # fmt: skip
-TEXT_SUFFIXES = (".json", ".csv", ".py", ".yaml", ".yml", ".txt", ".md", ".svg")
 INDEX_COLUMNS = ("set", "counts", "start_count", "measure", "seconds", "cue")
 EMPTY_LIST = dump_json([])
 DEFAULTS = {
@@ -76,16 +72,6 @@ DEFAULTS = {
     SELECTION_DOC: dump_json(Selection(ids=()).model_dump(mode="json")),
     COMMENTS_DOC: EMPTY_LIST,
 }
-COMMENTS_ADAPTER = TypeAdapter(list[Comment])
-
-
-def decode_comments(raw: bytes) -> list[Comment]:
-    """Decodes a comments file, raising SchemaError for bad UTF-8, JSON or comment shapes.
-
-    >>> decode_comments(b"[]")
-    []
-    """
-    return validate_adapter_json(COMMENTS_ADAPTER, raw, name="Comments")
 
 
 def _set_files(show: Show, tree: Mapping[str, bytes]) -> list[str]:
@@ -129,16 +115,7 @@ def directories(show: Show | None, tree: Mapping[str, bytes]) -> set[str]:
 
 
 def _text_or_bytes(path: str, raw: bytes) -> str | bytes:
-    if not path.endswith(TEXT_SUFFIXES):
-        return raw
-    try:
-        return raw.decode()
-    except UnicodeDecodeError as exc:
-        raise SchemaError(
-            f"{path} is not valid UTF-8: {exc}",
-            hint="write UTF-8 text to text files",
-            context={"path": path},
-        ) from exc
+    return decode_text(path, raw) if path.endswith(TEXT_SUFFIXES) else raw
 
 
 def _unknown(path: str, show: Show | None, tree: Mapping[str, bytes]) -> UnknownRefError:
@@ -273,25 +250,6 @@ def _staged_show_doc(
     return show_changes(edited, tree)
 
 
-def _require_valid(path: str, raw: bytes) -> None:
-    if not path.endswith(TEXT_SUFFIXES):
-        return
-    try:
-        text = raw.decode()
-        if path == SELECTION_DOC:
-            Selection.model_validate_json(text)
-        elif path == COMMENTS_DOC:
-            decode_comments(raw)
-        elif path.endswith(".json"):
-            json.loads(text)
-    except (UnicodeDecodeError, json.JSONDecodeError, SchemaError, PydanticValidationError) as exc:
-        raise SchemaError(
-            f"{path} does not hold valid content: {exc}",
-            hint="write UTF-8 text; JSON files must parse and match their model",
-            context={"path": path},
-        ) from exc
-
-
 def staged_changes(
     path: str, raw: bytes, show: Show | None, tree: Mapping[str, bytes]
 ) -> dict[str, bytes | None]:
@@ -319,5 +277,5 @@ def staged_changes(
         _require_show(show, path).set(segments[1])
     elif not (path in DEFAULTS or path == CLAIMS_DOC or path.startswith(FREE_ROOTS)):
         raise _unknown(path, show, tree)
-    _require_valid(path, raw)
+    require_structured(path, raw)
     return {to_stored_path(path, show): raw}
