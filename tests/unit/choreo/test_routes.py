@@ -27,7 +27,10 @@ Contains:
     test_regression_counter_march_force_moves_pinned_placement: moves a pinned placement when
         forced
     test_regression_follow_cannot_replace_the_route_of_a_locked_row: raises LockedError when a
-        locked row follows the route being replaced (open defect UP-9.2-39)
+        locked row follows the route being replaced
+    test_regression_follow_force_replaces_the_route_of_a_locked_row: replaces it when forced
+    test_regression_second_counter_march_keeps_a_locked_route: refuses to rewrite a locked
+        counter-march route unless forced
 """
 
 import math
@@ -51,7 +54,6 @@ from showpy.core.util import approx_equal
 from showpy.show.models import Show
 from tests.fixtures.motion_shows import TID, with_targets
 from tests.fixtures.shows import two_set_show
-from tests.helpers import defect
 
 FILE = ["T4", "T3", "T2", "T1"]
 
@@ -239,7 +241,6 @@ def test_regression_counter_march_force_moves_pinned_placement() -> None:
     assert approx_equal(moved.set("2").get("T1").point, (5.0, 8.0))
 
 
-@defect("UP-9.2-39")
 def test_regression_follow_cannot_replace_the_route_of_a_locked_row() -> None:
     """Raises LockedError when `follow` replaces the route a locked row follows."""
     show = follow_and_set_targets(
@@ -250,3 +251,25 @@ def test_regression_follow_cannot_replace_the_route_of_a_locked_row() -> None:
     detour = make_route(show, TID, "T4", [(6.0, 12.0)], members=["T4"])
     with pytest.raises(LockedError):
         follow(show.transition(TID), detour.replace(id=next(iter(route))))
+
+
+def test_regression_follow_force_replaces_the_route_of_a_locked_row() -> None:
+    """Replaces the locked row's route when `force=True`."""
+    show = follow_and_set_targets(
+        two_set_show(), TID, make_route(two_set_show(), TID, "T4", [(6.0, 15.0)], members=FILE)
+    )
+    spec = lock(show.transition(TID), ["T1"])
+    route_id = next(iter(spec.routes))
+    detour = make_route(show, TID, "T4", [(6.0, 12.0)], members=["T4"]).replace(id=route_id)
+    forced = follow(spec, detour, force=True)
+    assert forced.routes[route_id].members == ("T4",)
+
+
+def test_regression_second_counter_march_keeps_a_locked_route() -> None:
+    """Refuses a second counter-march that rewrites a route a locked row follows."""
+    show = counter_march(two_set_show(), TID, FILE, (6.0, 15.0))
+    locked = show.replace(transitions=(lock(show.transition(TID), ["T1"]),))
+    with pytest.raises(LockedError):
+        counter_march(locked, TID, ["T4", "T3"], (6.0, 15.0))
+    forced = counter_march(locked, TID, ["T4", "T3"], (6.0, 15.0), force=True)
+    assert forced.transition(TID).routes["counter-march-T4"].members == ("T4", "T3")
