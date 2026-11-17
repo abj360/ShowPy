@@ -51,13 +51,15 @@ Contains:
     test_regression_swapped_blob_is_corrupt_naming_its_file: reports a blob whose bytes miss their
         digest as CORRUPT with the object path
     test_regression_backend_refuses_a_traversal_revision_id: refuses a revision ID that would put
-        its tree file outside the repository with BAD_REVISION_ID, writing nothing
+        its tree file outside the repository with BAD_ID, writing nothing
     test_regression_oversized_blob_is_refused_before_it_is_written: refuses a blob over the read
         cap at commit, so the show stays readable
     test_regression_object_swapped_after_lstat_is_refused: refuses a symlink or FIFO swapped in
         between the lstat check and the open, without following or blocking on it
     test_regression_backend_refuses_a_malformed_parent_id: blames the caller for a malformed parent
         ID passed to commit
+    test_regression_backend_refuses_a_malformed_blob_digest: blames the caller for a malformed blob
+        digest passed to commit
     test_regression_stored_malformed_id_stays_corrupt: keeps CORRUPT for a malformed stored ID
 """
 
@@ -572,7 +574,7 @@ def test_regression_backend_refuses_a_traversal_revision_id(tmp_path: Path) -> N
     tree = {**repo.backend.tree(SHOW_ID, rev), "/renders/b.txt": digest(raw)}
     with pytest.raises(StorageError) as caught:
         repo.backend.commit(SHOW_ID, escaped, tree, {digest(raw): raw})
-    assert caught.value.code == "BAD_REVISION_ID"
+    assert caught.value.code == "BAD_ID"
     assert "64 lowercase hex digits" in caught.value.hint
     assert _all_files(tmp_path) == before
     assert not (base / "trees" / f"{TRAVERSAL_ID}.json").resolve().exists()
@@ -585,7 +587,20 @@ def test_regression_backend_refuses_a_malformed_parent_id(tmp_path: Path) -> Non
     child = Revision(id=HEX_ID, parent=TRAVERSAL_ID, at=AT, changed=())
     with pytest.raises(StorageError) as caught:
         repo.backend.commit(SHOW_ID, child, repo.backend.tree(SHOW_ID, rev), {})
-    assert caught.value.code == "BAD_REVISION_ID"
+    assert caught.value.code == "BAD_ID"
+
+
+def test_regression_backend_refuses_a_malformed_blob_digest(tmp_path: Path) -> None:
+    """Blames the caller for a malformed blob digest passed to commit, writing nothing."""
+    repo, rev, _ = _saved(tmp_path)
+    before = _all_files(tmp_path)
+    child = Revision(id=HEX_ID, parent=rev, at=AT, changed=("/renders/b.txt",))
+    tree = {**repo.backend.tree(SHOW_ID, rev), "/renders/b.txt": TRAVERSAL_ID}
+    with pytest.raises(StorageError) as caught:
+        repo.backend.commit(SHOW_ID, child, tree, {TRAVERSAL_ID: b"x"})
+    assert caught.value.code == "BAD_ID"
+    assert "blob digest" in caught.value.message
+    assert _all_files(tmp_path) == before
 
 
 def test_regression_stored_malformed_id_stays_corrupt(tmp_path: Path) -> None:

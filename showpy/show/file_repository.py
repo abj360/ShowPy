@@ -196,11 +196,11 @@ class _FileBackend:
     def _caller_id(self, show_id: str, value: str, role: str) -> str:
         if not REVISION_ID_PATTERN.fullmatch(value):
             raise StorageError(
-                f"{role} {value!r} is not a revision ID",
-                hint="revision IDs are 64 lowercase hex digits made by "
+                f"{role} {value!r} is not a 64-digit hex id",
+                hint="revision IDs and blob digests are 64 lowercase hex digits made by "
                 "DocumentRepository.transaction",
                 context={"show": show_id, role: value},
-                code="BAD_REVISION_ID",
+                code="BAD_ID",
             )
         return value
 
@@ -338,7 +338,7 @@ class _FileBackend:
             self._caller_id(show_id, revision.parent, "parent id")
         _require_readable_sizes(show_id, tree, blobs)
         for digest, data in blobs.items():
-            target = base / OBJECT_DIR / self._checked_id(show_id, digest, base / OBJECT_DIR)
+            target = base / OBJECT_DIR / self._caller_id(show_id, digest, "blob digest")
             mode = _lstat_mode(show_id, target)
             if mode is not None and stat.S_ISLNK(mode):
                 raise self._corrupt(show_id, target, "file is a symbolic link")
