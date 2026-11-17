@@ -53,6 +53,13 @@ Contains:
     test_regression_put_set_keeps_the_stored_key: keeps a renumbered set's folder and script when
         put_set gets a freshly built set, and refuses a mismatching explicit key
     test_regression_workspace_has_no_public_stored_commit: keeps stored-path commits private
+    test_regression_new_set_folder_must_pass_the_id_check: refuses put_show and save_show of a
+        show gaining a set whose folder fails check_id, leaving the repository unchanged
+    test_regression_stored_legacy_folders_keep_saving: edits, saves and reloads a tree that
+        already holds /sets/con/, and renumbers a legacy show without creating a folder
+    test_regression_dashed_set_folder_commit_is_refused: refuses a raw commit under /sets/a-b/
+        with a ShowPyError and stores nothing
+    test_regression_new_set_key_must_be_nfc: refuses a new folder whose key NFC changes
 """
 
 import json
@@ -66,6 +73,7 @@ import pytest
 from showpy.choreo.forms import line_form
 from showpy.choreo.models import PathRow, Set, TransitionSpec
 from showpy.core.errors import SchemaError, ShowPyError, StorageError
+from showpy.core.util import content_hash
 from showpy.examples import two_set_show
 from showpy.export.positions import import_positions
 from showpy.show.decode_cache import DecodeCache
@@ -80,9 +88,14 @@ from showpy.show.documents import (
 )
 from showpy.show.file_repository import FileRepository
 from showpy.show.history import revert
-from showpy.show.integrity import blob_digest, require_valid_digests, require_valid_tree
+from showpy.show.integrity import (
+    blob_digest,
+    require_new_set_keys,
+    require_valid_digests,
+    require_valid_tree,
+)
 from showpy.show.manage import add_set, insert_subset, remove_set, renumber
-from showpy.show.models import Show
+from showpy.show.models import Revision, Show
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.sections import join_sections
 from showpy.show.set_keys import to_display_path, to_stored_path
@@ -409,8 +422,7 @@ def test_regression_legacy_set_ids_outside_the_id_pattern_load_and_round_trip(
     assert f"/sets/{first_id}/set.json" in docs
     assert f"/sets/{second_id}/set.json" in docs
     assert decode_show(docs) == show
-    repo = InMemoryRepository()
-    repo.transaction(SHOW_ID, docs, expected_revision="", at=AT)
+    repo = _legacy_repo(show)
     ws = open_workspace(repo, SHOW_ID)
     assert load_show(ws).replace(revision="") == show
     ws.write(f"/sets/{second_id}/set.py", "# legacy\n", at=LATER)
@@ -456,3 +468,65 @@ def test_regression_put_set_keeps_the_stored_key() -> None:
 
 def test_regression_workspace_has_no_public_stored_commit() -> None:
     assert not hasattr(Workspace, "commit_stored")
+
+
+def _with_fresh_set(show: Show, set_id: str) -> Show:
+    fresh = Set.model_validate({**show.sets[-1].model_dump(), "id": set_id})
+    return show.replace(sets=(*show.sets, fresh))
+
+
+def test_regression_new_set_folder_must_pass_the_id_check() -> None:
+    repo = InMemoryRepository()
+    head = repo.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT).id
+    before = repo.paths(SHOW_ID)
+    gaining = _with_fresh_set(two_set_show(), "con")
+    with pytest.raises(SchemaError):
+        repo.put_show(SHOW_ID, gaining, expected_revision=head, at=LATER)
+    ws = open_workspace(repo, SHOW_ID)
+    with pytest.raises(SchemaError):
+        save_show(ws, _with_fresh_set(load_show(ws), "con"), LATER)
+    with pytest.raises(SchemaError):
+        save_show(ws, _with_fresh_set(load_show(ws), LEGACY_LONG_ID), LATER)
+    assert repo.paths(SHOW_ID) == before
+    assert repo.head(SHOW_ID) == head
+
+
+def _legacy_repo(show: Show) -> InMemoryRepository:
+    """Stores `show` as v0.2 did, through the backend, so no Phase 1 commit check runs."""
+    repo = InMemoryRepository()
+    docs = encode_show(show)
+    tree = {p: blob_digest(raw) for p, raw in docs.items()}
+    revision = Revision(id=content_hash(tree), parent="", at=AT, changed=tuple(sorted(docs)))
+    repo.backend.commit(SHOW_ID, revision, tree, {blob_digest(raw): raw for raw in docs.values()})
+    return repo
+
+
+def test_regression_stored_legacy_folders_keep_saving() -> None:
+    repo = _legacy_repo(_legacy_show("con", "2"))
+    ws = open_workspace(repo, SHOW_ID)
+    show = load_show(ws)
+    moved = show.set("con").with_placements({"T1": {"x": 3.0}})
+    save_show(ws, show.replace(sets=(moved, show.sets[1]), title="edited"), LATER)
+    reloaded = repo.get_show(SHOW_ID)
+    assert reloaded.set("con").get("T1").x == 3.0
+    assert reloaded.title == "edited"
+    ws.write("/sets/con/set.py", "# legacy\n", at=LATER)
+    legacy = _legacy_repo(_legacy_show("1", "1A"))
+    lws = open_workspace(legacy, SHOW_ID)
+    save_show(lws, renumber(load_show(lws))[0], LATER)
+    assert [s.key for s in legacy.get_show(SHOW_ID).sets] == ["1", "1A"]
+    assert legacy.get_show(SHOW_ID).set_ids() == ["1", "2"]
+
+
+def test_regression_dashed_set_folder_commit_is_refused() -> None:
+    repo, ws, _ = _saved_renumbered()
+    before = {p: repo.read(SHOW_ID, p) for p in repo.paths(SHOW_ID)}
+    for path in ("/sets/a-b/set.py", "/sets/a-b/set.json", "/transitions/2-a-b/paths.json"):
+        with pytest.raises(ShowPyError):
+            repo.transaction(SHOW_ID, {path: b"{}"}, expected_revision=ws.revision, at=LATER)
+    assert {p: repo.read(SHOW_ID, p) for p in repo.paths(SHOW_ID)} == before
+
+
+def test_regression_new_set_key_must_be_nfc() -> None:
+    with pytest.raises(SchemaError):
+        require_new_set_keys([], ["/sets/\u212a1/set.py"])

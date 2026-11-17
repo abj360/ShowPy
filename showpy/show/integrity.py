@@ -5,15 +5,17 @@ Contains:
     KNOWN_ROOTS: the path prefixes a repository accepts documents under
     require_known_path(): refuses a path outside KNOWN_ROOTS, including look-alike paths
     blob_digest(): returns the SHA-256 hex digest blobs are addressed by
+    require_new_set_keys(): checks every set key a commit stores in a folder the base lacks
     require_valid_digests(): checks digest trees, loading and decoding only what must be decoded
     require_valid_tree(): checks byte trees the same way, without a cache
 """
 
 import hashlib
 import unicodedata
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 
 from showpy.core.errors import SchemaError, StorageError
+from showpy.core.ids import check_id
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.documents import (
     SHEET_DOC,
@@ -24,6 +26,7 @@ from showpy.show.documents import (
     is_show_doc,
 )
 from showpy.show.models import Show
+from showpy.show.set_keys import PAIR_SEPARATOR, SETS_ROOT, TRANSITIONS_ROOT
 
 KNOWN_ROOTS = (
     "/show/",
@@ -41,6 +44,7 @@ FORBIDDEN_CHARACTER = "\\"
 CONTROL_CATEGORY = "Cc"
 REQUIRED_DOCS = (SHOW_DOC, SHEET_DOC, TIMELINE_DOC)
 DOT_SEGMENTS = ("", ".", "..")
+FOLDER_DEPTH = 3
 
 
 def _bad_path(path: str) -> StorageError:
@@ -117,6 +121,44 @@ def _require_no_orphans(show: Show, written: list[str]) -> None:
         )
 
 
+def _set_keys_in(path: str) -> list[str]:
+    parts = path.split("/")
+    if len(parts) <= FOLDER_DEPTH:
+        return []
+    if parts[1] == SETS_ROOT:
+        return [parts[2]]
+    if parts[1] == TRANSITIONS_ROOT:
+        return parts[2].split(PAIR_SEPARATOR)
+    return []
+
+
+def require_new_set_keys(before: Iterable[str], written: Iterable[str]) -> None:
+    """Checks every set key a commit stores in a folder the base tree lacks (ADR 0006 item 6).
+
+    Folders already stored are grandfathered, so v0.1 and v0.2 set IDs keep saving until the
+    Phase 2 migration; a new folder, however the show was built, must pass check_id.
+
+    Args:
+        before: Paths of the base revision's tree.
+        written: Paths the commit writes.
+
+    >>> require_new_set_keys(["/sets/con/set.json"], ["/sets/con/set.py", "/sets/2/set.py"])
+    >>> try:
+    ...     require_new_set_keys([], ["/sets/con/set.json"])
+    ... except SchemaError as exc:
+    ...     print(exc.context["kind"])
+    set key
+    """
+    stored = {key for path in before for key in _set_keys_in(path)}
+    for key in sorted({key for path in written for key in _set_keys_in(path)} - stored):
+        if check_id(key, kind="set key") != key:
+            raise SchemaError(
+                f"set key {key!r} is not in NFC form",
+                hint="write set keys as plain ASCII letters, digits, _ and .",
+                context={"kind": "set key", "text": key},
+            )
+
+
 def require_valid_digests(
     before: Mapping[str, str],
     after: Mapping[str, str],
@@ -143,6 +185,7 @@ def require_valid_digests(
     changed = [p for p in set(before) | set(after) if before.get(p) != after.get(p)]
     for path in sorted(changed):
         require_known_path(path)
+    require_new_set_keys(before, [p for p in changed if p in after])
     if not any(is_show_doc(p) for p in changed):
         return None
     _require_required_docs(after)
