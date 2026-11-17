@@ -7,6 +7,8 @@ Contains:
     test_fuzz_decode_show_bytes(): decodes known documents replaced by arbitrary bytes
     test_fuzz_decode_show_json_shapes(): decodes known documents replaced by JSON of any shape
     test_fuzz_decode_show_field_shapes(): decodes show.json whose fields hold JSON of any shape
+    test_fuzz_decode_show_mutations(): decodes real documents with one nested value replaced
+    test_fuzz_decode_show_cached(): decodes mutated documents through a warm decode cache
     test_fuzz_split_path(): splits arbitrary text as a workspace path
     test_fuzz_read(): reads arbitrary text, then display and stored paths after a renumber
     test_fuzz_ls(): lists arbitrary text as a directory path
@@ -27,8 +29,10 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from showpy.show.collab import apply_event
+from showpy.show.decode_cache import DecodeCache
 from showpy.show.documents import SHOW_DOC, decode_show, encode_show, split_path
 from showpy.show.files import all_files, staged_changes
+from showpy.show.integrity import blob_digest
 from showpy.show.manage import insert_subset, renumber
 from showpy.show.models import CanvasEvent, EventKind, Show
 from showpy.show.storage import Workspace
@@ -111,6 +115,49 @@ def test_fuzz_decode_show_field_shapes(fields: dict[str, object]) -> None:
 @given(PATH_TEXT)
 def test_fuzz_split_path(path: str) -> None:
     only_showpy_errors(lambda: split_path(path), path)
+
+
+JSON_DOC_PATHS = [path for path in STORED_PATHS if path.endswith(".json")]
+MUTATIONS = st.tuples(
+    st.sampled_from(JSON_DOC_PATHS), st.lists(st.integers(min_value=0), max_size=8), JSON_VALUES
+)
+
+
+def _replace_nested(document: object, picks: list[int], value: object) -> object:
+    """Returns the document with the value at the picked nested position replaced."""
+    if not picks or not isinstance(document, dict | list) or not document:
+        return value
+    if isinstance(document, dict):
+        key = sorted(document)[picks[0] % len(document)]
+        return {**document, key: _replace_nested(document[key], picks[1:], value)}
+    index = picks[0] % len(document)
+    return [
+        *document[:index],
+        _replace_nested(document[index], picks[1:], value),
+        *document[index + 1 :],
+    ]
+
+
+def _mutated(path: str, picks: list[int], value: object) -> dict[str, bytes]:
+    document = _replace_nested(json.loads(STORED[path]), picks, value)
+    return {**STORED, path: _json_bytes(document)}
+
+
+def _digests(docs: dict[str, bytes]) -> dict[str, str]:
+    return {path: blob_digest(raw) for path, raw in docs.items()}
+
+
+@given(MUTATIONS)
+def test_fuzz_decode_show_mutations(mutation: tuple[str, list[int], object]) -> None:
+    only_showpy_errors(lambda: decode_show(_mutated(*mutation)), mutation)
+
+
+@given(MUTATIONS)
+def test_fuzz_decode_show_cached(mutation: tuple[str, list[int], object]) -> None:
+    cache = DecodeCache()
+    decode_show(STORED, cache=cache, digests=_digests(STORED))
+    docs = _mutated(*mutation)
+    only_showpy_errors(lambda: decode_show(docs, cache=cache, digests=_digests(docs)), mutation)
 
 
 @given(KNOWN_OR_TEXT)
