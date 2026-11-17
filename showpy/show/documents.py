@@ -8,6 +8,7 @@ Contains:
     SHOW_DOC: names the document holding show metadata, cast and set order
     split_path(): checks a workspace path and returns its segments, rejecting traversal
     dump_json(): writes JSON canonically: sorted keys, sorted sets, two-space indent
+    dump_dumped_json(): writes the JSON-mode dump of a model canonically, skipping a second walk
     set_doc(): returns the path of a set folder's placements document
     script_doc(): returns the path of a set folder's build script
     forms_doc(): returns the path of a set folder's forms document
@@ -17,19 +18,21 @@ Contains:
     is_storable_folder(): reports whether a set folder name can be stored
     expected_show_docs(): lists the stored show-document paths decode reads for a show
     encode_show(): splits a show into documents stored by set key
+    encode_documents(): encodes only the named stored documents of a show
     decode_show(): assembles a show from documents, reusing cached per-document decodes
 """
 
 import itertools
 import json
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping, Sequence
 from functools import partial
 from typing import Any
 
-from pydantic_core import to_jsonable_python
+from pydantic import BaseModel
 
 from showpy.choreo.models import Form, Set, TransitionSpec
+from showpy.core.canonical import MAX_INT_DIGITS, canonical_value
 from showpy.core.errors import SchemaError, StorageError, field_errors
 from showpy.core.ids import SetId, TransitionId, check_id
 from showpy.show.decode_cache import DecodeCache
@@ -55,7 +58,8 @@ SHOW_DOC_PATTERN = re.compile(
     rf"|transitions/{SEGMENT}/paths\.json)"
 )
 JSON_INDENT = 2
-JSON_SCALARS = frozenset({str, int, float, bool})
+NEGATIVE_ZERO = re.compile(r"-0\.0\b")
+RESERVED_KEY_PREFIX = "$showpy:"
 
 
 def split_path(path: str) -> list[str]:
@@ -79,19 +83,6 @@ def split_path(path: str) -> list[str]:
     return segments
 
 
-# Any: canonicalizes arbitrary JSON-like values produced by model_dump.
-def _canonical(value: Any) -> Any:
-    if value is None or type(value) in JSON_SCALARS:
-        return value
-    if isinstance(value, dict):
-        return {str(k): _canonical(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_canonical(v) for v in value]
-    if isinstance(value, (set, frozenset)):
-        return sorted(_canonical(v) for v in value)
-    return to_jsonable_python(value)
-
-
 # Any: accepts any JSON-like value or model dump.
 def dump_json(value: Any) -> bytes:
     r"""Writes JSON canonically so equal content always gives equal bytes and hashes.
@@ -99,8 +90,47 @@ def dump_json(value: Any) -> bytes:
     >>> dump_json({"b": frozenset({"y", "x"}), "a": 1})
     b'{\n  "a": 1,\n  "b": [\n    "x",\n    "y"\n  ]\n}\n'
     """
-    text = json.dumps(_canonical(value), indent=JSON_INDENT, sort_keys=True, ensure_ascii=False)
+    text = json.dumps(
+        canonical_value(value), indent=JSON_INDENT, sort_keys=True, ensure_ascii=False
+    )
     return f"{text}\n".encode()
+
+
+# Any: a model_dump(mode="json") result, whose JSON types and string keys are guaranteed.
+def dump_dumped_json(dumped: Any) -> bytes:
+    """Writes the JSON-mode dump of a model with the same bytes as dump_json, much faster.
+
+    The dump already holds only JSON types and string keys, so one `json.dumps` pass is enough
+    unless the text shows a value canonical_value must treat: `-0.0`, a reserved key prefix or a
+    line long enough to hold a huge int. NaN, infinity and lone surrogates make the pass fail,
+    which hands the value to dump_json so it raises the same SchemaError.
+
+    >>> dump_dumped_json({"b": [1.5, None], "a": -0.0}) == dump_json({"b": [1.5, None], "a": -0.0})
+    True
+    """
+    try:
+        text = json.dumps(
+            dumped, indent=JSON_INDENT, sort_keys=True, ensure_ascii=False, allow_nan=False
+        )
+        encoded = f"{text}\n".encode()
+    except (ValueError, UnicodeEncodeError):
+        return dump_json(dumped)
+    if _needs_normalizing(text):
+        return dump_json(dumped)
+    return encoded
+
+
+def _needs_normalizing(text: str) -> bool:
+    """Reports whether JSON text may hold a value that only canonical_value treats correctly.
+
+    With one value per line, an int past the digit cap of canonical_value makes a line longer
+    than the cap, so line length stands in for a slow scan of every digit run.
+    """
+    if RESERVED_KEY_PREFIX in text:
+        return True
+    if "-0.0" in text and NEGATIVE_ZERO.search(text):
+        return True
+    return max(map(len, text.split("\n"))) > MAX_INT_DIGITS
 
 
 def set_doc(folder: str) -> str:
@@ -181,25 +211,49 @@ def encode_show(show: Show) -> dict[str, bytes]:
     >>> sorted(encode_show(two_set_show()))[:3]
     ['/sets/1/set.json', '/sets/2/set.json', '/show/notes.json']
     """
+    return {path: encode() for path, encode in _encoders(show).items()}
+
+
+def encode_documents(show: Show, paths: Collection[str]) -> dict[str, bytes]:
+    """Encodes only the named stored documents of a show; paths the show does not write are skipped.
+
+    >>> from showpy.examples import two_set_show
+    >>> sorted(encode_documents(two_set_show(), ["/show/sheet.json", "/sets/9/set.json"]))
+    ['/show/sheet.json']
+    """
+    encoders = _encoders(show)
+    return {path: encoders[path]() for path in paths if path in encoders}
+
+
+def _encoders(show: Show) -> dict[str, Callable[[], bytes]]:
+    """Maps each stored document path of a show to a call that encodes it."""
     _require_storable(show)
     keys = {s.id: set_key(s) for s in show.sets}
-    meta = show.model_dump(mode="python", exclude=set(SPLIT_FIELDS))
-    docs = {
-        SHOW_DOC: dump_json({**meta, SET_ORDER_FIELD: list(keys.values())}),
-        SHEET_DOC: dump_json(show.sheet.model_dump(mode="python")),
-        NOTES_DOC: dump_json([n.model_dump(mode="python") for n in show.notes]),
-        TIMELINE_DOC: dump_json(show.timeline.model_dump(mode="python")),
+    meta = show.model_dump(mode="json", exclude=set(SPLIT_FIELDS))
+    encoders: dict[str, Callable[[], bytes]] = {
+        SHOW_DOC: lambda: dump_dumped_json({**meta, SET_ORDER_FIELD: list(keys.values())}),
+        SHEET_DOC: lambda: dump_dumped_json(show.sheet.model_dump(mode="json")),
+        NOTES_DOC: lambda: dump_dumped_json([n.model_dump(mode="json") for n in show.notes]),
+        TIMELINE_DOC: lambda: dump_dumped_json(show.timeline.model_dump(mode="json")),
     }
     for current in show.sets:
-        docs[set_doc(keys[current.id])] = dump_json(current.model_dump(mode="python"))
+        folder = keys[current.id]
+        encoders[set_doc(folder)] = partial(_dump_model, current)
         forms = [f for _, f in sorted(show.forms.items()) if f.set == current.id]
         if forms:
-            dumped = [f.model_dump(mode="python") for f in forms]
-            docs[forms_doc(keys[current.id])] = dump_json(dumped)
+            encoders[forms_doc(folder)] = partial(_dump_models, forms)
     for spec in show.transitions:
-        folder = (keys[spec.id[0]], keys[spec.id[1]])
-        docs[paths_doc(folder)] = dump_json(spec.model_dump(mode="python"))
-    return docs
+        folder_pair = (keys[spec.id[0]], keys[spec.id[1]])
+        encoders[paths_doc(folder_pair)] = partial(_dump_model, spec)
+    return encoders
+
+
+def _dump_model(model: BaseModel) -> bytes:
+    return dump_dumped_json(model.model_dump(mode="json"))
+
+
+def _dump_models(models: Sequence[BaseModel]) -> bytes:
+    return dump_dumped_json([m.model_dump(mode="json") for m in models])
 
 
 # Any: parsed JSON documents hold arbitrary JSON values.

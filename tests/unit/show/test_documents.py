@@ -18,6 +18,12 @@ Contains:
         `Infinity` in stored JSON
     test_regression_negative_zero_encodes_like_zero: writes equal bytes for -0.0 and 0.0, which are
         equal models
+    test_regression_fast_dump_matches_dump_json: writes the same bytes through dump_dumped_json
+        and dump_json for plain, `-0.0`, reserved-key and over-long-int values
+    test_regression_fast_dump_refuses_what_dump_json_refuses: raises SchemaError for NaN,
+        infinity and a lone surrogate through both
+    test_regression_encode_documents_matches_encode_show: encodes a subset of documents with the
+        bytes encode_show gives and skips paths the show does not write
 """
 
 import json
@@ -25,8 +31,17 @@ import math
 
 import pytest
 
-from showpy.core.errors import ShowPyError, VersionError
-from showpy.show.documents import SHOW_DOC, decode_show, encode_show, forms_doc
+from showpy.core.canonical import INT_LIMIT
+from showpy.core.errors import SchemaError, ShowPyError, VersionError
+from showpy.show.documents import (
+    SHOW_DOC,
+    decode_show,
+    dump_dumped_json,
+    dump_json,
+    encode_documents,
+    encode_show,
+    forms_doc,
+)
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 
@@ -87,8 +102,6 @@ def _reject_constant(name: str) -> float:
     raise AssertionError(f"non-standard JSON constant {name}")
 
 
-@pytest.mark.defect("UP-9.7-30")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-30")
 def test_regression_encode_never_writes_non_finite_numbers() -> None:
     """Refuses or avoids non-standard `Infinity` in stored JSON (audit 9.7 item 11)."""
     show = two_set_show()
@@ -112,11 +125,50 @@ def _with_first_x(show: Show, x: float) -> Show:
     return show.model_copy(update={"sets": (updated, *show.sets[1:])})
 
 
-@pytest.mark.defect("UP-9.7-31")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-31")
 def test_regression_negative_zero_encodes_like_zero() -> None:
     """Writes equal bytes for -0.0 and 0.0, which are equal models (audit 9.7 item 11)."""
     positive = _with_first_x(two_set_show(), 0.0)
     negative = _with_first_x(two_set_show(), -0.0)
     assert positive.sets == negative.sets
     assert encode_show(positive) == encode_show(negative)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {"b": [1.5, None, "-0.07"], "a": {"z": 1, "y": True}},
+        {"x": -0.0, "y": [0.0, -0.0]},
+        {"$showpy:map": 1},
+        {"huge": INT_LIMIT},
+        {"long": "x" * 1000},
+    ],
+)
+def test_regression_fast_dump_matches_dump_json(value: object) -> None:
+    try:
+        expected = dump_json(value)
+    except SchemaError:
+        with pytest.raises(SchemaError):
+            dump_dumped_json(value)
+        return
+    assert dump_dumped_json(value) == expected
+
+
+@pytest.mark.parametrize("value", [math.nan, math.inf, -math.inf, "\ud800"])
+def test_regression_fast_dump_refuses_what_dump_json_refuses(value: object) -> None:
+    with pytest.raises(SchemaError):
+        dump_json({"v": value})
+    with pytest.raises(SchemaError):
+        dump_dumped_json({"v": value})
+
+
+def test_regression_fast_dump_writes_no_negative_zero() -> None:
+    assert b"-0.0" not in dump_dumped_json({"x": -0.0, "y": [-0.0]})
+    assert dump_dumped_json({"x": -0.0}) == dump_dumped_json({"x": 0.0})
+
+
+def test_regression_encode_documents_matches_encode_show() -> None:
+    show = two_set_show()
+    docs = encode_show(show)
+    wanted = [SHOW_DOC, "/sets/2/set.json", "/sets/9/set.json"]
+    assert encode_documents(show, wanted) == {p: docs[p] for p in wanted if p in docs}
+    assert "/sets/9/set.json" not in encode_documents(show, wanted)

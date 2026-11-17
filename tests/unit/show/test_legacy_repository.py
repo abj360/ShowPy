@@ -12,6 +12,15 @@ Contains:
         ID uses the domain-tagged scheme while stored IDs and the head chain stay as written
     test_regression_v02_revisions_load_without_authorship: loads the fixture's revisions with only
         id, parent, at and changed, every stored ID still listed and nothing on disk rewritten
+    test_regression_v020_head_loads_with_its_stored_negative_zero: keeps the stored sign of every
+        `-0.0` on load and rewrites nothing
+    test_regression_first_save_normalizes_v020_documents_in_one_revision: adds exactly one
+        revision holding only re-encoded show documents with no `-0.0`, then the edit on top
+    test_regression_normalizing_revision_is_invisible_to_diff_and_events: shows an empty
+        `diff_show` and no events since the pre-upgrade head
+    test_regression_second_save_adds_no_normalizing_revision: adds nothing on a repeat save
+    test_regression_normalization_keeps_tags_selection_scripts_and_pin: carries them through
+        both the load and the normalizing save
     test_new_records_carrying_authorship_are_refused: refuses actor on a new Revision or
         CanvasEvent
     test_stored_record_with_an_unknown_key_is_refused: drops only the legacy keys from a stored
@@ -20,6 +29,8 @@ Contains:
 
 import hashlib
 import json
+import math
+import re
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,14 +40,19 @@ import pytest
 
 from showpy.core.errors import SchemaError
 from showpy.core.util import content_hash
+from showpy.show.collab import events_since
+from showpy.show.documents import is_show_doc
 from showpy.show.file_repository import FileRepository
+from showpy.show.history import diff_show
 from showpy.show.models import CanvasEvent, Revision, Show
+from showpy.show.storage import Workspace, load_show, open_workspace, save_show
 
 FIXTURE = Path(__file__).resolve().parents[2] / "fixtures" / "repos" / "v0.2.0"
 LEGACY_KEYS = {"actor", "message", "kind"}
 REVISION_FIELDS = {"id", "parent", "at", "changed"}
 COMMITTED_AT = datetime(2026, 11, 16, 9, 0, tzinfo=UTC)
 HEX_LENGTH = 64
+NEGATIVE_ZERO = re.compile(rb"-0\.0\b")
 
 
 def _expected() -> dict[str, Any]:
@@ -122,3 +138,96 @@ def test_stored_record_with_an_unknown_key_is_refused(tmp_path: Path) -> None:
     record_path.write_text(json.dumps(record))
     with pytest.raises(SchemaError):
         FileRepository(tmp_path / "repo").revisions(expected["show_id"])
+
+
+def _negative_zero_paths(tree: dict[str, bytes]) -> set[str]:
+    return {p for p, raw in tree.items() if is_show_doc(p) and NEGATIVE_ZERO.search(raw)}
+
+
+def _fixture_workspace(tmp_path: Path) -> tuple[FileRepository, Workspace, dict[str, Any]]:
+    expected = _expected()
+    shutil.copytree(FIXTURE / "repo", tmp_path / "repo")
+    repo = FileRepository(tmp_path / "repo")
+    return repo, open_workspace(repo, expected["show_id"]), expected
+
+
+def _signs(show: Show) -> list[float]:
+    return [p.x for s in show.sets for p in s.placements]
+
+
+def test_regression_v020_head_loads_with_its_stored_negative_zero(tmp_path: Path) -> None:
+    repo, ws, expected = _fixture_workspace(tmp_path)
+    before = {p: p.read_bytes() for p in (tmp_path / "repo").rglob("*") if p.is_file()}
+    tree = ws.tree_at(expected["head"])
+    assert _negative_zero_paths(tree)
+    show = load_show(ws)
+    assert any(math.copysign(1.0, x) < 0 for x in _signs(show) if x == 0)
+    assert {p: p.read_bytes() for p in (tmp_path / "repo").rglob("*") if p.is_file()} == before
+    assert repo.head(expected["show_id"]) == expected["head"]
+
+
+def test_regression_first_save_normalizes_v020_documents_in_one_revision(tmp_path: Path) -> None:
+    repo, ws, expected = _fixture_workspace(tmp_path)
+    show_id, head = expected["show_id"], expected["head"]
+    before = ws.tree_at(head)
+    saved = save_show(ws, load_show(ws), COMMITTED_AT)
+    log = repo.revisions(show_id)
+    assert [r.id for r in log] == [*expected["revisions"], saved.id]
+    assert saved.parent == head
+    assert set(saved.changed) == _negative_zero_paths(before)
+    after = ws.tree_at(saved.id)
+    assert not _negative_zero_paths(after)
+    unchanged = set(before) - set(saved.changed)
+    assert {p: after[p] for p in unchanged} == {p: before[p] for p in unchanged}
+    assert set(after) == set(before)
+    scripts = {p for p in before if p.endswith("/set.py")}
+    assert scripts
+    assert not scripts & set(saved.changed)
+
+
+def test_regression_save_with_an_edit_normalizes_first_then_edits(tmp_path: Path) -> None:
+    repo, ws, expected = _fixture_workspace(tmp_path)
+    show = load_show(ws)
+    saved = save_show(ws, show.model_copy(update={"title": "Renamed"}), COMMITTED_AT)
+    log = repo.revisions(expected["show_id"])
+    assert [r.id for r in log][:3] == expected["revisions"]
+    assert len(log) == 5
+    assert log[4].id == saved.id
+    assert log[3].parent == expected["head"]
+    assert set(log[3].changed) == _negative_zero_paths(ws.tree_at(expected["head"]))
+    assert log[4].changed == ("/show/show.json",)
+    assert not _negative_zero_paths(ws.tree_at(saved.id))
+
+
+def test_regression_normalizing_revision_is_invisible_to_diff_and_events(tmp_path: Path) -> None:
+    repo, ws, expected = _fixture_workspace(tmp_path)
+    before = load_show(ws)
+    saved = save_show(ws, before, COMMITTED_AT)
+    after = ws.show_at(saved.id)
+    assert after is not None
+    assert diff_show(before, after) == {}
+    assert events_since(ws, expected["head"]) == []
+    assert repo.get_show(expected["show_id"], expected["head"]) == before
+
+
+def test_regression_second_save_adds_no_normalizing_revision(tmp_path: Path) -> None:
+    repo, ws, expected = _fixture_workspace(tmp_path)
+    first = save_show(ws, load_show(ws), COMMITTED_AT)
+    ws.refresh()
+    again = save_show(ws, load_show(ws), COMMITTED_AT)
+    assert again.id == first.id
+    assert len(repo.revisions(expected["show_id"])) == len(expected["revisions"]) + 1
+
+
+def test_regression_normalization_keeps_tags_selection_scripts_and_pin(tmp_path: Path) -> None:
+    repo, ws, expected = _fixture_workspace(tmp_path)
+    head = expected["head"]
+    show = load_show(ws)
+    scripts = {p: raw for p, raw in ws.tree_at(head).items() if p.endswith("/set.py")}
+    saved = save_show(ws, show, COMMITTED_AT)
+    for loaded in (show, repo.get_show(expected["show_id"], saved.id)):
+        assert [s.tags for s in loaded.cast.spots if s.tags] == [("horn", "lead")]
+        assert loaded.cast.selections == {"front-four": ("B1", "B2", "B3", "B4")}
+        assert [(p.id, p.target, p.reason) for p in loaded.pins] == [("B3", "entity", "soloist")]
+    after = ws.tree_at(saved.id)
+    assert {p: after[p] for p in scripts} == scripts

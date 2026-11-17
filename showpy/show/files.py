@@ -70,7 +70,7 @@ EMPTY_LIST = dump_json([])
 DEFAULTS = {
     LIMITS_DOC: b"",
     WAIVERS_DOC: b"",
-    SELECTION_DOC: dump_json(Selection(ids=()).model_dump(mode="python")),
+    SELECTION_DOC: dump_json(Selection(ids=()).model_dump(mode="json")),
     COMMENTS_DOC: EMPTY_LIST,
 }
 COMMENTS_ADAPTER = TypeAdapter(list[Comment])
@@ -173,7 +173,7 @@ def _show_file(path: str, segments: list[str], show: Show) -> bytes | None:
             return encode_show(show).get(to_stored_path(path, show), EMPTY_LIST)
     if segments[0] == "transitions" and len(segments) == 3 and segments[2] == PATHS_NAME:
         tid = _pair(show, segments[1])
-        return dump_json(show.transition(tid).model_dump(mode="python"))
+        return dump_json(show.transition(tid).model_dump(mode="json"))
     if path in (SHOW_DOC, SHEET_DOC, NOTES_DOC, TIMELINE_DOC):
         return encode_show(show)[path]
     return None
@@ -205,17 +205,24 @@ def read_file(path: str, show: Show | None, tree: Mapping[str, bytes]) -> str | 
     return _text_or_bytes(path, stored)
 
 
-def show_changes(show: Show, tree: Mapping[str, bytes]) -> dict[str, bytes | None]:
+def show_changes(
+    show: Show, tree: Mapping[str, bytes], docs: Mapping[str, bytes] | None = None
+) -> dict[str, bytes | None]:
     """Lists the stored writes and deletes that store `show` over `tree`, with removed sets' files.
 
     Paths are stored paths: set folders are keys, so a renumbered set keeps its folder.
+
+    Args:
+        show: Show to store.
+        tree: Stored documents to change.
+        docs: The show's encoded documents when the caller already holds them.
 
     >>> from showpy.examples import two_set_show
     >>> changes = show_changes(two_set_show(), {"/sets/9/set.py": b""})
     >>> changes["/sets/9/set.py"], len(changes)
     (None, 7)
     """
-    docs = encode_show(show)
+    docs = encode_show(show) if docs is None else docs
     kept = tuple(f"/sets/{set_key(s)}/" for s in show.sets)
     stale = [
         p

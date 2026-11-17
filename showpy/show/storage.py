@@ -26,7 +26,7 @@ from showpy.choreo.models import Form, Set, TransitionSpec
 from showpy.core.errors import StorageError, UnknownRefError
 from showpy.core.ids import SetId, TransitionId
 from showpy.core.util import close_matches
-from showpy.show.documents import SHOW_DOC, decode_show, split_path
+from showpy.show.documents import SHOW_DOC, decode_show, encode_documents, encode_show, split_path
 from showpy.show.files import (
     all_files,
     directories,
@@ -399,5 +399,29 @@ def save_show(ws: Workspace, show: Show, at: datetime) -> Revision:
     >>> save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC)).parent
     ''
     """
-    changes = show_changes(show, ws.tree_at(show.revision))
-    return ws._commit_stored(changes, at=at, expected_revision=show.revision)
+    base = ws.tree_at(show.revision)
+    docs = encode_show(show)
+    normalizing = _normalizing_changes(ws.show_at(show.revision), base, docs)
+    if not normalizing:
+        return ws._commit_stored(
+            show_changes(show, base, docs), at=at, expected_revision=show.revision
+        )
+    normalized = ws._commit_stored(normalizing, at=at, expected_revision=show.revision)
+    changes = show_changes(show, ws.tree_at(normalized.id), docs)
+    return ws._commit_stored(changes, at=at, expected_revision=normalized.id)
+
+
+def _normalizing_changes(
+    stored: Show | None, tree: Mapping[str, bytes], edited: Mapping[str, bytes]
+) -> dict[str, bytes | None]:
+    """Lists stored show documents whose bytes differ from their canonical re-encoding.
+
+    Only documents are listed, never scripts or other files, and nothing is deleted, so the
+    decoded show is the same before and after (ADR 0014 item 5). A document the edited show
+    encodes to its stored bytes is canonical already, so only the others are re-encoded.
+    """
+    if stored is None:
+        return {}
+    differing = [p for p, d in edited.items() if p in tree and tree[p] != d]
+    canonical = encode_documents(stored, differing)
+    return {p: d for p, d in canonical.items() if tree[p] != d}

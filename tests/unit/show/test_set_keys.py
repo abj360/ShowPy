@@ -17,8 +17,8 @@ Contains:
     test_regression_import_positions_new_set_picks_a_free_key: gives an imported set a free key
     test_regression_never_renumbered_v020_show_encodes_to_its_stored_documents: re-encodes the
         v0.2.0 fixture head to the same paths and canonical bytes, with no `key` field
-    test_v020_head_documents_redump_to_their_stored_bytes: checks the fixture head is already
-        canonical; ADR 0014 (task A7) updates this test when it normalizes `-0.0`
+    test_v020_head_documents_redump_to_their_stored_bytes: re-dumps the fixture head to its stored
+        bytes except the documents ADR 0014 normalizes (`-0.0` or unsorted keys), found by scan
     test_encode_after_renumber_addresses_sets_by_key: writes folders, set order and transition
         folders by key and decodes back to the same show
     test_regression_decode_defaults_a_missing_key_to_the_folder_name: reads a set.json without a
@@ -63,6 +63,8 @@ Contains:
 """
 
 import json
+import math
+import re
 import shutil
 from datetime import UTC, datetime
 from pathlib import Path
@@ -111,6 +113,7 @@ SUBSET_COUNTS = 2.0
 LAST_SET_COUNTS = 6.0
 FIXTURE = Path(__file__).resolve().parents[2] / "fixtures" / "repos" / "v0.2.0"
 FIXTURE_SCRIPT = "/sets/2/set.py"
+NEGATIVE_ZERO = re.compile(rb"-0\.0\b")
 
 
 def _renumbered() -> Show:
@@ -209,11 +212,33 @@ def test_regression_never_renumbered_v020_show_encodes_to_its_stored_documents(
     assert not [p for p in encoded if p.endswith("/set.json") and "key" in json.loads(encoded[p])]
 
 
+def _holds_negative_zero(value: Any) -> bool:
+    if isinstance(value, float):
+        return value == 0 and math.copysign(1.0, value) < 0
+    if isinstance(value, dict):
+        return any(_holds_negative_zero(v) for v in value.values())
+    if isinstance(value, list):
+        return any(_holds_negative_zero(v) for v in value)
+    return False
+
+
+def _normalized_by_adr_0014(raw: bytes) -> bool:
+    parsed = json.loads(raw)
+    stored_order = json.dumps(parsed, indent=2, ensure_ascii=False) + "\n"
+    sorted_order = json.dumps(parsed, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    return _holds_negative_zero(parsed) or stored_order != sorted_order
+
+
 def test_v020_head_documents_redump_to_their_stored_bytes(tmp_path: Path) -> None:
-    """Pins today's canonical form; task A7 updates this when ADR 0014 normalizes `-0.0`."""
     _, _, tree = _fixture_tree(tmp_path)
     stored = {p: raw for p, raw in tree.items() if is_show_doc(p)}
-    assert {p: dump_json(json.loads(raw)) for p, raw in stored.items()} == stored
+    normalized = {p for p, raw in stored.items() if _normalized_by_adr_0014(raw)}
+    assert normalized
+    for path, raw in stored.items():
+        redumped = dump_json(json.loads(raw))
+        assert (redumped != raw) == (path in normalized), path
+        if path in normalized:
+            assert redumped == NEGATIVE_ZERO.sub(b"0.0", raw), path
 
 
 def _with_transition(show: Show) -> Show:
