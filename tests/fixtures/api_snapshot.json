@@ -1474,7 +1474,7 @@
   "symmetry_score": "(s: showpy.choreo.models.Set, axis_x: float = 0.0) -> float",
   "template_ref": "(ref_id: str) -> SheetRef",
   "tempo_at": "(tl: showpy.time.models.Timeline, c: Count) -> CountsPerMinute",
-  "text_outline": "(text: str, font: str, height: Meters, at: Point) -> list[showpy.geo.curves.Polyline]",
+  "text_outline": "(text: str, font: str | collections.abc.Sequence[str], height: Meters, at: Point, *, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> list[showpy.geo.curves.Polyline | showpy.geo.curves.SvgCurve]",
   "timer": "() -> collections.abc.Iterator[showpy.core.util.Timer]",
   "to_coords": "(show: 'Show', p: Point, style: CoordStyle = 'long') -> str",
   "to_csv": "(obj: Tabular, *, neutralize: bool = True) -> str",

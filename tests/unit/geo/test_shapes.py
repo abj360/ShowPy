@@ -14,6 +14,11 @@ Contains:
         when the arc sits 10,000 km from the origin
     test_regression_text_outline_loops_are_closed_without_repeated_start: emits glyph loops as
         closed polylines that do not repeat their start point
+    test_regression_simplex_text_outline_keeps_its_geometry: keeps every simplex glyph's points,
+        order and open flags; only loops close
+    test_text_outline_spells_lowercase_and_punctuation: spells lowercase and punctuation in
+        hershey-roman as polylines
+    test_text_outline_takes_a_fallback_chain: falls back to the next font for a missing glyph
     test_regression_regular_polygon_rejects_fractional_sides: raises a ShowPyError for n=3.5 instead
         of leaking TypeError
     test_regression_rect_rejects_nan_width: rejects a NaN width instead of building a polygon of NaN
@@ -25,9 +30,9 @@ import math
 import numpy as np
 import pytest
 
-from showpy.core.errors import GeometryError, ShowPyError, UnknownRefError
+from showpy.core.errors import GeometryError, GlyphError, ShowPyError, UnknownRefError
 from showpy.core.util import approx_equal
-from showpy.geo.curves import CircleCurve
+from showpy.geo.curves import CircleCurve, Polyline
 from showpy.geo.shapes import (
     arc,
     arc_from_chord,
@@ -47,6 +52,7 @@ from showpy.geo.shapes import (
     text_outline,
     wedge,
 )
+from showpy.geo.text import SIMPLEX
 
 OFFSET_M = 1.0
 CIRCLE_RADIUS_M = 2.0
@@ -58,6 +64,10 @@ LOOP_GLYPHS = ["O", "0", "8", "D", "Q"]
 GLYPH_HEIGHT_M = 2.0
 FRACTIONAL_SIDES = 3.5
 SQUARE_SIDE_M = 4.0
+AT = (1.0, 3.0)
+SIMPLEX_HEIGHT_M = 2.0
+SIMPLEX_GRID_HEIGHT = 6.0
+GEOMETRY_TOL = 1e-12
 
 
 def test_line_and_polyline() -> None:
@@ -203,14 +213,53 @@ def test_regression_arc_through_is_accurate_far_from_the_origin() -> None:
     assert abs(arc_through(*points).radius - FAR_RADIUS_M) < RADIUS_TOL_M
 
 
-@pytest.mark.defect("UP-9.1-28")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-28")
 @pytest.mark.parametrize("glyph", LOOP_GLYPHS)
 def test_regression_text_outline_loops_are_closed_without_repeated_start(glyph: str) -> None:
     """Emits glyph loops as closed polylines that do not repeat their start point (audit 9.1)."""
     strokes = text_outline(glyph, "simplex", GLYPH_HEIGHT_M, (0.0, 0.0))
     assert any(stroke.closed for stroke in strokes)
-    assert all(stroke.closed or stroke.points[0] != stroke.points[-1] for stroke in strokes)
+    assert all(isinstance(stroke, Polyline) for stroke in strokes)
+    assert all(
+        stroke.closed or stroke.points[0] != stroke.points[-1]
+        for stroke in strokes
+        if isinstance(stroke, Polyline)
+    )
+
+
+def _expected_simplex_strokes(char: str) -> list[tuple[bool, list[tuple[float, float]]]]:
+    scale = SIMPLEX_HEIGHT_M / SIMPLEX_GRID_HEIGHT
+    expected = []
+    for stroke in SIMPLEX[char]:
+        points = [(AT[0] + x * scale, AT[1] + y * scale) for x, y in stroke]
+        is_loop = len(points) > 1 and points[0] == points[-1]
+        expected.append((is_loop, points[:-1] if is_loop else points))
+    return expected
+
+
+@pytest.mark.parametrize("char", sorted({c for k in SIMPLEX for c in (k, k.lower())}))
+def test_regression_simplex_text_outline_keeps_its_geometry(char: str) -> None:
+    """Keeps every simplex glyph's points, order and open flags; only loops close."""
+    strokes = text_outline(char, "simplex", SIMPLEX_HEIGHT_M, AT)
+    expected = _expected_simplex_strokes(char.upper() if char.upper() in SIMPLEX else char)
+    assert len(strokes) == len(expected)
+    for stroke, (is_loop, points) in zip(strokes, expected, strict=True):
+        assert isinstance(stroke, Polyline)
+        assert stroke.closed is is_loop
+        assert len(stroke.points) == len(points)
+        for got, want in zip(stroke.points, points, strict=True):
+            assert math.dist(got, want) < GEOMETRY_TOL
+
+
+def test_text_outline_spells_lowercase_and_punctuation() -> None:
+    strokes = text_outline("hi!", "hershey-roman", 1.0, (0, 0))
+    assert strokes
+    assert all(isinstance(stroke, Polyline) for stroke in strokes)
+
+
+def test_text_outline_takes_a_fallback_chain() -> None:
+    assert text_outline("A\u20ac", ["simplex", "relief-singleline"], 1.0, (0, 0))
+    with pytest.raises(GlyphError):
+        text_outline("A\u20ac", "simplex", 1.0, (0, 0))
 
 
 @pytest.mark.defect("UP-9.1-60")
