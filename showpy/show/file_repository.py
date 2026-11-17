@@ -5,6 +5,8 @@ Contains:
     REVISION_ID_PATTERN: matches the 64-digit hex IDs allowed in next/ links and tree digests
     LEGACY_REVISION_KEYS: names the authorship keys v0.1 and v0.2 stored in revision records
     NO_HARDLINK_ERRNOS: lists the errno values meaning the file system cannot hard-link
+    READ_FLAGS: opens stored files without following symlinks or blocking on FIFOs
+    SYMLINK_OPEN_ERRNOS: lists the errno values an O_NOFOLLOW open of a symlink raises
     LINK_MAX_BYTES: caps the size of a next/ link file read
     TREE_MAX_BYTES: caps the size of a tree record read
     BLOB_MAX_BYTES: caps the size of a blob written or read
@@ -37,6 +39,18 @@ TEMP_PREFIX = ".tmp-"
 REVISION_ID_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 LEGACY_REVISION_KEYS = frozenset({"actor", "message", "kind", "target"})
 NO_HARDLINK_ERRNOS = frozenset({errno.EPERM, errno.EXDEV, errno.ENOTSUP})
+# A file swapped in between the lstat check and the open must not be followed (symlink) or
+# block the open (FIFO), so the open itself refuses both and fstat checks the descriptor.
+# Windows has neither flag; there only the lstat check guards, and creating symlinks needs
+# privilege. O_BINARY (Windows only) keeps the C runtime from translating line endings.
+READ_FLAGS = (
+    os.O_RDONLY
+    | getattr(os, "O_NOFOLLOW", 0)
+    | getattr(os, "O_NONBLOCK", 0)
+    | getattr(os, "O_BINARY", 0)
+)
+# open(O_NOFOLLOW) on a symlink fails with ELOOP on Linux and macOS, EMLINK on FreeBSD.
+SYMLINK_OPEN_ERRNOS = frozenset({errno.ELOOP, errno.EMLINK})
 # A link holds one 64-digit hex ID; v0.1 and v0.2 may have added a newline. Rounded up.
 LINK_MAX_BYTES = 128
 # A 600-spot x 120-set show's tree record is 47 KB for 362 documents (130 bytes each, measured
@@ -194,10 +208,21 @@ class _FileBackend:
                 raise self._corrupt(show_id, path, "file is a symbolic link")
             if not stat.S_ISREG(mode):
                 raise self._corrupt(show_id, path, "file is missing or not a regular file")
-            with path.open("rb") as handle:
+            with os.fdopen(self._open_no_follow(show_id, path), "rb") as handle:
+                if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                    raise self._corrupt(show_id, path, "file is missing or not a regular file")
                 return self._read_sized(show_id, path, handle, kind, cap)
         except (FileNotFoundError, IsADirectoryError) as error:
             raise self._corrupt(show_id, path, "file is missing or not a file") from error
+
+    def _open_no_follow(self, show_id: str, path: Path) -> int:
+        """Opens `path` for reading without following a symlink or blocking on a FIFO."""
+        try:
+            return os.open(path, READ_FLAGS)
+        except OSError as error:
+            if error.errno in SYMLINK_OPEN_ERRNOS:
+                raise self._corrupt(show_id, path, "file is a symbolic link") from error
+            raise
 
     def _read_sized(self, show_id: str, path: Path, handle: BinaryIO, kind: str, cap: int) -> bytes:
         """Reads an open file by its fstat size, which `read(n)` allocates up front."""

@@ -54,6 +54,8 @@ Contains:
         its tree file outside the repository, writing nothing
     test_regression_oversized_blob_is_refused_before_it_is_written: refuses a blob over the read
         cap at commit, so the show stays readable
+    test_regression_object_swapped_after_lstat_is_refused: refuses a symlink or FIFO swapped in
+        between the lstat check and the open, without following or blocking on it
 """
 
 import errno
@@ -414,10 +416,10 @@ def test_regression_permission_denied_read_is_io(
     """Maps PermissionError from a read to IO."""
     repo, _, _ = _saved(tmp_path)
 
-    def deny(_self: Path, *_args: object, **_kwargs: object) -> NoReturn:
+    def deny(*_args: object, **_kwargs: object) -> NoReturn:
         raise PermissionError(errno.EACCES, "Permission denied", str(tmp_path))
 
-    monkeypatch.setattr(Path, "open", deny)
+    monkeypatch.setattr(os, "open", deny)
     with pytest.raises(StorageError) as caught:
         repo.revisions(SHOW_ID)
     assert caught.value.code == "IO"
@@ -593,3 +595,45 @@ def test_regression_oversized_blob_is_refused_before_it_is_written(
     at_cap = b"\0" * SMALL_BLOB_CAP
     repo.transaction(SHOW_ID, {OVERSIZED_PATH: at_cap}, expected_revision=rev, at=AT)
     assert repo.read(SHOW_ID, OVERSIZED_PATH) == at_cap
+
+
+def _swapped_after_lstat(
+    monkeypatch: pytest.MonkeyPatch, target: Path, swap: Callable[[Path], None]
+) -> None:
+    """Swaps `target` for something else while lstat keeps reporting the regular file it was."""
+    stale = target.lstat()
+    target.unlink()
+    swap(target)
+    real_lstat = Path.lstat
+
+    def stale_lstat(path: Path) -> os.stat_result:
+        return stale if path == target else real_lstat(path)
+
+    monkeypatch.setattr(Path, "lstat", stale_lstat)
+
+
+SWAPS: dict[str, Callable[[Path, bytes], None]] = {
+    "symlink": lambda target, data: _symlink_to_copy(target, data),
+    "fifo": lambda target, _data: os.mkfifo(target),
+}
+
+
+def _symlink_to_copy(target: Path, data: bytes) -> None:
+    """Links `target` to an outside copy of its bytes, so following it would pass the digest."""
+    outside = target.parent.parent.parent / "outside-copy"
+    outside.write_bytes(data)
+    target.symlink_to(outside)
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs O_NOFOLLOW, FIFOs and SIGALRM")
+@pytest.mark.parametrize("kind", sorted(SWAPS))
+@fails_after(5)
+def test_regression_object_swapped_after_lstat_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """Refuses a symlink or FIFO swapped in after lstat, without following or blocking on it."""
+    repo, rev, base = _saved(tmp_path)
+    target = base / "objects" / repo.backend.tree(SHOW_ID, rev)[SHOW_DOC]
+    data = target.read_bytes()
+    _swapped_after_lstat(monkeypatch, target, lambda path: SWAPS[kind](path, data))
+    _assert_corrupt(lambda: repo.read(SHOW_ID, SHOW_DOC))
