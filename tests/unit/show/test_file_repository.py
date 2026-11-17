@@ -44,28 +44,38 @@ Contains:
     test_regression_other_os_errors_are_io: maps stray OSErrors on read paths and show_ids() to IO
     test_regression_deep_or_huge_tree_record_is_corrupt: maps a tree record nested past the stack
         or holding an overlong int to CORRUPT
+    test_regression_oversized_files_are_corrupt_before_reading: refuses a sparse terabyte link,
+        tree record or blob by its size, naming the kind and cap but not the content
+    test_regression_file_growing_after_its_size_check_is_corrupt: refuses a file that grew after
+        fstat reported its size
 """
 
 import errno
 import json
 import os
 import shutil
+import stat
 import sys
 import tempfile
 import threading
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import pytest
 
 from showpy.core.errors import ConflictError, StorageError
-from showpy.show.file_repository import FileRepository
+from showpy.show.file_repository import (
+    BLOB_MAX_BYTES,
+    LINK_MAX_BYTES,
+    TREE_MAX_BYTES,
+    FileRepository,
+)
 from showpy.show.models import Revision
 from showpy.show.repositories import digest
 from tests.fixtures.shows import two_set_show
-from tests.helpers import HOSTILE_JSON, fails_after
+from tests.helpers import HOSTILE_JSON, capped_address_space, fails_after
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 SHOW_ID = "show-1"
@@ -397,10 +407,10 @@ def test_regression_permission_denied_read_is_io(
     """Maps PermissionError from a read to IO."""
     repo, _, _ = _saved(tmp_path)
 
-    def deny(_self: Path) -> bytes:
+    def deny(_self: Path, *_args: object, **_kwargs: object) -> NoReturn:
         raise PermissionError(errno.EACCES, "Permission denied", str(tmp_path))
 
-    monkeypatch.setattr(Path, "read_bytes", deny)
+    monkeypatch.setattr(Path, "open", deny)
     with pytest.raises(StorageError) as caught:
         repo.revisions(SHOW_ID)
     assert caught.value.code == "IO"
@@ -461,3 +471,64 @@ def test_regression_deep_or_huge_tree_record_is_corrupt(tmp_path: Path, raw: byt
     (base / "trees" / f"{rev}.json").write_bytes(raw)
     _assert_corrupt(lambda: repo.backend.tree(SHOW_ID, rev))
     _assert_corrupt(lambda: repo.revisions(SHOW_ID))
+
+
+SPARSE_SIZE = 2**40
+BLOCK_BYTES = 512
+
+
+def _make_sparse(path: Path) -> None:
+    """Grows `path` to a terabyte without writing it; skips where sparse files are missing."""
+    try:
+        os.truncate(path, SPARSE_SIZE)
+    except OSError as error:
+        pytest.skip(f"no sparse files here: {error}")
+    if getattr(path.stat(), "st_blocks", SPARSE_SIZE) * BLOCK_BYTES >= SPARSE_SIZE:
+        pytest.skip("file system stores truncated files in full")
+
+
+def _oversized_reads(repo: FileRepository, rev: str, base: Path) -> dict[str, tuple[Path, int]]:
+    digest_value = repo.backend.tree(SHOW_ID, rev)[SHOW_DOC]
+    return {
+        "link": (base / "next" / "root", LINK_MAX_BYTES),
+        "tree record": (base / "trees" / f"{rev}.json", TREE_MAX_BYTES),
+        "blob": (base / "objects" / digest_value, BLOB_MAX_BYTES),
+    }
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="needs RLIMIT_AS to stop a runaway read")
+@pytest.mark.parametrize("kind", ["link", "tree record", "blob"])
+def test_regression_oversized_files_are_corrupt_before_reading(tmp_path: Path, kind: str) -> None:
+    """Refuses a sparse terabyte file by its size instead of allocating it (lane A review).
+
+    The address space is capped so a missing size check fails fast instead of exhausting memory.
+    """
+    repo, rev, base = _saved(tmp_path)
+    path, cap = _oversized_reads(repo, rev, base)[kind]
+    _make_sparse(path)
+    with capped_address_space(), pytest.raises(StorageError) as caught:
+        repo.read(SHOW_ID, SHOW_DOC)
+    assert caught.value.code == CORRUPT
+    assert f"{kind} is larger than {cap} bytes" in caught.value.message
+    assert caught.value.context == {"show": SHOW_ID, "path": str(path)}
+
+
+def test_regression_file_growing_after_its_size_check_is_corrupt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Refuses a link that grew after fstat reported its size, past the cap or not."""
+    repo, _, base = _saved(tmp_path)
+    (base / "next" / "root").write_bytes(b"a" * (LINK_MAX_BYTES * 2))
+    reported_size = 1
+    real_fstat = os.fstat
+
+    def stale_fstat(fd: int) -> os.stat_result:
+        fields = list(real_fstat(fd))
+        fields[stat.ST_SIZE] = reported_size
+        return os.stat_result(fields)
+
+    monkeypatch.setattr(os, "fstat", stale_fstat)
+    with pytest.raises(StorageError) as caught:
+        repo.revisions(SHOW_ID)
+    assert caught.value.code == CORRUPT
+    assert "link grew while it was read" in caught.value.message

@@ -5,6 +5,9 @@ Contains:
     REVISION_ID_PATTERN: matches the 64-digit hex IDs allowed in next/ links and tree digests
     LEGACY_REVISION_KEYS: names the authorship keys v0.1 and v0.2 stored in revision records
     NO_HARDLINK_ERRNOS: lists the errno values meaning the file system cannot hard-link
+    LINK_MAX_BYTES: caps the size of a next/ link file read
+    TREE_MAX_BYTES: caps the size of a tree record read
+    BLOB_MAX_BYTES: caps the size of a blob read
     FileRepository: keeps every revision as JSON and blob files under a root directory
 """
 
@@ -18,7 +21,7 @@ import tempfile
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, BinaryIO, cast
 
 from showpy.core.errors import StorageError
 from showpy.show.documents import dump_json
@@ -33,6 +36,15 @@ TEMP_PREFIX = ".tmp-"
 REVISION_ID_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 LEGACY_REVISION_KEYS = frozenset({"actor", "message", "kind", "target"})
 NO_HARDLINK_ERRNOS = frozenset({errno.EPERM, errno.EXDEV, errno.ENOTSUP})
+# A link holds one 64-digit hex ID; v0.1 and v0.2 may have added a newline. Rounded up.
+LINK_MAX_BYTES = 128
+# A 600-spot x 120-set show's tree record is 47 KB for 362 documents (130 bytes each, measured
+# 2026-11-16); 8 MiB holds about 60,000 entries, room for renders, exports and drafts.
+TREE_MAX_BYTES = 8 * 2**20
+# That show's largest document is 333 KB (a transition's paths.json, measured 2026-11-16).
+# /exports/ and /renders/ also hold rendered PDFs and videos, which can reach hundreds of MB,
+# so 1 GiB leaves headroom over both while refusing a sparse terabyte.
+BLOB_MAX_BYTES = 2**30
 
 
 def _temp_copy(directory: Path, data: bytes) -> Path:
@@ -159,20 +171,32 @@ class _FileBackend:
             if mode is not None and stat.S_ISLNK(mode):
                 raise self._corrupt(show_id, directory, "directory is a symbolic link")
 
-    def _read(self, show_id: str, path: Path) -> bytes:
+    def _read(self, show_id: str, path: Path, kind: str, cap: int) -> bytes:
+        """Reads a regular file of at most `cap` bytes, checking its size before reading."""
         try:
             mode = path.lstat().st_mode
             if stat.S_ISLNK(mode):
                 raise self._corrupt(show_id, path, "file is a symbolic link")
             if not stat.S_ISREG(mode):
                 raise self._corrupt(show_id, path, "file is missing or not a regular file")
-            return path.read_bytes()
+            with path.open("rb") as handle:
+                return self._read_sized(show_id, path, handle, kind, cap)
         except (FileNotFoundError, IsADirectoryError) as error:
             raise self._corrupt(show_id, path, "file is missing or not a file") from error
 
+    def _read_sized(self, show_id: str, path: Path, handle: BinaryIO, kind: str, cap: int) -> bytes:
+        """Reads an open file by its fstat size, which `read(n)` allocates up front."""
+        size = os.fstat(handle.fileno()).st_size
+        if size > cap:
+            raise self._corrupt(show_id, path, f"{kind} is larger than {cap} bytes")
+        data = handle.read(size + 1)
+        if len(data) > size:
+            raise self._corrupt(show_id, path, f"{kind} grew while it was read")
+        return data
+
     def _read_link(self, show_id: str, path: Path) -> str:
         try:
-            return self._read(show_id, path).decode().strip()
+            return self._read(show_id, path, "link", LINK_MAX_BYTES).decode().strip()
         except UnicodeDecodeError as error:
             raise self._corrupt(show_id, path, "link is not valid UTF-8") from error
 
@@ -183,7 +207,7 @@ class _FileBackend:
     def _record(self, show_id: str, revision_id: str, source: Path) -> dict[str, object]:
         path = self._tree_path(show_id, revision_id, source)
         try:
-            record = json.loads(self._read(show_id, path))
+            record = json.loads(self._read(show_id, path, "tree record", TREE_MAX_BYTES))
         except (ValueError, RecursionError) as error:
             raise self._corrupt(
                 show_id, path, "tree file is not valid JSON or too deeply nested"
@@ -246,7 +270,8 @@ class _FileBackend:
     def blob(self, show_id: str, digest: str) -> bytes:
         self._guard_dirs(show_id)
         objects = self._dir(show_id) / OBJECT_DIR
-        return self._read(show_id, objects / self._checked_id(show_id, digest, objects))
+        path = objects / self._checked_id(show_id, digest, objects)
+        return self._read(show_id, path, "blob", BLOB_MAX_BYTES)
 
     @_guarded
     def commit(
