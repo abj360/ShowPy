@@ -21,6 +21,13 @@ Contains:
     test_regression_second_save_adds_no_normalizing_revision: adds nothing on a repeat save
     test_regression_normalization_keeps_tags_selection_scripts_and_pin: carries them through
         both the load and the normalizing save
+    test_regression_workspace_write_normalizes_first_then_edits: lists only the edited document in
+        the write's own revision, with an empty `diff_show` across the normalizing one
+    test_regression_workspace_commit_normalizes_first_then_edits: normalizes the one document a
+        commit rewrites, then commits the edit of it
+    test_regression_second_workspace_write_adds_no_normalizing_revision: adds one revision only
+    test_regression_conflict_after_normalizing_leaves_content_unchanged: refuses a stale write
+        with ConflictError, adds no revision and leaves the show as it was
     test_new_records_carrying_authorship_are_refused: refuses actor on a new Revision or
         CanvasEvent
     test_stored_record_with_an_unknown_key_is_refused: drops only the legacy keys from a stored
@@ -38,10 +45,10 @@ from typing import Any
 
 import pytest
 
-from showpy.core.errors import SchemaError
+from showpy.core.errors import ConflictError, SchemaError
 from showpy.core.util import content_hash
 from showpy.show.collab import events_since
-from showpy.show.documents import is_show_doc
+from showpy.show.documents import dump_json, is_show_doc
 from showpy.show.file_repository import FileRepository
 from showpy.show.history import diff_show
 from showpy.show.models import CanvasEvent, Revision, Show
@@ -231,3 +238,68 @@ def test_regression_normalization_keeps_tags_selection_scripts_and_pin(tmp_path:
         assert [(p.id, p.target, p.reason) for p in loaded.pins] == [("B3", "entity", "soloist")]
     after = ws.tree_at(saved.id)
     assert {p: after[p] for p in scripts} == scripts
+
+
+def _retitled(ws: Workspace, title: str) -> bytes:
+    document = json.loads(ws.read("/show/show.json"))
+    document["title"] = title
+    return json.dumps(document).encode()
+
+
+def _assert_normalized_then_edited(
+    repo: FileRepository, ws: Workspace, expected: dict[str, Any], edit: Revision
+) -> None:
+    log = repo.revisions(expected["show_id"])
+    assert [r.id for r in log][:3] == expected["revisions"]
+    assert len(log) == 5
+    assert log[4].id == edit.id
+    assert log[3].parent == expected["head"]
+    assert set(log[3].changed) == _negative_zero_paths(ws.tree_at(expected["head"]))
+    assert log[4].changed == ("/show/show.json",)
+    before, after = ws.show_at(expected["head"]), ws.show_at(log[3].id)
+    assert before is not None
+    assert after is not None
+    assert diff_show(before, after) == {}
+    assert not _negative_zero_paths(ws.tree_at(edit.id))
+
+
+def test_regression_workspace_write_normalizes_first_then_edits(tmp_path: Path) -> None:
+    repo, ws, expected = _fixture_workspace(tmp_path)
+    edit = ws.write("/show/show.json", _retitled(ws, "Renamed"), at=COMMITTED_AT)
+    _assert_normalized_then_edited(repo, ws, expected, edit)
+
+
+def test_regression_workspace_commit_normalizes_first_then_edits(tmp_path: Path) -> None:
+    repo, ws, expected = _fixture_workspace(tmp_path)
+    document = json.loads(ws.tree_at(ws.revision)["/sets/1/set.json"])
+    document["label"] = "Opening"
+    edit = ws.commit({"/sets/1/set.json": dump_json(document)}, at=COMMITTED_AT)
+    log = repo.revisions(expected["show_id"])
+    assert [r.id for r in log][:3] == expected["revisions"]
+    assert [r.changed for r in log[3:]] == [("/sets/1/set.json",), ("/sets/1/set.json",)]
+    assert log[4].id == edit.id
+    before, normalized = ws.show_at(expected["head"]), ws.show_at(log[3].id)
+    assert before is not None
+    assert normalized is not None
+    assert diff_show(before, normalized) == {}
+    assert not NEGATIVE_ZERO.search(ws.tree_at(edit.id)["/sets/1/set.json"])
+
+
+def test_regression_second_workspace_write_adds_no_normalizing_revision(tmp_path: Path) -> None:
+    repo, ws, expected = _fixture_workspace(tmp_path)
+    ws.write("/show/show.json", _retitled(ws, "Renamed"), at=COMMITTED_AT)
+    ws.write("/show/show.json", _retitled(ws, "Renamed again"), at=COMMITTED_AT)
+    assert len(repo.revisions(expected["show_id"])) == len(expected["revisions"]) + 3
+
+
+def test_regression_conflict_after_normalizing_leaves_content_unchanged(tmp_path: Path) -> None:
+    repo, ws, expected = _fixture_workspace(tmp_path)
+    before = load_show(ws)
+    raw = _retitled(ws, "Renamed")
+    with pytest.raises(ConflictError):
+        ws.write(
+            "/show/show.json", raw, expected_revision=expected["revisions"][1], at=COMMITTED_AT
+        )
+    assert len(repo.revisions(expected["show_id"])) == len(expected["revisions"])
+    ws.refresh()
+    assert load_show(ws) == before

@@ -32,7 +32,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from showpy.choreo.models import Form, Set, TransitionSpec
-from showpy.core.canonical import MAX_INT_DIGITS, canonical_value
+from showpy.core.canonical import MAX_INT_DIGITS, MAX_NESTING, canonical_value
 from showpy.core.errors import SchemaError, StorageError, field_errors
 from showpy.core.ids import SetId, TransitionId, check_id
 from showpy.show.decode_cache import DecodeCache
@@ -60,6 +60,7 @@ SHOW_DOC_PATTERN = re.compile(
 JSON_INDENT = 2
 NEGATIVE_ZERO = re.compile(r"-0\.0\b")
 RESERVED_KEY_PREFIX = "$showpy:"
+TOO_DEEP = "\n" + " " * (JSON_INDENT * (MAX_NESTING + 1))
 
 
 def split_path(path: str) -> list[str]:
@@ -101,9 +102,10 @@ def dump_dumped_json(dumped: Any) -> bytes:
     """Writes the JSON-mode dump of a model with the same bytes as dump_json, much faster.
 
     The dump already holds only JSON types and string keys, so one `json.dumps` pass is enough
-    unless the text shows a value canonical_value must treat: `-0.0`, a reserved key prefix or a
-    line long enough to hold a huge int. NaN, infinity and lone surrogates make the pass fail,
-    which hands the value to dump_json so it raises the same SchemaError.
+    unless the text shows a value canonical_value must treat: `-0.0`, a reserved key prefix, a
+    line long enough to hold a huge int or indented deeper than canonical_value allows. NaN,
+    infinity and lone surrogates make the pass fail, which hands the value to dump_json so it
+    raises the same SchemaError.
 
     >>> dump_dumped_json({"b": [1.5, None], "a": -0.0}) == dump_json({"b": [1.5, None], "a": -0.0})
     True
@@ -123,12 +125,15 @@ def dump_dumped_json(dumped: Any) -> bytes:
 def _needs_normalizing(text: str) -> bool:
     """Reports whether JSON text may hold a value that only canonical_value treats correctly.
 
-    With one value per line, an int past the digit cap of canonical_value makes a line longer
-    than the cap, so line length stands in for a slow scan of every digit run.
+    With one value per line and two spaces per level, an int past the digit cap of canonical_value
+    makes a line longer than the cap, and a value nested past its depth cap makes a line indented
+    past TOO_DEEP, so line length and indent stand in for a slow scan of every digit run.
     """
     if RESERVED_KEY_PREFIX in text:
         return True
     if "-0.0" in text and NEGATIVE_ZERO.search(text):
+        return True
+    if TOO_DEEP in text:
         return True
     return max(map(len, text.split("\n"))) > MAX_INT_DIGITS
 

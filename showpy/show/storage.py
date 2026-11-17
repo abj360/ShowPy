@@ -26,7 +26,7 @@ from showpy.choreo.models import Form, Set, TransitionSpec
 from showpy.core.errors import StorageError, UnknownRefError
 from showpy.core.ids import SetId, TransitionId
 from showpy.core.util import close_matches
-from showpy.show.documents import SHOW_DOC, decode_show, encode_documents, encode_show, split_path
+from showpy.show.documents import SHOW_DOC, decode_show, encode_documents, split_path
 from showpy.show.files import (
     all_files,
     directories,
@@ -310,7 +310,7 @@ class Workspace:
             split_path(path)
         folders = SetFolders(self.show_at(base))
         stored = {folders.to_stored(path): data for path, data in changes.items()}
-        return self._commit_stored(stored, at=at, expected_revision=base)
+        return self._commit_normalizing(stored, at=at, expected_revision=base)
 
     def _commit_stored(
         self,
@@ -339,6 +339,38 @@ class Workspace:
         self._revision = revision.id
         return revision
 
+    def _commit_normalizing(
+        self,
+        changes: Mapping[str, bytes | None],
+        *,
+        at: datetime,
+        expected_revision: str | None = None,
+    ) -> Revision:
+        """Saves stored-document changes after re-encoding non-canonical documents on their own.
+
+        When a stored show document the change rewrites is not canonical, a revision holding only
+        those re-encoded documents lands first and the change follows, so the change's own
+        revision lists only what it edits (ADR 0014). If the change then conflicts, the
+        normalizing revision stays; it changes no content.
+
+        Args:
+            changes: Stored path to new bytes, or None to delete.
+            at: Time stamp of the revisions.
+            expected_revision: Revision the change was made against; default the workspace's.
+
+        Returns:
+            revision: The new head; the workspace moves to it.
+        """
+        base = self._revision if expected_revision is None else expected_revision
+        edited = {p: d for p, d in changes.items() if d is not None}
+        normalizing = _normalizing_changes(self.show_at(base), self.tree_at(base), edited)
+        if not normalizing:
+            return self._commit_stored(changes, at=at, expected_revision=base)
+        normalized = self._commit_stored(normalizing, at=at, expected_revision=base)
+        stored = self.tree_at(normalized.id)
+        remaining = {p: d for p, d in changes.items() if d is None or stored.get(p) != d}
+        return self._commit_stored(remaining, at=at, expected_revision=normalized.id)
+
     def write(
         self,
         path: str,
@@ -361,7 +393,7 @@ class Workspace:
         split_path(path)
         raw = data.encode() if isinstance(data, str) else data
         changes = staged_changes(path, raw, self._show(), self._tree())
-        return self._commit_stored(changes, at=at, expected_revision=expected_revision)
+        return self._commit_normalizing(changes, at=at, expected_revision=expected_revision)
 
 
 def open_workspace(repo: Repository, show_id: str) -> Workspace:
@@ -390,7 +422,9 @@ def save_show(ws: Workspace, show: Show, at: datetime) -> Revision:
     """Writes the whole show against `show.revision`, the revision it was loaded at.
 
     Raises ConflictError listing every revision (short ID, time, paths) saved since, so the
-    caller sees what changed meanwhile; reload, reapply and save again.
+    caller sees what changed meanwhile; reload, reapply and save again. Stored documents that
+    are not canonical are re-encoded in a revision of their own first (ADR 0014); if the edit
+    then conflicts, that revision stays, it changes no content, and the retry builds on it.
 
     >>> from showpy.show.repositories import InMemoryRepository
     >>> from showpy.examples import two_set_show
@@ -399,16 +433,8 @@ def save_show(ws: Workspace, show: Show, at: datetime) -> Revision:
     >>> save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC)).parent
     ''
     """
-    base = ws.tree_at(show.revision)
-    docs = encode_show(show)
-    normalizing = _normalizing_changes(ws.show_at(show.revision), base, docs)
-    if not normalizing:
-        return ws._commit_stored(
-            show_changes(show, base, docs), at=at, expected_revision=show.revision
-        )
-    normalized = ws._commit_stored(normalizing, at=at, expected_revision=show.revision)
-    changes = show_changes(show, ws.tree_at(normalized.id), docs)
-    return ws._commit_stored(changes, at=at, expected_revision=normalized.id)
+    changes = show_changes(show, ws.tree_at(show.revision))
+    return ws._commit_normalizing(changes, at=at, expected_revision=show.revision)
 
 
 def _normalizing_changes(
