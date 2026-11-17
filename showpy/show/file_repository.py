@@ -2,14 +2,17 @@
 file_repository.py --- a repository that keeps every revision as files under a root directory
 
 Contains:
+    REVISION_ID_PATTERN: matches the 64-digit hex IDs allowed in next/ links and tree digests
     FileRepository: keeps every revision as JSON and blob files under a root directory
 """
 
 import json
 import os
+import re
 import tempfile
 from pathlib import Path
 
+from showpy.core.errors import StorageError
 from showpy.show.documents import dump_json
 from showpy.show.models import Revision
 from showpy.show.repositories import DocumentRepository, conflict_error
@@ -19,6 +22,7 @@ TREE_DIR = "trees"
 LINK_DIR = "next"
 OBJECT_DIR = "objects"
 TEMP_PREFIX = ".tmp-"
+REVISION_ID_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _temp_copy(directory: Path, data: bytes) -> Path:
@@ -68,26 +72,68 @@ class _FileBackend:
             return []
         return [p.name for p in self.root.iterdir() if (p / LINK_DIR / ROOT_LINK).exists()]
 
-    def _record(self, show_id: str, revision_id: str) -> dict[str, object]:
-        raw = (self._dir(show_id) / TREE_DIR / f"{revision_id}.json").read_bytes()
-        record: dict[str, object] = json.loads(raw)
+    def _corrupt(self, show_id: str, path: Path, reason: str) -> StorageError:
+        return StorageError(
+            f"repository of {show_id} is corrupt: {reason}",
+            hint="restore the show folder from a backup or remove the damaged file",
+            context={"show": show_id, "path": str(path)},
+            code="CORRUPT",
+        )
+
+    def _checked_id(self, show_id: str, value: str, source: Path) -> str:
+        if not REVISION_ID_PATTERN.match(value):
+            raise self._corrupt(show_id, source, f"{value!r} is not a 64-digit hex id")
+        return value
+
+    def _read(self, show_id: str, path: Path) -> bytes:
+        try:
+            return path.read_bytes()
+        except (FileNotFoundError, IsADirectoryError) as error:
+            raise self._corrupt(show_id, path, "file is missing or not a file") from error
+
+    def _tree_path(self, show_id: str, revision_id: str, source: Path) -> Path:
+        name = self._checked_id(show_id, revision_id, source)
+        return self._dir(show_id) / TREE_DIR / f"{name}.json"
+
+    def _record(self, show_id: str, revision_id: str, source: Path) -> dict[str, object]:
+        path = self._tree_path(show_id, revision_id, source)
+        try:
+            record = json.loads(self._read(show_id, path))
+        except (json.JSONDecodeError, UnicodeDecodeError) as error:
+            raise self._corrupt(show_id, path, "tree file is not valid JSON") from error
+        if not isinstance(record, dict) or "revision" not in record or "tree" not in record:
+            raise self._corrupt(show_id, path, "tree file lacks revision or tree")
         return record
 
     def log(self, show_id: str) -> list[Revision]:
         links = self._dir(show_id) / LINK_DIR
         log: list[Revision] = []
+        seen: set[str] = set()
         current = ROOT_LINK
         while (links / current).exists():
-            current = (links / current).read_text().strip()
-            log.append(Revision.model_validate(self._record(show_id, current)["revision"]))
+            link = links / current
+            current = self._checked_id(show_id, self._read(show_id, link).decode().strip(), link)
+            if current in seen:
+                raise self._corrupt(show_id, link, "next/ links form a cycle")
+            seen.add(current)
+            record = self._record(show_id, current, link)
+            log.append(Revision.model_validate(record["revision"]))
         return log
 
     def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
-        tree = self._record(show_id, revision_id)["tree"]
-        return dict(tree) if isinstance(tree, dict) else {}
+        path = self._tree_path(show_id, revision_id, self._dir(show_id) / TREE_DIR)
+        tree = self._record(show_id, revision_id, path)["tree"]
+        if not isinstance(tree, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in tree.items()
+        ):
+            raise self._corrupt(show_id, path, "tree is not a mapping of paths to digests")
+        for value in tree.values():
+            self._checked_id(show_id, value, path)
+        return dict(tree)
 
     def blob(self, show_id: str, digest: str) -> bytes:
-        return (self._dir(show_id) / OBJECT_DIR / digest).read_bytes()
+        objects = self._dir(show_id) / OBJECT_DIR
+        return self._read(show_id, objects / self._checked_id(show_id, digest, objects))
 
     def commit(
         self, show_id: str, revision: Revision, tree: dict[str, str], blobs: dict[str, bytes]

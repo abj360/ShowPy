@@ -64,8 +64,6 @@ def _second_revision(repo: FileRepository, parent: str) -> str:
     ).id
 
 
-@pytest.mark.defect("UP-9.7-03")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-03")
 def test_regression_next_link_to_outside_path_is_refused(tmp_path: Path) -> None:
     """Refuses a next/ file naming a path outside the tree store (audit 9.7 item 3; P0 #3)."""
     repo, rev, base = _saved(tmp_path)
@@ -77,8 +75,6 @@ def test_regression_next_link_to_outside_path_is_refused(tmp_path: Path) -> None
         repo.revisions(SHOW_ID)
 
 
-@pytest.mark.defect("UP-9.7-04")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-04")
 @fails_after(5)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_next_link_cycle_is_refused(tmp_path: Path) -> None:
@@ -89,8 +85,6 @@ def test_regression_next_link_cycle_is_refused(tmp_path: Path) -> None:
         repo.revisions(SHOW_ID)
 
 
-@pytest.mark.defect("UP-9.7-05")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-05")
 def test_regression_tree_digest_path_traversal_is_refused(tmp_path: Path) -> None:
     """Refuses a tree entry whose digest is a path outside objects/ (audit 9.7 item 3; P0 #3)."""
     repo, rev, base = _saved(tmp_path)
@@ -104,8 +98,6 @@ def test_regression_tree_digest_path_traversal_is_refused(tmp_path: Path) -> Non
         repo.read(SHOW_ID, SHOW_DOC)
 
 
-@pytest.mark.defect("UP-9.7-22")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-22")
 def test_regression_missing_object_is_a_storage_error(tmp_path: Path) -> None:
     """Maps a missing object file to StorageError, not FileNotFoundError (audit 9.7 item 9)."""
     repo, _, base = _saved(tmp_path)
@@ -114,8 +106,6 @@ def test_regression_missing_object_is_a_storage_error(tmp_path: Path) -> None:
         repo.get_show(SHOW_ID)
 
 
-@pytest.mark.defect("UP-9.7-23")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-23")
 def test_regression_truncated_tree_is_a_storage_error(tmp_path: Path) -> None:
     """Maps a truncated tree file to StorageError, not JSONDecodeError (audit 9.7 item 9)."""
     repo, rev, base = _saved(tmp_path)
