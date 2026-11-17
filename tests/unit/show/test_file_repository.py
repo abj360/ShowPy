@@ -882,6 +882,10 @@ def _plant_other_tree(record: Path, data: bytes) -> None:
     record.write_text(json.dumps(tampered))
 
 
+def _plant_truncated(record: Path, _data: bytes) -> None:
+    record.write_bytes(b"{")
+
+
 def _plant_symlink(record: Path, data: bytes) -> None:
     outside = record.parent.parent.parent / "outside-record.json"
     outside.write_bytes(data)
@@ -890,7 +894,7 @@ def _plant_symlink(record: Path, data: bytes) -> None:
 
 PLANTED_RECORDS: dict[str, Callable[[Path, bytes], None]] = {
     "other tree": _plant_other_tree,
-    "truncated": lambda record, _data: record.write_bytes(b"{"),
+    "truncated": _plant_truncated,
     "symlink": _plant_symlink,
 }
 
