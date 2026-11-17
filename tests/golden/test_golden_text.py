@@ -21,10 +21,7 @@ import pytest
 
 from showpy.choreo.forms import slots, text_form
 
-pytestmark = [
-    pytest.mark.golden,
-    pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning"),
-]
+pytestmark = pytest.mark.golden
 
 FIXTURE = Path(__file__).parent / "fixtures" / "text_slots.json"
 UPDATE_FLAG = "SHOWPY_UPDATE_GOLDEN"
@@ -33,16 +30,16 @@ AT = (0.0, 10.0)
 DIGITS = 9
 TOL = 1e-9
 CASES: dict[str, dict[str, Any]] = {
-    "go_team": {"text": "GO TEAM", "fonts": ["hershey-roman"], "n": 60},
+    "go_team": {"text": "GO TEAM", "fonts": ["hershey-roman"], "n": 120},
     "equipe": {
         "text": "Équipe 2026!",
         "fonts": ["relief-singleline"],
-        "n": 90,
+        "n": 200,
         "rotation": 15.0,
         "align": "center",
         "anchor": "middle",
     },
-    "greek": {"text": "ΑΒΓ", "fonts": ["hershey-greek"], "n": 30},
+    "greek": {"text": "ΑΒΓ", "fonts": ["hershey-greek"], "n": 45},
 }
 
 
