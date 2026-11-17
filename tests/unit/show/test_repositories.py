@@ -14,6 +14,8 @@ Contains:
         like a Windows device, in memory or on disk, writing nothing
     test_existing_device_name_show_keeps_loading_and_committing: reads and extends a show stored
         under a device name before the refusal existed
+    test_regression_device_name_is_refused_before_its_path_is_touched: refuses a new device-name
+        show with BAD_PATH even where looking up its folder fails, as Windows' console device does
     test_regression_trailing_dot_show_id_is_rejected_or_stored_safely: rejects a show ID ending in a
         dot or stores it under another name
     test_regression_overlong_show_id_is_rejected_or_stored_safely: rejects a 300-character show ID
@@ -29,6 +31,8 @@ Contains:
 """
 
 import contextlib
+import errno
+import os
 import sys
 import threading
 from collections.abc import Callable
@@ -178,6 +182,24 @@ def test_regression_new_device_name_show_is_refused_before_writing(
     assert _folders(tmp_path) == set()
 
 
+def test_regression_device_name_is_refused_before_its_path_is_touched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Refuses a new device-name show with BAD_PATH even where looking up its folder fails."""
+    repo = FileRepository(tmp_path)
+    real_lstat = os.lstat
+
+    def console_lstat(path: str | Path, **kwargs: Any) -> os.stat_result:
+        if Path(path).name.casefold() == "con":
+            raise OSError(errno.EINVAL, "Invalid argument", str(path))
+        return real_lstat(path, **kwargs)
+
+    monkeypatch.setattr(os, "lstat", console_lstat)
+    with pytest.raises(StorageError) as caught:
+        _create(repo, "con")
+    assert caught.value.code == DEVICE_NAME_CODE
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot create a device-name folder")
 def test_existing_device_name_show_keeps_loading_and_committing(tmp_path: Path) -> None:
     """Reads and extends a show stored under a device name before the refusal existed."""
@@ -190,6 +212,9 @@ def test_existing_device_name_show_keeps_loading_and_committing(tmp_path: Path) 
     landed = repo.transaction("CON", {"/renders/a.txt": b"a"}, expected_revision=head, at=AT)
     assert repo.head("CON") == landed.id
     assert repo.read("CON", "/renders/a.txt") == b"a"
+    with pytest.raises(StorageError) as restarted:
+        _create(repo, "CON")
+    assert restarted.value.code == DEVICE_NAME_CODE
 
 
 @pytest.mark.defect("UP-9.7-16")

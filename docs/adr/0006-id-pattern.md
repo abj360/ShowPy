@@ -153,14 +153,16 @@ Audit decision 4 asks for the pattern and the reserved words.
   of UP-9.7-15 from Phase 3 to Phase 1 on 2026-11-17. Windows CI showed the gap on PR #20:
   Windows refused the `CON` folder, while Linux and macOS stored it.
   `DocumentRepository.transaction` now refuses a show ID that `is_device_name` matches (`con`,
-  `NUL`, `aux.1`, `com1`; the same device list and before-the-first-dot rule as `check_id`) when
-  the show has no revisions yet.
-  It raises `StorageError` with code `BAD_PATH`, the code for any show ID that cannot be stored,
-  before anything is written. The refusal holds in memory and on disk, on every platform.
+  `NUL`, `aux.1`, `com1`; the same device list and before-the-first-dot rule as `check_id`)
+  whenever the caller starts a show (expected revision is the root). It raises `StorageError`
+  with code `BAD_PATH`, the code for any show ID that cannot be stored, before the show's folder
+  is even looked up: on Windows that lookup opens the device (`con` gave `IO` on CI). The
+  refusal holds in memory and on disk, on every platform.
 - **Existing shows keep loading.** A show already stored under a device name on Linux or macOS
-  still reads, lists and commits, as decision 6 requires. Phase 3's encoded folder names
-  (ADR 0015) migrate it. Only the device-name rule moves: hyphens and the rest of the pattern
-  stay accepted for show IDs until Phase 3.
+  still reads, lists and commits on its head, as decision 6 requires; a write to it that
+  claims to start the show gets `BAD_PATH` instead of `ConflictError`. Phase 3's encoded folder
+  names (ADR 0015) migrate it. Only the device-name rule moves: hyphens and the rest of the
+  pattern stay accepted for show IDs until Phase 3.
 - **Ledger.** UP-9.7-15 is closed. UP-9.7-14 (case) and UP-9.7-16 (trailing dot) still close in
   Phase 3.
 - **Code comments state the rule, not its source.** By the user's rule of 2026-11-17, docstrings

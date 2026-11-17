@@ -47,7 +47,11 @@ def _require_show_id(show_id: str) -> None:
 
 
 def _require_new_show_id(show_id: str) -> None:
-    """Refuses a Windows device name for a new show; shows already stored under one still load."""
+    """Refuses a Windows device name for a new show before its folder is looked up.
+
+    On Windows that lookup opens the device itself. Shows already stored under such a name still
+    load and take commits on their head.
+    """
     if is_device_name(show_id):
         raise StorageError(
             f"show id {show_id!r} is a Windows device name and cannot start a new show",
@@ -233,9 +237,9 @@ class DocumentRepository:
         for path in changes:
             split_path(path)
             require_known_path(path)
-        log = self._require_head(show_id, expected_revision)
-        if not log:
+        if expected_revision == ROOT_REVISION:
             _require_new_show_id(show_id)
+        log = self._require_head(show_id, expected_revision)
         old = self._tree(show_id, expected_revision)
         blobs = {digest(d): d for d in changes.values() if d is not None}
         new = {**old, **{p: digest(d) for p, d in changes.items() if d is not None}}
