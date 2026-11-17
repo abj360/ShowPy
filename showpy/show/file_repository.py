@@ -220,11 +220,20 @@ class _FileBackend:
         return value
 
     def _guard_dirs(self, show_id: str) -> None:
+        """Refuses symlinked store directories and reports a file standing in for one as ENOTDIR.
+
+        Windows reports a path through a regular file as missing, not ENOTDIR, so the check runs
+        here instead of relying on the open of a file below it.
+        """
         base = self._dir(show_id)
         for directory in (base, base / OBJECT_DIR, base / TREE_DIR, base / LINK_DIR):
             mode = _lstat_mode(show_id, directory)
-            if mode is not None and stat.S_ISLNK(mode):
+            if mode is None:
+                continue
+            if stat.S_ISLNK(mode):
                 raise self._corrupt(show_id, directory, "directory is a symbolic link")
+            if not stat.S_ISDIR(mode):
+                raise NotADirectoryError(errno.ENOTDIR, os.strerror(errno.ENOTDIR), str(directory))
 
     def _read(self, show_id: str, path: Path, kind: str, cap: int) -> bytes:
         """Reads a regular file of at most `cap` bytes, checking its size before reading."""

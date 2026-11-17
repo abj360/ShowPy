@@ -65,6 +65,8 @@ Contains:
         error for a component over 255 characters to NAME_TOO_LONG
     test_regression_windows_invalid_short_name_stays_io: keeps the Windows invalid-name error IO
         when no component is too long
+    test_regression_file_for_a_directory_is_io_where_the_os_reports_it_missing: reports a file
+        standing in for trees/ as ENOTDIR even where the OS says the path is missing
 """
 
 import contextlib
@@ -791,3 +793,24 @@ def test_regression_windows_invalid_short_name_stays_io(
     with pytest.raises(StorageError) as caught:
         repo.revisions(SHOW_ID)
     assert caught.value.code == "IO"
+
+
+def test_regression_file_for_a_directory_is_io_where_the_os_reports_it_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reports a file standing in for trees/ as ENOTDIR where the OS calls the path missing."""
+    repo, _, base = _saved(tmp_path)
+    shutil.rmtree(base / "trees")
+    (base / "trees").write_bytes(b"not a directory")
+    real_lstat = Path.lstat
+
+    def windows_lstat(path: Path) -> os.stat_result:
+        if path.parent == base / "trees":
+            raise FileNotFoundError(errno.ENOENT, "The system cannot find the path", str(path))
+        return real_lstat(path)
+
+    monkeypatch.setattr(Path, "lstat", windows_lstat)
+    with pytest.raises(StorageError) as caught:
+        repo.revisions(SHOW_ID)
+    assert caught.value.code == "IO"
+    assert caught.value.context["errno"] == errno.ENOTDIR
