@@ -494,8 +494,6 @@ def test_regression_block_rejects_unknown_anchor() -> None:
         block((0.0, 0.0), 2, 2, 1.0, anchor="middle")  # type: ignore[arg-type]
 
 
-@pytest.mark.defect("UP-9.1-57")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-57")
 def test_regression_space_proportional_rejects_zero_length_curves() -> None:
     """Raises SpacingError for all-zero lengths instead of leaking ZeroDivisionError."""
     dots = [Segment(a=(0.0, 0.0), b=(0.0, 0.0)), Segment(a=(1.0, 1.0), b=(1.0, 1.0))]

@@ -211,13 +211,21 @@ def apportion(lengths: Sequence[float], n: int, minimums: Sequence[int] | None =
 def space_proportional(curves: Sequence[Curve], n: int) -> list[Points]:
     """Shares n spots across curves in proportion to length, so intervals match.
 
-    Counts use largest-remainder apportionment; every curve gets at least one spot.
+    Counts use largest-remainder apportionment; every curve gets at least one spot, and at
+    least one curve must have a length.
 
     >>> from showpy.geo.shapes import line
     >>> [len(p) for p in space_proportional([line((0, 0), (4, 0)), line((0, 1), (12, 1))], 6)]
     [2, 4]
     """
-    counts = apportion([c.length() for c in curves], n)
+    lengths = [c.length() for c in curves]
+    if lengths and not any(lengths):
+        raise SpacingError(
+            f"all {len(lengths)} curves have zero length",
+            hint="give at least one curve a length > 0",
+            context={"curves": len(lengths)},
+        )
+    counts = apportion(lengths, n)
     return [space_along(curve, k) for curve, k in zip(curves, counts, strict=True)]
 
 
