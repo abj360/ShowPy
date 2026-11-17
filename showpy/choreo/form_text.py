@@ -372,10 +372,10 @@ def require_member_count(form_id: str, n: int, member_count: int) -> None:
     )
 
 
-EDIT_TEXT_COUNT_HINT = (
+_EDIT_TEXT_COUNT_HINT = (
     "use edit_text_count(form, add=[...], remove=[...], n=...) to change the count"
 )
-COUNT_FIELDS = ("n", "spacing")
+_COUNT_FIELDS = ("n", "spacing")
 
 
 def reject_count_change(form_id: str, changes: Mapping[str, Any]) -> None:
@@ -388,32 +388,43 @@ def reject_count_change(form_id: str, changes: Mapping[str, Any]) -> None:
     Raises:
         SchemaError: `TEXT_COUNT_EDIT`; the hint names `edit_text_count`.
     """
-    for field in COUNT_FIELDS:
+    for field in _COUNT_FIELDS:
         if field in changes:
             raise SchemaError(
                 f"text form {form_id} cannot change {field} through edit",
-                hint=EDIT_TEXT_COUNT_HINT,
+                hint=_EDIT_TEXT_COUNT_HINT,
                 context={"form": form_id, "field": field},
                 code="TEXT_COUNT_EDIT",
             )
 
 
 def resolve_edit_fonts(
-    changes: Mapping[str, Any], font_registry: FontRegistry | None
+    form_id: str, changes: Mapping[str, Any], font_registry: FontRegistry | None
 ) -> dict[str, Any]:
     """Returns the changes with any `fonts` entry resolved to font URIs.
 
     Args:
+        form_id: ID of the form, named in the error.
         changes: The edit's recipe changes.
         font_registry: Registry that resolves the names; None means `bundled_fonts()`.
 
     Returns:
         resolved: The changes; `fonts` holds a list of URIs when it was given.
+
+    Raises:
+        SchemaError: `fonts` is a string or not a list or tuple.
     """
     if "fonts" not in changes:
         return dict(changes)
-    registry = font_registry or bundled_fonts()
-    return {**changes, "fonts": [registry.resolve(font) for font in changes["fonts"]]}
+    fonts = changes["fonts"]
+    if not isinstance(fonts, list | tuple):
+        raise SchemaError(
+            f"text form {form_id} needs fonts as a list, got {type(fonts).__name__}",
+            hint="pass a list of font names or URIs",
+            context={"form": form_id, "field": "fonts"},
+        )
+    registry = bundled_fonts() if font_registry is None else font_registry
+    return {**changes, "fonts": [registry.resolve(font) for font in fonts]}
 
 
 def require_edited_members(form_id: str, n: int, member_count: int) -> None:
@@ -432,7 +443,7 @@ def require_edited_members(form_id: str, n: int, member_count: int) -> None:
     except SpacingError as exc:
         raise SpacingError(
             exc.message,
-            hint=f"{exc.hint}; {EDIT_TEXT_COUNT_HINT}",
+            hint=f"{exc.hint}; {_EDIT_TEXT_COUNT_HINT}",
             context=exc.context,
             code="MEMBER_COUNT_MISMATCH",
         ) from exc

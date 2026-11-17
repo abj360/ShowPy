@@ -58,6 +58,7 @@ from showpy.choreo.form_ops import (
     split_form,
     transform_form,
 )
+from showpy.choreo.form_text import text_recipe, text_strokes
 from showpy.choreo.forms import (
     arc_form,
     block_form,
@@ -429,7 +430,11 @@ def test_edit_text_keeps_members_in_reading_order() -> None:
     assert g.members == f.members
     assert len(slots(g)) == 60
     assert g.geometry["n"] == 60
-    assert placements(g)[0].entity == "S0"
+    first = placements(g)[0]
+    start = text_strokes(text_recipe(g.geometry))[0].point_at(0.0)
+    assert first.entity == "S0"
+    assert (first.x, first.y) == pytest.approx(tuple(start), abs=1e-9)
+    assert not np.allclose(slots(g), slots(f))
 
 
 @pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
@@ -494,6 +499,29 @@ def test_regression_edit_text_form_rejects_a_member_count_change(count: int) -> 
 def test_edit_text_form_allows_reordering_members() -> None:
     f = _text()
     assert edit(f, members=f.members[::-1]).members == f.members[::-1]
+
+
+@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+@pytest.mark.parametrize("fonts", ["hershey-roman", 5])
+def test_edit_text_rejects_fonts_that_are_not_a_list(fonts: Any) -> None:
+    with pytest.raises(SchemaError) as caught:
+        edit(_text(), fonts=fonts)
+    assert caught.value.context == {"form": "go", "field": "fonts"}
+    assert caught.value.hint == "pass a list of font names or URIs"
+
+
+@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+def test_edit_text_fonts_accept_a_user_font_uri_through_the_registry() -> None:
+    registry, uri = register_font(bundled_fonts(), tiny_bytes())
+    members = ["A", "B", "C", "D"]
+    f = text_form(
+        "t", members, "I", fonts=[uri], height=2.0, at=(1, 1), n=4, font_registry=registry
+    )
+    swapped = edit(_text(), fonts=[uri], text="I", font_registry=registry)
+    assert swapped.geometry["fonts"] == [uri]
+    assert edit(f, fonts=[uri], font_registry=registry).geometry["fonts"] == [uri]
+    with pytest.raises(MissingFontError):
+        edit(_text(), fonts=[uri])
 
 
 @pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")

@@ -130,7 +130,7 @@ def edit(
     check_unlocked(form, force)
     if form.kind == "text":
         reject_count_change(form.id, changes)
-        changes = resolve_edit_fonts(changes, font_registry)
+        changes = resolve_edit_fonts(form.id, changes, font_registry)
     fields = {k: v for k, v in changes.items() if k in FORM_FIELDS}
     recipe = {k: v for k, v in changes.items() if k not in FORM_FIELDS}
     geometry = _edited_geometry(form, recipe) if recipe else form.geometry
