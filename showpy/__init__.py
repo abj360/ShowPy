@@ -135,6 +135,7 @@ if TYPE_CHECKING:
         slot_poses,
         slots,
         svg_form,
+        text_form,
         wedge_form,
     )
     from showpy.choreo.match import (
@@ -1254,6 +1255,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "symmetry_score": ("showpy.geo.analysis", "symmetry_score"),
     "template_ref": ("showpy.sheet.surfaces", "template_ref"),
     "tempo_at": ("showpy.time.clock", "tempo_at"),
+    "text_form": ("showpy.choreo.forms", "text_form"),
     "text_outline": ("showpy.geo.shapes", "text_outline"),
     "timer": ("showpy.core.util", "timer"),
     "to_coords": ("showpy.sheet.coords", "to_coords"),
@@ -1814,6 +1816,7 @@ __all__ = [
     "symmetry_score",
     "template_ref",
     "tempo_at",
+    "text_form",
     "text_outline",
     "timer",
     "to_coords",

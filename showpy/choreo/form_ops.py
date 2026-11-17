@@ -40,6 +40,7 @@ from showpy.choreo.forms import (
     slot_poses,
     slots,
     svg_form,
+    text_form,
     wedge_form,
 )
 from showpy.choreo.match import match
@@ -429,4 +430,5 @@ def form_templates() -> dict[str, Callable[..., Form]]:
         "scatter": scatter_form,
         "custom": custom_form,
         "generated": generated_form,
+        "text": text_form,
     }

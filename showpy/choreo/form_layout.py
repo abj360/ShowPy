@@ -24,6 +24,7 @@ import numpy as np
 import shapely
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
+from showpy.choreo.form_text import text_recipe, text_slots
 from showpy.choreo.models import FacingSpec, Form, SpacingSpec
 from showpy.core.errors import SchemaError, SpacingError
 from showpy.core.types import Degrees, Point, Points, Region
@@ -38,6 +39,7 @@ from showpy.geo.curves import (
     CompositeCurve,
     curve_from_construction,
 )
+from showpy.geo.fonts import FontRegistry
 from showpy.geo.spacing import block, fill, scatter, space_proportional
 
 CURVE_KINDS = frozenset({"line", "arc", "curve", "circle", "wedge", "polyline", "svg"})
@@ -255,8 +257,35 @@ def _chord_tangents(pts: Points) -> Points:
     return tangents
 
 
-def layout(form: Form, registry: FormFnRegistry = DEFAULT_FORM_FNS) -> FormLayout:
+def _transformed(lay: FormLayout, matrix: FloatArray) -> FormLayout:
+    pts = transform_points(lay.points, matrix)
+    turned = lay.tangents @ matrix[:2, :2].T
+    lengths = np.linalg.norm(turned, axis=1, keepdims=True)
+    unit = np.divide(turned, lengths, out=np.zeros_like(turned), where=lengths > ZERO_DIRECTION)
+    return FormLayout(points=pts, tangents=unit)
+
+
+def _text_layout(form: Form, font_registry: FontRegistry | None) -> FormLayout:
+    points, tangents = text_slots(
+        text_recipe(form.geometry), _required_count(form), font_registry=font_registry
+    )
+    lay = FormLayout(points=points, tangents=tangents)
+    transform = form.geometry.get("transform")
+    if transform is None:
+        return lay
+    return _transformed(lay, np.asarray(transform, dtype=float))
+
+
+def layout(
+    form: Form,
+    registry: FormFnRegistry = DEFAULT_FORM_FNS,
+    *,
+    font_registry: FontRegistry | None = None,
+) -> FormLayout:
     """Builds a form's slot layout from its recipe, applying any stored `transform`.
+
+    A text form's tangents go through the transform's linear part and are re-normalized to
+    unit length, so `along` facings turn with the text. Other kinds ignore `font_registry`.
 
     >>> from showpy.geo.shapes import line
     >>> f = Form(id="f", set="1", kind="line", members=("A", "B"),
@@ -266,6 +295,8 @@ def layout(form: Form, registry: FormFnRegistry = DEFAULT_FORM_FNS) -> FormLayou
     """
     if form.kind in CURVE_KINDS:
         return _curve_layout(form)
+    if form.kind == "text":
+        return _text_layout(form, font_registry)
     pts = RAW_POINTS[form.kind](form, registry)
     transform = form.geometry.get("transform")
     if transform is not None:

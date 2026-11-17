@@ -16,6 +16,7 @@ from scipy.spatial import cKDTree
 from showpy.choreo.form_text import (
     COINCIDENT_TOL_M,
     LEGIBLE_SPACING_SHARE,
+    MAX_TEXT_SPOTS,
     min_text_spots,
     text_recipe,
     text_slots,
@@ -225,3 +226,18 @@ def test_text_recipe_rejects_unknown_keys() -> None:
         text_recipe(geometry(spacing=1.0))
     assert caught.value.context["field"] == "spacing"
     assert "text" in caught.value.hint
+
+
+def test_regression_text_slots_cap_the_spot_count() -> None:
+    with pytest.raises(SpacingError) as caught:
+        text_slots(recipe("HI"), 10**12)
+    assert caught.value.code == "TOO_MANY_SPOTS"
+    assert caught.value.context["n"] == 10**12
+    assert caught.value.context["max_n"] == MAX_TEXT_SPOTS
+    assert "split the text" in caught.value.hint
+
+
+@pytest.mark.parametrize("n", [0, -3, True, 2.0])
+def test_text_slots_reject_counts_below_one_before_layout(n: object) -> None:
+    with pytest.raises(SpacingError):
+        text_slots(recipe("HI"), n)  # type: ignore[arg-type]

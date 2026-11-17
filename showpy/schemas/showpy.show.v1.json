@@ -524,7 +524,8 @@
         "fill",
         "scatter",
         "custom",
-        "generated"
+        "generated",
+        "text"
       ],
       "type": "string"
     },

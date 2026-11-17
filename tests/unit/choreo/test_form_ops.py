@@ -275,7 +275,7 @@ def test_pinwheel_rotates_every_spoke() -> None:
 def test_form_templates_cover_every_kind() -> None:
     assert set(form_templates()) == {
         "line", "arc", "curve", "circle", "block", "wedge", "polyline", "svg", "fill",
-        "scatter", "custom", "generated",
+        "scatter", "custom", "generated", "text",
     }  # fmt: skip
 
 

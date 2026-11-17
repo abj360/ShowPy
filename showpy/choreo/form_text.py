@@ -10,10 +10,12 @@ Contains:
     STROKE_MINIMUM_CLOSED: spots a closed stroke needs to read as a loop
     LEGIBLE_SPACING_SHARE: largest spot spacing that still reads, as a share of the cap height
     COINCIDENT_TOL_M: smallest distance allowed between two slots
+    MAX_TEXT_SPOTS: most spots one text form may have
     text_recipe(): validates a text form's stored geometry into a TextRecipe
     text_strokes(): lays a recipe out and returns its visible strokes in reading order
     min_text_spots(): counts the spots the strokes need at least
     text_slots(): places exactly n slots on the strokes, with unit tangents
+    require_member_count(): rejects a text form whose member count differs from its slot count
 """
 
 import math
@@ -48,6 +50,7 @@ STROKE_MINIMUM_CLOSED = 3
 # above half the cap height loses the middle spot.
 LEGIBLE_SPACING_SHARE = 0.5
 COINCIDENT_TOL_M = 1e-6
+MAX_TEXT_SPOTS = 10_000
 SHARED_KEYS = frozenset({"n", "transform"})
 NEIGHBOR_CELLS = tuple((dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1))
 FIELD_HINTS: Mapping[str, str] = MappingProxyType(
@@ -213,13 +216,23 @@ def min_text_spots(strokes: Sequence[Curve]) -> int:
     return sum(_stroke_minimum(stroke) for stroke in strokes)
 
 
-def _require_count(n: int, min_n: int, text: str) -> None:
-    if isinstance(n, bool) or not isinstance(n, Integral):
+def _require_whole_count(n: int) -> None:
+    if isinstance(n, bool) or not isinstance(n, Integral) or n < 1:
         raise SpacingError(
-            "n must be a whole number",
-            hint=f"pass n as an int >= {min_n}",
-            context={"n": bounded_repr(n), "min_n": min_n},
+            "n must be a whole number of at least 1",
+            hint="pass n as an int >= 1",
+            context={"n": bounded_repr(n)},
         )
+    if n > MAX_TEXT_SPOTS:
+        raise SpacingError(
+            f"{n} spots is over the cap of {MAX_TEXT_SPOTS} for one text form",
+            hint=f"use n <= {MAX_TEXT_SPOTS} or split the text into several forms",
+            context={"n": n, "max_n": MAX_TEXT_SPOTS},
+            code="TOO_MANY_SPOTS",
+        )
+
+
+def _require_count(n: int, min_n: int, text: str) -> None:
     if n < min_n:
         raise SpacingError(
             f"{n} spots cannot draw this text; its strokes need at least {min_n}",
@@ -302,7 +315,8 @@ def text_slots(
             stored transform.
 
     Raises:
-        SpacingError: `TOO_FEW_SPOTS` when n is below `min_text_spots`.
+        SpacingError: `TOO_MANY_SPOTS` when n is over `MAX_TEXT_SPOTS`, checked before any
+            layout; `TOO_FEW_SPOTS` when n is below `min_text_spots`.
         GeometryError: `COINCIDENT_SLOTS` when a stroke has no spread that keeps slots apart.
 
     >>> from showpy.geo.fonts import bundled_fonts
@@ -312,6 +326,7 @@ def text_slots(
     >>> points.shape, points[0].tolist()
     ((36, 2), [0.0, 10.0])
     """
+    _require_whole_count(n)
     glyphs = _laid_strokes(recipe, font_registry)
     strokes = [stroke for glyph in glyphs for stroke in glyph.strokes]
     chars = [glyph.char for glyph in glyphs for _ in glyph.strokes]
@@ -325,3 +340,30 @@ def text_slots(
     ]
     _warn_if_sparse(strokes, counts, recipe.height)
     return np.vstack([points for points, _ in placed]), np.vstack([tan for _, tan in placed])
+
+
+def require_member_count(form_id: str, n: int, member_count: int) -> None:
+    """Rejects a text form whose member count differs from its slot count.
+
+    A text form never has open slots: member i stands on slot i, and every slot has a member.
+
+    Args:
+        form_id: ID of the form, named in the error.
+        n: Slots the form has.
+        member_count: Members the form lists.
+
+    Raises:
+        SpacingError: `MEMBER_COUNT_MISMATCH`; the hint says how many spots to add or remove.
+
+    >>> require_member_count("go", 24, 24)
+    """
+    if member_count == n:
+        return
+    gap = abs(n - member_count)
+    hint = f"add {gap} more spots" if member_count < n else f"remove {gap} spots"
+    raise SpacingError(
+        f"text form {form_id} has {member_count} members for {n} slots",
+        hint=hint,
+        context={"form": form_id, "n": n, "members": member_count},
+        code="MEMBER_COUNT_MISMATCH",
+    )

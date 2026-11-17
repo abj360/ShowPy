@@ -11,13 +11,15 @@ whose keys depend on `Form.kind`:
     scatter:   {"region": <Region dict>, "min_gap", "seed"}
     custom:    {"points": [[x, y], ...], "facings": [deg, ...] | null}
     generated: {"fn": <registered name>, "params": {...}}
+    text:      TextRecipe fields: {"text", "fonts" (URIs), "mode", "height", "at", "rotation",
+               "align", "anchor", "letter_spacing", "line_spacing"}; "n" is always stored
 
 Every recipe may also hold `"n"`, the slot count; without it a form has one slot per member
 (interval spacing places as many as fit, a block has rows x cols, a custom form one per
 point, a fill every lattice point). Non-curve recipes may hold `"transform"`, a 3x3 affine
 matrix applied to the generated points, which keeps gated or mirrored forms editable.
 Members fill slots in order: member i stands on slot i; slots past the last member are
-open for `place` to fill.
+open for `place` to fill, except in a text form, which has exactly one member per slot.
 
 Contains:
     check_unlocked(): raises LockedError when a form is locked and force is not given
@@ -33,6 +35,7 @@ Contains:
     scatter_form(): builds an organic scatter form
     custom_form(): builds a form of frozen hand-placed spots
     generated_form(): builds a form from a registered shape generator
+    text_form(): builds a form that writes text on the field, one member per slot
     edit_params(): returns a generated form with changed generator parameters
     slots(): returns a form's slot positions
     slot_poses(): returns every slot's position and facing
@@ -46,13 +49,16 @@ import shapely
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
 from showpy.choreo.form_layout import layout, member_facings, slot_count
-from showpy.choreo.models import FacingSpec, Form, FormKind, Placement, SpacingSpec
+from showpy.choreo.form_text import require_member_count
+from showpy.choreo.models import FacingSpec, Form, FormKind, Placement, SpacingSpec, TextRecipe
 from showpy.core.errors import LockedError, SchemaError, SpacingError
 from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.types import Box2, Degrees, Meters, Point, Points, Region
 from showpy.core.util import as_points
 from showpy.geo.curve_base import Curve
 from showpy.geo.curves import AnyCurve, CompositeCurve
+from showpy.geo.fonts import FontRegistry, bundled_fonts
+from showpy.geo.models import DEFAULT_LINE_SPACING, TextAlign, TextAnchor
 from showpy.geo.regions import region
 from showpy.geo.shapes import arc, circle, curve_through, line, polyline, svg_outline, wedge
 from showpy.geo.spacing import BlockAnchor, FillPattern
@@ -389,6 +395,73 @@ def generated_form(
     return form
 
 
+def text_form(
+    form_id: FormId,
+    members: Sequence[SpotId],
+    text: str,
+    *,
+    fonts: Sequence[str],
+    height: Meters,
+    at: Point,
+    rotation: Degrees = 0.0,
+    align: TextAlign = "left",
+    anchor: TextAnchor = "baseline",
+    letter_spacing: float = 0.0,
+    line_spacing: float = DEFAULT_LINE_SPACING,
+    facing: FacingSpec | None = None,
+    set_id: SetId = "",
+    n: int,
+    font_registry: FontRegistry | None = None,
+) -> Form:
+    r"""Builds a form that writes `text` on the field with exactly `n` spots, one per member.
+
+    Fonts are stored as URIs, so the recipe names the exact font bytes. Member i stands on
+    slot i in reading order; a text form needs exactly `n` members.
+
+    Args:
+        form_id: ID of the new form.
+        members: Spots in slot order; there must be exactly `n`.
+        text: Characters to write, `\n` between lines.
+        fonts: Font names or URIs, first choice first.
+        height: Cap height in meters.
+        at: Layout point on the stage plane.
+        rotation: Degrees counter-clockwise about `at`.
+        align: Where each line sits horizontally on `at`.
+        anchor: Which line of the text block sits vertically on `at`.
+        letter_spacing: Extra gap between glyphs, in ems of the first font.
+        line_spacing: Baseline-to-baseline distance, in ems of the first font.
+        facing: Facing spec, or None for audience.
+        set_id: Set the form belongs to.
+        n: Number of spots; at least the text's stroke minimum.
+        font_registry: Registry that resolves the fonts; None means `bundled_fonts()`.
+
+    Raises:
+        SpacingError: `TOO_FEW_SPOTS`, `TOO_MANY_SPOTS` or `MEMBER_COUNT_MISMATCH`.
+        MissingFontError: A font is not in the registry.
+
+    >>> go = text_form("go", [f"S{i}" for i in range(24)], "GO", fonts=["hershey-roman"],
+    ...     height=4.0, at=(0, 10), n=24)
+    >>> len(slots(go))
+    24
+    """
+    fonts_registry = font_registry or bundled_fonts()
+    recipe = TextRecipe(
+        text=text,
+        fonts=tuple(fonts_registry.resolve(font) for font in fonts),
+        height=height,
+        at=at,
+        rotation=rotation,
+        align=align,
+        anchor=anchor,
+        letter_spacing=letter_spacing,
+        line_spacing=line_spacing,
+    )
+    form = _form(form_id, "text", recipe.model_dump(mode="json"), members, None, facing, set_id, n)
+    layout(form, font_registry=font_registry)
+    require_member_count(form_id, n, len(members))
+    return form
+
+
 # Any: generator parameters are JSON values defined by each generator.
 def edit_params(
     form: Form, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS, **params: Any
@@ -413,13 +486,20 @@ def edit_params(
     return edited
 
 
-def slots(form: Form, registry: FormFnRegistry = DEFAULT_FORM_FNS) -> Points:
+def slots(
+    form: Form,
+    registry: FormFnRegistry = DEFAULT_FORM_FNS,
+    *,
+    font_registry: FontRegistry | None = None,
+) -> Points:
     """Returns slot positions (N, 2) in slot order, before members are assigned.
+
+    `font_registry` holds a text form's fonts; None means `bundled_fonts()`.
 
     >>> slots(line_form("f", [], (0, 0), (2, 0), n=2)).tolist()
     [[0.0, 0.0], [2.0, 0.0]]
     """
-    return layout(form, registry).points
+    return layout(form, registry, font_registry=font_registry).points
 
 
 def _stored_facings(form: Form) -> list[Degrees] | None:
@@ -429,25 +509,37 @@ def _stored_facings(form: Form) -> list[Degrees] | None:
 
 
 def slot_poses(
-    form: Form, registry: FormFnRegistry = DEFAULT_FORM_FNS
+    form: Form,
+    registry: FormFnRegistry = DEFAULT_FORM_FNS,
+    *,
+    font_registry: FontRegistry | None = None,
 ) -> tuple[Points, list[Degrees]]:
     """Returns every slot's position and facing, members or not.
+
+    `font_registry` holds a text form's fonts; None means `bundled_fonts()`.
 
     >>> pts, facings = slot_poses(circle_form("f", [], (0, 0), 1.0, n=2))
     >>> facings
     [90.0, 270.0]
     """
-    lay = layout(form, registry)
+    lay = layout(form, registry, font_registry=font_registry)
     return lay.points, _stored_facings(form) or member_facings(form.facing, lay)
 
 
-def placements(form: Form, registry: FormFnRegistry = DEFAULT_FORM_FNS) -> list[Placement]:
+def placements(
+    form: Form,
+    registry: FormFnRegistry = DEFAULT_FORM_FNS,
+    *,
+    font_registry: FontRegistry | None = None,
+) -> list[Placement]:
     """Regenerates one placement per member from the form's recipe, spacing and facing.
+
+    `font_registry` holds a text form's fonts; None means `bundled_fonts()`.
 
     >>> [(p.entity, p.x, p.order) for p in placements(line_form("f", ["A", "B"], (0, 0), (2, 0)))]
     [('A', 0.0, 0), ('B', 2.0, 1)]
     """
-    pts, facings = slot_poses(form, registry)
+    pts, facings = slot_poses(form, registry, font_registry=font_registry)
     if len(form.members) > len(pts):
         raise SpacingError(
             f"form {form.id} has {len(form.members)} members but {len(pts)} slots",

@@ -319,7 +319,7 @@ class TextRecipe(FrozenModel):
 
 type FormKind = Literal[
     "line", "arc", "curve", "circle", "block", "wedge", "polyline", "svg", "fill", "scatter",
-    "custom", "generated",
+    "custom", "generated", "text",
 ]  # fmt: skip
 
 
