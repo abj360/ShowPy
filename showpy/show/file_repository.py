@@ -25,6 +25,7 @@ from typing import Any, BinaryIO, cast
 
 from showpy.core.errors import StorageError
 from showpy.show.documents import dump_json
+from showpy.show.integrity import blob_digest
 from showpy.show.models import Revision
 from showpy.show.repositories import DocumentRepository, conflict_error
 
@@ -271,7 +272,10 @@ class _FileBackend:
         self._guard_dirs(show_id)
         objects = self._dir(show_id) / OBJECT_DIR
         path = objects / self._checked_id(show_id, digest, objects)
-        return self._read(show_id, path, "blob", BLOB_MAX_BYTES)
+        data = self._read(show_id, path, "blob", BLOB_MAX_BYTES)
+        if blob_digest(data) != digest:
+            raise self._corrupt(show_id, path, "blob bytes do not match their digest")
+        return data
 
     @_guarded
     def commit(

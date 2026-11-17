@@ -48,6 +48,8 @@ Contains:
         tree record or blob by its size, naming the kind and cap but not the content
     test_regression_file_growing_after_its_size_check_is_corrupt: refuses a file that grew after
         fstat reported its size
+    test_regression_swapped_blob_is_corrupt_naming_its_file: reports a blob whose bytes miss their
+        digest as CORRUPT with the object path
 """
 
 import errno
@@ -167,8 +169,6 @@ def test_regression_missing_hard_links_are_a_storage_error(
     assert repo.head(SHOW_ID) == rev
 
 
-@pytest.mark.defect("UP-9.7-26")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-26")
 def test_regression_swapped_blob_is_reported_corrupt(tmp_path: Path) -> None:
     """Reports a swapped blob as corrupt by verifying its hash on read (audit 9.7 item 10)."""
     repo, _, base = _saved(tmp_path)
@@ -532,3 +532,15 @@ def test_regression_file_growing_after_its_size_check_is_corrupt(
         repo.revisions(SHOW_ID)
     assert caught.value.code == CORRUPT
     assert "link grew while it was read" in caught.value.message
+
+
+def test_regression_swapped_blob_is_corrupt_naming_its_file(tmp_path: Path) -> None:
+    """Reports a blob whose bytes miss their digest as CORRUPT with the object path."""
+    repo, rev, base = _saved(tmp_path)
+    blob_path = base / "objects" / repo.backend.tree(SHOW_ID, rev)[SHOW_DOC]
+    blob_path.write_bytes(blob_path.read_bytes() + b" ")
+    with pytest.raises(StorageError) as caught:
+        repo.get_show(SHOW_ID)
+    assert caught.value.code == CORRUPT
+    assert caught.value.context["path"] == str(blob_path)
+    assert "do not match their digest" in caught.value.message
