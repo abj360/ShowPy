@@ -24,7 +24,7 @@ from showpy.core.types import Points
 from showpy.core.util import approx_equal
 from showpy.geo.curves import Polyline, SvgCurve
 from showpy.geo.fonts import FontRegistry, bundled_fonts, register_font
-from showpy.geo.models import Font, LaidGlyph, TextAlign
+from showpy.geo.models import Font, LaidGlyph, TextAlign, TextAnchor
 from showpy.geo.text_layout import MAX_LAYOUT_CHARS, layout_text
 from tests.fixtures.fonts import TINY, tiny_bytes
 
@@ -35,6 +35,7 @@ RELIEF = ["relief-singleline"]
 TINY_REGISTRY, TINY_URI = register_font(bundled_fonts(), tiny_bytes())
 SIMPLEX_ADVANCE = 5.0
 SIMPLEX_H_INK = 4.0
+ANCHORS: tuple[TextAnchor, ...] = ("baseline", "middle", "top")
 ALIGN_SHARES: tuple[tuple[TextAlign, float], ...] = (("center", 0.5), ("right", 1.0))
 
 
@@ -243,3 +244,12 @@ def test_regression_huge_finite_values_raise_showpy_error() -> None:
         arguments = {"fonts": SIMPLEX, **call}
         with pytest.raises(GeometryError):
             layout_text(**arguments)  # type: ignore[arg-type]
+
+
+def test_layout_drops_trailing_empty_lines() -> None:
+    """Lays "H\\n" out exactly like "H" for every anchor; interior empty lines stay."""
+    for anchor in ANCHORS:
+        plain = layout_text("H", SIMPLEX, 1.0, (0.0, 0.0), anchor=anchor)
+        for text in ("H\n", "H\n\n", "H\r\n"):
+            assert layout_text(text, SIMPLEX, 1.0, (0.0, 0.0), anchor=anchor) == plain
+    assert [glyph.line for glyph in layout_text("H\n\nH", SIMPLEX, 1.0, (0.0, 0.0))] == [0, 2]

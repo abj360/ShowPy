@@ -76,6 +76,16 @@ def _check_numbers(
 
 
 def _chain(fonts: Sequence[str], registry: FontRegistry, height: Meters) -> list[_ChainFont]:
+    """Resolves every font in the chain, used or not, with its scale to the cap height.
+
+    Args:
+        fonts: Font names or URIs as the caller passed them.
+        registry: Registry holding the fonts.
+        height: Cap height in meters that every font is scaled to.
+
+    Returns:
+        chain: One entry per font, in chain order, with `scale = height / cap`.
+    """
     if not fonts:
         raise SchemaError(
             "the font chain is empty",
@@ -98,6 +108,7 @@ def _chain(fonts: Sequence[str], registry: FontRegistry, height: Meters) -> list
 
 
 def _pick(char: str, chain: Sequence[_ChainFont], fonts: Sequence[str]) -> _ChainFont:
+    """Returns the first chain font with a glyph for `char`, or raises a teaching GlyphError."""
     for entry in chain:
         if char in entry.font.glyphs:
             return entry
@@ -112,6 +123,17 @@ def _pick(char: str, chain: Sequence[_ChainFont], fonts: Sequence[str]) -> _Chai
 def _place_line(
     line: str, chain: Sequence[_ChainFont], fonts: Sequence[str], gap: Meters
 ) -> tuple[list[_Placed], Meters]:
+    """Places each character of one line along a cursor that starts at 0.
+
+    Args:
+        line: Characters of the line, without line breaks.
+        chain: Resolved fallback chain.
+        fonts: Chain as the caller passed it, named in a GlyphError.
+        gap: Extra space in meters between glyphs, none after the last.
+
+    Returns:
+        placed: Each glyph with its font and cursor x, and the line's advance width.
+    """
     placed = []
     cursor = 0.0
     width = 0.0
@@ -142,6 +164,7 @@ def _stroke(subpath: Subpath, matrix: Matrix, d: str) -> Polyline | SvgCurve:
 
 
 def _glyph_strokes(placed: _Placed, matrix: Matrix) -> tuple[Polyline | SvgCurve, ...]:
+    """Maps every stroke of a placed glyph, rejecting a stroke that is not one subpath."""
     strokes = []
     for d in placed.glyph.strokes:
         subpaths = parse_path(d)
@@ -159,7 +182,10 @@ def _split_lines(text: str) -> list[str]:
     normalized = unicodedata.normalize("NFC", text)
     for old, new in LINE_BREAKS:
         normalized = normalized.replace(old, new)
-    return normalized.split("\n")
+    lines = normalized.split("\n")
+    while len(lines) > 1 and not lines[-1]:
+        lines.pop()
+    return lines
 
 
 def _lay_line(
@@ -200,8 +226,10 @@ def layout_text(
 ) -> tuple[LaidGlyph, ...]:
     r"""Lays multi-line text out as glyph strokes on the stage plane, in reading order.
 
-    The text is NFC-normalized and `\r\n` or `\r` count as one line break. Its length is
-    checked against `MAX_LAYOUT_CHARS` before normalization, which at most triples it.
+    `MAX_LAYOUT_CHARS` bounds the raw input characters, checked before NFC normalization, which
+    at most triples them. Then `\r\n` or `\r` count as one line break, and empty lines at the
+    end of the text are dropped; interior empty lines stay as spacing. Every font in the chain
+    is resolved, even one no character uses.
 
     Args:
         text: Characters to lay out; `\n` starts a new line.
