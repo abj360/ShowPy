@@ -8,6 +8,8 @@ Contains:
         show document
     test_regression_commit_refuses_unknown_root: refuses a commit under a root no reader can open
     test_any_valid_write_lands: lands an agent workspace write to the limits file
+    test_regression_derived_tables_are_read_only: refuses writes to the derived index and
+        placement tables
     test_regression_reading_root_is_a_library_error: raises a ShowPyError, not IndexError, when
         reading the root path
     test_regression_invalid_utf8_text_file_is_a_library_error: maps invalid UTF-8 in a text file to
@@ -19,7 +21,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from showpy.core.errors import ShowPyError
+from showpy.core.errors import LockedError, ShowPyError
 from showpy.show.documents import SHOW_DOC
 from showpy.show.storage import Workspace
 from tests.fixtures.shows import two_set_show
@@ -64,6 +66,15 @@ def test_any_valid_write_lands() -> None:
     revision = agent.write("/config/limits.yaml", "max_speed: 99\n", at=LATER)
     assert agent.revision == revision.id
     assert agent.read("/config/limits.yaml") == "max_speed: 99\n"
+
+
+@pytest.mark.parametrize("path", ["/show/index.csv", "/sets/1/placements.csv"])
+def test_regression_derived_tables_are_read_only(path: str) -> None:
+    agent, designer = _session()
+    for ws in (agent, designer):
+        with pytest.raises(LockedError) as info:
+            ws.write(path, "entity\n", at=LATER)
+        assert info.value.code == "READ_ONLY"
 
 
 @pytest.mark.defect("UP-9.7-18")
