@@ -5,6 +5,8 @@ Contains:
     REVISION_ID_PATTERN: matches the 64-digit hex IDs allowed in next/ links and tree digests
     LEGACY_REVISION_KEYS: names the authorship keys v0.1 and v0.2 stored in revision records
     NO_HARDLINK_ERRNOS: lists the errno values meaning the file system cannot hard-link
+    WINDOWS_INVALID_NAME: names the Windows error code for an unusable path component
+    COMPONENT_MAX_CHARS: caps the length of one path component on NTFS
     READ_FLAGS: opens stored files without following symlinks or blocking on FIFOs
     SYMLINK_OPEN_ERRNOS: lists the errno values an O_NOFOLLOW open of a symlink raises
     LINK_MAX_BYTES: caps the size of a next/ link file read
@@ -39,6 +41,11 @@ TEMP_PREFIX = ".tmp-"
 REVISION_ID_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 LEGACY_REVISION_KEYS = frozenset({"actor", "message", "kind", "target"})
 NO_HARDLINK_ERRNOS = frozenset({errno.EPERM, errno.EXDEV, errno.ENOTSUP})
+# Windows has no ENAMETOOLONG for a component over 255 characters: with long paths enabled it
+# raises ERROR_INVALID_NAME (errno EINVAL), which also covers bad characters, so the length
+# decides. NTFS caps one component at 255 UTF-16 units.
+WINDOWS_INVALID_NAME = 123
+COMPONENT_MAX_CHARS = 255
 # A file swapped in between the lstat check and the open must not be followed (symlink) or
 # block the open (FIFO), so the open itself refuses both and fstat checks the descriptor.
 # Windows has neither flag; there only the lstat check guards, and creating symlinks needs
@@ -93,14 +100,22 @@ def _link_exclusive(show_id: str, path: Path, data: bytes) -> bool:
     return True
 
 
+def _is_name_too_long(error: OSError, path: str) -> bool:
+    if error.errno == errno.ENAMETOOLONG:
+        return True
+    return getattr(error, "winerror", None) == WINDOWS_INVALID_NAME and any(
+        len(part) > COMPONENT_MAX_CHARS for part in Path(path).parts
+    )
+
+
 def _storage_error(show_id: str, error: OSError, fallback: Path, is_link: bool) -> StorageError:
     path = str(error.filename or fallback)
     context: dict[str, object] = {"show": show_id, "path": path, "errno": error.errno}
-    if error.errno == errno.ENAMETOOLONG:
+    if _is_name_too_long(error, path):
         return StorageError(
             f"name too long for {show_id}: {path}",
             hint="use a shorter show ID or a repository root with a shorter path",
-            context=context,
+            context={**context, "errno": errno.ENAMETOOLONG},
             code="NAME_TOO_LONG",
         )
     if is_link and (isinstance(error, PermissionError) or error.errno in NO_HARDLINK_ERRNOS):

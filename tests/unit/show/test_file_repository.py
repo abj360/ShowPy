@@ -61,6 +61,10 @@ Contains:
     test_regression_backend_refuses_a_malformed_blob_digest: blames the caller for a malformed blob
         digest passed to commit
     test_regression_stored_malformed_id_stays_corrupt: keeps CORRUPT for a malformed stored ID
+    test_regression_windows_overlong_component_is_name_too_long: maps the Windows invalid-name
+        error for a component over 255 characters to NAME_TOO_LONG
+    test_regression_windows_invalid_short_name_stays_io: keeps the Windows invalid-name error IO
+        when no component is too long
 """
 
 import contextlib
@@ -738,3 +742,52 @@ def test_regression_plain_fifo_as_link_or_record_is_corrupt_without_blocking(
         repo.backend.log(SHOW_ID)
     assert caught.value.code == CORRUPT
     assert NOT_REGULAR in caught.value.message
+
+
+ERROR_INVALID_NAME = 123
+OVERLONG_ID = "a" * 300
+
+
+class _WindowsInvalidNameError(OSError):
+    """Stands in for the error Windows raises for an unusable path component."""
+
+    winerror = ERROR_INVALID_NAME
+
+
+def _windows_invalid_name_for(monkeypatch: pytest.MonkeyPatch, component: str) -> None:
+    """Makes os.lstat fail as Windows does for any path containing `component`."""
+    real_lstat = os.lstat
+
+    def lstat(path: str | Path, **kwargs: Any) -> os.stat_result:
+        if component in Path(path).parts:
+            raise _WindowsInvalidNameError(errno.EINVAL, "Invalid argument", str(path))
+        return real_lstat(path, **kwargs)
+
+    monkeypatch.setattr(os, "lstat", lstat)
+
+
+def test_regression_windows_overlong_component_is_name_too_long(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Maps the Windows invalid-name error for a 300-character component to NAME_TOO_LONG."""
+    repo, _, _ = _saved(tmp_path)
+    _windows_invalid_name_for(monkeypatch, OVERLONG_ID)
+    for call in (
+        lambda: repo.revisions(OVERLONG_ID),
+        lambda: repo.put_show(OVERLONG_ID, two_set_show(), expected_revision="", at=AT),
+    ):
+        with pytest.raises(StorageError) as caught:
+            call()
+        assert caught.value.code == "NAME_TOO_LONG"
+        assert caught.value.context["errno"] == errno.ENAMETOOLONG
+
+
+def test_regression_windows_invalid_short_name_stays_io(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keeps the Windows invalid-name error IO when no path component is too long."""
+    repo, _, _ = _saved(tmp_path)
+    _windows_invalid_name_for(monkeypatch, SHOW_ID)
+    with pytest.raises(StorageError) as caught:
+        repo.revisions(SHOW_ID)
+    assert caught.value.code == "IO"
