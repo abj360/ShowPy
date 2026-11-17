@@ -49,11 +49,26 @@ DEFAULT_ROUTE_ID = "route"
 
 
 def _dedupe(points: Sequence[Point]) -> tuple[Point, ...]:
+    return _dedupe_indexed(points)[0]
+
+
+def _dedupe_indexed(points: Sequence[Point]) -> tuple[tuple[Point, ...], list[int]]:
+    """Drops consecutive repeats and maps every input point to the vertex that kept it.
+
+    A route may pass one place twice, so a point's vertex comes from its position in the
+    sequence, never from looking its coordinates up.
+
+    Returns:
+        vertices: The points with consecutive repeats removed.
+        vertex_of: For each input point, the index of its vertex in `vertices`.
+    """
     kept: list[Point] = []
+    vertex_of: list[int] = []
     for p in points:
         if not kept or math.dist(kept[-1], p) > MIN_GAP:
             kept.append((float(p[0]), float(p[1])))
-    return tuple(kept)
+        vertex_of.append(len(kept) - 1)
+    return tuple(kept), vertex_of
 
 
 def _cumulative(points: Sequence[Point]) -> list[float]:
@@ -90,7 +105,7 @@ def make_route(
     start_set = show.set(tid[0])
     starts = [start_set.get(m).point for m in reversed(file)]
     ahead = list(waypoints) or [show.set(tid[1]).get(leader).point]
-    vertices = _dedupe([*starts, *ahead])
+    vertices, vertex_of = _dedupe_indexed([*starts, *ahead])
     if len(vertices) < 2:
         raise PathError(
             "the route is a single point",
@@ -98,7 +113,7 @@ def make_route(
             context={"leader": leader},
         )
     lengths = _cumulative(vertices)
-    offsets = tuple(lengths[vertices.index(_dedupe([start_set.get(m).point])[0])] for m in file)
+    offsets = tuple(lengths[v] for v in reversed(vertex_of[: len(file)]))
     curve = (
         Polyline(points=vertices) if len(vertices) > 2 else Segment(a=vertices[0], b=vertices[1])
     )
