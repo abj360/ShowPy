@@ -5,14 +5,18 @@ test_text_layout.py --- tests multi-line text layout with a per-character font f
 
 Contains:
     test_*(): one behavior of showpy.geo.text_layout.layout_text each
+    test_regression_worst_legal_text_stays_within_its_work_budget(): bounds the curve work of
+        the heaviest text the piece caps allow (slow)
 """
 
 import math
+import time
 from collections.abc import Iterable
 
 import numpy as np
 import pytest
 
+from showpy.choreo.forms import text_form
 from showpy.core.errors import (
     FontError,
     GeometryError,
@@ -24,11 +28,19 @@ from showpy.core.readonly import ReadOnlyMap
 from showpy.core.types import Points
 from showpy.core.util import approx_equal
 from showpy.geo import text_layout
-from showpy.geo.curves import Polyline, SvgCurve
-from showpy.geo.fonts import MAX_GLYPH_PIECES, FontRegistry, bundled_fonts, register_font
+from showpy.geo.curves import SVG_SAMPLES_PER_PIECE, Polyline, SvgCurve
+from showpy.geo.fonts import (
+    MAX_GLYPH_PIECES,
+    MAX_STROKE_PIECES,
+    FontRegistry,
+    bundled_fonts,
+    register_font,
+)
 from showpy.geo.models import Font, LaidGlyph, TextAlign, TextAnchor
+from showpy.geo.svg import parse_path
 from showpy.geo.text_layout import (
     MAX_LAYOUT_CHARS,
+    MAX_LAYOUT_CURVE_PIECES,
     MAX_LAYOUT_EXTENT_M,
     MAX_LAYOUT_PIECES,
     layout_text,
@@ -46,6 +58,9 @@ ANCHORS: tuple[TextAnchor, ...] = ("baseline", "middle", "top")
 SWEEP_HEIGHTS = (1.0, 4e5, 1e300, 1e305)
 SWEEP_ORIGINS = ((0.0, 0.0), (1.7e308, 1.7e308), (-1.7e308, -1.7e308))
 LARGEST_ACCEPTED_HEIGHT = 4e5
+WORK_BUDGET_SAMPLES = 16_000_000
+# Measured about 4 s on 2026-11-17; the bound only catches a return of the quadratic cost.
+WORST_TEXT_SECONDS = 30.0
 ALIGN_SHARES: tuple[tuple[TextAlign, float], ...] = (("center", 0.5), ("right", 1.0))
 
 
@@ -237,7 +252,8 @@ def test_regression_layout_text_caps_the_laid_pieces(monkeypatch: pytest.MonkeyP
     U+0344 normalizes to two combining marks, so text under MAX_LAYOUT_CHARS can lay out more
     glyphs than it has characters.
     """
-    heavy = {"advance": 4, "strokes": [_zigzag(MAX_GLYPH_PIECES)]}
+    straight = [_zigzag(MAX_STROKE_PIECES), _zigzag(MAX_GLYPH_PIECES - MAX_STROKE_PIECES)]
+    heavy = {"advance": 4, "strokes": straight}
     glyphs = {"\u0308": heavy, "\u0301": heavy}
     registry, _ = register_font(bundled_fonts(), tiny_bytes(glyphs=glyphs))
     copies = MAX_LAYOUT_PIECES // (2 * MAX_GLYPH_PIECES) + 1
@@ -247,6 +263,54 @@ def test_regression_layout_text_caps_the_laid_pieces(monkeypatch: pytest.MonkeyP
     assert caught.value.context["requested"] == 2 * copies * MAX_GLYPH_PIECES
     assert caught.value.context["cap"] == MAX_LAYOUT_PIECES
     assert "shorten the text" in caught.value.hint
+
+
+def _curl(pieces: int) -> str:
+    return "M0 0 " + " ".join(f"Q{i % 2} {i + 0.5} {(i + 1) % 2} {i + 1}" for i in range(pieces))
+
+
+def test_regression_layout_text_caps_the_curved_pieces(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rejects text whose curved strokes hold over MAX_LAYOUT_CURVE_PIECES before building one.
+
+    Curved strokes become SvgCurve tables, which cost far more per piece than straight ones.
+    """
+    curl = {"advance": 4, "strokes": [_curl(MAX_STROKE_PIECES)]}
+    registry, _ = register_font(bundled_fonts(), tiny_bytes(glyphs={"I": curl}))
+    copies = MAX_LAYOUT_CURVE_PIECES // MAX_STROKE_PIECES + 1
+    assert copies * MAX_STROKE_PIECES <= MAX_LAYOUT_PIECES
+    monkeypatch.setattr(text_layout, "SvgCurve", _refuse_strokes)
+    with pytest.raises(SchemaError) as caught:
+        layout_text("I" * copies, ["tiny"], 1.0, (0.0, 0.0), font_registry=registry)
+    assert caught.value.context["requested"] == copies * MAX_STROKE_PIECES
+    assert caught.value.context["cap"] == MAX_LAYOUT_CURVE_PIECES
+    assert "curved" in caught.value.hint
+
+
+@pytest.mark.slow
+@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+def test_regression_worst_legal_text_stays_within_its_work_budget() -> None:
+    """Keeps the heaviest text the caps allow to a bounded curve table size and a few seconds.
+
+    Every glyph holds MAX_GLYPH_PIECES curved pieces in strokes of at most MAX_STROKE_PIECES.
+    The work is the curve table samples; the clock check only guards against a regression.
+    """
+    curls = [_curl(MAX_STROKE_PIECES), _curl(MAX_GLYPH_PIECES - MAX_STROKE_PIECES)]
+    registry, uri = register_font(
+        bundled_fonts(), tiny_bytes(glyphs={"I": {"advance": 4, "strokes": curls}})
+    )
+    copies = min(MAX_LAYOUT_CHARS, MAX_LAYOUT_CURVE_PIECES // MAX_GLYPH_PIECES)
+    started = time.perf_counter()
+    form = text_form("worst", [f"S{i}" for i in range(2 * len(curls) * copies)], "I" * copies,
+                     fonts=[uri], height=1.0, at=(0.0, 0.0), n=2 * len(curls) * copies,
+                     font_registry=registry)  # fmt: skip
+    elapsed = time.perf_counter() - started
+    laid = layout_text("I" * copies, [uri], 1.0, (0.0, 0.0), font_registry=registry)
+    curves = [stroke for glyph in laid for stroke in glyph.strokes if isinstance(stroke, SvgCurve)]
+    pieces = sum(len(parse_path(curve.d)[0].pieces) for curve in curves)
+    assert pieces <= MAX_LAYOUT_CURVE_PIECES
+    assert pieces * SVG_SAMPLES_PER_PIECE + len(curves) <= WORK_BUDGET_SAMPLES
+    assert form.geometry["n"] == 2 * len(curls) * copies
+    assert elapsed < WORST_TEXT_SECONDS
 
 
 def test_layout_round_trips_through_json() -> None:

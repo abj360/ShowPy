@@ -10,7 +10,7 @@ Contains:
     test_fuzz_register_font_font_shaped_json: raises only ShowPyError and never changes the
         registry it extends
     test_fuzz_load_font_glyph_piece_cap: raises only ShowPyError for glyphs near the piece cap,
-        split over several strokes, and accepts none over it
+        split over several strokes, and accepts none over the glyph or stroke cap
     test_fuzz_layout_text_piece_cap: raises only ShowPyError laying out heavy glyphs that
         normalization doubles, and lays out none over the piece cap
     test_fuzz_import_fonts_arbitrary_documents: raises only ShowPyError for JSON-like documents
@@ -33,7 +33,14 @@ from hypothesis import strategies as st
 from showpy.core.errors import FontError, SchemaError, ShowPyError
 from showpy.core.util import asset_uri
 from showpy.export.data import FONTS_KEY, import_fonts
-from showpy.geo.fonts import MAX_GLYPH_PIECES, FontRegistry, bundled_fonts, load_font, register_font
+from showpy.geo.fonts import (
+    MAX_GLYPH_PIECES,
+    MAX_STROKE_PIECES,
+    FontRegistry,
+    bundled_fonts,
+    load_font,
+    register_font,
+)
 from showpy.geo.models import LaidGlyph
 from showpy.geo.text_layout import MAX_LAYOUT_CHARS, MAX_LAYOUT_PIECES, layout_text
 from tests.fixtures.fonts import tiny_bytes
@@ -172,13 +179,14 @@ def _zigzag(pieces: int) -> str:
     return "M0 0 " + " ".join(f"L{i % 2} {i + 1}" for i in range(pieces))
 
 
-def _loads_only_under_the_cap(data: bytes, pieces: int) -> None:
+def _loads_only_under_the_caps(data: bytes, pieces: int, longest: int) -> None:
+    legal = pieces <= MAX_GLYPH_PIECES and longest <= MAX_STROKE_PIECES
     try:
         load_font(data)
     except FontError:
-        assert pieces > MAX_GLYPH_PIECES
+        assert not legal
         return
-    assert pieces <= MAX_GLYPH_PIECES
+    assert legal
 
 
 @given(
@@ -186,11 +194,13 @@ def _loads_only_under_the_cap(data: bytes, pieces: int) -> None:
     st.integers(1, 4),
 )
 def test_fuzz_load_font_glyph_piece_cap(pieces: int, strokes: int) -> None:
-    """Raises only ShowPyError near the glyph piece cap, and accepts no glyph over it."""
+    """Raises only ShowPyError near the glyph piece cap, and accepts no glyph over a cap."""
     shares = [pieces // strokes + (index < pieces % strokes) for index in range(strokes)]
     glyphs = {"I": {"advance": 4, "strokes": [_zigzag(share) for share in shares]}}
     data = tiny_bytes(glyphs=glyphs)
-    only_showpy_errors(lambda: _loads_only_under_the_cap(data, pieces), (pieces, strokes))
+    only_showpy_errors(
+        lambda: _loads_only_under_the_caps(data, pieces, max(shares)), (pieces, strokes)
+    )
 
 
 def _lays_only_under_the_cap(text: str, registry: FontRegistry, pieces: int) -> None:
@@ -203,7 +213,7 @@ def _lays_only_under_the_cap(text: str, registry: FontRegistry, pieces: int) -> 
 
 
 @settings(max_examples=HEAVY_EXAMPLES)
-@given(st.integers(1, MAX_GLYPH_PIECES), st.integers(-NEAR_CAP, NEAR_CAP))
+@given(st.integers(1, MAX_STROKE_PIECES), st.integers(-NEAR_CAP, NEAR_CAP))
 def test_fuzz_layout_text_piece_cap(pieces: int, offset: int) -> None:
     """Raises only ShowPyError for heavy text normalization doubles; lays none over the cap."""
     heavy = {"advance": 4, "strokes": [_zigzag(pieces)]}

@@ -16,6 +16,8 @@ Contains:
         that serves glyphs its URI's bytes do not hold
     test_regression_load_font_caps_the_pieces_of_one_glyph: refuses a glyph whose strokes hold
         more than MAX_GLYPH_PIECES path pieces in all
+    test_regression_load_font_caps_the_pieces_of_one_stroke: refuses a stroke over
+        MAX_STROKE_PIECES path pieces even when its glyph is under MAX_GLYPH_PIECES
     test_regression_register_font_can_keep_a_taken_name: registers a font by URI only when its
         name is bound to other bytes, and the registry still validates from its dump
 """
@@ -34,6 +36,7 @@ from showpy.geo.fonts import (
     BUNDLED_FONTS,
     MAX_FONT_BYTES,
     MAX_GLYPH_PIECES,
+    MAX_STROKE_PIECES,
     FontRegistry,
     bundled_fonts,
     load_font,
@@ -284,14 +287,38 @@ def _zigzag(pieces: int) -> str:
     return "M0 0 " + " ".join(f"L{i % 2} {i + 1}" for i in range(pieces))
 
 
+def _strokes(pieces: int) -> list[str]:
+    """Splits `pieces` into zigzag strokes of at most MAX_STROKE_PIECES each."""
+    sizes = [MAX_STROKE_PIECES] * (pieces // MAX_STROKE_PIECES) + [pieces % MAX_STROKE_PIECES]
+    return [_zigzag(size) for size in sizes if size]
+
+
 def test_regression_load_font_caps_the_pieces_of_one_glyph() -> None:
-    whole = _glyphs(I={"advance": 4, "strokes": [_zigzag(MAX_GLYPH_PIECES)]})
-    assert len(load_font(tiny_bytes(**whole)).glyphs["I"].strokes) == 1
+    whole = _glyphs(I={"advance": 4, "strokes": _strokes(MAX_GLYPH_PIECES)})
+    assert len(load_font(tiny_bytes(**whole)).glyphs["I"].strokes) == len(
+        _strokes(MAX_GLYPH_PIECES)
+    )
     half = MAX_GLYPH_PIECES // 2 + 1
-    for strokes in ([_zigzag(MAX_GLYPH_PIECES + 1)], [_zigzag(half), _zigzag(half)]):
+    for strokes in (_strokes(MAX_GLYPH_PIECES + 1), [_zigzag(half), _zigzag(half)]):
         with pytest.raises(FontError) as info:
             load_font(tiny_bytes(**_glyphs(I={"advance": 4, "strokes": strokes})))
         assert info.value.code == "BAD_FONT"
         assert info.value.context["glyph"] == "I"
         assert info.value.context["cap"] == MAX_GLYPH_PIECES
         assert "simplify glyph 'I'" in info.value.hint
+
+
+def test_regression_load_font_caps_the_pieces_of_one_stroke() -> None:
+    whole = _glyphs(I={"advance": 4, "strokes": [_zigzag(MAX_STROKE_PIECES)]})
+    assert len(load_font(tiny_bytes(**whole)).glyphs["I"].strokes) == 1
+    strokes = ["M5 0 L5 1", _zigzag(MAX_STROKE_PIECES + 1)]
+    assert MAX_STROKE_PIECES + 2 <= MAX_GLYPH_PIECES
+    with pytest.raises(FontError) as info:
+        load_font(tiny_bytes(**_glyphs(I={"advance": 4, "strokes": strokes})))
+    assert info.value.code == "BAD_FONT"
+    assert info.value.context["glyph"] == "I"
+    assert info.value.context["stroke"] == 1
+    assert info.value.context["cap"] == MAX_STROKE_PIECES
+    assert f"split stroke 1 of glyph 'I' into strokes of at most {MAX_STROKE_PIECES}" in (
+        info.value.hint
+    )

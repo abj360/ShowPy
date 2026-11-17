@@ -9,6 +9,7 @@ Contains:
     MAX_LAYOUT_CHARS: bounds the characters of one laid-out text
     MAX_LAYOUT_EXTENT_M: bounds how far from the origin a laid stroke may reach
     MAX_LAYOUT_PIECES: bounds the path pieces of all laid glyphs together
+    MAX_LAYOUT_CURVE_PIECES: bounds the path pieces of all laid curved strokes together
     layout_text(): lays multi-line text out as glyph strokes on the stage plane
 """
 
@@ -48,6 +49,10 @@ MAX_LAYOUT_EXTENT_M = 1e6
 # MAX_LAYOUT_CHARS copies of the most complex bundled glyph (hershey-script "8", 51 pieces)
 # lay 51,000 pieces (measured 2026-11-16); the cap is about 10 times that.
 MAX_LAYOUT_PIECES = 512_000
+# A curved stroke becomes an SvgCurve; measuring and placing spots costs about 60 µs per piece
+# against about 1 µs for a straight one (measured 2026-11-17), so this cap keeps the worst
+# legal text to about 4 s. Bundled Relief needs at most 15 per glyph, 15,000 for 1,000 glyphs.
+MAX_LAYOUT_CURVE_PIECES = 60_000
 LINE_BREAKS = (("\r\n", "\n"), ("\r", "\n"))
 ALIGN_SHARE: Mapping[TextAlign, float] = MappingProxyType(
     {"left": 0.0, "center": 0.5, "right": 1.0}
@@ -163,7 +168,7 @@ def _stroke(subpath: Subpath, matrix: Matrix, d: str) -> Polyline | SvgCurve:
 
     A closed straight stroke drops its last vertex, which `Z` always puts back on the start.
     """
-    if not all(isinstance(piece, LinePiece) for piece in subpath.pieces):
+    if not _is_straight(subpath):
         transform = tuple((float(a), float(b), float(c)) for a, b, c in matrix.tolist())
         return SvgCurve(d=d, transform=transform, closed=subpath.closed)
     ends = [subpath.start, *(piece.end for piece in subpath.pieces)]
@@ -216,27 +221,38 @@ def _parse_strokes(placed: _Placed) -> tuple[tuple[Subpath, str], ...]:
 
 
 def _parse_glyphs(placed: Iterable[_Placed]) -> dict[GlyphKey, tuple[tuple[Subpath, str], ...]]:
-    """Parses each distinct glyph once, then rejects text over `MAX_LAYOUT_PIECES` pieces.
+    """Parses each distinct glyph once, then rejects text over either piece cap.
 
     Returns:
         parsed: Each glyph's subpaths with their path data, keyed by font URI and character.
     """
     parsed: dict[GlyphKey, tuple[tuple[Subpath, str], ...]] = {}
-    pieces = 0
+    pieces = curved = 0
     for item in placed:
         key = (item.source.uri, item.char)
         if key not in parsed:
             parsed[key] = _parse_strokes(item)
-        pieces += sum(len(subpath.pieces) for subpath, _ in parsed[key])
+        for subpath, _ in parsed[key]:
+            pieces += len(subpath.pieces)
+            curved += 0 if _is_straight(subpath) else len(subpath.pieces)
+    _require_pieces(pieces, MAX_LAYOUT_PIECES, "path pieces")
+    _require_pieces(curved, MAX_LAYOUT_CURVE_PIECES, "curved path pieces")
+    return parsed
+
+
+def _require_pieces(pieces: int, cap: int, what: str) -> None:
     try:
-        require_size(pieces, MAX_LAYOUT_PIECES, what="laid path pieces")
+        require_size(pieces, cap, what=f"laid {what}")
     except SchemaError as exc:
         raise SchemaError(
-            f"the text's glyphs hold over {MAX_LAYOUT_PIECES} path pieces",
-            hint="shorten the text, or use a font with simpler glyphs",
+            f"the text's glyphs hold over {cap} {what}",
+            hint=f"shorten the text, or use a font with simpler glyphs ({what})",
             context=exc.context,
         ) from exc
-    return parsed
+
+
+def _is_straight(subpath: Subpath) -> bool:
+    return all(isinstance(piece, LinePiece) for piece in subpath.pieces)
 
 
 def _glyph_strokes(
@@ -303,10 +319,11 @@ def layout_text(
     `MAX_LAYOUT_CHARS` bounds the raw input characters, checked before NFC normalization, which
     at most triples them. Then `\r\n` or `\r` count as one line break, and empty lines at the
     end of the text are dropped; interior empty lines stay as spacing. Each distinct glyph is
-    parsed once, and `MAX_LAYOUT_PIECES` bounds the path pieces of all laid glyphs together,
-    checked before any stroke is built. Every font in the chain is resolved, even one no
-    character uses. No laid stroke may reach farther than `MAX_LAYOUT_EXTENT_M` from the origin
-    on either axis, so every returned curve evaluates without overflow.
+    parsed once; `MAX_LAYOUT_PIECES` bounds the path pieces of all laid glyphs together and
+    `MAX_LAYOUT_CURVE_PIECES` those of curved strokes, both checked before any stroke is built.
+    Every font in the chain is resolved, even one no character uses. No laid stroke may reach
+    farther than `MAX_LAYOUT_EXTENT_M` from the origin on either axis, so every returned curve
+    evaluates without overflow.
 
     Args:
         text: Characters to lay out; `\n` starts a new line.
