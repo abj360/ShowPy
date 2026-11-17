@@ -149,8 +149,6 @@ def test_regression_trailing_dot_show_id_is_rejected_or_stored_safely(tmp_path: 
     assert created is None or not any(name.rstrip(". ") == "abc" for name in created)
 
 
-@pytest.mark.defect("UP-9.7-17")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-17")
 def test_regression_overlong_show_id_is_rejected_or_stored_safely(tmp_path: Path) -> None:
     """Rejects a 300-character show ID or stores it under a short name (audit 9.7 item 8)."""
     created = _created_folders(FileRepository(tmp_path), "a" * MAX_SHOW_ID_LENGTH)

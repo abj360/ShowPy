@@ -4,15 +4,21 @@ file_repository.py --- a repository that keeps every revision as files under a r
 Contains:
     REVISION_ID_PATTERN: matches the 64-digit hex IDs allowed in next/ links and tree digests
     LEGACY_REVISION_KEYS: names the authorship keys v0.1 and v0.2 stored in revision records
+    NO_HARDLINK_ERRNOS: lists the errno values meaning the file system cannot hard-link
     FileRepository: keeps every revision as JSON and blob files under a root directory
 """
 
+import errno
+import functools
 import json
 import os
 import re
 import stat
 import tempfile
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Any, cast
 
 from showpy.core.errors import StorageError
 from showpy.show.documents import dump_json
@@ -26,6 +32,7 @@ OBJECT_DIR = "objects"
 TEMP_PREFIX = ".tmp-"
 REVISION_ID_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 LEGACY_REVISION_KEYS = frozenset({"actor", "message", "kind", "target"})
+NO_HARDLINK_ERRNOS = frozenset({errno.EPERM, errno.EXDEV, errno.ENOTSUP})
 
 
 def _temp_copy(directory: Path, data: bytes) -> Path:
@@ -45,16 +52,62 @@ def _atomic_write(path: Path, data: bytes) -> None:
         temp.unlink(missing_ok=True)
 
 
-def _link_exclusive(path: Path, data: bytes) -> bool:
+def _link_exclusive(show_id: str, path: Path, data: bytes) -> bool:
     """Creates `path` with `data` only if it does not exist; os.link refuses to overwrite."""
     temp = _temp_copy(path.parent, data)
     try:
-        os.link(temp, path)
+        with _mapped_io(show_id, path, is_link=True):
+            os.link(temp, path)
     except FileExistsError:
         return False
     finally:
         temp.unlink(missing_ok=True)
     return True
+
+
+def _storage_error(show_id: str, error: OSError, fallback: Path, is_link: bool) -> StorageError:
+    path = str(error.filename or fallback)
+    context: dict[str, object] = {"show": show_id, "path": path, "errno": error.errno}
+    if error.errno == errno.ENAMETOOLONG:
+        return StorageError(
+            f"name too long for {show_id}: {path}",
+            hint="use a shorter show ID or a repository root with a shorter path",
+            context=context,
+            code="NAME_TOO_LONG",
+        )
+    if is_link and (isinstance(error, PermissionError) or error.errno in NO_HARDLINK_ERRNOS):
+        return StorageError(
+            f"file system under {path} cannot create hard links",
+            hint="put the repository root on a file system that supports hard links",
+            context=context,
+            code="NO_HARDLINKS",
+        )
+    return StorageError(
+        f"file-system error in repository of {show_id}: {error.strerror or error}",
+        hint="check that the repository root exists, is writable and is a directory",
+        context=context,
+        code="IO",
+    )
+
+
+@contextmanager
+def _mapped_io(show_id: str, path: Path, is_link: bool = False) -> Iterator[None]:
+    """Turns an OSError raised inside the block into a StorageError with a code and hint."""
+    try:
+        yield
+    except OSError as error:
+        raise _storage_error(show_id, error, path, is_link) from error
+
+
+def _guarded[F: Callable[..., Any]](method: F) -> F:  # Any: decorator keeps each signature
+    """Maps any OSError a backend method leaks to StorageError; `show_id` is its first argument."""
+
+    @functools.wraps(method)
+    def wrapper(self: "_FileBackend", show_id: str, *args: Any, **kwargs: Any) -> Any:
+        with _mapped_io(show_id, self.root / show_id):
+            return method(self, show_id, *args, **kwargs)
+
+    return cast(F, wrapper)
 
 
 class _FileBackend:
@@ -71,9 +124,10 @@ class _FileBackend:
         return self.root / show_id
 
     def show_ids(self) -> list[str]:
-        if not self.root.exists():
-            return []
-        return [p.name for p in self.root.iterdir() if (p / LINK_DIR / ROOT_LINK).exists()]
+        with _mapped_io("", self.root):
+            if not self.root.exists():
+                return []
+            return [p.name for p in self.root.iterdir() if (p / LINK_DIR / ROOT_LINK).exists()]
 
     def _corrupt(self, show_id: str, path: Path, reason: str) -> StorageError:
         return StorageError(
@@ -126,6 +180,7 @@ class _FileBackend:
             raise self._corrupt(show_id, path, "tree file lacks revision or tree")
         return record
 
+    @_guarded
     def log(self, show_id: str) -> list[Revision]:
         self._guard_dirs(show_id)
         links = self._dir(show_id) / LINK_DIR
@@ -162,6 +217,7 @@ class _FileBackend:
         if revision.parent != parent:
             raise self._corrupt(show_id, source, "revision parent differs from the chain")
 
+    @_guarded
     def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
         self._guard_dirs(show_id)
         path = self._tree_path(show_id, revision_id, self._dir(show_id) / TREE_DIR)
@@ -174,11 +230,13 @@ class _FileBackend:
             self._checked_id(show_id, value, path)
         return dict(tree)
 
+    @_guarded
     def blob(self, show_id: str, digest: str) -> bytes:
         self._guard_dirs(show_id)
         objects = self._dir(show_id) / OBJECT_DIR
         return self._read(show_id, objects / self._checked_id(show_id, digest, objects))
 
+    @_guarded
     def commit(
         self, show_id: str, revision: Revision, tree: dict[str, str], blobs: dict[str, bytes]
     ) -> None:
@@ -195,7 +253,7 @@ class _FileBackend:
         record = {"revision": revision.model_dump(mode="json"), "tree": tree}
         _atomic_write(base / TREE_DIR / f"{revision.id}.json", dump_json(record))
         link = base / LINK_DIR / (revision.parent or ROOT_LINK)
-        if not _link_exclusive(link, revision.id.encode()):
+        if not _link_exclusive(show_id, link, revision.id.encode()):
             raise conflict_error(show_id, revision.parent, self.log(show_id)[-1:])
 
 

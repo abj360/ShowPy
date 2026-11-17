@@ -34,12 +34,20 @@ Contains:
     test_regression_malformed_records_are_corrupt: maps malformed, directory-shaped and deeply
         nested tree files to CORRUPT
     test_regression_trailing_newline_in_id_is_refused: refuses an ID followed by a newline
+    test_regression_link_failures_carry_no_hardlinks_code: maps os.link refusals to NO_HARDLINKS
+        with show, path and errno context
+    test_regression_temp_file_failure_is_io_not_no_hardlinks: keeps a failing temp write out of
+        NO_HARDLINKS
+    test_regression_long_names_are_name_too_long: maps ENAMETOOLONG on writes and reads
+    test_regression_other_os_errors_are_io: maps stray OSErrors on read paths and show_ids() to IO
 """
 
+import errno
 import json
 import os
 import shutil
 import sys
+import tempfile
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -127,8 +135,6 @@ def test_regression_truncated_tree_is_a_storage_error(tmp_path: Path) -> None:
         repo.revisions(SHOW_ID)
 
 
-@pytest.mark.defect("UP-9.7-24")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-24")
 def test_regression_missing_hard_links_are_a_storage_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -290,3 +296,107 @@ def test_regression_trailing_newline_in_id_is_refused(tmp_path: Path) -> None:
     shutil.copy(base / "objects" / digest_value, base / "objects" / f"{digest_value}\n")
     _tamper_record(base, rev, lambda r: r["tree"].update({SHOW_DOC: f"{digest_value}\n"}))
     _assert_corrupt(lambda: repo.read(SHOW_ID, SHOW_DOC))
+
+
+def _commit_error(tmp_path: Path) -> StorageError:
+    repo = FileRepository(tmp_path / "repo")
+    with pytest.raises(StorageError) as caught:
+        repo.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT)
+    return caught.value
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        PermissionError(errno.EPERM, "Operation not permitted"),
+        OSError(errno.EPERM, "Operation not permitted"),
+        OSError(errno.EXDEV, "Invalid cross-device link"),
+        OSError(errno.ENOTSUP, "Operation not supported"),
+    ],
+)
+def test_regression_link_failures_carry_no_hardlinks_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error: OSError
+) -> None:
+    """Maps os.link refusals to NO_HARDLINKS with show, path and errno context."""
+
+    def refuse(*_args: object) -> None:
+        raise error
+
+    monkeypatch.setattr(os, "link", refuse)
+    caught = _commit_error(tmp_path)
+    assert caught.code == "NO_HARDLINKS"
+    assert set(caught.context) == {"show", "path", "errno"}
+    assert caught.context["show"] == SHOW_ID
+    assert caught.context["errno"] == error.errno
+    assert caught.hint
+
+
+def test_regression_temp_file_failure_is_io_not_no_hardlinks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keeps a failing temp write out of NO_HARDLINKS."""
+
+    def refuse(*_args: object, **_kwargs: object) -> None:
+        raise PermissionError(errno.EACCES, "Permission denied")
+
+    monkeypatch.setattr(tempfile, "NamedTemporaryFile", refuse)
+    caught = _commit_error(tmp_path)
+    assert caught.code == "IO"
+    assert caught.context["errno"] == errno.EACCES
+
+
+def test_regression_long_names_are_name_too_long(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Maps ENAMETOOLONG on writes and reads."""
+    repo, _, _ = _saved(tmp_path)
+    with pytest.raises(StorageError) as written:
+        repo.put_show("a" * 300, two_set_show(), expected_revision="", at=AT)
+
+    def too_long(_self: Path, **_kwargs: object) -> os.stat_result:
+        raise OSError(errno.ENAMETOOLONG, "File name too long")
+
+    monkeypatch.setattr(Path, "lstat", too_long)
+    with pytest.raises(StorageError) as read:
+        repo.revisions(SHOW_ID)
+    for caught in (written.value, read.value):
+        assert caught.code == "NAME_TOO_LONG"
+        assert caught.context["errno"] == errno.ENAMETOOLONG
+        assert set(caught.context) == {"show", "path", "errno"}
+
+
+def test_regression_other_os_errors_are_io(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Maps stray OSErrors on read paths and show_ids() to IO."""
+    repo, rev, base = _saved(tmp_path)
+    shutil.rmtree(base / "trees")
+    (base / "trees").write_bytes(b"not a directory")
+    with pytest.raises(StorageError) as not_dir:
+        repo.revisions(SHOW_ID)
+    assert not_dir.value.code == "IO"
+    assert not_dir.value.context["errno"] == errno.ENOTDIR
+
+    def deny(_self: Path) -> list[Path]:
+        raise PermissionError(errno.EACCES, "Permission denied", str(tmp_path))
+
+    monkeypatch.setattr(Path, "iterdir", deny)
+    with pytest.raises(StorageError) as listing:
+        repo.shows()
+    assert listing.value.code == "IO"
+    assert listing.value.context["errno"] == errno.EACCES
+    assert rev
+
+
+def test_regression_permission_denied_read_is_io(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Maps PermissionError from a read to IO."""
+    repo, _, _ = _saved(tmp_path)
+
+    def deny(_self: Path) -> bytes:
+        raise PermissionError(errno.EACCES, "Permission denied", str(tmp_path))
+
+    monkeypatch.setattr(Path, "read_bytes", deny)
+    with pytest.raises(StorageError) as caught:
+        repo.revisions(SHOW_ID)
+    assert caught.value.code == "IO"
+    assert caught.value.context["errno"] == errno.EACCES
