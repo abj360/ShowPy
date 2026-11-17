@@ -138,7 +138,10 @@ def test_svg_font_snaps_a_nearly_closed_stroke() -> None:
 def test_svg_font_reads_metrics_and_skips_ligatures_and_unnamed_glyphs() -> None:
     font = build_fonts.svg_font(META, SVG_WITH_LIGATURE_AND_NOTDEF)
     assert (font["units_per_em"], font["cap_height"], font["ascender"], font["descender"]) == (
-        1000.0, 680.0, 800.0, -200.0,
+        1000.0,
+        680.0,
+        800.0,
+        -200.0,
     )
     assert sorted(font["glyphs"]) == ["A"]
 
