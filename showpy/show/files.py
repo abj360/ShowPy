@@ -1,30 +1,28 @@
 """
 files.py --- maps workspace file paths to show documents: what each path reads, writes and owns
 
+Workspace paths address sets by display ID; stored trees address them by key, and every
+crossing goes through showpy.show.set_keys.
+
 Contains:
     INDEX_DOC: names the derived set index table
     LIMITS_DOC: names the designer's limits file
     WAIVERS_DOC: names the designer's waivers file
-    SELECTION_DOC: names the designer's current canvas selection
-    COMMENTS_DOC: names the canvas comment list
     CLAIMS_DOC: names the published claims file
-    DESIGNER_PATHS: names the files only the designer and the system may write
     all_files(): lists every readable file path
     directories(): lists every directory path, each ending in `/`
     read_file(): returns a file's text or bytes
-    show_changes(): lists the document writes and deletes that store a show
-    staged_changes(): validates one file write and returns the document changes it makes
+    show_changes(): lists the stored-document writes and deletes that store a show
+    staged_changes(): validates one file write and returns the stored-document changes it makes
 """
 
 import csv
 import io
-import json
 from collections.abc import Mapping
 
-from pydantic import TypeAdapter
-from pydantic import ValidationError as PydanticValidationError
-
-from showpy.core.errors import LockedError, SchemaError, StorageError, UnknownRefError
+from showpy.choreo.models import Set
+from showpy.core.csv_cells import neutralize_cell
+from showpy.core.errors import LockedError, StorageError, UnknownRefError
 from showpy.core.ids import TransitionId
 from showpy.core.selection import Selection
 from showpy.core.util import close_matches
@@ -39,6 +37,7 @@ from showpy.show.documents import (
     TIMELINE_DOC,
     decode_show,
     dump_json,
+    encode_documents,
     encode_show,
     forms_doc,
     is_show_doc,
@@ -48,37 +47,41 @@ from showpy.show.documents import (
     split_path,
 )
 from showpy.show.manage import index
-from showpy.show.models import Comment, Show
+from showpy.show.models import Show
+from showpy.show.set_keys import SetFolders, set_key, to_stored_path
+from showpy.show.structured import (
+    COMMENTS_DOC,
+    SELECTION_DOC,
+    TEXT_SUFFIXES,
+    decode_text,
+    require_structured,
+)
 
 INDEX_DOC = "/show/index.csv"
 LIMITS_DOC = "/config/limits.yaml"
 WAIVERS_DOC = "/config/waivers.yaml"
-SELECTION_DOC = "/canvas/selection.json"
-COMMENTS_DOC = "/canvas/comments.json"
 CLAIMS_DOC = "/publish/claims.json"
-DESIGNER_PATHS = frozenset({LIMITS_DOC, WAIVERS_DOC, SELECTION_DOC, CLAIMS_DOC})
 FREE_ROOTS = ("/renders/", "/exports/", "/lib/drafts/")
 FIXED_DIRS = (
     "/", "/canvas/", "/config/", "/exports/", "/lib/", "/lib/drafts/", "/publish/", "/renders/",
     "/sets/", "/show/", "/time/", "/transitions/",
 )  # fmt: skip
-TEXT_SUFFIXES = (".json", ".csv", ".py", ".yaml", ".yml", ".txt", ".md", ".svg")
 INDEX_COLUMNS = ("set", "counts", "start_count", "measure", "seconds", "cue")
 EMPTY_LIST = dump_json([])
 DEFAULTS = {
     LIMITS_DOC: b"",
     WAIVERS_DOC: b"",
-    SELECTION_DOC: dump_json(Selection(ids=()).model_dump(mode="python")),
+    SELECTION_DOC: dump_json(Selection(ids=()).model_dump(mode="json")),
     COMMENTS_DOC: EMPTY_LIST,
 }
-COMMENTS_ADAPTER = TypeAdapter(list[Comment])
 
 
 def _set_files(show: Show, tree: Mapping[str, bytes]) -> list[str]:
+    folders = SetFolders(show)
     files: list[str] = []
     for set_id in show.set_ids():
         files += [forms_doc(set_id), placements_doc(set_id)]
-        files += [script_doc(set_id)] if script_doc(set_id) in tree else []
+        files += [script_doc(set_id)] if folders.to_stored(script_doc(set_id)) in tree else []
     return files
 
 
@@ -114,7 +117,7 @@ def directories(show: Show | None, tree: Mapping[str, bytes]) -> set[str]:
 
 
 def _text_or_bytes(path: str, raw: bytes) -> str | bytes:
-    return raw.decode() if path.endswith(TEXT_SUFFIXES) else raw
+    return decode_text(path, raw) if path.endswith(TEXT_SUFFIXES) else raw
 
 
 def _unknown(path: str, show: Show | None, tree: Mapping[str, bytes]) -> UnknownRefError:
@@ -123,6 +126,15 @@ def _unknown(path: str, show: Show | None, tree: Mapping[str, bytes]) -> Unknown
         f"no file {path}",
         hint=f"did you mean {', '.join(close)}?" if close else "ls('/') lists what exists",
         context={"path": path},
+    )
+
+
+def _is_directory(path: str) -> StorageError:
+    return StorageError(
+        f"{path} is a directory",
+        hint="name a file path such as /renders/set-2.png; ls() lists directories",
+        context={"path": path},
+        code="BAD_PATH",
     )
 
 
@@ -155,8 +167,17 @@ def _index_csv(show: Show) -> bytes:
     writer.writerow(INDEX_COLUMNS)
     for e in index(show).entries:
         label = "" if e.measure is None else f"{e.measure.measure}:{e.measure.count_in_measure:g}"
-        writer.writerow([e.set, e.counts, e.start_count, label, e.seconds, e.cue or ""])
+        writer.writerow(
+            [e.set, e.counts, e.start_count, label, e.seconds, neutralize_cell(e.cue or "")]
+        )
     return out.getvalue().encode()
+
+
+def _placements_csv(current: Set) -> bytes:
+    table = current.table().map(
+        lambda cell: neutralize_cell(cell) if isinstance(cell, str) else cell
+    )
+    return table.to_csv(index=False, lineterminator="\n").encode()
 
 
 def _show_file(path: str, segments: list[str], show: Show) -> bytes | None:
@@ -165,14 +186,15 @@ def _show_file(path: str, segments: list[str], show: Show) -> bytes | None:
     if segments[0] == "sets" and len(segments) == 3:
         current = show.set(segments[1])
         if segments[2] == PLACEMENTS_NAME:
-            return current.table().to_csv(index=False, lineterminator="\n").encode()
+            return _placements_csv(current)
         if segments[2] == FORMS_NAME:
-            return encode_show(show).get(path, EMPTY_LIST)
+            stored = to_stored_path(path, show)
+            return encode_documents(show, [stored]).get(stored, EMPTY_LIST)
     if segments[0] == "transitions" and len(segments) == 3 and segments[2] == PATHS_NAME:
         tid = _pair(show, segments[1])
-        return dump_json(show.transition(tid).model_dump(mode="python"))
+        return dump_json(show.transition(tid).model_dump(mode="json"))
     if path in (SHOW_DOC, SHEET_DOC, NOTES_DOC, TIMELINE_DOC):
-        return encode_show(show)[path]
+        return encode_documents(show, [path])[path]
     return None
 
 
@@ -182,7 +204,7 @@ def read_file(path: str, show: Show | None, tree: Mapping[str, bytes]) -> str | 
     Args:
         path: Workspace path.
         show: Show at the workspace revision; None before the first save.
-        tree: Stored documents at the workspace revision.
+        tree: Stored documents at the workspace revision, addressed by set key.
 
     Returns:
         content: Text for text files, bytes otherwise.
@@ -191,11 +213,13 @@ def read_file(path: str, show: Show | None, tree: Mapping[str, bytes]) -> str | 
     ''
     """
     segments = split_path(path)
+    if not segments:
+        raise _is_directory(path)
     if segments[0] in ("show", "time", "sets", "transitions"):
         found = _show_file(path, segments, _require_show(show, path))
         if found is not None:
             return _text_or_bytes(path, found)
-    stored = tree.get(path, DEFAULTS.get(path))
+    stored = tree.get(to_stored_path(path, show), DEFAULTS.get(path))
     is_listed = path in DEFAULTS or path == CLAIMS_DOC or path.startswith(FREE_ROOTS)
     if stored is None or not (is_listed or path.endswith(f"/{SCRIPT_NAME}")):
         raise _unknown(path, show, tree)
@@ -203,7 +227,9 @@ def read_file(path: str, show: Show | None, tree: Mapping[str, bytes]) -> str | 
 
 
 def show_changes(show: Show, tree: Mapping[str, bytes]) -> dict[str, bytes | None]:
-    """Lists the writes and deletes that store `show` over `tree`, including removed sets' files.
+    """Lists the stored writes and deletes that store `show` over `tree`, with removed sets' files.
+
+    Paths are stored paths: set folders are keys, so a renumbered set keeps its folder.
 
     >>> from showpy.examples import two_set_show
     >>> changes = show_changes(two_set_show(), {"/sets/9/set.py": b""})
@@ -211,7 +237,7 @@ def show_changes(show: Show, tree: Mapping[str, bytes]) -> dict[str, bytes | Non
     (None, 7)
     """
     docs = encode_show(show)
-    kept = tuple(f"/sets/{s}/" for s in show.set_ids())
+    kept = tuple(f"/sets/{set_key(s)}/" for s in show.sets)
     stale = [
         p
         for p in tree
@@ -230,33 +256,15 @@ def _staged_show_doc(
         show.set(segments[1])
     if segments[0] == "transitions":
         _pair(show, segments[1])
-    edited = decode_show({**encode_show(show), path: raw}, show.revision)
+    stored = to_stored_path(path, show)
+    edited = decode_show({**encode_show(show), stored: raw}, show.revision)
     return show_changes(edited, tree)
-
-
-def _require_valid(path: str, raw: bytes) -> None:
-    if not path.endswith(TEXT_SUFFIXES):
-        return
-    try:
-        text = raw.decode()
-        if path == SELECTION_DOC:
-            Selection.model_validate_json(text)
-        elif path == COMMENTS_DOC:
-            COMMENTS_ADAPTER.validate_json(text)
-        elif path.endswith(".json"):
-            json.loads(text)
-    except (UnicodeDecodeError, json.JSONDecodeError, SchemaError, PydanticValidationError) as exc:
-        raise SchemaError(
-            f"{path} does not hold valid content: {exc}",
-            hint="write UTF-8 text; JSON files must parse and match their model",
-            context={"path": path},
-        ) from exc
 
 
 def staged_changes(
     path: str, raw: bytes, show: Show | None, tree: Mapping[str, bytes]
 ) -> dict[str, bytes | None]:
-    """Validates one file write and returns the document changes it makes.
+    """Validates one file write and returns the stored-document changes it makes.
 
     Show documents are re-encoded canonically from the edited show, so a write can also
     delete documents (writing `[]` to forms.json or `{}` to paths.json clears them).
@@ -266,12 +274,7 @@ def staged_changes(
     """
     segments = split_path(path)
     if path.endswith("/"):
-        raise StorageError(
-            f"{path} is a directory",
-            hint="write to a file path such as /renders/set-2.png",
-            context={"path": path},
-            code="BAD_PATH",
-        )
+        raise _is_directory(path)
     if path == INDEX_DOC or (segments[0] == "sets" and segments[-1] == PLACEMENTS_NAME):
         raise LockedError(
             f"{path} is derived and read-only",
@@ -285,5 +288,5 @@ def staged_changes(
         _require_show(show, path).set(segments[1])
     elif not (path in DEFAULTS or path == CLAIMS_DOC or path.startswith(FREE_ROOTS)):
         raise _unknown(path, show, tree)
-    _require_valid(path, raw)
-    return {path: raw}
+    require_structured(path, raw)
+    return {to_stored_path(path, show): raw}

@@ -8,6 +8,7 @@ Contains:
 
 from collections.abc import Sequence
 
+from showpy.choreo.match_ops import forms_of_set
 from showpy.choreo.models import PathRow
 from showpy.core.errors import UnknownRefError
 from showpy.core.ids import format_tid, parse_tid
@@ -39,10 +40,13 @@ def _covers_placement(held: Sequence[Pin], set_id: str, entity: str) -> bool:
     )
 
 
-def _covers_form(held: Sequence[Pin], form_id: str, set_id: str) -> bool:
+def _covers_form(show: Show, held: Sequence[Pin], form_id: str) -> bool:
+    # a set pin may name a set that no longer exists; forms_of_set would raise on it
     return any(
-        (p.target == "form" and p.id == form_id) or (p.target == "set" and p.id == set_id)
+        (p.target == "form" and p.id == form_id)
+        or (p.target == "set" and form_id in forms_of_set(show, p.id))
         for p in held
+        if p.target == "form" or p.id in show.set_ids()
     )
 
 
@@ -61,7 +65,7 @@ def _flag_placements(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
 
 def _flag_forms(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
     forms = {
-        k: f.replace(locked=_covers_form(held, k, f.set))
+        k: f.replace(locked=_covers_form(show, held, k))
         if (scope.target == "form" and k == scope.id)
         or (scope.target == "set" and f.set == scope.id)
         else f
@@ -94,8 +98,9 @@ def pin(show: Show, target: PinTarget, pin_id: str, reason: str = "", by: str = 
     """Locks an item and records why; pinning the same item again replaces the record.
 
     Entity pins pin the spot's placement in every set; set pins pin every placement and lock
-    every form of the set; form pins lock the form; transition pins lock a row for every spot.
-    Only the designer pins: an agent's save that changes pins raises LockedError.
+    every form the set lists; form pins lock the form; transition pins lock a row for every
+    spot. A stale form (one the set no longer lists) is not covered by its set's pin: pin the
+    form itself.
 
     >>> from showpy.examples import two_set_show
     >>> pinned = pin(two_set_show(), "entity", "T1", "soloist")

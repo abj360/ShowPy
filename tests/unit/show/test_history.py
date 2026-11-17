@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 
 """
-test_history.py --- tests set, path and show diffs, snapshots, revert, undo/redo, renames, changelog
+test_history.py --- tests set, path and show diffs, revert, renames and the changelog
 
 Contains:
-    test_regression_undo_does_not_leave_a_path_row_for_a_removed_spot: refuses or repairs an undo
-        that would orphan the agent's path row
-    test_regression_undoing_the_first_save_keeps_a_loadable_show: refuses to undo the first save, or
-        leaves a loadable show
+    test_revert_restores_an_earlier_show: reverts to the first of two edits as a new revision
+    test_regression_undo_does_not_leave_a_path_row_for_a_removed_spot: refuses or repairs a host
+        undo (a revert to the parent) that would orphan the agent's path row
+    test_regression_undoing_the_first_save_keeps_a_loadable_show: refuses to revert to before the
+        first save, or leaves a loadable show
     test_regression_diff_show_reports_a_new_group: reports a group added to the cast
     test_regression_diff_show_reports_a_pack_change: reports a changed pack key
     test_regression_diff_show_reports_a_set_cue_change: reports a changed set cue
@@ -16,6 +17,9 @@ Contains:
     test_regression_diff_show_reports_a_selection_change: reports a changed named selection
     test_regression_rename_entities_rewrites_expression_selectors: rewrites spot IDs inside
         expression selectors, as cast.rewrite does
+    test_regression_rename_entities_renames_sheet_zones: rewrites zones stored on the sheet
+    test_regression_rename_entities_keeps_selection_order: stores selections as ordered tuples
+    test_rename_entities_equals_rewrite_spot_ids: gives the same show as the cast rename
     test_regression_unpin_normalizes_transition_ids_like_pin: accepts `1->2` in unpin as pin does
 """
 
@@ -24,6 +28,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from showpy.cast.models import Group
+from showpy.cast.rewrite import rewrite_spot_ids
 from showpy.cast.spots import add_spot
 from showpy.choreo.models import (
     FacingMode,
@@ -33,24 +38,17 @@ from showpy.choreo.models import (
     Route,
     TransitionSpec,
 )
-from showpy.core.errors import (
-    ConflictError,
-    SchemaError,
-    ShowPyError,
-    StorageError,
-    UnknownRefError,
-)
+from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
+from showpy.core.types import Region
 from showpy.notes.models import Anchor, Note
+from showpy.sheet.models import Zone, ZoneKind
 from showpy.show.history import (
     changelog,
     diff_paths,
     diff_sets,
     diff_show,
-    redo,
     rename_entities,
     revert,
-    snapshot,
-    undo,
 )
 from showpy.show.manage import add_set
 from showpy.show.models import Pin, Show
@@ -122,79 +120,42 @@ def test_diff_show_summarizes_structure_and_paths() -> None:
     assert diff_show(a, a) == {}
 
 
-def test_snapshot_records_empty_revision() -> None:
-    repo, _, designer = open_session(two_set_show(), AT)
-    rev = snapshot(designer, "before finale", AT + STEP)
-    assert (rev.kind, rev.changed, rev.message) == ("snapshot", (), "before finale")
-    assert len(repo.revisions("s")) == 2
-
-
 def test_revert_restores_earlier_documents() -> None:
     _, _, designer = open_session(two_set_show(), AT)
     first = designer.revision
-    save_show(designer, _moved(load_show(designer), "T1", 7.0), AT + STEP, "move")
+    moved = save_show(designer, _moved(load_show(designer), "T1", 7.0), AT + STEP)
     rev = revert(designer, first, AT + 2 * STEP)
-    assert rev.kind == "revert"
-    assert rev.target == first
+    assert rev.parent == moved.id
     assert load_show(designer).set("2").get("T1").x == 0.0
     with pytest.raises(UnknownRefError):
         revert(designer, "nope", AT)
 
 
-def test_agent_revert_leaves_designer_files() -> None:
+def test_revert_restores_an_earlier_show() -> None:
+    _, _, ws = open_session(two_set_show(), AT)
+    first = save_show(ws, _moved(load_show(ws), "T1", 3.0), AT + STEP)
+    first_show = load_show(ws)
+    second = save_show(ws, _moved(first_show, "T2", 6.0), AT + 2 * STEP)
+    restored = revert(ws, first.id, AT + 3 * STEP)
+    assert restored.parent == second.id
+    assert restored.id not in (first.id, second.id)
+    assert restored.changed == ("/sets/2/set.json",)
+    assert set(restored.model_dump()) == {"id", "parent", "at", "changed"}
+    assert load_show(ws).model_copy(update={"revision": ""}) == first_show.model_copy(
+        update={"revision": ""}
+    )
+
+
+def test_revert_restores_every_file() -> None:
     _, agent, designer = open_session(two_set_show(), AT)
     first = designer.revision
+    original = designer.read("/config/limits.yaml")
     designer.write("/config/limits.yaml", "max: 1\n", at=AT + STEP)
     agent.refresh()
     agent.write("/sets/1/set.py", "pass\n", at=AT + 2 * STEP)
     revert(agent, first, AT + 3 * STEP)
-    assert agent.read("/config/limits.yaml") == "max: 1\n"
+    assert agent.read("/config/limits.yaml") == original
     assert "set.py" not in agent.ls("/sets/1")
-
-
-def test_undo_redo_are_per_principal_and_derived_from_history() -> None:
-    _, agent, designer = open_session(two_set_show(), AT)
-    agent.write("/sets/1/set.py", "a = 1\n", at=AT + STEP)
-    designer.refresh()
-    designer.write("/sets/2/set.py", "b = 2\n", at=AT + 2 * STEP)
-    agent.refresh()
-    undone = undo(agent, AT + 3 * STEP)
-    assert (undone.kind, undone.changed) == ("undo", ("/sets/1/set.py",))
-    assert agent.ls("/sets/1") == ["forms.json", "placements.csv"]
-    assert agent.read("/sets/2/set.py") == "b = 2\n"
-    with pytest.raises(StorageError):
-        undo(agent, AT + 4 * STEP)
-    redo(agent, AT + 4 * STEP)
-    assert agent.read("/sets/1/set.py") == "a = 1\n"
-    with pytest.raises(StorageError):
-        redo(agent, AT + 5 * STEP)
-    fresh = open_workspace(agent.repo, "s", "agent")
-    undo(fresh, AT + 5 * STEP)
-    assert fresh.ls("/sets/1") == ["forms.json", "placements.csv"]
-
-
-def test_new_edit_clears_redo_and_conflicting_undo_raises() -> None:
-    _, agent, designer = open_session(two_set_show(), AT)
-    agent.write("/sets/1/set.py", "a = 1\n", at=AT + STEP)
-    undo(agent, AT + 2 * STEP)
-    agent.write("/sets/2/set.py", "c = 3\n", at=AT + 3 * STEP)
-    with pytest.raises(StorageError):
-        redo(agent, AT + 4 * STEP)
-    designer.refresh()
-    designer.write("/sets/2/set.py", "d = 4\n", at=AT + 4 * STEP)
-    with pytest.raises(ConflictError):
-        undo(agent, AT + 5 * STEP)
-
-
-def test_agent_undo_refuses_after_designer_pinned_the_same_set() -> None:
-    _, agent, designer = open_session(two_set_show(), AT)
-    save_show(agent, _moved(load_show(agent), "T1", 3.0), AT + STEP, "agent move")
-    designer.refresh()
-    current = load_show(designer)
-    pinned = current.sets[1].with_placements({"T1": {"pinned": True}})
-    save_show(designer, current.model_copy(update={"sets": (current.sets[0], pinned)}), AT, "pin")
-    with pytest.raises(ConflictError):
-        undo(agent, AT + 3 * STEP)
 
 
 def test_rename_entities_rewrites_everything() -> None:
@@ -230,6 +191,51 @@ def test_rename_entities_rewrites_everything() -> None:
     assert renamed.pins[0].id == "S1"
 
 
+def _full_show() -> Show:
+    show = two_set_show()
+    form = Form(id="f", set="2", kind="line", geometry={}, members=("T1", "T2"))
+    row = PathRow(entity="T1", facing_mode=FacingMode.TOWARD_ENTITY, facing_value="T2")
+    route = Route(id="r", curve={}, members=("T2",), offsets=(0.0,), travel=1.0)
+    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": row}, routes={"r": route})
+    note = Note(id="n", text="x", anchor=Anchor.on_spots(["T1"]), author="d", created_at=AT)
+    override = FacingOverride(entities="T1 + T2", mode=FacingMode.FIXED, value=90.0, start=0, end=4)
+    square = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)))
+    zone = Zone(id="z", kind=ZoneKind.CUSTOM, polygon=square, applies_to=("T1", "T3"))
+    cast = show.cast.model_copy(update={"selections": {"lead": ("T3", "T1")}})
+    return show.model_copy(
+        update={
+            "forms": {"f": form},
+            "transitions": (spec,),
+            "notes": (note,),
+            "facing_overrides": (override,),
+            "pins": (Pin(target="entity", id="T1"),),
+            "zones": (zone,),
+            "sheet": show.sheet.model_copy(update={"zones": (zone,)}),
+            "cast": cast,
+        }
+    )
+
+
+def test_regression_rename_entities_renames_sheet_zones() -> None:
+    """Rewrites `applies_to` of zones stored on the sheet, as rewrite_spot_ids does."""
+    renamed = rename_entities(_full_show(), {"T1": "S1"})
+    assert renamed.sheet.zones[0].applies_to == ("S1", "T3")
+    assert renamed.zones[0].applies_to == ("S1", "T3")
+
+
+def test_regression_rename_entities_keeps_selection_order() -> None:
+    """Stores renamed selections as ordered tuples, the order lane D keeps."""
+    renamed = rename_entities(_full_show(), {"T1": "S1"})
+    assert renamed.cast.selections == {"lead": ("T3", "S1")}
+
+
+def test_rename_entities_equals_rewrite_spot_ids() -> None:
+    show = _full_show()
+    mapping = {"T1": "S1", "T2": "T4", "T4": "T2"}
+    expected = rewrite_spot_ids(show, lambda spot_id: mapping.get(spot_id, spot_id))
+    assert rename_entities(show, mapping) == expected
+
+
 def test_rename_entities_swaps_and_collisions() -> None:
     swapped = rename_entities(two_set_show(), {"T1": "T2", "T2": "T1"})
     assert swapped.sets[0].get("T2").x == 0.0
@@ -244,10 +250,9 @@ def test_rename_entities_swaps_and_collisions() -> None:
 def test_changelog_lines_since_revision() -> None:
     _, agent, _ = open_session(two_set_show(), AT)
     first = agent.revision
-    agent.write("/sets/1/set.py", "a = 1\n", at=AT + STEP, message="script 1")
+    rev = agent.write("/sets/1/set.py", "a = 1\n", at=AT + STEP)
     lines = changelog(agent, first).splitlines()
-    assert len(lines) == 1
-    assert lines[0].endswith("2026-11-11 12:01 agent: script 1 (1 path)")
+    assert lines == [f"{rev.id[:7]} 2026-11-11 12:01 (/sets/1/set.py)"]
     assert len(changelog(agent).splitlines()) == 2
     assert changelog(agent, agent.revision) == ""
 
@@ -257,13 +262,11 @@ def _with_set_two(show: Show, **fields: object) -> Show:
     return show.model_copy(update={"sets": (show.sets[0], edited, *show.sets[2:])})
 
 
-@pytest.mark.defect("UP-9.7-36")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-36")
 def test_regression_undo_does_not_leave_a_path_row_for_a_removed_spot() -> None:
     """Refuses or repairs an undo that would orphan the agent's path row (audit 9.7 history)."""
     _, agent, designer = open_session(two_set_show(), AT)
-    save_show(
-        designer, add_spot(load_show(designer), (0.0, 5.0), "trumpets", "1"), AT + STEP, "add"
+    added = save_show(
+        designer, add_spot(load_show(designer), (0.0, 5.0), "trumpets", "1"), AT + STEP
     )
     new_spot = load_show(designer).cast.ids()[-1]
     agent.refresh()
@@ -272,24 +275,22 @@ def test_regression_undo_does_not_leave_a_path_row_for_a_removed_spot() -> None:
     )
     save_show(agent, load_show(agent).model_copy(update={"transitions": (row,)}), AT + 2 * STEP)
     try:
-        undo(designer, AT + 3 * STEP)
+        revert(designer, added.parent, AT + 3 * STEP)
     except ShowPyError:
         return
     assert validate_show(load_show(designer)).ok
 
 
-@pytest.mark.defect("UP-9.7-37")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-37")
 def test_regression_undoing_the_first_save_keeps_a_loadable_show() -> None:
     """Refuses to undo the first save, or leaves a loadable show (audit 9.7 history).
 
     A third legitimate fix, an explicit empty-root state that load_show names, would need this
     assertion relaxed.
     """
-    ws = open_workspace(InMemoryRepository(), "s", "designer")
-    save_show(ws, two_set_show(), AT)
+    ws = open_workspace(InMemoryRepository(), "s")
+    first = save_show(ws, two_set_show(), AT)
     try:
-        undo(ws, AT + STEP)
+        revert(ws, first.parent, AT + STEP)
     except ShowPyError:
         return
     assert load_show(ws).sets
@@ -350,8 +351,6 @@ def test_regression_diff_show_reports_a_selection_change() -> None:
     assert diff_show(base, edited)
 
 
-@pytest.mark.defect("UP-9.7-44")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-44")
 def test_regression_rename_entities_rewrites_expression_selectors() -> None:
     """Rewrites spot IDs inside expression selectors, as cast.rewrite does (audit 9.7 history)."""
     base = two_set_show()
@@ -359,10 +358,7 @@ def test_regression_rename_entities_rewrites_expression_selectors() -> None:
     renamed = rename_entities(
         base.model_copy(update={"facing_overrides": (override,)}), {"T1": "S1"}
     )
-    entities = renamed.facing_overrides[0].entities
-    assert isinstance(entities, str)
-    assert "S1" in entities
-    assert "T1" not in entities
+    assert renamed.facing_overrides[0].entities == ("S1", "T2")
 
 
 @pytest.mark.defect("UP-9.7-45")

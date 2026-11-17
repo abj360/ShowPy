@@ -1,54 +1,54 @@
 """
-storage.py --- the repository and asset protocols plus the agent's file view of a show
+storage.py --- the repository and asset protocols plus the file view of a show
 
 Contains:
     ROOT_REVISION: names the revision before the first save
     Repository: versions a show's documents; every write checks the expected revision
     AssetStore: stores binary assets under content-hash URIs
-    Workspace: exposes one show as files to one principal, with ownership rules
+    Workspace: exposes one show as files, reading at its own revision like a working copy
     Workspace.read(): returns a file's text or bytes
     Workspace.write(): validates and saves one file
     Workspace.ls(): lists a directory
-    Workspace.commit(): saves a batch of document changes under the principal's rules
+    Workspace.commit(): saves a batch of file changes addressed by set ID as one revision
     Workspace.refresh(): moves the workspace to the head revision
     Workspace.show_at(): returns the show at a revision, or None before the first save
     Workspace.tree_at(): returns the stored documents at a revision
     open_workspace(): opens a workspace at the head revision
     load_show(): reads the whole show at the workspace revision
-    save_show(): writes the whole show, refusing when the designer changed it meanwhile
+    save_show(): writes the whole show, refusing when another write landed meanwhile
 """
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from datetime import datetime
 from typing import Protocol
 
 from showpy.choreo.models import Form, Set, TransitionSpec
-from showpy.core.errors import LockedError, StorageError, UnknownRefError
+from showpy.core.errors import StorageError, UnknownRefError
 from showpy.core.ids import SetId, TransitionId
 from showpy.core.util import close_matches
-from showpy.show.documents import SHOW_DOC, decode_show, is_show_doc, split_path
+from showpy.show.documents import SHOW_DOC, decode_show, encode_documents, is_show_doc, split_path
 from showpy.show.files import (
-    DESIGNER_PATHS,
     all_files,
     directories,
     read_file,
     show_changes,
     staged_changes,
 )
-from showpy.show.locks import require_unlocked
-from showpy.show.models import Principal, Revision, RevisionKind, Show
+from showpy.show.models import Revision, Show
+from showpy.show.set_keys import SetFolders
 from showpy.time.models import Timeline
 
 ROOT_REVISION = ""
-DESIGNER_PRINCIPALS: frozenset[Principal] = frozenset({"designer", "system"})
-SAVE_MESSAGE = "save show"
 
 
 class Repository(Protocol):
     """Versions each show's documents in a linear history of revisions.
 
-    Paths are workspace paths such as `/sets/1/set.json`. Every write takes the revision the
-    caller read at and raises ConflictError, listing what landed since, when the head moved.
+    Paths are stored paths, which address sets by key (`/sets/<key>/set.json`, ADR 0004).
+    Every write takes the revision the caller read at and raises ConflictError, listing what
+    landed since, when the head moved. Writes check validity, never pins or locks: edit
+    functions enforce those for every caller (ADR 0003); a host that writes raw documents
+    owns them.
     """
 
     def shows(self) -> list[str]:
@@ -81,16 +81,11 @@ class Repository(Protocol):
         changes: Mapping[str, bytes | None],
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
-        kind: RevisionKind = "edit",
-        target: str | None = None,
     ) -> Revision:
         """Writes (bytes) or deletes (None) documents atomically as one revision.
 
-        An edit that changes nothing returns the head revision unchanged (idempotent upsert);
-        a `snapshot` records an empty revision.
+        An edit that changes nothing returns the head revision unchanged (idempotent upsert).
         """
         ...
 
@@ -104,11 +99,12 @@ class Repository(Protocol):
         show: Show,
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
     ) -> Revision:
-        """Writes the whole show, deleting documents of sets and paths it no longer has."""
+        """Writes the whole show, deleting documents of sets and paths it no longer has.
+
+        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        """
         ...
 
     def list_sets(self, show_id: str) -> list[SetId]:
@@ -125,11 +121,12 @@ class Repository(Protocol):
         new_set: Set,
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
     ) -> Revision:
-        """Replaces one existing set."""
+        """Replaces one existing set.
+
+        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        """
         ...
 
     def get_script(self, show_id: str, set_id: SetId) -> str:
@@ -143,11 +140,12 @@ class Repository(Protocol):
         source: str,
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
     ) -> Revision:
-        """Replaces a set's build script."""
+        """Replaces a set's build script.
+
+        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        """
         ...
 
     def get_paths(self, show_id: str, tid: TransitionId) -> TransitionSpec:
@@ -160,11 +158,12 @@ class Repository(Protocol):
         spec: TransitionSpec,
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
     ) -> Revision:
-        """Replaces a transition's paths; counts follow the destination set."""
+        """Replaces a transition's paths; counts follow the destination set.
+
+        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        """
         ...
 
     def get_forms(self, show_id: str, set_id: SetId) -> tuple[Form, ...]:
@@ -178,11 +177,12 @@ class Repository(Protocol):
         forms: tuple[Form, ...],
         *,
         expected_revision: str,
-        actor: Principal,
         at: datetime,
-        message: str,
     ) -> Revision:
-        """Replaces a set's forms."""
+        """Replaces a set's forms.
+
+        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        """
         ...
 
     def get_timeline(self, show_id: str) -> Timeline:
@@ -211,27 +211,27 @@ class AssetStore(Protocol):
 
 
 class Workspace:
-    """Exposes one show as files to one principal.
+    """Exposes one show as files, addressing sets by display ID.
 
-    The workspace reads at its own revision, like a working copy. Writes default to expecting
+    Paths such as `/sets/2/set.py` map to the stored folder of the set's key and back, so a
+    renumber moves no file (ADR 0004). The workspace reads at its own revision, like a working
+    copy. Writes default to expecting
     that revision, so an edit made against a stale view raises ConflictError instead of
-    overwriting the designer. `refresh()` moves to the head; each successful write moves to
-    the revision it created. Agents may not write designer-owned files or touch pins and
-    pinned items.
+    overwriting a newer save. `refresh()` moves to the head; each successful write moves to
+    the revision it created. Who may write what is the host's decision (ADR 0003).
 
     Attributes:
         repo: Storage backend.
         show_id: Show being edited.
-        principal: Who is editing.
     """
 
-    def __init__(self, repo: Repository, show_id: str, principal: Principal, revision: str):
+    def __init__(self, repo: Repository, show_id: str, revision: str):
         self.repo = repo
         self.show_id = show_id
-        self.principal: Principal = principal
         self._revision = revision
         self._trees: dict[str, dict[str, bytes]] = {}
         self._shows: dict[str, Show | None] = {}
+        self._canonical_revisions: set[str] = set()
 
     @property
     def revision(self) -> str:
@@ -275,9 +275,9 @@ class Workspace:
         >>> from showpy.examples import two_set_show
         >>> from datetime import datetime, UTC
         >>> repo = InMemoryRepository()
-        >>> _ = repo.put_show("show-1", two_set_show(), expected_revision="", actor="designer",
-        ...                   at=datetime(2026, 11, 11, tzinfo=UTC), message="create")
-        >>> open_workspace(repo, "show-1", "agent").read("/sets/2/placements.csv").splitlines()[1]
+        >>> _ = repo.put_show("show-1", two_set_show(), expected_revision="",
+        ...                   at=datetime(2026, 11, 11, tzinfo=UTC))
+        >>> open_workspace(repo, "show-1").read("/sets/2/placements.csv").splitlines()[1]
         'T1,0.0,9.0,0.0,,,False,True,'
         """
         split_path(path)
@@ -303,68 +303,125 @@ class Workspace:
         }
         return sorted(children)
 
-    def _require_allowed(self, changes: Mapping[str, bytes | None]) -> None:
-        if self.principal in DESIGNER_PRINCIPALS:
-            return
-        owned = sorted(p for p in changes if p in DESIGNER_PATHS)
-        if owned:
-            raise LockedError(
-                f"{', '.join(owned)} belong to the designer",
-                hint="read them, and ask the designer to change them",
-                context={"paths": owned, "principal": self.principal},
-            )
-
-    def _require_pins_kept(self, changes: Mapping[str, bytes | None], base: str) -> None:
-        if self.principal in DESIGNER_PRINCIPALS or not any(map(is_show_doc, changes)):
-            return
-        before = self.show_at(base)
-        if before is None:
-            return
-        after = dict(self.tree_at(base))
-        for path, data in changes.items():
-            if data is None:
-                after.pop(path, None)
-            else:
-                after[path] = data
-        require_unlocked(before, decode_show(after, base))
-
     def commit(
         self,
         changes: Mapping[str, bytes | None],
         *,
         at: datetime,
-        message: str,
         expected_revision: str | None = None,
-        kind: RevisionKind = "edit",
-        target: str | None = None,
     ) -> Revision:
-        """Saves document changes as one revision under the principal's ownership rules.
+        """Saves file changes addressed by display set ID as one revision.
+
+        A folder that names no set but matches another set's key, ignoring case, is refused
+        with StorageError code AMBIGUOUS_PATH rather than written into that set's folder.
 
         Args:
-            changes: Path to new bytes, or None to delete.
+            changes: Workspace path to new bytes, or None to delete.
             at: Time stamp of the revision.
-            message: What the change is for.
             expected_revision: Revision the change was made against; default the workspace's.
-            kind: Revision kind, for undo and redo bookkeeping.
-            target: Revision an undo, redo or revert acts on.
 
         Returns:
             revision: The new head; the workspace moves to it.
         """
         base = self._revision if expected_revision is None else expected_revision
-        self._require_allowed(changes)
-        self._require_pins_kept(changes, base)
+        for path in changes:
+            split_path(path)
+        folders = SetFolders(self.show_at(base))
+        stored = {folders.to_stored(path): data for path, data in changes.items()}
+        return self._commit_normalizing(stored, at=at, expected_revision=base)
+
+    def _commit_stored(
+        self,
+        changes: Mapping[str, bytes | None],
+        *,
+        at: datetime,
+        expected_revision: str | None = None,
+    ) -> Revision:
+        """Saves stored-document changes, addressed by set key, as one revision.
+
+        Args:
+            changes: Stored path to new bytes, or None to delete.
+            at: Time stamp of the revision.
+            expected_revision: Revision the change was made against; default the workspace's.
+
+        Returns:
+            revision: The new head; the workspace moves to it.
+        """
+        base = self._revision if expected_revision is None else expected_revision
         revision = self.repo.transaction(
             self.show_id,
             changes,
             expected_revision=base,
-            actor=self.principal,
             at=at,
-            message=message,
-            kind=kind,
-            target=target,
         )
         self._revision = revision.id
+        return revision
+
+    def _commit_normalizing(
+        self,
+        changes: Mapping[str, bytes | None],
+        *,
+        at: datetime,
+        expected_revision: str | None = None,
+        is_complete: bool = False,
+    ) -> Revision:
+        """Saves stored-document changes after re-encoding non-canonical documents on their own.
+
+        When any stored show document of the base revision is not canonical, one revision holding
+        only those re-encoded documents lands first and the change follows, so the change's own
+        revision lists only what it edits and later writes add no second one (ADR 0014). If the
+        change then conflicts, the normalizing revision stays; it changes no content. A revision
+        found or made canonical is remembered, so the check runs once per revision.
+
+        Args:
+            changes: Stored path to new bytes, or None to delete.
+            at: Time stamp of the revisions.
+            expected_revision: Revision the change was made against; default the workspace's.
+            is_complete: Whether `changes` holds every show document that differs from the
+                canonical encoding of the edited show, as show_changes() lists them; then only
+                those documents need re-encoding to find the non-canonical ones.
+
+        Returns:
+            revision: The new head; the workspace moves to it.
+        """
+        base = self._revision if expected_revision is None else expected_revision
+        normalizing = self._normalizing_for(base, changes, is_complete)
+        if not normalizing:
+            return self._remembered(
+                self._commit_stored(changes, at=at, expected_revision=base), changes, is_complete
+            )
+        normalized = self._commit_stored(normalizing, at=at, expected_revision=base)
+        self._canonical_revisions.add(normalized.id)
+        stored = self.tree_at(normalized.id)
+        remaining = {p: d for p, d in changes.items() if d is None or stored.get(p) != d}
+        return self._remembered(
+            self._commit_stored(remaining, at=at, expected_revision=normalized.id),
+            changes,
+            is_complete,
+        )
+
+    def _normalizing_for(
+        self, base: str, changes: Mapping[str, bytes | None], is_complete: bool
+    ) -> dict[str, bytes | None]:
+        """Lists the re-encodings a change over `base` needs first, empty for a known revision."""
+        if base in self._canonical_revisions:
+            return {}
+        tree = self.tree_at(base)
+        if is_complete:
+            paths = [p for p, d in changes.items() if d is not None and p in tree and tree[p] != d]
+        else:
+            paths = [p for p in tree if is_show_doc(p)]
+        normalizing = _normalizing_changes(self.show_at(base), tree, paths)
+        if not normalizing:
+            self._canonical_revisions.add(base)
+        return normalizing
+
+    def _remembered(
+        self, revision: Revision, changes: Mapping[str, bytes | None], is_complete: bool
+    ) -> Revision:
+        """Remembers a new revision as canonical when its change wrote only canonical documents."""
+        if is_complete or not any(is_show_doc(p) for p in changes):
+            self._canonical_revisions.add(revision.id)
         return revision
 
     def write(
@@ -374,7 +431,6 @@ class Workspace:
         expected_revision: str | None = None,
         *,
         at: datetime,
-        message: str = "",
     ) -> Revision:
         """Validates and saves one file.
 
@@ -383,34 +439,26 @@ class Workspace:
             data: New content; text files take UTF-8.
             expected_revision: Revision the edit was made against; default the workspace's.
             at: Time stamp of the revision.
-            message: What the change is for; default `write <path>`.
 
         Returns:
             revision: The new head.
         """
         split_path(path)
         raw = data.encode() if isinstance(data, str) else data
-        self._require_allowed({path: raw})
         changes = staged_changes(path, raw, self._show(), self._tree())
-        return self.commit(
-            changes, at=at, message=message or f"write {path}", expected_revision=expected_revision
+        return self._commit_normalizing(
+            changes, at=at, expected_revision=expected_revision, is_complete=is_show_doc(path)
         )
 
 
-def open_workspace(repo: Repository, show_id: str, principal: Principal) -> Workspace:
+def open_workspace(repo: Repository, show_id: str) -> Workspace:
     """Opens a workspace on a show at its head revision.
 
     >>> from showpy.show.repositories import InMemoryRepository
-    >>> open_workspace(InMemoryRepository(), "new-show", "designer").revision
+    >>> open_workspace(InMemoryRepository(), "new-show").revision
     ''
     """
-    if principal not in ("agent", "designer", "system"):
-        raise UnknownRefError(
-            f"unknown principal {principal!r}",
-            hint="use agent, designer or system",
-            context={"principal": principal},
-        )
-    return Workspace(repo, show_id, principal, repo.head(show_id))
+    return Workspace(repo, show_id, repo.head(show_id))
 
 
 def load_show(ws: Workspace) -> Show:
@@ -425,18 +473,34 @@ def load_show(ws: Workspace) -> Show:
     return show
 
 
-def save_show(ws: Workspace, show: Show, at: datetime, message: str = SAVE_MESSAGE) -> Revision:
+def save_show(ws: Workspace, show: Show, at: datetime) -> Revision:
     """Writes the whole show against `show.revision`, the revision it was loaded at.
 
-    Raises ConflictError listing every revision (actor, message, paths) saved since, so the
-    agent sees what the designer changed; reload, reapply and save again.
+    Raises ConflictError listing every revision (short ID, time, paths) saved since, so the
+    caller sees what changed meanwhile; reload, reapply and save again. Stored documents that
+    are not canonical are re-encoded in a revision of their own first (ADR 0014); if the edit
+    then conflicts, that revision stays, it changes no content, and the retry builds on it.
 
     >>> from showpy.show.repositories import InMemoryRepository
     >>> from showpy.examples import two_set_show
     >>> from datetime import datetime, UTC
-    >>> ws = open_workspace(InMemoryRepository(), "show-1", "designer")
+    >>> ws = open_workspace(InMemoryRepository(), "show-1")
     >>> save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC)).parent
     ''
     """
     changes = show_changes(show, ws.tree_at(show.revision))
-    return ws.commit(changes, at=at, message=message, expected_revision=show.revision)
+    return ws._commit_normalizing(changes, at=at, expected_revision=show.revision, is_complete=True)
+
+
+def _normalizing_changes(
+    stored: Show | None, tree: Mapping[str, bytes], paths: Collection[str]
+) -> dict[str, bytes | None]:
+    """Lists the named stored show documents whose bytes differ from their canonical encoding.
+
+    Only documents are listed, never scripts or other files, and nothing is deleted, so the
+    decoded show is the same before and after (ADR 0014 item 5).
+    """
+    if stored is None:
+        return {}
+    canonical = encode_documents(stored, paths)
+    return {p: d for p, d in canonical.items() if tree[p] != d}

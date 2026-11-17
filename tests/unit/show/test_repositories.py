@@ -1,41 +1,59 @@
 #!/usr/bin/env python3
 
 """
-test_repositories.py --- encodes audited repository defects (UP-9.7-02, -12 to -17) as strict xfails
+test_repositories.py --- tests show-ID storage safety and repository races; open defects xfail
 
 Contains:
     test_regression_memory_commit_has_one_winner_per_parent: lands exactly one of many threads
         racing on one parent
-    test_regression_repository_refuses_agent_pinned_move: refuses an agent put_set that moves a
-        pinned spot
-    test_regression_repository_refuses_agent_limits_write: refuses an agent transaction that writes
-        the limits file
     test_regression_show_ids_differing_by_case_are_distinct_or_rejected: keeps IDs differing only by
         case from sharing a folder name
     test_regression_reserved_device_show_ids_are_rejected_or_stored_safely: rejects Windows device
         names as show IDs or stores them under another name
+    test_regression_new_device_name_show_is_refused_before_writing: refuses to create a show named
+        like a Windows device, in memory or on disk, writing nothing
+    test_existing_device_name_show_keeps_loading_and_committing: reads and extends a show stored
+        under a device name before the refusal existed
+    test_regression_device_name_is_refused_before_its_path_is_touched: refuses a new device-name
+        show with BAD_PATH even where looking up its folder fails, as Windows' console device does
     test_regression_trailing_dot_show_id_is_rejected_or_stored_safely: rejects a show ID ending in a
         dot or stores it under another name
     test_regression_overlong_show_id_is_rejected_or_stored_safely: rejects a 300-character show ID
         or stores it under a short name
+    test_regression_get_forms_omits_forms_the_set_no_longer_lists: leaves a stale form out of a
+        set's forms
+    test_put_forms_keeps_stale_forms_of_the_set_in_the_show: keeps a stale form stored when the
+        set's forms are replaced
+    test_regression_put_forms_then_get_forms_returns_the_put_forms: lists newly put forms in the
+        set that listed others
+    test_regression_text_getters_raise_schema_error_for_tampered_bytes: raises SchemaError naming
+        the path, not UnicodeDecodeError, for a script, limits or waivers file that is not UTF-8
 """
 
 import contextlib
+import errno
+import os
 import sys
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
 
-from showpy.core.errors import ConflictError, LockedError, StorageError
+from showpy.core.errors import ConflictError, SchemaError, StorageError
+from showpy.core.ids import WINDOWS_DEVICE_NAMES
+from showpy.core.util import content_hash
+from showpy.show.documents import script_doc
 from showpy.show.file_repository import FileRepository
-from showpy.show.files import LIMITS_DOC
+from showpy.show.files import LIMITS_DOC, WAIVERS_DOC
+from showpy.show.integrity import blob_digest
+from showpy.show.models import Revision
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import Repository
 from tests.fixtures.shows import two_set_show
-from tests.helpers import fails_after, pin_spot
+from tests.helpers import fails_after, replaced_form_show
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 SHOW_ID = "show-1"
@@ -45,9 +63,7 @@ MAX_SHOW_ID_LENGTH = 300
 
 
 def _create(repo: Repository, show_id: str = SHOW_ID) -> str:
-    return repo.put_show(
-        show_id, two_set_show(), expected_revision="", actor="designer", at=AT, message="create"
-    ).id
+    return repo.put_show(show_id, two_set_show(), expected_revision="", at=AT).id
 
 
 class _SyncedBlobs(dict[str, bytes]):
@@ -76,9 +92,7 @@ def _race_winners() -> tuple[list[str], set[str]]:
                 SHOW_ID,
                 {f"/renders/{n}.txt": f"x{n}".encode()},
                 expected_revision="",
-                actor="agent",
                 at=AT,
-                message=f"w{n}",
             )
         except ConflictError:
             return
@@ -93,8 +107,6 @@ def _race_winners() -> tuple[list[str], set[str]]:
     return winners, {r.id for r in repo.revisions(SHOW_ID)}
 
 
-@pytest.mark.defect("UP-9.7-02")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-02")
 @fails_after(5)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_memory_commit_has_one_winner_per_parent() -> None:
@@ -103,41 +115,6 @@ def test_regression_memory_commit_has_one_winner_per_parent() -> None:
     assert len(winners) == 1
     assert set(winners) <= stored
     assert len(stored) == 1
-
-
-@pytest.mark.defect("UP-9.7-12")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-12")
-def test_regression_repository_refuses_agent_pinned_move() -> None:
-    """Refuses an agent put_set that moves a pinned spot (audit 9.7 item 7; P0 #5)."""
-    repo = InMemoryRepository()
-    rev = repo.put_show(
-        SHOW_ID,
-        pin_spot(two_set_show(), "2", "T1"),
-        expected_revision="",
-        actor="designer",
-        at=AT,
-        message="create",
-    ).id
-    moved = repo.get_set(SHOW_ID, "2").with_placements({"T1": {"x": 7.0}}, force=True)
-    with pytest.raises(LockedError):
-        repo.put_set(SHOW_ID, moved, expected_revision=rev, actor="agent", at=AT, message="m")
-
-
-@pytest.mark.defect("UP-9.7-13")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-13")
-def test_regression_repository_refuses_agent_limits_write() -> None:
-    """Refuses an agent transaction that writes the limits file (audit 9.7 item 7; P0 #5)."""
-    repo = InMemoryRepository()
-    rev = _create(repo)
-    with pytest.raises(LockedError):
-        repo.transaction(
-            SHOW_ID,
-            {LIMITS_DOC: b"max_speed: 99"},
-            expected_revision=rev,
-            actor="agent",
-            at=AT,
-            message="raise limits",
-        )
 
 
 SAFE_NAME_MAX = 255
@@ -175,8 +152,6 @@ def test_regression_show_ids_differing_by_case_are_distinct_or_rejected(tmp_path
     assert len(lowered) == len(set(lowered))
 
 
-@pytest.mark.defect("UP-9.7-15")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-15")
 @pytest.mark.parametrize("show_id", ["CON", "nul"])
 def test_regression_reserved_device_show_ids_are_rejected_or_stored_safely(
     tmp_path: Path, show_id: str
@@ -184,6 +159,63 @@ def test_regression_reserved_device_show_ids_are_rejected_or_stored_safely(
     """Rejects Windows device names as show IDs or stores them under another name (audit 9.7 #8)."""
     created = _created_folders(FileRepository(tmp_path), show_id)
     assert created is None or show_id not in created
+
+
+DEVICE_SHOW_IDS = ["con", "CON", "nul", "aux.1", "com1", "LPT9.txt"]
+DEVICE_NAME_CODE = "BAD_PATH"
+
+
+@pytest.mark.parametrize("show_id", DEVICE_SHOW_IDS)
+@pytest.mark.parametrize("backend", ["memory", "file"])
+def test_regression_new_device_name_show_is_refused_before_writing(
+    tmp_path: Path, show_id: str, backend: str
+) -> None:
+    """Refuses a new show named like a Windows device, in memory or on disk, writing nothing."""
+    repo: InMemoryRepository | FileRepository = (
+        InMemoryRepository() if backend == "memory" else FileRepository(tmp_path)
+    )
+    with pytest.raises(StorageError) as caught:
+        _create(repo, show_id)
+    assert caught.value.code == DEVICE_NAME_CODE
+    assert caught.value.context == {"show": show_id}
+    assert all(name in caught.value.hint for name in WINDOWS_DEVICE_NAMES)
+    assert repo.shows() == []
+    assert _folders(tmp_path) == set()
+
+
+def test_regression_device_name_is_refused_before_its_path_is_touched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Refuses a new device-name show with BAD_PATH even where looking up its folder fails."""
+    repo = FileRepository(tmp_path)
+    real_lstat = os.lstat
+
+    def console_lstat(path: str | Path, **kwargs: Any) -> os.stat_result:
+        if Path(path).name.casefold() == "con":
+            raise OSError(errno.EINVAL, "Invalid argument", str(path))
+        return real_lstat(path, **kwargs)
+
+    monkeypatch.setattr(os, "lstat", console_lstat)
+    with pytest.raises(StorageError) as caught:
+        _create(repo, "con")
+    assert caught.value.code == DEVICE_NAME_CODE
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot create a device-name folder")
+def test_existing_device_name_show_keeps_loading_and_committing(tmp_path: Path) -> None:
+    """Reads and extends a show stored under a device name before the refusal existed."""
+    repo = FileRepository(tmp_path)
+    head = _create(repo, SHOW_ID)
+    stored = repo.get_show(SHOW_ID)
+    (tmp_path / SHOW_ID).rename(tmp_path / "CON")
+    assert repo.shows() == ["CON"]
+    assert repo.get_show("CON") == stored
+    landed = repo.transaction("CON", {"/renders/a.txt": b"a"}, expected_revision=head, at=AT)
+    assert repo.head("CON") == landed.id
+    assert repo.read("CON", "/renders/a.txt") == b"a"
+    with pytest.raises(StorageError) as restarted:
+        _create(repo, "CON")
+    assert restarted.value.code == DEVICE_NAME_CODE
 
 
 @pytest.mark.defect("UP-9.7-16")
@@ -195,9 +227,60 @@ def test_regression_trailing_dot_show_id_is_rejected_or_stored_safely(tmp_path: 
     assert created is None or not any(name.rstrip(". ") == "abc" for name in created)
 
 
-@pytest.mark.defect("UP-9.7-17")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-17")
 def test_regression_overlong_show_id_is_rejected_or_stored_safely(tmp_path: Path) -> None:
     """Rejects a 300-character show ID or stores it under a short name (audit 9.7 item 8)."""
     created = _created_folders(FileRepository(tmp_path), "a" * MAX_SHOW_ID_LENGTH)
     assert created is None or all(len(n) <= SAFE_NAME_MAX for n in created)
+
+
+def test_regression_get_forms_omits_forms_the_set_no_longer_lists() -> None:
+    """Leaves a stale form out of a set's forms (ruling L-G3)."""
+    repo = InMemoryRepository()
+    repo.put_show(SHOW_ID, replaced_form_show(), expected_revision="", at=AT)
+    assert [f.id for f in repo.get_forms(SHOW_ID, "2")] == ["b"]
+
+
+def test_put_forms_keeps_stale_forms_of_the_set_in_the_show() -> None:
+    """Keeps a stale form stored when the set's forms are replaced through put_forms."""
+    repo = InMemoryRepository()
+    revision = repo.put_show(SHOW_ID, replaced_form_show(), expected_revision="", at=AT)
+    current = repo.get_forms(SHOW_ID, "2")
+    repo.put_forms(SHOW_ID, "2", current, expected_revision=revision.id, at=AT)
+    assert sorted(repo.get_show(SHOW_ID).forms) == ["a", "b"]
+
+
+def test_regression_put_forms_then_get_forms_returns_the_put_forms() -> None:
+    """Lists newly put forms in the set that listed others; stale forms stay stored."""
+    repo = InMemoryRepository()
+    show = replaced_form_show()
+    revision = repo.put_show(SHOW_ID, show, expected_revision="", at=AT)
+    fresh = show.forms["b"].replace(id="c")
+    repo.put_forms(SHOW_ID, "2", (fresh,), expected_revision=revision.id, at=AT)
+    assert [f.id for f in repo.get_forms(SHOW_ID, "2")] == ["c"]
+    assert "a" in repo.get_show(SHOW_ID).forms
+
+
+def _tampered(path: str, raw: bytes) -> InMemoryRepository:
+    """Stores `raw` at `path` through the backend, past the commit check, as a tampered repo."""
+    repo = InMemoryRepository()
+    head = _create(repo)
+    tree = {**repo.backend.tree(SHOW_ID, head), path: blob_digest(raw)}
+    revision = Revision(id=content_hash(tree), parent=head, at=AT, changed=(path,))
+    repo.backend.commit(SHOW_ID, revision, tree, {blob_digest(raw): raw})
+    return repo
+
+
+TEXT_GETTERS: dict[str, Callable[[InMemoryRepository], str]] = {
+    script_doc("1"): lambda repo: repo.get_script(SHOW_ID, "1"),
+    LIMITS_DOC: lambda repo: repo.get_limits(SHOW_ID),
+    WAIVERS_DOC: lambda repo: repo.get_waivers(SHOW_ID),
+}
+
+
+@pytest.mark.parametrize("path", sorted(TEXT_GETTERS))
+def test_regression_text_getters_raise_schema_error_for_tampered_bytes(path: str) -> None:
+    """Raises SchemaError naming the path, not UnicodeDecodeError, for bytes that are not UTF-8."""
+    repo = _tampered(path, b"\xff\xfe")
+    with pytest.raises(SchemaError) as caught:
+        TEXT_GETTERS[path](repo)
+    assert caught.value.context["path"] == path

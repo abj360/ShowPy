@@ -9,12 +9,13 @@ Contains:
     pin_spot(): pins one spot's placement in one set of a show
     replaced_form_show(): places form a on set "2", then re-places the set with form b only
     with_curve_rows(): gives the spots curved path rows through (1, 7) in transition 1 -> 2
-    open_session(): saves a show to a fresh repository and opens agent and designer workspaces
+    open_session(): saves a show to a fresh repository and opens two independent workspaces on it
     bisector_rotation(): returns a pivot and sweep whose arc carries one point onto another
     defect(): marks a test as an open audited defect, a strict xfail keyed on its ID
     capped_address_space(): caps the address space so a runaway allocation fails fast
     fails_after(): fails a test still running after a deadline, never inside coverage or a hook
     only_showpy_errors(): runs a fuzz target; only a ShowPyError may escape, within 5 s
+    HOSTILE_JSON: names JSON bytes that make json.loads raise RecursionError or ValueError
     EXPECTED_FAILURES: exception names a hash-seed subprocess may end with
     outputs_under_hash_seeds(): runs one script under each hash seed and collects its output
     TAGGED_SHOW_SCRIPT: script head building two_set_show() with spot tags and a selection
@@ -55,13 +56,17 @@ FIRST_TRANSITION = ("1", "2")
 CURVE_COUNTS = 8.0
 CURVE_WAYPOINT = Waypoint(x=1, y=7)
 SHOW_ID = "s"
-CREATE_MESSAGE = "create"
 STILL_TOL_M = 1e-6
 FULL_TURN = 360.0
 HALF_TURN = 180.0
 ALLOCATION_HEADROOM_BYTES = 256 * 2**20
 FUZZ_BUDGET_S = 5.0
 SAMPLE_REPR_CHARS = 200
+JSON_NESTING_DEPTH = 200_000
+OVERLONG_INT_DIGITS = 5_000
+# json.loads overflows the C stack (RecursionError) and refuses ints past
+# sys.int_max_str_digits, 4300 by default (ValueError).
+HOSTILE_JSON = {"deep": b"[" * JSON_NESTING_DEPTH, "huge-int": b"9" * OVERLONG_INT_DIGITS}
 # Code running here is a tracer, finalizer or error hook: an exception raised in it is lost
 # or corrupts the hook, so a hang alarm waits for the next tick instead.
 NO_ALARM_MODULES = frozenset(
@@ -159,15 +164,17 @@ def with_curve_rows(show: Show, entities: Iterable[str], locked: bool = False) -
 
 
 def open_session(show: Show, at: datetime) -> tuple[InMemoryRepository, Workspace, Workspace]:
-    """Saves `show` as the designer, then opens an agent workspace on the same repository.
+    """Saves `show` through one workspace, then opens a second one on the same repository.
+
+    Two working copies let a test write through one while the other holds a stale view.
 
     Returns:
-        session: The repository, the agent workspace and the designer workspace.
+        session: The repository, the second workspace and the workspace that saved the show.
     """
     repo = InMemoryRepository()
-    designer = open_workspace(repo, SHOW_ID, "designer")
-    save_show(designer, show, at, CREATE_MESSAGE)
-    return repo, open_workspace(repo, SHOW_ID, "agent"), designer
+    saver = open_workspace(repo, SHOW_ID)
+    save_show(saver, show, at)
+    return repo, open_workspace(repo, SHOW_ID), saver
 
 
 def _angle(origin: Point, p: Point) -> float:

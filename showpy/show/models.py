@@ -26,6 +26,7 @@ Contains:
 
 import bisect
 import itertools
+from collections import Counter
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
@@ -45,8 +46,6 @@ from showpy.time.models import MeasureLabel, Timeline
 INDEX_TOL = 1e-9
 
 type PinTarget = Literal["entity", "form", "set", "transition"]
-type Principal = Literal["agent", "designer", "system"]
-type RevisionKind = Literal["edit", "snapshot", "revert", "undo", "redo"]
 type EventKind = Literal[
     "move", "edit_form", "pin", "unpin", "edit_paths", "comment", "set_counts", "highlight"
 ]
@@ -116,6 +115,15 @@ class Show(FrozenModel):
         ids = self.set_ids()
         if len(set(ids)) != len(ids):
             raise SchemaError("set ids repeat", hint="give every set a unique id")
+        keys = [s.key or s.id for s in self.sets]
+        folded = Counter(k.casefold() for k in keys)
+        repeated = sorted({k for k in keys if folded[k.casefold()] > 1})
+        if repeated:
+            raise SchemaError(
+                f"set keys repeat ignoring case: {', '.join(repeated)}",
+                hint="give every set a key unique ignoring case; add_set() picks a free one",
+                context={"keys": repeated},
+            )
         return self
 
     def set_ids(self) -> list[SetId]:
@@ -301,27 +309,20 @@ class PathDiff(FrozenModel):
 
 
 class Revision(FrozenModel):
-    """Records one saved state of a show; the ID hashes the parent plus the change.
+    """Records one saved state of a show: what changed and when, never who or why (ADR 0003).
 
     Attributes:
-        id: Content hash of parent, change and metadata.
+        id: Content hash of parent, time and change.
         parent: Previous revision; empty for the first.
         at: When it was saved; passed in, never read from the clock.
-        actor: Who saved it.
-        message: What the change was for.
-        changed: Workspace paths written or deleted, sorted.
-        kind: Plain edit, empty snapshot, revert, undo or redo.
-        target: Revision an undo, redo or revert acts on.
+        changed: Stored paths written or deleted, sorted; set and transition folders are named
+            by set key (ADR 0004), so they can differ from workspace paths after a renumber.
     """
 
     id: str
     parent: str
     at: datetime
-    actor: Principal
-    message: str
     changed: tuple[str, ...] = ()
-    kind: RevisionKind = "edit"
-    target: str | None = None
 
 
 class Comment(FrozenModel):
@@ -408,7 +409,6 @@ class CanvasEvent(FrozenModel):
     Attributes:
         id: Event ID.
         at: When it happened.
-        actor: Who made it.
         kind: What happened.
         payload: JSON body for the kind.
         revision: Revision that holds the edit; empty for pointers such as highlights.
@@ -416,7 +416,6 @@ class CanvasEvent(FrozenModel):
 
     id: str
     at: datetime
-    actor: Principal
     kind: EventKind
     # Any: payloads are JSON objects whose fields depend on the kind.
     payload: dict[str, Any]

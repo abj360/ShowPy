@@ -29,8 +29,11 @@ class Selection(FrozenModel):
     @model_validator(mode="before")
     @classmethod
     def _dedupe(cls, values: object) -> object:
-        if isinstance(values, dict) and "ids" in values:
-            values = {**values, "ids": tuple(dict.fromkeys(values["ids"]))}
+        if not isinstance(values, dict):
+            return values
+        ids = values.get("ids")
+        if isinstance(ids, list | tuple) and all(isinstance(i, str) for i in ids):
+            return {**values, "ids": tuple(dict.fromkeys(ids))}
         return values
 
     def __or__(self, other: Self) -> "Selection":

@@ -17,6 +17,8 @@ Contains:
     test_regression_split_drops_audio_whose_section_starts_after_the_half_ends: keeps an audio track
         out of a half that ends before the track's section
     test_regression_split_puts_a_cue_in_one_half_only: keeps cue c1 in a single half of a split
+    test_split_then_join_keeps_a_stale_form: carries a stale form into its section so a rejoin
+        restores the show
 """
 
 from datetime import UTC, datetime
@@ -34,6 +36,7 @@ from showpy.time.clock import count_to_seconds
 from showpy.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting, TempoSection
 from tests.fixtures.shows import two_set_show
 from tests.golden.opener import opener_show
+from tests.helpers import replaced_form_show
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 TOL = 1e-9
@@ -231,3 +234,12 @@ def test_regression_split_puts_a_cue_in_one_half_only() -> None:
     in_first = "c1" in {c.label for c in first.timeline.cues}
     in_second = "c1" in {c.label for c in second.timeline.cues}
     assert in_first != in_second
+
+
+def test_split_then_join_keeps_a_stale_form() -> None:
+    """Carries a stale form into its section so a rejoin restores the show (ruling L-G3)."""
+    show = add_set(replaced_form_show(), "3", 4.0)
+    first, second = split_section(show, "2")
+    assert "a" in first.forms
+    assert "a" in second.forms
+    assert join_sections(first, second).forms == show.forms

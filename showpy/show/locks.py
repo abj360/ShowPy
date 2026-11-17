@@ -2,11 +2,12 @@
 locks.py --- finds edits that touch pinned placements, locked forms, locked path rows or pins
 
 Contains:
+    locked_row_changes(): lists the locked rows of one transition that an edit changes or reroutes
     locked_changes(): lists every pinned or locked item that differs between two shows
     require_unlocked(): raises LockedError when an edit touches a pinned or locked item
 """
 
-from showpy.choreo.models import PathRow, Set
+from showpy.choreo.models import Set, TransitionSpec
 from showpy.core.errors import LockedError
 from showpy.core.ids import format_tid
 from showpy.show.models import Show
@@ -46,22 +47,45 @@ def _form_changes(before: Show, after: Show) -> list[str]:
     ]
 
 
-def _locked_rows(show: Show) -> dict[tuple[str, str], PathRow]:
-    rows: dict[tuple[str, str], PathRow] = {}
-    for spec in show.transitions:
-        for entity, row in spec.rows.items():
-            if row.locked:
-                rows[(format_tid(spec.id), entity)] = row
-    return rows
+def locked_row_changes(before: TransitionSpec, after: TransitionSpec) -> list[str]:
+    """Lists the locked rows of `before` that `after` changes, drops or reroutes.
+
+    A locked row owns the route it names: replacing or removing that route counts as a change
+    to the row.
+
+    Args:
+        before: Transition as stored, whose locked rows apply.
+        after: Transition as an edit would leave it.
+
+    Returns:
+        touched: Readable names such as `path T1 in 1→2`, in row order.
+
+    >>> from showpy.choreo.models import TransitionSpec
+    >>> locked_row_changes(TransitionSpec(id=("1", "2"), counts=8.0), TransitionSpec(
+    ...     id=("1", "2"), counts=8.0))
+    []
+    """
+    tid = format_tid(before.id)
+    found: list[str] = []
+    for entity, row in before.rows.items():
+        if not row.locked:
+            continue
+        if after.rows.get(entity) != row:
+            found.append(f"path {entity} in {tid}")
+        elif row.route is not None and after.routes.get(row.route) != before.routes.get(row.route):
+            found.append(f"route {row.route} of path {entity} in {tid}")
+    return found
 
 
 def _path_changes(before: Show, after: Show) -> list[str]:
     after_specs = {format_tid(spec.id): spec for spec in after.transitions}
     found: list[str] = []
-    for (tid, entity), row in _locked_rows(before).items():
-        spec = after_specs.get(tid)
-        if spec is None or spec.rows.get(entity) != row:
-            found.append(f"path {entity} in {tid}")
+    for spec in before.transitions:
+        new = after_specs.get(format_tid(spec.id))
+        if new is None:
+            found.extend(locked_row_changes(spec, spec.replace(rows={}, routes={})))
+        else:
+            found.extend(locked_row_changes(spec, new))
     return found
 
 
@@ -105,7 +129,6 @@ def require_unlocked(before: Show, after: Show, force: bool = False) -> None:
     if touched:
         raise LockedError(
             f"edit touches pinned or locked items: {', '.join(touched)}",
-            hint="leave pinned items as they are, ask the designer to unpin, or pass force=True "
-            "as the designer",
+            hint="leave pinned items as they are, unpin them first, or pass force=True",
             context={"touched": touched},
         )

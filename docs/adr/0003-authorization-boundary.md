@@ -128,3 +128,26 @@ maintainer will build it there (2026-11-15).
 - Code: `showpy/show/storage.py`, `showpy/show/repositories.py`, `showpy/show/files.py`,
   `showpy/show/collab.py`, `showpy/show/locks.py`.
 - Related: ADR 0004 (stable set keys), ADR 0005 (what pins and locks protect).
+
+## Addendum 2026-11-16: storage writes, revert, `Revision.changed` and the measured check cost
+
+- **Storage writes check validity, not pins or locks (ruling L-A1).** `DocumentRepository`
+  `transaction` and every `put_*` write (`put_show`, `put_set`, `put_script`, `put_paths`,
+  `put_forms`) refuse unknown paths, undecodable structured files and trees that do not decode
+  into a valid `Show`. They never raise `LockedError`. Pins and locks are enforced by the edit
+  functions for every caller (decision 4); a host that writes raw documents owns that check.
+  The class and method docstrings say so.
+- **`revert` restores pinned items without `force`.** `revert(ws, revision_id, at)` commits the
+  stored documents of an earlier revision as they were, so it can undo a change to a pinned
+  placement or a locked path row. That is its job: undo built on it must bring back exactly
+  what was there. A host that wants pins to survive its undo compares the shows first with
+  `diff_show`.
+- **`Revision.changed` holds stored paths.** It lists the paths of the stored tree, which name
+  set and transition folders by set key (ADR 0004), not the workspace paths that use display
+  IDs. After a renumber the two differ; map them through a `Workspace`.
+- **The commit check costs more than estimated.** The lane A review measured it at 300 spots x
+  60 sets: 184 to 208 ms with a warm decode cache, and about 479 ms for the first commit in a
+  process, when the cache is cold. That replaces the "about 70 ms" estimate in
+  Consequences and Numbers above. Controller ruling L-A5: the plan's 300 ms target applies to
+  the steady (warm) path; the cold first-commit cost is a Phase 3 item, solved by decoding per
+  document. A host that saves once per process (a CLI) sees about 0.5 s on that save until then.

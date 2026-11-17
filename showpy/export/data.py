@@ -19,13 +19,13 @@ Contains:
 import csv
 import io
 import math
-import re
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
 
 import pandas as pd
 
 from showpy.choreo.engine import PathEngine
+from showpy.core.csv_cells import neutralize_cell
 from showpy.core.errors import ROOT_LOC, SchemaError, UnknownRefError, field_errors
 from showpy.core.types import Point
 from showpy.core.units import round_to
@@ -46,9 +46,6 @@ FULL_TURN = 360.0
 COLUMN_GAP = "  "
 TITLE_SEPARATOR = " — "
 LIST_SEPARATOR = ", "
-FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
-FORMULA_GUARD = "'"
-PLAIN_DECIMAL = re.compile(r"[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?", re.ASCII)
 TRUE_TEXT, FALSE_TEXT = "true", "false"
 SHEET_HEADER = (
     "set", "counts", "cumulative", "measure", "position", "x", "y", "facing", "behavior",
@@ -267,12 +264,6 @@ def as_table(obj: Tabular) -> TextTable:
     )
 
 
-def _neutralized(cell: str) -> str:
-    if not cell.startswith(FORMULA_TRIGGERS) or PLAIN_DECIMAL.fullmatch(cell):
-        return cell
-    return FORMULA_GUARD + cell
-
-
 def to_csv(obj: Tabular, *, neutralize: bool = True) -> str:
     """Writes a coordinate sheet, chart or DataFrame as CSV; the csv module quotes every cell.
 
@@ -294,7 +285,7 @@ def to_csv(obj: Tabular, *, neutralize: bool = True) -> str:
     table = as_table(obj)
     out = io.StringIO()
     writer = csv.writer(out, lineterminator="\n")
-    guard = _neutralized if neutralize else str
+    guard = neutralize_cell if neutralize else str
     writer.writerow(guard(cell) for cell in table.header)
     writer.writerows([guard(cell) for cell in row] for row in table.rows)
     return out.getvalue()

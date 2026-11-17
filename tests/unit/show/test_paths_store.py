@@ -19,10 +19,8 @@ SHOW_ID = "show-1"
 
 def test_save_and_load_paths_round_trip() -> None:
     repo = InMemoryRepository()
-    repo.put_show(
-        SHOW_ID, two_set_show(), expected_revision="", actor="designer", at=AT, message="create"
-    )
-    ws = open_workspace(repo, SHOW_ID, "agent")
+    repo.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT)
+    ws = open_workspace(repo, SHOW_ID)
     spec = delay(TransitionSpec(id=("1", "2"), counts=8.0), ["T1"], 2.0)
     save_paths(ws, spec, at=AT)
     assert load_paths(ws, ("1", "2")) == spec
@@ -30,9 +28,7 @@ def test_save_and_load_paths_round_trip() -> None:
 
 def test_load_paths_defaults_to_straight_moves() -> None:
     repo = InMemoryRepository()
-    repo.put_show(
-        SHOW_ID, two_set_show(), expected_revision="", actor="designer", at=AT, message="create"
-    )
-    spec = load_paths(open_workspace(repo, SHOW_ID, "agent"), ("1", "2"))
+    repo.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT)
+    spec = load_paths(open_workspace(repo, SHOW_ID), ("1", "2"))
     assert spec.rows == {}
     assert spec.counts == 8.0

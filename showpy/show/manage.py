@@ -30,6 +30,7 @@ from showpy.notes.models import Anchor, Note
 from showpy.sheet.models import Sheet
 from showpy.show.locks import require_unlocked
 from showpy.show.models import Pin, Show, ShowIndex, ShowIndexEntry
+from showpy.show.set_keys import free_set_key, set_key
 from showpy.time.clock import count_to_seconds
 from showpy.time.measures import count_to_measure
 from showpy.time.models import Timeline
@@ -44,7 +45,7 @@ SCHEMES = (SEQUENTIAL,)
 
 
 def _require_set_id(show: Show, set_id: SetId) -> None:
-    if not SET_ID_PATTERN.match(set_id) or ".." in set_id:
+    if not SET_ID_PATTERN.fullmatch(set_id) or ".." in set_id:
         raise SchemaError(
             f"set id {set_id!r} is not allowed",
             hint="use letters, digits, _ and . only, starting with a letter or digit, e.g. 12A",
@@ -153,6 +154,10 @@ def new_show(
     )
 
 
+def _new_key(show: Show, set_id: SetId) -> str:
+    return free_set_key(map(set_key, show.sets), set_id)
+
+
 def _given_placements(show: Show, placements: Sequence[Placement]) -> dict[SpotId, Placement]:
     for placement in placements:
         show.cast.spot(placement.entity)
@@ -168,6 +173,10 @@ def add_set(
     force: bool = False,
 ) -> Show:
     """Inserts a set; spots without a given placement copy their place in the previous set.
+
+    The set's key is its ID, or the first free `<id>.<n>` when a renumbered set holds that key.
+    Only live keys count: after remove_set() in the same unsaved show, a new set with the removed
+    set's ID reuses its key, so on save it takes over that folder and its build script.
 
     Copied placements keep position, facing and on-field state, but not form membership,
     because forms belong to one set. They are pinned when the spot has an entity pin.
@@ -192,7 +201,7 @@ def add_set(
     given = _given_placements(show, placements or ())
     previous = show.sets[position - 1] if position > 0 else None
     rows = tuple(given.get(e) or _carried(show, previous, e) for e in show.cast.ids())
-    new = Set(id=set_id, counts=counts, placements=rows)
+    new = Set(id=set_id, key=_new_key(show, set_id), counts=counts, placements=rows)
     return _with_sets(show, [*show.sets[:position], new, *show.sets[position:]], force)
 
 
@@ -216,7 +225,7 @@ def insert_subset(
     """Inserts a sub-set after `after`, taking its counts from the following set.
 
     The sub-set holds the spots where they stand in `after`; place them afterwards. The total
-    show time stays the same.
+    show time stays the same. Its key follows the add_set() rule.
 
     Args:
         show: Show to edit.
@@ -248,7 +257,7 @@ def insert_subset(
         )
     new_id = _subset_id(show, after)
     rows = tuple(_carried(show, show.sets[position], e) for e in show.cast.ids())
-    new = Set(id=new_id, counts=counts, placements=rows)
+    new = Set(id=new_id, key=_new_key(show, new_id), counts=counts, placements=rows)
     shortened = following.replace(counts=following.counts - counts)
     sets = [*show.sets[: position + 1], new, shortened, *show.sets[position + 2 :]]
     return _with_sets(show, sets, force), new_id
@@ -392,6 +401,8 @@ def _renamed_note(note: Note, mapping: Mapping[SetId, SetId]) -> Note:
 
 def renumber(show: Show, scheme: str = SEQUENTIAL) -> tuple[Show, dict[SetId, SetId]]:
     """Renames sets 1..N in show order, rewriting transitions, forms, notes and pins.
+
+    Keys stay, so stored set folders and their build scripts stay with their sets (ADR 0004).
 
     Args:
         show: Show to edit.

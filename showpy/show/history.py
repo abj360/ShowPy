@@ -1,42 +1,29 @@
 """
-history.py --- diffs sets, paths and shows; snapshots, reverts, undo and redo; spot renames
+history.py --- diffs sets, paths and shows; reverts; spot renames; the changelog
 
 Contains:
     diff_sets(): lists spots moved, turned, added or removed and forms changed between sets
     diff_paths(): lists spots and routes whose effective paths differ between transitions
     diff_show(): summarizes every difference between two shows as a JSON-safe dict
-    snapshot(): records an empty, named revision
     revert(): saves the documents of an earlier revision as a new revision
-    undo(): reverses the principal's latest undoable revision
-    redo(): reapplies the principal's latest undone revision
     rename_entities(): rewrites spot IDs everywhere in a show
     changelog(): lists revisions since a revision as terse lines
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any
 
-from showpy.choreo.models import (
-    FacingMode,
-    FacingOverride,
-    PathRow,
-    Placement,
-    Set,
-    TransitionSpec,
-)
-from showpy.core.errors import ConflictError, SchemaError, StorageError
+from showpy.cast.rewrite import rewrite_spot_ids
+from showpy.choreo.models import Set, TransitionSpec
+from showpy.core.errors import SchemaError
 from showpy.core.ids import SpotId, format_tid
-from showpy.core.selection import Selection, SelectorField
 from showpy.core.units import angle_diff
 from showpy.core.util import approx_equal, natural_sort
-from showpy.notes.models import Note
-from showpy.show.files import DESIGNER_PATHS
 from showpy.show.models import PathDiff, Revision, SetDiff, Show
 from showpy.show.storage import ROOT_REVISION, Workspace
 
 SHORT_ID = 7
-UNDOABLE_KINDS = ("edit", "revert")
 TIME_FORMAT = "%Y-%m-%d %H:%M"
 SHOW_FIELDS = ("sheet", "timeline", "coordinates", "zones", "facing_overrides", "dependencies")
 
@@ -170,25 +157,10 @@ def diff_show(a: Show, b: Show) -> dict[str, Any]:
     return {key: value for key, value in found.items() if value}
 
 
-def snapshot(ws: Workspace, message: str, at: datetime) -> Revision:
-    """Records an empty, named revision at the workspace revision, like a tag.
-
-    >>> from datetime import UTC
-    >>> from showpy.show.repositories import InMemoryRepository
-    >>> from showpy.show.storage import open_workspace, save_show
-    >>> from showpy.examples import two_set_show
-    >>> ws = open_workspace(InMemoryRepository(), "s", "designer")
-    >>> _ = save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC))
-    >>> snapshot(ws, "before finale", datetime(2026, 11, 11, tzinfo=UTC)).changed
-    ()
-    """
-    return ws.commit({}, at=at, message=message, kind="snapshot")
-
-
 def revert(ws: Workspace, revision_id: str, at: datetime) -> Revision:
     """Saves the documents of an earlier revision as a new head revision.
 
-    An agent's revert leaves designer-owned files as they are; pins still guard the result.
+    Hosts build undo on it: only the host knows which revisions its user made (ADR 0003).
 
     Args:
         ws: Workspace; it moves to the head first.
@@ -197,79 +169,23 @@ def revert(ws: Workspace, revision_id: str, at: datetime) -> Revision:
 
     Returns:
         revision: The new head; the head itself when nothing differs.
+
+    >>> from datetime import UTC
+    >>> from showpy.show.repositories import InMemoryRepository
+    >>> from showpy.show.storage import load_show, open_workspace, save_show
+    >>> from showpy.examples import two_set_show
+    >>> ws = open_workspace(InMemoryRepository(), "s")
+    >>> first = save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC))
+    >>> _ = save_show(ws, load_show(ws).replace(title="B"), datetime(2026, 11, 12, tzinfo=UTC))
+    >>> _ = revert(ws, first.id, datetime(2026, 11, 13, tzinfo=UTC))
+    >>> load_show(ws).title
+    'Test show'
     """
     target = ws.repo.get_revision(ws.show_id, revision_id)
     ws.refresh()
     old, head = ws.tree_at(target.id), ws.tree_at(ws.revision)
     paths = {p for p in set(old) | set(head) if old.get(p) != head.get(p)}
-    if ws.principal == "agent":
-        paths -= DESIGNER_PATHS
-    changes = {p: old.get(p) for p in sorted(paths)}
-    message = f"revert to {target.id[:SHORT_ID]}: {target.message}"
-    return ws.commit(changes, at=at, message=message, kind="revert", target=target.id)
-
-
-def _stacks(log: list[Revision], actor: str) -> tuple[list[str], list[str]]:
-    undo_stack: list[str] = []
-    redo_stack: list[str] = []
-    for revision in (r for r in log if r.actor == actor):
-        target = revision.target or ""
-        if revision.kind in UNDOABLE_KINDS:
-            undo_stack.append(revision.id)
-            redo_stack.clear()
-        elif revision.kind == "undo" and target in undo_stack:
-            undo_stack.remove(target)
-            redo_stack.append(target)
-        elif revision.kind == "redo" and target in redo_stack:
-            redo_stack.remove(target)
-            undo_stack.append(target)
-    return undo_stack, redo_stack
-
-
-def _swap(ws: Workspace, target: Revision, forward: bool) -> dict[str, bytes | None]:
-    before, after = ws.tree_at(target.parent), ws.tree_at(target.id)
-    expected, wanted = (before, after) if forward else (after, before)
-    head = ws.tree_at(ws.revision)
-    moved = [p for p in target.changed if head.get(p) != expected.get(p)]
-    if moved:
-        raise ConflictError(
-            f"{', '.join(moved)} changed again after {target.id[:SHORT_ID]}",
-            hint="revert() to a revision instead, or edit the files directly",
-            context={"revision": target.id, "paths": moved},
-        )
-    return {p: wanted.get(p) for p in target.changed}
-
-
-def _step(ws: Workspace, at: datetime, kind: Literal["undo", "redo"]) -> Revision:
-    ws.refresh()
-    undo_stack, redo_stack = _stacks(ws.repo.revisions(ws.show_id), ws.principal)
-    stack = undo_stack if kind == "undo" else redo_stack
-    if not stack:
-        raise StorageError(
-            f"nothing to {kind} for {ws.principal}",
-            hint="only your own edits and reverts can be undone, and only undone ones redone",
-            context={"principal": ws.principal},
-            code=f"NOTHING_TO_{kind.upper()}",
-        )
-    target = ws.repo.get_revision(ws.show_id, stack[-1])
-    changes = _swap(ws, target, forward=kind == "redo")
-    message = f"{kind} {target.id[:SHORT_ID]}: {target.message}"
-    return ws.commit(changes, at=at, message=message, kind=kind, target=target.id)
-
-
-def undo(ws: Workspace, at: datetime) -> Revision:
-    """Reverses the principal's latest undoable revision (an edit or revert).
-
-    Stacks are derived from the revision history alone, so they are deterministic and shared
-    by every workspace of the same principal. Raises ConflictError when someone changed the
-    same files since.
-    """
-    return _step(ws, at, "undo")
-
-
-def redo(ws: Workspace, at: datetime) -> Revision:
-    """Reapplies the principal's latest undone revision; a new edit clears the redo stack."""
-    return _step(ws, at, "redo")
+    return ws._commit_stored({p: old.get(p) for p in sorted(paths)}, at=at)
 
 
 def _require_renamable(show: Show, mapping: Mapping[SpotId, SpotId]) -> None:
@@ -287,47 +203,6 @@ def _require_renamable(show: Show, mapping: Mapping[SpotId, SpotId]) -> None:
         )
 
 
-def _selector(value: SelectorField, rename: Callable[[str], str]) -> SelectorField:
-    if isinstance(value, str):
-        return rename(value)
-    if isinstance(value, Selection):
-        return value.replace(ids=tuple(map(rename, value.ids)))
-    return tuple(map(rename, value))
-
-
-def _row(row: PathRow, rename: Callable[[str], str]) -> PathRow:
-    value = row.facing_value
-    if row.facing_mode is FacingMode.TOWARD_ENTITY and isinstance(value, str):
-        value = rename(value)
-    return row.replace(entity=rename(row.entity), facing_value=value)
-
-
-def _spec(spec: TransitionSpec, rename: Callable[[str], str]) -> TransitionSpec:
-    rows = {rename(e): _row(r, rename) for e, r in spec.rows.items()}
-    routes = {k: r.replace(members=tuple(map(rename, r.members))) for k, r in spec.routes.items()}
-    return spec.replace(rows=rows, routes=routes)
-
-
-def _override(item: FacingOverride, rename: Callable[[str], str]) -> FacingOverride:
-    value = item.value
-    if item.mode is FacingMode.TOWARD_ENTITY and isinstance(value, str):
-        value = rename(value)
-    return item.replace(entities=_selector(item.entities, rename), value=value)
-
-
-def _note(note: Note, rename: Callable[[str], str]) -> Note:
-    spots = note.anchor.spots
-    if spots is None:
-        return note
-    anchor = note.anchor.replace(spots=tuple(map(rename, spots)))
-    return note.replace(anchor=anchor)
-
-
-def _placements(s: Set, rename: Callable[[str], str]) -> Set:
-    rows: tuple[Placement, ...] = tuple(p.replace(entity=rename(p.entity)) for p in s.placements)
-    return s.replace(placements=rows)
-
-
 def rename_entities(show: Show, mapping: Mapping[SpotId, SpotId]) -> Show:
     """Rewrites spot IDs everywhere in a show.
 
@@ -341,44 +216,26 @@ def rename_entities(show: Show, mapping: Mapping[SpotId, SpotId]) -> Show:
     (('S1', 'T2', 'T3', 'T4'), 'S1')
     """
     _require_renamable(show, mapping)
-
-    def rename(spot: str) -> str:
-        return mapping.get(spot, spot)
-
-    cast = show.cast.replace(
-        spots=tuple(s.replace(id=rename(s.id)) for s in show.cast.spots),
-        selections={k: frozenset(map(rename, v)) for k, v in show.cast.selections.items()},
-    )
-    return show.replace(
-        cast=cast,
-        sets=tuple(_placements(s, rename) for s in show.sets),
-        forms={k: f.replace(members=tuple(map(rename, f.members))) for k, f in show.forms.items()},
-        transitions=tuple(_spec(spec, rename) for spec in show.transitions),
-        notes=tuple(_note(n, rename) for n in show.notes),
-        facing_overrides=tuple(_override(o, rename) for o in show.facing_overrides),
-        zones=tuple(z.replace(applies_to=_selector(z.applies_to, rename)) for z in show.zones),
-        pins=tuple(p.replace(id=rename(p.id)) if p.target == "entity" else p for p in show.pins),
-    )
+    return rewrite_spot_ids(show, lambda spot_id: mapping.get(spot_id, spot_id))
 
 
 def _line(revision: Revision) -> str:
-    count = len(revision.changed)
-    paths = f" ({count} path{'s' if count != 1 else ''})" if count else ""
     when = revision.at.strftime(TIME_FORMAT)
-    return f"{revision.id[:SHORT_ID]} {when} {revision.actor}: {revision.message}{paths}"
+    return f"{revision.id[:SHORT_ID]} {when} ({', '.join(revision.changed)})"
 
 
 def changelog(ws: Workspace, since: str = ROOT_REVISION) -> str:
-    """Lists revisions after `since`, oldest first, one terse line each.
+    """Lists revisions after `since`, oldest first, as `<short id> <at> (<paths>)` lines.
 
     >>> from datetime import UTC
     >>> from showpy.show.repositories import InMemoryRepository
     >>> from showpy.show.storage import open_workspace, save_show
     >>> from showpy.examples import two_set_show
-    >>> ws = open_workspace(InMemoryRepository(), "s", "designer")
-    >>> _ = save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC), "create")
-    >>> changelog(ws).split(" ", 1)[1]
-    '2026-11-11 00:00 designer: create (6 paths)'
+    >>> ws = open_workspace(InMemoryRepository(), "s")
+    >>> first = save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC))
+    >>> _ = ws.write("/sets/1/set.py", "pass", at=datetime(2026, 11, 11, 0, 5, tzinfo=UTC))
+    >>> changelog(ws, first.id).split(" ", 1)[1]
+    '2026-11-11 00:05 (/sets/1/set.py)'
     """
     log = ws.repo.revisions(ws.show_id)
     if since != ROOT_REVISION:

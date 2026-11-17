@@ -37,10 +37,10 @@ from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
-from pydantic import Field, model_validator
+from pydantic import Field, SerializerFunctionWrapHandler, model_serializer, model_validator
 
 from showpy.core.errors import LockedError, PathError, SchemaError, UnknownRefError
-from showpy.core.ids import FormId, RouteId, SetId, SpotId, TransitionId
+from showpy.core.ids import FormId, RouteId, SetId, SpotId, TransitionId, check_id
 from showpy.core.selection import Selection, SelectorField
 from showpy.core.types import Count, Degrees, FrozenModel, Meters, Point, Points
 
@@ -107,6 +107,8 @@ class Set(FrozenModel):
 
     Attributes:
         id: Set ID, e.g. `12` or `12A`.
+        key: Stable storage key, fixed when the set is created; defaults to the ID (ADR 0004).
+            A key that differs from the ID must pass check_id.
         counts: Counts since the previous set; 0 for the first.
         placements: One placement per spot in the cast.
         forms: Forms present in this set.
@@ -117,6 +119,7 @@ class Set(FrozenModel):
     """
 
     id: SetId
+    key: str | None = None
     counts: float
     placements: tuple[Placement, ...] = ()
     forms: tuple[FormId, ...] = ()
@@ -132,7 +135,20 @@ class Set(FrozenModel):
         entities = [p.entity for p in self.placements]
         if len(set(entities)) != len(entities):
             raise SchemaError(f"set {self.id} places a spot twice", hint="one placement per spot")
+        # A key equal to the ID is today's ID (ADR 0006 item 6 leaves stored IDs alone until the
+        # Phase 2 migration); constructors check new keys through free_set_key().
+        key = self.id if self.key in (None, self.id) else check_id(self.key, kind="set key")
+        # The model is frozen; the validator is the one place that fills the defaulted key.
+        object.__setattr__(self, "key", key)
         return self
+
+    # Any: the dump is the JSON-like mapping pydantic built for this model.
+    @model_serializer(mode="wrap")
+    def _omit_default_key(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        dumped: dict[str, Any] = handler(self)
+        if self.key == self.id:
+            dumped.pop("key", None)
+        return dumped
 
     def _index(self) -> dict[SpotId, int]:
         return {p.entity: i for i, p in enumerate(self.placements)}

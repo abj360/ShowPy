@@ -27,12 +27,13 @@ from numbers import Real
 from typing import Annotated, Any, Literal, cast, override
 
 import numpy as np
-from pydantic import Field, TypeAdapter, ValidationError, field_validator, model_validator
+from pydantic import Field, TypeAdapter, field_validator, model_validator
 from scipy.special import comb
 
 from showpy.core.caps import MAX_TABLE, require_size
-from showpy.core.errors import GeometryError, schema_error_from
+from showpy.core.errors import GeometryError
 from showpy.core.types import Degrees, Meters, Point, Points, PositiveFinite
+from showpy.core.validation import validate_adapter
 from showpy.geo.checks import require_finite_as
 from showpy.geo.curve_base import CurveBase, FloatArray, _unit
 from showpy.geo.svg import Subpath, parse_path
@@ -569,10 +570,7 @@ def curve_from_construction(recipe: dict[str, Any]) -> AnyCurve:
     >>> curve_from_construction(Segment(a=(0, 0), b=(1, 0)).construction()).length()
     1.0
     """
-    try:
-        return CURVE_ADAPTER.validate_python(recipe)
-    except ValidationError as exc:
-        raise schema_error_from(exc, model="Curve") from exc
+    return validate_adapter(CURVE_ADAPTER, recipe, name="Curve")
 
 
 def _require_turns(value: Real) -> None:

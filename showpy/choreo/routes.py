@@ -29,7 +29,7 @@ from showpy.choreo.models import (
     Waypoint,
 )
 from showpy.choreo.paths import set_style
-from showpy.core.errors import PathError
+from showpy.core.errors import LockedError, PathError
 from showpy.core.ids import SpotId, TransitionId, format_tid
 from showpy.core.types import Point
 from showpy.geo.curves import (
@@ -40,7 +40,7 @@ from showpy.geo.curves import (
     Segment,
     curve_from_construction,
 )
-from showpy.show.locks import require_unlocked
+from showpy.show.locks import locked_row_changes, require_unlocked
 from showpy.show.models import Show
 
 MIN_GAP = 1e-9
@@ -137,7 +137,15 @@ def follow(
     'follow'
     """
     timed = route.replace(start=start, end=end)
-    spec = spec.replace(routes={**spec.routes, route.id: timed})
+    routed = spec.replace(routes={**spec.routes, route.id: timed})
+    touched = locked_row_changes(spec, routed)
+    if touched and not force:
+        raise LockedError(
+            f"route {route.id} is followed by locked rows: {', '.join(touched)}",
+            hint="use a new route id, unlock the rows first, or pass force=True",
+            context={"route": route.id, "touched": touched},
+        )
+    spec = routed
     return set_style(spec, list(route.members), PathStyle.FOLLOW, force=force, route=route.id)
 
 

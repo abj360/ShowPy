@@ -346,24 +346,22 @@ LONG_INPUT_CHARS = 10_000
 MAX_ECHOING_MESSAGE_CHARS = 200
 
 
-@pytest.mark.defect("UP-9.7-01")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-01")
 def test_regression_renumber_then_save_keeps_scripts_with_their_sets() -> None:
     """Moves each set's build script with the set across renumber and save (audit 9.7 #1; P0 #1)."""
     repo = InMemoryRepository()
-    ws = open_workspace(repo, "s", "designer")
+    ws = open_workspace(repo, "s")
     inserted, _ = insert_subset(two_set_show(), "1", 2.0)
     save_show(ws, inserted, AT)
     ws.commit(
         {"/sets/1A/set.py": SCRIPT_OLD_ONE_A, "/sets/2/set.py": SCRIPT_OLD_TWO},
         at=AT,
-        message="scripts",
     )
     renumbered, mapping = renumber(load_show(ws))
-    save_show(ws, renumbered, AT, "renumber")
+    save_show(ws, renumbered, AT)
     assert mapping == {"1": "1", "1A": "2", "2": "3"}
-    assert repo.read("s", "/sets/2/set.py") == SCRIPT_OLD_ONE_A
-    assert repo.read("s", "/sets/3/set.py") == SCRIPT_OLD_TWO
+    ws.refresh()
+    assert ws.read("/sets/2/set.py") == SCRIPT_OLD_ONE_A.decode()
+    assert ws.read("/sets/3/set.py") == SCRIPT_OLD_TWO.decode()
 
 
 @pytest.mark.defect("UP-9.7-51")
@@ -464,27 +462,21 @@ def test_regression_frozen_show_is_hashable() -> None:
 def test_regression_stale_save_conflict_message_is_bounded() -> None:
     """Caps the ConflictError text after many landed revisions (audit 9.7 sets defects)."""
     repo = InMemoryRepository()
-    first = repo.put_show(
-        "s", two_set_show(), expected_revision="", actor="designer", at=AT, message="create"
-    ).id
+    first = repo.put_show("s", two_set_show(), expected_revision="", at=AT).id
     head = first
     for n in range(REVISION_FLOOD):
         head = repo.transaction(
             "s",
             {"/renders/a.txt": str(n).encode()},
             expected_revision=head,
-            actor="agent",
             at=AT,
-            message=f"render {n}",
         ).id
     with pytest.raises(ConflictError) as excinfo:
         repo.transaction(
             "s",
             {"/renders/b.txt": b"late"},
             expected_revision=first,
-            actor="agent",
             at=AT,
-            message="stale",
         )
     assert len(str(excinfo.value)) <= MAX_CONFLICT_MESSAGE_CHARS
 

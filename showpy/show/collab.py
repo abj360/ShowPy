@@ -7,7 +7,7 @@ Contains:
     pins(): lists the designer's locks
     propose(): wraps change ops as a suggestion for the designer
     preview_proposal(): computes the ghost placements and paths a proposal would produce
-    accept(): applies a proposal as the designer, refusing when the same items moved since
+    accept(): applies a proposal to the head show, refusing when the same items moved since
     reject(): closes a proposal with a reason
     highlight(): points the designer at spots, an area, a set, a transition or a zone
     selection(): returns what the designer has selected
@@ -20,15 +20,14 @@ from pydantic import TypeAdapter
 
 from showpy.core.errors import (
     ConflictError,
-    LockedError,
     SchemaError,
     TimeRangeError,
 )
 from showpy.core.ids import ZoneId, format_tid
 from showpy.core.selection import Selection
+from showpy.core.validation import validate_adapter
 from showpy.notes.models import Anchor
 from showpy.show.changes import apply_change
-from showpy.show.files import COMMENTS_ADAPTER, COMMENTS_DOC, SELECTION_DOC
 from showpy.show.locks import locked_changes
 from showpy.show.models import (
     CanvasEvent,
@@ -47,6 +46,7 @@ from showpy.show.models import (
 )
 from showpy.show.pinning import pin, unpin
 from showpy.show.storage import ROOT_REVISION, Workspace, load_show, save_show
+from showpy.show.structured import COMMENTS_DOC, SELECTION_DOC, decode_comments
 
 OP_ADAPTER: TypeAdapter[ChangeOp] = TypeAdapter(ChangeOp)
 OP_KIND: dict[type, EventKind] = {
@@ -60,36 +60,34 @@ DEFAULT_TTL_S = 30.0
 SHORT_ID = 7
 
 
-def _require_designer(event: CanvasEvent) -> None:
-    if event.actor == "agent":
-        raise LockedError(
-            f"agent event {event.id} changes pins",
-            hint="pins belong to the designer; propose() a change instead",
-            context={"event": event.id},
-        )
-
-
-def apply_event(show: Show, event: CanvasEvent) -> Show:
-    """Replays one canvas event; designer and system events may touch pinned items.
+def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
+    """Replays one canvas event; pinned items raise LockedError unless `force` is set.
 
     Comment and highlight events leave the show unchanged.
 
+    Args:
+        show: Show the event applies to.
+        event: Canvas event to replay.
+        force: Whether the caller overrides pins and locks on the touched items.
+
+    Returns:
+        edited: The show after the event.
+
     >>> from datetime import UTC
     >>> from showpy.examples import two_set_show
-    >>> event = CanvasEvent(id="e1", at=datetime(2026, 11, 11, tzinfo=UTC), actor="designer",
-    ...                     kind="set_counts", payload={"op": "counts", "set_id": "2", "counts": 6})
+    >>> event = CanvasEvent(id="e1", at=datetime(2026, 11, 11, tzinfo=UTC), kind="set_counts",
+    ...                     payload={"op": "counts", "set_id": "2", "counts": 6})
     >>> apply_event(two_set_show(), event).set("2").counts
     6.0
     """
     if event.kind in ("comment", "highlight"):
         return show
     if event.kind in ("pin", "unpin"):
-        _require_designer(event)
         held = Pin.model_validate(event.payload)
         if event.kind == "pin":
             return pin(show, held.target, held.id, held.reason, held.by)
         return unpin(show, held.target, held.id)
-    op = OP_ADAPTER.validate_python(event.payload)
+    op = validate_adapter(OP_ADAPTER, event.payload, name="ChangeOp")
     if OP_KIND[type(op)] != event.kind:
         raise SchemaError(
             f"event {event.id} of kind {event.kind} carries a {op.op} op",
@@ -97,7 +95,7 @@ def apply_event(show: Show, event: CanvasEvent) -> Show:
             "edit_paths=paths, set_counts=counts",
             context={"event": event.id},
         )
-    return apply_change(show, [op], force=event.actor != "agent")
+    return apply_change(show, [op], force=force)
 
 
 def _pin_events(before: Show, after: Show) -> list[tuple[EventKind, dict[str, object]]]:
@@ -140,7 +138,7 @@ def _show_events(before: Show, after: Show) -> list[tuple[EventKind, dict[str, o
 
 def _comments(ws: Workspace, revision: str) -> dict[str, Comment]:
     raw = ws.tree_at(revision).get(COMMENTS_DOC)
-    return {} if raw is None else {c.id: c for c in COMMENTS_ADAPTER.validate_json(raw)}
+    return {} if raw is None else {c.id: c for c in decode_comments(raw)}
 
 
 def _comment_events(ws: Workspace, r: Revision) -> list[tuple[EventKind, dict[str, object]]]:
@@ -159,7 +157,6 @@ def _revision_events(ws: Workspace, r: Revision) -> list[CanvasEvent]:
         CanvasEvent(
             id=f"{r.id[:EVENT_ID_LENGTH]}-{n}",
             at=r.at,
-            actor=r.actor,
             kind=kind,
             payload=payload,
             revision=r.id,
@@ -267,32 +264,26 @@ def _require_no_overlap(ws: Workspace, proposal: Proposal, head: Show) -> None:
 
 
 def accept(ws: Workspace, proposal: Proposal, at: datetime) -> Revision:
-    """Applies an open proposal to the head show as the designer and saves it.
+    """Applies an open proposal to the head show and saves it.
 
     When the base moved, the proposal still lands if nothing it touches changed since;
     otherwise ConflictError names the overlap. Pins still hold: unpin first to accept edits
     to pinned items.
 
     Args:
-        ws: Designer or system workspace; it moves to the head.
+        ws: Workspace; it moves to the head.
         proposal: Open proposal.
         at: Time stamp of the revision.
 
     Returns:
         revision: The revision holding the accepted change.
     """
-    if ws.principal == "agent":
-        raise LockedError(
-            "the agent cannot accept proposals",
-            hint="the designer accepts or rejects proposals",
-            context={"proposal": proposal.id},
-        )
     _require_open(proposal)
     ws.refresh()
     head = load_show(ws)
     _require_no_overlap(ws, proposal, head)
     edited = apply_change(head, proposal.change)
-    return save_show(ws, edited, at, f"accept proposal {proposal.id}: {proposal.note}")
+    return save_show(ws, edited, at)
 
 
 def reject(proposal: Proposal, reason: str) -> Proposal:
@@ -329,9 +320,7 @@ def highlight(
         if isinstance(target, Anchor)
         else {"zone": target}
     )
-    return CanvasEvent(
-        id=event_id, at=at, actor="agent", kind="highlight", payload={**pointed, "ttl_s": ttl_s}
-    )
+    return CanvasEvent(id=event_id, at=at, kind="highlight", payload={**pointed, "ttl_s": ttl_s})
 
 
 def selection(ws: Workspace) -> Selection:

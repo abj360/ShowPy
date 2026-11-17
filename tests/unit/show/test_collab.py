@@ -46,7 +46,6 @@ from showpy.show.collab import (
     selection,
 )
 from showpy.show.documents import dump_json
-from showpy.show.files import COMMENTS_DOC
 from showpy.show.manage import add_set, set_counts
 from showpy.show.models import (
     CanvasEvent,
@@ -60,6 +59,7 @@ from showpy.show.models import (
 )
 from showpy.show.pinning import pin, unpin
 from showpy.show.storage import Workspace, load_show, save_show
+from showpy.show.structured import COMMENTS_DOC
 from tests.fixtures.shows import two_set_show
 from tests.helpers import open_session
 
@@ -149,7 +149,7 @@ def _designer_edits(designer: Workspace) -> Show:
         [_move("T1", -4.0), FormOp(form=FORM), PathsOp(spec=paths), CountsOp(set_id="3", counts=6)],
     )
     edited = pin(edited, "entity", "T4", "anchor")
-    save_show(designer, edited, AT + STEP, "designer pass")
+    save_show(designer, edited, AT + STEP)
     return edited
 
 
@@ -162,10 +162,10 @@ def test_events_since_replay_reproduces_head() -> None:
     kinds = [e.kind for e in events]
     assert kinds[0] == "pin"
     assert {"move", "edit_form", "edit_paths", "set_counts"} <= set(kinds)
-    assert all(e.actor == "designer" and e.revision == designer.revision for e in events)
+    assert all(e.revision == designer.revision for e in events)
     replayed = base
     for event in events:
-        replayed = apply_event(replayed, event)
+        replayed = apply_event(replayed, event, force=True)
     head = load_show(designer)
     assert replayed.model_copy(update={"revision": head.revision}) == head
     assert events_since(agent, designer.revision) == []
@@ -182,28 +182,37 @@ def test_events_since_reports_comments() -> None:
 
 
 def test_apply_event_rules() -> None:
-    agent_pin = CanvasEvent(
-        id="e", at=AT, actor="agent", kind="pin", payload=Pin(target="set", id="1").model_dump()
-    )
-    with pytest.raises(LockedError):
-        apply_event(two_set_show(), agent_pin)
     mismatched = CanvasEvent(
         id="e",
         at=AT,
-        actor="designer",
         kind="move",
         payload={"op": "counts", "set_id": "2", "counts": 4},
     )
     with pytest.raises(SchemaError):
         apply_event(two_set_show(), mismatched)
     pinned = pin(two_set_show(), "entity", "T1")
-    agent_move = CanvasEvent(
-        id="e", at=AT, actor="agent", kind="move", payload=_move("T1", 3.0).model_dump(mode="json")
+    note = CanvasEvent(id="e", at=AT, kind="comment", payload={"text": "x"})
+    assert apply_event(pinned, note) == pinned
+
+
+def test_canvas_event_needs_explicit_force() -> None:
+    pinned = pin(two_set_show(), "entity", "T1")
+    move = CanvasEvent(
+        id="e",
+        at=AT,
+        kind="move",
+        payload=_move("T1", 3.0).model_dump(mode="json"),
     )
     with pytest.raises(LockedError):
-        apply_event(pinned, agent_move)
-    note = CanvasEvent(id="e", at=AT, actor="agent", kind="comment", payload={"text": "x"})
-    assert apply_event(pinned, note) == pinned
+        apply_event(pinned, move)
+    assert apply_event(pinned, move, force=True).set("2").get("T1").x == 3.0
+
+
+def test_agent_pin_event_applies() -> None:
+    event = CanvasEvent(id="e", at=AT, kind="pin", payload=Pin(target="set", id="1").model_dump())
+    assert Pin(target="set", id="1") in [
+        Pin(target=p.target, id=p.id) for p in apply_event(two_set_show(), event).pins
+    ]
 
 
 def test_propose_preview_and_reject() -> None:
@@ -223,13 +232,11 @@ def test_propose_preview_and_reject() -> None:
         reject(rejected, "again")
 
 
-def test_accept_applies_as_designer() -> None:
+def test_accept_saves_the_proposal_as_the_new_head() -> None:
     _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
     proposal = propose(load_show(agent), [_move("T3", -1.0)], "shift", "p1")
-    with pytest.raises(LockedError):
-        accept(agent, proposal, AT)
     rev = accept(designer, proposal, AT + STEP)
-    assert rev.actor == "designer"
+    assert (rev.id, rev.at) == (designer.repo.head("s"), AT + STEP)
     assert load_show(designer).set("2").get("T3").x == -1.0
 
 
@@ -237,7 +244,7 @@ def test_accept_rebases_when_unrelated_items_moved() -> None:
     _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
     proposal = propose(load_show(agent), [_move("T3", -1.0)], "shift", "p1")
     other = apply_change(load_show(designer), [_move("T1", 8.0)])
-    save_show(designer, other, AT + STEP, "unrelated")
+    save_show(designer, other, AT + STEP)
     accept(designer, proposal, AT + 2 * STEP)
     head = load_show(designer)
     assert (head.set("2").get("T1").x, head.set("2").get("T3").x) == (8.0, -1.0)
@@ -246,7 +253,7 @@ def test_accept_rebases_when_unrelated_items_moved() -> None:
 def test_accept_conflicts_when_same_items_moved() -> None:
     _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
     proposal = propose(load_show(agent), [_move("T1", -1.0)], "shift", "p1")
-    save_show(designer, apply_change(load_show(designer), [_move("T1", 8.0)]), AT + STEP, "mine")
+    save_show(designer, apply_change(load_show(designer), [_move("T1", 8.0)]), AT + STEP)
     with pytest.raises(ConflictError) as info:
         accept(designer, proposal, AT + 2 * STEP)
     assert info.value.context["overlap"] == ["placement T1 in set 2"]
@@ -255,9 +262,9 @@ def test_accept_conflicts_when_same_items_moved() -> None:
 def test_accept_respects_pins() -> None:
     _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
     proposal = propose(load_show(agent), [_move("T1", -1.0)], "shift", "p1")
-    save_show(designer, pin(load_show(designer), "entity", "T2"), AT + STEP, "pin T2")
+    save_show(designer, pin(load_show(designer), "entity", "T2"), AT + STEP)
     accept(designer, proposal, AT + 2 * STEP)
-    save_show(designer, pin(load_show(designer), "entity", "T1"), AT + 3 * STEP, "pin T1")
+    save_show(designer, pin(load_show(designer), "entity", "T1"), AT + 3 * STEP)
     pinned_t1 = propose(load_show(designer), [_move("T1", 5.0)], "again", "p2")
     with pytest.raises(LockedError):
         accept(designer, pinned_t1, AT + 4 * STEP)
@@ -297,7 +304,7 @@ def test_regression_counts_only_change_is_not_reported_as_a_paths_edit() -> None
     _, agent, designer = open_session(_with_path_row(two_set_show()), AT)
     base_revision = designer.revision
     retimed = set_counts(load_show(designer), "2", RETIMED_COUNTS)
-    save_show(designer, retimed, AT + STEP, "retime")
+    save_show(designer, retimed, AT + STEP)
     kinds = {event.kind for event in events_since(agent, base_revision)}
     assert "set_counts" in kinds
     assert "edit_paths" not in kinds
@@ -311,10 +318,10 @@ def test_regression_events_since_replay_reproduces_a_form_deletion() -> None:
     _, agent, designer = open_session(with_form, AT)
     base_revision = designer.revision
     base = load_show(designer)
-    save_show(designer, base.model_copy(update={"forms": {}}), AT + STEP, "delete form")
+    save_show(designer, base.model_copy(update={"forms": {}}), AT + STEP)
     replayed = base
     for event in events_since(agent, base_revision):
-        replayed = apply_event(replayed, event)
+        replayed = apply_event(replayed, event, force=True)
     assert replayed.forms == load_show(designer).forms
 
 
@@ -350,7 +357,7 @@ def test_regression_rescale_proposal_conflicts_with_a_newer_row_of_the_same_tran
     proposal = propose(load_show(agent), [rescale], "", "p1")
     newer = STRAIGHT_ROW.model_copy(update={"rows": {"T1": PathRow(entity="T1", start=4)}})
     designer_show = load_show(designer).model_copy(update={"transitions": (newer,)})
-    save_show(designer, designer_show, AT + STEP, "designer row")
+    save_show(designer, designer_show, AT + STEP)
     with pytest.raises(ConflictError):
         accept(designer, proposal, AT + 2 * STEP)
 
@@ -363,9 +370,20 @@ def test_regression_accepting_a_form_edit_does_not_resurrect_a_deleted_form() ->
     _, agent, designer = open_session(with_form, AT)
     edited_form = FORM.model_copy(update={"geometry": {"len": 9}})
     proposal = propose(load_show(agent), [FormOp(form=edited_form)], "longer", "p1")
-    save_show(designer, load_show(designer).model_copy(update={"forms": {}}), AT + STEP, "drop")
+    save_show(designer, load_show(designer).model_copy(update={"forms": {}}), AT + STEP)
     try:
         accept(designer, proposal, AT + 2 * STEP)
     except ShowPyError:
         return
     assert "f1" not in load_show(designer).forms
+
+
+@pytest.mark.parametrize("payload", [{}, {"op": "nope"}, {"op": "counts", "counts": "x"}])
+def test_regression_canvas_event_with_bad_payload_is_a_schema_error(
+    payload: dict[str, object],
+) -> None:
+    """Raises SchemaError, not pydantic's ValidationError, for a malformed op payload."""
+    event = CanvasEvent(id="e", at=AT, kind="set_counts", payload=payload)
+    with pytest.raises(SchemaError) as info:
+        apply_event(two_set_show(), event)
+    assert info.value.context["errors"]

@@ -38,7 +38,7 @@ Drill design is slow because every dot, every move and every check is manual. Sh
 - **Show:**
   - Set management and a show index.
   - Validation, versioned storage (in memory or files) and a workspace file view.
-  - History with undo and redo, pins, proposals and canvas events.
+  - History with diffs and revert, pins, proposals and canvas events.
 - **Export:**
   - Publishing with performer claims and QR codes.
   - Coordinate sheets, charts and cue sheets.

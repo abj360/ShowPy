@@ -182,3 +182,17 @@ hold old `source_hash` values. The change must not lose or rewrite any of that.
 - **Dump failures raise `SchemaError`.** A model whose field serializer fails
   (`PydanticSerializationError`) or whose fields hold a reference cycle (pydantic's
   circular-reference `ValueError`) raises `SchemaError` naming the model.
+
+## Addendum 2026-11-16: normalizing revisions over a repository's life
+
+- **The first write of any kind normalizes (ruling A7-R4).** `save_show`, `Workspace.write` and
+  `Workspace.commit`, including a write that touches no show document (a build script, a
+  render), first commit one revision that re-encodes every non-canonical show document of the
+  base tree, then the edit on top. A legacy repository therefore gets exactly one normalizing
+  revision on its first write after the upgrade, whatever that write is.
+- **More than one can occur over a repository's life.** Decision 5 and the Numbers row "at most
+  1" hold per upgrade, not for ever. `Workspace.commit` stores the bytes it is given, canonical
+  or not, so a raw commit of a hand-formatted `show.json` leaves a non-canonical document that
+  the next write normalizes again. `revert` to a revision written before the upgrade restores
+  its legacy bytes, and the next write normalizes them again. Each such revision changes no
+  content: its decoded show equals the stored one, and `diff_show` across it is empty.
