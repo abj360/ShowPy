@@ -11,6 +11,7 @@ Contains:
     placements_doc(): returns the path of a set's derived placements table
     paths_doc(): returns the path of a transition's paths document
     is_show_doc(): reports whether a path is part of the encoded Show
+    expected_show_docs(): lists the show-document paths decode reads for a show
     encode_show(): splits a show into documents
     decode_show(): assembles a show from documents, reusing cached per-document decodes
 """
@@ -37,15 +38,16 @@ NOTES_DOC = "/show/notes.json"
 TIMELINE_DOC = "/time/timeline.json"
 SET_ORDER_FIELD = "sets"
 SPLIT_FIELDS = frozenset({"sheet", "notes", "timeline", "sets", "forms", "transitions", "revision"})
-SEGMENT_PATTERN = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.\-]*$")
+SEGMENT = r"[A-Za-z0-9_][A-Za-z0-9_.\-]*"
+SEGMENT_PATTERN = re.compile(SEGMENT)
 SET_DOC_NAME = "set.json"
 SCRIPT_NAME = "set.py"
 FORMS_NAME = "forms.json"
 PLACEMENTS_NAME = "placements.csv"
 PATHS_NAME = "paths.json"
 SHOW_DOC_PATTERN = re.compile(
-    r"^/(show/(show|sheet|notes)\.json|time/timeline\.json|sets/[^/]+/(set|forms)\.json"
-    r"|transitions/[^/]+/paths\.json)$"
+    rf"/(show/(show|sheet|notes)\.json|time/timeline\.json|sets/{SEGMENT}/(set|forms)\.json"
+    rf"|transitions/{SEGMENT}/paths\.json)"
 )
 JSON_INDENT = 2
 JSON_SCALARS = frozenset({str, int, float, bool})
@@ -62,7 +64,7 @@ def split_path(path: str) -> list[str]:
         segments = segments[:-1]
     if path == "/":
         return []
-    if not segments or not all(SEGMENT_PATTERN.match(s) and ".." not in s for s in segments):
+    if not segments or not all(SEGMENT_PATTERN.fullmatch(s) and ".." not in s for s in segments):
         raise StorageError(
             f"path {path!r} is not a workspace path",
             hint="use an absolute path such as /sets/1/set.py, without '..', '.' or empty parts",
@@ -131,11 +133,11 @@ def is_show_doc(path: str) -> bool:
     >>> is_show_doc("/sets/1/forms.json"), is_show_doc("/sets/1/set.py")
     (True, False)
     """
-    return SHOW_DOC_PATTERN.match(path) is not None
+    return SHOW_DOC_PATTERN.fullmatch(path) is not None
 
 
 def _require_storable(show: Show) -> None:
-    bad = [s for s in show.set_ids() if not SET_ID_PATTERN.match(s) or ".." in s]
+    bad = [s for s in show.set_ids() if not SET_ID_PATTERN.fullmatch(s) or ".." in s]
     pairs = set(show.transition_ids())
     loose = [spec.id for spec in show.transitions if spec.id not in pairs]
     orphans = [f for f, form in show.forms.items() if form.set not in show.set_ids()]
@@ -146,6 +148,21 @@ def _require_storable(show: Show) -> None:
             "sets; give every form an existing set",
             context={"bad_set_ids": bad, "loose_transitions": loose, "orphan_forms": orphans},
         )
+
+
+def expected_show_docs(show: Show) -> frozenset[str]:
+    """Returns every show-document path decode_show() reads for `show`.
+
+    >>> from showpy.examples import two_set_show
+    >>> "/transitions/1-2/paths.json" in expected_show_docs(two_set_show())
+    True
+    """
+    order = show.set_ids()
+    paths = {SHOW_DOC, SHEET_DOC, NOTES_DOC, TIMELINE_DOC}
+    paths.update(set_doc(s) for s in order)
+    paths.update(forms_doc(s) for s in order)
+    paths.update(paths_doc(tid) for tid in itertools.pairwise(order))
+    return frozenset(paths)
 
 
 def encode_show(show: Show) -> dict[str, bytes]:
@@ -223,14 +240,41 @@ def _paths(docs: Mapping[str, bytes], tid: TransitionId) -> tuple[TransitionSpec
     raw = _load(docs, paths_doc(tid), {})
     if not raw:
         return ()
-    spec = TransitionSpec.model_validate(raw)
-    if spec.id != tid:
+    return (TransitionSpec.model_validate(raw),)
+
+
+def _require_paths_for(tid: TransitionId, specs: tuple[TransitionSpec, ...]) -> None:
+    for spec in specs:
+        if spec.id != tid:
+            raise SchemaError(
+                f"{paths_doc(tid)} holds paths for {spec.id}",
+                hint=f"set id to {list(tid)}",
+                context={"tid": tid, "found": spec.id},
+            )
+
+
+def _require_set_ids(order: list[SetId]) -> None:
+    bad = [s for s in order if not SET_ID_PATTERN.fullmatch(s) or ".." in s]
+    if bad:
         raise SchemaError(
-            f"{paths_doc(tid)} holds paths for {spec.id}",
-            hint=f"set id to {list(tid)}",
-            context={"tid": tid, "found": spec.id},
+            f"{SHOW_DOC} lists set ids that cannot be stored: {', '.join(bad)}",
+            hint="use set ids of letters, digits, _ and .",
+            context={"bad_set_ids": bad},
         )
-    return (spec,)
+
+
+def _transition_specs(
+    docs: Mapping[str, bytes],
+    order: list[SetId],
+    cache: DecodeCache | None,
+    digests: Mapping[str, str],
+) -> list[TransitionSpec]:
+    specs: list[TransitionSpec] = []
+    for tid in itertools.pairwise(order):
+        found = _cached(cache, digests, paths_doc(tid), partial(_paths, docs, tid))
+        _require_paths_for(tid, found)
+        specs.extend(found)
+    return specs
 
 
 def _assemble(
@@ -238,18 +282,14 @@ def _assemble(
 ) -> Show:
     meta = dict(_load(docs, SHOW_DOC))
     order: list[SetId] = list(meta.pop(SET_ORDER_FIELD, []))
+    _require_set_ids(order)
     sets = [_cached(cache, digests, set_doc(s), partial(_set, docs, s)) for s in order]
     forms = {
         f.id: f
         for s in order
         for f in _cached(cache, digests, forms_doc(s), partial(_forms, docs, s))
     }
-    pairs = list(itertools.pairwise(order))
-    specs = [
-        spec
-        for tid in pairs
-        for spec in _cached(cache, digests, paths_doc(tid), partial(_paths, docs, tid))
-    ]
+    specs = _transition_specs(docs, order, cache, digests)
     counts = {s.id: s.counts for s in sets}
     specs = [spec.replace(counts=counts[spec.id[1]]) for spec in specs]
     return Show.model_validate(

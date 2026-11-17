@@ -44,7 +44,7 @@ SCHEMES = (SEQUENTIAL,)
 
 
 def _require_set_id(show: Show, set_id: SetId) -> None:
-    if not SET_ID_PATTERN.match(set_id) or ".." in set_id:
+    if not SET_ID_PATTERN.fullmatch(set_id) or ".." in set_id:
         raise SchemaError(
             f"set id {set_id!r} is not allowed",
             hint="use letters, digits, _ and . only, starting with a letter or digit, e.g. 12A",

@@ -34,7 +34,7 @@ SHORT_ID = 7
 
 
 def _require_show_id(show_id: str) -> None:
-    if not SHOW_ID_PATTERN.match(show_id) or ".." in show_id:
+    if not SHOW_ID_PATTERN.fullmatch(show_id) or ".." in show_id:
         raise StorageError(
             f"show id {show_id!r} cannot be stored",
             hint="use letters, digits, _, . and - only, starting with a letter or digit",

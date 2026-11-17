@@ -10,11 +10,19 @@ Contains:
 """
 
 import hashlib
+import unicodedata
 from collections.abc import Callable, Iterator, Mapping
 
-from showpy.core.errors import StorageError
+from showpy.core.errors import SchemaError, StorageError
 from showpy.show.decode_cache import DecodeCache
-from showpy.show.documents import decode_show, is_show_doc
+from showpy.show.documents import (
+    SHEET_DOC,
+    SHOW_DOC,
+    TIMELINE_DOC,
+    decode_show,
+    expected_show_docs,
+    is_show_doc,
+)
 from showpy.show.models import Show
 
 KNOWN_ROOTS = (
@@ -29,7 +37,9 @@ KNOWN_ROOTS = (
     "/exports/",
     "/lib/drafts/",
 )
-FORBIDDEN_CHARACTERS = ("\\", "\x00")
+FORBIDDEN_CHARACTER = "\\"
+CONTROL_CATEGORY = "Cc"
+REQUIRED_DOCS = (SHOW_DOC, SHEET_DOC, TIMELINE_DOC)
 DOT_SEGMENTS = ("", ".", "..")
 
 
@@ -40,6 +50,10 @@ def _bad_path(path: str) -> StorageError:
         context={"path": path, "roots": list(KNOWN_ROOTS)},
         code="BAD_PATH",
     )
+
+
+def _is_forbidden(char: str) -> bool:
+    return char == FORBIDDEN_CHARACTER or unicodedata.category(char) == CONTROL_CATEGORY
 
 
 def require_known_path(path: str) -> None:
@@ -56,7 +70,7 @@ def require_known_path(path: str) -> None:
     BAD_PATH
     """
     root = next((r for r in KNOWN_ROOTS if path.startswith(r)), None)
-    if root is None or any(c in path for c in FORBIDDEN_CHARACTERS):
+    if root is None or any(_is_forbidden(c) for c in path):
         raise _bad_path(path)
     if any(segment in DOT_SEGMENTS for segment in path[len(root) :].split("/")):
         raise _bad_path(path)
@@ -80,6 +94,27 @@ class _LazyBlobs(Mapping[str, bytes]):
 
     def __len__(self) -> int:
         return len(self._digests)
+
+
+def _require_required_docs(after: Mapping[str, str]) -> None:
+    missing = [p for p in REQUIRED_DOCS if p not in after]
+    if missing:
+        raise SchemaError(
+            f"commit leaves no {', '.join(missing)}",
+            hint="write the whole show with save_show()",
+            context={"missing": missing},
+        )
+
+
+def _require_no_orphans(show: Show, written: list[str]) -> None:
+    expected = expected_show_docs(show)
+    orphans = sorted(p for p in written if is_show_doc(p) and p not in expected)
+    if orphans:
+        raise SchemaError(
+            f"show documents the show does not read: {', '.join(orphans)}",
+            hint="write documents only for sets and consecutive transitions in the show",
+            context={"orphans": orphans},
+        )
 
 
 def require_valid_digests(
@@ -110,7 +145,10 @@ def require_valid_digests(
         require_known_path(path)
     if not any(is_show_doc(p) for p in changed):
         return None
-    return decode_show(_LazyBlobs(after, blob), cache=cache, digests=after)
+    _require_required_docs(after)
+    show = decode_show(_LazyBlobs(after, blob), cache=cache, digests=after)
+    _require_no_orphans(show, [p for p in changed if p in after])
+    return show
 
 
 def require_valid_tree(before: Mapping[str, bytes], after: Mapping[str, bytes]) -> Show | None:

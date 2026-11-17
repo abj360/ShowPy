@@ -12,6 +12,7 @@ from collections import OrderedDict
 from collections.abc import Callable
 from typing import cast
 
+# Three documents per set (set, forms, paths): 4096 holds about 1,300 sets, 20 shows of 60.
 DECODE_CACHE_SIZE = 4096
 
 

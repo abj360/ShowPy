@@ -21,14 +21,25 @@ Contains:
     test_uncached_invalid_document_is_refused: refuses an invalid document never seen before
     test_cache_serves_unchanged_documents: decodes only the changed document on a one-set edit
     test_cache_respects_its_bound: evicts the oldest entry past max_entries
-    test_one_spot_edit_through_a_workspace_stays_fast: keeps a one-spot edit on a large show
-        under the time budget
+    test_one_spot_edit_decodes_only_changed_documents: counts per-document decodes on a warm cache
+    test_regression_show_json_alone_changing_is_still_validated_whole: refuses a show invalid
+        only through the combination while every cached set is reused
+    test_regression_trailing_newline_paths_are_refused: refuses `$`-anchored look-alike paths
+    test_regression_control_characters_in_paths_are_refused: refuses C0, DEL and C1 characters
+    test_regression_dashed_set_ids_are_a_schema_error_cached_or_not: refuses set IDs that make
+        transition paths ambiguous, with no raw KeyError
+    test_regression_orphan_show_documents_are_refused: refuses show documents decode never reads
+    test_removing_a_set_deletes_its_documents: keeps save_show from leaving orphans
+    test_regression_show_id_with_trailing_newline_is_refused: refuses a show id ending in a newline
+    test_regression_missing_show_document_is_a_schema_error: raises SchemaError for a commit
+        without show.json
 """
 
 import json
-import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from functools import partial
+from typing import Any
 
 import pytest
 
@@ -38,7 +49,15 @@ from showpy.choreo.forms import line_form
 from showpy.core.errors import SchemaError, StorageError
 from showpy.examples import two_set_show
 from showpy.show.decode_cache import DecodeCache
-from showpy.show.documents import SHOW_DOC, dump_json, encode_show, forms_doc, paths_doc, set_doc
+from showpy.show.documents import (
+    SHOW_DOC,
+    dump_json,
+    encode_show,
+    forms_doc,
+    is_show_doc,
+    paths_doc,
+    set_doc,
+)
 from showpy.show.integrity import (
     KNOWN_ROOTS,
     blob_digest,
@@ -46,6 +65,7 @@ from showpy.show.integrity import (
     require_valid_digests,
     require_valid_tree,
 )
+from showpy.show.manage import remove_set
 from showpy.show.models import Show
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import load_show, open_workspace, save_show
@@ -235,17 +255,117 @@ def test_cache_respects_its_bound() -> None:
     assert calls == ["decoded"]
 
 
-@pytest.mark.slow
-def test_one_spot_edit_through_a_workspace_stays_fast() -> None:
-    """Keeps a one-spot edit on 300 spots and 60 sets under 300 ms (median of 5)."""
+def _count_decodes(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    decoded: list[str] = []
+    original = DecodeCache.get_or_decode
+
+    def counting(self: DecodeCache, path: str, digest: str, decode: Callable[[], Any]) -> Any:
+        def counted() -> Any:
+            decoded.append(path)
+            return decode()
+
+        return original(self, path, digest, counted)
+
+    monkeypatch.setattr(DecodeCache, "get_or_decode", counting)
+    return decoded
+
+
+def test_one_spot_edit_decodes_only_changed_documents(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Counts decodes on a warm cache: a cast edit decodes none, a set edit decodes one set."""
     repo = InMemoryRepository()
-    save_show(open_workspace(repo, SHOW_ID, "designer"), seeded_show(3, 300, 60), AT)
-    times = []
-    for index in range(5):
-        ws = open_workspace(repo, SHOW_ID, "designer")
-        show = load_show(ws)
-        shape = Shape(kind="rectangle" if index % 2 == 0 else "circle")
-        started = time.perf_counter()
-        save_show(ws, set_shape(show, show.cast.spots[0].id, shape), AT)
-        times.append(time.perf_counter() - started)
-    assert sorted(times)[2] < 0.3
+    ws = open_workspace(repo, SHOW_ID, "designer")
+    save_show(ws, seeded_show(3, 30, 8), AT)
+    calls = _count_decodes(monkeypatch)
+    show = load_show(open_workspace(repo, SHOW_ID, "designer"))
+    calls.clear()
+    shape = Shape(kind="rectangle")
+    save_show(ws, set_shape(show, show.cast.spots[0].id, shape), AT)
+    assert calls == []
+    ws = open_workspace(repo, SHOW_ID, "designer")
+    show = load_show(ws)
+    calls.clear()
+    renamed = tuple(s.replace(label="renamed") if s.id == "3" else s for s in show.sets)
+    save_show(ws, show.replace(sets=renamed), AT)
+    assert calls == ["/sets/3/set.json"]
+
+
+def test_regression_show_json_alone_changing_is_still_validated_whole() -> None:
+    """Refuses a show.json that repeats a set id, with every set document served from cache."""
+    docs = encode_show(two_set_show())
+    cache = DecodeCache()
+    _validate({}, docs, cache)
+    meta = json.loads(docs[SHOW_DOC])
+    broken = {**docs, SHOW_DOC: json.dumps({**meta, "sets": ["1", "1"]}).encode()}
+    with pytest.raises(SchemaError):
+        _validate(docs, broken, cache)
+
+
+@pytest.mark.parametrize("path", ["/sets/1/set.json\n", "/show/show.json\n", "/sets/1\n/set.json"])
+def test_regression_trailing_newline_paths_are_refused(path: str) -> None:
+    """Refuses a newline anywhere in a path, through the funnel and through the patterns."""
+    assert not is_show_doc(path)
+    repo, head = _repo()
+    with pytest.raises(StorageError) as caught:
+        _commit(repo, head, {path: b"{}"})
+    assert caught.value.code == "BAD_PATH"
+
+
+@pytest.mark.parametrize("char", ["\x01", "\x1f", "\x7f", "\x80", "\x85", "\x9f"])
+def test_regression_control_characters_in_paths_are_refused(char: str) -> None:
+    """Refuses C0, DEL and C1 characters in a committed path."""
+    with pytest.raises(StorageError) as caught:
+        require_known_path(f"/renders/a{char}b.txt")
+    assert caught.value.code == "BAD_PATH"
+
+
+def _dashed_docs() -> dict[str, bytes]:
+    docs = encode_show(two_set_show())
+    meta = json.loads(docs[SHOW_DOC])
+    return {**docs, SHOW_DOC: json.dumps({**meta, "sets": ["1-2", "3"]}).encode()}
+
+
+def test_regression_dashed_set_ids_are_a_schema_error_cached_or_not() -> None:
+    """Raises the same SchemaError, naming the ID, with a warm cache and without one."""
+    docs = encode_show(two_set_show())
+    cache = DecodeCache()
+    _validate({}, docs, cache)
+    dashed = _dashed_docs()
+    for used in (cache, None):
+        with pytest.raises(SchemaError) as caught:
+            _validate(docs, dashed, used)
+        assert "1-2" in str(caught.value.context)
+
+
+@pytest.mark.parametrize("path", ["/sets/zzz/set.json", "/transitions/1-9/paths.json"])
+def test_regression_orphan_show_documents_are_refused(path: str) -> None:
+    """Refuses a show document that decode never reads, naming its path."""
+    docs = encode_show(two_set_show())
+    with pytest.raises(SchemaError) as caught:
+        require_valid_tree(docs, {**docs, path: b"{}"})
+    assert path in str(caught.value.context)
+
+
+def test_removing_a_set_deletes_its_documents() -> None:
+    """Keeps save_show from leaving the removed set's documents behind."""
+    show = seeded_show(3, 10, 4)
+    repo = InMemoryRepository()
+    save_show(open_workspace(repo, SHOW_ID, "designer"), show, AT)
+    ws = open_workspace(repo, SHOW_ID, "designer")
+    save_show(ws, remove_set(load_show(ws), "2", force=True), AT)
+    stored = repo.paths(SHOW_ID)
+    assert not [p for p in stored if p.startswith("/sets/2/")]
+    assert "/transitions/2-3/paths.json" not in stored
+
+
+def test_regression_missing_show_document_is_a_schema_error() -> None:
+    """Raises SchemaError, not StorageError, when a commit leaves no show.json."""
+    repo, head = _repo()
+    with pytest.raises(SchemaError):
+        _commit(repo, head, {SHOW_DOC: None})
+
+
+def test_regression_show_id_with_trailing_newline_is_refused() -> None:
+    """Refuses a show id that only matches the pattern before a trailing newline."""
+    with pytest.raises(StorageError) as caught:
+        InMemoryRepository().revisions("s\n")
+    assert caught.value.code == "BAD_PATH"
