@@ -7,15 +7,15 @@ Last updated: 2026-11-16
 
 ## Where things stand
 
-| Item          | Value                                                                                                                    |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Repository    | `abj360/ShowPy` (public since 2026-11-15); split into its own repository on 2026-11-12 with full history                 |
-| Gates         | `nox -s tests`: 2,390 passed, `Ledger: 424 open` (2026-11-16); ruff, mypy `--strict`, pyright clean                      |
-| CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main                                |
-| Defect ledger | `Ledger: 424 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-16)                                  |
-| Out of scope  | `stagecheck`, `showpy.packs` and `showpy.index`, by the user's decision (2026-11-11)                                     |
-| Text feature  | branch `feat/text-on-field`, stage 1 under final fixes; two merge blockers open; stages 2 and 3 not started (2026-11-16) |
-| Pushing       | needs explicit approval                                                                                                  |
+| Item          | Value                                                                                                                          |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Repository    | `abj360/ShowPy` (public since 2026-11-15); split into its own repository on 2026-11-12 with full history                       |
+| Gates         | `nox -s tests`: 2,390 passed, `Ledger: 424 open` (2026-11-16); ruff, mypy `--strict`, pyright clean                            |
+| CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main                                      |
+| Defect ledger | `Ledger: 424 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-16)                                        |
+| Out of scope  | `stagecheck`, `showpy.packs` and `showpy.index`, by the user's decision (2026-11-11)                                           |
+| Text feature  | branch `feat/text-on-field`, stage 1 complete with final-review fixes, awaiting merge; stages 2 and 3 not started (2026-11-17) |
+| Pushing       | needs explicit approval                                                                                                        |
 
 **Repository split (2026-11-12).** Agent-only code moved to a separate consumer repository with
 its history: set-script builds and the bubblewrap sandbox (`show/build.py`, `build_models.py`,
@@ -87,8 +87,8 @@ deviations below (the code is the source of truth until generated docs land in P
 
 Stage 1 (bundled single-line fonts, user fonts as `showpy.font.v1` JSON, `centerline` text forms) is on `feat/text-on-field`. Open follow-ups, in order:
 
-1. **Junction gap (final review I1): fixed on this branch, waiting on the golden sign-off.** Slots keep a soft junction gap (0.25 of the smaller local stroke spacing) wherever a spread allows it. Where Hershey doubled or converging strokes allow none (hershey-script `!` at its minimum count holds at most five of its six spots in a 1-unit strip), the stroke takes the least crowded spread, at least 1 µm apart, and `text_report(form)` lists it. The golden test fails here until item 2 lands.
-2. **Merge blocker: golden refresh (I8).** A proposed fixture is ready from this code: GO TEAM n = 120, Équipe 2026! n = 200, ΑΒΓ n = 45, with no `LegibilityWarning` and no crowded stroke. After the maintainer signs it off, set those counts in `tests/golden/test_golden_text.py`, drop its `LegibilityWarning` filter, refresh with `SHOWPY_UPDATE_GOLDEN=1` and merge this branch into `feat/text-on-field`.
+1. **Junction gap (final review I1): done.** Slots keep a soft junction gap (0.25 of the smaller local stroke spacing) wherever a spread allows it. Where Hershey doubled or converging strokes allow none (hershey-script `!` at its minimum count holds at most five of its six spots in a 1-unit strip), the stroke takes the least crowded spread, at least 1 µm apart, and `text_report(form)` lists it.
+2. **Golden refresh (I8): done.** The maintainer approved it on 2026-11-17. The text golden now holds GO TEAM n = 120, Équipe 2026! n = 200 and ΑΒΓ n = 45, with no `LegibilityWarning` filter and no crowded stroke.
 3. **Thread `font_registry`** through `match`, `reorder`, `gate`, `split_form`, `merge_forms`, `form_place` (`place`, `rebuild`), `apply_match`, `swap` and `morph_targets`, so user-font text forms work there. Then `split_form` and `merge_forms` can keep the text recipe.
 4. **Repositories store fonts (spec, deferred to stage 2; final review I5).** Put each text form's font bytes in the injected `AssetStore` on save and register them on load. Until then a reopened show needs the caller's registry; it fails closed with `MissingFontError`.
 5. **Faster curve pieces.** `SvgCurve._native` now evaluates each piece once per call (it was quadratic), but a curved piece still costs about 60 µs through layout and slot placement, which is why `MAX_LAYOUT_CURVE_PIECES` is 60,000. Batching pieces by type would allow a higher cap.
