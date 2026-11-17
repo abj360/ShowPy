@@ -83,3 +83,25 @@ permissions, which ADR 0003 leaves to the host, so this ADR settles the key alon
   (`renumber`), `showpy/choreo/models.py` (`Set`).
 - Related: ADR 0003 (permissions belong to the host), ADR 0006 (key pattern), ADR 0007 (format
   v2, Phase 2).
+
+## Addendum 2026-11-16: legacy set IDs that fail ADR 0006
+
+v0.1 and v0.2 accepted set IDs that ADR 0006 refuses as keys: `con` and other Windows device
+names, a trailing `.` such as `1.`, and IDs over 64 characters. Rulings A6-R1, A6-R3 and A6-R4 of
+lane A settle how such shows behave until the Phase 2 migration renames them.
+
+- **They load (A6-R1).** A key defaulted from a stored set's `id` (a `set.json` without `key`) is
+  not run through `check_id` on load. `check_id(kind="set key")` runs on every key a constructor
+  assigns (`add_set`, `insert_subset`, `import_positions`, `join_sections`) and on every key
+  stored explicitly. Such shows load, edit and save with no data loss.
+- **The repository decides what is new (A6-R3).** The commit check, which every caller passes,
+  runs `check_id(kind="set key")` on every `/sets/<folder>/` and transition key segment absent
+  from the base revision's tree. Folders already stored are grandfathered, so a legacy show
+  cannot add a new folder named like its legacy one.
+- **Such a set cannot change its ID at all (A6-R4).** Its key stays `con`, so any new display ID
+  makes the key differ from the ID; the key is then stored explicitly and checked, and the edit
+  raises `SchemaError`. `renumber` of a show holding one raises for the same reason, and a
+  `revert` that re-creates a deleted legacy folder is refused by the commit check. The only way
+  out before Phase 2 is `remove_set` followed by `add_set`, which gives the set a valid key and
+  drops its old folder with its build script: copy the script out first and write it back to
+  the new set. Relaxing the explicit-key check instead would let unchecked keys back in.
