@@ -5,7 +5,8 @@ Contains:
     MAX_FONT_BYTES: bounds the size of one font file
     BUNDLED_FONTS: maps each bundled font's name to the URI of its exact file bytes
     FontRegistry: holds loaded fonts, their source bytes and their names, all read-only; checks
-        on construction that every URI hashes its bytes and every name names its font
+        on construction that every URI hashes its bytes, every font is what its bytes load to,
+        and every name names its font
     FontRegistry.get(): returns the font stored under a URI
     FontRegistry.resolve(): turns a font name or URI into a URI
     FontRegistry.source(): returns the exact bytes a font was loaded from
@@ -60,6 +61,8 @@ class FontRegistry(FrozenModel):
 
     A URI is a font's identity; a name is a convenience. A font whose name is bound to other
     bytes, such as an older release imported from a document, is reachable by URI only.
+    Validating a registry from data loads every font from its bytes once and compares;
+    `register_font` skips that, since it loads the one font it adds.
 
     Attributes:
         fonts: Loaded fonts keyed by `asset:sha256:<hex>` URI.
@@ -86,6 +89,13 @@ class FontRegistry(FrozenModel):
                     f"font bytes do not hash to {uri}",
                     hint="key each font by asset_uri(its bytes), or use register_font",
                     context={"uri": uri, "actual": asset_uri(data)},
+                    code="FONT_HASH_MISMATCH",
+                )
+            if self.fonts[uri] != load_font(data):
+                raise FontError(
+                    f"the font stored at {uri} is not the font its bytes load to",
+                    hint="build registries with register_font, or store load_font(bytes)",
+                    context={"uri": uri, "font": self.fonts[uri].name},
                     code="FONT_HASH_MISMATCH",
                 )
         self._check_names()

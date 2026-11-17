@@ -12,6 +12,8 @@ Contains:
         or names disagree
     test_regression_font_cap_falls_back_to_h_then_ascender: reads the cap height from the field,
         then from the ink of H, then from the ascender
+    test_regression_font_registry_rejects_fonts_that_differ_from_their_bytes: refuses a registry
+        that serves glyphs its URI's bytes do not hold
     test_regression_register_font_can_keep_a_taken_name: registers a font by URI only when its
         name is bound to other bytes, and the registry still validates from its dump
 """
@@ -257,3 +259,19 @@ def test_regression_register_font_can_keep_a_taken_name() -> None:
     with pytest.raises(FontError) as raised:
         register_font(once, other)
     assert raised.value.code == "FONT_NAME_TAKEN"
+
+
+def test_regression_font_registry_rejects_fonts_that_differ_from_their_bytes() -> None:
+    bundled = bundled_fonts()
+    simplex = bundled.resolve("simplex")
+    impostor = bundled.get(bundled.resolve("hershey-roman")).replace(name="simplex")
+    forged = {
+        "fonts": {simplex: impostor},
+        "sources": {simplex: bundled.source(simplex)},
+        "names": {"simplex": simplex},
+    }
+    with pytest.raises(FontError) as info:
+        FontRegistry.model_validate(forged)
+    assert info.value.code == "FONT_HASH_MISMATCH"
+    assert info.value.context["uri"] == simplex
+    assert FontRegistry.model_validate(bundled.model_dump()) == bundled
