@@ -46,6 +46,13 @@ Contains:
         with its set across insert, renumber and save
     test_regression_join_sections_rekeys_a_tail_set_whose_key_clashes: gives a joined set whose
         key the first section holds a free key and keeps every other key
+    test_regression_legacy_set_ids_outside_the_id_pattern_load_and_round_trip: loads a tree
+        whose set folders are IDs v0.2 accepted but ADR 0006 refuses, with no loss
+    test_regression_constructors_refuse_a_reserved_key: refuses `con` as a key from add_set and
+        insert_subset's rule, and as an explicit key stored in set.json
+    test_regression_put_set_keeps_the_stored_key: keeps a renumbered set's folder and script when
+        put_set gets a freshly built set, and refuses a mismatching explicit key
+    test_regression_workspace_has_no_public_stored_commit: keeps stored-path commits private
 """
 
 import json
@@ -80,6 +87,7 @@ from showpy.show.repositories import InMemoryRepository
 from showpy.show.sections import join_sections
 from showpy.show.set_keys import to_display_path, to_stored_path
 from showpy.show.storage import Workspace, load_show, open_workspace, save_show
+from showpy.show.validate import validate_show
 
 AT = datetime(2026, 11, 16, 9, 0, tzinfo=UTC)
 LATER = datetime(2026, 11, 16, 9, 5, tzinfo=UTC)
@@ -377,3 +385,74 @@ def test_regression_join_sections_rekeys_a_tail_set_whose_key_clashes() -> None:
     joined = join_sections(first, relabelled)
     assert joined.set_ids() == ["1", "2", "B1", "B2", "B3"]
     assert _keys(joined) == ["1", "2", "B1", "B2", "3"]
+
+
+LEGACY_LONG_ID = "L" * 65
+
+
+def _legacy_show(first_id: str, second_id: str) -> Show:
+    """Builds the example show with set IDs v0.2 stored but ADR 0006 refuses as new keys."""
+    show = two_set_show()
+    renamed = tuple(
+        Set.model_validate({**s.model_dump(), "id": new_id})
+        for s, new_id in zip(show.sets, (first_id, second_id), strict=True)
+    )
+    return show.replace(sets=renamed, transitions=(), forms={})
+
+
+@pytest.mark.parametrize(("first_id", "second_id"), [("con", LEGACY_LONG_ID), ("1.", "aux.txt")])
+def test_regression_legacy_set_ids_outside_the_id_pattern_load_and_round_trip(
+    first_id: str, second_id: str
+) -> None:
+    show = _legacy_show(first_id, second_id)
+    docs = encode_show(show)
+    assert f"/sets/{first_id}/set.json" in docs
+    assert f"/sets/{second_id}/set.json" in docs
+    assert decode_show(docs) == show
+    repo = InMemoryRepository()
+    repo.transaction(SHOW_ID, docs, expected_revision="", at=AT)
+    ws = open_workspace(repo, SHOW_ID)
+    assert load_show(ws).replace(revision="") == show
+    ws.write(f"/sets/{second_id}/set.py", "# legacy\n", at=LATER)
+    assert repo.read(SHOW_ID, f"/sets/{second_id}/set.py") == b"# legacy\n"
+    assert encode_show(load_show(ws)) == docs
+
+
+def test_regression_constructors_refuse_a_reserved_key() -> None:
+    with pytest.raises(SchemaError):
+        add_set(two_set_show(), "con", 4.0)
+    with pytest.raises(SchemaError):
+        Set(id="1", counts=0.0, key="con")
+    docs = encode_show(_legacy_show("con", "2"))
+    body = json.loads(docs["/sets/con/set.json"]) | {"key": "con"}
+    with pytest.raises(SchemaError):
+        decode_show({**docs, "/sets/con/set.json": dump_json(body)})
+
+
+def _put_set_repo() -> tuple[InMemoryRepository, Workspace]:
+    """Saves 1, 1A, 2 with a script on 1A, then removes 1 and renumbers: sets 1, 2 keyed 1A, 2."""
+    repo = InMemoryRepository()
+    ws = open_workspace(repo, SHOW_ID)
+    inserted, _ = insert_subset(two_set_show(), "1", SUBSET_COUNTS)
+    save_show(ws, inserted, AT)
+    ws.commit({"/sets/1A/set.py": SCRIPT_ONE_A}, at=AT)
+    save_show(ws, renumber(remove_set(load_show(ws), "1"))[0], LATER)
+    return repo, ws
+
+
+def test_regression_put_set_keeps_the_stored_key() -> None:
+    repo, ws = _put_set_repo()
+    current = load_show(ws).set("1")
+    assert current.key == "1A"
+    fresh = Set(id="1", counts=0.0, placements=current.placements, label="fresh")
+    revision = repo.put_set(SHOW_ID, fresh, expected_revision=ws.revision, at=LATER)
+    assert repo.get_set(SHOW_ID, "1").key == "1A"
+    assert repo.get_set(SHOW_ID, "1").label == "fresh"
+    assert repo.get_script(SHOW_ID, "1") == SCRIPT_ONE_A.decode()
+    assert validate_show(repo.get_show(SHOW_ID)).ok
+    with pytest.raises(SchemaError):
+        repo.put_set(SHOW_ID, fresh.replace(key="zz"), expected_revision=revision.id, at=LATER)
+
+
+def test_regression_workspace_has_no_public_stored_commit() -> None:
+    assert not hasattr(Workspace, "commit_stored")

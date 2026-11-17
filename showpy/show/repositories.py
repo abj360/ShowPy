@@ -92,6 +92,18 @@ def conflict_error(show_id: str, expected: str, landed: list[Revision]) -> Confl
     )
 
 
+def _with_stored_key(new_set: Set, stored: Set) -> Set:
+    if new_set.key == stored.key:
+        return new_set
+    if "key" not in new_set.model_fields_set:
+        return new_set.replace(key=stored.key)
+    raise SchemaError(
+        f"set {new_set.id} has key {new_set.key}, but the stored set has key {stored.key}",
+        hint="keys never change; leave key unset or pass the stored key",
+        context={"set": new_set.id, "key": new_set.key, "stored_key": stored.key},
+    )
+
+
 class DocumentRepository:
     """Implements Repository over a backend that stores revisions, trees and blobs.
 
@@ -278,10 +290,15 @@ class DocumentRepository:
         expected_revision: str,
         at: datetime,
     ) -> Revision:
-        """Replaces one existing set; add sets through put_show()."""
+        """Replaces one existing set, keeping its stored key; add sets through put_show().
+
+        A set built without a key takes the replaced set's key, so its folder and build script
+        stay; an explicit key that differs from the stored one raises SchemaError.
+        """
         show = self.get_show(show_id, expected_revision or None)
         position = show.set_index(new_set.id)
-        sets = (*show.sets[:position], new_set, *show.sets[position + 1 :])
+        kept = _with_stored_key(new_set, show.sets[position])
+        sets = (*show.sets[:position], kept, *show.sets[position + 1 :])
         return self.put_show(
             show_id,
             show.replace(sets=sets),

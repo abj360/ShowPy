@@ -10,7 +10,6 @@ Contains:
     Workspace.write(): validates and saves one file
     Workspace.ls(): lists a directory
     Workspace.commit(): saves a batch of file changes addressed by set ID as one revision
-    Workspace.commit_stored(): saves a batch of stored-document changes as one revision
     Workspace.refresh(): moves the workspace to the head revision
     Workspace.show_at(): returns the show at a revision, or None before the first save
     Workspace.tree_at(): returns the stored documents at a revision
@@ -311,9 +310,9 @@ class Workspace:
             split_path(path)
         folders = SetFolders(self.show_at(base))
         stored = {folders.to_stored(path): data for path, data in changes.items()}
-        return self.commit_stored(stored, at=at, expected_revision=base)
+        return self._commit_stored(stored, at=at, expected_revision=base)
 
-    def commit_stored(
+    def _commit_stored(
         self,
         changes: Mapping[str, bytes | None],
         *,
@@ -362,7 +361,7 @@ class Workspace:
         split_path(path)
         raw = data.encode() if isinstance(data, str) else data
         changes = staged_changes(path, raw, self._show(), self._tree())
-        return self.commit_stored(changes, at=at, expected_revision=expected_revision)
+        return self._commit_stored(changes, at=at, expected_revision=expected_revision)
 
 
 def open_workspace(repo: Repository, show_id: str) -> Workspace:
@@ -401,4 +400,4 @@ def save_show(ws: Workspace, show: Show, at: datetime) -> Revision:
     ''
     """
     changes = show_changes(show, ws.tree_at(show.revision))
-    return ws.commit_stored(changes, at=at, expected_revision=show.revision)
+    return ws._commit_stored(changes, at=at, expected_revision=show.revision)

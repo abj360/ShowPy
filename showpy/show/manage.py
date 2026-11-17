@@ -175,6 +175,8 @@ def add_set(
     """Inserts a set; spots without a given placement copy their place in the previous set.
 
     The set's key is its ID, or the first free `<id>.<n>` when a renumbered set holds that key.
+    Only live keys count: after remove_set() in the same unsaved show, a new set with the removed
+    set's ID reuses its key, so on save it takes over that folder and its build script.
 
     Copied placements keep position, facing and on-field state, but not form membership,
     because forms belong to one set. They are pinned when the spot has an entity pin.

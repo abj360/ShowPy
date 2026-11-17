@@ -14,6 +14,7 @@ Contains:
     placements_doc(): returns the path of a set folder's derived placements table
     paths_doc(): returns the path of a transition folder's paths document
     is_show_doc(): reports whether a path is part of the encoded Show
+    is_storable_folder(): reports whether a set folder name can be stored
     expected_show_docs(): lists the stored show-document paths decode reads for a show
     encode_show(): splits a show into documents stored by set key
     decode_show(): assembles a show from documents, reusing cached per-document decodes
@@ -145,6 +146,7 @@ def is_show_doc(path: str) -> bool:
 
 def _require_storable(show: Show) -> None:
     bad = [s for s in show.set_ids() if not SET_ID_PATTERN.fullmatch(s) or ".." in s]
+    bad += [set_key(s) for s in show.sets if not is_storable_folder(set_key(s))]
     pairs = set(show.transition_ids())
     loose = [spec.id for spec in show.transitions if spec.id not in pairs]
     orphans = [f for f, form in show.forms.items() if form.set not in show.set_ids()]
@@ -232,6 +234,8 @@ def _cached[T](
 
 def _set(docs: Mapping[str, bytes], key: str) -> Set:
     raw = _load(docs, set_doc(key))
+    if isinstance(raw, dict) and isinstance(raw.get("key"), str):
+        check_id(raw["key"], kind="set key")
     if isinstance(raw, dict) and "key" not in raw:
         raw = {**raw, "key": key}
     loaded = Set.model_validate(raw)
@@ -277,20 +281,30 @@ def _require_paths_for(
             )
 
 
-def _is_storable_key(key: object) -> bool:
+def is_storable_folder(folder: object) -> bool:
+    """Reports whether a set folder name can be stored: a v0.2 set ID or an ADR 0006 key.
+
+    Stored IDs that predate ADR 0006 keep loading until the Phase 2 migration (item 6).
+
+    >>> is_storable_folder("con"), is_storable_folder("_k"), is_storable_folder("1-2")
+    (True, True, False)
+    """
+    if not isinstance(folder, str):
+        return False
+    if SET_ID_PATTERN.fullmatch(folder) and ".." not in folder:
+        return True
     try:
-        return isinstance(key, str) and check_id(key, kind="set key") == key
+        return check_id(folder, kind="set key") == folder
     except SchemaError:
         return False
 
 
 def _require_set_keys(order: list[str]) -> None:
-    bad = [k for k in order if not _is_storable_key(k)]
+    bad = [k for k in order if not is_storable_folder(k)]
     if bad:
         raise SchemaError(
             f"{SHOW_DOC} lists set keys that cannot be stored: {', '.join(map(str, bad))}",
-            hint="use set keys of 1 to 64 letters, digits, _ and ., with no leading, trailing "
-            "or doubled .",
+            hint="use set keys of letters, digits, _ and ., with no doubled .",
             context={"bad_set_keys": bad},
         )
 
