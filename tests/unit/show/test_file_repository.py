@@ -59,10 +59,9 @@ Contains:
     test_regression_backend_refuses_a_malformed_parent_id: blames the caller for a malformed parent
         ID passed to commit
     test_regression_stored_malformed_id_stays_corrupt: keeps CORRUPT for a malformed stored ID
-    test_regression_fifo_as_link_or_record_is_corrupt_without_blocking: refuses a FIFO standing in
-        for a next/ link or a tree record
 """
 
+import contextlib
 import errno
 import json
 import os
@@ -649,6 +648,9 @@ def _symlink_to_copy(target: Path, data: bytes) -> None:
     target.symlink_to(outside)
 
 
+SWAP_MESSAGES = {"symlink": "symbolic link", "fifo": "not a regular file"}
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="needs O_NOFOLLOW, FIFOs and SIGALRM")
 @pytest.mark.parametrize("kind", sorted(SWAPS))
 @fails_after(5)
@@ -660,7 +662,10 @@ def test_regression_object_swapped_after_lstat_is_refused(
     target = base / "objects" / repo.backend.tree(SHOW_ID, rev)[SHOW_DOC]
     data = target.read_bytes()
     _swapped_after_lstat(monkeypatch, target, lambda path: SWAPS[kind](path, data))
-    _assert_corrupt(lambda: repo.read(SHOW_ID, SHOW_DOC))
+    with pytest.raises(StorageError) as caught:
+        repo.read(SHOW_ID, SHOW_DOC)
+    assert caught.value.code == CORRUPT
+    assert SWAP_MESSAGES[kind] in caught.value.message
 
 
 STORED_FILES: dict[str, Callable[[Path, str], Path]] = {
@@ -669,19 +674,52 @@ STORED_FILES: dict[str, Callable[[Path, str], Path]] = {
 }
 
 
+NOT_REGULAR = "not a regular file"
+
+
+def _fifo_filled_with(content: bytes) -> Callable[[Path], None]:
+    """Makes a FIFO that a writer thread fills with `content` once a reader opens it."""
+
+    def swap(target: Path) -> None:
+        os.mkfifo(target)
+
+        def fill() -> None:
+            with contextlib.suppress(BrokenPipeError), target.open("wb") as writer:
+                writer.write(content)
+
+        threading.Thread(target=fill, daemon=True).start()
+
+    return swap
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="needs O_NOFOLLOW, FIFOs and SIGALRM")
-@pytest.mark.parametrize("stale_lstat", [False, True], ids=["plain", "swapped-after-lstat"])
 @pytest.mark.parametrize("kind", sorted(STORED_FILES))
 @fails_after(5)
-def test_regression_fifo_as_link_or_record_is_corrupt_without_blocking(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str, stale_lstat: bool
+def test_regression_fifo_swapped_in_after_lstat_is_refused_by_fstat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    """Refuses a FIFO that holds valid content, naming a non-regular file, via the fstat check."""
+    repo, rev, base = _saved(tmp_path)
+    target = STORED_FILES[kind](base, rev)
+    _swapped_after_lstat(monkeypatch, target, _fifo_filled_with(target.read_bytes()))
+    with pytest.raises(StorageError) as caught:
+        repo.backend.log(SHOW_ID)
+    assert caught.value.code == CORRUPT
+    assert NOT_REGULAR in caught.value.message
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs O_NOFOLLOW, FIFOs and SIGALRM")
+@pytest.mark.parametrize("kind", sorted(STORED_FILES))
+@fails_after(5)
+def test_regression_plain_fifo_as_link_or_record_is_corrupt_without_blocking(
+    tmp_path: Path, kind: str
 ) -> None:
     """Refuses a FIFO standing in for a next/ link or a tree record, never blocking on it."""
     repo, rev, base = _saved(tmp_path)
     target = STORED_FILES[kind](base, rev)
-    if stale_lstat:
-        _swapped_after_lstat(monkeypatch, target, os.mkfifo)
-    else:
-        target.unlink()
-        os.mkfifo(target)
-    _assert_corrupt(lambda: repo.backend.log(SHOW_ID))
+    target.unlink()
+    os.mkfifo(target)
+    with pytest.raises(StorageError) as caught:
+        repo.backend.log(SHOW_ID)
+    assert caught.value.code == CORRUPT
+    assert NOT_REGULAR in caught.value.message
