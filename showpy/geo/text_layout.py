@@ -29,6 +29,7 @@ from showpy.geo.affine import (
 )
 from showpy.geo.checks import require_finite_as
 from showpy.geo.curves import Polyline, SvgCurve
+from showpy.geo.font_strokes import sample_stroke
 from showpy.geo.fonts import FontRegistry, bundled_fonts
 from showpy.geo.models import (
     DEFAULT_LINE_SPACING,
@@ -124,7 +125,13 @@ def _place_line(
 
 
 def _stroke(subpath: Subpath, matrix: Matrix, d: str) -> Polyline | SvgCurve:
+    """Maps one stroke to stage meters as a Polyline when straight, else as an SvgCurve.
+
+    A closed straight stroke drops its last vertex, which `Z` always puts back on the start.
+    A curved stroke's samples are mapped once so an overflow surfaces here, not on evaluation.
+    """
     if not all(isinstance(piece, LinePiece) for piece in subpath.pieces):
+        transform_points(sample_stroke(d)[0], matrix)
         transform = tuple((float(a), float(b), float(c)) for a, b, c in matrix.tolist())
         return SvgCurve(d=d, transform=transform, closed=subpath.closed)
     ends = [subpath.start, *(piece.end for piece in subpath.pieces)]
@@ -163,6 +170,8 @@ def _lay_line(
         scale = item.source.scale
         shift = translation_matrix(origin[0] + item.x, origin[1])
         matrix = turn @ shift @ scale_matrix(scale, scale, ORIGIN)
+        if not np.isfinite(matrix).all():
+            raise FloatingPointError("glyph matrix is not finite")
         strokes = _glyph_strokes(item, matrix)
         laid.append(LaidGlyph(char=item.char, font=item.source.uri, line=index, strokes=strokes))
     return laid
@@ -227,8 +236,21 @@ def layout_text(
     lift = _anchor_shift(anchor, height, -(len(lines) - 1) * pitch)
     turn = translation_matrix(*at) @ rotation_matrix(rotation, ORIGIN)
     laid: list[LaidGlyph] = []
-    for index, line in enumerate(lines):
-        placed, width = _place_line(line, chain, fonts, letter_spacing * em)
-        origin = (-ALIGN_SHARE[align] * width, lift - index * pitch)
-        laid.extend(_lay_line(placed, index, origin, turn))
+    try:
+        with np.errstate(over="raise", invalid="raise", divide="raise"):
+            for index, line in enumerate(lines):
+                placed, width = _place_line(line, chain, fonts, letter_spacing * em)
+                origin = (-ALIGN_SHARE[align] * width, lift - index * pitch)
+                laid.extend(_lay_line(placed, index, origin, turn))
+    except FloatingPointError as exc:
+        raise GeometryError(
+            "laid-out text overflows the float range",
+            hint="use a smaller height, spacing or position",
+            context={
+                "height": height,
+                "at": at,
+                "letter_spacing": letter_spacing,
+                "line_spacing": line_spacing,
+            },
+        ) from exc
     return tuple(laid)

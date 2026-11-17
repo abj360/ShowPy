@@ -11,6 +11,8 @@ Contains:
         registry it extends
     test_fuzz_layout_text_arbitrary_text: raises only ShowPyError for arbitrary Unicode text laid
         out with the bundled fallback chain
+    test_fuzz_layout_text_extreme_numbers: raises only ShowPyError for any finite height,
+        position, spacing and rotation
 """
 
 import json
@@ -29,6 +31,10 @@ LAYOUT_TEXT = st.one_of(
     st.text(max_size=40),
     st.text(alphabet="AHOae\u0301 \r\n!☃", max_size=40),
     st.text(min_size=MAX_LAYOUT_CHARS - 2, max_size=MAX_LAYOUT_CHARS + 2),
+)
+FINITE = st.one_of(
+    st.sampled_from([1.7976931348623157e308, 1e308, -1e308, 5e-324, 0.0, 1.0]),
+    st.floats(allow_nan=False, allow_infinity=False),
 )
 STROKES = st.one_of(
     st.sampled_from(["M0 0 L1 1", "M0 0 L0 0", "M0 0", "M0 0 L1 0 M2 0 L3 0", "M0 0 L1 0 Z", ""]),
@@ -91,3 +97,34 @@ def test_fuzz_register_font_font_shaped_json(document: dict[str, Any]) -> None:
 def test_fuzz_layout_text_arbitrary_text(text: str) -> None:
     """Raises only ShowPyError for arbitrary Unicode text laid out with the bundled chain."""
     only_showpy_errors(lambda: layout_text(text, BUNDLED_CHAIN, 1.0, (0.0, 0.0)), text)
+
+
+@given(
+    st.text(alphabet="HOa\n ", min_size=1, max_size=6),
+    FINITE,
+    st.tuples(FINITE, FINITE),
+    FINITE,
+    FINITE,
+    FINITE,
+)
+def test_fuzz_layout_text_extreme_numbers(
+    text: str,
+    height: float,
+    at: tuple[float, float],
+    letter_spacing: float,
+    line_spacing: float,
+    rotation: float,
+) -> None:
+    """Raises only ShowPyError for any finite height, position, spacing and rotation."""
+    only_showpy_errors(
+        lambda: layout_text(
+            text,
+            BUNDLED_CHAIN,
+            height,
+            at,
+            rotation=rotation,
+            letter_spacing=letter_spacing,
+            line_spacing=line_spacing,
+        ),
+        (text, height, at, letter_spacing, line_spacing, rotation),
+    )

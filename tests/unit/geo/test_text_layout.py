@@ -228,3 +228,18 @@ def test_layout_rejects_a_stroke_with_two_subpaths() -> None:
         layout_text(
             "I", ["tiny"], 1.0, (0.0, 0.0), font_registry=_unchecked_registry(glyphs=glyphs)
         )
+
+
+def test_regression_huge_finite_values_raise_showpy_error() -> None:
+    """Raises GeometryError, never a numpy RuntimeWarning, when finite inputs overflow."""
+    huge = (1.7e308, 1.7e308)
+    calls = (
+        {"text": "HH", "height": 1e308, "at": huge, "rotation": 45.0},
+        {"text": "OO", "fonts": RELIEF, "height": 1e308, "at": huge},
+        {"text": "H\nH", "height": 1e308, "at": (0.0, 0.0), "line_spacing": 1e308},
+        {"text": "HHH", "height": 1.0, "at": (0.0, 0.0), "letter_spacing": 1.7e308},
+    )
+    for call in calls:
+        arguments = {"fonts": SIMPLEX, **call}
+        with pytest.raises(GeometryError):
+            layout_text(**arguments)  # type: ignore[arg-type]
