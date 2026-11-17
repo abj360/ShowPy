@@ -35,6 +35,8 @@ Contains:
         without show.json
     test_regression_commit_refuses_bad_structured_file: refuses invalid UTF-8 or wrong-shaped
         JSON at structured paths and invalid UTF-8 at text paths
+    test_regression_bom_json_is_refused_at_commit: refuses a JSON file that starts with a UTF-8
+        BOM, which the reader returns as text json.loads rejects
     test_structured_check_decodes_only_changed_structured_blobs: loads no blob for show
         documents or raw-byte paths
 """
@@ -404,3 +406,15 @@ def test_structured_check_decodes_only_changed_structured_blobs() -> None:
 
     require_valid_digests(_digests(docs), _digests(after), blob)
     assert loaded == [b"[]"]
+
+
+@pytest.mark.parametrize(
+    "path", ["/canvas/comments.json", "/canvas/selection.json", "/exports/x.json"]
+)
+def test_regression_bom_json_is_refused_at_commit(path: str) -> None:
+    """Refuses a JSON file with a UTF-8 BOM, so read-back text always parses."""
+    repo, head = _repo()
+    body = b"[]" if path.endswith("comments.json") else b'{"ids": []}'
+    with pytest.raises(SchemaError) as caught:
+        _commit(repo, head, {path: b"\xef\xbb\xbf" + body})
+    assert caught.value.context["path"] == path

@@ -27,6 +27,7 @@ SELECTION_DOC = "/canvas/selection.json"
 COMMENTS_DOC = "/canvas/comments.json"
 TEXT_SUFFIXES = (".json", ".csv", ".py", ".yaml", ".yml", ".txt", ".md", ".svg")
 JSON_SUFFIX = ".json"
+BYTE_ORDER_MARK = "\ufeff"
 COMMENTS_ADAPTER = TypeAdapter(list[Comment])
 SELECTION_ADAPTER = TypeAdapter(Selection)
 
@@ -57,6 +58,12 @@ def decode_text(path: str, raw: bytes) -> str:
 def decode_comments(raw: bytes) -> list[Comment]:
     """Decodes a comments file, raising SchemaError for bad UTF-8, JSON or comment shapes.
 
+    Args:
+        raw: Comments file bytes.
+
+    Returns:
+        comments: The stored comments, in file order.
+
     >>> decode_comments(b"[]")
     []
     """
@@ -67,9 +74,9 @@ def _check_selection(raw: bytes) -> None:
     validate_adapter_json(SELECTION_ADAPTER, raw, name="Selection")
 
 
-def _check_json(raw: bytes) -> None:
+def _check_json(text: str) -> None:
     try:
-        json.loads(raw)
+        json.loads(text)
     except (json.JSONDecodeError, RecursionError) as exc:
         raise SchemaError(
             f"not valid JSON: {exc}",
@@ -104,12 +111,18 @@ def require_structured(path: str, raw: bytes) -> None:
     if not path.endswith(TEXT_SUFFIXES):
         return
     try:
-        decode_text(path, raw)
+        text = decode_text(path, raw)
+        if path.endswith(JSON_SUFFIX) and text.startswith(BYTE_ORDER_MARK):
+            raise SchemaError(
+                "JSON starts with a byte order mark",
+                hint="write JSON without a BOM",
+                context={},
+            )
         check = EXACT_CHECKS.get(path)
         if check is not None:
             check(raw)
         elif path.endswith(JSON_SUFFIX):
-            _check_json(raw)
+            _check_json(text)
     except SchemaError as exc:
         raise SchemaError(
             f"{path} does not hold valid content: {exc.message}",
