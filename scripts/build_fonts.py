@@ -60,6 +60,7 @@ JHF_HEADER_WIDTH = 8
 HERSHEY_FIRST_CHAR = 32
 HERSHEY_CHAR_COUNT = 95
 DECIMALS = 6
+MIN_SNAPPED_PIECES = 2
 DOWNLOAD_TIMEOUT_S = 60
 SHEET_COLUMNS = 16
 SHEET_CELL_PX = 96
@@ -268,7 +269,8 @@ def jhf_font(meta: FontMeta, glyphs: Sequence[JhfGlyph], chars: Mapping[int, str
         chars: Maps a glyph's index in the file to its character.
 
     Returns:
-        font: The showpy.font.v1 document.
+        font: The showpy.font.v1 document. Baseline and cap height come from the glyph for H,
+            or for Greek capital Eta when the file has no Latin H.
     """
     reference = _reference_capital(glyphs, chars)
     ys = [y for stroke in reference.strokes for _, y in stroke]
@@ -328,9 +330,12 @@ def _snap_closed(subpath: Subpath, tolerance: float) -> Subpath:
     gap = math.dist(last.end, subpath.start)
     if not subpath.closed and gap > tolerance:
         return subpath
-    if isinstance(last, LinePiece):
-        return Subpath(subpath.start, tuple(head), True)
-    return Subpath(subpath.start, (*head, replace(last, end=subpath.start)), True)
+    pieces = (
+        tuple(head) if isinstance(last, LinePiece) else (*head, replace(last, end=subpath.start))
+    )
+    if len(pieces) < MIN_SNAPPED_PIECES and not subpath.closed:
+        return subpath
+    return Subpath(subpath.start, pieces, True)
 
 
 def _is_degenerate(subpath: Subpath) -> bool:

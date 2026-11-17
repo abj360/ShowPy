@@ -122,3 +122,44 @@ def test_greek_table_follows_hershey_numbering() -> None:
 def test_verified_rejects_a_checksum_mismatch() -> None:
     with pytest.raises(SystemExit, match="E: checksum mismatch"):
         build_fonts.verified(b"x", "0" * 64, "https://example.invalid/font")
+
+
+H_JHF = "  508  9G]KFK[ RYFY[ RKPYP\n"
+
+
+def test_regression_short_open_line_inside_the_close_tolerance_stays_open() -> None:
+    font = build_fonts.svg_font(META, svg_font_text('d="M0 0 L3 0"'))
+    assert font["glyphs"]["A"]["strokes"] == ["M0.0 0.0 L3.0 0.0"]
+
+
+def test_svg_font_snaps_a_nearly_closed_curve_by_moving_its_end() -> None:
+    font = build_fonts.svg_font(META, svg_font_text('d="M0 0 L10 0 C10 5 5 10 0.3 0.1"'))
+    assert font["glyphs"]["A"]["strokes"] == ["M0.0 0.0 L10.0 0.0 C10.0 5.0 5.0 10.0 0.0 0.0 Z"]
+
+
+def test_svg_font_drops_zero_length_subpaths_and_keeps_the_rest() -> None:
+    font = build_fonts.svg_font(META, svg_font_text('d="M0 0 L0 0 M1 1 L50 50"'))
+    assert font["glyphs"]["A"]["strokes"] == ["M1.0 1.0 L50.0 50.0"]
+
+
+def test_jhf_font_drops_strokes_that_never_leave_their_start() -> None:
+    glyphs = build_fonts.parse_jhf("  501  3I[RFRF\n" + H_JHF)
+    font = build_fonts.jhf_font(META, glyphs, {0: "A", 1: "H"})
+    assert font["glyphs"]["A"]["strokes"] == []
+
+
+def test_jhf_font_falls_back_to_greek_eta_for_the_baseline_and_cap() -> None:
+    glyphs = build_fonts.parse_jhf("  501  9I[RFJ[ RRFZ[ RMTWT\n" + H_JHF)
+    font = build_fonts.jhf_font(META, glyphs, {0: "A", 1: "\u0397"})
+    assert font["cap_height"] == 21.0
+    assert font["glyphs"]["A"]["strokes"][0] == "M9.0 21.0 L1.0 0.0"
+
+
+def test_contact_sheet_draws_the_closing_edge_of_a_closed_stroke() -> None:
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGB", (30, 30), "white")
+    build_fonts._draw_glyph(
+        ImageDraw.Draw(image), ["M0.0 0.0 L10.0 0.0 L10.0 10.0 Z"], (5.0, 25.0), 1.0
+    )
+    assert image.getpixel((10, 20)) == (0, 0, 0)
