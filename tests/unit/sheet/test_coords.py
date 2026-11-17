@@ -9,8 +9,18 @@ Contains:
         ShowPyError, however the system gets into a show
     test_regression_to_coords_rejects_infinite_point(): rejects an infinite point with a
         ShowPyError, not decimal.InvalidOperation
+    test_regression_to_coords_rejects_unrepresentable_magnitude(): rejects a finite point too
+        large to round with a ShowPyError, not decimal.InvalidOperation
     test_regression_to_coords_rejects_nan_point(): rejects a NaN point instead of printing "nan m
         right of center"
+    test_regression_from_coords_rejects_overflowing_number(): rejects a number too large for a
+        float instead of returning an infinite point
+    test_regression_unvalidated_origin_is_rejected(): rejects a NaN, infinite or malformed origin
+        instead of returning or printing garbage
+    test_regression_from_coords_rejects_overflowing_result(): rejects a point whose sum with a huge
+        origin overflows, instead of returning an infinite point
+    test_regression_unvalidated_audience_side_is_rejected(): rejects an audience side outside the
+        four sides with a ShowPyError, not KeyError
     test_regression_to_coords_rejects_unknown_style(): rejects an unknown style instead of silently
         using long style
     test_regression_short_label_with_digit_round_trips_or_is_rejected(): round-trips a short
@@ -25,6 +35,8 @@ Contains:
     test_regression_from_coords_reads_number_glued_to_unit(): reads "3m right of center" with no
         space before the unit
 """
+
+from typing import Any
 
 import pytest
 
@@ -167,24 +179,24 @@ def _word_with_precision(precision: float) -> str:
     return to_coords(two_set_show().model_copy(update={"coordinates": system}), (1.0, 1.0))
 
 
-@pytest.mark.defect("UP-9.4-15")
-@pytest.mark.xfail(strict=True, reason="UP-9.4-15")
 def test_regression_zero_precision_is_rejected_not_division_by_zero() -> None:
     """Rejects precision=0 with a ShowPyError, however the system gets into a show (audit 9.4)."""
     with pytest.raises(ShowPyError):
         _word_with_precision(0.0)
 
 
-@pytest.mark.defect("UP-9.4-16")
-@pytest.mark.xfail(strict=True, reason="UP-9.4-16")
 def test_regression_to_coords_rejects_infinite_point() -> None:
     """Rejects an infinite point with a ShowPyError, not decimal.InvalidOperation (audit 9.4)."""
     with pytest.raises(ShowPyError):
         to_coords(two_set_show(), (float("inf"), 0.0))
 
 
-@pytest.mark.defect("UP-9.4-17")
-@pytest.mark.xfail(strict=True, reason="UP-9.4-17")
+def test_regression_to_coords_rejects_unrepresentable_magnitude() -> None:
+    """Rejects the finite point (0.0, 1e26), too large to round, with a ShowPyError (UP-9.4-47)."""
+    with pytest.raises(ShowPyError):
+        to_coords(two_set_show(), (0.0, 1e26))
+
+
 def test_regression_to_coords_rejects_nan_point() -> None:
     """Rejects a NaN point instead of printing "nan m right of center" (audit 9.4)."""
     with pytest.raises(ShowPyError):
@@ -241,3 +253,65 @@ def test_regression_from_coords_reads_number_glued_to_unit() -> None:
     """Reads "3m right of center" with no space before the unit (audit 9.4)."""
     text = "3m right of center, 2.00 m upstage of front edge"
     assert approx_equal(from_coords(two_set_show(), text), (3.0, 2.0), TOL)
+
+
+def _injected(fields: dict[str, Any]) -> Show:  # model_construct takes unchecked values
+    system = CoordinateSystem.model_construct(None, **fields)
+    return two_set_show().model_copy(update={"coordinates": system})
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "R" + "9" * 400 + " U1",
+        "1" + "0" * 400 + " m right of center, 1 m upstage of front edge",
+    ],
+)
+def test_regression_from_coords_rejects_overflowing_number(text: str) -> None:
+    """Rejects a 400-digit number, not an infinite point (audit 9.4, UP-9.4-48)."""
+    with pytest.raises(ShowPyError):
+        from_coords(two_set_show(), text)
+
+
+@pytest.mark.parametrize("origin", [(float("nan"), 0.0), (float("inf"), 0.0), (1.0,)])
+def test_regression_unvalidated_origin_is_rejected(origin: tuple[float, ...]) -> None:
+    """Rejects a NaN, infinite or one-value origin in both directions (audit 9.4, UP-9.4-49)."""
+    show = _injected({"origin": origin})
+    with pytest.raises(ShowPyError):
+        from_coords(show, "R1 U1")
+    with pytest.raises(ShowPyError):
+        to_coords(show, (1.0, 1.0))
+
+
+def test_regression_unvalidated_audience_side_is_rejected() -> None:
+    """Rejects audience_side="x" in both directions, not KeyError (audit 9.4, UP-9.4-50)."""
+    show = _injected({"audience_side": "x"})
+    with pytest.raises(ShowPyError):
+        from_coords(show, "R1 U1")
+    with pytest.raises(ShowPyError):
+        to_coords(show, (1.0, 1.0))
+
+
+def test_regression_from_coords_rejects_overflowing_result() -> None:
+    """Rejects "R999..9 U1" (308 digits) from origin 1.7e308, not (inf, 1.0) (UP-9.4-51)."""
+    show = set_coordinates(two_set_show(), CoordinateSystem(origin=(1.7e308, 0.0)))
+    with pytest.raises(ShowPyError):
+        from_coords(show, "R" + "9" * 308 + " U1")
+
+
+def test_regression_to_coords_rejects_non_finite_wording() -> None:
+    """Rejects points whose local offset or rounded value is nan or inf (UP-9.4-52)."""
+    shifted = set_coordinates(two_set_show(), CoordinateSystem(origin=(1.7e308, -1.7e308)))
+    with pytest.raises(ShowPyError):
+        to_coords(shifted, (-1.7e308, 1.7e308))
+    coarse = two_set_show().model_copy(update={"coordinates": CoordinateSystem(precision=1e308)})
+    with pytest.raises(ShowPyError):
+        to_coords(coarse, (1.7976931348623157e308, 0.0))
+
+
+def test_regression_to_coords_rounding_failure_hint_names_precision() -> None:
+    """Teaches the precision as a possible cause when rounding exceeds Decimal's digits."""
+    show = two_set_show().model_copy(update={"coordinates": CoordinateSystem(precision=1e-300)})
+    with pytest.raises(ShowPyError) as raised:
+        to_coords(show, (1.0, 0.0))
+    assert "precision" in raised.value.hint

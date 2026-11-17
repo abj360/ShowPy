@@ -818,15 +818,6 @@
       "px_per_m": "float"
     }
   },
-  "SheetReplaceReport": {
-    "model": {
-      "form_notes": "tuple[str, ...]",
-      "in_zones": "tuple[tuple[SpotId, ZoneId], ...]",
-      "mapping": "Literal['landmarks', 'origin', 'scale']",
-      "moved": "dict[SpotId, tuple[Point, Point]]",
-      "outside": "tuple[SpotId, ...]"
-    }
-  },
   "SheetRow": {
     "model": {
       "behavior": "str",
@@ -1346,7 +1337,6 @@
   "render_sheet": "(sheet: showpy.sheet.models.Sheet, fmt: SheetFormat = 'svg', px_per_m: float = 20.0) -> bytes",
   "renumber": "(show: showpy.show.models.Show, scheme: str = 'sequential') -> tuple[showpy.show.models.Show, dict[SetId, SetId]]",
   "reorder": "(form: showpy.choreo.models.Form, order: Order, prev_set: showpy.choreo.models.Set | None = None, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> showpy.choreo.models.Form",
-  "replace_sheet": "(show: 'Show', sheet: showpy.sheet.models.Sheet, mapping: SheetMapping = 'landmarks', force: bool = False) -> tuple['Show', showpy.sheet.models.SheetReplaceReport]",
   "require_finite": "(value: float, *, name: str, low: float | None = None, low_open: bool = False, high: float | None = None) -> float",
   "require_size": "(requested: int, cap: int, *, what: str, error: type[showpy.core.errors.ShowPyError] = ...) -> None",
   "revert": "(ws: showpy.show.storage.Workspace, revision_id: str, at: datetime.datetime) -> showpy.show.models.Revision",

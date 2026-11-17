@@ -28,7 +28,7 @@ showpy/
   geo/      curves, shapes, svg, text, regions, spacing, affine, transforms, measure, analysis
   time/     count timeline: tempo, holds, markers, cues, measures, audio sync
   cast/     Group, Spot, Shape, Cast, spot tools, selection grammar
-  sheet/    Sheet, templates, coordinate systems, bounds, replace_sheet, render
+  sheet/    Sheet, templates, coordinate systems, bounds, similarity fit, render
   notes/    design notes
   choreo/   Placement, Set, forms, match, paths, routes, motion, engine, facing, avoid, motion_stats
   show/     Show, manage, sections, storage, repositories, history, collab, validate, paths_store

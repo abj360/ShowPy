@@ -44,7 +44,7 @@ Use `uv` only, never pip.
 | `geo`    | curve_base, curves (11 kinds, arc-length param), svg, text (stroke font), shapes, regions, spacing (Bridson scatter), affine, transforms + transform_base + snapping, measure, analysis, models                                                      |
 | `time`   | models, timeline, clock (ramps and holds, analytic inverse), measures, validate                                                                                                                                                                      |
 | `cast`   | models, spots, select (expression grammar), rewrite (renames IDs everywhere)                                                                                                                                                                         |
-| `sheet`  | models, templates + surfaces (NFHS, NCAA and NFL fields, stage, gym), coords, bounds, replace, render (`SheetCanvas`, `draw_sheet`)                                                                                                                  |
+| `sheet`  | models, templates + surfaces (NFHS, NCAA and NFL fields, stage, gym), coords, bounds, replace (similarity_fit only), render (`SheetCanvas`, `draw_sheet`)                                                                                            |
 | `notes`  | models (tagged `Anchor`), notes (add, edit, find, `accept_draft`)                                                                                                                                                                                    |
 | `choreo` | models, motion (easing, `MotionRegistry`), engine, engine_compile, engine_facing, engine_models, paths, routes, facing, avoid, motion_stats, forms, form_fns, form_layout, form_ops, form_fit, form_place, match, match_cost, match_solve, match_ops |
 | `show`   | models (`Show`, `Pin`, `ShowIndex`, diffs, `Revision`, `CanvasEvent`, `Proposal`), manage, sections, storage, repositories, file_repository, documents, files, history, collab, pinning, changes, locks, validate, paths_store, counts               |
@@ -102,7 +102,6 @@ deviations below (the code is the source of truth until generated docs land in P
 - **sheet**:
   - `sheet_templates()` replaces `templates()`.
   - `get_sheet` and `save_sheet` take an injected `SheetStore`.
-  - `replace_sheet` takes `force`, moves paths and zones too, and has no `checks`.
   - Field templates live in core `surfaces.py`.
 - **cast**:
   - `regroup` and `remove_group` return `(Show, mapping)`.

@@ -13,7 +13,6 @@ Contains:
     Zone.is_active(): reports whether the zone applies at a count
     CoordinateSystem: describes how positions are labeled; display only
     Sheet: holds the 2D design surface
-    SheetReplaceReport: reports what changed when a sheet was replaced
 """
 
 from enum import StrEnum
@@ -22,9 +21,17 @@ from typing import Literal
 from pydantic import model_validator
 
 from showpy.core.errors import GeometryError, TimeRangeError
-from showpy.core.ids import LandmarkId, SheetRef, SpotId, ZoneId
+from showpy.core.ids import LandmarkId, SheetRef, ZoneId
 from showpy.core.selection import SelectorField
-from showpy.core.types import Count, Degrees, FrozenModel, Meters, Point, Region, Ring
+from showpy.core.types import (
+    Count,
+    Degrees,
+    FrozenModel,
+    Meters,
+    Point,
+    Region,
+    Ring,
+)
 
 MIN_POINTS_BY_KIND = {"point": 1, "line": 2, "area": 3}
 
@@ -219,21 +226,3 @@ class Sheet(FrozenModel):
     based_on: SheetRef | None = None
     owner: str = ""
     thumbnail: str = ""
-
-
-class SheetReplaceReport(FrozenModel):
-    """Reports what changed when a show's sheet was replaced.
-
-    Attributes:
-        mapping: How positions were carried over.
-        moved: Spot to (old point, new point), for the first set where it moved most.
-        outside: Spots that land off the new sheet in some set.
-        in_zones: Spots that land in a restricted zone.
-        form_notes: Form constructions that changed.
-    """
-
-    mapping: Literal["landmarks", "origin", "scale"]
-    moved: dict[SpotId, tuple[Point, Point]] = {}
-    outside: tuple[SpotId, ...] = ()
-    in_zones: tuple[tuple[SpotId, ZoneId], ...] = ()
-    form_notes: tuple[str, ...] = ()
