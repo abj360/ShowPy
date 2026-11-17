@@ -42,6 +42,8 @@ Contains:
     test_regression_losing_commit_race_is_a_conflict: keeps a lost link race a ConflictError
     test_regression_overlong_show_id_reads_raise_name_too_long: refuses reads of a 300-character ID
     test_regression_other_os_errors_are_io: maps stray OSErrors on read paths and show_ids() to IO
+    test_regression_deep_or_huge_tree_record_is_corrupt: maps a tree record nested past the stack
+        or holding an overlong int to CORRUPT
 """
 
 import errno
@@ -63,7 +65,7 @@ from showpy.show.file_repository import FileRepository
 from showpy.show.models import Revision
 from showpy.show.repositories import digest
 from tests.fixtures.shows import two_set_show
-from tests.helpers import fails_after
+from tests.helpers import HOSTILE_JSON, fails_after
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 SHOW_ID = "show-1"
@@ -450,3 +452,12 @@ def test_regression_overlong_show_id_reads_raise_name_too_long(tmp_path: Path) -
         with pytest.raises(StorageError) as caught:
             read()
         assert caught.value.code == "NAME_TOO_LONG"
+
+
+@pytest.mark.parametrize("raw", HOSTILE_JSON.values(), ids=HOSTILE_JSON.keys())
+def test_regression_deep_or_huge_tree_record_is_corrupt(tmp_path: Path, raw: bytes) -> None:
+    """Maps a tree record nested past the stack or holding an overlong int to CORRUPT."""
+    repo, rev, base = _saved(tmp_path)
+    (base / "trees" / f"{rev}.json").write_bytes(raw)
+    _assert_corrupt(lambda: repo.backend.tree(SHOW_ID, rev))
+    _assert_corrupt(lambda: repo.revisions(SHOW_ID))

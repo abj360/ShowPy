@@ -26,6 +26,8 @@ Contains:
         infinity and a lone surrogate through both
     test_regression_encode_documents_matches_encode_show: encodes a subset of documents with the
         bytes encode_show gives and skips paths the show does not write
+    test_regression_deep_or_huge_json_document_is_a_schema_error: raises SchemaError naming the
+        document, not RecursionError or ValueError, for deep nesting or an overlong int
 """
 
 import json
@@ -46,6 +48,7 @@ from showpy.show.documents import (
 )
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
+from tests.helpers import HOSTILE_JSON
 
 FUTURE_VERSION = 999
 VERSION_KEYS = ("format", "version", "schema_version", "layout_version")
@@ -187,3 +190,11 @@ def test_regression_encode_documents_matches_encode_show() -> None:
     wanted = [SHOW_DOC, "/sets/2/set.json", "/sets/9/set.json"]
     assert encode_documents(show, wanted) == {p: docs[p] for p in wanted if p in docs}
     assert "/sets/9/set.json" not in encode_documents(show, wanted)
+
+
+@pytest.mark.parametrize("raw", HOSTILE_JSON.values(), ids=HOSTILE_JSON.keys())
+def test_regression_deep_or_huge_json_document_is_a_schema_error(raw: bytes) -> None:
+    """Raises SchemaError naming show.json for nesting past the stack or an overlong int."""
+    with pytest.raises(SchemaError) as caught:
+        decode_show({**_docs(), SHOW_DOC: raw})
+    assert caught.value.context["path"] == SHOW_DOC

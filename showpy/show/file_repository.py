@@ -184,7 +184,7 @@ class _FileBackend:
         path = self._tree_path(show_id, revision_id, source)
         try:
             record = json.loads(self._read(show_id, path))
-        except (json.JSONDecodeError, UnicodeDecodeError, RecursionError) as error:
+        except (ValueError, RecursionError) as error:
             raise self._corrupt(
                 show_id, path, "tree file is not valid JSON or too deeply nested"
             ) from error

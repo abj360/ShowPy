@@ -15,6 +15,7 @@ Contains:
     capped_address_space(): caps the address space so a runaway allocation fails fast
     fails_after(): fails a test still running after a deadline, never inside coverage or a hook
     only_showpy_errors(): runs a fuzz target; only a ShowPyError may escape, within 5 s
+    HOSTILE_JSON: names JSON bytes that make json.loads raise RecursionError or ValueError
     EXPECTED_FAILURES: exception names a hash-seed subprocess may end with
     outputs_under_hash_seeds(): runs one script under each hash seed and collects its output
     TAGGED_SHOW_SCRIPT: script head building two_set_show() with spot tags and a selection
@@ -61,6 +62,11 @@ HALF_TURN = 180.0
 ALLOCATION_HEADROOM_BYTES = 256 * 2**20
 FUZZ_BUDGET_S = 5.0
 SAMPLE_REPR_CHARS = 200
+JSON_NESTING_DEPTH = 200_000
+OVERLONG_INT_DIGITS = 5_000
+# json.loads overflows the C stack (RecursionError) and refuses ints past
+# sys.int_max_str_digits, 4300 by default (ValueError).
+HOSTILE_JSON = {"deep": b"[" * JSON_NESTING_DEPTH, "huge-int": b"9" * OVERLONG_INT_DIGITS}
 # Code running here is a tracer, finalizer or error hook: an exception raised in it is lost
 # or corrupts the hook, so a hang alarm waits for the next tick instead.
 NO_ALARM_MODULES = frozenset(

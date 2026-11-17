@@ -39,6 +39,8 @@ Contains:
         BOM, which the reader returns as text json.loads rejects
     test_structured_check_decodes_only_changed_structured_blobs: loads no blob for show
         documents or raw-byte paths
+    test_regression_commit_refuses_deep_or_huge_json: raises SchemaError, not RecursionError or
+        ValueError, for deep nesting or an overlong int in a show or free JSON document
 """
 
 import json
@@ -76,6 +78,7 @@ from showpy.show.models import Show
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import load_show, open_workspace, save_show
 from tests.fixtures.generators import seeded_show
+from tests.helpers import HOSTILE_JSON
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 SHOW_ID = "integrity"
@@ -418,3 +421,14 @@ def test_regression_bom_json_is_refused_at_commit(path: str) -> None:
     with pytest.raises(SchemaError) as caught:
         _commit(repo, head, {path: b"\xef\xbb\xbf" + body})
     assert caught.value.context["path"] == path
+
+
+@pytest.mark.parametrize("raw", HOSTILE_JSON.values(), ids=HOSTILE_JSON.keys())
+@pytest.mark.parametrize("path", [SHOW_DOC, "/config/x.json", "/exports/x.json"])
+def test_regression_commit_refuses_deep_or_huge_json(path: str, raw: bytes) -> None:
+    """Refuses nesting past the stack or an overlong int with SchemaError naming the path."""
+    repo, head = _repo()
+    with pytest.raises(SchemaError) as caught:
+        _commit(repo, head, {path: raw})
+    assert caught.value.context["path"] == path
+    assert repo.head(SHOW_ID) == head

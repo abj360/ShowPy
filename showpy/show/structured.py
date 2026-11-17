@@ -77,7 +77,7 @@ def _check_selection(raw: bytes) -> None:
 def _check_json(text: str) -> None:
     try:
         json.loads(text)
-    except (json.JSONDecodeError, RecursionError) as exc:
+    except (ValueError, RecursionError) as exc:
         raise SchemaError(
             f"not valid JSON: {exc}",
             hint="write one JSON document",

@@ -275,12 +275,14 @@ def _load_json(docs: Mapping[str, bytes], path: str) -> object:
 
 
 def _parse(path: str, raw: bytes) -> object:
+    """Parses JSON, raising SchemaError for bad UTF-8 or JSON, deep nesting or an overlong int."""
     try:
         return json.loads(raw)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (ValueError, RecursionError) as exc:
         raise SchemaError(
             f"{path} is not valid JSON: {exc}",
-            hint="write UTF-8 JSON",
+            hint=f"write UTF-8 JSON nested at most {MAX_NESTING} levels, ints of at most"
+            f" {MAX_INT_DIGITS} digits, as save_show() does",
             context={"path": path},
         ) from exc
 

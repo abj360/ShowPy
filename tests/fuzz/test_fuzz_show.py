@@ -38,7 +38,7 @@ from showpy.show.models import CanvasEvent, EventKind, Show
 from showpy.show.storage import Workspace
 from showpy.show.structured import decode_comments
 from tests.fixtures.shows import two_set_show
-from tests.helpers import only_showpy_errors, open_session
+from tests.helpers import HOSTILE_JSON, only_showpy_errors, open_session
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 LATER = datetime(2026, 11, 11, 12, 5, tzinfo=UTC)
@@ -56,6 +56,7 @@ JSON_VALUES = st.recursive(
     ),
     max_leaves=12,
 )
+RAW_BYTES = st.one_of(st.binary(max_size=64), st.sampled_from(sorted(HOSTILE_JSON.values())))
 PATH_PIECES = st.sampled_from(
     [
         *["/", "sets", "show", "transitions", "1", "1A", "2", "3", "renders"],
@@ -96,7 +97,7 @@ def _json_bytes(value: object) -> bytes:
     return json.dumps(value).encode()
 
 
-@given(st.dictionaries(st.sampled_from(STORED_PATHS), st.binary(max_size=64), max_size=4))
+@given(st.dictionaries(st.sampled_from(STORED_PATHS), RAW_BYTES, max_size=4))
 def test_fuzz_decode_show_bytes(replaced: dict[str, bytes]) -> None:
     only_showpy_errors(lambda: decode_show({**STORED, **replaced}), replaced)
 
@@ -170,7 +171,7 @@ def test_fuzz_ls(path: str) -> None:
     only_showpy_errors(lambda: READ_ONLY.ls(path), path)
 
 
-@given(st.sampled_from(KNOWN_PATHS), st.binary(max_size=64), st.booleans())
+@given(st.sampled_from(KNOWN_PATHS), RAW_BYTES, st.booleans())
 def test_fuzz_staged_changes_bytes(path: str, raw: bytes, is_renumbered: bool) -> None:
     show = RENUMBERED if is_renumbered else PLAIN
     stored = STORED if is_renumbered else encode_show(PLAIN)
@@ -182,7 +183,7 @@ def test_fuzz_staged_changes_json_shapes(path: str, raw: bytes) -> None:
     only_showpy_errors(lambda: staged_changes(path, raw, RENUMBERED, STORED), (path, raw))
 
 
-@given(KNOWN_OR_TEXT, st.one_of(st.binary(max_size=64), JSON_VALUES.map(_json_bytes)))
+@given(KNOWN_OR_TEXT, st.one_of(RAW_BYTES, JSON_VALUES.map(_json_bytes)))
 def test_fuzz_write_paths(path: str, raw: bytes) -> None:
     workspace = _session_workspace()
     only_showpy_errors(lambda: workspace.write(path, raw, at=LATER), (path, raw))
@@ -191,7 +192,7 @@ def test_fuzz_write_paths(path: str, raw: bytes) -> None:
 @given(
     st.dictionaries(
         KNOWN_OR_TEXT,
-        st.one_of(st.none(), st.binary(max_size=64), JSON_VALUES.map(_json_bytes)),
+        st.one_of(st.none(), RAW_BYTES, JSON_VALUES.map(_json_bytes)),
         max_size=3,
     )
 )
@@ -200,7 +201,7 @@ def test_fuzz_commit_paths(changes: dict[str, bytes | None]) -> None:
     only_showpy_errors(lambda: workspace.commit(changes, at=LATER), changes)
 
 
-@given(st.sampled_from(KNOWN_PATHS), st.binary(max_size=64))
+@given(st.sampled_from(KNOWN_PATHS), RAW_BYTES)
 def test_fuzz_commit_then_read(path: str, raw: bytes) -> None:
     workspace = _session_workspace()
 
@@ -227,6 +228,6 @@ def test_fuzz_apply_event_payloads(kind: EventKind, payload: dict[str, object]) 
     only_showpy_errors(lambda: apply_event(PLAIN, event, force=True), (kind, payload))
 
 
-@given(st.one_of(st.binary(max_size=64), JSON_VALUES.map(_json_bytes)))
+@given(st.one_of(RAW_BYTES, JSON_VALUES.map(_json_bytes)))
 def test_fuzz_decode_comments(raw: bytes) -> None:
     only_showpy_errors(lambda: decode_comments(raw), raw)
