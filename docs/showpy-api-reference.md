@@ -447,18 +447,20 @@ Layout rules, all measured on the first font of the chain:
 - Slot order is reading order: lines top to bottom, glyphs in logical order, strokes in font order, each stroke from its start.
   Caps are checked before anything is built:
 
-| Cap                   | Value   | Applies to                                            | Failure                |
-| --------------------- | ------- | ----------------------------------------------------- | ---------------------- |
-| `MAX_LAYOUT_CHARS`    | 1,000   | Raw characters of `text`, before normalization        | `SchemaError`          |
-| `MAX_LAYOUT_EXTENT_M` | 1e6 m   | Laid extent of the text block                         | `GeometryError`        |
-| `MAX_FONT_BYTES`      | 8 MiB   | One font file                                         | `FontError` `BAD_FONT` |
-| `MAX_GLYPH_PIECES`    | 512     | Path pieces of one glyph, over all its strokes        | `FontError` `BAD_FONT` |
-| `MAX_LAYOUT_PIECES`   | 512,000 | Path pieces of all laid glyphs of one text            | `SchemaError`          |
-| `MAX_TEXT_FONTS`      | 16      | Fonts in one `TextRecipe` chain                       | `SchemaError`          |
-| `MAX_TEXT_SPOTS`      | 10,000  | Spots in one text form (`showpy.choreo.form_text`)    | `TOO_MANY_SPOTS`       |
-| `MAX_IMPORT_FONTS`    | 64      | Fonts embedded in one document read by `import_fonts` | `FontError` `BAD_FONT` |
+| Cap                       | Value   | Applies to                                            | Failure                |
+| ------------------------- | ------- | ----------------------------------------------------- | ---------------------- |
+| `MAX_LAYOUT_CHARS`        | 1,000   | Raw characters of `text`, before normalization        | `SchemaError`          |
+| `MAX_LAYOUT_EXTENT_M`     | 1e6 m   | Laid extent of the text block                         | `GeometryError`        |
+| `MAX_FONT_BYTES`          | 8 MiB   | One font file                                         | `FontError` `BAD_FONT` |
+| `MAX_GLYPH_PIECES`        | 512     | Path pieces of one glyph, over all its strokes        | `FontError` `BAD_FONT` |
+| `MAX_STROKE_PIECES`       | 384     | Path pieces of one stroke                             | `FontError` `BAD_FONT` |
+| `MAX_LAYOUT_PIECES`       | 512,000 | Path pieces of all laid glyphs of one text            | `SchemaError`          |
+| `MAX_LAYOUT_CURVE_PIECES` | 60,000  | Path pieces of all laid curved strokes of one text    | `SchemaError`          |
+| `MAX_TEXT_FONTS`          | 16      | Fonts in one `TextRecipe` chain                       | `SchemaError`          |
+| `MAX_TEXT_SPOTS`          | 10,000  | Spots in one text form (`showpy.choreo.form_text`)    | `TOO_MANY_SPOTS`       |
+| `MAX_IMPORT_FONTS`        | 64      | Fonts embedded in one document read by `import_fonts` | `FontError` `BAD_FONT` |
 
-The piece caps are about 10 times the bundled maxima measured on 2026-11-16: the most complex bundled glyph, hershey-script `8`, has 51 pieces, and 1,000 copies of it lay 51,000. `load_font` counts pieces while parsing, before sampling; `layout_text` parses each distinct glyph once and counts before building a stroke (NFC can lay out more glyphs than raw characters, for example U+0344 lays two). The cost is not linear: an `SvgCurve` table costs about the square of a stroke's pieces, so 1,000 glyphs of 512 cubic pieces take about 160 s to measure.
+The glyph, stroke and layout piece caps are about 10 times the bundled maxima measured on 2026-11-16: the most complex bundled glyph, hershey-script `8`, has 51 pieces, the longest stroke, hershey-script `Z`, has 38, and 1,000 copies of the heaviest glyph lay 51,000. A curved stroke becomes an `SvgCurve`, whose table costs about 60 µs per piece to measure and place against about 1 µs for a straight one (measured 2026-11-17), so `MAX_LAYOUT_CURVE_PIECES` bounds those separately; bundled Relief needs at most 15,000 for 1,000 glyphs. `load_font` counts pieces while parsing, before sampling; `layout_text` parses each distinct glyph once and counts before building a stroke (NFC can lay out more glyphs than raw characters, for example U+0344 lays two). The worst legal text (1,000 glyphs, 512,000 pieces, 59,904 of them curved) builds a text form in about 3 s.
 
 `text_outline` changed with this feature: it takes a font chain and `font_registry`, returns `list[Polyline | SvgCurve]`, closes glyph loops without repeating the start point, starts a new line at `\n` (it used to raise), rejects a non-finite `height` or `at`, raises `GlyphError` or `MissingFontError` (both `UnknownRefError`) for a missing glyph or font, and shares the two layout caps.
 
