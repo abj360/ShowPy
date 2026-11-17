@@ -12,13 +12,14 @@ Contains:
     paths_doc(): returns the path of a transition's paths document
     is_show_doc(): reports whether a path is part of the encoded Show
     encode_show(): splits a show into documents
-    decode_show(): assembles a show from documents
+    decode_show(): assembles a show from documents, reusing cached per-document decodes
 """
 
 import itertools
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from functools import partial
 from typing import Any
 
 from pydantic_core import to_jsonable_python
@@ -26,6 +27,7 @@ from pydantic_core import to_jsonable_python
 from showpy.choreo.models import Form, Set, TransitionSpec
 from showpy.core.errors import SchemaError, StorageError, field_errors
 from showpy.core.ids import SetId, TransitionId
+from showpy.show.decode_cache import DecodeCache
 from showpy.show.manage import SET_ID_PATTERN
 from showpy.show.models import Show
 
@@ -46,6 +48,7 @@ SHOW_DOC_PATTERN = re.compile(
     r"|transitions/[^/]+/paths\.json)$"
 )
 JSON_INDENT = 2
+JSON_SCALARS = frozenset({str, int, float, bool})
 
 
 def split_path(path: str) -> list[str]:
@@ -71,6 +74,8 @@ def split_path(path: str) -> list[str]:
 
 # Any: canonicalizes arbitrary JSON-like values produced by model_dump.
 def _canonical(value: Any) -> Any:
+    if value is None or type(value) in JSON_SCALARS:
+        return value
     if isinstance(value, dict):
         return {str(k): _canonical(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
@@ -189,7 +194,20 @@ def _load(docs: Mapping[str, bytes], path: str, default: Any = None) -> Any:
         ) from exc
 
 
-def _forms(docs: Mapping[str, bytes], set_id: SetId) -> dict[str, Form]:
+def _cached[T](
+    cache: DecodeCache | None, digests: Mapping[str, str], path: str, decode: Callable[[], T]
+) -> T:
+    digest = digests.get(path)
+    if cache is None or digest is None:
+        return decode()
+    return cache.get_or_decode(path, digest, decode)
+
+
+def _set(docs: Mapping[str, bytes], set_id: SetId) -> Set:
+    return Set.model_validate(_load(docs, set_doc(set_id)))
+
+
+def _forms(docs: Mapping[str, bytes], set_id: SetId) -> tuple[Form, ...]:
     forms = [Form.model_validate(f) for f in _load(docs, forms_doc(set_id), [])]
     wrong = [f.id for f in forms if f.set != set_id]
     if wrong:
@@ -198,13 +216,13 @@ def _forms(docs: Mapping[str, bytes], set_id: SetId) -> dict[str, Form]:
             hint=f"give every form in this file set={set_id!r}",
             context={"set": set_id, "forms": wrong},
         )
-    return {f.id: f for f in forms}
+    return tuple(forms)
 
 
-def _paths(docs: Mapping[str, bytes], tid: TransitionId) -> list[TransitionSpec]:
+def _paths(docs: Mapping[str, bytes], tid: TransitionId) -> tuple[TransitionSpec, ...]:
     raw = _load(docs, paths_doc(tid), {})
     if not raw:
-        return []
+        return ()
     spec = TransitionSpec.model_validate(raw)
     if spec.id != tid:
         raise SchemaError(
@@ -212,16 +230,26 @@ def _paths(docs: Mapping[str, bytes], tid: TransitionId) -> list[TransitionSpec]
             hint=f"set id to {list(tid)}",
             context={"tid": tid, "found": spec.id},
         )
-    return [spec]
+    return (spec,)
 
 
-def _assemble(docs: Mapping[str, bytes], revision: str) -> Show:
+def _assemble(
+    docs: Mapping[str, bytes], revision: str, cache: DecodeCache | None, digests: Mapping[str, str]
+) -> Show:
     meta = dict(_load(docs, SHOW_DOC))
     order: list[SetId] = list(meta.pop(SET_ORDER_FIELD, []))
-    sets = [Set.model_validate(_load(docs, set_doc(s))) for s in order]
-    forms = {k: v for s in order for k, v in _forms(docs, s).items()}
+    sets = [_cached(cache, digests, set_doc(s), partial(_set, docs, s)) for s in order]
+    forms = {
+        f.id: f
+        for s in order
+        for f in _cached(cache, digests, forms_doc(s), partial(_forms, docs, s))
+    }
     pairs = list(itertools.pairwise(order))
-    specs = [spec for tid in pairs for spec in _paths(docs, tid)]
+    specs = [
+        spec
+        for tid in pairs
+        for spec in _cached(cache, digests, paths_doc(tid), partial(_paths, docs, tid))
+    ]
     counts = {s.id: s.counts for s in sets}
     specs = [spec.replace(counts=counts[spec.id[1]]) for spec in specs]
     return Show.model_validate(
@@ -238,12 +266,21 @@ def _assemble(docs: Mapping[str, bytes], revision: str) -> Show:
     )
 
 
-def decode_show(docs: Mapping[str, bytes], revision: str = "") -> Show:
+def decode_show(
+    docs: Mapping[str, bytes],
+    revision: str = "",
+    *,
+    cache: DecodeCache | None = None,
+    digests: Mapping[str, str] | None = None,
+) -> Show:
     """Assembles a show from documents; paths take the destination set's counts.
 
     Args:
         docs: Path to document bytes; documents other than show documents are ignored.
         revision: Revision the documents were read at.
+        cache: Decoded documents to reuse; the show is still validated whole.
+        digests: Path to blob digest of each document, naming the cache entries; without it
+            nothing is cached.
 
     Returns:
         show: The assembled show, raising SchemaError when a document does not fit.
@@ -253,7 +290,7 @@ def decode_show(docs: Mapping[str, bytes], revision: str = "") -> Show:
     True
     """
     try:
-        return _assemble(docs, revision)
+        return _assemble(docs, revision, cache, digests or {})
     except SchemaError as exc:
         errors = field_errors(exc)
         raise SchemaError(

@@ -4,12 +4,16 @@ integrity.py --- checks that every commit lands a known path layout and a decoda
 Contains:
     KNOWN_ROOTS: the path prefixes a repository accepts documents under
     require_known_path(): refuses a path outside KNOWN_ROOTS, including look-alike paths
-    require_valid_tree(): checks the changed paths and decodes the show when a show document moved
+    blob_digest(): returns the SHA-256 hex digest blobs are addressed by
+    require_valid_digests(): checks digest trees, loading and decoding only what must be decoded
+    require_valid_tree(): checks byte trees the same way, without a cache
 """
 
-from collections.abc import Mapping
+import hashlib
+from collections.abc import Callable, Iterator, Mapping
 
 from showpy.core.errors import StorageError
+from showpy.show.decode_cache import DecodeCache
 from showpy.show.documents import decode_show, is_show_doc
 from showpy.show.models import Show
 
@@ -58,6 +62,57 @@ def require_known_path(path: str) -> None:
         raise _bad_path(path)
 
 
+def blob_digest(data: bytes) -> str:
+    """Returns the SHA-256 hex digest blobs and assets are addressed by."""
+    return hashlib.sha256(data).hexdigest()
+
+
+class _LazyBlobs(Mapping[str, bytes]):
+    def __init__(self, digests: Mapping[str, str], blob: Callable[[str], bytes]) -> None:
+        self._digests = digests
+        self._blob = blob
+
+    def __getitem__(self, path: str) -> bytes:
+        return self._blob(self._digests[path])
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._digests)
+
+    def __len__(self) -> int:
+        return len(self._digests)
+
+
+def require_valid_digests(
+    before: Mapping[str, str],
+    after: Mapping[str, str],
+    blob: Callable[[str], bytes],
+    cache: DecodeCache | None = None,
+) -> Show | None:
+    """Checks every changed path and decodes the show when any show document changed.
+
+    Documents whose digest sits in `cache` at the same path are reused; every changed
+    document is decoded fresh, and the show is validated whole either way.
+
+    Args:
+        before: Path to blob digest before the commit.
+        after: Path to blob digest the commit would leave.
+        blob: Returns the bytes of a digest; called only for documents that must be decoded.
+        cache: Decoded documents of earlier commits, or None to decode everything.
+
+    Returns:
+        show: The decoded `after` tree, or None when no show document changed.
+
+    >>> require_valid_digests({}, {"/renders/a.txt": blob_digest(b"hi")}, lambda d: b"hi") is None
+    True
+    """
+    changed = [p for p in set(before) | set(after) if before.get(p) != after.get(p)]
+    for path in sorted(changed):
+        require_known_path(path)
+    if not any(is_show_doc(p) for p in changed):
+        return None
+    return decode_show(_LazyBlobs(after, blob), cache=cache, digests=after)
+
+
 def require_valid_tree(before: Mapping[str, bytes], after: Mapping[str, bytes]) -> Show | None:
     """Checks every changed path and decodes the show when any show document changed.
 
@@ -71,9 +126,9 @@ def require_valid_tree(before: Mapping[str, bytes], after: Mapping[str, bytes]) 
     >>> require_valid_tree({}, {"/renders/a.txt": b"hi"}) is None
     True
     """
-    changed = [p for p in set(before) | set(after) if before.get(p) != after.get(p)]
-    for path in sorted(changed):
-        require_known_path(path)
-    if not any(is_show_doc(p) for p in changed):
-        return None
-    return decode_show(after)
+    by_digest = {blob_digest(raw): raw for raw in after.values()}
+    return require_valid_digests(
+        {p: blob_digest(raw) for p, raw in before.items()},
+        {p: blob_digest(raw) for p, raw in after.items()},
+        by_digest.__getitem__,
+    )

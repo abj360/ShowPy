@@ -13,17 +13,43 @@ Contains:
         the schema
     test_non_show_documents_are_not_decoded: lands a commit with no show document untouched
     test_valid_show_decodes_on_change: returns the decoded show when a show document changed
+    test_cached_and_plain_paths_agree: returns equal shows with and without a decode cache
+    test_regression_cache_does_not_hide_a_bad_rewrite_of_a_cached_path: refuses invalid bytes for
+        a path whose valid bytes were cached
+    test_regression_cache_digest_twin_at_another_path_is_still_validated: refuses a forms document
+        copied from another set although the same bytes are cached there
+    test_uncached_invalid_document_is_refused: refuses an invalid document never seen before
+    test_cache_serves_unchanged_documents: decodes only the changed document on a one-set edit
+    test_cache_respects_its_bound: evicts the oldest entry past max_entries
+    test_one_spot_edit_through_a_workspace_stays_fast: keeps a one-spot edit on a large show
+        under the time budget
 """
 
+import json
+import time
 from datetime import UTC, datetime
+from functools import partial
 
 import pytest
 
+from showpy.cast.models import Shape
+from showpy.cast.spots import set_shape
+from showpy.choreo.forms import line_form
 from showpy.core.errors import SchemaError, StorageError
 from showpy.examples import two_set_show
-from showpy.show.documents import SHOW_DOC, encode_show, paths_doc
-from showpy.show.integrity import KNOWN_ROOTS, require_known_path, require_valid_tree
+from showpy.show.decode_cache import DecodeCache
+from showpy.show.documents import SHOW_DOC, dump_json, encode_show, forms_doc, paths_doc, set_doc
+from showpy.show.integrity import (
+    KNOWN_ROOTS,
+    blob_digest,
+    require_known_path,
+    require_valid_digests,
+    require_valid_tree,
+)
+from showpy.show.models import Show
 from showpy.show.repositories import InMemoryRepository
+from showpy.show.storage import load_show, open_workspace, save_show
+from tests.fixtures.generators import seeded_show
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 SHOW_ID = "integrity"
@@ -125,3 +151,101 @@ def test_valid_show_decodes_on_change() -> None:
     docs = encode_show(two_set_show())
     assert require_valid_tree({}, docs) == two_set_show()
     assert require_valid_tree(docs, docs) is None
+
+
+def _digests(docs: dict[str, bytes]) -> dict[str, str]:
+    return {path: blob_digest(raw) for path, raw in docs.items()}
+
+
+def _validate(
+    before: dict[str, bytes], after: dict[str, bytes], cache: DecodeCache | None
+) -> Show | None:
+    by_digest = {blob_digest(raw): raw for raw in after.values()}
+    return require_valid_digests(_digests(before), _digests(after), by_digest.__getitem__, cache)
+
+
+def test_cached_and_plain_paths_agree() -> None:
+    """Returns equal shows with and without a decode cache, warm or cold."""
+    docs = encode_show(two_set_show())
+    cache = DecodeCache()
+    plain = require_valid_tree({}, docs)
+    assert _validate({}, docs, cache) == plain
+    assert _validate({}, docs, cache) == plain
+
+
+def test_regression_cache_does_not_hide_a_bad_rewrite_of_a_cached_path() -> None:
+    """Refuses invalid bytes for a set document whose valid bytes were cached."""
+    docs = encode_show(two_set_show())
+    cache = DecodeCache()
+    _validate({}, docs, cache)
+    broken = {**docs, set_doc("1"): b'{"id": "1"}'}
+    with pytest.raises(SchemaError):
+        _validate(docs, broken, cache)
+
+
+def test_regression_cache_digest_twin_at_another_path_is_still_validated() -> None:
+    """Refuses a forms document copied to another set, though its bytes are cached at home."""
+    show = two_set_show()
+    first, second = show.set_ids()[:2]
+    members = [spot.id for spot in show.cast.spots[:2]]
+    form = line_form("f", members, (0.0, 0.0), (4.0, 0.0), set_id=first)
+    forms_bytes = dump_json([form.model_dump(mode="python")])
+    docs = {**encode_show(show), forms_doc(first): forms_bytes}
+    cache = DecodeCache()
+    _validate({}, docs, cache)
+    with pytest.raises(SchemaError):
+        _validate(docs, {**docs, forms_doc(second): forms_bytes}, cache)
+
+
+def test_uncached_invalid_document_is_refused() -> None:
+    """Refuses an invalid document whose digest was never cached."""
+    docs = encode_show(two_set_show())
+    cache = DecodeCache()
+    _validate({}, docs, cache)
+    with pytest.raises(SchemaError):
+        _validate(docs, {**docs, paths_doc(("1", "2")): b"[1]"}, cache)
+
+
+def test_cache_serves_unchanged_documents() -> None:
+    """Decodes only the changed document when one set is edited on a warm cache."""
+    docs = encode_show(two_set_show())
+    cache = DecodeCache()
+    _validate({}, docs, cache)
+    cold = len(cache)
+    body = json.loads(docs[set_doc("1")])
+    body["label"] = "renamed"
+    edited = {**docs, set_doc("1"): json.dumps(body).encode()}
+    _validate(docs, edited, cache)
+    assert len(cache) == cold + 1
+
+
+def test_cache_respects_its_bound() -> None:
+    """Evicts the oldest entry once max_entries is exceeded."""
+    cache = DecodeCache(max_entries=2)
+    for index in range(3):
+        cache.get_or_decode(f"/p{index}", "d", partial(int, index))
+    assert len(cache) == 2
+    calls: list[str] = []
+
+    def decode() -> int:
+        calls.append("decoded")
+        return 0
+
+    cache.get_or_decode("/p0", "d", decode)
+    assert calls == ["decoded"]
+
+
+@pytest.mark.slow
+def test_one_spot_edit_through_a_workspace_stays_fast() -> None:
+    """Keeps a one-spot edit on 300 spots and 60 sets under 300 ms (median of 5)."""
+    repo = InMemoryRepository()
+    save_show(open_workspace(repo, SHOW_ID, "designer"), seeded_show(3, 300, 60), AT)
+    times = []
+    for index in range(5):
+        ws = open_workspace(repo, SHOW_ID, "designer")
+        show = load_show(ws)
+        shape = Shape(kind="rectangle" if index % 2 == 0 else "circle")
+        started = time.perf_counter()
+        save_show(ws, set_shape(show, show.cast.spots[0].id, shape), AT)
+        times.append(time.perf_counter() - started)
+    assert sorted(times)[2] < 0.3

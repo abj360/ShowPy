@@ -9,7 +9,6 @@ Contains:
     InMemoryAssetStore: keeps assets in process memory under content-hash URIs
 """
 
-import hashlib
 import re
 import threading
 from collections.abc import Mapping
@@ -20,9 +19,10 @@ from showpy.choreo.models import Form, Set, TransitionSpec
 from showpy.core.errors import ConflictError, SchemaError, StorageError, UnknownRefError
 from showpy.core.ids import SetId, TransitionId
 from showpy.core.util import close_matches, content_hash
+from showpy.show.decode_cache import DecodeCache
 from showpy.show.documents import decode_show, script_doc, split_path
 from showpy.show.files import LIMITS_DOC, WAIVERS_DOC, show_changes
-from showpy.show.integrity import require_known_path, require_valid_tree
+from showpy.show.integrity import blob_digest, require_known_path, require_valid_digests
 from showpy.show.models import Principal, Revision, RevisionKind, Show
 from showpy.show.storage import ROOT_REVISION
 from showpy.time.models import Timeline
@@ -45,7 +45,7 @@ def _require_show_id(show_id: str) -> None:
 
 def digest(data: bytes) -> str:
     """Returns the SHA-256 hex digest blobs and assets are addressed by."""
-    return hashlib.sha256(data).hexdigest()
+    return blob_digest(data)
 
 
 class RepositoryBackend(Protocol):
@@ -98,6 +98,7 @@ class DocumentRepository:
 
     def __init__(self, backend: RepositoryBackend):
         self.backend = backend
+        self._decode_cache = DecodeCache()
 
     def shows(self) -> list[str]:
         """Returns the IDs of stored shows, sorted."""
@@ -161,9 +162,14 @@ class DocumentRepository:
     def _require_valid_tree(
         self, show_id: str, old: dict[str, str], new: dict[str, str], added: dict[str, bytes]
     ) -> None:
-        before = {path: self.backend.blob(show_id, d) for path, d in old.items()}
-        after = {path: added[d] if d in added else before[path] for path, d in new.items()}
-        require_valid_tree(before, after)
+        def blob(blob_digest: str) -> bytes:
+            return (
+                added[blob_digest]
+                if blob_digest in added
+                else self.backend.blob(show_id, blob_digest)
+            )
+
+        require_valid_digests(old, new, blob, self._decode_cache)
 
     def transaction(
         self,
