@@ -374,7 +374,10 @@ class DocumentRepository:
         expected_revision: str,
         at: datetime,
     ) -> Revision:
-        """Replaces a set's forms; every form must name that set. Stale forms are kept."""
+        """Replaces a set's forms; every form must name that set. Stale forms are kept.
+
+        A set that lists forms lists the put forms afterwards, so `get_forms` returns them.
+        """
         wrong = [f.id for f in forms if f.set != set_id]
         if wrong:
             raise SchemaError(
@@ -386,6 +389,11 @@ class DocumentRepository:
         replaced = forms_of_set(show, set_id)
         kept = {k: f for k, f in show.forms.items() if k not in replaced}
         edited = show.replace(forms={**kept, **{f.id: f for f in forms}})
+        if show.set(set_id).forms and forms:
+            listed = show.set(set_id).replace(forms=tuple(f.id for f in forms))
+            edited = edited.replace(
+                sets=tuple(listed if s.id == set_id else s for s in edited.sets)
+            )
         return self.put_show(
             show_id,
             edited,

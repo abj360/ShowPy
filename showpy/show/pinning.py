@@ -41,6 +41,7 @@ def _covers_placement(held: Sequence[Pin], set_id: str, entity: str) -> bool:
 
 
 def _covers_form(show: Show, held: Sequence[Pin], form_id: str) -> bool:
+    # a set pin may name a set that no longer exists; forms_of_set would raise on it
     return any(
         (p.target == "form" and p.id == form_id)
         or (p.target == "set" and form_id in forms_of_set(show, p.id))
@@ -63,9 +64,11 @@ def _flag_placements(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
 
 
 def _flag_forms(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
-    rescoped = set(forms_of_set(show, scope.id)) if scope.target == "set" else {scope.id}
     forms = {
-        k: f.replace(locked=_covers_form(show, held, k)) if k in rescoped else f
+        k: f.replace(locked=_covers_form(show, held, k))
+        if (scope.target == "form" and k == scope.id)
+        or (scope.target == "set" and f.set == scope.id)
+        else f
         for k, f in show.forms.items()
     }
     return show.replace(forms=forms)
@@ -95,7 +98,9 @@ def pin(show: Show, target: PinTarget, pin_id: str, reason: str = "", by: str = 
     """Locks an item and records why; pinning the same item again replaces the record.
 
     Entity pins pin the spot's placement in every set; set pins pin every placement and lock
-    every form of the set; form pins lock the form; transition pins lock a row for every spot.
+    every form the set lists; form pins lock the form; transition pins lock a row for every
+    spot. A stale form (one the set no longer lists) is not covered by its set's pin: pin the
+    form itself.
 
     >>> from showpy.examples import two_set_show
     >>> pinned = pin(two_set_show(), "entity", "T1", "soloist")

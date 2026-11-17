@@ -18,6 +18,8 @@ Contains:
         set's forms
     test_put_forms_keeps_stale_forms_of_the_set_in_the_show: keeps a stale form stored when the
         set's forms are replaced
+    test_regression_put_forms_then_get_forms_returns_the_put_forms: lists newly put forms in the
+        set that listed others
 """
 
 import contextlib
@@ -173,3 +175,14 @@ def test_put_forms_keeps_stale_forms_of_the_set_in_the_show() -> None:
     current = repo.get_forms(SHOW_ID, "2")
     repo.put_forms(SHOW_ID, "2", current, expected_revision=revision.id, at=AT)
     assert sorted(repo.get_show(SHOW_ID).forms) == ["a", "b"]
+
+
+def test_regression_put_forms_then_get_forms_returns_the_put_forms() -> None:
+    """Lists newly put forms in the set that listed others; stale forms stay stored."""
+    repo = InMemoryRepository()
+    show = replaced_form_show()
+    revision = repo.put_show(SHOW_ID, show, expected_revision="", at=AT)
+    fresh = show.forms["b"].replace(id="c")
+    repo.put_forms(SHOW_ID, "2", (fresh,), expected_revision=revision.id, at=AT)
+    assert [f.id for f in repo.get_forms(SHOW_ID, "2")] == ["c"]
+    assert "a" in repo.get_show(SHOW_ID).forms
