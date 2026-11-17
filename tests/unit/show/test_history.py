@@ -358,9 +358,7 @@ def test_regression_rename_entities_rewrites_expression_selectors() -> None:
     renamed = rename_entities(
         base.model_copy(update={"facing_overrides": (override,)}), {"T1": "S1"}
     )
-    entities = str(renamed.facing_overrides[0].entities)
-    assert "S1" in entities
-    assert "T1" not in entities
+    assert renamed.facing_overrides[0].entities == ("S1", "T2")
 
 
 @pytest.mark.defect("UP-9.7-45")
