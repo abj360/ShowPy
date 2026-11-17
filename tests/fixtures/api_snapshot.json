@@ -1154,6 +1154,7 @@
   "apply_event": "(show: showpy.show.models.Show, event: showpy.show.models.CanvasEvent, *, force: bool = False) -> showpy.show.models.Show",
   "apply_fix": "(spec: showpy.choreo.models.TransitionSpec, fix: showpy.choreo.engine_models.Fix) -> showpy.choreo.models.TransitionSpec",
   "apply_match": "(show: showpy.show.models.Show, tid: TransitionId, result: showpy.choreo.models.MatchResult, force: bool = False) -> showpy.show.models.Show",
+  "apportion": "(lengths: collections.abc.Sequence[float], n: int, minimums: collections.abc.Sequence[int] | None = None) -> list[int]",
   "approx_equal": "(a: ArrayLike, b: ArrayLike, tol: float = 1e-06) -> bool",
   "arc": "(center: Point, radius: Meters, start_deg: Degrees, sweep_deg: Degrees) -> showpy.geo.curves.ArcCurve",
   "arc_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], center: Point, radius: Meters, start_deg: Degrees, sweep_deg: Degrees, spacing: showpy.choreo.models.SpacingSpec | None = None, facing: showpy.choreo.models.FacingSpec | None = None, *, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",

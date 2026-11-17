@@ -483,6 +483,7 @@ if TYPE_CHECKING:
         snap_to_guides,
     )
     from showpy.geo.spacing import (
+        apportion,
         block,
         concentric,
         distribute_on_points,
@@ -930,6 +931,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "apply_event": ("showpy.show.collab", "apply_event"),
     "apply_fix": ("showpy.choreo.avoid", "apply_fix"),
     "apply_match": ("showpy.choreo.match_ops", "apply_match"),
+    "apportion": ("showpy.geo.spacing", "apportion"),
     "approx_equal": ("showpy.core.util", "approx_equal"),
     "arc": ("showpy.geo.shapes", "arc"),
     "arc_form": ("showpy.choreo.forms", "arc_form"),
@@ -1488,6 +1490,7 @@ __all__ = [
     "apply_event",
     "apply_fix",
     "apply_match",
+    "apportion",
     "approx_equal",
     "arc",
     "arc_form",

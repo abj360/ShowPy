@@ -203,6 +203,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("apply_event", "showpy.show.collab", "apply_event"),
     ("apply_fix", "showpy.choreo.avoid", "apply_fix"),
     ("apply_match", "showpy.choreo.match_ops", "apply_match"),
+    ("apportion", "showpy.geo.spacing", "apportion"),
     ("approx_equal", "showpy.core.util", "approx_equal"),
     ("arc", "showpy.geo.shapes", "arc"),
     ("arc_form", "showpy.choreo.forms", "arc_form"),
