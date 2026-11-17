@@ -1023,6 +1023,20 @@
   "TextAnchor": {
     "constant": "TextAnchor"
   },
+  "TextRecipe": {
+    "model": {
+      "align": "TextAlign",
+      "anchor": "TextAnchor",
+      "at": "Point",
+      "fonts": "tuple[FontUri, ...]",
+      "height": "Meters",
+      "letter_spacing": "float",
+      "line_spacing": "float",
+      "mode": "Literal['centerline']",
+      "rotation": "Degrees",
+      "text": "str"
+    }
+  },
   "TextTable": {
     "model": {
       "header": "tuple[str, ...]",

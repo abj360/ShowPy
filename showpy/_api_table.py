@@ -159,6 +159,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("TempoSection", "showpy.time.models", "TempoSection"),
     ("TextAlign", "showpy.geo.models", "TextAlign"),
     ("TextAnchor", "showpy.geo.models", "TextAnchor"),
+    ("TextRecipe", "showpy.choreo.models", "TextRecipe"),
     ("TextTable", "showpy.export.models", "TextTable"),
     ("TimeRangeError", "showpy.core.errors", "TimeRangeError"),
     ("Timeline", "showpy.time.models", "Timeline"),

@@ -12,6 +12,7 @@ Contains:
     SpotCount: counts spots on and off the field in one set
     SpacingSpec: describes how members are spaced on a form's shape
     FacingSpec: describes how form members face
+    TextRecipe: holds the construction recipe of a text form: text, font chain and layout
     Form: holds a stored shape construction plus its ordered members
     FacingOverride: forces a facing on spots over a global count range
     PathStyle: names the built-in path styles
@@ -33,7 +34,7 @@ import itertools
 import math
 from collections.abc import Callable, Mapping, Sequence
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -43,14 +44,18 @@ from showpy.core.errors import LockedError, PathError, SchemaError, UnknownRefEr
 from showpy.core.ids import FormId, RouteId, SetId, SpotId, TransitionId, check_id
 from showpy.core.selection import Selection, SelectorField
 from showpy.core.types import Count, Degrees, FrozenModel, Meters, Point, Points
+from showpy.geo.models import DEFAULT_LINE_SPACING, TextAlign, TextAnchor
+from showpy.geo.text_layout import MAX_LAYOUT_CHARS
 
 TABLE_COLUMNS = ("entity", "x", "y", "facing", "form", "order", "pinned", "on_field", "note")
 DEFAULT_EASING_STRENGTH = 2.0
 MATCH_WEIGHT_KEYS = ("backward", "crossing", "group_spread", "turn")
+FONT_URI_PATTERN = r"^asset:sha256:[0-9a-f]{64}$"
 EasingKind = Literal[
     "linear", "ease_in", "ease_out", "ease_in_out", "hold_then_burst", "burst_then_settle",
     "steps", "custom",
 ]  # fmt: skip
+type FontUri = Annotated[str, Field(pattern=FONT_URI_PATTERN)]
 
 
 class ApprovalState(StrEnum):
@@ -275,6 +280,41 @@ class FacingSpec(FrozenModel):
                 context={"mode": self.mode},
             )
         return self
+
+
+class TextRecipe(FrozenModel):
+    r"""Holds the construction recipe of a text form: text, font chain and layout.
+
+    Fonts are stored as URIs, never names, so a recipe always names the exact font bytes.
+
+    Attributes:
+        text: Characters to write, `\n` between lines.
+        fonts: Fallback chain of font URIs, `asset:sha256:<64 hex>`.
+        mode: How glyphs become slots; `centerline` puts spots on the strokes.
+        height: Cap height in meters.
+        at: Layout point on the stage plane.
+        rotation: Degrees counter-clockwise about `at`; 0 reads left to right toward +x.
+        align: Where each line sits horizontally on `at`.
+        anchor: Which line of the text block sits vertically on `at`.
+        letter_spacing: Extra gap between glyphs, in ems of the first font.
+        line_spacing: Baseline-to-baseline distance, in ems of the first font.
+
+    >>> from showpy.geo.fonts import bundled_fonts
+    >>> simplex = bundled_fonts().resolve("simplex")
+    >>> TextRecipe(text="HI", fonts=(simplex,), height=2.0, at=(0.0, 10.0)).align
+    'left'
+    """
+
+    text: str = Field(min_length=1, max_length=MAX_LAYOUT_CHARS)
+    fonts: tuple[FontUri, ...] = Field(min_length=1)
+    mode: Literal["centerline"] = "centerline"
+    height: Meters = Field(gt=0)
+    at: Point
+    rotation: Degrees = 0.0
+    align: TextAlign = "left"
+    anchor: TextAnchor = "baseline"
+    letter_spacing: float = 0.0
+    line_spacing: float = Field(default=DEFAULT_LINE_SPACING, gt=0)
 
 
 type FormKind = Literal[
