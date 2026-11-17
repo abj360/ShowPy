@@ -14,8 +14,11 @@ Contains:
     test_simplex_font_folds_case_on_the_four_by_six_grid: checks the built-in font conversion
     test_greek_table_follows_hershey_numbering: checks the Greek letter table
     test_verified_rejects_a_checksum_mismatch: checks a bad checksum stops the build
+    test_regression_notice_is_written_with_lf_line_ends: checks NOTICE.txt has no CR bytes
+    test_regression_every_named_license_file_is_written: checks NOTICE names files that ship
 """
 
+import hashlib
 import importlib.util
 from pathlib import Path
 from types import ModuleType
@@ -163,3 +166,33 @@ def test_contact_sheet_draws_the_closing_edge_of_a_closed_stroke() -> None:
         ImageDraw.Draw(image), ["M0.0 0.0 L10.0 0.0 L10.0 10.0 Z"], (5.0, 25.0), 1.0
     )
     assert image.getpixel((10, 20)) == (0, 0, 0)
+
+
+def test_regression_notice_is_written_with_lf_line_ends(tmp_path: Path) -> None:
+    build_fonts._write_notice(tmp_path, ["a\nb\n", "c\n"])
+    data = (tmp_path / "NOTICE.txt").read_bytes()
+    assert data == b"a\nb\n\nc\n"
+
+
+def test_regression_every_named_license_file_is_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    sources = {}
+    for key in ("relief.ofl", "hershey.txt"):
+        body = b"licence text " + key.encode()
+        (cache / key).write_bytes(body)
+        digest = hashlib.sha256(body).hexdigest()
+        sources[key] = build_fonts.Source(build_fonts.SOURCES[key].url, digest)
+    monkeypatch.setattr(build_fonts, "SOURCES", {**build_fonts.SOURCES, **sources})
+    out = tmp_path / "out"
+    build_fonts._write_licenses(out, cache)
+    plans = build_fonts._plans()
+    assert all((out / plan.license_file).is_file() for plan in plans)
+    simplex = plans[-1]
+    assert simplex.license_file == "licenses/MIT.txt"
+    assert (out / simplex.license_file).read_bytes() == (
+        SCRIPT_PATH.parents[1] / "LICENSE"
+    ).read_bytes()
+    assert "(licenses/MIT.txt)" in build_fonts._notice_block(simplex, "0")

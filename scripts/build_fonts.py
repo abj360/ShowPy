@@ -51,6 +51,7 @@ from showpy.geo.svg import (
 )
 from showpy.geo.text import SIMPLEX
 
+REPO_LICENSE = Path(__file__).resolve().parents[1] / "LICENSE"
 FONT_FORMAT = "showpy.font.v1"
 HERSHEY_UNITS_PER_EM = 32.0
 CLOSE_TOL_EM = 0.005
@@ -488,7 +489,9 @@ def _plans() -> list[FontPlan]:
         hershey("hershey-roman", "Hershey Roman Simplex", "rowmans.jhf"),
         hershey("hershey-script", "Hershey Script Simplex", "scripts.jhf"),
         hershey("hershey-greek", "Hershey Greek Simplex", "greeks.jhf"),
-        FontPlan(FontMeta("simplex", "Simplex", "MIT", "showpy/geo/text.py"), None, "LICENSE"),
+        FontPlan(
+            FontMeta("simplex", "Simplex", "MIT", "showpy/geo/text.py"), None, "licenses/MIT.txt"
+        ),
     ]
 
 
@@ -588,8 +591,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.sheets is not None:
             _write_sheet(font, args.sheets / f"{plan.meta.name}.png")
     _write_licenses(args.out, args.cache)
-    (args.out / "NOTICE.txt").write_text("\n".join(notices), encoding="utf-8")
+    _write_notice(args.out, notices)
     return 0
+
+
+def _write_notice(out: Path, notices: Sequence[str]) -> None:
+    (out / "NOTICE.txt").write_bytes("\n".join(notices).encode("utf-8"))
 
 
 def _write_licenses(out: Path, cache: Path) -> None:
@@ -597,6 +604,7 @@ def _write_licenses(out: Path, cache: Path) -> None:
     licenses.mkdir(parents=True, exist_ok=True)
     for key, name in (("relief.ofl", "OFL-1.1.txt"), ("hershey.txt", "HERSHEY.txt")):
         (licenses / name).write_bytes(_fetch(SOURCES[key], cache, key))
+    (licenses / "MIT.txt").write_bytes(REPO_LICENSE.read_bytes())
 
 
 if __name__ == "__main__":
