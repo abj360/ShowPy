@@ -283,6 +283,7 @@ class _FileBackend:
     ) -> None:
         self._guard_dirs(show_id)
         base = self._dir(show_id)
+        tree_name = self._checked_id(show_id, revision.id, base / TREE_DIR)
         if revision.parent:
             self._checked_id(show_id, revision.parent, base / LINK_DIR)
         for digest, data in blobs.items():
@@ -293,9 +294,9 @@ class _FileBackend:
             if mode is None:
                 _atomic_write(target, data)
         record = {"revision": revision.model_dump(mode="json"), "tree": tree}
-        _atomic_write(base / TREE_DIR / f"{revision.id}.json", dump_json(record))
+        _atomic_write(base / TREE_DIR / f"{tree_name}.json", dump_json(record))
         link = base / LINK_DIR / (revision.parent or ROOT_LINK)
-        if not _link_exclusive(show_id, link, revision.id.encode()):
+        if not _link_exclusive(show_id, link, tree_name.encode()):
             raise conflict_error(show_id, revision.parent, self.log(show_id)[-1:])
 
 

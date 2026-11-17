@@ -50,6 +50,8 @@ Contains:
         fstat reported its size
     test_regression_swapped_blob_is_corrupt_naming_its_file: reports a blob whose bytes miss their
         digest as CORRUPT with the object path
+    test_regression_backend_refuses_a_traversal_revision_id: refuses a revision ID that would put
+        its tree file outside the repository, writing nothing
 """
 
 import errno
@@ -85,6 +87,8 @@ STALE_AGE_S = 7 * 24 * 3600
 DECOY_NAME = "decoy"
 SHOW_DOC = "/show/show.json"
 RACERS = 8
+LOSER_ID = "0" * 64
+TRAVERSAL_ID = "../../../escaped"
 
 
 def _saved(tmp_path: Path) -> tuple[FileRepository, str, Path]:
@@ -198,7 +202,7 @@ def test_regression_losing_commit_leaves_no_orphan_tree(tmp_path: Path) -> None:
     _second_revision(repo, rev)
     loser_blob = b"loser"
     loser = Revision(
-        id="loser",
+        id=LOSER_ID,
         parent=rev,
         at=AT,
         changed=("/renders/b.txt",),
@@ -206,7 +210,7 @@ def test_regression_losing_commit_leaves_no_orphan_tree(tmp_path: Path) -> None:
     tree = {"/renders/b.txt": digest(loser_blob)}
     with pytest.raises(ConflictError):
         repo.backend.commit(SHOW_ID, loser, tree, {digest(loser_blob): loser_blob})
-    assert not (base / "trees" / "loser.json").exists()
+    assert not (base / "trees" / f"{loser.id}.json").exists()
 
 
 CORRUPT = "CORRUPT"
@@ -544,3 +548,20 @@ def test_regression_swapped_blob_is_corrupt_naming_its_file(tmp_path: Path) -> N
     assert caught.value.code == CORRUPT
     assert caught.value.context["path"] == str(blob_path)
     assert "do not match their digest" in caught.value.message
+
+
+def _all_files(root: Path) -> set[Path]:
+    return {path for path in root.rglob("*") if path.is_file()}
+
+
+def test_regression_backend_refuses_a_traversal_revision_id(tmp_path: Path) -> None:
+    """Refuses a revision ID that would put its tree file outside the root, writing nothing."""
+    repo, rev, base = _saved(tmp_path)
+    before = _all_files(tmp_path)
+    raw = b"escaped"
+    escaped = Revision(id=TRAVERSAL_ID, parent=rev, at=AT, changed=("/renders/b.txt",))
+    tree = {**repo.backend.tree(SHOW_ID, rev), "/renders/b.txt": digest(raw)}
+    _assert_corrupt(lambda: repo.backend.commit(SHOW_ID, escaped, tree, {digest(raw): raw}))
+    assert _all_files(tmp_path) == before
+    assert not (base / "trees" / f"{TRAVERSAL_ID}.json").resolve().exists()
+    assert repo.head(SHOW_ID) == rev
