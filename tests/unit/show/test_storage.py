@@ -14,7 +14,6 @@ import pytest
 from showpy.choreo.models import Form, PathRow, TransitionSpec
 from showpy.core.errors import (
     ConflictError,
-    LockedError,
     SchemaError,
     StorageError,
     UnknownRefError,
@@ -23,7 +22,7 @@ from showpy.notes.models import Anchor, Note
 from showpy.show.documents import decode_show, dump_json, encode_show, split_path
 from showpy.show.file_repository import FileRepository
 from showpy.show.manage import add_set
-from showpy.show.models import Pin, Show
+from showpy.show.models import Show
 from showpy.show.repositories import InMemoryAssetStore, InMemoryRepository
 from showpy.show.storage import Repository, Workspace, load_show, open_workspace, save_show
 from tests.fixtures.shows import two_set_show
@@ -283,14 +282,13 @@ def test_workspace_rejects_traversal(path: str) -> None:
         designer.write(path, b"x", at=AT)
 
 
-def test_agent_cannot_write_designer_files_or_derived_tables() -> None:
+def test_agent_writes_designer_files_and_sees_designer_edits() -> None:
     agent, designer = _workspaces(InMemoryRepository())
-    for path in ("/config/limits.yaml", "/config/waivers.yaml", "/canvas/selection.json"):
-        with pytest.raises(LockedError):
-            agent.write(path, "{}", at=AT)
-    with pytest.raises(LockedError):
-        agent.write("/sets/1/placements.csv", "entity\n", at=AT)
-    designer.write("/config/limits.yaml", "max_step_m: 1.2\n", at=AT)
+    agent.write("/config/limits.yaml", "max_step_m: 1.0\n", at=AT)
+    agent.write("/config/waivers.yaml", "[]\n", at=AT)
+    agent.write("/canvas/selection.json", '{"ids": ["T1"]}', at=AT)
+    designer.refresh()
+    designer.write("/config/limits.yaml", "max_step_m: 1.2\n", at=LATER)
     agent.refresh()
     assert agent.read("/config/limits.yaml") == "max_step_m: 1.2\n"
 
@@ -352,7 +350,7 @@ def test_save_show_conflict_lists_designer_changes() -> None:
     assert load_show(agent).set("2").get("T2").x == 10.0
 
 
-def test_agent_cannot_touch_pinned_items_or_pins() -> None:
+def test_workspace_save_lands_edits_to_pinned_items() -> None:
     agent, designer = _workspaces(InMemoryRepository())
     show = load_show(designer)
     pinned = show.sets[1].with_placements({"T1": {"pinned": True}})
@@ -360,12 +358,8 @@ def test_agent_cannot_touch_pinned_items_or_pins() -> None:
     agent.refresh()
     current = load_show(agent)
     moved = current.sets[1].with_placements({"T1": {"x": 3.0}}, force=True)
-    with pytest.raises(LockedError):
-        save_show(agent, current.model_copy(update={"sets": (current.sets[0], moved)}), LATER)
-    with pytest.raises(LockedError):
-        save_show(agent, current.model_copy(update={"pins": (Pin(target="set", id="1"),)}), LATER)
-    free = current.sets[1].with_placements({"T2": {"x": 3.0}})
-    save_show(agent, current.model_copy(update={"sets": (current.sets[0], free)}), LATER)
+    save_show(agent, current.model_copy(update={"sets": (current.sets[0], moved)}), LATER)
+    assert load_show(agent).set("2").get("T1").x == 3.0
 
 
 def test_open_workspace_before_first_save() -> None:

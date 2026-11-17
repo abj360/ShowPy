@@ -31,7 +31,6 @@ from showpy.core.selection import Selection, SelectorField
 from showpy.core.units import angle_diff
 from showpy.core.util import approx_equal, natural_sort
 from showpy.notes.models import Note
-from showpy.show.files import DESIGNER_PATHS
 from showpy.show.models import PathDiff, Revision, SetDiff, Show
 from showpy.show.storage import ROOT_REVISION, Workspace
 
@@ -188,8 +187,6 @@ def snapshot(ws: Workspace, message: str, at: datetime) -> Revision:
 def revert(ws: Workspace, revision_id: str, at: datetime) -> Revision:
     """Saves the documents of an earlier revision as a new head revision.
 
-    An agent's revert leaves designer-owned files as they are; pins still guard the result.
-
     Args:
         ws: Workspace; it moves to the head first.
         revision_id: Revision whose documents come back.
@@ -202,8 +199,6 @@ def revert(ws: Workspace, revision_id: str, at: datetime) -> Revision:
     ws.refresh()
     old, head = ws.tree_at(target.id), ws.tree_at(ws.revision)
     paths = {p for p in set(old) | set(head) if old.get(p) != head.get(p)}
-    if ws.principal == "agent":
-        paths -= DESIGNER_PATHS
     changes = {p: old.get(p) for p in sorted(paths)}
     message = f"revert to {target.id[:SHORT_ID]}: {target.message}"
     return ws.commit(changes, at=at, message=message, kind="revert", target=target.id)

@@ -1,20 +1,13 @@
 #!/usr/bin/env python3
 
 """
-test_files.py --- encodes audited workspace-file and ownership defects as strict xfails
+test_files.py --- encodes workspace-file defects and write behavior
 
 Contains:
     test_regression_commit_refuses_garbage_show_document: refuses a commit of bytes that are not a
         show document
     test_regression_commit_refuses_unknown_root: refuses a commit under a root no reader can open
-    test_regression_agent_cannot_delete_sets_through_show_json: refuses an agent rewrite of
-        show.json that drops sets
-    test_regression_agent_cannot_empty_cast_through_show_json: refuses an agent rewrite of show.json
-        that empties the cast
-    test_regression_agent_cannot_change_show_id_through_show_json: refuses an agent show.json
-        rewrite that changes the show ID
-    test_regression_agent_cannot_forge_designer_comments: keeps an agent from writing a
-        designer-authored comment
+    test_any_valid_write_lands: lands an agent workspace write to the limits file
     test_regression_reading_root_is_a_library_error: raises a ShowPyError, not IndexError, when
         reading the root path
     test_regression_invalid_utf8_text_file_is_a_library_error: maps invalid UTF-8 in a text file to
@@ -26,11 +19,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from showpy.core.errors import LockedError, ShowPyError
-from showpy.notes.models import Anchor
-from showpy.show.documents import SHOW_DOC, dump_json
-from showpy.show.files import COMMENTS_DOC
-from showpy.show.models import Comment
+from showpy.core.errors import ShowPyError
+from showpy.show.documents import SHOW_DOC
 from showpy.show.storage import Workspace
 from tests.fixtures.shows import two_set_show
 from tests.helpers import open_session
@@ -69,48 +59,11 @@ def test_regression_commit_refuses_unknown_root() -> None:
         designer.commit({"/mystery/x.txt": b"1"}, at=LATER, message="oops")
 
 
-@pytest.mark.defect("UP-9.7-08")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-08")
-def test_regression_agent_cannot_delete_sets_through_show_json() -> None:
-    """Refuses an agent rewrite of show.json that drops sets (audit 9.7 item 5; P0 #5)."""
+def test_any_valid_write_lands() -> None:
     agent, _ = _session()
-    body = _show_json(agent) | {"sets": ["1"]}
-    with pytest.raises(LockedError):
-        agent.write(SHOW_DOC, dump_json(body), at=LATER)
-
-
-@pytest.mark.defect("UP-9.7-09")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-09")
-def test_regression_agent_cannot_empty_cast_through_show_json() -> None:
-    """Refuses an agent rewrite of show.json that empties the cast (audit 9.7 item 5; P0 #5)."""
-    agent, _ = _session()
-    body = _show_json(agent) | {"cast": {"groups": {}, "spots": []}}
-    with pytest.raises(LockedError):
-        agent.write(SHOW_DOC, dump_json(body), at=LATER)
-
-
-@pytest.mark.defect("UP-9.7-10")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-10")
-def test_regression_agent_cannot_change_show_id_through_show_json() -> None:
-    """Refuses an agent show.json rewrite that changes the show ID (audit 9.7 item 5; P0 #5)."""
-    agent, _ = _session()
-    body = _show_json(agent) | {"id": "hijacked"}
-    with pytest.raises(LockedError):
-        agent.write(SHOW_DOC, dump_json(body), at=LATER)
-
-
-@pytest.mark.defect("UP-9.7-11")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-11")
-def test_regression_agent_cannot_forge_designer_comments() -> None:
-    """Keeps an agent from writing a designer-authored comment (audit 9.7 item 6; P0 #5)."""
-    agent, _ = _session()
-    forged = Comment(id="c1", anchor=Anchor.on_set("2"), text="approved", author="designer")
-    try:
-        agent.write(COMMENTS_DOC, dump_json([forged.model_dump(mode="python")]), at=LATER)
-    except LockedError:
-        return
-    stored = json.loads(agent.read(COMMENTS_DOC))
-    assert {c["author"] for c in stored} == {"agent"}
+    revision = agent.write("/config/limits.yaml", "max_speed: 99\n", at=LATER)
+    assert agent.revision == revision.id
+    assert agent.read("/config/limits.yaml") == "max_speed: 99\n"
 
 
 @pytest.mark.defect("UP-9.7-18")

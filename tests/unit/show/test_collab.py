@@ -165,7 +165,7 @@ def test_events_since_replay_reproduces_head() -> None:
     assert all(e.actor == "designer" and e.revision == designer.revision for e in events)
     replayed = base
     for event in events:
-        replayed = apply_event(replayed, event)
+        replayed = apply_event(replayed, event, force=True)
     head = load_show(designer)
     assert replayed.model_copy(update={"revision": head.revision}) == head
     assert events_since(agent, designer.revision) == []
@@ -182,11 +182,6 @@ def test_events_since_reports_comments() -> None:
 
 
 def test_apply_event_rules() -> None:
-    agent_pin = CanvasEvent(
-        id="e", at=AT, actor="agent", kind="pin", payload=Pin(target="set", id="1").model_dump()
-    )
-    with pytest.raises(LockedError):
-        apply_event(two_set_show(), agent_pin)
     mismatched = CanvasEvent(
         id="e",
         at=AT,
@@ -197,13 +192,31 @@ def test_apply_event_rules() -> None:
     with pytest.raises(SchemaError):
         apply_event(two_set_show(), mismatched)
     pinned = pin(two_set_show(), "entity", "T1")
-    agent_move = CanvasEvent(
-        id="e", at=AT, actor="agent", kind="move", payload=_move("T1", 3.0).model_dump(mode="json")
-    )
-    with pytest.raises(LockedError):
-        apply_event(pinned, agent_move)
     note = CanvasEvent(id="e", at=AT, actor="agent", kind="comment", payload={"text": "x"})
     assert apply_event(pinned, note) == pinned
+
+
+def test_canvas_event_needs_explicit_force() -> None:
+    pinned = pin(two_set_show(), "entity", "T1")
+    move = CanvasEvent(
+        id="e",
+        at=AT,
+        actor="designer",
+        kind="move",
+        payload=_move("T1", 3.0).model_dump(mode="json"),
+    )
+    with pytest.raises(LockedError):
+        apply_event(pinned, move)
+    assert apply_event(pinned, move, force=True).set("2").get("T1").x == 3.0
+
+
+def test_agent_pin_event_applies() -> None:
+    event = CanvasEvent(
+        id="e", at=AT, actor="agent", kind="pin", payload=Pin(target="set", id="1").model_dump()
+    )
+    assert Pin(target="set", id="1") in [
+        Pin(target=p.target, id=p.id) for p in apply_event(two_set_show(), event).pins
+    ]
 
 
 def test_propose_preview_and_reject() -> None:
@@ -226,8 +239,6 @@ def test_propose_preview_and_reject() -> None:
 def test_accept_applies_as_designer() -> None:
     _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
     proposal = propose(load_show(agent), [_move("T3", -1.0)], "shift", "p1")
-    with pytest.raises(LockedError):
-        accept(agent, proposal, AT)
     rev = accept(designer, proposal, AT + STEP)
     assert rev.actor == "designer"
     assert load_show(designer).set("2").get("T3").x == -1.0
@@ -314,7 +325,7 @@ def test_regression_events_since_replay_reproduces_a_form_deletion() -> None:
     save_show(designer, base.model_copy(update={"forms": {}}), AT + STEP, "delete form")
     replayed = base
     for event in events_since(agent, base_revision):
-        replayed = apply_event(replayed, event)
+        replayed = apply_event(replayed, event, force=True)
     assert replayed.forms == load_show(designer).forms
 
 

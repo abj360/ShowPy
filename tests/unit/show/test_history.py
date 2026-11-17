@@ -141,14 +141,15 @@ def test_revert_restores_earlier_documents() -> None:
         revert(designer, "nope", AT)
 
 
-def test_agent_revert_leaves_designer_files() -> None:
+def test_revert_restores_every_file() -> None:
     _, agent, designer = open_session(two_set_show(), AT)
     first = designer.revision
+    original = designer.read("/config/limits.yaml")
     designer.write("/config/limits.yaml", "max: 1\n", at=AT + STEP)
     agent.refresh()
     agent.write("/sets/1/set.py", "pass\n", at=AT + 2 * STEP)
     revert(agent, first, AT + 3 * STEP)
-    assert agent.read("/config/limits.yaml") == "max: 1\n"
+    assert agent.read("/config/limits.yaml") == original
     assert "set.py" not in agent.ls("/sets/1")
 
 

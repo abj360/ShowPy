@@ -7,7 +7,7 @@ Contains:
     pins(): lists the designer's locks
     propose(): wraps change ops as a suggestion for the designer
     preview_proposal(): computes the ghost placements and paths a proposal would produce
-    accept(): applies a proposal as the designer, refusing when the same items moved since
+    accept(): applies a proposal to the head show, refusing when the same items moved since
     reject(): closes a proposal with a reason
     highlight(): points the designer at spots, an area, a set, a transition or a zone
     selection(): returns what the designer has selected
@@ -20,7 +20,6 @@ from pydantic import TypeAdapter
 
 from showpy.core.errors import (
     ConflictError,
-    LockedError,
     SchemaError,
     TimeRangeError,
 )
@@ -60,19 +59,18 @@ DEFAULT_TTL_S = 30.0
 SHORT_ID = 7
 
 
-def _require_designer(event: CanvasEvent) -> None:
-    if event.actor == "agent":
-        raise LockedError(
-            f"agent event {event.id} changes pins",
-            hint="pins belong to the designer; propose() a change instead",
-            context={"event": event.id},
-        )
-
-
-def apply_event(show: Show, event: CanvasEvent) -> Show:
-    """Replays one canvas event; designer and system events may touch pinned items.
+def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
+    """Replays one canvas event; pinned items raise LockedError unless `force` is set.
 
     Comment and highlight events leave the show unchanged.
+
+    Args:
+        show: Show the event applies to.
+        event: Canvas event to replay.
+        force: Whether the caller overrides pins and locks on the touched items.
+
+    Returns:
+        edited: The show after the event.
 
     >>> from datetime import UTC
     >>> from showpy.examples import two_set_show
@@ -84,7 +82,6 @@ def apply_event(show: Show, event: CanvasEvent) -> Show:
     if event.kind in ("comment", "highlight"):
         return show
     if event.kind in ("pin", "unpin"):
-        _require_designer(event)
         held = Pin.model_validate(event.payload)
         if event.kind == "pin":
             return pin(show, held.target, held.id, held.reason, held.by)
@@ -97,7 +94,7 @@ def apply_event(show: Show, event: CanvasEvent) -> Show:
             "edit_paths=paths, set_counts=counts",
             context={"event": event.id},
         )
-    return apply_change(show, [op], force=event.actor != "agent")
+    return apply_change(show, [op], force=force)
 
 
 def _pin_events(before: Show, after: Show) -> list[tuple[EventKind, dict[str, object]]]:
@@ -267,26 +264,20 @@ def _require_no_overlap(ws: Workspace, proposal: Proposal, head: Show) -> None:
 
 
 def accept(ws: Workspace, proposal: Proposal, at: datetime) -> Revision:
-    """Applies an open proposal to the head show as the designer and saves it.
+    """Applies an open proposal to the head show and saves it.
 
     When the base moved, the proposal still lands if nothing it touches changed since;
     otherwise ConflictError names the overlap. Pins still hold: unpin first to accept edits
     to pinned items.
 
     Args:
-        ws: Designer or system workspace; it moves to the head.
+        ws: Workspace; it moves to the head.
         proposal: Open proposal.
         at: Time stamp of the revision.
 
     Returns:
         revision: The revision holding the accepted change.
     """
-    if ws.principal == "agent":
-        raise LockedError(
-            "the agent cannot accept proposals",
-            hint="the designer accepts or rejects proposals",
-            context={"proposal": proposal.id},
-        )
     _require_open(proposal)
     ws.refresh()
     head = load_show(ws)

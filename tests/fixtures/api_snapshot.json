@@ -1098,7 +1098,7 @@
   "alternate": "(sel: showpy.core.selection.Selection | collections.abc.Sequence[SpotId], k: int = 2) -> list[showpy.core.selection.Selection]",
   "angle_diff": "(a: Degrees, b: Degrees) -> Degrees",
   "apply_change": "(show: showpy.show.models.Show, change: collections.abc.Sequence[ChangeOp], force: bool = False) -> showpy.show.models.Show",
-  "apply_event": "(show: showpy.show.models.Show, event: showpy.show.models.CanvasEvent) -> showpy.show.models.Show",
+  "apply_event": "(show: showpy.show.models.Show, event: showpy.show.models.CanvasEvent, *, force: bool = False) -> showpy.show.models.Show",
   "apply_fix": "(spec: showpy.choreo.models.TransitionSpec, fix: showpy.choreo.engine_models.Fix) -> showpy.choreo.models.TransitionSpec",
   "apply_match": "(show: showpy.show.models.Show, tid: TransitionId, result: showpy.choreo.models.MatchResult, force: bool = False) -> showpy.show.models.Show",
   "approx_equal": "(a: ArrayLike, b: ArrayLike, tol: float = 1e-06) -> bool",

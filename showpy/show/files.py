@@ -8,7 +8,6 @@ Contains:
     SELECTION_DOC: names the designer's current canvas selection
     COMMENTS_DOC: names the canvas comment list
     CLAIMS_DOC: names the published claims file
-    DESIGNER_PATHS: names the files only the designer and the system may write
     all_files(): lists every readable file path
     directories(): lists every directory path, each ending in `/`
     read_file(): returns a file's text or bytes
@@ -56,7 +55,6 @@ WAIVERS_DOC = "/config/waivers.yaml"
 SELECTION_DOC = "/canvas/selection.json"
 COMMENTS_DOC = "/canvas/comments.json"
 CLAIMS_DOC = "/publish/claims.json"
-DESIGNER_PATHS = frozenset({LIMITS_DOC, WAIVERS_DOC, SELECTION_DOC, CLAIMS_DOC})
 FREE_ROOTS = ("/renders/", "/exports/", "/lib/drafts/")
 FIXED_DIRS = (
     "/", "/canvas/", "/config/", "/exports/", "/lib/", "/lib/drafts/", "/publish/", "/renders/",

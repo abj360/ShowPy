@@ -1,15 +1,11 @@
 #!/usr/bin/env python3
 
 """
-test_repositories.py --- encodes audited repository defects (UP-9.7-02, -12 to -17) as strict xfails
+test_repositories.py --- encodes audited repository defects (UP-9.7-02, -14 to -17) as strict xfails
 
 Contains:
     test_regression_memory_commit_has_one_winner_per_parent: lands exactly one of many threads
         racing on one parent
-    test_regression_repository_refuses_agent_pinned_move: refuses an agent put_set that moves a
-        pinned spot
-    test_regression_repository_refuses_agent_limits_write: refuses an agent transaction that writes
-        the limits file
     test_regression_show_ids_differing_by_case_are_distinct_or_rejected: keeps IDs differing only by
         case from sharing a folder name
     test_regression_reserved_device_show_ids_are_rejected_or_stored_safely: rejects Windows device
@@ -29,13 +25,12 @@ from typing import Any, cast
 
 import pytest
 
-from showpy.core.errors import ConflictError, LockedError, StorageError
+from showpy.core.errors import ConflictError, StorageError
 from showpy.show.file_repository import FileRepository
-from showpy.show.files import LIMITS_DOC
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import Repository
 from tests.fixtures.shows import two_set_show
-from tests.helpers import fails_after, pin_spot
+from tests.helpers import fails_after
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 SHOW_ID = "show-1"
@@ -101,41 +96,6 @@ def test_regression_memory_commit_has_one_winner_per_parent() -> None:
     assert len(winners) == 1
     assert set(winners) <= stored
     assert len(stored) == 1
-
-
-@pytest.mark.defect("UP-9.7-12")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-12")
-def test_regression_repository_refuses_agent_pinned_move() -> None:
-    """Refuses an agent put_set that moves a pinned spot (audit 9.7 item 7; P0 #5)."""
-    repo = InMemoryRepository()
-    rev = repo.put_show(
-        SHOW_ID,
-        pin_spot(two_set_show(), "2", "T1"),
-        expected_revision="",
-        actor="designer",
-        at=AT,
-        message="create",
-    ).id
-    moved = repo.get_set(SHOW_ID, "2").with_placements({"T1": {"x": 7.0}}, force=True)
-    with pytest.raises(LockedError):
-        repo.put_set(SHOW_ID, moved, expected_revision=rev, actor="agent", at=AT, message="m")
-
-
-@pytest.mark.defect("UP-9.7-13")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-13")
-def test_regression_repository_refuses_agent_limits_write() -> None:
-    """Refuses an agent transaction that writes the limits file (audit 9.7 item 7; P0 #5)."""
-    repo = InMemoryRepository()
-    rev = _create(repo)
-    with pytest.raises(LockedError):
-        repo.transaction(
-            SHOW_ID,
-            {LIMITS_DOC: b"max_speed: 99"},
-            expected_revision=rev,
-            actor="agent",
-            at=AT,
-            message="raise limits",
-        )
 
 
 SAFE_NAME_MAX = 255

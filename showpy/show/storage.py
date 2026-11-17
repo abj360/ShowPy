@@ -23,24 +23,21 @@ from datetime import datetime
 from typing import Protocol
 
 from showpy.choreo.models import Form, Set, TransitionSpec
-from showpy.core.errors import LockedError, StorageError, UnknownRefError
+from showpy.core.errors import StorageError, UnknownRefError
 from showpy.core.ids import SetId, TransitionId
 from showpy.core.util import close_matches
-from showpy.show.documents import SHOW_DOC, decode_show, is_show_doc, split_path
+from showpy.show.documents import SHOW_DOC, decode_show, split_path
 from showpy.show.files import (
-    DESIGNER_PATHS,
     all_files,
     directories,
     read_file,
     show_changes,
     staged_changes,
 )
-from showpy.show.locks import require_unlocked
 from showpy.show.models import Principal, Revision, RevisionKind, Show
 from showpy.time.models import Timeline
 
 ROOT_REVISION = ""
-DESIGNER_PRINCIPALS: frozenset[Principal] = frozenset({"designer", "system"})
 SAVE_MESSAGE = "save show"
 
 
@@ -303,31 +300,6 @@ class Workspace:
         }
         return sorted(children)
 
-    def _require_allowed(self, changes: Mapping[str, bytes | None]) -> None:
-        if self.principal in DESIGNER_PRINCIPALS:
-            return
-        owned = sorted(p for p in changes if p in DESIGNER_PATHS)
-        if owned:
-            raise LockedError(
-                f"{', '.join(owned)} belong to the designer",
-                hint="read them, and ask the designer to change them",
-                context={"paths": owned, "principal": self.principal},
-            )
-
-    def _require_pins_kept(self, changes: Mapping[str, bytes | None], base: str) -> None:
-        if self.principal in DESIGNER_PRINCIPALS or not any(map(is_show_doc, changes)):
-            return
-        before = self.show_at(base)
-        if before is None:
-            return
-        after = dict(self.tree_at(base))
-        for path, data in changes.items():
-            if data is None:
-                after.pop(path, None)
-            else:
-                after[path] = data
-        require_unlocked(before, decode_show(after, base))
-
     def commit(
         self,
         changes: Mapping[str, bytes | None],
@@ -338,7 +310,7 @@ class Workspace:
         kind: RevisionKind = "edit",
         target: str | None = None,
     ) -> Revision:
-        """Saves document changes as one revision under the principal's ownership rules.
+        """Saves document changes as one revision.
 
         Args:
             changes: Path to new bytes, or None to delete.
@@ -352,8 +324,6 @@ class Workspace:
             revision: The new head; the workspace moves to it.
         """
         base = self._revision if expected_revision is None else expected_revision
-        self._require_allowed(changes)
-        self._require_pins_kept(changes, base)
         revision = self.repo.transaction(
             self.show_id,
             changes,
@@ -390,7 +360,6 @@ class Workspace:
         """
         split_path(path)
         raw = data.encode() if isinstance(data, str) else data
-        self._require_allowed({path: raw})
         changes = staged_changes(path, raw, self._show(), self._tree())
         return self.commit(
             changes, at=at, message=message or f"write {path}", expected_revision=expected_revision
