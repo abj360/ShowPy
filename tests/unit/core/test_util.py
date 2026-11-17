@@ -5,6 +5,9 @@ test_util.py --- tests ID sorting, ranges, float comparison, hashing and point n
 
 Contains:
     test_*(): one behavior of showpy.core.util each
+    test_regression_natural_sort_breaks_numeric_ties_by_original_text: orders T02 and T2 by text
+    test_regression_seeded_rng_rejects_non_integer_or_negative_seeds: rejects bad seeds with hint
+    test_regression_seeded_rng_keeps_the_default_rng_stream: matches numpy's default_rng stream
     test_regression_format_ranges_ties_ignore_hash_seed: orders natural-sort ties the same under
         every hash seed
     test_regression_seeded_rng_rejects_none: rejects a missing seed instead of returning an unseeded
@@ -49,6 +52,14 @@ Contains:
     test_regression_id_split_is_linear_on_long_ids: splits a 10,000-character ID in linear time
     test_regression_range_check_happens_before_expansion: checks range endpoints before building
         300,000 strings
+    test_split_id_*(): splits IDs into a prefix and a trailing ASCII number
+    test_regression_split_id_rejects_digit_runs_no_id_can_hold: rejects a 5,000-digit tail with a
+        ShowPyError
+    test_regression_parse_range_rejects_oversized_ranges: rejects a range over MAX_RANGE before
+        expanding it
+    test_regression_parse_range_ignores_unicode_digits: treats an Arabic-Indic digit range as one ID
+    test_regression_parse_range_rejects_huge_endpoints: rejects a 5,000-digit endpoint with a
+        ShowPyError
     test_regression_parse_range_reads_ranges_with_digits_in_the_prefix: expands `P1x1-P1x3` whose
         prefix holds a digit
     test_regression_parse_range_reads_ranges_with_dash_prefixes: expands `flag-1-flag-3` the way
@@ -91,6 +102,7 @@ from showpy.core.util import (
     natural_sort,
     parse_range,
     seeded_rng,
+    split_id,
     timer,
 )
 from tests.helpers import digests_under_hash_seeds, fails_after
@@ -263,28 +275,42 @@ def _best_of(call: Callable[[], object], trials: int = 3) -> float:
     return best
 
 
-@pytest.mark.defect("UP-9.3-01")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-01")
 def test_regression_format_ranges_ties_ignore_hash_seed() -> None:
     """Orders natural-sort ties the same under every hash seed (audit 9.3; P0 #9)."""
     outputs = run_under_seeds(HASH_TIES_SCRIPT)
     assert len(set(outputs)) == 1, outputs
 
 
-@pytest.mark.defect("UP-9.3-02")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-02")
 def test_regression_seeded_rng_rejects_none() -> None:
     """Rejects a missing seed instead of returning an unseeded generator (audit 9.3)."""
     with pytest.raises(ShowPyError):
         seeded_rng(None)  # type: ignore[arg-type]
 
 
-@pytest.mark.defect("UP-9.3-03")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-03")
 def test_regression_seeded_rng_rejects_negative_seed() -> None:
     """Rejects a negative seed instead of leaking numpy's ValueError (audit 9.3)."""
     with pytest.raises(ShowPyError):
         seeded_rng(-1)
+
+
+def test_regression_natural_sort_breaks_numeric_ties_by_original_text() -> None:
+    """Orders T02 and T2 by text, whatever order they arrive in."""
+    assert natural_sort(["T2", "T02"]) == natural_sort(["T02", "T2"]) == ["T02", "T2"]
+
+
+@pytest.mark.parametrize("seed", [None, True, -1, 1.5, "1"])
+def test_regression_seeded_rng_rejects_non_integer_or_negative_seeds(seed: object) -> None:
+    """Rejects None, booleans, negatives and non-integers with a hint."""
+    with pytest.raises(SchemaError) as caught:
+        seeded_rng(seed)  # type: ignore[arg-type]
+    assert caught.value.hint
+
+
+def test_regression_seeded_rng_keeps_the_default_rng_stream() -> None:
+    """Draws the same stream as numpy's default_rng for int and numpy integer seeds."""
+    expected = np.random.default_rng(7).random(5)
+    assert np.array_equal(seeded_rng(7).random(5), expected)
+    assert np.array_equal(seeded_rng(np.int64(7)).random(5), expected)  # type: ignore[arg-type]
 
 
 def test_regression_content_hash_equal_for_signed_zero() -> None:
@@ -379,15 +405,11 @@ def test_regression_as_points_returns_a_copy() -> None:
     assert approx_equal(original, np.zeros((2, 2)))
 
 
-@pytest.mark.defect("UP-9.3-17")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-17")
 def test_regression_natural_sort_survives_unicode_digits() -> None:
     """Sorts IDs holding non-ASCII digits such as superscript two (audit 9.3)."""
     assert len(natural_sort(["T1²", "T1"])) == 2
 
 
-@pytest.mark.defect("UP-9.3-18")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-18")
 def test_regression_natural_sort_survives_huge_numbers() -> None:
     """Sorts IDs whose number has over 4,300 digits (audit 9.3)."""
     huge = "T" + "9" * 5000
@@ -417,8 +439,6 @@ def test_regression_chunk_counts_rejects_nan_total() -> None:
         chunk_counts(NAN, 4)
 
 
-@pytest.mark.defect("UP-9.3-22")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-22")
 @fails_after(5)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_id_split_is_linear_on_long_ids() -> None:
@@ -427,8 +447,6 @@ def test_regression_id_split_is_linear_on_long_ids() -> None:
     assert _best_of(lambda: label_prefix(long_id), trials=1) < QUADRATIC_BUDGET_S
 
 
-@pytest.mark.defect("UP-9.3-23")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-23")
 @fails_after(5)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_range_check_happens_before_expansion() -> None:
@@ -461,8 +479,6 @@ def test_regression_parse_range_reads_ranges_with_dash_prefixes() -> None:
     assert parse_range("flag-1-flag-3") == ["flag-1", "flag-2", "flag-3"]
 
 
-@pytest.mark.defect("UP-9.3-26")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-26")
 def test_regression_parse_range_does_not_read_unicode_digits_as_ascii() -> None:
     """Does not read the Arabic-Indic digit three as 3 (audit 9.3)."""
     try:
@@ -512,8 +528,8 @@ def test_content_hash_separates_domains_and_kinds() -> None:
 def test_content_hash_ignores_hash_seed() -> None:
     """Hashes `two_set_show()`, which holds no multi-element frozenset (ruling R11).
 
-    The helper's tagged `show` carries frozenset tags, so the example show is built directly;
-    hashing a show with multi-element frozensets stays seed dependent until UP-9.3-55 is fixed.
+    The helper's tagged `show` carries frozenset tags, so the example show is built directly.
+    Hashing a show with multi-element frozensets is seed independent since UP-9.3-55 was fixed.
     The helper covers hash seeds 1 and 2; seed 0 disables hash randomization, so it adds nothing.
     """
     digests = digests_under_hash_seeds(
@@ -529,3 +545,38 @@ def test_regression_content_hash_rejects_a_domain_outside_its_alphabet(domain: s
     with pytest.raises(SchemaError) as caught:
         content_hash({"a": 1}, domain=domain)
     assert caught.value.context["domain"] == domain
+
+
+def test_split_id_splits_prefix_and_number() -> None:
+    assert split_id("flag-12") == ("flag-", 12)
+    assert split_id("T007") == ("T", 7)
+    assert split_id("lead") == ("lead", None)
+    assert split_id("") == ("", None)
+
+
+def test_split_id_ignores_non_ascii_digits() -> None:
+    assert split_id("T\u0663") == ("T\u0663", None)
+
+
+def test_regression_split_id_rejects_digit_runs_no_id_can_hold() -> None:
+    """Rejects a 5,000-digit tail with a ShowPyError, not ValueError from int()."""
+    with pytest.raises(SchemaError):
+        split_id("T" + "9" * 5000)
+
+
+def test_regression_parse_range_rejects_oversized_ranges() -> None:
+    """Rejects a range over MAX_RANGE before expanding it."""
+    with pytest.raises(SchemaError):
+        parse_range("T1-T10001")
+    assert len(parse_range("T1-T10000")) == 10_000
+
+
+def test_regression_parse_range_ignores_unicode_digits() -> None:
+    """Treats a range written in Arabic-Indic digits as one ID, not a range."""
+    assert parse_range("T\u0663-T\u0665") == ["T\u0663-T\u0665"]
+
+
+def test_regression_parse_range_rejects_huge_endpoints() -> None:
+    """Rejects a 5,000-digit endpoint with a ShowPyError, not ValueError from int()."""
+    with pytest.raises(SchemaError):
+        parse_range("T1-T" + "9" * 5000)

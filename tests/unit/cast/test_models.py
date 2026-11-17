@@ -11,6 +11,11 @@ Contains:
         under every hash seed
     test_regression_cast_content_hash_ignores_hash_seed: gives one content hash for a cast under
         every hash seed
+    test_regression_frozenset_tags_and_selections_store_in_one_order: stores a frozenset input in
+        natural order under every hash seed
+    test_regression_tags_and_selections_dedupe_keeping_first_occurrence: drops repeats, keeps the
+        given order of non-set input
+    test_regression_v02_array_documents_still_decode: decodes JSON arrays written by v0.2
     test_regression_group_limits_are_immutable: refuses in-place edits to Group.limits of a frozen
         model
     test_regression_cast_groups_are_immutable: refuses `cast.groups.pop(...)` on a frozen cast
@@ -76,7 +81,7 @@ def test_spot_defaults() -> None:
     spot = Spot(id="T1", group="trumpets")
     assert spot.active
     assert spot.claimable == "performer"
-    assert spot.tags == frozenset()
+    assert spot.tags == ()
     assert spot.symbol is None
 
 
@@ -138,13 +143,11 @@ def _small_cast() -> Cast:
     return Cast(
         groups={"g": Group(key="g", label_prefix="T", limits={"speed": 2.0})},
         spots=(Spot(id="T1", group="g"),),
-        selections={"s": frozenset({"T1"})},
+        selections={"s": ("T1",)},
         label_scheme=LabelScheme(prefixes={"g": "X"}),
     )
 
 
-@pytest.mark.defect("UP-9.3-53")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-53")
 def test_regression_spot_tags_serialize_in_a_stable_order() -> None:
     """Dumps Spot.tags identically under every hash seed (audit 9.3; P0 #9).
 
@@ -154,8 +157,6 @@ def test_regression_spot_tags_serialize_in_a_stable_order() -> None:
     assert len(set(outputs)) == 1, outputs
 
 
-@pytest.mark.defect("UP-9.3-54")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-54")
 def test_regression_cast_selections_serialize_in_a_stable_order() -> None:
     """Dumps Cast.selections identically under every hash seed (audit 9.3; P0 #9).
 
@@ -165,8 +166,6 @@ def test_regression_cast_selections_serialize_in_a_stable_order() -> None:
     assert len(set(outputs)) == 1, outputs
 
 
-@pytest.mark.defect("UP-9.3-55")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-55")
 def test_regression_cast_content_hash_ignores_hash_seed() -> None:
     """Gives one content hash for a cast under every hash seed (audit 9.3; P0 #9).
 
@@ -174,6 +173,46 @@ def test_regression_cast_content_hash_ignores_hash_seed() -> None:
     """
     outputs = _under_seeds("print(content_hash(cast))\n")
     assert len(set(outputs)) == 1, outputs
+
+
+def test_regression_frozenset_tags_and_selections_store_in_one_order() -> None:
+    """Stores a frozenset input as one natural-order tuple under every hash seed (ruling D-R1)."""
+    script = (
+        CAST_SCRIPT_HEAD + "print(cast.spots[0].tags, cast.selections['s'])\n"
+        "print(Spot(id='T1', group='g', tags=frozenset({'b', 'a10', 'a2'})).tags)\n"
+    )
+    outputs = outputs_under_hash_seeds(script)
+    assert len(set(outputs)) == 1, outputs
+    assert "('alpha', 'beta', 'delta', 'eps', 'gamma')" in outputs[0]
+    assert "('T1', 'T2', 'T3', 'T4', 'T5', 'T6')" in outputs[0]
+    assert "('a2', 'a10', 'b')" in outputs[0]
+
+
+def test_regression_tags_and_selections_dedupe_keeping_first_occurrence() -> None:
+    """Drops repeated tags and selection IDs and keeps the order a list was given in."""
+    spot = Spot.model_validate({"id": "T1", "group": "g", "tags": ["z", "a", "z"]})
+    assert spot.tags == ("z", "a")
+    cast = Cast.model_validate(
+        {
+            "groups": {"g": Group(key="g", label_prefix="T")},
+            "spots": (spot, Spot(id="T2", group="g")),
+            "selections": {"s": ["T2", "T1", "T2"]},
+        }
+    )
+    assert cast.selections["s"] == ("T2", "T1")
+
+
+def test_regression_v02_array_documents_still_decode() -> None:
+    """Decodes the JSON arrays a v0.2 document holds for tags and selections."""
+    document = (
+        '{"groups": {"g": {"key": "g", "label_prefix": "T"}},'
+        ' "spots": [{"id": "T1", "group": "g", "tags": ["b", "a"]}],'
+        ' "selections": {"s": ["T1"]}}'
+    )
+    cast = Cast.model_validate_json(document)
+    assert cast.spots[0].tags == ("b", "a")
+    assert cast.selections == {"s": ("T1",)}
+    assert Cast.model_validate_json(cast.model_dump_json()) == cast
 
 
 @pytest.mark.defect("UP-9.3-56")
@@ -276,7 +315,7 @@ def test_regression_cast_rejects_selections_naming_missing_spots() -> None:
         Cast(
             groups={"g": Group(key="g", label_prefix="T")},
             spots=(Spot(id="T1", group="g"),),
-            selections={"s": frozenset({"T9"})},
+            selections={"s": ("T9",)},
         )
 
 

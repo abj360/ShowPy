@@ -313,8 +313,6 @@ def test_frames_csv_is_byte_identical_across_runs_and_hash_seeds() -> None:
     assert len({first for first, _ in digests}) == 1, digests
 
 
-@pytest.mark.defect("UP-4.3-01")
-@pytest.mark.xfail(strict=True, reason="UP-4.3-01")
 def test_regression_export_json_ignores_hash_seed() -> None:
     """Dumps the same JSON export under every hash seed, spot tags included (audit 4.3; P0 #9)."""
     digests = digests_under_hash_seeds(

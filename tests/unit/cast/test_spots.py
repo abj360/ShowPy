@@ -21,7 +21,7 @@ Contains:
 """
 
 from datetime import UTC, datetime
-from inspect import signature
+from inspect import Parameter, signature
 
 import pytest
 import shapely
@@ -59,8 +59,9 @@ from showpy.core.types import Region
 from showpy.core.util import approx_equal
 from showpy.geo.regions import region
 from showpy.geo.shapes import line
+from showpy.show.manage import add_set
 from showpy.show.models import Show
-from showpy.show.pinning import pin
+from showpy.show.pinning import pin, unpin
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.shows import two_set_show
 
@@ -168,7 +169,7 @@ def test_delete_spots_removes_every_reference() -> None:
     assert "T4" not in spec.rows
     assert spec.routes["r1"].members == ("T3",)
     assert spec.routes["r1"].offsets == (0.0,)
-    assert show.cast.selections["pair"] == frozenset({"T1"})
+    assert show.cast.selections["pair"] == ("T1",)
     assert show.zones[2].applies_to == Selection(ids=())
 
 
@@ -269,7 +270,7 @@ def test_rename_everywhere_rewrites_every_reference() -> None:
     override = show.facing_overrides[0]
     assert override.entities == ("A1", "A2")
     assert override.value == "A3"
-    assert show.cast.selections["pair"] == frozenset({"A1", "A4"})
+    assert show.cast.selections["pair"] == ("A1", "A4")
     assert [z.applies_to for z in show.zones] == [
         ("A1", "A2"),
         "group:trumpets",
@@ -306,7 +307,7 @@ def test_rename_everywhere_with_empty_mapping_is_identity() -> None:
 
 def test_define_selection_stores_resolved_ids() -> None:
     show = define_selection(two_set_show(), "ends", "T1 + T4")
-    assert show.cast.selections["ends"] == frozenset({"T1", "T4"})
+    assert show.cast.selections["ends"] == ("T1", "T4")
     with pytest.raises(SchemaError):
         define_selection(two_set_show(), "bad name", "T1")
 
@@ -320,7 +321,7 @@ def test_set_shape_and_set_claimable() -> None:
         set_claimable(show, ["T3"], "audience")  # type: ignore[arg-type]
 
 
-EDITS_THAT_NEED_FORCE = (add_spot, add_spots_along, fill_spots, duplicate_spots)
+EDITS_THAT_NEED_FORCE = (add_spot, add_spots_along, fill_spots, duplicate_spots, delete_spots)
 PREFIX_X = LabelScheme(prefixes={"trumpets": "X"})
 UNIT_SQUARE = region([(0, 0), (2, 0), (2, 2), (0, 2)])
 
@@ -333,36 +334,73 @@ def _with_second_group(show: Show) -> Show:
     return add_group(show, Group(key="brass", label_prefix="B"))
 
 
-@pytest.mark.defect("UP-9.3-88")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-88")
 def test_regression_add_spot_refuses_a_pinned_set() -> None:
     """Refuses an unpinned placement in a pinned set (audit 9.3; P0 #13)."""
     with pytest.raises(LockedError):
         add_spot(_with_pinned_set(), (1.0, 2.0), "trumpets", "2")
 
 
-@pytest.mark.defect("UP-9.3-89")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-89")
 def test_regression_add_spots_along_refuses_a_pinned_set() -> None:
     """Raises LockedError for a curve fill into a pinned set (audit 9.3; P0 #13)."""
     with pytest.raises(LockedError):
         add_spots_along(_with_pinned_set(), line((0, 0), (4, 0)), 3, "trumpets", "1")
 
 
-@pytest.mark.defect("UP-9.3-90")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-90")
 def test_regression_fill_spots_refuses_a_pinned_set() -> None:
     """Raises LockedError for an area fill into a pinned set (audit 9.3; P0 #13)."""
     with pytest.raises(LockedError):
         fill_spots(_with_pinned_set(), UNIT_SQUARE, "trumpets", "1", interval=1.0)
 
 
-@pytest.mark.defect("UP-9.3-91")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-91")
 def test_regression_duplicate_spots_refuses_a_pinned_set() -> None:
     """Raises LockedError for copies written into a pinned set (audit 9.3; P0 #13)."""
     with pytest.raises(LockedError):
         duplicate_spots(_with_pinned_set(), ["T1"], (0.0, 1.0), "1")
+
+
+def test_regression_add_spot_entering_after_a_pinned_set_needs_no_force() -> None:
+    """Adds a spot that first appears on-field after every pinned set (ADR 0005 item 3)."""
+    show = two_set_show()
+    pinned = pin(show, "set", "1")
+    after = add_spot(pinned, (1.0, 2.0), "trumpets", "2")
+    assert after.cast.ids()[-1] == "T5"
+    assert [p.on_field for s in after.sets for p in s.placements if p.entity == "T5"] == [
+        False,
+        True,
+    ]
+
+
+def test_regression_forced_add_spot_enters_a_pinned_set() -> None:
+    """Lets the designer add an on-field spot to a pinned set with force=True."""
+    after = add_spot(_with_pinned_set(), (1.0, 2.0), "trumpets", "2", force=True)
+    assert after.set("2").get("T5").on_field
+
+
+def test_regression_add_spot_refusal_names_the_pinned_set() -> None:
+    """Names the pinned set in the LockedError of a refused addition."""
+    with pytest.raises(LockedError) as info:
+        add_spot(_with_pinned_set(), (1.0, 2.0), "trumpets", "2")
+    assert "set 2" in info.value.message
+
+
+def test_regression_forced_add_into_pinned_set_stays_protected() -> None:
+    """Flags a forced addition to a pinned set, so an unforced delete refuses it."""
+    added = add_spot(_with_pinned_set(), (1.0, 2.0), "trumpets", "2", force=True)
+    assert added.set("2").get("T5").pinned
+    with pytest.raises(LockedError):
+        delete_spots(added, "T5")
+    assert "T5" not in delete_spots(added, "T5", force=True).cast.ids()
+    assert not unpin(added, "set", "2").set("2").get("T5").pinned
+
+
+def test_regression_spot_entering_before_two_pinned_sets_names_both() -> None:
+    """Names every pinned set a new spot would enter."""
+    show = add_set(two_set_show(), "3", 4.0)
+    pinned = pin(pin(show, "set", "2"), "set", "3")
+    with pytest.raises(LockedError) as info:
+        add_spot(pinned, (1.0, 2.0), "trumpets", "1")
+    assert "set 2" in info.value.message
+    assert "set 3" in info.value.message
 
 
 def _pinned_coordinates(show: Show, spot_id: str) -> list[tuple[float, float]]:
@@ -376,46 +414,29 @@ def _assert_pin_follows(before: Show, after: Show, mapping: dict[str, str]) -> N
     assert _pinned_coordinates(before, "T1") != []
 
 
-@pytest.mark.defect("UP-9.3-92")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-92")
 def test_regression_regroup_keeps_a_pinned_spot_protected() -> None:
-    """Refuses to regroup a pinned spot, or regroups it with the pin following (audit 9.3; P0 #13).
-
-    The rename policy is open (draft ADR: renames allowed, positions protected), so both
-    LockedError and a successful regroup with an intact pin are accepted.
-    """
+    """Regroups a pinned spot with the pin following (audit 9.3; ADR 0005 item 6)."""
     before = _with_second_group(pin(two_set_show(), "entity", "T1"))
-    try:
-        after, mapping = regroup(before, ["T1"], "brass")
-    except LockedError:
-        return
+    after, mapping = regroup(before, ["T1"], "brass")
     _assert_pin_follows(before, after, mapping)
 
 
-@pytest.mark.defect("UP-9.3-93")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-93")
 def test_regression_relabel_keeps_a_pinned_spot_protected() -> None:
-    """Refuses to relabel a pinned spot, or relabels it with the pin following (audit 9.3).
-
-    The rename policy is open (draft ADR: renames allowed, positions protected), so both
-    LockedError and a successful relabel with an intact pin are accepted.
-    """
+    """Relabels a pinned spot with the pin following (audit 9.3; ADR 0005 item 6)."""
     before = pin(two_set_show(), "entity", "T1")
-    try:
-        after, mapping = relabel(before, PREFIX_X)
-    except LockedError:
-        return
+    after, mapping = relabel(before, PREFIX_X)
     _assert_pin_follows(before, after, mapping)
 
 
-@pytest.mark.defect("UP-9.3-94")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-94")
 def test_regression_cast_edits_accept_force() -> None:
-    """Gives every cast edit a `force` parameter like delete_spots (audit 9.3; P0 #13)."""
-    missing = [
-        fn.__name__ for fn in EDITS_THAT_NEED_FORCE if "force" not in signature(fn).parameters
+    """Gives every cast edit a keyword-only `force` parameter (audit 9.3; ADR 0005 item 4)."""
+    not_keyword_only = [
+        fn.__name__
+        for fn in EDITS_THAT_NEED_FORCE
+        if "force" not in signature(fn).parameters
+        or signature(fn).parameters["force"].kind is not Parameter.KEYWORD_ONLY
     ]
-    assert missing == []
+    assert not_keyword_only == []
 
 
 def test_regression_edit_group_keeps_a_validator_schema_error(

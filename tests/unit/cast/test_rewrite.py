@@ -81,24 +81,18 @@ def _pin_ids(show: Show) -> list[str]:
     return [p.id for p in show.pins]
 
 
-@pytest.mark.defect("UP-9.3-79")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-79")
 def test_regression_relabel_rewrites_pins() -> None:
     """Renames the spot a pin names when the spot is relabeled (audit 9.3)."""
     relabeled, _ = relabel(_pinned_show(), RENAME_T_TO_X)
     assert _pin_ids(relabeled) == ["X1"]
 
 
-@pytest.mark.defect("UP-9.3-80")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-80")
 def test_regression_forced_delete_drops_pins_on_the_spot() -> None:
     """Leaves no pin naming a spot that `delete_spots(force=True)` removed (audit 9.3)."""
     remaining = delete_spots(_pinned_show(), "T1", force=True)
     assert "T1" not in _pin_ids(remaining)
 
 
-@pytest.mark.defect("UP-9.3-81")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-81")
 def test_regression_relabel_rewrites_sheet_zones() -> None:
     """Rewrites `applies_to` of zones stored on the sheet when spots are relabeled (audit 9.3)."""
     show = two_set_show()

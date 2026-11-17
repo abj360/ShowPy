@@ -415,8 +415,6 @@ def test_regression_scatter_rejects_zero_min_gap() -> None:
         scatter(_square(), 3, 0.0)
 
 
-@pytest.mark.defect("UP-9.1-61")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-61")
 def test_regression_scatter_rejects_fractional_seed() -> None:
     """Raises a ShowPyError for seed=1.5 instead of leaking TypeError (audit 9.1)."""
     with pytest.raises(ShowPyError):
