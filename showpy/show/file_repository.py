@@ -72,9 +72,14 @@ BLOB_MAX_BYTES = 2**30
 def _temp_copy(directory: Path, data: bytes) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=directory, delete=False, prefix=TEMP_PREFIX) as handle:
-        handle.write(data)
-        handle.flush()
-        os.fsync(handle.fileno())
+        try:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        except OSError:
+            handle.close()
+            Path(handle.name).unlink(missing_ok=True)
+            raise
     return Path(handle.name)
 
 

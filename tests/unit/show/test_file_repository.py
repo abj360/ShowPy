@@ -73,6 +73,8 @@ Contains:
         commit wrote the same tree record first and the OS refuses to replace it
     test_regression_planted_tree_record_blocks_the_commit: refuses a commit whose tree record name
         holds another tree, a truncated record or a symlink, before its next/ link
+    test_regression_failed_temp_write_leaves_no_temp_file: removes the temp file when writing or
+        syncing it fails
 """
 
 import contextlib
@@ -907,3 +909,19 @@ def test_regression_planted_tree_record_blocks_the_commit(tmp_path: Path, kind: 
     PLANTED_RECORDS[kind](record, (twin_base / "trees" / f"{twin}.json").read_bytes())
     _assert_corrupt(lambda: _second_revision(repo, rev))
     assert not (base / "next" / rev).exists()
+
+
+def test_regression_failed_temp_write_leaves_no_temp_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Removes the temp file when syncing it to disk fails."""
+    repo, rev, base = _saved(tmp_path)
+
+    def fail_sync(_fd: int) -> NoReturn:
+        raise OSError(errno.EIO, "Input/output error")
+
+    monkeypatch.setattr(os, "fsync", fail_sync)
+    with pytest.raises(StorageError) as caught:
+        _second_revision(repo, rev)
+    assert caught.value.code == "IO"
+    assert not list(base.rglob(".tmp-*"))
