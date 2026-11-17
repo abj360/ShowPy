@@ -5,24 +5,33 @@ test_text_count.py --- tests text spot counts derived from a spacing between spo
 
 Contains:
     test_*(): one behavior of showpy.choreo.text_count each
+    test_regression_spacing_count_follows_a_scaled_text_form(): counts a scaled form's spots
+        from its stage-meter stroke lengths
+    test_regression_legibility_warning_reports_stage_meters(): names a scaled form's spacing
+        and letter height after its transform
 """
 
 import math
+import warnings
 
 import pytest
 from scipy.spatial import cKDTree
 
+from showpy.choreo.form_layout import layout
+from showpy.choreo.form_ops import transform_form
 from showpy.choreo.form_text import (
     COINCIDENT_TOL_M,
     MAX_TEXT_SPOTS,
     text_slots,
     text_strokes,
 )
-from showpy.choreo.forms import text_form
+from showpy.choreo.forms import slots, text_form
 from showpy.choreo.models import TextRecipe
 from showpy.choreo.text_count import count_recipe, spacing_count
+from showpy.choreo.text_edit import edit_text_count
 from showpy.core.errors import LegibilityWarning, SchemaError, SpacingError
 from showpy.core.types import Points
+from showpy.geo.affine import scale_matrix
 from showpy.geo.fonts import bundled_fonts, register_font
 from tests.fixtures.fonts import tiny_bytes
 
@@ -36,6 +45,8 @@ CLOSED_MINIMUM = 3
 TINY_SPACING = 1e-6
 DENSE_STROKES = tuple(f"M{x} 0 L{x} 10" for x in range(6))
 DENSE_CHARS = 900
+SCALE = 2.0
+SCALED_L_SPOTS = 21
 ignore_legibility = pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
 
 
@@ -140,3 +151,29 @@ def test_count_recipe_with_n_clears_the_spacing() -> None:
 def test_count_recipe_rejects_a_bad_n(n: object) -> None:
     with pytest.raises(SpacingError):
         count_recipe(recipe("L").model_dump(mode="json"), n, None, None)  # type: ignore[arg-type]
+
+
+def test_regression_spacing_count_follows_a_scaled_text_form() -> None:
+    ell = text_form("L", spots(L_SPOTS_AT_ONE_METER), "L", fonts=["simplex"],
+                    height=LETTER_HEIGHT, at=(0, 0), spacing=1.0)  # fmt: skip
+    scaled = transform_form(ell, scale_matrix(SCALE, SCALE, (0.0, 0.0)))
+    added = [f"X{i}" for i in range(SCALED_L_SPOTS - L_SPOTS_AT_ONE_METER)]
+    edited = edit_text_count(scaled, add=added, spacing=1.0)
+    assert edited.geometry["n"] == SCALED_L_SPOTS
+    stem = slots(edited)[: SCALED_L_SPOTS // 2]
+    assert math.dist(stem[0], stem[1]) == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize(
+    ("sx", "sy", "wanted"),
+    [(SCALE, SCALE, "20.00 m apart on 12.00 m"), (1.0, 4.0, "28.00 m apart on 12.00 m")],
+)
+def test_regression_legibility_warning_reports_stage_meters(
+    sx: float, sy: float, wanted: str
+) -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", LegibilityWarning)
+        ell = text_form("L", spots(2), "L", fonts=["simplex"], height=LETTER_HEIGHT, at=(0, 0), n=2)
+    stretched = transform_form(ell, scale_matrix(sx, sy, (0.0, 0.0)))
+    with pytest.warns(LegibilityWarning, match=f"up to {wanted} letters"):
+        layout(stretched)

@@ -14,10 +14,13 @@ import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+import numpy as np
+
 from showpy.choreo.form_text import (
     MAX_TEXT_SPOTS,
     min_text_spots,
     require_whole_count,
+    stage_strokes,
     text_recipe,
     text_strokes,
 )
@@ -104,6 +107,8 @@ def count_recipe(
 
     Returns:
         recipe: The geometry with `n` and `spacing` set; `spacing` is None for an exact count.
+            A spacing is measured along the strokes after any stored `transform`, in stage
+            meters.
 
     Raises:
         SchemaError: `N_OR_SPACING` unless exactly one is given; a bad spacing names the field.
@@ -122,7 +127,9 @@ def count_recipe(
         return {**geometry, "spacing": None, "n": n}
     if spacing is not None and n is None:
         recipe = text_recipe({**geometry, "spacing": spacing})
-        strokes = text_strokes(recipe, font_registry=font_registry)
+        stored = geometry.get("transform")
+        transform = None if stored is None else np.asarray(stored, dtype=float)
+        strokes = stage_strokes(text_strokes(recipe, font_registry=font_registry), transform)
         return {**geometry, "spacing": recipe.spacing, "n": spacing_count(strokes, spacing)}
     raise SchemaError(
         "a text form takes exactly one of n and spacing",

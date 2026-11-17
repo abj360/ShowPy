@@ -13,6 +13,7 @@ Contains:
     MAX_TEXT_SPOTS: most spots one text form may have
     text_recipe(): validates a text form's stored geometry into a TextRecipe
     text_strokes(): lays a recipe out and returns its visible strokes in reading order
+    stage_strokes(): maps strokes through a form's stored transform into stage meters
     min_text_spots(): counts the spots the strokes need at least
     require_whole_count(): rejects a spot count that is not a whole number up to the cap
     text_slots(): places exactly n slots on the strokes, with unit tangents
@@ -41,6 +42,7 @@ from showpy.core.errors import (
     field_errors,
 )
 from showpy.core.types import Points
+from showpy.geo.affine import Matrix, transform_curve
 from showpy.geo.curve_base import Curve, FloatArray
 from showpy.geo.curves import Polyline, SvgCurve
 from showpy.geo.fonts import FontRegistry, bundled_fonts
@@ -199,6 +201,28 @@ def text_strokes(recipe: TextRecipe, *, font_registry: FontRegistry | None = Non
     return [stroke for glyph in _laid_strokes(recipe, font_registry) for stroke in glyph.strokes]
 
 
+def stage_strokes(strokes: Sequence[Stroke], transform: Matrix | None) -> list[Curve]:
+    """Maps strokes through a form's stored transform, so their lengths are stage meters.
+
+    Args:
+        strokes: Glyph strokes, as `text_strokes` returns them.
+        transform: The form's stored 3x3 affine matrix, or None for none.
+
+    Returns:
+        mapped: The strokes after the transform; the same strokes when there is none.
+
+    >>> from showpy.geo.affine import scale_matrix
+    >>> from showpy.geo.fonts import bundled_fonts
+    >>> ell = TextRecipe(text="L", fonts=(bundled_fonts().resolve("simplex"),), height=6.0,
+    ...                  at=(0.0, 0.0))
+    >>> [stroke.length() for stroke in stage_strokes(text_strokes(ell), scale_matrix(2, 2, (0, 0)))]
+    [20.0]
+    """
+    if transform is None:
+        return list(strokes)
+    return [transform_curve(stroke, transform) for stroke in strokes]
+
+
 def _stroke_minimum(stroke: Curve) -> int:
     return STROKE_MINIMUM_CLOSED if stroke.closed else STROKE_MINIMUM_OPEN
 
@@ -291,11 +315,20 @@ def _place_stroke(stroke: Stroke, k: int, grid: _SlotGrid, char: str) -> tuple[P
     )
 
 
-def _warn_if_sparse(strokes: Sequence[Stroke], counts: Sequence[int], height: float) -> None:
-    """Warns, at the caller of `text_slots`, when a stroke's spots sit too far apart to read."""
+def _warn_if_sparse(
+    strokes: Sequence[Stroke], counts: Sequence[int], height: float, transform: Matrix | None
+) -> None:
+    """Warns, at the caller of `text_slots`, when a stroke's spots sit too far apart to read.
+
+    Spacing and letter height are measured after the stored transform; the height scales by
+    the square root of the transform's area factor.
+    """
+    mapped = stage_strokes(strokes, transform)
+    if transform is not None:
+        height *= math.sqrt(abs(float(np.linalg.det(transform[:2, :2]))))
     widest = max(
         stroke.length() / (k if stroke.closed else k - 1)
-        for stroke, k in zip(strokes, counts, strict=True)
+        for stroke, k in zip(mapped, counts, strict=True)
     )
     if widest > LEGIBLE_SPACING_SHARE * height:
         warnings.warn(
@@ -306,7 +339,11 @@ def _warn_if_sparse(strokes: Sequence[Stroke], counts: Sequence[int], height: fl
 
 
 def text_slots(
-    recipe: TextRecipe, n: int, *, font_registry: FontRegistry | None = None
+    recipe: TextRecipe,
+    n: int,
+    *,
+    font_registry: FontRegistry | None = None,
+    transform: Matrix | None = None,
 ) -> tuple[Points, Points]:
     """Places exactly n slots on the recipe's strokes, in reading order, with unit tangents.
 
@@ -319,6 +356,8 @@ def text_slots(
         recipe: Text, fonts and layout to draw.
         n: Spots to place.
         font_registry: Registry holding the recipe's fonts; None means `bundled_fonts()`.
+        transform: The form's stored transform; only the legibility check uses it, so the
+            warning names stage meters.
 
     Returns:
         slots: An (n, 2) array of points and an (n, 2) array of unit tangents, before any
@@ -348,7 +387,7 @@ def text_slots(
         _place_stroke(stroke, k, grid, char)
         for stroke, k, char in zip(strokes, counts, chars, strict=True)
     ]
-    _warn_if_sparse(strokes, counts, recipe.height)
+    _warn_if_sparse(strokes, counts, recipe.height, transform)
     return np.vstack([points for points, _ in placed]), np.vstack([tan for _, tan in placed])
 
 

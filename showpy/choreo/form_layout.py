@@ -266,14 +266,16 @@ def _transformed(lay: FormLayout, matrix: FloatArray) -> FormLayout:
 
 
 def _text_layout(form: Form, font_registry: FontRegistry | None) -> FormLayout:
+    stored = form.geometry.get("transform")
+    transform = None if stored is None else np.asarray(stored, dtype=float)
     points, tangents = text_slots(
-        text_recipe(form.geometry), _required_count(form), font_registry=font_registry
+        text_recipe(form.geometry),
+        _required_count(form),
+        font_registry=font_registry,
+        transform=transform,
     )
     lay = FormLayout(points=points, tangents=tangents)
-    transform = form.geometry.get("transform")
-    if transform is None:
-        return lay
-    return _transformed(lay, np.asarray(transform, dtype=float))
+    return lay if transform is None else _transformed(lay, transform)
 
 
 def layout(
