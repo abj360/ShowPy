@@ -17,6 +17,9 @@ Contains:
     test_regression_diff_show_reports_a_selection_change: reports a changed named selection
     test_regression_rename_entities_rewrites_expression_selectors: rewrites spot IDs inside
         expression selectors, as cast.rewrite does
+    test_regression_rename_entities_renames_sheet_zones: rewrites zones stored on the sheet
+    test_regression_rename_entities_keeps_selection_order: stores selections as ordered tuples
+    test_rename_entities_equals_rewrite_spot_ids: gives the same show as the cast rename
     test_regression_unpin_normalizes_transition_ids_like_pin: accepts `1->2` in unpin as pin does
 """
 
@@ -25,6 +28,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from showpy.cast.models import Group
+from showpy.cast.rewrite import rewrite_spot_ids
 from showpy.cast.spots import add_spot
 from showpy.choreo.models import (
     FacingMode,
@@ -35,7 +39,9 @@ from showpy.choreo.models import (
     TransitionSpec,
 )
 from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
+from showpy.core.types import Region
 from showpy.notes.models import Anchor, Note
+from showpy.sheet.models import Zone, ZoneKind
 from showpy.show.history import (
     changelog,
     diff_paths,
@@ -185,6 +191,51 @@ def test_rename_entities_rewrites_everything() -> None:
     assert renamed.pins[0].id == "S1"
 
 
+def _full_show() -> Show:
+    show = two_set_show()
+    form = Form(id="f", set="2", kind="line", geometry={}, members=("T1", "T2"))
+    row = PathRow(entity="T1", facing_mode=FacingMode.TOWARD_ENTITY, facing_value="T2")
+    route = Route(id="r", curve={}, members=("T2",), offsets=(0.0,), travel=1.0)
+    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": row}, routes={"r": route})
+    note = Note(id="n", text="x", anchor=Anchor.on_spots(["T1"]), author="d", created_at=AT)
+    override = FacingOverride(entities="T1 + T2", mode=FacingMode.FIXED, value=90.0, start=0, end=4)
+    square = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)))
+    zone = Zone(id="z", kind=ZoneKind.CUSTOM, polygon=square, applies_to=("T1", "T3"))
+    cast = show.cast.model_copy(update={"selections": {"lead": ("T3", "T1")}})
+    return show.model_copy(
+        update={
+            "forms": {"f": form},
+            "transitions": (spec,),
+            "notes": (note,),
+            "facing_overrides": (override,),
+            "pins": (Pin(target="entity", id="T1"),),
+            "zones": (zone,),
+            "sheet": show.sheet.model_copy(update={"zones": (zone,)}),
+            "cast": cast,
+        }
+    )
+
+
+def test_regression_rename_entities_renames_sheet_zones() -> None:
+    """Rewrites `applies_to` of zones stored on the sheet, as rewrite_spot_ids does."""
+    renamed = rename_entities(_full_show(), {"T1": "S1"})
+    assert renamed.sheet.zones[0].applies_to == ("S1", "T3")
+    assert renamed.zones[0].applies_to == ("S1", "T3")
+
+
+def test_regression_rename_entities_keeps_selection_order() -> None:
+    """Stores renamed selections as ordered tuples, the order lane D keeps."""
+    renamed = rename_entities(_full_show(), {"T1": "S1"})
+    assert renamed.cast.selections == {"lead": ("T3", "S1")}
+
+
+def test_rename_entities_equals_rewrite_spot_ids() -> None:
+    show = _full_show()
+    mapping = {"T1": "S1", "T2": "T4", "T4": "T2"}
+    expected = rewrite_spot_ids(show, lambda spot_id: mapping.get(spot_id, spot_id))
+    assert rename_entities(show, mapping) == expected
+
+
 def test_rename_entities_swaps_and_collisions() -> None:
     swapped = rename_entities(two_set_show(), {"T1": "T2", "T2": "T1"})
     assert swapped.sets[0].get("T2").x == 0.0
@@ -300,8 +351,6 @@ def test_regression_diff_show_reports_a_selection_change() -> None:
     assert diff_show(base, edited)
 
 
-@pytest.mark.defect("UP-9.7-44")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-44")
 def test_regression_rename_entities_rewrites_expression_selectors() -> None:
     """Rewrites spot IDs inside expression selectors, as cast.rewrite does (audit 9.7 history)."""
     base = two_set_show()
@@ -309,8 +358,7 @@ def test_regression_rename_entities_rewrites_expression_selectors() -> None:
     renamed = rename_entities(
         base.model_copy(update={"facing_overrides": (override,)}), {"T1": "S1"}
     )
-    entities = renamed.facing_overrides[0].entities
-    assert isinstance(entities, str)
+    entities = str(renamed.facing_overrides[0].entities)
     assert "S1" in entities
     assert "T1" not in entities
 

@@ -10,24 +10,16 @@ Contains:
     changelog(): lists revisions since a revision as terse lines
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
-from showpy.choreo.models import (
-    FacingMode,
-    FacingOverride,
-    PathRow,
-    Placement,
-    Set,
-    TransitionSpec,
-)
+from showpy.cast.rewrite import rewrite_spot_ids
+from showpy.choreo.models import Set, TransitionSpec
 from showpy.core.errors import SchemaError
 from showpy.core.ids import SpotId, format_tid
-from showpy.core.selection import Selection, SelectorField
 from showpy.core.units import angle_diff
 from showpy.core.util import approx_equal, natural_sort
-from showpy.notes.models import Note
 from showpy.show.models import PathDiff, Revision, SetDiff, Show
 from showpy.show.storage import ROOT_REVISION, Workspace
 
@@ -211,47 +203,6 @@ def _require_renamable(show: Show, mapping: Mapping[SpotId, SpotId]) -> None:
         )
 
 
-def _selector(value: SelectorField, rename: Callable[[str], str]) -> SelectorField:
-    if isinstance(value, str):
-        return rename(value)
-    if isinstance(value, Selection):
-        return value.replace(ids=tuple(map(rename, value.ids)))
-    return tuple(map(rename, value))
-
-
-def _row(row: PathRow, rename: Callable[[str], str]) -> PathRow:
-    value = row.facing_value
-    if row.facing_mode is FacingMode.TOWARD_ENTITY and isinstance(value, str):
-        value = rename(value)
-    return row.replace(entity=rename(row.entity), facing_value=value)
-
-
-def _spec(spec: TransitionSpec, rename: Callable[[str], str]) -> TransitionSpec:
-    rows = {rename(e): _row(r, rename) for e, r in spec.rows.items()}
-    routes = {k: r.replace(members=tuple(map(rename, r.members))) for k, r in spec.routes.items()}
-    return spec.replace(rows=rows, routes=routes)
-
-
-def _override(item: FacingOverride, rename: Callable[[str], str]) -> FacingOverride:
-    value = item.value
-    if item.mode is FacingMode.TOWARD_ENTITY and isinstance(value, str):
-        value = rename(value)
-    return item.replace(entities=_selector(item.entities, rename), value=value)
-
-
-def _note(note: Note, rename: Callable[[str], str]) -> Note:
-    spots = note.anchor.spots
-    if spots is None:
-        return note
-    anchor = note.anchor.replace(spots=tuple(map(rename, spots)))
-    return note.replace(anchor=anchor)
-
-
-def _placements(s: Set, rename: Callable[[str], str]) -> Set:
-    rows: tuple[Placement, ...] = tuple(p.replace(entity=rename(p.entity)) for p in s.placements)
-    return s.replace(placements=rows)
-
-
 def rename_entities(show: Show, mapping: Mapping[SpotId, SpotId]) -> Show:
     """Rewrites spot IDs everywhere in a show.
 
@@ -265,24 +216,7 @@ def rename_entities(show: Show, mapping: Mapping[SpotId, SpotId]) -> Show:
     (('S1', 'T2', 'T3', 'T4'), 'S1')
     """
     _require_renamable(show, mapping)
-
-    def rename(spot: str) -> str:
-        return mapping.get(spot, spot)
-
-    cast = show.cast.replace(
-        spots=tuple(s.replace(id=rename(s.id)) for s in show.cast.spots),
-        selections={k: frozenset(map(rename, v)) for k, v in show.cast.selections.items()},
-    )
-    return show.replace(
-        cast=cast,
-        sets=tuple(_placements(s, rename) for s in show.sets),
-        forms={k: f.replace(members=tuple(map(rename, f.members))) for k, f in show.forms.items()},
-        transitions=tuple(_spec(spec, rename) for spec in show.transitions),
-        notes=tuple(_note(n, rename) for n in show.notes),
-        facing_overrides=tuple(_override(o, rename) for o in show.facing_overrides),
-        zones=tuple(z.replace(applies_to=_selector(z.applies_to, rename)) for z in show.zones),
-        pins=tuple(p.replace(id=rename(p.id)) if p.target == "entity" else p for p in show.pins),
-    )
+    return rewrite_spot_ids(show, lambda spot_id: mapping.get(spot_id, spot_id))
 
 
 def _line(revision: Revision) -> str:
