@@ -7,6 +7,7 @@ characters are laid out one by one in logical order.
 
 Contains:
     MAX_LAYOUT_CHARS: bounds the characters of one laid-out text
+    MAX_LAYOUT_EXTENT_M: bounds how far from the origin a laid stroke may reach
     layout_text(): lays multi-line text out as glyph strokes on the stage plane
 """
 
@@ -29,7 +30,6 @@ from showpy.geo.affine import (
 )
 from showpy.geo.checks import require_finite_as
 from showpy.geo.curves import Polyline, SvgCurve
-from showpy.geo.font_strokes import sample_stroke
 from showpy.geo.fonts import FontRegistry, bundled_fonts
 from showpy.geo.models import (
     DEFAULT_LINE_SPACING,
@@ -39,9 +39,11 @@ from showpy.geo.models import (
     TextAlign,
     TextAnchor,
 )
-from showpy.geo.svg import LinePiece, Subpath, parse_path
+from showpy.geo.svg import ArcPiece, CubicPiece, LinePiece, Piece, QuadPiece, Subpath, parse_path
 
 MAX_LAYOUT_CHARS = 1_000
+# A stage is ~100 m; squared coordinates stay far below the float range the curve tables square.
+MAX_LAYOUT_EXTENT_M = 1e6
 LINE_BREAKS = (("\r\n", "\n"), ("\r", "\n"))
 ALIGN_SHARE: Mapping[TextAlign, float] = MappingProxyType(
     {"left": 0.0, "center": 0.5, "right": 1.0}
@@ -67,12 +69,16 @@ class _Placed:
 def _check_numbers(
     height: Meters, at: Point, rotation: Degrees, letter_spacing: float, line_spacing: float
 ) -> None:
-    require_finite_as(GeometryError, height, name="height", low=0.0, low_open=True)
+    require_finite_as(
+        GeometryError, height, name="height", low=0.0, low_open=True, high=MAX_LAYOUT_EXTENT_M
+    )
     require_finite_as(GeometryError, line_spacing, name="line_spacing", low=0.0, low_open=True)
     require_finite_as(GeometryError, letter_spacing, name="letter_spacing")
     require_finite_as(GeometryError, rotation, name="rotation")
-    require_finite_as(GeometryError, at[0], name="at.x")
-    require_finite_as(GeometryError, at[1], name="at.y")
+    for name, value in (("at.x", at[0]), ("at.y", at[1])):
+        require_finite_as(
+            GeometryError, value, name=name, low=-MAX_LAYOUT_EXTENT_M, high=MAX_LAYOUT_EXTENT_M
+        )
 
 
 def _chain(fonts: Sequence[str], registry: FontRegistry, height: Meters) -> list[_ChainFont]:
@@ -150,10 +156,8 @@ def _stroke(subpath: Subpath, matrix: Matrix, d: str) -> Polyline | SvgCurve:
     """Maps one stroke to stage meters as a Polyline when straight, else as an SvgCurve.
 
     A closed straight stroke drops its last vertex, which `Z` always puts back on the start.
-    A curved stroke's samples are mapped once so an overflow surfaces here, not on evaluation.
     """
     if not all(isinstance(piece, LinePiece) for piece in subpath.pieces):
-        transform_points(sample_stroke(d)[0], matrix)
         transform = tuple((float(a), float(b), float(c)) for a, b, c in matrix.tolist())
         return SvgCurve(d=d, transform=transform, closed=subpath.closed)
     ends = [subpath.start, *(piece.end for piece in subpath.pieces)]
@@ -163,8 +167,35 @@ def _stroke(subpath: Subpath, matrix: Matrix, d: str) -> Polyline | SvgCurve:
     return Polyline(points=points, closed=subpath.closed)
 
 
+def _piece_hull(piece: Piece) -> list[Point]:
+    """Returns points whose convex hull holds the piece: Bézier control points, an arc's box."""
+    if isinstance(piece, QuadPiece):
+        return [piece.control, piece.end]
+    if isinstance(piece, CubicPiece):
+        return [piece.c1, piece.c2, piece.end]
+    if isinstance(piece, ArcPiece):
+        radius = max(piece.rx, piece.ry)
+        cx, cy = piece.center
+        return [(cx + dx, cy + dy) for dx in (-radius, radius) for dy in (-radius, radius)]
+    return [piece.end]
+
+
+def _require_within_extent(subpath: Subpath, matrix: Matrix, placed: _Placed) -> None:
+    """Rejects a stroke whose mapped hull reaches past `MAX_LAYOUT_EXTENT_M` from the origin."""
+    hull = [subpath.start, *(p for piece in subpath.pieces for p in _piece_hull(piece))]
+    reach = float(np.abs(transform_points(np.asarray(hull, dtype=float), matrix)).max())
+    if reach <= MAX_LAYOUT_EXTENT_M:
+        return
+    raise GeometryError(
+        f"glyph {placed.char!r} reaches {reach:.3g} m from the origin, over the "
+        f"{MAX_LAYOUT_EXTENT_M:g} m layout extent",
+        hint="use a smaller height or spacing, or fewer lines",
+        context={"char": placed.char, "reach": reach, "max_extent": MAX_LAYOUT_EXTENT_M},
+    )
+
+
 def _glyph_strokes(placed: _Placed, matrix: Matrix) -> tuple[Polyline | SvgCurve, ...]:
-    """Maps every stroke of a placed glyph, rejecting a stroke that is not one subpath."""
+    """Maps every stroke of a placed glyph, rejecting one that is not one subpath or too far."""
     strokes = []
     for d in placed.glyph.strokes:
         subpaths = parse_path(d)
@@ -174,6 +205,7 @@ def _glyph_strokes(placed: _Placed, matrix: Matrix) -> tuple[Polyline | SvgCurve
                 hint="write each stroke as one subpath starting with M",
                 context={"font": placed.source.uri, "glyph": placed.char, "stroke": d},
             )
+        _require_within_extent(subpaths[0], matrix, placed)
         strokes.append(_stroke(subpaths[0], matrix, d))
     return tuple(strokes)
 
@@ -229,7 +261,9 @@ def layout_text(
     `MAX_LAYOUT_CHARS` bounds the raw input characters, checked before NFC normalization, which
     at most triples them. Then `\r\n` or `\r` count as one line break, and empty lines at the
     end of the text are dropped; interior empty lines stay as spacing. Every font in the chain
-    is resolved, even one no character uses.
+    is resolved, even one no character uses. No laid stroke may reach farther than
+    `MAX_LAYOUT_EXTENT_M` from the origin on either axis, so every returned curve evaluates
+    without overflow.
 
     Args:
         text: Characters to lay out; `\n` starts a new line.

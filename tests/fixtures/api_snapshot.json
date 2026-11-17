@@ -459,6 +459,9 @@
   "MAX_LAYOUT_CHARS": {
     "constant": "1000"
   },
+  "MAX_LAYOUT_EXTENT_M": {
+    "constant": "1000000.0"
+  },
   "MAX_POINTS": {
     "constant": "1000000"
   },

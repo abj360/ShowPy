@@ -10,18 +10,20 @@ Contains:
     test_fuzz_register_font_font_shaped_json: raises only ShowPyError and never changes the
         registry it extends
     test_fuzz_layout_text_arbitrary_text: raises only ShowPyError for arbitrary Unicode text laid
-        out with the bundled fallback chain
+        out with the bundled fallback chain, then evaluated
     test_fuzz_layout_text_extreme_numbers: raises only ShowPyError for any finite height,
-        position, spacing and rotation
+        position, spacing and rotation, laying out and evaluating every stroke
 """
 
 import json
+from collections.abc import Iterable
 from typing import Any
 
 from hypothesis import given
 from hypothesis import strategies as st
 
 from showpy.geo.fonts import FontRegistry, load_font, register_font
+from showpy.geo.models import LaidGlyph
 from showpy.geo.text_layout import MAX_LAYOUT_CHARS, layout_text
 from tests.helpers import only_showpy_errors
 
@@ -72,6 +74,12 @@ def _encode(document: dict[str, Any]) -> bytes:
     return json.dumps(document).encode()
 
 
+def _evaluate(glyphs: Iterable[LaidGlyph]) -> None:
+    for glyph in glyphs:
+        for stroke in glyph.strokes:
+            stroke.point_at(stroke.length() / 2)
+
+
 @given(st.binary(max_size=300))
 def test_fuzz_load_font_raw_bytes(data: bytes) -> None:
     """Raises only ShowPyError for arbitrary bytes."""
@@ -95,8 +103,8 @@ def test_fuzz_register_font_font_shaped_json(document: dict[str, Any]) -> None:
 
 @given(LAYOUT_TEXT)
 def test_fuzz_layout_text_arbitrary_text(text: str) -> None:
-    """Raises only ShowPyError for arbitrary Unicode text laid out with the bundled chain."""
-    only_showpy_errors(lambda: layout_text(text, BUNDLED_CHAIN, 1.0, (0.0, 0.0)), text)
+    """Raises only ShowPyError laying out and evaluating arbitrary text in the bundled chain."""
+    only_showpy_errors(lambda: _evaluate(layout_text(text, BUNDLED_CHAIN, 1.0, (0.0, 0.0))), text)
 
 
 @given(
@@ -115,16 +123,18 @@ def test_fuzz_layout_text_extreme_numbers(
     line_spacing: float,
     rotation: float,
 ) -> None:
-    """Raises only ShowPyError for any finite height, position, spacing and rotation."""
+    """Raises only ShowPyError laying out and evaluating text at any finite size and place."""
     only_showpy_errors(
-        lambda: layout_text(
-            text,
-            BUNDLED_CHAIN,
-            height,
-            at,
-            rotation=rotation,
-            letter_spacing=letter_spacing,
-            line_spacing=line_spacing,
+        lambda: _evaluate(
+            layout_text(
+                text,
+                BUNDLED_CHAIN,
+                height,
+                at,
+                rotation=rotation,
+                letter_spacing=letter_spacing,
+                line_spacing=line_spacing,
+            )
         ),
         (text, height, at, letter_spacing, line_spacing, rotation),
     )

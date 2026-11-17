@@ -25,7 +25,7 @@ from showpy.core.util import approx_equal
 from showpy.geo.curves import Polyline, SvgCurve
 from showpy.geo.fonts import FontRegistry, bundled_fonts, register_font
 from showpy.geo.models import Font, LaidGlyph, TextAlign, TextAnchor
-from showpy.geo.text_layout import MAX_LAYOUT_CHARS, layout_text
+from showpy.geo.text_layout import MAX_LAYOUT_CHARS, MAX_LAYOUT_EXTENT_M, layout_text
 from tests.fixtures.fonts import TINY, tiny_bytes
 
 TOL = 1e-12
@@ -36,6 +36,9 @@ TINY_REGISTRY, TINY_URI = register_font(bundled_fonts(), tiny_bytes())
 SIMPLEX_ADVANCE = 5.0
 SIMPLEX_H_INK = 4.0
 ANCHORS: tuple[TextAnchor, ...] = ("baseline", "middle", "top")
+SWEEP_HEIGHTS = (1.0, 4e5, 1e300, 1e305)
+SWEEP_ORIGINS = ((0.0, 0.0), (1.7e308, 1.7e308), (-1.7e308, -1.7e308))
+LARGEST_ACCEPTED_HEIGHT = 4e5
 ALIGN_SHARES: tuple[tuple[TextAlign, float], ...] = (("center", 0.5), ("right", 1.0))
 
 
@@ -244,6 +247,61 @@ def test_regression_huge_finite_values_raise_showpy_error() -> None:
         arguments = {"fonts": SIMPLEX, **call}
         with pytest.raises(GeometryError):
             layout_text(**arguments)  # type: ignore[arg-type]
+
+
+def _evaluate(glyphs: Iterable[LaidGlyph]) -> None:
+    for glyph in glyphs:
+        for stroke in glyph.strokes:
+            half = stroke.length() / 2
+            assert np.isfinite(stroke.point_at(half)).all()
+            assert np.isfinite(stroke.tangent_at(half)).all()
+
+
+def test_regression_laid_text_evaluates_without_overflow() -> None:
+    """Rejects text too large to evaluate; every stroke it returns evaluates without a warning."""
+    accepted = []
+    for height in SWEEP_HEIGHTS:
+        for at in SWEEP_ORIGINS:
+            for fonts in (SIMPLEX, RELIEF):
+                try:
+                    glyphs = layout_text("HO", fonts, height, at)
+                except GeometryError:
+                    continue
+                _evaluate(glyphs)
+                accepted.append((height, at))
+    assert (LARGEST_ACCEPTED_HEIGHT, (0.0, 0.0)) in accepted
+    assert (1.0, (0.0, 0.0)) in accepted
+
+
+def test_layout_caps_the_laid_extent() -> None:
+    """Accepts strokes up to MAX_LAYOUT_EXTENT_M from the origin and rejects any reaching past."""
+    edge = MAX_LAYOUT_EXTENT_M - 10.0
+    _evaluate(layout_text("HO", RELIEF, 1.0, (edge, -edge), rotation=30.0))
+    too_far = (
+        {"height": MAX_LAYOUT_EXTENT_M * 2},
+        {"at": (MAX_LAYOUT_EXTENT_M * 2, 0.0)},
+        {"at": (edge, 0.0), "height": 20.0},
+        {"letter_spacing": MAX_LAYOUT_EXTENT_M},
+        {"text": "H\nH", "line_spacing": MAX_LAYOUT_EXTENT_M * 2},
+    )
+    for changes in too_far:
+        call = {"text": "HH", "fonts": SIMPLEX, "height": 1.0, "at": (0.0, 0.0), **changes}
+        with pytest.raises(GeometryError):
+            layout_text(**call)  # type: ignore[arg-type]
+
+
+def test_layout_bounds_quadratic_and_arc_strokes_by_their_hulls() -> None:
+    """Bounds Q and A strokes by their hulls, so end points inside the extent are not enough."""
+    bulges = {
+        "Q": {"advance": 10, "strokes": ["M0 0 Q5 10 10 0"]},
+        "A": {"advance": 10, "strokes": ["M0 0 A5 5 0 0 0 10 0"]},
+    }
+    registry, _ = register_font(bundled_fonts(), tiny_bytes(glyphs=bulges))
+    near_top = (0.0, MAX_LAYOUT_EXTENT_M - 1.0)
+    for char in bulges:
+        _evaluate(layout_text(char, ["tiny"], 10.0, (0.0, 0.0), font_registry=registry))
+        with pytest.raises(GeometryError):
+            layout_text(char, ["tiny"], 10.0, near_top, font_registry=registry)
 
 
 def test_layout_drops_trailing_empty_lines() -> None:

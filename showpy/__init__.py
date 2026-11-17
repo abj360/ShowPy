@@ -507,6 +507,7 @@ if TYPE_CHECKING:
     )
     from showpy.geo.text_layout import (
         MAX_LAYOUT_CHARS,
+        MAX_LAYOUT_EXTENT_M,
         layout_text,
     )
     from showpy.geo.transforms import (
@@ -811,6 +812,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "MAX_GRID_CELLS": ("showpy.core.caps", "MAX_GRID_CELLS"),
     "MAX_IMAGE_PIXELS": ("showpy.core.caps", "MAX_IMAGE_PIXELS"),
     "MAX_LAYOUT_CHARS": ("showpy.geo.text_layout", "MAX_LAYOUT_CHARS"),
+    "MAX_LAYOUT_EXTENT_M": ("showpy.geo.text_layout", "MAX_LAYOUT_EXTENT_M"),
     "MAX_POINTS": ("showpy.core.caps", "MAX_POINTS"),
     "MAX_RANGE": ("showpy.core.caps", "MAX_RANGE"),
     "MAX_TABLE": ("showpy.core.caps", "MAX_TABLE"),
@@ -1300,6 +1302,7 @@ __all__ = [
     "MAX_GRID_CELLS",
     "MAX_IMAGE_PIXELS",
     "MAX_LAYOUT_CHARS",
+    "MAX_LAYOUT_EXTENT_M",
     "MAX_POINTS",
     "MAX_RANGE",
     "MAX_TABLE",
