@@ -8,6 +8,7 @@ Contains:
 
 from collections.abc import Sequence
 
+from showpy.choreo.match_ops import forms_of_set
 from showpy.choreo.models import PathRow
 from showpy.core.errors import UnknownRefError
 from showpy.core.ids import format_tid, parse_tid
@@ -39,10 +40,12 @@ def _covers_placement(held: Sequence[Pin], set_id: str, entity: str) -> bool:
     )
 
 
-def _covers_form(held: Sequence[Pin], form_id: str, set_id: str) -> bool:
+def _covers_form(show: Show, held: Sequence[Pin], form_id: str) -> bool:
     return any(
-        (p.target == "form" and p.id == form_id) or (p.target == "set" and p.id == set_id)
+        (p.target == "form" and p.id == form_id)
+        or (p.target == "set" and form_id in forms_of_set(show, p.id))
         for p in held
+        if p.target == "form" or p.id in show.set_ids()
     )
 
 
@@ -60,11 +63,9 @@ def _flag_placements(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
 
 
 def _flag_forms(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
+    rescoped = set(forms_of_set(show, scope.id)) if scope.target == "set" else {scope.id}
     forms = {
-        k: f.replace(locked=_covers_form(held, k, f.set))
-        if (scope.target == "form" and k == scope.id)
-        or (scope.target == "set" and f.set == scope.id)
-        else f
+        k: f.replace(locked=_covers_form(show, held, k)) if k in rescoped else f
         for k, f in show.forms.items()
     }
     return show.replace(forms=forms)

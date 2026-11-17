@@ -16,6 +16,7 @@ from collections.abc import Iterable
 from typing import Literal
 
 from showpy.choreo.engine import PathEngine
+from showpy.choreo.match_ops import forms_of_set
 from showpy.choreo.models import Set, TransitionSpec
 from showpy.core.errors import ContinuityError, ShowPyError
 from showpy.core.ids import format_tid, parse_ref
@@ -111,6 +112,21 @@ def _forms(show: Show, candidate: Set) -> list[ValidationIssue]:
     return issues
 
 
+def _stale_forms(show: Show, candidate: Set) -> list[ValidationIssue]:
+    listed = forms_of_set(show, candidate.id)
+    return [
+        _issue(
+            WARNING,
+            "STALE_FORM",
+            f"set {candidate.id} form {form_id}",
+            f"set {candidate.id} no longer lists form {form_id}",
+            "re-place the set's forms, or remove the form",
+        )
+        for form_id, form in show.forms.items()
+        if form.set == candidate.id and form_id not in listed
+    ]
+
+
 def _facings(candidate: Set) -> list[ValidationIssue]:
     return [
         _issue(
@@ -134,7 +150,10 @@ def validate_set(show: Show, candidate: Set) -> ValidationReport:
     True
     """
     issues = _membership(show, candidate) + _pins(show, candidate) + _forms(show, candidate)
-    return ValidationReport(issues=tuple(issues + _facings(candidate)))
+    issues += _facings(candidate)
+    if candidate.id in show.set_ids():
+        issues += _stale_forms(show, candidate)
+    return ValidationReport(issues=tuple(issues))
 
 
 def _with_spec(show: Show, spec: TransitionSpec) -> Show:

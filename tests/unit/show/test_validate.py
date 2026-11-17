@@ -56,6 +56,10 @@ Contains:
         coordinate
     test_regression_validate_show_reports_comments_anchored_to_missing_items: reports a comment
         anchored to a set that does not exist
+    test_regression_validate_show_warns_about_stale_forms: warns about a form its set no longer
+        lists
+    test_validate_show_accepts_a_set_whose_forms_are_all_listed: raises no stale-form warning when
+        every form is listed
 """
 
 import math
@@ -88,6 +92,7 @@ from showpy.show.validate import (
 )
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
 from tests.fixtures.shows import two_set_show
+from tests.helpers import replaced_form_show
 
 
 def _codes(report: ValidationReport) -> set[str]:
@@ -496,3 +501,20 @@ def test_regression_validate_show_reports_comments_anchored_to_missing_items() -
     comment = Comment(id="c1", anchor=Anchor.on_set(GHOST), text="check")
     report = validate(two_set_show(), comments=(comment,))
     assert any(GHOST in f"{i.where} {i.message}" for i in report.issues)
+
+
+def test_regression_validate_show_warns_about_stale_forms() -> None:
+    """Warns about a form its set no longer lists, naming the form and the set (ruling L-G3)."""
+    report = validate_show(replaced_form_show())
+    (issue,) = [i for i in report.issues if i.code == "STALE_FORM"]
+    assert issue.level == "warning"
+    assert "a" in issue.message
+    assert "set 2" in issue.where
+    assert report.ok
+
+
+def test_validate_show_accepts_a_set_whose_forms_are_all_listed() -> None:
+    """Raises no stale-form warning when every form is listed."""
+    show = replaced_form_show()
+    clean = show.replace(forms={"b": show.forms["b"]})
+    assert [i for i in validate_show(clean).issues if i.code == "STALE_FORM"] == []

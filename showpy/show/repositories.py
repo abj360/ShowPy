@@ -15,6 +15,7 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Protocol, override
 
+from showpy.choreo.match_ops import forms_of_set
 from showpy.choreo.models import Form, Set, TransitionSpec
 from showpy.core.errors import ConflictError, SchemaError, StorageError, UnknownRefError
 from showpy.core.ids import SetId, TransitionId
@@ -360,10 +361,9 @@ class DocumentRepository:
         )
 
     def get_forms(self, show_id: str, set_id: SetId) -> tuple[Form, ...]:
-        """Returns a set's forms sorted by ID."""
+        """Returns the forms a set lists, sorted by ID; stale forms stay out."""
         show = self.get_show(show_id)
-        show.set(set_id)
-        return tuple(f for _, f in sorted(show.forms.items()) if f.set == set_id)
+        return tuple(f for _, f in sorted(forms_of_set(show, set_id).items()))
 
     def put_forms(
         self,
@@ -374,7 +374,7 @@ class DocumentRepository:
         expected_revision: str,
         at: datetime,
     ) -> Revision:
-        """Replaces a set's forms; every form must name that set."""
+        """Replaces a set's forms; every form must name that set. Stale forms are kept."""
         wrong = [f.id for f in forms if f.set != set_id]
         if wrong:
             raise SchemaError(
@@ -383,8 +383,8 @@ class DocumentRepository:
                 context={"set": set_id, "forms": wrong},
             )
         show = self.get_show(show_id, expected_revision or None)
-        show.set(set_id)
-        kept = {k: f for k, f in show.forms.items() if f.set != set_id}
+        replaced = forms_of_set(show, set_id)
+        kept = {k: f for k, f in show.forms.items() if k not in replaced}
         edited = show.replace(forms={**kept, **{f.id: f for f in forms}})
         return self.put_show(
             show_id,

@@ -14,6 +14,10 @@ Contains:
         dot or stores it under another name
     test_regression_overlong_show_id_is_rejected_or_stored_safely: rejects a 300-character show ID
         or stores it under a short name
+    test_regression_get_forms_omits_forms_the_set_no_longer_lists: leaves a stale form out of a
+        set's forms
+    test_put_forms_keeps_stale_forms_of_the_set_in_the_show: keeps a stale form stored when the
+        set's forms are replaced
 """
 
 import contextlib
@@ -30,7 +34,7 @@ from showpy.show.file_repository import FileRepository
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import Repository
 from tests.fixtures.shows import two_set_show
-from tests.helpers import fails_after
+from tests.helpers import fails_after, replaced_form_show
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 SHOW_ID = "show-1"
@@ -153,3 +157,19 @@ def test_regression_overlong_show_id_is_rejected_or_stored_safely(tmp_path: Path
     """Rejects a 300-character show ID or stores it under a short name (audit 9.7 item 8)."""
     created = _created_folders(FileRepository(tmp_path), "a" * MAX_SHOW_ID_LENGTH)
     assert created is None or all(len(n) <= SAFE_NAME_MAX for n in created)
+
+
+def test_regression_get_forms_omits_forms_the_set_no_longer_lists() -> None:
+    """Leaves a stale form out of a set's forms (ruling L-G3)."""
+    repo = InMemoryRepository()
+    repo.put_show(SHOW_ID, replaced_form_show(), expected_revision="", at=AT)
+    assert [f.id for f in repo.get_forms(SHOW_ID, "2")] == ["b"]
+
+
+def test_put_forms_keeps_stale_forms_of_the_set_in_the_show() -> None:
+    """Keeps a stale form stored when the set's forms are replaced through put_forms."""
+    repo = InMemoryRepository()
+    revision = repo.put_show(SHOW_ID, replaced_form_show(), expected_revision="", at=AT)
+    current = repo.get_forms(SHOW_ID, "2")
+    repo.put_forms(SHOW_ID, "2", current, expected_revision=revision.id, at=AT)
+    assert sorted(repo.get_show(SHOW_ID).forms) == ["a", "b"]
