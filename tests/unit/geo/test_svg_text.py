@@ -32,10 +32,22 @@ Contains:
     test_regression_parse_path_rejects_unicode_digits: rejects the Arabic-Indic digit three instead
         of reading it as 3
     test_regression_parse_path_requires_a_leading_move: rejects path data that does not start with M
+    test_regression_parse_path_rejects_oversized_data: raises SchemaError for path data over
+        MAX_TEXT_CHARS before tokenizing
+    test_regression_parse_path_rejects_a_command_where_a_number_belongs: raises SchemaError for "MM"
+        instead of leaking ValueError
+    test_regression_parse_path_rejects_arcs_that_overflow: raises SchemaError for an arc with a
+        1e300 endpoint instead of leaking OverflowError
     test_regression_svg_outline_rejects_empty_data: raises a ShowPyError for empty data instead of
         leaking ValueError
     test_regression_svg_outline_rejects_bad_path_index: raises a ShowPyError for an out-of-range
         path_index instead of leaking IndexError
+    test_regression_parse_path_rejects_arcs_with_non_finite_geometry: raises SchemaError for 1e80
+        radii instead of returning NaN angles
+    test_regression_svg_outline_rejects_arcs_with_non_finite_geometry: raises SchemaError for 1e80
+        radii instead of leaking IndexError
+    test_regression_svg_outline_rejects_a_path_with_too_many_pieces: raises a ShowPyError for
+        50,000 pieces
 """
 
 import math
@@ -46,6 +58,7 @@ import time
 import numpy as np
 import pytest
 
+from showpy.core.caps import MAX_TEXT_CHARS
 from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
 from showpy.core.types import Box2
 from showpy.core.util import approx_equal
@@ -163,8 +176,6 @@ def _median_parse_times(arc_count: int) -> tuple[float, float]:
 
 
 @pytest.mark.slow
-@pytest.mark.defect("UP-9.1-09")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-09")
 @fails_after(SCALING_TIMEOUT_S)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_parse_path_scales_linearly_with_arc_count() -> None:
@@ -222,12 +233,49 @@ def test_regression_svg_outline_reads_basic_shapes() -> None:
     assert curves[0].closed
 
 
-@pytest.mark.defect("UP-9.1-43")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-43")
 def test_regression_parse_path_rejects_closepath_with_missing_arguments() -> None:
     """Raises SchemaError for "M0 0 L1 Z" instead of leaking ValueError (audit 9.1)."""
     with pytest.raises(SchemaError):
         parse_path("M0 0 L1 Z")
+
+
+def test_regression_parse_path_rejects_oversized_data() -> None:
+    """Raises SchemaError for path data over MAX_TEXT_CHARS before tokenizing it."""
+    with pytest.raises(SchemaError):
+        parse_path("M0 0" + " " * MAX_TEXT_CHARS)
+
+
+def test_regression_parse_path_rejects_a_command_where_a_number_belongs() -> None:
+    """Raises SchemaError for "MM" instead of leaking ValueError from float("M")."""
+    with pytest.raises(SchemaError):
+        parse_path("MM")
+
+
+def test_regression_parse_path_rejects_arcs_that_overflow() -> None:
+    """Raises SchemaError for an arc ending at 1e300 instead of leaking OverflowError."""
+    with pytest.raises(SchemaError):
+        parse_path("M0 0 A.1 .1 0 0 1 .1e300 .1")
+
+
+NAN_ARC_PATH = "M0 0 A1e80 1e80 0 0 1 1 1"
+
+
+def test_regression_parse_path_rejects_arcs_with_non_finite_geometry() -> None:
+    """Raises SchemaError for 1e80 radii instead of returning an arc with NaN angles."""
+    with pytest.raises(SchemaError):
+        parse_path(NAN_ARC_PATH)
+
+
+def test_regression_svg_outline_rejects_arcs_with_non_finite_geometry() -> None:
+    """Raises SchemaError for 1e80 radii instead of leaking IndexError and a RuntimeWarning."""
+    with pytest.raises(SchemaError):
+        svg_outline(NAN_ARC_PATH + " L2 0", BOX)
+
+
+def test_regression_svg_outline_rejects_a_path_with_too_many_pieces() -> None:
+    """Raises a ShowPyError for 50,000 pieces instead of building a 12.8-million-sample table."""
+    with pytest.raises(ShowPyError):
+        svg_outline("M0 0" + "h1" * 50_000, BOX)
 
 
 @pytest.mark.defect("UP-9.1-44")
@@ -254,8 +302,6 @@ def test_regression_parse_path_rejects_fractional_arc_flag() -> None:
         parse_path("M0 0 a1 1 0 0.5 0 1 1")
 
 
-@pytest.mark.defect("UP-9.1-47")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-47")
 def test_regression_parse_path_rejects_overflowing_numbers() -> None:
     """Rejects 1e400 instead of turning it into infinity (audit 9.1)."""
     with pytest.raises(SchemaError):

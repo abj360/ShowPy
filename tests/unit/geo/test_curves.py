@@ -10,6 +10,12 @@ Contains:
         samples
     test_regression_spiral_rejects_infinite_turns: rejects infinite turns with a ShowPyError instead
         of leaking OverflowError
+    test_regression_spiral_rejects_huge_finite_and_numpy_turns: raises GeometryError for 1e300
+        turns and numpy scalars instead of overflowing
+    test_regression_spiral_table_cap_sits_between_976_and_977_turns: builds 976 turns and rejects
+        977
+    test_regression_spline_rejects_a_table_over_the_cap: rejects a 4,000-point spline table
+    test_regression_svg_curve_rejects_a_table_over_the_cap: rejects a 50,000-piece SVG table
     test_regression_trimmed_curve_rejects_out_of_range_arc_lengths: rejects s0/s1 outside [0, L] of
         an open base instead of reporting length 15
     test_regression_composite_rejects_gapped_parts: rejects parts whose ends do not meet instead of
@@ -213,8 +219,6 @@ def test_regression_model_copy_drops_cached_arc_length_table() -> None:
     assert bigger.length() > small.length() * 2
 
 
-@pytest.mark.defect("UP-9.1-04")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-04")
 @fails_after(SIGNAL_TIMEOUT_S)
 @pytest.mark.skipif(sys.platform != "linux", reason="needs signal timeout and RLIMIT_AS")
 def test_regression_spiral_rejects_unbounded_turns() -> None:
@@ -226,12 +230,46 @@ def test_regression_spiral_rejects_unbounded_turns() -> None:
         spiral((0.0, 0.0), 1.0, 2.0, HUGE_TURNS).length()
 
 
-@pytest.mark.defect("UP-9.1-05")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-05")
 def test_regression_spiral_rejects_infinite_turns() -> None:
     """Rejects infinite turns with a ShowPyError instead of leaking OverflowError (audit 9.1)."""
     with pytest.raises(GeometryError):
         spiral((0.0, 0.0), 1.0, 2.0, math.inf).length()
+
+
+@pytest.mark.parametrize(
+    "turns", [1e300, np.float64(1e300), np.float64(math.inf), np.float64(math.nan), -1.0, 0.0]
+)
+def test_regression_spiral_rejects_huge_finite_and_numpy_turns(turns: float) -> None:
+    """Raises GeometryError for 1e300 turns and numpy scalars instead of overflowing."""
+    with pytest.raises(GeometryError):
+        spiral((0.0, 0.0), 1.0, 2.0, turns)
+
+
+SPIRAL_MAX_TURNS = 976
+SPIRAL_MIN_REJECTED_TURNS = 977
+OVER_TABLE_PIECES = 4000
+OVER_TABLE_SVG_PIECES = 50_000
+
+
+def test_regression_spiral_table_cap_sits_between_976_and_977_turns() -> None:
+    """Builds a 976-turn spiral (999,425 samples) and rejects 977 turns (1,000,449 samples)."""
+    assert spiral((0.0, 0.0), 1.0, 2.0, SPIRAL_MAX_TURNS).turns == SPIRAL_MAX_TURNS
+    with pytest.raises(GeometryError):
+        spiral((0.0, 0.0), 1.0, 2.0, SPIRAL_MIN_REJECTED_TURNS)
+
+
+def test_regression_spline_rejects_a_table_over_the_cap() -> None:
+    """Raises GeometryError for a 4,000-point spline (1,023,745 samples) instead of tabulating."""
+    points = tuple((float(i), float(i % 7)) for i in range(OVER_TABLE_PIECES))
+    with pytest.raises(GeometryError):
+        SplineCurve(points=points).length()
+
+
+def test_regression_svg_curve_rejects_a_table_over_the_cap() -> None:
+    """Raises GeometryError for 50,000 pieces (12.8 million samples) instead of tabulating."""
+    curve = SvgCurve(d="M0 0" + "h1" * OVER_TABLE_SVG_PIECES)
+    with pytest.raises(GeometryError):
+        curve.length()
 
 
 @pytest.mark.defect("UP-9.1-20")

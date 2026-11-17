@@ -9,7 +9,7 @@ Contains:
     CurveBase.tangent_at(): returns unit tangents at arc lengths
     CurveBase.normal_at(): returns unit left normals at arc lengths
     CurveBase.project(): returns the arc length of the closest point
-    CurveBase.to_polyline(): approximates the curve within a chord error
+    CurveBase.to_polyline(): approximates the curve within a chord error, capped in size
     CurveBase.to_shapely(): returns a LineString or LinearRing
     CurveBase.construction(): returns the JSON recipe of the curve
 """
@@ -23,8 +23,10 @@ import numpy as np
 import numpy.typing as npt
 import shapely
 
-from showpy.core.errors import ZeroLengthError
+from showpy.core.caps import MAX_POINTS, MAX_TABLE, require_size
+from showpy.core.errors import GeometryError, ZeroLengthError
 from showpy.core.types import FrozenModel, Meters, Point, Points
+from showpy.geo.checks import require_finite_as
 
 TABLE_SAMPLES = 2048
 INITIAL_SPLITS = 8
@@ -109,6 +111,7 @@ class CurveBase(FrozenModel):
 
     @cached_property
     def _table(self) -> tuple[FloatArray, FloatArray]:
+        require_size(self._table_size(), MAX_TABLE, what="curve table samples", error=GeometryError)
         t = np.linspace(0.0, 1.0, self._table_size())
         pts = self._native(t)
         s = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(pts, axis=0), axis=1))])
@@ -193,23 +196,37 @@ class CurveBase(FrozenModel):
         return float(self._wrap(np.array([(lo + hi) / 2]))[0])
 
     def to_polyline(self, tol: float = 0.01) -> Points:
-        """Returns vertices from start to end whose chords stay within `tol` of the curve."""
+        """Returns vertices from start to end whose chords stay within `tol` of the curve.
+
+        Raises:
+            GeometryError: `tol` is not a finite number above 0, or the result would pass
+                `MAX_POINTS` vertices.
+        """
+        tol = require_finite_as(GeometryError, tol, name="tol", low=0.0, low_open=True)
         breaks = np.unique(np.concatenate([self._breaks(), [0.0, self.length()]]))
         stations: list[float] = [float(breaks[0])]
         for a, b in itertools.pairwise(breaks):
             for lo, hi in _pairs(np.linspace(a, b, INITIAL_SPLITS + 1)):
-                stations.extend(self._subdivide(lo, hi, tol, 0))
+                self._subdivide(lo, hi, tol, stations)
         return self._points(np.array(stations))
 
-    def _subdivide(self, lo: float, hi: float, tol: float, depth: int) -> list[float]:
+    def _subdivide(self, lo: float, hi: float, tol: float, stations: list[float]) -> None:
+        pending = [(lo, hi, 0)]
+        while pending:
+            lo, hi, depth = pending.pop()
+            if depth >= MAX_SUBDIVISION_DEPTH or self._chord_error(lo, hi) <= tol:
+                stations.append(hi)
+                _require_polyline_size(len(stations))
+                continue
+            mid = (lo + hi) / 2
+            pending.append((mid, hi, depth + 1))
+            pending.append((lo, mid, depth + 1))
+
+    def _chord_error(self, lo: float, hi: float) -> float:
         probes = np.array([lo, lo + (hi - lo) / 4, (lo + hi) / 2, lo + 3 * (hi - lo) / 4, hi])
         pts = self._points(probes)
         chord = pts[0] + np.outer((probes[1:4] - lo) / (hi - lo), pts[4] - pts[0])
-        error = float(np.max(np.linalg.norm(pts[1:4] - chord, axis=1)))
-        if error <= tol or depth >= MAX_SUBDIVISION_DEPTH:
-            return [hi]
-        mid = (lo + hi) / 2
-        return self._subdivide(lo, mid, tol, depth + 1) + self._subdivide(mid, hi, tol, depth + 1)
+        return float(np.max(np.linalg.norm(pts[1:4] - chord, axis=1)))
 
     def to_shapely(self, tol: float = 0.01) -> shapely.LineString:
         """Returns a LinearRing for closed curves and a LineString otherwise."""
@@ -220,6 +237,13 @@ class CurveBase(FrozenModel):
     def construction(self) -> dict[str, Any]:
         """Returns the JSON recipe that rebuilds this curve."""
         return self.model_dump(mode="json")
+
+
+def _require_polyline_size(count: int) -> None:
+    try:
+        require_size(count, MAX_POINTS, what="polyline points", error=GeometryError)
+    except GeometryError as exc:
+        raise GeometryError(exc.message, hint="pass a larger tol", context=exc.context) from exc
 
 
 def _pairs(values: FloatArray) -> list[tuple[float, float]]:

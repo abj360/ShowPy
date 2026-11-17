@@ -20,15 +20,29 @@ import numpy.typing as npt
 import shapely
 
 from showpy.choreo.models import Set
+from showpy.core.caps import MAX_GRID_CELLS
 from showpy.core.errors import GeometryError, UnknownRefError
 from showpy.core.types import Meters, Points
 from showpy.core.util import close_matches
+from showpy.geo.checks import require_finite_as
 from showpy.geo.measure import mirror_gaps, on_field_ids
 from showpy.sheet.models import Sheet
 
 AXIS_INDEX = {"x": 0, "y": 1}
 DISK_SEGMENTS = 32
 SPREAD_FLOOR = 1e-9
+
+
+def _require_grid_size(spans: Points, cell: Meters) -> None:
+    with np.errstate(over="ignore"):
+        cells = float(np.prod([max(1.0, float(np.ceil(span / cell))) for span in spans]))
+    if math.isfinite(cells) and cells <= MAX_GRID_CELLS:
+        return
+    raise GeometryError(
+        f"a cell of {cell} m gives over {MAX_GRID_CELLS} grid cells on this sheet",
+        hint="pass a larger cell in meters",
+        context={"cell": cell, "max_cells": MAX_GRID_CELLS},
+    )
 
 
 def _require_positive(name: str, value: float) -> None:
@@ -66,8 +80,9 @@ def density_map(s: Set, sheet: Sheet, cell: Meters = 1.0) -> npt.NDArray[np.int6
     >>> density_map(s, sheet).tolist()
     [[0, 1]]
     """
-    _require_positive("cell", cell)
+    require_finite_as(GeometryError, cell, name="cell", low=0.0, low_open=True)
     lo, hi = _extent(sheet)
+    _require_grid_size(hi - lo, cell)
     cols, rows = (max(1, math.ceil(span / cell)) for span in hi - lo)
     pts = _on_field_points(s)
     grid, _, _ = np.histogram2d(

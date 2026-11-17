@@ -40,10 +40,42 @@ Contains:
         leaking TypeError
     test_regression_fill_rejects_empty_area: raises a ShowPyError for an empty area instead of
         leaking GEOSException
+    test_regression_scatter_rejects_n_over_the_cap: rejects n over MAX_POINTS before sampling
+    test_regression_scatter_rejects_sample_bound_over_the_cap: rejects a gap whose sample bound is
+        over MAX_POINTS before sampling
+    test_regression_scatter_rejects_non_finite_min_gap: rejects NaN and infinite gaps
+    test_regression_fill_rejects_non_finite_interval: rejects NaN and infinite intervals
+    test_regression_space_by_interval_rejects_non_finite_interval: rejects NaN and infinite
+        intervals
+    test_regression_spacing_rejects_subnormal_gaps: raises SpacingError, not OverflowError, for a
+        1e-320 gap or interval
+    test_regression_fill_rejects_tiny_interval_without_overflow: raises SpacingError for a 1e-300
+        interval
+    test_regression_spacing_rejects_huge_area_with_small_gap: raises SpacingError for a 1e308 m
+        area
+    test_regression_spacing_rejects_empty_area: raises SpacingError for an empty area in scatter
+        and fill
+    test_scatter_sample_bound_counts_the_exact_multiple_cell: bounds samples by floor(w / cell) + 1
+        per axis
+    test_regression_fill_estimate_bounds_the_lattice: estimates at least the lattice the builder
+        generates
+    test_regression_fill_refuses_a_lattice_just_over_the_cap: refuses a 1,162,049-point lattice
+    test_regression_space_by_interval_rejects_non_finite_start: names a non-finite start
+    test_regression_fill_rejects_non_finite_angle: raises ShowPyError for NaN or inf angle_deg
+        (UP-9.1-68)
+    test_regression_fill_rejects_non_finite_margin: raises ShowPyError for NaN or inf margin
+        (UP-9.1-69)
+    test_regression_fill_rejects_non_finite_anchor: raises ShowPyError for a NaN or inf anchor
+        (UP-9.1-70)
+    test_regression_block_rejects_infinite_facing: raises ShowPyError for an inf facing (UP-9.1-71)
+    test_regression_block_rejects_nan_facing: raises ShowPyError for a NaN facing (UP-9.1-73)
+    test_regression_scatter_on_a_field_finishes_or_refuses_within_ten_seconds: bounds a field-size
+        scatter near the cap to 10 s (UP-9.1-72)
 """
 
 import math
 import sys
+from collections.abc import Callable
 
 import numpy as np
 import pytest
@@ -51,12 +83,18 @@ import shapely
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from showpy.core.caps import MAX_POINTS
 from showpy.core.errors import ShowPyError, SpacingError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.geo.curves import Segment
 from showpy.geo.regions import region
 from showpy.geo.shapes import arc, circle, line, rect
 from showpy.geo.spacing import (
+    FillPattern,
+    _lattice_axes,
+    _lattice_estimate,
+    _poisson_sample_bound,
+    _require_lattice_size,
     block,
     concentric,
     distribute_on_points,
@@ -68,7 +106,7 @@ from showpy.geo.spacing import (
     space_proportional,
     space_with_gaps,
 )
-from tests.helpers import capped_address_space, fails_after
+from tests.helpers import capped_address_space, defect, fails_after
 
 SIGNAL_TIMEOUT_S = 5
 SQUARE_SIDE_M = 10.0
@@ -89,6 +127,11 @@ EDGE_BAND_M = 1.0
 MAX_EDGE_SPOTS = 8
 WIDE_SPOTS = 20
 FRACTIONAL_SEED = 1.5
+OVER_CAP_SPOTS = MAX_POINTS + 1
+SUBNORMAL_GAP_M = 1e-320
+TINY_GAP_M = 1e-300
+HUGE_SIDE_M = 1e308
+NON_FINITE = [math.nan, math.inf, -math.inf]
 
 LINE = line((0.0, 0.0), (10.0, 0.0))
 
@@ -239,8 +282,6 @@ def _square(origin_x: float = 0.0, side: float = SQUARE_SIDE_M) -> shapely.Polyg
     return region([(origin_x, 0), (origin_x + side, 0), (origin_x + side, side), (origin_x, side)])
 
 
-@pytest.mark.defect("UP-9.1-03")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-03")
 @fails_after(SIGNAL_TIMEOUT_S)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_scatter_rejects_negative_min_gap() -> None:
@@ -249,8 +290,6 @@ def test_regression_scatter_rejects_negative_min_gap() -> None:
         scatter(_square(), 5, -1.0)
 
 
-@pytest.mark.defect("UP-9.1-07")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-07")
 @fails_after(SIGNAL_TIMEOUT_S)
 @pytest.mark.skipif(sys.platform != "linux", reason="needs signal timeout and RLIMIT_AS")
 def test_regression_fill_caps_the_lattice_size() -> None:
@@ -259,8 +298,6 @@ def test_regression_fill_caps_the_lattice_size() -> None:
         fill(_square(), TINY_FILL_INTERVAL_M, anchor=(0.0, 0.0))
 
 
-@pytest.mark.defect("UP-9.1-08")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-08")
 @fails_after(SIGNAL_TIMEOUT_S)
 @pytest.mark.skipif(sys.platform != "linux", reason="needs signal timeout and RLIMIT_AS")
 def test_regression_space_by_interval_caps_the_point_count() -> None:
@@ -366,16 +403,12 @@ def test_regression_space_proportional_rejects_zero_length_curves() -> None:
         space_proportional(dots, 4)
 
 
-@pytest.mark.defect("UP-9.1-58")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-58")
 def test_regression_fill_rejects_zero_interval() -> None:
     """Raises SpacingError for interval=0 instead of leaking ZeroDivisionError (audit 9.1)."""
     with pytest.raises(SpacingError):
         fill(_square(), 0.0)
 
 
-@pytest.mark.defect("UP-9.1-59")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-59")
 def test_regression_scatter_rejects_zero_min_gap() -> None:
     """Raises SpacingError for min_gap=0 instead of leaking ZeroDivisionError (audit 9.1)."""
     with pytest.raises(SpacingError):
@@ -396,3 +429,185 @@ def test_regression_fill_rejects_empty_area() -> None:
     """Raises a ShowPyError for an empty area instead of leaking GEOSException (audit 9.1)."""
     with pytest.raises(ShowPyError):
         fill(shapely.Polygon(), 1.0)
+
+
+def test_regression_scatter_rejects_n_over_the_cap() -> None:
+    """Rejects n over MAX_POINTS with SpacingError before any sampling."""
+    with pytest.raises(SpacingError):
+        scatter(_square(), OVER_CAP_SPOTS, 1.0)
+
+
+@fails_after(SIGNAL_TIMEOUT_S)
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+def test_regression_scatter_rejects_sample_bound_over_the_cap() -> None:
+    """Rejects a gap whose Poisson-disk sample bound passes MAX_POINTS, before sampling."""
+    with pytest.raises(SpacingError):
+        scatter(_square(), 5, TINY_FILL_INTERVAL_M)
+
+
+@pytest.mark.parametrize("min_gap", NON_FINITE)
+def test_regression_scatter_rejects_non_finite_min_gap(min_gap: float) -> None:
+    """Rejects NaN and infinite gaps with SpacingError."""
+    with pytest.raises(SpacingError):
+        scatter(_square(), 3, min_gap)
+
+
+@pytest.mark.parametrize("interval", NON_FINITE)
+def test_regression_fill_rejects_non_finite_interval(interval: float) -> None:
+    """Rejects NaN and infinite intervals with SpacingError."""
+    with pytest.raises(SpacingError):
+        fill(_square(), interval)
+
+
+@pytest.mark.parametrize("interval", NON_FINITE)
+def test_regression_space_by_interval_rejects_non_finite_interval(interval: float) -> None:
+    """Rejects NaN and infinite intervals with SpacingError."""
+    with pytest.raises(SpacingError):
+        space_by_interval(LINE, interval)
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: fill(_square(), SUBNORMAL_GAP_M, anchor=(0.0, 0.0)),
+        lambda: scatter(_square(), 3, SUBNORMAL_GAP_M),
+        lambda: space_by_interval(LINE, SUBNORMAL_GAP_M),
+    ],
+    ids=["fill", "scatter", "space_by_interval"],
+)
+def test_regression_spacing_rejects_subnormal_gaps(call: Callable[[], object]) -> None:
+    """Raises SpacingError, not OverflowError, when the gap divides to infinity."""
+    with pytest.raises(SpacingError):
+        call()
+
+
+def test_regression_fill_rejects_tiny_interval_without_overflow() -> None:
+    """Raises SpacingError, not OverflowError, when the lattice count exceeds a C ssize_t."""
+    with pytest.raises(SpacingError):
+        fill(_square(), TINY_GAP_M, anchor=(0.0, 0.0))
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: scatter(_square(side=HUGE_SIDE_M), 3, 1e-5),
+        lambda: fill(_square(side=HUGE_SIDE_M), 1e-5, anchor=(0.0, 0.0)),
+    ],
+    ids=["scatter", "fill"],
+)
+def test_regression_spacing_rejects_huge_area_with_small_gap(call: Callable[[], object]) -> None:
+    """Raises SpacingError, not OverflowError, for an area with 1e308 m sides."""
+    with pytest.raises(SpacingError):
+        call()
+
+
+def test_regression_spacing_rejects_empty_area() -> None:
+    """Raises SpacingError, not a leaked error, when the area has NaN bounds."""
+    with pytest.raises(SpacingError):
+        scatter(shapely.Polygon(), 3, 1.0)
+    with pytest.raises(SpacingError):
+        fill(shapely.Polygon(), 1.0, anchor=(0.0, 0.0))
+
+
+def test_scatter_sample_bound_counts_the_exact_multiple_cell() -> None:
+    """Bounds samples by floor(w / cell) + 1 per axis, so an exact multiple gains a cell."""
+    cell_m = 2.0
+    assert _poisson_sample_bound(_square(side=4.0), cell_m * math.sqrt(2)) == 3 * 3
+
+
+LATTICE_BOUNDS = [
+    (-0.01, -0.01, 2.01, 2.01),
+    (-0.001, -0.001, 997.9, 997.9),
+    (0.5, 0.5, 1.5, 1.5),
+    (-3.2, -7.9, 11.1, 5.05),
+    (0.0, 0.0, 3.0, 3.0),
+    (-0.01, -0.01, 166000.01, 2.01),
+]
+
+
+@pytest.mark.parametrize("pattern", ["grid", "offset", "hex"])
+@pytest.mark.parametrize("bounds", LATTICE_BOUNDS)
+def test_regression_fill_estimate_bounds_the_lattice(
+    bounds: tuple[float, ...], pattern: FillPattern
+) -> None:
+    """Estimates at least the rows times columns that the lattice builder generates."""
+    _, rows, cols = _lattice_axes(bounds, 1.0, pattern)
+    assert _lattice_estimate(bounds, 1.0, pattern) >= len(rows) * len(cols)
+
+
+def test_regression_fill_refuses_a_lattice_just_over_the_cap() -> None:
+    """Refuses bounds whose lattice has 1,162,049 points, over the cap of 1,000,000."""
+    with pytest.raises(SpacingError):
+        _require_lattice_size((-0.01, -0.01, 166000.01, 2.01), 1.0, "grid")
+
+
+NON_FINITE_PARAMETER = [math.nan, math.inf, -math.inf]
+SCATTER_DEADLINE_S = 10
+FIELD_LENGTH_M = 109.7
+FIELD_WIDTH_M = 48.8
+NEAR_CAP_GAP_M = 0.11
+
+
+@pytest.mark.parametrize("start", NON_FINITE_PARAMETER)
+def test_regression_space_by_interval_rejects_non_finite_start(start: float) -> None:
+    """Names a non-finite start in the message instead of calling the interval too small."""
+    with pytest.raises(SpacingError, match="start"):
+        space_by_interval(LINE, 1.0, start=start)
+
+
+@defect("UP-9.1-68")
+@pytest.mark.parametrize("angle_deg", NON_FINITE_PARAMETER)
+def test_regression_fill_rejects_non_finite_angle(angle_deg: float) -> None:
+    """Raises a SpacingError for a NaN or infinite angle_deg instead of leaking."""
+    with pytest.raises(ShowPyError):
+        fill(_square(), 1.0, angle_deg=angle_deg)
+
+
+@defect("UP-9.1-69")
+@pytest.mark.parametrize("margin", NON_FINITE_PARAMETER)
+def test_regression_fill_rejects_non_finite_margin(margin: float) -> None:
+    """Raises a SpacingError for a NaN or infinite margin instead of leaking."""
+    with pytest.raises(ShowPyError):
+        fill(_square(), 1.0, margin=margin)
+
+
+@defect("UP-9.1-70")
+@pytest.mark.parametrize("coordinate", NON_FINITE_PARAMETER)
+def test_regression_fill_rejects_non_finite_anchor(coordinate: float) -> None:
+    """Raises a SpacingError for a NaN or infinite anchor instead of leaking GEOSException."""
+    with pytest.raises(ShowPyError):
+        fill(_square(), 1.0, anchor=(coordinate, 0.0))
+
+
+@defect("UP-9.1-71")
+@pytest.mark.parametrize("facing", [math.inf, -math.inf])
+def test_regression_block_rejects_infinite_facing(facing: float) -> None:
+    """Raises a SpacingError for an infinite facing instead of leaking ValueError."""
+    with pytest.raises(ShowPyError):
+        block((0.0, 0.0), 2, 2, 1.0, facing=facing)
+
+
+@defect("UP-9.1-73")
+def test_regression_block_rejects_nan_facing() -> None:
+    """Raises a ShowPyError for a NaN facing instead of returning NaN points."""
+    with pytest.raises(ShowPyError):
+        block((0.0, 0.0), 2, 2, 1.0, facing=math.nan)
+
+
+@defect("UP-9.1-72")
+@pytest.mark.slow
+@fails_after(SCATTER_DEADLINE_S)
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+def test_regression_scatter_on_a_field_finishes_or_refuses_within_ten_seconds() -> None:
+    """Finishes or refuses a field-size scatter at gap 0.11 m within 10 s, not minutes.
+
+    The sample bound at this gap is about 885,000, just under MAX_POINTS. Ten seconds is the
+    longest an interactive caller waits on one placement.
+    """
+    field = region(
+        [(0, 0), (FIELD_LENGTH_M, 0), (FIELD_LENGTH_M, FIELD_WIDTH_M), (0, FIELD_WIDTH_M)]
+    )
+    try:
+        scatter(field, 5, NEAR_CAP_GAP_M)
+    except SpacingError:
+        return

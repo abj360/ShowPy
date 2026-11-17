@@ -297,24 +297,18 @@ FRACTIONAL_SLOT_COUNT = 2.5
 TIMEOUT_S = 5
 
 
-@pytest.mark.defect("UP-9.6-42")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-42")
 def test_regression_fill_form_rejects_zero_interval() -> None:
     """Raises SpacingError, not ZeroDivisionError, for fill_form(interval=0) (audit 9.6)."""
     with pytest.raises(SpacingError):
         slots(fill_form("f", [], SQUARE_AREA, 0.0))
 
 
-@pytest.mark.defect("UP-9.6-43")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-43")
 def test_regression_scatter_form_rejects_zero_min_gap() -> None:
     """Raises SpacingError, not ZeroDivisionError, for scatter_form(min_gap=0) (audit 9.6)."""
     with pytest.raises(SpacingError):
         slots(scatter_form("f", ["A", "B"], SQUARE_AREA, 0.0))
 
 
-@pytest.mark.defect("UP-9.6-44")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-44")
 @fails_after(TIMEOUT_S)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_scatter_form_rejects_negative_min_gap_without_hanging() -> None:

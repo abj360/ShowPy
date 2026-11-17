@@ -23,14 +23,17 @@ Contains:
 
 import math
 from functools import cached_property
-from typing import Annotated, Any, Literal, override
+from numbers import Real
+from typing import Annotated, Any, Literal, cast, override
 
 import numpy as np
-from pydantic import Field, TypeAdapter, ValidationError, model_validator
+from pydantic import Field, TypeAdapter, ValidationError, field_validator, model_validator
 from scipy.special import comb
 
+from showpy.core.caps import MAX_TABLE, require_size
 from showpy.core.errors import GeometryError, schema_error_from
-from showpy.core.types import Degrees, Meters, Point, Points
+from showpy.core.types import Degrees, Meters, Point, Points, PositiveFinite
+from showpy.geo.checks import require_finite_as
 from showpy.geo.curve_base import CurveBase, FloatArray, _unit
 from showpy.geo.svg import Subpath, parse_path
 
@@ -135,6 +138,7 @@ class Polyline(CurveModel):
     @override
     def to_polyline(self, tol: float = 0.01) -> Points:
         """Returns the vertices themselves, closing the loop when closed."""
+        require_finite_as(GeometryError, tol, name="tol", low=0.0, low_open=True)
         return self._vertices.copy()
 
 
@@ -402,13 +406,22 @@ class SpiralCurve(CurveModel):
     center: Point
     r0: Meters
     r1: Meters
-    turns: float
+    turns: PositiveFinite
     start_deg: Degrees = 0.0
     closed: Literal[False] = False
 
+    @field_validator("turns", mode="before")
+    @classmethod
+    def _turns_are_finite(cls, value: Any) -> Any:  # Any: raw input before pydantic coerces it
+        if isinstance(value, Real) and not isinstance(value, bool):
+            _require_turns(value)
+        return value
+
     @model_validator(mode="after")
     def _valid(self) -> "SpiralCurve":
-        _require_positive("turns", self.turns)
+        require_size(
+            self._table_size(), MAX_TABLE, what="spiral table samples", error=GeometryError
+        )
         if min(self.r0, self.r1) < 0 or max(self.r0, self.r1) == 0:
             raise GeometryError("spiral radii must be >= 0 and not both 0", hint="fix r0/r1")
         return self
@@ -560,6 +573,11 @@ def curve_from_construction(recipe: dict[str, Any]) -> AnyCurve:
         return CURVE_ADAPTER.validate_python(recipe)
     except ValidationError as exc:
         raise schema_error_from(exc, model="Curve") from exc
+
+
+def _require_turns(value: Real) -> None:
+    # cast: Real is not float to mypy; require_finite_as accepts any real number, even huge ints.
+    require_finite_as(GeometryError, cast("float", value), name="turns", low=0.0, low_open=True)
 
 
 def _require_positive(name: str, value: float) -> None:
