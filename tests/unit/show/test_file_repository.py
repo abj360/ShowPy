@@ -59,6 +59,8 @@ Contains:
     test_regression_backend_refuses_a_malformed_parent_id: blames the caller for a malformed parent
         ID passed to commit
     test_regression_stored_malformed_id_stays_corrupt: keeps CORRUPT for a malformed stored ID
+    test_regression_fifo_as_link_or_record_is_corrupt_without_blocking: refuses a FIFO standing in
+        for a next/ link or a tree record
 """
 
 import errno
@@ -659,3 +661,27 @@ def test_regression_object_swapped_after_lstat_is_refused(
     data = target.read_bytes()
     _swapped_after_lstat(monkeypatch, target, lambda path: SWAPS[kind](path, data))
     _assert_corrupt(lambda: repo.read(SHOW_ID, SHOW_DOC))
+
+
+STORED_FILES: dict[str, Callable[[Path, str], Path]] = {
+    "link": lambda base, _rev: base / "next" / "root",
+    "record": lambda base, rev: base / "trees" / f"{rev}.json",
+}
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs O_NOFOLLOW, FIFOs and SIGALRM")
+@pytest.mark.parametrize("stale_lstat", [False, True], ids=["plain", "swapped-after-lstat"])
+@pytest.mark.parametrize("kind", sorted(STORED_FILES))
+@fails_after(5)
+def test_regression_fifo_as_link_or_record_is_corrupt_without_blocking(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str, stale_lstat: bool
+) -> None:
+    """Refuses a FIFO standing in for a next/ link or a tree record, never blocking on it."""
+    repo, rev, base = _saved(tmp_path)
+    target = STORED_FILES[kind](base, rev)
+    if stale_lstat:
+        _swapped_after_lstat(monkeypatch, target, os.mkfifo)
+    else:
+        target.unlink()
+        os.mkfifo(target)
+    _assert_corrupt(lambda: repo.backend.log(SHOW_ID))
