@@ -67,6 +67,8 @@ Contains:
         when no component is too long
     test_regression_file_for_a_directory_is_io_where_the_os_reports_it_missing: reports a file
         standing in for trees/ as ENOTDIR even where the OS says the path is missing
+    test_regression_blob_landed_by_a_racing_writer_is_kept: commits when a racing writer lands the
+        same blob first and the OS refuses to replace it
 """
 
 import contextlib
@@ -468,7 +470,9 @@ def test_regression_threaded_commit_race_has_one_winner(tmp_path: Path) -> None:
         thread.join()
     losers = [o for o in outcomes if isinstance(o, StorageError)]
     assert len(outcomes) - len(losers) == 1
-    assert all(isinstance(o, ConflictError) for o in losers)
+    assert all(isinstance(o, ConflictError) for o in losers), [
+        (o.code, o.message, o.context) for o in losers if not isinstance(o, ConflictError)
+    ]
 
 
 def test_regression_overlong_show_id_reads_raise_name_too_long(tmp_path: Path) -> None:
@@ -814,3 +818,31 @@ def test_regression_file_for_a_directory_is_io_where_the_os_reports_it_missing(
         repo.revisions(SHOW_ID)
     assert caught.value.code == "IO"
     assert caught.value.context["errno"] == errno.ENOTDIR
+
+
+def test_regression_blob_landed_by_a_racing_writer_is_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Commits when a racing writer lands the same blob first and the OS refuses to replace it."""
+    repo, rev, base = _saved(tmp_path)
+    content = b"x"
+    target = base / "objects" / digest(content)
+    real_lstat_mode = file_repository._lstat_mode
+    real_replace = Path.replace
+
+    def racing_lstat_mode(show_id: str, path: Path) -> int | None:
+        mode = real_lstat_mode(show_id, path)
+        if path == target and mode is None:
+            target.write_bytes(content)
+        return mode
+
+    def windows_replace(source: Path, destination: str | Path) -> Path:
+        if Path(destination).exists():
+            raise PermissionError(errno.EACCES, "Access is denied", str(destination))
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(file_repository, "_lstat_mode", racing_lstat_mode)
+    monkeypatch.setattr(Path, "replace", windows_replace)
+    landed = repo.transaction(SHOW_ID, {"/renders/a.txt": content}, expected_revision=rev, at=AT)
+    assert repo.head(SHOW_ID) == landed.id
+    assert repo.read(SHOW_ID, "/renders/a.txt") == content

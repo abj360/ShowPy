@@ -367,7 +367,9 @@ class _FileBackend:
             if mode is not None and stat.S_ISLNK(mode):
                 raise self._corrupt(show_id, target, "file is a symbolic link")
             if mode is None:
-                _atomic_write(target, data)
+                # Content-addressed: a blob a racing writer landed first holds these bytes. A link
+                # never replaces it, which Windows refuses while the other writer holds the name.
+                _link_exclusive(show_id, target, data)
         record = {"revision": revision.model_dump(mode="json"), "tree": tree}
         _atomic_write(base / TREE_DIR / f"{tree_name}.json", dump_json(record))
         link = base / LINK_DIR / (revision.parent or ROOT_LINK)
@@ -378,8 +380,9 @@ class _FileBackend:
 class FileRepository(DocumentRepository):
     """Keeps every revision as JSON and blob files under a root directory.
 
-    Writes are atomic (temp file plus os.replace) and blobs are content-addressed, so writing
-    equal content twice is a no-op. Two processes racing on one head cannot both land.
+    Writes are atomic (temp file plus os.replace, or os.link for blobs) and blobs are
+    content-addressed, so writing equal content twice is a no-op. Two processes racing on one
+    head cannot both land.
 
     Attributes:
         root: Directory holding one folder per show.
