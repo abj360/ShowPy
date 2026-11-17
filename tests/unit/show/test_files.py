@@ -12,6 +12,7 @@ Contains:
         placement tables
     test_regression_reading_root_is_a_library_error: raises a ShowPyError, not IndexError, when
         reading the root path
+    test_regression_reading_root_names_a_directory: raises StorageError BAD_PATH for the root
     test_regression_invalid_utf8_text_file_is_a_library_error: maps invalid UTF-8 in a text file to
         a ShowPyError
 """
@@ -21,7 +22,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from showpy.core.errors import LockedError, ShowPyError
+from showpy.core.errors import LockedError, ShowPyError, StorageError
 from showpy.show.documents import SHOW_DOC
 from showpy.show.storage import Workspace
 from tests.fixtures.shows import two_set_show
@@ -77,8 +78,6 @@ def test_regression_derived_tables_are_read_only(path: str) -> None:
         assert info.value.code == "READ_ONLY"
 
 
-@pytest.mark.defect("UP-9.7-18")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-18")
 def test_regression_reading_root_is_a_library_error() -> None:
     """Raises a ShowPyError, not IndexError, when reading the root path (audit 9.7 item 9)."""
     agent, _ = _session()
@@ -86,8 +85,14 @@ def test_regression_reading_root_is_a_library_error() -> None:
         agent.read("/")
 
 
-@pytest.mark.defect("UP-9.7-25")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-25")
+def test_regression_reading_root_names_a_directory() -> None:
+    """Raises StorageError BAD_PATH for the root, as writing a directory does."""
+    agent, _ = _session()
+    with pytest.raises(StorageError) as excinfo:
+        agent.read("/")
+    assert excinfo.value.code == "BAD_PATH"
+
+
 def test_regression_invalid_utf8_text_file_is_a_library_error() -> None:
     """Maps invalid UTF-8 in a text file to a ShowPyError (audit 9.7 item 9)."""
     _, designer = _session()

@@ -10,6 +10,8 @@ Contains:
         TypeError, for a forms.json of the wrong shape
     test_regression_decode_rejects_string_set_order: rejects `"sets": "12"` instead of decoding it
         as sets 1 and 2
+    test_regression_decode_wrong_shape_names_the_document: puts the path of the wrong-shaped
+        document in the SchemaError context
     test_regression_show_json_carries_a_format_version: stamps show.json with a format and layout
         version
     test_regression_decode_names_the_minimum_version_for_a_newer_document: raises VersionError for a
@@ -53,8 +55,6 @@ def _docs() -> dict[str, bytes]:
     return encode_show(two_set_show())
 
 
-@pytest.mark.defect("UP-9.7-19")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-19")
 @pytest.mark.parametrize("raw", [b"5", b'"text"'])
 def test_regression_decode_wrong_shape_show_json_is_a_library_error(raw: bytes) -> None:
     """Raises a ShowPyError, not TypeError, for a show.json of the wrong shape (audit 9.7 #9)."""
@@ -62,21 +62,36 @@ def test_regression_decode_wrong_shape_show_json_is_a_library_error(raw: bytes) 
         decode_show({**_docs(), SHOW_DOC: raw})
 
 
-@pytest.mark.defect("UP-9.7-20")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-20")
 def test_regression_decode_wrong_shape_forms_json_is_a_library_error() -> None:
     """Raises a ShowPyError, not TypeError, for a forms.json of the wrong shape (audit 9.7 #9)."""
     with pytest.raises(ShowPyError):
         decode_show({**_docs(), forms_doc("2"): b"5"})
 
 
-@pytest.mark.defect("UP-9.7-21")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-21")
 def test_regression_decode_rejects_string_set_order() -> None:
     """Rejects `"sets": "12"` instead of decoding it as sets 1 and 2 (audit 9.7 item 9)."""
     body = json.loads(_docs()[SHOW_DOC]) | {"sets": "12"}
     with pytest.raises(ShowPyError):
         decode_show({**_docs(), SHOW_DOC: json.dumps(body).encode()})
+
+
+@pytest.mark.parametrize(
+    ("path", "raw"),
+    [
+        (SHOW_DOC, b"[]"),
+        ("/show/sheet.json", b"null"),
+        ("/show/notes.json", b"{}"),
+        ("/time/timeline.json", b"7"),
+        ("/sets/2/set.json", b"[]"),
+        (forms_doc("2"), b"{}"),
+        ("/transitions/1-2/paths.json", b"[]"),
+    ],
+)
+def test_regression_decode_wrong_shape_names_the_document(path: str, raw: bytes) -> None:
+    """Puts the path of the wrong-shaped document in the SchemaError context."""
+    with pytest.raises(SchemaError) as excinfo:
+        decode_show({**_docs(), path: raw})
+    assert excinfo.value.context["path"] == path
 
 
 @pytest.mark.defect("UP-9.7-29")

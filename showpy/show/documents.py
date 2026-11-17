@@ -46,6 +46,8 @@ NOTES_DOC = "/show/notes.json"
 TIMELINE_DOC = "/time/timeline.json"
 SET_ORDER_FIELD = "sets"
 SPLIT_FIELDS = frozenset({"sheet", "notes", "timeline", "sets", "forms", "transitions", "revision"})
+JsonObject = dict[str, Any]  # Any: parsed JSON values of any type
+JsonArray = list[Any]  # Any: parsed JSON values of any type
 SEGMENT = r"[A-Za-z0-9_][A-Za-z0-9_.\-]*"
 SEGMENT_PATTERN = re.compile(SEGMENT)
 SET_DOC_NAME = "set.json"
@@ -261,17 +263,18 @@ def _dump_models(models: Sequence[BaseModel]) -> bytes:
     return dump_dumped_json([m.model_dump(mode="json") for m in models])
 
 
-# Any: parsed JSON documents hold arbitrary JSON values.
-def _load(docs: Mapping[str, bytes], path: str, default: Any = None) -> Any:
+def _load_json(docs: Mapping[str, bytes], path: str) -> object:
     raw = docs.get(path)
     if raw is None:
-        if default is None:
-            raise StorageError(
-                f"document {path} is missing",
-                hint="write the whole show with save_show() first",
-                context={"path": path},
-            )
-        return default
+        raise StorageError(
+            f"document {path} is missing",
+            hint="write the whole show with save_show() first",
+            context={"path": path},
+        )
+    return _parse(path, raw)
+
+
+def _parse(path: str, raw: bytes) -> object:
     try:
         return json.loads(raw)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -280,6 +283,34 @@ def _load(docs: Mapping[str, bytes], path: str, default: Any = None) -> Any:
             hint="write UTF-8 JSON",
             context={"path": path},
         ) from exc
+
+
+def _shape_error(path: str, name: str, value: object) -> SchemaError:
+    return SchemaError(
+        f"{path} must hold a JSON {name}, not {type(value).__name__}",
+        hint=f"write a JSON {name}, as save_show() does",
+        context={"path": path},
+    )
+
+
+def _load_object(docs: Mapping[str, bytes], path: str, *, is_optional: bool = False) -> JsonObject:
+    """Parses a document that must hold a JSON object; an absent optional one reads as `{}`."""
+    if is_optional and path not in docs:
+        return {}
+    value = _load_json(docs, path)
+    if not isinstance(value, dict):
+        raise _shape_error(path, "object", value)
+    return value
+
+
+def _load_array(docs: Mapping[str, bytes], path: str, *, is_optional: bool = False) -> JsonArray:
+    """Parses a document that must hold a JSON array; an absent optional one reads as `[]`."""
+    if is_optional and path not in docs:
+        return []
+    value = _load_json(docs, path)
+    if not isinstance(value, list):
+        raise _shape_error(path, "array", value)
+    return value
 
 
 def _cached[T](
@@ -292,10 +323,10 @@ def _cached[T](
 
 
 def _set(docs: Mapping[str, bytes], key: str) -> Set:
-    raw = _load(docs, set_doc(key))
-    if isinstance(raw, dict) and isinstance(raw.get("key"), str):
+    raw = _load_object(docs, set_doc(key))
+    if isinstance(raw.get("key"), str):
         check_id(raw["key"], kind="set key")
-    if isinstance(raw, dict) and "key" not in raw:
+    if "key" not in raw:
         raw = {**raw, "key": key}
     loaded = Set.model_validate(raw)
     if loaded.key != key:
@@ -308,7 +339,9 @@ def _set(docs: Mapping[str, bytes], key: str) -> Set:
 
 
 def _forms(docs: Mapping[str, bytes], key: str) -> tuple[Form, ...]:
-    return tuple(Form.model_validate(f) for f in _load(docs, forms_doc(key), []))
+    return tuple(
+        Form.model_validate(f) for f in _load_array(docs, forms_doc(key), is_optional=True)
+    )
 
 
 def _require_forms_for(key: str, set_id: SetId, forms: tuple[Form, ...]) -> None:
@@ -322,7 +355,7 @@ def _require_forms_for(key: str, set_id: SetId, forms: tuple[Form, ...]) -> None
 
 
 def _paths(docs: Mapping[str, bytes], folder: TransitionId) -> tuple[TransitionSpec, ...]:
-    raw = _load(docs, paths_doc(folder), {})
+    raw = _load_object(docs, paths_doc(folder), is_optional=True)
     if not raw:
         return ()
     return (TransitionSpec.model_validate(raw),)
@@ -358,7 +391,10 @@ def is_storable_folder(folder: object) -> bool:
         return False
 
 
-def _require_set_keys(order: list[str]) -> None:
+def _set_order(order: object) -> list[str]:
+    """Checks the set order show.json lists: an array of storable set keys, never text."""
+    if not isinstance(order, list):
+        raise _shape_error(SHOW_DOC, "array under 'sets'", order)
     bad = [k for k in order if not is_storable_folder(k)]
     if bad:
         raise SchemaError(
@@ -366,6 +402,7 @@ def _require_set_keys(order: list[str]) -> None:
             hint="use set keys of letters, digits, _ and ., with no doubled .",
             context={"bad_set_keys": bad},
         )
+    return order
 
 
 def _transition_specs(
@@ -386,9 +423,8 @@ def _transition_specs(
 def _assemble(
     docs: Mapping[str, bytes], revision: str, cache: DecodeCache | None, digests: Mapping[str, str]
 ) -> Show:
-    meta = dict(_load(docs, SHOW_DOC))
-    order: list[str] = list(meta.pop(SET_ORDER_FIELD, []))
-    _require_set_keys(order)
+    meta = _load_object(docs, SHOW_DOC)
+    order = _set_order(meta.pop(SET_ORDER_FIELD, []))
     stored = [(k, _cached(cache, digests, set_doc(k), partial(_set, docs, k))) for k in order]
     forms: dict[str, Form] = {}
     for key, current in stored:
@@ -404,9 +440,9 @@ def _assemble(
     return Show.model_validate(
         {
             **meta,
-            "sheet": _load(docs, SHEET_DOC),
-            "notes": _load(docs, NOTES_DOC, []),
-            "timeline": _load(docs, TIMELINE_DOC),
+            "sheet": _load_object(docs, SHEET_DOC),
+            "notes": _load_array(docs, NOTES_DOC, is_optional=True),
+            "timeline": _load_object(docs, TIMELINE_DOC),
             "sets": sets,
             "forms": forms,
             "transitions": specs,

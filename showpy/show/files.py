@@ -118,7 +118,16 @@ def directories(show: Show | None, tree: Mapping[str, bytes]) -> set[str]:
 
 
 def _text_or_bytes(path: str, raw: bytes) -> str | bytes:
-    return raw.decode() if path.endswith(TEXT_SUFFIXES) else raw
+    if not path.endswith(TEXT_SUFFIXES):
+        return raw
+    try:
+        return raw.decode()
+    except UnicodeDecodeError as exc:
+        raise SchemaError(
+            f"{path} is not valid UTF-8: {exc}",
+            hint="write UTF-8 text to text files",
+            context={"path": path},
+        ) from exc
 
 
 def _unknown(path: str, show: Show | None, tree: Mapping[str, bytes]) -> UnknownRefError:
@@ -127,6 +136,15 @@ def _unknown(path: str, show: Show | None, tree: Mapping[str, bytes]) -> Unknown
         f"no file {path}",
         hint=f"did you mean {', '.join(close)}?" if close else "ls('/') lists what exists",
         context={"path": path},
+    )
+
+
+def _is_directory(path: str) -> StorageError:
+    return StorageError(
+        f"{path} is a directory",
+        hint="name a file path such as /renders/set-2.png; ls() lists directories",
+        context={"path": path},
+        code="BAD_PATH",
     )
 
 
@@ -196,6 +214,8 @@ def read_file(path: str, show: Show | None, tree: Mapping[str, bytes]) -> str | 
     ''
     """
     segments = split_path(path)
+    if not segments:
+        raise _is_directory(path)
     if segments[0] in ("show", "time", "sets", "transitions"):
         found = _show_file(path, segments, _require_show(show, path))
         if found is not None:
@@ -274,12 +294,7 @@ def staged_changes(
     """
     segments = split_path(path)
     if path.endswith("/"):
-        raise StorageError(
-            f"{path} is a directory",
-            hint="write to a file path such as /renders/set-2.png",
-            context={"path": path},
-            code="BAD_PATH",
-        )
+        raise _is_directory(path)
     if path == INDEX_DOC or (segments[0] == "sets" and segments[-1] == PLACEMENTS_NAME):
         raise LockedError(
             f"{path} is derived and read-only",
