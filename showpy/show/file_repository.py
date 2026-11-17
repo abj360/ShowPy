@@ -9,6 +9,7 @@ Contains:
 import json
 import os
 import re
+import stat
 import tempfile
 from pathlib import Path
 
@@ -81,15 +82,31 @@ class _FileBackend:
         )
 
     def _checked_id(self, show_id: str, value: str, source: Path) -> str:
-        if not REVISION_ID_PATTERN.match(value):
+        if not REVISION_ID_PATTERN.fullmatch(value):
             raise self._corrupt(show_id, source, f"{value!r} is not a 64-digit hex id")
         return value
 
+    def _guard_dirs(self, show_id: str) -> None:
+        base = self._dir(show_id)
+        for directory in (base, base / OBJECT_DIR, base / TREE_DIR, base / LINK_DIR):
+            if directory.is_symlink():
+                raise self._corrupt(show_id, directory, "directory is a symbolic link")
+
     def _read(self, show_id: str, path: Path) -> bytes:
         try:
+            if path.is_symlink():
+                raise self._corrupt(show_id, path, "file is a symbolic link")
+            if not stat.S_ISREG(path.lstat().st_mode):
+                raise self._corrupt(show_id, path, "file is missing or not a regular file")
             return path.read_bytes()
         except (FileNotFoundError, IsADirectoryError) as error:
             raise self._corrupt(show_id, path, "file is missing or not a file") from error
+
+    def _read_link(self, show_id: str, path: Path) -> str:
+        try:
+            return self._read(show_id, path).decode().strip()
+        except UnicodeDecodeError as error:
+            raise self._corrupt(show_id, path, "link is not valid UTF-8") from error
 
     def _tree_path(self, show_id: str, revision_id: str, source: Path) -> Path:
         name = self._checked_id(show_id, revision_id, source)
@@ -99,28 +116,42 @@ class _FileBackend:
         path = self._tree_path(show_id, revision_id, source)
         try:
             record = json.loads(self._read(show_id, path))
-        except (json.JSONDecodeError, UnicodeDecodeError) as error:
-            raise self._corrupt(show_id, path, "tree file is not valid JSON") from error
+        except (json.JSONDecodeError, UnicodeDecodeError, RecursionError) as error:
+            raise self._corrupt(
+                show_id, path, "tree file is not valid JSON or too deeply nested"
+            ) from error
         if not isinstance(record, dict) or "revision" not in record or "tree" not in record:
             raise self._corrupt(show_id, path, "tree file lacks revision or tree")
         return record
 
     def log(self, show_id: str) -> list[Revision]:
+        self._guard_dirs(show_id)
         links = self._dir(show_id) / LINK_DIR
         log: list[Revision] = []
         seen: set[str] = set()
         current = ROOT_LINK
-        while (links / current).exists():
+        while os.path.lexists(links / current):
             link = links / current
-            current = self._checked_id(show_id, self._read(show_id, link).decode().strip(), link)
+            previous = "" if current == ROOT_LINK else current
+            current = self._checked_id(show_id, self._read_link(show_id, link), link)
             if current in seen:
                 raise self._corrupt(show_id, link, "next/ links form a cycle")
             seen.add(current)
-            record = self._record(show_id, current, link)
-            log.append(Revision.model_validate(record["revision"]))
+            revision = Revision.model_validate(self._record(show_id, current, link)["revision"])
+            self._check_revision(show_id, revision, current, previous, link)
+            log.append(revision)
         return log
 
+    def _check_revision(
+        self, show_id: str, revision: Revision, expected_id: str, parent: str, source: Path
+    ) -> None:
+        if revision.id != expected_id:
+            raise self._corrupt(show_id, source, "revision id differs from its link")
+        if revision.parent != parent:
+            raise self._corrupt(show_id, source, "revision parent differs from the chain")
+
     def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
+        self._guard_dirs(show_id)
         path = self._tree_path(show_id, revision_id, self._dir(show_id) / TREE_DIR)
         tree = self._record(show_id, revision_id, path)["tree"]
         if not isinstance(tree, dict) or not all(
@@ -132,16 +163,23 @@ class _FileBackend:
         return dict(tree)
 
     def blob(self, show_id: str, digest: str) -> bytes:
+        self._guard_dirs(show_id)
         objects = self._dir(show_id) / OBJECT_DIR
         return self._read(show_id, objects / self._checked_id(show_id, digest, objects))
 
     def commit(
         self, show_id: str, revision: Revision, tree: dict[str, str], blobs: dict[str, bytes]
     ) -> None:
+        self._guard_dirs(show_id)
         base = self._dir(show_id)
+        if revision.parent:
+            self._checked_id(show_id, revision.parent, base / LINK_DIR)
         for digest, data in blobs.items():
-            if not (base / OBJECT_DIR / digest).exists():
-                _atomic_write(base / OBJECT_DIR / digest, data)
+            target = base / OBJECT_DIR / self._checked_id(show_id, digest, base / OBJECT_DIR)
+            if target.is_symlink():
+                raise self._corrupt(show_id, target, "file is a symbolic link")
+            if not target.exists():
+                _atomic_write(target, data)
         record = {"revision": revision.model_dump(mode="json"), "tree": tree}
         _atomic_write(base / TREE_DIR / f"{revision.id}.json", dump_json(record))
         link = base / LINK_DIR / (revision.parent or ROOT_LINK)

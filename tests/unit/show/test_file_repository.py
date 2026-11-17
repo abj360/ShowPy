@@ -21,13 +21,29 @@ Contains:
         on the next commit
     test_regression_losing_commit_leaves_no_orphan_tree: removes the tree file of a commit that lost
         the race
+    test_regression_record_id_must_match_its_link: refuses a tree record whose revision id differs
+        from the link that named it
+    test_regression_record_parent_must_follow_the_chain: refuses a tree record whose parent is not
+        the previous revision
+    test_regression_non_utf8_link_is_corrupt: maps an undecodable next/ link to CORRUPT
+    test_regression_symlinked_object_is_refused: refuses an object that is a symbolic link
+    test_regression_symlinked_directory_blocks_commit: refuses to write through a symlinked
+        objects/ directory
+    test_regression_dangling_root_link_is_corrupt: treats a dangling next/root as corruption, not
+        as an empty history
+    test_regression_malformed_records_are_corrupt: maps malformed, directory-shaped and deeply
+        nested tree files to CORRUPT
+    test_regression_trailing_newline_in_id_is_refused: refuses an ID followed by a newline
 """
 
 import json
 import os
+import shutil
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -175,3 +191,108 @@ def test_regression_losing_commit_leaves_no_orphan_tree(tmp_path: Path) -> None:
     with pytest.raises(ConflictError):
         repo.backend.commit(SHOW_ID, loser, tree, {digest(loser_blob): loser_blob})
     assert not (base / "trees" / "loser.json").exists()
+
+
+CORRUPT = "CORRUPT"
+NO_SYMLINKS = pytest.mark.skipif(sys.platform == "win32", reason="symlinks need privilege")
+HEX_ID = "a" * 64
+NESTING_DEPTH = 100_000
+
+
+def _tamper_record(base: Path, rev: str, edit: Callable[[dict[str, Any]], None]) -> None:
+    path = base / "trees" / f"{rev}.json"
+    record = json.loads(path.read_text())
+    edit(record)
+    path.write_text(json.dumps(record))
+
+
+def _assert_corrupt(action: Callable[[], object]) -> None:
+    with pytest.raises(StorageError) as caught:
+        action()
+    assert caught.value.code == CORRUPT
+
+
+def test_regression_record_id_must_match_its_link(tmp_path: Path) -> None:
+    """Refuses a tree record whose revision id differs from the link that named it."""
+    repo, rev, base = _saved(tmp_path)
+    _tamper_record(base, rev, lambda r: r["revision"].update(id="../../../x"))
+    _assert_corrupt(lambda: repo.revisions(SHOW_ID))
+
+
+def test_regression_record_parent_must_follow_the_chain(tmp_path: Path) -> None:
+    """Refuses a tree record whose parent is not the previous revision."""
+    repo, rev, base = _saved(tmp_path)
+    _tamper_record(base, rev, lambda r: r["revision"].update(parent=HEX_ID))
+    _assert_corrupt(lambda: repo.revisions(SHOW_ID))
+
+
+def test_regression_non_utf8_link_is_corrupt(tmp_path: Path) -> None:
+    """Maps an undecodable next/ link to CORRUPT."""
+    repo, rev, base = _saved(tmp_path)
+    (base / "next" / rev).write_bytes(b"\xff\xfe")
+    _assert_corrupt(lambda: repo.revisions(SHOW_ID))
+
+
+@NO_SYMLINKS
+def test_regression_symlinked_object_is_refused(tmp_path: Path) -> None:
+    """Refuses an object that is a symbolic link instead of reading outside the root."""
+    repo, rev, base = _saved(tmp_path)
+    secret = tmp_path / "secret.txt"
+    secret.write_bytes(b"outside")
+    object_file = base / "objects" / repo.backend.tree(SHOW_ID, rev)[SHOW_DOC]
+    object_file.unlink()
+    object_file.symlink_to(secret)
+    _assert_corrupt(lambda: repo.read(SHOW_ID, SHOW_DOC))
+
+
+@NO_SYMLINKS
+def test_regression_symlinked_directory_blocks_commit(tmp_path: Path) -> None:
+    """Refuses to write through a symlinked objects/ directory."""
+    repo, rev, base = _saved(tmp_path)
+    elsewhere = tmp_path / "elsewhere"
+    shutil.move(base / "objects", elsewhere)
+    (base / "objects").symlink_to(elsewhere)
+    before = sorted(elsewhere.iterdir())
+    _assert_corrupt(lambda: _second_revision(repo, rev))
+    assert sorted(elsewhere.iterdir()) == before
+
+
+@NO_SYMLINKS
+def test_regression_dangling_root_link_is_corrupt(tmp_path: Path) -> None:
+    """Treats a dangling next/root as corruption, not as an empty history."""
+    repo, _, base = _saved(tmp_path)
+    (base / "next" / "root").unlink()
+    (base / "next" / "root").symlink_to(tmp_path / "nowhere")
+    _assert_corrupt(lambda: repo.revisions(SHOW_ID))
+
+
+def test_regression_malformed_records_are_corrupt(tmp_path: Path) -> None:
+    """Maps malformed, directory-shaped and deeply nested tree files to CORRUPT."""
+    repo, rev, base = _saved(tmp_path)
+    tree_file = base / "trees" / f"{rev}.json"
+    good = tree_file.read_text()
+    bad_records = [
+        json.dumps({"revision": json.loads(good)["revision"]}),
+        json.dumps([1, 2]),
+        json.dumps({**json.loads(good), "tree": {SHOW_DOC: 5}}),
+        json.dumps({**json.loads(good), "tree": [HEX_ID]}),
+        "[" * NESTING_DEPTH,
+    ]
+    for text in bad_records:
+        tree_file.write_text(text)
+        _assert_corrupt(lambda: repo.backend.tree(SHOW_ID, rev))
+    tree_file.write_bytes(b"\xff\xfe")
+    _assert_corrupt(lambda: repo.backend.tree(SHOW_ID, rev))
+    tree_file.unlink()
+    tree_file.mkdir()
+    _assert_corrupt(lambda: repo.backend.tree(SHOW_ID, rev))
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="newline in file names")
+def test_regression_trailing_newline_in_id_is_refused(tmp_path: Path) -> None:
+    """Refuses a tree digest followed by a newline, even when that object file exists."""
+    repo, rev, base = _saved(tmp_path)
+    digest_value = repo.backend.tree(SHOW_ID, rev)[SHOW_DOC]
+    shutil.copy(base / "objects" / digest_value, base / "objects" / f"{digest_value}\n")
+    _tamper_record(base, rev, lambda r: r["tree"].update({SHOW_DOC: f"{digest_value}\n"}))
+    _assert_corrupt(lambda: repo.read(SHOW_ID, SHOW_DOC))
