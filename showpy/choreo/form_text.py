@@ -16,6 +16,9 @@ Contains:
     min_text_spots(): counts the spots the strokes need at least
     text_slots(): places exactly n slots on the strokes, with unit tangents
     require_member_count(): rejects a text form whose member count differs from its slot count
+    reject_count_change(): rejects an edit of a text form that changes its count
+    resolve_edit_fonts(): resolves the font names of a text edit to URIs
+    require_edited_members(): rejects an edited text form whose member count left its slot count
 """
 
 import math
@@ -39,7 +42,7 @@ from showpy.core.errors import (
 from showpy.core.types import Points
 from showpy.geo.curve_base import Curve, FloatArray
 from showpy.geo.curves import Polyline, SvgCurve
-from showpy.geo.fonts import FontRegistry
+from showpy.geo.fonts import FontRegistry, bundled_fonts
 from showpy.geo.models import LaidGlyph, TextAlign, TextAnchor
 from showpy.geo.spacing import apportion
 from showpy.geo.text_layout import MAX_LAYOUT_CHARS, layout_text
@@ -367,3 +370,69 @@ def require_member_count(form_id: str, n: int, member_count: int) -> None:
         context={"form": form_id, "n": n, "members": member_count},
         code="MEMBER_COUNT_MISMATCH",
     )
+
+
+EDIT_TEXT_COUNT_HINT = (
+    "use edit_text_count(form, add=[...], remove=[...], n=...) to change the count"
+)
+COUNT_FIELDS = ("n", "spacing")
+
+
+def reject_count_change(form_id: str, changes: Mapping[str, Any]) -> None:
+    """Rejects an edit of a text form that sets `n` or `spacing`.
+
+    Args:
+        form_id: ID of the form, named in the error.
+        changes: The edit's field changes.
+
+    Raises:
+        SchemaError: `TEXT_COUNT_EDIT`; the hint names `edit_text_count`.
+    """
+    for field in COUNT_FIELDS:
+        if field in changes:
+            raise SchemaError(
+                f"text form {form_id} cannot change {field} through edit",
+                hint=EDIT_TEXT_COUNT_HINT,
+                context={"form": form_id, "field": field},
+                code="TEXT_COUNT_EDIT",
+            )
+
+
+def resolve_edit_fonts(
+    changes: Mapping[str, Any], font_registry: FontRegistry | None
+) -> dict[str, Any]:
+    """Returns the changes with any `fonts` entry resolved to font URIs.
+
+    Args:
+        changes: The edit's recipe changes.
+        font_registry: Registry that resolves the names; None means `bundled_fonts()`.
+
+    Returns:
+        resolved: The changes; `fonts` holds a list of URIs when it was given.
+    """
+    if "fonts" not in changes:
+        return dict(changes)
+    registry = font_registry or bundled_fonts()
+    return {**changes, "fonts": [registry.resolve(font) for font in changes["fonts"]]}
+
+
+def require_edited_members(form_id: str, n: int, member_count: int) -> None:
+    """Rejects an edited text form whose member count no longer matches its slot count.
+
+    Args:
+        form_id: ID of the form, named in the error.
+        n: Slots the form has.
+        member_count: Members the edited form lists.
+
+    Raises:
+        SpacingError: `MEMBER_COUNT_MISMATCH`; the hint also names `edit_text_count`.
+    """
+    try:
+        require_member_count(form_id, n, member_count)
+    except SpacingError as exc:
+        raise SpacingError(
+            exc.message,
+            hint=f"{exc.hint}; {EDIT_TEXT_COUNT_HINT}",
+            context=exc.context,
+            code="MEMBER_COUNT_MISMATCH",
+        ) from exc

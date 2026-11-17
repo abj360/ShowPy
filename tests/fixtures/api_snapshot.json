@@ -1250,7 +1250,7 @@
   "duplicate_spots": "(show: 'Show', sel: Selector, offset: Point, set_id: SetId, *, force: bool = False) -> 'Show'",
   "ease": "(easing: showpy.choreo.models.Easing, u: FloatArray) -> FloatArray",
   "easing_breaks": "(easing: showpy.choreo.models.Easing) -> list[float]",
-  "edit": "(form: showpy.choreo.models.Form, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., **changes: Any) -> showpy.choreo.models.Form",
+  "edit": "(form: showpy.choreo.models.Form, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., *, font_registry: showpy.geo.fonts.FontRegistry | None = None, **changes: Any) -> showpy.choreo.models.Form",
   "edit_group": "(show: 'Show', key: str, /, **changes: Any) -> 'Show'",
   "edit_note": "(show: 'Show', note_id: str, /, **changes: Any) -> 'Show'",
   "edit_params": "(form: showpy.choreo.models.Form, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., **params: Any) -> showpy.choreo.models.Form",

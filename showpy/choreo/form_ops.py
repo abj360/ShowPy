@@ -25,6 +25,11 @@ import numpy as np
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
 from showpy.choreo.form_layout import CURVE_KINDS, curve_stations, layout, slot_count
+from showpy.choreo.form_text import (
+    reject_count_change,
+    require_edited_members,
+    resolve_edit_fonts,
+)
 from showpy.choreo.forms import (
     arc_form,
     block_form,
@@ -44,7 +49,7 @@ from showpy.choreo.forms import (
     wedge_form,
 )
 from showpy.choreo.match import match
-from showpy.choreo.models import FacingSpec, Form, Set
+from showpy.choreo.models import FacingSpec, Form, Set, TextRecipe
 from showpy.core.errors import SchemaError
 from showpy.core.ids import FormId, SpotId
 from showpy.core.types import Degrees, Point, Points
@@ -59,6 +64,7 @@ from showpy.geo.affine import (
     transform_points,
 )
 from showpy.geo.curves import TrimmedCurve, curve_from_construction
+from showpy.geo.fonts import FontRegistry
 
 FORM_FIELDS = frozenset({"members", "spacing", "facing", "locked", "meta", "set"})
 SHARED_RECIPE_KEYS = frozenset({"n", "transform"})
@@ -68,6 +74,7 @@ RECIPE_KEYS = {
     "scatter": frozenset({"region", "min_gap", "seed"}),
     "custom": frozenset({"points", "facings"}),
     "generated": frozenset({"fn", "params"}),
+    "text": frozenset(TextRecipe.model_fields),
 }
 TRIMMABLE_FACINGS = frozenset({"audience", "fixed", "along", "normal", "toward_point"})
 HALF_TURN = 180.0
@@ -103,24 +110,37 @@ def _edited_geometry(form: Form, changes: dict[str, Any]) -> dict[str, Any]:
 
 # Any: changes are construction values or form fields of any type.
 def edit(
-    form: Form, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS, **changes: Any
+    form: Form,
+    force: bool = False,
+    registry: FormFnRegistry = DEFAULT_FORM_FNS,
+    *,
+    font_registry: FontRegistry | None = None,
+    **changes: Any,
 ) -> Form:
     """Returns a form with construction fields (e.g. radius) or form fields changed.
 
-    The result is validated by regenerating its slots when the slot count is known.
+    The result is validated by regenerating its slots when the slot count is known. A text
+    form keeps its count: `n` and `spacing` raise `TEXT_COUNT_EDIT` (use `edit_text_count`),
+    and `members` must keep the count. `fonts` names resolve through `font_registry`.
 
     >>> f = circle_form("c", ["A", "B"], (0, 5), 2.0)
     >>> edit(f, radius=3.0).geometry["curve"]["radius"]
     3.0
     """
     check_unlocked(form, force)
+    if form.kind == "text":
+        reject_count_change(form.id, changes)
+        changes = resolve_edit_fonts(changes, font_registry)
     fields = {k: v for k, v in changes.items() if k in FORM_FIELDS}
     recipe = {k: v for k, v in changes.items() if k not in FORM_FIELDS}
     geometry = _edited_geometry(form, recipe) if recipe else form.geometry
     dumped = form.model_dump()
     edited = Form.model_validate({**dumped, **fields, "geometry": geometry})
-    if slot_count(edited) is not None:
-        layout(edited, registry)
+    count = slot_count(edited)
+    if edited.kind == "text" and count is not None:
+        require_edited_members(edited.id, count, len(edited.members))
+    if count is not None:
+        layout(edited, registry, font_registry=font_registry)
     return edited
 
 
