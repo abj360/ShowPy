@@ -451,7 +451,7 @@ def text_form(
     >>> len(slots(go))
     24
     """
-    fonts_registry = font_registry or bundled_fonts()
+    fonts_registry = bundled_fonts() if font_registry is None else font_registry
     recipe = TextRecipe(
         text=text,
         fonts=tuple(fonts_registry.resolve(font) for font in fonts),

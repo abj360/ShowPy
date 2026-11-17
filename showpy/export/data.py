@@ -120,7 +120,8 @@ def export_json(
             )
         dumped = {key: value for key, value in dumped.items() if key in keep}
     document: dict[str, Any] = {SCHEMA_KEY: SCHEMA_TAG, SHOW_KEY: dumped}
-    fonts = _embedded_fonts(show, dumped, font_registry or bundled_fonts())
+    registry = bundled_fonts() if font_registry is None else font_registry
+    fonts = _embedded_fonts(show, dumped, registry)
     if fonts:
         document[FONTS_KEY] = fonts
     return document
@@ -227,7 +228,7 @@ def import_fonts(d: Mapping[str, Any], font_registry: FontRegistry | None = None
     >>> import_fonts(export_json(two_set_show())) is bundled_fonts()
     True
     """
-    registry = font_registry or bundled_fonts()
+    registry = bundled_fonts() if font_registry is None else font_registry
     if not isinstance(d, Mapping):
         raise FontError(
             f"document is a {type(d).__name__}, not a mapping",

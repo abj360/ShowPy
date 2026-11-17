@@ -334,7 +334,7 @@ def layout_text(
     """
     require_size(len(text), MAX_LAYOUT_CHARS, what="text characters")
     _check_numbers(height, at, rotation, letter_spacing, line_spacing)
-    chain = _chain(fonts, font_registry or bundled_fonts(), height)
+    chain = _chain(fonts, bundled_fonts() if font_registry is None else font_registry, height)
     em = chain[0].scale * chain[0].font.units_per_em
     lines = _split_lines(text)
     pitch = line_spacing * em
