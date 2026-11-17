@@ -43,6 +43,7 @@ from typing import Any, cast
 import pytest
 
 from showpy.core.errors import ConflictError, SchemaError, StorageError
+from showpy.core.ids import WINDOWS_DEVICE_NAMES
 from showpy.core.util import content_hash
 from showpy.show.documents import script_doc
 from showpy.show.file_repository import FileRepository
@@ -177,7 +178,7 @@ def test_regression_new_device_name_show_is_refused_before_writing(
         _create(repo, show_id)
     assert caught.value.code == DEVICE_NAME_CODE
     assert caught.value.context == {"show": show_id}
-    assert "device" in caught.value.hint
+    assert all(name in caught.value.hint for name in WINDOWS_DEVICE_NAMES)
     assert repo.shows() == []
     assert _folders(tmp_path) == set()
 
