@@ -14,6 +14,7 @@ Contains:
     text_recipe(): validates a text form's stored geometry into a TextRecipe
     text_strokes(): lays a recipe out and returns its visible strokes in reading order
     min_text_spots(): counts the spots the strokes need at least
+    require_whole_count(): rejects a spot count that is not a whole number up to the cap
     text_slots(): places exactly n slots on the strokes, with unit tangents
     require_member_count(): rejects a text form whose member count differs from its slot count
     reject_count_change(): rejects an edit of a text form that changes its count
@@ -69,6 +70,7 @@ FIELD_HINTS: Mapping[str, str] = MappingProxyType(
         "anchor": f"use anchor {', '.join(get_args(TextAnchor.__value__))}",
         "letter_spacing": "give letter_spacing as a finite number of ems",
         "line_spacing": "give line_spacing as a finite number of ems > 0",
+        "spacing": "give spacing as a finite distance > 0 in meters, or null",
     }
 )
 
@@ -219,7 +221,12 @@ def min_text_spots(strokes: Sequence[Curve]) -> int:
     return sum(_stroke_minimum(stroke) for stroke in strokes)
 
 
-def _require_whole_count(n: int) -> None:
+def require_whole_count(n: int) -> None:
+    """Rejects a text spot count that is not a whole number from 1 to `MAX_TEXT_SPOTS`.
+
+    Raises:
+        SpacingError: `TOO_MANY_SPOTS` above the cap; no code for a non-int or n < 1.
+    """
     if isinstance(n, bool) or not isinstance(n, Integral) or n < 1:
         raise SpacingError(
             "n must be a whole number of at least 1",
@@ -329,7 +336,7 @@ def text_slots(
     >>> points.shape, points[0].tolist()
     ((36, 2), [0.0, 10.0])
     """
-    _require_whole_count(n)
+    require_whole_count(n)
     glyphs = _laid_strokes(recipe, font_registry)
     strokes = [stroke for glyph in glyphs for stroke in glyph.strokes]
     chars = [glyph.char for glyph in glyphs for _ in glyph.strokes]

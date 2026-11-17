@@ -43,7 +43,7 @@ from pydantic import Field, SerializerFunctionWrapHandler, model_serializer, mod
 from showpy.core.errors import LockedError, PathError, SchemaError, UnknownRefError
 from showpy.core.ids import FormId, RouteId, SetId, SpotId, TransitionId, check_id
 from showpy.core.selection import Selection, SelectorField
-from showpy.core.types import Count, Degrees, FrozenModel, Meters, Point, Points
+from showpy.core.types import Count, Degrees, FrozenModel, Meters, Point, Points, PositiveMeters
 from showpy.geo.models import DEFAULT_LINE_SPACING, TextAlign, TextAnchor
 from showpy.geo.text_layout import MAX_LAYOUT_CHARS
 
@@ -298,6 +298,8 @@ class TextRecipe(FrozenModel):
         anchor: Which line of the text block sits vertically on `at`.
         letter_spacing: Extra gap between glyphs, in ems of the first font.
         line_spacing: Baseline-to-baseline distance, in ems of the first font.
+        spacing: Meters between spots that last set the form's count, or None when the count
+            was given as `n`; the stored `n` stays the count.
 
     >>> from showpy.geo.fonts import bundled_fonts
     >>> simplex = bundled_fonts().resolve("simplex")
@@ -315,6 +317,7 @@ class TextRecipe(FrozenModel):
     anchor: TextAnchor = "baseline"
     letter_spacing: float = 0.0
     line_spacing: float = Field(default=DEFAULT_LINE_SPACING, gt=0)
+    spacing: PositiveMeters | None = None
 
 
 type FormKind = Literal[

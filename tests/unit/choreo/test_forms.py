@@ -31,6 +31,7 @@ import contextlib
 import json
 import math
 import sys
+from typing import Any
 
 import numpy as np
 import pytest
@@ -452,6 +453,20 @@ def test_text_form_needs_one_member_per_slot(members: list[str], hint: str) -> N
     assert caught.value.code == "MEMBER_COUNT_MISMATCH"
     assert caught.value.hint == hint
     assert caught.value.context == {"form": "go", "n": 24, "members": len(members)}
+
+
+@pytest.mark.parametrize("counts", [{}, {"n": 24, "spacing": 0.5}])
+def test_text_form_needs_exactly_one_of_n_and_spacing(counts: dict[str, Any]) -> None:
+    with pytest.raises(SchemaError) as caught:
+        text_form("go", TEXT_MEMBERS, "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10),
+                  **counts)  # fmt: skip
+    assert caught.value.code == "N_OR_SPACING"
+    assert "n=" in caught.value.hint
+    assert "spacing=" in caught.value.hint
+
+
+def test_text_form_stores_n_and_no_spacing_for_an_exact_count() -> None:
+    assert _go().geometry["spacing"] is None
 
 
 def test_text_form_rejects_too_few_spots() -> None:

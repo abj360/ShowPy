@@ -7,6 +7,7 @@ Contains:
     test_*(): one behavior of showpy.choreo.form_text each
 """
 
+import math
 from collections.abc import Iterator
 
 import numpy as np
@@ -223,9 +224,22 @@ def test_text_recipe_ignores_shared_keys() -> None:
 
 def test_text_recipe_rejects_unknown_keys() -> None:
     with pytest.raises(SchemaError) as caught:
-        text_recipe(geometry(spacing=1.0))
-    assert caught.value.context["field"] == "spacing"
+        text_recipe(geometry(kerning=1.0))
+    assert caught.value.context["field"] == "kerning"
     assert "text" in caught.value.hint
+
+
+@pytest.mark.parametrize("spacing", [0, -1, math.nan])
+def test_text_recipe_rejects_bad_spacing(spacing: float) -> None:
+    with pytest.raises(SchemaError) as caught:
+        text_recipe(geometry(spacing=spacing))
+    assert caught.value.context["field"] == "spacing"
+    assert "spacing" in caught.value.hint
+
+
+def test_text_recipe_keeps_a_spacing() -> None:
+    assert text_recipe(geometry(spacing=0.5)).spacing == 0.5
+    assert text_recipe(geometry()).spacing is None
 
 
 def test_regression_text_slots_cap_the_spot_count() -> None:

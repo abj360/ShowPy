@@ -28,6 +28,7 @@ Contains:
         pydantic error, for edit(radius="abc")
     test_edit_text_keeps_members_in_reading_order: regenerates the letters on the same members
     test_edit_text_too_long_for_the_count_names_the_minimum: names the minimum count for a long text
+    test_edit_text_keeps_the_derived_count: keeps n, spacing and members of a spacing-built form
     test_edit_text_resolves_font_names: stores font URIs when edit gets font names
     test_edit_text_suggests_the_field_for_a_typo: names the near field for a misspelled key
     test_edit_locked_text_form_needs_force: refuses a locked text form without force
@@ -74,6 +75,7 @@ from showpy.choreo.forms import (
     text_form,
 )
 from showpy.choreo.models import FacingSpec, Form, Placement, Set, SpacingSpec
+from showpy.choreo.text_count import spacing_count
 from showpy.core.errors import (
     LockedError,
     MissingFontError,
@@ -445,6 +447,17 @@ def test_edit_text_too_long_for_the_count_names_the_minimum() -> None:
         edit(f, text="HIHI")
     assert caught.value.code == "TOO_FEW_SPOTS"
     assert caught.value.context["min_n"] == 24
+
+
+def test_edit_text_keeps_the_derived_count() -> None:
+    strokes = text_strokes(text_recipe(_text().geometry))
+    members = [f"S{i}" for i in range(spacing_count(strokes, 0.5))]
+    f = text_form("t", members, "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10),
+                  spacing=0.5)  # fmt: skip
+    g = edit(f, text="GOGO")
+    assert g.geometry["n"] == f.geometry["n"] == len(members)
+    assert g.geometry["spacing"] == f.geometry["spacing"] == 0.5
+    assert g.members == f.members
 
 
 def test_edit_text_resolves_font_names() -> None:

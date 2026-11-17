@@ -12,7 +12,9 @@ whose keys depend on `Form.kind`:
     custom:    {"points": [[x, y], ...], "facings": [deg, ...] | null}
     generated: {"fn": <registered name>, "params": {...}}
     text:      TextRecipe fields: {"text", "fonts" (URIs), "mode", "height", "at", "rotation",
-               "align", "anchor", "letter_spacing", "line_spacing"}; "n" is always stored
+               "align", "anchor", "letter_spacing", "line_spacing", "spacing"}; "spacing" is
+               the request that last set the count (meters between spots, or null), and "n"
+               is the stored count, always present; only edit_text_count changes either
 
 Every recipe may also hold `"n"`, the slot count; without it a form has one slot per member
 (interval spacing places as many as fit, a block has rows x cols, a custom form one per
@@ -51,6 +53,7 @@ from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
 from showpy.choreo.form_layout import layout, member_facings, slot_count
 from showpy.choreo.form_text import require_member_count
 from showpy.choreo.models import FacingSpec, Form, FormKind, Placement, SpacingSpec, TextRecipe
+from showpy.choreo.text_count import count_recipe
 from showpy.core.errors import LockedError, SchemaError, SpacingError
 from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.types import Box2, Degrees, Meters, Point, Points, Region
@@ -410,13 +413,15 @@ def text_form(
     line_spacing: float = DEFAULT_LINE_SPACING,
     facing: FacingSpec | None = None,
     set_id: SetId = "",
-    n: int,
+    n: int | None = None,
+    spacing: Meters | None = None,
     font_registry: FontRegistry | None = None,
 ) -> Form:
     r"""Builds a form that writes `text` on the field with exactly `n` spots, one per member.
 
     Fonts are stored as URIs, so the recipe names the exact font bytes. Member i stands on
-    slot i in reading order; a text form needs exactly `n` members.
+    slot i in reading order; a text form needs exactly `n` members. Give exactly one of `n`
+    and `spacing`; a spacing derives `n` from the stroke lengths and is stored beside it.
 
     Args:
         form_id: ID of the new form.
@@ -433,9 +438,11 @@ def text_form(
         facing: Facing spec, or None for audience.
         set_id: Set the form belongs to.
         n: Number of spots; at least the text's stroke minimum.
+        spacing: Meters between spots along the strokes, instead of `n`.
         font_registry: Registry that resolves the fonts; None means `bundled_fonts()`.
 
     Raises:
+        SchemaError: `N_OR_SPACING` unless exactly one of `n` and `spacing` is given.
         SpacingError: `TOO_FEW_SPOTS`, `TOO_MANY_SPOTS` or `MEMBER_COUNT_MISMATCH`.
         MissingFontError: A font is not in the registry.
 
@@ -456,9 +463,10 @@ def text_form(
         letter_spacing=letter_spacing,
         line_spacing=line_spacing,
     )
-    form = _form(form_id, "text", recipe.model_dump(mode="json"), members, None, facing, set_id, n)
+    geometry = count_recipe(recipe.model_dump(mode="json"), n, spacing, font_registry)
+    form = _form(form_id, "text", geometry, members, None, facing, set_id, None)
     layout(form, font_registry=font_registry)
-    require_member_count(form_id, n, len(members))
+    require_member_count(form_id, geometry["n"], len(members))
     return form
 
 

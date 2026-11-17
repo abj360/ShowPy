@@ -225,6 +225,9 @@ if TYPE_CHECKING:
         rotate_path,
         two_part,
     )
+    from showpy.choreo.text_edit import (
+        edit_text_count,
+    )
     from showpy.core.canonical import (
         canonical_value,
         jcs,
@@ -1020,6 +1023,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "edit_group": ("showpy.cast.spots", "edit_group"),
     "edit_note": ("showpy.notes.notes", "edit_note"),
     "edit_params": ("showpy.choreo.forms", "edit_params"),
+    "edit_text_count": ("showpy.choreo.text_edit", "edit_text_count"),
     "ellipse": ("showpy.geo.shapes", "ellipse"),
     "energy_curve": ("showpy.choreo.motion_stats", "energy_curve"),
     "escape_text": ("showpy.export.pdf", "escape_text"),
@@ -1581,6 +1585,7 @@ __all__ = [
     "edit_group",
     "edit_note",
     "edit_params",
+    "edit_text_count",
     "ellipse",
     "energy_curve",
     "escape_text",

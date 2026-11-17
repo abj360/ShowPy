@@ -1034,6 +1034,7 @@
       "line_spacing": "float",
       "mode": "Literal['centerline']",
       "rotation": "Degrees",
+      "spacing": "PositiveMeters | None",
       "text": "str"
     }
   },
@@ -1254,6 +1255,7 @@
   "edit_group": "(show: 'Show', key: str, /, **changes: Any) -> 'Show'",
   "edit_note": "(show: 'Show', note_id: str, /, **changes: Any) -> 'Show'",
   "edit_params": "(form: showpy.choreo.models.Form, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., **params: Any) -> showpy.choreo.models.Form",
+  "edit_text_count": "(form: showpy.choreo.models.Form, *, add: collections.abc.Sequence[SpotId] = (), remove: collections.abc.Sequence[SpotId] = (), n: int | None = None, spacing: Meters | None = None, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., font_registry: showpy.geo.fonts.FontRegistry | None = None) -> showpy.choreo.models.Form",
   "ellipse": "(center: Point, rx: Meters, ry: Meters, rotation_deg: Degrees = 0.0) -> showpy.geo.curves.EllipseCurve",
   "energy_curve": "(show: showpy.show.models.Show, per_count: int = 1) -> pandas.Series",
   "escape_text": "(text: str) -> bytes",
@@ -1489,7 +1491,7 @@
   "symmetry_score": "(s: showpy.choreo.models.Set, axis_x: float = 0.0) -> float",
   "template_ref": "(ref_id: str) -> SheetRef",
   "tempo_at": "(tl: showpy.time.models.Timeline, c: Count) -> CountsPerMinute",
-  "text_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], text: str, *, fonts: collections.abc.Sequence[str], height: Meters, at: Point, rotation: Degrees = 0.0, align: TextAlign = 'left', anchor: TextAnchor = 'baseline', letter_spacing: float = 0.0, line_spacing: float = 1.2, facing: showpy.choreo.models.FacingSpec | None = None, set_id: SetId = '', n: int, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> showpy.choreo.models.Form",
+  "text_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], text: str, *, fonts: collections.abc.Sequence[str], height: Meters, at: Point, rotation: Degrees = 0.0, align: TextAlign = 'left', anchor: TextAnchor = 'baseline', letter_spacing: float = 0.0, line_spacing: float = 1.2, facing: showpy.choreo.models.FacingSpec | None = None, set_id: SetId = '', n: int | None = None, spacing: Meters | None = None, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> showpy.choreo.models.Form",
   "text_outline": "(text: str, font: str | collections.abc.Sequence[str], height: Meters, at: Point, *, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> list[showpy.geo.curves.Polyline | showpy.geo.curves.SvgCurve]",
   "timer": "() -> collections.abc.Iterator[showpy.core.util.Timer]",
   "to_coords": "(show: 'Show', p: Point, style: CoordStyle = 'long') -> str",
