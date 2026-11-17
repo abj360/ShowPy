@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 """
-test_validation.py --- tests validation reports, validate_or_schema_error and require_finite
+test_validation.py --- tests validation reports, SchemaError-raising validators, require_finite
 
 Contains:
     test_report_*(), test_merge_concatenates_issues: status, rendering and merging of reports
     test_validate_or_schema_error_*(): one behavior of the SchemaError-raising validator each
+    test_validate_adapter_*(): SchemaError from standalone TypeAdapters, Python or JSON input
     test_require_finite_*(): one rule of the finite-number check each
     test_regression_require_finite_rejects_an_int_too_large_for_float: rejects 10**400 instead of
         leaking OverflowError
@@ -17,13 +18,15 @@ from typing import Literal
 
 import numpy as np
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 
 from showpy.core.errors import SchemaError
 from showpy.core.validation import (
     ValidationIssue,
     ValidationReport,
     require_finite,
+    validate_adapter,
+    validate_adapter_json,
     validate_or_schema_error,
 )
 
@@ -130,3 +133,28 @@ def test_regression_require_finite_echoes_a_huge_int_by_its_bit_count() -> None:
     assert "too large for a float" in caught.value.message
     assert caught.value.context["value"] == f"<int of {huge.bit_length()} bits>"
     assert "bits" in repr(caught.value.context)
+
+
+_INT_LIST: TypeAdapter[list[int]] = TypeAdapter(list[int])
+
+
+def test_validate_adapter_returns_the_value() -> None:
+    assert validate_adapter(_INT_LIST, ["1", 2], name="Ints") == [1, 2]
+
+
+def test_validate_adapter_names_the_failing_item() -> None:
+    with pytest.raises(SchemaError) as info:
+        validate_adapter(_INT_LIST, [1, "x"], name="Ints")
+    assert info.value.context["model"] == "Ints"
+    assert info.value.context["errors"][0]["loc"] == "1"
+
+
+@pytest.mark.parametrize("raw", [b"[1, 2", b'["x"]', b"\xff\xfe", b'{"a": 1}'])
+def test_validate_adapter_json_raises_schema_error(raw: bytes) -> None:
+    with pytest.raises(SchemaError) as info:
+        validate_adapter_json(_INT_LIST, raw, name="Ints")
+    assert info.value.context["errors"]
+
+
+def test_validate_adapter_json_returns_the_value() -> None:
+    assert validate_adapter_json(_INT_LIST, b"[3]", name="Ints") == [3]

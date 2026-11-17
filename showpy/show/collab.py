@@ -25,9 +25,10 @@ from showpy.core.errors import (
 )
 from showpy.core.ids import ZoneId, format_tid
 from showpy.core.selection import Selection
+from showpy.core.validation import validate_adapter
 from showpy.notes.models import Anchor
 from showpy.show.changes import apply_change
-from showpy.show.files import COMMENTS_ADAPTER, COMMENTS_DOC, SELECTION_DOC
+from showpy.show.files import COMMENTS_DOC, SELECTION_DOC, decode_comments
 from showpy.show.locks import locked_changes
 from showpy.show.models import (
     CanvasEvent,
@@ -86,7 +87,7 @@ def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
         if event.kind == "pin":
             return pin(show, held.target, held.id, held.reason, held.by)
         return unpin(show, held.target, held.id)
-    op = OP_ADAPTER.validate_python(event.payload)
+    op = validate_adapter(OP_ADAPTER, event.payload, name="ChangeOp")
     if OP_KIND[type(op)] != event.kind:
         raise SchemaError(
             f"event {event.id} of kind {event.kind} carries a {op.op} op",
@@ -137,7 +138,7 @@ def _show_events(before: Show, after: Show) -> list[tuple[EventKind, dict[str, o
 
 def _comments(ws: Workspace, revision: str) -> dict[str, Comment]:
     raw = ws.tree_at(revision).get(COMMENTS_DOC)
-    return {} if raw is None else {c.id: c for c in COMMENTS_ADAPTER.validate_json(raw)}
+    return {} if raw is None else {c.id: c for c in decode_comments(raw)}
 
 
 def _comment_events(ws: Workspace, r: Revision) -> list[tuple[EventKind, dict[str, object]]]:

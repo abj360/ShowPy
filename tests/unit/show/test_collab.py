@@ -376,3 +376,14 @@ def test_regression_accepting_a_form_edit_does_not_resurrect_a_deleted_form() ->
     except ShowPyError:
         return
     assert "f1" not in load_show(designer).forms
+
+
+@pytest.mark.parametrize("payload", [{}, {"op": "nope"}, {"op": "counts", "counts": "x"}])
+def test_regression_canvas_event_with_bad_payload_is_a_schema_error(
+    payload: dict[str, object],
+) -> None:
+    """Raises SchemaError, not pydantic's ValidationError, for a malformed op payload."""
+    event = CanvasEvent(id="e", at=AT, kind="set_counts", payload=payload)
+    with pytest.raises(SchemaError) as info:
+        apply_event(two_set_show(), event)
+    assert info.value.context["errors"]

@@ -6,6 +6,8 @@ Contains:
     ValidationReport: collects issues, reports ok, renders one line per issue
     ValidationReport.merge(): combines several reports into one
     validate_or_schema_error(): validates data against any pydantic model, raising SchemaError
+    validate_adapter(): validates a Python value against a TypeAdapter, raising SchemaError
+    validate_adapter_json(): validates JSON bytes or text against a TypeAdapter, raising SchemaError
     require_finite(): checks a numeric parameter is finite and inside optional bounds
 """
 
@@ -14,7 +16,7 @@ from numbers import Real
 from typing import Literal
 
 import numpy as np
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from showpy.core.errors import SchemaError, bounded_repr, schema_error_from
 from showpy.core.types import FrozenModel
@@ -85,6 +87,48 @@ def validate_or_schema_error[M: BaseModel](model: type[M], data: object) -> M:
         return model.model_validate(data)
     except ValidationError as exc:
         raise schema_error_from(exc, model=model.__name__) from exc
+
+
+def validate_adapter[T](adapter: TypeAdapter[T], data: object, *, name: str) -> T:
+    """Validates a Python value against a TypeAdapter, raising SchemaError on failure.
+
+    Args:
+        adapter: Standalone adapter for a union or generic type no model class covers.
+        data: Raw value to validate.
+        name: What the adapter validates, echoed in the error context.
+
+    Returns:
+        value: The validated value.
+
+    >>> from pydantic import TypeAdapter
+    >>> validate_adapter(TypeAdapter(list[int]), ["1"], name="Ints")
+    [1]
+    """
+    try:
+        return adapter.validate_python(data)
+    except ValidationError as exc:
+        raise schema_error_from(exc, model=name) from exc
+
+
+def validate_adapter_json[T](adapter: TypeAdapter[T], raw: str | bytes, *, name: str) -> T:
+    """Validates JSON against a TypeAdapter; bad JSON or UTF-8 is a SchemaError too.
+
+    Args:
+        adapter: Standalone adapter for a union or generic type no model class covers.
+        raw: JSON text or UTF-8 bytes.
+        name: What the adapter validates, echoed in the error context.
+
+    Returns:
+        value: The validated value.
+
+    >>> from pydantic import TypeAdapter
+    >>> validate_adapter_json(TypeAdapter(list[int]), b"[1]", name="Ints")
+    [1]
+    """
+    try:
+        return adapter.validate_json(raw)
+    except ValidationError as exc:
+        raise schema_error_from(exc, model=name) from exc
 
 
 def require_finite(

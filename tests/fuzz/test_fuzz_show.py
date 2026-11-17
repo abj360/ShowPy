@@ -14,19 +14,23 @@ Contains:
     test_fuzz_staged_changes_json_shapes(): stages JSON of any shape at every known path
     test_fuzz_write_paths(): writes arbitrary bytes to arbitrary or known paths
     test_fuzz_commit_paths(): commits arbitrary changes to arbitrary or known paths
+    test_fuzz_apply_event_payloads(): applies canvas events carrying JSON payloads of any shape
+    test_fuzz_decode_comments(): decodes arbitrary bytes as a comments file
     test_fuzz_commit_then_read(): reads back whatever bytes a commit accepted at a known path
 """
 
 import json
 from datetime import UTC, datetime
+from typing import get_args
 
 from hypothesis import given
 from hypothesis import strategies as st
 
+from showpy.show.collab import apply_event
 from showpy.show.documents import SHOW_DOC, decode_show, encode_show, split_path
-from showpy.show.files import all_files, staged_changes
+from showpy.show.files import all_files, decode_comments, staged_changes
 from showpy.show.manage import insert_subset, renumber
-from showpy.show.models import Show
+from showpy.show.models import CanvasEvent, EventKind, Show
 from showpy.show.storage import Workspace
 from tests.fixtures.shows import two_set_show
 from tests.helpers import only_showpy_errors, open_session
@@ -157,3 +161,24 @@ def test_fuzz_commit_then_read(path: str, raw: bytes) -> None:
         workspace.read(path)
 
     only_showpy_errors(commit_and_read, (path, raw))
+
+
+EVENT_KINDS = st.sampled_from(get_args(EventKind.__value__))
+OP_PAYLOADS = st.one_of(
+    st.dictionaries(st.text(max_size=6), JSON_VALUES, max_size=4),
+    st.fixed_dictionaries({"op": st.sampled_from(["placement", "form", "paths", "counts", "x"])}),
+    st.fixed_dictionaries(
+        {"op": st.just("counts"), "set_id": JSON_VALUES, "counts": JSON_VALUES},
+    ),
+)
+
+
+@given(EVENT_KINDS, OP_PAYLOADS)
+def test_fuzz_apply_event_payloads(kind: EventKind, payload: dict[str, object]) -> None:
+    event = CanvasEvent(id="e", at=AT, kind=kind, payload=payload)
+    only_showpy_errors(lambda: apply_event(PLAIN, event, force=True), (kind, payload))
+
+
+@given(st.one_of(st.binary(max_size=64), JSON_VALUES.map(_json_bytes)))
+def test_fuzz_decode_comments(raw: bytes) -> None:
+    only_showpy_errors(lambda: decode_comments(raw), raw)

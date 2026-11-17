@@ -13,6 +13,7 @@ Contains:
     CLAIMS_DOC: names the published claims file
     all_files(): lists every readable file path
     directories(): lists every directory path, each ending in `/`
+    decode_comments(): decodes a comments file into its comments
     read_file(): returns a file's text or bytes
     show_changes(): lists the stored-document writes and deletes that store a show
     staged_changes(): validates one file write and returns the stored-document changes it makes
@@ -30,6 +31,7 @@ from showpy.core.errors import LockedError, SchemaError, StorageError, UnknownRe
 from showpy.core.ids import TransitionId
 from showpy.core.selection import Selection
 from showpy.core.util import close_matches
+from showpy.core.validation import validate_adapter_json
 from showpy.show.documents import (
     FORMS_NAME,
     NOTES_DOC,
@@ -75,6 +77,15 @@ DEFAULTS = {
     COMMENTS_DOC: EMPTY_LIST,
 }
 COMMENTS_ADAPTER = TypeAdapter(list[Comment])
+
+
+def decode_comments(raw: bytes) -> list[Comment]:
+    """Decodes a comments file, raising SchemaError for bad UTF-8, JSON or comment shapes.
+
+    >>> decode_comments(b"[]")
+    []
+    """
+    return validate_adapter_json(COMMENTS_ADAPTER, raw, name="Comments")
 
 
 def _set_files(show: Show, tree: Mapping[str, bytes]) -> list[str]:
@@ -270,7 +281,7 @@ def _require_valid(path: str, raw: bytes) -> None:
         if path == SELECTION_DOC:
             Selection.model_validate_json(text)
         elif path == COMMENTS_DOC:
-            COMMENTS_ADAPTER.validate_json(text)
+            decode_comments(raw)
         elif path.endswith(".json"):
             json.loads(text)
     except (UnicodeDecodeError, json.JSONDecodeError, SchemaError, PydanticValidationError) as exc:

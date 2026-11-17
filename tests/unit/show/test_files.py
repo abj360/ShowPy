@@ -15,6 +15,8 @@ Contains:
     test_regression_reading_root_names_a_directory: raises StorageError BAD_PATH for the root
     test_regression_invalid_utf8_text_file_is_a_library_error: maps invalid UTF-8 in a text file to
         a ShowPyError
+    test_regression_bad_comments_file_is_a_schema_error: raises SchemaError for comments files of
+        the wrong shape, invalid JSON or invalid UTF-8
 """
 
 import json
@@ -22,8 +24,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from showpy.core.errors import LockedError, ShowPyError, StorageError
+from showpy.core.errors import LockedError, SchemaError, ShowPyError, StorageError
 from showpy.show.documents import SHOW_DOC
+from showpy.show.files import decode_comments
 from showpy.show.storage import Workspace
 from tests.fixtures.shows import two_set_show
 from tests.helpers import open_session
@@ -98,3 +101,14 @@ def test_regression_invalid_utf8_text_file_is_a_library_error() -> None:
     _, designer = _session()
     with pytest.raises(ShowPyError):
         _store_then_read(designer, "/renders/a.txt", INVALID_UTF8)
+
+
+@pytest.mark.parametrize("raw", [b'{"id": "c1"}', b"[1]", b"{", b"", INVALID_UTF8])
+def test_regression_bad_comments_file_is_a_schema_error(raw: bytes) -> None:
+    """Raises SchemaError, not pydantic or decode errors, for a malformed comments file."""
+    with pytest.raises(SchemaError):
+        decode_comments(raw)
+
+
+def test_decode_comments_reads_a_stored_list() -> None:
+    assert decode_comments(b"[]") == []
