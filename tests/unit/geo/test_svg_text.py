@@ -48,6 +48,7 @@ Contains:
         radii instead of leaking IndexError
     test_regression_svg_outline_rejects_a_path_with_too_many_pieces: raises a ShowPyError for
         50,000 pieces
+    test_regression_simplex_tables_are_read_only: refuses item assignment on SIMPLEX and FONTS
 """
 
 import math
@@ -65,6 +66,7 @@ from showpy.core.util import approx_equal
 from showpy.geo.curves import SvgCurve
 from showpy.geo.shapes import svg_outline, text_outline
 from showpy.geo.svg import parse_path
+from showpy.geo.text import FONTS, SIMPLEX
 from tests.helpers import fails_after
 
 BOX = Box2(min=(0.0, 0.0), max=(10.0, 10.0))
@@ -338,3 +340,10 @@ def test_regression_svg_outline_rejects_bad_path_index() -> None:
     """Raises a ShowPyError for an out-of-range path_index instead of leaking IndexError."""
     with pytest.raises(ShowPyError):
         svg_outline("M0 0 L1 1", BOX, path_index=BAD_PATH_INDEX)
+
+
+def test_regression_simplex_tables_are_read_only() -> None:
+    with pytest.raises(TypeError):
+        FONTS["other"] = {}  # type: ignore[index]
+    with pytest.raises(TypeError):
+        SIMPLEX["?"] = ()  # type: ignore[index]

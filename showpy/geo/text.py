@@ -9,6 +9,9 @@ Contains:
     glyph_strokes(): returns the strokes of one character on the unit grid
 """
 
+from collections.abc import Mapping
+from types import MappingProxyType
+
 from showpy.core.errors import UnknownRefError
 
 type Stroke = tuple[tuple[float, float], ...]
@@ -21,7 +24,7 @@ ADVANCE = 5.0
 _O: Stroke = ((1, 0), (0, 1), (0, 5), (1, 6), (3, 6), (4, 5), (4, 1), (3, 0), (1, 0))
 _P: Stroke = ((0, 0), (0, 6), (3, 6), (4, 5), (4, 4), (3, 3), (0, 3))
 
-SIMPLEX: dict[str, Glyph] = {
+_SIMPLEX_GLYPHS: dict[str, Glyph] = {
     " ": (),
     "A": (((0, 0), (2, 6), (4, 0)), ((1, 3), (3, 3))),
     "B": (
@@ -101,7 +104,8 @@ SIMPLEX: dict[str, Glyph] = {
     ".": (((2, 0), (2, 0.5)),),
 }
 
-FONTS: dict[str, dict[str, Glyph]] = {"simplex": SIMPLEX}
+SIMPLEX: Mapping[str, Glyph] = MappingProxyType(_SIMPLEX_GLYPHS)
+FONTS: Mapping[str, Mapping[str, Glyph]] = MappingProxyType({"simplex": SIMPLEX})
 
 
 def glyph_strokes(char: str, font: str) -> Glyph:

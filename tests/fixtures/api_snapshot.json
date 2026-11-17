@@ -42,6 +42,9 @@
       "sync_offset_s": "Seconds"
     }
   },
+  "BUNDLED_FONTS": {
+    "constant": "mappingproxy({'relief-singleline': 'asset:sha256:fd67c5b12e38ab886258f5bc16611b3f61f0bcc2d5711dc5ddf8fd42bc8f4b55', 'hershey-roman': 'asset:sha256:e1969f4711a74be259a5e602da900a65b94c5f45f69c33e32ab4eeb86a2c83cb', 'hershey-script': 'asset:sha256:1f0a661303e872ffd3ac5c8abdd8804519c2174696c1f8f04ac1aaee37c5a9d0', 'hershey-greek': 'asset:sha256:43f6945dde1eea1a5b51295a518f7cb8c1a12fd04d2df536ef4ab37cb2533cd1', 'simplex': 'asset:sha256:7e345d1ae7a55abc2d6414c6b16d121bdaddba1ef1fb5d82dec483e4bac20e3e'})"
+  },
   "BezierCurve": {
     "model": {
       "closed": "Literal[False]",
@@ -272,7 +275,34 @@
       "params": "dict[str, Any]"
     }
   },
+  "Font": {
+    "model": {
+      "ascender": "float",
+      "cap_height": "float | None",
+      "descender": "float",
+      "family": "str",
+      "format": "Literal['showpy.font.v1']",
+      "glyphs": "collections.abc.Mapping[str, showpy.geo.models.FontGlyph]",
+      "license": "str",
+      "name": "str",
+      "source": "str",
+      "units_per_em": "float"
+    }
+  },
   "FontError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "FontGlyph": {
+    "model": {
+      "advance": "float",
+      "strokes": "tuple[str, ...]"
+    }
+  },
+  "FontRegistry": {
+    "model": {
+      "fonts": "collections.abc.Mapping[str, showpy.geo.models.Font]",
+      "names": "collections.abc.Mapping[str, str]",
+      "sources": "collections.abc.Mapping[str, bytes]"
+    }
+  },
   "Form": {
     "model": {
       "facing": "showpy.choreo.models.FacingSpec",
@@ -1119,6 +1149,7 @@
   "bottleneck_value": "(cost: object) -> float",
   "bounds": "(obj: Points | showpy.geo.curve_base.Curve) -> showpy.core.types.Box2",
   "buffer": "(area: Area, d: float) -> Area",
+  "bundled_fonts": "() -> showpy.geo.fonts.FontRegistry",
   "canonical_value": "(obj: object) -> JsonValue",
   "center": "(obj: Points | showpy.geo.curve_base.Curve) -> Point",
   "centroid": "(obj: Points | showpy.geo.curve_base.Curve) -> Point",
@@ -1210,6 +1241,7 @@
   "fit_line": "(points: object) -> tuple[Point, Point, float]",
   "follow": "(spec: showpy.choreo.models.TransitionSpec, route: showpy.choreo.models.Route, start: float = 0.0, end: float | None = None, *, force: bool = False) -> showpy.choreo.models.TransitionSpec",
   "follow_and_set_targets": "(show: showpy.show.models.Show, tid: TransitionId, route: showpy.choreo.models.Route, start: float = 0.0, end: float | None = None, *, force: bool = False) -> showpy.show.models.Show",
+  "font_path": "(name: str) -> importlib.resources.abc.Traversable",
   "football_field": "(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> showpy.sheet.models.Sheet",
   "form_fns": "(registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> list[showpy.choreo.models.FormFnInfo]",
   "form_metrics": "(points: Points) -> showpy.geo.models.FormMetrics",
@@ -1250,6 +1282,7 @@
   "line": "(a: Point, b: Point) -> showpy.geo.curves.Segment",
   "line_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], a: Point, b: Point, spacing: showpy.choreo.models.SpacingSpec | None = None, facing: showpy.choreo.models.FacingSpec | None = None, *, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",
   "line_landmark": "(mark_id: str, name: str, a: Point, b: Point, *aliases: str) -> showpy.sheet.models.Landmark",
+  "load_font": "(data: bytes) -> showpy.geo.models.Font",
   "load_paths": "(ws: showpy.show.storage.Workspace, tid: TransitionId) -> showpy.choreo.models.TransitionSpec",
   "load_show": "(ws: showpy.show.storage.Workspace) -> showpy.show.models.Show",
   "lock": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel) -> showpy.choreo.models.TransitionSpec",
@@ -1315,6 +1348,7 @@
   "rect_ring": "(x0: float, y0: float, x1: float, y1: float) -> Ring",
   "region": "(outline: showpy.geo.curve_base.Curve | object) -> shapely.geometry.polygon.Polygon",
   "register_exporter": "(registry: showpy.export.data.FormatRegistry, name: str, fn: Exporter) -> showpy.export.data.FormatRegistry",
+  "register_font": "(registry: showpy.geo.fonts.FontRegistry, data: bytes) -> tuple[showpy.geo.fonts.FontRegistry, str]",
   "register_form_fn": "(registry: showpy.choreo.form_fns.FormFnRegistry, name: str, fn: FormFn) -> showpy.choreo.form_fns.FormFnRegistry",
   "register_importer": "(registry: showpy.export.data.FormatRegistry, name: str, fn: Importer) -> showpy.export.data.FormatRegistry",
   "register_motion": "(registry: showpy.choreo.motion.MotionRegistry, name: str, fn: showpy.choreo.motion.MotionFn) -> showpy.choreo.motion.MotionRegistry",

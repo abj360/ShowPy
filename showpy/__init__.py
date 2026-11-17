@@ -275,6 +275,7 @@ if TYPE_CHECKING:
         parse_tid,
     )
     from showpy.core.resources import (
+        font_path,
         schema_path,
     )
     from showpy.core.selection import (
@@ -413,6 +414,13 @@ if TYPE_CHECKING:
         TrimmedCurve,
         curve_from_construction,
     )
+    from showpy.geo.fonts import (
+        BUNDLED_FONTS,
+        FontRegistry,
+        bundled_fonts,
+        load_font,
+        register_font,
+    )
     from showpy.geo.measure import (
         bounds,
         center,
@@ -430,6 +438,8 @@ if TYPE_CHECKING:
         symmetry_error,
     )
     from showpy.geo.models import (
+        Font,
+        FontGlyph,
         FormMetrics,
         IntervalStats,
         SnapReport,
@@ -723,6 +733,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "ArcPiece": ("showpy.geo.svg", "ArcPiece"),
     "AssetStore": ("showpy.show.storage", "AssetStore"),
     "AudioTrack": ("showpy.time.models", "AudioTrack"),
+    "BUNDLED_FONTS": ("showpy.geo.fonts", "BUNDLED_FONTS"),
     "BezierCurve": ("showpy.geo.curves", "BezierCurve"),
     "Box2": ("showpy.core.types", "Box2"),
     "Box3": ("showpy.core.types", "Box3"),
@@ -756,7 +767,10 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "FacingSpec": ("showpy.choreo.models", "FacingSpec"),
     "FileRepository": ("showpy.show.file_repository", "FileRepository"),
     "Fix": ("showpy.choreo.engine_models", "Fix"),
+    "Font": ("showpy.geo.models", "Font"),
     "FontError": ("showpy.core.errors", "FontError"),
+    "FontGlyph": ("showpy.geo.models", "FontGlyph"),
+    "FontRegistry": ("showpy.geo.fonts", "FontRegistry"),
     "Form": ("showpy.choreo.models", "Form"),
     "FormFnInfo": ("showpy.choreo.models", "FormFnInfo"),
     "FormFnRegistry": ("showpy.choreo.form_fns", "FormFnRegistry"),
@@ -919,6 +933,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "bottleneck_value": ("showpy.choreo.match", "bottleneck_value"),
     "bounds": ("showpy.geo.measure", "bounds"),
     "buffer": ("showpy.geo.regions", "buffer"),
+    "bundled_fonts": ("showpy.geo.fonts", "bundled_fonts"),
     "canonical_value": ("showpy.core.canonical", "canonical_value"),
     "center": ("showpy.geo.measure", "center"),
     "centroid": ("showpy.geo.measure", "centroid"),
@@ -1010,6 +1025,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "fit_line": ("showpy.choreo.form_fit", "fit_line"),
     "follow": ("showpy.choreo.routes", "follow"),
     "follow_and_set_targets": ("showpy.choreo.routes", "follow_and_set_targets"),
+    "font_path": ("showpy.core.resources", "font_path"),
     "football_field": ("showpy.sheet.surfaces", "football_field"),
     "form_fns": ("showpy.choreo.form_fns", "form_fns"),
     "form_metrics": ("showpy.geo.measure", "form_metrics"),
@@ -1050,6 +1066,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "line": ("showpy.geo.shapes", "line"),
     "line_form": ("showpy.choreo.forms", "line_form"),
     "line_landmark": ("showpy.sheet.surfaces", "line_landmark"),
+    "load_font": ("showpy.geo.fonts", "load_font"),
     "load_paths": ("showpy.show.paths_store", "load_paths"),
     "load_show": ("showpy.show.storage", "load_show"),
     "lock": ("showpy.choreo.paths", "lock"),
@@ -1115,6 +1132,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "rect_ring": ("showpy.sheet.surfaces", "rect_ring"),
     "region": ("showpy.geo.regions", "region"),
     "register_exporter": ("showpy.export.data", "register_exporter"),
+    "register_font": ("showpy.geo.fonts", "register_font"),
     "register_form_fn": ("showpy.choreo.form_fns", "register_form_fn"),
     "register_importer": ("showpy.export.data", "register_importer"),
     "register_motion": ("showpy.choreo.motion", "register_motion"),
@@ -1260,6 +1278,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
 }
 
 __all__ = [
+    "BUNDLED_FONTS",
     "ID_MAX_LENGTH",
     "ID_PATTERN",
     "MAX_DEPTH",
@@ -1310,7 +1329,10 @@ __all__ = [
     "FacingSpec",
     "FileRepository",
     "Fix",
+    "Font",
     "FontError",
+    "FontGlyph",
+    "FontRegistry",
     "Form",
     "FormFnInfo",
     "FormFnRegistry",
@@ -1462,6 +1484,7 @@ __all__ = [
     "bottleneck_value",
     "bounds",
     "buffer",
+    "bundled_fonts",
     "canonical_value",
     "center",
     "centroid",
@@ -1553,6 +1576,7 @@ __all__ = [
     "fit_line",
     "follow",
     "follow_and_set_targets",
+    "font_path",
     "football_field",
     "form_fns",
     "form_metrics",
@@ -1593,6 +1617,7 @@ __all__ = [
     "line",
     "line_form",
     "line_landmark",
+    "load_font",
     "load_paths",
     "load_show",
     "lock",
@@ -1658,6 +1683,7 @@ __all__ = [
     "rect_ring",
     "region",
     "register_exporter",
+    "register_font",
     "register_form_fn",
     "register_importer",
     "register_motion",

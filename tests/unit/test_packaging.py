@@ -14,6 +14,7 @@ from importlib.resources import files
 
 import showpy
 from showpy.core.resources import schema_path
+from showpy.geo.fonts import MAX_FONT_BYTES
 
 
 def test_version_is_exported() -> None:
@@ -35,7 +36,6 @@ def test_import_name_is_showpy() -> None:
 
 BUNDLED = ("simplex", "hershey-roman", "hershey-script", "hershey-greek", "relief-singleline")
 LICENCES = ("licenses/OFL-1.1.txt", "licenses/HERSHEY.txt", "licenses/MIT.txt", "NOTICE.txt")
-MAX_FONT_BYTES = 1024 * 1024
 
 
 def test_bundled_fonts_ship_with_their_licences() -> None:
