@@ -26,6 +26,7 @@ Contains:
 
 import bisect
 import itertools
+from collections import Counter
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
@@ -114,6 +115,15 @@ class Show(FrozenModel):
         ids = self.set_ids()
         if len(set(ids)) != len(ids):
             raise SchemaError("set ids repeat", hint="give every set a unique id")
+        keys = [s.key or s.id for s in self.sets]
+        folded = Counter(k.casefold() for k in keys)
+        repeated = sorted({k for k in keys if folded[k.casefold()] > 1})
+        if repeated:
+            raise SchemaError(
+                f"set keys repeat ignoring case: {', '.join(repeated)}",
+                hint="give every set a key unique ignoring case; add_set() picks a free one",
+                context={"keys": repeated},
+            )
         return self
 
     def set_ids(self) -> list[SetId]:

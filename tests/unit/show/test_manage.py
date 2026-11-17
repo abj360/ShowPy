@@ -346,8 +346,6 @@ LONG_INPUT_CHARS = 10_000
 MAX_ECHOING_MESSAGE_CHARS = 200
 
 
-@pytest.mark.defect("UP-9.7-01")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-01")
 def test_regression_renumber_then_save_keeps_scripts_with_their_sets() -> None:
     """Moves each set's build script with the set across renumber and save (audit 9.7 #1; P0 #1)."""
     repo = InMemoryRepository()
@@ -361,8 +359,9 @@ def test_regression_renumber_then_save_keeps_scripts_with_their_sets() -> None:
     renumbered, mapping = renumber(load_show(ws))
     save_show(ws, renumbered, AT)
     assert mapping == {"1": "1", "1A": "2", "2": "3"}
-    assert repo.read("s", "/sets/2/set.py") == SCRIPT_OLD_ONE_A
-    assert repo.read("s", "/sets/3/set.py") == SCRIPT_OLD_TWO
+    ws.refresh()
+    assert ws.read("/sets/2/set.py") == SCRIPT_OLD_ONE_A.decode()
+    assert ws.read("/sets/3/set.py") == SCRIPT_OLD_TWO.decode()
 
 
 @pytest.mark.defect("UP-9.7-51")

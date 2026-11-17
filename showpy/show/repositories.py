@@ -24,6 +24,7 @@ from showpy.show.documents import decode_show, script_doc, split_path
 from showpy.show.files import LIMITS_DOC, WAIVERS_DOC, show_changes
 from showpy.show.integrity import blob_digest, require_known_path, require_valid_digests
 from showpy.show.models import Revision, Show
+from showpy.show.set_keys import set_key
 from showpy.show.storage import ROOT_REVISION
 from showpy.time.models import Timeline
 
@@ -289,9 +290,9 @@ class DocumentRepository:
         )
 
     def get_script(self, show_id: str, set_id: SetId) -> str:
-        """Returns a set's build script."""
-        self.get_set(show_id, set_id)
-        source = self.read(show_id, script_doc(set_id))
+        """Returns a set's build script, stored in the folder of the set's key."""
+        key = set_key(self.get_set(show_id, set_id))
+        source = self.read(show_id, script_doc(key))
         if source is None:
             raise UnknownRefError(
                 f"set {set_id} has no script",
@@ -309,11 +310,11 @@ class DocumentRepository:
         expected_revision: str,
         at: datetime,
     ) -> Revision:
-        """Replaces a set's build script."""
-        self.get_show(show_id, expected_revision or None).set(set_id)
+        """Replaces a set's build script, stored in the folder of the set's key."""
+        key = set_key(self.get_show(show_id, expected_revision or None).set(set_id))
         return self.transaction(
             show_id,
-            {script_doc(set_id): source.encode()},
+            {script_doc(key): source.encode()},
             expected_revision=expected_revision,
             at=at,
         )

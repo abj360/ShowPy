@@ -1,6 +1,9 @@
 """
 files.py --- maps workspace file paths to show documents: what each path reads, writes and owns
 
+Workspace paths address sets by display ID; stored trees address them by key, and every
+crossing goes through showpy.show.set_keys.
+
 Contains:
     INDEX_DOC: names the derived set index table
     LIMITS_DOC: names the designer's limits file
@@ -11,8 +14,8 @@ Contains:
     all_files(): lists every readable file path
     directories(): lists every directory path, each ending in `/`
     read_file(): returns a file's text or bytes
-    show_changes(): lists the document writes and deletes that store a show
-    staged_changes(): validates one file write and returns the document changes it makes
+    show_changes(): lists the stored-document writes and deletes that store a show
+    staged_changes(): validates one file write and returns the stored-document changes it makes
 """
 
 import csv
@@ -48,6 +51,7 @@ from showpy.show.documents import (
 )
 from showpy.show.manage import index
 from showpy.show.models import Comment, Show
+from showpy.show.set_keys import SetFolders, set_key, to_stored_path
 
 INDEX_DOC = "/show/index.csv"
 LIMITS_DOC = "/config/limits.yaml"
@@ -73,10 +77,11 @@ COMMENTS_ADAPTER = TypeAdapter(list[Comment])
 
 
 def _set_files(show: Show, tree: Mapping[str, bytes]) -> list[str]:
+    folders = SetFolders(show)
     files: list[str] = []
     for set_id in show.set_ids():
         files += [forms_doc(set_id), placements_doc(set_id)]
-        files += [script_doc(set_id)] if script_doc(set_id) in tree else []
+        files += [script_doc(set_id)] if folders.to_stored(script_doc(set_id)) in tree else []
     return files
 
 
@@ -165,7 +170,7 @@ def _show_file(path: str, segments: list[str], show: Show) -> bytes | None:
         if segments[2] == PLACEMENTS_NAME:
             return current.table().to_csv(index=False, lineterminator="\n").encode()
         if segments[2] == FORMS_NAME:
-            return encode_show(show).get(path, EMPTY_LIST)
+            return encode_show(show).get(to_stored_path(path, show), EMPTY_LIST)
     if segments[0] == "transitions" and len(segments) == 3 and segments[2] == PATHS_NAME:
         tid = _pair(show, segments[1])
         return dump_json(show.transition(tid).model_dump(mode="python"))
@@ -180,7 +185,7 @@ def read_file(path: str, show: Show | None, tree: Mapping[str, bytes]) -> str | 
     Args:
         path: Workspace path.
         show: Show at the workspace revision; None before the first save.
-        tree: Stored documents at the workspace revision.
+        tree: Stored documents at the workspace revision, addressed by set key.
 
     Returns:
         content: Text for text files, bytes otherwise.
@@ -193,7 +198,7 @@ def read_file(path: str, show: Show | None, tree: Mapping[str, bytes]) -> str | 
         found = _show_file(path, segments, _require_show(show, path))
         if found is not None:
             return _text_or_bytes(path, found)
-    stored = tree.get(path, DEFAULTS.get(path))
+    stored = tree.get(to_stored_path(path, show), DEFAULTS.get(path))
     is_listed = path in DEFAULTS or path == CLAIMS_DOC or path.startswith(FREE_ROOTS)
     if stored is None or not (is_listed or path.endswith(f"/{SCRIPT_NAME}")):
         raise _unknown(path, show, tree)
@@ -201,7 +206,9 @@ def read_file(path: str, show: Show | None, tree: Mapping[str, bytes]) -> str | 
 
 
 def show_changes(show: Show, tree: Mapping[str, bytes]) -> dict[str, bytes | None]:
-    """Lists the writes and deletes that store `show` over `tree`, including removed sets' files.
+    """Lists the stored writes and deletes that store `show` over `tree`, with removed sets' files.
+
+    Paths are stored paths: set folders are keys, so a renumbered set keeps its folder.
 
     >>> from showpy.examples import two_set_show
     >>> changes = show_changes(two_set_show(), {"/sets/9/set.py": b""})
@@ -209,7 +216,7 @@ def show_changes(show: Show, tree: Mapping[str, bytes]) -> dict[str, bytes | Non
     (None, 7)
     """
     docs = encode_show(show)
-    kept = tuple(f"/sets/{s}/" for s in show.set_ids())
+    kept = tuple(f"/sets/{set_key(s)}/" for s in show.sets)
     stale = [
         p
         for p in tree
@@ -228,7 +235,8 @@ def _staged_show_doc(
         show.set(segments[1])
     if segments[0] == "transitions":
         _pair(show, segments[1])
-    edited = decode_show({**encode_show(show), path: raw}, show.revision)
+    stored = to_stored_path(path, show)
+    edited = decode_show({**encode_show(show), stored: raw}, show.revision)
     return show_changes(edited, tree)
 
 
@@ -254,7 +262,7 @@ def _require_valid(path: str, raw: bytes) -> None:
 def staged_changes(
     path: str, raw: bytes, show: Show | None, tree: Mapping[str, bytes]
 ) -> dict[str, bytes | None]:
-    """Validates one file write and returns the document changes it makes.
+    """Validates one file write and returns the stored-document changes it makes.
 
     Show documents are re-encoded canonically from the edited show, so a write can also
     delete documents (writing `[]` to forms.json or `{}` to paths.json clears them).
@@ -284,4 +292,4 @@ def staged_changes(
     elif not (path in DEFAULTS or path == CLAIMS_DOC or path.startswith(FREE_ROOTS)):
         raise _unknown(path, show, tree)
     _require_valid(path, raw)
-    return {path: raw}
+    return {to_stored_path(path, show): raw}

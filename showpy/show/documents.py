@@ -1,18 +1,21 @@
 """
-documents.py --- splits a Show into canonical JSON documents at workspace paths and back
+documents.py --- splits a Show into canonical JSON documents at stored paths and back
+
+Stored paths address sets by key (`/sets/<key>/…`, `/transitions/<key a>-<key b>/…`) and
+show.json lists the set order as keys (ADR 0004); workspaces map display IDs onto them.
 
 Contains:
     SHOW_DOC: names the document holding show metadata, cast and set order
     split_path(): checks a workspace path and returns its segments, rejecting traversal
     dump_json(): writes JSON canonically: sorted keys, sorted sets, two-space indent
-    set_doc(): returns the path of a set's placements document
-    script_doc(): returns the path of a set's build script
-    forms_doc(): returns the path of a set's forms document
-    placements_doc(): returns the path of a set's derived placements table
-    paths_doc(): returns the path of a transition's paths document
+    set_doc(): returns the path of a set folder's placements document
+    script_doc(): returns the path of a set folder's build script
+    forms_doc(): returns the path of a set folder's forms document
+    placements_doc(): returns the path of a set folder's derived placements table
+    paths_doc(): returns the path of a transition folder's paths document
     is_show_doc(): reports whether a path is part of the encoded Show
-    expected_show_docs(): lists the show-document paths decode reads for a show
-    encode_show(): splits a show into documents
+    expected_show_docs(): lists the stored show-document paths decode reads for a show
+    encode_show(): splits a show into documents stored by set key
     decode_show(): assembles a show from documents, reusing cached per-document decodes
 """
 
@@ -27,10 +30,11 @@ from pydantic_core import to_jsonable_python
 
 from showpy.choreo.models import Form, Set, TransitionSpec
 from showpy.core.errors import SchemaError, StorageError, field_errors
-from showpy.core.ids import SetId, TransitionId
+from showpy.core.ids import SetId, TransitionId, check_id
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.manage import SET_ID_PATTERN
 from showpy.show.models import Show
+from showpy.show.set_keys import set_key
 
 SHOW_DOC = "/show/show.json"
 SHEET_DOC = "/show/sheet.json"
@@ -98,28 +102,31 @@ def dump_json(value: Any) -> bytes:
     return f"{text}\n".encode()
 
 
-def set_doc(set_id: SetId) -> str:
-    """Returns the path of a set's placements document, which storage keeps internal."""
-    return f"/sets/{set_id}/{SET_DOC_NAME}"
+def set_doc(folder: str) -> str:
+    """Returns the path of a set's placements document, which storage keeps internal.
+
+    The folder is the set key in stored paths and the display ID in workspace paths.
+    """
+    return f"/sets/{folder}/{SET_DOC_NAME}"
 
 
-def script_doc(set_id: SetId) -> str:
-    """Returns the path of a set's build script."""
-    return f"/sets/{set_id}/{SCRIPT_NAME}"
+def script_doc(folder: str) -> str:
+    """Returns the path of a set folder's build script."""
+    return f"/sets/{folder}/{SCRIPT_NAME}"
 
 
-def forms_doc(set_id: SetId) -> str:
-    """Returns the path of a set's forms document."""
-    return f"/sets/{set_id}/{FORMS_NAME}"
+def forms_doc(folder: str) -> str:
+    """Returns the path of a set folder's forms document."""
+    return f"/sets/{folder}/{FORMS_NAME}"
 
 
-def placements_doc(set_id: SetId) -> str:
-    """Returns the path of a set's derived placements table."""
-    return f"/sets/{set_id}/{PLACEMENTS_NAME}"
+def placements_doc(folder: str) -> str:
+    """Returns the path of a set folder's derived placements table."""
+    return f"/sets/{folder}/{PLACEMENTS_NAME}"
 
 
 def paths_doc(tid: TransitionId) -> str:
-    """Returns the path of a transition's paths document.
+    """Returns the path of a transition folder's paths document: keys stored, IDs in workspaces.
 
     >>> paths_doc(("12", "12A"))
     '/transitions/12-12A/paths.json'
@@ -151,13 +158,13 @@ def _require_storable(show: Show) -> None:
 
 
 def expected_show_docs(show: Show) -> frozenset[str]:
-    """Returns every show-document path decode_show() reads for `show`.
+    """Returns every stored show-document path decode_show() reads for `show`, by set key.
 
     >>> from showpy.examples import two_set_show
     >>> "/transitions/1-2/paths.json" in expected_show_docs(two_set_show())
     True
     """
-    order = show.set_ids()
+    order = [set_key(s) for s in show.sets]
     paths = {SHOW_DOC, SHEET_DOC, NOTES_DOC, TIMELINE_DOC}
     paths.update(set_doc(s) for s in order)
     paths.update(forms_doc(s) for s in order)
@@ -166,27 +173,30 @@ def expected_show_docs(show: Show) -> frozenset[str]:
 
 
 def encode_show(show: Show) -> dict[str, bytes]:
-    """Splits a show into documents; empty forms and stored-path documents are left out.
+    """Splits a show into documents under set keys; empty forms and paths are left out.
 
     >>> from showpy.examples import two_set_show
     >>> sorted(encode_show(two_set_show()))[:3]
     ['/sets/1/set.json', '/sets/2/set.json', '/show/notes.json']
     """
     _require_storable(show)
+    keys = {s.id: set_key(s) for s in show.sets}
     meta = show.model_dump(mode="python", exclude=set(SPLIT_FIELDS))
     docs = {
-        SHOW_DOC: dump_json({**meta, SET_ORDER_FIELD: show.set_ids()}),
+        SHOW_DOC: dump_json({**meta, SET_ORDER_FIELD: list(keys.values())}),
         SHEET_DOC: dump_json(show.sheet.model_dump(mode="python")),
         NOTES_DOC: dump_json([n.model_dump(mode="python") for n in show.notes]),
         TIMELINE_DOC: dump_json(show.timeline.model_dump(mode="python")),
     }
     for current in show.sets:
-        docs[set_doc(current.id)] = dump_json(current.model_dump(mode="python"))
+        docs[set_doc(keys[current.id])] = dump_json(current.model_dump(mode="python"))
         forms = [f for _, f in sorted(show.forms.items()) if f.set == current.id]
         if forms:
-            docs[forms_doc(current.id)] = dump_json([f.model_dump(mode="python") for f in forms])
+            dumped = [f.model_dump(mode="python") for f in forms]
+            docs[forms_doc(keys[current.id])] = dump_json(dumped)
     for spec in show.transitions:
-        docs[paths_doc(spec.id)] = dump_json(spec.model_dump(mode="python"))
+        folder = (keys[spec.id[0]], keys[spec.id[1]])
+        docs[paths_doc(folder)] = dump_json(spec.model_dump(mode="python"))
     return docs
 
 
@@ -220,59 +230,82 @@ def _cached[T](
     return cache.get_or_decode(path, digest, decode)
 
 
-def _set(docs: Mapping[str, bytes], set_id: SetId) -> Set:
-    return Set.model_validate(_load(docs, set_doc(set_id)))
+def _set(docs: Mapping[str, bytes], key: str) -> Set:
+    raw = _load(docs, set_doc(key))
+    if isinstance(raw, dict) and "key" not in raw:
+        raw = {**raw, "key": key}
+    loaded = Set.model_validate(raw)
+    if loaded.key != key:
+        raise SchemaError(
+            f"{set_doc(key)} holds the set keyed {loaded.key}",
+            hint=f"store each set under its key; drop key or set it to {key!r}",
+            context={"path": set_doc(key), "key": loaded.key},
+        )
+    return loaded
 
 
-def _forms(docs: Mapping[str, bytes], set_id: SetId) -> tuple[Form, ...]:
-    forms = [Form.model_validate(f) for f in _load(docs, forms_doc(set_id), [])]
+def _forms(docs: Mapping[str, bytes], key: str) -> tuple[Form, ...]:
+    return tuple(Form.model_validate(f) for f in _load(docs, forms_doc(key), []))
+
+
+def _require_forms_for(key: str, set_id: SetId, forms: tuple[Form, ...]) -> None:
     wrong = [f.id for f in forms if f.set != set_id]
     if wrong:
         raise SchemaError(
-            f"{forms_doc(set_id)} holds forms of another set: {', '.join(wrong)}",
+            f"{forms_doc(key)} holds forms of another set: {', '.join(wrong)}",
             hint=f"give every form in this file set={set_id!r}",
             context={"set": set_id, "forms": wrong},
         )
-    return tuple(forms)
 
 
-def _paths(docs: Mapping[str, bytes], tid: TransitionId) -> tuple[TransitionSpec, ...]:
-    raw = _load(docs, paths_doc(tid), {})
+def _paths(docs: Mapping[str, bytes], folder: TransitionId) -> tuple[TransitionSpec, ...]:
+    raw = _load(docs, paths_doc(folder), {})
     if not raw:
         return ()
     return (TransitionSpec.model_validate(raw),)
 
 
-def _require_paths_for(tid: TransitionId, specs: tuple[TransitionSpec, ...]) -> None:
+def _require_paths_for(
+    folder: TransitionId, tid: TransitionId, specs: tuple[TransitionSpec, ...]
+) -> None:
     for spec in specs:
         if spec.id != tid:
             raise SchemaError(
-                f"{paths_doc(tid)} holds paths for {spec.id}",
+                f"{paths_doc(folder)} holds paths for {spec.id}",
                 hint=f"set id to {list(tid)}",
                 context={"tid": tid, "found": spec.id},
             )
 
 
-def _require_set_ids(order: list[SetId]) -> None:
-    bad = [s for s in order if not SET_ID_PATTERN.fullmatch(s) or ".." in s]
+def _is_storable_key(key: object) -> bool:
+    try:
+        return isinstance(key, str) and check_id(key, kind="set key") == key
+    except SchemaError:
+        return False
+
+
+def _require_set_keys(order: list[str]) -> None:
+    bad = [k for k in order if not _is_storable_key(k)]
     if bad:
         raise SchemaError(
-            f"{SHOW_DOC} lists set ids that cannot be stored: {', '.join(bad)}",
-            hint="use set ids of letters, digits, _ and .",
-            context={"bad_set_ids": bad},
+            f"{SHOW_DOC} lists set keys that cannot be stored: {', '.join(map(str, bad))}",
+            hint="use set keys of 1 to 64 letters, digits, _ and ., with no leading, trailing "
+            "or doubled .",
+            context={"bad_set_keys": bad},
         )
 
 
 def _transition_specs(
     docs: Mapping[str, bytes],
-    order: list[SetId],
+    stored: list[tuple[str, Set]],
     cache: DecodeCache | None,
     digests: Mapping[str, str],
 ) -> list[TransitionSpec]:
     specs: list[TransitionSpec] = []
-    for tid in itertools.pairwise(order):
-        found = _cached(cache, digests, paths_doc(tid), partial(_paths, docs, tid))
-        _require_paths_for(tid, found)
+    for (key_a, set_a), (key_b, set_b) in itertools.pairwise(stored):
+        folder = (key_a, key_b)
+        found = _cached(cache, digests, paths_doc(folder), partial(_paths, docs, folder))
+        _require_paths_for(folder, (set_a.id, set_b.id), found)
         specs.extend(found)
     return specs
 
@@ -281,17 +314,20 @@ def _assemble(
     docs: Mapping[str, bytes], revision: str, cache: DecodeCache | None, digests: Mapping[str, str]
 ) -> Show:
     meta = dict(_load(docs, SHOW_DOC))
-    order: list[SetId] = list(meta.pop(SET_ORDER_FIELD, []))
-    _require_set_ids(order)
-    sets = [_cached(cache, digests, set_doc(s), partial(_set, docs, s)) for s in order]
-    forms = {
-        f.id: f
-        for s in order
-        for f in _cached(cache, digests, forms_doc(s), partial(_forms, docs, s))
-    }
-    specs = _transition_specs(docs, order, cache, digests)
+    order: list[str] = list(meta.pop(SET_ORDER_FIELD, []))
+    _require_set_keys(order)
+    stored = [(k, _cached(cache, digests, set_doc(k), partial(_set, docs, k))) for k in order]
+    forms: dict[str, Form] = {}
+    for key, current in stored:
+        found = _cached(cache, digests, forms_doc(key), partial(_forms, docs, key))
+        _require_forms_for(key, current.id, found)
+        forms.update((f.id, f) for f in found)
+    sets = [current for _, current in stored]
     counts = {s.id: s.counts for s in sets}
-    specs = [spec.replace(counts=counts[spec.id[1]]) for spec in specs]
+    specs = [
+        spec.replace(counts=counts[spec.id[1]])
+        for spec in _transition_specs(docs, stored, cache, digests)
+    ]
     return Show.model_validate(
         {
             **meta,

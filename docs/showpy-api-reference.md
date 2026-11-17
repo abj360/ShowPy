@@ -523,15 +523,16 @@ Property: `point → Point`.
 
 **`Set`** — a snapshot of the stage at one moment.
 
-| Field          | Type                    | Meaning                                                                                           |
-| -------------- | ----------------------- | ------------------------------------------------------------------------------------------------- |
-| `id`           | `SetId`                 |                                                                                                   |
-| `counts`       | `float`                 | Counts since the previous set (0 for the first); the incoming transition's counts always equal it |
-| `placements`   | `tuple[Placement, ...]` | One per spot, off-field spots included                                                            |
-| `forms`        | `tuple[FormId, ...]`    | Forms present                                                                                     |
-| `label`, `cue` | `str \| None`           | Designer label, rehearsal mark or cue                                                             |
-| `source_hash`  | `str`                   | Hash of the script that built it                                                                  |
-| `state`        | `ApprovalState`         | Collaboration state                                                                               |
+| Field          | Type                    | Meaning                                                                                                                    |
+| -------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `id`           | `SetId`                 |                                                                                                                            |
+| `key`          | `str \| None`           | Stable storage key: fixed at creation, kept by `renumber`; defaults to `id` and is written only when it differs (ADR 0004) |
+| `counts`       | `float`                 | Counts since the previous set (0 for the first); the incoming transition's counts always equal it                          |
+| `placements`   | `tuple[Placement, ...]` | One per spot, off-field spots included                                                                                     |
+| `forms`        | `tuple[FormId, ...]`    | Forms present                                                                                                              |
+| `label`, `cue` | `str \| None`           | Designer label, rehearsal mark or cue                                                                                      |
+| `source_hash`  | `str`                   | Hash of the script that built it                                                                                           |
+| `state`        | `ApprovalState`         | Collaboration state                                                                                                        |
 
 | Method                                  | Inputs                    | Output                                                                  | Purpose                                   |
 | --------------------------------------- | ------------------------- | ----------------------------------------------------------------------- | ----------------------------------------- |
@@ -871,6 +872,8 @@ Set scripts, their builds and the script sandbox live in a separate consumer rep
 | `load_show(ws)` / `save_show(ws, show, at)`                                                                                                                                |                                                                                                                                                                                                                                                                                                                                                                                  | `Show` / `Revision`                                                    | Whole-show access against `show.revision`; `ConflictError` lists each landed revision's short ID, time and paths                                                                                                                                                                                                                                                                                                                             |
 
 `showpy.show.documents` splits a show into documents and back (`encode_show`, `decode_show`); `showpy.show.files` maps workspace paths onto them.
+
+Stored paths address sets by key (`/sets/<key>/…`, `/transitions/<key a>-<key b>/…`, and the set order in `/show/show.json` lists keys); `Repository.read` and `paths` return stored paths. `Workspace` paths address sets by display ID and map onto keys through `showpy.show.set_keys`, so `renumber` followed by `save_show` moves no file. A workspace folder that names no set but matches another set's key, ignoring case, raises `StorageError` (code `AMBIGUOUS_PATH`). `Workspace.commit_stored(changes, *, at, expected_revision=None)` commits stored paths as they are, as `save_show` and `revert` do. `add_set`, `insert_subset`, `import_positions` and `join_sections` give a new set the key `<id>`, or the first free `<id>.<n>` (n from 2) when a live set holds it.
 
 ### showpy.show.collab
 

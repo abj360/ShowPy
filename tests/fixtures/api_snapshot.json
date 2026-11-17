@@ -764,6 +764,7 @@
       "cue": "str | None",
       "forms": "tuple[FormId, ...]",
       "id": "SetId",
+      "key": "str | None",
       "label": "str | None",
       "placements": "tuple[showpy.choreo.models.Placement, ...]",
       "source_hash": "str",

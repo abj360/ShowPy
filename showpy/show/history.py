@@ -193,7 +193,7 @@ def revert(ws: Workspace, revision_id: str, at: datetime) -> Revision:
     ws.refresh()
     old, head = ws.tree_at(target.id), ws.tree_at(ws.revision)
     paths = {p for p in set(old) | set(head) if old.get(p) != head.get(p)}
-    return ws.commit({p: old.get(p) for p in sorted(paths)}, at=at)
+    return ws.commit_stored({p: old.get(p) for p in sorted(paths)}, at=at)
 
 
 def _require_renamable(show: Show, mapping: Mapping[SpotId, SpotId]) -> None:

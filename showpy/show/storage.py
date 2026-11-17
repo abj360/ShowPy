@@ -9,7 +9,8 @@ Contains:
     Workspace.read(): returns a file's text or bytes
     Workspace.write(): validates and saves one file
     Workspace.ls(): lists a directory
-    Workspace.commit(): saves a batch of document changes as one revision
+    Workspace.commit(): saves a batch of file changes addressed by set ID as one revision
+    Workspace.commit_stored(): saves a batch of stored-document changes as one revision
     Workspace.refresh(): moves the workspace to the head revision
     Workspace.show_at(): returns the show at a revision, or None before the first save
     Workspace.tree_at(): returns the stored documents at a revision
@@ -35,6 +36,7 @@ from showpy.show.files import (
     staged_changes,
 )
 from showpy.show.models import Revision, Show
+from showpy.show.set_keys import SetFolders
 from showpy.time.models import Timeline
 
 ROOT_REVISION = ""
@@ -43,8 +45,9 @@ ROOT_REVISION = ""
 class Repository(Protocol):
     """Versions each show's documents in a linear history of revisions.
 
-    Paths are workspace paths such as `/sets/1/set.json`. Every write takes the revision the
-    caller read at and raises ConflictError, listing what landed since, when the head moved.
+    Paths are stored paths, which address sets by key (`/sets/<key>/set.json`, ADR 0004).
+    Every write takes the revision the caller read at and raises ConflictError, listing what
+    landed since, when the head moved.
     """
 
     def shows(self) -> list[str]:
@@ -192,9 +195,11 @@ class AssetStore(Protocol):
 
 
 class Workspace:
-    """Exposes one show as files.
+    """Exposes one show as files, addressing sets by display ID.
 
-    The workspace reads at its own revision, like a working copy. Writes default to expecting
+    Paths such as `/sets/2/set.py` map to the stored folder of the set's key and back, so a
+    renumber moves no file (ADR 0004). The workspace reads at its own revision, like a working
+    copy. Writes default to expecting
     that revision, so an edit made against a stale view raises ConflictError instead of
     overwriting a newer save. `refresh()` moves to the head; each successful write moves to
     the revision it created. Who may write what is the host's decision (ADR 0003).
@@ -288,10 +293,37 @@ class Workspace:
         at: datetime,
         expected_revision: str | None = None,
     ) -> Revision:
-        """Saves document changes as one revision.
+        """Saves file changes addressed by display set ID as one revision.
+
+        A folder that names no set but matches another set's key, ignoring case, is refused
+        with StorageError code AMBIGUOUS_PATH rather than written into that set's folder.
 
         Args:
-            changes: Path to new bytes, or None to delete.
+            changes: Workspace path to new bytes, or None to delete.
+            at: Time stamp of the revision.
+            expected_revision: Revision the change was made against; default the workspace's.
+
+        Returns:
+            revision: The new head; the workspace moves to it.
+        """
+        base = self._revision if expected_revision is None else expected_revision
+        for path in changes:
+            split_path(path)
+        folders = SetFolders(self.show_at(base))
+        stored = {folders.to_stored(path): data for path, data in changes.items()}
+        return self.commit_stored(stored, at=at, expected_revision=base)
+
+    def commit_stored(
+        self,
+        changes: Mapping[str, bytes | None],
+        *,
+        at: datetime,
+        expected_revision: str | None = None,
+    ) -> Revision:
+        """Saves stored-document changes, addressed by set key, as one revision.
+
+        Args:
+            changes: Stored path to new bytes, or None to delete.
             at: Time stamp of the revision.
             expected_revision: Revision the change was made against; default the workspace's.
 
@@ -330,7 +362,7 @@ class Workspace:
         split_path(path)
         raw = data.encode() if isinstance(data, str) else data
         changes = staged_changes(path, raw, self._show(), self._tree())
-        return self.commit(changes, at=at, expected_revision=expected_revision)
+        return self.commit_stored(changes, at=at, expected_revision=expected_revision)
 
 
 def open_workspace(repo: Repository, show_id: str) -> Workspace:
@@ -369,4 +401,4 @@ def save_show(ws: Workspace, show: Show, at: datetime) -> Revision:
     ''
     """
     changes = show_changes(show, ws.tree_at(show.revision))
-    return ws.commit(changes, at=at, expected_revision=show.revision)
+    return ws.commit_stored(changes, at=at, expected_revision=show.revision)

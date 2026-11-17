@@ -17,6 +17,7 @@ from showpy.notes.models import Note
 from showpy.sheet.models import Zone
 from showpy.show.manage import index
 from showpy.show.models import Pin, Show
+from showpy.show.set_keys import free_set_key, set_key
 from showpy.time.clock import count_to_seconds, tempo_at
 from showpy.time.measures import count_to_measure
 from showpy.time.models import AudioTrack, MeasureSetting, TempoSection, Timeline
@@ -224,6 +225,20 @@ def _tail_sets(a: Show, b: Show) -> tuple[Set, ...]:
     return b.sets
 
 
+def _keyed_after(a: Show, tail: Sequence[Set]) -> tuple[Set, ...]:
+    taken = [set_key(s) for s in a.sets]
+    folded = {key.casefold() for key in taken}
+    keyed: list[Set] = []
+    for current in tail:
+        key = set_key(current)
+        if key.casefold() in folded:
+            key = free_set_key(taken, current.id)
+        taken.append(key)
+        folded.add(key.casefold())
+        keyed.append(current if key == current.key else current.replace(key=key))
+    return tuple(keyed)
+
+
 def _merged_forms(a: Show, b: Show) -> dict[str, Form]:
     clash = [k for k, f in b.forms.items() if k in a.forms and a.forms[k] != f]
     if clash:
@@ -285,6 +300,7 @@ def join_sections(a: Show, b: Show) -> Show:
     When `b` starts with `a`'s last set (same ID and placements) they become one set.
     Otherwise set IDs must not repeat, and `b`'s first set keeps its counts (0), so retime it
     with set_counts(). `b`'s tempos, holds, markers and facing overrides shift by `a`'s length.
+    `b`'s sets keep their keys; one whose key `a` already holds gets a free key, as in add_set().
 
     >>> from showpy.examples import two_set_show
     >>> from showpy.show.manage import add_set
@@ -298,7 +314,7 @@ def join_sections(a: Show, b: Show) -> Show:
     for zone in _clip_zones(b.zones, 0.0, float("inf"), -offset):
         zones.setdefault(zone.id, zone)
     return a.replace(
-        sets=(*a.sets, *_tail_sets(a, b)),
+        sets=(*a.sets, *_keyed_after(a, _tail_sets(a, b))),
         forms=_merged_forms(a, b),
         transitions=(*a.transitions, *b.transitions),
         notes=(*a.notes, *(n for n in b.notes if n not in a.notes)),

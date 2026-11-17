@@ -20,6 +20,7 @@ from showpy.core.ids import SetId, SpotId
 from showpy.core.types import Point
 from showpy.core.util import close_matches
 from showpy.show.models import Show
+from showpy.show.set_keys import free_set_key, set_key
 
 POSITION_FIELDS = ("set", "counts", "entity", "x", "y", "facing")
 REQUIRED_FIELDS = POSITION_FIELDS[:5]
@@ -188,6 +189,7 @@ class _Merge:
     cast_ids: tuple[SpotId, ...]
     rows: dict[tuple[SetId, SpotId], _PositionRow]
     counts: dict[SetId, float]
+    keys: dict[SetId, str]
     first_seen: dict[SpotId, Point]
     force: bool
 
@@ -221,9 +223,23 @@ def _carried(merge: _Merge, entity: SpotId, previous: dict[SpotId, Placement]) -
     return Placement(entity=entity, x=x, y=y, on_field=False)
 
 
+def _new_keys(base: Show, order: list[SetId]) -> dict[SetId, str]:
+    stored = set(base.set_ids())
+    taken = [set_key(s) for s in base.sets]
+    keys: dict[SetId, str] = {}
+    for set_id in (s for s in order if s not in stored):
+        keys[set_id] = free_set_key(taken, set_id)
+        taken.append(keys[set_id])
+    return keys
+
+
 def _merged_set(merge: _Merge, set_id: SetId, previous: dict[SpotId, Placement]) -> Set:
     stored = set_id in merge.base.set_ids()
-    current = merge.base.set(set_id) if stored else Set(id=set_id, counts=merge.counts[set_id])
+    current = (
+        merge.base.set(set_id)
+        if stored
+        else Set(id=set_id, key=merge.keys[set_id], counts=merge.counts[set_id])
+    )
     kept = {p.entity: p for p in current.placements}
     placements = tuple(kept.get(e) or _carried(merge, e, previous) for e in merge.cast_ids)
     filled = current.replace(placements=placements)
@@ -250,7 +266,8 @@ def import_positions(
 ) -> Show:
     r"""Merges CSV rows of set, counts, entity, x, y and optional facing into a show.
 
-    Missing sets are created where they fall in file order and missing spots join `group`.
+    Missing sets are created where they fall in file order, keyed like add_set(), and missing
+    spots join `group`.
     Every spot ends up placed in every set: a spot without a row holds its previous
     placement, and sits off the field at its first position before it first appears.
 
@@ -281,6 +298,7 @@ def import_positions(
         cast_ids=cast.ids(),
         rows={(r.set_id, r.entity): r for r in rows},
         counts=counts,
+        keys=_new_keys(base, order),
         first_seen=_first_seen(base, order, rows),
         force=force,
     )
