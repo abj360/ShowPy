@@ -343,6 +343,22 @@ class _FileBackend:
             raise self._corrupt(show_id, path, "blob bytes do not match their digest")
         return data
 
+    def _store_record(
+        self, show_id: str, path: Path, revision: Revision, tree: dict[str, str]
+    ) -> None:
+        """Links the tree record into place, or verifies the record already there byte for byte.
+
+        Files are linked, never replaced, because Windows refuses to replace a file another
+        writer holds. The record's name is the revision ID, which hashes the parent, time and
+        changes, so a racing identical commit writes the same bytes. Anything else under the
+        name (another tree, a truncated file, a symlink) blocks the commit before it lands.
+        """
+        record = dump_json({"revision": revision.model_dump(mode="json"), "tree": tree})
+        if _link_exclusive(show_id, path, record):
+            return
+        if self._read(show_id, path, "tree record", TREE_MAX_BYTES) != record:
+            raise self._corrupt(show_id, path, "tree record differs from this commit")
+
     @_guarded
     def commit(
         self, show_id: str, revision: Revision, tree: dict[str, str], blobs: dict[str, bytes]
@@ -359,13 +375,9 @@ class _FileBackend:
             if mode is not None and stat.S_ISLNK(mode):
                 raise self._corrupt(show_id, target, "file is a symbolic link")
             if mode is None:
+                # A blob a racing writer linked first under this digest is kept; reads verify it.
                 _link_exclusive(show_id, target, data)
-        # A blob's name is its digest and a tree record's name is the revision ID, which hashes
-        # the parent, time and changes. A file a racing writer landed first under either name
-        # holds these bytes, so it is kept. A link never replaces it, which Windows refuses
-        # while the other writer holds the name.
-        record = {"revision": revision.model_dump(mode="json"), "tree": tree}
-        _link_exclusive(show_id, base / TREE_DIR / f"{tree_name}.json", dump_json(record))
+        self._store_record(show_id, base / TREE_DIR / f"{tree_name}.json", revision, tree)
         link = base / LINK_DIR / (revision.parent or ROOT_LINK)
         if not _link_exclusive(show_id, link, tree_name.encode()):
             raise conflict_error(show_id, revision.parent, self.log(show_id)[-1:])

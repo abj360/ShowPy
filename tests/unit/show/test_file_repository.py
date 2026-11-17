@@ -71,6 +71,8 @@ Contains:
         same blob first and the OS refuses to replace it
     test_regression_tree_record_landed_by_an_identical_commit_is_kept: commits when an identical
         commit wrote the same tree record first and the OS refuses to replace it
+    test_regression_planted_tree_record_blocks_the_commit: refuses a commit whose tree record name
+        holds another tree, a truncated record or a symlink, before its next/ link
 """
 
 import contextlib
@@ -868,3 +870,40 @@ def test_regression_tree_record_landed_by_an_identical_commit_is_kept(
     _refuse_replacing_existing(monkeypatch)
     assert _second_revision(repo, rev) == twin
     assert repo.head(SHOW_ID) == twin
+
+
+def _plant_other_tree(record: Path, data: bytes) -> None:
+    tampered = json.loads(data)
+    tampered["tree"]["/renders/a.txt"] = tampered["tree"][SHOW_DOC]
+    record.write_text(json.dumps(tampered))
+
+
+def _plant_symlink(record: Path, data: bytes) -> None:
+    outside = record.parent.parent.parent / "outside-record.json"
+    outside.write_bytes(data)
+    record.symlink_to(outside)
+
+
+PLANTED_RECORDS: dict[str, Callable[[Path, bytes], None]] = {
+    "other tree": _plant_other_tree,
+    "truncated": lambda record, _data: record.write_bytes(b"{"),
+    "symlink": _plant_symlink,
+}
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        pytest.param(kind, marks=NO_SYMLINKS) if kind == "symlink" else kind
+        for kind in sorted(PLANTED_RECORDS)
+    ],
+)
+def test_regression_planted_tree_record_blocks_the_commit(tmp_path: Path, kind: str) -> None:
+    """Refuses a commit whose record name holds something else, before linking next/."""
+    twin_repo, twin_rev, twin_base = _saved(tmp_path / "twin")
+    twin = _second_revision(twin_repo, twin_rev)
+    repo, rev, base = _saved(tmp_path)
+    record = base / "trees" / f"{twin}.json"
+    PLANTED_RECORDS[kind](record, (twin_base / "trees" / f"{twin}.json").read_bytes())
+    _assert_corrupt(lambda: _second_revision(repo, rev))
+    assert not (base / "next" / rev).exists()
