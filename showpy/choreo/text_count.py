@@ -8,6 +8,7 @@ half rounds up, and it is checked against `MAX_TEXT_SPOTS` before any slot is pl
 Contains:
     spacing_count(): counts the spots that strokes hold at a spacing
     count_recipe(): returns a text recipe with its count set from exactly one of n and spacing
+    text_spot_count(): counts the spots `text_form(spacing=...)` derives, before any members exist
 """
 
 import math
@@ -24,15 +25,18 @@ from showpy.choreo.form_text import (
     text_recipe,
     text_strokes,
 )
+from showpy.choreo.models import TextRecipe
 from showpy.core.errors import SchemaError, SpacingError, bounded_repr
-from showpy.core.types import Meters
+from showpy.core.types import Degrees, Meters
 from showpy.core.validation import require_finite
 from showpy.geo.curve_base import Curve
-from showpy.geo.fonts import FontRegistry
+from showpy.geo.fonts import FontRegistry, bundled_fonts
+from showpy.geo.models import DEFAULT_LINE_SPACING, TextAlign, TextAnchor
 
 HALF = 0.5
 HINT_DECIMALS = 1_000
 SPLIT_HINT = "shorten the text or split it into several forms"
+ORIGIN = (0.0, 0.0)
 
 
 def _requested(min_n: int, ideal: float) -> int | str:
@@ -137,3 +141,61 @@ def count_recipe(
         context={"n": bounded_repr(n), "spacing": bounded_repr(spacing)},
         code="N_OR_SPACING",
     )
+
+
+def text_spot_count(
+    text: str,
+    *,
+    fonts: Sequence[str],
+    height: Meters,
+    spacing: Meters,
+    rotation: Degrees = 0.0,
+    align: TextAlign = "left",
+    anchor: TextAnchor = "baseline",
+    letter_spacing: float = 0.0,
+    line_spacing: float = DEFAULT_LINE_SPACING,
+    font_registry: FontRegistry | None = None,
+) -> int:
+    r"""Counts the spots `text_form(spacing=...)` derives, so the caller can name its members.
+
+    A text form needs exactly one member per spot; with `spacing` the count comes from the
+    stroke lengths. The position `at` never changes the count, so it is not a parameter.
+
+    Args:
+        text: Characters to write, `\n` between lines.
+        fonts: Font names or URIs, first choice first.
+        height: Cap height in meters.
+        spacing: Meters between spots along the strokes.
+        rotation: Degrees counter-clockwise.
+        align: Where each line sits horizontally.
+        anchor: Which line of the text block sits vertically on the layout point.
+        letter_spacing: Extra gap between glyphs, in ems of the first font.
+        line_spacing: Baseline-to-baseline distance, in ems of the first font.
+        font_registry: Registry that resolves the fonts; None means `bundled_fonts()`.
+
+    Returns:
+        n: The spot count, the same as the form's `geometry["n"]`.
+
+    Raises:
+        SchemaError: A bad layout field or spacing.
+        SpacingError: `TOO_MANY_SPOTS` when the count passes `MAX_TEXT_SPOTS`.
+        MissingFontError: A font is not in the registry.
+
+    >>> text_spot_count("L", fonts=["simplex"], height=6.0, spacing=1.0)
+    11
+    """
+    registry = bundled_fonts() if font_registry is None else font_registry
+    recipe = TextRecipe(
+        text=text,
+        fonts=tuple(registry.resolve(font) for font in fonts),
+        height=height,
+        at=ORIGIN,
+        rotation=rotation,
+        align=align,
+        anchor=anchor,
+        letter_spacing=letter_spacing,
+        line_spacing=line_spacing,
+    )
+    counted = count_recipe(recipe.model_dump(mode="json"), None, spacing, registry)
+    count: int = counted["n"]
+    return count

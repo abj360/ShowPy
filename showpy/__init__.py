@@ -225,6 +225,9 @@ if TYPE_CHECKING:
         rotate_path,
         two_part,
     )
+    from showpy.choreo.text_count import (
+        text_spot_count,
+    )
     from showpy.choreo.text_edit import (
         edit_text_count,
     )
@@ -1263,6 +1266,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "tempo_at": ("showpy.time.clock", "tempo_at"),
     "text_form": ("showpy.choreo.forms", "text_form"),
     "text_outline": ("showpy.geo.shapes", "text_outline"),
+    "text_spot_count": ("showpy.choreo.text_count", "text_spot_count"),
     "timer": ("showpy.core.util", "timer"),
     "to_coords": ("showpy.sheet.coords", "to_coords"),
     "to_csv": ("showpy.export.data", "to_csv"),
@@ -1826,6 +1830,7 @@ __all__ = [
     "tempo_at",
     "text_form",
     "text_outline",
+    "text_spot_count",
     "timer",
     "to_coords",
     "to_csv",

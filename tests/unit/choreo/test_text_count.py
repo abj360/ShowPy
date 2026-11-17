@@ -5,6 +5,8 @@ test_text_count.py --- tests text spot counts derived from a spacing between spo
 
 Contains:
     test_*(): one behavior of showpy.choreo.text_count each
+    test_regression_text_spot_count_gives_the_count_text_form_derives(): names the members a
+        spacing-built text form needs before it is built
     test_regression_spacing_count_follows_a_scaled_text_form(): counts a scaled form's spots
         from its stage-meter stroke lengths
     test_regression_legibility_warning_reports_stage_meters(): names a scaled form's spacing
@@ -22,12 +24,13 @@ from showpy.choreo.form_ops import transform_form
 from showpy.choreo.form_text import (
     COINCIDENT_TOL_M,
     MAX_TEXT_SPOTS,
+    text_recipe,
     text_slots,
     text_strokes,
 )
 from showpy.choreo.forms import slots, text_form
 from showpy.choreo.models import TextRecipe
-from showpy.choreo.text_count import count_recipe, spacing_count
+from showpy.choreo.text_count import count_recipe, spacing_count, text_spot_count
 from showpy.choreo.text_edit import edit_text_count
 from showpy.core.errors import LegibilityWarning, SchemaError, SpacingError
 from showpy.core.types import Points
@@ -177,3 +180,18 @@ def test_regression_legibility_warning_reports_stage_meters(
     stretched = transform_form(ell, scale_matrix(sx, sy, (0.0, 0.0)))
     with pytest.warns(LegibilityWarning, match=f"up to {wanted} letters"):
         layout(stretched)
+
+
+@pytest.mark.parametrize("font", ["hershey-roman", "tiny"])
+def test_regression_text_spot_count_gives_the_count_text_form_derives(font: str) -> None:
+    registry, _ = register_font(bundled_fonts(), tiny_bytes())
+    text = "I" if font == "tiny" else "GO\nTEAM"
+    n = text_spot_count(text, fonts=[font], height=4.0, spacing=0.5, rotation=30.0,
+                        align="center", letter_spacing=0.1, line_spacing=1.5,
+                        font_registry=registry)  # fmt: skip
+    form = text_form("t", spots(n), text, fonts=[font], height=4.0, at=(3, 9), rotation=30.0,
+                     align="center", letter_spacing=0.1, line_spacing=1.5, spacing=0.5,
+                     font_registry=registry)  # fmt: skip
+    assert form.geometry["n"] == n
+    strokes = text_strokes(text_recipe(form.geometry), font_registry=registry)
+    assert n == spacing_count(strokes, 0.5)
