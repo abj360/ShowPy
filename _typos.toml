@@ -15,4 +15,5 @@ extend-exclude = [
     "*.pdf",
     "tests/golden/fixtures",
     "tests/fixtures/repos",
+    "showpy/fonts",
 ]

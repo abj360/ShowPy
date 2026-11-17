@@ -72,14 +72,15 @@ Three facts drive the format:
 
 ## Numbers
 
-| Measure                                         | Value                         |
-| ----------------------------------------------- | ----------------------------- |
-| Relief SingleLine SVG source                    | 176,600 bytes                 |
-| Each Hershey `.jhf` source                      | about 3.5 KB                  |
-| Parsers in the library for font data            | 1 (`parse_path`), 0 XML       |
-| Pinned sources (data and licence texts)         | 6, each verified by SHA-256   |
-| Bytes of the built JSON that depend on the host | 0 (byte-deterministic output) |
-| Identity length                                 | 64 hex, equals the asset URI  |
+| Measure                                         | Value                          |
+| ----------------------------------------------- | ------------------------------ |
+| Relief SingleLine SVG source                    | 176,600 bytes                  |
+| Each Hershey `.jhf` source                      | 3,470 to 5,528 bytes           |
+| Built JSON, all five fonts                      | 136,775 bytes (largest 82,162) |
+| Parsers in the library for font data            | 1 (`parse_path`), 0 XML        |
+| Pinned sources (data and licence texts)         | 6, each verified by SHA-256    |
+| Bytes of the built JSON that depend on the host | 0 (byte-deterministic output)  |
+| Identity length                                 | 64 hex, equals the asset URI   |
 
 ## What would change our mind
 

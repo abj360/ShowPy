@@ -42,6 +42,8 @@ import importlib.resources as resources
 import showpy
 assert resources.files("showpy").joinpath("py.typed").is_file(), "py.typed missing"
 assert showpy.schema_path("showpy.show.v1.json").is_file(), "schema missing"
+for font in ("fonts/relief-singleline.json", "fonts/licenses/OFL-1.1.txt"):
+    assert resources.files("showpy").joinpath(font).is_file(), "fonts missing"
 assert "site-packages" in showpy.__file__, showpy.__file__
 print("Found showpy", showpy.__version__)
 """

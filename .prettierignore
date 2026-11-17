@@ -7,3 +7,4 @@ node_modules/
 .nox/
 .superpowers/
 tests/fixtures/repos/
+showpy/fonts/
