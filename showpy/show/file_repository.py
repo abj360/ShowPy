@@ -78,14 +78,6 @@ def _temp_copy(directory: Path, data: bytes) -> Path:
     return Path(handle.name)
 
 
-def _atomic_write(path: Path, data: bytes) -> None:
-    temp = _temp_copy(path.parent, data)
-    try:
-        temp.replace(path)
-    finally:
-        temp.unlink(missing_ok=True)
-
-
 def _link_exclusive(show_id: str, path: Path, data: bytes) -> bool:
     """Creates `path` with `data` only if it does not exist; os.link refuses to overwrite."""
     temp = _temp_copy(path.parent, data)
@@ -367,11 +359,13 @@ class _FileBackend:
             if mode is not None and stat.S_ISLNK(mode):
                 raise self._corrupt(show_id, target, "file is a symbolic link")
             if mode is None:
-                # Content-addressed: a blob a racing writer landed first holds these bytes. A link
-                # never replaces it, which Windows refuses while the other writer holds the name.
                 _link_exclusive(show_id, target, data)
+        # A blob's name is its digest and a tree record's name is the revision ID, which hashes
+        # the parent, time and changes. A file a racing writer landed first under either name
+        # holds these bytes, so it is kept. A link never replaces it, which Windows refuses
+        # while the other writer holds the name.
         record = {"revision": revision.model_dump(mode="json"), "tree": tree}
-        _atomic_write(base / TREE_DIR / f"{tree_name}.json", dump_json(record))
+        _link_exclusive(show_id, base / TREE_DIR / f"{tree_name}.json", dump_json(record))
         link = base / LINK_DIR / (revision.parent or ROOT_LINK)
         if not _link_exclusive(show_id, link, tree_name.encode()):
             raise conflict_error(show_id, revision.parent, self.log(show_id)[-1:])
@@ -380,7 +374,7 @@ class _FileBackend:
 class FileRepository(DocumentRepository):
     """Keeps every revision as JSON and blob files under a root directory.
 
-    Writes are atomic (temp file plus os.replace, or os.link for blobs) and blobs are
+    Writes are atomic (a temp file hard-linked into place, never replacing a file) and blobs are
     content-addressed, so writing equal content twice is a no-op. Two processes racing on one
     head cannot both land.
 

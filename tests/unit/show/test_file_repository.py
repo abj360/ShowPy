@@ -69,6 +69,8 @@ Contains:
         standing in for trees/ as ENOTDIR even where the OS says the path is missing
     test_regression_blob_landed_by_a_racing_writer_is_kept: commits when a racing writer lands the
         same blob first and the OS refuses to replace it
+    test_regression_tree_record_landed_by_an_identical_commit_is_kept: commits when an identical
+        commit wrote the same tree record first and the OS refuses to replace it
 """
 
 import contextlib
@@ -820,6 +822,18 @@ def test_regression_file_for_a_directory_is_io_where_the_os_reports_it_missing(
     assert caught.value.context["errno"] == errno.ENOTDIR
 
 
+def _refuse_replacing_existing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Makes Path.replace refuse an existing target, as Windows does while a racer holds it."""
+    real_replace = Path.replace
+
+    def windows_replace(source: Path, destination: str | Path) -> Path:
+        if Path(destination).exists():
+            raise PermissionError(errno.EACCES, "Access is denied", str(destination))
+        return real_replace(source, destination)
+
+    monkeypatch.setattr(Path, "replace", windows_replace)
+
+
 def test_regression_blob_landed_by_a_racing_writer_is_kept(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -828,7 +842,6 @@ def test_regression_blob_landed_by_a_racing_writer_is_kept(
     content = b"x"
     target = base / "objects" / digest(content)
     real_lstat_mode = file_repository._lstat_mode
-    real_replace = Path.replace
 
     def racing_lstat_mode(show_id: str, path: Path) -> int | None:
         mode = real_lstat_mode(show_id, path)
@@ -836,13 +849,22 @@ def test_regression_blob_landed_by_a_racing_writer_is_kept(
             target.write_bytes(content)
         return mode
 
-    def windows_replace(source: Path, destination: str | Path) -> Path:
-        if Path(destination).exists():
-            raise PermissionError(errno.EACCES, "Access is denied", str(destination))
-        return real_replace(source, destination)
-
     monkeypatch.setattr(file_repository, "_lstat_mode", racing_lstat_mode)
-    monkeypatch.setattr(Path, "replace", windows_replace)
+    _refuse_replacing_existing(monkeypatch)
     landed = repo.transaction(SHOW_ID, {"/renders/a.txt": content}, expected_revision=rev, at=AT)
     assert repo.head(SHOW_ID) == landed.id
     assert repo.read(SHOW_ID, "/renders/a.txt") == content
+
+
+def test_regression_tree_record_landed_by_an_identical_commit_is_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Commits when an identical commit wrote the same tree record first; replacing it fails."""
+    twin_repo, twin_rev, twin_base = _saved(tmp_path / "twin")
+    twin = _second_revision(twin_repo, twin_rev)
+    repo, rev, base = _saved(tmp_path)
+    assert rev == twin_rev
+    shutil.copy(twin_base / "trees" / f"{twin}.json", base / "trees" / f"{twin}.json")
+    _refuse_replacing_existing(monkeypatch)
+    assert _second_revision(repo, rev) == twin
+    assert repo.head(SHOW_ID) == twin
