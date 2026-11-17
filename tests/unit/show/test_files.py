@@ -55,8 +55,6 @@ def _store_then_read(ws: Workspace, path: str, raw: bytes) -> None:
     ws.read(path)
 
 
-@pytest.mark.defect("UP-9.7-06")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-06")
 def test_regression_commit_refuses_garbage_show_document() -> None:
     """Refuses a commit of bytes that are not a show document (audit 9.7 item 4; P0 #4)."""
     _, designer = _session()
@@ -64,8 +62,6 @@ def test_regression_commit_refuses_garbage_show_document() -> None:
         designer.commit({SHOW_DOC: b"garbage"}, at=LATER, message="oops")
 
 
-@pytest.mark.defect("UP-9.7-07")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-07")
 def test_regression_commit_refuses_unknown_root() -> None:
     """Refuses a commit under a root no reader can open (audit 9.7 item 4; P0 #4)."""
     _, designer = _session()

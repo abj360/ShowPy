@@ -22,6 +22,7 @@ from showpy.core.ids import SetId, TransitionId
 from showpy.core.util import close_matches, content_hash
 from showpy.show.documents import decode_show, script_doc, split_path
 from showpy.show.files import LIMITS_DOC, WAIVERS_DOC, show_changes
+from showpy.show.integrity import require_known_path, require_valid_tree
 from showpy.show.models import Principal, Revision, RevisionKind, Show
 from showpy.show.storage import ROOT_REVISION
 from showpy.time.models import Timeline
@@ -157,6 +158,13 @@ class DocumentRepository:
             raise conflict_error(show_id, expected, landed)
         return log
 
+    def _require_valid_tree(
+        self, show_id: str, old: dict[str, str], new: dict[str, str], added: dict[str, bytes]
+    ) -> None:
+        before = {path: self.backend.blob(show_id, d) for path, d in old.items()}
+        after = {path: added[d] if d in added else before[path] for path, d in new.items()}
+        require_valid_tree(before, after)
+
     def transaction(
         self,
         show_id: str,
@@ -195,6 +203,7 @@ class DocumentRepository:
         """
         for path in changes:
             split_path(path)
+            require_known_path(path)
         log = self._require_head(show_id, expected_revision)
         old = self._tree(show_id, expected_revision)
         blobs = {digest(d): d for d in changes.values() if d is not None}
@@ -229,6 +238,7 @@ class DocumentRepository:
             kind=kind,
             target=target,
         )
+        self._require_valid_tree(show_id, old, new, blobs)
         self.backend.commit(show_id, revision, new, blobs)
         return revision
 

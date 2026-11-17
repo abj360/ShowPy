@@ -278,8 +278,6 @@ def test_regression_undo_does_not_leave_a_path_row_for_a_removed_spot() -> None:
     assert validate_show(load_show(designer)).ok
 
 
-@pytest.mark.defect("UP-9.7-37")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-37")
 def test_regression_undoing_the_first_save_keeps_a_loadable_show() -> None:
     """Refuses to undo the first save, or leaves a loadable show (audit 9.7 history).
 
