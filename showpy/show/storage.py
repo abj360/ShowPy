@@ -46,7 +46,9 @@ class Repository(Protocol):
 
     Paths are stored paths, which address sets by key (`/sets/<key>/set.json`, ADR 0004).
     Every write takes the revision the caller read at and raises ConflictError, listing what
-    landed since, when the head moved.
+    landed since, when the head moved. Writes check validity, never pins or locks: edit
+    functions enforce those for every caller (ADR 0003); a host that writes raw documents
+    owns them.
     """
 
     def shows(self) -> list[str]:
@@ -99,7 +101,10 @@ class Repository(Protocol):
         expected_revision: str,
         at: datetime,
     ) -> Revision:
-        """Writes the whole show, deleting documents of sets and paths it no longer has."""
+        """Writes the whole show, deleting documents of sets and paths it no longer has.
+
+        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        """
         ...
 
     def list_sets(self, show_id: str) -> list[SetId]:
@@ -118,7 +123,10 @@ class Repository(Protocol):
         expected_revision: str,
         at: datetime,
     ) -> Revision:
-        """Replaces one existing set."""
+        """Replaces one existing set.
+
+        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        """
         ...
 
     def get_script(self, show_id: str, set_id: SetId) -> str:
@@ -134,7 +142,10 @@ class Repository(Protocol):
         expected_revision: str,
         at: datetime,
     ) -> Revision:
-        """Replaces a set's build script."""
+        """Replaces a set's build script.
+
+        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        """
         ...
 
     def get_paths(self, show_id: str, tid: TransitionId) -> TransitionSpec:
@@ -149,7 +160,10 @@ class Repository(Protocol):
         expected_revision: str,
         at: datetime,
     ) -> Revision:
-        """Replaces a transition's paths; counts follow the destination set."""
+        """Replaces a transition's paths; counts follow the destination set.
+
+        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        """
         ...
 
     def get_forms(self, show_id: str, set_id: SetId) -> tuple[Form, ...]:
@@ -165,7 +179,10 @@ class Repository(Protocol):
         expected_revision: str,
         at: datetime,
     ) -> Revision:
-        """Replaces a set's forms."""
+        """Replaces a set's forms.
+
+        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        """
         ...
 
     def get_timeline(self, show_id: str) -> Timeline:

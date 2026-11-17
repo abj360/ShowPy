@@ -315,7 +315,8 @@ class Revision(FrozenModel):
         id: Content hash of parent, time and change.
         parent: Previous revision; empty for the first.
         at: When it was saved; passed in, never read from the clock.
-        changed: Workspace paths written or deleted, sorted.
+        changed: Stored paths written or deleted, sorted; set and transition folders are named
+            by set key (ADR 0004), so they can differ from workspace paths after a renumber.
     """
 
     id: str

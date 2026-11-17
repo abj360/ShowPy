@@ -109,6 +109,10 @@ def _with_stored_key(new_set: Set, stored: Set) -> Set:
 class DocumentRepository:
     """Implements Repository over a backend that stores revisions, trees and blobs.
 
+    Every write checks validity: known paths, decodable structured files and a show that
+    decodes. No write checks pins or locks. Edit functions enforce those for every caller, the
+    designer included (ADR 0003, ruling L-A1); a host that writes raw documents owns them.
+
     Attributes:
         backend: Where revisions, trees and blobs live.
     """
@@ -268,7 +272,10 @@ class DocumentRepository:
         expected_revision: str,
         at: datetime,
     ) -> Revision:
-        """Writes the whole show, deleting documents of sets and paths it no longer has."""
+        """Writes the whole show, deleting documents of sets and paths it no longer has.
+
+        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        """
         return self.transaction(
             show_id,
             show_changes(show, self._documents(show_id, expected_revision)),
@@ -296,6 +303,7 @@ class DocumentRepository:
 
         A set built without a key takes the replaced set's key, so its folder and build script
         stay; an explicit key that differs from the stored one raises SchemaError.
+        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
         """
         show = self.get_show(show_id, expected_revision or None)
         position = show.set_index(new_set.id)
@@ -329,7 +337,10 @@ class DocumentRepository:
         expected_revision: str,
         at: datetime,
     ) -> Revision:
-        """Replaces a set's build script, stored in the folder of the set's key."""
+        """Replaces a set's build script, stored in the folder of the set's key.
+
+        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        """
         key = set_key(self.get_show(show_id, expected_revision or None).set(set_id))
         return self.transaction(
             show_id,
@@ -350,7 +361,10 @@ class DocumentRepository:
         expected_revision: str,
         at: datetime,
     ) -> Revision:
-        """Replaces a transition's paths; counts follow the destination set (ADR 0001 item 16)."""
+        """Replaces a transition's paths; counts follow the destination set (ADR 0001 item 16).
+
+        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        """
         show = self.get_show(show_id, expected_revision or None)
         stored = spec.replace(counts=show.transition(spec.id).counts)
         specs = (*(s for s in show.transitions if s.id != spec.id), stored)
@@ -378,6 +392,7 @@ class DocumentRepository:
         """Replaces a set's forms; every form must name that set. Stale forms are kept.
 
         A set that lists forms lists the put forms afterwards, so `get_forms` returns them.
+        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
         """
         wrong = [f.id for f in forms if f.set != set_id]
         if wrong:
