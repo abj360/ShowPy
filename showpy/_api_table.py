@@ -334,6 +334,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("gym_floor", "showpy.sheet.surfaces", "gym_floor"),
     ("highlight", "showpy.show.collab", "highlight"),
     ("hold", "showpy.choreo.paths", "hold"),
+    ("import_fonts", "showpy.export.data", "import_fonts"),
     ("import_json", "showpy.export.data", "import_json"),
     ("import_positions", "showpy.export.positions", "import_positions"),
     ("in_region", "showpy.cast.select", "in_region"),

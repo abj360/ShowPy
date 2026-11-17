@@ -9,12 +9,16 @@ Contains:
     test_fuzz_load_font_font_shaped_json: raises only ShowPyError for font-shaped JSON
     test_fuzz_register_font_font_shaped_json: raises only ShowPyError and never changes the
         registry it extends
+    test_fuzz_import_fonts_arbitrary_documents: raises only ShowPyError for JSON-like documents
+    test_fuzz_import_fonts_corrupted_base64: raises only ShowPyError for a real font entry with
+        corrupted base64, a wrong URI or flipped bytes, and never registers a mismatched font
     test_fuzz_layout_text_arbitrary_text: raises only ShowPyError for arbitrary Unicode text laid
         out with the bundled fallback chain, then evaluated
     test_fuzz_layout_text_extreme_numbers: raises only ShowPyError for any finite height,
         position, spacing and rotation, laying out and evaluating every stroke
 """
 
+import base64
 import json
 from collections.abc import Iterable
 from typing import Any
@@ -22,9 +26,13 @@ from typing import Any
 from hypothesis import given
 from hypothesis import strategies as st
 
+from showpy.core.errors import ShowPyError
+from showpy.core.util import asset_uri
+from showpy.export.data import FONTS_KEY, import_fonts
 from showpy.geo.fonts import FontRegistry, load_font, register_font
 from showpy.geo.models import LaidGlyph
 from showpy.geo.text_layout import MAX_LAYOUT_CHARS, layout_text
+from tests.fixtures.fonts import tiny_bytes
 from tests.helpers import only_showpy_errors
 
 EMPTY = FontRegistry(fonts={}, sources={}, names={})
@@ -68,6 +76,18 @@ FONT_DICTS = st.fixed_dictionaries(
     },
     optional={"unknown": st.integers()},
 )
+JSON_LEAVES = st.one_of(
+    st.none(), st.booleans(), st.integers(), st.floats(allow_nan=False), st.text(max_size=30)
+)
+JSON_VALUES = st.recursive(
+    JSON_LEAVES,
+    lambda inner: st.one_of(
+        st.lists(inner, max_size=4), st.dictionaries(st.text(max_size=70), inner, max_size=4)
+    ),
+    max_leaves=12,
+)
+TINY_BYTES = tiny_bytes()
+TINY_URI = asset_uri(TINY_BYTES)
 
 
 def _encode(document: dict[str, Any]) -> bytes:
@@ -138,3 +158,30 @@ def test_fuzz_layout_text_extreme_numbers(
         ),
         (text, height, at, letter_spacing, line_spacing, rotation),
     )
+
+
+@given(st.one_of(JSON_VALUES, st.dictionaries(st.sampled_from([FONTS_KEY, "x"]), JSON_VALUES)))
+def test_fuzz_import_fonts_arbitrary_documents(document: Any) -> None:
+    """Raises only ShowPyError for any JSON-like document."""
+    only_showpy_errors(lambda: import_fonts(document, font_registry=EMPTY), document)
+
+
+def _corrupt(draw: st.DrawFn) -> dict[str, Any]:
+    encoded = list(base64.b64encode(TINY_BYTES).decode())
+    for _ in range(draw(st.integers(0, 3))):
+        position = draw(st.integers(0, len(encoded)))
+        encoded.insert(position, draw(st.sampled_from(list("=!\n é+/AZ"))))
+    uri = draw(st.sampled_from([TINY_URI, asset_uri(b"other"), "asset:sha256:", ""]))
+    return {FONTS_KEY: {uri: "".join(encoded)}}
+
+
+@given(st.composite(_corrupt)())
+def test_fuzz_import_fonts_corrupted_base64(document: dict[str, Any]) -> None:
+    """Raises only ShowPyError, and registers a font only when its bytes hash to its URI."""
+    ((uri, encoded),) = document[FONTS_KEY].items()
+    try:
+        registry = import_fonts(document, font_registry=EMPTY)
+    except ShowPyError:
+        return
+    assert uri == TINY_URI
+    assert registry.source(uri) == base64.b64decode(encoded, validate=True)

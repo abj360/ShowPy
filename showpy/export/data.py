@@ -3,8 +3,12 @@ data.py --- native JSON interchange, per-count frames, text tables and format pl
 
 Contains:
     SCHEMA_TAG: names the interchange format, `showpy.show.v1`
-    export_json(): dumps a show to a tagged JSON-safe document
+    FONTS_KEY: names the document key that holds the embedded fonts
+    MAX_IMPORT_FONTS: bounds how many fonts one document may carry
+    export_json(): dumps a show to a tagged JSON-safe document, embedding the fonts its text
+        forms use
     import_json(): loads a show from a tagged document, refusing unknown schemas
+    import_fonts(): registers the fonts embedded in a document, checking each against its hash
     export_frames_csv(): samples every spot through the engine, per count, as CSV
     as_table(): turns a coordinate sheet, chart or DataFrame into a TextTable
     to_csv(): writes a coordinate sheet, chart or DataFrame as CSV
@@ -16,6 +20,7 @@ Contains:
     DEFAULT_FORMATS: holds the built-in json and frames_csv formats
 """
 
+import base64
 import csv
 import io
 import math
@@ -25,18 +30,38 @@ from typing import Any
 import pandas as pd
 
 from showpy.choreo.engine import PathEngine
+from showpy.choreo.form_text import text_recipe
 from showpy.core.csv_cells import neutralize_cell
-from showpy.core.errors import ROOT_LOC, SchemaError, UnknownRefError, field_errors
+from showpy.core.errors import (
+    ROOT_LOC,
+    FontError,
+    SchemaError,
+    UnknownRefError,
+    field_errors,
+)
 from showpy.core.types import Point
 from showpy.core.units import round_to
-from showpy.core.util import close_matches
+from showpy.core.util import asset_uri, close_matches
 from showpy.export.models import Chart, CoordinateSheet, TextTable
+from showpy.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
 from showpy.show.models import Show
 from showpy.time.clock import count_to_seconds
 
 SCHEMA_TAG = "showpy.show.v1"
 SCHEMA_KEY = "schema"
 SHOW_KEY = "show"
+FONTS_KEY = "fonts"
+FORMS_FIELD = "forms"
+TEXT_KIND = "text"
+# A document with more fonts than the five bundled plus a generous allowance of user fonts is
+# hostile; each entry is also bounded by MAX_FONT_BYTES.
+MAX_IMPORT_FONTS = 64
+BASE64_BLOCK_CHARS = 4
+BASE64_BYTES_PER_BLOCK = 3
+BASE64_SLACK_CHARS = 4
+MAX_ENCODED_FONT_CHARS = (
+    BASE64_BLOCK_CHARS * math.ceil(MAX_FONT_BYTES / BASE64_BYTES_PER_BLOCK) + BASE64_SLACK_CHARS
+)
 ALWAYS_EXPORTED = "id"
 FRAME_COLUMNS = ("count", "seconds", "entity", "x", "y", "facing", "on_field")
 FRAME_PLACES = 6
@@ -61,15 +86,23 @@ type Importer = Callable[..., Show]
 
 
 # Any: the exported document holds arbitrarily nested JSON values.
-def export_json(show: Show, include: Iterable[str] | None = None) -> dict[str, Any]:
-    """Dumps a show to a tagged JSON-safe document.
+def export_json(
+    show: Show,
+    include: Iterable[str] | None = None,
+    *,
+    font_registry: FontRegistry | None = None,
+) -> dict[str, Any]:
+    """Dumps a show to a tagged JSON-safe document, embedding the fonts its text forms use.
 
     Args:
         show: Show to export.
         include: Top-level show fields to keep; None keeps all. The ID is always kept.
+        font_registry: Registry holding the fonts of the text forms; None means the bundled fonts.
 
     Returns:
-        document: `{"schema": "showpy.show.v1", "show": {...}}`.
+        document: `{"schema": "showpy.show.v1", "show": {...}}`, plus `"fonts"` mapping each
+            font URI to its base64 bytes, sorted by URI, when an exported form is a text form.
+            A font the registry lacks raises MissingFontError.
 
     >>> from showpy.examples import two_set_show
     >>> sorted(export_json(two_set_show(), include=["title"])["show"])
@@ -86,7 +119,25 @@ def export_json(show: Show, include: Iterable[str] | None = None) -> dict[str, A
                 context={"field": name},
             )
         dumped = {key: value for key, value in dumped.items() if key in keep}
-    return {SCHEMA_KEY: SCHEMA_TAG, SHOW_KEY: dumped}
+    document: dict[str, Any] = {SCHEMA_KEY: SCHEMA_TAG, SHOW_KEY: dumped}
+    fonts = _embedded_fonts(show, dumped, font_registry or bundled_fonts())
+    if fonts:
+        document[FONTS_KEY] = fonts
+    return document
+
+
+def _embedded_fonts(
+    show: Show, dumped: Mapping[str, Any], registry: FontRegistry
+) -> dict[str, str]:
+    if FORMS_FIELD not in dumped:
+        return {}
+    uris = {
+        uri
+        for form in show.forms.values()
+        if form.kind == TEXT_KIND
+        for uri in text_recipe(form.geometry).fonts
+    }
+    return {uri: base64.b64encode(registry.source(uri)).decode("ascii") for uri in sorted(uris)}
 
 
 # Any: an imported document holds arbitrarily nested JSON values.
@@ -124,6 +175,74 @@ def import_json(d: Mapping[str, Any]) -> Show:
             hint=f"fix {'the show' if field == ROOT_LOC else field} to match {SCHEMA_TAG}",
             context={"field": field, "error_count": len(errors)},
         ) from error
+
+
+def _decode_font(uri: object, encoded: object) -> bytes:
+    if not isinstance(uri, str) or not isinstance(encoded, str):
+        raise FontError(
+            "embedded fonts must map URI strings to base64 strings",
+            hint=f'write {{"{FONTS_KEY}": {{"asset:sha256:<hex>": "<base64>"}}}}',
+            context={"uri": repr(uri)[:80]},
+        )
+    if len(encoded) > MAX_ENCODED_FONT_CHARS:
+        raise FontError(
+            f"embedded font {uri} is {len(encoded)} characters, over {MAX_ENCODED_FONT_CHARS}",
+            hint=f"embed fonts of at most {MAX_FONT_BYTES} bytes",
+            context={"uri": uri, "chars": len(encoded)},
+        )
+    try:
+        data = base64.b64decode(encoded, validate=True)
+    # b64decode raises binascii.Error for bad padding and plain ValueError for non-ASCII text.
+    except ValueError as exc:
+        raise FontError(
+            f"embedded font {uri} is not valid base64",
+            hint="embed each font with export_json()",
+            context={"uri": uri},
+        ) from exc
+    if asset_uri(data) != uri:
+        raise FontError(
+            f"embedded font bytes do not hash to {uri}",
+            hint="re-export the document; the font data was changed",
+            context={"uri": uri, "actual": asset_uri(data)},
+            code="FONT_HASH_MISMATCH",
+        )
+    return data
+
+
+def import_fonts(d: Mapping[str, Any], font_registry: FontRegistry | None = None) -> FontRegistry:
+    """Registers the fonts embedded in a document, checking each against its URI.
+
+    Args:
+        d: A document from `export_json`; one without a `fonts` key changes nothing.
+        font_registry: Registry to extend; None means the bundled fonts. It is not changed.
+
+    Returns:
+        registry: `font_registry` plus every embedded font. A malformed entry, a hash mismatch or
+            more than `MAX_IMPORT_FONTS` fonts raises FontError.
+
+    >>> from showpy.examples import two_set_show
+    >>> import_fonts(export_json(two_set_show())) is bundled_fonts()
+    True
+    """
+    registry = font_registry or bundled_fonts()
+    if not isinstance(d, Mapping):
+        raise FontError(
+            f"document is a {type(d).__name__}, not a mapping",
+            hint="pass the dict that export_json() returned",
+            context={"type": type(d).__name__},
+        )
+    if FONTS_KEY not in d:
+        return registry
+    fonts = d[FONTS_KEY]
+    if not isinstance(fonts, Mapping) or len(fonts) > MAX_IMPORT_FONTS:
+        raise FontError(
+            f"{FONTS_KEY!r} must be a mapping of at most {MAX_IMPORT_FONTS} fonts",
+            hint=f'write {{"{FONTS_KEY}": {{"asset:sha256:<hex>": "<base64>"}}}}',
+            context={"type": type(fonts).__name__},
+        )
+    for uri, encoded in fonts.items():
+        registry, _ = register_font(registry, _decode_font(uri, encoded))
+    return registry
 
 
 def _number(value: float, places: int) -> str:
