@@ -4,6 +4,7 @@
 test_errors.py --- tests the ShowPyError family: fields, codes, hierarchy and rendering
 
 Contains:
+    test_font_errors_carry_their_codes: gives the font errors their codes and parents
     test_*(): one behavior of showpy.core.errors each
     test_regression_every_error_survives_pickling: round-trips every ShowPyError subclass through
         pickle
@@ -33,12 +34,17 @@ from showpy.core.errors import (
     MAX_ECHOED_INPUT_CHARS,
     ConflictError,
     ContinuityError,
+    FontError,
     GeometryError,
+    GlyphError,
+    LegibilityWarning,
     LockedError,
+    MissingFontError,
     PathError,
     SchemaError,
     ShowPyError,
     StorageError,
+    UnknownRefError,
     ZeroLengthError,
     bounded_repr,
 )
@@ -180,3 +186,12 @@ def test_bounded_repr_survives_a_container_too_long_to_print() -> None:
 
 def test_bounded_repr_keeps_text_unquoted_and_cut() -> None:
     assert bounded_repr("a" * 200) == "a" * MAX_ECHOED_INPUT_CHARS
+
+
+def test_font_errors_carry_their_codes() -> None:
+    assert GlyphError("m", hint="h").code == "MISSING_GLYPH"
+    assert MissingFontError("m", hint="h").code == "MISSING_FONT"
+    assert FontError("m", hint="h").code == "BAD_FONT"
+    assert issubclass(GlyphError, UnknownRefError)
+    assert issubclass(LegibilityWarning, UserWarning)
+    assert issubclass(MissingFontError, UnknownRefError)

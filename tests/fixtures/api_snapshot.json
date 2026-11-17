@@ -272,6 +272,7 @@
       "params": "dict[str, Any]"
     }
   },
+  "FontError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
   "Form": {
     "model": {
       "facing": "showpy.choreo.models.FacingSpec",
@@ -331,6 +332,7 @@
     }
   },
   "GeometryError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "GlyphError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
   "Grid": {
     "model": {
       "major_every": "int",
@@ -401,6 +403,7 @@
       "name": "str"
     }
   },
+  "LegibilityWarning": "(*args)",
   "LinePiece": "(start: Point, end: Point) -> None",
   "LockedError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
   "MAX_DEPTH": {
@@ -485,6 +488,7 @@
       "start_measure": "int"
     }
   },
+  "MissingFontError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
   "MotionFn": {
     "protocol": {}
   },
@@ -1105,6 +1109,7 @@
   "arrive_early": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel, counts: float, force: bool = False) -> showpy.choreo.models.TransitionSpec",
   "as_points": "(obj: object) -> Points",
   "as_table": "(obj: Tabular) -> showpy.export.models.TextTable",
+  "asset_uri": "(data: bytes) -> str",
   "attach_audio": "(tl: showpy.time.models.Timeline, track: showpy.time.models.AudioTrack) -> showpy.time.models.Timeline",
   "balance": "(s: showpy.choreo.models.Set, sheet: showpy.sheet.models.Sheet, axis: Literal['x', 'y'] = 'x') -> float",
   "bezier": "(*control: Point) -> showpy.geo.curves.BezierCurve",
