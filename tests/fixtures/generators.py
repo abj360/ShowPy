@@ -145,8 +145,8 @@ def _place_forms(rng: np.random.Generator, show: Show, set_id: str, still: str) 
             continue
         kind = FORM_KINDS[(int(set_id) + index) % len(FORM_KINDS)]
         forms.append(_form(rng, kind, f"{key}-{set_id}", ids, set_id))
-    placed = with_set(show, place(show, set_id, forms))
-    return apply_change(placed, [FormOp(form=f) for f in forms])
+    placed_set, filled = place(show, set_id, forms)
+    return apply_change(with_set(show, placed_set), [FormOp(form=f) for f in filled])
 
 
 def _follow_and_hold(show: Show, tid: TransitionId, ids: list[str]) -> Show:

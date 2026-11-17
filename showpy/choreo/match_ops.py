@@ -6,8 +6,10 @@ the touching transitions, so those rows are dropped and the spot moves straight 
 
 Contains:
     with_set(): returns a show with one set replaced by ID
+    forms_of_set(): returns the forms a set places, ignoring stale forms it no longer lists
+    is_elsewhere(): tells whether a placement differs in position or presence from a target
     clear_rows(): drops stored path rows of some spots in one transition, respecting locks
-    apply_match(): writes a match result's targets into a transition's destination set
+    apply_match(): writes a match result into a transition's destination set, forms included
     swap(): swaps two spots' places in one set, keeping forms and paths consistent
     suggest_swaps(): ranks swaps that shrink the largest straight move or remove crossings
 """
@@ -17,18 +19,20 @@ from collections.abc import Iterable
 
 import numpy as np
 
-from showpy.choreo.forms import check_unlocked
+from showpy.choreo.forms import check_unlocked, slot_poses
 from showpy.choreo.match_solve import BoolArray, FloatArray, crossing_mask
-from showpy.choreo.models import MatchResult, Placement, Set
-from showpy.core.errors import LockedError
-from showpy.core.ids import SetId, SpotId, TransitionId
+from showpy.choreo.models import Form, MatchResult, Placement, Set
+from showpy.core.errors import LockedError, MatchError, UnknownRefError
+from showpy.core.ids import FormId, SetId, SpotId, TransitionId
 from showpy.core.ids import format_tid as _format_tid
 from showpy.core.types import Points
+from showpy.core.units import angle_diff
 from showpy.core.util import natural_sort
 from showpy.show.models import Show
 
 SAME_POSITION_TOL = 1e-9
 GAIN_TOL = 1e-9
+FACING_TOL = 1e-9
 SWAPPED_FIELDS = ("x", "y", "facing", "form", "order", "on_field")
 
 
@@ -42,6 +46,27 @@ def with_set(show: Show, new: Set) -> Show:
     """
     sets = tuple(new if s.id == new.id else s for s in show.sets)
     return show.replace(sets=sets)
+
+
+def forms_of_set(show: Show, set_id: SetId) -> dict[FormId, Form]:
+    """Returns the forms stamped with `set_id` that the set lists in `Set.forms`.
+
+    A form the set no longer lists (it was re-placed without it) is stale and left out. A set
+    that lists no forms, because its forms were stored without `place`, owns every form
+    stamped with its ID.
+
+    >>> from showpy.choreo.forms import line_form
+    >>> from showpy.examples import two_set_show
+    >>> row = line_form("row", ["T1"], (0, 12), (2, 12), set_id="2")
+    >>> list(forms_of_set(two_set_show().replace(forms={"row": row}), "2"))
+    ['row']
+    """
+    listed = show.set(set_id).forms
+    return {
+        form_id: form
+        for form_id, form in show.forms.items()
+        if form.set == set_id and (not listed or form_id in listed)
+    }
 
 
 def clear_rows(
@@ -74,11 +99,137 @@ def _neighbour_tids(show: Show, set_id: SetId) -> list[TransitionId]:
     return [tid for tid in show.transition_ids() if set_id in tid]
 
 
+def _form_poses(show: Show, set_id: SetId, form_id: FormId) -> tuple[Points, list[float]]:
+    form = show.forms.get(form_id)
+    if form is None:
+        raise UnknownRefError(
+            f"match result names unknown form {form_id!r}",
+            hint="match onto forms of this show, or match onto points",
+            context={"form": form_id, "forms": sorted(show.forms)},
+        )
+    if form.set != set_id:
+        raise MatchError(
+            f"form {form_id} belongs to set {form.set}, not {set_id}",
+            hint=f"match onto forms of set {set_id}",
+            context={"form": form_id, "form_set": form.set, "set": set_id},
+        )
+    if form_id not in forms_of_set(show, set_id):
+        raise MatchError(
+            f"set {set_id} no longer places form {form_id}",
+            hint=f"match onto forms set {set_id} lists, or re-place the set with this form",
+            context={"form": form_id, "set": set_id, "set_forms": list(show.set(set_id).forms)},
+        )
+    return slot_poses(form)
+
+
+def _check_slot(form_id: FormId, slot: int, slot_count: int) -> None:
+    if not 0 <= slot < slot_count:
+        raise MatchError(
+            f"form {form_id} has no slot {slot}; its slots are 0 to {slot_count - 1}",
+            hint="match onto an existing slot of the form, or add slots with n=",
+            context={"form": form_id, "slot": slot, "slots": slot_count},
+        )
+
+
+def _slot_targets(show: Show, set_id: SetId, result: MatchResult) -> dict[SpotId, Placement]:
+    poses: dict[FormId, tuple[Points, list[float]]] = {}
+    targets = {}
+    for entity, (form_id, slot) in result.slots.items():
+        if form_id not in poses:
+            poses[form_id] = _form_poses(show, set_id, form_id)
+        points, facings = poses[form_id]
+        _check_slot(form_id, slot, len(points))
+        x, y = (float(v) for v in points[slot])
+        targets[entity] = Placement(
+            entity=entity, x=x, y=y, facing=facings[slot], form=form_id, order=slot
+        )
+    return targets
+
+
+def _form_slot_error(form: Form, reason: str, slot: int) -> MatchError:
+    return MatchError(
+        f"match leaves form {form.id} with {reason} at slot {slot}",
+        hint="match every member of the form, or use place()",
+        context={"form": form.id, "slot": slot},
+    )
+
+
+def _matched_members(form: Form, result: MatchResult) -> tuple[SpotId, ...]:
+    held: list[SpotId | None] = [m if m not in result.slots else None for m in form.members]
+    for entity, (form_id, slot) in result.slots.items():
+        if form_id != form.id:
+            continue
+        held.extend([None] * (slot + 1 - len(held)))
+        if held[slot] is not None:
+            raise _form_slot_error(form, "two spots", slot)
+        held[slot] = entity
+    while held and held[-1] is None:
+        held.pop()
+    for slot, member in enumerate(held):
+        if member is None:
+            raise _form_slot_error(form, "an empty slot", slot)
+    return tuple(m for m in held if m is not None)
+
+
+def _matched_forms(show: Show, set_id: SetId, result: MatchResult, force: bool) -> Show:
+    touched = {form_id for form_id, _ in result.slots.values()}
+    forms = dict(show.forms)
+    for form_id, form in forms_of_set(show, set_id).items():
+        if form_id not in touched and not set(form.members) & set(result.slots):
+            continue
+        members = _matched_members(form, result)
+        if members != form.members:
+            check_unlocked(form, force)
+            forms[form_id] = form.replace(members=members)
+    return show.replace(forms=forms)
+
+
+def is_elsewhere(current: Placement, x: float, y: float) -> bool:
+    """Tells whether `current` is off the field or more than `SAME_POSITION_TOL` from (x, y).
+
+    >>> from showpy.examples import two_set_show
+    >>> is_elsewhere(two_set_show().set("2").get("T1"), 0.0, 99.0)
+    True
+    """
+    return (
+        abs(current.x - x) > SAME_POSITION_TOL
+        or abs(current.y - y) > SAME_POSITION_TOL
+        or not current.on_field
+    )
+
+
+def _slot_updates(dest: Set, targets: dict[SpotId, Placement]) -> dict[SpotId, Placement]:
+    updates = {}
+    for entity, wanted in targets.items():
+        current = dest.get(entity)
+        is_same_slot = (current.form, current.order) == (wanted.form, wanted.order)
+        is_same_pose = not is_elsewhere(current, wanted.x, wanted.y) and (
+            abs(angle_diff(current.facing, wanted.facing)) <= FACING_TOL
+        )
+        if not (is_same_slot and is_same_pose):
+            updates[entity] = current.replace(
+                x=wanted.x, y=wanted.y, facing=wanted.facing, form=wanted.form,
+                order=wanted.order, on_field=True,
+            )  # fmt: skip
+    return updates
+
+
+def _point_updates(dest: Set, result: MatchResult) -> dict[SpotId, dict[str, object]]:
+    updates: dict[SpotId, dict[str, object]] = {}
+    for entity, (x, y) in zip(result.entities, result.targets, strict=True):
+        if is_elsewhere(dest.get(entity), x, y):
+            updates[entity] = {"x": x, "y": y, "on_field": True}
+    return updates
+
+
 def apply_match(show: Show, tid: TransitionId, result: MatchResult, force: bool = False) -> Show:
-    """Writes the result's targets into the destination set and resets those spots' paths.
+    """Writes the result's targets into the destination set and resets moved spots' paths.
 
     Spots already on their target are left alone, so pinned spots that stay put are fine;
-    moving a pinned spot or dropping a locked path row needs force=True.
+    moving a pinned spot or dropping a locked path row needs force=True. A result matched
+    onto forms also writes each spot's facing, form and order from its slot and updates
+    `Form.members` like `swap`, so rebuilding a form keeps the match; changing a locked
+    form needs force=True.
 
     >>> from showpy.choreo.match import match
     >>> from showpy.examples import two_set_show
@@ -89,14 +240,15 @@ def apply_match(show: Show, tid: TransitionId, result: MatchResult, force: bool 
     """
     show.transition(tid)
     dest = show.set(tid[1])
-    updates = {}
-    for entity, (x, y) in zip(result.entities, result.targets, strict=True):
-        current = dest.get(entity)
-        moved = abs(current.x - x) > SAME_POSITION_TOL or abs(current.y - y) > SAME_POSITION_TOL
-        if moved or not current.on_field:
-            updates[entity] = {"x": x, "y": y, "on_field": True}
-    edited = with_set(show, dest.with_placements(updates, force=force))
-    return clear_rows(edited, tid, list(updates), force)
+    if not result.slots:
+        updates = _point_updates(dest, result)
+        edited = with_set(show, dest.with_placements(updates, force=force))
+        return clear_rows(edited, tid, list(updates), force)
+    slot_updates = _slot_updates(dest, _slot_targets(show, tid[1], result))
+    forms_edited = _matched_forms(show, tid[1], result, force)
+    edited = with_set(forms_edited, dest.with_placements(slot_updates, force=force))
+    relocated = [e for e, p in slot_updates.items() if is_elsewhere(dest.get(e), p.x, p.y)]
+    return clear_rows(edited, tid, relocated, force)
 
 
 def _swap_members(members: tuple[SpotId, ...], a: SpotId, b: SpotId) -> tuple[SpotId, ...]:
@@ -105,8 +257,8 @@ def _swap_members(members: tuple[SpotId, ...], a: SpotId, b: SpotId) -> tuple[Sp
 
 def _swap_forms(show: Show, set_id: SetId, a: SpotId, b: SpotId, force: bool) -> Show:
     forms = dict(show.forms)
-    for form_id, form in show.forms.items():
-        if form.set != set_id or not {a, b} & set(form.members):
+    for form_id, form in forms_of_set(show, set_id).items():
+        if not {a, b} & set(form.members):
             continue
         check_unlocked(form, force)
         members = _swap_members(form.members, a, b)
@@ -121,8 +273,9 @@ def _spot_fields(placement: Placement) -> dict[str, object]:
 def swap(show: Show, set_id: SetId, a: SpotId, b: SpotId, force: bool = False) -> Show:
     """Swaps where two spots stand in one set, with facing and form slot.
 
-    Form members are swapped too, so regenerating a form keeps the swap, and both spots'
-    path rows into and out of the set are dropped. Pins and locks need force=True.
+    Members of the set's forms (`forms_of_set`) are swapped too, so regenerating a form keeps
+    the swap, and both spots' path rows into and out of the set are dropped. Pins and locks
+    need force=True.
 
     >>> from showpy.examples import two_set_show
     >>> swap(two_set_show(), "2", "T1", "T4").set("2").get("T1").x

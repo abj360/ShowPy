@@ -9,6 +9,9 @@ Contains:
     test_regression_match_wraps_a_failing_cost_fn: raises MatchError when a cost_fn callback raises
     test_regression_match_names_the_nan_start: raises SchemaError, or a MatchError naming the NaN
         start, not an empty one
+    test_match_records_form_slots_across_concatenated_forms: maps columns to (form, local slot)
+    test_match_onto_points_records_no_form_slots: leaves slots empty for point targets
+    test_match_by_order_records_form_slots: maps each spot to its slot in the given form
 """
 
 import math
@@ -334,3 +337,21 @@ def test_regression_match_names_the_nan_start() -> None:
         match([(math.nan, 0.0), (1.0, 0.0)], PAIR_SLOTS)
     if isinstance(excinfo.value, MatchError):
         assert "nan" in str(excinfo.value).lower()
+
+
+def test_match_records_form_slots_across_concatenated_forms() -> None:
+    first = line_form("a", [], (0, 0), (2, 0), n=2)
+    second = line_form("b", [], (0, 5), (2, 5), n=2)
+    result = match([(0.0, 5.0), (2.0, 0.0)], [first, second], entities=["P", "Q"])
+    assert result.assignment == {"P": 2, "Q": 1}
+    assert result.slots == {"P": ("b", 0), "Q": ("a", 1)}
+
+
+def test_match_onto_points_records_no_form_slots() -> None:
+    assert match([(0.0, 0.0)], [(1.0, 0.0)]).slots == {}
+
+
+def test_match_by_order_records_form_slots() -> None:
+    form = line_form("f", [], (0, 0), (2, 0), n=2)
+    assert match_by_order(["B", "A"], form).slots == {"B": ("f", 0), "A": ("f", 1)}
+    assert match_by_order(["B", "A"], np.array([[0.0, 0.0], [1.0, 0.0]])).slots == {}
