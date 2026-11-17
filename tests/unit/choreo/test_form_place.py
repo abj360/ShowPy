@@ -34,10 +34,13 @@ Contains:
         place() put it when the filled sparse form is rebuilt
     test_regression_place_rejects_a_text_form_with_fewer_members_than_slots: refuses to match
         unrelated spots into the letters of a text form that lost members
+    test_regression_rebuild_rejects_a_text_form_left_short_by_delete_spots: raises
+        MEMBER_COUNT_MISMATCH instead of drawing only some of the slots
 """
 
 import pytest
 
+from showpy.cast.spots import delete_spots
 from showpy.choreo.form_place import filled_forms, place, rebuild
 from showpy.choreo.forms import circle_form, line_form, text_form
 from showpy.choreo.match_ops import with_set
@@ -320,4 +323,19 @@ def test_regression_place_rejects_a_text_form_with_fewer_members_than_slots() ->
     assert caught.value.code == "MEMBER_COUNT_MISMATCH"
     assert caught.value.context == {"form": "t", "n": 6, "members": 2}
     assert caught.value.hint.startswith("add 4 more spots; ")
+    assert "edit_text_count" in caught.value.hint
+
+
+def test_regression_rebuild_rejects_a_text_form_left_short_by_delete_spots() -> None:
+    """A text form that lost a member to delete_spots never rebuilds with a letter missing."""
+    show = two_set_show()
+    dash = text_form("dash", ["T1", "T2", "T3", "T4"], "-", fonts=["simplex"], height=2.0,
+                     at=(0, 9), n=4)  # fmt: skip
+    placed, (filled,) = place(show, "2", [dash])
+    stored = with_set(show, placed).replace(forms={"dash": filled})
+    short = delete_spots(stored, "T4")
+    with pytest.raises(SpacingError) as caught:
+        rebuild(short, "dash")
+    assert caught.value.code == "MEMBER_COUNT_MISMATCH"
+    assert caught.value.context == {"form": "dash", "n": 4, "members": 3}
     assert "edit_text_count" in caught.value.hint

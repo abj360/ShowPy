@@ -51,7 +51,7 @@ import shapely
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
 from showpy.choreo.form_layout import layout, member_facings, slot_count
-from showpy.choreo.form_text import require_member_count
+from showpy.choreo.form_text import require_member_count, require_text_members
 from showpy.choreo.models import FacingSpec, Form, FormKind, Placement, SpacingSpec, TextRecipe
 from showpy.choreo.text_count import count_recipe
 from showpy.core.errors import LockedError, SchemaError, SpacingError
@@ -542,11 +542,13 @@ def placements(
 ) -> list[Placement]:
     """Regenerates one placement per member from the form's recipe, spacing and facing.
 
-    `font_registry` holds a text form's fonts; None means `bundled_fonts()`.
+    `font_registry` holds a text form's fonts; None means `bundled_fonts()`. A text form whose
+    members no longer fill its slots raises `MEMBER_COUNT_MISMATCH` before any layout.
 
     >>> [(p.entity, p.x, p.order) for p in placements(line_form("f", ["A", "B"], (0, 0), (2, 0)))]
     [('A', 0.0, 0), ('B', 2.0, 1)]
     """
+    require_text_members(form)
     pts, facings = slot_poses(form, registry, font_registry=font_registry)
     if len(form.members) > len(pts):
         raise SpacingError(

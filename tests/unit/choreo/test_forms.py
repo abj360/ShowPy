@@ -25,6 +25,8 @@ Contains:
         generator params, or rejects them with a ShowPyError
     test_text_form_*: stores font URIs, follows reading order, needs one member per slot, keeps
         user fonts behind their registry and maps slots and facings through transforms
+    test_regression_placements_rejects_a_text_form_short_of_members: raises MEMBER_COUNT_MISMATCH
+        with the edit_text_count hint instead of leaving letters out
 """
 
 import contextlib
@@ -483,3 +485,13 @@ def test_transformed_text_moves_slots_and_facings() -> None:
     turned = transform_form(form, rotation_matrix(TURN, (0, 0)))
     for old, new in zip(placements(form), placements(turned), strict=True):
         assert abs((new.facing - old.facing - TURN + 180.0) % 360.0 - 180.0) < 1e-9
+
+
+def test_regression_placements_rejects_a_text_form_short_of_members() -> None:
+    short = _go().replace(members=tuple(TEXT_MEMBERS[:-1]))
+    with pytest.raises(SpacingError) as caught:
+        placements(short)
+    assert caught.value.code == "MEMBER_COUNT_MISMATCH"
+    assert caught.value.context == {"form": "go", "n": 24, "members": 23}
+    assert caught.value.hint.startswith("add 1 more spots; ")
+    assert "edit_text_count" in caught.value.hint

@@ -21,6 +21,7 @@ Contains:
     reject_count_change(): rejects an edit of a text form that changes its count
     resolve_edit_fonts(): resolves the font names of a text edit to URIs
     require_edited_members(): rejects an edited text form whose member count left its slot count
+    require_text_members(): rejects a text form whose members no longer fill its slots
 """
 
 import math
@@ -32,7 +33,7 @@ from typing import Any, get_args
 
 import numpy as np
 
-from showpy.choreo.models import TextRecipe
+from showpy.choreo.models import Form, TextRecipe
 from showpy.core.errors import (
     GeometryError,
     LegibilityWarning,
@@ -493,3 +494,25 @@ def require_edited_members(form_id: str, n: int, member_count: int) -> None:
             context=exc.context,
             code="MEMBER_COUNT_MISMATCH",
         ) from exc
+
+
+def require_text_members(form: Form) -> None:
+    """Rejects a text form whose member count differs from its stored count; other kinds pass.
+
+    `delete_spots` may leave a text form short; regenerating its placements then fails
+    closed until `edit_text_count` restores one member per slot.
+
+    Args:
+        form: Any form; only a text form with a stored `n` is checked.
+
+    Raises:
+        SpacingError: `MEMBER_COUNT_MISMATCH`; the hint names `edit_text_count`.
+
+    >>> from showpy.choreo.forms import text_form
+    >>> go = text_form("go", [f"S{i}" for i in range(24)], "GO", fonts=["hershey-roman"],
+    ...     height=4.0, at=(0, 10), n=24)
+    >>> require_text_members(go)
+    """
+    count = form.geometry.get("n")
+    if form.kind == "text" and count is not None:
+        require_edited_members(form.id, int(count), len(form.members))
