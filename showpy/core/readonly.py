@@ -3,10 +3,14 @@ readonly.py --- a read-only mapping that compares equal to a dict and survives p
 
 Contains:
     ReadOnlyMap: wraps a copy of a mapping so no caller can change it
-    read_only(): returns a ReadOnlyMap over a copy of a mapping
+    ReadOnly: annotates a model field so it validates from any mapping and stores a ReadOnlyMap
 """
 
 from collections.abc import Iterator, Mapping
+from typing import Any, get_args
+
+from pydantic import GetCoreSchemaHandler
+from pydantic_core import CoreSchema, core_schema
 
 
 class ReadOnlyMap[K, V](Mapping[K, V]):
@@ -34,17 +38,23 @@ class ReadOnlyMap[K, V](Mapping[K, V]):
         return ReadOnlyMap, (self._items,)
 
 
-def read_only[K, V](items: Mapping[K, V]) -> Mapping[K, V]:
-    """Returns a read-only view over a copy of a mapping.
+class ReadOnly:
+    """Annotates a mapping field: any mapping goes in, a ReadOnlyMap is stored, a dict dumps out.
 
-    Args:
-        items: Mapping to copy.
-
-    Returns:
-        frozen_map: A mapping that equals `items` and raises TypeError on item assignment.
-
-    Examples:
-        >>> read_only({"a": 1}) == {"a": 1}
-        True
+    Use as `Annotated[Mapping[str, Font], ReadOnly()]` so callers still pass plain dicts.
     """
-    return ReadOnlyMap(items)
+
+    # Any: pydantic passes the parametrized source type, which has no static type.
+    def __get_pydantic_core_schema__(
+        self, source: Any, handler: GetCoreSchemaHandler
+    ) -> CoreSchema:
+        """Validates as the plain mapping, wraps the result, and serializes it as a dict."""
+        key_type, value_type = get_args(source) or (Any, Any)
+        plain = handler.generate_schema(dict[key_type, value_type])  # type: ignore[valid-type]
+        return core_schema.no_info_after_validator_function(
+            ReadOnlyMap,
+            plain,
+            serialization=core_schema.wrap_serializer_function_ser_schema(
+                lambda value, serialize: serialize(dict(value)), schema=plain
+            ),
+        )

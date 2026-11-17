@@ -17,9 +17,9 @@ import functools
 import json
 from collections.abc import Mapping
 from types import MappingProxyType
+from typing import Annotated
 
 import numpy as np
-from pydantic import field_validator
 
 from showpy.core.caps import require_size
 from showpy.core.errors import (
@@ -28,7 +28,7 @@ from showpy.core.errors import (
     SchemaError,
     field_errors,
 )
-from showpy.core.readonly import read_only
+from showpy.core.readonly import ReadOnly
 from showpy.core.resources import font_path
 from showpy.core.types import FrozenModel
 from showpy.core.util import ASSET_PREFIX, asset_uri, close_matches
@@ -60,14 +60,9 @@ class FontRegistry(FrozenModel):
         names: URI of each font keyed by its short name.
     """
 
-    fonts: Mapping[str, Font]
-    sources: Mapping[str, bytes]
-    names: Mapping[str, str]
-
-    @field_validator("fonts", "sources", "names")
-    @classmethod
-    def _freeze[V](cls, table: Mapping[str, V]) -> Mapping[str, V]:
-        return read_only(table)
+    fonts: Annotated[Mapping[str, Font], ReadOnly()]
+    sources: Annotated[Mapping[str, bytes], ReadOnly()]
+    names: Annotated[Mapping[str, str], ReadOnly()]
 
     def get(self, uri: str) -> Font:
         """Returns the font stored under a URI.

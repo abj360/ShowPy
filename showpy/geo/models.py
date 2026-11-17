@@ -12,12 +12,12 @@ Contains:
 """
 
 from collections.abc import Mapping
-from typing import Literal
+from typing import Annotated, Literal
 
 import numpy as np
 from pydantic import Field, field_validator
 
-from showpy.core.readonly import read_only
+from showpy.core.readonly import ReadOnly
 from showpy.core.types import FrozenModel, Meters
 from showpy.geo.font_strokes import sample_stroke
 
@@ -128,15 +128,15 @@ class Font(FrozenModel):
     cap_height: float | None = Field(default=None, gt=0)
     ascender: float
     descender: float
-    glyphs: Mapping[str, FontGlyph]
+    glyphs: Annotated[Mapping[str, FontGlyph], ReadOnly()]
 
     @field_validator("glyphs")
     @classmethod
-    def _freeze_glyphs(cls, glyphs: Mapping[str, FontGlyph]) -> Mapping[str, FontGlyph]:
+    def _check_glyph_keys(cls, glyphs: Mapping[str, FontGlyph]) -> Mapping[str, FontGlyph]:
         for key in glyphs:
             if len(key) != 1:
                 raise ValueError(f"glyph key {key!r} must be exactly one character")
-        return read_only(glyphs)
+        return glyphs
 
     def cap(self) -> float:
         """Returns `cap_height`, else the ink height of `H`, else `ascender`.

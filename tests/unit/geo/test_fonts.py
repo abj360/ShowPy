@@ -7,12 +7,15 @@ Contains:
     test_*(): one behavior of showpy.geo.fonts each
     test_regression_bundled_registry_is_read_only: refuses writes through the cached registry's
         mappings and a font's glyph table
+    test_regression_font_dumps_to_json: dumps and reloads Font and FontRegistry without warnings
     test_regression_font_cap_falls_back_to_h_then_ascender: reads the cap height from the field,
         then from the ink of H, then from the ascender
 """
 
+import copy
 import json
 import pickle
+import warnings
 from typing import Any
 
 import pytest
@@ -203,3 +206,26 @@ def test_regression_bundled_registry_is_read_only() -> None:
         registry.names["x"] = "y"  # type: ignore[index]
     with pytest.raises(TypeError):
         registry.get(BUNDLED_FONTS["simplex"]).glyphs["x"] = None  # type: ignore[index]
+
+
+def test_regression_font_dumps_to_json() -> None:
+    font = load_font(_tiny())
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        dumped = font.model_dump()
+        text = font.model_dump_json()
+        registry, uri = register_font(EMPTY, _tiny())
+        registry_dump = registry.model_dump()
+        registry_text = registry.model_dump_json()
+    assert dumped["glyphs"]["I"]["advance"] == 4
+    assert Font.model_validate_json(text) == font
+    assert registry_dump["fonts"][uri]["name"] == "tiny"
+    assert FontRegistry.model_validate_json(registry_text) == registry
+    assert FontRegistry.model_validate(registry_dump) == registry
+    with pytest.raises(TypeError):
+        Font.model_validate_json(text).glyphs["x"] = None  # type: ignore[index]
+
+
+def test_font_registry_survives_deepcopy() -> None:
+    registry, uri = register_font(EMPTY, _tiny())
+    assert copy.deepcopy(registry).get(uri) == registry.get(uri)
