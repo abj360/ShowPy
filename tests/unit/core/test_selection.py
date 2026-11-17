@@ -11,12 +11,14 @@ Contains:
         constructor does
     test_regression_selection_equality_ignores_the_description: compares selections by IDs, not by
         how they were described
+    test_regression_malformed_ids_are_a_schema_error_not_a_type_error: rejects non-list ids with
+        SchemaError, never TypeError
 """
 
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from showpy.core.errors import ShowPyError
+from showpy.core.errors import SchemaError, ShowPyError
 from showpy.core.selection import Selection
 
 
@@ -40,8 +42,6 @@ def test_len_iter_contains() -> None:
     assert "T9" not in sel
 
 
-@pytest.mark.defect("UP-9.3-33")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-33")
 def test_regression_selection_rejects_a_bare_string() -> None:
     """Rejects `ids="T12"` instead of splitting it into characters (audit 9.3)."""
     with pytest.raises((ShowPyError, PydanticValidationError)):
@@ -62,3 +62,10 @@ def test_regression_selection_equality_ignores_the_description() -> None:
     """Compares selections by IDs, not by how they were described (audit 9.3)."""
     left = Selection(ids=("a",), description="first")
     assert left == Selection(ids=("a",), description="second")
+
+
+@pytest.mark.parametrize("ids", [3, None, [[1]], [{"a": 1}], "T1", [1, 1]])
+def test_regression_malformed_ids_are_a_schema_error_not_a_type_error(ids: object) -> None:
+    """Rejects ids that are not a list of strings with SchemaError, never TypeError."""
+    with pytest.raises(SchemaError):
+        Selection.model_validate({"ids": ids})
