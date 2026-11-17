@@ -12,6 +12,8 @@ from collections.abc import Mapping, Sequence
 import numpy as np
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
+from showpy.choreo.form_layout import slot_count
+from showpy.choreo.form_text import require_edited_members
 from showpy.choreo.forms import placements, slot_poses
 from showpy.choreo.match import match
 from showpy.choreo.match_ops import clear_rows, forms_of_set, is_elsewhere, with_set
@@ -36,6 +38,13 @@ def _check_disjoint(forms: Sequence[Form]) -> None:
                     context={"spot": member},
                 )
             seen[member] = form.id
+
+
+def _check_text_counts(forms: Sequence[Form]) -> None:
+    for form in forms:
+        count = slot_count(form)
+        if form.kind == "text" and count is not None:
+            require_edited_members(form.id, count, len(form.members))
 
 
 def _open_slots(
@@ -125,6 +134,8 @@ def place(
     The set lists the placed forms plus any form a pinned placement still references; other
     placements that pointed at a form no longer placed lose their `form` and `order`. The
     show is not changed: store the returned forms, which carry the matched spots as members.
+    A text form has no open slots: one whose member count differs from its `n` (a deleted
+    spot left it short) raises `MEMBER_COUNT_MISMATCH`; fix it with `edit_text_count`.
 
     Args:
         show: Show that holds the set and its previous set.
@@ -149,6 +160,7 @@ def place(
     target = show.set(set_id)
     stamped = [form.replace(set=set_id) for form in forms]
     _check_disjoint(stamped)
+    _check_text_counts(stamped)
     pinned = {p.entity for p in target.placements if p.pinned}
     rows = [p for form in stamped for p in placements(form, registry) if p.entity not in pinned]
     rows += _matched(show, target, stamped, match_options, registry)
