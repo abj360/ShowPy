@@ -12,6 +12,7 @@ Contains:
     SpotCount: counts spots on and off the field in one set
     SpacingSpec: describes how members are spaced on a form's shape
     FacingSpec: describes how form members face
+    MAX_TEXT_FONTS: bounds the font chain of one text recipe
     TextRecipe: holds the construction recipe of a text form: text, font chain and layout
     Form: holds a stored shape construction plus its ordered members
     FacingOverride: forces a facing on spots over a global count range
@@ -51,6 +52,8 @@ TABLE_COLUMNS = ("entity", "x", "y", "facing", "form", "order", "pinned", "on_fi
 DEFAULT_EASING_STRENGTH = 2.0
 MATCH_WEIGHT_KEYS = ("backward", "crossing", "group_spread", "turn")
 FONT_URI_PATTERN = r"^asset:sha256:[0-9a-f]{64}$"
+# Layout resolves every chain font and measures its cap height, so a stored chain is bounded.
+MAX_TEXT_FONTS = 16
 EasingKind = Literal[
     "linear", "ease_in", "ease_out", "ease_in_out", "hold_then_burst", "burst_then_settle",
     "steps", "custom",
@@ -289,7 +292,7 @@ class TextRecipe(FrozenModel):
 
     Attributes:
         text: Characters to write, `\n` between lines.
-        fonts: Fallback chain of font URIs, `asset:sha256:<64 hex>`.
+        fonts: Fallback chain of 1 to `MAX_TEXT_FONTS` font URIs, `asset:sha256:<64 hex>`.
         mode: How glyphs become slots; `centerline` puts spots on the strokes.
         height: Cap height in meters.
         at: Layout point on the stage plane.
@@ -308,7 +311,7 @@ class TextRecipe(FrozenModel):
     """
 
     text: str = Field(min_length=1, max_length=MAX_LAYOUT_CHARS)
-    fonts: tuple[FontUri, ...] = Field(min_length=1)
+    fonts: tuple[FontUri, ...] = Field(min_length=1, max_length=MAX_TEXT_FONTS)
     mode: Literal["centerline"] = "centerline"
     height: Meters = Field(gt=0)
     at: Point

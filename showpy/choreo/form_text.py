@@ -34,7 +34,7 @@ from typing import Any, get_args
 
 import numpy as np
 
-from showpy.choreo.models import Form, TextRecipe
+from showpy.choreo.models import MAX_TEXT_FONTS, Form, TextRecipe
 from showpy.core.errors import (
     GeometryError,
     LegibilityWarning,
@@ -64,8 +64,8 @@ NEIGHBOR_CELLS = tuple((dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1))
 FIELD_HINTS: Mapping[str, str] = MappingProxyType(
     {
         "text": f"give text of 1 to {MAX_LAYOUT_CHARS} characters",
-        "fonts": "give at least one font as an asset:sha256:<64 hex> URI; resolve a name with "
-        "bundled_fonts().resolve(...)",
+        "fonts": f"give 1 to {MAX_TEXT_FONTS} fonts as asset:sha256:<64 hex> URIs; resolve a "
+        "name with bundled_fonts().resolve(...)",
         "mode": "use mode centerline",
         "height": "give height as a finite cap height > 0 in meters",
         "at": "give at as a finite (x, y) point in meters",

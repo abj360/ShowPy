@@ -23,7 +23,7 @@ from showpy.choreo.form_text import (
     text_slots,
     text_strokes,
 )
-from showpy.choreo.models import TextRecipe
+from showpy.choreo.models import MAX_TEXT_FONTS, TextRecipe
 from showpy.core.errors import GeometryError, LegibilityWarning, SchemaError, SpacingError
 from showpy.core.types import Points
 from showpy.core.util import approx_equal
@@ -258,3 +258,12 @@ def test_regression_text_slots_cap_the_spot_count() -> None:
 def test_text_slots_reject_counts_below_one_before_layout(n: object) -> None:
     with pytest.raises(SpacingError):
         text_slots(recipe("HI"), n)  # type: ignore[arg-type]
+
+
+def test_regression_text_recipe_caps_the_font_chain() -> None:
+    simplex = bundled_fonts().resolve("simplex")
+    assert len(text_recipe(geometry(fonts=[simplex] * MAX_TEXT_FONTS)).fonts) == MAX_TEXT_FONTS
+    with pytest.raises(SchemaError) as caught:
+        text_recipe(geometry(fonts=[simplex] * (MAX_TEXT_FONTS + 1)))
+    assert caught.value.context["field"] == "fonts"
+    assert f"1 to {MAX_TEXT_FONTS} fonts" in caught.value.hint
