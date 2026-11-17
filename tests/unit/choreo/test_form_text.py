@@ -38,7 +38,10 @@ HI_MIN_SPOTS = 12
 DENSE_HI_SPOTS = 36
 LOOP_TEXT = "O0D8Q6B"
 LOOP_SPOTS = 60
-SPARSE_WARNING = r"^W: text spots are up to \d+\.\d\d m apart on 2\.00 m letters; raise n$"
+SPARSE_WARNING = (
+    r"^W: text spots are up to \d+\.\d\d m apart on 2\.00 m letters; raise n, "
+    r"or add spots with edit_text_count$"
+)
 ignore_legibility = pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
 
 

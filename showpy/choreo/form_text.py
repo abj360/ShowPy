@@ -22,6 +22,7 @@ Contains:
     resolve_edit_fonts(): resolves the font names of a text edit to URIs
     require_edited_members(): rejects an edited text form whose member count left its slot count
     require_text_members(): rejects a text form whose members no longer fill its slots
+    too_few_for_edit(): returns a TOO_FEW_SPOTS error whose hint names edit_text_count
 """
 
 import math
@@ -333,7 +334,8 @@ def _warn_if_sparse(
     )
     if widest > LEGIBLE_SPACING_SHARE * height:
         warnings.warn(
-            f"W: text spots are up to {widest:.2f} m apart on {height:.2f} m letters; raise n",
+            f"W: text spots are up to {widest:.2f} m apart on {height:.2f} m letters; raise n, "
+            "or add spots with edit_text_count",
             LegibilityWarning,
             stacklevel=3,
         )
@@ -516,3 +518,24 @@ def require_text_members(form: Form) -> None:
     count = form.geometry.get("n")
     if form.kind == "text" and count is not None:
         require_edited_members(form.id, int(count), len(form.members))
+
+
+def too_few_for_edit(exc: SpacingError) -> SpacingError:
+    """Returns a TOO_FEW_SPOTS error whose hint says how many spots `edit_text_count` must add.
+
+    `edit` cannot change a text form's count, so its hint names the call that can.
+
+    Args:
+        exc: The `TOO_FEW_SPOTS` error `text_slots` raised, with `n` and `min_n` in context.
+
+    Returns:
+        error: The same error with the edit hint.
+    """
+    n, min_n = exc.context["n"], exc.context["min_n"]
+    return SpacingError(
+        exc.message,
+        hint=f"add {min_n - n} spots with edit_text_count(form, add=[...], n={min_n}), "
+        "or shorten the text",
+        context=exc.context,
+        code="TOO_FEW_SPOTS",
+    )

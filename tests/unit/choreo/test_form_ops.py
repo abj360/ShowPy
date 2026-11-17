@@ -40,6 +40,10 @@ Contains:
         open slots
     test_edit_text_form_allows_reordering_members: swaps members at the same count
     test_edit_text_with_a_user_font_takes_the_registry: resolves user fonts through the registry
+    test_regression_edit_text_too_few_spots_hint_names_edit_text_count: says how many spots to
+        add with edit_text_count when new text needs more than the form has
+    test_regression_edit_text_sparse_warning_names_edit_text_count: points the legibility
+        warning at edit_text_count, since edit cannot change n
 """
 
 from typing import Any
@@ -77,6 +81,7 @@ from showpy.choreo.forms import (
 from showpy.choreo.models import FacingSpec, Form, Placement, Set, SpacingSpec
 from showpy.choreo.text_count import spacing_count
 from showpy.core.errors import (
+    LegibilityWarning,
     LockedError,
     MissingFontError,
     SchemaError,
@@ -547,3 +552,23 @@ def test_edit_text_with_a_user_font_takes_the_registry() -> None:
     assert edit(f, text="II", font_registry=registry).geometry["text"] == "II"
     with pytest.raises(MissingFontError):
         edit(f, text="II")
+
+
+@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+def test_regression_edit_text_too_few_spots_hint_names_edit_text_count() -> None:
+    members = [f"S{i}" for i in range(12)]
+    f = text_form("t", members, "HI", fonts=["simplex"], height=4.0, at=(0, 10), n=12)
+    with pytest.raises(SpacingError) as caught:
+        edit(f, text="HIHI")
+    assert caught.value.code == "TOO_FEW_SPOTS"
+    assert caught.value.context == {"n": 12, "min_n": 24, "text": "HIHI"}
+    assert caught.value.hint == (
+        "add 12 spots with edit_text_count(form, add=[...], n=24), or shorten the text"
+    )
+
+
+def test_regression_edit_text_sparse_warning_names_edit_text_count() -> None:
+    members = [f"S{i}" for i in range(36)]
+    f = text_form("t", members, "HI", fonts=["simplex"], height=2.0, at=(0, 10), n=36)
+    with pytest.warns(LegibilityWarning, match=r"; raise n, or add spots with edit_text_count$"):
+        edit(f, text="HIHIHI")

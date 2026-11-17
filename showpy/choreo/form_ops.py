@@ -29,6 +29,7 @@ from showpy.choreo.form_text import (
     reject_count_change,
     require_edited_members,
     resolve_edit_fonts,
+    too_few_for_edit,
 )
 from showpy.choreo.forms import (
     arc_form,
@@ -50,7 +51,7 @@ from showpy.choreo.forms import (
 )
 from showpy.choreo.match import match
 from showpy.choreo.models import FacingSpec, Form, Set, TextRecipe
-from showpy.core.errors import SchemaError
+from showpy.core.errors import SchemaError, SpacingError
 from showpy.core.ids import FormId, SpotId
 from showpy.core.types import Degrees, Point, Points
 from showpy.core.units import normalize_angle
@@ -140,8 +141,18 @@ def edit(
     if edited.kind == "text" and count is not None:
         require_edited_members(edited.id, count, len(edited.members))
     if count is not None:
-        layout(edited, registry, font_registry=font_registry)
+        _check_layout(edited, registry, font_registry)
     return edited
+
+
+def _check_layout(form: Form, registry: FormFnRegistry, font_registry: FontRegistry | None) -> None:
+    """Builds an edited form's slots; a text form short of spots names edit_text_count."""
+    try:
+        layout(form, registry, font_registry=font_registry)
+    except SpacingError as exc:
+        if form.kind == "text" and exc.code == "TOO_FEW_SPOTS":
+            raise too_few_for_edit(exc) from exc
+        raise
 
 
 def _ranked_slots(pts: Points, axis: int) -> list[int]:
