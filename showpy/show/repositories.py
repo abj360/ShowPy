@@ -27,6 +27,7 @@ from showpy.show.integrity import blob_digest, require_known_path, require_valid
 from showpy.show.models import Revision, Show
 from showpy.show.set_keys import set_key
 from showpy.show.storage import ROOT_REVISION
+from showpy.show.structured import decode_text
 from showpy.time.models import Timeline
 
 SHOW_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]*$")
@@ -317,7 +318,7 @@ class DocumentRepository:
                 hint="write one with put_script()",
                 context={"set": set_id},
             )
-        return source.decode()
+        return decode_text(script_doc(key), source)
 
     def put_script(
         self,
@@ -407,11 +408,11 @@ class DocumentRepository:
 
     def get_limits(self, show_id: str) -> str:
         """Returns the designer's limits YAML text; empty when none is stored."""
-        return (self.read(show_id, LIMITS_DOC) or b"").decode()
+        return decode_text(LIMITS_DOC, self.read(show_id, LIMITS_DOC) or b"")
 
     def get_waivers(self, show_id: str) -> str:
         """Returns the designer's waivers YAML text; empty when none is stored."""
-        return (self.read(show_id, WAIVERS_DOC) or b"").decode()
+        return decode_text(WAIVERS_DOC, self.read(show_id, WAIVERS_DOC) or b"")
 
 
 class _MemoryBackend(RepositoryBackend):

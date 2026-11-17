@@ -20,19 +20,27 @@ Contains:
         set's forms are replaced
     test_regression_put_forms_then_get_forms_returns_the_put_forms: lists newly put forms in the
         set that listed others
+    test_regression_text_getters_raise_schema_error_for_tampered_bytes: raises SchemaError naming
+        the path, not UnicodeDecodeError, for a script, limits or waivers file that is not UTF-8
 """
 
 import contextlib
 import sys
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
 
-from showpy.core.errors import ConflictError, StorageError
+from showpy.core.errors import ConflictError, SchemaError, StorageError
+from showpy.core.util import content_hash
+from showpy.show.documents import script_doc
 from showpy.show.file_repository import FileRepository
+from showpy.show.files import LIMITS_DOC, WAIVERS_DOC
+from showpy.show.integrity import blob_digest
+from showpy.show.models import Revision
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import Repository
 from tests.fixtures.shows import two_set_show
@@ -186,3 +194,29 @@ def test_regression_put_forms_then_get_forms_returns_the_put_forms() -> None:
     repo.put_forms(SHOW_ID, "2", (fresh,), expected_revision=revision.id, at=AT)
     assert [f.id for f in repo.get_forms(SHOW_ID, "2")] == ["c"]
     assert "a" in repo.get_show(SHOW_ID).forms
+
+
+def _tampered(path: str, raw: bytes) -> InMemoryRepository:
+    """Stores `raw` at `path` through the backend, past the commit check, as a tampered repo."""
+    repo = InMemoryRepository()
+    head = _create(repo)
+    tree = {**repo.backend.tree(SHOW_ID, head), path: blob_digest(raw)}
+    revision = Revision(id=content_hash(tree), parent=head, at=AT, changed=(path,))
+    repo.backend.commit(SHOW_ID, revision, tree, {blob_digest(raw): raw})
+    return repo
+
+
+TEXT_GETTERS: dict[str, Callable[[InMemoryRepository], str]] = {
+    script_doc("1"): lambda repo: repo.get_script(SHOW_ID, "1"),
+    LIMITS_DOC: lambda repo: repo.get_limits(SHOW_ID),
+    WAIVERS_DOC: lambda repo: repo.get_waivers(SHOW_ID),
+}
+
+
+@pytest.mark.parametrize("path", sorted(TEXT_GETTERS))
+def test_regression_text_getters_raise_schema_error_for_tampered_bytes(path: str) -> None:
+    """Raises SchemaError naming the path, not UnicodeDecodeError, for bytes that are not UTF-8."""
+    repo = _tampered(path, b"\xff\xfe")
+    with pytest.raises(SchemaError) as caught:
+        TEXT_GETTERS[path](repo)
+    assert caught.value.context["path"] == path
