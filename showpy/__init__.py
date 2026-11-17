@@ -118,6 +118,9 @@ if TYPE_CHECKING:
         place,
         rebuild,
     )
+    from showpy.choreo.form_text import (
+        text_report,
+    )
     from showpy.choreo.forms import (
         arc_form,
         block_form,
@@ -153,6 +156,7 @@ if TYPE_CHECKING:
     )
     from showpy.choreo.models import (
         ApprovalState,
+        CrowdedStroke,
         Easing,
         FacingMode,
         FacingOverride,
@@ -169,6 +173,7 @@ if TYPE_CHECKING:
         SpacingSpec,
         SpotCount,
         TextRecipe,
+        TextReport,
         TransitionSpec,
         TurnDirection,
         Waypoint,
@@ -771,6 +776,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "CoordinateSheet": ("showpy.export.models", "CoordinateSheet"),
     "CoordinateSystem": ("showpy.sheet.models", "CoordinateSystem"),
     "CountsOp": ("showpy.show.models", "CountsOp"),
+    "CrowdedStroke": ("showpy.choreo.models", "CrowdedStroke"),
     "CubicPiece": ("showpy.geo.svg", "CubicPiece"),
     "Cue": ("showpy.time.models", "Cue"),
     "Curve": ("showpy.geo.curve_base", "Curve"),
@@ -897,6 +903,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "TextAlign": ("showpy.geo.models", "TextAlign"),
     "TextAnchor": ("showpy.geo.models", "TextAnchor"),
     "TextRecipe": ("showpy.choreo.models", "TextRecipe"),
+    "TextReport": ("showpy.choreo.models", "TextReport"),
     "TextTable": ("showpy.export.models", "TextTable"),
     "TimeRangeError": ("showpy.core.errors", "TimeRangeError"),
     "Timeline": ("showpy.time.models", "Timeline"),
@@ -1266,6 +1273,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "tempo_at": ("showpy.time.clock", "tempo_at"),
     "text_form": ("showpy.choreo.forms", "text_form"),
     "text_outline": ("showpy.geo.shapes", "text_outline"),
+    "text_report": ("showpy.choreo.form_text", "text_report"),
     "text_spot_count": ("showpy.choreo.text_count", "text_spot_count"),
     "timer": ("showpy.core.util", "timer"),
     "to_coords": ("showpy.sheet.coords", "to_coords"),
@@ -1349,6 +1357,7 @@ __all__ = [
     "CoordinateSheet",
     "CoordinateSystem",
     "CountsOp",
+    "CrowdedStroke",
     "CubicPiece",
     "Cue",
     "Curve",
@@ -1461,6 +1470,7 @@ __all__ = [
     "TextAlign",
     "TextAnchor",
     "TextRecipe",
+    "TextReport",
     "TextTable",
     "TimeRangeError",
     "Timeline",
@@ -1830,6 +1840,7 @@ __all__ = [
     "tempo_at",
     "text_form",
     "text_outline",
+    "text_report",
     "text_spot_count",
     "timer",
     "to_coords",

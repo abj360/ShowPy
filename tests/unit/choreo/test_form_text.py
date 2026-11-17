@@ -15,7 +15,6 @@ import pytest
 from scipy.spatial import cKDTree
 
 from showpy.choreo.form_text import (
-    COINCIDENT_TOL_M,
     LEGIBLE_SPACING_SHARE,
     MAX_TEXT_SPOTS,
     min_text_spots,
@@ -24,6 +23,7 @@ from showpy.choreo.form_text import (
     text_strokes,
 )
 from showpy.choreo.models import MAX_TEXT_FONTS, TextRecipe
+from showpy.choreo.text_spread import COINCIDENT_TOL_M
 from showpy.core.errors import GeometryError, LegibilityWarning, SchemaError, SpacingError
 from showpy.core.types import Points
 from showpy.core.util import approx_equal
@@ -175,14 +175,22 @@ def test_min_text_spots_counts_two_per_open_and_three_per_closed_stroke() -> Non
     assert min_text_spots(text_strokes(recipe("O"))) == 3
 
 
-def test_retraced_closed_stroke_raises_coincident_slots() -> None:
-    registry, uri = _tiny_registry("M2 0 L2 10 Z")
-    retraced = TextRecipe(text="I", fonts=(uri,), height=HEIGHT, at=AT)
+def test_stroke_shorter_than_the_tolerance_raises_coincident_slots() -> None:
+    registry, uri = _tiny_registry("M2 0 L2 10", "M3 0 L3 0.000001")
+    micro = TextRecipe(text="I", fonts=(uri,), height=HEIGHT, at=AT)
     with pytest.raises(GeometryError) as caught:
-        text_slots(retraced, 3, font_registry=registry)
+        text_slots(micro, 4, font_registry=registry)
     assert caught.value.code == "COINCIDENT_SLOTS"
     assert caught.value.context["char"] == "I"
     assert caught.value.hint == "change n or the text"
+
+
+@ignore_legibility
+def test_retraced_closed_stroke_spreads_its_spots_apart() -> None:
+    registry, uri = _tiny_registry("M2 0 L2 10 Z")
+    retraced = TextRecipe(text="I", fonts=(uri,), height=HEIGHT, at=AT)
+    points, _ = text_slots(retraced, 3, font_registry=registry)
+    assert min_gap(points) >= COINCIDENT_TOL_M
 
 
 @pytest.mark.parametrize(

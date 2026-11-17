@@ -13,7 +13,7 @@ from collections.abc import Sequence
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
 from showpy.choreo.form_layout import layout
-from showpy.choreo.form_text import require_member_count
+from showpy.choreo.form_text import require_member_count, require_text_form
 from showpy.choreo.forms import check_unlocked
 from showpy.choreo.models import Form
 from showpy.choreo.text_count import count_recipe
@@ -86,16 +86,6 @@ def _kept(form: Form, remove: Sequence[SpotId]) -> tuple[SpotId, ...]:
     )
 
 
-def _require_text_form(form: Form) -> None:
-    if form.kind != "text":
-        raise SchemaError(
-            f"form {form.id} is a {form.kind} form, not text",
-            hint="use edit() for other kinds",
-            context={"form": form.id, "kind": form.kind},
-            code="NOT_A_TEXT_FORM",
-        )
-
-
 def edit_text_count(
     form: Form,
     *,
@@ -141,7 +131,7 @@ def edit_text_count(
     (('X1', 'X2'), 26)
     """
     check_unlocked(form, force)
-    _require_text_form(form)
+    require_text_form(form)
     members = (*_kept(form, remove), *_added(form, add))
     count = len(members) if n is None and spacing is None else n
     geometry = count_recipe(form.geometry, count, spacing, font_registry)

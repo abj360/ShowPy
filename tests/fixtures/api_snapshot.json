@@ -178,6 +178,18 @@
       "set_id": "SetId"
     }
   },
+  "CrowdedStroke": {
+    "model": {
+      "char": "str",
+      "column": "int",
+      "first_slot": "int",
+      "gap": "Meters",
+      "line": "int",
+      "spots": "int",
+      "stroke": "int",
+      "wanted": "Meters"
+    }
+  },
   "CubicPiece": "(start: Point, c1: Point, c2: Point, end: Point) -> None",
   "Cue": {
     "model": {
@@ -1038,6 +1050,11 @@
       "text": "str"
     }
   },
+  "TextReport": {
+    "model": {
+      "crowded": "tuple[showpy.choreo.models.CrowdedStroke, ...]"
+    }
+  },
   "TextTable": {
     "model": {
       "header": "tuple[str, ...]",
@@ -1494,6 +1511,7 @@
   "tempo_at": "(tl: showpy.time.models.Timeline, c: Count) -> CountsPerMinute",
   "text_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], text: str, *, fonts: collections.abc.Sequence[str], height: Meters, at: Point, rotation: Degrees = 0.0, align: TextAlign = 'left', anchor: TextAnchor = 'baseline', letter_spacing: float = 0.0, line_spacing: float = 1.2, facing: showpy.choreo.models.FacingSpec | None = None, set_id: SetId = '', n: int | None = None, spacing: Meters | None = None, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> showpy.choreo.models.Form",
   "text_outline": "(text: str, font: str | collections.abc.Sequence[str], height: Meters, at: Point, *, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> list[showpy.geo.curves.Polyline | showpy.geo.curves.SvgCurve]",
+  "text_report": "(form: showpy.choreo.models.Form, *, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> showpy.choreo.models.TextReport",
   "text_spot_count": "(text: str, *, fonts: collections.abc.Sequence[str], height: Meters, spacing: Meters, rotation: Degrees = 0.0, align: TextAlign = 'left', anchor: TextAnchor = 'baseline', letter_spacing: float = 0.0, line_spacing: float = 1.2, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> int",
   "timer": "() -> collections.abc.Iterator[showpy.core.util.Timer]",
   "to_coords": "(show: 'Show', p: Point, style: CoordStyle = 'long') -> str",

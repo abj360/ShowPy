@@ -3,13 +3,13 @@ form_text.py --- turns a text recipe into exactly n slots on its glyph strokes
 
 Slots follow reading order: lines top to bottom, glyphs in logical order, strokes in font
 order, each stroke from its start. Every stroke gets at least its minimum spots, the rest are
-shared by length, and no two slots ever sit closer than `COINCIDENT_TOL_M`.
+shared by length, and `showpy.choreo.text_spread` spreads them so touching strokes keep a
+junction gap; `text_report` names every stroke that could not.
 
 Contains:
     STROKE_MINIMUM_OPEN: spots an open stroke needs to read as a line
     STROKE_MINIMUM_CLOSED: spots a closed stroke needs to read as a loop
     LEGIBLE_SPACING_SHARE: largest spot spacing that still reads, as a share of the cap height
-    COINCIDENT_TOL_M: smallest distance allowed between two slots
     MAX_TEXT_SPOTS: most spots one text form may have
     text_recipe(): validates a text form's stored geometry into a TextRecipe
     text_strokes(): lays a recipe out and returns its visible strokes in reading order
@@ -17,6 +17,8 @@ Contains:
     min_text_spots(): counts the spots the strokes need at least
     require_whole_count(): rejects a spot count that is not a whole number up to the cap
     text_slots(): places exactly n slots on the strokes, with unit tangents
+    text_report(): reports the strokes of a text form whose spots crowd another stroke's
+    require_text_form(): rejects a form that is not a text form
     require_member_count(): rejects a text form whose member count differs from its slot count
     reject_count_change(): rejects an edit of a text form that changes its count
     resolve_edit_fonts(): resolves the font names of a text edit to URIs
@@ -28,15 +30,16 @@ Contains:
 import math
 import warnings
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from numbers import Integral
 from types import MappingProxyType
 from typing import Any, get_args
 
 import numpy as np
 
-from showpy.choreo.models import MAX_TEXT_FONTS, Form, TextRecipe
+from showpy.choreo.models import MAX_TEXT_FONTS, CrowdedStroke, Form, TextRecipe, TextReport
+from showpy.choreo.text_spread import SlotSpreader, StrokeSpread, stroke_gap
 from showpy.core.errors import (
-    GeometryError,
     LegibilityWarning,
     SchemaError,
     SpacingError,
@@ -45,7 +48,7 @@ from showpy.core.errors import (
 )
 from showpy.core.types import Points
 from showpy.geo.affine import Matrix, transform_curve
-from showpy.geo.curve_base import Curve, FloatArray
+from showpy.geo.curve_base import Curve
 from showpy.geo.curves import Polyline, SvgCurve
 from showpy.geo.fonts import FontRegistry, bundled_fonts
 from showpy.geo.models import LaidGlyph, TextAlign, TextAnchor
@@ -57,10 +60,8 @@ STROKE_MINIMUM_CLOSED = 3
 # A vertical stroke reads as a line only with spots at its top, middle and bottom; a spacing
 # above half the cap height loses the middle spot.
 LEGIBLE_SPACING_SHARE = 0.5
-COINCIDENT_TOL_M = 1e-6
 MAX_TEXT_SPOTS = 10_000
 SHARED_KEYS = frozenset({"n", "transform"})
-NEIGHBOR_CELLS = tuple((dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1))
 FIELD_HINTS: Mapping[str, str] = MappingProxyType(
     {
         "text": f"give text of 1 to {MAX_LAYOUT_CHARS} characters",
@@ -78,49 +79,15 @@ FIELD_HINTS: Mapping[str, str] = MappingProxyType(
     }
 )
 
-type Cell = tuple[int, int]
 type Stroke = Polyline | SvgCurve
 
 
-class _SlotGrid:
-    """Finds slots closer than `COINCIDENT_TOL_M` through a hash of tolerance-sized cells.
-
-    Any two points closer than the tolerance sit in the same or adjacent cells, so each check
-    reads nine cells and the whole placement stays linear in the slot count.
-
-    Attributes:
-        cells: Accepted slots keyed by the cell that holds them.
-    """
-
-    def __init__(self) -> None:
-        self.cells: dict[Cell, list[list[float]]] = {}
-
-    def fits(self, points: Points) -> bool:
-        """Returns whether the points keep the tolerance from each other and every slot."""
-        pending: dict[Cell, list[list[float]]] = {}
-        for point in points.tolist():
-            cell = _cell(point)
-            if _crowded(point, cell, self.cells) or _crowded(point, cell, pending):
-                return False
-            pending.setdefault(cell, []).append(point)
-        return True
-
-    def add(self, points: Points) -> None:
-        """Accepts the points as slots."""
-        for point in points.tolist():
-            self.cells.setdefault(_cell(point), []).append(point)
-
-
-def _cell(point: list[float]) -> Cell:
-    return math.floor(point[0] / COINCIDENT_TOL_M), math.floor(point[1] / COINCIDENT_TOL_M)
-
-
-def _crowded(point: list[float], cell: Cell, cells: Mapping[Cell, list[list[float]]]) -> bool:
-    return any(
-        math.dist(point, other) < COINCIDENT_TOL_M
-        for dx, dy in NEIGHBOR_CELLS
-        for other in cells.get((cell[0] + dx, cell[1] + dy), ())
-    )
+@dataclass(frozen=True)
+class _StrokePlace:
+    char: str
+    line: int
+    column: int
+    stroke: int
 
 
 def text_recipe(geometry: Mapping[str, Any]) -> TextRecipe:
@@ -157,7 +124,10 @@ def text_recipe(geometry: Mapping[str, Any]) -> TextRecipe:
         ) from exc
 
 
-def _laid_strokes(recipe: TextRecipe, font_registry: FontRegistry | None) -> list[LaidGlyph]:
+def _laid_strokes(
+    recipe: TextRecipe, font_registry: FontRegistry | None
+) -> list[tuple[LaidGlyph, int]]:
+    """Lays the recipe out and returns each visible glyph with its column in its line."""
     glyphs = layout_text(
         recipe.text,
         recipe.fonts,
@@ -170,7 +140,10 @@ def _laid_strokes(recipe: TextRecipe, font_registry: FontRegistry | None) -> lis
         line_spacing=recipe.line_spacing,
         font_registry=font_registry,
     )
-    visible = [glyph for glyph in glyphs if glyph.strokes]
+    columns = [sum(1 for other in glyphs[:i] if other.line == glyph.line) for i, glyph in
+               enumerate(glyphs)]  # fmt: skip
+    visible = [(glyph, column) for glyph, column in zip(glyphs, columns, strict=True)
+               if glyph.strokes]  # fmt: skip
     if not visible:
         raise SchemaError(
             f"text {bounded_repr(recipe.text)!r} has no visible strokes",
@@ -200,7 +173,8 @@ def text_strokes(recipe: TextRecipe, *, font_registry: FontRegistry | None = Non
     >>> len(text_strokes(hi))
     6
     """
-    return [stroke for glyph in _laid_strokes(recipe, font_registry) for stroke in glyph.strokes]
+    laid = _laid_strokes(recipe, font_registry)
+    return [stroke for glyph, _ in laid for stroke in glyph.strokes]
 
 
 def stage_strokes(strokes: Sequence[Stroke], transform: Matrix | None) -> list[Curve]:
@@ -278,45 +252,6 @@ def _require_count(n: int, min_n: int, text: str) -> None:
         )
 
 
-def _candidate_stations(length: float, k: int, closed: bool) -> list[FloatArray]:
-    """Returns arc-length stations to try for k spots, preferred spread first."""
-    j = np.arange(k, dtype=float)
-    if closed:
-        return [j * length / k, (j + 0.5) * length / k]
-    return [
-        j * length / (k - 1),
-        (j + 1) * length / k,
-        j * length / k,
-        (j + 1) * length / (k + 1),
-        (j + 0.5) * length / k,
-    ]
-
-
-def _place_stroke(stroke: Stroke, k: int, grid: _SlotGrid, char: str) -> tuple[Points, Points]:
-    """Places k slots on one stroke at the first candidate that keeps every slot apart.
-
-    Args:
-        stroke: Glyph stroke in stage meters.
-        k: Spots this stroke gets.
-        grid: Slots already placed; the chosen slots are added to it.
-        char: Character the stroke draws, named in an error.
-
-    Returns:
-        slots: The stroke's slot points and their unit tangents.
-    """
-    for stations in _candidate_stations(stroke.length(), k, stroke.closed):
-        points = stroke.point_at(stations)
-        if grid.fits(points):
-            grid.add(points)
-            return points, stroke.tangent_at(stations)
-    raise GeometryError(
-        f"no spacing of {k} spots on a stroke of {char!r} keeps them apart",
-        hint="change n or the text",
-        context={"char": char, "spots": k, "tolerance": COINCIDENT_TOL_M},
-        code="COINCIDENT_SLOTS",
-    )
-
-
 def _warn_if_sparse(
     strokes: Sequence[Stroke], counts: Sequence[int], height: float, transform: Matrix | None
 ) -> None:
@@ -350,10 +285,11 @@ def text_slots(
 ) -> tuple[Points, Points]:
     """Places exactly n slots on the recipe's strokes, in reading order, with unit tangents.
 
-    Each stroke gets its minimum (2 open, 3 closed) and the rest by length. A stroke tries a
-    few spreads in turn and takes the first that keeps every slot `COINCIDENT_TOL_M` from the
-    others, so touching and crossing strokes never stack two spots. A `LegibilityWarning`
-    says when the widest stroke spacing passes `LEGIBLE_SPACING_SHARE` of the cap height.
+    Each stroke gets its minimum (2 open, 3 closed) and the rest by length. A stroke tries
+    spreads in turn and takes the first that keeps its spots a junction gap from other slots;
+    where none does it takes the least crowded one and `text_report` lists it. Two spots never
+    share a point. A `LegibilityWarning` says when the widest stroke spacing passes
+    `LEGIBLE_SPACING_SHARE` of the cap height.
 
     Args:
         recipe: Text, fonts and layout to draw.
@@ -369,7 +305,8 @@ def text_slots(
     Raises:
         SpacingError: `TOO_MANY_SPOTS` when n is over `MAX_TEXT_SPOTS`, checked before any
             layout; `TOO_FEW_SPOTS` when n is below `min_text_spots`.
-        GeometryError: `COINCIDENT_SLOTS` when a stroke has no spread that keeps slots apart.
+        GeometryError: `COINCIDENT_SLOTS` when every spread of a stroke puts a spot within
+            `COINCIDENT_TOL_M` of another slot.
 
     >>> from showpy.geo.fonts import bundled_fonts
     >>> hi = TextRecipe(text="HI", fonts=(bundled_fonts().resolve("simplex"),), height=2.0,
@@ -379,19 +316,106 @@ def text_slots(
     ((36, 2), [0.0, 10.0])
     """
     require_whole_count(n)
-    glyphs = _laid_strokes(recipe, font_registry)
-    strokes = [stroke for glyph in glyphs for stroke in glyph.strokes]
-    chars = [glyph.char for glyph in glyphs for _ in glyph.strokes]
+    strokes, counts, spreads, _ = _spread(recipe, n, font_registry)
+    _warn_if_sparse(strokes, counts, recipe.height, transform)
+    return (
+        np.vstack([spread.points for spread in spreads]),
+        np.vstack([spread.tangents for spread in spreads]),
+    )
+
+
+def _spread(
+    recipe: TextRecipe, n: int, font_registry: FontRegistry | None
+) -> tuple[list[Stroke], list[int], list[StrokeSpread], list[_StrokePlace]]:
+    """Shares n spots over the recipe's strokes and spreads each stroke's spots.
+
+    Returns:
+        spread: The strokes, their spot counts, their spreads and where each stroke sits in
+            the text.
+    """
+    laid = _laid_strokes(recipe, font_registry)
+    strokes = [stroke for glyph, _ in laid for stroke in glyph.strokes]
+    places = [
+        _StrokePlace(glyph.char, glyph.line, column, index)
+        for glyph, column in laid
+        for index in range(len(glyph.strokes))
+    ]
     _require_count(n, min_text_spots(strokes), recipe.text)
     minimums = [_stroke_minimum(stroke) for stroke in strokes]
     counts = apportion([stroke.length() for stroke in strokes], n, minimums)
-    grid = _SlotGrid()
-    placed = [
-        _place_stroke(stroke, k, grid, char)
-        for stroke, k, char in zip(strokes, counts, chars, strict=True)
+    spreader = SlotSpreader(max(stroke_gap(s, k) for s, k in zip(strokes, counts, strict=True)))
+    spreads = [
+        spreader.place(stroke, k, place.char)
+        for stroke, k, place in zip(strokes, counts, places, strict=True)
     ]
-    _warn_if_sparse(strokes, counts, recipe.height, transform)
-    return np.vstack([points for points, _ in placed]), np.vstack([tan for _, tan in placed])
+    return strokes, counts, spreads, places
+
+
+def text_report(form: Form, *, font_registry: FontRegistry | None = None) -> TextReport:
+    """Reports the strokes of a text form whose spots sit closer than their junction gap.
+
+    A stroke keeps `JUNCTION_GAP_SHARE` of its spot spacing from other strokes' spots where any
+    spread allows it. Doubled or converging strokes, as in several Hershey glyphs, may leave no
+    such spread; the stroke then takes the spread whose closest spot is farthest away and is
+    listed here, so no fallback goes unseen. Distances are before any stored transform.
+
+    Args:
+        form: A text form.
+        font_registry: Registry holding the form's fonts; None means `bundled_fonts()`.
+
+    Returns:
+        report: Every crowded stroke in slot order; empty when every junction gap holds.
+
+    Raises:
+        SchemaError: `NOT_A_TEXT_FORM` for another kind.
+
+    >>> from showpy.choreo.forms import text_form
+    >>> go = text_form("go", [f"S{i}" for i in range(24)], "GO", fonts=["hershey-roman"],
+    ...     height=4.0, at=(0, 10), n=24)
+    >>> text_report(go).crowded
+    ()
+    """
+    require_text_form(form)
+    n = form.geometry.get("n")
+    if n is None:
+        raise SchemaError(
+            f"text form {form.id} stores no spot count",
+            hint="rebuild it with text_form(...)",
+            context={"form": form.id},
+        )
+    _, _, spreads, places = _spread(text_recipe(form.geometry), int(n), font_registry)
+    starts = np.cumsum([0, *(len(spread.points) for spread in spreads)]).tolist()
+    return TextReport(
+        crowded=tuple(
+            CrowdedStroke(
+                char=place.char,
+                line=place.line,
+                column=place.column,
+                stroke=place.stroke,
+                first_slot=first,
+                spots=len(spread.points),
+                gap=spread.nearest,
+                wanted=spread.gap,
+            )
+            for spread, place, first in zip(spreads, places, starts[:-1], strict=True)
+            if spread.is_crowded
+        )
+    )
+
+
+def require_text_form(form: Form) -> None:
+    """Rejects a form that is not a text form.
+
+    Raises:
+        SchemaError: `NOT_A_TEXT_FORM`; the hint points other kinds at `edit()`.
+    """
+    if form.kind != "text":
+        raise SchemaError(
+            f"form {form.id} is a {form.kind} form, not text",
+            hint="use edit() for other kinds",
+            context={"form": form.id, "kind": form.kind},
+            code="NOT_A_TEXT_FORM",
+        )
 
 
 def require_member_count(form_id: str, n: int, member_count: int) -> None:

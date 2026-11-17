@@ -14,6 +14,8 @@ Contains:
     FacingSpec: describes how form members face
     MAX_TEXT_FONTS: bounds the font chain of one text recipe
     TextRecipe: holds the construction recipe of a text form: text, font chain and layout
+    CrowdedStroke: names a glyph stroke whose spots sit closer than its junction gap
+    TextReport: reports how a text form's spots were spread, listing its crowded strokes
     Form: holds a stored shape construction plus its ordered members
     FacingOverride: forces a facing on spots over a global count range
     PathStyle: names the built-in path styles
@@ -327,6 +329,41 @@ type FormKind = Literal[
     "line", "arc", "curve", "circle", "block", "wedge", "polyline", "svg", "fill", "scatter",
     "custom", "generated", "text",
 ]  # fmt: skip
+
+
+class CrowdedStroke(FrozenModel):
+    """Names a glyph stroke whose spots sit closer than its junction gap to another slot.
+
+    Attributes:
+        char: Character the stroke draws.
+        line: Line of the text, 0 at the top.
+        column: Position of the character in its line, after normalization.
+        stroke: Index of the stroke in its glyph, in font order.
+        first_slot: Slot index of the stroke's first spot.
+        spots: Spots on the stroke.
+        gap: Closest distance from one of its spots to another slot, in meters before any
+            stored transform.
+        wanted: Junction gap the stroke should keep, in meters before any stored transform.
+    """
+
+    char: str
+    line: int = Field(ge=0)
+    column: int = Field(ge=0)
+    stroke: int = Field(ge=0)
+    first_slot: int = Field(ge=0)
+    spots: int = Field(ge=1)
+    gap: Meters
+    wanted: Meters
+
+
+class TextReport(FrozenModel):
+    """Reports how a text form's spots were spread on its strokes.
+
+    Attributes:
+        crowded: Strokes whose spots sit closer than their junction gap, in slot order.
+    """
+
+    crowded: tuple[CrowdedStroke, ...] = ()
 
 
 class Form(FrozenModel):

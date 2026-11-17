@@ -22,7 +22,6 @@ from scipy.spatial import cKDTree
 from showpy.choreo.form_layout import layout
 from showpy.choreo.form_ops import transform_form
 from showpy.choreo.form_text import (
-    COINCIDENT_TOL_M,
     MAX_TEXT_SPOTS,
     text_recipe,
     text_slots,
@@ -32,6 +31,7 @@ from showpy.choreo.forms import slots, text_form
 from showpy.choreo.models import TextRecipe
 from showpy.choreo.text_count import count_recipe, spacing_count, text_spot_count
 from showpy.choreo.text_edit import edit_text_count
+from showpy.choreo.text_spread import COINCIDENT_TOL_M
 from showpy.core.errors import LegibilityWarning, SchemaError, SpacingError
 from showpy.core.types import Points
 from showpy.geo.affine import scale_matrix
