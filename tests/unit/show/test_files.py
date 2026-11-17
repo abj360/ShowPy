@@ -15,10 +15,14 @@ Contains:
     test_regression_reading_root_names_a_directory: raises StorageError BAD_PATH for the root
     test_regression_invalid_utf8_text_file_is_a_library_error: maps invalid UTF-8 in a text file to
         a ShowPyError
+    test_regression_index_csv_neutralizes_formula_cues: quotes every formula-looking cue cell
+    test_regression_placements_csv_neutralizes_formula_notes: quotes every formula-looking note
     test_regression_bad_comments_file_is_a_schema_error: raises SchemaError for comments files of
         the wrong shape, invalid JSON or invalid UTF-8
 """
 
+import csv
+import io
 import json
 from datetime import UTC, datetime
 
@@ -26,6 +30,7 @@ import pytest
 
 from showpy.core.errors import LockedError, SchemaError, ShowPyError, StorageError
 from showpy.show.documents import SHOW_DOC
+from showpy.show.models import Show
 from showpy.show.storage import Workspace
 from showpy.show.structured import decode_comments
 from tests.fixtures.shows import two_set_show
@@ -49,6 +54,45 @@ def _show_json(ws: Workspace) -> dict[str, object]:
 def _store_then_read(ws: Workspace, path: str, raw: bytes) -> None:
     ws.commit({path: raw}, at=LATER)
     ws.read(path)
+
+
+FORMULA_LEADS = ["=", "+", "-", "@", "\t", "\r"]
+
+
+def _rows(text: str | bytes) -> list[list[str]]:
+    return list(csv.reader(io.StringIO(str(text), newline="")))
+
+
+def _show_with_cues(cues: list[str]) -> Show:
+    show = two_set_show()
+    first = show.sets[0].model_copy(update={"cue": cues[0]})
+    second = show.sets[1].model_copy(update={"cue": cues[1]})
+    return show.model_copy(update={"sets": (first, second)})
+
+
+@pytest.mark.parametrize("lead", FORMULA_LEADS)
+def test_regression_index_csv_neutralizes_formula_cues(lead: str) -> None:
+    """Quotes every formula-looking cue cell and leaves a plain negative number alone."""
+    cue = f'{lead}HYPERLINK("http://x","click")'
+    _, agent, _ = open_session(_show_with_cues([cue, "-12.5"]), AT)
+    rows = _rows(agent.read("/show/index.csv"))
+    assert rows[1][-1] == f"'{cue}"
+    assert rows[2][-1] == "-12.5"
+
+
+@pytest.mark.parametrize("lead", FORMULA_LEADS)
+def test_regression_placements_csv_neutralizes_formula_notes(lead: str) -> None:
+    """Quotes every formula-looking note cell in a set's placement table."""
+    note = f"{lead}cmd|' /C calc'!A0"
+    show = two_set_show()
+    first = show.sets[0]
+    noted = first.with_placements({first.placements[0].entity: {"note": note}})
+    show = show.model_copy(update={"sets": (noted, show.sets[1])})
+    _, agent, _ = open_session(show, AT)
+    rows = _rows(agent.read("/sets/1/placements.csv"))
+    note_column = rows[0].index("note")
+    assert rows[1][note_column] == f"'{note}"
+    assert rows[1][rows[0].index("x")] == "0.0"
 
 
 def test_regression_commit_refuses_garbage_show_document() -> None:

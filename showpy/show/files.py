@@ -20,6 +20,8 @@ import csv
 import io
 from collections.abc import Mapping
 
+from showpy.choreo.models import Set
+from showpy.core.csv_cells import neutralize_cell
 from showpy.core.errors import LockedError, StorageError, UnknownRefError
 from showpy.core.ids import TransitionId
 from showpy.core.selection import Selection
@@ -165,8 +167,17 @@ def _index_csv(show: Show) -> bytes:
     writer.writerow(INDEX_COLUMNS)
     for e in index(show).entries:
         label = "" if e.measure is None else f"{e.measure.measure}:{e.measure.count_in_measure:g}"
-        writer.writerow([e.set, e.counts, e.start_count, label, e.seconds, e.cue or ""])
+        writer.writerow(
+            [e.set, e.counts, e.start_count, label, e.seconds, neutralize_cell(e.cue or "")]
+        )
     return out.getvalue().encode()
+
+
+def _placements_csv(current: Set) -> bytes:
+    table = current.table().map(
+        lambda cell: neutralize_cell(cell) if isinstance(cell, str) else cell
+    )
+    return table.to_csv(index=False, lineterminator="\n").encode()
 
 
 def _show_file(path: str, segments: list[str], show: Show) -> bytes | None:
@@ -175,7 +186,7 @@ def _show_file(path: str, segments: list[str], show: Show) -> bytes | None:
     if segments[0] == "sets" and len(segments) == 3:
         current = show.set(segments[1])
         if segments[2] == PLACEMENTS_NAME:
-            return current.table().to_csv(index=False, lineterminator="\n").encode()
+            return _placements_csv(current)
         if segments[2] == FORMS_NAME:
             stored = to_stored_path(path, show)
             return encode_documents(show, [stored]).get(stored, EMPTY_LIST)
