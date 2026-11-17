@@ -322,6 +322,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("interpolate_forms", "showpy.geo.transforms", "interpolate_forms"),
     ("intersection", "showpy.geo.regions", "intersection"),
     ("interval", "showpy.geo.measure", "interval"),
+    ("is_device_name", "showpy.core.ids", "is_device_name"),
     ("is_label_dependent", "showpy.cast.select", "is_label_dependent"),
     ("is_similarity", "showpy.geo.affine", "is_similarity"),
     ("jcs", "showpy.core.canonical", "jcs"),

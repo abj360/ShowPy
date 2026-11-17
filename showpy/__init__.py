@@ -266,6 +266,7 @@ if TYPE_CHECKING:
         find_case_clashes,
         format_ref,
         format_tid,
+        is_device_name,
         parse_ref,
         parse_tid,
     )
@@ -1024,6 +1025,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "interpolate_forms": ("showpy.geo.transforms", "interpolate_forms"),
     "intersection": ("showpy.geo.regions", "intersection"),
     "interval": ("showpy.geo.measure", "interval"),
+    "is_device_name": ("showpy.core.ids", "is_device_name"),
     "is_label_dependent": ("showpy.cast.select", "is_label_dependent"),
     "is_similarity": ("showpy.geo.affine", "is_similarity"),
     "jcs": ("showpy.core.canonical", "jcs"),
@@ -1561,6 +1563,7 @@ __all__ = [
     "interpolate_forms",
     "intersection",
     "interval",
+    "is_device_name",
     "is_label_dependent",
     "is_similarity",
     "jcs",

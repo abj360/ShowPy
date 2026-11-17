@@ -18,7 +18,7 @@ from typing import Protocol, override
 from showpy.choreo.match_ops import forms_of_set
 from showpy.choreo.models import Form, Set, TransitionSpec
 from showpy.core.errors import ConflictError, SchemaError, StorageError, UnknownRefError
-from showpy.core.ids import SetId, TransitionId
+from showpy.core.ids import SetId, TransitionId, is_device_name
 from showpy.core.util import close_matches, content_hash
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.documents import decode_show, script_doc, split_path
@@ -41,6 +41,18 @@ def _require_show_id(show_id: str) -> None:
         raise StorageError(
             f"show id {show_id!r} cannot be stored",
             hint="use letters, digits, _, . and - only, starting with a letter or digit",
+            context={"show": show_id},
+            code="BAD_PATH",
+        )
+
+
+def _require_new_show_id(show_id: str) -> None:
+    """Refuses a Windows device name for a new show; shows already stored under one still load."""
+    if is_device_name(show_id):
+        raise StorageError(
+            f"show id {show_id!r} is a Windows device name and cannot start a new show",
+            hint="pick another ID: con, prn, aux, nul, com1 to com9 and lpt1 to lpt9, alone or"
+            " before a dot, name devices on Windows",
             context={"show": show_id},
             code="BAD_PATH",
         )
@@ -222,6 +234,8 @@ class DocumentRepository:
             split_path(path)
             require_known_path(path)
         log = self._require_head(show_id, expected_revision)
+        if not log:
+            _require_new_show_id(show_id)
         old = self._tree(show_id, expected_revision)
         blobs = {digest(d): d for d in changes.values() if d is not None}
         new = {**old, **{p: digest(d) for p, d in changes.items() if d is not None}}

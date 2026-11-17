@@ -10,6 +10,7 @@ Contains:
     ID_MAX_LENGTH: bounds the characters of one ID
     RESERVED_IDS: names no ID may take, compared ignoring case; device names also bar `con.5`
     check_id(): validates one ID and returns its NFC-normalized text
+    is_device_name(): tells whether text is a Windows device name, alone or before a dot
     find_case_clashes(): lists pairs of IDs that differ only by case
 """
 
@@ -162,10 +163,26 @@ def _first_bad_position(text: str) -> int | None:
     return None
 
 
+def is_device_name(text: str) -> bool:
+    """Tells whether text is a Windows device name, alone or before a dot, ignoring case.
+
+    Windows opens `con`, and `con.txt` too, as the console device instead of a file or folder.
+
+    Args:
+        text: Candidate name, such as an ID that becomes a path segment.
+
+    Returns:
+        is_device: True for `con`, `NUL` or `aux.1`; False for `cons`, `com10` or `x.con`.
+
+    >>> is_device_name("COM1.txt"), is_device_name("com10")
+    (True, False)
+    """
+    return text.casefold().partition(".")[0] in WINDOWS_DEVICE_NAMES
+
+
 def _is_reserved(text: str) -> bool:
     """Tells whether an ID is reserved, or is a Windows device name followed by an extension."""
-    folded = text.casefold()
-    return folded in RESERVED_IDS or folded.partition(".")[0] in WINDOWS_DEVICE_NAMES
+    return text.casefold() in RESERVED_IDS or is_device_name(text)
 
 
 def _edge_position(text: str) -> int:

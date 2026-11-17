@@ -10,6 +10,10 @@ Contains:
         case from sharing a folder name
     test_regression_reserved_device_show_ids_are_rejected_or_stored_safely: rejects Windows device
         names as show IDs or stores them under another name
+    test_regression_new_device_name_show_is_refused_before_writing: refuses to create a show named
+        like a Windows device, in memory or on disk, writing nothing
+    test_existing_device_name_show_keeps_loading_and_committing: reads and extends a show stored
+        under a device name before the refusal existed
     test_regression_trailing_dot_show_id_is_rejected_or_stored_safely: rejects a show ID ending in a
         dot or stores it under another name
     test_regression_overlong_show_id_is_rejected_or_stored_safely: rejects a 300-character show ID
@@ -143,8 +147,6 @@ def test_regression_show_ids_differing_by_case_are_distinct_or_rejected(tmp_path
     assert len(lowered) == len(set(lowered))
 
 
-@pytest.mark.defect("UP-9.7-15")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-15")
 @pytest.mark.parametrize("show_id", ["CON", "nul"])
 def test_regression_reserved_device_show_ids_are_rejected_or_stored_safely(
     tmp_path: Path, show_id: str
@@ -152,6 +154,42 @@ def test_regression_reserved_device_show_ids_are_rejected_or_stored_safely(
     """Rejects Windows device names as show IDs or stores them under another name (audit 9.7 #8)."""
     created = _created_folders(FileRepository(tmp_path), show_id)
     assert created is None or show_id not in created
+
+
+DEVICE_SHOW_IDS = ["con", "CON", "nul", "aux.1", "com1", "LPT9.txt"]
+DEVICE_NAME_CODE = "BAD_PATH"
+
+
+@pytest.mark.parametrize("show_id", DEVICE_SHOW_IDS)
+@pytest.mark.parametrize("backend", ["memory", "file"])
+def test_regression_new_device_name_show_is_refused_before_writing(
+    tmp_path: Path, show_id: str, backend: str
+) -> None:
+    """Refuses a new show named like a Windows device, in memory or on disk, writing nothing."""
+    repo: InMemoryRepository | FileRepository = (
+        InMemoryRepository() if backend == "memory" else FileRepository(tmp_path)
+    )
+    with pytest.raises(StorageError) as caught:
+        _create(repo, show_id)
+    assert caught.value.code == DEVICE_NAME_CODE
+    assert caught.value.context == {"show": show_id}
+    assert "device" in caught.value.hint
+    assert repo.shows() == []
+    assert _folders(tmp_path) == set()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows cannot create a device-name folder")
+def test_existing_device_name_show_keeps_loading_and_committing(tmp_path: Path) -> None:
+    """Reads and extends a show stored under a device name before the refusal existed."""
+    repo = FileRepository(tmp_path)
+    head = _create(repo, SHOW_ID)
+    stored = repo.get_show(SHOW_ID)
+    (tmp_path / SHOW_ID).rename(tmp_path / "CON")
+    assert repo.shows() == ["CON"]
+    assert repo.get_show("CON") == stored
+    landed = repo.transaction("CON", {"/renders/a.txt": b"a"}, expected_revision=head, at=AT)
+    assert repo.head("CON") == landed.id
+    assert repo.read("CON", "/renders/a.txt") == b"a"
 
 
 @pytest.mark.defect("UP-9.7-16")

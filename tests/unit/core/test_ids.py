@@ -23,6 +23,10 @@ Contains:
     test_check_id_returns_the_ascii_id_nfc_makes: turns the Kelvin sign into `K`, so callers store
         the returned ID
     test_find_case_clashes_*(): one behavior of the case-clash finder each
+    test_is_device_name_matches_device_names_alone_or_before_a_dot: flags `con`, `NUL` and
+        `aux.1`, ignoring case
+    test_is_device_name_ignores_names_that_only_start_like_a_device: passes `cons`, `com10`,
+        `all` and `show-1`
 """
 
 import unicodedata
@@ -40,6 +44,7 @@ from showpy.core.ids import (
     find_case_clashes,
     format_ref,
     format_tid,
+    is_device_name,
     parse_ref,
     parse_tid,
 )
@@ -204,3 +209,13 @@ def test_check_id_accepts_names_that_only_start_like_a_device(text: str) -> None
 def test_check_id_returns_the_ascii_id_nfc_makes() -> None:
     kelvin_one = "\u212a1"
     assert check_id(kelvin_one, kind="spot") == "K1"
+
+
+@pytest.mark.parametrize("text", ["con", "CON", "nul", "Aux", "aux.1", "com1", "LPT9.txt"])
+def test_is_device_name_matches_device_names_alone_or_before_a_dot(text: str) -> None:
+    assert is_device_name(text)
+
+
+@pytest.mark.parametrize("text", ["cons", "com10", "com0", "all", "show-1", "x.con"])
+def test_is_device_name_ignores_names_that_only_start_like_a_device(text: str) -> None:
+    assert not is_device_name(text)

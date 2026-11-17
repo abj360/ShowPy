@@ -1230,6 +1230,7 @@
   "interpolate_forms": "(a: Points, b: Points, u: float) -> Points",
   "intersection": "(a: Area, b: Area) -> Area",
   "interval": "(points: Points, ordered: bool = True) -> showpy.geo.models.IntervalStats",
+  "is_device_name": "(text: str) -> bool",
   "is_label_dependent": "(expr: str) -> bool",
   "is_similarity": "(matrix: Matrix) -> bool",
   "jcs": "(obj: object) -> bytes",
