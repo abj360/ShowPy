@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_repositories.py --- encodes audited repository defects (UP-9.7-02, -14 to -17) as strict xfails
+test_repositories.py --- tests show-ID storage safety and repository races; open defects xfail
 
 Contains:
     test_regression_memory_commit_has_one_winner_per_parent: lands exactly one of many threads
