@@ -2,6 +2,7 @@
 pinning.py --- designer locks: records pins and sets the flags they cover
 
 Contains:
+    pin_key(): returns the stored spelling of a pin ID
     pin(): locks a spot, form, set or transition and records why
     unpin(): removes a lock, keeping flags other pins still cover
 """
