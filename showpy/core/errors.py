@@ -22,7 +22,11 @@ Contains:
     StorageError: reports a persistence failure
     ConflictError: reports a concurrent edit that landed first
     ValidationError: reports a structural integrity failure
+    FontError: reports a font file that is invalid, hash-mismatched or whose name is taken
+    MissingFontError: reports a font name or URI the registry does not hold
+    GlyphError: reports a character the font chain has no glyph for
     DeprecatedWarning: warns that a deprecated API was used
+    LegibilityWarning: warns that text was laid out with fewer spots than it reads well at
 """
 
 from collections.abc import Callable, Mapping
@@ -265,5 +269,27 @@ class ValidationError(ShowPyError):
     default_code = "VALIDATION"
 
 
+class FontError(ShowPyError):
+    """Reports a font file that is invalid, mismatches its hash or claims a taken name."""
+
+    default_code = "BAD_FONT"
+
+
+class MissingFontError(UnknownRefError):
+    """Reports a font name or URI the registry does not hold."""
+
+    default_code = "MISSING_FONT"
+
+
+class GlyphError(UnknownRefError):
+    """Reports a character that no font in the chain has a glyph for."""
+
+    default_code = "MISSING_GLYPH"
+
+
 class DeprecatedWarning(UserWarning):
     """Warns that a deprecated API was used and names its replacement."""
+
+
+class LegibilityWarning(UserWarning):
+    """Warns that text was laid out with fewer spots than it reads well at."""

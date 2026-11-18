@@ -10,6 +10,7 @@ Contains:
     seeded_rng(): returns the only allowed random generator
     as_points(): normalizes point-like inputs to an (N, 2) array
     content_hash(): hashes bytes, text or canonical JSON under a domain tag
+    asset_uri(): names bytes by the `asset:sha256:<hex>` URI an asset store returns
     chunk_counts(): splits counts into equal parts that sum exactly
     close_matches(): suggests known names close to a misspelled one
     log(): emits a structured log line on the `showpy` logger
@@ -44,6 +45,7 @@ LOGGER = logging.getLogger("showpy")
 HASH_PREFIX = "showpy-hash/1"
 # The domain is one line of the hash header, so it may not hold a newline or forge a kind line.
 HASH_DOMAIN_PATTERN = re.compile(r"[a-z0-9_.]+")
+ASSET_PREFIX = "asset:sha256:"
 CLOSE_MATCH_COUNT = 3
 CLOSE_MATCH_CUTOFF = 0.4
 
@@ -256,6 +258,22 @@ def chunk_counts(total: float, parts: int) -> list[float]:
     size = total / parts
     chunks = [size] * (parts - 1)
     return [*chunks, total - sum(chunks)]
+
+
+def asset_uri(data: bytes) -> str:
+    """Names bytes by the `asset:sha256:<hex>` URI an asset store returns for them.
+
+    Args:
+        data: Exact bytes of the asset.
+
+    Returns:
+        uri: `asset:sha256:` followed by the SHA-256 hex digest of `data`.
+
+    Examples:
+        >>> asset_uri(b"")
+        'asset:sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+    """
+    return f"{ASSET_PREFIX}{hashlib.sha256(data).hexdigest()}"
 
 
 def close_matches(name: str, candidates: Iterable[str]) -> list[str]:

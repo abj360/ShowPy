@@ -19,7 +19,7 @@ from showpy.choreo.match_ops import forms_of_set
 from showpy.choreo.models import Form, Set, TransitionSpec
 from showpy.core.errors import ConflictError, SchemaError, StorageError, UnknownRefError
 from showpy.core.ids import WINDOWS_DEVICE_NAMES, SetId, TransitionId, is_device_name
-from showpy.core.util import close_matches, content_hash
+from showpy.core.util import ASSET_PREFIX, asset_uri, close_matches, content_hash
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.documents import decode_show, script_doc, split_path
 from showpy.show.files import LIMITS_DOC, WAIVERS_DOC, show_changes
@@ -31,7 +31,6 @@ from showpy.show.structured import decode_text
 from showpy.time.models import Timeline
 
 SHOW_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]*$")
-ASSET_PREFIX = "asset:sha256:"
 REVISION_HASH_DOMAIN = "showpy.revision"
 SHORT_ID = 7
 
@@ -503,7 +502,7 @@ class InMemoryAssetStore:
         >>> InMemoryAssetStore().put(b"x").startswith(ASSET_PREFIX)
         True
         """
-        uri = f"{ASSET_PREFIX}{digest(data)}"
+        uri = asset_uri(data)
         self._assets[uri] = data
         return uri
 

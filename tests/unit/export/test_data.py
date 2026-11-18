@@ -28,25 +28,45 @@ Contains:
     test_regression_import_json_counts_field_errors_under_error_count(): stores the number of
         failing fields as `error_count`, not as an int under `errors`
     test_frames_csv_is_byte_identical_across_runs_and_hash_seeds(): writes one CSV per show
+    test_export_embeds_every_font_a_text_form_uses(): lists the tiny and simplex fonts, sorted
+    test_export_without_text_forms_has_no_fonts_key(): keeps a plain show's document unchanged
+    test_import_fonts_round_trips_slots(): rebuilds a registry that gives the original slots
+    test_import_fonts_rejects_tampered_data(): raises FONT_HASH_MISMATCH for edited bytes
+    test_import_fonts_rejects_bad_base64(): raises BAD_FONT for text that is not base64
+    test_export_with_a_missing_font_fails_closed(): raises MissingFontError
+    test_export_include_without_forms_embeds_no_fonts(): drops fonts when forms are not exported
+    test_import_json_still_loads_a_document_with_fonts(): ignores the fonts key
+    test_regression_import_fonts_rejects_hostile_documents(): raises BAD_FONT, never TypeError,
+        for non-mapping fonts, non-string or non-ASCII entries, oversize entries and too many fonts
+    test_regression_import_fonts_accepts_an_older_font_under_a_taken_name(): registers an
+        exported font by URI when a newer font holds its name, and rebuilds the same slots
 """
 
+import base64
 import csv
 import io
 import json
+import math
 import unicodedata
 
+import numpy as np
 import pandas as pd
 import pytest
 
-from showpy.core.errors import SchemaError, UnknownRefError
-from showpy.core.util import approx_equal
+from showpy.choreo.forms import slots, text_form
+from showpy.core.errors import FontError, MissingFontError, SchemaError, UnknownRefError
+from showpy.core.resources import font_path
+from showpy.core.util import approx_equal, asset_uri
 from showpy.export.data import (
     DEFAULT_FORMATS,
+    FONTS_KEY,
+    MAX_IMPORT_FONTS,
     SCHEMA_TAG,
     as_table,
     export_frames_csv,
     export_json,
     formats,
+    import_fonts,
     import_json,
     register_exporter,
     register_importer,
@@ -55,13 +75,16 @@ from showpy.export.data import (
 )
 from showpy.export.models import Chart, ChartRow, Claim, CoordinateSheet, SheetRow
 from showpy.export.print_sheets import chart, coordinate_sheet, cue_sheet
+from showpy.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
 from showpy.show.models import Show
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.export_shows import AT, guided_show, live_publication, performer
+from tests.fixtures.fonts import tiny_bytes
 from tests.fixtures.shows import two_set_show
 from tests.helpers import digests_under_hash_seeds
 
 TOL = 1e-9
+EMPTY_FONTS = FontRegistry(fonts={}, sources={}, names={})
 WIDE_CELL = 2
 FORMULA_NAME = '=HYPERLINK("http://evil")'
 
@@ -357,3 +380,118 @@ def test_regression_import_json_counts_field_errors_under_error_count() -> None:
         import_json({"schema": SCHEMA_TAG, "show": {"id": "x"}})
     assert "errors" not in caught.value.context
     assert caught.value.context["error_count"] >= 1
+
+
+TEXT_MEMBERS = ["T1", "T2", "T3", "T4"]
+
+
+def _text_show() -> tuple[Show, FontRegistry, str]:
+    registry, tiny = register_font(bundled_fonts(), tiny_bytes())
+    simplex = registry.resolve("simplex")
+    base = two_set_show()
+    forms = {
+        "tiny": text_form("tiny", TEXT_MEMBERS, "I", fonts=[tiny, simplex], height=2.0,
+                          at=(0, 5), n=4, font_registry=registry),
+    }  # fmt: skip
+    return base.replace(forms=forms), registry, tiny
+
+
+def test_export_embeds_every_font_a_text_form_uses() -> None:
+    show, registry, tiny = _text_show()
+    fonts = export_json(show, font_registry=registry)[FONTS_KEY]
+    assert list(fonts) == sorted([tiny, registry.resolve("simplex")])
+    assert base64.b64decode(fonts[tiny]) == tiny_bytes()
+
+
+def test_export_without_text_forms_has_no_fonts_key() -> None:
+    assert set(export_json(two_set_show())) == {"schema", "show"}
+
+
+def test_import_fonts_round_trips_slots() -> None:
+    show, registry, _ = _text_show()
+    form = show.forms["tiny"]
+    document = json.loads(json.dumps(export_json(show, font_registry=registry)))
+    rebuilt = import_fonts(document, font_registry=EMPTY_FONTS)
+    assert np.array_equal(slots(form, font_registry=rebuilt), slots(form, font_registry=registry))
+
+
+def test_import_fonts_rejects_tampered_data() -> None:
+    show, registry, tiny = _text_show()
+    document = export_json(show, font_registry=registry)
+    document[FONTS_KEY][tiny] = base64.b64encode(tiny_bytes(family="Evil")).decode()
+    with pytest.raises(FontError) as info:
+        import_fonts(document)
+    assert info.value.code == "FONT_HASH_MISMATCH"
+    assert info.value.context["uri"] == tiny
+
+
+def test_import_fonts_rejects_bad_base64() -> None:
+    with pytest.raises(FontError) as info:
+        import_fonts({FONTS_KEY: {asset_uri(b"x"): "not base64!"}})
+    assert info.value.code == "BAD_FONT"
+
+
+def test_export_with_a_missing_font_fails_closed() -> None:
+    show, _, _ = _text_show()
+    with pytest.raises(MissingFontError):
+        export_json(show)
+
+
+def test_export_include_without_forms_embeds_no_fonts() -> None:
+    show, registry, _ = _text_show()
+    assert set(export_json(show, include=["title"], font_registry=registry)) == {"schema", "show"}
+
+
+def test_import_json_still_loads_a_document_with_fonts() -> None:
+    show, registry, _ = _text_show()
+    loaded = import_json(export_json(show, font_registry=registry))
+    assert loaded.forms["tiny"] == show.forms["tiny"]
+
+
+def test_import_fonts_without_a_fonts_key_returns_the_registry() -> None:
+    assert import_fonts({"schema": SCHEMA_TAG}) is bundled_fonts()
+
+
+def _entry(data: bytes) -> dict[str, str]:
+    return {asset_uri(data): base64.b64encode(data).decode()}
+
+
+def test_regression_import_fonts_rejects_hostile_documents() -> None:
+    uri = asset_uri(b"x")
+    too_long = "A" * (4 * math.ceil(MAX_FONT_BYTES / 3) + 5)
+    hostile: list[object] = [
+        [1],
+        "text",
+        7,
+        None,
+        {1: "AA=="},
+        {uri: 7},
+        {uri: None},
+        {uri: ["AA=="]},
+        {uri: too_long},
+        {uri: "caf\u00e9"},
+        {f"asset:sha256:{i:064x}": "AA==" for i in range(MAX_IMPORT_FONTS + 1)},
+    ]
+    for value in hostile:
+        with pytest.raises(FontError) as info:
+            import_fonts({FONTS_KEY: value})
+        assert info.value.code == "BAD_FONT", value
+    with pytest.raises(FontError):
+        import_fonts([1])  # type: ignore[arg-type]
+    assert import_fonts({FONTS_KEY: _entry(tiny_bytes())}).names["tiny"] == asset_uri(tiny_bytes())
+
+
+def _older_simplex() -> bytes:
+    document = json.loads(font_path("simplex.json").read_bytes())
+    return json.dumps({**document, "family": "Simplex, an older release"}).encode()
+
+
+def test_regression_import_fonts_accepts_an_older_font_under_a_taken_name() -> None:
+    older, uri = register_font(EMPTY_FONTS, _older_simplex())
+    form = text_form("old", [f"S{i}" for i in range(36)], "HI", fonts=[uri], height=2.0,
+                     at=(0, 5), n=36, font_registry=older)  # fmt: skip
+    document = export_json(two_set_show().replace(forms={"old": form}), font_registry=older)
+    imported = import_fonts(document)
+    assert imported.names["simplex"] == bundled_fonts().resolve("simplex")
+    assert imported.source(uri) == _older_simplex()
+    assert np.array_equal(slots(form, font_registry=imported), slots(form, font_registry=older))

@@ -3,18 +3,19 @@
 Audience: the next agent or engineer continuing this repository. Scope: state of work, what is
 left, and the traps already hit.
 
-Last updated: 2026-11-15
+Last updated: 2026-11-16
 
 ## Where things stand
 
-| Item          | Value                                                                                                     |
-| ------------- | --------------------------------------------------------------------------------------------------------- |
-| Repository    | `abj360/ShowPy` (public since 2026-11-15); split into its own repository on 2026-11-12 with full history  |
-| Gates         | `nox -s tests`: about 1,500 passed, `Ledger: 528 open` (2026-11-13); ruff, mypy `--strict`, pyright clean |
-| CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main                 |
-| Defect ledger | `Ledger: 528 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-13)                   |
-| Out of scope  | `stagecheck`, `showpy.packs` and `showpy.index`, by the user's decision (2026-11-11)                      |
-| Pushing       | needs explicit approval                                                                                   |
+| Item          | Value                                                                                                                          |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Repository    | `abj360/ShowPy` (public since 2026-11-15); split into its own repository on 2026-11-12 with full history                       |
+| Gates         | `nox -s tests`: 2,390 passed, `Ledger: 424 open` (2026-11-16); ruff, mypy `--strict`, pyright clean                            |
+| CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main                                      |
+| Defect ledger | `Ledger: 424 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-16)                                        |
+| Out of scope  | `stagecheck`, `showpy.packs` and `showpy.index`, by the user's decision (2026-11-11)                                           |
+| Text feature  | branch `feat/text-on-field`, stage 1 complete with final-review fixes, awaiting merge; stages 2 and 3 not started (2026-11-17) |
+| Pushing       | needs explicit approval                                                                                                        |
 
 **Repository split (2026-11-12).** Agent-only code moved to a separate consumer repository with
 its history: set-script builds and the bubblewrap sandbox (`show/build.py`, `build_models.py`,
@@ -38,17 +39,17 @@ Use `uv` only, never pip.
 
 ## Module map (what exists)
 
-| Package  | Modules                                                                                                                                                                                                                                              |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `core`   | errors, ids, types (`FrozenModel`, `Region`, `Box2`), units (immutable `UnitRegistry`), util (`close_matches`, `content_hash`, `seeded_rng`), selection, validation                                                                                  |
-| `geo`    | curve_base, curves (11 kinds, arc-length param), svg, text (stroke font), shapes, regions, spacing (Bridson scatter), affine, transforms + transform_base + snapping, measure, analysis, models                                                      |
-| `time`   | models, timeline, clock (ramps and holds, analytic inverse), measures, validate                                                                                                                                                                      |
-| `cast`   | models, spots, select (expression grammar), rewrite (renames IDs everywhere)                                                                                                                                                                         |
-| `sheet`  | models, templates + surfaces (NFHS, NCAA and NFL fields, stage, gym), coords, bounds, replace (similarity_fit only), render (`SheetCanvas`, `draw_sheet`)                                                                                            |
-| `notes`  | models (tagged `Anchor`), notes (add, edit, find, `accept_draft`)                                                                                                                                                                                    |
-| `choreo` | models, motion (easing, `MotionRegistry`), engine, engine_compile, engine_facing, engine_models, paths, routes, facing, avoid, motion_stats, forms, form_fns, form_layout, form_ops, form_fit, form_place, match, match_cost, match_solve, match_ops |
-| `show`   | models (`Show`, `Pin`, `ShowIndex`, diffs, `Revision`, `CanvasEvent`, `Proposal`), manage, sections, storage, repositories, file_repository, documents, files, history, collab, pinning, changes, locks, validate, paths_store, counts               |
-| `export` | models, data (JSON, CSV, format registry), positions, print_sheets, pdf, publish (claims, QR codes), video                                                                                                                                           |
+| Package  | Modules                                                                                                                                                                                                                                                                                |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core`   | errors, ids, types (`FrozenModel`, `Region`, `Box2`), readonly (`ReadOnly`, `ReadOnlyMap`), units (immutable `UnitRegistry`), util (`close_matches`, `content_hash`, `seeded_rng`), selection, validation                                                                              |
+| `geo`    | curve_base, curves (11 kinds, arc-length param), svg, text (`simplex` helpers), fonts, font_strokes, text_layout, shapes, regions, spacing (Bridson scatter, `apportion`), affine, transforms + transform_base + snapping, measure, analysis, models                                   |
+| `time`   | models, timeline, clock (ramps and holds, analytic inverse), measures, validate                                                                                                                                                                                                        |
+| `cast`   | models, spots, select (expression grammar), rewrite (renames IDs everywhere)                                                                                                                                                                                                           |
+| `sheet`  | models, templates + surfaces (NFHS, NCAA and NFL fields, stage, gym), coords, bounds, replace (similarity_fit only), render (`SheetCanvas`, `draw_sheet`)                                                                                                                              |
+| `notes`  | models (tagged `Anchor`), notes (add, edit, find, `accept_draft`)                                                                                                                                                                                                                      |
+| `choreo` | models, motion (easing, `MotionRegistry`), engine, engine_compile, engine_facing, engine_models, paths, routes, facing, avoid, motion_stats, forms, form_fns, form_layout, form_ops, form_text, text_count, text_edit, form_fit, form_place, match, match_cost, match_solve, match_ops |
+| `show`   | models (`Show`, `Pin`, `ShowIndex`, diffs, `Revision`, `CanvasEvent`, `Proposal`), manage, sections, storage, repositories, file_repository, documents, files, history, collab, pinning, changes, locks, validate, paths_store, counts                                                 |
+| `export` | models, data (JSON, CSV, format registry), positions, print_sheets, pdf, publish (claims, QR codes), video                                                                                                                                                                             |
 
 ## Upgrade program
 
@@ -82,6 +83,20 @@ the host app (ADR 0003), and sheet replacement is removed (ADR 0017).
 Still open from the original build: align `docs/showpy-api-reference.md` with the code and the
 deviations below (the code is the source of truth until generated docs land in Phase 6).
 
+## Next: text on the field
+
+Stage 1 (bundled single-line fonts, user fonts as `showpy.font.v1` JSON, `centerline` text forms) is on `feat/text-on-field`. Open follow-ups, in order:
+
+1. **Junction gap (final review I1): done.** Slots keep a soft junction gap (0.25 of the smaller local stroke spacing) wherever a spread allows it. Where Hershey doubled or converging strokes allow none (hershey-script `!` at its minimum count holds at most five of its six spots in a 1-unit strip), the stroke takes the least crowded spread, at least 1 µm apart, and `text_report(form)` lists it.
+2. **Golden refresh (I8): done.** The maintainer approved it on 2026-11-17. The text golden now holds GO TEAM n = 120, Équipe 2026! n = 200 and ΑΒΓ n = 45, with no `LegibilityWarning` filter and no crowded stroke.
+3. **Thread `font_registry`** through `match`, `reorder`, `gate`, `split_form`, `merge_forms`, `form_place` (`place`, `rebuild`), `apply_match`, `swap` and `morph_targets`, so user-font text forms work there. Then `split_form` and `merge_forms` can keep the text recipe.
+4. **Repositories store fonts (spec, deferred to stage 2; final review I5).** Put each text form's font bytes in the injected `AssetStore` on save and register them on load. Until then a reopened show needs the caller's registry; it fails closed with `MissingFontError`.
+5. **Faster curve pieces.** `SvgCurve._native` now evaluates each piece once per call (it was quadratic), but a curved piece still costs about 60 µs through layout and slot placement, which is why `MAX_LAYOUT_CURVE_PIECES` is 60,000. Batching pieces by type would allow a higher cap.
+6. **Stage 2.** User TTF, OTF, WOFF and WOFF2 through fontTools (a new runtime dependency, pinned in `uv.lock` and ranged in `pyproject.toml`). `register_font` dispatches on the magic bytes. Adds `outline` and `fill` modes, the skeleton `centerline` with automatic fallback to `outline`, a build report and a research note on skeleton thresholds.
+7. **Stage 3.** Kerning (`GPOS`, `kern`), text `along` a curve, and a `showpy[shaping]` extra (HarfBuzz and bidi).
+8. **Smaller items.** A verified Cyrillic single-line source. One spot for dot-sized strokes (`.`, `i` dots), which take 2 or 3 spots within centimeters today. A `MIN_LAYOUT_HEIGHT_M` (heights near 1e-14 m pass layout, then fail in `tangent_at`). Split `choreo/forms.py` (567 lines) and `choreo/models.py` (682 lines).
+9. **Parked, pre-existing.** `curve_base` `_table` overflows with a raw `RuntimeWarning` for coordinates past about 1e154, for every curve kind.
+
 ## Deviations already made (put these into the reference doc)
 
 - **core**:
@@ -94,7 +109,13 @@ deviations below (the code is the source of truth until generated docs land in P
   - Closed curves wrap.
   - Mirrored circles keep `ccw=False`.
   - `svg_outline` takes `d` or SVG text, not a file path.
-  - `text_outline` uses the built-in font `simplex`.
+  - Text on the field, stage 1 (ADR 0016; modules `fonts`, `font_strokes`, `text_layout`):
+    - `simplex` is its own bundled font, not a Hershey alias. Bundled: `relief-singleline`, `hershey-roman`, `hershey-script`, `hershey-greek`, `simplex`. Hershey Cyrillic is deferred.
+    - `text_outline(text, font, height, at, *, font_registry=None)` takes a font chain and returns `list[Polyline | SvgCurve]`. Loops close without a repeated start point (closes UP-9.1-28). `\n` starts a new line (it used to raise). Non-finite `height` or `at` is rejected. A missing glyph or font raises `GlyphError` or `MissingFontError` (both `UnknownRefError`).
+    - Caps: `MAX_LAYOUT_CHARS = 1_000` raw characters, `MAX_LAYOUT_EXTENT_M = 1e6` m laid extent, `MAX_FONT_BYTES` 8 MiB, `MAX_GLYPH_PIECES = 512` path pieces per glyph and `MAX_STROKE_PIECES = 384` per stroke (in `load_font`), and `MAX_LAYOUT_PIECES = 512_000` per laid text, about 10 times the bundled maxima (hershey-script `8`, 51 pieces; hershey-script `Z`, 38 in one stroke). `MAX_LAYOUT_CURVE_PIECES = 60_000` bounds the pieces of curved strokes, which cost about 60 µs each against about 1 µs for straight ones; the worst legal text builds a text form in about 3 s. `layout_text` drops trailing empty lines and parses each distinct glyph once.
+    - Font names are a convenience; URIs are identity. `register_font(..., if_name_taken="keep")` registers a font by URI when its name points at other bytes, and `import_fonts` uses it, so documents with an older release of a bundled font still import. `register_font` alone still raises `FONT_NAME_TAKEN`. `FontRegistry.model_validate` loads every font from its bytes and rejects one that differs (`FONT_HASH_MISMATCH`).
+    - `core/readonly.py` adds `ReadOnly` and `ReadOnlyMap`: read-only, JSON-serializable mappings that keep the cached `bundled_fonts()` registry immutable. `Font.glyphs` and `FontRegistry.fonts`, `sources` and `names` are such mappings.
+    - `apportion` is public and uses exact integer arithmetic. `space_proportional` rejects all-zero lengths (closes UP-9.1-57), and `n` below the curve count now has code `TOO_FEW_SPOTS`.
   - `density_map`, `coverage` and `balance` take `sheet`.
   - Transforms work on Points, curves and Sets (+ sel), not Forms. Forms use `choreo.form_ops.transform_form`.
   - `snap` returns `(obj, SnapReport)`.
@@ -132,6 +153,16 @@ deviations below (the code is the source of truth until generated docs land in P
   - `Show.pins` was added.
   - Events are derived from revisions.
 - **export**: `export_video(show, count_range, fps, audio: Mapping[uri, bytes], px_per_m)`.
+  - `export_json(show, include=None, *, font_registry=None)` embeds the fonts of text forms (base64, keyed by URI). `import_json` ignores the `fonts` key; fonts are imported with `import_fonts(d, font_registry=None)`, which verifies each hash and rejects more than `MAX_IMPORT_FONTS = 64`.
+- **choreo, text forms** (`form_text`, `text_count`, `text_edit`; `TextRecipe` in `models`):
+  - Text forms never have open slots. `text_form` and every text edit require `len(members) == n`, else `MEMBER_COUNT_MISMATCH` with an add or remove hint. `placements` (so `place` and `rebuild`) and `apply_match` reject a text form short of members (after cast `delete_spots`) and point at `edit_text_count`; `delete_spots` itself still deletes.
+  - `spacing=` stores its derived count as `n`, measured after the stored `transform` in stage meters. `text_spot_count(text, *, fonts, height, spacing, ...)` returns that count before the form exists. A text edit keeps `n`, spacing and members; the stored spacing is the request that last set the count, not the current spacing.
+  - The count changes only through `edit_text_count(form, add=, remove=, n=|spacing=)`, which names the spots to add or remove. `edit(n=)` and `edit(spacing=)` raise `TEXT_COUNT_EDIT`.
+  - `MAX_TEXT_SPOTS = 10_000`, checked before allocation. `TextRecipe.fonts` holds 1 to `MAX_TEXT_FONTS = 16` URIs.
+  - Junction gap: `showpy.choreo.text_spread` keeps each stroke's spots `JUNCTION_GAP_SHARE = 0.25` of its spot spacing from other strokes' spots where a spread allows it; otherwise the least crowded spread (at least `COINCIDENT_TOL_M`) is used and `text_report(form) -> TextReport` lists each such `CrowdedStroke`. `COINCIDENT_SLOTS` fires only when every spread would put two spots within 1 µm; a retraced loop now spreads apart instead of raising.
+  - After `edit(text=...)`, the `TOO_FEW_SPOTS` hint names `edit_text_count` and the number of spots to add; the `LegibilityWarning` ends "raise n, or add spots with edit_text_count".
+  - Stage-1 limits: `gate`, `split_form`, `merge_forms`, `match`, `reorder`, `place`, `rebuild`, `apply_match`, `swap` and `morph_targets` take no `font_registry`, so a text form with a user font fails closed there with `MissingFontError`. `split_form` and `merge_forms` on a text form return custom forms (recipe dropped).
+  - Spec deviation (final review I5): the spec says repositories store fonts in the asset store; stage 1 does not. A show reopened from a repository rebuilds a user-font text form only with a registry that holds the font, else `MissingFontError`, never a substitute. `export_json` and `import_fonts` carry fonts today; repository storage moves to stage 2.
 
 ## Traps already hit (each has a regression test)
 

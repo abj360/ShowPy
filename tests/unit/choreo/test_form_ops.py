@@ -26,7 +26,27 @@ Contains:
         ValueError, when members outnumber slots
     test_regression_edit_rejects_non_numeric_radius_with_show_py_error: raises a ShowPyError, not a
         pydantic error, for edit(radius="abc")
+    test_edit_text_keeps_members_in_reading_order: regenerates the letters on the same members
+    test_edit_text_too_long_for_the_count_names_the_minimum: names the minimum count for a long text
+    test_edit_text_keeps_the_derived_count: keeps n, spacing and members of a spacing-built form
+    test_edit_text_resolves_font_names: stores font URIs when edit gets font names
+    test_edit_text_suggests_the_field_for_a_typo: names the near field for a misspelled key
+    test_edit_locked_text_form_needs_force: refuses a locked text form without force
+    test_regression_edit_text_form_rejects_count_changes: sends n and spacing edits to
+        edit_text_count
+    test_regression_edit_text_form_accepts_text_n_free_edits: edits text, layout and transform
+        fields without a raw KeyError
+    test_regression_edit_text_form_rejects_a_member_count_change: keeps a text form from gaining
+        open slots
+    test_edit_text_form_allows_reordering_members: swaps members at the same count
+    test_edit_text_with_a_user_font_takes_the_registry: resolves user fonts through the registry
+    test_regression_edit_text_too_few_spots_hint_names_edit_text_count: says how many spots to
+        add with edit_text_count when new text needs more than the form has
+    test_regression_edit_text_sparse_warning_names_edit_text_count: points the legibility
+        warning at edit_text_count, since edit cannot change n
 """
+
+from typing import Any
 
 import numpy as np
 import pytest
@@ -43,6 +63,7 @@ from showpy.choreo.form_ops import (
     split_form,
     transform_form,
 )
+from showpy.choreo.form_text import text_recipe, text_strokes
 from showpy.choreo.forms import (
     arc_form,
     block_form,
@@ -55,9 +76,19 @@ from showpy.choreo.forms import (
     scatter_form,
     slot_poses,
     slots,
+    text_form,
 )
 from showpy.choreo.models import FacingSpec, Form, Placement, Set, SpacingSpec
-from showpy.core.errors import LockedError, SchemaError, ShowPyError, UnknownRefError
+from showpy.choreo.text_count import spacing_count
+from showpy.core.errors import (
+    LegibilityWarning,
+    LockedError,
+    MissingFontError,
+    SchemaError,
+    ShowPyError,
+    SpacingError,
+    UnknownRefError,
+)
 from showpy.core.types import Points
 from showpy.core.util import approx_equal
 from showpy.geo.affine import (
@@ -69,6 +100,8 @@ from showpy.geo.affine import (
     transform_facing,
     transform_points,
 )
+from showpy.geo.fonts import bundled_fonts, register_font
+from tests.fixtures.fonts import tiny_bytes
 
 TOL = 1e-6
 MEMBERS = ("A", "B", "C", "D")
@@ -275,7 +308,7 @@ def test_pinwheel_rotates_every_spoke() -> None:
 def test_form_templates_cover_every_kind() -> None:
     assert set(form_templates()) == {
         "line", "arc", "curve", "circle", "block", "wedge", "polyline", "svg", "fill",
-        "scatter", "custom", "generated",
+        "scatter", "custom", "generated", "text",
     }  # fmt: skip
 
 
@@ -386,3 +419,156 @@ def test_regression_edit_rejects_non_numeric_radius_with_show_py_error() -> None
     """Raises a ShowPyError, not a pydantic error, for edit(radius="abc") (audit 9.6)."""
     with pytest.raises(ShowPyError):
         edit(circle_form("c", ["A", "B"], (0, 5), 2.0), radius="abc")
+
+
+TEXT_MEMBERS = [f"S{i}" for i in range(24)]
+
+
+def _text(members: list[str] = TEXT_MEMBERS, n: int = 24) -> Form:
+    return text_form(
+        "go", members, "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10), n=n,
+    )  # fmt: skip
+
+
+def test_edit_text_keeps_members_in_reading_order() -> None:
+    members = [f"S{i}" for i in range(60)]
+    f = text_form("t", members, "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10), n=60)
+    g = edit(f, text="GO TEAM")
+    assert g.members == f.members
+    assert len(slots(g)) == 60
+    assert g.geometry["n"] == 60
+    first = placements(g)[0]
+    start = text_strokes(text_recipe(g.geometry))[0].point_at(0.0)
+    assert first.entity == "S0"
+    assert (first.x, first.y) == pytest.approx(tuple(start), abs=1e-9)
+    assert not np.allclose(slots(g), slots(f))
+
+
+@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+def test_edit_text_too_long_for_the_count_names_the_minimum() -> None:
+    members = [f"S{i}" for i in range(12)]
+    f = text_form("t", members, "HI", fonts=["simplex"], height=4.0, at=(0, 10), n=12)
+    with pytest.raises(SpacingError) as caught:
+        edit(f, text="HIHI")
+    assert caught.value.code == "TOO_FEW_SPOTS"
+    assert caught.value.context["min_n"] == 24
+
+
+def test_edit_text_keeps_the_derived_count() -> None:
+    strokes = text_strokes(text_recipe(_text().geometry))
+    members = [f"S{i}" for i in range(spacing_count(strokes, 0.5))]
+    f = text_form("t", members, "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10),
+                  spacing=0.5)  # fmt: skip
+    g = edit(f, text="GOGO")
+    assert g.geometry["n"] == f.geometry["n"] == len(members)
+    assert g.geometry["spacing"] == f.geometry["spacing"] == 0.5
+    assert g.members == f.members
+
+
+def test_edit_text_resolves_font_names() -> None:
+    edited = edit(_text(), fonts=["relief-singleline"])
+    assert edited.geometry["fonts"] == [bundled_fonts().resolve("relief-singleline")]
+
+
+def test_edit_text_suggests_the_field_for_a_typo() -> None:
+    with pytest.raises(SchemaError) as caught:
+        edit(_text(), txt="A")
+    assert "text" in caught.value.hint
+
+
+def test_edit_locked_text_form_needs_force() -> None:
+    locked = _text().replace(locked=True)
+    with pytest.raises(LockedError):
+        edit(locked, text="GA")
+    assert edit(locked, force=True, text="GA").geometry["text"] == "GA"
+
+
+@pytest.mark.parametrize(("field", "value"), [("n", 30), ("spacing", SpacingSpec(interval=1.0))])
+def test_regression_edit_text_form_rejects_count_changes(field: str, value: Any) -> None:
+    f = _text()
+    with pytest.raises(SchemaError) as caught:
+        edit(f, **{field: value})
+    assert caught.value.code == "TEXT_COUNT_EDIT"
+    assert caught.value.context == {"form": "go", "field": field}
+    assert caught.value.hint == (
+        "use edit_text_count(form, add=[...], remove=[...], n=...) to change the count"
+    )
+    assert f == _text()
+
+
+def test_regression_edit_text_form_accepts_text_n_free_edits() -> None:
+    f = _text()
+    assert edit(f, text="GA").geometry["text"] == "GA"
+    assert edit(f, height=5.0).geometry["height"] == 5.0
+    assert edit(f, rotation=30.0).geometry["rotation"] == 30.0
+    assert edit(f, transform=[[1, 0, 2], [0, 1, 0], [0, 0, 1]]).members == f.members
+
+
+@pytest.mark.parametrize("count", [5, 25])
+def test_regression_edit_text_form_rejects_a_member_count_change(count: int) -> None:
+    f = _text()
+    members = [f"S{i}" for i in range(count)]
+    with pytest.raises(SpacingError) as caught:
+        edit(f, members=members)
+    assert caught.value.code == "MEMBER_COUNT_MISMATCH"
+    assert "edit_text_count" in caught.value.hint
+
+
+def test_edit_text_form_allows_reordering_members() -> None:
+    f = _text()
+    assert edit(f, members=f.members[::-1]).members == f.members[::-1]
+
+
+@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+@pytest.mark.parametrize("fonts", ["hershey-roman", 5])
+def test_edit_text_rejects_fonts_that_are_not_a_list(fonts: Any) -> None:
+    with pytest.raises(SchemaError) as caught:
+        edit(_text(), fonts=fonts)
+    assert caught.value.context == {"form": "go", "field": "fonts"}
+    assert caught.value.hint == "pass a list of font names or URIs"
+
+
+@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+def test_edit_text_fonts_accept_a_user_font_uri_through_the_registry() -> None:
+    registry, uri = register_font(bundled_fonts(), tiny_bytes())
+    members = ["A", "B", "C", "D"]
+    f = text_form(
+        "t", members, "I", fonts=[uri], height=2.0, at=(1, 1), n=4, font_registry=registry
+    )
+    swapped = edit(_text(), fonts=[uri], text="I", font_registry=registry)
+    assert swapped.geometry["fonts"] == [uri]
+    assert edit(f, fonts=[uri], font_registry=registry).geometry["fonts"] == [uri]
+    with pytest.raises(MissingFontError):
+        edit(_text(), fonts=[uri])
+
+
+@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+def test_edit_text_with_a_user_font_takes_the_registry() -> None:
+    registry, uri = register_font(bundled_fonts(), tiny_bytes())
+    members = ["A", "B", "C", "D"]
+    f = text_form(
+        "t", members, "I", fonts=[uri], height=2.0, at=(1, 1), n=4, font_registry=registry
+    )
+    assert edit(f, text="II", font_registry=registry).geometry["text"] == "II"
+    with pytest.raises(MissingFontError):
+        edit(f, text="II")
+
+
+@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+def test_regression_edit_text_too_few_spots_hint_names_edit_text_count() -> None:
+    members = [f"S{i}" for i in range(12)]
+    f = text_form("t", members, "HI", fonts=["simplex"], height=4.0, at=(0, 10), n=12)
+    with pytest.raises(SpacingError) as caught:
+        edit(f, text="HIHI")
+    assert caught.value.code == "TOO_FEW_SPOTS"
+    assert caught.value.context == {"n": 12, "min_n": 24, "text": "HIHI"}
+    assert caught.value.hint == (
+        "add 12 spots with edit_text_count(form, add=[...], n=24), or shorten the text"
+    )
+
+
+def test_regression_edit_text_sparse_warning_names_edit_text_count() -> None:
+    members = [f"S{i}" for i in range(36)]
+    f = text_form("t", members, "HI", fonts=["simplex"], height=2.0, at=(0, 10), n=36)
+    with pytest.warns(LegibilityWarning, match=r"; raise n, or add spots with edit_text_count$"):
+        edit(f, text="HIHIHI")

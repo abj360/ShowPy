@@ -12,6 +12,10 @@ Contains:
     SpotCount: counts spots on and off the field in one set
     SpacingSpec: describes how members are spaced on a form's shape
     FacingSpec: describes how form members face
+    MAX_TEXT_FONTS: bounds the font chain of one text recipe
+    TextRecipe: holds the construction recipe of a text form: text, font chain and layout
+    CrowdedStroke: names a glyph stroke whose spots sit closer than its junction gap
+    TextReport: reports how a text form's spots were spread, listing its crowded strokes
     Form: holds a stored shape construction plus its ordered members
     FacingOverride: forces a facing on spots over a global count range
     PathStyle: names the built-in path styles
@@ -33,7 +37,7 @@ import itertools
 import math
 from collections.abc import Callable, Mapping, Sequence
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -42,15 +46,21 @@ from pydantic import Field, SerializerFunctionWrapHandler, model_serializer, mod
 from showpy.core.errors import LockedError, PathError, SchemaError, UnknownRefError
 from showpy.core.ids import FormId, RouteId, SetId, SpotId, TransitionId, check_id
 from showpy.core.selection import Selection, SelectorField
-from showpy.core.types import Count, Degrees, FrozenModel, Meters, Point, Points
+from showpy.core.types import Count, Degrees, FrozenModel, Meters, Point, Points, PositiveMeters
+from showpy.geo.models import DEFAULT_LINE_SPACING, TextAlign, TextAnchor
+from showpy.geo.text_layout import MAX_LAYOUT_CHARS
 
 TABLE_COLUMNS = ("entity", "x", "y", "facing", "form", "order", "pinned", "on_field", "note")
 DEFAULT_EASING_STRENGTH = 2.0
 MATCH_WEIGHT_KEYS = ("backward", "crossing", "group_spread", "turn")
+FONT_URI_PATTERN = r"^asset:sha256:[0-9a-f]{64}$"
+# Layout resolves every chain font and measures its cap height, so a stored chain is bounded.
+MAX_TEXT_FONTS = 16
 EasingKind = Literal[
     "linear", "ease_in", "ease_out", "ease_in_out", "hold_then_burst", "burst_then_settle",
     "steps", "custom",
 ]  # fmt: skip
+type FontUri = Annotated[str, Field(pattern=FONT_URI_PATTERN)]
 
 
 class ApprovalState(StrEnum):
@@ -277,10 +287,83 @@ class FacingSpec(FrozenModel):
         return self
 
 
+class TextRecipe(FrozenModel):
+    r"""Holds the construction recipe of a text form: text, font chain and layout.
+
+    Fonts are stored as URIs, never names, so a recipe always names the exact font bytes.
+
+    Attributes:
+        text: Characters to write, `\n` between lines.
+        fonts: Fallback chain of 1 to `MAX_TEXT_FONTS` font URIs, `asset:sha256:<64 hex>`.
+        mode: How glyphs become slots; `centerline` puts spots on the strokes.
+        height: Cap height in meters.
+        at: Layout point on the stage plane.
+        rotation: Degrees counter-clockwise about `at`; 0 reads left to right toward +x.
+        align: Where each line sits horizontally on `at`.
+        anchor: Which line of the text block sits vertically on `at`.
+        letter_spacing: Extra gap between glyphs, in ems of the first font.
+        line_spacing: Baseline-to-baseline distance, in ems of the first font.
+        spacing: Meters between spots that last set the form's count, or None when the count
+            was given as `n`; the stored `n` stays the count.
+
+    >>> from showpy.geo.fonts import bundled_fonts
+    >>> simplex = bundled_fonts().resolve("simplex")
+    >>> TextRecipe(text="HI", fonts=(simplex,), height=2.0, at=(0.0, 10.0)).align
+    'left'
+    """
+
+    text: str = Field(min_length=1, max_length=MAX_LAYOUT_CHARS)
+    fonts: tuple[FontUri, ...] = Field(min_length=1, max_length=MAX_TEXT_FONTS)
+    mode: Literal["centerline"] = "centerline"
+    height: Meters = Field(gt=0)
+    at: Point
+    rotation: Degrees = 0.0
+    align: TextAlign = "left"
+    anchor: TextAnchor = "baseline"
+    letter_spacing: float = 0.0
+    line_spacing: float = Field(default=DEFAULT_LINE_SPACING, gt=0)
+    spacing: PositiveMeters | None = None
+
+
 type FormKind = Literal[
     "line", "arc", "curve", "circle", "block", "wedge", "polyline", "svg", "fill", "scatter",
-    "custom", "generated",
+    "custom", "generated", "text",
 ]  # fmt: skip
+
+
+class CrowdedStroke(FrozenModel):
+    """Names a glyph stroke whose spots sit closer than its junction gap to another slot.
+
+    Attributes:
+        char: Character the stroke draws.
+        line: Line of the text, 0 at the top.
+        column: Position of the character in its line, after normalization.
+        stroke: Index of the stroke in its glyph, in font order.
+        first_slot: Slot index of the stroke's first spot.
+        spots: Spots on the stroke.
+        gap: Closest distance from one of its spots to another slot, in meters before any
+            stored transform.
+        wanted: Junction gap the stroke should keep, in meters before any stored transform.
+    """
+
+    char: str
+    line: int = Field(ge=0)
+    column: int = Field(ge=0)
+    stroke: int = Field(ge=0)
+    first_slot: int = Field(ge=0)
+    spots: int = Field(ge=1)
+    gap: Meters
+    wanted: Meters
+
+
+class TextReport(FrozenModel):
+    """Reports how a text form's spots were spread on its strokes.
+
+    Attributes:
+        crowded: Strokes whose spots sit closer than their junction gap, in slot order.
+    """
+
+    crowded: tuple[CrowdedStroke, ...] = ()
 
 
 class Form(FrozenModel):

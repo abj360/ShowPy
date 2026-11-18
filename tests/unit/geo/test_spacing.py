@@ -95,6 +95,7 @@ from showpy.geo.spacing import (
     _lattice_estimate,
     _poisson_sample_bound,
     _require_lattice_size,
+    apportion,
     block,
     concentric,
     distribute_on_points,
@@ -132,6 +133,8 @@ SUBNORMAL_GAP_M = 1e-320
 TINY_GAP_M = 1e-300
 HUGE_SIDE_M = 1e308
 NON_FINITE = [math.nan, math.inf, -math.inf]
+APPORTION_MIN_N = 4
+HUGE_N = 10**18
 
 LINE = line((0.0, 0.0), (10.0, 0.0))
 
@@ -193,6 +196,103 @@ def test_space_proportional_shares_one_interval() -> None:
     parts = space_proportional([short, long_], 6)
     assert [len(p) for p in parts] == [2, 4]
     assert approx_equal(_gaps(parts[0])[0], _gaps(parts[1])[0])
+
+
+def test_apportion_shares_by_length_with_one_spot_each_by_default() -> None:
+    assert apportion([4.0, 12.0], 6) == [2, 4]
+
+
+def test_apportion_gives_each_curve_its_minimum_first() -> None:
+    assert apportion([1.0, 100.0], 6, [3, 2]) == [3, 3]
+
+
+def test_apportion_shares_equally_when_every_length_is_zero() -> None:
+    assert apportion([0.0, 0.0], 4, [0, 0]) == [2, 2]
+
+
+def test_apportion_names_the_smallest_n_that_meets_the_minimums() -> None:
+    with pytest.raises(SpacingError) as raised:
+        apportion([1.0, 1.0], 3, [2, 2])
+    assert raised.value.code == "TOO_FEW_SPOTS"
+    assert raised.value.context["min_n"] == APPORTION_MIN_N
+    assert f"use n >= {APPORTION_MIN_N}" in raised.value.hint
+
+
+def test_apportion_gives_leftovers_to_the_longer_curve_on_equal_fractions() -> None:
+    assert apportion([1.0, 3.0], 2, [0, 0]) == [0, 2]
+
+
+def test_apportion_breaks_full_ties_by_lower_index() -> None:
+    assert apportion([2.0, 2.0, 2.0], 2, [0, 0, 0]) == [1, 1, 0]
+
+
+def test_apportion_of_nothing_is_empty() -> None:
+    assert apportion([], 0) == []
+
+
+def test_apportion_rejects_spots_with_no_curves() -> None:
+    with pytest.raises(SpacingError):
+        apportion([], 1)
+
+
+def test_apportion_counts_a_huge_n_exactly() -> None:
+    counts = apportion([1.0, 1.0, 1.0], HUGE_N)
+    assert sum(counts) == HUGE_N
+    assert max(counts) - min(counts) == 1
+
+
+def test_apportion_counts_exactly_at_the_largest_lengths() -> None:
+    assert sum(apportion([sys.float_info.max] * 3, HUGE_N)) == HUGE_N
+
+
+@pytest.mark.parametrize("n", [True, 2.0, "2", None, -1])
+def test_apportion_rejects_a_bad_n(n: object) -> None:
+    with pytest.raises(SpacingError):
+        apportion([1.0], n)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("length", [-1.0, *NON_FINITE, "1", True])
+def test_apportion_rejects_a_bad_length(length: object) -> None:
+    with pytest.raises(SpacingError):
+        apportion([1.0, length], 4)  # type: ignore[list-item]
+
+
+@pytest.mark.parametrize("minimum", [-1, 1.0, True, "1"])
+def test_apportion_rejects_a_bad_minimum(minimum: object) -> None:
+    with pytest.raises(SpacingError):
+        apportion([1.0, 1.0], 4, [1, minimum])  # type: ignore[list-item]
+
+
+def test_apportion_rejects_minimums_of_another_length() -> None:
+    with pytest.raises(SpacingError) as raised:
+        apportion([1.0, 1.0], 4, [1])
+    assert raised.value.context == {"lengths": 2, "minimums": 1}
+
+
+@st.composite
+def _apportion_cases(draw: st.DrawFn) -> tuple[list[float], int, list[int]]:
+    lengths = draw(st.lists(st.floats(min_value=0.0, max_value=100.0), min_size=1, max_size=30))
+    minimums = draw(st.lists(st.integers(0, 3), min_size=len(lengths), max_size=len(lengths)))
+    n = draw(st.integers(sum(minimums), sum(minimums) + 200))
+    return lengths, n, minimums
+
+
+@given(_apportion_cases())
+def test_apportion_sums_exactly_and_respects_minimums(
+    case: tuple[list[float], int, list[int]],
+) -> None:
+    lengths, n, minimums = case
+    counts = apportion(lengths, n, minimums)
+    assert sum(counts) == n
+    assert all(count >= minimum for count, minimum in zip(counts, minimums, strict=True))
+    assert apportion(lengths, n, minimums) == counts
+    pairs = range(len(lengths))
+    assert all(
+        counts[i] >= counts[j]
+        for i in pairs
+        for j in pairs
+        if minimums[i] == minimums[j] and lengths[i] > lengths[j]
+    )
 
 
 def test_space_with_gaps_adds_extra_after_index() -> None:
@@ -394,8 +494,6 @@ def test_regression_block_rejects_unknown_anchor() -> None:
         block((0.0, 0.0), 2, 2, 1.0, anchor="middle")  # type: ignore[arg-type]
 
 
-@pytest.mark.defect("UP-9.1-57")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-57")
 def test_regression_space_proportional_rejects_zero_length_curves() -> None:
     """Raises SpacingError for all-zero lengths instead of leaking ZeroDivisionError."""
     dots = [Segment(a=(0.0, 0.0), b=(0.0, 0.0)), Segment(a=(1.0, 1.0), b=(1.0, 1.0))]

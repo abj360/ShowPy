@@ -10,6 +10,10 @@ Contains:
     test_regression_two_part_edits_unlocked_row_of_stored_transition: edits unlocked rows freely
     test_regression_make_route_with_single_vertex_raises_path_error: raises a PathError, not
         IndexError, when the whole route is one point
+    test_regression_make_route_merges_near_coincident_starts_onto_one_offset: gives two members
+        whose starts lie within MIN_GAP the offset of their shared vertex, not a ValueError
+    test_regression_make_route_takes_each_offset_from_its_own_start_vertex: gives a leader that
+        starts back on a follower's point its own vertex's offset, not the follower's
     test_regression_counter_march_with_no_members_raises_path_error: raises a PathError, not
         IndexError, for an empty file
     test_regression_rotate_path_refuses_locked_row: raises LockedError for a locked row
@@ -44,6 +48,7 @@ from showpy.choreo.match_ops import with_set
 from showpy.choreo.models import FacingMode, PathStyle, TransitionSpec
 from showpy.choreo.paths import lock
 from showpy.choreo.routes import (
+    MIN_GAP,
     counter_march,
     follow,
     follow_and_set_targets,
@@ -165,6 +170,29 @@ def test_regression_make_route_with_single_vertex_raises_path_error() -> None:
     with pytest.raises(PathError) as raised:
         make_route(show, TID, "T1", [start])
     assert raised.value.context == {"leader": "T1"}
+
+
+def _moved(show: Show, spot: str, point: tuple[float, float]) -> Show:
+    start = show.set(TID[0])
+    return with_set(show, start.with_placements({spot: {"x": point[0], "y": point[1]}}))
+
+
+def test_regression_make_route_merges_near_coincident_starts_onto_one_offset() -> None:
+    """Gives members whose starts lie within MIN_GAP one shared offset, not a ValueError."""
+    t3 = two_set_show().set(TID[0]).get("T3").point
+    show = _moved(two_set_show(), "T4", (t3[0] + MIN_GAP / 2, t3[1]))
+    route = make_route(show, TID, "T4", [(6.0, 15.0)], members=["T4", "T3"])
+    assert route.offsets == (0.0, 0.0)
+    assert approx_equal(route.travel, math.dist(t3, (6.0, 15.0)), tol=1e-9)
+
+
+def test_regression_make_route_takes_each_offset_from_its_own_start_vertex() -> None:
+    """Gives a leader back on a follower's start the offset of its own vertex on the route."""
+    t2 = two_set_show().set(TID[0]).get("T2").point
+    show = _moved(two_set_show(), "T4", t2)
+    route = make_route(show, TID, "T4", [(6.0, 15.0)], members=["T4", "T3", "T2"])
+    assert route.offsets == (4.0, 2.0, 0.0)
+    assert approx_equal(route.travel, math.dist(t2, (6.0, 15.0)), tol=1e-9)
 
 
 def test_regression_counter_march_with_no_members_raises_path_error() -> None:

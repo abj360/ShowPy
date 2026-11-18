@@ -23,17 +23,23 @@ Contains:
         svg_form("")
     test_regression_generated_form_with_numpy_params_serializes_or_is_rejected: serializes numpy
         generator params, or rejects them with a ShowPyError
+    test_text_form_*: stores font URIs, follows reading order, needs one member per slot, keeps
+        user fonts behind their registry and maps slots and facings through transforms
+    test_regression_placements_rejects_a_text_form_short_of_members: raises MEMBER_COUNT_MISMATCH
+        with the edit_text_count hint instead of leaving letters out
 """
 
 import contextlib
 import json
 import math
 import sys
+from typing import Any
 
 import numpy as np
 import pytest
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, register_form_fn
+from showpy.choreo.form_ops import gate, reorder, transform_form
 from showpy.choreo.forms import (
     arc_form,
     block_form,
@@ -49,13 +55,24 @@ from showpy.choreo.forms import (
     scatter_form,
     slots,
     svg_form,
+    text_form,
     wedge_form,
 )
 from showpy.choreo.models import FacingSpec, Form, SpacingSpec
-from showpy.core.errors import LockedError, SchemaError, ShowPyError, SpacingError, UnknownRefError
+from showpy.core.errors import (
+    LockedError,
+    MissingFontError,
+    SchemaError,
+    ShowPyError,
+    SpacingError,
+    UnknownRefError,
+)
 from showpy.core.types import Box2, Points
 from showpy.core.util import approx_equal
+from showpy.geo.affine import rotation_matrix, translation_matrix
 from showpy.geo.curves import curve_from_construction
+from showpy.geo.fonts import BUNDLED_FONTS, FontRegistry, bundled_fonts, register_font
+from tests.fixtures.fonts import TINY, tiny_bytes
 from tests.helpers import fails_after
 
 TOL = 1e-6
@@ -373,3 +390,108 @@ def test_regression_generated_form_with_numpy_params_serializes_or_is_rejected()
     center = np.array([0.0, 1.0])
     with contextlib.suppress(ShowPyError):
         json.loads(generated_form("g", ["A"], "spiral", center=center).model_dump_json())
+
+
+TEXT_MEMBERS = [f"S{i}" for i in range(24)]
+EMPTY_FONTS = FontRegistry(fonts={}, sources={}, names={})
+TURN = 90.0
+
+
+def _go(members: list[str] = TEXT_MEMBERS, n: int = 24, facing: FacingSpec | None = None) -> Form:
+    return text_form(
+        "go", members, "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10), n=n, facing=facing
+    )
+
+
+def _tiny_form() -> tuple[Form, FontRegistry]:
+    registry, uri = register_font(bundled_fonts(), tiny_bytes())
+    members = ["A", "B", "C"]
+    form = text_form("t", members, "I", fonts=[uri], height=2.0, at=(1, 1), n=3,
+                     font_registry=registry)  # fmt: skip
+    return form, registry
+
+
+def test_text_form_stores_uris_not_names() -> None:
+    assert _go().geometry["fonts"] == [BUNDLED_FONTS["hershey-roman"]]
+    assert _go().geometry["n"] == 24
+
+
+def test_text_form_placements_follow_reading_order() -> None:
+    form = _go()
+    placed = placements(form)
+    assert [p.entity for p in placed] == TEXT_MEMBERS
+    assert [(p.x, p.y) for p in placed] == [tuple(row) for row in slots(form).tolist()]
+
+
+def test_existing_kinds_ignore_the_font_registry() -> None:
+    form = line_form("f", ["A", "B", "C"], (0, 0), (4, 0))
+    assert np.array_equal(slots(form, font_registry=EMPTY_FONTS), slots(form))
+    assert placements(form, font_registry=EMPTY_FONTS) == placements(form)
+
+
+def test_text_form_with_a_user_font_needs_its_registry() -> None:
+    form, registry = _tiny_form()
+    uri = form.geometry["fonts"][0]
+    assert len(slots(form, font_registry=registry)) == 3
+    with pytest.raises(MissingFontError) as caught:
+        slots(form)
+    assert caught.value.context["font"] == uri
+    with pytest.raises(MissingFontError) as gated:
+        gate(form, "start", TURN)
+    assert gated.value.context["font"] == uri
+    with pytest.raises(MissingFontError) as reordered:
+        reorder(form, "by_x")
+    assert reordered.value.context["font"] == uri
+    assert TINY["name"] not in caught.value.message
+
+
+@pytest.mark.parametrize(
+    ("members", "hint"),
+    [(TEXT_MEMBERS[:20], "add 4 more spots"), ([*TEXT_MEMBERS, "X", "Y"], "remove 2 spots")],
+)
+def test_text_form_needs_one_member_per_slot(members: list[str], hint: str) -> None:
+    with pytest.raises(SpacingError) as caught:
+        _go(members)
+    assert caught.value.code == "MEMBER_COUNT_MISMATCH"
+    assert caught.value.hint == hint
+    assert caught.value.context == {"form": "go", "n": 24, "members": len(members)}
+
+
+@pytest.mark.parametrize("counts", [{}, {"n": 24, "spacing": 0.5}])
+def test_text_form_needs_exactly_one_of_n_and_spacing(counts: dict[str, Any]) -> None:
+    with pytest.raises(SchemaError) as caught:
+        text_form("go", TEXT_MEMBERS, "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10),
+                  **counts)  # fmt: skip
+    assert caught.value.code == "N_OR_SPACING"
+    assert "n=" in caught.value.hint
+    assert "spacing=" in caught.value.hint
+
+
+def test_text_form_stores_n_and_no_spacing_for_an_exact_count() -> None:
+    assert _go().geometry["spacing"] is None
+
+
+def test_text_form_rejects_too_few_spots() -> None:
+    with pytest.raises(SpacingError) as caught:
+        _go(TEXT_MEMBERS[:3], n=3)
+    assert caught.value.code == "TOO_FEW_SPOTS"
+
+
+def test_transformed_text_moves_slots_and_facings() -> None:
+    form = _go(facing=FacingSpec(mode="along"))
+    before = slots(form)
+    moved = transform_form(form, translation_matrix(0, 3))
+    assert np.allclose(slots(moved), before + np.array([0.0, 3.0]), atol=1e-9)
+    turned = transform_form(form, rotation_matrix(TURN, (0, 0)))
+    for old, new in zip(placements(form), placements(turned), strict=True):
+        assert abs((new.facing - old.facing - TURN + 180.0) % 360.0 - 180.0) < 1e-9
+
+
+def test_regression_placements_rejects_a_text_form_short_of_members() -> None:
+    short = _go().replace(members=tuple(TEXT_MEMBERS[:-1]))
+    with pytest.raises(SpacingError) as caught:
+        placements(short)
+    assert caught.value.code == "MEMBER_COUNT_MISMATCH"
+    assert caught.value.context == {"form": "go", "n": 24, "members": 23}
+    assert caught.value.hint.startswith("add 1 more spots; ")
+    assert "edit_text_count" in caught.value.hint

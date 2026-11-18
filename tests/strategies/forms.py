@@ -29,6 +29,7 @@ from showpy.choreo.forms import (
     polyline_form,
     scatter_form,
     svg_form,
+    text_form,
     wedge_form,
 )
 from showpy.choreo.match_ops import with_set
@@ -54,7 +55,7 @@ FORM_FNS = ("rose", "sine_wave", "spiral")
 MIN_MEMBERS = 2
 FORM_KINDS: tuple[FormKind, ...] = (
     "line", "arc", "curve", "circle", "block", "wedge", "polyline", "svg", "fill", "scatter",
-    "custom", "generated",
+    "custom", "generated", "text",
 )  # fmt: skip
 
 sizes = st.floats(min_value=MIN_SIZE_M, max_value=MAX_SIZE_M, allow_nan=False)
@@ -194,10 +195,17 @@ def _generated(draw: st.DrawFn, d: FormDraft) -> Form:
     return generated_form(d.form_id, d.members, fn, facing=d.facing, set_id=d.set_id, center=anchor)
 
 
+def _text(draw: st.DrawFn, d: FormDraft) -> Form:
+    return text_form(
+        d.form_id, d.members, "-", fonts=["simplex"], height=draw(sizes), at=d.center,
+        facing=d.facing, set_id=d.set_id, n=len(d.members),
+    )  # fmt: skip
+
+
 BUILDERS: dict[FormKind, FormBuilder] = {
     "line": _line, "arc": _arc, "curve": _curve, "circle": _circle, "block": _block,
     "wedge": _wedge, "polyline": _polyline, "svg": _svg, "fill": _fill, "scatter": _scatter,
-    "custom": _custom, "generated": _generated,
+    "custom": _custom, "generated": _generated, "text": _text,
 }  # fmt: skip
 
 

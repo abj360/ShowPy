@@ -125,6 +125,8 @@ def place(
     The set lists the placed forms plus any form a pinned placement still references; other
     placements that pointed at a form no longer placed lose their `form` and `order`. The
     show is not changed: store the returned forms, which carry the matched spots as members.
+    A text form has no open slots: one whose member count differs from its `n` (a deleted
+    spot left it short) raises `MEMBER_COUNT_MISMATCH`; fix it with `edit_text_count`.
 
     Args:
         show: Show that holds the set and its previous set.

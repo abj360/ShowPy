@@ -8,6 +8,8 @@ Contains:
         with the new slot, not only x and y
     test_regression_apply_match_updates_form_members_like_swap: keeps Form.members in step with
         matched slots so rebuild keeps them
+    test_regression_apply_match_rejects_a_text_form_left_short: raises MEMBER_COUNT_MISMATCH when
+        a match takes a text form's last member to another form
     test_regression_apply_match_rejects_a_slot_held_by_an_unmatched_member: raises MatchError
         instead of putting two spots in one slot
     test_regression_apply_match_rejects_leaving_an_interior_slot_empty: raises MatchError
@@ -31,12 +33,12 @@ Contains:
 
 import pytest
 
-from showpy.choreo.form_place import rebuild
-from showpy.choreo.forms import circle_form, line_form, slot_poses
+from showpy.choreo.form_place import place, rebuild
+from showpy.choreo.forms import circle_form, line_form, slot_poses, text_form
 from showpy.choreo.match import match, match_by_order
-from showpy.choreo.match_ops import apply_match, clear_rows, suggest_swaps, swap
-from showpy.choreo.models import FacingSpec, Form, TransitionSpec
-from showpy.core.errors import LockedError, MatchError, UnknownRefError
+from showpy.choreo.match_ops import apply_match, clear_rows, suggest_swaps, swap, with_set
+from showpy.choreo.models import FacingSpec, Form, MatchResult, TransitionSpec
+from showpy.core.errors import LockedError, MatchError, SpacingError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
@@ -282,3 +284,20 @@ def test_regression_clear_rows_keeps_transition_order() -> None:
     show = show.model_copy(update={"transitions": (show.transitions[0], later)})
     cleared = clear_rows(show, TID, ROW_SPOTS)
     assert [t.id for t in cleared.transitions] == [t.id for t in show.transitions]
+
+
+def test_regression_apply_match_rejects_a_text_form_left_short() -> None:
+    """Refuses a match that moves a text form's last member into another form's slot."""
+    show = two_set_show()
+    dash = text_form("dash", ["T1", "T2", "T3", "T4"], "-", fonts=["simplex"], height=2.0,
+                     at=(0, 9), n=4)  # fmt: skip
+    row = line_form("row", [], (0, 14), (4, 14), n=1)
+    placed, filled = place(show, "2", [dash, row])
+    stored = with_set(show, placed).replace(forms={form.id: form for form in filled})
+    moved = MatchResult(
+        entities=("T4",), assignment={"T4": 0}, targets=((0.0, 14.0),), slots={"T4": ("row", 0)}
+    )
+    with pytest.raises(SpacingError) as caught:
+        apply_match(stored, TID, moved)
+    assert caught.value.code == "MEMBER_COUNT_MISMATCH"
+    assert caught.value.context == {"form": "dash", "n": 4, "members": 3}

@@ -17,13 +17,14 @@ Contains:
     regular_polygon(): builds a closed regular polygon
     star(): builds a closed star outline
     svg_outline(): fits SVG path data into a box as SvgCurves
-    text_outline(): spells text in a stroke font as polylines
+    text_outline(): spells text in stroke fonts as polylines and SVG curves
     join(): chains curves end to end
     offset(): builds a parallel curve
 """
 
 import math
 import re
+from collections.abc import Sequence
 
 import numpy as np
 import shapely
@@ -45,8 +46,9 @@ from showpy.geo.curves import (
     SplineCurve,
     SvgCurve,
 )
+from showpy.geo.fonts import FontRegistry
 from showpy.geo.svg import Subpath, parse_path
-from showpy.geo.text import ADVANCE, GLYPH_HEIGHT, glyph_strokes
+from showpy.geo.text_layout import layout_text
 
 JOIN_TOL = 1e-6
 COLLINEAR_TOL = 1e-12
@@ -285,20 +287,36 @@ def svg_outline(
     return [curve.replace(transform=matrix) for curve in raw]
 
 
-def text_outline(text: str, font: str, height: Meters, at: Point) -> list[Polyline]:
-    """Spells `text` as stroke polylines; `at` is the baseline-left of the first letter.
+def text_outline(
+    text: str,
+    font: str | Sequence[str],
+    height: Meters,
+    at: Point,
+    *,
+    font_registry: FontRegistry | None = None,
+) -> list[Polyline | SvgCurve]:
+    r"""Spells `text` as stroke curves; `at` is the baseline-left of the first letter.
+
+    `font` is one name or URI, or a fallback chain; each character takes the first font that has
+    it. Glyph loops come out closed without a repeated end point. The input is bounded by
+    `MAX_LAYOUT_CHARS` characters and `MAX_LAYOUT_EXTENT_M`, as in `layout_text`.
+
+    Args:
+        text: Characters to spell; `\n` starts a new line.
+        font: Font name or URI, or a fallback chain of them.
+        height: Cap height in meters.
+        at: Baseline-left point of the first letter.
+        font_registry: Registry to resolve fonts in; `None` means the bundled fonts.
+
+    Returns:
+        strokes: Every glyph's strokes in reading order.
 
     >>> len(text_outline("HI", "simplex", 2.0, (0, 0)))
     6
     """
-    scale = height / GLYPH_HEIGHT
-    curves = []
-    for index, char in enumerate(text):
-        left = at[0] + index * ADVANCE * scale
-        for stroke in glyph_strokes(char, font):
-            pts = tuple((left + x * scale, at[1] + y * scale) for x, y in stroke)
-            curves.append(Polyline(points=pts))
-    return curves
+    fonts = [font] if isinstance(font, str) else list(font)
+    laid = layout_text(text, fonts, height, at, font_registry=font_registry)
+    return [stroke for glyph in laid for stroke in glyph.strokes]
 
 
 def join(*curves: AnyCurve, bridge: bool = False) -> CompositeCurve:

@@ -94,6 +94,7 @@ from showpy.core.errors import SchemaError, ShowPyError
 from showpy.core.util import (
     approx_equal,
     as_points,
+    asset_uri,
     chunk_counts,
     close_matches,
     content_hash,
@@ -105,6 +106,7 @@ from showpy.core.util import (
     split_id,
     timer,
 )
+from showpy.show.repositories import InMemoryAssetStore
 from tests.helpers import digests_under_hash_seeds, fails_after
 
 
@@ -580,3 +582,8 @@ def test_regression_parse_range_rejects_huge_endpoints() -> None:
     """Rejects a 5,000-digit endpoint with a ShowPyError, not ValueError from int()."""
     with pytest.raises(SchemaError):
         parse_range("T1-T" + "9" * 5000)
+
+
+def test_asset_uri_matches_the_asset_store() -> None:
+    assert asset_uri(b"x") == InMemoryAssetStore().put(b"x")
+    assert asset_uri(b"x").startswith("asset:sha256:")

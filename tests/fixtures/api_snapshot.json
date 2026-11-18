@@ -42,6 +42,9 @@
       "sync_offset_s": "Seconds"
     }
   },
+  "BUNDLED_FONTS": {
+    "constant": "mappingproxy({'relief-singleline': 'asset:sha256:fd67c5b12e38ab886258f5bc16611b3f61f0bcc2d5711dc5ddf8fd42bc8f4b55', 'hershey-roman': 'asset:sha256:e1969f4711a74be259a5e602da900a65b94c5f45f69c33e32ab4eeb86a2c83cb', 'hershey-script': 'asset:sha256:1f0a661303e872ffd3ac5c8abdd8804519c2174696c1f8f04ac1aaee37c5a9d0', 'hershey-greek': 'asset:sha256:43f6945dde1eea1a5b51295a518f7cb8c1a12fd04d2df536ef4ab37cb2533cd1', 'simplex': 'asset:sha256:7e345d1ae7a55abc2d6414c6b16d121bdaddba1ef1fb5d82dec483e4bac20e3e'})"
+  },
   "BezierCurve": {
     "model": {
       "closed": "Literal[False]",
@@ -175,6 +178,18 @@
       "set_id": "SetId"
     }
   },
+  "CrowdedStroke": {
+    "model": {
+      "char": "str",
+      "column": "int",
+      "first_slot": "int",
+      "gap": "Meters",
+      "line": "int",
+      "spots": "int",
+      "stroke": "int",
+      "wanted": "Meters"
+    }
+  },
   "CubicPiece": "(start: Point, c1: Point, c2: Point, end: Point) -> None",
   "Cue": {
     "model": {
@@ -205,6 +220,9 @@
     "model": {
       "closed": "bool"
     }
+  },
+  "DEFAULT_LINE_SPACING": {
+    "constant": "1.2"
   },
   "DeprecatedWarning": "(*args)",
   "DocumentRepository": "(backend: showpy.show.repositories.RepositoryBackend)",
@@ -272,6 +290,34 @@
       "params": "dict[str, Any]"
     }
   },
+  "Font": {
+    "model": {
+      "ascender": "float",
+      "cap_height": "float | None",
+      "descender": "float",
+      "family": "str",
+      "format": "Literal['showpy.font.v1']",
+      "glyphs": "collections.abc.Mapping[str, showpy.geo.models.FontGlyph]",
+      "license": "str",
+      "name": "str",
+      "source": "str",
+      "units_per_em": "float"
+    }
+  },
+  "FontError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "FontGlyph": {
+    "model": {
+      "advance": "float",
+      "strokes": "tuple[str, ...]"
+    }
+  },
+  "FontRegistry": {
+    "model": {
+      "fonts": "collections.abc.Mapping[str, showpy.geo.models.Font]",
+      "names": "collections.abc.Mapping[str, str]",
+      "sources": "collections.abc.Mapping[str, bytes]"
+    }
+  },
   "Form": {
     "model": {
       "facing": "showpy.choreo.models.FacingSpec",
@@ -331,6 +377,7 @@
     }
   },
   "GeometryError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "GlyphError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
   "Grid": {
     "model": {
       "major_every": "int",
@@ -392,6 +439,14 @@
       "start": "int"
     }
   },
+  "LaidGlyph": {
+    "model": {
+      "char": "str",
+      "font": "str",
+      "line": "int",
+      "strokes": "tuple[LaidStroke, ...]"
+    }
+  },
   "Landmark": {
     "model": {
       "aliases": "tuple[str, ...]",
@@ -401,6 +456,7 @@
       "name": "str"
     }
   },
+  "LegibilityWarning": "(*args)",
   "LinePiece": "(start: Point, end: Point) -> None",
   "LockedError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
   "MAX_DEPTH": {
@@ -411,6 +467,12 @@
   },
   "MAX_IMAGE_PIXELS": {
     "constant": "40000000"
+  },
+  "MAX_LAYOUT_CHARS": {
+    "constant": "1000"
+  },
+  "MAX_LAYOUT_EXTENT_M": {
+    "constant": "1000000.0"
   },
   "MAX_POINTS": {
     "constant": "1000000"
@@ -485,6 +547,7 @@
       "start_measure": "int"
     }
   },
+  "MissingFontError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
   "MotionFn": {
     "protocol": {}
   },
@@ -966,6 +1029,32 @@
       "ramp_to": "CountsPerMinute | None"
     }
   },
+  "TextAlign": {
+    "constant": "TextAlign"
+  },
+  "TextAnchor": {
+    "constant": "TextAnchor"
+  },
+  "TextRecipe": {
+    "model": {
+      "align": "TextAlign",
+      "anchor": "TextAnchor",
+      "at": "Point",
+      "fonts": "tuple[FontUri, ...]",
+      "height": "Meters",
+      "letter_spacing": "float",
+      "line_spacing": "float",
+      "mode": "Literal['centerline']",
+      "rotation": "Degrees",
+      "spacing": "PositiveMeters | None",
+      "text": "str"
+    }
+  },
+  "TextReport": {
+    "model": {
+      "crowded": "tuple[showpy.choreo.models.CrowdedStroke, ...]"
+    }
+  },
   "TextTable": {
     "model": {
       "header": "tuple[str, ...]",
@@ -1097,6 +1186,7 @@
   "apply_event": "(show: showpy.show.models.Show, event: showpy.show.models.CanvasEvent, *, force: bool = False) -> showpy.show.models.Show",
   "apply_fix": "(spec: showpy.choreo.models.TransitionSpec, fix: showpy.choreo.engine_models.Fix) -> showpy.choreo.models.TransitionSpec",
   "apply_match": "(show: showpy.show.models.Show, tid: TransitionId, result: showpy.choreo.models.MatchResult, force: bool = False) -> showpy.show.models.Show",
+  "apportion": "(lengths: collections.abc.Sequence[float], n: int, minimums: collections.abc.Sequence[int] | None = None) -> list[int]",
   "approx_equal": "(a: ArrayLike, b: ArrayLike, tol: float = 1e-06) -> bool",
   "arc": "(center: Point, radius: Meters, start_deg: Degrees, sweep_deg: Degrees) -> showpy.geo.curves.ArcCurve",
   "arc_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], center: Point, radius: Meters, start_deg: Degrees, sweep_deg: Degrees, spacing: showpy.choreo.models.SpacingSpec | None = None, facing: showpy.choreo.models.FacingSpec | None = None, *, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",
@@ -1105,6 +1195,7 @@
   "arrive_early": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel, counts: float, force: bool = False) -> showpy.choreo.models.TransitionSpec",
   "as_points": "(obj: object) -> Points",
   "as_table": "(obj: Tabular) -> showpy.export.models.TextTable",
+  "asset_uri": "(data: bytes) -> str",
   "attach_audio": "(tl: showpy.time.models.Timeline, track: showpy.time.models.AudioTrack) -> showpy.time.models.Timeline",
   "balance": "(s: showpy.choreo.models.Set, sheet: showpy.sheet.models.Sheet, axis: Literal['x', 'y'] = 'x') -> float",
   "bezier": "(*control: Point) -> showpy.geo.curves.BezierCurve",
@@ -1114,6 +1205,7 @@
   "bottleneck_value": "(cost: object) -> float",
   "bounds": "(obj: Points | showpy.geo.curve_base.Curve) -> showpy.core.types.Box2",
   "buffer": "(area: Area, d: float) -> Area",
+  "bundled_fonts": "() -> showpy.geo.fonts.FontRegistry",
   "canonical_value": "(obj: object) -> JsonValue",
   "center": "(obj: Points | showpy.geo.curve_base.Curve) -> Point",
   "centroid": "(obj: Points | showpy.geo.curve_base.Curve) -> Point",
@@ -1176,17 +1268,18 @@
   "duplicate_spots": "(show: 'Show', sel: Selector, offset: Point, set_id: SetId, *, force: bool = False) -> 'Show'",
   "ease": "(easing: showpy.choreo.models.Easing, u: FloatArray) -> FloatArray",
   "easing_breaks": "(easing: showpy.choreo.models.Easing) -> list[float]",
-  "edit": "(form: showpy.choreo.models.Form, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., **changes: Any) -> showpy.choreo.models.Form",
+  "edit": "(form: showpy.choreo.models.Form, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., *, font_registry: showpy.geo.fonts.FontRegistry | None = None, **changes: Any) -> showpy.choreo.models.Form",
   "edit_group": "(show: 'Show', key: str, /, **changes: Any) -> 'Show'",
   "edit_note": "(show: 'Show', note_id: str, /, **changes: Any) -> 'Show'",
   "edit_params": "(form: showpy.choreo.models.Form, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., **params: Any) -> showpy.choreo.models.Form",
+  "edit_text_count": "(form: showpy.choreo.models.Form, *, add: collections.abc.Sequence[SpotId] = (), remove: collections.abc.Sequence[SpotId] = (), n: int | None = None, spacing: Meters | None = None, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., font_registry: showpy.geo.fonts.FontRegistry | None = None) -> showpy.choreo.models.Form",
   "ellipse": "(center: Point, rx: Meters, ry: Meters, rotation_deg: Degrees = 0.0) -> showpy.geo.curves.EllipseCurve",
   "energy_curve": "(show: showpy.show.models.Show, per_count: int = 1) -> pandas.Series",
   "escape_text": "(text: str) -> bytes",
   "events_since": "(ws: showpy.show.storage.Workspace, revision: str) -> list[showpy.show.models.CanvasEvent]",
   "expand": "(obj: T, d: Meters, about: About = 'center', sel: SetSelector = 'all', force: bool = False) -> T",
   "export_frames_csv": "(show: showpy.show.models.Show, per_count: int = 1) -> str",
-  "export_json": "(show: showpy.show.models.Show, include: collections.abc.Iterable[str] | None = None) -> dict[str, Any]",
+  "export_json": "(show: showpy.show.models.Show, include: collections.abc.Iterable[str] | None = None, *, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> dict[str, Any]",
   "export_video": "(show: showpy.show.models.Show, count_range: tuple[Count, Count] | None = None, fps: float = 30, audio: collections.abc.Mapping[str, bytes] | None = None, px_per_m: float = 10.0) -> bytes",
   "face_along": "(show: showpy.show.models.Show, set_id: SetId, form_id: FormId, reverse: bool = False, force: bool = False) -> showpy.choreo.models.Set",
   "face_audience": "(target: showpy.choreo.models.Set, sel: Sel, force: bool = False) -> showpy.choreo.models.Set",
@@ -1205,6 +1298,7 @@
   "fit_line": "(points: object) -> tuple[Point, Point, float]",
   "follow": "(spec: showpy.choreo.models.TransitionSpec, route: showpy.choreo.models.Route, start: float = 0.0, end: float | None = None, *, force: bool = False) -> showpy.choreo.models.TransitionSpec",
   "follow_and_set_targets": "(show: showpy.show.models.Show, tid: TransitionId, route: showpy.choreo.models.Route, start: float = 0.0, end: float | None = None, *, force: bool = False) -> showpy.show.models.Show",
+  "font_path": "(name: str) -> importlib.resources.abc.Traversable",
   "football_field": "(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> showpy.sheet.models.Sheet",
   "form_fns": "(registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> list[showpy.choreo.models.FormFnInfo]",
   "form_metrics": "(points: Points) -> showpy.geo.models.FormMetrics",
@@ -1222,6 +1316,7 @@
   "gym_floor": "() -> showpy.sheet.models.Sheet",
   "highlight": "(target: showpy.notes.models.Anchor | ZoneId, ttl_s: float = 30.0, *, at: datetime.datetime, event_id: str) -> showpy.show.models.CanvasEvent",
   "hold": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel, until: float | None = None, from_: float | None = None, force: bool = False) -> showpy.choreo.models.TransitionSpec",
+  "import_fonts": "(d: collections.abc.Mapping[str, Any], font_registry: showpy.geo.fonts.FontRegistry | None = None) -> showpy.geo.fonts.FontRegistry",
   "import_json": "(d: collections.abc.Mapping[str, Any]) -> showpy.show.models.Show",
   "import_positions": "(base: showpy.show.models.Show, text: str, group: str, columns: collections.abc.Mapping[str, str] | None = None, force: bool = False) -> showpy.show.models.Show",
   "in_region": "(set_: showpy.choreo.models.Set, shape: RegionLike) -> showpy.core.selection.Selection",
@@ -1241,10 +1336,12 @@
   "landmark": "(sheet: showpy.sheet.models.Sheet, name: str) -> showpy.sheet.models.Landmark",
   "landmark_anchor": "(mark: showpy.sheet.models.Landmark) -> Point",
   "landmark_keys": "(mark: showpy.sheet.models.Landmark) -> tuple[str, ...]",
+  "layout_text": "(text: str, fonts: collections.abc.Sequence[str], height: Meters, at: Point, *, rotation: Degrees = 0.0, align: TextAlign = 'left', anchor: TextAnchor = 'baseline', letter_spacing: float = 0.0, line_spacing: float = 1.2, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> tuple[showpy.geo.models.LaidGlyph, ...]",
   "length": "(obj: Points | showpy.geo.curve_base.Curve) -> Meters",
   "line": "(a: Point, b: Point) -> showpy.geo.curves.Segment",
   "line_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], a: Point, b: Point, spacing: showpy.choreo.models.SpacingSpec | None = None, facing: showpy.choreo.models.FacingSpec | None = None, *, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",
   "line_landmark": "(mark_id: str, name: str, a: Point, b: Point, *aliases: str) -> showpy.sheet.models.Landmark",
+  "load_font": "(data: bytes) -> showpy.geo.models.Font",
   "load_paths": "(ws: showpy.show.storage.Workspace, tid: TransitionId) -> showpy.choreo.models.TransitionSpec",
   "load_show": "(ws: showpy.show.storage.Workspace) -> showpy.show.models.Show",
   "lock": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel) -> showpy.choreo.models.TransitionSpec",
@@ -1292,7 +1389,7 @@
   "pins": "(show: showpy.show.models.Show) -> list[showpy.show.models.Pin]",
   "pinwheel": "(forms: collections.abc.Sequence[showpy.choreo.models.Form], center: Point, deg: Degrees, force: bool = False) -> list[showpy.choreo.models.Form]",
   "place": "(show: showpy.show.models.Show, set_id: SetId, forms: collections.abc.Sequence[showpy.choreo.models.Form], match_options: showpy.choreo.models.MatchOptions | None = None, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> tuple[showpy.choreo.models.Set, list[showpy.choreo.models.Form]]",
-  "placements": "(form: showpy.choreo.models.Form, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> list[showpy.choreo.models.Placement]",
+  "placements": "(form: showpy.choreo.models.Form, registry: showpy.choreo.form_fns.FormFnRegistry = ..., *, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> list[showpy.choreo.models.Placement]",
   "point_landmark": "(mark_id: str, name: str, p: Point, *aliases: str) -> showpy.sheet.models.Landmark",
   "polyline": "(*pts: Point, closed: bool = False) -> showpy.geo.curves.Polyline",
   "polyline_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], *pts: Point, closed: bool = False, spacing: showpy.choreo.models.SpacingSpec | None = None, facing: showpy.choreo.models.FacingSpec | None = None, set_id: SetId = '', n: int | None = None) -> showpy.choreo.models.Form",
@@ -1310,6 +1407,7 @@
   "rect_ring": "(x0: float, y0: float, x1: float, y1: float) -> Ring",
   "region": "(outline: showpy.geo.curve_base.Curve | object) -> shapely.geometry.polygon.Polygon",
   "register_exporter": "(registry: showpy.export.data.FormatRegistry, name: str, fn: Exporter) -> showpy.export.data.FormatRegistry",
+  "register_font": "(registry: showpy.geo.fonts.FontRegistry, data: bytes, *, if_name_taken: NameTaken = 'raise') -> tuple[showpy.geo.fonts.FontRegistry, str]",
   "register_form_fn": "(registry: showpy.choreo.form_fns.FormFnRegistry, name: str, fn: FormFn) -> showpy.choreo.form_fns.FormFnRegistry",
   "register_importer": "(registry: showpy.export.data.FormatRegistry, name: str, fn: Importer) -> showpy.export.data.FormatRegistry",
   "register_motion": "(registry: showpy.choreo.motion.MotionRegistry, name: str, fn: showpy.choreo.motion.MotionFn) -> showpy.choreo.motion.MotionRegistry",
@@ -1377,8 +1475,8 @@
   "sine_wave_points": "(params: collections.abc.Mapping[str, Any], n: int) -> Points",
   "skew": "(obj: T, deg_x: Degrees = 0.0, deg_y: Degrees = 0.0, about: About = 'center', sel: SetSelector = 'all', force: bool = False) -> T",
   "skew_matrix": "(deg_x: Degrees, deg_y: Degrees, about: Point) -> Matrix",
-  "slot_poses": "(form: showpy.choreo.models.Form, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> tuple[Points, list[Degrees]]",
-  "slots": "(form: showpy.choreo.models.Form, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> Points",
+  "slot_poses": "(form: showpy.choreo.models.Form, registry: showpy.choreo.form_fns.FormFnRegistry = ..., *, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> tuple[Points, list[Degrees]]",
+  "slots": "(form: showpy.choreo.models.Form, registry: showpy.choreo.form_fns.FormFnRegistry = ..., *, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> Points",
   "snap": "(obj: T, precision: Meters, mode: Literal['round', 'floor', 'ceil'] = 'round', axes: Literal['x', 'y', 'xy'] = 'xy', sel: SetSelector = 'all', force: bool = False) -> tuple[T, showpy.geo.models.SnapReport]",
   "snap_to_guides": "(obj: T, sheet: showpy.sheet.models.Sheet, tol: Meters, kinds: collections.abc.Sequence[str] | None = None, sel: SetSelector = 'all', force: bool = False) -> T",
   "space_along": "(curve: showpy.geo.curve_base.Curve, n: int, start: Meters = 0.0, end: Meters | None = None, endpoints: bool = True) -> Points",
@@ -1411,7 +1509,10 @@
   "symmetry_score": "(s: showpy.choreo.models.Set, axis_x: float = 0.0) -> float",
   "template_ref": "(ref_id: str) -> SheetRef",
   "tempo_at": "(tl: showpy.time.models.Timeline, c: Count) -> CountsPerMinute",
-  "text_outline": "(text: str, font: str, height: Meters, at: Point) -> list[showpy.geo.curves.Polyline]",
+  "text_form": "(form_id: FormId, members: collections.abc.Sequence[SpotId], text: str, *, fonts: collections.abc.Sequence[str], height: Meters, at: Point, rotation: Degrees = 0.0, align: TextAlign = 'left', anchor: TextAnchor = 'baseline', letter_spacing: float = 0.0, line_spacing: float = 1.2, facing: showpy.choreo.models.FacingSpec | None = None, set_id: SetId = '', n: int | None = None, spacing: Meters | None = None, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> showpy.choreo.models.Form",
+  "text_outline": "(text: str, font: str | collections.abc.Sequence[str], height: Meters, at: Point, *, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> list[showpy.geo.curves.Polyline | showpy.geo.curves.SvgCurve]",
+  "text_report": "(form: showpy.choreo.models.Form, *, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> showpy.choreo.models.TextReport",
+  "text_spot_count": "(text: str, *, fonts: collections.abc.Sequence[str], height: Meters, spacing: Meters, rotation: Degrees = 0.0, align: TextAlign = 'left', anchor: TextAnchor = 'baseline', letter_spacing: float = 0.0, line_spacing: float = 1.2, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> int",
   "timer": "() -> collections.abc.Iterator[showpy.core.util.Timer]",
   "to_coords": "(show: 'Show', p: Point, style: CoordStyle = 'long') -> str",
   "to_csv": "(obj: Tabular, *, neutralize: bool = True) -> str",

@@ -19,6 +19,7 @@ from collections.abc import Iterable
 
 import numpy as np
 
+from showpy.choreo.form_text import require_text_members
 from showpy.choreo.forms import check_unlocked, slot_poses
 from showpy.choreo.match_solve import BoolArray, FloatArray, crossing_mask
 from showpy.choreo.models import Form, MatchResult, Placement, Set
@@ -181,6 +182,7 @@ def _matched_forms(show: Show, set_id: SetId, result: MatchResult, force: bool) 
         if members != form.members:
             check_unlocked(form, force)
             forms[form_id] = form.replace(members=members)
+            require_text_members(forms[form_id])
     return show.replace(forms=forms)
 
 
@@ -229,7 +231,8 @@ def apply_match(show: Show, tid: TransitionId, result: MatchResult, force: bool 
     moving a pinned spot or dropping a locked path row needs force=True. A result matched
     onto forms also writes each spot's facing, form and order from its slot and updates
     `Form.members` like `swap`, so rebuilding a form keeps the match; changing a locked
-    form needs force=True.
+    form needs force=True, and leaving a text form short of members raises
+    `MEMBER_COUNT_MISMATCH`.
 
     >>> from showpy.choreo.match import match
     >>> from showpy.examples import two_set_show

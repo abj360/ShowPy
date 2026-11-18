@@ -380,9 +380,12 @@ class SvgCurve(CurveModel):
         index = np.minimum((t * n).astype(int), n - 1)
         u = t * n - index
         out = np.empty((len(t), 2))
-        for i in np.unique(index):
-            mask = index == i
-            out[mask] = pieces[i].evaluate(u[mask])
+        order = np.argsort(index, kind="stable")
+        present, starts = np.unique(index[order], return_index=True)
+        stops = [*starts[1:].tolist(), len(t)]
+        for i, start, stop in zip(present.tolist(), starts.tolist(), stops, strict=True):
+            rows = order[start:stop]
+            out[rows] = pieces[i].evaluate(u[rows])
         matrix = np.asarray(self.transform)
         result: Points = out @ matrix[:2, :2].T + matrix[:2, 2]
         return result

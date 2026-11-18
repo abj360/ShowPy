@@ -2,6 +2,7 @@
 spacing.py --- places spots evenly along curves, inside areas, in blocks, rings and scatters
 
 Contains:
+    apportion(): shares n spots across curves by length, above per-curve minimums
     space_along(): spaces n spots evenly by arc length
     space_by_interval(): spaces spots at a fixed interval
     space_proportional(): shares n spots across curves at one interval
@@ -16,6 +17,7 @@ Contains:
 
 import math
 from collections.abc import Sequence
+from numbers import Integral
 from typing import Literal
 
 import numpy as np
@@ -24,7 +26,7 @@ import shapely.affinity
 from shapely.prepared import prep
 
 from showpy.core.caps import MAX_POINTS, require_size
-from showpy.core.errors import SpacingError
+from showpy.core.errors import SpacingError, bounded_repr
 from showpy.core.types import Degrees, Meters, Point, Points
 from showpy.core.units import facing_vector
 from showpy.core.util import as_points, seeded_rng
@@ -120,31 +122,110 @@ def space_by_interval(
     return curve.point_at(start + shift + interval * np.arange(count))
 
 
-def _apportion(lengths: Sequence[float], n: int) -> list[int]:
-    if n < len(lengths):
+def _require_whole(value: object, name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, Integral) or value < 0:
         raise SpacingError(
-            "fewer spots than curves", hint="give each curve at least one spot", context={"n": n}
+            f"{name} must be a whole number >= 0",
+            hint=f"pass {name} as an int >= 0",
+            context={"name": name, "value": bounded_repr(value)},
         )
-    total = sum(lengths)
-    extra = n - len(lengths)
-    quotas = [extra * length / total for length in lengths]
-    counts = [1 + math.floor(q) for q in quotas]
-    order = sorted(range(len(quotas)), key=lambda i: (-(quotas[i] - math.floor(quotas[i])), i))
-    for i in order[: n - sum(counts)]:
-        counts[i] += 1
-    return counts
+    return int(value)
+
+
+def _check_minimums(lengths: Sequence[float], minimums: Sequence[int] | None) -> list[int]:
+    if minimums is None:
+        return [1] * len(lengths)
+    if len(minimums) != len(lengths):
+        raise SpacingError(
+            "minimums and lengths differ in size",
+            hint="pass one minimum per curve",
+            context={"lengths": len(lengths), "minimums": len(minimums)},
+        )
+    return [_require_whole(m, f"minimums[{i}]") for i, m in enumerate(minimums)]
+
+
+def _integer_weights(lengths: Sequence[float]) -> list[int]:
+    ratios = [
+        require_finite_as(SpacingError, length, name=f"lengths[{i}]", low=0.0).as_integer_ratio()
+        for i, length in enumerate(lengths)
+    ]
+    scale = max((den for _, den in ratios), default=1)
+    weights = [num * (scale // den) for num, den in ratios]
+    return weights if any(weights) else [1] * len(weights)
+
+
+def _require_enough(n: int, min_n: int, curves: int) -> None:
+    if n and not curves:
+        raise SpacingError(
+            f"{n} spots have no curve to go on",
+            hint="pass at least one curve length, or n = 0",
+            context={"n": n},
+        )
+    if n < min_n:
+        raise SpacingError(
+            f"{n} spots are fewer than the curves' minimum of {min_n}",
+            code="TOO_FEW_SPOTS",
+            hint=f"use n >= {min_n}",
+            context={"n": n, "min_n": min_n},
+        )
+
+
+def apportion(lengths: Sequence[float], n: int, minimums: Sequence[int] | None = None) -> list[int]:
+    """Shares n spots across curves by length, after each curve gets its minimum.
+
+    Curve i gets `minimums[i] + floor(q_i)` with `q_i = (n - sum(minimums)) * L_i / sum(L)`, or
+    an equal share when every length is zero. Leftover spots go one each by larger fraction
+    of `q_i`, then longer curve, then lower index. Exact integer arithmetic keeps the sum at n
+    for any n, and with equal minimums a longer curve never gets fewer spots.
+
+    Args:
+        lengths: Curve lengths in meters, each finite and >= 0.
+        n: Total spots to share.
+        minimums: Spots each curve gets first; one per curve when None.
+
+    Returns:
+        counts: Spots per curve, in curve order, summing to n.
+
+    >>> apportion([4.0, 12.0], 6)
+    [2, 4]
+    >>> apportion([1.0, 100.0], 6, [3, 2])
+    [3, 3]
+    """
+    total = _require_whole(n, "n")
+    weights = _integer_weights(lengths)
+    floors = _check_minimums(lengths, minimums)
+    min_n = sum(floors)
+    _require_enough(total, min_n, len(floors))
+    extra, weight_sum = total - min_n, sum(weights)
+    remainders = []
+    for i, weight in enumerate(weights):
+        share, remainder = divmod(extra * weight, weight_sum)
+        floors[i] += share
+        remainders.append(remainder)
+    order = sorted(range(len(weights)), key=lambda i: (-remainders[i], -weights[i], i))
+    for i in order[: total - sum(floors)]:
+        floors[i] += 1
+    return floors
 
 
 def space_proportional(curves: Sequence[Curve], n: int) -> list[Points]:
     """Shares n spots across curves in proportion to length, so intervals match.
 
-    Counts use largest-remainder apportionment; every curve gets at least one spot.
+    Counts use largest-remainder apportionment; every curve gets at least one spot, and at
+    least one curve must have a length.
 
     >>> from showpy.geo.shapes import line
     >>> [len(p) for p in space_proportional([line((0, 0), (4, 0)), line((0, 1), (12, 1))], 6)]
     [2, 4]
     """
-    counts = _apportion([c.length() for c in curves], n)
+    lengths = [c.length() for c in curves]
+    if lengths and not any(lengths):
+        raise SpacingError(
+            f"all {len(lengths)} curves have zero length",
+            hint="give at least one curve a length > 0",
+            context={"curves": len(lengths)},
+        )
+    counts = apportion(lengths, n)
     return [space_along(curve, k) for curve, k in zip(curves, counts, strict=True)]
 
 
