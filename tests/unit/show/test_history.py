@@ -361,8 +361,6 @@ def test_regression_rename_entities_rewrites_expression_selectors() -> None:
     assert renamed.facing_overrides[0].entities == ("S1", "T2")
 
 
-@pytest.mark.defect("UP-9.7-45")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-45")
 def test_regression_unpin_normalizes_transition_ids_like_pin() -> None:
     """Accepts `1->2` in unpin as pin does (audit 9.7 history)."""
     pinned = pin(two_set_show(), "transition", "1->2", "hold")

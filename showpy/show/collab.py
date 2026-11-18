@@ -45,7 +45,7 @@ from showpy.show.models import (
     Revision,
     Show,
 )
-from showpy.show.pinning import pin, unpin
+from showpy.show.pinning import pin, pin_key, unpin
 from showpy.show.storage import ROOT_REVISION, Workspace, load_show, save_show
 from showpy.show.structured import COMMENTS_DOC, SELECTION_DOC, decode_comments
 
@@ -65,8 +65,8 @@ def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
     """Replays one canvas event; pinned items raise LockedError unless `force` is set.
 
     Comment and highlight events leave the show unchanged. A pin event that adds a new pin needs
-    no force; an unpin event, or a pin event that replaces an existing record, raises LockedError
-    without it.
+    no force; an unpin event, or a pin event that replaces an existing record (even an identical
+    one), raises LockedError without it.
 
     Args:
         show: Show the event applies to.
@@ -103,7 +103,8 @@ def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
 
 
 def _require_pin_force(show: Show, held: Pin, event: CanvasEvent, force: bool) -> None:
-    exists = any((p.target, p.id) == (held.target, held.id) for p in show.pins)
+    key = (held.target, pin_key(held.target, held.id))
+    exists = any((p.target, p.id) == key for p in show.pins)
     if force or not (exists or event.kind == "unpin"):
         return
     raise LockedError(
@@ -185,7 +186,8 @@ def events_since(ws: Workspace, revision: str) -> list[CanvasEvent]:
 
     Events are derived from stored states, so replaying them with apply_event() on the show
     at `revision` reproduces each later placement, form, path and count edit. Structural
-    edits (sets added or removed, cast or sheet changes) show up in changelog() only.
+    edits (sets added or removed, cast or sheet changes) show up in changelog() only. Replaying a
+    log that holds unpin events or pin replacements needs `force=True` in apply_event().
     """
     log = ws.repo.revisions(ws.show_id)
     if revision != ROOT_REVISION:

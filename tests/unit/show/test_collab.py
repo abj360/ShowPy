@@ -414,3 +414,17 @@ def test_regression_canvas_event_with_bad_payload_is_a_schema_error(
     with pytest.raises(SchemaError) as info:
         apply_event(two_set_show(), event)
     assert info.value.context["errors"]
+
+
+@pytest.mark.parametrize("spelling", ["1->2", "1→2"])
+def test_regression_transition_pin_events_need_force_in_either_spelling(spelling: str) -> None:
+    """Refuses replacing or dropping a transition pin whichever way its ID is spelled."""
+    pinned = pin(two_set_show(), "transition", "1->2", "keep")
+    held = Pin(target="transition", id=spelling, reason="x")
+    replace = CanvasEvent(id="e", at=AT, kind="pin", payload=held.model_dump())
+    drop = CanvasEvent(id="e", at=AT, kind="unpin", payload=held.model_dump())
+    for event in (replace, drop):
+        with pytest.raises(LockedError):
+            apply_event(pinned, event)
+    assert [p.reason for p in apply_event(pinned, replace, force=True).pins] == ["x"]
+    assert apply_event(pinned, drop, force=True).pins == ()
