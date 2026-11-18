@@ -13,9 +13,11 @@ Contains:
     test_defect_marker_accepts_parametrized_marks: accepts defect marks inside pytest.param
     test_ledger_counts_only_selected_tests: leaves deselected defect tests out of the count
     test_ledger_prints_zero_open_without_defect_tests: prints Ledger: 0 open when none exist
-    find_open_priority_zero_tests(): lists priority 0 tests in a source that carry a defect mark
+    find_open_priority_zero_tests(): lists priority 0 tests in a source that carry a defect or xfail
+        mark
     test_no_priority_zero_defect_remains: guards that no priority 0 test is an open defect
     test_priority_zero_scan_reports_a_marked_test: checks the scanner flags each marking style
+    test_regression_priority_zero_scan_reports_a_bare_xfail: checks the scanner flags a bare xfail
     test_priority_zero_scan_ignores_unmarked_tests: checks the scanner passes clean tests
 """
 
@@ -33,6 +35,7 @@ PRIORITY_ZERO_CITATION = re.compile(r"P0 #(\d+)")
 PRIORITY_ZERO_ITEMS = frozenset(range(1, 14))
 ITEMS_RESOLVED_BY_DECISION = frozenset({5})  # permissions moved to the host app
 MIN_PRIORITY_ZERO_TESTS = 50
+OPEN_MARKS = frozenset({"defect", "xfail"})
 PLUGIN_ARGS = ("-p", "tests.ledger_plugin", "-p", "no:cacheprovider")
 
 
@@ -194,19 +197,19 @@ def test_ledger_prints_zero_open_without_defect_tests(pytester: pytest.Pytester)
     result.stdout.fnmatch_lines(["Ledger: 0 open"])
 
 
-def _mentions_defect(node: ast.AST) -> bool:
+def _mentions_open_mark(node: ast.AST) -> bool:
     return any(
-        (isinstance(n, ast.Name) and n.id == "defect")
-        or (isinstance(n, ast.Attribute) and n.attr == "defect")
+        (isinstance(n, ast.Name) and n.id in OPEN_MARKS)
+        or (isinstance(n, ast.Attribute) and n.attr in OPEN_MARKS)
         for n in ast.walk(node)
     )
 
 
-def _is_module_defect_mark(node: ast.stmt) -> bool:
+def _is_module_open_mark(node: ast.stmt) -> bool:
     if not isinstance(node, ast.Assign):
         return False
     names = [t.id for t in node.targets if isinstance(t, ast.Name)]
-    return "pytestmark" in names and _mentions_defect(node.value)
+    return "pytestmark" in names and _mentions_open_mark(node.value)
 
 
 def _collect_priority_zero(
@@ -214,28 +217,28 @@ def _collect_priority_zero(
 ) -> None:
     for node in body:
         if isinstance(node, ast.ClassDef):
-            marked = is_marked or any(_mentions_defect(d) for d in node.decorator_list)
+            marked = is_marked or any(_mentions_open_mark(d) for d in node.decorator_list)
             _collect_priority_zero(node.body, marked, found)
         elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             items = frozenset(
                 int(m) for m in PRIORITY_ZERO_CITATION.findall(ast.get_docstring(node) or "")
             )
             if items:
-                marked = is_marked or any(_mentions_defect(d) for d in node.decorator_list)
+                marked = is_marked or any(_mentions_open_mark(d) for d in node.decorator_list)
                 found.append((node.name, items, marked))
 
 
 def scan_priority_zero(source: str) -> list[tuple[str, frozenset[int], bool]]:
-    """Returns (test name, cited items, is defect-marked) for each test citing P0 #."""
+    """Returns (test name, cited items, is defect- or xfail-marked) for each test citing P0 #."""
     tree = ast.parse(source)
-    module_marked = any(_is_module_defect_mark(n) for n in tree.body)
+    module_marked = any(_is_module_open_mark(n) for n in tree.body)
     found: list[tuple[str, frozenset[int], bool]] = []
     _collect_priority_zero(tree.body, module_marked, found)
     return found
 
 
 def find_open_priority_zero_tests(source: str) -> list[str]:
-    """Lists the priority 0 tests in a source that carry a defect marker."""
+    """Lists the priority 0 tests in a source that carry a defect or xfail marker."""
     return [name for name, _, marked in scan_priority_zero(source) if marked]
 
 
@@ -269,6 +272,17 @@ def test_priority_zero_scan_reports_a_marked_test() -> None:
     )
     assert find_open_priority_zero_tests(by_decorator) == ["test_a"]
     assert find_open_priority_zero_tests(by_class) == ["test_b"]
+    assert find_open_priority_zero_tests(by_module) == ["test_c"]
+
+
+def test_regression_priority_zero_scan_reports_a_bare_xfail() -> None:
+    """Flags a priority 0 test marked only by a strict xfail, by attribute or by name."""
+    docstring = '''    """Does it (P0 #4)."""\n'''
+    by_attribute = f"@pytest.mark.xfail(strict=True)\ndef test_a() -> None:\n{docstring}    pass\n"
+    by_name = f"@xfail(strict=True)\ndef test_b() -> None:\n{docstring}    pass\n"
+    by_module = f"pytestmark = pytest.mark.xfail\ndef test_c() -> None:\n{docstring}    pass\n"
+    assert find_open_priority_zero_tests(by_attribute) == ["test_a"]
+    assert find_open_priority_zero_tests(by_name) == ["test_b"]
     assert find_open_priority_zero_tests(by_module) == ["test_c"]
 
 
