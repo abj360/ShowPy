@@ -27,6 +27,8 @@ Contains:
     test_regression_similarity_fit_rejects_overflowing_coordinates(): refuses huge coordinates
         with NOT_FINITE instead of returning a non-finite matrix
     test_similarity_fit_handles_large_finite_coordinates(): still fits coordinates near 1e150
+    test_regression_sheet_replacement_stays_removed(): keeps a show on its sheet; no public name
+        swaps it
 """
 
 import warnings
@@ -34,6 +36,8 @@ import warnings
 import numpy as np
 import pytest
 
+import showpy
+import showpy.sheet.replace as sheet_replace
 from showpy.core.errors import GeometryError
 from showpy.sheet.replace import similarity_fit
 
@@ -173,3 +177,11 @@ def test_similarity_fit_handles_large_finite_coordinates() -> None:
         warnings.simplefilter("error")
         fit = similarity_fit(src, src)
     assert np.isfinite(fit).all()
+
+
+@pytest.mark.parametrize("name", ["replace_sheet", "SheetReplaceReport"])
+def test_regression_sheet_replacement_stays_removed(name: str) -> None:
+    """Keeps a show on its sheet: neither the package nor its module offers a sheet swap."""
+    assert name not in showpy.__all__
+    assert not hasattr(showpy, name)
+    assert not hasattr(sheet_replace, name)

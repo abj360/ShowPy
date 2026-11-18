@@ -21,7 +21,7 @@ from showpy.core.errors import (
 from showpy.notes.models import Anchor, Note
 from showpy.show.documents import decode_show, dump_json, encode_show, split_path
 from showpy.show.file_repository import FileRepository
-from showpy.show.manage import add_set
+from showpy.show.manage import add_set, remove_set
 from showpy.show.models import Show
 from showpy.show.repositories import InMemoryAssetStore, InMemoryRepository
 from showpy.show.storage import Repository, Workspace, load_show, open_workspace, save_show
@@ -270,6 +270,19 @@ def test_agent_writes_designer_files_and_sees_designer_edits() -> None:
     designer.write("/config/limits.yaml", "max_step_m: 1.2\n", at=LATER)
     agent.refresh()
     assert agent.read("/config/limits.yaml") == "max_step_m: 1.2\n"
+
+
+def test_regression_library_leaves_permissions_to_the_host() -> None:
+    """Lands an agent's set deletion, retitle and limits write; the host decides who may write."""
+    agent, designer = _workspaces(InMemoryRepository())
+    show = load_show(agent)
+    save_show(agent, remove_set(show, "2").replace(title="Retitled by agent"), AT)
+    agent.write("/config/limits.yaml", "max_speed: 99\n", at=LATER)
+    designer.refresh()
+    reloaded = load_show(designer)
+    assert [s.id for s in reloaded.sets] == ["1"]
+    assert reloaded.title == "Retitled by agent"
+    assert designer.read("/config/limits.yaml") == "max_speed: 99\n"
 
 
 def test_agent_writes_forms_paths_scripts_and_renders() -> None:
