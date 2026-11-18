@@ -117,7 +117,13 @@ class Show(FrozenModel):
             raise SchemaError("set ids repeat", hint="give every set a unique id")
         keys = [s.key or s.id for s in self.sets]
         folded = Counter(k.casefold() for k in keys)
-        repeated = sorted({k for k in keys if folded[k.casefold()] > 1})
+        # v0.2 stored IDs differing only by case; a key equal to its ID is such a stored ID, so
+        # only a group holding a key that differs from its ID is refused. Commits refuse new
+        # folders that repeat ignoring case, and add_set() picks keys free ignoring case.
+        explicit = {s.key.casefold() for s in self.sets if s.key not in (None, s.id)}
+        repeated = sorted(
+            {k for k in keys if folded[k.casefold()] > 1 and k.casefold() in explicit}
+        )
         if repeated:
             raise SchemaError(
                 f"set keys repeat ignoring case: {', '.join(repeated)}",

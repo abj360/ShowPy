@@ -60,6 +60,14 @@ Contains:
     test_regression_dashed_set_folder_commit_is_refused: refuses a raw commit under /sets/a-b/
         with a ShowPyError and stores nothing
     test_regression_new_set_key_must_be_nfc: refuses a new folder whose key NFC changes
+    test_regression_v020_show_with_set_ids_differing_by_case_loads: decodes stored v0.2 documents
+        whose set folders differ only by case and round-trips them
+    test_regression_v020_case_pair_show_adds_a_set_with_a_free_key: adds a set whose ID matches a
+        stored key ignoring case under a free key, then saves and reloads it
+    test_regression_v020_case_pair_show_cannot_be_renumbered: refuses a renumber that would make
+        the stored keys explicit, leaving the stored show unchanged
+    test_regression_new_set_folders_differing_by_case_are_refused: refuses a commit adding a set
+        folder that matches another folder ignoring case, storing nothing
 """
 
 import json
@@ -555,3 +563,66 @@ def test_regression_dashed_set_folder_commit_is_refused() -> None:
 def test_regression_new_set_key_must_be_nfc() -> None:
     with pytest.raises(SchemaError):
         require_new_set_keys([], ["/sets/\u212a1/set.py"])
+
+
+def _case_pair_docs(first_id: str, second_id: str) -> dict[str, bytes]:
+    """Writes the example show as v0.2 stored it, under set folders named by the given IDs."""
+    docs = encode_show(two_set_show())
+    meta = json.loads(docs[SHOW_DOC])
+    meta["sets"] = [first_id, second_id]
+    docs[SHOW_DOC] = dump_json(meta)
+    for old_id, new_id in (("1", first_id), ("2", second_id)):
+        body = json.loads(docs.pop(set_doc(old_id)))
+        assert "key" not in body
+        docs[set_doc(new_id)] = dump_json({**body, "id": new_id})
+    return docs
+
+
+def _stored_repo(docs: dict[str, bytes]) -> InMemoryRepository:
+    """Stores documents as v0.2 did, through the backend, so no Phase 1 commit check runs."""
+    repo = InMemoryRepository()
+    tree = {p: blob_digest(raw) for p, raw in docs.items()}
+    revision = Revision(id=content_hash(tree), parent="", at=AT, changed=tuple(sorted(docs)))
+    repo.backend.commit(SHOW_ID, revision, tree, {blob_digest(raw): raw for raw in docs.values()})
+    return repo
+
+
+def test_regression_v020_show_with_set_ids_differing_by_case_loads() -> None:
+    docs = _case_pair_docs("1a", "1A")
+    show = decode_show(docs)
+    assert show.set_ids() == ["1a", "1A"]
+    assert _keys(show) == ["1a", "1A"]
+    assert encode_show(show) == docs
+    assert decode_show(encode_show(show)) == show
+    assert load_show(open_workspace(_stored_repo(docs), SHOW_ID)).set_ids() == ["1a", "1A"]
+
+
+def test_regression_v020_case_pair_show_adds_a_set_with_a_free_key() -> None:
+    repo = _stored_repo(_case_pair_docs("ab", "AB"))
+    ws = open_workspace(repo, SHOW_ID)
+    added = add_set(load_show(ws), "Ab", SUBSET_COUNTS, after="AB")
+    assert _keys(added) == ["ab", "AB", "Ab.2"]
+    save_show(ws, added, LATER)
+    assert _keys(repo.get_show(SHOW_ID)) == ["ab", "AB", "Ab.2"]
+    assert "/sets/Ab.2/set.json" in repo.paths(SHOW_ID)
+
+
+def test_regression_v020_case_pair_show_cannot_be_renumbered() -> None:
+    repo = _stored_repo(_case_pair_docs("1a", "1A"))
+    head = repo.head(SHOW_ID)
+    show = repo.get_show(SHOW_ID)
+    with pytest.raises(SchemaError):
+        renumber(show)
+    assert repo.head(SHOW_ID) == head
+
+
+def test_regression_new_set_folders_differing_by_case_are_refused() -> None:
+    repo = InMemoryRepository()
+    with pytest.raises(SchemaError):
+        repo.transaction(SHOW_ID, _case_pair_docs("1a", "1A"), expected_revision="", at=AT)
+    assert repo.head(SHOW_ID) == ""
+    inserted, _ = insert_subset(two_set_show(), "1", SUBSET_COUNTS)
+    head = repo.put_show(SHOW_ID, inserted, expected_revision="", at=AT).id
+    with pytest.raises(SchemaError):
+        repo.transaction(SHOW_ID, {"/sets/1a/set.py": b""}, expected_revision=head, at=LATER)
+    assert repo.head(SHOW_ID) == head

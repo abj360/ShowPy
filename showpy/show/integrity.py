@@ -8,6 +8,7 @@ Contains:
     blob_digest(): returns the SHA-256 hex digest blobs are addressed by
     LazyBlobs: maps paths to blob bytes, reading each blob only when its path is looked up
     require_new_set_keys(): checks every set key a commit stores in a folder the base lacks
+    require_distinct_folders(): refuses a new set folder matching another folder ignoring case
     require_valid_digests(): checks digest trees, loading and decoding only what must be decoded,
         and refuses a decoded show the encoder could not store again
     require_valid_tree(): checks byte trees the same way, without a cache
@@ -176,6 +177,37 @@ def require_new_set_keys(before: Iterable[str], written: Iterable[str]) -> None:
             )
 
 
+def require_distinct_folders(before: Iterable[str], after: Iterable[str]) -> None:
+    """Refuses a set folder new to the tree that matches another folder ignoring case.
+
+    Folders already stored are grandfathered, since v0.2 stored set IDs differing only by case.
+
+    Args:
+        before: Paths of the base revision's tree.
+        after: Paths of the tree the commit would leave.
+
+    >>> require_distinct_folders(["/sets/1a/set.json"], ["/sets/1a/set.json", "/sets/2/set.py"])
+    >>> try:
+    ...     require_distinct_folders(["/sets/1a/set.json"], ["/sets/1a/set.json", "/sets/1A/x"])
+    ... except SchemaError as exc:
+    ...     print(exc.context["folders"])
+    ['1A', '1a']
+    """
+    stored = {key for path in before for key in _set_keys_in(path)}
+    keys = {key for path in after for key in _set_keys_in(path)}
+    folded: dict[str, set[str]] = {}
+    for key in keys:
+        folded.setdefault(key.casefold(), set()).add(key)
+    groups = [folded[key.casefold()] for key in keys - stored]
+    clashes = sorted({key for group in groups if len(group) > 1 for key in group})
+    if clashes:
+        raise SchemaError(
+            f"set folders repeat ignoring case: {', '.join(clashes)}",
+            hint="give every set a key unique ignoring case; add_set() picks a free one",
+            context={"folders": clashes},
+        )
+
+
 def require_structured_files(
     changed: Iterable[str], after: Mapping[str, str], blob: Callable[[str], bytes]
 ) -> None:
@@ -223,6 +255,7 @@ def require_valid_digests(
     for path in sorted(changed):
         require_known_path(path)
     require_new_set_keys(before, [p for p in changed if p in after])
+    require_distinct_folders(before, after)
     require_structured_files(changed, after, blob)
     if not any(is_show_doc(p) for p in changed):
         return None
