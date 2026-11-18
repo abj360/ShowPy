@@ -19,6 +19,8 @@ Contains:
     test_regression_unpin_event_needs_force: refuses an unpin event unless forced
     test_regression_pin_event_replacing_a_pin_needs_force: refuses a pin event that replaces a pin
         unless forced
+    test_regression_unpin_event_of_a_missing_pin_raises_unknown_ref: names the missing pin with or
+        without force
 """
 
 from datetime import UTC, datetime, timedelta
@@ -233,6 +235,13 @@ def test_regression_pin_event_replacing_a_pin_needs_force() -> None:
         apply_event(pinned, _pin_event("pin", "other"))
     replaced = apply_event(pinned, _pin_event("pin", "other"), force=True)
     assert [p.reason for p in replaced.pins] == ["other"]
+
+
+@pytest.mark.parametrize("force", [False, True])
+def test_regression_unpin_event_of_a_missing_pin_raises_unknown_ref(force: bool) -> None:
+    """Reports an unpin event of a pin that does not exist as an unknown pin, forced or not."""
+    with pytest.raises(UnknownRefError):
+        apply_event(two_set_show(), _pin_event("unpin"), force=force)
 
 
 def test_agent_pin_event_applies() -> None:

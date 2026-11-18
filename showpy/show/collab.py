@@ -66,7 +66,8 @@ def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
 
     Comment and highlight events leave the show unchanged. A pin event that adds a new pin needs
     no force; an unpin event, or a pin event that replaces an existing record (even an identical
-    one), raises LockedError without it.
+    one), raises LockedError without it. An unpin event of a pin that does not exist raises
+    UnknownRefError, with or without force.
 
     Args:
         show: Show the event applies to.
@@ -105,7 +106,7 @@ def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
 def _require_pin_force(show: Show, held: Pin, event: CanvasEvent, force: bool) -> None:
     key = (held.target, pin_key(held.target, held.id))
     exists = any((p.target, p.id) == key for p in show.pins)
-    if force or not (exists or event.kind == "unpin"):
+    if force or not exists:
         return
     raise LockedError(
         f"{event.kind} event on {held.target} {held.id} drops or replaces an existing pin",
