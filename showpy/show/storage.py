@@ -75,6 +75,10 @@ class Repository(Protocol):
         """Returns a document at a revision (default head), or None when absent."""
         ...
 
+    def documents(self, show_id: str, revision: str | None = None) -> Mapping[str, bytes]:
+        """Returns the stored documents at a revision (default head), reading bytes on lookup."""
+        ...
+
     def transaction(
         self,
         show_id: str,
@@ -229,7 +233,7 @@ class Workspace:
         self.repo = repo
         self.show_id = show_id
         self._revision = revision
-        self._trees: dict[str, dict[str, bytes]] = {}
+        self._trees: dict[str, Mapping[str, bytes]] = {}
         self._shows: dict[str, Show | None] = {}
         self._canonical_revisions: set[str] = set()
 
@@ -243,17 +247,16 @@ class Workspace:
         self._revision = self.repo.head(self.show_id)
         return self._revision
 
-    def tree_at(self, revision: str) -> dict[str, bytes]:
-        """Returns the stored documents at a revision; revisions never change, so it caches."""
+    def tree_at(self, revision: str) -> Mapping[str, bytes]:
+        """Returns the stored documents at a revision, reading each file's bytes on lookup.
+
+        Revisions never change, so the last tree is cached.
+        """
         if revision == ROOT_REVISION:
             return {}
         if revision not in self._trees:
-            stored = {
-                p: self.repo.read(self.show_id, p, revision)
-                for p in self.repo.paths(self.show_id, revision)
-            }
-            self._trees = {revision: {p: d for p, d in stored.items() if d is not None}}
-        return dict(self._trees[revision])
+            self._trees = {revision: self.repo.documents(self.show_id, revision)}
+        return self._trees[revision]
 
     def show_at(self, revision: str) -> Show | None:
         """Returns the show at a revision, or None before the first save; cached like trees."""
@@ -265,7 +268,7 @@ class Workspace:
     def _show(self) -> Show | None:
         return self.show_at(self._revision)
 
-    def _tree(self) -> dict[str, bytes]:
+    def _tree(self) -> Mapping[str, bytes]:
         return self.tree_at(self._revision)
 
     def read(self, path: str) -> str | bytes:

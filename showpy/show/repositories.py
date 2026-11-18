@@ -9,6 +9,7 @@ Contains:
     InMemoryAssetStore: keeps assets in process memory under content-hash URIs
 """
 
+import functools
 import re
 import threading
 from collections.abc import Mapping
@@ -23,7 +24,12 @@ from showpy.core.util import ASSET_PREFIX, asset_uri, close_matches, content_has
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.documents import decode_show, script_doc, split_path
 from showpy.show.files import LIMITS_DOC, WAIVERS_DOC, show_changes
-from showpy.show.integrity import blob_digest, require_known_path, require_valid_digests
+from showpy.show.integrity import (
+    LazyBlobs,
+    blob_digest,
+    require_known_path,
+    require_valid_digests,
+)
 from showpy.show.models import Revision, Show
 from showpy.show.set_keys import set_key
 from showpy.show.storage import ROOT_REVISION
@@ -181,9 +187,21 @@ class DocumentRepository:
         digest = self._tree(show_id, revision).get(path)
         return None if digest is None else self.backend.blob(show_id, digest)
 
-    def _documents(self, show_id: str, revision: str | None) -> dict[str, bytes]:
-        tree = self._tree(show_id, revision)
-        return {p: self.backend.blob(show_id, d) for p, d in tree.items()}
+    def documents(self, show_id: str, revision: str | None = None) -> Mapping[str, bytes]:
+        """Returns the stored documents at a revision (default head), reading blobs on lookup.
+
+        The revision is resolved once; each blob is read the first time a path holding it is
+        looked up, so listing paths or decoding the show never loads renders or exports.
+
+        >>> from datetime import UTC
+        >>> repo = InMemoryRepository()
+        >>> at = datetime(2026, 11, 11, tzinfo=UTC)
+        >>> _ = repo.transaction("s", {"/renders/a.txt": b"hi"}, expected_revision="", at=at)
+        >>> repo.documents("s")["/renders/a.txt"]
+        b'hi'
+        """
+        blob = functools.cache(functools.partial(self.backend.blob, show_id))
+        return LazyBlobs(self._tree(show_id, revision), blob)
 
     def _require_head(self, show_id: str, expected: str) -> list[Revision]:
         log = self.revisions(show_id)
@@ -271,7 +289,7 @@ class DocumentRepository:
     def get_show(self, show_id: str, revision: str | None = None) -> Show:
         """Returns the whole show at a revision (default head)."""
         rev = self.head(show_id) if revision is None else revision
-        docs = self._documents(show_id, rev)
+        docs = self.documents(show_id, rev)
         if not docs:
             close = close_matches(show_id, self.shows())
             raise UnknownRefError(
@@ -295,7 +313,7 @@ class DocumentRepository:
         """
         return self.transaction(
             show_id,
-            show_changes(show, self._documents(show_id, expected_revision)),
+            show_changes(show, self.documents(show_id, expected_revision)),
             expected_revision=expected_revision,
             at=at,
         )

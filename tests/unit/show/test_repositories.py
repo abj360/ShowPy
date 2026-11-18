@@ -28,6 +28,8 @@ Contains:
         set that listed others
     test_regression_text_getters_raise_schema_error_for_tampered_bytes: raises SchemaError naming
         the path, not UnicodeDecodeError, for a script, limits or waivers file that is not UTF-8
+    test_regression_get_show_reads_no_render_blobs: loads and saves a show through the repository
+        and a workspace without reading a render or export blob
 """
 
 import contextlib
@@ -50,8 +52,8 @@ from showpy.show.file_repository import FileRepository
 from showpy.show.files import LIMITS_DOC, WAIVERS_DOC
 from showpy.show.integrity import blob_digest
 from showpy.show.models import Revision
-from showpy.show.repositories import InMemoryRepository
-from showpy.show.storage import Repository
+from showpy.show.repositories import DocumentRepository, InMemoryRepository, RepositoryBackend
+from showpy.show.storage import Repository, load_show, open_workspace, save_show
 from tests.fixtures.shows import two_set_show
 from tests.helpers import fails_after, replaced_form_show
 
@@ -284,3 +286,43 @@ def test_regression_text_getters_raise_schema_error_for_tampered_bytes(path: str
     with pytest.raises(SchemaError) as caught:
         TEXT_GETTERS[path](repo)
     assert caught.value.context["path"] == path
+
+
+class _CountingBackend:
+    """Delegates to another backend and records every blob digest read."""
+
+    def __init__(self, inner: RepositoryBackend) -> None:
+        self.inner = inner
+        self.blobs_read: list[str] = []
+
+    def show_ids(self) -> list[str]:
+        return self.inner.show_ids()
+
+    def log(self, show_id: str) -> list[Revision]:
+        return self.inner.log(show_id)
+
+    def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
+        return self.inner.tree(show_id, revision_id)
+
+    def blob(self, show_id: str, digest: str) -> bytes:
+        self.blobs_read.append(digest)
+        return self.inner.blob(show_id, digest)
+
+    def commit(
+        self, show_id: str, revision: Revision, tree: dict[str, str], blobs: dict[str, bytes]
+    ) -> None:
+        self.inner.commit(show_id, revision, tree, blobs)
+
+
+def test_regression_get_show_reads_no_render_blobs() -> None:
+    backend = _CountingBackend(InMemoryRepository().backend)
+    repo = DocumentRepository(backend)
+    media = {"/renders/a.png": b"render", "/exports/b.pdf": b"export"}
+    head = repo.transaction(SHOW_ID, media, expected_revision=_create(repo), at=AT).id
+    backend.blobs_read.clear()
+    show = repo.get_show(SHOW_ID)
+    head = repo.put_show(SHOW_ID, show.replace(title="T2"), expected_revision=head, at=AT).id
+    ws = open_workspace(repo, SHOW_ID)
+    save_show(ws, load_show(ws).replace(title="T3"), AT)
+    assert backend.blobs_read
+    assert not {blob_digest(raw) for raw in media.values()} & set(backend.blobs_read)

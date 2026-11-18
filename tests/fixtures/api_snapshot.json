@@ -755,6 +755,7 @@
   },
   "Repository": {
     "protocol": {
+      "documents": "(self, show_id: str, revision: str | None = None) -> collections.abc.Mapping[str, bytes]",
       "get_forms": "(self, show_id: str, set_id: SetId) -> tuple[showpy.choreo.models.Form, ...]",
       "get_limits": "(self, show_id: str) -> str",
       "get_paths": "(self, show_id: str, tid: TransitionId) -> showpy.choreo.models.TransitionSpec",

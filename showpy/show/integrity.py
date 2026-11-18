@@ -6,6 +6,7 @@ Contains:
     require_structured_files(): checks changed text files decode as their readers decode them
     require_known_path(): refuses a path outside KNOWN_ROOTS, including look-alike paths
     blob_digest(): returns the SHA-256 hex digest blobs are addressed by
+    LazyBlobs: maps paths to blob bytes, reading each blob only when its path is looked up
     require_new_set_keys(): checks every set key a commit stores in a folder the base lacks
     require_valid_digests(): checks digest trees, loading and decoding only what must be decoded,
         and refuses a decoded show the encoder could not store again
@@ -89,13 +90,25 @@ def blob_digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-class _LazyBlobs(Mapping[str, bytes]):
+class LazyBlobs(Mapping[str, bytes]):
+    """Maps paths to blob bytes, reading a blob only when its path is looked up.
+
+    Membership and iteration read the digests alone, so listing or probing paths loads nothing.
+
+    >>> blobs = LazyBlobs({"/renders/a.txt": "d"}, lambda digest: b"hi")
+    >>> "/renders/a.txt" in blobs, blobs["/renders/a.txt"]
+    (True, b'hi')
+    """
+
     def __init__(self, digests: Mapping[str, str], blob: Callable[[str], bytes]) -> None:
         self._digests = digests
         self._blob = blob
 
     def __getitem__(self, path: str) -> bytes:
         return self._blob(self._digests[path])
+
+    def __contains__(self, path: object) -> bool:
+        return path in self._digests
 
     def __iter__(self) -> Iterator[str]:
         return iter(self._digests)
@@ -214,7 +227,7 @@ def require_valid_digests(
     if not any(is_show_doc(p) for p in changed):
         return None
     _require_required_docs(after)
-    show = decode_show(_LazyBlobs(after, blob), cache=cache, digests=after)
+    show = decode_show(LazyBlobs(after, blob), cache=cache, digests=after)
     require_storable(show)
     _require_no_orphans(show, [p for p in changed if p in after])
     return show

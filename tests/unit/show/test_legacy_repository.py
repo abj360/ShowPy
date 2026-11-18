@@ -49,6 +49,7 @@ import json
 import math
 import re
 import shutil
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -157,7 +158,7 @@ def test_stored_record_with_an_unknown_key_is_refused(tmp_path: Path) -> None:
         FileRepository(tmp_path / "repo").revisions(expected["show_id"])
 
 
-def _negative_zero_paths(tree: dict[str, bytes]) -> set[str]:
+def _negative_zero_paths(tree: Mapping[str, bytes]) -> set[str]:
     return {p for p, raw in tree.items() if is_show_doc(p) and NEGATIVE_ZERO.search(raw)}
 
 
