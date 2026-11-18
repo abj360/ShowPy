@@ -1,5 +1,5 @@
 """
-engine_facing.py --- computes a spot's facing from its plan, in three phases (ADR 0002)
+engine_facing.py --- computes a spot's facing from its plan, in three phases
 
 Contains:
     FacingContext: gives the facing rules access to positions of any spot at a global count

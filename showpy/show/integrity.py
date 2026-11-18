@@ -6,8 +6,11 @@ Contains:
     require_structured_files(): checks changed text files decode as their readers decode them
     require_known_path(): refuses a path outside KNOWN_ROOTS, including look-alike paths
     blob_digest(): returns the SHA-256 hex digest blobs are addressed by
+    LazyBlobs: maps paths to blob bytes, reading each blob only when its path is looked up
     require_new_set_keys(): checks every set key a commit stores in a folder the base lacks
-    require_valid_digests(): checks digest trees, loading and decoding only what must be decoded
+    require_distinct_folders(): refuses a new set folder matching another folder ignoring case
+    require_valid_digests(): checks digest trees, loading and decoding only what must be decoded,
+        and refuses a decoded show the encoder could not store again
     require_valid_tree(): checks byte trees the same way, without a cache
 """
 
@@ -25,7 +28,9 @@ from showpy.show.documents import (
     decode_show,
     expected_show_docs,
     is_show_doc,
+    require_storable,
 )
+from showpy.show.files import require_writable
 from showpy.show.models import Show
 from showpy.show.set_keys import PAIR_SEPARATOR, SETS_ROOT, TRANSITIONS_ROOT
 from showpy.show.structured import TEXT_SUFFIXES, require_structured
@@ -87,13 +92,36 @@ def blob_digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-class _LazyBlobs(Mapping[str, bytes]):
+class LazyBlobs(Mapping[str, bytes]):
+    """Maps paths to blob bytes, reading a blob only when its path is looked up.
+
+    Membership and iteration read the digests alone, so listing or probing paths loads nothing.
+    A path in the tree whose blob the backend lacks raises StorageError, so `get` never turns
+    a missing blob into None.
+
+    >>> blobs = LazyBlobs({"/renders/a.txt": "d"}, lambda digest: b"hi")
+    >>> "/renders/a.txt" in blobs, blobs["/renders/a.txt"]
+    (True, b'hi')
+    """
+
     def __init__(self, digests: Mapping[str, str], blob: Callable[[str], bytes]) -> None:
         self._digests = digests
         self._blob = blob
 
     def __getitem__(self, path: str) -> bytes:
-        return self._blob(self._digests[path])
+        digest = self._digests[path]
+        try:
+            return self._blob(digest)
+        except KeyError as err:
+            raise StorageError(
+                f"no blob stored for {path!r}",
+                hint="restore the show folder from a backup or remove the damaged file",
+                context={"path": path, "digest": digest},
+                code="CORRUPT",
+            ) from err
+
+    def __contains__(self, path: object) -> bool:
+        return path in self._digests
 
     def __iter__(self) -> Iterator[str]:
         return iter(self._digests)
@@ -135,10 +163,10 @@ def _set_keys_in(path: str) -> list[str]:
 
 
 def require_new_set_keys(before: Iterable[str], written: Iterable[str]) -> None:
-    """Checks every set key a commit stores in a folder the base tree lacks (ADR 0006 item 6).
+    """Checks every set key a commit stores in a folder the base tree lacks.
 
-    Folders already stored are grandfathered, so v0.1 and v0.2 set IDs keep saving until the
-    Phase 2 migration; a new folder, however the show was built, must pass check_id.
+    Folders already stored are grandfathered, so v0.1 and v0.2 set IDs keep saving until stored IDs
+    are migrated; a new folder, however the show was built, must pass check_id.
 
     Args:
         before: Paths of the base revision's tree.
@@ -159,6 +187,37 @@ def require_new_set_keys(before: Iterable[str], written: Iterable[str]) -> None:
                 hint="write set keys as plain ASCII letters, digits, _ and .",
                 context={"kind": "set key", "text": key},
             )
+
+
+def require_distinct_folders(before: Iterable[str], after: Iterable[str]) -> None:
+    """Refuses a set folder new to the tree that matches another folder ignoring case.
+
+    Folders already stored are grandfathered, since v0.2 stored set IDs differing only by case.
+
+    Args:
+        before: Paths of the base revision's tree.
+        after: Paths of the tree the commit would leave.
+
+    >>> require_distinct_folders(["/sets/1a/set.json"], ["/sets/1a/set.json", "/sets/2/set.py"])
+    >>> try:
+    ...     require_distinct_folders(["/sets/1a/set.json"], ["/sets/1a/set.json", "/sets/1A/x"])
+    ... except SchemaError as exc:
+    ...     print(exc.context["folders"])
+    ['1A', '1a']
+    """
+    stored = {key for path in before for key in _set_keys_in(path)}
+    keys = {key for path in after for key in _set_keys_in(path)}
+    folded: dict[str, set[str]] = {}
+    for key in keys:
+        folded.setdefault(key.casefold(), set()).add(key)
+    groups = [folded[key.casefold()] for key in keys - stored]
+    clashes = sorted({key for group in groups if len(group) > 1 for key in group})
+    if clashes:
+        raise SchemaError(
+            f"set folders repeat ignoring case: {', '.join(clashes)}",
+            hint="give every set a key unique ignoring case; add_set() picks a free one",
+            context={"folders": clashes},
+        )
 
 
 def require_structured_files(
@@ -189,6 +248,7 @@ def require_valid_digests(
 ) -> Show | None:
     """Checks every changed path and decodes the show when any show document changed.
 
+    Writing a derived table raises LockedError code READ_ONLY; deleting a stored copy is allowed.
     Documents whose digest sits in `cache` at the same path are reused; every changed
     document is decoded fresh, and the show is validated whole either way.
 
@@ -207,12 +267,16 @@ def require_valid_digests(
     changed = [p for p in set(before) | set(after) if before.get(p) != after.get(p)]
     for path in sorted(changed):
         require_known_path(path)
+        if path in after:
+            require_writable(path)
     require_new_set_keys(before, [p for p in changed if p in after])
+    require_distinct_folders(before, after)
     require_structured_files(changed, after, blob)
     if not any(is_show_doc(p) for p in changed):
         return None
     _require_required_docs(after)
-    show = decode_show(_LazyBlobs(after, blob), cache=cache, digests=after)
+    show = decode_show(LazyBlobs(after, blob), cache=cache, digests=after)
+    require_storable(show)
     _require_no_orphans(show, [p for p in changed if p in after])
     return show
 

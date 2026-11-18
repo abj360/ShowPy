@@ -44,10 +44,10 @@ ROOT_REVISION = ""
 class Repository(Protocol):
     """Versions each show's documents in a linear history of revisions.
 
-    Paths are stored paths, which address sets by key (`/sets/<key>/set.json`, ADR 0004).
+    Paths are stored paths, which address sets by key (`/sets/<key>/set.json`).
     Every write takes the revision the caller read at and raises ConflictError, listing what
     landed since, when the head moved. Writes check validity, never pins or locks: edit
-    functions enforce those for every caller (ADR 0003); a host that writes raw documents
+    functions enforce those for every caller; a host that writes raw documents
     owns them.
     """
 
@@ -73,6 +73,10 @@ class Repository(Protocol):
 
     def read(self, show_id: str, path: str, revision: str | None = None) -> bytes | None:
         """Returns a document at a revision (default head), or None when absent."""
+        ...
+
+    def documents(self, show_id: str, revision: str | None = None) -> Mapping[str, bytes]:
+        """Returns the stored documents at a revision (default head), reading bytes on lookup."""
         ...
 
     def transaction(
@@ -103,7 +107,7 @@ class Repository(Protocol):
     ) -> Revision:
         """Writes the whole show, deleting documents of sets and paths it no longer has.
 
-        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        Checks validity only, never pins or locks; edit functions enforce those.
         """
         ...
 
@@ -125,7 +129,7 @@ class Repository(Protocol):
     ) -> Revision:
         """Replaces one existing set.
 
-        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        Checks validity only, never pins or locks; edit functions enforce those.
         """
         ...
 
@@ -144,7 +148,7 @@ class Repository(Protocol):
     ) -> Revision:
         """Replaces a set's build script.
 
-        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        Checks validity only, never pins or locks; edit functions enforce those.
         """
         ...
 
@@ -162,7 +166,7 @@ class Repository(Protocol):
     ) -> Revision:
         """Replaces a transition's paths; counts follow the destination set.
 
-        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        Checks validity only, never pins or locks; edit functions enforce those.
         """
         ...
 
@@ -181,7 +185,7 @@ class Repository(Protocol):
     ) -> Revision:
         """Replaces a set's forms.
 
-        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        Checks validity only, never pins or locks; edit functions enforce those.
         """
         ...
 
@@ -214,11 +218,11 @@ class Workspace:
     """Exposes one show as files, addressing sets by display ID.
 
     Paths such as `/sets/2/set.py` map to the stored folder of the set's key and back, so a
-    renumber moves no file (ADR 0004). The workspace reads at its own revision, like a working
+    renumber moves no file. The workspace reads at its own revision, like a working
     copy. Writes default to expecting
     that revision, so an edit made against a stale view raises ConflictError instead of
     overwriting a newer save. `refresh()` moves to the head; each successful write moves to
-    the revision it created. Who may write what is the host's decision (ADR 0003).
+    the revision it created. Who may write what is the host's decision.
 
     Attributes:
         repo: Storage backend.
@@ -229,7 +233,7 @@ class Workspace:
         self.repo = repo
         self.show_id = show_id
         self._revision = revision
-        self._trees: dict[str, dict[str, bytes]] = {}
+        self._trees: dict[str, Mapping[str, bytes]] = {}
         self._shows: dict[str, Show | None] = {}
         self._canonical_revisions: set[str] = set()
 
@@ -243,17 +247,16 @@ class Workspace:
         self._revision = self.repo.head(self.show_id)
         return self._revision
 
-    def tree_at(self, revision: str) -> dict[str, bytes]:
-        """Returns the stored documents at a revision; revisions never change, so it caches."""
+    def tree_at(self, revision: str) -> Mapping[str, bytes]:
+        """Returns the stored documents at a revision, reading each file's bytes on lookup.
+
+        Revisions never change, so the last tree is cached.
+        """
         if revision == ROOT_REVISION:
             return {}
         if revision not in self._trees:
-            stored = {
-                p: self.repo.read(self.show_id, p, revision)
-                for p in self.repo.paths(self.show_id, revision)
-            }
-            self._trees = {revision: {p: d for p, d in stored.items() if d is not None}}
-        return dict(self._trees[revision])
+            self._trees = {revision: self.repo.documents(self.show_id, revision)}
+        return self._trees[revision]
 
     def show_at(self, revision: str) -> Show | None:
         """Returns the show at a revision, or None before the first save; cached like trees."""
@@ -265,7 +268,7 @@ class Workspace:
     def _show(self) -> Show | None:
         return self.show_at(self._revision)
 
-    def _tree(self) -> dict[str, bytes]:
+    def _tree(self) -> Mapping[str, bytes]:
         return self.tree_at(self._revision)
 
     def read(self, path: str) -> str | bytes:
@@ -369,7 +372,7 @@ class Workspace:
 
         When any stored show document of the base revision is not canonical, one revision holding
         only those re-encoded documents lands first and the change follows, so the change's own
-        revision lists only what it edits and later writes add no second one (ADR 0014). If the
+        revision lists only what it edits and later writes add no second one. If the
         change then conflicts, the normalizing revision stays; it changes no content. A revision
         found or made canonical is remembered, so the check runs once per revision.
 
@@ -478,7 +481,7 @@ def save_show(ws: Workspace, show: Show, at: datetime) -> Revision:
 
     Raises ConflictError listing every revision (short ID, time, paths) saved since, so the
     caller sees what changed meanwhile; reload, reapply and save again. Stored documents that
-    are not canonical are re-encoded in a revision of their own first (ADR 0014); if the edit
+    are not canonical are re-encoded in a revision of their own first; if the edit
     then conflicts, that revision stays, it changes no content, and the retry builds on it.
 
     >>> from showpy.show.repositories import InMemoryRepository
@@ -498,7 +501,7 @@ def _normalizing_changes(
     """Lists the named stored show documents whose bytes differ from their canonical encoding.
 
     Only documents are listed, never scripts or other files, and nothing is deleted, so the
-    decoded show is the same before and after (ADR 0014 item 5).
+    decoded show is the same before and after.
     """
     if stored is None:
         return {}

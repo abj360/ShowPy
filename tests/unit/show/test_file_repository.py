@@ -75,6 +75,12 @@ Contains:
         holds another tree, a truncated record or a symlink, before its next/ link
     test_regression_failed_temp_write_leaves_no_temp_file: removes the temp file when writing or
         syncing it fails
+    test_regression_tree_at_walks_the_log_once: parses at most one record per revision plus the
+        tree when a workspace reads a whole tree
+    test_regression_commit_refuses_to_land_over_a_damaged_existing_blob: refuses a commit whose
+        blob is already stored with other bytes, before its tree record or link is written
+    test_regression_commit_refuses_a_symlink_at_a_blob_target: refuses a commit whose blob name
+        holds a symbolic link, even to the right bytes, before its tree record or link is written
 """
 
 import contextlib
@@ -103,6 +109,7 @@ from showpy.show.file_repository import (
 )
 from showpy.show.models import Revision
 from showpy.show.repositories import digest
+from showpy.show.storage import open_workspace
 from tests.fixtures.shows import two_set_show
 from tests.helpers import HOSTILE_JSON, capped_address_space, fails_after
 
@@ -114,6 +121,7 @@ SHOW_DOC = "/show/show.json"
 RACERS = 8
 LOSER_ID = "0" * 64
 TRAVERSAL_ID = "../../../escaped"
+RENDER_COMMITS = 5
 
 
 def _saved(tmp_path: Path) -> tuple[FileRepository, str, Path]:
@@ -931,3 +939,53 @@ def test_regression_failed_temp_write_leaves_no_temp_file(
         _second_revision(repo, rev)
     assert caught.value.code == "IO"
     assert not list(base.rglob(".tmp-*"))
+
+
+def test_regression_tree_at_walks_the_log_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, head, _ = _saved(tmp_path)
+    for n in range(RENDER_COMMITS):
+        head = repo.transaction(
+            SHOW_ID, {f"/renders/{n}.txt": str(n).encode()}, expected_revision=head, at=AT
+        ).id
+    backend: Any = repo.backend
+    parse: Callable[[str, str, Path], dict[str, object]] = backend._record
+    parsed: list[str] = []
+
+    def counted(show_id: str, revision_id: str, source: Path) -> dict[str, object]:
+        parsed.append(revision_id)
+        return parse(show_id, revision_id, source)
+
+    ws = open_workspace(repo, SHOW_ID)
+    monkeypatch.setattr(backend, "_record", counted)
+    tree = ws.tree_at(head)
+    parses = len(parsed)
+    assert len(tree) == len(repo.paths(SHOW_ID, head))
+    assert parses <= len(repo.revisions(SHOW_ID)) + 1
+
+
+def test_regression_commit_refuses_to_land_over_a_damaged_existing_blob(tmp_path: Path) -> None:
+    repo, head, base = _saved(tmp_path)
+    (base / "objects" / digest(b"x")).write_bytes(b"garbage")
+    records = sorted((base / "trees").iterdir())
+    with pytest.raises(StorageError) as caught:
+        repo.transaction(SHOW_ID, {"/renders/a.txt": b"x"}, expected_revision=head, at=AT)
+    assert caught.value.code == "CORRUPT"
+    assert repo.head(SHOW_ID) == head
+    assert sorted((base / "trees").iterdir()) == records
+
+
+@NO_SYMLINKS
+def test_regression_commit_refuses_a_symlink_at_a_blob_target(tmp_path: Path) -> None:
+    repo, head, base = _saved(tmp_path)
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(b"x")
+    (base / "objects" / digest(b"x")).symlink_to(outside)
+    records = sorted((base / "trees").iterdir())
+    _assert_corrupt(
+        lambda: repo.transaction(SHOW_ID, {"/renders/a.txt": b"x"}, expected_revision=head, at=AT)
+    )
+    assert repo.head(SHOW_ID) == head
+    assert sorted((base / "trees").iterdir()) == records
+    assert outside.read_bytes() == b"x"

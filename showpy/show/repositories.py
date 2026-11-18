@@ -3,12 +3,14 @@ repositories.py --- the shared repository logic, the in-memory repository and as
 
 Contains:
     RepositoryBackend: stores revisions, trees and blobs; commits compare-and-swap on the head
+    revisions_since(): lists the revisions of a log that landed after a parent revision
     conflict_error(): builds the ConflictError that lists the revisions that landed meanwhile
     DocumentRepository: implements Repository over a backend of revisions, trees and blobs
     InMemoryRepository: keeps every revision in process memory
     InMemoryAssetStore: keeps assets in process memory under content-hash URIs
 """
 
+import functools
 import re
 import threading
 from collections.abc import Mapping
@@ -20,10 +22,16 @@ from showpy.choreo.models import Form, Set, TransitionSpec
 from showpy.core.errors import ConflictError, SchemaError, StorageError, UnknownRefError
 from showpy.core.ids import WINDOWS_DEVICE_NAMES, SetId, TransitionId, is_device_name
 from showpy.core.util import ASSET_PREFIX, asset_uri, close_matches, content_hash
+from showpy.show.changes import require_form_owner
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.documents import decode_show, script_doc, split_path
 from showpy.show.files import LIMITS_DOC, WAIVERS_DOC, show_changes
-from showpy.show.integrity import blob_digest, require_known_path, require_valid_digests
+from showpy.show.integrity import (
+    LazyBlobs,
+    blob_digest,
+    require_known_path,
+    require_valid_digests,
+)
 from showpy.show.models import Revision, Show
 from showpy.show.set_keys import set_key
 from showpy.show.storage import ROOT_REVISION
@@ -92,6 +100,27 @@ class RepositoryBackend(Protocol):
         ...
 
 
+def revisions_since(log: list[Revision], parent: str) -> list[Revision]:
+    """Lists the revisions of a log that landed after a parent revision.
+
+    Args:
+        log: A show's revisions, oldest first.
+        parent: Revision a commit was based on; the root revision, or one missing from the log,
+            means every revision landed since.
+
+    Returns:
+        landed: The revisions after the parent, oldest first.
+
+    >>> from datetime import UTC, datetime
+    >>> at = datetime(2026, 11, 11, tzinfo=UTC)
+    >>> log = [Revision(id=i, parent=p, at=at) for i, p in (("a", ""), ("b", "a"), ("c", "b"))]
+    >>> [r.id for r in revisions_since(log, "a")], len(revisions_since(log, ""))
+    (['b', 'c'], 3)
+    """
+    ids = [r.id for r in log]
+    return log[ids.index(parent) + 1 :] if parent in ids else log
+
+
 def conflict_error(show_id: str, expected: str, landed: list[Revision]) -> ConflictError:
     """Builds the ConflictError listing each landed revision's short ID, time and paths."""
     summary = "; ".join(
@@ -126,7 +155,7 @@ class DocumentRepository:
 
     Every write checks validity: known paths, decodable structured files and a show that
     decodes. No write checks pins or locks. Edit functions enforce those for every caller, the
-    designer included (ADR 0003, ruling L-A1); a host that writes raw documents owns them.
+    designer included; a host that writes raw documents owns them.
 
     Attributes:
         backend: Where revisions, trees and blobs live.
@@ -181,16 +210,28 @@ class DocumentRepository:
         digest = self._tree(show_id, revision).get(path)
         return None if digest is None else self.backend.blob(show_id, digest)
 
-    def _documents(self, show_id: str, revision: str | None) -> dict[str, bytes]:
-        tree = self._tree(show_id, revision)
-        return {p: self.backend.blob(show_id, d) for p, d in tree.items()}
+    def documents(self, show_id: str, revision: str | None = None) -> Mapping[str, bytes]:
+        """Returns the stored documents at a revision (default head), reading blobs on lookup.
+
+        The revision is resolved once; each blob is read the first time a path holding it is
+        looked up, so listing paths or decoding the show never loads renders or exports.
+
+        >>> from datetime import UTC
+        >>> repo = InMemoryRepository()
+        >>> at = datetime(2026, 11, 11, tzinfo=UTC)
+        >>> _ = repo.transaction("s", {"/renders/a.txt": b"hi"}, expected_revision="", at=at)
+        >>> repo.documents("s")["/renders/a.txt"]
+        b'hi'
+        """
+        blob = functools.cache(functools.partial(self.backend.blob, show_id))
+        return LazyBlobs(self._tree(show_id, revision), blob)
 
     def _require_head(self, show_id: str, expected: str) -> list[Revision]:
         log = self.revisions(show_id)
         ids = [r.id for r in log]
         if expected != ROOT_REVISION and expected not in ids:
             self.get_revision(show_id, expected)
-        landed = log[ids.index(expected) + 1 :] if expected else log
+        landed = revisions_since(log, expected)
         if landed:
             raise conflict_error(show_id, expected, landed)
         return log
@@ -271,7 +312,7 @@ class DocumentRepository:
     def get_show(self, show_id: str, revision: str | None = None) -> Show:
         """Returns the whole show at a revision (default head)."""
         rev = self.head(show_id) if revision is None else revision
-        docs = self._documents(show_id, rev)
+        docs = self.documents(show_id, rev)
         if not docs:
             close = close_matches(show_id, self.shows())
             raise UnknownRefError(
@@ -291,11 +332,11 @@ class DocumentRepository:
     ) -> Revision:
         """Writes the whole show, deleting documents of sets and paths it no longer has.
 
-        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        Checks validity only, never pins or locks; edit functions enforce those.
         """
         return self.transaction(
             show_id,
-            show_changes(show, self._documents(show_id, expected_revision)),
+            show_changes(show, self.documents(show_id, expected_revision)),
             expected_revision=expected_revision,
             at=at,
         )
@@ -320,7 +361,7 @@ class DocumentRepository:
 
         A set built without a key takes the replaced set's key, so its folder and build script
         stay; an explicit key that differs from the stored one raises SchemaError.
-        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        Checks validity only, never pins or locks; edit functions enforce those.
         """
         show = self.get_show(show_id, expected_revision or None)
         position = show.set_index(new_set.id)
@@ -356,7 +397,7 @@ class DocumentRepository:
     ) -> Revision:
         """Replaces a set's build script, stored in the folder of the set's key.
 
-        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        Checks validity only, never pins or locks; edit functions enforce those.
         """
         key = set_key(self.get_show(show_id, expected_revision or None).set(set_id))
         return self.transaction(
@@ -378,9 +419,9 @@ class DocumentRepository:
         expected_revision: str,
         at: datetime,
     ) -> Revision:
-        """Replaces a transition's paths; counts follow the destination set (ADR 0001 item 16).
+        """Replaces a transition's paths; the destination set's counts win.
 
-        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        Checks validity only, never pins or locks; edit functions enforce those.
         """
         show = self.get_show(show_id, expected_revision or None)
         stored = spec.replace(counts=show.transition(spec.id).counts)
@@ -408,8 +449,10 @@ class DocumentRepository:
     ) -> Revision:
         """Replaces a set's forms; every form must name that set. Stale forms are kept.
 
+        A form ID that is stored under another set raises SchemaError.
+
         A set that lists forms lists the put forms afterwards, so `get_forms` returns them.
-        Checks validity only, never pins or locks; edit functions enforce those (ADR 0003).
+        Checks validity only, never pins or locks; edit functions enforce those.
         """
         wrong = [f.id for f in forms if f.set != set_id]
         if wrong:
@@ -419,6 +462,8 @@ class DocumentRepository:
                 context={"set": set_id, "forms": wrong},
             )
         show = self.get_show(show_id, expected_revision or None)
+        for put in forms:
+            require_form_owner(show, put)
         replaced = forms_of_set(show, set_id)
         kept = {k: f for k, f in show.forms.items() if k not in replaced}
         edited = show.replace(forms={**kept, **{f.id: f for f in forms}})
@@ -477,7 +522,9 @@ class _MemoryBackend(RepositoryBackend):
         with self._lock:
             log = self._logs.setdefault(show_id, [])
             if (log[-1].id if log else ROOT_REVISION) != revision.parent:
-                raise conflict_error(show_id, revision.parent, log)
+                raise conflict_error(
+                    show_id, revision.parent, revisions_since(log, revision.parent)
+                )
             self._blobs.update(blobs)
             self._trees[(show_id, revision.id)] = dict(tree)
             log.append(revision)

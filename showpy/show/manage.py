@@ -7,6 +7,7 @@ Contains:
     add_set(): inserts a set, copying missing placements from the previous set
     insert_subset(): inserts a sub-set such as 12A, keeping the total time
     remove_set(): deletes a set with its forms and paths, optionally keeping the total time
+    replace_sets(): replaces a show's sets, syncing transitions and refusing locked edits
     set_counts(): retimes a set and the transition into it
     renumber(): renames sets 1..N in show order and rewrites every reference
     transitions(): lists consecutive set pairs
@@ -37,7 +38,7 @@ from showpy.time.models import Timeline
 
 SET_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.]*$")
 FIRST_SET_ID = "1"
-# ADR 0001 item 4: (0, 0) is the sheet's front-centre, the natural wait spot before an entrance.
+# (0, 0) is the sheet's front-centre, the natural wait spot before an entrance.
 OFF_FIELD_POINT = (0.0, 0.0)
 SUBSET_LETTERS = string.ascii_uppercase
 SEQUENTIAL = "sequential"
@@ -100,7 +101,26 @@ def _sync_transitions(show: Show) -> Show:
     return show.replace(transitions=kept)
 
 
-def _with_sets(show: Show, sets: Sequence[Set], force: bool, **update: object) -> Show:
+def replace_sets(show: Show, sets: Sequence[Set], *, force: bool, **update: object) -> Show:
+    """Replaces a show's sets, keeping transitions in step and refusing pinned or locked edits.
+
+    Transitions between sets that are no longer consecutive are dropped, and each kept one takes
+    the counts of the set it leads into.
+
+    Args:
+        show: Show to edit.
+        sets: New sets, in show order.
+        force: Allows edits to pinned placements, locked forms or locked paths.
+        update: Other show fields to replace in the same edit, such as `cast` or `forms`.
+
+    Returns:
+        edited: The show with the new sets and synced transitions.
+
+    >>> from showpy.examples import two_set_show
+    >>> show = two_set_show()
+    >>> replace_sets(show, show.sets[:1], force=False).transition_ids()
+    []
+    """
     edited = _sync_transitions(show.replace(sets=tuple(sets), **update))
     require_unlocked(show, edited, force)
     return edited
@@ -202,7 +222,7 @@ def add_set(
     previous = show.sets[position - 1] if position > 0 else None
     rows = tuple(given.get(e) or _carried(show, previous, e) for e in show.cast.ids())
     new = Set(id=set_id, key=_new_key(show, set_id), counts=counts, placements=rows)
-    return _with_sets(show, [*show.sets[:position], new, *show.sets[position:]], force)
+    return replace_sets(show, [*show.sets[:position], new, *show.sets[position:]], force=force)
 
 
 def _subset_id(show: Show, after: SetId) -> SetId:
@@ -260,7 +280,7 @@ def insert_subset(
     new = Set(id=new_id, key=_new_key(show, new_id), counts=counts, placements=rows)
     shortened = following.replace(counts=following.counts - counts)
     sets = [*show.sets[: position + 1], new, shortened, *show.sets[position + 2 :]]
-    return _with_sets(show, sets, force), new_id
+    return replace_sets(show, sets, force=force), new_id
 
 
 def _pins_without_set(show: Show, set_id: SetId) -> tuple[Pin, ...]:
@@ -303,7 +323,7 @@ def remove_set(show: Show, set_id: SetId, merge_counts: bool = True, force: bool
         sets[0] = sets[0].replace(counts=0.0)
     forms = {f: form for f, form in show.forms.items() if form.set != set_id}
     pins = _pins_without_set(show, set_id)
-    return _with_sets(show, sets, force, forms=forms, pins=pins)
+    return replace_sets(show, sets, force=force, forms=forms, pins=pins)
 
 
 def _scale_route(route: Route, factor: float) -> Route:
@@ -351,7 +371,9 @@ def _retimed_spec(spec: TransitionSpec, counts: float, rescale: bool) -> Transit
 def set_counts(
     show: Show, set_id: SetId, counts: float, rescale: bool = False, force: bool = False
 ) -> Show:
-    """Retimes a set and keeps the incoming transition's counts equal to it (ADR 0001 item 16).
+    """Retimes a set and keeps the incoming transition's counts equal to it.
+
+    The destination set's counts win over the transition's.
 
     Args:
         show: Show to edit.
@@ -375,7 +397,7 @@ def set_counts(
         _retimed_spec(spec, counts, rescale) if spec.id[1] == set_id else spec
         for spec in show.transitions
     )
-    return _with_sets(show, sets, force, transitions=specs)
+    return replace_sets(show, sets, force=force, transitions=specs)
 
 
 def _renamed_anchor(anchor: Anchor, mapping: Mapping[SetId, SetId]) -> Anchor:
@@ -402,7 +424,7 @@ def _renamed_note(note: Note, mapping: Mapping[SetId, SetId]) -> Note:
 def renumber(show: Show, scheme: str = SEQUENTIAL) -> tuple[Show, dict[SetId, SetId]]:
     """Renames sets 1..N in show order, rewriting transitions, forms, notes and pins.
 
-    Keys stay, so stored set folders and their build scripts stay with their sets (ADR 0004).
+    Keys stay, so stored set folders and their build scripts stay with their sets.
 
     Args:
         show: Show to edit.

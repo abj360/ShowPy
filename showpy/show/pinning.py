@@ -2,6 +2,7 @@
 pinning.py --- designer locks: records pins and sets the flags they cover
 
 Contains:
+    pin_key(): returns the stored spelling of a pin ID
     pin(): locks a spot, form, set or transition and records why
     unpin(): removes a lock, keeping flags other pins still cover
 """
@@ -94,6 +95,11 @@ def _reflag(show: Show, held: tuple[Pin, ...], scope: Pin) -> Show:
     return _flag_forms(flagged, held, scope) if scope.target in ("form", "set") else flagged
 
 
+def pin_key(target: PinTarget, pin_id: str) -> str:
+    """Returns the stored spelling of a pin ID; transition IDs take their canonical form."""
+    return format_tid(parse_tid(pin_id)) if target == "transition" else pin_id
+
+
 def pin(show: Show, target: PinTarget, pin_id: str, reason: str = "", by: str = "designer") -> Show:
     """Locks an item and records why; pinning the same item again replaces the record.
 
@@ -108,8 +114,7 @@ def pin(show: Show, target: PinTarget, pin_id: str, reason: str = "", by: str = 
     ([True, True], 'soloist')
     """
     _require_target(show, target, pin_id)
-    if target == "transition":
-        pin_id = format_tid(parse_tid(pin_id))
+    pin_id = pin_key(target, pin_id)
     record = Pin(target=target, id=pin_id, by=by, reason=reason)
     held = (*(p for p in show.pins if (p.target, p.id) != (target, pin_id)), record)
     return _reflag(show, held, record)
@@ -122,6 +127,7 @@ def unpin(show: Show, target: PinTarget, pin_id: str) -> Show:
     >>> unpin(pin(two_set_show(), "set", "2"), "set", "2") == two_set_show()
     True
     """
+    pin_id = pin_key(target, pin_id)
     found = [p for p in show.pins if (p.target, p.id) == (target, pin_id)]
     if not found:
         raise UnknownRefError(

@@ -168,7 +168,7 @@ def filled_forms(placed: Set, forms: Sequence[Form]) -> list[Form]:
     A form's own members keep their place, even a pinned member whose slot stayed open. The
     other spots placed on the form follow in increasing `order`. Gaps in the orders are
     compacted, so rebuilding a compacted form may shift spots that took non-lowest open slots,
-    until open slots are typed (Phase 2).
+    until open slots are typed.
 
     Args:
         placed: Set whose placements carry `form` and `order`.

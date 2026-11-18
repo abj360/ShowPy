@@ -26,8 +26,20 @@ Contains:
         set's forms are replaced
     test_regression_put_forms_then_get_forms_returns_the_put_forms: lists newly put forms in the
         set that listed others
+    test_regression_put_forms_refuses_a_form_id_another_set_holds: refuses a form whose ID is
+        stored under another set, keeping that set's form
+    test_regression_put_show_refuses_sets_differing_only_by_case: refuses a show whose defaulted
+        set keys collide case-insensitively, leaving head unchanged
+    test_regression_form_op_refuses_a_form_id_another_set_holds: refuses a FormOp whose form ID is
+        stored under another set
     test_regression_text_getters_raise_schema_error_for_tampered_bytes: raises SchemaError naming
         the path, not UnicodeDecodeError, for a script, limits or waivers file that is not UTF-8
+    test_regression_get_show_reads_no_render_blobs: loads and saves a show through the repository
+        and a workspace without reading a render or export blob
+    test_regression_in_memory_commit_conflict_under_the_lock: raises ConflictError naming only the
+        racing revision when it lands between the head check and the commit
+    test_regression_file_conflict_lists_every_revision_since_the_parent: raises ConflictError naming
+        every racing revision when several land before a file-backend commit
 """
 
 import contextlib
@@ -45,13 +57,14 @@ import pytest
 from showpy.core.errors import ConflictError, SchemaError, StorageError
 from showpy.core.ids import WINDOWS_DEVICE_NAMES
 from showpy.core.util import content_hash
+from showpy.show.changes import apply_change
 from showpy.show.documents import script_doc
 from showpy.show.file_repository import FileRepository
 from showpy.show.files import LIMITS_DOC, WAIVERS_DOC
 from showpy.show.integrity import blob_digest
-from showpy.show.models import Revision
-from showpy.show.repositories import InMemoryRepository
-from showpy.show.storage import Repository
+from showpy.show.models import FormOp, Revision
+from showpy.show.repositories import DocumentRepository, InMemoryRepository, RepositoryBackend
+from showpy.show.storage import Repository, load_show, open_workspace, save_show
 from tests.fixtures.shows import two_set_show
 from tests.helpers import fails_after, replaced_form_show
 
@@ -277,6 +290,39 @@ TEXT_GETTERS: dict[str, Callable[[InMemoryRepository], str]] = {
 }
 
 
+def test_regression_put_forms_refuses_a_form_id_another_set_holds() -> None:
+    """Refuses to take over a form that another set lists, and leaves the show unchanged."""
+    repo = InMemoryRepository()
+    show = replaced_form_show()
+    revision = repo.put_show(SHOW_ID, show, expected_revision="", at=AT)
+    takeover = show.forms["b"].replace(set="1")
+    with pytest.raises(SchemaError):
+        repo.put_forms(SHOW_ID, "1", (takeover,), expected_revision=revision.id, at=AT)
+    assert repo.get_show(SHOW_ID).forms["b"].set == "2"
+    assert [f.id for f in repo.get_forms(SHOW_ID, "2")] == ["b"]
+
+
+def test_regression_put_show_refuses_sets_differing_only_by_case() -> None:
+    """Refuses sets "a" and "A" whose keys would share a folder on a case-insensitive disk."""
+    repo = InMemoryRepository()
+    revision = repo.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT)
+    base = two_set_show()
+    lower = base.sets[0].model_copy(update={"id": "a", "key": None})
+    upper = base.sets[1].model_copy(update={"id": "A", "key": None})
+    clash = base.model_copy(update={"sets": (lower, upper)})
+    with pytest.raises(SchemaError):
+        repo.put_show(SHOW_ID, clash, expected_revision=revision.id, at=AT)
+    assert repo.head(SHOW_ID) == revision.id
+
+
+def test_regression_form_op_refuses_a_form_id_another_set_holds() -> None:
+    """Refuses a FormOp that would move a form from the set that lists it to another set."""
+    show = replaced_form_show()
+    takeover = show.forms["b"].replace(set="1")
+    with pytest.raises(SchemaError):
+        apply_change(show, [FormOp(form=takeover)], force=True)
+
+
 @pytest.mark.parametrize("path", sorted(TEXT_GETTERS))
 def test_regression_text_getters_raise_schema_error_for_tampered_bytes(path: str) -> None:
     """Raises SchemaError naming the path, not UnicodeDecodeError, for bytes that are not UTF-8."""
@@ -284,3 +330,94 @@ def test_regression_text_getters_raise_schema_error_for_tampered_bytes(path: str
     with pytest.raises(SchemaError) as caught:
         TEXT_GETTERS[path](repo)
     assert caught.value.context["path"] == path
+
+
+class _HookedBackend:
+    """Delegates to another backend, records every blob digest read and can run a racer once.
+
+    Attributes:
+        inner: Backend every call is delegated to.
+        blobs_read: Digests passed to blob(), in call order.
+        racer: Runs once at the start of the next commit, before the inner commit.
+    """
+
+    def __init__(self, inner: RepositoryBackend) -> None:
+        self.inner = inner
+        self.blobs_read: list[str] = []
+        self.racer: Callable[[], object] | None = None
+
+    def show_ids(self) -> list[str]:
+        return self.inner.show_ids()
+
+    def log(self, show_id: str) -> list[Revision]:
+        return self.inner.log(show_id)
+
+    def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
+        return self.inner.tree(show_id, revision_id)
+
+    def blob(self, show_id: str, digest: str) -> bytes:
+        self.blobs_read.append(digest)
+        return self.inner.blob(show_id, digest)
+
+    def commit(
+        self, show_id: str, revision: Revision, tree: dict[str, str], blobs: dict[str, bytes]
+    ) -> None:
+        racer, self.racer = self.racer, None
+        if racer is not None:
+            racer()
+        self.inner.commit(show_id, revision, tree, blobs)
+
+
+def test_regression_get_show_reads_no_render_blobs() -> None:
+    backend = _HookedBackend(InMemoryRepository().backend)
+    repo = DocumentRepository(backend)
+    media = {"/renders/a.png": b"render", "/exports/b.pdf": b"export"}
+    head = repo.transaction(SHOW_ID, media, expected_revision=_create(repo), at=AT).id
+    backend.blobs_read.clear()
+    show = repo.get_show(SHOW_ID)
+    head = repo.put_show(SHOW_ID, show.replace(title="T2"), expected_revision=head, at=AT).id
+    ws = open_workspace(repo, SHOW_ID)
+    save_show(ws, load_show(ws).replace(title="T3"), AT)
+    assert backend.blobs_read
+    assert not {blob_digest(raw) for raw in media.values()} & set(backend.blobs_read)
+
+
+def test_regression_in_memory_commit_conflict_under_the_lock() -> None:
+    backend = _HookedBackend(InMemoryRepository().backend)
+    repo = DocumentRepository(backend)
+    head = _create(repo)
+    landed: list[Revision] = []
+
+    def race() -> None:
+        landed.append(
+            repo.transaction(SHOW_ID, {"/renders/b.txt": b"b"}, expected_revision=head, at=AT)
+        )
+
+    backend.racer = race
+    with pytest.raises(ConflictError) as caught:
+        repo.transaction(SHOW_ID, {"/renders/a.txt": b"a"}, expected_revision=head, at=AT)
+    assert [r.id for r in landed] == [repo.head(SHOW_ID)]
+    assert caught.value.context["head"] == landed[0].id
+    assert [c["id"] for c in caught.value.context["changes"]] == [landed[0].id]
+    assert repo.paths(SHOW_ID).count("/renders/a.txt") == 0
+
+
+def test_regression_file_conflict_lists_every_revision_since_the_parent(tmp_path: Path) -> None:
+    """Names both racing revisions, and no older one, when they land before a file commit."""
+    backend = _HookedBackend(FileRepository(tmp_path).backend)
+    repo = DocumentRepository(backend)
+    head = _create(repo)
+    landed: list[Revision] = []
+
+    def race() -> None:
+        parent = head
+        for path in ("/renders/b.txt", "/renders/c.txt"):
+            landed.append(repo.transaction(SHOW_ID, {path: b"x"}, expected_revision=parent, at=AT))
+            parent = landed[-1].id
+
+    backend.racer = race
+    with pytest.raises(ConflictError) as caught:
+        repo.transaction(SHOW_ID, {"/renders/a.txt": b"a"}, expected_revision=head, at=AT)
+    assert caught.value.context["head"] == landed[-1].id == repo.head(SHOW_ID)
+    assert [c["id"] for c in caught.value.context["changes"]] == [r.id for r in landed]
+    assert "/renders/a.txt" not in repo.paths(SHOW_ID)

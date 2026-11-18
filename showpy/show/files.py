@@ -13,6 +13,7 @@ Contains:
     directories(): lists every directory path, each ending in `/`
     read_file(): returns a file's text or bytes
     show_changes(): lists the stored-document writes and deletes that store a show
+    require_writable(): refuses a write to a derived read-only table
     staged_changes(): validates one file write and returns the stored-document changes it makes
 """
 
@@ -167,9 +168,8 @@ def _index_csv(show: Show) -> bytes:
     writer.writerow(INDEX_COLUMNS)
     for e in index(show).entries:
         label = "" if e.measure is None else f"{e.measure.measure}:{e.measure.count_in_measure:g}"
-        writer.writerow(
-            [e.set, e.counts, e.start_count, label, e.seconds, neutralize_cell(e.cue or "")]
-        )
+        cells = [neutralize_cell(e.set), e.counts, e.start_count, label, e.seconds]
+        writer.writerow([*cells, neutralize_cell(e.cue or "")])
     return out.getvalue().encode()
 
 
@@ -261,6 +261,26 @@ def _staged_show_doc(
     return show_changes(edited, tree)
 
 
+def require_writable(path: str) -> None:
+    """Refuses a derived table, which reads compute from the show, with LockedError READ_ONLY.
+
+    >>> require_writable("/sets/1/set.py")
+    >>> try:
+    ...     require_writable("/show/index.csv")
+    ... except LockedError as exc:
+    ...     print(exc.code)
+    READ_ONLY
+    """
+    segments = path.split("/")
+    if path == INDEX_DOC or (segments[1:2] == ["sets"] and segments[-1] == PLACEMENTS_NAME):
+        raise LockedError(
+            f"{path} is derived and read-only",
+            hint="edit forms.json, set.py or paths instead; the table follows",
+            context={"path": path},
+            code="READ_ONLY",
+        )
+
+
 def staged_changes(
     path: str, raw: bytes, show: Show | None, tree: Mapping[str, bytes]
 ) -> dict[str, bytes | None]:
@@ -275,13 +295,7 @@ def staged_changes(
     segments = split_path(path)
     if path.endswith("/"):
         raise _is_directory(path)
-    if path == INDEX_DOC or (segments[0] == "sets" and segments[-1] == PLACEMENTS_NAME):
-        raise LockedError(
-            f"{path} is derived and read-only",
-            hint="edit forms.json, set.py or paths instead; the table follows",
-            context={"path": path},
-            code="READ_ONLY",
-        )
+    require_writable(path)
     if is_show_doc(path) and not path.endswith("/set.json"):
         return _staged_show_doc(path, raw, _require_show(show, path), tree)
     if segments[0] == "sets" and len(segments) == 3 and segments[2] == SCRIPT_NAME:

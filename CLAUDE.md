@@ -75,6 +75,7 @@ Exception: `showpy/examples/__init__.py` re-exports its names, so `from showpy.e
 - **New public names** go in `showpy/_api_table.py`. Run `uv run python scripts/gen_public_api.py` to regenerate `showpy/__init__.py`; never edit that file by hand. Refresh the snapshot with `SHOWPY_UPDATE_API=1 uv run pytest tests/unit/test_api_snapshot.py`. A changed public name must appear backticked in the CHANGELOG "Unreleased" section, via the commit subject or a `BREAKING CHANGE` footer.
 - **New data classes** go in the package's `models.py` and must be JSON-serializable; regenerate `showpy/schemas/` with `SHOWPY_UPDATE_SCHEMA=1 uv run pytest tests/unit/show/test_schema.py` and bump the schema version if a stored model changes incompatibly.
 - **Coordinates in field language** (e.g. "2 outside the 35") belong in the pack's `PositionLanguage`, never in core modules.
+- Docstrings and comments never cite ADRs, docs or ledger IDs; state the rule itself.
 - **Prefer extending existing primitives** (curves, spacing, transforms, path styles) over adding parallel ones. Custom movement = register a `MotionFn`; custom shapes = `register_form_fn`.
 - Keep modules small and focused; if a file passes ~500 lines, split by responsibility.
 

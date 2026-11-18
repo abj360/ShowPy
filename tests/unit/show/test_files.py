@@ -16,6 +16,7 @@ Contains:
     test_regression_invalid_utf8_text_file_is_a_library_error: maps invalid UTF-8 in a text file to
         a ShowPyError
     test_regression_index_csv_neutralizes_formula_cues: quotes every formula-looking cue cell
+    test_regression_index_csv_neutralizes_set_ids: quotes a formula-like set ID
     test_regression_placements_csv_neutralizes_formula_notes: quotes every formula-looking note
     test_regression_placements_csv_keeps_negative_numbers_unquoted: keeps a negative x a number
     test_regression_bad_comments_file_is_a_schema_error: raises SchemaError for comments files of
@@ -31,6 +32,7 @@ import pytest
 
 from showpy.core.errors import LockedError, SchemaError, ShowPyError, StorageError
 from showpy.show.documents import SHOW_DOC
+from showpy.show.files import _index_csv
 from showpy.show.models import Show
 from showpy.show.storage import Workspace
 from showpy.show.structured import decode_comments
@@ -79,6 +81,15 @@ def test_regression_index_csv_neutralizes_formula_cues(lead: str) -> None:
     rows = _rows(agent.read("/show/index.csv"))
     assert rows[1][-1] == f"'{cue}"
     assert rows[2][-1] == "-12.5"
+
+
+def test_regression_index_csv_neutralizes_set_ids() -> None:
+    """Quotes a formula-like set ID in the derived index table."""
+    show = two_set_show()
+    renamed = show.sets[1].model_copy(update={"id": "=1+2"})
+    edited = show.model_copy(update={"sets": (show.sets[0], renamed)})
+    rows = _rows(_index_csv(edited).decode())
+    assert rows[2][0] == "'=1+2"
 
 
 @pytest.mark.parametrize("lead", FORMULA_LEADS)

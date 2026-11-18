@@ -16,6 +16,11 @@ Contains:
         rescale proposal after the designer edited that transition's rows
     test_regression_accepting_a_form_edit_does_not_resurrect_a_deleted_form: refuses, or keeps the
         form deleted, when accepting an edit of a deleted form
+    test_regression_unpin_event_needs_force: refuses an unpin event unless forced
+    test_regression_pin_event_replacing_a_pin_needs_force: refuses a pin event that replaces a pin
+        unless forced
+    test_regression_unpin_event_of_a_missing_pin_raises_unknown_ref: names the missing pin with or
+        without force
 """
 
 from datetime import UTC, datetime, timedelta
@@ -51,6 +56,7 @@ from showpy.show.models import (
     CanvasEvent,
     Comment,
     CountsOp,
+    EventKind,
     FormOp,
     PathsOp,
     Pin,
@@ -206,6 +212,36 @@ def test_canvas_event_needs_explicit_force() -> None:
     with pytest.raises(LockedError):
         apply_event(pinned, move)
     assert apply_event(pinned, move, force=True).set("2").get("T1").x == 3.0
+
+
+def _pin_event(kind: EventKind, reason: str = "") -> CanvasEvent:
+    held = Pin(target="entity", id="T1", reason=reason)
+    return CanvasEvent(id="e", at=AT, kind=kind, payload=held.model_dump())
+
+
+def test_regression_unpin_event_needs_force() -> None:
+    """Refuses an unpin event without force and leaves the pins as they were."""
+    pinned = pin(two_set_show(), "entity", "T1", "solo")
+    with pytest.raises(LockedError):
+        apply_event(pinned, _pin_event("unpin"))
+    assert pins(pinned) == pins(pin(two_set_show(), "entity", "T1", "solo"))
+    assert apply_event(pinned, _pin_event("unpin"), force=True).pins == ()
+
+
+def test_regression_pin_event_replacing_a_pin_needs_force() -> None:
+    """Refuses a pin event that rewrites an existing record unless forced."""
+    pinned = pin(two_set_show(), "entity", "T1", "solo")
+    with pytest.raises(LockedError):
+        apply_event(pinned, _pin_event("pin", "other"))
+    replaced = apply_event(pinned, _pin_event("pin", "other"), force=True)
+    assert [p.reason for p in replaced.pins] == ["other"]
+
+
+@pytest.mark.parametrize("force", [False, True])
+def test_regression_unpin_event_of_a_missing_pin_raises_unknown_ref(force: bool) -> None:
+    """Reports an unpin event of a pin that does not exist as an unknown pin, forced or not."""
+    with pytest.raises(UnknownRefError):
+        apply_event(two_set_show(), _pin_event("unpin"), force=force)
 
 
 def test_agent_pin_event_applies() -> None:
@@ -387,3 +423,17 @@ def test_regression_canvas_event_with_bad_payload_is_a_schema_error(
     with pytest.raises(SchemaError) as info:
         apply_event(two_set_show(), event)
     assert info.value.context["errors"]
+
+
+@pytest.mark.parametrize("spelling", ["1->2", "1→2"])
+def test_regression_transition_pin_events_need_force_in_either_spelling(spelling: str) -> None:
+    """Refuses replacing or dropping a transition pin whichever way its ID is spelled."""
+    pinned = pin(two_set_show(), "transition", "1->2", "keep")
+    held = Pin(target="transition", id=spelling, reason="x")
+    replace = CanvasEvent(id="e", at=AT, kind="pin", payload=held.model_dump())
+    drop = CanvasEvent(id="e", at=AT, kind="unpin", payload=held.model_dump())
+    for event in (replace, drop):
+        with pytest.raises(LockedError):
+            apply_event(pinned, event)
+    assert [p.reason for p in apply_event(pinned, replace, force=True).pins] == ["x"]
+    assert apply_event(pinned, drop, force=True).pins == ()

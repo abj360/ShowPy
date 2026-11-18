@@ -3,13 +3,15 @@
 """
 test_data.py --- tests JSON interchange, frame CSV, position import, tables and format plugins
 
-Also holds the audited data and CSV defects (UP-9.5-29 to UP-9.5-34, UP-4.3-01) as strict xfails.
+Also holds the audited data and CSV defects (UP-9.5-29 to UP-9.5-34) as strict xfails.
 UP-9.5-35 is fixed; its test below passes.
 
 Contains:
     test_regression_chart_csv_neutralizes_formula_names(): quotes a formula-like performer name
     test_regression_csv_neutralizes_every_formula_trigger(): quotes cells led by + - @ tab or CR
     test_regression_csv_neutralizes_header_cells(): quotes a formula-like column name
+    test_regression_frames_csv_neutralizes_spot_ids(): quotes a formula-like spot ID in the frames
+        CSV
     test_regression_csv_leaves_numeric_literals_untouched(): keeps -5, +3, 1.5e3 and -.5 as is
     test_regression_csv_prefixes_a_non_numeric_minus_cell(): quotes `-x` and `-1+1`
     test_regression_csv_opt_out_leaves_formula_cells_unchanged(): writes cells raw when asked
@@ -53,6 +55,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from showpy.cast.rewrite import rewrite_spot_ids
 from showpy.choreo.forms import slots, text_form
 from showpy.core.errors import FontError, MissingFontError, SchemaError, UnknownRefError
 from showpy.core.resources import font_path
@@ -268,6 +271,16 @@ def test_regression_csv_neutralizes_every_formula_trigger(lead: str) -> None:
 def test_regression_csv_neutralizes_header_cells() -> None:
     rows = _csv_rows(to_csv(pd.DataFrame({"=SUM(A1)": ["ok"]})))
     assert rows[0] == ["'=SUM(A1)"]
+
+
+def test_regression_frames_csv_neutralizes_spot_ids() -> None:
+    """Prefixes a quote to a formula-like spot ID in the frames CSV."""
+    payload = '=HYPERLINK("http://evil","x")'
+    show = rewrite_spot_ids(two_set_show(), lambda spot: payload if spot == "T1" else spot)
+    rows = _csv_rows(export_frames_csv(show))
+    entities = {row[2] for row in rows[1:]}
+    assert f"'{payload}" in entities
+    assert payload not in entities
 
 
 @pytest.mark.parametrize("literal", ["-5", "+3", "1.5e3", "-.5"])

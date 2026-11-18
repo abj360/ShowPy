@@ -1,5 +1,5 @@
 """
-canonical.py --- normalizes values to the JSON data model and encodes them per RFC 8785 (ADR 0014)
+canonical.py --- normalizes values to the JSON data model and encodes them per RFC 8785
 
 Contains:
     JsonValue: the JSON data model every canonical value belongs to
@@ -50,7 +50,7 @@ SUPPORTED_HINT = (
 
 
 def canonical_value(obj: object) -> JsonValue:
-    """Normalizes a supported value into the JSON data model of ADR 0014.
+    """Normalizes a supported value into the JSON data model.
 
     Models dump in JSON mode, tuples become lists, sets become lists sorted by canonical bytes,
     `-0.0` becomes `0.0`, and a mapping with any non-string key becomes the tagged form
@@ -58,8 +58,7 @@ def canonical_value(obj: object) -> JsonValue:
 
     A set held by a model field is dumped by pydantic in iteration order, before this function
     sees it, so it is not sorted; that order can change with `PYTHONHASHSEED` until stored
-    models hold tuples instead (UP-9.3-55). Containers nest at most 100 levels and ints stay
-    under 10**640 (ADR 0014, addendum 2026-11-15).
+    models hold tuples instead. Containers nest at most 100 levels and ints stay under 10**640.
 
     Args:
         obj: Value to normalize.

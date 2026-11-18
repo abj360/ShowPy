@@ -1,12 +1,12 @@
 """
-ids.py --- ID aliases, the ADR 0006 ID check, and sheet-reference and transition-ID parsing
+ids.py --- ID aliases, the ID check, and sheet-reference and transition-ID parsing
 
 Contains:
     parse_ref(): reads `kind:id@version` into its parts
     format_ref(): writes a reference from its parts
     parse_tid(): reads `12→13` or `12->13` into a TransitionId
     format_tid(): writes a TransitionId as `12→13`
-    ID_PATTERN: matches the one ID shape of ADR 0006; check with fullmatch, never match
+    ID_PATTERN: matches the one ID shape; check with fullmatch, never match
     ID_MAX_LENGTH: bounds the characters of one ID
     RESERVED_IDS: names no ID may take, compared ignoring case; device names also bar `con.5`
     check_id(): validates one ID and returns its NFC-normalized text
@@ -41,7 +41,7 @@ ID_PATTERN = re.compile(r"^[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,62}[A-Za-z0-9_])?$")
 ID_MAX_LENGTH = 64
 GRAMMAR_KEYWORD = "all"
 # Microsoft's "Naming Files, Paths, and Namespaces" lists COM1 to COM9 and LPT1 to LPT9, not
-# COM0 or LPT0 (ADR 0006, addendum 2026-11-15).
+# COM0 or LPT0.
 WINDOWS_DEVICE_NAMES = frozenset(
     {"con", "prn", "aux", "nul"}
     | {f"com{n}" for n in range(1, 10)}
@@ -116,7 +116,7 @@ def format_tid(tid: TransitionId) -> str:
 
 
 def check_id(text: str, *, kind: str) -> str:
-    """Validates one ID against the ADR 0006 pattern and returns its NFC-normalized text.
+    """Validates one ID against the ID pattern and returns its NFC-normalized text.
 
     Reserved names are rejected, and so is a Windows device name followed by an extension
     (`con.5`), which Windows opens as the device.

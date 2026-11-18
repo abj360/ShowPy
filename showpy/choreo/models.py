@@ -117,7 +117,7 @@ class Set(FrozenModel):
 
     Attributes:
         id: Set ID, e.g. `12` or `12A`.
-        key: Stable storage key, fixed when the set is created; defaults to the ID (ADR 0004).
+        key: Stable storage key, fixed when the set is created; defaults to the ID.
             A key that differs from the ID must pass check_id.
         counts: Counts since the previous set; 0 for the first.
         placements: One placement per spot in the cast.
@@ -145,8 +145,8 @@ class Set(FrozenModel):
         entities = [p.entity for p in self.placements]
         if len(set(entities)) != len(entities):
             raise SchemaError(f"set {self.id} places a spot twice", hint="one placement per spot")
-        # A key equal to the ID is today's ID (ADR 0006 item 6 leaves stored IDs alone until the
-        # Phase 2 migration); constructors check new keys through free_set_key().
+        # A key equal to the ID is a stored ID, left unchecked until stored IDs are migrated;
+        # constructors check new keys through free_set_key().
         key = self.id if self.key in (None, self.id) else check_id(self.key, kind="set key")
         # The model is frozen; the validator is the one place that fills the defaulted key.
         object.__setattr__(self, "key", key)

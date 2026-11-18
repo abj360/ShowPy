@@ -117,7 +117,13 @@ class Show(FrozenModel):
             raise SchemaError("set ids repeat", hint="give every set a unique id")
         keys = [s.key or s.id for s in self.sets]
         folded = Counter(k.casefold() for k in keys)
-        repeated = sorted({k for k in keys if folded[k.casefold()] > 1})
+        # v0.2 stored IDs differing only by case; a key equal to its ID is such a stored ID, so
+        # only a group holding a key that differs from its ID is refused. Commits refuse new
+        # folders that repeat ignoring case, and add_set() picks keys free ignoring case.
+        explicit = {s.key.casefold() for s in self.sets if s.key not in (None, s.id)}
+        repeated = sorted(
+            {k for k in keys if folded[k.casefold()] > 1 and k.casefold() in explicit}
+        )
         if repeated:
             raise SchemaError(
                 f"set keys repeat ignoring case: {', '.join(repeated)}",
@@ -309,14 +315,14 @@ class PathDiff(FrozenModel):
 
 
 class Revision(FrozenModel):
-    """Records one saved state of a show: what changed and when, never who or why (ADR 0003).
+    """Records one saved state of a show: what changed and when, never who or why.
 
     Attributes:
         id: Content hash of parent, time and change.
         parent: Previous revision; empty for the first.
         at: When it was saved; passed in, never read from the clock.
         changed: Stored paths written or deleted, sorted; set and transition folders are named
-            by set key (ADR 0004), so they can differ from workspace paths after a renumber.
+            by set key, so they can differ from workspace paths after a renumber.
     """
 
     id: str

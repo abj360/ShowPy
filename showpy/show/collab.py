@@ -20,6 +20,7 @@ from pydantic import TypeAdapter
 
 from showpy.core.errors import (
     ConflictError,
+    LockedError,
     SchemaError,
     TimeRangeError,
 )
@@ -44,7 +45,7 @@ from showpy.show.models import (
     Revision,
     Show,
 )
-from showpy.show.pinning import pin, unpin
+from showpy.show.pinning import pin, pin_key, unpin
 from showpy.show.storage import ROOT_REVISION, Workspace, load_show, save_show
 from showpy.show.structured import COMMENTS_DOC, SELECTION_DOC, decode_comments
 
@@ -63,7 +64,10 @@ SHORT_ID = 7
 def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
     """Replays one canvas event; pinned items raise LockedError unless `force` is set.
 
-    Comment and highlight events leave the show unchanged.
+    Comment and highlight events leave the show unchanged. A pin event that adds a new pin needs
+    no force; an unpin event, or a pin event that replaces an existing record (even an identical
+    one), raises LockedError without it. An unpin event of a pin that does not exist raises
+    UnknownRefError, with or without force.
 
     Args:
         show: Show the event applies to.
@@ -84,6 +88,7 @@ def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
         return show
     if event.kind in ("pin", "unpin"):
         held = Pin.model_validate(event.payload)
+        _require_pin_force(show, held, event, force)
         if event.kind == "pin":
             return pin(show, held.target, held.id, held.reason, held.by)
         return unpin(show, held.target, held.id)
@@ -96,6 +101,18 @@ def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
             context={"event": event.id},
         )
     return apply_change(show, [op], force=force)
+
+
+def _require_pin_force(show: Show, held: Pin, event: CanvasEvent, force: bool) -> None:
+    key = (held.target, pin_key(held.target, held.id))
+    exists = any((p.target, p.id) == key for p in show.pins)
+    if force or not exists:
+        return
+    raise LockedError(
+        f"{event.kind} event on {held.target} {held.id} drops or replaces an existing pin",
+        hint="pass force=True to replay it, or keep the pin as it is",
+        context={"target": held.target, "id": held.id, "event": event.id},
+    )
 
 
 def _pin_events(before: Show, after: Show) -> list[tuple[EventKind, dict[str, object]]]:
@@ -170,7 +187,8 @@ def events_since(ws: Workspace, revision: str) -> list[CanvasEvent]:
 
     Events are derived from stored states, so replaying them with apply_event() on the show
     at `revision` reproduces each later placement, form, path and count edit. Structural
-    edits (sets added or removed, cast or sheet changes) show up in changelog() only.
+    edits (sets added or removed, cast or sheet changes) show up in changelog() only. Replaying a
+    log that holds unpin events or pin replacements needs `force=True` in apply_event().
     """
     log = ws.repo.revisions(ws.show_id)
     if revision != ROOT_REVISION:

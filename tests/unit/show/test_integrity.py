@@ -43,12 +43,19 @@ Contains:
         ValueError, for deep nesting or an overlong int in a show or free JSON document
     test_regression_commit_refuses_a_cast_spot_still_placed: refuses a show.json that drops a cast
         spot some set still places
+    test_regression_transaction_refuses_a_set_id_put_show_refuses: refuses a set.json whose ID
+        the show encoder refuses, so the show stays saveable
+    test_regression_commit_refuses_derived_tables: refuses the derived index and placements
+        tables with READ_ONLY through a raw transaction and Workspace.commit on both backends
+    test_regression_lazy_blobs_get_fails_closed_on_a_missing_blob: raises StorageError, not None,
+        when the backend has no blob for a path in the tree
 """
 
 import json
 from collections.abc import Callable
 from datetime import UTC, datetime
 from functools import partial
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -56,7 +63,7 @@ import pytest
 from showpy.cast.models import Shape
 from showpy.cast.spots import set_shape
 from showpy.choreo.forms import line_form
-from showpy.core.errors import SchemaError, StorageError
+from showpy.core.errors import LockedError, SchemaError, StorageError
 from showpy.examples import two_set_show
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.documents import (
@@ -68,8 +75,10 @@ from showpy.show.documents import (
     paths_doc,
     set_doc,
 )
+from showpy.show.file_repository import FileRepository
 from showpy.show.integrity import (
     KNOWN_ROOTS,
+    LazyBlobs,
     blob_digest,
     require_known_path,
     require_valid_digests,
@@ -77,7 +86,7 @@ from showpy.show.integrity import (
 )
 from showpy.show.manage import remove_set
 from showpy.show.models import Show
-from showpy.show.repositories import InMemoryRepository
+from showpy.show.repositories import DocumentRepository, InMemoryRepository
 from showpy.show.storage import load_show, open_workspace, save_show
 from tests.fixtures.generators import seeded_show
 from tests.helpers import HOSTILE_JSON
@@ -447,3 +456,45 @@ def test_regression_commit_refuses_a_cast_spot_still_placed() -> None:
     with pytest.raises(SchemaError):
         _commit(repo, head, {SHOW_DOC: dump_json(body)})
     assert repo.head(SHOW_ID) == head
+
+
+def test_regression_transaction_refuses_a_set_id_put_show_refuses() -> None:
+    """Refuses a set.json whose ID the show encoder refuses, so put_show keeps working after."""
+    repo, head = _repo()
+    body = json.loads(encode_show(two_set_show())[set_doc("2")])
+    with pytest.raises(SchemaError):
+        _commit(repo, head, {set_doc("2"): dump_json({**body, "id": "=1+2", "key": "2"})})
+    assert repo.head(SHOW_ID) == head
+    edited = repo.get_show(SHOW_ID).replace(title="T2")
+    assert repo.put_show(SHOW_ID, edited, expected_revision=head, at=AT).parent == head
+
+
+@pytest.mark.parametrize("path", ["/show/index.csv", "/sets/1/placements.csv"])
+@pytest.mark.parametrize("backend", ["memory", "file"])
+def test_regression_commit_refuses_derived_tables(path: str, backend: str, tmp_path: Path) -> None:
+    repo: DocumentRepository = (
+        InMemoryRepository() if backend == "memory" else FileRepository(tmp_path / "repo")
+    )
+    head = repo.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT).id
+    payload = b'=HYPERLINK("x")\n'
+    with pytest.raises(LockedError) as raw:
+        repo.transaction(SHOW_ID, {path: payload}, expected_revision=head, at=AT)
+    with pytest.raises(LockedError) as committed:
+        open_workspace(repo, SHOW_ID).commit({path: payload}, at=AT)
+    assert raw.value.code == committed.value.code == "READ_ONLY"
+    assert repo.head(SHOW_ID) == head
+    assert path not in repo.paths(SHOW_ID)
+
+
+def _missing_blob(digest: str) -> bytes:
+    raise KeyError(digest)
+
+
+def test_regression_lazy_blobs_get_fails_closed_on_a_missing_blob() -> None:
+    """Raises StorageError for a tree path whose blob is gone; an absent path still gives None."""
+    blobs = LazyBlobs({"/renders/a.txt": "d"}, _missing_blob)
+    with pytest.raises(StorageError):
+        blobs.get("/renders/a.txt")
+    with pytest.raises(StorageError):
+        blobs["/renders/a.txt"]
+    assert blobs.get("/renders/b.txt") is None

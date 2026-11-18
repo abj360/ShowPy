@@ -253,7 +253,7 @@ def compile_plan(
 
 
 def plan_progress(plan: MotionPlan, tau: FloatArray) -> FloatArray:
-    """Returns the arc length travelled at each local count (ADR 0002, decision 1).
+    """Returns the arc length travelled at each local count.
 
     >>> from showpy.choreo.models import TransitionSpec, PathRow, Placement
     >>> from showpy.choreo.motion import DEFAULT_MOTIONS
@@ -365,8 +365,9 @@ def easing_chord_error(easing: Easing, u0: float, u1: float) -> float:
     """Returns the largest gap between an easing and its chord over shares [u0, u1].
 
     The piece must hold no easing break and no smoothstep inflection, so the easing is convex
-    or concave on it and the gap peaks where its slope equals the chord's (see
-    docs/research/segment-chord-bounds.md). Affine pieces have no gap.
+    or concave on it and the gap peaks where its slope equals the chord's. The gap never exceeds
+    the linear-interpolation bound, h^2/8 times the largest second derivative. Affine pieces
+    have no gap.
 
     Args:
         easing: Easing whose distance share is compared with its chord.

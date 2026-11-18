@@ -211,7 +211,7 @@ def as_points(obj: object) -> Points:
 
 
 def content_hash(obj: object, *, domain: str = "showpy.content") -> str:
-    """Hashes a value as SHA-256 over domain-tagged canonical JSON (ADR 0014).
+    """Hashes a value as SHA-256 over domain-tagged canonical JSON.
 
     Bytes and text hash as themselves under their own kind tag, so the string `'{"a":1}'` and
     the object `{"a": 1}` never collide. Everything else hashes as RFC 8785 JSON.

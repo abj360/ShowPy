@@ -102,3 +102,9 @@ The maintainer chose on 2026-11-16 to fix this in the release that already break
 - Phase 1 task E1 (`publish(..., join_token=)`, `verify_join_token`; commit `5d6fe52`).
 - Lane E security review of E1, finding I1 (raw token beside its hash), and ruling R10.
 - Code: `showpy/export/publish.py`, `showpy/export/models.py` (`Publication`).
+
+## Addendum 2026-11-17: where task E1 landed
+
+Phase 1 task E1 (`publish(..., join_token=)`, `verify_join_token`) shipped in PR #19. The commit
+SHA `5d6fe52` in References predates the lane's rebase, which rewrote it; PR #19 is the stable
+pointer.

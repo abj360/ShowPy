@@ -5,7 +5,7 @@ Contains:
     Finite, NonNegFinite, PositiveFinite: constrain a float to be finite, non-negative or positive
     Meters, Seconds, Count, Degrees: finite floats in the library's one unit system
     NonNegCount, NonNegSeconds, PositiveMeters: range-limited unit aliases
-    CountsPerMinute: finite tempo alias (positivity stays a timeline rule until Phase 2)
+    CountsPerMinute: finite tempo alias (positivity stays a timeline rule)
     FrozenModel: provides the immutable, strict base that raises SchemaError on bad data
     FrozenModel.replace(): returns a revalidated copy with some fields changed
     Box2: bounds stage-plane points and reports size and center

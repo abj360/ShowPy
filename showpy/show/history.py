@@ -160,7 +160,9 @@ def diff_show(a: Show, b: Show) -> dict[str, Any]:
 def revert(ws: Workspace, revision_id: str, at: datetime) -> Revision:
     """Saves the documents of an earlier revision as a new head revision.
 
-    Hosts build undo on it: only the host knows which revisions its user made (ADR 0003).
+    Hosts build undo on it: only the host knows which revisions its user made. The restored
+    documents come back as they were, pinned and locked items included, and no `force` is asked:
+    the host decides who may revert.
 
     Args:
         ws: Workspace; it moves to the head first.

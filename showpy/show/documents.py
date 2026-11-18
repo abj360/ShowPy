@@ -2,7 +2,7 @@
 documents.py --- splits a Show into canonical JSON documents at stored paths and back
 
 Stored paths address sets by key (`/sets/<key>/…`, `/transitions/<key a>-<key b>/…`) and
-show.json lists the set order as keys (ADR 0004); workspaces map display IDs onto them.
+show.json lists the set order as keys; workspaces map display IDs onto them.
 
 Contains:
     SHOW_DOC: names the document holding show metadata, cast and set order
@@ -16,6 +16,7 @@ Contains:
     paths_doc(): returns the path of a transition folder's paths document
     is_show_doc(): reports whether a path is part of the encoded Show
     is_storable_folder(): reports whether a set folder name can be stored
+    require_storable(): refuses a show whose set IDs, keys, paths or forms cannot be stored
     expected_show_docs(): lists the stored show-document paths decode reads for a show
     encode_show(): splits a show into documents stored by set key
     encode_documents(): encodes only the named stored documents of a show
@@ -181,7 +182,12 @@ def is_show_doc(path: str) -> bool:
     return SHOW_DOC_PATTERN.fullmatch(path) is not None
 
 
-def _require_storable(show: Show) -> None:
+def require_storable(show: Show) -> None:
+    """Refuses a show the stored layout cannot hold: bad set IDs or keys, loose paths or forms.
+
+    >>> from showpy.examples import two_set_show
+    >>> require_storable(two_set_show())
+    """
     bad = [s for s in show.set_ids() if not SET_ID_PATTERN.fullmatch(s) or ".." in s]
     bad += [set_key(s) for s in show.sets if not is_storable_folder(set_key(s))]
     pairs = set(show.transition_ids())
@@ -234,7 +240,7 @@ def encode_documents(show: Show, paths: Collection[str]) -> dict[str, bytes]:
 
 def _encoders(show: Show) -> dict[str, Callable[[], bytes]]:
     """Maps each stored document path of a show to a call that encodes it."""
-    _require_storable(show)
+    require_storable(show)
     keys = {s.id: set_key(s) for s in show.sets}
     meta = show.model_dump(mode="json", exclude=set(SPLIT_FIELDS))
     encoders: dict[str, Callable[[], bytes]] = {
@@ -376,9 +382,9 @@ def _require_paths_for(
 
 
 def is_storable_folder(folder: object) -> bool:
-    """Reports whether a set folder name can be stored: a v0.2 set ID or an ADR 0006 key.
+    """Reports whether a set folder name can be stored: a v0.2 set ID or a key that passes check_id.
 
-    Stored IDs that predate ADR 0006 keep loading until the Phase 2 migration (item 6).
+    Stored IDs that predate the ID pattern keep loading until they are migrated.
 
     >>> is_storable_folder("con"), is_storable_folder("_k"), is_storable_folder("1-2")
     (True, True, False)

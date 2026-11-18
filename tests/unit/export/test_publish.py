@@ -57,6 +57,8 @@ Contains:
     test_regression_join_link_rejects_a_malformed_token(): refuses a token of the wrong shape
     test_regression_join_link_rejects_a_wrong_token(): refuses a token that does not match
     test_regression_join_link_fails_closed_without_a_digest(): refuses a v0.2.0 publication
+    test_regression_join_link_refuses_a_non_https_stored_link(): refuses a stored link that is
+        http or javascript
     test_regression_qr_code_encodes_the_join_link(): encodes the verified joinable link
     test_regression_qr_code_rejects_a_wrong_token(): refuses to encode an unverified token
     test_regression_first_publish_requires_a_join_token(): refuses to publish without a token
@@ -1018,6 +1020,16 @@ def test_regression_join_link_fails_closed_without_a_digest() -> None:
     with pytest.raises(ValidationError) as caught:
         join_link(_published().replace(join_token_sha256=None), JOIN_TOKEN)
     assert "join_token" in caught.value.hint
+
+
+@pytest.mark.parametrize("link", ["http://x.example/pub-1", "javascript:alert(1)//pub-1"])
+def test_regression_join_link_refuses_a_non_https_stored_link(link: str) -> None:
+    """Refuses to append a token to a stored link whose scheme was replaced."""
+    pub = _published().replace(link=link)
+    with pytest.raises(ValidationError):
+        join_link(pub, JOIN_TOKEN)
+    with pytest.raises(ValidationError):
+        qr_code(pub, JOIN_TOKEN)
 
 
 def test_regression_qr_code_encodes_the_join_link() -> None:

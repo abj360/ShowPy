@@ -2,7 +2,7 @@
 motion_stats.py --- measurements over time, all computed by the PathEngine
 
 These live in showpy.choreo, not showpy.geo, because they need motion; showpy.geo stays static
-geometry (ADR 0002 addendum).
+geometry.
 
 Contains:
     position_at(): returns a spot's position at a global count
