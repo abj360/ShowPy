@@ -7,7 +7,8 @@ Contains:
     require_known_path(): refuses a path outside KNOWN_ROOTS, including look-alike paths
     blob_digest(): returns the SHA-256 hex digest blobs are addressed by
     require_new_set_keys(): checks every set key a commit stores in a folder the base lacks
-    require_valid_digests(): checks digest trees, loading and decoding only what must be decoded
+    require_valid_digests(): checks digest trees, loading and decoding only what must be decoded,
+        and refuses a decoded show the encoder could not store again
     require_valid_tree(): checks byte trees the same way, without a cache
 """
 
@@ -25,6 +26,7 @@ from showpy.show.documents import (
     decode_show,
     expected_show_docs,
     is_show_doc,
+    require_storable,
 )
 from showpy.show.models import Show
 from showpy.show.set_keys import PAIR_SEPARATOR, SETS_ROOT, TRANSITIONS_ROOT
@@ -213,6 +215,7 @@ def require_valid_digests(
         return None
     _require_required_docs(after)
     show = decode_show(_LazyBlobs(after, blob), cache=cache, digests=after)
+    require_storable(show)
     _require_no_orphans(show, [p for p in changed if p in after])
     return show
 

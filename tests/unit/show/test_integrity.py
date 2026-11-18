@@ -43,6 +43,8 @@ Contains:
         ValueError, for deep nesting or an overlong int in a show or free JSON document
     test_regression_commit_refuses_a_cast_spot_still_placed: refuses a show.json that drops a cast
         spot some set still places
+    test_regression_transaction_refuses_a_set_id_put_show_refuses: refuses a set.json whose ID
+        the show encoder refuses, so the show stays saveable
 """
 
 import json
@@ -447,3 +449,14 @@ def test_regression_commit_refuses_a_cast_spot_still_placed() -> None:
     with pytest.raises(SchemaError):
         _commit(repo, head, {SHOW_DOC: dump_json(body)})
     assert repo.head(SHOW_ID) == head
+
+
+def test_regression_transaction_refuses_a_set_id_put_show_refuses() -> None:
+    """Refuses a set.json whose ID the show encoder refuses, so put_show keeps working after."""
+    repo, head = _repo()
+    body = json.loads(encode_show(two_set_show())[set_doc("2")])
+    with pytest.raises(SchemaError):
+        _commit(repo, head, {set_doc("2"): dump_json({**body, "id": "=1+2", "key": "2"})})
+    assert repo.head(SHOW_ID) == head
+    edited = repo.get_show(SHOW_ID).replace(title="T2")
+    assert repo.put_show(SHOW_ID, edited, expected_revision=head, at=AT).parent == head
