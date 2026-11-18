@@ -79,6 +79,8 @@ Contains:
         tree when a workspace reads a whole tree
     test_regression_commit_refuses_to_land_over_a_damaged_existing_blob: refuses a commit whose
         blob is already stored with other bytes, before its tree record or link is written
+    test_regression_commit_refuses_a_symlink_at_a_blob_target: refuses a commit whose blob name
+        holds a symbolic link, even to the right bytes, before its tree record or link is written
 """
 
 import contextlib
@@ -972,3 +974,18 @@ def test_regression_commit_refuses_to_land_over_a_damaged_existing_blob(tmp_path
     assert caught.value.code == "CORRUPT"
     assert repo.head(SHOW_ID) == head
     assert sorted((base / "trees").iterdir()) == records
+
+
+@NO_SYMLINKS
+def test_regression_commit_refuses_a_symlink_at_a_blob_target(tmp_path: Path) -> None:
+    repo, head, base = _saved(tmp_path)
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(b"x")
+    (base / "objects" / digest(b"x")).symlink_to(outside)
+    records = sorted((base / "trees").iterdir())
+    _assert_corrupt(
+        lambda: repo.transaction(SHOW_ID, {"/renders/a.txt": b"x"}, expected_revision=head, at=AT)
+    )
+    assert repo.head(SHOW_ID) == head
+    assert sorted((base / "trees").iterdir()) == records
+    assert outside.read_bytes() == b"x"
