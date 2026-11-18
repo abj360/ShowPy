@@ -31,7 +31,6 @@ HASH_SEEDS = ("1", "2")
 SLOW_HASH_SEEDS = ("0", "1")
 DEFAULT_HASH_SEED = "0"
 FUZZ_PROFILE = "nightly"
-NO_TESTS_EXIT = 5
 COVERAGE_FLOOR = "96"
 NO_SYNC_ENV = "NOX_UV_NO_SYNC"
 
@@ -157,13 +156,13 @@ def slow(session: nox.Session) -> None:
 def fuzz(session: nox.Session) -> None:
     """Runs the fuzz targets under the nightly Hypothesis profile unless one is already set.
 
-    Not a default session: it is slow and runs on demand and in the nightly workflow. Skips
-    cleanly when no target exists yet.
+    Not a default session: it is slow and runs on demand and in the nightly workflow. Fails when
+    pytest collects no target, so broken marker plumbing cannot pass as green.
     """
     _require_same_python(session)
     session.env["HYPOTHESIS_PROFILE"] = os.environ.get("HYPOTHESIS_PROFILE", FUZZ_PROFILE)
     session.env["PYTHONHASHSEED"] = DEFAULT_HASH_SEED
-    _uv_run(session, "pytest", "-m", "fuzz", *session.posargs, success_codes=[0, NO_TESTS_EXIT])
+    _uv_run(session, "pytest", "-m", "fuzz", *session.posargs)
 
 
 @nox.session
