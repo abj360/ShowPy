@@ -5,7 +5,9 @@ test_phase1_scenario.py --- proves the Phase 1 exit criteria on a 300-spot, 60-s
 
 Builds seeded_show(11, 300, 60), pins, inserts a sub-set, renumbers, regroups, relabels, saves
 through file-backed workspaces, edits through a second workspace, publishes and claims, then
-checks the section 5.2.3 invariants. The whole scenario runs twice for the determinism check.
+checks the exit invariants: continuity at set boundaries, the collision segment bound, JSON and
+document round trips, events replaying to head, revert, determinism and no input mutation. The
+whole scenario runs twice for the determinism check.
 Every library call that takes a model is wrapped so a changed input fails the run. The path
 checks sample deterministically: every SEGMENT_STRIDE-th transition, plus the two around the
 inserted sub-set (indices 4 and 5), gets the nine-probe segment check; every set boundary of every
