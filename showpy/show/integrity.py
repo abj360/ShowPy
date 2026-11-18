@@ -96,6 +96,8 @@ class LazyBlobs(Mapping[str, bytes]):
     """Maps paths to blob bytes, reading a blob only when its path is looked up.
 
     Membership and iteration read the digests alone, so listing or probing paths loads nothing.
+    A path in the tree whose blob the backend lacks raises StorageError, so `get` never turns
+    a missing blob into None.
 
     >>> blobs = LazyBlobs({"/renders/a.txt": "d"}, lambda digest: b"hi")
     >>> "/renders/a.txt" in blobs, blobs["/renders/a.txt"]
@@ -107,7 +109,16 @@ class LazyBlobs(Mapping[str, bytes]):
         self._blob = blob
 
     def __getitem__(self, path: str) -> bytes:
-        return self._blob(self._digests[path])
+        digest = self._digests[path]
+        try:
+            return self._blob(digest)
+        except KeyError as err:
+            raise StorageError(
+                f"no blob stored for {path!r}",
+                hint="restore the show folder from a backup or remove the damaged file",
+                context={"path": path, "digest": digest},
+                code="CORRUPT",
+            ) from err
 
     def __contains__(self, path: object) -> bool:
         return path in self._digests

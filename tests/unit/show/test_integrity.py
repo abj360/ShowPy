@@ -47,6 +47,8 @@ Contains:
         the show encoder refuses, so the show stays saveable
     test_regression_commit_refuses_derived_tables: refuses the derived index and placements
         tables with READ_ONLY through a raw transaction and Workspace.commit on both backends
+    test_regression_lazy_blobs_get_fails_closed_on_a_missing_blob: raises StorageError, not None,
+        when the backend has no blob for a path in the tree
 """
 
 import json
@@ -76,6 +78,7 @@ from showpy.show.documents import (
 from showpy.show.file_repository import FileRepository
 from showpy.show.integrity import (
     KNOWN_ROOTS,
+    LazyBlobs,
     blob_digest,
     require_known_path,
     require_valid_digests,
@@ -481,3 +484,17 @@ def test_regression_commit_refuses_derived_tables(path: str, backend: str, tmp_p
     assert raw.value.code == committed.value.code == "READ_ONLY"
     assert repo.head(SHOW_ID) == head
     assert path not in repo.paths(SHOW_ID)
+
+
+def _missing_blob(digest: str) -> bytes:
+    raise KeyError(digest)
+
+
+def test_regression_lazy_blobs_get_fails_closed_on_a_missing_blob() -> None:
+    """Raises StorageError for a tree path whose blob is gone; an absent path still gives None."""
+    blobs = LazyBlobs({"/renders/a.txt": "d"}, _missing_blob)
+    with pytest.raises(StorageError):
+        blobs.get("/renders/a.txt")
+    with pytest.raises(StorageError):
+        blobs["/renders/a.txt"]
+    assert blobs.get("/renders/b.txt") is None
