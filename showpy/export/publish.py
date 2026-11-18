@@ -272,11 +272,23 @@ def verify_join_token(pub: Publication, token: str) -> bool:
     return hmac.compare_digest(_token_digest(token), pub.join_token_sha256)
 
 
+def _require_https_link(pub: Publication) -> None:
+    try:
+        _require_https_base_url(pub.link)
+    except SchemaError as err:
+        raise ValidationError(
+            f"publication {pub.id} stores a link that is not a plain https link: {err.message}",
+            hint="republish it with publish(..., previous=pub) to rebuild the link",
+            context={"publication": pub.id},
+        ) from err
+
+
 def join_link(pub: Publication, token: str) -> str:
     """Builds the joinable link `<pub.link>?t=<token>` once the token matches the stored digest.
 
     The publication never holds the token, so the host passes the one it issued at publish.
-    A stored link that already has a query or fragment is refused; republishing rebuilds it.
+    A stored link that already has a query or fragment, or is not https, is refused;
+    republishing rebuilds it.
 
     Args:
         pub: Publication whose link performers join through.
@@ -300,6 +312,7 @@ def join_link(pub: Publication, token: str) -> str:
             hint="republish it with publish(..., previous=pub) to rebuild the link",
             context={"publication": pub.id},
         )
+    _require_https_link(pub)
     if pub.join_token_sha256 is None:
         raise ValidationError(
             f"publication {pub.id} stores no join token digest, so nobody can join it",
