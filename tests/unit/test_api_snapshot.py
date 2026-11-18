@@ -8,12 +8,18 @@ Contains:
     diff_snapshots(): lists the names added, removed and changed between two snapshots
     unreleased_section(): extracts the Unreleased section of a changelog
     names_missing_from_changelog(): lists changed names the Unreleased section never mentions
+    has_released_section(): tells whether a changelog lists any released version
     check_snapshot(): compares the API with the stored snapshot and refreshes it when allowed
     test_public_api_matches_snapshot: fails on any signature drift and checks the changelog
     test_regression_refresh_refuses_a_change_missing_from_the_changelog: fails and keeps the old
         snapshot when refresh mode meets a changed name that Unreleased never names
     test_refresh_writes_a_change_the_changelog_names: rewrites the snapshot when every changed
         name is in Unreleased
+    test_regression_bootstrap_refuses_once_a_release_exists: fails and writes nothing when the
+        snapshot is missing and the changelog already lists a release
+    test_bootstrap_writes_a_snapshot_before_any_release: writes the first snapshot when the
+        changelog has no released section
+    test_has_released_section_reads_both_heading_styles: checks the release heading match
     test_diff_snapshots_reports_each_kind_of_change: checks the diff on a synthetic pair
     test_unreleased_section_stops_at_the_next_release: checks the changelog slicing
     test_names_missing_from_changelog_flags_unlisted_names: checks the changelog gate can fail
@@ -47,6 +53,8 @@ OPAQUE_DEFAULT = "..."
 STABLE_DEFAULT_TYPES = (type(None), bool, int, float, str, bytes, tuple, frozenset, enum.Enum)
 UNRELEASED_HEADING = re.compile(r"^## Unreleased\s*$", re.MULTILINE)
 NEXT_RELEASE_HEADING = re.compile(r"^## ", re.MULTILINE)
+RELEASED_HEADING = re.compile(r"^## \[?\d+\.\d+\.\d+", re.MULTILINE)
+RESTORE_COMMAND = "git checkout -- tests/fixtures/api_snapshot.json"
 
 JsonValue = str | dict[str, "JsonValue"]
 
@@ -199,6 +207,11 @@ def names_missing_from_changelog(names: list[str], changelog: str) -> list[str]:
     return [name for name in names if f"`{name}`" not in section]
 
 
+def has_released_section(changelog: str) -> bool:
+    """Tells whether a changelog lists any released version, as `## [x.y.z]` or `## x.y.z`."""
+    return RELEASED_HEADING.search(changelog) is not None
+
+
 def _format_failure(diff: dict[str, list[str]], unlisted: list[str]) -> str:
     """Formats the failure message with each changed name and the fix commands."""
     lines = ["E: public API differs from tests/fixtures/api_snapshot.json"]
@@ -229,6 +242,12 @@ def check_snapshot(
         failure: The failure message, or None when the API matches or the refresh succeeded.
     """
     if not snapshot_path.exists() and is_updating:
+        if changelog_path.exists() and has_released_section(changelog_path.read_text()):
+            return (
+                f"E: {snapshot_path.name} is missing but {changelog_path.name} lists a release; "
+                f"a fresh snapshot would skip the changelog check\n"
+                f"Fix: run {RESTORE_COMMAND}, then {UPDATE_COMMAND}"
+            )
         _write_snapshot(current, snapshot_path)
         return None
     if not snapshot_path.exists():
@@ -321,3 +340,29 @@ def test_refresh_writes_a_change_the_changelog_names(tmp_path: Path) -> None:
 
     assert check_snapshot(CHANGED_API, snapshot_path, changelog_path, is_updating=True) is None
     assert json.loads(snapshot_path.read_text()) == CHANGED_API
+
+
+def test_regression_bootstrap_refuses_once_a_release_exists(tmp_path: Path) -> None:
+    changelog = "## Unreleased\n\n- `alpha` grows b\n\n## [0.2.0] - 2026-11-15\n\n- `alpha`\n"
+    snapshot_path, changelog_path = _api_files(tmp_path, changelog)
+    snapshot_path.unlink()
+
+    failure = check_snapshot(CHANGED_API, snapshot_path, changelog_path, is_updating=True)
+
+    assert failure is not None
+    assert RESTORE_COMMAND in failure
+    assert not snapshot_path.exists()
+
+
+def test_bootstrap_writes_a_snapshot_before_any_release(tmp_path: Path) -> None:
+    snapshot_path, changelog_path = _api_files(tmp_path, "## Unreleased\n\n- first names\n")
+    snapshot_path.unlink()
+
+    assert check_snapshot(CHANGED_API, snapshot_path, changelog_path, is_updating=True) is None
+    assert json.loads(snapshot_path.read_text()) == CHANGED_API
+
+
+def test_has_released_section_reads_both_heading_styles() -> None:
+    assert has_released_section("## Unreleased\n\n## [0.2.0] - 2026-11-15\n")
+    assert has_released_section("## Unreleased\n\n## 0.2.0\n")
+    assert not has_released_section("## Unreleased\n\n- fixed 1.2.3 parsing\n")
