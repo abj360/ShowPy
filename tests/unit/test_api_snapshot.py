@@ -17,6 +17,8 @@ Contains:
         name is in Unreleased
     test_regression_bootstrap_refuses_once_a_release_exists: fails and writes nothing when the
         snapshot is missing and the changelog already lists a release
+    test_regression_bootstrap_refuses_without_a_changelog: fails and writes nothing when both the
+        snapshot and the changelog are missing
     test_bootstrap_writes_a_snapshot_before_any_release: writes the first snapshot when the
         changelog has no released section
     test_has_released_section_reads_both_heading_styles: checks the release heading match
@@ -227,6 +229,25 @@ def _write_snapshot(snapshot: dict[str, JsonValue], path: Path) -> None:
     path.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
 
 
+def _bootstrap_snapshot(
+    current: dict[str, JsonValue], snapshot_path: Path, changelog_path: Path
+) -> str | None:
+    """Writes the first snapshot, refusing when the changelog is missing or lists a release."""
+    if not changelog_path.exists():
+        return (
+            f"E: {changelog_path.name} is missing, so no release check can vouch for a fresh "
+            f"{snapshot_path.name}\nFix: run {UPDATE_COMMAND} from a source checkout"
+        )
+    if has_released_section(changelog_path.read_text()):
+        return (
+            f"E: {snapshot_path.name} is missing but {changelog_path.name} lists a release; "
+            f"a fresh snapshot would skip the changelog check\n"
+            f"Fix: run {RESTORE_COMMAND}, then {UPDATE_COMMAND}"
+        )
+    _write_snapshot(current, snapshot_path)
+    return None
+
+
 def check_snapshot(
     current: dict[str, JsonValue], snapshot_path: Path, changelog_path: Path, *, is_updating: bool
 ) -> str | None:
@@ -242,14 +263,7 @@ def check_snapshot(
         failure: The failure message, or None when the API matches or the refresh succeeded.
     """
     if not snapshot_path.exists() and is_updating:
-        if changelog_path.exists() and has_released_section(changelog_path.read_text()):
-            return (
-                f"E: {snapshot_path.name} is missing but {changelog_path.name} lists a release; "
-                f"a fresh snapshot would skip the changelog check\n"
-                f"Fix: run {RESTORE_COMMAND}, then {UPDATE_COMMAND}"
-            )
-        _write_snapshot(current, snapshot_path)
-        return None
+        return _bootstrap_snapshot(current, snapshot_path, changelog_path)
     if not snapshot_path.exists():
         return f"E: {snapshot_path.name} is missing; run {UPDATE_COMMAND}"
     stored: dict[str, JsonValue] = json.loads(snapshot_path.read_text())
@@ -351,6 +365,20 @@ def test_regression_bootstrap_refuses_once_a_release_exists(tmp_path: Path) -> N
 
     assert failure is not None
     assert RESTORE_COMMAND in failure
+    assert not snapshot_path.exists()
+
+
+def test_regression_bootstrap_refuses_without_a_changelog(tmp_path: Path) -> None:
+    """Refuses a bootstrap when the changelog is missing, since no release check can run."""
+    snapshot_path, changelog_path = _api_files(tmp_path, "")
+    snapshot_path.unlink()
+    changelog_path.unlink()
+
+    failure = check_snapshot(CHANGED_API, snapshot_path, changelog_path, is_updating=True)
+
+    assert failure is not None
+    assert "CHANGELOG.md is missing" in failure
+    assert UPDATE_COMMAND in failure
     assert not snapshot_path.exists()
 
 
