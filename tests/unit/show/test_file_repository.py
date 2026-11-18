@@ -77,6 +77,8 @@ Contains:
         syncing it fails
     test_regression_tree_at_walks_the_log_once: parses at most one record per revision plus the
         tree when a workspace reads a whole tree
+    test_regression_commit_refuses_to_land_over_a_damaged_existing_blob: refuses a commit whose
+        blob is already stored with other bytes, before its tree record or link is written
 """
 
 import contextlib
@@ -959,3 +961,14 @@ def test_regression_tree_at_walks_the_log_once(
     parses = len(parsed)
     assert len(tree) == len(repo.paths(SHOW_ID, head))
     assert parses <= len(repo.revisions(SHOW_ID)) + 1
+
+
+def test_regression_commit_refuses_to_land_over_a_damaged_existing_blob(tmp_path: Path) -> None:
+    repo, head, base = _saved(tmp_path)
+    (base / "objects" / digest(b"x")).write_bytes(b"garbage")
+    records = sorted((base / "trees").iterdir())
+    with pytest.raises(StorageError) as caught:
+        repo.transaction(SHOW_ID, {"/renders/a.txt": b"x"}, expected_revision=head, at=AT)
+    assert caught.value.code == "CORRUPT"
+    assert repo.head(SHOW_ID) == head
+    assert sorted((base / "trees").iterdir()) == records

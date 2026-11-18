@@ -344,9 +344,12 @@ class _FileBackend:
     def blob(self, show_id: str, digest: str) -> bytes:
         self._guard_dirs(show_id)
         objects = self._dir(show_id) / OBJECT_DIR
-        path = objects / self._checked_id(show_id, digest, objects)
+        return self._verified_blob(show_id, objects / self._checked_id(show_id, digest, objects))
+
+    def _verified_blob(self, show_id: str, path: Path) -> bytes:
+        """Reads a stored object, raising CORRUPT unless its bytes hash to its file name."""
         data = self._read(show_id, path, "blob", BLOB_MAX_BYTES)
-        if blob_digest(data) != digest:
+        if blob_digest(data) != path.name:
             raise self._corrupt(show_id, path, "blob bytes do not match their digest")
         return data
 
@@ -378,12 +381,11 @@ class _FileBackend:
         _require_readable_sizes(show_id, tree, blobs)
         for digest, data in blobs.items():
             target = base / OBJECT_DIR / self._caller_id(show_id, digest, "blob digest")
-            mode = _lstat_mode(show_id, target)
-            if mode is not None and stat.S_ISLNK(mode):
-                raise self._corrupt(show_id, target, "file is a symbolic link")
-            if mode is None:
-                # A blob a racing writer linked first under this digest is kept; reads verify it.
-                _link_exclusive(show_id, target, data)
+            if _lstat_mode(show_id, target) is None and _link_exclusive(show_id, target, data):
+                continue
+            # A blob already stored, or linked first by a racing writer, is kept only when it
+            # holds these bytes; a symlink or damaged file blocks the commit before it lands.
+            self._verified_blob(show_id, target)
         self._store_record(show_id, base / TREE_DIR / f"{tree_name}.json", revision, tree)
         link = base / LINK_DIR / (revision.parent or ROOT_LINK)
         if not _link_exclusive(show_id, link, tree_name.encode()):
