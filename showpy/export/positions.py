@@ -19,7 +19,7 @@ from showpy.core.errors import SchemaError, UnknownRefError, ValidationError
 from showpy.core.ids import SetId, SpotId
 from showpy.core.types import Point
 from showpy.core.util import close_matches
-from showpy.show.manage import _with_sets
+from showpy.show.manage import replace_sets
 from showpy.show.models import Show
 from showpy.show.set_keys import free_set_key, set_key
 
@@ -309,4 +309,4 @@ def import_positions(
     for set_id in order:
         previous = {p.entity: p for p in sets[-1].placements} if sets else {}
         sets.append(_merged_set(merge, set_id, previous))
-    return _with_sets(base, sets, force, cast=cast)
+    return replace_sets(base, sets, force=force, cast=cast)
