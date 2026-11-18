@@ -2,7 +2,7 @@
 facing.py --- facing tools for sets, plus timed facing overrides on a show
 
 The face_* tools edit placements in one Set. Facing over a time range goes through
-add_facing_override, which the PathEngine applies on top of paths (ADR 0001 item 14).
+add_facing_override, which the PathEngine applies on top of paths.
 
 Contains:
     face_audience(): faces spots toward the audience (0°)

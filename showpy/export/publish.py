@@ -1,9 +1,8 @@
 """
 publish.py --- publishing a show as a live link, claims on its spots and performer views
 
-Every function is pure: claims live inside the immutable Publication (ADR 0001 item 13),
-edits return a new Publication, and every time stamp is an explicit `at` (item 8).
-Notifications are returned, never sent (item 20).
+Every function is pure: claims live inside the immutable Publication, edits return a new
+Publication, and every time stamp is an explicit `at`. Notifications are returned, never sent.
 
 Contains:
     publish(): publishes a show revision, carrying forward claims that still qualify

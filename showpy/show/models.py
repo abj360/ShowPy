@@ -309,14 +309,14 @@ class PathDiff(FrozenModel):
 
 
 class Revision(FrozenModel):
-    """Records one saved state of a show: what changed and when, never who or why (ADR 0003).
+    """Records one saved state of a show: what changed and when, never who or why.
 
     Attributes:
         id: Content hash of parent, time and change.
         parent: Previous revision; empty for the first.
         at: When it was saved; passed in, never read from the clock.
         changed: Stored paths written or deleted, sorted; set and transition folders are named
-            by set key (ADR 0004), so they can differ from workspace paths after a renumber.
+            by set key, so they can differ from workspace paths after a renumber.
     """
 
     id: str

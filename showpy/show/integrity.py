@@ -135,10 +135,10 @@ def _set_keys_in(path: str) -> list[str]:
 
 
 def require_new_set_keys(before: Iterable[str], written: Iterable[str]) -> None:
-    """Checks every set key a commit stores in a folder the base tree lacks (ADR 0006 item 6).
+    """Checks every set key a commit stores in a folder the base tree lacks.
 
-    Folders already stored are grandfathered, so v0.1 and v0.2 set IDs keep saving until the
-    Phase 2 migration; a new folder, however the show was built, must pass check_id.
+    Folders already stored are grandfathered, so v0.1 and v0.2 set IDs keep saving until stored IDs
+    are migrated; a new folder, however the show was built, must pass check_id.
 
     Args:
         before: Paths of the base revision's tree.

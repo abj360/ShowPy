@@ -2,7 +2,6 @@
 engine.py --- PathEngine, the only code that turns path instructions into positions over time
 
 The canvas, checker, exports and analysis all ask this engine, so they never disagree.
-See ADR 0002 for the compile rules.
 
 Contains:
     PathEngine: compiles a show's transitions and answers where, how and how fast spots move
@@ -385,7 +384,8 @@ class _SegmentFit:
     """Splits one plan's motion into time-linear segments that stay within `tol` of it.
 
     Pieces on curves with a known curvature bound are accepted by the closed-form chord bound
-    of docs/research/segment-chord-bounds.md; other curves are probed at seeded jittered shares.
+    (linear-interpolation error h^2/8 times the largest second derivative); other curves are
+    probed at seeded jittered shares.
 
     Attributes:
         plan: Plan being segmented.

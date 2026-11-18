@@ -1,7 +1,7 @@
 """
 print_sheets.py --- builds coordinate sheets, set charts and the cue sheet of a show
 
-Positions are worded by the show's coordinate system (ADR 0001 item 21). Facing, behavior
+Positions are worded by the show's coordinate system, not a pack language. Facing, behavior
 and guide crossings come from PathEngine, the single motion source.
 
 Contains:

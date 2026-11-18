@@ -2,7 +2,7 @@
 documents.py --- splits a Show into canonical JSON documents at stored paths and back
 
 Stored paths address sets by key (`/sets/<key>/…`, `/transitions/<key a>-<key b>/…`) and
-show.json lists the set order as keys (ADR 0004); workspaces map display IDs onto them.
+show.json lists the set order as keys; workspaces map display IDs onto them.
 
 Contains:
     SHOW_DOC: names the document holding show metadata, cast and set order
@@ -376,9 +376,9 @@ def _require_paths_for(
 
 
 def is_storable_folder(folder: object) -> bool:
-    """Reports whether a set folder name can be stored: a v0.2 set ID or an ADR 0006 key.
+    """Reports whether a set folder name can be stored: a v0.2 set ID or a key that passes check_id.
 
-    Stored IDs that predate ADR 0006 keep loading until the Phase 2 migration (item 6).
+    Stored IDs that predate the ID pattern keep loading until they are migrated.
 
     >>> is_storable_folder("con"), is_storable_folder("_k"), is_storable_folder("1-2")
     (True, True, False)

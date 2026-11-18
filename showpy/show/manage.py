@@ -37,7 +37,7 @@ from showpy.time.models import Timeline
 
 SET_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.]*$")
 FIRST_SET_ID = "1"
-# ADR 0001 item 4: (0, 0) is the sheet's front-centre, the natural wait spot before an entrance.
+# (0, 0) is the sheet's front-centre, the natural wait spot before an entrance.
 OFF_FIELD_POINT = (0.0, 0.0)
 SUBSET_LETTERS = string.ascii_uppercase
 SEQUENTIAL = "sequential"
@@ -351,7 +351,9 @@ def _retimed_spec(spec: TransitionSpec, counts: float, rescale: bool) -> Transit
 def set_counts(
     show: Show, set_id: SetId, counts: float, rescale: bool = False, force: bool = False
 ) -> Show:
-    """Retimes a set and keeps the incoming transition's counts equal to it (ADR 0001 item 16).
+    """Retimes a set and keeps the incoming transition's counts equal to it.
+
+    The destination set's counts win over the transition's.
 
     Args:
         show: Show to edit.
@@ -402,7 +404,7 @@ def _renamed_note(note: Note, mapping: Mapping[SetId, SetId]) -> Note:
 def renumber(show: Show, scheme: str = SEQUENTIAL) -> tuple[Show, dict[SetId, SetId]]:
     """Renames sets 1..N in show order, rewriting transitions, forms, notes and pins.
 
-    Keys stay, so stored set folders and their build scripts stay with their sets (ADR 0004).
+    Keys stay, so stored set folders and their build scripts stay with their sets.
 
     Args:
         show: Show to edit.

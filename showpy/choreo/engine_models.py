@@ -42,7 +42,7 @@ class MotionPiece(FrozenModel):
 
 
 class MotionPlan(FrozenModel):
-    """Holds one spot's compiled motion in one transition (see ADR 0002).
+    """Holds one spot's compiled motion in one transition.
 
     Attributes:
         entity: Spot ID.

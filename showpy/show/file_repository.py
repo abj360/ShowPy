@@ -310,7 +310,7 @@ class _FileBackend:
         return log
 
     def _stored_revision(self, show_id: str, revision_id: str, source: Path) -> Revision:
-        """Decodes a stored revision; v0.1 and v0.2 records lose their authorship keys (ADR 0003).
+        """Decodes a stored revision; v0.1 and v0.2 records lose their authorship keys.
 
         The file is never rewritten: its ID still hashes the dropped keys, and stays as stored.
         """

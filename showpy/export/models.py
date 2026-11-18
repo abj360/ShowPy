@@ -188,8 +188,8 @@ class Publication(FrozenModel):
         show_id: Show published.
         revision: Show revision the publication shows.
         link: Join URL without the token, `<base_url>/<publication id>`; `join_link` adds the
-            token. A `t` parameter in a stored E1-era link is dropped on load (ADR 0018);
-            `model_copy(update=)` skips that step, so hosts edit with `replace` instead.
+            token. A `t` parameter in a stored link is dropped on load, since a link never carries
+            the token; `model_copy(update=)` skips that step, so hosts edit with `replace` instead.
         join_token_sha256: SHA-256 hex digest of the join token; hosts verify a join against it
             with `verify_join_token` instead of comparing raw tokens.
         status: `live`, `paused` or `closed`.

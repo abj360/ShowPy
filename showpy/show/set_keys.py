@@ -2,7 +2,7 @@
 set_keys.py --- picks stable set keys and maps workspace paths to key-addressed stored paths
 
 Workspace paths address sets by display ID (`/sets/2/set.py`); the stored tree addresses them
-by key (`/sets/1A/set.py`), so a renumber moves no file (ADR 0004).
+by key (`/sets/1A/set.py`), so a renumber moves no file.
 
 Contains:
     set_key(): returns the storage key of a set
@@ -43,7 +43,7 @@ def set_key(current: Set) -> str:
 def free_set_key(taken: Iterable[str], set_id: SetId) -> str:
     """Returns `set_id` as a new set's key, or the first `<set_id>.<n>` (n from 2) still free.
 
-    Keys compare ignoring case (ADR 0006 item 3).
+    Keys compare ignoring case.
 
     Args:
         taken: Keys of the sets already in the show.
