@@ -75,9 +75,9 @@ is tagged; the tag and git history keep it.
    class outside `AnyCurve`.
 
 **Phase 1, Priority 0: done; `v0.3.0` prepared on `chore/p1-exit`, tag pending maintainer
-approval** (release notes `docs/releases/v0.3.0.md`; lane PRs #13 to
-#21, text on the field PR #22, 2026-11-17). The Priority 0 ledger tests pass: storage data loss and
-traversal, commit validation, guaranteed segment bounds, hangs and unbounded allocations,
+approval** (release notes `docs/releases/v0.3.0.md`; lane PRs #13 to #20, nightly route fix PR
+#21, text on the field PR #22, 2026-11-17). The Priority 0 ledger tests pass: storage data loss
+and traversal, commit validation, guaranteed segment bounds, hangs and unbounded allocations,
 hash-seed determinism, publication tokens, form consistency after matching, and every lock and
 pin bypass. By the maintainer's decisions of 2026-11-15, permissions, authorship, commit messages
 and undo moved to the host app (ADR 0003), and sheet replacement was removed (ADR 0017). The
