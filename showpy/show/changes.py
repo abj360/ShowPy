@@ -2,6 +2,7 @@
 changes.py --- applies placement, form, paths and counts ops to a show
 
 Contains:
+    require_form_owner(): refuses a form whose ID is stored under another set
     store_paths(): stores a transition's paths in show order, dropping default paths
     apply_change(): applies change ops to a show, refusing pinned items unless forced
 """
@@ -9,7 +10,8 @@ Contains:
 import functools
 from collections.abc import Sequence
 
-from showpy.choreo.models import TransitionSpec
+from showpy.choreo.models import Form, TransitionSpec
+from showpy.core.errors import SchemaError
 from showpy.show.locks import require_unlocked
 from showpy.show.manage import set_counts
 from showpy.show.models import ChangeOp, FormOp, PathsOp, PlacementOp, Show
@@ -23,7 +25,25 @@ def _replace_set(show: Show, op: PlacementOp) -> Show:
     return show.replace(sets=(*show.sets[:position], edited, *show.sets[position + 1 :]))
 
 
+def require_form_owner(show: Show, form: Form) -> None:
+    """Refuses a form whose ID is stored under a different set than the form names.
+
+    Args:
+        show: Show that holds the stored forms.
+        form: Form about to be stored.
+    """
+    stored = show.forms.get(form.id)
+    if stored is None or stored.set == form.set:
+        return
+    raise SchemaError(
+        f"form {form.id} belongs to set {stored.set}, not {form.set}",
+        hint=f"give the form a new ID, or put it on set {stored.set}",
+        context={"form": form.id, "owner": stored.set, "set": form.set},
+    )
+
+
 def _replace_form(show: Show, op: FormOp) -> Show:
+    require_form_owner(show, op.form)
     position = show.set_index(op.form.set)
     owner = show.sets[position]
     if op.form.id not in owner.forms:

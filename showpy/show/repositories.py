@@ -21,6 +21,7 @@ from showpy.choreo.models import Form, Set, TransitionSpec
 from showpy.core.errors import ConflictError, SchemaError, StorageError, UnknownRefError
 from showpy.core.ids import WINDOWS_DEVICE_NAMES, SetId, TransitionId, is_device_name
 from showpy.core.util import ASSET_PREFIX, asset_uri, close_matches, content_hash
+from showpy.show.changes import require_form_owner
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.documents import decode_show, script_doc, split_path
 from showpy.show.files import LIMITS_DOC, WAIVERS_DOC, show_changes
@@ -426,6 +427,8 @@ class DocumentRepository:
     ) -> Revision:
         """Replaces a set's forms; every form must name that set. Stale forms are kept.
 
+        A form ID that is stored under another set raises SchemaError.
+
         A set that lists forms lists the put forms afterwards, so `get_forms` returns them.
         Checks validity only, never pins or locks; edit functions enforce those.
         """
@@ -437,6 +440,8 @@ class DocumentRepository:
                 context={"set": set_id, "forms": wrong},
             )
         show = self.get_show(show_id, expected_revision or None)
+        for put in forms:
+            require_form_owner(show, put)
         replaced = forms_of_set(show, set_id)
         kept = {k: f for k, f in show.forms.items() if k not in replaced}
         edited = show.replace(forms={**kept, **{f.id: f for f in forms}})
