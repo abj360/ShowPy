@@ -31,7 +31,7 @@ from showpy.core.errors import StorageError
 from showpy.show.documents import dump_json
 from showpy.show.integrity import blob_digest
 from showpy.show.models import Revision
-from showpy.show.repositories import DocumentRepository, conflict_error
+from showpy.show.repositories import DocumentRepository, conflict_error, revisions_since
 
 ROOT_LINK = "root"
 TREE_DIR = "trees"
@@ -389,7 +389,8 @@ class _FileBackend:
         self._store_record(show_id, base / TREE_DIR / f"{tree_name}.json", revision, tree)
         link = base / LINK_DIR / (revision.parent or ROOT_LINK)
         if not _link_exclusive(show_id, link, tree_name.encode()):
-            raise conflict_error(show_id, revision.parent, self.log(show_id)[-1:])
+            landed = revisions_since(self.log(show_id), revision.parent)
+            raise conflict_error(show_id, revision.parent, landed)
 
 
 class FileRepository(DocumentRepository):

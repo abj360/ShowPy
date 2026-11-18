@@ -3,6 +3,7 @@ repositories.py --- the shared repository logic, the in-memory repository and as
 
 Contains:
     RepositoryBackend: stores revisions, trees and blobs; commits compare-and-swap on the head
+    revisions_since(): lists the revisions of a log that landed after a parent revision
     conflict_error(): builds the ConflictError that lists the revisions that landed meanwhile
     DocumentRepository: implements Repository over a backend of revisions, trees and blobs
     InMemoryRepository: keeps every revision in process memory
@@ -97,6 +98,27 @@ class RepositoryBackend(Protocol):
     ) -> None:
         """Stores blobs and the tree, then lands the revision only if its parent is the head."""
         ...
+
+
+def revisions_since(log: list[Revision], parent: str) -> list[Revision]:
+    """Lists the revisions of a log that landed after a parent revision.
+
+    Args:
+        log: A show's revisions, oldest first.
+        parent: Revision a commit was based on; the root revision, or one missing from the log,
+            means every revision landed since.
+
+    Returns:
+        landed: The revisions after the parent, oldest first.
+
+    >>> from datetime import UTC, datetime
+    >>> at = datetime(2026, 11, 11, tzinfo=UTC)
+    >>> log = [Revision(id=i, parent=p, at=at) for i, p in (("a", ""), ("b", "a"), ("c", "b"))]
+    >>> [r.id for r in revisions_since(log, "a")], len(revisions_since(log, ""))
+    (['b', 'c'], 3)
+    """
+    ids = [r.id for r in log]
+    return log[ids.index(parent) + 1 :] if parent in ids else log
 
 
 def conflict_error(show_id: str, expected: str, landed: list[Revision]) -> ConflictError:
@@ -209,7 +231,7 @@ class DocumentRepository:
         ids = [r.id for r in log]
         if expected != ROOT_REVISION and expected not in ids:
             self.get_revision(show_id, expected)
-        landed = log[ids.index(expected) + 1 :] if expected else log
+        landed = revisions_since(log, expected)
         if landed:
             raise conflict_error(show_id, expected, landed)
         return log
@@ -500,9 +522,9 @@ class _MemoryBackend(RepositoryBackend):
         with self._lock:
             log = self._logs.setdefault(show_id, [])
             if (log[-1].id if log else ROOT_REVISION) != revision.parent:
-                ids = [r.id for r in log]
-                start = ids.index(revision.parent) + 1 if revision.parent in ids else 0
-                raise conflict_error(show_id, revision.parent, log[start:])
+                raise conflict_error(
+                    show_id, revision.parent, revisions_since(log, revision.parent)
+                )
             self._blobs.update(blobs)
             self._trees[(show_id, revision.id)] = dict(tree)
             log.append(revision)

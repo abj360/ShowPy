@@ -38,6 +38,8 @@ Contains:
         and a workspace without reading a render or export blob
     test_regression_in_memory_commit_conflict_under_the_lock: raises ConflictError naming only the
         racing revision when it lands between the head check and the commit
+    test_regression_file_conflict_lists_every_revision_since_the_parent: raises ConflictError naming
+        every racing revision when several land before a file-backend commit
 """
 
 import contextlib
@@ -398,3 +400,24 @@ def test_regression_in_memory_commit_conflict_under_the_lock() -> None:
     assert caught.value.context["head"] == landed[0].id
     assert [c["id"] for c in caught.value.context["changes"]] == [landed[0].id]
     assert repo.paths(SHOW_ID).count("/renders/a.txt") == 0
+
+
+def test_regression_file_conflict_lists_every_revision_since_the_parent(tmp_path: Path) -> None:
+    """Names both racing revisions, and no older one, when they land before a file commit."""
+    backend = _HookedBackend(FileRepository(tmp_path).backend)
+    repo = DocumentRepository(backend)
+    head = _create(repo)
+    landed: list[Revision] = []
+
+    def race() -> None:
+        parent = head
+        for path in ("/renders/b.txt", "/renders/c.txt"):
+            landed.append(repo.transaction(SHOW_ID, {path: b"x"}, expected_revision=parent, at=AT))
+            parent = landed[-1].id
+
+    backend.racer = race
+    with pytest.raises(ConflictError) as caught:
+        repo.transaction(SHOW_ID, {"/renders/a.txt": b"a"}, expected_revision=head, at=AT)
+    assert caught.value.context["head"] == landed[-1].id == repo.head(SHOW_ID)
+    assert [c["id"] for c in caught.value.context["changes"]] == [r.id for r in landed]
+    assert "/renders/a.txt" not in repo.paths(SHOW_ID)
