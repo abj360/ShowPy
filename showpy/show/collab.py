@@ -20,6 +20,7 @@ from pydantic import TypeAdapter
 
 from showpy.core.errors import (
     ConflictError,
+    LockedError,
     SchemaError,
     TimeRangeError,
 )
@@ -63,7 +64,9 @@ SHORT_ID = 7
 def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
     """Replays one canvas event; pinned items raise LockedError unless `force` is set.
 
-    Comment and highlight events leave the show unchanged.
+    Comment and highlight events leave the show unchanged. A pin event that adds a new pin needs
+    no force; an unpin event, or a pin event that replaces an existing record, raises LockedError
+    without it.
 
     Args:
         show: Show the event applies to.
@@ -84,6 +87,7 @@ def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
         return show
     if event.kind in ("pin", "unpin"):
         held = Pin.model_validate(event.payload)
+        _require_pin_force(show, held, event, force)
         if event.kind == "pin":
             return pin(show, held.target, held.id, held.reason, held.by)
         return unpin(show, held.target, held.id)
@@ -96,6 +100,17 @@ def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
             context={"event": event.id},
         )
     return apply_change(show, [op], force=force)
+
+
+def _require_pin_force(show: Show, held: Pin, event: CanvasEvent, force: bool) -> None:
+    exists = any((p.target, p.id) == (held.target, held.id) for p in show.pins)
+    if force or not (exists or event.kind == "unpin"):
+        return
+    raise LockedError(
+        f"{event.kind} event on {held.target} {held.id} drops or replaces an existing pin",
+        hint="pass force=True to replay it, or keep the pin as it is",
+        context={"target": held.target, "id": held.id, "event": event.id},
+    )
 
 
 def _pin_events(before: Show, after: Show) -> list[tuple[EventKind, dict[str, object]]]:

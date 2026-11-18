@@ -16,6 +16,9 @@ Contains:
         rescale proposal after the designer edited that transition's rows
     test_regression_accepting_a_form_edit_does_not_resurrect_a_deleted_form: refuses, or keeps the
         form deleted, when accepting an edit of a deleted form
+    test_regression_unpin_event_needs_force: refuses an unpin event unless forced
+    test_regression_pin_event_replacing_a_pin_needs_force: refuses a pin event that replaces a pin
+        unless forced
 """
 
 from datetime import UTC, datetime, timedelta
@@ -51,6 +54,7 @@ from showpy.show.models import (
     CanvasEvent,
     Comment,
     CountsOp,
+    EventKind,
     FormOp,
     PathsOp,
     Pin,
@@ -206,6 +210,29 @@ def test_canvas_event_needs_explicit_force() -> None:
     with pytest.raises(LockedError):
         apply_event(pinned, move)
     assert apply_event(pinned, move, force=True).set("2").get("T1").x == 3.0
+
+
+def _pin_event(kind: EventKind, reason: str = "") -> CanvasEvent:
+    held = Pin(target="entity", id="T1", reason=reason)
+    return CanvasEvent(id="e", at=AT, kind=kind, payload=held.model_dump())
+
+
+def test_regression_unpin_event_needs_force() -> None:
+    """Refuses an unpin event without force and leaves the pins as they were."""
+    pinned = pin(two_set_show(), "entity", "T1", "solo")
+    with pytest.raises(LockedError):
+        apply_event(pinned, _pin_event("unpin"))
+    assert pins(pinned) == pins(pin(two_set_show(), "entity", "T1", "solo"))
+    assert apply_event(pinned, _pin_event("unpin"), force=True).pins == ()
+
+
+def test_regression_pin_event_replacing_a_pin_needs_force() -> None:
+    """Refuses a pin event that rewrites an existing record unless forced."""
+    pinned = pin(two_set_show(), "entity", "T1", "solo")
+    with pytest.raises(LockedError):
+        apply_event(pinned, _pin_event("pin", "other"))
+    replaced = apply_event(pinned, _pin_event("pin", "other"), force=True)
+    assert [p.reason for p in replaced.pins] == ["other"]
 
 
 def test_agent_pin_event_applies() -> None:
