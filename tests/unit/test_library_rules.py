@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 CITATION_PATTERN = re.compile(r"\bADR\b|\bUP-\d+\.\d+-\d+\b|\bdocs/")
+MIN_LIBRARY_FILES = 100
 LIBRARY_ROOT = Path(__file__).resolve().parents[2] / "showpy"
 pytestmark = pytest.mark.skipif(
     not LIBRARY_ROOT.is_dir(), reason="needs a source checkout; the wheel test has no showpy tree"
@@ -83,9 +84,11 @@ def find_citations(source: str, name: str) -> list[str]:
 
 def test_library_cites_no_adr_docs_or_ledger_ids() -> None:
     """Requires docstrings and comments to state the rule, never point at an ADR or ledger ID."""
+    paths = sorted(LIBRARY_ROOT.rglob("*.py"))
+    assert len(paths) >= MIN_LIBRARY_FILES, f"scan found only {len(paths)} library files"
     offenders = [
         hit
-        for path in sorted(LIBRARY_ROOT.rglob("*.py"))
+        for path in paths
         for hit in find_citations(
             path.read_text(encoding="utf-8"), str(path.relative_to(LIBRARY_ROOT.parent))
         )
