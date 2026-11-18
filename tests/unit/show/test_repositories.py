@@ -28,6 +28,8 @@ Contains:
         set that listed others
     test_regression_put_forms_refuses_a_form_id_another_set_holds: refuses a form whose ID is
         stored under another set, keeping that set's form
+    test_regression_put_show_refuses_sets_differing_only_by_case: refuses a show whose defaulted
+        set keys collide case-insensitively, leaving head unchanged
     test_regression_form_op_refuses_a_form_id_another_set_holds: refuses a FormOp whose form ID is
         stored under another set
     test_regression_text_getters_raise_schema_error_for_tampered_bytes: raises SchemaError naming
@@ -296,6 +298,19 @@ def test_regression_put_forms_refuses_a_form_id_another_set_holds() -> None:
         repo.put_forms(SHOW_ID, "1", (takeover,), expected_revision=revision.id, at=AT)
     assert repo.get_show(SHOW_ID).forms["b"].set == "2"
     assert [f.id for f in repo.get_forms(SHOW_ID, "2")] == ["b"]
+
+
+def test_regression_put_show_refuses_sets_differing_only_by_case() -> None:
+    """Refuses sets "a" and "A" whose keys would share a folder on a case-insensitive disk."""
+    repo = InMemoryRepository()
+    revision = repo.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT)
+    base = two_set_show()
+    lower = base.sets[0].model_copy(update={"id": "a", "key": None})
+    upper = base.sets[1].model_copy(update={"id": "A", "key": None})
+    clash = base.model_copy(update={"sets": (lower, upper)})
+    with pytest.raises(SchemaError):
+        repo.put_show(SHOW_ID, clash, expected_revision=revision.id, at=AT)
+    assert repo.head(SHOW_ID) == revision.id
 
 
 def test_regression_form_op_refuses_a_form_id_another_set_holds() -> None:
