@@ -31,6 +31,8 @@ Contains:
     test_regression_follow_force_replaces_the_route_of_a_locked_row: replaces it when forced
     test_regression_second_counter_march_keeps_a_locked_route: refuses to rewrite a locked
         counter-march route unless forced
+    test_regression_make_route_offsets_members_that_share_a_start: gives each of two file members
+        on one spot its own arc length, so the file stays on the route
 """
 
 import math
@@ -38,6 +40,7 @@ import math
 import pytest
 
 from showpy.choreo.engine import PathEngine
+from showpy.choreo.match_ops import with_set
 from showpy.choreo.models import FacingMode, PathStyle, TransitionSpec
 from showpy.choreo.paths import lock
 from showpy.choreo.routes import (
@@ -52,6 +55,7 @@ from showpy.core.errors import LockedError, PathError
 from showpy.core.ids import format_tid
 from showpy.core.util import approx_equal
 from showpy.show.models import Show
+from showpy.show.validate import validate_paths
 from tests.fixtures.motion_shows import TID, with_targets
 from tests.fixtures.shows import two_set_show
 
@@ -273,3 +277,18 @@ def test_regression_second_counter_march_keeps_a_locked_route() -> None:
         counter_march(locked, TID, ["T4", "T3"], (6.0, 15.0))
     forced = counter_march(locked, TID, ["T4", "T3"], (6.0, 15.0), force=True)
     assert forced.transition(TID).routes["counter-march-T4"].members == ("T4", "T3")
+
+
+def test_regression_make_route_offsets_members_that_share_a_start() -> None:
+    """Keeps the file on the route when a follower starts on the leader's spot (nightly 2026-11-15).
+
+    T1 stands on T4's spot, so the route passes (6, 5) twice: T1 at arc length 0, T4 at 4.
+    """
+    show = two_set_show()
+    show = with_set(show, show.set("1").with_placements({"T1": {"x": 6.0, "y": 5.0}}))
+    route = make_route(show, TID, "T4", [(6.0, 15.0)], members=["T4", "T3", "T1"])
+    assert approx_equal(route.offsets, (4.0, 2.0, 0.0))
+    assert approx_equal(route.travel, 10.0)
+    moved = follow_and_set_targets(show, TID, route)
+    report = validate_paths(moved, moved.transition(TID))
+    assert report.ok, [(i.code, i.message) for i in report.issues if i.level == "error"]
