@@ -7,8 +7,9 @@ Builds seeded_show(11, 300, 60), pins, inserts a sub-set, renumbers, regroups, r
 through file-backed workspaces, edits through a second workspace, publishes and claims, then
 checks the section 5.2.3 invariants. The whole scenario runs twice for the determinism check.
 Every library call that takes a model is wrapped so a changed input fails the run. The path
-checks sample deterministically: every SEGMENT_STRIDE-th transition gets the nine-probe segment
-check; every set boundary of every spot is checked for continuity.
+checks sample deterministically: every SEGMENT_STRIDE-th transition, plus the two around the
+inserted sub-set (indices 4 and 5), gets the nine-probe segment check; every set boundary of every
+spot is checked for continuity.
 
 Contains:
     Scenario: the shows, revisions and publication one scenario run produces
@@ -39,7 +40,7 @@ from pydantic import BaseModel
 
 from showpy.cast.models import LabelScheme
 from showpy.cast.spots import delete_spots, regroup, relabel
-from showpy.choreo.engine import PathEngine
+from showpy.choreo.engine import DEFAULT_SEGMENT_TOL, PathEngine
 from showpy.choreo.engine_models import MotionSegment
 from showpy.choreo.models import Set
 from showpy.core.errors import LockedError
@@ -76,9 +77,9 @@ JOIN_TOKEN = "scenario-join-token-0123456789"
 BASE_URL = "https://shows.example"
 PUBLICATION_ID = "scenario"
 POSITION_TOL = 1e-6
-SEGMENT_TOL = 0.02
 SEGMENT_PROBES = 9
 SEGMENT_STRIDE = 6
+SUBSET_TRANSITIONS = (4, 5)
 STEP = timedelta(minutes=1)
 
 
@@ -151,15 +152,19 @@ def _retimed(ws: Workspace, number: int, at: datetime) -> None:
     target = str(RETIMED_FIRST_SET + number)
     with unchanged(head):
         edited = set_counts(head, target, head.set(target).counts + COUNT_BUMP)
-    save_show(ws, edited, at)
+    with unchanged(edited):
+        save_show(ws, edited, at)
 
 
 def _published(show: Show, at: datetime) -> Publication:
     with unchanged(show):
         pub = publish(show, PUBLICATION_ID, BASE_URL, at, join_token=JOIN_TOKEN)
-    assert verify_join_token(pub, JOIN_TOKEN)
-    assert join_link(pub, JOIN_TOKEN).startswith(pub.link)
-    for number, spot in enumerate(unclaimed(pub, show)[:CLAIMS]):
+    with unchanged(pub):
+        assert verify_join_token(pub, JOIN_TOKEN)
+        assert join_link(pub, JOIN_TOKEN).startswith(pub.link)
+    with unchanged(pub, show):
+        open_spots = unclaimed(pub, show)
+    for number, spot in enumerate(open_spots[:CLAIMS]):
         with unchanged(pub, show):
             pub, _ = claim_spot(pub, show, performer(f"P{number:02d}"), spot, at)
     return pub
@@ -173,7 +178,8 @@ def run_scenario(root: Path) -> Scenario:
     final_edit = _regrouped(restructured, pinned)
     repo = FileRepository(root)
     ws = open_workspace(repo, final_edit.id)
-    first = save_show(ws, final_edit, EXAMPLE_TIME)
+    with unchanged(final_edit):
+        first = save_show(ws, final_edit, EXAMPLE_TIME)
     base = load_show(ws)
     second = open_workspace(repo, final_edit.id)
     for number in range(SECOND_WORKSPACE_EDITS):
@@ -279,12 +285,13 @@ def _probe_gap(engine: PathEngine, piece: MotionSegment) -> float:
 def test_segments_follow_the_engine(scenario: Scenario) -> None:
     head = scenario.head
     engine = PathEngine(head)
-    sampled = head.transition_ids()[::SEGMENT_STRIDE]
+    tids = head.transition_ids()
+    sampled = [t for i, t in enumerate(tids) if i % SEGMENT_STRIDE == 0 or i in SUBSET_TRANSITIONS]
     with unchanged(head):
         pieces = [piece for tid in sampled for piece in engine.segments(tid)]
         gaps = [_probe_gap(engine, piece) for piece in pieces]
     assert len(pieces) >= len(sampled) * SPOTS
-    assert max(gaps) <= SEGMENT_TOL
+    assert max(gaps) <= DEFAULT_SEGMENT_TOL
 
 
 def test_json_and_document_round_trips_are_equal(scenario: Scenario) -> None:
@@ -307,7 +314,7 @@ def test_events_since_replays_to_head(scenario: Scenario) -> None:
     assert {e.revision for e in events if e.revision} >= set(_edit_revisions(ws, scenario))
     replayed = scenario.base
     for event in events:
-        with unchanged(replayed):
+        with unchanged(replayed, event):
             replayed = apply_event(replayed, event)
     assert encode_show(replayed) == encode_show(scenario.head)
 
@@ -324,3 +331,5 @@ def test_two_runs_are_byte_identical(scenario: Scenario, tmp_path: Path) -> None
     assert content_hash(again.head) == content_hash(scenario.head)
     assert again.head.revision == scenario.head.revision
     assert again.publication == scenario.publication
+    assert encode_show(again.base) == encode_show(scenario.base)
+    assert encode_show(again.reverted) == encode_show(scenario.reverted)
