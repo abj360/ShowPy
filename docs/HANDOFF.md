@@ -10,11 +10,11 @@ Last updated: 2026-11-17
 | Item          | Value                                                                                                    |
 | ------------- | -------------------------------------------------------------------------------------------------------- |
 | Repository    | `abj360/ShowPy` (public since 2026-11-15); split into its own repository on 2026-11-12 with full history |
-| Gates         | `nox -s tests`: 2,932 passed, `Ledger: 374 open` (2026-11-17); ruff, mypy `--strict`, pyright clean      |
+| Gates         | `nox -s tests`: 2,974 passed, `Ledger: 373 open` (2026-11-17); ruff, mypy `--strict`, pyright clean      |
 | CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main                |
-| Defect ledger | `Ledger: 374 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-17)                  |
+| Defect ledger | `Ledger: 373 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-17)                  |
 | Out of scope  | `stagecheck`, `showpy.packs` and `showpy.index`, by the user's decision (2026-11-11)                     |
-| Phase 1       | Priority 0 done on branch `chore/p1-exit`, pending release `v0.3.0`; Phase 2 is next (2026-11-17)        |
+| Phase 1       | Priority 0 done; `v0.3.0` prepared on `chore/p1-exit`, tag pending maintainer approval (2026-11-17)      |
 | Text feature  | stage 1 merged (PR #22, 2026-11-17); stages 2 and 3 not started                                          |
 | Pushing       | needs explicit approval                                                                                  |
 
@@ -74,7 +74,8 @@ is tagged; the tag and git history keep it.
    (`make_route`, closes UP-9.2-27), a counter-march with no members, and trimming a curve
    class outside `AnyCurve`.
 
-**Phase 1, Priority 0: done on branch `chore/p1-exit`, pending release `v0.3.0`** (lane PRs #15 to
+**Phase 1, Priority 0: done; `v0.3.0` prepared on `chore/p1-exit`, tag pending maintainer
+approval** (release notes `docs/releases/v0.3.0.md`; lane PRs #13 to
 #21, text on the field PR #22, 2026-11-17). The Priority 0 ledger tests pass: storage data loss and
 traversal, commit validation, guaranteed segment bounds, hangs and unbounded allocations,
 hash-seed determinism, publication tokens, form consistency after matching, and every lock and
