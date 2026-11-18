@@ -30,6 +30,7 @@ from showpy.show.documents import (
     is_show_doc,
     require_storable,
 )
+from showpy.show.files import require_writable
 from showpy.show.models import Show
 from showpy.show.set_keys import PAIR_SEPARATOR, SETS_ROOT, TRANSITIONS_ROOT
 from showpy.show.structured import TEXT_SUFFIXES, require_structured
@@ -236,6 +237,7 @@ def require_valid_digests(
 ) -> Show | None:
     """Checks every changed path and decodes the show when any show document changed.
 
+    Writing a derived table raises LockedError code READ_ONLY; deleting a stored copy is allowed.
     Documents whose digest sits in `cache` at the same path are reused; every changed
     document is decoded fresh, and the show is validated whole either way.
 
@@ -254,6 +256,8 @@ def require_valid_digests(
     changed = [p for p in set(before) | set(after) if before.get(p) != after.get(p)]
     for path in sorted(changed):
         require_known_path(path)
+        if path in after:
+            require_writable(path)
     require_new_set_keys(before, [p for p in changed if p in after])
     require_distinct_folders(before, after)
     require_structured_files(changed, after, blob)
