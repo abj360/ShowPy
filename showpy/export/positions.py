@@ -19,6 +19,7 @@ from showpy.core.errors import SchemaError, UnknownRefError, ValidationError
 from showpy.core.ids import SetId, SpotId
 from showpy.core.types import Point
 from showpy.core.util import close_matches
+from showpy.show.manage import _with_sets
 from showpy.show.models import Show
 from showpy.show.set_keys import free_set_key, set_key
 
@@ -269,7 +270,9 @@ def import_positions(
     Missing sets are created where they fall in file order, keyed like add_set(), and missing
     spots join `group`.
     Every spot ends up placed in every set: a spot without a row holds its previous
-    placement, and sits off the field at its first position before it first appears.
+    placement, and sits off the field at its first position before it first appears. A set inserted
+    between two stored sets drops the stored paths of the transition it splits; a locked one
+    raises LockedError unless `force` is set.
 
     Args:
         base: Show to merge into.
@@ -277,7 +280,7 @@ def import_positions(
         group: Group that new spots join.
         columns: Position field (`set`, `counts`, `entity`, `x`, `y`, `facing`) to the CSV
             column holding it, for files with other headers.
-        force: Move pinned placements anyway, as the designer.
+        force: Move pinned placements and edit locked transitions anyway, as the designer.
 
     Returns:
         show: The merged show.
@@ -306,4 +309,4 @@ def import_positions(
     for set_id in order:
         previous = {p.entity: p for p in sets[-1].placements} if sets else {}
         sets.append(_merged_set(merge, set_id, previous))
-    return base.replace(cast=cast, sets=tuple(sets))
+    return _with_sets(base, sets, force, cast=cast)

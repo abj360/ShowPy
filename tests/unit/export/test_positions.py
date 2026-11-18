@@ -18,18 +18,27 @@ Contains:
     test_regression_import_positions_caps_the_text_size(): refuses a CSV over the character cap
     test_regression_import_positions_caps_placements_before_ordering_sets(): refuses 32,000 new
         sets fast
+    test_regression_import_positions_refuses_a_set_inside_a_locked_transition(): raises
+        LockedError without force, and the forced result saves
+    test_regression_import_positions_drops_paths_between_sets_it_separates(): drops stored paths
+        between sets the import splits, so the result saves
 """
 
 import math
 import sys
+from datetime import UTC, datetime
 
 import pytest
 
+from showpy.choreo.models import PathRow, TransitionSpec
 from showpy.core.caps import MAX_POINTS, MAX_TEXT_CHARS
 from showpy.core.errors import LockedError, SchemaError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.export import positions
 from showpy.export.positions import import_positions
+from showpy.show.models import Show
+from showpy.show.pinning import pin
+from showpy.show.repositories import InMemoryRepository
 from tests.fixtures.shows import two_set_show
 from tests.helpers import fails_after
 
@@ -207,3 +216,31 @@ def test_regression_import_positions_caps_placements_before_ordering_sets(
     rows = "".join(f"{FIRST_NEW_SET + i},4,E{i},1,1\n" for i in range(MANY_NEW_SETS))
     with pytest.raises(SchemaError, match="placements"):
         import_positions(two_set_show(), "set,counts,entity,x,y\n" + rows, "trumpets")
+
+
+BETWEEN_TEXT = "set,counts,entity,x,y\n1,0,T1,0,0\n1b,4,T1,1,1\n2,8,T1,0,9\n"
+SAVED_AT = datetime(2026, 11, 17, 12, 0, tzinfo=UTC)
+
+
+def _saves(show: Show) -> None:
+    InMemoryRepository().put_show("s", show, expected_revision="", at=SAVED_AT)
+
+
+def test_regression_import_positions_refuses_a_set_inside_a_locked_transition() -> None:
+    """Raises LockedError for a set inserted into a pinned transition, and saves when forced."""
+    locked = pin(two_set_show(), "transition", "1->2")
+    with pytest.raises(LockedError):
+        import_positions(locked, BETWEEN_TEXT, "trumpets")
+    forced = import_positions(locked, BETWEEN_TEXT, "trumpets", force=True)
+    assert forced.set_ids() == ["1", "1b", "2"]
+    _saves(forced)
+
+
+def test_regression_import_positions_drops_paths_between_sets_it_separates() -> None:
+    """Drops a stored transition that is no longer between consecutive sets."""
+    base = two_set_show()
+    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", end=2)})
+    stored = base.model_copy(update={"transitions": (spec,)})
+    merged = import_positions(stored, BETWEEN_TEXT, "trumpets")
+    assert merged.transitions == ()
+    _saves(merged)
