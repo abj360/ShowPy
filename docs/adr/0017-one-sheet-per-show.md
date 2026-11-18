@@ -72,3 +72,9 @@ for one field is designed for that field; carrying it to another is a new design
 - Code: `showpy/sheet/replace.py`, `showpy/sheet/models.py` (`SheetReplaceReport`),
   `showpy/_api_table.py`.
 - Supersedes ADR 0001 rows 6 and 22 (where `replace_sheet` lives and what it reports).
+
+## Addendum 2026-11-17: `place()` returns the filled forms
+
+Decision 4 shows the call as `place(new_show, set_id, forms)`. As shipped, `place()` returns
+`(Set, list[Form])`: the set, plus the forms filled with the spots matched into their open slots.
+It does not change the show, so the caller stores the returned forms.

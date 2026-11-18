@@ -196,3 +196,11 @@ hold old `source_hash` values. The change must not lose or rewrite any of that.
   the next write normalizes again. `revert` to a revision written before the upgrade restores
   its legacy bytes, and the next write normalizes them again. Each such revision changes no
   content: its decoded show equals the stored one, and `diff_show` across it is empty.
+
+## Addendum 2026-11-17: when int and float hashes agree
+
+The 2026-11-15 addendum says `content_hash(n) == content_hash(float(n))` holds "only for
+`abs(n) <= 2**53`". That overclaims. Equality is guaranteed within ±2\*\*53, where every int is
+exactly a float. Beyond it equality may fail: `2**60` does (`jcs(2**60)` and `jcs(float(2**60))`
+differ, as shown there), while a power of two that a float holds exactly can still match when the
+float's shortest digits equal the int's. No caller may rely on either outcome past ±2\*\*53.
