@@ -30,6 +30,8 @@ Contains:
         the path, not UnicodeDecodeError, for a script, limits or waivers file that is not UTF-8
     test_regression_get_show_reads_no_render_blobs: loads and saves a show through the repository
         and a workspace without reading a render or export blob
+    test_regression_in_memory_commit_conflict_under_the_lock: raises ConflictError naming only the
+        racing revision when it lands between the head check and the commit
 """
 
 import contextlib
@@ -288,12 +290,19 @@ def test_regression_text_getters_raise_schema_error_for_tampered_bytes(path: str
     assert caught.value.context["path"] == path
 
 
-class _CountingBackend:
-    """Delegates to another backend and records every blob digest read."""
+class _HookedBackend:
+    """Delegates to another backend, records every blob digest read and can run a racer once.
+
+    Attributes:
+        inner: Backend every call is delegated to.
+        blobs_read: Digests passed to blob(), in call order.
+        racer: Runs once at the start of the next commit, before the inner commit.
+    """
 
     def __init__(self, inner: RepositoryBackend) -> None:
         self.inner = inner
         self.blobs_read: list[str] = []
+        self.racer: Callable[[], object] | None = None
 
     def show_ids(self) -> list[str]:
         return self.inner.show_ids()
@@ -311,11 +320,14 @@ class _CountingBackend:
     def commit(
         self, show_id: str, revision: Revision, tree: dict[str, str], blobs: dict[str, bytes]
     ) -> None:
+        racer, self.racer = self.racer, None
+        if racer is not None:
+            racer()
         self.inner.commit(show_id, revision, tree, blobs)
 
 
 def test_regression_get_show_reads_no_render_blobs() -> None:
-    backend = _CountingBackend(InMemoryRepository().backend)
+    backend = _HookedBackend(InMemoryRepository().backend)
     repo = DocumentRepository(backend)
     media = {"/renders/a.png": b"render", "/exports/b.pdf": b"export"}
     head = repo.transaction(SHOW_ID, media, expected_revision=_create(repo), at=AT).id
@@ -326,3 +338,23 @@ def test_regression_get_show_reads_no_render_blobs() -> None:
     save_show(ws, load_show(ws).replace(title="T3"), AT)
     assert backend.blobs_read
     assert not {blob_digest(raw) for raw in media.values()} & set(backend.blobs_read)
+
+
+def test_regression_in_memory_commit_conflict_under_the_lock() -> None:
+    backend = _HookedBackend(InMemoryRepository().backend)
+    repo = DocumentRepository(backend)
+    head = _create(repo)
+    landed: list[Revision] = []
+
+    def race() -> None:
+        landed.append(
+            repo.transaction(SHOW_ID, {"/renders/b.txt": b"b"}, expected_revision=head, at=AT)
+        )
+
+    backend.racer = race
+    with pytest.raises(ConflictError) as caught:
+        repo.transaction(SHOW_ID, {"/renders/a.txt": b"a"}, expected_revision=head, at=AT)
+    assert [r.id for r in landed] == [repo.head(SHOW_ID)]
+    assert caught.value.context["head"] == landed[0].id
+    assert [c["id"] for c in caught.value.context["changes"]] == [landed[0].id]
+    assert repo.paths(SHOW_ID).count("/renders/a.txt") == 0

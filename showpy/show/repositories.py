@@ -495,7 +495,9 @@ class _MemoryBackend(RepositoryBackend):
         with self._lock:
             log = self._logs.setdefault(show_id, [])
             if (log[-1].id if log else ROOT_REVISION) != revision.parent:
-                raise conflict_error(show_id, revision.parent, log)
+                ids = [r.id for r in log]
+                start = ids.index(revision.parent) + 1 if revision.parent in ids else 0
+                raise conflict_error(show_id, revision.parent, log[start:])
             self._blobs.update(blobs)
             self._trees[(show_id, revision.id)] = dict(tree)
             log.append(revision)
