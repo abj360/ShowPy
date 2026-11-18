@@ -168,9 +168,8 @@ def _index_csv(show: Show) -> bytes:
     writer.writerow(INDEX_COLUMNS)
     for e in index(show).entries:
         label = "" if e.measure is None else f"{e.measure.measure}:{e.measure.count_in_measure:g}"
-        writer.writerow(
-            [e.set, e.counts, e.start_count, label, e.seconds, neutralize_cell(e.cue or "")]
-        )
+        cells = [neutralize_cell(e.set), e.counts, e.start_count, label, e.seconds]
+        writer.writerow([*cells, neutralize_cell(e.cue or "")])
     return out.getvalue().encode()
 
 

@@ -291,7 +291,7 @@ def export_frames_csv(show: Show, per_count: int = 1) -> str:
                 [
                     _number(frame.t, FRAME_PLACES),
                     seconds,
-                    state.entity,
+                    neutralize_cell(state.entity),
                     _number(x, FRAME_PLACES),
                     _number(y, FRAME_PLACES),
                     _number(state.facing, FRAME_PLACES),
