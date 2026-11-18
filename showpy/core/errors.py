@@ -8,7 +8,8 @@ Contains:
     SchemaError: reports data that fails its schema or text format
     schema_error_from(): converts a pydantic ValidationError into a SchemaError
     field_errors(): returns the per-field errors of a converted SchemaError or re-raises it
-    bounded_repr(): renders a value for an error context in at most 80 characters, never raising
+    bounded_repr(): renders a value for an error context in at most 80 characters; never fails
+        on size, and catches only the ValueError that `repr` raises for an over-long int
     GeometryError: reports a degenerate shape
     ZeroLengthError: reports a request for the direction of a zero vector
     SpacingError: reports items that do not fit

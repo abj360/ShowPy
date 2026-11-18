@@ -3,7 +3,7 @@
 """
 test_data.py --- tests JSON interchange, frame CSV, position import, tables and format plugins
 
-Also holds the audited data and CSV defects (UP-9.5-29 to UP-9.5-34, UP-4.3-01) as strict xfails.
+Also holds the audited data and CSV defects (UP-9.5-29 to UP-9.5-34) as strict xfails.
 UP-9.5-35 is fixed; its test below passes.
 
 Contains:
