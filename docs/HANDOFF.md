@@ -3,19 +3,20 @@
 Audience: the next agent or engineer continuing this repository. Scope: state of work, what is
 left, and the traps already hit.
 
-Last updated: 2026-11-16
+Last updated: 2026-11-17
 
 ## Where things stand
 
-| Item          | Value                                                                                                                          |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Repository    | `abj360/ShowPy` (public since 2026-11-15); split into its own repository on 2026-11-12 with full history                       |
-| Gates         | `nox -s tests`: 2,390 passed, `Ledger: 424 open` (2026-11-16); ruff, mypy `--strict`, pyright clean                            |
-| CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main                                      |
-| Defect ledger | `Ledger: 424 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-16)                                        |
-| Out of scope  | `stagecheck`, `showpy.packs` and `showpy.index`, by the user's decision (2026-11-11)                                           |
-| Text feature  | branch `feat/text-on-field`, stage 1 complete with final-review fixes, awaiting merge; stages 2 and 3 not started (2026-11-17) |
-| Pushing       | needs explicit approval                                                                                                        |
+| Item          | Value                                                                                                    |
+| ------------- | -------------------------------------------------------------------------------------------------------- |
+| Repository    | `abj360/ShowPy` (public since 2026-11-15); split into its own repository on 2026-11-12 with full history |
+| Gates         | `nox -s tests`: 2,932 passed, `Ledger: 374 open` (2026-11-17); ruff, mypy `--strict`, pyright clean      |
+| CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main                |
+| Defect ledger | `Ledger: 374 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-17)                  |
+| Out of scope  | `stagecheck`, `showpy.packs` and `showpy.index`, by the user's decision (2026-11-11)                     |
+| Phase 1       | Priority 0 done on branch `chore/p1-exit`, pending release `v0.3.0`; Phase 2 is next (2026-11-17)        |
+| Text feature  | stage 1 merged (PR #22, 2026-11-17); stages 2 and 3 not started                                          |
+| Pushing       | needs explicit approval                                                                                  |
 
 **Repository split (2026-11-12).** Agent-only code moved to a separate consumer repository with
 its history: set-script builds and the bubblewrap sandbox (`show/build.py`, `build_models.py`,
@@ -73,19 +74,23 @@ is tagged; the tag and git history keep it.
    (`make_route`, closes UP-9.2-27), a counter-march with no members, and trimming a curve
    class outside `AnyCurve`.
 
-**Next: Phase 1, Priority 0.** Make the Priority 0 ledger tests pass: storage data loss and
+**Phase 1, Priority 0: done on branch `chore/p1-exit`, pending release `v0.3.0`** (lane PRs #15 to
+#21, text on the field PR #22, 2026-11-17). The Priority 0 ledger tests pass: storage data loss and
 traversal, commit validation, guaranteed segment bounds, hangs and unbounded allocations,
 hash-seed determinism, publication tokens, form consistency after matching, and every lock and
-pin bypass. Removing a fixed test's `defect` and `xfail` markers is part of the fix. By the
-maintainer's decisions of 2026-11-15, permissions, authorship, commit messages and undo move to
-the host app (ADR 0003), and sheet replacement is removed (ADR 0017).
+pin bypass. By the maintainer's decisions of 2026-11-15, permissions, authorship, commit messages
+and undo moved to the host app (ADR 0003), and sheet replacement was removed (ADR 0017). The
+phase's plan stays until the `v0.3.0` tag; the controller deletes it then.
 
-Still open from the original build: align `docs/showpy-api-reference.md` with the code and the
-deviations below (the code is the source of truth until generated docs land in Phase 6).
+**Next: Phase 2, foundations** (`docs/upgrade-plan.md`, "Phase 2"), the main breaking release
+before 1.0. Its plan is written when the phase starts.
+
+`docs/showpy-api-reference.md` was aligned with the code on 2026-11-17; the code stays the source
+of truth until generated docs land in Phase 6.
 
 ## Next: text on the field
 
-Stage 1 (bundled single-line fonts, user fonts as `showpy.font.v1` JSON, `centerline` text forms) is on `feat/text-on-field`. Open follow-ups, in order:
+Stage 1 (bundled single-line fonts, user fonts as `showpy.font.v1` JSON, `centerline` text forms) was merged on 2026-11-17 (PR #22). Open follow-ups, in order:
 
 1. **Junction gap (final review I1): done.** Slots keep a soft junction gap (0.25 of the smaller local stroke spacing) wherever a spread allows it. Where Hershey doubled or converging strokes allow none (hershey-script `!` at its minimum count holds at most five of its six spots in a 1-unit strip), the stroke takes the least crowded spread, at least 1 µm apart, and `text_report(form)` lists it.
 2. **Golden refresh (I8): done.** The maintainer approved it on 2026-11-17. The text golden now holds GO TEAM n = 120, Équipe 2026! n = 200 and ΑΒΓ n = 45, with no `LegibilityWarning` filter and no crowded stroke.
