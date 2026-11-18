@@ -201,6 +201,9 @@ hold old `source_hash` values. The change must not lose or rewrite any of that.
 
 The 2026-11-15 addendum says `content_hash(n) == content_hash(float(n))` holds "only for
 `abs(n) <= 2**53`". That overclaims. Equality is guaranteed within ±2\*\*53, where every int is
-exactly a float. Beyond it equality may fail: `2**60` does (`jcs(2**60)` and `jcs(float(2**60))`
-differ, as shown there), while a power of two that a float holds exactly can still match when the
-float's shortest digits equal the int's. No caller may rely on either outcome past ±2\*\*53.
+exactly a float. Beyond it an int matches its float only when the int's decimal digits equal the
+float's JCS digits: the shortest digits that round-trip the float, written in plain notation,
+which JCS uses below 10\*\*21. `2**53+2` and `10**20` match (`9007199254740994` and
+`100000000000000000000` on both sides). `2**60` does not (`1152921504606846976` against
+`1152921504606847000`), and neither does `10**21` (`1000000000000000000000` against `1e+21`).
+No caller may rely on either outcome past ±2\*\*53.
