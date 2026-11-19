@@ -75,7 +75,7 @@ def _uv_run(session: nox.Session, *args: str, success_codes: list[int] | None = 
     """
     sync_flag = "--no-sync" if os.environ.get(NO_SYNC_ENV) == "1" else "--locked"
     # Pin the nested run to nox's own interpreter: without it the nested uv re-resolved the
-    # Python from .python-version and rebuilt .venv, so CI's 3.12/3.13 legs ran on 3.14.
+    # Python from .python-version and rebuilt .venv, so CI's older legs ran on 3.14.
     session.run(
         "uv",
         "run",

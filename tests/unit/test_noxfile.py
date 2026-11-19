@@ -7,12 +7,21 @@ Contains:
     tolerated_exit_codes(): lists the pytest exit codes a nox session accepts besides 0
     test_fuzz_session_accepts_only_exit_code_zero: fails when fuzz tolerates "no tests collected"
     test_tolerated_exit_codes_sees_an_accepted_code: proves the scan can fail
+    test_ci_matrix_matches_requires_python: keeps the CI Python matrix and the metadata in step
 """
 
 import ast
+import re
+import tomllib
 from pathlib import Path
 
-NOXFILE = Path(__file__).resolve().parents[2] / "noxfile.py"
+ROOT = Path(__file__).resolve().parents[2]
+NOXFILE = ROOT / "noxfile.py"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
+PYPROJECT = ROOT / "pyproject.toml"
+MATRIX_PYTHONS = re.compile(r"^\s*python:\s*\[(.*?)\]", re.MULTILINE)
+FLOOR_SPEC = re.compile(r"^>=(3\.\d+)$")
+PYTHON_CLASSIFIER = re.compile(r"^Programming Language :: Python :: (3\.\d+)$")
 FUZZ_SESSION = "fuzz"
 SUCCESS_CODES = "success_codes"
 
@@ -48,3 +57,24 @@ def test_fuzz_session_accepts_only_exit_code_zero() -> None:
 def test_tolerated_exit_codes_sees_an_accepted_code() -> None:
     source = "def fuzz(session):\n    run('pytest', success_codes=[0, 5])\n"
     assert tolerated_exit_codes(source, "fuzz") == ["[0, 5]"]
+
+
+def minor_of(version: str) -> int:
+    """Extracts the minor number of a 3.x version string."""
+    return int(version.split(".")[1])
+
+
+def test_ci_matrix_matches_requires_python() -> None:
+    match = MATRIX_PYTHONS.search(CI_WORKFLOW.read_text())
+    assert match is not None
+    matrix = {item.strip().strip("\"'") for item in match.group(1).split(",")}
+    project = tomllib.loads(PYPROJECT.read_text())["project"]
+    classified = {
+        found.group(1)
+        for classifier in project["classifiers"]
+        if (found := PYTHON_CLASSIFIER.match(classifier))
+    }
+    floor = FLOOR_SPEC.match(project["requires-python"])
+    assert floor is not None
+    assert matrix == classified
+    assert min(matrix, key=minor_of) == floor.group(1)

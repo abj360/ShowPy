@@ -5,14 +5,13 @@ description = "Choreography library: sheets, spots, sets, forms and motion."
 readme = "README.md"
 license = "MIT AND OFL-1.1 AND LicenseRef-Hershey-Fonts"
 license-files = ["LICENSE", "showpy/fonts/licenses/*.txt"]
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Typing :: Typed",
@@ -87,7 +86,7 @@ dev = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py313"
 
 [tool.ruff.lint]
 allowed-confusables = ["–"]
@@ -138,7 +137,7 @@ ignore_missing_imports = true
 [tool.pyright]
 include = ["showpy", "tests", "scripts"]
 typeCheckingMode = "basic"
-pythonVersion = "3.12"
+pythonVersion = "3.13"
 stubPath = "typings"
 
 [tool.pytest.ini_options]
