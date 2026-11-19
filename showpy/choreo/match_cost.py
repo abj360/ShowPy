@@ -45,11 +45,11 @@ class MatchProblem:
         slot_groups: Group label per slot; None is open to all.
     """
 
-    entities: tuple[SpotId, ...]
+    entities: tuple[str, ...]
     starts: Points
     facings: tuple[float, ...] | None
     slots: Points
-    groups: Mapping[SpotId, str]
+    groups: Mapping[str, str]
     slot_groups: tuple[str | None, ...]
 
     def permuted(self, order: list[int]) -> "MatchProblem":
@@ -66,8 +66,8 @@ def _slot_points(to_slots: SlotSource) -> Points:
 
 
 def _source(
-    from_: Source, entities: Sequence[SpotId] | None
-) -> tuple[tuple[SpotId, ...], Points, tuple[float, ...] | None]:
+    from_: Source, entities: Sequence[str] | None
+) -> tuple[tuple[str, ...], Points, tuple[float, ...] | None]:
     if isinstance(from_, Set):
         ids = (
             tuple(entities)
@@ -99,8 +99,8 @@ def _labels(m: int, slot_groups: Sequence[str | None] | None) -> tuple[str | Non
 def build_problem(
     from_: Source,
     to_slots: SlotSource,
-    entities: Sequence[SpotId] | None,
-    groups: Mapping[SpotId, str] | None,
+    entities: Sequence[str] | None,
+    groups: Mapping[str, str] | None,
     slot_groups: Sequence[str | None] | None,
 ) -> MatchProblem:
     """Builds a problem from a Set or start points and slot points or forms.

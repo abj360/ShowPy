@@ -41,6 +41,7 @@ from showpy.choreo.engine_models import Fix
 from showpy.choreo.models import Easing, PathRow, PathStyle
 from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, MotionRegistry
 from showpy.core.errors import PathError, ShowPyError
+from showpy.core.ids import SpotId
 from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
 from showpy.show.models import Show
@@ -126,8 +127,8 @@ def test_suggest_reassignment_uncrosses_a_swap() -> None:
     result = suggest_reassignment(crossing_show(), TID, ["T1", "T2"])
     assert result.crossings == 0
     targets = dict(zip(result.entities, result.target_points().tolist(), strict=True))
-    assert approx_equal(targets["T1"], (0.0, 9.0))
-    assert approx_equal(targets["T2"], (4.0, 9.0))
+    assert approx_equal(targets[SpotId("T1")], (0.0, 9.0))
+    assert approx_equal(targets[SpotId("T2")], (4.0, 9.0))
 
 
 def test_regression_reassign_hint_names_the_real_module() -> None:
@@ -144,7 +145,7 @@ PARKED_UNTIL = 7.0
 @defect("UP-9.2-17")
 def test_regression_suggested_waypoint_is_reached_at_its_count_on_eased_rows() -> None:
     """Puts a suggested bend where it says, at the count it names, on an eased row (audit 9.2)."""
-    row = PathRow(entity="T1", easing=Easing(kind="ease_in", strength=2.0))
+    row = PathRow(entity=SpotId("T1"), easing=Easing(kind="ease_in", strength=2.0))
     show = with_rows({"T1": row}, show=crossing_show())
     fix = suggest_waypoint(show, TID, "T1", "T2")[0]
     changed = apply_fix(show.transition(TID), fix)
@@ -172,7 +173,7 @@ def test_regression_min_gaps_ignores_spots_before_their_entrance() -> None:
     )
     second = base.set("2").with_placements({"T1": {"x": 6.0, "y": 5.0}, "T2": {"x": 2.0, "y": 9.0}})
     show = with_rows(
-        {"T1": PathRow(entity="T1", start=PARKED_UNTIL)},
+        {"T1": PathRow(entity=SpotId("T1"), start=PARKED_UNTIL)},
         show=base.model_copy(update={"sets": (first, second)}),
     )
     assert min_gaps(show, TID, sel=["T1", "T2"], top=1)[0].gap > 0.0
@@ -212,7 +213,7 @@ def _waypoint_call(show: Show, motions: MotionRegistry) -> object:
 def test_regression_avoid_helpers_accept_a_custom_motion_registry(call: MotionsCall) -> None:
     """Analyses a show that uses a custom-registered motion (audit 9.2)."""
     registry = DEFAULT_MOTIONS.with_motion("probe", _stay_on_the_line)
-    row = PathRow(entity="T1", style=PathStyle.CUSTOM, motion_fn="probe")
+    row = PathRow(entity=SpotId("T1"), style=PathStyle.CUSTOM, motion_fn="probe")
     custom = with_rows({"T1": row}, show=crossing_show())
     assert repr(call(custom, registry)) == repr(call(crossing_show(), DEFAULT_MOTIONS))
 

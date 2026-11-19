@@ -8,6 +8,7 @@ Contains:
     shows(): draws a valid show with groups, sets, forms, paths, tempo changes and holds
 """
 
+from collections.abc import Sequence
 from typing import Literal
 
 from hypothesis import reject
@@ -53,7 +54,7 @@ def _formed(show: Show, set_id: str) -> set[str]:
 
 
 @st.composite
-def _followed(draw: st.DrawFn, show: Show, tid: tuple[str, str], free: list[str]) -> Show:
+def _followed(draw: st.DrawFn, show: Show, tid: tuple[str, str], free: Sequence[str]) -> Show:
     file = draw(st.lists(st.sampled_from(free), min_size=1, max_size=MAX_FILE, unique=True))
     ahead = draw(st.lists(points_on(show.sheet), max_size=MAX_ROUTE_WAYPOINTS))
     try:
@@ -67,7 +68,7 @@ def _followed(draw: st.DrawFn, show: Show, tid: tuple[str, str], free: list[str]
     return follow_and_set_targets(show, tid, route, start, end)
 
 
-def _held(show: Show, tid: tuple[str, str], held: list[str]) -> Show:
+def _held(show: Show, tid: tuple[str, str], held: Sequence[str]) -> Show:
     start, target = show.set(tid[0]), show.set(tid[1])
     still = {e: {"x": start.get(e).x, "y": start.get(e).y} for e in held}
     show = with_set(show, target.with_placements(still))
@@ -75,7 +76,7 @@ def _held(show: Show, tid: tuple[str, str], held: list[str]) -> Show:
 
 
 @st.composite
-def _spread(draw: st.DrawFn, spec: TransitionSpec, ordered: list[str]) -> TransitionSpec:
+def _spread(draw: st.DrawFn, spec: TransitionSpec, ordered: Sequence[str]) -> TransitionSpec:
     share = draw(st.integers(1, WAYPOINT_STEPS - 1)) / WAYPOINT_STEPS
     if draw(st.booleans()):
         direction = draw(st.sampled_from(STAGGER_ENDS))

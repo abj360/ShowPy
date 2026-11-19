@@ -79,7 +79,7 @@ from showpy.choreo.models import (
     TransitionSpec,
     Waypoint,
 )
-from showpy.core.ids import make_tid
+from showpy.core.ids import FormId, SetId, SpotId, make_tid
 from showpy.core.types import Region
 from showpy.core.validation import ValidationReport
 from showpy.notes.models import Anchor, Note
@@ -109,9 +109,9 @@ def test_valid_show_passes() -> None:
 def test_set_missing_and_unknown_spots() -> None:
     show = two_set_show()
     broken = Set(
-        id="2",
+        id=SetId("2"),
         counts=8.0,
-        placements=(*show.set("2").placements[1:], Placement(entity="Z9", x=0, y=0)),
+        placements=(*show.set("2").placements[1:], Placement(entity=SpotId("Z9"), x=0, y=0)),
     )
     codes = _codes(validate_set(show, broken))
     assert {"MISSING_SPOT", "UNKNOWN_SPOT"} <= codes
@@ -125,7 +125,7 @@ def test_pinned_rows_must_stay_unchanged() -> None:
 
 def test_form_membership_is_checked() -> None:
     show = two_set_show()
-    form = Form(id="f", set="1", kind="line", geometry={}, members=("T1",))
+    form = Form(id=FormId("f"), set=SetId("1"), kind="line", geometry={}, members=(SpotId("T1"),))
     show = show.model_copy(update={"forms": {"f": form}})
     first = show.set("1").with_placements({"T2": {"form": "f", "order": 0}, "T3": {"form": "zz"}})
     codes = _codes(validate_set(show, first))
@@ -145,7 +145,10 @@ def test_paths_continuity_and_windows() -> None:
     spec = TransitionSpec(
         id=TID,
         counts=8.0,
-        rows={"T1": PathRow(entity="T1", style=PathStyle.HOLD), "Z9": PathRow(entity="Z9")},
+        rows={
+            SpotId("T1"): PathRow(entity=SpotId("T1"), style=PathStyle.HOLD),
+            SpotId("Z9"): PathRow(entity=SpotId("Z9")),
+        },
     )
     codes = _codes(validate_paths(show, spec))
     assert {"CONTINUITY", "UNKNOWN_SPOT"} <= codes
@@ -158,7 +161,10 @@ def test_paths_counts_must_match_destination_set() -> None:
 
 def test_paths_report_bad_window_and_missing_rotate_params() -> None:
     show = with_rows(
-        {"T1": PathRow(entity="T1", end=12.0), "T2": PathRow(entity="T2", style=PathStyle.ROTATE)}
+        {
+            "T1": PathRow(entity=SpotId("T1"), end=12.0),
+            "T2": PathRow(entity=SpotId("T2"), style=PathStyle.ROTATE),
+        }
     )
     codes = _codes(validate_paths(show, show.transition(TID)))
     assert {"PATH"} <= codes
@@ -212,7 +218,13 @@ def _formed(
 ) -> Show:
     """Builds a show with one form of set 2 that is valid unless a parameter breaks it."""
     show = two_set_show()
-    form = Form(id=form_id, set=form_set, kind="line", geometry={}, members=members)
+    form = Form(
+        id=FormId(form_id),
+        set=SetId(form_set),
+        kind="line",
+        geometry={},
+        members=tuple(map(SpotId, members)),
+    )
     rows = tuple(
         p.model_copy(update={"form": key, "order": members.index(p.entity)})
         if points_back and p.entity in members
@@ -341,7 +353,7 @@ def test_regression_validate_show_reports_duplicate_note_ids() -> None:
 
 def _override(entity: str = "T1", start: float = 1.0, end: float = 2.0) -> FacingOverride:
     return FacingOverride(
-        entities=(entity,), mode=FacingMode.FIXED, value=90.0, start=start, end=end
+        entities=(SpotId(entity),), mode=FacingMode.FIXED, value=90.0, start=start, end=end
     )
 
 
@@ -408,8 +420,8 @@ def test_regression_validate_show_reports_non_finite_tempo() -> None:
 def test_regression_validate_show_reports_non_finite_waypoints() -> None:
     """Reports a path waypoint with an infinite coordinate (audit 9.7 validation gaps)."""
     waypoint = Waypoint(x=1.0, y=1.0).model_copy(update={"x": math.inf})
-    row = PathRow(entity="T1").model_copy(update={"waypoints": (waypoint,)})
-    spec = TransitionSpec(id=make_tid("1", "2"), counts=8.0, rows={"T1": row})
+    row = PathRow(entity=SpotId("T1")).model_copy(update={"waypoints": (waypoint,)})
+    spec = TransitionSpec(id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): row})
     assert _mentions(_edited(transitions=(spec,)), "inf")
 
 
@@ -489,8 +501,8 @@ def test_regression_validate_show_reports_nan_counts_on_the_first_set() -> None:
 def test_regression_validate_show_reports_nan_waypoints() -> None:
     """Reports a path waypoint with a NaN coordinate (audit 9.7 validation gaps)."""
     waypoint = Waypoint(x=1.0, y=1.0).model_copy(update={"y": math.nan})
-    row = PathRow(entity="T1").model_copy(update={"waypoints": (waypoint,)})
-    spec = TransitionSpec(id=make_tid("1", "2"), counts=8.0, rows={"T1": row})
+    row = PathRow(entity=SpotId("T1")).model_copy(update={"waypoints": (waypoint,)})
+    spec = TransitionSpec(id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): row})
     assert _mentions(_edited(transitions=(spec,)), "nan")
 
 
@@ -517,5 +529,5 @@ def test_regression_validate_show_warns_about_stale_forms() -> None:
 def test_validate_show_accepts_a_set_whose_forms_are_all_listed() -> None:
     """Raises no stale-form warning when every form is listed."""
     show = replaced_form_show()
-    clean = show.replace(forms={"b": show.forms["b"]})
+    clean = show.replace(forms={"b": show.forms[FormId("b")]})
     assert [i for i in validate_show(clean).issues if i.code == "STALE_FORM"] == []

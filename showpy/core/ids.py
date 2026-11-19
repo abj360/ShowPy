@@ -2,9 +2,11 @@
 ids.py --- ID aliases, checked model ID fields, the ID checks, and reference and transition parsing
 
 Contains:
-    SpotIdField, SetIdField, SetKeyField, FormIdField, RouteIdField, ShowIdField, NoteIdField,
+    SpotIdField, SetIdField, SetKeyField, FormIdField, RouteIdField, NoteIdField,
         SelectionNameField: model field types that run check_id on validation
     LandmarkIdField, ZoneIdField: model field types that run check_sheet_id on validation
+    ShowIdField: model field type that runs check_sheet_id, because stored show IDs keep an
+        inner `-`
     TransitionId: names the transition between two sets; `str()` writes `12→13`
     LEGACY_IDS_KEY: validation context key whose True value lets ID fields take any non-empty text
     parse_ref(): reads `kind:id@version` into its parts, checking the id and version
@@ -28,23 +30,23 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from itertools import combinations
-from typing import Annotated, NamedTuple
+from typing import Annotated, NamedTuple, NewType
 
 from pydantic import AfterValidator, ValidationInfo
 
 from showpy.core.errors import SchemaError
 
 type SheetRef = str
-type SpotId = str
-type SetId = str
-type SetKey = str
-type FormId = str
-type RouteId = str
-type ZoneId = str
-type LandmarkId = str
-type ShowId = str
-type NoteId = str
-type SelectionName = str
+SpotId = NewType("SpotId", str)
+SetId = NewType("SetId", str)
+SetKey = NewType("SetKey", str)
+FormId = NewType("FormId", str)
+RouteId = NewType("RouteId", str)
+ZoneId = NewType("ZoneId", str)
+LandmarkId = NewType("LandmarkId", str)
+ShowId = NewType("ShowId", str)
+NoteId = NewType("NoteId", str)
+SelectionName = NewType("SelectionName", str)
 
 REF_PATTERN = re.compile(r"^(?P<kind>[A-Za-z][\w-]*):(?P<id>[^@:\s]+)(?:@(?P<version>[^@\s]+))?$")
 REF_ID_KIND = "reference"
@@ -175,7 +177,7 @@ def make_tid(from_set: str, to_set: str) -> TransitionId:
     >>> str(make_tid("1", "2"))
     '1→2'
     """
-    return TransitionId(check_id(from_set, kind="set"), check_id(to_set, kind="set"))
+    return TransitionId(SetId(check_id(from_set, kind="set")), SetId(check_id(to_set, kind="set")))
 
 
 def parse_tid(text: str) -> TransitionId:
@@ -350,7 +352,9 @@ SetIdField = Annotated[SetId, AfterValidator(_checked("set", _ID_RULE))]
 SetKeyField = Annotated[SetKey, AfterValidator(_checked("set key", _ID_RULE))]
 FormIdField = Annotated[FormId, AfterValidator(_checked("form", _ID_RULE))]
 RouteIdField = Annotated[RouteId, AfterValidator(_checked("route", _ID_RULE))]
-ShowIdField = Annotated[ShowId, AfterValidator(_checked("show", _ID_RULE))]
+# Show IDs name repository folders, and stored shows keep IDs with an inner `-`, so the field
+# applies the sheet rule; refusing `-` in new show IDs belongs to the code that creates shows.
+ShowIdField = Annotated[ShowId, AfterValidator(_checked("show", _SHEET_ID_RULE))]
 NoteIdField = Annotated[NoteId, AfterValidator(_checked("note", _ID_RULE))]
 SelectionNameField = Annotated[SelectionName, AfterValidator(_checked("selection", _ID_RULE))]
 LandmarkIdField = Annotated[LandmarkId, AfterValidator(_checked("landmark", _SHEET_ID_RULE))]

@@ -7,11 +7,11 @@ Contains:
 """
 
 import itertools
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from showpy.choreo.models import FacingOverride, Form, Set
 from showpy.core.errors import SchemaError, TimelineError, VersionError
-from showpy.core.ids import SetId, parse_tid
+from showpy.core.ids import FormId, SetId, parse_tid
 from showpy.core.types import Count
 from showpy.notes.models import Note
 from showpy.sheet.models import Zone
@@ -135,7 +135,7 @@ def _note_in(note: Note, ids: set[SetId]) -> bool:
     return True
 
 
-def _pin_in(item: Pin, ids: set[SetId], forms: dict[str, Form]) -> bool:
+def _pin_in(item: Pin, ids: set[SetId], forms: Mapping[FormId, Form]) -> bool:
     if item.target == "set":
         return item.id in ids
     if item.target == "form":
@@ -162,7 +162,7 @@ def _section(show: Show, sets: Sequence[Set], timeline: Timeline, low: Count, hi
     )
 
 
-def split_section(show: Show, at: SetId) -> tuple[Show, Show]:
+def split_section(show: Show, at: str) -> tuple[Show, Show]:
     """Splits a show at set `at`; both shows hold `at`, and the second starts its clock there.
 
     The second show's tempo, holds, markers, measures, audio sync, facing overrides and zone
@@ -239,7 +239,7 @@ def _keyed_after(a: Show, tail: Sequence[Set]) -> tuple[Set, ...]:
     return tuple(keyed)
 
 
-def _merged_forms(a: Show, b: Show) -> dict[str, Form]:
+def _merged_forms(a: Show, b: Show) -> dict[FormId, Form]:
     clash = [k for k, f in b.forms.items() if k in a.forms and a.forms[k] != f]
     if clash:
         raise SchemaError(

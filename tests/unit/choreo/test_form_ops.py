@@ -89,6 +89,7 @@ from showpy.core.errors import (
     SpacingError,
     UnknownRefError,
 )
+from showpy.core.ids import SetId, SpotId
 from showpy.core.types import Points
 from showpy.core.util import approx_equal
 from showpy.geo.affine import (
@@ -113,8 +114,8 @@ def _locked(form: Form) -> Form:
 
 
 def _prev(**points: tuple[float, float]) -> Set:
-    rows = tuple(Placement(entity=e, x=x, y=y) for e, (x, y) in points.items())
-    return Set(id="0", counts=0.0, placements=rows)
+    rows = tuple(Placement(entity=SpotId(e), x=x, y=y) for e, (x, y) in points.items())
+    return Set(id=SetId("0"), counts=0.0, placements=rows)
 
 
 def test_edit_changes_construction_and_form_fields() -> None:
@@ -159,14 +160,14 @@ def test_reorder_by_x_uses_previous_positions() -> None:
     form = line_form("f", ("A", "B", "C"), (4, 5), (0, 5))
     prev = _prev(A=(9.0, 0.0), B=(1.0, 0.0), C=(5.0, 0.0))
     reordered = reorder(form, "by_x", prev)
-    xs = {p.entity: p.x for p in placements(reordered)}
+    xs: dict[str, float] = {p.entity: p.x for p in placements(reordered)}
     assert xs["B"] < xs["C"] < xs["A"]
 
 
 def test_reorder_by_y_without_previous_set_uses_ids() -> None:
     form = line_form("f", ("C", "A", "B"), (0, 4), (0, 0))
     reordered = reorder(form, "by_y")
-    ys = {p.entity: p.y for p in placements(reordered)}
+    ys: dict[str, float] = {p.entity: p.y for p in placements(reordered)}
     assert ys["A"] < ys["B"] < ys["C"]
 
 

@@ -21,6 +21,7 @@ from collections.abc import Sequence
 import numpy as np
 import numpy.typing as npt
 
+from showpy.cast.select import select
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import Fix, GapInfo
 from showpy.choreo.match import match
@@ -73,37 +74,37 @@ def _track(times: Sequence[float], points: Sequence[Point] | Points, at: FloatAr
 
 
 def _stations(
-    engine: PathEngine, entity: SpotId, tid: tuple[str, str]
-) -> tuple[list[float], Points]:
+    engine: PathEngine, entity: str, tid: tuple[str, str]
+) -> tuple[SpotId, list[float], Points]:
     segments = engine.entity_segments(entity, tid)
     times = [segments[0].t0, *(s.t1 for s in segments)]
     points = np.array([segments[0].p0, *(s.p1 for s in segments)], dtype=float)
-    return times, points
+    return segments[0].entity, times, points
 
 
-def _extent(show: Show, entity: SpotId) -> float:
+def _extent(show: Show, entity: str) -> float:
     return show.cast.spot(entity).shape.extent_m if entity in show.cast.ids() else 0.0
 
 
-def _pair_gap(engine: PathEngine, tid: tuple[str, str], a: SpotId, b: SpotId) -> GapInfo:
-    ta, pa = _stations(engine, a, tid)
-    tb, pb = _stations(engine, b, tid)
+def _pair_gap(engine: PathEngine, tid: tuple[str, str], a: str, b: str) -> GapInfo:
+    id_a, ta, pa = _stations(engine, a, tid)
+    id_b, tb, pb = _stations(engine, b, tid)
     tau, dist = closest_approach(ta, pa, tb, pb)
-    first, second = sorted((a, b))
+    first, second = sorted((id_a, id_b))
     gap = dist - _extent(engine.show, a) - _extent(engine.show, b)
     return GapInfo(a=first, b=second, tau=tau, gap=gap)
 
 
 def _on_field_ids(
-    engine: PathEngine, tid: tuple[str, str], sel: str | Sequence[SpotId]
+    engine: PathEngine, tid: tuple[str, str], sel: str | Sequence[str]
 ) -> list[SpotId]:
     plans = engine.compile(tid).plans
-    ids = list(plans) if sel == ALL else list(sel)
+    ids = list(plans) if sel == ALL else list(select(engine.show, sel).ids)
     return [e for e in ids if plans[e].start.on_field or plans[e].end.on_field]
 
 
 def min_gaps(
-    show: Show, tid: tuple[str, str], sel: str | Sequence[SpotId] = ALL, top: int = 10
+    show: Show, tid: tuple[str, str], sel: str | Sequence[str] = ALL, top: int = 10
 ) -> list[GapInfo]:
     """Lists the `top` tightest pairs of on-field spots in a transition, tightest first.
 
@@ -128,7 +129,7 @@ def min_gaps(
 
 
 def _box(engine: PathEngine, entity: SpotId, tid: tuple[str, str]) -> tuple[Points, Points]:
-    _, pts = _stations(engine, entity, tid)
+    _, _, pts = _stations(engine, entity, tid)
     return pts.min(axis=0), pts.max(axis=0)
 
 
@@ -141,8 +142,8 @@ def _evaluate(
     show: Show,
     tid: tuple[str, str],
     changed: TransitionSpec,
-    pair: tuple[SpotId, SpotId],
-    moved: SpotId,
+    pair: tuple[str, str],
+    moved: str,
 ) -> tuple[float, float]:
     others = tuple(t for t in show.transitions if t.id != tid)
     trial = show.replace(transitions=(*others, changed))
@@ -151,7 +152,7 @@ def _evaluate(
 
 
 def suggest_delays(
-    show: Show, tid: tuple[str, str], pair: tuple[SpotId, SpotId], max_delay: float = 4.0
+    show: Show, tid: tuple[str, str], pair: tuple[str, str], max_delay: float = 4.0
 ) -> list[Fix]:
     """Suggests delaying either spot by 0.5-count steps up to max_delay, best gap first.
 
@@ -178,7 +179,7 @@ def suggest_delays(
 
 
 def suggest_waypoint(
-    show: Show, tid: tuple[str, str], entity: SpotId, around: SpotId, clearance: float = 0.8
+    show: Show, tid: tuple[str, str], entity: str, around: str, clearance: float = 0.8
 ) -> list[Fix]:
     """Suggests a timed bend that takes `entity` around `around` at their closest moment.
 
@@ -221,7 +222,7 @@ def _away(here: Points, other: Points, velocity: Points) -> Points:
 def suggest_reassignment(
     show: Show,
     tid: tuple[str, str],
-    sel: Sequence[SpotId],
+    sel: Sequence[str],
     crossing_weight: float = CROSSING_WEIGHT,
 ) -> MatchResult:
     """Re-matches the selected spots to their own next-set targets, penalizing crossings.
@@ -239,7 +240,7 @@ def suggest_reassignment(
 
 
 def separate_in_time(
-    spec: TransitionSpec, ordered_sel: Sequence[SpotId], gap_counts: float = 1.0
+    spec: TransitionSpec, ordered_sel: Sequence[str], gap_counts: float = 1.0
 ) -> TransitionSpec:
     """Staggers starts `gap_counts` apart along an order.
 

@@ -70,9 +70,9 @@ def _with_cast(show: "Show", **changes: Any) -> "Show":
     return show.replace(cast=cast)
 
 
-def _allocate_labels(cast: Cast, group_keys: Sequence[str]) -> list[SpotId]:
+def _allocate_labels(cast: Cast, group_keys: Sequence[str]) -> list[str]:
     scheme = cast.label_scheme
-    taken = set(cast.ids())
+    taken: set[str] = set(cast.ids())
     cursor: dict[str, int] = {}
     labels = []
     for key in group_keys:
@@ -101,7 +101,7 @@ def _new_placements(
     )
 
 
-def _pinned_set_ids(show: "Show") -> frozenset[SetId]:
+def _pinned_set_ids(show: "Show") -> frozenset[str]:
     return frozenset(pin.id for pin in show.pins if pin.target == "set")
 
 
@@ -118,7 +118,7 @@ def _entered_pinned_sets(before: "Show", after: "Show") -> list[str]:
 
 
 def _require_pictures_kept(
-    before: "Show", after: "Show", rename: Mapping[SpotId, SpotId], *, force: bool
+    before: "Show", after: "Show", rename: Mapping[SpotId, str], *, force: bool
 ) -> None:
     """Raises LockedError when `after` changes a pinned picture of `before` beyond `rename`."""
     if force:
@@ -162,15 +162,16 @@ def _add_points(
     shape = _default_shape(_group(show.cast, group))
     labels = _allocate_labels(show.cast, [group] * len(points))
     entries = [
-        (Spot(id=label, group=group, shape=shape), (float(p[0]), float(p[1])))
+        (
+            Spot.model_validate({"id": label, "group": group, "shape": shape}),
+            (float(p[0]), float(p[1])),
+        )
         for label, p in zip(labels, points, strict=True)
     ]
     return _insert_spots(show, entries, set_id, force=force)
 
 
-def add_spot(
-    show: "Show", point: Point, group: str, set_id: SetId, *, force: bool = False
-) -> "Show":
+def add_spot(show: "Show", point: Point, group: str, set_id: str, *, force: bool = False) -> "Show":
     """Adds one spot at `point`, on the field from `set_id` on and off it before.
 
     The label is the lowest free number under the group's prefix (the label scheme's
@@ -182,11 +183,11 @@ def add_spot(
     >>> show.cast.ids()[-1], show.set("1").get("T5").on_field
     ('T5', False)
     """
-    return _add_points(show, [point], group, set_id, force=force)
+    return _add_points(show, [point], group, show.set(set_id).id, force=force)
 
 
 def add_spots_along(
-    show: "Show", curve: Curve, n: int, group: str, set_id: SetId, *, force: bool = False
+    show: "Show", curve: Curve, n: int, group: str, set_id: str, *, force: bool = False
 ) -> "Show":
     """Adds n spots spaced evenly by arc length along a curve, in curve order.
 
@@ -198,7 +199,8 @@ def add_spots_along(
     7
     """
     points = space_along(curve, n)
-    return _add_points(show, [(p[0], p[1]) for p in points.tolist()], group, set_id, force=force)
+    target = show.set(set_id).id
+    return _add_points(show, [(p[0], p[1]) for p in points.tolist()], group, target, force=force)
 
 
 def _fill_count(area: Area, interval: Meters) -> int:
@@ -242,7 +244,7 @@ def fill_spots(
     show: "Show",
     region: Area | Region,
     group: str,
-    set_id: SetId,
+    set_id: str,
     interval: Meters | None = None,
     n: int | None = None,
     *,
@@ -279,11 +281,12 @@ def fill_spots(
             hint="pass interval=<meters> or n=<count>",
             context={"interval": interval, "n": n},
         )
-    return _add_points(show, [(p[0], p[1]) for p in points.tolist()], group, set_id, force=force)
+    target = show.set(set_id).id
+    return _add_points(show, [(p[0], p[1]) for p in points.tolist()], group, target, force=force)
 
 
 def duplicate_spots(
-    show: "Show", sel: Selector, offset: Point, set_id: SetId, *, force: bool = False
+    show: "Show", sel: Selector, offset: Point, set_id: str, *, force: bool = False
 ) -> "Show":
     """Copies spots, shifted by `offset` from their placement in `set_id`, under new labels.
 
@@ -301,7 +304,7 @@ def duplicate_spots(
     for spot, label in zip(originals, labels, strict=True):
         x, y = source.get(spot.id).point
         entries.append((spot.replace(id=label), (x + offset[0], y + offset[1])))
-    return _insert_spots(show, entries, set_id, force=force)
+    return _insert_spots(show, entries, source.id, force=force)
 
 
 def _locked_items(show: "Show", ids: frozenset[SpotId]) -> list[str]:
@@ -365,14 +368,14 @@ def delete_spots(show: "Show", sel: Selector, *, force: bool = False) -> "Show":
     return rewrite_spot_ids(show, lambda spot_id: None if spot_id in ids else spot_id)
 
 
-def _relabel_targets(cast: Cast, moved: Sequence[SpotId], group: Group) -> dict[SpotId, SpotId]:
+def _relabel_targets(cast: Cast, moved: Sequence[SpotId], group: Group) -> dict[SpotId, str]:
     prefix = cast.label_scheme.prefix_for(group)
     needs_label = [i for i in moved if label_prefix(i) != prefix]
     labels = _allocate_labels(cast, [group.key] * len(needs_label))
     return dict(zip(needs_label, labels, strict=True))
 
 
-def regroup(show: "Show", sel: Selector, group: str) -> tuple["Show", dict[SpotId, SpotId]]:
+def regroup(show: "Show", sel: Selector, group: str) -> tuple["Show", dict[SpotId, str]]:
     """Moves spots to another group and relabels them to its prefix.
 
     Spots whose label already uses the new prefix keep it; the others take the lowest free
@@ -439,7 +442,7 @@ def edit_group(show: "Show", key: str, /, **changes: Any) -> "Show":
 
 def remove_group(
     show: "Show", key: str, reassign_to: str | None = None
-) -> tuple["Show", dict[SpotId, SpotId]]:
+) -> tuple["Show", dict[SpotId, str]]:
     """Removes a group, first moving its spots to `reassign_to` as regroup() does.
 
     Returns:
@@ -459,7 +462,7 @@ def remove_group(
             hint="pass reassign_to=<another group key>, or delete the spots first",
             context={"group": key, "reassign_to": reassign_to},
         )
-    mapping: dict[SpotId, SpotId] = {}
+    mapping: dict[SpotId, str] = {}
     if members and reassign_to is not None:
         show, mapping = regroup(show, members, reassign_to)
     scheme = show.cast.label_scheme
@@ -469,8 +472,8 @@ def remove_group(
     return _with_cast(show, groups=groups, label_scheme=new_scheme), mapping
 
 
-def _scheme_labels(cast: Cast, scheme: LabelScheme) -> dict[SpotId, SpotId]:
-    labels: dict[SpotId, SpotId] = {}
+def _scheme_labels(cast: Cast, scheme: LabelScheme) -> dict[SpotId, str]:
+    labels: dict[SpotId, str] = {}
     for group in cast.groups.values():
         members = natural_sort(s.id for s in cast.spots if s.group == group.key)
         prefix = scheme.prefix_for(group)
@@ -479,7 +482,7 @@ def _scheme_labels(cast: Cast, scheme: LabelScheme) -> dict[SpotId, SpotId]:
     return labels
 
 
-def relabel(show: "Show", scheme: LabelScheme) -> tuple["Show", dict[SpotId, SpotId]]:
+def relabel(show: "Show", scheme: LabelScheme) -> tuple["Show", dict[SpotId, str]]:
     """Renumbers every group under `scheme`, in natural order of the current labels.
 
     IDs are rewritten everywhere: cast, placements, forms, path rows, routes, note anchors,
@@ -559,11 +562,11 @@ def set_claimable(show: "Show", sel: Selector, value: Claimable) -> "Show":
     return _edit_spots(show, sel, claimable=value)
 
 
-def _repeated(ids: Iterable[SpotId]) -> list[SpotId]:
+def _repeated(ids: Iterable[str]) -> list[str]:
     return sorted(spot_id for spot_id, count in Counter(ids).items() if count > 1)
 
 
-def _rename_everywhere(show: "Show", mapping: Mapping[SpotId, SpotId]) -> "Show":
+def _rename_everywhere(show: "Show", mapping: Mapping[SpotId, str]) -> "Show":
     """Renames spot IDs simultaneously in every place a show refers to them.
 
     Covers the cast, placements, forms, path rows (keys, entities and entity facings),

@@ -46,6 +46,7 @@ from showpy.choreo.engine import DEFAULT_SEGMENT_TOL, PathEngine
 from showpy.choreo.engine_models import MotionSegment
 from showpy.choreo.models import Set
 from showpy.core.errors import LockedError
+from showpy.core.ids import SetId
 from showpy.core.resources import schema_path
 from showpy.core.util import approx_equal, content_hash
 from showpy.examples import EXAMPLE_TIME, performer
@@ -67,7 +68,7 @@ pytestmark = pytest.mark.slow
 
 SEED, SPOTS, SETS = 11, 300, 60
 PINNED_SPOTS = 20
-PINNED_SET = "12"
+PINNED_SET = SetId("12")
 SUBSET_AFTER = "5"
 REGROUPED_SPOTS = 6
 SECOND_WORKSPACE_EDITS = 10
@@ -109,7 +110,7 @@ class Scenario:
     reverted: Show
     publication: Publication
     events: list[CanvasEvent]
-    mapping: dict[str, str]
+    mapping: dict[SetId, SetId]
     pinned: tuple[str, ...]
     initial: Show
 
@@ -132,7 +133,7 @@ def _pinned_show(show: Show) -> tuple[Show, tuple[str, ...]]:
     return edited, ids
 
 
-def _restructured(show: Show) -> tuple[Show, dict[str, str]]:
+def _restructured(show: Show) -> tuple[Show, dict[SetId, SetId]]:
     follower = show.set(show.sets[show.set_index(SUBSET_AFTER) + 1].id)
     with unchanged(show):
         edited, _ = insert_subset(show, SUBSET_AFTER, follower.counts / 2)

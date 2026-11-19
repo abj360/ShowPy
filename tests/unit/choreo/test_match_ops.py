@@ -39,7 +39,7 @@ from showpy.choreo.match import match, match_by_order
 from showpy.choreo.match_ops import apply_match, clear_rows, suggest_swaps, swap, with_set
 from showpy.choreo.models import FacingSpec, Form, MatchResult, TransitionSpec
 from showpy.core.errors import LockedError, MatchError, SpacingError, UnknownRefError
-from showpy.core.ids import make_tid
+from showpy.core.ids import FormId, SpotId, make_tid
 from showpy.core.util import approx_equal
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
@@ -94,7 +94,7 @@ def test_swap_exchanges_places_forms_and_drops_rows() -> None:
     swapped = swap(show, "2", "T1", "T2")
     assert swapped.set("2").get("T1").x == 2.0
     assert swapped.set("2").get("T2").x == 0.0
-    assert swapped.forms["front"].members == ("T2", "T1", "T3", "T4")
+    assert swapped.forms[FormId("front")].members == ("T2", "T1", "T3", "T4")
     assert list(swapped.transition(TID).rows) == []
 
 
@@ -105,7 +105,7 @@ def test_swap_respects_locked_forms_and_pins() -> None:
     show = two_set_show().model_copy(update={"forms": {"f": form}})
     with pytest.raises(LockedError):
         swap(show, "2", "T1", "T2")
-    assert swap(show, "2", "T1", "T2", force=True).forms["f"].members == ("T2", "T1")
+    assert swap(show, "2", "T1", "T2", force=True).forms[FormId("f")].members == ("T2", "T1")
     with pytest.raises(LockedError):
         swap(pin_spot(two_set_show(), "2", "T3"), "2", "T3", "T4")
 
@@ -161,10 +161,10 @@ def test_regression_apply_match_updates_order_and_facing_of_formed_spots() -> No
 def test_regression_apply_match_updates_form_members_like_swap() -> None:
     """Keeps Form.members in step with matched slots so rebuild keeps them (audit 9.6; P0 #12)."""
     show, _ = _ring_show()
-    ring = show.forms["ring"]
+    ring = show.forms[FormId("ring")]
     result = match_by_order(REVERSED_RING, ring, show.set("1"))
     matched = apply_match(show, TID, result)
-    assert matched.forms["ring"].members == tuple(REVERSED_RING)
+    assert matched.forms[FormId("ring")].members == tuple(REVERSED_RING)
     kept = matched.set("2").get("T1").point
     assert approx_equal(rebuild(matched, "ring").set("2").get("T1").point, kept, POSE_TOL)
 
@@ -199,14 +199,16 @@ def test_regression_apply_match_respects_locked_forms() -> None:
     result = match_by_order(REVERSED_RING, ring, show.set("1"))
     with pytest.raises(LockedError):
         apply_match(show, TID, result)
-    assert apply_match(show, TID, result, force=True).forms["ring"].members == tuple(REVERSED_RING)
+    assert apply_match(show, TID, result, force=True).forms[FormId("ring")].members == tuple(
+        REVERSED_RING
+    )
 
 
 def test_regression_apply_match_rejects_a_form_of_another_set() -> None:
     """Refuses slots of a form outside the destination set, writing nothing (audit 9.6; P0 #12)."""
     show, ring = _ring_show()
     show = show.replace(forms={"ring": ring.replace(set="1")})
-    result = match_by_order(REVERSED_RING, show.forms["ring"], show.set("1"))
+    result = match_by_order(REVERSED_RING, show.forms[FormId("ring")], show.set("1"))
     with pytest.raises(MatchError):
         apply_match(show, TID, result)
 
@@ -233,16 +235,18 @@ def test_regression_apply_match_rejects_an_out_of_range_slot(slot: int) -> None:
 def test_regression_apply_match_ignores_a_form_the_set_no_longer_places() -> None:
     """Matches onto the set's current form while a stale form still names it (lane G review)."""
     show = replaced_form_show()
-    matched = apply_match(show, TID, match_by_order(["T3", "T2"], show.forms["b"], show.set("1")))
-    assert matched.forms["a"] == show.forms["a"]
-    assert matched.forms["b"].members == ("T3", "T2")
+    matched = apply_match(
+        show, TID, match_by_order(["T3", "T2"], show.forms[FormId("b")], show.set("1"))
+    )
+    assert matched.forms[FormId("a")] == show.forms[FormId("a")]
+    assert matched.forms[FormId("b")].members == ("T3", "T2")
     assert matched.set("2").get("T3").point == (0.0, 12.0)
 
 
 def test_regression_apply_match_rejects_slots_of_a_form_the_set_no_longer_places() -> None:
     """Refuses slots of a form the set no longer lists, writing nothing (lane G review)."""
     show = replaced_form_show()
-    result = match_by_order(["T1"], show.forms["a"], show.set("1"))
+    result = match_by_order(["T1"], show.forms[FormId("a")], show.set("1"))
     with pytest.raises(MatchError) as caught:
         apply_match(show, TID, result)
     assert caught.value.context == {"form": "a", "set": "2", "set_forms": ["b"]}
@@ -251,18 +255,18 @@ def test_regression_apply_match_rejects_slots_of_a_form_the_set_no_longer_places
 def test_regression_swap_ignores_a_form_the_set_no_longer_places() -> None:
     """Swaps only forms the set lists, even when a stale form is locked (lane G review)."""
     show = replaced_form_show()
-    stale = show.forms["a"].replace(locked=True)
-    show = show.replace(forms={**show.forms, "a": stale})
+    stale = show.forms[FormId("a")].replace(locked=True)
+    show = show.replace(forms={**show.forms, stale.id: stale})
     swapped = swap(show, "2", "T2", "T3")
-    assert swapped.forms["a"] == stale
-    assert swapped.forms["b"].members == ("T3", "T2")
+    assert swapped.forms[FormId("a")] == stale
+    assert swapped.forms[FormId("b")].members == ("T3", "T2")
 
 
 def test_apply_match_leaves_unchanged_slots_alone() -> None:
     show, ring = _ring_show()
     pinned = pin_spot(show, "2", "T1")
     result = match_by_order(["T1", "T2"], ring, show.set("1"))
-    assert apply_match(pinned, TID, result).forms["ring"].members == ring.members
+    assert apply_match(pinned, TID, result).forms[FormId("ring")].members == ring.members
 
 
 def test_apply_match_trims_trailing_empty_slots() -> None:
@@ -271,8 +275,8 @@ def test_apply_match_trims_trailing_empty_slots() -> None:
     show = show.replace(forms={"ring": smaller, "row": row})
     result = match_by_order(["T3"], row, show.set("1"))
     matched = apply_match(show, TID, result)
-    assert matched.forms["ring"].members == ("T1", "T2")
-    assert matched.forms["row"].members == ("T3",)
+    assert matched.forms[FormId("ring")].members == ("T1", "T2")
+    assert matched.forms[FormId("row")].members == ("T3",)
     assert matched.set("2").get("T3").form == "row"
 
 
@@ -296,7 +300,10 @@ def test_regression_apply_match_rejects_a_text_form_left_short() -> None:
     placed, filled = place(show, "2", [dash, row])
     stored = with_set(show, placed).replace(forms={form.id: form for form in filled})
     moved = MatchResult(
-        entities=("T4",), assignment={"T4": 0}, targets=((0.0, 14.0),), slots={"T4": ("row", 0)}
+        entities=(SpotId("T4"),),
+        assignment={SpotId("T4"): 0},
+        targets=((0.0, 14.0),),
+        slots={SpotId("T4"): (FormId("row"), 0)},
     )
     with pytest.raises(SpacingError) as caught:
         apply_match(stored, TID, moved)

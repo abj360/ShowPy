@@ -32,19 +32,20 @@
         "set_id": {
           "anyOf": [
             {
-              "$ref": "#/$defs/SetId"
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "title": "Set Id"
         },
         "spots": {
           "anyOf": [
             {
               "items": {
-                "$ref": "#/$defs/SpotId"
+                "type": "string"
               },
               "type": "array"
             },
@@ -167,7 +168,7 @@
         "selections": {
           "additionalProperties": {
             "items": {
-              "$ref": "#/$defs/SpotId"
+              "type": "string"
             },
             "type": "array"
           },
@@ -239,7 +240,7 @@
               "$ref": "#/$defs/Point"
             },
             {
-              "$ref": "#/$defs/LandmarkId"
+              "type": "string"
             }
           ],
           "default": [
@@ -386,7 +387,7 @@
               "$ref": "#/$defs/Point"
             },
             {
-              "$ref": "#/$defs/SpotId"
+              "type": "string"
             },
             {
               "type": "null"
@@ -458,7 +459,8 @@
           "type": "object"
         },
         "id": {
-          "$ref": "#/$defs/FormId"
+          "title": "Id",
+          "type": "string"
         },
         "kind": {
           "$ref": "#/$defs/FormKind"
@@ -470,7 +472,7 @@
         },
         "members": {
           "items": {
-            "$ref": "#/$defs/SpotId"
+            "type": "string"
           },
           "title": "Members",
           "type": "array"
@@ -484,7 +486,8 @@
           "type": "object"
         },
         "set": {
-          "$ref": "#/$defs/SetId"
+          "title": "Set",
+          "type": "string"
         },
         "spacing": {
           "$ref": "#/$defs/SpacingSpec",
@@ -507,9 +510,6 @@
       ],
       "title": "Form",
       "type": "object"
-    },
-    "FormId": {
-      "type": "string"
     },
     "FormKind": {
       "enum": [
@@ -738,7 +738,8 @@
           "$ref": "#/$defs/Ring"
         },
         "id": {
-          "$ref": "#/$defs/LandmarkId"
+          "title": "Id",
+          "type": "string"
         },
         "kind": {
           "enum": [
@@ -762,9 +763,6 @@
       ],
       "title": "Landmark",
       "type": "object"
-    },
-    "LandmarkId": {
-      "type": "string"
     },
     "Marker": {
       "additionalProperties": false,
@@ -918,7 +916,8 @@
           "title": "End"
         },
         "entity": {
-          "$ref": "#/$defs/SpotId"
+          "title": "Entity",
+          "type": "string"
         },
         "facing_mode": {
           "$ref": "#/$defs/FacingMode",
@@ -933,7 +932,7 @@
               "$ref": "#/$defs/Point"
             },
             {
-              "$ref": "#/$defs/SpotId"
+              "type": "string"
             },
             {
               "type": "null"
@@ -996,13 +995,14 @@
         "route": {
           "anyOf": [
             {
-              "$ref": "#/$defs/RouteId"
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "title": "Route"
         },
         "start": {
           "default": 0.0,
@@ -1105,7 +1105,8 @@
       "description": "Holds one spot's state at one set.\n\nAttributes:\n    entity: Spot ID.\n    x: Meters from the center line, audience-left negative.\n    y: Meters upstage from the front edge.\n    facing: Degrees, 0 toward the audience, counter-clockwise positive.\n    form: Form the spot belongs to in this set.\n    order: Index along that form.\n    pinned: Designer lock; edits need force=True.\n    note: Text printed on sheets.\n    on_field: False before an entrance or after an exit; not drawn or collision-checked.",
       "properties": {
         "entity": {
-          "$ref": "#/$defs/SpotId"
+          "title": "Entity",
+          "type": "string"
         },
         "facing": {
           "$ref": "#/$defs/Degrees",
@@ -1114,13 +1115,14 @@
         "form": {
           "anyOf": [
             {
-              "$ref": "#/$defs/FormId"
+              "type": "string"
             },
             {
               "type": "null"
             }
           ],
-          "default": null
+          "default": null,
+          "title": "Form"
         },
         "note": {
           "anyOf": [
@@ -1234,11 +1236,12 @@
           "title": "End"
         },
         "id": {
-          "$ref": "#/$defs/RouteId"
+          "title": "Id",
+          "type": "string"
         },
         "members": {
           "items": {
-            "$ref": "#/$defs/SpotId"
+            "type": "string"
           },
           "title": "Members",
           "type": "array"
@@ -1268,9 +1271,6 @@
       ],
       "title": "Route",
       "type": "object"
-    },
-    "RouteId": {
-      "type": "string"
     },
     "Seconds": {
       "type": "number"
@@ -1337,13 +1337,14 @@
         "forms": {
           "default": [],
           "items": {
-            "$ref": "#/$defs/FormId"
+            "type": "string"
           },
           "title": "Forms",
           "type": "array"
         },
         "id": {
-          "$ref": "#/$defs/SetId"
+          "title": "Id",
+          "type": "string"
         },
         "key": {
           "anyOf": [
@@ -1393,9 +1394,6 @@
       ],
       "title": "Set",
       "type": "object"
-    },
-    "SetId": {
-      "type": "string"
     },
     "Shape": {
       "additionalProperties": false,
@@ -1656,7 +1654,8 @@
           "type": "string"
         },
         "id": {
-          "$ref": "#/$defs/SpotId"
+          "title": "Id",
+          "type": "string"
         },
         "shape": {
           "$ref": "#/$defs/Shape",
@@ -1695,9 +1694,6 @@
       ],
       "title": "Spot",
       "type": "object"
-    },
-    "SpotId": {
-      "type": "string"
     },
     "SurfaceType": {
       "description": "Names the kinds of surface a sheet represents.",
@@ -1843,10 +1839,12 @@
       "minItems": 2,
       "prefixItems": [
         {
-          "$ref": "#/$defs/SetId"
+          "title": "From Set",
+          "type": "string"
         },
         {
-          "$ref": "#/$defs/SetId"
+          "title": "To Set",
+          "type": "string"
         }
       ],
       "type": "array"
@@ -1872,9 +1870,6 @@
             "$ref": "#/$defs/Route"
           },
           "default": {},
-          "propertyNames": {
-            "$ref": "#/$defs/RouteId"
-          },
           "title": "Routes",
           "type": "object"
         },
@@ -1883,9 +1878,6 @@
             "$ref": "#/$defs/PathRow"
           },
           "default": {},
-          "propertyNames": {
-            "$ref": "#/$defs/SpotId"
-          },
           "title": "Rows",
           "type": "object"
         },
@@ -1976,7 +1968,8 @@
           "default": "all"
         },
         "id": {
-          "$ref": "#/$defs/ZoneId"
+          "title": "Id",
+          "type": "string"
         },
         "kind": {
           "$ref": "#/$defs/ZoneKind"
@@ -1997,9 +1990,6 @@
       ],
       "title": "Zone",
       "type": "object"
-    },
-    "ZoneId": {
-      "type": "string"
     },
     "ZoneKind": {
       "description": "Names the kinds of rule-bearing area.",
@@ -2068,9 +2058,6 @@
         "$ref": "#/$defs/Form"
       },
       "default": {},
-      "propertyNames": {
-        "$ref": "#/$defs/FormId"
-      },
       "title": "Forms",
       "type": "object"
     },

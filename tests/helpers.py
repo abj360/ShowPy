@@ -46,7 +46,7 @@ from showpy.choreo.forms import line_form
 from showpy.choreo.match_ops import with_set
 from showpy.choreo.models import PathRow, PathStyle, Placement, Set, TransitionSpec, Waypoint
 from showpy.core.errors import ShowPyError, bounded_repr
-from showpy.core.ids import make_tid
+from showpy.core.ids import SetId, SpotId, make_tid
 from showpy.core.json_types import JsonValue
 from showpy.core.types import Point
 from showpy.examples import two_set_show
@@ -110,8 +110,10 @@ def make_set(*rows: tuple[str, float, float], off: tuple[str, ...] = ()) -> Set:
         rows: One (entity, x, y) tuple per spot.
         off: Spots placed off the field.
     """
-    placements = tuple(Placement(entity=e, x=x, y=y, on_field=e not in off) for e, x, y in rows)
-    return Set(id=SET_ID, counts=0.0, placements=placements)
+    placements = tuple(
+        Placement(entity=SpotId(e), x=x, y=y, on_field=e not in off) for e, x, y in rows
+    )
+    return Set(id=SetId(SET_ID), counts=0.0, placements=placements)
 
 
 def make_facing_set(
@@ -127,10 +129,10 @@ def make_facing_set(
         pinned: Spots whose placement is pinned.
     """
     placements = tuple(
-        Placement(entity=e, x=x, y=y, facing=f, on_field=e not in off, pinned=e in pinned)
+        Placement(entity=SpotId(e), x=x, y=y, facing=f, on_field=e not in off, pinned=e in pinned)
         for e, x, y, f in rows
     )
-    return Set(id=SET_ID, counts=0.0, placements=placements)
+    return Set(id=SetId(SET_ID), counts=0.0, placements=placements)
 
 
 def pin_spot(show: Show, set_id: str, entity: str) -> Show:
@@ -159,7 +161,9 @@ def with_curve_rows(show: Show, entities: Iterable[str], locked: bool = False) -
         locked: Whether the rows are locked.
     """
     rows = {
-        e: PathRow(entity=e, style=PathStyle.CURVE, waypoints=(CURVE_WAYPOINT,), locked=locked)
+        SpotId(e): PathRow(
+            entity=SpotId(e), style=PathStyle.CURVE, waypoints=(CURVE_WAYPOINT,), locked=locked
+        )
         for e in entities
     }
     spec = TransitionSpec(id=make_tid(*FIRST_TRANSITION), counts=CURVE_COUNTS, rows=rows)

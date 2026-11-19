@@ -57,7 +57,7 @@ from showpy.choreo.routes import (
     two_part,
 )
 from showpy.core.errors import LockedError, PathError
-from showpy.core.ids import format_tid
+from showpy.core.ids import RouteId, format_tid
 from showpy.core.util import approx_equal
 from showpy.show.models import Show
 from showpy.show.validate import validate_paths
@@ -304,7 +304,7 @@ def test_regression_second_counter_march_keeps_a_locked_route() -> None:
     with pytest.raises(LockedError):
         counter_march(locked, TID, ["T4", "T3"], (6.0, 15.0))
     forced = counter_march(locked, TID, ["T4", "T3"], (6.0, 15.0), force=True)
-    assert forced.transition(TID).routes["counter-march-T4"].members == ("T4", "T3")
+    assert forced.transition(TID).routes[RouteId("counter-march-T4")].members == ("T4", "T3")
 
 
 def test_regression_make_route_offsets_members_that_share_a_start() -> None:

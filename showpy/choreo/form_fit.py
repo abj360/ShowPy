@@ -20,7 +20,6 @@ import numpy as np
 from showpy.choreo.forms import arc_form, circle_form, custom_form, line_form
 from showpy.choreo.models import Form
 from showpy.core.errors import SchemaError
-from showpy.core.ids import FormId, SpotId
 from showpy.core.types import Meters, Point, Points
 from showpy.core.util import as_points
 
@@ -100,12 +99,12 @@ def fit_circle(points: object) -> tuple[Point, Meters, float]:
     return (cx, cy), r, residual
 
 
-def _ordered_members(members: Sequence[SpotId], order: Sequence[int]) -> tuple[SpotId, ...]:
+def _ordered_members[T: str](members: Sequence[T], order: Sequence[int]) -> tuple[T, ...]:
     return tuple(members[i] for i in order) if members else ()
 
 
 def _round_form(
-    form_id: FormId, members: Sequence[SpotId], pts: Points, center: Point, radius: Meters
+    form_id: str, members: Sequence[str], pts: Points, center: Point, radius: Meters
 ) -> Form:
     raw = np.degrees(np.arctan2(pts[:, 1] - center[1], pts[:, 0] - center[0]))
     angles = np.round(raw, ANGLE_DECIMALS) % FULL_TURN
@@ -128,8 +127,8 @@ def _round_form(
 def detect_form(
     points: object,
     tol: Meters = DEFAULT_TOL,
-    form_id: FormId = "detected",
-    members: Sequence[SpotId] = (),
+    form_id: str = "detected",
+    members: Sequence[str] = (),
 ) -> Form:
     """Turns imported spots into a line, arc or circle form, else a custom form.
 

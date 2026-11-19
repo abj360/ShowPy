@@ -49,7 +49,7 @@ def with_set(show: Show, new: Set) -> Show:
     return show.replace(sets=sets)
 
 
-def forms_of_set(show: Show, set_id: SetId) -> dict[FormId, Form]:
+def forms_of_set(show: Show, set_id: str) -> dict[FormId, Form]:
     """Returns the forms stamped with `set_id` that the set lists in `Set.forms`.
 
     A form the set no longer lists (it was re-placed without it) is stale and left out. A set
@@ -71,7 +71,7 @@ def forms_of_set(show: Show, set_id: SetId) -> dict[FormId, Form]:
 
 
 def clear_rows(
-    show: Show, tid: tuple[str, str], entities: Iterable[SpotId], *, force: bool = False
+    show: Show, tid: tuple[str, str], entities: Iterable[str], *, force: bool = False
 ) -> Show:
     """Drops stored path rows of `entities` in transition `tid`; locked rows need force.
 
@@ -80,7 +80,7 @@ def clear_rows(
     ()
     """
     spec = show.transition(tid)
-    doomed = [e for e in entities if e in spec.rows]
+    doomed = [SpotId(e) for e in entities if e in spec.rows]
     if not doomed:
         return show
     locked = [e for e in doomed if spec.rows[e].locked]
@@ -249,8 +249,8 @@ def apply_match(
         updates = _point_updates(dest, result)
         edited = with_set(show, dest.with_placements(updates, force=force))
         return clear_rows(edited, tid, list(updates), force=force)
-    slot_updates = _slot_updates(dest, _slot_targets(show, tid[1], result))
-    forms_edited = _matched_forms(show, tid[1], result, force=force)
+    slot_updates = _slot_updates(dest, _slot_targets(show, dest.id, result))
+    forms_edited = _matched_forms(show, dest.id, result, force=force)
     edited = with_set(forms_edited, dest.with_placements(slot_updates, force=force))
     relocated = [e for e, p in slot_updates.items() if is_elsewhere(dest.get(e), p.x, p.y)]
     return clear_rows(edited, tid, relocated, force=force)
@@ -275,7 +275,7 @@ def _spot_fields(placement: Placement) -> dict[str, object]:
     return {name: getattr(placement, name) for name in SWAPPED_FIELDS}
 
 
-def swap(show: Show, set_id: SetId, a: SpotId, b: SpotId, *, force: bool = False) -> Show:
+def swap(show: Show, set_id: str, a: str, b: str, *, force: bool = False) -> Show:
     """Swaps where two spots stand in one set, with facing and form slot.
 
     Members of the set's forms (`forms_of_set`) are swapped too, so regenerating a form keeps
@@ -290,8 +290,8 @@ def swap(show: Show, set_id: SetId, a: SpotId, b: SpotId, *, force: bool = False
     pa, pb = target.get(a), target.get(b)
     updates = {a: _spot_fields(pb), b: _spot_fields(pa)}
     edited = with_set(show, target.with_placements(updates, force=force))
-    edited = _swap_forms(edited, set_id, a, b, force=force)
-    for tid in _neighbour_tids(edited, set_id):
+    edited = _swap_forms(edited, target.id, pa.entity, pb.entity, force=force)
+    for tid in _neighbour_tids(edited, target.id):
         edited = clear_rows(edited, tid, [a, b], force=force)
     return edited
 

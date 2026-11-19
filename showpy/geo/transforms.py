@@ -326,7 +326,7 @@ def mirror[T: (Points, CurveModel, Set)](
 
 def _pair_by_assignment(
     s: Set, sources: Sequence[SpotId], partners: Sequence[SpotId], axis_x: float
-) -> dict[SpotId, SpotId]:
+) -> dict[str, str]:
     if not sources or not partners:
         return {}
     mirrored = s.positions(sources) * np.array([-1.0, 1.0]) + np.array([2 * axis_x, 0.0])
@@ -335,10 +335,8 @@ def _pair_by_assignment(
     return {sources[int(r)]: partners[int(c)] for r, c in zip(rows, cols, strict=True)}
 
 
-def _check_pairs(s: Set, pairs: Mapping[SpotId, SpotId]) -> None:
-    for source, partner in pairs.items():
-        s.get(source)
-        s.get(partner)
+def _check_pairs(s: Set, pairs: Mapping[str, str]) -> list[tuple[SpotId, SpotId]]:
+    typed = [(s.get(source).entity, s.get(partner).entity) for source, partner in pairs.items()]
     clash = set(pairs) & set(pairs.values())
     if clash or len(set(pairs.values())) != len(pairs):
         raise SchemaError(
@@ -346,13 +344,14 @@ def _check_pairs(s: Set, pairs: Mapping[SpotId, SpotId]) -> None:
             hint="pass pairs like {'L1': 'R1', 'L2': 'R2'} with distinct spots",
             context={"repeated": sorted(clash)},
         )
+    return typed
 
 
 def symmetrize(
     s: Set,
     sel: SetSelector = ALL,
     source_side: Literal["left", "right"] = "left",
-    pairs: Mapping[SpotId, SpotId] | None = None,
+    pairs: Mapping[str, str] | None = None,
     axis_x: float = 0.0,
     *,
     force: bool = False,
@@ -375,10 +374,9 @@ def symmetrize(
         sources = [i for i in ids if side[i] > 0]
         partners = [i for i in ids if side[i] < 0]
         pairs = _pair_by_assignment(s, sources, partners, axis_x)
-    _check_pairs(s, pairs)
     matrix = _vertical_mirror(axis_x)
     updates: dict[SpotId, dict[str, float]] = {}
-    for source, partner in pairs.items():
+    for source, partner in _check_pairs(s, pairs):
         origin = s.get(source)
         updates[partner] = {
             "x": 2 * axis_x - origin.x,

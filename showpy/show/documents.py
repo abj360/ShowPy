@@ -189,7 +189,7 @@ def require_storable(show: Show) -> None:
     >>> from showpy.examples import two_set_show
     >>> require_storable(two_set_show())
     """
-    bad = [s for s in show.set_ids() if not SET_ID_PATTERN.fullmatch(s) or ".." in s]
+    bad: list[str] = [s for s in show.set_ids() if not SET_ID_PATTERN.fullmatch(s) or ".." in s]
     bad += [set_key(s) for s in show.sets if not is_storable_folder(set_key(s))]
     pairs = set(show.transition_ids())
     loose = [spec.id for spec in show.transitions if spec.id not in pairs]

@@ -24,6 +24,7 @@ import pytest
 from PIL import Image, ImageDraw
 
 from showpy.core.errors import SchemaError
+from showpy.core.ids import LandmarkId, ZoneId
 from showpy.core.types import Region
 from showpy.core.util import approx_equal
 from showpy.sheet.models import GuideLine, Landmark, Sheet, Zone, ZoneKind
@@ -114,7 +115,7 @@ HOLE = ((4.0, 2.0), (6.0, 2.0), (6.0, 4.0), (4.0, 4.0))
 
 
 def _sheet_with_zone(holes: tuple[tuple[tuple[float, float], ...], ...]) -> Sheet:
-    zone = Zone(id="pit", kind=ZoneKind.PIT, polygon=Region(exterior=OUTER, holes=holes))
+    zone = Zone(id=ZoneId("pit"), kind=ZoneKind.PIT, polygon=Region(exterior=OUTER, holes=holes))
     return add_zone(blank_sheet(10, 6), zone)
 
 
@@ -133,7 +134,7 @@ def test_regression_svg_is_well_formed_with_control_characters_in_names() -> Non
     """Keeps the SVG parseable when names and labels hold control characters (audit 9.4)."""
     sheet = blank_sheet(10, 6).model_copy(update={"name": "bad\x01name"})
     sheet = add_landmark(
-        sheet, Landmark(id="m", name="mark\x02", kind="point", geometry=((1.0, 1.0),))
+        sheet, Landmark(id=LandmarkId("m"), name="mark\x02", kind="point", geometry=((1.0, 1.0),))
     )
     sheet = add_guide(
         sheet,

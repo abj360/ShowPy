@@ -34,6 +34,7 @@ from showpy.core.errors import (
     UnknownRefError,
     VersionError,
 )
+from showpy.core.ids import LandmarkId, ZoneId
 from showpy.core.types import Region
 from showpy.core.units import convert
 from showpy.core.util import approx_equal
@@ -175,7 +176,7 @@ def test_blank_sheet_rejects_non_positive_size() -> None:
 
 
 def test_customize_resize_regenerates_outline_and_keeps_user_items() -> None:
-    zone = Zone(id="props", kind=ZoneKind.STAGING, polygon=SQUARE)
+    zone = Zone(id=ZoneId("props"), kind=ZoneKind.STAGING, polygon=SQUARE)
     sheet = add_zone(blank_sheet(10.0, 6.0), zone)
     resized = customize(sheet, size=(20.0, 8.0), name="Big room")
     assert resized.size_m == (20.0, 8.0)
@@ -201,9 +202,9 @@ def test_customize_rejects_unknown_fields_and_keeps_input() -> None:
 
 def test_add_and_remove_items() -> None:
     sheet = blank_sheet(10.0, 6.0)
-    mark = Landmark(id="prop", name="prop table", kind="point", geometry=((1.0, 1.0),))
+    mark = Landmark(id=LandmarkId("prop"), name="prop table", kind="point", geometry=((1.0, 1.0),))
     guide = GuideLine(id="tape", kind="custom", points=((0.0, 1.0), (1.0, 1.0)))
-    zone = Zone(id="pit", kind=ZoneKind.PIT, polygon=SQUARE)
+    zone = Zone(id=ZoneId("pit"), kind=ZoneKind.PIT, polygon=SQUARE)
     edited = add_guide(add_landmark(add_zone(sheet, zone), mark), guide)
     assert mark in edited.landmarks
     assert guide in edited.guides
@@ -215,11 +216,15 @@ def test_add_and_remove_items() -> None:
 def test_duplicate_ids_raise() -> None:
     sheet = blank_sheet(10.0, 6.0)
     with pytest.raises(SchemaError):
-        add_landmark(sheet, Landmark(id="center", name="x", kind="point", geometry=((0, 0),)))
+        add_landmark(
+            sheet, Landmark(id=LandmarkId("center"), name="x", kind="point", geometry=((0, 0),))
+        )
 
 
 def test_remove_unknown_suggests_close_matches() -> None:
-    sheet = add_zone(blank_sheet(10.0, 6.0), Zone(id="pit", kind=ZoneKind.PIT, polygon=SQUARE))
+    sheet = add_zone(
+        blank_sheet(10.0, 6.0), Zone(id=ZoneId("pit"), kind=ZoneKind.PIT, polygon=SQUARE)
+    )
     with pytest.raises(UnknownRefError) as info:
         remove_zone(sheet, "pitt")
     assert "pit" in info.value.hint
@@ -312,7 +317,9 @@ def test_regression_customize_resize_updates_ref_and_name() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.4-35")
 def test_regression_customize_resize_does_not_keep_items_off_the_sheet() -> None:
     """Rejects or drops zones that lie off the sheet after a resize (audit 9.4)."""
-    sheet = add_zone(blank_sheet(10, 6), Zone(id="far", kind=ZoneKind.PIT, polygon=OFF_SHEET_ZONE))
+    sheet = add_zone(
+        blank_sheet(10, 6), Zone(id=ZoneId("far"), kind=ZoneKind.PIT, polygon=OFF_SHEET_ZONE)
+    )
     try:
         resized = customize(sheet, size=RESIZED)
     except ShowPyError:
@@ -345,7 +352,7 @@ def test_regression_sheet_templates_rejects_unknown_surface_type() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.4-46")
 def test_regression_customize_resize_does_not_keep_landmarks_off_the_sheet() -> None:
     """Rejects or drops landmarks that lie off the sheet after a resize (audit 9.4)."""
-    mark = Landmark(id="far", name="far prop", kind="point", geometry=((4.5, 1.0),))
+    mark = Landmark(id=LandmarkId("far"), name="far prop", kind="point", geometry=((4.5, 1.0),))
     sheet = add_landmark(blank_sheet(10, 6), mark)
     try:
         resized = customize(sheet, size=RESIZED)

@@ -30,7 +30,7 @@ from showpy.choreo.models import (
 )
 from showpy.choreo.paths import set_style
 from showpy.core.errors import LockedError, PathError
-from showpy.core.ids import SpotId, TransitionId, format_tid
+from showpy.core.ids import TransitionId, format_tid
 from showpy.core.types import Point
 from showpy.geo.curves import (
     AnyCurve,
@@ -81,9 +81,9 @@ def _cumulative(points: Sequence[Point]) -> list[float]:
 def make_route(
     show: Show,
     tid: tuple[str, str],
-    leader: SpotId,
+    leader: str,
     waypoints: Sequence[Point],
-    members: Sequence[SpotId] | None = None,
+    members: Sequence[str] | None = None,
     spacing: Literal["keep"] = "keep",
     route_id: str = DEFAULT_ROUTE_ID,
 ) -> Route:
@@ -117,12 +117,14 @@ def make_route(
     curve = (
         Polyline(points=vertices) if len(vertices) > 2 else Segment(a=vertices[0], b=vertices[1])
     )
-    return Route(
-        id=route_id,
-        curve=curve.construction(),
-        members=tuple(file),
-        offsets=offsets,
-        travel=lengths[-1] - offsets[0],
+    return Route.model_validate(
+        {
+            "id": route_id,
+            "curve": curve.construction(),
+            "members": tuple(file),
+            "offsets": offsets,
+            "travel": lengths[-1] - offsets[0],
+        }
     )
 
 
@@ -243,7 +245,7 @@ def _u_turn(file_points: tuple[Point, ...], turn_at: Point) -> tuple[AnyCurve, f
 def counter_march(
     show: Show,
     tid: tuple[str, str],
-    sel: Sequence[SpotId],
+    sel: Sequence[str],
     turn_at: Point,
     counts_per_turn: float = 2.0,
     *,
@@ -282,18 +284,20 @@ def counter_march(
     file_points = _dedupe([start_set.get(m).point for m in reversed(file)])
     curve, turn_length = _u_turn(file_points, (float(turn_at[0]), float(turn_at[1])))
     lengths = _cumulative(file_points)
-    route = Route(
-        id=f"counter-march-{file[0]}",
-        curve=curve.construction(),
-        members=tuple(file),
-        offsets=tuple(reversed(lengths)),
-        travel=lengths[-1] + turn_length,
+    route = Route.model_validate(
+        {
+            "id": f"counter-march-{file[0]}",
+            "curve": curve.construction(),
+            "members": tuple(file),
+            "offsets": tuple(reversed(lengths)),
+            "travel": lengths[-1] + turn_length,
+        }
     )
     moved = follow_and_set_targets(show, tid, route, force=force)
     spec = moved.transition(tid)
     rows = {
-        e: spec.row(e).replace(facing_mode=FacingMode.TRAVEL, turn_counts=counts_per_turn)
-        for e in file
+        row.entity: row.replace(facing_mode=FacingMode.TRAVEL, turn_counts=counts_per_turn)
+        for row in map(spec.row, file)
     }
     spec = spec.replace(rows={**spec.rows, **rows})
     return _store(moved, spec.id, spec, moved.set(spec.id.to_set))
@@ -302,7 +306,7 @@ def counter_march(
 def two_part(
     show: Show,
     spec: TransitionSpec,
-    sel: Sequence[SpotId],
+    sel: Sequence[str],
     corner: Literal["x_first", "y_first"] | Point,
     split: float | None = None,
     *,
@@ -338,7 +342,7 @@ def two_part(
             point = corner
         row = spec.row(entity)
         waypoint = Waypoint(x=point[0], y=point[1], at=split)
-        rows[entity] = PathRow.model_validate(
+        rows[row.entity] = PathRow.model_validate(
             {**row.model_dump(), "style": PathStyle.POLYLINE, "waypoints": (waypoint,)}
         )
     edited = spec.replace(rows=rows)
@@ -366,7 +370,7 @@ def _require_rows_unlocked(
 def rotate_path(
     show: Show,
     spec: TransitionSpec,
-    sel: Sequence[SpotId],
+    sel: Sequence[str],
     pivot: Point | Literal["center"],
     deg: float,
     *,

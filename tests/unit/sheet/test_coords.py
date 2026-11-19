@@ -41,6 +41,7 @@ from typing import Any
 import pytest
 
 from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
+from showpy.core.ids import LandmarkId
 from showpy.core.util import approx_equal
 from showpy.sheet.coords import (
     CoordStyle,
@@ -90,7 +91,7 @@ def test_audience_on_the_left_turns_the_frame() -> None:
 
 
 def test_landmark_origin_names_the_landmark() -> None:
-    show = _with(CoordinateSystem(origin="c"))
+    show = _with(CoordinateSystem(origin=LandmarkId("c")))
     assert to_coords(show, (3.5, 12.0)) == "3.50 m right of center, 2.00 m upstage of center"
     assert approx_equal(from_coords(show, "R3.50 U2.00"), (3.5, 12.0), TOL)
 
@@ -146,7 +147,7 @@ def test_set_coordinates_never_moves_positions() -> None:
 def test_set_coordinates_validates_the_system() -> None:
     show = two_set_show()
     with pytest.raises(UnknownRefError):
-        set_coordinates(show, CoordinateSystem(origin="nowhere"))
+        set_coordinates(show, CoordinateSystem(origin=LandmarkId("nowhere")))
     with pytest.raises(UnknownRefError):
         set_coordinates(show, CoordinateSystem(units="furlong"))
     with pytest.raises(SchemaError):

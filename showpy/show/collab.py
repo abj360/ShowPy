@@ -25,7 +25,7 @@ from showpy.core.errors import (
     SchemaError,
     TimeRangeError,
 )
-from showpy.core.ids import ZoneId, format_tid
+from showpy.core.ids import format_tid
 from showpy.core.selection import Selection
 from showpy.core.validation import validate_adapter
 from showpy.notes.models import Anchor
@@ -316,7 +316,7 @@ def reject(proposal: Proposal, reason: str) -> Proposal:
 
 
 def highlight(
-    target: Anchor | ZoneId, ttl_s: float = DEFAULT_TTL_S, *, at: datetime, event_id: str
+    target: Anchor | str, ttl_s: float = DEFAULT_TTL_S, *, at: datetime, event_id: str
 ) -> CanvasEvent:
     """Points the designer at spots, an area, a point, a set, a transition or a zone.
 

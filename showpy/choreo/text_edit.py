@@ -26,13 +26,13 @@ from showpy.geo.fonts import FontRegistry
 LISTED_SPOTS = 10
 
 
-def _preview(spots: Sequence[SpotId]) -> str:
+def _preview(spots: Sequence[str]) -> str:
     shown = ", ".join(spots[:LISTED_SPOTS])
     hidden = len(spots) - LISTED_SPOTS
     return f"{shown} and {hidden} more" if hidden > 0 else shown
 
 
-def _spot_list(form: Form, field: str, spots: Sequence[SpotId]) -> tuple[SpotId, ...]:
+def _spot_list(form: Form, field: str, spots: Sequence[str]) -> tuple[str, ...]:
     """Returns the spots as a tuple, rejecting a bare string or anything but a list of strings."""
     if isinstance(spots, list | tuple) and all(isinstance(spot, str) for spot in spots):
         return tuple(spots)
@@ -43,10 +43,10 @@ def _spot_list(form: Form, field: str, spots: Sequence[SpotId]) -> tuple[SpotId,
     )
 
 
-def _repeats(spots: Sequence[SpotId], taken: set[SpotId]) -> list[SpotId]:
+def _repeats[T: str](spots: Sequence[T], taken: set[str]) -> list[T]:
     """Returns, once each and in order, the spots already in `taken` or repeated in `spots`."""
     seen = set(taken)
-    culprits: dict[SpotId, None] = {}
+    culprits: dict[T, None] = {}
     for spot in spots:
         if spot in seen:
             culprits[spot] = None
@@ -54,9 +54,9 @@ def _repeats(spots: Sequence[SpotId], taken: set[SpotId]) -> list[SpotId]:
     return list(culprits)
 
 
-def _added(form: Form, add: Sequence[SpotId]) -> tuple[SpotId, ...]:
+def _added(form: Form, add: Sequence[str]) -> tuple[SpotId, ...]:
     """Returns the checked, NFC-normalized new spots; none may be a member or repeat."""
-    spots = tuple(check_id(spot, kind="spot") for spot in _spot_list(form, "add", add))
+    spots = tuple(SpotId(check_id(spot, kind="spot")) for spot in _spot_list(form, "add", add))
     culprits = _repeats(spots, set(form.members))
     if not culprits:
         return spots
@@ -70,7 +70,7 @@ def _added(form: Form, add: Sequence[SpotId]) -> tuple[SpotId, ...]:
     )
 
 
-def _kept(form: Form, remove: Sequence[SpotId]) -> tuple[SpotId, ...]:
+def _kept(form: Form, remove: Sequence[str]) -> tuple[SpotId, ...]:
     """Returns the members left after removing `remove`; each must be a member, once."""
     spots = _spot_list(form, "remove", remove)
     outsiders = set(spots) - set(form.members)
@@ -90,8 +90,8 @@ def _kept(form: Form, remove: Sequence[SpotId]) -> tuple[SpotId, ...]:
 def edit_text_count(
     form: Form,
     *,
-    add: Sequence[SpotId] = (),
-    remove: Sequence[SpotId] = (),
+    add: Sequence[str] = (),
+    remove: Sequence[str] = (),
     n: int | None = None,
     spacing: Meters | None = None,
     force: bool = False,

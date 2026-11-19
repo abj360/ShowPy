@@ -17,6 +17,7 @@ import pytest
 
 from showpy.choreo.models import FormFnInfo, MatchOptions, MatchResult
 from showpy.core.errors import SchemaError
+from showpy.core.ids import FormId, SpotId
 
 
 def test_match_options_defaults_follow_the_reference() -> None:
@@ -47,21 +48,29 @@ def test_cost_fn_is_excluded_from_serialization() -> None:
 
 
 def test_match_result_round_trips_and_checks_alignment() -> None:
-    result = MatchResult(entities=("A",), assignment={"A": 0}, targets=((1.0, 2.0),))
+    result = MatchResult(
+        entities=(SpotId("A"),), assignment={SpotId("A"): 0}, targets=((1.0, 2.0),)
+    )
     assert MatchResult.model_validate_json(result.model_dump_json()) == result
     assert result.target_points().tolist() == [[1.0, 2.0]]
     with pytest.raises(SchemaError):
-        MatchResult(entities=("A",), assignment={"B": 0}, targets=((1.0, 2.0),))
+        MatchResult(entities=(SpotId("A"),), assignment={SpotId("B"): 0}, targets=((1.0, 2.0),))
 
 
 def test_match_result_slots_must_cover_the_assigned_spots() -> None:
     kept = MatchResult(
-        entities=("A",), assignment={"A": 0}, targets=((1.0, 2.0),), slots={"A": ("f", 0)}
+        entities=(SpotId("A"),),
+        assignment={SpotId("A"): 0},
+        targets=((1.0, 2.0),),
+        slots={SpotId("A"): (FormId("f"), 0)},
     )
     assert MatchResult.model_validate_json(kept.model_dump_json()) == kept
     with pytest.raises(SchemaError):
         MatchResult(
-            entities=("A",), assignment={"A": 0}, targets=((1.0, 2.0),), slots={"B": ("f", 0)}
+            entities=(SpotId("A"),),
+            assignment={SpotId("A"): 0},
+            targets=((1.0, 2.0),),
+            slots={SpotId("B"): (FormId("f"), 0)},
         )
 
 
@@ -91,4 +100,4 @@ def test_regression_match_options_rejects_negative_no_backward() -> None:
 def test_regression_match_options_rejects_bool_slot_index() -> None:
     """Rejects True as a pinned slot index instead of pinning to slot 1 (audit 9.6)."""
     with pytest.raises(SchemaError):
-        MatchOptions(pinned={"A": True})
+        MatchOptions(pinned={SpotId("A"): True})

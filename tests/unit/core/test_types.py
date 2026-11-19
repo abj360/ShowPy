@@ -44,6 +44,7 @@ from pydantic import ValidationError as PydanticValidationError
 from showpy.cast.models import Shape
 from showpy.choreo.models import Set, Waypoint
 from showpy.core.errors import SchemaError, ShowPyError, field_errors
+from showpy.core.ids import LandmarkId, SetId
 from showpy.core.types import (
     Box2,
     Count,
@@ -73,8 +74,12 @@ NON_FINITE_MODELS: dict[str, Callable[[], FrozenModel]] = {
     "waypoint-inf": lambda: Waypoint(x=0.0, y=-math.inf),
     "shape-nan-rotation": lambda: Shape(kind="rectangle", rotation_deg=math.nan),
     "shape-inf-radius": lambda: Shape(radius_m=math.inf),
-    "landmark-nan": lambda: Landmark(id="a", name="a", kind="point", geometry=((math.nan, 0.0),)),
-    "landmark-inf": lambda: Landmark(id="a", name="a", kind="point", geometry=((math.inf, 0.0),)),
+    "landmark-nan": lambda: Landmark(
+        id=LandmarkId("a"), name="a", kind="point", geometry=((math.nan, 0.0),)
+    ),
+    "landmark-inf": lambda: Landmark(
+        id=LandmarkId("a"), name="a", kind="point", geometry=((math.inf, 0.0),)
+    ),
 }
 
 
@@ -166,7 +171,7 @@ NEGATIVE_COUNTS = -4.0
 def test_regression_replace_revalidates() -> None:
     """Rejects an edit that breaks a model validator, instead of copying it unchecked."""
     with pytest.raises(SchemaError):
-        Set(id="1", counts=0.0).replace(counts=NEGATIVE_COUNTS)
+        Set(id=SetId("1"), counts=0.0).replace(counts=NEGATIVE_COUNTS)
 
 
 def test_replace_returns_a_new_model_with_the_change() -> None:

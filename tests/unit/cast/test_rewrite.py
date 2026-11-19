@@ -31,6 +31,7 @@ from showpy.cast.rewrite import faces_entity, rewrite_spot_ids
 from showpy.cast.spots import delete_spots, relabel
 from showpy.choreo.models import FacingMode
 from showpy.core.errors import ShowPyError, UnknownRefError
+from showpy.core.ids import FormId, SpotId, ZoneId
 from showpy.core.selection import Selection
 from showpy.core.types import Region
 from showpy.sheet.models import Zone, ZoneKind
@@ -50,8 +51,8 @@ def test_drop_keeps_containers_and_removes_ids() -> None:
     show = rewrite_spot_ids(rich_show(), lambda i: None if i in {"T1", "T2"} else i)
     assert show.zones[0].applies_to == ()
     assert show.zones[1].applies_to == "group:trumpets"
-    assert show.zones[2].applies_to == Selection(ids=("T4",))
-    assert show.forms["line1"].members == ("T3", "T4")
+    assert show.zones[2].applies_to == Selection(ids=(SpotId("T4"),))
+    assert show.forms[FormId("line1")].members == ("T3", "T4")
 
 
 def test_identity_rewrite_freezes_label_expressions_only() -> None:
@@ -59,7 +60,7 @@ def test_identity_rewrite_freezes_label_expressions_only() -> None:
     assert [z.applies_to for z in show.zones] == [
         ("T1", "T2"),
         "group:trumpets",
-        Selection(ids=("T4",)),
+        Selection(ids=(SpotId("T4"),)),
     ]
     assert show.cast == rich_show().cast
     assert show.sets == rich_show().sets
@@ -70,7 +71,7 @@ RENAME_T_TO_X = LabelScheme(prefixes={"trumpets": "X"})
 
 
 def _zone(applies_to: str) -> Zone:
-    return Zone(id="z", kind=ZoneKind.CUSTOM, polygon=SQUARE, applies_to=applies_to)
+    return Zone(id=ZoneId("z"), kind=ZoneKind.CUSTOM, polygon=SQUARE, applies_to=applies_to)
 
 
 def _pinned_show() -> Show:

@@ -45,7 +45,7 @@ from showpy.choreo.match_solve import (
 )
 from showpy.choreo.models import Form, MatchOptions, MatchResult, Set
 from showpy.core.errors import MatchError
-from showpy.core.ids import FormId, SpotId
+from showpy.core.ids import FormId
 from showpy.core.types import Points
 from showpy.core.util import as_points, natural_sort
 
@@ -56,8 +56,8 @@ def cost_matrix(
     from_: Source,
     to_slots: SlotSource,
     options: MatchOptions | None = None,
-    entities: Sequence[SpotId] | None = None,
-    groups: Mapping[SpotId, str] | None = None,
+    entities: Sequence[str] | None = None,
+    groups: Mapping[str, str] | None = None,
     slot_groups: Sequence[str | None] | None = None,
 ) -> FloatArray:
     """Returns the (spots x slots) cost: meters plus penalties, infinity where forbidden.
@@ -207,28 +207,33 @@ def _result(
     largest = float(moves.max()) if len(moves) else 0.0
     total = float(moves.sum())
     unassigned = tuple(sorted(set(range(len(p.slots))) - {int(c) for c in cols}))
-    return MatchResult(
-        entities=p.entities,
-        assignment={e: int(c) for e, c in zip(p.entities, cols, strict=True)},
-        targets=tuple(point_tuple(t) for t in targets),
-        total_distance=total,
-        max_distance=largest,
-        max_speed=None if options.counts is None else largest / options.counts,
-        crossings=count_crossings(p.starts, targets),
-        unassigned_slots=unassigned,
-        explain=_explain(options, largest, total, swaps, len(unassigned)),
-        slots={e: column_slots[int(c)] for e, c in zip(p.entities, cols, strict=True)}
+    slots = (
+        {e: column_slots[int(c)] for e, c in zip(p.entities, cols, strict=True)}
         if column_slots
-        else {},
+        else {}
+    )
+    return MatchResult.model_validate(
+        {
+            "entities": p.entities,
+            "assignment": {e: int(c) for e, c in zip(p.entities, cols, strict=True)},
+            "targets": tuple(point_tuple(t) for t in targets),
+            "total_distance": total,
+            "max_distance": largest,
+            "max_speed": None if options.counts is None else largest / options.counts,
+            "crossings": count_crossings(p.starts, targets),
+            "unassigned_slots": unassigned,
+            "explain": _explain(options, largest, total, swaps, len(unassigned)),
+            "slots": slots,
+        }
     )
 
 
 def match(
     from_: Source,
     to_slots: SlotSource,
-    entities: Sequence[SpotId] | None = None,
+    entities: Sequence[str] | None = None,
     options: MatchOptions | None = None,
-    groups: Mapping[SpotId, str] | None = None,
+    groups: Mapping[str, str] | None = None,
     slot_groups: Sequence[str | None] | None = None,
 ) -> MatchResult:
     """Assigns spots to slots, exactly and deterministically, under the options.
@@ -268,7 +273,7 @@ def match(
 
 
 def match_by_order(
-    ordered_sel: Sequence[SpotId], form: Form | Points, from_: Set | None = None
+    ordered_sel: Sequence[str], form: Form | Points, from_: Set | None = None
 ) -> MatchResult:
     """Assigns the i-th spot to the i-th slot; distances need the starting set.
 

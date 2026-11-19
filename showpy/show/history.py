@@ -17,7 +17,7 @@ from typing import Any
 from showpy.cast.rewrite import rewrite_spot_ids
 from showpy.choreo.models import Set, TransitionSpec
 from showpy.core.errors import SchemaError
-from showpy.core.ids import SpotId, format_tid
+from showpy.core.ids import FormId, SpotId, format_tid
 from showpy.core.units import angle_diff
 from showpy.core.util import approx_equal, natural_sort
 from showpy.show.models import PathDiff, Revision, SetDiff, Show
@@ -32,15 +32,15 @@ def _member_key(row: tuple[int | None, SpotId]) -> tuple[bool, int, SpotId]:
     return row[0] is None, row[0] or 0, row[1]
 
 
-def _form_members(s: Set) -> dict[str, list[tuple[int | None, SpotId]]]:
-    members: dict[str, list[tuple[int | None, SpotId]]] = {}
+def _form_members(s: Set) -> dict[FormId, list[tuple[int | None, SpotId]]]:
+    members: dict[FormId, list[tuple[int | None, SpotId]]] = {}
     for p in s.placements:
         if p.form is not None:
             members.setdefault(p.form, []).append((p.order, p.entity))
     return {form: sorted(rows, key=_member_key) for form, rows in members.items()}
 
 
-def _changed_forms(a: Set, b: Set) -> list[str]:
+def _changed_forms(a: Set, b: Set) -> list[FormId]:
     left, right = _form_members(a), _form_members(b)
     declared = set(a.forms) ^ set(b.forms)
     membership = {f for f in set(left) | set(right) if left.get(f) != right.get(f)}
@@ -100,7 +100,7 @@ def diff_paths(a: TransitionSpec, b: TransitionSpec) -> PathDiff:
 
 
 # Any: diff summaries hold JSON values of mixed types.
-def _keyed(left: Mapping[str, object], right: Mapping[str, object]) -> dict[str, Any]:
+def _keyed[K: str](left: Mapping[K, object], right: Mapping[K, object]) -> dict[str, Any]:
     found = {
         "added": natural_sort(set(right) - set(left)),
         "removed": natural_sort(set(left) - set(right)),
@@ -190,7 +190,7 @@ def revert(ws: Workspace, revision_id: str, at: datetime) -> Revision:
     return ws._commit_stored({p: old.get(p) for p in sorted(paths)}, at=at)
 
 
-def _require_renamable(show: Show, mapping: Mapping[SpotId, SpotId]) -> None:
+def _require_renamable(show: Show, mapping: Mapping[str, str]) -> None:
     known = set(show.cast.ids())
     for old in mapping:
         show.cast.spot(old)
@@ -205,7 +205,7 @@ def _require_renamable(show: Show, mapping: Mapping[SpotId, SpotId]) -> None:
         )
 
 
-def rename_entities(show: Show, mapping: Mapping[SpotId, SpotId]) -> Show:
+def rename_entities(show: Show, mapping: Mapping[str, str]) -> Show:
     """Rewrites spot IDs everywhere in a show.
 
     Covers cast, selections, placements, forms, paths, routes, notes, facing overrides, zones

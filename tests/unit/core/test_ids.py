@@ -29,6 +29,7 @@ Contains:
         `all` and `show-1`
     test_id_fields_*(): one behavior of the annotated model ID field types each
     test_sheet_id_fields_*(): landmark and zone fields keep an inner `-`
+    test_show_id_field_*(): show IDs keep an inner `-` and follow the rest of the sheet rule
     test_transition_id_*(): one behavior of the TransitionId named tuple each
     test_regression_check_id_reports_a_leading_dot_at_position_zero: reports `..a` at 0, the
         first character that breaks the pattern
@@ -57,6 +58,7 @@ from showpy.core.ids import (
     NoteIdField,
     RouteIdField,
     SelectionNameField,
+    SetId,
     SetIdField,
     SetKeyField,
     ShowIdField,
@@ -256,7 +258,6 @@ SPOT_ID_FIELDS: list[Any] = [
     SetKeyField,
     FormIdField,
     RouteIdField,
-    ShowIdField,
     NoteIdField,
     SelectionNameField,
 ]
@@ -315,6 +316,18 @@ def test_id_fields_of_every_kind_run_the_id_check(field: Any) -> None:
         adapter.validate_python("a-b")
 
 
+def test_show_id_field_keeps_a_hyphenated_show_id() -> None:
+    adapter: TypeAdapter[str] = TypeAdapter(ShowIdField)
+    assert adapter.validate_python("my-show") == "my-show"
+
+
+@pytest.mark.parametrize("text", ["a b", "..", "all", "-show", "con"])
+def test_show_id_field_refuses_ids_outside_the_sheet_rule(text: str) -> None:
+    adapter: TypeAdapter[str] = TypeAdapter(ShowIdField)
+    with pytest.raises(ValidationError, match="show id"):
+        adapter.validate_python(text)
+
+
 @pytest.mark.parametrize("model", [_ToyLandmark, _ToyZone])
 def test_sheet_id_fields_keep_an_inner_hyphen(model: type[BaseModel]) -> None:
     assert model.model_validate({"id": "end-zone-left"}).model_dump() == {"id": "end-zone-left"}
@@ -333,7 +346,7 @@ def test_sheet_id_fields_accept_legacy_ids_in_context() -> None:
 
 
 def test_transition_id_is_a_named_tuple() -> None:
-    tid = TransitionId("1", "2")
+    tid = TransitionId(SetId("1"), SetId("2"))
     assert isinstance(tid, tuple)
     assert (tid.from_set, tid.to_set) == ("1", "2")
     assert tid == ("1", "2")
@@ -355,7 +368,7 @@ def test_transition_id_round_trips_through_json() -> None:
 
 
 def test_make_tid_checks_both_set_ids() -> None:
-    assert make_tid("1", "2A") == TransitionId("1", "2A")
+    assert make_tid("1", "2A") == TransitionId(SetId("1"), SetId("2A"))
     with pytest.raises(SchemaError, match="set id"):
         make_tid("1", "a-b")
 

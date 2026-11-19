@@ -136,7 +136,7 @@ class Show(FrozenModel):
         """Returns set IDs in show order."""
         return [s.id for s in self.sets]
 
-    def set_index(self, set_id: SetId) -> int:
+    def set_index(self, set_id: str) -> int:
         """Returns the position of a set, raising UnknownRefError with suggestions."""
         for index, candidate in enumerate(self.sets):
             if candidate.id == set_id:
@@ -150,7 +150,7 @@ class Show(FrozenModel):
             context={"set": set_id},
         )
 
-    def set(self, set_id: SetId) -> Set:
+    def set(self, set_id: str) -> Set:
         """Returns a set by ID."""
         return self.sets[self.set_index(set_id)]
 
@@ -264,8 +264,8 @@ class ShowIndex(FrozenModel):
         before, after = self.entries[position], self.entries[position + 1]
         return TransitionId(before.set, after.set), count - before.start_count
 
-    def _position(self, set_id: SetId) -> int:
-        ids = [entry.set for entry in self.entries]
+    def _position(self, set_id: str) -> int:
+        ids: list[str] = [entry.set for entry in self.entries]
         if set_id not in ids:
             close = close_matches(set_id, ids)
             raise UnknownRefError(
@@ -275,12 +275,12 @@ class ShowIndex(FrozenModel):
             )
         return ids.index(set_id)
 
-    def next(self, set_id: SetId) -> SetId | None:
+    def next(self, set_id: str) -> SetId | None:
         """Returns the set after `set_id`, or None for the last set."""
         position = self._position(set_id) + 1
         return self.entries[position].set if position < len(self.entries) else None
 
-    def prev(self, set_id: SetId) -> SetId | None:
+    def prev(self, set_id: str) -> SetId | None:
         """Returns the set before `set_id`, or None for the first set."""
         position = self._position(set_id) - 1
         return self.entries[position].set if position >= 0 else None

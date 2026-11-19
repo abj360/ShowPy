@@ -16,7 +16,6 @@ from showpy.cast.models import Cast, Spot
 from showpy.choreo.models import Placement, Set
 from showpy.core.caps import MAX_POINTS, MAX_TEXT_CHARS, require_size
 from showpy.core.errors import SchemaError, ShowValidationError, UnknownRefError
-from showpy.core.ids import SetId, SpotId
 from showpy.core.types import Point
 from showpy.core.util import close_matches
 from showpy.show.manage import replace_sets
@@ -30,9 +29,9 @@ REQUIRED_FIELDS = POSITION_FIELDS[:5]
 @dataclass(frozen=True)
 class _PositionRow:
     line: int
-    set_id: SetId
+    set_id: str
     counts: float
-    entity: SpotId
+    entity: str
     point: Point
     facing: float | None
 
@@ -103,7 +102,7 @@ def _read_rows(text: str, columns: Mapping[str, str] | None) -> list[_PositionRo
 
 def _collect_rows(reader: csv.DictReader[str], mapping: dict[str, str]) -> list[_PositionRow]:
     rows: list[_PositionRow] = []
-    seen: set[tuple[SetId, SpotId]] = set()
+    seen: set[tuple[str, str]] = set()
     for record in reader:
         row = _parse_row(record, mapping, reader.line_num)
         key = (row.set_id, row.entity)
@@ -118,9 +117,9 @@ def _collect_rows(reader: csv.DictReader[str], mapping: dict[str, str]) -> list[
     return rows
 
 
-def _set_counts(base: Show, rows: list[_PositionRow]) -> dict[SetId, float]:
-    counts: dict[SetId, float] = {}
-    existing = {s.id: s.counts for s in base.sets}
+def _set_counts(base: Show, rows: list[_PositionRow]) -> dict[str, float]:
+    counts: dict[str, float] = {}
+    existing: dict[str, float] = {s.id: s.counts for s in base.sets}
     for row in rows:
         expected = counts.get(row.set_id, existing.get(row.set_id, row.counts))
         if expected != row.counts:
@@ -140,14 +139,14 @@ def _require_placement_cap(base: Show, rows: list[_PositionRow]) -> None:
     require_size(len(set_ids) * len(spot_ids), MAX_POINTS, what="placements")
 
 
-def _chain(first: SetId, follower: dict[SetId, SetId]) -> list[SetId]:
+def _chain(first: str, follower: dict[str, str]) -> list[str]:
     chain = [first]
     while chain[-1] in follower:
         chain.append(follower[chain[-1]])
     return chain
 
 
-def _set_order(base: Show, file_ids: list[SetId]) -> list[SetId]:
+def _set_order(base: Show, file_ids: list[str]) -> list[str]:
     """Places each new set right after the set before it in the file, in linear time.
 
     A new set that opens the file goes before the first stored set the file names later, or
@@ -160,7 +159,7 @@ def _set_order(base: Show, file_ids: list[SetId]) -> list[SetId]:
     }
     leading = file_ids[0] if file_ids and file_ids[0] not in known else None
     before = next((s for s in file_ids if s in known), None) if leading else None
-    order: list[SetId] = []
+    order: list[str] = []
     for set_id in stored:
         if leading is not None and set_id == before:
             order += _chain(leading, follower)
@@ -180,40 +179,38 @@ def _extend_cast(base: Show, rows: list[_PositionRow], group: str) -> Cast:
         )
     known = set(base.cast.ids())
     new_ids = [r.entity for r in rows if r.entity not in known]
-    added = tuple(Spot(id=e, group=group) for e in dict.fromkeys(new_ids))
+    added = tuple(Spot.model_validate({"id": e, "group": group}) for e in dict.fromkeys(new_ids))
     return base.cast.replace(spots=base.cast.spots + added)
 
 
 @dataclass(frozen=True)
 class _Merge:
     base: Show
-    cast_ids: tuple[SpotId, ...]
-    rows: dict[tuple[SetId, SpotId], _PositionRow]
-    counts: dict[SetId, float]
-    keys: dict[SetId, str]
-    first_seen: dict[SpotId, Point]
+    cast_ids: tuple[str, ...]
+    rows: dict[tuple[str, str], _PositionRow]
+    counts: dict[str, float]
+    keys: dict[str, str]
+    first_seen: dict[str, Point]
     force: bool
 
 
-def _first_seen(base: Show, order: list[SetId], rows: list[_PositionRow]) -> dict[SpotId, Point]:
-    known: dict[SetId, dict[SpotId, Point]] = {
+def _first_seen(base: Show, order: list[str], rows: list[_PositionRow]) -> dict[str, Point]:
+    known: dict[str, dict[str, Point]] = {
         s.id: {p.entity: p.point for p in s.placements} for s in base.sets
     }
     for row in rows:
         known.setdefault(row.set_id, {})[row.entity] = row.point
-    first: dict[SpotId, Point] = {}
+    first: dict[str, Point] = {}
     for set_id in order:
         for entity, point in known.get(set_id, {}).items():
             first.setdefault(entity, point)
     return first
 
 
-def _carried(merge: _Merge, entity: SpotId, previous: dict[SpotId, Placement]) -> Placement:
+def _carried(merge: _Merge, entity: str, previous: dict[str, Placement]) -> Placement:
     if entity in previous:
         held = previous[entity]
-        return Placement(
-            entity=entity, x=held.x, y=held.y, facing=held.facing, on_field=held.on_field
-        )
+        return held.replace(form=None, order=None, pinned=False, note=None)
     if entity not in merge.first_seen:
         raise ShowValidationError(
             f"{entity} has no position in any set",
@@ -221,27 +218,29 @@ def _carried(merge: _Merge, entity: SpotId, previous: dict[SpotId, Placement]) -
             context={"entity": entity},
         )
     x, y = merge.first_seen[entity]
-    return Placement(entity=entity, x=x, y=y, on_field=False)
+    return Placement.model_validate({"entity": entity, "x": x, "y": y, "on_field": False})
 
 
-def _new_keys(base: Show, order: list[SetId]) -> dict[SetId, str]:
+def _new_keys(base: Show, order: list[str]) -> dict[str, str]:
     stored = set(base.set_ids())
     taken = [set_key(s) for s in base.sets]
-    keys: dict[SetId, str] = {}
+    keys: dict[str, str] = {}
     for set_id in (s for s in order if s not in stored):
         keys[set_id] = free_set_key(taken, set_id)
         taken.append(keys[set_id])
     return keys
 
 
-def _merged_set(merge: _Merge, set_id: SetId, previous: dict[SpotId, Placement]) -> Set:
+def _merged_set(merge: _Merge, set_id: str, previous: dict[str, Placement]) -> Set:
     stored = set_id in merge.base.set_ids()
     current = (
         merge.base.set(set_id)
         if stored
-        else Set(id=set_id, key=merge.keys[set_id], counts=merge.counts[set_id])
+        else Set.model_validate(
+            {"id": set_id, "key": merge.keys[set_id], "counts": merge.counts[set_id]}
+        )
     )
-    kept = {p.entity: p for p in current.placements}
+    kept: dict[str, Placement] = {p.entity: p for p in current.placements}
     placements = tuple(kept.get(e) or _carried(merge, e, previous) for e in merge.cast_ids)
     filled = current.replace(placements=placements)
     updates = {}
@@ -308,6 +307,6 @@ def import_positions(
     )
     sets: list[Set] = []
     for set_id in order:
-        previous = {p.entity: p for p in sets[-1].placements} if sets else {}
+        previous: dict[str, Placement] = {p.entity: p for p in sets[-1].placements} if sets else {}
         sets.append(_merged_set(merge, set_id, previous))
     return replace_sets(base, sets, force=force, cast=cast)

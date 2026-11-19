@@ -51,6 +51,7 @@ from showpy.cast.select import (
 from showpy.choreo.models import Form, Placement, Set
 from showpy.core.caps import MAX_DEPTH, MAX_TEXT_CHARS
 from showpy.core.errors import GeometryError, SchemaError, ShowPyError, UnknownRefError
+from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.types import Region
 from showpy.geo.shapes import line
 from showpy.show.models import Show
@@ -67,28 +68,38 @@ def mixed_cast() -> Cast:
         "flags": Group(key="flags", label_prefix="flag-"),
     }
     spots = (
-        Spot(id="T1", group="trumpets", tags=("soloist",)),
-        Spot(id="T2", group="trumpets"),
-        Spot(id="T10", group="trumpets"),
-        Spot(id="TB1", group="tubas", shape=RECT),
-        Spot(id="flag-1", group="flags", shape=RECT),
-        Spot(id="flag-2", group="flags", tags=("soloist",)),
+        Spot(id=SpotId("T1"), group="trumpets", tags=("soloist",)),
+        Spot(id=SpotId("T2"), group="trumpets"),
+        Spot(id=SpotId("T10"), group="trumpets"),
+        Spot(id=SpotId("TB1"), group="tubas", shape=RECT),
+        Spot(id=SpotId("flag-1"), group="flags", shape=RECT),
+        Spot(id=SpotId("flag-2"), group="flags", tags=("soloist",)),
     )
-    return Cast(groups=groups, spots=spots, selections={"front": ("T2", "flag-1")})
+    return Cast(groups=groups, spots=spots, selections={"front": (SpotId("T2"), SpotId("flag-1"))})
 
 
 def mixed_show() -> Show:
     cast = mixed_cast()
     placements = tuple(
-        Placement(entity=spot_id, x=float(i), y=0.0, form="arc1" if i < 3 else None, order=i)
+        Placement(
+            entity=spot_id, x=float(i), y=0.0, form=FormId("arc1") if i < 3 else None, order=i
+        )
         for i, spot_id in enumerate(cast.ids())
     )
-    arc = Form(id="arc1", set="1", kind="arc", geometry={}, members=("T10", "T2", "T1"))
+    arc = Form(
+        id=FormId("arc1"),
+        set=SetId("1"),
+        kind="arc",
+        geometry={},
+        members=(SpotId("T10"), SpotId("T2"), SpotId("T1")),
+    )
     base = two_set_show()
     return base.model_copy(
         update={
             "cast": cast,
-            "sets": (Set(id="1", counts=0.0, placements=placements, forms=("arc1",)),),
+            "sets": (
+                Set(id=SetId("1"), counts=0.0, placements=placements, forms=(FormId("arc1"),)),
+            ),
             "forms": {"arc1": arc},
             "transitions": (),
         }
@@ -207,7 +218,7 @@ def test_bad_shape_kind_raises_schema_error() -> None:
 def test_list_and_selection_pass_through_validated() -> None:
     cast = mixed_cast()
     assert select(cast, ["T2", "T1", "T2"]).ids == ("T2", "T1")
-    assert select(cast, Selection(ids=("TB1",))).ids == ("TB1",)
+    assert select(cast, Selection(ids=(SpotId("TB1"),))).ids == ("TB1",)
     with pytest.raises(UnknownRefError):
         select(cast, ["T1", "T9"])
 
@@ -221,17 +232,17 @@ def test_is_label_dependent() -> None:
 
 def spatial_set() -> Set:
     return Set(
-        id="1",
+        id=SetId("1"),
         counts=0.0,
         placements=(
-            Placement(entity="A", x=-2.0, y=1.0, form="f", order=2),
-            Placement(entity="B", x=2.0, y=1.0, form="f", order=0),
-            Placement(entity="C", x=0.0, y=3.0, form="f", order=1),
-            Placement(entity="D", x=1.0, y=1.0, on_field=False),
-            Placement(entity="E", x=-1.0, y=2.0),
-            Placement(entity="F", x=1.05, y=2.0),
+            Placement(entity=SpotId("A"), x=-2.0, y=1.0, form=FormId("f"), order=2),
+            Placement(entity=SpotId("B"), x=2.0, y=1.0, form=FormId("f"), order=0),
+            Placement(entity=SpotId("C"), x=0.0, y=3.0, form=FormId("f"), order=1),
+            Placement(entity=SpotId("D"), x=1.0, y=1.0, on_field=False),
+            Placement(entity=SpotId("E"), x=-1.0, y=2.0),
+            Placement(entity=SpotId("F"), x=1.05, y=2.0),
         ),
-        forms=("f",),
+        forms=(FormId("f"),),
     )
 
 
@@ -274,19 +285,19 @@ def test_ordered_along_form_x_y() -> None:
 
 def test_ordered_along_curve_breaks_ties_by_natural_id() -> None:
     tied = Set(
-        id="1",
+        id=SetId("1"),
         counts=0.0,
         placements=(
-            Placement(entity="T10", x=1.0, y=1.0),
-            Placement(entity="T2", x=1.0, y=-1.0),
-            Placement(entity="T1", x=3.0, y=0.0),
+            Placement(entity=SpotId("T10"), x=1.0, y=1.0),
+            Placement(entity=SpotId("T2"), x=1.0, y=-1.0),
+            Placement(entity=SpotId("T1"), x=3.0, y=0.0),
         ),
     )
     assert ordered_along(tied, "all", by=line((0.0, 0.0), (4.0, 0.0))).ids == ("T2", "T10", "T1")
 
 
 def test_split_makes_near_equal_consecutive_groups() -> None:
-    parts = split(Selection(ids=tuple("ABCDEFG")), 3)
+    parts = split(Selection(ids=tuple(map(SpotId, "ABCDEFG"))), 3)
     assert [p.ids for p in parts] == [("A", "B", "C"), ("D", "E"), ("F", "G")]
 
 
@@ -308,13 +319,13 @@ def test_mirror_pairs_pairs_across_axis_within_tol() -> None:
 
 def test_mirror_pairs_uses_optimal_assignment() -> None:
     crowded = Set(
-        id="1",
+        id=SetId("1"),
         counts=0.0,
         placements=(
-            Placement(entity="L1", x=-1.0, y=0.0),
-            Placement(entity="L2", x=-1.0, y=0.3),
-            Placement(entity="R1", x=1.0, y=0.25),
-            Placement(entity="R2", x=1.0, y=0.55),
+            Placement(entity=SpotId("L1"), x=-1.0, y=0.0),
+            Placement(entity=SpotId("L2"), x=-1.0, y=0.3),
+            Placement(entity=SpotId("R1"), x=1.0, y=0.25),
+            Placement(entity=SpotId("R2"), x=1.0, y=0.55),
         ),
     )
     assert mirror_pairs(crowded, "all", tol=0.3) == [("L1", "R1"), ("L2", "R2")]
@@ -356,7 +367,7 @@ SET_SELECT_SCRIPT = (
 def _line_cast() -> Cast:
     return Cast(
         groups={"g": Group(key="g", label_prefix="T")},
-        spots=tuple(Spot(id=f"T{i}", group="g") for i in range(1, 5)),
+        spots=tuple(Spot(id=SpotId(f"T{i}"), group="g") for i in range(1, 5)),
     )
 
 
@@ -393,12 +404,12 @@ def test_regression_select_deep_nesting_raises_schema_error() -> None:
 def test_regression_mirror_pairs_finds_every_pair_within_tolerance() -> None:
     """Pairs spots within tolerance even when the min-sum plan misses them (audit 9.3)."""
     placements = (
-        Placement(entity="A", x=-1.0, y=0.0),
-        Placement(entity="B", x=-1.0, y=-0.4),
-        Placement(entity="R1", x=1.09, y=0.0),
-        Placement(entity="R2", x=1.0, y=0.3),
+        Placement(entity=SpotId("A"), x=-1.0, y=0.0),
+        Placement(entity=SpotId("B"), x=-1.0, y=-0.4),
+        Placement(entity=SpotId("R1"), x=1.09, y=0.0),
+        Placement(entity=SpotId("R2"), x=1.0, y=0.3),
     )
-    set_ = Set(id="1", counts=0.0, placements=placements)
+    set_ = Set(id=SetId("1"), counts=0.0, placements=placements)
     assert len(mirror_pairs(set_, "all", tol=MIRROR_TOL_M)) >= 1
 
 

@@ -98,6 +98,7 @@ from showpy.core.errors import (
     ShowValidationError,
     UnknownRefError,
 )
+from showpy.core.ids import SpotId
 from showpy.export.data import export_json
 from showpy.export.models import Performer, Publication
 from showpy.export.print_sheets import chart, coordinate_sheets
@@ -335,7 +336,7 @@ def test_notify_changes_tells_only_affected_performers() -> None:
     old = two_set_show()
     pub = _with_claims(old, ("Ada", "T1"), ("Bo", "T2"), ("Cy", "T3"), ("Di", "T4"))
     new = with_targets({"T1": {"x": 1.0}, "T2": {"facing": 90.0}}, show=old)
-    new = with_rows({"T3": PathRow(entity="T3", start=2.0)}, show=new)
+    new = with_rows({"T3": PathRow(entity=SpotId("T3"), start=2.0)}, show=new)
     notices = notify_changes(pub, old, new)
     assert [(p.name, text) for p, text in notices] == [
         ("Ada", "moved in set 2"),
@@ -365,7 +366,7 @@ def test_notify_changes_reports_removed_spots_and_combines_parts() -> None:
 
 def test_unclaimed_skips_spots_nobody_may_claim() -> None:
     show = two_set_show()
-    extra = Spot(id="P1", group="trumpets", claimable="none")
+    extra = Spot(id=SpotId("P1"), group="trumpets", claimable="none")
     show = show.model_copy(
         update={"cast": show.cast.model_copy(update={"spots": (*show.cast.spots, extra)})}
     )

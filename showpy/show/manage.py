@@ -31,7 +31,15 @@ from showpy.core.errors import (
     VersionError,
     bounded_repr,
 )
-from showpy.core.ids import SetId, SpotId, TransitionId, format_ref, format_tid, parse_ref
+from showpy.core.ids import (
+    SetId,
+    SpotId,
+    TransitionId,
+    check_id,
+    format_ref,
+    format_tid,
+    parse_ref,
+)
 from showpy.core.types import Count
 from showpy.core.util import close_matches
 from showpy.notes.models import Anchor, Note
@@ -52,7 +60,7 @@ SEQUENTIAL = "sequential"
 SCHEMES = (SEQUENTIAL,)
 
 
-def _require_set_id(show: Show, set_id: SetId) -> None:
+def _checked_set_id(show: Show, set_id: str) -> SetId:
     if not SET_ID_PATTERN.fullmatch(set_id) or ".." in set_id:
         raise SchemaError(
             f"set id {set_id!r} is not allowed",
@@ -65,6 +73,7 @@ def _require_set_id(show: Show, set_id: SetId) -> None:
             hint="pick an unused id or use insert_subset()",
             context={"set": set_id, "known": show.set_ids()},
         )
+    return SetId(set_id)
 
 
 def _require_counts(counts: float, *, is_first: bool) -> None:
@@ -167,7 +176,8 @@ def new_show(
             context={"ref": sheet.ref},
         )
     roster = cast or Cast()
-    first = Set(id=FIRST_SET_ID, counts=0.0, placements=tuple(map(_off_field, roster.ids())))
+    placements = tuple(map(_off_field, roster.ids()))
+    first = Set.model_validate({"id": FIRST_SET_ID, "counts": 0.0, "placements": placements})
     return Show(
         id=show_id,
         title=title,
@@ -193,9 +203,9 @@ def _given_placements(show: Show, placements: Sequence[Placement]) -> dict[SpotI
 
 def add_set(
     show: Show,
-    set_id: SetId,
+    set_id: str,
     counts: float,
-    after: SetId | None = None,
+    after: str | None = None,
     placements: Sequence[Placement] | None = None,
     *,
     force: bool = False,
@@ -223,23 +233,23 @@ def add_set(
     >>> show.set_ids(), show.set("3").get("T1").y
     (['1', '2', '3'], 9.0)
     """
-    _require_set_id(show, set_id)
+    new_id = _checked_set_id(show, set_id)
     position = len(show.sets) if after is None else show.set_index(after) + 1
     _require_counts(counts, is_first=position == 0)
     given = _given_placements(show, placements or ())
     previous = show.sets[position - 1] if position > 0 else None
     rows = tuple(given.get(e) or _carried(show, previous, e) for e in show.cast.ids())
-    new = Set(id=set_id, key=_new_key(show, set_id), counts=counts, placements=rows)
+    new = Set(id=new_id, key=_new_key(show, new_id), counts=counts, placements=rows)
     return replace_sets(show, [*show.sets[:position], new, *show.sets[position:]], force=force)
 
 
-def _subset_id(show: Show, after: SetId) -> SetId:
+def _subset_id(show: Show, after: str) -> SetId:
     base = after.rstrip(SUBSET_LETTERS)
     suffix = after[len(base) :]
     start = SUBSET_LETTERS.index(suffix[-1]) + 1 if suffix else 0
     for letter in SUBSET_LETTERS[start:]:
         if f"{base}{letter}" not in show.set_ids():
-            return f"{base}{letter}"
+            return _checked_set_id(show, f"{base}{letter}")
     raise SchemaError(
         f"no free sub-set letter after {after}",
         hint="renumber the show first with renumber()",
@@ -248,7 +258,7 @@ def _subset_id(show: Show, after: SetId) -> SetId:
 
 
 def insert_subset(
-    show: Show, after: SetId, counts: float, *, force: bool = False
+    show: Show, after: str, counts: float, *, force: bool = False
 ) -> tuple[Show, SetId]:
     """Inserts a sub-set after `after`, taking its counts from the following set.
 
@@ -291,7 +301,7 @@ def insert_subset(
     return replace_sets(show, sets, force=force), new_id
 
 
-def _pins_without_set(show: Show, set_id: SetId) -> tuple[Pin, ...]:
+def _pins_without_set(show: Show, set_id: str) -> tuple[Pin, ...]:
     dropped_forms = {f for f, form in show.forms.items() if form.set == set_id}
     tids = {format_tid(t) for t in show.transition_ids() if set_id in t}
 
@@ -305,9 +315,7 @@ def _pins_without_set(show: Show, set_id: SetId) -> tuple[Pin, ...]:
     return tuple(filter(kept, show.pins))
 
 
-def remove_set(
-    show: Show, set_id: SetId, *, merge_counts: bool = True, force: bool = False
-) -> Show:
+def remove_set(show: Show, set_id: str, *, merge_counts: bool = True, force: bool = False) -> Show:
     """Deletes a set, its forms, its pins and the stored paths into and out of it.
 
     Args:
@@ -354,7 +362,7 @@ def _scale_spec(spec: TransitionSpec, factor: float) -> TransitionSpec:
 
 
 def _overruns(spec: TransitionSpec, counts: float) -> list[str]:
-    late = [
+    late: list[str] = [
         entity
         for entity, row in spec.rows.items()
         if row.window(counts)[1] > counts
@@ -379,7 +387,7 @@ def _retimed_spec(spec: TransitionSpec, counts: float, *, rescale: bool) -> Tran
 
 
 def set_counts(
-    show: Show, set_id: SetId, counts: float, *, rescale: bool = False, force: bool = False
+    show: Show, set_id: str, counts: float, *, rescale: bool = False, force: bool = False
 ) -> Show:
     """Retimes a set and keeps the incoming transition's counts equal to it.
 
@@ -419,7 +427,7 @@ def _renamed_anchor(anchor: Anchor, mapping: Mapping[SetId, SetId]) -> Anchor:
     return anchor
 
 
-def _renamed_pin(pin: Pin, mapping: Mapping[SetId, SetId], tids: Mapping[str, str]) -> Pin:
+def _renamed_pin(pin: Pin, mapping: Mapping[str, str], tids: Mapping[str, str]) -> Pin:
     if pin.target == "set":
         return pin.replace(id=mapping.get(pin.id, pin.id))
     if pin.target == "transition":
@@ -454,7 +462,8 @@ def renumber(show: Show, scheme: str = SEQUENTIAL) -> tuple[Show, dict[SetId, Se
             hint=f"use one of {', '.join(SCHEMES)}",
             context={"scheme": scheme},
         )
-    mapping = {s.id: str(n) for n, s in enumerate(show.sets, start=1)}
+    mapping = {s.id: SetId(check_id(str(n), kind="set")) for n, s in enumerate(show.sets, start=1)}
+    by_text: dict[str, str] = dict(mapping.items())
     tids = {
         format_tid(t): format_tid((mapping[t[0]], mapping[t[1]])) for t in show.transition_ids()
     }
@@ -467,7 +476,7 @@ def renumber(show: Show, scheme: str = SEQUENTIAL) -> tuple[Show, dict[SetId, Se
             f: form.replace(set=mapping.get(form.set, form.set)) for f, form in show.forms.items()
         },
         notes=tuple(_renamed_note(n, mapping) for n in show.notes),
-        pins=tuple(_renamed_pin(p, mapping, tids) for p in show.pins),
+        pins=tuple(_renamed_pin(p, by_text, tids) for p in show.pins),
     )
     return renamed, mapping
 

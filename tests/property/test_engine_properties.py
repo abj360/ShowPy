@@ -17,6 +17,7 @@ from hypothesis import strategies as st
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_compile import plan_positions
 from showpy.choreo.models import Easing, EasingKind, PathRow, PathStyle, Waypoint
+from showpy.core.ids import SpotId
 from showpy.core.util import approx_equal
 from tests.fixtures.motion_shows import TID, with_rows
 
@@ -45,7 +46,7 @@ def rows(draw: st.DrawFn) -> PathRow:
     waypoints = tuple(Waypoint(x=draw(coords), y=draw(coords)) for _ in range(n))
     easing = Easing(kind=draw(st.sampled_from(EASINGS)), strength=draw(st.floats(1.0, 4.0)))
     return PathRow(
-        entity="T1", style=style, start=start, end=end, waypoints=waypoints, easing=easing
+        entity=SpotId("T1"), style=style, start=start, end=end, waypoints=waypoints, easing=easing
     )
 
 
@@ -75,7 +76,7 @@ def periodic_rows(draw: st.DrawFn) -> PathRow:
     amplitude = draw(st.floats(min_value=0.1, max_value=2.0))
     easing = Easing(kind=draw(st.sampled_from(EASINGS)), strength=draw(st.floats(1.0, 4.0)))
     return PathRow(
-        entity="T1",
+        entity=SpotId("T1"),
         style=PathStyle.CUSTOM,
         motion_fn=draw(st.sampled_from(PERIODIC_MOTIONS)),
         motion_params={"cycles": cycles, "amplitude": amplitude},
@@ -87,7 +88,7 @@ def periodic_rows(draw: st.DrawFn) -> PathRow:
 @given(periodic_rows())
 def test_segments_track_periodic_custom_motions_within_tolerance(row: PathRow) -> None:
     engine = PathEngine(with_rows({"T1": row}))
-    plan = engine.compile(TID).plans["T1"]
+    plan = engine.compile(TID).plans[SpotId("T1")]
     for seg in engine.entity_segments("T1", TID, tol=TOL):
         taus = seg.t0 + PROBE_SHARES * (seg.t1 - seg.t0)
         linear = np.asarray(seg.p0) + np.outer(PROBE_SHARES, np.subtract(seg.p1, seg.p0))

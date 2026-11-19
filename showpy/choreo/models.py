@@ -172,27 +172,27 @@ class Set(FrozenModel):
         """Returns the spot IDs in placement order."""
         return tuple(p.entity for p in self.placements)
 
-    def positions(self, sel: Literal["all"] | Sequence[SpotId] | Selection = "all") -> Points:
+    def positions(self, sel: Literal["all"] | Sequence[str] | Selection = "all") -> Points:
         """Returns coordinates (N, 2) in selection order; "all" uses placement order."""
         ids = self.entity_ids() if sel == "all" else tuple(sel)
         if not ids:
             return np.zeros((0, 2))
         return np.array([self.get(i).point for i in ids], dtype=float)
 
-    def get(self, entity: SpotId) -> Placement:
+    def get(self, entity: str) -> Placement:
         """Returns one placement, raising UnknownRefError when the spot is absent."""
-        index = self._index().get(entity)
-        if index is None:
+        index = self._index()
+        if entity not in index:
             raise UnknownRefError(
                 f"spot {entity!r} is not in set {self.id}",
                 hint="check the spot id or add the spot first",
                 context={"set": self.id, "entity": entity},
             )
-        return self.placements[index]
+        return self.placements[index[SpotId(entity)]]
 
     # Any: updates may be a Placement or a partial dict of any placement fields.
-    def with_placements(
-        self, updates: Mapping[SpotId, Placement | Mapping[str, Any]], *, force: bool = False
+    def with_placements[K: str](
+        self, updates: Mapping[K, Placement | Mapping[str, Any]], *, force: bool = False
     ) -> "Set":
         """Returns a set with placements replaced or patched; pinned rows need force=True."""
         rows = list(self.placements)
@@ -205,7 +205,7 @@ class Set(FrozenModel):
                     hint="unpin it first, or pass force=True as the designer",
                     context={"set": self.id, "entity": entity},
                 )
-            rows[index[entity]] = _apply_change(current, change)
+            rows[index[current.entity]] = _apply_change(current, change)
         return self.replace(placements=tuple(rows))
 
 
@@ -619,13 +619,15 @@ class TransitionSpec(FrozenModel):
                 raise SchemaError(f"row key {key} holds {row.entity}", hint="key rows by entity")
         return self
 
-    def row(self, entity: SpotId) -> PathRow:
+    def row(self, entity: str) -> PathRow:
         """Returns the spot's row, or a default straight row when it has none."""
-        return self.rows.get(entity) or PathRow(entity=entity)
+        if entity in self.rows:
+            return self.rows[SpotId(entity)]
+        return PathRow.model_validate({"entity": entity})
 
 
 type MatchObjective = Literal["sum", "sum_squares", "bottleneck", "bottleneck_then_sum"]
-type CostFn = Callable[[SpotId, int, Point, Point], float]
+type CostFn = Callable[[str, int, Point, Point], float]
 
 
 class MatchOptions(FrozenModel):

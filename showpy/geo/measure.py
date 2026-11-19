@@ -45,7 +45,7 @@ CURVE_TOL = 0.001
 DISK_SEGMENTS = 64
 STRAIGHT_TOL = 1e-12
 
-type SetSelector = Literal["all"] | Sequence[SpotId] | Selection
+type SetSelector = Literal["all"] | Sequence[str] | Selection
 
 
 def on_field_ids(s: Set, sel: SetSelector = ALL) -> tuple[SpotId, ...]:
@@ -65,7 +65,7 @@ def on_field_ids(s: Set, sel: SetSelector = ALL) -> tuple[SpotId, ...]:
             context={"selector": sel},
         )
     ids = s.entity_ids() if sel == ALL else tuple(dict.fromkeys(sel))
-    return tuple(i for i in ids if s.get(i).on_field)
+    return tuple(p.entity for p in map(s.get, ids) if p.on_field)
 
 
 def _points(obj: Points | Curve) -> Points:
@@ -180,14 +180,14 @@ def distance_matrix(a: Points, b: Points) -> Points:
     return matrix
 
 
-def _closest(s: Set, target: Point, k: int, skip: SpotId | None) -> list[tuple[SpotId, Meters]]:
+def _closest(s: Set, target: Point, k: int, skip: str | None) -> list[tuple[SpotId, Meters]]:
     ids = [i for i in on_field_ids(s) if i != skip]
     rank = {spot: n for n, spot in enumerate(natural_sort(ids))}
     scored = [(math.dist(target, s.get(i).point), rank[i], i) for i in ids]
     return [(i, d) for d, _, i in sorted(scored)[:k]]
 
 
-def neighbors(s: Set, entity: SpotId, k: int = 2) -> list[tuple[SpotId, Meters]]:
+def neighbors(s: Set, entity: str, k: int = 2) -> list[tuple[SpotId, Meters]]:
     """Returns the k on-field spots closest to `entity`, nearest first, ties by natural ID.
 
     Off-field spots are never neighbours; the entity itself is measured from where it stands.

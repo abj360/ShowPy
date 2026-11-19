@@ -8,7 +8,7 @@ import pytest
 
 from showpy.choreo.models import PathRow, TransitionSpec
 from showpy.core.errors import SchemaError, UnknownRefError
-from showpy.core.ids import make_tid
+from showpy.core.ids import SpotId, make_tid
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 
@@ -42,7 +42,9 @@ def test_missing_transition_defaults_to_destination_counts() -> None:
 
 def test_stored_transition_is_returned() -> None:
     stored = TransitionSpec(
-        id=make_tid("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", start=2)}
+        id=make_tid("1", "2"),
+        counts=8.0,
+        rows={SpotId("T1"): PathRow(entity=SpotId("T1"), start=2)},
     )
     show = two_set_show().model_copy(update={"transitions": (stored,)})
     assert show.transition(("1", "2")) == stored

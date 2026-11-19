@@ -67,6 +67,7 @@ from showpy.core.errors import (
     SpacingError,
     UnknownRefError,
 )
+from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.types import Box2, Points
 from showpy.core.util import approx_equal
 from showpy.geo.affine import rotation_matrix, translation_matrix
@@ -284,7 +285,9 @@ def test_edit_params_respects_lock_and_kind() -> None:
 
 
 def test_missing_recipe_key_raises_schema_error() -> None:
-    broken = Form(id="b", set="1", kind="block", geometry={"rows": 1}, members=("A",))
+    broken = Form(
+        id=FormId("b"), set=SetId("1"), kind="block", geometry={"rows": 1}, members=(SpotId("A"),)
+    )
     with pytest.raises(SchemaError, match="origin"):
         slots(broken)
 
@@ -340,7 +343,7 @@ def test_regression_misspelled_recipe_key_is_rejected() -> None:
     """Raises SchemaError for an unknown recipe key such as "anchr" (audit 9.6)."""
     recipe = {**BLOCK_RECIPE, "anchr": "front-left"}
     with pytest.raises(SchemaError):
-        slots(Form(id="f", set="1", kind="block", geometry=recipe, members=()))
+        slots(Form(id=FormId("f"), set=SetId("1"), kind="block", geometry=recipe, members=()))
 
 
 @pytest.mark.defect("UP-9.6-46")

@@ -10,6 +10,7 @@ from hypothesis import strategies as st
 from hypothesis.extra.numpy import arrays
 
 from showpy.choreo.models import Placement, Set
+from showpy.core.ids import SetId, SpotId
 from showpy.core.types import Points
 from showpy.core.units import angle_diff, normalize_angle
 from showpy.core.util import approx_equal
@@ -39,10 +40,10 @@ mirror_axes = st.one_of(
 def sets(draw: st.DrawFn) -> Set:
     pts = draw(point_arrays)
     rows = tuple(
-        Placement(entity=f"S{i}", x=float(x), y=float(y), facing=draw(facings))
+        Placement(entity=SpotId(f"S{i}"), x=float(x), y=float(y), facing=draw(facings))
         for i, (x, y) in enumerate(pts)
     )
-    return Set(id="1", counts=0.0, placements=rows)
+    return Set(id=SetId("1"), counts=0.0, placements=rows)
 
 
 @given(point_arrays, anchors)

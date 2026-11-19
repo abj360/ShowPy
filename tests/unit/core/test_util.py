@@ -91,6 +91,7 @@ from showpy.cast.models import Cast, Group, Spot
 from showpy.cast.select import label_prefix, select
 from showpy.core.canonical import jcs
 from showpy.core.errors import SchemaError, ShowPyError
+from showpy.core.ids import SpotId
 from showpy.core.util import (
     approx_equal,
     as_points,
@@ -455,7 +456,7 @@ def test_regression_range_check_happens_before_expansion() -> None:
     """Checks range endpoints before building 300,000 strings (audit 9.3; P0 #8)."""
     cast = Cast(
         groups={"t": Group(key="t", label_prefix="T")},
-        spots=(Spot(id="T1", group="t"), Spot(id="T2", group="t")),
+        spots=(Spot(id=SpotId("T1"), group="t"), Spot(id=SpotId("T2"), group="t")),
     )
     tracemalloc.start()
     try:

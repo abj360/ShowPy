@@ -60,7 +60,7 @@ def _natural_key(text: str) -> tuple[tuple[tuple[int, int, str], ...], str]:
     return chunks, text
 
 
-def natural_sort(ids: Iterable[str]) -> list[str]:
+def natural_sort[T: str](ids: Iterable[T]) -> list[T]:
     """Sorts IDs with embedded numbers compared numerically; ties fall back to the text.
 
     >>> natural_sort(["T10", "T2"])

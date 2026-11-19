@@ -30,6 +30,7 @@ from showpy.choreo.motion_stats import (
     speeds,
 )
 from showpy.core.errors import ShowPyError, TimeRangeError
+from showpy.core.ids import SpotId
 from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
 from showpy.show.models import Show
@@ -48,7 +49,7 @@ def test_engine_speed_reports_distance_rate_and_seconds() -> None:
 
 
 def test_speed_window_and_delayed_move() -> None:
-    show = with_rows({"T1": PathRow(entity="T1", start=4.0)})
+    show = with_rows({"T1": PathRow(entity=SpotId("T1"), start=4.0)})
     stats = speed(show, "T1", TID)
     assert approx_equal(stats.max_instant, 1.0)
     assert approx_equal(stats.counts, 4.0)
@@ -170,7 +171,7 @@ def _phrase_call(show: Show, motions: MotionRegistry) -> object:
 def test_regression_motion_helpers_accept_a_custom_motion_registry(call: MotionsCall) -> None:
     """Analyses a show that uses a custom-registered motion (audit 9.2)."""
     registry = DEFAULT_MOTIONS.with_motion("probe", _line_motion)
-    row = PathRow(entity="T1", style=PathStyle.CUSTOM, motion_fn="probe")
+    row = PathRow(entity=SpotId("T1"), style=PathStyle.CUSTOM, motion_fn="probe")
     plain = call(two_set_show(), DEFAULT_MOTIONS)
     assert repr(call(with_rows({"T1": row}), registry)) == repr(plain)
 

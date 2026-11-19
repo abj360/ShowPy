@@ -58,6 +58,7 @@ import pytest
 from showpy.cast.rewrite import rewrite_spot_ids
 from showpy.choreo.forms import slots, text_form
 from showpy.core.errors import FontError, MissingFontError, SchemaError, UnknownRefError
+from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.resources import font_path
 from showpy.core.util import approx_equal, asset_uri
 from showpy.export.data import (
@@ -147,14 +148,14 @@ def test_frames_csv_respects_per_count() -> None:
 
 def test_csv_quotes_user_text() -> None:
     row = ChartRow(
-        entity="T1",
+        entity=SpotId("T1"),
         group="trumpets",
         position_text="a, b",
         xy=(0.0, 0.0),
         facing=0.0,
         note='say "hi"\nthen go',
     )
-    text = to_csv(Chart(set_id="1", rows=(row,)))
+    text = to_csv(Chart(set_id=SetId("1"), rows=(row,)))
     parsed = list(csv.reader(io.StringIO(text)))
     assert parsed[1][parsed[0].index("position")] == "a, b"
     assert parsed[1][parsed[0].index("note")] == 'say "hi"\nthen go'
@@ -182,11 +183,11 @@ def test_text_and_csv_accept_dataframes() -> None:
 
 def test_tables_name_the_performer() -> None:
     sheet = CoordinateSheet(
-        entity="T1",
+        entity=SpotId("T1"),
         performer_name="Ada",
         rows=(
             SheetRow(
-                set="1",
+                set=SetId("1"),
                 counts=0.0,
                 cumulative=0.0,
                 position_text="here",
@@ -252,7 +253,7 @@ def test_regression_chart_csv_neutralizes_formula_names() -> None:
     """
     show = guided_show()
     pub = live_publication(show)
-    claim = Claim(spot="T1", performer=performer(FORMULA_NAME), claimed_at=AT)
+    claim = Claim(spot=SpotId("T1"), performer=performer(FORMULA_NAME), claimed_at=AT)
     pub = pub.model_copy(update={"claims": (claim,)})
     rows = _csv_rows(to_csv(chart(show, "1", publication=pub)))
     cells = [cell for row in rows[1:] for cell in row]
@@ -424,7 +425,7 @@ def test_export_without_text_forms_has_no_fonts_key() -> None:
 
 def test_import_fonts_round_trips_slots() -> None:
     show, registry, _ = _text_show()
-    form = show.forms["tiny"]
+    form = show.forms[FormId("tiny")]
     document = json.loads(json.dumps(export_json(show, font_registry=registry)))
     rebuilt = import_fonts(document, font_registry=EMPTY_FONTS)
     assert np.array_equal(slots(form, font_registry=rebuilt), slots(form, font_registry=registry))
@@ -460,7 +461,7 @@ def test_export_include_without_forms_embeds_no_fonts() -> None:
 def test_import_json_still_loads_a_document_with_fonts() -> None:
     show, registry, _ = _text_show()
     loaded = import_json(export_json(show, font_registry=registry))
-    assert loaded.forms["tiny"] == show.forms["tiny"]
+    assert loaded.forms[FormId("tiny")] == show.forms[FormId("tiny")]
 
 
 def test_import_fonts_without_a_fonts_key_returns_the_registry() -> None:

@@ -20,6 +20,7 @@ Contains:
 import pytest
 
 from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
+from showpy.core.ids import LandmarkId, ZoneId
 from showpy.core.types import Region
 from showpy.core.util import approx_equal
 from showpy.sheet.bounds import (
@@ -69,8 +70,10 @@ def test_landmark_unknown_suggests_close_matches() -> None:
 
 def test_nearest_landmarks_measures_lines_and_areas() -> None:
     sheet = field_sheet()
-    line = Landmark(id="ln", name="tape", kind="line", geometry=((-5.0, 3.0), (5.0, 3.0)))
-    area = Landmark(id="ar", name="box", kind="area", geometry=HOLE)
+    line = Landmark(
+        id=LandmarkId("ln"), name="tape", kind="line", geometry=((-5.0, 3.0), (5.0, 3.0))
+    )
+    area = Landmark(id=LandmarkId("ar"), name="box", kind="area", geometry=HOLE)
     sheet = add_landmark(add_landmark(sheet, line), area)
     found = nearest_landmarks(sheet, (0.0, 1.5), k=3)
     assert [lm.id for lm, _ in found] == ["ar", "ln", "c"]
@@ -87,7 +90,7 @@ def test_nearest_landmarks_filters_kinds_and_limits() -> None:
 def test_zones_at_merges_show_zones_and_filters_by_count() -> None:
     show = two_set_show()
     timed = Zone(
-        id="timed",
+        id=ZoneId("timed"),
         kind=ZoneKind.RESTRICTED,
         polygon=Region(exterior=((-1.0, -2.0), (1.0, -2.0), (1.0, -1.0), (-1.0, -1.0))),
         active=((0.0, 4.0),),
@@ -109,7 +112,7 @@ def test_regression_landmark_anchor_ignores_repeated_closing_vertex() -> None:
     """Counts a repeated closing vertex once when anchoring an area (audit 9.4)."""
     side = SQUARE_SIDE
     ring = ((0.0, 0.0), (side, 0.0), (side, side), (0.0, side), (0.0, 0.0))
-    area = Landmark(id="box", name="box", kind="area", geometry=ring)
+    area = Landmark(id=LandmarkId("box"), name="box", kind="area", geometry=ring)
     assert approx_equal(landmark_anchor(area), (side / 2, side / 2), CENTER_TOL)
 
 
@@ -118,7 +121,7 @@ def test_regression_landmark_anchor_ignores_repeated_closing_vertex() -> None:
 def test_regression_landmark_anchor_is_the_area_centroid() -> None:
     """Anchors an area at its centroid, not the mean of its vertices (audit 9.4)."""
     ring = ((0.0, 0.0), (1.0, 0.0), (2.0, 0.0), (3.0, 0.0), (4.0, 0.0), (4.0, 2.0), (0.0, 2.0))
-    area = Landmark(id="strip", name="strip", kind="area", geometry=ring)
+    area = Landmark(id=LandmarkId("strip"), name="strip", kind="area", geometry=ring)
     assert approx_equal(landmark_anchor(area), (2.0, 1.0), CENTER_TOL)
 
 

@@ -11,6 +11,7 @@ Contains:
 """
 
 from showpy.choreo.models import PathRow, PathStyle
+from showpy.core.ids import SpotId
 from showpy.examples import EXAMPLE_TIME as AT
 from showpy.examples import live_publication, performer
 from showpy.sheet.models import GuideLine
@@ -40,8 +41,10 @@ def guided_show() -> Show:
     sheet = base.sheet.model_copy(update={"guides": (guide,)})
     show = with_targets({"T3": {"y": 5.0}}, show=base.model_copy(update={"sheet": sheet}))
     rows = {
-        "T2": PathRow(entity="T2", start=2.0),
-        "T3": PathRow(entity="T3", style=PathStyle.HOLD),
-        "T4": PathRow(entity="T4", style=PathStyle.ROTATE, pivot=(6.0, GUIDE_Y), sweep_deg=180.0),
+        "T2": PathRow(entity=SpotId("T2"), start=2.0),
+        "T3": PathRow(entity=SpotId("T3"), style=PathStyle.HOLD),
+        "T4": PathRow(
+            entity=SpotId("T4"), style=PathStyle.ROTATE, pivot=(6.0, GUIDE_Y), sweep_deg=180.0
+        ),
     }
     return with_rows(rows, show=show)

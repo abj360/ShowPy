@@ -360,7 +360,7 @@ class DocumentRepository:
         """Returns set IDs in show order."""
         return self.get_show(show_id).set_ids()
 
-    def get_set(self, show_id: str, set_id: SetId) -> Set:
+    def get_set(self, show_id: str, set_id: str) -> Set:
         """Returns one set."""
         return self.get_show(show_id).set(set_id)
 
@@ -389,7 +389,7 @@ class DocumentRepository:
             at=at,
         )
 
-    def get_script(self, show_id: str, set_id: SetId) -> str:
+    def get_script(self, show_id: str, set_id: str) -> str:
         """Returns a set's build script, stored in the folder of the set's key."""
         key = set_key(self.get_set(show_id, set_id))
         source = self.read(show_id, script_doc(key))
@@ -404,7 +404,7 @@ class DocumentRepository:
     def put_script(
         self,
         show_id: str,
-        set_id: SetId,
+        set_id: str,
         source: str,
         *,
         expected_revision: str,
@@ -448,7 +448,7 @@ class DocumentRepository:
             at=at,
         )
 
-    def get_forms(self, show_id: str, set_id: SetId) -> tuple[Form, ...]:
+    def get_forms(self, show_id: str, set_id: str) -> tuple[Form, ...]:
         """Returns the forms a set lists, sorted by ID; stale forms stay out."""
         show = self.get_show(show_id)
         return tuple(f for _, f in sorted(forms_of_set(show, set_id).items()))
@@ -456,7 +456,7 @@ class DocumentRepository:
     def put_forms(
         self,
         show_id: str,
-        set_id: SetId,
+        set_id: str,
         forms: tuple[Form, ...],
         *,
         expected_revision: str,

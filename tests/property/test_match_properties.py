@@ -19,6 +19,7 @@ from showpy.choreo.match import bottleneck_value, match, match_by_order
 from showpy.choreo.match_ops import apply_match
 from showpy.choreo.match_solve import FloatArray, count_crossings
 from showpy.choreo.models import Form, MatchObjective, MatchOptions, MatchResult
+from showpy.core.ids import SpotId
 from showpy.core.types import Points
 from showpy.core.util import approx_equal, seeded_rng
 from tests.fixtures.shows import two_set_show
@@ -126,7 +127,7 @@ def test_preserve_order_equals_brute_force_over_increasing_assignments(
     )
     options = MatchOptions(objective="sum", preserve_order=True)
     result = match(starts, slots, options=options)
-    cols = [result.assignment[str(i)] for i in rows]
+    cols = [result.assignment[SpotId(str(i))] for i in rows]
     assert cols == sorted(cols)
     assert approx_equal(result.total_distance, best, 1e-7)
 

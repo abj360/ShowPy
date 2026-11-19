@@ -98,7 +98,7 @@ def _rotate_curve(row: PathRow, a: Placement, b: Placement) -> AnyCurve | None:
 
 
 def _route(row: PathRow, spec: TransitionSpec) -> Route:
-    route = spec.routes.get(row.route or "")
+    route = None if row.route is None else spec.routes.get(row.route)
     if route is None or row.entity not in route.members:
         raise PathError(
             f"follow path of {row.entity} names no route it belongs to",

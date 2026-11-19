@@ -17,12 +17,12 @@ Contains:
 
 import itertools
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from showpy.choreo.models import FacingOverride, Form, Set
 from showpy.choreo.motion import turn
 from showpy.core.errors import GeometryError, TimeRangeError, UnknownRefError
-from showpy.core.ids import FormId, SetId, SpotId
+from showpy.core.ids import FormId, SpotId
 from showpy.core.selection import Selection
 from showpy.core.types import Degrees, Point
 from showpy.core.units import normalize_angle, vector_facing
@@ -46,10 +46,10 @@ HALF_TURN = 180.0
 QUARTER_TURN = 90.0
 ZERO_TOL = 1e-9
 
-type Sel = Sequence[SpotId] | Selection
+type Sel = Sequence[str] | Selection
 
 
-def _set_facings(target: Set, facings: dict[SpotId, Degrees], *, force: bool) -> Set:
+def _set_facings[K: str](target: Set, facings: Mapping[K, Degrees], *, force: bool) -> Set:
     updates = {e: {"facing": normalize_angle(f)} for e, f in facings.items()}
     return target.with_placements(updates, force=force)
 
@@ -90,7 +90,7 @@ def face_point(target: Set, sel: Sel, point: Point, *, force: bool = False) -> S
     return _set_facings(target, facings, force=force)
 
 
-def face_entity(target: Set, sel: Sel, entity: SpotId, *, force: bool = False) -> Set:
+def face_entity(target: Set, sel: Sel, entity: str, *, force: bool = False) -> Set:
     """Faces spots toward another spot's placement in the same set.
 
     Over time, use a TOWARD_ENTITY path facing or override, which tracks the spot as it moves.
@@ -102,7 +102,7 @@ def face_entity(target: Set, sel: Sel, entity: SpotId, *, force: bool = False) -
     return face_point(target, sel, target.get(entity).point, force=force)
 
 
-def _form(show: Show, form_id: FormId) -> Form:
+def _form(show: Show, form_id: str) -> Form:
     if form_id not in show.forms:
         close = close_matches(form_id, show.forms)
         raise UnknownRefError(
@@ -110,7 +110,7 @@ def _form(show: Show, form_id: FormId) -> Form:
             hint=f"did you mean {', '.join(close)}?" if close else "check the form id",
             context={"form": form_id},
         )
-    return show.forms[form_id]
+    return show.forms[FormId(form_id)]
 
 
 def _form_curve(form: Form) -> AnyCurve:
@@ -125,8 +125,8 @@ def _form_curve(form: Form) -> AnyCurve:
 
 
 def _tangent_facings(
-    show: Show, set_id: SetId, form_id: FormId, turn_by: Degrees
-) -> dict[str, Degrees]:
+    show: Show, set_id: str, form_id: str, turn_by: Degrees
+) -> dict[SpotId, Degrees]:
     form = _form(show, form_id)
     curve = _form_curve(form)
     target = show.set(set_id)
@@ -139,7 +139,7 @@ def _tangent_facings(
 
 
 def face_along(
-    show: Show, set_id: SetId, form_id: FormId, *, reverse: bool = False, force: bool = False
+    show: Show, set_id: str, form_id: str, *, reverse: bool = False, force: bool = False
 ) -> Set:
     """Faces form members along the form's curve, in travel direction unless reversed.
 
@@ -157,7 +157,7 @@ def face_along(
 
 
 def face_normal(
-    show: Show, set_id: SetId, form_id: FormId, *, outward: bool = True, force: bool = False
+    show: Show, set_id: str, form_id: str, *, outward: bool = True, force: bool = False
 ) -> Set:
     """Faces form members perpendicular to the curve; outward is the right of travel.
 

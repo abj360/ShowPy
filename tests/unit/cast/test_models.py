@@ -52,6 +52,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from showpy.cast.models import Cast, Group, LabelScheme, Shape, Spot
 from showpy.core.errors import GeometryError, ShowPyError, UnknownRefError
+from showpy.core.ids import SpotId
 from tests.helpers import fails_after, outputs_under_hash_seeds
 
 
@@ -78,7 +79,7 @@ def test_shape_extent_for_circle_and_rectangle() -> None:
 
 
 def test_spot_defaults() -> None:
-    spot = Spot(id="T1", group="trumpets")
+    spot = Spot(id=SpotId("T1"), group="trumpets")
     assert spot.active
     assert spot.claimable == "performer"
     assert spot.tags == ()
@@ -88,7 +89,7 @@ def test_spot_defaults() -> None:
 def test_cast_spot_lookup_and_unknown_hint() -> None:
     cast = Cast(
         groups={"t": Group(key="t", label_prefix="T")},
-        spots=(Spot(id="T1", group="t"), Spot(id="T2", group="t")),
+        spots=(Spot(id=SpotId("T1"), group="t"), Spot(id=SpotId("T2"), group="t")),
     )
     assert cast.spot("T2").id == "T2"
     with pytest.raises(UnknownRefError) as info:
@@ -98,11 +99,11 @@ def test_cast_spot_lookup_and_unknown_hint() -> None:
 
 def test_cast_rejects_unknown_group_and_duplicate_ids() -> None:
     with pytest.raises(UnknownRefError):
-        Cast(groups={}, spots=(Spot(id="T1", group="t"),))
+        Cast(groups={}, spots=(Spot(id=SpotId("T1"), group="t"),))
     with pytest.raises(UnknownRefError):
         Cast(
             groups={"t": Group(key="t", label_prefix="T")},
-            spots=(Spot(id="T1", group="t"), Spot(id="T1", group="t")),
+            spots=(Spot(id=SpotId("T1"), group="t"), Spot(id=SpotId("T1"), group="t")),
         )
 
 
@@ -114,7 +115,9 @@ def test_label_scheme_prefix_falls_back_to_group() -> None:
 
 
 def test_cast_round_trips_json() -> None:
-    cast = Cast(groups={"t": Group(key="t", label_prefix="T")}, spots=(Spot(id="T1", group="t"),))
+    cast = Cast(
+        groups={"t": Group(key="t", label_prefix="T")}, spots=(Spot(id=SpotId("T1"), group="t"),)
+    )
     assert Cast.model_validate_json(cast.model_dump_json()) == cast
 
 
@@ -142,8 +145,8 @@ def _under_seeds(body: str) -> list[str]:
 def _small_cast() -> Cast:
     return Cast(
         groups={"g": Group(key="g", label_prefix="T", limits={"speed": 2.0})},
-        spots=(Spot(id="T1", group="g"),),
-        selections={"s": ("T1",)},
+        spots=(Spot(id=SpotId("T1"), group="g"),),
+        selections={"s": (SpotId("T1"),)},
         label_scheme=LabelScheme(prefixes={"g": "X"}),
     )
 
@@ -195,7 +198,7 @@ def test_regression_tags_and_selections_dedupe_keeping_first_occurrence() -> Non
     cast = Cast.model_validate(
         {
             "groups": {"g": Group(key="g", label_prefix="T")},
-            "spots": (spot, Spot(id="T2", group="g")),
+            "spots": (spot, Spot(id=SpotId("T2"), group="g")),
             "selections": {"s": ["T2", "T1", "T2"]},
         }
     )
@@ -314,8 +317,8 @@ def test_regression_cast_rejects_selections_naming_missing_spots() -> None:
     with pytest.raises(REJECTED):
         Cast(
             groups={"g": Group(key="g", label_prefix="T")},
-            spots=(Spot(id="T1", group="g"),),
-            selections={"s": ("T9",)},
+            spots=(Spot(id=SpotId("T1"), group="g"),),
+            selections={"s": (SpotId("T9"),)},
         )
 
 
@@ -335,7 +338,7 @@ def test_regression_cast_rejects_prefixes_for_unknown_groups() -> None:
 def test_regression_spot_rejects_empty_id() -> None:
     """Rejects an empty spot ID, which no selector can name (audit 9.3)."""
     with pytest.raises(REJECTED):
-        Spot(id="", group="g")
+        Spot(id=SpotId(""), group="g")
 
 
 @pytest.mark.defect("UP-9.3-70")
@@ -344,7 +347,7 @@ def test_regression_spot_rejects_empty_id() -> None:
 def test_regression_spot_rejects_ids_with_spaces_or_operators(spot_id: str) -> None:
     """Rejects IDs holding spaces, parentheses or operators (audit 9.3)."""
     with pytest.raises(REJECTED):
-        Spot(id=spot_id, group="g")
+        Spot(id=SpotId(spot_id), group="g")
 
 
 @pytest.mark.defect("UP-9.3-71")
@@ -353,4 +356,4 @@ def test_regression_spot_rejects_ids_with_spaces_or_operators(spot_id: str) -> N
 def test_regression_spot_rejects_reserved_selector_words(spot_id: str) -> None:
     """Rejects IDs that collide with selector syntax such as `all` (audit 9.3)."""
     with pytest.raises(REJECTED):
-        Spot(id=spot_id, group="g")
+        Spot(id=SpotId(spot_id), group="g")

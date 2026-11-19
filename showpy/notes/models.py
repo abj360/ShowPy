@@ -64,9 +64,9 @@ class Anchor(FrozenModel):
         return self
 
     @classmethod
-    def on_set(cls, set_id: SetId) -> "Anchor":
+    def on_set(cls, set_id: str) -> "Anchor":
         """Anchors to a set."""
-        return cls(kind="set", set_id=set_id)
+        return cls.model_validate({"kind": "set", "set_id": set_id})
 
     @classmethod
     def on_transition(cls, tid: tuple[str, str]) -> "Anchor":
@@ -84,9 +84,9 @@ class Anchor(FrozenModel):
         return cls(kind="area", area=area)
 
     @classmethod
-    def on_spots(cls, spots: Sequence[SpotId]) -> "Anchor":
+    def on_spots(cls, spots: Sequence[str]) -> "Anchor":
         """Anchors to spots, e.g. a sticky note on a soloist or a group."""
-        return cls(kind="spots", spots=tuple(spots))
+        return cls.model_validate({"kind": "spots", "spots": tuple(spots)})
 
 
 class Note(FrozenModel):

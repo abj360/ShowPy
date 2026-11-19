@@ -23,7 +23,7 @@ from showpy.cast.select import select
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import MotionPlan
 from showpy.choreo.models import PathRow, PathStyle, Placement
-from showpy.core.ids import SetId, SpotId, TransitionId
+from showpy.core.ids import SpotId, TransitionId
 from showpy.core.selection import Selection
 from showpy.core.types import Count, Point
 from showpy.core.units import normalize_angle
@@ -186,7 +186,7 @@ def _build_sheet(
 
 def coordinate_sheet(
     show: Show,
-    entity: SpotId,
+    entity: str,
     precision: float | None = None,
     publication: Publication | None = None,
 ) -> CoordinateSheet:
@@ -206,12 +206,13 @@ def coordinate_sheet(
     ['start', 'move 8']
     """
     worded = _with_precision(show, precision)
-    return _build_sheet(worded, PathEngine(worded), entity, _claimed_names(publication))
+    spot_id = worded.cast.spot(entity).id
+    return _build_sheet(worded, PathEngine(worded), spot_id, _claimed_names(publication))
 
 
 def coordinate_sheets(
     show: Show,
-    sel: str | Sequence[SpotId] | Selection = "all",
+    sel: str | Sequence[str] | Selection = "all",
     publication: Publication | None = None,
     precision: float | None = None,
 ) -> list[CoordinateSheet]:
@@ -226,7 +227,7 @@ def coordinate_sheets(
     return [_build_sheet(worded, engine, e, names) for e in select(worded, sel).ids]
 
 
-def chart(show: Show, set_id: SetId, publication: Publication | None = None) -> Chart:
+def chart(show: Show, set_id: str, publication: Publication | None = None) -> Chart:
     """Builds the designer chart of one set: every spot's position, facing and form.
 
     >>> from showpy.examples import two_set_show
@@ -252,7 +253,7 @@ def chart(show: Show, set_id: SetId, publication: Publication | None = None) -> 
                 note=placement.note,
             )
         )
-    return Chart(set_id=set_id, rows=tuple(rows))
+    return Chart(set_id=current.id, rows=tuple(rows))
 
 
 def _clock_known(show: Show) -> bool:

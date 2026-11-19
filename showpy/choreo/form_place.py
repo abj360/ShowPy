@@ -88,7 +88,7 @@ def _matched(
             hint="add members to forms, add slots with n=, or place those spots elsewhere",
             context={"spots": candidates, "open_slots": len(refs)},
         )
-    groups = {spot.id: spot.group for spot in show.cast.spots}
+    groups: dict[str, str] = {spot.id: spot.group for spot in show.cast.spots}
     result = match(prev, points, entities=candidates, options=options, groups=groups)
     return [
         Placement(
@@ -113,7 +113,7 @@ def _clear_stale_forms(target: Set, placed_ids: set[SpotId]) -> dict[SpotId, Pla
 
 def place(
     show: Show,
-    set_id: SetId,
+    set_id: str,
     forms: Sequence[Form],
     match_options: MatchOptions | None = None,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
@@ -209,9 +209,9 @@ def _filled(placed: Set, form: Form) -> Form:
     return form.replace(set=placed.id, members=members)
 
 
-def _form_of(forms: Mapping[FormId, Form], form_id: FormId) -> Form:
+def _form_of(forms: Mapping[FormId, Form], form_id: str) -> Form:
     if form_id in forms:
-        return forms[form_id]
+        return forms[FormId(form_id)]
     close = close_matches(form_id, forms)
     raise UnknownRefError(
         f"unknown form {form_id!r}",
@@ -232,7 +232,7 @@ def _check_placed(show: Show, form: Form) -> None:
 
 
 def rebuild(
-    show: Show, form_id: FormId, *, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS
+    show: Show, form_id: str, *, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS
 ) -> Show:
     """Regenerates a form's placements in its set and resets its members' neighbouring paths.
 

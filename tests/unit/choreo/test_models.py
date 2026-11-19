@@ -46,7 +46,7 @@ from showpy.choreo.models import (
     Waypoint,
 )
 from showpy.core.errors import LockedError, PathError, SchemaError, UnknownRefError
-from showpy.core.ids import make_tid
+from showpy.core.ids import FormId, RouteId, SetId, SpotId, make_tid
 from showpy.core.selection import Selection
 from showpy.core.units import normalize_angle
 from showpy.core.util import approx_equal
@@ -63,17 +63,17 @@ def test_set_defaults() -> None:
 
 def test_set_rejects_duplicate_entities() -> None:
     with pytest.raises(SchemaError):
-        Set(id="1", counts=0, placements=(Placement(entity="A", x=0, y=0),) * 2)
+        Set(id=SetId("1"), counts=0, placements=(Placement(entity=SpotId("A"), x=0, y=0),) * 2)
 
 
 def test_set_rejects_negative_counts() -> None:
     with pytest.raises(SchemaError):
-        Set(id="1", counts=-1, placements=())
+        Set(id=SetId("1"), counts=-1, placements=())
 
 
 def test_placement_rejects_non_finite() -> None:
     with pytest.raises(SchemaError):
-        Placement(entity="A", x=float("nan"), y=0.0)
+        Placement(entity=SpotId("A"), x=float("nan"), y=0.0)
 
 
 def test_get_and_unknown() -> None:
@@ -85,7 +85,7 @@ def test_get_and_unknown() -> None:
 def test_positions_in_selection_order() -> None:
     s = _set()
     assert approx_equal(s.positions(["T2", "T1"]), [[2.0, 0.0], [0.0, 0.0]])
-    assert approx_equal(s.positions(Selection(ids=("T1",))), [[0.0, 0.0]])
+    assert approx_equal(s.positions(Selection(ids=(SpotId("T1"),))), [[0.0, 0.0]])
     assert s.positions().shape == (2, 2)
 
 
@@ -103,13 +103,13 @@ def test_with_placements_respects_pins() -> None:
 
 
 def test_with_placements_accepts_placement_objects() -> None:
-    new = Placement(entity="T1", x=1.0, y=1.0, facing=90.0)
+    new = Placement(entity=SpotId("T1"), x=1.0, y=1.0, facing=90.0)
     assert _set().with_placements({"T1": new}).get("T1").facing == 90.0
 
 
 def test_with_placements_rejects_entity_mismatch() -> None:
     with pytest.raises(SchemaError):
-        _set().with_placements({"T1": Placement(entity="T9", x=0, y=0)})
+        _set().with_placements({"T1": Placement(entity=SpotId("T9"), x=0, y=0)})
 
 
 def test_table_columns() -> None:
@@ -130,20 +130,26 @@ def test_spacing_and_facing_spec_validation() -> None:
 
 def test_form_requires_unique_members() -> None:
     with pytest.raises(SchemaError):
-        Form(id="f", set="1", kind="line", geometry={}, members=("A", "A"))
+        Form(
+            id=FormId("f"),
+            set=SetId("1"),
+            kind="line",
+            geometry={},
+            members=(SpotId("A"), SpotId("A")),
+        )
 
 
 def test_path_row_defaults_and_window() -> None:
-    row = PathRow(entity="T1")
+    row = PathRow(entity=SpotId("T1"))
     assert row.style == PathStyle.STRAIGHT
     assert row.facing_mode == FacingMode.TO_TARGET
     assert row.window(8.0) == (0.0, 8.0)
-    assert PathRow(entity="T1", start=2, end=6).window(8.0) == (2.0, 6.0)
+    assert PathRow(entity=SpotId("T1"), start=2, end=6).window(8.0) == (2.0, 6.0)
 
 
 def test_path_row_rejects_bad_window() -> None:
     with pytest.raises(PathError):
-        PathRow(entity="T1", start=4, end=2)
+        PathRow(entity=SpotId("T1"), start=4, end=2)
 
 
 def test_waypoint_and_easing_defaults() -> None:
@@ -153,14 +159,14 @@ def test_waypoint_and_easing_defaults() -> None:
 
 def test_transition_spec_row_lookup_defaults_to_straight() -> None:
     spec = TransitionSpec(id=make_tid("1", "2"), counts=8.0)
-    assert spec.row("T1") == PathRow(entity="T1")
+    assert spec.row("T1") == PathRow(entity=SpotId("T1"))
 
 
 def test_transition_spec_round_trips_json() -> None:
     spec = TransitionSpec(
         id=make_tid("1", "2"),
         counts=8.0,
-        rows={"T1": PathRow(entity="T1", waypoints=(Waypoint(x=1, y=1),))},
+        rows={SpotId("T1"): PathRow(entity=SpotId("T1"), waypoints=(Waypoint(x=1, y=1),))},
     )
     assert TransitionSpec.model_validate_json(spec.model_dump_json()) == spec
 
@@ -173,7 +179,9 @@ ANGLE_TOL = 1e-9
 
 
 def _custom_form() -> Form:
-    return Form(id="f", set="1", kind="custom", geometry={"n": 2}, members=("A",))
+    return Form(
+        id=FormId("f"), set=SetId("1"), kind="custom", geometry={"n": 2}, members=(SpotId("A"),)
+    )
 
 
 @pytest.mark.defect("UP-9.6-19")
@@ -196,12 +204,14 @@ def test_regression_form_is_hashable() -> None:
 def test_regression_frozen_model_replace_revalidates_negative_counts() -> None:
     """Rejects a negative count through FrozenModel.replace (audit 9.6)."""
     with pytest.raises(SchemaError):
-        Set(id="1", counts=0.0).replace(counts=NEGATIVE_COUNTS)
+        Set(id=SetId("1"), counts=0.0).replace(counts=NEGATIVE_COUNTS)
 
 
 def test_regression_frozen_model_replace_revalidates_duplicate_placements() -> None:
     """Rejects duplicated placements through FrozenModel.replace (audit 9.6)."""
-    placed = Set(id="1", counts=0.0, placements=(Placement(entity="A", x=0.0, y=0.0),))
+    placed = Set(
+        id=SetId("1"), counts=0.0, placements=(Placement(entity=SpotId("A"), x=0.0, y=0.0),)
+    )
     twice = placed.placements * 2
     with pytest.raises(SchemaError):
         placed.replace(placements=twice)
@@ -211,16 +221,16 @@ def test_regression_frozen_model_replace_revalidates_duplicate_placements() -> N
 @pytest.mark.xfail(strict=True, reason="UP-9.6-26")
 def test_regression_transition_spec_checks_route_keys_against_route_ids() -> None:
     """Rejects a route stored under a key that differs from its ID (audit 9.6)."""
-    route = Route(id="y", curve={}, members=(), offsets=(), travel=1.0)
+    route = Route(id=RouteId("y"), curve={}, members=(), offsets=(), travel=1.0)
     with pytest.raises(SchemaError):
-        TransitionSpec(id=make_tid("1", "2"), counts=NEIGHBOUR_COUNTS, routes={"x": route})
+        TransitionSpec(id=make_tid("1", "2"), counts=NEIGHBOUR_COUNTS, routes={RouteId("x"): route})
 
 
 @pytest.mark.parametrize("counts", [math.nan, math.inf])
 def test_regression_set_rejects_non_finite_counts(counts: float) -> None:
     """Rejects NaN and infinite Set.counts (audit 9.6)."""
     with pytest.raises(SchemaError):
-        Set(id="1", counts=counts)
+        Set(id=SetId("1"), counts=counts)
 
 
 @pytest.mark.defect("UP-9.6-34")
@@ -228,7 +238,7 @@ def test_regression_set_rejects_non_finite_counts(counts: float) -> None:
 def test_regression_path_row_rejects_nan_start() -> None:
     """Rejects a NaN PathRow.start (audit 9.6)."""
     with pytest.raises(PathError):
-        PathRow(entity="A", start=math.nan)
+        PathRow(entity=SpotId("A"), start=math.nan)
 
 
 def test_regression_facing_spec_rejects_nan_point() -> None:
@@ -257,7 +267,7 @@ def test_regression_spacing_spec_rejects_negative_gaps() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.6-40")
 def test_regression_placement_normalizes_facing() -> None:
     """Wraps a placement facing of 720 degrees into [0, 360) (audit 9.6)."""
-    placement = Placement(entity="A", x=0.0, y=0.0, facing=TURNS_PAST_FULL)
+    placement = Placement(entity=SpotId("A"), x=0.0, y=0.0, facing=TURNS_PAST_FULL)
     assert approx_equal(placement.facing, normalize_angle(TURNS_PAST_FULL), ANGLE_TOL)
 
 

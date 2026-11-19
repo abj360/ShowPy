@@ -18,6 +18,7 @@ from showpy.choreo.facing import (
 )
 from showpy.choreo.models import FacingMode, FacingOverride, Form
 from showpy.core.errors import GeometryError, LockedError, TimeRangeError, UnknownRefError
+from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.util import approx_equal
 from showpy.geo.shapes import circle, line
 from showpy.show.models import Show
@@ -48,7 +49,13 @@ def test_face_tools_respect_pins() -> None:
 
 def _show_with_line_form() -> Show:
     recipe = {"curve": line((0.0, 5.0), (6.0, 5.0)).construction()}
-    form = Form(id="f", set="1", kind="line", geometry=recipe, members=("T1", "T2", "T3", "T4"))
+    form = Form(
+        id=FormId("f"),
+        set=SetId("1"),
+        kind="line",
+        geometry=recipe,
+        members=(SpotId("T1"), SpotId("T2"), SpotId("T3"), SpotId("T4")),
+    )
     return two_set_show().model_copy(update={"forms": {"f": form}})
 
 
@@ -63,7 +70,11 @@ def test_face_normal_on_circle_outward_and_inward() -> None:
     show = two_set_show()
     ring = circle((3.0, 5.0), 3.0, start_deg=180.0)
     form = Form(
-        id="c", set="1", kind="circle", geometry={"curve": ring.construction()}, members=("T1",)
+        id=FormId("c"),
+        set=SetId("1"),
+        kind="circle",
+        geometry={"curve": ring.construction()},
+        members=(SpotId("T1"),),
     )
     show = show.model_copy(update={"forms": {"c": form}})
     assert approx_equal(face_normal(show, "1", "c").get("T1").facing, 270.0, tol=1e-6)
@@ -72,7 +83,13 @@ def test_face_normal_on_circle_outward_and_inward() -> None:
 
 def test_face_along_needs_a_curve_form() -> None:
     show = two_set_show()
-    form = Form(id="b", set="1", kind="block", geometry={"origin": [0, 0]}, members=("T1",))
+    form = Form(
+        id=FormId("b"),
+        set=SetId("1"),
+        kind="block",
+        geometry={"origin": [0, 0]},
+        members=(SpotId("T1"),),
+    )
     show = show.model_copy(update={"forms": {"b": form}})
     with pytest.raises(GeometryError):
         face_along(show, "1", "b")
@@ -81,10 +98,12 @@ def test_face_along_needs_a_curve_form() -> None:
 
 
 def test_add_facing_override_validates_range() -> None:
-    override = FacingOverride(entities=("T1",), mode=FacingMode.AUDIENCE, start=1.0, end=3.0)
+    override = FacingOverride(
+        entities=(SpotId("T1"),), mode=FacingMode.AUDIENCE, start=1.0, end=3.0
+    )
     show = add_facing_override(two_set_show(), override)
     assert show.facing_overrides == (override,)
-    late = FacingOverride(entities=("T1",), mode=FacingMode.AUDIENCE, start=1.0, end=30.0)
+    late = FacingOverride(entities=(SpotId("T1"),), mode=FacingMode.AUDIENCE, start=1.0, end=30.0)
     with pytest.raises(TimeRangeError):
         add_facing_override(two_set_show(), late)
 

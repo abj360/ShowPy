@@ -83,7 +83,7 @@ import pytest
 from showpy.choreo.forms import line_form
 from showpy.choreo.models import PathRow, Set, TransitionSpec
 from showpy.core.errors import SchemaError, ShowPyError, StorageError
-from showpy.core.ids import make_tid
+from showpy.core.ids import SetId, SpotId, make_tid
 from showpy.core.util import content_hash
 from showpy.examples import two_set_show
 from showpy.export.positions import import_positions
@@ -156,7 +156,7 @@ def _fixture_tree(tmp_path: Path) -> tuple[FileRepository, str, dict[str, bytes]
 
 
 def test_set_key_defaults_to_the_id_and_is_written_only_when_it_differs() -> None:
-    fresh = Set(id="2", counts=1.0)
+    fresh = Set(id=SetId("2"), counts=1.0)
     moved = fresh.replace(id="3")
     assert fresh.key == "2"
     assert "key" not in fresh.model_dump()
@@ -169,7 +169,7 @@ def test_set_key_defaults_to_the_id_and_is_written_only_when_it_differs() -> Non
 @pytest.mark.parametrize("key", ["a-b", "con", "x" * 65, "1.", "", "all"])
 def test_regression_set_key_must_pass_the_id_check(key: str) -> None:
     with pytest.raises(SchemaError):
-        Set(id="1", counts=0.0, key=key)
+        Set(id=SetId("1"), counts=0.0, key=key)
 
 
 def test_regression_show_refuses_set_keys_that_repeat_ignoring_case() -> None:
@@ -252,7 +252,9 @@ def test_v020_head_documents_redump_to_their_stored_bytes(tmp_path: Path) -> Non
 
 def _with_transition(show: Show) -> Show:
     spec = TransitionSpec(
-        id=make_tid("2", "3"), counts=LAST_SET_COUNTS, rows={"T1": PathRow(entity="T1", start=1)}
+        id=make_tid("2", "3"),
+        counts=LAST_SET_COUNTS,
+        rows={SpotId("T1"): PathRow(entity=SpotId("T1"), start=1)},
     )
     return show.replace(transitions=(spec,))
 
@@ -352,7 +354,9 @@ def test_workspace_writes_and_commits_through_the_key() -> None:
     ws.write("/sets/2/forms.json", dump_json([form.model_dump(mode="python")]), at=LATER)
     assert repo.read(SHOW_ID, "/sets/1A/forms.json") is not None
     spec = TransitionSpec(
-        id=make_tid("2", "3"), counts=LAST_SET_COUNTS, rows={"T1": PathRow(entity="T1", end=4)}
+        id=make_tid("2", "3"),
+        counts=LAST_SET_COUNTS,
+        rows={SpotId("T1"): PathRow(entity=SpotId("T1"), end=4)},
     )
     ws.write("/transitions/2-3/paths.json", spec.model_dump_json(), at=LATER)
     assert "/transitions/1A-2/paths.json" in repo.paths(SHOW_ID)
@@ -468,7 +472,7 @@ def test_regression_constructors_refuse_a_reserved_key() -> None:
     with pytest.raises(SchemaError):
         add_set(two_set_show(), "con", 4.0)
     with pytest.raises(SchemaError):
-        Set(id="1", counts=0.0, key="con")
+        Set(id=SetId("1"), counts=0.0, key="con")
     docs = encode_show(_legacy_show("con", "2"))
     body = json.loads(docs["/sets/con/set.json"]) | {"key": "con"}
     with pytest.raises(SchemaError):
@@ -490,7 +494,7 @@ def test_regression_put_set_keeps_the_stored_key() -> None:
     repo, ws = _put_set_repo()
     current = load_show(ws).set("1")
     assert current.key == "1A"
-    fresh = Set(id="1", counts=0.0, placements=current.placements, label="fresh")
+    fresh = Set(id=SetId("1"), counts=0.0, placements=current.placements, label="fresh")
     revision = repo.put_set(SHOW_ID, fresh, expected_revision=ws.revision, at=LATER)
     assert repo.get_set(SHOW_ID, "1").key == "1A"
     assert repo.get_set(SHOW_ID, "1").label == "fresh"

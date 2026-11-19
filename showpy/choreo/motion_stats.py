@@ -23,7 +23,6 @@ import pandas as pd
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import MotionStats
 from showpy.core.errors import TimeRangeError
-from showpy.core.ids import SpotId
 from showpy.core.types import Count, Degrees, Points
 from showpy.core.units import vector_facing
 from showpy.geo.models import SpeedStats
@@ -33,7 +32,7 @@ STILL_TOL = 1e-9
 SPEED_COLUMNS = ["entity", "distance", "counts", "m_per_count", "m_per_s", "max_instant"]
 
 
-def position_at(show: Show, entity: SpotId, t: Count) -> Points:
+def position_at(show: Show, entity: str, t: Count) -> Points:
     """Returns a spot's position at a global count.
 
     >>> from showpy.examples import two_set_show
@@ -44,7 +43,7 @@ def position_at(show: Show, entity: SpotId, t: Count) -> Points:
 
 
 def speed(
-    show: Show, entity: SpotId, tid: tuple[str, str], window: tuple[float, float] | None = None
+    show: Show, entity: str, tid: tuple[str, str], window: tuple[float, float] | None = None
 ) -> SpeedStats:
     """Returns a spot's movement demand over a local window of a transition.
 
@@ -72,7 +71,7 @@ def speeds(show: Show, tid: tuple[str, str]) -> pd.DataFrame:
 
 
 def direction_of_travel(
-    show: Show, entity: SpotId, tid: tuple[str, str], tau: float
+    show: Show, entity: str, tid: tuple[str, str], tau: float
 ) -> Degrees | None:
     """Returns the facing a spot's travel points at local count tau, or None when still.
 

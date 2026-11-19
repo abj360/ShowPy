@@ -44,14 +44,13 @@ from showpy.choreo.models import (
 )
 from showpy.choreo.motion import DEFAULT_MOTIONS, MotionRegistry, ease
 from showpy.core.errors import LockedError, PathError
-from showpy.core.ids import SpotId
 from showpy.core.selection import Selection
 from showpy.core.types import Degrees, Point
 
 if TYPE_CHECKING:
     from showpy.show.models import Show
 
-type Sel = Sequence[SpotId] | Selection
+type Sel = Sequence[str] | Selection
 
 REQUIRED_PARAMS: dict[PathStyle, tuple[str, ...]] = {
     PathStyle.ROTATE: ("pivot", "sweep_deg"),
@@ -81,7 +80,7 @@ def _edit(
             )
         updated = PathRow.model_validate({**row.model_dump(), **change(row)})
         _require_fits(updated, spec.counts)
-        rows[entity] = updated
+        rows[updated.entity] = updated
     return spec.replace(rows=rows)
 
 
@@ -193,7 +192,7 @@ def window(
 
 def add_waypoint(
     spec: TransitionSpec,
-    entity: SpotId,
+    entity: str,
     point: Point,
     at: float | None = None,
     index: int | None = None,
@@ -221,7 +220,7 @@ def add_waypoint(
 
 
 def remove_waypoint(
-    spec: TransitionSpec, entity: SpotId, index: int, *, force: bool = False
+    spec: TransitionSpec, entity: str, index: int, *, force: bool = False
 ) -> TransitionSpec:
     """Removes the waypoint at `index`.
 
@@ -256,7 +255,7 @@ def clear_waypoints(spec: TransitionSpec, sel: Sel, *, force: bool = False) -> T
 
 
 def curve_path(
-    spec: TransitionSpec, entity: SpotId, *control: Point, force: bool = False
+    spec: TransitionSpec, entity: str, *control: Point, force: bool = False
 ) -> TransitionSpec:
     """Makes a smooth path through control points between the two placements.
 
@@ -328,7 +327,7 @@ def set_facing(
     spec: TransitionSpec,
     sel: Sel,
     mode: FacingMode,
-    value: Degrees | Point | SpotId | None = None,
+    value: Degrees | Point | str | None = None,
     turn_counts: float = 0.0,
     direction: TurnDirection = TurnDirection.SHORTEST,
     *,

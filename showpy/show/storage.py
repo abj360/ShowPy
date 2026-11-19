@@ -115,7 +115,7 @@ class Repository(Protocol):
         """Returns set IDs in show order."""
         ...
 
-    def get_set(self, show_id: str, set_id: SetId) -> Set:
+    def get_set(self, show_id: str, set_id: str) -> Set:
         """Returns one set."""
         ...
 
@@ -133,14 +133,14 @@ class Repository(Protocol):
         """
         ...
 
-    def get_script(self, show_id: str, set_id: SetId) -> str:
+    def get_script(self, show_id: str, set_id: str) -> str:
         """Returns a set's build script."""
         ...
 
     def put_script(
         self,
         show_id: str,
-        set_id: SetId,
+        set_id: str,
         source: str,
         *,
         expected_revision: str,
@@ -170,14 +170,14 @@ class Repository(Protocol):
         """
         ...
 
-    def get_forms(self, show_id: str, set_id: SetId) -> tuple[Form, ...]:
+    def get_forms(self, show_id: str, set_id: str) -> tuple[Form, ...]:
         """Returns a set's forms sorted by ID."""
         ...
 
     def put_forms(
         self,
         show_id: str,
-        set_id: SetId,
+        set_id: str,
         forms: tuple[Form, ...],
         *,
         expected_revision: str,
