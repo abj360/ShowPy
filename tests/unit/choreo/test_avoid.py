@@ -18,6 +18,8 @@ Contains:
         custom-registered motion
     test_regression_closest_approach_of_empty_track_raises_showpy_error: raises a ShowPyError, not
         IndexError, for an empty track
+    test_regression_min_gaps_resolves_selector_expressions: reads `sel` as a selector expression,
+        and refuses an unknown spot with UnknownRefError
 """
 
 import math
@@ -40,7 +42,7 @@ from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import Fix
 from showpy.choreo.models import Easing, PathRow, PathStyle
 from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, MotionRegistry
-from showpy.core.errors import PathError, ShowPyError
+from showpy.core.errors import PathError, ShowPyError, UnknownRefError
 from showpy.core.ids import SpotId
 from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
@@ -223,3 +225,12 @@ def test_regression_closest_approach_of_empty_track_raises_showpy_error() -> Non
     """Raises a ShowPyError, not IndexError, for an empty track (audit 9.2)."""
     with pytest.raises(ShowPyError):
         closest_approach([], [], [0.0, 1.0], [(0.0, 0.0), (1.0, 1.0)])
+
+
+def test_regression_min_gaps_resolves_selector_expressions() -> None:
+    """Reads `sel` as a selector expression and refuses an unknown spot (review of L0.5)."""
+    show = two_set_show()
+    gaps = min_gaps(show, TID, "T1-T3")
+    assert {(g.a, g.b) for g in gaps} == {("T1", "T2"), ("T1", "T3"), ("T2", "T3")}
+    with pytest.raises(UnknownRefError):
+        min_gaps(show, TID, ["T1", "Z9"])
