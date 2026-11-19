@@ -157,7 +157,7 @@ def _sheet_row(
     placement = current.get(entity)
     behavior, crossings = START, NO_CROSSINGS
     if index > 0:
-        tid = (show.sets[index - 1].id, current.id)
+        tid = TransitionId(show.sets[index - 1].id, current.id)
         plan = engine.compile(tid).plans[entity]
         behavior = _behavior(plan, show.transition(tid).row(entity), current.counts)
         crossings = _crossings(show, engine, entity, tid)

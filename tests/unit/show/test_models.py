@@ -8,6 +8,7 @@ import pytest
 
 from showpy.choreo.models import PathRow, TransitionSpec
 from showpy.core.errors import SchemaError, UnknownRefError
+from showpy.core.ids import make_tid
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 
@@ -24,6 +25,15 @@ def test_transition_ids_are_consecutive_pairs() -> None:
     assert two_set_show().transition_ids() == [("1", "2")]
 
 
+def test_transition_id_resolves_a_pair_to_the_show_transition() -> None:
+    show = two_set_show()
+    tid = show.transition_id(("1", "2"))
+    assert tid == show.transition_ids()[0]
+    assert (tid.from_set, tid.to_set) == ("1", "2")
+    with pytest.raises(UnknownRefError):
+        show.transition_id(("2", "1"))
+
+
 def test_missing_transition_defaults_to_destination_counts() -> None:
     spec = two_set_show().transition(("1", "2"))
     assert spec.counts == 8.0
@@ -31,7 +41,9 @@ def test_missing_transition_defaults_to_destination_counts() -> None:
 
 
 def test_stored_transition_is_returned() -> None:
-    stored = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", start=2)})
+    stored = TransitionSpec(
+        id=make_tid("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", start=2)}
+    )
     show = two_set_show().model_copy(update={"transitions": (stored,)})
     assert show.transition(("1", "2")) == stored
 

@@ -349,7 +349,7 @@ def test_compile_all_and_invalidate() -> None:
     engine = PathEngine(two_set_show())
     compiled = engine.compile_all()
     assert list(compiled) == [TID]
-    assert set(compiled[TID].plans) == {"T1", "T2", "T3", "T4"}
+    assert set(compiled[engine.show.transition_id(TID)].plans) == {"T1", "T2", "T3", "T4"}
     engine.invalidate(transitions=[TID])
     assert engine.compile(TID).counts == 8.0
 

@@ -19,11 +19,12 @@ from typing import Any
 
 from showpy.cast.models import Cast, Group, Spot
 from showpy.choreo.models import PathRow, Placement, Route, Set, TransitionSpec
+from showpy.core.ids import make_tid
 from showpy.examples.sheets import field_sheet
 from showpy.show.models import Show
 from showpy.time.models import TempoSection, Timeline, TimelineMode
 
-EXAMPLE_TID = ("1", "2")
+EXAMPLE_TID = make_tid("1", "2")
 TEMPO = 120.0
 COUNTS = 8.0
 

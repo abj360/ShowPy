@@ -28,7 +28,6 @@ from showpy.choreo.match_ops import with_set
 from showpy.choreo.models import Form, PathStyle, TransitionSpec
 from showpy.choreo.paths import curve_path, custom_path, delay, hold, set_easing
 from showpy.choreo.routes import follow_and_set_targets, make_route, rotate_path, two_part
-from showpy.core.ids import TransitionId
 from showpy.core.types import Point
 from showpy.core.util import seeded_rng
 from showpy.geo.shapes import line
@@ -149,7 +148,7 @@ def _place_forms(rng: np.random.Generator, show: Show, set_id: str, still: str) 
     return apply_change(with_set(show, placed_set), [FormOp(form=f) for f in filled])
 
 
-def _follow_and_hold(show: Show, tid: TransitionId, ids: list[str]) -> Show:
+def _follow_and_hold(show: Show, tid: tuple[str, str], ids: list[str]) -> Show:
     if not ids:
         return show
     file = ids[:FOLLOW_FILE]
@@ -204,7 +203,7 @@ def _timed(rng: np.random.Generator, spec: TransitionSpec, moving: list[str]) ->
     return spec
 
 
-def _with_paths(rng: np.random.Generator, show: Show, tid: TransitionId, still: str) -> Show:
+def _with_paths(rng: np.random.Generator, show: Show, tid: tuple[str, str], still: str) -> Show:
     groups = _members(show)
     show = _follow_and_hold(show, tid, groups[still])
     moving = [e for key, ids in groups.items() if key != still for e in ids]

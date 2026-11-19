@@ -39,6 +39,7 @@ from showpy.choreo.match import match, match_by_order
 from showpy.choreo.match_ops import apply_match, clear_rows, suggest_swaps, swap, with_set
 from showpy.choreo.models import FacingSpec, Form, MatchResult, TransitionSpec
 from showpy.core.errors import LockedError, MatchError, SpacingError, UnknownRefError
+from showpy.core.ids import make_tid
 from showpy.core.util import approx_equal
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
@@ -280,7 +281,7 @@ def test_apply_match_trims_trailing_empty_slots() -> None:
 def test_regression_clear_rows_keeps_transition_order() -> None:
     """Leaves show.transitions in their original order when rows are cleared (audit 9.6)."""
     show = with_curve_rows(two_set_show(), ROW_SPOTS)
-    later = TransitionSpec(id=("2", "3"), counts=NEXT_TRANSITION_COUNTS)
+    later = TransitionSpec(id=make_tid("2", "3"), counts=NEXT_TRANSITION_COUNTS)
     show = show.model_copy(update={"transitions": (show.transitions[0], later)})
     cleared = clear_rows(show, TID, ROW_SPOTS)
     assert [t.id for t in cleared.transitions] == [t.id for t in show.transitions]

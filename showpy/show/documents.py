@@ -165,7 +165,7 @@ def placements_doc(folder: str) -> str:
     return f"/sets/{folder}/{PLACEMENTS_NAME}"
 
 
-def paths_doc(tid: TransitionId) -> str:
+def paths_doc(tid: tuple[str, str]) -> str:
     """Returns the path of a transition folder's paths document: keys stored, IDs in workspaces.
 
     >>> paths_doc(("12", "12A"))
@@ -363,7 +363,7 @@ def _require_forms_for(key: str, set_id: SetId, forms: tuple[Form, ...]) -> None
         )
 
 
-def _paths(docs: Mapping[str, bytes], folder: TransitionId) -> tuple[TransitionSpec, ...]:
+def _paths(docs: Mapping[str, bytes], folder: tuple[str, str]) -> tuple[TransitionSpec, ...]:
     raw = _load_object(docs, paths_doc(folder), is_optional=True)
     if not raw:
         return ()
@@ -371,7 +371,7 @@ def _paths(docs: Mapping[str, bytes], folder: TransitionId) -> tuple[TransitionS
 
 
 def _require_paths_for(
-    folder: TransitionId, tid: TransitionId, specs: tuple[TransitionSpec, ...]
+    folder: tuple[str, str], tid: TransitionId, specs: tuple[TransitionSpec, ...]
 ) -> None:
     for spec in specs:
         if spec.id != tid:
@@ -424,7 +424,7 @@ def _transition_specs(
     for (key_a, set_a), (key_b, set_b) in itertools.pairwise(stored):
         folder = (key_a, key_b)
         found = _cached(cache, digests, paths_doc(folder), partial(_paths, docs, folder))
-        _require_paths_for(folder, (set_a.id, set_b.id), found)
+        _require_paths_for(folder, TransitionId(set_a.id, set_b.id), found)
         specs.extend(found)
     return specs
 

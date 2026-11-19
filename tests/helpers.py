@@ -46,6 +46,7 @@ from showpy.choreo.forms import line_form
 from showpy.choreo.match_ops import with_set
 from showpy.choreo.models import PathRow, PathStyle, Placement, Set, TransitionSpec, Waypoint
 from showpy.core.errors import ShowPyError, bounded_repr
+from showpy.core.ids import make_tid
 from showpy.core.json_types import JsonValue
 from showpy.core.types import Point
 from showpy.examples import two_set_show
@@ -73,6 +74,7 @@ HOSTILE_JSON = {"deep": b"[" * JSON_NESTING_DEPTH, "huge-int": b"9" * OVERLONG_I
 NO_ALARM_MODULES = frozenset(
     {"coverage", "weakref", "_weakrefset", "_pytest.unraisableexception", "_pytest.threadexception"}
 )
+
 FINALIZER_NAME = "__del__"
 HANG_RETRY_S = 0.05
 EXPECTED_FAILURES = ("ShowValidationError", "SchemaError", "ShowPyError")
@@ -160,7 +162,7 @@ def with_curve_rows(show: Show, entities: Iterable[str], locked: bool = False) -
         e: PathRow(entity=e, style=PathStyle.CURVE, waypoints=(CURVE_WAYPOINT,), locked=locked)
         for e in entities
     }
-    spec = TransitionSpec(id=FIRST_TRANSITION, counts=CURVE_COUNTS, rows=rows)
+    spec = TransitionSpec(id=make_tid(*FIRST_TRANSITION), counts=CURVE_COUNTS, rows=rows)
     return show.model_copy(update={"transitions": (spec,)})
 
 

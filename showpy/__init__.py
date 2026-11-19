@@ -291,6 +291,7 @@ if TYPE_CHECKING:
         format_ref,
         format_tid,
         is_device_name,
+        make_tid,
         parse_ref,
         parse_tid,
     )
@@ -1121,6 +1122,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "lock": ("showpy.choreo.paths", "lock"),
     "log": ("showpy.core.util", "log"),
     "make_route": ("showpy.choreo.routes", "make_route"),
+    "make_tid": ("showpy.core.ids", "make_tid"),
     "marker_to_count": ("showpy.time.timeline", "marker_to_count"),
     "match": ("showpy.choreo.match", "match"),
     "match_by_order": ("showpy.choreo.match", "match_by_order"),
@@ -1695,6 +1697,7 @@ __all__ = [
     "lock",
     "log",
     "make_route",
+    "make_tid",
     "marker_to_count",
     "match",
     "match_by_order",

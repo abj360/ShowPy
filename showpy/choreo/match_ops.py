@@ -71,7 +71,7 @@ def forms_of_set(show: Show, set_id: SetId) -> dict[FormId, Form]:
 
 
 def clear_rows(
-    show: Show, tid: TransitionId, entities: Iterable[SpotId], *, force: bool = False
+    show: Show, tid: tuple[str, str], entities: Iterable[SpotId], *, force: bool = False
 ) -> Show:
     """Drops stored path rows of `entities` in transition `tid`; locked rows need force.
 
@@ -224,7 +224,9 @@ def _point_updates(dest: Set, result: MatchResult) -> dict[SpotId, dict[str, obj
     return updates
 
 
-def apply_match(show: Show, tid: TransitionId, result: MatchResult, *, force: bool = False) -> Show:
+def apply_match(
+    show: Show, tid: tuple[str, str], result: MatchResult, *, force: bool = False
+) -> Show:
     """Writes the result's targets into the destination set and resets moved spots' paths.
 
     Spots already on their target are left alone, so pinned spots that stay put are fine;
@@ -350,7 +352,7 @@ class _Moves:
 
 
 def suggest_swaps(
-    show: Show, tid: TransitionId, k: int = 5, *, same_group: bool = True
+    show: Show, tid: tuple[str, str], k: int = 5, *, same_group: bool = True
 ) -> list[tuple[SpotId, SpotId, float]]:
     """Ranks destination swaps that shrink the largest straight move or remove crossings.
 
@@ -366,9 +368,9 @@ def suggest_swaps(
     ...     suggest_swaps(swap(two_set_show(), "2", "T1", "T4"), ("1", "2"), k=1)]
     [('T1', 'T4', 3.21)]
     """
-    show.transition(tid)
-    ids = _swappable(show, tid)
-    moves = _Moves(show.set(tid[0]).positions(ids), show.set(tid[1]).positions(ids))
+    known = show.transition_id(tid)
+    ids = _swappable(show, known)
+    moves = _Moves(show.set(known.from_set).positions(ids), show.set(known.to_set).positions(ids))
     group = {spot.id: spot.group for spot in show.cast.spots}
     ranked = []
     for i, j in itertools.combinations(range(len(ids)), 2):

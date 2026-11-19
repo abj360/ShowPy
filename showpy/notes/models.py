@@ -69,9 +69,9 @@ class Anchor(FrozenModel):
         return cls(kind="set", set_id=set_id)
 
     @classmethod
-    def on_transition(cls, tid: TransitionId) -> "Anchor":
+    def on_transition(cls, tid: tuple[str, str]) -> "Anchor":
         """Anchors to a transition."""
-        return cls(kind="transition", tid=tid)
+        return cls.model_validate({"kind": "transition", "tid": tid})
 
     @classmethod
     def at_point(cls, point: Point) -> "Anchor":

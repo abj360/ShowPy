@@ -10,6 +10,7 @@ Contains:
 from showpy.cast.models import Cast, Group, Spot
 from showpy.choreo.models import Placement, Set, TransitionSpec
 from showpy.choreo.paths import curve_path, set_easing, stagger
+from showpy.core.ids import make_tid
 from showpy.core.types import Points
 from showpy.geo.shapes import arc, line
 from showpy.geo.spacing import block, space_along
@@ -50,9 +51,9 @@ def opener_show() -> Show:
         ),
         dependencies={"sheet:test-field": "1"},
     )
-    opening = stagger(TransitionSpec(id=("1", "2"), counts=16.0), list(IDS), step=1.0)
+    opening = stagger(TransitionSpec(id=make_tid("1", "2"), counts=16.0), list(IDS), step=1.0)
     opening = set_easing(opening, list(IDS), "ease_in_out")
-    curving = TransitionSpec(id=("2", "3"), counts=8.0)
+    curving = TransitionSpec(id=make_tid("2", "3"), counts=8.0)
     for entity in IDS[:4]:
         curving = curve_path(curving, entity, (show.sets[1].get(entity).x, 9.0))
     return show.model_copy(update={"transitions": (opening, curving)})

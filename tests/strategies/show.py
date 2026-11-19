@@ -19,7 +19,6 @@ from showpy.choreo.models import FacingMode, FacingOverride, TransitionSpec
 from showpy.choreo.paths import hold, ripple, stagger
 from showpy.choreo.routes import follow_and_set_targets, make_route
 from showpy.core.errors import PathError
-from showpy.core.ids import TransitionId
 from showpy.show.changes import store_paths
 from showpy.show.manage import new_show
 from showpy.show.models import PathsOp, Show
@@ -54,7 +53,7 @@ def _formed(show: Show, set_id: str) -> set[str]:
 
 
 @st.composite
-def _followed(draw: st.DrawFn, show: Show, tid: TransitionId, free: list[str]) -> Show:
+def _followed(draw: st.DrawFn, show: Show, tid: tuple[str, str], free: list[str]) -> Show:
     file = draw(st.lists(st.sampled_from(free), min_size=1, max_size=MAX_FILE, unique=True))
     ahead = draw(st.lists(points_on(show.sheet), max_size=MAX_ROUTE_WAYPOINTS))
     try:
@@ -68,7 +67,7 @@ def _followed(draw: st.DrawFn, show: Show, tid: TransitionId, free: list[str]) -
     return follow_and_set_targets(show, tid, route, start, end)
 
 
-def _held(show: Show, tid: TransitionId, held: list[str]) -> Show:
+def _held(show: Show, tid: tuple[str, str], held: list[str]) -> Show:
     start, target = show.set(tid[0]), show.set(tid[1])
     still = {e: {"x": start.get(e).x, "y": start.get(e).y} for e in held}
     show = with_set(show, target.with_placements(still))
@@ -85,7 +84,7 @@ def _spread(draw: st.DrawFn, spec: TransitionSpec, ordered: list[str]) -> Transi
 
 
 @st.composite
-def with_paths(draw: st.DrawFn, show: Show, tid: TransitionId) -> Show:
+def with_paths(draw: st.DrawFn, show: Show, tid: tuple[str, str]) -> Show:
     """Gives transition `tid` a follow route, held spots, edited rows and a stagger or ripple.
 
     Spots in a form of the destination set keep their form slots: routes and holds, which

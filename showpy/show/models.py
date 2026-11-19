@@ -156,21 +156,33 @@ class Show(FrozenModel):
 
     def transition_ids(self) -> list[TransitionId]:
         """Returns consecutive set pairs in show order."""
-        ids = self.set_ids()
-        return list(itertools.pairwise(ids))
+        return [TransitionId(a, b) for a, b in itertools.pairwise(self.set_ids())]
 
-    def transition(self, tid: TransitionId) -> TransitionSpec:
+    def transition_id(self, tid: tuple[str, str]) -> TransitionId:
+        """Resolves a pair of set IDs to the show's transition between them.
+
+        Args:
+            tid: Pair of set IDs, such as `("1", "2")` or a TransitionId.
+
+        Returns:
+            transition_id: The show's own TransitionId for that pair.
+        """
+        for known in self.transition_ids():
+            if known == tid:
+                return known
+        raise UnknownRefError(
+            f"{_format_tid(tid)} is not a transition between consecutive sets",
+            hint="use a pair from show.transition_ids()",
+            context={"tid": tid},
+        )
+
+    def transition(self, tid: tuple[str, str]) -> TransitionSpec:
         """Returns stored paths for a consecutive pair, or straight moves when none are stored."""
-        if tid not in self.transition_ids():
-            raise UnknownRefError(
-                f"{_format_tid(tid)} is not a transition between consecutive sets",
-                hint="use a pair from show.transition_ids()",
-                context={"tid": tid},
-            )
+        known = self.transition_id(tid)
         for spec in self.transitions:
-            if spec.id == tid:
+            if spec.id == known:
                 return spec
-        return TransitionSpec(id=tid, counts=self.set(tid[1]).counts)
+        return TransitionSpec(id=known, counts=self.set(known.to_set).counts)
 
 
 class ShowIndexEntry(FrozenModel):
@@ -244,13 +256,13 @@ class ShowIndex(FrozenModel):
         >>> idx = ShowIndex(entries=tuple(
         ...     ShowIndexEntry(set=i, counts=s, start_count=s, seconds=0) for i, s in rows))
         >>> idx.transition_at(3.0)
-        (('1', '2'), 3.0)
+        (TransitionId(from_set='1', to_set='2'), 3.0)
         """
         if self.set_at(count) is not None:
             return None
         position = bisect.bisect_right(self._starts(), count) - 1
         before, after = self.entries[position], self.entries[position + 1]
-        return (before.set, after.set), count - before.start_count
+        return TransitionId(before.set, after.set), count - before.start_count
 
     def _position(self, set_id: SetId) -> int:
         ids = [entry.set for entry in self.entries]

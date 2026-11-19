@@ -44,7 +44,7 @@ from showpy.choreo.models import (
 )
 from showpy.choreo.motion import DEFAULT_MOTIONS, MotionRegistry, ease
 from showpy.core.errors import LockedError, PathError
-from showpy.core.ids import SpotId, TransitionId
+from showpy.core.ids import SpotId
 from showpy.core.selection import Selection
 from showpy.core.types import Degrees, Point
 
@@ -95,14 +95,14 @@ def _require_fits(row: PathRow, counts: float) -> None:
         )
 
 
-def default_paths(show: "Show", tid: TransitionId) -> TransitionSpec:
+def default_paths(show: "Show", tid: tuple[str, str]) -> TransitionSpec:
     """Returns straight moves over the full counts for everyone (no stored rows).
 
     >>> from showpy.examples import two_set_show
     >>> default_paths(two_set_show(), ("1", "2")).rows
     {}
     """
-    return TransitionSpec(id=tid, counts=show.set(tid[1]).counts)
+    return TransitionSpec.model_validate({"id": tid, "counts": show.set(tid[1]).counts})
 
 
 # Any: style parameters are PathRow field values whose types depend on the style.

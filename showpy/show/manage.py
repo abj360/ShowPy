@@ -477,7 +477,7 @@ def transitions(show: Show) -> list[TransitionId]:
 
     >>> from showpy.examples import two_set_show
     >>> transitions(two_set_show())
-    [('1', '2')]
+    [TransitionId(from_set='1', to_set='2')]
     """
     return show.transition_ids()
 
@@ -521,7 +521,7 @@ def transition_at_count(show: Show, c: Count) -> tuple[TransitionId, Count] | No
 
     >>> from showpy.examples import two_set_show
     >>> transition_at_count(two_set_show(), 2.0)
-    (('1', '2'), 2.0)
+    (TransitionId(from_set='1', to_set='2'), 2.0)
     """
     return index(show).transition_at(c)
 

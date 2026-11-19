@@ -83,6 +83,7 @@ import pytest
 from showpy.choreo.forms import line_form
 from showpy.choreo.models import PathRow, Set, TransitionSpec
 from showpy.core.errors import SchemaError, ShowPyError, StorageError
+from showpy.core.ids import make_tid
 from showpy.core.util import content_hash
 from showpy.examples import two_set_show
 from showpy.export.positions import import_positions
@@ -251,7 +252,7 @@ def test_v020_head_documents_redump_to_their_stored_bytes(tmp_path: Path) -> Non
 
 def _with_transition(show: Show) -> Show:
     spec = TransitionSpec(
-        id=("2", "3"), counts=LAST_SET_COUNTS, rows={"T1": PathRow(entity="T1", start=1)}
+        id=make_tid("2", "3"), counts=LAST_SET_COUNTS, rows={"T1": PathRow(entity="T1", start=1)}
     )
     return show.replace(transitions=(spec,))
 
@@ -351,7 +352,7 @@ def test_workspace_writes_and_commits_through_the_key() -> None:
     ws.write("/sets/2/forms.json", dump_json([form.model_dump(mode="python")]), at=LATER)
     assert repo.read(SHOW_ID, "/sets/1A/forms.json") is not None
     spec = TransitionSpec(
-        id=("2", "3"), counts=LAST_SET_COUNTS, rows={"T1": PathRow(entity="T1", end=4)}
+        id=make_tid("2", "3"), counts=LAST_SET_COUNTS, rows={"T1": PathRow(entity="T1", end=4)}
     )
     ws.write("/transitions/2-3/paths.json", spec.model_dump_json(), at=LATER)
     assert "/transitions/1A-2/paths.json" in repo.paths(SHOW_ID)

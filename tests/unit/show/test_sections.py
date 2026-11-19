@@ -27,6 +27,7 @@ import pytest
 
 from showpy.choreo.models import FacingMode, FacingOverride, Form, TransitionSpec
 from showpy.core.errors import SchemaError, TimelineError
+from showpy.core.ids import make_tid
 from showpy.core.util import approx_equal
 from showpy.notes.models import Anchor, Note
 from showpy.show.manage import add_set, index, renumber
@@ -66,7 +67,7 @@ def _four_sets() -> Show:
             "timeline": timeline,
             "facing_overrides": (override,),
             "forms": {"f3": form},
-            "transitions": (TransitionSpec(id=("3", "4"), counts=8.0),),
+            "transitions": (TransitionSpec(id=make_tid("3", "4"), counts=8.0),),
             "notes": notes,
             "pins": (Pin(target="set", id="4"), Pin(target="entity", id="T2")),
         }

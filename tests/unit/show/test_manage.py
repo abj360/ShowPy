@@ -57,6 +57,7 @@ from showpy.core.errors import (
     UnknownRefError,
     VersionError,
 )
+from showpy.core.ids import make_tid
 from showpy.core.util import approx_equal
 from showpy.notes.models import Anchor, Note
 from showpy.show.documents import decode_show, encode_show
@@ -123,7 +124,9 @@ def test_add_set_copies_previous_positions_without_forms() -> None:
 
 
 def test_add_set_after_drops_paths_between_neighbours() -> None:
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", start=1)})
+    spec = TransitionSpec(
+        id=make_tid("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", start=1)}
+    )
     show = add_set(_with_paths(two_set_show(), spec), "1B", 2.0, after="1")
     assert show.set_ids() == ["1", "1B", "2"]
     assert show.transitions == ()
@@ -131,7 +134,9 @@ def test_add_set_after_drops_paths_between_neighbours() -> None:
 
 def test_add_set_refuses_to_drop_locked_paths() -> None:
     row = PathRow(entity="T1", locked=True)
-    show = _with_paths(two_set_show(), TransitionSpec(id=("1", "2"), counts=8, rows={"T1": row}))
+    show = _with_paths(
+        two_set_show(), TransitionSpec(id=make_tid("1", "2"), counts=8, rows={"T1": row})
+    )
     with pytest.raises(LockedError):
         add_set(show, "1B", 2.0, after="1")
     assert add_set(show, "1B", 2.0, after="1", force=True).transitions == ()
@@ -179,7 +184,7 @@ def test_insert_subset_respects_pinned_next_set() -> None:
 def test_remove_set_merges_counts_and_drops_forms_and_paths() -> None:
     show = _three_set_show()
     form = Form(id="f", set="2", kind="line", geometry={}, members=("T1",))
-    spec = TransitionSpec(id=("2", "3"), counts=4.0, rows={"T1": PathRow(entity="T1")})
+    spec = TransitionSpec(id=make_tid("2", "3"), counts=4.0, rows={"T1": PathRow(entity="T1")})
     show = show.model_copy(update={"forms": {"f": form}, "transitions": (spec,)})
     removed = remove_set(show, "2")
     assert removed.set_ids() == ["1", "3"]
@@ -203,7 +208,9 @@ def test_remove_set_refuses_pinned_placements_unless_forced() -> None:
 
 
 def test_set_counts_updates_transition_counts() -> None:
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", end=4.0)})
+    spec = TransitionSpec(
+        id=make_tid("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", end=4.0)}
+    )
     show = set_counts(_with_paths(two_set_show(), spec), "2", 12.0)
     assert show.set("2").counts == 12.0
     assert show.transition(("1", "2")).counts == 12.0
@@ -213,7 +220,7 @@ def test_set_counts_updates_transition_counts() -> None:
 def test_set_counts_rescales_windows_waypoints_and_routes() -> None:
     row = PathRow(entity="T1", start=2.0, end=6.0, waypoints=(Waypoint(x=0, y=0, at=4.0),))
     route = Route(id="r", curve={}, members=("T2",), offsets=(0.0,), travel=1.0, end=8.0)
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": row}, routes={"r": route})
+    spec = TransitionSpec(id=make_tid("1", "2"), counts=8.0, rows={"T1": row}, routes={"r": route})
     scaled = set_counts(_with_paths(two_set_show(), spec), "2", 4.0, rescale=True)
     new = scaled.transition(("1", "2"))
     assert (new.rows["T1"].start, new.rows["T1"].end) == (1.0, 3.0)
@@ -222,7 +229,9 @@ def test_set_counts_rescales_windows_waypoints_and_routes() -> None:
 
 
 def test_set_counts_without_rescale_refuses_overrunning_paths() -> None:
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", end=6.0)})
+    spec = TransitionSpec(
+        id=make_tid("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", end=6.0)}
+    )
     with pytest.raises(PathError):
         set_counts(_with_paths(two_set_show(), spec), "2", 4.0)
 
@@ -231,7 +240,7 @@ def test_set_counts_rules_for_first_and_locked() -> None:
     with pytest.raises(TimeRangeError):
         set_counts(two_set_show(), "1", 4.0)
     row = PathRow(entity="T1", end=6.0, locked=True)
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": row})
+    spec = TransitionSpec(id=make_tid("1", "2"), counts=8.0, rows={"T1": row})
     with pytest.raises(LockedError):
         set_counts(_with_paths(two_set_show(), spec), "2", 4.0, rescale=True)
 
@@ -239,7 +248,7 @@ def test_set_counts_rules_for_first_and_locked() -> None:
 def test_renumber_rewrites_every_reference() -> None:
     show, sub = insert_subset(_three_set_show(), "2", 2.0)
     form = Form(id="f", set=sub, kind="line", geometry={}, members=("T1",))
-    spec = TransitionSpec(id=("2", sub), counts=2.0)
+    spec = TransitionSpec(id=make_tid("2", sub), counts=2.0)
     notes = (
         Note(id="n1", text="hit", anchor=Anchor.on_set(sub), author="d", created_at=AT),
         Note(

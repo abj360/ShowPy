@@ -95,7 +95,7 @@ class PathEngine:
         self.curve_tol = curve_tol
         self.motions = motions
         self._use_cache = cache
-        self._cache: dict[TransitionId, CompiledTransition] = {}
+        self._cache: dict[tuple[str, str], CompiledTransition] = {}
         self._override_cache: dict[int, tuple[SpotId, ...]] = {}
         self._starts = list(itertools.accumulate((s.counts for s in show.sets[1:]), initial=0.0))
         self._ids = show.cast.ids() or (show.sets[0].entity_ids() if show.sets else ())
@@ -103,22 +103,23 @@ class PathEngine:
     def _set_start(self, set_id: SetId) -> Count:
         return self._starts[self.show.set_index(set_id)]
 
-    def compile(self, tid: TransitionId) -> CompiledTransition:
+    def compile(self, tid: tuple[str, str]) -> CompiledTransition:
         """Builds every plan of one transition; raises ContinuityError on a missed target."""
         if self._use_cache and tid in self._cache:
             return self._cache[tid]
-        plans = {entity: self.compile_entity(entity, tid) for entity in self._ids}
+        known = self.show.transition_id(tid)
+        plans = {entity: self.compile_entity(entity, known) for entity in self._ids}
         compiled = CompiledTransition(
-            id=tid,
-            counts=self.show.transition(tid).counts,
-            t_global0=self._set_start(tid[0]),
+            id=known,
+            counts=self.show.transition(known).counts,
+            t_global0=self._set_start(known.from_set),
             plans=plans,
         )
         if self._use_cache:
-            self._cache[tid] = compiled
+            self._cache[known] = compiled
         return compiled
 
-    def compile_entity(self, entity: SpotId, tid: TransitionId) -> MotionPlan:
+    def compile_entity(self, entity: SpotId, tid: tuple[str, str]) -> MotionPlan:
         """Builds one spot's plan without caching, so callers can report errors per spot."""
         spec = self.show.transition(tid)
         a, b = self.show.set(tid[0]).get(entity), self.show.set(tid[1]).get(entity)
@@ -138,7 +139,7 @@ class PathEngine:
         index = max(bisect.bisect_left(self._starts, t), 1)
         return tids[index - 1], t - self._starts[index - 1]
 
-    def _plan(self, entity: SpotId, tid: TransitionId) -> MotionPlan:
+    def _plan(self, entity: SpotId, tid: tuple[str, str]) -> MotionPlan:
         plans = self.compile(tid).plans
         if entity not in plans:
             close = close_matches(entity, plans)
@@ -149,7 +150,9 @@ class PathEngine:
             )
         return plans[entity]
 
-    def _resolve(self, t: Count, local: TransitionId | None) -> tuple[TransitionId | None, float]:
+    def _resolve(
+        self, t: Count, local: tuple[str, str] | None
+    ) -> tuple[tuple[str, str] | None, float]:
         return (local, t) if local is not None else self.locate(t)
 
     def _static_set(self, t: Count) -> int:
@@ -158,7 +161,7 @@ class PathEngine:
     def _static_point(self, entity: SpotId, t: Count) -> Point:
         return self.show.sets[self._static_set(t)].get(entity).point
 
-    def position(self, entity: SpotId, t: Count, local: TransitionId | None = None) -> Points:
+    def position(self, entity: SpotId, t: Count, local: tuple[str, str] | None = None) -> Points:
         """Returns a spot's position (shape (2,)) at a global count, or a local one with `local`."""
         tid, tau = self._resolve(t, local)
         if tid is None:
@@ -178,12 +181,12 @@ class PathEngine:
         p = self.position(entity, t)
         return float(p[0]), float(p[1])
 
-    def _path_facing(self, entity: SpotId, tid: TransitionId, tau: float) -> Degrees:
+    def _path_facing(self, entity: SpotId, tid: tuple[str, str], tau: float) -> Degrees:
         compiled = self.compile(tid)
         ctx = FacingContext(self._point_at, compiled.t_global0, compiled.counts)
         return plan_facing(self._plan(entity, tid), tau, ctx)
 
-    def facing_at(self, entity: SpotId, t: Count, local: TransitionId | None = None) -> Degrees:
+    def facing_at(self, entity: SpotId, t: Count, local: tuple[str, str] | None = None) -> Degrees:
         """Returns a spot's facing; facing overrides win inside their count ranges."""
         tid, tau = self._resolve(t, local)
         if tid is None:
@@ -232,7 +235,7 @@ class PathEngine:
         from_mode = plan.replace(turn_counts=0.0)
         return plan_facing(from_mode, inside, ctx) if plan.curve is not None else base
 
-    def velocity_at(self, entity: SpotId, t: Count, local: TransitionId | None = None) -> Points:
+    def velocity_at(self, entity: SpotId, t: Count, local: tuple[str, str] | None = None) -> Points:
         """Returns velocity in meters per count by a central difference of the plan's positions."""
         tid, tau = self._resolve(t, local)
         if tid is None:
@@ -245,7 +248,7 @@ class PathEngine:
         velocity: Points = (pts[1] - pts[0]) / (hi - lo)
         return velocity
 
-    def on_field_at(self, entity: SpotId, t: Count, local: TransitionId | None = None) -> bool:
+    def on_field_at(self, entity: SpotId, t: Count, local: tuple[str, str] | None = None) -> bool:
         """Reports whether a spot is on the field: previous set, either while moving, next set."""
         tid, tau = self._resolve(t, local)
         if tid is None:
@@ -258,7 +261,9 @@ class PathEngine:
             return plan.end.on_field
         return plan.start.on_field or plan.end.on_field
 
-    def state_at(self, entity: SpotId, t: Count, local: TransitionId | None = None) -> EntityState:
+    def state_at(
+        self, entity: SpotId, t: Count, local: tuple[str, str] | None = None
+    ) -> EntityState:
         """Returns a spot's position, facing, velocity and field state."""
         p = self.position(entity, t, local)
         v = self.velocity_at(entity, t, local)
@@ -293,7 +298,9 @@ class PathEngine:
         for t in times:
             yield self.sample(float(t))
 
-    def segments(self, tid: TransitionId, tol: float = DEFAULT_SEGMENT_TOL) -> list[MotionSegment]:
+    def segments(
+        self, tid: tuple[str, str], tol: float = DEFAULT_SEGMENT_TOL
+    ) -> list[MotionSegment]:
         """Returns contiguous time-linear segments per spot, accurate to `tol` meters.
 
         Raises PathError code SEGMENT_BOUND when a spot's motion cannot be brought within
@@ -303,22 +310,23 @@ class PathEngine:
         return [seg for e in self.compile(tid).plans for seg in self.entity_segments(e, tid, tol)]
 
     def entity_segments(
-        self, entity: SpotId, tid: TransitionId, tol: float = DEFAULT_SEGMENT_TOL
+        self, entity: SpotId, tid: tuple[str, str], tol: float = DEFAULT_SEGMENT_TOL
     ) -> list[MotionSegment]:
         """Returns one spot's contiguous time-linear segments in a transition."""
         tol = require_finite(tol, name="tol", low=0.0, low_open=True)
         plan = self._plan(entity, tid)
-        stations = _SegmentFit(plan, tid, tol).stations(self.compile(tid).counts)
+        compiled = self.compile(tid)
+        stations = _SegmentFit(plan, compiled.id, tol).stations(compiled.counts)
         pts = plan_positions(plan, np.array(stations))
         return [
-            MotionSegment(entity=entity, tid=tid, t0=t0, t1=t1, p0=_pt(p0), p1=_pt(p1))
+            MotionSegment(entity=entity, tid=compiled.id, t0=t0, t1=t1, p0=_pt(p0), p1=_pt(p1))
             for (t0, t1), (p0, p1) in zip(
                 itertools.pairwise(stations), itertools.pairwise(pts), strict=True
             )
         ]
 
     def speed(
-        self, entity: SpotId, tid: TransitionId, window: tuple[float, float] | None = None
+        self, entity: SpotId, tid: tuple[str, str], window: tuple[float, float] | None = None
     ) -> SpeedStats:
         """Returns movement demand over a local window; counts and seconds cover moving time."""
         compiled = self.compile(tid)
@@ -344,7 +352,7 @@ class PathEngine:
         )
 
     def _clipped(
-        self, entity: SpotId, tid: TransitionId, lo: float, hi: float
+        self, entity: SpotId, tid: tuple[str, str], lo: float, hi: float
     ) -> list[MotionSegment]:
         plan = self._plan(entity, tid)
         out = []
@@ -356,7 +364,7 @@ class PathEngine:
             out.append(seg.replace(t0=t0, t1=t1, p0=_pt(p0), p1=_pt(p1)))
         return out
 
-    def path_geometry(self, entity: SpotId, tid: TransitionId) -> Points:
+    def path_geometry(self, entity: SpotId, tid: tuple[str, str]) -> Points:
         """Returns the drawn path of a spot in a transition, start to end."""
         plan = self._plan(entity, tid)
         if plan.curve is None:
@@ -364,7 +372,7 @@ class PathEngine:
         return plan.curve.to_polyline(self.curve_tol)
 
     def invalidate(
-        self, sets: Iterable[SetId] = (), transitions: Iterable[TransitionId] = ()
+        self, sets: Iterable[SetId] = (), transitions: Iterable[tuple[str, str]] = ()
     ) -> None:
         """Clears cached compiles touching the given sets or transitions."""
         set_ids = set(sets)

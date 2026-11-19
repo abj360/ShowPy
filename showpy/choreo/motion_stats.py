@@ -23,7 +23,7 @@ import pandas as pd
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import MotionStats
 from showpy.core.errors import TimeRangeError
-from showpy.core.ids import SpotId, TransitionId
+from showpy.core.ids import SpotId
 from showpy.core.types import Count, Degrees, Points
 from showpy.core.units import vector_facing
 from showpy.geo.models import SpeedStats
@@ -44,7 +44,7 @@ def position_at(show: Show, entity: SpotId, t: Count) -> Points:
 
 
 def speed(
-    show: Show, entity: SpotId, tid: TransitionId, window: tuple[float, float] | None = None
+    show: Show, entity: SpotId, tid: tuple[str, str], window: tuple[float, float] | None = None
 ) -> SpeedStats:
     """Returns a spot's movement demand over a local window of a transition.
 
@@ -55,7 +55,7 @@ def speed(
     return PathEngine(show).speed(entity, tid, window)
 
 
-def speeds(show: Show, tid: TransitionId) -> pd.DataFrame:
+def speeds(show: Show, tid: tuple[str, str]) -> pd.DataFrame:
     """Ranks every spot of a transition by peak then mean speed, hardest first.
 
     >>> from showpy.examples import two_set_show
@@ -72,7 +72,7 @@ def speeds(show: Show, tid: TransitionId) -> pd.DataFrame:
 
 
 def direction_of_travel(
-    show: Show, entity: SpotId, tid: TransitionId, tau: float
+    show: Show, entity: SpotId, tid: tuple[str, str], tau: float
 ) -> Degrees | None:
     """Returns the facing a spot's travel points at local count tau, or None when still.
 
@@ -86,7 +86,7 @@ def direction_of_travel(
     return vector_facing((float(v[0]), float(v[1])))
 
 
-def motion_contrast(show: Show, tid: TransitionId) -> MotionStats:
+def motion_contrast(show: Show, tid: tuple[str, str]) -> MotionStats:
     """Summarizes moving share, speed spread and direction variety of a transition.
 
     >>> from showpy.examples import two_set_show

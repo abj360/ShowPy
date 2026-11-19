@@ -24,7 +24,7 @@ from typing import Protocol
 
 from showpy.choreo.models import Form, Set, TransitionSpec
 from showpy.core.errors import StorageError, UnknownRefError
-from showpy.core.ids import SetId, TransitionId
+from showpy.core.ids import SetId
 from showpy.core.util import close_matches
 from showpy.show.documents import SHOW_DOC, decode_show, encode_documents, is_show_doc, split_path
 from showpy.show.files import (
@@ -152,7 +152,7 @@ class Repository(Protocol):
         """
         ...
 
-    def get_paths(self, show_id: str, tid: TransitionId) -> TransitionSpec:
+    def get_paths(self, show_id: str, tid: tuple[str, str]) -> TransitionSpec:
         """Returns a transition's paths, defaulting to straight moves."""
         ...
 

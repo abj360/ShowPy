@@ -33,6 +33,7 @@ import pytest
 from showpy.choreo.models import PathRow, TransitionSpec
 from showpy.core.caps import MAX_POINTS, MAX_TEXT_CHARS
 from showpy.core.errors import LockedError, SchemaError, UnknownRefError
+from showpy.core.ids import make_tid
 from showpy.core.util import approx_equal
 from showpy.export import positions
 from showpy.export.positions import import_positions
@@ -239,7 +240,9 @@ def test_regression_import_positions_refuses_a_set_inside_a_locked_transition() 
 def test_regression_import_positions_drops_paths_between_sets_it_separates() -> None:
     """Drops a stored transition that is no longer between consecutive sets."""
     base = two_set_show()
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", end=2)})
+    spec = TransitionSpec(
+        id=make_tid("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", end=2)}
+    )
     stored = base.model_copy(update={"transitions": (spec,)})
     merged = import_positions(stored, BETWEEN_TEXT, "trumpets")
     assert merged.transitions == ()

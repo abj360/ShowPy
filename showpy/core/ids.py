@@ -5,9 +5,11 @@ Contains:
     SpotIdField, SetIdField, SetKeyField, FormIdField, RouteIdField, ShowIdField, NoteIdField,
         SelectionNameField: model field types that run check_id on validation
     LandmarkIdField, ZoneIdField: model field types that run check_sheet_id on validation
+    TransitionId: names the transition between two sets; `str()` writes `12→13`
     LEGACY_IDS_KEY: validation context key whose True value lets ID fields take any non-empty text
     parse_ref(): reads `kind:id@version` into its parts, checking the id and version
     format_ref(): writes a reference from its parts
+    make_tid(): checks two set IDs and pairs them into a TransitionId
     parse_tid(): reads `12→13` or `12->13` into a TransitionId
     format_tid(): writes a TransitionId as `12→13`, refusing anything but a pair
     ID_PATTERN: matches the one ID shape; check with fullmatch, never match
@@ -26,7 +28,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from itertools import combinations
-from typing import Annotated
+from typing import Annotated, NamedTuple
 
 from pydantic import AfterValidator, ValidationInfo
 
@@ -40,7 +42,6 @@ type FormId = str
 type RouteId = str
 type ZoneId = str
 type LandmarkId = str
-type TransitionId = tuple[SetId, SetId]
 type ShowId = str
 type NoteId = str
 type SelectionName = str
@@ -103,6 +104,25 @@ _ID_RULE = _IdRule(ID_PATTERN, ID_BODY_CHARS, frozenset("."), ID_HINT)
 _SHEET_ID_RULE = _IdRule(SHEET_ID_PATTERN, SHEET_ID_BODY_CHARS, frozenset(".-"), SHEET_ID_HINT)
 
 
+class TransitionId(NamedTuple):
+    """Names the transition from one set to the next; a tuple, so `("1", "2")` compares equal.
+
+    Attributes:
+        from_set: The set the transition leaves.
+        to_set: The set the transition reaches.
+
+    >>> str(TransitionId("1", "2"))
+    '1→2'
+    """
+
+    from_set: SetId
+    to_set: SetId
+
+    def __str__(self) -> str:
+        """Writes the canonical spelling, such as `1→2`."""
+        return f"{self.from_set}{ARROW}{self.to_set}"
+
+
 def parse_ref(text: str) -> tuple[str, str, str | None]:
     """Reads a reference such as `sheet:hs-field@2`.
 
@@ -142,11 +162,29 @@ def format_ref(kind: str, ref_id: str, version: str | None = None) -> str:
     return text
 
 
+def make_tid(from_set: str, to_set: str) -> TransitionId:
+    """Checks two set IDs with check_id and pairs them into a TransitionId.
+
+    Args:
+        from_set: ID of the set the transition leaves.
+        to_set: ID of the set the transition reaches.
+
+    Returns:
+        tid: The transition ID, each part NFC-normalized.
+
+    >>> str(make_tid("1", "2"))
+    '1→2'
+    """
+    return TransitionId(check_id(from_set, kind="set"), check_id(to_set, kind="set"))
+
+
 def parse_tid(text: str) -> TransitionId:
     """Reads a transition ID written with `→` or `->`; a third part is refused.
 
+    Each part must pass check_id.
+
     >>> parse_tid("12->13")
-    ('12', '13')
+    TransitionId(from_set='12', to_set='13')
     """
     normalized = text.replace(ARROWS[1], ARROWS[0])
     parts = [part.strip() for part in normalized.split(ARROW)]
@@ -156,10 +194,10 @@ def parse_tid(text: str) -> TransitionId:
             hint="write transitions as 12→13 or 12->13",
             context={"text": text},
         )
-    return parts[0], parts[1]
+    return make_tid(parts[0], parts[1])
 
 
-def format_tid(tid: TransitionId) -> str:
+def format_tid(tid: tuple[str, str]) -> str:
     """Writes a transition ID as `a→b`, refusing a tuple that is not a pair.
 
     >>> format_tid(("12", "13"))

@@ -80,7 +80,7 @@ def _cumulative(points: Sequence[Point]) -> list[float]:
 
 def make_route(
     show: Show,
-    tid: TransitionId,
+    tid: tuple[str, str],
     leader: SpotId,
     waypoints: Sequence[Point],
     members: Sequence[SpotId] | None = None,
@@ -166,7 +166,7 @@ def follow(
 
 def follow_and_set_targets(
     show: Show,
-    tid: TransitionId,
+    tid: tuple[str, str],
     route: Route,
     start: float = 0.0,
     end: float | None = None,
@@ -200,7 +200,7 @@ def follow_and_set_targets(
         updates[member] = {"x": float(p[0]), "y": float(p[1])}
     new_target = target.with_placements(updates, force=force)
     spec = follow(show.transition(tid), route, start, end, force=force)
-    return _store(show, tid, spec, new_target)
+    return _store(show, spec.id, spec, new_target)
 
 
 def _store(show: Show, tid: TransitionId, spec: TransitionSpec, target: Set) -> Show:
@@ -242,7 +242,7 @@ def _u_turn(file_points: tuple[Point, ...], turn_at: Point) -> tuple[AnyCurve, f
 
 def counter_march(
     show: Show,
-    tid: TransitionId,
+    tid: tuple[str, str],
     sel: Sequence[SpotId],
     turn_at: Point,
     counts_per_turn: float = 2.0,
@@ -296,7 +296,7 @@ def counter_march(
         for e in file
     }
     spec = spec.replace(rows={**spec.rows, **rows})
-    return _store(moved, tid, spec, moved.set(tid[1]))
+    return _store(moved, spec.id, spec, moved.set(spec.id.to_set))
 
 
 def two_part(

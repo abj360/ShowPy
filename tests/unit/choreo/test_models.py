@@ -46,6 +46,7 @@ from showpy.choreo.models import (
     Waypoint,
 )
 from showpy.core.errors import LockedError, PathError, SchemaError, UnknownRefError
+from showpy.core.ids import make_tid
 from showpy.core.selection import Selection
 from showpy.core.units import normalize_angle
 from showpy.core.util import approx_equal
@@ -151,13 +152,13 @@ def test_waypoint_and_easing_defaults() -> None:
 
 
 def test_transition_spec_row_lookup_defaults_to_straight() -> None:
-    spec = TransitionSpec(id=("1", "2"), counts=8.0)
+    spec = TransitionSpec(id=make_tid("1", "2"), counts=8.0)
     assert spec.row("T1") == PathRow(entity="T1")
 
 
 def test_transition_spec_round_trips_json() -> None:
     spec = TransitionSpec(
-        id=("1", "2"),
+        id=make_tid("1", "2"),
         counts=8.0,
         rows={"T1": PathRow(entity="T1", waypoints=(Waypoint(x=1, y=1),))},
     )
@@ -212,7 +213,7 @@ def test_regression_transition_spec_checks_route_keys_against_route_ids() -> Non
     """Rejects a route stored under a key that differs from its ID (audit 9.6)."""
     route = Route(id="y", curve={}, members=(), offsets=(), travel=1.0)
     with pytest.raises(SchemaError):
-        TransitionSpec(id=("1", "2"), counts=NEIGHBOUR_COUNTS, routes={"x": route})
+        TransitionSpec(id=make_tid("1", "2"), counts=NEIGHBOUR_COUNTS, routes={"x": route})
 
 
 @pytest.mark.parametrize("counts", [math.nan, math.inf])
@@ -241,7 +242,7 @@ def test_regression_facing_spec_rejects_nan_point() -> None:
 def test_regression_transition_spec_rejects_negative_counts() -> None:
     """Rejects negative TransitionSpec.counts (audit 9.6)."""
     with pytest.raises(SchemaError):
-        TransitionSpec(id=("1", "2"), counts=NEGATIVE_COUNTS)
+        TransitionSpec(id=make_tid("1", "2"), counts=NEGATIVE_COUNTS)
 
 
 @pytest.mark.defect("UP-9.6-39")

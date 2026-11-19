@@ -28,7 +28,7 @@ from showpy.core.errors import (
     bounded_repr,
     join_listed,
 )
-from showpy.core.ids import WINDOWS_DEVICE_NAMES, SetId, TransitionId, is_device_name
+from showpy.core.ids import WINDOWS_DEVICE_NAMES, SetId, is_device_name
 from showpy.core.util import ASSET_PREFIX, asset_uri, close_matches, content_hash
 from showpy.show.changes import require_form_owner
 from showpy.show.decode_cache import DecodeCache
@@ -422,7 +422,7 @@ class DocumentRepository:
             at=at,
         )
 
-    def get_paths(self, show_id: str, tid: TransitionId) -> TransitionSpec:
+    def get_paths(self, show_id: str, tid: tuple[str, str]) -> TransitionSpec:
         """Returns a transition's paths, defaulting to straight moves."""
         return self.get_show(show_id).transition(tid)
 

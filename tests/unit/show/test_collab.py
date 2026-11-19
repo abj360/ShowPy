@@ -36,6 +36,7 @@ from showpy.core.errors import (
     TimeRangeError,
     UnknownRefError,
 )
+from showpy.core.ids import make_tid
 from showpy.core.selection import Selection
 from showpy.notes.models import Anchor
 from showpy.show.changes import apply_change
@@ -80,7 +81,9 @@ def _move(entity: str, x: float, set_id: str = "2") -> PlacementOp:
 
 
 def test_apply_change_applies_every_op_kind() -> None:
-    paths = TransitionSpec(id=("1", "2"), counts=1.0, rows={"T1": PathRow(entity="T1", end=4)})
+    paths = TransitionSpec(
+        id=make_tid("1", "2"), counts=1.0, rows={"T1": PathRow(entity="T1", end=4)}
+    )
     show = apply_change(
         two_set_show(),
         [_move("T1", -3.0), FormOp(form=FORM), PathsOp(spec=paths), CountsOp(set_id="2", counts=6)],
@@ -103,7 +106,9 @@ def test_apply_change_unknown_refs() -> None:
     with pytest.raises(UnknownRefError):
         apply_change(two_set_show(), [_move("Z1", 0.0)])
     with pytest.raises(UnknownRefError):
-        apply_change(two_set_show(), [PathsOp(spec=TransitionSpec(id=("2", "1"), counts=8))])
+        apply_change(
+            two_set_show(), [PathsOp(spec=TransitionSpec(id=make_tid("2", "1"), counts=8))]
+        )
 
 
 def test_pin_entity_set_form_and_transition_flags() -> None:
@@ -149,7 +154,9 @@ def test_pin_replaces_existing_record() -> None:
 
 def _designer_edits(designer: Workspace) -> Show:
     base = load_show(designer)
-    paths = TransitionSpec(id=("2", "3"), counts=4.0, rows={"T2": PathRow(entity="T2", end=2)})
+    paths = TransitionSpec(
+        id=make_tid("2", "3"), counts=4.0, rows={"T2": PathRow(entity="T2", end=2)}
+    )
     edited = apply_change(
         base,
         [_move("T1", -4.0), FormOp(form=FORM), PathsOp(spec=paths), CountsOp(set_id="3", counts=6)],
@@ -324,7 +331,9 @@ def test_highlight_and_selection() -> None:
     assert selection(agent).ids == ("T2", "T1")
 
 
-STRAIGHT_ROW = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", start=2)})
+STRAIGHT_ROW = TransitionSpec(
+    id=make_tid("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", start=2)}
+)
 RETIMED_COUNTS = 12.0
 RESCALED_COUNTS = 16.0
 

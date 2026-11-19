@@ -9,7 +9,6 @@ Contains:
 from datetime import datetime
 
 from showpy.choreo.models import TransitionSpec
-from showpy.core.ids import TransitionId
 from showpy.show.documents import paths_doc
 from showpy.show.storage import Workspace, load_show
 
@@ -20,6 +19,6 @@ def save_paths(ws: Workspace, spec: TransitionSpec, at: datetime) -> str:
     return revision.id
 
 
-def load_paths(ws: Workspace, tid: TransitionId) -> TransitionSpec:
+def load_paths(ws: Workspace, tid: tuple[str, str]) -> TransitionSpec:
     """Reads a transition's paths; a transition without a document moves straight."""
     return load_show(ws).transition(tid)

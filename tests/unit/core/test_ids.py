@@ -29,6 +29,7 @@ Contains:
         `all` and `show-1`
     test_id_fields_*(): one behavior of the annotated model ID field types each
     test_sheet_id_fields_*(): landmark and zone fields keep an inner `-`
+    test_transition_id_*(): one behavior of the TransitionId named tuple each
     test_regression_check_id_reports_a_leading_dot_at_position_zero: reports `..a` at 0, the
         first character that breaks the pattern
     test_id_pattern_agrees_with_body_chars_and_length: keeps `ID_PATTERN` and the
@@ -60,6 +61,7 @@ from showpy.core.ids import (
     SetKeyField,
     ShowIdField,
     SpotIdField,
+    TransitionId,
     ZoneIdField,
     check_id,
     check_sheet_id,
@@ -67,6 +69,7 @@ from showpy.core.ids import (
     format_ref,
     format_tid,
     is_device_name,
+    make_tid,
     parse_ref,
     parse_tid,
 )
@@ -271,6 +274,10 @@ class _ToyZone(BaseModel):
     id: ZoneIdField
 
 
+class _ToyTransition(BaseModel):
+    tid: TransitionId
+
+
 @pytest.mark.parametrize("text", ["a b", "", "all", "a-b", "a\n"])
 def test_id_fields_reject_bad_ids(text: str) -> None:
     with pytest.raises(ValidationError, match="spot id"):
@@ -323,6 +330,40 @@ def test_sheet_id_fields_reject_bad_ids(model: type[BaseModel], text: str) -> No
 def test_sheet_id_fields_accept_legacy_ids_in_context() -> None:
     toy = _ToyLandmark.model_validate({"id": "-a"}, context={"legacy_ids": True})
     assert toy.id == "-a"
+
+
+def test_transition_id_is_a_named_tuple() -> None:
+    tid = TransitionId("1", "2")
+    assert isinstance(tid, tuple)
+    assert (tid.from_set, tid.to_set) == ("1", "2")
+    assert tid == ("1", "2")
+    assert hash(tid) == hash(("1", "2"))
+    assert str(tid) == "1→2"
+    assert format_tid(tid) == "1→2"
+
+
+def test_transition_id_comes_from_parse_tid() -> None:
+    tid = parse_tid("12->13")
+    assert isinstance(tid, TransitionId)
+    assert tid.from_set == "12"
+
+
+def test_transition_id_round_trips_through_json() -> None:
+    toy = _ToyTransition.model_validate_json('{"tid": ["1", "2"]}')
+    assert isinstance(toy.tid, TransitionId)
+    assert toy.model_dump_json() == '{"tid":["1","2"]}'
+
+
+def test_make_tid_checks_both_set_ids() -> None:
+    assert make_tid("1", "2A") == TransitionId("1", "2A")
+    with pytest.raises(SchemaError, match="set id"):
+        make_tid("1", "a-b")
+
+
+@pytest.mark.parametrize("text", ["a-b->2", "1->all", "1→a b"])
+def test_parse_tid_refuses_parts_that_fail_the_id_check(text: str) -> None:
+    with pytest.raises(SchemaError):
+        parse_tid(text)
 
 
 def test_regression_check_id_reports_a_leading_dot_at_position_zero() -> None:

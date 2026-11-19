@@ -18,6 +18,7 @@ from showpy.choreo.models import (
     Route,
     TransitionSpec,
 )
+from showpy.core.ids import make_tid
 from showpy.core.selection import Selection
 from showpy.core.types import Region
 from showpy.notes.models import Anchor, Note
@@ -39,7 +40,7 @@ def rich_show() -> Show:
         "T3": PathRow(entity="T3", style=PathStyle.FOLLOW, route="r1"),
         "T4": PathRow(entity="T4", style=PathStyle.FOLLOW, route="r1"),
     }
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows=rows, routes={"r1": route})
+    spec = TransitionSpec(id=make_tid("1", "2"), counts=8.0, rows=rows, routes={"r1": route})
     note = Note(id="n1", text="solo", anchor=Anchor.on_spots(["T2"]), author="pat", created_at=AT)
     override = FacingOverride(
         entities=("T1", "T2"), mode=FacingMode.TOWARD_ENTITY, value="T3", start=0.0, end=4.0

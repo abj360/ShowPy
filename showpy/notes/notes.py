@@ -18,7 +18,7 @@ import shapely
 
 from showpy.cast.select import select
 from showpy.core.errors import GeometryError, SchemaError, UnknownRefError, field_errors
-from showpy.core.ids import SetId, TransitionId
+from showpy.core.ids import SetId
 from showpy.core.types import Meters, Point
 from showpy.core.util import close_matches
 from showpy.notes.models import Anchor, Note, NoteKind
@@ -145,7 +145,7 @@ def remove_note(show: "Show", note_id: str) -> "Show":
 
 
 def notes_for(
-    show: "Show", target: SetId | TransitionId, *, include_hidden: bool = False
+    show: "Show", target: SetId | tuple[str, str], *, include_hidden: bool = False
 ) -> list[Note]:
     """Returns the notes anchored to a set (an ID) or a transition (a pair), in show order.
 

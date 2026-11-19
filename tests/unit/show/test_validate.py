@@ -79,6 +79,7 @@ from showpy.choreo.models import (
     TransitionSpec,
     Waypoint,
 )
+from showpy.core.ids import make_tid
 from showpy.core.types import Region
 from showpy.core.validation import ValidationReport
 from showpy.notes.models import Anchor, Note
@@ -178,7 +179,7 @@ def test_dependency_version_must_be_pinned() -> None:
 
 def test_show_flags_stale_transitions_and_zero_counts() -> None:
     show = two_set_show()
-    stale = TransitionSpec(id=("2", "1"), counts=8.0)
+    stale = TransitionSpec(id=make_tid("2", "1"), counts=8.0)
     zero = show.set("2").model_copy(update={"counts": 0.0})
     broken = show.model_copy(update={"transitions": (stale,), "sets": (show.sets[0], zero)})
     codes = _codes(validate_show(broken))
@@ -408,7 +409,7 @@ def test_regression_validate_show_reports_non_finite_waypoints() -> None:
     """Reports a path waypoint with an infinite coordinate (audit 9.7 validation gaps)."""
     waypoint = Waypoint(x=1.0, y=1.0).model_copy(update={"x": math.inf})
     row = PathRow(entity="T1").model_copy(update={"waypoints": (waypoint,)})
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": row})
+    spec = TransitionSpec(id=make_tid("1", "2"), counts=8.0, rows={"T1": row})
     assert _mentions(_edited(transitions=(spec,)), "inf")
 
 
@@ -489,7 +490,7 @@ def test_regression_validate_show_reports_nan_waypoints() -> None:
     """Reports a path waypoint with a NaN coordinate (audit 9.7 validation gaps)."""
     waypoint = Waypoint(x=1.0, y=1.0).model_copy(update={"y": math.nan})
     row = PathRow(entity="T1").model_copy(update={"waypoints": (waypoint,)})
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": row})
+    spec = TransitionSpec(id=make_tid("1", "2"), counts=8.0, rows={"T1": row})
     assert _mentions(_edited(transitions=(spec,)), "nan")
 
 
