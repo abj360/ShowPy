@@ -1841,15 +1841,33 @@ wheels = [
 name = "showpy"
 source = { editable = "." }
 dependencies = [
-    { name = "imageio-ffmpeg" },
     { name = "numpy" },
-    { name = "pandas" },
-    { name = "pillow" },
     { name = "pydantic" },
     { name = "pydantic-core" },
     { name = "scipy" },
-    { name = "segno" },
     { name = "shapely" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "imageio-ffmpeg" },
+    { name = "pandas" },
+    { name = "pillow" },
+    { name = "segno" },
+]
+qr = [
+    { name = "pillow" },
+    { name = "segno" },
+]
+render = [
+    { name = "pillow" },
+]
+tables = [
+    { name = "pandas" },
+]
+video = [
+    { name = "imageio-ffmpeg" },
+    { name = "pillow" },
 ]
 
 [package.dev-dependencies]
@@ -1872,22 +1890,30 @@ dev = [
     { name = "rfc8785" },
     { name = "ruff" },
     { name = "scipy-stubs" },
+    { name = "showpy", extra = ["all"] },
     { name = "types-jsonschema" },
     { name = "types-shapely" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "imageio-ffmpeg", specifier = ">=0.8.1" },
+    { name = "imageio-ffmpeg", marker = "extra == 'all'", specifier = ">=0.8.1" },
+    { name = "imageio-ffmpeg", marker = "extra == 'video'", specifier = ">=0.8.1" },
     { name = "numpy", specifier = ">=2.5.4" },
-    { name = "pandas", specifier = ">=3.1.1" },
-    { name = "pillow", specifier = ">=13.0.0" },
+    { name = "pandas", marker = "extra == 'all'", specifier = ">=3.1.1" },
+    { name = "pandas", marker = "extra == 'tables'", specifier = ">=3.1.1" },
+    { name = "pillow", marker = "extra == 'all'", specifier = ">=13.0.0" },
+    { name = "pillow", marker = "extra == 'qr'", specifier = ">=13.0.0" },
+    { name = "pillow", marker = "extra == 'render'", specifier = ">=13.0.0" },
+    { name = "pillow", marker = "extra == 'video'", specifier = ">=13.0.0" },
     { name = "pydantic", specifier = ">=2.14.3" },
     { name = "pydantic-core", specifier = ">=2.50.4" },
     { name = "scipy", specifier = ">=1.18.1" },
-    { name = "segno", specifier = ">=1.6.6" },
+    { name = "segno", marker = "extra == 'all'", specifier = ">=1.6.6" },
+    { name = "segno", marker = "extra == 'qr'", specifier = ">=1.6.6" },
     { name = "shapely", specifier = ">=2.2.0" },
 ]
+provides-extras = ["all", "qr", "render", "tables", "video"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1909,6 +1935,7 @@ dev = [
     { name = "rfc8785", specifier = "==0.1.4" },
     { name = "ruff", specifier = "==0.17.4" },
     { name = "scipy-stubs", specifier = "==1.18.1.1" },
+    { name = "showpy", extras = ["all"] },
     { name = "types-jsonschema", specifier = "==4.26.0.20261006" },
     { name = "types-shapely", specifier = "==2.1.0.20261030" },
 ]

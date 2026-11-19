@@ -37,18 +37,21 @@ import itertools
 import math
 from collections.abc import Callable, Mapping, Sequence
 from enum import StrEnum
-from typing import Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 import numpy as np
-import pandas as pd
 from pydantic import Field, SerializerFunctionWrapHandler, model_serializer, model_validator
 
 from showpy.core.errors import LockedError, PathError, SchemaError, UnknownRefError
+from showpy.core.extras import require_extra
 from showpy.core.ids import FormId, RouteId, SetId, SpotId, TransitionId, check_id
 from showpy.core.selection import Selection, SelectorField
 from showpy.core.types import Count, Degrees, FrozenModel, Meters, Point, Points, PositiveMeters
 from showpy.geo.models import DEFAULT_LINE_SPACING, TextAlign, TextAnchor
 from showpy.geo.text_layout import MAX_LAYOUT_CHARS
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 TABLE_COLUMNS = ("entity", "x", "y", "facing", "form", "order", "pinned", "on_field", "note")
 DEFAULT_EASING_STRENGTH = 2.0
@@ -163,8 +166,11 @@ class Set(FrozenModel):
     def _index(self) -> dict[SpotId, int]:
         return {p.entity: i for i, p in enumerate(self.placements)}
 
-    def table(self) -> pd.DataFrame:
-        """Returns placements as a DataFrame, one row per spot."""
+    def table(self) -> "pd.DataFrame":
+        """Returns placements as a DataFrame, one row per spot; needs the `tables` extra."""
+        require_extra("pandas", extra="tables", needed_by="Set.table")
+        import pandas as pd
+
         rows = [{column: getattr(p, column) for column in TABLE_COLUMNS} for p in self.placements]
         return pd.DataFrame(rows, columns=list(TABLE_COLUMNS))
 

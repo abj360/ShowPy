@@ -4,6 +4,7 @@ video.py --- renders the animated 2D sheet to MP4, with the show's audio when su
 Frames are sampled by the PathEngine at the music's clock (fps per second of audio time,
 honouring tempo and holds), drawn on the same sheet background as printouts, and encoded
 with the ffmpeg binary bundled by imageio-ffmpeg. Audio only plays; it never changes timing.
+Frames draw through Pillow, the `render` extra; encoding needs the `video` extra.
 
 Contains:
     video_canvas(): builds a pixel canvas for a show with even dimensions for H.264
@@ -16,14 +17,13 @@ import subprocess
 import tempfile
 from collections.abc import Mapping
 from pathlib import Path
-
-import imageio_ffmpeg
-from PIL import Image, ImageDraw
+from typing import TYPE_CHECKING
 
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import EntityState, Frame
 from showpy.core.caps import MAX_VIDEO_PIXELS, require_size
 from showpy.core.errors import SchemaError, StorageError, TimeRangeError, UnknownRefError
+from showpy.core.extras import require_extra
 from showpy.core.types import Count, Point
 from showpy.core.units import facing_vector
 from showpy.core.validation import require_finite
@@ -31,6 +31,9 @@ from showpy.sheet.render import BACKGROUND, SheetCanvas, draw_sheet
 from showpy.show.models import Show
 from showpy.time.clock import count_to_seconds
 from showpy.time.models import AudioTrack
+
+if TYPE_CHECKING:
+    from PIL import Image, ImageDraw
 
 DEFAULT_FPS = 30
 DEFAULT_PX_PER_M = 10.0
@@ -90,7 +93,7 @@ def _color(show: Show, entity: str) -> str:
 
 
 def _draw_state(
-    draw: ImageDraw.ImageDraw, canvas: SheetCanvas, show: Show, state: EntityState
+    draw: "ImageDraw.ImageDraw", canvas: SheetCanvas, show: Show, state: EntityState
 ) -> None:
     extent = show.cast.spot(state.entity).shape.extent_m if state.entity in show.cast.ids() else 0.3
     radius = max(extent * canvas.px_per_m, MIN_DOT_PX)
@@ -104,14 +107,19 @@ def _draw_state(
     draw.line((x, y, *canvas.to_px(tip)), fill=TICK_COLOR, width=max(1, round(radius / 3)))
 
 
-def render_frame(show: Show, frame: Frame, canvas: SheetCanvas) -> Image.Image:
+def render_frame(show: Show, frame: Frame, canvas: SheetCanvas) -> "Image.Image":
     """Draws one engine frame over the sheet; off-field spots are not drawn.
+
+    Needs the `render` extra.
 
     >>> from showpy.examples import two_set_show
     >>> show = two_set_show()
     >>> render_frame(show, PathEngine(show).sample(0.0), video_canvas(show)).mode
     'RGB'
     """
+    require_extra("PIL", extra="render", needed_by="render_frame")
+    from PIL import Image, ImageDraw
+
     image = Image.new("RGB", canvas.size, BACKGROUND)
     draw = ImageDraw.Draw(image)
     draw_sheet(draw, canvas, show.sheet)
@@ -147,6 +155,8 @@ def _read_encoded(path: Path) -> bytes:
 def _write_frames(
     show: Show, path: Path, t0: Count, t1: Count, fps: float, px_per_m: float
 ) -> None:
+    import imageio_ffmpeg
+
     canvas = video_canvas(show, px_per_m)
     engine = PathEngine(show)
     writer = imageio_ffmpeg.write_frames(
@@ -177,6 +187,8 @@ def _track(show: Show, audio: Mapping[str, bytes]) -> tuple[AudioTrack, bytes] |
 
 
 def _mux(video: Path, audio: Path, out: Path, start_s: float) -> None:
+    import imageio_ffmpeg
+
     command = [
         imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error",
         "-i", str(video), "-ss", f"{start_s:.6f}", "-i", str(audio),
@@ -202,12 +214,15 @@ def export_video(
     """Renders a count range of the show to MP4 bytes.
 
     With `audio` (track file URI to bytes), the timeline's first track is muxed, starting at
-    its sync offset plus the range start in seconds. Without it the video is silent.
+    its sync offset plus the range start in seconds. Without it the video is silent. Needs the
+    `video` extra.
 
     >>> from showpy.examples import two_set_show
     >>> export_video(two_set_show(), (0.0, 1.0), fps=2, px_per_m=4.0)[4:8]
     b'ftyp'
     """
+    require_extra("imageio_ffmpeg", extra="video", needed_by="export_video")
+    require_extra("PIL", extra="video", needed_by="export_video")
     if not fps > 0 or not math.isfinite(fps):
         raise SchemaError(f"fps must be above 0, got {fps}", hint="use e.g. fps=30")
     t0, t1 = _range(show, count_range)

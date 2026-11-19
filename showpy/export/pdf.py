@@ -12,27 +12,23 @@ Contains:
 """
 
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal
-
-import pandas as pd
+from typing import TYPE_CHECKING, Literal
 
 from showpy.core.errors import SchemaError
+from showpy.core.extras import is_dataframe
 from showpy.export.data import as_table
 from showpy.export.models import Chart, CoordinateSheet, TextTable
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 type Layout = Literal["sheet", "book", "chart_pages", "cue_sheet"]
 type Printable = (
     CoordinateSheet | Chart | pd.DataFrame | Sequence[CoordinateSheet] | Sequence[Chart]
 )
 
-LAYOUT_KINDS: dict[str, type] = {
-    "sheet": CoordinateSheet,
-    "book": CoordinateSheet,
-    "chart_pages": Chart,
-    "cue_sheet": pd.DataFrame,
-}
 SINGLE_LAYOUTS = ("sheet", "cue_sheet")
 PAGE_WIDTH = 792.0
 PAGE_HEIGHT = 612.0
@@ -55,6 +51,22 @@ PDF_HEADER = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"
 FONT_OBJECTS = {"F1": "Helvetica", "F2": "Helvetica-Bold"}
 FIRST_PAGE_OBJECT = 3 + len(FONT_OBJECTS)
 FREE_ENTRY = b"0000000000 65535 f \n"
+
+
+def _is_sheet(item: object) -> bool:
+    return isinstance(item, CoordinateSheet)
+
+
+def _is_chart(item: object) -> bool:
+    return isinstance(item, Chart)
+
+
+LAYOUT_KINDS: dict[str, tuple[str, Callable[[object], bool]]] = {
+    "sheet": ("CoordinateSheet", _is_sheet),
+    "book": ("CoordinateSheet", _is_sheet),
+    "chart_pages": ("Chart", _is_chart),
+    "cue_sheet": ("DataFrame", is_dataframe),
+}
 
 
 @dataclass(frozen=True)
@@ -86,7 +98,7 @@ def escape_text(text: str) -> bytes:
 
 
 def _items(obj: Printable, layout: Layout) -> list[object]:
-    if layout in SINGLE_LAYOUTS or isinstance(obj, CoordinateSheet | Chart | pd.DataFrame):
+    if layout in SINGLE_LAYOUTS or isinstance(obj, CoordinateSheet | Chart) or is_dataframe(obj):
         return [obj]
     return list(obj)
 
@@ -98,12 +110,14 @@ def _tables(obj: Printable, layout: Layout) -> list[TextTable]:
             hint=f"use one of {', '.join(LAYOUT_KINDS)}",
             context={"layout": layout},
         )
-    kind = LAYOUT_KINDS[layout]
+    kind, is_kind = LAYOUT_KINDS[layout]
     items = _items(obj, layout)
-    tables = [as_table(i) for i in items if isinstance(i, CoordinateSheet | Chart | pd.DataFrame)]
-    if not items or not all(isinstance(item, kind) for item in items):
+    tables = [
+        as_table(i) for i in items if isinstance(i, CoordinateSheet | Chart) or is_dataframe(i)
+    ]
+    if not items or not all(is_kind(item) for item in items):
         raise SchemaError(
-            f"layout {layout} prints {kind.__name__} objects, got {type(obj).__name__}",
+            f"layout {layout} prints {kind} objects, got {type(obj).__name__}",
             hint="sheet: one CoordinateSheet; book: CoordinateSheets; chart_pages: Charts; "
             "cue_sheet: the cue_sheet() DataFrame",
             context={"layout": layout},

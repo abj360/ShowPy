@@ -25,6 +25,7 @@ ENV UV_LINK_MODE=copy \
 
 WORKDIR /app
 COPY pyproject.toml uv.lock .python-version README.md LICENSE ./
+# The dev group holds showpy[all], so the locked sync installs every extra's dependencies.
 RUN uv sync --locked --no-install-project --group dev
 
 COPY --from=builder /dist /dist

@@ -29,15 +29,14 @@ import ipaddress
 import math
 import re
 from datetime import datetime
+from typing import TYPE_CHECKING
 from urllib.parse import SplitResult, quote, urlsplit, urlunsplit
-
-import segno
-from PIL import Image
 
 from showpy.cast.models import Spot
 from showpy.choreo.models import Placement, Set
 from showpy.core.caps import MAX_IMAGE_PIXELS, require_size
 from showpy.core.errors import LockedError, SchemaError, ShowValidationError, UnknownRefError
+from showpy.core.extras import require_extra
 from showpy.core.ids import SpotId, TransitionId, format_tid
 from showpy.core.units import angle_diff
 from showpy.core.util import close_matches, content_hash, format_ranges, natural_sort
@@ -52,6 +51,9 @@ from showpy.export.models import (
 from showpy.export.print_sheets import OFF_FIELD
 from showpy.sheet.coords import to_coords
 from showpy.show.models import Show
+
+if TYPE_CHECKING:
+    import segno
 
 JOIN_TOKEN_FORMAT = re.compile(r"[A-Za-z0-9_-]{22,256}")
 BASE_URL_SCHEME = "https"
@@ -364,7 +366,9 @@ def _require_pixel_size(size: int) -> None:
     require_size(size * size, MAX_IMAGE_PIXELS, what="QR code pixels")
 
 
-def _make_code(link: str) -> segno.QRCode:
+def _make_code(link: str) -> "segno.QRCode":
+    import segno
+
     try:
         return segno.make(link, error=QR_ERROR_LEVEL, micro=False, boost_error=False)
     except segno.DataOverflowError as err:
@@ -379,6 +383,7 @@ def qr_code(pub: Publication, token: str, size: int = 512) -> bytes:
     r"""Renders `join_link(pub, token)` as a square PNG QR code of `size` pixels.
 
     Modules are whole pixels, centered with the standard quiet zone, so the code stays sharp.
+    Needs the `qr` extra.
 
     Args:
         pub: Publication whose joinable link is encoded.
@@ -396,6 +401,10 @@ def qr_code(pub: Publication, token: str, size: int = 512) -> bytes:
     >>> qr_code(pub, token, size=128)[:4]
     b'\x89PNG'
     """
+    require_extra("segno", extra="qr", needed_by="qr_code")
+    require_extra("PIL", extra="qr", needed_by="qr_code")
+    from PIL import Image
+
     link = join_link(pub, token)
     _require_pixel_size(size)
     code = _make_code(link)

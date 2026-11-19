@@ -25,9 +25,7 @@ import csv
 import io
 import math
 from collections.abc import Callable, Iterable, Mapping
-from typing import Any
-
-import pandas as pd
+from typing import TYPE_CHECKING, Any
 
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.form_text import text_recipe
@@ -40,6 +38,7 @@ from showpy.core.errors import (
     UnknownRefError,
     field_errors,
 )
+from showpy.core.extras import is_dataframe
 from showpy.core.types import Point
 from showpy.core.units import round_to
 from showpy.core.util import asset_uri, close_matches
@@ -47,6 +46,9 @@ from showpy.export.models import Chart, CoordinateSheet, TextTable
 from showpy.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
 from showpy.show.models import Show
 from showpy.time.clock import count_to_seconds
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 SCHEMA_TAG = "showpy.show.v1"
 SCHEMA_KEY = "schema"
@@ -360,7 +362,7 @@ def _cell(value: object) -> str:
     return str(value)
 
 
-def _frame_table(frame: pd.DataFrame) -> TextTable:
+def _frame_table(frame: "pd.DataFrame") -> TextTable:
     title = frame.attrs.get("title", "")
     rows = tuple(tuple(_cell(v) for v in record) for record in frame.itertuples(index=False))
     header = tuple(str(c) for c in frame.columns)
@@ -379,7 +381,7 @@ def as_table(obj: Tabular) -> TextTable:
         return _sheet_table(obj)
     if isinstance(obj, Chart):
         return _chart_table(obj)
-    if isinstance(obj, pd.DataFrame):
+    if is_dataframe(obj):
         return _frame_table(obj)
     raise SchemaError(
         f"cannot tabulate a {type(obj).__name__}",

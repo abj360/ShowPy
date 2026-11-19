@@ -103,6 +103,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("MatchResult", "showpy.choreo.models", "MatchResult"),
     ("MeasureLabel", "showpy.time.models", "MeasureLabel"),
     ("MeasureSetting", "showpy.time.models", "MeasureSetting"),
+    ("MissingExtraError", "showpy.core.extras", "MissingExtraError"),
     ("MissingFontError", "showpy.core.errors", "MissingFontError"),
     ("MotionFn", "showpy.choreo.motion", "MotionFn"),
     ("MotionInfo", "showpy.choreo.motion", "MotionInfo"),

@@ -281,6 +281,9 @@ if TYPE_CHECKING:
         VersionError,
         ZeroLengthError,
     )
+    from showpy.core.extras import (
+        MissingExtraError,
+    )
     from showpy.core.ids import (
         ID_MAX_LENGTH,
         ID_PATTERN,
@@ -857,6 +860,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "MatchResult": ("showpy.choreo.models", "MatchResult"),
     "MeasureLabel": ("showpy.time.models", "MeasureLabel"),
     "MeasureSetting": ("showpy.time.models", "MeasureSetting"),
+    "MissingExtraError": ("showpy.core.extras", "MissingExtraError"),
     "MissingFontError": ("showpy.core.errors", "MissingFontError"),
     "MotionFn": ("showpy.choreo.motion", "MotionFn"),
     "MotionInfo": ("showpy.choreo.motion", "MotionInfo"),
@@ -1436,6 +1440,7 @@ __all__ = [
     "MatchResult",
     "MeasureLabel",
     "MeasureSetting",
+    "MissingExtraError",
     "MissingFontError",
     "MotionFn",
     "MotionInfo",

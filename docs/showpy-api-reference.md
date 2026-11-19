@@ -106,26 +106,27 @@ The foundation every other module imports: one unit system, shared types and IDs
 
 Every error has `code: str`, `message: str`, `context: dict`, `hint: str`, and is raised as `ShowPyError(message, *, hint, context=None, code=None)`; `code` defaults to the class's own code (`UNKNOWN_REF`, `LOCKED`, ...). `str(error)` reads `CODE: message (hint: ...)`.
 
-| Class               | Parent          | Raised when                                                        |
-| ------------------- | --------------- | ------------------------------------------------------------------ |
-| `ShowPyError`       | `Exception`     | Base of all library errors                                         |
-| `UnknownRefError`   | `ShowPyError`   | An ID, name or unit does not resolve; hint lists close matches     |
-| `VersionError`      | `ShowPyError`   | A pinned version is missing or incompatible                        |
-| `SchemaError`       | `ShowPyError`   | Data fails its JSON schema or text format; names the field         |
-| `GeometryError`     | `ShowPyError`   | Degenerate shape (zero radius, open polygon, collinear arc points) |
-| `ZeroLengthError`   | `GeometryError` | Direction of a zero vector requested                               |
-| `SpacingError`      | `ShowPyError`   | Items do not fit; reports the maximum that fits                    |
-| `TimeRangeError`    | `ShowPyError`   | Times outside range or start ≥ end                                 |
-| `TimelineError`     | `ShowPyError`   | Inconsistent tempo, measure or hold data                           |
-| `SurfaceError`      | `ShowPyError`   | A point is off the sheet                                           |
-| `MatchError`        | `ShowPyError`   | No feasible assignment; names the blocking constraint              |
-| `PathError`         | `ShowPyError`   | Invalid path instruction                                           |
-| `ContinuityError`   | `PathError`     | A path does not end on its target placement                        |
-| `LockedError`       | `ShowPyError`   | Edit touches something the designer locked                         |
-| `StorageError`      | `ShowPyError`   | Persistence failure                                                |
-| `ConflictError`     | `StorageError`  | A concurrent edit landed first; lists what changed                 |
-| `ValidationError`   | `ShowPyError`   | Structural integrity failure                                       |
-| `DeprecatedWarning` | `UserWarning`   | Deprecated API used; names the replacement                         |
+| Class               | Parent          | Raised when                                                                                         |
+| ------------------- | --------------- | --------------------------------------------------------------------------------------------------- |
+| `ShowPyError`       | `Exception`     | Base of all library errors                                                                          |
+| `UnknownRefError`   | `ShowPyError`   | An ID, name or unit does not resolve; hint lists close matches                                      |
+| `VersionError`      | `ShowPyError`   | A pinned version is missing or incompatible                                                         |
+| `SchemaError`       | `ShowPyError`   | Data fails its JSON schema or text format; names the field                                          |
+| `GeometryError`     | `ShowPyError`   | Degenerate shape (zero radius, open polygon, collinear arc points)                                  |
+| `ZeroLengthError`   | `GeometryError` | Direction of a zero vector requested                                                                |
+| `SpacingError`      | `ShowPyError`   | Items do not fit; reports the maximum that fits                                                     |
+| `TimeRangeError`    | `ShowPyError`   | Times outside range or start ≥ end                                                                  |
+| `TimelineError`     | `ShowPyError`   | Inconsistent tempo, measure or hold data                                                            |
+| `SurfaceError`      | `ShowPyError`   | A point is off the sheet                                                                            |
+| `MatchError`        | `ShowPyError`   | No feasible assignment; names the blocking constraint                                               |
+| `PathError`         | `ShowPyError`   | Invalid path instruction                                                                            |
+| `ContinuityError`   | `PathError`     | A path does not end on its target placement                                                         |
+| `LockedError`       | `ShowPyError`   | Edit touches something the designer locked                                                          |
+| `StorageError`      | `ShowPyError`   | Persistence failure                                                                                 |
+| `ConflictError`     | `StorageError`  | A concurrent edit landed first; lists what changed                                                  |
+| `ValidationError`   | `ShowPyError`   | Structural integrity failure                                                                        |
+| `MissingExtraError` | `ShowPyError`   | A function needs an extra that is not installed; hint is the install command (`showpy.core.extras`) |
+| `DeprecatedWarning` | `UserWarning`   | Deprecated API used; names the replacement                                                          |
 
 ### Error codes beyond each class's own
 

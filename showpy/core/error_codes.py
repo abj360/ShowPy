@@ -77,6 +77,8 @@ class ErrorCode(StrEnum):
     """A measure length is not positive or a measure change count is negative."""
     MEMBER_COUNT_MISMATCH = "MEMBER_COUNT_MISMATCH"
     """A text form has a different number of members than slots."""
+    MISSING_EXTRA = "MISSING_EXTRA"
+    """A function needs an optional dependency whose showpy extra is not installed."""
     MISSING_FONT = "MISSING_FONT"
     """A font name or URI is not held by the font registry."""
     MISSING_GLYPH = "MISSING_GLYPH"

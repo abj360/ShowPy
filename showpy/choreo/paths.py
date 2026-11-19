@@ -31,7 +31,6 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
-import pandas as pd
 
 from showpy.choreo.models import (
     Easing,
@@ -44,10 +43,13 @@ from showpy.choreo.models import (
 )
 from showpy.choreo.motion import DEFAULT_MOTIONS, MotionRegistry, ease
 from showpy.core.errors import LockedError, PathError
+from showpy.core.extras import require_extra
 from showpy.core.selection import Selection
 from showpy.core.types import Degrees, Point
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from showpy.show.models import Show
 
 type Sel = Sequence[str] | Selection
@@ -408,12 +410,17 @@ def unlock(spec: TransitionSpec, sel: Sel) -> TransitionSpec:
     return _edit(spec, sel, lambda _row: {"locked": False}, force=True)
 
 
-def paths_table(spec: TransitionSpec) -> pd.DataFrame:
+def paths_table(spec: TransitionSpec) -> "pd.DataFrame":
     """Returns the rows that differ from a default straight move, one per spot.
+
+    Needs the `tables` extra.
 
     >>> paths_table(TransitionSpec(id=("1", "2"), counts=8.0)).empty
     True
     """
+    require_extra("pandas", extra="tables", needed_by="paths_table")
+    import pandas as pd
+
     rows = [
         {field: getattr(row, field) for field in TABLE_FIELDS}
         for entity, row in sorted(spec.rows.items())

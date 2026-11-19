@@ -3,6 +3,7 @@ render.py --- draws a blank sheet as SVG, PNG or PDF, with a meters-to-pixels ca
 
 Pixel space puts the audience at the bottom: y is flipped so upstage is up. Video and print
 exports reuse SheetCanvas and draw_sheet() to paint the same background under their spots.
+SVG is written by hand; PNG, PDF and draw_sheet() draw through Pillow, the `render` extra.
 
 Contains:
     SheetFormat: names the output formats
@@ -18,14 +19,16 @@ Contains:
 
 import io
 import math
-from typing import Literal, Self
+from typing import TYPE_CHECKING, Literal, Self
 from xml.sax.saxutils import escape, quoteattr
 
-from PIL import Image, ImageDraw, ImageFont
-
 from showpy.core.errors import SchemaError
+from showpy.core.extras import require_extra
 from showpy.core.types import FrozenModel, Point, Ring
 from showpy.sheet.models import GuideLine, Landmark, Sheet, SurfaceType, Zone, ZoneKind
+
+if TYPE_CHECKING:
+    from PIL import Image, ImageDraw, ImageFont
 
 type SheetFormat = Literal["svg", "png", "pdf"]
 type Font = ImageFont.ImageFont | ImageFont.FreeTypeFont
@@ -140,7 +143,7 @@ def _guide_style(sheet: Sheet, guide: GuideLine) -> tuple[str, int]:
     return color, GUIDE_WIDTH_PX.get(guide.kind, GUIDE_WIDTH_DEFAULT_PX)
 
 
-def _draw_areas(draw: ImageDraw.ImageDraw, canvas: SheetCanvas, sheet: Sheet) -> None:
+def _draw_areas(draw: "ImageDraw.ImageDraw", canvas: SheetCanvas, sheet: Sheet) -> None:
     surface = SURFACE.get(sheet.surface_type, SURFACE_DEFAULT)
     draw.polygon(canvas.ring_px(sheet.outline), fill=OFF_WALKABLE)
     draw.polygon(canvas.ring_px(sheet.walkable.exterior), fill=surface)
@@ -152,7 +155,7 @@ def _draw_areas(draw: ImageDraw.ImageDraw, canvas: SheetCanvas, sheet: Sheet) ->
 
 
 def _draw_marks(
-    draw: ImageDraw.ImageDraw, canvas: SheetCanvas, sheet: Sheet, kinds: tuple[str, ...]
+    draw: "ImageDraw.ImageDraw", canvas: SheetCanvas, sheet: Sheet, kinds: tuple[str, ...]
 ) -> None:
     for mark in (m for m in sheet.landmarks if m.kind in kinds):
         ring = canvas.ring_px(mark.geometry)
@@ -170,7 +173,9 @@ def _label_at(canvas: SheetCanvas, guide: GuideLine) -> tuple[float, float]:
     return x + LABEL_OFFSET_PX, y - LABEL_OFFSET_PX - LABEL_PX
 
 
-def _draw_guides(draw: ImageDraw.ImageDraw, canvas: SheetCanvas, sheet: Sheet, font: Font) -> None:
+def _draw_guides(
+    draw: "ImageDraw.ImageDraw", canvas: SheetCanvas, sheet: Sheet, font: "Font"
+) -> None:
     for guide in sheet.guides:
         color, width = _guide_style(sheet, guide)
         draw.line(canvas.ring_px(guide.points), fill=color, width=width)
@@ -178,12 +183,14 @@ def _draw_guides(draw: ImageDraw.ImageDraw, canvas: SheetCanvas, sheet: Sheet, f
             draw.text(_label_at(canvas, guide), guide.label, fill=color, font=font)
 
 
-def draw_sheet(draw: ImageDraw.ImageDraw, canvas: SheetCanvas, sheet: Sheet) -> None:
+def draw_sheet(draw: "ImageDraw.ImageDraw", canvas: SheetCanvas, sheet: Sheet) -> None:
     """Paints outline, walkable area, zones, guides and landmarks onto a PIL drawing.
 
     Guides paint over line and area landmarks, which usually trace them; point landmarks go
     on top. Drawing is a side effect on the image behind `draw`; the sheet is not changed.
+    Needs the `render` extra.
 
+    >>> from PIL import Image, ImageDraw
     >>> from showpy.sheet.templates import blank_sheet
     >>> sheet = blank_sheet(4, 4)
     >>> canvas = SheetCanvas.for_sheet(sheet)
@@ -192,6 +199,9 @@ def draw_sheet(draw: ImageDraw.ImageDraw, canvas: SheetCanvas, sheet: Sheet) -> 
     >>> image.getpixel((40, 40))
     (246, 244, 238)
     """
+    require_extra("PIL", extra="render", needed_by="draw_sheet")
+    from PIL import ImageFont
+
     font = ImageFont.load_default(size=LABEL_PX)
     _draw_areas(draw, canvas, sheet)
     _draw_marks(draw, canvas, sheet, ("line", "area"))
@@ -199,7 +209,9 @@ def draw_sheet(draw: ImageDraw.ImageDraw, canvas: SheetCanvas, sheet: Sheet) -> 
     _draw_marks(draw, canvas, sheet, ("point",))
 
 
-def _raster(sheet: Sheet, px_per_m: float) -> Image.Image:
+def _raster(sheet: Sheet, px_per_m: float) -> "Image.Image":
+    from PIL import Image, ImageDraw
+
     canvas = SheetCanvas.for_sheet(sheet, px_per_m=px_per_m)
     width, height = canvas.size
     if width * height > MAX_PIXELS:
@@ -300,6 +312,8 @@ def render_sheet(
 ) -> bytes:
     r"""Renders a printable blank sheet: hand-written SVG, or PNG and PDF through Pillow.
 
+    PNG and PDF need the `render` extra; SVG needs no extra.
+
     Args:
         sheet: Sheet to draw.
         fmt: `svg`, `png` or `pdf`.
@@ -318,6 +332,7 @@ def render_sheet(
         )
     if fmt == "svg":
         return _svg(sheet, px_per_m)
+    require_extra("PIL", extra="render", needed_by=f"render_sheet(fmt={fmt!r})")
     buffer = io.BytesIO()
     _raster(sheet, px_per_m).save(buffer, format=fmt.upper())
     return buffer.getvalue()
