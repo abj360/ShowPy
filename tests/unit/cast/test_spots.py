@@ -50,9 +50,9 @@ from showpy.choreo.models import (
 from showpy.core.errors import (
     LockedError,
     SchemaError,
+    ShowValidationError,
     SpacingError,
     UnknownRefError,
-    ValidationError,
 )
 from showpy.core.selection import Selection
 from showpy.core.types import Region
@@ -191,7 +191,7 @@ def test_delete_spots_refuses_locked_form_without_force() -> None:
 
 
 def test_delete_spots_refuses_when_others_face_the_spot() -> None:
-    with pytest.raises(ValidationError) as info:
+    with pytest.raises(ShowValidationError) as info:
         delete_spots(rich_show(), ["T3"])
     assert "T3" in info.value.message
 

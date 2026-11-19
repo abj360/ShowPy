@@ -5,7 +5,7 @@ test_validation.py --- tests validation reports, SchemaError-raising validators,
 
 Contains:
     test_report_*(), test_merge_concatenates_issues: status, rendering and merging of reports
-    test_raise_for_errors_*(): raises a ValidationError only when the report holds an error
+    test_raise_for_errors_*(): raises a ShowValidationError only when the report holds an error
     test_issue_context_*(): the read-only, bounded context of one issue
     test_validate_or_schema_error_*(): one behavior of the SchemaError-raising validator each
     test_validate_adapter_*(): SchemaError from standalone TypeAdapters, Python or JSON input
@@ -26,7 +26,7 @@ from pydantic import BaseModel, TypeAdapter
 from showpy.core.errors import (
     MAX_CONTEXT_ITEMS,
     SchemaError,
-    ValidationError,
+    ShowValidationError,
     bounded_repr,
     field_errors,
 )
@@ -83,7 +83,7 @@ def test_raise_for_errors_returns_when_only_warnings() -> None:
 
 def test_raise_for_errors_raises_with_the_issues_in_context() -> None:
     report = ValidationReport(issues=(_issue("warning", "W1"), _issue("error", "E1")))
-    with pytest.raises(ValidationError) as info:
+    with pytest.raises(ShowValidationError) as info:
         report.raise_for_errors()
     assert "E1" in info.value.message
     assert [issue["code"] for issue in context_entries(info.value, "issues")] == ["E1"]
@@ -91,7 +91,7 @@ def test_raise_for_errors_raises_with_the_issues_in_context() -> None:
 
 def test_raise_for_errors_caps_the_listed_issues() -> None:
     report = ValidationReport(issues=tuple(_issue("error", f"E{n}") for n in range(MANY_ISSUES)))
-    with pytest.raises(ValidationError) as info:
+    with pytest.raises(ShowValidationError) as info:
         report.raise_for_errors()
     issues = info.value.context["issues"]
     assert isinstance(issues, list)

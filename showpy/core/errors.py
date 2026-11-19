@@ -26,11 +26,11 @@ Contains:
     LockedError: reports an edit that touches a pinned or locked item
     StorageError: reports a persistence failure
     ConflictError: reports a concurrent edit that landed first
-    ValidationError: reports a structural integrity failure
+    ShowValidationError: reports a structural integrity failure
     FontError: reports a font file that is invalid, hash-mismatched or whose name is taken
     MissingFontError: reports a font name or URI the registry does not hold
     GlyphError: reports a character the font chain has no glyph for
-    DeprecatedWarning: warns that a deprecated API was used
+    DeprecatedWarning: warns that a deprecated API was used (defined in showpy.core.deprecation)
     LegibilityWarning: warns that text was laid out with fewer spots than it reads well at
 """
 
@@ -46,6 +46,8 @@ from typing import TYPE_CHECKING, ClassVar, cast
 import numpy as np
 from pydantic import ValidationError as PydanticValidationError
 
+from showpy.core.deprecation import DeprecatedWarning as DeprecatedWarning
+from showpy.core.deprecation import moved
 from showpy.core.error_codes import ErrorCode
 from showpy.core.json_types import JsonValue
 
@@ -502,7 +504,7 @@ class ConflictError(StorageError):
     default_code = ErrorCode.CONFLICT
 
 
-class ValidationError(ShowPyError):
+class ShowValidationError(ShowPyError):
     """Reports a structural integrity failure."""
 
     default_code = ErrorCode.VALIDATION
@@ -526,9 +528,13 @@ class GlyphError(UnknownRefError):
     default_code = ErrorCode.MISSING_GLYPH
 
 
-class DeprecatedWarning(UserWarning):
-    """Warns that a deprecated API was used and names its replacement."""
-
-
 class LegibilityWarning(UserWarning):
     """Warns that text was laid out with fewer spots than it reads well at."""
+
+
+__getattr__ = moved(
+    __name__,
+    {"ValidationError": f"{__name__}.ShowValidationError"},
+    since="0.4.0",
+    remove="0.6.0",
+)

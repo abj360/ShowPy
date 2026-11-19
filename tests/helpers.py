@@ -75,7 +75,7 @@ NO_ALARM_MODULES = frozenset(
 )
 FINALIZER_NAME = "__del__"
 HANG_RETRY_S = 0.05
-EXPECTED_FAILURES = ("ValidationError", "SchemaError", "ShowPyError")
+EXPECTED_FAILURES = ("ShowValidationError", "SchemaError", "ShowPyError")
 HASH_SEEDS = ("1", "2", "3")
 SUBPROCESS_TIMEOUT_S = 20
 STDERR_CHECK_TAIL = 300

@@ -30,11 +30,11 @@ from showpy.choreo.models import Placement
 from showpy.core.errors import (
     LockedError,
     SchemaError,
+    ShowValidationError,
     SpacingError,
     UnknownRefError,
     field_errors,
 )
-from showpy.core.errors import ValidationError as ShowPyValidationError
 from showpy.core.ids import SetId, SpotId
 from showpy.core.selection import Selector
 from showpy.core.types import Meters, Point, Region
@@ -341,7 +341,7 @@ def delete_spots(show: "Show", sel: Selector, *, force: bool = False) -> "Show":
 
     Pinned placements, locked forms and locked paths raise LockedError unless `force=True`.
     A forced delete also drops the pins on the deleted spots.
-    Spots that other spots face raise ValidationError until those facings change.
+    Spots that other spots face raise ShowValidationError until those facings change.
 
     >>> from showpy.examples import two_set_show
     >>> delete_spots(two_set_show(), "T2-T3").cast.ids()
@@ -357,7 +357,7 @@ def delete_spots(show: "Show", sel: Selector, *, force: bool = False) -> "Show":
         )
     facing = _facing_targets(show, ids)
     if facing:
-        raise ShowPyValidationError(
+        raise ShowValidationError(
             f"other spots face deleted spots: {'; '.join(facing)}",
             hint="re-aim those facings at another spot or a point first",
             context={"references": facing},

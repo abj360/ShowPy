@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from showpy.cast.models import Cast, Spot
 from showpy.choreo.models import Placement, Set
 from showpy.core.caps import MAX_POINTS, MAX_TEXT_CHARS, require_size
-from showpy.core.errors import SchemaError, UnknownRefError, ValidationError
+from showpy.core.errors import SchemaError, ShowValidationError, UnknownRefError
 from showpy.core.ids import SetId, SpotId
 from showpy.core.types import Point
 from showpy.core.util import close_matches
@@ -215,7 +215,7 @@ def _carried(merge: _Merge, entity: SpotId, previous: dict[SpotId, Placement]) -
             entity=entity, x=held.x, y=held.y, facing=held.facing, on_field=held.on_field
         )
     if entity not in merge.first_seen:
-        raise ValidationError(
+        raise ShowValidationError(
             f"{entity} has no position in any set",
             hint="add a row for the spot or place it in the show first",
             context={"entity": entity},

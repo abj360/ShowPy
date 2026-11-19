@@ -37,7 +37,7 @@ from PIL import Image
 from showpy.cast.models import Spot
 from showpy.choreo.models import Placement, Set
 from showpy.core.caps import MAX_IMAGE_PIXELS, require_size
-from showpy.core.errors import LockedError, SchemaError, UnknownRefError, ValidationError
+from showpy.core.errors import LockedError, SchemaError, ShowValidationError, UnknownRefError
 from showpy.core.ids import SpotId, TransitionId, format_tid
 from showpy.core.units import angle_diff
 from showpy.core.util import close_matches, content_hash, format_ranges, natural_sort
@@ -225,7 +225,7 @@ def publish(
         )
     root = _require_https_base_url(base_url)
     if previous is not None and (previous.id, previous.show_id) != (publication_id, show.id):
-        raise ValidationError(
+        raise ShowValidationError(
             f"publication {previous.id} of {previous.show_id} cannot be republished as "
             f"{publication_id} of {show.id}",
             hint="republish with the same publication ID and show",
@@ -276,7 +276,7 @@ def _require_https_link(pub: Publication) -> None:
     try:
         _require_https_base_url(pub.link)
     except SchemaError as err:
-        raise ValidationError(
+        raise ShowValidationError(
             f"publication {pub.id} stores a link that is not a plain https link: {err.message}",
             hint="republish it with publish(..., previous=pub) to rebuild the link",
             context={"publication": pub.id},
@@ -307,20 +307,20 @@ def join_link(pub: Publication, token: str) -> str:
     """
     _require_join_token(token)
     if "?" in pub.link or "#" in pub.link:
-        raise ValidationError(
+        raise ShowValidationError(
             f"publication {pub.id} link has a query or fragment, so no token can follow it",
             hint="republish it with publish(..., previous=pub) to rebuild the link",
             context={"publication": pub.id},
         )
     _require_https_link(pub)
     if pub.join_token_sha256 is None:
-        raise ValidationError(
+        raise ShowValidationError(
             f"publication {pub.id} stores no join token digest, so nobody can join it",
             hint="republish it with join_token=secrets.token_urlsafe(16) to issue one",
             context={"publication": pub.id},
         )
     if not verify_join_token(pub, token):
-        raise ValidationError(
+        raise ShowValidationError(
             f"join token does not match publication {pub.id}",
             hint="pass the token issued at publish; republish with a new join_token if it is lost",
             context={"publication": pub.id},
@@ -478,7 +478,7 @@ def _require_claimable(pub: Publication, show: Show, performer: Performer, spot:
             context={"performer": performer.id, "spot": mine},
         )
     if not _may_claim(spot, performer):
-        raise ValidationError(
+        raise ShowValidationError(
             f"{spot.id} cannot be claimed by a {performer.role}",
             hint=f"{performer.role}s may claim active spots marked {performer.role}",
             context={"spot": spot.id, "claimable": spot.claimable, "active": spot.active},
@@ -507,7 +507,7 @@ def claim_spot(
     True
     """
     if pub.show_id != show.id:
-        raise ValidationError(
+        raise ShowValidationError(
             f"publication {pub.id} is of show {pub.show_id}, not {show.id}",
             hint="pass the show the publication was made from",
             context={"publication": pub.id, "show": show.id},
@@ -559,13 +559,13 @@ def swap_claims(pub: Publication, a: SpotId, b: SpotId) -> Publication:
     _require_open(pub)
     first, second = _claim_on(pub, a), _claim_on(pub, b)
     if first is None or second is None:
-        raise ValidationError(
+        raise ShowValidationError(
             f"swap needs both {a} and {b} claimed",
             hint="use reassign() to move a performer onto an empty spot",
             context={"a": a, "b": b},
         )
     if first.performer.role != second.performer.role:
-        raise ValidationError(
+        raise ShowValidationError(
             f"{a} and {b} are held by a {first.performer.role} and a {second.performer.role}",
             hint="swap performers of the same role",
             context={"a": a, "b": b},

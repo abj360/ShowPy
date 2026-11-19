@@ -5,7 +5,7 @@ Contains:
     ValidationIssue: describes one error or warning with location, hint and bounded context
     ValidationReport: collects issues, reports ok, renders one line per issue
     ValidationReport.merge(): combines several reports into one
-    ValidationReport.raise_for_errors(): raises a ValidationError when any issue is an error
+    ValidationReport.raise_for_errors(): raises a ShowValidationError when any issue is an error
     ValidationReport.to_json(): renders the report as JSON text
     validate_or_schema_error(): validates data against any pydantic model, raising SchemaError
     validate_adapter(): validates a Python value against a TypeAdapter, raising SchemaError
@@ -24,7 +24,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from showpy.core.errors import (
     SchemaError,
-    ValidationError,
+    ShowValidationError,
     bounded_context,
     bounded_repr,
     join_listed,
@@ -97,7 +97,7 @@ class ValidationReport(FrozenModel):
         return tuple(dict.fromkeys(issue.code for issue in self.issues))
 
     def raise_for_errors(self) -> None:
-        """Raises a ValidationError listing the error issues; returns when there are none.
+        """Raises a ShowValidationError listing the error issues; returns when there are none.
 
         The message names at most five error codes and counts the rest; the context holds the
         error issues, capped like every error context.
@@ -110,7 +110,7 @@ class ValidationReport(FrozenModel):
         if not errors:
             return
         listed = join_listed([f"{issue.code} {issue.where}" for issue in errors], separator=", ")
-        raise ValidationError(
+        raise ShowValidationError(
             f"{len(errors)} validation error(s): {listed}",
             hint=ERRORS_HINT,
             context={"issues": [issue.model_dump(mode="json") for issue in errors]},

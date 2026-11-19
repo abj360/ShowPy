@@ -5,6 +5,7 @@ test_api_snapshot.py --- guards the public API signatures against unannounced ch
 
 Contains:
     describe_public_object(): renders one public name as a Python-version-stable JSON value
+    build_snapshot(): builds the snapshot of every public name and the deprecated aliases
     diff_snapshots(): lists the names added, removed and changed between two snapshots
     unreleased_section(): extracts the Unreleased section of a changelog
     names_missing_from_changelog(): lists changed names the Unreleased section never mentions
@@ -42,7 +43,7 @@ import pytest
 from pydantic import BaseModel
 
 import showpy
-from showpy._api_table import PUBLIC_API
+from showpy._api_table import DEPRECATED, PUBLIC_API
 
 ROOT = Path(__file__).resolve().parents[2]
 SNAPSHOT_PATH = ROOT / "tests" / "fixtures" / "api_snapshot.json"
@@ -56,6 +57,7 @@ STABLE_DEFAULT_TYPES = (type(None), bool, int, float, str, bytes, tuple, frozens
 UNRELEASED_HEADING = re.compile(r"^## Unreleased\s*$", re.MULTILINE)
 NEXT_RELEASE_HEADING = re.compile(r"^## ", re.MULTILINE)
 RELEASED_HEADING = re.compile(r"^## \[?\d+\.\d+\.\d+", re.MULTILINE)
+DEPRECATED_KEY = "deprecated"
 RESTORE_COMMAND = "git checkout -- tests/fixtures/api_snapshot.json"
 
 JsonValue = str | dict[str, "JsonValue"]
@@ -172,8 +174,13 @@ def describe_public_object(obj: object) -> JsonValue:
 
 
 def build_snapshot() -> dict[str, JsonValue]:
-    """Builds the snapshot of every public name, sorted by name."""
-    return {name: describe_public_object(getattr(showpy, name)) for name, _, _ in PUBLIC_API}
+    """Builds the snapshot of every public name, plus its deprecated aliases under "deprecated"."""
+    snapshot = {name: describe_public_object(getattr(showpy, name)) for name, _, _ in PUBLIC_API}
+    snapshot[DEPRECATED_KEY] = {
+        name: {"target": target, "since": since, "remove": remove}
+        for name, target, since, remove in DEPRECATED
+    }
+    return snapshot
 
 
 def diff_snapshots(old: dict[str, JsonValue], new: dict[str, JsonValue]) -> dict[str, list[str]]:
@@ -276,7 +283,8 @@ def check_snapshot(
             f"E: public API drifted and {changelog_path.name} is absent; "
             f"run from a source checkout: {UPDATE_COMMAND}"
         )
-    unlisted = names_missing_from_changelog(changed, changelog_path.read_text())
+    announced = [name for name in changed if name != DEPRECATED_KEY]
+    unlisted = names_missing_from_changelog(announced, changelog_path.read_text())
     if unlisted or not is_updating:
         return _format_failure(diff, unlisted)
     _write_snapshot(current, snapshot_path)

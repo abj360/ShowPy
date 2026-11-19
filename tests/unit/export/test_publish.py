@@ -95,8 +95,8 @@ from showpy.core.errors import (
     LockedError,
     SchemaError,
     ShowPyError,
+    ShowValidationError,
     UnknownRefError,
-    ValidationError,
 )
 from showpy.export.data import export_json
 from showpy.export.models import Performer, Publication
@@ -237,12 +237,12 @@ def test_one_spot_per_performer_and_one_performer_per_spot() -> None:
 def test_claims_respect_roles_and_activity() -> None:
     show = _crew_show()
     pub = _published(show)
-    with pytest.raises(ValidationError):
+    with pytest.raises(ShowValidationError):
         claim_spot(pub, show, performer("Ada"), "T2", AT)
     claim_spot(pub, show, performer("Cy", role="crew"), "T2", AT)
-    with pytest.raises(ValidationError):
+    with pytest.raises(ShowValidationError):
         claim_spot(pub, show, performer("Ada"), "T3", AT)
-    with pytest.raises(ValidationError):
+    with pytest.raises(ShowValidationError):
         claim_spot(pub, show, performer("Ada"), "T4", AT)
     assert unclaimed(pub, show) == ["T1", "T2"]
 
@@ -254,7 +254,7 @@ def test_claims_need_a_live_publication_of_the_same_show() -> None:
     with pytest.raises(UnknownRefError):
         claim_spot(_published(show), show, performer("Ada"), "T9", AT)
     other = show.model_copy(update={"id": "show-2"})
-    with pytest.raises(ValidationError):
+    with pytest.raises(ShowValidationError):
         claim_spot(_published(show), other, performer("Ada"), "T1", AT)
 
 
@@ -280,7 +280,7 @@ def test_republish_keeps_claims_on_spots_that_still_qualify() -> None:
     again = publish(edited, "pub-1", BASE_URL, LATER, previous=pub, join_token=JOIN_TOKEN)
     assert [c.spot for c in again.claims] == ["T1"]
     assert again.published_at == LATER
-    with pytest.raises(ValidationError):
+    with pytest.raises(ShowValidationError):
         publish(edited, "pub-2", BASE_URL, LATER, previous=pub, join_token=JOIN_TOKEN)
 
 
@@ -305,7 +305,7 @@ def test_swap_reassign_and_release_are_designer_edits() -> None:
 def test_designer_edits_refuse_bad_targets() -> None:
     show = two_set_show()
     pub = _with_claims(show, ("Ada", "T1"), ("Cy", "T3"))
-    with pytest.raises(ValidationError):
+    with pytest.raises(ShowValidationError):
         swap_claims(pub, "T1", "T2")
     with pytest.raises(UnknownRefError):
         release(pub, "T2")
@@ -313,7 +313,7 @@ def test_designer_edits_refuse_bad_targets() -> None:
         release(unpublish(pub), "T1")
     crew = _with_claims(_crew_show(), ("Ada", "T1"))
     crew, _ = claim_spot(crew, _crew_show(), performer("Cy", role="crew"), "T2", AT)
-    with pytest.raises(ValidationError):
+    with pytest.raises(ShowValidationError):
         swap_claims(crew, "T1", "T2")
 
 
@@ -665,7 +665,7 @@ def test_regression_claim_spot_rejects_a_naive_time() -> None:
 def test_regression_claim_spot_rejects_a_time_before_publication() -> None:
     """Rejects a claim dated before the publication existed (audit 9.5)."""
     show = two_set_show()
-    with pytest.raises(ValidationError):
+    with pytest.raises(ShowValidationError):
         claim_spot(_published(show), show, performer("Ada"), "T1", EARLIER)
 
 
@@ -681,7 +681,7 @@ def test_regression_reassign_rejects_a_naive_time() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.5-15")
 def test_regression_reassign_rejects_a_time_before_publication() -> None:
     """Rejects a reassignment dated before the publication existed (audit 9.5)."""
-    with pytest.raises(ValidationError):
+    with pytest.raises(ShowValidationError):
         reassign(_published(), "T1", performer("Ada"), EARLIER)
 
 
@@ -702,7 +702,7 @@ def test_regression_reassign_rejects_an_unknown_spot() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.5-17")
 def test_regression_reassign_rejects_crew_on_a_performer_spot() -> None:
     """Refuses to put crew on a spot only performers may hold (audit 9.5)."""
-    with pytest.raises(ValidationError):
+    with pytest.raises(ShowValidationError):
         _reassign_checked("T1", performer("Cy", role="crew"), two_set_show())
 
 
@@ -710,7 +710,7 @@ def test_regression_reassign_rejects_crew_on_a_performer_spot() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.5-18")
 def test_regression_reassign_rejects_an_inactive_spot() -> None:
     """Refuses to move a performer onto an inactive spot (audit 9.5)."""
-    with pytest.raises(ValidationError):
+    with pytest.raises(ShowValidationError):
         _reassign_checked("T4", performer("Ada"), _crew_show())
 
 
@@ -781,7 +781,7 @@ def test_regression_performer_view_checks_the_show_matches_the_publication() -> 
     show = two_set_show()
     pub = _with_claims(show, ("Ada", "T1"))
     other = show.model_copy(update={"id": "show-2"})
-    with pytest.raises(ValidationError):
+    with pytest.raises(ShowValidationError):
         performer_view(pub, other, performer("Ada"))
 
 
@@ -1010,14 +1010,14 @@ def test_regression_join_link_rejects_a_malformed_token(token: Any) -> None:
 @pytest.mark.parametrize("token", [OTHER_TOKEN, JOIN_TOKEN[:-1] + "X", JOIN_TOKEN.upper()])
 def test_regression_join_link_rejects_a_wrong_token(token: str) -> None:
     """Refuses a well-formed token whose digest is not the stored one."""
-    with pytest.raises(ValidationError) as caught:
+    with pytest.raises(ShowValidationError) as caught:
         join_link(_published(), token)
     assert token not in _error_text(caught.value)
 
 
 def test_regression_join_link_fails_closed_without_a_digest() -> None:
     """Refuses every token for a publication that stores no digest, as v0.2.0 ones do."""
-    with pytest.raises(ValidationError) as caught:
+    with pytest.raises(ShowValidationError) as caught:
         join_link(_published().replace(join_token_sha256=None), JOIN_TOKEN)
     assert "join_token" in caught.value.hint
 
@@ -1026,9 +1026,9 @@ def test_regression_join_link_fails_closed_without_a_digest() -> None:
 def test_regression_join_link_refuses_a_non_https_stored_link(link: str) -> None:
     """Refuses to append a token to a stored link whose scheme was replaced."""
     pub = _published().replace(link=link)
-    with pytest.raises(ValidationError):
+    with pytest.raises(ShowValidationError):
         join_link(pub, JOIN_TOKEN)
-    with pytest.raises(ValidationError):
+    with pytest.raises(ShowValidationError):
         qr_code(pub, JOIN_TOKEN)
 
 
@@ -1071,7 +1071,7 @@ def test_regression_republish_with_a_token_rotates_the_digest() -> None:
     )
     assert again.join_token_sha256 == hashlib.sha256(OTHER_TOKEN.encode()).hexdigest()
     assert join_link(again, OTHER_TOKEN) == f"{LINK}?t={OTHER_TOKEN}"
-    with pytest.raises(ValidationError):
+    with pytest.raises(ShowValidationError):
         join_link(again, JOIN_TOKEN)
 
 
@@ -1195,7 +1195,7 @@ def test_regression_publication_refuses_a_non_text_link_without_echoing_it(kind:
 def test_regression_join_link_refuses_a_link_with_a_query_or_fragment(link: str) -> None:
     """Refuses to append `?t=` to a stored link that already has a query or fragment."""
     pub = _published().replace(link=link)
-    with pytest.raises(ValidationError) as caught:
+    with pytest.raises(ShowValidationError) as caught:
         join_link(pub, JOIN_TOKEN)
     assert "republish" in caught.value.hint
     assert JOIN_TOKEN not in _error_text(caught.value)

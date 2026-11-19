@@ -6,6 +6,7 @@ Edit PUBLIC_API, then run `uv run python scripts/gen_public_api.py` to regenerat
 
 Contains:
     PUBLIC_API: lists (public name, defining module, attribute) sorted by public name
+    DEPRECATED: lists (old name, dotted path of its replacement, since, remove) for each alias
 """
 
 PUBLIC_API: tuple[tuple[str, str, str], ...] = (
@@ -145,6 +146,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("ShowIndex", "showpy.show.models", "ShowIndex"),
     ("ShowIndexEntry", "showpy.show.models", "ShowIndexEntry"),
     ("ShowPyError", "showpy.core.errors", "ShowPyError"),
+    ("ShowValidationError", "showpy.core.errors", "ShowValidationError"),
     ("SnapReport", "showpy.geo.models", "SnapReport"),
     ("SpacingError", "showpy.core.errors", "SpacingError"),
     ("SpacingSpec", "showpy.choreo.models", "SpacingSpec"),
@@ -174,7 +176,6 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("TurnDirection", "showpy.choreo.models", "TurnDirection"),
     ("UnitRegistry", "showpy.core.units", "UnitRegistry"),
     ("UnknownRefError", "showpy.core.errors", "UnknownRefError"),
-    ("ValidationError", "showpy.core.errors", "ValidationError"),
     ("ValidationIssue", "showpy.core.validation", "ValidationIssue"),
     ("ValidationReport", "showpy.core.validation", "ValidationReport"),
     ("VersionError", "showpy.core.errors", "VersionError"),
@@ -574,4 +575,8 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("with_set", "showpy.choreo.match_ops", "with_set"),
     ("zigzag", "showpy.choreo.motion", "zigzag"),
     ("zones_at", "showpy.sheet.bounds", "zones_at"),
+)
+
+DEPRECATED: tuple[tuple[str, str, str, str], ...] = (
+    ("ValidationError", "showpy.core.errors.ShowValidationError", "0.4.0", "0.6.0"),
 )

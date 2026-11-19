@@ -1015,6 +1015,7 @@
     }
   },
   "ShowPyError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
+  "ShowValidationError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "SnapReport": {
     "model": {
       "max_shift": "Meters",
@@ -1196,7 +1197,6 @@
     }
   },
   "UnknownRefError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
-  "ValidationError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "ValidationIssue": {
     "model": {
       "code": "str",
@@ -1333,6 +1333,13 @@
   "delay": "(spec: showpy.choreo.models.TransitionSpec, sel: Sel, counts: float, keep_end: bool = True, force: bool = False) -> showpy.choreo.models.TransitionSpec",
   "delete_spots": "(show: 'Show', sel: Selector, *, force: bool = False) -> 'Show'",
   "density_map": "(s: showpy.choreo.models.Set, sheet: showpy.sheet.models.Sheet, cell: Meters = 1.0) -> NDArray[numpy.int64]",
+  "deprecated": {
+    "ValidationError": {
+      "remove": "0.6.0",
+      "since": "0.4.0",
+      "target": "showpy.core.errors.ShowValidationError"
+    }
+  },
   "describe_count": "(tl: showpy.time.models.Timeline, c: Count) -> str",
   "detect_form": "(points: object, tol: Meters = 0.1, form_id: FormId = 'detected', members: collections.abc.Sequence[SpotId] = ()) -> showpy.choreo.models.Form",
   "diff_paths": "(a: showpy.choreo.models.TransitionSpec, b: showpy.choreo.models.TransitionSpec) -> showpy.show.models.PathDiff",
