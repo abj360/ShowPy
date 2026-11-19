@@ -755,6 +755,8 @@ if TYPE_CHECKING:
         validate_timeline,
     )
 
+    ValidationError = ShowValidationError
+
 _EXPORTS: dict[str, tuple[str, str]] = {
     "Anchor": ("showpy.notes.models", "Anchor"),
     "ApprovalState": ("showpy.choreo.models", "ApprovalState"),

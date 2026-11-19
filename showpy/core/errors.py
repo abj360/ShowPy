@@ -538,3 +538,6 @@ __getattr__ = moved(
     since="0.4.0",
     remove="0.6.0",
 )
+
+if TYPE_CHECKING:
+    ValidationError = ShowValidationError

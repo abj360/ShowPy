@@ -131,3 +131,11 @@ deprecation policy.
 - Code: `showpy/core/errors.py` (`ValidationError`, `DeprecatedWarning`), `showpy/_api_table.py`,
   `scripts/gen_public_api.py`, `pyproject.toml` (`[tool.ruff.lint]`, `filterwarnings`).
 - Related: ADR 0007 (format v2 field renames), ADR 0011 (Python floor).
+
+## Addendum 2026-11-19: deprecating a class alias
+
+A renamed class keeps a same-class alias. It warns at runtime through a module `__getattr__`
+and is visible to type checkers as a plain alias (`ValidationError = ShowValidationError` under
+`TYPE_CHECKING`). `warnings.deprecated` on an alias would create a subclass, and `except OldName`
+would stop catching the renamed class. Functions and new wrapper classes still use
+`warnings.deprecated`.

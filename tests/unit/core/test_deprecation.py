@@ -10,10 +10,12 @@ Contains:
     test_deprecated_warning_is_a_deprecation_warning: checks the base class
     test_validation_error_alias_warns_and_is_the_same_class: checks the alias on both paths
     test_deprecated_names_reach_users_through_showpy: resolves every table row with a warning
+    test_deprecated_class_alias_is_visible_to_type_checkers: types check both aliases statically
     test_deprecations_are_removed_on_time: fails when a row outlives its removal version
 """
 
 import re
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -22,6 +24,10 @@ import showpy.core.errors
 from showpy._api_table import DEPRECATED
 from showpy.core.deprecation import DeprecatedWarning, moved, renamed_field
 from showpy.core.errors import ShowValidationError
+
+if TYPE_CHECKING:
+    from showpy import ValidationError as PackageAlias
+    from showpy.core.errors import ValidationError as ModuleAlias
 
 VERSION_PREFIX = re.compile(r"^(\d+)\.(\d+)")
 
@@ -84,3 +90,14 @@ def test_deprecations_are_removed_on_time() -> None:
         if (int(major), int(minor)) <= current:
             overdue.append(f"{name} (remove {remove})")
     assert not overdue, f"E: deprecated names past their removal version: {', '.join(overdue)}"
+
+
+def _accepts_both_aliases(
+    from_package: "PackageAlias", from_module: "ModuleAlias"
+) -> list[ShowValidationError]:
+    """Type-checks that both deprecated names are the class `ShowValidationError`."""
+    return [from_package, from_module]
+
+
+def test_deprecated_class_alias_is_visible_to_type_checkers() -> None:
+    assert _accepts_both_aliases.__annotations__["from_package"] == "PackageAlias"

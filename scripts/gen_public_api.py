@@ -103,6 +103,10 @@ def _render_type_checking_block() -> str:
             plain[module].append(name)
         else:
             aliased[module].append((attribute, name))
+    for _name, target, _since, _remove in _deprecated():
+        module, _, attribute = target.rpartition(".")
+        if attribute not in plain[module]:
+            plain[module].append(attribute)
     lines = ["if TYPE_CHECKING:"]
     for module in sorted(plain.keys() | aliased.keys()):
         if plain[module]:
@@ -113,6 +117,7 @@ def _render_type_checking_block() -> str:
             f"    from {module} import {attribute} as {name}"
             for attribute, name in sorted(aliased[module])
         ]
+    lines += [f"    {name} = {target.rpartition('.')[2]}" for name, target, _s, _r in _deprecated()]
     return "\n".join(lines) + "\n"
 
 

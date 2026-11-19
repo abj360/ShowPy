@@ -33,7 +33,7 @@ def moved(
     Args:
         module_name: Dotted name of the module that used to hold the names.
         names: Old attribute name mapped to the dotted path `package.module.attribute` it moved to.
-        since: Release that deprecated the names.
+        since: Release that deprecated the names; recorded in the API table, not in the message.
         remove: Release that removes the old path.
         extra_frames: Frames between the user's attribute access and the call of the hook.
 
@@ -80,7 +80,7 @@ def renamed_field(new: str, *, since: str, remove: str) -> property:
 
     Args:
         new: Attribute that replaced the old one.
-        since: Release that deprecated the old name.
+        since: Release that deprecated the old name; recorded in the API table, not in the message.
         remove: Release that removes the old name.
 
     Returns:
