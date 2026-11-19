@@ -466,6 +466,51 @@
         "stddev_outliers": 1,
         "total": 10.77432937300182
       }
+    },
+    {
+      "group": null,
+      "name": "test_import_choreo_models",
+      "fullname": "tests/bench/test_import_time.py::test_import_choreo_models",
+      "params": null,
+      "param": null,
+      "extra_info": {
+        "tier": "M",
+        "budget_s": 0.47159604958724227
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-6,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.3653694220120087,
+        "max": 0.4239204180194065,
+        "mean": 0.3942938847790679,
+        "stddev": 0.018953052601353736,
+        "rounds": 9,
+        "median": 0.3929967079893686,
+        "iqr": 0.02585588702640962,
+        "q1": 0.38200143874564674,
+        "q3": 0.40785732577205636,
+        "iqr_outliers": 0,
+        "stddev_outliers": 4,
+        "outliers": "4;0",
+        "ld15iqr": 0.3653694220120087,
+        "hd15iqr": 0.4239204180194065,
+        "ops": 2.5361793286759275,
+        "total": 3.5486449630116113,
+        "data": [
+          0.385209541011136, 0.4239204180194065, 0.40518245502607897, 0.4158819380099885,
+          0.3723771319491789, 0.39163500297581777, 0.3929967079893686, 0.3653694220120087,
+          0.3960723460186273
+        ],
+        "iterations": 1
+      }
     }
   ],
   "commit_info": {
