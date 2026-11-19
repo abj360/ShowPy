@@ -392,10 +392,11 @@ def test_make_tid_checks_both_set_ids() -> None:
         make_tid("1", "a-b")
 
 
-@pytest.mark.parametrize("text", ["a-b->2", "1->all", "1→a b"])
-def test_parse_tid_refuses_parts_that_fail_the_id_check(text: str) -> None:
-    with pytest.raises(SchemaError):
-        parse_tid(text)
+@pytest.mark.parametrize(("text", "parts"), [("con->1", ("con", "1")), ("1.→a-b", ("1.", "a-b"))])
+def test_parse_tid_reads_stored_set_ids_outside_the_id_rule(
+    text: str, parts: tuple[str, str]
+) -> None:
+    assert parse_tid(text) == parts
 
 
 def test_regression_check_id_reports_a_leading_dot_at_position_zero() -> None:

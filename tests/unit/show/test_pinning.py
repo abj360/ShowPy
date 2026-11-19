@@ -16,11 +16,21 @@ Contains:
     test_form_pin_on_a_stale_form_survives_a_set_unpin: keeps a stale form locked by its own pin
     test_set_pin_locks_every_form_when_the_set_lists_none: locks every stamped form of an unlisted
         set
+    test_regression_legacy_transition_pin_with_reserved_set_id_still_resolves: pins, splits and
+        lock-checks a transition into a stored set named `con`
 """
 
+from showpy.choreo.models import Set
 from showpy.core.ids import FormId
+from showpy.examples import two_set_show
+from showpy.show.locks import require_unlocked
+from showpy.show.manage import add_set
 from showpy.show.pinning import pin, unpin
+from showpy.show.sections import split_section
 from tests.helpers import replaced_form_show
+
+LEGACY_SET = "con"
+LEGACY_TRANSITION = "con→3"
 
 
 def test_regression_set_pin_locks_the_forms_the_set_lists() -> None:
@@ -72,3 +82,16 @@ def test_set_pin_locks_every_form_when_the_set_lists_none() -> None:
     pinned = pin(unlisted, "set", "2")
     assert pinned.forms[FormId("a")].locked
     assert pinned.forms[FormId("b")].locked
+
+
+def test_regression_legacy_transition_pin_with_reserved_set_id_still_resolves() -> None:
+    """Resolves a stored transition pin whose set ID predates the ID rule (review of L0.5)."""
+    show = add_set(two_set_show(), "3", 4.0)
+    renamed = Set.model_validate({**show.sets[1].model_dump(), "id": LEGACY_SET})
+    legacy = show.replace(sets=(show.sets[0], renamed, show.sets[2]), transitions=())
+    pinned = pin(legacy, "transition", LEGACY_TRANSITION)
+    assert [p.id for p in pinned.pins] == [LEGACY_TRANSITION]
+    require_unlocked(pinned, pinned)
+    first, second = split_section(pinned, LEGACY_SET)
+    assert [p.id for p in second.pins] == [LEGACY_TRANSITION]
+    assert first.pins == ()

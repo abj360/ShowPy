@@ -183,7 +183,8 @@ def make_tid(from_set: str, to_set: str) -> TransitionId:
 def parse_tid(text: str) -> TransitionId:
     """Reads a transition ID written with `→` or `->`; a third part is refused.
 
-    Each part must pass check_id.
+    Only the shape is checked: stored pins and paths name sets that may predate the ID rule
+    (a v1 set `con`). Use make_tid to check new set IDs.
 
     >>> parse_tid("12->13")
     TransitionId(from_set='12', to_set='13')
@@ -196,7 +197,7 @@ def parse_tid(text: str) -> TransitionId:
             hint="write transitions as 12→13 or 12->13",
             context={"text": text},
         )
-    return make_tid(parts[0], parts[1])
+    return TransitionId(SetId(parts[0]), SetId(parts[1]))
 
 
 def format_tid(tid: tuple[str, str]) -> str:
