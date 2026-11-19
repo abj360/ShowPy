@@ -26,6 +26,7 @@ from showpy.show.models import Show
 from showpy.show.repositories import InMemoryAssetStore, InMemoryRepository
 from showpy.show.storage import Repository, Workspace, load_show, open_workspace, save_show
 from tests.fixtures.shows import two_set_show
+from tests.helpers import context_entries
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 LATER = datetime(2026, 11, 11, 12, 5, tzinfo=UTC)
@@ -121,7 +122,7 @@ def test_stale_write_raises_conflict_listing_changes(make_repo: RepoFactory) -> 
     landed = repo.put_script(SHOW_ID, "1", "x = 1\n", expected_revision=base, at=LATER)
     with pytest.raises(ConflictError) as info:
         repo.put_script(SHOW_ID, "2", "y = 2\n", expected_revision=base, at=LATER)
-    changes = info.value.context["changes"]
+    changes = context_entries(info.value, "changes")
     assert [c["id"] for c in changes] == [landed.id]
     assert changes[0]["changed"] == ["/sets/1/set.py"]
     assert f"{landed.id[:7]} {LATER.isoformat()} (/sets/1/set.py)" in info.value.message
@@ -322,7 +323,7 @@ def test_stale_workspace_write_lists_designer_changes() -> None:
     landed = designer.write("/sets/1/set.py", "pass\n", at=AT)
     with pytest.raises(ConflictError) as info:
         agent.write("/sets/2/set.py", "pass\n", at=LATER)
-    assert info.value.context["changes"][0]["id"] == landed.id
+    assert context_entries(info.value, "changes")[0]["id"] == landed.id
     agent.refresh()
     agent.write("/sets/2/set.py", "pass\n", at=LATER)
 
@@ -335,7 +336,7 @@ def test_save_show_conflict_lists_designer_changes() -> None:
     landed = save_show(designer, theirs.model_copy(update={"sets": (theirs.sets[0], moved)}), AT)
     with pytest.raises(ConflictError) as info:
         save_show(agent, mine.model_copy(update={"title": "New"}), LATER)
-    assert info.value.context["changes"][0]["changed"] == list(landed.changed)
+    assert context_entries(info.value, "changes")[0]["changed"] == list(landed.changed)
     agent.refresh()
     fresh = load_show(agent)
     save_show(agent, fresh.model_copy(update={"title": "New"}), LATER)

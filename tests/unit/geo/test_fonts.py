@@ -100,7 +100,9 @@ def test_resolve_unknown_name_suggests_close_names() -> None:
     assert "register_font" in raised.value.hint
     assert "import_fonts" in raised.value.hint
     assert raised.value.context["font"] == "relief-singlelin"
-    assert "simplex" in raised.value.context["known"]
+    known = raised.value.context["known"]
+    assert isinstance(known, list)
+    assert "simplex" in known
 
 
 def test_resolve_unknown_uri_names_the_hash() -> None:

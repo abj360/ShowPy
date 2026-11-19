@@ -455,8 +455,6 @@ def test_regression_frozen_show_is_hashable() -> None:
     assert isinstance(hash(two_set_show()), int)
 
 
-@pytest.mark.defect("UP-9.7-59")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-59")
 @fails_after(5)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_stale_save_conflict_message_is_bounded() -> None:
@@ -510,8 +508,6 @@ def test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair() -> 
     assert not edited.pins or not validate_show(edited).ok
 
 
-@pytest.mark.defect("UP-4.2-01")
-@pytest.mark.xfail(strict=True, reason="UP-4.2-01")
 def test_regression_error_messages_truncate_echoed_input() -> None:
     """Echoes at most about 80 characters of a 10,000-character scheme name (audit 4.2)."""
     with pytest.raises(UnknownRefError) as excinfo:

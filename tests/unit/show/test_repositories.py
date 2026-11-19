@@ -66,7 +66,7 @@ from showpy.show.models import FormOp, Revision
 from showpy.show.repositories import DocumentRepository, InMemoryRepository, RepositoryBackend
 from showpy.show.storage import Repository, load_show, open_workspace, save_show
 from tests.fixtures.shows import two_set_show
-from tests.helpers import fails_after, replaced_form_show
+from tests.helpers import context_entries, fails_after, replaced_form_show
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 SHOW_ID = "show-1"
@@ -398,7 +398,7 @@ def test_regression_in_memory_commit_conflict_under_the_lock() -> None:
         repo.transaction(SHOW_ID, {"/renders/a.txt": b"a"}, expected_revision=head, at=AT)
     assert [r.id for r in landed] == [repo.head(SHOW_ID)]
     assert caught.value.context["head"] == landed[0].id
-    assert [c["id"] for c in caught.value.context["changes"]] == [landed[0].id]
+    assert [c["id"] for c in context_entries(caught.value, "changes")] == [landed[0].id]
     assert repo.paths(SHOW_ID).count("/renders/a.txt") == 0
 
 
@@ -419,5 +419,5 @@ def test_regression_file_conflict_lists_every_revision_since_the_parent(tmp_path
     with pytest.raises(ConflictError) as caught:
         repo.transaction(SHOW_ID, {"/renders/a.txt": b"a"}, expected_revision=head, at=AT)
     assert caught.value.context["head"] == landed[-1].id == repo.head(SHOW_ID)
-    assert [c["id"] for c in caught.value.context["changes"]] == [r.id for r in landed]
+    assert [c["id"] for c in context_entries(caught.value, "changes")] == [r.id for r in landed]
     assert "/renders/a.txt" not in repo.paths(SHOW_ID)

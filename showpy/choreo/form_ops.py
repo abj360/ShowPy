@@ -51,6 +51,7 @@ from showpy.choreo.forms import (
 )
 from showpy.choreo.match import match
 from showpy.choreo.models import FacingSpec, Form, Set, TextRecipe
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, SpacingError
 from showpy.core.ids import FormId, SpotId
 from showpy.core.types import Degrees, Point, Points
@@ -150,7 +151,7 @@ def _check_layout(form: Form, registry: FormFnRegistry, font_registry: FontRegis
     try:
         layout(form, registry, font_registry=font_registry)
     except SpacingError as exc:
-        if form.kind == "text" and exc.code == "TOO_FEW_SPOTS":
+        if form.kind == "text" and exc.code == ErrorCode.TOO_FEW_SPOTS:
             raise too_few_for_edit(exc) from exc
         raise
 

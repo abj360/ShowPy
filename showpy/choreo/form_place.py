@@ -16,6 +16,7 @@ from showpy.choreo.forms import placements, slot_poses
 from showpy.choreo.match import match
 from showpy.choreo.match_ops import clear_rows, forms_of_set, is_elsewhere, with_set
 from showpy.choreo.models import Form, MatchOptions, Placement, Set
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import MatchError, SchemaError, ShowPyError, UnknownRefError
 from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.types import Degrees, Points
@@ -226,7 +227,7 @@ def _check_placed(show: Show, form: Form) -> None:
             f"set {form.set} no longer places form {form.id}; it places {', '.join(listed)}",
             hint="re-place the set with this form, or delete the form",
             context={"form": form.id, "set": form.set, "set_forms": listed},
-            code="STALE_FORM",
+            code=ErrorCode.STALE_FORM,
         )
 
 

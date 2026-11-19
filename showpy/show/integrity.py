@@ -18,6 +18,7 @@ import hashlib
 import unicodedata
 from collections.abc import Callable, Iterable, Iterator, Mapping
 
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, StorageError
 from showpy.core.ids import check_id
 from showpy.show.decode_cache import DecodeCache
@@ -59,7 +60,7 @@ def _bad_path(path: str) -> StorageError:
         f"path {path!r} is not a storable document path",
         hint=f"write files under {', '.join(KNOWN_ROOTS)} with no '.', '..' or empty parts",
         context={"path": path, "roots": list(KNOWN_ROOTS)},
-        code="BAD_PATH",
+        code=ErrorCode.BAD_PATH,
     )
 
 
@@ -117,7 +118,7 @@ class LazyBlobs(Mapping[str, bytes]):
                 f"no blob stored for {path!r}",
                 hint="restore the show folder from a backup or remove the damaged file",
                 context={"path": path, "digest": digest},
-                code="CORRUPT",
+                code=ErrorCode.CORRUPT,
             ) from err
 
     def __contains__(self, path: object) -> bool:

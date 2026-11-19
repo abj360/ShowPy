@@ -32,6 +32,7 @@ import pandas as pd
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.form_text import text_recipe
 from showpy.core.csv_cells import neutralize_cell
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import (
     ROOT_LOC,
     FontError,
@@ -205,7 +206,7 @@ def _decode_font(uri: object, encoded: object) -> bytes:
             f"embedded font bytes do not hash to {uri}",
             hint="re-export the document; the font data was changed",
             context={"uri": uri, "actual": asset_uri(data)},
-            code="FONT_HASH_MISMATCH",
+            code=ErrorCode.FONT_HASH_MISMATCH,
         )
     return data
 

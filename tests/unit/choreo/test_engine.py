@@ -467,7 +467,9 @@ def test_regression_segment_bound_hint_names_an_accepted_tol() -> None:
         _engine(T1=row).entity_segments("T1", TID, tol=1e-15)
     named = re.search(r"tol above ([0-9.e+-]+) m", info.value.hint)
     assert named is not None
-    assert float(named.group(1)) * HINT_TOL_MARGIN * PROBE_TOL_SHARE >= info.value.context["error"]
+    error = info.value.context["error"]
+    assert isinstance(error, float)
+    assert float(named.group(1)) * HINT_TOL_MARGIN * PROBE_TOL_SHARE >= error
 
 
 @pytest.mark.parametrize("tol", [0.0, -0.02, math.nan, math.inf])

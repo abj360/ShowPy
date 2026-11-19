@@ -143,8 +143,8 @@
       "parts": "tuple[AnyCurve, ...]"
     }
   },
-  "ConflictError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
-  "ContinuityError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "ConflictError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
+  "ContinuityError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "CoordinateKind": {
     "enum": {
       "DANCE_FLOOR": "'dance_floor'",
@@ -253,6 +253,85 @@
       "velocity": "Point"
     }
   },
+  "ErrorCode": {
+    "enum": {
+      "ALREADY_MEMBER": "'ALREADY_MEMBER'",
+      "AMBIGUOUS_PATH": "'AMBIGUOUS_PATH'",
+      "AUDIO_DUPLICATE": "'AUDIO_DUPLICATE'",
+      "AUDIO_RANGE": "'AUDIO_RANGE'",
+      "BAD_FONT": "'BAD_FONT'",
+      "BAD_ID": "'BAD_ID'",
+      "BAD_PATH": "'BAD_PATH'",
+      "BAD_SHAPE": "'BAD_SHAPE'",
+      "COINCIDENT_SLOTS": "'COINCIDENT_SLOTS'",
+      "CONFLICT": "'CONFLICT'",
+      "CONTINUITY": "'CONTINUITY'",
+      "CORRUPT": "'CORRUPT'",
+      "COUNTS_MISMATCH": "'COUNTS_MISMATCH'",
+      "CUE_DUPLICATE": "'CUE_DUPLICATE'",
+      "CUE_NEGATIVE": "'CUE_NEGATIVE'",
+      "DEGENERATE": "'DEGENERATE'",
+      "FACING_RANGE": "'FACING_RANGE'",
+      "FONT_HASH_MISMATCH": "'FONT_HASH_MISMATCH'",
+      "FONT_NAME_TAKEN": "'FONT_NAME_TAKEN'",
+      "GEOMETRY": "'GEOMETRY'",
+      "HOLD_NEGATIVE": "'HOLD_NEGATIVE'",
+      "HOLD_OVERLAP": "'HOLD_OVERLAP'",
+      "IO": "'IO'",
+      "LOCKED": "'LOCKED'",
+      "MARKER_DUPLICATE": "'MARKER_DUPLICATE'",
+      "MARKER_RANGE": "'MARKER_RANGE'",
+      "MATCH": "'MATCH'",
+      "MEASURE_LENGTH": "'MEASURE_LENGTH'",
+      "MEMBER_COUNT_MISMATCH": "'MEMBER_COUNT_MISMATCH'",
+      "MISSING_FONT": "'MISSING_FONT'",
+      "MISSING_GLYPH": "'MISSING_GLYPH'",
+      "MISSING_SPOT": "'MISSING_SPOT'",
+      "NAME_TOO_LONG": "'NAME_TOO_LONG'",
+      "NOT_A_MEMBER": "'NOT_A_MEMBER'",
+      "NOT_A_TEXT_FORM": "'NOT_A_TEXT_FORM'",
+      "NOT_FINITE": "'NOT_FINITE'",
+      "NOT_IN_FORM": "'NOT_IN_FORM'",
+      "NO_HARDLINKS": "'NO_HARDLINKS'",
+      "N_OR_SPACING": "'N_OR_SPACING'",
+      "PATH": "'PATH'",
+      "PINNED_CHANGED": "'PINNED_CHANGED'",
+      "PROPOSAL_CLOSED": "'PROPOSAL_CLOSED'",
+      "RAMP_CUT": "'RAMP_CUT'",
+      "RAMP_INCOMPLETE": "'RAMP_INCOMPLETE'",
+      "RAMP_LENGTH": "'RAMP_LENGTH'",
+      "READ_ONLY": "'READ_ONLY'",
+      "REFLECTION": "'REFLECTION'",
+      "SCHEMA": "'SCHEMA'",
+      "SEGMENT_BOUND": "'SEGMENT_BOUND'",
+      "SPACING": "'SPACING'",
+      "STAGE": "'STAGE'",
+      "STALE_FORM": "'STALE_FORM'",
+      "STALE_TRANSITION": "'STALE_TRANSITION'",
+      "STORAGE": "'STORAGE'",
+      "SURFACE": "'SURFACE'",
+      "TEMPO_MISSING": "'TEMPO_MISSING'",
+      "TEMPO_NONPOSITIVE": "'TEMPO_NONPOSITIVE'",
+      "TEMPO_ORDER": "'TEMPO_ORDER'",
+      "TEMPO_START": "'TEMPO_START'",
+      "TEXT_COUNT_EDIT": "'TEXT_COUNT_EDIT'",
+      "TIMELINE": "'TIMELINE'",
+      "TIME_RANGE": "'TIME_RANGE'",
+      "TOO_FEW_POINTS": "'TOO_FEW_POINTS'",
+      "TOO_FEW_SPOTS": "'TOO_FEW_SPOTS'",
+      "TOO_LARGE": "'TOO_LARGE'",
+      "TOO_MANY_SPOTS": "'TOO_MANY_SPOTS'",
+      "UNKNOWN_FORM": "'UNKNOWN_FORM'",
+      "UNKNOWN_REF": "'UNKNOWN_REF'",
+      "UNKNOWN_SHEET": "'UNKNOWN_SHEET'",
+      "UNKNOWN_SPOT": "'UNKNOWN_SPOT'",
+      "UNPINNED_SHEET": "'UNPINNED_SHEET'",
+      "VALIDATION": "'VALIDATION'",
+      "VERSION": "'VERSION'",
+      "ZERO_COUNTS": "'ZERO_COUNTS'",
+      "ZERO_LENGTH": "'ZERO_LENGTH'"
+    }
+  },
   "FacingMode": {
     "enum": {
       "AGAINST_TRAVEL": "'against_travel'",
@@ -304,7 +383,7 @@
       "units_per_em": "float"
     }
   },
-  "FontError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "FontError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "FontGlyph": {
     "model": {
       "advance": "float",
@@ -376,8 +455,8 @@
       "tau": "float"
     }
   },
-  "GeometryError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
-  "GlyphError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "GeometryError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
+  "GlyphError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "Grid": {
     "model": {
       "major_every": "int",
@@ -458,7 +537,7 @@
   },
   "LegibilityWarning": "(*args)",
   "LinePiece": "(start: Point, end: Point) -> None",
-  "LockedError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "LockedError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "MAX_DEPTH": {
     "constant": "64"
   },
@@ -503,7 +582,7 @@
       "REHEARSAL": "'rehearsal'"
     }
   },
-  "MatchError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "MatchError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "MatchOptions": {
     "model": {
       "cost_fn": "CostFn | None",
@@ -547,7 +626,7 @@
       "start_measure": "int"
     }
   },
-  "MissingFontError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "MissingFontError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "MotionFn": {
     "protocol": {}
   },
@@ -620,7 +699,7 @@
     }
   },
   "PathEngine": "(show: showpy.show.models.Show, curve_tol: float = 0.01, cache: bool = True, motions: showpy.choreo.motion.MotionRegistry = ...) -> None",
-  "PathError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "PathError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "PathRow": {
     "model": {
       "easing": "showpy.choreo.models.Easing",
@@ -807,7 +886,7 @@
       "travel": "Meters"
     }
   },
-  "SchemaError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "SchemaError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "Segment": {
     "model": {
       "a": "Point",
@@ -935,14 +1014,14 @@
       "start_count": "Count"
     }
   },
-  "ShowPyError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "ShowPyError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "SnapReport": {
     "model": {
       "max_shift": "Meters",
       "moved": "int"
     }
   },
-  "SpacingError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "SpacingError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "SpacingSpec": {
     "model": {
       "align": "Literal['start', 'end', 'center']",
@@ -1001,9 +1080,9 @@
       "set_id": "SetId"
     }
   },
-  "StorageError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "StorageError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "Subpath": "(start: Point, pieces: tuple[Piece, ...], closed: bool) -> None",
-  "SurfaceError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "SurfaceError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "SurfaceType": {
     "enum": {
       "ARENA": "'arena'",
@@ -1063,7 +1142,7 @@
       "title": "str"
     }
   },
-  "TimeRangeError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "TimeRangeError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "Timeline": {
     "model": {
       "audio": "tuple[showpy.time.models.AudioTrack, ...]",
@@ -1076,7 +1155,7 @@
       "total_counts": "Count | None"
     }
   },
-  "TimelineError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "TimelineError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "TimelineMode": {
     "enum": {
       "COUNTS": "'counts'",
@@ -1116,11 +1195,12 @@
       "meters_per_unit": "dict[str, float]"
     }
   },
-  "UnknownRefError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
-  "ValidationError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "UnknownRefError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
+  "ValidationError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "ValidationIssue": {
     "model": {
       "code": "str",
+      "context": "collections.abc.Mapping[str, JsonValue]",
       "hint": "str",
       "level": "Literal['error', 'warning']",
       "message": "str",
@@ -1132,7 +1212,7 @@
       "issues": "tuple[showpy.core.validation.ValidationIssue, ...]"
     }
   },
-  "VersionError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "VersionError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "Waypoint": {
     "model": {
       "at": "float | None",
@@ -1141,7 +1221,7 @@
     }
   },
   "Workspace": "(repo: showpy.show.storage.Repository, show_id: str, revision: str)",
-  "ZeroLengthError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, Any] | None = None, code: str | None = None) -> None",
+  "ZeroLengthError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "Zone": {
     "model": {
       "active": "tuple[tuple[Count, Count], ...] | None",

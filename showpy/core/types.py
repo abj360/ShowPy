@@ -19,6 +19,7 @@ import numpy as np
 import shapely
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic.config import ExtraValues
 
 from showpy.core.errors import schema_error_from
 
@@ -62,26 +63,76 @@ class FrozenModel(BaseModel):
     __init__.__pydantic_base_init__ = True  # type: ignore[attr-defined]
 
     @classmethod
-    def model_validate(cls, obj: Any, **options: Any) -> Self:  # Any: pydantic passthrough
+    def model_validate(
+        cls,
+        obj: object,
+        *,
+        strict: bool | None = None,
+        extra: ExtraValues | None = None,
+        from_attributes: bool | None = None,
+        context: object | None = None,
+        by_alias: bool | None = None,
+        by_name: bool | None = None,
+    ) -> Self:
         """Validates an object into this model, raising SchemaError on bad data."""
         try:
-            return super().model_validate(obj, **options)
+            return super().model_validate(
+                obj,
+                strict=strict,
+                extra=extra,
+                from_attributes=from_attributes,
+                context=context,
+                by_alias=by_alias,
+                by_name=by_name,
+            )
         except ValidationError as exc:
             raise schema_error_from(exc, model=cls.__name__) from exc
 
     @classmethod
-    def model_validate_json(cls, json_data: str | bytes | bytearray, **options: Any) -> Self:
+    def model_validate_json(
+        cls,
+        json_data: str | bytes | bytearray,
+        *,
+        strict: bool | None = None,
+        extra: ExtraValues | None = None,
+        context: object | None = None,
+        by_alias: bool | None = None,
+        by_name: bool | None = None,
+    ) -> Self:
         """Validates JSON text into this model, raising SchemaError on bad data."""
         try:
-            return super().model_validate_json(json_data, **options)
+            return super().model_validate_json(
+                json_data,
+                strict=strict,
+                extra=extra,
+                context=context,
+                by_alias=by_alias,
+                by_name=by_name,
+            )
         except ValidationError as exc:
             raise schema_error_from(exc, model=cls.__name__) from exc
 
     @classmethod
-    def model_validate_strings(cls, obj: Any, **options: Any) -> Self:  # Any: pydantic passthrough
+    def model_validate_strings(
+        cls,
+        obj: object,
+        *,
+        strict: bool | None = None,
+        extra: ExtraValues | None = None,
+        context: object | None = None,
+        by_alias: bool | None = None,
+        by_name: bool | None = None,
+    ) -> Self:
         """Validates string-leaved data into this model, raising SchemaError on bad data."""
         try:
-            return super().model_validate_strings(obj, **options)
+            return super().model_validate_strings(
+                obj,
+                strict=strict,
+                extra=extra,
+                context=context,
+                by_alias=by_alias,
+                by_name=by_name,
+            )
         except ValidationError as exc:
             raise schema_error_from(exc, model=cls.__name__) from exc
 

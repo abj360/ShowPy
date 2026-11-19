@@ -11,19 +11,34 @@ Contains:
     test_library_cites_no_adr_docs_or_ledger_ids: fails on any such citation in showpy/
     test_citation_scan_flags_a_docstring_and_a_comment: proves the scan can fail
     test_citation_scan_ignores_runtime_strings: proves plain string literals are not flagged
+    find_code_spellings(): lists file, line and code of each raised or reported error code
+    test_every_raised_code_is_catalogued: fails on a code that is not an ErrorCode member
+    test_every_error_code_is_used: fails on an ErrorCode member no library module uses
+    test_code_scan_flags_literals_and_unknown_members: proves the code scan can fail
+    test_every_error_code_has_a_one_line_docstring: fails on a member without a docstring
+    test_error_code_docs_are_current: fails when docs/error-codes.md differs from its generator
 """
 
 import ast
+import importlib.util
 import io
 import re
 import tokenize
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
+from showpy.core.error_codes import ErrorCode
+
 CITATION_PATTERN = re.compile(r"\bADR\b|\bUP-\d+\.\d+-\d+\b|\bdocs/")
 MIN_LIBRARY_FILES = 100
-LIBRARY_ROOT = Path(__file__).resolve().parents[2] / "showpy"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+LIBRARY_ROOT = REPO_ROOT / "showpy"
+ERROR_CODES_PATH = LIBRARY_ROOT / "core" / "error_codes.py"
+ERROR_CODE_DOCS_PATH = REPO_ROOT / "docs" / "error-codes.md"
+ERROR_CODE_GENERATOR_PATH = REPO_ROOT / "scripts" / "gen_error_codes.py"
+LITERAL = "literal"
 pytestmark = pytest.mark.skipif(
     not LIBRARY_ROOT.is_dir(), reason="needs a source checkout; the wheel test has no showpy tree"
 )
@@ -110,3 +125,102 @@ def test_citation_scan_flags_a_docstring_and_a_comment() -> None:
 def test_citation_scan_ignores_runtime_strings() -> None:
     """Leaves a plain string literal alone, since only docstrings and comments are scanned."""
     assert find_citations('MESSAGE = "see docs/guide for ADR 5"\n', "m.py") == []
+
+
+def _assigned_code(node: ast.AST) -> ast.expr | None:
+    """Returns the value given to a `code=` keyword or a `default_code` assignment, if any."""
+    if isinstance(node, ast.keyword) and node.arg == "code":
+        return node.value
+    if isinstance(node, ast.Assign) and any(
+        isinstance(target, ast.Name) and target.id == "default_code" for target in node.targets
+    ):
+        return node.value
+    return None
+
+
+def find_code_spellings(source: str, name: str) -> list[tuple[str, str, str]]:
+    """Lists (`name:line`, how, code) for each error code spelled in the source.
+
+    A code is spelled as a string literal passed as `code=` or assigned to `default_code`
+    (how is `literal`), or as an `ErrorCode.<NAME>` attribute (how is `member`).
+    """
+    hits: list[tuple[str, str, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        literal = _assigned_code(node)
+        if isinstance(literal, ast.Constant) and isinstance(literal.value, str):
+            hits.append((f"{name}:{literal.lineno}", LITERAL, literal.value))
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "ErrorCode"
+        ):
+            hits.append((f"{name}:{node.lineno}", "member", node.attr))
+    return sorted(hits)
+
+
+def _library_code_spellings() -> list[tuple[str, str, str]]:
+    return [
+        hit
+        for path in sorted(LIBRARY_ROOT.rglob("*.py"))
+        if path != ERROR_CODES_PATH
+        for hit in find_code_spellings(
+            path.read_text(encoding="utf-8"), str(path.relative_to(REPO_ROOT))
+        )
+    ]
+
+
+def test_every_raised_code_is_catalogued() -> None:
+    """Requires every raised or reported code to be spelled as a member of ErrorCode."""
+    members = {code.name for code in ErrorCode}
+    offenders = [
+        f"{where} {code}"
+        for where, how, code in _library_code_spellings()
+        if how == LITERAL or code not in members
+    ]
+    assert not offenders, "spell each code as an ErrorCode member: " + ", ".join(offenders)
+
+
+def test_every_error_code_is_used() -> None:
+    """Requires every ErrorCode member to be raised or reported somewhere in the library."""
+    used = {code for _, _, code in _library_code_spellings()}
+    unused = sorted(code.name for code in ErrorCode if code.name not in used)
+    assert not unused, "remove codes the library never raises: " + ", ".join(unused)
+
+
+def test_code_scan_flags_literals_and_unknown_members() -> None:
+    """Reports a literal `code=`, a literal `default_code` and an ErrorCode attribute."""
+    source = (
+        "class E(ShowPyError):\n"
+        "    default_code = 'OLD'\n"
+        "raise E('m', hint='h', code='NOPE')\n"
+        "raise E('m', hint='h', code=ErrorCode.MADE_UP)\n"
+    )
+    assert find_code_spellings(source, "m.py") == [
+        ("m.py:2", LITERAL, "OLD"),
+        ("m.py:3", LITERAL, "NOPE"),
+        ("m.py:4", "member", "MADE_UP"),
+    ]
+
+
+def _load_code_generator() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("gen_error_codes", ERROR_CODE_GENERATOR_PATH)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_every_error_code_has_a_one_line_docstring() -> None:
+    meanings: dict[str, str] = _load_code_generator().code_meanings()
+    assert sorted(meanings) == sorted(code.name for code in ErrorCode)
+    assert all(meaning and "\n" not in meaning for meaning in meanings.values())
+
+
+def test_error_code_docs_are_current() -> None:
+    """Requires docs/error-codes.md to be the generator's output, byte for byte."""
+    rendered: str = _load_code_generator().render_docs()
+    assert rendered == ERROR_CODE_DOCS_PATH.read_text(encoding="utf-8"), (
+        "E: docs/error-codes.md differs from ErrorCode; "
+        "run: uv run python scripts/gen_error_codes.py"
+    )

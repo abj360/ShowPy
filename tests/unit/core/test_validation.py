@@ -5,6 +5,8 @@ test_validation.py --- tests validation reports, SchemaError-raising validators,
 
 Contains:
     test_report_*(), test_merge_concatenates_issues: status, rendering and merging of reports
+    test_raise_for_errors_*(): raises a ValidationError only when the report holds an error
+    test_issue_context_*(): the read-only, bounded context of one issue
     test_validate_or_schema_error_*(): one behavior of the SchemaError-raising validator each
     test_validate_adapter_*(): SchemaError from standalone TypeAdapters, Python or JSON input
     test_require_finite_*(): one rule of the finite-number check each
@@ -14,13 +16,20 @@ Contains:
         too large for a float and keeps the error context printable
 """
 
+import json
 from typing import Literal
 
 import numpy as np
 import pytest
 from pydantic import BaseModel, TypeAdapter
 
-from showpy.core.errors import SchemaError
+from showpy.core.errors import (
+    MAX_CONTEXT_ITEMS,
+    SchemaError,
+    ValidationError,
+    bounded_repr,
+    field_errors,
+)
 from showpy.core.validation import (
     ValidationIssue,
     ValidationReport,
@@ -29,10 +38,13 @@ from showpy.core.validation import (
     validate_adapter_json,
     validate_or_schema_error,
 )
+from tests.helpers import context_entries
+
+MANY_ISSUES = 30
 
 
-def _issue(level: Literal["error", "warning"]) -> ValidationIssue:
-    return ValidationIssue(level=level, code="X", where="set 1", message="bad", hint="fix")
+def _issue(level: Literal["error", "warning"], code: str = "X") -> ValidationIssue:
+    return ValidationIssue(level=level, code=code, where="set 1", message="bad", hint="fix")
 
 
 def test_report_ok_when_only_warnings() -> None:
@@ -46,6 +58,69 @@ def test_report_not_ok_with_error() -> None:
 def test_report_renders_one_line_per_issue() -> None:
     text = str(ValidationReport(issues=(_issue("error"),)))
     assert text == "E: X set 1: bad (hint: fix)"
+
+
+def test_report_splits_errors_and_warnings() -> None:
+    error, warning = _issue("error", "E1"), _issue("warning", "W1")
+    report = ValidationReport(issues=(warning, error))
+    assert (report.errors, report.warnings) == ((error,), (warning,))
+
+
+def test_report_codes_are_ordered_and_unique() -> None:
+    issues = (_issue("error", "B"), _issue("warning", "A"), _issue("error", "B"))
+    assert ValidationReport(issues=issues).codes == ("B", "A")
+
+
+def test_report_to_json_round_trips() -> None:
+    report = ValidationReport(issues=(_issue("error"), _issue("warning")))
+    assert ValidationReport.model_validate_json(report.to_json()) == report
+    assert json.loads(report.to_json())["issues"][0]["code"] == "X"
+
+
+def test_raise_for_errors_returns_when_only_warnings() -> None:
+    ValidationReport(issues=(_issue("warning"),)).raise_for_errors()
+
+
+def test_raise_for_errors_raises_with_the_issues_in_context() -> None:
+    report = ValidationReport(issues=(_issue("warning", "W1"), _issue("error", "E1")))
+    with pytest.raises(ValidationError) as info:
+        report.raise_for_errors()
+    assert "E1" in info.value.message
+    assert [issue["code"] for issue in context_entries(info.value, "issues")] == ["E1"]
+
+
+def test_raise_for_errors_caps_the_listed_issues() -> None:
+    report = ValidationReport(issues=tuple(_issue("error", f"E{n}") for n in range(MANY_ISSUES)))
+    with pytest.raises(ValidationError) as info:
+        report.raise_for_errors()
+    issues = info.value.context["issues"]
+    assert isinstance(issues, list)
+    assert issues[-1] == f"(+{MANY_ISSUES - MAX_CONTEXT_ITEMS} more)"
+
+
+def test_issue_context_defaults_to_empty() -> None:
+    assert _issue("error").context == {}
+
+
+def test_issue_context_is_read_only() -> None:
+    issue = ValidationIssue(
+        level="error", code="X", where="w", message="m", hint="h", context={"n": 1}
+    )
+    with pytest.raises(TypeError):
+        issue.context["n"] = 2  # type: ignore[index]
+
+
+def test_regression_issue_context_is_bounded() -> None:
+    issue = ValidationIssue(
+        level="error",
+        code="X",
+        where="w",
+        message="m",
+        hint="h",
+        context={"ids": [str(n) for n in range(MANY_ISSUES)], "name": "n" * 1_000},
+    )
+    assert issue.context["ids"] == [*map(str, range(MAX_CONTEXT_ITEMS)), "(+10 more)"]
+    assert issue.context["name"] == bounded_repr("n" * 1_000)
 
 
 def test_merge_concatenates_issues() -> None:
@@ -67,7 +142,7 @@ def test_validate_or_schema_error_names_the_failing_field() -> None:
     with pytest.raises(SchemaError) as info:
         validate_or_schema_error(_Plain, {"size": "big"})
     assert info.value.context["model"] == "_Plain"
-    assert info.value.context["errors"][0]["loc"] == "size"
+    assert field_errors(info.value)[0]["loc"] == "size"
 
 
 def test_require_finite_returns_float() -> None:
@@ -146,14 +221,14 @@ def test_validate_adapter_names_the_failing_item() -> None:
     with pytest.raises(SchemaError) as info:
         validate_adapter(_INT_LIST, [1, "x"], name="Ints")
     assert info.value.context["model"] == "Ints"
-    assert info.value.context["errors"][0]["loc"] == "1"
+    assert field_errors(info.value)[0]["loc"] == "1"
 
 
 @pytest.mark.parametrize("raw", [b"[1, 2", b'["x"]', b"\xff\xfe", b'{"a": 1}'])
 def test_validate_adapter_json_raises_schema_error(raw: bytes) -> None:
     with pytest.raises(SchemaError) as info:
         validate_adapter_json(_INT_LIST, raw, name="Ints")
-    assert info.value.context["errors"]
+    assert field_errors(info.value)
 
 
 def test_validate_adapter_json_returns_the_value() -> None:

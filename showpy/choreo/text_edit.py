@@ -17,6 +17,7 @@ from showpy.choreo.form_text import require_member_count, require_text_form
 from showpy.choreo.forms import check_unlocked
 from showpy.choreo.models import Form
 from showpy.choreo.text_count import count_recipe
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError
 from showpy.core.ids import SpotId, check_id
 from showpy.core.types import Meters
@@ -65,7 +66,7 @@ def _added(form: Form, add: Sequence[SpotId]) -> tuple[SpotId, ...]:
         f"text form {form.id} already has {', '.join(culprits)}",
         hint=f"add only spots outside form {form.id}{listed}",
         context={"form": form.id, "spots": culprits},
-        code="ALREADY_MEMBER",
+        code=ErrorCode.ALREADY_MEMBER,
     )
 
 
@@ -82,7 +83,7 @@ def _kept(form: Form, remove: Sequence[SpotId]) -> tuple[SpotId, ...]:
         f"text form {form.id} has no member {', '.join(culprits)} to remove",
         hint=f"remove only members of form {form.id}: {_preview(form.members)}",
         context={"form": form.id, "spots": culprits},
-        code="NOT_A_MEMBER",
+        code=ErrorCode.NOT_A_MEMBER,
     )
 
 

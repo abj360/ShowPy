@@ -27,6 +27,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, BinaryIO, cast
 
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import StorageError
 from showpy.show.documents import dump_json
 from showpy.show.integrity import blob_digest
@@ -115,20 +116,20 @@ def _storage_error(show_id: str, error: OSError, fallback: Path, is_link: bool) 
             hint="use a shorter show ID or a repository root with a shorter path",
             context={**context, "errno": errno.ENAMETOOLONG}
             | ({"winerror": winerror} if winerror is not None else {}),
-            code="NAME_TOO_LONG",
+            code=ErrorCode.NAME_TOO_LONG,
         )
     if is_link and (isinstance(error, PermissionError) or error.errno in NO_HARDLINK_ERRNOS):
         return StorageError(
             f"file system under {path} cannot create hard links",
             hint="put the repository root on a file system that supports hard links",
             context=context,
-            code="NO_HARDLINKS",
+            code=ErrorCode.NO_HARDLINKS,
         )
     return StorageError(
         f"file-system error in repository of {show_id}: {error.strerror or error}",
         hint="check that the repository root exists, is writable and is a directory",
         context=context,
-        code="IO",
+        code=ErrorCode.IO,
     )
 
 
@@ -171,7 +172,7 @@ def _require_readable_sizes(show_id: str, tree: dict[str, str], blobs: dict[str,
         f"files of {show_id} over the {BLOB_MAX_BYTES}-byte cap: {', '.join(paths)}",
         hint="keep each file under the cap; store larger media outside the repository",
         context={"show": show_id, "paths": paths, "cap": BLOB_MAX_BYTES},
-        code="TOO_LARGE",
+        code=ErrorCode.TOO_LARGE,
     )
 
 
@@ -199,7 +200,7 @@ class _FileBackend:
             f"repository of {show_id} is corrupt: {reason}",
             hint="restore the show folder from a backup or remove the damaged file",
             context={"show": show_id, "path": str(path)},
-            code="CORRUPT",
+            code=ErrorCode.CORRUPT,
         )
 
     def _checked_id(self, show_id: str, value: str, source: Path) -> str:
@@ -214,7 +215,7 @@ class _FileBackend:
                 hint="revision IDs and blob digests are 64 lowercase hex digits made by "
                 "DocumentRepository.transaction",
                 context={"show": show_id, role: value},
-                code="BAD_ID",
+                code=ErrorCode.BAD_ID,
             )
         return value
 

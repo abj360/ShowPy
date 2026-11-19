@@ -23,7 +23,14 @@ from collections.abc import Mapping, Sequence
 
 from showpy.cast.models import Cast
 from showpy.choreo.models import Placement, Route, Set, TransitionSpec, Waypoint
-from showpy.core.errors import PathError, SchemaError, TimeRangeError, UnknownRefError, VersionError
+from showpy.core.errors import (
+    PathError,
+    SchemaError,
+    TimeRangeError,
+    UnknownRefError,
+    VersionError,
+    bounded_repr,
+)
 from showpy.core.ids import SetId, SpotId, TransitionId, format_ref, format_tid, parse_ref
 from showpy.core.types import Count
 from showpy.core.util import close_matches
@@ -440,7 +447,7 @@ def renumber(show: Show, scheme: str = SEQUENTIAL) -> tuple[Show, dict[SetId, Se
     """
     if scheme not in SCHEMES:
         raise UnknownRefError(
-            f"unknown numbering scheme {scheme!r}",
+            f"unknown numbering scheme {bounded_repr(repr(scheme))}",
             hint=f"use one of {', '.join(SCHEMES)}",
             context={"scheme": scheme},
         )

@@ -8,6 +8,7 @@ Contains:
 
 import numpy as np
 
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import GeometryError
 from showpy.core.types import Points
 from showpy.geo.affine import Matrix
@@ -17,7 +18,7 @@ SPREAD_TOL = 1e-12
 RANK_ONE_RATIO = 1e-9
 
 
-def _refuse(code: str, message: str, hint: str, **context: object) -> GeometryError:
+def _refuse(code: ErrorCode, message: str, hint: str, **context: object) -> GeometryError:
     return GeometryError(message, hint=hint, code=code, context=context)
 
 
@@ -35,13 +36,13 @@ def _checked_points(src: Points, dst: Points) -> tuple[Points, Points]:
         src_a, dst_a = np.asarray(src, dtype=float), np.asarray(dst, dtype=float)
     except (ValueError, TypeError) as error:
         raise _refuse(
-            "BAD_SHAPE",
+            ErrorCode.BAD_SHAPE,
             "similarity fit needs two numeric (N, 2) arrays",
             "pass matched (N, 2) arrays of numbers with the same N",
         ) from error
     if src_a.ndim != 2 or src_a.shape[1] != 2 or src_a.shape != dst_a.shape:
         raise _refuse(
-            "BAD_SHAPE",
+            ErrorCode.BAD_SHAPE,
             "similarity fit needs two (N, 2) arrays of the same shape",
             "pass matched (N, 2) point arrays with the same N",
             src_shape=list(src_a.shape),
@@ -49,21 +50,21 @@ def _checked_points(src: Points, dst: Points) -> tuple[Points, Points]:
         )
     if len(src_a) < MIN_SHARED_LANDMARKS:
         raise _refuse(
-            "TOO_FEW_POINTS",
+            ErrorCode.TOO_FEW_POINTS,
             "similarity fit needs at least two matched points",
             "match two or more landmarks that are not on top of each other",
             count=len(src_a),
         )
     if not (np.isfinite(src_a).all() and np.isfinite(dst_a).all()):
         raise _refuse(
-            "NOT_FINITE",
+            ErrorCode.NOT_FINITE,
             "similarity fit needs finite coordinates",
             "remove NaN and infinite landmark coordinates",
         )
     for name, points in (("src", src_a), ("dst", dst_a)):
         if float(((points - points.mean(axis=0)) ** 2).sum()) / len(points) < SPREAD_TOL:
             raise _refuse(
-                "DEGENERATE",
+                ErrorCode.DEGENERATE,
                 f"{name} landmarks sit on top of each other",
                 "match two or more landmarks that are not on top of each other",
                 side=name,
@@ -88,7 +89,7 @@ def _fit_matrix(src: Points, dst: Points) -> Matrix:
     is_mirrored = np.linalg.det(u) * np.linalg.det(vt) < 0
     if is_mirrored and singular[1] > RANK_ONE_RATIO * singular[0]:
         raise _refuse(
-            "REFLECTION",
+            ErrorCode.REFLECTION,
             "landmarks are mirrored between the sheets",
             "similarity fits keep handedness; check the landmark pairing; to fit a deliberate "
             "mirror, reflect one set first with showpy.geo.transforms.mirror",
@@ -125,13 +126,13 @@ def similarity_fit(src: Points, dst: Points) -> Matrix:
             matrix = _fit_matrix(*_checked_points(src, dst))
     except FloatingPointError as error:
         raise _refuse(
-            "NOT_FINITE",
+            ErrorCode.NOT_FINITE,
             "similarity fit overflowed on these coordinates",
             "use coordinates in meters on the sheet, well below 1e150",
         ) from error
     if not np.isfinite(matrix).all():
         raise _refuse(
-            "NOT_FINITE",
+            ErrorCode.NOT_FINITE,
             "similarity fit produced a non-finite matrix",
             "use coordinates in meters on the sheet, well below 1e150",
         )

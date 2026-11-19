@@ -17,6 +17,7 @@ Contains:
 from collections.abc import Iterable, Mapping
 
 from showpy.choreo.models import Set
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import StorageError
 from showpy.core.ids import SetId, check_id
 from showpy.show.models import Show
@@ -69,7 +70,7 @@ def _ambiguous(path: str, folder: str, owner: str, target: str) -> StorageError:
         hint=f"address that set as /sets/{owner}/…; add sets with add_set() and save_show(),"
         " which pick a free key",
         context={"path": path, "folder": folder, "set": owner, "matches": target},
-        code="AMBIGUOUS_PATH",
+        code=ErrorCode.AMBIGUOUS_PATH,
     )
 
 

@@ -18,6 +18,7 @@ from typing import Literal
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.match_ops import forms_of_set
 from showpy.choreo.models import Set, TransitionSpec
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import ContinuityError, ShowPyError
 from showpy.core.ids import format_tid, parse_ref
 from showpy.core.validation import ValidationIssue, ValidationReport
@@ -32,7 +33,7 @@ ERROR: Level = "error"
 WARNING: Level = "warning"
 
 
-def _issue(level: Level, code: str, where: str, message: str, hint: str) -> ValidationIssue:
+def _issue(level: Level, code: ErrorCode, where: str, message: str, hint: str) -> ValidationIssue:
     return ValidationIssue(level=level, code=code, where=where, message=message, hint=hint)
 
 
@@ -43,7 +44,7 @@ def _membership(show: Show, candidate: Set) -> list[ValidationIssue]:
     issues = [
         _issue(
             ERROR,
-            "MISSING_SPOT",
+            ErrorCode.MISSING_SPOT,
             where,
             f"{e} has no placement",
             "every spot is placed in every set",
@@ -54,7 +55,7 @@ def _membership(show: Show, candidate: Set) -> list[ValidationIssue]:
     issues += [
         _issue(
             ERROR,
-            "UNKNOWN_SPOT",
+            ErrorCode.UNKNOWN_SPOT,
             where,
             f"{e} is not in the cast",
             "add the spot or remove the row",
@@ -72,7 +73,7 @@ def _pins(show: Show, candidate: Set) -> list[ValidationIssue]:
     return [
         _issue(
             ERROR,
-            "PINNED_CHANGED",
+            ErrorCode.PINNED_CHANGED,
             f"set {candidate.id} {p.entity}",
             "a pinned placement changed",
             "unpin it before editing",
@@ -93,7 +94,7 @@ def _forms(show: Show, candidate: Set) -> list[ValidationIssue]:
             issues.append(
                 _issue(
                     ERROR,
-                    "UNKNOWN_FORM",
+                    ErrorCode.UNKNOWN_FORM,
                     where,
                     f"form {p.form} does not exist",
                     "rebuild the form or clear the placement's form",
@@ -103,7 +104,7 @@ def _forms(show: Show, candidate: Set) -> list[ValidationIssue]:
             issues.append(
                 _issue(
                     ERROR,
-                    "NOT_IN_FORM",
+                    ErrorCode.NOT_IN_FORM,
                     where,
                     f"not a member of {p.form} in this set",
                     "add it to the form's members",
@@ -117,7 +118,7 @@ def _stale_forms(show: Show, candidate: Set) -> list[ValidationIssue]:
     return [
         _issue(
             WARNING,
-            "STALE_FORM",
+            ErrorCode.STALE_FORM,
             f"set {candidate.id} form {form_id}",
             f"set {candidate.id} no longer lists form {form_id}",
             "re-place the set's forms, or remove the form",
@@ -131,7 +132,7 @@ def _facings(candidate: Set) -> list[ValidationIssue]:
     return [
         _issue(
             WARNING,
-            "FACING_RANGE",
+            ErrorCode.FACING_RANGE,
             f"set {candidate.id} {p.entity}",
             f"facing {p.facing} is outside [0, 360)",
             "normalize the facing",
@@ -164,7 +165,13 @@ def _with_spec(show: Show, spec: TransitionSpec) -> Show:
 def _path_rows(show: Show, spec: TransitionSpec, where: str) -> list[ValidationIssue]:
     cast_ids = set(show.cast.ids())
     issues = [
-        _issue(ERROR, "UNKNOWN_SPOT", f"{where} {e}", f"{e} is not in the cast", "remove the row")
+        _issue(
+            ERROR,
+            ErrorCode.UNKNOWN_SPOT,
+            f"{where} {e}",
+            f"{e} is not in the cast",
+            "remove the row",
+        )
         for e in spec.rows
         if e not in cast_ids
     ]
@@ -174,7 +181,7 @@ def _path_rows(show: Show, spec: TransitionSpec, where: str) -> list[ValidationI
             issues.append(
                 _issue(
                     ERROR,
-                    "UNKNOWN_SPOT",
+                    ErrorCode.UNKNOWN_SPOT,
                     f"{where} route {route.id}",
                     f"unknown members {unknown}",
                     "rebuild the route",
@@ -184,7 +191,7 @@ def _path_rows(show: Show, spec: TransitionSpec, where: str) -> list[ValidationI
 
 
 def _compile_issue(error: ShowPyError, where: str) -> ValidationIssue:
-    code = "CONTINUITY" if isinstance(error, ContinuityError) else error.code
+    code = ErrorCode.CONTINUITY if isinstance(error, ContinuityError) else error.code
     return _issue(ERROR, code, where, error.message, error.hint)
 
 
@@ -218,7 +225,7 @@ def validate_paths(show: Show, spec: TransitionSpec) -> ValidationReport:
         issues.append(
             _issue(
                 ERROR,
-                "COUNTS_MISMATCH",
+                ErrorCode.COUNTS_MISMATCH,
                 where,
                 f"paths span {spec.counts} counts, set {spec.id[1]} has {expected}",
                 "retime with set_counts",
@@ -241,7 +248,7 @@ def validate_dependencies(show: Show, store: SheetStore | None = None) -> Valida
         issues.append(
             _issue(
                 ERROR,
-                "UNPINNED_SHEET",
+                ErrorCode.UNPINNED_SHEET,
                 "dependencies",
                 f"{ref} is not pinned",
                 "pin it with upgrade_dependency",
@@ -250,7 +257,7 @@ def validate_dependencies(show: Show, store: SheetStore | None = None) -> Valida
     try:
         get_sheet(ref, store)
     except ShowPyError as error:
-        issues.append(_issue(ERROR, "UNKNOWN_SHEET", "sheet", error.message, error.hint))
+        issues.append(_issue(ERROR, ErrorCode.UNKNOWN_SHEET, "sheet", error.message, error.hint))
     return ValidationReport(issues=tuple(issues))
 
 
@@ -258,7 +265,7 @@ def _sequence(show: Show) -> list[ValidationIssue]:
     zero_counts = [
         _issue(
             WARNING,
-            "ZERO_COUNTS",
+            ErrorCode.ZERO_COUNTS,
             f"set {s.id}",
             "set arrives in 0 counts",
             "give the set counts > 0",
@@ -270,7 +277,7 @@ def _sequence(show: Show) -> list[ValidationIssue]:
     stale = [
         _issue(
             ERROR,
-            "STALE_TRANSITION",
+            ErrorCode.STALE_TRANSITION,
             format_tid(spec.id),
             "paths for sets that are not consecutive",
             "delete or re-create these paths",

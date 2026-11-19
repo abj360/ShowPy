@@ -46,6 +46,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("Easing", "showpy.choreo.models", "Easing"),
     ("EllipseCurve", "showpy.geo.curves", "EllipseCurve"),
     ("EntityState", "showpy.choreo.engine_models", "EntityState"),
+    ("ErrorCode", "showpy.core.error_codes", "ErrorCode"),
     ("FacingMode", "showpy.choreo.models", "FacingMode"),
     ("FacingOverride", "showpy.choreo.models", "FacingOverride"),
     ("FacingSpec", "showpy.choreo.models", "FacingSpec"),

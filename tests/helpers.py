@@ -15,6 +15,7 @@ Contains:
     capped_address_space(): caps the address space so a runaway allocation fails fast
     fails_after(): fails a test still running after a deadline, never inside coverage or a hook
     only_showpy_errors(): runs a fuzz target; only a ShowPyError may escape, within 5 s
+    context_entries(): returns the list of JSON objects under one key of an error's context
     HOSTILE_JSON: names JSON bytes that make json.loads raise RecursionError or ValueError
     EXPECTED_FAILURES: exception names a hash-seed subprocess may end with
     outputs_under_hash_seeds(): runs one script under each hash seed and collects its output
@@ -44,7 +45,8 @@ from showpy.choreo.form_place import place
 from showpy.choreo.forms import line_form
 from showpy.choreo.match_ops import with_set
 from showpy.choreo.models import PathRow, PathStyle, Placement, Set, TransitionSpec, Waypoint
-from showpy.core.errors import ShowPyError
+from showpy.core.errors import ShowPyError, bounded_repr
+from showpy.core.json_types import JsonValue
 from showpy.core.types import Point
 from showpy.examples import two_set_show
 from showpy.show.models import Show
@@ -61,7 +63,6 @@ FULL_TURN = 360.0
 HALF_TURN = 180.0
 ALLOCATION_HEADROOM_BYTES = 256 * 2**20
 FUZZ_BUDGET_S = 5.0
-SAMPLE_REPR_CHARS = 200
 JSON_NESTING_DEPTH = 200_000
 OVERLONG_INT_DIGITS = 5_000
 # json.loads overflows the C stack (RecursionError) and refuses ints past
@@ -361,11 +362,8 @@ def fails_after(
 
 
 def _shortened(sample: object) -> str:
-    """Returns the repr of `sample`, cut to SAMPLE_REPR_CHARS characters."""
-    text = repr(sample)
-    if len(text) <= SAMPLE_REPR_CHARS:
-        return text
-    return f"{text[:SAMPLE_REPR_CHARS]}... ({len(text)} chars)"
+    """Returns the bounded repr of `sample`, quoting text so blank input stays visible."""
+    return bounded_repr(repr(sample) if isinstance(sample, str) else sample)
 
 
 def only_showpy_errors(call: Callable[[], object], sample: object = None) -> None:
@@ -388,11 +386,27 @@ def only_showpy_errors(call: Callable[[], object], sample: object = None) -> Non
             return
         except Exception as error:
             pytest.fail(
-                f"{type(error).__name__} escaped on input {_shortened(sample)}: {error}",
+                f"{type(error).__name__} escaped on input {_shortened(sample)}: "
+                f"{bounded_repr(str(error))}",
                 pytrace=False,
             )
 
     _run_under_hang_alarm(FUZZ_BUDGET_S, guarded_call)
+
+
+def context_entries(error: ShowPyError, key: str) -> list[dict[str, JsonValue]]:
+    """Returns the JSON objects listed under `key` in an error's context.
+
+    Args:
+        error: Error whose context holds a list of objects under `key`.
+        key: Context key, such as `changes`.
+
+    Returns:
+        entries: The objects of that list, without a trailing `"(+n more)"` count.
+    """
+    listed = error.context[key]
+    assert isinstance(listed, list), f"context[{key!r}] is {type(listed).__name__}, not a list"
+    return [entry for entry in listed if isinstance(entry, dict)]
 
 
 def outputs_under_hash_seeds(script: str, seeds: Iterable[str] = HASH_SEEDS) -> list[str]:

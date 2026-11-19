@@ -18,6 +18,7 @@ from datetime import datetime
 
 from pydantic import TypeAdapter
 
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import (
     ConflictError,
     LockedError,
@@ -261,7 +262,7 @@ def _require_open(proposal: Proposal) -> None:
             f"proposal {proposal.id} is {proposal.state}",
             hint="only open proposals can be accepted or rejected",
             context={"proposal": proposal.id},
-            code="PROPOSAL_CLOSED",
+            code=ErrorCode.PROPOSAL_CLOSED,
         )
 
 

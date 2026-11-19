@@ -51,6 +51,7 @@ from showpy.choreo.engine_models import (
 )
 from showpy.choreo.models import FacingOverride
 from showpy.choreo.motion import DEFAULT_MOTIONS, MotionRegistry, ease, turn
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import PathError, UnknownRefError
 from showpy.core.ids import SetId, SpotId, TransitionId
 from showpy.core.selection import Selection
@@ -426,7 +427,7 @@ class _SegmentFit:
                     "tol": self.tol,
                     "error": error,
                 },
-                code="SEGMENT_BOUND",
+                code=ErrorCode.SEGMENT_BOUND,
             )
         mid = (lo + hi) / 2
         return self._split(lo, mid, depth + 1) + self._split(mid, hi, depth + 1)

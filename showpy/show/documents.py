@@ -34,6 +34,7 @@ from pydantic import BaseModel
 
 from showpy.choreo.models import Form, Set, TransitionSpec
 from showpy.core.canonical import MAX_INT_DIGITS, MAX_NESTING, canonical_value
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, StorageError, field_errors
 from showpy.core.ids import SetId, TransitionId, check_id
 from showpy.show.decode_cache import DecodeCache
@@ -82,7 +83,7 @@ def split_path(path: str) -> list[str]:
             f"path {path!r} is not a workspace path",
             hint="use an absolute path such as /sets/1/set.py, without '..', '.' or empty parts",
             context={"path": path},
-            code="BAD_PATH",
+            code=ErrorCode.BAD_PATH,
         )
     return segments
 

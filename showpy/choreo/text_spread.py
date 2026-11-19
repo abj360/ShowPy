@@ -24,6 +24,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import GeometryError
 from showpy.core.types import Points
 from showpy.geo.curve_base import Curve, FloatArray
@@ -142,7 +143,7 @@ class SlotSpreader:
             f"no spacing of {k} spots on a stroke of {char!r} keeps them apart",
             hint="change n or the text",
             context={"char": char, "spots": k, "tolerance": COINCIDENT_TOL_M},
-            code="COINCIDENT_SLOTS",
+            code=ErrorCode.COINCIDENT_SLOTS,
         )
 
     def _spreads(self, stroke: Curve, k: int, gap: float) -> Iterator[FloatArray]:

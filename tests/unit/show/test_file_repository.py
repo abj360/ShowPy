@@ -100,7 +100,7 @@ from typing import Any, NoReturn
 import pytest
 
 import showpy.show.file_repository as file_repository
-from showpy.core.errors import ConflictError, StorageError
+from showpy.core.errors import ConflictError, StorageError, bounded_repr
 from showpy.show.file_repository import (
     BLOB_MAX_BYTES,
     LINK_MAX_BYTES,
@@ -550,7 +550,7 @@ def test_regression_oversized_files_are_corrupt_before_reading(tmp_path: Path, k
         repo.read(SHOW_ID, SHOW_DOC)
     assert caught.value.code == CORRUPT
     assert f"{kind} is larger than {cap} bytes" in caught.value.message
-    assert caught.value.context == {"show": SHOW_ID, "path": str(path)}
+    assert caught.value.context == {"show": SHOW_ID, "path": bounded_repr(str(path))}
 
 
 def test_regression_file_growing_after_its_size_check_is_corrupt(
@@ -582,7 +582,7 @@ def test_regression_swapped_blob_is_corrupt_naming_its_file(tmp_path: Path) -> N
     with pytest.raises(StorageError) as caught:
         repo.get_show(SHOW_ID)
     assert caught.value.code == CORRUPT
-    assert caught.value.context["path"] == str(blob_path)
+    assert caught.value.context["path"] == bounded_repr(str(blob_path))
     assert "do not match their digest" in caught.value.message
 
 

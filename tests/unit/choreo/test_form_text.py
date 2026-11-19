@@ -21,9 +21,11 @@ from showpy.choreo.form_text import (
     text_recipe,
     text_slots,
     text_strokes,
+    too_few_for_edit,
 )
 from showpy.choreo.models import MAX_TEXT_FONTS, TextRecipe
 from showpy.choreo.text_spread import COINCIDENT_TOL_M
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import GeometryError, LegibilityWarning, SchemaError, SpacingError
 from showpy.core.types import Points
 from showpy.core.util import approx_equal
@@ -275,3 +277,13 @@ def test_regression_text_recipe_caps_the_font_chain() -> None:
         text_recipe(geometry(fonts=[simplex] * (MAX_TEXT_FONTS + 1)))
     assert caught.value.context["field"] == "fonts"
     assert f"1 to {MAX_TEXT_FONTS} fonts" in caught.value.hint
+
+
+def test_too_few_for_edit_names_the_spots_to_add() -> None:
+    exc = SpacingError("m", hint="h", context={"n": 3, "min_n": 5}, code=ErrorCode.TOO_FEW_SPOTS)
+    assert "add 2 spots with edit_text_count" in too_few_for_edit(exc).hint
+
+
+def test_too_few_for_edit_keeps_an_error_without_counts() -> None:
+    exc = SpacingError("m", hint="h", context={"n": "3"}, code=ErrorCode.TOO_FEW_SPOTS)
+    assert too_few_for_edit(exc) is exc

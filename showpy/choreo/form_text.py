@@ -39,6 +39,7 @@ import numpy as np
 
 from showpy.choreo.models import MAX_TEXT_FONTS, CrowdedStroke, Form, TextRecipe, TextReport
 from showpy.choreo.text_spread import SlotSpreader, StrokeSpread, stroke_gap
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import (
     LegibilityWarning,
     SchemaError,
@@ -238,7 +239,7 @@ def require_whole_count(n: int) -> None:
             f"{n} spots is over the cap of {MAX_TEXT_SPOTS} for one text form",
             hint=f"use n <= {MAX_TEXT_SPOTS} or split the text into several forms",
             context={"n": n, "max_n": MAX_TEXT_SPOTS},
-            code="TOO_MANY_SPOTS",
+            code=ErrorCode.TOO_MANY_SPOTS,
         )
 
 
@@ -248,7 +249,7 @@ def _require_count(n: int, min_n: int, text: str) -> None:
             f"{n} spots cannot draw this text; its strokes need at least {min_n}",
             hint=f"use n >= {min_n} for this text, or shorten it",
             context={"n": n, "min_n": min_n, "text": bounded_repr(text)},
-            code="TOO_FEW_SPOTS",
+            code=ErrorCode.TOO_FEW_SPOTS,
         )
 
 
@@ -414,7 +415,7 @@ def require_text_form(form: Form) -> None:
             f"form {form.id} is a {form.kind} form, not text",
             hint="use edit() for other kinds",
             context={"form": form.id, "kind": form.kind},
-            code="NOT_A_TEXT_FORM",
+            code=ErrorCode.NOT_A_TEXT_FORM,
         )
 
 
@@ -441,7 +442,7 @@ def require_member_count(form_id: str, n: int, member_count: int) -> None:
         f"text form {form_id} has {member_count} members for {n} slots",
         hint=hint,
         context={"form": form_id, "n": n, "members": member_count},
-        code="MEMBER_COUNT_MISMATCH",
+        code=ErrorCode.MEMBER_COUNT_MISMATCH,
     )
 
 
@@ -467,7 +468,7 @@ def reject_count_change(form_id: str, changes: Mapping[str, Any]) -> None:
                 f"text form {form_id} cannot change {field} through edit",
                 hint=_EDIT_TEXT_COUNT_HINT,
                 context={"form": form_id, "field": field},
-                code="TEXT_COUNT_EDIT",
+                code=ErrorCode.TEXT_COUNT_EDIT,
             )
 
 
@@ -518,7 +519,7 @@ def require_edited_members(form_id: str, n: int, member_count: int) -> None:
             exc.message,
             hint=f"{exc.hint}; {_EDIT_TEXT_COUNT_HINT}",
             context=exc.context,
-            code="MEMBER_COUNT_MISMATCH",
+            code=ErrorCode.MEMBER_COUNT_MISMATCH,
         ) from exc
 
 
@@ -553,13 +554,16 @@ def too_few_for_edit(exc: SpacingError) -> SpacingError:
         exc: The `TOO_FEW_SPOTS` error `text_slots` raised, with `n` and `min_n` in context.
 
     Returns:
-        error: The same error with the edit hint.
+        error: The same error with the edit hint, or `exc` itself when its context lacks the
+            two counts.
     """
-    n, min_n = exc.context["n"], exc.context["min_n"]
+    n, min_n = exc.context.get("n"), exc.context.get("min_n")
+    if not isinstance(n, int) or not isinstance(min_n, int):
+        return exc
     return SpacingError(
         exc.message,
         hint=f"add {min_n - n} spots with edit_text_count(form, add=[...], n={min_n}), "
         "or shorten the text",
         context=exc.context,
-        code="TOO_FEW_SPOTS",
+        code=ErrorCode.TOO_FEW_SPOTS,
     )

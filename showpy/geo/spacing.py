@@ -26,6 +26,7 @@ import shapely.affinity
 from shapely.prepared import prep
 
 from showpy.core.caps import MAX_POINTS, require_size
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SpacingError, bounded_repr
 from showpy.core.types import Degrees, Meters, Point, Points
 from showpy.core.units import facing_vector
@@ -164,7 +165,7 @@ def _require_enough(n: int, min_n: int, curves: int) -> None:
     if n < min_n:
         raise SpacingError(
             f"{n} spots are fewer than the curves' minimum of {min_n}",
-            code="TOO_FEW_SPOTS",
+            code=ErrorCode.TOO_FEW_SPOTS,
             hint=f"use n >= {min_n}",
             context={"n": n, "min_n": min_n},
         )

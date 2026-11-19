@@ -251,6 +251,9 @@ if TYPE_CHECKING:
         MAX_VIDEO_PIXELS,
         require_size,
     )
+    from showpy.core.error_codes import (
+        ErrorCode,
+    )
     from showpy.core.errors import (
         ConflictError,
         ContinuityError,
@@ -788,6 +791,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Easing": ("showpy.choreo.models", "Easing"),
     "EllipseCurve": ("showpy.geo.curves", "EllipseCurve"),
     "EntityState": ("showpy.choreo.engine_models", "EntityState"),
+    "ErrorCode": ("showpy.core.error_codes", "ErrorCode"),
     "FacingMode": ("showpy.choreo.models", "FacingMode"),
     "FacingOverride": ("showpy.choreo.models", "FacingOverride"),
     "FacingSpec": ("showpy.choreo.models", "FacingSpec"),
@@ -1368,6 +1372,7 @@ __all__ = [
     "Easing",
     "EllipseCurve",
     "EntityState",
+    "ErrorCode",
     "FacingMode",
     "FacingOverride",
     "FacingSpec",

@@ -236,7 +236,9 @@ def test_preserve_order_infeasible_names_order() -> None:
     options = MatchOptions(preserve_order=True, pinned={"A": 1})
     with pytest.raises(MatchError) as caught:
         match([(0.0, 0.0), (1.0, 0.0)], [(0.0, 0.0), (1.0, 0.0)], ["A", "B"], options)
-    assert "preserve_order" in caught.value.context["blocking"]
+    blocking = caught.value.context["blocking"]
+    assert isinstance(blocking, list)
+    assert "preserve_order" in blocking
 
 
 def test_cost_fn_adds_cost_and_infinity_forbids() -> None:

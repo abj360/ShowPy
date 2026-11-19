@@ -19,7 +19,15 @@ from typing import Protocol, override
 
 from showpy.choreo.match_ops import forms_of_set
 from showpy.choreo.models import Form, Set, TransitionSpec
-from showpy.core.errors import ConflictError, SchemaError, StorageError, UnknownRefError
+from showpy.core.error_codes import ErrorCode
+from showpy.core.errors import (
+    ConflictError,
+    SchemaError,
+    StorageError,
+    UnknownRefError,
+    bounded_repr,
+    join_listed,
+)
 from showpy.core.ids import WINDOWS_DEVICE_NAMES, SetId, TransitionId, is_device_name
 from showpy.core.util import ASSET_PREFIX, asset_uri, close_matches, content_hash
 from showpy.show.changes import require_form_owner
@@ -49,7 +57,7 @@ def _require_show_id(show_id: str) -> None:
             f"show id {show_id!r} cannot be stored",
             hint="use letters, digits, _, . and - only, starting with a letter or digit",
             context={"show": show_id},
-            code="BAD_PATH",
+            code=ErrorCode.BAD_PATH,
         )
 
 
@@ -65,7 +73,7 @@ def _require_new_show_id(show_id: str) -> None:
             hint=f"pick another ID: {', '.join(sorted(WINDOWS_DEVICE_NAMES))}, alone or before a"
             " dot, name devices on Windows",
             context={"show": show_id},
-            code="BAD_PATH",
+            code=ErrorCode.BAD_PATH,
         )
 
 
@@ -122,9 +130,16 @@ def revisions_since(log: list[Revision], parent: str) -> list[Revision]:
 
 
 def conflict_error(show_id: str, expected: str, landed: list[Revision]) -> ConflictError:
-    """Builds the ConflictError listing each landed revision's short ID, time and paths."""
-    summary = "; ".join(
-        f"{r.id[:SHORT_ID]} {r.at.isoformat()} ({', '.join(r.changed)})" for r in landed
+    """Builds the ConflictError listing the first landed revisions' short ID, time and paths.
+
+    The message lists five revisions, each with its paths cut to 80 characters, and counts the
+    rest, so a long run of landed revisions still gives a short message.
+    """
+    summary = join_listed(
+        [
+            f"{r.id[:SHORT_ID]} {r.at.isoformat()} ({bounded_repr(', '.join(r.changed))})"
+            for r in landed
+        ]
     )
     return ConflictError(
         f"{len(landed)} revision(s) landed on {show_id} since {expected[:SHORT_ID] or 'the start'}:"

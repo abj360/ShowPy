@@ -28,8 +28,11 @@ Contains:
     test_regression_model_validate_strings_raises_schema_error: converts the pydantic error of
         `model_validate_strings`, keeping the cause
     test_model_validate_strings_parses_valid_text: builds a model from string-leaved data
+    test_regression_validators_show_and_forward_pydantic_keywords: names pydantic's keywords in
+        each validator signature and forwards `strict`
 """
 
+import inspect
 import math
 from collections.abc import Callable
 
@@ -40,7 +43,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from showpy.cast.models import Shape
 from showpy.choreo.models import Set, Waypoint
-from showpy.core.errors import SchemaError, ShowPyError
+from showpy.core.errors import SchemaError, ShowPyError, field_errors
 from showpy.core.types import (
     Box2,
     Count,
@@ -141,20 +144,20 @@ def test_regression_nested_model_error_keeps_outer_locs() -> None:
     with pytest.raises(SchemaError) as info:
         _Outer.model_validate({"inner": {"a": "x", "b": "y"}, "n": "z"})
     assert info.value.context["model"] == "_Outer"
-    assert [e["loc"] for e in info.value.context["errors"]] == ["inner.a", "inner.b", "n"]
+    assert [e["loc"] for e in field_errors(info.value)] == ["inner.a", "inner.b", "n"]
 
 
 def test_regression_nested_construction_error_names_the_outermost_model() -> None:
     with pytest.raises(SchemaError) as info:
         _Outer(inner={"a": "x", "b": 1}, n="z")  # pyright: ignore[reportArgumentType]
     assert info.value.context["model"] == "_Outer"
-    assert [e["loc"] for e in info.value.context["errors"]] == ["inner.a", "n"]
+    assert [e["loc"] for e in field_errors(info.value)] == ["inner.a", "n"]
 
 
 def test_regression_library_model_reports_dotted_loc() -> None:
     with pytest.raises(SchemaError) as info:
         Box2.model_validate({"min": ("x", 0), "max": (1, 1)})
-    assert info.value.context["errors"][0]["loc"] == "min.0"
+    assert field_errors(info.value)[0]["loc"] == "min.0"
 
 
 NEGATIVE_COUNTS = -4.0
@@ -229,10 +232,30 @@ def test_regression_model_validate_strings_raises_schema_error() -> None:
     with pytest.raises(SchemaError) as caught:
         TempoSection.model_validate_strings({"at_count": "soon", "counts_per_minute": "120"})
     assert caught.value.context["model"] == "TempoSection"
-    assert caught.value.context["errors"][0]["loc"] == "at_count"
+    assert field_errors(caught.value)[0]["loc"] == "at_count"
     assert isinstance(caught.value.__cause__, PydanticValidationError)
 
 
 def test_model_validate_strings_parses_valid_text() -> None:
     tempo = TempoSection.model_validate_strings({"at_count": "8", "counts_per_minute": "120"})
     assert (tempo.at_count, tempo.counts_per_minute) == (8.0, 120.0)
+
+
+@pytest.mark.parametrize(
+    "validator", [Box2.model_validate, Box2.model_validate_json, Box2.model_validate_strings]
+)
+def test_regression_validators_show_and_forward_pydantic_keywords(
+    validator: Callable[..., Box2],
+) -> None:
+    """Names pydantic's keywords instead of hiding them behind `**options`."""
+    parameters = inspect.signature(validator).parameters
+    assert {"strict", "extra", "context", "by_alias", "by_name"} <= parameters.keys()
+    assert all(p.kind is not inspect.Parameter.VAR_KEYWORD for p in parameters.values())
+
+
+def test_regression_model_validate_forwards_strict() -> None:
+    with pytest.raises(SchemaError):
+        Box2.model_validate({"min": ("0", 0), "max": (1, 1)}, strict=True)
+    assert Box2.model_validate({"min": ("0", 0), "max": (1, 1)}).min == (0.0, 0.0)
+    with pytest.raises(SchemaError):
+        Box2.model_validate_json('{"min": ["0", 0], "max": [1, 1]}', strict=True)

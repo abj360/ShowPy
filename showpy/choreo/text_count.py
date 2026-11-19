@@ -26,6 +26,7 @@ from showpy.choreo.form_text import (
     text_strokes,
 )
 from showpy.choreo.models import TextRecipe
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, SpacingError, bounded_repr
 from showpy.core.types import Degrees, Meters
 from showpy.core.validation import require_finite
@@ -90,7 +91,7 @@ def spacing_count(strokes: Sequence[Curve], spacing: Meters) -> int:
         f"{MAX_TEXT_SPOTS} for one text form",
         hint=_spacing_hint(total, open_strokes, min_n),
         context={"n": requested, "max_n": MAX_TEXT_SPOTS, "spacing": step},
-        code="TOO_MANY_SPOTS",
+        code=ErrorCode.TOO_MANY_SPOTS,
     )
 
 
@@ -139,7 +140,7 @@ def count_recipe(
         "a text form takes exactly one of n and spacing",
         hint="pass n= for an exact spot count or spacing= for meters between spots, not both",
         context={"n": bounded_repr(n), "spacing": bounded_repr(spacing)},
-        code="N_OR_SPACING",
+        code=ErrorCode.N_OR_SPACING,
     )
 
 

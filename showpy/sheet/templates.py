@@ -253,8 +253,9 @@ def customize(sheet: Sheet, **changes: object) -> Sheet:
             context={"fields": unknown},
         )
     result = _resized(sheet, changes["size"]) if "size" in changes else sheet
-    update = {key: changes[key] for key in ("name", "grid") if key in changes}
-    return Sheet.model_validate({**result.model_dump(), **update})
+    fields: dict[str, object] = result.model_dump()
+    fields.update((key, changes[key]) for key in ("name", "grid") if key in changes)
+    return Sheet.model_validate(fields)
 
 
 def _ids(items: tuple[SheetItem, ...]) -> list[str]:

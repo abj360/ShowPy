@@ -27,6 +27,7 @@ import numpy as np
 from pydantic import model_validator
 
 from showpy.core.caps import require_size
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import (
     FontError,
     MissingFontError,
@@ -96,14 +97,14 @@ class FontRegistry(FrozenModel):
                     f"font bytes do not hash to {uri}",
                     hint="key each font by asset_uri(its bytes), or use register_font",
                     context={"uri": uri, "actual": asset_uri(data)},
-                    code="FONT_HASH_MISMATCH",
+                    code=ErrorCode.FONT_HASH_MISMATCH,
                 )
             if self.fonts[uri] != load_font(data):
                 raise FontError(
                     f"the font stored at {uri} is not the font its bytes load to",
                     hint="build registries with register_font, or store load_font(bytes)",
                     context={"uri": uri, "font": self.fonts[uri].name},
-                    code="FONT_HASH_MISMATCH",
+                    code=ErrorCode.FONT_HASH_MISMATCH,
                 )
         self._check_names()
         return self
@@ -333,7 +334,7 @@ def register_font(
             f"font name {font.name!r} is already bound to {taken}",
             hint="rename the font in its file, or use the registered one",
             context={"font": font.name, "taken_by": taken, "uri": uri},
-            code="FONT_NAME_TAKEN",
+            code=ErrorCode.FONT_NAME_TAKEN,
         )
     names = registry.names if taken is not None else {**registry.names, font.name: uri}
     # model_construct skips the consistency validator: this font was just hashed and loaded, and
@@ -365,7 +366,7 @@ def bundled_fonts() -> FontRegistry:
                 f"bundled font {name!r} does not match its pinned hash",
                 hint="reinstall showpy; the font file was modified",
                 context={"font": name, "expected": expected, "actual": asset_uri(data)},
-                code="FONT_HASH_MISMATCH",
+                code=ErrorCode.FONT_HASH_MISMATCH,
             )
         registry, _ = register_font(registry, data)
     return registry

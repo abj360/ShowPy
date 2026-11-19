@@ -392,7 +392,9 @@ def test_regression_import_json_counts_field_errors_under_error_count() -> None:
     with pytest.raises(SchemaError) as caught:
         import_json({"schema": SCHEMA_TAG, "show": {"id": "x"}})
     assert "errors" not in caught.value.context
-    assert caught.value.context["error_count"] >= 1
+    error_count = caught.value.context["error_count"]
+    assert isinstance(error_count, int)
+    assert error_count >= 1
 
 
 TEXT_MEMBERS = ["T1", "T2", "T3", "T4"]
