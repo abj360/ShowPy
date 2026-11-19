@@ -61,6 +61,8 @@ CUT_MARK = "…"
 # A cut keeps both ends: the start names what the value is, the end holds a path's file name.
 ECHO_HEAD_CHARS = 40
 ECHO_TAIL_CHARS = MAX_ECHOED_INPUT_CHARS - ECHO_HEAD_CHARS - len(CUT_MARK)
+# Ranking a set that `<` does not order bounds every item; past this many it is summarized.
+MAX_RANKED_SET_ITEMS = 1_000
 NUMBER_TYPES = frozenset({bool, int, float})
 MORE_PATTERN = re.compile(r"\(\+[0-9]+ more\)")
 # CPython refuses to print ints longer than sys.int_max_str_digits, which the environment can
@@ -149,15 +151,16 @@ def bounded_context(context: Mapping[str, object]) -> dict[str, JsonValue]:
     Text and reprs are cut to 80 characters. Lists, tuples, arrays, sets and mappings keep 20
     items or entries plus a `"(+n more)"` count. A set keeps its 20 smallest items: by value
     when it holds only text, only bytes, or only numbers without NaN, and otherwise by type
-    name and bounded JSON text, so no hash seed changes the result. Numpy values become plain
-    numbers or lists,
+    name and bounded JSON text, so no hash seed changes the result. A set of over 1,000 items
+    that is not ordered by value is not ranked: it becomes its type name and length and a
+    `"(not shown: n unorderable items)"` marker. Numpy values become plain numbers or lists,
     mapping keys become text, non-finite floats become text, and anything else, or anything
     nested deeper than 8 levels, becomes its bounded repr, or its type name when the repr
     raises. Bounding a bounded context changes nothing.
 
     Cost is linear in the kept items, except for sets, whose iteration order can change with
-    the hash seed: a set is scanned once in full, and a set that is not ordered by value has
-    every item bounded once to rank it.
+    the hash seed: a set's item types are scanned once in full, and a set of at most 1,000
+    items that is not ordered by value has every item bounded once to rank it.
 
     Args:
         context: Debugging values chosen by a raise site.
@@ -238,6 +241,11 @@ def _bounded_set(items: set[object] | frozenset[object], depth: int) -> list[Jso
     if _is_totally_ordered(items):
         kept = heapq.nsmallest(MAX_CONTEXT_ITEMS, cast("set[SupportsRichComparison]", items))
         return _listed(kept, len(items) - len(kept), depth)
+    if len(items) > MAX_RANKED_SET_ITEMS:
+        return [
+            f"<{type(items).__name__} of {len(items)} items>",
+            f"(not shown: {len(items)} unorderable items)",
+        ]
     ranked = heapq.nsmallest(
         MAX_CONTEXT_ITEMS, (_ranked(item, depth + 1) for item in items), key=itemgetter(0)
     )

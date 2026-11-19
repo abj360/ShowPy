@@ -33,7 +33,10 @@ Contains:
     test_regression_huge_array_context_converts_only_kept_rows: converts 20 rows of a
         1,000,000-item array
     test_regression_huge_ordered_set_context_bounds_only_kept_items: selects a million-item int
-        or text set by value, bounding only the 20 kept items
+        set or a 200,000-item text set by value, bounding only the 20 kept items
+    test_regression_unorderable_set_at_the_cap_is_ranked: ranks a set of 1,000 frozensets
+    test_regression_unorderable_set_past_the_cap_is_summarized: summarizes 1,001 frozensets
+        without bounding or printing any item
     test_regression_set_context_order_ignores_the_hash_seed: bounds sets of frozensets and of
         NaN and text identically under hash seeds 0, 1 and 2
     test_regression_mixed_set_context_is_ordered_by_type_then_value: orders a mixed-type set
@@ -62,6 +65,7 @@ from showpy.core.errors import (
     ECHO_HEAD_CHARS,
     MAX_CONTEXT_ITEMS,
     MAX_ECHOED_INPUT_CHARS,
+    MAX_RANKED_SET_ITEMS,
     ConflictError,
     ContinuityError,
     FontError,
@@ -92,6 +96,7 @@ LISTED_SCHEMA_ERRORS = 5
 BAD_LIST_ITEMS = 8
 DEEP_NESTING = 50
 HUGE_CONTEXT_ITEMS = 1_000_000
+LARGE_TEXT_SET_ITEMS = 200_000
 # A backstop only: capping takes about 10 ms, a full repr sort about 1 s.
 HUGE_CONTEXT_BACKSTOP_S = 0.5
 # One call for the outer value (or its context key) plus one per kept item.
@@ -410,16 +415,16 @@ def test_regression_huge_array_context_converts_only_kept_rows() -> None:
     ("value", "smallest"),
     [
         (set(range(HUGE_CONTEXT_ITEMS)), list(range(MAX_CONTEXT_ITEMS))),
-        ({f"{n:07d}" for n in range(HUGE_CONTEXT_ITEMS)}, [f"{n:07d}" for n in range(20)]),
+        ({f"{n:06d}" for n in range(LARGE_TEXT_SET_ITEMS)}, [f"{n:06d}" for n in range(20)]),
     ],
     ids=["ints", "strs"],
 )
 def test_regression_huge_ordered_set_context_bounds_only_kept_items(
     monkeypatch: pytest.MonkeyPatch, value: set[object], smallest: list[object]
 ) -> None:
-    """Selects the 20 smallest items of a million-item set by value, never by repr."""
+    """Selects the 20 smallest items of a large int or text set by value, never by repr."""
     calls, bounded = _count_bounding_calls(monkeypatch, value)
-    assert bounded == [*smallest, f"(+{HUGE_CONTEXT_ITEMS - MAX_CONTEXT_ITEMS} more)"]
+    assert bounded == [*smallest, f"(+{len(value) - MAX_CONTEXT_ITEMS} more)"]
     assert calls["_bounded_value"] == CAPPED_BOUND_CALLS
     assert calls["bounded_repr"] <= CAPPED_BOUND_CALLS
 
@@ -457,3 +462,29 @@ def test_regression_context_survives_a_broken_repr() -> None:
         "obj": "<unprintable _BrokenRepr>",
         "keys": {"<unprintable _BrokenRepr>": 1},
     }
+
+
+def _frozenset_items(count: int) -> set[frozenset[int]]:
+    return {frozenset({n}) for n in range(count)}
+
+
+def test_regression_unorderable_set_at_the_cap_is_ranked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ranks a set of exactly 1,000 frozensets by bounded JSON text and keeps the 20 first."""
+    calls, bounded = _count_bounding_calls(monkeypatch, _frozenset_items(MAX_RANKED_SET_ITEMS))
+    ranked = sorted(range(MAX_RANKED_SET_ITEMS), key=lambda n: json.dumps([n]))
+    assert bounded == [
+        *([n] for n in ranked[:MAX_CONTEXT_ITEMS]),
+        f"(+{MAX_RANKED_SET_ITEMS - MAX_CONTEXT_ITEMS} more)",
+    ]
+    assert calls["_bounded_value"] > MAX_RANKED_SET_ITEMS
+
+
+def test_regression_unorderable_set_past_the_cap_is_summarized(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reports 1,001 frozensets by type and count, never bounding or printing an item."""
+    count = MAX_RANKED_SET_ITEMS + 1
+    calls, bounded = _count_bounding_calls(monkeypatch, _frozenset_items(count))
+    assert bounded == [f"<set of {count} items>", f"(not shown: {count} unorderable items)"]
+    assert calls["_bounded_value"] == 1
+    assert calls["bounded_repr"] == 1
