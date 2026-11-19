@@ -886,6 +886,9 @@
       "travel": "Meters"
     }
   },
+  "SHEET_ID_PATTERN": {
+    "constant": "re.compile('^[A-Za-z0-9_](?:[A-Za-z0-9_.\\\\-]{0,62}[A-Za-z0-9_])?$')"
+  },
   "SchemaError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "Segment": {
     "model": {
@@ -1294,6 +1297,7 @@
   "changelog": "(ws: showpy.show.storage.Workspace, since: str = '') -> str",
   "chart": "(show: showpy.show.models.Show, set_id: SetId, publication: showpy.export.models.Publication | None = None) -> showpy.export.models.Chart",
   "check_id": "(text: str, *, kind: str) -> str",
+  "check_sheet_id": "(text: str, *, kind: str) -> str",
   "check_unlocked": "(form: showpy.choreo.models.Form, *, force: bool) -> None",
   "chunk_counts": "(total: float, parts: int) -> list[float]",
   "circle": "(center: Point, radius: Meters, start_deg: Degrees = 0.0) -> showpy.geo.curves.CircleCurve",
