@@ -34,7 +34,8 @@ class MissingExtraError(ShowPyError):
 def require_extra(module: str, *, extra: str, needed_by: str) -> ModuleType:
     """Imports an optional module, or raises MissingExtraError naming the extra that installs it.
 
-    The import system caches the module, so later calls cost one dictionary lookup.
+    It keeps no cache of its own: `sys.modules` holds the imported module, so later calls cost one
+    dictionary lookup.
 
     Args:
         module: Dotted name of the optional module to import.
