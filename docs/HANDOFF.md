@@ -3,18 +3,18 @@
 Audience: the next agent or engineer continuing this repository. Scope: state of work, what is
 left, and the traps already hit.
 
-Last updated: 2026-11-17
+Last updated: 2026-11-18
 
 ## Where things stand
 
 | Item          | Value                                                                                                    |
 | ------------- | -------------------------------------------------------------------------------------------------------- |
 | Repository    | `abj360/ShowPy` (public since 2026-11-15); split into its own repository on 2026-11-12 with full history |
-| Gates         | `nox -s tests`: 2,974 passed, `Ledger: 373 open` (2026-11-17); ruff, mypy `--strict`, pyright clean      |
+| Gates         | `nox -s tests`: 2,984 passed, `Ledger: 373 open` (2026-11-18); ruff, mypy `--strict`, pyright clean      |
 | CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main                |
 | Defect ledger | `Ledger: 373 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-17)                  |
 | Out of scope  | `stagecheck`, `showpy.packs` and `showpy.index`, by the user's decision (2026-11-11)                     |
-| Phase 1       | Priority 0 done; `v0.3.0` prepared on `chore/p1-exit`, tag pending maintainer approval (2026-11-17)      |
+| Phase 1       | done; merged as PR #23 (`dae2b33`) and tagged `v0.3.0` on 2026-11-18                                     |
 | Text feature  | stage 1 merged (PR #22, 2026-11-17); stages 2 and 3 not started                                          |
 | Pushing       | needs explicit approval                                                                                  |
 
@@ -36,7 +36,7 @@ Use `uv` only, never pip.
 1. `CLAUDE.md` (project) and `~/.claude/CLAUDE.md` (user style: file headers with a `Contains:` section, verb-first docstrings, no AI trailers on commits).
 2. `docs/adr/0001-library-layout-and-reference-fixes.md`: 24 fixes to the reference, the origin convention (front-center), the facing vector `(sin θ, −cos θ)`, and why subpackage `__init__` files are empty.
 3. `docs/adr/0002-path-engine.md`, plus its three addenda: segment probe density, time-based measures living in `showpy.choreo`, and the `min_gaps` hotspot forecast.
-4. `docs/upgrade-plan.md` and `docs/superpowers/plans/2026-11-15-phase-1-priority-0.md`: the upgrade program and the current phase's plan, with its ADRs 0003 to 0006, 0014 and 0017.
+4. `docs/upgrade-plan.md` and `docs/releases/v0.3.0.md`: the upgrade program, and what Phase 1 changed with its ADRs 0003 to 0006, 0014, 0017 and 0018.
 
 ## Module map (what exists)
 
@@ -74,14 +74,14 @@ is tagged; the tag and git history keep it.
    (`make_route`, closes UP-9.2-27), a counter-march with no members, and trimming a curve
    class outside `AnyCurve`.
 
-**Phase 1, Priority 0: done; `v0.3.0` prepared on `chore/p1-exit`, tag pending maintainer
-approval** (release notes `docs/releases/v0.3.0.md`; lane PRs #13 to #20, nightly route fix PR
-#21, text on the field PR #22, 2026-11-17). The Priority 0 ledger tests pass: storage data loss
+**Phase 1, Priority 0: merged and tagged `v0.3.0` on 2026-11-18** (PR #23, merge commit
+`dae2b33`; release notes `docs/releases/v0.3.0.md`; lane PRs #13 to #20, nightly route fix PR
+#21, text on the field PR #22). The Priority 0 ledger tests pass: storage data loss
 and traversal, commit validation, guaranteed segment bounds, hangs and unbounded allocations,
 hash-seed determinism, publication tokens, form consistency after matching, and every lock and
 pin bypass. By the maintainer's decisions of 2026-11-15, permissions, authorship, commit messages
 and undo moved to the host app (ADR 0003), and sheet replacement was removed (ADR 0017). The
-phase's plan stays until the `v0.3.0` tag; the controller deletes it then.
+phase's plan was deleted after the tag.
 
 **Next: Phase 2, foundations** (`docs/upgrade-plan.md`, "Phase 2"), the main breaking release
 before 1.0. Its plan is written when the phase starts.
