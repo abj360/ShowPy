@@ -30,9 +30,13 @@ Contains:
     test_regression_unpicklable_context_value_pickles_as_its_repr: pickles a lambda in context
     test_regression_schema_error_message_counts_unlisted_errors: ends with "(+n more)" past five
     test_every_class_default_code_is_catalogued: makes every default code an ErrorCode member
-    test_regression_huge_array_and_set_contexts_build_fast: caps a 5,000,000-item array and a
-        1,000,000-item set without converting or sorting every item
-    test_regression_mixed_set_context_is_ordered_by_repr: orders a set of unorderable items
+    test_regression_huge_array_context_converts_only_kept_rows: converts 20 rows of a
+        1,000,000-item array
+    test_regression_huge_ordered_set_context_bounds_only_kept_items: selects a million-item int
+        or text set by value, bounding only the 20 kept items
+    test_regression_set_context_order_ignores_the_hash_seed: bounds sets of frozensets and of
+        NaN and text identically under hash seeds 0, 1 and 2
+    test_regression_mixed_set_context_is_ordered_by_type_then_value: orders a mixed-type set
     test_regression_context_mappings_are_capped: keeps 20 entries of a 1,000-entry mapping
     test_regression_context_survives_a_broken_repr: names the type of a value whose repr raises
 """
@@ -42,12 +46,14 @@ import json
 import pickle
 import sys
 import time
-from collections.abc import Collection
+from collections import Counter
+from typing import Any, ClassVar
 
 import numpy as np
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
+import showpy.core.errors as errors_module
 from showpy.cast.models import Spot
 from showpy.choreo.models import Placement
 from showpy.core.error_codes import ErrorCode
@@ -74,7 +80,9 @@ from showpy.core.errors import (
     field_errors,
     schema_error_from,
 )
+from showpy.core.json_types import JsonValue
 from showpy.core.types import Box2
+from tests.helpers import outputs_under_hash_seeds
 
 HUGE_INT = 10**5000
 HUGE_INT_ECHO = f"<int of {HUGE_INT.bit_length()} bits>"
@@ -84,12 +92,19 @@ LISTED_SCHEMA_ERRORS = 5
 BAD_LIST_ITEMS = 8
 DEEP_NESTING = 50
 HUGE_CONTEXT_ITEMS = 1_000_000
-# Converting every item of an array costs about 28 ms per million, so five million items
-# make a full conversion (about 140 ms) fail the budget.
-HUGE_ARRAY_ITEMS = 5_000_000
-# About 5 times the measured cost of capping either value (array slice, scan of an int set),
-# so a full conversion or a repr sort (about 1 s) fails while a slow CI runner still passes.
-HUGE_CONTEXT_BUDGET_S = 0.05
+# A backstop only: capping takes about 10 ms, a full repr sort about 1 s.
+HUGE_CONTEXT_BACKSTOP_S = 0.5
+# One call for the outer value (or its context key) plus one per kept item.
+CAPPED_BOUND_CALLS = MAX_CONTEXT_ITEMS + 1
+SET_ORDER_SEEDS = ("0", "1", "2")
+SET_ORDER_SCRIPT = (
+    "import json\n"
+    "from showpy.core.errors import SchemaError\n"
+    "groups = {frozenset({f's{n}', f't{n}'}) for n in range(40)}\n"
+    "mixed = {float('nan'), 3.0, 1.0, *(f'x{n}' for n in range(30))}\n"
+    "error = SchemaError('x', hint='y', context={'groups': groups, 'mixed': mixed})\n"
+    "print(json.dumps(error.to_dict()))\n"
+)
 
 
 def test_error_carries_code_message_context_and_hint() -> None:
@@ -348,25 +363,74 @@ def test_every_class_default_code_is_catalogued() -> None:
         assert isinstance(error_class.default_code, ErrorCode), error_class.__name__
 
 
-def _capped_build_seconds(value: object) -> tuple[float, object]:
+class _CountingArray(np.ndarray):
+    """Records how many items each `tolist` call converts."""
+
+    converted: ClassVar[list[int]] = []
+
+    # Any: an override must keep the return type of numpy's own tolist stub.
+    def tolist(self) -> Any:
+        type(self).converted.append(int(self.size))
+        return super().tolist()
+
+
+def _count_bounding_calls(
+    monkeypatch: pytest.MonkeyPatch, value: object
+) -> tuple[Counter[str], JsonValue]:
+    """Bounds `value` as context, counting calls of `_bounded_value` and `bounded_repr`."""
+    calls: Counter[str] = Counter()
+    for name in ("_bounded_value", "bounded_repr"):
+        original = getattr(errors_module, name)
+
+        def counted(*args: object, _name: str = name, _original: object = original) -> object:
+            calls[_name] += 1
+            assert callable(_original)
+            return _original(*args)
+
+        monkeypatch.setattr(errors_module, name, counted)
     start = time.perf_counter()
-    error = SchemaError("x", hint="y", context={"value": value})
-    return time.perf_counter() - start, error.context["value"]
+    bounded = SchemaError("x", hint="y", context={"value": value}).context["value"]
+    assert time.perf_counter() - start < HUGE_CONTEXT_BACKSTOP_S
+    return calls, bounded
+
+
+def test_regression_huge_array_context_converts_only_kept_rows() -> None:
+    """Converts the 20 kept rows of a million-item array, never the whole array."""
+    _CountingArray.converted.clear()
+    array = np.arange(HUGE_CONTEXT_ITEMS).view(_CountingArray)
+    bounded = SchemaError("x", hint="y", context={"value": array}).context["value"]
+    assert bounded == [
+        *range(MAX_CONTEXT_ITEMS),
+        f"(+{HUGE_CONTEXT_ITEMS - MAX_CONTEXT_ITEMS} more)",
+    ]
+    assert _CountingArray.converted == [MAX_CONTEXT_ITEMS]
 
 
 @pytest.mark.parametrize(
-    "value",
-    [np.arange(HUGE_ARRAY_ITEMS), set(range(HUGE_CONTEXT_ITEMS))],
-    ids=["array", "set"],
+    ("value", "smallest"),
+    [
+        (set(range(HUGE_CONTEXT_ITEMS)), list(range(MAX_CONTEXT_ITEMS))),
+        ({f"{n:07d}" for n in range(HUGE_CONTEXT_ITEMS)}, [f"{n:07d}" for n in range(20)]),
+    ],
+    ids=["ints", "strs"],
 )
-def test_regression_huge_array_and_set_contexts_build_fast(value: Collection[int]) -> None:
-    """Caps a huge array and set by their first 20 items without converting or sorting all."""
-    seconds, bounded = _capped_build_seconds(value)
-    assert bounded == [*range(MAX_CONTEXT_ITEMS), f"(+{len(value) - MAX_CONTEXT_ITEMS} more)"]
-    assert seconds < HUGE_CONTEXT_BUDGET_S, f"{type(value).__name__} took {seconds:.3f} s"
+def test_regression_huge_ordered_set_context_bounds_only_kept_items(
+    monkeypatch: pytest.MonkeyPatch, value: set[object], smallest: list[object]
+) -> None:
+    """Selects the 20 smallest items of a million-item set by value, never by repr."""
+    calls, bounded = _count_bounding_calls(monkeypatch, value)
+    assert bounded == [*smallest, f"(+{HUGE_CONTEXT_ITEMS - MAX_CONTEXT_ITEMS} more)"]
+    assert calls["_bounded_value"] == CAPPED_BOUND_CALLS
+    assert calls["bounded_repr"] <= CAPPED_BOUND_CALLS
 
 
-def test_regression_mixed_set_context_is_ordered_by_repr() -> None:
+def test_regression_set_context_order_ignores_the_hash_seed() -> None:
+    """Gives the same bounded sets of frozensets and of NaN, floats and text under every seed."""
+    outputs = outputs_under_hash_seeds(SET_ORDER_SCRIPT, SET_ORDER_SEEDS)
+    assert len(set(outputs)) == 1, outputs
+
+
+def test_regression_mixed_set_context_is_ordered_by_type_then_value() -> None:
     error = SchemaError("x", hint="y", context={"ids": {2, "a", 1.5}})
     assert error.context["ids"] == [1.5, 2, "a"]
 

@@ -35,10 +35,12 @@ Contains:
 """
 
 import heapq
+import json
 import math
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from itertools import islice
+from operator import itemgetter
 from typing import TYPE_CHECKING, ClassVar, cast
 
 import numpy as np
@@ -59,6 +61,7 @@ CUT_MARK = "…"
 # A cut keeps both ends: the start names what the value is, the end holds a path's file name.
 ECHO_HEAD_CHARS = 40
 ECHO_TAIL_CHARS = MAX_ECHOED_INPUT_CHARS - ECHO_HEAD_CHARS - len(CUT_MARK)
+NUMBER_TYPES = frozenset({bool, int, float})
 MORE_PATTERN = re.compile(r"\(\+[0-9]+ more\)")
 # CPython refuses to print ints longer than sys.int_max_str_digits, which the environment can
 # lower to 640 and no further; ints at or past this bound echo by size so every environment
@@ -144,14 +147,17 @@ def bounded_context(context: Mapping[str, object]) -> dict[str, JsonValue]:
     """Bounds a context mapping to JSON values of limited size and depth.
 
     Text and reprs are cut to 80 characters. Lists, tuples, arrays, sets and mappings keep 20
-    items or entries plus a `"(+n more)"` count; sets keep their 20 smallest items, by value,
-    or by repr when the items do not compare. Numpy values become plain numbers or lists,
+    items or entries plus a `"(+n more)"` count. A set keeps its 20 smallest items: by value
+    when it holds only text, only bytes, or only numbers without NaN, and otherwise by type
+    name and bounded JSON text, so no hash seed changes the result. Numpy values become plain
+    numbers or lists,
     mapping keys become text, non-finite floats become text, and anything else, or anything
     nested deeper than 8 levels, becomes its bounded repr, or its type name when the repr
     raises. Bounding a bounded context changes nothing.
 
-    Cost is linear in the kept items, except that a set is scanned once in full to find its
-    smallest items, since its iteration order can change with the hash seed.
+    Cost is linear in the kept items, except for sets, whose iteration order can change with
+    the hash seed: a set is scanned once in full, and a set that is not ordered by value has
+    every item bounded once to rank it.
 
     Args:
         context: Debugging values chosen by a raise site.
@@ -192,8 +198,10 @@ def _safe_repr(value: object) -> str:
     """Returns the bounded repr of a value, or its type name when its repr raises."""
     try:
         return bounded_repr(value)
-    # Every exception: a context value's own __repr__ can raise anything, and a failing repr
-    # must not stop the error that carries it from being built.
+    except (MemoryError, RecursionError):
+        raise
+    # Every other exception: a context value's own __repr__ can raise anything, and a failing
+    # repr must not stop the error that carries it from being built.
     except Exception:
         return f"<unprintable {type(value).__name__}>"
 
@@ -226,15 +234,38 @@ def _bounded_array(array: np.ndarray, depth: int) -> JsonValue:
 
 
 def _bounded_set(items: set[object] | frozenset[object], depth: int) -> list[JsonValue]:
-    """Keeps the 20 smallest items of a set, by value or else by repr, counting the rest."""
-    try:
-        # Comparability is only known at run time; a TypeError falls back to the repr order.
-        kept: Sequence[object] = heapq.nsmallest(
-            MAX_CONTEXT_ITEMS, cast("set[SupportsRichComparison]", items)
-        )
-    except TypeError:
-        kept = heapq.nsmallest(MAX_CONTEXT_ITEMS, items, key=_safe_repr)
-    return _listed(kept, len(items) - len(kept), depth)
+    """Keeps the 20 smallest items of a set, counting the rest, in an order no hash seed moves."""
+    if _is_totally_ordered(items):
+        kept = heapq.nsmallest(MAX_CONTEXT_ITEMS, cast("set[SupportsRichComparison]", items))
+        return _listed(kept, len(items) - len(kept), depth)
+    ranked = heapq.nsmallest(
+        MAX_CONTEXT_ITEMS, (_ranked(item, depth + 1) for item in items), key=itemgetter(0)
+    )
+    bounded = [value for _, value in ranked]
+    if len(items) > len(ranked):
+        bounded.append(more_count(len(items) - len(ranked)))
+    return bounded
+
+
+def _is_totally_ordered(items: set[object] | frozenset[object]) -> bool:
+    """Tells whether `<` totally orders a set: all text, all bytes, or numbers with no NaN."""
+    kinds = {type(item) for item in items}
+    if kinds <= {str} or kinds <= {bytes}:
+        return True
+    if not kinds <= NUMBER_TYPES:
+        return False
+    return float not in kinds or not any(
+        isinstance(item, float) and math.isnan(item) for item in items
+    )
+
+
+def _ranked(item: object, depth: int) -> tuple[tuple[str, str], JsonValue]:
+    """Bounds one set item and keys it by its type name and its bounded JSON text.
+
+    Two items with the same key bound to the same value, so ties cannot reorder the output.
+    """
+    value = _bounded_value(item, depth)
+    return (type(item).__qualname__, json.dumps(value, sort_keys=True)), value
 
 
 def _bounded_items(items: list[object] | tuple[object, ...], depth: int) -> list[JsonValue]:
