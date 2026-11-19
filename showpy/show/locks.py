@@ -116,7 +116,7 @@ def locked_changes(before: Show, after: Show) -> list[str]:
     ]
 
 
-def require_unlocked(before: Show, after: Show, force: bool = False) -> None:
+def require_unlocked(before: Show, after: Show, *, force: bool = False) -> None:
     """Raises LockedError when `after` touches what `before` pins or locks, unless forced.
 
     >>> from showpy.examples import two_set_show

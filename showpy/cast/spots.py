@@ -93,7 +93,7 @@ def _default_shape(group: Group) -> Shape:
 
 
 def _new_placements(
-    entries: Sequence[tuple[Spot, Point]], on_field: bool, is_pinned: bool
+    entries: Sequence[tuple[Spot, Point]], *, on_field: bool, is_pinned: bool
 ) -> tuple[Placement, ...]:
     return tuple(
         Placement(entity=s.id, x=p[0], y=p[1], on_field=on_field, pinned=is_pinned)
@@ -118,7 +118,7 @@ def _entered_pinned_sets(before: "Show", after: "Show") -> list[str]:
 
 
 def _require_pictures_kept(
-    before: "Show", after: "Show", rename: Mapping[SpotId, SpotId], force: bool
+    before: "Show", after: "Show", rename: Mapping[SpotId, SpotId], *, force: bool
 ) -> None:
     """Raises LockedError when `after` changes a pinned picture of `before` beyond `rename`."""
     if force:
@@ -138,25 +138,25 @@ def _require_pictures_kept(
 
 
 def _insert_spots(
-    show: "Show", entries: Sequence[tuple[Spot, Point]], set_id: SetId, force: bool
+    show: "Show", entries: Sequence[tuple[Spot, Point]], set_id: SetId, *, force: bool
 ) -> "Show":
     created_at = show.set_index(set_id)
     pinned_sets = _pinned_set_ids(show)
     sets = tuple(
         s.replace(
             placements=s.placements
-            + _new_placements(entries, index >= created_at, s.id in pinned_sets)
+            + _new_placements(entries, on_field=index >= created_at, is_pinned=s.id in pinned_sets)
         )
         for index, s in enumerate(show.sets)
     )
     new_spots = tuple(spot for spot, _ in entries)
     after = _with_cast(show, spots=show.cast.spots + new_spots).replace(sets=sets)
-    _require_pictures_kept(show, after, {}, force)
+    _require_pictures_kept(show, after, {}, force=force)
     return after
 
 
 def _add_points(
-    show: "Show", points: Sequence[Point], group: str, set_id: SetId, force: bool
+    show: "Show", points: Sequence[Point], group: str, set_id: SetId, *, force: bool
 ) -> "Show":
     show.set_index(set_id)
     shape = _default_shape(_group(show.cast, group))
@@ -165,7 +165,7 @@ def _add_points(
         (Spot(id=label, group=group, shape=shape), (float(p[0]), float(p[1])))
         for label, p in zip(labels, points, strict=True)
     ]
-    return _insert_spots(show, entries, set_id, force)
+    return _insert_spots(show, entries, set_id, force=force)
 
 
 def add_spot(
@@ -182,7 +182,7 @@ def add_spot(
     >>> show.cast.ids()[-1], show.set("1").get("T5").on_field
     ('T5', False)
     """
-    return _add_points(show, [point], group, set_id, force)
+    return _add_points(show, [point], group, set_id, force=force)
 
 
 def add_spots_along(
@@ -198,7 +198,7 @@ def add_spots_along(
     7
     """
     points = space_along(curve, n)
-    return _add_points(show, [(p[0], p[1]) for p in points.tolist()], group, set_id, force)
+    return _add_points(show, [(p[0], p[1]) for p in points.tolist()], group, set_id, force=force)
 
 
 def _fill_count(area: Area, interval: Meters) -> int:
@@ -279,7 +279,7 @@ def fill_spots(
             hint="pass interval=<meters> or n=<count>",
             context={"interval": interval, "n": n},
         )
-    return _add_points(show, [(p[0], p[1]) for p in points.tolist()], group, set_id, force)
+    return _add_points(show, [(p[0], p[1]) for p in points.tolist()], group, set_id, force=force)
 
 
 def duplicate_spots(
@@ -301,7 +301,7 @@ def duplicate_spots(
     for spot, label in zip(originals, labels, strict=True):
         x, y = source.get(spot.id).point
         entries.append((spot.replace(id=label), (x + offset[0], y + offset[1])))
-    return _insert_spots(show, entries, set_id, force)
+    return _insert_spots(show, entries, set_id, force=force)
 
 
 def _locked_items(show: "Show", ids: frozenset[SpotId]) -> list[str]:

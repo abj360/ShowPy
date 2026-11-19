@@ -108,18 +108,18 @@ AFFINE_ROW = (0.0, 0.0, 1.0)
 
 
 def shift[T: (Points, CurveModel, Set)](
-    obj: T, dx: Meters, dy: Meters, sel: SetSelector = ALL, force: bool = False
+    obj: T, dx: Meters, dy: Meters, sel: SetSelector = ALL, *, force: bool = False
 ) -> T:
     """Translates by (dx, dy).
 
     >>> shift(np.array([[0.0, 0.0]]), 1.0, 2.0).tolist()
     [[1.0, 2.0]]
     """
-    return apply_matrix(obj, translation_matrix(dx, dy), sel, force)
+    return apply_matrix(obj, translation_matrix(dx, dy), sel, force=force)
 
 
 def move_to[T: (Points, CurveModel, Set)](
-    obj: T, anchor: Anchor, to: Point, sel: SetSelector = ALL, force: bool = False
+    obj: T, anchor: Anchor, to: Point, sel: SetSelector = ALL, *, force: bool = False
 ) -> T:
     """Moves an anchor of the object onto `to`; front is the lowest y, left the lowest x.
 
@@ -133,18 +133,18 @@ def move_to[T: (Points, CurveModel, Set)](
         fx, fy = pick("anchor", anchor, BOX_ANCHORS)
         box = bounds(source)
         here = (box.min[0] + fx * box.size[0], box.min[1] + fy * box.size[1])
-    return shift(obj, to[0] - here[0], to[1] - here[1], sel, force)
+    return shift(obj, to[0] - here[0], to[1] - here[1], sel, force=force)
 
 
 def rotate[T: (Points, CurveModel, Set)](
-    obj: T, deg: Degrees, about: About = "center", sel: SetSelector = ALL, force: bool = False
+    obj: T, deg: Degrees, about: About = "center", sel: SetSelector = ALL, *, force: bool = False
 ) -> T:
     """Rotates counter-clockwise by `deg` about an anchor; facings turn by the same angle.
 
     >>> rotate(np.array([[1.0, 0.0]]), 90.0, about=(0.0, 0.0)).round(6).tolist()
     [[0.0, 1.0]]
     """
-    return apply_matrix(obj, rotation_matrix(deg, about_point(obj, about, sel)), sel, force)
+    return apply_matrix(obj, rotation_matrix(deg, about_point(obj, about, sel)), sel, force=force)
 
 
 def scale[T: (Points, CurveModel, Set)](
@@ -153,6 +153,7 @@ def scale[T: (Points, CurveModel, Set)](
     sy: float | None = None,
     about: About = "center",
     sel: SetSelector = ALL,
+    *,
     force: bool = False,
 ) -> T:
     """Resizes about an anchor; `sy` defaults to `sx`. Factors must be positive.
@@ -168,7 +169,7 @@ def scale[T: (Points, CurveModel, Set)](
             context={"sx": sx, "sy": factor_y},
         )
     matrix = scale_matrix(sx, factor_y, about_point(obj, about, sel))
-    return apply_matrix(obj, matrix, sel, force)
+    return apply_matrix(obj, matrix, sel, force=force)
 
 
 def _radial(anchor: Point, d: Meters) -> PointMap:
@@ -201,7 +202,7 @@ def _require_non_negative(name: str, d: Meters) -> None:
 
 
 def expand[T: (Points, CurveModel, Set)](
-    obj: T, d: Meters, about: About = "center", sel: SetSelector = ALL, force: bool = False
+    obj: T, d: Meters, about: About = "center", sel: SetSelector = ALL, *, force: bool = False
 ) -> T:
     """Moves every point d meters away from an anchor along its ray; points on it stay.
 
@@ -209,11 +210,11 @@ def expand[T: (Points, CurveModel, Set)](
     [[3.0, 0.0]]
     """
     _require_non_negative("expand", d)
-    return apply_pointwise(obj, _radial(about_point(obj, about, sel), d), sel, force)
+    return apply_pointwise(obj, _radial(about_point(obj, about, sel), d), sel, force=force)
 
 
 def contract[T: (Points, CurveModel, Set)](
-    obj: T, d: Meters, about: About = "center", sel: SetSelector = ALL, force: bool = False
+    obj: T, d: Meters, about: About = "center", sel: SetSelector = ALL, *, force: bool = False
 ) -> T:
     """Moves every point d meters toward an anchor; overshooting the anchor raises.
 
@@ -221,10 +222,10 @@ def contract[T: (Points, CurveModel, Set)](
     [[2.0, 0.0]]
     """
     _require_non_negative("contract", d)
-    return apply_pointwise(obj, _radial(about_point(obj, about, sel), -d), sel, force)
+    return apply_pointwise(obj, _radial(about_point(obj, about, sel), -d), sel, force=force)
 
 
-def _end_direction(pieces: Points, lengths: Points, from_end: bool) -> Points:
+def _end_direction(pieces: Points, lengths: Points, *, from_end: bool) -> Points:
     order = range(len(pieces) - 1, -1, -1) if from_end else range(len(pieces))
     index = next(i for i in order if lengths[i] > MOVE_TOL)
     direction: Points = pieces[index] / lengths[index]
@@ -238,8 +239,10 @@ def _along_extended(pts: Points, s: Points) -> Points:
     total = float(cumulative[-1])
     out = np.stack([np.interp(s, cumulative, pts[:, k]) for k in (0, 1)], axis=1)
     before, after = s < 0, s > total
-    out[before] = pts[0] + np.outer(s[before], _end_direction(pieces, lengths, False))
-    out[after] = pts[-1] + np.outer(s[after] - total, _end_direction(pieces, lengths, True))
+    out[before] = pts[0] + np.outer(s[before], _end_direction(pieces, lengths, from_end=False))
+    out[after] = pts[-1] + np.outer(
+        s[after] - total, _end_direction(pieces, lengths, from_end=True)
+    )
     return out
 
 
@@ -268,6 +271,7 @@ def set_interval[S: (Points, Set)](
     interval: Meters,
     anchor: Literal["start", "center", "end"] = "center",
     sel: SetSelector = ALL,
+    *,
     force: bool = False,
 ) -> S:
     """Respaces spots `interval` apart along the polyline through them, in order.
@@ -282,7 +286,7 @@ def set_interval[S: (Points, Set)](
         raise SpacingError(
             f"interval must be above 0, got {interval}", hint="pass a positive interval"
         )
-    return apply_pointwise(obj, _respace(interval, anchor), sel, force)
+    return apply_pointwise(obj, _respace(interval, anchor), sel, force=force)
 
 
 def _vertical_mirror(axis_x: float) -> Matrix:
@@ -307,7 +311,7 @@ def _mirror_line(obj: Points | CurveModel | Set, axis: MirrorAxis, sel: SetSelec
 
 
 def mirror[T: (Points, CurveModel, Set)](
-    obj: T, axis: MirrorAxis, sel: SetSelector = ALL, force: bool = False
+    obj: T, axis: MirrorAxis, sel: SetSelector = ALL, *, force: bool = False
 ) -> T:
     """Reflects across a line; facings reflect too.
 
@@ -317,7 +321,7 @@ def mirror[T: (Points, CurveModel, Set)](
     >>> mirror(np.array([[1.0, 2.0]]), "x").tolist()
     [[-1.0, 2.0]]
     """
-    return apply_matrix(obj, _mirror_line(obj, axis, sel), sel, force)
+    return apply_matrix(obj, _mirror_line(obj, axis, sel), sel, force=force)
 
 
 def _pair_by_assignment(
@@ -350,6 +354,7 @@ def symmetrize(
     source_side: Literal["left", "right"] = "left",
     pairs: Mapping[SpotId, SpotId] | None = None,
     axis_x: float = 0.0,
+    *,
     force: bool = False,
 ) -> Set:
     """Copies each source-side spot's mirror image (position and facing) onto its partner.
@@ -389,6 +394,7 @@ def skew[T: (Points, CurveModel, Set)](
     deg_y: Degrees = 0.0,
     about: About = "center",
     sel: SetSelector = ALL,
+    *,
     force: bool = False,
 ) -> T:
     """Shears about an anchor: x shifts by tan(deg_x)·y, y by tan(deg_y)·x.
@@ -397,7 +403,7 @@ def skew[T: (Points, CurveModel, Set)](
     [[1.0, 1.0]]
     """
     matrix = skew_matrix(deg_x, deg_y, about_point(obj, about, sel))
-    return apply_matrix(obj, matrix, sel, force)
+    return apply_matrix(obj, matrix, sel, force=force)
 
 
 def _as_matrix(matrix: npt.ArrayLike) -> Matrix:
@@ -418,14 +424,14 @@ def _as_matrix(matrix: npt.ArrayLike) -> Matrix:
 
 
 def affine[T: (Points, CurveModel, Set)](
-    obj: T, matrix: npt.ArrayLike, sel: SetSelector = ALL, force: bool = False
+    obj: T, matrix: npt.ArrayLike, sel: SetSelector = ALL, *, force: bool = False
 ) -> T:
     """Applies a 2x3 or 3x3 affine matrix; facings follow its linear part.
 
     >>> affine(np.array([[1.0, 1.0]]), [[2.0, 0.0, 1.0], [0.0, 1.0, 0.0]]).tolist()
     [[3.0, 1.0]]
     """
-    return apply_matrix(obj, _as_matrix(matrix), sel, force)
+    return apply_matrix(obj, _as_matrix(matrix), sel, force=force)
 
 
 def interpolate_forms(a: Points, b: Points, u: float) -> Points:

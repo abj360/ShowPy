@@ -13,7 +13,7 @@ Contains:
 import math
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import numpy.typing as npt
@@ -168,7 +168,7 @@ class Subpath:
 
     start: Point
     pieces: tuple[Piece, ...]
-    closed: bool
+    closed: bool = field(kw_only=True)
 
     def to_d(self) -> str:
         """Returns the subpath as absolute path data."""
@@ -213,9 +213,9 @@ class _PathBuilder:
         self.last_control: Point | None = None
         self.last_command = ""
 
-    def flush(self, closed: bool) -> None:
+    def flush(self, *, closed: bool) -> None:
         if self.pieces:
-            self.subpaths.append(Subpath(self.start, tuple(self.pieces), closed))
+            self.subpaths.append(Subpath(self.start, tuple(self.pieces), closed=closed))
         self.pieces = []
 
     def add(self, piece: Piece, control: Point | None = None) -> None:
@@ -292,7 +292,9 @@ def _arc(b: _PathBuilder, a: list[float], ox: float, oy: float) -> None:
         b.add(LinePiece(b.current, end))
         return
     try:
-        piece = _arc_piece(b.current, end, abs(a[0]), abs(a[1]), a[2], bool(a[3]), bool(a[4]))
+        piece = _arc_piece(
+            b.current, end, abs(a[0]), abs(a[1]), a[2], large=bool(a[3]), sweep=bool(a[4])
+        )
     except (OverflowError, ZeroDivisionError, ValueError) as exc:
         raise _arc_error(end) from exc
     if not all(math.isfinite(v) for v in (*piece.center, piece.theta1_deg, piece.dtheta_deg)):
@@ -322,7 +324,7 @@ HANDLERS: dict[str, Callable[[_PathBuilder, list[float], float, float], None]] =
 
 
 def _arc_piece(
-    p1: Point, p2: Point, rx: float, ry: float, phi_deg: float, large: bool, sweep: bool
+    p1: Point, p2: Point, rx: float, ry: float, phi_deg: float, *, large: bool, sweep: bool
 ) -> ArcPiece:
     phi = math.radians(phi_deg)
     cos_phi, sin_phi = math.cos(phi), math.sin(phi)

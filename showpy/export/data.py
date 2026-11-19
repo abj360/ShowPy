@@ -255,7 +255,7 @@ def _number(value: float, places: int) -> str:
     return text.rstrip("0").rstrip(".") if "." in text else text
 
 
-def _flag(value: bool) -> str:
+def _flag(*, value: bool) -> str:
     return TRUE_TEXT if value else FALSE_TEXT
 
 
@@ -296,7 +296,7 @@ def export_frames_csv(show: Show, per_count: int = 1) -> str:
                     _number(x, FRAME_PLACES),
                     _number(y, FRAME_PLACES),
                     _number(state.facing, FRAME_PLACES),
-                    _flag(state.on_field),
+                    _flag(value=state.on_field),
                 ]
             )
     return out.getvalue()
@@ -342,7 +342,7 @@ def _chart_table(chart: Chart) -> TextTable:
             *_point_cells(r.xy),
             _facing_text(r.facing),
             r.form or "",
-            _flag(r.on_field),
+            _flag(value=r.on_field),
             r.note or "",
         )
         for r in chart.rows
@@ -354,7 +354,7 @@ def _cell(value: object) -> str:
     if value is None or (isinstance(value, float) and math.isnan(value)):
         return ""
     if isinstance(value, bool):
-        return _flag(value)
+        return _flag(value=value)
     if isinstance(value, float):
         return f"{value:g}"
     return str(value)

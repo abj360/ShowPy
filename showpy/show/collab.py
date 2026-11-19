@@ -89,7 +89,7 @@ def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
         return show
     if event.kind in ("pin", "unpin"):
         held = Pin.model_validate(event.payload)
-        _require_pin_force(show, held, event, force)
+        _require_pin_force(show, held, event, force=force)
         if event.kind == "pin":
             return pin(show, held.target, held.id, held.reason, held.by)
         return unpin(show, held.target, held.id)
@@ -104,7 +104,7 @@ def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
     return apply_change(show, [op], force=force)
 
 
-def _require_pin_force(show: Show, held: Pin, event: CanvasEvent, force: bool) -> None:
+def _require_pin_force(show: Show, held: Pin, event: CanvasEvent, *, force: bool) -> None:
     key = (held.target, pin_key(held.target, held.id))
     exists = any((p.target, p.id) == key for p in show.pins)
     if force or not exists:

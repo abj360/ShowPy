@@ -131,7 +131,7 @@ def _columns(header: tuple[str, ...], rows: list[tuple[str, ...]]) -> tuple[floa
 
 
 def _line(
-    edges: list[float], y: float, size: float, cells: tuple[str, ...], bold: bool
+    edges: list[float], y: float, size: float, cells: tuple[str, ...], *, bold: bool
 ) -> list[_Text]:
     return [_Text(x, y, size, bold, cell) for x, cell in zip(edges, cells, strict=True) if cell]
 
@@ -146,7 +146,9 @@ def _table_pages(table: TextTable) -> list[list[_Text]]:
     per_page = max(1, math.floor((header_y - MARGIN) / leading))
     pages = []
     for first in range(0, max(len(rows), 1), per_page):
-        page = [_Text(MARGIN, title_y, TITLE_SIZE, True, table.title)] if table.title else []
+        page = (
+            [_Text(MARGIN, title_y, TITLE_SIZE, bold=True, text=table.title)] if table.title else []
+        )
         page += _line(edges, header_y, size, table.header, bold=True)
         for offset, row in enumerate(rows[first : first + per_page], start=1):
             page += _line(edges, header_y - offset * leading, size, row, bold=False)
@@ -158,7 +160,7 @@ def _with_footers(pages: list[list[_Text]]) -> list[list[_Text]]:
     total = len(pages)
     footer_y = MARGIN / 2
     return [
-        [*page, _Text(MARGIN, footer_y, FOOTER_SIZE, False, f"page {i} of {total}")]
+        [*page, _Text(MARGIN, footer_y, FOOTER_SIZE, bold=False, text=f"page {i} of {total}")]
         for i, page in enumerate(pages, start=1)
     ]
 

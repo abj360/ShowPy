@@ -49,29 +49,29 @@ ZERO_TOL = 1e-9
 type Sel = Sequence[SpotId] | Selection
 
 
-def _set_facings(target: Set, facings: dict[SpotId, Degrees], force: bool) -> Set:
+def _set_facings(target: Set, facings: dict[SpotId, Degrees], *, force: bool) -> Set:
     updates = {e: {"facing": normalize_angle(f)} for e, f in facings.items()}
     return target.with_placements(updates, force=force)
 
 
-def face_direction(target: Set, sel: Sel, deg: Degrees, force: bool = False) -> Set:
+def face_direction(target: Set, sel: Sel, deg: Degrees, *, force: bool = False) -> Set:
     """Gives spots a fixed facing; pinned spots raise LockedError unless forced.
 
     >>> from showpy.examples import two_set_show
     >>> face_direction(two_set_show().set("1"), ["T1"], 90.0).get("T1").facing
     90.0
     """
-    return _set_facings(target, dict.fromkeys(sel, deg), force)
+    return _set_facings(target, dict.fromkeys(sel, deg), force=force)
 
 
-def face_audience(target: Set, sel: Sel, force: bool = False) -> Set:
+def face_audience(target: Set, sel: Sel, *, force: bool = False) -> Set:
     """Faces spots toward the audience.
 
     >>> from showpy.examples import two_set_show
     >>> face_audience(two_set_show().set("1"), ["T1"]).get("T1").facing
     0.0
     """
-    return face_direction(target, sel, AUDIENCE, force)
+    return face_direction(target, sel, AUDIENCE, force=force)
 
 
 def _toward(origin: Point, point: Point, fallback: Degrees) -> Degrees:
@@ -79,7 +79,7 @@ def _toward(origin: Point, point: Point, fallback: Degrees) -> Degrees:
     return fallback if math.hypot(dx, dy) < ZERO_TOL else vector_facing((dx, dy))
 
 
-def face_point(target: Set, sel: Sel, point: Point, force: bool = False) -> Set:
+def face_point(target: Set, sel: Sel, point: Point, *, force: bool = False) -> Set:
     """Faces spots toward a point; a spot on the point keeps its facing.
 
     >>> from showpy.examples import two_set_show
@@ -87,10 +87,10 @@ def face_point(target: Set, sel: Sel, point: Point, force: bool = False) -> Set:
     90.0
     """
     facings = {e: _toward(target.get(e).point, point, target.get(e).facing) for e in sel}
-    return _set_facings(target, facings, force)
+    return _set_facings(target, facings, force=force)
 
 
-def face_entity(target: Set, sel: Sel, entity: SpotId, force: bool = False) -> Set:
+def face_entity(target: Set, sel: Sel, entity: SpotId, *, force: bool = False) -> Set:
     """Faces spots toward another spot's placement in the same set.
 
     Over time, use a TOWARD_ENTITY path facing or override, which tracks the spot as it moves.
@@ -99,7 +99,7 @@ def face_entity(target: Set, sel: Sel, entity: SpotId, force: bool = False) -> S
     >>> face_entity(two_set_show().set("1"), ["T1"], "T2").get("T1").facing
     90.0
     """
-    return face_point(target, sel, target.get(entity).point, force)
+    return face_point(target, sel, target.get(entity).point, force=force)
 
 
 def _form(show: Show, form_id: FormId) -> Form:
@@ -139,7 +139,7 @@ def _tangent_facings(
 
 
 def face_along(
-    show: Show, set_id: SetId, form_id: FormId, reverse: bool = False, force: bool = False
+    show: Show, set_id: SetId, form_id: FormId, *, reverse: bool = False, force: bool = False
 ) -> Set:
     """Faces form members along the form's curve, in travel direction unless reversed.
 
@@ -153,11 +153,11 @@ def face_along(
     90
     """
     facings = _tangent_facings(show, set_id, form_id, HALF_TURN if reverse else 0.0)
-    return _set_facings(show.set(set_id), facings, force)
+    return _set_facings(show.set(set_id), facings, force=force)
 
 
 def face_normal(
-    show: Show, set_id: SetId, form_id: FormId, outward: bool = True, force: bool = False
+    show: Show, set_id: SetId, form_id: FormId, *, outward: bool = True, force: bool = False
 ) -> Set:
     """Faces form members perpendicular to the curve; outward is the right of travel.
 
@@ -174,7 +174,7 @@ def face_normal(
     """
     turn_by = -QUARTER_TURN if outward else QUARTER_TURN
     facings = _tangent_facings(show, set_id, form_id, turn_by)
-    return _set_facings(show.set(set_id), facings, force)
+    return _set_facings(show.set(set_id), facings, force=force)
 
 
 def add_facing_override(show: Show, override: FacingOverride) -> Show:

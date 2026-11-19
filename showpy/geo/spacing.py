@@ -63,7 +63,7 @@ def _require_count(n: int) -> None:
 
 
 def space_along(
-    curve: Curve, n: int, start: Meters = 0.0, end: Meters | None = None, endpoints: bool = True
+    curve: Curve, n: int, start: Meters = 0.0, end: Meters | None = None, *, endpoints: bool = True
 ) -> Points:
     """Spaces n spots evenly by arc length between `start` and `end`.
 

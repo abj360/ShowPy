@@ -131,7 +131,7 @@ def edit_text_count(
     >>> wider.members[-2:], wider.geometry["n"]
     (('X1', 'X2'), 26)
     """
-    check_unlocked(form, force)
+    check_unlocked(form, force=force)
     require_text_form(form)
     members = (*_kept(form, remove), *_added(form, add))
     count = len(members) if n is None and spacing is None else n

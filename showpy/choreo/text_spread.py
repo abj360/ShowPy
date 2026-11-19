@@ -80,7 +80,7 @@ def stroke_gap(stroke: Curve, k: int) -> float:
     return max(COINCIDENT_TOL_M, JUNCTION_GAP_SHARE * _spacing(stroke, k))
 
 
-def _even_spreads(length: float, k: int, closed: bool) -> Iterator[FloatArray]:
+def _even_spreads(length: float, k: int, *, closed: bool) -> Iterator[FloatArray]:
     """Yields arc-length stations for k spots, preferred spread first, then shifted ones.
 
     An open spread `(j + t) L / (k - 1 + t + u)` leaves margins t and u (in spacings) at the
@@ -147,7 +147,7 @@ class SlotSpreader:
         )
 
     def _spreads(self, stroke: Curve, k: int, gap: float) -> Iterator[FloatArray]:
-        yield from _even_spreads(stroke.length(), k, stroke.closed)
+        yield from _even_spreads(stroke.length(), k, closed=stroke.closed)
         avoiding = self._avoiding_spread(stroke, k, gap)
         if avoiding is not None:
             yield avoiding

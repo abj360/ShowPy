@@ -524,7 +524,8 @@ def test_content_hash_is_domain_tagged_sha256() -> None:
 def test_content_hash_separates_domains_and_kinds() -> None:
     assert content_hash({"a": 1}) != content_hash({"a": 1}, domain="showpy.revision")
     assert len({content_hash(b'"a"'), content_hash("a"), content_hash(["a"])}) == 3
-    assert content_hash(True) != content_hash(1)
+    truth = True
+    assert content_hash(truth) != content_hash(1)
 
 
 def test_content_hash_ignores_hash_seed() -> None:

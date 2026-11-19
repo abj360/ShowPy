@@ -17,10 +17,16 @@ Contains:
     test_code_scan_flags_literals_and_unknown_members: proves the code scan can fail
     test_every_error_code_has_a_one_line_docstring: fails on a member without a docstring
     test_error_code_docs_are_current: fails when docs/error-codes.md differs from its generator
+    find_positional_booleans(): lists file, line and parameter of each positional bool parameter
+    test_regression_library_has_no_positional_boolean_parameter: fails on any such parameter
+    test_regression_public_functions_take_booleans_by_keyword: fails when a public signature
+        takes a bool positionally
+    test_positional_boolean_scan_flags_a_definition: proves the scan can fail
 """
 
 import ast
 import importlib.util
+import inspect
 import io
 import re
 import tokenize
@@ -29,6 +35,8 @@ from types import ModuleType
 
 import pytest
 
+import showpy
+from showpy._api_table import PUBLIC_API
 from showpy.core.error_codes import ErrorCode
 
 CITATION_PATTERN = re.compile(r"\bADR\b|\bUP-\d+\.\d+-\d+\b|\bdocs/")
@@ -224,3 +232,65 @@ def test_error_code_docs_are_current() -> None:
         "E: docs/error-codes.md differs from ErrorCode; "
         "run: uv run python scripts/gen_error_codes.py"
     )
+
+
+def _is_boolean_annotation(annotation: ast.expr | None) -> bool:
+    """Tells whether an annotation is `bool` or a union that contains it."""
+    if isinstance(annotation, ast.BinOp) and isinstance(annotation.op, ast.BitOr):
+        return _is_boolean_annotation(annotation.left) or _is_boolean_annotation(annotation.right)
+    return isinstance(annotation, ast.Name) and annotation.id == "bool"
+
+
+def find_positional_booleans(source: str, name: str) -> list[str]:
+    """Lists `name:line:parameter` for each positional parameter annotated as a bool."""
+    found: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        found.extend(
+            f"{name}:{arg.lineno}:{arg.arg}"
+            for arg in (*node.args.posonlyargs, *node.args.args)
+            if _is_boolean_annotation(arg.annotation)
+        )
+    return found
+
+
+def test_regression_library_has_no_positional_boolean_parameter() -> None:
+    """Requires every bool parameter under showpy/ and scripts/ to be keyword-only."""
+    paths = [*LIBRARY_ROOT.rglob("*.py"), *(REPO_ROOT / "scripts").glob("*.py")]
+    offenders = [
+        hit
+        for path in paths
+        for hit in find_positional_booleans(path.read_text(encoding="utf-8"), str(path))
+    ]
+    assert not offenders, f"E: positional bool parameters: {offenders}"
+
+
+def test_regression_public_functions_take_booleans_by_keyword() -> None:
+    """Requires no public function or method to accept a bool positionally."""
+    offenders: list[str] = []
+    for public_name, _module, _attribute in PUBLIC_API:
+        obj = getattr(showpy, public_name)
+        targets = [obj] if inspect.isfunction(obj) else []
+        if inspect.isclass(obj):
+            targets = [
+                member
+                for _, member in inspect.getmembers(obj, inspect.isfunction)
+                if member.__qualname__.startswith(obj.__name__ + ".")
+            ]
+        for target in targets:
+            offenders.extend(
+                f"{public_name}:{target.__qualname__}:{parameter.name}"
+                for parameter in inspect.signature(target).parameters.values()
+                if parameter.annotation in (bool, "bool")
+                and parameter.kind
+                in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            )
+    assert not offenders, f"E: positional bool parameters: {offenders}"
+
+
+def test_positional_boolean_scan_flags_a_definition() -> None:
+    """Shows the scan reports a positional bool and accepts a keyword-only one."""
+    assert find_positional_booleans("def f(a: int, force: bool = False): ...", "m") == ["m:1:force"]
+    assert find_positional_booleans("def f(a: int, *, force: bool = False): ...", "m") == []
+    assert find_positional_booleans("def f(a: int, test: Callable[[int], bool]): ...", "m") == []

@@ -106,7 +106,7 @@ def _is_name_too_long(error: OSError, path: str) -> bool:
     )
 
 
-def _storage_error(show_id: str, error: OSError, fallback: Path, is_link: bool) -> StorageError:
+def _storage_error(show_id: str, error: OSError, fallback: Path, *, is_link: bool) -> StorageError:
     path = str(error.filename or fallback)
     context: dict[str, object] = {"show": show_id, "path": path, "errno": error.errno}
     if _is_name_too_long(error, path):
@@ -134,12 +134,12 @@ def _storage_error(show_id: str, error: OSError, fallback: Path, is_link: bool) 
 
 
 @contextmanager
-def _mapped_io(show_id: str, path: Path, is_link: bool = False) -> Iterator[None]:
+def _mapped_io(show_id: str, path: Path, *, is_link: bool = False) -> Iterator[None]:
     """Turns an OSError raised inside the block into a StorageError with a code and hint."""
     try:
         yield
     except OSError as error:
-        raise _storage_error(show_id, error, path, is_link) from error
+        raise _storage_error(show_id, error, path, is_link=is_link) from error
 
 
 def _guarded[F: Callable[..., Any]](method: F) -> F:  # Any: decorator keeps each signature

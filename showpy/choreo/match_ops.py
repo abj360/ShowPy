@@ -71,7 +71,7 @@ def forms_of_set(show: Show, set_id: SetId) -> dict[FormId, Form]:
 
 
 def clear_rows(
-    show: Show, tid: TransitionId, entities: Iterable[SpotId], force: bool = False
+    show: Show, tid: TransitionId, entities: Iterable[SpotId], *, force: bool = False
 ) -> Show:
     """Drops stored path rows of `entities` in transition `tid`; locked rows need force.
 
@@ -172,7 +172,7 @@ def _matched_members(form: Form, result: MatchResult) -> tuple[SpotId, ...]:
     return tuple(m for m in held if m is not None)
 
 
-def _matched_forms(show: Show, set_id: SetId, result: MatchResult, force: bool) -> Show:
+def _matched_forms(show: Show, set_id: SetId, result: MatchResult, *, force: bool) -> Show:
     touched = {form_id for form_id, _ in result.slots.values()}
     forms = dict(show.forms)
     for form_id, form in forms_of_set(show, set_id).items():
@@ -180,7 +180,7 @@ def _matched_forms(show: Show, set_id: SetId, result: MatchResult, force: bool) 
             continue
         members = _matched_members(form, result)
         if members != form.members:
-            check_unlocked(form, force)
+            check_unlocked(form, force=force)
             forms[form_id] = form.replace(members=members)
             require_text_members(forms[form_id])
     return show.replace(forms=forms)
@@ -224,7 +224,7 @@ def _point_updates(dest: Set, result: MatchResult) -> dict[SpotId, dict[str, obj
     return updates
 
 
-def apply_match(show: Show, tid: TransitionId, result: MatchResult, force: bool = False) -> Show:
+def apply_match(show: Show, tid: TransitionId, result: MatchResult, *, force: bool = False) -> Show:
     """Writes the result's targets into the destination set and resets moved spots' paths.
 
     Spots already on their target are left alone, so pinned spots that stay put are fine;
@@ -246,24 +246,24 @@ def apply_match(show: Show, tid: TransitionId, result: MatchResult, force: bool 
     if not result.slots:
         updates = _point_updates(dest, result)
         edited = with_set(show, dest.with_placements(updates, force=force))
-        return clear_rows(edited, tid, list(updates), force)
+        return clear_rows(edited, tid, list(updates), force=force)
     slot_updates = _slot_updates(dest, _slot_targets(show, tid[1], result))
-    forms_edited = _matched_forms(show, tid[1], result, force)
+    forms_edited = _matched_forms(show, tid[1], result, force=force)
     edited = with_set(forms_edited, dest.with_placements(slot_updates, force=force))
     relocated = [e for e, p in slot_updates.items() if is_elsewhere(dest.get(e), p.x, p.y)]
-    return clear_rows(edited, tid, relocated, force)
+    return clear_rows(edited, tid, relocated, force=force)
 
 
 def _swap_members(members: tuple[SpotId, ...], a: SpotId, b: SpotId) -> tuple[SpotId, ...]:
     return tuple(b if m == a else a if m == b else m for m in members)
 
 
-def _swap_forms(show: Show, set_id: SetId, a: SpotId, b: SpotId, force: bool) -> Show:
+def _swap_forms(show: Show, set_id: SetId, a: SpotId, b: SpotId, *, force: bool) -> Show:
     forms = dict(show.forms)
     for form_id, form in forms_of_set(show, set_id).items():
         if not {a, b} & set(form.members):
             continue
-        check_unlocked(form, force)
+        check_unlocked(form, force=force)
         members = _swap_members(form.members, a, b)
         forms[form_id] = form.replace(members=members)
     return show.replace(forms=forms)
@@ -273,7 +273,7 @@ def _spot_fields(placement: Placement) -> dict[str, object]:
     return {name: getattr(placement, name) for name in SWAPPED_FIELDS}
 
 
-def swap(show: Show, set_id: SetId, a: SpotId, b: SpotId, force: bool = False) -> Show:
+def swap(show: Show, set_id: SetId, a: SpotId, b: SpotId, *, force: bool = False) -> Show:
     """Swaps where two spots stand in one set, with facing and form slot.
 
     Members of the set's forms (`forms_of_set`) are swapped too, so regenerating a form keeps
@@ -287,10 +287,10 @@ def swap(show: Show, set_id: SetId, a: SpotId, b: SpotId, force: bool = False) -
     target = show.set(set_id)
     pa, pb = target.get(a), target.get(b)
     updates = {a: _spot_fields(pb), b: _spot_fields(pa)}
-    edited = with_set(show, target.with_placements(updates, force))
-    edited = _swap_forms(edited, set_id, a, b, force)
+    edited = with_set(show, target.with_placements(updates, force=force))
+    edited = _swap_forms(edited, set_id, a, b, force=force)
     for tid in _neighbour_tids(edited, set_id):
-        edited = clear_rows(edited, tid, [a, b], force)
+        edited = clear_rows(edited, tid, [a, b], force=force)
     return edited
 
 
@@ -350,7 +350,7 @@ class _Moves:
 
 
 def suggest_swaps(
-    show: Show, tid: TransitionId, k: int = 5, same_group: bool = True
+    show: Show, tid: TransitionId, k: int = 5, *, same_group: bool = True
 ) -> list[tuple[SpotId, SpotId, float]]:
     """Ranks destination swaps that shrink the largest straight move or remove crossings.
 

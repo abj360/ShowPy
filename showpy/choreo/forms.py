@@ -70,10 +70,10 @@ PROPORTIONAL = SpacingSpec(mode="proportional")
 OUTWARD = FacingSpec(mode="outward")
 
 
-def check_unlocked(form: Form, force: bool) -> None:
+def check_unlocked(form: Form, *, force: bool) -> None:
     """Raises LockedError when the form is locked and the caller did not pass force=True.
 
-    >>> check_unlocked(Form(id="f", set="1", kind="custom", geometry={}, members=()), False)
+    >>> check_unlocked(Form(id="f", set="1", kind="custom", geometry={}, members=()), force=False)
     """
     if form.locked and not force:
         raise LockedError(
@@ -270,10 +270,10 @@ def svg_form(
     members: Sequence[SpotId],
     svg: str,
     fit: Box2,
+    *,
     keep_aspect: bool = True,
     spacing: SpacingSpec | None = None,
     facing: FacingSpec | None = None,
-    *,
     set_id: SetId = "",
     n: int | None = None,
 ) -> Form:
@@ -472,7 +472,7 @@ def text_form(
 
 # Any: generator parameters are JSON values defined by each generator.
 def edit_params(
-    form: Form, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS, **params: Any
+    form: Form, *, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS, **params: Any
 ) -> Form:
     """Returns a generated form with some generator parameters changed.
 
@@ -480,7 +480,7 @@ def edit_params(
     >>> edit_params(f, turns=3.0).geometry["params"]["turns"]
     3.0
     """
-    check_unlocked(form, force)
+    check_unlocked(form, force=force)
     if form.kind != "generated":
         raise SchemaError(
             f"form {form.id} is a {form.kind} form, not generated",

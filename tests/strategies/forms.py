@@ -160,7 +160,9 @@ def _svg(draw: st.DrawFn, d: FormDraft) -> Form:
     r = draw(sizes)
     fit = Box2(min=_offset(d.center, -r, -r), max=_offset(d.center, r, r))
     keep = draw(st.booleans())
-    return svg_form(d.form_id, d.members, SVG_TRIANGLE, fit, keep, facing=d.facing, set_id=d.set_id)
+    return svg_form(
+        d.form_id, d.members, SVG_TRIANGLE, fit, keep_aspect=keep, facing=d.facing, set_id=d.set_id
+    )
 
 
 def _fill(draw: st.DrawFn, d: FormDraft) -> Form:

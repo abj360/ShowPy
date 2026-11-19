@@ -342,14 +342,21 @@ def two_part(
             {**row.model_dump(), "style": PathStyle.POLYLINE, "waypoints": (waypoint,)}
         )
     edited = spec.replace(rows=rows)
-    _require_rows_unlocked(show, spec, edited, force)
+    _require_rows_unlocked(show, spec, edited, force=force)
     return edited
 
 
 def _require_rows_unlocked(
-    show: Show, spec: TransitionSpec, edited: TransitionSpec, force: bool
+    show: Show, spec: TransitionSpec, edited: TransitionSpec, *, force: bool
 ) -> None:
-    """Raises LockedError when `edited` changes a locked row of `spec`, unless forced."""
+    """Raises LockedError when `edited` changes a locked row of `spec`, unless forced.
+
+    Args:
+        show: Show that owns the transition.
+        spec: Transition as it stands before the edit.
+        edited: Transition after the edit.
+        force: Whether the caller overrides locks and pins.
+    """
     others = tuple(t for t in show.transitions if t.id != spec.id)
     before = show.replace(transitions=(*others, spec))
     after = show.replace(transitions=(*others, edited))

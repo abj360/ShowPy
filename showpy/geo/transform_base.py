@@ -82,12 +82,12 @@ def about_point(obj: Points | CurveModel | Set, about: About, sel: SetSelector) 
 
 
 def apply_matrix[T: (Points, CurveModel, Set)](
-    obj: T, matrix: Matrix, sel: SetSelector, force: bool
+    obj: T, matrix: Matrix, sel: SetSelector, *, force: bool
 ) -> T:
     """Maps an object through an affine matrix; set facings follow its linear part.
 
     >>> from showpy.geo.affine import translation_matrix
-    >>> apply_matrix(np.array([[0.0, 0.0]]), translation_matrix(1, 0), "all", False).tolist()
+    >>> apply_matrix(np.array([[0.0, 0.0]]), translation_matrix(1, 0), "all", force=False).tolist()
     [[1.0, 0.0]]
     """
     if isinstance(obj, np.ndarray):
@@ -96,28 +96,28 @@ def apply_matrix[T: (Points, CurveModel, Set)](
         ids = on_field_ids(obj, sel)
         pts = transform_points(obj.positions(ids), matrix)
         facings = [transform_facing(obj.get(i).facing, matrix) for i in ids]
-        return _update_set(obj, ids, pts, facings, force)
+        return _update_set(obj, ids, pts, facings, force=force)
     return transform_curve(cast(AnyCurve, obj), matrix)
 
 
 def apply_pointwise[T: (Points, CurveModel, Set)](
-    obj: T, fn: PointMap, sel: SetSelector, force: bool
+    obj: T, fn: PointMap, sel: SetSelector, *, force: bool
 ) -> T:
     """Maps an object's points through `fn`; set facings stay as they are.
 
-    >>> apply_pointwise(np.array([[1.0, 1.0]]), lambda p: p * 2, "all", False).tolist()
+    >>> apply_pointwise(np.array([[1.0, 1.0]]), lambda p: p * 2, "all", force=False).tolist()
     [[2.0, 2.0]]
     """
     if isinstance(obj, np.ndarray):
         return fn(as_points(obj))
     if isinstance(obj, Set):
         ids = on_field_ids(obj, sel)
-        return _update_set(obj, ids, fn(obj.positions(ids)), None, force)
+        return _update_set(obj, ids, fn(obj.positions(ids)), None, force=force)
     return map_curve(obj, fn)
 
 
 def _update_set(
-    s: Set, ids: Sequence[SpotId], pts: Points, facings: Sequence[Degrees] | None, force: bool
+    s: Set, ids: Sequence[SpotId], pts: Points, facings: Sequence[Degrees] | None, *, force: bool
 ) -> Set:
     updates: dict[SpotId, dict[str, float]] = {}
     for k, entity in enumerate(ids):

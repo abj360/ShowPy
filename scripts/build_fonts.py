@@ -230,7 +230,7 @@ def _polyline_stroke(points: Sequence[Point]) -> str | None:
     if len(set(cleaned)) < 2:
         return None
     pieces = tuple(LinePiece(a, b) for a, b in itertools.pairwise(cleaned))
-    return Subpath(cleaned[0], pieces, closed).to_d()
+    return Subpath(cleaned[0], pieces, closed=closed).to_d()
 
 
 def _font_doc(
@@ -336,7 +336,7 @@ def _snap_closed(subpath: Subpath, tolerance: float) -> Subpath:
     )
     if len(pieces) < MIN_SNAPPED_PIECES and not subpath.closed:
         return subpath
-    return Subpath(subpath.start, pieces, True)
+    return Subpath(subpath.start, pieces, closed=True)
 
 
 def _is_degenerate(subpath: Subpath) -> bool:
@@ -351,7 +351,9 @@ def _svg_strokes(d: str, tolerance: float) -> list[str]:
         snapped = _snap_closed(subpath, tolerance)
         pieces = tuple(_round_piece(p) for p in snapped.pieces)
         if pieces:
-            strokes.append(Subpath(_clean_point(snapped.start), pieces, snapped.closed).to_d())
+            strokes.append(
+                Subpath(_clean_point(snapped.start), pieces, closed=snapped.closed).to_d()
+            )
     return strokes
 
 

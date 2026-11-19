@@ -245,7 +245,7 @@ def _svg_subpaths(svg: str) -> list[Subpath]:
 
 
 def _fit_matrix(
-    bounds: tuple[float, float, float, float], fit: Box2, keep_aspect: bool, flip_y: bool
+    bounds: tuple[float, float, float, float], fit: Box2, *, keep_aspect: bool, flip_y: bool
 ) -> tuple[tuple[float, float, float], ...]:
     minx, miny, maxx, maxy = bounds
     width, depth = fit.size
@@ -266,6 +266,7 @@ def svg_outline(
     svg: str,
     fit: Box2,
     path_index: int | None = None,
+    *,
     keep_aspect: bool = True,
     flip_y: bool = True,
 ) -> list[SvgCurve]:
@@ -283,7 +284,7 @@ def svg_outline(
     raw = [SvgCurve(d=s.to_d(), closed=s.closed) for s in subpaths]
     pts = np.vstack([curve.to_polyline(SVG_FIT_TOL) for curve in raw])
     bounds = (pts[:, 0].min(), pts[:, 1].min(), pts[:, 0].max(), pts[:, 1].max())
-    matrix = _fit_matrix(tuple(map(float, bounds)), fit, keep_aspect, flip_y)  # type: ignore[arg-type]
+    matrix = _fit_matrix(tuple(map(float, bounds)), fit, keep_aspect=keep_aspect, flip_y=flip_y)  # type: ignore[arg-type]
     return [curve.replace(transform=matrix) for curve in raw]
 
 

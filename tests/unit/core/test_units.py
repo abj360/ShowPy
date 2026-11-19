@@ -205,7 +205,8 @@ def test_regression_round_to_handles_bools_cleanly() -> None:
     The audit allows reject or accept; an accepted result must be the numeric value.
     """
     try:
-        rounded = round_to(True)
+        truth = True
+        rounded = round_to(truth)
     except ShowPyError:
         return
     assert approx_equal(rounded, 1.0)

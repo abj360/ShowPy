@@ -60,7 +60,7 @@ def solve_sum(cost: FloatArray) -> IntArray:
     return np.asarray(cols, dtype=np.intp)
 
 
-def min_max_threshold(cost: FloatArray, ordered: bool = False) -> float:
+def min_max_threshold(cost: FloatArray, *, ordered: bool = False) -> float:
     """Returns the smallest t such that a full assignment uses only costs <= t.
 
     Binary search over the sorted unique finite costs, testing each threshold for a full
@@ -75,14 +75,14 @@ def min_max_threshold(cost: FloatArray, ordered: bool = False) -> float:
     lo, hi = 0, len(values) - 1
     while lo < hi:
         mid = (lo + hi) // 2
-        if _feasible_under(cost, float(values[mid]), ordered):
+        if _feasible_under(cost, float(values[mid]), ordered=ordered):
             hi = mid
         else:
             lo = mid + 1
     return float(values[lo])
 
 
-def _feasible_under(cost: FloatArray, threshold: float, ordered: bool) -> bool:
+def _feasible_under(cost: FloatArray, threshold: float, *, ordered: bool) -> bool:
     allowed = cost <= threshold
     if not ordered:
         return is_feasible(allowed)

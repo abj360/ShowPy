@@ -93,6 +93,7 @@ allowed-confusables = ["–"]
 select = [
     "E", "W", "F", "I", "B", "UP", "N", "SIM", "RUF", "C4", "PT", "D",
     "EXE", "PIE", "PGH", "RSE", "ISC", "LOG", "DTZ", "PTH", "FURB", "ARG", "PERF", "C90", "TID",
+    "FBT",
 ]
 ignore = ["D105", "D107", "D104", "D200", "D212", "D401", "D413", "D415"]
 
@@ -113,7 +114,7 @@ banned-module-level-imports = ["tests"]
 [tool.ruff.lint.per-file-ignores]
 "showpy/**/models.py" = ["RUF012"]
 "showpy/**/*_models.py" = ["RUF012"]
-"tests/**" = ["D", "EXE001", "TID251", "TID253"]
+"tests/**" = ["D", "EXE001", "FBT001", "FBT002", "TID251", "TID253"]
 "scripts/**" = ["EXE001"]
 # The fixture script runs in a v0.2.0 checkout and takes its seeded show from the test helpers.
 "scripts/make_legacy_fixture.py" = ["TID251", "TID253"]

@@ -388,10 +388,12 @@ class Workspace:
             revision: The new head; the workspace moves to it.
         """
         base = self._revision if expected_revision is None else expected_revision
-        normalizing = self._normalizing_for(base, changes, is_complete)
+        normalizing = self._normalizing_for(base, changes, is_complete=is_complete)
         if not normalizing:
             return self._remembered(
-                self._commit_stored(changes, at=at, expected_revision=base), changes, is_complete
+                self._commit_stored(changes, at=at, expected_revision=base),
+                changes,
+                is_complete=is_complete,
             )
         normalized = self._commit_stored(normalizing, at=at, expected_revision=base)
         self._canonical_revisions.add(normalized.id)
@@ -400,11 +402,11 @@ class Workspace:
         return self._remembered(
             self._commit_stored(remaining, at=at, expected_revision=normalized.id),
             changes,
-            is_complete,
+            is_complete=is_complete,
         )
 
     def _normalizing_for(
-        self, base: str, changes: Mapping[str, bytes | None], is_complete: bool
+        self, base: str, changes: Mapping[str, bytes | None], *, is_complete: bool
     ) -> dict[str, bytes | None]:
         """Lists the re-encodings a change over `base` needs first, empty for a known revision."""
         if base in self._canonical_revisions:
@@ -420,7 +422,7 @@ class Workspace:
         return normalizing
 
     def _remembered(
-        self, revision: Revision, changes: Mapping[str, bytes | None], is_complete: bool
+        self, revision: Revision, changes: Mapping[str, bytes | None], *, is_complete: bool
     ) -> Revision:
         """Remembers a new revision as canonical when its change wrote only canonical documents."""
         if is_complete or not any(is_show_doc(p) for p in changes):

@@ -89,13 +89,13 @@ def bottleneck_value(cost: object) -> float:
     return min_max_threshold(matrix)
 
 
-def _feasible(allowed: BoolArray, ordered: bool) -> bool:
+def _feasible(allowed: BoolArray, *, ordered: bool) -> bool:
     if not ordered or allowed.shape[0] == 0:
         return is_feasible(allowed)
     return len(solve_ordered(np.where(allowed, 0.0, np.inf))) > 0
 
 
-def _require_feasible(p: MatchProblem, costs: MatchCosts, ordered: bool) -> None:
+def _require_feasible(p: MatchProblem, costs: MatchCosts, *, ordered: bool) -> None:
     n, m = costs.cost.shape
     if n > m:
         raise MatchError(
@@ -103,10 +103,10 @@ def _require_feasible(p: MatchProblem, costs: MatchCosts, ordered: bool) -> None
             hint=f"add {n - m} slots or match fewer spots",
             context={"spots": n, "slots": m},
         )
-    if _feasible(np.isfinite(costs.cost), ordered):
+    if _feasible(np.isfinite(costs.cost), ordered=ordered):
         return
     names = list(costs.masks) + (["preserve_order"] if ordered else [])
-    blocking = [name for name in names if _relaxed_feasible(costs, name, ordered)]
+    blocking = [name for name in names if _relaxed_feasible(costs, name, ordered=ordered)]
     stuck = [p.entities[i] for i in range(n) if not np.isfinite(costs.cost[i]).any()]
     culprits = blocking or names
     suffix = f"; {', '.join(stuck)} have no allowed slot" if stuck else ""
@@ -117,10 +117,10 @@ def _require_feasible(p: MatchProblem, costs: MatchCosts, ordered: bool) -> None
     )
 
 
-def _relaxed_feasible(costs: MatchCosts, name: str, ordered: bool) -> bool:
+def _relaxed_feasible(costs: MatchCosts, name: str, *, ordered: bool) -> bool:
     kept = {k: v for k, v in costs.masks.items() if k != name}
     allowed = ~combine_masks(kept, costs.cost.shape)
-    return _feasible(allowed, ordered and name != "preserve_order")
+    return _feasible(allowed, ordered=ordered and name != "preserve_order")
 
 
 def _objective_cost(cost: FloatArray, options: MatchOptions) -> FloatArray:
@@ -138,7 +138,7 @@ def _solve(cost: FloatArray, options: MatchOptions) -> tuple[IntArray, float]:
     if options.objective not in BOTTLENECK_OBJECTIVES:
         weighted = _objective_cost(cost, options)
         return (solve_ordered(weighted) if ordered else solve_sum(weighted)), np.inf
-    cap = min_max_threshold(cost, ordered)
+    cap = min_max_threshold(cost, ordered=ordered)
     capped = np.where(cost <= cap, cost, np.inf)
     if options.objective == "bottleneck_then_sum":
         return (solve_ordered(capped) if ordered else solve_sum(capped)), cap
@@ -261,7 +261,7 @@ def match(
         index = {e: i for i, e in enumerate(p.entities)}
         p = p.permuted([index[e] for e in natural_sort(p.entities)])
     costs = build_costs(p, opts)
-    _require_feasible(p, costs, opts.preserve_order)
+    _require_feasible(p, costs, ordered=opts.preserve_order)
     cols, cap = _solve(costs.cost, opts)
     cols, swaps = _improve(p, costs.cost, cols, cap, opts)
     return _result(p, costs, cols, opts, swaps, _column_slots(to_slots))

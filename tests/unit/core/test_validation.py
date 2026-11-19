@@ -197,8 +197,9 @@ def test_require_finite_accepts_numpy_scalars_and_returns_python_float() -> None
 
 
 def test_require_finite_rejects_numpy_bool() -> None:
+    truth = True
     with pytest.raises(SchemaError):
-        require_finite(np.bool_(True), name="n")  # type: ignore[arg-type]
+        require_finite(np.bool_(truth), name="n")  # type: ignore[arg-type]
 
 
 def test_regression_require_finite_echoes_a_huge_int_by_its_bit_count() -> None:

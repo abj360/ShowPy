@@ -232,7 +232,7 @@ def _check_placed(show: Show, form: Form) -> None:
 
 
 def rebuild(
-    show: Show, form_id: FormId, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS
+    show: Show, form_id: FormId, *, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS
 ) -> Show:
     """Regenerates a form's placements in its set and resets its members' neighbouring paths.
 
@@ -260,5 +260,5 @@ def rebuild(
     edited = with_set(show, target.with_placements(updates, force=force))
     for tid in edited.transition_ids():
         if form.set in tid:
-            edited = clear_rows(edited, tid, moved, force)
+            edited = clear_rows(edited, tid, moved, force=force)
     return edited

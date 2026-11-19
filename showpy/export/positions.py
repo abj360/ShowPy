@@ -263,6 +263,7 @@ def import_positions(
     text: str,
     group: str,
     columns: Mapping[str, str] | None = None,
+    *,
     force: bool = False,
 ) -> Show:
     r"""Merges CSV rows of set, counts, entity, x, y and optional facing into a show.

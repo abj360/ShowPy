@@ -147,7 +147,7 @@ def _stats(gaps: Points) -> IntervalStats:
     )
 
 
-def interval(points: Points, ordered: bool = True) -> IntervalStats:
+def interval(points: Points, *, ordered: bool = True) -> IntervalStats:
     """Summarizes gaps: consecutive pairs when ordered, each spot's nearest neighbour otherwise.
 
     >>> interval(np.array([[0.0, 0.0], [2.0, 0.0], [3.0, 0.0]])).gaps

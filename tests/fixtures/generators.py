@@ -185,7 +185,7 @@ def _styled(
     for entity in by_style[PathStyle.ROTATE]:
         reach = REACH_M * float(rng.choice((-1, 1)))
         pivot, sweep = bisector_rotation(
-            start.get(entity).point, target.get(entity).point, reach, False
+            start.get(entity).point, target.get(entity).point, reach, long_way=False
         )
         spec = rotate_path(show, spec, [entity], pivot, sweep)
     if by_style[PathStyle.CUSTOM]:

@@ -192,7 +192,7 @@ class Set(FrozenModel):
 
     # Any: updates may be a Placement or a partial dict of any placement fields.
     def with_placements(
-        self, updates: Mapping[SpotId, Placement | Mapping[str, Any]], force: bool = False
+        self, updates: Mapping[SpotId, Placement | Mapping[str, Any]], *, force: bool = False
     ) -> "Set":
         """Returns a set with placements replaced or patched; pinned rows need force=True."""
         rows = list(self.placements)

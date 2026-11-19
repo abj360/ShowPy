@@ -222,7 +222,8 @@ def test_canonical_value_keeps_every_element_of_a_long_numpy_array() -> None:
 
 
 def test_canonical_value_unwraps_numpy_scalars() -> None:
-    values = [np.int64(3), np.float32(0.5), np.bool_(True), np.str_("x")]
+    truth = True
+    values = [np.int64(3), np.float32(0.5), np.bool_(truth), np.str_("x")]
 
     items = canonical_value(values)
 
@@ -232,7 +233,8 @@ def test_canonical_value_unwraps_numpy_scalars() -> None:
 
 
 def test_canonical_value_keeps_booleans_distinct_from_numbers() -> None:
-    assert jcs(True) != jcs(1)
+    truth = True
+    assert jcs(truth) != jcs(1)
     assert jcs({True: "a"}) != jcs({1: "a"})
 
 

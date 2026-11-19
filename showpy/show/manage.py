@@ -67,7 +67,7 @@ def _require_set_id(show: Show, set_id: SetId) -> None:
         )
 
 
-def _require_counts(counts: float, is_first: bool) -> None:
+def _require_counts(counts: float, *, is_first: bool) -> None:
     if is_first and counts != 0:
         raise TimeRangeError(
             f"the first set has counts {counts}",
@@ -82,7 +82,7 @@ def _require_counts(counts: float, is_first: bool) -> None:
         )
 
 
-def _off_field(entity: SpotId, pinned: bool = False) -> Placement:
+def _off_field(entity: SpotId, *, pinned: bool = False) -> Placement:
     x, y = OFF_FIELD_POINT
     return Placement(entity=entity, x=x, y=y, on_field=False, pinned=pinned)
 
@@ -94,7 +94,7 @@ def _entity_pinned(show: Show, entity: SpotId) -> bool:
 def _carried(show: Show, previous: Set | None, entity: SpotId) -> Placement:
     pinned = _entity_pinned(show, entity)
     if previous is None or entity not in previous.entity_ids():
-        return _off_field(entity, pinned)
+        return _off_field(entity, pinned=pinned)
     source = previous.get(entity)
     return source.replace(form=None, order=None, pinned=pinned)
 
@@ -129,7 +129,7 @@ def replace_sets(show: Show, sets: Sequence[Set], *, force: bool, **update: obje
     []
     """
     edited = _sync_transitions(show.replace(sets=tuple(sets), **update))
-    require_unlocked(show, edited, force)
+    require_unlocked(show, edited, force=force)
     return edited
 
 
@@ -197,6 +197,7 @@ def add_set(
     counts: float,
     after: SetId | None = None,
     placements: Sequence[Placement] | None = None,
+    *,
     force: bool = False,
 ) -> Show:
     """Inserts a set; spots without a given placement copy their place in the previous set.
@@ -247,7 +248,7 @@ def _subset_id(show: Show, after: SetId) -> SetId:
 
 
 def insert_subset(
-    show: Show, after: SetId, counts: float, force: bool = False
+    show: Show, after: SetId, counts: float, *, force: bool = False
 ) -> tuple[Show, SetId]:
     """Inserts a sub-set after `after`, taking its counts from the following set.
 
@@ -304,7 +305,9 @@ def _pins_without_set(show: Show, set_id: SetId) -> tuple[Pin, ...]:
     return tuple(filter(kept, show.pins))
 
 
-def remove_set(show: Show, set_id: SetId, merge_counts: bool = True, force: bool = False) -> Show:
+def remove_set(
+    show: Show, set_id: SetId, *, merge_counts: bool = True, force: bool = False
+) -> Show:
     """Deletes a set, its forms, its pins and the stored paths into and out of it.
 
     Args:
@@ -362,7 +365,7 @@ def _overruns(spec: TransitionSpec, counts: float) -> list[str]:
     return late
 
 
-def _retimed_spec(spec: TransitionSpec, counts: float, rescale: bool) -> TransitionSpec:
+def _retimed_spec(spec: TransitionSpec, counts: float, *, rescale: bool) -> TransitionSpec:
     if rescale and spec.counts > 0:
         spec = _scale_spec(spec, counts / spec.counts)
     late = _overruns(spec, counts)
@@ -376,7 +379,7 @@ def _retimed_spec(spec: TransitionSpec, counts: float, rescale: bool) -> Transit
 
 
 def set_counts(
-    show: Show, set_id: SetId, counts: float, rescale: bool = False, force: bool = False
+    show: Show, set_id: SetId, counts: float, *, rescale: bool = False, force: bool = False
 ) -> Show:
     """Retimes a set and keeps the incoming transition's counts equal to it.
 
@@ -401,7 +404,7 @@ def set_counts(
     sets = list(show.sets)
     sets[position] = sets[position].replace(counts=counts)
     specs = tuple(
-        _retimed_spec(spec, counts, rescale) if spec.id[1] == set_id else spec
+        _retimed_spec(spec, counts, rescale=rescale) if spec.id[1] == set_id else spec
         for spec in show.transitions
     )
     return replace_sets(show, sets, force=force, transitions=specs)

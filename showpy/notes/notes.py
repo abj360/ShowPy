@@ -145,7 +145,7 @@ def remove_note(show: "Show", note_id: str) -> "Show":
 
 
 def notes_for(
-    show: "Show", target: SetId | TransitionId, include_hidden: bool = False
+    show: "Show", target: SetId | TransitionId, *, include_hidden: bool = False
 ) -> list[Note]:
     """Returns the notes anchored to a set (an ID) or a transition (a pair), in show order.
 
@@ -189,6 +189,7 @@ def notes_near(
     p: Point,
     radius: Meters,
     set_id: SetId | None = None,
+    *,
     include_hidden: bool = False,
 ) -> list[Note]:
     """Returns notes anchored within `radius` of a point, in show order.

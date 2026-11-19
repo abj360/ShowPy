@@ -113,9 +113,9 @@ def _edited_geometry(form: Form, changes: dict[str, Any]) -> dict[str, Any]:
 # Any: changes are construction values or form fields of any type.
 def edit(
     form: Form,
+    *,
     force: bool = False,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
-    *,
     font_registry: FontRegistry | None = None,
     **changes: Any,
 ) -> Form:
@@ -129,7 +129,7 @@ def edit(
     >>> edit(f, radius=3.0).geometry["curve"]["radius"]
     3.0
     """
-    check_unlocked(form, force)
+    check_unlocked(form, force=force)
     if form.kind == "text":
         reject_count_change(form.id, changes)
         changes = resolve_edit_fonts(form.id, changes, font_registry)
@@ -198,6 +198,7 @@ def reorder(
     form: Form,
     order: Order,
     prev_set: Set | None = None,
+    *,
     force: bool = False,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
 ) -> Form:
@@ -210,7 +211,7 @@ def reorder(
     >>> reorder(line_form("f", ["A", "B", "C"], (0, 0), (2, 0)), "reverse").members
     ('C', 'B', 'A')
     """
-    check_unlocked(form, force)
+    check_unlocked(form, force=force)
     if order == "reverse":
         members = list(form.members[::-1])
     elif order in ("by_x", "by_y"):
@@ -268,6 +269,7 @@ def split_form(
     form: Form,
     at: int | SpotId,
     ids: tuple[FormId, FormId] | None = None,
+    *,
     force: bool = False,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
 ) -> tuple[Form, Form]:
@@ -280,7 +282,7 @@ def split_form(
     >>> a.members, slots(b).tolist()
     (('A', 'B'), [[2.0, 0.0], [3.0, 0.0]])
     """
-    check_unlocked(form, force)
+    check_unlocked(form, force=force)
     index = _split_index(form, at)
     first_id, second_id = ids or (f"{form.id}-1", f"{form.id}-2")
     parts = []
@@ -298,6 +300,7 @@ def merge_forms(
     a: Form,
     b: Form,
     form_id: FormId,
+    *,
     force: bool = False,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
 ) -> Form:
@@ -308,8 +311,8 @@ def merge_forms(
     >>> merged.members, slots(merged).tolist()
     (('A', 'B'), [[0.5, 0.0], [5.5, 0.0]])
     """
-    check_unlocked(a, force)
-    check_unlocked(b, force)
+    check_unlocked(a, force=force)
+    check_unlocked(b, force=force)
     if a.set != b.set:
         raise SchemaError(
             f"forms {a.id} and {b.id} belong to sets {a.set} and {b.set}",
@@ -387,7 +390,7 @@ def _mapped_geometry(form: Form, matrix: Matrix) -> dict[str, Any]:
     return {**g, "transform": composed.tolist()}
 
 
-def transform_form(form: Form, matrix: Matrix, force: bool = False) -> Form:
+def transform_form(form: Form, matrix: Matrix, *, force: bool = False) -> Form:
     """Maps a form through a 3x3 affine matrix; slots and facings map exactly.
 
     >>> from showpy.geo.affine import translation_matrix
@@ -396,7 +399,7 @@ def transform_form(form: Form, matrix: Matrix, force: bool = False) -> Form:
     >>> slots(moved).tolist()
     [[0.0, 3.0], [2.0, 3.0]]
     """
-    check_unlocked(form, force)
+    check_unlocked(form, force=force)
     return form.replace(
         geometry=_mapped_geometry(form, matrix), facing=_mapped_facing(form.facing, matrix)
     )
@@ -420,6 +423,7 @@ def gate(
     form: Form,
     hinge: Literal["start", "end"] | int,
     deg: Degrees,
+    *,
     force: bool = False,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
 ) -> Form:
@@ -429,10 +433,14 @@ def gate(
     >>> slots(gated).round(6).tolist()
     [[0.0, 0.0], [0.0, 2.0]]
     """
-    return transform_form(form, rotation_matrix(deg, _hinge_point(form, hinge, registry)), force)
+    return transform_form(
+        form, rotation_matrix(deg, _hinge_point(form, hinge, registry)), force=force
+    )
 
 
-def pinwheel(forms: Sequence[Form], center: Point, deg: Degrees, force: bool = False) -> list[Form]:
+def pinwheel(
+    forms: Sequence[Form], center: Point, deg: Degrees, *, force: bool = False
+) -> list[Form]:
     """Rotates every form counter-clockwise by `deg` about one center, like spokes.
 
     >>> spokes = [line_form("a", ["A"], (1, 0), (2, 0)), line_form("b", ["B"], (-1, 0), (-2, 0))]
@@ -440,7 +448,7 @@ def pinwheel(forms: Sequence[Form], center: Point, deg: Degrees, force: bool = F
     [[[0.0, 1.5]], [[0.0, -1.5]]]
     """
     matrix = rotation_matrix(deg, center)
-    return [transform_form(form, matrix, force) for form in forms]
+    return [transform_form(form, matrix, force=force) for form in forms]
 
 
 def form_templates() -> dict[str, Callable[..., Form]]:

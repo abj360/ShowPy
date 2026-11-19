@@ -87,6 +87,7 @@ class PathEngine:
         self,
         show: Show,
         curve_tol: float = DEFAULT_CURVE_TOL,
+        *,
         cache: bool = True,
         motions: MotionRegistry = DEFAULT_MOTIONS,
     ) -> None:
