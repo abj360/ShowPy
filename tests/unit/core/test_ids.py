@@ -30,6 +30,9 @@ Contains:
     test_id_fields_*(): one behavior of the annotated model ID field types each
     test_sheet_id_fields_*(): landmark and zone fields keep an inner `-`
     test_show_id_field_*(): show IDs keep an inner `-` and follow the rest of the sheet rule
+    test_sheet_id_pattern_agrees_with_its_characters_and_edges: keeps `SHEET_ID_PATTERN` equal to
+        its characters, length cap and edge rules over 2,000 strings
+    test_bundled_*(): every bundled template ref and sheet item ID passes the sheet rule
     test_transition_id_*(): one behavior of the TransitionId named tuple each
     test_regression_check_id_reports_a_leading_dot_at_position_zero: reports `..a` at 0, the
         first character that breaks the pattern
@@ -75,6 +78,7 @@ from showpy.core.ids import (
     parse_ref,
     parse_tid,
 )
+from showpy.sheet.templates import sheet_templates
 
 ID_CANDIDATES = st.from_regex(ID_PATTERN, fullmatch=True) | st.text(
     alphabet=st.characters(max_codepoint=0x7F) | st.sampled_from("\u00e9\u0663\u212a"),
@@ -246,10 +250,21 @@ def test_is_device_name_ignores_names_that_only_start_like_a_device(text: str) -
 
 
 AGREEMENT_EXAMPLES = 10_000
-AGREEMENT_CANDIDATES = st.text(
-    alphabet=st.sampled_from(sorted(ID_BODY_CHARS)) | st.sampled_from(".-*: \n\u00e9\u0663"),
+AGREEMENT_ALPHABET = st.sampled_from(sorted(ID_BODY_CHARS)) | st.sampled_from(".-*: \n\u00e9\u0663")
+NEAR_CAP_IDS = st.text(
+    alphabet=st.sampled_from(sorted(ID_BODY_CHARS)),
+    min_size=ID_MAX_LENGTH - 4,
     max_size=ID_MAX_LENGTH + 2,
 )
+AGREEMENT_CANDIDATES = (
+    st.text(alphabet=AGREEMENT_ALPHABET, max_size=ID_MAX_LENGTH + 2) | NEAR_CAP_IDS
+)
+SHEET_AGREEMENT_EXAMPLES = 2_000
+SHEET_AGREEMENT_CANDIDATES = (
+    st.text(alphabet=AGREEMENT_ALPHABET | st.just("-"), max_size=ID_MAX_LENGTH + 2) | NEAR_CAP_IDS
+)
+BUNDLED_TEMPLATES = 6
+BUNDLED_SHEET_ITEMS = 339
 TOY_SPOT_ID = "T1"
 # Any: annotated field types are type forms, which mypy cannot hold as plain values.
 SPOT_ID_FIELDS: list[Any] = [
@@ -265,6 +280,10 @@ SPOT_ID_FIELDS: list[Any] = [
 
 class _ToySpot(BaseModel):
     id: SpotIdField
+
+
+class _Outer(BaseModel):
+    inner: _ToySpot
 
 
 class _ToyLandmark(BaseModel):
@@ -404,6 +423,46 @@ def _fast_path_accepts(text: str) -> bool:
 @given(AGREEMENT_CANDIDATES)
 def test_id_pattern_agrees_with_body_chars_and_length(text: str) -> None:
     assert (ID_PATTERN.fullmatch(text) is not None) == _fast_path_accepts(text)
+
+
+def _sheet_rule_accepts(text: str) -> bool:
+    return (
+        0 < len(text) <= ID_MAX_LENGTH
+        and all(char in ID_BODY_CHARS or char == "-" for char in text)
+        and text[0] not in ".-"
+        and text[-1] not in ".-"
+    )
+
+
+@settings(max_examples=SHEET_AGREEMENT_EXAMPLES)
+@given(SHEET_AGREEMENT_CANDIDATES)
+def test_sheet_id_pattern_agrees_with_its_characters_and_edges(text: str) -> None:
+    assert (SHEET_ID_PATTERN.fullmatch(text) is not None) == _sheet_rule_accepts(text)
+
+
+def test_id_fields_take_the_legacy_context_into_nested_models() -> None:
+    nested = {"inner": {"id": "a-b"}}
+    assert _Outer.model_validate(nested, context={"legacy_ids": True}).inner.id == "a-b"
+    with pytest.raises(ValidationError, match="spot id"):
+        _Outer.model_validate(nested)
+
+
+def test_bundled_template_refs_pass_parse_ref() -> None:
+    refs = [sheet.ref for sheet in sheet_templates()]
+    assert len(refs) == BUNDLED_TEMPLATES
+    assert [parse_ref(ref)[1] for ref in refs] == [
+        check_sheet_id(ref.partition(":")[2].partition("@")[0], kind="reference") for ref in refs
+    ]
+
+
+def test_bundled_sheet_items_pass_check_sheet_id() -> None:
+    ids: list[str] = []
+    for sheet in sheet_templates():
+        ids += [landmark.id for landmark in sheet.landmarks]
+        ids += [zone.id for zone in sheet.zones]
+        ids += [guide.id for guide in sheet.guides]
+    assert len(ids) == BUNDLED_SHEET_ITEMS
+    assert [check_sheet_id(item_id, kind="sheet item") for item_id in ids] == ids
 
 
 @pytest.mark.parametrize("text", ["hs-football", "end-zone-left", "a--b", "x.1-2", "T1"])
