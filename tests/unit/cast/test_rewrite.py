@@ -6,6 +6,8 @@ test_rewrite.py --- tests rewriting and dropping spot IDs across a whole show
 Contains:
     test_*(): one behavior of showpy.cast.rewrite each
     test_regression_relabel_rewrites_pins: renames the spot a pin names when the spot is relabeled
+    test_regression_rewrite_passes_every_entity_pin_to_the_rename: renames, drops or renames a
+        pin on a spot outside the cast exactly as the rename callback says
     test_regression_forced_delete_drops_pins_on_the_spot: leaves no pin naming a spot that
         `delete_spots(force=True)` removed
     test_regression_relabel_rewrites_sheet_zones: rewrites `applies_to` of zones stored on the sheet
@@ -35,7 +37,7 @@ from showpy.core.ids import FormId, SpotId, ZoneId
 from showpy.core.selection import Selection
 from showpy.core.types import Region
 from showpy.sheet.models import Zone, ZoneKind
-from showpy.show.models import Show
+from showpy.show.models import Pin, Show
 from showpy.show.pinning import pin
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.shows import two_set_show
@@ -151,3 +153,12 @@ def test_regression_many_to_one_rename_is_reported_with_the_duplicate_target() -
         rewrite_spot_ids(two_set_show(), lambda i: "T9" if i in {"T1", "T2"} else i)
     assert not isinstance(excinfo.value, UnknownRefError)
     assert "T9" in str(excinfo.value.context)
+
+
+def test_regression_rewrite_passes_every_entity_pin_to_the_rename() -> None:
+    """Applies the rename to every entity pin, including one on a spot outside the cast."""
+    pins = tuple(Pin(target="entity", id=spot_id) for spot_id in ("T1", "T2", "Z9"))
+    show = rich_show().model_copy(update={"pins": pins})
+    renames: dict[str, str | None] = {"T1": "S1", "T2": None, "Z9": "Q9"}
+    rewritten = rewrite_spot_ids(show, lambda spot_id: renames.get(spot_id, spot_id))
+    assert [p.id for p in rewritten.pins] == ["S1", "Q9"]

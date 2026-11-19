@@ -64,7 +64,7 @@ def rewrite_spot_ids(show: "Show", rename: Rename) -> "Show":
             _rewrite_override(show, o, rename) for o in show.facing_overrides
         ),
         "zones": tuple(_rewrite_zone(show, z, rename) for z in show.zones),
-        "pins": _rewrite_pins(show.pins, show.cast.ids(), rename),
+        "pins": _rewrite_pins(show.pins, rename),
         "sheet": _rewrite_sheet(show, rename),
     }
     new_cast = Cast.model_validate({**dict(cast), "spots": spots, "selections": selections})
@@ -139,16 +139,12 @@ def _rewrite_zone(show: "Show", zone: Zone, rename: Rename) -> Zone:
     return zone.replace(applies_to=_rewrite_selector(show, zone.applies_to, rename))
 
 
-def _rewrite_pins(
-    pins: "tuple[Pin, ...]", spot_ids: Sequence[SpotId], rename: Rename
-) -> "tuple[Pin, ...]":
-    known: dict[str, SpotId] = {spot_id: spot_id for spot_id in spot_ids}
+def _rewrite_pins(pins: "tuple[Pin, ...]", rename: Rename) -> "tuple[Pin, ...]":
     kept = []
     for pin in pins:
-        spot_id = known.get(pin.id) if pin.target == "entity" else None
-        if spot_id is None:
+        if pin.target != "entity":
             kept.append(pin)
-        elif (new := rename(spot_id)) is not None:
+        elif (new := rename(SpotId(pin.id))) is not None:
             kept.append(pin.replace(id=new))
     return tuple(kept)
 
