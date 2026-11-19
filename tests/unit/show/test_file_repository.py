@@ -550,7 +550,11 @@ def test_regression_oversized_files_are_corrupt_before_reading(tmp_path: Path, k
         repo.read(SHOW_ID, SHOW_DOC)
     assert caught.value.code == CORRUPT
     assert f"{kind} is larger than {cap} bytes" in caught.value.message
-    assert caught.value.context == {"show": SHOW_ID, "path": bounded_repr(str(path))}
+    assert caught.value.context == {
+        "show": SHOW_ID,
+        "path": bounded_repr(str(path)),
+        "file": path.name,
+    }
 
 
 def test_regression_file_growing_after_its_size_check_is_corrupt(
@@ -583,6 +587,7 @@ def test_regression_swapped_blob_is_corrupt_naming_its_file(tmp_path: Path) -> N
         repo.get_show(SHOW_ID)
     assert caught.value.code == CORRUPT
     assert caught.value.context["path"] == bounded_repr(str(blob_path))
+    assert caught.value.context["file"] == blob_path.name
     assert "do not match their digest" in caught.value.message
 
 

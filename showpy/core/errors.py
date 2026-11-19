@@ -34,16 +34,21 @@ Contains:
     LegibilityWarning: warns that text was laid out with fewer spots than it reads well at
 """
 
+import heapq
 import math
 import re
-from collections.abc import Callable, Mapping, Sequence
-from typing import ClassVar
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from itertools import islice
+from typing import TYPE_CHECKING, ClassVar, cast
 
 import numpy as np
 from pydantic import ValidationError as PydanticValidationError
 
 from showpy.core.error_codes import ErrorCode
 from showpy.core.json_types import JsonValue
+
+if TYPE_CHECKING:
+    from _typeshed import SupportsRichComparison
 
 MAX_LISTED_ERRORS = 5
 MAX_ECHOED_INPUT_CHARS = 80
@@ -138,10 +143,15 @@ def _rebuild(
 def bounded_context(context: Mapping[str, object]) -> dict[str, JsonValue]:
     """Bounds a context mapping to JSON values of limited size and depth.
 
-    Text and reprs are cut to 80 characters, lists, tuples and sets keep their first 20 items
-    plus a `"(+n more)"` count, numpy values become plain numbers or lists, mapping keys become
-    text, non-finite floats become text, and anything else, or anything nested deeper than
-    8 levels, becomes its bounded repr. Bounding a bounded context changes nothing.
+    Text and reprs are cut to 80 characters. Lists, tuples, arrays, sets and mappings keep 20
+    items or entries plus a `"(+n more)"` count; sets keep their 20 smallest items, by value,
+    or by repr when the items do not compare. Numpy values become plain numbers or lists,
+    mapping keys become text, non-finite floats become text, and anything else, or anything
+    nested deeper than 8 levels, becomes its bounded repr, or its type name when the repr
+    raises. Bounding a bounded context changes nothing.
+
+    Cost is linear in the kept items, except that a set is scanned once in full to find its
+    smallest items, since its iteration order can change with the hash seed.
 
     Args:
         context: Debugging values chosen by a raise site.
@@ -152,7 +162,7 @@ def bounded_context(context: Mapping[str, object]) -> dict[str, JsonValue]:
     >>> bounded_context({"ids": tuple(range(25))})["ids"][-1]
     '(+5 more)'
     """
-    return {bounded_repr(key): _bounded_value(value, 0) for key, value in context.items()}
+    return _bounded_mapping(context, 0)
 
 
 def _bounded_value(value: object, depth: int) -> JsonValue:
@@ -166,24 +176,78 @@ def _bounded_value(value: object, depth: int) -> JsonValue:
     if isinstance(value, float):
         return value if math.isfinite(value) else bounded_repr(value)
     if isinstance(value, str) or depth >= MAX_CONTEXT_DEPTH:
-        return bounded_repr(value)
+        return _safe_repr(value)
     if isinstance(value, np.ndarray):
-        return _bounded_items(value.tolist(), depth)
+        return _bounded_array(value, depth)
     if isinstance(value, Mapping):
-        return {bounded_repr(key): _bounded_value(item, depth + 1) for key, item in value.items()}
+        return _bounded_mapping(value, depth + 1)
     if isinstance(value, list | tuple):
         return _bounded_items(value, depth)
     if isinstance(value, set | frozenset):
-        return _bounded_items(sorted(value, key=bounded_repr), depth)
-    return bounded_repr(value)
+        return _bounded_set(value, depth)
+    return _safe_repr(value)
+
+
+def _safe_repr(value: object) -> str:
+    """Returns the bounded repr of a value, or its type name when its repr raises."""
+    try:
+        return bounded_repr(value)
+    # Every exception: a context value's own __repr__ can raise anything, and a failing repr
+    # must not stop the error that carries it from being built.
+    except Exception:
+        return f"<unprintable {type(value).__name__}>"
+
+
+def _bounded_mapping[K](mapping: Mapping[K, object], depth: int) -> dict[str, JsonValue]:
+    """Keeps the first 20 entries of a mapping, counting the rest; a capped one stays whole."""
+    keep = MAX_CONTEXT_ITEMS + 1 if _is_capped_mapping(mapping) else MAX_CONTEXT_ITEMS
+    bounded = {
+        _safe_repr(key): _bounded_value(item, depth) for key, item in islice(mapping.items(), keep)
+    }
+    if len(mapping) > keep:
+        bounded[more_count(len(mapping) - keep)] = None
+    return bounded
+
+
+def _is_capped_mapping[K](mapping: Mapping[K, object]) -> bool:
+    """Tells whether a mapping is a capped one: 20 entries and its `"(+n more)"` key."""
+    if len(mapping) != MAX_CONTEXT_ITEMS + 1:
+        return False
+    last = next(islice(mapping, MAX_CONTEXT_ITEMS, None))
+    return isinstance(last, str) and MORE_PATTERN.fullmatch(last) is not None
+
+
+def _bounded_array(array: np.ndarray, depth: int) -> JsonValue:
+    """Converts only the first 20 rows of an array, counting the rest."""
+    if array.ndim == 0:
+        return _bounded_value(array.item(), depth)
+    kept: list[object] = array[:MAX_CONTEXT_ITEMS].tolist()
+    return _listed(kept, len(array) - len(kept), depth)
+
+
+def _bounded_set(items: set[object] | frozenset[object], depth: int) -> list[JsonValue]:
+    """Keeps the 20 smallest items of a set, by value or else by repr, counting the rest."""
+    try:
+        # Comparability is only known at run time; a TypeError falls back to the repr order.
+        kept: Sequence[object] = heapq.nsmallest(
+            MAX_CONTEXT_ITEMS, cast("set[SupportsRichComparison]", items)
+        )
+    except TypeError:
+        kept = heapq.nsmallest(MAX_CONTEXT_ITEMS, items, key=_safe_repr)
+    return _listed(kept, len(items) - len(kept), depth)
 
 
 def _bounded_items(items: list[object] | tuple[object, ...], depth: int) -> list[JsonValue]:
     """Keeps the first 20 items, counting the rest; an already capped list is kept whole."""
     kept = items if _is_capped(items) else items[:MAX_CONTEXT_ITEMS]
+    return _listed(kept, len(items) - len(kept), depth)
+
+
+def _listed(kept: Iterable[object], hidden: int, depth: int) -> list[JsonValue]:
+    """Bounds the kept items and appends the count of hidden ones, if any."""
     bounded = [_bounded_value(item, depth + 1) for item in kept]
-    if len(items) > len(kept):
-        bounded.append(more_count(len(items) - len(kept)))
+    if hidden:
+        bounded.append(more_count(hidden))
     return bounded
 
 

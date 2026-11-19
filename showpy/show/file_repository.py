@@ -199,7 +199,7 @@ class _FileBackend:
         return StorageError(
             f"repository of {show_id} is corrupt: {reason}",
             hint="restore the show folder from a backup or remove the damaged file",
-            context={"show": show_id, "path": str(path)},
+            context={"show": show_id, "path": str(path), "file": path.name},
             code=ErrorCode.CORRUPT,
         )
 

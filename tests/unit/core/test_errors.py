@@ -30,12 +30,19 @@ Contains:
     test_regression_unpicklable_context_value_pickles_as_its_repr: pickles a lambda in context
     test_regression_schema_error_message_counts_unlisted_errors: ends with "(+n more)" past five
     test_every_class_default_code_is_catalogued: makes every default code an ErrorCode member
+    test_regression_huge_array_and_set_contexts_build_fast: caps a 5,000,000-item array and a
+        1,000,000-item set without converting or sorting every item
+    test_regression_mixed_set_context_is_ordered_by_repr: orders a set of unorderable items
+    test_regression_context_mappings_are_capped: keeps 20 entries of a 1,000-entry mapping
+    test_regression_context_survives_a_broken_repr: names the type of a value whose repr raises
 """
 
 import copy
 import json
 import pickle
 import sys
+import time
+from collections.abc import Collection
 
 import numpy as np
 import pytest
@@ -76,6 +83,13 @@ LONG_CONTEXT_ITEMS = 1_000
 LISTED_SCHEMA_ERRORS = 5
 BAD_LIST_ITEMS = 8
 DEEP_NESTING = 50
+HUGE_CONTEXT_ITEMS = 1_000_000
+# Converting every item of an array costs about 28 ms per million, so five million items
+# make a full conversion (about 140 ms) fail the budget.
+HUGE_ARRAY_ITEMS = 5_000_000
+# About 5 times the measured cost of capping either value (array slice, scan of an int set),
+# so a full conversion or a repr sort (about 1 s) fails while a slow CI runner still passes.
+HUGE_CONTEXT_BUDGET_S = 0.05
 
 
 def test_error_carries_code_message_context_and_hint() -> None:
@@ -332,3 +346,50 @@ def test_regression_schema_error_message_counts_unlisted_errors() -> None:
 def test_every_class_default_code_is_catalogued() -> None:
     for error_class in _every_error_class():
         assert isinstance(error_class.default_code, ErrorCode), error_class.__name__
+
+
+def _capped_build_seconds(value: object) -> tuple[float, object]:
+    start = time.perf_counter()
+    error = SchemaError("x", hint="y", context={"value": value})
+    return time.perf_counter() - start, error.context["value"]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [np.arange(HUGE_ARRAY_ITEMS), set(range(HUGE_CONTEXT_ITEMS))],
+    ids=["array", "set"],
+)
+def test_regression_huge_array_and_set_contexts_build_fast(value: Collection[int]) -> None:
+    """Caps a huge array and set by their first 20 items without converting or sorting all."""
+    seconds, bounded = _capped_build_seconds(value)
+    assert bounded == [*range(MAX_CONTEXT_ITEMS), f"(+{len(value) - MAX_CONTEXT_ITEMS} more)"]
+    assert seconds < HUGE_CONTEXT_BUDGET_S, f"{type(value).__name__} took {seconds:.3f} s"
+
+
+def test_regression_mixed_set_context_is_ordered_by_repr() -> None:
+    error = SchemaError("x", hint="y", context={"ids": {2, "a", 1.5}})
+    assert error.context["ids"] == [1.5, 2, "a"]
+
+
+def test_regression_context_mappings_are_capped() -> None:
+    """Keeps 20 entries of a 1,000-entry mapping, counts the rest and survives a re-raise."""
+    first = SchemaError("x", hint="y", context={"by_id": {str(n): n for n in range(1_000)}})
+    assert first.context["by_id"] == {
+        **{str(n): n for n in range(MAX_CONTEXT_ITEMS)},
+        "(+980 more)": None,
+    }
+    assert SchemaError("x", hint="y", context=first.context).context == first.context
+
+
+class _BrokenRepr:
+    def __repr__(self) -> str:
+        raise RuntimeError("repr failed")
+
+
+def test_regression_context_survives_a_broken_repr() -> None:
+    """Names the type of a context value or key whose repr raises instead of failing to build."""
+    error = SchemaError("x", hint="y", context={"obj": _BrokenRepr(), "keys": {_BrokenRepr(): 1}})
+    assert error.context == {
+        "obj": "<unprintable _BrokenRepr>",
+        "keys": {"<unprintable _BrokenRepr>": 1},
+    }
