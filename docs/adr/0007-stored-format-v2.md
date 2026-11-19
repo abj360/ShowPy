@@ -1,6 +1,6 @@
 # ADR 0007: Stored format v2, read through a migration chain, with v1 read until 2.0
 
-- Status: Proposed
+- Status: Accepted (2026-11-19)
 - Date: 2026-11-18
 - Deciders: the maintainer (abj360)
 

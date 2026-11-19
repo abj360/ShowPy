@@ -1,6 +1,6 @@
 # ADR 0009: Boolean flags are keyword-only; renamed or moved names warn for two minor releases
 
-- Status: Proposed
+- Status: Accepted (2026-11-19)
 - Date: 2026-11-18
 - Deciders: the maintainer (abj360)
 

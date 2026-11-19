@@ -1,6 +1,6 @@
 # ADR 0008: `&` never mixes with `+` or `-` without parentheses; named selections store ordered IDs
 
-- Status: Proposed
+- Status: Accepted (2026-11-19)
 - Date: 2026-11-18
 - Deciders: the maintainer (abj360)
 

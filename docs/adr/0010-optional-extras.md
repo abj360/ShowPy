@@ -1,6 +1,6 @@
 # ADR 0010: pandas, Pillow, segno and imageio-ffmpeg become optional extras
 
-- Status: Proposed
+- Status: Accepted (2026-11-19)
 - Date: 2026-11-18
 - Deciders: the maintainer (abj360)
 

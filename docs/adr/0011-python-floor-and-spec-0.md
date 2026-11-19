@@ -1,6 +1,6 @@
 # ADR 0011: Follow SPEC 0 for Python; the floor rises to 3.13 at v0.4.0
 
-- Status: Proposed
+- Status: Accepted (2026-11-19)
 - Date: 2026-11-18
 - Deciders: the maintainer (abj360)
 
