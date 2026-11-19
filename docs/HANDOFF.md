@@ -85,8 +85,8 @@ phase's plan was deleted after the tag.
 
 **Next: Phase 2, foundations** (`docs/upgrade-plan.md`, "Phase 2"), the main breaking release
 before 1.0, target `v0.4.0`. Plan: `docs/superpowers/plans/2026-11-18-phase-2-foundations.md`;
-decision records: ADRs 0007 to 0011 (Proposed 2026-11-18). Nothing starts before the maintainer
-accepts those ADRs and answers the plan's "Decisions needed" list.
+decision records: ADRs 0007 to 0011, accepted 2026-11-19 with the plan's twelve "Decisions needed"
+as recommended (Python floor 3.13).
 
 `docs/showpy-api-reference.md` was aligned with the code on 2026-11-17; the code stays the source
 of truth until generated docs land in Phase 6.

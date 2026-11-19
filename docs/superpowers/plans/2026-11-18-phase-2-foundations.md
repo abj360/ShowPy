@@ -41,9 +41,10 @@ Where the audit and the code disagree, this plan follows the code (measured on `
 
 ## Decisions needed
 
-The maintainer decides these before the lanes they name start. Each line: the question, my
-recommendation, and what it costs if the recommendation is wrong. The five ADRs above are
-decided in their own pull requests and are not repeated here.
+**Decided 2026-11-19:** the maintainer accepted ADRs 0007 to 0011 (Python floor 3.13) and all
+twelve decisions below as recommended. Decision 1 is recorded as a dated ADR 0006 addendum.
+
+Each line: the question, the recommendation, and what it costs if the recommendation is wrong.
 
 1. **Sheet template IDs with hyphens.** ADR 0006 says landmark and zone IDs cannot contain `-`,
    but 335 of 339 IDs in the bundled templates do (`front-sideline`, `end-zone-left`), and so do
