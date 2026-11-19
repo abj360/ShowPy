@@ -28,6 +28,8 @@ Contains:
     test_names_missing_from_changelog_flags_unlisted_names: checks the changelog gate can fail
     test_names_missing_from_changelog_ignores_prose_mentions: checks plain words do not count
     test_snapshot_is_stable_across_python_versions: checks reprs carry no version-only text
+    test_regression_snapshot_tells_a_frozenset_constant_from_a_list: renders a set constant with
+        its type, so a frozenset turned list shows up as a change
 """
 
 import enum
@@ -169,7 +171,7 @@ def describe_public_object(obj: object) -> JsonValue:
     if callable(obj):
         return _signature_text(obj)
     if isinstance(obj, frozenset | set):
-        return {"constant": repr(sorted(obj, key=repr))}
+        return {"constant": f"{type(obj).__name__}({sorted(obj, key=repr)!r})"}
     return {"constant": repr(obj)}
 
 
@@ -331,6 +333,13 @@ def test_snapshot_is_stable_across_python_versions() -> None:
         if any(token in json.dumps(value) for token in forbidden)
     ]
     assert offenders == []
+
+
+def test_regression_snapshot_tells_a_frozenset_constant_from_a_list() -> None:
+    as_set = describe_public_object(frozenset({"b", "a"}))
+    assert as_set == {"constant": "frozenset(['a', 'b'])"}
+    assert as_set != describe_public_object(["a", "b"])
+    assert describe_public_object({"b", "a"}) == {"constant": "set(['a', 'b'])"}
 
 
 STORED_API: dict[str, JsonValue] = {"alpha": "(a)"}
