@@ -168,3 +168,20 @@ Audit decision 4 asks for the pattern and the reserved words.
 - **Code comments state the rule, not its source.** By the user's rule of 2026-11-17, docstrings
   and comments do not cite ADRs or ledger IDs; the refusal's docstring and hint name the device
   names themselves.
+
+## Addendum 2026-11-19: sheet items and sheet refs keep an inner hyphen
+
+- **The ban on `-` does not reach the sheet.** 335 of the 339 item IDs in the six bundled sheet
+  templates contain `-` (`front-sideline`, `end-zone-left`), and so do all six template refs
+  (`sheet:hs-football@1`). The maintainer decided on 2026-11-19 (Phase 2 plan, decision 1) that
+  landmark, zone and guide IDs and sheet refs may hold `-` anywhere but the first or last
+  character. Lane F sets the exact pattern and tests it against every bundled template.
+- **Why it is safe there.** Decision 1 bans `-` because it is the range and difference
+  operator (`T1-T8`, `A - B`) and the separator of transition folders (`/transitions/12-13/`).
+  Sheet items and sheet refs never enter the selection grammar or a transition folder name, so
+  their hyphens cannot be misread.
+- **Cost if wrong.** If a later selection grammar names zones (`zone:end-zone-left`), it must
+  read the whole word after `zone:` as one name. Renaming the bundled items then is one more
+  format migration step.
+- **Everything else is unchanged.** Spot, group, set, form and show IDs keep the pattern and
+  reserved words above.
