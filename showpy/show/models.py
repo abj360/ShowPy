@@ -166,6 +166,10 @@ class Show(FrozenModel):
 
         Returns:
             transition_id: The show's own TransitionId for that pair.
+
+        >>> from showpy.examples import two_set_show
+        >>> str(two_set_show().transition_id(("1", "2")))
+        '1→2'
         """
         for known in self.transition_ids():
             if known == tid:
