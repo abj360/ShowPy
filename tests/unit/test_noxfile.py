@@ -66,7 +66,7 @@ def minor_of(version: str) -> int:
 
 def test_ci_matrix_matches_requires_python() -> None:
     match = MATRIX_PYTHONS.search(CI_WORKFLOW.read_text())
-    assert match is not None
+    assert match is not None, "ci.yml has no python matrix line"
     matrix = {item.strip().strip("\"'") for item in match.group(1).split(",")}
     project = tomllib.loads(PYPROJECT.read_text())["project"]
     classified = {
@@ -75,6 +75,7 @@ def test_ci_matrix_matches_requires_python() -> None:
         if (found := PYTHON_CLASSIFIER.match(classifier))
     }
     floor = FLOOR_SPEC.match(project["requires-python"])
-    assert floor is not None
+    assert floor is not None, "requires-python is not a >=3.x floor"
     assert matrix == classified
+    assert all(minor_of(version) >= minor_of(floor.group(1)) for version in matrix)
     assert min(matrix, key=minor_of) == floor.group(1)
