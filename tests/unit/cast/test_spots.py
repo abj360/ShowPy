@@ -298,7 +298,8 @@ def test_rename_everywhere_leaves_degree_facings_alone() -> None:
     show = rich_show()
     row = PathRow(entity=SpotId("T2"), facing_mode=FacingMode.FIXED, facing_value=90.0)
     spec = show.transition(("1", "2"))
-    spec = spec.model_copy(update={"rows": {**spec.rows, "T2": row}})
+    rows: dict[SpotId, PathRow] = {**spec.rows, SpotId("T2"): row}
+    spec = spec.model_copy(update={"rows": rows})
     show = _rename_everywhere(
         show.model_copy(update={"transitions": (spec,)}), {SpotId("T2"): "X2"}
     )

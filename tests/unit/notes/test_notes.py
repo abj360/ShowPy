@@ -160,8 +160,6 @@ REJECTED = (ShowPyError, PydanticValidationError)
 NAIVE_TIME = datetime(2026, 11, 11)  # noqa: DTZ001 - the tests check it is rejected
 
 
-@pytest.mark.defect("UP-9.3-122")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-122")
 def test_regression_degenerate_area_anchor_never_leaks_shapely_errors() -> None:
     """Rejects a two-point area anchor, or finds it without a Shapely ValueError (audit 9.3)."""
     try:

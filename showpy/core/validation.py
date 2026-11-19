@@ -16,7 +16,7 @@ Contains:
 import math
 from collections.abc import Mapping
 from numbers import Real
-from typing import Annotated, Literal
+from typing import Annotated, Literal, SupportsFloat
 
 import numpy as np
 from pydantic import BaseModel, Field, TypeAdapter, field_validator
@@ -196,7 +196,7 @@ def validate_adapter_json[T](adapter: TypeAdapter[T], raw: str | bytes, *, name:
 
 
 def require_finite(
-    value: float,
+    value: SupportsFloat,
     *,
     name: str,
     low: float | None = None,
@@ -221,6 +221,10 @@ def require_finite(
     2.0
     """
     context = {"name": name, "value": bounded_repr(value), "low": low, "high": high}
+    if (low is not None and math.isnan(low)) or (high is not None and math.isnan(high)):
+        raise SchemaError(
+            f"{name} has a NaN bound", hint="pass finite or None bounds", context=context
+        )
     if isinstance(value, bool | np.bool_) or not isinstance(value, Real):
         raise SchemaError(f"{name} must be a number", hint="pass an int or float", context=context)
     try:

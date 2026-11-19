@@ -100,16 +100,12 @@ def test_regression_sheet_rejects_duplicate_landmark_ids() -> None:
         _sheet_with(landmarks=(mark, other))
 
 
-@pytest.mark.defect("UP-9.4-12")
-@pytest.mark.xfail(strict=True, reason="UP-9.4-12")
 def test_regression_region_rejects_two_point_ring() -> None:
     """Rejects a two-point region ring, which has no area (audit 9.4)."""
     with pytest.raises(ShowPyError):
         Region(exterior=((0.0, 0.0), (1.0, 1.0)))
 
 
-@pytest.mark.defect("UP-9.4-13")
-@pytest.mark.xfail(strict=True, reason="UP-9.4-13")
 def test_regression_region_rejects_bow_tie_ring() -> None:
     """Rejects a self-intersecting bow-tie ring (audit 9.4)."""
     with pytest.raises(ShowPyError):

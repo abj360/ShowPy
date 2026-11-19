@@ -23,6 +23,7 @@ from showpy.core.caps import (
     MAX_TABLE,
     MAX_TEXT_CHARS,
     MAX_VIDEO_PIXELS,
+    MIN_LAYOUT_HEIGHT_M,
     require_size,
 )
 from showpy.core.errors import SchemaError, SpacingError
@@ -55,6 +56,7 @@ def test_caps_have_approved_values() -> None:
     assert MAX_TEXT_CHARS == 1_000_000
     assert MAX_IMAGE_PIXELS == 40_000_000
     assert MAX_VIDEO_PIXELS == 3840 * 2160
+    assert MIN_LAYOUT_HEIGHT_M == 0.001
 
 
 def test_regression_require_size_rejects_a_negative_request() -> None:

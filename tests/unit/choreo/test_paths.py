@@ -169,7 +169,8 @@ def test_edits_never_mutate_input() -> None:
 
 def test_paths_table_lists_only_non_default_rows() -> None:
     spec = delay(SPEC, ["T1"], 1.0)
-    spec = spec.model_copy(update={"rows": {**spec.rows, "T2": PathRow(entity=SpotId("T2"))}})
+    rows: dict[SpotId, PathRow] = {**spec.rows, SpotId("T2"): PathRow(entity=SpotId("T2"))}
+    spec = spec.model_copy(update={"rows": rows})
     table = paths_table(spec)
     assert list(table["entity"]) == ["T1"]
     assert approx_equal(table.iloc[0]["start"], 1.0)

@@ -422,7 +422,8 @@ def outputs_under_hash_seeds(script: str, seeds: Iterable[str] = HASH_SEEDS) -> 
 
     Args:
         script: Python source passed to `python -c`.
-        seeds: Hash seeds to run under, one subprocess each.
+        seeds: Hash seeds to run under, one subprocess each; the default covers 1, 2 and 3, not 0,
+            which disables hash randomization.
 
     Returns:
         outputs: Per seed, stdout plus the tail of stderr.

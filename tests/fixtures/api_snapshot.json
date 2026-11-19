@@ -568,6 +568,9 @@
   "MAX_VIDEO_PIXELS": {
     "constant": "8294400"
   },
+  "MIN_LAYOUT_HEIGHT_M": {
+    "constant": "0.001"
+  },
   "Marker": {
     "model": {
       "at_count": "Count",
@@ -1196,7 +1199,7 @@
   },
   "UnitRegistry": {
     "model": {
-      "meters_per_unit": "dict[str, float]"
+      "meters_per_unit": "collections.abc.Mapping[str, UnitSize]"
     }
   },
   "UnknownRefError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
@@ -1271,7 +1274,7 @@
   "apply_fix": "(spec: showpy.choreo.models.TransitionSpec, fix: showpy.choreo.engine_models.Fix) -> showpy.choreo.models.TransitionSpec",
   "apply_match": "(show: showpy.show.models.Show, tid: tuple[str, str], result: showpy.choreo.models.MatchResult, *, force: bool = False) -> showpy.show.models.Show",
   "apportion": "(lengths: collections.abc.Sequence[float], n: int, minimums: collections.abc.Sequence[int] | None = None) -> list[int]",
-  "approx_equal": "(a: ArrayLike, b: ArrayLike, tol: float = 1e-06) -> bool",
+  "approx_equal": "(a: ArrayLike, b: ArrayLike, tol: float = 1e-06, *, rel_tol: float = 0.0) -> bool",
   "arc": "(center: Point, radius: Meters, start_deg: Degrees, sweep_deg: Degrees) -> showpy.geo.curves.ArcCurve",
   "arc_form": "(form_id: str, members: collections.abc.Sequence[str], center: Point, radius: Meters, start_deg: Degrees, sweep_deg: Degrees, spacing: showpy.choreo.models.SpacingSpec | None = None, facing: showpy.choreo.models.FacingSpec | None = None, *, set_id: str = '', n: int | None = None) -> showpy.choreo.models.Form",
   "arc_from_chord": "(a: Point, b: Point, bulge: Meters) -> showpy.geo.curves.ArcCurve",
@@ -1395,6 +1398,7 @@
   "form_fns": "(registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> list[showpy.choreo.models.FormFnInfo]",
   "form_metrics": "(points: Points) -> showpy.geo.models.FormMetrics",
   "form_templates": "() -> dict[str, collections.abc.Callable[..., showpy.choreo.models.Form]]",
+  "format_number": "(value: float, *, max_decimals: int = 6) -> str",
   "format_ranges": "(ids: collections.abc.Iterable[str]) -> str",
   "format_ref": "(kind: str, ref_id: str, version: str | None = None) -> str",
   "format_tid": "(tid: tuple[str, str]) -> str",
@@ -1461,7 +1465,7 @@
   "neighbors": "(s: showpy.choreo.models.Set, entity: str, k: int = 2) -> list[tuple[showpy.core.ids.SpotId, Meters]]",
   "new_show": "(show_id: str, title: str, sheet: showpy.sheet.models.Sheet, timeline: showpy.time.models.Timeline, cast: showpy.cast.models.Cast | None = None, pack: str = '') -> showpy.show.models.Show",
   "new_timeline": "(mode: showpy.time.models.TimelineMode, counts_per_minute: CountsPerMinute | None = None, total: Count | None = None) -> showpy.time.models.Timeline",
-  "normalize_angle": "(a: Degrees) -> Degrees",
+  "normalize_angle": "(deg: float) -> float",
   "notes_for": "(show: 'Show', target: str | tuple[str, str], *, include_hidden: bool = False) -> list[showpy.notes.models.Note]",
   "notes_near": "(show: 'Show', p: Point, radius: Meters, set_id: str | None = None, *, include_hidden: bool = False) -> list[showpy.notes.models.Note]",
   "notify_changes": "(pub: showpy.export.models.Publication, old_show: showpy.show.models.Show, new_show: showpy.show.models.Show) -> list[tuple[showpy.export.models.Performer, str]]",
@@ -1527,7 +1531,7 @@
   "render_sheet": "(sheet: showpy.sheet.models.Sheet, fmt: SheetFormat = 'svg', px_per_m: float = 20.0) -> bytes",
   "renumber": "(show: showpy.show.models.Show, scheme: str = 'sequential') -> tuple[showpy.show.models.Show, dict[showpy.core.ids.SetId, showpy.core.ids.SetId]]",
   "reorder": "(form: showpy.choreo.models.Form, order: Order, prev_set: showpy.choreo.models.Set | None = None, *, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> showpy.choreo.models.Form",
-  "require_finite": "(value: float, *, name: str, low: float | None = None, low_open: bool = False, high: float | None = None) -> float",
+  "require_finite": "(value: SupportsFloat, *, name: str, low: float | None = None, low_open: bool = False, high: float | None = None) -> float",
   "require_size": "(requested: int, cap: int, *, what: str, error: type[showpy.core.errors.ShowPyError] = ...) -> None",
   "revert": "(ws: showpy.show.storage.Workspace, revision_id: str, at: datetime.datetime) -> showpy.show.models.Revision",
   "ripple": "(spec: showpy.choreo.models.TransitionSpec, ordered_sel: Sel, total: float, curve: Literal['linear', 'ease_in', 'ease_out', 'ease_in_out'] = 'linear', *, force: bool = False) -> showpy.choreo.models.TransitionSpec",

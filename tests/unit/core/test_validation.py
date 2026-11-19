@@ -9,7 +9,9 @@ Contains:
     test_issue_context_*(): the read-only, bounded context of one issue
     test_validate_or_schema_error_*(): one behavior of the SchemaError-raising validator each
     test_validate_adapter_*(): SchemaError from standalone TypeAdapters, Python or JSON input
-    test_require_finite_*(): one rule of the finite-number check each
+    test_require_finite_*(): one rule of the finite-number check each, bounds included
+    test_regression_issue_context_is_bounded: caps the items of an issue's context
+    test_require_finite_rejects_nan_bounds: raises SchemaError for a NaN low or high bound
     test_regression_require_finite_rejects_an_int_too_large_for_float: rejects 10**400 instead of
         leaking OverflowError
     test_regression_require_finite_echoes_a_huge_int_by_its_bit_count: says a 5,000-digit int is
@@ -191,7 +193,7 @@ def test_regression_require_finite_rejects_an_int_too_large_for_float() -> None:
 
 def test_require_finite_accepts_numpy_scalars_and_returns_python_float() -> None:
     for scalar in (np.int64(3), np.float32(0.5)):
-        result = require_finite(scalar, name="n")  # type: ignore[arg-type]
+        result = require_finite(scalar, name="n")
         assert type(result) is float
         assert result == float(scalar)
 
@@ -199,7 +201,7 @@ def test_require_finite_accepts_numpy_scalars_and_returns_python_float() -> None
 def test_require_finite_rejects_numpy_bool() -> None:
     truth = True
     with pytest.raises(SchemaError):
-        require_finite(np.bool_(truth), name="n")  # type: ignore[arg-type]
+        require_finite(np.bool_(truth), name="n")
 
 
 def test_regression_require_finite_echoes_a_huge_int_by_its_bit_count() -> None:
@@ -234,3 +236,10 @@ def test_validate_adapter_json_raises_schema_error(raw: bytes) -> None:
 
 def test_validate_adapter_json_returns_the_value() -> None:
     assert validate_adapter_json(_INT_LIST, b"[3]", name="Ints") == [3]
+
+
+def test_require_finite_rejects_nan_bounds() -> None:
+    with pytest.raises(SchemaError):
+        require_finite(1.0, name="n", low=float("nan"))
+    with pytest.raises(SchemaError):
+        require_finite(1.0, name="n", high=float("nan"))

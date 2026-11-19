@@ -2,11 +2,13 @@
 units.py --- the only unit conversion point, plus angle helpers for facings
 
 Contains:
-    UnitRegistry: maps unit names to meters per unit, immutably
+    UnitRegistry: maps unit names to exact meters-per-unit fractions, immutably
+    UnitRegistry.exact(): returns one unit's size as a fraction
+    UnitRegistry.factor(): returns one unit's size as a float
     convert(): converts a length between two registered units
     register_unit(): returns a registry extended with one unit
     units(): lists the default units
-    normalize_angle(): wraps an angle into [0, 360)
+    normalize_angle(): wraps an angle into [0, 360), re-exported from numbers
     angle_diff(): returns the signed shortest turn from a to b
     facing_vector(): converts a facing to a unit direction
     vector_facing(): converts a direction to a facing
@@ -14,26 +16,61 @@ Contains:
 """
 
 import math
-from decimal import ROUND_HALF_UP, Decimal
+from collections.abc import Mapping
+from decimal import ROUND_HALF_UP, Decimal, DecimalException
+from fractions import Fraction
+from numbers import Real
+from typing import Annotated
 
-from showpy.core.errors import UnknownRefError, ZeroLengthError
+from pydantic import BeforeValidator, model_validator
+
+from showpy.core.errors import SchemaError, UnknownRefError, ZeroLengthError
+from showpy.core.numbers import normalize_angle as normalize_angle
+from showpy.core.readonly import ReadOnly
 from showpy.core.types import Degrees, FrozenModel, Point
 
-INCH_M = 0.0254
+INCH_M = Fraction(127, 5000)
+BASE_UNIT = "m"
 ZERO_VECTOR_TOL = 1e-12
 
 
+def _as_exact_size(raw: object) -> object:
+    if isinstance(raw, float):
+        return Fraction(repr(raw)) if math.isfinite(raw) else raw
+    return raw
+
+
+type UnitSize = Annotated[Fraction, BeforeValidator(_as_exact_size)]
+
+
 class UnitRegistry(FrozenModel):
-    """Maps unit names to their size in meters.
+    """Maps unit names to their size in meters as exact fractions.
 
     Attributes:
-        meters_per_unit: Unit name to meters per one unit.
+        meters_per_unit: Unit name to meters per one unit; read-only, and `m` is always 1.
     """
 
-    meters_per_unit: dict[str, float]
+    meters_per_unit: Annotated[Mapping[str, UnitSize], ReadOnly()]
 
-    def factor(self, name: str) -> float:
-        """Returns meters per unit, raising UnknownRefError for unknown names."""
+    @model_validator(mode="after")
+    def _check_sizes(self) -> "UnitRegistry":
+        if self.meters_per_unit.get(BASE_UNIT) != 1:
+            raise SchemaError(
+                f"unit {BASE_UNIT!r} must be present and equal 1",
+                hint=f"include {BASE_UNIT!r} with a size of 1 meter",
+                context={"unit": BASE_UNIT},
+            )
+        for name, size in self.meters_per_unit.items():
+            if not name.strip() or size <= 0:
+                raise SchemaError(
+                    f"unit {name!r} needs a non-empty name and a positive size",
+                    hint="give each unit a name and meters_per_unit above 0",
+                    context={"unit": name, "meters_per_unit": str(size)},
+                )
+        return self
+
+    def exact(self, name: str) -> Fraction:
+        """Returns meters per unit as an exact fraction, raising UnknownRefError if unknown."""
         if name not in self.meters_per_unit:
             raise UnknownRefError(
                 f"unknown unit {name!r}",
@@ -42,12 +79,16 @@ class UnitRegistry(FrozenModel):
             )
         return self.meters_per_unit[name]
 
+    def factor(self, name: str) -> float:
+        """Returns meters per unit, raising UnknownRefError for unknown names."""
+        return float(self.exact(name))
+
 
 DEFAULT_UNITS = UnitRegistry(
     meters_per_unit={
-        "m": 1.0,
-        "cm": 0.01,
-        "mm": 0.001,
+        "m": Fraction(1),
+        "cm": Fraction(1, 100),
+        "mm": Fraction(1, 1000),
         "in": INCH_M,
         "ft": 12 * INCH_M,
         "yd": 36 * INCH_M,
@@ -58,7 +99,7 @@ DEFAULT_UNITS = UnitRegistry(
 def convert(
     value: float, from_unit: str, to_unit: str, registry: UnitRegistry = DEFAULT_UNITS
 ) -> float:
-    """Converts a length between units.
+    """Converts a length between units; the unit ratio is exact before it meets `value`.
 
     Args:
         value: Length in `from_unit`.
@@ -69,25 +110,36 @@ def convert(
     Returns:
         converted: Length in `to_unit`.
 
-    >>> round(convert(3.0, "ft", "yd"), 6)
+    >>> convert(3.0, "ft", "yd")
     1.0
     """
-    return value * registry.factor(from_unit) / registry.factor(to_unit)
+    return value * float(registry.exact(from_unit) / registry.exact(to_unit))
 
 
 def register_unit(registry: UnitRegistry, name: str, meters_per_unit: float) -> UnitRegistry:
-    """Returns a new registry that also knows `name`.
+    """Returns a new registry that also knows `name`; a float is read as its decimal text.
+
+    Raises SchemaError for an empty name, for `m`, and for a size that is not finite and positive.
 
     >>> register_unit(DEFAULT_UNITS, "step85", 0.5715).factor("step85")
     0.5715
     """
-    if not meters_per_unit > 0:
-        raise UnknownRefError(
-            f"unit {name!r} needs a positive size",
-            hint="give meters_per_unit above 0",
-            context={"unit": name, "meters_per_unit": meters_per_unit},
+    context = {"unit": name, "meters_per_unit": repr(meters_per_unit)}
+    if not name.strip() or name == BASE_UNIT:
+        raise SchemaError(
+            f"unit name {name!r} is not allowed",
+            hint=f"use a non-empty name other than {BASE_UNIT!r}",
+            context=context,
         )
-    return UnitRegistry(meters_per_unit={**registry.meters_per_unit, name: meters_per_unit})
+    if not math.isfinite(meters_per_unit) or meters_per_unit <= 0:
+        raise SchemaError(
+            f"unit {name!r} needs a finite positive size",
+            hint="give meters_per_unit above 0",
+            context=context,
+        )
+    return UnitRegistry(
+        meters_per_unit={**registry.meters_per_unit, name: Fraction(repr(meters_per_unit))}
+    )
 
 
 def units() -> dict[str, float]:
@@ -96,18 +148,7 @@ def units() -> dict[str, float]:
     >>> units()["m"]
     1.0
     """
-    return dict(DEFAULT_UNITS.meters_per_unit)
-
-
-def normalize_angle(a: Degrees) -> Degrees:
-    """Wraps an angle into [0, 360).
-
-    >>> normalize_angle(-90.0)
-    270.0
-    """
-    wrapped = math.fmod(a, 360.0)
-    wrapped = wrapped + 360.0 if wrapped < 0 else wrapped
-    return 0.0 if wrapped >= 360.0 else wrapped
+    return {name: float(size) for name, size in DEFAULT_UNITS.meters_per_unit.items()}
 
 
 def angle_diff(a: Degrees, b: Degrees) -> Degrees:
@@ -148,10 +189,32 @@ def vector_facing(v: Point) -> Degrees:
 def round_to(value: float, precision: float = 0.01) -> float:
     """Rounds to a multiple of `precision`, half away from zero, for display.
 
+    Raises SchemaError for a bool, a non-number, a non-finite value, a precision that is not
+    finite and positive, and a quotient too long for 28 decimal digits. Every result that rounds to
+    zero is `0.0`, never `-0.0`.
+
     >>> round_to(2.345)
     2.35
     """
-    steps = (Decimal(repr(value)) / Decimal(repr(precision))).quantize(
-        Decimal(1), rounding=ROUND_HALF_UP
-    )
-    return float(steps * Decimal(repr(precision)))
+    if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(value):
+        raise SchemaError(
+            f"cannot round {value!r}",
+            hint="pass a finite number",
+            context={"value": repr(value)},
+        )
+    if not math.isfinite(precision) or precision <= 0:
+        raise SchemaError(
+            f"precision must be finite and above 0, got {precision!r}",
+            hint="pass a precision such as 0.01",
+            context={"precision": repr(precision)},
+        )
+    step = Decimal(repr(float(precision)))
+    try:
+        steps = (Decimal(repr(float(value))) / step).quantize(Decimal(1), rounding=ROUND_HALF_UP)
+        return float(steps * step) + 0.0
+    except DecimalException as error:
+        raise SchemaError(
+            f"cannot round {value!r} to a step of {precision!r}: too many digits",
+            hint="use a larger precision or a smaller value",
+            context={"value": repr(value), "precision": repr(precision)},
+        ) from error

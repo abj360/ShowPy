@@ -251,6 +251,7 @@ if TYPE_CHECKING:
         MAX_TABLE,
         MAX_TEXT_CHARS,
         MAX_VIDEO_PIXELS,
+        MIN_LAYOUT_HEIGHT_M,
         require_size,
     )
     from showpy.core.error_codes import (
@@ -294,6 +295,9 @@ if TYPE_CHECKING:
         make_tid,
         parse_ref,
         parse_tid,
+    )
+    from showpy.core.numbers import (
+        format_number,
     )
     from showpy.core.resources import (
         font_path,
@@ -845,6 +849,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "MAX_TABLE": ("showpy.core.caps", "MAX_TABLE"),
     "MAX_TEXT_CHARS": ("showpy.core.caps", "MAX_TEXT_CHARS"),
     "MAX_VIDEO_PIXELS": ("showpy.core.caps", "MAX_VIDEO_PIXELS"),
+    "MIN_LAYOUT_HEIGHT_M": ("showpy.core.caps", "MIN_LAYOUT_HEIGHT_M"),
     "Marker": ("showpy.time.models", "Marker"),
     "MarkerKind": ("showpy.time.models", "MarkerKind"),
     "MatchError": ("showpy.core.errors", "MatchError"),
@@ -1078,6 +1083,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "form_fns": ("showpy.choreo.form_fns", "form_fns"),
     "form_metrics": ("showpy.geo.measure", "form_metrics"),
     "form_templates": ("showpy.choreo.form_ops", "form_templates"),
+    "format_number": ("showpy.core.numbers", "format_number"),
     "format_ranges": ("showpy.core.util", "format_ranges"),
     "format_ref": ("showpy.core.ids", "format_ref"),
     "format_tid": ("showpy.core.ids", "format_tid"),
@@ -1350,6 +1356,7 @@ __all__ = [
     "MAX_TABLE",
     "MAX_TEXT_CHARS",
     "MAX_VIDEO_PIXELS",
+    "MIN_LAYOUT_HEIGHT_M",
     "RESERVED_IDS",
     "SHEET_ID_PATTERN",
     "Anchor",
@@ -1653,6 +1660,7 @@ __all__ = [
     "form_fns",
     "form_metrics",
     "form_templates",
+    "format_number",
     "format_ranges",
     "format_ref",
     "format_tid",

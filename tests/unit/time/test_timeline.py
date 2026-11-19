@@ -310,8 +310,6 @@ def test_regression_add_tempo_rejects_infinite_tempo() -> None:
         add_tempo(_steady(), TempoSection(at_count=8.0, counts_per_minute=math.inf))
 
 
-@pytest.mark.defect("UP-9.3-105")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-105")
 def test_regression_add_tempo_rejects_negative_ramp_target() -> None:
     """Rejects a ramp toward a negative tempo (audit 9.3)."""
     with pytest.raises(REJECTED):

@@ -4,9 +4,10 @@
 test_library_rules.py --- tests source-level rules that every showpy module must follow
 
 Contains:
-    find_model_copy_updates(): lists file and line of each model_copy call that passes update
+    find_model_copy_updates(): lists file and line of each unvalidated model_copy use
     test_library_never_calls_model_copy_with_update: fails on any such call in showpy/
     test_model_copy_ban_detects_an_offending_call: proves the scan can fail
+    test_model_copy_ban_detects_kwargs_aliases_and_getattr: proves the scan sees evasions
     find_citations(): lists file and line of each ADR, ledger-ID or docs-path citation
     test_library_cites_no_adr_docs_or_ledger_ids: fails on any such citation in showpy/
     test_citation_scan_flags_a_docstring_and_a_comment: proves the scan can fail
@@ -47,21 +48,44 @@ ERROR_CODES_PATH = LIBRARY_ROOT / "core" / "error_codes.py"
 ERROR_CODE_DOCS_PATH = REPO_ROOT / "docs" / "error-codes.md"
 ERROR_CODE_GENERATOR_PATH = REPO_ROOT / "scripts" / "gen_error_codes.py"
 LITERAL = "literal"
+MODEL_COPY = "model_copy"
+MODEL_COPY_OVERRIDE = Path("core") / "types.py"
 pytestmark = pytest.mark.skipif(
     not LIBRARY_ROOT.is_dir(), reason="needs a source checkout; the wheel test has no showpy tree"
 )
 
 
+def _is_model_copy(node: ast.AST) -> bool:
+    return isinstance(node, ast.Attribute) and node.attr == MODEL_COPY
+
+
+def _is_getattr_of_model_copy(node: ast.AST) -> bool:
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "getattr"
+        and any(isinstance(arg, ast.Constant) and arg.value == MODEL_COPY for arg in node.args)
+    )
+
+
 def find_model_copy_updates(source: str, name: str) -> list[str]:
-    """Lists `name:line` for each `model_copy(update=...)` call in the source."""
-    return [
-        f"{name}:{node.lineno}"
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "model_copy"
-        and any(keyword.arg == "update" for keyword in node.keywords)
-    ]
+    """Lists `name:line` for each unvalidated `model_copy` use in the source.
+
+    Flags a call that passes `update` or `**kwargs`, a `getattr(x, "model_copy")` and any
+    reference that is not an immediate call, such as an alias or a callback.
+    """
+    tree = ast.parse(source)
+    called = {id(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)}
+    hits: set[int] = set()
+    for node in (item for item in ast.walk(tree) if isinstance(item, ast.expr)):
+        if _is_getattr_of_model_copy(node):
+            hits.add(node.lineno)
+        elif isinstance(node, ast.Call) and _is_model_copy(node.func):
+            if any(keyword.arg in {"update", None} for keyword in node.keywords):
+                hits.add(node.lineno)
+        elif _is_model_copy(node) and id(node) not in called:
+            hits.add(node.lineno)
+    return [f"{name}:{line}" for line in sorted(hits)]
 
 
 def test_library_never_calls_model_copy_with_update() -> None:
@@ -69,6 +93,7 @@ def test_library_never_calls_model_copy_with_update() -> None:
     offenders = [
         hit
         for path in sorted(LIBRARY_ROOT.rglob("*.py"))
+        if path.relative_to(LIBRARY_ROOT) != MODEL_COPY_OVERRIDE
         for hit in find_model_copy_updates(
             path.read_text(encoding="utf-8"), str(path.relative_to(LIBRARY_ROOT.parent))
         )
@@ -82,6 +107,20 @@ def test_model_copy_ban_detects_an_offending_call() -> None:
     """Reports the line of an update call and ignores a plain copy."""
     source = "a = x.model_copy()\nb = x.model_copy(update={'k': 1})\n"
     assert find_model_copy_updates(source, "m.py") == ["m.py:2"]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "x.model_copy(**changes)\n",
+        "copy = x.model_copy\ncopy(update={})\n",
+        "run(x.model_copy)\n",
+        "getattr(x, 'model_copy')(update={})\n",
+    ],
+)
+def test_model_copy_ban_detects_kwargs_aliases_and_getattr(source: str) -> None:
+    """Reports a spread, an alias, a callback and a getattr lookup of `model_copy`."""
+    assert find_model_copy_updates(source, "m.py")
 
 
 def find_citations(source: str, name: str) -> list[str]:

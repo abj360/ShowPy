@@ -5,23 +5,34 @@ Contains:
     Finite, NonNegFinite, PositiveFinite: constrain a float to be finite, non-negative or positive
     Meters, Seconds, Count, Degrees: finite floats in the library's one unit system
     NonNegCount, NonNegSeconds, PositiveMeters: range-limited unit aliases
-    CountsPerMinute: finite tempo alias (positivity stays a timeline rule)
+    CountsPerMinute: positive finite tempo alias
+    Heading: wraps a stored facing into [0, 360)
+    JsonValue: the JSON data model, re-exported from json_types
+    JsonObject: a read-only JSON object for open payloads
     FrozenModel: provides the immutable, strict base that raises SchemaError on bad data
     FrozenModel.replace(): returns a revalidated copy with some fields changed
+    FrozenModel.model_copy(): returns a copy whose cached_property values are dropped
     Box2: bounds stage-plane points and reports size and center
     Box3: bounds world points
-    Region: stores an area as exterior and hole rings, convertible to Shapely
+    Region: stores a valid simple area as exterior and hole rings, convertible to Shapely
 """
 
+from collections.abc import Mapping
+from functools import cached_property
 from typing import Annotated, Any, Self
 
 import numpy as np
 import shapely
 from numpy.typing import NDArray
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationError, model_validator
 from pydantic.config import ExtraValues
 
 from showpy.core.errors import schema_error_from
+from showpy.core.json_types import JsonValue as JsonValue
+from showpy.core.numbers import normalize_angle
+from showpy.core.readonly import ReadOnly
+
+MIN_RING_POINTS = 3
 
 type Finite = Annotated[float, Field(allow_inf_nan=False)]
 type NonNegFinite = Annotated[float, Field(ge=0, allow_inf_nan=False)]
@@ -33,7 +44,9 @@ type Degrees = Annotated[float, Field(allow_inf_nan=False)]
 type NonNegCount = Annotated[float, Field(ge=0, allow_inf_nan=False)]
 type NonNegSeconds = Annotated[float, Field(ge=0, allow_inf_nan=False)]
 type PositiveMeters = Annotated[float, Field(gt=0, allow_inf_nan=False)]
-type CountsPerMinute = Annotated[float, Field(allow_inf_nan=False)]
+type CountsPerMinute = Annotated[float, Field(gt=0, allow_inf_nan=False)]
+type Heading = Annotated[float, Field(allow_inf_nan=False), AfterValidator(normalize_angle)]
+type JsonObject = Annotated[Mapping[str, JsonValue], ReadOnly()]
 type Point = tuple[float, float]
 type Point3 = tuple[float, float, float]
 type Ring = tuple[Point, ...]
@@ -136,6 +149,22 @@ class FrozenModel(BaseModel):
         except ValidationError as exc:
             raise schema_error_from(exc, model=cls.__name__) from exc
 
+    def model_copy(self, *, update: Mapping[str, object] | None = None, deep: bool = False) -> Self:
+        """Returns a copy whose `cached_property` values are dropped, so none goes stale.
+
+        Like pydantic's, `update` is not validated; edit with `replace` to revalidate.
+
+        >>> from showpy.core.types import Box2
+        >>> Box2(min=(0.0, 0.0), max=(1.0, 1.0)).model_copy().max
+        (1.0, 1.0)
+        """
+        duplicate = super().model_copy(update=update, deep=deep)
+        for owner in type(self).__mro__:
+            for name, attribute in vars(owner).items():
+                if isinstance(attribute, cached_property):
+                    vars(duplicate).pop(name, None)
+        return duplicate
+
     def replace(self, **changes: object) -> Self:
         """Returns a copy with `changes` applied, run through every validator.
 
@@ -200,6 +229,14 @@ class Region(FrozenModel):
 
     exterior: Ring
     holes: tuple[Ring, ...] = ()
+
+    @model_validator(mode="after")
+    def _require_simple_ring(self) -> Self:
+        if len(set(self.exterior)) < MIN_RING_POINTS:
+            raise ValueError("a region needs at least 3 distinct exterior points")
+        if not shapely.is_valid(self.to_shapely()):
+            raise ValueError("a region must be a simple ring: no self-crossing, holes inside")
+        return self
 
     @classmethod
     def from_shapely(cls, polygon: shapely.Polygon) -> Self:

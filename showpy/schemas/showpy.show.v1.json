@@ -267,6 +267,7 @@
       "type": "number"
     },
     "CountsPerMinute": {
+      "exclusiveMinimum": 0,
       "type": "number"
     },
     "Cue": {
