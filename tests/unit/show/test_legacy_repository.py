@@ -62,6 +62,7 @@ from showpy.show.collab import events_since
 from showpy.show.documents import SHOW_DOC, dump_json, dump_show_doc, is_show_doc
 from showpy.show.file_repository import FileRepository
 from showpy.show.history import diff_show
+from showpy.show.migrate import format_header
 from showpy.show.models import CanvasEvent, Revision, Show
 from showpy.show.storage import Workspace, load_show, open_workspace, save_show
 
@@ -328,16 +329,24 @@ def _revision_count(repo: FileRepository, expected: dict[str, Any]) -> int:
     return len(repo.revisions(expected["show_id"])) - len(expected["revisions"])
 
 
-STALE_DOCS = {"/sets/1/set.json", "/show/sheet.json", SHOW_DOC}
+STALE_DOCS = {"/sets/1/set.json", "/show/sheet.json"}
 
 
 def _two_stale_documents(tmp_path: Path) -> tuple[FileRepository, Workspace, int]:
-    """Copies the fixture and reformats its sheet document, so two documents are non-canonical."""
+    """Copies the fixture and reformats its sheet document, so two documents are non-canonical.
+
+    The commit also stores the current show.json, which any commit of a show document needs;
+    the `-0.0` set document and the reformatted sheet stay stale.
+    """
     repo, ws, expected = _fixture_workspace(tmp_path)
-    sheet = json.loads(ws.tree_at(expected["head"])["/show/sheet.json"])
+    tree = ws.tree_at(expected["head"])
+    sheet = json.loads(tree["/show/sheet.json"])
     repo.transaction(
         expected["show_id"],
-        {"/show/sheet.json": json.dumps(sheet, indent=4).encode()},
+        {
+            "/show/sheet.json": json.dumps(sheet, indent=4).encode(),
+            SHOW_DOC: dump_show_doc({**format_header(), **json.loads(tree[SHOW_DOC])}),
+        },
         expected_revision=expected["head"],
         at=COMMITTED_AT,
     )

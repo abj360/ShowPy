@@ -30,6 +30,8 @@ Contains:
     test_v030_reader_refuses_a_v2_tree(): fails the frozen v1 schema on the v2 header alone
     test_decode_caches_nothing_for_an_older_tree(): never caches documents that get migrated
     test_writes_of_a_v1_show_json_are_refused(): refuses OLD_FORMAT through commit and write
+    test_regression_raw_commit_into_a_v1_tree_needs_a_current_show_json(): refuses a commit of
+        any show document while show.json stays v1
     test_regression_current_trees_validate_with_the_checked_context(): passes CHECKED_CONTEXT to
         every model a v2 tree or v2 import builds, so v1 IDs a first save kept still load
 """
@@ -428,3 +430,23 @@ def test_regression_current_trees_validate_with_the_checked_context(
     assert "T-1" in import_json(exported).cast.ids()
     assert contexts
     assert all(context == CHECKED_CONTEXT for context in contexts)
+
+
+def test_regression_raw_commit_into_a_v1_tree_needs_a_current_show_json(tmp_path: Path) -> None:
+    """Refuses a repository commit of set.json alone into a never-saved v1 tree.
+
+    show.json versions the whole tree, so a current document beside a v1 show.json would be
+    read as v1; the commit must bring a current show.json or go through save_show().
+    """
+    repo, expected = _fixture("v0.2.0", tmp_path)
+    show_id = expected["show_id"]
+    raw = repo.documents(show_id)["/sets/2/set.json"]
+    edited = raw.replace(b'"label": null', b'"label": "Opening"', 1)
+    assert edited != raw
+    with pytest.raises(SchemaError) as caught:
+        repo.transaction(
+            show_id, {"/sets/2/set.json": edited}, expected_revision=expected["head"], at=AT
+        )
+    assert caught.value.code == ErrorCode.OLD_FORMAT
+    assert "save_show" in (caught.value.hint or "")
+    assert repo.head(show_id) == expected["head"]

@@ -251,7 +251,8 @@ def require_valid_digests(
     """Checks every changed path and decodes the show when any show document changed.
 
     Writing a derived table raises LockedError code READ_ONLY; deleting a stored copy is allowed.
-    A changed show.json of an older format version raises SchemaError code OLD_FORMAT.
+    When any show document changes, the show.json the commit leaves must be in the current
+    format version, else SchemaError code OLD_FORMAT: show.json versions the whole tree.
     Documents whose digest sits in `cache` at the same path are reused; every changed
     document is decoded fresh, and the show is validated whole either way.
 
@@ -277,7 +278,7 @@ def require_valid_digests(
     require_structured_files(changed, after, blob)
     if not any(is_show_doc(p) for p in changed):
         return None
-    if SHOW_DOC in changed and SHOW_DOC in after:
+    if SHOW_DOC in after:
         require_current_show_doc(blob(after[SHOW_DOC]))
     _require_required_docs(after)
     show = decode_show(LazyBlobs(after, blob), cache=cache, digests=after)
