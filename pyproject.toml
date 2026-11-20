@@ -106,7 +106,7 @@ ignore = ["D105", "D107", "D104", "D200", "D212", "D401", "D413", "D415"]
 convention = "google"
 
 [tool.ruff.lint.mccabe]
-max-complexity = 12
+max-complexity = 10
 
 # Library code and its doctests never import the test folder (HANDOFF trap, 2026-11-11).
 [tool.ruff.lint.flake8-tidy-imports]

@@ -7,6 +7,9 @@ Contains:
     tolerated_exit_codes(): lists the pytest exit codes a nox session accepts besides 0
     test_fuzz_session_accepts_only_exit_code_zero: fails when fuzz tolerates "no tests collected"
     test_tolerated_exit_codes_sees_an_accepted_code: proves the scan can fail
+    default_exit_codes(): lists the default of every success_codes parameter of one function
+    test_uv_run_default_accepts_only_exit_code_zero: fails when the _uv_run default tolerates codes
+    test_default_exit_codes_sees_an_accepted_default: proves the default scan can fail
     test_ci_matrix_matches_requires_python: keeps the CI Python matrix and the metadata in step
     session_names(): lists the names a nox session's body reads
     ci_job(): returns the text of one job of the CI workflow
@@ -71,6 +74,46 @@ def test_fuzz_session_accepts_only_exit_code_zero() -> None:
 def test_tolerated_exit_codes_sees_an_accepted_code() -> None:
     source = "def fuzz(session):\n    run('pytest', success_codes=[0, 5])\n"
     assert tolerated_exit_codes(source, "fuzz") == ["[0, 5]"]
+
+
+def default_exit_codes(source: str, function_name: str) -> list[str]:
+    """Lists the source text of each non-None default of a success_codes parameter.
+
+    Args:
+        source: The text of a noxfile.
+        function_name: The function whose signature to inspect.
+
+    Returns:
+        defaults: One entry per success_codes default other than None.
+    """
+    function = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    )
+    arguments = function.args
+    pairs = [
+        *zip(reversed(arguments.args), reversed(arguments.defaults), strict=False),
+        *(
+            (arg, default)
+            for arg, default in zip(arguments.kwonlyargs, arguments.kw_defaults, strict=True)
+            if default is not None
+        ),
+    ]
+    return [
+        ast.unparse(default)
+        for arg, default in pairs
+        if arg.arg == SUCCESS_CODES and ast.unparse(default) != "None"
+    ]
+
+
+def test_uv_run_default_accepts_only_exit_code_zero() -> None:
+    assert default_exit_codes(NOXFILE.read_text(), "_uv_run") == []
+
+
+def test_default_exit_codes_sees_an_accepted_default() -> None:
+    source = "def _uv_run(session, *args, success_codes=[0, 5]):\n    pass\n"
+    assert default_exit_codes(source, "_uv_run") == ["[0, 5]"]
 
 
 def minor_of(version: str) -> int:

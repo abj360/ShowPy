@@ -23,6 +23,11 @@ Contains:
     test_regression_public_functions_take_booleans_by_keyword: fails when a public signature
         takes a bool positionally
     test_positional_boolean_scan_flags_a_definition: proves the scan can fail
+    test_public_names_are_cached_after_first_use: requires a resolved name to land in the module
+    test_deprecated_alias_warns_on_every_access: requires an alias to warn each time, uncached
+    find_geo_foreign_imports(): lists each import in geo source outside showpy.core and showpy.geo
+    test_geo_imports_only_core: fails while geo imports another showpy package
+    test_geo_layering_scan_flags_a_foreign_import: proves the layering scan can fail
 """
 
 import ast
@@ -31,6 +36,7 @@ import inspect
 import io
 import re
 import tokenize
+import warnings
 from pathlib import Path
 from types import ModuleType
 
@@ -38,6 +44,7 @@ import pytest
 
 import showpy
 from showpy._api_table import PUBLIC_API
+from showpy.core.deprecation import DeprecatedWarning
 from showpy.core.error_codes import ErrorCode
 
 CITATION_PATTERN = re.compile(r"\bADR\b|\bUP-\d+\.\d+-\d+\b|\bdocs/")
@@ -333,3 +340,72 @@ def test_positional_boolean_scan_flags_a_definition() -> None:
     assert find_positional_booleans("def f(a: int, force: bool = False): ...", "m") == ["m:1:force"]
     assert find_positional_booleans("def f(a: int, *, force: bool = False): ...", "m") == []
     assert find_positional_booleans("def f(a: int, test: Callable[[int], bool]): ...", "m") == []
+
+
+def test_public_names_are_cached_after_first_use() -> None:
+    if "Show" in vars(showpy):
+        delattr(showpy, "Show")
+    resolved = showpy.Show
+    assert vars(showpy)["Show"] is resolved
+
+
+def test_deprecated_alias_warns_on_every_access() -> None:
+    alias = next(iter(vars(showpy)["_DEPRECATED"]))
+    for _ in range(2):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            getattr(showpy, alias)
+        assert [w.category for w in caught] == [DeprecatedWarning]
+    assert alias not in vars(showpy)
+
+
+def find_geo_foreign_imports(source: str, name: str) -> list[str]:
+    """Lists `name:line:module` for each import outside showpy.core and showpy.geo.
+
+    Args:
+        source: The text of a geo module.
+        name: The label to report for the module.
+
+    Returns:
+        offenders: One entry per offending runtime or TYPE_CHECKING import.
+    """
+    found: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            modules = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            modules = [node.module]
+        else:
+            continue
+        found.extend(
+            f"{name}:{node.lineno}:{module}"
+            for module in modules
+            if module.split(".")[0] == "showpy"
+            and module not in ("showpy.core", "showpy.geo")
+            and not module.startswith(("showpy.core.", "showpy.geo."))
+        )
+    return sorted(found, key=lambda entry: int(entry.split(":")[1]))
+
+
+@pytest.mark.xfail(strict=True, reason="lane C task C4")
+def test_geo_imports_only_core() -> None:
+    offenders = [
+        offender
+        for path in sorted((LIBRARY_ROOT / "geo").glob("*.py"))
+        for offender in find_geo_foreign_imports(path.read_text(encoding="utf-8"), path.name)
+    ]
+    assert offenders == []
+
+
+def test_geo_layering_scan_flags_a_foreign_import() -> None:
+    source = (
+        "from typing import TYPE_CHECKING\n"
+        "from showpy.core.types import Box2\n"
+        "if TYPE_CHECKING:\n"
+        "    from showpy.cast.models import Spot\n"
+        "import showpy.choreo.models\n"
+    )
+    assert find_geo_foreign_imports(source, "x.py") == [
+        "x.py:4:showpy.cast.models",
+        "x.py:5:showpy.choreo.models",
+    ]
