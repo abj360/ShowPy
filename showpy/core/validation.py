@@ -22,6 +22,7 @@ import numpy as np
 from pydantic import BaseModel, Field, TypeAdapter, field_validator
 from pydantic import ValidationError as PydanticValidationError
 
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import (
     SchemaError,
     ShowValidationError,
@@ -41,7 +42,7 @@ class ValidationIssue(FrozenModel):
 
     Attributes:
         level: Whether the issue blocks (`error`) or only informs (`warning`).
-        code: Stable issue code.
+        code: Stable issue code; a value outside ErrorCode raises SchemaError.
         where: Location, e.g. `set 12` or `12→13 T4`.
         message: What is wrong.
         hint: What would make it valid.
@@ -49,7 +50,7 @@ class ValidationIssue(FrozenModel):
     """
 
     level: Literal["error", "warning"]
-    code: str
+    code: ErrorCode
     where: str
     message: str
     hint: str

@@ -162,7 +162,7 @@ Output sizes are checked before anything is allocated; `require_size(requested, 
 
 | Data class         | Fields                                                                                                          | Represents                                                                                |
 | ------------------ | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `ValidationIssue`  | `level: "error" \| "warning", code: str, where: str, message: str, hint: str`                                   | One structural problem, printed as `E: <code> <where>: <message> (hint: ...)` or `W: ...` |
+| `ValidationIssue`  | `level: "error" \| "warning", code: ErrorCode, where: str, message: str, hint: str, context: JsonObject`        | One structural problem, printed as `E: <code> <where>: <message> (hint: ...)` or `W: ...` |
 | `ValidationReport` | `issues: tuple[ValidationIssue, ...]`; property `ok` (no error-level issue); `ValidationReport.merge(*reports)` | Every problem found, printed one line per issue                                           |
 
 ### showpy.core.util

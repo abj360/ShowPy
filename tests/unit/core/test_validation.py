@@ -8,6 +8,7 @@ Contains:
     test_raise_for_errors_*(): raises a ShowValidationError only when the report holds an error
     test_issue_context_*(): the read-only, bounded context of one issue
     test_issue_hashes_with_and_without_context: issues are hashable, nested context included
+    test_regression_issue_refuses_an_uncatalogued_code: an issue code must be an ErrorCode member
     test_validate_or_schema_error_*(): one behavior of the SchemaError-raising validator each
     test_validate_adapter_*(): SchemaError from standalone TypeAdapters, Python or JSON input
     test_require_finite_*(): one rule of the finite-number check each, bounds included
@@ -26,6 +27,7 @@ import numpy as np
 import pytest
 from pydantic import BaseModel, TypeAdapter
 
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import (
     MAX_CONTEXT_ITEMS,
     SchemaError,
@@ -46,7 +48,9 @@ from tests.helpers import context_entries
 MANY_ISSUES = 30
 
 
-def _issue(level: Literal["error", "warning"], code: str = "X") -> ValidationIssue:
+def _issue(
+    level: Literal["error", "warning"], code: ErrorCode = ErrorCode.SCHEMA
+) -> ValidationIssue:
     return ValidationIssue(level=level, code=code, where="set 1", message="bad", hint="fix")
 
 
@@ -60,24 +64,28 @@ def test_report_not_ok_with_error() -> None:
 
 def test_report_renders_one_line_per_issue() -> None:
     text = str(ValidationReport(issues=(_issue("error"),)))
-    assert text == "E: X set 1: bad (hint: fix)"
+    assert text == "E: SCHEMA set 1: bad (hint: fix)"
 
 
 def test_report_splits_errors_and_warnings() -> None:
-    error, warning = _issue("error", "E1"), _issue("warning", "W1")
+    error, warning = _issue("error", ErrorCode.LOCKED), _issue("warning", ErrorCode.TEMPO_ORDER)
     report = ValidationReport(issues=(warning, error))
     assert (report.errors, report.warnings) == ((error,), (warning,))
 
 
 def test_report_codes_are_ordered_and_unique() -> None:
-    issues = (_issue("error", "B"), _issue("warning", "A"), _issue("error", "B"))
-    assert ValidationReport(issues=issues).codes == ("B", "A")
+    issues = (
+        _issue("error", ErrorCode.PATH),
+        _issue("warning", ErrorCode.MATCH),
+        _issue("error", ErrorCode.PATH),
+    )
+    assert ValidationReport(issues=issues).codes == ("PATH", "MATCH")
 
 
 def test_report_to_json_round_trips() -> None:
     report = ValidationReport(issues=(_issue("error"), _issue("warning")))
     assert ValidationReport.model_validate_json(report.to_json()) == report
-    assert json.loads(report.to_json())["issues"][0]["code"] == "X"
+    assert json.loads(report.to_json())["issues"][0]["code"] == "SCHEMA"
 
 
 def test_raise_for_errors_returns_when_only_warnings() -> None:
@@ -85,15 +93,19 @@ def test_raise_for_errors_returns_when_only_warnings() -> None:
 
 
 def test_raise_for_errors_raises_with_the_issues_in_context() -> None:
-    report = ValidationReport(issues=(_issue("warning", "W1"), _issue("error", "E1")))
+    report = ValidationReport(
+        issues=(_issue("warning", ErrorCode.TEMPO_ORDER), _issue("error", ErrorCode.LOCKED))
+    )
     with pytest.raises(ShowValidationError) as info:
         report.raise_for_errors()
-    assert "E1" in info.value.message
-    assert [issue["code"] for issue in context_entries(info.value, "issues")] == ["E1"]
+    assert "LOCKED" in info.value.message
+    assert [issue["code"] for issue in context_entries(info.value, "issues")] == ["LOCKED"]
 
 
 def test_raise_for_errors_caps_the_listed_issues() -> None:
-    report = ValidationReport(issues=tuple(_issue("error", f"E{n}") for n in range(MANY_ISSUES)))
+    report = ValidationReport(
+        issues=tuple(_issue("error", list(ErrorCode)[n]) for n in range(MANY_ISSUES))
+    )
     with pytest.raises(ShowValidationError) as info:
         report.raise_for_errors()
     issues = info.value.context["issues"]
@@ -107,7 +119,7 @@ def test_issue_context_defaults_to_empty() -> None:
 
 def test_issue_context_is_read_only() -> None:
     issue = ValidationIssue(
-        level="error", code="X", where="w", message="m", hint="h", context={"n": 1}
+        level="error", code=ErrorCode.SCHEMA, where="w", message="m", hint="h", context={"n": 1}
     )
     with pytest.raises(TypeError):
         issue.context["n"] = 2  # type: ignore[index]
@@ -116,7 +128,7 @@ def test_issue_context_is_read_only() -> None:
 def test_regression_issue_context_is_bounded() -> None:
     issue = ValidationIssue(
         level="error",
-        code="X",
+        code=ErrorCode.SCHEMA,
         where="w",
         message="m",
         hint="h",
@@ -129,10 +141,22 @@ def test_regression_issue_context_is_bounded() -> None:
 def test_issue_hashes_with_and_without_context() -> None:
     bare = _issue("error")
     nested = ValidationIssue(
-        level="error", code="X", where="w", message="m", hint="h", context={"ids": ["a", "b"]}
+        level="error",
+        code=ErrorCode.SCHEMA,
+        where="w",
+        message="m",
+        hint="h",
+        context={"ids": ["a", "b"]},
     )
     assert hash(bare) == hash(_issue("error"))
     assert hash(nested) == hash(nested.model_copy())
+
+
+def test_regression_issue_refuses_an_uncatalogued_code() -> None:
+    fields = {"level": "error", "where": "w", "message": "m", "hint": "h"}
+    with pytest.raises(SchemaError):
+        ValidationIssue.model_validate({**fields, "code": "NOT_A_CODE"})
+    assert ValidationIssue.model_validate({**fields, "code": "LOCKED"}).code is ErrorCode.LOCKED
 
 
 def test_merge_concatenates_issues() -> None:

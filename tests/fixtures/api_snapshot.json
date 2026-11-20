@@ -1223,7 +1223,7 @@
   "UnknownRefError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "ValidationIssue": {
     "model": {
-      "code": "str",
+      "code": "showpy.core.error_codes.ErrorCode",
       "context": "JsonObject",
       "hint": "str",
       "level": "Literal['error', 'warning']",

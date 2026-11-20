@@ -239,7 +239,7 @@ def validate_dependencies(show: Show, store: SheetStore | None = None) -> Valida
     """Checks that the sheet reference resolves and its version is pinned in dependencies.
 
     >>> from showpy.examples import two_set_show
-    >>> [i.code for i in validate_dependencies(two_set_show()).issues]
+    >>> [str(i.code) for i in validate_dependencies(two_set_show()).issues]
     ['UNKNOWN_SHEET']
     """
     ref = show.sheet.ref
