@@ -1,0 +1,55 @@
+{
+  "counts": 8.0,
+  "cue": null,
+  "forms": [],
+  "id": "2",
+  "label": null,
+  "placements": [
+    {
+      "entity": "T1",
+      "facing": 0.0,
+      "form": null,
+      "note": null,
+      "on_field": true,
+      "order": null,
+      "pinned": false,
+      "x": 0.0,
+      "y": 9.0
+    },
+    {
+      "entity": "T2",
+      "facing": 0.0,
+      "form": null,
+      "note": null,
+      "on_field": true,
+      "order": null,
+      "pinned": false,
+      "x": 2.0,
+      "y": 9.0
+    },
+    {
+      "entity": "T3",
+      "facing": 0.0,
+      "form": null,
+      "note": null,
+      "on_field": true,
+      "order": null,
+      "pinned": false,
+      "x": 4.0,
+      "y": 9.0
+    },
+    {
+      "entity": "T4",
+      "facing": 0.0,
+      "form": null,
+      "note": null,
+      "on_field": true,
+      "order": null,
+      "pinned": false,
+      "x": 6.0,
+      "y": 9.0
+    }
+  ],
+  "source_hash": "",
+  "state": "draft"
+}

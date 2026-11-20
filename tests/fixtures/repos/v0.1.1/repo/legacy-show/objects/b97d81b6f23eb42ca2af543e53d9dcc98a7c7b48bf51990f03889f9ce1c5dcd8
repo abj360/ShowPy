@@ -1,0 +1,122 @@
+{
+  "cast": {
+    "groups": {
+      "trumpets": {
+        "color": "#808080",
+        "default_radius": 0.3,
+        "key": "trumpets",
+        "label_prefix": "T",
+        "limits": {},
+        "moves": true,
+        "name": "Trumpets",
+        "symbol": "circle"
+      }
+    },
+    "label_scheme": {
+      "pad": 0,
+      "prefixes": {},
+      "start": 1
+    },
+    "selections": {
+      "front-four": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ]
+    },
+    "spots": [
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "trumpets",
+        "id": "T1",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "trumpets",
+        "id": "T2",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": [
+          "horn",
+          "lead"
+        ]
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "trumpets",
+        "id": "T3",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      },
+      {
+        "active": true,
+        "claimable": "performer",
+        "color": null,
+        "group": "trumpets",
+        "id": "T4",
+        "shape": {
+          "depth_m": 0.6,
+          "kind": "circle",
+          "radius_m": 0.3,
+          "rotation_deg": 0.0,
+          "width_m": 0.6
+        },
+        "symbol": null,
+        "tags": []
+      }
+    ]
+  },
+  "coordinates": {
+    "audience_side": "front",
+    "kind": "grid",
+    "labels": {},
+    "origin": [
+      0.0,
+      0.0
+    ],
+    "precision": 0.01,
+    "units": "m"
+  },
+  "dependencies": {
+    "sheet:test-field": "1"
+  },
+  "facing_overrides": [],
+  "id": "show-1",
+  "pack": "",
+  "pins": [],
+  "sets": [
+    "1",
+    "2"
+  ],
+  "title": "Test show",
+  "zones": []
+}

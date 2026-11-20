@@ -1,0 +1,26 @@
+{
+  "revision": {
+    "actor": "designer",
+    "at": "2026-11-13T12:00:00Z",
+    "changed": [
+      "/sets/1/set.json",
+      "/sets/2/set.json",
+      "/show/show.json"
+    ],
+    "id": "bba290e6a2cd0e52bb7728949664e87348813989b71e8f7e9f1f0896f1e8745e",
+    "kind": "edit",
+    "message": "Pin",
+    "parent": "97e38a6f4bf00a5fde157cf1c17b6543f44263f1f4ffdc9903e60f0e3f511e04",
+    "target": null
+  },
+  "tree": {
+    "/sets/1/set.json": "0db5a7c116d6102a26ff855dbd840aef447c572258a04ec60a52ac6dbba6e940",
+    "/sets/2/set.json": "abf6b047ecf4fd98879dc54b74a48a8a537e923595c11206724581cf99ad575f",
+    "/sets/2/set.py": "9c42227695b491fd1bfd7c9d7c40ff37680bd762f95fdf7ece57fde6cf44b6cc",
+    "/show/notes.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "/show/sheet.json": "5bf2c1b4c3abb5f67402b45dc64d6e9dbc47abd0304d542fc5c0cfbda46c2f47",
+    "/show/show.json": "793d355b636414a15f8a0b2ec27372e9d9b7e91baacc978153dfbac4106ff685",
+    "/time/timeline.json": "1159588c42a68ae4f359c531d4afa93eec5839baf59b40ba649cb94299c41c48",
+    "/transitions/1-2/paths.json": "42abf35424e5e88eb427ea88eea58737550c09875be97fdd2cca43dc1c0ffd6f"
+  }
+}

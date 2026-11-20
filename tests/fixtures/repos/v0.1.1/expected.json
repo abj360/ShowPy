@@ -1,0 +1,431 @@
+{
+  "head": "bba290e6a2cd0e52bb7728949664e87348813989b71e8f7e9f1f0896f1e8745e",
+  "legacy_content_hash": "80797a55ca7b8516844b565aca10b03547249a8d84c5648ee2a778b78bd76ab0",
+  "revisions": [
+    "55ce7ab2baa3d840319e21d9cf8418792519b8461266b470b6c7ee7373902a07",
+    "97e38a6f4bf00a5fde157cf1c17b6543f44263f1f4ffdc9903e60f0e3f511e04",
+    "bba290e6a2cd0e52bb7728949664e87348813989b71e8f7e9f1f0896f1e8745e"
+  ],
+  "show": {
+    "cast": {
+      "groups": {
+        "trumpets": {
+          "color": "#808080",
+          "default_radius": 0.3,
+          "key": "trumpets",
+          "label_prefix": "T",
+          "limits": {},
+          "moves": true,
+          "name": "Trumpets",
+          "symbol": "circle"
+        }
+      },
+      "label_scheme": {
+        "pad": 0,
+        "prefixes": {},
+        "start": 1
+      },
+      "selections": {
+        "front-four": [
+          "T1",
+          "T2",
+          "T3",
+          "T4"
+        ]
+      },
+      "spots": [
+        {
+          "active": true,
+          "claimable": "performer",
+          "color": null,
+          "group": "trumpets",
+          "id": "T1",
+          "shape": {
+            "depth_m": 0.6,
+            "kind": "circle",
+            "radius_m": 0.3,
+            "rotation_deg": 0.0,
+            "width_m": 0.6
+          },
+          "symbol": null,
+          "tags": []
+        },
+        {
+          "active": true,
+          "claimable": "performer",
+          "color": null,
+          "group": "trumpets",
+          "id": "T2",
+          "shape": {
+            "depth_m": 0.6,
+            "kind": "circle",
+            "radius_m": 0.3,
+            "rotation_deg": 0.0,
+            "width_m": 0.6
+          },
+          "symbol": null,
+          "tags": [
+            "horn",
+            "lead"
+          ]
+        },
+        {
+          "active": true,
+          "claimable": "performer",
+          "color": null,
+          "group": "trumpets",
+          "id": "T3",
+          "shape": {
+            "depth_m": 0.6,
+            "kind": "circle",
+            "radius_m": 0.3,
+            "rotation_deg": 0.0,
+            "width_m": 0.6
+          },
+          "symbol": null,
+          "tags": []
+        },
+        {
+          "active": true,
+          "claimable": "performer",
+          "color": null,
+          "group": "trumpets",
+          "id": "T4",
+          "shape": {
+            "depth_m": 0.6,
+            "kind": "circle",
+            "radius_m": 0.3,
+            "rotation_deg": 0.0,
+            "width_m": 0.6
+          },
+          "symbol": null,
+          "tags": []
+        }
+      ]
+    },
+    "coordinates": {
+      "audience_side": "front",
+      "kind": "grid",
+      "labels": {},
+      "origin": [
+        0.0,
+        0.0
+      ],
+      "precision": 0.01,
+      "units": "m"
+    },
+    "dependencies": {
+      "sheet:test-field": "1"
+    },
+    "facing_overrides": [],
+    "forms": {},
+    "id": "show-1",
+    "notes": [],
+    "pack": "",
+    "pins": [
+      {
+        "by": "designer",
+        "id": "T3",
+        "reason": "soloist",
+        "target": "entity"
+      }
+    ],
+    "revision": "bba290e6a2cd0e52bb7728949664e87348813989b71e8f7e9f1f0896f1e8745e",
+    "sets": [
+      {
+        "counts": 0.0,
+        "cue": null,
+        "forms": [],
+        "id": "1",
+        "label": null,
+        "placements": [
+          {
+            "entity": "T1",
+            "facing": 0.0,
+            "form": null,
+            "note": null,
+            "on_field": true,
+            "order": null,
+            "pinned": false,
+            "x": -0.0,
+            "y": 5.0
+          },
+          {
+            "entity": "T2",
+            "facing": 0.0,
+            "form": null,
+            "note": null,
+            "on_field": true,
+            "order": null,
+            "pinned": false,
+            "x": 2.0,
+            "y": 5.0
+          },
+          {
+            "entity": "T3",
+            "facing": 0.0,
+            "form": null,
+            "note": null,
+            "on_field": true,
+            "order": null,
+            "pinned": true,
+            "x": 4.0,
+            "y": 5.0
+          },
+          {
+            "entity": "T4",
+            "facing": 0.0,
+            "form": null,
+            "note": null,
+            "on_field": true,
+            "order": null,
+            "pinned": false,
+            "x": 6.0,
+            "y": 5.0
+          }
+        ],
+        "source_hash": "",
+        "state": "draft"
+      },
+      {
+        "counts": 8.0,
+        "cue": null,
+        "forms": [],
+        "id": "2",
+        "label": null,
+        "placements": [
+          {
+            "entity": "T1",
+            "facing": 0.0,
+            "form": null,
+            "note": null,
+            "on_field": true,
+            "order": null,
+            "pinned": false,
+            "x": 0.0,
+            "y": 9.0
+          },
+          {
+            "entity": "T2",
+            "facing": 0.0,
+            "form": null,
+            "note": null,
+            "on_field": true,
+            "order": null,
+            "pinned": false,
+            "x": 2.0,
+            "y": 9.0
+          },
+          {
+            "entity": "T3",
+            "facing": 0.0,
+            "form": null,
+            "note": null,
+            "on_field": true,
+            "order": null,
+            "pinned": true,
+            "x": 4.0,
+            "y": 9.0
+          },
+          {
+            "entity": "T4",
+            "facing": 0.0,
+            "form": null,
+            "note": null,
+            "on_field": true,
+            "order": null,
+            "pinned": false,
+            "x": 6.0,
+            "y": 9.0
+          }
+        ],
+        "source_hash": "",
+        "state": "draft"
+      }
+    ],
+    "sheet": {
+      "based_on": null,
+      "default_coordinates": {
+        "audience_side": "front",
+        "kind": "grid",
+        "labels": {},
+        "origin": [
+          0.0,
+          0.0
+        ],
+        "precision": 0.01,
+        "units": "m"
+      },
+      "grid": {
+        "major_every": 5,
+        "origin": [
+          0.0,
+          0.0
+        ],
+        "rotation_deg": 0.0,
+        "spacing": [
+          1.0,
+          1.0
+        ],
+        "unit_name": "m"
+      },
+      "guides": [],
+      "landmarks": [
+        {
+          "aliases": [],
+          "geometry": [
+            [
+              0.0,
+              10.0
+            ]
+          ],
+          "id": "c",
+          "kind": "point",
+          "name": "center"
+        }
+      ],
+      "name": "Test field",
+      "outline": [
+        [
+          -20.0,
+          0.0
+        ],
+        [
+          20.0,
+          0.0
+        ],
+        [
+          20.0,
+          20.0
+        ],
+        [
+          -20.0,
+          20.0
+        ]
+      ],
+      "owner": "",
+      "ref": "sheet:test-field@1",
+      "size_m": [
+        40.0,
+        20.0
+      ],
+      "surface_type": "blank",
+      "thumbnail": "",
+      "walkable": {
+        "exterior": [
+          [
+            -20.0,
+            0.0
+          ],
+          [
+            20.0,
+            0.0
+          ],
+          [
+            20.0,
+            20.0
+          ],
+          [
+            -20.0,
+            20.0
+          ]
+        ],
+        "holes": []
+      },
+      "zones": [
+        {
+          "active": null,
+          "applies_to": "all",
+          "id": "pit",
+          "kind": "pit",
+          "note": "",
+          "polygon": {
+            "exterior": [
+              [
+                -4.0,
+                -3.0
+              ],
+              [
+                4.0,
+                -3.0
+              ],
+              [
+                4.0,
+                -0.5
+              ],
+              [
+                -4.0,
+                -0.5
+              ]
+            ],
+            "holes": []
+          }
+        }
+      ]
+    },
+    "timeline": {
+      "audio": [],
+      "cues": [],
+      "holds": [],
+      "markers": [],
+      "measures": null,
+      "mode": "counts",
+      "tempos": [
+        {
+          "at_count": 0.0,
+          "counts_per_minute": 120.0,
+          "ramp_counts": null,
+          "ramp_to": null
+        }
+      ],
+      "total_counts": null
+    },
+    "title": "Test show",
+    "transitions": [
+      {
+        "counts": 8.0,
+        "id": [
+          "1",
+          "2"
+        ],
+        "notes": "",
+        "routes": {},
+        "rows": {
+          "T1": {
+            "easing": {
+              "kind": "linear",
+              "points": [],
+              "strength": 2.0
+            },
+            "end": null,
+            "entity": "T1",
+            "facing_mode": "to_target",
+            "facing_value": null,
+            "locked": false,
+            "motion_fn": null,
+            "motion_params": {},
+            "note": null,
+            "pace": 1.0,
+            "pivot": null,
+            "route": null,
+            "start": 0.0,
+            "style": "curve",
+            "sweep_deg": null,
+            "turn_counts": 0.0,
+            "turn_direction": "shortest",
+            "waypoints": [
+              {
+                "at": null,
+                "x": 1.5,
+                "y": 4.0
+              }
+            ]
+          }
+        },
+        "source_hash": ""
+      }
+    ],
+    "zones": []
+  },
+  "show_id": "legacy-show"
+}

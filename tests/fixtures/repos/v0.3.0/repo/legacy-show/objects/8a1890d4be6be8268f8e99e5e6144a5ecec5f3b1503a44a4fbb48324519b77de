@@ -1,0 +1,66 @@
+[
+  {
+    "facing": {
+      "mode": "audience",
+      "value": null
+    },
+    "geometry": {
+      "align": "left",
+      "anchor": "baseline",
+      "at": [
+        -10.0,
+        20.0
+      ],
+      "fonts": [
+        "asset:sha256:7e345d1ae7a55abc2d6414c6b16d121bdaddba1ef1fb5d82dec483e4bac20e3e"
+      ],
+      "height": 8.0,
+      "letter_spacing": 0.0,
+      "line_spacing": 1.2,
+      "mode": "centerline",
+      "n": 24,
+      "rotation": 0.0,
+      "spacing": null,
+      "text": "GO"
+    },
+    "id": "title",
+    "kind": "text",
+    "locked": false,
+    "members": [
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "B5",
+      "B6",
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6",
+      "P1",
+      "P2",
+      "P3",
+      "P4",
+      "P5",
+      "P6",
+      "G1",
+      "G2",
+      "G3",
+      "G4",
+      "G5",
+      "G6"
+    ],
+    "meta": {},
+    "set": "8",
+    "spacing": {
+      "align": "start",
+      "end": null,
+      "gaps": [],
+      "interval": null,
+      "mode": "count",
+      "start": 0.0
+    }
+  }
+]
