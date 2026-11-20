@@ -268,7 +268,7 @@ def test_regression_spacing_spec_rejects_negative_gaps() -> None:
 def test_regression_placement_normalizes_facing() -> None:
     """Wraps a placement facing of 720 degrees into [0, 360) (audit 9.6)."""
     placement = Placement(entity=SpotId("A"), x=0.0, y=0.0, facing=TURNS_PAST_FULL)
-    assert approx_equal(placement.facing, normalize_angle(TURNS_PAST_FULL), ANGLE_TOL)
+    assert approx_equal(placement.facing, normalize_angle(TURNS_PAST_FULL), abs_tol=ANGLE_TOL)
 
 
 @pytest.mark.defect("UP-9.6-41")
@@ -277,4 +277,4 @@ def test_regression_facing_spec_normalizes_fixed_value() -> None:
     """Wraps a fixed facing of 720 degrees into [0, 360) (audit 9.6)."""
     spec = FacingSpec(mode="fixed", value=TURNS_PAST_FULL)
     assert isinstance(spec.value, float)
-    assert approx_equal(spec.value, normalize_angle(TURNS_PAST_FULL), ANGLE_TOL)
+    assert approx_equal(spec.value, normalize_angle(TURNS_PAST_FULL), abs_tol=ANGLE_TOL)

@@ -183,7 +183,7 @@ def test_regression_make_route_merges_near_coincident_starts_onto_one_offset() -
     show = _moved(two_set_show(), "T4", (t3[0] + MIN_GAP / 2, t3[1]))
     route = make_route(show, TID, "T4", [(6.0, 15.0)], members=["T4", "T3"])
     assert route.offsets == (0.0, 0.0)
-    assert approx_equal(route.travel, math.dist(t3, (6.0, 15.0)), tol=1e-9)
+    assert approx_equal(route.travel, math.dist(t3, (6.0, 15.0)), abs_tol=1e-9)
 
 
 def test_regression_make_route_takes_each_offset_from_its_own_start_vertex() -> None:
@@ -192,7 +192,7 @@ def test_regression_make_route_takes_each_offset_from_its_own_start_vertex() -> 
     show = _moved(two_set_show(), "T4", t2)
     route = make_route(show, TID, "T4", [(6.0, 15.0)], members=["T4", "T3", "T2"])
     assert route.offsets == (4.0, 2.0, 0.0)
-    assert approx_equal(route.travel, math.dist(t2, (6.0, 15.0)), tol=1e-9)
+    assert approx_equal(route.travel, math.dist(t2, (6.0, 15.0)), abs_tol=1e-9)
 
 
 def test_regression_counter_march_with_no_members_raises_path_error() -> None:

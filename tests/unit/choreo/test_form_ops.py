@@ -192,8 +192,8 @@ def test_split_keeps_every_position_and_facing() -> None:
         first, second = split_form(form, 2)
         after = {p.entity: p for p in placements(first) + placements(second)}
         for entity, p in before.items():
-            assert approx_equal(after[entity].point, p.point, TOL)
-            assert approx_equal(after[entity].facing, p.facing, TOL)
+            assert approx_equal(after[entity].point, p.point, abs_tol=TOL)
+            assert approx_equal(after[entity].facing, p.facing, abs_tol=TOL)
 
 
 def test_split_line_stays_a_curve_form_and_names_parts() -> None:
@@ -214,7 +214,7 @@ def test_merge_keeps_positions() -> None:
     merged = merge_forms(a, b, "ab")
     assert merged.members == ("A", "B", "C", "D")
     before = [p.point for p in placements(a) + placements(b)]
-    assert approx_equal([p.point for p in placements(merged)], before, TOL)
+    assert approx_equal([p.point for p in placements(merged)], before, abs_tol=TOL)
     assert [p.facing for p in placements(merged)][2:] == [p.facing for p in placements(b)]
     with pytest.raises(SchemaError):
         merge_forms(a, b.model_copy(update={"set": "2"}), "ab")
@@ -224,7 +224,7 @@ def test_morph_targets_follow_members() -> None:
     a = line_form("a", ("A", "B"), (0, 0), (1, 0))
     b = circle_form("b", ("B", "A"), (0, 5), 1.0)
     targets = morph_targets(a, b)
-    assert approx_equal(targets, [[-1, 5], [1, 5]], TOL)
+    assert approx_equal(targets, [[-1, 5], [1, 5]], abs_tol=TOL)
     with pytest.raises(SchemaError):
         morph_targets(a, line_form("c", ("A", "Z"), (0, 0), (1, 0)))
 
@@ -257,16 +257,16 @@ def test_transform_maps_slots_and_facings_exactly(matrix: Matrix) -> None:
     for form in forms:
         pts, facings = slot_poses(transform_form(form, matrix))
         want_pts, want_facings = _expected(form, matrix)
-        assert approx_equal(pts, want_pts, TOL), form.kind
+        assert approx_equal(pts, want_pts, abs_tol=TOL), form.kind
         diffs = (np.asarray(facings) - np.asarray(want_facings) + 180.0) % 360.0 - 180.0
-        assert approx_equal(diffs, np.zeros(len(diffs)), TOL), form.kind
+        assert approx_equal(diffs, np.zeros(len(diffs)), abs_tol=TOL), form.kind
 
 
 def test_transform_of_scatter_keeps_points_exact() -> None:
     form = scatter_form("s", MEMBERS, SQUARE, 1.0, seed=2)
     matrix = rotation_matrix(30.0, (0.0, 0.0))
     want, _ = _expected(form, matrix)
-    assert approx_equal(slots(transform_form(form, matrix)), want, TOL)
+    assert approx_equal(slots(transform_form(form, matrix)), want, abs_tol=TOL)
 
 
 def test_skewed_block_keeps_points_exact() -> None:
@@ -274,21 +274,21 @@ def test_skewed_block_keeps_points_exact() -> None:
     matrix = skew_matrix(20.0, 0.0, (0.0, 0.0))
     skewed = transform_form(form, matrix)
     assert "transform" in skewed.geometry
-    assert approx_equal(slots(skewed), _expected(form, matrix)[0], TOL)
+    assert approx_equal(slots(skewed), _expected(form, matrix)[0], abs_tol=TOL)
 
 
 def test_rotated_block_keeps_an_editable_recipe() -> None:
     rotated = transform_form(block_form("b", [], (0, 5), 2, 2, 1.0), rotation_matrix(90, (0, 0)))
     assert "transform" not in rotated.geometry
-    assert approx_equal(rotated.geometry["origin"], [-5.0, 0.0], TOL)
+    assert approx_equal(rotated.geometry["origin"], [-5.0, 0.0], abs_tol=TOL)
 
 
 def test_gate_rotates_about_an_end() -> None:
     form = line_form("f", ("A", "B", "C"), (0, 0), (2, 0))
     end = gate(form, "end", 90.0)
-    assert approx_equal(slots(end), [[2, -2], [2, -1], [2, 0]], TOL)
+    assert approx_equal(slots(end), [[2, -2], [2, -1], [2, 0]], abs_tol=TOL)
     middle = gate(form, 1, 180.0)
-    assert approx_equal(slots(middle), [[2, 0], [1, 0], [0, 0]], TOL)
+    assert approx_equal(slots(middle), [[2, 0], [1, 0], [0, 0]], abs_tol=TOL)
     with pytest.raises(SchemaError):
         gate(form, 7, 90.0)
     with pytest.raises(LockedError):
@@ -297,13 +297,13 @@ def test_gate_rotates_about_an_end() -> None:
 
 def test_full_turn_gate_is_identity() -> None:
     form = arc_form("a", MEMBERS, (0, 0), 3.0, 10.0, 120.0)
-    assert approx_equal(slots(gate(form, "start", 360.0)), slots(form), TOL)
+    assert approx_equal(slots(gate(form, "start", 360.0)), slots(form), abs_tol=TOL)
 
 
 def test_pinwheel_rotates_every_spoke() -> None:
     spokes = [line_form(f"s{i}", ("A",), (0, 1), (0, 3)) for i in range(2)]
     turned = pinwheel(spokes, (0.0, 0.0), -90.0)
-    assert all(approx_equal(slots(f), [[2, 0]], TOL) for f in turned)
+    assert all(approx_equal(slots(f), [[2, 0]], abs_tol=TOL) for f in turned)
 
 
 def test_form_templates_cover_every_kind() -> None:
@@ -364,7 +364,7 @@ def test_regression_transform_form_skewed_circle_slots_map_exactly() -> None:
     """Places a skewed circle's slots exactly where the matrix maps them (audit 9.6)."""
     circle = circle_form("c", ["A", "B", "C", "D"], (0, 5), 3.0)
     expected = transform_points(slots(circle), SKEW_MATRIX)
-    assert approx_equal(slots(transform_form(circle, SKEW_MATRIX)), expected, SLOT_TOL)
+    assert approx_equal(slots(transform_form(circle, SKEW_MATRIX)), expected, abs_tol=SLOT_TOL)
 
 
 @pytest.mark.defect("UP-9.6-16")
@@ -374,7 +374,7 @@ def test_regression_transform_form_scales_windowed_spacing() -> None:
     spacing = SpacingSpec(start=WINDOW_START, end=WINDOW_END)
     form = line_form("l", ["A", "B", "C"], (0, 0), (10, 0), spacing=spacing)
     expected = slots(form) * 2.0
-    assert approx_equal(slots(transform_form(form, DOUBLE_MATRIX)), expected, SLOT_TOL)
+    assert approx_equal(slots(transform_form(form, DOUBLE_MATRIX)), expected, abs_tol=SLOT_TOL)
 
 
 @pytest.mark.defect("UP-9.6-17")
@@ -394,7 +394,7 @@ def test_regression_transform_form_maps_audience_facings() -> None:
     matrix = rotation_matrix(QUARTER_TURN, (0, 0))
     expected = [transform_facing(p.facing, matrix) for p in placements(form)]
     mapped = [p.facing for p in placements(transform_form(form, matrix))]
-    assert approx_equal(mapped, expected, SLOT_TOL)
+    assert approx_equal(mapped, expected, abs_tol=SLOT_TOL)
 
 
 @pytest.mark.defect("UP-9.6-56")

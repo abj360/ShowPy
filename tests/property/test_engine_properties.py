@@ -54,8 +54,8 @@ def rows(draw: st.DrawFn) -> PathRow:
 @given(rows())
 def test_every_path_ends_on_its_target(row: PathRow) -> None:
     engine = PathEngine(with_rows({"T1": row}))
-    assert approx_equal(engine.position("T1", 8.0, local=TID), (0.0, 9.0), tol=1e-6)
-    assert approx_equal(engine.position("T1", 0.0, local=TID), (0.0, 5.0), tol=1e-6)
+    assert approx_equal(engine.position("T1", 8.0, local=TID), (0.0, 9.0), abs_tol=1e-6)
+    assert approx_equal(engine.position("T1", 0.0, local=TID), (0.0, 5.0), abs_tol=1e-6)
 
 
 @settings(max_examples=150, deadline=None)

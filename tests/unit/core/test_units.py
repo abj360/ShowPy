@@ -30,6 +30,8 @@ Contains:
     test_registry_*(), test_register_unit_*(): exact Fraction factors and refused registrations
     test_round_to_*(): too-long quotients, bad steps and non-numbers
     test_regression_round_to_returns_positive_zero_for_every_zero: never returns -0.0
+    test_round_to_old_precision_keyword_warns_and_matches: serves and warns on `precision`
+    test_round_to_rejects_both_step_keywords: raises when both names are passed
 """
 
 import math
@@ -40,6 +42,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from showpy.core.deprecation import DeprecatedWarning
 from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError, ZeroLengthError
 from showpy.core.units import (
     DEFAULT_UNITS,
@@ -117,7 +120,7 @@ def test_vector_facing_rejects_zero_vector() -> None:
 def test_angle_diff_in_half_open_range(a: float, b: float) -> None:
     d = angle_diff(a, b)
     assert -180.0 < d <= 180.0
-    assert approx_equal(math.cos(math.radians(a + d)), math.cos(math.radians(b)), tol=1e-6)
+    assert approx_equal(math.cos(math.radians(a + d)), math.cos(math.radians(b)), abs_tol=1e-6)
 
 
 @pytest.mark.parametrize(
@@ -262,3 +265,14 @@ def test_round_to_rejects_non_numbers() -> None:
 def test_regression_round_to_returns_positive_zero_for_every_zero() -> None:
     for value in (-0.0, -0.001, 0.001, -1e-300):
         assert math.copysign(1.0, round_to(value)) == 1.0
+
+
+def test_round_to_old_precision_keyword_warns_and_matches() -> None:
+    with pytest.warns(DeprecatedWarning, match="step"):
+        old = round_to(2.345, precision=0.01)
+    assert old == round_to(2.345, step=0.01) == round_to(2.345, 0.01) == 2.35
+
+
+def test_round_to_rejects_both_step_keywords() -> None:
+    with pytest.raises(SchemaError):
+        round_to(1.0, step=0.1, precision=0.1)

@@ -158,7 +158,7 @@ def test_regression_import_positions_normalizes_facing() -> None:
     text = "set,counts,entity,x,y,facing\n3,4,T1,1,1,720\n"
     facing = import_positions(two_set_show(), text, group="trumpets").set("3").get("T1").facing
     assert 0.0 <= facing < FULL_TURN
-    assert approx_equal(facing, 0.0, TOL)
+    assert approx_equal(facing, 0.0, abs_tol=TOL)
 
 
 @pytest.mark.defect("UP-9.5-44")

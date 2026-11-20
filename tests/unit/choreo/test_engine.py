@@ -139,7 +139,7 @@ def test_curve_passes_through_waypoints() -> None:
     row = PathRow(
         entity=SpotId("T1"), style=PathStyle.CURVE, waypoints=(Waypoint(x=2.0, y=7.0, at=4.0),)
     )
-    assert approx_equal(_engine(T1=row).position("T1", 4.0), (2.0, 7.0), tol=1e-6)
+    assert approx_equal(_engine(T1=row).position("T1", 4.0), (2.0, 7.0), abs_tol=1e-6)
 
 
 def test_hold_requires_target_equal_to_start() -> None:
@@ -296,7 +296,7 @@ def test_facing_override_wins_inside_its_range() -> None:
 
 def test_velocity_and_state() -> None:
     engine = PathEngine(two_set_show())
-    assert approx_equal(engine.velocity_at("T1", 4.0), (0.0, 0.5), tol=1e-6)
+    assert approx_equal(engine.velocity_at("T1", 4.0), (0.0, 0.5), abs_tol=1e-6)
     state = engine.state_at("T1", 4.0)
     assert state.moving
     assert state.on_field
@@ -443,7 +443,7 @@ def test_regression_segments_stay_within_tolerance_on_periodic_motion() -> None:
 def test_regression_speed_distance_matches_traced_path_length() -> None:
     """Reports the travelled distance of a 4-cycle weave, not its 4 m chord (audit 9.2; P0 #6)."""
     engine = _engine(T1=WEAVE_ROW)
-    assert approx_equal(engine.speed("T1", TID).distance, _traced_length(engine, "T1"), tol=0.2)
+    assert approx_equal(engine.speed("T1", TID).distance, _traced_length(engine, "T1"), abs_tol=0.2)
 
 
 def _eight_turn_engine() -> PathEngine:
@@ -468,7 +468,7 @@ def test_regression_polyline_corner_is_a_segment_end() -> None:
         easing=Easing(kind="ease_in_out", strength=3.0),
     )
     ends = [seg.p1 for seg in _engine(T1=row).entity_segments("T1", TID)]
-    assert any(approx_equal(end, (3.0, 6.0), tol=1e-9) for end in ends)
+    assert any(approx_equal(end, (3.0, 6.0), abs_tol=1e-9) for end in ends)
 
 
 def test_regression_custom_motion_samples_are_not_forced_segment_ends() -> None:
@@ -517,7 +517,7 @@ def test_regression_facing_override_applies_to_holding_spot() -> None:
     )
     rows = {"T1": PathRow(entity=SpotId("T1"), style=PathStyle.HOLD)}
     show = _override_show(rows, override, y_hold=True)
-    assert approx_equal(PathEngine(show).facing_at("T1", 4.0), 90.0, tol=1e-6)
+    assert approx_equal(PathEngine(show).facing_at("T1", 4.0), 90.0, abs_tol=1e-6)
 
 
 @defect("UP-9.2-08")
@@ -535,7 +535,7 @@ def test_regression_toward_entity_override_uses_query_time_position() -> None:
     query = 1.0
     offset = engine.position("T4", query) - engine.position("T1", query)
     expected = vector_facing((float(offset[0]), float(offset[1])))
-    assert approx_equal(engine.facing_at("T1", query), expected, tol=0.5)
+    assert approx_equal(engine.facing_at("T1", query), expected, abs_tol=0.5)
 
 
 def _three_set_show() -> Show:
@@ -595,4 +595,4 @@ def test_regression_velocity_is_full_speed_near_a_window_kink() -> None:
     """Reports the moving speed just after a window start, not half of it (audit 9.2)."""
     engine = _engine(T1=PathRow(entity=SpotId("T1"), start=2.0, end=6.0))
     velocity = engine.velocity_at("T1", 2.00005, local=TID)
-    assert approx_equal(float(np.linalg.norm(velocity)), 1.0, tol=1e-3)
+    assert approx_equal(float(np.linalg.norm(velocity)), 1.0, abs_tol=1e-3)

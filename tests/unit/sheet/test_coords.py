@@ -76,7 +76,7 @@ def test_stage_kind_uses_performer_left_and_right() -> None:
         "3.00 m stage right of center, 1.00 m upstage of front edge"
     )
     assert to_coords(show, (3.0, 1.0), style="short") == "SL3.00 US1.00"
-    assert approx_equal(from_coords(show, "SR3.00 US1.00"), (-3.0, 1.0), TOL)
+    assert approx_equal(from_coords(show, "SR3.00 US1.00"), (-3.0, 1.0), abs_tol=TOL)
 
 
 def test_audience_at_the_back_flips_both_axes() -> None:
@@ -87,13 +87,13 @@ def test_audience_at_the_back_flips_both_axes() -> None:
 def test_audience_on_the_left_turns_the_frame() -> None:
     show = _with(CoordinateSystem(audience_side="left"))
     assert to_coords(show, (2.0, 3.0), style="short") == "L3.00 U2.00"
-    assert approx_equal(from_coords(show, "R3.00 U2.00"), (2.0, -3.0), TOL)
+    assert approx_equal(from_coords(show, "R3.00 U2.00"), (2.0, -3.0), abs_tol=TOL)
 
 
 def test_landmark_origin_names_the_landmark() -> None:
     show = _with(CoordinateSystem(origin=LandmarkId("c")))
     assert to_coords(show, (3.5, 12.0)) == "3.50 m right of center, 2.00 m upstage of center"
-    assert approx_equal(from_coords(show, "R3.50 U2.00"), (3.5, 12.0), TOL)
+    assert approx_equal(from_coords(show, "R3.50 U2.00"), (3.5, 12.0), abs_tol=TOL)
 
 
 def test_units_and_precision_round_for_display() -> None:
@@ -106,16 +106,18 @@ def test_labels_override_words() -> None:
     show = _with(CoordinateSystem(labels={"right": "house left", "right_short": "HL"}))
     assert to_coords(show, (1.0, 1.0)).startswith("1.00 m house left of center")
     assert to_coords(show, (1.0, 1.0), style="short") == "HL1.00 U1.00"
-    assert approx_equal(from_coords(show, "HL1.00 U1.00"), (1.0, 1.0), TOL)
+    assert approx_equal(from_coords(show, "HL1.00 U1.00"), (1.0, 1.0), abs_tol=TOL)
 
 
 def test_from_coords_reads_both_styles_and_any_order() -> None:
     show = two_set_show()
     long_text = "3.50 m left of center, 2.00 m upstage of front edge"
-    assert approx_equal(from_coords(show, long_text), (-3.5, 2.0), TOL)
-    assert approx_equal(from_coords(show, "u2 l3.5"), (-3.5, 2.0), TOL)
+    assert approx_equal(from_coords(show, long_text), (-3.5, 2.0), abs_tol=TOL)
+    assert approx_equal(from_coords(show, "u2 l3.5"), (-3.5, 2.0), abs_tol=TOL)
     assert approx_equal(
-        from_coords(show, "1 ft right of center, 0 m upstage of front edge"), (0.3048, 0.0), TOL
+        from_coords(show, "1 ft right of center, 0 m upstage of front edge"),
+        (0.3048, 0.0),
+        abs_tol=TOL,
     )
 
 
@@ -172,7 +174,7 @@ def _assert_round_trips_or_rejects(system: CoordinateSystem, style: CoordStyle) 
         text = to_coords(show, ROUND_TRIP_POINT, style)
     except ShowPyError:
         return
-    assert approx_equal(from_coords(show, text), ROUND_TRIP_POINT, TOL)
+    assert approx_equal(from_coords(show, text), ROUND_TRIP_POINT, abs_tol=TOL)
 
 
 def _word_with_precision(precision: float) -> str:
@@ -231,21 +233,21 @@ def test_regression_colliding_direction_labels_round_trip_or_are_rejected() -> N
 def test_regression_from_coords_reads_negative_long_number() -> None:
     """Reads "-3.5 m right of center" as 3.5 m to the left (audit 9.4)."""
     text = "-3.5 m right of center, 2.00 m upstage of front edge"
-    assert approx_equal(from_coords(two_set_show(), text), (-3.5, 2.0), TOL)
+    assert approx_equal(from_coords(two_set_show(), text), (-3.5, 2.0), abs_tol=TOL)
 
 
 @pytest.mark.defect("UP-9.4-22")
 @pytest.mark.xfail(strict=True, reason="UP-9.4-22")
 def test_regression_from_coords_reads_leading_dot_number() -> None:
     """Reads the short code "R.5" as 0.5 m right (audit 9.4)."""
-    assert approx_equal(from_coords(two_set_show(), "R.5 U2"), (0.5, 2.0), TOL)
+    assert approx_equal(from_coords(two_set_show(), "R.5 U2"), (0.5, 2.0), abs_tol=TOL)
 
 
 @pytest.mark.defect("UP-9.4-23")
 @pytest.mark.xfail(strict=True, reason="UP-9.4-23")
 def test_regression_from_coords_reads_exponent_number() -> None:
     """Reads the short code "R1e3" as 1000 m right (audit 9.4)."""
-    assert approx_equal(from_coords(two_set_show(), "R1e3 U2"), (1000.0, 2.0), TOL)
+    assert approx_equal(from_coords(two_set_show(), "R1e3 U2"), (1000.0, 2.0), abs_tol=TOL)
 
 
 @pytest.mark.defect("UP-9.4-24")
@@ -253,7 +255,7 @@ def test_regression_from_coords_reads_exponent_number() -> None:
 def test_regression_from_coords_reads_number_glued_to_unit() -> None:
     """Reads "3m right of center" with no space before the unit (audit 9.4)."""
     text = "3m right of center, 2.00 m upstage of front edge"
-    assert approx_equal(from_coords(two_set_show(), text), (3.0, 2.0), TOL)
+    assert approx_equal(from_coords(two_set_show(), text), (3.0, 2.0), abs_tol=TOL)
 
 
 def _injected(fields: dict[str, Any]) -> Show:  # model_construct takes unchecked values

@@ -58,7 +58,7 @@ def test_mapped_curve_matches_mapped_points(curve: object, matrix: np.ndarray) -
     for u in (0.0, 0.5, 1.0):
         expected = transform_points(curve.point_at_u(u), matrix)  # type: ignore[attr-defined]
         if is_similarity(matrix) or u in (0.0, 1.0):
-            assert approx_equal(mapped.point_at_u(u), expected, tol=2e-3)
+            assert approx_equal(mapped.point_at_u(u), expected, abs_tol=2e-3)
 
 
 def test_similarity_keeps_arcs_exact() -> None:

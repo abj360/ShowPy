@@ -155,7 +155,7 @@ def test_regression_apply_match_updates_order_and_facing_of_formed_spots() -> No
     poses = slot_poses(ring)[1]
     for entity, slot in result.assignment.items():
         assert placed.get(entity).order == slot
-        assert approx_equal(placed.get(entity).facing, poses[slot], POSE_TOL)
+        assert approx_equal(placed.get(entity).facing, poses[slot], abs_tol=POSE_TOL)
 
 
 def test_regression_apply_match_updates_form_members_like_swap() -> None:
@@ -166,7 +166,7 @@ def test_regression_apply_match_updates_form_members_like_swap() -> None:
     matched = apply_match(show, TID, result)
     assert matched.forms[FormId("ring")].members == tuple(REVERSED_RING)
     kept = matched.set("2").get("T1").point
-    assert approx_equal(rebuild(matched, "ring").set("2").get("T1").point, kept, POSE_TOL)
+    assert approx_equal(rebuild(matched, "ring").set("2").get("T1").point, kept, abs_tol=POSE_TOL)
 
 
 def _ring_without(member: str) -> tuple[Show, Form]:

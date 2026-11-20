@@ -52,6 +52,7 @@ Contains:
     test_as_points_*(): copies, flattens 3D input and rejects multi-part geometry
     test_approx_equal_*(): infinities, NaN and relative tolerance
     test_chunk_counts_*(): exact sums for any total and rejection of infinite totals
+    test_approx_equal_old_tol_keyword_*(), test_approx_equal_rejects_both_*(): the renamed keyword
     test_regression_id_split_is_linear_on_long_ids: splits a 10,000-character ID in linear time
     test_regression_range_check_happens_before_expansion: checks range endpoints before building
         300,000 strings
@@ -93,7 +94,7 @@ from pydantic import BaseModel, ConfigDict
 from showpy.cast.models import Cast, Group, Spot
 from showpy.cast.select import label_prefix, select
 from showpy.core.canonical import jcs
-from showpy.core.errors import GeometryError, SchemaError, ShowPyError
+from showpy.core.errors import DeprecatedWarning, GeometryError, SchemaError, ShowPyError
 from showpy.core.ids import SpotId
 from showpy.core.util import (
     approx_equal,
@@ -196,7 +197,7 @@ def test_content_hash_of_model_matches_its_dump() -> None:
 def test_chunk_counts_sum_to_total(total: float, parts: int) -> None:
     chunks = chunk_counts(total, parts)
     assert len(chunks) == parts
-    assert approx_equal(sum(chunks), total, tol=1e-9)
+    assert approx_equal(sum(chunks), total, abs_tol=1e-9)
 
 
 def test_chunk_counts_rejects_zero_parts() -> None:
@@ -615,7 +616,7 @@ def test_approx_equal_handles_infinities_and_nan_without_warning() -> None:
 
 
 def test_approx_equal_honors_relative_tolerance() -> None:
-    assert approx_equal(1e9, 1e9 + 1.0, 0.0, rel_tol=1e-6)
+    assert approx_equal(1e9, 1e9 + 1.0, abs_tol=0.0, rel_tol=1e-6)
     assert not approx_equal(1e9, 1e9 + 1.0)
 
 
@@ -630,3 +631,14 @@ def test_chunk_counts_sum_exactly_for_any_total(total: float, parts: int) -> Non
 def test_chunk_counts_rejects_infinite_totals(bad: float) -> None:
     with pytest.raises(SchemaError):
         chunk_counts(bad, 3)
+
+
+def test_approx_equal_old_tol_keyword_warns_and_matches() -> None:
+    with pytest.warns(DeprecatedWarning, match="abs_tol"):
+        old = approx_equal(1.0, 1.05, tol=0.1)
+    assert old is approx_equal(1.0, 1.05, abs_tol=0.1) is True
+
+
+def test_approx_equal_rejects_both_tolerance_keywords() -> None:
+    with pytest.raises(SchemaError):
+        approx_equal(1.0, 1.0, tol=0.1, abs_tol=0.1)

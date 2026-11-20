@@ -77,7 +77,7 @@ def test_nearest_landmarks_measures_lines_and_areas() -> None:
     sheet = add_landmark(add_landmark(sheet, line), area)
     found = nearest_landmarks(sheet, (0.0, 1.5), k=3)
     assert [lm.id for lm, _ in found] == ["ar", "ln", "c"]
-    assert approx_equal([d for _, d in found], [0.0, 1.5, 8.5], TOL)
+    assert approx_equal([d for _, d in found], [0.0, 1.5, 8.5], abs_tol=TOL)
 
 
 def test_nearest_landmarks_filters_kinds_and_limits() -> None:
@@ -113,7 +113,7 @@ def test_regression_landmark_anchor_ignores_repeated_closing_vertex() -> None:
     side = SQUARE_SIDE
     ring = ((0.0, 0.0), (side, 0.0), (side, side), (0.0, side), (0.0, 0.0))
     area = Landmark(id=LandmarkId("box"), name="box", kind="area", geometry=ring)
-    assert approx_equal(landmark_anchor(area), (side / 2, side / 2), CENTER_TOL)
+    assert approx_equal(landmark_anchor(area), (side / 2, side / 2), abs_tol=CENTER_TOL)
 
 
 @pytest.mark.defect("UP-9.4-26")
@@ -122,7 +122,7 @@ def test_regression_landmark_anchor_is_the_area_centroid() -> None:
     """Anchors an area at its centroid, not the mean of its vertices (audit 9.4)."""
     ring = ((0.0, 0.0), (1.0, 0.0), (2.0, 0.0), (3.0, 0.0), (4.0, 0.0), (4.0, 2.0), (0.0, 2.0))
     area = Landmark(id=LandmarkId("strip"), name="strip", kind="area", geometry=ring)
-    assert approx_equal(landmark_anchor(area), (2.0, 1.0), CENTER_TOL)
+    assert approx_equal(landmark_anchor(area), (2.0, 1.0), abs_tol=CENTER_TOL)
 
 
 @pytest.mark.defect("UP-9.4-27")

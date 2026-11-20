@@ -45,8 +45,8 @@ def test_canvas_flips_y_so_the_audience_is_at_the_bottom() -> None:
     front = canvas.to_px((0.0, 0.0))
     back = canvas.to_px((0.0, 20.0))
     assert back[1] < front[1]
-    assert approx_equal(canvas.to_px((-20.0, 20.0)), (0.0, 0.0), TOL)
-    assert approx_equal(canvas.from_px(canvas.to_px((3.0, 4.0))), (3.0, 4.0), TOL)
+    assert approx_equal(canvas.to_px((-20.0, 20.0)), (0.0, 0.0), abs_tol=TOL)
+    assert approx_equal(canvas.from_px(canvas.to_px((3.0, 4.0))), (3.0, 4.0), abs_tol=TOL)
 
 
 def test_canvas_rejects_bad_scale() -> None:

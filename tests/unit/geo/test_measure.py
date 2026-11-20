@@ -43,20 +43,20 @@ MIN_UNMATCHED_ERROR_M = 0.5
 
 
 def test_length_of_points_and_curves() -> None:
-    assert approx_equal(length(np.array([[0.0, 0.0], [3.0, 4.0], [3.0, 5.0]])), 6.0, tol=TOL)
-    assert approx_equal(length(arc((0, 0), 2.0, 0.0, 90.0)), math.pi, tol=1e-3)
+    assert approx_equal(length(np.array([[0.0, 0.0], [3.0, 4.0], [3.0, 5.0]])), 6.0, abs_tol=TOL)
+    assert approx_equal(length(arc((0, 0), 2.0, 0.0, 90.0)), math.pi, abs_tol=1e-3)
     assert length(np.zeros((1, 2))) == 0.0
 
 
 def test_center_and_centroid_differ_on_lopsided_points() -> None:
     pts = np.array([[0.0, 0.0], [1.0, 0.0], [10.0, 0.0]])
     assert center(pts) == (5.0, 0.0)
-    assert approx_equal(centroid(pts), (11 / 3, 0.0), tol=TOL)
+    assert approx_equal(centroid(pts), (11 / 3, 0.0), abs_tol=TOL)
 
 
 def test_curve_centroid_is_length_weighted() -> None:
-    assert approx_equal(centroid(circle((2, 3), 1.5)), (2.0, 3.0), tol=1e-3)
-    assert approx_equal(centroid(line((0, 0), (4, 2))), (2.0, 1.0), tol=TOL)
+    assert approx_equal(centroid(circle((2, 3), 1.5)), (2.0, 3.0), abs_tol=1e-3)
+    assert approx_equal(centroid(line((0, 0), (4, 2))), (2.0, 1.0), abs_tol=TOL)
 
 
 def test_bounds_and_empty_input() -> None:
@@ -73,7 +73,7 @@ def test_ordered_interval_reports_consecutive_gaps() -> None:
     assert stats.mean == 1.5
     assert stats.min == 1.0
     assert stats.max == 2.0
-    assert approx_equal(stats.std, 0.5, tol=TOL)
+    assert approx_equal(stats.std, 0.5, abs_tol=TOL)
 
 
 def test_unordered_interval_uses_nearest_neighbours() -> None:
@@ -116,7 +116,7 @@ def test_on_field_ids_keeps_selection_order() -> None:
 
 def test_reachable_region_is_a_disk() -> None:
     disk = reachable_region((1.0, 2.0), 8.0, 0.5)
-    assert approx_equal(disk.area, math.pi * 16.0, tol=0.05)
+    assert approx_equal(disk.area, math.pi * 16.0, abs_tol=0.05)
     assert disk.contains(shapely.Point(4.9, 2.0))
     with pytest.raises(GeometryError):
         reachable_region((0.0, 0.0), 8.0, -1.0)
@@ -127,13 +127,13 @@ def test_form_metrics_of_a_straight_line() -> None:
     assert metrics.length == 4.0
     assert metrics.intervals.gaps == (2.0, 2.0)
     assert metrics.curvature_range == (0.0, 0.0)
-    assert approx_equal(metrics.symmetry_error, 0.0, tol=TOL)
+    assert approx_equal(metrics.symmetry_error, 0.0, abs_tol=TOL)
 
 
 def test_form_metrics_finds_an_off_center_axis() -> None:
     pts = np.array([[3.0, 0.0], [5.0, 1.0], [7.0, 0.0]])
     metrics = form_metrics(pts)
-    assert approx_equal(metrics.symmetry_error, 0.0, tol=1e-4)
+    assert approx_equal(metrics.symmetry_error, 0.0, abs_tol=1e-4)
     lo, hi = metrics.curvature_range
     assert lo == hi
     assert hi > 0
@@ -143,15 +143,15 @@ def test_form_metrics_curvature_of_circle_samples() -> None:
     angles = np.linspace(0, math.pi, 13)
     pts = np.stack([3 * np.cos(angles), 3 * np.sin(angles)], axis=1)
     lo, hi = form_metrics(pts).curvature_range
-    assert approx_equal(lo, 1 / 3, tol=0.01)
-    assert approx_equal(hi, 1 / 3, tol=0.01)
+    assert approx_equal(lo, 1 / 3, abs_tol=0.01)
+    assert approx_equal(hi, 1 / 3, abs_tol=0.01)
 
 
 def test_mirror_gaps_and_symmetry_error() -> None:
     pts = np.array([[-1.0, 0.0], [1.0, 0.0], [2.0, 3.0]])
-    assert approx_equal(mirror_gaps(pts, 0.0), [0.0, 0.0, math.hypot(1, 3)], tol=TOL)
+    assert approx_equal(mirror_gaps(pts, 0.0), [0.0, 0.0, math.hypot(1, 3)], abs_tol=TOL)
     s = make_set(("A", -1, 0), ("B", 1, 0), ("C", 2, 3), ("D", 9, 9), off=("D",))
-    assert approx_equal(symmetry_error(s, axis_x=0.0), math.hypot(1, 3), tol=TOL)
+    assert approx_equal(symmetry_error(s, axis_x=0.0), math.hypot(1, 3), abs_tol=TOL)
     assert symmetry_error(s, ["A", "B"], axis_x=0.0) == 0.0
 
 

@@ -100,9 +100,11 @@ def test_split_keeps_seconds_of_later_counts() -> None:
         whole = count_to_seconds(show.timeline, 12.0 + local) - count_to_seconds(
             show.timeline, 12.0
         )
-        assert approx_equal(count_to_seconds(second.timeline, local), whole, 1e-6)
+        assert approx_equal(count_to_seconds(second.timeline, local), whole, abs_tol=1e-6)
     track = second.timeline.audio[0]
-    assert approx_equal(track.sync_offset_s, 1.0 + count_to_seconds(show.timeline, 12.0), 1e-9)
+    assert approx_equal(
+        track.sync_offset_s, 1.0 + count_to_seconds(show.timeline, 12.0), abs_tol=1e-9
+    )
 
 
 def test_split_mid_measure_raises() -> None:
@@ -147,7 +149,7 @@ def test_join_disjoint_sections_and_clashes() -> None:
     )
     with pytest.raises(SchemaError):
         join_sections(first, bad_boundary)
-    assert approx_equal(index(joined).total_counts, 20.0, TOL)
+    assert approx_equal(index(joined).total_counts, 20.0, abs_tol=TOL)
 
 
 def test_regression_join_after_split_restores_the_show() -> None:

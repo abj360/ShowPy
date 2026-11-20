@@ -95,8 +95,8 @@ def test_suggest_delays_opens_the_gap() -> None:
     best = fixes[0]
     assert best.kind == "delay"
     assert best.params == {"entity": "T1", "counts": 4.0}
-    assert approx_equal(best.new_gap, 4.0 / math.sqrt(10.0) - FOOTPRINTS, tol=1e-6)
-    assert approx_equal(best.max_speed_after, math.sqrt(2.0), tol=1e-6)
+    assert approx_equal(best.new_gap, 4.0 / math.sqrt(10.0) - FOOTPRINTS, abs_tol=1e-6)
+    assert approx_equal(best.max_speed_after, math.sqrt(2.0), abs_tol=1e-6)
 
 
 def test_suggest_waypoint_routes_around() -> None:
@@ -105,9 +105,9 @@ def test_suggest_waypoint_routes_around() -> None:
     assert best.kind == "waypoint"
     assert approx_equal(best.params["at"], 4.0)
     offset = 1.4 / math.sqrt(2.0)
-    assert approx_equal(best.params["point"], (2.0 + offset, 7.0 - offset), tol=1e-6)
-    assert approx_equal(best.new_gap, 0.178385, tol=1e-5)
-    assert approx_equal(best.max_speed_after, 0.788987, tol=1e-5)
+    assert approx_equal(best.params["point"], (2.0 + offset, 7.0 - offset), abs_tol=1e-6)
+    assert approx_equal(best.new_gap, 0.178385, abs_tol=1e-5)
+    assert approx_equal(best.max_speed_after, 0.788987, abs_tol=1e-5)
 
 
 def test_apply_fix_and_separate_in_time() -> None:
@@ -153,7 +153,7 @@ def test_regression_suggested_waypoint_is_reached_at_its_count_on_eased_rows() -
     changed = apply_fix(show.transition(TID), fix)
     engine = PathEngine(show.model_copy(update={"transitions": (changed,)}))
     reached = engine.position("T1", fix.params["at"], local=TID)
-    assert approx_equal(reached, fix.params["point"], tol=1e-6)
+    assert approx_equal(reached, fix.params["point"], abs_tol=1e-6)
 
 
 @defect("UP-9.2-28")

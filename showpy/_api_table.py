@@ -7,6 +7,7 @@ Edit PUBLIC_API, then run `uv run python scripts/gen_public_api.py` to regenerat
 Contains:
     PUBLIC_API: lists (public name, defining module, attribute) sorted by public name
     DEPRECATED: lists (old name, dotted path of its replacement, since, remove) for each alias
+    DEPRECATED_KEYWORDS: lists (function, old keyword, new keyword, since, remove) per rename
 """
 
 PUBLIC_API: tuple[tuple[str, str, str], ...] = (
@@ -584,4 +585,9 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
 
 DEPRECATED: tuple[tuple[str, str, str, str], ...] = (
     ("ValidationError", "showpy.core.errors.ShowValidationError", "0.4.0", "0.6.0"),
+)
+
+DEPRECATED_KEYWORDS: tuple[tuple[str, str, str, str, str], ...] = (
+    ("approx_equal", "tol", "abs_tol", "0.4.0", "0.6.0"),
+    ("round_to", "precision", "step", "0.4.0", "0.6.0"),
 )

@@ -5,6 +5,7 @@ Contains:
     DeprecatedWarning: warns that a deprecated API was used and names its replacement
     moved(): builds a module `__getattr__` that serves moved names and warns on each use
     renamed_field(): builds a read-only property that serves a renamed field and warns
+    renamed_keyword(): resolves a keyword argument that was renamed, warning on the old name
 """
 
 import importlib
@@ -106,3 +107,42 @@ def renamed_field(new: str, *, since: str, remove: str) -> property:
 
     field = _RenamedField(read)
     return field
+
+
+def renamed_keyword[T](
+    old: str, old_value: T | None, new: str, new_value: T | None, *, default: T, remove: str
+) -> T:
+    """Returns the value of a renamed keyword argument, warning when the old name was used.
+
+    Call it from the function that renamed the keyword; the warning points at that function's
+    caller. Passing both names raises SchemaError.
+
+    Args:
+        old: Previous keyword name.
+        old_value: Value passed under the old name, or None when it was not passed.
+        new: Current keyword name.
+        new_value: Value passed under the new name, or None when it was not passed.
+        default: Value to use when neither name was passed.
+        remove: Release that removes the old keyword.
+
+    Returns:
+        value: The value under the new name, else under the old name, else `default`.
+
+    Example:
+        >>> from showpy.core.deprecation import renamed_keyword
+        >>> renamed_keyword("tol", None, "abs_tol", 0.5, default=1e-6, remove="0.6.0")
+        0.5
+    """
+    if old_value is not None and new_value is not None:
+        from showpy.core.errors import SchemaError  # errors imports this module
+
+        raise SchemaError(
+            f"`{old}` and `{new}` were both passed",
+            hint=f"pass only `{new}`; `{old}` is its deprecated name",
+            context={"old": old, "new": new},
+        )
+    if old_value is not None:
+        message = f"`{old}` renamed to `{new}`; the old keyword is removed in {remove}"
+        warnings.warn(message, DeprecatedWarning, stacklevel=WARNING_STACK_LEVEL)
+        return old_value
+    return default if new_value is None else new_value

@@ -105,8 +105,8 @@ def test_facing_comes_from_the_engine() -> None:
     turned = show.sets[1].with_placements({"T1": {"facing": 90.0}})
     show = show.model_copy(update={"sets": (show.sets[0], turned)})
     rows = coordinate_sheet(show, "T1").rows
-    assert approx_equal(rows[0].facing, 0.0, TOL)
-    assert approx_equal(rows[1].facing, 90.0, TOL)
+    assert approx_equal(rows[0].facing, 0.0, abs_tol=TOL)
+    assert approx_equal(rows[1].facing, 90.0, abs_tol=TOL)
 
 
 def test_performer_name_appears_once_claimed() -> None:

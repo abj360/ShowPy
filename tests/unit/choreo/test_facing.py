@@ -77,8 +77,10 @@ def test_face_normal_on_circle_outward_and_inward() -> None:
         members=(SpotId("T1"),),
     )
     show = show.model_copy(update={"forms": {"c": form}})
-    assert approx_equal(face_normal(show, "1", "c").get("T1").facing, 270.0, tol=1e-6)
-    assert approx_equal(face_normal(show, "1", "c", outward=False).get("T1").facing, 90.0, tol=1e-6)
+    assert approx_equal(face_normal(show, "1", "c").get("T1").facing, 270.0, abs_tol=1e-6)
+    assert approx_equal(
+        face_normal(show, "1", "c", outward=False).get("T1").facing, 90.0, abs_tol=1e-6
+    )
 
 
 def test_face_along_needs_a_curve_form() -> None:

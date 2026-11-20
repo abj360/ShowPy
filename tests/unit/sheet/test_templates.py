@@ -88,11 +88,13 @@ def test_templates_filter_by_surface_type() -> None:
 def test_football_field_is_120_yards_by_160_feet() -> None:
     sheet = get_sheet(HS_REF)
     width, depth = sheet.size_m
-    assert approx_equal(width, 109.728, TOL)
-    assert approx_equal(depth, 48.768, TOL)
+    assert approx_equal(width, 109.728, abs_tol=TOL)
+    assert approx_equal(depth, 48.768, abs_tol=TOL)
     xs = [p[0] for p in sheet.outline]
     ys = [p[1] for p in sheet.outline]
-    assert approx_equal([min(xs), max(xs), min(ys), max(ys)], [-54.864, 54.864, 0.0, 48.768], TOL)
+    assert approx_equal(
+        [min(xs), max(xs), min(ys), max(ys)], [-54.864, 54.864, 0.0, 48.768], abs_tol=TOL
+    )
 
 
 @pytest.mark.parametrize(
@@ -101,8 +103,8 @@ def test_football_field_is_120_yards_by_160_feet() -> None:
 )
 def test_hashes_sit_at_rule_book_distances(ref: str, from_sideline: float) -> None:
     depth = get_sheet(ref).size_m[1]
-    assert approx_equal(_point(ref, "front-hash-50")[1], from_sideline, TOL)
-    assert approx_equal(_point(ref, "back-hash-50")[1], depth - from_sideline, TOL)
+    assert approx_equal(_point(ref, "front-hash-50")[1], from_sideline, abs_tol=TOL)
+    assert approx_equal(_point(ref, "back-hash-50")[1], depth - from_sideline, abs_tol=TOL)
 
 
 def test_yard_lines_every_five_yards_with_labels() -> None:
@@ -112,7 +114,7 @@ def test_yard_lines_every_five_yards_with_labels() -> None:
     labels = sorted({g.label for g in yards})
     assert labels == sorted({"G", "5", "10", "15", "20", "25", "30", "35", "40", "45", "50"})
     left_45 = next(g for g in yards if g.id == "yard-left-45")
-    assert approx_equal(left_45.points[0][0], -convert(5, "yd", "m"), TOL)
+    assert approx_equal(left_45.points[0][0], -convert(5, "yd", "m"), abs_tol=TOL)
 
 
 def test_field_has_sidelines_end_lines_and_center() -> None:
@@ -142,7 +144,7 @@ def test_stage_template_has_wings_center_line_and_spikes() -> None:
 
 def test_gym_template_is_a_basketball_court() -> None:
     width, depth = get_sheet(GYM_REF).size_m
-    assert approx_equal((width, depth), (28.6512, 15.24), TOL)
+    assert approx_equal((width, depth), (28.6512, 15.24), abs_tol=TOL)
 
 
 def test_get_sheet_without_version_returns_template() -> None:
@@ -164,10 +166,10 @@ def test_get_sheet_falls_back_to_store() -> None:
 def test_blank_sheet_dimensions_and_units() -> None:
     sheet = blank_sheet(10.0, 6.0, grid_spacing=2.0, units="ft")
     assert sheet.size_m == (10.0, 6.0)
-    assert approx_equal(sheet.grid.spacing, (_ft(2), _ft(2)), TOL)
+    assert approx_equal(sheet.grid.spacing, (_ft(2), _ft(2)), abs_tol=TOL)
     assert sheet.grid.unit_name == "ft"
     assert sheet.default_coordinates.units == "ft"
-    assert approx_equal(sorted(p[0] for p in sheet.outline), [-5, -5, 5, 5], TOL)
+    assert approx_equal(sorted(p[0] for p in sheet.outline), [-5, -5, 5, 5], abs_tol=TOL)
 
 
 def test_blank_sheet_rejects_non_positive_size() -> None:

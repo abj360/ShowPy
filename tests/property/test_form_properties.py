@@ -45,14 +45,14 @@ def _chords(pts: Points) -> Points:
 @given(curve_forms())
 def test_count_spacing_is_even(form: Form) -> None:
     chords = _chords(slots(form))
-    assert approx_equal(chords, np.full(len(chords), chords[0]), TOL)
+    assert approx_equal(chords, np.full(len(chords), chords[0]), abs_tol=TOL)
 
 
 @settings(max_examples=60, deadline=None)
 @given(curve_forms(), angles)
 def test_gate_then_ungate_is_identity(form: Form, deg: float) -> None:
     back = gate(gate(form, "start", deg), "start", -deg)
-    assert approx_equal(slots(back), slots(form), TOL)
+    assert approx_equal(slots(back), slots(form), abs_tol=TOL)
 
 
 @settings(max_examples=60, deadline=None)
@@ -62,7 +62,7 @@ def test_rotation_moves_every_slot_rigidly(form: Form, deg: float, x: float, y: 
     original = slots(form)
     d_before = np.linalg.norm(original[:, None] - original[None], axis=2)
     d_after = np.linalg.norm(turned[:, None] - turned[None], axis=2)
-    assert approx_equal(d_after, d_before, TOL)
+    assert approx_equal(d_after, d_before, abs_tol=TOL)
 
 
 @settings(max_examples=60, deadline=None)
@@ -74,4 +74,4 @@ def test_split_then_merge_keeps_every_placement(form: Form, data: st.DataObject)
     assert merged.members == form.members
     before = [(p.x, p.y) for p in placements(form)]
     after = [(p.x, p.y) for p in placements(merged)]
-    assert approx_equal(after, before, TOL)
+    assert approx_equal(after, before, abs_tol=TOL)

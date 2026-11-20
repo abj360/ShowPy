@@ -12,7 +12,7 @@ Contains:
     angle_diff(): returns the signed shortest turn from a to b
     facing_vector(): converts a facing to a unit direction
     vector_facing(): converts a direction to a facing
-    round_to(): rounds half away from zero to a precision
+    round_to(): rounds half away from zero to a step
 """
 
 import math
@@ -24,6 +24,7 @@ from typing import Annotated
 
 from pydantic import BeforeValidator, model_validator
 
+from showpy.core.deprecation import renamed_keyword
 from showpy.core.errors import SchemaError, UnknownRefError, ZeroLengthError
 from showpy.core.numbers import normalize_angle as normalize_angle
 from showpy.core.readonly import ReadOnly
@@ -31,6 +32,8 @@ from showpy.core.types import Degrees, FrozenModel, Point
 
 INCH_M = Fraction(127, 5000)
 BASE_UNIT = "m"
+DEFAULT_STEP = 0.01
+RENAME_REMOVAL = "0.6.0"
 ZERO_VECTOR_TOL = 1e-12
 
 
@@ -186,35 +189,46 @@ def vector_facing(v: Point) -> Degrees:
     return normalize_angle(math.degrees(math.atan2(v[0], -v[1])))
 
 
-def round_to(value: float, precision: float = 0.01) -> float:
-    """Rounds to a multiple of `precision`, half away from zero, for display.
+def round_to(value: float, step: float | None = None, *, precision: float | None = None) -> float:
+    """Rounds to a multiple of `step`, half away from zero, for display.
 
-    Raises SchemaError for a bool, a non-number, a non-finite value, a precision that is not
-    finite and positive, and a quotient too long for 28 decimal digits. Every result that rounds to
+    Raises SchemaError for a bool, a non-number, a non-finite value, a step that is not finite
+    and positive, and a quotient too long for 28 decimal digits. Every result that rounds to
     zero is `0.0`, never `-0.0`.
+
+    Args:
+        value: The number to round.
+        step: Size of the grid to round onto; 0.01 when omitted.
+        precision: Deprecated name of `step`.
+
+    Returns:
+        rounded: The nearest multiple of `step`.
 
     >>> round_to(2.345)
     2.35
     """
+    grid = renamed_keyword(
+        "precision", precision, "step", step, default=DEFAULT_STEP, remove=RENAME_REMOVAL
+    )
     if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(value):
         raise SchemaError(
             f"cannot round {value!r}",
             hint="pass a finite number",
             context={"value": repr(value)},
         )
-    if not math.isfinite(precision) or precision <= 0:
+    if not math.isfinite(grid) or grid <= 0:
         raise SchemaError(
-            f"precision must be finite and above 0, got {precision!r}",
-            hint="pass a precision such as 0.01",
-            context={"precision": repr(precision)},
+            f"step must be finite and above 0, got {grid!r}",
+            hint="pass a step such as 0.01",
+            context={"step": repr(grid)},
         )
-    step = Decimal(repr(float(precision)))
+    unit = Decimal(repr(float(grid)))
     try:
-        steps = (Decimal(repr(float(value))) / step).quantize(Decimal(1), rounding=ROUND_HALF_UP)
-        return float(steps * step) + 0.0
+        steps = (Decimal(repr(float(value))) / unit).quantize(Decimal(1), rounding=ROUND_HALF_UP)
+        return float(steps * unit) + 0.0
     except DecimalException as error:
         raise SchemaError(
-            f"cannot round {value!r} to a step of {precision!r}: too many digits",
-            hint="use a larger precision or a smaller value",
-            context={"value": repr(value), "precision": repr(precision)},
+            f"cannot round {value!r} to a step of {grid!r}: too many digits",
+            hint="use a larger step or a smaller value",
+            context={"value": repr(value), "step": repr(grid)},
         ) from error

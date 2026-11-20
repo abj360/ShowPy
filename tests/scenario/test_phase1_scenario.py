@@ -266,10 +266,13 @@ def test_positions_are_continuous_at_every_set_boundary(scenario: Scenario) -> N
     with unchanged(head):
         for spot, index, start, end in _transition_ends(head):
             before, after = head.sets[index], head.sets[index + 1]
-            assert approx_equal(start, _xy(before, spot), POSITION_TOL), (spot, index)
-            assert approx_equal(end, _xy(after, spot), POSITION_TOL), (spot, index)
+            assert approx_equal(start, _xy(before, spot), abs_tol=POSITION_TOL), (spot, index)
+            assert approx_equal(end, _xy(after, spot), abs_tol=POSITION_TOL), (spot, index)
             if index:
-                assert approx_equal(start, ends[spot, index - 1], POSITION_TOL), (spot, index)
+                assert approx_equal(start, ends[spot, index - 1], abs_tol=POSITION_TOL), (
+                    spot,
+                    index,
+                )
             ends[spot, index] = end
     assert len(ends) == SPOTS * SETS
 

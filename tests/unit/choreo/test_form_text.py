@@ -90,15 +90,15 @@ def test_text_slots_follow_reading_order() -> None:
     strokes = text_strokes(hi)
     points, _ = text_slots(hi, HI_MIN_SPOTS)
     i_left = min(float(stroke.to_polyline()[:, 0].min()) for stroke in strokes[3:])
-    assert approx_equal(points[0], strokes[0].point_at(0.0), TOL)
+    assert approx_equal(points[0], strokes[0].point_at(0.0), abs_tol=TOL)
     assert (points[-6:, 0] >= i_left - TOL).all()
 
 
 @ignore_legibility
 def test_text_slots_tangents_are_unit_and_follow_the_stroke() -> None:
     _, tangents = text_slots(recipe("HI"), HI_MIN_SPOTS)
-    assert approx_equal(np.linalg.norm(tangents, axis=1), np.ones(HI_MIN_SPOTS), TOL)
-    assert approx_equal(np.abs(tangents[0]), [0.0, 1.0], TOL)
+    assert approx_equal(np.linalg.norm(tangents, axis=1), np.ones(HI_MIN_SPOTS), abs_tol=TOL)
+    assert approx_equal(np.abs(tangents[0]), [0.0, 1.0], abs_tol=TOL)
 
 
 @ignore_legibility
@@ -123,7 +123,7 @@ def test_regression_touching_strokes_skip_the_shared_point() -> None:
     registry, uri = _tiny_registry("M0 0 L0 10", "M0 0 L4 0")
     corner = TextRecipe(text="I", fonts=(uri,), height=HEIGHT, at=AT)
     points, _ = text_slots(corner, 4, font_registry=registry)
-    assert approx_equal(points, [[0.0, 10.0], [0.0, 12.0], [0.4, 10.0], [0.8, 10.0]], TOL)
+    assert approx_equal(points, [[0.0, 10.0], [0.0, 12.0], [0.4, 10.0], [0.8, 10.0]], abs_tol=TOL)
 
 
 def test_too_few_spots_names_the_minimum() -> None:

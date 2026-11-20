@@ -134,8 +134,8 @@ def test_frames_csv_samples_every_spot_per_count() -> None:
     assert list(rows[0]) == ["count", "seconds", "entity", "x", "y", "facing", "on_field"]
     assert len(rows) == 9 * 4
     mid = next(r for r in rows if r["count"] == "4" and r["entity"] == "T2")
-    assert approx_equal(float(mid["y"]), 7.0, TOL)
-    assert approx_equal(float(mid["seconds"]), 2.0, TOL)
+    assert approx_equal(float(mid["y"]), 7.0, abs_tol=TOL)
+    assert approx_equal(float(mid["seconds"]), 2.0, abs_tol=TOL)
     assert mid["on_field"] == "true"
 
 
@@ -315,7 +315,7 @@ def test_regression_csv_keeps_cue_seconds_above_one_thousand_exact() -> None:
     """Keeps the precision of cue seconds past 1,000 s; `:g` keeps six significant digits."""
     seconds = 1234.5678
     rows = _csv_rows(to_csv(pd.DataFrame({"seconds": [seconds]})))
-    assert approx_equal(float(rows[1][0]), seconds, TOL)
+    assert approx_equal(float(rows[1][0]), seconds, abs_tol=TOL)
 
 
 @pytest.mark.defect("UP-9.5-31")

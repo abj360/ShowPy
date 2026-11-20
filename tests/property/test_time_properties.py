@@ -47,7 +47,9 @@ def timelines(draw: st.DrawFn) -> Timeline:
 
 @given(timelines(), counts)
 def test_count_round_trips_through_seconds(tl: Timeline, count: float) -> None:
-    assert approx_equal(seconds_to_count(tl, count_to_seconds(tl, count)), count, ROUND_TRIP_TOL)
+    assert approx_equal(
+        seconds_to_count(tl, count_to_seconds(tl, count)), count, abs_tol=ROUND_TRIP_TOL
+    )
 
 
 @given(timelines(), counts, counts)

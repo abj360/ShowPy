@@ -258,7 +258,7 @@ def test_regression_rebuild_force_moves_pinned_members() -> None:
     moved = line_form("row", ["T1", "T2", "T3", "T4"], (0, UPSTAGE_ROW_Y), (6, UPSTAGE_ROW_Y))
     show = show.model_copy(update={"forms": {"row": moved.model_copy(update={"set": "2"})}})
     placed = rebuild(show, "row", force=True).set("2")
-    assert approx_equal(placed.get("T1").point, (0.0, UPSTAGE_ROW_Y), FORM_COORD_TOL)
+    assert approx_equal(placed.get("T1").point, (0.0, UPSTAGE_ROW_Y), abs_tol=FORM_COORD_TOL)
 
 
 def test_regression_rebuild_keeps_the_pin_flag_of_a_forced_member() -> None:
@@ -311,7 +311,7 @@ def test_regression_rebuild_after_place_moves_nobody_on_a_sparse_form() -> None:
     stored = with_set(show, placed).replace(forms={"f": filled})
     rebuilt = rebuild(stored, "f").set("2")
     for before in placed.placements:
-        assert approx_equal(rebuilt.get(before.entity).point, before.point, FORM_COORD_TOL)
+        assert approx_equal(rebuilt.get(before.entity).point, before.point, abs_tol=FORM_COORD_TOL)
 
 
 def test_regression_place_rejects_a_text_form_with_fewer_members_than_slots() -> None:

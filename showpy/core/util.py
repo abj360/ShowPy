@@ -35,6 +35,7 @@ import shapely
 
 from showpy.core.canonical import canonical_value, jcs
 from showpy.core.caps import MAX_POINTS, MAX_RANGE, require_size
+from showpy.core.deprecation import renamed_keyword
 from showpy.core.errors import MAX_ECHOED_INPUT_CHARS, GeometryError, SchemaError
 from showpy.core.ids import ID_MAX_LENGTH
 from showpy.core.types import Points
@@ -50,6 +51,8 @@ HASH_DOMAIN_PATTERN = re.compile(r"[a-z0-9_.]+")
 ASSET_PREFIX = "asset:sha256:"
 CLOSE_MATCH_COUNT = 3
 CLOSE_MATCH_CUTOFF = 0.4
+DEFAULT_ABS_TOL = 1e-6
+RENAME_REMOVAL = "0.6.0"
 SINGLE_PART_GEOMETRY = frozenset({"Point", "LineString", "LinearRing", "Polygon"})
 
 
@@ -157,17 +160,23 @@ def _continues(previous: str, current: str) -> bool:
 
 
 def approx_equal(
-    a: npt.ArrayLike, b: npt.ArrayLike, tol: float = 1e-6, *, rel_tol: float = 0.0
+    a: npt.ArrayLike,
+    b: npt.ArrayLike,
+    *,
+    abs_tol: float | None = None,
+    rel_tol: float = 0.0,
+    tol: float | None = None,
 ) -> bool:
-    """Compares numbers or arrays within `tol` plus `rel_tol` of `b`; shape mismatch is unequal.
+    """Compares numbers or arrays within `abs_tol` plus `rel_tol` of `b`; shapes must match.
 
     Equal infinities are equal and NaN equals nothing, without any warning.
 
     Args:
         a: First number or array.
         b: Second number or array.
-        tol: Absolute tolerance.
+        abs_tol: Absolute tolerance; 1e-6 when omitted.
         rel_tol: Tolerance relative to the magnitude of `b`.
+        tol: Deprecated name of `abs_tol`.
 
     Returns:
         is_close: Whether every element of `a` is within tolerance of its element of `b`.
@@ -175,11 +184,14 @@ def approx_equal(
     >>> approx_equal(0.1 + 0.2, 0.3)
     True
     """
+    limit = renamed_keyword(
+        "tol", tol, "abs_tol", abs_tol, default=DEFAULT_ABS_TOL, remove=RENAME_REMOVAL
+    )
     left, right = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
     if left.shape != right.shape:
         return False
     with np.errstate(invalid="ignore", over="ignore"):
-        close = np.abs(left - right) <= tol + rel_tol * np.abs(right)
+        close = np.abs(left - right) <= limit + rel_tol * np.abs(right)
     return bool(np.all(close | (left == right)))
 
 

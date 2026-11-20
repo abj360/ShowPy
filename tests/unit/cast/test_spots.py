@@ -80,7 +80,7 @@ def test_add_spot_takes_next_free_label_and_group_radius() -> None:
     spot = show.cast.spot("B1")
     assert spot.group == "brass"
     assert spot.shape.radius_m == 0.5
-    assert approx_equal(spot.shape.width_m, 1.0, tol=1e-9)
+    assert approx_equal(spot.shape.width_m, 1.0, abs_tol=1e-9)
 
 
 def test_add_spot_exists_in_every_set_off_field_before_creation() -> None:
@@ -121,7 +121,7 @@ def test_add_spots_along_spaces_evenly() -> None:
         with_brass(two_set_show()), line((0.0, 0.0), (4.0, 0.0)), 3, "brass", "1"
     )
     xs = [show.set("1").get(i).x for i in ("B1", "B2", "B3")]
-    assert approx_equal(xs, [0.0, 2.0, 4.0], tol=1e-9)
+    assert approx_equal(xs, [0.0, 2.0, 4.0], abs_tol=1e-9)
 
 
 def test_fill_spots_by_interval() -> None:

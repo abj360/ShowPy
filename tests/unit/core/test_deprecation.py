@@ -21,7 +21,7 @@ import pytest
 
 import showpy
 import showpy.core.errors
-from showpy._api_table import DEPRECATED
+from showpy._api_table import DEPRECATED, DEPRECATED_KEYWORDS
 from showpy.core.deprecation import DeprecatedWarning, moved, renamed_field
 from showpy.core.errors import ShowValidationError
 
@@ -89,6 +89,10 @@ def test_deprecations_are_removed_on_time() -> None:
         major, minor, _patch = remove.split(".")
         if (int(major), int(minor)) <= current:
             overdue.append(f"{name} (remove {remove})")
+    for function, old, _new, _since, remove in DEPRECATED_KEYWORDS:
+        major, minor, _patch = remove.split(".")
+        if (int(major), int(minor)) <= current:
+            overdue.append(f"{function}({old}=) (remove {remove})")
     assert not overdue, f"E: deprecated names past their removal version: {', '.join(overdue)}"
 
 

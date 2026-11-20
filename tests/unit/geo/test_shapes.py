@@ -180,7 +180,7 @@ def test_regression_offset_honours_clockwise_circles() -> None:
     clockwise = CircleCurve(center=(0.0, 0.0), radius=CIRCLE_RADIUS_M, ccw=False)
     result = offset(clockwise, OFFSET_M, "left")
     assert isinstance(result, CircleCurve)
-    assert approx_equal(result.radius, CIRCLE_RADIUS_M + OFFSET_M, tol=1e-9)
+    assert approx_equal(result.radius, CIRCLE_RADIUS_M + OFFSET_M, abs_tol=1e-9)
 
 
 @pytest.mark.defect("UP-9.1-14")

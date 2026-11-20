@@ -80,15 +80,15 @@ def test_form_fns_lists_names_and_summaries() -> None:
 def test_spiral_points_are_even_and_widen() -> None:
     pts = spiral_points({"center": (0, 0), "r0": 1.0, "r1": 3.0, "turns": 2.0}, 9)
     radii = np.linalg.norm(pts, axis=1)
-    assert approx_equal(radii[0], 1.0, TOL)
-    assert approx_equal(radii[-1], 3.0, TOL)
+    assert approx_equal(radii[0], 1.0, abs_tol=TOL)
+    assert approx_equal(radii[-1], 3.0, abs_tol=TOL)
     assert np.all(np.diff(radii) > 0)
 
 
 def test_sine_wave_spans_its_length_and_amplitude() -> None:
     pts = sine_wave_points({"start": (0, 0), "length": 8.0, "amplitude": 1.0}, 33)
-    assert approx_equal(pts[0], [0, 0], TOL)
-    assert approx_equal(pts[-1], [8, 0], 1e-3)
+    assert approx_equal(pts[0], [0, 0], abs_tol=TOL)
+    assert approx_equal(pts[-1], [8, 0], abs_tol=1e-3)
     assert np.abs(pts[:, 1]).max() <= 1.0 + TOL
 
 

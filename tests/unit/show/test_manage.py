@@ -166,7 +166,7 @@ def test_insert_subset_keeps_total_time_and_names_letters() -> None:
     show, second = insert_subset(show, "1A", 2.0)
     assert (first, second) == ("1A", "1B")
     assert show.set_ids() == ["1", "1A", "1B", "2"]
-    assert approx_equal(index(show).total_counts, 8.0, TOL)
+    assert approx_equal(index(show).total_counts, 8.0, abs_tol=TOL)
     assert show.set("1A").get("T1").point == show.set("1").get("T1").point
 
 
@@ -302,7 +302,7 @@ def test_index_counts_measures_seconds_and_holds() -> None:
     entries = index(show).entries
     assert [e.start_count for e in entries] == [0.0, 8.0, 12.0]
     assert [e.measure.measure for e in entries if e.measure] == [1, 3, 4]
-    assert approx_equal([e.seconds for e in entries], [0.0, 4.0, 9.0], TOL)
+    assert approx_equal([e.seconds for e in entries], [0.0, 4.0, 9.0], abs_tol=TOL)
 
 
 def test_index_lookups_at_sets_and_inside_transitions() -> None:
@@ -419,7 +419,7 @@ def test_regression_remove_last_set_with_merge_counts_keeps_total_time() -> None
         edited = remove_set(show, "3", merge_counts=True)
     except ShowPyError:
         return
-    assert approx_equal(sum(s.counts for s in edited.sets), total, 1e-9)
+    assert approx_equal(sum(s.counts for s in edited.sets), total, abs_tol=1e-9)
 
 
 @pytest.mark.defect("UP-9.7-54")

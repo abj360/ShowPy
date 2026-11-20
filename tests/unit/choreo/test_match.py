@@ -36,8 +36,8 @@ def test_bottleneck_then_sum_minimizes_largest_move_first() -> None:
     slots = [(1.0, 0.0), (2.0, 0.0)]
     result = match(starts, slots)
     assert result.assignment == {"0": 0, "1": 1}
-    assert approx_equal(result.max_distance, 1.0, TOL)
-    assert approx_equal(result.total_distance, 2.0, TOL)
+    assert approx_equal(result.max_distance, 1.0, abs_tol=TOL)
+    assert approx_equal(result.total_distance, 2.0, abs_tol=TOL)
 
 
 def test_sum_and_bottleneck_disagree_on_a_known_instance() -> None:
@@ -45,11 +45,11 @@ def test_sum_and_bottleneck_disagree_on_a_known_instance() -> None:
     slots = [(0.0, 0.0), (3.0, 0.0)]
     by_sum = match(starts, slots, options=MatchOptions(objective="sum"))
     assert by_sum.assignment == {"0": 0, "1": 1}
-    assert approx_equal(by_sum.total_distance, 5.0, TOL)
+    assert approx_equal(by_sum.total_distance, 5.0, abs_tol=TOL)
     by_bottleneck = match(starts, slots)
     assert by_bottleneck.assignment == {"0": 1, "1": 0}
-    assert approx_equal(by_bottleneck.max_distance, 3.0, TOL)
-    assert approx_equal(by_bottleneck.total_distance, 6.0, TOL)
+    assert approx_equal(by_bottleneck.max_distance, 3.0, abs_tol=TOL)
+    assert approx_equal(by_bottleneck.total_distance, 6.0, abs_tol=TOL)
     assert match(starts, slots, options=MatchOptions(objective="bottleneck")).max_distance == (
         by_bottleneck.max_distance
     )
@@ -159,15 +159,15 @@ def test_no_backward_forbids_travel_against_facing() -> None:
 def test_no_backward_penalty_adds_meters() -> None:
     src = make_facing_set(("A", 0.0, 5.0, 0.0))
     cost = cost_matrix(src, [(0.0, 6.0), (0.0, 4.0)], MatchOptions(no_backward=2.5))
-    assert approx_equal(cost, [[3.5, 1.0]], TOL)
+    assert approx_equal(cost, [[3.5, 1.0]], abs_tol=TOL)
 
 
 def test_backward_and_turn_weights() -> None:
     src = make_facing_set(("A", 0.0, 5.0, 0.0))
     back = cost_matrix(src, [(0.0, 7.0)], MatchOptions(weights={"backward": 1.0}))
-    assert approx_equal(back, [[4.0]], TOL)
+    assert approx_equal(back, [[4.0]], abs_tol=TOL)
     turn = cost_matrix(src, [(2.0, 5.0)], MatchOptions(weights={"turn": 0.01}))
-    assert approx_equal(turn, [[2.9]], TOL)
+    assert approx_equal(turn, [[2.9]], abs_tol=TOL)
 
 
 def test_backward_rules_need_facings() -> None:
@@ -307,7 +307,7 @@ def test_match_by_order_reports_distances_from_set() -> None:
     form = line_form("f", [], (0, 3), (2, 3), n=2)
     result = match_by_order(["B", "A"], form, src)
     assert result.assignment == {"B": 0, "A": 1}
-    assert approx_equal(result.max_distance, math.hypot(2, 3), TOL)
+    assert approx_equal(result.max_distance, math.hypot(2, 3), abs_tol=TOL)
     with pytest.raises(MatchError):
         match_by_order(["A", "B", "C"], form)
 

@@ -160,7 +160,7 @@ def test_interval_spacing_with_gaps() -> None:
 
 def test_closed_curve_never_repeats_its_start() -> None:
     pts = slots(circle_form("f", ["A", "B", "C", "D"], (0, 0), 1.0))
-    assert approx_equal(pts, [[1, 0], [0, 1], [-1, 0], [0, -1]], TOL)
+    assert approx_equal(pts, [[1, 0], [0, 1], [-1, 0], [0, -1]], abs_tol=TOL)
 
 
 def test_slot_count_n_without_members() -> None:
@@ -228,7 +228,7 @@ def test_circle_faces_outward_and_arc_uses_its_center() -> None:
     inward_arc = arc_form(
         "a", ["A", "B"], (0, 0), 3.0, 0.0, 90.0, facing=FacingSpec(mode="outward")
     )
-    assert approx_equal(_facings(inward_arc), [90.0, 180.0], TOL)
+    assert approx_equal(_facings(inward_arc), [90.0, 180.0], abs_tol=TOL)
 
 
 def test_outward_on_centroid_spot_faces_the_audience() -> None:
@@ -302,9 +302,9 @@ def test_transform_key_maps_non_curve_points() -> None:
 
 def test_arc_slot_positions_are_on_the_circle() -> None:
     pts = slots(arc_form("a", MEMBERS, (1, 2), 3.0, 30.0, 120.0))
-    assert approx_equal(np.linalg.norm(pts - [1, 2], axis=1), [3.0] * 5, TOL)
+    assert approx_equal(np.linalg.norm(pts - [1, 2], axis=1), [3.0] * 5, abs_tol=TOL)
     angles = np.degrees(np.arctan2(pts[:, 1] - 2, pts[:, 0] - 1))
-    assert approx_equal(angles, [30, 60, 90, 120, 150], TOL)
+    assert approx_equal(angles, [30, 60, 90, 120, 150], abs_tol=TOL)
     assert math.isclose(
         float(np.linalg.norm(pts[0] - pts[1])), float(np.linalg.norm(pts[3] - pts[4]))
     )

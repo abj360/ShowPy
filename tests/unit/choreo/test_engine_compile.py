@@ -129,7 +129,7 @@ def test_regression_engine_and_editors_agree_a_straight_row_has_no_bend() -> Non
         mid = engine.position("T1", 4.0, local=TID)
     except ShowPyError:
         return
-    assert approx_equal(mid, (0.0, 7.0), tol=1e-6)
+    assert approx_equal(mid, (0.0, 7.0), abs_tol=1e-6)
 
 
 def _stay_at_start(u: FloatArray, start: Point, end: Point, params: object) -> Points:
@@ -184,7 +184,7 @@ def test_regression_timed_waypoint_is_reached_at_its_count_under_easing() -> Non
         easing=Easing(kind="ease_in", strength=2.0),
     )
     engine = PathEngine(with_rows({"T1": row}))
-    assert approx_equal(engine.position("T1", 2.0, local=TID), (bend.x, bend.y), tol=1e-6)
+    assert approx_equal(engine.position("T1", 2.0, local=TID), (bend.x, bend.y), abs_tol=1e-6)
 
 
 def _easing_edges(easing: Easing) -> list[float]:

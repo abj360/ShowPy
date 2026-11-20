@@ -70,7 +70,7 @@ def diff_sets(a: Set, b: Set, tol: float = 1e-6) -> SetDiff:
     moved = [
         e
         for e in common
-        if not approx_equal(left[e].point, right[e].point, tol)
+        if not approx_equal(left[e].point, right[e].point, abs_tol=tol)
         or left[e].on_field != right[e].on_field
     ]
     turned = [e for e in common if abs(angle_diff(left[e].facing, right[e].facing)) > tol]
