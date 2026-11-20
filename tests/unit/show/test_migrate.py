@@ -18,17 +18,52 @@ Contains:
     test_validation_after_ids_keeps_accepting_legacy_ids_until_ids_are_renamed(): passes the
         legacy-ID context to the last validation while the ids step renames nothing
     test_require_current_version_refuses_an_older_show_json(): raises OLD_FORMAT for v1
+    test_every_fixture_migrates_to_its_expected_v2(): matches expected_v2.json, documents and
+        report, regenerated only under SHOWPY_UPDATE_MIGRATION=1
+    test_v1_fixtures_decode_to_their_oracle(): decodes each fixture head equal to expected.json
+    test_first_save_after_migration_writes_one_revision_and_the_second_none(): saves v2 once
+    test_stored_revision_ids_survive_migration(): keeps every stored revision ID and record
+    test_regression_migration_keeps_tags_selection_scripts_and_pins(): carries them through the
+        migration and the first save
+    test_strict_json_refuses_nan_tokens(): refuses NaN and infinity tokens in any document
+    test_strict_json_refuses_duplicate_keys(): refuses a repeated key, naming the document
+    test_v030_reader_refuses_a_v2_tree(): fails the frozen v1 schema on the v2 header alone
+    test_decode_caches_nothing_for_an_older_tree(): never caches documents that get migrated
+    test_writes_of_a_v1_show_json_are_refused(): refuses OLD_FORMAT through commit and write
 """
 
+import itertools
 import json
+import os
+import shutil
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
 import pytest
+from jsonschema.validators import validator_for
 
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, StorageError, VersionError
 from showpy.core.ids import LEGACY_IDS_KEY
 from showpy.core.json_types import JsonValue
+from showpy.core.resources import schema_path
 from showpy.examples import two_set_show
+from showpy.show.decode_cache import DecodeCache
+from showpy.show.documents import (
+    NOTES_DOC,
+    SHEET_DOC,
+    TIMELINE_DOC,
+    decode_show,
+    encode_show,
+    forms_doc,
+    is_show_doc,
+    migrate_documents,
+    paths_doc,
+    set_doc,
+)
+from showpy.show.file_repository import FileRepository
+from showpy.show.integrity import blob_digest
 from showpy.show.migrate import (
     CHECKED_CONTEXT,
     CURRENT_VERSION,
@@ -47,7 +82,16 @@ from showpy.show.migrate import (
 )
 from showpy.show.migrations import V1_TO_V2_JSON_STEPS, V1_TO_V2_MODEL_STEPS
 from showpy.show.migrations.v1_to_v2_ids import KEEPS_LEGACY_IDS
+from showpy.show.models import Show
+from showpy.show.storage import load_show, open_workspace, save_show
 
+FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "repos"
+TAGS = ["v0.1.1", "v0.2.0", "v0.3.0"]
+TAGGED_TAGS = ["v0.1.1", "v0.2.0"]
+EXPECTED_V2 = "expected_v2.json"
+UPDATE_FLAG = "SHOWPY_UPDATE_MIGRATION"
+AT = datetime(2026, 11, 19, 12, 0, tzinfo=UTC)
+V1_SCHEMA = "showpy.show.v1.json"
 JSON_STEP_ORDER = [
     "migrate_forms",
     "migrate_paths",
@@ -165,3 +209,190 @@ def test_require_current_version_refuses_an_older_show_json() -> None:
         require_current_version({"id": "x"}, name=SHOW_DOC)
     assert caught.value.code == ErrorCode.OLD_FORMAT
     assert without_header({**format_header(), "id": "x"}) == {"id": "x"}
+
+
+def _fixture(tag: str, tmp_path: Path) -> tuple[FileRepository, dict[str, Any]]:
+    """Copies a read-only fixture repository and loads its expected.json."""
+    shutil.copytree(FIXTURES / tag / "repo", tmp_path / "repo")
+    expected: dict[str, Any] = json.loads((FIXTURES / tag / "expected.json").read_text())
+    return FileRepository(tmp_path / "repo"), expected
+
+
+def _head(tag: str, tmp_path: Path) -> dict[str, bytes]:
+    repo, expected = _fixture(tag, tmp_path)
+    return dict(repo.documents(expected["show_id"]))
+
+
+def _record(docs: dict[str, bytes]) -> dict[str, object]:
+    """Lists the migrated show documents as JSON and the report, as expected_v2.json holds them."""
+    migrated, report = migrate_documents(docs)
+    documents = {p: json.loads(raw) for p, raw in sorted(migrated.items()) if is_show_doc(p)}
+    return {"documents": documents, "report": report.model_dump(mode="json")}
+
+
+@pytest.mark.parametrize("tag", TAGS)
+def test_every_fixture_migrates_to_its_expected_v2(tag: str, tmp_path: Path) -> None:
+    docs = _head(tag, tmp_path)
+    record = _record(docs)
+    path = FIXTURES / tag / EXPECTED_V2
+    if os.environ.get(UPDATE_FLAG) == "1":
+        path.write_text(json.dumps(record, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+    assert record == json.loads(path.read_text())
+    migrated, _ = migrate_documents(docs)
+    assert {p: raw for p, raw in migrated.items() if not is_show_doc(p)} == {
+        p: raw for p, raw in docs.items() if not is_show_doc(p)
+    }
+    assert migrated[SHOW_DOC].splitlines()[1:3] == [
+        b'  "format": "showpy.show",',
+        b'  "version": 2,',
+    ]
+    assert read_version(docs) == 1
+    assert read_version(migrated) == CURRENT_VERSION
+    assert decode_show(migrated) == decode_show(docs)
+    assert migrate_documents(migrated) == (migrated, MigrationReport(from_version=CURRENT_VERSION))
+
+
+@pytest.mark.parametrize("tag", TAGS)
+def test_v1_fixtures_decode_to_their_oracle(tag: str, tmp_path: Path) -> None:
+    repo, expected = _fixture(tag, tmp_path)
+    assert [r.id for r in repo.revisions(expected["show_id"])] == expected["revisions"]
+    assert repo.get_show(expected["show_id"]) == Show.model_validate(expected["show"])
+
+
+@pytest.mark.parametrize("tag", TAGS)
+def test_first_save_after_migration_writes_one_revision_and_the_second_none(
+    tag: str, tmp_path: Path
+) -> None:
+    repo, expected = _fixture(tag, tmp_path)
+    ws = open_workspace(repo, expected["show_id"])
+    first = save_show(ws, load_show(ws), AT)
+    assert first.parent == expected["head"]
+    assert SHOW_DOC in first.changed
+    assert (
+        repo.documents(expected["show_id"])[SHOW_DOC]
+        == migrate_documents(_head(tag, tmp_path / "again"))[0][SHOW_DOC]
+    )
+    ws.refresh()
+    again = save_show(ws, load_show(ws), AT)
+    assert again.id == first.id
+    assert [r.id for r in repo.revisions(expected["show_id"])] == [*expected["revisions"], first.id]
+
+
+@pytest.mark.parametrize("tag", TAGS)
+def test_stored_revision_ids_survive_migration(tag: str, tmp_path: Path) -> None:
+    repo, expected = _fixture(tag, tmp_path)
+    show_id = expected["show_id"]
+    before = {p: p.read_bytes() for p in (tmp_path / "repo").rglob("*") if p.is_file()}
+    old_shows = [repo.get_show(show_id, revision) for revision in expected["revisions"]]
+    assert {p: p.read_bytes() for p in (tmp_path / "repo").rglob("*") if p.is_file()} == before
+    ws = open_workspace(repo, show_id)
+    save_show(ws, load_show(ws), AT)
+    after = {p: p.read_bytes() for p in (tmp_path / "repo").rglob("*") if p.is_file()}
+    assert {p: after[p] for p in before} == before
+    assert [r.id for r in repo.revisions(show_id)][: len(expected["revisions"])] == expected[
+        "revisions"
+    ]
+    assert [repo.get_show(show_id, r) for r in expected["revisions"]] == old_shows
+
+
+@pytest.mark.parametrize("tag", TAGGED_TAGS)
+def test_regression_migration_keeps_tags_selection_scripts_and_pins(
+    tag: str, tmp_path: Path
+) -> None:
+    repo, expected = _fixture(tag, tmp_path)
+    docs = dict(repo.documents(expected["show_id"]))
+    migrated, _ = migrate_documents(docs)
+    ws = open_workspace(repo, expected["show_id"])
+    saved = save_show(ws, load_show(ws), AT)
+    first_spots = [s.id for s in decode_show(docs).cast.spots][:4]
+    for show in (decode_show(migrated), repo.get_show(expected["show_id"], saved.id)):
+        assert [s.tags for s in show.cast.spots if s.tags] == [("horn", "lead")]
+        assert dict(show.cast.selections) == {"front-four": tuple(first_spots)}
+        assert [(p.target, p.reason) for p in show.pins] == [("entity", "soloist")]
+    scripts = {p: raw for p, raw in docs.items() if p.endswith("/set.py")}
+    assert scripts
+    assert {p: migrated[p] for p in scripts} == scripts
+    assert {p: repo.documents(expected["show_id"])[p] for p in scripts} == scripts
+
+
+@pytest.mark.parametrize("path", [SHOW_DOC, set_doc("1"), TIMELINE_DOC])
+@pytest.mark.parametrize("token", ["NaN", "Infinity", "-Infinity"])
+def test_strict_json_refuses_nan_tokens(path: str, token: str, tmp_path: Path) -> None:
+    docs = _head("v0.2.0", tmp_path)
+    document = json.loads(docs[path])
+    document["x_extra"] = 1.5
+    docs[path] = json.dumps(document).replace("1.5", token).encode()
+    with pytest.raises(SchemaError) as caught:
+        decode_show(docs)
+    assert caught.value.code == ErrorCode.STRICT_JSON
+    assert caught.value.context["path"] == path
+    with pytest.raises(SchemaError):
+        migrate_documents(docs)
+
+
+def test_strict_json_refuses_duplicate_keys() -> None:
+    docs = encode_show(two_set_show())
+    docs[SHOW_DOC] = docs[SHOW_DOC].replace(b'  "title"', b'  "title": "Twice",\n  "title"', 1)
+    with pytest.raises(SchemaError) as caught:
+        decode_show(docs)
+    assert caught.value.code == ErrorCode.STRICT_JSON
+    assert caught.value.context["path"] == SHOW_DOC
+    assert caught.value.context["key"] == "title"
+
+
+def _assembled_as_v030_did(tree: dict[str, bytes]) -> dict[str, Any]:
+    """Assembles a stored tree into one Show dump the way the v0.3.0 decoder did."""
+    meta = json.loads(tree[SHOW_DOC])
+    order: list[str] = meta.pop("sets")
+    sets = [{"key": key, **json.loads(tree[set_doc(key)])} for key in order]
+    forms = {
+        form["id"]: form for key in order for form in json.loads(tree.get(forms_doc(key), b"[]"))
+    }
+    pairs = [pair for pair in itertools.pairwise(order) if paths_doc(pair) in tree]
+    return {
+        **meta,
+        "sheet": json.loads(tree[SHEET_DOC]),
+        "notes": json.loads(tree.get(NOTES_DOC, b"[]")),
+        "timeline": json.loads(tree[TIMELINE_DOC]),
+        "sets": sets,
+        "forms": forms,
+        "transitions": [json.loads(tree[paths_doc(pair)]) for pair in pairs],
+        "revision": "",
+    }
+
+
+def test_v030_reader_refuses_a_v2_tree(tmp_path: Path) -> None:
+    schema = json.loads(schema_path(V1_SCHEMA).read_text())
+    validator = validator_for(schema)(schema)
+    docs = _head("v0.3.0", tmp_path)
+    assert list(validator.iter_errors(_assembled_as_v030_did(docs))) == []
+    migrated, _ = migrate_documents(docs)
+    errors = [error.message for error in validator.iter_errors(_assembled_as_v030_did(migrated))]
+    assert any("'format'" in message and "'version'" in message for message in errors)
+
+
+def test_decode_caches_nothing_for_an_older_tree(tmp_path: Path) -> None:
+    docs = _head("v0.2.0", tmp_path)
+    digests = {path: blob_digest(raw) for path, raw in docs.items()}
+    cache = DecodeCache()
+    decode_show(docs, cache=cache, digests=digests)
+    assert len(cache) == 0
+    migrated, _ = migrate_documents(docs)
+    decode_show(migrated, cache=cache, digests={p: blob_digest(r) for p, r in migrated.items()})
+    assert len(cache) > 0
+
+
+def test_writes_of_a_v1_show_json_are_refused(tmp_path: Path) -> None:
+    repo, expected = _fixture("v0.2.0", tmp_path)
+    ws = open_workspace(repo, expected["show_id"])
+    save_show(ws, load_show(ws), AT)
+    ws.refresh()
+    v1_meta = without_header(json.loads(ws.read(SHOW_DOC)))
+    head = repo.head(expected["show_id"])
+    raw = json.dumps(v1_meta)
+    with pytest.raises(SchemaError) as committed:
+        ws.commit({SHOW_DOC: raw.encode()}, at=AT)
+    with pytest.raises(SchemaError) as written:
+        ws.write(SHOW_DOC, raw, at=AT)
+    assert committed.value.code == written.value.code == ErrorCode.OLD_FORMAT
+    assert repo.head(expected["show_id"]) == head

@@ -97,16 +97,12 @@ def test_regression_decode_wrong_shape_names_the_document(path: str, raw: bytes)
     assert excinfo.value.context["path"] == path
 
 
-@pytest.mark.defect("UP-9.7-29")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-29")
 def test_regression_show_json_carries_a_format_version() -> None:
     """Stamps show.json with a format and layout version (audit 9.7 item 11)."""
     body = json.loads(_docs()[SHOW_DOC])
     assert any(key in body for key in VERSION_KEYS)
 
 
-@pytest.mark.defect("UP-9.7-92")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-92")
 def test_regression_decode_names_the_minimum_version_for_a_newer_document() -> None:
     """Raises VersionError for a document written by a newer library (audit 9.7 item 11)."""
     body = json.loads(_docs()[SHOW_DOC]) | {"version": FUTURE_VERSION}

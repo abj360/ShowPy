@@ -27,6 +27,11 @@ Contains:
     test_regression_export_json_ignores_hash_seed(): dumps spot tags and selections in one order
         under every hash seed
     test_import_json_rejects_the_old_stage_tag(): refuses a document tagged stage.show.v1
+    test_export_json_writes_the_format_header_first(): starts the document with format and version
+    test_regression_import_json_reads_a_version_1_document(): migrates a showpy.show.v1 document
+    test_regression_import_json_refuses_a_newer_version(): raises VersionError naming the version
+    test_regression_import_json_refuses_mixed_tags(): refuses a v1 tag beside a format header
+    test_regression_import_json_refuses_a_lone_surrogate(): applies the strict JSON rules
     test_regression_import_json_counts_field_errors_under_error_count(): stores the number of
         failing fields as `error_count`, not as an int under `errors`
     test_frames_csv_is_byte_identical_across_runs_and_hash_seeds(): writes one CSV per show
@@ -57,7 +62,13 @@ import pytest
 
 from showpy.cast.rewrite import rewrite_spot_ids
 from showpy.choreo.forms import slots, text_form
-from showpy.core.errors import FontError, MissingFontError, SchemaError, UnknownRefError
+from showpy.core.errors import (
+    FontError,
+    MissingFontError,
+    SchemaError,
+    UnknownRefError,
+    VersionError,
+)
 from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.resources import font_path
 from showpy.core.util import approx_equal, asset_uri
@@ -80,6 +91,7 @@ from showpy.export.data import (
 from showpy.export.models import Chart, ChartRow, Claim, CoordinateSheet, SheetRow
 from showpy.export.print_sheets import chart, coordinate_sheet, cue_sheet
 from showpy.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
+from showpy.show.migrate import CURRENT_VERSION, FORMAT
 from showpy.show.models import Show
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.export_shows import AT, guided_show, live_publication, performer
@@ -95,7 +107,7 @@ FORMULA_NAME = '=HYPERLINK("http://evil")'
 
 def test_export_json_is_tagged_and_json_safe() -> None:
     exported = export_json(rich_show())
-    assert exported["schema"] == SCHEMA_TAG == "showpy.show.v1"
+    assert (exported["format"], exported["version"]) == (FORMAT, CURRENT_VERSION)
     assert json.loads(json.dumps(exported)) == exported
 
 
@@ -224,9 +236,39 @@ def test_format_registry_is_immutable() -> None:
         register_exporter(DEFAULT_FORMATS, " ", shout)
 
 
-def test_export_json_writes_showpy_tag() -> None:
-    assert export_json(two_set_show())["schema"] == "showpy.show.v1"
-    assert SCHEMA_TAG == "showpy.show.v1"
+def test_export_json_writes_the_format_header_first() -> None:
+    exported = export_json(two_set_show())
+    assert list(exported)[:3] == ["format", "version", "show"]
+    assert (exported["format"], exported["version"]) == ("showpy.show", 2)
+    assert "schema" not in exported
+
+
+def test_regression_import_json_reads_a_version_1_document() -> None:
+    show = rich_show()
+    document = {"schema": SCHEMA_TAG, "show": json.loads(json.dumps(show.model_dump(mode="json")))}
+    assert import_json(document) == show
+
+
+def test_regression_import_json_refuses_a_newer_version() -> None:
+    document = {**export_json(two_set_show()), "version": CURRENT_VERSION + 1}
+    with pytest.raises(VersionError) as caught:
+        import_json(document)
+    assert caught.value.context["version"] == CURRENT_VERSION + 1
+    assert caught.value.context["newest"] == CURRENT_VERSION
+
+
+def test_regression_import_json_refuses_mixed_tags() -> None:
+    with pytest.raises(SchemaError) as caught:
+        import_json({**export_json(two_set_show()), "schema": SCHEMA_TAG})
+    assert caught.value.code == "UNKNOWN_FORMAT"
+
+
+def test_regression_import_json_refuses_a_lone_surrogate() -> None:
+    document = export_json(two_set_show())
+    document["show"] = {**document["show"], "title": "\ud800"}
+    with pytest.raises(SchemaError) as caught:
+        import_json(document)
+    assert caught.value.code == "STRICT_JSON"
 
 
 def test_import_json_rejects_the_old_stage_tag() -> None:
@@ -389,9 +431,14 @@ def test_regression_import_json_keeps_the_duplicate_set_id_error() -> None:
     assert info.value.message == "set ids repeat"
 
 
-def test_regression_import_json_counts_field_errors_under_error_count() -> None:
+@pytest.mark.parametrize(
+    "tag", [{"schema": SCHEMA_TAG}, {"format": FORMAT, "version": CURRENT_VERSION}]
+)
+def test_regression_import_json_counts_field_errors_under_error_count(
+    tag: dict[str, object],
+) -> None:
     with pytest.raises(SchemaError) as caught:
-        import_json({"schema": SCHEMA_TAG, "show": {"id": "x"}})
+        import_json({**tag, "show": {"id": "x"}})
     assert "errors" not in caught.value.context
     error_count = caught.value.context["error_count"]
     assert isinstance(error_count, int)
@@ -420,7 +467,7 @@ def test_export_embeds_every_font_a_text_form_uses() -> None:
 
 
 def test_export_without_text_forms_has_no_fonts_key() -> None:
-    assert set(export_json(two_set_show())) == {"schema", "show"}
+    assert set(export_json(two_set_show())) == {"format", "version", "show"}
 
 
 def test_import_fonts_round_trips_slots() -> None:
@@ -455,7 +502,8 @@ def test_export_with_a_missing_font_fails_closed() -> None:
 
 def test_export_include_without_forms_embeds_no_fonts() -> None:
     show, registry, _ = _text_show()
-    assert set(export_json(show, include=["title"], font_registry=registry)) == {"schema", "show"}
+    exported = export_json(show, include=["title"], font_registry=registry)
+    assert set(exported) == {"format", "version", "show"}
 
 
 def test_import_json_still_loads_a_document_with_fonts() -> None:

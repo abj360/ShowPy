@@ -2,12 +2,12 @@
 data.py --- native JSON interchange, per-count frames, text tables and format plugins
 
 Contains:
-    SCHEMA_TAG: names the interchange format, `showpy.show.v1`
+    SCHEMA_TAG: names the version 1 interchange format, `showpy.show.v1`, which import still reads
     FONTS_KEY: names the document key that holds the embedded fonts
     MAX_IMPORT_FONTS: bounds how many fonts one document may carry
-    export_json(): dumps a show to a tagged JSON-safe document, embedding the fonts its text
-        forms use
-    import_json(): loads a show from a tagged document, refusing unknown schemas
+    export_json(): dumps a show to a format-tagged JSON-safe document, embedding the fonts its
+        text forms use
+    import_json(): loads a show from a document of any readable format version, migrating it
     import_fonts(): registers the fonts embedded in a document, checking each against its hash
     export_frames_csv(): samples every spot through the engine, per count, as CSV
     as_table(): turns a coordinate sheet, chart or DataFrame into a TextTable
@@ -25,7 +25,7 @@ import csv
 import io
 import math
 from collections.abc import Callable, Iterable, Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Never
 
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.form_text import text_recipe
@@ -36,14 +36,24 @@ from showpy.core.errors import (
     FontError,
     SchemaError,
     UnknownRefError,
-    field_errors,
 )
 from showpy.core.extras import is_dataframe
+from showpy.core.strict_json import strict_json_copy
 from showpy.core.types import Point
 from showpy.core.units import round_to
 from showpy.core.util import asset_uri, close_matches
 from showpy.export.models import Chart, CoordinateSheet, TextTable
 from showpy.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
+from showpy.show.document_reading import decode_show_dump
+from showpy.show.migrate import (
+    CURRENT_VERSION,
+    FIRST_VERSION,
+    FORMAT,
+    FORMAT_KEY,
+    VERSION_KEY,
+    format_header,
+    version_of,
+)
 from showpy.show.models import Show
 from showpy.time.clock import count_to_seconds
 
@@ -53,6 +63,11 @@ if TYPE_CHECKING:
 SCHEMA_TAG = "showpy.show.v1"
 SCHEMA_KEY = "schema"
 SHOW_KEY = "show"
+DOCUMENT_NAME = "document"
+DOCUMENT_HINT = (
+    f'documents are JSON objects: {{"{FORMAT_KEY}": "{FORMAT}", "{VERSION_KEY}": {CURRENT_VERSION},'
+    f' "{SHOW_KEY}": {{...}}}}'
+)
 FONTS_KEY = "fonts"
 FORMS_FIELD = "forms"
 TEXT_KIND = "text"
@@ -103,9 +118,9 @@ def export_json(
         font_registry: Registry holding the fonts of the text forms; None means the bundled fonts.
 
     Returns:
-        document: `{"schema": "showpy.show.v1", "show": {...}}`, plus `"fonts"` mapping each
-            font URI to its base64 bytes, sorted by URI, when an exported form is a text form.
-            A font the registry lacks raises MissingFontError.
+        document: `{"format": "showpy.show", "version": 2, "show": {...}}`, plus `"fonts"`
+            mapping each font URI to its base64 bytes, sorted by URI, when an exported form is
+            a text form. A font the registry lacks raises MissingFontError.
 
     >>> from showpy.examples import two_set_show
     >>> sorted(export_json(two_set_show(), include=["title"])["show"])
@@ -122,7 +137,7 @@ def export_json(
                 context={"field": name},
             )
         dumped = {key: value for key, value in dumped.items() if key in keep}
-    document: dict[str, Any] = {SCHEMA_KEY: SCHEMA_TAG, SHOW_KEY: dumped}
+    document: dict[str, Any] = {**format_header(), SHOW_KEY: dumped}
     registry = bundled_fonts() if font_registry is None else font_registry
     fonts = _embedded_fonts(show, dumped, registry)
     if fonts:
@@ -146,39 +161,81 @@ def _embedded_fonts(
 
 # Any: an imported document holds arbitrarily nested JSON values.
 def import_json(d: Mapping[str, Any]) -> Show:
-    """Loads a show from a tagged document, refusing a wrong or missing schema tag.
+    """Loads a show from a document of any readable format version, migrating older ones.
+
+    Version 1 documents carry `"schema": "showpy.show.v1"`; later ones carry `"format"` and
+    `"version"`. The show is checked as strict JSON first, as stored documents are.
+
+    Args:
+        d: A document from `export_json`, of this or an earlier release.
+
+    Returns:
+        show: The show in the current format. A wrong or missing tag raises SchemaError, a
+            newer version VersionError, and a show that is not strict JSON or does not fit
+            SchemaError.
 
     >>> from showpy.examples import two_set_show
     >>> import_json(export_json(two_set_show())).id
     'show-1'
+    >>> v1 = {"schema": "showpy.show.v1", "show": two_set_show().model_dump(mode="json")}
+    >>> import_json(v1) == two_set_show()
+    True
     """
     if not isinstance(d, Mapping):
         raise SchemaError(
             f"document is a {type(d).__name__}, not an object",
-            hint=f'documents are JSON objects: {{"schema": "{SCHEMA_TAG}", "show": {{...}}}}',
+            hint=DOCUMENT_HINT,
             context={"type": type(d).__name__},
         )
-    tag = d.get(SCHEMA_KEY)
-    if tag != SCHEMA_TAG:
-        raise SchemaError(
-            f"document schema is {tag!r}, not {SCHEMA_TAG!r}",
-            hint=f'export with export_json(); documents start {{"schema": "{SCHEMA_TAG}"}}',
-            context={"schema": tag},
-        )
+    version = _document_version(d)
     body = d.get(SHOW_KEY)
-    if not isinstance(body, Mapping):
+    show = strict_json_copy(dict(body), document=SHOW_KEY) if isinstance(body, Mapping) else None
+    if not isinstance(show, dict):
         raise SchemaError("document has no show object", hint=f"put the show under {SHOW_KEY!r}")
     try:
-        return Show.model_validate(body)
+        if version < CURRENT_VERSION:
+            return decode_show_dump(show, version)
+        return Show.model_validate(show)
     except SchemaError as error:
-        errors = field_errors(error)
-        first = errors[0]
-        field = first["loc"]
-        raise SchemaError(
-            f"show field {field} is invalid: {first['msg']}",
-            hint=f"fix {'the show' if field == ROOT_LOC else field} to match {SCHEMA_TAG}",
-            context={"field": field, "error_count": len(errors)},
-        ) from error
+        friendly = _first_field_error(error)
+        if friendly is error:
+            raise
+        raise friendly from error
+
+
+def _document_version(d: Mapping[str, Any]) -> int:
+    """Reads the format version of an interchange document from its tag or header."""
+    if SCHEMA_KEY not in d:
+        return version_of(d, name=DOCUMENT_NAME) if FORMAT_KEY in d else _unknown_tag(None)
+    if d[SCHEMA_KEY] != SCHEMA_TAG or FORMAT_KEY in d or VERSION_KEY in d:
+        _unknown_tag(d[SCHEMA_KEY])
+    return FIRST_VERSION
+
+
+def _unknown_tag(tag: object) -> Never:
+    raise SchemaError(
+        f"document schema is {tag!r}, not {SCHEMA_TAG!r} or format {FORMAT!r}",
+        hint=f"export with export_json(); {DOCUMENT_HINT}, or version 1 documents"
+        f' {{"{SCHEMA_KEY}": "{SCHEMA_TAG}", "{SHOW_KEY}": {{...}}}}',
+        context={"schema": repr(tag)},
+        code=ErrorCode.UNKNOWN_FORMAT,
+    )
+
+
+def _first_field_error(error: SchemaError) -> SchemaError:
+    """Names the first failing show field of a validation error and counts the rest.
+
+    An error without per-field entries already teaches and is returned unchanged.
+    """
+    errors = error.context.get("errors")
+    if not isinstance(errors, list) or not errors or not isinstance(errors[0], dict):
+        return error
+    field = errors[0].get("loc")
+    return SchemaError(
+        f"show field {field} is invalid: {errors[0].get('msg')}",
+        hint=f"fix {'the show' if field == ROOT_LOC else field} to match {FORMAT}",
+        context={"field": field, "error_count": len(errors)},
+    )
 
 
 def _decode_font(uri: object, encoded: object) -> bytes:

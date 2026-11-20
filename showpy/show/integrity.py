@@ -32,6 +32,7 @@ from showpy.show.documents import (
     require_storable,
 )
 from showpy.show.files import require_writable
+from showpy.show.migrate import require_current_show_doc
 from showpy.show.models import Show
 from showpy.show.set_keys import PAIR_SEPARATOR, SETS_ROOT, TRANSITIONS_ROOT
 from showpy.show.structured import TEXT_SUFFIXES, require_structured
@@ -250,6 +251,7 @@ def require_valid_digests(
     """Checks every changed path and decodes the show when any show document changed.
 
     Writing a derived table raises LockedError code READ_ONLY; deleting a stored copy is allowed.
+    A changed show.json of an older format version raises SchemaError code OLD_FORMAT.
     Documents whose digest sits in `cache` at the same path are reused; every changed
     document is decoded fresh, and the show is validated whole either way.
 
@@ -275,6 +277,8 @@ def require_valid_digests(
     require_structured_files(changed, after, blob)
     if not any(is_show_doc(p) for p in changed):
         return None
+    if SHOW_DOC in changed and SHOW_DOC in after:
+        require_current_show_doc(blob(after[SHOW_DOC]))
     _require_required_docs(after)
     show = decode_show(LazyBlobs(after, blob), cache=cache, digests=after)
     require_storable(show)

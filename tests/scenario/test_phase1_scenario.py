@@ -18,7 +18,7 @@ Contains:
     unchanged(): fails when a model serializes differently after a block
     run_scenario(): runs every phase of the scenario against a fresh repository
     test_scenario_edits_hit_every_phase(): checks each phase left its mark
-    test_final_show_validates(): checks validate_show and the stored JSON schema
+    test_final_show_validates(): checks validate_show and the stored documents' JSON schema
     test_positions_are_continuous_at_every_set_boundary(): checks transition ends meet placements
     test_segments_follow_the_engine(): checks segments against position() at nine probes
     test_json_and_document_round_trips_are_equal(): checks export_json and encode_show round trips
@@ -256,8 +256,9 @@ def test_locked_delete_is_refused_without_force(scenario: Scenario) -> None:
 def test_final_show_validates(scenario: Scenario) -> None:
     with unchanged(scenario.head):
         assert validate_show(scenario.head).ok
-    schema = json.loads(schema_path("showpy.show.v1.json").read_text())
-    jsonschema.validate(scenario.head.model_dump(mode="json"), schema)
+    schema = json.loads(schema_path("showpy.show.v2.json").read_text())
+    tree = {path: json.loads(raw) for path, raw in encode_show(scenario.head).items()}
+    jsonschema.validate(tree, schema)
 
 
 def test_positions_are_continuous_at_every_set_boundary(scenario: Scenario) -> None:

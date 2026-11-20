@@ -1,29 +1,24 @@
 """
 documents.py --- splits a Show into canonical JSON documents at stored paths and back
 
-Stored paths address sets by key (`/sets/<key>/…`, `/transitions/<key a>-<key b>/…`) and
-show.json lists the set order as keys; workspaces map display IDs onto them.
+show.json starts with the format header and the rest of every document is canonical, so equal
+shows give equal bytes. Reading accepts every readable format version: document_reading parses
+strictly and migrates older trees in memory. The stored-path names of document_paths are
+re-exported here for existing importers.
 
 Contains:
-    SHOW_DOC: names the document holding show metadata, cast and set order
-    split_path(): checks a workspace path and returns its segments, rejecting traversal
+    SHOW_DOC: names the document holding show metadata, cast, set order and the format header
     dump_json(): writes JSON canonically: sorted keys, sorted sets, two-space indent
     dump_dumped_json(): writes the JSON-mode dump of a model canonically, skipping a second walk
-    set_doc(): returns the path of a set folder's placements document
-    script_doc(): returns the path of a set folder's build script
-    forms_doc(): returns the path of a set folder's forms document
-    placements_doc(): returns the path of a set folder's derived placements table
-    paths_doc(): returns the path of a transition folder's paths document
-    is_show_doc(): reports whether a path is part of the encoded Show
-    is_storable_folder(): reports whether a set folder name can be stored
+    dump_show_doc(): writes a show.json object canonically, the format header first
     require_storable(): refuses a show whose set IDs, keys, paths or forms cannot be stored
     expected_show_docs(): lists the stored show-document paths decode reads for a show
-    encode_show(): splits a show into documents stored by set key
+    encode_show(): splits a show into documents stored by set key, show.json header first
     encode_documents(): encodes only the named stored documents of a show
-    decode_show(): assembles a show from documents, reusing cached per-document decodes
+    decode_show(): assembles a show from documents of any readable format version
+    migrate_documents(): migrates a stored document set to the current format and reports it
 """
 
-import itertools
 import json
 import re
 from collections.abc import Callable, Collection, Mapping, Sequence
@@ -32,62 +27,50 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from showpy.choreo.form_models import Form
-from showpy.choreo.models import Set
-from showpy.choreo.path_models import TransitionSpec
 from showpy.core.canonical import MAX_INT_DIGITS, MAX_NESTING, canonical_value
-from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import SchemaError, StorageError, field_errors
-from showpy.core.ids import SetId, TransitionId, check_id
+from showpy.core.errors import SchemaError
+from showpy.core.json_types import JsonValue
 from showpy.show.decode_cache import DecodeCache
+from showpy.show.document_paths import FORMS_NAME as FORMS_NAME
+from showpy.show.document_paths import NOTES_DOC as NOTES_DOC
+from showpy.show.document_paths import PATHS_NAME as PATHS_NAME
+from showpy.show.document_paths import PLACEMENTS_NAME as PLACEMENTS_NAME
+from showpy.show.document_paths import SCRIPT_NAME as SCRIPT_NAME
+from showpy.show.document_paths import SET_ORDER_FIELD as SET_ORDER_FIELD
+from showpy.show.document_paths import SHEET_DOC as SHEET_DOC
+from showpy.show.document_paths import SPLIT_FIELDS, docs_for_order
+from showpy.show.document_paths import TIMELINE_DOC as TIMELINE_DOC
+from showpy.show.document_paths import forms_doc as forms_doc
+from showpy.show.document_paths import is_show_doc as is_show_doc
+from showpy.show.document_paths import is_storable_folder as is_storable_folder
+from showpy.show.document_paths import paths_doc as paths_doc
+from showpy.show.document_paths import placements_doc as placements_doc
+from showpy.show.document_paths import script_doc as script_doc
+from showpy.show.document_paths import set_doc as set_doc
+from showpy.show.document_paths import split_path as split_path
+from showpy.show.document_reading import read_migrated, read_show
 from showpy.show.manage import SET_ID_PATTERN
+from showpy.show.migrate import (
+    CURRENT_VERSION,
+    MigrationReport,
+    ReportBuilder,
+    format_header,
+    read_version,
+    require_current_version,
+    without_header,
+)
+from showpy.show.migrate import SHOW_DOC as SHOW_DOC
 from showpy.show.models import Show
 from showpy.show.set_keys import set_key
 
-SHOW_DOC = "/show/show.json"
-SHEET_DOC = "/show/sheet.json"
-NOTES_DOC = "/show/notes.json"
-TIMELINE_DOC = "/time/timeline.json"
-SET_ORDER_FIELD = "sets"
-SPLIT_FIELDS = frozenset({"sheet", "notes", "timeline", "sets", "forms", "transitions", "revision"})
 JsonObject = dict[str, Any]  # Any: parsed JSON values of any type
-JsonArray = list[Any]  # Any: parsed JSON values of any type
-SEGMENT = r"[A-Za-z0-9_][A-Za-z0-9_.\-]*"
-SEGMENT_PATTERN = re.compile(SEGMENT)
-SET_DOC_NAME = "set.json"
-SCRIPT_NAME = "set.py"
-FORMS_NAME = "forms.json"
-PLACEMENTS_NAME = "placements.csv"
-PATHS_NAME = "paths.json"
-SHOW_DOC_PATTERN = re.compile(
-    rf"/(show/(show|sheet|notes)\.json|time/timeline\.json|sets/{SEGMENT}/(set|forms)\.json"
-    rf"|transitions/{SEGMENT}/paths\.json)"
-)
 JSON_INDENT = 2
 NEGATIVE_ZERO = re.compile(r"-0\.0\b")
 RESERVED_KEY_PREFIX = "$showpy:"
 TOO_DEEP = "\n" + " " * (JSON_INDENT * (MAX_NESTING + 1))
-
-
-def split_path(path: str) -> list[str]:
-    r"""Checks a workspace path and returns its segments; `..`, `.`, `//` and `\\` are refused.
-
-    >>> split_path("/sets/12A/set.py")
-    ['sets', '12A', 'set.py']
-    """
-    segments = path.split("/")[1:] if path.startswith("/") else []
-    if path.endswith("/") and len(segments) > 1:
-        segments = segments[:-1]
-    if path == "/":
-        return []
-    if not segments or not all(SEGMENT_PATTERN.fullmatch(s) and ".." not in s for s in segments):
-        raise StorageError(
-            f"path {path!r} is not a workspace path",
-            hint="use an absolute path such as /sets/1/set.py, without '..', '.' or empty parts",
-            context={"path": path},
-            code=ErrorCode.BAD_PATH,
-        )
-    return segments
+HEADER_CLOSE = b"\n}\n"
+OPEN_OBJECT = b"{\n"
+CLOSE_OBJECT = b"}\n"
 
 
 # Any: accepts any JSON-like value or model dump.
@@ -144,47 +127,6 @@ def _needs_normalizing(text: str) -> bool:
     return max(map(len, text.split("\n"))) > MAX_INT_DIGITS
 
 
-def set_doc(folder: str) -> str:
-    """Returns the path of a set's placements document, which storage keeps internal.
-
-    The folder is the set key in stored paths and the display ID in workspace paths.
-    """
-    return f"/sets/{folder}/{SET_DOC_NAME}"
-
-
-def script_doc(folder: str) -> str:
-    """Returns the path of a set folder's build script."""
-    return f"/sets/{folder}/{SCRIPT_NAME}"
-
-
-def forms_doc(folder: str) -> str:
-    """Returns the path of a set folder's forms document."""
-    return f"/sets/{folder}/{FORMS_NAME}"
-
-
-def placements_doc(folder: str) -> str:
-    """Returns the path of a set folder's derived placements table."""
-    return f"/sets/{folder}/{PLACEMENTS_NAME}"
-
-
-def paths_doc(tid: tuple[str, str]) -> str:
-    """Returns the path of a transition folder's paths document: keys stored, IDs in workspaces.
-
-    >>> paths_doc(("12", "12A"))
-    '/transitions/12-12A/paths.json'
-    """
-    return f"/transitions/{tid[0]}-{tid[1]}/{PATHS_NAME}"
-
-
-def is_show_doc(path: str) -> bool:
-    """Reports whether a path is one of the documents encode_show() writes.
-
-    >>> is_show_doc("/sets/1/forms.json"), is_show_doc("/sets/1/set.py")
-    (True, False)
-    """
-    return SHOW_DOC_PATTERN.fullmatch(path) is not None
-
-
 def require_storable(show: Show) -> None:
     """Refuses a show the stored layout cannot hold: bad set IDs or keys, loose paths or forms.
 
@@ -212,20 +154,19 @@ def expected_show_docs(show: Show) -> frozenset[str]:
     >>> "/transitions/1-2/paths.json" in expected_show_docs(two_set_show())
     True
     """
-    order = [set_key(s) for s in show.sets]
-    paths = {SHOW_DOC, SHEET_DOC, NOTES_DOC, TIMELINE_DOC}
-    paths.update(set_doc(s) for s in order)
-    paths.update(forms_doc(s) for s in order)
-    paths.update(paths_doc(tid) for tid in itertools.pairwise(order))
-    return frozenset(paths)
+    return docs_for_order([set_key(s) for s in show.sets])
 
 
 def encode_show(show: Show) -> dict[str, bytes]:
     """Splits a show into documents under set keys; empty forms and paths are left out.
 
+    show.json starts with `"format"` and `"version"`; the rest of every document is canonical.
+
     >>> from showpy.examples import two_set_show
     >>> sorted(encode_show(two_set_show()))[:3]
     ['/sets/1/set.json', '/sets/2/set.json', '/show/notes.json']
+    >>> encode_show(two_set_show())["/show/show.json"].splitlines()[1:3]
+    [b'  "format": "showpy.show",', b'  "version": 2,']
     """
     return {path: encode() for path, encode in _encoders(show).items()}
 
@@ -247,7 +188,9 @@ def _encoders(show: Show) -> dict[str, Callable[[], bytes]]:
     keys = {s.id: set_key(s) for s in show.sets}
     meta = show.model_dump(mode="json", exclude=set(SPLIT_FIELDS))
     encoders: dict[str, Callable[[], bytes]] = {
-        SHOW_DOC: lambda: dump_dumped_json({**meta, SET_ORDER_FIELD: list(keys.values())}),
+        SHOW_DOC: lambda: dump_show_doc(
+            {**format_header(), **meta, SET_ORDER_FIELD: list(keys.values())}
+        ),
         SHEET_DOC: lambda: dump_dumped_json(show.sheet.model_dump(mode="json")),
         NOTES_DOC: lambda: dump_dumped_json([n.model_dump(mode="json") for n in show.notes]),
         TIMELINE_DOC: lambda: dump_dumped_json(show.timeline.model_dump(mode="json")),
@@ -264,202 +207,38 @@ def _encoders(show: Show) -> dict[str, Callable[[], bytes]]:
     return encoders
 
 
+def dump_show_doc(document: Mapping[str, JsonValue]) -> bytes:
+    """Writes a show.json object canonically, with the format header as its first two keys.
+
+    Use it to commit a hand-edited show.json: dump_json() would sort the header among the
+    other keys, which reads the same but is not the canonical encoding.
+
+    Args:
+        document: Parsed show.json object in the current format version, header included.
+
+    Returns:
+        raw: Its canonical bytes. A document of another format version raises SchemaError
+            code OLD_FORMAT, or VersionError when it is newer.
+
+    >>> from showpy.examples import two_set_show
+    >>> raw = encode_show(two_set_show())[SHOW_DOC]
+    >>> dump_show_doc(json.loads(raw)) == raw
+    True
+    """
+    require_current_version(document, name=SHOW_DOC)
+    head = dump_dumped_json(format_header())
+    rest = dump_dumped_json(without_header(document)).removeprefix(OPEN_OBJECT)
+    if rest == CLOSE_OBJECT:
+        return head
+    return head.removesuffix(HEADER_CLOSE) + b",\n" + rest
+
+
 def _dump_model(model: BaseModel) -> bytes:
     return dump_dumped_json(model.model_dump(mode="json"))
 
 
 def _dump_models(models: Sequence[BaseModel]) -> bytes:
     return dump_dumped_json([m.model_dump(mode="json") for m in models])
-
-
-def _load_json(docs: Mapping[str, bytes], path: str) -> object:
-    raw = docs.get(path)
-    if raw is None:
-        raise StorageError(
-            f"document {path} is missing",
-            hint="write the whole show with save_show() first",
-            context={"path": path},
-        )
-    return _parse(path, raw)
-
-
-def _parse(path: str, raw: bytes) -> object:
-    """Parses JSON, raising SchemaError for bad UTF-8 or JSON, deep nesting or an overlong int."""
-    try:
-        return json.loads(raw)
-    except (ValueError, RecursionError) as exc:
-        raise SchemaError(
-            f"{path} is not valid JSON: {exc}",
-            hint=f"write UTF-8 JSON nested at most {MAX_NESTING} levels, ints of at most"
-            f" {MAX_INT_DIGITS} digits, as save_show() does",
-            context={"path": path},
-        ) from exc
-
-
-def _shape_error(path: str, name: str, value: object) -> SchemaError:
-    return SchemaError(
-        f"{path} must hold a JSON {name}, not {type(value).__name__}",
-        hint=f"write a JSON {name}, as save_show() does",
-        context={"path": path},
-    )
-
-
-def _load_object(docs: Mapping[str, bytes], path: str, *, is_optional: bool = False) -> JsonObject:
-    """Parses a document that must hold a JSON object; an absent optional one reads as `{}`."""
-    if is_optional and path not in docs:
-        return {}
-    value = _load_json(docs, path)
-    if not isinstance(value, dict):
-        raise _shape_error(path, "object", value)
-    return value
-
-
-def _load_array(docs: Mapping[str, bytes], path: str, *, is_optional: bool = False) -> JsonArray:
-    """Parses a document that must hold a JSON array; an absent optional one reads as `[]`."""
-    if is_optional and path not in docs:
-        return []
-    value = _load_json(docs, path)
-    if not isinstance(value, list):
-        raise _shape_error(path, "array", value)
-    return value
-
-
-def _cached[T](
-    cache: DecodeCache | None, digests: Mapping[str, str], path: str, decode: Callable[[], T]
-) -> T:
-    digest = digests.get(path)
-    if cache is None or digest is None:
-        return decode()
-    return cache.get_or_decode(path, digest, decode)
-
-
-def _set(docs: Mapping[str, bytes], key: str) -> Set:
-    raw = _load_object(docs, set_doc(key))
-    if isinstance(raw.get("key"), str):
-        check_id(raw["key"], kind="set key")
-    if "key" not in raw:
-        raw = {**raw, "key": key}
-    loaded = Set.model_validate(raw)
-    if loaded.key != key:
-        raise SchemaError(
-            f"{set_doc(key)} holds the set keyed {loaded.key}",
-            hint=f"store each set under its key; drop key or set it to {key!r}",
-            context={"path": set_doc(key), "key": loaded.key},
-        )
-    return loaded
-
-
-def _forms(docs: Mapping[str, bytes], key: str) -> tuple[Form, ...]:
-    return tuple(
-        Form.model_validate(f) for f in _load_array(docs, forms_doc(key), is_optional=True)
-    )
-
-
-def _require_forms_for(key: str, set_id: SetId, forms: tuple[Form, ...]) -> None:
-    wrong = [f.id for f in forms if f.set != set_id]
-    if wrong:
-        raise SchemaError(
-            f"{forms_doc(key)} holds forms of another set: {', '.join(wrong)}",
-            hint=f"give every form in this file set={set_id!r}",
-            context={"set": set_id, "forms": wrong},
-        )
-
-
-def _paths(docs: Mapping[str, bytes], folder: tuple[str, str]) -> tuple[TransitionSpec, ...]:
-    raw = _load_object(docs, paths_doc(folder), is_optional=True)
-    if not raw:
-        return ()
-    return (TransitionSpec.model_validate(raw),)
-
-
-def _require_paths_for(
-    folder: tuple[str, str], tid: TransitionId, specs: tuple[TransitionSpec, ...]
-) -> None:
-    for spec in specs:
-        if spec.id != tid:
-            raise SchemaError(
-                f"{paths_doc(folder)} holds paths for {spec.id}",
-                hint=f"set id to {list(tid)}",
-                context={"tid": tid, "found": spec.id},
-            )
-
-
-def is_storable_folder(folder: object) -> bool:
-    """Reports whether a set folder name can be stored: a v0.2 set ID or a key that passes check_id.
-
-    Stored IDs that predate the ID pattern keep loading until they are migrated.
-
-    >>> is_storable_folder("con"), is_storable_folder("_k"), is_storable_folder("1-2")
-    (True, True, False)
-    """
-    if not isinstance(folder, str):
-        return False
-    if SET_ID_PATTERN.fullmatch(folder) and ".." not in folder:
-        return True
-    try:
-        return check_id(folder, kind="set key") == folder
-    except SchemaError:
-        return False
-
-
-def _set_order(order: object) -> list[str]:
-    """Checks the set order show.json lists: an array of storable set keys, never text."""
-    if not isinstance(order, list):
-        raise _shape_error(SHOW_DOC, "array under 'sets'", order)
-    bad = [k for k in order if not is_storable_folder(k)]
-    if bad:
-        raise SchemaError(
-            f"{SHOW_DOC} lists set keys that cannot be stored: {', '.join(map(str, bad))}",
-            hint="use set keys of letters, digits, _ and ., with no doubled .",
-            context={"bad_set_keys": bad},
-        )
-    return order
-
-
-def _transition_specs(
-    docs: Mapping[str, bytes],
-    stored: list[tuple[str, Set]],
-    cache: DecodeCache | None,
-    digests: Mapping[str, str],
-) -> list[TransitionSpec]:
-    specs: list[TransitionSpec] = []
-    for (key_a, set_a), (key_b, set_b) in itertools.pairwise(stored):
-        folder = (key_a, key_b)
-        found = _cached(cache, digests, paths_doc(folder), partial(_paths, docs, folder))
-        _require_paths_for(folder, TransitionId(set_a.id, set_b.id), found)
-        specs.extend(found)
-    return specs
-
-
-def _assemble(
-    docs: Mapping[str, bytes], revision: str, cache: DecodeCache | None, digests: Mapping[str, str]
-) -> Show:
-    meta = _load_object(docs, SHOW_DOC)
-    order = _set_order(meta.pop(SET_ORDER_FIELD, []))
-    stored = [(k, _cached(cache, digests, set_doc(k), partial(_set, docs, k))) for k in order]
-    forms: dict[str, Form] = {}
-    for key, current in stored:
-        found = _cached(cache, digests, forms_doc(key), partial(_forms, docs, key))
-        _require_forms_for(key, current.id, found)
-        forms.update((f.id, f) for f in found)
-    sets = [current for _, current in stored]
-    counts = {s.id: s.counts for s in sets}
-    specs = [
-        spec.replace(counts=counts[spec.id[1]])
-        for spec in _transition_specs(docs, stored, cache, digests)
-    ]
-    return Show.model_validate(
-        {
-            **meta,
-            "sheet": _load_object(docs, SHEET_DOC),
-            "notes": _load_array(docs, NOTES_DOC, is_optional=True),
-            "timeline": _load_object(docs, TIMELINE_DOC),
-            "sets": sets,
-            "forms": forms,
-            "transitions": specs,
-            "revision": revision,
-        }
-    )
 
 
 def decode_show(
@@ -469,28 +248,52 @@ def decode_show(
     cache: DecodeCache | None = None,
     digests: Mapping[str, str] | None = None,
 ) -> Show:
-    """Assembles a show from documents; paths take the destination set's counts.
+    """Assembles a show from documents of any readable format; paths take the target's counts.
+
+    Documents of an older format version are migrated in memory; nothing stored changes.
 
     Args:
         docs: Path to document bytes; documents other than show documents are ignored.
         revision: Revision the documents were read at.
-        cache: Decoded documents to reuse; the show is still validated whole.
+        cache: Decoded documents to reuse; the show is still validated whole. Documents of an
+            older format version are never cached.
         digests: Path to blob digest of each document, naming the cache entries; without it
             nothing is cached.
 
     Returns:
-        show: The assembled show, raising SchemaError when a document does not fit.
+        show: The assembled show. A document that is not strict JSON or does not fit raises
+            SchemaError; a format version newer than this release reads raises VersionError.
 
     >>> from showpy.examples import two_set_show
     >>> decode_show(encode_show(two_set_show())) == two_set_show()
     True
     """
-    try:
-        return _assemble(docs, revision, cache, digests or {})
-    except SchemaError as exc:
-        errors = field_errors(exc)
-        raise SchemaError(
-            "show documents do not match the Show schema",
-            hint="write documents produced by save_show(), or fix the fields named in context",
-            context={"errors": errors},
-        ) from exc
+    return read_show(docs, revision, cache=cache, digests=digests)
+
+
+def migrate_documents(docs: Mapping[str, bytes]) -> tuple[dict[str, bytes], MigrationReport]:
+    """Migrates a stored document set to the current format version and reports what changed.
+
+    A host can show the report to the designer, and apply its renames to what it stores outside
+    ShowPy, before the first save writes the new documents.
+
+    Args:
+        docs: Stored path to document bytes, as a repository tree holds them.
+
+    Returns:
+        migrated: The show documents re-encoded in the current format, plus every other file
+            of `docs` unchanged; `docs` itself when it is already current.
+        report: What the migration renamed and repaired, and the version it started from.
+
+    >>> from showpy.examples import two_set_show
+    >>> docs = encode_show(two_set_show())
+    >>> migrated, report = migrate_documents(docs)
+    >>> migrated == docs, report.from_version
+    (True, 2)
+    """
+    version = read_version(docs)
+    if version == CURRENT_VERSION:
+        return dict(docs), ReportBuilder(version).build()
+    show, report = read_migrated(docs)
+    others = {path: raw for path, raw in docs.items() if not is_show_doc(path)}
+    return others | encode_show(show), report.build()

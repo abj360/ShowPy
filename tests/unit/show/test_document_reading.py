@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+
+"""
+test_document_reading.py --- tests how v1 interchange dumps split into stored documents
+
+Contains:
+    test_v1_dump_round_trips_through_the_split(): decodes a v1 dump equal to its show
+    test_regression_v1_dump_split_refuses_what_no_tree_can_hold(): refuses set lists, duplicate
+        sets, transitions and forms that no stored tree can hold, with SchemaError
+    test_regression_v1_dump_without_sheet_counts_the_missing_fields(): names the first missing
+        field and counts both
+"""
+
+import copy
+from collections.abc import Callable
+from typing import Any
+
+import pytest
+
+from showpy.core.errors import SchemaError
+from showpy.examples import crossing_show, two_set_show
+from showpy.show.document_reading import decode_show_dump
+
+type Damage = Callable[[dict[str, Any]], None]
+
+
+def _dump() -> dict[str, Any]:
+    show = crossing_show()
+    return copy.deepcopy(show.model_dump(mode="json"))
+
+
+def _set_forms(dump: dict[str, Any], forms: object) -> None:
+    dump["forms"] = forms
+
+
+def _orphan_form(dump: dict[str, Any]) -> None:
+    dump["forms"] = {"f": {"id": "f", "set": "9"}}
+
+
+def _unknown_pair(dump: dict[str, Any]) -> None:
+    dump["transitions"] = [{"id": ["1", "9"]}]
+
+
+def _repeated_pair(dump: dict[str, Any]) -> None:
+    dump["transitions"] = [{"id": ["1", "2"]}, {"id": ["1", "2"]}]
+
+
+def _repeated_set(dump: dict[str, Any]) -> None:
+    dump["sets"] = [dump["sets"][0], dump["sets"][0]]
+
+
+def _sets_as_text(dump: dict[str, Any]) -> None:
+    dump["sets"] = "12"
+
+
+def test_v1_dump_round_trips_through_the_split() -> None:
+    for show in (two_set_show(), crossing_show()):
+        assert decode_show_dump(show.model_dump(mode="json"), 1) == show
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        _sets_as_text,
+        _repeated_set,
+        _unknown_pair,
+        _repeated_pair,
+        lambda dump: _set_forms(dump, []),
+        _orphan_form,
+    ],
+)
+def test_regression_v1_dump_split_refuses_what_no_tree_can_hold(damage: Damage) -> None:
+    dump = _dump()
+    damage(dump)
+    with pytest.raises(SchemaError):
+        decode_show_dump(dump, 1)
+
+
+def test_regression_v1_dump_without_sheet_counts_the_missing_fields() -> None:
+    dump = {"id": "x", "title": "t"}
+    with pytest.raises(SchemaError) as caught:
+        decode_show_dump(dump, 1)
+    assert caught.value.context == {"field": "sheet", "error_count": 2}

@@ -64,6 +64,9 @@
       "min": "Point3"
     }
   },
+  "CURRENT_VERSION": {
+    "constant": "2"
+  },
   "CanvasEvent": {
     "model": {
       "at": "datetime.datetime",
@@ -335,6 +338,9 @@
       "ZERO_COUNTS": "'ZERO_COUNTS'",
       "ZERO_LENGTH": "'ZERO_LENGTH'"
     }
+  },
+  "FORMAT": {
+    "constant": "'showpy.show'"
   },
   "FacingMode": {
     "enum": {
@@ -631,6 +637,13 @@
       "changes": "tuple[tuple[Count, float], ...]",
       "counts_per_measure": "float",
       "start_measure": "int"
+    }
+  },
+  "MigrationReport": {
+    "model": {
+      "from_version": "int",
+      "renamed": "collections.abc.Mapping[str, tuple[tuple[str, str], ...]]",
+      "repairs": "tuple[str, ...]"
     }
   },
   "MissingExtraError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
@@ -1454,6 +1467,7 @@
   "match_by_order": "(ordered_sel: collections.abc.Sequence[str], form: showpy.choreo.form_models.Form | Points, from_: showpy.choreo.models.Set | None = None) -> showpy.choreo.match_models.MatchResult",
   "measure_to_count": "(tl: showpy.time.models.Timeline, measure: int, count_in_measure: float = 1.0) -> Count",
   "merge_forms": "(a: showpy.choreo.form_models.Form, b: showpy.choreo.form_models.Form, form_id: str, *, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> showpy.choreo.form_models.Form",
+  "migrate_documents": "(docs: collections.abc.Mapping[str, bytes]) -> tuple[dict[str, bytes], showpy.show.migrate.MigrationReport]",
   "min_gaps": "(show: showpy.show.models.Show, tid: tuple[str, str], sel: str | collections.abc.Sequence[str] = 'all', top: int = 10) -> list[showpy.choreo.engine_models.GapInfo]",
   "mirror": "(obj: T, axis: MirrorAxis, sel: SetSelector = 'all', *, force: bool = False) -> T",
   "mirror_gaps": "(points: Points, axis_x: float) -> Points",
@@ -1503,6 +1517,7 @@
   "qr_code": "(pub: showpy.export.models.Publication, token: str, size: int = 512) -> bytes",
   "ranks_and_files": "(points: Points, rows: int, cols: int) -> list[list[int]]",
   "reachable_region": "(start: Point, counts: Count, max_speed: float) -> Polygon",
+  "read_version": "(docs: collections.abc.Mapping[str, bytes]) -> int",
   "reassign": "(pub: showpy.export.models.Publication, spot: str, performer: showpy.export.models.Performer, at: datetime.datetime) -> showpy.export.models.Publication",
   "rebuild": "(show: showpy.show.models.Show, form_id: str, *, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> showpy.show.models.Show",
   "rect": "(center: Point, w: Meters, d: Meters, rotation_deg: Degrees = 0.0) -> showpy.geo.curves.Polyline",

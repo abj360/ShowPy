@@ -13,6 +13,7 @@ Contains:
 
 import json
 import re
+from collections import Counter
 
 from showpy.core.canonical import MAX_INT_DIGITS, MAX_NESTING
 from showpy.core.error_codes import ErrorCode
@@ -84,13 +85,8 @@ def parse_strict_json(raw: bytes, *, document: str) -> JsonValue:
 
 
 def _first_repeated(keys: list[str]) -> str:
-    """Returns the first key that appears a second time in a list known to hold a repeat."""
-    seen: set[str] = set()
-    for key in keys:
-        if key in seen:
-            return key
-        seen.add(key)
-    return keys[-1]
+    """Returns the first key, in reading order, of a list known to hold a repeated key."""
+    return next(key for key, count in Counter(keys).items() if count > 1)
 
 
 def _require_no_lone_surrogate(value: JsonValue, document: str) -> None:

@@ -93,6 +93,7 @@ from showpy.show.documents import (
     SHOW_DOC,
     decode_show,
     dump_json,
+    dump_show_doc,
     encode_show,
     forms_doc,
     is_show_doc,
@@ -107,6 +108,7 @@ from showpy.show.integrity import (
     require_valid_tree,
 )
 from showpy.show.manage import add_set, insert_subset, remove_set, renumber
+from showpy.show.migrate import format_header, without_header
 from showpy.show.models import Revision, Show
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.sections import join_sections
@@ -216,9 +218,9 @@ def test_regression_never_renumbered_v020_show_encodes_to_its_stored_documents(
     stored = {p: raw for p, raw in tree.items() if is_show_doc(p)}
     encoded = encode_show(decode_show(tree))
     assert set(encoded) == set(stored)
-    assert {p: encoded[p] for p in stored} == {
-        p: dump_json(json.loads(raw)) for p, raw in stored.items()
-    }
+    canonical = {p: dump_json(json.loads(raw)) for p, raw in stored.items()}
+    canonical[SHOW_DOC] = dump_show_doc({**format_header(), **json.loads(stored[SHOW_DOC])})
+    assert {p: encoded[p] for p in stored} == canonical
     assert not [p for p in encoded if p.endswith("/set.json") and "key" in json.loads(encoded[p])]
 
 
@@ -574,7 +576,7 @@ def test_regression_new_set_key_must_be_nfc() -> None:
 def _case_pair_docs(first_id: str, second_id: str) -> dict[str, bytes]:
     """Writes the example show as v0.2 stored it, under set folders named by the given IDs."""
     docs = encode_show(two_set_show())
-    meta = json.loads(docs[SHOW_DOC])
+    meta = without_header(json.loads(docs[SHOW_DOC]))
     meta["sets"] = [first_id, second_id]
     docs[SHOW_DOC] = dump_json(meta)
     for old_id, new_id in (("1", first_id), ("2", second_id)):
@@ -598,7 +600,8 @@ def test_regression_v020_show_with_set_ids_differing_by_case_loads() -> None:
     show = decode_show(docs)
     assert show.set_ids() == ["1a", "1A"]
     assert _keys(show) == ["1a", "1A"]
-    assert encode_show(show) == docs
+    v2_meta = dump_show_doc({**format_header(), **json.loads(docs[SHOW_DOC])})
+    assert encode_show(show) == {**docs, SHOW_DOC: v2_meta}
     assert decode_show(encode_show(show)) == show
     assert load_show(open_workspace(_stored_repo(docs), SHOW_ID)).set_ids() == ["1a", "1A"]
 

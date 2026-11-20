@@ -49,6 +49,7 @@ from showpy.show.documents import (
     split_path,
 )
 from showpy.show.manage import index
+from showpy.show.migrate import require_current_show_doc
 from showpy.show.models import Show
 from showpy.show.set_keys import SetFolders, set_key, to_stored_path
 from showpy.show.structured import (
@@ -258,6 +259,8 @@ def _staged_show_doc(
     if segments[0] == "transitions":
         _pair(show, segments[1])
     stored = to_stored_path(path, show)
+    if stored == SHOW_DOC:
+        require_current_show_doc(raw)
     edited = decode_show({**encode_show(show), stored: raw}, show.revision)
     return show_changes(edited, tree)
 

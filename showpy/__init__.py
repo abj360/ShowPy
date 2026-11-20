@@ -648,6 +648,9 @@ if TYPE_CHECKING:
     from showpy.show.counts import (
         spot_counts,
     )
+    from showpy.show.documents import (
+        migrate_documents,
+    )
     from showpy.show.file_repository import (
         FileRepository,
     )
@@ -671,6 +674,12 @@ if TYPE_CHECKING:
         transition_at_count,
         transitions,
         upgrade_dependency,
+    )
+    from showpy.show.migrate import (
+        CURRENT_VERSION,
+        FORMAT,
+        MigrationReport,
+        read_version,
     )
     from showpy.show.models import (
         CanvasEvent,
@@ -784,6 +793,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "BezierCurve": ("showpy.geo.curves", "BezierCurve"),
     "Box2": ("showpy.core.types", "Box2"),
     "Box3": ("showpy.core.types", "Box3"),
+    "CURRENT_VERSION": ("showpy.show.migrate", "CURRENT_VERSION"),
     "CanvasEvent": ("showpy.show.models", "CanvasEvent"),
     "Cast": ("showpy.cast.models", "Cast"),
     "Chart": ("showpy.export.models", "Chart"),
@@ -812,6 +822,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "EllipseCurve": ("showpy.geo.curves", "EllipseCurve"),
     "EntityState": ("showpy.choreo.engine_models", "EntityState"),
     "ErrorCode": ("showpy.core.error_codes", "ErrorCode"),
+    "FORMAT": ("showpy.show.migrate", "FORMAT"),
     "FacingMode": ("showpy.choreo.path_models", "FacingMode"),
     "FacingOverride": ("showpy.choreo.path_models", "FacingOverride"),
     "FacingSpec": ("showpy.choreo.form_models", "FacingSpec"),
@@ -866,6 +877,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "MatchResult": ("showpy.choreo.match_models", "MatchResult"),
     "MeasureLabel": ("showpy.time.models", "MeasureLabel"),
     "MeasureSetting": ("showpy.time.models", "MeasureSetting"),
+    "MigrationReport": ("showpy.show.migrate", "MigrationReport"),
     "MissingExtraError": ("showpy.core.extras", "MissingExtraError"),
     "MissingFontError": ("showpy.core.errors", "MissingFontError"),
     "MotionFn": ("showpy.choreo.motion", "MotionFn"),
@@ -1144,6 +1156,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "match_by_order": ("showpy.choreo.match", "match_by_order"),
     "measure_to_count": ("showpy.time.measures", "measure_to_count"),
     "merge_forms": ("showpy.choreo.form_ops", "merge_forms"),
+    "migrate_documents": ("showpy.show.documents", "migrate_documents"),
     "min_gaps": ("showpy.choreo.avoid", "min_gaps"),
     "mirror": ("showpy.geo.transforms", "mirror"),
     "mirror_gaps": ("showpy.geo.measure", "mirror_gaps"),
@@ -1193,6 +1206,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "qr_code": ("showpy.export.publish", "qr_code"),
     "ranks_and_files": ("showpy.geo.spacing", "ranks_and_files"),
     "reachable_region": ("showpy.geo.measure", "reachable_region"),
+    "read_version": ("showpy.show.migrate", "read_version"),
     "reassign": ("showpy.export.publish", "reassign"),
     "rebuild": ("showpy.choreo.form_place", "rebuild"),
     "rect": ("showpy.geo.shapes", "rect"),
@@ -1353,7 +1367,9 @@ _DEPRECATED: dict[str, tuple[str, str, str]] = {
 
 __all__ = [
     "BUNDLED_FONTS",
+    "CURRENT_VERSION",
     "DEFAULT_LINE_SPACING",
+    "FORMAT",
     "ID_MAX_LENGTH",
     "ID_PATTERN",
     "MAX_DEPTH",
@@ -1446,6 +1462,7 @@ __all__ = [
     "MatchResult",
     "MeasureLabel",
     "MeasureSetting",
+    "MigrationReport",
     "MissingExtraError",
     "MissingFontError",
     "MotionFn",
@@ -1722,6 +1739,7 @@ __all__ = [
     "match_by_order",
     "measure_to_count",
     "merge_forms",
+    "migrate_documents",
     "min_gaps",
     "mirror",
     "mirror_gaps",
@@ -1771,6 +1789,7 @@ __all__ = [
     "qr_code",
     "ranks_and_files",
     "reachable_region",
+    "read_version",
     "reassign",
     "rebuild",
     "rect",
