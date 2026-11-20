@@ -5,6 +5,8 @@ The order lives here, not in the step modules, so no lane reorders another's ste
 sub-steps run on the parsed show documents keyed by stored path (show, sheet, notes, timeline,
 set, forms and paths documents); model sub-steps run after, on the show validated with any
 non-empty v1 ID accepted. A step never edits the output format of an earlier version's steps.
+A step returns new objects for whatever it changes and never mutates a value it was given,
+nested values included, so the documents a caller passed in stay as they were.
 
 Contains:
     JsonStep: a sub-step over parsed documents: documents and report in, documents out

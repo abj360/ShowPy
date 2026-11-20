@@ -296,7 +296,8 @@ def decode_show_dump(dump: Mapping[str, JsonValue], version: int) -> Show:
     """Assembles a show from the interchange dump of an older format version, migrating it.
 
     The dump is split into the documents a stored tree of that version holds, so the same
-    migration runs for interchange documents as for stored trees.
+    migration runs for interchange documents as for stored trees. `dump` is never mutated:
+    the split builds new containers and migration steps never mutate what they are given.
 
     Args:
         dump: The `show` object of an interchange document, already strictly parsed.

@@ -258,7 +258,7 @@ def migrate_objects(
     """Runs the JSON sub-steps that bring parsed documents from `version` to CURRENT_VERSION.
 
     Args:
-        objects: Stored path to parsed document, without a format header; the run owns it.
+        objects: Stored path to parsed document, without a format header; never mutated.
         version: Format version the documents were stored in.
         report: Collects what the sub-steps rename and repair.
 

@@ -11,10 +11,13 @@ Contains:
         hold, with SchemaError
     test_regression_v1_dump_without_sheet_counts_the_missing_fields(): names the first missing
         field and counts both
+    test_decode_show_dump_never_mutates_the_dump(): leaves a fixture dump with forms, paths,
+        zones and legacy set IDs exactly as it was
 """
 
 import copy
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -22,8 +25,12 @@ import pytest
 from showpy.core.errors import SchemaError
 from showpy.examples import crossing_show, two_set_show
 from showpy.show.document_reading import decode_show_dump
+from showpy.show.documents import decode_show
+from showpy.show.file_repository import FileRepository
 
 type Damage = Callable[[dict[str, Any]], None]
+
+V030_REPO = Path(__file__).resolve().parents[2] / "fixtures" / "repos" / "v0.3.0" / "repo"
 
 
 def _dump() -> dict[str, Any]:
@@ -94,3 +101,11 @@ def test_regression_v1_dump_without_sheet_counts_the_missing_fields() -> None:
     with pytest.raises(SchemaError) as caught:
         decode_show_dump(dump, 1)
     assert caught.value.context == {"field": "sheet", "error_count": 2}
+
+
+def test_decode_show_dump_never_mutates_the_dump() -> None:
+    tree = dict(FileRepository(V030_REPO).documents("legacy-show"))
+    dump = decode_show(tree).model_dump(mode="json")
+    before = copy.deepcopy(dump)
+    assert decode_show_dump(dump, 1) == decode_show(tree)
+    assert dump == before
