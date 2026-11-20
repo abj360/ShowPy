@@ -6,8 +6,10 @@ Contains:
     moved(): builds a module `__getattr__` that serves moved names and warns on each use
     renamed_field(): builds a read-only property that serves a renamed field, optionally converted
     renamed_keyword(): resolves a keyword argument that was renamed, warning on the old name
+    deprecated_call(): decorates a superseded function so each call warns, then runs it
 """
 
+import functools
 import importlib
 import warnings
 from collections.abc import Callable, Mapping
@@ -151,3 +153,56 @@ def renamed_keyword[T](
         warnings.warn(message, DeprecatedWarning, stacklevel=WARNING_STACK_LEVEL)
         return old_value
     return default if new_value is None else new_value
+
+
+def _dotted_name(target: str | Callable[..., object]) -> str:
+    if isinstance(target, str):
+        return target
+    return f"{target.__module__}.{target.__qualname__}"
+
+
+def deprecated_call[**P, R](
+    replacement: str | Callable[..., object], *, since: str, remove: str
+) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    """Decorates a superseded function so each call warns, naming its replacement, then runs it.
+
+    The decorated function keeps its name, docstring and signature for callers and type
+    checkers; its body forwards to the replacement. A dotted path names a replacement that the
+    old module must not import, such as one in a higher layer.
+
+    Args:
+        replacement: The function that supersedes the decorated one, or its dotted path.
+        since: Release that deprecated the function; recorded in the API table, not the message.
+        remove: Release that removes the decorated function.
+
+    Returns:
+        decorator: Wraps a function so every call warns DeprecatedWarning at the caller.
+
+    Example:
+        >>> import warnings
+        >>> from showpy.core.deprecation import deprecated_call
+        >>> @deprecated_call("showpy.core.util.approx_equal", since="0.4.0", remove="0.6.0")
+        ... def close(a: float, b: float) -> bool:
+        ...     return abs(a - b) < 1e-6
+        >>> with warnings.catch_warnings(record=True) as caught:
+        ...     warnings.simplefilter("always")
+        ...     close(1.0, 1.0)
+        True
+        >>> "replaced by `showpy.core.util.approx_equal`" in str(caught[0].message)
+        True
+    """
+    del since
+    target = _dotted_name(replacement)
+
+    def decorate(function: Callable[P, R]) -> Callable[P, R]:
+        old = _dotted_name(function)
+        message = f"`{old}` is replaced by `{target}`; the old function is removed in {remove}"
+
+        @functools.wraps(function)
+        def warn_and_run(*args: P.args, **kwargs: P.kwargs) -> R:
+            warnings.warn(message, DeprecatedWarning, stacklevel=WARNING_STACK_LEVEL - 1)
+            return function(*args, **kwargs)
+
+        return warn_and_run
+
+    return decorate

@@ -8,17 +8,20 @@ Contains:
     test_moved_rejects_unknown_names: raises AttributeError for a name outside the table
     test_renamed_field_warns_and_reads_the_new_field: reads the new field through the old name
     test_renamed_field_passes_the_new_value_through_read: serves read(new value) under the old name
+    test_deprecated_call_warns_names_the_replacement_and_forwards: warns at the caller, then runs
+    test_deprecated_call_keeps_the_wrapped_signature: keeps name, docstring and parameters
     test_deprecated_warning_is_a_deprecation_warning: checks the base class
     test_validation_error_alias_warns_and_is_the_same_class: checks the alias on both paths
     test_deprecated_names_reach_users_through_showpy: resolves every table row with a warning
     test_deprecated_class_alias_is_visible_to_type_checkers: types check both aliases statically
     test_deprecations_are_removed_on_time: fails when a row outlives its removal version
-    test_every_deprecation_call_is_removed_on_time: fails when a moved, renamed_field or
-        renamed_keyword call in showpy outlives its removal version
+    test_every_deprecation_call_is_removed_on_time: fails when a moved, renamed_field,
+        renamed_keyword or deprecated_call call in showpy outlives its removal version
     test_deprecation_scan_flags_overdue_and_non_literal_calls: proves the scan can fail
 """
 
 import ast
+import inspect
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -28,8 +31,9 @@ import pytest
 import showpy
 import showpy.core.errors
 from showpy._api_table import DEPRECATED, DEPRECATED_KEYWORDS
-from showpy.core.deprecation import DeprecatedWarning, moved, renamed_field
+from showpy.core.deprecation import DeprecatedWarning, deprecated_call, moved, renamed_field
 from showpy.core.errors import ShowValidationError
+from showpy.core.util import approx_equal
 
 if TYPE_CHECKING:
     from showpy import ValidationError as PackageAlias
@@ -42,11 +46,23 @@ REQUIRED_KEYWORDS = {
     "moved": ("since", "remove"),
     "renamed_field": ("since", "remove"),
     "renamed_keyword": ("remove",),
+    "deprecated_call": ("since", "remove"),
 }
 
 
 def _doubled(value: int) -> int:
     return value * 2
+
+
+@deprecated_call("showpy.core.util.approx_equal", since="0.4.0", remove="0.6.0")
+def _old_close(a: float, b: float, *, slack: float = 1e-6) -> bool:
+    """Compares two numbers the old way."""
+    return approx_equal(a, b, abs_tol=slack)
+
+
+@deprecated_call(approx_equal, since="0.4.0", remove="0.6.0")
+def _old_close_by_callable(a: float, b: float) -> bool:
+    return approx_equal(a, b)
 
 
 class _Holder:
@@ -77,6 +93,21 @@ def test_renamed_field_warns_and_reads_the_new_field() -> None:
 def test_renamed_field_passes_the_new_value_through_read() -> None:
     with pytest.warns(DeprecatedWarning, match="`twice` renamed to `value`"):
         assert _Holder().twice == 2 * _Holder.value
+
+
+def test_deprecated_call_warns_names_the_replacement_and_forwards() -> None:
+    pattern = r"`.*_old_close` is replaced by `showpy\.core\.util\.approx_equal`.*0\.6\.0"
+    with pytest.warns(DeprecatedWarning, match=pattern) as caught:
+        assert _old_close(1.0, 1.05, slack=0.1) is True
+    assert caught[0].filename == __file__
+    with pytest.warns(DeprecatedWarning, match=r"replaced by `showpy\.core\.util\.approx_equal`"):
+        assert _old_close_by_callable(1.0, 2.0) is False
+
+
+def test_deprecated_call_keeps_the_wrapped_signature() -> None:
+    assert _old_close.__name__ == "_old_close"
+    assert _old_close.__doc__ == "Compares two numbers the old way."
+    assert list(inspect.signature(_old_close).parameters) == ["a", "b", "slack"]
 
 
 def test_deprecated_warning_is_a_deprecation_warning() -> None:
@@ -158,7 +189,7 @@ def _literal(node: ast.expr | None, constants: dict[str, str]) -> str | None:
 
 
 def scan_deprecation_calls(source: str, where: str) -> list[str]:
-    """Lists the problems in the moved, renamed_field and renamed_keyword calls of one source.
+    """Lists the problems in the deprecation helper calls of one source.
 
     A keyword must be a string literal or a module-level name bound to one.
     """
@@ -200,8 +231,12 @@ def test_deprecation_scan_flags_overdue_and_non_literal_calls() -> None:
     overdue = 'getter = moved("m", {}, since="0.1.0", remove="0.0.1")\n'
     dynamic = 'getter = moved("m", {}, since="0.4.0", remove=LIMIT)\n'
     keyword = 'x = renamed_keyword("a", 1, "b", None, default=0, remove=LIMIT)\n'
+    decorator = '@deprecated_call("m.f", since="0.1.0", remove="0.0.1")\ndef g() -> None: ...\n'
     ok = 'getter = moved("m", {}, since="0.4.0", remove="99.0.0")\n'
     assert "overdue" in scan_deprecation_calls(overdue, "t.py")[0]
     assert "literal remove=" in scan_deprecation_calls(dynamic, "t.py")[0]
     assert "literal remove=" in scan_deprecation_calls(keyword, "t.py")[0]
+    assert (
+        "deprecated_call() remove=0.0.1 is overdue" in scan_deprecation_calls(decorator, "t.py")[0]
+    )
     assert scan_deprecation_calls(ok, "t.py") == []
