@@ -7,6 +7,7 @@ Contains:
     test_report_*(), test_merge_concatenates_issues: status, rendering and merging of reports
     test_raise_for_errors_*(): raises a ShowValidationError only when the report holds an error
     test_issue_context_*(): the read-only, bounded context of one issue
+    test_issue_hashes_with_and_without_context: issues are hashable, nested context included
     test_validate_or_schema_error_*(): one behavior of the SchemaError-raising validator each
     test_validate_adapter_*(): SchemaError from standalone TypeAdapters, Python or JSON input
     test_require_finite_*(): one rule of the finite-number check each, bounds included
@@ -121,8 +122,17 @@ def test_regression_issue_context_is_bounded() -> None:
         hint="h",
         context={"ids": [str(n) for n in range(MANY_ISSUES)], "name": "n" * 1_000},
     )
-    assert issue.context["ids"] == [*map(str, range(MAX_CONTEXT_ITEMS)), "(+10 more)"]
+    assert issue.context["ids"] == (*map(str, range(MAX_CONTEXT_ITEMS)), "(+10 more)")
     assert issue.context["name"] == bounded_repr("n" * 1_000)
+
+
+def test_issue_hashes_with_and_without_context() -> None:
+    bare = _issue("error")
+    nested = ValidationIssue(
+        level="error", code="X", where="w", message="m", hint="h", context={"ids": ["a", "b"]}
+    )
+    assert hash(bare) == hash(_issue("error"))
+    assert hash(nested) == hash(nested.model_copy())
 
 
 def test_merge_concatenates_issues() -> None:

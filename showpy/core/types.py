@@ -8,7 +8,8 @@ Contains:
     CountsPerMinute: positive finite tempo alias
     Heading: wraps a stored facing into [0, 360)
     JsonValue: the JSON data model, re-exported from json_types
-    JsonObject: a read-only JSON object for open payloads
+    FrozenJsonValue: the read-only JSON value a JsonObject holds, re-exported from json_types
+    JsonObject: a deeply read-only, hashable JSON object for open payloads; dumps plain JSON
     FrozenModel: provides the immutable, strict base that raises SchemaError on bad data
     FrozenModel.replace(): returns a revalidated copy with some fields changed
     FrozenModel.model_copy(): returns a copy whose cached_property values are dropped
@@ -28,9 +29,10 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationErr
 from pydantic.config import ExtraValues
 
 from showpy.core.errors import schema_error_from
+from showpy.core.json_types import FrozenJsonValue as FrozenJsonValue
 from showpy.core.json_types import JsonValue as JsonValue
 from showpy.core.numbers import normalize_angle
-from showpy.core.readonly import ReadOnly
+from showpy.core.readonly import FrozenJson
 
 MIN_RING_POINTS = 3
 
@@ -46,7 +48,9 @@ type NonNegSeconds = Annotated[float, Field(ge=0, allow_inf_nan=False)]
 type PositiveMeters = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 type CountsPerMinute = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 type Heading = Annotated[float, Field(allow_inf_nan=False), AfterValidator(normalize_angle)]
-type JsonObject = Annotated[Mapping[str, JsonValue], ReadOnly()]
+# Plain JSON in the static type lets callers pass dicts and lists; validation always stores the
+# frozen form, so values read back are tuples and read-only mappings.
+type JsonObject = Annotated[Mapping[str, JsonValue | FrozenJsonValue], FrozenJson()]
 type Point = tuple[float, float]
 type Point3 = tuple[float, float, float]
 type Ring = tuple[Point, ...]

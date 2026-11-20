@@ -38,9 +38,11 @@ Contains:
     test_region_*(): distinct points, holes inside the exterior, and valid rings with holes
     test_json_value_is_the_one_shared_alias: exports the JsonValue that canonical encoding uses
     test_json_object_stores_a_read_only_mapping: stores a JSON object as a read-only mapping
+    test_json_object_*(): deep freezing, plain JSON dumps and schema, round trips and hashing
 """
 
 import inspect
+import json
 import math
 from collections.abc import Callable
 from functools import cached_property
@@ -56,6 +58,7 @@ from showpy.choreo.path_models import Waypoint
 from showpy.core import canonical, json_types
 from showpy.core.errors import SchemaError, ShowPyError, field_errors
 from showpy.core.ids import LandmarkId, SetId
+from showpy.core.readonly import ReadOnlyMap
 from showpy.core.types import (
     Box2,
     Count,
@@ -343,7 +346,52 @@ def test_json_object_stores_a_read_only_mapping() -> None:
         payload: JsonObject
 
     holder = Holder(payload={"a": [1, {"b": None}]})
-    assert holder.payload == {"a": [1, {"b": None}]}
+    assert holder.payload == Holder(payload={"a": (1, {"b": None})}).payload
     assert holder.model_dump() == {"payload": {"a": [1, {"b": None}]}}
     with pytest.raises(TypeError):
         holder.payload["c"] = 1  # type: ignore[index]
+
+
+class _JsonHolder(FrozenModel):
+    payload: JsonObject
+
+
+def test_json_object_freezes_nested_values() -> None:
+    holder = _JsonHolder(payload={"k": [1, 2], "inner": {"n": [{"m": 1}]}})
+    with pytest.raises(AttributeError):
+        holder.payload["k"].append(3)  # type: ignore[union-attr]
+    inner = holder.payload["inner"]
+    assert isinstance(inner, ReadOnlyMap)
+    with pytest.raises(TypeError):
+        inner["n"] = 2  # type: ignore[index]
+    assert holder.model_dump()["payload"]["k"] == [1, 2]
+
+
+def test_json_object_dumps_plain_json_and_round_trips() -> None:
+    holder = _JsonHolder(payload={"k": [1, {"n": [True, None]}], "s": "x"})
+    dumped = holder.model_dump()
+    assert dumped == {"payload": {"k": [1, {"n": [True, None]}], "s": "x"}}
+    assert type(dumped["payload"]) is dict
+    assert type(dumped["payload"]["k"]) is list
+    assert type(dumped["payload"]["k"][1]) is dict
+    assert json.loads(holder.model_dump_json()) == dumped
+    assert _JsonHolder.model_validate(dumped) == holder
+    assert _JsonHolder.model_validate_json(holder.model_dump_json()) == holder
+
+
+def test_json_object_schema_is_a_plain_json_object() -> None:
+    schema = _JsonHolder.model_json_schema()
+    name = schema["properties"]["payload"]["$ref"].rsplit("/", 1)[-1]
+    assert schema["$defs"][name] == {
+        "type": "object",
+        "additionalProperties": {"$ref": "#/$defs/JsonValue"},
+    }
+    assert {"type": "array", "items": {"$ref": "#/$defs/JsonValue"}} in schema["$defs"][
+        "JsonValue"
+    ]["anyOf"]
+
+
+def test_json_object_models_hash_by_content() -> None:
+    first = _JsonHolder(payload={"a": [1, {"b": 2}], "c": None})
+    second = _JsonHolder(payload={"c": None, "a": [1, {"b": 2}]})
+    assert hash(first) == hash(second)

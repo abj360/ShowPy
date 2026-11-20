@@ -16,7 +16,7 @@ Contains:
 import math
 from collections.abc import Mapping
 from numbers import Real
-from typing import Annotated, Literal, SupportsFloat
+from typing import Literal, SupportsFloat
 
 import numpy as np
 from pydantic import BaseModel, Field, TypeAdapter, field_validator
@@ -30,9 +30,7 @@ from showpy.core.errors import (
     join_listed,
     schema_error_from,
 )
-from showpy.core.json_types import JsonValue
-from showpy.core.readonly import ReadOnly
-from showpy.core.types import FrozenModel
+from showpy.core.types import FrozenModel, JsonObject
 
 LEVEL_PREFIX = {"error": "E", "warning": "W"}
 ERRORS_HINT = "fix the issues listed in context, then validate again"
@@ -47,7 +45,7 @@ class ValidationIssue(FrozenModel):
         where: Location, e.g. `set 12` or `12→13 T4`.
         message: What is wrong.
         hint: What would make it valid.
-        context: JSON values that help debug the issue, bounded like an error's context.
+        context: Read-only JSON values that help debug the issue, bounded like an error's context.
     """
 
     level: Literal["error", "warning"]
@@ -55,7 +53,7 @@ class ValidationIssue(FrozenModel):
     where: str
     message: str
     hint: str
-    context: Annotated[Mapping[str, JsonValue], ReadOnly()] = Field(default_factory=dict)
+    context: JsonObject = Field(default_factory=dict, validate_default=True)
 
     @field_validator("context", mode="before")
     @classmethod

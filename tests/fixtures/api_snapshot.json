@@ -1224,7 +1224,7 @@
   "ValidationIssue": {
     "model": {
       "code": "str",
-      "context": "collections.abc.Mapping[str, JsonValue]",
+      "context": "JsonObject",
       "hint": "str",
       "level": "Literal['error', 'warning']",
       "message": "str",
