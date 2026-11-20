@@ -52,6 +52,7 @@ Contains:
     test_as_points_*(): copies, flattens 3D input and rejects multi-part geometry
     test_approx_equal_*(): infinities, NaN and relative tolerance
     test_chunk_counts_*(): exact sums for any total and rejection of infinite totals
+    test_regression_chunk_counts_near_float_max: splits a total near 1.7e308 without overflow
     test_approx_equal_old_tol_keyword_*(), test_approx_equal_rejects_both_*(): the renamed keyword
     test_regression_id_split_is_linear_on_long_ids: splits a 10,000-character ID in linear time
     test_regression_range_check_happens_before_expansion: checks range endpoints before building
@@ -620,7 +621,7 @@ def test_approx_equal_honors_relative_tolerance() -> None:
     assert not approx_equal(1e9, 1e9 + 1.0)
 
 
-@given(st.floats(min_value=-1e6, max_value=1e6), st.integers(min_value=1, max_value=200))
+@given(st.floats(min_value=-1e308, max_value=1e308), st.integers(min_value=1, max_value=200))
 def test_chunk_counts_sum_exactly_for_any_total(total: float, parts: int) -> None:
     chunks = chunk_counts(total, parts)
     assert len(chunks) == parts
@@ -631,6 +632,14 @@ def test_chunk_counts_sum_exactly_for_any_total(total: float, parts: int) -> Non
 def test_chunk_counts_rejects_infinite_totals(bad: float) -> None:
     with pytest.raises(SchemaError):
         chunk_counts(bad, 3)
+
+
+def test_regression_chunk_counts_near_float_max() -> None:
+    """Splits a total near the float limit without overflowing a boundary."""
+    chunks = chunk_counts(1.7e308, 3)
+    assert len(chunks) == 3
+    assert all(math.isfinite(chunk) for chunk in chunks)
+    assert math.fsum(chunks) == 1.7e308
 
 
 def test_approx_equal_old_tol_keyword_warns_and_matches() -> None:

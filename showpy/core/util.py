@@ -310,7 +310,7 @@ def chunk_counts(total: float, parts: int) -> list[float]:
             context={"total": repr(total)},
         )
     require_size(parts, MAX_POINTS, what="chunks")
-    bounds = [0.0, *(total * index / parts for index in range(1, parts)), total]
+    bounds = [0.0, *(total / parts * index for index in range(1, parts)), total]
     return [stop - start for start, stop in itertools.pairwise(bounds)]
 
 
