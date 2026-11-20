@@ -12,7 +12,8 @@ from collections import OrderedDict
 from collections.abc import Callable
 from typing import cast
 
-# Three documents per set (set, forms, paths): 4096 holds about 1,300 sets, 20 shows of 60.
+# Default for a repository-wide cache shared by every show it stores: with three documents per
+# set (set, forms, paths), 4096 holds about 1,300 sets, 20 shows of 60.
 DECODE_CACHE_SIZE = 4096
 
 
@@ -20,7 +21,8 @@ class DecodeCache:
     """Remembers decoded immutable documents; the key is the path plus the blob digest.
 
     The path is part of the key because a document's checks depend on where it sits: the same
-    bytes can be valid at one path and refused at another.
+    bytes can be valid at one path and refused at another. The validation context is not part of
+    the key, so one cache serves exactly one validation context.
 
     Attributes:
         max_entries: Most documents kept; the least recently used one leaves first.

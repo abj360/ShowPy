@@ -18,6 +18,7 @@ Contains:
 import hashlib
 import unicodedata
 from collections.abc import Callable, Iterable, Iterator, Mapping
+from types import MappingProxyType
 
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, StorageError
@@ -134,8 +135,8 @@ class LazyBlobs(Mapping[str, bytes]):
 
     @property
     def digests(self) -> Mapping[str, str]:
-        """Returns the content digest of each path's blob, so callers can key caches by it."""
-        return self._digests
+        """Returns a read-only view of each path's blob digest, so callers can key caches by it."""
+        return MappingProxyType(self._digests)
 
 
 def _require_required_docs(after: Mapping[str, str]) -> None:

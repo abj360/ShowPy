@@ -3,6 +3,7 @@ storage.py --- the repository and asset protocols plus the file view of a show
 
 Contains:
     ROOT_REVISION: names the revision before the first save
+    WORKSPACE_DECODE_CACHE_SIZE: bounds the documents one workspace keeps decoded
     Repository: versions a show's documents; every write checks the expected revision
     AssetStore: stores binary assets under content-hash URIs
     Workspace: exposes one show as files, reading at its own revision like a working copy
@@ -43,6 +44,9 @@ from showpy.show.set_keys import SetFolders
 from showpy.time.models import Timeline
 
 ROOT_REVISION = ""
+# A tree keeps three documents per set (set, forms, paths): two trees of a 60-set show are about
+# 360 documents, so 512 holds the revision being read and its parent, about 35 MB at 300 spots.
+WORKSPACE_DECODE_CACHE_SIZE = 512
 
 
 class Repository(Protocol):
@@ -239,7 +243,8 @@ class Workspace:
         self._revision = revision
         self._trees: dict[str, Mapping[str, bytes]] = {}
         self._shows: dict[str, Show | None] = {}
-        self._decode_cache = DecodeCache()
+        # Serves only show_at, which validates with one context, so entries never mix contexts.
+        self._decode_cache = DecodeCache(WORKSPACE_DECODE_CACHE_SIZE)
         self._canonical_revisions: set[str] = set()
 
     @property

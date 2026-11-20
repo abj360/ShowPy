@@ -8,6 +8,8 @@ Contains:
         and uncached documents of each later revision, not the whole tree
     test_show_at_never_serves_a_changed_document_from_the_cache: every revision decodes equal to
         a fresh decode and carries its own edited placement
+    test_regression_workspace_cache_is_bounded: holds at most WORKSPACE_DECODE_CACHE_SIZE
+        documents, a few trees' worth, never the repository-wide bound
 """
 
 from datetime import UTC, datetime, timedelta
@@ -16,6 +18,8 @@ import pytest
 
 from showpy.core.json_types import JsonValue
 from showpy.core.strict_json import parse_strict_json
+from showpy.show import storage
+from showpy.show.decode_cache import DECODE_CACHE_SIZE
 from showpy.show.documents import decode_show
 from showpy.show.models import Show
 from showpy.show.repositories import InMemoryRepository
@@ -82,3 +86,14 @@ def test_show_at_never_serves_a_changed_document_from_the_cache() -> None:
         if n:
             placed = {p.entity: p for p in show.sets[EDITED_SET].placements}
             assert placed[entity].x == float(n)
+
+
+def test_regression_workspace_cache_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert storage.WORKSPACE_DECODE_CACHE_SIZE < DECODE_CACHE_SIZE
+    repo = _history()
+    bound = 4
+    monkeypatch.setattr(storage, "WORKSPACE_DECODE_CACHE_SIZE", bound)
+    ws = open_workspace(repo, SHOW_ID)
+    for revision in repo.revisions(SHOW_ID):
+        ws.show_at(revision.id)
+    assert len(ws._decode_cache) == bound
