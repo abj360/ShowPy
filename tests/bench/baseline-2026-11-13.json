@@ -511,6 +511,90 @@
         ],
         "iterations": 1
       }
+    },
+    {
+      "group": null,
+      "name": "test_decode_and_migrate_a_v030_show",
+      "fullname": "tests/bench/test_migrate.py::test_decode_and_migrate_a_v030_show",
+      "params": null,
+      "param": null,
+      "extra_info": {
+        "tier": "M",
+        "budget_s": 1.0
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-6,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.47916262701619416,
+        "max": 0.5587901870021597,
+        "mean": 0.5124827471910975,
+        "stddev": 0.029966393599465287,
+        "rounds": 5,
+        "median": 0.5104390509659424,
+        "iqr": 0.03744058274605777,
+        "q1": 0.4912820119934622,
+        "q3": 0.52872259473952,
+        "iqr_outliers": 0,
+        "stddev_outliers": 2,
+        "outliers": "2;0",
+        "ld15iqr": 0.47916262701619416,
+        "hd15iqr": 0.5587901870021597,
+        "ops": 1.9512852002939995,
+        "total": 2.562413735955488,
+        "data": [
+          0.5187000639853068, 0.4953218069858849, 0.47916262701619416, 0.5587901870021597,
+          0.5104390509659424
+        ],
+        "iterations": 1
+      }
+    },
+    {
+      "group": null,
+      "name": "test_migrate_documents_of_a_v030_show",
+      "fullname": "tests/bench/test_migrate.py::test_migrate_documents_of_a_v030_show",
+      "params": null,
+      "param": null,
+      "extra_info": {
+        "tier": "M"
+      },
+      "options": {
+        "disable_gc": false,
+        "timer": "perf_counter",
+        "min_rounds": 5,
+        "max_time": 1.0,
+        "min_time": 5e-6,
+        "precision": null,
+        "confidence": null,
+        "warmup": false
+      },
+      "stats": {
+        "min": 0.6614459940465167,
+        "max": 0.7344024299527518,
+        "mean": 0.694299315335229,
+        "stddev": 0.03701459188641687,
+        "rounds": 3,
+        "median": 0.6870495220064186,
+        "iqr": 0.054717326929676346,
+        "q1": 0.6678468760364922,
+        "q3": 0.7225642029661685,
+        "iqr_outliers": 0,
+        "stddev_outliers": 1,
+        "outliers": "1;0",
+        "ld15iqr": 0.6614459940465167,
+        "hd15iqr": 0.7344024299527518,
+        "ops": 1.440301002626179,
+        "total": 2.082897946005687,
+        "data": [0.7344024299527518, 0.6870495220064186, 0.6614459940465167],
+        "iterations": 1
+      }
     }
   ],
   "commit_info": {
