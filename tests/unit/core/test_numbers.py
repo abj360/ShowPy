@@ -49,9 +49,16 @@ def test_format_number_rejects_non_finite(bad: float) -> None:
         format_number(bad)
 
 
-def test_format_number_rejects_negative_decimals() -> None:
+@pytest.mark.parametrize("bad", [-1, 18])
+def test_format_number_rejects_out_of_range_decimals(bad: int) -> None:
     with pytest.raises(SchemaError):
-        format_number(1.0, max_decimals=-1)
+        format_number(1.0, max_decimals=bad)
+
+
+@pytest.mark.parametrize("bad", ["1.0", None, True])
+def test_format_number_rejects_non_numbers_and_bools(bad: object) -> None:
+    with pytest.raises(SchemaError):
+        format_number(bad)  # type: ignore[arg-type]
 
 
 @given(st.floats(min_value=-LIMIT, max_value=LIMIT, allow_nan=False, allow_infinity=False))

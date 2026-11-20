@@ -13,6 +13,7 @@ from showpy.core.errors import SchemaError
 
 TURN_DEG = 360.0
 DEFAULT_DECIMALS = 6
+MAX_DECIMALS = 17
 
 
 def format_number(value: float, *, max_decimals: int = DEFAULT_DECIMALS) -> str:
@@ -21,8 +22,8 @@ def format_number(value: float, *, max_decimals: int = DEFAULT_DECIMALS) -> str:
     Values that round to zero print as `0`, never `-0`.
 
     Args:
-        value: A finite number.
-        max_decimals: Most digits kept after the decimal point.
+        value: A finite number; bools and non-numbers are rejected.
+        max_decimals: Most digits kept after the decimal point, from 0 to 17.
 
     Returns:
         text: Digits with an optional sign and point; never an exponent.
@@ -32,13 +33,13 @@ def format_number(value: float, *, max_decimals: int = DEFAULT_DECIMALS) -> str:
     >>> format_number(3.0), format_number(1e-9)
     ('3', '0')
     """
-    if max_decimals < 0:
+    if not 0 <= max_decimals <= MAX_DECIMALS:
         raise SchemaError(
-            f"max_decimals must be 0 or more, got {max_decimals}",
-            hint="pass max_decimals >= 0",
+            f"max_decimals must be 0 to {MAX_DECIMALS}, got {max_decimals}",
+            hint=f"pass max_decimals from 0 to {MAX_DECIMALS}",
             context={"max_decimals": max_decimals},
         )
-    if not math.isfinite(value):
+    if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(value):
         raise SchemaError(
             f"cannot format {value!r}", hint="pass a finite number", context={"value": repr(value)}
         )
