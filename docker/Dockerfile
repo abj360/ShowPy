@@ -34,6 +34,7 @@ RUN uv pip install --python /opt/venv/bin/python --no-deps /dist/*.whl
 COPY noxfile.py ./
 COPY tests ./tests
 COPY scripts ./scripts
+COPY .github/workflows/ci.yml ./.github/workflows/ci.yml
 RUN chown -R 10001:10001 /app
 USER 10001
 
