@@ -129,6 +129,8 @@ class ErrorCode(StrEnum):
     """A transition holds paths for two sets that are not consecutive."""
     STORAGE = "STORAGE"
     """A show cannot be persisted or read back."""
+    STRICT_JSON = "STRICT_JSON"
+    """Stored or imported JSON holds NaN, infinity, a repeated key, a BOM or a lone surrogate."""
     SURFACE = "SURFACE"
     """A point is off the sheet."""
     TEMPO_MISSING = "TEMPO_MISSING"
