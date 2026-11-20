@@ -14,6 +14,7 @@ Contains:
     test_strict_copy_matches_the_value(): copies lists, tuples and dicts as JSON values
     test_strict_copy_refuses_what_json_cannot_hold(): refuses NaN, sets, surrogates and keys that
         collide once turned into text
+    test_strict_parse_keeps_large_finite_and_tiny_numbers(): reads 1.7e308 and 1e-400 as floats
 """
 
 import math
@@ -95,3 +96,11 @@ def test_strict_copy_refuses_what_json_cannot_hold(value: object) -> None:
     with pytest.raises(SchemaError) as caught:
         strict_json_copy(value, document="doc")
     assert caught.value.code == ErrorCode.STRICT_JSON
+
+
+def test_strict_parse_keeps_large_finite_and_tiny_numbers() -> None:
+    assert parse_strict_json(b"[1.7e308, 1e-400, 2.5e10]", document="d.json") == [
+        1.7e308,
+        0.0,
+        2.5e10,
+    ]

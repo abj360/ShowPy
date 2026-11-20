@@ -30,6 +30,8 @@ Contains:
         document, not RecursionError or ValueError, for deep nesting or an overlong int
     test_regression_dump_show_doc_of_a_bare_header_is_valid_json: writes the header alone as
         canonical JSON, not a dangling comma
+    test_regression_decode_refuses_a_stored_number_that_overflows_a_float: refuses a stored
+        `1e400` with SchemaError code SCHEMA naming the field, as model validation does
 """
 
 import json
@@ -38,6 +40,7 @@ import math
 import pytest
 
 from showpy.core.canonical import INT_LIMIT
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, ShowPyError, VersionError
 from showpy.show.documents import (
     SHOW_DOC,
@@ -204,3 +207,20 @@ def test_regression_dump_show_doc_of_a_bare_header_is_valid_json() -> None:
     """Writes a document holding only the header as the header's own canonical bytes."""
     header = format_header()
     assert dump_show_doc(header) == dump_json(header)
+
+
+def test_regression_decode_refuses_a_stored_number_that_overflows_a_float() -> None:
+    docs = encode_show(two_set_show())
+    path = "/sets/1/set.json"
+    assert b'"x": 0.0' in docs[path]
+    docs[path] = docs[path].replace(b'"x": 0.0', b'"x": 1e400', 1)
+    with pytest.raises(SchemaError) as caught:
+        decode_show(docs)
+    assert caught.value.code == ErrorCode.SCHEMA
+    errors = caught.value.context["errors"]
+    assert isinstance(errors, list)
+    assert errors[0] == {
+        "loc": "placements.0.x",
+        "msg": "Input should be a finite number",
+        "input": "inf",
+    }
