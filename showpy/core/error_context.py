@@ -15,13 +15,15 @@ import re
 from collections.abc import Iterable, Mapping
 from itertools import islice
 from operator import itemgetter
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, TypeGuard
 
 import numpy as np
 
 from showpy.core.json_types import JsonValue
 
 if TYPE_CHECKING:
+    from collections.abc import Set as AbstractSet
+
     from _typeshed import SupportsRichComparison
 
 MAX_ECHOED_INPUT_CHARS = 80
@@ -136,7 +138,7 @@ def _bounded_array(array: np.ndarray, depth: int) -> JsonValue:
 def _bounded_set(items: set[object] | frozenset[object], depth: int) -> list[JsonValue]:
     """Keeps the 20 smallest items of a set, counting the rest, in an order no hash seed moves."""
     if _is_totally_ordered(items):
-        kept = heapq.nsmallest(MAX_CONTEXT_ITEMS, cast("set[SupportsRichComparison]", items))
+        kept = heapq.nsmallest(MAX_CONTEXT_ITEMS, items)
         return _listed(kept, len(items) - len(kept), depth)
     if len(items) > MAX_RANKED_SET_ITEMS:
         return [
@@ -152,7 +154,9 @@ def _bounded_set(items: set[object] | frozenset[object], depth: int) -> list[Jso
     return bounded
 
 
-def _is_totally_ordered(items: set[object] | frozenset[object]) -> bool:
+def _is_totally_ordered(
+    items: set[object] | frozenset[object],
+) -> "TypeGuard[AbstractSet[SupportsRichComparison]]":
     """Tells whether `<` totally orders a set: all text, all bytes, or numbers with no NaN."""
     kinds = {type(item) for item in items}
     if kinds <= {str} or kinds <= {bytes}:
