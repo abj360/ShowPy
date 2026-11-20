@@ -10,6 +10,9 @@ Contains:
     test_renamed_field_passes_the_new_value_through_read: serves read(new value) under the old name
     test_deprecated_call_warns_names_the_replacement_and_forwards: warns at the caller, then runs
     test_deprecated_call_keeps_the_wrapped_signature: keeps name, docstring and parameters
+    test_warn_deprecated_points_at_the_callers_line: attributes the warning to the caller's line,
+        also through a helper with extra_frames=1
+    test_warn_deprecated_stays_silent_on_the_valid_path: no warning when no Set is given
     test_deprecated_warning_is_a_deprecation_warning: checks the base class
     test_validation_error_alias_warns_and_is_the_same_class: checks the alias on both paths
     test_deprecated_names_reach_users_through_showpy: resolves every table row with a warning
@@ -26,6 +29,7 @@ Contains:
 import ast
 import inspect
 import re
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -34,7 +38,13 @@ import pytest
 import showpy
 import showpy.core.errors
 from showpy._api_table import DEPRECATED, DEPRECATED_KEYWORDS
-from showpy.core.deprecation import DeprecatedWarning, deprecated_call, moved, renamed_field
+from showpy.core.deprecation import (
+    DeprecatedWarning,
+    deprecated_call,
+    moved,
+    renamed_field,
+    warn_deprecated,
+)
 from showpy.core.errors import ShowValidationError
 from showpy.core.util import approx_equal
 
@@ -46,11 +56,13 @@ VERSION_PREFIX = re.compile(r"^(\d+)\.(\d+)")
 RELEASE_PATTERN = re.compile(r"\d+\.\d+\.\d+")
 SOURCE_ROOT = Path(showpy.__file__).parent
 SCAN_SKIPPED = ("__init__.py", "core/deprecation.py")
+TURN_WARNING = r"`turn\(frozenset\)` is replaced by `turn_set`; the old use is removed in 0\.6\.0"
 REQUIRED_KEYWORDS = {
     "moved": ("since", "remove"),
     "renamed_field": ("since", "remove"),
     "renamed_keyword": ("remove",),
     "deprecated_call": ("since", "remove"),
+    "warn_deprecated": ("since", "remove"),
 }
 
 
@@ -67,6 +79,23 @@ def _old_close(a: float, b: float, *, slack: float = 1e-6) -> bool:
 @deprecated_call(approx_equal, since="0.4.0", remove="0.6.0")
 def _old_close_by_callable(a: float, b: float) -> bool:
     return approx_equal(a, b)
+
+
+def _turn(target: object) -> str:
+    """Forwards a set to its replacement with a warning; other targets stay valid."""
+    if isinstance(target, frozenset):
+        warn_deprecated("turn(frozenset)", "turn_set", since="0.4.0", remove="0.6.0")
+    return "turned"
+
+
+def _warn_from_helper() -> None:
+    warn_deprecated("turn(frozenset)", "turn_set", since="0.4.0", remove="0.6.0", extra_frames=1)
+
+
+def _turn_through_helper(target: object) -> str:
+    if isinstance(target, frozenset):
+        _warn_from_helper()
+    return "turned"
 
 
 class _Holder:
@@ -106,6 +135,25 @@ def test_deprecated_call_warns_names_the_replacement_and_forwards() -> None:
     assert caught[0].filename == __file__
     with pytest.warns(DeprecatedWarning, match=r"replaced by `showpy\.core\.util\.approx_equal`"):
         assert _old_close_by_callable(1.0, 2.0) is False
+
+
+def test_warn_deprecated_points_at_the_callers_line() -> None:
+    frame = inspect.currentframe()
+    assert frame is not None
+    line = frame.f_lineno + 2
+    with pytest.warns(DeprecatedWarning, match=TURN_WARNING) as direct:
+        _turn(frozenset())
+    helper_line = frame.f_lineno + 2
+    with pytest.warns(DeprecatedWarning, match=TURN_WARNING) as through_helper:
+        _turn_through_helper(frozenset())
+    assert (direct[0].filename, direct[0].lineno) == (__file__, line)
+    assert (through_helper[0].filename, through_helper[0].lineno) == (__file__, helper_line)
+
+
+def test_warn_deprecated_stays_silent_on_the_valid_path() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert _turn((1.0, 2.0)) == "turned"
 
 
 def test_deprecated_call_keeps_the_wrapped_signature() -> None:
@@ -281,6 +329,7 @@ def test_deprecation_scan_flags_overdue_and_non_literal_calls() -> None:
     dynamic = 'getter = moved("m", {}, since="0.4.0", remove=LIMIT)\n'
     keyword = 'x = renamed_keyword("a", 1, "b", None, default=0, remove=LIMIT)\n'
     decorator = '@deprecated_call("m.f", since="0.1.0", remove="0.0.1")\ndef g() -> None: ...\n'
+    conditional = 'warn_deprecated("f(Set)", "g", since="0.1.0", remove="0.0.1")\n'
     ok = 'getter = moved("m", {}, since="0.4.0", remove="99.0.0")\n'
     assert "overdue" in scan_deprecation_calls(overdue, "t.py")[0]
     assert "literal remove=" in scan_deprecation_calls(dynamic, "t.py")[0]
@@ -288,6 +337,9 @@ def test_deprecation_scan_flags_overdue_and_non_literal_calls() -> None:
     assert (
         "deprecated_call() remove=0.0.1 is overdue" in scan_deprecation_calls(decorator, "t.py")[0]
     )
+    assert scan_deprecation_calls(conditional, "t.py") == [
+        "t.py:1: warn_deprecated() remove=0.0.1 is overdue"
+    ]
     assert scan_deprecation_calls(ok, "t.py") == []
 
 

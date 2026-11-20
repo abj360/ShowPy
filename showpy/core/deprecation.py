@@ -6,6 +6,7 @@ Contains:
     moved(): builds a module `__getattr__` that serves moved names and warns on each use
     renamed_field(): builds a read-only property that serves a renamed field, optionally converted
     renamed_keyword(): resolves a keyword argument that was renamed, warning on the old name
+    warn_deprecated(): warns, at the user's calling line, that one use of an API is deprecated
     deprecated_call(): decorates a superseded function so each call warns, then runs it
 """
 
@@ -155,6 +156,39 @@ def renamed_keyword[T](
     return default if new_value is None else new_value
 
 
+def warn_deprecated(old: str, new: str, *, since: str, remove: str, extra_frames: int = 0) -> None:
+    """Warns DeprecatedWarning that `old` is replaced by `new`, at the user's calling line.
+
+    Call it from the public function whose use is deprecated, for instance only on the branch
+    that takes an argument type it will stop accepting; the warning names the line that called
+    that function, so default filters show it in user code.
+
+    Args:
+        old: The deprecated use, such as a function or a function given one argument type.
+        new: The replacement to name.
+        since: Release that deprecated the use; recorded in the API table, not in the message.
+        remove: Release that removes the use.
+        extra_frames: Frames between the public function and this call, such as a helper.
+
+    Example:
+        >>> import warnings
+        >>> from showpy.core.deprecation import warn_deprecated
+        >>> def turn(target: object) -> str:
+        ...     if isinstance(target, frozenset):
+        ...         warn_deprecated("turn(frozenset)", "turn_set", since="0.4.0", remove="0.6.0")
+        ...     return "turned"
+        >>> with warnings.catch_warnings(record=True) as caught:
+        ...     warnings.simplefilter("always")
+        ...     turn((1.0, 2.0)), turn(frozenset())
+        ('turned', 'turned')
+        >>> [str(w.message) for w in caught]
+        ['`turn(frozenset)` is replaced by `turn_set`; the old use is removed in 0.6.0']
+    """
+    del since
+    message = f"`{old}` is replaced by `{new}`; the old use is removed in {remove}"
+    warnings.warn(message, DeprecatedWarning, stacklevel=WARNING_STACK_LEVEL + extra_frames)
+
+
 def _dotted_name(target: str | Callable[..., object]) -> str:
     if isinstance(target, str):
         return target
@@ -191,16 +225,14 @@ def deprecated_call[**P, R](
         >>> "replaced by `showpy.core.util.approx_equal`" in str(caught[0].message)
         True
     """
-    del since
     target = _dotted_name(replacement)
 
     def decorate(function: Callable[P, R]) -> Callable[P, R]:
         old = _dotted_name(function)
-        message = f"`{old}` is replaced by `{target}`; the old function is removed in {remove}"
 
         @functools.wraps(function)
         def warn_and_run(*args: P.args, **kwargs: P.kwargs) -> R:
-            warnings.warn(message, DeprecatedWarning, stacklevel=WARNING_STACK_LEVEL - 1)
+            warn_deprecated(old, target, since=since, remove=remove)
             return function(*args, **kwargs)
 
         return warn_and_run
