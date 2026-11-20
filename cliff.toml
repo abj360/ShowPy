@@ -86,3 +86,17 @@ ${2}
 
 BREAKING CHANGE: `FrozenModel` rejects NaN and infinity in every float field, so v0.2.0 \
 documents that hold `NaN` or `Infinity` no longer decode; they raise `SchemaError`."""
+
+# a97871a wrapped its footer onto a line that git-cliff reads as a new footer, which cut the
+# entry after its first line and dropped the new public names.
+[[git.commit_preprocessors]]
+pattern = '(?s)^(feat\(show\)!: add stored format v2 .*?)\nBREAKING CHANGE: .*$'
+replace = """$1
+
+BREAKING CHANGE: `export_json` writes `format: showpy.show` and `version: 2` instead of \
+`schema: showpy.show.v1`, and `import_json` reads both, refuses non-strict JSON (lone \
+surrogates, NaN) and a v1 tag beside a format header. `save_show`, `load_show` and every \
+repository write store show.json with the format header first, so the first save of a v1 show \
+writes one revision and a v0.3.0 reader refuses the result; commits and workspace writes \
+refuse a show.json without the current header. New public names `migrate_documents`, \
+`MigrationReport`, `read_version`, `FORMAT` and `CURRENT_VERSION`."""
