@@ -1,11 +1,12 @@
 """
 document_reading.py --- reads stored show documents of any readable format version into a Show
 
-Every document is parsed as strict JSON. A tree of the current format is assembled directly,
-reusing cached per-document decodes. A tree of an older version is parsed whole, run through
-the migration sub-steps, validated with any non-empty v1 ID accepted, run through the model
-sub-steps and validated again; nothing stored changes. An interchange dump of an older version
-is first split into the documents a stored tree of that version holds.
+Every document is parsed as strict JSON. A tree of the current format is assembled directly, reusing
+cached per-document decodes, and validated with CHECKED_CONTEXT: until the ids step renames v1 IDs,
+a tree saved after a migration still holds them and must keep loading. A tree of an older version is
+parsed whole, run through the migration sub-steps, validated with any non-empty v1 ID accepted, run
+through the model sub-steps and validated again; nothing stored changes. An interchange dump of an
+older version is first split into the documents a stored tree of that version holds.
 
 Contains:
     read_show(): assembles a show from stored documents, migrating an older format in memory
@@ -219,6 +220,14 @@ def _transition_specs(reading: _Reading, stored: list[tuple[str, Set]]) -> list[
     return specs
 
 
+def _with_counts(
+    spec: TransitionSpec, counts: float, context: Mapping[str, bool] | None
+) -> TransitionSpec:
+    """Gives paths the destination set's counts, validated in the decode's ID context."""
+    fields = {name: getattr(spec, name) for name in type(spec).model_fields}
+    return TransitionSpec.model_validate(fields | {"counts": counts}, context=context)
+
+
 def _assemble(reading: _Reading, meta: JsonObject, revision: str) -> Show:
     """Builds the show from a header-free show.json object and the other documents."""
     order = _set_order(meta.get(SET_ORDER_FIELD, []))
@@ -231,7 +240,10 @@ def _assemble(reading: _Reading, meta: JsonObject, revision: str) -> Show:
         forms.update((f.id, f) for f in found)
     sets = [current for _, current in stored]
     counts = {s.id: s.counts for s in sets}
-    specs = [spec.replace(counts=counts[spec.id[1]]) for spec in _transition_specs(reading, stored)]
+    specs = [
+        _with_counts(spec, counts[spec.id[1]], reading.context)
+        for spec in _transition_specs(reading, stored)
+    ]
     return Show.model_validate(
         {
             **rest,
@@ -394,7 +406,7 @@ def read_show(
         version = version_of(meta, name=SHOW_DOC)
         if version < CURRENT_VERSION:
             return _migrated_show(source, meta, version, revision)[0]
-        reading = _Reading(source, None, cache, digests or {})
+        reading = _Reading(source, CHECKED_CONTEXT, cache, digests or {})
         return _assemble(reading, without_header(meta), revision)
     except SchemaError as exc:
         raise _reraised_for_show(exc) from exc

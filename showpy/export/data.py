@@ -46,6 +46,7 @@ from showpy.export.models import Chart, CoordinateSheet, TextTable
 from showpy.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
 from showpy.show.document_reading import decode_show_dump
 from showpy.show.migrate import (
+    CHECKED_CONTEXT,
     CURRENT_VERSION,
     FIRST_VERSION,
     FORMAT,
@@ -195,7 +196,7 @@ def import_json(d: Mapping[str, Any]) -> Show:
     try:
         if version < CURRENT_VERSION:
             return decode_show_dump(show, version)
-        return Show.model_validate(show)
+        return Show.model_validate(show, context=CHECKED_CONTEXT)
     except SchemaError as error:
         friendly = _first_field_error(error)
         if friendly is error:

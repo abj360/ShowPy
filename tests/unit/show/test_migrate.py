@@ -30,6 +30,8 @@ Contains:
     test_v030_reader_refuses_a_v2_tree(): fails the frozen v1 schema on the v2 header alone
     test_decode_caches_nothing_for_an_older_tree(): never caches documents that get migrated
     test_writes_of_a_v1_show_json_are_refused(): refuses OLD_FORMAT through commit and write
+    test_regression_current_trees_validate_with_the_checked_context(): passes CHECKED_CONTEXT to
+        every model a v2 tree or v2 import builds, so v1 IDs a first save kept still load
 """
 
 import itertools
@@ -43,12 +45,16 @@ from typing import Any
 import pytest
 from jsonschema.validators import validator_for
 
+from showpy.choreo.form_models import Form
+from showpy.choreo.models import Set
+from showpy.choreo.path_models import TransitionSpec
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, StorageError, VersionError
 from showpy.core.ids import LEGACY_IDS_KEY
 from showpy.core.json_types import JsonValue
 from showpy.core.resources import schema_path
-from showpy.examples import two_set_show
+from showpy.examples import crossing_show, two_set_show
+from showpy.export.data import export_json, import_json
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.documents import (
     NOTES_DOC,
@@ -256,7 +262,8 @@ def test_every_fixture_migrates_to_its_expected_v2(tag: str, tmp_path: Path) -> 
 def test_v1_fixtures_decode_to_their_oracle(tag: str, tmp_path: Path) -> None:
     repo, expected = _fixture(tag, tmp_path)
     assert [r.id for r in repo.revisions(expected["show_id"])] == expected["revisions"]
-    assert repo.get_show(expected["show_id"]) == Show.model_validate(expected["show"])
+    oracle = Show.model_validate(expected["show"], context=LEGACY_CONTEXT)
+    assert repo.get_show(expected["show_id"]) == oracle
 
 
 @pytest.mark.parametrize("tag", TAGS)
@@ -396,3 +403,28 @@ def test_writes_of_a_v1_show_json_are_refused(tmp_path: Path) -> None:
         ws.write(SHOW_DOC, raw, at=AT)
     assert committed.value.code == written.value.code == ErrorCode.OLD_FORMAT
     assert repo.head(expected["show_id"]) == head
+
+
+def test_regression_current_trees_validate_with_the_checked_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hands CHECKED_CONTEXT to every model of a v2 decode and a v2 import.
+
+    Until the ids step renames v1 IDs, a first save keeps IDs such as `T-1`; once a model
+    adopts a checked ID field, only this context lets the saved v2 tree load again.
+    """
+    docs = {p: raw.replace(b'"T1"', b'"T-1"') for p, raw in encode_show(crossing_show()).items()}
+    exported = export_json(decode_show(docs))
+    contexts: list[object] = []
+    for model in (Show, Set, Form, TransitionSpec):
+        original = model.model_validate
+
+        def spy(obj: object, *, _original: Any = original, **kwargs: Any) -> object:
+            contexts.append(kwargs.get("context"))
+            return _original(obj, **kwargs)
+
+        monkeypatch.setattr(model, "model_validate", spy)
+    assert "T-1" in decode_show(docs).cast.ids()
+    assert "T-1" in import_json(exported).cast.ids()
+    assert contexts
+    assert all(context == CHECKED_CONTEXT for context in contexts)
