@@ -3,7 +3,9 @@ strict_json.py --- parses stored and imported JSON strictly, so two readers neve
 
 Standard JSON has no NaN or infinity, and a document with a repeated key or a lone surrogate
 reads differently in different parsers; a byte-order mark hides the UTF-8 encoding. All four
-are refused, each with SchemaError code STRICT_JSON naming the document.
+are refused, each with SchemaError code STRICT_JSON naming the document. A number too large for
+a float, such as 1e400, parses to infinity and is refused when the model validates, not here, so
+parsing stays on the C fast path without a Python call per float.
 
 Contains:
     parse_strict_json(): parses UTF-8 JSON bytes, refusing non-standard tokens, repeated keys,
