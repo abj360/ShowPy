@@ -14,9 +14,10 @@ Contains:
     test_report_builder_groups_renames_by_kind_in_order(): keeps renames per kind in call order
     test_migration_report_is_read_only(): refuses edits to the renamed map
     test_sub_steps_run_in_the_fixed_order(): lists the JSON and model sub-steps in their order
-    test_unfilled_sub_steps_change_nothing(): returns the documents and the show unchanged
+    test_json_steps_never_mutate_their_input(): leaves every fixture's parsed documents unchanged
+    test_current_documents_skip_the_json_steps(): returns current documents as they are
     test_validation_after_ids_keeps_accepting_legacy_ids_until_ids_are_renamed(): passes the
-        legacy-ID context to the last validation while the ids step renames nothing
+        legacy-ID context to the last validation exactly while the ids step keeps v1 IDs
     test_require_current_version_refuses_an_older_show_json(): raises OLD_FORMAT for v1
     test_every_fixture_migrates_to_its_expected_v2(): matches expected_v2.json, documents and
         report, regenerated only under SHOWPY_UPDATE_MIGRATION=1
@@ -38,6 +39,7 @@ Contains:
         every model a v2 tree or v2 import builds, so v1 IDs a first save kept still load
 """
 
+import copy
 import itertools
 import json
 import math
@@ -84,7 +86,6 @@ from showpy.show.migrate import (
     MigrationReport,
     ReportBuilder,
     format_header,
-    migrate_model,
     migrate_objects,
     read_version,
     require_current_version,
@@ -196,22 +197,26 @@ def test_sub_steps_run_in_the_fixed_order() -> None:
     assert [step.__name__ for step in V1_TO_V2_MODEL_STEPS] == ["rename_ids"]
 
 
-def test_unfilled_sub_steps_change_nothing() -> None:
+@pytest.mark.parametrize("tag", TAGS)
+def test_json_steps_never_mutate_their_input(tag: str, tmp_path: Path) -> None:
+    docs = _head(tag, tmp_path)
     objects: dict[str, JsonValue] = {
-        SHOW_DOC: {"id": "x", "sets": []},
-        "/show/sheet.json": {"size_m": [1, 2]},
+        path: json.loads(raw) for path, raw in sorted(docs.items()) if is_show_doc(path)
     }
-    report = ReportBuilder(1)
-    assert migrate_objects(json.loads(json.dumps(objects)), 1, report) == objects
-    assert migrate_model(two_set_show(), 1, report) == two_set_show()
-    assert report.build() == MigrationReport(from_version=1)
-    assert migrate_objects(objects, CURRENT_VERSION, report) is objects
+    snapshot = copy.deepcopy(objects)
+    version = read_version(docs)
+    migrate_objects(objects, version, ReportBuilder(version))
+    assert objects == snapshot
+
+
+def test_current_documents_skip_the_json_steps() -> None:
+    objects: dict[str, JsonValue] = {SHOW_DOC: {"id": "x", "sets": []}}
+    assert migrate_objects(objects, CURRENT_VERSION, ReportBuilder(CURRENT_VERSION)) is objects
 
 
 def test_validation_after_ids_keeps_accepting_legacy_ids_until_ids_are_renamed() -> None:
     assert LEGACY_CONTEXT == {LEGACY_IDS_KEY: True}
-    assert KEEPS_LEGACY_IDS is True
-    assert CHECKED_CONTEXT == LEGACY_CONTEXT
+    assert (LEGACY_CONTEXT if KEEPS_LEGACY_IDS else None) == CHECKED_CONTEXT
 
 
 def test_require_current_version_refuses_an_older_show_json() -> None:
