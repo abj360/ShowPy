@@ -62,7 +62,7 @@ from showpy.show.collab import events_since
 from showpy.show.documents import SHOW_DOC, dump_json, dump_show_doc, is_show_doc
 from showpy.show.file_repository import FileRepository
 from showpy.show.history import diff_show
-from showpy.show.migrate import format_header
+from showpy.show.migrate import LEGACY_CONTEXT, format_header
 from showpy.show.models import CanvasEvent, Revision, Show
 from showpy.show.storage import Workspace, load_show, open_workspace, save_show
 
@@ -86,7 +86,7 @@ def test_v020_repository_loads_without_loss(tmp_path: Path) -> None:
     show_id = expected["show_id"]
     assert [r.id for r in repo.revisions(show_id)] == expected["revisions"]
     assert repo.head(show_id) == expected["head"]
-    assert repo.get_show(show_id) == Show.model_validate(expected["show"])
+    assert repo.get_show(show_id) == Show.model_validate(expected["show"], context=LEGACY_CONTEXT)
 
 
 def test_v020_revision_records_carry_legacy_keys() -> None:
@@ -121,7 +121,9 @@ def test_commit_on_v020_repository_gets_a_new_scheme_id(tmp_path: Path) -> None:
     assert revision.id != hashlib.sha256(legacy_scheme).hexdigest()
     assert len(revision.id) == HEX_LENGTH
     assert [r.id for r in repo.revisions(show_id)] == [*expected["revisions"], revision.id]
-    assert repo.get_show(show_id, expected["head"]) == Show.model_validate(expected["show"])
+    assert repo.get_show(show_id, expected["head"]) == Show.model_validate(
+        expected["show"], context=LEGACY_CONTEXT
+    )
     assert content_hash(head_show) != expected["legacy_content_hash"]
 
 
