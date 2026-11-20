@@ -6,7 +6,8 @@ test_document_reading.py --- tests how v1 interchange dumps split into stored do
 Contains:
     test_v1_dump_round_trips_through_the_split(): decodes a v1 dump equal to its show
     test_regression_v1_dump_split_refuses_what_no_tree_can_hold(): refuses set lists, duplicate
-        sets, transitions and forms that no stored tree can hold, with SchemaError
+        sets, transitions (a pair of lists among them, found by fuzzing) and forms that no stored
+        tree can hold, with SchemaError
     test_regression_v1_dump_without_sheet_counts_the_missing_fields(): names the first missing
         field and counts both
 """
@@ -41,6 +42,10 @@ def _unknown_pair(dump: dict[str, Any]) -> None:
     dump["transitions"] = [{"id": ["1", "9"]}]
 
 
+def _pair_of_lists(dump: dict[str, Any]) -> None:
+    dump["transitions"] = [{"id": [["1"], "2"]}]
+
+
 def _repeated_pair(dump: dict[str, Any]) -> None:
     dump["transitions"] = [{"id": ["1", "2"]}, {"id": ["1", "2"]}]
 
@@ -64,6 +69,7 @@ def test_v1_dump_round_trips_through_the_split() -> None:
         _sets_as_text,
         _repeated_set,
         _unknown_pair,
+        _pair_of_lists,
         _repeated_pair,
         lambda dump: _set_forms(dump, []),
         _orphan_form,

@@ -340,9 +340,16 @@ def _split_dump(dump: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
         objects[forms_doc(keys[set_id])] = forms
     for spec in _dump_list(dump, TRANSITIONS_FIELD):
         pair = spec.get("id")
-        if not isinstance(pair, list) or len(pair) != PAIR_PARTS or not set(pair) <= set(keys):
+        if not isinstance(pair, list) or len(pair) != PAIR_PARTS:
             raise _shape_error(f"show field {TRANSITIONS_FIELD}", "pair of set ids", pair)
-        path = paths_doc((keys[str(pair[0])], keys[str(pair[1])]))
+        first, second = pair
+        if (
+            not isinstance(first, str)
+            or not isinstance(second, str)
+            or not {first, second} <= set(keys)
+        ):
+            raise _shape_error(f"show field {TRANSITIONS_FIELD}", "pair of set ids", pair)
+        path = paths_doc((keys[first], keys[second]))
         if path in objects:
             raise _shape_error(f"show field {TRANSITIONS_FIELD}", "one entry per pair", pair)
         objects[path] = spec
