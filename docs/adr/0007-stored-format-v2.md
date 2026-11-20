@@ -183,3 +183,16 @@ Audit decision 6 asks for format v2 and how long v1 is read.
   (`Show._unique_set_ids`), `tests/fixtures/repos/v0.2.0/`.
 - Related: ADR 0004 (stable set keys), ADR 0006 (ID pattern), ADR 0008 (selection precedence),
   ADR 0009 (deprecation), ADR 0014 (canonical hashing), ADR 0015 (repository layout v2, Phase 3).
+
+## Addendum 2026-11-19: strict JSON errors name the token or key
+
+Decision 3 says each refusal names the document and the position. The parser
+(`showpy.core.strict_json`, task L0.9) names the document and, instead of a position, the
+offending token (`NaN`, `Infinity`, `-Infinity`) or the repeated key: the standard library's
+`parse_constant` and `object_pairs_hook` hooks receive no offset. A leading byte-order mark
+reports position 0, and invalid JSON keeps the line and column of `json.JSONDecodeError` in its
+message. Every refusal is `SchemaError` code `STRICT_JSON`.
+
+A parser that tracks offsets (a second scan of the bytes for the token, or a parser other than
+the standard library's) would restore positions; one more pass over every stored document was
+not worth it for errors that name the token or key already.
