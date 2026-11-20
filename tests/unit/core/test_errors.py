@@ -56,7 +56,7 @@ import numpy as np
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-import showpy.core.errors as errors_module
+import showpy.core.error_context as context_module
 from showpy.cast.models import Spot
 from showpy.choreo.models import Placement
 from showpy.core.error_codes import ErrorCode
@@ -385,14 +385,14 @@ def _count_bounding_calls(
     """Bounds `value` as context, counting calls of `_bounded_value` and `bounded_repr`."""
     calls: Counter[str] = Counter()
     for name in ("_bounded_value", "bounded_repr"):
-        original = getattr(errors_module, name)
+        original = getattr(context_module, name)
 
         def counted(*args: object, _name: str = name, _original: object = original) -> object:
             calls[_name] += 1
             assert callable(_original)
             return _original(*args)
 
-        monkeypatch.setattr(errors_module, name, counted)
+        monkeypatch.setattr(context_module, name, counted)
     start = time.perf_counter()
     bounded = SchemaError("x", hint="y", context={"value": value}).context["value"]
     assert time.perf_counter() - start < HUGE_CONTEXT_BACKSTOP_S
