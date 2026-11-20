@@ -201,5 +201,6 @@ def test_regression_deep_or_huge_json_document_is_a_schema_error(raw: bytes) -> 
 
 
 def test_regression_dump_show_doc_of_a_bare_header_is_valid_json() -> None:
+    """Writes a document holding only the header as the header's own canonical bytes."""
     header = format_header()
     assert dump_show_doc(header) == dump_json(header)

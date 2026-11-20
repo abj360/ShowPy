@@ -25,6 +25,8 @@ Contains:
     test_stored_revision_ids_survive_migration(): keeps every stored revision ID and record
     test_regression_migration_keeps_tags_selection_scripts_and_pins(): carries them through the
         migration and the first save
+    test_regression_migration_keeps_a_stored_negative_zero(): keeps the sign of the v0.1.1
+        fixture's stored `-0.0` through the in-memory migration
     test_strict_json_refuses_nan_tokens(): refuses NaN and infinity tokens in any document
     test_strict_json_refuses_duplicate_keys(): refuses a repeated key, naming the document
     test_v030_reader_refuses_a_v2_tree(): fails the frozen v1 schema on the v2 header alone
@@ -38,6 +40,7 @@ Contains:
 
 import itertools
 import json
+import math
 import os
 import shutil
 from datetime import UTC, datetime
@@ -322,6 +325,15 @@ def test_regression_migration_keeps_tags_selection_scripts_and_pins(
     assert scripts
     assert {p: migrated[p] for p in scripts} == scripts
     assert {p: repo.documents(expected["show_id"])[p] for p in scripts} == scripts
+
+
+def test_regression_migration_keeps_a_stored_negative_zero(tmp_path: Path) -> None:
+    """Keeps the sign of the `-0.0` v0.1.1 stored for set 1's first placement."""
+    docs = _head("v0.1.1", tmp_path)
+    assert b"-0.0" in docs[set_doc("1")]
+    first = decode_show(docs).set("1").placements[0]
+    assert first.x == 0.0
+    assert math.copysign(1.0, first.x) == -1.0
 
 
 @pytest.mark.parametrize("path", [SHOW_DOC, set_doc("1"), TIMELINE_DOC])
