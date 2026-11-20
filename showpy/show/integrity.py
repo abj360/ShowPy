@@ -7,6 +7,7 @@ Contains:
     require_known_path(): refuses a path outside KNOWN_ROOTS, including look-alike paths
     blob_digest(): returns the SHA-256 hex digest blobs are addressed by
     LazyBlobs: maps paths to blob bytes, reading each blob only when its path is looked up
+    LazyBlobs.digests: returns the content digest of each path's blob
     require_new_set_keys(): checks every set key a commit stores in a folder the base lacks
     require_distinct_folders(): refuses a new set folder matching another folder ignoring case
     require_valid_digests(): checks digest trees, loading and decoding only what must be decoded,
@@ -130,6 +131,11 @@ class LazyBlobs(Mapping[str, bytes]):
 
     def __len__(self) -> int:
         return len(self._digests)
+
+    @property
+    def digests(self) -> Mapping[str, str]:
+        """Returns the content digest of each path's blob, so callers can key caches by it."""
+        return self._digests
 
 
 def _require_required_docs(after: Mapping[str, str]) -> None:

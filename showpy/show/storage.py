@@ -28,6 +28,7 @@ from showpy.choreo.path_models import TransitionSpec
 from showpy.core.errors import StorageError, UnknownRefError
 from showpy.core.ids import SetId
 from showpy.core.util import close_matches
+from showpy.show.decode_cache import DecodeCache
 from showpy.show.documents import SHOW_DOC, decode_show, encode_documents, is_show_doc, split_path
 from showpy.show.files import (
     all_files,
@@ -36,6 +37,7 @@ from showpy.show.files import (
     show_changes,
     staged_changes,
 )
+from showpy.show.integrity import LazyBlobs
 from showpy.show.models import Revision, Show
 from showpy.show.set_keys import SetFolders
 from showpy.time.models import Timeline
@@ -237,6 +239,7 @@ class Workspace:
         self._revision = revision
         self._trees: dict[str, Mapping[str, bytes]] = {}
         self._shows: dict[str, Show | None] = {}
+        self._decode_cache = DecodeCache()
         self._canonical_revisions: set[str] = set()
 
     @property
@@ -261,11 +264,20 @@ class Workspace:
         return self._trees[revision]
 
     def show_at(self, revision: str) -> Show | None:
-        """Returns the show at a revision, or None before the first save; cached like trees."""
+        """Returns the show at a revision, or None before the first save; cached like trees.
+
+        Documents whose content digest an earlier call already decoded are reused, so stepping
+        through revisions decodes only what each one changed; the show is still validated whole.
+        """
         if revision not in self._shows:
             tree = self.tree_at(revision)
-            self._shows = {revision: decode_show(tree, revision) if SHOW_DOC in tree else None}
+            self._shows = {revision: self._decoded(tree, revision) if SHOW_DOC in tree else None}
         return self._shows[revision]
+
+    def _decoded(self, tree: Mapping[str, bytes], revision: str) -> Show:
+        """Decodes a tree, reusing documents whose blob digest an earlier revision decoded."""
+        digests = tree.digests if isinstance(tree, LazyBlobs) else None
+        return decode_show(tree, revision, cache=self._decode_cache, digests=digests)
 
     def _show(self) -> Show | None:
         return self.show_at(self._revision)
