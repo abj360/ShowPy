@@ -28,7 +28,8 @@ from pathlib import Path
 from typing import Any, BinaryIO, cast
 
 from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import StorageError
+from showpy.core.errors import SchemaError, StorageError
+from showpy.core.strict_json import require_nesting
 from showpy.show.documents import dump_json
 from showpy.show.integrity import blob_digest
 from showpy.show.models import Revision
@@ -281,9 +282,11 @@ class _FileBackend:
 
     def _record(self, show_id: str, revision_id: str, source: Path) -> dict[str, object]:
         path = self._tree_path(show_id, revision_id, source)
+        raw = self._read(show_id, path, "tree record", TREE_MAX_BYTES)
         try:
-            record = json.loads(self._read(show_id, path, "tree record", TREE_MAX_BYTES))
-        except (ValueError, RecursionError) as error:
+            require_nesting(raw, document="tree record")
+            record = json.loads(raw)
+        except (SchemaError, ValueError, RecursionError) as error:
             raise self._corrupt(
                 show_id, path, "tree file is not valid JSON or too deeply nested"
             ) from error
