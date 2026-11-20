@@ -18,6 +18,9 @@ Contains:
     test_every_deprecation_call_is_removed_on_time: fails when a moved, renamed_field,
         renamed_keyword or deprecated_call call in showpy outlives its removal version
     test_deprecation_scan_flags_overdue_and_non_literal_calls: proves the scan can fail
+    is_scan_skipped(): tells whether the scan skips a module (only the root __init__.py)
+    test_deprecation_scan_*(): attribute calls, malformed `remove`, scoped local defs, skips
+    test_every_deprecated_keyword_row_names_real_parameters: checks each row's old and new keyword
 """
 
 import ast
@@ -40,6 +43,7 @@ if TYPE_CHECKING:
     from showpy.core.errors import ValidationError as ModuleAlias
 
 VERSION_PREFIX = re.compile(r"^(\d+)\.(\d+)")
+RELEASE_PATTERN = re.compile(r"\d+\.\d+\.\d+")
 SOURCE_ROOT = Path(showpy.__file__).parent
 SCAN_SKIPPED = ("__init__.py", "core/deprecation.py")
 REQUIRED_KEYWORDS = {
@@ -188,6 +192,48 @@ def _literal(node: ast.expr | None, constants: dict[str, str]) -> str | None:
     return None
 
 
+def _called_name(node: ast.Call) -> str | None:
+    """Returns the helper name a call spells, as `moved(...)` or `deprecation.moved(...)`."""
+    if isinstance(node.func, ast.Name):
+        return node.func.id
+    if isinstance(node.func, ast.Attribute):
+        return node.func.attr
+    return None
+
+
+def _defined_names(scope: ast.AST) -> set[str]:
+    """Names of the functions defined directly or nested inside a scope, the scope excluded."""
+    return {
+        node.name
+        for node in ast.walk(scope)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node is not scope
+    }
+
+
+def _helper_calls(node: ast.AST, shadowed: frozenset[str]) -> list[tuple[str, ast.Call]]:
+    """Lists the helper calls under a node, skipping names a local def shadows in its function."""
+    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+        shadowed = shadowed | _defined_names(node)
+    found: list[tuple[str, ast.Call]] = []
+    if isinstance(node, ast.Call):
+        name = _called_name(node)
+        if name in REQUIRED_KEYWORDS and name not in shadowed:
+            found.append((name, node))
+    for child in ast.iter_child_nodes(node):
+        found += _helper_calls(child, shadowed)
+    return found
+
+
+def _remove_problem(name: str, remove: str, where: str) -> str | None:
+    """Describes a malformed or overdue `remove` version, or returns None when it is fine."""
+    if not RELEASE_PATTERN.fullmatch(remove):
+        return f"{where}: {name}() remove={remove} is not MAJOR.MINOR.PATCH"
+    major, minor, _patch = remove.split(".")
+    if (int(major), int(minor)) <= _current_minor():
+        return f"{where}: {name}() remove={remove} is overdue"
+    return None
+
+
 def scan_deprecation_calls(source: str, where: str) -> list[str]:
     """Lists the problems in the deprecation helper calls of one source.
 
@@ -195,14 +241,11 @@ def scan_deprecation_calls(source: str, where: str) -> list[str]:
     """
     tree = ast.parse(source)
     constants = _string_constants(tree)
-    local_defs = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+    top_level = frozenset(
+        node.name for node in tree.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+    )
     problems: list[str] = []
-    for node in ast.walk(tree):
-        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
-            continue
-        name = node.func.id
-        if name not in REQUIRED_KEYWORDS or name in local_defs:
-            continue
+    for name, node in _helper_calls(tree, top_level):
         keywords = {kw.arg: _literal(kw.value, constants) for kw in node.keywords}
         problems.extend(
             f"{where}:{node.lineno}: {name}() needs a literal {required}="
@@ -210,18 +253,24 @@ def scan_deprecation_calls(source: str, where: str) -> list[str]:
             if keywords.get(required) is None
         )
         remove = keywords.get("remove")
-        if remove is not None:
-            major, minor, _patch = remove.split(".")
-            if (int(major), int(minor)) <= _current_minor():
-                problems.append(f"{where}:{node.lineno}: {name}() remove={remove} is overdue")
+        problem = (
+            None if remove is None else _remove_problem(name, remove, f"{where}:{node.lineno}")
+        )
+        if problem is not None:
+            problems.append(problem)
     return problems
+
+
+def is_scan_skipped(relative: str) -> bool:
+    """Tells whether the scan skips a module, given its path relative to the showpy package."""
+    return relative in SCAN_SKIPPED
 
 
 def test_every_deprecation_call_is_removed_on_time() -> None:
     problems = []
     for path in sorted(SOURCE_ROOT.rglob("*.py")):
         relative = path.relative_to(SOURCE_ROOT).as_posix()
-        if relative.endswith(SCAN_SKIPPED):
+        if is_scan_skipped(relative):
             continue
         problems += scan_deprecation_calls(path.read_text(), relative)
     assert not problems, "E: " + "; ".join(problems)
@@ -240,3 +289,40 @@ def test_deprecation_scan_flags_overdue_and_non_literal_calls() -> None:
         "deprecated_call() remove=0.0.1 is overdue" in scan_deprecation_calls(decorator, "t.py")[0]
     )
     assert scan_deprecation_calls(ok, "t.py") == []
+
+
+def test_deprecation_scan_sees_attribute_calls() -> None:
+    source = 'getter = deprecation.moved("m", {}, since="0.1.0", remove="0.0.1")\n'
+    assert scan_deprecation_calls(source, "t.py") == ["t.py:1: moved() remove=0.0.1 is overdue"]
+
+
+def test_deprecation_scan_reports_a_malformed_remove() -> None:
+    source = 'getter = moved("m", {}, since="0.4.0", remove="0.6")\n'
+    assert scan_deprecation_calls(source, "t.py") == [
+        "t.py:1: moved() remove=0.6 is not MAJOR.MINOR.PATCH"
+    ]
+
+
+def test_deprecation_scan_skips_a_local_def_only_inside_its_function() -> None:
+    source = (
+        "def shift(count: float) -> float:\n"
+        "    def moved(value: float) -> float:\n"
+        "        return value + 1\n"
+        "    return moved(count)\n"
+        'getter = moved("m", {}, since="0.1.0", remove="0.0.1")\n'
+    )
+    assert scan_deprecation_calls(source, "t.py") == ["t.py:5: moved() remove=0.0.1 is overdue"]
+
+
+def test_deprecation_scan_skips_only_the_root_init() -> None:
+    assert is_scan_skipped("__init__.py")
+    assert is_scan_skipped("core/deprecation.py")
+    assert not is_scan_skipped("choreo/__init__.py")
+    assert not is_scan_skipped("geo/__init__.py")
+
+
+def test_every_deprecated_keyword_row_names_real_parameters() -> None:
+    for function, old, new, _since, _remove in DEPRECATED_KEYWORDS:
+        parameters = inspect.signature(getattr(showpy, function)).parameters
+        assert old in parameters, f"{function}() has no keyword {old}"
+        assert new in parameters, f"{function}() has no keyword {new}"
