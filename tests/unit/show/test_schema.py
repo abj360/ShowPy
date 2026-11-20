@@ -50,7 +50,7 @@ from showpy.time.models import Timeline
 from tests.fixtures.cast_shows import rich_show
 
 V1_NAME = "showpy.show.v1.json"
-V1_SHA256 = "b041fea2fd17328f8ba2d0a4a9a3547602e41a11ed56b4ea0b5d7b861e90dd95"
+V1_SHA256 = "dd0467b169c74cbfdea81ac83092f56bb3182c152bc80d6a30bb91ad8ac78f37"
 V2_NAME = "showpy.show.v2.json"
 V2_PATH = Path(__file__).parents[3] / "showpy" / "schemas" / V2_NAME
 V2_ID = "showpy.show.v2"
