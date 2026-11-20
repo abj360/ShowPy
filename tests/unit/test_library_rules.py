@@ -28,6 +28,7 @@ Contains:
     find_geo_foreign_imports(): lists each import in geo source outside showpy.core and showpy.geo
     test_geo_imports_only_core: fails while geo imports another showpy package
     test_geo_layering_scan_flags_a_foreign_import: proves the layering scan can fail
+    test_geo_layering_scan_resolves_relative_imports: checks `from ..cast import x` against layers
 """
 
 import ast
@@ -54,6 +55,7 @@ LIBRARY_ROOT = REPO_ROOT / "showpy"
 ERROR_CODES_PATH = LIBRARY_ROOT / "core" / "error_codes.py"
 ERROR_CODE_DOCS_PATH = REPO_ROOT / "docs" / "error-codes.md"
 ERROR_CODE_GENERATOR_PATH = REPO_ROOT / "scripts" / "gen_error_codes.py"
+GEO_PACKAGE = "showpy.geo"
 LITERAL = "literal"
 MODEL_COPY = "model_copy"
 MODEL_COPY_OVERRIDE = Path("core") / "types.py"
@@ -359,27 +361,37 @@ def test_deprecated_alias_warns_on_every_access() -> None:
     assert alias not in vars(showpy)
 
 
-def find_geo_foreign_imports(source: str, name: str) -> list[str]:
+def _imported_modules(node: ast.Import | ast.ImportFrom, package: str) -> list[str]:
+    """Returns the absolute modules an import names, resolving relative ones against `package`."""
+    if isinstance(node, ast.Import):
+        return [alias.name for alias in node.names]
+    if node.level == 0:
+        return [node.module] if node.module else []
+    parts = package.split(".")
+    base = ".".join(parts[: len(parts) - node.level + 1])
+    if node.module:
+        return [f"{base}.{node.module}"]
+    return [f"{base}.{alias.name}" for alias in node.names]
+
+
+def find_geo_foreign_imports(source: str, name: str, package: str = GEO_PACKAGE) -> list[str]:
     """Lists `name:line:module` for each import outside showpy.core and showpy.geo.
 
     Args:
         source: The text of a geo module.
         name: The label to report for the module.
+        package: The package the module belongs to, for resolving relative imports.
 
     Returns:
         offenders: One entry per offending runtime or TYPE_CHECKING import.
     """
     found: list[str] = []
     for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.Import):
-            modules = [alias.name for alias in node.names]
-        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-            modules = [node.module]
-        else:
+        if not isinstance(node, ast.Import | ast.ImportFrom):
             continue
         found.extend(
             f"{name}:{node.lineno}:{module}"
-            for module in modules
+            for module in _imported_modules(node, package)
             if module.split(".")[0] == "showpy"
             and module not in ("showpy.core", "showpy.geo")
             and not module.startswith(("showpy.core.", "showpy.geo."))
@@ -408,4 +420,18 @@ def test_geo_layering_scan_flags_a_foreign_import() -> None:
     assert find_geo_foreign_imports(source, "x.py") == [
         "x.py:4:showpy.cast.models",
         "x.py:5:showpy.choreo.models",
+    ]
+
+
+def test_geo_layering_scan_resolves_relative_imports() -> None:
+    source = (
+        "from . import curves\n"
+        "from .affine import compose\n"
+        "from ..core.types import Box2\n"
+        "from ..cast.models import Spot\n"
+        "from .. import choreo\n"
+    )
+    assert find_geo_foreign_imports(source, "x.py") == [
+        "x.py:4:showpy.cast.models",
+        "x.py:5:showpy.choreo",
     ]
