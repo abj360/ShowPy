@@ -169,7 +169,8 @@ def approx_equal(
 ) -> bool:
     """Compares numbers or arrays within `abs_tol` plus `rel_tol` of `b`; shapes must match.
 
-    Equal infinities are equal and NaN equals nothing, without any warning.
+    Equal infinities are equal and NaN equals nothing, without any warning. A negative or NaN
+    tolerance raises SchemaError.
 
     Args:
         a: First number or array.
@@ -187,12 +188,23 @@ def approx_equal(
     limit = renamed_keyword(
         "tol", tol, "abs_tol", abs_tol, default=DEFAULT_ABS_TOL, remove=RENAME_REMOVAL
     )
+    _require_tolerance("abs_tol", limit)
+    _require_tolerance("rel_tol", rel_tol)
     left, right = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
     if left.shape != right.shape:
         return False
     with np.errstate(invalid="ignore", over="ignore"):
         close = np.abs(left - right) <= limit + rel_tol * np.abs(right)
     return bool(np.all(close | (left == right)))
+
+
+def _require_tolerance(name: str, value: float) -> None:
+    if not value >= 0:
+        raise SchemaError(
+            f"{name} must be 0 or more, got {value!r}",
+            hint=f"pass {name} as a number 0 or more, such as 1e-6",
+            context={name: repr(value)},
+        )
 
 
 def seeded_rng(seed: int) -> np.random.Generator:

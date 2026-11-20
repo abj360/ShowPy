@@ -54,6 +54,7 @@ Contains:
     test_chunk_counts_*(): exact sums for any total and rejection of infinite totals
     test_regression_chunk_counts_near_float_max: splits a total near 1.7e308 without overflow
     test_approx_equal_old_tol_keyword_*(), test_approx_equal_rejects_both_*(): the renamed keyword
+    test_regression_approx_equal_refuses_negative_or_nan_tolerances: raises SchemaError for them
     test_regression_id_split_is_linear_on_long_ids: splits a 10,000-character ID in linear time
     test_regression_range_check_happens_before_expansion: checks range endpoints before building
         300,000 strings
@@ -651,3 +652,15 @@ def test_approx_equal_old_tol_keyword_warns_and_matches() -> None:
 def test_approx_equal_rejects_both_tolerance_keywords() -> None:
     with pytest.raises(SchemaError):
         approx_equal(1.0, 1.0, tol=0.1, abs_tol=0.1)
+
+
+@pytest.mark.parametrize(
+    "tolerances",
+    [{"abs_tol": -1e-6}, {"abs_tol": math.nan}, {"rel_tol": -0.1}, {"rel_tol": math.nan}],
+)
+def test_regression_approx_equal_refuses_negative_or_nan_tolerances(
+    tolerances: dict[str, float],
+) -> None:
+    with pytest.raises(SchemaError) as caught:
+        approx_equal(1.0, 1.0, **tolerances)
+    assert "0 or more" in caught.value.hint
