@@ -4,14 +4,14 @@ deprecation.py --- warns when a renamed or moved public name is used
 Contains:
     DeprecatedWarning: warns that a deprecated API was used and names its replacement
     moved(): builds a module `__getattr__` that serves moved names and warns on each use
-    renamed_field(): builds a read-only property that serves a renamed field and warns
+    renamed_field(): builds a read-only property that serves a renamed field, optionally converted
     renamed_keyword(): resolves a keyword argument that was renamed, warning on the old name
 """
 
 import importlib
 import warnings
 from collections.abc import Callable, Mapping
-from typing import Final
+from typing import Final, Never
 
 WARNING_STACK_LEVEL: Final = 3
 
@@ -76,13 +76,17 @@ class _RenamedField(property):
         self.old_name = name
 
 
-def renamed_field(new: str, *, since: str, remove: str) -> property:
+def renamed_field(
+    new: str, *, since: str, remove: str, read: Callable[[Never], object] | None = None
+) -> property:
     """Builds a read-only property under an old field name that warns and reads the new one.
 
     Args:
         new: Attribute that replaced the old one.
         since: Release that deprecated the old name; recorded in the API table, not in the message.
         remove: Release that removes the old name.
+        read: Converts the new attribute's value into what the old field held; the value itself
+            when omitted.
 
     Returns:
         old_field: A property to assign to the old name in the class body.
@@ -100,12 +104,13 @@ def renamed_field(new: str, *, since: str, remove: str) -> property:
     """
     del since
 
-    def read(instance: object) -> object:
+    def read_old(instance: object) -> object:
         message = f"`{field.old_name}` renamed to `{new}`; the old name is removed in {remove}"
         warnings.warn(message, DeprecatedWarning, stacklevel=WARNING_STACK_LEVEL - 1)
-        return getattr(instance, new)
+        value = getattr(instance, new)
+        return value if read is None else read(value)
 
-    field = _RenamedField(read)
+    field = _RenamedField(read_old)
     return field
 
 

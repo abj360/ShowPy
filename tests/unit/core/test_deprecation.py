@@ -7,6 +7,7 @@ Contains:
     test_moved_name_warns_and_resolves: warns once per access and returns the new object
     test_moved_rejects_unknown_names: raises AttributeError for a name outside the table
     test_renamed_field_warns_and_reads_the_new_field: reads the new field through the old name
+    test_renamed_field_passes_the_new_value_through_read: serves read(new value) under the old name
     test_deprecated_warning_is_a_deprecation_warning: checks the base class
     test_validation_error_alias_warns_and_is_the_same_class: checks the alias on both paths
     test_deprecated_names_reach_users_through_showpy: resolves every table row with a warning
@@ -44,9 +45,14 @@ REQUIRED_KEYWORDS = {
 }
 
 
+def _doubled(value: int) -> int:
+    return value * 2
+
+
 class _Holder:
     value = 7
     legacy = renamed_field("value", since="0.4.0", remove="0.6.0")
+    twice = renamed_field("value", since="0.4.0", remove="0.6.0", read=_doubled)
 
 
 def test_moved_name_warns_and_resolves() -> None:
@@ -66,6 +72,11 @@ def test_moved_rejects_unknown_names() -> None:
 def test_renamed_field_warns_and_reads_the_new_field() -> None:
     with pytest.warns(DeprecatedWarning, match="legacy.*value.*0.6.0"):
         assert _Holder().legacy == _Holder.value
+
+
+def test_renamed_field_passes_the_new_value_through_read() -> None:
+    with pytest.warns(DeprecatedWarning, match="`twice` renamed to `value`"):
+        assert _Holder().twice == 2 * _Holder.value
 
 
 def test_deprecated_warning_is_a_deprecation_warning() -> None:
