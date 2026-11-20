@@ -8,9 +8,9 @@ import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from showpy.choreo.form_models import Form
 from showpy.choreo.form_ops import gate, merge_forms, split_form, transform_form
 from showpy.choreo.forms import arc_form, circle_form, line_form, placements, slots
-from showpy.choreo.models import Form
 from showpy.core.types import Points
 from showpy.core.util import approx_equal
 from showpy.geo.affine import rotation_matrix

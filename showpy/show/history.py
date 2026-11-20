@@ -15,7 +15,8 @@ from datetime import datetime
 from typing import Any
 
 from showpy.cast.rewrite import rewrite_spot_ids
-from showpy.choreo.models import Set, TransitionSpec
+from showpy.choreo.models import Set
+from showpy.choreo.path_models import TransitionSpec
 from showpy.core.errors import SchemaError
 from showpy.core.ids import FormId, SpotId, format_tid
 from showpy.core.units import angle_diff
@@ -86,7 +87,7 @@ def diff_sets(a: Set, b: Set, tol: float = 1e-6) -> SetDiff:
 def diff_paths(a: TransitionSpec, b: TransitionSpec) -> PathDiff:
     """Lists spots and routes whose effective paths differ; a missing row equals a default row.
 
-    >>> from showpy.choreo.models import PathRow
+    >>> from showpy.choreo.path_models import PathRow
     >>> plain = TransitionSpec(id=("1", "2"), counts=8.0)
     >>> late = plain.replace(rows={"T1": PathRow(entity="T1", start=2.0)})
     >>> diff_paths(plain, late).changed_rows

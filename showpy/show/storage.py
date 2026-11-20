@@ -22,7 +22,9 @@ from collections.abc import Collection, Mapping
 from datetime import datetime
 from typing import Protocol
 
-from showpy.choreo.models import Form, Set, TransitionSpec
+from showpy.choreo.form_models import Form
+from showpy.choreo.models import Set
+from showpy.choreo.path_models import TransitionSpec
 from showpy.core.errors import StorageError, UnknownRefError
 from showpy.core.ids import SetId
 from showpy.core.util import close_matches

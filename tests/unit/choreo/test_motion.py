@@ -22,7 +22,6 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.choreo.models import Easing, EasingKind, TurnDirection
 from showpy.choreo.motion import (
     DEFAULT_MOTIONS,
     FloatArray,
@@ -32,6 +31,7 @@ from showpy.choreo.motion import (
     register_motion,
     turn,
 )
+from showpy.choreo.path_models import Easing, EasingKind, TurnDirection
 from showpy.core.errors import PathError, ShowPyError, UnknownRefError
 from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal

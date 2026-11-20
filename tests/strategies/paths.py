@@ -19,12 +19,12 @@ from typing import Literal
 from hypothesis import strategies as st
 
 from showpy.choreo.match_ops import clear_rows
-from showpy.choreo.models import (
+from showpy.choreo.models import Placement
+from showpy.choreo.path_models import (
     Easing,
     FacingMode,
     PathRow,
     PathStyle,
-    Placement,
     TransitionSpec,
     TurnDirection,
 )

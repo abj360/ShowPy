@@ -16,9 +16,11 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 
+from showpy.choreo.form_models import Form
 from showpy.choreo.forms import slots as form_slots
+from showpy.choreo.match_models import MatchOptions
 from showpy.choreo.match_solve import BoolArray, FloatArray
-from showpy.choreo.models import Form, MatchOptions, Set
+from showpy.choreo.models import Set
 from showpy.core.errors import MatchError, SchemaError, UnknownRefError
 from showpy.core.ids import SpotId
 from showpy.core.types import Points

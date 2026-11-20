@@ -17,7 +17,8 @@ from typing import Literal
 
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.match_ops import forms_of_set
-from showpy.choreo.models import Set, TransitionSpec
+from showpy.choreo.models import Set
+from showpy.choreo.path_models import TransitionSpec
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import ContinuityError, ShowPyError
 from showpy.core.ids import format_tid, parse_ref

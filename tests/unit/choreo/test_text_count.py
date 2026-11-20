@@ -20,6 +20,7 @@ import pytest
 from scipy.spatial import cKDTree
 
 from showpy.choreo.form_layout import layout
+from showpy.choreo.form_models import TextRecipe
 from showpy.choreo.form_ops import transform_form
 from showpy.choreo.form_text import (
     MAX_TEXT_SPOTS,
@@ -28,7 +29,6 @@ from showpy.choreo.form_text import (
     text_strokes,
 )
 from showpy.choreo.forms import slots, text_form
-from showpy.choreo.models import TextRecipe
 from showpy.choreo.text_count import count_recipe, spacing_count, text_spot_count
 from showpy.choreo.text_edit import edit_text_count
 from showpy.choreo.text_spread import COINCIDENT_TOL_M

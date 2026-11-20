@@ -15,7 +15,8 @@ import math
 
 import pytest
 
-from showpy.choreo.models import FormFnInfo, MatchOptions, MatchResult
+from showpy.choreo.form_models import FormFnInfo
+from showpy.choreo.match_models import MatchOptions, MatchResult
 from showpy.core.errors import SchemaError
 from showpy.core.ids import FormId, SpotId
 

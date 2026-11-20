@@ -24,8 +24,8 @@ import numpy as np
 import shapely
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
+from showpy.choreo.form_models import FacingSpec, Form, SpacingSpec
 from showpy.choreo.form_text import text_recipe, text_slots
-from showpy.choreo.models import FacingSpec, Form, SpacingSpec
 from showpy.core.errors import SchemaError, SpacingError
 from showpy.core.types import Degrees, Point, Points, Region
 from showpy.core.units import normalize_angle, vector_facing

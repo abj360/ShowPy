@@ -13,12 +13,13 @@ import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from showpy.choreo.form_models import Form
 from showpy.choreo.form_place import rebuild
 from showpy.choreo.forms import block_form, circle_form, line_form
 from showpy.choreo.match import bottleneck_value, match, match_by_order
+from showpy.choreo.match_models import MatchObjective, MatchOptions, MatchResult
 from showpy.choreo.match_ops import apply_match
 from showpy.choreo.match_solve import FloatArray, count_crossings
-from showpy.choreo.models import Form, MatchObjective, MatchOptions, MatchResult
 from showpy.core.ids import SpotId
 from showpy.core.types import Points
 from showpy.core.util import approx_equal, seeded_rng

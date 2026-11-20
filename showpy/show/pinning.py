@@ -10,7 +10,7 @@ Contains:
 from collections.abc import Sequence
 
 from showpy.choreo.match_ops import forms_of_set
-from showpy.choreo.models import PathRow
+from showpy.choreo.path_models import PathRow
 from showpy.core.errors import UnknownRefError
 from showpy.core.ids import format_tid, parse_tid
 from showpy.core.util import close_matches

@@ -22,10 +22,11 @@ import numpy as np
 
 from showpy.cast.models import Group
 from showpy.cast.spots import add_group, add_spots_along
+from showpy.choreo.form_models import Form
 from showpy.choreo.form_place import place
 from showpy.choreo.forms import arc_form, block_form, circle_form, line_form, wedge_form
 from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import Form, PathStyle, TransitionSpec
+from showpy.choreo.path_models import PathStyle, TransitionSpec
 from showpy.choreo.paths import curve_path, custom_path, delay, hold, set_easing
 from showpy.choreo.routes import follow_and_set_targets, make_route, rotate_path, two_part
 from showpy.core.types import Point

@@ -31,7 +31,7 @@ import pytest
 from showpy.cast.models import LabelScheme
 from showpy.cast.rewrite import faces_entity, rewrite_spot_ids
 from showpy.cast.spots import delete_spots, relabel
-from showpy.choreo.models import FacingMode
+from showpy.choreo.path_models import FacingMode
 from showpy.core.errors import ShowPyError, UnknownRefError
 from showpy.core.ids import FormId, SpotId, ZoneId
 from showpy.core.selection import Selection

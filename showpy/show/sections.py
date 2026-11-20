@@ -9,7 +9,9 @@ Contains:
 import itertools
 from collections.abc import Mapping, Sequence
 
-from showpy.choreo.models import FacingOverride, Form, Set
+from showpy.choreo.form_models import Form
+from showpy.choreo.models import Set
+from showpy.choreo.path_models import FacingOverride
 from showpy.core.errors import SchemaError, TimelineError, VersionError
 from showpy.core.ids import FormId, SetId, parse_tid
 from showpy.core.types import Count

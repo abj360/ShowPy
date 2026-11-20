@@ -10,7 +10,7 @@ Contains:
     live_publication(): returns a live publication of a show with no claims
 """
 
-from showpy.choreo.models import PathRow, PathStyle
+from showpy.choreo.path_models import PathRow, PathStyle
 from showpy.core.ids import SpotId
 from showpy.examples import EXAMPLE_TIME as AT
 from showpy.examples import live_publication, performer

@@ -37,12 +37,12 @@ from datetime import UTC, datetime
 import pytest
 
 from showpy.cast.models import Cast, Group, Spot
-from showpy.choreo.models import (
+from showpy.choreo.form_models import Form
+from showpy.choreo.models import Placement
+from showpy.choreo.path_models import (
     FacingMode,
     FacingOverride,
-    Form,
     PathRow,
-    Placement,
     Route,
     TransitionSpec,
     Waypoint,

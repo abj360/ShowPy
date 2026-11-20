@@ -30,7 +30,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from showpy.choreo.models import PathRow, TransitionSpec
+from showpy.choreo.path_models import PathRow, TransitionSpec
 from showpy.core.caps import MAX_POINTS, MAX_TEXT_CHARS
 from showpy.core.errors import LockedError, SchemaError, UnknownRefError
 from showpy.core.ids import SpotId, make_tid

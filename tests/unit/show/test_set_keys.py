@@ -81,7 +81,8 @@ from typing import Any
 import pytest
 
 from showpy.choreo.forms import line_form
-from showpy.choreo.models import PathRow, Set, TransitionSpec
+from showpy.choreo.models import Set
+from showpy.choreo.path_models import PathRow, TransitionSpec
 from showpy.core.errors import SchemaError, ShowPyError, StorageError
 from showpy.core.ids import SetId, SpotId, make_tid
 from showpy.core.util import content_hash

@@ -48,7 +48,8 @@ from showpy.cast.select import (
     split,
     where,
 )
-from showpy.choreo.models import Form, Placement, Set
+from showpy.choreo.form_models import Form
+from showpy.choreo.models import Placement, Set
 from showpy.core.caps import MAX_DEPTH, MAX_TEXT_CHARS
 from showpy.core.errors import GeometryError, SchemaError, ShowPyError, UnknownRefError
 from showpy.core.ids import FormId, SetId, SpotId

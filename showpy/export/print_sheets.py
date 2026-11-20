@@ -22,7 +22,8 @@ import shapely
 from showpy.cast.select import select
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import MotionPlan
-from showpy.choreo.models import PathRow, PathStyle, Placement
+from showpy.choreo.models import Placement
+from showpy.choreo.path_models import PathRow, PathStyle
 from showpy.core.extras import require_extra
 from showpy.core.ids import SpotId, TransitionId
 from showpy.core.selection import Selection

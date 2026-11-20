@@ -90,7 +90,7 @@ from PIL import Image
 
 from showpy.cast.models import Spot
 from showpy.cast.rewrite import rewrite_spot_ids
-from showpy.choreo.models import PathRow
+from showpy.choreo.path_models import PathRow
 from showpy.core.errors import (
     LockedError,
     SchemaError,

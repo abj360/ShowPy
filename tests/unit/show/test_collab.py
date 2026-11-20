@@ -27,7 +27,9 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from showpy.choreo.models import Form, PathRow, Placement, TransitionSpec
+from showpy.choreo.form_models import Form
+from showpy.choreo.models import Placement
+from showpy.choreo.path_models import PathRow, TransitionSpec
 from showpy.core.errors import (
     ConflictError,
     LockedError,

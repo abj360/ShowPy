@@ -39,6 +39,7 @@ import numpy as np
 import pytest
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, register_form_fn
+from showpy.choreo.form_models import FacingSpec, Form, SpacingSpec
 from showpy.choreo.form_ops import gate, reorder, transform_form
 from showpy.choreo.forms import (
     arc_form,
@@ -58,7 +59,6 @@ from showpy.choreo.forms import (
     text_form,
     wedge_form,
 )
-from showpy.choreo.models import FacingSpec, Form, SpacingSpec
 from showpy.core.errors import (
     LockedError,
     MissingFontError,

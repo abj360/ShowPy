@@ -8,7 +8,8 @@ Contains:
 """
 
 from showpy.cast.models import Cast, Group, Spot
-from showpy.choreo.models import Placement, Set, TransitionSpec
+from showpy.choreo.models import Placement, Set
+from showpy.choreo.path_models import TransitionSpec
 from showpy.choreo.paths import curve_path, set_easing, stagger
 from showpy.core.ids import SetId, SpotId, make_tid
 from showpy.core.types import Points

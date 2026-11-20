@@ -43,8 +43,8 @@ import pytest
 from showpy.cast.spots import delete_spots
 from showpy.choreo.form_place import filled_forms, place, rebuild
 from showpy.choreo.forms import circle_form, line_form, text_form
+from showpy.choreo.match_models import MatchOptions
 from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import MatchOptions
 from showpy.core.errors import (
     LockedError,
     MatchError,

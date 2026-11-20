@@ -17,8 +17,10 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Protocol, override
 
+from showpy.choreo.form_models import Form
 from showpy.choreo.match_ops import forms_of_set
-from showpy.choreo.models import Form, Set, TransitionSpec
+from showpy.choreo.models import Set
+from showpy.choreo.path_models import TransitionSpec
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import (
     ConflictError,

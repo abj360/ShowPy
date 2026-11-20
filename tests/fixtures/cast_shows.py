@@ -9,10 +9,10 @@ Contains:
 
 from datetime import UTC, datetime
 
-from showpy.choreo.models import (
+from showpy.choreo.form_models import Form
+from showpy.choreo.path_models import (
     FacingMode,
     FacingOverride,
-    Form,
     PathRow,
     PathStyle,
     Route,

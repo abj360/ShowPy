@@ -16,7 +16,8 @@ from showpy.choreo.facing import (
     face_point,
     turn,
 )
-from showpy.choreo.models import FacingMode, FacingOverride, Form
+from showpy.choreo.form_models import Form
+from showpy.choreo.path_models import FacingMode, FacingOverride
 from showpy.core.errors import GeometryError, LockedError, TimeRangeError, UnknownRefError
 from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.util import approx_equal

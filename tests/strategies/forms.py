@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from hypothesis import strategies as st
 
+from showpy.choreo.form_models import FacingSpec, Form, FormKind, SpacingSpec
 from showpy.choreo.form_place import place
 from showpy.choreo.forms import (
     arc_form,
@@ -33,7 +34,6 @@ from showpy.choreo.forms import (
     wedge_form,
 )
 from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import FacingSpec, Form, FormKind, SpacingSpec
 from showpy.core.types import Box2, Point
 from showpy.geo.shapes import rect
 from showpy.geo.spacing import FillPattern

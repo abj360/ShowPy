@@ -19,12 +19,12 @@ from typing import Literal
 
 import numpy as np
 
-from showpy.choreo.models import (
+from showpy.choreo.models import Set
+from showpy.choreo.path_models import (
     FacingMode,
     PathRow,
     PathStyle,
     Route,
-    Set,
     TransitionSpec,
     Waypoint,
 )

@@ -20,6 +20,7 @@ from collections.abc import Mapping, Sequence
 
 import numpy as np
 
+from showpy.choreo.form_models import Form
 from showpy.choreo.forms import slots as form_slots
 from showpy.choreo.match_cost import (
     MatchCosts,
@@ -31,6 +32,7 @@ from showpy.choreo.match_cost import (
     combine_masks,
     point_tuple,
 )
+from showpy.choreo.match_models import MatchOptions, MatchResult
 from showpy.choreo.match_solve import (
     BoolArray,
     FloatArray,
@@ -43,7 +45,7 @@ from showpy.choreo.match_solve import (
     solve_ordered,
     solve_sum,
 )
-from showpy.choreo.models import Form, MatchOptions, MatchResult, Set
+from showpy.choreo.models import Set
 from showpy.core.errors import MatchError
 from showpy.core.ids import FormId
 from showpy.core.types import Points

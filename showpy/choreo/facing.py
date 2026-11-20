@@ -19,8 +19,10 @@ import itertools
 import math
 from collections.abc import Mapping, Sequence
 
-from showpy.choreo.models import FacingOverride, Form, Set
+from showpy.choreo.form_models import Form
+from showpy.choreo.models import Set
 from showpy.choreo.motion import turn
+from showpy.choreo.path_models import FacingOverride
 from showpy.core.errors import GeometryError, TimeRangeError, UnknownRefError
 from showpy.core.ids import FormId, SpotId
 from showpy.core.selection import Selection
@@ -181,7 +183,7 @@ def add_facing_override(show: Show, override: FacingOverride) -> Show:
     """Adds a timed facing override; its range must lie within the show's counts.
 
     >>> from showpy.examples import two_set_show
-    >>> from showpy.choreo.models import FacingMode
+    >>> from showpy.choreo.path_models import FacingMode
     >>> o = FacingOverride(entities="all", mode=FacingMode.AUDIENCE, start=0.0, end=4.0)
     >>> len(add_facing_override(two_set_show(), o).facing_overrides)
     1

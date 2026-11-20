@@ -12,10 +12,12 @@ from collections.abc import Mapping, Sequence
 import numpy as np
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
+from showpy.choreo.form_models import Form
 from showpy.choreo.forms import placements, slot_poses
 from showpy.choreo.match import match
+from showpy.choreo.match_models import MatchOptions
 from showpy.choreo.match_ops import clear_rows, forms_of_set, is_elsewhere, with_set
-from showpy.choreo.models import Form, MatchOptions, Placement, Set
+from showpy.choreo.models import Placement, Set
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import MatchError, SchemaError, ShowPyError, UnknownRefError
 from showpy.core.ids import FormId, SetId, SpotId

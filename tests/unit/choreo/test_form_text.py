@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 from scipy.spatial import cKDTree
 
+from showpy.choreo.form_models import MAX_TEXT_FONTS, TextRecipe
 from showpy.choreo.form_text import (
     LEGIBLE_SPACING_SHARE,
     MAX_TEXT_SPOTS,
@@ -23,7 +24,6 @@ from showpy.choreo.form_text import (
     text_strokes,
     too_few_for_edit,
 )
-from showpy.choreo.models import MAX_TEXT_FONTS, TextRecipe
 from showpy.choreo.text_spread import COINCIDENT_TOL_M
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import GeometryError, LegibilityWarning, SchemaError, SpacingError

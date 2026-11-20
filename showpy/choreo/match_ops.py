@@ -19,10 +19,12 @@ from collections.abc import Iterable
 
 import numpy as np
 
+from showpy.choreo.form_models import Form
 from showpy.choreo.form_text import require_text_members
 from showpy.choreo.forms import check_unlocked, slot_poses
+from showpy.choreo.match_models import MatchResult
 from showpy.choreo.match_solve import BoolArray, FloatArray, crossing_mask
-from showpy.choreo.models import Form, MatchResult, Placement, Set
+from showpy.choreo.models import Placement, Set
 from showpy.core.errors import LockedError, MatchError, UnknownRefError
 from showpy.core.ids import FormId, SetId, SpotId, TransitionId
 from showpy.core.ids import format_tid as _format_tid

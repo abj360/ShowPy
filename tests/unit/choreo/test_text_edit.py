@@ -13,9 +13,9 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
+from showpy.choreo.form_models import Form
 from showpy.choreo.form_text import text_recipe, text_strokes
 from showpy.choreo.forms import circle_form, slots, text_form
-from showpy.choreo.models import Form
 from showpy.choreo.text_count import spacing_count
 from showpy.choreo.text_edit import edit_text_count
 from showpy.core.errors import LockedError, SchemaError, SpacingError

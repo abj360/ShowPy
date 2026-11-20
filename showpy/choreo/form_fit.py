@@ -17,8 +17,8 @@ from collections.abc import Sequence
 
 import numpy as np
 
+from showpy.choreo.form_models import Form
 from showpy.choreo.forms import arc_form, circle_form, custom_form, line_form
-from showpy.choreo.models import Form
 from showpy.core.errors import SchemaError
 from showpy.core.types import Meters, Point, Points
 from showpy.core.util import as_points

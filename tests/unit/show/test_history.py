@@ -30,14 +30,8 @@ import pytest
 from showpy.cast.models import Group
 from showpy.cast.rewrite import rewrite_spot_ids
 from showpy.cast.spots import add_spot
-from showpy.choreo.models import (
-    FacingMode,
-    FacingOverride,
-    Form,
-    PathRow,
-    Route,
-    TransitionSpec,
-)
+from showpy.choreo.form_models import Form
+from showpy.choreo.path_models import FacingMode, FacingOverride, PathRow, Route, TransitionSpec
 from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
 from showpy.core.ids import FormId, RouteId, SetId, SpotId, ZoneId, make_tid
 from showpy.core.types import Region

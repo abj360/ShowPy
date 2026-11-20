@@ -18,7 +18,6 @@ import numpy as np
 import pytest
 
 from showpy.choreo.engine import PathEngine
-from showpy.choreo.models import PathRow, PathStyle
 from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, MotionRegistry
 from showpy.choreo.motion_stats import (
     direction_of_travel,
@@ -29,6 +28,7 @@ from showpy.choreo.motion_stats import (
     speed,
     speeds,
 )
+from showpy.choreo.path_models import PathRow, PathStyle
 from showpy.core.errors import ShowPyError, TimeRangeError
 from showpy.core.ids import SpotId
 from showpy.core.types import Point, Points

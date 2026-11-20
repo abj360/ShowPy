@@ -31,8 +31,8 @@ import pytest
 
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_compile import curvature_bound, easing_chord_error
-from showpy.choreo.models import Easing, PathRow, PathStyle, TransitionSpec, Waypoint
 from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, ease, easing_breaks
+from showpy.choreo.path_models import Easing, PathRow, PathStyle, TransitionSpec, Waypoint
 from showpy.choreo.paths import add_waypoint, set_style
 from showpy.choreo.routes import follow, make_route
 from showpy.core.errors import ContinuityError, PathError, ShowPyError

@@ -8,7 +8,7 @@ Contains:
 
 from datetime import datetime
 
-from showpy.choreo.models import TransitionSpec
+from showpy.choreo.path_models import TransitionSpec
 from showpy.show.documents import paths_doc
 from showpy.show.storage import Workspace, load_show
 

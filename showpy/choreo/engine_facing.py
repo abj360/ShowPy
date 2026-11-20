@@ -15,8 +15,8 @@ import numpy as np
 
 from showpy.choreo.engine_compile import plan_positions, plan_progress
 from showpy.choreo.engine_models import MotionPlan
-from showpy.choreo.models import FacingMode, TurnDirection
 from showpy.choreo.motion import ease, turn
+from showpy.choreo.path_models import FacingMode, TurnDirection
 from showpy.core.errors import PathError
 from showpy.core.types import Count, Degrees, Point
 from showpy.core.units import normalize_angle, vector_facing

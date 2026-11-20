@@ -50,7 +50,7 @@ import numpy as np
 import pytest
 
 from showpy.choreo.engine import PROBE_TOL_SHARE, PathEngine
-from showpy.choreo.models import (
+from showpy.choreo.path_models import (
     Easing,
     FacingMode,
     FacingOverride,

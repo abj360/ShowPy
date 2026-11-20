@@ -25,7 +25,8 @@ from showpy.cast.select import select
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import Fix, GapInfo
 from showpy.choreo.match import match
-from showpy.choreo.models import MatchOptions, MatchResult, TransitionSpec
+from showpy.choreo.match_models import MatchOptions, MatchResult
+from showpy.choreo.path_models import TransitionSpec
 from showpy.choreo.paths import add_waypoint, delay, stagger
 from showpy.core.errors import PathError
 from showpy.core.ids import SpotId
@@ -244,7 +245,7 @@ def separate_in_time(
 ) -> TransitionSpec:
     """Staggers starts `gap_counts` apart along an order.
 
-    >>> from showpy.choreo.models import TransitionSpec
+    >>> from showpy.choreo.path_models import TransitionSpec
     >>> separate_in_time(TransitionSpec(id=("1", "2"), counts=8.0), ["A", "B"]).row("B").start
     1.0
     """
@@ -254,7 +255,7 @@ def separate_in_time(
 def apply_fix(spec: TransitionSpec, fix: Fix) -> TransitionSpec:
     """Applies a delay, waypoint or stagger fix; a reassignment must go through apply_match.
 
-    >>> from showpy.choreo.models import TransitionSpec
+    >>> from showpy.choreo.path_models import TransitionSpec
     >>> params = {"entity": "A", "counts": 2.0}
     >>> fix = Fix(kind="delay", params=params, new_gap=1.0, max_speed_after=1.0)
     >>> apply_fix(TransitionSpec(id=("1", "2"), counts=8.0), fix).row("A").start

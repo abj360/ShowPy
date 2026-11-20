@@ -10,7 +10,8 @@ Contains:
 import functools
 from collections.abc import Sequence
 
-from showpy.choreo.models import Form, TransitionSpec
+from showpy.choreo.form_models import Form
+from showpy.choreo.path_models import TransitionSpec
 from showpy.core.errors import SchemaError
 from showpy.show.locks import require_unlocked
 from showpy.show.manage import set_counts

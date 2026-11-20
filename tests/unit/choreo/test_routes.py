@@ -45,7 +45,7 @@ import pytest
 
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import FacingMode, PathStyle, TransitionSpec
+from showpy.choreo.path_models import FacingMode, PathStyle, TransitionSpec
 from showpy.choreo.paths import lock
 from showpy.choreo.routes import (
     MIN_GAP,

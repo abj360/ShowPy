@@ -33,7 +33,9 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, model_validator
 
 from showpy.cast.models import Cast
-from showpy.choreo.models import FacingOverride, Form, Placement, Set, TransitionSpec
+from showpy.choreo.form_models import Form
+from showpy.choreo.models import Placement, Set
+from showpy.choreo.path_models import FacingOverride, TransitionSpec
 from showpy.core.errors import SchemaError, TimeRangeError, UnknownRefError
 from showpy.core.ids import FormId, RouteId, SetId, SpotId, TransitionId
 from showpy.core.ids import format_tid as _format_tid

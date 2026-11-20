@@ -52,6 +52,7 @@ import numpy as np
 import pytest
 
 from showpy.choreo.form_layout import slot_count
+from showpy.choreo.form_models import FacingSpec, Form, SpacingSpec
 from showpy.choreo.form_ops import (
     edit,
     form_templates,
@@ -78,7 +79,7 @@ from showpy.choreo.forms import (
     slots,
     text_form,
 )
-from showpy.choreo.models import FacingSpec, Form, Placement, Set, SpacingSpec
+from showpy.choreo.models import Placement, Set
 from showpy.choreo.text_count import spacing_count
 from showpy.core.errors import (
     LegibilityWarning,

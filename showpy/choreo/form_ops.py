@@ -25,6 +25,7 @@ import numpy as np
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
 from showpy.choreo.form_layout import CURVE_KINDS, curve_stations, layout, slot_count
+from showpy.choreo.form_models import FacingSpec, Form, TextRecipe
 from showpy.choreo.form_text import (
     reject_count_change,
     require_edited_members,
@@ -50,7 +51,7 @@ from showpy.choreo.forms import (
     wedge_form,
 )
 from showpy.choreo.match import match
-from showpy.choreo.models import FacingSpec, Form, Set, TextRecipe
+from showpy.choreo.models import Set
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, SpacingError
 from showpy.core.ids import SpotId

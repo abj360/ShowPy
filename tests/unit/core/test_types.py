@@ -51,7 +51,8 @@ from pydantic import TypeAdapter
 from pydantic import ValidationError as PydanticValidationError
 
 from showpy.cast.models import Shape
-from showpy.choreo.models import Set, Waypoint
+from showpy.choreo.models import Set
+from showpy.choreo.path_models import Waypoint
 from showpy.core import canonical, json_types
 from showpy.core.errors import SchemaError, ShowPyError, field_errors
 from showpy.core.ids import LandmarkId, SetId

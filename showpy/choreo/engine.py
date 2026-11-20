@@ -49,8 +49,8 @@ from showpy.choreo.engine_models import (
     MotionPlan,
     MotionSegment,
 )
-from showpy.choreo.models import FacingOverride
 from showpy.choreo.motion import DEFAULT_MOTIONS, MotionRegistry, ease, turn
+from showpy.choreo.path_models import FacingOverride
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import PathError, UnknownRefError
 from showpy.core.ids import SetId, SpotId, TransitionId

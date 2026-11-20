@@ -9,7 +9,7 @@ Contains:
 """
 
 from showpy.choreo.engine import PathEngine
-from showpy.choreo.models import FacingMode, PathRow
+from showpy.choreo.path_models import FacingMode, PathRow
 from showpy.core.ids import SpotId
 from showpy.core.units import angle_diff
 from tests.fixtures.motion_shows import TID, with_rows, with_targets

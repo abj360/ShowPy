@@ -12,7 +12,9 @@ from typing import TYPE_CHECKING
 
 from showpy.cast.models import Cast
 from showpy.cast.select import is_label_dependent, select
-from showpy.choreo.models import FacingMode, FacingOverride, Form, Route, Set, TransitionSpec
+from showpy.choreo.form_models import Form
+from showpy.choreo.models import Set
+from showpy.choreo.path_models import FacingMode, FacingOverride, Route, TransitionSpec
 from showpy.core.ids import SpotId
 from showpy.core.selection import Selection, SelectorField
 from showpy.core.types import Point

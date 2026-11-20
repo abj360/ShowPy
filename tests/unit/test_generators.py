@@ -4,7 +4,7 @@
 test_generators.py --- checks seeded shows are deterministic, valid, varied in style and entrances
 """
 
-from showpy.choreo.models import PathStyle
+from showpy.choreo.path_models import PathStyle
 from showpy.show.documents import encode_show
 from showpy.show.validate import validate_show
 from tests.fixtures.generators import seeded_show

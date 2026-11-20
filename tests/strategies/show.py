@@ -16,7 +16,7 @@ from hypothesis import strategies as st
 
 from showpy.choreo.facing import add_facing_override
 from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import FacingMode, FacingOverride, TransitionSpec
+from showpy.choreo.path_models import FacingMode, FacingOverride, TransitionSpec
 from showpy.choreo.paths import hold, ripple, stagger
 from showpy.choreo.routes import follow_and_set_targets, make_route
 from showpy.core.errors import PathError

@@ -28,7 +28,7 @@ from pathlib import Path
 from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
 
-from showpy.choreo.models import PathRow, PathStyle, Waypoint
+from showpy.choreo.path_models import PathRow, PathStyle, Waypoint
 from showpy.core.util import content_hash
 from showpy.show.documents import script_doc
 from showpy.show.file_repository import FileRepository

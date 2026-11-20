@@ -32,7 +32,9 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from showpy.choreo.models import Form, Set, TransitionSpec
+from showpy.choreo.form_models import Form
+from showpy.choreo.models import Set
+from showpy.choreo.path_models import TransitionSpec
 from showpy.core.canonical import MAX_INT_DIGITS, MAX_NESTING, canonical_value
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, StorageError, field_errors

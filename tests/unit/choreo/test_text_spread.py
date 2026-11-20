@@ -24,9 +24,9 @@ from hypothesis import given
 from hypothesis import strategies as st
 from scipy.spatial import cKDTree
 
+from showpy.choreo.form_models import Form, TextRecipe
 from showpy.choreo.form_text import min_text_spots, text_recipe, text_report, text_strokes
 from showpy.choreo.forms import line_form, slots, text_form
-from showpy.choreo.models import Form, TextRecipe
 from showpy.choreo.text_spread import COINCIDENT_TOL_M, JUNCTION_GAP_SHARE
 from showpy.core.errors import SchemaError
 from showpy.core.types import Points

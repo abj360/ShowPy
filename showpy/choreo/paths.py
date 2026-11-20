@@ -32,7 +32,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
-from showpy.choreo.models import (
+from showpy.choreo.motion import DEFAULT_MOTIONS, MotionRegistry, ease
+from showpy.choreo.path_models import (
     Easing,
     FacingMode,
     PathRow,
@@ -41,7 +42,6 @@ from showpy.choreo.models import (
     TurnDirection,
     Waypoint,
 )
-from showpy.choreo.motion import DEFAULT_MOTIONS, MotionRegistry, ease
 from showpy.core.errors import LockedError, PathError
 from showpy.core.extras import require_extra
 from showpy.core.selection import Selection

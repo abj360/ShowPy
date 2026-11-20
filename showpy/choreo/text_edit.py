@@ -13,9 +13,9 @@ from collections.abc import Sequence
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
 from showpy.choreo.form_layout import layout
+from showpy.choreo.form_models import Form
 from showpy.choreo.form_text import require_member_count, require_text_form
 from showpy.choreo.forms import check_unlocked
-from showpy.choreo.models import Form
 from showpy.choreo.text_count import count_recipe
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError

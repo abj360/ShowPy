@@ -22,7 +22,7 @@ from hypothesis import strategies as st
 from showpy.cast.models import Shape
 from showpy.cast.spots import set_shape
 from showpy.choreo.form_ops import transform_form
-from showpy.choreo.models import PathStyle
+from showpy.choreo.path_models import PathStyle
 from showpy.choreo.paths import default_paths, set_style
 from showpy.core.errors import ShowPyError
 from showpy.examples import two_set_show

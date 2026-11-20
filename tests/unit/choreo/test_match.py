@@ -21,7 +21,7 @@ import pytest
 
 from showpy.choreo.forms import line_form
 from showpy.choreo.match import bottleneck_value, cost_matrix, match, match_by_order
-from showpy.choreo.models import MatchOptions
+from showpy.choreo.match_models import MatchOptions
 from showpy.core.errors import MatchError, SchemaError, ShowPyError, UnknownRefError
 from showpy.core.ids import SpotId
 from showpy.core.types import Point

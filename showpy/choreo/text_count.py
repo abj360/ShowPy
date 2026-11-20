@@ -17,6 +17,7 @@ from typing import Any
 
 import numpy as np
 
+from showpy.choreo.form_models import TextRecipe
 from showpy.choreo.form_text import (
     MAX_TEXT_SPOTS,
     min_text_spots,
@@ -25,7 +26,6 @@ from showpy.choreo.form_text import (
     text_recipe,
     text_strokes,
 )
-from showpy.choreo.models import TextRecipe
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, SpacingError, bounded_repr
 from showpy.core.types import Degrees, Meters
@@ -71,7 +71,7 @@ def spacing_count(strokes: Sequence[Curve], spacing: Meters) -> int:
         SchemaError: `spacing` is not a finite number > 0.
         SpacingError: `TOO_MANY_SPOTS` when the count passes `MAX_TEXT_SPOTS`.
 
-    >>> from showpy.choreo.models import TextRecipe
+    >>> from showpy.choreo.form_models import TextRecipe
     >>> from showpy.geo.fonts import bundled_fonts
     >>> ell = TextRecipe(text="L", fonts=(bundled_fonts().resolve("simplex"),), height=6.0,
     ...                  at=(0.0, 0.0))
@@ -120,7 +120,7 @@ def count_recipe(
         SpacingError: `n` is not a whole number from 1 to `MAX_TEXT_SPOTS`, or the derived
             count passes the cap.
 
-    >>> from showpy.choreo.models import TextRecipe
+    >>> from showpy.choreo.form_models import TextRecipe
     >>> from showpy.geo.fonts import bundled_fonts
     >>> ell = TextRecipe(text="L", fonts=(bundled_fonts().resolve("simplex"),), height=6.0,
     ...                  at=(0.0, 0.0))

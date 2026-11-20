@@ -25,7 +25,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from showpy.choreo.models import FacingMode, FacingOverride, Form, TransitionSpec
+from showpy.choreo.form_models import Form
+from showpy.choreo.path_models import FacingMode, FacingOverride, TransitionSpec
 from showpy.core.errors import SchemaError, TimelineError
 from showpy.core.ids import FormId, SetId, SpotId, make_tid
 from showpy.core.util import approx_equal

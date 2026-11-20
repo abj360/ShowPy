@@ -40,8 +40,8 @@ from showpy.choreo.avoid import (
 )
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import Fix
-from showpy.choreo.models import Easing, PathRow, PathStyle
 from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, MotionRegistry
+from showpy.choreo.path_models import Easing, PathRow, PathStyle
 from showpy.core.errors import PathError, ShowPyError, UnknownRefError
 from showpy.core.ids import SpotId
 from showpy.core.types import Point, Points

@@ -51,8 +51,9 @@ import shapely
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
 from showpy.choreo.form_layout import layout, member_facings, slot_count
+from showpy.choreo.form_models import FacingSpec, Form, FormKind, SpacingSpec, TextRecipe
 from showpy.choreo.form_text import require_member_count, require_text_members
-from showpy.choreo.models import FacingSpec, Form, FormKind, Placement, SpacingSpec, TextRecipe
+from showpy.choreo.models import Placement
 from showpy.choreo.text_count import count_recipe
 from showpy.core.errors import LockedError, SchemaError, SpacingError
 from showpy.core.types import Box2, Degrees, Meters, Point, Points, Region

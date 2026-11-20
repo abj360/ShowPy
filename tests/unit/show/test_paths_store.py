@@ -6,7 +6,7 @@ test_paths_store.py --- tests saving and loading a transition's paths through th
 
 from datetime import UTC, datetime
 
-from showpy.choreo.models import TransitionSpec
+from showpy.choreo.path_models import TransitionSpec
 from showpy.choreo.paths import delay
 from showpy.core.ids import make_tid
 from showpy.examples import two_set_show

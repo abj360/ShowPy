@@ -16,8 +16,9 @@ import numpy as np
 import numpy.typing as npt
 
 from showpy.choreo.engine_models import MotionPiece, MotionPlan, PieceKind
-from showpy.choreo.models import Easing, PathRow, PathStyle, Placement, Route, TransitionSpec
+from showpy.choreo.models import Placement
 from showpy.choreo.motion import MotionRegistry, ease, easing_breaks
+from showpy.choreo.path_models import Easing, PathRow, PathStyle, Route, TransitionSpec
 from showpy.core.errors import ContinuityError, PathError
 from showpy.core.types import Point, Points
 from showpy.geo.curves import (
@@ -221,7 +222,8 @@ def compile_plan(
 ) -> MotionPlan:
     """Builds a spot's MotionPlan for one transition, raising ContinuityError on a miss.
 
-    >>> from showpy.choreo.models import TransitionSpec, PathRow, Placement
+    >>> from showpy.choreo.path_models import TransitionSpec, PathRow
+    >>> from showpy.choreo.models import Placement
     >>> from showpy.choreo.motion import DEFAULT_MOTIONS
     >>> spec = TransitionSpec(id=("1", "2"), counts=8.0)
     >>> a, b = Placement(entity="A", x=0, y=0), Placement(entity="A", x=0, y=4)
@@ -255,7 +257,8 @@ def compile_plan(
 def plan_progress(plan: MotionPlan, tau: FloatArray) -> FloatArray:
     """Returns the arc length travelled at each local count.
 
-    >>> from showpy.choreo.models import TransitionSpec, PathRow, Placement
+    >>> from showpy.choreo.path_models import TransitionSpec, PathRow
+    >>> from showpy.choreo.models import Placement
     >>> from showpy.choreo.motion import DEFAULT_MOTIONS
     >>> spec = TransitionSpec(id=("1", "2"), counts=8.0)
     >>> a, b = Placement(entity="A", x=0, y=0), Placement(entity="A", x=0, y=4)
@@ -273,7 +276,8 @@ def plan_progress(plan: MotionPlan, tau: FloatArray) -> FloatArray:
 def plan_positions(plan: MotionPlan, tau: FloatArray) -> Points:
     """Evaluates a plan's positions at local counts.
 
-    >>> from showpy.choreo.models import TransitionSpec, PathRow, Placement
+    >>> from showpy.choreo.path_models import TransitionSpec, PathRow
+    >>> from showpy.choreo.models import Placement
     >>> from showpy.choreo.motion import DEFAULT_MOTIONS
     >>> spec = TransitionSpec(id=("1", "2"), counts=8.0)
     >>> a, b = Placement(entity="A", x=0, y=0), Placement(entity="A", x=0, y=4)
@@ -322,7 +326,8 @@ def plan_breaks(plan: MotionPlan) -> FloatArray:
     custom motion's sample vertices are not breaks: they sample a function, they are not
     corners the designer drew.
 
-    >>> from showpy.choreo.models import TransitionSpec, PathRow, Placement, Waypoint
+    >>> from showpy.choreo.path_models import TransitionSpec, PathRow, Waypoint
+    >>> from showpy.choreo.models import Placement
     >>> from showpy.choreo.motion import DEFAULT_MOTIONS
     >>> spec = TransitionSpec(id=("1", "2"), counts=8.0)
     >>> a, b = Placement(entity="A", x=0, y=0), Placement(entity="A", x=0, y=4)

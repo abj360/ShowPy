@@ -37,7 +37,7 @@ from typing import Any, get_args
 
 import numpy as np
 
-from showpy.choreo.models import MAX_TEXT_FONTS, CrowdedStroke, Form, TextRecipe, TextReport
+from showpy.choreo.form_models import MAX_TEXT_FONTS, CrowdedStroke, Form, TextRecipe, TextReport
 from showpy.choreo.text_spread import SlotSpreader, StrokeSpread, stroke_gap
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import (

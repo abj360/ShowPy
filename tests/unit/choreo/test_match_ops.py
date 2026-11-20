@@ -33,11 +33,13 @@ Contains:
 
 import pytest
 
+from showpy.choreo.form_models import FacingSpec, Form
 from showpy.choreo.form_place import place, rebuild
 from showpy.choreo.forms import circle_form, line_form, slot_poses, text_form
 from showpy.choreo.match import match, match_by_order
+from showpy.choreo.match_models import MatchResult
 from showpy.choreo.match_ops import apply_match, clear_rows, suggest_swaps, swap, with_set
-from showpy.choreo.models import FacingSpec, Form, MatchResult, TransitionSpec
+from showpy.choreo.path_models import TransitionSpec
 from showpy.core.errors import LockedError, MatchError, SpacingError, UnknownRefError
 from showpy.core.ids import FormId, SpotId, make_tid
 from showpy.core.util import approx_equal

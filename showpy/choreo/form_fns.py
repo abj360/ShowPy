@@ -23,7 +23,7 @@ from typing import Any
 
 import numpy as np
 
-from showpy.choreo.models import FormFnInfo
+from showpy.choreo.form_models import FormFnInfo
 from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
 from showpy.core.types import FrozenModel, Point, Points
 from showpy.core.util import as_points, close_matches

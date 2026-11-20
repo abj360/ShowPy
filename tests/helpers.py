@@ -44,7 +44,8 @@ import pytest
 from showpy.choreo.form_place import place
 from showpy.choreo.forms import line_form
 from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import PathRow, PathStyle, Placement, Set, TransitionSpec, Waypoint
+from showpy.choreo.models import Placement, Set
+from showpy.choreo.path_models import PathRow, PathStyle, TransitionSpec, Waypoint
 from showpy.core.errors import ShowPyError, bounded_repr
 from showpy.core.ids import SetId, SpotId, make_tid
 from showpy.core.json_types import JsonValue

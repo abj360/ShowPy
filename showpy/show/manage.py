@@ -22,7 +22,8 @@ import string
 from collections.abc import Mapping, Sequence
 
 from showpy.cast.models import Cast
-from showpy.choreo.models import Placement, Route, Set, TransitionSpec, Waypoint
+from showpy.choreo.models import Placement, Set
+from showpy.choreo.path_models import Route, TransitionSpec, Waypoint
 from showpy.core.errors import (
     PathError,
     SchemaError,

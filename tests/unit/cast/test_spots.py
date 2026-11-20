@@ -44,10 +44,7 @@ from showpy.cast.spots import (
     set_claimable,
     set_shape,
 )
-from showpy.choreo.models import (
-    FacingMode,
-    PathRow,
-)
+from showpy.choreo.path_models import FacingMode, PathRow
 from showpy.core.errors import (
     LockedError,
     SchemaError,

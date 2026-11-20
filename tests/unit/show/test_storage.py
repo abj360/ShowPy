@@ -11,7 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from showpy.choreo.models import Form, PathRow, TransitionSpec
+from showpy.choreo.form_models import Form
+from showpy.choreo.path_models import PathRow, TransitionSpec
 from showpy.core.errors import (
     ConflictError,
     SchemaError,

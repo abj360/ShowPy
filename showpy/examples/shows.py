@@ -18,7 +18,8 @@ from collections.abc import Mapping
 from typing import Any
 
 from showpy.cast.models import Cast, Group, Spot
-from showpy.choreo.models import PathRow, Placement, Route, Set, TransitionSpec
+from showpy.choreo.models import Placement, Set
+from showpy.choreo.path_models import PathRow, Route, TransitionSpec
 from showpy.core.ids import make_tid
 from showpy.examples.sheets import field_sheet
 from showpy.show.models import Show

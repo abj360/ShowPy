@@ -15,7 +15,8 @@ import math
 
 import pytest
 
-from showpy.choreo.models import PathRow, PathStyle, Placement, Set
+from showpy.choreo.models import Placement, Set
+from showpy.choreo.path_models import PathRow, PathStyle
 from showpy.core.errors import SchemaError, UnknownRefError
 from showpy.core.ids import SetId, SpotId
 from showpy.core.util import approx_equal

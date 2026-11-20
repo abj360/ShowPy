@@ -25,7 +25,7 @@ from collections.abc import Callable
 import pytest
 
 from showpy.choreo.engine import PathEngine
-from showpy.choreo.models import Easing, FacingMode, PathRow, PathStyle, TransitionSpec
+from showpy.choreo.path_models import Easing, FacingMode, PathRow, PathStyle, TransitionSpec
 from showpy.choreo.paths import (
     add_waypoint,
     arrive_early,

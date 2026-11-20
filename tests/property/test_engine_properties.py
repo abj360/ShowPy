@@ -16,7 +16,7 @@ from hypothesis import strategies as st
 
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_compile import plan_positions
-from showpy.choreo.models import Easing, EasingKind, PathRow, PathStyle, Waypoint
+from showpy.choreo.path_models import Easing, EasingKind, PathRow, PathStyle, Waypoint
 from showpy.core.ids import SpotId
 from showpy.core.util import approx_equal
 from tests.fixtures.motion_shows import TID, with_rows
