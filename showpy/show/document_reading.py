@@ -17,7 +17,7 @@ Contains:
 import itertools
 from collections.abc import Callable, Mapping
 from functools import partial
-from typing import Any, NamedTuple
+from typing import NamedTuple
 
 from showpy.choreo.form_models import Form
 from showpy.choreo.models import Set
@@ -58,8 +58,8 @@ from showpy.show.migrate import (
 )
 from showpy.show.models import Show
 
-JsonObject = dict[str, Any]  # Any: parsed JSON values of any type
-JsonArray = list[Any]  # Any: parsed JSON values of any type
+type JsonObject = dict[str, JsonValue]
+type JsonArray = list[JsonValue]
 
 
 class _Source(NamedTuple):
@@ -147,8 +147,9 @@ class _Reading(NamedTuple):
 
 def _set(reading: _Reading, key: str) -> Set:
     raw = _load_object(reading.source, set_doc(key))
-    if isinstance(raw.get("key"), str):
-        check_id(raw["key"], kind="set key")
+    stored_key = raw.get("key")
+    if isinstance(stored_key, str):
+        check_id(stored_key, kind="set key")
     if "key" not in raw:
         raw = {**raw, "key": key}
     loaded = Set.model_validate(raw, context=reading.context)
@@ -363,9 +364,8 @@ def _paths_by_pair(dump: Mapping[str, JsonValue], keys: Mapping[str, str]) -> Js
     found: JsonObject = {}
     for spec in _dump_list(dump, TRANSITIONS_FIELD):
         pair = spec.get("id")
-        texts = isinstance(pair, list) and all(isinstance(part, str) for part in pair)
-        ids = tuple(pair) if isinstance(pair, list) and texts else None
-        if ids is None or ids not in consecutive:
+        ids = [part for part in pair if isinstance(part, str)] if isinstance(pair, list) else []
+        if not isinstance(pair, list) or len(ids) != len(pair) or tuple(ids) not in consecutive:
             raise SchemaError(
                 f"show field {TRANSITIONS_FIELD} holds paths for {pair!r}, which are not two"
                 " consecutive sets",
@@ -373,7 +373,8 @@ def _paths_by_pair(dump: Mapping[str, JsonValue], keys: Mapping[str, str]) -> Js
                 " remove the entry or point it at a consecutive pair",
                 context={"field": TRANSITIONS_FIELD, "pair": repr(pair)},
             )
-        path = paths_doc((keys[ids[0]], keys[ids[1]]))
+        first, second = ids
+        path = paths_doc((keys[first], keys[second]))
         if path in found:
             raise _shape_error(f"show field {TRANSITIONS_FIELD}", "one entry per pair", pair)
         found[path] = spec

@@ -204,7 +204,7 @@ def import_json(d: Mapping[str, Any]) -> Show:
         raise friendly from error
 
 
-def _document_version(d: Mapping[str, Any]) -> int:
+def _document_version(d: Mapping[str, object]) -> int:
     """Reads the format version of an interchange document from its tag or header."""
     if SCHEMA_KEY not in d:
         return version_of(d, name=DOCUMENT_NAME) if FORMAT_KEY in d else _unknown_tag(None)

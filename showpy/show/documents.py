@@ -63,7 +63,6 @@ from showpy.show.migrate import SHOW_DOC as SHOW_DOC
 from showpy.show.models import Show
 from showpy.show.set_keys import set_key
 
-JsonObject = dict[str, Any]  # Any: parsed JSON values of any type
 JSON_INDENT = 2
 NEGATIVE_ZERO = re.compile(r"-0\.0\b")
 RESERVED_KEY_PREFIX = "$showpy:"
