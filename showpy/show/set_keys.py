@@ -17,8 +17,9 @@ Contains:
 from collections.abc import Iterable, Mapping
 
 from showpy.choreo.models import Set
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import StorageError
-from showpy.core.ids import SetId, check_id
+from showpy.core.ids import check_id
 from showpy.show.models import Show
 
 SETS_ROOT = "sets"
@@ -40,7 +41,7 @@ def set_key(current: Set) -> str:
     return current.key or current.id
 
 
-def free_set_key(taken: Iterable[str], set_id: SetId) -> str:
+def free_set_key(taken: Iterable[str], set_id: str) -> str:
     """Returns `set_id` as a new set's key, or the first `<set_id>.<n>` (n from 2) still free.
 
     Keys compare ignoring case.
@@ -69,7 +70,7 @@ def _ambiguous(path: str, folder: str, owner: str, target: str) -> StorageError:
         hint=f"address that set as /sets/{owner}/…; add sets with add_set() and save_show(),"
         " which pick a free key",
         context={"path": path, "folder": folder, "set": owner, "matches": target},
-        code="AMBIGUOUS_PATH",
+        code=ErrorCode.AMBIGUOUS_PATH,
     )
 
 

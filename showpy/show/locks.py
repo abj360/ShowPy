@@ -7,7 +7,8 @@ Contains:
     require_unlocked(): raises LockedError when an edit touches a pinned or locked item
 """
 
-from showpy.choreo.models import Set, TransitionSpec
+from showpy.choreo.models import Set
+from showpy.choreo.path_models import TransitionSpec
 from showpy.core.errors import LockedError
 from showpy.core.ids import format_tid
 from showpy.show.models import Show
@@ -60,7 +61,7 @@ def locked_row_changes(before: TransitionSpec, after: TransitionSpec) -> list[st
     Returns:
         touched: Readable names such as `path T1 in 1→2`, in row order.
 
-    >>> from showpy.choreo.models import TransitionSpec
+    >>> from showpy.choreo.path_models import TransitionSpec
     >>> locked_row_changes(TransitionSpec(id=("1", "2"), counts=8.0), TransitionSpec(
     ...     id=("1", "2"), counts=8.0))
     []
@@ -116,7 +117,7 @@ def locked_changes(before: Show, after: Show) -> list[str]:
     ]
 
 
-def require_unlocked(before: Show, after: Show, force: bool = False) -> None:
+def require_unlocked(before: Show, after: Show, *, force: bool = False) -> None:
     """Raises LockedError when `after` touches what `before` pins or locks, unless forced.
 
     >>> from showpy.examples import two_set_show

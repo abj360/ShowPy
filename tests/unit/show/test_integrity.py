@@ -4,6 +4,8 @@
 test_integrity.py --- checks that the write funnel refuses bad paths and undecodable shows
 
 Contains:
+    test_regression_lazy_blobs_digests_are_read_only: the digest view refuses writes and does not
+        alias the tree it was built from
     test_regression_look_alike_paths_are_refused: refuses paths that only look inside a root
     test_regression_deleting_a_bad_path_is_refused: checks the path of a deletion too
     test_regression_unknown_root_names_the_roots_in_the_hint: gives a hint listing the roots
@@ -498,3 +500,14 @@ def test_regression_lazy_blobs_get_fails_closed_on_a_missing_blob() -> None:
     with pytest.raises(StorageError):
         blobs["/renders/a.txt"]
     assert blobs.get("/renders/b.txt") is None
+
+
+def test_regression_lazy_blobs_digests_are_read_only() -> None:
+    tree = {"/renders/a.txt": "d"}
+    blobs = LazyBlobs(tree, _missing_blob)
+    digests = blobs.digests
+    assert digests == tree
+    with pytest.raises(TypeError):
+        digests["/renders/a.txt"] = "e"  # type: ignore[index]
+    assert not hasattr(digests, "update")
+    assert blobs.digests["/renders/a.txt"] == "d"

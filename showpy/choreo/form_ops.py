@@ -25,6 +25,7 @@ import numpy as np
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
 from showpy.choreo.form_layout import CURVE_KINDS, curve_stations, layout, slot_count
+from showpy.choreo.form_models import FacingSpec, Form, TextRecipe
 from showpy.choreo.form_text import (
     reject_count_change,
     require_edited_members,
@@ -50,9 +51,10 @@ from showpy.choreo.forms import (
     wedge_form,
 )
 from showpy.choreo.match import match
-from showpy.choreo.models import FacingSpec, Form, Set, TextRecipe
+from showpy.choreo.models import Set
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, SpacingError
-from showpy.core.ids import FormId, SpotId
+from showpy.core.ids import SpotId
 from showpy.core.types import Degrees, Point, Points
 from showpy.core.units import normalize_angle
 from showpy.core.util import close_matches, natural_sort
@@ -80,7 +82,7 @@ RECIPE_KEYS = {
 TRIMMABLE_FACINGS = frozenset({"audience", "fixed", "along", "normal", "toward_point"})
 HALF_TURN = 180.0
 
-type Order = Sequence[SpotId] | Literal["reverse", "by_x", "by_y", "nearest_prev"]
+type Order = Sequence[str] | Literal["reverse", "by_x", "by_y", "nearest_prev"]
 
 
 def _allowed_keys(form: Form) -> frozenset[str]:
@@ -112,9 +114,9 @@ def _edited_geometry(form: Form, changes: dict[str, Any]) -> dict[str, Any]:
 # Any: changes are construction values or form fields of any type.
 def edit(
     form: Form,
+    *,
     force: bool = False,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
-    *,
     font_registry: FontRegistry | None = None,
     **changes: Any,
 ) -> Form:
@@ -128,7 +130,7 @@ def edit(
     >>> edit(f, radius=3.0).geometry["curve"]["radius"]
     3.0
     """
-    check_unlocked(form, force)
+    check_unlocked(form, force=force)
     if form.kind == "text":
         reject_count_change(form.id, changes)
         changes = resolve_edit_fonts(form.id, changes, font_registry)
@@ -150,7 +152,7 @@ def _check_layout(form: Form, registry: FormFnRegistry, font_registry: FontRegis
     try:
         layout(form, registry, font_registry=font_registry)
     except SpacingError as exc:
-        if form.kind == "text" and exc.code == "TOO_FEW_SPOTS":
+        if form.kind == "text" and exc.code == ErrorCode.TOO_FEW_SPOTS:
             raise too_few_for_edit(exc) from exc
         raise
 
@@ -170,11 +172,9 @@ def _ranked_members(form: Form, axis: int, prev_set: Set | None) -> list[SpotId]
 
 def _by_axis(form: Form, axis: int, prev_set: Set | None, registry: FormFnRegistry) -> list[SpotId]:
     pts = slots(form, registry)[: len(form.members)]
-    by_slot: list[SpotId] = [""] * len(form.members)
     ranked = zip(_ranked_slots(pts, axis), _ranked_members(form, axis, prev_set), strict=True)
-    for slot, member in ranked:
-        by_slot[slot] = member
-    return by_slot
+    by_slot = dict(ranked)
+    return [by_slot[slot] for slot in range(len(form.members))]
 
 
 def _nearest_prev(form: Form, prev_set: Set, registry: FormFnRegistry) -> list[SpotId]:
@@ -183,20 +183,22 @@ def _nearest_prev(form: Form, prev_set: Set, registry: FormFnRegistry) -> list[S
     return sorted(form.members, key=lambda m: result.assignment[m])
 
 
-def _explicit(form: Form, order: Sequence[SpotId]) -> list[SpotId]:
+def _explicit(form: Form, order: Sequence[str]) -> list[SpotId]:
     if sorted(order) != sorted(form.members):
         raise SchemaError(
             f"new order for form {form.id} is not a reordering of its members",
             hint="list every current member exactly once",
             context={"form": form.id, "members": list(form.members)},
         )
-    return list(order)
+    members: dict[str, SpotId] = {member: member for member in form.members}
+    return [members[spot_id] for spot_id in order]
 
 
 def reorder(
     form: Form,
     order: Order,
     prev_set: Set | None = None,
+    *,
     force: bool = False,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
 ) -> Form:
@@ -209,7 +211,7 @@ def reorder(
     >>> reorder(line_form("f", ["A", "B", "C"], (0, 0), (2, 0)), "reverse").members
     ('C', 'B', 'A')
     """
-    check_unlocked(form, force)
+    check_unlocked(form, force=force)
     if order == "reverse":
         members = list(form.members[::-1])
     elif order in ("by_x", "by_y"):
@@ -223,7 +225,7 @@ def reorder(
     return form.replace(members=tuple(members))
 
 
-def _split_index(form: Form, at: int | SpotId) -> int:
+def _split_index(form: Form, at: int | str) -> int:
     index = form.members.index(at) if isinstance(at, str) and at in form.members else at
     if not isinstance(index, int) or not 0 < index < len(form.members):
         raise SchemaError(
@@ -234,7 +236,7 @@ def _split_index(form: Form, at: int | SpotId) -> int:
     return index
 
 
-def _custom_part(form: Form, part_id: FormId, lo: int, hi: int, registry: FormFnRegistry) -> Form:
+def _custom_part(form: Form, part_id: str, lo: int, hi: int, registry: FormFnRegistry) -> Form:
     pts, facings = slot_poses(form, registry)
     part = custom_form(part_id, form.members[lo:hi], pts[lo:hi], facings[lo:hi], set_id=form.set)
     return part.replace(meta=dict(form.meta))
@@ -251,7 +253,7 @@ def _trimmable(form: Form, lo: int, hi: int) -> bool:
     )
 
 
-def _trimmed_part(form: Form, part_id: FormId, lo: int, hi: int) -> Form:
+def _trimmed_part(form: Form, part_id: str, lo: int, hi: int) -> Form:
     curve = curve_from_construction(form.geometry["curve"])
     stations = curve_stations(curve, form.spacing, slot_count(form))
     trimmed = TrimmedCurve(base=curve, s0=float(stations[lo]), s1=float(stations[hi - 1]))
@@ -265,8 +267,9 @@ def _trimmed_part(form: Form, part_id: FormId, lo: int, hi: int) -> Form:
 
 def split_form(
     form: Form,
-    at: int | SpotId,
-    ids: tuple[FormId, FormId] | None = None,
+    at: int | str,
+    ids: tuple[str, str] | None = None,
+    *,
     force: bool = False,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
 ) -> tuple[Form, Form]:
@@ -279,7 +282,7 @@ def split_form(
     >>> a.members, slots(b).tolist()
     (('A', 'B'), [[2.0, 0.0], [3.0, 0.0]])
     """
-    check_unlocked(form, force)
+    check_unlocked(form, force=force)
     index = _split_index(form, at)
     first_id, second_id = ids or (f"{form.id}-1", f"{form.id}-2")
     parts = []
@@ -296,7 +299,8 @@ def split_form(
 def merge_forms(
     a: Form,
     b: Form,
-    form_id: FormId,
+    form_id: str,
+    *,
     force: bool = False,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
 ) -> Form:
@@ -307,8 +311,8 @@ def merge_forms(
     >>> merged.members, slots(merged).tolist()
     (('A', 'B'), [[0.5, 0.0], [5.5, 0.0]])
     """
-    check_unlocked(a, force)
-    check_unlocked(b, force)
+    check_unlocked(a, force=force)
+    check_unlocked(b, force=force)
     if a.set != b.set:
         raise SchemaError(
             f"forms {a.id} and {b.id} belong to sets {a.set} and {b.set}",
@@ -386,7 +390,7 @@ def _mapped_geometry(form: Form, matrix: Matrix) -> dict[str, Any]:
     return {**g, "transform": composed.tolist()}
 
 
-def transform_form(form: Form, matrix: Matrix, force: bool = False) -> Form:
+def transform_form(form: Form, matrix: Matrix, *, force: bool = False) -> Form:
     """Maps a form through a 3x3 affine matrix; slots and facings map exactly.
 
     >>> from showpy.geo.affine import translation_matrix
@@ -395,7 +399,7 @@ def transform_form(form: Form, matrix: Matrix, force: bool = False) -> Form:
     >>> slots(moved).tolist()
     [[0.0, 3.0], [2.0, 3.0]]
     """
-    check_unlocked(form, force)
+    check_unlocked(form, force=force)
     return form.replace(
         geometry=_mapped_geometry(form, matrix), facing=_mapped_facing(form.facing, matrix)
     )
@@ -419,6 +423,7 @@ def gate(
     form: Form,
     hinge: Literal["start", "end"] | int,
     deg: Degrees,
+    *,
     force: bool = False,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
 ) -> Form:
@@ -428,10 +433,14 @@ def gate(
     >>> slots(gated).round(6).tolist()
     [[0.0, 0.0], [0.0, 2.0]]
     """
-    return transform_form(form, rotation_matrix(deg, _hinge_point(form, hinge, registry)), force)
+    return transform_form(
+        form, rotation_matrix(deg, _hinge_point(form, hinge, registry)), force=force
+    )
 
 
-def pinwheel(forms: Sequence[Form], center: Point, deg: Degrees, force: bool = False) -> list[Form]:
+def pinwheel(
+    forms: Sequence[Form], center: Point, deg: Degrees, *, force: bool = False
+) -> list[Form]:
     """Rotates every form counter-clockwise by `deg` about one center, like spokes.
 
     >>> spokes = [line_form("a", ["A"], (1, 0), (2, 0)), line_form("b", ["B"], (-1, 0), (-2, 0))]
@@ -439,7 +448,7 @@ def pinwheel(forms: Sequence[Form], center: Point, deg: Degrees, force: bool = F
     [[[0.0, 1.5]], [[0.0, -1.5]]]
     """
     matrix = rotation_matrix(deg, center)
-    return [transform_form(form, matrix, force) for form in forms]
+    return [transform_form(form, matrix, force=force) for form in forms]
 
 
 def form_templates() -> dict[str, Callable[..., Form]]:

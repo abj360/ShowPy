@@ -3,6 +3,7 @@ storage.py --- the repository and asset protocols plus the file view of a show
 
 Contains:
     ROOT_REVISION: names the revision before the first save
+    WORKSPACE_DECODE_CACHE_SIZE: bounds the documents one workspace keeps decoded
     Repository: versions a show's documents; every write checks the expected revision
     AssetStore: stores binary assets under content-hash URIs
     Workspace: exposes one show as files, reading at its own revision like a working copy
@@ -22,10 +23,13 @@ from collections.abc import Collection, Mapping
 from datetime import datetime
 from typing import Protocol
 
-from showpy.choreo.models import Form, Set, TransitionSpec
+from showpy.choreo.form_models import Form
+from showpy.choreo.models import Set
+from showpy.choreo.path_models import TransitionSpec
 from showpy.core.errors import StorageError, UnknownRefError
-from showpy.core.ids import SetId, TransitionId
+from showpy.core.ids import SetId
 from showpy.core.util import close_matches
+from showpy.show.decode_cache import DecodeCache
 from showpy.show.documents import SHOW_DOC, decode_show, encode_documents, is_show_doc, split_path
 from showpy.show.files import (
     all_files,
@@ -34,11 +38,15 @@ from showpy.show.files import (
     show_changes,
     staged_changes,
 )
+from showpy.show.integrity import LazyBlobs
 from showpy.show.models import Revision, Show
 from showpy.show.set_keys import SetFolders
 from showpy.time.models import Timeline
 
 ROOT_REVISION = ""
+# A tree keeps three documents per set (set, forms, paths): two trees of a 60-set show are about
+# 360 documents, so 512 holds the revision being read and its parent, about 35 MB at 300 spots.
+WORKSPACE_DECODE_CACHE_SIZE = 512
 
 
 class Repository(Protocol):
@@ -115,7 +123,7 @@ class Repository(Protocol):
         """Returns set IDs in show order."""
         ...
 
-    def get_set(self, show_id: str, set_id: SetId) -> Set:
+    def get_set(self, show_id: str, set_id: str) -> Set:
         """Returns one set."""
         ...
 
@@ -133,14 +141,14 @@ class Repository(Protocol):
         """
         ...
 
-    def get_script(self, show_id: str, set_id: SetId) -> str:
+    def get_script(self, show_id: str, set_id: str) -> str:
         """Returns a set's build script."""
         ...
 
     def put_script(
         self,
         show_id: str,
-        set_id: SetId,
+        set_id: str,
         source: str,
         *,
         expected_revision: str,
@@ -152,7 +160,7 @@ class Repository(Protocol):
         """
         ...
 
-    def get_paths(self, show_id: str, tid: TransitionId) -> TransitionSpec:
+    def get_paths(self, show_id: str, tid: tuple[str, str]) -> TransitionSpec:
         """Returns a transition's paths, defaulting to straight moves."""
         ...
 
@@ -170,14 +178,14 @@ class Repository(Protocol):
         """
         ...
 
-    def get_forms(self, show_id: str, set_id: SetId) -> tuple[Form, ...]:
+    def get_forms(self, show_id: str, set_id: str) -> tuple[Form, ...]:
         """Returns a set's forms sorted by ID."""
         ...
 
     def put_forms(
         self,
         show_id: str,
-        set_id: SetId,
+        set_id: str,
         forms: tuple[Form, ...],
         *,
         expected_revision: str,
@@ -235,6 +243,8 @@ class Workspace:
         self._revision = revision
         self._trees: dict[str, Mapping[str, bytes]] = {}
         self._shows: dict[str, Show | None] = {}
+        # Serves only show_at, which validates with one context, so entries never mix contexts.
+        self._decode_cache = DecodeCache(WORKSPACE_DECODE_CACHE_SIZE)
         self._canonical_revisions: set[str] = set()
 
     @property
@@ -259,11 +269,20 @@ class Workspace:
         return self._trees[revision]
 
     def show_at(self, revision: str) -> Show | None:
-        """Returns the show at a revision, or None before the first save; cached like trees."""
+        """Returns the show at a revision, or None before the first save; cached like trees.
+
+        Documents whose content digest an earlier call already decoded are reused, so stepping
+        through revisions decodes only what each one changed; the show is still validated whole.
+        """
         if revision not in self._shows:
             tree = self.tree_at(revision)
-            self._shows = {revision: decode_show(tree, revision) if SHOW_DOC in tree else None}
+            self._shows = {revision: self._decoded(tree, revision) if SHOW_DOC in tree else None}
         return self._shows[revision]
+
+    def _decoded(self, tree: Mapping[str, bytes], revision: str) -> Show:
+        """Decodes a tree, reusing documents whose blob digest an earlier revision decoded."""
+        digests = tree.digests if isinstance(tree, LazyBlobs) else None
+        return decode_show(tree, revision, cache=self._decode_cache, digests=digests)
 
     def _show(self) -> Show | None:
         return self.show_at(self._revision)
@@ -388,10 +407,12 @@ class Workspace:
             revision: The new head; the workspace moves to it.
         """
         base = self._revision if expected_revision is None else expected_revision
-        normalizing = self._normalizing_for(base, changes, is_complete)
+        normalizing = self._normalizing_for(base, changes, is_complete=is_complete)
         if not normalizing:
             return self._remembered(
-                self._commit_stored(changes, at=at, expected_revision=base), changes, is_complete
+                self._commit_stored(changes, at=at, expected_revision=base),
+                changes,
+                is_complete=is_complete,
             )
         normalized = self._commit_stored(normalizing, at=at, expected_revision=base)
         self._canonical_revisions.add(normalized.id)
@@ -400,11 +421,11 @@ class Workspace:
         return self._remembered(
             self._commit_stored(remaining, at=at, expected_revision=normalized.id),
             changes,
-            is_complete,
+            is_complete=is_complete,
         )
 
     def _normalizing_for(
-        self, base: str, changes: Mapping[str, bytes | None], is_complete: bool
+        self, base: str, changes: Mapping[str, bytes | None], *, is_complete: bool
     ) -> dict[str, bytes | None]:
         """Lists the re-encodings a change over `base` needs first, empty for a known revision."""
         if base in self._canonical_revisions:
@@ -420,7 +441,7 @@ class Workspace:
         return normalizing
 
     def _remembered(
-        self, revision: Revision, changes: Mapping[str, bytes | None], is_complete: bool
+        self, revision: Revision, changes: Mapping[str, bytes | None], *, is_complete: bool
     ) -> Revision:
         """Remembers a new revision as canonical when its change wrote only canonical documents."""
         if is_complete or not any(is_show_doc(p) for p in changes):

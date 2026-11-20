@@ -15,15 +15,17 @@ import itertools
 import math
 from collections.abc import Sequence
 from dataclasses import astuple, dataclass
+from typing import TYPE_CHECKING
 
-import pandas as pd
 import shapely
 
 from showpy.cast.select import select
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import MotionPlan
-from showpy.choreo.models import PathRow, PathStyle, Placement
-from showpy.core.ids import SetId, SpotId, TransitionId
+from showpy.choreo.models import Placement
+from showpy.choreo.path_models import PathRow, PathStyle
+from showpy.core.extras import require_extra
+from showpy.core.ids import SpotId, TransitionId
 from showpy.core.selection import Selection
 from showpy.core.types import Count, Point
 from showpy.core.units import normalize_angle
@@ -35,6 +37,9 @@ from showpy.time.clock import count_to_seconds, seconds_to_count
 from showpy.time.measures import count_to_measure
 from showpy.time.models import TimelineMode
 from showpy.time.timeline import cue_to_seconds
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 OFF_FIELD = "off field"
 START = "start"
@@ -157,7 +162,7 @@ def _sheet_row(
     placement = current.get(entity)
     behavior, crossings = START, NO_CROSSINGS
     if index > 0:
-        tid = (show.sets[index - 1].id, current.id)
+        tid = TransitionId(show.sets[index - 1].id, current.id)
         plan = engine.compile(tid).plans[entity]
         behavior = _behavior(plan, show.transition(tid).row(entity), current.counts)
         crossings = _crossings(show, engine, entity, tid)
@@ -186,7 +191,7 @@ def _build_sheet(
 
 def coordinate_sheet(
     show: Show,
-    entity: SpotId,
+    entity: str,
     precision: float | None = None,
     publication: Publication | None = None,
 ) -> CoordinateSheet:
@@ -206,12 +211,13 @@ def coordinate_sheet(
     ['start', 'move 8']
     """
     worded = _with_precision(show, precision)
-    return _build_sheet(worded, PathEngine(worded), entity, _claimed_names(publication))
+    spot_id = worded.cast.spot(entity).id
+    return _build_sheet(worded, PathEngine(worded), spot_id, _claimed_names(publication))
 
 
 def coordinate_sheets(
     show: Show,
-    sel: str | Sequence[SpotId] | Selection = "all",
+    sel: str | Sequence[str] | Selection = "all",
     publication: Publication | None = None,
     precision: float | None = None,
 ) -> list[CoordinateSheet]:
@@ -226,7 +232,7 @@ def coordinate_sheets(
     return [_build_sheet(worded, engine, e, names) for e in select(worded, sel).ids]
 
 
-def chart(show: Show, set_id: SetId, publication: Publication | None = None) -> Chart:
+def chart(show: Show, set_id: str, publication: Publication | None = None) -> Chart:
     """Builds the designer chart of one set: every spot's position, facing and form.
 
     >>> from showpy.examples import two_set_show
@@ -252,7 +258,7 @@ def chart(show: Show, set_id: SetId, publication: Publication | None = None) -> 
                 note=placement.note,
             )
         )
-    return Chart(set_id=set_id, rows=tuple(rows))
+    return Chart(set_id=current.id, rows=tuple(rows))
 
 
 def _clock_known(show: Show) -> bool:
@@ -322,15 +328,19 @@ def _cue_entries(show: Show) -> list[_CueEntry]:
     return entries
 
 
-def cue_sheet(show: Show) -> pd.DataFrame:
+def cue_sheet(show: Show) -> "pd.DataFrame":
     """Lists set labels and cues, timeline markers and cue-mode cues in count order.
 
-    In cue mode without a tempo, counts and seconds cannot convert and show as NaN.
+    In cue mode without a tempo, counts and seconds cannot convert and show as NaN. Needs the
+    `tables` extra.
 
     >>> from showpy.examples import two_set_show
     >>> list(cue_sheet(two_set_show()).columns)
     ['count', 'seconds', 'measure', 'kind', 'label', 'detail']
     """
+    require_extra("pandas", extra="tables", needed_by="cue_sheet")
+    import pandas as pd
+
     entries = _set_entries(show) + _marker_entries(show) + _cue_entries(show)
     rows = [astuple(entry) for entry in sorted(entries, key=_CueEntry.key)]
     table = pd.DataFrame(rows, columns=list(CUE_COLUMNS))

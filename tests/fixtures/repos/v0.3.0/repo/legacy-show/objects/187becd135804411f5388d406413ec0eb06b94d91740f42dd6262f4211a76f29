@@ -1,0 +1,23 @@
+{
+  "audio": [],
+  "cues": [],
+  "holds": [],
+  "markers": [],
+  "measures": null,
+  "mode": "counts",
+  "tempos": [
+    {
+      "at_count": 0.0,
+      "counts_per_minute": 144.0,
+      "ramp_counts": null,
+      "ramp_to": null
+    },
+    {
+      "at_count": 56.0,
+      "counts_per_minute": 160.0,
+      "ramp_counts": 12.0,
+      "ramp_to": 176.0
+    }
+  ],
+  "total_counts": null
+}

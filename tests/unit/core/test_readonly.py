@@ -56,3 +56,15 @@ def test_read_only_annotation_stores_a_read_only_map_and_dumps_a_dict() -> None:
     assert isinstance(holder.table, ReadOnlyMap)
     assert holder.model_dump() == {"table": {"a": 1}}
     assert Holder.model_validate_json(holder.model_dump_json()) == holder
+
+
+def test_read_only_map_hashes_equal_maps_alike_in_any_order() -> None:
+    first, second = ReadOnlyMap({"a": 1, "b": (2, 3)}), ReadOnlyMap({"b": (2, 3), "a": 1})
+    assert first == second
+    assert hash(first) == hash(second)
+    assert len({first, second}) == 1
+
+
+def test_read_only_map_with_an_unhashable_value_is_unhashable() -> None:
+    with pytest.raises(TypeError):
+        hash(ReadOnlyMap({"a": ([1],)}))

@@ -214,7 +214,7 @@ def test_regression_short_audio_does_not_truncate_the_video(tmp_path: Path) -> N
         px_per_m=SMALL_PX_PER_M,
         audio={MUSIC: _wav(0.5)},
     )
-    assert approx_equal(_duration_s(_probe(data, tmp_path)), RANGE_SECONDS, DURATION_TOL_S)
+    assert approx_equal(_duration_s(_probe(data, tmp_path)), RANGE_SECONDS, abs_tol=DURATION_TOL_S)
 
 
 @pytest.mark.defect("UP-9.5-47")

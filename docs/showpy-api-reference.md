@@ -100,32 +100,33 @@ The foundation every other module imports: one unit system, shared types and IDs
 | `angle_diff(a, b)`                                           | `Degrees`, `Degrees`           | `Degrees` in (−180, 180\] | Signed shortest turn                                             |
 | `facing_vector(theta)`                                       | `Degrees`                      | unit `Point`              | Facing to direction, `(sin θ, −cos θ)`; 0° → (0, −1)             |
 | `vector_facing(v)`                                           | `Point`                        | `Degrees` in \[0, 360)    | Direction to facing; raises `ZeroLengthError` on (0, 0)          |
-| `round_to(value, precision=0.01)`                            | `float`, `float`               | `float`                   | Display rounding, half away from zero                            |
+| `round_to(value, step=0.01)`                                 | `float`, `float`               | `float`                   | Display rounding, half away from zero                            |
 
 ### showpy.core.errors
 
 Every error has `code: str`, `message: str`, `context: dict`, `hint: str`, and is raised as `ShowPyError(message, *, hint, context=None, code=None)`; `code` defaults to the class's own code (`UNKNOWN_REF`, `LOCKED`, ...). `str(error)` reads `CODE: message (hint: ...)`.
 
-| Class               | Parent          | Raised when                                                        |
-| ------------------- | --------------- | ------------------------------------------------------------------ |
-| `ShowPyError`       | `Exception`     | Base of all library errors                                         |
-| `UnknownRefError`   | `ShowPyError`   | An ID, name or unit does not resolve; hint lists close matches     |
-| `VersionError`      | `ShowPyError`   | A pinned version is missing or incompatible                        |
-| `SchemaError`       | `ShowPyError`   | Data fails its JSON schema or text format; names the field         |
-| `GeometryError`     | `ShowPyError`   | Degenerate shape (zero radius, open polygon, collinear arc points) |
-| `ZeroLengthError`   | `GeometryError` | Direction of a zero vector requested                               |
-| `SpacingError`      | `ShowPyError`   | Items do not fit; reports the maximum that fits                    |
-| `TimeRangeError`    | `ShowPyError`   | Times outside range or start ≥ end                                 |
-| `TimelineError`     | `ShowPyError`   | Inconsistent tempo, measure or hold data                           |
-| `SurfaceError`      | `ShowPyError`   | A point is off the sheet                                           |
-| `MatchError`        | `ShowPyError`   | No feasible assignment; names the blocking constraint              |
-| `PathError`         | `ShowPyError`   | Invalid path instruction                                           |
-| `ContinuityError`   | `PathError`     | A path does not end on its target placement                        |
-| `LockedError`       | `ShowPyError`   | Edit touches something the designer locked                         |
-| `StorageError`      | `ShowPyError`   | Persistence failure                                                |
-| `ConflictError`     | `StorageError`  | A concurrent edit landed first; lists what changed                 |
-| `ValidationError`   | `ShowPyError`   | Structural integrity failure                                       |
-| `DeprecatedWarning` | `UserWarning`   | Deprecated API used; names the replacement                         |
+| Class               | Parent          | Raised when                                                                                         |
+| ------------------- | --------------- | --------------------------------------------------------------------------------------------------- |
+| `ShowPyError`       | `Exception`     | Base of all library errors                                                                          |
+| `UnknownRefError`   | `ShowPyError`   | An ID, name or unit does not resolve; hint lists close matches                                      |
+| `VersionError`      | `ShowPyError`   | A pinned version is missing or incompatible                                                         |
+| `SchemaError`       | `ShowPyError`   | Data fails its JSON schema or text format; names the field                                          |
+| `GeometryError`     | `ShowPyError`   | Degenerate shape (zero radius, open polygon, collinear arc points)                                  |
+| `ZeroLengthError`   | `GeometryError` | Direction of a zero vector requested                                                                |
+| `SpacingError`      | `ShowPyError`   | Items do not fit; reports the maximum that fits                                                     |
+| `TimeRangeError`    | `ShowPyError`   | Times outside range or start ≥ end                                                                  |
+| `TimelineError`     | `ShowPyError`   | Inconsistent tempo, measure or hold data                                                            |
+| `SurfaceError`      | `ShowPyError`   | A point is off the sheet                                                                            |
+| `MatchError`        | `ShowPyError`   | No feasible assignment; names the blocking constraint                                               |
+| `PathError`         | `ShowPyError`   | Invalid path instruction                                                                            |
+| `ContinuityError`   | `PathError`     | A path does not end on its target placement                                                         |
+| `LockedError`       | `ShowPyError`   | Edit touches something the designer locked                                                          |
+| `StorageError`      | `ShowPyError`   | Persistence failure                                                                                 |
+| `ConflictError`     | `StorageError`  | A concurrent edit landed first; lists what changed                                                  |
+| `ValidationError`   | `ShowPyError`   | Structural integrity failure                                                                        |
+| `MissingExtraError` | `ShowPyError`   | A function needs an extra that is not installed; hint is the install command (`showpy.core.extras`) |
+| `DeprecatedWarning` | `UserWarning`   | Deprecated API used; names the replacement                                                          |
 
 ### Error codes beyond each class's own
 
@@ -161,7 +162,7 @@ Output sizes are checked before anything is allocated; `require_size(requested, 
 
 | Data class         | Fields                                                                                                          | Represents                                                                                |
 | ------------------ | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `ValidationIssue`  | `level: "error" \| "warning", code: str, where: str, message: str, hint: str`                                   | One structural problem, printed as `E: <code> <where>: <message> (hint: ...)` or `W: ...` |
+| `ValidationIssue`  | `level: "error" \| "warning", code: ErrorCode, where: str, message: str, hint: str, context: JsonObject`        | One structural problem, printed as `E: <code> <where>: <message> (hint: ...)` or `W: ...` |
 | `ValidationReport` | `issues: tuple[ValidationIssue, ...]`; property `ok` (no error-level issue); `ValidationReport.merge(*reports)` | Every problem found, printed one line per issue                                           |
 
 ### showpy.core.util
@@ -171,7 +172,7 @@ Output sizes are checked before anything is allocated; `require_size(requested, 
 | `natural_sort(ids)`                             | `Iterable[str]`                                  | `list[str]`                                  | T2 before T10                                                                                                                                                                   |
 | `parse_range(text)`                             | `"T1-T8"`                                        | `list[str]`                                  | Expand ID ranges; a single ID returns itself                                                                                                                                    |
 | `format_ranges(ids)`                            | `Iterable[str]`                                  | `str`, e.g. `"T1–T4, T7"`                    | Compact display                                                                                                                                                                 |
-| `approx_equal(a, b, tol=1e-6)`                  | numbers or arrays                                | `bool`                                       | Float comparison with an absolute tolerance; shape mismatch is unequal                                                                                                          |
+| `approx_equal(a, b, abs_tol=1e-6)`              | numbers or arrays                                | `bool`                                       | Float comparison with an absolute tolerance; shape mismatch is unequal                                                                                                          |
 | `seeded_rng(seed)`                              | `int`                                            | `numpy.random.Generator`                     | The only randomness allowed in the library and scripts                                                                                                                          |
 | `as_points(obj)`                                | tuples, lists, arrays, Shapely, objects with x/y | `Points`                                     | Normalize point inputs                                                                                                                                                          |
 | `content_hash(obj, *, domain="showpy.content")` | any model or bytes                               | `str` (SHA-256 hex)                          | Hash of domain-tagged canonical JSON (RFC 8785), so `1` and `1.0` hash alike and equal content in two domains differs; `domain` is lowercase ASCII letters, digits, `_` and `.` |

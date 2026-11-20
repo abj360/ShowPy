@@ -16,9 +16,11 @@ from dataclasses import dataclass, replace
 
 import numpy as np
 
+from showpy.choreo.form_models import Form
 from showpy.choreo.forms import slots as form_slots
+from showpy.choreo.match_models import MatchOptions
 from showpy.choreo.match_solve import BoolArray, FloatArray
-from showpy.choreo.models import Form, MatchOptions, Set
+from showpy.choreo.models import Set
 from showpy.core.errors import MatchError, SchemaError, UnknownRefError
 from showpy.core.ids import SpotId
 from showpy.core.types import Points
@@ -45,11 +47,11 @@ class MatchProblem:
         slot_groups: Group label per slot; None is open to all.
     """
 
-    entities: tuple[SpotId, ...]
+    entities: tuple[str, ...]
     starts: Points
     facings: tuple[float, ...] | None
     slots: Points
-    groups: Mapping[SpotId, str]
+    groups: Mapping[str, str]
     slot_groups: tuple[str | None, ...]
 
     def permuted(self, order: list[int]) -> "MatchProblem":
@@ -66,8 +68,8 @@ def _slot_points(to_slots: SlotSource) -> Points:
 
 
 def _source(
-    from_: Source, entities: Sequence[SpotId] | None
-) -> tuple[tuple[SpotId, ...], Points, tuple[float, ...] | None]:
+    from_: Source, entities: Sequence[str] | None
+) -> tuple[tuple[str, ...], Points, tuple[float, ...] | None]:
     if isinstance(from_, Set):
         ids = (
             tuple(entities)
@@ -99,8 +101,8 @@ def _labels(m: int, slot_groups: Sequence[str | None] | None) -> tuple[str | Non
 def build_problem(
     from_: Source,
     to_slots: SlotSource,
-    entities: Sequence[SpotId] | None,
-    groups: Mapping[SpotId, str] | None,
+    entities: Sequence[str] | None,
+    groups: Mapping[str, str] | None,
     slot_groups: Sequence[str | None] | None,
 ) -> MatchProblem:
     """Builds a problem from a Set or start points and slot points or forms.

@@ -31,11 +31,12 @@ import pytest
 
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_compile import curvature_bound, easing_chord_error
-from showpy.choreo.models import Easing, PathRow, PathStyle, TransitionSpec, Waypoint
 from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, ease, easing_breaks
+from showpy.choreo.path_models import Easing, PathRow, PathStyle, TransitionSpec, Waypoint
 from showpy.choreo.paths import add_waypoint, set_style
 from showpy.choreo.routes import follow, make_route
 from showpy.core.errors import ContinuityError, PathError, ShowPyError
+from showpy.core.ids import SpotId
 from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
 from showpy.geo.curves import (
@@ -120,13 +121,15 @@ def test_regression_timed_waypoint_survives_style_change_without_index_error(
 @defect("UP-9.2-05")
 def test_regression_engine_and_editors_agree_a_straight_row_has_no_bend() -> None:
     """Moves a STRAIGHT row straight, as the path editors do, even with a waypoint (audit 9.2)."""
-    row = PathRow(entity="T1", style=PathStyle.STRAIGHT, waypoints=(Waypoint(x=1.0, y=7.0),))
+    row = PathRow(
+        entity=SpotId("T1"), style=PathStyle.STRAIGHT, waypoints=(Waypoint(x=1.0, y=7.0),)
+    )
     engine = PathEngine(with_rows({"T1": row}))
     try:
         mid = engine.position("T1", 4.0, local=TID)
     except ShowPyError:
         return
-    assert approx_equal(mid, (0.0, 7.0), tol=1e-6)
+    assert approx_equal(mid, (0.0, 7.0), abs_tol=1e-6)
 
 
 def _stay_at_start(u: FloatArray, start: Point, end: Point, params: object) -> Points:
@@ -145,7 +148,7 @@ def _with_nan_sample(u: FloatArray, start: Point, end: Point, params: object) ->
 
 def _custom_engine(motion: Callable[..., Points]) -> PathEngine:
     registry = DEFAULT_MOTIONS.with_motion("probe", motion)
-    row = PathRow(entity="T1", style=PathStyle.CUSTOM, motion_fn="probe")
+    row = PathRow(entity=SpotId("T1"), style=PathStyle.CUSTOM, motion_fn="probe")
     return PathEngine(with_rows({"T1": row}), motions=registry)
 
 
@@ -175,13 +178,13 @@ def test_regression_timed_waypoint_is_reached_at_its_count_under_easing() -> Non
     """Reaches a waypoint timed "at 2" at count 2 even when the row is eased (audit 9.2)."""
     bend = Waypoint(x=3.0, y=7.0, at=2.0)
     row = PathRow(
-        entity="T1",
+        entity=SpotId("T1"),
         style=PathStyle.POLYLINE,
         waypoints=(bend,),
         easing=Easing(kind="ease_in", strength=2.0),
     )
     engine = PathEngine(with_rows({"T1": row}))
-    assert approx_equal(engine.position("T1", 2.0, local=TID), (bend.x, bend.y), tol=1e-6)
+    assert approx_equal(engine.position("T1", 2.0, local=TID), (bend.x, bend.y), abs_tol=1e-6)
 
 
 def _easing_edges(easing: Easing) -> list[float]:

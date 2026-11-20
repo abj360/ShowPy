@@ -2,9 +2,11 @@
 validation.py --- ValidationIssue and ValidationReport shared by every structural validator
 
 Contains:
-    ValidationIssue: describes one error or warning with location and hint
+    ValidationIssue: describes one error or warning with location, hint and bounded context
     ValidationReport: collects issues, reports ok, renders one line per issue
     ValidationReport.merge(): combines several reports into one
+    ValidationReport.raise_for_errors(): raises a ShowValidationError when any issue is an error
+    ValidationReport.to_json(): renders the report as JSON text
     validate_or_schema_error(): validates data against any pydantic model, raising SchemaError
     validate_adapter(): validates a Python value against a TypeAdapter, raising SchemaError
     validate_adapter_json(): validates JSON bytes or text against a TypeAdapter, raising SchemaError
@@ -12,16 +14,27 @@ Contains:
 """
 
 import math
+from collections.abc import Mapping
 from numbers import Real
-from typing import Literal
+from typing import Literal, SupportsFloat
 
 import numpy as np
-from pydantic import BaseModel, TypeAdapter, ValidationError
+from pydantic import BaseModel, Field, TypeAdapter, field_validator
+from pydantic import ValidationError as PydanticValidationError
 
-from showpy.core.errors import SchemaError, bounded_repr, schema_error_from
-from showpy.core.types import FrozenModel
+from showpy.core.error_codes import ErrorCode
+from showpy.core.errors import (
+    SchemaError,
+    ShowValidationError,
+    bounded_context,
+    bounded_repr,
+    join_listed,
+    schema_error_from,
+)
+from showpy.core.types import FrozenModel, JsonObject
 
 LEVEL_PREFIX = {"error": "E", "warning": "W"}
+ERRORS_HINT = "fix the issues listed in context, then validate again"
 
 
 class ValidationIssue(FrozenModel):
@@ -29,17 +42,24 @@ class ValidationIssue(FrozenModel):
 
     Attributes:
         level: Whether the issue blocks (`error`) or only informs (`warning`).
-        code: Stable issue code.
+        code: Stable issue code; a value outside ErrorCode raises SchemaError.
         where: Location, e.g. `set 12` or `12→13 T4`.
         message: What is wrong.
         hint: What would make it valid.
+        context: Read-only JSON values that help debug the issue, bounded like an error's context.
     """
 
     level: Literal["error", "warning"]
-    code: str
+    code: ErrorCode
     where: str
     message: str
     hint: str
+    context: JsonObject = Field(default_factory=dict, validate_default=True)
+
+    @field_validator("context", mode="before")
+    @classmethod
+    def _bound_context(cls, context: object) -> object:
+        return bounded_context(context) if isinstance(context, Mapping) else context
 
     def __str__(self) -> str:
         prefix = LEVEL_PREFIX[self.level]
@@ -59,6 +79,49 @@ class ValidationReport(FrozenModel):
     def ok(self) -> bool:
         """Returns True when no issue is an error."""
         return all(issue.level != "error" for issue in self.issues)
+
+    @property
+    def errors(self) -> tuple[ValidationIssue, ...]:
+        """Returns the issues that block, in discovery order."""
+        return tuple(issue for issue in self.issues if issue.level == "error")
+
+    @property
+    def warnings(self) -> tuple[ValidationIssue, ...]:
+        """Returns the issues that only inform, in discovery order."""
+        return tuple(issue for issue in self.issues if issue.level == "warning")
+
+    @property
+    def codes(self) -> tuple[str, ...]:
+        """Returns each issue code once, in order of first discovery."""
+        return tuple(dict.fromkeys(issue.code for issue in self.issues))
+
+    def raise_for_errors(self) -> None:
+        """Raises a ShowValidationError listing the error issues; returns when there are none.
+
+        The message names at most five error codes and counts the rest; the context holds the
+        error issues, capped like every error context.
+
+        >>> from showpy.examples import two_set_show
+        >>> from showpy.show.validate import validate_show
+        >>> validate_show(two_set_show()).raise_for_errors()
+        """
+        errors = self.errors
+        if not errors:
+            return
+        listed = join_listed([f"{issue.code} {issue.where}" for issue in errors], separator=", ")
+        raise ShowValidationError(
+            f"{len(errors)} validation error(s): {listed}",
+            hint=ERRORS_HINT,
+            context={"issues": [issue.model_dump(mode="json") for issue in errors]},
+        )
+
+    def to_json(self) -> str:
+        """Renders the report as JSON text that `model_validate_json` reads back.
+
+        >>> ValidationReport().to_json()
+        '{"issues":[]}'
+        """
+        return self.model_dump_json()
 
     @classmethod
     def merge(cls, *reports: "ValidationReport") -> "ValidationReport":
@@ -85,7 +148,7 @@ def validate_or_schema_error[M: BaseModel](model: type[M], data: object) -> M:
     """
     try:
         return model.model_validate(data)
-    except ValidationError as exc:
+    except PydanticValidationError as exc:
         raise schema_error_from(exc, model=model.__name__) from exc
 
 
@@ -106,7 +169,7 @@ def validate_adapter[T](adapter: TypeAdapter[T], data: object, *, name: str) -> 
     """
     try:
         return adapter.validate_python(data)
-    except ValidationError as exc:
+    except PydanticValidationError as exc:
         raise schema_error_from(exc, model=name) from exc
 
 
@@ -127,12 +190,12 @@ def validate_adapter_json[T](adapter: TypeAdapter[T], raw: str | bytes, *, name:
     """
     try:
         return adapter.validate_json(raw)
-    except ValidationError as exc:
+    except PydanticValidationError as exc:
         raise schema_error_from(exc, model=name) from exc
 
 
 def require_finite(
-    value: float,
+    value: SupportsFloat,
     *,
     name: str,
     low: float | None = None,
@@ -157,6 +220,10 @@ def require_finite(
     2.0
     """
     context = {"name": name, "value": bounded_repr(value), "low": low, "high": high}
+    if (low is not None and math.isnan(low)) or (high is not None and math.isnan(high)):
+        raise SchemaError(
+            f"{name} has a NaN bound", hint="pass finite or None bounds", context=context
+        )
     if isinstance(value, bool | np.bool_) or not isinstance(value, Real):
         raise SchemaError(f"{name} must be a number", hint="pass an int or float", context=context)
     try:

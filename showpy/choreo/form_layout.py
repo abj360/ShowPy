@@ -24,8 +24,8 @@ import numpy as np
 import shapely
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
+from showpy.choreo.form_models import FacingSpec, Form, SpacingSpec
 from showpy.choreo.form_text import text_recipe, text_slots
-from showpy.choreo.models import FacingSpec, Form, SpacingSpec
 from showpy.core.errors import SchemaError, SpacingError
 from showpy.core.types import Degrees, Point, Points, Region
 from showpy.core.units import normalize_angle, vector_facing
@@ -118,7 +118,7 @@ def _extras(gaps: tuple[tuple[int, float], ...], slots: int) -> FloatArray:
 
 
 def _even_stations(
-    start: float, stop: float, n: int, full_loop: bool, gaps: tuple[tuple[int, float], ...]
+    start: float, stop: float, n: int, *, full_loop: bool, gaps: tuple[tuple[int, float], ...]
 ) -> FloatArray:
     if n == 1:
         return np.array([(start + stop) / 2])
@@ -172,14 +172,14 @@ def curve_stations(curve: AnyCurve, spacing: SpacingSpec, n: int | None) -> Floa
     if n is None or n < 1:
         raise SpacingError("count spacing needs a slot count", hint="give members or n=")
     full_loop = curve.closed and math.isclose(stop - start, length)
-    return _even_stations(start, stop, n, full_loop, spacing.gaps)
+    return _even_stations(start, stop, n, full_loop=full_loop, gaps=spacing.gaps)
 
 
 def _proportional_layout(curve: CompositeCurve, n: int) -> FormLayout:
     counts = [len(pts) for pts in space_proportional(curve.parts, n)]
     points, tangents = [], []
     for part, count in zip(curve.parts, counts, strict=True):
-        stations = _even_stations(0.0, part.length(), count, part.closed, ())
+        stations = _even_stations(0.0, part.length(), count, full_loop=part.closed, gaps=())
         points.append(part.point_at(stations))
         tangents.append(part.tangent_at(stations))
     return FormLayout(points=np.vstack(points), tangents=np.vstack(tangents))

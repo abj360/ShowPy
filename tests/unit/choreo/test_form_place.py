@@ -43,8 +43,8 @@ import pytest
 from showpy.cast.spots import delete_spots
 from showpy.choreo.form_place import filled_forms, place, rebuild
 from showpy.choreo.forms import circle_form, line_form, text_form
+from showpy.choreo.match_models import MatchOptions
 from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import MatchOptions
 from showpy.core.errors import (
     LockedError,
     MatchError,
@@ -53,6 +53,7 @@ from showpy.core.errors import (
     SpacingError,
     UnknownRefError,
 )
+from showpy.core.ids import SpotId
 from showpy.core.util import approx_equal
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
@@ -80,7 +81,7 @@ def test_place_matches_unassigned_spots_into_open_slots() -> None:
 
 def test_place_passes_match_options() -> None:
     form = line_form("f", [], (0, 12), (6, 12), n=4)
-    placed, _ = place(two_set_show(), "2", [form], MatchOptions(pinned={"T1": 3}))
+    placed, _ = place(two_set_show(), "2", [form], MatchOptions(pinned={SpotId("T1"): 3}))
     assert placed.get("T1").x == 6.0
 
 
@@ -110,7 +111,7 @@ def test_place_in_first_set_needs_members() -> None:
 
 def test_place_with_spare_slots_keeps_them_open() -> None:
     form = line_form("f", ["T1"], (0, 12), (12, 12), n=6)
-    placed, (filled,) = place(two_set_show(), "2", [form], MatchOptions(pinned={"T4": 4}))
+    placed, (filled,) = place(two_set_show(), "2", [form], MatchOptions(pinned={SpotId("T4"): 4}))
     orders = sorted(p.order for p in placed.placements if p.order is not None)
     assert len(orders) == 4
     assert orders == [0, 1, 2, 5]
@@ -221,7 +222,7 @@ def test_regression_filled_forms_compacts_a_pinned_member_and_gapped_matches() -
     """Keeps a pinned member in place and compacts matched spots after it (G-R4)."""
     show = pin_spot(two_set_show(), "2", "T1")
     form = line_form("f", ["T1", "T2"], (0, 15), (10, 15), n=SPARSE_SLOTS)
-    placed, (filled,) = place(show, "2", [form], MatchOptions(pinned={"T4": 3}))
+    placed, (filled,) = place(show, "2", [form], MatchOptions(pinned={SpotId("T4"): 3}))
     orders = sorted(p.order for p in placed.placements if p.order is not None)
     assert orders != list(range(len(orders)))
     assert filled.members[:2] == ("T1", "T2")
@@ -257,7 +258,7 @@ def test_regression_rebuild_force_moves_pinned_members() -> None:
     moved = line_form("row", ["T1", "T2", "T3", "T4"], (0, UPSTAGE_ROW_Y), (6, UPSTAGE_ROW_Y))
     show = show.model_copy(update={"forms": {"row": moved.model_copy(update={"set": "2"})}})
     placed = rebuild(show, "row", force=True).set("2")
-    assert approx_equal(placed.get("T1").point, (0.0, UPSTAGE_ROW_Y), FORM_COORD_TOL)
+    assert approx_equal(placed.get("T1").point, (0.0, UPSTAGE_ROW_Y), abs_tol=FORM_COORD_TOL)
 
 
 def test_regression_rebuild_keeps_the_pin_flag_of_a_forced_member() -> None:
@@ -306,11 +307,11 @@ def test_regression_rebuild_after_place_moves_nobody_on_a_sparse_form() -> None:
     """Keeps every spot in place when a filled sparse form is rebuilt (lane G review; G-R4)."""
     show = two_set_show()
     form = line_form("f", ["T1"], (0, UPSTAGE_ROW_Y), (12, UPSTAGE_ROW_Y), n=SPARSE_SLOTS)
-    placed, (filled,) = place(show, "2", [form], MatchOptions(pinned={"T4": 4}))
+    placed, (filled,) = place(show, "2", [form], MatchOptions(pinned={SpotId("T4"): 4}))
     stored = with_set(show, placed).replace(forms={"f": filled})
     rebuilt = rebuild(stored, "f").set("2")
     for before in placed.placements:
-        assert approx_equal(rebuilt.get(before.entity).point, before.point, FORM_COORD_TOL)
+        assert approx_equal(rebuilt.get(before.entity).point, before.point, abs_tol=FORM_COORD_TOL)
 
 
 def test_regression_place_rejects_a_text_form_with_fewer_members_than_slots() -> None:

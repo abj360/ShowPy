@@ -45,7 +45,7 @@ import pytest
 
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import FacingMode, PathStyle, TransitionSpec
+from showpy.choreo.path_models import FacingMode, PathStyle, TransitionSpec
 from showpy.choreo.paths import lock
 from showpy.choreo.routes import (
     MIN_GAP,
@@ -57,7 +57,7 @@ from showpy.choreo.routes import (
     two_part,
 )
 from showpy.core.errors import LockedError, PathError
-from showpy.core.ids import format_tid
+from showpy.core.ids import RouteId, format_tid
 from showpy.core.util import approx_equal
 from showpy.show.models import Show
 from showpy.show.validate import validate_paths
@@ -183,7 +183,7 @@ def test_regression_make_route_merges_near_coincident_starts_onto_one_offset() -
     show = _moved(two_set_show(), "T4", (t3[0] + MIN_GAP / 2, t3[1]))
     route = make_route(show, TID, "T4", [(6.0, 15.0)], members=["T4", "T3"])
     assert route.offsets == (0.0, 0.0)
-    assert approx_equal(route.travel, math.dist(t3, (6.0, 15.0)), tol=1e-9)
+    assert approx_equal(route.travel, math.dist(t3, (6.0, 15.0)), abs_tol=1e-9)
 
 
 def test_regression_make_route_takes_each_offset_from_its_own_start_vertex() -> None:
@@ -192,7 +192,7 @@ def test_regression_make_route_takes_each_offset_from_its_own_start_vertex() -> 
     show = _moved(two_set_show(), "T4", t2)
     route = make_route(show, TID, "T4", [(6.0, 15.0)], members=["T4", "T3", "T2"])
     assert route.offsets == (4.0, 2.0, 0.0)
-    assert approx_equal(route.travel, math.dist(t2, (6.0, 15.0)), tol=1e-9)
+    assert approx_equal(route.travel, math.dist(t2, (6.0, 15.0)), abs_tol=1e-9)
 
 
 def test_regression_counter_march_with_no_members_raises_path_error() -> None:
@@ -304,7 +304,7 @@ def test_regression_second_counter_march_keeps_a_locked_route() -> None:
     with pytest.raises(LockedError):
         counter_march(locked, TID, ["T4", "T3"], (6.0, 15.0))
     forced = counter_march(locked, TID, ["T4", "T3"], (6.0, 15.0), force=True)
-    assert forced.transition(TID).routes["counter-march-T4"].members == ("T4", "T3")
+    assert forced.transition(TID).routes[RouteId("counter-march-T4")].members == ("T4", "T3")
 
 
 def test_regression_make_route_offsets_members_that_share_a_start() -> None:

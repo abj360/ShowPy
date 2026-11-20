@@ -7,7 +7,7 @@ Thanks for helping make choreography exact, safe and fast to write.
 ```bash
 export PATH=~/.nvm/versions/node/v22.23.5/bin:$PATH   # Node's bin/ first; there is no system node
 npm ci                               # pinned Prettier; the lint gate runs it through npx
-uv sync                              # Python 3.12+ env (3.14 by default) with every pinned dependency
+uv sync                              # Python 3.13+ env (3.14 by default) with every pinned dependency
 uv run pre-commit install            # lint and types per commit, pytest per push
 ```
 

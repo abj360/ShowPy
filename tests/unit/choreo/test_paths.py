@@ -25,7 +25,7 @@ from collections.abc import Callable
 import pytest
 
 from showpy.choreo.engine import PathEngine
-from showpy.choreo.models import Easing, FacingMode, PathRow, PathStyle, TransitionSpec
+from showpy.choreo.path_models import Easing, FacingMode, PathRow, PathStyle, TransitionSpec
 from showpy.choreo.paths import (
     add_waypoint,
     arrive_early,
@@ -49,6 +49,7 @@ from showpy.choreo.paths import (
 )
 from showpy.choreo.routes import follow, make_route
 from showpy.core.errors import LockedError, PathError, UnknownRefError
+from showpy.core.ids import SpotId
 from showpy.core.types import Point
 from showpy.core.util import approx_equal
 from showpy.show.models import Show
@@ -168,7 +169,8 @@ def test_edits_never_mutate_input() -> None:
 
 def test_paths_table_lists_only_non_default_rows() -> None:
     spec = delay(SPEC, ["T1"], 1.0)
-    spec = spec.model_copy(update={"rows": {**spec.rows, "T2": PathRow(entity="T2")}})
+    rows: dict[SpotId, PathRow] = {**spec.rows, SpotId("T2"): PathRow(entity=SpotId("T2"))}
+    spec = spec.model_copy(update={"rows": rows})
     table = paths_table(spec)
     assert list(table["entity"]) == ["T1"]
     assert approx_equal(table.iloc[0]["start"], 1.0)

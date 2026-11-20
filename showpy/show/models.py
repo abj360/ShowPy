@@ -33,7 +33,9 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, model_validator
 
 from showpy.cast.models import Cast
-from showpy.choreo.models import FacingOverride, Form, Placement, Set, TransitionSpec
+from showpy.choreo.form_models import Form
+from showpy.choreo.models import Placement, Set
+from showpy.choreo.path_models import FacingOverride, TransitionSpec
 from showpy.core.errors import SchemaError, TimeRangeError, UnknownRefError
 from showpy.core.ids import FormId, RouteId, SetId, SpotId, TransitionId
 from showpy.core.ids import format_tid as _format_tid
@@ -136,7 +138,7 @@ class Show(FrozenModel):
         """Returns set IDs in show order."""
         return [s.id for s in self.sets]
 
-    def set_index(self, set_id: SetId) -> int:
+    def set_index(self, set_id: str) -> int:
         """Returns the position of a set, raising UnknownRefError with suggestions."""
         for index, candidate in enumerate(self.sets):
             if candidate.id == set_id:
@@ -150,27 +152,43 @@ class Show(FrozenModel):
             context={"set": set_id},
         )
 
-    def set(self, set_id: SetId) -> Set:
+    def set(self, set_id: str) -> Set:
         """Returns a set by ID."""
         return self.sets[self.set_index(set_id)]
 
     def transition_ids(self) -> list[TransitionId]:
         """Returns consecutive set pairs in show order."""
-        ids = self.set_ids()
-        return list(itertools.pairwise(ids))
+        return [TransitionId(a, b) for a, b in itertools.pairwise(self.set_ids())]
 
-    def transition(self, tid: TransitionId) -> TransitionSpec:
+    def transition_id(self, tid: tuple[str, str]) -> TransitionId:
+        """Resolves a pair of set IDs to the show's transition between them.
+
+        Args:
+            tid: Pair of set IDs, such as `("1", "2")` or a TransitionId.
+
+        Returns:
+            transition_id: The show's own TransitionId for that pair.
+
+        >>> from showpy.examples import two_set_show
+        >>> str(two_set_show().transition_id(("1", "2")))
+        '1→2'
+        """
+        for known in self.transition_ids():
+            if known == tid:
+                return known
+        raise UnknownRefError(
+            f"{_format_tid(tid)} is not a transition between consecutive sets",
+            hint="use a pair from show.transition_ids()",
+            context={"tid": tid},
+        )
+
+    def transition(self, tid: tuple[str, str]) -> TransitionSpec:
         """Returns stored paths for a consecutive pair, or straight moves when none are stored."""
-        if tid not in self.transition_ids():
-            raise UnknownRefError(
-                f"{_format_tid(tid)} is not a transition between consecutive sets",
-                hint="use a pair from show.transition_ids()",
-                context={"tid": tid},
-            )
+        known = self.transition_id(tid)
         for spec in self.transitions:
-            if spec.id == tid:
+            if spec.id == known:
                 return spec
-        return TransitionSpec(id=tid, counts=self.set(tid[1]).counts)
+        return TransitionSpec(id=known, counts=self.set(known.to_set).counts)
 
 
 class ShowIndexEntry(FrozenModel):
@@ -244,16 +262,16 @@ class ShowIndex(FrozenModel):
         >>> idx = ShowIndex(entries=tuple(
         ...     ShowIndexEntry(set=i, counts=s, start_count=s, seconds=0) for i, s in rows))
         >>> idx.transition_at(3.0)
-        (('1', '2'), 3.0)
+        (TransitionId(from_set='1', to_set='2'), 3.0)
         """
         if self.set_at(count) is not None:
             return None
         position = bisect.bisect_right(self._starts(), count) - 1
         before, after = self.entries[position], self.entries[position + 1]
-        return (before.set, after.set), count - before.start_count
+        return TransitionId(before.set, after.set), count - before.start_count
 
-    def _position(self, set_id: SetId) -> int:
-        ids = [entry.set for entry in self.entries]
+    def _position(self, set_id: str) -> int:
+        ids: list[str] = [entry.set for entry in self.entries]
         if set_id not in ids:
             close = close_matches(set_id, ids)
             raise UnknownRefError(
@@ -263,12 +281,12 @@ class ShowIndex(FrozenModel):
             )
         return ids.index(set_id)
 
-    def next(self, set_id: SetId) -> SetId | None:
+    def next(self, set_id: str) -> SetId | None:
         """Returns the set after `set_id`, or None for the last set."""
         position = self._position(set_id) + 1
         return self.entries[position].set if position < len(self.entries) else None
 
-    def prev(self, set_id: SetId) -> SetId | None:
+    def prev(self, set_id: str) -> SetId | None:
         """Returns the set before `set_id`, or None for the first set."""
         position = self._position(set_id) - 1
         return self.entries[position].set if position >= 0 else None

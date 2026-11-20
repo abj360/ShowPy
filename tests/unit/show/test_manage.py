@@ -37,12 +37,12 @@ from datetime import UTC, datetime
 import pytest
 
 from showpy.cast.models import Cast, Group, Spot
-from showpy.choreo.models import (
+from showpy.choreo.form_models import Form
+from showpy.choreo.models import Placement
+from showpy.choreo.path_models import (
     FacingMode,
     FacingOverride,
-    Form,
     PathRow,
-    Placement,
     Route,
     TransitionSpec,
     Waypoint,
@@ -57,6 +57,7 @@ from showpy.core.errors import (
     UnknownRefError,
     VersionError,
 )
+from showpy.core.ids import FormId, RouteId, SetId, SpotId, make_tid
 from showpy.core.util import approx_equal
 from showpy.notes.models import Anchor, Note
 from showpy.show.documents import decode_show, encode_show
@@ -115,7 +116,7 @@ def test_add_set_copies_previous_positions_without_forms() -> None:
     show = two_set_show()
     form_set = show.sets[1].with_placements({"T1": {"form": "f", "order": 0}})
     show = show.model_copy(update={"sets": (show.sets[0], form_set)})
-    added = add_set(show, "3", 4.0, placements=[Placement(entity="T2", x=-3.0, y=1.0)])
+    added = add_set(show, "3", 4.0, placements=[Placement(entity=SpotId("T2"), x=-3.0, y=1.0)])
     third = added.set("3")
     assert third.get("T1").point == (0.0, 9.0)
     assert third.get("T1").form is None
@@ -123,15 +124,21 @@ def test_add_set_copies_previous_positions_without_forms() -> None:
 
 
 def test_add_set_after_drops_paths_between_neighbours() -> None:
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", start=1)})
+    spec = TransitionSpec(
+        id=make_tid("1", "2"),
+        counts=8.0,
+        rows={SpotId("T1"): PathRow(entity=SpotId("T1"), start=1)},
+    )
     show = add_set(_with_paths(two_set_show(), spec), "1B", 2.0, after="1")
     assert show.set_ids() == ["1", "1B", "2"]
     assert show.transitions == ()
 
 
 def test_add_set_refuses_to_drop_locked_paths() -> None:
-    row = PathRow(entity="T1", locked=True)
-    show = _with_paths(two_set_show(), TransitionSpec(id=("1", "2"), counts=8, rows={"T1": row}))
+    row = PathRow(entity=SpotId("T1"), locked=True)
+    show = _with_paths(
+        two_set_show(), TransitionSpec(id=make_tid("1", "2"), counts=8, rows={SpotId("T1"): row})
+    )
     with pytest.raises(LockedError):
         add_set(show, "1B", 2.0, after="1")
     assert add_set(show, "1B", 2.0, after="1", force=True).transitions == ()
@@ -146,7 +153,7 @@ def test_add_set_validates_ids_counts_and_spots() -> None:
     with pytest.raises(TimeRangeError):
         add_set(show, "3", 0.0)
     with pytest.raises(UnknownRefError):
-        add_set(show, "3", 4.0, placements=[Placement(entity="Z9", x=0, y=0)])
+        add_set(show, "3", 4.0, placements=[Placement(entity=SpotId("Z9"), x=0, y=0)])
 
 
 def test_add_set_copies_entity_pin() -> None:
@@ -159,7 +166,7 @@ def test_insert_subset_keeps_total_time_and_names_letters() -> None:
     show, second = insert_subset(show, "1A", 2.0)
     assert (first, second) == ("1A", "1B")
     assert show.set_ids() == ["1", "1A", "1B", "2"]
-    assert approx_equal(index(show).total_counts, 8.0, TOL)
+    assert approx_equal(index(show).total_counts, 8.0, abs_tol=TOL)
     assert show.set("1A").get("T1").point == show.set("1").get("T1").point
 
 
@@ -178,8 +185,10 @@ def test_insert_subset_respects_pinned_next_set() -> None:
 
 def test_remove_set_merges_counts_and_drops_forms_and_paths() -> None:
     show = _three_set_show()
-    form = Form(id="f", set="2", kind="line", geometry={}, members=("T1",))
-    spec = TransitionSpec(id=("2", "3"), counts=4.0, rows={"T1": PathRow(entity="T1")})
+    form = Form(id=FormId("f"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
+    spec = TransitionSpec(
+        id=make_tid("2", "3"), counts=4.0, rows={SpotId("T1"): PathRow(entity=SpotId("T1"))}
+    )
     show = show.model_copy(update={"forms": {"f": form}, "transitions": (spec,)})
     removed = remove_set(show, "2")
     assert removed.set_ids() == ["1", "3"]
@@ -203,26 +212,38 @@ def test_remove_set_refuses_pinned_placements_unless_forced() -> None:
 
 
 def test_set_counts_updates_transition_counts() -> None:
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", end=4.0)})
+    spec = TransitionSpec(
+        id=make_tid("1", "2"),
+        counts=8.0,
+        rows={SpotId("T1"): PathRow(entity=SpotId("T1"), end=4.0)},
+    )
     show = set_counts(_with_paths(two_set_show(), spec), "2", 12.0)
     assert show.set("2").counts == 12.0
     assert show.transition(("1", "2")).counts == 12.0
-    assert show.transition(("1", "2")).rows["T1"].end == 4.0
+    assert show.transition(("1", "2")).rows[SpotId("T1")].end == 4.0
 
 
 def test_set_counts_rescales_windows_waypoints_and_routes() -> None:
-    row = PathRow(entity="T1", start=2.0, end=6.0, waypoints=(Waypoint(x=0, y=0, at=4.0),))
-    route = Route(id="r", curve={}, members=("T2",), offsets=(0.0,), travel=1.0, end=8.0)
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": row}, routes={"r": route})
+    row = PathRow(entity=SpotId("T1"), start=2.0, end=6.0, waypoints=(Waypoint(x=0, y=0, at=4.0),))
+    route = Route(
+        id=RouteId("r"), curve={}, members=(SpotId("T2"),), offsets=(0.0,), travel=1.0, end=8.0
+    )
+    spec = TransitionSpec(
+        id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): row}, routes={RouteId("r"): route}
+    )
     scaled = set_counts(_with_paths(two_set_show(), spec), "2", 4.0, rescale=True)
     new = scaled.transition(("1", "2"))
-    assert (new.rows["T1"].start, new.rows["T1"].end) == (1.0, 3.0)
-    assert new.rows["T1"].waypoints[0].at == 2.0
-    assert new.routes["r"].end == 4.0
+    assert (new.rows[SpotId("T1")].start, new.rows[SpotId("T1")].end) == (1.0, 3.0)
+    assert new.rows[SpotId("T1")].waypoints[0].at == 2.0
+    assert new.routes[RouteId("r")].end == 4.0
 
 
 def test_set_counts_without_rescale_refuses_overrunning_paths() -> None:
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", end=6.0)})
+    spec = TransitionSpec(
+        id=make_tid("1", "2"),
+        counts=8.0,
+        rows={SpotId("T1"): PathRow(entity=SpotId("T1"), end=6.0)},
+    )
     with pytest.raises(PathError):
         set_counts(_with_paths(two_set_show(), spec), "2", 4.0)
 
@@ -230,16 +251,16 @@ def test_set_counts_without_rescale_refuses_overrunning_paths() -> None:
 def test_set_counts_rules_for_first_and_locked() -> None:
     with pytest.raises(TimeRangeError):
         set_counts(two_set_show(), "1", 4.0)
-    row = PathRow(entity="T1", end=6.0, locked=True)
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": row})
+    row = PathRow(entity=SpotId("T1"), end=6.0, locked=True)
+    spec = TransitionSpec(id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): row})
     with pytest.raises(LockedError):
         set_counts(_with_paths(two_set_show(), spec), "2", 4.0, rescale=True)
 
 
 def test_renumber_rewrites_every_reference() -> None:
     show, sub = insert_subset(_three_set_show(), "2", 2.0)
-    form = Form(id="f", set=sub, kind="line", geometry={}, members=("T1",))
-    spec = TransitionSpec(id=("2", sub), counts=2.0)
+    form = Form(id=FormId("f"), set=sub, kind="line", geometry={}, members=(SpotId("T1"),))
+    spec = TransitionSpec(id=make_tid("2", sub), counts=2.0)
     notes = (
         Note(id="n1", text="hit", anchor=Anchor.on_set(sub), author="d", created_at=AT),
         Note(
@@ -253,7 +274,7 @@ def test_renumber_rewrites_every_reference() -> None:
     renamed, mapping = renumber(show)
     assert mapping == {"1": "1", "2": "2", "2A": "3", "3": "4"}
     assert renamed.set_ids() == ["1", "2", "3", "4"]
-    assert renamed.forms["f"].set == "3"
+    assert renamed.forms[FormId("f")].set == "3"
     assert renamed.transitions[0].id == ("2", "3")
     assert renamed.notes[0].anchor.set_id == "3"
     assert renamed.notes[1].anchor.tid == ("3", "4")
@@ -281,7 +302,7 @@ def test_index_counts_measures_seconds_and_holds() -> None:
     entries = index(show).entries
     assert [e.start_count for e in entries] == [0.0, 8.0, 12.0]
     assert [e.measure.measure for e in entries if e.measure] == [1, 3, 4]
-    assert approx_equal([e.seconds for e in entries], [0.0, 4.0, 9.0], TOL)
+    assert approx_equal([e.seconds for e in entries], [0.0, 4.0, 9.0], abs_tol=TOL)
 
 
 def test_index_lookups_at_sets_and_inside_transitions() -> None:
@@ -328,7 +349,7 @@ def test_new_show_with_empty_cast() -> None:
     show = new_show("s", "t", field_sheet(), two_set_show().timeline, cast=Cast())
     assert show.sets[0].placements == ()
     spot_cast = Cast(
-        groups={"g": Group(key="g", label_prefix="G")}, spots=(Spot(id="G1", group="g"),)
+        groups={"g": Group(key="g", label_prefix="G")}, spots=(Spot(id=SpotId("G1"), group="g"),)
     )
     assert new_show("s", "t", field_sheet(), two_set_show().timeline, spot_cast).sets[
         0
@@ -398,14 +419,17 @@ def test_regression_remove_last_set_with_merge_counts_keeps_total_time() -> None
         edited = remove_set(show, "3", merge_counts=True)
     except ShowPyError:
         return
-    assert approx_equal(sum(s.counts for s in edited.sets), total, 1e-9)
+    assert approx_equal(sum(s.counts for s in edited.sets), total, abs_tol=1e-9)
 
 
 @pytest.mark.defect("UP-9.7-54")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-54")
 def test_regression_add_set_rejects_two_placements_for_one_spot() -> None:
     """Rejects two placements for one spot instead of keeping the last (audit 9.7)."""
-    rows = (Placement(entity="T1", x=1.0, y=1.0), Placement(entity="T1", x=2.0, y=2.0))
+    rows = (
+        Placement(entity=SpotId("T1"), x=1.0, y=1.0),
+        Placement(entity=SpotId("T1"), x=2.0, y=2.0),
+    )
     with pytest.raises(SchemaError):
         add_set(two_set_show(), "3", 4.0, placements=rows)
 
@@ -429,7 +453,7 @@ def test_regression_insert_subset_after_a_names_a_subset_of_a() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.7-56")
 def test_regression_form_keys_equal_form_ids_across_a_round_trip() -> None:
     """Rejects a form key that differs from its ID, or keeps keys stable (audit 9.7)."""
-    form = Form(id="f1", set="2", kind="line", geometry={}, members=("T1",))
+    form = Form(id=FormId("f1"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
     try:
         show = two_set_show().model_copy(update={"forms": {"zz": form}})
         Show.model_validate(show.model_dump())
@@ -442,10 +466,10 @@ def test_regression_form_keys_equal_form_ids_across_a_round_trip() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.7-57")
 def test_regression_frozen_show_forms_cannot_be_mutated() -> None:
     """Refuses `show.forms[...] = form` on a frozen show (audit 9.7 sets defects)."""
-    form = Form(id="zz", set="2", kind="line", geometry={}, members=("T1",))
+    form = Form(id=FormId("zz"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
     show = two_set_show()
     with pytest.raises(TypeError):
-        show.forms["zz"] = form
+        show.forms[FormId("zz")] = form
 
 
 @pytest.mark.defect("UP-9.7-58")
@@ -455,8 +479,6 @@ def test_regression_frozen_show_is_hashable() -> None:
     assert isinstance(hash(two_set_show()), int)
 
 
-@pytest.mark.defect("UP-9.7-59")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-59")
 @fails_after(5)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_stale_save_conflict_message_is_bounded() -> None:
@@ -510,8 +532,6 @@ def test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair() -> 
     assert not edited.pins or not validate_show(edited).ok
 
 
-@pytest.mark.defect("UP-4.2-01")
-@pytest.mark.xfail(strict=True, reason="UP-4.2-01")
 def test_regression_error_messages_truncate_echoed_input() -> None:
     """Echoes at most about 80 characters of a 10,000-character scheme name (audit 4.2)."""
     with pytest.raises(UnknownRefError) as excinfo:

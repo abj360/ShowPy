@@ -32,7 +32,7 @@ def test_insert_subset_keeps_total_time(extra: list[float], share: float) -> Non
     total = index(show).total_counts
     after = show.sets[0].id
     edited, new_id = insert_subset(show, after, show.sets[1].counts * share)
-    assert approx_equal(index(edited).total_counts, total, 1e-6)
+    assert approx_equal(index(edited).total_counts, total, abs_tol=1e-6)
     assert edited.set_ids()[1] == new_id
 
 

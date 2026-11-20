@@ -171,7 +171,7 @@ def test_space_along_rejects_zero() -> None:
 def test_space_along_arc_is_even(n: int, radius: float) -> None:
     pts = space_along(arc((0, 0), radius, 0.0, 120.0), n)
     gaps = _gaps(pts)
-    assert approx_equal(gaps, np.full(n - 1, gaps[0]), tol=1e-6)
+    assert approx_equal(gaps, np.full(n - 1, gaps[0]), abs_tol=1e-6)
 
 
 def test_space_by_interval_fills_max_that_fits() -> None:
@@ -430,7 +430,7 @@ def test_regression_space_along_closed_curve_wraps_from_a_later_start() -> None:
     """Spaces spots evenly around a circle even when start > 0 (audit 9.1)."""
     pts = space_along(circle((0.0, 0.0), 1.0), RING_SPOTS, start=RING_START_M)
     gaps = np.linalg.norm(pts - np.roll(pts, -1, axis=0), axis=1)
-    assert approx_equal(gaps, [math.sqrt(2.0)] * RING_SPOTS, tol=1e-9)
+    assert approx_equal(gaps, [math.sqrt(2.0)] * RING_SPOTS, abs_tol=1e-9)
 
 
 @pytest.mark.defect("UP-9.1-30")

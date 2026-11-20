@@ -5,6 +5,7 @@ test_api_snapshot.py --- guards the public API signatures against unannounced ch
 
 Contains:
     describe_public_object(): renders one public name as a Python-version-stable JSON value
+    build_snapshot(): builds the snapshot of every public name and the deprecated aliases
     diff_snapshots(): lists the names added, removed and changed between two snapshots
     unreleased_section(): extracts the Unreleased section of a changelog
     names_missing_from_changelog(): lists changed names the Unreleased section never mentions
@@ -27,6 +28,8 @@ Contains:
     test_names_missing_from_changelog_flags_unlisted_names: checks the changelog gate can fail
     test_names_missing_from_changelog_ignores_prose_mentions: checks plain words do not count
     test_snapshot_is_stable_across_python_versions: checks reprs carry no version-only text
+    test_regression_snapshot_tells_a_frozenset_constant_from_a_list: renders a set constant with
+        its type, so a frozenset turned list shows up as a change
 """
 
 import enum
@@ -42,7 +45,7 @@ import pytest
 from pydantic import BaseModel
 
 import showpy
-from showpy._api_table import PUBLIC_API
+from showpy._api_table import DEPRECATED, PUBLIC_API
 
 ROOT = Path(__file__).resolve().parents[2]
 SNAPSHOT_PATH = ROOT / "tests" / "fixtures" / "api_snapshot.json"
@@ -56,6 +59,7 @@ STABLE_DEFAULT_TYPES = (type(None), bool, int, float, str, bytes, tuple, frozens
 UNRELEASED_HEADING = re.compile(r"^## Unreleased\s*$", re.MULTILINE)
 NEXT_RELEASE_HEADING = re.compile(r"^## ", re.MULTILINE)
 RELEASED_HEADING = re.compile(r"^## \[?\d+\.\d+\.\d+", re.MULTILINE)
+DEPRECATED_KEY = "deprecated"
 RESTORE_COMMAND = "git checkout -- tests/fixtures/api_snapshot.json"
 
 JsonValue = str | dict[str, "JsonValue"]
@@ -167,13 +171,18 @@ def describe_public_object(obj: object) -> JsonValue:
     if callable(obj):
         return _signature_text(obj)
     if isinstance(obj, frozenset | set):
-        return {"constant": repr(sorted(obj, key=repr))}
+        return {"constant": f"{type(obj).__name__}({sorted(obj, key=repr)!r})"}
     return {"constant": repr(obj)}
 
 
 def build_snapshot() -> dict[str, JsonValue]:
-    """Builds the snapshot of every public name, sorted by name."""
-    return {name: describe_public_object(getattr(showpy, name)) for name, _, _ in PUBLIC_API}
+    """Builds the snapshot of every public name, plus its deprecated aliases under "deprecated"."""
+    snapshot = {name: describe_public_object(getattr(showpy, name)) for name, _, _ in PUBLIC_API}
+    snapshot[DEPRECATED_KEY] = {
+        name: {"target": target, "since": since, "remove": remove}
+        for name, target, since, remove in DEPRECATED
+    }
+    return snapshot
 
 
 def diff_snapshots(old: dict[str, JsonValue], new: dict[str, JsonValue]) -> dict[str, list[str]]:
@@ -276,7 +285,8 @@ def check_snapshot(
             f"E: public API drifted and {changelog_path.name} is absent; "
             f"run from a source checkout: {UPDATE_COMMAND}"
         )
-    unlisted = names_missing_from_changelog(changed, changelog_path.read_text())
+    announced = [name for name in changed if name != DEPRECATED_KEY]
+    unlisted = names_missing_from_changelog(announced, changelog_path.read_text())
     if unlisted or not is_updating:
         return _format_failure(diff, unlisted)
     _write_snapshot(current, snapshot_path)
@@ -323,6 +333,13 @@ def test_snapshot_is_stable_across_python_versions() -> None:
         if any(token in json.dumps(value) for token in forbidden)
     ]
     assert offenders == []
+
+
+def test_regression_snapshot_tells_a_frozenset_constant_from_a_list() -> None:
+    as_set = describe_public_object(frozenset({"b", "a"}))
+    assert as_set == {"constant": "frozenset(['a', 'b'])"}
+    assert as_set != describe_public_object(["a", "b"])
+    assert describe_public_object({"b", "a"}) == {"constant": "set(['a', 'b'])"}
 
 
 STORED_API: dict[str, JsonValue] = {"alpha": "(a)"}

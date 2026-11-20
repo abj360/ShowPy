@@ -33,7 +33,7 @@ def _sort_unordered(value: object) -> object:
     return value
 
 
-def _dedupe_in_order(items: tuple[str, ...]) -> tuple[str, ...]:
+def _dedupe_in_order[T: str](items: tuple[T, ...]) -> tuple[T, ...]:
     return tuple(dict.fromkeys(items))
 
 
@@ -200,7 +200,7 @@ class Cast(FrozenModel):
             seen.add(spot.id)
         return self
 
-    def spot(self, spot_id: SpotId) -> Spot:
+    def spot(self, spot_id: str) -> Spot:
         """Returns one spot, raising UnknownRefError with close matches in the hint."""
         for spot in self.spots:
             if spot.id == spot_id:

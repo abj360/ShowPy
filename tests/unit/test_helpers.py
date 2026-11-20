@@ -15,6 +15,7 @@ Contains:
     test_only_showpy_errors_accepts_a_showpy_error(): lets a ShowPyError and a normal return pass
     test_only_showpy_errors_names_the_input(): puts the sample input in the failure message
     test_only_showpy_errors_truncates_a_large_input(): bounds the input shown in the message
+    test_regression_only_showpy_errors_bounds_the_error_text(): bounds a huge error message
     test_only_showpy_errors_fails_a_hang(): fails a call that outlasts the 5 s budget
 """
 
@@ -283,4 +284,16 @@ def test_only_showpy_errors_truncates_a_large_input() -> None:
     """Keeps the failure message short however large the generated input is."""
     with pytest.raises(pytest.fail.Exception) as failure:
         only_showpy_errors(_raise_key_error, sample="x" * 100_000)
+    assert len(str(failure.value)) < 400
+
+
+@posix_only
+def test_regression_only_showpy_errors_bounds_the_error_text() -> None:
+    """Keeps the failure message short when the escaped error's own text is huge."""
+
+    def raise_long_error() -> None:
+        raise KeyError("k" * 100_000)
+
+    with pytest.raises(pytest.fail.Exception) as failure:
+        only_showpy_errors(raise_long_error, sample="odd input")
     assert len(str(failure.value)) < 400

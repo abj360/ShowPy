@@ -6,9 +6,9 @@ Contains:
     split_id(): splits an ID into its prefix and trailing number
     parse_range(): expands `T1-T8` into IDs
     format_ranges(): compacts IDs into `T1–T4, T7`
-    approx_equal(): compares floats or arrays with an absolute tolerance
+    approx_equal(): compares floats or arrays within absolute and relative tolerances
     seeded_rng(): returns the only allowed random generator
-    as_points(): normalizes point-like inputs to an (N, 2) array
+    as_points(): copies point-like inputs into a new (N, 2) float64 array
     content_hash(): hashes bytes, text or canonical JSON under a domain tag
     asset_uri(): names bytes by the `asset:sha256:<hex>` URI an asset store returns
     chunk_counts(): splits counts into equal parts that sum exactly
@@ -20,7 +20,9 @@ Contains:
 
 import difflib
 import hashlib
+import itertools
 import logging
+import math
 import re
 import time
 from collections.abc import Iterable, Iterator, Sequence
@@ -32,8 +34,9 @@ import numpy.typing as npt
 import shapely
 
 from showpy.core.canonical import canonical_value, jcs
-from showpy.core.caps import MAX_RANGE, require_size
-from showpy.core.errors import MAX_ECHOED_INPUT_CHARS, SchemaError
+from showpy.core.caps import MAX_POINTS, MAX_RANGE, require_size
+from showpy.core.deprecation import renamed_keyword
+from showpy.core.errors import MAX_ECHOED_INPUT_CHARS, GeometryError, SchemaError
 from showpy.core.ids import ID_MAX_LENGTH
 from showpy.core.types import Points
 
@@ -48,6 +51,9 @@ HASH_DOMAIN_PATTERN = re.compile(r"[a-z0-9_.]+")
 ASSET_PREFIX = "asset:sha256:"
 CLOSE_MATCH_COUNT = 3
 CLOSE_MATCH_CUTOFF = 0.4
+DEFAULT_ABS_TOL = 1e-6
+RENAME_REMOVAL = "0.6.0"
+SINGLE_PART_GEOMETRY = frozenset({"Point", "LineString", "LinearRing", "Polygon"})
 
 
 def _natural_key(text: str) -> tuple[tuple[tuple[int, int, str], ...], str]:
@@ -60,7 +66,7 @@ def _natural_key(text: str) -> tuple[tuple[tuple[int, int, str], ...], str]:
     return chunks, text
 
 
-def natural_sort(ids: Iterable[str]) -> list[str]:
+def natural_sort[T: str](ids: Iterable[T]) -> list[T]:
     """Sorts IDs with embedded numbers compared numerically; ties fall back to the text.
 
     >>> natural_sort(["T10", "T2"])
@@ -153,21 +159,59 @@ def _continues(previous: str, current: str) -> bool:
     )
 
 
-def approx_equal(a: npt.ArrayLike, b: npt.ArrayLike, tol: float = 1e-6) -> bool:
-    """Compares numbers or arrays with an absolute tolerance; shape mismatch is unequal.
+def approx_equal(
+    a: npt.ArrayLike,
+    b: npt.ArrayLike,
+    *,
+    abs_tol: float | None = None,
+    rel_tol: float = 0.0,
+    tol: float | None = None,
+) -> bool:
+    """Compares numbers or arrays within `abs_tol` plus `rel_tol` of `b`; shapes must match.
+
+    Equal infinities are equal and NaN equals nothing, without any warning. A negative or NaN
+    tolerance raises SchemaError.
+
+    Args:
+        a: First number or array.
+        b: Second number or array.
+        abs_tol: Absolute tolerance; 1e-6 when omitted.
+        rel_tol: Tolerance relative to the magnitude of `b`.
+        tol: Deprecated name of `abs_tol`.
+
+    Returns:
+        is_close: Whether every element of `a` is within tolerance of its element of `b`.
 
     >>> approx_equal(0.1 + 0.2, 0.3)
     True
     """
+    limit = renamed_keyword(
+        "tol", tol, "abs_tol", abs_tol, default=DEFAULT_ABS_TOL, remove=RENAME_REMOVAL
+    )
+    _require_tolerance("abs_tol", limit)
+    _require_tolerance("rel_tol", rel_tol)
     left, right = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
-    return left.shape == right.shape and bool(np.all(np.abs(left - right) <= tol))
+    if left.shape != right.shape:
+        return False
+    with np.errstate(invalid="ignore", over="ignore"):
+        close = np.abs(left - right) <= limit + rel_tol * np.abs(right)
+    return bool(np.all(close | (left == right)))
+
+
+def _require_tolerance(name: str, value: float) -> None:
+    if not value >= 0:
+        raise SchemaError(
+            f"{name} must be 0 or more, got {value!r}",
+            hint=f"pass {name} as a number 0 or more, such as 1e-6",
+            context={name: repr(value)},
+        )
 
 
 def seeded_rng(seed: int) -> np.random.Generator:
     """Returns a deterministic generator; the only randomness allowed in the library.
 
     Args:
-        seed: Non-negative integer seed; None, booleans and negatives are rejected.
+        seed: Non-negative `int` or `np.integer` seed; None, booleans and negatives are rejected.
 
     Returns:
         rng: A PCG64 generator that yields the same stream for the same seed.
@@ -187,16 +231,19 @@ def seeded_rng(seed: int) -> np.random.Generator:
 def as_points(obj: object) -> Points:
     """Normalizes tuples, lists, arrays, Shapely geometry or objects with x/y to (N, 2).
 
+    The result is always a new C-contiguous float64 array. Shapely coordinates keep x and y and
+    drop z; a polygon gives its exterior; multi-part geometry raises GeometryError.
+
     >>> as_points((1, 2)).tolist()
     [[1.0, 2.0]]
     """
     if isinstance(obj, shapely.Polygon):
         obj = obj.exterior
     if isinstance(obj, shapely.geometry.base.BaseGeometry):
-        return np.asarray(obj.coords, dtype=float).reshape(-1, 2)[:, :2]
+        return _geometry_points(obj)
     if isinstance(obj, Sequence) and obj and hasattr(obj[0], "x") and hasattr(obj[0], "y"):
-        return np.array([[float(item.x), float(item.y)] for item in obj], dtype=float)
-    array = np.asarray(obj, dtype=float)
+        return np.array([[float(item.x), float(item.y)] for item in obj], dtype=np.float64)
+    array = np.array(obj, dtype=np.float64, order="C", copy=True)
     if array.size == 0:
         return np.zeros((0, 2))
     if array.ndim == 1 and array.shape == (2,):
@@ -208,6 +255,16 @@ def as_points(obj: object) -> Points:
             context={"shape": array.shape},
         )
     return array
+
+
+def _geometry_points(geometry: shapely.geometry.base.BaseGeometry) -> Points:
+    if geometry.geom_type not in SINGLE_PART_GEOMETRY:
+        raise GeometryError(
+            f"cannot read points from a {geometry.geom_type}",
+            hint="pass a Point, LineString, LinearRing or Polygon, or one part at a time",
+            context={"geometry": geometry.geom_type},
+        )
+    return np.ascontiguousarray(shapely.get_coordinates(geometry), dtype=np.float64)
 
 
 def content_hash(obj: object, *, domain: str = "showpy.content") -> str:
@@ -246,7 +303,10 @@ def content_hash(obj: object, *, domain: str = "showpy.content") -> str:
 
 
 def chunk_counts(total: float, parts: int) -> list[float]:
-    """Splits counts into equal parts whose sum is exactly `total`.
+    """Splits counts into equal parts that sum to `total`, each cut at an exact boundary.
+
+    Raises SchemaError for fewer than one part, a part count over `MAX_POINTS` and a total that
+    is NaN or infinite.
 
     >>> chunk_counts(8.0, 4)
     [2.0, 2.0, 2.0, 2.0]
@@ -255,9 +315,15 @@ def chunk_counts(total: float, parts: int) -> list[float]:
         raise SchemaError(
             "parts must be at least 1", hint="pass parts >= 1", context={"parts": parts}
         )
-    size = total / parts
-    chunks = [size] * (parts - 1)
-    return [*chunks, total - sum(chunks)]
+    if not math.isfinite(total):
+        raise SchemaError(
+            f"total must be finite, got {total!r}",
+            hint="pass a finite number of counts",
+            context={"total": repr(total)},
+        )
+    require_size(parts, MAX_POINTS, what="chunks")
+    bounds = [0.0, *(total / parts * index for index in range(1, parts)), total]
+    return [stop - start for start, stop in itertools.pairwise(bounds)]
 
 
 def asset_uri(data: bytes) -> str:

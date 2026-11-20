@@ -25,8 +25,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from showpy.choreo.models import FacingMode, FacingOverride, Form, TransitionSpec
+from showpy.choreo.form_models import Form
+from showpy.choreo.path_models import FacingMode, FacingOverride, TransitionSpec
 from showpy.core.errors import SchemaError, TimelineError
+from showpy.core.ids import FormId, SetId, SpotId, make_tid
 from showpy.core.util import approx_equal
 from showpy.notes.models import Anchor, Note
 from showpy.show.manage import add_set, index, renumber
@@ -55,8 +57,10 @@ def _four_sets() -> Show:
             "audio": (AudioTrack(file="a.wav", label="music", sync_offset_s=1.0),),
         }
     )
-    override = FacingOverride(entities=("T1",), mode=FacingMode.FIXED, value=90.0, start=10, end=14)
-    form = Form(id="f3", set="3", kind="line", geometry={}, members=("T1",))
+    override = FacingOverride(
+        entities=(SpotId("T1"),), mode=FacingMode.FIXED, value=90.0, start=10, end=14
+    )
+    form = Form(id=FormId("f3"), set=SetId("3"), kind="line", geometry={}, members=(SpotId("T1"),))
     notes = (
         Note(id="a", text="x", anchor=Anchor.on_set("2"), author="d", created_at=AT),
         Note(id="b", text="y", anchor=Anchor.on_set("4"), author="d", created_at=AT),
@@ -66,7 +70,7 @@ def _four_sets() -> Show:
             "timeline": timeline,
             "facing_overrides": (override,),
             "forms": {"f3": form},
-            "transitions": (TransitionSpec(id=("3", "4"), counts=8.0),),
+            "transitions": (TransitionSpec(id=make_tid("3", "4"), counts=8.0),),
             "notes": notes,
             "pins": (Pin(target="set", id="4"), Pin(target="entity", id="T2")),
         }
@@ -79,7 +83,7 @@ def test_split_shares_boundary_and_shifts_clock() -> None:
     assert first.set_ids() == ["1", "2", "3"]
     assert second.set_ids() == ["3", "4"]
     assert second.sets[0].counts == 0.0
-    assert second.forms == {"f3": show.forms["f3"]}
+    assert second.forms == {"f3": show.forms[FormId("f3")]}
     assert second.transitions == show.transitions
     assert [n.id for n in first.notes] == ["a"]
     assert [p.id for p in second.pins] == ["4", "T2"]
@@ -97,9 +101,11 @@ def test_split_keeps_seconds_of_later_counts() -> None:
         whole = count_to_seconds(show.timeline, 12.0 + local) - count_to_seconds(
             show.timeline, 12.0
         )
-        assert approx_equal(count_to_seconds(second.timeline, local), whole, 1e-6)
+        assert approx_equal(count_to_seconds(second.timeline, local), whole, abs_tol=1e-6)
     track = second.timeline.audio[0]
-    assert approx_equal(track.sync_offset_s, 1.0 + count_to_seconds(show.timeline, 12.0), 1e-9)
+    assert approx_equal(
+        track.sync_offset_s, 1.0 + count_to_seconds(show.timeline, 12.0), abs_tol=1e-9
+    )
 
 
 def test_split_mid_measure_raises() -> None:
@@ -144,7 +150,7 @@ def test_join_disjoint_sections_and_clashes() -> None:
     )
     with pytest.raises(SchemaError):
         join_sections(first, bad_boundary)
-    assert approx_equal(index(joined).total_counts, 20.0, TOL)
+    assert approx_equal(index(joined).total_counts, 20.0, abs_tol=TOL)
 
 
 def test_regression_join_after_split_restores_the_show() -> None:
@@ -192,7 +198,7 @@ def test_regression_join_after_split_keeps_one_facing_override_across_the_split(
     """Rejoins a facing override cut by a split into one override (audit 9.7 sections)."""
     show = _three_sets_with()
     override = FacingOverride(
-        entities=("T1",),
+        entities=(SpotId("T1"),),
         mode=FacingMode.FIXED,
         value=90.0,
         start=WINDOW_ACROSS_SPLIT[0],

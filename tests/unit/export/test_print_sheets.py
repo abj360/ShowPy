@@ -15,8 +15,10 @@ import math
 
 import pytest
 
-from showpy.choreo.models import PathRow, PathStyle, Placement, Set
+from showpy.choreo.models import Placement, Set
+from showpy.choreo.path_models import PathRow, PathStyle
 from showpy.core.errors import SchemaError, UnknownRefError
+from showpy.core.ids import SetId, SpotId
 from showpy.core.util import approx_equal
 from showpy.export.models import Claim
 from showpy.export.print_sheets import chart, coordinate_sheet, coordinate_sheets, cue_sheet
@@ -37,7 +39,7 @@ TWO_CROSSINGS = 2
 def _three_set_show() -> Show:
     show = two_set_show()
     third = Set(
-        id="3",
+        id=SetId("3"),
         counts=4.0,
         placements=tuple(p.model_copy(update={"x": p.x + 1.0}) for p in show.sets[1].placements),
         label="Hit",
@@ -82,7 +84,7 @@ def test_behavior_describes_the_arriving_move() -> None:
 
 
 def test_behavior_reports_an_early_arrival() -> None:
-    show = with_rows({"T1": PathRow(entity="T1", end=6.0)})
+    show = with_rows({"T1": PathRow(entity=SpotId("T1"), end=6.0)})
     assert coordinate_sheet(show, "T1").rows[1].behavior == "move 6, hold 2"
 
 
@@ -104,14 +106,14 @@ def test_facing_comes_from_the_engine() -> None:
     turned = show.sets[1].with_placements({"T1": {"facing": 90.0}})
     show = show.model_copy(update={"sets": (show.sets[0], turned)})
     rows = coordinate_sheet(show, "T1").rows
-    assert approx_equal(rows[0].facing, 0.0, TOL)
-    assert approx_equal(rows[1].facing, 90.0, TOL)
+    assert approx_equal(rows[0].facing, 0.0, abs_tol=TOL)
+    assert approx_equal(rows[1].facing, 90.0, abs_tol=TOL)
 
 
 def test_performer_name_appears_once_claimed() -> None:
     show = guided_show()
     pub = live_publication(show)
-    claim = Claim(spot="T2", performer=performer("Ada"), claimed_at=AT)
+    claim = Claim(spot=SpotId("T2"), performer=performer("Ada"), claimed_at=AT)
     pub = pub.model_copy(update={"claims": (claim,)})
     sheets = coordinate_sheets(show, "T1-T2", publication=pub)
     assert [(s.entity, s.performer_name) for s in sheets] == [("T1", None), ("T2", "Ada")]
@@ -207,7 +209,7 @@ def test_single_set_show_has_start_rows_only() -> None:
     show = show.model_copy(update={"sets": show.sets[:1]})
     rows = coordinate_sheet(show, "T1").rows
     assert [(r.set, r.behavior, r.crossings) for r in rows] == [("1", "start", ())]
-    assert rows[0].xy == Placement(entity="T1", x=0.0, y=5.0).point
+    assert rows[0].xy == Placement(entity=SpotId("T1"), x=0.0, y=5.0).point
 
 
 def _twin_guides_show() -> Show:
@@ -241,6 +243,8 @@ def test_regression_out_and_back_crossing_is_reported_twice() -> None:
     A full turn about a pivot on the guide crosses it going out and coming back; only the
     first crossing is reported today.
     """
-    loop = PathRow(entity="T1", style=PathStyle.ROTATE, pivot=(0.0, GUIDE_Y), sweep_deg=FULL_TURN)
+    loop = PathRow(
+        entity=SpotId("T1"), style=PathStyle.ROTATE, pivot=(0.0, GUIDE_Y), sweep_deg=FULL_TURN
+    )
     show = with_rows({"T1": loop}, show=with_targets({"T1": {"y": 5.0}}, show=guided_show()))
     assert len(coordinate_sheet(show, "T1").rows[1].crossings) == TWO_CROSSINGS

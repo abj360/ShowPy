@@ -56,6 +56,7 @@ def snap[T: (Points, CurveModel, Set)](
     mode: Literal["round", "floor", "ceil"] = "round",
     axes: Literal["x", "y", "xy"] = "xy",
     sel: SetSelector = ALL,
+    *,
     force: bool = False,
 ) -> tuple[T, SnapReport]:
     """Snaps points to multiples of `precision`; rounding is half away from zero.
@@ -77,7 +78,7 @@ def snap[T: (Points, CurveModel, Set)](
         shifts.append(np.linalg.norm(snapped - pts, axis=1))
         return snapped
 
-    result = apply_pointwise(obj, to_grid, sel, force)
+    result = apply_pointwise(obj, to_grid, sel, force=force)
     moved = np.concatenate([np.zeros(0), *shifts])
     report = SnapReport(
         moved=int((moved > MOVE_TOL).sum()), max_shift=float(moved.max(initial=0.0))
@@ -121,6 +122,7 @@ def snap_to_guides[T: (Points, CurveModel, Set)](
     tol: Meters,
     kinds: Sequence[str] | None = None,
     sel: SetSelector = ALL,
+    *,
     force: bool = False,
 ) -> T:
     """Projects each point onto the nearest guide line within `tol`; others stay put.
@@ -137,7 +139,7 @@ def snap_to_guides[T: (Points, CurveModel, Set)](
     """
     if tol < 0:
         raise GeometryError(f"tolerance must be >= 0, got {tol}", hint="pass tol in meters")
-    return apply_pointwise(obj, _onto_guides(_guides(sheet, kinds), tol), sel, force)
+    return apply_pointwise(obj, _onto_guides(_guides(sheet, kinds), tol), sel, force=force)
 
 
 def _align_target(values: Points, value: float | str) -> float:
@@ -151,6 +153,7 @@ def align[T: (Points, CurveModel, Set)](
     axis: Axis,
     value: float | Literal["mean", "min", "max"],
     sel: SetSelector = ALL,
+    *,
     force: bool = False,
 ) -> T:
     """Sets one coordinate of every point to a number or to the points' mean, min or max.
@@ -167,7 +170,7 @@ def align[T: (Points, CurveModel, Set)](
         lined[:, column] = _align_target(pts[:, column], value)
         return lined
 
-    return apply_pointwise(obj, line_up, sel, force)
+    return apply_pointwise(obj, line_up, sel, force=force)
 
 
 def distribute[S: (Points, Set)](
@@ -176,6 +179,7 @@ def distribute[S: (Points, Set)](
     start: float | None = None,
     end: float | None = None,
     sel: SetSelector = ALL,
+    *,
     force: bool = False,
 ) -> S:
     """Evens points out along an axis from `start` to `end`, keeping their order on it.
@@ -197,4 +201,4 @@ def distribute[S: (Points, Set)](
         spread[np.argsort(values, kind="stable"), column] = np.linspace(lo, hi, len(pts))
         return spread
 
-    return apply_pointwise(obj, even_out, sel, force)
+    return apply_pointwise(obj, even_out, sel, force=force)

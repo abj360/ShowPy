@@ -5,6 +5,7 @@ test_fonts.py --- tests the font data classes, load_font and the frozen FontRegi
 
 Contains:
     test_*(): one behavior of showpy.geo.fonts each
+    test_regression_font_json_nested_past_the_cap_is_a_font_error: refuses it before validation
     test_regression_bundled_registry_is_read_only: refuses writes through the cached registry's
         mappings and a font's glyph table
     test_regression_font_dumps_to_json: dumps and reloads Font and FontRegistry without warnings
@@ -29,6 +30,7 @@ from typing import Any
 
 import pytest
 
+from showpy.core.canonical import MAX_NESTING
 from showpy.core.errors import FontError, MissingFontError, SchemaError
 from showpy.core.resources import font_path
 from showpy.core.util import asset_uri
@@ -100,7 +102,9 @@ def test_resolve_unknown_name_suggests_close_names() -> None:
     assert "register_font" in raised.value.hint
     assert "import_fonts" in raised.value.hint
     assert raised.value.context["font"] == "relief-singlelin"
-    assert "simplex" in raised.value.context["known"]
+    known = raised.value.context["known"]
+    assert isinstance(known, list)
+    assert "simplex" in known
 
 
 def test_resolve_unknown_uri_names_the_hash() -> None:
@@ -322,3 +326,9 @@ def test_regression_load_font_caps_the_pieces_of_one_stroke() -> None:
     assert f"split stroke 1 of glyph 'I' into strokes of at most {MAX_STROKE_PIECES}" in (
         info.value.hint
     )
+
+
+def test_regression_font_json_nested_past_the_cap_is_a_font_error() -> None:
+    deep = b'{"name": ' + b"[" * (MAX_NESTING + 1) + b"]" * (MAX_NESTING + 1) + b"}"
+    with pytest.raises(FontError, match="nests deeper than"):
+        load_font(deep)

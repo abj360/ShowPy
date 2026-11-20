@@ -2,7 +2,7 @@
 canonical.py --- normalizes values to the JSON data model and encodes them per RFC 8785
 
 Contains:
-    JsonValue: the JSON data model every canonical value belongs to
+    JsonValue: the JSON data model every canonical value belongs to, re-exported from json_types
     canonical_value(): normalizes a supported value into the JSON data model
     jcs(): serializes a value as RFC 8785 (JCS) canonical JSON bytes
 """
@@ -16,8 +16,10 @@ from pydantic import BaseModel
 from pydantic_core import PydanticSerializationError
 
 from showpy.core.errors import SchemaError, bounded_repr
+from showpy.core.json_types import JsonValue
 
-type JsonValue = bool | int | float | str | list[JsonValue] | dict[str, JsonValue] | None
+__all__ = ["JsonValue", "canonical_value", "jcs"]
+
 type JsonScalar = bool | int | float | str | None
 
 TAG_PREFIX = "$showpy:"

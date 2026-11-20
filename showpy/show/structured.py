@@ -20,6 +20,7 @@ from pydantic import TypeAdapter
 
 from showpy.core.errors import SchemaError
 from showpy.core.selection import Selection
+from showpy.core.strict_json import require_nesting
 from showpy.core.validation import validate_adapter_json
 from showpy.show.models import Comment
 
@@ -74,7 +75,8 @@ def _check_selection(raw: bytes) -> None:
     validate_adapter_json(SELECTION_ADAPTER, raw, name="Selection")
 
 
-def _check_json(text: str) -> None:
+def _check_json(raw: bytes, text: str) -> None:
+    require_nesting(raw, document="JSON")
     try:
         json.loads(text)
     except (ValueError, RecursionError) as exc:
@@ -122,7 +124,7 @@ def require_structured(path: str, raw: bytes) -> None:
         if check is not None:
             check(raw)
         elif path.endswith(JSON_SUFFIX):
-            _check_json(text)
+            _check_json(raw, text)
     except SchemaError as exc:
         raise SchemaError(
             f"{path} does not hold valid content: {exc.message}",

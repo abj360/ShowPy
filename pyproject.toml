@@ -5,29 +5,31 @@ description = "Choreography library: sheets, spots, sets, forms and motion."
 readme = "README.md"
 license = "MIT AND OFL-1.1 AND LicenseRef-Hershey-Fonts"
 license-files = ["LICENSE", "showpy/fonts/licenses/*.txt"]
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Typing :: Typed",
 ]
 dependencies = [
-    "imageio-ffmpeg>=0.8.1",
     "numpy>=2.5.4",
-    "pandas>=3.1.1",
-    "pillow>=13.0.0",
     "pydantic>=2.14.3",
     "pydantic-core>=2.50.4",
     "scipy>=1.18.1",
-    "segno>=1.6.6",
     "shapely>=2.2.0",
 ]
+
+[project.optional-dependencies]
+tables = ["pandas>=3.1.1"]
+render = ["pillow>=13.0.0"]
+qr = ["segno>=1.6.6", "pillow>=13.0.0"]
+video = ["imageio-ffmpeg>=0.8.1", "pillow>=13.0.0"]
+all = ["pandas>=3.1.1", "pillow>=13.0.0", "segno>=1.6.6", "imageio-ffmpeg>=0.8.1"]
 
 [project.urls]
 Homepage = "https://github.com/abj360/ShowPy"
@@ -61,8 +63,10 @@ exclude = [
 [tool.hatch.build.targets.wheel]
 packages = ["showpy"]
 
+# The suite exercises every extra-gated function, so the dev environment installs them all.
 [dependency-groups]
 dev = [
+    "showpy[all]",
     "deptry==0.25.1",
     "git-cliff==2.14.2",
     "hypothesis==6.170.15",
@@ -87,13 +91,14 @@ dev = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py313"
 
 [tool.ruff.lint]
 allowed-confusables = ["–"]
 select = [
     "E", "W", "F", "I", "B", "UP", "N", "SIM", "RUF", "C4", "PT", "D",
     "EXE", "PIE", "PGH", "RSE", "ISC", "LOG", "DTZ", "PTH", "FURB", "ARG", "PERF", "C90", "TID",
+    "FBT",
 ]
 ignore = ["D105", "D107", "D104", "D200", "D212", "D401", "D413", "D415"]
 
@@ -101,7 +106,7 @@ ignore = ["D105", "D107", "D104", "D200", "D212", "D401", "D413", "D415"]
 convention = "google"
 
 [tool.ruff.lint.mccabe]
-max-complexity = 12
+max-complexity = 10
 
 # Library code and its doctests never import the test folder (HANDOFF trap, 2026-11-11).
 [tool.ruff.lint.flake8-tidy-imports]
@@ -114,10 +119,10 @@ banned-module-level-imports = ["tests"]
 [tool.ruff.lint.per-file-ignores]
 "showpy/**/models.py" = ["RUF012"]
 "showpy/**/*_models.py" = ["RUF012"]
-"tests/**" = ["D", "EXE001", "TID251", "TID253"]
+"tests/**" = ["D", "EXE001", "FBT001", "FBT002", "TID251", "TID253"]
 "scripts/**" = ["EXE001"]
-# The fixture script runs in a v0.2.0 checkout and takes its seeded show from the test helpers.
-"scripts/make_legacy_fixture.py" = ["TID251", "TID253"]
+# The fixture script runs in a released checkout and takes its seeded show from the test helpers.
+"scripts/make_{legacy,bench}_fixture.py" = ["TID251", "TID253"]
 # Test motions implement MotionFn, whose parameter names are part of the protocol.
 "tests/unit/choreo/test_{avoid,engine_compile,motion,motion_stats}.py" = ["ARG001"]
 
@@ -138,7 +143,7 @@ ignore_missing_imports = true
 [tool.pyright]
 include = ["showpy", "tests", "scripts"]
 typeCheckingMode = "basic"
-pythonVersion = "3.12"
+pythonVersion = "3.13"
 stubPath = "typings"
 
 [tool.pytest.ini_options]

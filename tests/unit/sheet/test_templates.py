@@ -34,6 +34,7 @@ from showpy.core.errors import (
     UnknownRefError,
     VersionError,
 )
+from showpy.core.ids import LandmarkId, ZoneId
 from showpy.core.types import Region
 from showpy.core.units import convert
 from showpy.core.util import approx_equal
@@ -87,11 +88,13 @@ def test_templates_filter_by_surface_type() -> None:
 def test_football_field_is_120_yards_by_160_feet() -> None:
     sheet = get_sheet(HS_REF)
     width, depth = sheet.size_m
-    assert approx_equal(width, 109.728, TOL)
-    assert approx_equal(depth, 48.768, TOL)
+    assert approx_equal(width, 109.728, abs_tol=TOL)
+    assert approx_equal(depth, 48.768, abs_tol=TOL)
     xs = [p[0] for p in sheet.outline]
     ys = [p[1] for p in sheet.outline]
-    assert approx_equal([min(xs), max(xs), min(ys), max(ys)], [-54.864, 54.864, 0.0, 48.768], TOL)
+    assert approx_equal(
+        [min(xs), max(xs), min(ys), max(ys)], [-54.864, 54.864, 0.0, 48.768], abs_tol=TOL
+    )
 
 
 @pytest.mark.parametrize(
@@ -100,8 +103,8 @@ def test_football_field_is_120_yards_by_160_feet() -> None:
 )
 def test_hashes_sit_at_rule_book_distances(ref: str, from_sideline: float) -> None:
     depth = get_sheet(ref).size_m[1]
-    assert approx_equal(_point(ref, "front-hash-50")[1], from_sideline, TOL)
-    assert approx_equal(_point(ref, "back-hash-50")[1], depth - from_sideline, TOL)
+    assert approx_equal(_point(ref, "front-hash-50")[1], from_sideline, abs_tol=TOL)
+    assert approx_equal(_point(ref, "back-hash-50")[1], depth - from_sideline, abs_tol=TOL)
 
 
 def test_yard_lines_every_five_yards_with_labels() -> None:
@@ -111,7 +114,7 @@ def test_yard_lines_every_five_yards_with_labels() -> None:
     labels = sorted({g.label for g in yards})
     assert labels == sorted({"G", "5", "10", "15", "20", "25", "30", "35", "40", "45", "50"})
     left_45 = next(g for g in yards if g.id == "yard-left-45")
-    assert approx_equal(left_45.points[0][0], -convert(5, "yd", "m"), TOL)
+    assert approx_equal(left_45.points[0][0], -convert(5, "yd", "m"), abs_tol=TOL)
 
 
 def test_field_has_sidelines_end_lines_and_center() -> None:
@@ -141,7 +144,7 @@ def test_stage_template_has_wings_center_line_and_spikes() -> None:
 
 def test_gym_template_is_a_basketball_court() -> None:
     width, depth = get_sheet(GYM_REF).size_m
-    assert approx_equal((width, depth), (28.6512, 15.24), TOL)
+    assert approx_equal((width, depth), (28.6512, 15.24), abs_tol=TOL)
 
 
 def test_get_sheet_without_version_returns_template() -> None:
@@ -163,10 +166,10 @@ def test_get_sheet_falls_back_to_store() -> None:
 def test_blank_sheet_dimensions_and_units() -> None:
     sheet = blank_sheet(10.0, 6.0, grid_spacing=2.0, units="ft")
     assert sheet.size_m == (10.0, 6.0)
-    assert approx_equal(sheet.grid.spacing, (_ft(2), _ft(2)), TOL)
+    assert approx_equal(sheet.grid.spacing, (_ft(2), _ft(2)), abs_tol=TOL)
     assert sheet.grid.unit_name == "ft"
     assert sheet.default_coordinates.units == "ft"
-    assert approx_equal(sorted(p[0] for p in sheet.outline), [-5, -5, 5, 5], TOL)
+    assert approx_equal(sorted(p[0] for p in sheet.outline), [-5, -5, 5, 5], abs_tol=TOL)
 
 
 def test_blank_sheet_rejects_non_positive_size() -> None:
@@ -175,7 +178,7 @@ def test_blank_sheet_rejects_non_positive_size() -> None:
 
 
 def test_customize_resize_regenerates_outline_and_keeps_user_items() -> None:
-    zone = Zone(id="props", kind=ZoneKind.STAGING, polygon=SQUARE)
+    zone = Zone(id=ZoneId("props"), kind=ZoneKind.STAGING, polygon=SQUARE)
     sheet = add_zone(blank_sheet(10.0, 6.0), zone)
     resized = customize(sheet, size=(20.0, 8.0), name="Big room")
     assert resized.size_m == (20.0, 8.0)
@@ -201,9 +204,9 @@ def test_customize_rejects_unknown_fields_and_keeps_input() -> None:
 
 def test_add_and_remove_items() -> None:
     sheet = blank_sheet(10.0, 6.0)
-    mark = Landmark(id="prop", name="prop table", kind="point", geometry=((1.0, 1.0),))
+    mark = Landmark(id=LandmarkId("prop"), name="prop table", kind="point", geometry=((1.0, 1.0),))
     guide = GuideLine(id="tape", kind="custom", points=((0.0, 1.0), (1.0, 1.0)))
-    zone = Zone(id="pit", kind=ZoneKind.PIT, polygon=SQUARE)
+    zone = Zone(id=ZoneId("pit"), kind=ZoneKind.PIT, polygon=SQUARE)
     edited = add_guide(add_landmark(add_zone(sheet, zone), mark), guide)
     assert mark in edited.landmarks
     assert guide in edited.guides
@@ -215,11 +218,15 @@ def test_add_and_remove_items() -> None:
 def test_duplicate_ids_raise() -> None:
     sheet = blank_sheet(10.0, 6.0)
     with pytest.raises(SchemaError):
-        add_landmark(sheet, Landmark(id="center", name="x", kind="point", geometry=((0, 0),)))
+        add_landmark(
+            sheet, Landmark(id=LandmarkId("center"), name="x", kind="point", geometry=((0, 0),))
+        )
 
 
 def test_remove_unknown_suggests_close_matches() -> None:
-    sheet = add_zone(blank_sheet(10.0, 6.0), Zone(id="pit", kind=ZoneKind.PIT, polygon=SQUARE))
+    sheet = add_zone(
+        blank_sheet(10.0, 6.0), Zone(id=ZoneId("pit"), kind=ZoneKind.PIT, polygon=SQUARE)
+    )
     with pytest.raises(UnknownRefError) as info:
         remove_zone(sheet, "pitt")
     assert "pit" in info.value.hint
@@ -312,7 +319,9 @@ def test_regression_customize_resize_updates_ref_and_name() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.4-35")
 def test_regression_customize_resize_does_not_keep_items_off_the_sheet() -> None:
     """Rejects or drops zones that lie off the sheet after a resize (audit 9.4)."""
-    sheet = add_zone(blank_sheet(10, 6), Zone(id="far", kind=ZoneKind.PIT, polygon=OFF_SHEET_ZONE))
+    sheet = add_zone(
+        blank_sheet(10, 6), Zone(id=ZoneId("far"), kind=ZoneKind.PIT, polygon=OFF_SHEET_ZONE)
+    )
     try:
         resized = customize(sheet, size=RESIZED)
     except ShowPyError:
@@ -345,7 +354,7 @@ def test_regression_sheet_templates_rejects_unknown_surface_type() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.4-46")
 def test_regression_customize_resize_does_not_keep_landmarks_off_the_sheet() -> None:
     """Rejects or drops landmarks that lie off the sheet after a resize (audit 9.4)."""
-    mark = Landmark(id="far", name="far prop", kind="point", geometry=((4.5, 1.0),))
+    mark = Landmark(id=LandmarkId("far"), name="far prop", kind="point", geometry=((4.5, 1.0),))
     sheet = add_landmark(blank_sheet(10, 6), mark)
     try:
         resized = customize(sheet, size=RESIZED)

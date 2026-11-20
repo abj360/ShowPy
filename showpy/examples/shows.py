@@ -18,12 +18,14 @@ from collections.abc import Mapping
 from typing import Any
 
 from showpy.cast.models import Cast, Group, Spot
-from showpy.choreo.models import PathRow, Placement, Route, Set, TransitionSpec
+from showpy.choreo.models import Placement, Set
+from showpy.choreo.path_models import PathRow, Route, TransitionSpec
+from showpy.core.ids import make_tid
 from showpy.examples.sheets import field_sheet
 from showpy.show.models import Show
 from showpy.time.models import TempoSection, Timeline, TimelineMode
 
-EXAMPLE_TID = ("1", "2")
+EXAMPLE_TID = make_tid("1", "2")
 TEMPO = 120.0
 COUNTS = 8.0
 
@@ -34,7 +36,7 @@ def two_set_show() -> Show:
     >>> [p.point for p in two_set_show().set("2").placements][:2]
     [(0.0, 9.0), (2.0, 9.0)]
     """
-    spots = tuple(Spot(id=f"T{i}", group="trumpets") for i in range(1, 5))
+    spots = tuple(Spot.model_validate({"id": f"T{i}", "group": "trumpets"}) for i in range(1, 5))
     first = tuple(Placement(entity=s.id, x=2.0 * i, y=5.0) for i, s in enumerate(spots))
     second = tuple(p.replace(y=9.0) for p in first)
     return Show(
@@ -46,8 +48,8 @@ def two_set_show() -> Show:
             mode=TimelineMode.COUNTS, tempos=(TempoSection(at_count=0.0, counts_per_minute=TEMPO),)
         ),
         sets=(
-            Set(id="1", counts=0.0, placements=first),
-            Set(id="2", counts=COUNTS, placements=second),
+            Set.model_validate({"id": "1", "counts": 0.0, "placements": first}),
+            Set.model_validate({"id": "2", "counts": COUNTS, "placements": second}),
         ),
         dependencies={"sheet:test-field": "1"},
     )
@@ -62,12 +64,14 @@ def with_rows(
     2.0
     """
     base = show or two_set_show()
-    spec = TransitionSpec(id=EXAMPLE_TID, counts=COUNTS, rows=dict(rows), routes=dict(routes or {}))
+    spec = TransitionSpec.model_validate(
+        {"id": EXAMPLE_TID, "counts": COUNTS, "rows": dict(rows), "routes": dict(routes or {})}
+    )
     return base.replace(transitions=(spec,))
 
 
 # Any: target updates are partial placement dicts.
-def with_targets(updates: Mapping[str, Mapping[str, Any]], show: Show | None = None) -> Show:
+def with_targets[K: str](updates: Mapping[K, Mapping[str, Any]], show: Show | None = None) -> Show:
     """Returns a show whose set 2 placements are patched by `updates`.
 
     >>> with_targets({"T1": {"x": 3.0}}).set("2").get("T1").x

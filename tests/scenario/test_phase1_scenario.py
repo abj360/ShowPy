@@ -18,7 +18,7 @@ Contains:
     unchanged(): fails when a model serializes differently after a block
     run_scenario(): runs every phase of the scenario against a fresh repository
     test_scenario_edits_hit_every_phase(): checks each phase left its mark
-    test_final_show_validates(): checks validate_show and the stored JSON schema
+    test_final_show_validates(): checks validate_show and the stored documents' JSON schema
     test_positions_are_continuous_at_every_set_boundary(): checks transition ends meet placements
     test_segments_follow_the_engine(): checks segments against position() at nine probes
     test_json_and_document_round_trips_are_equal(): checks export_json and encode_show round trips
@@ -46,6 +46,7 @@ from showpy.choreo.engine import DEFAULT_SEGMENT_TOL, PathEngine
 from showpy.choreo.engine_models import MotionSegment
 from showpy.choreo.models import Set
 from showpy.core.errors import LockedError
+from showpy.core.ids import SetId
 from showpy.core.resources import schema_path
 from showpy.core.util import approx_equal, content_hash
 from showpy.examples import EXAMPLE_TIME, performer
@@ -67,7 +68,7 @@ pytestmark = pytest.mark.slow
 
 SEED, SPOTS, SETS = 11, 300, 60
 PINNED_SPOTS = 20
-PINNED_SET = "12"
+PINNED_SET = SetId("12")
 SUBSET_AFTER = "5"
 REGROUPED_SPOTS = 6
 SECOND_WORKSPACE_EDITS = 10
@@ -109,7 +110,7 @@ class Scenario:
     reverted: Show
     publication: Publication
     events: list[CanvasEvent]
-    mapping: dict[str, str]
+    mapping: dict[SetId, SetId]
     pinned: tuple[str, ...]
     initial: Show
 
@@ -132,7 +133,7 @@ def _pinned_show(show: Show) -> tuple[Show, tuple[str, ...]]:
     return edited, ids
 
 
-def _restructured(show: Show) -> tuple[Show, dict[str, str]]:
+def _restructured(show: Show) -> tuple[Show, dict[SetId, SetId]]:
     follower = show.set(show.sets[show.set_index(SUBSET_AFTER) + 1].id)
     with unchanged(show):
         edited, _ = insert_subset(show, SUBSET_AFTER, follower.counts / 2)
@@ -255,8 +256,9 @@ def test_locked_delete_is_refused_without_force(scenario: Scenario) -> None:
 def test_final_show_validates(scenario: Scenario) -> None:
     with unchanged(scenario.head):
         assert validate_show(scenario.head).ok
-    schema = json.loads(schema_path("showpy.show.v1.json").read_text())
-    jsonschema.validate(scenario.head.model_dump(mode="json"), schema)
+    schema = json.loads(schema_path("showpy.show.v2.json").read_text())
+    tree = {path: json.loads(raw) for path, raw in encode_show(scenario.head).items()}
+    jsonschema.validate(tree, schema)
 
 
 def test_positions_are_continuous_at_every_set_boundary(scenario: Scenario) -> None:
@@ -265,10 +267,13 @@ def test_positions_are_continuous_at_every_set_boundary(scenario: Scenario) -> N
     with unchanged(head):
         for spot, index, start, end in _transition_ends(head):
             before, after = head.sets[index], head.sets[index + 1]
-            assert approx_equal(start, _xy(before, spot), POSITION_TOL), (spot, index)
-            assert approx_equal(end, _xy(after, spot), POSITION_TOL), (spot, index)
+            assert approx_equal(start, _xy(before, spot), abs_tol=POSITION_TOL), (spot, index)
+            assert approx_equal(end, _xy(after, spot), abs_tol=POSITION_TOL), (spot, index)
             if index:
-                assert approx_equal(start, ends[spot, index - 1], POSITION_TOL), (spot, index)
+                assert approx_equal(start, ends[spot, index - 1], abs_tol=POSITION_TOL), (
+                    spot,
+                    index,
+                )
             ends[spot, index] = end
     assert len(ends) == SPOTS * SETS
 

@@ -79,7 +79,7 @@ class _Universe(NamedTuple):
     ids: tuple[SpotId, ...]
     source: str
     cast: Cast | None
-    forms: dict[FormId, tuple[SpotId, ...]] | None
+    forms: dict[str, tuple[SpotId, ...]] | None
 
 
 def _bad_token(message: str, position: int, expr: str) -> SchemaError:
@@ -106,7 +106,7 @@ def _tokenize(expr: str) -> list[_Token]:
     return tokens
 
 
-def _set_forms(set_: Set) -> dict[FormId, tuple[SpotId, ...]]:
+def _set_forms(set_: Set) -> dict[str, tuple[SpotId, ...]]:
     members: dict[FormId, list[Placement]] = {}
     for placement in set_.placements:
         if placement.form is not None:
@@ -126,7 +126,9 @@ def _universe(source: "Show | Set | Cast") -> _Universe:
         return _Universe(source.ids(), "cast", source, None)
     if isinstance(source, Set):
         return _Universe(source.entity_ids(), "set", None, _set_forms(source))
-    forms = {form_id: form.members for form_id, form in source.forms.items()}
+    forms: dict[str, tuple[SpotId, ...]] = {
+        form_id: form.members for form_id, form in source.forms.items()
+    }
     return _Universe(source.cast.ids(), "show", source.cast, forms)
 
 
@@ -139,7 +141,7 @@ def _unknown(kind: str, name: str, known: Sequence[str], token: _Token) -> Unkno
     )
 
 
-def label_prefix(spot_id: SpotId) -> str | None:
+def label_prefix(spot_id: str) -> str | None:
     """Returns the part of a label before its trailing number, or None without a number.
 
     >>> label_prefix("flag-12"), label_prefix("lead")
@@ -160,11 +162,11 @@ def _resolve_prefix(universe: _Universe, token: _Token) -> tuple[SpotId, ...]:
 
 def _resolve_range(universe: _Universe, token: _Token) -> tuple[SpotId, ...]:
     expanded = parse_range(token.text)
-    present = set(universe.ids)
+    present: dict[str, SpotId] = {spot_id: spot_id for spot_id in universe.ids}
     for endpoint in (expanded[0], expanded[-1]):
         if endpoint not in present:
             raise _unknown("spot", endpoint, universe.ids, token)
-    return tuple(i for i in expanded if i in present)
+    return tuple(present[i] for i in expanded if i in present)
 
 
 def _resolve_form(universe: _Universe, name: str, token: _Token) -> tuple[SpotId, ...]:
@@ -231,7 +233,7 @@ def _resolve_word(universe: _Universe, token: _Token, expr: str) -> Selection:
     elif text.endswith(PREFIX_MARK):
         found = _resolve_prefix(universe, token)
     elif text in universe.ids:
-        found = (text,)
+        found = (universe.ids[universe.ids.index(text)],)
     elif RANGE_PATTERN.match(text):
         found = _resolve_range(universe, token)
     else:
@@ -299,8 +301,8 @@ class _Parser:
         return inner
 
 
-def _validated(universe: _Universe, ids: Sequence[SpotId]) -> Selection:
-    known = set(universe.ids)
+def _validated(universe: _Universe, ids: Sequence[str]) -> Selection:
+    known: dict[str, SpotId] = {spot_id: spot_id for spot_id in universe.ids}
     for spot_id in ids:
         if spot_id not in known:
             close = close_matches(spot_id, universe.ids)
@@ -309,10 +311,10 @@ def _validated(universe: _Universe, ids: Sequence[SpotId]) -> Selection:
                 hint=f"did you mean {', '.join(close)}?" if close else "check the spot ids",
                 context={"spot": spot_id},
             )
-    return Selection(ids=tuple(ids))
+    return Selection(ids=tuple(known[spot_id] for spot_id in ids))
 
 
-def _id_sequence(expr: object) -> tuple[SpotId, ...]:
+def _id_sequence(expr: object) -> tuple[str, ...]:
     if not isinstance(expr, Iterable):
         raise SchemaError(
             f"cannot select with {type(expr).__name__}",
@@ -479,7 +481,7 @@ def _require_parts(k: int, limit: int = MAX_RANGE) -> None:
     require_size(k, min(limit, MAX_RANGE), what="parts")
 
 
-def split(sel: Selection | Sequence[SpotId], k: int) -> list[Selection]:
+def split(sel: Selection | Sequence[str], k: int) -> list[Selection]:
     """Cuts a selection into k consecutive groups whose sizes differ by at most one.
 
     Larger groups come first. k is at most the number of spots (1 for an empty selection)
@@ -494,12 +496,13 @@ def split(sel: Selection | Sequence[SpotId], k: int) -> list[Selection]:
     parts, start = [], 0
     for index in range(k):
         stop = start + size + (1 if index < extra else 0)
-        parts.append(Selection(ids=ids[start:stop], description=f"part {index + 1}/{k}"))
+        part = {"ids": ids[start:stop], "description": f"part {index + 1}/{k}"}
+        parts.append(Selection.model_validate(part))
         start = stop
     return parts
 
 
-def alternate(sel: Selection | Sequence[SpotId], k: int = 2) -> list[Selection]:
+def alternate(sel: Selection | Sequence[str], k: int = 2) -> list[Selection]:
     """Deals a selection into k interleaved groups: group i holds every k-th spot from i.
 
     >>> [p.ids for p in alternate(["A", "B", "C"])]
@@ -507,7 +510,10 @@ def alternate(sel: Selection | Sequence[SpotId], k: int = 2) -> list[Selection]:
     """
     _require_parts(k)
     ids = tuple(sel)
-    return [Selection(ids=ids[i::k], description=f"every {k} from {i + 1}") for i in range(k)]
+    return [
+        Selection.model_validate({"ids": ids[i::k], "description": f"every {k} from {i + 1}"})
+        for i in range(k)
+    ]
 
 
 def mirror_pairs(

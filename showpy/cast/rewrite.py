@@ -12,7 +12,9 @@ from typing import TYPE_CHECKING
 
 from showpy.cast.models import Cast
 from showpy.cast.select import is_label_dependent, select
-from showpy.choreo.models import FacingMode, FacingOverride, Form, Route, Set, TransitionSpec
+from showpy.choreo.form_models import Form
+from showpy.choreo.models import Set
+from showpy.choreo.path_models import FacingMode, FacingOverride, Route, TransitionSpec
 from showpy.core.ids import SpotId
 from showpy.core.selection import Selection, SelectorField
 from showpy.core.types import Point
@@ -22,11 +24,11 @@ from showpy.sheet.models import Sheet, Zone
 if TYPE_CHECKING:
     from showpy.show.models import Pin, Show
 
-type Rename = Callable[[SpotId], SpotId | None]
+type Rename = Callable[[SpotId], str | None]
 type FacingValue = float | Point | SpotId | None
 
 
-def faces_entity(mode: FacingMode, value: FacingValue) -> SpotId | None:
+def faces_entity[T: str](mode: FacingMode, value: float | Point | T | None) -> T | None:
     """Returns the spot a facing aims at, or None when it aims at an angle or a point.
 
     >>> faces_entity(FacingMode.TOWARD_ENTITY, "T2"), faces_entity(FacingMode.FIXED, 90.0)
@@ -35,7 +37,7 @@ def faces_entity(mode: FacingMode, value: FacingValue) -> SpotId | None:
     return value if mode == FacingMode.TOWARD_ENTITY and isinstance(value, str) else None
 
 
-def _keep(ids: Sequence[SpotId], rename: Rename) -> tuple[SpotId, ...]:
+def _keep(ids: Sequence[SpotId], rename: Rename) -> tuple[str, ...]:
     return tuple(new for new in map(rename, ids) if new is not None)
 
 
@@ -91,7 +93,9 @@ def _rewrite_route(route: Route, rename: Rename) -> Route:
     return route.replace(members=tuple(m for m, _ in kept), offsets=tuple(o for _, o in kept))
 
 
-def _rewrite_value(mode: FacingMode, value: FacingValue, rename: Rename) -> FacingValue:
+def _rewrite_value(
+    mode: FacingMode, value: FacingValue, rename: Rename
+) -> float | Point | str | None:
     target = faces_entity(mode, value)
     return value if target is None else rename(target)
 
@@ -115,7 +119,9 @@ def _rewrite_note(note: Note, rename: Rename) -> Note:
     return note.replace(anchor=moved)
 
 
-def _rewrite_selector(show: "Show", selector: SelectorField, rename: Rename) -> SelectorField:
+def _rewrite_selector(
+    show: "Show", selector: SelectorField, rename: Rename
+) -> str | tuple[str, ...] | Selection:
     if isinstance(selector, Selection):
         return selector.replace(ids=_keep(selector.ids, rename))
     if isinstance(selector, str):
@@ -140,7 +146,7 @@ def _rewrite_pins(pins: "tuple[Pin, ...]", rename: Rename) -> "tuple[Pin, ...]":
     for pin in pins:
         if pin.target != "entity":
             kept.append(pin)
-        elif (new := rename(pin.id)) is not None:
+        elif (new := rename(SpotId(pin.id))) is not None:
             kept.append(pin.replace(id=new))
     return tuple(kept)
 

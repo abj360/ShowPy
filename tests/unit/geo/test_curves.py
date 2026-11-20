@@ -133,7 +133,7 @@ def test_ellipse_length_matches_ramanujan() -> None:
     a, b = 3.0, 1.0
     h = ((a - b) / (a + b)) ** 2
     expected = math.pi * (a + b) * (1 + 3 * h / (10 + math.sqrt(4 - 3 * h)))
-    assert approx_equal(oval.length(), expected, tol=1e-4)
+    assert approx_equal(oval.length(), expected, abs_tol=1e-4)
 
 
 def test_spline_passes_through_control_points() -> None:
@@ -149,7 +149,7 @@ def test_bezier_quadratic_midpoint() -> None:
     assert approx_equal(curve.point_at_u(0.0), (0.0, 0.0))
     assert approx_equal(curve.point_at_u(1.0), (2.0, 0.0))
     mid = curve.point_at(curve.length() / 2)
-    assert approx_equal(mid, (1.0, 1.0), tol=1e-4)
+    assert approx_equal(mid, (1.0, 1.0), abs_tol=1e-4)
 
 
 def test_spiral_radius_grows_from_r0_to_r1() -> None:
@@ -160,7 +160,7 @@ def test_spiral_radius_grows_from_r0_to_r1() -> None:
 
 def test_project_returns_arc_length_of_closest_point() -> None:
     assert approx_equal(SEG.project((1.5, 3.0)), 1.5)
-    assert approx_equal(QUARTER.project((5.0, 5.0)), math.pi / 2, tol=1e-6)
+    assert approx_equal(QUARTER.project((5.0, 5.0)), math.pi / 2, abs_tol=1e-6)
 
 
 def test_substring_and_reversed() -> None:

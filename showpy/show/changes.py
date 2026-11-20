@@ -10,7 +10,8 @@ Contains:
 import functools
 from collections.abc import Sequence
 
-from showpy.choreo.models import Form, TransitionSpec
+from showpy.choreo.form_models import Form
+from showpy.choreo.path_models import TransitionSpec
 from showpy.core.errors import SchemaError
 from showpy.show.locks import require_unlocked
 from showpy.show.manage import set_counts
@@ -77,7 +78,7 @@ def _apply_op(show: Show, op: ChangeOp) -> Show:
     return set_counts(show, op.set_id, op.counts, rescale=op.rescale, force=True)
 
 
-def apply_change(show: Show, change: Sequence[ChangeOp], force: bool = False) -> Show:
+def apply_change(show: Show, change: Sequence[ChangeOp], *, force: bool = False) -> Show:
     """Applies change ops in order, then refuses the result if it touches pinned items.
 
     Args:
@@ -95,5 +96,5 @@ def apply_change(show: Show, change: Sequence[ChangeOp], force: bool = False) ->
     -2.0
     """
     edited = functools.reduce(_apply_op, change, show)
-    require_unlocked(show, edited, force)
+    require_unlocked(show, edited, force=force)
     return edited

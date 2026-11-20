@@ -15,6 +15,7 @@ Contains:
     capped_address_space(): caps the address space so a runaway allocation fails fast
     fails_after(): fails a test still running after a deadline, never inside coverage or a hook
     only_showpy_errors(): runs a fuzz target; only a ShowPyError may escape, within 5 s
+    context_entries(): returns the list of JSON objects under one key of an error's context
     HOSTILE_JSON: names JSON bytes that make json.loads raise RecursionError or ValueError
     EXPECTED_FAILURES: exception names a hash-seed subprocess may end with
     outputs_under_hash_seeds(): runs one script under each hash seed and collects its output
@@ -43,8 +44,11 @@ import pytest
 from showpy.choreo.form_place import place
 from showpy.choreo.forms import line_form
 from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import PathRow, PathStyle, Placement, Set, TransitionSpec, Waypoint
-from showpy.core.errors import ShowPyError
+from showpy.choreo.models import Placement, Set
+from showpy.choreo.path_models import PathRow, PathStyle, TransitionSpec, Waypoint
+from showpy.core.errors import ShowPyError, bounded_repr
+from showpy.core.ids import SetId, SpotId, make_tid
+from showpy.core.json_types import JsonValue
 from showpy.core.types import Point
 from showpy.examples import two_set_show
 from showpy.show.models import Show
@@ -61,7 +65,6 @@ FULL_TURN = 360.0
 HALF_TURN = 180.0
 ALLOCATION_HEADROOM_BYTES = 256 * 2**20
 FUZZ_BUDGET_S = 5.0
-SAMPLE_REPR_CHARS = 200
 JSON_NESTING_DEPTH = 200_000
 OVERLONG_INT_DIGITS = 5_000
 # json.loads overflows the C stack (RecursionError) and refuses ints past
@@ -72,9 +75,10 @@ HOSTILE_JSON = {"deep": b"[" * JSON_NESTING_DEPTH, "huge-int": b"9" * OVERLONG_I
 NO_ALARM_MODULES = frozenset(
     {"coverage", "weakref", "_weakrefset", "_pytest.unraisableexception", "_pytest.threadexception"}
 )
+
 FINALIZER_NAME = "__del__"
 HANG_RETRY_S = 0.05
-EXPECTED_FAILURES = ("ValidationError", "SchemaError", "ShowPyError")
+EXPECTED_FAILURES = ("ShowValidationError", "SchemaError", "ShowPyError")
 HASH_SEEDS = ("1", "2", "3")
 SUBPROCESS_TIMEOUT_S = 20
 STDERR_CHECK_TAIL = 300
@@ -107,8 +111,10 @@ def make_set(*rows: tuple[str, float, float], off: tuple[str, ...] = ()) -> Set:
         rows: One (entity, x, y) tuple per spot.
         off: Spots placed off the field.
     """
-    placements = tuple(Placement(entity=e, x=x, y=y, on_field=e not in off) for e, x, y in rows)
-    return Set(id=SET_ID, counts=0.0, placements=placements)
+    placements = tuple(
+        Placement(entity=SpotId(e), x=x, y=y, on_field=e not in off) for e, x, y in rows
+    )
+    return Set(id=SetId(SET_ID), counts=0.0, placements=placements)
 
 
 def make_facing_set(
@@ -124,10 +130,10 @@ def make_facing_set(
         pinned: Spots whose placement is pinned.
     """
     placements = tuple(
-        Placement(entity=e, x=x, y=y, facing=f, on_field=e not in off, pinned=e in pinned)
+        Placement(entity=SpotId(e), x=x, y=y, facing=f, on_field=e not in off, pinned=e in pinned)
         for e, x, y, f in rows
     )
-    return Set(id=SET_ID, counts=0.0, placements=placements)
+    return Set(id=SetId(SET_ID), counts=0.0, placements=placements)
 
 
 def pin_spot(show: Show, set_id: str, entity: str) -> Show:
@@ -156,10 +162,12 @@ def with_curve_rows(show: Show, entities: Iterable[str], locked: bool = False) -
         locked: Whether the rows are locked.
     """
     rows = {
-        e: PathRow(entity=e, style=PathStyle.CURVE, waypoints=(CURVE_WAYPOINT,), locked=locked)
+        SpotId(e): PathRow(
+            entity=SpotId(e), style=PathStyle.CURVE, waypoints=(CURVE_WAYPOINT,), locked=locked
+        )
         for e in entities
     }
-    spec = TransitionSpec(id=FIRST_TRANSITION, counts=CURVE_COUNTS, rows=rows)
+    spec = TransitionSpec(id=make_tid(*FIRST_TRANSITION), counts=CURVE_COUNTS, rows=rows)
     return show.model_copy(update={"transitions": (spec,)})
 
 
@@ -361,11 +369,8 @@ def fails_after(
 
 
 def _shortened(sample: object) -> str:
-    """Returns the repr of `sample`, cut to SAMPLE_REPR_CHARS characters."""
-    text = repr(sample)
-    if len(text) <= SAMPLE_REPR_CHARS:
-        return text
-    return f"{text[:SAMPLE_REPR_CHARS]}... ({len(text)} chars)"
+    """Returns the bounded repr of `sample`, quoting text so blank input stays visible."""
+    return bounded_repr(repr(sample) if isinstance(sample, str) else sample)
 
 
 def only_showpy_errors(call: Callable[[], object], sample: object = None) -> None:
@@ -388,11 +393,27 @@ def only_showpy_errors(call: Callable[[], object], sample: object = None) -> Non
             return
         except Exception as error:
             pytest.fail(
-                f"{type(error).__name__} escaped on input {_shortened(sample)}: {error}",
+                f"{type(error).__name__} escaped on input {_shortened(sample)}: "
+                f"{bounded_repr(str(error))}",
                 pytrace=False,
             )
 
     _run_under_hang_alarm(FUZZ_BUDGET_S, guarded_call)
+
+
+def context_entries(error: ShowPyError, key: str) -> list[dict[str, JsonValue]]:
+    """Returns the JSON objects listed under `key` in an error's context.
+
+    Args:
+        error: Error whose context holds a list of objects under `key`.
+        key: Context key, such as `changes`.
+
+    Returns:
+        entries: The objects of that list, without a trailing `"(+n more)"` count.
+    """
+    listed = error.context[key]
+    assert isinstance(listed, list), f"context[{key!r}] is {type(listed).__name__}, not a list"
+    return [entry for entry in listed if isinstance(entry, dict)]
 
 
 def outputs_under_hash_seeds(script: str, seeds: Iterable[str] = HASH_SEEDS) -> list[str]:
@@ -402,7 +423,8 @@ def outputs_under_hash_seeds(script: str, seeds: Iterable[str] = HASH_SEEDS) -> 
 
     Args:
         script: Python source passed to `python -c`.
-        seeds: Hash seeds to run under, one subprocess each.
+        seeds: Hash seeds to run under, one subprocess each; the default covers 1, 2 and 3, not 0,
+            which disables hash randomization.
 
     Returns:
         outputs: Per seed, stdout plus the tail of stderr.

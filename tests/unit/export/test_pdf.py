@@ -27,6 +27,7 @@ import pandas as pd
 import pytest
 
 from showpy.core.errors import SchemaError
+from showpy.core.ids import SetId, SpotId
 from showpy.export.models import CoordinateSheet, SheetRow
 from showpy.export.pdf import escape_text, to_pdf
 from showpy.export.print_sheets import chart, coordinate_sheet, coordinate_sheets, cue_sheet
@@ -57,7 +58,7 @@ LONG_TITLE_REPEATS = 40
 
 def _long_sheet(rows: int) -> CoordinateSheet:
     row = SheetRow(
-        set="1",
+        set=SetId("1"),
         counts=8.0,
         cumulative=0.0,
         position_text="here",
@@ -66,7 +67,7 @@ def _long_sheet(rows: int) -> CoordinateSheet:
         behavior="move 8",
     )
     return CoordinateSheet(
-        entity="T1",
+        entity=SpotId("T1"),
         rows=tuple(row.model_copy(update={"set": str(i)}) for i in range(rows)),
     )
 

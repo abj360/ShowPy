@@ -31,6 +31,8 @@ Contains:
         objects/ directory
     test_regression_dangling_root_link_is_corrupt: treats a dangling next/root as corruption, not
         as an empty history
+    test_regression_tree_record_nested_past_the_cap_is_corrupt: refuses a valid record that holds
+        a value nested MAX_NESTING + 1 levels, whatever the stack size
     test_regression_malformed_records_are_corrupt: maps malformed, directory-shaped and deeply
         nested tree files to CORRUPT
     test_regression_trailing_newline_in_id_is_refused: refuses an ID followed by a newline
@@ -100,7 +102,8 @@ from typing import Any, NoReturn
 import pytest
 
 import showpy.show.file_repository as file_repository
-from showpy.core.errors import ConflictError, StorageError
+from showpy.core.canonical import MAX_NESTING
+from showpy.core.errors import ConflictError, StorageError, bounded_repr
 from showpy.show.file_repository import (
     BLOB_MAX_BYTES,
     LINK_MAX_BYTES,
@@ -262,6 +265,18 @@ def _tamper_record(base: Path, rev: str, edit: Callable[[dict[str, Any]], None])
 def _assert_corrupt(action: Callable[[], object]) -> None:
     with pytest.raises(StorageError) as caught:
         action()
+    assert caught.value.code == CORRUPT
+
+
+def test_regression_tree_record_nested_past_the_cap_is_corrupt(tmp_path: Path) -> None:
+    """Refuses a well-formed record carrying an extra value nested past MAX_NESTING levels."""
+    repo, rev, base = _saved(tmp_path)
+    deep: list[object] = []
+    for _ in range(MAX_NESTING):
+        deep = [deep]
+    _tamper_record(base, rev, lambda r: r.update(x=deep))
+    with pytest.raises(StorageError, match="too deeply nested") as caught:
+        repo.backend.tree(SHOW_ID, rev)
     assert caught.value.code == CORRUPT
 
 
@@ -550,7 +565,11 @@ def test_regression_oversized_files_are_corrupt_before_reading(tmp_path: Path, k
         repo.read(SHOW_ID, SHOW_DOC)
     assert caught.value.code == CORRUPT
     assert f"{kind} is larger than {cap} bytes" in caught.value.message
-    assert caught.value.context == {"show": SHOW_ID, "path": str(path)}
+    assert caught.value.context == {
+        "show": SHOW_ID,
+        "path": bounded_repr(str(path)),
+        "file": path.name,
+    }
 
 
 def test_regression_file_growing_after_its_size_check_is_corrupt(
@@ -582,7 +601,8 @@ def test_regression_swapped_blob_is_corrupt_naming_its_file(tmp_path: Path) -> N
     with pytest.raises(StorageError) as caught:
         repo.get_show(SHOW_ID)
     assert caught.value.code == CORRUPT
-    assert caught.value.context["path"] == str(blob_path)
+    assert caught.value.context["path"] == bounded_repr(str(blob_path))
+    assert caught.value.context["file"] == blob_path.name
     assert "do not match their digest" in caught.value.message
 
 

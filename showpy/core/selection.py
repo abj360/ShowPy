@@ -12,6 +12,7 @@ from typing import Self
 
 from pydantic import model_validator
 
+from showpy.core.ids import SpotId
 from showpy.core.types import FrozenModel
 
 
@@ -23,7 +24,7 @@ class Selection(FrozenModel):
         description: How the selection was made, for display.
     """
 
-    ids: tuple[str, ...]
+    ids: tuple[SpotId, ...]
     description: str = ""
 
     @model_validator(mode="before")
@@ -58,7 +59,7 @@ class Selection(FrozenModel):
     def __len__(self) -> int:
         return len(self.ids)
 
-    def __iter__(self) -> Iterator[str]:  # type: ignore[override]
+    def __iter__(self) -> Iterator[SpotId]:  # type: ignore[override]
         return iter(self.ids)
 
     def __contains__(self, item: object) -> bool:
@@ -66,4 +67,4 @@ class Selection(FrozenModel):
 
 
 type Selector = str | Sequence[str] | Selection
-type SelectorField = str | tuple[str, ...] | Selection
+type SelectorField = str | tuple[SpotId, ...] | Selection

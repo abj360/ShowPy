@@ -88,10 +88,10 @@ def test_tempos_must_be_strictly_ordered() -> None:
 
 
 def test_tempos_must_be_positive() -> None:
-    assert _codes(_counts(tempos=(_tempo(0.0, 0.0),))) == ["TEMPO_NONPOSITIVE"]
-    assert _codes(_counts(tempos=(_tempo(0.0, ramp_to=-5.0, ramp_counts=4.0),))) == [
-        "TEMPO_NONPOSITIVE"
-    ]
+    stopped = _tempo(0.0).model_copy(update={"counts_per_minute": 0.0})
+    assert _codes(_counts(tempos=(stopped,))) == ["TEMPO_NONPOSITIVE"]
+    backwards = _tempo(0.0, ramp_to=140.0, ramp_counts=4.0).model_copy(update={"ramp_to": -5.0})
+    assert _codes(_counts(tempos=(backwards,))) == ["TEMPO_NONPOSITIVE"]
 
 
 def test_ramp_must_be_fully_specified_with_positive_length() -> None:

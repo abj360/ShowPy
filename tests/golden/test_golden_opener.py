@@ -14,6 +14,7 @@ from typing import Any, TypedDict
 import pytest
 
 from showpy.choreo.engine import PathEngine
+from showpy.core.ids import SpotId
 from tests.golden.opener import opener_show
 
 FIXTURE = Path(__file__).parent / "fixtures" / "opener_frames.json"
@@ -28,7 +29,7 @@ class FrameRecord(TypedDict):
 
     t: float
     # Any: each state mixes floats (x, y, facing) with a bool (on_field), as stored in JSON.
-    states: dict[str, list[Any]]
+    states: dict[SpotId, list[Any]]
 
 
 def _replay() -> list[FrameRecord]:

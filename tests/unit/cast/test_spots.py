@@ -20,6 +20,7 @@ Contains:
         delete_spots
 """
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from inspect import Parameter, signature
 
@@ -43,17 +44,15 @@ from showpy.cast.spots import (
     set_claimable,
     set_shape,
 )
-from showpy.choreo.models import (
-    FacingMode,
-    PathRow,
-)
+from showpy.choreo.path_models import FacingMode, PathRow
 from showpy.core.errors import (
     LockedError,
     SchemaError,
+    ShowValidationError,
     SpacingError,
     UnknownRefError,
-    ValidationError,
 )
+from showpy.core.ids import FormId, RouteId, SpotId
 from showpy.core.selection import Selection
 from showpy.core.types import Region
 from showpy.core.util import approx_equal
@@ -78,7 +77,7 @@ def test_add_spot_takes_next_free_label_and_group_radius() -> None:
     spot = show.cast.spot("B1")
     assert spot.group == "brass"
     assert spot.shape.radius_m == 0.5
-    assert approx_equal(spot.shape.width_m, 1.0, tol=1e-9)
+    assert approx_equal(spot.shape.width_m, 1.0, abs_tol=1e-9)
 
 
 def test_add_spot_exists_in_every_set_off_field_before_creation() -> None:
@@ -119,7 +118,7 @@ def test_add_spots_along_spaces_evenly() -> None:
         with_brass(two_set_show()), line((0.0, 0.0), (4.0, 0.0)), 3, "brass", "1"
     )
     xs = [show.set("1").get(i).x for i in ("B1", "B2", "B3")]
-    assert approx_equal(xs, [0.0, 2.0, 4.0], tol=1e-9)
+    assert approx_equal(xs, [0.0, 2.0, 4.0], abs_tol=1e-9)
 
 
 def test_fill_spots_by_interval() -> None:
@@ -164,11 +163,11 @@ def test_delete_spots_removes_every_reference() -> None:
     show = delete_spots(rich_show(), ["T4"])
     assert "T4" not in show.cast.ids()
     assert all("T4" not in s.entity_ids() for s in show.sets)
-    assert show.forms["line1"].members == ("T1", "T2", "T3")
+    assert show.forms[FormId("line1")].members == ("T1", "T2", "T3")
     spec = show.transition(("1", "2"))
     assert "T4" not in spec.rows
-    assert spec.routes["r1"].members == ("T3",)
-    assert spec.routes["r1"].offsets == (0.0,)
+    assert spec.routes[RouteId("r1")].members == ("T3",)
+    assert spec.routes[RouteId("r1")].offsets == (0.0,)
     assert show.cast.selections["pair"] == ("T1",)
     assert show.zones[2].applies_to == Selection(ids=())
 
@@ -184,14 +183,14 @@ def test_delete_spots_refuses_pinned_without_force() -> None:
 
 def test_delete_spots_refuses_locked_form_without_force() -> None:
     show = rich_show()
-    locked = show.forms["line1"].model_copy(update={"locked": True})
+    locked = show.forms[FormId("line1")].model_copy(update={"locked": True})
     show = show.model_copy(update={"forms": {"line1": locked}})
     with pytest.raises(LockedError):
         delete_spots(show, ["T2"])
 
 
 def test_delete_spots_refuses_when_others_face_the_spot() -> None:
-    with pytest.raises(ValidationError) as info:
+    with pytest.raises(ShowValidationError) as info:
         delete_spots(rich_show(), ["T3"])
     assert "T3" in info.value.message
 
@@ -200,7 +199,7 @@ def test_regroup_relabels_and_returns_mapping() -> None:
     show, mapping = regroup(with_brass(rich_show()), ["T3", "T4"], "brass")
     assert mapping == {"T3": "B1", "T4": "B2"}
     assert show.cast.spot("B1").group == "brass"
-    assert show.forms["line1"].members == ("T1", "T2", "B1", "B2")
+    assert show.forms[FormId("line1")].members == ("T1", "T2", "B1", "B2")
 
 
 def test_regroup_keeps_labels_that_already_fit() -> None:
@@ -240,7 +239,7 @@ def test_remove_group_with_members_needs_target() -> None:
 
 def test_relabel_numbers_in_natural_order() -> None:
     show = two_set_show()
-    show = _rename_everywhere(show, {"T1": "T10", "T2": "T9"})
+    show = _rename_everywhere(show, {SpotId("T1"): "T10", SpotId("T2"): "T9"})
     relabeled, mapping = relabel(show, LabelScheme(prefixes={"trumpets": "Tp"}, start=1))
     assert mapping == {"T3": "Tp1", "T4": "Tp2", "T9": "Tp3", "T10": "Tp4"}
     assert relabeled.cast.label_scheme.prefixes == {"trumpets": "Tp"}
@@ -255,16 +254,16 @@ def test_relabel_rejects_colliding_prefixes() -> None:
 
 
 def test_rename_everywhere_rewrites_every_reference() -> None:
-    mapping = {"T1": "A1", "T2": "A2", "T3": "A3", "T4": "A4"}
+    mapping = {SpotId(old): f"A{old[1:]}" for old in ("T1", "T2", "T3", "T4")}
     show = _rename_everywhere(rich_show(), mapping)
     assert show.cast.ids() == ("A1", "A2", "A3", "A4")
     assert all(s.entity_ids() == ("A1", "A2", "A3", "A4") for s in show.sets)
-    assert show.forms["line1"].members == ("A1", "A2", "A3", "A4")
+    assert show.forms[FormId("line1")].members == ("A1", "A2", "A3", "A4")
     spec = show.transition(("1", "2"))
     assert set(spec.rows) == {"A1", "A3", "A4"}
-    assert spec.rows["A1"].entity == "A1"
-    assert spec.rows["A1"].facing_value == "A2"
-    assert spec.routes["r1"].members == ("A3", "A4")
+    assert spec.rows[SpotId("A1")].entity == "A1"
+    assert spec.rows[SpotId("A1")].facing_value == "A2"
+    assert spec.routes[RouteId("r1")].members == ("A3", "A4")
     anchor = show.notes[0].anchor
     assert anchor.spots == ("A2",)
     override = show.facing_overrides[0]
@@ -274,31 +273,34 @@ def test_rename_everywhere_rewrites_every_reference() -> None:
     assert [z.applies_to for z in show.zones] == [
         ("A1", "A2"),
         "group:trumpets",
-        Selection(ids=("A4",)),
+        Selection(ids=(SpotId("A4"),)),
     ]
 
 
 def test_rename_everywhere_swaps_simultaneously() -> None:
-    show = _rename_everywhere(rich_show(), {"T1": "T2", "T2": "T1"})
+    show = _rename_everywhere(rich_show(), {SpotId("T1"): "T2", SpotId("T2"): "T1"})
     assert show.cast.ids() == ("T2", "T1", "T3", "T4")
-    assert show.transition(("1", "2")).rows["T2"].facing_value == "T1"
+    assert show.transition(("1", "2")).rows[SpotId("T2")].facing_value == "T1"
     assert show.set("1").get("T2").x == 0.0
 
 
 def test_rename_everywhere_rejects_collisions_and_unknown_ids() -> None:
     with pytest.raises(SchemaError):
-        _rename_everywhere(rich_show(), {"T1": "T2"})
+        _rename_everywhere(rich_show(), {SpotId("T1"): "T2"})
     with pytest.raises(UnknownRefError):
-        _rename_everywhere(rich_show(), {"T9": "T10"})
+        _rename_everywhere(rich_show(), {SpotId("T9"): "T10"})
 
 
 def test_rename_everywhere_leaves_degree_facings_alone() -> None:
     show = rich_show()
-    row = PathRow(entity="T2", facing_mode=FacingMode.FIXED, facing_value=90.0)
+    row = PathRow(entity=SpotId("T2"), facing_mode=FacingMode.FIXED, facing_value=90.0)
     spec = show.transition(("1", "2"))
-    spec = spec.model_copy(update={"rows": {**spec.rows, "T2": row}})
-    show = _rename_everywhere(show.model_copy(update={"transitions": (spec,)}), {"T2": "X2"})
-    assert show.transition(("1", "2")).rows["X2"].facing_value == 90.0
+    rows: dict[SpotId, PathRow] = {**spec.rows, SpotId("T2"): row}
+    spec = spec.model_copy(update={"rows": rows})
+    show = _rename_everywhere(
+        show.model_copy(update={"transitions": (spec,)}), {SpotId("T2"): "X2"}
+    )
+    assert show.transition(("1", "2")).rows[SpotId("X2")].facing_value == 90.0
 
 
 def test_rename_everywhere_with_empty_mapping_is_identity() -> None:
@@ -407,8 +409,8 @@ def _pinned_coordinates(show: Show, spot_id: str) -> list[tuple[float, float]]:
     return [p.point for s in show.sets for p in s.placements if p.entity == spot_id and p.pinned]
 
 
-def _assert_pin_follows(before: Show, after: Show, mapping: dict[str, str]) -> None:
-    new_id = mapping.get("T1", "T1")
+def _assert_pin_follows(before: Show, after: Show, mapping: Mapping[SpotId, str]) -> None:
+    new_id = mapping.get(SpotId("T1"), "T1")
     assert [p.id for p in after.pins] == [new_id]
     assert _pinned_coordinates(after, new_id) == _pinned_coordinates(before, "T1")
     assert _pinned_coordinates(before, "T1") != []

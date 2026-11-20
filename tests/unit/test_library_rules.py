@@ -4,41 +4,97 @@
 test_library_rules.py --- tests source-level rules that every showpy module must follow
 
 Contains:
-    find_model_copy_updates(): lists file and line of each model_copy call that passes update
+    find_model_copy_updates(): lists file and line of each unvalidated model_copy use
     test_library_never_calls_model_copy_with_update: fails on any such call in showpy/
     test_model_copy_ban_detects_an_offending_call: proves the scan can fail
+    test_model_copy_ban_detects_kwargs_aliases_and_getattr: proves the scan sees evasions
     find_citations(): lists file and line of each ADR, ledger-ID or docs-path citation
     test_library_cites_no_adr_docs_or_ledger_ids: fails on any such citation in showpy/
     test_citation_scan_flags_a_docstring_and_a_comment: proves the scan can fail
     test_citation_scan_ignores_runtime_strings: proves plain string literals are not flagged
+    find_code_spellings(): lists file, line and code of each raised or reported error code
+    test_every_raised_code_is_catalogued: fails on a code that is not an ErrorCode member
+    test_every_error_code_is_used: fails on an ErrorCode member no library module uses
+    test_code_scan_flags_literals_and_unknown_members: proves the code scan can fail
+    test_every_error_code_has_a_one_line_docstring: fails on a member without a docstring
+    test_error_code_docs_are_current: fails when docs/error-codes.md differs from its generator
+    find_positional_booleans(): lists file, line and parameter of each positional bool parameter
+    test_regression_library_has_no_positional_boolean_parameter: fails on any such parameter
+    test_regression_public_functions_take_booleans_by_keyword: fails when a public signature
+        takes a bool positionally
+    test_positional_boolean_scan_flags_a_definition: proves the scan can fail
+    test_public_names_are_cached_after_first_use: requires a resolved name to land in the module
+    test_deprecated_alias_warns_on_every_access: requires an alias to warn each time, uncached
+    find_geo_foreign_imports(): lists each import in geo source outside showpy.core and showpy.geo
+    test_geo_imports_only_core: fails while geo imports another showpy package
+    test_geo_layering_scan_flags_a_foreign_import: proves the layering scan can fail
+    test_geo_layering_scan_resolves_relative_imports: checks `from ..cast import x` against layers
 """
 
 import ast
+import importlib.util
+import inspect
 import io
 import re
 import tokenize
+import warnings
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
+import showpy
+from showpy._api_table import PUBLIC_API
+from showpy.core.deprecation import DeprecatedWarning
+from showpy.core.error_codes import ErrorCode
+
 CITATION_PATTERN = re.compile(r"\bADR\b|\bUP-\d+\.\d+-\d+\b|\bdocs/")
 MIN_LIBRARY_FILES = 100
-LIBRARY_ROOT = Path(__file__).resolve().parents[2] / "showpy"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+LIBRARY_ROOT = REPO_ROOT / "showpy"
+ERROR_CODES_PATH = LIBRARY_ROOT / "core" / "error_codes.py"
+ERROR_CODE_DOCS_PATH = REPO_ROOT / "docs" / "error-codes.md"
+ERROR_CODE_GENERATOR_PATH = REPO_ROOT / "scripts" / "gen_error_codes.py"
+GEO_PACKAGE = "showpy.geo"
+LITERAL = "literal"
+MODEL_COPY = "model_copy"
+MODEL_COPY_OVERRIDE = Path("core") / "types.py"
 pytestmark = pytest.mark.skipif(
     not LIBRARY_ROOT.is_dir(), reason="needs a source checkout; the wheel test has no showpy tree"
 )
 
 
+def _is_model_copy(node: ast.AST) -> bool:
+    return isinstance(node, ast.Attribute) and node.attr == MODEL_COPY
+
+
+def _is_getattr_of_model_copy(node: ast.AST) -> bool:
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "getattr"
+        and any(isinstance(arg, ast.Constant) and arg.value == MODEL_COPY for arg in node.args)
+    )
+
+
 def find_model_copy_updates(source: str, name: str) -> list[str]:
-    """Lists `name:line` for each `model_copy(update=...)` call in the source."""
-    return [
-        f"{name}:{node.lineno}"
-        for node in ast.walk(ast.parse(source))
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "model_copy"
-        and any(keyword.arg == "update" for keyword in node.keywords)
-    ]
+    """Lists `name:line` for each unvalidated `model_copy` use in the source.
+
+    Flags a call that passes `update` or `**kwargs`, a `getattr(x, "model_copy")` and any
+    reference that is not an immediate call, such as an alias or a callback.
+    """
+    tree = ast.parse(source)
+    called = {id(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)}
+    hits: set[int] = set()
+    for node in (item for item in ast.walk(tree) if isinstance(item, ast.expr)):
+        if _is_getattr_of_model_copy(node):
+            hits.add(node.lineno)
+        elif isinstance(node, ast.Call) and _is_model_copy(node.func):
+            if any(keyword.arg in {"update", None} for keyword in node.keywords):
+                hits.add(node.lineno)
+        elif _is_model_copy(node) and id(node) not in called:
+            hits.add(node.lineno)
+    return [f"{name}:{line}" for line in sorted(hits)]
 
 
 def test_library_never_calls_model_copy_with_update() -> None:
@@ -46,6 +102,7 @@ def test_library_never_calls_model_copy_with_update() -> None:
     offenders = [
         hit
         for path in sorted(LIBRARY_ROOT.rglob("*.py"))
+        if path.relative_to(LIBRARY_ROOT) != MODEL_COPY_OVERRIDE
         for hit in find_model_copy_updates(
             path.read_text(encoding="utf-8"), str(path.relative_to(LIBRARY_ROOT.parent))
         )
@@ -59,6 +116,20 @@ def test_model_copy_ban_detects_an_offending_call() -> None:
     """Reports the line of an update call and ignores a plain copy."""
     source = "a = x.model_copy()\nb = x.model_copy(update={'k': 1})\n"
     assert find_model_copy_updates(source, "m.py") == ["m.py:2"]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "x.model_copy(**changes)\n",
+        "copy = x.model_copy\ncopy(update={})\n",
+        "run(x.model_copy)\n",
+        "getattr(x, 'model_copy')(update={})\n",
+    ],
+)
+def test_model_copy_ban_detects_kwargs_aliases_and_getattr(source: str) -> None:
+    """Reports a spread, an alias, a callback and a getattr lookup of `model_copy`."""
+    assert find_model_copy_updates(source, "m.py")
 
 
 def find_citations(source: str, name: str) -> list[str]:
@@ -110,3 +181,257 @@ def test_citation_scan_flags_a_docstring_and_a_comment() -> None:
 def test_citation_scan_ignores_runtime_strings() -> None:
     """Leaves a plain string literal alone, since only docstrings and comments are scanned."""
     assert find_citations('MESSAGE = "see docs/guide for ADR 5"\n', "m.py") == []
+
+
+def _assigned_code(node: ast.AST) -> ast.expr | None:
+    """Returns the value given to a `code=` keyword or a `default_code` assignment, if any."""
+    if isinstance(node, ast.keyword) and node.arg == "code":
+        return node.value
+    if isinstance(node, ast.Assign) and any(
+        isinstance(target, ast.Name) and target.id == "default_code" for target in node.targets
+    ):
+        return node.value
+    return None
+
+
+def find_code_spellings(source: str, name: str) -> list[tuple[str, str, str]]:
+    """Lists (`name:line`, how, code) for each error code spelled in the source.
+
+    A code is spelled as a string literal passed as `code=` or assigned to `default_code`
+    (how is `literal`), or as an `ErrorCode.<NAME>` attribute (how is `member`).
+    """
+    hits: list[tuple[str, str, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        literal = _assigned_code(node)
+        if isinstance(literal, ast.Constant) and isinstance(literal.value, str):
+            hits.append((f"{name}:{literal.lineno}", LITERAL, literal.value))
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "ErrorCode"
+        ):
+            hits.append((f"{name}:{node.lineno}", "member", node.attr))
+    return sorted(hits)
+
+
+def _library_code_spellings() -> list[tuple[str, str, str]]:
+    return [
+        hit
+        for path in sorted(LIBRARY_ROOT.rglob("*.py"))
+        if path != ERROR_CODES_PATH
+        for hit in find_code_spellings(
+            path.read_text(encoding="utf-8"), str(path.relative_to(REPO_ROOT))
+        )
+    ]
+
+
+def test_every_raised_code_is_catalogued() -> None:
+    """Requires every raised or reported code to be spelled as a member of ErrorCode."""
+    members = {code.name for code in ErrorCode}
+    offenders = [
+        f"{where} {code}"
+        for where, how, code in _library_code_spellings()
+        if how == LITERAL or code not in members
+    ]
+    assert not offenders, "spell each code as an ErrorCode member: " + ", ".join(offenders)
+
+
+def test_every_error_code_is_used() -> None:
+    """Requires every ErrorCode member to be raised or reported somewhere in the library."""
+    used = {code for _, _, code in _library_code_spellings()}
+    unused = sorted(code.name for code in ErrorCode if code.name not in used)
+    assert not unused, "remove codes the library never raises: " + ", ".join(unused)
+
+
+def test_code_scan_flags_literals_and_unknown_members() -> None:
+    """Reports a literal `code=`, a literal `default_code` and an ErrorCode attribute."""
+    source = (
+        "class E(ShowPyError):\n"
+        "    default_code = 'OLD'\n"
+        "raise E('m', hint='h', code='NOPE')\n"
+        "raise E('m', hint='h', code=ErrorCode.MADE_UP)\n"
+    )
+    assert find_code_spellings(source, "m.py") == [
+        ("m.py:2", LITERAL, "OLD"),
+        ("m.py:3", LITERAL, "NOPE"),
+        ("m.py:4", "member", "MADE_UP"),
+    ]
+
+
+def _load_code_generator() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("gen_error_codes", ERROR_CODE_GENERATOR_PATH)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_every_error_code_has_a_one_line_docstring() -> None:
+    meanings: dict[str, str] = _load_code_generator().code_meanings()
+    assert sorted(meanings) == sorted(code.name for code in ErrorCode)
+    assert all(meaning and "\n" not in meaning for meaning in meanings.values())
+
+
+def test_error_code_docs_are_current() -> None:
+    """Requires docs/error-codes.md to be the generator's output, byte for byte."""
+    rendered: str = _load_code_generator().render_docs()
+    assert rendered == ERROR_CODE_DOCS_PATH.read_text(encoding="utf-8"), (
+        "E: docs/error-codes.md differs from ErrorCode; "
+        "run: uv run python scripts/gen_error_codes.py"
+    )
+
+
+def _is_boolean_annotation(annotation: ast.expr | None) -> bool:
+    """Tells whether an annotation is `bool` or a union that contains it."""
+    if isinstance(annotation, ast.BinOp) and isinstance(annotation.op, ast.BitOr):
+        return _is_boolean_annotation(annotation.left) or _is_boolean_annotation(annotation.right)
+    return isinstance(annotation, ast.Name) and annotation.id == "bool"
+
+
+def find_positional_booleans(source: str, name: str) -> list[str]:
+    """Lists `name:line:parameter` for each positional parameter annotated as a bool."""
+    found: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        found.extend(
+            f"{name}:{arg.lineno}:{arg.arg}"
+            for arg in (*node.args.posonlyargs, *node.args.args)
+            if _is_boolean_annotation(arg.annotation)
+        )
+    return found
+
+
+def test_regression_library_has_no_positional_boolean_parameter() -> None:
+    """Requires every bool parameter under showpy/ and scripts/ to be keyword-only."""
+    paths = [*LIBRARY_ROOT.rglob("*.py"), *(REPO_ROOT / "scripts").glob("*.py")]
+    offenders = [
+        hit
+        for path in paths
+        for hit in find_positional_booleans(path.read_text(encoding="utf-8"), str(path))
+    ]
+    assert not offenders, f"E: positional bool parameters: {offenders}"
+
+
+def test_regression_public_functions_take_booleans_by_keyword() -> None:
+    """Requires no public function or method to accept a bool positionally."""
+    offenders: list[str] = []
+    for public_name, _module, _attribute in PUBLIC_API:
+        obj = getattr(showpy, public_name)
+        targets = [obj] if inspect.isfunction(obj) else []
+        if inspect.isclass(obj):
+            targets = [
+                member
+                for _, member in inspect.getmembers(obj, inspect.isfunction)
+                if member.__qualname__.startswith(obj.__name__ + ".")
+            ]
+        for target in targets:
+            offenders.extend(
+                f"{public_name}:{target.__qualname__}:{parameter.name}"
+                for parameter in inspect.signature(target).parameters.values()
+                if parameter.annotation in (bool, "bool")
+                and parameter.kind
+                in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+            )
+    assert not offenders, f"E: positional bool parameters: {offenders}"
+
+
+def test_positional_boolean_scan_flags_a_definition() -> None:
+    """Shows the scan reports a positional bool and accepts a keyword-only one."""
+    assert find_positional_booleans("def f(a: int, force: bool = False): ...", "m") == ["m:1:force"]
+    assert find_positional_booleans("def f(a: int, *, force: bool = False): ...", "m") == []
+    assert find_positional_booleans("def f(a: int, test: Callable[[int], bool]): ...", "m") == []
+
+
+def test_public_names_are_cached_after_first_use() -> None:
+    if "Show" in vars(showpy):
+        delattr(showpy, "Show")
+    resolved = showpy.Show
+    assert vars(showpy)["Show"] is resolved
+
+
+def test_deprecated_alias_warns_on_every_access() -> None:
+    alias = next(iter(vars(showpy)["_DEPRECATED"]))
+    for _ in range(2):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            getattr(showpy, alias)
+        assert [w.category for w in caught] == [DeprecatedWarning]
+    assert alias not in vars(showpy)
+
+
+def _imported_modules(node: ast.Import | ast.ImportFrom, package: str) -> list[str]:
+    """Returns the absolute modules an import names, resolving relative ones against `package`."""
+    if isinstance(node, ast.Import):
+        return [alias.name for alias in node.names]
+    if node.level == 0:
+        return [node.module] if node.module else []
+    parts = package.split(".")
+    base = ".".join(parts[: len(parts) - node.level + 1])
+    if node.module:
+        return [f"{base}.{node.module}"]
+    return [f"{base}.{alias.name}" for alias in node.names]
+
+
+def find_geo_foreign_imports(source: str, name: str, package: str = GEO_PACKAGE) -> list[str]:
+    """Lists `name:line:module` for each import outside showpy.core and showpy.geo.
+
+    Args:
+        source: The text of a geo module.
+        name: The label to report for the module.
+        package: The package the module belongs to, for resolving relative imports.
+
+    Returns:
+        offenders: One entry per offending runtime or TYPE_CHECKING import.
+    """
+    found: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Import | ast.ImportFrom):
+            continue
+        found.extend(
+            f"{name}:{node.lineno}:{module}"
+            for module in _imported_modules(node, package)
+            if module.split(".")[0] == "showpy"
+            and module not in ("showpy.core", "showpy.geo")
+            and not module.startswith(("showpy.core.", "showpy.geo."))
+        )
+    return sorted(found, key=lambda entry: int(entry.split(":")[1]))
+
+
+@pytest.mark.xfail(strict=True, reason="lane C task C4")
+def test_geo_imports_only_core() -> None:
+    offenders = [
+        offender
+        for path in sorted((LIBRARY_ROOT / "geo").glob("*.py"))
+        for offender in find_geo_foreign_imports(path.read_text(encoding="utf-8"), path.name)
+    ]
+    assert offenders == []
+
+
+def test_geo_layering_scan_flags_a_foreign_import() -> None:
+    source = (
+        "from typing import TYPE_CHECKING\n"
+        "from showpy.core.types import Box2\n"
+        "if TYPE_CHECKING:\n"
+        "    from showpy.cast.models import Spot\n"
+        "import showpy.choreo.models\n"
+    )
+    assert find_geo_foreign_imports(source, "x.py") == [
+        "x.py:4:showpy.cast.models",
+        "x.py:5:showpy.choreo.models",
+    ]
+
+
+def test_geo_layering_scan_resolves_relative_imports() -> None:
+    source = (
+        "from . import curves\n"
+        "from .affine import compose\n"
+        "from ..core.types import Box2\n"
+        "from ..cast.models import Spot\n"
+        "from .. import choreo\n"
+    )
+    assert find_geo_foreign_imports(source, "x.py") == [
+        "x.py:4:showpy.cast.models",
+        "x.py:5:showpy.choreo",
+    ]

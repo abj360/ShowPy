@@ -16,7 +16,7 @@ Contains:
 
 import math
 import re
-from decimal import Decimal, DecimalException
+from decimal import Decimal
 from typing import TYPE_CHECKING, Literal
 
 from showpy.core.errors import SchemaError, UnknownRefError
@@ -180,7 +180,7 @@ def _rounded(value_m: float, system: CoordinateSystem) -> float:
     context = {"value": value_m, "precision": system.precision, "units": system.units}
     try:
         shown = round_to(convert(value_m, "m", system.units), system.precision)
-    except DecimalException as error:
+    except SchemaError as error:
         raise SchemaError(
             f"cannot round {value_m} m to a step of {system.precision} {system.units}",
             hint=ROUNDING_HINT,

@@ -27,7 +27,9 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, BinaryIO, cast
 
-from showpy.core.errors import StorageError
+from showpy.core.error_codes import ErrorCode
+from showpy.core.errors import SchemaError, StorageError
+from showpy.core.strict_json import require_nesting
 from showpy.show.documents import dump_json
 from showpy.show.integrity import blob_digest
 from showpy.show.models import Revision
@@ -105,7 +107,7 @@ def _is_name_too_long(error: OSError, path: str) -> bool:
     )
 
 
-def _storage_error(show_id: str, error: OSError, fallback: Path, is_link: bool) -> StorageError:
+def _storage_error(show_id: str, error: OSError, fallback: Path, *, is_link: bool) -> StorageError:
     path = str(error.filename or fallback)
     context: dict[str, object] = {"show": show_id, "path": path, "errno": error.errno}
     if _is_name_too_long(error, path):
@@ -115,30 +117,30 @@ def _storage_error(show_id: str, error: OSError, fallback: Path, is_link: bool) 
             hint="use a shorter show ID or a repository root with a shorter path",
             context={**context, "errno": errno.ENAMETOOLONG}
             | ({"winerror": winerror} if winerror is not None else {}),
-            code="NAME_TOO_LONG",
+            code=ErrorCode.NAME_TOO_LONG,
         )
     if is_link and (isinstance(error, PermissionError) or error.errno in NO_HARDLINK_ERRNOS):
         return StorageError(
             f"file system under {path} cannot create hard links",
             hint="put the repository root on a file system that supports hard links",
             context=context,
-            code="NO_HARDLINKS",
+            code=ErrorCode.NO_HARDLINKS,
         )
     return StorageError(
         f"file-system error in repository of {show_id}: {error.strerror or error}",
         hint="check that the repository root exists, is writable and is a directory",
         context=context,
-        code="IO",
+        code=ErrorCode.IO,
     )
 
 
 @contextmanager
-def _mapped_io(show_id: str, path: Path, is_link: bool = False) -> Iterator[None]:
+def _mapped_io(show_id: str, path: Path, *, is_link: bool = False) -> Iterator[None]:
     """Turns an OSError raised inside the block into a StorageError with a code and hint."""
     try:
         yield
     except OSError as error:
-        raise _storage_error(show_id, error, path, is_link) from error
+        raise _storage_error(show_id, error, path, is_link=is_link) from error
 
 
 def _guarded[F: Callable[..., Any]](method: F) -> F:  # Any: decorator keeps each signature
@@ -171,7 +173,7 @@ def _require_readable_sizes(show_id: str, tree: dict[str, str], blobs: dict[str,
         f"files of {show_id} over the {BLOB_MAX_BYTES}-byte cap: {', '.join(paths)}",
         hint="keep each file under the cap; store larger media outside the repository",
         context={"show": show_id, "paths": paths, "cap": BLOB_MAX_BYTES},
-        code="TOO_LARGE",
+        code=ErrorCode.TOO_LARGE,
     )
 
 
@@ -198,8 +200,8 @@ class _FileBackend:
         return StorageError(
             f"repository of {show_id} is corrupt: {reason}",
             hint="restore the show folder from a backup or remove the damaged file",
-            context={"show": show_id, "path": str(path)},
-            code="CORRUPT",
+            context={"show": show_id, "path": str(path), "file": path.name},
+            code=ErrorCode.CORRUPT,
         )
 
     def _checked_id(self, show_id: str, value: str, source: Path) -> str:
@@ -214,7 +216,7 @@ class _FileBackend:
                 hint="revision IDs and blob digests are 64 lowercase hex digits made by "
                 "DocumentRepository.transaction",
                 context={"show": show_id, role: value},
-                code="BAD_ID",
+                code=ErrorCode.BAD_ID,
             )
         return value
 
@@ -280,9 +282,11 @@ class _FileBackend:
 
     def _record(self, show_id: str, revision_id: str, source: Path) -> dict[str, object]:
         path = self._tree_path(show_id, revision_id, source)
+        raw = self._read(show_id, path, "tree record", TREE_MAX_BYTES)
         try:
-            record = json.loads(self._read(show_id, path, "tree record", TREE_MAX_BYTES))
-        except (ValueError, RecursionError) as error:
+            require_nesting(raw, document="tree record")
+            record = json.loads(raw)
+        except (SchemaError, ValueError, RecursionError) as error:
             raise self._corrupt(
                 show_id, path, "tree file is not valid JSON or too deeply nested"
             ) from error

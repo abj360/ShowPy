@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 import pytest
 
 from showpy.core.errors import SchemaError
+from showpy.core.ids import SetId
 from showpy.notes.models import Anchor, Note
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
@@ -25,7 +26,7 @@ def test_anchor_rejects_missing_or_extra_payload() -> None:
     with pytest.raises(SchemaError):
         Anchor(kind="set")
     with pytest.raises(SchemaError):
-        Anchor(kind="set", set_id="1", point=(0.0, 0.0))
+        Anchor(kind="set", set_id=SetId("1"), point=(0.0, 0.0))
 
 
 def test_note_round_trips_json() -> None:

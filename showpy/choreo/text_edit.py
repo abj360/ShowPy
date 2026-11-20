@@ -13,10 +13,11 @@ from collections.abc import Sequence
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
 from showpy.choreo.form_layout import layout
+from showpy.choreo.form_models import Form
 from showpy.choreo.form_text import require_member_count, require_text_form
 from showpy.choreo.forms import check_unlocked
-from showpy.choreo.models import Form
 from showpy.choreo.text_count import count_recipe
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError
 from showpy.core.ids import SpotId, check_id
 from showpy.core.types import Meters
@@ -25,13 +26,13 @@ from showpy.geo.fonts import FontRegistry
 LISTED_SPOTS = 10
 
 
-def _preview(spots: Sequence[SpotId]) -> str:
+def _preview(spots: Sequence[str]) -> str:
     shown = ", ".join(spots[:LISTED_SPOTS])
     hidden = len(spots) - LISTED_SPOTS
     return f"{shown} and {hidden} more" if hidden > 0 else shown
 
 
-def _spot_list(form: Form, field: str, spots: Sequence[SpotId]) -> tuple[SpotId, ...]:
+def _spot_list(form: Form, field: str, spots: Sequence[str]) -> tuple[str, ...]:
     """Returns the spots as a tuple, rejecting a bare string or anything but a list of strings."""
     if isinstance(spots, list | tuple) and all(isinstance(spot, str) for spot in spots):
         return tuple(spots)
@@ -42,10 +43,10 @@ def _spot_list(form: Form, field: str, spots: Sequence[SpotId]) -> tuple[SpotId,
     )
 
 
-def _repeats(spots: Sequence[SpotId], taken: set[SpotId]) -> list[SpotId]:
+def _repeats[T: str](spots: Sequence[T], taken: set[str]) -> list[T]:
     """Returns, once each and in order, the spots already in `taken` or repeated in `spots`."""
     seen = set(taken)
-    culprits: dict[SpotId, None] = {}
+    culprits: dict[T, None] = {}
     for spot in spots:
         if spot in seen:
             culprits[spot] = None
@@ -53,9 +54,9 @@ def _repeats(spots: Sequence[SpotId], taken: set[SpotId]) -> list[SpotId]:
     return list(culprits)
 
 
-def _added(form: Form, add: Sequence[SpotId]) -> tuple[SpotId, ...]:
+def _added(form: Form, add: Sequence[str]) -> tuple[SpotId, ...]:
     """Returns the checked, NFC-normalized new spots; none may be a member or repeat."""
-    spots = tuple(check_id(spot, kind="spot") for spot in _spot_list(form, "add", add))
+    spots = tuple(SpotId(check_id(spot, kind="spot")) for spot in _spot_list(form, "add", add))
     culprits = _repeats(spots, set(form.members))
     if not culprits:
         return spots
@@ -65,11 +66,11 @@ def _added(form: Form, add: Sequence[SpotId]) -> tuple[SpotId, ...]:
         f"text form {form.id} already has {', '.join(culprits)}",
         hint=f"add only spots outside form {form.id}{listed}",
         context={"form": form.id, "spots": culprits},
-        code="ALREADY_MEMBER",
+        code=ErrorCode.ALREADY_MEMBER,
     )
 
 
-def _kept(form: Form, remove: Sequence[SpotId]) -> tuple[SpotId, ...]:
+def _kept(form: Form, remove: Sequence[str]) -> tuple[SpotId, ...]:
     """Returns the members left after removing `remove`; each must be a member, once."""
     spots = _spot_list(form, "remove", remove)
     outsiders = set(spots) - set(form.members)
@@ -82,15 +83,15 @@ def _kept(form: Form, remove: Sequence[SpotId]) -> tuple[SpotId, ...]:
         f"text form {form.id} has no member {', '.join(culprits)} to remove",
         hint=f"remove only members of form {form.id}: {_preview(form.members)}",
         context={"form": form.id, "spots": culprits},
-        code="NOT_A_MEMBER",
+        code=ErrorCode.NOT_A_MEMBER,
     )
 
 
 def edit_text_count(
     form: Form,
     *,
-    add: Sequence[SpotId] = (),
-    remove: Sequence[SpotId] = (),
+    add: Sequence[str] = (),
+    remove: Sequence[str] = (),
     n: int | None = None,
     spacing: Meters | None = None,
     force: bool = False,
@@ -130,7 +131,7 @@ def edit_text_count(
     >>> wider.members[-2:], wider.geometry["n"]
     (('X1', 'X2'), 26)
     """
-    check_unlocked(form, force)
+    check_unlocked(form, force=force)
     require_text_form(form)
     members = (*_kept(form, remove), *_added(form, add))
     count = len(members) if n is None and spacing is None else n

@@ -19,23 +19,24 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 
 from showpy.core.errors import SchemaError, ShowPyError
+from showpy.core.ids import SpotId
 from showpy.core.selection import Selection
 
 
 def test_selection_dedupes_and_keeps_order() -> None:
-    assert Selection(ids=("T2", "T1", "T2")).ids == ("T2", "T1")
+    assert Selection(ids=(SpotId("T2"), SpotId("T1"), SpotId("T2"))).ids == ("T2", "T1")
 
 
 def test_union_intersection_difference() -> None:
-    a = Selection(ids=("T1", "T2", "T3"))
-    b = Selection(ids=("T3", "T4"))
+    a = Selection(ids=(SpotId("T1"), SpotId("T2"), SpotId("T3")))
+    b = Selection(ids=(SpotId("T3"), SpotId("T4")))
     assert (a | b).ids == ("T1", "T2", "T3", "T4")
     assert (a & b).ids == ("T3",)
     assert (a - b).ids == ("T1", "T2")
 
 
 def test_len_iter_contains() -> None:
-    sel = Selection(ids=("T1", "T2"))
+    sel = Selection(ids=(SpotId("T1"), SpotId("T2")))
     assert len(sel) == 2
     assert list(sel) == ["T1", "T2"]
     assert "T1" in sel
@@ -52,7 +53,7 @@ def test_regression_selection_rejects_a_bare_string() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.3-34")
 def test_regression_selection_model_copy_keeps_ids_unique() -> None:
     """Deduplicates IDs on model_copy as the constructor does (audit 9.3)."""
-    duplicated = Selection(ids=("a", "b")).model_copy(update={"ids": ("a", "a")})
+    duplicated = Selection(ids=(SpotId("a"), SpotId("b"))).model_copy(update={"ids": ("a", "a")})
     assert duplicated.ids == ("a",)
 
 
@@ -60,8 +61,8 @@ def test_regression_selection_model_copy_keeps_ids_unique() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.3-35")
 def test_regression_selection_equality_ignores_the_description() -> None:
     """Compares selections by IDs, not by how they were described (audit 9.3)."""
-    left = Selection(ids=("a",), description="first")
-    assert left == Selection(ids=("a",), description="second")
+    left = Selection(ids=(SpotId("a"),), description="first")
+    assert left == Selection(ids=(SpotId("a"),), description="second")
 
 
 @pytest.mark.parametrize("ids", [3, None, [[1]], [{"a": 1}], "T1", [1, 1]])

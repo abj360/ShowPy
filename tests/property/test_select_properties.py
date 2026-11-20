@@ -17,6 +17,7 @@ from hypothesis import strategies as st
 
 from showpy.cast.models import Cast, Group, Spot
 from showpy.cast.select import select
+from showpy.core.ids import SpotId
 
 GROUPS = {"trumpets": "T", "tubas": "TB", "flags": "F"}
 TAGS = ("soloist", "leader")
@@ -27,7 +28,7 @@ def property_cast() -> Cast:
     groups = {key: Group(key=key, label_prefix=prefix) for key, prefix in GROUPS.items()}
     spots = tuple(
         Spot(
-            id=f"{prefix}{n}",
+            id=SpotId(f"{prefix}{n}"),
             group=key,
             tags=(TAGS[n % len(TAGS)],) if n % 3 else (),
         )

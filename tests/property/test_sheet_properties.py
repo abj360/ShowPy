@@ -37,7 +37,7 @@ def test_wording_round_trips_within_precision(
     text = to_coords(show, (x, y), style=style)  # type: ignore[arg-type]
     back = from_coords(show, text)
     tol = convert(system.precision, system.units, "m") / 2 + SLACK_M
-    assert approx_equal(back, (x, y), tol * 2**0.5)
+    assert approx_equal(back, (x, y), abs_tol=tol * 2**0.5)
     assert to_coords(show, back, style=style) == text  # type: ignore[arg-type]
 
 
@@ -57,4 +57,4 @@ def test_similarity_fit_recovers_a_known_map(
         @ scale_matrix(scale, scale, (0, 0))
     )
     fitted = similarity_fit(src, transform_points(src, truth))
-    assert approx_equal(fitted, truth, FIT_TOL)
+    assert approx_equal(fitted, truth, abs_tol=FIT_TOL)

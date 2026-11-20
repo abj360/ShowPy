@@ -92,34 +92,34 @@ def test_string_selector_must_be_all() -> None:
 def test_move_to_puts_the_anchor_on_the_target(anchor: str, expected: tuple[float, float]) -> None:
     moved = move_to(SQUARE, anchor, (10.0, 10.0))  # type: ignore[arg-type]
     offset = np.array([10.0, 10.0]) - np.array(expected)
-    assert approx_equal(moved, SQUARE + offset, tol=TOL)
+    assert approx_equal(moved, SQUARE + offset, abs_tol=TOL)
 
 
 def test_move_to_centroid_and_unknown_anchor() -> None:
     pts = np.array([[0.0, 0.0], [0.0, 0.0], [3.0, 0.0]])
-    assert approx_equal(move_to(pts, "centroid", (0.0, 0.0))[2], (2.0, 0.0), tol=TOL)
+    assert approx_equal(move_to(pts, "centroid", (0.0, 0.0))[2], (2.0, 0.0), abs_tol=TOL)
     with pytest.raises(UnknownRefError) as caught:
         move_to(pts, "front-centre", (0.0, 0.0))  # type: ignore[arg-type]
     assert "front-center" in caught.value.hint
 
 
 def test_rotate_about_center_point_and_facings() -> None:
-    assert approx_equal(rotate(SQUARE, 90.0)[0], (2.0, 0.0), tol=TOL)
-    assert approx_equal(rotate(SQUARE, 90.0, about=(0.0, 0.0))[1], (0.0, 2.0), tol=TOL)
+    assert approx_equal(rotate(SQUARE, 90.0)[0], (2.0, 0.0), abs_tol=TOL)
+    assert approx_equal(rotate(SQUARE, 90.0, about=(0.0, 0.0))[1], (0.0, 2.0), abs_tol=TOL)
     s = rotate(make_facing_set(("A", 1, 0, 10.0), ("B", -1, 0, 0.0)), 90.0)
-    assert approx_equal(s.get("A").point, (0.0, 1.0), tol=TOL)
-    assert approx_equal(s.get("A").facing, 100.0, tol=1e-9)
+    assert approx_equal(s.get("A").point, (0.0, 1.0), abs_tol=TOL)
+    assert approx_equal(s.get("A").facing, 100.0, abs_tol=1e-9)
 
 
 def test_rotate_keeps_arcs_exact() -> None:
     turned = rotate(arc((0, 0), 2.0, 0.0, 90.0), 90.0, about=(0.0, 0.0))
     assert isinstance(turned, ArcCurve)
-    assert approx_equal(turned.start_deg, 90.0, tol=1e-9)
+    assert approx_equal(turned.start_deg, 90.0, abs_tol=1e-9)
 
 
 def test_scale_and_negative_scale() -> None:
-    assert approx_equal(scale(SQUARE, 2.0)[2], (3.0, 3.0), tol=TOL)
-    assert approx_equal(scale(SQUARE, 2.0, 1.0, about=(0.0, 0.0))[2], (4.0, 2.0), tol=TOL)
+    assert approx_equal(scale(SQUARE, 2.0)[2], (3.0, 3.0), abs_tol=TOL)
+    assert approx_equal(scale(SQUARE, 2.0, 1.0, about=(0.0, 0.0))[2], (4.0, 2.0), abs_tol=TOL)
     with pytest.raises(GeometryError) as caught:
         scale(SQUARE, -1.0)
     assert "mirror" in caught.value.hint
@@ -128,9 +128,9 @@ def test_scale_and_negative_scale() -> None:
 def test_expand_and_contract_move_points_radially() -> None:
     pts = np.array([[0.0, 0.0], [3.0, 0.0], [0.0, -4.0]])
     grown = expand(pts, 1.0, about=(0.0, 0.0))
-    assert approx_equal(grown, [[0.0, 0.0], [4.0, 0.0], [0.0, -5.0]], tol=TOL)
+    assert approx_equal(grown, [[0.0, 0.0], [4.0, 0.0], [0.0, -5.0]], abs_tol=TOL)
     shrunk = contract(pts, 2.0, about=(0.0, 0.0))
-    assert approx_equal(shrunk, [[0.0, 0.0], [1.0, 0.0], [0.0, -2.0]], tol=TOL)
+    assert approx_equal(shrunk, [[0.0, 0.0], [1.0, 0.0], [0.0, -2.0]], abs_tol=TOL)
     with pytest.raises(GeometryError) as caught:
         contract(pts, 3.5, about=(0.0, 0.0))
     assert caught.value.context["max_d"] == 3.0
@@ -141,21 +141,21 @@ def test_expand_curve_maps_its_points() -> None:
     assert isinstance(grown, Polyline)
     assert grown.points == ((-2.0, 0.0), (2.0, 0.0))
     ring = expand(circle((0, 0), 1.0), 1.0, about=(0.0, 0.0))
-    assert approx_equal(np.linalg.norm(ring.point_at_u(0.3)), 2.0, tol=1e-2)
+    assert approx_equal(np.linalg.norm(ring.point_at_u(0.3)), 2.0, abs_tol=1e-2)
 
 
 def test_set_interval_respaces_about_the_center() -> None:
     pts = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0], [3.0, 0.0]])
     wide = set_interval(pts, 2.0)
-    assert approx_equal(wide[:, 0], [-1.5, 0.5, 2.5, 4.5], tol=TOL)
+    assert approx_equal(wide[:, 0], [-1.5, 0.5, 2.5, 4.5], abs_tol=TOL)
     start = set_interval(pts, 0.5, anchor="start")
-    assert approx_equal(start[:, 0], [0.0, 0.5, 1.0, 1.5], tol=TOL)
+    assert approx_equal(start[:, 0], [0.0, 0.5, 1.0, 1.5], abs_tol=TOL)
 
 
 def test_set_interval_follows_a_bend() -> None:
     pts = np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 2.0]])
     tight = set_interval(pts, 1.0, anchor="start")
-    assert approx_equal(tight, [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]], tol=TOL)
+    assert approx_equal(tight, [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]], abs_tol=TOL)
 
 
 def test_set_interval_on_a_set_uses_selection_order() -> None:
@@ -172,13 +172,13 @@ def test_set_interval_on_a_set_uses_selection_order() -> None:
 )
 def test_mirror_axes(axis: object, expected_first: tuple[float, float]) -> None:
     pts = np.array([[1.0, 0.0], [3.0, 1.0], [4.0, 2.0]])
-    assert approx_equal(mirror(pts, axis)[0], expected_first, tol=TOL)  # type: ignore[arg-type]
+    assert approx_equal(mirror(pts, axis)[0], expected_first, abs_tol=TOL)  # type: ignore[arg-type]
 
 
 def test_mirror_reflects_facings() -> None:
     s = mirror(make_facing_set(("A", 1, 0, 90.0)), "x")
     assert s.get("A").point == (-1.0, 0.0)
-    assert approx_equal(s.get("A").facing, 270.0, tol=1e-9)
+    assert approx_equal(s.get("A").facing, 270.0, abs_tol=1e-9)
 
 
 def test_symmetrize_pairs_by_assignment() -> None:
@@ -191,7 +191,7 @@ def test_symmetrize_pairs_by_assignment() -> None:
     )
     out = symmetrize(s)
     assert out.get("R2").point == (1.0, 0.0)
-    assert approx_equal(out.get("R2").facing, 330.0, tol=1e-9)
+    assert approx_equal(out.get("R2").facing, 330.0, abs_tol=1e-9)
     assert out.get("R1").point == (3.0, 1.0)
     assert out.get("M").point == (0.0, 5.0)
     assert out.get("L1") == s.get("L1")
@@ -213,7 +213,7 @@ def test_symmetrize_respects_pins() -> None:
 
 def test_skew_shears_about_the_anchor() -> None:
     out = skew(SQUARE, deg_x=45.0, about=(0.0, 0.0))
-    assert approx_equal(out[2], (4.0, 2.0), tol=TOL)
+    assert approx_equal(out[2], (4.0, 2.0), abs_tol=TOL)
 
 
 def test_affine_accepts_2x3_and_3x3() -> None:
@@ -229,13 +229,13 @@ def test_affine_accepts_2x3_and_3x3() -> None:
 def test_snap_modes_and_report() -> None:
     pts = np.array([[0.24, 0.26], [1.0, 1.0], [-0.25, 0.0]])
     out, report = snap(pts, 0.5)
-    assert approx_equal(out, [[0.0, 0.5], [1.0, 1.0], [-0.5, 0.0]], tol=TOL)
+    assert approx_equal(out, [[0.0, 0.5], [1.0, 1.0], [-0.5, 0.0]], abs_tol=TOL)
     assert report.moved == 2
-    assert approx_equal(report.max_shift, math.hypot(0.24, 0.24), tol=TOL)
+    assert approx_equal(report.max_shift, math.hypot(0.24, 0.24), abs_tol=TOL)
     floored, _ = snap(pts, 0.5, mode="floor", axes="x")
-    assert approx_equal(floored[0], (0.0, 0.26), tol=TOL)
+    assert approx_equal(floored[0], (0.0, 0.26), abs_tol=TOL)
     ceiled, _ = snap(np.array([[0.3, 0.0]]), 0.1, mode="ceil")
-    assert approx_equal(ceiled[0], (0.3, 0.0), tol=TOL)
+    assert approx_equal(ceiled[0], (0.3, 0.0), abs_tol=TOL)
 
 
 def test_snap_set_and_curve() -> None:
@@ -263,9 +263,9 @@ def test_snap_to_guides_pulls_close_points_only() -> None:
     )
     pts = np.array([[4.7, 2.0], [0.0, 5.8], [0.0, 2.0]])
     out = snap_to_guides(pts, sheet, tol=0.5)
-    assert approx_equal(out, [[5.0, 2.0], [0.0, 6.0], [0.0, 2.0]], tol=TOL)
+    assert approx_equal(out, [[5.0, 2.0], [0.0, 6.0], [0.0, 2.0]], abs_tol=TOL)
     yards_only = snap_to_guides(pts, sheet, tol=0.5, kinds=["yard"])
-    assert approx_equal(yards_only[1], (0.0, 5.8), tol=TOL)
+    assert approx_equal(yards_only[1], (0.0, 5.8), abs_tol=TOL)
     with pytest.raises(UnknownRefError):
         snap_to_guides(pts, sheet, tol=0.5, kinds=["yards"])
 
@@ -280,10 +280,10 @@ def test_align_values() -> None:
 def test_distribute_keeps_order_along_the_axis() -> None:
     pts = np.array([[5.0, 0.0], [0.0, 1.0], [1.0, 2.0], [10.0, 3.0]])
     out = distribute(pts, "x")
-    assert approx_equal(out[:, 0], [20 / 3, 0.0, 10 / 3, 10.0], tol=TOL)
+    assert approx_equal(out[:, 0], [20 / 3, 0.0, 10 / 3, 10.0], abs_tol=TOL)
     assert out[:, 1].tolist() == [0.0, 1.0, 2.0, 3.0]
     spread = distribute(pts, "x", start=0.0, end=30.0)
-    assert approx_equal(spread[:, 0], [20.0, 0.0, 10.0, 30.0], tol=TOL)
+    assert approx_equal(spread[:, 0], [20.0, 0.0, 10.0, 30.0], abs_tol=TOL)
 
 
 def test_interpolate_forms() -> None:
@@ -312,4 +312,4 @@ def test_regression_affine_accepts_tiny_but_invertible_scales() -> None:
     """Applies a uniform 1e-7 scale instead of calling the plane collapsed (audit 9.1)."""
     pts = np.array([[0.0, 0.0], [1.0, 2.0]])
     matrix = [[TINY_UNIFORM_SCALE, 0.0, 0.0], [0.0, TINY_UNIFORM_SCALE, 0.0]]
-    assert approx_equal(affine(pts, matrix), pts * TINY_UNIFORM_SCALE, tol=1e-15)
+    assert approx_equal(affine(pts, matrix), pts * TINY_UNIFORM_SCALE, abs_tol=1e-15)

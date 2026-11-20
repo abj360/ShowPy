@@ -15,7 +15,7 @@ Contains:
     test_regression_v020_head_loads_with_its_stored_negative_zero: keeps the stored sign of every
         `-0.0` on load and rewrites nothing
     test_regression_first_save_normalizes_v020_documents_in_one_revision: adds exactly one
-        revision holding only re-encoded show documents with no `-0.0`, then the edit on top
+        revision holding only re-encoded show documents with no `-0.0` and the show.json header
     test_regression_normalizing_revision_is_invisible_to_diff_and_events: shows an empty
         `diff_show` and no events since the pre-upgrade head
     test_regression_second_save_adds_no_normalizing_revision: adds nothing on a repeat save
@@ -23,8 +23,8 @@ Contains:
         both the load and the normalizing save
     test_regression_workspace_write_normalizes_first_then_edits: lists only the edited document in
         the write's own revision, with an empty `diff_show` across the normalizing one
-    test_regression_workspace_commit_normalizes_first_then_edits: normalizes the one document a
-        commit rewrites, then commits the edit of it
+    test_regression_workspace_commit_normalizes_first_then_edits: normalizes the document a commit
+        rewrites and adds the show.json header, then commits the edit
     test_regression_second_workspace_write_adds_no_normalizing_revision: adds one revision only
     test_regression_stale_write_on_a_legacy_repository_lands_nothing: refuses a stale write
         with ConflictError, adds no revision and leaves the show as it was
@@ -59,9 +59,10 @@ import pytest
 from showpy.core.errors import ConflictError, SchemaError
 from showpy.core.util import content_hash
 from showpy.show.collab import events_since
-from showpy.show.documents import dump_json, is_show_doc
+from showpy.show.documents import SHOW_DOC, dump_json, dump_show_doc, is_show_doc
 from showpy.show.file_repository import FileRepository
 from showpy.show.history import diff_show
+from showpy.show.migrate import LEGACY_CONTEXT, format_header
 from showpy.show.models import CanvasEvent, Revision, Show
 from showpy.show.storage import Workspace, load_show, open_workspace, save_show
 
@@ -85,7 +86,7 @@ def test_v020_repository_loads_without_loss(tmp_path: Path) -> None:
     show_id = expected["show_id"]
     assert [r.id for r in repo.revisions(show_id)] == expected["revisions"]
     assert repo.head(show_id) == expected["head"]
-    assert repo.get_show(show_id) == Show.model_validate(expected["show"])
+    assert repo.get_show(show_id) == Show.model_validate(expected["show"], context=LEGACY_CONTEXT)
 
 
 def test_v020_revision_records_carry_legacy_keys() -> None:
@@ -120,7 +121,9 @@ def test_commit_on_v020_repository_gets_a_new_scheme_id(tmp_path: Path) -> None:
     assert revision.id != hashlib.sha256(legacy_scheme).hexdigest()
     assert len(revision.id) == HEX_LENGTH
     assert [r.id for r in repo.revisions(show_id)] == [*expected["revisions"], revision.id]
-    assert repo.get_show(show_id, expected["head"]) == Show.model_validate(expected["show"])
+    assert repo.get_show(show_id, expected["head"]) == Show.model_validate(
+        expected["show"], context=LEGACY_CONTEXT
+    )
     assert content_hash(head_show) != expected["legacy_content_hash"]
 
 
@@ -162,6 +165,11 @@ def _negative_zero_paths(tree: Mapping[str, bytes]) -> set[str]:
     return {p for p, raw in tree.items() if is_show_doc(p) and NEGATIVE_ZERO.search(raw)}
 
 
+def _normalized_paths(tree: Mapping[str, bytes]) -> set[str]:
+    """Lists what the first save rewrites: `-0.0` documents, and show.json for its v2 header."""
+    return _negative_zero_paths(tree) | {SHOW_DOC}
+
+
 def _fixture_workspace(tmp_path: Path) -> tuple[FileRepository, Workspace, dict[str, Any]]:
     expected = _expected()
     shutil.copytree(FIXTURE / "repo", tmp_path / "repo")
@@ -192,7 +200,7 @@ def test_regression_first_save_normalizes_v020_documents_in_one_revision(tmp_pat
     log = repo.revisions(show_id)
     assert [r.id for r in log] == [*expected["revisions"], saved.id]
     assert saved.parent == head
-    assert set(saved.changed) == _negative_zero_paths(before)
+    assert set(saved.changed) == _normalized_paths(before)
     after = ws.tree_at(saved.id)
     assert not _negative_zero_paths(after)
     unchanged = set(before) - set(saved.changed)
@@ -212,7 +220,7 @@ def test_regression_save_with_an_edit_normalizes_first_then_edits(tmp_path: Path
     assert len(log) == 5
     assert log[4].id == saved.id
     assert log[3].parent == expected["head"]
-    assert set(log[3].changed) == _negative_zero_paths(ws.tree_at(expected["head"]))
+    assert set(log[3].changed) == _normalized_paths(ws.tree_at(expected["head"]))
     assert log[4].changed == ("/show/show.json",)
     assert not _negative_zero_paths(ws.tree_at(saved.id))
 
@@ -265,7 +273,7 @@ def _assert_normalized_then_edited(
     assert len(log) == 5
     assert log[4].id == edit.id
     assert log[3].parent == expected["head"]
-    assert set(log[3].changed) == _negative_zero_paths(ws.tree_at(expected["head"]))
+    assert set(log[3].changed) == _normalized_paths(ws.tree_at(expected["head"]))
     assert log[4].changed == ("/show/show.json",)
     before, after = ws.show_at(expected["head"]), ws.show_at(log[3].id)
     assert before is not None
@@ -287,7 +295,10 @@ def test_regression_workspace_commit_normalizes_first_then_edits(tmp_path: Path)
     edit = ws.commit({"/sets/1/set.json": dump_json(document)}, at=COMMITTED_AT)
     log = repo.revisions(expected["show_id"])
     assert [r.id for r in log][:3] == expected["revisions"]
-    assert [r.changed for r in log[3:]] == [("/sets/1/set.json",), ("/sets/1/set.json",)]
+    assert [set(r.changed) for r in log[3:]] == [
+        {"/sets/1/set.json", SHOW_DOC},
+        {"/sets/1/set.json"},
+    ]
     assert log[4].id == edit.id
     before, normalized = ws.show_at(expected["head"]), ws.show_at(log[3].id)
     assert before is not None
@@ -324,12 +335,20 @@ STALE_DOCS = {"/sets/1/set.json", "/show/sheet.json"}
 
 
 def _two_stale_documents(tmp_path: Path) -> tuple[FileRepository, Workspace, int]:
-    """Copies the fixture and reformats its sheet document, so two documents are non-canonical."""
+    """Copies the fixture and reformats its sheet document, so two documents are non-canonical.
+
+    The commit also stores the current show.json, which any commit of a show document needs;
+    the `-0.0` set document and the reformatted sheet stay stale.
+    """
     repo, ws, expected = _fixture_workspace(tmp_path)
-    sheet = json.loads(ws.tree_at(expected["head"])["/show/sheet.json"])
+    tree = ws.tree_at(expected["head"])
+    sheet = json.loads(tree["/show/sheet.json"])
     repo.transaction(
         expected["show_id"],
-        {"/show/sheet.json": json.dumps(sheet, indent=4).encode()},
+        {
+            "/show/sheet.json": json.dumps(sheet, indent=4).encode(),
+            SHOW_DOC: dump_show_doc({**format_header(), **json.loads(tree[SHOW_DOC])}),
+        },
         expected_revision=expected["head"],
         at=COMMITTED_AT,
     )
@@ -363,11 +382,11 @@ def test_regression_writes_to_different_documents_normalize_once(tmp_path: Path)
 def test_regression_commits_to_different_documents_normalize_once(tmp_path: Path) -> None:
     repo, ws, count = _two_stale_documents(tmp_path)
     tree = ws.tree_at(ws.revision)
-    first = json.loads(tree["/show/show.json"])
+    first = json.loads(ws.read(SHOW_DOC))
     first["title"] = "Renamed"
     second = json.loads(tree["/transitions/4-5/paths.json"])
     second["notes"] = "slow"
-    ws.commit({"/show/show.json": dump_json(first)}, at=COMMITTED_AT)
+    ws.commit({SHOW_DOC: dump_show_doc(first)}, at=COMMITTED_AT)
     ws.commit({"/transitions/4-5/paths.json": dump_json(second)}, at=COMMITTED_AT)
     assert [set(r.changed) for r in _after(repo, ws, count)] == [
         STALE_DOCS,
@@ -409,7 +428,7 @@ def test_regression_edit_conflicting_after_normalizing_keeps_it_and_retries_on_t
         ws.write("/show/show.json", raw, at=COMMITTED_AT)
     log = repo.revisions(expected["show_id"])[len(expected["revisions"]) :]
     assert len(log) == 2
-    assert set(log[0].changed) == _negative_zero_paths(ws.tree_at(expected["head"]))
+    assert set(log[0].changed) == _normalized_paths(ws.tree_at(expected["head"]))
     assert log[1].changed == ("/sets/2/set.py",)
     kept = repo.get_show(expected["show_id"], log[0].id)
     assert diff_show(before, kept) == {}
@@ -429,4 +448,4 @@ def test_regression_commit_of_the_canonical_form_adds_only_the_normalizing_revis
     log = repo.revisions(expected["show_id"])[len(expected["revisions"]) :]
     assert [r.id for r in log] == [head.id]
     assert repo.head(expected["show_id"]) == head.id
-    assert set(head.changed) == _negative_zero_paths(ws.tree_at(expected["head"]))
+    assert set(head.changed) == _normalized_paths(ws.tree_at(expected["head"]))

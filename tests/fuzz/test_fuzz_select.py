@@ -18,7 +18,7 @@ from hypothesis import strategies as st
 
 from showpy.cast.models import Cast, Group, Spot
 from showpy.cast.select import select
-from showpy.core.ids import parse_ref, parse_tid
+from showpy.core.ids import SpotId, parse_ref, parse_tid
 from showpy.core.util import natural_sort, parse_range
 from tests.helpers import only_showpy_errors
 
@@ -35,7 +35,7 @@ def fuzz_cast() -> Cast:
     """Builds a three-group cast of tagged spots, the target of every selection fuzz input."""
     groups = {key: Group(key=key, label_prefix=prefix) for key, prefix in GROUPS.items()}
     spots = tuple(
-        Spot(id=f"{prefix}{n}", group=key, tags=(TAGS[n % len(TAGS)],) if n % 3 else ())
+        Spot(id=SpotId(f"{prefix}{n}"), group=key, tags=(TAGS[n % len(TAGS)],) if n % 3 else ())
         for key, prefix in GROUPS.items()
         for n in range(1, SPOTS_PER_GROUP + 1)
     )

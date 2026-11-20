@@ -27,7 +27,9 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from showpy.choreo.models import Form, PathRow, Placement, TransitionSpec
+from showpy.choreo.form_models import Form
+from showpy.choreo.models import Placement
+from showpy.choreo.path_models import PathRow, TransitionSpec
 from showpy.core.errors import (
     ConflictError,
     LockedError,
@@ -36,6 +38,7 @@ from showpy.core.errors import (
     TimeRangeError,
     UnknownRefError,
 )
+from showpy.core.ids import FormId, SetId, SpotId, make_tid
 from showpy.core.selection import Selection
 from showpy.notes.models import Anchor
 from showpy.show.changes import apply_change
@@ -71,25 +74,38 @@ from tests.helpers import open_session
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 STEP = timedelta(minutes=1)
-FORM = Form(id="f1", set="2", kind="line", geometry={"len": 6}, members=("T1", "T2"))
+FORM = Form(
+    id=FormId("f1"),
+    set=SetId("2"),
+    kind="line",
+    geometry={"len": 6},
+    members=(SpotId("T1"), SpotId("T2")),
+)
 
 
 def _move(entity: str, x: float, set_id: str = "2") -> PlacementOp:
     y = 9.0 if set_id == "2" else 5.0
-    return PlacementOp(set_id=set_id, placement=Placement(entity=entity, x=x, y=y))
+    return PlacementOp(set_id=SetId(set_id), placement=Placement(entity=SpotId(entity), x=x, y=y))
 
 
 def test_apply_change_applies_every_op_kind() -> None:
-    paths = TransitionSpec(id=("1", "2"), counts=1.0, rows={"T1": PathRow(entity="T1", end=4)})
+    paths = TransitionSpec(
+        id=make_tid("1", "2"), counts=1.0, rows={SpotId("T1"): PathRow(entity=SpotId("T1"), end=4)}
+    )
     show = apply_change(
         two_set_show(),
-        [_move("T1", -3.0), FormOp(form=FORM), PathsOp(spec=paths), CountsOp(set_id="2", counts=6)],
+        [
+            _move("T1", -3.0),
+            FormOp(form=FORM),
+            PathsOp(spec=paths),
+            CountsOp(set_id=SetId("2"), counts=6),
+        ],
     )
     assert show.set("2").get("T1").x == -3.0
-    assert show.forms["f1"] == FORM
+    assert show.forms[FormId("f1")] == FORM
     assert show.set("2").forms == ("f1",)
     assert show.transition(("1", "2")).counts == 6.0
-    assert show.transition(("1", "2")).rows["T1"].end == 4
+    assert show.transition(("1", "2")).rows[SpotId("T1")].end == 4
 
 
 def test_apply_change_refuses_pinned_unless_forced() -> None:
@@ -103,7 +119,9 @@ def test_apply_change_unknown_refs() -> None:
     with pytest.raises(UnknownRefError):
         apply_change(two_set_show(), [_move("Z1", 0.0)])
     with pytest.raises(UnknownRefError):
-        apply_change(two_set_show(), [PathsOp(spec=TransitionSpec(id=("2", "1"), counts=8))])
+        apply_change(
+            two_set_show(), [PathsOp(spec=TransitionSpec(id=make_tid("2", "1"), counts=8))]
+        )
 
 
 def test_pin_entity_set_form_and_transition_flags() -> None:
@@ -113,8 +131,8 @@ def test_pin_entity_set_form_and_transition_flags() -> None:
     assert not entity.sets[0].get("T2").pinned
     whole = pin(show, "set", "2")
     assert all(p.pinned for p in whole.set("2").placements)
-    assert whole.forms["f1"].locked
-    assert pin(show, "form", "f1").forms["f1"].locked
+    assert whole.forms[FormId("f1")].locked
+    assert pin(show, "form", "f1").forms[FormId("f1")].locked
     paths = pin(show, "transition", "1->2").transition(("1", "2"))
     assert set(paths.rows) == {"T1", "T2", "T3", "T4"}
     assert all(row.locked for row in paths.rows.values())
@@ -149,10 +167,17 @@ def test_pin_replaces_existing_record() -> None:
 
 def _designer_edits(designer: Workspace) -> Show:
     base = load_show(designer)
-    paths = TransitionSpec(id=("2", "3"), counts=4.0, rows={"T2": PathRow(entity="T2", end=2)})
+    paths = TransitionSpec(
+        id=make_tid("2", "3"), counts=4.0, rows={SpotId("T2"): PathRow(entity=SpotId("T2"), end=2)}
+    )
     edited = apply_change(
         base,
-        [_move("T1", -4.0), FormOp(form=FORM), PathsOp(spec=paths), CountsOp(set_id="3", counts=6)],
+        [
+            _move("T1", -4.0),
+            FormOp(form=FORM),
+            PathsOp(spec=paths),
+            CountsOp(set_id=SetId("3"), counts=6),
+        ],
     )
     edited = pin(edited, "entity", "T4", "anchor")
     save_show(designer, edited, AT + STEP)
@@ -254,11 +279,14 @@ def test_agent_pin_event_applies() -> None:
 def test_propose_preview_and_reject() -> None:
     show = pin(two_set_show(), "entity", "T1")
     proposal = propose(
-        show, [_move("T1", 1.0), _move("T2", 3.5), CountsOp(set_id="2", counts=6)], "wider", "p1"
+        show,
+        [_move("T1", 1.0), _move("T2", 3.5), CountsOp(set_id=SetId("2"), counts=6)],
+        "wider",
+        "p1",
     )
     assert (proposal.state, proposal.base_revision) == ("open", "")
     preview = preview_proposal(show, proposal)
-    assert [p.entity for p in preview.placements["2"]] == ["T1", "T2"]
+    assert [p.entity for p in preview.placements[SetId("2")]] == ["T1", "T2"]
     assert preview.counts == {"2": 6.0}
     assert preview.paths[0].counts == 6.0
     assert preview.blocked == ("placement T1 in set 2",)
@@ -319,12 +347,18 @@ def test_highlight_and_selection() -> None:
         highlight("pit", 0.0, at=AT, event_id="h3")
     _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
     assert selection(agent).ids == ()
-    designer.write("/canvas/selection.json", Selection(ids=("T2", "T1")).model_dump_json(), at=AT)
+    designer.write(
+        "/canvas/selection.json",
+        Selection(ids=(SpotId("T2"), SpotId("T1"))).model_dump_json(),
+        at=AT,
+    )
     agent.refresh()
     assert selection(agent).ids == ("T2", "T1")
 
 
-STRAIGHT_ROW = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", start=2)})
+STRAIGHT_ROW = TransitionSpec(
+    id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): PathRow(entity=SpotId("T1"), start=2)}
+)
 RETIMED_COUNTS = 12.0
 RESCALED_COUNTS = 16.0
 
@@ -389,9 +423,9 @@ def test_regression_proposal_against_unsaved_show_can_be_accepted() -> None:
 def test_regression_rescale_proposal_conflicts_with_a_newer_row_of_the_same_transition() -> None:
     """Refuses a rescale proposal after the designer edited that transition's rows (audit 9.7)."""
     _, agent, designer = open_session(_with_path_row(two_set_show()), AT)
-    rescale = CountsOp(set_id="2", counts=RESCALED_COUNTS, rescale=True)
+    rescale = CountsOp(set_id=SetId("2"), counts=RESCALED_COUNTS, rescale=True)
     proposal = propose(load_show(agent), [rescale], "", "p1")
-    newer = STRAIGHT_ROW.model_copy(update={"rows": {"T1": PathRow(entity="T1", start=4)}})
+    newer = STRAIGHT_ROW.model_copy(update={"rows": {"T1": PathRow(entity=SpotId("T1"), start=4)}})
     designer_show = load_show(designer).model_copy(update={"transitions": (newer,)})
     save_show(designer, designer_show, AT + STEP)
     with pytest.raises(ConflictError):

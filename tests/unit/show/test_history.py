@@ -30,15 +30,10 @@ import pytest
 from showpy.cast.models import Group
 from showpy.cast.rewrite import rewrite_spot_ids
 from showpy.cast.spots import add_spot
-from showpy.choreo.models import (
-    FacingMode,
-    FacingOverride,
-    Form,
-    PathRow,
-    Route,
-    TransitionSpec,
-)
+from showpy.choreo.form_models import Form
+from showpy.choreo.path_models import FacingMode, FacingOverride, PathRow, Route, TransitionSpec
 from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
+from showpy.core.ids import FormId, RouteId, SetId, SpotId, ZoneId, make_tid
 from showpy.core.types import Region
 from showpy.notes.models import Anchor, Note
 from showpy.sheet.models import Zone, ZoneKind
@@ -95,9 +90,9 @@ def test_diff_sets_counts_entrances_as_moves() -> None:
 
 
 def test_diff_paths_treats_default_rows_as_missing() -> None:
-    plain = TransitionSpec(id=("1", "2"), counts=8.0)
-    explicit = plain.model_copy(update={"rows": {"T1": PathRow(entity="T1")}})
-    route = Route(id="r", curve={}, members=("T1",), offsets=(0.0,), travel=2.0)
+    plain = TransitionSpec(id=make_tid("1", "2"), counts=8.0)
+    explicit = plain.model_copy(update={"rows": {"T1": PathRow(entity=SpotId("T1"))}})
+    route = Route(id=RouteId("r"), curve={}, members=(SpotId("T1"),), offsets=(0.0,), travel=2.0)
     routed = plain.model_copy(update={"routes": {"r": route}})
     assert diff_paths(plain, explicit).is_empty
     assert diff_paths(plain, routed).routes_changed == ("r",)
@@ -105,8 +100,12 @@ def test_diff_paths_treats_default_rows_as_missing() -> None:
 
 def test_diff_show_summarizes_structure_and_paths() -> None:
     a = two_set_show()
-    form = Form(id="f", set="2", kind="line", geometry={}, members=("T1",))
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", start=1)})
+    form = Form(id=FormId("f"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
+    spec = TransitionSpec(
+        id=make_tid("1", "2"),
+        counts=8.0,
+        rows={SpotId("T1"): PathRow(entity=SpotId("T1"), start=1)},
+    )
     b = add_set(_moved(a, "T1", 5.0), "3", 4.0).model_copy(
         update={"forms": {"f": form}, "transitions": (spec,), "pins": (Pin(target="set", id="1"),)}
     )
@@ -160,12 +159,24 @@ def test_revert_restores_every_file() -> None:
 
 def test_rename_entities_rewrites_everything() -> None:
     show = two_set_show()
-    form = Form(id="f", set="2", kind="line", geometry={}, members=("T1", "T2"))
-    row = PathRow(entity="T1", facing_mode=FacingMode.TOWARD_ENTITY, facing_value="T2")
-    route = Route(id="r", curve={}, members=("T2",), offsets=(0.0,), travel=1.0)
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": row}, routes={"r": route})
+    form = Form(
+        id=FormId("f"),
+        set=SetId("2"),
+        kind="line",
+        geometry={},
+        members=(SpotId("T1"), SpotId("T2")),
+    )
+    row = PathRow(
+        entity=SpotId("T1"), facing_mode=FacingMode.TOWARD_ENTITY, facing_value=SpotId("T2")
+    )
+    route = Route(id=RouteId("r"), curve={}, members=(SpotId("T2"),), offsets=(0.0,), travel=1.0)
+    spec = TransitionSpec(
+        id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): row}, routes={RouteId("r"): route}
+    )
     note = Note(id="n", text="x", anchor=Anchor.on_spots(["T1"]), author="d", created_at=AT)
-    override = FacingOverride(entities=("T1",), mode=FacingMode.FIXED, value=90.0, start=0, end=4)
+    override = FacingOverride(
+        entities=(SpotId("T1"),), mode=FacingMode.FIXED, value=90.0, start=0, end=4
+    )
     cast = show.cast.model_copy(update={"selections": {"lead": frozenset({"T1"})}})
     show = show.model_copy(
         update={
@@ -181,11 +192,11 @@ def test_rename_entities_rewrites_everything() -> None:
     assert renamed.cast.ids()[:2] == ("S1", "S2")
     assert renamed.cast.selections == {"lead": ("S1",)}
     assert renamed.sets[0].entity_ids()[:2] == ("S1", "S2")
-    assert renamed.forms["f"].members == ("S1", "S2")
+    assert renamed.forms[FormId("f")].members == ("S1", "S2")
     new_spec = renamed.transitions[0]
     assert list(new_spec.rows) == ["S1"]
-    assert new_spec.rows["S1"].facing_value == "S2"
-    assert new_spec.routes["r"].members == ("S2",)
+    assert new_spec.rows[SpotId("S1")].facing_value == "S2"
+    assert new_spec.routes[RouteId("r")].members == ("S2",)
     assert renamed.notes[0].anchor.spots == ("S1",)
     assert renamed.facing_overrides[0].entities == ("S1",)
     assert renamed.pins[0].id == "S1"
@@ -193,14 +204,29 @@ def test_rename_entities_rewrites_everything() -> None:
 
 def _full_show() -> Show:
     show = two_set_show()
-    form = Form(id="f", set="2", kind="line", geometry={}, members=("T1", "T2"))
-    row = PathRow(entity="T1", facing_mode=FacingMode.TOWARD_ENTITY, facing_value="T2")
-    route = Route(id="r", curve={}, members=("T2",), offsets=(0.0,), travel=1.0)
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": row}, routes={"r": route})
+    form = Form(
+        id=FormId("f"),
+        set=SetId("2"),
+        kind="line",
+        geometry={},
+        members=(SpotId("T1"), SpotId("T2")),
+    )
+    row = PathRow(
+        entity=SpotId("T1"), facing_mode=FacingMode.TOWARD_ENTITY, facing_value=SpotId("T2")
+    )
+    route = Route(id=RouteId("r"), curve={}, members=(SpotId("T2"),), offsets=(0.0,), travel=1.0)
+    spec = TransitionSpec(
+        id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): row}, routes={RouteId("r"): route}
+    )
     note = Note(id="n", text="x", anchor=Anchor.on_spots(["T1"]), author="d", created_at=AT)
     override = FacingOverride(entities="T1 + T2", mode=FacingMode.FIXED, value=90.0, start=0, end=4)
     square = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)))
-    zone = Zone(id="z", kind=ZoneKind.CUSTOM, polygon=square, applies_to=("T1", "T3"))
+    zone = Zone(
+        id=ZoneId("z"),
+        kind=ZoneKind.CUSTOM,
+        polygon=square,
+        applies_to=(SpotId("T1"), SpotId("T3")),
+    )
     cast = show.cast.model_copy(update={"selections": {"lead": ("T3", "T1")}})
     return show.model_copy(
         update={
@@ -271,7 +297,7 @@ def test_regression_undo_does_not_leave_a_path_row_for_a_removed_spot() -> None:
     new_spot = load_show(designer).cast.ids()[-1]
     agent.refresh()
     row = TransitionSpec(
-        id=("1", "2"), counts=8.0, rows={new_spot: PathRow(entity=new_spot, start=1)}
+        id=make_tid("1", "2"), counts=8.0, rows={new_spot: PathRow(entity=new_spot, start=1)}
     )
     save_show(agent, load_show(agent).model_copy(update={"transitions": (row,)}), AT + 2 * STEP)
     try:

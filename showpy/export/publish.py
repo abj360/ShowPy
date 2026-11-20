@@ -29,15 +29,14 @@ import ipaddress
 import math
 import re
 from datetime import datetime
+from typing import TYPE_CHECKING
 from urllib.parse import SplitResult, quote, urlsplit, urlunsplit
-
-import segno
-from PIL import Image
 
 from showpy.cast.models import Spot
 from showpy.choreo.models import Placement, Set
 from showpy.core.caps import MAX_IMAGE_PIXELS, require_size
-from showpy.core.errors import LockedError, SchemaError, UnknownRefError, ValidationError
+from showpy.core.errors import LockedError, SchemaError, ShowValidationError, UnknownRefError
+from showpy.core.extras import require_extra
 from showpy.core.ids import SpotId, TransitionId, format_tid
 from showpy.core.units import angle_diff
 from showpy.core.util import close_matches, content_hash, format_ranges, natural_sort
@@ -52,6 +51,9 @@ from showpy.export.models import (
 from showpy.export.print_sheets import OFF_FIELD
 from showpy.sheet.coords import to_coords
 from showpy.show.models import Show
+
+if TYPE_CHECKING:
+    import segno
 
 JOIN_TOKEN_FORMAT = re.compile(r"[A-Za-z0-9_-]{22,256}")
 BASE_URL_SCHEME = "https"
@@ -225,7 +227,7 @@ def publish(
         )
     root = _require_https_base_url(base_url)
     if previous is not None and (previous.id, previous.show_id) != (publication_id, show.id):
-        raise ValidationError(
+        raise ShowValidationError(
             f"publication {previous.id} of {previous.show_id} cannot be republished as "
             f"{publication_id} of {show.id}",
             hint="republish with the same publication ID and show",
@@ -276,7 +278,7 @@ def _require_https_link(pub: Publication) -> None:
     try:
         _require_https_base_url(pub.link)
     except SchemaError as err:
-        raise ValidationError(
+        raise ShowValidationError(
             f"publication {pub.id} stores a link that is not a plain https link: {err.message}",
             hint="republish it with publish(..., previous=pub) to rebuild the link",
             context={"publication": pub.id},
@@ -307,20 +309,20 @@ def join_link(pub: Publication, token: str) -> str:
     """
     _require_join_token(token)
     if "?" in pub.link or "#" in pub.link:
-        raise ValidationError(
+        raise ShowValidationError(
             f"publication {pub.id} link has a query or fragment, so no token can follow it",
             hint="republish it with publish(..., previous=pub) to rebuild the link",
             context={"publication": pub.id},
         )
     _require_https_link(pub)
     if pub.join_token_sha256 is None:
-        raise ValidationError(
+        raise ShowValidationError(
             f"publication {pub.id} stores no join token digest, so nobody can join it",
             hint="republish it with join_token=secrets.token_urlsafe(16) to issue one",
             context={"publication": pub.id},
         )
     if not verify_join_token(pub, token):
-        raise ValidationError(
+        raise ShowValidationError(
             f"join token does not match publication {pub.id}",
             hint="pass the token issued at publish; republish with a new join_token if it is lost",
             context={"publication": pub.id},
@@ -364,7 +366,9 @@ def _require_pixel_size(size: int) -> None:
     require_size(size * size, MAX_IMAGE_PIXELS, what="QR code pixels")
 
 
-def _make_code(link: str) -> segno.QRCode:
+def _make_code(link: str) -> "segno.QRCode":
+    import segno
+
     try:
         return segno.make(link, error=QR_ERROR_LEVEL, micro=False, boost_error=False)
     except segno.DataOverflowError as err:
@@ -379,6 +383,7 @@ def qr_code(pub: Publication, token: str, size: int = 512) -> bytes:
     r"""Renders `join_link(pub, token)` as a square PNG QR code of `size` pixels.
 
     Modules are whole pixels, centered with the standard quiet zone, so the code stays sharp.
+    Needs the `qr` extra.
 
     Args:
         pub: Publication whose joinable link is encoded.
@@ -396,6 +401,10 @@ def qr_code(pub: Publication, token: str, size: int = 512) -> bytes:
     >>> qr_code(pub, token, size=128)[:4]
     b'\x89PNG'
     """
+    require_extra("segno", extra="qr", needed_by="qr_code")
+    require_extra("PIL", extra="qr", needed_by="qr_code")
+    from PIL import Image
+
     link = join_link(pub, token)
     _require_pixel_size(size)
     code = _make_code(link)
@@ -431,11 +440,11 @@ def claims(pub: Publication) -> list[Claim]:
     return list(pub.claims)
 
 
-def _claim_on(pub: Publication, spot: SpotId) -> Claim | None:
+def _claim_on(pub: Publication, spot: str) -> Claim | None:
     return next((c for c in pub.claims if c.spot == spot), None)
 
 
-def who_is_on(pub: Publication, spot: SpotId) -> Performer | None:
+def who_is_on(pub: Publication, spot: str) -> Performer | None:
     """Returns the performer holding a spot, or None when it is free.
 
     >>> from showpy.examples import live_publication
@@ -478,7 +487,7 @@ def _require_claimable(pub: Publication, show: Show, performer: Performer, spot:
             context={"performer": performer.id, "spot": mine},
         )
     if not _may_claim(spot, performer):
-        raise ValidationError(
+        raise ShowValidationError(
             f"{spot.id} cannot be claimed by a {performer.role}",
             hint=f"{performer.role}s may claim active spots marked {performer.role}",
             context={"spot": spot.id, "claimable": spot.claimable, "active": spot.active},
@@ -486,7 +495,7 @@ def _require_claimable(pub: Publication, show: Show, performer: Performer, spot:
 
 
 def claim_spot(
-    pub: Publication, show: Show, performer: Performer, spot: SpotId, at: datetime
+    pub: Publication, show: Show, performer: Performer, spot: str, at: datetime
 ) -> tuple[Publication, Claim]:
     """Puts a performer on a spot: one spot per performer, one performer per spot.
 
@@ -507,7 +516,7 @@ def claim_spot(
     True
     """
     if pub.show_id != show.id:
-        raise ValidationError(
+        raise ShowValidationError(
             f"publication {pub.id} is of show {pub.show_id}, not {show.id}",
             hint="pass the show the publication was made from",
             context={"publication": pub.id, "show": show.id},
@@ -518,8 +527,9 @@ def claim_spot(
             hint="claims open only while the publication is live",
             context={"status": pub.status},
         )
-    _require_claimable(pub, show, performer, show.cast.spot(spot))
-    claim = Claim(spot=spot, performer=performer, claimed_at=at)
+    target = show.cast.spot(spot)
+    _require_claimable(pub, show, performer, target)
+    claim = Claim(spot=target.id, performer=performer, claimed_at=at)
     return pub.replace(claims=_sorted([*pub.claims, claim])), claim
 
 
@@ -532,7 +542,7 @@ def _require_open(pub: Publication) -> None:
         )
 
 
-def _require_claimed(pub: Publication, spot: SpotId) -> Claim:
+def _require_claimed(pub: Publication, spot: str) -> Claim:
     claim = _claim_on(pub, spot)
     if claim is None:
         held = [c.spot for c in pub.claims]
@@ -545,7 +555,7 @@ def _require_claimed(pub: Publication, spot: SpotId) -> Claim:
     return claim
 
 
-def swap_claims(pub: Publication, a: SpotId, b: SpotId) -> Publication:
+def swap_claims(pub: Publication, a: str, b: str) -> Publication:
     """Swaps the performers of two claimed spots, as the designer; roles must match.
 
     >>> from showpy.examples import EXAMPLE_TIME as AT, live_publication, performer
@@ -559,13 +569,13 @@ def swap_claims(pub: Publication, a: SpotId, b: SpotId) -> Publication:
     _require_open(pub)
     first, second = _claim_on(pub, a), _claim_on(pub, b)
     if first is None or second is None:
-        raise ValidationError(
+        raise ShowValidationError(
             f"swap needs both {a} and {b} claimed",
             hint="use reassign() to move a performer onto an empty spot",
             context={"a": a, "b": b},
         )
     if first.performer.role != second.performer.role:
-        raise ValidationError(
+        raise ShowValidationError(
             f"{a} and {b} are held by a {first.performer.role} and a {second.performer.role}",
             hint="swap performers of the same role",
             context={"a": a, "b": b},
@@ -575,7 +585,7 @@ def swap_claims(pub: Publication, a: SpotId, b: SpotId) -> Publication:
     return pub.replace(claims=_sorted(others + swapped))
 
 
-def reassign(pub: Publication, spot: SpotId, performer: Performer, at: datetime) -> Publication:
+def reassign(pub: Publication, spot: str, performer: Performer, at: datetime) -> Publication:
     """Moves a performer onto a spot, as the designer; whoever held the spot is unassigned.
 
     >>> from showpy.examples import EXAMPLE_TIME as AT, live_publication, performer
@@ -586,11 +596,11 @@ def reassign(pub: Publication, spot: SpotId, performer: Performer, at: datetime)
     """
     _require_open(pub)
     kept = [c for c in pub.claims if c.spot != spot and c.performer.id != performer.id]
-    claim = Claim(spot=spot, performer=performer, claimed_at=at)
+    claim = Claim.model_validate({"spot": spot, "performer": performer, "claimed_at": at})
     return pub.replace(claims=_sorted([*kept, claim]))
 
 
-def release(pub: Publication, spot: SpotId) -> Publication:
+def release(pub: Publication, spot: str) -> Publication:
     """Frees a claimed spot, as the designer.
 
     >>> from showpy.examples import EXAMPLE_TIME as AT, live_publication, performer
@@ -642,7 +652,8 @@ def _placement(current: Set, spot: SpotId) -> Placement | None:
 
 
 def _set_changes(old: Show, new: Show, spot: SpotId) -> tuple[list[str], list[str]]:
-    moved, turned = [], []
+    moved: list[str] = []
+    turned: list[str] = []
     old_sets = {s.id: s for s in old.sets}
     for current in new.sets:
         before = _placement(old_sets[current.id], spot) if current.id in old_sets else None

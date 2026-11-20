@@ -19,18 +19,18 @@ from typing import Literal
 
 import numpy as np
 
-from showpy.choreo.models import (
+from showpy.choreo.models import Set
+from showpy.choreo.path_models import (
     FacingMode,
     PathRow,
     PathStyle,
     Route,
-    Set,
     TransitionSpec,
     Waypoint,
 )
 from showpy.choreo.paths import set_style
 from showpy.core.errors import LockedError, PathError
-from showpy.core.ids import SpotId, TransitionId, format_tid
+from showpy.core.ids import TransitionId, format_tid
 from showpy.core.types import Point
 from showpy.geo.curves import (
     AnyCurve,
@@ -80,10 +80,10 @@ def _cumulative(points: Sequence[Point]) -> list[float]:
 
 def make_route(
     show: Show,
-    tid: TransitionId,
-    leader: SpotId,
+    tid: tuple[str, str],
+    leader: str,
     waypoints: Sequence[Point],
-    members: Sequence[SpotId] | None = None,
+    members: Sequence[str] | None = None,
     spacing: Literal["keep"] = "keep",
     route_id: str = DEFAULT_ROUTE_ID,
 ) -> Route:
@@ -117,12 +117,14 @@ def make_route(
     curve = (
         Polyline(points=vertices) if len(vertices) > 2 else Segment(a=vertices[0], b=vertices[1])
     )
-    return Route(
-        id=route_id,
-        curve=curve.construction(),
-        members=tuple(file),
-        offsets=offsets,
-        travel=lengths[-1] - offsets[0],
+    return Route.model_validate(
+        {
+            "id": route_id,
+            "curve": curve.construction(),
+            "members": tuple(file),
+            "offsets": offsets,
+            "travel": lengths[-1] - offsets[0],
+        }
     )
 
 
@@ -166,7 +168,7 @@ def follow(
 
 def follow_and_set_targets(
     show: Show,
-    tid: TransitionId,
+    tid: tuple[str, str],
     route: Route,
     start: float = 0.0,
     end: float | None = None,
@@ -200,7 +202,7 @@ def follow_and_set_targets(
         updates[member] = {"x": float(p[0]), "y": float(p[1])}
     new_target = target.with_placements(updates, force=force)
     spec = follow(show.transition(tid), route, start, end, force=force)
-    return _store(show, tid, spec, new_target)
+    return _store(show, spec.id, spec, new_target)
 
 
 def _store(show: Show, tid: TransitionId, spec: TransitionSpec, target: Set) -> Show:
@@ -242,8 +244,8 @@ def _u_turn(file_points: tuple[Point, ...], turn_at: Point) -> tuple[AnyCurve, f
 
 def counter_march(
     show: Show,
-    tid: TransitionId,
-    sel: Sequence[SpotId],
+    tid: tuple[str, str],
+    sel: Sequence[str],
     turn_at: Point,
     counts_per_turn: float = 2.0,
     *,
@@ -282,27 +284,29 @@ def counter_march(
     file_points = _dedupe([start_set.get(m).point for m in reversed(file)])
     curve, turn_length = _u_turn(file_points, (float(turn_at[0]), float(turn_at[1])))
     lengths = _cumulative(file_points)
-    route = Route(
-        id=f"counter-march-{file[0]}",
-        curve=curve.construction(),
-        members=tuple(file),
-        offsets=tuple(reversed(lengths)),
-        travel=lengths[-1] + turn_length,
+    route = Route.model_validate(
+        {
+            "id": f"counter-march-{file[0]}",
+            "curve": curve.construction(),
+            "members": tuple(file),
+            "offsets": tuple(reversed(lengths)),
+            "travel": lengths[-1] + turn_length,
+        }
     )
     moved = follow_and_set_targets(show, tid, route, force=force)
     spec = moved.transition(tid)
     rows = {
-        e: spec.row(e).replace(facing_mode=FacingMode.TRAVEL, turn_counts=counts_per_turn)
-        for e in file
+        row.entity: row.replace(facing_mode=FacingMode.TRAVEL, turn_counts=counts_per_turn)
+        for row in map(spec.row, file)
     }
     spec = spec.replace(rows={**spec.rows, **rows})
-    return _store(moved, tid, spec, moved.set(tid[1]))
+    return _store(moved, spec.id, spec, moved.set(spec.id.to_set))
 
 
 def two_part(
     show: Show,
     spec: TransitionSpec,
-    sel: Sequence[SpotId],
+    sel: Sequence[str],
     corner: Literal["x_first", "y_first"] | Point,
     split: float | None = None,
     *,
@@ -338,18 +342,25 @@ def two_part(
             point = corner
         row = spec.row(entity)
         waypoint = Waypoint(x=point[0], y=point[1], at=split)
-        rows[entity] = PathRow.model_validate(
+        rows[row.entity] = PathRow.model_validate(
             {**row.model_dump(), "style": PathStyle.POLYLINE, "waypoints": (waypoint,)}
         )
     edited = spec.replace(rows=rows)
-    _require_rows_unlocked(show, spec, edited, force)
+    _require_rows_unlocked(show, spec, edited, force=force)
     return edited
 
 
 def _require_rows_unlocked(
-    show: Show, spec: TransitionSpec, edited: TransitionSpec, force: bool
+    show: Show, spec: TransitionSpec, edited: TransitionSpec, *, force: bool
 ) -> None:
-    """Raises LockedError when `edited` changes a locked row of `spec`, unless forced."""
+    """Raises LockedError when `edited` changes a locked row of `spec`, unless forced.
+
+    Args:
+        show: Show that owns the transition.
+        spec: Transition as it stands before the edit.
+        edited: Transition after the edit.
+        force: Whether the caller overrides locks and pins.
+    """
     others = tuple(t for t in show.transitions if t.id != spec.id)
     before = show.replace(transitions=(*others, spec))
     after = show.replace(transitions=(*others, edited))
@@ -359,7 +370,7 @@ def _require_rows_unlocked(
 def rotate_path(
     show: Show,
     spec: TransitionSpec,
-    sel: Sequence[SpotId],
+    sel: Sequence[str],
     pivot: Point | Literal["center"],
     deg: float,
     *,

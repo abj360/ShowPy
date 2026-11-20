@@ -23,6 +23,7 @@ from collections.abc import Mapping
 
 from showpy.choreo.models import Set
 from showpy.core.csv_cells import neutralize_cell
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import LockedError, StorageError, UnknownRefError
 from showpy.core.ids import TransitionId
 from showpy.core.selection import Selection
@@ -48,6 +49,7 @@ from showpy.show.documents import (
     split_path,
 )
 from showpy.show.manage import index
+from showpy.show.migrate import require_current_show_doc
 from showpy.show.models import Show
 from showpy.show.set_keys import SetFolders, set_key, to_stored_path
 from showpy.show.structured import (
@@ -135,7 +137,7 @@ def _is_directory(path: str) -> StorageError:
         f"{path} is a directory",
         hint="name a file path such as /renders/set-2.png; ls() lists directories",
         context={"path": path},
-        code="BAD_PATH",
+        code=ErrorCode.BAD_PATH,
     )
 
 
@@ -257,6 +259,8 @@ def _staged_show_doc(
     if segments[0] == "transitions":
         _pair(show, segments[1])
     stored = to_stored_path(path, show)
+    if stored == SHOW_DOC:
+        require_current_show_doc(raw)
     edited = decode_show({**encode_show(show), stored: raw}, show.revision)
     return show_changes(edited, tree)
 
@@ -277,7 +281,7 @@ def require_writable(path: str) -> None:
             f"{path} is derived and read-only",
             hint="edit forms.json, set.py or paths instead; the table follows",
             context={"path": path},
-            code="READ_ONLY",
+            code=ErrorCode.READ_ONLY,
         )
 
 

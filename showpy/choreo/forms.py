@@ -51,11 +51,11 @@ import shapely
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
 from showpy.choreo.form_layout import layout, member_facings, slot_count
+from showpy.choreo.form_models import FacingSpec, Form, FormKind, SpacingSpec, TextRecipe
 from showpy.choreo.form_text import require_member_count, require_text_members
-from showpy.choreo.models import FacingSpec, Form, FormKind, Placement, SpacingSpec, TextRecipe
+from showpy.choreo.models import Placement
 from showpy.choreo.text_count import count_recipe
 from showpy.core.errors import LockedError, SchemaError, SpacingError
-from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.types import Box2, Degrees, Meters, Point, Points, Region
 from showpy.core.util import as_points
 from showpy.geo.curve_base import Curve
@@ -70,10 +70,10 @@ PROPORTIONAL = SpacingSpec(mode="proportional")
 OUTWARD = FacingSpec(mode="outward")
 
 
-def check_unlocked(form: Form, force: bool) -> None:
+def check_unlocked(form: Form, *, force: bool) -> None:
     """Raises LockedError when the form is locked and the caller did not pass force=True.
 
-    >>> check_unlocked(Form(id="f", set="1", kind="custom", geometry={}, members=()), False)
+    >>> check_unlocked(Form(id="f", set="1", kind="custom", geometry={}, members=()), force=False)
     """
     if form.locked and not force:
         raise LockedError(
@@ -85,24 +85,26 @@ def check_unlocked(form: Form, force: bool) -> None:
 
 # Any: recipes are JSON objects whose keys depend on the kind.
 def _form(
-    form_id: FormId,
+    form_id: str,
     kind: FormKind,
     geometry: dict[str, Any],
-    members: Sequence[SpotId],
+    members: Sequence[str],
     spacing: SpacingSpec | None,
     facing: FacingSpec | None,
-    set_id: SetId,
+    set_id: str,
     n: int | None,
 ) -> Form:
     recipe = geometry if n is None else {**geometry, "n": n}
-    return Form(
-        id=form_id,
-        set=set_id,
-        kind=kind,
-        geometry=recipe,
-        members=tuple(members),
-        spacing=spacing or SpacingSpec(),
-        facing=facing or FacingSpec(),
+    return Form.model_validate(
+        {
+            "id": form_id,
+            "set": set_id,
+            "kind": kind,
+            "geometry": recipe,
+            "members": tuple(members),
+            "spacing": spacing or SpacingSpec(),
+            "facing": facing or FacingSpec(),
+        }
     )
 
 
@@ -111,14 +113,14 @@ def _curve_recipe(curve: AnyCurve) -> dict[str, Any]:
 
 
 def line_form(
-    form_id: FormId,
-    members: Sequence[SpotId],
+    form_id: str,
+    members: Sequence[str],
     a: Point,
     b: Point,
     spacing: SpacingSpec | None = None,
     facing: FacingSpec | None = None,
     *,
-    set_id: SetId = "",
+    set_id: str = "",
     n: int | None = None,
 ) -> Form:
     """Builds a straight-line form from `a` to `b`.
@@ -131,8 +133,8 @@ def line_form(
 
 
 def arc_form(
-    form_id: FormId,
-    members: Sequence[SpotId],
+    form_id: str,
+    members: Sequence[str],
     center: Point,
     radius: Meters,
     start_deg: Degrees,
@@ -140,7 +142,7 @@ def arc_form(
     spacing: SpacingSpec | None = None,
     facing: FacingSpec | None = None,
     *,
-    set_id: SetId = "",
+    set_id: str = "",
     n: int | None = None,
 ) -> Form:
     """Builds an arc form; angles count counter-clockwise from +x.
@@ -153,13 +155,13 @@ def arc_form(
 
 
 def curve_form(
-    form_id: FormId,
-    members: Sequence[SpotId],
+    form_id: str,
+    members: Sequence[str],
     *pts: Point,
     closed: bool = False,
     spacing: SpacingSpec | None = None,
     facing: FacingSpec | None = None,
-    set_id: SetId = "",
+    set_id: str = "",
     n: int | None = None,
 ) -> Form:
     """Builds a smooth curve form passing through every point.
@@ -172,15 +174,15 @@ def curve_form(
 
 
 def circle_form(
-    form_id: FormId,
-    members: Sequence[SpotId],
+    form_id: str,
+    members: Sequence[str],
     center: Point,
     radius: Meters,
     start_deg: Degrees = 0.0,
     spacing: SpacingSpec | None = None,
     facing: FacingSpec | None = None,
     *,
-    set_id: SetId = "",
+    set_id: str = "",
     n: int | None = None,
 ) -> Form:
     """Builds a counter-clockwise circle form; members face outward unless told otherwise.
@@ -193,8 +195,8 @@ def circle_form(
 
 
 def block_form(
-    form_id: FormId,
-    members: Sequence[SpotId],
+    form_id: str,
+    members: Sequence[str],
     origin: Point,
     rows: int,
     cols: int,
@@ -203,7 +205,7 @@ def block_form(
     anchor: BlockAnchor = "center",
     facing: FacingSpec | None = None,
     *,
-    set_id: SetId = "",
+    set_id: str = "",
 ) -> Form:
     """Builds a rows x cols block, front row first; members face `direction_deg` by default.
 
@@ -224,8 +226,8 @@ def block_form(
 
 
 def wedge_form(
-    form_id: FormId,
-    members: Sequence[SpotId],
+    form_id: str,
+    members: Sequence[str],
     apex: Point,
     length: Meters,
     spread_deg: Degrees,
@@ -233,7 +235,7 @@ def wedge_form(
     spacing: SpacingSpec | None = None,
     facing: FacingSpec | None = None,
     *,
-    set_id: SetId = "",
+    set_id: str = "",
     n: int | None = None,
 ) -> Form:
     """Builds a V whose apex leads toward `direction_deg`; members face it by default.
@@ -247,13 +249,13 @@ def wedge_form(
 
 
 def polyline_form(
-    form_id: FormId,
-    members: Sequence[SpotId],
+    form_id: str,
+    members: Sequence[str],
     *pts: Point,
     closed: bool = False,
     spacing: SpacingSpec | None = None,
     facing: FacingSpec | None = None,
-    set_id: SetId = "",
+    set_id: str = "",
     n: int | None = None,
 ) -> Form:
     """Builds a form with straight sides through the corners `pts`.
@@ -266,15 +268,15 @@ def polyline_form(
 
 
 def svg_form(
-    form_id: FormId,
-    members: Sequence[SpotId],
+    form_id: str,
+    members: Sequence[str],
     svg: str,
     fit: Box2,
+    *,
     keep_aspect: bool = True,
     spacing: SpacingSpec | None = None,
     facing: FacingSpec | None = None,
-    *,
-    set_id: SetId = "",
+    set_id: str = "",
     n: int | None = None,
 ) -> Form:
     """Builds a form on an SVG outline fitted into `fit`; spots share subpaths by length.
@@ -297,15 +299,15 @@ def _region_recipe(outline: Region | shapely.Polygon | Curve | object) -> dict[s
 
 
 def fill_form(
-    form_id: FormId,
-    members: Sequence[SpotId],
+    form_id: str,
+    members: Sequence[str],
     outline: Region | shapely.Polygon | Curve | object,
     interval: Meters,
     pattern: FillPattern = "grid",
     angle_deg: Degrees = 0.0,
     facing: FacingSpec | None = None,
     *,
-    set_id: SetId = "",
+    set_id: str = "",
     n: int | None = None,
 ) -> Form:
     """Fills an area with a lattice; with members or n, keeps the slots nearest its center.
@@ -323,14 +325,14 @@ def fill_form(
 
 
 def scatter_form(
-    form_id: FormId,
-    members: Sequence[SpotId],
+    form_id: str,
+    members: Sequence[str],
     area: Region | shapely.Polygon | Curve | object,
     min_gap: Meters,
     seed: int = 0,
     facing: FacingSpec | None = None,
     *,
-    set_id: SetId = "",
+    set_id: str = "",
     n: int | None = None,
 ) -> Form:
     """Scatters one slot per member (or n) organically, at least `min_gap` apart.
@@ -343,12 +345,12 @@ def scatter_form(
 
 
 def custom_form(
-    form_id: FormId,
-    members: Sequence[SpotId],
+    form_id: str,
+    members: Sequence[str],
     points: object,
     facings: Sequence[Degrees] | None = None,
     *,
-    set_id: SetId = "",
+    set_id: str = "",
 ) -> Form:
     """Builds a form of frozen hand-placed spots; stored facings win over the FacingSpec.
 
@@ -372,14 +374,14 @@ def custom_form(
 
 # Any: generator parameters are JSON values defined by each generator.
 def generated_form(
-    form_id: FormId,
-    members: Sequence[SpotId],
+    form_id: str,
+    members: Sequence[str],
     fn: str,
     spacing: SpacingSpec | None = None,
     facing: FacingSpec | None = None,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
     *,
-    set_id: SetId = "",
+    set_id: str = "",
     n: int | None = None,
     **params: Any,
 ) -> Form:
@@ -399,8 +401,8 @@ def generated_form(
 
 
 def text_form(
-    form_id: FormId,
-    members: Sequence[SpotId],
+    form_id: str,
+    members: Sequence[str],
     text: str,
     *,
     fonts: Sequence[str],
@@ -412,7 +414,7 @@ def text_form(
     letter_spacing: float = 0.0,
     line_spacing: float = DEFAULT_LINE_SPACING,
     facing: FacingSpec | None = None,
-    set_id: SetId = "",
+    set_id: str = "",
     n: int | None = None,
     spacing: Meters | None = None,
     font_registry: FontRegistry | None = None,
@@ -472,7 +474,7 @@ def text_form(
 
 # Any: generator parameters are JSON values defined by each generator.
 def edit_params(
-    form: Form, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS, **params: Any
+    form: Form, *, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS, **params: Any
 ) -> Form:
     """Returns a generated form with some generator parameters changed.
 
@@ -480,7 +482,7 @@ def edit_params(
     >>> edit_params(f, turns=3.0).geometry["params"]["turns"]
     3.0
     """
-    check_unlocked(form, force)
+    check_unlocked(form, force=force)
     if form.kind != "generated":
         raise SchemaError(
             f"form {form.id} is a {form.kind} form, not generated",

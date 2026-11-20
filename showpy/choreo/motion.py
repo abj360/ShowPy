@@ -30,7 +30,7 @@ from typing import Any, Protocol
 import numpy as np
 import numpy.typing as npt
 
-from showpy.choreo.models import Easing, TurnDirection
+from showpy.choreo.path_models import Easing, TurnDirection
 from showpy.core.errors import PathError, UnknownRefError
 from showpy.core.types import Degrees, FrozenModel, Point, Points
 from showpy.core.units import angle_diff, normalize_angle

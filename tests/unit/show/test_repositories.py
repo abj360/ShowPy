@@ -55,7 +55,7 @@ from typing import Any, cast
 import pytest
 
 from showpy.core.errors import ConflictError, SchemaError, StorageError
-from showpy.core.ids import WINDOWS_DEVICE_NAMES
+from showpy.core.ids import WINDOWS_DEVICE_NAMES, FormId
 from showpy.core.util import content_hash
 from showpy.show.changes import apply_change
 from showpy.show.documents import script_doc
@@ -66,7 +66,7 @@ from showpy.show.models import FormOp, Revision
 from showpy.show.repositories import DocumentRepository, InMemoryRepository, RepositoryBackend
 from showpy.show.storage import Repository, load_show, open_workspace, save_show
 from tests.fixtures.shows import two_set_show
-from tests.helpers import fails_after, replaced_form_show
+from tests.helpers import context_entries, fails_after, replaced_form_show
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 SHOW_ID = "show-1"
@@ -267,7 +267,7 @@ def test_regression_put_forms_then_get_forms_returns_the_put_forms() -> None:
     repo = InMemoryRepository()
     show = replaced_form_show()
     revision = repo.put_show(SHOW_ID, show, expected_revision="", at=AT)
-    fresh = show.forms["b"].replace(id="c")
+    fresh = show.forms[FormId("b")].replace(id="c")
     repo.put_forms(SHOW_ID, "2", (fresh,), expected_revision=revision.id, at=AT)
     assert [f.id for f in repo.get_forms(SHOW_ID, "2")] == ["c"]
     assert "a" in repo.get_show(SHOW_ID).forms
@@ -295,10 +295,10 @@ def test_regression_put_forms_refuses_a_form_id_another_set_holds() -> None:
     repo = InMemoryRepository()
     show = replaced_form_show()
     revision = repo.put_show(SHOW_ID, show, expected_revision="", at=AT)
-    takeover = show.forms["b"].replace(set="1")
+    takeover = show.forms[FormId("b")].replace(set="1")
     with pytest.raises(SchemaError):
         repo.put_forms(SHOW_ID, "1", (takeover,), expected_revision=revision.id, at=AT)
-    assert repo.get_show(SHOW_ID).forms["b"].set == "2"
+    assert repo.get_show(SHOW_ID).forms[FormId("b")].set == "2"
     assert [f.id for f in repo.get_forms(SHOW_ID, "2")] == ["b"]
 
 
@@ -318,7 +318,7 @@ def test_regression_put_show_refuses_sets_differing_only_by_case() -> None:
 def test_regression_form_op_refuses_a_form_id_another_set_holds() -> None:
     """Refuses a FormOp that would move a form from the set that lists it to another set."""
     show = replaced_form_show()
-    takeover = show.forms["b"].replace(set="1")
+    takeover = show.forms[FormId("b")].replace(set="1")
     with pytest.raises(SchemaError):
         apply_change(show, [FormOp(form=takeover)], force=True)
 
@@ -398,7 +398,7 @@ def test_regression_in_memory_commit_conflict_under_the_lock() -> None:
         repo.transaction(SHOW_ID, {"/renders/a.txt": b"a"}, expected_revision=head, at=AT)
     assert [r.id for r in landed] == [repo.head(SHOW_ID)]
     assert caught.value.context["head"] == landed[0].id
-    assert [c["id"] for c in caught.value.context["changes"]] == [landed[0].id]
+    assert [c["id"] for c in context_entries(caught.value, "changes")] == [landed[0].id]
     assert repo.paths(SHOW_ID).count("/renders/a.txt") == 0
 
 
@@ -419,5 +419,5 @@ def test_regression_file_conflict_lists_every_revision_since_the_parent(tmp_path
     with pytest.raises(ConflictError) as caught:
         repo.transaction(SHOW_ID, {"/renders/a.txt": b"a"}, expected_revision=head, at=AT)
     assert caught.value.context["head"] == landed[-1].id == repo.head(SHOW_ID)
-    assert [c["id"] for c in caught.value.context["changes"]] == [r.id for r in landed]
+    assert [c["id"] for c in context_entries(caught.value, "changes")] == [r.id for r in landed]
     assert "/renders/a.txt" not in repo.paths(SHOW_ID)

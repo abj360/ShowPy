@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_types.py --- tests the JSON-safe Region and Box2 models and the FrozenModel base
+test_types.py --- tests the shared type aliases, JSON-safe Region and Box2, and the FrozenModel base
 
 Contains:
     NON_FINITE_MODELS: builders that put NaN or infinity into one float field per model family
@@ -28,10 +28,24 @@ Contains:
     test_regression_model_validate_strings_raises_schema_error: converts the pydantic error of
         `model_validate_strings`, keeping the cause
     test_model_validate_strings_parses_valid_text: builds a model from string-leaved data
+    test_regression_validators_show_and_forward_pydantic_keywords: names pydantic's keywords in
+        each validator signature and forwards `strict`
+    test_regression_model_validate_forwards_strict: passes `strict` through `model_validate`
+    test_regression_model_copy_drops_cached_values: rebuilds a cached_property on the copy
+    test_model_copy_without_cached_values_still_copies: copies a model that caches nothing
+    test_counts_per_minute_must_be_positive: rejects zero, negative, NaN and infinite tempo
+    test_heading_wraps_into_a_turn: wraps a facing into [0, 360) and rejects NaN
+    test_region_*(): distinct points, holes inside the exterior, and valid rings with holes
+    test_json_value_is_the_one_shared_alias: exports the JsonValue that canonical encoding uses
+    test_json_object_stores_a_read_only_mapping: stores a JSON object as a read-only mapping
+    test_json_object_*(): deep freezing, plain JSON dumps and schema, round trips and hashing
 """
 
+import inspect
+import json
 import math
 from collections.abc import Callable
+from functools import cached_property
 
 import pytest
 import shapely
@@ -39,14 +53,21 @@ from pydantic import TypeAdapter
 from pydantic import ValidationError as PydanticValidationError
 
 from showpy.cast.models import Shape
-from showpy.choreo.models import Set, Waypoint
-from showpy.core.errors import SchemaError, ShowPyError
+from showpy.choreo.models import Set
+from showpy.choreo.path_models import Waypoint
+from showpy.core import canonical, json_types
+from showpy.core.errors import SchemaError, ShowPyError, field_errors
+from showpy.core.ids import LandmarkId, SetId
+from showpy.core.readonly import ReadOnlyMap
 from showpy.core.types import (
     Box2,
     Count,
     CountsPerMinute,
     Degrees,
     FrozenModel,
+    Heading,
+    JsonObject,
+    JsonValue,
     Meters,
     NonNegCount,
     NonNegFinite,
@@ -70,8 +91,12 @@ NON_FINITE_MODELS: dict[str, Callable[[], FrozenModel]] = {
     "waypoint-inf": lambda: Waypoint(x=0.0, y=-math.inf),
     "shape-nan-rotation": lambda: Shape(kind="rectangle", rotation_deg=math.nan),
     "shape-inf-radius": lambda: Shape(radius_m=math.inf),
-    "landmark-nan": lambda: Landmark(id="a", name="a", kind="point", geometry=((math.nan, 0.0),)),
-    "landmark-inf": lambda: Landmark(id="a", name="a", kind="point", geometry=((math.inf, 0.0),)),
+    "landmark-nan": lambda: Landmark(
+        id=LandmarkId("a"), name="a", kind="point", geometry=((math.nan, 0.0),)
+    ),
+    "landmark-inf": lambda: Landmark(
+        id=LandmarkId("a"), name="a", kind="point", geometry=((math.inf, 0.0),)
+    ),
 }
 
 
@@ -92,8 +117,6 @@ def test_box2_size_and_center() -> None:
     assert box.center == (2.0, 1.0)
 
 
-@pytest.mark.defect("UP-9.3-36")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-36")
 def test_regression_region_rejects_fewer_than_three_points() -> None:
     """Rejects a two-point region, which has no area (audit 9.3)."""
     with pytest.raises((ShowPyError, PydanticValidationError)):
@@ -106,8 +129,6 @@ def test_regression_region_rejects_nan_points() -> None:
         Region(exterior=((0.0, 0.0), (1.0, float("nan")), (1.0, 1.0)))
 
 
-@pytest.mark.defect("UP-9.3-38")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-38")
 def test_regression_region_rejects_self_intersection() -> None:
     """Rejects a bow-tie ring that crosses itself (audit 9.3)."""
     with pytest.raises((ShowPyError, PydanticValidationError)):
@@ -141,20 +162,20 @@ def test_regression_nested_model_error_keeps_outer_locs() -> None:
     with pytest.raises(SchemaError) as info:
         _Outer.model_validate({"inner": {"a": "x", "b": "y"}, "n": "z"})
     assert info.value.context["model"] == "_Outer"
-    assert [e["loc"] for e in info.value.context["errors"]] == ["inner.a", "inner.b", "n"]
+    assert [e["loc"] for e in field_errors(info.value)] == ["inner.a", "inner.b", "n"]
 
 
 def test_regression_nested_construction_error_names_the_outermost_model() -> None:
     with pytest.raises(SchemaError) as info:
         _Outer(inner={"a": "x", "b": 1}, n="z")  # pyright: ignore[reportArgumentType]
     assert info.value.context["model"] == "_Outer"
-    assert [e["loc"] for e in info.value.context["errors"]] == ["inner.a", "n"]
+    assert [e["loc"] for e in field_errors(info.value)] == ["inner.a", "n"]
 
 
 def test_regression_library_model_reports_dotted_loc() -> None:
     with pytest.raises(SchemaError) as info:
         Box2.model_validate({"min": ("x", 0), "max": (1, 1)})
-    assert info.value.context["errors"][0]["loc"] == "min.0"
+    assert field_errors(info.value)[0]["loc"] == "min.0"
 
 
 NEGATIVE_COUNTS = -4.0
@@ -163,7 +184,7 @@ NEGATIVE_COUNTS = -4.0
 def test_regression_replace_revalidates() -> None:
     """Rejects an edit that breaks a model validator, instead of copying it unchecked."""
     with pytest.raises(SchemaError):
-        Set(id="1", counts=0.0).replace(counts=NEGATIVE_COUNTS)
+        Set(id=SetId("1"), counts=0.0).replace(counts=NEGATIVE_COUNTS)
 
 
 def test_replace_returns_a_new_model_with_the_change() -> None:
@@ -229,10 +250,148 @@ def test_regression_model_validate_strings_raises_schema_error() -> None:
     with pytest.raises(SchemaError) as caught:
         TempoSection.model_validate_strings({"at_count": "soon", "counts_per_minute": "120"})
     assert caught.value.context["model"] == "TempoSection"
-    assert caught.value.context["errors"][0]["loc"] == "at_count"
+    assert field_errors(caught.value)[0]["loc"] == "at_count"
     assert isinstance(caught.value.__cause__, PydanticValidationError)
 
 
 def test_model_validate_strings_parses_valid_text() -> None:
     tempo = TempoSection.model_validate_strings({"at_count": "8", "counts_per_minute": "120"})
     assert (tempo.at_count, tempo.counts_per_minute) == (8.0, 120.0)
+
+
+@pytest.mark.parametrize(
+    "validator", [Box2.model_validate, Box2.model_validate_json, Box2.model_validate_strings]
+)
+def test_regression_validators_show_and_forward_pydantic_keywords(
+    validator: Callable[..., Box2],
+) -> None:
+    """Names pydantic's keywords instead of hiding them behind `**options`."""
+    parameters = inspect.signature(validator).parameters
+    assert {"strict", "extra", "context", "by_alias", "by_name"} <= parameters.keys()
+    assert all(p.kind is not inspect.Parameter.VAR_KEYWORD for p in parameters.values())
+
+
+def test_regression_model_validate_forwards_strict() -> None:
+    with pytest.raises(SchemaError):
+        Box2.model_validate({"min": ("0", 0), "max": (1, 1)}, strict=True)
+    assert Box2.model_validate({"min": ("0", 0), "max": (1, 1)}).min == (0.0, 0.0)
+    with pytest.raises(SchemaError):
+        Box2.model_validate_json('{"min": ["0", 0], "max": [1, 1]}', strict=True)
+
+
+class _Indexed(FrozenModel):
+    values: tuple[int, ...]
+
+    @cached_property
+    def total(self) -> int:
+        return sum(self.values)
+
+
+def test_regression_model_copy_drops_cached_values() -> None:
+    """Rebuilds a cached_property on the copy instead of carrying the stale value across."""
+    original = _Indexed(values=(1, 2))
+    assert original.total == 3
+    updated = original.model_copy(update={"values": (5, 5)})
+    assert updated.total == 10
+    assert original.total == 3
+    assert original.model_copy(deep=True).total == 3
+
+
+def test_model_copy_without_cached_values_still_copies() -> None:
+    box = Box2(min=(0.0, 0.0), max=(1.0, 1.0))
+    assert box.model_copy() == box
+
+
+def test_counts_per_minute_must_be_positive() -> None:
+    adapter = TypeAdapter(CountsPerMinute)
+    assert adapter.validate_python(120.0) == 120.0
+    for bad in (0.0, -1.0, math.nan, math.inf):
+        with pytest.raises(PydanticValidationError):
+            adapter.validate_python(bad)
+
+
+def test_heading_wraps_into_a_turn() -> None:
+    adapter = TypeAdapter(Heading)
+    assert adapter.validate_python(-90.0) == 270.0
+    assert adapter.validate_python(360.0) == 0.0
+    assert math.copysign(1.0, adapter.validate_python(-0.0)) == 1.0
+    with pytest.raises(PydanticValidationError):
+        adapter.validate_python(math.nan)
+
+
+def test_region_requires_three_distinct_points() -> None:
+    with pytest.raises(SchemaError):
+        Region(exterior=((0.0, 0.0), (1.0, 1.0), (1.0, 1.0)))
+
+
+def test_region_rejects_a_hole_outside_the_exterior() -> None:
+    square = ((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0))
+    far = ((10.0, 10.0), (11.0, 10.0), (11.0, 11.0))
+    with pytest.raises(SchemaError):
+        Region(exterior=square, holes=(far,))
+
+
+def test_region_accepts_a_valid_ring_with_a_hole() -> None:
+    square = ((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0))
+    hole = ((1.0, 1.0), (2.0, 1.0), (2.0, 2.0))
+    assert Region(exterior=square, holes=(hole,)).to_shapely().area == 15.5
+
+
+def test_json_value_is_the_one_shared_alias() -> None:
+    assert JsonValue is json_types.JsonValue is canonical.JsonValue
+
+
+def test_json_object_stores_a_read_only_mapping() -> None:
+    class Holder(FrozenModel):
+        payload: JsonObject
+
+    holder = Holder(payload={"a": [1, {"b": None}]})
+    assert holder.payload == Holder(payload={"a": (1, {"b": None})}).payload
+    assert holder.model_dump() == {"payload": {"a": [1, {"b": None}]}}
+    with pytest.raises(TypeError):
+        holder.payload["c"] = 1  # type: ignore[index]
+
+
+class _JsonHolder(FrozenModel):
+    payload: JsonObject
+
+
+def test_json_object_freezes_nested_values() -> None:
+    holder = _JsonHolder(payload={"k": [1, 2], "inner": {"n": [{"m": 1}]}})
+    with pytest.raises(AttributeError):
+        holder.payload["k"].append(3)  # type: ignore[union-attr]
+    inner = holder.payload["inner"]
+    assert isinstance(inner, ReadOnlyMap)
+    with pytest.raises(TypeError):
+        inner["n"] = 2  # type: ignore[index]
+    assert holder.model_dump()["payload"]["k"] == [1, 2]
+
+
+def test_json_object_dumps_plain_json_and_round_trips() -> None:
+    holder = _JsonHolder(payload={"k": [1, {"n": [True, None]}], "s": "x"})
+    dumped = holder.model_dump()
+    assert dumped == {"payload": {"k": [1, {"n": [True, None]}], "s": "x"}}
+    assert type(dumped["payload"]) is dict
+    assert type(dumped["payload"]["k"]) is list
+    assert type(dumped["payload"]["k"][1]) is dict
+    assert json.loads(holder.model_dump_json()) == dumped
+    assert _JsonHolder.model_validate(dumped) == holder
+    assert _JsonHolder.model_validate_json(holder.model_dump_json()) == holder
+
+
+def test_json_object_schema_is_a_plain_json_object() -> None:
+    schema = _JsonHolder.model_json_schema()
+    name = schema["properties"]["payload"]["$ref"].rsplit("/", 1)[-1]
+    assert schema["$defs"][name] == {
+        "type": "object",
+        "additionalProperties": {"$ref": "#/$defs/JsonValue"},
+    }
+    assert {"type": "array", "items": {"$ref": "#/$defs/JsonValue"}} in schema["$defs"][
+        "JsonValue"
+    ]["anyOf"]
+
+
+def test_json_object_models_hash_by_content() -> None:
+    first = _JsonHolder(payload={"a": [1, {"b": 2}], "c": None})
+    second = _JsonHolder(payload={"c": None, "a": [1, {"b": 2}]})
+    assert hash(first) == hash(second)

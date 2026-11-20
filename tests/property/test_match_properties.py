@@ -13,12 +13,14 @@ import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from showpy.choreo.form_models import Form
 from showpy.choreo.form_place import rebuild
 from showpy.choreo.forms import block_form, circle_form, line_form
 from showpy.choreo.match import bottleneck_value, match, match_by_order
+from showpy.choreo.match_models import MatchObjective, MatchOptions, MatchResult
 from showpy.choreo.match_ops import apply_match
 from showpy.choreo.match_solve import FloatArray, count_crossings
-from showpy.choreo.models import Form, MatchObjective, MatchOptions, MatchResult
+from showpy.core.ids import SpotId
 from showpy.core.types import Points
 from showpy.core.util import approx_equal, seeded_rng
 from tests.fixtures.shows import two_set_show
@@ -69,8 +71,8 @@ def test_bottleneck_equals_brute_force(case: tuple[Points, Points]) -> None:
     starts, slots = case
     best = min(b[0] for b in _brute(starts, slots))
     result = match(starts, slots, options=MatchOptions(objective="bottleneck"))
-    assert approx_equal(result.max_distance, best, TOL)
-    assert approx_equal(bottleneck_value(_distances(starts, slots)), best, TOL)
+    assert approx_equal(result.max_distance, best, abs_tol=TOL)
+    assert approx_equal(bottleneck_value(_distances(starts, slots)), best, abs_tol=TOL)
 
 
 @settings(max_examples=60, deadline=None)
@@ -81,8 +83,8 @@ def test_bottleneck_then_sum_equals_brute_force(case: tuple[Points, Points]) -> 
     cap = min(b[0] for b in brute)
     best_total = min(b[1] for b in brute if b[0] <= cap + TOL)
     result = match(starts, slots)
-    assert approx_equal(result.max_distance, cap, TOL)
-    assert approx_equal(result.total_distance, best_total, 1e-7)
+    assert approx_equal(result.max_distance, cap, abs_tol=TOL)
+    assert approx_equal(result.total_distance, best_total, abs_tol=1e-7)
 
 
 @settings(max_examples=60, deadline=None)
@@ -91,10 +93,10 @@ def test_sum_equals_brute_force(case: tuple[Points, Points]) -> None:
     starts, slots = case
     brute = _brute(starts, slots)
     result = match(starts, slots, options=MatchOptions(objective="sum"))
-    assert approx_equal(result.total_distance, min(b[1] for b in brute), 1e-7)
+    assert approx_equal(result.total_distance, min(b[1] for b in brute), abs_tol=1e-7)
     squares = match(starts, slots, options=MatchOptions(objective="sum_squares"))
     moves = np.linalg.norm(squares.target_points() - starts, axis=1)
-    assert approx_equal(float((moves**2).sum()), min(b[2] for b in brute), 1e-7)
+    assert approx_equal(float((moves**2).sum()), min(b[2] for b in brute), abs_tol=1e-7)
 
 
 @settings(max_examples=60, deadline=None)
@@ -126,9 +128,9 @@ def test_preserve_order_equals_brute_force_over_increasing_assignments(
     )
     options = MatchOptions(objective="sum", preserve_order=True)
     result = match(starts, slots, options=options)
-    cols = [result.assignment[str(i)] for i in rows]
+    cols = [result.assignment[SpotId(str(i))] for i in rows]
     assert cols == sorted(cols)
-    assert approx_equal(result.total_distance, best, 1e-7)
+    assert approx_equal(result.total_distance, best, abs_tol=1e-7)
 
 
 @settings(max_examples=30, deadline=None)
@@ -163,5 +165,5 @@ def test_applied_matches_survive_a_form_rebuild(kind: str, order: list[str]) -> 
         assert approx_equal(
             np.array(rebuilt.set("2").get(spot).point),
             np.array(applied.set("2").get(spot).point),
-            MOVE_TOL,
+            abs_tol=MOVE_TOL,
         )

@@ -11,13 +11,15 @@ from pathlib import Path
 
 import pytest
 
-from showpy.choreo.models import Form, PathRow, TransitionSpec
+from showpy.choreo.form_models import Form
+from showpy.choreo.path_models import PathRow, TransitionSpec
 from showpy.core.errors import (
     ConflictError,
     SchemaError,
     StorageError,
     UnknownRefError,
 )
+from showpy.core.ids import FormId, SetId, SpotId, make_tid
 from showpy.notes.models import Anchor, Note
 from showpy.show.documents import decode_show, dump_json, encode_show, split_path
 from showpy.show.file_repository import FileRepository
@@ -26,6 +28,7 @@ from showpy.show.models import Show
 from showpy.show.repositories import InMemoryAssetStore, InMemoryRepository
 from showpy.show.storage import Repository, Workspace, load_show, open_workspace, save_show
 from tests.fixtures.shows import two_set_show
+from tests.helpers import context_entries
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 LATER = datetime(2026, 11, 11, 12, 5, tzinfo=UTC)
@@ -43,8 +46,18 @@ def make_repo(request: pytest.FixtureRequest, tmp_path: Path) -> RepoFactory:
 
 def _rich_show() -> Show:
     show = two_set_show()
-    form = Form(id="f1", set="2", kind="line", geometry={"a": 1}, members=("T1", "T2"))
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", start=2)})
+    form = Form(
+        id=FormId("f1"),
+        set=SetId("2"),
+        kind="line",
+        geometry={"a": 1},
+        members=(SpotId("T1"), SpotId("T2")),
+    )
+    spec = TransitionSpec(
+        id=make_tid("1", "2"),
+        counts=8.0,
+        rows={SpotId("T1"): PathRow(entity=SpotId("T1"), start=2)},
+    )
     note = Note(id="n1", text="hit", anchor=Anchor.on_set("2"), author="d", created_at=AT)
     return show.model_copy(update={"forms": {"f1": form}, "transitions": (spec,), "notes": (note,)})
 
@@ -121,7 +134,7 @@ def test_stale_write_raises_conflict_listing_changes(make_repo: RepoFactory) -> 
     landed = repo.put_script(SHOW_ID, "1", "x = 1\n", expected_revision=base, at=LATER)
     with pytest.raises(ConflictError) as info:
         repo.put_script(SHOW_ID, "2", "y = 2\n", expected_revision=base, at=LATER)
-    changes = info.value.context["changes"]
+    changes = context_entries(info.value, "changes")
     assert [c["id"] for c in changes] == [landed.id]
     assert changes[0]["changed"] == ["/sets/1/set.py"]
     assert f"{landed.id[:7]} {LATER.isoformat()} (/sets/1/set.py)" in info.value.message
@@ -141,10 +154,12 @@ def test_typed_accessors(make_repo: RepoFactory) -> None:
     moved = repo.get_set(SHOW_ID, "2").with_placements({"T1": {"x": -5.0}})
     rev = repo.put_set(SHOW_ID, moved, expected_revision=rev, at=LATER).id
     assert repo.get_set(SHOW_ID, "2").get("T1").x == -5.0
-    spec = TransitionSpec(id=("1", "2"), counts=99.0, rows={"T2": PathRow(entity="T2", end=4)})
+    spec = TransitionSpec(
+        id=make_tid("1", "2"), counts=99.0, rows={SpotId("T2"): PathRow(entity=SpotId("T2"), end=4)}
+    )
     rev = repo.put_paths(SHOW_ID, spec, expected_revision=rev, at=LATER).id
     assert repo.get_paths(SHOW_ID, ("1", "2")).counts == 8.0
-    form = Form(id="f", set="2", kind="line", geometry={}, members=("T1",))
+    form = Form(id=FormId("f"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
     rev = repo.put_forms(SHOW_ID, "2", (form,), expected_revision=rev, at=LATER).id
     assert repo.get_forms(SHOW_ID, "2") == (form,)
     with pytest.raises(SchemaError):
@@ -288,9 +303,11 @@ def test_regression_library_leaves_permissions_to_the_host() -> None:
 def test_agent_writes_forms_paths_scripts_and_renders() -> None:
     repo = InMemoryRepository()
     agent, _ = _workspaces(repo)
-    form = Form(id="f", set="2", kind="line", geometry={}, members=("T1",))
+    form = Form(id=FormId("f"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
     agent.write("/sets/2/forms.json", dump_json([form.model_dump(mode="python")]), at=AT)
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows={"T1": PathRow(entity="T1", end=6)})
+    spec = TransitionSpec(
+        id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): PathRow(entity=SpotId("T1"), end=6)}
+    )
     agent.write("/transitions/1-2/paths.json", spec.model_dump_json(), at=AT)
     agent.write("/sets/2/set.py", "def build(ctx):\n    return ctx.prev\n", at=AT)
     agent.write("/renders/set-2.png", b"\x89PNG", at=AT)
@@ -306,7 +323,7 @@ def test_agent_writes_forms_paths_scripts_and_renders() -> None:
 
 def test_workspace_write_validates_content() -> None:
     agent, _ = _workspaces(InMemoryRepository())
-    wrong = Form(id="f", set="1", kind="line", geometry={}, members=("T1",))
+    wrong = Form(id=FormId("f"), set=SetId("1"), kind="line", geometry={}, members=(SpotId("T1"),))
     with pytest.raises(SchemaError):
         agent.write("/sets/2/forms.json", dump_json([wrong.model_dump(mode="python")]), at=AT)
     with pytest.raises(SchemaError):
@@ -322,7 +339,7 @@ def test_stale_workspace_write_lists_designer_changes() -> None:
     landed = designer.write("/sets/1/set.py", "pass\n", at=AT)
     with pytest.raises(ConflictError) as info:
         agent.write("/sets/2/set.py", "pass\n", at=LATER)
-    assert info.value.context["changes"][0]["id"] == landed.id
+    assert context_entries(info.value, "changes")[0]["id"] == landed.id
     agent.refresh()
     agent.write("/sets/2/set.py", "pass\n", at=LATER)
 
@@ -335,7 +352,7 @@ def test_save_show_conflict_lists_designer_changes() -> None:
     landed = save_show(designer, theirs.model_copy(update={"sets": (theirs.sets[0], moved)}), AT)
     with pytest.raises(ConflictError) as info:
         save_show(agent, mine.model_copy(update={"title": "New"}), LATER)
-    assert info.value.context["changes"][0]["changed"] == list(landed.changed)
+    assert context_entries(info.value, "changes")[0]["changed"] == list(landed.changed)
     agent.refresh()
     fresh = load_show(agent)
     save_show(agent, fresh.model_copy(update={"title": "New"}), LATER)

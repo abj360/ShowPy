@@ -47,9 +47,9 @@ def _ramp(start: float, end: float, counts: float) -> Timeline:
 
 def test_constant_tempo_conversion() -> None:
     tl = _counts(120.0)
-    assert approx_equal(count_to_seconds(tl, 8.0), 4.0, TOL)
-    assert approx_equal(seconds_to_count(tl, 4.0), 8.0, TOL)
-    assert approx_equal(seconds_per_count(tl, 3.0), 0.5, TOL)
+    assert approx_equal(count_to_seconds(tl, 8.0), 4.0, abs_tol=TOL)
+    assert approx_equal(seconds_to_count(tl, 4.0), 8.0, abs_tol=TOL)
+    assert approx_equal(seconds_per_count(tl, 3.0), 0.5, abs_tol=TOL)
 
 
 def test_count_zero_is_second_zero() -> None:
@@ -59,98 +59,98 @@ def test_count_zero_is_second_zero() -> None:
 
 def test_multiple_sections_accumulate() -> None:
     tl = add_tempo(_counts(120.0), TempoSection(at_count=16.0, counts_per_minute=60.0))
-    assert approx_equal(count_to_seconds(tl, 24.0), 16.0, TOL)
-    assert approx_equal(seconds_to_count(tl, 12.0), 20.0, TOL)
+    assert approx_equal(count_to_seconds(tl, 24.0), 16.0, abs_tol=TOL)
+    assert approx_equal(seconds_to_count(tl, 12.0), 20.0, abs_tol=TOL)
     assert tempo_at(tl, 15.999) == 120.0
     assert tempo_at(tl, 16.0) == 60.0
 
 
 def test_ramp_up_tempo_is_linear_in_counts_then_holds_target() -> None:
     tl = _ramp(60.0, 120.0, 60.0)
-    assert approx_equal(tempo_at(tl, 0.0), 60.0, TOL)
-    assert approx_equal(tempo_at(tl, 15.0), 75.0, TOL)
-    assert approx_equal(tempo_at(tl, 60.0), 120.0, TOL)
-    assert approx_equal(tempo_at(tl, 200.0), 120.0, TOL)
+    assert approx_equal(tempo_at(tl, 0.0), 60.0, abs_tol=TOL)
+    assert approx_equal(tempo_at(tl, 15.0), 75.0, abs_tol=TOL)
+    assert approx_equal(tempo_at(tl, 60.0), 120.0, abs_tol=TOL)
+    assert approx_equal(tempo_at(tl, 200.0), 120.0, abs_tol=TOL)
 
 
 def test_ramp_up_seconds_use_log_formula() -> None:
     tl = _ramp(60.0, 120.0, 60.0)
-    assert approx_equal(count_to_seconds(tl, 60.0), 60.0 * LN2, TOL)
-    assert approx_equal(count_to_seconds(tl, 72.0), 60.0 * LN2 + 6.0, TOL)
-    assert approx_equal(seconds_to_count(tl, 60.0 * LN2 + 6.0), 72.0, TOL)
+    assert approx_equal(count_to_seconds(tl, 60.0), 60.0 * LN2, abs_tol=TOL)
+    assert approx_equal(count_to_seconds(tl, 72.0), 60.0 * LN2 + 6.0, abs_tol=TOL)
+    assert approx_equal(seconds_to_count(tl, 60.0 * LN2 + 6.0), 72.0, abs_tol=TOL)
 
 
 def test_ramp_down_seconds_and_inverse() -> None:
     tl = _ramp(120.0, 60.0, 60.0)
-    assert approx_equal(tempo_at(tl, 30.0), 90.0, TOL)
+    assert approx_equal(tempo_at(tl, 30.0), 90.0, abs_tol=TOL)
     expected = 60.0 * math.log(4.0 / 3.0)
-    assert approx_equal(count_to_seconds(tl, 30.0), expected, TOL)
-    assert approx_equal(seconds_to_count(tl, expected), 30.0, TOL)
-    assert approx_equal(count_to_seconds(tl, 60.0), 60.0 * LN2, TOL)
+    assert approx_equal(count_to_seconds(tl, 30.0), expected, abs_tol=TOL)
+    assert approx_equal(seconds_to_count(tl, expected), 30.0, abs_tol=TOL)
+    assert approx_equal(count_to_seconds(tl, 60.0), 60.0 * LN2, abs_tol=TOL)
 
 
 def test_ramp_to_same_tempo_behaves_as_constant() -> None:
     tl = _ramp(90.0, 90.0, 16.0)
-    assert approx_equal(count_to_seconds(tl, 30.0), 20.0, TOL)
-    assert approx_equal(seconds_to_count(tl, 20.0), 30.0, TOL)
+    assert approx_equal(count_to_seconds(tl, 30.0), 20.0, abs_tol=TOL)
+    assert approx_equal(seconds_to_count(tl, 20.0), 30.0, abs_tol=TOL)
 
 
 def test_ramp_is_cut_short_by_next_section() -> None:
     tl = add_tempo(_ramp(60.0, 120.0, 60.0), TempoSection(at_count=30.0, counts_per_minute=200.0))
-    assert approx_equal(tempo_at(tl, 29.0), 89.0, TOL)
+    assert approx_equal(tempo_at(tl, 29.0), 89.0, abs_tol=TOL)
     assert tempo_at(tl, 40.0) == 200.0
     at_cut = 60.0 * math.log(1.5)
-    assert approx_equal(count_to_seconds(tl, 30.0), at_cut, TOL)
-    assert approx_equal(count_to_seconds(tl, 40.0), at_cut + 3.0, TOL)
+    assert approx_equal(count_to_seconds(tl, 30.0), at_cut, abs_tol=TOL)
+    assert approx_equal(count_to_seconds(tl, 40.0), at_cut + 3.0, abs_tol=TOL)
 
 
 def test_hold_pauses_counts() -> None:
     tl = add_hold(_counts(120.0), Hold(at_count=8.0, seconds=3.0))
-    assert approx_equal(count_to_seconds(tl, 8.0), 4.0, TOL)
-    assert approx_equal(count_to_seconds(tl, 10.0), 8.0, TOL)
-    assert approx_equal(seconds_to_count(tl, 8.0), 10.0, TOL)
+    assert approx_equal(count_to_seconds(tl, 8.0), 4.0, abs_tol=TOL)
+    assert approx_equal(count_to_seconds(tl, 10.0), 8.0, abs_tol=TOL)
+    assert approx_equal(seconds_to_count(tl, 8.0), 10.0, abs_tol=TOL)
 
 
 def test_inverse_returns_hold_count_across_whole_hold() -> None:
     tl = add_hold(_counts(120.0), Hold(at_count=8.0, seconds=3.0))
     for seconds in (4.0, 5.5, 7.0):
-        assert approx_equal(seconds_to_count(tl, seconds), 8.0, TOL)
+        assert approx_equal(seconds_to_count(tl, seconds), 8.0, abs_tol=TOL)
     assert seconds_to_count(tl, 7.0 + 1e-6) > 8.0
 
 
 def test_hold_at_count_zero() -> None:
     tl = add_hold(_counts(120.0), Hold(at_count=0.0, seconds=2.0))
     assert count_to_seconds(tl, 0.0) == 0.0
-    assert approx_equal(count_to_seconds(tl, 2.0), 3.0, TOL)
+    assert approx_equal(count_to_seconds(tl, 2.0), 3.0, abs_tol=TOL)
     assert seconds_to_count(tl, 1.0) == 0.0
-    assert approx_equal(seconds_to_count(tl, 3.0), 2.0, TOL)
+    assert approx_equal(seconds_to_count(tl, 3.0), 2.0, abs_tol=TOL)
 
 
 def test_hold_inside_ramp() -> None:
     tl = add_hold(_ramp(60.0, 120.0, 60.0), Hold(at_count=30.0, seconds=5.0))
     at_hold = 60.0 * math.log(1.5)
-    assert approx_equal(count_to_seconds(tl, 30.0), at_hold, TOL)
-    assert approx_equal(count_to_seconds(tl, 60.0), 60.0 * LN2 + 5.0, TOL)
-    assert approx_equal(seconds_to_count(tl, at_hold + 2.5), 30.0, TOL)
-    assert approx_equal(seconds_to_count(tl, 60.0 * LN2 + 5.0), 60.0, TOL)
+    assert approx_equal(count_to_seconds(tl, 30.0), at_hold, abs_tol=TOL)
+    assert approx_equal(count_to_seconds(tl, 60.0), 60.0 * LN2 + 5.0, abs_tol=TOL)
+    assert approx_equal(seconds_to_count(tl, at_hold + 2.5), 30.0, abs_tol=TOL)
+    assert approx_equal(seconds_to_count(tl, 60.0 * LN2 + 5.0), 60.0, abs_tol=TOL)
 
 
 def test_hold_at_tempo_change_boundary() -> None:
     tl = add_tempo(_counts(120.0), TempoSection(at_count=8.0, counts_per_minute=60.0))
     tl = add_hold(tl, Hold(at_count=8.0, seconds=1.0))
-    assert approx_equal(count_to_seconds(tl, 8.0), 4.0, TOL)
-    assert approx_equal(count_to_seconds(tl, 9.0), 6.0, TOL)
-    assert approx_equal(seconds_to_count(tl, 4.5), 8.0, TOL)
+    assert approx_equal(count_to_seconds(tl, 8.0), 4.0, abs_tol=TOL)
+    assert approx_equal(count_to_seconds(tl, 9.0), 6.0, abs_tol=TOL)
+    assert approx_equal(seconds_to_count(tl, 4.5), 8.0, abs_tol=TOL)
 
 
 def test_seconds_per_count_follows_ramp() -> None:
-    assert approx_equal(seconds_per_count(_ramp(60.0, 120.0, 60.0), 30.0), 60.0 / 90.0, TOL)
+    assert approx_equal(seconds_per_count(_ramp(60.0, 120.0, 60.0), 30.0), 60.0 / 90.0, abs_tol=TOL)
 
 
 def test_seconds_mode_defaults_to_one_count_per_second() -> None:
     tl = new_timeline(TimelineMode.SECONDS)
-    assert approx_equal(count_to_seconds(tl, 10.0), 10.0, TOL)
-    assert approx_equal(seconds_to_count(tl, 7.5), 7.5, TOL)
+    assert approx_equal(count_to_seconds(tl, 10.0), 10.0, abs_tol=TOL)
+    assert approx_equal(seconds_to_count(tl, 7.5), 7.5, abs_tol=TOL)
     assert tempo_at(tl, 3.0) == 60.0
 
 
@@ -238,7 +238,7 @@ def test_regression_unsorted_tempo_sections_are_sorted_or_rejected() -> None:
         seconds = count_to_seconds(timeline, 16.0)
     except REJECTED:
         return
-    assert approx_equal(seconds, SIX_SECONDS, tol=1e-9)
+    assert approx_equal(seconds, SIX_SECONDS, abs_tol=1e-9)
 
 
 @pytest.mark.defect("UP-9.3-96")

@@ -10,6 +10,7 @@ Contains:
     MAX_TEXT_CHARS: bounds the characters of one parser input
     MAX_IMAGE_PIXELS: bounds the pixels of one raster image
     MAX_VIDEO_PIXELS: bounds the pixels of one video frame
+    MIN_LAYOUT_HEIGHT_M: sets the smallest cap height text layout accepts, in meters
     require_size(): rejects a requested size that is negative or over its cap
 """
 
@@ -23,6 +24,7 @@ MAX_DEPTH = 64
 MAX_TEXT_CHARS = 1_000_000
 MAX_IMAGE_PIXELS = 40_000_000
 MAX_VIDEO_PIXELS = 3840 * 2160
+MIN_LAYOUT_HEIGHT_M = 0.001
 
 
 def require_size(

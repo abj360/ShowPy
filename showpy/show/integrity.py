@@ -7,6 +7,7 @@ Contains:
     require_known_path(): refuses a path outside KNOWN_ROOTS, including look-alike paths
     blob_digest(): returns the SHA-256 hex digest blobs are addressed by
     LazyBlobs: maps paths to blob bytes, reading each blob only when its path is looked up
+    LazyBlobs.digests: returns the content digest of each path's blob
     require_new_set_keys(): checks every set key a commit stores in a folder the base lacks
     require_distinct_folders(): refuses a new set folder matching another folder ignoring case
     require_valid_digests(): checks digest trees, loading and decoding only what must be decoded,
@@ -17,7 +18,9 @@ Contains:
 import hashlib
 import unicodedata
 from collections.abc import Callable, Iterable, Iterator, Mapping
+from types import MappingProxyType
 
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, StorageError
 from showpy.core.ids import check_id
 from showpy.show.decode_cache import DecodeCache
@@ -31,6 +34,7 @@ from showpy.show.documents import (
     require_storable,
 )
 from showpy.show.files import require_writable
+from showpy.show.migrate import require_current_show_doc
 from showpy.show.models import Show
 from showpy.show.set_keys import PAIR_SEPARATOR, SETS_ROOT, TRANSITIONS_ROOT
 from showpy.show.structured import TEXT_SUFFIXES, require_structured
@@ -59,7 +63,7 @@ def _bad_path(path: str) -> StorageError:
         f"path {path!r} is not a storable document path",
         hint=f"write files under {', '.join(KNOWN_ROOTS)} with no '.', '..' or empty parts",
         context={"path": path, "roots": list(KNOWN_ROOTS)},
-        code="BAD_PATH",
+        code=ErrorCode.BAD_PATH,
     )
 
 
@@ -117,7 +121,7 @@ class LazyBlobs(Mapping[str, bytes]):
                 f"no blob stored for {path!r}",
                 hint="restore the show folder from a backup or remove the damaged file",
                 context={"path": path, "digest": digest},
-                code="CORRUPT",
+                code=ErrorCode.CORRUPT,
             ) from err
 
     def __contains__(self, path: object) -> bool:
@@ -128,6 +132,11 @@ class LazyBlobs(Mapping[str, bytes]):
 
     def __len__(self) -> int:
         return len(self._digests)
+
+    @property
+    def digests(self) -> Mapping[str, str]:
+        """Returns a read-only view of each path's blob digest, so callers can key caches by it."""
+        return MappingProxyType(self._digests)
 
 
 def _require_required_docs(after: Mapping[str, str]) -> None:
@@ -249,6 +258,8 @@ def require_valid_digests(
     """Checks every changed path and decodes the show when any show document changed.
 
     Writing a derived table raises LockedError code READ_ONLY; deleting a stored copy is allowed.
+    When any show document changes, the show.json the commit leaves must be in the current
+    format version, else SchemaError code OLD_FORMAT: show.json versions the whole tree.
     Documents whose digest sits in `cache` at the same path are reused; every changed
     document is decoded fresh, and the show is validated whole either way.
 
@@ -274,6 +285,8 @@ def require_valid_digests(
     require_structured_files(changed, after, blob)
     if not any(is_show_doc(p) for p in changed):
         return None
+    if SHOW_DOC in after:
+        require_current_show_doc(blob(after[SHOW_DOC]))
     _require_required_docs(after)
     show = decode_show(LazyBlobs(after, blob), cache=cache, digests=after)
     require_storable(show)

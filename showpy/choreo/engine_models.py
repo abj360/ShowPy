@@ -15,7 +15,8 @@ Contains:
 
 from typing import Any, Literal
 
-from showpy.choreo.models import Easing, FacingMode, PathStyle, Placement, TurnDirection
+from showpy.choreo.models import Placement
+from showpy.choreo.path_models import Easing, FacingMode, PathStyle, TurnDirection
 from showpy.core.ids import SpotId, TransitionId
 from showpy.core.types import Count, Degrees, FrozenModel, Meters, Point
 from showpy.geo.curves import AnyCurve

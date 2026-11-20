@@ -8,6 +8,7 @@ import csv
 import io
 import json
 import re
+from collections.abc import Sequence
 
 import pandas as pd
 from hypothesis import given, settings
@@ -108,7 +109,7 @@ def test_import_places_every_spot_in_every_set(rows: list[tuple[str, str, float,
         assert placement.on_field
 
 
-def _inserted_order(stored: list[str], file_ids: list[str]) -> list[str]:
+def _inserted_order(stored: Sequence[str], file_ids: Sequence[str]) -> list[str]:
     """Orders sets by inserting each new one after its file predecessor, one at a time.
 
     The quadratic reference the linear `_set_order` replaced (UP-9.5-60).

@@ -9,15 +9,16 @@ Contains:
 
 from datetime import UTC, datetime
 
-from showpy.choreo.models import (
+from showpy.choreo.form_models import Form
+from showpy.choreo.path_models import (
     FacingMode,
     FacingOverride,
-    Form,
     PathRow,
     PathStyle,
     Route,
     TransitionSpec,
 )
+from showpy.core.ids import FormId, RouteId, SetId, SpotId, ZoneId, make_tid
 from showpy.core.selection import Selection
 from showpy.core.types import Region
 from showpy.notes.models import Anchor, Note
@@ -32,22 +33,49 @@ SQUARE = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)))
 def rich_show() -> Show:
     """Builds two_set_show() plus a form, paths, a route, a note, an override and zones."""
     show = two_set_show()
-    form = Form(id="line1", set="1", kind="line", geometry={}, members=("T1", "T2", "T3", "T4"))
-    route = Route(id="r1", curve={}, members=("T3", "T4"), offsets=(0.0, 1.0), travel=2.0)
+    form = Form(
+        id=FormId("line1"),
+        set=SetId("1"),
+        kind="line",
+        geometry={},
+        members=(SpotId("T1"), SpotId("T2"), SpotId("T3"), SpotId("T4")),
+    )
+    route = Route(
+        id=RouteId("r1"),
+        curve={},
+        members=(SpotId("T3"), SpotId("T4")),
+        offsets=(0.0, 1.0),
+        travel=2.0,
+    )
     rows = {
-        "T1": PathRow(entity="T1", facing_mode=FacingMode.TOWARD_ENTITY, facing_value="T2"),
-        "T3": PathRow(entity="T3", style=PathStyle.FOLLOW, route="r1"),
-        "T4": PathRow(entity="T4", style=PathStyle.FOLLOW, route="r1"),
+        SpotId("T1"): PathRow(
+            entity=SpotId("T1"), facing_mode=FacingMode.TOWARD_ENTITY, facing_value=SpotId("T2")
+        ),
+        SpotId("T3"): PathRow(entity=SpotId("T3"), style=PathStyle.FOLLOW, route=RouteId("r1")),
+        SpotId("T4"): PathRow(entity=SpotId("T4"), style=PathStyle.FOLLOW, route=RouteId("r1")),
     }
-    spec = TransitionSpec(id=("1", "2"), counts=8.0, rows=rows, routes={"r1": route})
+    spec = TransitionSpec(
+        id=make_tid("1", "2"), counts=8.0, rows=rows, routes={RouteId("r1"): route}
+    )
     note = Note(id="n1", text="solo", anchor=Anchor.on_spots(["T2"]), author="pat", created_at=AT)
     override = FacingOverride(
-        entities=("T1", "T2"), mode=FacingMode.TOWARD_ENTITY, value="T3", start=0.0, end=4.0
+        entities=(SpotId("T1"), SpotId("T2")),
+        mode=FacingMode.TOWARD_ENTITY,
+        value=SpotId("T3"),
+        start=0.0,
+        end=4.0,
     )
     zones = (
-        Zone(id="z-ids", kind=ZoneKind.CUSTOM, polygon=SQUARE, applies_to="T1-T2"),
-        Zone(id="z-group", kind=ZoneKind.CUSTOM, polygon=SQUARE, applies_to="group:trumpets"),
-        Zone(id="z-sel", kind=ZoneKind.CUSTOM, polygon=SQUARE, applies_to=Selection(ids=("T4",))),
+        Zone(id=ZoneId("z-ids"), kind=ZoneKind.CUSTOM, polygon=SQUARE, applies_to="T1-T2"),
+        Zone(
+            id=ZoneId("z-group"), kind=ZoneKind.CUSTOM, polygon=SQUARE, applies_to="group:trumpets"
+        ),
+        Zone(
+            id=ZoneId("z-sel"),
+            kind=ZoneKind.CUSTOM,
+            polygon=SQUARE,
+            applies_to=Selection(ids=(SpotId("T4"),)),
+        ),
     )
     cast = show.cast.replace(selections={"pair": frozenset({"T1", "T4"})})
     return show.model_copy(

@@ -86,9 +86,9 @@ def _line(glyphs: Iterable[LaidGlyph], line: int) -> list[LaidGlyph]:
 def test_layout_puts_baseline_left_on_at() -> None:
     """Puts the first glyph's baseline-left corner on `at`, scaled to the cap height."""
     points = _points(layout_text("H", SIMPLEX, 2.0, (1.0, 5.0)))
-    assert approx_equal(points[:, 0].min(), 1.0, tol=TOL)
-    assert approx_equal(points[:, 1].min(), 5.0, tol=TOL)
-    assert approx_equal(points[:, 1].max(), 7.0, tol=TOL)
+    assert approx_equal(points[:, 0].min(), 1.0, abs_tol=TOL)
+    assert approx_equal(points[:, 1].min(), 5.0, abs_tol=TOL)
+    assert approx_equal(points[:, 1].max(), 7.0, abs_tol=TOL)
 
 
 def test_layout_matches_cap_heights_across_fonts() -> None:
@@ -99,11 +99,13 @@ def test_layout_matches_cap_heights_across_fonts() -> None:
     )
     assert glyph_i.font == TINY_URI
     assert glyph_h.font == bundled_fonts().resolve("simplex")
-    assert approx_equal(_points([glyph_i])[:, 1].max(), at[1] + height, tol=TOL)
-    assert approx_equal(_points([glyph_h])[:, 1].max(), at[1] + height, tol=TOL)
+    assert approx_equal(_points([glyph_i])[:, 1].max(), at[1] + height, abs_tol=TOL)
+    assert approx_equal(_points([glyph_h])[:, 1].max(), at[1] + height, abs_tol=TOL)
     tiny_advance = TINY["glyphs"]["I"]["advance"]
     tiny_scale = height / TINY["cap_height"]
-    assert approx_equal(_points([glyph_h])[:, 0].min(), at[0] + tiny_advance * tiny_scale, tol=TOL)
+    assert approx_equal(
+        _points([glyph_h])[:, 0].min(), at[0] + tiny_advance * tiny_scale, abs_tol=TOL
+    )
 
 
 def test_layout_falls_back_per_character() -> None:
@@ -168,25 +170,25 @@ def test_layout_aligns_each_line() -> None:
         for line in (0, 1):
             xs = _points(_line(glyphs, line))[:, 0]
             start, end = xs.min(), xs.max() + SIMPLEX_ADVANCE - SIMPLEX_H_INK
-            assert approx_equal(start + share * (end - start), 0.0, tol=TOL)
+            assert approx_equal(start + share * (end - start), 0.0, abs_tol=TOL)
 
 
 def test_layout_anchor_top_and_middle() -> None:
     """Puts the cap line on `at` for top, and the cap-to-last-baseline midpoint for middle."""
     top = _points(layout_text("H", SIMPLEX, 6.0, (0.0, 2.0), anchor="top"))
-    assert approx_equal(top[:, 1].max(), 2.0, tol=TOL)
+    assert approx_equal(top[:, 1].max(), 2.0, abs_tol=TOL)
     middle = layout_text("H\nH", SIMPLEX, 6.0, (0.0, 2.0), anchor="middle")
     cap_line = _points(middle)[:, 1].max()
     last_baseline = _points(_line(middle, 1))[:, 1].min()
-    assert approx_equal((cap_line + last_baseline) / 2, 2.0, tol=TOL)
+    assert approx_equal((cap_line + last_baseline) / 2, 2.0, abs_tol=TOL)
 
 
 def test_layout_spacing_uses_the_first_fonts_em() -> None:
     """Measures letter and line spacing in the first font's em, 6 m for simplex at height 6."""
     _, second = layout_text("HH", SIMPLEX, 6.0, (0.0, 0.0), letter_spacing=0.5)
-    assert approx_equal(_points([second])[:, 0].min(), 8.0, tol=TOL)
+    assert approx_equal(_points([second])[:, 0].min(), 8.0, abs_tol=TOL)
     glyphs = layout_text("H\nH", SIMPLEX, 6.0, (0.0, 0.0), line_spacing=2.0)
-    assert approx_equal(_points(_line(glyphs, 1))[:, 1].min(), -12.0, tol=TOL)
+    assert approx_equal(_points(_line(glyphs, 1))[:, 1].min(), -12.0, abs_tol=TOL)
 
 
 def test_layout_rotation_turns_counter_clockwise() -> None:
@@ -204,7 +206,7 @@ def test_layout_curved_strokes_are_svg_curves() -> None:
     (curve,) = relief_o.strokes
     assert isinstance(curve, SvgCurve)
     assert curve.closed
-    assert approx_equal(curve.point_at(0.0), (1.0 + 3.57, 6.8), tol=TOL)
+    assert approx_equal(curve.point_at(0.0), (1.0 + 3.57, 6.8), abs_tol=TOL)
     (simplex_o,) = layout_text("O", SIMPLEX, 6.0, (0.0, 0.0))
     (polyline,) = simplex_o.strokes
     assert isinstance(polyline, Polyline)

@@ -121,7 +121,7 @@ def test_svg_cubic_and_arc_commands() -> None:
     assert cubic.length() > 10.0
     wide = Box2(min=(0.0, 0.0), max=(10.0, 5.0))
     half = svg_outline("M0 0 A5 5 0 0 1 10 0", wide, flip_y=False)[0]
-    assert approx_equal(half.length(), math.pi * 5, tol=1e-3)
+    assert approx_equal(half.length(), math.pi * 5, abs_tol=1e-3)
 
 
 def test_svg_outline_selects_path_index() -> None:
@@ -191,7 +191,7 @@ def test_regression_parse_path_scales_linearly_with_arc_count() -> None:
 def test_regression_svg_outline_stretches_a_degenerate_span() -> None:
     """Fits a flat line across the full 20 m box width instead of leaving it 5 m (audit 9.1)."""
     min_x, _, max_x, _ = _bounds(svg_outline("M0 0 L5 0", WIDE_BOX))
-    assert approx_equal(max_x - min_x, 20.0, tol=FIT_TOL_M)
+    assert approx_equal(max_x - min_x, 20.0, abs_tol=FIT_TOL_M)
 
 
 @pytest.mark.defect("UP-9.1-38")
@@ -208,7 +208,7 @@ def test_regression_svg_outline_applies_the_transform_attribute() -> None:
     """Applies transform="scale(4 1)" so a unit triangle fits as 8 x 2 m (audit 9.1)."""
     markup = '<path d="M0 0 L1 0 L1 1 Z" transform="scale(4 1)"/>'
     min_x, min_y, max_x, max_y = _bounds(svg_outline(markup, SCALED_BOX))
-    assert approx_equal((max_x - min_x, max_y - min_y), (8.0, 2.0), tol=FIT_TOL_M)
+    assert approx_equal((max_x - min_x, max_y - min_y), (8.0, 2.0), abs_tol=FIT_TOL_M)
 
 
 @pytest.mark.defect("UP-9.1-40")
@@ -216,7 +216,7 @@ def test_regression_svg_outline_applies_the_transform_attribute() -> None:
 def test_regression_svg_outline_honours_the_viewbox() -> None:
     """Maps a shape at 10..20 of a 100-unit viewBox to 1..2 m in a 10 m box (audit 9.1)."""
     min_x, _, max_x, _ = _bounds(svg_outline(VIEWBOX_SVG, BOX))
-    assert approx_equal((min_x, max_x), (1.0, 2.0), tol=FIT_TOL_M)
+    assert approx_equal((min_x, max_x), (1.0, 2.0), abs_tol=FIT_TOL_M)
 
 
 @pytest.mark.defect("UP-9.1-41")
@@ -285,7 +285,7 @@ def test_regression_svg_outline_rejects_a_path_with_too_many_pieces() -> None:
 def test_regression_parse_path_accepts_packed_flags_before_a_fraction() -> None:
     """Parses "a1 1 0 01.5.5" as flags 0 and 1 then the point (0.5, 0.5) (audit 9.1)."""
     piece = parse_path("M0 0 a1 1 0 01.5.5")[0].pieces[0]
-    assert approx_equal(piece.end, (0.5, 0.5), tol=FIT_TOL_M)
+    assert approx_equal(piece.end, (0.5, 0.5), abs_tol=FIT_TOL_M)
 
 
 @pytest.mark.defect("UP-9.1-45")

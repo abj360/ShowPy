@@ -100,7 +100,9 @@ def point_landmark(mark_id: str, name: str, p: Point, *aliases: str) -> Landmark
     >>> point_landmark("c", "center", (0.0, 0.0), "middle").aliases
     ('middle',)
     """
-    return Landmark(id=mark_id, name=name, kind="point", geometry=(p,), aliases=aliases)
+    return Landmark.model_validate(
+        {"id": mark_id, "name": name, "kind": "point", "geometry": (p,), "aliases": aliases}
+    )
 
 
 def line_landmark(mark_id: str, name: str, a: Point, b: Point, *aliases: str) -> Landmark:
@@ -109,7 +111,13 @@ def line_landmark(mark_id: str, name: str, a: Point, b: Point, *aliases: str) ->
     >>> line_landmark("edge", "front edge", (-1.0, 0.0), (1.0, 0.0)).kind
     'line'
     """
-    return Landmark(id=mark_id, name=name, kind="line", geometry=(a, b), aliases=aliases)
+    return Landmark.model_validate(
+        {"id": mark_id, "name": name, "kind": "line", "geometry": (a, b), "aliases": aliases}
+    )
+
+
+def _area_landmark(mark_id: str, name: str, ring: Ring) -> Landmark:
+    return Landmark.model_validate({"id": mark_id, "name": name, "kind": "area", "geometry": ring})
 
 
 def template_ref(ref_id: str) -> SheetRef:
@@ -181,18 +189,8 @@ def _field_landmarks(
         ),
         line_landmark("front-hash", "front hash", (-goal, front), (goal, front), "home hash"),
         line_landmark("back-hash", "back hash", (-goal, back), (goal, back), "visitor hash"),
-        Landmark(
-            id="end-zone-left",
-            name="left end zone",
-            kind="area",
-            geometry=rect_ring(-half, 0.0, -goal, depth),
-        ),
-        Landmark(
-            id="end-zone-right",
-            name="right end zone",
-            kind="area",
-            geometry=rect_ring(goal, 0.0, half, depth),
-        ),
+        _area_landmark("end-zone-left", "left end zone", rect_ring(-half, 0.0, -goal, depth)),
+        _area_landmark("end-zone-right", "right end zone", rect_ring(goal, 0.0, half, depth)),
     )
 
 
@@ -261,7 +259,9 @@ def _stage_guides(half: float, play_half: float) -> tuple[GuideLine, ...]:
 
 def _wing(zone_id: str, x0: float, x1: float, note: str) -> Zone:
     ring = rect_ring(x0, 0.0, x1, STAGE_DEPTH_M)
-    return Zone(id=zone_id, kind=ZoneKind.WINGS, polygon=Region(exterior=ring), note=note)
+    return Zone.model_validate(
+        {"id": zone_id, "kind": ZoneKind.WINGS, "polygon": Region(exterior=ring), "note": note}
+    )
 
 
 def proscenium_stage() -> Sheet:

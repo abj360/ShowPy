@@ -74,6 +74,16 @@ showpy.min_gaps(show, ("1", "2"), top=1)[0].gap  # 1.4 m between footprints
 showpy.validate_show(show).ok  # True
 ```
 
+`pip install showpy` (or `uv add showpy`) installs the core: numpy, scipy, shapely and pydantic. Four extras add the dependencies of a few output functions; without one, those functions raise `MissingExtraError` with the install command.
+
+| Extra    | Installs               | Unlocks                                                                             |
+| -------- | ---------------------- | ----------------------------------------------------------------------------------- |
+| `tables` | pandas                 | `Set.table`, `paths_table`, `speeds`, `energy_curve`, `phrase_profile`, `cue_sheet` |
+| `render` | Pillow                 | `render_sheet(fmt="png")` and `fmt="pdf"`, `draw_sheet`, `render_frame`             |
+| `qr`     | segno, Pillow          | `qr_code`                                                                           |
+| `video`  | imageio-ffmpeg, Pillow | `export_video`                                                                      |
+| `all`    | every extra above      | everything                                                                          |
+
 Every public function has a runnable `>>>` example in its docstring. The full API is in `docs/showpy-api-reference.md`.
 
 ## Architecture
@@ -146,18 +156,19 @@ Read `CLAUDE.md`, `CONTRIBUTING.md` and the ADRs before changing anything. The P
 
 ## Testing / CI
 
-| Gate            | Command                                                                                          | CI  |
-| --------------- | ------------------------------------------------------------------------------------------------ | --- |
-| Format, lint    | `uv run ruff format --check . && uv run ruff check .`, then Prettier for Markdown, YAML and JSON | yes |
-| Types           | `uv run nox -s types` (mypy `--strict`, then pyright basic)                                      | yes |
-| Tests           | `uv run pytest` (unit, property, golden, doctests; warnings are errors)                          | yes |
-| Golden          | `uv run pytest -m golden`                                                                        | yes |
-| Dependency scan | `pip-audit --strict --require-hashes` on the exported lockfile                                   | yes |
-| Hash seeds      | `uv run nox -s hashseeds` (full suite under seeds 1 and 2)                                       | yes |
-| Slow            | `uv run nox -s slow` (generated-show properties, large golden, two seeds)                        | yes |
-| Wheel           | `uv run nox -s wheel` (build, install in a clean venv, run the Usage example)                    | yes |
-| Lowest          | `uv sync --resolution lowest-direct`, then `uv run --no-sync nox -s tests`                       | yes |
-| Docker          | `docker compose -f docker/docker-compose.yml up --build --exit-code-from showpy`                 | yes |
+| Gate            | Command                                                                                            | CI  |
+| --------------- | -------------------------------------------------------------------------------------------------- | --- |
+| Format, lint    | `uv run ruff format --check . && uv run ruff check .`, then Prettier for Markdown, YAML and JSON   | yes |
+| Types           | `uv run nox -s types` (mypy `--strict`, then pyright basic)                                        | yes |
+| Tests           | `uv run pytest` (unit, property, golden, doctests; warnings are errors)                            | yes |
+| Golden          | `uv run pytest -m golden`                                                                          | yes |
+| Dependency scan | `pip-audit --strict --require-hashes` on the exported lockfile                                     | yes |
+| Hash seeds      | `uv run nox -s hashseeds` (full suite under seeds 1 and 2)                                         | yes |
+| Slow            | `uv run nox -s slow` (generated-show properties, large golden, two seeds)                          | yes |
+| Wheel           | `uv run nox -s wheel` (build, install with `[all]` in a clean venv, run the Usage example)         | yes |
+| Core install    | `uv run nox -s core` (wheel without extras: imports, Usage example, every gated call fails closed) | yes |
+| Lowest          | `uv sync --resolution lowest-direct`, then `uv run --no-sync nox -s tests`                         | yes |
+| Docker          | `docker compose -f docker/docker-compose.yml up --build --exit-code-from showpy`                   | yes |
 
 ## Docs
 

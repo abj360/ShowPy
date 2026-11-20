@@ -4,6 +4,8 @@
 test_files.py --- encodes workspace-file defects and write behavior
 
 Contains:
+    test_regression_structured_check_refuses_nesting_past_the_cap: refuses a .json file nested
+        MAX_NESTING + 1 levels, as the strict parser does
     test_regression_commit_refuses_garbage_show_document: refuses a commit of bytes that are not a
         show document
     test_regression_commit_refuses_unknown_root: refuses a commit under a root no reader can open
@@ -30,12 +32,13 @@ from datetime import UTC, datetime
 
 import pytest
 
+from showpy.core.canonical import MAX_NESTING
 from showpy.core.errors import LockedError, SchemaError, ShowPyError, StorageError
 from showpy.show.documents import SHOW_DOC
 from showpy.show.files import _index_csv
 from showpy.show.models import Show
 from showpy.show.storage import Workspace
-from showpy.show.structured import decode_comments
+from showpy.show.structured import decode_comments, require_structured
 from tests.fixtures.shows import two_set_show
 from tests.helpers import open_session
 
@@ -181,3 +184,10 @@ def test_regression_bad_comments_file_is_a_schema_error(raw: bytes) -> None:
 
 def test_decode_comments_reads_a_stored_list() -> None:
     assert decode_comments(b"[]") == []
+
+
+def test_regression_structured_check_refuses_nesting_past_the_cap() -> None:
+    deep = b"[" * (MAX_NESTING + 1) + b"]" * (MAX_NESTING + 1)
+    with pytest.raises(SchemaError, match="nests deeper than"):
+        require_structured("/scripts/extra.json", deep)
+    require_structured("/scripts/extra.json", b"[" * MAX_NESTING + b"]" * MAX_NESTING)

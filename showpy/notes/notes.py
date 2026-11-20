@@ -18,7 +18,6 @@ import shapely
 
 from showpy.cast.select import select
 from showpy.core.errors import GeometryError, SchemaError, UnknownRefError, field_errors
-from showpy.core.ids import SetId, TransitionId
 from showpy.core.types import Meters, Point
 from showpy.core.util import close_matches
 from showpy.notes.models import Anchor, Note, NoteKind
@@ -145,7 +144,7 @@ def remove_note(show: "Show", note_id: str) -> "Show":
 
 
 def notes_for(
-    show: "Show", target: SetId | TransitionId, include_hidden: bool = False
+    show: "Show", target: str | tuple[str, str], *, include_hidden: bool = False
 ) -> list[Note]:
     """Returns the notes anchored to a set (an ID) or a transition (a pair), in show order.
 
@@ -167,13 +166,13 @@ def notes_for(
     return [n for n in show.notes if n.anchor == anchor and (n.visible or include_hidden)]
 
 
-def _spot_points(show: "Show", note: Note, set_id: SetId | None) -> list[Point]:
+def _spot_points(show: "Show", note: Note, set_id: str | None) -> list[Point]:
     sets = show.sets if set_id is None else (show.set(set_id),)
     spots = set(note.anchor.spots or ())
     return [p.point for s in sets for p in s.placements if p.on_field and p.entity in spots]
 
 
-def _is_near(show: "Show", note: Note, p: Point, radius: Meters, set_id: SetId | None) -> bool:
+def _is_near(show: "Show", note: Note, p: Point, radius: Meters, set_id: str | None) -> bool:
     anchor = note.anchor
     if anchor.point is not None:
         return math.dist(anchor.point, p) <= radius
@@ -188,7 +187,8 @@ def notes_near(
     show: "Show",
     p: Point,
     radius: Meters,
-    set_id: SetId | None = None,
+    set_id: str | None = None,
+    *,
     include_hidden: bool = False,
 ) -> list[Note]:
     """Returns notes anchored within `radius` of a point, in show order.

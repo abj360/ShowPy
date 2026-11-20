@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from hypothesis import strategies as st
 
+from showpy.choreo.form_models import FacingSpec, Form, FormKind, SpacingSpec
 from showpy.choreo.form_place import place
 from showpy.choreo.forms import (
     arc_form,
@@ -33,7 +34,6 @@ from showpy.choreo.forms import (
     wedge_form,
 )
 from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import FacingSpec, Form, FormKind, SpacingSpec
 from showpy.core.types import Box2, Point
 from showpy.geo.shapes import rect
 from showpy.geo.spacing import FillPattern
@@ -160,7 +160,9 @@ def _svg(draw: st.DrawFn, d: FormDraft) -> Form:
     r = draw(sizes)
     fit = Box2(min=_offset(d.center, -r, -r), max=_offset(d.center, r, r))
     keep = draw(st.booleans())
-    return svg_form(d.form_id, d.members, SVG_TRIANGLE, fit, keep, facing=d.facing, set_id=d.set_id)
+    return svg_form(
+        d.form_id, d.members, SVG_TRIANGLE, fit, keep_aspect=keep, facing=d.facing, set_id=d.set_id
+    )
 
 
 def _fill(draw: st.DrawFn, d: FormDraft) -> Form:

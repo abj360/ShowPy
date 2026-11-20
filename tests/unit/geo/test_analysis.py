@@ -57,17 +57,17 @@ def test_density_map_ignores_spots_off_the_sheet() -> None:
 def test_coverage_is_share_of_walkable_area() -> None:
     sheet = field_sheet()
     one = coverage(make_set(("A", 0, 10)), sheet, radius=2.0)
-    assert approx_equal(one, math.pi * 4 / 800, tol=1e-4)
+    assert approx_equal(one, math.pi * 4 / 800, abs_tol=1e-4)
     edge = coverage(make_set(("A", 0, 0)), sheet, radius=2.0)
-    assert approx_equal(edge, one / 2, tol=1e-4)
+    assert approx_equal(edge, one / 2, abs_tol=1e-4)
     assert coverage(make_set(("A", 0, 1), off=("A",)), sheet) == 0.0
 
 
 def test_balance_left_right_and_front_back() -> None:
     sheet = field_sheet()
     assert balance(make_set(("A", -10, 10), ("B", 10, 10)), sheet) == 0.0
-    assert approx_equal(balance(make_set(("A", 10, 10), ("B", 20, 10)), sheet), 0.75, tol=TOL)
-    assert approx_equal(balance(make_set(("A", 0, 20)), sheet, axis="y"), 1.0, tol=TOL)
+    assert approx_equal(balance(make_set(("A", 10, 10), ("B", 20, 10)), sheet), 0.75, abs_tol=TOL)
+    assert approx_equal(balance(make_set(("A", 0, 20)), sheet, axis="y"), 1.0, abs_tol=TOL)
     assert balance(make_set(), sheet) == 0.0
     with pytest.raises(UnknownRefError):
         balance(make_set(("A", 0, 0)), sheet, axis="z")  # type: ignore[arg-type]
@@ -84,7 +84,7 @@ def test_symmetry_score_extremes() -> None:
 
 def test_change_amount_uses_spots_in_both_sets() -> None:
     show = two_set_show()
-    assert approx_equal(change_amount(show.sets[0], show.sets[1]), 4.0, tol=TOL)
+    assert approx_equal(change_amount(show.sets[0], show.sets[1]), 4.0, abs_tol=TOL)
     a = make_set(("A", 0, 0), ("B", 0, 0), ("C", 0, 0), off=("C",))
     b = make_set(("A", 3, 4), ("C", 100, 0))
     assert change_amount(a, b) == 5.0

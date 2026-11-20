@@ -46,7 +46,7 @@ def test_count_to_measure_is_one_based(count: float, measure: int, count_in_meas
     label = count_to_measure(_measured(FOUR), count)
     assert label is not None
     assert label.measure == measure
-    assert approx_equal(label.count_in_measure, count_in_measure, TOL)
+    assert approx_equal(label.count_in_measure, count_in_measure, abs_tol=TOL)
 
 
 def test_start_measure_offsets_numbering() -> None:
@@ -64,7 +64,7 @@ def test_change_on_measure_boundary() -> None:
     assert count_to_measure(tl, 15.0) == MeasureLabel(measure=4, count_in_measure=4.0)
     assert count_to_measure(tl, 16.0) == MeasureLabel(measure=5, count_in_measure=1.0)
     assert count_to_measure(tl, 19.0) == MeasureLabel(measure=6, count_in_measure=1.0)
-    assert approx_equal(measure_to_count(tl, 6), 19.0, TOL)
+    assert approx_equal(measure_to_count(tl, 6), 19.0, abs_tol=TOL)
 
 
 def test_change_mid_measure_starts_a_new_measure() -> None:
@@ -72,8 +72,8 @@ def test_change_mid_measure_starts_a_new_measure() -> None:
     assert count_to_measure(tl, 17.0) == MeasureLabel(measure=5, count_in_measure=2.0)
     assert count_to_measure(tl, 18.0) == MeasureLabel(measure=6, count_in_measure=1.0)
     assert count_to_measure(tl, 21.0) == MeasureLabel(measure=7, count_in_measure=1.0)
-    assert approx_equal(measure_to_count(tl, 6), 18.0, TOL)
-    assert approx_equal(measure_to_count(tl, 7, 2.0), 22.0, TOL)
+    assert approx_equal(measure_to_count(tl, 6), 18.0, abs_tol=TOL)
+    assert approx_equal(measure_to_count(tl, 7, 2.0), 22.0, abs_tol=TOL)
 
 
 def test_unsorted_changes_are_applied_in_count_order() -> None:
@@ -86,13 +86,13 @@ def test_unsorted_changes_are_applied_in_count_order() -> None:
 def test_fractional_measure_length() -> None:
     tl = _measured(MeasureSetting(counts_per_measure=2.5))
     assert count_to_measure(tl, 5.0) == MeasureLabel(measure=3, count_in_measure=1.0)
-    assert approx_equal(measure_to_count(tl, 3, 2.0), 6.0, TOL)
+    assert approx_equal(measure_to_count(tl, 3, 2.0), 6.0, abs_tol=TOL)
 
 
 def test_measure_to_count_round_trips_label() -> None:
     tl = _measured(FOUR)
-    assert approx_equal(measure_to_count(tl, 33, 3.0), 130.0, TOL)
-    assert approx_equal(measure_to_count(tl, 1), 0.0, TOL)
+    assert approx_equal(measure_to_count(tl, 33, 3.0), 130.0, abs_tol=TOL)
+    assert approx_equal(measure_to_count(tl, 1), 0.0, abs_tol=TOL)
 
 
 def test_measure_to_count_with_measures_off_raises() -> None:

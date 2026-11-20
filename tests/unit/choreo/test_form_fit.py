@@ -39,7 +39,7 @@ def _ring(center: tuple[float, float], radius: float, degrees: list[float]) -> P
 
 def test_fit_line_returns_extremes_and_residual() -> None:
     a, b, residual = fit_line([(0, 1), (2, 3), (4, 5)])
-    assert approx_equal([a, b], [[0, 1], [4, 5]], TOL)
+    assert approx_equal([a, b], [[0, 1], [4, 5]], abs_tol=TOL)
     assert residual < TOL
 
 
@@ -47,8 +47,8 @@ def test_fit_circle_recovers_noisy_circle() -> None:
     pts = _ring((3.0, 7.0), 4.0, list(range(0, 360, 30)))
     noisy = pts + seeded_rng(1).normal(0.0, 0.01, pts.shape)
     center, radius, residual = fit_circle(noisy)
-    assert approx_equal(center, (3.0, 7.0), 0.02)
-    assert approx_equal(radius, 4.0, 0.02)
+    assert approx_equal(center, (3.0, 7.0), abs_tol=0.02)
+    assert approx_equal(radius, 4.0, abs_tol=0.02)
     assert residual < 0.05
 
 
@@ -76,7 +76,7 @@ def test_detects_line_and_orders_members_along_it() -> None:
     form = detect_form([(4, 0), (0, 0), (2, 0.02)], members=["C", "A", "B"])
     assert form.kind == "line"
     assert form.members == ("A", "B", "C")
-    assert approx_equal(slots(form)[:, 0], [0, 2, 4], 0.05)
+    assert approx_equal(slots(form)[:, 0], [0, 2, 4], abs_tol=0.05)
 
 
 def test_detects_circle_with_ccw_member_order() -> None:
@@ -84,7 +84,7 @@ def test_detects_circle_with_ccw_member_order() -> None:
     form = detect_form(pts[[2, 0, 3, 1]], members=["W", "E", "S", "N"])
     assert form.kind == "circle"
     assert form.members == ("E", "N", "W", "S")
-    assert approx_equal(slots(form), pts, TOL)
+    assert approx_equal(slots(form), pts, abs_tol=TOL)
 
 
 def test_detects_arc_from_angular_coverage() -> None:
@@ -92,8 +92,8 @@ def test_detects_arc_from_angular_coverage() -> None:
     form = detect_form(pts)
     assert form.kind == "arc"
     curve = form.geometry["curve"]
-    assert approx_equal(curve["sweep_deg"], 90.0, TOL)
-    assert approx_equal(slots(form), pts, TOL)
+    assert approx_equal(curve["sweep_deg"], 90.0, abs_tol=TOL)
+    assert approx_equal(slots(form), pts, abs_tol=TOL)
 
 
 def test_unfit_points_become_custom() -> None:
@@ -161,8 +161,8 @@ def test_regression_detect_form_tolerates_one_outlier_on_a_clean_circle() -> Non
     form = detect_form(np.vstack([pts, OUTLIER]), tol=FIT_TOL)
     assert form.kind == "circle"
     curve = form.geometry["curve"]
-    assert approx_equal(curve["center"], (0.0, 0.0), FIT_TOL)
-    assert approx_equal(curve["radius"], RING_RADIUS, FIT_TOL)
+    assert approx_equal(curve["center"], (0.0, 0.0), abs_tol=FIT_TOL)
+    assert approx_equal(curve["radius"], RING_RADIUS, abs_tol=FIT_TOL)
 
 
 @pytest.mark.defect("UP-9.6-31")

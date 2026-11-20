@@ -30,6 +30,10 @@ def field_sheet() -> Sheet:
         size_m=(WIDTH, DEPTH),
         outline=ring,
         walkable=Region(exterior=ring),
-        landmarks=(Landmark(id="c", name="center", kind="point", geometry=((0.0, 10.0),)),),
-        zones=(Zone(id="pit", kind=ZoneKind.PIT, polygon=pit),),
+        landmarks=(
+            Landmark.model_validate(
+                {"id": "c", "name": "center", "kind": "point", "geometry": ((0.0, 10.0),)}
+            ),
+        ),
+        zones=(Zone.model_validate({"id": "pit", "kind": ZoneKind.PIT, "polygon": pit}),),
     )

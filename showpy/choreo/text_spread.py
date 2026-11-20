@@ -24,6 +24,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import GeometryError
 from showpy.core.types import Points
 from showpy.geo.curve_base import Curve, FloatArray
@@ -79,7 +80,7 @@ def stroke_gap(stroke: Curve, k: int) -> float:
     return max(COINCIDENT_TOL_M, JUNCTION_GAP_SHARE * _spacing(stroke, k))
 
 
-def _even_spreads(length: float, k: int, closed: bool) -> Iterator[FloatArray]:
+def _even_spreads(length: float, k: int, *, closed: bool) -> Iterator[FloatArray]:
     """Yields arc-length stations for k spots, preferred spread first, then shifted ones.
 
     An open spread `(j + t) L / (k - 1 + t + u)` leaves margins t and u (in spacings) at the
@@ -142,11 +143,11 @@ class SlotSpreader:
             f"no spacing of {k} spots on a stroke of {char!r} keeps them apart",
             hint="change n or the text",
             context={"char": char, "spots": k, "tolerance": COINCIDENT_TOL_M},
-            code="COINCIDENT_SLOTS",
+            code=ErrorCode.COINCIDENT_SLOTS,
         )
 
     def _spreads(self, stroke: Curve, k: int, gap: float) -> Iterator[FloatArray]:
-        yield from _even_spreads(stroke.length(), k, stroke.closed)
+        yield from _even_spreads(stroke.length(), k, closed=stroke.closed)
         avoiding = self._avoiding_spread(stroke, k, gap)
         if avoiding is not None:
             yield avoiding

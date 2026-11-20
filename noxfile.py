@@ -11,7 +11,9 @@ Contains:
     slow: runs the slow tests under each seed in SLOW_HASH_SEEDS
     fuzz: runs the fuzz targets under the nightly Hypothesis profile
     audit: scans the locked dependencies for known vulnerabilities
-    wheel: builds the wheel, installs it in a clean venv and runs the README usage example
+    wheel: builds the wheel, installs it with every extra in a clean venv and runs the README
+        usage example
+    core: installs the wheel without extras and checks imports and extra-gated calls fail closed
     bench: runs the budget benchmarks; at tier M fails on a >20% min-time regression
     changelog: regenerates CHANGELOG.md with git-cliff and formats it with Prettier
     docs: placeholder until the docs build lands
@@ -35,6 +37,8 @@ COVERAGE_FLOOR = "96"
 NO_SYNC_ENV = "NOX_UV_NO_SYNC"
 
 PYTHON_FOR_WHEEL = "3.14"
+ALL_EXTRAS = "[all]"
+CORE_CHECK_SCRIPT = "scripts/check_core_install.py"
 USAGE_BLOCK = re.compile(r"^## Usage\n.*?```python\n(.*?)```", re.DOTALL | re.MULTILINE)
 WHEEL_CHECK = """
 import importlib.resources as resources
@@ -75,7 +79,7 @@ def _uv_run(session: nox.Session, *args: str, success_codes: list[int] | None = 
     """
     sync_flag = "--no-sync" if os.environ.get(NO_SYNC_ENV) == "1" else "--locked"
     # Pin the nested run to nox's own interpreter: without it the nested uv re-resolved the
-    # Python from .python-version and rebuilt .venv, so CI's 3.12/3.13 legs ran on 3.14.
+    # Python from .python-version and rebuilt .venv, so CI's older legs ran on 3.14.
     session.run(
         "uv",
         "run",
@@ -185,29 +189,79 @@ def audit(session: nox.Session) -> None:
     )
 
 
+def _build_wheel(session: nox.Session, work: Path) -> Path:
+    """Builds the one wheel of the project into a fresh folder under work.
+
+    Args:
+        session: The running nox session.
+        work: The session's scratch folder.
+
+    Returns:
+        wheel: Path of the built wheel.
+    """
+    dist = work / "dist"
+    shutil.rmtree(dist, ignore_errors=True)
+    session.run("uv", "build", "--wheel", "--out-dir", str(dist), external=True)
+    wheels = sorted(dist.glob("*.whl"))
+    if len(wheels) != 1:
+        session.error(f"expected one wheel in {dist}, found {len(wheels)}")
+    return wheels[0]
+
+
+def _fresh_venv(session: nox.Session, venv: Path, *, has_pip: bool) -> Path:
+    """Creates an empty venv on PYTHON_FOR_WHEEL and returns its interpreter."""
+    shutil.rmtree(venv, ignore_errors=True)
+    seed = ["--seed"] if has_pip else []
+    session.run("uv", "venv", *seed, "--python", PYTHON_FOR_WHEEL, str(venv), external=True)
+    return venv / "bin" / "python"
+
+
+def _write_readme_example(root: Path, work: Path) -> Path:
+    """Writes the README usage example to a script under work and returns its path."""
+    example = work / "readme_usage.py"
+    example.write_text(_readme_usage_block(root / "README.md"))
+    return example
+
+
 @nox.session
 def wheel(session: nox.Session) -> None:
-    """Builds the wheel, installs it in a clean venv and runs the README usage example.
+    """Builds the wheel, installs it with every extra in a clean venv and runs the README example.
 
     Not a default session: it builds and creates a venv, so it runs on demand and in CI.
     """
     root = Path.cwd()
     work = Path(session.create_tmp()).resolve()
-    dist, venv = work / "dist", work / "venv"
-    shutil.rmtree(dist, ignore_errors=True)
-    shutil.rmtree(venv, ignore_errors=True)
-    session.run("uv", "build", "--wheel", "--out-dir", str(dist), external=True)
-    wheels = sorted(dist.glob("*.whl"))
-    if len(wheels) != 1:
-        session.error(f"expected one wheel in {dist}, found {len(wheels)}")
-    python = venv / "bin" / "python"
-    session.run("uv", "venv", "--seed", "--python", PYTHON_FOR_WHEEL, str(venv), external=True)
-    session.run(str(python), "-m", "pip", "install", "--quiet", str(wheels[0]), external=True)
-    example = work / "readme_usage.py"
-    example.write_text(_readme_usage_block(root / "README.md"))
+    built = _build_wheel(session, work)
+    python = _fresh_venv(session, work / "venv", has_pip=True)
+    session.run(
+        str(python), "-m", "pip", "install", "--quiet", f"{built}{ALL_EXTRAS}", external=True
+    )
+    example = _write_readme_example(root, work)
     session.chdir(work)
     session.run(str(python), "-I", "-c", WHEEL_CHECK, external=True)
     session.run(str(python), "-I", str(example), external=True)
+
+
+@nox.session
+def core(session: nox.Session) -> None:
+    """Installs the wheel without extras and checks the core install fails closed.
+
+    Runs the README usage example, imports every module with no optional dependency loaded,
+    and expects MissingExtraError naming the extra from every extra-gated call. Not a default
+    session: it builds and creates a venv, so it runs on demand and in CI.
+    """
+    root = Path.cwd()
+    work = Path(session.create_tmp()).resolve()
+    built = _build_wheel(session, work)
+    python = _fresh_venv(session, work / "venv", has_pip=False)
+    session.run(
+        "uv", "pip", "install", "--quiet", "--python", str(python), str(built), external=True
+    )
+    example = _write_readme_example(root, work)
+    check = root / CORE_CHECK_SCRIPT
+    session.chdir(work)
+    session.run(str(python), "-I", str(example), external=True)
+    session.run(str(python), "-I", str(check), external=True)
 
 
 def _tier(posargs: list[str]) -> str:

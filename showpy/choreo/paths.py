@@ -31,9 +31,9 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
-import pandas as pd
 
-from showpy.choreo.models import (
+from showpy.choreo.motion import DEFAULT_MOTIONS, MotionRegistry, ease
+from showpy.choreo.path_models import (
     Easing,
     FacingMode,
     PathRow,
@@ -42,16 +42,17 @@ from showpy.choreo.models import (
     TurnDirection,
     Waypoint,
 )
-from showpy.choreo.motion import DEFAULT_MOTIONS, MotionRegistry, ease
 from showpy.core.errors import LockedError, PathError
-from showpy.core.ids import SpotId, TransitionId
+from showpy.core.extras import require_extra
 from showpy.core.selection import Selection
 from showpy.core.types import Degrees, Point
 
 if TYPE_CHECKING:
+    import pandas as pd
+
     from showpy.show.models import Show
 
-type Sel = Sequence[SpotId] | Selection
+type Sel = Sequence[str] | Selection
 
 REQUIRED_PARAMS: dict[PathStyle, tuple[str, ...]] = {
     PathStyle.ROTATE: ("pivot", "sweep_deg"),
@@ -67,6 +68,7 @@ def _edit(
     spec: TransitionSpec,
     sel: Sel,
     change: Callable[[PathRow], dict[str, Any]],
+    *,
     force: bool,
 ) -> TransitionSpec:
     rows = dict(spec.rows)
@@ -80,7 +82,7 @@ def _edit(
             )
         updated = PathRow.model_validate({**row.model_dump(), **change(row)})
         _require_fits(updated, spec.counts)
-        rows[entity] = updated
+        rows[updated.entity] = updated
     return spec.replace(rows=rows)
 
 
@@ -94,19 +96,19 @@ def _require_fits(row: PathRow, counts: float) -> None:
         )
 
 
-def default_paths(show: "Show", tid: TransitionId) -> TransitionSpec:
+def default_paths(show: "Show", tid: tuple[str, str]) -> TransitionSpec:
     """Returns straight moves over the full counts for everyone (no stored rows).
 
     >>> from showpy.examples import two_set_show
     >>> default_paths(two_set_show(), ("1", "2")).rows
     {}
     """
-    return TransitionSpec(id=tid, counts=show.set(tid[1]).counts)
+    return TransitionSpec.model_validate({"id": tid, "counts": show.set(tid[1]).counts})
 
 
 # Any: style parameters are PathRow field values whose types depend on the style.
 def set_style(
-    spec: TransitionSpec, sel: Sel, style: PathStyle, force: bool = False, **params: Any
+    spec: TransitionSpec, sel: Sel, style: PathStyle, *, force: bool = False, **params: Any
 ) -> TransitionSpec:
     """Changes path style; raises PathError when a style's required parameters are missing.
 
@@ -126,11 +128,11 @@ def set_style(
             hint=f"pass {', '.join(missing)}",
             context={"style": style.value},
         )
-    return _edit(spec, sel, lambda _row: {"style": style, **params}, force)
+    return _edit(spec, sel, lambda _row: {"style": style, **params}, force=force)
 
 
 def delay(
-    spec: TransitionSpec, sel: Sel, counts: float, keep_end: bool = True, force: bool = False
+    spec: TransitionSpec, sel: Sel, counts: float, *, keep_end: bool = True, force: bool = False
 ) -> TransitionSpec:
     """Starts moves `counts` later; with keep_end the move gets faster, otherwise it shifts.
 
@@ -142,7 +144,7 @@ def delay(
         start, end = row.window(spec.counts)
         return {"start": start + counts, "end": row.end if keep_end else end + counts}
 
-    return _edit(spec, sel, change, force)
+    return _edit(spec, sel, change, force=force)
 
 
 def hold(
@@ -150,6 +152,7 @@ def hold(
     sel: Sel,
     until: float | None = None,
     from_: float | None = None,
+    *,
     force: bool = False,
 ) -> TransitionSpec:
     """Holds until a local count, from a local count, or (neither given) the whole transition.
@@ -158,43 +161,44 @@ def hold(
     3.0
     """
     if until is None and from_ is None:
-        return _edit(spec, sel, lambda _row: {"style": PathStyle.HOLD}, force)
+        return _edit(spec, sel, lambda _row: {"style": PathStyle.HOLD}, force=force)
     change: dict[str, Any] = {}
     if until is not None:
         change["start"] = until
     if from_ is not None:
         change["end"] = from_
-    return _edit(spec, sel, lambda _row: change, force)
+    return _edit(spec, sel, lambda _row: change, force=force)
 
 
 def arrive_early(
-    spec: TransitionSpec, sel: Sel, counts: float, force: bool = False
+    spec: TransitionSpec, sel: Sel, counts: float, *, force: bool = False
 ) -> TransitionSpec:
     """Finishes moves `counts` before the end of their window.
 
     >>> arrive_early(TransitionSpec(id=("1", "2"), counts=8.0), ["A"], 2.0).row("A").end
     6.0
     """
-    return _edit(spec, sel, lambda row: {"end": row.window(spec.counts)[1] - counts}, force)
+    return _edit(spec, sel, lambda row: {"end": row.window(spec.counts)[1] - counts}, force=force)
 
 
 def window(
-    spec: TransitionSpec, sel: Sel, start: float, end: float, force: bool = False
+    spec: TransitionSpec, sel: Sel, start: float, end: float, *, force: bool = False
 ) -> TransitionSpec:
     """Sets both ends of the move in local counts.
 
     >>> window(TransitionSpec(id=("1", "2"), counts=8.0), ["A"], 1.0, 5.0).row("A").window(8.0)
     (1.0, 5.0)
     """
-    return _edit(spec, sel, lambda _row: {"start": start, "end": end}, force)
+    return _edit(spec, sel, lambda _row: {"start": start, "end": end}, force=force)
 
 
 def add_waypoint(
     spec: TransitionSpec,
-    entity: SpotId,
+    entity: str,
     point: Point,
     at: float | None = None,
     index: int | None = None,
+    *,
     force: bool = False,
 ) -> TransitionSpec:
     """Bends a path through `point`, optionally reached at local count `at`.
@@ -214,11 +218,11 @@ def add_waypoint(
         style = row.style if row.style in WAYPOINT_STYLES else PathStyle.POLYLINE
         return {"waypoints": tuple(waypoints), "style": style}
 
-    return _edit(spec, [entity], change, force)
+    return _edit(spec, [entity], change, force=force)
 
 
 def remove_waypoint(
-    spec: TransitionSpec, entity: SpotId, index: int, force: bool = False
+    spec: TransitionSpec, entity: str, index: int, *, force: bool = False
 ) -> TransitionSpec:
     """Removes the waypoint at `index`.
 
@@ -234,10 +238,10 @@ def remove_waypoint(
             context={"entity": entity, "index": index},
         )
     del waypoints[index]
-    return _edit(spec, [entity], lambda _row: {"waypoints": tuple(waypoints)}, force)
+    return _edit(spec, [entity], lambda _row: {"waypoints": tuple(waypoints)}, force=force)
 
 
-def clear_waypoints(spec: TransitionSpec, sel: Sel, force: bool = False) -> TransitionSpec:
+def clear_waypoints(spec: TransitionSpec, sel: Sel, *, force: bool = False) -> TransitionSpec:
     """Removes every waypoint; POLYLINE and CURVE rows go back to STRAIGHT.
 
     >>> spec = add_waypoint(TransitionSpec(id=("1", "2"), counts=8.0), "A", (1.0, 1.0))
@@ -249,11 +253,11 @@ def clear_waypoints(spec: TransitionSpec, sel: Sel, force: bool = False) -> Tran
         style = PathStyle.STRAIGHT if row.style in WAYPOINT_STYLES else row.style
         return {"waypoints": (), "style": style}
 
-    return _edit(spec, sel, change, force)
+    return _edit(spec, sel, change, force=force)
 
 
 def curve_path(
-    spec: TransitionSpec, entity: SpotId, *control: Point, force: bool = False
+    spec: TransitionSpec, entity: str, *control: Point, force: bool = False
 ) -> TransitionSpec:
     """Makes a smooth path through control points between the two placements.
 
@@ -262,7 +266,7 @@ def curve_path(
     """
     waypoints = tuple(Waypoint(x=p[0], y=p[1]) for p in control)
     return _edit(
-        spec, [entity], lambda _row: {"style": PathStyle.CURVE, "waypoints": waypoints}, force
+        spec, [entity], lambda _row: {"style": PathStyle.CURVE, "waypoints": waypoints}, force=force
     )
 
 
@@ -271,6 +275,7 @@ def stagger(
     ordered_sel: Sel,
     step: float = 1.0,
     direction: Literal["start", "end"] = "start",
+    *,
     keep_end: bool = True,
     force: bool = False,
 ) -> TransitionSpec:
@@ -299,6 +304,7 @@ def ripple(
     ordered_sel: Sel,
     total: float,
     curve: Literal["linear", "ease_in", "ease_out", "ease_in_out"] = "linear",
+    *,
     force: bool = False,
 ) -> TransitionSpec:
     """Spreads starts from 0 to `total` counts along an order, shaped by an easing curve.
@@ -311,7 +317,7 @@ def ripple(
     shares = np.linspace(0.0, 1.0, len(order)) if len(order) > 1 else np.zeros(1)
     starts = total * ease(RIPPLE_CURVES[curve], shares)
     for entity, start in zip(order, starts, strict=True):
-        spec = _edit(spec, [entity], _setter("start", float(start)), force)
+        spec = _edit(spec, [entity], _setter("start", float(start)), force=force)
     return spec
 
 
@@ -323,9 +329,10 @@ def set_facing(
     spec: TransitionSpec,
     sel: Sel,
     mode: FacingMode,
-    value: Degrees | Point | SpotId | None = None,
+    value: Degrees | Point | str | None = None,
     turn_counts: float = 0.0,
     direction: TurnDirection = TurnDirection.SHORTEST,
+    *,
     force: bool = False,
 ) -> TransitionSpec:
     """Sets how spots face while they move.
@@ -340,16 +347,16 @@ def set_facing(
         "turn_counts": turn_counts,
         "turn_direction": direction,
     }
-    return _edit(spec, sel, lambda _row: change, force)
+    return _edit(spec, sel, lambda _row: change, force=force)
 
 
-def set_pace(spec: TransitionSpec, sel: Sel, pace: float, force: bool = False) -> TransitionSpec:
+def set_pace(spec: TransitionSpec, sel: Sel, pace: float, *, force: bool = False) -> TransitionSpec:
     """Sets the step pace multiplier (2 = double time); positions do not change.
 
     >>> set_pace(TransitionSpec(id=("1", "2"), counts=8.0), ["A"], 0.5).row("A").pace
     0.5
     """
-    return _edit(spec, sel, lambda _row: {"pace": pace}, force)
+    return _edit(spec, sel, lambda _row: {"pace": pace}, force=force)
 
 
 # Any: motion parameters are JSON values defined by each registered motion.
@@ -358,6 +365,7 @@ def custom_path(
     sel: Sel,
     motion: str,
     registry: MotionRegistry = DEFAULT_MOTIONS,
+    *,
     force: bool = False,
     **params: Any,
 ) -> TransitionSpec:
@@ -368,11 +376,11 @@ def custom_path(
     """
     registry.get(motion)
     change = {"style": PathStyle.CUSTOM, "motion_fn": motion, "motion_params": params}
-    return _edit(spec, sel, lambda _row: change, force)
+    return _edit(spec, sel, lambda _row: change, force=force)
 
 
 def set_easing(
-    spec: TransitionSpec, sel: Sel, easing: Easing | str, force: bool = False
+    spec: TransitionSpec, sel: Sel, easing: Easing | str, *, force: bool = False
 ) -> TransitionSpec:
     """Changes pacing within the move; a kind name uses default strength.
 
@@ -381,7 +389,7 @@ def set_easing(
     'ease_out'
     """
     chosen = easing if isinstance(easing, Easing) else Easing.model_validate({"kind": easing})
-    return _edit(spec, sel, lambda _row: {"easing": chosen}, force)
+    return _edit(spec, sel, lambda _row: {"easing": chosen}, force=force)
 
 
 def lock(spec: TransitionSpec, sel: Sel) -> TransitionSpec:
@@ -402,12 +410,17 @@ def unlock(spec: TransitionSpec, sel: Sel) -> TransitionSpec:
     return _edit(spec, sel, lambda _row: {"locked": False}, force=True)
 
 
-def paths_table(spec: TransitionSpec) -> pd.DataFrame:
+def paths_table(spec: TransitionSpec) -> "pd.DataFrame":
     """Returns the rows that differ from a default straight move, one per spot.
+
+    Needs the `tables` extra.
 
     >>> paths_table(TransitionSpec(id=("1", "2"), counts=8.0)).empty
     True
     """
+    require_extra("pandas", extra="tables", needed_by="paths_table")
+    import pandas as pd
+
     rows = [
         {field: getattr(row, field) for field in TABLE_FIELDS}
         for entity, row in sorted(spec.rows.items())

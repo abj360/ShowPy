@@ -18,6 +18,8 @@ Contains:
         custom-registered motion
     test_regression_closest_approach_of_empty_track_raises_showpy_error: raises a ShowPyError, not
         IndexError, for an empty track
+    test_regression_min_gaps_resolves_selector_expressions: reads `sel` as a selector expression,
+        and refuses an unknown spot with UnknownRefError
 """
 
 import math
@@ -38,9 +40,10 @@ from showpy.choreo.avoid import (
 )
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import Fix
-from showpy.choreo.models import Easing, PathRow, PathStyle
 from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, MotionRegistry
-from showpy.core.errors import PathError, ShowPyError
+from showpy.choreo.path_models import Easing, PathRow, PathStyle
+from showpy.core.errors import PathError, ShowPyError, UnknownRefError
+from showpy.core.ids import SpotId
 from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
 from showpy.show.models import Show
@@ -92,8 +95,8 @@ def test_suggest_delays_opens_the_gap() -> None:
     best = fixes[0]
     assert best.kind == "delay"
     assert best.params == {"entity": "T1", "counts": 4.0}
-    assert approx_equal(best.new_gap, 4.0 / math.sqrt(10.0) - FOOTPRINTS, tol=1e-6)
-    assert approx_equal(best.max_speed_after, math.sqrt(2.0), tol=1e-6)
+    assert approx_equal(best.new_gap, 4.0 / math.sqrt(10.0) - FOOTPRINTS, abs_tol=1e-6)
+    assert approx_equal(best.max_speed_after, math.sqrt(2.0), abs_tol=1e-6)
 
 
 def test_suggest_waypoint_routes_around() -> None:
@@ -102,9 +105,9 @@ def test_suggest_waypoint_routes_around() -> None:
     assert best.kind == "waypoint"
     assert approx_equal(best.params["at"], 4.0)
     offset = 1.4 / math.sqrt(2.0)
-    assert approx_equal(best.params["point"], (2.0 + offset, 7.0 - offset), tol=1e-6)
-    assert approx_equal(best.new_gap, 0.178385, tol=1e-5)
-    assert approx_equal(best.max_speed_after, 0.788987, tol=1e-5)
+    assert approx_equal(best.params["point"], (2.0 + offset, 7.0 - offset), abs_tol=1e-6)
+    assert approx_equal(best.new_gap, 0.178385, abs_tol=1e-5)
+    assert approx_equal(best.max_speed_after, 0.788987, abs_tol=1e-5)
 
 
 def test_apply_fix_and_separate_in_time() -> None:
@@ -126,8 +129,8 @@ def test_suggest_reassignment_uncrosses_a_swap() -> None:
     result = suggest_reassignment(crossing_show(), TID, ["T1", "T2"])
     assert result.crossings == 0
     targets = dict(zip(result.entities, result.target_points().tolist(), strict=True))
-    assert approx_equal(targets["T1"], (0.0, 9.0))
-    assert approx_equal(targets["T2"], (4.0, 9.0))
+    assert approx_equal(targets[SpotId("T1")], (0.0, 9.0))
+    assert approx_equal(targets[SpotId("T2")], (4.0, 9.0))
 
 
 def test_regression_reassign_hint_names_the_real_module() -> None:
@@ -144,13 +147,13 @@ PARKED_UNTIL = 7.0
 @defect("UP-9.2-17")
 def test_regression_suggested_waypoint_is_reached_at_its_count_on_eased_rows() -> None:
     """Puts a suggested bend where it says, at the count it names, on an eased row (audit 9.2)."""
-    row = PathRow(entity="T1", easing=Easing(kind="ease_in", strength=2.0))
+    row = PathRow(entity=SpotId("T1"), easing=Easing(kind="ease_in", strength=2.0))
     show = with_rows({"T1": row}, show=crossing_show())
     fix = suggest_waypoint(show, TID, "T1", "T2")[0]
     changed = apply_fix(show.transition(TID), fix)
     engine = PathEngine(show.model_copy(update={"transitions": (changed,)}))
     reached = engine.position("T1", fix.params["at"], local=TID)
-    assert approx_equal(reached, fix.params["point"], tol=1e-6)
+    assert approx_equal(reached, fix.params["point"], abs_tol=1e-6)
 
 
 @defect("UP-9.2-28")
@@ -172,7 +175,7 @@ def test_regression_min_gaps_ignores_spots_before_their_entrance() -> None:
     )
     second = base.set("2").with_placements({"T1": {"x": 6.0, "y": 5.0}, "T2": {"x": 2.0, "y": 9.0}})
     show = with_rows(
-        {"T1": PathRow(entity="T1", start=PARKED_UNTIL)},
+        {"T1": PathRow(entity=SpotId("T1"), start=PARKED_UNTIL)},
         show=base.model_copy(update={"sets": (first, second)}),
     )
     assert min_gaps(show, TID, sel=["T1", "T2"], top=1)[0].gap > 0.0
@@ -212,7 +215,7 @@ def _waypoint_call(show: Show, motions: MotionRegistry) -> object:
 def test_regression_avoid_helpers_accept_a_custom_motion_registry(call: MotionsCall) -> None:
     """Analyses a show that uses a custom-registered motion (audit 9.2)."""
     registry = DEFAULT_MOTIONS.with_motion("probe", _stay_on_the_line)
-    row = PathRow(entity="T1", style=PathStyle.CUSTOM, motion_fn="probe")
+    row = PathRow(entity=SpotId("T1"), style=PathStyle.CUSTOM, motion_fn="probe")
     custom = with_rows({"T1": row}, show=crossing_show())
     assert repr(call(custom, registry)) == repr(call(crossing_show(), DEFAULT_MOTIONS))
 
@@ -222,3 +225,12 @@ def test_regression_closest_approach_of_empty_track_raises_showpy_error() -> Non
     """Raises a ShowPyError, not IndexError, for an empty track (audit 9.2)."""
     with pytest.raises(ShowPyError):
         closest_approach([], [], [0.0, 1.0], [(0.0, 0.0), (1.0, 1.0)])
+
+
+def test_regression_min_gaps_resolves_selector_expressions() -> None:
+    """Reads `sel` as a selector expression and refuses an unknown spot (review of L0.5)."""
+    show = two_set_show()
+    gaps = min_gaps(show, TID, "T1-T3")
+    assert {(g.a, g.b) for g in gaps} == {("T1", "T2"), ("T1", "T3"), ("T2", "T3")}
+    with pytest.raises(UnknownRefError):
+        min_gaps(show, TID, ["T1", "Z9"])

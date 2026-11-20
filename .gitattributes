@@ -1,2 +1,3 @@
 tests/fixtures/repos/** -text
 showpy/fonts/** -text
+showpy/schemas/** -text
