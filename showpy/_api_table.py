@@ -178,6 +178,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("TimelineError", "showpy.core.errors", "TimelineError"),
     ("TimelineMode", "showpy.time.models", "TimelineMode"),
     ("Timer", "showpy.core.util", "Timer"),
+    ("TransitionId", "showpy.core.ids", "TransitionId"),
     ("TransitionSpec", "showpy.choreo.path_models", "TransitionSpec"),
     ("TrimmedCurve", "showpy.geo.curves", "TrimmedCurve"),
     ("TurnDirection", "showpy.choreo.path_models", "TurnDirection"),

@@ -1189,6 +1189,7 @@
     }
   },
   "Timer": "(elapsed_ms: float = 0.0) -> None",
+  "TransitionId": "(from_set: showpy.core.ids.SetId, to_set: showpy.core.ids.SetId)",
   "TransitionSpec": {
     "model": {
       "counts": "float",
