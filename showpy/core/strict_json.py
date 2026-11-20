@@ -8,6 +8,8 @@ a float, such as 1e400, parses to infinity and is refused when the model validat
 parsing stays on the C fast path without a Python call per float.
 
 Contains:
+    json_nesting(): measures how deep arrays and objects nest in JSON bytes, without recursing
+    require_nesting(): refuses JSON bytes nested deeper than MAX_NESTING levels
     parse_strict_json(): parses UTF-8 JSON bytes, refusing non-standard tokens, repeated keys,
         a byte-order mark and lone surrogates
     strict_json_copy(): copies an already parsed JSON value through the strict parser
@@ -17,6 +19,8 @@ import json
 import re
 from collections import Counter
 
+import numpy as np
+
 from showpy.core.canonical import MAX_INT_DIGITS, MAX_NESTING
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError
@@ -25,6 +29,15 @@ from showpy.core.json_types import JsonValue
 UTF8_BOM = b"\xef\xbb\xbf"
 SURROGATE_ESCAPE = re.compile(rb"\\u[dD][89a-fA-F]")
 SURROGATE_HINT = "write text as valid Unicode; a \\ud800-\\udfff escape must be part of a pair"
+STRUCTURE_BYTES = b'[]{}"'
+NON_STRUCTURE_BYTES = bytes(sorted(set(range(256)) - set(STRUCTURE_BYTES)))
+QUOTE = ord('"')
+# Bit 1 is set in `[` (91) and `{` (123) and clear in `]` (93) and `}` (125), so a bracket's
+# step is (byte & 2) - 1.
+OPENER_BIT = 2
+BACKSLASH = b"\\"
+ESCAPED_BACKSLASH = b"\\\\"
+ESCAPED_QUOTE = b'\\"'
 STRICT_HINT = "write standard UTF-8 JSON, as save_show() and export_json() do"
 
 
@@ -35,6 +48,73 @@ def _strict_error(document: str, problem: str, **context: str | int) -> SchemaEr
         context={"path": document, "problem": problem, **context},
         code=ErrorCode.STRICT_JSON,
     )
+
+
+def json_nesting(raw: bytes) -> int:
+    """Measures how deep arrays and objects nest in JSON bytes, counting brackets outside strings.
+
+    Escaped backslashes and quotes are dropped first, so every quote left opens or closes a
+    string; brackets between a quote pair are skipped. The scan runs in C and numpy without
+    recursion, so no interpreter or stack limit decides the result. For text that is not JSON
+    the count is only an estimate; the parser refuses such text anyway.
+
+    Args:
+        raw: JSON bytes.
+
+    Returns:
+        depth: The most arrays and objects open at once; 0 for a bare scalar.
+
+    >>> json_nesting(b'{"a": [1, "]]"], "b": {}}')
+    2
+    """
+    return _depth(_structure(raw))
+
+
+def _structure(raw: bytes) -> bytes:
+    """Keeps only the brackets and the quotes that delimit strings, dropping escaped ones."""
+    if BACKSLASH in raw:
+        raw = raw.replace(ESCAPED_BACKSLASH, b"").replace(ESCAPED_QUOTE, b"")
+    return raw.translate(None, NON_STRUCTURE_BYTES)
+
+
+def _depth(structure: bytes) -> int:
+    """Returns the deepest bracket nesting of a structure, skipping brackets inside strings."""
+    marks = np.frombuffer(structure, dtype=np.uint8)
+    quotes = marks == QUOTE
+    brackets = marks[~(np.bitwise_xor.accumulate(quotes) | quotes)]
+    if brackets.size == 0:
+        return 0
+    steps = (brackets & OPENER_BIT).view(np.int8) - 1
+    return max(int(steps.cumsum(dtype=np.int32).max()), 0)
+
+
+def require_nesting(raw: bytes, *, document: str) -> None:
+    """Refuses JSON bytes whose arrays and objects nest deeper than MAX_NESTING levels.
+
+    The check is explicit so the cap holds whatever recursion the interpreter's JSON parser
+    allows; the canonical writer refuses the same depth.
+
+    Args:
+        raw: JSON bytes.
+        document: Path or name of the document, used in errors.
+
+    >>> require_nesting(b"[[1]]", document="d.json")
+    >>> try:
+    ...     require_nesting(b"[" * 101 + b"]" * 101, document="d.json")
+    ... except SchemaError as exc:
+    ...     print(exc.context["max_nesting"])
+    100
+    """
+    structure = _structure(raw)
+    if len(structure) - structure.count(b'"') <= MAX_NESTING:
+        return
+    depth = _depth(structure)
+    if depth > MAX_NESTING:
+        raise SchemaError(
+            f"{document} nests deeper than {MAX_NESTING} levels",
+            hint=f"write JSON nested at most {MAX_NESTING} levels",
+            context={"path": document, "depth": depth, "max_nesting": MAX_NESTING},
+        )
 
 
 def parse_strict_json(raw: bytes, *, document: str) -> JsonValue:
@@ -59,6 +139,7 @@ def parse_strict_json(raw: bytes, *, document: str) -> JsonValue:
     """
     if raw.startswith(UTF8_BOM):
         raise _strict_error(document, "starts with a byte-order mark", position=0)
+    require_nesting(raw, document=document)
 
     def refuse_constant(token: str) -> float:
         raise _strict_error(document, f"non-standard token {token}", token=token)

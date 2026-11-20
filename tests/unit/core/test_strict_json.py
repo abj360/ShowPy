@@ -15,15 +15,20 @@ Contains:
     test_strict_copy_refuses_what_json_cannot_hold(): refuses NaN, sets, surrogates and keys that
         collide once turned into text
     test_strict_parse_keeps_large_finite_and_tiny_numbers(): reads 1.7e308 and 1e-400 as floats
+    test_regression_strict_parse_refuses_nesting_past_the_cap(): refuses MAX_NESTING + 1 levels,
+        far under any recursion limit, and reads MAX_NESTING levels
+    test_json_nesting_counts_only_brackets_outside_strings(): ignores brackets and escaped quotes
+        inside strings
 """
 
 import math
 
 import pytest
 
+from showpy.core.canonical import MAX_NESTING
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError
-from showpy.core.strict_json import parse_strict_json, strict_json_copy
+from showpy.core.strict_json import json_nesting, parse_strict_json, strict_json_copy
 
 DOC = "/show/show.json"
 DEEP = 100_000
@@ -104,3 +109,22 @@ def test_strict_parse_keeps_large_finite_and_tiny_numbers() -> None:
         0.0,
         2.5e10,
     ]
+
+
+def _nested(depth: int) -> bytes:
+    return b"[" * depth + b"]" * depth
+
+
+def test_regression_strict_parse_refuses_nesting_past_the_cap() -> None:
+    error = _refusal(_nested(MAX_NESTING + 1))
+    assert error.code == ErrorCode.SCHEMA
+    assert error.context["max_nesting"] == MAX_NESTING
+    assert parse_strict_json(_nested(MAX_NESTING), document=DOC) is not None
+
+
+def test_json_nesting_counts_only_brackets_outside_strings() -> None:
+    assert json_nesting(b"1") == 0
+    assert json_nesting(b'{"a": [1, {"b": []}]}') == 4
+    assert json_nesting(b'["[[[[{{{", "]]]]"]') == 1
+    assert json_nesting(b'["\\"]') == 1
+    assert json_nesting(b'["a\\"[[[", [[]]]') == 3
