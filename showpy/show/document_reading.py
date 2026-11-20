@@ -60,7 +60,6 @@ from showpy.show.models import Show
 
 JsonObject = dict[str, Any]  # Any: parsed JSON values of any type
 JsonArray = list[Any]  # Any: parsed JSON values of any type
-PAIR_PARTS = 2
 
 
 class _Source(NamedTuple):
@@ -350,22 +349,35 @@ def _split_dump(dump: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
     objects.update((set_doc(keys[str(s.get("id"))]), s) for s in sets)
     for set_id, forms in _forms_by_set(dump, keys).items():
         objects[forms_doc(keys[set_id])] = forms
+    objects.update(_paths_by_pair(dump, keys))
+    return objects
+
+
+def _paths_by_pair(dump: Mapping[str, JsonValue], keys: Mapping[str, str]) -> JsonObject:
+    """Files each transition of a show dump under its paths document by set keys.
+
+    Every v1 release stored paths only between consecutive sets and read only those, so a
+    transition between any other pair has no document to go to and is refused, never dropped.
+    """
+    consecutive = set(itertools.pairwise(keys))
+    found: JsonObject = {}
     for spec in _dump_list(dump, TRANSITIONS_FIELD):
         pair = spec.get("id")
-        if not isinstance(pair, list) or len(pair) != PAIR_PARTS:
-            raise _shape_error(f"show field {TRANSITIONS_FIELD}", "pair of set ids", pair)
-        first, second = pair
-        if (
-            not isinstance(first, str)
-            or not isinstance(second, str)
-            or not {first, second} <= set(keys)
-        ):
-            raise _shape_error(f"show field {TRANSITIONS_FIELD}", "pair of set ids", pair)
-        path = paths_doc((keys[first], keys[second]))
-        if path in objects:
+        texts = isinstance(pair, list) and all(isinstance(part, str) for part in pair)
+        ids = tuple(pair) if isinstance(pair, list) and texts else None
+        if ids is None or ids not in consecutive:
+            raise SchemaError(
+                f"show field {TRANSITIONS_FIELD} holds paths for {pair!r}, which are not two"
+                " consecutive sets",
+                hint="keep paths only between consecutive sets, as save_show() stores them;"
+                " remove the entry or point it at a consecutive pair",
+                context={"field": TRANSITIONS_FIELD, "pair": repr(pair)},
+            )
+        path = paths_doc((keys[ids[0]], keys[ids[1]]))
+        if path in found:
             raise _shape_error(f"show field {TRANSITIONS_FIELD}", "one entry per pair", pair)
-        objects[path] = spec
-    return objects
+        found[path] = spec
+    return found
 
 
 def _forms_by_set(
