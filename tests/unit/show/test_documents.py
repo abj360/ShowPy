@@ -28,6 +28,8 @@ Contains:
         bytes encode_show gives and skips paths the show does not write
     test_regression_deep_or_huge_json_document_is_a_schema_error: raises SchemaError naming the
         document, not RecursionError or ValueError, for deep nesting or an overlong int
+    test_regression_dump_show_doc_of_a_bare_header_is_valid_json: writes the header alone as
+        canonical JSON, not a dangling comma
 """
 
 import json
@@ -42,10 +44,12 @@ from showpy.show.documents import (
     decode_show,
     dump_dumped_json,
     dump_json,
+    dump_show_doc,
     encode_documents,
     encode_show,
     forms_doc,
 )
+from showpy.show.migrate import format_header
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 from tests.helpers import HOSTILE_JSON
@@ -194,3 +198,8 @@ def test_regression_deep_or_huge_json_document_is_a_schema_error(raw: bytes) -> 
     with pytest.raises(SchemaError) as caught:
         decode_show({**_docs(), SHOW_DOC: raw})
     assert caught.value.context["path"] == SHOW_DOC
+
+
+def test_regression_dump_show_doc_of_a_bare_header_is_valid_json() -> None:
+    header = format_header()
+    assert dump_show_doc(header) == dump_json(header)

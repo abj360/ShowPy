@@ -70,7 +70,6 @@ RESERVED_KEY_PREFIX = "$showpy:"
 TOO_DEEP = "\n" + " " * (JSON_INDENT * (MAX_NESTING + 1))
 HEADER_CLOSE = b"\n}\n"
 OPEN_OBJECT = b"{\n"
-CLOSE_OBJECT = b"}\n"
 
 
 # Any: accepts any JSON-like value or model dump.
@@ -227,9 +226,10 @@ def dump_show_doc(document: Mapping[str, JsonValue]) -> bytes:
     """
     require_current_version(document, name=SHOW_DOC)
     head = dump_dumped_json(format_header())
-    rest = dump_dumped_json(without_header(document)).removeprefix(OPEN_OBJECT)
-    if rest == CLOSE_OBJECT:
+    body = without_header(document)
+    if not body:
         return head
+    rest = dump_dumped_json(body).removeprefix(OPEN_OBJECT)
     return head.removesuffix(HEADER_CLOSE) + b",\n" + rest
 
 
