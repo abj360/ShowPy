@@ -7,7 +7,6 @@ placements and respect pins; affine maps carry facings with them.
 Contains:
     About: names the anchor a rotation, scale or skew turns about
     PointMap: names a function that maps an (N, 2) array to a new (N, 2) array
-    pick(): looks up a named option, raising UnknownRefError with suggestions
     anchor_source(): returns what anchors are measured on: points, a curve or set positions
     about_point(): resolves "center", "centroid" or a point to coordinates
     apply_matrix(): maps an object through an affine matrix; facings follow
@@ -15,17 +14,17 @@ Contains:
     map_curve(): maps a curve's defining points, or a dense polyline when it has none
 """
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from typing import Literal, cast
 
 import numpy as np
 
 from showpy.choreo.models import Set
-from showpy.core.errors import UnknownRefError
 from showpy.core.ids import SpotId
 from showpy.core.types import Degrees, Point, Points
-from showpy.core.util import as_points, close_matches
+from showpy.core.util import as_points
 from showpy.geo.affine import Matrix, transform_curve, transform_facing, transform_points
+from showpy.geo.checks import pick
 from showpy.geo.curves import (
     AnyCurve,
     BezierCurve,
@@ -41,21 +40,6 @@ type About = Literal["center", "centroid"] | Point
 type PointMap = Callable[[Points], Points]
 
 FALLBACK_TOL = 0.001
-
-
-def pick[V](kind: str, name: str, options: Mapping[str, V]) -> V:
-    """Looks up a named option; an unknown name raises UnknownRefError with close matches.
-
-    >>> pick("axis", "x", {"x": 0, "y": 1})
-    0
-    """
-    if name not in options:
-        raise UnknownRefError(
-            f"unknown {kind} {name!r}",
-            hint=f"use one of {sorted(options)}; did you mean {close_matches(name, options)}?",
-            context={kind: name},
-        )
-    return options[name]
 
 
 def anchor_source(obj: Points | CurveModel | Set, sel: SetSelector) -> Points | CurveModel:

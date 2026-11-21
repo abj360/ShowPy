@@ -2,11 +2,30 @@
 checks.py --- parameter checks that raise geometry-family errors instead of SchemaError
 
 Contains:
+    pick(): looks up a named option, raising UnknownRefError with suggestions
     require_finite_as(): checks a finite, bounded number and raises the caller's error class
 """
 
-from showpy.core.errors import SchemaError, ShowPyError
+from collections.abc import Mapping
+
+from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
+from showpy.core.util import close_matches
 from showpy.core.validation import require_finite
+
+
+def pick[V](kind: str, name: str, options: Mapping[str, V]) -> V:
+    """Looks up a named option; an unknown name raises UnknownRefError with close matches.
+
+    >>> pick("axis", "x", {"x": 0, "y": 1})
+    0
+    """
+    if name not in options:
+        raise UnknownRefError(
+            f"unknown {kind} {name!r}",
+            hint=f"use one of {sorted(options)}; did you mean {close_matches(name, options)}?",
+            context={kind: name},
+        )
+    return options[name]
 
 
 def require_finite_as(

@@ -28,10 +28,12 @@ from collections.abc import Sequence
 
 import numpy as np
 import shapely
+from shapely.errors import GEOSException
 
-from showpy.core.errors import GeometryError
+from showpy.core.errors import GeometryError, bounded_repr
 from showpy.core.types import Box2, Degrees, Meters, Point
 from showpy.core.units import facing_vector
+from showpy.geo.checks import pick
 from showpy.geo.curve_base import Curve
 from showpy.geo.curves import (
     AnyCurve,
@@ -57,6 +59,7 @@ SVG_FIT_TOL = 0.001
 SVG_D_ATTRIBUTE = re.compile(r"\bd\s*=\s*(?:\"([^\"]*)\"|'([^']*)')")
 MIN_POLYGON_SIDES = 3
 MIN_STAR_POINTS = 2
+OFFSET_SIDES = {"left": 1.0, "right": -1.0}
 
 
 def line(a: Point, b: Point) -> Segment:
@@ -207,12 +210,22 @@ def wedge(apex: Point, length: Meters, spread_deg: Degrees, facing_deg: Degrees 
     return Polyline(points=(arms[0], (float(apex[0]), float(apex[1])), arms[1]))
 
 
+def _require_whole_count(value: object, name: str) -> None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise GeometryError(
+            f"{name} must be a whole number, got {bounded_repr(value)}",
+            hint=f"pass {name} as an int",
+            context={name: bounded_repr(value)},
+        )
+
+
 def regular_polygon(center: Point, radius: Meters, n: int, rotation_deg: Degrees = 0.0) -> Polyline:
     """Builds a closed regular polygon whose first vertex points upstage (+y) before rotation.
 
     >>> len(regular_polygon((0, 0), 1.0, 5).points)
     5
     """
+    _require_whole_count(n, "n")
     if n < MIN_POLYGON_SIDES or radius <= 0:
         raise GeometryError("polygon needs n >= 3 and radius > 0", hint="fix n or radius")
     angles = [math.radians(90.0 + 360.0 * k / n) for k in range(n)]
@@ -228,6 +241,7 @@ def star(
     >>> len(star((0, 0), 2.0, 1.0, 5).points)
     10
     """
+    _require_whole_count(n, "n")
     if n < MIN_STAR_POINTS or not 0 < r_inner < r_outer:
         raise GeometryError("star needs n >= 2 and 0 < r_inner < r_outer", hint="fix the radii")
     local = []
@@ -279,7 +293,19 @@ def svg_outline(
     2
     """
     subpaths = _svg_subpaths(svg)
+    if not subpaths:
+        raise GeometryError(
+            "the SVG holds no path data",
+            hint="pass a `d` string or SVG text with at least one M command",
+            context={"svg": bounded_repr(svg)},
+        )
     if path_index is not None:
+        if not 0 <= path_index < len(subpaths):
+            raise GeometryError(
+                f"path_index {path_index} is out of range for {len(subpaths)} subpaths",
+                hint=f"use 0..{len(subpaths) - 1}, or None for every subpath",
+                context={"path_index": path_index, "subpaths": len(subpaths)},
+            )
         subpaths = [subpaths[path_index]]
     raw = [SvgCurve(d=s.to_d(), closed=s.closed) for s in subpaths]
     pts = np.vstack([curve.to_polyline(SVG_FIT_TOL) for curve in raw])
@@ -351,7 +377,7 @@ def offset(curve: Curve, distance: Meters, side: str = "left") -> Curve:
     >>> offset(line((0, 0), (1, 0)), 1.0).point_at(0.0).tolist()
     [0.0, 1.0]
     """
-    signed = distance if side == "left" else -distance
+    signed = distance * pick("offset side", side, OFFSET_SIDES)
     if isinstance(curve, Segment):
         normal = curve.normal_at(0.0) * signed
         a, b = np.asarray(curve.a) + normal, np.asarray(curve.b) + normal
@@ -370,7 +396,14 @@ def offset(curve: Curve, distance: Meters, side: str = "left") -> Curve:
 
 
 def _offset_polyline(curve: Curve, signed: Meters) -> Polyline:
-    geometry = shapely.LineString(curve.to_polyline(OFFSET_TOL)).offset_curve(signed)
+    try:
+        geometry = shapely.LineString(curve.to_polyline(OFFSET_TOL)).offset_curve(signed)
+    except (GEOSException, ValueError) as exc:
+        raise GeometryError(
+            "offset could not be computed for this curve",
+            hint="use a finite offset distance and a curve with finite points",
+            context={"distance": signed},
+        ) from exc
     if geometry.is_empty or not isinstance(geometry, shapely.LineString):
         raise GeometryError("offset collapses the curve", hint="use a smaller offset distance")
     coords = [(float(x), float(y)) for x, y in geometry.coords]
