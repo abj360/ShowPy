@@ -339,6 +339,7 @@
         },
         "strength": {
           "default": 2.0,
+          "minimum": 1.0,
           "title": "Strength",
           "type": "number"
         }

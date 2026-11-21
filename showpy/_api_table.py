@@ -90,6 +90,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("MAX_COORD_M", "showpy.core.caps", "MAX_COORD_M"),
     ("MAX_COUNTS", "showpy.core.caps", "MAX_COUNTS"),
     ("MAX_DEPTH", "showpy.core.caps", "MAX_DEPTH"),
+    ("MAX_EASING_STEPS", "showpy.choreo.path_models", "MAX_EASING_STEPS"),
     ("MAX_GRID_CELLS", "showpy.core.caps", "MAX_GRID_CELLS"),
     ("MAX_IMAGE_PIXELS", "showpy.core.caps", "MAX_IMAGE_PIXELS"),
     ("MAX_LAYOUT_CHARS", "showpy.geo.text_layout", "MAX_LAYOUT_CHARS"),

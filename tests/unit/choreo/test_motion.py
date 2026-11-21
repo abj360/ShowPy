@@ -35,7 +35,6 @@ from showpy.choreo.path_models import Easing, EasingKind, TurnDirection
 from showpy.core.errors import PathError, ShowPyError, UnknownRefError
 from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
-from tests.helpers import defect
 
 KINDS: list[EasingKind] = [
     "linear",
@@ -160,14 +159,12 @@ def test_regression_infinite_steps_strength_raises_showpy_error() -> None:
         ease(Easing(kind="steps", strength=float("inf")), SHARES)
 
 
-@defect("UP-9.2-14")
 def test_regression_easing_strength_below_one_is_not_clamped_silently() -> None:
     """Rejects a strength below 1 instead of clamping it to 1 (audit 9.2)."""
     with pytest.raises(ShowPyError):
         ease(Easing(kind="ease_in", strength=0.5), SHARES)
 
 
-@defect("UP-9.2-15")
 def test_regression_steps_strength_has_a_cap() -> None:
     """Rejects a 10,000-step easing instead of building 9,999 edges (audit 9.2)."""
     with pytest.raises(ShowPyError):

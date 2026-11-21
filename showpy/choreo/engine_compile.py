@@ -313,7 +313,7 @@ def _local_counts(plan: MotionPlan, eased: FloatArray) -> FloatArray:
 def _easing_edges(easing: Easing) -> list[float]:
     edges = easing_breaks(easing)
     if easing.kind == "steps":
-        n = max(round(max(easing.strength, 1.0)), 1)
+        n = round(easing.strength)
         edges += [(i + SMOOTHSTEP_INFLECTION) / n for i in range(n)]
     return edges
 
@@ -385,7 +385,7 @@ def easing_chord_error(easing: Easing, u0: float, u1: float) -> float:
     >>> easing_chord_error(Easing(kind="ease_in", strength=2.0), 0.0, 1.0)
     0.25
     """
-    k = max(easing.strength, 1.0)
+    k = easing.strength
     mid = (u0 + u1) / 2
     if easing.kind == "ease_in":
         return _power_chord_error(k, u0, u1)
@@ -396,7 +396,7 @@ def easing_chord_error(easing: Easing, u0: float, u1: float) -> float:
     if easing.kind == "ease_in_out":
         return _power_chord_error(k, 2.0 - 2.0 * u1, 2.0 - 2.0 * u0) / 2
     if easing.kind == "steps":
-        n = max(round(k), 1)
+        n = round(k)
         step = min(math.floor(mid * n), n - 1)
         return _smoothstep_chord_error(u0 * n - step, u1 * n - step) / n
     return 0.0

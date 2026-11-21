@@ -557,6 +557,9 @@
   "MAX_DEPTH": {
     "constant": "64"
   },
+  "MAX_EASING_STEPS": {
+    "constant": "200"
+  },
   "MAX_GRID_CELLS": {
     "constant": "4000000"
   },

@@ -199,6 +199,7 @@ if TYPE_CHECKING:
         speeds,
     )
     from showpy.choreo.path_models import (
+        MAX_EASING_STEPS,
         Easing,
         FacingMode,
         FacingOverride,
@@ -866,6 +867,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "MAX_COORD_M": ("showpy.core.caps", "MAX_COORD_M"),
     "MAX_COUNTS": ("showpy.core.caps", "MAX_COUNTS"),
     "MAX_DEPTH": ("showpy.core.caps", "MAX_DEPTH"),
+    "MAX_EASING_STEPS": ("showpy.choreo.path_models", "MAX_EASING_STEPS"),
     "MAX_GRID_CELLS": ("showpy.core.caps", "MAX_GRID_CELLS"),
     "MAX_IMAGE_PIXELS": ("showpy.core.caps", "MAX_IMAGE_PIXELS"),
     "MAX_LAYOUT_CHARS": ("showpy.geo.text_layout", "MAX_LAYOUT_CHARS"),
@@ -1383,6 +1385,7 @@ __all__ = [
     "MAX_COORD_M",
     "MAX_COUNTS",
     "MAX_DEPTH",
+    "MAX_EASING_STEPS",
     "MAX_GRID_CELLS",
     "MAX_IMAGE_PIXELS",
     "MAX_LAYOUT_CHARS",

@@ -73,7 +73,7 @@ def ease(easing: Easing, u: FloatArray) -> FloatArray:
     [0.25]
     """
     u = np.clip(np.asarray(u, dtype=float), 0.0, 1.0)
-    k = max(easing.strength, 1.0)
+    k = easing.strength
     kind = easing.kind
     if kind == "linear":
         return u
@@ -90,7 +90,7 @@ def ease(easing: Easing, u: FloatArray) -> FloatArray:
     if kind == "burst_then_settle":
         return np.clip(u * k, 0.0, 1.0)
     if kind == "steps":
-        return _steps(u, max(round(k), 1))
+        return _steps(u, round(k))
     times, shares = zip(*easing.points, strict=True)
     custom: FloatArray = np.interp(u, times, shares)
     return custom
@@ -104,10 +104,10 @@ def easing_breaks(easing: Easing) -> list[float]:
     >>> easing_breaks(Easing(kind="steps", strength=2.0))
     [0.5]
     """
-    k = max(easing.strength, 1.0)
+    k = easing.strength
     breaks: list[float] = []
     if easing.kind == "steps":
-        n = max(round(k), 1)
+        n = round(k)
         breaks = [i / n for i in range(1, n)]
     elif easing.kind == "hold_then_burst":
         breaks = [1.0 - 1.0 / k]

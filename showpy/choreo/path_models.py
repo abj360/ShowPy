@@ -3,6 +3,8 @@ path_models.py --- path data classes: path rows, routes, easing, facing override
 
 Contains:
     DEFAULT_EASING_STRENGTH: sets the exponent or step count an easing starts with
+    MIN_EASING_STRENGTH: sets the smallest exponent, divisor or step count an easing takes
+    MAX_EASING_STEPS: bounds the step count of a `steps` easing
     EasingKind: names the easing families
     PathStyle: names the built-in path styles
     FacingMode: names how a spot faces while it moves
@@ -18,9 +20,9 @@ Contains:
 
 import itertools
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from showpy.core.errors import PathError, SchemaError
 from showpy.core.ids import RouteId, SpotId, TransitionId
@@ -28,6 +30,10 @@ from showpy.core.selection import SelectorField
 from showpy.core.types import Count, Degrees, FrozenModel, Meters, Point
 
 DEFAULT_EASING_STRENGTH = 2.0
+MIN_EASING_STRENGTH = 1.0
+# Ten times the longest transition in the examples and golden shows (16 counts, one step per
+# count), rounded up.
+MAX_EASING_STEPS = 200
 EasingKind = Literal[
     "linear", "ease_in", "ease_out", "ease_in_out", "hold_then_burst", "burst_then_settle",
     "steps", "custom",
@@ -117,8 +123,18 @@ class Easing(FrozenModel):
     """
 
     kind: EasingKind = "linear"
-    strength: float = DEFAULT_EASING_STRENGTH
+    strength: Annotated[float, Field(ge=MIN_EASING_STRENGTH)] = DEFAULT_EASING_STRENGTH
     points: tuple[tuple[float, float], ...] = ()
+
+    @model_validator(mode="after")
+    def _capped_steps(self) -> "Easing":
+        if self.kind == "steps" and round(self.strength) > MAX_EASING_STEPS:
+            raise SchemaError(
+                f"a steps easing takes at most {MAX_EASING_STEPS} steps, not {self.strength}",
+                hint=f"use a strength from {MIN_EASING_STRENGTH:g} to {MAX_EASING_STEPS}",
+                context={"strength": self.strength, "cap": MAX_EASING_STEPS},
+            )
+        return self
 
     @model_validator(mode="after")
     def _valid_custom(self) -> "Easing":
