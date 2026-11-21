@@ -146,6 +146,22 @@
       "title": "AudioTrack",
       "type": "object"
     },
+    "BuiltInMotionParams": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WeaveParams"
+        },
+        {
+          "$ref": "#/$defs/ZigzagParams"
+        },
+        {
+          "$ref": "#/$defs/FigureEightParams"
+        },
+        {
+          "$ref": "#/$defs/SpiralParams"
+        }
+      ]
+    },
     "Cast": {
       "additionalProperties": false,
       "description": "Holds every group and spot in the show.\n\nAttributes:\n    groups: Group key to group.\n    spots: Every spot, in creation order.\n    selections: Named selections of spot IDs, deduplicated in first-seen order.\n    label_scheme: Labeling rules.",
@@ -447,6 +463,21 @@
       "title": "FacingSpec",
       "type": "object"
     },
+    "FigureEightParams": {
+      "additionalProperties": false,
+      "description": "Holds the parameters of the built-in figure_eight motion.\n\n>>> FigureEightParams().amplitude\n1.0\n\nAttributes:\n    amplitude: Side offset in meters; negative mirrors the loops.",
+      "properties": {
+        "amplitude": {
+          "$ref": "#/$defs/Finite",
+          "default": 1.0
+        }
+      },
+      "title": "FigureEightParams",
+      "type": "object"
+    },
+    "Finite": {
+      "type": "number"
+    },
     "Form": {
       "additionalProperties": false,
       "description": "Holds a stored shape construction plus its ordered members.\n\nAttributes:\n    id: Form ID, unique across the show.\n    set: Set the form belongs to.\n    kind: Shape family.\n    geometry: JSON construction recipe the slots are generated from.\n    members: Spots in slot order.\n    spacing: How members are spaced on the shape.\n    facing: How members face.\n    locked: Designer lock; edits need force=True.\n    meta: Free designer metadata.",
@@ -701,6 +732,43 @@
       "title": "Hold",
       "type": "object"
     },
+    "JsonObject": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "type": "object"
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "LabelScheme": {
       "additionalProperties": false,
       "description": "Holds labeling rules; a group missing from `prefixes` uses its own label_prefix.\n\nAttributes:\n    prefixes: Group key to label prefix overrides.\n    start: First number in each group.\n    pad: Zero-pad numbers to this width.",
@@ -900,7 +968,7 @@
     },
     "PathRow": {
       "additionalProperties": false,
-      "description": "Holds one spot's instructions for one transition; times are local counts.\n\nAttributes:\n    entity: Spot ID.\n    style: Path style.\n    start: Local count the move starts.\n    end: Local count the move ends; None means the end of the transition.\n    waypoints: Points passed on the way, for CURVE and POLYLINE.\n    route: Route followed, for FOLLOW.\n    pivot: Rotation center, for ROTATE.\n    sweep_deg: Signed rotation, for ROTATE; positive is counter-clockwise.\n    facing_mode: How the spot faces during the move.\n    facing_value: Degrees, point or spot ID, depending on the facing mode.\n    turn_counts: Counts spent turning into and out of the move's facing.\n    turn_direction: Which way turns go.\n    pace: Step pace multiplier for step-size reporting; positions ignore it.\n    locked: Designer lock.\n    note: Free text.\n    motion_fn: Registered motion function, for CUSTOM.\n    motion_params: Parameters for the motion function.\n    easing: How progress maps to time across the window.",
+      "description": "Holds one spot's instructions for one transition; times are local counts.\n\nAttributes:\n    entity: Spot ID.\n    style: Path style.\n    start: Local count the move starts.\n    end: Local count the move ends; None means the end of the transition.\n    waypoints: Points passed on the way, for CURVE and POLYLINE.\n    route: Route followed, for FOLLOW.\n    pivot: Rotation center, for ROTATE.\n    sweep_deg: Signed rotation, for ROTATE; positive is counter-clockwise.\n    facing_mode: How the spot faces during the move.\n    facing_value: Degrees, point or spot ID, depending on the facing mode.\n    turn_counts: Counts spent turning into and out of the move's facing.\n    turn_direction: Which way turns go.\n    pace: Step pace multiplier for step-size reporting; positions ignore it.\n    locked: Designer lock.\n    note: Free text.\n    motion_fn: Registered motion function, for CUSTOM.\n    motion_params: The built-in motion's typed parameters, or a read-only JSON object for a\n        registered custom motion.\n    easing: How progress maps to time across the window.",
       "properties": {
         "easing": {
           "$ref": "#/$defs/Easing",
@@ -966,10 +1034,15 @@
           "title": "Motion Fn"
         },
         "motion_params": {
-          "additionalProperties": true,
-          "default": {},
-          "title": "Motion Params",
-          "type": "object"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JsonObject"
+            },
+            {
+              "$ref": "#/$defs/BuiltInMotionParams"
+            }
+          ],
+          "title": "Motion Params"
         },
         "note": {
           "anyOf": [
@@ -1729,6 +1802,26 @@
       "title": "SpacingSpec",
       "type": "object"
     },
+    "SpiralParams": {
+      "additionalProperties": false,
+      "description": "Holds the parameters of the built-in spiral motion: half a turn plus whole extra turns.\n\n>>> SpiralParams(turns=2).clockwise\nFalse\n\nAttributes:\n    turns: Extra full turns around the midpoint of the move.\n    clockwise: Turns clockwise instead of counter-clockwise.",
+      "properties": {
+        "clockwise": {
+          "default": false,
+          "title": "Clockwise",
+          "type": "boolean"
+        },
+        "turns": {
+          "default": 0,
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Turns",
+          "type": "integer"
+        }
+      },
+      "title": "SpiralParams",
+      "type": "object"
+    },
     "Spot": {
       "additionalProperties": false,
       "description": "Describes one dot that persists through the whole show.\n\nAttributes:\n    id: Label shown on the sheet, stable all show.\n    group: Key of the owning group.\n    symbol: Sheet glyph; None inherits the group's.\n    color: Hex color; None inherits the group's.\n    tags: Free tags such as `soloist`, deduplicated in first-seen order; a set is sorted.\n    active: False excludes the spot from forms and checks.\n    shape: Footprint on the sheet and for collisions.\n    claimable: Who may claim the spot once the show is published.",
@@ -2009,6 +2102,11 @@
       "title": "TurnDirection",
       "type": "string"
     },
+    "WaveCycles": {
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "number"
+    },
     "Waypoint": {
       "additionalProperties": false,
       "description": "Holds a point a path passes through.\n\nAttributes:\n    x: Meters.\n    y: Meters.\n    at: Local count to pass the point; None keeps constant speed.",
@@ -2037,6 +2135,38 @@
         "y"
       ],
       "title": "Waypoint",
+      "type": "object"
+    },
+    "WeaveParams": {
+      "additionalProperties": false,
+      "description": "Holds the parameters of the built-in weave motion: a sinusoidal side-to-side offset.\n\n>>> WeaveParams(cycles=1.5).amplitude\n1.0\n\nAttributes:\n    amplitude: Side offset in meters; negative starts to the other side.\n    cycles: Side-to-side cycles, a positive multiple of 0.5.",
+      "properties": {
+        "amplitude": {
+          "$ref": "#/$defs/Finite",
+          "default": 1.0
+        },
+        "cycles": {
+          "$ref": "#/$defs/WaveCycles",
+          "default": 2.0
+        }
+      },
+      "title": "WeaveParams",
+      "type": "object"
+    },
+    "ZigzagParams": {
+      "additionalProperties": false,
+      "description": "Holds the parameters of the built-in zigzag motion: a triangle-wave side offset.\n\n>>> ZigzagParams(cycles=1).cycles\n1.0\n\nAttributes:\n    amplitude: Side offset in meters; negative starts to the other side.\n    cycles: Side-to-side cycles, a positive multiple of 0.5.",
+      "properties": {
+        "amplitude": {
+          "$ref": "#/$defs/Finite",
+          "default": 1.0
+        },
+        "cycles": {
+          "$ref": "#/$defs/WaveCycles",
+          "default": 2.0
+        }
+      },
+      "title": "ZigzagParams",
       "type": "object"
     },
     "Zone": {

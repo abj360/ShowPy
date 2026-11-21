@@ -64,6 +64,9 @@
       "min": "Point3"
     }
   },
+  "BuiltInMotionParams": {
+    "constant": "BuiltInMotionParams"
+  },
   "CURRENT_VERSION": {
     "constant": "2"
   },
@@ -307,6 +310,7 @@
       "RAMP_LENGTH": "'RAMP_LENGTH'",
       "READ_ONLY": "'READ_ONLY'",
       "REFLECTION": "'REFLECTION'",
+      "RESERVED_MOTION": "'RESERVED_MOTION'",
       "SCHEMA": "'SCHEMA'",
       "SEGMENT_BOUND": "'SEGMENT_BOUND'",
       "SPACING": "'SPACING'",
@@ -368,6 +372,11 @@
     "model": {
       "mode": "Literal['fixed', 'audience', 'toward_point', 'along', 'normal', 'outward']",
       "value": "Degrees | Point | None"
+    }
+  },
+  "FigureEightParams": {
+    "model": {
+      "amplitude": "Finite"
     }
   },
   "FileRepository": "(root: str | pathlib.Path)",
@@ -572,11 +581,17 @@
   "MAX_LAYOUT_EXTENT_M": {
     "constant": "1000000.0"
   },
+  "MAX_MOTION_CYCLES": {
+    "constant": "100"
+  },
   "MAX_POINTS": {
     "constant": "1000000"
   },
   "MAX_RANGE": {
     "constant": "10000"
+  },
+  "MAX_SPIRAL_TURNS": {
+    "constant": "20"
   },
   "MAX_TABLE": {
     "constant": "1000000"
@@ -742,7 +757,7 @@
       "facing_value": "Degrees | Point | showpy.core.ids.SpotId | None",
       "locked": "bool",
       "motion_fn": "str | None",
-      "motion_params": "dict[str, Any]",
+      "motion_params": "JsonObject | BuiltInMotionParams",
       "note": "str | None",
       "pace": "float",
       "pivot": "Point | None",
@@ -1089,6 +1104,12 @@
       "turns": "PositiveFinite"
     }
   },
+  "SpiralParams": {
+    "model": {
+      "clockwise": "bool",
+      "turns": "int"
+    }
+  },
   "SplineCurve": {
     "model": {
       "alpha": "float",
@@ -1257,8 +1278,20 @@
       "y": "Meters"
     }
   },
+  "WeaveParams": {
+    "model": {
+      "amplitude": "Finite",
+      "cycles": "WaveCycles"
+    }
+  },
   "Workspace": "(repo: showpy.show.storage.Repository, show_id: str, revision: str)",
   "ZeroLengthError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
+  "ZigzagParams": {
+    "model": {
+      "amplitude": "Finite",
+      "cycles": "WaveCycles"
+    }
+  },
   "Zone": {
     "model": {
       "active": "tuple[tuple[Count, Count], ...] | None",
@@ -1414,7 +1447,7 @@
   "face_normal": "(show: showpy.show.models.Show, set_id: str, form_id: str, *, outward: bool = True, force: bool = False) -> showpy.choreo.models.Set",
   "face_point": "(target: showpy.choreo.models.Set, sel: Sel, point: Point, *, force: bool = False) -> showpy.choreo.models.Set",
   "facing_vector": "(theta: Degrees) -> Point",
-  "figure_eight": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, Any]) -> Points",
+  "figure_eight": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, JsonValue]) -> Points",
   "fill": "(area: Area, interval: Meters, pattern: FillPattern = 'grid', angle_deg: Degrees = 0.0, anchor: Point | None = None, n: int | None = None, margin: Meters = 0.0) -> Points",
   "fill_form": "(form_id: str, members: collections.abc.Sequence[str], outline: showpy.core.types.Region | shapely.geometry.polygon.Polygon | showpy.geo.curve_base.Curve | object, interval: Meters, pattern: FillPattern = 'grid', angle_deg: Degrees = 0.0, facing: showpy.choreo.form_models.FacingSpec | None = None, *, set_id: str = '', n: int | None = None) -> showpy.choreo.form_models.Form",
   "fill_spots": "(show: 'Show', region: Area | showpy.core.types.Region, group: str, set_id: str, interval: Meters | None = None, n: int | None = None, *, force: bool = False) -> 'Show'",
@@ -1616,7 +1649,7 @@
   "speed": "(show: showpy.show.models.Show, entity: str, tid: tuple[str, str], window: tuple[float, float] | None = None) -> showpy.geo.models.SpeedStats",
   "speeds": "(show: showpy.show.models.Show, tid: tuple[str, str]) -> 'pd.DataFrame'",
   "spiral": "(center: Point, r0: Meters, r1: Meters, turns: float, start_deg: Degrees = 0.0) -> showpy.geo.curves.SpiralCurve",
-  "spiral_motion": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, Any]) -> Points",
+  "spiral_motion": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, JsonValue]) -> Points",
   "spiral_points": "(params: collections.abc.Mapping[str, Any], n: int) -> Points",
   "split": "(sel: showpy.core.selection.Selection | collections.abc.Sequence[str], k: int) -> list[showpy.core.selection.Selection]",
   "split_form": "(form: showpy.choreo.form_models.Form, at: int | str, ids: tuple[str, str] | None = None, *, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ...) -> tuple[showpy.choreo.form_models.Form, showpy.choreo.form_models.Form]",
@@ -1674,13 +1707,13 @@
   "verify_join_token": "(pub: showpy.export.models.Publication, token: str) -> bool",
   "video_canvas": "(show: showpy.show.models.Show, px_per_m: float = 10.0) -> showpy.sheet.render.SheetCanvas",
   "walkable": "(sheet: showpy.sheet.models.Sheet, p: Point) -> bool",
-  "weave": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, Any]) -> Points",
+  "weave": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, JsonValue]) -> Points",
   "wedge": "(apex: Point, length: Meters, spread_deg: Degrees, facing_deg: Degrees = 0.0) -> showpy.geo.curves.Polyline",
   "wedge_form": "(form_id: str, members: collections.abc.Sequence[str], apex: Point, length: Meters, spread_deg: Degrees, direction_deg: Degrees = 0.0, spacing: showpy.choreo.form_models.SpacingSpec | None = None, facing: showpy.choreo.form_models.FacingSpec | None = None, *, set_id: str = '', n: int | None = None) -> showpy.choreo.form_models.Form",
   "where": "(set_: showpy.choreo.models.Set, predicate: collections.abc.Callable[[showpy.choreo.models.Placement], bool]) -> showpy.core.selection.Selection",
   "who_is_on": "(pub: showpy.export.models.Publication, spot: str) -> showpy.export.models.Performer | None",
   "window": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, start: float, end: float, *, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",
   "with_set": "(show: showpy.show.models.Show, new: showpy.choreo.models.Set) -> showpy.show.models.Show",
-  "zigzag": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, Any]) -> Points",
+  "zigzag": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, JsonValue]) -> Points",
   "zones_at": "(show: 'Show', p: Point, t: Count | None = None) -> list[showpy.sheet.models.Zone]"
 }

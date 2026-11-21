@@ -117,6 +117,8 @@ class ErrorCode(StrEnum):
     """A write targets a derived workspace file, which is read-only."""
     REFLECTION = "REFLECTION"
     """The landmarks of a similarity fit are mirrored between the two sheets."""
+    RESERVED_MOTION = "RESERVED_MOTION"
+    """A motion registry would bind a built-in motion name to another function."""
     SCHEMA = "SCHEMA"
     """Data fails its schema or text format."""
     SEGMENT_BOUND = "SEGMENT_BOUND"

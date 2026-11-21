@@ -20,10 +20,12 @@ Contains:
         to within 1e-6 of a 20,001-point scan on pieces between easing edges
     test_curvature_bound_is_known_only_for_exact_arc_length_curves: bounds lines, arcs, circles,
         trims and composites of them, and leaves table-based curves opaque
+    test_custom_motion_receives_plain_json: passes a custom motion its stored parameters as
+        plain dicts and lists, never read-only containers
 """
 
 import itertools
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, cast
 
 import numpy as np
@@ -37,6 +39,7 @@ from showpy.choreo.paths import add_waypoint, set_style
 from showpy.choreo.routes import follow, make_route
 from showpy.core.errors import ContinuityError, PathError, ShowPyError
 from showpy.core.ids import SpotId
+from showpy.core.json_types import JsonValue
 from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
 from showpy.geo.curves import (
@@ -59,6 +62,7 @@ SWEEP_FULL_TURN = 360.0
 NAN_SAMPLE_INDEX = 10
 SCAN_SAMPLES = 20_001
 CHORD_ERROR_TOL = 1e-6
+CUSTOM_PARAMS: dict[str, JsonValue] = {"bend": [1, {"deep": True}], "label": "x"}
 PIECE_SHARES = ((0.0, 1.0), (0.0, 0.3), (0.2, 0.9), (0.6, 0.61), (0.97, 1.0))
 CHORD_EASINGS = [
     Easing(kind="linear"),
@@ -226,3 +230,26 @@ def test_curvature_bound_is_known_only_for_exact_arc_length_curves() -> None:
     assert curvature_bound(CompositeCurve(parts=(arc, line))) == 0.25
     assert curvature_bound(spline) is None
     assert curvature_bound(CompositeCurve(parts=(line, spline))) is None
+
+
+def test_custom_motion_receives_plain_json() -> None:
+    """Passes a custom motion its stored parameters as plain dicts and lists, never frozen ones."""
+    seen: list[Mapping[str, JsonValue]] = []
+
+    def recording(
+        u: FloatArray, start: Point, end: Point, params: Mapping[str, JsonValue]
+    ) -> Points:
+        seen.append(params)
+        result: Points = np.linspace(start, end, len(u))
+        return result
+
+    registry = DEFAULT_MOTIONS.with_motion("probe", recording)
+    row = PathRow.model_validate(
+        {"entity": "T1", "style": "custom", "motion_fn": "probe", "motion_params": CUSTOM_PARAMS}
+    )
+    PathEngine(with_rows({"T1": row}), motions=registry).compile(TID)
+    assert seen == [CUSTOM_PARAMS]
+    assert type(seen[0]) is dict
+    bend = seen[0]["bend"]
+    assert isinstance(bend, list)
+    assert type(bend[1]) is dict

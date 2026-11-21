@@ -12,9 +12,15 @@ Contains:
         instead of clamping it to 1
     test_regression_steps_strength_has_a_cap: rejects a 10,000-step easing instead of building 9,999
         edges
+    test_motion_registry_is_read_only: exposes a read-only copy of its motions and extends into a
+        new registry
+    test_regression_builtin_motion_names_are_reserved: refuses to rebind weave, zigzag,
+        figure_eight or spiral through the constructor, with_motion or register_motion
+    test_regression_builtin_motions_validate_their_params: refuses unknown keys and bad values in
+        a built-in motion's own parameters
 """
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, MutableMapping
 from typing import Any
 
 import numpy as np
@@ -25,14 +31,17 @@ from hypothesis import strategies as st
 from showpy.choreo.motion import (
     DEFAULT_MOTIONS,
     FloatArray,
+    MotionRegistry,
     ease,
     easing_breaks,
     motions,
     register_motion,
     turn,
 )
-from showpy.choreo.path_models import Easing, EasingKind, TurnDirection
-from showpy.core.errors import PathError, ShowPyError, UnknownRefError
+from showpy.choreo.path_models import BUILT_IN_MOTION_PARAMS, Easing, EasingKind, TurnDirection
+from showpy.core.error_codes import ErrorCode
+from showpy.core.errors import PathError, SchemaError, ShowPyError, UnknownRefError
+from showpy.core.readonly import ReadOnlyMap
 from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
 
@@ -45,6 +54,8 @@ KINDS: list[EasingKind] = [
     "burst_then_settle",
     "steps",
 ]
+BUILT_IN_NAMES = ("weave", "zigzag", "figure_eight", "spiral")
+BAD_BUILT_IN_PARAMS = [{"wobble": 1.0}, {"cycles": 0.3}, {"cycles": 0}]
 
 
 @pytest.mark.parametrize("kind", KINDS)
@@ -169,3 +180,56 @@ def test_regression_steps_strength_has_a_cap() -> None:
     """Rejects a 10,000-step easing instead of building 9,999 edges (audit 9.2)."""
     with pytest.raises(ShowPyError):
         easing_breaks(Easing(kind="steps", strength=OVERSIZED_STEP_COUNT))
+
+
+def _straight(u: FloatArray, start: Point, end: Point, params: Mapping[str, Any]) -> Points:
+    """Moves in a straight line."""
+    a, b = np.asarray(start), np.asarray(end)
+    result: Points = a + np.outer(u, b - a)
+    return result
+
+
+def test_motion_registry_is_read_only() -> None:
+    """Exposes a read-only copy of its motions and extends into a new registry."""
+    source = {"probe": _straight}
+    registry = MotionRegistry(source)
+    source["other"] = _straight
+    assert registry.names() == ["probe"]
+    assert isinstance(registry.fns, ReadOnlyMap)
+    assert not isinstance(registry.fns, MutableMapping)
+    extended = DEFAULT_MOTIONS.with_motion("probe", _straight)
+    assert extended is not DEFAULT_MOTIONS
+    assert "probe" in extended.names()
+    assert "probe" not in DEFAULT_MOTIONS.names()
+    assert DEFAULT_MOTIONS.names() == sorted(BUILT_IN_MOTION_PARAMS)
+
+
+@pytest.mark.parametrize("name", BUILT_IN_NAMES)
+@pytest.mark.parametrize(
+    "rebind",
+    [
+        lambda name: MotionRegistry({name: _straight}),
+        lambda name: DEFAULT_MOTIONS.with_motion(name, _straight),
+        lambda name: register_motion(DEFAULT_MOTIONS, name, _straight),
+    ],
+)
+def test_regression_builtin_motion_names_are_reserved(
+    name: str, rebind: Callable[[str], MotionRegistry]
+) -> None:
+    """Refuses to rebind a built-in motion name, so its stored parameters keep their meaning."""
+    with pytest.raises(PathError) as info:
+        rebind(name)
+    assert info.value.code == ErrorCode.RESERVED_MOTION
+    assert DEFAULT_MOTIONS.with_motion(name, DEFAULT_MOTIONS.get(name)).get(name) is (
+        DEFAULT_MOTIONS.get(name)
+    )
+
+
+@pytest.mark.parametrize("name", ["weave", "zigzag"])
+@pytest.mark.parametrize("params", BAD_BUILT_IN_PARAMS)
+def test_regression_builtin_motions_validate_their_params(
+    name: str, params: dict[str, float]
+) -> None:
+    """Refuses unknown keys and bad values in a built-in motion's own parameters."""
+    with pytest.raises(SchemaError):
+        DEFAULT_MOTIONS.get(name)(np.array([0.0, 1.0]), (0.0, 0.0), (4.0, 0.0), params)

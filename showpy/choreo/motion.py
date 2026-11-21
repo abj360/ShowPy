@@ -3,7 +3,9 @@ motion.py --- easing curves, facing turns and the immutable registry of custom m
 
 Every easing is a monotone map of [0, 1] onto itself with e(0) = 0 and e(1) = 1, so an eased
 move still starts and ends on its placements. Custom motions must return `start` at u = 0 and
-`end` at u = 1; registration checks this on a probe move.
+`end` at u = 1; registration checks this on a probe move and compiling checks every output.
+The four built-in names are reserved: a registry never binds them to another function, so their
+stored typed parameters always mean the same motion.
 
 Contains:
     ease(): maps time shares to distance shares through an Easing
@@ -12,8 +14,10 @@ Contains:
     MotionFn: describes a pure custom motion function
     MotionInfo: describes one registered motion for listings
     MotionRegistry: holds named motion functions immutably
+    MotionRegistry.fns: returns the read-only map of names to motion functions
     MotionRegistry.get(): returns a motion by name
     MotionRegistry.names(): lists registered names
+    MotionRegistry.with_motion(): returns a copy that also holds one motion
     register_motion(): returns a registry extended with one validated motion
     motions(): lists registered motions with their summaries
     weave(): moves with a sinusoidal side-to-side offset
@@ -25,13 +29,23 @@ Contains:
 
 import math
 from collections.abc import Mapping
-from typing import Any, Protocol
+from typing import Protocol
 
 import numpy as np
 import numpy.typing as npt
 
-from showpy.choreo.path_models import Easing, TurnDirection
+from showpy.choreo.path_models import (
+    Easing,
+    FigureEightParams,
+    SpiralParams,
+    TurnDirection,
+    WeaveParams,
+    ZigzagParams,
+)
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import PathError, UnknownRefError
+from showpy.core.json_types import JsonValue
+from showpy.core.readonly import ReadOnlyMap
 from showpy.core.types import Degrees, FrozenModel, Point, Points
 from showpy.core.units import angle_diff, normalize_angle
 from showpy.core.util import close_matches
@@ -42,17 +56,16 @@ PROBE_START: Point = (0.0, 0.0)
 PROBE_END: Point = (4.0, 3.0)
 PROBE_SAMPLES = 9
 ENDPOINT_TOL = 1e-6
-DEFAULT_AMPLITUDE_M = 1.0
-DEFAULT_CYCLES = 2.0
-DEFAULT_TURNS = 0
 
 
 class MotionFn(Protocol):
-    """Describes a pure custom motion: positions at progress u from start to end."""
+    """Describes a pure custom motion: positions at progress u from start to end.
 
-    # Any: motion parameters are JSON values defined by each motion function.
+    `params` is plain JSON: the row's stored parameters, with lists and dicts for containers.
+    """
+
     def __call__(
-        self, u: FloatArray, start: Point, end: Point, params: Mapping[str, Any]
+        self, u: FloatArray, start: Point, end: Point, params: Mapping[str, JsonValue]
     ) -> Points:
         """Returns positions (len(u), 2) at progress shares u."""
         ...
@@ -153,85 +166,73 @@ def _frame(start: Point, end: Point, u: FloatArray) -> tuple[Points, FloatArray]
     return base, side
 
 
-# Any: motion parameters are JSON values defined by each motion function.
-def weave(u: FloatArray, start: Point, end: Point, params: Mapping[str, Any]) -> Points:
+def weave(u: FloatArray, start: Point, end: Point, params: Mapping[str, JsonValue]) -> Points:
     """Moves with a sinusoidal side-to-side offset.
 
-    Params: `amplitude` meters (default 1), `cycles` (multiple of 0.5, default 2).
+    Params, validated as WeaveParams: `amplitude` meters (default 1), `cycles` (positive
+    multiple of 0.5, default 2).
 
     >>> (weave(np.array([0.0, 1.0]), (0, 0), (4, 0), {}).round(9) + 0.0).tolist()
     [[0.0, 0.0], [4.0, 0.0]]
     """
+    typed = WeaveParams.model_validate(dict(params))
     base, side = _frame(start, end, u)
-    amplitude = float(params.get("amplitude", DEFAULT_AMPLITUDE_M))
-    cycles = _half_integer(params.get("cycles", DEFAULT_CYCLES), "cycles")
-    return base + np.outer(amplitude * np.sin(2 * np.pi * cycles * u), side)
+    return base + np.outer(typed.amplitude * np.sin(2 * np.pi * typed.cycles * u), side)
 
 
-# Any: motion parameters are JSON values defined by each motion function.
-def zigzag(u: FloatArray, start: Point, end: Point, params: Mapping[str, Any]) -> Points:
+def zigzag(u: FloatArray, start: Point, end: Point, params: Mapping[str, JsonValue]) -> Points:
     """Moves with a triangle-wave side offset (sharp corners).
 
-    Params: `amplitude` meters (default 1), `cycles` (multiple of 0.5, default 2).
+    Params, validated as ZigzagParams: `amplitude` meters (default 1), `cycles` (positive
+    multiple of 0.5, default 2).
 
     >>> zigzag(np.array([0.125]), (0, 0), (8, 0), {"cycles": 1}).round(9).tolist()
     [[1.0, 0.5]]
     """
+    typed = ZigzagParams.model_validate(dict(params))
     base, side = _frame(start, end, u)
-    amplitude = float(params.get("amplitude", DEFAULT_AMPLITUDE_M))
-    cycles = _half_integer(params.get("cycles", DEFAULT_CYCLES), "cycles")
-    phase = cycles * u
+    phase = typed.cycles * u
     triangle = 4 * np.abs(phase - np.floor(phase + 0.75) + 0.25) - 1
-    return base + np.outer(amplitude * triangle, side)
+    return base + np.outer(typed.amplitude * triangle, side)
 
 
-# Any: motion parameters are JSON values defined by each motion function.
-def figure_eight(u: FloatArray, start: Point, end: Point, params: Mapping[str, Any]) -> Points:
+def figure_eight(
+    u: FloatArray, start: Point, end: Point, params: Mapping[str, JsonValue]
+) -> Points:
     """Moves along a figure-eight offset from the straight line.
 
-    Params: `amplitude` meters of side offset (default 1).
+    Params, validated as FigureEightParams: `amplitude` meters of side offset (default 1).
 
     >>> (figure_eight(np.array([1.0]), (0, 0), (4, 0), {}).round(9) + 0.0).tolist()
     [[4.0, 0.0]]
     """
+    amplitude = FigureEightParams.model_validate(dict(params)).amplitude
     base, side = _frame(start, end, u)
     chord = np.asarray(end, dtype=float) - np.asarray(start, dtype=float)
-    amplitude = float(params.get("amplitude", DEFAULT_AMPLITUDE_M))
     lateral = amplitude * np.sin(2 * np.pi * u)
     along = amplitude * np.sin(4 * np.pi * u) / 2
     unit = chord / max(float(np.linalg.norm(chord)), ENDPOINT_TOL)
     return base + np.outer(lateral, side) + np.outer(along, unit)
 
 
-# Any: motion parameters are JSON values defined by each motion function.
-def spiral(u: FloatArray, start: Point, end: Point, params: Mapping[str, Any]) -> Points:
+def spiral(u: FloatArray, start: Point, end: Point, params: Mapping[str, JsonValue]) -> Points:
     """Circles the midpoint of the move: half a turn plus `turns` extra full turns.
 
-    Params: `turns` (whole number >= 0, default 0), `clockwise` (default False).
+    Params, validated as SpiralParams: `turns` (whole number >= 0, default 0), `clockwise`
+    (default False).
 
     >>> (spiral(np.array([0.5]), (-1, 0), (1, 0), {}).round(9) + 0.0).tolist()
     [[0.0, -1.0]]
     """
+    typed = SpiralParams.model_validate(dict(params))
     a, b = np.asarray(start, dtype=float), np.asarray(end, dtype=float)
     mid = (a + b) / 2
     radius = float(np.linalg.norm(a - mid))
-    turns = int(params.get("turns", DEFAULT_TURNS))
-    sign = -1.0 if params.get("clockwise", False) else 1.0
+    sign = -1.0 if typed.clockwise else 1.0
     theta0 = math.atan2(a[1] - mid[1], a[0] - mid[0])
-    theta = theta0 + sign * math.pi * (1 + 2 * turns) * u
+    theta = theta0 + sign * math.pi * (1 + 2 * typed.turns) * u
     result: Points = mid + radius * np.stack([np.cos(theta), np.sin(theta)], axis=1)
     return result
-
-
-def _half_integer(value: object, name: str) -> float:
-    number = float(value)  # type: ignore[arg-type]
-    if not math.isclose(2 * number, round(2 * number)):
-        raise PathError(
-            f"{name} must be a multiple of 0.5 so the move ends on target",
-            hint=f"use {name} like 1, 1.5 or 2",
-            context={name: number},
-        )
-    return number
 
 
 class MotionInfo(FrozenModel):
@@ -246,11 +247,35 @@ class MotionInfo(FrozenModel):
     summary: str
 
 
+def _require_unreserved(name: str, fn: MotionFn) -> None:
+    built_in = _BUILT_IN_MOTIONS.get(name)
+    if built_in is not None and fn is not built_in:
+        raise PathError(
+            f"motion name {name!r} belongs to a built-in motion",
+            hint=f"register the motion under another name; reserved: {sorted(_BUILT_IN_MOTIONS)}",
+            context={"motion": name},
+            code=ErrorCode.RESERVED_MOTION,
+        )
+
+
 class MotionRegistry:
-    """Holds named motion functions; registration returns a new registry."""
+    """Holds named motion functions; registration returns a new registry.
+
+    The constructor copies `fns` into a read-only map and refuses a built-in motion name bound
+    to any function but that built-in.
+    """
+
+    __slots__ = ("_fns",)
 
     def __init__(self, fns: Mapping[str, MotionFn]) -> None:
-        self._fns = dict(fns)
+        for name, fn in fns.items():
+            _require_unreserved(name, fn)
+        self._fns: ReadOnlyMap[str, MotionFn] = ReadOnlyMap(fns)
+
+    @property
+    def fns(self) -> ReadOnlyMap[str, MotionFn]:
+        """Returns the read-only map of names to motion functions."""
+        return self._fns
 
     def get(self, name: str) -> MotionFn:
         """Returns a motion by name, raising UnknownRefError with suggestions."""
@@ -268,16 +293,23 @@ class MotionRegistry:
         return sorted(self._fns)
 
     def with_motion(self, name: str, fn: MotionFn) -> "MotionRegistry":
-        """Returns a copy that also holds `fn` under `name`."""
+        """Returns a copy that also holds `fn` under `name`, unchecked; a built-in name is refused.
+
+        Prefer register_motion, which also probes the motion's endpoints.
+        """
         return MotionRegistry({**self._fns, name: fn})
 
 
 def register_motion(registry: MotionRegistry, name: str, fn: MotionFn) -> MotionRegistry:
     """Returns a registry extended with `fn`, after checking it starts and ends on target.
 
+    A built-in motion name (weave, zigzag, figure_eight, spiral) is refused with
+    RESERVED_MOTION.
+
     >>> "weave" in register_motion(DEFAULT_MOTIONS, "w2", weave).names()
     True
     """
+    _require_unreserved(name, fn)
     u = np.linspace(0.0, 1.0, PROBE_SAMPLES)
     pts = np.asarray(fn(u, PROBE_START, PROBE_END, {}), dtype=float)
     ends_ok = pts.shape == (PROBE_SAMPLES, 2) and np.allclose(
@@ -305,6 +337,7 @@ def motions(registry: MotionRegistry) -> list[MotionInfo]:
     return infos
 
 
-DEFAULT_MOTIONS = MotionRegistry(
+_BUILT_IN_MOTIONS: ReadOnlyMap[str, MotionFn] = ReadOnlyMap(
     {"weave": weave, "zigzag": zigzag, "figure_eight": figure_eight, "spiral": spiral}
 )
+DEFAULT_MOTIONS = MotionRegistry(_BUILT_IN_MOTIONS)

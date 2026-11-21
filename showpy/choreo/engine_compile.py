@@ -20,6 +20,7 @@ from showpy.choreo.models import Placement
 from showpy.choreo.motion import MotionRegistry, ease, easing_breaks
 from showpy.choreo.path_models import Easing, PathRow, PathStyle, Route, TransitionSpec
 from showpy.core.errors import ContinuityError, PathError
+from showpy.core.json_types import JsonValue
 from showpy.core.types import Point, Points
 from showpy.geo.curves import (
     AnyCurve,
@@ -131,6 +132,14 @@ def _follow_curve(row: PathRow, spec: TransitionSpec, a: Placement) -> AnyCurve:
     return curve
 
 
+def _plain_params(row: PathRow) -> dict[str, JsonValue]:
+    """Returns a row's motion parameters as plain JSON, as every motion function receives them."""
+    plain: dict[str, JsonValue] = row.model_dump(mode="json", include={"motion_params"})[
+        "motion_params"
+    ]
+    return plain
+
+
 def _custom_curve(
     row: PathRow, a: Placement, b: Placement, motions: MotionRegistry
 ) -> AnyCurve | None:
@@ -138,7 +147,7 @@ def _custom_curve(
         raise PathError(f"custom path of {row.entity} names no motion", hint="set motion_fn")
     fn = motions.get(row.motion_fn)
     u = np.linspace(0.0, 1.0, CUSTOM_SAMPLES)
-    pts = np.asarray(fn(u, a.point, b.point, row.motion_params), dtype=float)
+    pts = np.asarray(fn(u, a.point, b.point, _plain_params(row)), dtype=float)
     keep = np.concatenate([[True], np.linalg.norm(np.diff(pts, axis=0), axis=1) > CONTINUITY_TOL])
     vertices = tuple((float(x), float(y)) for x, y in pts[keep])
     if math.dist(vertices[0], a.point) > CONTINUITY_TOL:

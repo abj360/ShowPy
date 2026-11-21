@@ -5,6 +5,8 @@ Contains:
     DEFAULT_EASING_STRENGTH: sets the exponent or step count an easing starts with
     MIN_EASING_STRENGTH: sets the smallest exponent, divisor or step count an easing takes
     MAX_EASING_STEPS: bounds the step count of a `steps` easing
+    MAX_MOTION_CYCLES: bounds the side-to-side cycles of a weave or zigzag
+    MAX_SPIRAL_TURNS: bounds the extra full turns of a spiral
     EasingKind: names the easing families
     PathStyle: names the built-in path styles
     FacingMode: names how a spot faces while it moves
@@ -12,6 +14,12 @@ Contains:
     FacingOverride: forces a facing on spots over a global count range
     Waypoint: holds a point a path passes through, optionally at a local count
     Easing: maps progress through a move to progress in time
+    WeaveParams: holds the parameters of the built-in weave motion
+    ZigzagParams: holds the parameters of the built-in zigzag motion
+    FigureEightParams: holds the parameters of the built-in figure_eight motion
+    SpiralParams: holds the parameters of the built-in spiral motion
+    BuiltInMotionParams: names the parameter models of the four built-in motions
+    BUILT_IN_MOTION_PARAMS: maps each built-in motion name to its parameter model
     PathRow: holds one spot's instructions for one transition
     Route: holds a shared path for follow-the-leader
     TransitionSpec: holds every path instruction for one transition
@@ -19,21 +27,31 @@ Contains:
 """
 
 import itertools
+import math
+from collections.abc import Mapping
 from enum import StrEnum
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Final, Literal
 
-from pydantic import Field, model_validator
+from pydantic import AfterValidator, BaseModel, Field, model_validator
 
 from showpy.core.errors import PathError, SchemaError
 from showpy.core.ids import RouteId, SpotId, TransitionId
+from showpy.core.readonly import ReadOnlyMap
 from showpy.core.selection import SelectorField
-from showpy.core.types import Count, Degrees, FrozenModel, Meters, Point
+from showpy.core.types import Count, Degrees, Finite, FrozenModel, JsonObject, Meters, Point
 
 DEFAULT_EASING_STRENGTH = 2.0
 MIN_EASING_STRENGTH = 1.0
 # Ten times the longest transition in the examples and golden shows (16 counts, one step per
 # count), rounded up.
 MAX_EASING_STEPS = 200
+# Ten times the most cycles any example, golden show, doc or test uses (8), rounded up.
+MAX_MOTION_CYCLES = 100
+# Ten times the most extra spiral turns any example, golden show, doc or test uses (2).
+MAX_SPIRAL_TURNS = 20
+DEFAULT_AMPLITUDE_M = 1.0
+DEFAULT_CYCLES = 2.0
+HALF_CYCLE_REL_TOL = 1e-9
 EasingKind = Literal[
     "linear", "ease_in", "ease_out", "ease_in_out", "hold_then_burst", "burst_then_settle",
     "steps", "custom",
@@ -150,6 +168,112 @@ class Easing(FrozenModel):
         return self
 
 
+def _half_cycles(cycles: float) -> float:
+    if not math.isclose(2 * cycles, round(2 * cycles), rel_tol=HALF_CYCLE_REL_TOL):
+        raise SchemaError(
+            f"cycles must be a multiple of 0.5 so the move ends on target, not {cycles}",
+            hint=f"use cycles like 1, 1.5 or 2, up to {MAX_MOTION_CYCLES}",
+            context={"cycles": cycles},
+        )
+    return cycles
+
+
+type WaveCycles = Annotated[
+    float, Field(gt=0, le=MAX_MOTION_CYCLES, allow_inf_nan=False), AfterValidator(_half_cycles)
+]
+
+
+class WeaveParams(FrozenModel):
+    """Holds the parameters of the built-in weave motion: a sinusoidal side-to-side offset.
+
+    >>> WeaveParams(cycles=1.5).amplitude
+    1.0
+
+    Attributes:
+        amplitude: Side offset in meters; negative starts to the other side.
+        cycles: Side-to-side cycles, a positive multiple of 0.5.
+    """
+
+    amplitude: Finite = DEFAULT_AMPLITUDE_M
+    cycles: WaveCycles = DEFAULT_CYCLES
+
+
+class ZigzagParams(FrozenModel):
+    """Holds the parameters of the built-in zigzag motion: a triangle-wave side offset.
+
+    >>> ZigzagParams(cycles=1).cycles
+    1.0
+
+    Attributes:
+        amplitude: Side offset in meters; negative starts to the other side.
+        cycles: Side-to-side cycles, a positive multiple of 0.5.
+    """
+
+    amplitude: Finite = DEFAULT_AMPLITUDE_M
+    cycles: WaveCycles = DEFAULT_CYCLES
+
+
+class FigureEightParams(FrozenModel):
+    """Holds the parameters of the built-in figure_eight motion.
+
+    >>> FigureEightParams().amplitude
+    1.0
+
+    Attributes:
+        amplitude: Side offset in meters; negative mirrors the loops.
+    """
+
+    amplitude: Finite = DEFAULT_AMPLITUDE_M
+
+
+class SpiralParams(FrozenModel):
+    """Holds the parameters of the built-in spiral motion: half a turn plus whole extra turns.
+
+    >>> SpiralParams(turns=2).clockwise
+    False
+
+    Attributes:
+        turns: Extra full turns around the midpoint of the move.
+        clockwise: Turns clockwise instead of counter-clockwise.
+    """
+
+    turns: Annotated[int, Field(ge=0, le=MAX_SPIRAL_TURNS)] = 0
+    clockwise: bool = False
+
+
+type BuiltInMotionParams = WeaveParams | ZigzagParams | FigureEightParams | SpiralParams
+BUILT_IN_MOTION_PARAMS: Final[Mapping[str, type[BuiltInMotionParams]]] = ReadOnlyMap(
+    {
+        "weave": WeaveParams,
+        "zigzag": ZigzagParams,
+        "figure_eight": FigureEightParams,
+        "spiral": SpiralParams,
+    }
+)
+
+
+def _mismatched_params(motion_fn: object, params: BaseModel) -> SchemaError:
+    return SchemaError(
+        f"motion {motion_fn!r} cannot take {type(params).__name__}",
+        hint="pass the parameters as a JSON object, or set motion_fn to the motion they belong to",
+        context={"motion_fn": repr(motion_fn), "params": type(params).__name__},
+    )
+
+
+def _typed_motion_params(motion_fn: object, params: object) -> object:
+    """Returns the parameters `motion_fn` takes: its built-in model, or the JSON object as is."""
+    model = BUILT_IN_MOTION_PARAMS.get(motion_fn) if isinstance(motion_fn, str) else None
+    if model is None:
+        if isinstance(params, BaseModel):
+            raise _mismatched_params(motion_fn, params)
+        return params
+    if isinstance(params, model):
+        return params
+    if isinstance(params, BaseModel):
+        raise _mismatched_params(motion_fn, params)
+    return model.model_validate(dict(params) if isinstance(params, Mapping) else params)
+
+
 class PathRow(FrozenModel):
     """Holds one spot's instructions for one transition; times are local counts.
 
@@ -170,7 +294,8 @@ class PathRow(FrozenModel):
         locked: Designer lock.
         note: Free text.
         motion_fn: Registered motion function, for CUSTOM.
-        motion_params: Parameters for the motion function.
+        motion_params: The built-in motion's typed parameters, or a read-only JSON object for a
+            registered custom motion.
         easing: How progress maps to time across the window.
     """
 
@@ -190,9 +315,19 @@ class PathRow(FrozenModel):
     locked: bool = False
     note: str | None = None
     motion_fn: str | None = None
-    # Any: motion parameters are JSON values defined by each registered motion function.
-    motion_params: dict[str, Any] = {}
+    motion_params: Annotated[
+        JsonObject | BuiltInMotionParams, Field(union_mode="left_to_right")
+    ] = Field(default_factory=dict, validate_default=True)
     easing: Easing = Easing()
+
+    # A pydantic discriminator cannot key on a sibling field, so motion_fn picks the model here.
+    @model_validator(mode="before")
+    @classmethod
+    def _motion_params_for_motion(cls, data: object) -> object:
+        if not isinstance(data, dict) or ("motion_params" not in data and "motion_fn" not in data):
+            return data
+        params = _typed_motion_params(data.get("motion_fn"), data.get("motion_params", {}))
+        return {**data, "motion_params": params}
 
     @model_validator(mode="after")
     def _window(self) -> "PathRow":
