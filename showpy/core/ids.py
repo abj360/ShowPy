@@ -16,6 +16,7 @@ Contains:
     format_tid(): writes a TransitionId as `12→13`, refusing anything but a pair
     ID_PATTERN: matches the one ID shape; check with fullmatch, never match
     SHEET_ID_PATTERN: matches sheet item and sheet reference IDs, which may hold an inner `-`
+    VERSION_PATTERN: matches a reference version, which may also hold `+` build metadata
     ID_MAX_LENGTH: bounds the characters of one ID
     RESERVED_IDS: names no ID may take, compared ignoring case; device names also bar `con.5`
     check_id(): validates one ID and returns its NFC-normalized text
@@ -73,6 +74,8 @@ RESERVED_IDS = frozenset({GRAMMAR_KEYWORD}) | WINDOWS_DEVICE_NAMES
 ID_CONTEXT_TEXT_CHARS = 80
 ID_BODY_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.")
 SHEET_ID_BODY_CHARS = ID_BODY_CHARS | {"-"}
+VERSION_PATTERN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9.+\-]{0,62}[A-Za-z0-9])?$")
+VERSION_BODY_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.+-")
 RESERVED_HINT = "not all or a Windows device name (con, com1, con.txt)"
 ID_HINT = (
     f"use 1 to 64 ASCII letters, digits, _ and . matching {ID_PATTERN.pattern}"
@@ -81,6 +84,10 @@ ID_HINT = (
 SHEET_ID_HINT = (
     f"use 1 to 64 ASCII letters, digits, _, . and - matching {SHEET_ID_PATTERN.pattern}"
     f" (no leading or trailing . or - and no ..), {RESERVED_HINT}"
+)
+VERSION_HINT = (
+    f"use 1 to 64 ASCII letters, digits, . - and + matching {VERSION_PATTERN.pattern}"
+    f" (a letter or digit at both ends and no ..), {RESERVED_HINT}"
 )
 LEGACY_IDS_KEY = "legacy_ids"
 
@@ -104,6 +111,7 @@ class _IdRule:
 
 _ID_RULE = _IdRule(ID_PATTERN, ID_BODY_CHARS, frozenset("."), ID_HINT)
 _SHEET_ID_RULE = _IdRule(SHEET_ID_PATTERN, SHEET_ID_BODY_CHARS, frozenset(".-"), SHEET_ID_HINT)
+_VERSION_RULE = _IdRule(VERSION_PATTERN, VERSION_BODY_CHARS, frozenset(".-+"), VERSION_HINT)
 
 
 class TransitionId(NamedTuple):
@@ -128,7 +136,8 @@ class TransitionId(NamedTuple):
 def parse_ref(text: str) -> tuple[str, str, str | None]:
     """Reads a reference such as `sheet:hs-field@2`.
 
-    The id and version must pass check_sheet_id, so `..`, `/` and spaces never reach a path.
+    The id must pass check_sheet_id and the version its own rule (letters, digits, `.`, `-` and
+    `+`, so `1.0.0+build.5` reads), so `..`, `/` and spaces never reach a path.
 
     Args:
         text: Reference text in `kind:id@version` form; the version is optional.
@@ -149,7 +158,7 @@ def parse_ref(text: str) -> tuple[str, str, str | None]:
     ref_id = check_sheet_id(match["id"], kind=REF_ID_KIND)
     version = match["version"]
     if version is not None:
-        version = check_sheet_id(version, kind=REF_VERSION_KIND)
+        version = _checked_text(version, REF_VERSION_KIND, _VERSION_RULE)
     return match["kind"], ref_id, version
 
 
