@@ -14,9 +14,18 @@ Contains:
     Timeline: holds the whole show timeline
 """
 
+from collections import Counter
 from enum import StrEnum
+from functools import cached_property
+from itertools import pairwise
+from typing import TYPE_CHECKING, Self
+
+from pydantic import model_validator
 
 from showpy.core.types import Count, CountsPerMinute, FrozenModel, Seconds
+
+if TYPE_CHECKING:
+    from showpy.time.clock import CompiledClock
 
 
 class TimelineMode(StrEnum):
@@ -49,6 +58,14 @@ class TempoSection(FrozenModel):
     counts_per_minute: CountsPerMinute
     ramp_to: CountsPerMinute | None = None
     ramp_counts: Count | None = None
+
+    @model_validator(mode="after")
+    def _require_complete_ramp(self) -> Self:
+        if (self.ramp_to is None) != (self.ramp_counts is None):
+            raise ValueError("a ramp needs both ramp_to and ramp_counts, or neither")
+        if self.ramp_counts is not None and not self.ramp_counts > 0:
+            raise ValueError(f"ramp_counts must be above 0, got {self.ramp_counts}")
+        return self
 
 
 class Hold(FrozenModel):
@@ -140,10 +157,14 @@ class AudioTrack(FrozenModel):
 class Timeline(FrozenModel):
     """Holds the whole show timeline.
 
+    Construction refuses a timeline the clock could not convert: tempo sections out of order,
+    two at one count or a first that is not at count 0; two cues with one order; holds out of
+    order, two at one count or outside the show; a negative `total_counts`.
+
     Attributes:
         mode: How the show is timed.
         tempos: Tempo sections sorted by count; the first starts at count 0.
-        holds: Pauses sorted by count.
+        holds: Pauses sorted by count, at most one per count, inside the show.
         markers: Named moments sorted by count.
         measures: Measure numbering, or None when measures are off.
         cues: Cue-mode moments sorted by order.
@@ -159,3 +180,39 @@ class Timeline(FrozenModel):
     cues: tuple[Cue, ...] = ()
     audio: tuple[AudioTrack, ...] = ()
     total_counts: Count | None = None
+
+    @model_validator(mode="after")
+    def _require_valid_timeline(self) -> Self:
+        self._require_tempo_map()
+        self._require_holds()
+        repeated = sorted(
+            order for order, seen in Counter(c.order for c in self.cues).items() if seen > 1
+        )
+        if repeated:
+            raise ValueError(f"cues share the order {repeated}; give each cue its own order")
+        if self.total_counts is not None and self.total_counts < 0:
+            raise ValueError(f"total_counts must not be negative, got {self.total_counts}")
+        return self
+
+    def _require_tempo_map(self) -> None:
+        counts = [s.at_count for s in self.tempos]
+        if counts and counts[0] != 0.0:
+            raise ValueError(f"the first tempo starts at count {counts[0]}, not 0")
+        if any(after <= before for before, after in pairwise(counts)):
+            raise ValueError(f"tempo counts {counts} must increase, one section per count")
+
+    def _require_holds(self) -> None:
+        counts = [h.at_count for h in self.holds]
+        if any(after <= before for before, after in pairwise(counts)):
+            raise ValueError(f"hold counts {counts} must increase, one hold per count")
+        end = self.total_counts
+        outside = [c for c in counts if c < 0 or (end is not None and c > end)]
+        if outside:
+            raise ValueError(f"holds at counts {outside} are outside the show")
+
+    @cached_property
+    def clock(self) -> "CompiledClock":
+        """Returns the compiled clock of this timeline, built once and reused by every lookup."""
+        from showpy.time.clock import compile_clock
+
+        return compile_clock(self)

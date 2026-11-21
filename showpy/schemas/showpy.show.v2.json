@@ -1854,7 +1854,7 @@
     },
     "Timeline": {
       "additionalProperties": false,
-      "description": "Holds the whole show timeline.\n\nAttributes:\n    mode: How the show is timed.\n    tempos: Tempo sections sorted by count; the first starts at count 0.\n    holds: Pauses sorted by count.\n    markers: Named moments sorted by count.\n    measures: Measure numbering, or None when measures are off.\n    cues: Cue-mode moments sorted by order.\n    audio: Playback tracks.\n    total_counts: Length of the show in counts, when known.",
+      "description": "Holds the whole show timeline.\n\nConstruction refuses a timeline the clock could not convert: tempo sections out of order,\ntwo at one count or a first that is not at count 0; two cues with one order; holds out of\norder, two at one count or outside the show; a negative `total_counts`.\n\nAttributes:\n    mode: How the show is timed.\n    tempos: Tempo sections sorted by count; the first starts at count 0.\n    holds: Pauses sorted by count, at most one per count, inside the show.\n    markers: Named moments sorted by count.\n    measures: Measure numbering, or None when measures are off.\n    cues: Cue-mode moments sorted by order.\n    audio: Playback tracks.\n    total_counts: Length of the show in counts, when known.",
       "properties": {
         "audio": {
           "default": [],

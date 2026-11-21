@@ -2,6 +2,8 @@
 clock.py --- converts counts to seconds and back through tempo sections, linear ramps and holds
 
 Contains:
+    CompiledClock: answers count and second lookups by binary search over a timeline's pieces
+    compile_clock(): compiles a timeline into its clock, refusing data that cannot convert
     tempo_at(): returns the tempo at a count, including ramps
     count_to_seconds(): converts a count to show seconds
     seconds_to_count(): converts show seconds to a count; during a hold returns its count
@@ -10,9 +12,11 @@ Contains:
 """
 
 import math
-from collections import defaultdict
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
+from itertools import pairwise
 
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import TimelineError, TimeRangeError
 from showpy.core.types import Count, CountsPerMinute, Seconds
 from showpy.core.units import round_to
@@ -54,11 +58,11 @@ class _Piece:
         return min(self.end, self.start + max(0.0, span))
 
 
-def _require_non_negative(value: float, what: str) -> None:
-    if value < 0:
+def _require_in_range(value: float, what: str) -> None:
+    if not math.isfinite(value) or value < 0:
         raise TimeRangeError(
-            f"{what} {value} is before the show start",
-            hint=f"{what} start at 0, the show start",
+            f"{what} {value} is not a finite time at or after the show start",
+            hint=f"{what} are finite and start at 0, the show start",
             context={what: value},
         )
 
@@ -72,11 +76,18 @@ def _sections(tl: Timeline) -> tuple[TempoSection, ...]:
             hint="add a tempo with add_tempo(); in cue mode time cues with cue_to_seconds()",
             context={"mode": tl.mode.value},
         )
-    if tl.tempos[0].at_count != 0.0:
+    counts = [s.at_count for s in tl.tempos]
+    if counts[0] != 0.0:
         raise TimelineError(
-            f"first tempo starts at count {tl.tempos[0].at_count}, not 0",
+            f"first tempo starts at count {counts[0]}, not 0",
             hint="add a tempo section at count 0",
-            context={"first_at_count": tl.tempos[0].at_count},
+            context={"first_at_count": counts[0]},
+        )
+    if any(not after > before for before, after in pairwise(counts)):
+        raise TimelineError(
+            f"tempo counts {counts} do not increase",
+            hint="keep tempo sections in increasing count order, one per count",
+            context={"at_counts": counts},
         )
     return tl.tempos
 
@@ -84,16 +95,19 @@ def _sections(tl: Timeline) -> tuple[TempoSection, ...]:
 def _require_valid_section(section: TempoSection) -> None:
     has_ramp_to, has_ramp_counts = section.ramp_to is not None, section.ramp_counts is not None
     ramp_tempos = [] if section.ramp_to is None else [section.ramp_to]
+    ramp_counts = [] if section.ramp_counts is None else [section.ramp_counts]
     tempos = [section.counts_per_minute, *ramp_tempos]
     problems = [
         has_ramp_to != has_ramp_counts,
-        not all(t > 0 for t in tempos),
-        section.ramp_counts is not None and not section.ramp_counts > 0,
+        not all(math.isfinite(t) and t > 0 for t in tempos),
+        not all(math.isfinite(n) and n > 0 for n in ramp_counts),
+        not math.isfinite(section.at_count),
     ]
     if any(problems):
         raise TimelineError(
             f"tempo section at count {section.at_count} is malformed",
-            hint="tempos must be positive; give both ramp_to and ramp_counts (> 0) or neither",
+            hint="tempos must be positive and finite; give both ramp_to and ramp_counts (> 0, "
+            "finite) or neither",
             context={"section": section.model_dump()},
         )
 
@@ -123,16 +137,25 @@ def _split(pieces: list[_Piece], at: Count) -> list[_Piece]:
 
 
 def _hold_seconds(tl: Timeline) -> dict[Count, Seconds]:
-    totals: dict[Count, Seconds] = defaultdict(float)
+    totals: dict[Count, Seconds] = {}
     for hold in tl.holds:
-        if hold.at_count < 0 or hold.seconds < 0:
+        if not (math.isfinite(hold.at_count) and math.isfinite(hold.seconds)) or (
+            hold.at_count < 0 or hold.seconds < 0
+        ):
             raise TimeRangeError(
                 f"hold at count {hold.at_count} lasting {hold.seconds}s is out of range",
-                hint="holds need a count >= 0 and seconds >= 0",
+                hint="holds need a finite count >= 0 and finite seconds >= 0",
                 context={"at_count": hold.at_count, "seconds": hold.seconds},
             )
-        totals[hold.at_count] += hold.seconds
-    return dict(totals)
+        if hold.at_count in totals:
+            raise TimelineError(
+                f"two holds share count {hold.at_count}",
+                hint="merge them into one hold, or use add_hold(), which replaces the hold",
+                context={"at_count": hold.at_count},
+                code=ErrorCode.HOLD_OVERLAP,
+            )
+        totals[hold.at_count] = hold.seconds
+    return totals
 
 
 def _pieces(tl: Timeline) -> list[_Piece]:
@@ -145,6 +168,68 @@ def _pieces(tl: Timeline) -> list[_Piece]:
     return pieces
 
 
+@dataclass(frozen=True)
+class CompiledClock:
+    """Holds a timeline's pieces and running totals, so each lookup is a binary search.
+
+    Attributes:
+        pieces: Ramp and steady pieces in count order, cut at every hold count.
+        starts: Start count of each piece.
+        holds: Hold seconds at each piece start; 0 where there is none.
+        elapsed: Seconds before each piece's hold, so piece `i` ends at `elapsed[i + 1]`.
+    """
+
+    pieces: tuple[_Piece, ...]
+    starts: tuple[Count, ...]
+    holds: tuple[Seconds, ...]
+    elapsed: tuple[Seconds, ...]
+
+    def tempo_at(self, c: Count) -> CountsPerMinute:
+        """Returns the tempo of the piece holding count `c`."""
+        return self.pieces[bisect_right(self.starts, c) - 1].tempo_in(c)
+
+    def seconds_at(self, c: Count) -> Seconds:
+        """Returns the show seconds at count `c`, with the holds before it."""
+        index = bisect_left(self.starts, c) - 1
+        if index < 0:
+            return 0.0
+        piece = self.pieces[index]
+        return self.elapsed[index] + self.holds[index] + piece.seconds_to(min(c, piece.end))
+
+    def count_at(self, s: Seconds) -> Count:
+        """Returns the count at show second `s`; during a hold, the hold's count."""
+        last = len(self.pieces) - 1
+        index = bisect_left(self.elapsed, s, 1, last + 1) - 1
+        piece = self.pieces[index]
+        into = s - self.elapsed[index]
+        if into <= self.holds[index]:
+            return piece.start
+        return piece.count_after(into - self.holds[index])
+
+
+def compile_clock(tl: Timeline) -> CompiledClock:
+    """Compiles a timeline into its clock, refusing tempo or hold data that cannot convert.
+
+    Args:
+        tl: Timeline to compile.
+
+    Returns:
+        clock: Pieces and running totals that answer every conversion by binary search.
+    """
+    holds = _hold_seconds(tl)
+    pieces = _pieces(tl)
+    hold_seconds = tuple(holds.get(p.start, 0.0) for p in pieces)
+    elapsed = [0.0]
+    for piece, hold in zip(pieces[:-1], hold_seconds, strict=False):
+        elapsed.append(elapsed[-1] + hold + piece.seconds_to(piece.end))
+    return CompiledClock(
+        pieces=tuple(pieces),
+        starts=tuple(p.start for p in pieces),
+        holds=hold_seconds,
+        elapsed=tuple(elapsed),
+    )
+
+
 def tempo_at(tl: Timeline, c: Count) -> CountsPerMinute:
     """Returns the tempo at a count; ramps change tempo linearly in counts.
 
@@ -153,9 +238,8 @@ def tempo_at(tl: Timeline, c: Count) -> CountsPerMinute:
     >>> tempo_at(Timeline(mode=TimelineMode.COUNTS, tempos=(ramp,)), 15.0)
     75.0
     """
-    _require_non_negative(c, "counts")
-    piece = [p for p in _pieces(tl) if p.start <= c][-1]
-    return piece.tempo_in(c)
+    _require_in_range(c, "counts")
+    return tl.clock.tempo_at(c)
 
 
 def count_to_seconds(tl: Timeline, c: Count) -> Seconds:
@@ -167,14 +251,8 @@ def count_to_seconds(tl: Timeline, c: Count) -> Seconds:
     >>> count_to_seconds(new_timeline(TimelineMode.COUNTS, 120.0), 8.0)
     4.0
     """
-    _require_non_negative(c, "counts")
-    holds = _hold_seconds(tl)
-    elapsed = 0.0
-    for piece in _pieces(tl):
-        if c <= piece.start:
-            return elapsed
-        elapsed += holds.get(piece.start, 0.0) + piece.seconds_to(min(c, piece.end))
-    return elapsed
+    _require_in_range(c, "counts")
+    return tl.clock.seconds_at(c)
 
 
 def seconds_to_count(tl: Timeline, s: Seconds) -> Count:
@@ -184,20 +262,8 @@ def seconds_to_count(tl: Timeline, s: Seconds) -> Count:
     >>> seconds_to_count(new_timeline(TimelineMode.COUNTS, 120.0), 4.0)
     8.0
     """
-    _require_non_negative(s, "seconds")
-    holds = _hold_seconds(tl)
-    *bounded, last = _pieces(tl)
-    remaining = s
-    for piece in bounded:
-        hold = holds.get(piece.start, 0.0)
-        if remaining <= hold:
-            return piece.start
-        duration = piece.seconds_to(piece.end)
-        if remaining - hold <= duration:
-            return piece.count_after(remaining - hold)
-        remaining -= hold + duration
-    hold = holds.get(last.start, 0.0)
-    return last.start if remaining <= hold else last.count_after(remaining - hold)
+    _require_in_range(s, "seconds")
+    return tl.clock.count_at(s)
 
 
 def seconds_per_count(tl: Timeline, c: Count) -> Seconds:

@@ -11,11 +11,16 @@ Contains:
         were sorted, or rejects them
     test_regression_seconds_to_count_rejects_nan: rejects NaN seconds instead of returning 0.0
     test_regression_tempo_at_rejects_nan: rejects a NaN count with a ShowPyError, not an IndexError
+    test_regression_timeline_clock_is_fresh_after_replace: drops the cached clock on replace and
+        model_copy, so no conversion uses stale pieces
+    test_regression_compiled_clock_refuses_what_the_models_refuse: refuses a tempo, ramp or hold
+        value the models reject when it arrives through model_construct
     test_regression_describe_count_prints_large_counts_in_full: prints 1234567.5 rather than
         `1.23457e+06`
 """
 
 import math
+from typing import Any
 
 import pytest
 from pydantic import ValidationError as PydanticValidationError
@@ -168,13 +173,13 @@ def test_cue_mode_without_tempo_raises() -> None:
 def test_first_tempo_after_zero_raises() -> None:
     late = TempoSection(at_count=4.0, counts_per_minute=120.0)
     with pytest.raises(TimelineError):
-        tempo_at(Timeline(mode=TimelineMode.COUNTS, tempos=(late,)), 5.0)
+        tempo_at(Timeline.model_construct(mode=TimelineMode.COUNTS, tempos=(late,)), 5.0)
 
 
 def test_half_specified_ramp_raises() -> None:
-    bad = TempoSection(at_count=0.0, counts_per_minute=120.0, ramp_to=140.0)
+    bad = TempoSection.model_construct(at_count=0.0, counts_per_minute=120.0, ramp_to=140.0)
     with pytest.raises(TimelineError):
-        count_to_seconds(Timeline(mode=TimelineMode.COUNTS, tempos=(bad,)), 4.0)
+        count_to_seconds(Timeline.model_construct(mode=TimelineMode.COUNTS, tempos=(bad,)), 4.0)
 
 
 def test_negative_inputs_raise_time_range_error() -> None:
@@ -222,8 +227,6 @@ def _steady(cpm: float = 120.0) -> Timeline:
     return new_timeline(TimelineMode.COUNTS, cpm)
 
 
-@pytest.mark.defect("UP-9.3-95")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-95")
 def test_regression_unsorted_tempo_sections_are_sorted_or_rejected() -> None:
     """Converts counts as if sections were sorted, or rejects them (audit 9.3)."""
     try:
@@ -241,16 +244,12 @@ def test_regression_unsorted_tempo_sections_are_sorted_or_rejected() -> None:
     assert approx_equal(seconds, SIX_SECONDS, abs_tol=1e-9)
 
 
-@pytest.mark.defect("UP-9.3-96")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-96")
 def test_regression_seconds_to_count_rejects_nan() -> None:
     """Rejects NaN seconds instead of returning 0.0 (audit 9.3)."""
     with pytest.raises(ShowPyError):
         seconds_to_count(_steady(), math.nan)
 
 
-@pytest.mark.defect("UP-9.3-97")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-97")
 def test_regression_tempo_at_rejects_nan() -> None:
     """Rejects a NaN count with a ShowPyError, not an IndexError (audit 9.3)."""
     with pytest.raises(ShowPyError):
@@ -262,3 +261,79 @@ def test_regression_tempo_at_rejects_nan() -> None:
 def test_regression_describe_count_prints_large_counts_in_full() -> None:
     """Prints 1234567.5 rather than `1.23457e+06` (audit 9.3)."""
     assert "count 1234567.5," in describe_count(_steady(), BIG_COUNT)
+
+
+def test_regression_timeline_clock_is_fresh_after_replace() -> None:
+    """Rebuilds the clock for every copy; a cached clock must never outlive its pieces."""
+    base = _counts(120.0)
+    assert count_to_seconds(base, 8.0) == 4.0
+    slower = TempoSection(at_count=0.0, counts_per_minute=60.0)
+    assert count_to_seconds(base.replace(tempos=(slower,)), 8.0) == 8.0
+    assert count_to_seconds(base.model_copy(update={"tempos": (slower,)}), 8.0) == 8.0
+    held = add_hold(base, Hold(at_count=4.0, seconds=1.0))
+    assert count_to_seconds(held, 8.0) == 5.0
+    assert count_to_seconds(base, 8.0) == 4.0
+
+
+def test_clock_is_built_once_per_timeline() -> None:
+    tl = _counts()
+    assert tl.clock is tl.clock
+
+
+# Any: bad values are exactly what the models refuse, so they are not of the declared types.
+BAD_SECTIONS: list[dict[str, Any]] = [
+    {"counts_per_minute": 0.0},
+    {"counts_per_minute": -90.0},
+    {"counts_per_minute": math.nan},
+    {"counts_per_minute": math.inf},
+    {"ramp_to": 0.0, "ramp_counts": 4.0},
+    {"ramp_to": -5.0, "ramp_counts": 4.0},
+    {"ramp_to": math.nan, "ramp_counts": 4.0},
+    {"ramp_to": math.inf, "ramp_counts": 4.0},
+    {"ramp_to": 90.0, "ramp_counts": math.nan},
+    {"ramp_to": 90.0, "ramp_counts": math.inf},
+    {"ramp_to": 90.0, "ramp_counts": -4.0},
+    {"ramp_to": 90.0, "ramp_counts": 0.0},
+    {"ramp_to": 90.0},
+    {"ramp_counts": 4.0},
+]
+
+
+@pytest.mark.parametrize("fields", BAD_SECTIONS)
+def test_regression_compiled_clock_refuses_what_the_models_refuse(fields: dict[str, Any]) -> None:
+    """Raises ShowPyError, never ZeroDivisionError, NaN or a hang, for a skipped model check."""
+    values: dict[str, Any] = {"at_count": 0.0, "counts_per_minute": 120.0}
+    values.update(fields)
+    section = TempoSection.model_construct(**values)
+    tl = Timeline.model_construct(mode=TimelineMode.COUNTS, tempos=(section,))
+    with pytest.raises(ShowPyError):
+        count_to_seconds(tl, 4.0)
+    with pytest.raises(ShowPyError):
+        seconds_to_count(tl, 4.0)
+    with pytest.raises(ShowPyError):
+        tempo_at(tl, 4.0)
+
+
+def test_clock_refuses_overlapping_holds() -> None:
+    holds = (Hold(at_count=4.0, seconds=1.0), Hold(at_count=4.0, seconds=2.0))
+    tl = Timeline.model_construct(mode=TimelineMode.COUNTS, tempos=_counts().tempos, holds=holds)
+    with pytest.raises(TimelineError):
+        count_to_seconds(tl, 8.0)
+
+
+def test_clock_refuses_tempo_sections_out_of_order() -> None:
+    sections = (
+        TempoSection(at_count=0.0, counts_per_minute=120.0),
+        TempoSection(at_count=16.0, counts_per_minute=60.0),
+        TempoSection(at_count=8.0, counts_per_minute=240.0),
+    )
+    tl = Timeline.model_construct(mode=TimelineMode.COUNTS, tempos=sections)
+    with pytest.raises(TimelineError):
+        count_to_seconds(tl, 16.0)
+
+
+def test_conversions_round_trip_across_holds_and_ramps() -> None:
+    tl = add_hold(_ramp(60.0, 120.0, 16.0), Hold(at_count=8.0, seconds=2.0))
+    tl = add_tempo(tl, TempoSection(at_count=24.0, counts_per_minute=90.0))
+    for count in (0.0, 3.5, 8.0, 8.5, 16.0, 20.0, 24.0, 30.0):
+        assert approx_equal(seconds_to_count(tl, count_to_seconds(tl, count)), count, abs_tol=TOL)

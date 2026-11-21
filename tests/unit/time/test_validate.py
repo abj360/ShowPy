@@ -24,7 +24,6 @@ import math
 from collections.abc import Callable
 from typing import Any
 
-import pytest
 from pydantic import ValidationError as PydanticValidationError
 
 from showpy.core.errors import ShowPyError
@@ -47,8 +46,9 @@ def _codes(tl: Timeline) -> list[str]:
     return [issue.code for issue in validate_timeline(tl).issues]
 
 
-def _tempo(at: float, cpm: float = 120.0, **ramp: float) -> TempoSection:
-    return TempoSection(at_count=at, counts_per_minute=cpm, **ramp)
+# Any: model_construct skips validation, so a test may pass any value a model would refuse.
+def _tempo(at: float, cpm: float = 120.0, **ramp: Any) -> TempoSection:
+    return TempoSection.model_construct(at_count=at, counts_per_minute=cpm, **ramp)
 
 
 def _counts(**fields: object) -> Timeline:
@@ -175,8 +175,6 @@ def _counts_with(**fields: Any) -> Timeline:
     return Timeline(mode=TimelineMode.COUNTS, tempos=(BASE_TEMPO,), **fields)
 
 
-@pytest.mark.defect("UP-9.3-114")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-114")
 def test_regression_validate_flags_negative_total_counts() -> None:
     """Rejects or reports a negative show length (audit 9.3)."""
     _rejected_or_flagged(lambda: _counts_with(total_counts=-5.0))
@@ -187,16 +185,12 @@ def test_regression_validate_flags_nan_hold() -> None:
     _rejected_or_flagged(lambda: _counts_with(holds=(Hold(at_count=4.0, seconds=math.nan),)))
 
 
-@pytest.mark.defect("UP-9.3-116")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-116")
 def test_regression_validate_flags_unsorted_holds() -> None:
     """Rejects or reports holds that are not sorted by count (audit 9.3)."""
     holds = (Hold(at_count=8.0, seconds=1.0), Hold(at_count=4.0, seconds=1.0))
     _rejected_or_flagged(lambda: _counts_with(holds=holds))
 
 
-@pytest.mark.defect("UP-9.3-117")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-117")
 def test_regression_validate_flags_a_hold_past_the_end() -> None:
     """Rejects or reports a hold after the last count (audit 9.3)."""
     _rejected_or_flagged(
@@ -204,8 +198,6 @@ def test_regression_validate_flags_a_hold_past_the_end() -> None:
     )
 
 
-@pytest.mark.defect("UP-9.3-118")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-118")
 def test_regression_validate_flags_duplicate_cue_orders() -> None:
     """Rejects or reports two cues sharing one order (audit 9.3)."""
     cues = (
@@ -215,24 +207,20 @@ def test_regression_validate_flags_duplicate_cue_orders() -> None:
     _rejected_or_flagged(lambda: Timeline(mode=TimelineMode.CUES, cues=cues))
 
 
-@pytest.mark.defect("UP-9.3-119")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-119")
 def test_regression_validate_flags_nan_gain() -> None:
     """Rejects or reports an audio track with NaN gain (audit 9.3)."""
-    track = AudioTrack(file="a.wav", label="a", gain=math.nan)
-    _rejected_or_flagged(lambda: _counts_with(audio=(track,)))
+    _rejected_or_flagged(
+        lambda: _counts_with(audio=(AudioTrack(file="a.wav", label="a", gain=math.nan),))
+    )
 
 
-@pytest.mark.defect("UP-9.3-120")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-120")
 def test_regression_validate_flags_infinite_sync_offset() -> None:
     """Rejects or reports an audio track with an infinite sync offset (audit 9.3)."""
-    track = AudioTrack(file="a.wav", label="a", sync_offset_s=math.inf)
-    _rejected_or_flagged(lambda: _counts_with(audio=(track,)))
+    _rejected_or_flagged(
+        lambda: _counts_with(audio=(AudioTrack(file="a.wav", label="a", sync_offset_s=math.inf),))
+    )
 
 
-@pytest.mark.defect("UP-9.3-121")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-121")
 def test_regression_overlapping_holds_have_one_policy() -> None:
     """Makes the clock reject overlapping holds exactly when validation does (audit 9.3)."""
     holds = (Hold(at_count=4.0, seconds=1.0), Hold(at_count=4.0, seconds=2.0))
