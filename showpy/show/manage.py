@@ -166,7 +166,7 @@ def new_show(
 
     >>> from showpy.examples import field_sheet, two_set_show
     >>> show = new_show("s", "Opener", field_sheet(), two_set_show().timeline)
-    >>> show.set_ids(), show.dependencies
+    >>> show.set_ids(), dict(show.dependencies)
     (['1'], {'sheet:test-field': '1'})
     """
     kind, ref_id, version = parse_ref(sheet.ref)
@@ -549,7 +549,7 @@ def upgrade_dependency(show: Show, ref: str, version: str, sheet: Sheet | None =
         sheet: The sheet at that version, to adopt it now.
 
     >>> from showpy.examples import two_set_show
-    >>> upgrade_dependency(two_set_show(), "sheet:test-field", "2").dependencies
+    >>> dict(upgrade_dependency(two_set_show(), "sheet:test-field", "2").dependencies)
     {'sheet:test-field': '2'}
     """
     kind, ref_id, _ = parse_ref(ref)

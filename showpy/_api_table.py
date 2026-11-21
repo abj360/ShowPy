@@ -155,6 +155,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("Show", "showpy.show.models", "Show"),
     ("ShowIndex", "showpy.show.models", "ShowIndex"),
     ("ShowIndexEntry", "showpy.show.models", "ShowIndexEntry"),
+    ("ShowLookup", "showpy.show.models", "ShowLookup"),
     ("ShowPyError", "showpy.core.errors", "ShowPyError"),
     ("ShowValidationError", "showpy.core.errors", "ShowValidationError"),
     ("SnapReport", "showpy.geo.models", "SnapReport"),

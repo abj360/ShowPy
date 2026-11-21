@@ -701,6 +701,7 @@ if TYPE_CHECKING:
         Show,
         ShowIndex,
         ShowIndexEntry,
+        ShowLookup,
     )
     from showpy.show.paths_store import (
         load_paths,
@@ -931,6 +932,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Show": ("showpy.show.models", "Show"),
     "ShowIndex": ("showpy.show.models", "ShowIndex"),
     "ShowIndexEntry": ("showpy.show.models", "ShowIndexEntry"),
+    "ShowLookup": ("showpy.show.models", "ShowLookup"),
     "ShowPyError": ("showpy.core.errors", "ShowPyError"),
     "ShowValidationError": ("showpy.core.errors", "ShowValidationError"),
     "SnapReport": ("showpy.geo.models", "SnapReport"),
@@ -1518,6 +1520,7 @@ __all__ = [
     "Show",
     "ShowIndex",
     "ShowIndexEntry",
+    "ShowLookup",
     "ShowPyError",
     "ShowValidationError",
     "SnapReport",

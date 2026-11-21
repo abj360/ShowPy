@@ -159,6 +159,8 @@ def validate_set(show: Show, candidate: Set) -> ValidationReport:
 
 
 def _with_spec(show: Show, spec: TransitionSpec) -> Show:
+    if show.transition(spec.id) == spec:
+        return show
     others = tuple(t for t in show.transitions if t.id != spec.id)
     return show.replace(transitions=(*others, spec))
 
@@ -289,6 +291,21 @@ def _sequence(show: Show) -> list[ValidationIssue]:
     return zero_counts + stale
 
 
+def _form_keys(show: Show) -> list[ValidationIssue]:
+    return [
+        ValidationIssue(
+            level=ERROR,
+            code=ErrorCode.KEY_MISMATCH,
+            where=f"form {key}",
+            message=f"form stored under {key!r} has id {form.id!r}",
+            hint="store every form under its own id",
+            context={"key": key, "id": form.id},
+        )
+        for key, form in show.forms.items()
+        if key != form.id
+    ]
+
+
 def _all(reports: Iterable[ValidationReport]) -> ValidationReport:
     return ValidationReport.merge(*reports)
 
@@ -302,7 +319,7 @@ def validate_show(show: Show, store: SheetStore | None = None) -> ValidationRepo
     """
     reports = [validate_set(show, s) for s in show.sets]
     reports += [validate_paths(show, show.transition(tid)) for tid in show.transition_ids()]
-    reports.append(ValidationReport(issues=tuple(_sequence(show))))
+    reports.append(ValidationReport(issues=tuple(_sequence(show) + _form_keys(show))))
     reports.append(validate_timeline(show.timeline))
     if store is not None:
         reports.append(validate_dependencies(show, store))

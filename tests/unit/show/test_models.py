@@ -68,3 +68,28 @@ def test_set_index() -> None:
 def test_show_round_trips_json() -> None:
     show = two_set_show()
     assert Show.model_validate_json(show.model_dump_json()) == show
+
+
+def test_regression_show_index_is_fresh_after_replace() -> None:
+    """Finds a set added by `replace` or `model_copy`, never a stale cached position."""
+    base = two_set_show()
+    assert base.set_index("2") == 1
+    third = base.sets[1].model_copy(update={"id": "3", "key": "3"})
+    for edited in (
+        base.replace(sets=(*base.sets, third)),
+        base.model_copy(update={"sets": (*base.sets, third)}),
+    ):
+        assert edited.set("3").id == "3"
+        assert edited.set_index("3") == 2
+        assert edited.transition_ids() == [("1", "2"), ("2", "3")]
+        assert edited.transition(("2", "3")).counts == third.counts
+    with pytest.raises(UnknownRefError):
+        base.set("3")
+
+
+def test_show_containers_hash() -> None:
+    show = two_set_show()
+    assert isinstance(hash(show.forms), int)
+    assert isinstance(hash(show.dependencies), int)
+    with pytest.raises(TypeError):
+        show.dependencies["x"] = "1"  # type: ignore[index]

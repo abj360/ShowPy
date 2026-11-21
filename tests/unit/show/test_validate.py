@@ -296,8 +296,6 @@ def test_regression_validate_show_reports_sets_declaring_missing_forms() -> None
     assert _mentions(_edited(sets=_set_two_with(forms=("ghost-form",))), "ghost-form")
 
 
-@pytest.mark.defect("UP-9.7-64")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-64")
 def test_regression_validate_show_reports_form_keys_that_differ_from_ids() -> None:
     """Reports a form stored under a key other than its ID (audit 9.7 validation gaps)."""
     assert _mentions(_formed(key="zz"), "zz")

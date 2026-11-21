@@ -4,10 +4,13 @@ models.py --- the Show aggregate, its index, and the storage, history and collab
 Contains:
     Pin: records one designer lock on a spot, form, set or transition
     Show: holds a whole show: sheet, cast, timeline, sets, forms, paths, notes and zones
+    ShowLookup: looks up a show's sets, transitions and forms by ID without scanning
+    Show.lookup: returns the show's cached ShowLookup
     Show.set(): returns a set by ID
     Show.set_index(): returns a set's position in the show
     Show.set_ids(): returns set IDs in show order
     Show.transition_ids(): returns consecutive set pairs
+    Show.transition_id(): resolves a pair of set IDs to the show's transition
     Show.transition(): returns a transition's paths, defaulting to straight moves
     ShowIndexEntry: holds one set's place on the clock: counts, start, measure, seconds, cue
     ShowIndex: looks up sets and transitions by global count
@@ -27,7 +30,9 @@ Contains:
 import bisect
 import itertools
 from collections import Counter
+from collections.abc import Mapping
 from datetime import datetime
+from functools import cached_property
 from typing import Annotated, Any, Literal
 
 from pydantic import Field, model_validator
@@ -39,6 +44,7 @@ from showpy.choreo.path_models import FacingOverride, TransitionSpec
 from showpy.core.errors import SchemaError, TimeRangeError, UnknownRefError
 from showpy.core.ids import FormId, RouteId, SetId, SpotId, TransitionId
 from showpy.core.ids import format_tid as _format_tid
+from showpy.core.readonly import ReadOnly, ReadOnlyMap
 from showpy.core.types import Count, FrozenModel, Seconds
 from showpy.core.util import close_matches
 from showpy.notes.models import Anchor, Note
@@ -68,6 +74,30 @@ class Pin(FrozenModel):
     id: str
     by: str = "designer"
     reason: str = ""
+
+
+class ShowLookup(FrozenModel):
+    """Looks up a show's sets, transitions and forms by ID; built once per Show.
+
+    Attributes:
+        positions: Set ID to its position in show order.
+        consecutive: Each consecutive set pair to the show's own TransitionId for it.
+        stored: TransitionId to its stored spec; the first spec wins when IDs repeat.
+        forms: Form ID to form.
+    """
+
+    positions: Annotated[Mapping[SetId, int], ReadOnly()]
+    consecutive: Annotated[Mapping[TransitionId, TransitionId], ReadOnly()]
+    stored: Annotated[Mapping[TransitionId, TransitionSpec], ReadOnly()]
+    forms: Annotated[Mapping[FormId, Form], ReadOnly()]
+
+
+def _no_forms() -> ReadOnlyMap[FormId, Form]:
+    return ReadOnlyMap({})
+
+
+def _no_dependencies() -> ReadOnlyMap[str, str]:
+    return ReadOnlyMap({})
 
 
 class Show(FrozenModel):
@@ -104,13 +134,24 @@ class Show(FrozenModel):
     cast: Cast = Cast()
     timeline: Timeline
     sets: tuple[Set, ...] = ()
-    forms: dict[FormId, Form] = {}
+    forms: Annotated[Mapping[FormId, Form], ReadOnly()] = Field(default_factory=_no_forms)
     transitions: tuple[TransitionSpec, ...] = ()
     facing_overrides: tuple[FacingOverride, ...] = ()
     zones: tuple[Zone, ...] = ()
-    dependencies: dict[str, str] = {}
+    dependencies: Annotated[Mapping[str, str], ReadOnly()] = Field(default_factory=_no_dependencies)
     pins: tuple[Pin, ...] = ()
     revision: str = ""
+
+    @model_validator(mode="after")
+    def _form_keys_match_ids(self) -> "Show":
+        wrong = {key: form.id for key, form in self.forms.items() if key != form.id}
+        if wrong:
+            raise SchemaError(
+                f"form keys differ from form ids: {', '.join(sorted(wrong))}",
+                hint="store every form under its own id",
+                context={"forms": wrong},
+            )
+        return self
 
     @model_validator(mode="after")
     def _unique_set_ids(self) -> "Show":
@@ -138,11 +179,29 @@ class Show(FrozenModel):
         """Returns set IDs in show order."""
         return [s.id for s in self.sets]
 
+    @cached_property
+    def lookup(self) -> ShowLookup:
+        """Returns the show's lookup tables, built on first use and dropped by every copy."""
+        ids = self.set_ids()
+        positions: dict[SetId, int] = {}
+        for position, set_id in enumerate(ids):
+            positions.setdefault(set_id, position)
+        stored: dict[TransitionId, TransitionSpec] = {}
+        for spec in self.transitions:
+            stored.setdefault(spec.id, spec)
+        pairs = [TransitionId(a, b) for a, b in itertools.pairwise(ids)]
+        return ShowLookup.model_construct(
+            positions=ReadOnlyMap(positions),
+            consecutive=ReadOnlyMap({pair: pair for pair in pairs}),
+            stored=ReadOnlyMap(stored),
+            forms=ReadOnlyMap(self.forms),
+        )
+
     def set_index(self, set_id: str) -> int:
         """Returns the position of a set, raising UnknownRefError with suggestions."""
-        for index, candidate in enumerate(self.sets):
-            if candidate.id == set_id:
-                return index
+        position = self.lookup.positions.get(SetId(set_id))
+        if position is not None:
+            return position
         close = close_matches(set_id, self.set_ids())
         raise UnknownRefError(
             f"unknown set {set_id!r}",
@@ -158,7 +217,7 @@ class Show(FrozenModel):
 
     def transition_ids(self) -> list[TransitionId]:
         """Returns consecutive set pairs in show order."""
-        return [TransitionId(a, b) for a, b in itertools.pairwise(self.set_ids())]
+        return list(self.lookup.consecutive.values())
 
     def transition_id(self, tid: tuple[str, str]) -> TransitionId:
         """Resolves a pair of set IDs to the show's transition between them.
@@ -173,9 +232,9 @@ class Show(FrozenModel):
         >>> str(two_set_show().transition_id(("1", "2")))
         '1→2'
         """
-        for known in self.transition_ids():
-            if known == tid:
-                return known
+        known = self.lookup.consecutive.get(TransitionId(SetId(tid[0]), SetId(tid[1])))
+        if known is not None:
+            return known
         raise UnknownRefError(
             f"{_format_tid(tid)} is not a transition between consecutive sets",
             hint="use a pair from show.transition_ids()",
@@ -185,9 +244,9 @@ class Show(FrozenModel):
     def transition(self, tid: tuple[str, str]) -> TransitionSpec:
         """Returns stored paths for a consecutive pair, or straight moves when none are stored."""
         known = self.transition_id(tid)
-        for spec in self.transitions:
-            if spec.id == known:
-                return spec
+        spec = self.lookup.stored.get(known)
+        if spec is not None:
+            return spec
         return TransitionSpec(id=known, counts=self.set(known.to_set).counts)
 
 

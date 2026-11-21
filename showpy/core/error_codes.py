@@ -65,6 +65,8 @@ class ErrorCode(StrEnum):
     """Two holds of a timeline share one count."""
     IO = "IO"
     """The file system fails while a file repository reads or writes."""
+    KEY_MISMATCH = "KEY_MISMATCH"
+    """A mapping key differs from the ID of the item it holds."""
     LOCKED = "LOCKED"
     """An edit touches a pinned or locked item without `force=True`."""
     MARKER_DUPLICATE = "MARKER_DUPLICATE"
