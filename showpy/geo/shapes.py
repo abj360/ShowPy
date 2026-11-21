@@ -33,7 +33,7 @@ from shapely.errors import GEOSException
 from showpy.core.errors import GeometryError, bounded_repr
 from showpy.core.types import Box2, Degrees, Meters, Point
 from showpy.core.units import facing_vector
-from showpy.geo.checks import pick
+from showpy.geo.checks import pick, require_positive
 from showpy.geo.curve_base import Curve
 from showpy.geo.curves import (
     AnyCurve,
@@ -88,6 +88,7 @@ def arc(center: Point, radius: Meters, start_deg: Degrees, sweep_deg: Degrees) -
     >>> round(arc((0, 0), 1.0, 0.0, 180.0).length(), 4)
     3.1416
     """
+    require_positive("radius", radius)
     return ArcCurve(center=center, radius=radius, start_deg=start_deg, sweep_deg=sweep_deg)
 
 
@@ -134,6 +135,7 @@ def circle(center: Point, radius: Meters, start_deg: Degrees = 0.0) -> CircleCur
     >>> round(circle((0, 0), 1.0).length(), 4)
     6.2832
     """
+    require_positive("radius", radius)
     return CircleCurve(center=center, radius=radius, start_deg=start_deg)
 
 
@@ -143,6 +145,8 @@ def ellipse(center: Point, rx: Meters, ry: Meters, rotation_deg: Degrees = 0.0) 
     >>> ellipse((0, 0), 2.0, 1.0).closed
     True
     """
+    require_positive("rx", rx)
+    require_positive("ry", ry)
     return EllipseCurve(center=center, rx=rx, ry=ry, rotation_deg=rotation_deg)
 
 
@@ -188,8 +192,8 @@ def rect(center: Point, w: Meters, d: Meters, rotation_deg: Degrees = 0.0) -> Po
     >>> rect((0, 0), 4, 2).length()
     12.0
     """
-    if w <= 0 or d <= 0:
-        raise GeometryError("rectangle sides must be above 0", hint="give positive w and d")
+    require_positive("w", w)
+    require_positive("d", d)
     half_w, half_d = w / 2, d / 2
     corners = [(-half_w, -half_d), (half_w, -half_d), (half_w, half_d), (-half_w, half_d)]
     return _rotated(center, corners, rotation_deg)
@@ -201,8 +205,9 @@ def wedge(apex: Point, length: Meters, spread_deg: Degrees, facing_deg: Degrees 
     >>> wedge((0, 0), 2.0, 90.0).points[1]
     (0.0, 0.0)
     """
-    if length <= 0 or not 0 < spread_deg < 360:
-        raise GeometryError("wedge needs length > 0 and 0 < spread < 360", hint="fix the wedge")
+    require_positive("length", length)
+    if not 0 < spread_deg < 360:
+        raise GeometryError("wedge needs 0 < spread < 360", hint="fix the wedge")
     arms = []
     for side in (-1, 1):
         back = facing_vector(facing_deg + 180.0 + side * spread_deg / 2)
@@ -226,8 +231,9 @@ def regular_polygon(center: Point, radius: Meters, n: int, rotation_deg: Degrees
     5
     """
     _require_whole_count(n, "n")
-    if n < MIN_POLYGON_SIDES or radius <= 0:
-        raise GeometryError("polygon needs n >= 3 and radius > 0", hint="fix n or radius")
+    require_positive("radius", radius)
+    if n < MIN_POLYGON_SIDES:
+        raise GeometryError("polygon needs n >= 3", hint="raise n to 3 or more")
     angles = [math.radians(90.0 + 360.0 * k / n) for k in range(n)]
     local = [(radius * math.cos(t), radius * math.sin(t)) for t in angles]
     return _rotated(center, local, rotation_deg)
@@ -242,8 +248,10 @@ def star(
     10
     """
     _require_whole_count(n, "n")
-    if n < MIN_STAR_POINTS or not 0 < r_inner < r_outer:
-        raise GeometryError("star needs n >= 2 and 0 < r_inner < r_outer", hint="fix the radii")
+    require_positive("r_inner", r_inner)
+    require_positive("r_outer", r_outer)
+    if n < MIN_STAR_POINTS or not r_inner < r_outer:
+        raise GeometryError("star needs n >= 2 and r_inner < r_outer", hint="fix the radii")
     local = []
     for k in range(2 * n):
         radius = r_outer if k % 2 == 0 else r_inner

@@ -12,6 +12,7 @@ Contains:
     CircleCurve: draws a full circle in either direction
     EllipseCurve: draws a rotated oval
     SplineCurve: passes a centripetal Catmull–Rom spline through points
+    MAX_BEZIER_DEGREE: bounds the degree of one Bézier curve
     BezierCurve: draws a Bézier curve of any degree from control points
     SvgCurve: evaluates one SVG subpath under an affine transform
     SpiralCurve: draws an Archimedean spiral
@@ -34,7 +35,7 @@ from showpy.core.caps import MAX_TABLE, require_size
 from showpy.core.errors import GeometryError
 from showpy.core.types import Degrees, Meters, Point, Points, PositiveFinite
 from showpy.core.validation import validate_adapter
-from showpy.geo.checks import require_finite_as
+from showpy.geo.checks import require_finite_as, require_positive
 from showpy.geo.curve_base import CurveBase, FloatArray, _unit
 from showpy.geo.svg import Subpath, parse_path
 
@@ -42,6 +43,12 @@ SPLINE_SAMPLES_PER_SEGMENT = 256
 SPIRAL_SAMPLES_PER_TURN = 1024
 SVG_SAMPLES_PER_PIECE = 256
 KNOT_FLOOR = 1e-9
+# Parsing every stroke of every bundled font gives only line and cubic pieces, so the largest
+# degree is 3 (measured 2026-11-21); the cap is 10 times that.
+MAX_BEZIER_DEGREE = 30
+# A closed composite's ends and trim bounds may differ by float error in arc-length tables.
+CONTINUITY_TOL_M = 1e-6
+TRANSFORM_ROWS = 3
 IDENTITY_3X3 = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 
 
@@ -337,6 +344,9 @@ class BezierCurve(CurveModel):
     def _needs_two_points(self) -> "BezierCurve":
         if len(self.control) < 2:
             raise GeometryError("a Bézier curve needs 2+ control points", hint="add points")
+        require_size(
+            len(self.control) - 1, MAX_BEZIER_DEGREE, what="Bézier degree", error=GeometryError
+        )
         return self
 
     def _native(self, t: FloatArray) -> Points:
@@ -359,6 +369,23 @@ class SvgCurve(CurveModel):
     kind: Literal["svg"] = "svg"
     d: str
     transform: tuple[tuple[float, float, float], ...] = IDENTITY_3X3
+
+    @model_validator(mode="after")
+    def _consistent(self) -> "SvgCurve":
+        if len(self.transform) != TRANSFORM_ROWS:
+            raise GeometryError(
+                f"transform needs {TRANSFORM_ROWS} rows, got {len(self.transform)}",
+                hint="pass a 3x3 affine matrix",
+                context={"rows": len(self.transform)},
+            )
+        if self.closed != self._subpath.closed:
+            raise GeometryError(
+                f"closed={self.closed} contradicts the path, which "
+                f"{'ends' if self._subpath.closed else 'does not end'} with Z",
+                hint=f"pass closed={self._subpath.closed}",
+                context={"closed": self.closed, "path_closed": self._subpath.closed},
+            )
+        return self
 
     @cached_property
     def _subpath(self) -> Subpath:
@@ -455,6 +482,10 @@ class CompositeCurve(CurveModel):
     def _needs_parts(self) -> "CompositeCurve":
         if not self.parts:
             raise GeometryError("a composite curve needs parts", hint="pass one or more curves")
+        if self.closed:
+            _require_meeting(
+                _end_of(self.parts[-1]), _start_of(self.parts[0]), "last and first part"
+            )
         return self
 
     @cached_property
@@ -487,6 +518,26 @@ class CompositeCurve(CurveModel):
         return np.unique(np.concatenate([self._offsets, *inner]))
 
 
+def _start_of(curve: "CurveModel") -> Point:
+    start = curve.point_at(0.0)
+    return (float(start[0]), float(start[1]))
+
+
+def _end_of(curve: "CurveModel") -> Point:
+    end = curve.point_at(curve.length())
+    return (float(end[0]), float(end[1]))
+
+
+def _require_meeting(end: Point, start: Point, where: str) -> None:
+    gap = math.dist(end, start)
+    if gap > CONTINUITY_TOL_M:
+        raise GeometryError(
+            f"{where} do not meet: {gap} m apart",
+            hint="start each part where the previous one ends, or drop closed=True",
+            context={"gap_m": gap, "end": end, "start": start},
+        )
+
+
 class TrimmedCurve(CurveModel):
     """Views the piece of `base` between arc lengths s0 and s1, reversed when s0 > s1.
 
@@ -501,6 +552,20 @@ class TrimmedCurve(CurveModel):
     s0: Meters
     s1: Meters
     closed: Literal[False] = False
+
+    @model_validator(mode="after")
+    def _inside_open_base(self) -> "TrimmedCurve":
+        if self.base.closed:
+            return self
+        total = self.base.length()
+        for name, value in (("s0", self.s0), ("s1", self.s1)):
+            if not -CONTINUITY_TOL_M <= value <= total + CONTINUITY_TOL_M:
+                raise GeometryError(
+                    f"{name}={value} is outside the base curve [0, {total}]",
+                    hint=f"give {name} between 0 and the base length",
+                    context={name: value, "length": total},
+                )
+        return self
 
     def length(self) -> Meters:
         """Returns |s1 - s0|."""
@@ -582,12 +647,7 @@ def _require_turns(value: Real) -> None:
 
 
 def _require_positive(name: str, value: float) -> None:
-    if not value > 0:
-        raise GeometryError(
-            f"{name} must be above 0, got {value}",
-            hint=f"give a positive {name}",
-            context={name: value},
-        )
+    require_positive(name, value)
 
 
 def _rotate(points: Points, degrees: float) -> Points:

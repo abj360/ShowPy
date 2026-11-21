@@ -266,8 +266,6 @@ def test_regression_regular_polygon_rejects_fractional_sides() -> None:
         regular_polygon((0.0, 0.0), 1.0, FRACTIONAL_SIDES)  # type: ignore[arg-type]
 
 
-@pytest.mark.defect("UP-9.1-66")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-66")
 def test_regression_rect_rejects_nan_width() -> None:
     """Rejects a NaN width instead of building a polygon of NaN points (audit 9.1)."""
     with pytest.raises(GeometryError):
