@@ -5,8 +5,11 @@ test_selection.py --- tests the Selection set algebra
 
 Contains:
     test_*(): one behavior of showpy.core.selection each
-    test_regression_selection_rejects_a_bare_string: rejects `ids="T12"` instead of splitting it
+    test_selection_rejects_a_bare_string_as_ids: rejects `ids="T12"` instead of splitting it
         into characters
+    test_selection_rejects_a_bare_string: rejects a bare string operand of |, & and -
+    test_selection_operators_accept_iterables: combines with tuples, lists and Selections
+    test_selection_has_no_iter_override: leaves BaseModel iteration yielding the fields
     test_regression_selection_model_copy_keeps_ids_unique: deduplicates IDs on model_copy as the
         constructor does
     test_regression_selection_equality_ignores_the_description: compares selections by IDs, not by
@@ -14,6 +17,9 @@ Contains:
     test_regression_malformed_ids_are_a_schema_error_not_a_type_error: rejects non-list ids with
         SchemaError, never TypeError
 """
+
+import operator
+from collections.abc import Callable
 
 import pytest
 from pydantic import ValidationError as PydanticValidationError
@@ -38,27 +44,17 @@ def test_union_intersection_difference() -> None:
 def test_len_iter_contains() -> None:
     sel = Selection(ids=(SpotId("T1"), SpotId("T2")))
     assert len(sel) == 2
-    assert list(sel) == ["T1", "T2"]
+    assert list(sel.ids) == ["T1", "T2"]
     assert "T1" in sel
     assert "T9" not in sel
 
 
-def test_regression_selection_rejects_a_bare_string() -> None:
-    """Rejects `ids="T12"` instead of splitting it into characters (audit 9.3)."""
-    with pytest.raises((ShowPyError, PydanticValidationError)):
-        Selection(ids="T12")  # pyright: ignore[reportArgumentType] - deliberately invalid input
-
-
-@pytest.mark.defect("UP-9.3-34")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-34")
 def test_regression_selection_model_copy_keeps_ids_unique() -> None:
     """Deduplicates IDs on model_copy as the constructor does (audit 9.3)."""
     duplicated = Selection(ids=(SpotId("a"), SpotId("b"))).model_copy(update={"ids": ("a", "a")})
     assert duplicated.ids == ("a",)
 
 
-@pytest.mark.defect("UP-9.3-35")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-35")
 def test_regression_selection_equality_ignores_the_description() -> None:
     """Compares selections by IDs, not by how they were described (audit 9.3)."""
     left = Selection(ids=(SpotId("a"),), description="first")
@@ -70,3 +66,39 @@ def test_regression_malformed_ids_are_a_schema_error_not_a_type_error(ids: objec
     """Rejects ids that are not a list of strings with SchemaError, never TypeError."""
     with pytest.raises(SchemaError):
         Selection.model_validate({"ids": ids})
+
+
+def test_selection_rejects_a_bare_string_as_ids() -> None:
+    """Rejects `ids="T12"` instead of splitting it into characters (audit 9.3)."""
+    with pytest.raises((ShowPyError, PydanticValidationError)):
+        Selection(ids="T12")  # pyright: ignore[reportArgumentType] - deliberately invalid input
+
+
+@pytest.mark.parametrize("combine", [operator.or_, operator.and_, operator.sub])
+def test_selection_rejects_a_bare_string(combine: Callable[[Selection, str], Selection]) -> None:
+    with pytest.raises(SchemaError):
+        combine(Selection(ids=(SpotId("T1"),)), "T12")
+
+
+def test_selection_operators_accept_iterables() -> None:
+    sel = Selection(ids=(SpotId("T1"), SpotId("T2")))
+    other = Selection(ids=(SpotId("T2"), SpotId("T3")))
+    assert (sel | ("T3", "T1")).ids == ("T1", "T2", "T3")
+    assert (sel | other).ids == ("T1", "T2", "T3")
+    assert (sel & ["T2", "T9"]).ids == ("T2",)
+    assert (sel - iter(["T1"])).ids == ("T2",)
+
+
+def test_selection_has_no_iter_override() -> None:
+    sel = Selection(ids=(SpotId("T1"),), description="d")
+    assert dict(sel) == {"ids": ("T1",), "description": "d"}
+
+
+def test_selection_hash_ignores_the_description() -> None:
+    left = Selection(ids=(SpotId("a"),), description="first")
+    assert hash(left) == hash(Selection(ids=(SpotId("a"),), description="second"))
+    assert left != Selection(ids=(SpotId("b"),), description="first")
+
+
+def test_selection_replace_deduplicates() -> None:
+    assert Selection(ids=(SpotId("a"),)).replace(ids=("a", "b", "a")).ids == ("a", "b")

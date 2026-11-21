@@ -32,6 +32,7 @@ from showpy.core.errors import GeometryError, SchemaError, UnknownRefError
 from showpy.core.ids import FormId, SpotId
 from showpy.core.selection import Selection as Selection
 from showpy.core.selection import Selector as Selector
+from showpy.core.selection import operand_ids
 from showpy.core.types import Meters, Point, Points, Region
 from showpy.core.util import (
     RANGE_PATTERN,
@@ -490,7 +491,7 @@ def split(sel: Selection | Sequence[str], k: int) -> list[Selection]:
     >>> [p.ids for p in split(["A", "B", "C"], 2)]
     [('A', 'B'), ('C',)]
     """
-    ids = tuple(sel)
+    ids = operand_ids(sel)
     _require_parts(k, max(len(ids), 1))
     size, extra = divmod(len(ids), k)
     parts, start = [], 0
@@ -509,7 +510,7 @@ def alternate(sel: Selection | Sequence[str], k: int = 2) -> list[Selection]:
     [('A', 'C'), ('B',)]
     """
     _require_parts(k)
-    ids = tuple(sel)
+    ids = operand_ids(sel)
     return [
         Selection.model_validate({"ids": ids[i::k], "description": f"every {k} from {i + 1}"})
         for i in range(k)
@@ -530,7 +531,7 @@ def mirror_pairs(
     >>> mirror_pairs(s, "all")
     [('L', 'R')]
     """
-    placed = [p for p in (set_.get(i) for i in select(set_, sel)) if p.on_field]
+    placed = [p for p in (set_.get(i) for i in select(set_, sel).ids) if p.on_field]
     left = [p for p in placed if p.x < axis_x - AXIS_EPS]
     right = [p for p in placed if p.x > axis_x + AXIS_EPS]
     if not left or not right:
