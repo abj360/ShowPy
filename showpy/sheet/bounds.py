@@ -20,7 +20,7 @@ import shapely
 from showpy.core.errors import SchemaError, UnknownRefError
 from showpy.core.types import Count, Meters, Point, Region
 from showpy.core.util import close_matches
-from showpy.sheet.models import Landmark, Sheet, Zone
+from showpy.sheet.models import Landmark, Sheet, Zone, normalized_name
 
 if TYPE_CHECKING:
     from showpy.show.models import Show
@@ -52,10 +52,6 @@ def walkable(sheet: Sheet, p: Point) -> bool:
     return _covers(sheet.walkable, p)
 
 
-def _normalized(text: str) -> str:
-    return " ".join(text.casefold().split())
-
-
 def _names(mark: Landmark) -> tuple[str, ...]:
     return (mark.id, mark.name, *mark.aliases)
 
@@ -67,7 +63,7 @@ def landmark_keys(mark: Landmark) -> tuple[str, ...]:
     >>> landmark_keys(point_landmark("c", "Center  Stage", (0.0, 0.0), "CS"))
     ('center stage', 'cs')
     """
-    return tuple(_normalized(n) for n in (mark.name, *mark.aliases))
+    return tuple(normalized_name(n) for n in (mark.name, *mark.aliases))
 
 
 def landmark(sheet: Sheet, name: str) -> Landmark:
@@ -77,9 +73,9 @@ def landmark(sheet: Sheet, name: str) -> Landmark:
     >>> landmark(get_sheet("sheet:hs-football"), "Home Hash").id
     'front-hash'
     """
-    wanted = _normalized(name)
+    wanted = normalized_name(name)
     for mark in sheet.landmarks:
-        if wanted in (_normalized(n) for n in _names(mark)):
+        if wanted in (normalized_name(n) for n in _names(mark)):
             return mark
     known = [n for mark in sheet.landmarks for n in _names(mark)]
     close = close_matches(name, known)

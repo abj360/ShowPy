@@ -25,7 +25,13 @@ from showpy.core.types import Point
 from showpy.core.units import convert, round_to
 from showpy.core.validation import require_finite
 from showpy.sheet.bounds import landmark, landmark_anchor
-from showpy.sheet.models import CoordinateKind, CoordinateSystem, Sheet, SurfaceType
+from showpy.sheet.models import (
+    CoordinateKind,
+    CoordinateSystem,
+    Sheet,
+    SurfaceType,
+    check_coordinate_system,
+)
 
 if TYPE_CHECKING:
     from showpy.show.models import Show
@@ -76,7 +82,6 @@ OF = " of "
 ROUNDING_HINT = (
     "keep each offset under about 1e27 rounding steps: use a coarser precision or a nearer origin"
 )
-POINT_SIZE = 2
 NUMBER_PREVIEW = 20
 TEXT_PREVIEW = 40
 POINT_BOUND_HINT = (
@@ -117,25 +122,10 @@ def coordinate_presets(sheet: Sheet) -> list[CoordinateSystem]:
 def _origin(sheet: Sheet, system: CoordinateSystem) -> Point:
     if isinstance(system.origin, str):
         return landmark_anchor(landmark(sheet, system.origin))
-    if len(system.origin) != POINT_SIZE:
-        raise SchemaError(
-            f"origin must hold {POINT_SIZE} numbers, got {len(system.origin)}",
-            hint="give the origin as (x, y) in meters or as a landmark ID",
-            context={"origin": system.origin},
-        )
-    return (
-        require_finite(system.origin[0], name="origin.x"),
-        require_finite(system.origin[1], name="origin.y"),
-    )
+    return system.origin[0], system.origin[1]
 
 
 def _frame(system: CoordinateSystem) -> tuple[Point, Point]:
-    if system.audience_side not in FRAMES:
-        raise SchemaError(
-            f"unknown audience side {system.audience_side!r}",
-            hint=f"use one of {', '.join(FRAMES)}",
-            context={"audience_side": system.audience_side},
-        )
     return FRAMES[system.audience_side]
 
 
@@ -146,12 +136,7 @@ def set_coordinates(show: "Show", system: CoordinateSystem) -> "Show":
     >>> set_coordinates(two_set_show(), CoordinateSystem(units="ft")).coordinates.units
     'ft'
     """
-    if not system.precision > 0:
-        raise SchemaError(
-            f"precision must be above 0, got {system.precision}",
-            hint="use a rounding step such as 0.01",
-            context={"precision": system.precision},
-        )
+    check_coordinate_system(system)
     convert(1.0, system.units, "m")
     _origin(show.sheet, system)
     return show.replace(coordinates=system)
@@ -224,7 +209,7 @@ def to_coords(show: "Show", p: Point, style: CoordStyle = "long") -> str:
     '3.50 m right of center, 2.00 m upstage of front edge'
     """
     system = show.coordinates
-    require_finite(system.precision, name="precision", low=0.0, low_open=True)
+    check_coordinate_system(system)
     require_finite(p[0], name="p.x")
     require_finite(p[1], name="p.y")
     words = _words(show.sheet, system)
@@ -300,6 +285,7 @@ def from_coords(show: "Show", text: str) -> Point:
     (-3.5, 2.0)
     """
     system = show.coordinates
+    check_coordinate_system(system)
     words = _words(show.sheet, system)
     values: dict[Axis, float] = {}
     for token, (axis, value) in _parts(text.strip(), words, system.units):

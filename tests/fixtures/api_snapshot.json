@@ -167,7 +167,7 @@
     "model": {
       "audience_side": "Literal['front', 'back', 'left', 'right']",
       "kind": "showpy.sheet.models.CoordinateKind",
-      "labels": "dict[str, str]",
+      "labels": "collections.abc.Mapping[str, str]",
       "origin": "Point | showpy.core.ids.LandmarkId",
       "precision": "float",
       "units": "str"

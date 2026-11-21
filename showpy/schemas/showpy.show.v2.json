@@ -231,7 +231,6 @@
           "additionalProperties": {
             "type": "string"
           },
-          "default": {},
           "title": "Labels",
           "type": "object"
         },
