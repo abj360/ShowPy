@@ -22,6 +22,8 @@ Contains:
         trims and composites of them, and leaves table-based curves opaque
     test_custom_motion_receives_plain_json: passes a custom motion its stored parameters as
         plain dicts and lists, never read-only containers
+    test_regression_custom_motion_with_ragged_output_raises_path_error: raises PathError for a
+        custom motion whose output is not an array of points
 """
 
 import itertools
@@ -156,21 +158,18 @@ def _custom_engine(motion: Callable[..., Points]) -> PathEngine:
     return PathEngine(with_rows({"T1": row}), motions=registry)
 
 
-@defect("UP-9.2-09")
 def test_regression_custom_motion_that_never_leaves_start_is_rejected() -> None:
     """Raises ContinuityError for a custom motion that stays put but has a distant target (9.2)."""
     with pytest.raises(ContinuityError):
         _custom_engine(_stay_at_start).compile(TID)
 
 
-@defect("UP-9.2-10")
 def test_regression_custom_motion_with_wrong_shape_raises_path_error() -> None:
     """Raises PathError for a custom motion that returns the wrong output shape (audit 9.2)."""
     with pytest.raises(PathError):
         _custom_engine(_flat_output).compile(TID)
 
 
-@defect("UP-9.2-11")
 def test_regression_custom_motion_with_nan_samples_is_rejected() -> None:
     """Rejects NaN samples from a custom motion instead of dropping them silently (audit 9.2)."""
     with pytest.raises(ShowPyError):
@@ -253,3 +252,13 @@ def test_custom_motion_receives_plain_json() -> None:
     bend = seen[0]["bend"]
     assert isinstance(bend, list)
     assert type(bend[1]) is dict
+
+
+def _ragged_output(u: FloatArray, start: Point, end: Point, params: object) -> Points:
+    return cast(Points, [[0.0, 0.0], [1.0]])
+
+
+def test_regression_custom_motion_with_ragged_output_raises_path_error() -> None:
+    """Raises PathError for a custom motion whose output is not an array of points."""
+    with pytest.raises(PathError):
+        _custom_engine(_ragged_output).compile(TID)

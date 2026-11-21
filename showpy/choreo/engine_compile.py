@@ -140,6 +140,38 @@ def _plain_params(row: PathRow) -> dict[str, JsonValue]:
     return plain
 
 
+def _motion_samples(row: PathRow, motion: str, a: Placement, b: Placement, raw: object) -> Points:
+    """Checks a motion's output once: CUSTOM_SAMPLES finite points from start to target."""
+    try:
+        pts = np.asarray(raw, dtype=float)
+    except (TypeError, ValueError) as exc:
+        raise PathError(
+            f"motion {motion} returned {type(raw).__name__}, not an array of points",
+            hint="return a float array of shape (len(u), 2)",
+            context={"entity": row.entity, "motion": motion},
+        ) from exc
+    if pts.shape != (CUSTOM_SAMPLES, 2):
+        raise PathError(
+            f"motion {motion} returned shape {pts.shape}, not ({CUSTOM_SAMPLES}, 2)",
+            hint="return one (x, y) row per progress share in u",
+            context={"entity": row.entity, "motion": motion, "shape": list(pts.shape)},
+        )
+    if not np.isfinite(pts).all():
+        raise PathError(
+            f"motion {motion} returned NaN or infinite positions for {row.entity}",
+            hint="return finite positions for every share in u",
+            context={"entity": row.entity, "motion": motion},
+        )
+    for share, point, placement in ((0, pts[0], a), (1, pts[-1], b)):
+        if math.dist((float(point[0]), float(point[1])), placement.point) > CONTINUITY_TOL:
+            raise ContinuityError(
+                f"motion {motion} is at {point.tolist()} at u={share}, not on {placement.point}",
+                hint="return start at u=0 and end at u=1",
+                context={"entity": row.entity, "motion": motion, "u": share},
+            )
+    return pts
+
+
 def _custom_curve(
     row: PathRow, a: Placement, b: Placement, motions: MotionRegistry
 ) -> AnyCurve | None:
@@ -147,13 +179,10 @@ def _custom_curve(
         raise PathError(f"custom path of {row.entity} names no motion", hint="set motion_fn")
     fn = motions.get(row.motion_fn)
     u = np.linspace(0.0, 1.0, CUSTOM_SAMPLES)
-    pts = np.asarray(fn(u, a.point, b.point, _plain_params(row)), dtype=float)
+    raw = fn(u, a.point, b.point, _plain_params(row))
+    pts = _motion_samples(row, row.motion_fn, a, b, raw)
     keep = np.concatenate([[True], np.linalg.norm(np.diff(pts, axis=0), axis=1) > CONTINUITY_TOL])
     vertices = tuple((float(x), float(y)) for x, y in pts[keep])
-    if math.dist(vertices[0], a.point) > CONTINUITY_TOL:
-        raise ContinuityError(
-            f"motion {row.motion_fn} does not start at {row.entity}", hint="fix it"
-        )
     return Polyline(points=vertices) if len(vertices) > 1 else None
 
 
