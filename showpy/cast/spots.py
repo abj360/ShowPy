@@ -358,12 +358,7 @@ def _facing_targets(show: "Show", ids: frozenset[SpotId]) -> list[str]:
         for row in spec.rows.values()
         if row.entity not in ids and faces_entity(row.facing_mode, row.facing_value) in ids
     ]
-    overrides = [
-        f"override at {o.start} faces {faces_entity(o.mode, o.value)}"
-        for o in show.facing_overrides
-        if faces_entity(o.mode, o.value) in ids
-    ]
-    return rows + overrides
+    return rows
 
 
 def delete_spots(show: "Show", sel: Selector, *, force: bool = False) -> "Show":
@@ -372,7 +367,9 @@ def delete_spots(show: "Show", sel: Selector, *, force: bool = False) -> "Show":
     Pinned placements, locked forms and locked paths raise LockedError unless `force=True`.
     A forced delete also drops the pins on the deleted spots. A deleted form member leaves an
     open slot, so later members keep their slots; text forms close the gap instead.
-    Spots that other spots face raise ShowValidationError until those facings change.
+    Spots that path rows face raise ShowValidationError until those facings change. A facing
+    override aimed at a deleted spot is removed. The report of what was dropped comes from
+    rename_spots() and rewrite_spots(), not from this function.
 
     >>> from showpy.examples import two_set_show
     >>> delete_spots(two_set_show(), "T2-T3").cast.ids()

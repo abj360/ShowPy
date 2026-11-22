@@ -202,8 +202,14 @@ def test_delete_spots_refuses_locked_form_without_force() -> None:
 
 def test_delete_spots_refuses_when_others_face_the_spot() -> None:
     with pytest.raises(ShowValidationError) as info:
-        delete_spots(rich_show(), ["T3"])
-    assert "T3" in info.value.message
+        delete_spots(rich_show(), ["T2"])
+    assert "T2" in info.value.message
+
+
+def test_regression_delete_spots_removes_an_override_aimed_at_the_spot() -> None:
+    """Removes a facing override that faces a deleted spot instead of refusing the delete."""
+    show = delete_spots(rich_show(), ["T3"])
+    assert show.facing_overrides == ()
 
 
 def test_regroup_relabels_and_returns_mapping() -> None:
