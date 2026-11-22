@@ -185,3 +185,28 @@ Audit decision 4 asks for the pattern and the reserved words.
   format migration step.
 - **Everything else is unchanged.** Spot, group, set, form and show IDs keep the pattern and
   reserved words above.
+
+## Addendum 2026-11-22: the pattern stays and `props` is reserved
+
+- **The pattern of decision 1 stays.** The maintainer decided on 2026-11-22 to keep it.
+  Alternative rejected again: `^[A-Za-z_][A-Za-z0-9_.-]{0,63}$`, which allows `-` and forbids a
+  leading digit. It would rename every numeric set ID (`1`, `12A`, `2.5`) in every stored show:
+  18 of the 19 set folder names in the three committed repository fixtures start with a digit
+  (v0.1.1: 2 of 2, v0.2.0: 6 of 6, v0.3.0: 10 of 11; counted from the `/sets/<key>/set.json`
+  paths in each fixture's stored trees), and so do all 4 set IDs of the two example shows in
+  `showpy.examples` that hold sets. It would also reopen the range ambiguity (`T1-T8`,
+  `flag-1-flag-3`) that decision 1 closed.
+- **`props` is a reserved word from v0.4.0.** v0.6.0 adds prop spots, which share the spot ID
+  namespace, and a selection word `props` that selects every prop spot, as `all` selects every
+  performer spot. Reserving the word now, while the v1-to-v2 migration renames IDs anyway, means
+  no later migration has to rename a spot called `props`. The rule is the one `all` follows:
+  compared ignoring case, as a whole ID, so `props.1` and `props2` stay valid. `RESERVED_IDS` in
+  `showpy/core/ids.py` grows from 23 names to 24.
+- **The migration renames a stored `props`.** The `ids` sub-step of the v1-to-v2 migration
+  applies the rule ADR 0007 (decision 5) already gives reserved words: the ID gets a trailing `_`,
+  so `props` becomes `props_` and `Props` becomes `Props_`. Every reference follows through the
+  same rewrite, and the migration report lists the rename.
+- **The addendum of 2026-11-19 ends with the old sheet model.** Landmark, zone and guide IDs and
+  sheet refs keep an inner hyphen only while the current sheet model exists. The sheet model that
+  replaces it at v0.6.0 decides its own item names and their pattern; ADR 0022, to be written,
+  records that choice. Nothing else in this ADR changes.
