@@ -165,8 +165,6 @@ def test_regression_detect_form_tolerates_one_outlier_on_a_clean_circle() -> Non
     assert approx_equal(curve["radius"], RING_RADIUS, abs_tol=FIT_TOL)
 
 
-@pytest.mark.defect("UP-9.6-31")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-31")
 def test_regression_fit_line_rejects_empty_input_with_schema_error() -> None:
     """Raises SchemaError for no points, with no numpy warning or ValueError (audit 9.6)."""
     with pytest.raises(SchemaError):
