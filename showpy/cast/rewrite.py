@@ -257,6 +257,17 @@ def _has_no_spots(selector: str | tuple[str, ...] | Selection) -> bool:
     return not isinstance(selector, str) and len(selector) == 0
 
 
+def _resolved_ids(show: "Show", selector: SelectorField) -> tuple[str, ...]:
+    if isinstance(selector, Selection):
+        return tuple(selector.ids)
+    if isinstance(selector, str):
+        try:
+            return tuple(select(show, selector).ids)
+        except (SchemaError, UnknownRefError):
+            return ()
+    return tuple(selector)
+
+
 def _rewrite_overrides(
     show: "Show", rename: Rename, dropped: _Dropped
 ) -> tuple[FacingOverride, ...]:
@@ -264,7 +275,7 @@ def _rewrite_overrides(
     for override in show.facing_overrides:
         entities = _rewrite_selector(show, override.entities, rename, dropped)
         target = faces_entity(override.mode, override.value)
-        lost_entities = _has_no_spots(entities) and not _has_no_spots(override.entities)
+        lost_entities = _has_no_spots(entities) and bool(_resolved_ids(show, override.entities))
         if lost_entities or (target is not None and rename(target) is None):
             dropped.facings.append(override)
         else:

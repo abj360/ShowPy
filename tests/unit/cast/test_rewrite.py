@@ -225,3 +225,13 @@ def test_regression_rewrite_refuses_a_row_facing_a_dropped_spot() -> None:
         rewrite_spots(rich_show(), lambda i: None if i == "T2" else i)
     assert "T1 faces T2" in excinfo.value.message
     assert excinfo.value.context["references"] == ["T1 faces T2 in 1→2"]
+
+
+def test_regression_override_with_an_empty_selection_is_not_dropped() -> None:
+    """Keeps an override whose selector already resolved to no spots before the rewrite."""
+    show = rich_show()
+    empty = show.facing_overrides[0].replace(entities="T1 - T1")
+    show = show.model_copy(update={"facing_overrides": (empty,)})
+    rewritten, report = rewrite_spots(show, lambda i: None if i == "T4" else i)
+    assert report.dropped_facings == ()
+    assert [o.entities for o in rewritten.facing_overrides] == [()]
