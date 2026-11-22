@@ -170,8 +170,6 @@ def test_regression_degenerate_area_anchor_never_leaks_shapely_errors() -> None:
         return
 
 
-@pytest.mark.defect("UP-9.3-123")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-123")
 def test_regression_accept_draft_accepts_a_hidden_draft_already_in_the_show() -> None:
     """Makes a hidden draft that is already in the show visible (audit 9.3)."""
     draft = Note(
@@ -181,8 +179,6 @@ def test_regression_accept_draft_accepts_a_hidden_draft_already_in_the_show() ->
     assert accept_draft(hidden, draft).notes[0].visible
 
 
-@pytest.mark.defect("UP-9.3-124")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-124")
 def test_regression_accept_draft_rejects_blank_text() -> None:
     """Rejects a draft whose text is blank, as add_note does (audit 9.3)."""
     draft = Note(
