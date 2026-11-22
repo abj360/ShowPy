@@ -19,9 +19,23 @@ Contains:
     test_core_check_script_exists: the core session's check script is in the repository
     test_ci_runs_the_core_session_on_linux: CI runs `nox -s core` on an Ubuntu runner
     test_ci_job_is_empty_for_a_missing_job: proves the job lookup can fail
+    ci_job_names(): lists the job names under the `jobs:` key of a workflow
+    job_value(): returns one key's value in a job, joining a folded `>-` value into one line
+    job_condition(): returns the job-level `if:` expression of one job
+    ungated_jobs(): lists the jobs that do not wait for and obey the changes job
+    test_ci_jobs_are_changes_lint_types_or_gated: every new CI job must be classed here
+    test_job_value_joins_a_folded_value: reads plain, folded and missing keys
+    test_ci_job_names_skip_trigger_keys: proves the job lister ignores `on:` keys
+    test_heavy_jobs_wait_for_the_changes_job: every heavy job needs changes and reads its output
+    test_ungated_jobs_sees_a_job_without_the_gate: proves the gate check can fail
+    test_single_jobs_skip_only_on_a_successful_docs_only_answer: the fail-closed job condition
+    test_matrix_job_gates_its_steps_not_itself: the matrix legs always start and expand
+    test_lint_types_runs_on_every_change: lint-types waits for nothing and is never skipped
+    test_changes_job_runs_the_classifier_on_full_history: the job diffs with the script
 """
 
 import ast
+import itertools
 import re
 import tomllib
 from pathlib import Path
@@ -41,6 +55,23 @@ EXTRAS_CONSTANT = "ALL_EXTRAS"
 CHECK_SCRIPT_CONSTANT = "CORE_CHECK_SCRIPT"
 LINUX_RUNNER = re.compile(r"^\s*runs-on:\s*ubuntu-", re.MULTILINE)
 JOB_HEADER = re.compile(r"^  (\S+):\s*$", re.MULTILINE)
+JOBS_KEY = "\njobs:\n"
+FOLDED = ">-"
+JOB_INDENT = 4
+ENV_INDENT = 6
+STEP_START = re.compile(r"^      - ", re.MULTILINE)
+CHANGES_JOB = "changes"
+UNGATED_JOB = "lint-types"
+MATRIX_JOB = "check"
+GATED_JOBS = ("check", "hashseed", "slow", "lowest", "wheel", "core", "docker")
+NEEDS_CHANGES = re.compile(r"^    needs: changes$", re.MULTILINE)
+RUNS_CODE_JOBS = "needs.changes.result != 'success' || needs.changes.outputs.code != 'false'"
+SINGLE_JOB_CONDITION = f"${{{{ !cancelled() && ({RUNS_CODE_JOBS}) }}}}"
+MATRIX_JOB_CONDITION = "${{ !cancelled() }}"
+MATRIX_STEP_ENV = f"${{{{ {RUNS_CODE_JOBS} }}}}"
+MATRIX_STEP_GATE = re.compile(
+    r"^(      - |        )if: env\.RUN_CODE_JOBS [!=]= 'true'$", re.MULTILINE
+)
 
 
 def tolerated_exit_codes(source: str, session_name: str) -> list[str]:
@@ -198,3 +229,123 @@ def test_ci_runs_the_core_session_on_linux() -> None:
 
 def test_ci_job_is_empty_for_a_missing_job() -> None:
     assert ci_job("jobs:\n  core:\n    runs-on: ubuntu-24.04\n", "wheel") == ""
+
+
+def ci_job_names(workflow: str) -> list[str]:
+    """Lists the job names under the `jobs:` key of a workflow, in file order."""
+    jobs = workflow[workflow.index(JOBS_KEY) :]
+    return [header.group(1) for header in JOB_HEADER.finditer(jobs)]
+
+
+def job_value(job: str, key: str, indent: int) -> str | None:
+    """Returns one key's value in a job, joining a folded `>-` value into one line.
+
+    Args:
+        job: The text of one job.
+        key: The mapping key to look up.
+        indent: The number of spaces before the key.
+
+    Returns:
+        value: The key's value with folded lines joined by single spaces, None when absent.
+    """
+    lines = job.splitlines()
+    prefix = f"{' ' * indent}{key}: "
+    deeper = " " * (indent + 1)
+    for index, line in enumerate(lines):
+        if not line.startswith(prefix):
+            continue
+        value = line.removeprefix(prefix)
+        if value != FOLDED:
+            return value
+        folded = itertools.takewhile(lambda part: part.startswith(deeper), lines[index + 1 :])
+        return " ".join(part.strip() for part in folded)
+    return None
+
+
+def job_condition(job: str) -> str | None:
+    """Returns the job-level `if:` expression of one job's text, or None when it has none."""
+    return job_value(job, "if", JOB_INDENT)
+
+
+def ungated_jobs(workflow: str, jobs: tuple[str, ...]) -> list[str]:
+    """Lists the jobs that do not both need the changes job and read its fail-closed answer.
+
+    Args:
+        workflow: The text of a workflow file.
+        jobs: The names of the jobs that must be gated.
+
+    Returns:
+        ungated: The names among jobs whose text lacks the dependency or the gate expression.
+    """
+    ungated = []
+    for name in jobs:
+        job = ci_job(workflow, name)
+        gates = (job_condition(job), job_value(job, "RUN_CODE_JOBS", ENV_INDENT))
+        if not NEEDS_CHANGES.search(job) or not any(
+            RUNS_CODE_JOBS in (gate or "") for gate in gates
+        ):
+            ungated.append(name)
+    return ungated
+
+
+def test_ci_jobs_are_changes_lint_types_or_gated() -> None:
+    names = ci_job_names(CI_WORKFLOW.read_text())
+    assert names[0] == CHANGES_JOB
+    assert sorted(names) == sorted([CHANGES_JOB, UNGATED_JOB, *GATED_JOBS])
+
+
+def test_job_value_joins_a_folded_value() -> None:
+    job = "  slow:\n    if: >-\n      ${{ a ||\n      b }}\n    runs-on: x\n"
+    assert job_condition(job) == "${{ a || b }}"
+    assert job_value(job, "runs-on", JOB_INDENT) == "x"
+    assert job_value(job, "needs", JOB_INDENT) is None
+
+
+def test_ci_job_names_skip_trigger_keys() -> None:
+    workflow = "on:\n  push:\n  pull_request:\n\njobs:\n  changes:\n    runs-on: x\n"
+    assert ci_job_names(workflow) == ["changes"]
+
+
+def test_heavy_jobs_wait_for_the_changes_job() -> None:
+    assert ungated_jobs(CI_WORKFLOW.read_text(), GATED_JOBS) == []
+
+
+def test_ungated_jobs_sees_a_job_without_the_gate() -> None:
+    workflow = (
+        "jobs:\n"
+        "  slow:\n    needs: changes\n    runs-on: x\n"
+        f"  wheel:\n    needs: changes\n    if: ${{{{ {RUNS_CODE_JOBS} }}}}\n"
+        f"  core:\n    if: ${{{{ {RUNS_CODE_JOBS} }}}}\n"
+    )
+    assert ungated_jobs(workflow, ("slow", "wheel", "core")) == ["slow", "core"]
+
+
+def test_single_jobs_skip_only_on_a_successful_docs_only_answer() -> None:
+    workflow = CI_WORKFLOW.read_text()
+    for name in GATED_JOBS:
+        if name != MATRIX_JOB:
+            assert job_condition(ci_job(workflow, name)) == SINGLE_JOB_CONDITION, name
+
+
+def test_matrix_job_gates_its_steps_not_itself() -> None:
+    job = ci_job(CI_WORKFLOW.read_text(), MATRIX_JOB)
+    assert job_condition(job) == MATRIX_JOB_CONDITION
+    assert job_value(job, "RUN_CODE_JOBS", ENV_INDENT) == MATRIX_STEP_ENV
+    steps = STEP_START.split(job)[1:]
+    assert steps
+    assert all(MATRIX_STEP_GATE.search(f"      - {step}") for step in steps)
+
+
+def test_lint_types_runs_on_every_change() -> None:
+    job = ci_job(CI_WORKFLOW.read_text(), UNGATED_JOB)
+    assert job
+    assert "    needs:" not in job
+    assert job_condition(job) is None
+
+
+def test_changes_job_runs_the_classifier_on_full_history() -> None:
+    job = ci_job(CI_WORKFLOW.read_text(), CHANGES_JOB)
+    assert "fetch-depth: 0" in job
+    assert "code: ${{ steps.classify.outputs.code }}" in job
+    assert "run: python3 scripts/ci_changes.py" in job
+    assert job_condition(job) is None
