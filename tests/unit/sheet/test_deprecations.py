@@ -31,11 +31,11 @@ from showpy._api_table import LEAVING, PUBLIC_API
 from showpy.core.deprecation import DeprecatedWarning
 from showpy.core.ids import LandmarkId, ZoneId
 from showpy.examples import two_set_show
-from showpy.export.data import export_json, import_json
 from showpy.sheet.models import CoordinateSystem, GuideLine, Landmark, Zone, ZoneKind
 from showpy.sheet.render import SheetCanvas
 from showpy.sheet.surfaces import NFHS_HASH, _proscenium_stage
 from showpy.sheet.templates import InMemorySheetStore, _blank_sheet
+from showpy.show.interchange import export_json, import_json
 from showpy.show.models import Show
 
 SHEET_SOURCE = Path(showpy.__file__).parent / "sheet"

@@ -414,10 +414,7 @@ if TYPE_CHECKING:
         FormatRegistry,
         as_table,
         export_frames_csv,
-        export_json,
         formats,
-        import_fonts,
-        import_json,
         register_exporter,
         register_importer,
         to_csv,
@@ -437,9 +434,6 @@ if TYPE_CHECKING:
     from showpy.export.pdf import (
         escape_text,
         to_pdf,
-    )
-    from showpy.export.positions import (
-        import_positions,
     )
     from showpy.export.print_sheets import (
         chart,
@@ -691,6 +685,12 @@ if TYPE_CHECKING:
         diff_show,
         rename_entities,
         revert,
+    )
+    from showpy.show.interchange import (
+        export_json,
+        import_fonts,
+        import_json,
+        import_positions,
     )
     from showpy.show.manage import (
         add_set,
@@ -1140,7 +1140,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "events_since": ("showpy.show.collab", "events_since"),
     "expand": ("showpy.choreo.set_transforms", "expand"),
     "export_frames_csv": ("showpy.export.data", "export_frames_csv"),
-    "export_json": ("showpy.export.data", "export_json"),
+    "export_json": ("showpy.show.interchange", "export_json"),
     "export_video": ("showpy.export.video", "export_video"),
     "face_along": ("showpy.choreo.facing", "face_along"),
     "face_audience": ("showpy.choreo.facing", "face_audience"),
@@ -1178,9 +1178,9 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "gym_floor": ("showpy.sheet.surfaces", "gym_floor"),
     "highlight": ("showpy.show.collab", "highlight"),
     "hold": ("showpy.choreo.paths", "hold"),
-    "import_fonts": ("showpy.export.data", "import_fonts"),
-    "import_json": ("showpy.export.data", "import_json"),
-    "import_positions": ("showpy.export.positions", "import_positions"),
+    "import_fonts": ("showpy.show.interchange", "import_fonts"),
+    "import_json": ("showpy.show.interchange", "import_json"),
+    "import_positions": ("showpy.show.interchange", "import_positions"),
     "in_region": ("showpy.cast.select", "in_region"),
     "index": ("showpy.show.manage", "index"),
     "insert_subset": ("showpy.show.manage", "insert_subset"),

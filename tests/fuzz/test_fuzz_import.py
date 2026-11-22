@@ -19,8 +19,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from showpy.examples import crossing_show, two_set_show
-from showpy.export.data import export_json, import_json
-from showpy.export.positions import POSITION_FIELDS, import_positions
+from showpy.show.interchange import POSITION_FIELDS, export_json, import_json, import_positions
 from tests.helpers import only_showpy_errors
 
 MAX_LEAVES = 20
