@@ -61,7 +61,7 @@ def test_drop_keeps_containers_and_removes_ids() -> None:
     assert show.zones[0].applies_to == ()
     assert show.zones[1].applies_to == "group:trumpets"
     assert show.zones[2].applies_to == Selection(ids=(SpotId("T4"),))
-    assert show.forms[FormId("line1")].members == ("T3", "T4")
+    assert show.forms[FormId("line1")].members == (None, None, "T3", "T4")
 
 
 def test_identity_rewrite_freezes_label_expressions_only() -> None:

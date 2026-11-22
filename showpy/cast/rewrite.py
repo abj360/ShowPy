@@ -149,12 +149,15 @@ def _rewrite_set(set_: Set, rename: Rename) -> Set:
 
 
 def _rewrite_form(form: Form, rename: Rename) -> Form:
-    members: list[str | None] = []
-    for member in form.members:
-        new = None if member is None else rename(member)
-        if member is None or new is not None:
-            members.append(new)
-    return form.replace(members=tuple(members))
+    """Renames a form's members; a dropped member leaves an open slot, except in a text form."""
+    renamed = [None if member is None else rename(member) for member in form.members]
+    if form.kind == "text":
+        renamed = [
+            new
+            for member, new in zip(form.members, renamed, strict=True)
+            if member is None or new is not None
+        ]
+    return form.replace(members=tuple(renamed))
 
 
 def _rewrite_route(route: Route, rename: Rename) -> Route:

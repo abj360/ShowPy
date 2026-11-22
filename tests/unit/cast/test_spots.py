@@ -163,11 +163,18 @@ def test_duplicate_spots_copies_attributes_at_offset() -> None:
     assert not show.set("1").get("T6").on_field
 
 
+def test_regression_delete_spots_leaves_an_open_slot_in_a_form() -> None:
+    """Keeps later members on their slots when a spot of a non-text form is deleted."""
+    form = delete_spots(rich_show(), ["T1"]).forms[FormId("line1")]
+    assert form.members == (None, "T2", "T3", "T4")
+    assert form.spots == ("T2", "T3", "T4")
+
+
 def test_delete_spots_removes_every_reference() -> None:
     show = delete_spots(rich_show(), ["T4"])
     assert "T4" not in show.cast.ids()
     assert all("T4" not in s.entity_ids() for s in show.sets)
-    assert show.forms[FormId("line1")].members == ("T1", "T2", "T3")
+    assert show.forms[FormId("line1")].members == ("T1", "T2", "T3", None)
     spec = show.transition(("1", "2"))
     assert "T4" not in spec.rows
     assert spec.routes[RouteId("r1")].members == ("T3",)
