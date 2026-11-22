@@ -4,8 +4,8 @@
 test_cast_scaling.py --- benchmarks how cast lookups, regroup and mirror_pairs scale with spots
 
 A designer's show holds hundreds of spots, so a quadratic step shows within one edit. Each gate
-times the same work at 300 and at 1,200 spots, as the fastest of three rounds, and demands under
-6x the time for 4x the spots (linear is 4x).
+times the same work at 300 and at 1,200 spots, as the fastest of many rounds of CPU time after a
+warm-up call, and demands under 6x the time for 4x the spots (linear is 4x).
 
 Contains:
     test_cast_spot_lookup_scales_linearly: gates looking up every spot by ID
@@ -13,6 +13,7 @@ Contains:
     test_mirror_pairs_scaling_is_recorded: records the mirror_pairs ratio without gating it
 """
 
+import time
 import timeit
 from collections.abc import Callable
 
@@ -32,12 +33,15 @@ pytestmark = pytest.mark.bench
 SMALL = 300
 LARGE = 1_200
 MAX_RATIO = 6.0
-ROUNDS = 3
+ROUNDS = 15
+CALLS_PER_ROUND = 5
 SEED = 7
 
 
 def _best(work: Callable[[], object]) -> float:
-    return min(timeit.repeat(work, number=1, repeat=ROUNDS))
+    work()
+    rounds = timeit.repeat(work, number=CALLS_PER_ROUND, repeat=ROUNDS, timer=time.process_time)
+    return min(rounds)
 
 
 def _cast(count: int) -> Cast:
