@@ -441,6 +441,8 @@ def test_regression_spot_entering_before_two_pinned_sets_names_both() -> None:
         add_spot(pinned, (1.0, 2.0), "trumpets", "1")
     assert "set 2" in info.value.message
     assert "set 3" in info.value.message
+    assert info.value.context["entered"] == ["T5 enters set 2", "T5 enters set 3"]
+    assert "set 1" not in info.value.message
 
 
 def _pinned_coordinates(show: Show, spot_id: str) -> list[tuple[float, float]]:
