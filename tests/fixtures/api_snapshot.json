@@ -947,7 +947,7 @@
   "Placement": {
     "model": {
       "entity": "showpy.core.ids.SpotId",
-      "facing": "Degrees",
+      "facing": "Heading",
       "form": "showpy.core.ids.FormId | None",
       "note": "str | None",
       "on_field": "bool",

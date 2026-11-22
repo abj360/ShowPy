@@ -107,8 +107,6 @@ def test_regression_spacing_spec_rejects_negative_gaps() -> None:
         SpacingSpec(gaps=((0, NEGATIVE_GAP),))
 
 
-@pytest.mark.defect("UP-9.6-41")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-41")
 def test_regression_facing_spec_normalizes_fixed_value() -> None:
     """Wraps a fixed facing of 720 degrees into [0, 360) (audit 9.6)."""
     spec = FacingSpec(mode="fixed", value=TURNS_PAST_FULL)

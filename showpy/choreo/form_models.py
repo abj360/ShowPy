@@ -25,7 +25,7 @@ Contains:
 from collections.abc import Mapping
 from typing import Annotated, ClassVar, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 
 from showpy.choreo.recipe_models import (
     ArcRecipe,
@@ -47,6 +47,7 @@ from showpy.core.deprecation import renamed_field
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, SpacingError
 from showpy.core.ids import FormId, SetId, SpotId, SpotIdField
+from showpy.core.numbers import normalize_angle
 from showpy.core.readonly import ReadOnly
 from showpy.core.types import (
     Degrees,
@@ -102,12 +103,21 @@ class FacingSpec(FrozenModel):
 
     Attributes:
         mode: `fixed`, `audience`, `toward_point`, `along`, `normal` or `outward`.
-        value: Degrees for fixed, a point for toward_point; for along, normal and outward an
-            optional offset in degrees added to the computed facing.
+        value: Heading for fixed, wrapped into [0, 360); a point for toward_point; for along,
+            normal and outward an optional offset in degrees added to the computed facing.
     """
 
     mode: Literal["fixed", "audience", "toward_point", "along", "normal", "outward"] = "audience"
     value: Degrees | Point | None = None
+
+    @field_validator("value")
+    @classmethod
+    def _wrap_fixed_heading(
+        cls, value: float | Point | None, info: ValidationInfo
+    ) -> float | Point | None:
+        if info.data.get("mode") == "fixed" and isinstance(value, float):
+            return normalize_angle(value)
+        return value
 
     @model_validator(mode="after")
     def _value_matches_mode(self) -> "FacingSpec":

@@ -1006,7 +1006,7 @@
     },
     "FacingSpec": {
       "additionalProperties": false,
-      "description": "Describes how form members face.\n\nAttributes:\n    mode: `fixed`, `audience`, `toward_point`, `along`, `normal` or `outward`.\n    value: Degrees for fixed, a point for toward_point; for along, normal and outward an\n        optional offset in degrees added to the computed facing.",
+      "description": "Describes how form members face.\n\nAttributes:\n    mode: `fixed`, `audience`, `toward_point`, `along`, `normal` or `outward`.\n    value: Heading for fixed, wrapped into [0, 360); a point for toward_point; for along,\n        normal and outward an optional offset in degrees added to the computed facing.",
       "properties": {
         "mode": {
           "default": "audience",
@@ -1973,14 +1973,14 @@
     },
     "Placement": {
       "additionalProperties": false,
-      "description": "Holds one spot's state at one set.\n\nAttributes:\n    entity: Spot ID.\n    x: Meters from the center line, audience-left negative.\n    y: Meters upstage from the front edge.\n    facing: Degrees, 0 toward the audience, counter-clockwise positive.\n    form: Form the spot belongs to in this set.\n    order: Index along that form.\n    pinned: Designer lock; edits need force=True.\n    note: Text printed on sheets.\n    on_field: False before an entrance or after an exit; not drawn or collision-checked.",
+      "description": "Holds one spot's state at one set.\n\nAttributes:\n    entity: Spot ID.\n    x: Meters from the center line, audience-left negative.\n    y: Meters upstage from the front edge.\n    facing: Degrees wrapped into [0, 360), 0 toward the audience, counter-clockwise positive.\n    form: Form the spot belongs to in this set.\n    order: Index along that form.\n    pinned: Designer lock; edits need force=True.\n    note: Text printed on sheets.\n    on_field: False before an entrance or after an exit; not drawn or collision-checked.",
       "properties": {
         "entity": {
           "title": "Entity",
           "type": "string"
         },
         "facing": {
-          "$ref": "#/$defs/Degrees",
+          "$ref": "#/$defs/Heading",
           "default": 0.0
         },
         "form": {

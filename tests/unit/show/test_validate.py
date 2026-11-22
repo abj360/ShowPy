@@ -146,7 +146,9 @@ def test_form_membership_is_checked() -> None:
 
 def test_facing_out_of_range_warns() -> None:
     show = two_set_show()
-    turned = show.set("1").with_placements({"T1": {"facing": 400.0}})
+    first = show.set("1")
+    unwrapped = first.placements[0].model_copy(update={"facing": 400.0})
+    turned = first.model_copy(update={"placements": (unwrapped, *first.placements[1:])})
     report = validate_set(show, turned)
     assert report.ok
     assert "FACING_RANGE" in _codes(report)

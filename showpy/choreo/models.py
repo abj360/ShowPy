@@ -29,7 +29,7 @@ from showpy.core.errors import LockedError, SchemaError, UnknownRefError
 from showpy.core.extras import require_extra
 from showpy.core.ids import FormId, SetId, SpotId, check_id
 from showpy.core.selection import Selection, operand_ids
-from showpy.core.types import Degrees, FrozenModel, Meters, Point, Points
+from showpy.core.types import FrozenModel, Heading, Meters, Point, Points
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -52,7 +52,7 @@ class Placement(FrozenModel):
         entity: Spot ID.
         x: Meters from the center line, audience-left negative.
         y: Meters upstage from the front edge.
-        facing: Degrees, 0 toward the audience, counter-clockwise positive.
+        facing: Degrees wrapped into [0, 360), 0 toward the audience, counter-clockwise positive.
         form: Form the spot belongs to in this set.
         order: Index along that form.
         pinned: Designer lock; edits need force=True.
@@ -63,7 +63,7 @@ class Placement(FrozenModel):
     entity: SpotId
     x: Meters
     y: Meters
-    facing: Degrees = 0.0
+    facing: Heading = 0.0
     form: FormId | None = None
     order: int | None = None
     pinned: bool = False

@@ -126,8 +126,6 @@ def test_regression_set_rejects_non_finite_counts(counts: float) -> None:
         Set(id=SetId("1"), counts=counts)
 
 
-@pytest.mark.defect("UP-9.6-40")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-40")
 def test_regression_placement_normalizes_facing() -> None:
     """Wraps a placement facing of 720 degrees into [0, 360) (audit 9.6)."""
     placement = Placement(entity=SpotId("A"), x=0.0, y=0.0, facing=TURNS_PAST_FULL)

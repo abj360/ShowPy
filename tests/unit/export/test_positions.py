@@ -151,8 +151,6 @@ def test_regression_import_positions_reads_semicolon_delimited_csv() -> None:
     assert semicolons == plain
 
 
-@pytest.mark.defect("UP-9.5-43")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-43")
 def test_regression_import_positions_normalizes_facing() -> None:
     """Stores facing 720 as 0 instead of keeping it unnormalized (audit 9.5)."""
     text = "set,counts,entity,x,y,facing\n3,4,T1,1,1,720\n"
