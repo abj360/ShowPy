@@ -139,7 +139,8 @@ would need a second package that re-exports the first.
 - A consumer that cannot change its import in one step (a long-lived deployment pinned by
   package name, not by tag): then the shim of the second alternative ships in a v0.4.x patch.
 - A later stored format that already rewrites every hash for another reason: then the two
-  hashing strings could be renamed in that same step at no extra cost.
+  hashing strings could be renamed in that same step at no extra cost (this ADR would then be
+  superseded).
 
 ## References
 
