@@ -25,6 +25,9 @@ Contains:
         along the subpath it stands nearest to
     test_regression_transform_form_maps_every_svg_subpath: moves each subpath of an svg form and
         stores no transform
+    test_regression_recipe_refuses_a_negative_slot_count: refuses an `n` below 0
+    test_regression_block_recipe_refuses_non_positive_rows_or_cols: refuses a block of 0 or fewer
+        rows or columns
     test_text_recipe_is_a_member_of_the_union: stores a text form's TextRecipe as its recipe
 """
 
@@ -56,7 +59,13 @@ from showpy.choreo.forms import (
     text_form,
     wedge_form,
 )
-from showpy.choreo.recipe_models import CustomRecipe, GeneratedRecipe, LineRecipe, SvgRecipe
+from showpy.choreo.recipe_models import (
+    BlockRecipe,
+    CustomRecipe,
+    GeneratedRecipe,
+    LineRecipe,
+    SvgRecipe,
+)
 from showpy.core.deprecation import DeprecatedWarning
 from showpy.core.errors import SchemaError
 from showpy.core.ids import FormId, SetId, SpotId
@@ -146,6 +155,18 @@ def test_regression_recipe_rejects_a_non_affine_transform_shape(transform: objec
 def test_regression_custom_recipe_needs_one_facing_per_point() -> None:
     with pytest.raises(SchemaError, match="one facing per point"):
         CustomRecipe(points=((0.0, 0.0), (1.0, 0.0)), facings=(0.0,))
+
+
+def test_regression_recipe_refuses_a_negative_slot_count() -> None:
+    with pytest.raises(SchemaError, match="n"):
+        CustomRecipe(points=((0.0, 0.0),), n=-1)
+    assert CustomRecipe(points=(), n=0).n == 0
+
+
+@pytest.mark.parametrize(("rows", "cols"), [(0, 2), (2, 0), (-1, 2), (2, -3)])
+def test_regression_block_recipe_refuses_non_positive_rows_or_cols(rows: int, cols: int) -> None:
+    with pytest.raises(SchemaError, match=r"rows|cols"):
+        BlockRecipe(origin=(0.0, 0.0), rows=rows, cols=cols, interval=1.0)
 
 
 def _nested_reader(params: Mapping[str, object], n: int) -> Points:

@@ -12,6 +12,10 @@ Contains:
     test_regression_facing_spec_rejects_nan_point: rejects a toward_point facing whose point is NaN
     test_regression_spacing_spec_rejects_negative_gaps: rejects a negative extra gap in
         SpacingSpec.gaps
+    test_regression_form_refuses_more_members_than_slots: rejects a form whose members outnumber
+        its slot count, and accepts one that fills it
+    test_regression_form_members_may_hold_open_slots: stores a slot with no spot as None, counts
+        it toward the slot count and lists each spot once
     test_regression_facing_spec_normalizes_fixed_value: wraps a fixed facing of 720 degrees into [0,
         360)
 """
@@ -23,7 +27,7 @@ import pytest
 
 from showpy.choreo.form_models import FacingSpec, Form, SpacingSpec
 from showpy.choreo.recipe_models import CustomRecipe
-from showpy.core.errors import SchemaError
+from showpy.core.errors import SchemaError, SpacingError
 from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.units import normalize_angle
 from showpy.core.util import approx_equal
@@ -99,3 +103,32 @@ def test_regression_facing_spec_normalizes_fixed_value() -> None:
     spec = FacingSpec(mode="fixed", value=TURNS_PAST_FULL)
     assert isinstance(spec.value, float)
     assert approx_equal(spec.value, normalize_angle(TURNS_PAST_FULL), abs_tol=ANGLE_TOL)
+
+
+def test_regression_form_refuses_more_members_than_slots() -> None:
+    members = (SpotId("A"), SpotId("B"), SpotId("C"))
+    with pytest.raises(SpacingError) as caught:
+        Form(id=FormId("f"), set=SetId("1"), recipe=CustomRecipe(points=(), n=2), members=members)
+    assert caught.value.context == {"form": "f", "n": 2, "members": 3}
+    full = Form(
+        id=FormId("f"), set=SetId("1"), recipe=CustomRecipe(points=(), n=3), members=members
+    )
+    assert len(full.members) == full.recipe.n
+
+
+def test_regression_form_members_may_hold_open_slots() -> None:
+    recipe = CustomRecipe(points=(), n=4)
+    gapped = Form(
+        id=FormId("f"),
+        set=SetId("1"),
+        recipe=recipe,
+        members=(SpotId("A"), None, None, SpotId("B")),
+    )
+    assert gapped.members == ("A", None, None, "B")
+    assert Form.model_validate_json(gapped.model_dump_json()) == gapped
+    with pytest.raises(SpacingError):
+        Form(id=FormId("f"), set=SetId("1"), recipe=recipe, members=(None,) * 5)
+    with pytest.raises(SchemaError):
+        Form(
+            id=FormId("f"), set=SetId("1"), recipe=recipe, members=(SpotId("A"), None, SpotId("A"))
+        )

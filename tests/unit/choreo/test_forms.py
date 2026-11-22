@@ -4,6 +4,8 @@
 test_forms.py --- tests form constructors, the recipe contract, slot spacing and facings
 
 Contains:
+    test_regression_placements_skip_open_slots_and_keep_slot_orders: places each spot of a gapped
+        form on its own slot and leaves the open slots empty
     test_regression_fill_form_rejects_zero_interval: raises SpacingError, not ZeroDivisionError, for
         fill_form(interval=0)
     test_regression_scatter_form_rejects_zero_min_gap: raises SpacingError, not ZeroDivisionError,
@@ -203,6 +205,13 @@ def test_slot_count_n_without_members() -> None:
     assert placements(form) == []
     with pytest.raises(SpacingError, match="no members"):
         slots(scatter_form("s", [], [(0, 0), (4, 0), (4, 4)], 1.0))
+
+
+def test_regression_placements_skip_open_slots_and_keep_slot_orders() -> None:
+    form = line_form("f", ["A", "B", "C"], (0, 0), (6, 0), n=4).replace(members=("A", None, "C"))
+    rows = placements(form)
+    assert [(p.entity, p.order) for p in rows] == [("A", 0), ("C", 2)]
+    assert [p.x for p in rows] == [0.0, 4.0]
 
 
 def test_members_beyond_slots_raise() -> None:

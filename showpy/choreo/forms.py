@@ -99,7 +99,7 @@ def check_unlocked(form: Form, *, force: bool) -> None:
 def _form(
     form_id: str,
     recipe: Recipe,
-    members: Sequence[str],
+    members: Sequence[str | None],
     spacing: SpacingSpec | None,
     facing: FacingSpec | None,
     set_id: str,
@@ -357,7 +357,7 @@ def scatter_form(
 
 def custom_form(
     form_id: str,
-    members: Sequence[str],
+    members: Sequence[str | None],
     points: object,
     facings: Sequence[Degrees] | None = None,
     *,
@@ -479,9 +479,9 @@ def text_form(
         line_spacing=line_spacing,
     )
     counted = count_recipe(recipe, n, spacing, font_registry)
+    require_member_count(form_id, stored_count(form_id, counted), len(members))
     form = _form(form_id, counted, members, None, facing, set_id)
     layout(form, font_registry=font_registry)
-    require_member_count(form_id, stored_count(form_id, counted), len(members))
     return form
 
 
@@ -555,7 +555,9 @@ def placements(
     *,
     font_registry: FontRegistry | None = None,
 ) -> list[Placement]:
-    """Regenerates one placement per member from the form's recipe, spacing and facing.
+    """Regenerates one placement per spot from the form's recipe, spacing and facing.
+
+    A spot's `order` is the slot it stands on; open slots get no placement.
 
     `font_registry` holds a text form's fonts; None means `bundled_fonts()`. A text form whose
     members no longer fill its slots raises `MEMBER_COUNT_MISMATCH` before any layout.
@@ -581,4 +583,5 @@ def placements(
             order=i,
         )
         for i, member in enumerate(form.members)
+        if member is not None
     ]

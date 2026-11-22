@@ -157,7 +157,7 @@ def _universe(source: "Show | Set | Cast") -> _Universe:
     if isinstance(source, Set):
         return _universe_of(source.entity_ids(), "set", None, _set_forms(source))
     forms: dict[str, tuple[SpotId, ...]] = {
-        form_id: form.members for form_id, form in source.forms.items()
+        form_id: form.spots for form_id, form in source.forms.items()
     }
     return _universe_of(source.cast.ids(), "show", source.cast, forms)
 

@@ -19,6 +19,8 @@ Contains:
     test_missing_snapshot_fails_outside_refresh_mode: fails and writes nothing
     test_refresh_writes_a_missing_snapshot: writes the first snapshot in refresh mode
     test_diff_snapshots_reports_each_kind_of_change: checks the diff on a synthetic pair
+    test_regression_snapshot_renders_an_annotated_type_without_its_validators: shows a field
+        type such as `SpotIdField` as its base type, with no validator address
     test_snapshot_is_stable_across_python_versions: checks reprs carry no version-only text
     test_regression_snapshot_tells_a_frozenset_constant_from_a_list: renders a set constant with
         its type, so a frozenset turned list shows up as a change
@@ -32,7 +34,7 @@ import os
 import types
 import warnings
 from pathlib import Path
-from typing import Literal, Union, get_args, get_origin
+from typing import Annotated, Literal, Union, get_args, get_origin
 
 import pytest
 from pydantic import BaseModel
@@ -95,6 +97,8 @@ def _annotation_text(annotation: object) -> str:
     if annotation is Ellipsis:
         return "..."
     origin, args = get_origin(annotation), get_args(annotation)
+    if origin is Annotated:
+        return _annotation_text(args[0])
     if origin in (Union, types.UnionType):
         return " | ".join(_annotation_text(arg) for arg in args)
     if origin is Literal:
@@ -272,6 +276,11 @@ def test_diff_snapshots_reports_each_kind_of_change() -> None:
     old: dict[str, JsonValue] = {"keep": "(a)", "drop": "(a)", "edit": "(a)"}
     new: dict[str, JsonValue] = {"keep": "(a)", "edit": "(a, b)", "add": "()"}
     assert diff_snapshots(old, new) == {"added": ["add"], "removed": ["drop"], "changed": ["edit"]}
+
+
+def test_regression_snapshot_renders_an_annotated_type_without_its_validators() -> None:
+    assert _annotation_text(Annotated[str, object()]) == "str"
+    assert "object" not in _annotation_text(tuple[Annotated[str, object()], ...])
 
 
 def test_snapshot_is_stable_across_python_versions() -> None:

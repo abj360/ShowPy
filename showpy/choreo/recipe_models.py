@@ -42,14 +42,14 @@ class RecipeBase(FrozenModel):
 
     Attributes:
         recipe_version: Shape version of the recipe; 1 for every kind.
-        n: Slot count; None gives one slot per member, or what the kind decides (interval
+        n: Slot count, 0 or more; None gives one slot per member, or what the kind decides (interval
             spacing fits as many as it can, a fill takes every lattice point).
         transform: 3x3 affine matrix applied to the generated slots and their directions, which
             keeps gated or mirrored forms editable; None for none.
     """
 
     recipe_version: Literal[1] = RECIPE_VERSION
-    n: int | None = None
+    n: int | None = Field(default=None, ge=0)
     transform: Affine | None = None
 
 
@@ -156,8 +156,8 @@ class BlockRecipe(RecipeBase):
 
     kind: Literal["block"] = "block"
     origin: Point
-    rows: int
-    cols: int
+    rows: int = Field(gt=0)
+    cols: int = Field(gt=0)
     interval: Meters
     facing: Degrees = 0.0
     anchor: BlockAnchor = "center"
