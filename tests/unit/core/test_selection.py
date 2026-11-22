@@ -5,9 +5,9 @@ test_selection.py --- tests the Selection set algebra
 
 Contains:
     test_*(): one behavior of showpy.core.selection each
-    test_selection_rejects_a_bare_string_as_ids: rejects `ids="T12"` instead of splitting it
+    test_regression_selection_rejects_a_bare_string: rejects `ids="T12"` instead of splitting it
         into characters
-    test_selection_rejects_a_bare_string: rejects a bare string operand of |, & and -
+    test_selection_operators_reject_a_bare_string: rejects a bare string operand of |, & and -
     test_selection_operators_accept_iterables: combines with tuples, lists and Selections
     test_selection_has_no_iter_override: leaves BaseModel iteration yielding the fields
     test_regression_selection_model_copy_keeps_ids_unique: deduplicates IDs on model_copy as the
@@ -68,14 +68,16 @@ def test_regression_malformed_ids_are_a_schema_error_not_a_type_error(ids: objec
         Selection.model_validate({"ids": ids})
 
 
-def test_selection_rejects_a_bare_string_as_ids() -> None:
+def test_regression_selection_rejects_a_bare_string() -> None:
     """Rejects `ids="T12"` instead of splitting it into characters (audit 9.3)."""
     with pytest.raises((ShowPyError, PydanticValidationError)):
         Selection(ids="T12")  # pyright: ignore[reportArgumentType] - deliberately invalid input
 
 
 @pytest.mark.parametrize("combine", [operator.or_, operator.and_, operator.sub])
-def test_selection_rejects_a_bare_string(combine: Callable[[Selection, str], Selection]) -> None:
+def test_selection_operators_reject_a_bare_string(
+    combine: Callable[[Selection, str], Selection],
+) -> None:
     with pytest.raises(SchemaError):
         combine(Selection(ids=(SpotId("T1"),)), "T12")
 
