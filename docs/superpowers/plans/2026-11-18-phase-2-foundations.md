@@ -78,19 +78,19 @@ scope is otherwise unchanged.
 **New (11).** Sections: L1, Z1 and L2 under "Transition tasks"; B4, C2b, C7, C8, F3 and E4 in
 their lanes; N1 and R1 under "Serial tail before lane X".
 
-| Task | Lane        | What                                                                   | Gate                                                                | State                                                   |
-| ---- | ----------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------- |
-| L1   | transition  | Relicense under PolyForm Noncommercial 1.0.0                           | ADR 0019 accepted                                                   | implemented on `chore/licence`, awaiting merge          |
-| Z1   | transition  | Six strict-xfail ledger tests, `UP-E-01` to `UP-E-06`                  | none                                                                | implemented on `test/evaluation-ledger`, awaiting merge |
-| L2   | transition  | `MAX_COORD_M`, `MAX_COUNTS` and `MIN_TEMPO` bounds in the core aliases | none                                                                | implemented on `feat/core-bounds`, awaiting merge       |
-| B4   | B           | Cached engine lookups                                                  | A1 and B2 merged                                                    | to do                                                   |
-| C2b  | C           | Composite curves must be continuous (UP-9.1-21)                        | G1 merged                                                           | to do                                                   |
-| C7   | C           | `project()` over the whole curve (UP-E-01)                             | C2 merged                                                           | to do                                                   |
-| C8   | C           | Geometry results are finite or an error (UP-E-03)                      | C7 merged                                                           | to do                                                   |
-| F3   | F           | Deprecation rows for the sheet names that leave                        | F1 merged, ADR 0021 accepted                                        | to do                                                   |
-| E4   | E           | Interchange moves to `showpy/show/interchange.py`; export deprecations | E1 merged, ADR 0021 accepted                                        | to do                                                   |
-| N1   | serial tail | Notes leave `Show` for a `notes.json` document                         | lanes A and D merged, ADR 0021 accepted                             | to do                                                   |
-| R1   | serial tail | The rename to e8Show                                                   | every lane merged, no lane branch open, ADRs 0020 and 0023 accepted | to do                                                   |
+| Task | Lane        | What                                                                                        | Gate                                                                | State                                                   |
+| ---- | ----------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------- |
+| L1   | transition  | Relicense under PolyForm Noncommercial 1.0.0                                                | ADR 0019 accepted                                                   | implemented on `chore/licence`, awaiting merge          |
+| Z1   | transition  | Six strict-xfail ledger tests, `UP-E-01` to `UP-E-06`                                       | none                                                                | implemented on `test/evaluation-ledger`, awaiting merge |
+| L2   | transition  | `MAX_COORD_M`, `MAX_COUNTS` and `MIN_TEMPO` bounds in the core aliases                      | none                                                                | implemented on `feat/core-bounds`, awaiting merge       |
+| B4   | B           | Cached engine lookups                                                                       | A1 and B2 merged                                                    | to do                                                   |
+| C2b  | C           | Composite curves must be continuous (UP-9.1-21)                                             | G1 merged                                                           | to do                                                   |
+| C7   | C           | `project()` over the whole curve (UP-E-01)                                                  | C2 merged                                                           | to do                                                   |
+| C8   | C           | Geometry results are finite or an error (UP-E-03)                                           | C7 merged                                                           | to do                                                   |
+| F3   | F           | Deprecation rows for the leaving sheet names, `Show.coordinates` and `Show.zones`           | F1 merged, ADR 0021 accepted                                        | to do                                                   |
+| E4   | E           | Interchange moves to `showpy/show/interchange.py`; export and `Spot.claimable` deprecations | E1 merged, ADR 0021 accepted                                        | to do                                                   |
+| N1   | serial tail | Notes leave `Show` for a `notes.json` document                                              | lanes A and D merged, ADR 0021 accepted                             | to do                                                   |
+| R1   | serial tail | The rename to e8Show                                                                        | every lane merged, no lane branch open, ADRs 0020 and 0023 accepted | to do                                                   |
 
 **Order.** L1 first, before any lane branch is pushed. Z1 and L2 before the lanes rebase. Then
 as in "Sequencing", plus: C2b after G1; B4 after A1 and B2; C7 after C2; C8 after C7; F3 after
@@ -105,9 +105,14 @@ in C2's row), C7 flips UP-E-01 and C8 flips UP-E-03.
 
 - Ledger: ADR 0021 retires 63 IDs, which stay strict xfails until their code is deleted at
   v0.6.0; 13 IDs in the folders that lose code still flip with E1 and F1; Z1 adds `UP-E-01` to
-  `UP-E-06`, of which C7 flips UP-E-01 and C8 flips UP-E-03. The default suite prints
-  `Ledger: 188 open` (the plan's 174, plus the 10 IDs that no longer flip, plus the 4 open
-  evaluation IDs); `nox -s slow` prints `Ledger: 1 open`.
+  `UP-E-06`, of which C7 flips UP-E-01 and C8 flips UP-E-03. Measured: `main` printed
+  `Ledger: 339 open` at `8b92d66` (default suite); Z1 adds 6, giving 345. Of the tests the
+  "Ledger coverage" table assigns to the lanes, 165 are still open at `8b92d66`; less the 10
+  that now retire (E2's 2, F2's 7, UP-9.4-45), the lanes flip 155, and C7 and C8 flip 2 more:
+  345 − 155 − 2 = 188. The same target from the original plan: its 174, plus the 10 retiring
+  tests, plus at most the 4 Z1 IDs no Phase 2 task flips (UP-E-02, UP-E-04, UP-E-05,
+  UP-E-06) = 188. So the default suite prints at most `Ledger: 188 open`, and `nox -s slow`
+  prints `Ledger: 1 open`.
 - `validate_show` at 300 spots by 60 sets runs under 1 s (A1, G3).
 - A seeded 3,000-spot show builds in under 3 s (A1, G3).
 - With 1,500 holds, a clock call takes under 1 ms (T1).
@@ -119,8 +124,9 @@ in C2's row), C7 flips UP-E-01 and C8 flips UP-E-03.
 - `import e8show` works and `import showpy` raises `ModuleNotFoundError` (R1).
 - The wheel's `License-Expression` is
   `PolyForm-Noncommercial-1.0.0 AND MIT AND OFL-1.1 AND LicenseRef-Hershey-Fonts` (L1).
-- `git diff v0.3.0 -- showpy/fonts` is empty; after R1 moves the folder, every font file shows
-  only as a 100% rename.
+- `git diff v0.3.0 -- showpy/fonts` is empty before R1; after R1,
+  `git diff -M --stat v0.3.0 -- showpy/fonts e8show/fonts` shows only 100% renames (no content
+  change), and the five bundled font URIs equal their v0.3.0 values.
 
 ## Decisions needed
 
@@ -1365,7 +1371,8 @@ strict xfails until their code is deleted at v0.6.0. Do not start.
 ### Task F3: deprecation rows for the sheet names that leave
 
 **Gate:** F1 merged, ADR 0021 accepted. **Fixes:** none. **Files:** Modify `showpy/sheet/*`
-(warning lines only), `showpy/_api_table.py`; regenerate `showpy/__init__.py` and
+(warning lines only), `showpy/show/models.py` (the `Show.coordinates` and `Show.zones` warning
+lines only), `showpy/_api_table.py`; regenerate `showpy/__init__.py` and
 `tests/fixtures/api_snapshot.json`. Test new `tests/unit/sheet/test_deprecations.py`, and the
 sheet test modules that exercise a leaving name.
 
@@ -1382,15 +1389,19 @@ name "leaves the library":
   `render_sheet`;
 - the names that change shape (up to 16, such as `sheet_templates`, `get_sheet`, `customize`,
   `GuideLine` and `on_surface`), each with the replacement ADR 0021's table gives; the commit
-  body lists the final set.
+  body lists the final set;
+- the sheet-side stored fields (2): `Show.coordinates` and `Show.zones`. Reading either warns;
+  decoding a stored show does not. The v3 format step at v0.6.0 drops both fields and lists them
+  in its report (ADR 0023).
 
 Library code that still needs a leaving name calls its private implementation, so only callers
 outside the library warn. The sheet test modules that exercise a leaving name filter
 `DeprecatedWarning` only (a module-level `pytest.mark.filterwarnings`), never all warnings.
 
 - [ ] **Step 1:** Test `test_leaving_sheet_names_warn` (parametrized over the rows: each name
-      warns `DeprecatedWarning` naming v0.6.0 and returns the same object as before). Run; expect
-      FAIL.
+      warns `DeprecatedWarning` naming v0.6.0 and returns the same object as before) and
+      `test_leaving_show_sheet_fields_warn` (reading `Show.coordinates` or `Show.zones` warns;
+      decoding a v1 or v2 show does not). Run; expect FAIL.
 - [ ] **Step 2:** Add the rows and the warning aliases; regenerate `showpy/__init__.py` and the
       API snapshot; run all gates (warnings are errors, so any internal call to a leaving name
       fails the suite).
@@ -1552,7 +1563,8 @@ start.
 **Gate:** E1 merged, ADR 0021 accepted; the pandas step after lanes B and G merge. **Fixes:**
 none (UP-9.5-41 and UP-9.5-42 move with `import_positions`, markers unchanged). **Files:** Modify
 `showpy/export/*`, `showpy/_api_table.py`, and for the five pandas results only their warning
-lines in `showpy/choreo/{motion_stats,paths,models}.py`. Create `showpy/show/interchange.py` and
+lines in `showpy/choreo/{motion_stats,paths,models}.py`, and the `Spot.claimable` warning lines in
+`showpy/cast/models.py`. Create `showpy/show/interchange.py` and
 `tests/unit/show/test_interchange.py`. Regenerate `showpy/__init__.py` and
 `tests/fixtures/api_snapshot.json`.
 
@@ -1570,20 +1582,25 @@ lines in `showpy/choreo/{motion_stats,paths,models}.py`. Create `showpy/show/int
   9, video 3. Each message says the name "leaves the library" or names its replacement.
 - The five pandas results (`speeds`, `energy_curve`, `phrase_profile`, `paths_table`,
   `Set.table`) keep their names and warn that they return arrays from v0.6.0.
+- The publishing-side stored field `Spot.claimable` gets a `DEPRECATED` row; reading it warns,
+  decoding a stored show does not. The v3 format step at v0.6.0 drops it and lists it in its
+  report (ADR 0023).
 - Library code that still needs a leaving name calls its private implementation; export test
   modules filter `DeprecatedWarning` only.
 
 - [ ] **Step 1:** Tests: `test_regression_import_json_refuses_an_unknown_top_level_key`,
       `test_import_json_keeps_x_keys` (an `x-extra` key survives an import and export round
       trip), `test_interchange_old_paths_warn_and_resolve`,
-      `test_leaving_export_names_warn` (parametrized over the rows) and
-      `test_pandas_results_warn_about_arrays`. Run; expect FAIL.
+      `test_leaving_export_names_warn` (parametrized over the rows),
+      `test_pandas_results_warn_about_arrays` and `test_spot_claimable_warns` (reading it warns;
+      decoding a stored show does not). Run; expect FAIL.
 - [ ] **Step 2:** Move the interchange code with no behavior change; commit
       `refactor(show): move JSON and positions interchange into show.interchange`, naming the
       four functions in the body.
 - [ ] **Step 3:** Refuse unknown top-level keys and keep `x-` keys; commit
       `fix(show)!: refuse unknown top-level keys in import_json and keep x- keys`.
-- [ ] **Step 4:** Add the export rows and warning aliases; regenerate `showpy/__init__.py` and the
+- [ ] **Step 4:** Add the export rows, the `Spot.claimable` row and the warning aliases;
+      regenerate `showpy/__init__.py` and the
       API snapshot; commit `feat(export): deprecate the export names that leave the library`,
       with every name listed in the body.
 - [ ] **Step 5:** After lanes B and G merge, the pandas warnings; commit
@@ -1670,9 +1687,10 @@ shim (ADR 0020). The format value becomes `e8.show` and the v2 schema `e8.show.v
 - [ ] **Step 6:** Scripted replacement also edits `>>>` doctest lines (wanted here), so run the
       doctests, then every gate, Docker included.
 - [ ] **Step 7:** Prove nothing stored moved: `git diff --stat` is empty for
-      `tests/fixtures/repos/`, and the font files show only as 100% renames
-      (`git diff -M100% --stat v0.3.0 -- showpy/fonts e8show/fonts`). Add
-      `test_bundled_font_uris_equal_their_v030_values` (the five URIs copied from v0.3.0).
+      `tests/fixtures/repos/`, and `git diff -M --stat v0.3.0 -- showpy/fonts e8show/fonts`
+      shows only 100% renames (no content change). Add
+      `test_bundled_font_uris_equal_their_v030_values`: the five bundled font URIs equal their
+      v0.3.0 values (copied from v0.3.0).
 - [ ] **Step 8:** Commit `refactor!: rename the library to e8show` with a `BREAKING CHANGE:`
       footer naming `showpy`, `ShowPyError` and the `SHOWPY_` variables.
 - [ ] **Step 9:** After the maintainer approves: rename the GitHub repository to
@@ -1707,16 +1725,17 @@ another's.
 
 ### Task X2: exit checks
 
-**Amended:** the ledger line expectations of the amendment replace `Ledger: 174 open`: the default
-line is 174 plus 10 (E2's 2 and F2's 7 IDs and UP-9.4-45 no longer flip) plus the 4 evaluation IDs
-no Phase 2 task flips (UP-E-02, UP-E-04, UP-E-05, UP-E-06), so `Ledger: 188 open`, and `nox -s slow`
-prints `Ledger: 1 open`; a measured difference is explained ID by ID in the commit body, never
-closed by editing a marker. The Step 1 constant drops the E2 and F2 IDs and UP-9.4-45 and adds
-UP-E-01 and UP-E-03. Add `test_every_leaving_name_is_deprecated` (every name in ADR 0021's timeline
-has a `DEPRECATED` row with its removal version). Set `MAX_SPOTS = 5_000` and `MAX_SETS = 1_000`
-from a re-measurement after A1 and G3, in `showpy/core/caps.py`, with tests at the boundary (5,000
-accepted, 5,001 refused; the same for sets). 0 `type: ignore` in the library and 0 `Any` in a stored
-model field, guarded by the Step 2 tests.
+**Amended:** the ledger line expectations of the amendment replace `Ledger: 174 open`: from the
+measured `Ledger: 339 open` at `8b92d66`, Z1 adds 6 (345), the lanes flip the 155 planned tests
+still open (165 less the 10 retiring ones of E2, F2 and UP-9.4-45) and C7 and C8 flip 2, so the
+default line is at most `Ledger: 188 open` (equally, the original 174 plus 10 plus at most 4), and
+`nox -s slow` prints `Ledger: 1 open`; a measured difference is explained ID by ID in the commit
+body, never closed by editing a marker. The Step 1 constant drops the E2 and F2 IDs and UP-9.4-45
+and adds UP-E-01 and UP-E-03. Add `test_every_leaving_name_is_deprecated` (every name in ADR 0021's
+timeline has a `DEPRECATED` row with its removal version). Set `MAX_SPOTS = 5_000` and
+`MAX_SETS = 1_000` from a re-measurement after A1 and G3, in `showpy/core/caps.py`, with tests at
+the boundary (5,000 accepted, 5,001 refused; the same for sets). 0 `type: ignore` in the library and
+0 `Any` in a stored model field, guarded by the Step 2 tests.
 
 **Files:** Modify `tests/unit/test_ledger.py`, `tests/unit/test_library_rules.py`.
 
