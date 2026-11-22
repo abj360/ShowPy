@@ -104,9 +104,9 @@ from showpy.core.errors import (
     UnknownRefError,
 )
 from showpy.core.ids import SpotId
-from showpy.export.models import Performer, Publication
-from showpy.export.print_sheets import chart, coordinate_sheets
-from showpy.export.publish import (
+from showpy.export._models import Performer, Publication
+from showpy.export._print_sheets import chart, coordinate_sheets
+from showpy.export._publish import (
     claim_spot,
     claims,
     join_link,

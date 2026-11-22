@@ -5,6 +5,10 @@ test_leaving_names.py --- tests that the export names and Spot.claimable warn be
 
 Contains:
     test_leaving_export_names_warn(): warns with the shared wording on `showpy.<name>` access
+    test_leaving_names_warn_from_their_export_module(): warns from showpy.export.<module> too
+    test_from_import_of_a_leaving_name_warns_at_the_import_line(): warns on `from ... import`
+    test_an_unknown_name_in_an_export_module_is_an_attribute_error(): refuses unknown names
+    test_library_modules_import_without_warning(): imports the private modules silently
     test_leaving_export_rows_cover_the_decided_names(): checks the 41 names, kinds, removal
         releases and replacements of each group
     test_spot_claimable_warns(): warns on an outside read, not on decoding a stored show
@@ -12,6 +16,8 @@ Contains:
 """
 
 import importlib
+import subprocess
+import sys
 import warnings
 from collections import Counter
 
@@ -69,6 +75,40 @@ def test_leaving_export_names_warn(row: tuple[str, str, object, str, str]) -> No
         assert resolved is getattr(module, name)
     assert name not in vars(showpy)
     assert name in showpy.__all__
+
+
+@pytest.mark.parametrize("row", EXPORT_ROWS, ids=[row[0] for row in EXPORT_ROWS])
+def test_leaving_names_warn_from_their_export_module(
+    row: tuple[str, str, object, str, str],
+) -> None:
+    name, _kind, _replacement, since, remove = row
+    private = PUBLIC_MODULES[name]
+    public = private.replace("._", ".")
+    with pytest.warns(DeprecatedWarning) as caught:
+        resolved = getattr(importlib.import_module(public), name)
+    expected = f"`{public}.{name}` is deprecated since {since} and leaves the library in {remove}"
+    assert str(caught[0].message) == expected + ENDINGS[name]
+    assert caught[0].filename == __file__
+    assert resolved is getattr(importlib.import_module(private), name)
+
+
+def test_from_import_of_a_leaving_name_warns_at_the_import_line() -> None:
+    with pytest.warns(DeprecatedWarning, match="`showpy.export.publish.claim_spot` is") as caught:
+        from showpy.export.publish import claim_spot
+    assert caught[0].filename == __file__
+    assert claim_spot.__module__ == "showpy.export._publish"
+
+
+def test_an_unknown_name_in_an_export_module_is_an_attribute_error() -> None:
+    module = importlib.import_module("showpy.export.publish")
+    assert not hasattr(module, "nothing")
+
+
+def test_library_modules_import_without_warning() -> None:
+    private = ("_publish", "_video", "_data", "_pdf", "_print_sheets", "_models")
+    imports = ", ".join(f"showpy.export.{module}" for module in private)
+    code = f"import {imports}, showpy.examples.publishing"
+    subprocess.run([sys.executable, "-W", "error", "-c", code], check=True)
 
 
 def test_leaving_export_rows_cover_the_decided_names() -> None:

@@ -50,8 +50,8 @@ from showpy.core.ids import SetId
 from showpy.core.resources import schema_path
 from showpy.core.util import approx_equal, content_hash
 from showpy.examples import EXAMPLE_TIME, performer
-from showpy.export.models import Publication
-from showpy.export.publish import claim_spot, join_link, publish, unclaimed, verify_join_token
+from showpy.export._models import Publication
+from showpy.export._publish import claim_spot, join_link, publish, unclaimed, verify_join_token
 from showpy.show.collab import apply_event, decode_event, events_since
 from showpy.show.documents import decode_show, encode_show
 from showpy.show.file_repository import FileRepository

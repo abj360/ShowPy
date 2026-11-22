@@ -31,9 +31,9 @@ from showpy.choreo.motion_stats import energy_curve, phrase_profile, speeds
 from showpy.choreo.paths import paths_table
 from showpy.core.extras import MissingExtraError
 from showpy.examples import COUNTS, EXAMPLE_TID, two_set_show
-from showpy.export.print_sheets import cue_sheet
-from showpy.export.publish import publish, qr_code
-from showpy.export.video import export_video, render_frame, video_canvas
+from showpy.export._print_sheets import cue_sheet
+from showpy.export._publish import publish, qr_code
+from showpy.export._video import export_video, render_frame, video_canvas
 from showpy.sheet.render import SheetCanvas, _draw_sheet, _render_sheet
 from showpy.sheet.templates import _blank_sheet
 

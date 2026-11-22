@@ -20,8 +20,8 @@ from showpy.choreo.path_models import PathRow, PathStyle
 from showpy.core.errors import SchemaError, UnknownRefError
 from showpy.core.ids import SetId, SpotId
 from showpy.core.util import approx_equal
-from showpy.export.models import Claim
-from showpy.export.print_sheets import chart, coordinate_sheet, coordinate_sheets, cue_sheet
+from showpy.export._models import Claim
+from showpy.export._print_sheets import chart, coordinate_sheet, coordinate_sheets, cue_sheet
 from showpy.sheet.models import GuideLine
 from showpy.show.models import Show
 from showpy.time.models import Cue, Marker, MeasureSetting, Timeline, TimelineMode

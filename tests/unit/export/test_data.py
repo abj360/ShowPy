@@ -44,7 +44,7 @@ from showpy.core.errors import (
 )
 from showpy.core.ids import LEGACY_IDS_KEY, SetId, SpotId
 from showpy.core.util import approx_equal
-from showpy.export.data import (
+from showpy.export._data import (
     DEFAULT_FORMATS,
     as_table,
     export_frames_csv,
@@ -54,8 +54,8 @@ from showpy.export.data import (
     to_csv,
     to_text,
 )
-from showpy.export.models import Chart, ChartRow, Claim, CoordinateSheet, SheetRow
-from showpy.export.print_sheets import chart, coordinate_sheet, cue_sheet
+from showpy.export._models import Chart, ChartRow, Claim, CoordinateSheet, SheetRow
+from showpy.export._print_sheets import chart, coordinate_sheet, cue_sheet
 from showpy.geo.fonts import FontRegistry
 from showpy.show.models import Show
 from tests.fixtures.export_shows import AT, guided_show, live_publication, performer
@@ -304,7 +304,7 @@ def test_csv_neutralizes_exactly_the_non_numeric_formula_cells(cells: list[str])
 def test_frames_csv_is_byte_identical_across_runs_and_hash_seeds() -> None:
     """Writes the same frames CSV twice in one run and under two hash seeds (audit 4.3)."""
     digests = digests_under_hash_seeds(
-        "from showpy.export.data import export_frames_csv", "export_frames_csv(show).encode()"
+        "from showpy.export._data import export_frames_csv", "export_frames_csv(show).encode()"
     )
     assert all(first == second for first, second in digests), digests
     assert len({first for first, _ in digests}) == 1, digests

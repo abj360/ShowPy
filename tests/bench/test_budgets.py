@@ -26,7 +26,7 @@ from showpy.choreo.match import match
 from showpy.core.ids import TransitionId
 from showpy.core.util import seeded_rng
 from showpy.examples import two_set_show
-from showpy.export.video import export_video
+from showpy.export._video import export_video
 from showpy.show.collab import events_since
 from showpy.show.manage import index
 from showpy.show.models import Show

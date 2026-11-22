@@ -57,7 +57,7 @@ from showpy.core.errors import (
     UnknownRefError,
 )
 from showpy.core.util import approx_equal
-from showpy.export.video import export_video, render_frame, video_canvas
+from showpy.export._video import export_video, render_frame, video_canvas
 from showpy.show.models import Show
 from showpy.time.models import AudioTrack
 from tests.fixtures.shows import two_set_show
@@ -434,6 +434,6 @@ def test_regression_export_video_refuses_an_empty_encoder_output(
     def write_nothing(_show: Show, path: Path, *_rest: object) -> None:
         path.write_bytes(b"")
 
-    monkeypatch.setattr("showpy.export.video._write_frames", write_nothing)
+    monkeypatch.setattr("showpy.export._video._write_frames", write_nothing)
     with pytest.raises(StorageError):
         export_video(two_set_show(), (0.0, 1.0), fps=FPS, px_per_m=SMALL_PX_PER_M)
