@@ -1,6 +1,38 @@
 {
   "$comment": "Licensed under the MIT License: see LICENSE-MIT.txt beside this file.",
   "$defs": {
+    "Affine": {
+      "maxItems": 3,
+      "minItems": 3,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/AffineRow"
+        },
+        {
+          "$ref": "#/$defs/AffineRow"
+        },
+        {
+          "$ref": "#/$defs/AffineRow"
+        }
+      ],
+      "type": "array"
+    },
+    "AffineRow": {
+      "maxItems": 3,
+      "minItems": 3,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/Finite"
+        },
+        {
+          "$ref": "#/$defs/Finite"
+        },
+        {
+          "$ref": "#/$defs/Finite"
+        }
+      ],
+      "type": "array"
+    },
     "Anchor": {
       "additionalProperties": false,
       "description": "Tags what a note or comment is attached to; exactly the field for `kind` is set.\n\nAttributes:\n    kind: What the anchor points at.\n    set_id: Set, for kind `set`.\n    tid: Transition, for kind `transition`.\n    point: Sheet point, for kind `point`.\n    area: Sheet area, for kind `area`.\n    spots: Spot IDs, for kind `spots`.",
@@ -186,6 +218,55 @@
       "title": "ArcCurve",
       "type": "object"
     },
+    "ArcRecipe": {
+      "additionalProperties": false,
+      "description": "Holds the curve of an arc form, refusing a sweep past one full turn.\n\nA sweep past 360 degrees would put slots on top of each other, so a sweep lies in (0, 360]\ndegrees either way; the arc curve itself refuses a zero sweep.\n\n>>> from showpy.geo.shapes import arc\n>>> ArcRecipe(curve=arc((0, 0), 2.0, 0.0, 90.0)).kind\n'arc'",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/AnyCurve"
+        },
+        "kind": {
+          "const": "arc",
+          "default": "arc",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "curve"
+      ],
+      "title": "ArcRecipe",
+      "type": "object"
+    },
     "AudioTrack": {
       "additionalProperties": false,
       "description": "Describes music or sound that plays alongside the show.\n\nAttributes:\n    file: Path or URI of the audio asset.\n    label: Unique name of the track.\n    sync_offset_s: Audio time that plays at count 0.\n    gain: Linear playback gain.\n    section: (start, end) counts the track covers, or None for the whole show.",
@@ -265,6 +346,89 @@
         "control"
       ],
       "title": "BezierCurve",
+      "type": "object"
+    },
+    "BlockAnchor": {
+      "enum": [
+        "center",
+        "front-left",
+        "front-center",
+        "front-right",
+        "back-left",
+        "back-center",
+        "back-right"
+      ],
+      "type": "string"
+    },
+    "BlockRecipe": {
+      "additionalProperties": false,
+      "description": "Holds a rows x cols block, front row first.\n\nAttributes:\n    origin: Point the anchor sits on.\n    rows: Rows from front to back.\n    cols: Columns from left to right.\n    interval: Meters between neighbouring slots.\n    facing: Direction the block faces, which turns the rows and columns.\n    anchor: Which slot or edge of the block sits on `origin`.\n\n>>> BlockRecipe(origin=(0, 0), rows=1, cols=2, interval=1.0).anchor\n'center'",
+      "properties": {
+        "anchor": {
+          "$ref": "#/$defs/BlockAnchor",
+          "default": "center"
+        },
+        "cols": {
+          "title": "Cols",
+          "type": "integer"
+        },
+        "facing": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        },
+        "interval": {
+          "$ref": "#/$defs/Meters"
+        },
+        "kind": {
+          "const": "block",
+          "default": "block",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "origin": {
+          "$ref": "#/$defs/Point"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "rows": {
+          "title": "Rows",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "origin",
+        "rows",
+        "cols",
+        "interval"
+      ],
+      "title": "BlockRecipe",
       "type": "object"
     },
     "BuiltInMotionParams": {
@@ -363,6 +527,55 @@
         "radius"
       ],
       "title": "CircleCurve",
+      "type": "object"
+    },
+    "CircleRecipe": {
+      "additionalProperties": false,
+      "description": "Holds the curve of a circle form.",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/AnyCurve"
+        },
+        "kind": {
+          "const": "circle",
+          "default": "circle",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "curve"
+      ],
+      "title": "CircleRecipe",
       "type": "object"
     },
     "Claimable": {
@@ -499,6 +712,123 @@
         "estimated_seconds"
       ],
       "title": "Cue",
+      "type": "object"
+    },
+    "CurveRecipe": {
+      "additionalProperties": false,
+      "description": "Holds the smooth curve of a curve form.",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/AnyCurve"
+        },
+        "kind": {
+          "const": "curve",
+          "default": "curve",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "curve"
+      ],
+      "title": "CurveRecipe",
+      "type": "object"
+    },
+    "CustomRecipe": {
+      "additionalProperties": false,
+      "description": "Holds frozen hand-placed points and, optionally, one stored facing per point.\n\nAttributes:\n    points: Slot positions in slot order.\n    facings: One facing per point, which wins over the form's FacingSpec; None for none.\n\n>>> CustomRecipe(points=((1.0, 2.0),), facings=(45.0,)).facings\n(45.0,)",
+      "properties": {
+        "facings": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Degrees"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Facings"
+        },
+        "kind": {
+          "const": "custom",
+          "default": "custom",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/Point"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "points"
+      ],
+      "title": "CustomRecipe",
       "type": "object"
     },
     "Degrees": {
@@ -736,6 +1066,75 @@
       "title": "FigureEightParams",
       "type": "object"
     },
+    "FillPattern": {
+      "enum": [
+        "grid",
+        "offset",
+        "hex"
+      ],
+      "type": "string"
+    },
+    "FillRecipe": {
+      "additionalProperties": false,
+      "description": "Holds an area filled with a lattice; with a count, the slots nearest its center are kept.\n\nAttributes:\n    outline: Area to fill.\n    interval: Meters between lattice neighbours.\n    pattern: `grid`, `offset` or `hex`.\n    angle_deg: Lattice rotation, counter-clockwise.",
+      "properties": {
+        "angle_deg": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        },
+        "interval": {
+          "$ref": "#/$defs/Meters"
+        },
+        "kind": {
+          "const": "fill",
+          "default": "fill",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "outline": {
+          "$ref": "#/$defs/Region"
+        },
+        "pattern": {
+          "$ref": "#/$defs/FillPattern",
+          "default": "grid"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "outline",
+        "interval"
+      ],
+      "title": "FillRecipe",
+      "type": "object"
+    },
     "Finite": {
       "type": "number"
     },
@@ -759,9 +1158,13 @@
       "title": "FixedFacing",
       "type": "object"
     },
+    "FontUri": {
+      "pattern": "^asset:sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
     "Form": {
       "additionalProperties": false,
-      "description": "Holds a stored shape construction plus its ordered members.\n\nAttributes:\n    id: Form ID, unique across the show.\n    set: Set the form belongs to.\n    kind: Shape family.\n    geometry: JSON construction recipe the slots are generated from.\n    members: Spots in slot order.\n    spacing: How members are spaced on the shape.\n    facing: How members face.\n    locked: Designer lock; edits need force=True.\n    meta: Free designer metadata.",
+      "description": "Holds a stored shape construction plus its ordered members.\n\nAttributes:\n    id: Form ID, unique across the show.\n    set: Set the form belongs to.\n    recipe: Typed construction recipe the slots are generated from; its `kind` is the\n        form's shape family.\n    members: Spots in slot order.\n    spacing: How members are spaced on the shape.\n    facing: How members face.\n    locked: Designer lock; edits need force=True.\n    meta: Free designer metadata.",
       "properties": {
         "facing": {
           "$ref": "#/$defs/FacingSpec",
@@ -770,17 +1173,9 @@
             "value": null
           }
         },
-        "geometry": {
-          "additionalProperties": true,
-          "title": "Geometry",
-          "type": "object"
-        },
         "id": {
           "title": "Id",
           "type": "string"
-        },
-        "kind": {
-          "$ref": "#/$defs/FormKind"
         },
         "locked": {
           "default": false,
@@ -802,6 +1197,9 @@
           "title": "Meta",
           "type": "object"
         },
+        "recipe": {
+          "$ref": "#/$defs/Recipe"
+        },
         "set": {
           "title": "Set",
           "type": "string"
@@ -821,30 +1219,66 @@
       "required": [
         "id",
         "set",
-        "kind",
-        "geometry",
+        "recipe",
         "members"
       ],
       "title": "Form",
       "type": "object"
     },
-    "FormKind": {
-      "enum": [
-        "line",
-        "arc",
-        "curve",
-        "circle",
-        "block",
-        "wedge",
-        "polyline",
-        "svg",
-        "fill",
-        "scatter",
-        "custom",
-        "generated",
-        "text"
+    "GeneratedRecipe": {
+      "additionalProperties": false,
+      "description": "Holds a registered generator's name and the JSON parameters it is called with.\n\nThe parameters stay an open, read-only JSON object: the generator checks them.\n\nAttributes:\n    fn: Registered generator name.\n    params: Parameters passed to the generator, as plain JSON.\n\n>>> GeneratedRecipe(fn=\"spiral\", params={\"turns\": 2.0}).params[\"turns\"]\n2.0",
+      "properties": {
+        "fn": {
+          "minLength": 1,
+          "title": "Fn",
+          "type": "string"
+        },
+        "kind": {
+          "const": "generated",
+          "default": "generated",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "params": {
+          "$ref": "#/$defs/JsonObject",
+          "default": {}
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "fn"
       ],
-      "type": "string"
+      "title": "GeneratedRecipe",
+      "type": "object"
     },
     "Grid": {
       "additionalProperties": false,
@@ -1124,6 +1558,55 @@
         "geometry"
       ],
       "title": "Landmark",
+      "type": "object"
+    },
+    "LineRecipe": {
+      "additionalProperties": false,
+      "description": "Holds the curve of a line form, a segment unless an edit reshaped it.\n\n>>> from showpy.geo.shapes import line\n>>> LineRecipe(curve=line((0, 0), (4, 0))).kind\n'line'",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/AnyCurve"
+        },
+        "kind": {
+          "const": "line",
+          "default": "line",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "curve"
+      ],
+      "title": "LineRecipe",
       "type": "object"
     },
     "Marker": {
@@ -1601,9 +2084,124 @@
       "title": "Polyline",
       "type": "object"
     },
+    "PolylineRecipe": {
+      "additionalProperties": false,
+      "description": "Holds the straight-sided curve of a polyline form.",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/AnyCurve"
+        },
+        "kind": {
+          "const": "polyline",
+          "default": "polyline",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "curve"
+      ],
+      "title": "PolylineRecipe",
+      "type": "object"
+    },
     "PositiveFinite": {
       "exclusiveMinimum": 0,
       "type": "number"
+    },
+    "PositiveMeters": {
+      "exclusiveMinimum": 0,
+      "maximum": 1000000.0,
+      "type": "number"
+    },
+    "Recipe": {
+      "discriminator": {
+        "mapping": {
+          "arc": "#/$defs/ArcRecipe",
+          "block": "#/$defs/BlockRecipe",
+          "circle": "#/$defs/CircleRecipe",
+          "curve": "#/$defs/CurveRecipe",
+          "custom": "#/$defs/CustomRecipe",
+          "fill": "#/$defs/FillRecipe",
+          "generated": "#/$defs/GeneratedRecipe",
+          "line": "#/$defs/LineRecipe",
+          "polyline": "#/$defs/PolylineRecipe",
+          "scatter": "#/$defs/ScatterRecipe",
+          "svg": "#/$defs/SvgRecipe",
+          "text": "#/$defs/TextRecipe",
+          "wedge": "#/$defs/WedgeRecipe"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/LineRecipe"
+        },
+        {
+          "$ref": "#/$defs/ArcRecipe"
+        },
+        {
+          "$ref": "#/$defs/CurveRecipe"
+        },
+        {
+          "$ref": "#/$defs/CircleRecipe"
+        },
+        {
+          "$ref": "#/$defs/BlockRecipe"
+        },
+        {
+          "$ref": "#/$defs/WedgeRecipe"
+        },
+        {
+          "$ref": "#/$defs/PolylineRecipe"
+        },
+        {
+          "$ref": "#/$defs/SvgRecipe"
+        },
+        {
+          "$ref": "#/$defs/FillRecipe"
+        },
+        {
+          "$ref": "#/$defs/ScatterRecipe"
+        },
+        {
+          "$ref": "#/$defs/CustomRecipe"
+        },
+        {
+          "$ref": "#/$defs/GeneratedRecipe"
+        },
+        {
+          "$ref": "#/$defs/TextRecipe"
+        }
+      ]
     },
     "Region": {
       "additionalProperties": false,
@@ -1687,6 +2285,64 @@
         "travel"
       ],
       "title": "Route",
+      "type": "object"
+    },
+    "ScatterRecipe": {
+      "additionalProperties": false,
+      "description": "Holds an area scattered with slots, at least `min_gap` apart.\n\nAttributes:\n    region: Area to scatter in.\n    min_gap: Smallest distance between two slots, in meters.\n    seed: Seed of the scatter, so the same recipe gives the same slots.",
+      "properties": {
+        "kind": {
+          "const": "scatter",
+          "default": "scatter",
+          "title": "Kind",
+          "type": "string"
+        },
+        "min_gap": {
+          "$ref": "#/$defs/Meters"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "region": {
+          "$ref": "#/$defs/Region"
+        },
+        "seed": {
+          "default": 0,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "region",
+        "min_gap"
+      ],
+      "title": "ScatterRecipe",
       "type": "object"
     },
     "Seconds": {
@@ -2419,6 +3075,60 @@
       "title": "SvgCurve",
       "type": "object"
     },
+    "SvgRecipe": {
+      "additionalProperties": false,
+      "description": "Holds the fitted picture outline of an svg form, one curve per subpath.\n\nSubpaths stay separate curves, never one curve that jumps the gaps between them; layout\nshares slots among them by length, or walks them in order for count and interval spacing.\n\nAttributes:\n    curves: The outline's subpaths in drawing order, each rebuilt from its construction.\n\n>>> from showpy.geo.shapes import line\n>>> len(SvgRecipe(curves=(line((0, 0), (1, 0)), line((0, 1), (3, 1)))).curves)\n2",
+      "properties": {
+        "curves": {
+          "items": {
+            "$ref": "#/$defs/AnyCurve"
+          },
+          "minItems": 1,
+          "title": "Curves",
+          "type": "array"
+        },
+        "kind": {
+          "const": "svg",
+          "default": "svg",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "curves"
+      ],
+      "title": "SvgRecipe",
+      "type": "object"
+    },
     "TempoSection": {
       "additionalProperties": false,
       "description": "Sets how fast counts go from a count onward.\n\nAttributes:\n    at_count: Count where the section starts.\n    counts_per_minute: Tempo at the start of the section.\n    ramp_to: Tempo reached at the end of the ramp, or None for a steady tempo.\n    ramp_counts: Counts the ramp takes, changing tempo linearly in counts.",
@@ -2457,6 +3167,133 @@
         "counts_per_minute"
       ],
       "title": "TempoSection",
+      "type": "object"
+    },
+    "TextAlign": {
+      "enum": [
+        "left",
+        "center",
+        "right"
+      ],
+      "type": "string"
+    },
+    "TextAnchor": {
+      "enum": [
+        "baseline",
+        "middle",
+        "top"
+      ],
+      "type": "string"
+    },
+    "TextRecipe": {
+      "additionalProperties": false,
+      "description": "Holds the construction recipe of a text form: text, font chain and layout.\n\nFonts are stored as URIs, never names, so a recipe always names the exact font bytes. A\ntext form's `n` is always set: it is the exact spot count, one member per slot.\n\nAttributes:\n    text: Characters to write, `\\n` between lines.\n    fonts: Fallback chain of 1 to `MAX_TEXT_FONTS` font URIs, `asset:sha256:<64 hex>`.\n    mode: How glyphs become slots; `centerline` puts spots on the strokes.\n    height: Cap height in meters.\n    at: Layout point on the stage plane.\n    rotation: Degrees counter-clockwise about `at`; 0 reads left to right toward +x.\n    align: Where each line sits horizontally on `at`.\n    anchor: Which line of the text block sits vertically on `at`.\n    letter_spacing: Extra gap between glyphs, in ems of the first font.\n    line_spacing: Baseline-to-baseline distance, in ems of the first font.\n    spacing: Meters between spots that last set the form's count, or None when the count\n        was given as `n`; the stored `n` stays the count.\n\n>>> from showpy.geo.fonts import bundled_fonts\n>>> simplex = bundled_fonts().resolve(\"simplex\")\n>>> TextRecipe(text=\"HI\", fonts=(simplex,), height=2.0, at=(0.0, 10.0)).align\n'left'",
+      "properties": {
+        "align": {
+          "$ref": "#/$defs/TextAlign",
+          "default": "left"
+        },
+        "anchor": {
+          "$ref": "#/$defs/TextAnchor",
+          "default": "baseline"
+        },
+        "at": {
+          "$ref": "#/$defs/Point"
+        },
+        "fonts": {
+          "items": {
+            "$ref": "#/$defs/FontUri"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Fonts",
+          "type": "array"
+        },
+        "height": {
+          "$ref": "#/$defs/Meters",
+          "gt": 0
+        },
+        "kind": {
+          "const": "text",
+          "default": "text",
+          "title": "Kind",
+          "type": "string"
+        },
+        "letter_spacing": {
+          "default": 0.0,
+          "title": "Letter Spacing",
+          "type": "number"
+        },
+        "line_spacing": {
+          "default": 1.2,
+          "exclusiveMinimum": 0,
+          "title": "Line Spacing",
+          "type": "number"
+        },
+        "mode": {
+          "const": "centerline",
+          "default": "centerline",
+          "title": "Mode",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "rotation": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        },
+        "spacing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PositiveMeters"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "text": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "text",
+        "fonts",
+        "height",
+        "at"
+      ],
+      "title": "TextRecipe",
       "type": "object"
     },
     "Timeline": {
@@ -2697,6 +3534,55 @@
         }
       },
       "title": "WeaveParams",
+      "type": "object"
+    },
+    "WedgeRecipe": {
+      "additionalProperties": false,
+      "description": "Holds the two-sided polyline of a wedge form.",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/AnyCurve"
+        },
+        "kind": {
+          "const": "wedge",
+          "default": "wedge",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "curve"
+      ],
+      "title": "WedgeRecipe",
       "type": "object"
     },
     "ZigzagParams": {

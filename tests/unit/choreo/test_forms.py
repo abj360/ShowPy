@@ -19,6 +19,16 @@ Contains:
     test_regression_arc_form_rejects_sweeps_that_overlap_themselves: rejects an arc past 360 degrees
         instead of producing coincident slots
     test_regression_form_rejects_fractional_slot_count: rejects n=2.5 instead of truncating it to 2
+    test_regression_svg_form_stores_each_subpath_as_its_own_curve: keeps an outline's subpaths
+        as separate curves, never one composite that jumps their gaps, and spaces them by length
+    test_regression_svg_form_with_subpaths_keeps_count_spacing_of_v0_3: spaces count slots along
+        the subpaths one after another, as v0.3.0 did, the jump between them counting nothing
+    test_regression_svg_form_with_subpaths_keeps_interval_spacing_of_v0_3: spaces interval slots
+        along the subpaths one after another, as v0.3.0 did
+    test_one_subpath_svg_form_keeps_every_spacing_mode: spaces a one-subpath outline
+        by interval as any curve form does
+    test_arc_form_rejects_a_zero_sweep: refuses an arc of 0 degrees, so a sweep lies in (0, 360]
+        either way
     test_regression_svg_form_rejects_empty_svg: raises a ShowPyError, not ValueError, for
         svg_form("")
     test_regression_generated_form_with_numpy_params_serializes_or_is_rejected: serializes numpy
@@ -59,6 +69,7 @@ from showpy.choreo.forms import (
     text_form,
     wedge_form,
 )
+from showpy.choreo.recipe_models import SvgRecipe
 from showpy.core.errors import (
     LockedError,
     MissingFontError,
@@ -67,17 +78,37 @@ from showpy.core.errors import (
     SpacingError,
     UnknownRefError,
 )
-from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.types import Box2, Points
 from showpy.core.util import approx_equal
 from showpy.geo.affine import rotation_matrix, translation_matrix
-from showpy.geo.curves import curve_from_construction
+from showpy.geo.curves import CompositeCurve, curve_from_construction
 from showpy.geo.fonts import BUNDLED_FONTS, FontRegistry, bundled_fonts, register_font
 from tests.fixtures.fonts import TINY, tiny_bytes
 from tests.helpers import fails_after
 
 TOL = 1e-6
 MEMBERS = ["A", "B", "C", "D", "E"]
+SHARED_RECIPE_KEYS = {"kind", "recipe_version", "n", "transform"}
+TWO_SUBPATHS = "M0 0 L1 0 M0 1 L3 1"
+TWO_SUBPATH_FIT = Box2(min=(0, 0), max=(3, 1))
+TWO_SUBPATH_SLOTS = [[0, 1], [1, 1], [0, 0], [1, 0], [2, 0], [3, 0]]
+CORNER_SUBPATHS = "M0 0 L2 0 M3 0 L3 2"
+CORNER_FIT = Box2(min=(0, 0), max=(3, 2))
+ALONG = FacingSpec(mode="along")
+# Slots and facings v0.3.0 (68344ab) gave these forms, measured when the subpaths stopped
+# being stored as one composite curve.
+CORNER_COUNT_POSES = [
+    (0.0, 2.0, 90.0), (1.0, 2.0, 90.0), (3.0, 2.0, 0.0), (3.0, 1.0, 0.0), (3.0, 0.0, 0.0),
+]  # fmt: skip
+CORNER_INTERVAL_SLOTS = [
+    [0.125, 2.0], [0.875, 2.0], [1.625, 2.0], [3.0, 1.625], [3.0, 0.875], [3.0, 0.125],
+]  # fmt: skip
+CORNER_THREE_POSES = [(1.25, 2.0, 90.0), (3.0, 2.0, 0.0), (3.0, 1.25, 0.0)]
+
+
+def _own_keys(form: Form) -> set[str]:
+    """Lists the recipe keys of a form's kind, without the keys every recipe shares."""
+    return set(form.recipe.model_dump(mode="json")) - SHARED_RECIPE_KEYS
 
 
 def _facings(form: Form) -> list[float]:
@@ -94,23 +125,26 @@ def test_curve_kinds_store_a_rebuildable_curve_recipe() -> None:
         polyline_form("f", MEMBERS, (0, 0), (2, 0), (2, 2)),
     ]
     for form in forms:
-        assert set(form.geometry) == {"curve"}
-        curve_from_construction(form.geometry["curve"])
+        assert _own_keys(form) == {"curve"}
+        curve_from_construction(form.recipe.model_dump(mode="json")["curve"])
         assert Form.model_validate_json(form.model_dump_json()) == form
         json.dumps(form.model_dump(mode="json"))
 
 
 def test_non_curve_recipes_follow_the_contract() -> None:
     square = [(0, 0), (4, 0), (4, 4), (0, 4)]
-    assert set(block_form("b", [], (0, 5), 2, 3, 1.0).geometry) == {
-        "origin", "rows", "cols", "interval", "facing", "anchor", "n",
-    }  # fmt: skip
-    assert set(fill_form("f", [], square, 1.0).geometry) == {
+    block = block_form("b", [], (0, 5), 2, 3, 1.0)
+    assert _own_keys(block) == {"origin", "rows", "cols", "interval", "facing", "anchor"}
+    assert block.recipe.n == 6
+    assert _own_keys(fill_form("f", [], square, 1.0)) == {
         "outline", "interval", "pattern", "angle_deg",
     }  # fmt: skip
-    assert set(scatter_form("s", ["A"], square, 1.0).geometry) == {"region", "min_gap", "seed"}
-    assert set(custom_form("c", [], [(0, 0)]).geometry) == {"points", "facings", "n"}
-    assert generated_form("g", ["A"], "spiral", turns=2.0).geometry == {
+    assert _own_keys(scatter_form("s", ["A"], square, 1.0)) == {"region", "min_gap", "seed"}
+    custom = custom_form("c", [], [(0, 0)])
+    assert _own_keys(custom) == {"points", "facings"}
+    assert custom.recipe.n == 1
+    generated = generated_form("g", ["A"], "spiral", turns=2.0).recipe.model_dump(mode="json")
+    assert {key: generated[key] for key in ("fn", "params")} == {
         "fn": "spiral",
         "params": {"turns": 2.0},
     }
@@ -182,6 +216,38 @@ def test_proportional_spacing_shares_svg_subpaths_by_length() -> None:
     assert len(pts) == 6
     lower = pts[:, 1] < 0.5
     assert sorted([int(lower.sum()), int((~lower).sum())]) == [2, 4]
+
+
+def test_regression_svg_form_stores_each_subpath_as_its_own_curve() -> None:
+    form = svg_form("f", [], TWO_SUBPATHS, TWO_SUBPATH_FIT, n=6)
+    assert isinstance(form.recipe, SvgRecipe)
+    assert len(form.recipe.curves) == 2
+    assert not any(isinstance(curve, CompositeCurve) for curve in form.recipe.curves)
+    assert approx_equal(slots(form), TWO_SUBPATH_SLOTS, abs_tol=TOL)
+
+
+def _poses(form: Form) -> list[list[float]]:
+    return [[p.x, p.y, p.facing] for p in placements(form)]
+
+
+def test_regression_svg_form_with_subpaths_keeps_count_spacing_of_v0_3() -> None:
+    spacing = SpacingSpec()
+    form = svg_form("f", list("ABCDE"), CORNER_SUBPATHS, CORNER_FIT, spacing=spacing, facing=ALONG)
+    assert approx_equal(_poses(form), CORNER_COUNT_POSES, abs_tol=TOL)
+
+
+def test_regression_svg_form_with_subpaths_keeps_interval_spacing_of_v0_3() -> None:
+    spacing = SpacingSpec(mode="interval", interval=0.75, align="center")
+    form = svg_form("f", [], CORNER_SUBPATHS, CORNER_FIT, spacing=spacing)
+    assert approx_equal(slots(form), CORNER_INTERVAL_SLOTS, abs_tol=TOL)
+    three = svg_form("f", list("ABC"), CORNER_SUBPATHS, CORNER_FIT, spacing=spacing, facing=ALONG)
+    assert approx_equal(_poses(three), CORNER_THREE_POSES, abs_tol=TOL)
+
+
+def test_one_subpath_svg_form_keeps_every_spacing_mode() -> None:
+    fit = Box2(min=(0, 0), max=(4, 1))
+    form = svg_form("f", [], "M0 0 L4 0", fit, spacing=SpacingSpec(mode="interval", interval=1.0))
+    assert approx_equal(slots(form)[:, 0], [0, 1, 2, 3, 4], abs_tol=TOL)
 
 
 def test_block_and_fill_and_scatter_slots() -> None:
@@ -267,7 +333,7 @@ def test_generated_form_uses_registered_generator_and_keeps_params() -> None:
     assert approx_equal(slots(form, registry)[:, 0], [0, 2, 4])
     wider = edit_params(form, registry=registry, step=3.0)
     assert approx_equal(slots(wider, registry)[:, 0], [0, 3, 6])
-    assert form.geometry["params"] == {"step": 2.0}
+    assert form.recipe.model_dump(mode="json")["params"] == {"step": 2.0}
 
 
 def test_generated_form_rejects_unknown_generator_with_suggestion() -> None:
@@ -279,24 +345,24 @@ def test_edit_params_respects_lock_and_kind() -> None:
     form = generated_form("g", ["A"], "spiral").model_copy(update={"locked": True})
     with pytest.raises(LockedError):
         edit_params(form, turns=1.0)
-    assert edit_params(form, force=True, turns=1.0).geometry["params"]["turns"] == 1.0
+    assert (
+        edit_params(form, force=True, turns=1.0).recipe.model_dump(mode="json")["params"]["turns"]
+        == 1.0
+    )
     with pytest.raises(SchemaError, match="not generated"):
         edit_params(line_form("f", ["A"], (0, 0), (1, 0)), turns=1.0)
 
 
 def test_missing_recipe_key_raises_schema_error() -> None:
-    broken = Form(
-        id=FormId("b"), set=SetId("1"), kind="block", geometry={"rows": 1}, members=(SpotId("A"),)
-    )
     with pytest.raises(SchemaError, match="origin"):
-        slots(broken)
+        Form.model_validate(
+            {"id": "b", "set": "1", "recipe": {"kind": "block", "rows": 1}, "members": ["A"]}
+        )
 
 
 def test_transform_key_maps_non_curve_points() -> None:
     form = custom_form("c", ["A"], [(1, 0)])
-    moved = form.model_copy(
-        update={"geometry": {**form.geometry, "transform": [[1, 0, 2], [0, 1, 3], [0, 0, 1]]}}
-    )
+    moved = form.replace(recipe=form.recipe.replace(transform=[[1, 0, 2], [0, 1, 3], [0, 0, 1]]))
     assert approx_equal(slots(moved), [[3, 3]])
 
 
@@ -337,41 +403,40 @@ def test_regression_scatter_form_rejects_negative_min_gap_without_hanging() -> N
         slots(scatter_form("f", ["A", "B"], SQUARE_AREA, -1.0))
 
 
-@pytest.mark.defect("UP-9.6-45")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-45")
 def test_regression_misspelled_recipe_key_is_rejected() -> None:
     """Raises SchemaError for an unknown recipe key such as "anchr" (audit 9.6)."""
     recipe = {**BLOCK_RECIPE, "anchr": "front-left"}
     with pytest.raises(SchemaError):
-        slots(Form(id=FormId("f"), set=SetId("1"), kind="block", geometry=recipe, members=()))
+        slots(
+            Form.model_validate(
+                {"id": "f", "set": "1", "recipe": {"kind": "block", **recipe}, "members": []}
+            )
+        )
 
 
-@pytest.mark.defect("UP-9.6-46")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-46")
 def test_regression_misspelled_fill_pattern_is_rejected() -> None:
     """Raises SchemaError for an unknown fill pattern such as "hexx" (audit 9.6)."""
     with pytest.raises(SchemaError):
         slots(fill_form("f", [], SQUARE_AREA, 1.0, pattern="hexx"))  # type: ignore[arg-type]
 
 
-@pytest.mark.defect("UP-9.6-47")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-47")
 def test_regression_bad_block_anchor_raises_schema_error() -> None:
     """Raises SchemaError, not KeyError, for an unknown block anchor (audit 9.6)."""
     with pytest.raises(SchemaError):
         slots(block_form("f", [], (0, 0), 1, 2, 1.0, anchor=""))  # type: ignore[arg-type]
 
 
-@pytest.mark.defect("UP-9.6-48")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-48")
+def test_arc_form_rejects_a_zero_sweep() -> None:
+    with pytest.raises(ShowPyError, match="sweep"):
+        arc_form("a", ["A", "B"], (0, 0), 5.0, 0.0, 0.0)
+
+
 def test_regression_arc_form_rejects_sweeps_that_overlap_themselves() -> None:
     """Rejects an arc past 360 degrees instead of producing coincident slots (audit 9.6)."""
     with pytest.raises(ShowPyError):
         slots(arc_form("a", ["A", "B", "C"], (0, 0), 5.0, 0.0, OVERLAPPING_SWEEP_DEG))
 
 
-@pytest.mark.defect("UP-9.6-49")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-49")
 def test_regression_form_rejects_fractional_slot_count() -> None:
     """Rejects n=2.5 instead of truncating it to 2 (audit 9.6)."""
     with pytest.raises(SchemaError):
@@ -384,8 +449,6 @@ def test_regression_svg_form_rejects_empty_svg() -> None:
         svg_form("f", [], "", Box2(min=(0, 0), max=(1, 1)))
 
 
-@pytest.mark.defect("UP-9.6-60")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-60")
 def test_regression_generated_form_with_numpy_params_serializes_or_is_rejected() -> None:
     """Serializes numpy generator params, or rejects them with a ShowPyError (audit 9.6)."""
     center = np.array([0.0, 1.0])
@@ -413,8 +476,8 @@ def _tiny_form() -> tuple[Form, FontRegistry]:
 
 
 def test_text_form_stores_uris_not_names() -> None:
-    assert _go().geometry["fonts"] == [BUNDLED_FONTS["hershey-roman"]]
-    assert _go().geometry["n"] == 24
+    assert _go().recipe.model_dump(mode="json")["fonts"] == [BUNDLED_FONTS["hershey-roman"]]
+    assert _go().recipe.model_dump(mode="json")["n"] == 24
 
 
 def test_text_form_placements_follow_reading_order() -> None:
@@ -432,7 +495,7 @@ def test_existing_kinds_ignore_the_font_registry() -> None:
 
 def test_text_form_with_a_user_font_needs_its_registry() -> None:
     form, registry = _tiny_form()
-    uri = form.geometry["fonts"][0]
+    uri = form.recipe.model_dump(mode="json")["fonts"][0]
     assert len(slots(form, font_registry=registry)) == 3
     with pytest.raises(MissingFontError) as caught:
         slots(form)
@@ -469,7 +532,7 @@ def test_text_form_needs_exactly_one_of_n_and_spacing(counts: dict[str, Any]) ->
 
 
 def test_text_form_stores_n_and_no_spacing_for_an_exact_count() -> None:
-    assert _go().geometry["spacing"] is None
+    assert _go().recipe.model_dump(mode="json")["spacing"] is None
 
 
 def test_text_form_rejects_too_few_spots() -> None:

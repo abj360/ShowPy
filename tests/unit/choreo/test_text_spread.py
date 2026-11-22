@@ -63,9 +63,11 @@ def _least(font: str, char: str) -> int:
 
 def _spacings(form: Form) -> np.ndarray:
     """Returns each slot's stroke spacing: its stroke's length over its gaps between spots."""
-    strokes = text_strokes(text_recipe(form.geometry))
+    strokes = text_strokes(text_recipe(form.recipe.model_dump(mode="json")))
     minimums = [CLOSED_MINIMUM if stroke.closed else OPEN_MINIMUM for stroke in strokes]
-    counts = apportion([stroke.length() for stroke in strokes], form.geometry["n"], minimums)
+    counts = apportion(
+        [stroke.length() for stroke in strokes], form.recipe.model_dump(mode="json")["n"], minimums
+    )
     return np.concatenate(
         [
             np.full(k, stroke.length() / (k if stroke.closed else k - 1))

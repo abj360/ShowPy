@@ -3,11 +3,13 @@ form_fns.py --- the immutable registry of shape generators behind `generated` fo
 
 A generator is a pure function `fn(params, n) -> Points` returning n stage-plane points in
 slot order. Every parameter must have a default, so `fn({}, n)` always works; registration
-probes that call.
+probes that call and refuses a generator that crashes. The bundled generators validate their
+parameters through typed models, so a wrong parameter raises SchemaError before any geometry
+is built.
 
 Contains:
     FormFn: names the generator signature
-    FormFnRegistry: maps generator names to functions, immutably
+    FormFnRegistry: maps generator names to functions, read-only
     FormFnRegistry.get(): returns a generator, suggesting close names when it is missing
     spiral_points(): spaces spots evenly along an Archimedean spiral
     sine_wave_points(): spaces spots evenly along a sine wave
@@ -19,25 +21,26 @@ Contains:
 
 import math
 from collections.abc import Callable, Mapping
-from typing import Any
+from typing import Annotated, Any
 
 import numpy as np
 
-from showpy.choreo.form_models import FormFnInfo
-from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
-from showpy.core.types import FrozenModel, Point, Points
-from showpy.core.util import as_points, close_matches
+from showpy.choreo.form_models import (
+    FormFnInfo,
+    RoseFormParams,
+    SineWaveFormParams,
+    SpiralFormParams,
+)
+from showpy.core.errors import SchemaError, UnknownRefError
+from showpy.core.readonly import ReadOnly
+from showpy.core.types import FrozenModel, Points
+from showpy.core.util import close_matches
 from showpy.geo.curves import Polyline
 from showpy.geo.shapes import spiral
 from showpy.geo.spacing import space_along
 
 PROBE_COUNT = 4
 CURVE_SAMPLES = 721
-DEFAULT_CENTER = (0.0, 10.0)
-SPIRAL_DEFAULTS = {"r0": 1.0, "r1": 5.0, "turns": 2.0, "start_deg": 0.0}
-SINE_DEFAULTS = {"length": 16.0, "amplitude": 2.0, "wavelength": 8.0, "phase_deg": 0.0}
-SINE_START = (-8.0, 10.0)
-ROSE_DEFAULTS = {"radius": 5.0, "petals": 5, "inner": 0.4}
 
 # Any: generator parameters are JSON values whose meaning each generator defines.
 type FormFn = Callable[[Mapping[str, Any], int], Points]
@@ -47,10 +50,10 @@ class FormFnRegistry(FrozenModel):
     """Maps generator names to functions; registering returns a new registry.
 
     Attributes:
-        fns: Generator name to function.
+        fns: Generator name to function; read-only, so the shared default never changes.
     """
 
-    fns: dict[str, FormFn]
+    fns: Annotated[Mapping[str, FormFn], ReadOnly()]
 
     def get(self, name: str) -> FormFn:
         """Returns a generator, raising UnknownRefError with close names in the hint."""
@@ -64,35 +67,18 @@ class FormFnRegistry(FrozenModel):
         )
 
 
-def _point(value: object, default: Point) -> Point:
-    if value is None:
-        return default
-    x, y = as_points(value)[0]
-    return float(x), float(y)
-
-
-# Any: generator parameters are JSON values.
-def _number(params: Mapping[str, Any], defaults: Mapping[str, float], key: str) -> float:
-    return float(params.get(key, defaults[key]))
-
-
 # Any: generator parameters are JSON values.
 def spiral_points(params: Mapping[str, Any], n: int) -> Points:
     """Spaces n spots evenly along an Archimedean spiral.
 
-    Params: `center` (0, 10), `r0` 1, `r1` 5, `turns` 2, `start_deg` 0 (counter-clockwise
-    from +x).
+    Params are the fields of `SpiralFormParams`: `center` (0, 10), `r0` 1, `r1` 5, `turns` 2,
+    `start_deg` 0 (counter-clockwise from +x). A bad or unknown parameter raises SchemaError.
 
     >>> spiral_points({"turns": 1.0}, 3).shape
     (3, 2)
     """
-    curve = spiral(
-        _point(params.get("center"), DEFAULT_CENTER),
-        _number(params, SPIRAL_DEFAULTS, "r0"),
-        _number(params, SPIRAL_DEFAULTS, "r1"),
-        _number(params, SPIRAL_DEFAULTS, "turns"),
-        _number(params, SPIRAL_DEFAULTS, "start_deg"),
-    )
+    p = SpiralFormParams.model_validate(params)
+    curve = spiral(p.center, p.r0, p.r1, p.turns, p.start_deg)
     return space_along(curve, n)
 
 
@@ -100,18 +86,16 @@ def spiral_points(params: Mapping[str, Any], n: int) -> Points:
 def sine_wave_points(params: Mapping[str, Any], n: int) -> Points:
     """Spaces n spots evenly by arc length along a sine wave running toward +x.
 
-    Params: `start` (-8, 10), `length` 16, `amplitude` 2, `wavelength` 8, `phase_deg` 0.
+    Params are the fields of `SineWaveFormParams`: `start` (-8, 10), `length` 16, `amplitude` 2,
+    `wavelength` 8, `phase_deg` 0. A bad or unknown parameter raises SchemaError.
 
     >>> sine_wave_points({"amplitude": 0.0}, 3)[:, 0].round(6).tolist()
     [-8.0, 0.0, 8.0]
     """
-    x0, y0 = _point(params.get("start"), SINE_START)
-    length = _number(params, SINE_DEFAULTS, "length")
-    amplitude = _number(params, SINE_DEFAULTS, "amplitude")
-    wavelength = _number(params, SINE_DEFAULTS, "wavelength")
-    phase = math.radians(_number(params, SINE_DEFAULTS, "phase_deg"))
-    x = np.linspace(0.0, length, CURVE_SAMPLES)
-    y = amplitude * np.sin(2 * math.pi * x / wavelength + phase)
+    p = SineWaveFormParams.model_validate(params)
+    x0, y0 = p.start
+    x = np.linspace(0.0, p.length, CURVE_SAMPLES)
+    y = p.amplitude * np.sin(2 * math.pi * x / p.wavelength + math.radians(p.phase_deg))
     pts = tuple((x0 + float(a), y0 + float(b)) for a, b in zip(x, y, strict=True))
     return space_along(Polyline(points=pts), n)
 
@@ -121,18 +105,17 @@ def rose_points(params: Mapping[str, Any], n: int) -> Points:
     """Spaces n spots evenly around a flower whose petals never reach the center.
 
     The outline is r(θ) = radius · (inner + (1 - inner) · |cos(petals · θ / 2)|), a simple
-    closed curve, so spots never coincide. Params: `center` (0, 10), `radius` 5,
-    `petals` 5, `inner` 0.4 (fraction of the radius between petals).
+    closed curve, so spots never coincide. Params are the fields of `RoseFormParams`: `center`
+    (0, 10), `radius` 5, `petals` 5, `inner` 0.4 (share of the radius between petals). A bad
+    or unknown parameter raises SchemaError.
 
     >>> len(rose_points({}, 10))
     10
     """
-    cx, cy = _point(params.get("center"), DEFAULT_CENTER)
-    radius = _number(params, ROSE_DEFAULTS, "radius")
-    petals = _number(params, ROSE_DEFAULTS, "petals")
-    inner = _number(params, ROSE_DEFAULTS, "inner")
+    p = RoseFormParams.model_validate(params)
+    cx, cy = p.center
     theta = np.linspace(0.0, 2 * math.pi, CURVE_SAMPLES)[:-1]
-    r = radius * (inner + (1 - inner) * np.abs(np.cos(petals * theta / 2)))
+    r = p.radius * (p.inner + (1 - p.inner) * np.abs(np.cos(p.petals * theta / 2)))
     pts = tuple(
         (cx + float(a), cy + float(b))
         for a, b in zip(r * np.cos(theta), r * np.sin(theta), strict=True)
@@ -148,7 +131,9 @@ DEFAULT_FORM_FNS = FormFnRegistry(
 def _probe(name: str, fn: FormFn) -> None:
     try:
         pts = np.asarray(fn({}, PROBE_COUNT), dtype=float)
-    except (ShowPyError, TypeError, ValueError, KeyError) as error:
+    # A generator is caller code, so its probe may raise anything; every crash means the
+    # generator cannot be registered, and the error names it instead of leaking its type.
+    except Exception as error:
         raise SchemaError(
             f"form generator {name!r} fails with default parameters: {error}",
             hint="give every parameter a default so fn({}, n) works",
@@ -164,6 +149,8 @@ def _probe(name: str, fn: FormFn) -> None:
 
 def register_form_fn(registry: FormFnRegistry, name: str, fn: FormFn) -> FormFnRegistry:
     """Returns a new registry that also holds `fn`, after probing it with `fn({}, 4)`.
+
+    The probe must return 4 finite (x, y) rows; any exception it raises becomes SchemaError.
 
     >>> def dots(params, n):
     ...     return np.stack([np.arange(n, dtype=float), np.zeros(n)], axis=1)

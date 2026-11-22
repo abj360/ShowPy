@@ -26,6 +26,7 @@ from showpy.geo.curves import Segment
 from showpy.notes.models import Anchor, Note
 from showpy.sheet.models import Zone, ZoneKind
 from showpy.show.models import Show
+from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
@@ -38,8 +39,7 @@ def rich_show() -> Show:
     form = Form(
         id=FormId("line1"),
         set=SetId("1"),
-        kind="line",
-        geometry={},
+        recipe=LINE_RECIPE,
         members=(SpotId("T1"), SpotId("T2"), SpotId("T3"), SpotId("T4")),
     )
     route = Route(

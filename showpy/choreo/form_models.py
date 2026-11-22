@@ -8,20 +8,52 @@ Contains:
     SpacingSpec: describes how members are spaced on a form's shape
     FacingSpec: describes how form members face
     TextRecipe: holds the construction recipe of a text form: text, font chain and layout
+    Recipe: the typed construction recipe of any form, tagged by `kind`
     FormKind: names the shape families a form can have
     CrowdedStroke: names a glyph stroke whose spots sit closer than its junction gap
     TextReport: reports how a text form's spots were spread, listing its crowded strokes
     Form: holds a stored shape construction plus its ordered members
+    Form.kind: returns the shape family, the recipe's kind
+    Form.geometry: returns the recipe as JSON; deprecated, read `Form.recipe`
     FormFnInfo: describes one registered shape generator
+    SpiralFormParams: holds the parameters of the bundled `spiral` generator
+    SineWaveFormParams: holds the parameters of the bundled `sine_wave` generator
+    RoseFormParams: holds the parameters of the bundled `rose` generator
 """
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, ClassVar, Literal
 
 from pydantic import Field, model_validator
 
+from showpy.choreo.recipe_models import (
+    ArcRecipe,
+    BlockRecipe,
+    CircleRecipe,
+    CurveRecipe,
+    CustomRecipe,
+    FillRecipe,
+    GeneratedRecipe,
+    LineRecipe,
+    PolylineRecipe,
+    RecipeBase,
+    ScatterRecipe,
+    SvgRecipe,
+    WedgeRecipe,
+)
+from showpy.core.deprecation import renamed_field
 from showpy.core.errors import SchemaError
 from showpy.core.ids import FormId, SetId, SpotId
-from showpy.core.types import Degrees, Finite, FrozenModel, Meters, Point, PositiveMeters
+from showpy.core.types import (
+    Degrees,
+    Finite,
+    FrozenModel,
+    JsonValue,
+    Meters,
+    NonNegFinite,
+    Point,
+    PositiveFinite,
+    PositiveMeters,
+)
 from showpy.geo.models import DEFAULT_LINE_SPACING, TextAlign, TextAnchor
 from showpy.geo.text_layout import MAX_LAYOUT_CHARS
 
@@ -29,6 +61,8 @@ FONT_URI_PATTERN = r"^asset:sha256:[0-9a-f]{64}$"
 # Layout resolves every chain font and measures its cap height, so a stored chain is bounded.
 MAX_TEXT_FONTS = 16
 type FontUri = Annotated[str, Field(pattern=FONT_URI_PATTERN)]
+DEFAULT_GENERATOR_CENTER: Point = (0.0, 10.0)
+DEFAULT_SINE_START: Point = (-8.0, 10.0)
 
 
 class SpacingSpec(FrozenModel):
@@ -81,10 +115,11 @@ class FacingSpec(FrozenModel):
         return self
 
 
-class TextRecipe(FrozenModel):
+class TextRecipe(RecipeBase):
     r"""Holds the construction recipe of a text form: text, font chain and layout.
 
-    Fonts are stored as URIs, never names, so a recipe always names the exact font bytes.
+    Fonts are stored as URIs, never names, so a recipe always names the exact font bytes. A
+    text form's `n` is always set: it is the exact spot count, one member per slot.
 
     Attributes:
         text: Characters to write, `\n` between lines.
@@ -106,6 +141,7 @@ class TextRecipe(FrozenModel):
     'left'
     """
 
+    kind: Literal["text"] = "text"
     text: str = Field(min_length=1, max_length=MAX_LAYOUT_CHARS)
     fonts: tuple[FontUri, ...] = Field(min_length=1, max_length=MAX_TEXT_FONTS)
     mode: Literal["centerline"] = "centerline"
@@ -118,6 +154,23 @@ class TextRecipe(FrozenModel):
     line_spacing: float = Field(default=DEFAULT_LINE_SPACING, gt=0)
     spacing: PositiveMeters | None = None
 
+
+type Recipe = Annotated[
+    LineRecipe
+    | ArcRecipe
+    | CurveRecipe
+    | CircleRecipe
+    | BlockRecipe
+    | WedgeRecipe
+    | PolylineRecipe
+    | SvgRecipe
+    | FillRecipe
+    | ScatterRecipe
+    | CustomRecipe
+    | GeneratedRecipe
+    | TextRecipe,
+    Field(discriminator="kind"),
+]
 
 type FormKind = Literal[
     "line", "arc", "curve", "circle", "block", "wedge", "polyline", "svg", "fill", "scatter",
@@ -160,14 +213,19 @@ class TextReport(FrozenModel):
     crowded: tuple[CrowdedStroke, ...] = ()
 
 
+def _recipe_json(recipe: RecipeBase) -> dict[str, JsonValue]:
+    dumped: dict[str, JsonValue] = recipe.model_dump(mode="json")
+    return dumped
+
+
 class Form(FrozenModel):
     """Holds a stored shape construction plus its ordered members.
 
     Attributes:
         id: Form ID, unique across the show.
         set: Set the form belongs to.
-        kind: Shape family.
-        geometry: JSON construction recipe the slots are generated from.
+        recipe: Typed construction recipe the slots are generated from; its `kind` is the
+            form's shape family.
         members: Spots in slot order.
         spacing: How members are spaced on the shape.
         facing: How members face.
@@ -177,14 +235,21 @@ class Form(FrozenModel):
 
     id: FormId
     set: SetId
-    kind: FormKind
-    # Any: construction recipes are JSON objects whose fields depend on the kind.
-    geometry: dict[str, Any]
+    recipe: Recipe
     members: tuple[SpotId, ...]
     spacing: SpacingSpec = SpacingSpec()
     facing: FacingSpec = FacingSpec()
     locked: bool = False
     meta: dict[str, str] = {}
+
+    geometry: ClassVar[property] = renamed_field(
+        "recipe", since="0.4.0", remove="0.6.0", read=_recipe_json
+    )
+
+    @property
+    def kind(self) -> FormKind:
+        """Returns the shape family, the recipe's kind."""
+        return self.recipe.kind
 
     @model_validator(mode="after")
     def _unique_members(self) -> "Form":
@@ -203,3 +268,65 @@ class FormFnInfo(FrozenModel):
 
     name: str
     summary: str
+
+
+class SpiralFormParams(FrozenModel):
+    """Holds the parameters of the bundled `spiral` generator.
+
+    Attributes:
+        center: Spiral center.
+        r0: Start radius in meters.
+        r1: End radius in meters.
+        turns: Counter-clockwise turns, above 0.
+        start_deg: Start angle, counter-clockwise from +x.
+
+    >>> SpiralFormParams(turns=1.5).r1
+    5.0
+    """
+
+    center: Point = DEFAULT_GENERATOR_CENTER
+    r0: NonNegFinite = 1.0
+    r1: NonNegFinite = 5.0
+    turns: PositiveFinite = 2.0
+    start_deg: Degrees = 0.0
+
+
+class SineWaveFormParams(FrozenModel):
+    """Holds the parameters of the bundled `sine_wave` generator.
+
+    Attributes:
+        start: Where the wave starts; it runs toward +x.
+        length: Run along x in meters, above 0.
+        amplitude: Peak offset from the center line in meters.
+        wavelength: Meters per full wave, above 0.
+        phase_deg: Phase at the start, in degrees.
+
+    >>> SineWaveFormParams().wavelength
+    8.0
+    """
+
+    start: Point = DEFAULT_SINE_START
+    length: PositiveMeters = 16.0
+    amplitude: Finite = 2.0
+    wavelength: PositiveMeters = 8.0
+    phase_deg: Degrees = 0.0
+
+
+class RoseFormParams(FrozenModel):
+    """Holds the parameters of the bundled `rose` generator.
+
+    Attributes:
+        center: Flower center.
+        radius: Petal tip radius in meters, above 0.
+        petals: Number of petals, above 0.
+        inner: Radius between petals as a share of `radius`, in (0, 1], so petals never meet
+            at the center.
+
+    >>> RoseFormParams(petals=3).inner
+    0.4
+    """
+
+    center: Point = DEFAULT_GENERATOR_CENTER
+    radius: PositiveMeters = 5.0
+    petals: PositiveFinite = 5.0
+    inner: Annotated[float, Field(gt=0, le=1, allow_inf_nan=False)] = 0.4

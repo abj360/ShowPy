@@ -22,10 +22,12 @@ import math
 import pytest
 
 from showpy.choreo.form_models import FacingSpec, Form, SpacingSpec
+from showpy.choreo.recipe_models import CustomRecipe
 from showpy.core.errors import SchemaError
 from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.units import normalize_angle
 from showpy.core.util import approx_equal
+from tests.fixtures.recipes import LINE_RECIPE
 
 TURNS_PAST_FULL = 720.0
 NEGATIVE_GAP = -1.0
@@ -45,15 +47,17 @@ def test_form_requires_unique_members() -> None:
         Form(
             id=FormId("f"),
             set=SetId("1"),
-            kind="line",
-            geometry={},
+            recipe=LINE_RECIPE,
             members=(SpotId("A"), SpotId("A")),
         )
 
 
 def _custom_form() -> Form:
     return Form(
-        id=FormId("f"), set=SetId("1"), kind="custom", geometry={"n": 2}, members=(SpotId("A"),)
+        id=FormId("f"),
+        set=SetId("1"),
+        recipe=CustomRecipe(points=(), n=2),
+        members=(SpotId("A"),),
     )
 
 

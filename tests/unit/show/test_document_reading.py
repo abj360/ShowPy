@@ -16,6 +16,7 @@ Contains:
 """
 
 import copy
+import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -105,7 +106,8 @@ def test_regression_v1_dump_without_sheet_counts_the_missing_fields() -> None:
 
 def test_decode_show_dump_never_mutates_the_dump() -> None:
     tree = dict(FileRepository(V030_REPO).documents("legacy-show"))
-    dump = decode_show(tree).model_dump(mode="json")
+    stored = json.loads((V030_REPO.parent / "expected.json").read_text())["show"]
+    dump = {**stored, "revision": ""}
     before = copy.deepcopy(dump)
     assert decode_show_dump(dump, 1) == decode_show(tree)
     assert dump == before

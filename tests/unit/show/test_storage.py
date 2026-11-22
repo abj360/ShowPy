@@ -27,6 +27,7 @@ from showpy.show.manage import add_set, remove_set
 from showpy.show.models import Show
 from showpy.show.repositories import InMemoryAssetStore, InMemoryRepository
 from showpy.show.storage import Repository, Workspace, load_show, open_workspace, save_show
+from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 from tests.helpers import context_entries
 
@@ -49,8 +50,7 @@ def _rich_show() -> Show:
     form = Form(
         id=FormId("f1"),
         set=SetId("2"),
-        kind="line",
-        geometry={"a": 1},
+        recipe=LINE_RECIPE,
         members=(SpotId("T1"), SpotId("T2")),
     )
     spec = TransitionSpec(
@@ -159,7 +159,7 @@ def test_typed_accessors(make_repo: RepoFactory) -> None:
     )
     rev = repo.put_paths(SHOW_ID, spec, expected_revision=rev, at=LATER).id
     assert repo.get_paths(SHOW_ID, ("1", "2")).counts == 8.0
-    form = Form(id=FormId("f"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
+    form = Form(id=FormId("f"), set=SetId("2"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     rev = repo.put_forms(SHOW_ID, "2", (form,), expected_revision=rev, at=LATER).id
     assert repo.get_forms(SHOW_ID, "2") == (form,)
     with pytest.raises(SchemaError):
@@ -303,7 +303,7 @@ def test_regression_library_leaves_permissions_to_the_host() -> None:
 def test_agent_writes_forms_paths_scripts_and_renders() -> None:
     repo = InMemoryRepository()
     agent, _ = _workspaces(repo)
-    form = Form(id=FormId("f"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
+    form = Form(id=FormId("f"), set=SetId("2"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     agent.write("/sets/2/forms.json", dump_json([form.model_dump(mode="python")]), at=AT)
     spec = TransitionSpec(
         id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): PathRow(entity=SpotId("T1"), end=6)}
@@ -323,7 +323,7 @@ def test_agent_writes_forms_paths_scripts_and_renders() -> None:
 
 def test_workspace_write_validates_content() -> None:
     agent, _ = _workspaces(InMemoryRepository())
-    wrong = Form(id=FormId("f"), set=SetId("1"), kind="line", geometry={}, members=(SpotId("T1"),))
+    wrong = Form(id=FormId("f"), set=SetId("1"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     with pytest.raises(SchemaError):
         agent.write("/sets/2/forms.json", dump_json([wrong.model_dump(mode="python")]), at=AT)
     with pytest.raises(SchemaError):

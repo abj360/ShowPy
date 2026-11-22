@@ -60,6 +60,7 @@ from showpy.show.pinning import pin, unpin
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import load_show, open_workspace, save_show
 from showpy.show.validate import validate_show
+from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 from tests.helpers import open_session
 
@@ -117,7 +118,7 @@ def test_diff_paths_treats_default_rows_as_missing() -> None:
 
 def test_diff_show_summarizes_structure_and_paths() -> None:
     a = two_set_show()
-    form = Form(id=FormId("f"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
+    form = Form(id=FormId("f"), set=SetId("2"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     spec = TransitionSpec(
         id=make_tid("1", "2"),
         counts=8.0,
@@ -179,8 +180,7 @@ def test_rename_entities_rewrites_everything() -> None:
     form = Form(
         id=FormId("f"),
         set=SetId("2"),
-        kind="line",
-        geometry={},
+        recipe=LINE_RECIPE,
         members=(SpotId("T1"), SpotId("T2")),
     )
     row = PathRow(
@@ -236,8 +236,7 @@ def _full_show() -> Show:
     form = Form(
         id=FormId("f"),
         set=SetId("2"),
-        kind="line",
-        geometry={},
+        recipe=LINE_RECIPE,
         members=(SpotId("T1"), SpotId("T2")),
     )
     row = PathRow(
