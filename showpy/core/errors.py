@@ -10,7 +10,8 @@ Contains:
     VersionError: reports a pinned version that is missing or incompatible
     SchemaError: reports data that fails its schema or text format
     schema_error_from(): converts a pydantic ValidationError into a SchemaError
-    BOUND_KEY, ALLOWED_KEY: name the error-context keys that carry a value's named bound
+    BOUND_KEY, ALLOWED_KEY: name the error-context keys that carry a value's named bound; the
+        SchemaError hint repeats them
     field_errors(): returns the per-field errors of a converted SchemaError or re-raises it
     GeometryError: reports a degenerate shape
     ZeroLengthError: reports a request for the direction of a zero vector
@@ -195,9 +196,21 @@ def schema_error_from(exc: PydanticValidationError, *, model: str) -> SchemaErro
     listed = join_listed([f"{item['loc']}: {item['msg']}" for item in errors])
     return SchemaError(
         f"{model} rejects {len(errors)} field(s): {listed}",
-        hint=SCHEMA_ERROR_HINT,
+        hint=_schema_hint(exc),
         context={"model": model, "errors": errors},
     )
+
+
+def _schema_hint(exc: PydanticValidationError) -> str:
+    """Names the bound of each value that left its named range, after the generic hint."""
+    bounds: dict[str, None] = {}
+    for item in exc.errors(include_url=False):
+        context = item.get("ctx", {})
+        if BOUND_KEY in context and ALLOWED_KEY in context:
+            bounds[f"{context[ALLOWED_KEY]} ({context[BOUND_KEY]})"] = None
+    if not bounds:
+        return SCHEMA_ERROR_HINT
+    return f"{SCHEMA_ERROR_HINT}; keep each value {' or '.join(bounds)}"
 
 
 def field_errors(error: SchemaError) -> list[dict[str, JsonValue]]:

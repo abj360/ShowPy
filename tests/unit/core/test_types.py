@@ -45,6 +45,7 @@ Contains:
     test_regression_spline_rejects_a_huge_control_point: refuses a 2e300 m spline point
     test_bounded_aliases_accept_their_bound: accepts each bound exactly
     test_bounded_aliases_refuse_the_next_float_past_their_bound: refuses one ulp past each bound
+    test_regression_bound_error_hint_names_the_bound: says what is allowed and names the constant
 """
 
 import inspect
@@ -489,3 +490,20 @@ def test_bounded_aliases_refuse_the_next_float_past_their_bound(
     del accepted
     with pytest.raises(SchemaError):
         _Bounded.model_validate({field: refused})
+
+
+BOUND_HINTS: dict[str, tuple[str, float, str]] = {
+    "coordinate": ("meters", HUGE_COORD_M, "between -1,000,000 and 1,000,000 m (MAX_COORD_M)"),
+    "length": ("positive_meters", HUGE_COORD_M, "at most 1,000,000 m (MAX_COORD_M)"),
+    "count": ("count", -HUGE_COORD_M, "between -1,000,000 and 1,000,000 counts (MAX_COUNTS)"),
+    "duration": ("non_neg_count", HUGE_COORD_M, "at most 1,000,000 counts (MAX_COUNTS)"),
+    "tempo": ("tempo", VANISHING_TEMPO, "at least 0.001 counts per minute (MIN_TEMPO)"),
+}
+
+
+@pytest.mark.parametrize(("field", "bad", "allowed"), BOUND_HINTS.values(), ids=BOUND_HINTS.keys())
+def test_regression_bound_error_hint_names_the_bound(field: str, bad: float, allowed: str) -> None:
+    with pytest.raises(SchemaError) as caught:
+        _Bounded.model_validate({field: bad})
+    assert allowed in caught.value.hint
+    assert allowed in caught.value.message
