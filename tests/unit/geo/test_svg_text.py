@@ -290,24 +290,18 @@ def test_regression_svg_outline_rejects_a_path_with_too_many_pieces() -> None:
         svg_outline("M0 0" + "h1" * 50_000, BOX)
 
 
-@pytest.mark.defect("UP-9.1-44")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-44")
 def test_regression_parse_path_accepts_packed_flags_before_a_fraction() -> None:
     """Parses "a1 1 0 01.5.5" as flags 0 and 1 then the point (0.5, 0.5) (audit 9.1)."""
     piece = parse_path("M0 0 a1 1 0 01.5.5")[0].pieces[0]
     assert approx_equal(piece.end, (0.5, 0.5), abs_tol=FIT_TOL_M)
 
 
-@pytest.mark.defect("UP-9.1-45")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-45")
 def test_regression_parse_path_rejects_arc_flag_two() -> None:
     """Rejects the arc flag 2, which SVG allows only as 0 or 1 (audit 9.1)."""
     with pytest.raises(SchemaError):
         parse_path("M0 0 a1 1 0 2 0 1 1")
 
 
-@pytest.mark.defect("UP-9.1-46")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-46")
 def test_regression_parse_path_rejects_fractional_arc_flag() -> None:
     """Rejects the arc flag 0.5, which SVG allows only as 0 or 1 (audit 9.1)."""
     with pytest.raises(SchemaError):
@@ -320,16 +314,12 @@ def test_regression_parse_path_rejects_overflowing_numbers() -> None:
         parse_path("M0 0 L1e400 1")
 
 
-@pytest.mark.defect("UP-9.1-48")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-48")
 def test_regression_parse_path_rejects_unicode_digits() -> None:
     """Rejects the Arabic-Indic digit three instead of reading it as 3 (audit 9.1)."""
     with pytest.raises(SchemaError):
         parse_path("M0 0 L٣ 1")
 
 
-@pytest.mark.defect("UP-9.1-49")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-49")
 def test_regression_parse_path_requires_a_leading_move() -> None:
     """Rejects path data that does not start with M (audit 9.1)."""
     with pytest.raises(SchemaError):
@@ -353,3 +343,26 @@ def test_regression_simplex_tables_are_read_only() -> None:
         FONTS["other"] = {}  # type: ignore[index]
     with pytest.raises(TypeError):
         SIMPLEX["?"] = ()  # type: ignore[index]
+
+
+def test_regression_parse_path_names_the_bad_flag_in_context() -> None:
+    """Reports the position and token of a bad arc flag and says flags are 0 or 1."""
+    with pytest.raises(SchemaError) as caught:
+        parse_path("M0 0 a1 1 0 2 0 1 1")
+    assert caught.value.context["position"] == 12
+    assert str(caught.value.context["token"]).startswith("2")
+    assert "0 or 1" in caught.value.hint
+
+
+def test_regression_parse_path_names_the_leading_token_in_context() -> None:
+    """Reports the first token of path data that does not open with a move."""
+    with pytest.raises(SchemaError) as caught:
+        parse_path("L1 1")
+    assert caught.value.context == {"position": 0, "token": "L"}
+    assert "M" in caught.value.hint
+
+
+def test_regression_parse_path_rejects_non_ascii_whitespace() -> None:
+    """Rejects a no-break space between numbers; SVG separators are ASCII only."""
+    with pytest.raises(SchemaError):
+        parse_path("M0\u00a00 L1 1")

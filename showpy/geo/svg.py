@@ -24,10 +24,13 @@ from showpy.core.types import Point, Points
 
 type FloatArray = npt.NDArray[np.float64]
 
-TOKEN = re.compile(r"([MmLlHhVvCcSsQqTtAaZz])|([-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?)")
+NUMBER = re.compile(r"[-+]?(?:[0-9]*\.[0-9]+|[0-9]+\.?)(?:[eE][-+]?[0-9]+)?")
 COMMAND_ARITY = {"M": 2, "L": 2, "H": 1, "V": 1, "C": 6, "S": 4, "Q": 4, "T": 2, "A": 7, "Z": 0}
-SEPARATORS = re.compile(r"[\s,]+")
+SEPARATORS = " \t\n\r\f,"
+COMMANDS = "MmLlHhVvCcSsQqTtAaZz"
 ARC_FLAG_SLOTS = (3, 4)
+TOKEN_HINT = "use SVG commands M L H V C S Q T A Z and plain ASCII numbers"
+ARC_FLAG_HINT = "write each arc flag as the single digit 0 or 1"
 
 
 @dataclass(frozen=True)
@@ -180,25 +183,46 @@ def _fmt(p: Point) -> str:
     return f"{p[0]!r} {p[1]!r}"
 
 
+def _bad_path_data(position: int, text: str, hint: str) -> SchemaError:
+    return SchemaError(
+        f"bad path data near {text!r}",
+        hint=hint,
+        context={"position": position, "token": text},
+    )
+
+
+def _skip_separators(d: str, position: int) -> int:
+    while position < len(d) and d[position] in SEPARATORS:
+        position += 1
+    return position
+
+
 def _tokenize(d: str) -> list[str]:
+    """Splits path data into command letters and numbers, reading arc flags as one digit each."""
     tokens: list[str] = []
-    position = 0
-    for match in TOKEN.finditer(d):
-        gap = d[position : match.start()]
-        if gap and not SEPARATORS.fullmatch(gap):
-            raise SchemaError(
-                f"bad path data near {gap.strip()!r}",
-                hint="use SVG commands M L H V C S Q T A Z",
-                context={"position": position},
-            )
-        tokens.append(match.group(0))
-        position = match.end()
-    if d[position:].strip(" \t\n\r,"):
-        raise SchemaError(
-            f"bad path data near {d[position:].strip()!r}",
-            hint="use SVG commands M L H V C S Q T A Z",
-            context={"position": position},
-        )
+    position = _skip_separators(d, 0)
+    is_arc = False
+    slot = 0
+    while position < len(d):
+        char = d[position]
+        if char in COMMANDS:
+            is_arc = char in "Aa"
+            slot = 0
+            token = char
+        elif is_arc and slot in ARC_FLAG_SLOTS:
+            if char not in "01":
+                raise _bad_path_data(position, d[position : position + 8].strip(), ARC_FLAG_HINT)
+            token = char
+        else:
+            match = NUMBER.match(d, position)
+            if match is None:
+                raise _bad_path_data(position, d[position : position + 8].strip(), TOKEN_HINT)
+            token = match.group(0)
+        if not token.isalpha():
+            slot = (slot + 1) % COMMAND_ARITY["A"]
+        tokens.append(token)
+        position += len(token)
+        position = _skip_separators(d, position)
     return tokens
 
 
@@ -355,33 +379,6 @@ def _angle(u: tuple[float, float], v: tuple[float, float]) -> float:
     return math.degrees(math.atan2(u[0] * v[1] - u[1] * v[0], u[0] * v[0] + u[1] * v[1]))
 
 
-def _unpack_arc_flags(tokens: list[str]) -> list[str]:
-    """Splits packed arc flags such as `011` into `0`, `1`, `1` in one pass over the tokens.
-
-    SVG flags are single digits, so a flag slot holding `01.5` reads as the flag `0` then `1.5`.
-    """
-    out: list[str] = []
-    in_arc = False
-    slot = 0
-    for token in tokens:
-        if token.isalpha():
-            in_arc = token in "Aa"
-            slot = 0
-            out.append(token)
-            continue
-        pending = token
-        while True:
-            if in_arc and slot in ARC_FLAG_SLOTS and _is_packed_flag(pending):
-                out.append(pending[0])
-                pending = pending[1:]
-            else:
-                out.append(pending)
-                break
-            slot = (slot + 1) % COMMAND_ARITY["A"]
-        slot = (slot + 1) % COMMAND_ARITY["A"]
-    return out
-
-
 def _number(token: str, command: str) -> float:
     value = float(token)
     if not math.isfinite(value):
@@ -393,10 +390,6 @@ def _number(token: str, command: str) -> float:
     return value
 
 
-def _is_packed_flag(token: str) -> bool:
-    return len(token) > 1 and token[0] in "01" and token[1] not in ".eE"
-
-
 def parse_path(d: str) -> list[Subpath]:
     """Parses SVG path data into subpaths of evaluable pieces.
 
@@ -405,7 +398,9 @@ def parse_path(d: str) -> list[Subpath]:
     """
     require_size(len(d), MAX_TEXT_CHARS, what="SVG path data characters")
     builder = _PathBuilder()
-    tokens = _unpack_arc_flags(_tokenize(d))
+    tokens = _tokenize(d)
+    if tokens and tokens[0] not in ("M", "m"):
+        raise _bad_path_data(0, tokens[0], "begin path data with M or m, then x and y")
     index = 0
     command = ""
     while index < len(tokens):
