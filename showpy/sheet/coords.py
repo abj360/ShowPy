@@ -19,6 +19,7 @@ import re
 from decimal import Decimal
 from typing import TYPE_CHECKING, Literal
 
+from showpy.core.caps import MAX_COORD_M
 from showpy.core.errors import SchemaError, UnknownRefError
 from showpy.core.types import Point
 from showpy.core.units import convert, round_to
@@ -78,6 +79,10 @@ ROUNDING_HINT = (
 POINT_SIZE = 2
 NUMBER_PREVIEW = 20
 TEXT_PREVIEW = 40
+POINT_BOUND_HINT = (
+    f"use smaller numbers or a nearer origin: keep each axis between -{MAX_COORD_M:,.0f} and "
+    f"{MAX_COORD_M:,.0f} m (MAX_COORD_M)"
+)
 
 
 def coordinate_presets(sheet: Sheet) -> list[CoordinateSystem]:
@@ -310,6 +315,6 @@ def from_coords(show: "Show", text: str) -> Point:
         ox + across * right[0] + depth * ahead[0] + 0.0,
         oy + across * right[1] + depth * ahead[1] + 0.0,
     )
-    if not all(math.isfinite(axis) for axis in point):
-        raise _bad(text[:TEXT_PREVIEW], text, "use smaller numbers or a nearer origin")
+    if not all(math.isfinite(axis) and abs(axis) <= MAX_COORD_M for axis in point):
+        raise _bad(text[:TEXT_PREVIEW], text, POINT_BOUND_HINT)
     return point
