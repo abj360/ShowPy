@@ -86,6 +86,7 @@ class _Universe(NamedTuple):
     source: str
     cast: Cast | None
     forms: dict[str, tuple[SpotId, ...]] | None
+    positions: dict[str, int]
 
 
 def _bad_token(message: str, position: int, expr: str) -> SchemaError:
@@ -133,13 +134,22 @@ def _order_key(placement: Placement) -> float:
 
 def _universe(source: "Show | Set | Cast") -> _Universe:
     if isinstance(source, Cast):
-        return _Universe(source.ids(), "cast", source, None)
+        return _universe_of(source.ids(), "cast", source, None)
     if isinstance(source, Set):
-        return _Universe(source.entity_ids(), "set", None, _set_forms(source))
+        return _universe_of(source.entity_ids(), "set", None, _set_forms(source))
     forms: dict[str, tuple[SpotId, ...]] = {
         form_id: form.members for form_id, form in source.forms.items()
     }
-    return _Universe(source.cast.ids(), "show", source.cast, forms)
+    return _universe_of(source.cast.ids(), "show", source.cast, forms)
+
+
+def _universe_of(
+    ids: tuple[SpotId, ...],
+    source: str,
+    cast: Cast | None,
+    forms: dict[str, tuple[SpotId, ...]] | None,
+) -> _Universe:
+    return _Universe(ids, source, cast, forms, {spot_id: i for i, spot_id in enumerate(ids)})
 
 
 def _unknown(kind: str, name: str, known: Sequence[str], token: _Token) -> UnknownRefError:
@@ -172,11 +182,11 @@ def _resolve_prefix(universe: _Universe, token: _Token) -> tuple[SpotId, ...]:
 
 def _resolve_range(universe: _Universe, token: _Token) -> tuple[SpotId, ...]:
     expanded = parse_range(token.text)
-    present: dict[str, SpotId] = {spot_id: spot_id for spot_id in universe.ids}
+    at = universe.positions
     for endpoint in (expanded[0], expanded[-1]):
-        if endpoint not in present:
+        if endpoint not in at:
             raise _unknown("spot", endpoint, universe.ids, token)
-    return tuple(present[i] for i in expanded if i in present)
+    return tuple(universe.ids[at[i]] for i in expanded if i in at)
 
 
 def _resolve_form(universe: _Universe, name: str, token: _Token) -> tuple[SpotId, ...]:
@@ -242,8 +252,8 @@ def _resolve_word(universe: _Universe, token: _Token, expr: str) -> tuple[SpotId
         found = _resolve_kind(universe, token, expr)
     elif text.endswith(PREFIX_MARK):
         found = _resolve_prefix(universe, token)
-    elif text in universe.ids:
-        found = (universe.ids[universe.ids.index(text)],)
+    elif text in universe.positions:
+        found = (universe.ids[universe.positions[text]],)
     elif RANGE_PATTERN.match(text):
         found = _resolve_range(universe, token)
     else:
@@ -417,30 +427,39 @@ def _evaluate(ast: SelectorAst, universe: _Universe) -> tuple[SpotId, ...]:
     """Runs a postfix program on ordered sets of universe indices with one explicit stack.
 
     A result keeps its left operand's order, then adds new IDs from the right in their order.
+    Every stack entry is a set built for this run alone, so `+` and `-` edit the left operand in
+    place and cost only the size of the right one.
     """
     names = list(universe.ids)
-    index = {spot_id: i for i, spot_id in enumerate(names)}
+    extra: dict[SpotId, int] = {}
     stack: list[dict[int, None]] = []
     for token in ast.program:
         if token.is_word:
             found = _resolve_word(universe, token, ast.text)
-            stack.append(dict.fromkeys(_interned(index, names, spot_id) for spot_id in found))
+            stack.append(dict.fromkeys(_position(universe, extra, names, i) for i in found))
             continue
         right = stack.pop()
-        left = stack.pop()
+        left = stack[-1]
         if token.text == "+":
-            stack.append(left | right)
+            left.update(right)
+        elif token.text == "-":
+            for i in right:
+                left.pop(i, None)
         else:
-            keeps = token.text == "&"
-            stack.append({i: None for i in left if (i in right) == keeps})
+            stack[-1] = {i: None for i in left if i in right}
     return tuple(names[i] for i in stack[0])
 
 
-def _interned(index: dict[SpotId, int], names: list[SpotId], spot_id: SpotId) -> int:
-    if spot_id not in index:
-        index[spot_id] = len(names)
+def _position(
+    universe: _Universe, extra: dict[SpotId, int], names: list[SpotId], spot_id: SpotId
+) -> int:
+    """Returns a spot's universe index, numbering IDs outside the universe after it."""
+    if spot_id in universe.positions:
+        return universe.positions[spot_id]
+    if spot_id not in extra:
+        extra[spot_id] = len(names)
         names.append(spot_id)
-    return index[spot_id]
+    return extra[spot_id]
 
 
 def _validated(universe: _Universe, ids: Sequence[str]) -> Selection:

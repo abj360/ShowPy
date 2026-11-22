@@ -34,6 +34,8 @@ Contains:
         with SchemaError naming the value, before sorting it
     test_regression_digit_tails_over_64_characters_raise_schema_error: splits a 64-digit tail and
         refuses a 65-digit one in IDs, labels and range words
+    test_regression_long_operator_chains_cost_only_their_right_operands: evaluates 20,000-term
+        chains on 40,000 spots within the time budget
 """
 
 import contextlib
@@ -576,3 +578,32 @@ def test_regression_digit_tails_over_64_characters_raise_schema_error() -> None:
         assert info.value.context["digits"] == ID_MAX_LENGTH + 1
     with pytest.raises(SchemaError):
         select(_line_cast(), f"T1-T{too_long}")
+
+
+LARGE_CAST_SPOTS = 40_000
+LONG_CHAIN_TERMS = 20_000
+LONG_CHAIN_BUDGET_S = 5
+
+
+@pytest.fixture(scope="module")
+def large_cast() -> Cast:
+    return Cast(
+        groups={"g": Group(key="g", label_prefix="T")},
+        spots=tuple(Spot(id=SpotId(f"T{i}"), group="g") for i in range(1, LARGE_CAST_SPOTS + 1)),
+    )
+
+
+@fails_after(LONG_CHAIN_BUDGET_S)
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+def test_regression_long_operator_chains_cost_only_their_right_operands(large_cast: Cast) -> None:
+    """Evaluates 20,000-term `-` and `+` chains on 40,000 spots without copying the left side.
+
+    Copying the left operand per operator made `all - T1 - ... - T20000` take about a minute.
+    """
+    terms = range(1, LONG_CHAIN_TERMS + 1)
+    removed = select(large_cast, "all" + "".join(f" - T{i}" for i in terms))
+    assert removed.ids[0] == f"T{LONG_CHAIN_TERMS + 1}"
+    assert len(removed.ids) == LARGE_CAST_SPOTS - LONG_CHAIN_TERMS
+    added = select(large_cast, " + ".join(f"T{i}" for i in reversed(terms)))
+    assert added.ids[:2] == (f"T{LONG_CHAIN_TERMS}", f"T{LONG_CHAIN_TERMS - 1}")
+    assert len(added.ids) == LONG_CHAIN_TERMS
