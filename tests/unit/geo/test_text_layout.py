@@ -316,7 +316,7 @@ def test_regression_worst_legal_text_stays_within_its_work_budget() -> None:
     pieces = sum(len(parse_path(curve.d)[0].pieces) for curve in curves)
     assert pieces <= MAX_LAYOUT_CURVE_PIECES
     assert pieces * SVG_SAMPLES_PER_PIECE + len(curves) <= WORK_BUDGET_SAMPLES
-    assert form.geometry["n"] == 2 * len(curls) * copies
+    assert form.recipe.n == 2 * len(curls) * copies
     assert elapsed < WORST_TEXT_SECONDS
 
 
