@@ -32,6 +32,8 @@ Contains:
         nested parentheses with SchemaError, never RecursionError
     test_regression_select_rejects_a_set_of_non_strings_with_schema_error: rejects a set of ints
         with SchemaError naming the value, before sorting it
+    test_regression_digit_tails_over_64_characters_raise_schema_error: splits a 64-digit tail and
+        refuses a 65-digit one in IDs, labels and range words
 """
 
 import contextlib
@@ -47,6 +49,7 @@ from showpy.cast.select import (
     alternate,
     in_region,
     is_label_dependent,
+    label_prefix,
     mirror_pairs,
     near,
     normalize_v1_selector,
@@ -61,8 +64,9 @@ from showpy.choreo.models import Placement, Set
 from showpy.core.caps import MAX_DEPTH, MAX_TEXT_CHARS
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import GeometryError, SchemaError, ShowPyError, UnknownRefError
-from showpy.core.ids import FormId, SetId, SpotId
+from showpy.core.ids import ID_MAX_LENGTH, FormId, SetId, SpotId
 from showpy.core.types import Region
+from showpy.core.util import split_id
 from showpy.geo.shapes import line
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
@@ -559,3 +563,16 @@ def test_regression_select_rejects_a_set_of_non_strings_with_schema_error() -> N
     with pytest.raises(SchemaError) as info:
         select(_line_cast(), {1, 2})  # type: ignore[arg-type]
     assert info.value.context["value"] in {"1", "2"}
+
+
+def test_regression_digit_tails_over_64_characters_raise_schema_error() -> None:
+    """Splits a 64-digit tail and refuses a 65-digit one in IDs, labels and range words."""
+    fits, too_long = "1" * ID_MAX_LENGTH, "1" * (ID_MAX_LENGTH + 1)
+    assert split_id(f"T{fits}") == ("T", int(fits))
+    assert label_prefix(f"T{fits}") == "T"
+    for call in (lambda: split_id(f"T{too_long}"), lambda: label_prefix(f"T{too_long}")):
+        with pytest.raises(SchemaError) as info:
+            call()
+        assert info.value.context["digits"] == ID_MAX_LENGTH + 1
+    with pytest.raises(SchemaError):
+        select(_line_cast(), f"T1-T{too_long}")
