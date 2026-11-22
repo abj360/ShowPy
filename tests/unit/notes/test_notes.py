@@ -188,8 +188,6 @@ def test_regression_accept_draft_rejects_blank_text() -> None:
         accept_draft(two_set_show(), draft)
 
 
-@pytest.mark.defect("UP-9.3-125")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-125")
 def test_regression_note_rejects_a_naive_datetime() -> None:
     """Rejects a created_at without a time zone, which cannot be compared (audit 9.3)."""
     with pytest.raises(REJECTED):

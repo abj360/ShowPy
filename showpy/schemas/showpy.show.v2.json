@@ -1208,7 +1208,7 @@
     },
     "Note": {
       "additionalProperties": false,
-      "description": "Holds one design note.\n\nAttributes:\n    id: Note ID.\n    text: Note body.\n    kind: goal, idea, todo or warning.\n    anchor: What the note is attached to.\n    author: User name, or \"agent\".\n    created_at: When the note was written; passed in, never read from the clock.\n    visible: Whether the canvas shows it.",
+      "description": "Holds one design note.\n\nAttributes:\n    id: Note ID.\n    text: Note body.\n    kind: goal, idea, todo or warning.\n    anchor: What the note is attached to.\n    author: User name, or \"agent\".\n    created_at: When the note was written, with a time zone; passed in, never read from\n        the clock.\n    visible: Whether the canvas shows it.",
       "properties": {
         "anchor": {
           "$ref": "#/$defs/Anchor"

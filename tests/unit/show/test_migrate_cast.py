@@ -14,7 +14,7 @@ import pytest
 from showpy.core.errors import SchemaError
 from showpy.core.json_types import JsonValue
 from showpy.show.migrate import SHOW_DOC, ReportBuilder
-from showpy.show.migrations.v1_to_v2_cast import migrate_cast
+from showpy.show.migrations.v1_to_v2_cast import NOTES_DOC, migrate_cast
 
 
 def _docs(**cast: JsonValue) -> dict[str, JsonValue]:
@@ -110,3 +110,59 @@ def test_regression_values_with_no_safe_repair_are_refused_naming_the_field(
 def test_regression_a_document_without_a_cast_passes_through() -> None:
     docs: dict[str, JsonValue] = {SHOW_DOC: {"id": "show"}, "/other": {"x": 1}}
     assert migrate_cast(docs, ReportBuilder(1)) == docs
+
+
+def _note(note_id: str, created_at: JsonValue) -> JsonValue:
+    return {
+        "id": note_id,
+        "text": "go",
+        "kind": "idea",
+        "anchor": {"kind": "set", "set_id": "1"},
+        "author": "pat",
+        "created_at": created_at,
+        "visible": True,
+    }
+
+
+def _notes(docs: dict[str, JsonValue]) -> list[JsonValue]:
+    notes = docs[NOTES_DOC]
+    assert isinstance(notes, list)
+    return notes
+
+
+def test_regression_a_naive_note_time_is_read_as_utc_and_reported() -> None:
+    docs = _docs()
+    docs[NOTES_DOC] = [_note("n1", "2026-11-11T09:30:00"), _note("n2", "2026-11-12T10:00:00.5")]
+    before = copy.deepcopy(docs)
+    report = ReportBuilder(1)
+    notes = _notes(migrate_cast(docs, report))
+    assert [n["created_at"] for n in notes if isinstance(n, dict)] == [
+        "2026-11-11T09:30:00Z",
+        "2026-11-12T10:00:00.500000Z",
+    ]
+    assert docs == before
+    assert len(report.build().repairs) == 2
+    assert "n1" in report.build().repairs[0]
+
+
+def test_regression_an_aware_note_time_is_kept_without_a_repair() -> None:
+    docs = _docs()
+    docs[NOTES_DOC] = [
+        _note("n1", "2026-11-11T09:30:00Z"),
+        _note("n2", "2026-11-11T09:30:00+02:00"),
+    ]
+    report = ReportBuilder(1)
+    assert migrate_cast(copy.deepcopy(docs), report) == docs
+    assert report.build().repairs == ()
+
+
+def test_regression_a_note_time_that_is_not_a_time_is_left_for_validation() -> None:
+    docs = _docs()
+    docs[NOTES_DOC] = [_note("n1", "yesterday"), _note("n2", None)]
+    report = ReportBuilder(1)
+    assert migrate_cast(copy.deepcopy(docs), report) == docs
+    assert report.build().repairs == ()
+
+
+def test_regression_a_show_without_notes_migrates_without_a_notes_document() -> None:
+    assert NOTES_DOC not in migrate_cast(_docs(), ReportBuilder(1))
