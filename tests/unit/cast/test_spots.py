@@ -29,6 +29,7 @@ import shapely
 
 from showpy.cast.models import Group, LabelScheme, Shape
 from showpy.cast.spots import (
+    GroupPatch,
     _rename_everywhere,
     add_group,
     add_spot,
@@ -220,9 +221,20 @@ def test_edit_group_changes_fields_but_not_key() -> None:
     show = edit_group(two_set_show(), "trumpets", color="#ff0000", moves=False)
     assert show.cast.groups["trumpets"].color == "#ff0000"
     with pytest.raises(SchemaError):
-        edit_group(two_set_show(), "trumpets", key="x")
+        edit_group(two_set_show(), "trumpets", key="x")  # type: ignore[call-arg]
     with pytest.raises(SchemaError):
-        edit_group(two_set_show(), "trumpets", default_radius="wide")
+        edit_group(two_set_show(), "trumpets", default_radius="wide")  # type: ignore[arg-type]
+
+
+def test_edit_group_rejects_an_unknown_field() -> None:
+    with pytest.raises(SchemaError) as info:
+        edit_group(two_set_show(), "trumpets", colour="#ffffff")  # type: ignore[call-arg]
+    assert "colour" in info.value.message
+    assert "color" in (info.value.hint or "")
+
+
+def test_group_patch_names_every_editable_group_field() -> None:
+    assert GroupPatch.__optional_keys__ == set(Group.model_fields) - {"key"}
 
 
 def test_remove_group_reassigns_members() -> None:

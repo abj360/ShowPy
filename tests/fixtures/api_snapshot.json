@@ -532,6 +532,7 @@
       "symbol": "str"
     }
   },
+  "GroupPatch": "(*args)",
   "GuideLine": {
     "model": {
       "id": "str",
@@ -1496,7 +1497,7 @@
   "ease": "(easing: showpy.choreo.path_models.Easing, u: FloatArray) -> FloatArray",
   "easing_breaks": "(easing: showpy.choreo.path_models.Easing) -> list[float]",
   "edit": "(form: showpy.choreo.form_models.Form, *, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., font_registry: showpy.geo.fonts.FontRegistry | None = None, **changes: Any) -> showpy.choreo.form_models.Form",
-  "edit_group": "(show: 'Show', key: str, /, **changes: Any) -> 'Show'",
+  "edit_group": "(show: 'Show', key: str, /, **changes: Unpack[showpy.cast.spots.GroupPatch]) -> 'Show'",
   "edit_note": "(show: 'Show', note_id: str, /, **changes: Any) -> 'Show'",
   "edit_params": "(form: showpy.choreo.form_models.Form, *, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., **params: Any) -> showpy.choreo.form_models.Form",
   "edit_text_count": "(form: showpy.choreo.form_models.Form, *, add: collections.abc.Sequence[str] = (), remove: collections.abc.Sequence[str] = (), n: int | None = None, spacing: Meters | None = None, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., font_registry: showpy.geo.fonts.FontRegistry | None = None) -> showpy.choreo.form_models.Form",
