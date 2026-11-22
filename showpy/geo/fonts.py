@@ -18,7 +18,6 @@ Contains:
 """
 
 import functools
-import json
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import Annotated, Literal, Self
@@ -36,7 +35,7 @@ from showpy.core.errors import (
 )
 from showpy.core.readonly import ReadOnly, ReadOnlyMap
 from showpy.core.resources import font_path
-from showpy.core.strict_json import require_nesting
+from showpy.core.strict_json import parse_strict_json
 from showpy.core.types import FrozenModel
 from showpy.core.util import ASSET_PREFIX, asset_uri, close_matches
 from showpy.geo.font_strokes import sample_subpaths, stroke_length
@@ -283,17 +282,9 @@ def load_font(data: bytes) -> Font:
     """
     require_size(len(data), MAX_FONT_BYTES, what="font bytes", error=FontError)
     try:
-        require_nesting(data, document="font")
+        document = parse_strict_json(data, document="font")
     except SchemaError as exc:
-        raise _bad_font(exc.message, hint=exc.hint, field="(root)") from exc
-    try:
-        document = json.loads(data.decode("utf-8"))
-    except (ValueError, RecursionError) as exc:
-        raise _bad_font(
-            f"font bytes are not UTF-8 JSON: {type(exc).__name__}",
-            hint="pass the bytes of a showpy.font.v1 JSON file",
-            field="(root)",
-        ) from exc
+        raise _bad_font(exc.message, hint=exc.hint, field="(root)", **exc.context) from exc
     try:
         font = Font.model_validate(document)
     except SchemaError as exc:

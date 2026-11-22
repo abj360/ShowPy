@@ -6,6 +6,8 @@ test_fonts.py --- tests the font data classes, load_font and the frozen FontRegi
 Contains:
     test_*(): one behavior of showpy.geo.fonts each
     test_regression_font_json_nested_past_the_cap_is_a_font_error: refuses it before validation
+    test_regression_load_font_refuses_duplicate_keys: refuses a font document that repeats a key
+    test_regression_load_font_refuses_non_finite_constants: refuses NaN and infinity tokens
     test_regression_bundled_registry_is_read_only: refuses writes through the cached registry's
         mappings and a font's glyph table
     test_regression_font_dumps_to_json: dumps and reloads Font and FontRegistry without warnings
@@ -332,3 +334,26 @@ def test_regression_font_json_nested_past_the_cap_is_a_font_error() -> None:
     deep = b'{"name": ' + b"[" * (MAX_NESTING + 1) + b"]" * (MAX_NESTING + 1) + b"}"
     with pytest.raises(FontError, match="nests deeper than"):
         load_font(deep)
+
+
+def test_regression_load_font_refuses_duplicate_keys() -> None:
+    document = tiny_bytes().replace(
+        b'"units_per_em": 10', b'"units_per_em": 10, "units_per_em": 20'
+    )
+    with pytest.raises(FontError) as raised:
+        load_font(document)
+    assert raised.value.code == "BAD_FONT"
+    assert "repeated key" in raised.value.message
+    assert isinstance(raised.value.__cause__, SchemaError)
+    assert raised.value.__cause__.code == "STRICT_JSON"
+
+
+@pytest.mark.parametrize("token", ["NaN", "Infinity", "-Infinity"])
+def test_regression_load_font_refuses_non_finite_constants(token: str) -> None:
+    document = tiny_bytes().replace(b'"cap_height": 10', b'"cap_height": ' + token.encode())
+    with pytest.raises(FontError) as raised:
+        load_font(document)
+    assert raised.value.code == "BAD_FONT"
+    assert token in raised.value.message
+    assert isinstance(raised.value.__cause__, SchemaError)
+    assert raised.value.__cause__.code == "STRICT_JSON"
