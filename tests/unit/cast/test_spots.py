@@ -46,6 +46,7 @@ from showpy.cast.spots import (
     set_shape,
 )
 from showpy.choreo.path_models import EntityFacing, FacingMode, FixedFacing, PathRow
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import (
     LockedError,
     SchemaError,
@@ -330,6 +331,20 @@ def test_define_selection_stores_resolved_ids() -> None:
     assert show.cast.selections["ends"] == ("T1", "T4")
     with pytest.raises(SchemaError):
         define_selection(two_set_show(), "bad name", "T1")
+
+
+def test_define_selection_refuses_a_taken_name() -> None:
+    show = define_selection(two_set_show(), "ends", "T1 + T4")
+    with pytest.raises(SchemaError) as info:
+        define_selection(show, "ends", "T2")
+    assert info.value.code == ErrorCode.NAME_TAKEN
+    assert show.cast.selections["ends"] == ("T1", "T4")
+
+
+def test_define_selection_replaces_a_taken_name_when_asked() -> None:
+    show = define_selection(two_set_show(), "ends", "T1 + T4")
+    show = define_selection(show, "ends", "T2", replace=True)
+    assert show.cast.selections["ends"] == ("T2",)
 
 
 def test_set_shape_and_set_claimable() -> None:

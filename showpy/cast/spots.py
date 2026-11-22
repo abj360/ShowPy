@@ -29,6 +29,7 @@ from showpy.cast.models import Cast, Claimable, Group, LabelScheme, Shape, Spot
 from showpy.cast.rewrite import faces_entity, rewrite_spot_ids
 from showpy.cast.select import label_prefix, select
 from showpy.choreo.models import Placement
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import (
     LockedError,
     SchemaError,
@@ -539,8 +540,14 @@ def relabel(show: "Show", scheme: LabelScheme) -> tuple["Show", dict[SpotId, str
     return _with_cast(_rename_everywhere(show, mapping), label_scheme=scheme), mapping
 
 
-def define_selection(show: "Show", name: str, sel: Selector) -> "Show":
-    """Stores a named selection, usable later as `sel:<name>`; an existing name is replaced.
+def define_selection(show: "Show", name: str, sel: Selector, *, replace: bool = False) -> "Show":
+    """Stores a named selection, usable later as `sel:<name>`.
+
+    Args:
+        show: Show to add the selection to.
+        name: Letters, digits, `_`, `.` and `-` only.
+        sel: Spots to store, resolved to IDs now.
+        replace: Whether an existing selection under `name` may be overwritten.
 
     >>> from showpy.examples import two_set_show
     >>> define_selection(two_set_show(), "ends", "T1 + T4").cast.selections["ends"]
@@ -551,6 +558,13 @@ def define_selection(show: "Show", name: str, sel: Selector) -> "Show":
             f"bad selection name {name!r}",
             hint="use letters, digits, _, . and - only",
             context={"name": name},
+        )
+    if name in show.cast.selections and not replace:
+        raise SchemaError(
+            f"selection {name!r} already exists",
+            hint="pass replace=True to overwrite it, or pick another name",
+            context={"name": name},
+            code=ErrorCode.NAME_TAKEN,
         )
     ids = select(show, sel).ids
     return _with_cast(show, selections={**show.cast.selections, name: ids})
