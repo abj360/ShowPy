@@ -38,6 +38,9 @@ type FloatArray = npt.NDArray[np.float64]
 DELAY_STEP = 0.5
 CROSSING_WEIGHT = 10.0
 ZERO_TOL = 1e-12
+# Gaps are ranked at nanometre resolution: their last bits are float noise that differs between
+# platforms (libm, fused multiply-add), so gaps that tie to 9 digits are ordered by spot IDs.
+GAP_RANK_DIGITS = 9
 ALL = "all"
 
 
@@ -110,12 +113,18 @@ def _on_field_ids(
     return [e for e in ids if plans[e].start.on_field or plans[e].end.on_field]
 
 
+def _gap_rank(gap: float) -> float:
+    return round(gap, GAP_RANK_DIGITS)
+
+
 def min_gaps(
     show: Show, tid: tuple[str, str], sel: str | Sequence[str] = ALL, top: int = 10
 ) -> list[GapInfo]:
     """Lists the `top` tightest pairs of on-field spots in a transition, tightest first.
 
-    A bounding-box broadphase skips pairs that cannot beat the current top list.
+    Gaps are ranked rounded to GAP_RANK_DIGITS decimals, so pairs that tie to within float noise
+    are listed in spot ID order. A bounding-box broadphase skips pairs that cannot beat the
+    current top list.
 
     >>> from showpy.examples import two_set_show
     >>> round(min_gaps(two_set_show(), ("1", "2"), top=1)[0].gap, 6)
@@ -135,10 +144,11 @@ def min_gaps(
     found: list[GapInfo] = []
     for a, b in itertools.combinations(ids, 2):
         reach = _extent(show, a) + _extent(show, b)
-        if len(found) >= top and _box_distance(boxes[a], boxes[b]) - reach > found[-1].gap:
+        lower = _gap_rank(_box_distance(boxes[a], boxes[b]) - reach)
+        if len(found) >= top and lower > _gap_rank(found[-1].gap):
             continue
         found.append(_pair_gap(engine, tid, a, b))
-        found.sort(key=lambda g: (g.gap, g.a, g.b))
+        found.sort(key=lambda g: (_gap_rank(g.gap), g.a, g.b))
         del found[top:]
     return found
 
