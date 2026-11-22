@@ -58,6 +58,9 @@ Contains:
     test_regression_id_split_is_linear_on_long_ids: splits a 10,000-character ID in linear time
     test_regression_range_check_happens_before_expansion: checks range endpoints before building
         300,000 strings
+    test_parse_range_*(), test_format_ranges_*(): padding, inner dashes, ASCII output and single IDs
+    test_regression_parse_range_refuses_mixed_padding_with_both_spellings: raises RANGE_PADDING
+        naming `T01-T10` and `T1-T10`
     test_split_id_*(): splits IDs into a prefix and a trailing ASCII number
     test_regression_split_id_rejects_digit_runs_no_id_can_hold: rejects a 5,000-digit tail with a
         ShowPyError
@@ -96,6 +99,7 @@ from pydantic import BaseModel, ConfigDict
 from showpy.cast.models import Cast, Group, Spot
 from showpy.cast.select import label_prefix, select
 from showpy.core.canonical import jcs
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import DeprecatedWarning, GeometryError, SchemaError, ShowPyError
 from showpy.core.ids import SpotId
 from showpy.core.util import (
@@ -140,7 +144,7 @@ def test_parse_range_rejects_bad_ranges(text: str) -> None:
 
 
 def test_format_ranges_compacts_runs() -> None:
-    assert format_ranges(["T3", "T1", "T2", "T4", "T7", "B1"]) == "B1, T1–T4, T7"
+    assert format_ranges(["T3", "T1", "T2", "T4", "T7", "B1"]) == "B1, T1-T4, T7"
 
 
 def test_format_ranges_empty() -> None:
@@ -460,15 +464,11 @@ def test_regression_range_check_happens_before_expansion() -> None:
     assert peak < RANGE_PEAK_BUDGET_BYTES
 
 
-@pytest.mark.defect("UP-9.3-24")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-24")
 def test_regression_parse_range_reads_ranges_with_digits_in_the_prefix() -> None:
     """Expands `P1x1-P1x3` whose prefix holds a digit (audit 9.3)."""
     assert parse_range("P1x1-P1x3") == ["P1x1", "P1x2", "P1x3"]
 
 
-@pytest.mark.defect("UP-9.3-25")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-25")
 def test_regression_parse_range_reads_ranges_with_dash_prefixes() -> None:
     """Expands `flag-1-flag-3` the way `flag-*` already matches (audit 9.3)."""
     assert parse_range("flag-1-flag-3") == ["flag-1", "flag-2", "flag-3"]
@@ -483,15 +483,11 @@ def test_regression_parse_range_does_not_read_unicode_digits_as_ascii() -> None:
     assert "T3" not in expanded
 
 
-@pytest.mark.defect("UP-9.3-27")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-27")
 def test_regression_format_ranges_output_parses_back() -> None:
     """Writes ranges that parse_range reads back to the same IDs (audit 9.3)."""
     assert parse_range(format_ranges(["T1", "T2", "T3"])) == ["T1", "T2", "T3"]
 
 
-@pytest.mark.defect("UP-9.3-28")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-28")
 def test_regression_parse_range_honors_padding_of_the_last_endpoint() -> None:
     """Keeps the spelling of the last endpoint or rejects mixed padding (audit 9.3)."""
     try:
@@ -499,6 +495,49 @@ def test_regression_parse_range_honors_padding_of_the_last_endpoint() -> None:
     except ShowPyError:
         return
     assert expanded[-1] == "T010"
+
+
+def test_parse_range_reads_zero_padded_ranges() -> None:
+    assert parse_range("T08-T10") == ["T08", "T09", "T10"]
+    assert parse_range("T001-T100")[-1] == "T100"
+
+
+@pytest.mark.parametrize("text", ["T1-T010", "T01-T1", "T008-T10", "T01-T010", "T9-T010"])
+def test_regression_parse_range_refuses_mixed_padding_with_both_spellings(text: str) -> None:
+    """Refuses endpoints spelled with different widths and names both valid spellings."""
+    with pytest.raises(SchemaError) as caught:
+        parse_range(text)
+    assert caught.value.code == ErrorCode.RANGE_PADDING
+    assert "T01-T10" in caught.value.hint
+    assert "T1-T10" in caught.value.hint
+
+
+def test_parse_range_accepts_unpadded_zero_and_overflow_ranges() -> None:
+    assert parse_range("T0-T10")[-1] == "T10"
+    assert parse_range("T98-T101")[-1] == "T101"
+    assert parse_range("T01-T100")[-1] == "T100"
+
+
+def test_parse_range_reads_ranges_with_digits_before_a_dash_prefix() -> None:
+    assert parse_range("p2-1-p2-3") == ["p2-1", "p2-2", "p2-3"]
+
+
+@pytest.mark.parametrize("text", ["T1-U3", "T3-T1"])
+def test_parse_range_still_rejects_mismatched_prefixes_and_descending_ranges(text: str) -> None:
+    with pytest.raises(SchemaError):
+        parse_range(text)
+
+
+@pytest.mark.parametrize("text", ["flag-1", "a-b", "x1-y", "1-a2"])
+def test_parse_range_returns_single_ids_with_inner_dashes_unchanged(text: str) -> None:
+    assert parse_range(text) == [text]
+
+
+def test_format_ranges_writes_ascii_dashes_and_respects_padding() -> None:
+    assert format_ranges(["T08", "T09", "T10", "T11"]) == "T08-T11"
+    assert format_ranges(["T9", "T010"]) == "T9, T010"
+    assert format_ranges(["flag-1", "flag-2", "flag-3"]) == "flag-1-flag-3"
+    assert format_ranges(["P1x1", "P1x2", "P1x3"]) == "P1x1-P1x3"
 
 
 def _tagged(domain: str, kind: str, payload: bytes) -> str:

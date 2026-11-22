@@ -12,6 +12,8 @@ Contains:
     test_results_are_unique_known_ids(): every result is duplicate-free and in the cast
     test_natural_sort_is_a_permutation(): sorting keeps every ID, duplicates included
     test_natural_sort_is_idempotent(): sorting a sorted list changes nothing
+    test_format_ranges_round_trips_through_parse_range(): every run of format_ranges expands back
+        to the sorted unique IDs it came from
 """
 
 from hypothesis import given
@@ -20,7 +22,7 @@ from hypothesis import strategies as st
 from showpy.cast.models import Cast, Group, Spot
 from showpy.cast.select import select
 from showpy.core.ids import SpotId
-from showpy.core.util import natural_sort
+from showpy.core.util import format_ranges, natural_sort, parse_range
 
 GROUPS = {"trumpets": "T", "tubas": "TB", "flags": "F"}
 TAGS = ("soloist", "leader")
@@ -115,3 +117,34 @@ def test_natural_sort_is_a_permutation(ids: list[str]) -> None:
 def test_natural_sort_is_idempotent(ids: list[str]) -> None:
     once = natural_sort(ids)
     assert natural_sort(once) == once
+
+
+RANGE_PREFIXES = st.from_regex(r"[A-Za-z_][A-Za-z0-9_]{0,5}-?", fullmatch=True)
+RANGE_NUMBERS = st.integers(min_value=0, max_value=120).flatmap(
+    lambda n: st.sampled_from([str(n), f"{n:02d}", f"{n:03d}"])
+)
+
+
+@st.composite
+def range_ids(draw: st.DrawFn) -> list[str]:
+    """Draws unique IDs of one or more prefix-plus-number shapes, in natural order.
+
+    The domain is IDs a prefix of letters, digits and underscores (optionally ending in `-`)
+    followed by a padded or unpadded ASCII number; format_ranges is defined for these.
+    """
+    prefixes = draw(st.lists(RANGE_PREFIXES, min_size=1, max_size=3, unique=True))
+    ids = draw(
+        st.sets(
+            st.builds(
+                lambda prefix, number: prefix + number, st.sampled_from(prefixes), RANGE_NUMBERS
+            ),
+            max_size=40,
+        )
+    )
+    return natural_sort(ids)
+
+
+@given(range_ids())
+def test_format_ranges_round_trips_through_parse_range(ids: list[str]) -> None:
+    runs = format_ranges(ids).split(", ") if ids else []
+    assert [spot_id for run in runs for spot_id in parse_range(run)] == ids
