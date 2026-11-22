@@ -236,7 +236,7 @@ def test_curvature_bound_is_known_only_for_exact_arc_length_curves() -> None:
     arc = ArcCurve(center=(0.0, 0.0), radius=4.0, start_deg=0.0, sweep_deg=720.0)
     circle = CircleCurve(center=(0.0, 0.0), radius=0.5)
     line = Segment(a=(4.0, 0.0), b=(5.0, 0.0))
-    spline = SplineCurve(points=((0.0, 0.0), (1.0, 1.0), (2.0, 0.0)))
+    spline = SplineCurve(points=((5.0, 0.0), (6.0, 1.0), (7.0, 0.0)))
     assert curvature_bound(line) == 0.0
     assert curvature_bound(Polyline(points=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0)))) == 0.0
     assert curvature_bound(arc) == 0.25
