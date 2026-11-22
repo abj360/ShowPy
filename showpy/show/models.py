@@ -43,6 +43,7 @@ from showpy.core.types import Count, FrozenModel, Seconds
 from showpy.core.util import close_matches
 from showpy.notes.models import Anchor, Note
 from showpy.sheet.models import CoordinateSystem, Sheet, Zone
+from showpy.show.leaving_fields import read_coordinates, read_zones
 from showpy.time.models import MeasureLabel, Timeline
 
 INDEX_TOL = 1e-9
@@ -189,6 +190,10 @@ class Show(FrozenModel):
             if spec.id == known:
                 return spec
         return TransitionSpec(id=known, counts=self.set(known.to_set).counts)
+
+
+for _leaving_field, _warning_read in (("coordinates", read_coordinates), ("zones", read_zones)):
+    setattr(Show, _leaving_field, property(_warning_read))
 
 
 class ShowIndexEntry(FrozenModel):

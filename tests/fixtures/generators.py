@@ -33,7 +33,7 @@ from showpy.core.types import Point
 from showpy.core.util import seeded_rng
 from showpy.geo.shapes import line
 from showpy.sheet.models import Sheet
-from showpy.sheet.templates import sheet_templates
+from showpy.sheet.templates import _sheet_templates as sheet_templates
 from showpy.show.changes import apply_change, store_paths
 from showpy.show.manage import add_set, new_show
 from showpy.show.models import FormOp, PathsOp, Show

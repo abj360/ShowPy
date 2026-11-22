@@ -44,6 +44,8 @@ from showpy.sheet.models import CoordinateSystem, GuideLine, Landmark, Sheet, Zo
 from showpy.sheet.templates import blank_sheet, sheet_templates
 from showpy.show.models import Show
 
+pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+
 SQUARE = Region(exterior=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)))
 
 

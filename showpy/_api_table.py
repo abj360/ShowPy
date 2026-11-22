@@ -7,6 +7,7 @@ Edit PUBLIC_API, then run `uv run python scripts/gen_public_api.py` to regenerat
 Contains:
     PUBLIC_API: lists (public name, defining module, attribute) sorted by public name
     DEPRECATED: lists (old name, dotted path of its replacement, since, remove) for each alias
+    LEAVING: lists (name, kind, replacement, since, remove) for each name that leaves the library
     DEPRECATED_KEYWORDS: lists (function, old keyword, new keyword, since, remove) per rename
 """
 
@@ -595,6 +596,49 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
 
 DEPRECATED: tuple[tuple[str, str, str, str], ...] = (
     ("ValidationError", "showpy.core.errors.ShowValidationError", "0.4.0", "0.6.0"),
+)
+
+LEAVING: tuple[tuple[str, str, str, str, str], ...] = (
+    ("to_coords", "function", "locate", "0.4.0", "0.7.0"),
+    ("from_coords", "function", "at_location", "0.4.0", "0.7.0"),
+    ("coordinate_presets", "function", "locate", "0.4.0", "0.7.0"),
+    ("set_coordinates", "function", "locate", "0.4.0", "0.7.0"),
+    ("CoordinateSystem", "type", "Location", "0.4.0", "0.7.0"),
+    ("CoordinateKind", "type", "Location", "0.4.0", "0.7.0"),
+    ("landmark", "function", "markings_near", "0.4.0", "0.7.0"),
+    ("landmark_anchor", "function", "markings_near", "0.4.0", "0.7.0"),
+    ("landmark_keys", "function", "markings_near", "0.4.0", "0.7.0"),
+    ("nearest_landmarks", "function", "markings_near", "0.4.0", "0.7.0"),
+    ("zones_at", "function", "markings_near", "0.4.0", "0.7.0"),
+    ("line_landmark", "function", "Marking", "0.4.0", "0.7.0"),
+    ("point_landmark", "function", "Marking", "0.4.0", "0.7.0"),
+    ("add_landmark", "function", "Marking", "0.4.0", "0.7.0"),
+    ("remove_landmark", "function", "Marking", "0.4.0", "0.7.0"),
+    ("add_zone", "function", "Marking", "0.4.0", "0.7.0"),
+    ("remove_zone", "function", "Marking", "0.4.0", "0.7.0"),
+    ("Landmark", "type", "Marking", "0.4.0", "0.7.0"),
+    ("Zone", "type", "Marking", "0.4.0", "0.7.0"),
+    ("ZoneKind", "type", "Marking", "0.4.0", "0.7.0"),
+    ("proscenium_stage", "function", "floor", "0.4.0", "0.7.0"),
+    ("SheetCanvas", "type", "no replacement (the name leaves the library)", "0.4.0", "0.6.0"),
+    ("draw_sheet", "function", "no replacement (the name leaves the library)", "0.4.0", "0.6.0"),
+    ("render_sheet", "function", "no replacement (the name leaves the library)", "0.4.0", "0.6.0"),
+    ("sheet_templates", "function", "sheets", "0.4.0", "0.7.0"),
+    ("get_sheet", "function", "sheet", "0.4.0", "0.7.0"),
+    ("customize", "function", "sheet", "0.4.0", "0.7.0"),
+    ("football_field", "function", "field", "0.4.0", "0.7.0"),
+    ("gym_floor", "function", "floor", "0.4.0", "0.7.0"),
+    ("GuideLine", "type", "Marking", "0.4.0", "0.7.0"),
+    ("on_surface", "function", "on_sheet", "0.4.0", "0.7.0"),
+    ("blank_sheet", "function", "sheet", "0.4.0", "0.7.0"),
+    ("add_guide", "function", "Marking", "0.4.0", "0.7.0"),
+    ("remove_guide", "function", "Marking", "0.4.0", "0.7.0"),
+    ("save_sheet", "function", "sheets", "0.4.0", "0.7.0"),
+    ("template_ref", "function", "sheet", "0.4.0", "0.7.0"),
+    ("SheetStore", "type", "sheets", "0.4.0", "0.7.0"),
+    ("InMemorySheetStore", "type", "sheets", "0.4.0", "0.7.0"),
+    ("Show.coordinates", "field", "Location", "0.4.0", "0.7.0"),
+    ("Show.zones", "field", "Marking", "0.4.0", "0.7.0"),
 )
 
 DEPRECATED_KEYWORDS: tuple[tuple[str, str, str, str, str], ...] = (

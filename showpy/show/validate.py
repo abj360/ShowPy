@@ -23,7 +23,7 @@ from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import ContinuityError, ShowPyError
 from showpy.core.ids import format_tid, parse_ref
 from showpy.core.validation import ValidationIssue, ValidationReport
-from showpy.sheet.templates import SheetStore, get_sheet
+from showpy.sheet.templates import SheetStore, _get_sheet
 from showpy.show.models import Show
 from showpy.time.validate import validate_timeline
 
@@ -256,7 +256,7 @@ def validate_dependencies(show: Show, store: SheetStore | None = None) -> Valida
             )
         )
     try:
-        get_sheet(ref, store)
+        _get_sheet(ref, store)
     except ShowPyError as error:
         issues.append(_issue(ERROR, ErrorCode.UNKNOWN_SHEET, "sheet", error.message, error.hint))
     return ValidationReport(issues=tuple(issues))

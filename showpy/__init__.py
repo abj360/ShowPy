@@ -20,7 +20,7 @@ import importlib
 from importlib.metadata import version
 from typing import TYPE_CHECKING
 
-from showpy.core.deprecation import moved
+from showpy.core.deprecation import moved, warn_deprecated
 
 __version__: str = version("ShowPy")
 
@@ -1373,6 +1373,18 @@ _DEPRECATED: dict[str, tuple[str, str, str]] = {
     "ValidationError": ("showpy.core.errors.ShowValidationError", "0.4.0", "0.6.0"),
 }
 
+_LEAVING_TYPES: dict[str, tuple[str, str, str]] = {
+    "CoordinateSystem": ("Location", "0.4.0", "0.7.0"),
+    "CoordinateKind": ("Location", "0.4.0", "0.7.0"),
+    "Landmark": ("Marking", "0.4.0", "0.7.0"),
+    "Zone": ("Marking", "0.4.0", "0.7.0"),
+    "ZoneKind": ("Marking", "0.4.0", "0.7.0"),
+    "SheetCanvas": ("no replacement (the name leaves the library)", "0.4.0", "0.6.0"),
+    "GuideLine": ("Marking", "0.4.0", "0.7.0"),
+    "SheetStore": ("sheets", "0.4.0", "0.7.0"),
+    "InMemorySheetStore": ("sheets", "0.4.0", "0.7.0"),
+}
+
 __all__ = [
     "BUNDLED_FONTS",
     "CURRENT_VERSION",
@@ -1961,7 +1973,8 @@ def __getattr__(name: str) -> object:
     """Imports a public name on first use, so `import showpy.<module>` stays light.
 
     The resolved object is stored in the module namespace, so later lookups skip this function.
-    Deprecated aliases are never stored: each access must still warn.
+    Deprecated aliases and types that leave the library are never stored: each access must still
+    warn.
     """
     if name in _DEPRECATED:
         target, since, remove = _DEPRECATED[name]
@@ -1970,6 +1983,10 @@ def __getattr__(name: str) -> object:
         raise AttributeError(f"module 'showpy' has no attribute {name!r}")
     module_name, attribute = _EXPORTS[name]
     value: object = getattr(importlib.import_module(module_name), attribute)
+    if name in _LEAVING_TYPES:
+        replacement, since, remove = _LEAVING_TYPES[name]
+        warn_deprecated(name, replacement, since=since, remove=remove)
+        return value
     globals()[name] = value
     return value
 

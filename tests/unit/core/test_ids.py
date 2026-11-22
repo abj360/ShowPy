@@ -82,6 +82,8 @@ from showpy.core.ids import (
 )
 from showpy.sheet.templates import sheet_templates
 
+pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+
 ID_CANDIDATES = st.from_regex(ID_PATTERN, fullmatch=True) | st.text(
     alphabet=st.characters(max_codepoint=0x7F) | st.sampled_from("\u00e9\u0663\u212a"),
     max_size=ID_MAX_LENGTH + 2,

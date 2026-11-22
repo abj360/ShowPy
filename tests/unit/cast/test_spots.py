@@ -64,6 +64,8 @@ from showpy.show.pinning import pin, unpin
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.shows import two_set_show
 
+pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 SQUARE = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)))
 

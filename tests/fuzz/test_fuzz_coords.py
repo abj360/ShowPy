@@ -33,6 +33,8 @@ from showpy.sheet.models import CoordinateKind, CoordinateSystem
 from showpy.show.models import Show
 from tests.helpers import only_showpy_errors
 
+pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+
 SHOW = two_set_show()
 ROUND_TRIP_TOL = 0.0051
 FLOATS = st.floats(allow_nan=True, allow_infinity=True, allow_subnormal=True)

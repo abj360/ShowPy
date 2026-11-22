@@ -61,6 +61,8 @@ from showpy.sheet.templates import get_sheet
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 
+pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+
 TOL = 1e-9
 STAGE = CoordinateSystem(kind=CoordinateKind.STAGE)
 
