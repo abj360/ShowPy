@@ -322,14 +322,19 @@ class PathEngine:
         Raises PathError code SEGMENT_BOUND when a spot's motion cannot be brought within
         `tol` before the depth cap.
         """
-        require_finite(tol, name="tol", low=0.0, low_open=True)
-        return [seg for e in self.compile(tid).plans for seg in self.entity_segments(e, tid, tol)]
+        tol = require_finite(tol, name="tol", low=0.0, low_open=True)
+        return [seg for e in self.compile(tid).plans for seg in self._entity_segments(e, tid, tol)]
 
     def entity_segments(
         self, entity: str, tid: tuple[str, str], tol: float = DEFAULT_SEGMENT_TOL
     ) -> list[MotionSegment]:
         """Returns one spot's contiguous time-linear segments in a transition."""
         tol = require_finite(tol, name="tol", low=0.0, low_open=True)
+        return self._entity_segments(entity, tid, tol)
+
+    def _entity_segments(
+        self, entity: str, tid: tuple[str, str], tol: float
+    ) -> list[MotionSegment]:
         plan = self._plan(entity, tid)
         compiled = self.compile(tid)
         stations = _SegmentFit(plan, compiled.id, tol).stations(compiled.counts)

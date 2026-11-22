@@ -40,6 +40,8 @@ Contains:
         one spot lacks a placement in the next set
     test_regression_velocity_is_full_speed_near_a_window_kink: reports the moving speed just after a
         window start, not half of it
+    test_segments_of_a_spline_row_are_the_same_in_two_engines: fits the same segments to a spline
+        row in two fresh engines and again in one engine
     test_regression_full_width_move_compiles_and_samples: compiles a 2e6 m move between the
         coordinate bounds in one count and samples its position and velocity
 """
@@ -75,6 +77,7 @@ from showpy.core.errors import (
 from showpy.core.ids import RouteId, SpotId
 from showpy.core.units import vector_facing
 from showpy.core.util import approx_equal
+from showpy.geo.curves import SplineCurve
 from showpy.geo.shapes import line
 from showpy.show.models import Show
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
@@ -642,3 +645,15 @@ def test_regression_full_width_move_compiles_and_samples() -> None:
     state = engine.state_at("T1", 4.0, local=TID)
     assert approx_equal(state.position, (0.0, 5.0), abs_tol=1e-6)
     assert approx_equal(state.velocity[0], 2 * MAX_COORD_M, rel_tol=1e-9)
+
+
+def test_segments_of_a_spline_row_are_the_same_in_two_engines() -> None:
+    """Fits the same segments to a spline row in two fresh engines and again in one engine."""
+    waypoints = (Waypoint(x=3.0, y=6.0), Waypoint(x=-2.0, y=8.0), Waypoint(x=1.0, y=7.5))
+    row = PathRow(entity=SpotId("T1"), style=PathStyle.CURVE, waypoints=waypoints)
+    first, second = _engine(T1=row), _engine(T1=row)
+    assert isinstance(first.compile(TID).plans[SpotId("T1")].curve, SplineCurve)
+    segments = first.segments(TID)
+    assert len(segments) > len(first.compile(TID).plans)
+    assert segments == second.segments(TID)
+    assert segments == first.segments(TID)
