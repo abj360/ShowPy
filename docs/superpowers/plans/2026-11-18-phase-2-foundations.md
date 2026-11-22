@@ -78,19 +78,19 @@ scope is otherwise unchanged.
 **New (11).** Sections: L1, Z1 and L2 under "Transition tasks"; B4, C2b, C7, C8, F3 and E4 in
 their lanes; N1 and R1 under "Serial tail before lane X".
 
-| Task | Lane        | What                                                                                        | Gate                                                                | State                                                   |
-| ---- | ----------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------- |
-| L1   | transition  | Relicense under PolyForm Noncommercial 1.0.0                                                | ADR 0019 accepted                                                   | implemented on `chore/licence`, awaiting merge          |
-| Z1   | transition  | Six strict-xfail ledger tests, `UP-E-01` to `UP-E-06`                                       | none                                                                | implemented on `test/evaluation-ledger`, awaiting merge |
-| L2   | transition  | `MAX_COORD_M`, `MAX_COUNTS` and `MIN_TEMPO` bounds in the core aliases                      | none                                                                | implemented on `feat/core-bounds`, awaiting merge       |
-| B4   | B           | Cached engine lookups                                                                       | A1 and B2 merged                                                    | to do                                                   |
-| C2b  | C           | Composite curves must be continuous (UP-9.1-21)                                             | G1 merged                                                           | to do                                                   |
-| C7   | C           | `project()` over the whole curve (UP-E-01)                                                  | C2 merged                                                           | to do                                                   |
-| C8   | C           | Geometry results are finite or an error (UP-E-03)                                           | C7 merged                                                           | to do                                                   |
-| F3   | F           | Deprecation rows for the leaving sheet names, `Show.coordinates` and `Show.zones`           | F1 merged, ADR 0021 accepted                                        | to do                                                   |
-| E4   | E           | Interchange moves to `showpy/show/interchange.py`; export and `Spot.claimable` deprecations | E1 merged, ADR 0021 accepted                                        | to do                                                   |
-| N1   | serial tail | Notes leave `Show` for a `notes.json` document                                              | lanes A and D merged, ADR 0021 accepted                             | to do                                                   |
-| R1   | serial tail | The rename to e8Show                                                                        | every lane merged, no lane branch open, ADRs 0020 and 0023 accepted | to do                                                   |
+| Task | Lane        | What                                                                                                    | Gate                                                                | State                                                   |
+| ---- | ----------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------- |
+| L1   | transition  | Relicense under PolyForm Noncommercial 1.0.0                                                            | ADR 0019 accepted                                                   | implemented on `chore/licence`, awaiting merge          |
+| Z1   | transition  | Six strict-xfail ledger tests, `UP-E-01` to `UP-E-06`                                                   | none                                                                | implemented on `test/evaluation-ledger`, awaiting merge |
+| L2   | transition  | `MAX_COORD_M`, `MAX_COUNTS` and `MIN_TEMPO` bounds in the core aliases                                  | none                                                                | implemented on `feat/core-bounds`, awaiting merge       |
+| B4   | B           | Cached engine lookups                                                                                   | A1 and B2 merged                                                    | to do                                                   |
+| C2b  | C           | Composite curves must be continuous (UP-9.1-21)                                                         | G1 merged                                                           | to do                                                   |
+| C7   | C           | `project()` over the whole curve (UP-E-01)                                                              | C2 merged                                                           | to do                                                   |
+| C8   | C           | Geometry results are finite or an error (UP-E-03)                                                       | C7 merged                                                           | to do                                                   |
+| F3   | F           | Deprecation rows for the leaving sheet names, `Show.coordinates` and `Show.zones`                       | F1 merged, ADR 0021 accepted                                        | to do                                                   |
+| E4   | E           | Interchange moves to `showpy/show/interchange.py`; export and `Spot.claimable` deprecations             | E1 merged, ADR 0021 accepted                                        | to do                                                   |
+| N1   | serial tail | Notes leave `Show` for `notes.json`; 7 names warn until 1.0.0; `Anchor` moves (old path gone at v0.6.0) | lanes A and D merged, ADR 0021 accepted                             | to do                                                   |
+| R1   | serial tail | The rename to e8Show                                                                                    | every lane merged, no lane branch open, ADRs 0020 and 0023 accepted | to do                                                   |
 
 **Order.** L1 first, before any lane branch is pushed. Z1 and L2 before the lanes rebase. Then
 as in "Sequencing", plus: C2b after G1; B4 after A1 and B2; C7 after C2; C8 after C7; F3 after
@@ -120,7 +120,8 @@ in C2's row), C7 flips UP-E-01 and C8 flips UP-E-03.
 - The nightly fuzz run returns no NaN or infinity (C8).
 - `project()` is within tolerance of brute force on spirals and zigzags (C7).
 - Every leaving name has a deprecation row, checked by `test_every_leaving_name_is_deprecated`
-  (X2).
+  (X2). For `notes` that is 7 leaving names (`Note` and six functions, removed at 1.0.0) plus 1
+  moved name (`Anchor`'s old import path, removed at v0.6.0).
 - `import e8show` works and `import showpy` raises `ModuleNotFoundError` (R1).
 - The wheel's `License-Expression` is
   `PolyForm-Noncommercial-1.0.0 AND MIT AND OFL-1.1 AND LicenseRef-Hershey-Fonts` (L1).
@@ -1638,12 +1639,13 @@ into `Show.notes`. Format v2 holds no notes (ADR 0021 decision 3, ADR 0023).
   rewrites each anchor through the ID renames the same migration recorded, and writes the notes
   document in the same single revision as the v2 documents. A second save writes nothing. A
   single-file export returns the notes document beside the show.
-- `Anchor` moves to `showpy/show/models.py`, because comments use it; the old path warns until
-  v0.6.0.
-- The seven leaving `notes` names (`Note`, `add_note`, `edit_note`, `remove_note`, `notes_for`,
-  `notes_near`, `accept_draft`) read and write the notes document instead of `Show.notes` and
-  warn `DeprecatedWarning` until 1.0.0 (`remove="1.0.0"`). Their new signatures go in the commit
-  body.
+- `Anchor` moves to `showpy/show/models.py`, because comments use it. It is a moved name
+  (ADR 0009's two releases): its old import path `showpy.notes.models.Anchor` warns
+  `DeprecatedWarning` from v0.4.0 and is removed at v0.6.0 (`remove="0.6.0"`).
+- The seven leaving `notes` names (`Note` and the six functions `add_note`, `edit_note`,
+  `remove_note`, `notes_for`, `notes_near`, `accept_draft`) read and write the notes document
+  instead of `Show.notes` and warn `DeprecatedWarning` from v0.4.0 until 1.0.0
+  (`remove="1.0.0"`). Their new signatures go in the commit body.
 - D2's note-anchor rewrite and `RewriteReport.orphaned_notes` apply to the notes document.
 
 - [ ] **Step 1:** Tests: `test_regression_v1_notes_move_to_the_notes_document` (for every
@@ -1746,7 +1748,7 @@ the boundary (5,000 accepted, 5,001 refused; the same for sets). 0 `type: ignore
       any `type: ignore` or `pyright: ignore` comment in `showpy/`. Each with a negative control.
 - [ ] **Step 3:** Run every gate: `uv run nox`, `uv run nox -s slow fuzz bench wheel core`,
       `docker compose -f docker/docker-compose.yml up --build`; the default suite prints
-      `Ledger: 174 open`.
+      `Ledger: 174 open` (now at most 188; see the amendment note above).
 - [ ] **Step 4:** Run `security-review` and `differential-review` over `v0.3.0..HEAD` for
       `showpy/show/`, `showpy/export/` and the selector parser.
 - [ ] **Step 5:** Commit `test: guard the phase 2 exit criteria`.
