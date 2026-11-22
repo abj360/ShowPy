@@ -151,8 +151,8 @@ path), 24 sheet names, 5 pandas results and 3 stored fields.
 
 ## What would change our mind
 
-- Two or more hosts that need the same print layout or publishing flow: then that part returns
-  as a separate optional package that depends on the library, never inside it.
+- Two or more hosts that need the same print layout or publishing flow: then bringing that part
+  back would be a separate decision.
 - A sheet feature that cannot be expressed without landmarks or zones: then ADR 0022 keeps it,
   and this timeline loses that row before v0.6.0.
 
