@@ -16,4 +16,4 @@ node_modules/
 tests/bench/.results/
 
 # Local agent workspaces; never tracked.
-/.superpowers/
+/.superpowers
