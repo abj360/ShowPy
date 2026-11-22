@@ -83,42 +83,40 @@ their lanes; N1 and R1 under "Serial tail before lane X".
 | L1   | transition  | Relicense under PolyForm Noncommercial 1.0.0                                                            | ADR 0019 accepted                                                   | implemented on `chore/licence`, awaiting merge          |
 | Z1   | transition  | Six strict-xfail ledger tests, `UP-E-01` to `UP-E-06`                                                   | none                                                                | implemented on `test/evaluation-ledger`, awaiting merge |
 | L2   | transition  | `MAX_COORD_M`, `MAX_COUNTS` and `MIN_TEMPO` bounds in the core aliases                                  | none                                                                | implemented on `feat/core-bounds`, awaiting merge       |
-| B4   | B           | Cached engine lookups                                                                                   | A1 and B2 merged                                                    | to do                                                   |
+| B4   | B           | Cached engine lookups                                                                                   | A1 and B2 merged                                                    | dropped (D38)                                           |
 | C2b  | C           | Composite curves must be continuous (UP-9.1-21)                                                         | G1 merged                                                           | to do                                                   |
-| C7   | C           | `project()` over the whole curve (UP-E-01)                                                              | C2 merged                                                           | to do                                                   |
-| C8   | C           | Geometry results are finite or an error (UP-E-03)                                                       | C7 merged                                                           | to do                                                   |
+| C7   | C           | `project()` over the whole curve (UP-E-01)                                                              | C2 merged                                                           | deferred (D38)                                          |
+| C8   | C           | Geometry results are finite or an error (UP-E-03)                                                       | C2 merged (D38)                                                     | to do                                                   |
 | F3   | F           | Deprecation rows for the leaving sheet names, `Show.coordinates` and `Show.zones`                       | F1 merged, ADR 0021 accepted                                        | to do                                                   |
 | E4   | E           | Interchange moves to `showpy/show/interchange.py`; export and `Spot.claimable` deprecations             | E1 merged, ADR 0021 accepted                                        | to do                                                   |
 | N1   | serial tail | Notes leave `Show` for `notes.json`; 7 names warn until 1.0.0; `Anchor` moves (old path gone at v0.6.0) | lanes A and D merged, ADR 0021 accepted                             | to do                                                   |
 | R1   | serial tail | The rename to e8Show                                                                                    | every lane merged, no lane branch open, ADRs 0020 and 0023 accepted | to do                                                   |
 
 **Order.** L1 first, before any lane branch is pushed. Z1 and L2 before the lanes rebase. Then
-as in "Sequencing", plus: C2b after G1; B4 after A1 and B2; C7 after C2; C8 after C7; F3 after
+as in "Sequencing", plus: C2b after G1; C8 after C2 (D38; B4 dropped, C7 deferred); F3 after
 F1; E4 after E1; N1 after lanes A and D merge; R1 after every lane merges and before lane X; X
 last.
 
 **Ledger coverage changes.** The E2 and F2 rows of "Ledger coverage" no longer flip, and F1 does
 not flip UP-9.4-45; these 10 IDs retire with the other retired IDs. C2b flips UP-9.1-21 (listed
-in C2's row), C7 flips UP-E-01 and C8 flips UP-E-03.
+in C2's row) and C8 flips UP-E-03. C7 no longer flips UP-E-01 (D38).
 
 **Exit-criteria changes.** These add to "Phase 2 exit criteria", whose text stays:
 
 - Ledger: ADR 0021 retires 63 IDs, which stay strict xfails until their code is deleted at
   v0.6.0; 13 IDs in the folders that lose code still flip with E1 and F1; Z1 adds `UP-E-01` to
-  `UP-E-06`, of which C7 flips UP-E-01 and C8 flips UP-E-03. Measured: `main` printed
+  `UP-E-06`, of which C8 flips UP-E-03 (D38: UP-E-01 stays open). Measured: `main` printed
   `Ledger: 339 open` at `8b92d66` (default suite); Z1 adds 6, giving 345. Of the tests the
   "Ledger coverage" table assigns to the lanes, 165 are still open at `8b92d66`; less the 10
-  that now retire (E2's 2, F2's 7, UP-9.4-45), the lanes flip 155, and C7 and C8 flip 2 more:
-  345 − 155 − 2 = 188. The same target from the original plan: its 174, plus the 10 retiring
-  tests, plus at most the 4 Z1 IDs no Phase 2 task flips (UP-E-02, UP-E-04, UP-E-05,
-  UP-E-06) = 188. So the default suite prints at most `Ledger: 188 open`, and `nox -s slow`
+  that now retire (E2's 2, F2's 7, UP-9.4-45), the lanes flip 155, and C8 flips 1 more:
+  345 − 155 − 1 = 189. The same target from the original plan: its 174, plus the 10 retiring
+  tests, plus at most the 5 Z1 IDs no Phase 2 task flips (UP-E-01, UP-E-02, UP-E-04, UP-E-05,
+  UP-E-06) = 189. So the default suite prints at most `Ledger: 189 open`, and `nox -s slow`
   prints `Ledger: 1 open`.
 - `validate_show` at 300 spots by 60 sets runs under 1 s (A1, G3).
 - A seeded 3,000-spot show builds in under 3 s (A1, G3).
 - With 1,500 holds, a clock call takes under 1 ms (T1).
-- `sample` cost no longer grows with the number of sets (B4).
 - The nightly fuzz run returns no NaN or infinity (C8).
-- `project()` is within tolerance of brute force on spirals and zigzags (C7).
 - Every leaving name has a deprecation row, checked by `test_every_leaving_name_is_deprecated`
   (X2). For `notes` that is 7 leaving names (`Note` and six functions, removed at 1.0.0) plus 1
   moved name (`Anchor`'s old import path, removed at v0.6.0).
@@ -128,6 +126,37 @@ in C2's row), C7 flips UP-E-01 and C8 flips UP-E-03.
 - `git diff v0.3.0 -- showpy/fonts` is empty before R1; after R1,
   `git diff -M --stat v0.3.0 -- showpy/fonts e8show/fonts` shows only 100% renames (no content
   change), and the five bundled font URIs equal their v0.3.0 values.
+
+## Addendum: D38 (accepted 2026-11-22)
+
+The maintainer accepted decision D38 on 2026-11-22: the engine is replaced in the next phase,
+right after v0.4.0, so Phase 2 stops spending effort on Python speed and on numeric
+routines that would be written twice. D38 changes the tasks below. This addendum wins over the
+amendment above and over a task's earlier text; the amendment's task table and exit-criteria
+list were updated in place to match (rows marked, bullets removed).
+
+| Task | Change                                                                                               | Why                                                                                                                 |
+| ---- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| B4   | Dropped (D38). No code, no tests, no bench change.                                                   | Its only value was Python speed in `choreo/engine.py`, which the next phase replaces.                               |
+| C7   | Deferred to a later release (D38). `UP-E-01` stays a strict xfail; it does not flip at v0.4.0.       | A numeric routine would be written twice. Z1's ledger test stays and becomes the check for the later fix.           |
+| C8   | Gate becomes "C2 merged" (was "C7 merged"). Scope unchanged; `UP-E-03` still flips.                  | C8 never used C7's output; it only shared the sequencing.                                                           |
+| W1   | Added (D38). pydantic's own model methods warn from v0.4.0. Section "Task W1" under the serial tail. | Two releases of warning must pass before the methods can go, and the next release may be the one that removes them. |
+
+**Sequencing additions.** C8 runs after C2 with no wait for C7. W1 runs after R1 and before
+X1, because it edits `FrozenModel`, which every lane's models inherit, and R1 renames the
+package. A later release carries C7 under its own task; v0.4.0 ships with `UP-E-01` open.
+
+**Ledger target.** `UP-E-01` no longer flips in Phase 2, so the default suite prints at most
+`Ledger: 189 open`: 345 measured, less 155 flipped by the lanes, less 1 flipped by C8
+(`UP-E-03`). Equally, the original plan's 174, plus the 10 retiring tests, plus at most the 5
+Z1 IDs no Phase 2 task flips (`UP-E-01`, `UP-E-02`, `UP-E-04`, `UP-E-05`, `UP-E-06`).
+`nox -s slow` still prints `Ledger: 1 open`. X2's expectation reads 189 in place of 188, and its
+Step 1 constant adds `UP-E-03` only.
+
+**Exit criteria.** The `sample` cost bullet (B4) and the `project()` bullet (C7) are removed.
+One bullet is added: calling `model_validate`, `model_dump`, `model_copy` or another pydantic
+model method on a public model emits `DeprecatedWarning`, and the message names the replacement
+API where one exists (W1).
 
 ## Decisions needed
 
@@ -956,6 +985,8 @@ Run `wc -l showpy/choreo/{engine,paths,routes,avoid}.py` after B1 and B2. Split 
 
 ### Task B4: cached engine lookups
 
+**Dropped (D38, accepted 2026-11-22):** do not start this task. Its text below is kept as the record.
+
 **Gate:** A1 and B2 merged. **Fixes:** none. **Files:** Modify `showpy/choreo/engine.py`. Test
 `tests/unit/choreo/test_engine.py`, `tests/bench/test_budgets.py`.
 
@@ -1082,6 +1113,9 @@ these modules again, and no moved-name deprecation rows are added for it. Do not
 
 ### Task C7: `project()` finds the nearest point on the whole curve
 
+**Deferred (D38, accepted 2026-11-22):** moved out of Phase 2 to a later release; do not start it
+here. `UP-E-01` stays open at v0.4.0. Its text below is kept as the record.
+
 **Gate:** C2 merged. **Fixes:** UP-E-01. **Files:** Modify `showpy/geo/curve_base.py`. Test
 `tests/unit/geo/test_curve_base_evaluation.py` (marker lines only),
 `tests/unit/geo/test_curve_base.py`, new `tests/property/test_curve_project.py`.
@@ -1108,7 +1142,9 @@ commit body records the measurement.
 
 ### Task C8: geometry results are finite or an error
 
-**Gate:** C7 merged. **Fixes:** UP-E-03. **Files:** Modify `showpy/geo/*` (the evaluation
+**Amended (D38):** the gate is C2 merged, not C7. Everything else is unchanged.
+
+**Gate:** C2 merged (was C7 merged). **Fixes:** UP-E-03. **Files:** Modify `showpy/geo/*` (the evaluation
 entry points: length, points, tangents and the arc-length table in `curve_base.py` and
 `curves.py`, plus `svg.py` and `spacing.py`). Add a code to `showpy/core/error_codes.py` and
 regenerate `docs/error-codes.md` only if no existing code fits. Test
@@ -1701,6 +1737,49 @@ shim (ADR 0020). The format value becomes `e8.show` and the v2 schema `e8.show.v
 
 ---
 
+### Task W1: pydantic's own model methods warn (D38)
+
+**Gate:** R1 merged, ADR 0026 accepted. **Fixes:** none. **Files:** Modify
+`showpy/core/types.py` (`FrozenModel`; `e8show/core/types.py` after R1), `showpy/core/deprecation.py`
+only if the existing helpers need a model-method entry point. Test
+`tests/unit/core/test_types.py`, `tests/unit/core/test_deprecation.py`.
+
+pydantic's methods cannot survive on public models in a later release. A caller needs two
+releases of warning first, so they start at v0.4.0. The warning text states the rule and the
+replacement; it never says why the methods are going.
+
+**Interfaces:**
+
+- `FrozenModel` overrides `model_validate`, `model_validate_json`, `model_validate_strings`,
+  `model_dump`, `model_dump_json`, `model_copy` and the `model_fields` lookup. Each emits
+  `DeprecatedWarning` through `showpy.core.deprecation` ("`name` is deprecated; use `new`; it is
+  removed in `remove`"), then behaves as before. Where ADR 0026 names a replacement (`replace(**changes)`
+  for `model_copy(update=...)`, `to_json` and `from_json` for the dump and validate pairs) the message names
+  it; where it names none, the message says so and gives only the removal version.
+- Library code never calls these methods on a public model. Internal calls go through private
+  helpers that do not warn, so a library call path emits no warning.
+- A single warning per call site; `stacklevel` points at the caller's line.
+- Each public model keeps the thin shim until two releases have passed; the removal version is
+  taken from ADR 0026 and recorded in the `DEPRECATED` table.
+
+- [ ] **Step 1:** Tests: `test_model_dump_warns_and_still_returns_the_dict`,
+      `test_model_validate_warns_and_still_validates`,
+      `test_model_copy_warns_and_names_replace`,
+      `test_model_fields_lookup_warns`,
+      `test_every_public_model_warns_on_pydantic_methods` (walks every `FrozenModel` subclass in
+      `showpy/`; a negative control builds a model with a silent override and must fail) and
+      `test_library_paths_emit_no_model_method_warning` (runs the 300 x 60 benchmark show through
+      load, edit and save under `-W error::showpy.core.deprecation.DeprecatedWarning`). Run; expect FAIL.
+- [ ] **Step 2:** Implement. Move every library call of a pydantic method onto a non-warning
+      private helper, then add the overrides. Never silence the warning with a filter in
+      `pyproject.toml`; a test that must call the method uses `pytest.warns`.
+- [ ] **Step 3:** Add the rows to `_api_table.py` (`DEPRECATED`), regenerate `__init__.py` and
+      the snapshot; run `uv run nox` and `uv run nox -s types`.
+- [ ] **Step 4:** Commit `feat(core)!: warn when pydantic model methods are called on public models`
+      with a `BREAKING CHANGE:` footer naming `DeprecatedWarning` and the four method names.
+
+---
+
 ## Lane X: exit (serial, after every lane merges)
 
 Branch `chore/p2-exit`.
@@ -1726,6 +1805,10 @@ another's.
       `test: add the phase 2 migration scenario`.
 
 ### Task X2: exit checks
+
+**Amended (D38):** the default ledger line is at most `Ledger: 189 open` (not 188), because C7 is
+deferred and `UP-E-01` stays open; the Step 1 constant adds `UP-E-03` only. Where the text below
+says C7 and C8 flip 2, only C8 flips 1.
 
 **Amended:** the ledger line expectations of the amendment replace `Ledger: 174 open`: from the
 measured `Ledger: 339 open` at `8b92d66`, Z1 adds 6 (345), the lanes flip the 155 planned tests
