@@ -22,7 +22,7 @@ import numpy as np
 from pydantic import Field, field_validator
 
 from showpy.core.readonly import ReadOnly
-from showpy.core.types import FrozenModel, Meters
+from showpy.core.types import Finite, FrozenModel
 from showpy.geo.curves import Polyline, SvgCurve
 from showpy.geo.font_strokes import sample_stroke
 
@@ -46,7 +46,7 @@ class SnapReport(FrozenModel):
     """
 
     moved: int
-    max_shift: Meters
+    max_shift: Finite
 
 
 class IntervalStats(FrozenModel):
@@ -60,11 +60,11 @@ class IntervalStats(FrozenModel):
         gaps: Every gap: consecutive pairs when ordered, nearest neighbour per spot otherwise.
     """
 
-    mean: Meters
-    min: Meters
-    max: Meters
-    std: Meters
-    gaps: tuple[Meters, ...]
+    mean: Finite
+    min: Finite
+    max: Finite
+    std: Finite
+    gaps: tuple[Finite, ...]
 
 
 class FormMetrics(FrozenModel):
@@ -77,10 +77,10 @@ class FormMetrics(FrozenModel):
         symmetry_error: Largest mirror mismatch about the best vertical axis.
     """
 
-    length: Meters
+    length: Finite
     intervals: IntervalStats
     curvature_range: tuple[float, float]
-    symmetry_error: Meters
+    symmetry_error: Finite
 
 
 class SpeedStats(FrozenModel):
@@ -94,7 +94,7 @@ class SpeedStats(FrozenModel):
         max_instant: Largest instantaneous speed in meters per count.
     """
 
-    distance: Meters
+    distance: Finite
     counts: float
     m_per_count: float
     m_per_s: float

@@ -6,6 +6,10 @@ test_measure.py --- tests lengths, extents, spacing stats, neighbours and symmet
 Contains:
     test_regression_symmetry_error_matches_spots_one_to_one: reports the unmatched spots of a
         10-versus-1 picture instead of a tiny gap
+    test_regression_interval_measures_gaps_between_opposite_bounds: reports a 2e6 m gap between
+        points at -MAX_COORD_M and MAX_COORD_M
+    test_regression_form_metrics_measure_a_line_between_opposite_bounds: reports the 2e6 m length
+        of a polyline across the full coordinate range
 """
 
 import math
@@ -14,6 +18,7 @@ import numpy as np
 import pytest
 import shapely
 
+from showpy.core.caps import MAX_COORD_M
 from showpy.core.errors import GeometryError, UnknownRefError
 from showpy.core.util import approx_equal
 from showpy.geo.measure import (
@@ -162,3 +167,19 @@ def test_regression_symmetry_error_matches_spots_one_to_one() -> None:
     left = [(f"L{i}", -MIRROR_X_M - CLUSTER_SPACING_M * i, 1.0) for i in range(LEFT_CLUSTER_SIZE)]
     lopsided = make_set(*left, ("R", MIRROR_X_M, 1.0))
     assert symmetry_error(lopsided) > MIN_UNMATCHED_ERROR_M
+
+
+FULL_WIDTH_M = 2 * MAX_COORD_M
+
+
+def test_regression_interval_measures_gaps_between_opposite_bounds() -> None:
+    """Reports the 2e6 m gap between two legal points at opposite coordinate bounds."""
+    stats = interval(np.array([[-MAX_COORD_M, 0.0], [MAX_COORD_M, 0.0]]))
+    assert stats.max == FULL_WIDTH_M
+    assert stats.gaps == (FULL_WIDTH_M,)
+
+
+def test_regression_form_metrics_measure_a_line_between_opposite_bounds() -> None:
+    """Reports the 2e6 m length of a legal polyline across the full coordinate range."""
+    points = np.array([[-MAX_COORD_M, 0.0], [0.0, 0.0], [MAX_COORD_M, 0.0]])
+    assert form_metrics(points).length == FULL_WIDTH_M

@@ -249,6 +249,8 @@ if TYPE_CHECKING:
         jcs,
     )
     from showpy.core.caps import (
+        MAX_COORD_M,
+        MAX_COUNTS,
         MAX_DEPTH,
         MAX_GRID_CELLS,
         MAX_IMAGE_PIXELS,
@@ -258,6 +260,7 @@ if TYPE_CHECKING:
         MAX_TEXT_CHARS,
         MAX_VIDEO_PIXELS,
         MIN_LAYOUT_HEIGHT_M,
+        MIN_TEMPO,
         require_size,
     )
     from showpy.core.error_codes import (
@@ -860,6 +863,8 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "LegibilityWarning": ("showpy.core.errors", "LegibilityWarning"),
     "LinePiece": ("showpy.geo.svg", "LinePiece"),
     "LockedError": ("showpy.core.errors", "LockedError"),
+    "MAX_COORD_M": ("showpy.core.caps", "MAX_COORD_M"),
+    "MAX_COUNTS": ("showpy.core.caps", "MAX_COUNTS"),
     "MAX_DEPTH": ("showpy.core.caps", "MAX_DEPTH"),
     "MAX_GRID_CELLS": ("showpy.core.caps", "MAX_GRID_CELLS"),
     "MAX_IMAGE_PIXELS": ("showpy.core.caps", "MAX_IMAGE_PIXELS"),
@@ -871,6 +876,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "MAX_TEXT_CHARS": ("showpy.core.caps", "MAX_TEXT_CHARS"),
     "MAX_VIDEO_PIXELS": ("showpy.core.caps", "MAX_VIDEO_PIXELS"),
     "MIN_LAYOUT_HEIGHT_M": ("showpy.core.caps", "MIN_LAYOUT_HEIGHT_M"),
+    "MIN_TEMPO": ("showpy.core.caps", "MIN_TEMPO"),
     "Marker": ("showpy.time.models", "Marker"),
     "MarkerKind": ("showpy.time.models", "MarkerKind"),
     "MatchError": ("showpy.core.errors", "MatchError"),
@@ -1374,6 +1380,8 @@ __all__ = [
     "FORMAT",
     "ID_MAX_LENGTH",
     "ID_PATTERN",
+    "MAX_COORD_M",
+    "MAX_COUNTS",
     "MAX_DEPTH",
     "MAX_GRID_CELLS",
     "MAX_IMAGE_PIXELS",
@@ -1385,6 +1393,7 @@ __all__ = [
     "MAX_TEXT_CHARS",
     "MAX_VIDEO_PIXELS",
     "MIN_LAYOUT_HEIGHT_M",
+    "MIN_TEMPO",
     "RESERVED_IDS",
     "SHEET_ID_PATTERN",
     "Anchor",

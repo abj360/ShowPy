@@ -3,10 +3,14 @@ types.py --- shared type aliases plus the JSON-safe Box2, Box3 and Region models
 
 Contains:
     Finite, NonNegFinite, PositiveFinite: constrain a float to be finite, non-negative or positive
-    Meters, Seconds, Count, Degrees: finite floats in the library's one unit system
+    Meters, Seconds, Count, Degrees: finite floats in the library's one unit system; meters stay
+        within MAX_COORD_M and counts within MAX_COUNTS
     NonNegCount, NonNegSeconds, PositiveMeters: range-limited unit aliases
-    CountsPerMinute: positive finite tempo alias
+    CountsPerMinute: finite tempo alias, at least MIN_TEMPO
     Heading: wraps a stored facing into [0, 360)
+    Point, Point3, Ring: coordinate tuples whose items are Meters
+    FinitePoint: a finite (x, y) pair with no coordinate bound, for derived values such as
+        velocities
     JsonValue: the JSON data model, re-exported from json_types
     FrozenJsonValue: the read-only JSON value a JsonObject holds, re-exported from json_types
     JsonObject: a deeply read-only, hashable JSON object for open payloads; dumps plain JSON
@@ -19,40 +23,105 @@ Contains:
 """
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from functools import cached_property
 from typing import Annotated, Any, Self
 
 import numpy as np
 import shapely
 from numpy.typing import NDArray
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    GetCoreSchemaHandler,
+    GetJsonSchemaHandler,
+    ValidationError,
+    model_validator,
+)
 from pydantic.config import ExtraValues
+from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import CoreSchema, core_schema
 
-from showpy.core.errors import schema_error_from
+from showpy.core.caps import MAX_COORD_M, MAX_COUNTS, MIN_TEMPO
+from showpy.core.errors import ALLOWED_KEY, BOUND_KEY, schema_error_from
 from showpy.core.json_types import FrozenJsonValue as FrozenJsonValue
 from showpy.core.json_types import JsonValue as JsonValue
 from showpy.core.numbers import normalize_angle
 from showpy.core.readonly import FrozenJson
 
 MIN_RING_POINTS = 3
+_BOUND_ERROR = "out_of_bounds"
+
+
+@dataclass(frozen=True)
+class _Within:
+    """Holds a float alias within a named bound, checked by pydantic after the finite check.
+
+    Attributes:
+        bound: Name of the constant that sets the bound, reported in the error.
+        allowed: What the alias allows, in words, reported in the error.
+        ge: Smallest value allowed, or None for no lower bound.
+        le: Largest value allowed, or None for no upper bound.
+    """
+
+    bound: str
+    allowed: str
+    ge: float | None = None
+    le: float | None = None
+
+    def __get_pydantic_core_schema__(
+        self, source: object, handler: GetCoreSchemaHandler
+    ) -> CoreSchema:
+        within = core_schema.custom_error_schema(
+            core_schema.float_schema(ge=self.ge, le=self.le),
+            custom_error_type=_BOUND_ERROR,
+            custom_error_message=f"Input should be {self.allowed} ({self.bound})",
+            custom_error_context={BOUND_KEY: self.bound, ALLOWED_KEY: self.allowed},
+        )
+        return core_schema.chain_schema([handler(source), within])
+
+    def __get_pydantic_json_schema__(
+        self, schema: CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        json_schema = handler(schema)
+        if self.ge is not None:
+            json_schema["minimum"] = self.ge
+        if self.le is not None:
+            json_schema["maximum"] = self.le
+        return json_schema
+
+
+_COORD_ALLOWED = f"between -{MAX_COORD_M:,.0f} and {MAX_COORD_M:,.0f} m"
+_POSITIVE_COORD_ALLOWED = f"at most {MAX_COORD_M:,.0f} m"
+_COUNT_ALLOWED = f"between -{MAX_COUNTS:,} and {MAX_COUNTS:,} counts"
+_NON_NEG_COUNT_ALLOWED = f"at most {MAX_COUNTS:,} counts"
+_TEMPO_ALLOWED = f"at least {MIN_TEMPO:g} counts per minute"
+_COORD_BOUND = _Within("MAX_COORD_M", _COORD_ALLOWED, ge=-MAX_COORD_M, le=MAX_COORD_M)
+_POSITIVE_COORD_BOUND = _Within("MAX_COORD_M", _POSITIVE_COORD_ALLOWED, le=MAX_COORD_M)
+_COUNT_BOUND = _Within("MAX_COUNTS", _COUNT_ALLOWED, ge=-MAX_COUNTS, le=MAX_COUNTS)
+_NON_NEG_COUNT_BOUND = _Within("MAX_COUNTS", _NON_NEG_COUNT_ALLOWED, le=MAX_COUNTS)
+_TEMPO_BOUND = _Within("MIN_TEMPO", _TEMPO_ALLOWED, ge=MIN_TEMPO)
 
 type Finite = Annotated[float, Field(allow_inf_nan=False)]
 type NonNegFinite = Annotated[float, Field(ge=0, allow_inf_nan=False)]
 type PositiveFinite = Annotated[float, Field(gt=0, allow_inf_nan=False)]
-type Meters = Annotated[float, Field(allow_inf_nan=False)]
+type Meters = Annotated[float, Field(allow_inf_nan=False), _COORD_BOUND]
 type Seconds = Annotated[float, Field(allow_inf_nan=False)]
-type Count = Annotated[float, Field(allow_inf_nan=False)]
+type Count = Annotated[float, Field(allow_inf_nan=False), _COUNT_BOUND]
 type Degrees = Annotated[float, Field(allow_inf_nan=False)]
-type NonNegCount = Annotated[float, Field(ge=0, allow_inf_nan=False)]
+type NonNegCount = Annotated[float, Field(ge=0, allow_inf_nan=False), _NON_NEG_COUNT_BOUND]
 type NonNegSeconds = Annotated[float, Field(ge=0, allow_inf_nan=False)]
-type PositiveMeters = Annotated[float, Field(gt=0, allow_inf_nan=False)]
-type CountsPerMinute = Annotated[float, Field(gt=0, allow_inf_nan=False)]
+type PositiveMeters = Annotated[float, Field(gt=0, allow_inf_nan=False), _POSITIVE_COORD_BOUND]
+type CountsPerMinute = Annotated[float, Field(allow_inf_nan=False), _TEMPO_BOUND]
 type Heading = Annotated[float, Field(allow_inf_nan=False), AfterValidator(normalize_angle)]
 # Plain JSON in the static type lets callers pass dicts and lists; validation always stores the
 # frozen form, so values read back are tuples and read-only mappings.
 type JsonObject = Annotated[Mapping[str, JsonValue | FrozenJsonValue], FrozenJson()]
-type Point = tuple[float, float]
-type Point3 = tuple[float, float, float]
+type Point = tuple[Meters, Meters]
+type Point3 = tuple[Meters, Meters, Meters]
+type FinitePoint = tuple[Finite, Finite]
 type Ring = tuple[Point, ...]
 type Points = NDArray[np.float64]
 type Transform = NDArray[np.float64]

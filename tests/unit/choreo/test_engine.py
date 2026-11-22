@@ -40,6 +40,8 @@ Contains:
         one spot lacks a placement in the next set
     test_regression_velocity_is_full_speed_near_a_window_kink: reports the moving speed just after a
         window start, not half of it
+    test_regression_full_width_move_compiles_and_samples: compiles a 2e6 m move between the
+        coordinate bounds in one count and samples its position and velocity
 """
 
 import itertools
@@ -59,6 +61,7 @@ from showpy.choreo.path_models import (
     Route,
     Waypoint,
 )
+from showpy.core.caps import MAX_COORD_M
 from showpy.core.errors import ContinuityError, PathError, ShowPyError, UnknownRefError
 from showpy.core.ids import RouteId, SpotId
 from showpy.core.units import vector_facing
@@ -596,3 +599,20 @@ def test_regression_velocity_is_full_speed_near_a_window_kink() -> None:
     engine = _engine(T1=PathRow(entity=SpotId("T1"), start=2.0, end=6.0))
     velocity = engine.velocity_at("T1", 2.00005, local=TID)
     assert approx_equal(float(np.linalg.norm(velocity)), 1.0, abs_tol=1e-3)
+
+
+def test_regression_full_width_move_compiles_and_samples() -> None:
+    """Compiles a 2e6 m move from -MAX_COORD_M to MAX_COORD_M in one count and samples it."""
+    base = two_set_show()
+    first = base.sets[0].with_placements({"T1": {"x": -MAX_COORD_M, "y": 5.0}})
+    show = with_targets(
+        {"T1": {"x": MAX_COORD_M, "y": 5.0}}, show=base.replace(sets=(first, base.sets[1]))
+    )
+    engine = PathEngine(
+        with_rows({"T1": PathRow(entity=SpotId("T1"), start=3.5, end=4.5)}, show=show)
+    )
+    plan = engine.compile_entity("T1", TID)
+    assert approx_equal(math.fsum(piece.length for piece in plan.pieces), 2 * MAX_COORD_M)
+    state = engine.state_at("T1", 4.0, local=TID)
+    assert approx_equal(state.position, (0.0, 5.0), abs_tol=1e-6)
+    assert approx_equal(state.velocity[0], 2 * MAX_COORD_M, rel_tol=1e-9)

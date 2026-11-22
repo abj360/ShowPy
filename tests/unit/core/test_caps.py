@@ -15,6 +15,8 @@ Contains:
 import pytest
 
 from showpy.core.caps import (
+    MAX_COORD_M,
+    MAX_COUNTS,
     MAX_DEPTH,
     MAX_GRID_CELLS,
     MAX_IMAGE_PIXELS,
@@ -24,6 +26,7 @@ from showpy.core.caps import (
     MAX_TEXT_CHARS,
     MAX_VIDEO_PIXELS,
     MIN_LAYOUT_HEIGHT_M,
+    MIN_TEMPO,
     require_size,
 )
 from showpy.core.errors import SchemaError, SpacingError
@@ -57,6 +60,9 @@ def test_caps_have_approved_values() -> None:
     assert MAX_IMAGE_PIXELS == 40_000_000
     assert MAX_VIDEO_PIXELS == 3840 * 2160
     assert MIN_LAYOUT_HEIGHT_M == 0.001
+    assert MAX_COORD_M == 1e6
+    assert MAX_COUNTS == 1_000_000
+    assert MIN_TEMPO == 1e-3
 
 
 def test_regression_require_size_rejects_a_negative_request() -> None:
