@@ -8,6 +8,8 @@ Contains:
     renamed_keyword(): resolves a keyword argument that was renamed, warning on the old name
     warn_deprecated(): warns, at the user's calling line, that one use of an API is deprecated
     deprecated_call(): decorates a superseded function so each call warns, then runs it
+    warn_leaving(): warns that a name leaves the library with no replacement
+    leaving_call(): decorates a function that leaves the library so each call warns, then runs it
 """
 
 import functools
@@ -233,6 +235,67 @@ def deprecated_call[**P, R](
         @functools.wraps(function)
         def warn_and_run(*args: P.args, **kwargs: P.kwargs) -> R:
             warn_deprecated(old, target, since=since, remove=remove)
+            return function(*args, **kwargs)
+
+        return warn_and_run
+
+    return decorate
+
+
+def warn_leaving(old: str, *, since: str, remove: str, extra_frames: int = 0) -> None:
+    """Warns DeprecatedWarning that `old` leaves the library, at the user's calling line.
+
+    The message names no replacement: the name is deprecated since `since` and leaves in `remove`.
+
+    Args:
+        old: Dotted public name that leaves, such as `showpy.sheet.render.render_sheet`.
+        since: Release that deprecated the name.
+        remove: Release that removes the name.
+        extra_frames: Frames between the public name's use and this call, such as a helper.
+
+    Example:
+        >>> import warnings
+        >>> from showpy.core.deprecation import warn_leaving
+        >>> with warnings.catch_warnings(record=True) as caught:
+        ...     warnings.simplefilter("always")
+        ...     warn_leaving("showpy.old", since="0.4.0", remove="0.7.0")
+        >>> str(caught[0].message)
+        '`showpy.old` is deprecated since 0.4.0 and leaves the library in 0.7.0.'
+    """
+    message = f"`{old}` is deprecated since {since} and leaves the library in {remove}."
+    warnings.warn(message, DeprecatedWarning, stacklevel=WARNING_STACK_LEVEL + extra_frames)
+
+
+def leaving_call[**P, R](*, since: str, remove: str) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    """Decorates a function that leaves the library so each call warns, then runs it.
+
+    Args:
+        since: Release that deprecated the function.
+        remove: Release that removes the function.
+
+    Returns:
+        decorator: Wraps a function so every call warns DeprecatedWarning at the caller.
+
+    Example:
+        >>> import warnings
+        >>> from showpy.core.deprecation import leaving_call
+        >>> @leaving_call(since="0.4.0", remove="99.0.0")
+        ... def old() -> int:
+        ...     return 1
+        >>> with warnings.catch_warnings(record=True) as caught:
+        ...     warnings.simplefilter("always")
+        ...     old()
+        1
+        >>> str(caught[0].message).endswith("leaves the library in 99.0.0.")
+        True
+    """
+
+    def decorate(function: Callable[P, R]) -> Callable[P, R]:
+        old = _dotted_name(function)
+
+        @functools.wraps(function)
+        def warn_and_run(*args: P.args, **kwargs: P.kwargs) -> R:
+            warn_leaving(old, since=since, remove=remove)
             return function(*args, **kwargs)
 
         return warn_and_run

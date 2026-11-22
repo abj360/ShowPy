@@ -20,7 +20,7 @@ Contains:
 
 import math
 
-from showpy.core.deprecation import deprecated_call
+from showpy.core.deprecation import leaving_call
 from showpy.core.ids import SheetRef, format_ref
 from showpy.core.types import Point, Region, Ring
 from showpy.core.units import convert
@@ -106,11 +106,11 @@ def _point_landmark(mark_id: str, name: str, p: Point, *aliases: str) -> Landmar
     )
 
 
-@deprecated_call("Marking", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def point_landmark(mark_id: str, name: str, p: Point, *aliases: str) -> Landmark:
     """Builds a point landmark.
 
-    Deprecated: this name is replaced by `Marking`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _point_landmark(mark_id, name, p, *aliases)
 
@@ -126,11 +126,11 @@ def _line_landmark(mark_id: str, name: str, a: Point, b: Point, *aliases: str) -
     )
 
 
-@deprecated_call("Marking", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def line_landmark(mark_id: str, name: str, a: Point, b: Point, *aliases: str) -> Landmark:
     """Builds a straight line landmark from `a` to `b`.
 
-    Deprecated: this name is replaced by `Marking`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _line_landmark(mark_id, name, a, b, *aliases)
 
@@ -148,11 +148,11 @@ def _template_ref(ref_id: str) -> SheetRef:
     return format_ref(REF_KIND, ref_id, FIRST_VERSION)
 
 
-@deprecated_call("sheet", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def template_ref(ref_id: str) -> SheetRef:
     """Returns the first-version reference of a built-in sheet.
 
-    Deprecated: this name is replaced by `sheet`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _template_ref(ref_id)
 
@@ -262,11 +262,11 @@ def _football_field(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> 
     )
 
 
-@deprecated_call("field", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def football_field(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> Sheet:
     """Builds a 120 yd x 160 ft field: yard lines every 5 yd, hashes, sidelines, end lines.
 
-    Deprecated: this name is replaced by `field`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _football_field(ref_id, name, hash_ft_in)
 
@@ -334,11 +334,11 @@ def _proscenium_stage() -> Sheet:
     )
 
 
-@deprecated_call("floor", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def proscenium_stage() -> Sheet:
     """Builds a 12 x 9 m stage: 1.5 m wings, a center line, spike marks, nine stage areas.
 
-    Deprecated: this name is replaced by `floor`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _proscenium_stage()
 
@@ -406,10 +406,10 @@ def _gym_floor() -> Sheet:
     )
 
 
-@deprecated_call("floor", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def gym_floor() -> Sheet:
     """Builds a 94 x 50 ft basketball court: lines, center circle, lanes, baskets.
 
-    Deprecated: this name is replaced by `floor`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _gym_floor()

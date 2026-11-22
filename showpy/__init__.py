@@ -20,7 +20,7 @@ import importlib
 from importlib.metadata import version
 from typing import TYPE_CHECKING
 
-from showpy.core.deprecation import moved, warn_deprecated
+from showpy.core.deprecation import moved, warn_leaving
 
 __version__: str = version("ShowPy")
 
@@ -1373,16 +1373,16 @@ _DEPRECATED: dict[str, tuple[str, str, str]] = {
     "ValidationError": ("showpy.core.errors.ShowValidationError", "0.4.0", "0.6.0"),
 }
 
-_LEAVING_TYPES: dict[str, tuple[str, str, str]] = {
-    "CoordinateSystem": ("Location", "0.4.0", "0.7.0"),
-    "CoordinateKind": ("Location", "0.4.0", "0.7.0"),
-    "Landmark": ("Marking", "0.4.0", "0.7.0"),
-    "Zone": ("Marking", "0.4.0", "0.7.0"),
-    "ZoneKind": ("Marking", "0.4.0", "0.7.0"),
-    "SheetCanvas": ("no replacement (the name leaves the library)", "0.4.0", "0.6.0"),
-    "GuideLine": ("Marking", "0.4.0", "0.7.0"),
-    "SheetStore": ("sheets", "0.4.0", "0.7.0"),
-    "InMemorySheetStore": ("sheets", "0.4.0", "0.7.0"),
+_LEAVING_TYPES: dict[str, tuple[str, str]] = {
+    "CoordinateSystem": ("0.4.0", "0.7.0"),
+    "CoordinateKind": ("0.4.0", "0.7.0"),
+    "Landmark": ("0.4.0", "0.7.0"),
+    "Zone": ("0.4.0", "0.7.0"),
+    "ZoneKind": ("0.4.0", "0.7.0"),
+    "SheetCanvas": ("0.4.0", "0.6.0"),
+    "GuideLine": ("0.4.0", "0.7.0"),
+    "SheetStore": ("0.4.0", "0.7.0"),
+    "InMemorySheetStore": ("0.4.0", "0.7.0"),
 }
 
 __all__ = [
@@ -1984,8 +1984,8 @@ def __getattr__(name: str) -> object:
     module_name, attribute = _EXPORTS[name]
     value: object = getattr(importlib.import_module(module_name), attribute)
     if name in _LEAVING_TYPES:
-        replacement, since, remove = _LEAVING_TYPES[name]
-        warn_deprecated(name, replacement, since=since, remove=remove)
+        since, remove = _LEAVING_TYPES[name]
+        warn_leaving(f"showpy.{name}", since=since, remove=remove)
         return value
     globals()[name] = value
     return value

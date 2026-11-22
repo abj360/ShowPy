@@ -1465,241 +1465,201 @@
     "CoordinateKind": {
       "kind": "type",
       "remove": "0.7.0",
-      "replacement": "Location",
       "since": "0.4.0"
     },
     "CoordinateSystem": {
       "kind": "type",
       "remove": "0.7.0",
-      "replacement": "Location",
       "since": "0.4.0"
     },
     "GuideLine": {
       "kind": "type",
       "remove": "0.7.0",
-      "replacement": "Marking",
       "since": "0.4.0"
     },
     "InMemorySheetStore": {
       "kind": "type",
       "remove": "0.7.0",
-      "replacement": "sheets",
       "since": "0.4.0"
     },
     "Landmark": {
       "kind": "type",
       "remove": "0.7.0",
-      "replacement": "Marking",
       "since": "0.4.0"
     },
     "SheetCanvas": {
       "kind": "type",
       "remove": "0.6.0",
-      "replacement": "no replacement (the name leaves the library)",
       "since": "0.4.0"
     },
     "SheetStore": {
       "kind": "type",
       "remove": "0.7.0",
-      "replacement": "sheets",
       "since": "0.4.0"
     },
     "Show.coordinates": {
       "kind": "field",
       "remove": "0.7.0",
-      "replacement": "Location",
       "since": "0.4.0"
     },
     "Show.zones": {
       "kind": "field",
       "remove": "0.7.0",
-      "replacement": "Marking",
       "since": "0.4.0"
     },
     "Zone": {
       "kind": "type",
       "remove": "0.7.0",
-      "replacement": "Marking",
       "since": "0.4.0"
     },
     "ZoneKind": {
       "kind": "type",
       "remove": "0.7.0",
-      "replacement": "Marking",
       "since": "0.4.0"
     },
     "add_guide": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "Marking",
       "since": "0.4.0"
     },
     "add_landmark": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "Marking",
       "since": "0.4.0"
     },
     "add_zone": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "Marking",
       "since": "0.4.0"
     },
     "blank_sheet": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "sheet",
       "since": "0.4.0"
     },
     "coordinate_presets": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "locate",
       "since": "0.4.0"
     },
     "customize": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "sheet",
       "since": "0.4.0"
     },
     "draw_sheet": {
       "kind": "function",
       "remove": "0.6.0",
-      "replacement": "no replacement (the name leaves the library)",
       "since": "0.4.0"
     },
     "football_field": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "field",
       "since": "0.4.0"
     },
     "from_coords": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "at_location",
       "since": "0.4.0"
     },
     "get_sheet": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "sheet",
       "since": "0.4.0"
     },
     "gym_floor": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "floor",
       "since": "0.4.0"
     },
     "landmark": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "markings_near",
       "since": "0.4.0"
     },
     "landmark_anchor": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "markings_near",
       "since": "0.4.0"
     },
     "landmark_keys": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "markings_near",
       "since": "0.4.0"
     },
     "line_landmark": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "Marking",
       "since": "0.4.0"
     },
     "nearest_landmarks": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "markings_near",
       "since": "0.4.0"
     },
     "on_surface": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "on_sheet",
       "since": "0.4.0"
     },
     "point_landmark": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "Marking",
       "since": "0.4.0"
     },
     "proscenium_stage": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "floor",
       "since": "0.4.0"
     },
     "remove_guide": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "Marking",
       "since": "0.4.0"
     },
     "remove_landmark": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "Marking",
       "since": "0.4.0"
     },
     "remove_zone": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "Marking",
       "since": "0.4.0"
     },
     "render_sheet": {
       "kind": "function",
       "remove": "0.6.0",
-      "replacement": "no replacement (the name leaves the library)",
       "since": "0.4.0"
     },
     "save_sheet": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "sheets",
       "since": "0.4.0"
     },
     "set_coordinates": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "locate",
       "since": "0.4.0"
     },
     "sheet_templates": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "sheets",
       "since": "0.4.0"
     },
     "template_ref": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "sheet",
       "since": "0.4.0"
     },
     "to_coords": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "locate",
       "since": "0.4.0"
     },
     "zones_at": {
       "kind": "function",
       "remove": "0.7.0",
-      "replacement": "markings_near",
       "since": "0.4.0"
     }
   },

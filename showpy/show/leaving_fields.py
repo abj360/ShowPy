@@ -12,7 +12,7 @@ Contains:
 import sys
 from typing import Final
 
-from showpy.core.deprecation import warn_deprecated
+from showpy.core.deprecation import warn_leaving
 
 LIBRARY_MODULE_PREFIXES: Final = ("showpy.", "pydantic.")
 CALLER_FRAME_DEPTH: Final = 2
@@ -34,7 +34,7 @@ def read_coordinates(show: object) -> object:
         coordinates: The show's `coordinates` value.
     """
     if not _is_library_caller():
-        warn_deprecated("Show.coordinates", "Location", since="0.4.0", remove="0.7.0")
+        warn_leaving("showpy.Show.coordinates", since="0.4.0", remove="0.7.0")
     return vars(show)["coordinates"]
 
 
@@ -48,5 +48,5 @@ def read_zones(show: object) -> object:
         zones: The show's `zones` value.
     """
     if not _is_library_caller():
-        warn_deprecated("Show.zones", "Marking", since="0.4.0", remove="0.7.0")
+        warn_leaving("showpy.Show.zones", since="0.4.0", remove="0.7.0")
     return vars(show)["zones"]

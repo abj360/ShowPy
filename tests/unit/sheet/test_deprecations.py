@@ -44,7 +44,6 @@ POINT = (1.0, 1.0)
 PROP = Landmark(id=LandmarkId("prop"), name="prop table", kind="point", geometry=((1.0, 1.0),))
 PIT = Zone(id=ZoneId("pit"), kind=ZoneKind.PIT, polygon=STAGE.zones[0].polygon)
 TAPE = GuideLine(id="tape", kind="custom", points=((0.0, 1.0), (1.0, 1.0)))
-NO_REPLACEMENT = "no replacement (the name leaves the library)"
 RENDER_NAMES = {"SheetCanvas", "draw_sheet", "render_sheet"}
 FIELD_NAMES = {"Show.coordinates", "Show.zones"}
 
@@ -91,33 +90,31 @@ FIELD_ROWS = [row for row in LEAVING if row[1] == "field"]
 PUBLIC_MODULES = {name: module for name, module, _attribute in PUBLIC_API}
 
 
-def _warning_text(message: str, name: str, replacement: str, remove: str) -> None:
-    assert name in message
-    assert replacement in message
-    assert f"removed in {remove}" in message
+def _leaving_text(qualified: str, since: str, remove: str) -> str:
+    return f"`{qualified}` is deprecated since {since} and leaves the library in {remove}."
 
 
 @pytest.mark.parametrize("row", FUNCTION_ROWS, ids=[row[0] for row in FUNCTION_ROWS])
-def test_leaving_sheet_names_warn(row: tuple[str, str, str, str, str]) -> None:
-    name, _kind, replacement, _since, remove = row
+def test_leaving_sheet_names_warn(row: tuple[str, str, str, str]) -> None:
+    name, _kind, since, remove = row
     module = importlib.import_module(PUBLIC_MODULES[name])
     public, implementation = getattr(module, name), getattr(module, f"_{name}")
     with pytest.warns(DeprecatedWarning) as caught:
         result = CALLS[name](public)
     assert len(caught) == 1
-    _warning_text(str(caught[0].message), name, replacement, remove)
+    assert str(caught[0].message) == _leaving_text(f"{module.__name__}.{name}", since, remove)
     assert caught[0].filename == __file__
     assert result == CALLS[name](implementation)
 
 
 @pytest.mark.parametrize("row", TYPE_ROWS, ids=[row[0] for row in TYPE_ROWS])
-def test_leaving_sheet_types_warn_on_top_level_access(row: tuple[str, str, str, str, str]) -> None:
-    name, _kind, replacement, _since, remove = row
+def test_leaving_sheet_types_warn_on_top_level_access(row: tuple[str, str, str, str]) -> None:
+    name, _kind, since, remove = row
     module = importlib.import_module(PUBLIC_MODULES[name])
     for _ in range(2):
         with pytest.warns(DeprecatedWarning) as caught:
             resolved = getattr(showpy, name)
-        _warning_text(str(caught[0].message), name, replacement, remove)
+        assert str(caught[0].message) == _leaving_text(f"showpy.{name}", since, remove)
         assert caught[0].filename == __file__
         assert resolved is getattr(module, name)
     assert name not in vars(showpy)
@@ -126,10 +123,16 @@ def test_leaving_sheet_types_warn_on_top_level_access(row: tuple[str, str, str, 
 def test_leaving_show_sheet_fields_warn() -> None:
     document = export_json(SHOW)
     version_one = {"schema": "showpy.show.v1", "show": SHOW.model_dump(mode="json")}
-    with pytest.warns(DeprecatedWarning, match=r"Show\.coordinates"):
+    with pytest.warns(DeprecatedWarning) as coordinates:
         assert SHOW.coordinates == SHOW.coordinates
-    with pytest.warns(DeprecatedWarning, match=r"Show\.zones"):
+    assert [str(w.message) for w in coordinates] == [
+        _leaving_text("showpy.Show.coordinates", "0.4.0", "0.7.0")
+    ] * 2
+    with pytest.warns(DeprecatedWarning) as zones:
         assert SHOW.zones == SHOW.zones
+    assert [str(w.message) for w in zones] == [
+        _leaving_text("showpy.Show.zones", "0.4.0", "0.7.0")
+    ] * 2
     assert {row[0] for row in FIELD_ROWS} == FIELD_NAMES
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -145,40 +148,33 @@ def test_leaving_show_fields_stay_silent_inside_the_library() -> None:
     assert importlib.import_module("showpy.sheet.bounds")._zones_at(SHOW, POINT) is not None
 
 
-def _decorated_rows() -> dict[str, tuple[str, str, str]]:
-    found: dict[str, tuple[str, str, str]] = {}
+def _decorated_rows() -> dict[str, tuple[str, str]]:
+    found: dict[str, tuple[str, str]] = {}
     for path in sorted(SHEET_SOURCE.glob("*.py")):
         for node in ast.parse(path.read_text()).body:
             if not isinstance(node, ast.FunctionDef):
                 continue
             for decorator in node.decorator_list:
                 if isinstance(decorator, ast.Call) and getattr(decorator.func, "id", "") == (
-                    "deprecated_call"
+                    "leaving_call"
                 ):
                     keywords = {kw.arg: ast.literal_eval(kw.value) for kw in decorator.keywords}
-                    found[node.name] = (
-                        ast.literal_eval(decorator.args[0]),
-                        keywords["since"],
-                        keywords["remove"],
-                    )
+                    assert not decorator.args
+                    found[node.name] = (keywords["since"], keywords["remove"])
     return found
 
 
 def test_leaving_functions_are_decorated_as_their_rows_say() -> None:
     decorated = _decorated_rows()
-    rows = {
-        name: (replacement, since, remove) for name, _k, replacement, since, remove in FUNCTION_ROWS
-    }
+    rows = {name: (since, remove) for name, _kind, since, remove in FUNCTION_ROWS}
     assert decorated == rows
 
 
 def test_leaving_rows_name_each_removal_release() -> None:
-    removal = {name: remove for name, _kind, _replacement, _since, remove in LEAVING}
+    removal = {name: remove for name, _kind, _since, remove in LEAVING}
     assert {name for name, remove in removal.items() if remove == "0.6.0"} == RENDER_NAMES
     assert set(removal.values()) == {"0.6.0", "0.7.0"}
     assert {since for *_rest, since, _remove in LEAVING} == {"0.4.0"}
-    replacements = {name: replacement for name, _k, replacement, _s, _r in LEAVING}
-    assert all(replacements[name] == NO_REPLACEMENT for name in RENDER_NAMES)
 
 
 def test_leaving_rows_cover_the_decided_names() -> None:

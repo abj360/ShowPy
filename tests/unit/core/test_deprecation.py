@@ -41,9 +41,11 @@ from showpy._api_table import DEPRECATED, DEPRECATED_KEYWORDS, LEAVING
 from showpy.core.deprecation import (
     DeprecatedWarning,
     deprecated_call,
+    leaving_call,
     moved,
     renamed_field,
     warn_deprecated,
+    warn_leaving,
 )
 from showpy.core.errors import ShowValidationError
 from showpy.core.util import approx_equal
@@ -63,6 +65,8 @@ REQUIRED_KEYWORDS = {
     "renamed_keyword": ("remove",),
     "deprecated_call": ("since", "remove"),
     "warn_deprecated": ("since", "remove"),
+    "leaving_call": ("since", "remove"),
+    "warn_leaving": ("since", "remove"),
 }
 
 
@@ -204,11 +208,11 @@ def test_deprecations_are_removed_on_time() -> None:
 
 
 def overdue_leaving_rows(
-    rows: tuple[tuple[str, str, str, str, str], ...], current: tuple[int, int]
+    rows: tuple[tuple[str, str, str, str], ...], current: tuple[int, int]
 ) -> list[str]:
     """Lists the leaving names whose removal release is the current release or an earlier one."""
     overdue = []
-    for name, _kind, _replacement, _since, remove in rows:
+    for name, _kind, _since, remove in rows:
         major, minor, _patch = remove.split(".")
         if (int(major), int(minor)) <= current:
             overdue.append(f"{name} (remove {remove})")
@@ -216,7 +220,7 @@ def overdue_leaving_rows(
 
 
 def test_leaving_scan_flags_a_type_row_past_its_removal_version() -> None:
-    rows = (("Landmark", "type", "Marking", "0.4.0", "0.7.0"),)
+    rows = (("Landmark", "type", "0.4.0", "0.7.0"),)
     assert overdue_leaving_rows(rows, (0, 6)) == []
     assert overdue_leaving_rows(rows, (0, 7)) == ["Landmark (remove 0.7.0)"]
 
@@ -397,3 +401,33 @@ def test_every_deprecated_keyword_row_names_real_parameters() -> None:
         parameters = inspect.signature(getattr(showpy, function)).parameters
         assert old in parameters, f"{function}() has no keyword {old}"
         assert new in parameters, f"{function}() has no keyword {new}"
+
+
+LEAVING_TEXT = "`showpy.old` is deprecated since 0.4.0 and leaves the library in 0.7.0."
+
+
+@leaving_call(since="0.4.0", remove="99.0.0")
+def _leaving_function() -> str:
+    return "ran"
+
+
+def _use_leaving_name() -> None:
+    warn_leaving("showpy.old", since="0.4.0", remove="0.7.0")
+
+
+def test_warn_leaving_words_the_message_without_a_replacement() -> None:
+    with pytest.warns(DeprecatedWarning) as caught:
+        _use_leaving_name()
+    assert str(caught[0].message) == LEAVING_TEXT
+    assert caught[0].filename == __file__
+
+
+def test_leaving_call_warns_on_each_call_and_runs_the_function() -> None:
+    for _ in range(2):
+        with pytest.warns(DeprecatedWarning) as caught:
+            assert _leaving_function() == "ran"
+        assert str(caught[0].message) == (
+            f"`{__name__}._leaving_function` is deprecated since 0.4.0 and leaves the library "
+            "in 99.0.0."
+        )
+        assert caught[0].filename == __file__

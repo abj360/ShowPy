@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Literal
 
 import shapely
 
-from showpy.core.deprecation import deprecated_call
+from showpy.core.deprecation import leaving_call
 from showpy.core.errors import SchemaError, UnknownRefError
 from showpy.core.types import Count, Meters, Point, Region
 from showpy.core.util import close_matches
@@ -43,11 +43,11 @@ def _on_surface(sheet: Sheet, p: Point) -> bool:
     return _covers(Region(exterior=sheet.outline), p)
 
 
-@deprecated_call("on_sheet", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def on_surface(sheet: Sheet, p: Point) -> bool:
     """Reports whether `p` lies on the sheet outline or inside it.
 
-    Deprecated: this name is replaced by `on_sheet`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _on_surface(sheet, p)
 
@@ -76,11 +76,11 @@ def _landmark_keys(mark: Landmark) -> tuple[str, ...]:
     return tuple(normalized_name(n) for n in (mark.name, *mark.aliases))
 
 
-@deprecated_call("markings_near", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def landmark_keys(mark: Landmark) -> tuple[str, ...]:
     """Returns a landmark's name and aliases, case-folded with spaces collapsed, for matching.
 
-    Deprecated: this name is replaced by `markings_near`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _landmark_keys(mark)
 
@@ -105,11 +105,11 @@ def _landmark(sheet: Sheet, name: str) -> Landmark:
     )
 
 
-@deprecated_call("markings_near", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def landmark(sheet: Sheet, name: str) -> Landmark:
     """Finds a landmark by name, ID or alias; case and repeated spaces are ignored.
 
-    Deprecated: this name is replaced by `markings_near`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _landmark(sheet, name)
 
@@ -126,11 +126,11 @@ def _landmark_anchor(mark: Landmark) -> Point:
     return sum(xs) / len(xs), sum(ys) / len(ys)
 
 
-@deprecated_call("markings_near", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def landmark_anchor(mark: Landmark) -> Point:
     """Returns the point a landmark stands for: the point itself, else its vertex centroid.
 
-    Deprecated: this name is replaced by `markings_near`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _landmark_anchor(mark)
 
@@ -176,13 +176,13 @@ def _nearest_landmarks(
     return measured[:k]
 
 
-@deprecated_call("markings_near", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def nearest_landmarks(
     sheet: Sheet, p: Point, k: int = 3, kinds: Iterable[LandmarkKind] | None = None
 ) -> list[tuple[Landmark, Meters]]:
     """Lists the k landmarks closest to `p`, nearest first; ties break by landmark ID.
 
-    Deprecated: this name is replaced by `markings_near`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _nearest_landmarks(sheet, p, k, kinds)
 
@@ -209,10 +209,10 @@ def _zones_at(show: "Show", p: Point, t: Count | None = None) -> list[Zone]:
     ]
 
 
-@deprecated_call("markings_near", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def zones_at(show: "Show", p: Point, t: Count | None = None) -> list[Zone]:
     """Lists the sheet zones, then the show zones, that cover `p`.
 
-    Deprecated: this name is replaced by `markings_near`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _zones_at(show, p, t)

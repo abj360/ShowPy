@@ -22,7 +22,7 @@ import math
 from typing import TYPE_CHECKING, Literal, Self
 from xml.sax.saxutils import escape, quoteattr
 
-from showpy.core.deprecation import deprecated_call
+from showpy.core.deprecation import leaving_call
 from showpy.core.errors import SchemaError
 from showpy.core.extras import require_extra
 from showpy.core.types import FrozenModel, Point, Ring
@@ -210,11 +210,11 @@ def _draw_sheet(draw: "ImageDraw.ImageDraw", canvas: SheetCanvas, sheet: Sheet) 
     _draw_marks(draw, canvas, sheet, ("point",))
 
 
-@deprecated_call("no replacement (the name leaves the library)", since="0.4.0", remove="0.6.0")
+@leaving_call(since="0.4.0", remove="0.6.0")
 def draw_sheet(draw: "ImageDraw.ImageDraw", canvas: SheetCanvas, sheet: Sheet) -> None:
     """Paints outline, walkable area, zones, guides and landmarks onto a PIL drawing.
 
-    Deprecated: this name leaves the library; it is removed in 0.6.0.
+    Deprecated: this name leaves the library in 0.6.0.
     """
     return _draw_sheet(draw, canvas, sheet)
 
@@ -348,12 +348,12 @@ def _render_sheet(
     return buffer.getvalue()
 
 
-@deprecated_call("no replacement (the name leaves the library)", since="0.4.0", remove="0.6.0")
+@leaving_call(since="0.4.0", remove="0.6.0")
 def render_sheet(
     sheet: Sheet, fmt: SheetFormat = "svg", px_per_m: float = DEFAULT_PX_PER_M
 ) -> bytes:
     """Renders a printable blank sheet: hand-written SVG, or PNG and PDF through Pillow.
 
-    Deprecated: this name leaves the library; it is removed in 0.6.0.
+    Deprecated: this name leaves the library in 0.6.0.
     """
     return _render_sheet(sheet, fmt, px_per_m)

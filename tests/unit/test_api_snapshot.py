@@ -190,8 +190,8 @@ def build_snapshot() -> dict[str, JsonValue]:
         for name, target, since, remove in DEPRECATED
     }
     snapshot[LEAVING_KEY] = {
-        name: {"kind": kind, "replacement": replacement, "since": since, "remove": remove}
-        for name, kind, replacement, since, remove in LEAVING
+        name: {"kind": kind, "since": since, "remove": remove}
+        for name, kind, since, remove in LEAVING
     }
     return snapshot
 

@@ -20,7 +20,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Literal
 
 from showpy.core.caps import MAX_COORD_M
-from showpy.core.deprecation import deprecated_call
+from showpy.core.deprecation import leaving_call
 from showpy.core.errors import SchemaError, UnknownRefError
 from showpy.core.types import Point
 from showpy.core.units import convert, round_to
@@ -120,11 +120,11 @@ def _coordinate_presets(sheet: Sheet) -> list[CoordinateSystem]:
     return unique
 
 
-@deprecated_call("locate", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def coordinate_presets(sheet: Sheet) -> list[CoordinateSystem]:
     """Lists coordinate systems that suit a sheet, its default first, without repeats.
 
-    Deprecated: this name is replaced by `locate`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _coordinate_presets(sheet)
 
@@ -152,11 +152,11 @@ def _set_coordinates(show: "Show", system: CoordinateSystem) -> "Show":
     return show.replace(coordinates=system)
 
 
-@deprecated_call("locate", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def set_coordinates(show: "Show", system: CoordinateSystem) -> "Show":
     """Returns the show with a new coordinate system; stored positions never move.
 
-    Deprecated: this name is replaced by `locate`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _set_coordinates(show, system)
 
@@ -242,11 +242,11 @@ def _to_coords(show: "Show", p: Point, style: CoordStyle = "long") -> str:
     return f"{across_text}, {d_num} {unit} {words[d_dir]} of {words['depth_ref']}"
 
 
-@deprecated_call("locate", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def to_coords(show: "Show", p: Point, style: CoordStyle = "long") -> str:
     """Words a point in the show's coordinate system, rounded to its precision.
 
-    Deprecated: this name is replaced by `locate`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _to_coords(show, p, style)
 
@@ -334,10 +334,10 @@ def _from_coords(show: "Show", text: str) -> Point:
     return point
 
 
-@deprecated_call("at_location", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def from_coords(show: "Show", text: str) -> Point:
     """Reads worded coordinates (long or short style, either part first) into a point.
 
-    Deprecated: this name is replaced by `at_location`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _from_coords(show, text)

@@ -26,7 +26,7 @@ import functools
 from collections.abc import Sequence
 from typing import Literal, Protocol
 
-from showpy.core.deprecation import deprecated_call
+from showpy.core.deprecation import leaving_call
 from showpy.core.errors import (
     ConflictError,
     SchemaError,
@@ -140,11 +140,11 @@ def _sheet_templates(surface_type: SurfaceType | None = None) -> list[Sheet]:
     return [s for s in _built_in() if surface_type is None or s.surface_type == surface_type]
 
 
-@deprecated_call("sheets", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def sheet_templates(surface_type: SurfaceType | None = None) -> list[Sheet]:
     """Lists the built-in sheet templates, optionally only those of one surface type.
 
-    Deprecated: this name is replaced by `sheets`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _sheet_templates(surface_type)
 
@@ -179,11 +179,11 @@ def _get_sheet(ref: SheetRef, store: SheetStore | None = None) -> Sheet:
     )
 
 
-@deprecated_call("sheet", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def get_sheet(ref: SheetRef, store: SheetStore | None = None) -> Sheet:
     """Resolves a sheet reference against the templates first, then the store.
 
-    Deprecated: this name is replaced by `sheet`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _get_sheet(ref, store)
 
@@ -231,13 +231,13 @@ def _blank_sheet(
     )
 
 
-@deprecated_call("sheet", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def blank_sheet(
     width_m: float, depth_m: float, grid_spacing: float = 1.0, units: str = "m"
 ) -> Sheet:
     """Builds a plain rectangle with a center line, for spaces no template fits.
 
-    Deprecated: this name is replaced by `sheet`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _blank_sheet(width_m, depth_m, grid_spacing, units)
 
@@ -288,11 +288,11 @@ def _customize(sheet: Sheet, **changes: object) -> Sheet:
     return Sheet.model_validate(fields)
 
 
-@deprecated_call("sheet", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def customize(sheet: Sheet, **changes: object) -> Sheet:
     """Changes a sheet's name, grid, or size; resizing applies to blank sheets only.
 
-    Deprecated: this name is replaced by `sheet`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _customize(sheet, **changes)
 
@@ -335,11 +335,11 @@ def _add_zone(sheet: Sheet, item: Zone) -> Sheet:
     return _add(sheet, "zones", item)
 
 
-@deprecated_call("Marking", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def add_zone(sheet: Sheet, item: Zone) -> Sheet:
     """Returns a sheet with one more zone, such as a pit or props area.
 
-    Deprecated: this name is replaced by `Marking`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _add_zone(sheet, item)
 
@@ -354,11 +354,11 @@ def _add_landmark(sheet: Sheet, item: Landmark) -> Sheet:
     return _add(sheet, "landmarks", item)
 
 
-@deprecated_call("Marking", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def add_landmark(sheet: Sheet, item: Landmark) -> Sheet:
     """Returns a sheet with one more landmark.
 
-    Deprecated: this name is replaced by `Marking`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _add_landmark(sheet, item)
 
@@ -373,11 +373,11 @@ def _add_guide(sheet: Sheet, item: GuideLine) -> Sheet:
     return _add(sheet, "guides", item)
 
 
-@deprecated_call("Marking", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def add_guide(sheet: Sheet, item: GuideLine) -> Sheet:
     """Returns a sheet with one more guide line.
 
-    Deprecated: this name is replaced by `Marking`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _add_guide(sheet, item)
 
@@ -391,11 +391,11 @@ def _remove_zone(sheet: Sheet, zone_id: str) -> Sheet:
     return _remove(sheet, "zones", zone_id)
 
 
-@deprecated_call("Marking", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def remove_zone(sheet: Sheet, zone_id: str) -> Sheet:
     """Returns a sheet without the zone `zone_id`.
 
-    Deprecated: this name is replaced by `Marking`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _remove_zone(sheet, zone_id)
 
@@ -409,11 +409,11 @@ def _remove_landmark(sheet: Sheet, landmark_id: str) -> Sheet:
     return _remove(sheet, "landmarks", landmark_id)
 
 
-@deprecated_call("Marking", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def remove_landmark(sheet: Sheet, landmark_id: str) -> Sheet:
     """Returns a sheet without the landmark `landmark_id`.
 
-    Deprecated: this name is replaced by `Marking`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _remove_landmark(sheet, landmark_id)
 
@@ -427,11 +427,11 @@ def _remove_guide(sheet: Sheet, guide_id: str) -> Sheet:
     return _remove(sheet, "guides", guide_id)
 
 
-@deprecated_call("Marking", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def remove_guide(sheet: Sheet, guide_id: str) -> Sheet:
     """Returns a sheet without the guide line `guide_id`.
 
-    Deprecated: this name is replaced by `Marking`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _remove_guide(sheet, guide_id)
 
@@ -481,10 +481,10 @@ def _save_sheet(store: SheetStore, sheet: Sheet, scope: SheetScope = "mine") -> 
     )
 
 
-@deprecated_call("sheets", since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0")
 def save_sheet(store: SheetStore, sheet: Sheet, scope: SheetScope = "mine") -> SheetRef:
     """Saves a sheet under the next free version, recording the version it came from.
 
-    Deprecated: this name is replaced by `sheets`; it is removed in 0.7.0.
+    Deprecated: this name leaves the library in 0.7.0.
     """
     return _save_sheet(store, sheet, scope)
