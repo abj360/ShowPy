@@ -16,6 +16,12 @@ Contains:
         geometry, a reserved key, an unknown key, an out-of-range value (a negative count, a block
         of no rows), more members than slots and a curve its own model refuses (an arc of zero
         sweep), naming the document, the field and the value
+    test_regression_forms_step_turns_v1_gapped_orders_into_open_slots: stores a v1 form whose
+        spots stand on gapped slots with a None at each open slot, and reports the repair
+    test_forms_step_leaves_members_alone_when_orders_match_or_are_unknown: changes no members
+        when the placements fill slots 0..n-1, or the set document lacks them
+    test_regression_forms_step_refuses_a_slot_past_the_slot_count: refuses a placement order the
+        form's slot count cannot hold, naming the document, the field and the value
     test_regression_forms_step_refuses_a_forms_document_that_is_not_a_list: refuses a forms
         document that holds no list
 """
@@ -255,3 +261,67 @@ def test_regression_forms_step_refuses_a_forms_document_that_is_not_a_list() -> 
     with pytest.raises(SchemaError) as caught:
         migrate_forms({DOC: {"f": 1}}, ReportBuilder(FIRST_VERSION))
     assert caught.value.context["path"] == DOC
+
+
+SET_DOC = "/sets/2/set.json"
+SLOT_COUNT = 6
+
+
+def _placed(entity: str, order: int | None) -> dict[str, JsonValue]:
+    return {"entity": entity, "form": "f", "order": order, "x": 0.0, "y": 0.0}
+
+
+def _gapped_docs(orders: dict[str, int | None]) -> dict[str, JsonValue]:
+    points: list[JsonValue] = [[0, 0]] * SLOT_COUNT
+    geometry: dict[str, JsonValue] = {"points": points, "n": SLOT_COUNT}
+    form = {**_v1_form("custom", geometry), "id": "f"}
+    form["members"] = list(orders)
+    placements: list[JsonValue] = [_placed(entity, order) for entity, order in orders.items()]
+    return {DOC: [form], SET_DOC: {"key": "2", "placements": placements}}
+
+
+def _stored_members(docs: dict[str, JsonValue]) -> JsonValue:
+    report = ReportBuilder(FIRST_VERSION)
+    forms = migrate_forms(docs, report)[DOC]
+    assert isinstance(forms, list)
+    [form] = forms
+    assert isinstance(form, dict)
+    return form["members"]
+
+
+def test_regression_forms_step_turns_v1_gapped_orders_into_open_slots() -> None:
+    docs = _gapped_docs({"T1": 0, "T2": 1, "T4": 3, "T3": 5})
+    before = copy.deepcopy(docs)
+    report = ReportBuilder(FIRST_VERSION)
+    migrated = migrate_forms(docs, report)
+    forms = migrated[DOC]
+    assert isinstance(forms, list)
+    [form] = forms
+    assert isinstance(form, dict)
+    assert form["members"] == ["T1", "T2", None, "T4", None, "T3"]
+    assert docs == before
+    repairs = report.build().repairs
+    assert len(repairs) == 1
+    assert "form f" in repairs[0]
+    assert "open slots" in repairs[0]
+    assert Form.model_validate(form).members == ("T1", "T2", None, "T4", None, "T3")
+
+
+def test_forms_step_leaves_members_alone_when_orders_match_or_are_unknown() -> None:
+    filled = _gapped_docs({"T1": 0, "T2": 1, "T3": 2})
+    assert _stored_members(filled) == ["T1", "T2", "T3"]
+    unplaced = _gapped_docs({"T1": 0, "T2": None, "T3": 4})
+    assert _stored_members(unplaced) == ["T1", "T2", "T3"]
+    no_set = {DOC: filled[DOC]}
+    assert _stored_members(no_set) == ["T1", "T2", "T3"]
+    report = ReportBuilder(FIRST_VERSION)
+    migrate_forms(filled, report)
+    assert report.build().repairs == ()
+
+
+def test_regression_forms_step_refuses_a_slot_past_the_slot_count() -> None:
+    docs = _gapped_docs({"T1": 0, "T2": SLOT_COUNT})
+    with pytest.raises(SchemaError) as caught:
+        _stored_members(docs)
+    assert caught.value.context["path"] == DOC
+    assert caught.value.context["field"] == "[0].members"

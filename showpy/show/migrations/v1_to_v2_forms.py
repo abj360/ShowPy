@@ -7,6 +7,11 @@ every geometry key into the recipe, checks the result against the v2 recipe of t
 stores it with every default written out, as a v2 save writes it. An svg outline's `curve`
 becomes `curves`, one curve per subpath: a v1 composite that joined several subpaths across
 their gaps is split into its parts.
+A v1 form kept its members compact while its spots' placements recorded the slot each stood on,
+so a form with open slots had gaps in those orders and a rebuild moved spots. v2 stores
+`members` slot by slot, with None at each open slot: when every member of a form has a placement
+on it, with distinct orders that are not 0, 1, 2 and so on, the members are laid out at those
+orders and the repair is recorded.
 A geometry that no v2 recipe can hold (an unknown kind, an unknown key, a value out of range,
 a curve its own model refuses such as an arc of zero sweep) is refused with SchemaError naming
 the document, the field and the value; nothing is guessed.
@@ -34,6 +39,12 @@ RECIPE_ADAPTER: Final[TypeAdapter[Recipe]] = TypeAdapter(Recipe)
 V2_ONLY_KEYS: Final = frozenset({"kind", "recipe_version"})
 SVG_V1_CURVE: Final = "curve"
 SVG_V2_CURVES: Final = "curves"
+FORMS_NAME: Final = "forms.json"
+SET_DOC_NAME: Final = "set.json"
+
+
+def _set_document(forms_path: str) -> str:
+    return forms_path.removesuffix(FORMS_NAME) + SET_DOC_NAME
 
 
 def _refusal(document: str, field: str, value: object, problem: str) -> SchemaError:
@@ -101,14 +112,72 @@ def _checked_recipe(
     return stored
 
 
-def _migrated_form(document: str, index: int, form: JsonValue) -> dict[str, JsonValue]:
+def _slot_orders(set_doc: JsonValue) -> dict[str, dict[str, int]]:
+    """Returns each form's spot-to-slot orders from a set document's placements."""
+    placements = set_doc.get("placements") if isinstance(set_doc, dict) else None
+    orders: dict[str, dict[str, int]] = {}
+    for row in placements if isinstance(placements, list) else []:
+        if not isinstance(row, dict):
+            continue
+        form, entity, order = row.get("form"), row.get("entity"), row.get("order")
+        if isinstance(form, str) and isinstance(entity, str) and type(order) is int:
+            orders.setdefault(form, {})[entity] = order
+    return orders
+
+
+def _slotted_members(members: list[JsonValue], orders: dict[str, int]) -> list[JsonValue] | None:
+    """Lays members out at their placement orders; None when they already sit on 0, 1, 2, ..."""
+    if not all(isinstance(m, str) and m in orders for m in members):
+        return None
+    slots = [orders[m] for m in members if isinstance(m, str)]
+    if (
+        len(set(slots)) != len(slots)
+        or min(slots, default=0) < 0
+        or slots == list(range(len(slots)))
+    ):
+        return None
+    laid: list[JsonValue] = [None] * (max(slots) + 1)
+    for member, slot in zip(members, slots, strict=True):
+        laid[slot] = member
+    return laid
+
+
+def _with_open_slots(
+    document: str,
+    form: dict[str, JsonValue],
+    orders: dict[str, dict[str, int]],
+    report: "ReportBuilder",
+) -> dict[str, JsonValue]:
+    """Returns the form with gapped placement orders stored as open slots, reporting the repair."""
+    members, form_id = form.get("members"), form.get("id")
+    if not isinstance(members, list) or not isinstance(form_id, str) or form_id not in orders:
+        return form
+    laid = _slotted_members(members, orders[form_id])
+    if laid is None:
+        return form
+    open_slots = [slot for slot, member in enumerate(laid) if member is None]
+    report.repair(
+        f"{document}: form {form_id} stood on gapped slots; stored slots {open_slots} as open slots"
+    )
+    return {**form, "members": laid}
+
+
+def _migrated_form(
+    document: str,
+    index: int,
+    form: JsonValue,
+    orders: dict[str, dict[str, int]],
+    report: "ReportBuilder",
+) -> dict[str, JsonValue]:
     if not isinstance(form, dict):
         raise _refusal(document, f"[{index}]", form, "is not an object")
     kind, geometry = _v1_parts(document, index, form)
     rest = {key: value for key, value in form.items() if key not in ("kind", "geometry")}
     recipe = _checked_recipe(document, index, kind, geometry)
     _require_members_fit(document, index, rest.get("members"), recipe.get("n"))
-    return {**rest, "recipe": recipe}
+    stored = _with_open_slots(document, rest, orders, report)
+    _require_members_fit(document, index, stored.get("members"), recipe.get("n"))
+    return {**stored, "recipe": recipe}
 
 
 def _require_members_fit(document: str, index: int, members: JsonValue, slots: JsonValue) -> None:
@@ -119,28 +188,34 @@ def _require_members_fit(document: str, index: int, members: JsonValue, slots: J
         )
 
 
-def _migrated_document(document: str, forms: JsonValue) -> list[JsonValue]:
+def _migrated_document(
+    document: str, forms: JsonValue, set_doc: JsonValue, report: "ReportBuilder"
+) -> list[JsonValue]:
     if not isinstance(forms, list):
         raise _refusal(document, "(root)", forms, "is not a list of forms")
-    return [_migrated_form(document, index, form) for index, form in enumerate(forms)]
+    orders = _slot_orders(set_doc)
+    return [_migrated_form(document, i, form, orders, report) for i, form in enumerate(forms)]
 
 
 def migrate_forms(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[str, JsonValue]:
     """Rewrites forms documents from the v1 shape to the v2 shape, one typed recipe per form.
 
     `kind` and `geometry` become `recipe`; every other document and form field passes through
-    as it is, and the input is never mutated.
+    as it is, and the input is never mutated. A form whose spots stood on gapped slots stores
+    them slot by slot with None at each open slot, read from the placements of the sibling
+    `set.json`.
 
     Args:
         docs: Stored path to parsed document, without a format header.
-        report: Collects the repairs the step makes; moving the fields repairs nothing.
+        report: Collects the repairs the step makes; moving the fields repairs nothing, laying
+            gapped members out as open slots records one repair per form.
 
     Returns:
         docs: The documents in the v2 shape.
 
     Raises:
-        SchemaError: A form's kind or geometry cannot be stored in v2; the context names the
-            document (`path`), the field and the value.
+        SchemaError: A form's kind or geometry cannot be stored in v2, or its members outnumber
+            its slots; the context names the document (`path`), the field and the value.
 
     >>> from showpy.show.migrate import ReportBuilder
     >>> docs = {"/sets/1/forms.json": [{"id": "f", "kind": "custom",
@@ -148,8 +223,9 @@ def migrate_forms(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[s
     >>> migrate_forms(docs, ReportBuilder(1))["/sets/1/forms.json"][0]["recipe"]["kind"]
     'custom'
     """
-    del report
     return {
-        path: _migrated_document(path, doc) if FORMS_DOC.match(path) else doc
+        path: _migrated_document(path, doc, docs.get(_set_document(path)), report)
+        if FORMS_DOC.match(path)
+        else doc
         for path, doc in docs.items()
     }
