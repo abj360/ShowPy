@@ -15,6 +15,8 @@ Contains:
     test_regression_steps_over_the_cap_are_refused(): refuses a step count v2 cannot hold
     test_custom_motion_params_and_other_documents_pass_through(): leaves a custom
         motion's parameters and every non-paths document unchanged
+    test_regression_unhashable_motion_fn_raises_schema_error(): refuses a list or object
+        motion_fn with SchemaError naming the document, the field and the value
 """
 
 import copy
@@ -52,6 +54,7 @@ REFUSED = [
     ("spiral", "turns", MAX_SPIRAL_TURNS + 1),
 ]
 LOW_STRENGTH = 0.5
+UNHASHABLE_MOTION_FNS: list[JsonValue] = [["weave"], {"name": "weave"}]
 
 
 def _v1_docs(row: dict[str, JsonValue]) -> dict[str, JsonValue]:
@@ -136,3 +139,15 @@ def test_custom_motion_params_and_other_documents_pass_through() -> None:
     out, report = _migrated(docs)
     assert out == docs
     assert report.build().repairs == ()
+
+
+@pytest.mark.parametrize("motion_fn", UNHASHABLE_MOTION_FNS)
+def test_regression_unhashable_motion_fn_raises_schema_error(motion_fn: JsonValue) -> None:
+    """Refuses a list or object motion_fn with SchemaError naming document, field and value."""
+    row: dict[str, JsonValue] = {"entity": "T1", "style": "custom", "motion_fn": motion_fn}
+    with pytest.raises(SchemaError) as info:
+        _migrated(_v1_docs(row))
+    field = "rows.T1.motion_fn"
+    assert info.value.context == {"path": PATHS, "field": field, "value": repr(motion_fn)}
+    assert PATHS in info.value.message
+    assert "a string or null" in info.value.hint

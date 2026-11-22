@@ -4,9 +4,9 @@ v1_to_v2_paths.py --- the paths sub-step of the v1 to v2 format migration (lane 
 v2 types the motion parameters of the four built-in motions and bounds easings. For each path
 row, a key the built-in motion never read in v1 is dropped, and an easing strength below 1 is
 stored as the 1 that v1 used in its place; both are recorded with `report.repair()`. A parameter
-or step count v2 cannot hold is refused with SchemaError naming the document, the field and the
-value. Parameters of registered custom motions pass through unchanged. Route curves keep their
-v1 shape until lane B types them.
+or step count v2 cannot hold, or a `motion_fn` that is neither a string nor null, is refused with
+SchemaError naming the document, the field and the value. Parameters of registered custom
+motions pass through unchanged. Route curves keep their v1 shape until lane B types them.
 
 Contains:
     migrate_paths(): rewrites paths documents from the v1 shape to the v2 shape
@@ -30,6 +30,7 @@ from showpy.core.readonly import ReadOnlyMap
 if TYPE_CHECKING:
     from showpy.show.migrate import ReportBuilder
 
+ALLOWED_MOTION_FN = "a string or null"
 # Matches stored paths documents; document_paths imports the migration chain, so not used here.
 PATHS_DOC_PATTERN = re.compile(r"/transitions/[^/]+/paths\.json")
 ALLOWED_PARAM_VALUES: Final[Mapping[str, str]] = ReadOnlyMap(
@@ -73,10 +74,16 @@ def _migrate_row(document: str, key: str, row: JsonValue, report: "ReportBuilder
     if isinstance(easing, dict):
         migrated["easing"] = _migrate_easing(document, f"rows.{key}.easing", easing, report)
     motion_fn = row.get("motion_fn")
+    if motion_fn is not None and not isinstance(motion_fn, str):
+        raise _refusal(document, f"rows.{key}.motion_fn", motion_fn, ALLOWED_MOTION_FN)
     params = row.get("motion_params", {})
-    if motion_fn in BUILT_IN_MOTION_PARAMS and isinstance(params, dict):
+    if (
+        isinstance(motion_fn, str)
+        and motion_fn in BUILT_IN_MOTION_PARAMS
+        and isinstance(params, dict)
+    ):
         field = f"rows.{key}.motion_params"
-        migrated["motion_params"] = _migrate_params(document, field, str(motion_fn), params, report)
+        migrated["motion_params"] = _migrate_params(document, field, motion_fn, params, report)
     return migrated
 
 
