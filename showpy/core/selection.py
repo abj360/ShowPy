@@ -16,6 +16,7 @@ from pydantic import model_validator
 from showpy.core.errors import SchemaError
 from showpy.core.ids import SpotId
 from showpy.core.types import FrozenModel
+from showpy.core.util import natural_sort
 
 type Operand = Iterable[str] | Selection
 
@@ -97,7 +98,7 @@ def operand_ids(other: Operand) -> tuple[SpotId, ...]:
         other: A Selection or any iterable of IDs.
 
     Returns:
-        ids: The IDs as a tuple; a bare string raises SchemaError.
+        ids: The IDs as a tuple, a set in natural order; a bare string raises SchemaError.
 
     >>> operand_ids(["T1", "T2"])
     ('T1', 'T2')
@@ -110,6 +111,8 @@ def operand_ids(other: Operand) -> tuple[SpotId, ...]:
         )
     if isinstance(other, Selection):
         return other.ids
+    if isinstance(other, set | frozenset):
+        return tuple(SpotId(i) for i in natural_sort(other))
     return tuple(SpotId(i) for i in other)
 
 

@@ -9,6 +9,8 @@ Contains:
         into characters
     test_selection_operators_reject_a_bare_string: rejects a bare string operand of |, & and -
     test_selection_operators_accept_iterables: combines with tuples, lists and Selections
+    test_regression_selection_union_with_a_set_is_in_natural_order: orders set operands naturally
+        whatever their iteration order
     test_selection_has_no_iter_override: leaves BaseModel iteration yielding the fields
     test_regression_selection_model_copy_keeps_ids_unique: deduplicates IDs on model_copy as the
         constructor does
@@ -21,14 +23,15 @@ Contains:
 """
 
 import operator
-from collections.abc import Callable
+from collections.abc import Callable, Iterable, Iterator
 
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
 from showpy.core.errors import SchemaError, ShowPyError
 from showpy.core.ids import SpotId
-from showpy.core.selection import Selection
+from showpy.core.selection import Selection, operand_ids
+from showpy.core.util import natural_sort
 
 
 def test_selection_dedupes_and_keeps_order() -> None:
@@ -117,3 +120,19 @@ def test_regression_selection_description_survives_a_one_shot_iterator(
 ) -> None:
     sel = Selection(ids=(SpotId("T1"), SpotId("T3")), description="a")
     assert combine(sel, iter(["T1", "T2"])).description == expected
+
+
+class _ReversedSet(set[str]):
+    """Iterates in reverse natural order, standing in for a hash-seed-dependent order."""
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(reversed(natural_sort(super().__iter__())))
+
+
+@pytest.mark.parametrize("make", [_ReversedSet, lambda ids: frozenset(ids)])
+def test_regression_selection_union_with_a_set_is_in_natural_order(
+    make: Callable[[list[str]], Iterable[str]],
+) -> None:
+    sel = Selection(ids=(SpotId("T9"),))
+    assert (sel | make(["T10", "T2", "T1"])).ids == ("T9", "T1", "T2", "T10")
+    assert operand_ids(make(["T10", "T2", "T1"])) == ("T1", "T2", "T10")
