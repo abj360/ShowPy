@@ -83,7 +83,10 @@ would need a second package that re-exports the first.
 5. **Also unchanged by the script:**
    - the frozen v1 schema `showpy/schemas/showpy.show.v1.json` (moved with its folder, name
      kept) and its tag `"schema": "showpy.show.v1"`, which the reader keeps accepting;
-   - everything under `tests/fixtures/repos/`: stored data written by released versions;
+   - the stored trees under `tests/fixtures/repos/*/repo/`, written by released versions, and
+     the fixtures' `README.md` files, which name the release that wrote each one. The
+     `expected_v2.json` files beside them are generated output: each holds
+     `"format": "showpy.show"` once, and the rename regenerates them with `e8.show`;
    - the font files themselves;
    - `CHANGELOG.md` entries and release notes up to and including v0.3.0;
    - the text of ADRs 0001 to 0019. History is not rewritten.
@@ -116,15 +119,16 @@ would need a second package that re-exports the first.
 
 ## Numbers
 
-| Measure                                                     | Value                                                |
-| ----------------------------------------------------------- | ---------------------------------------------------- |
-| Occurrences of `showpy` in any case, `8b92d66`              | 5,923 in 342 of 473 tracked files (5,342 lines)      |
-| `ShowPyError` occurrences                                   | 432 in 73 files                                      |
-| Environment variables renamed                               | 4                                                    |
-| Frozen wire strings                                         | 3 (`showpy-hash/1`, `$showpy:map`, `showpy.font.v1`) |
-| Bundled font URIs that must not change                      | 5                                                    |
-| `git diff --stat v0.3.0 -- showpy/fonts` at `8b92d66`       | empty                                                |
-| Occurrences left by design in fixtures, fonts and v1 schema | 6, 7 and 1 (measured at `8b92d66`)                   |
+| Measure                                                               | Value                                                |
+| --------------------------------------------------------------------- | ---------------------------------------------------- |
+| Occurrences of `showpy` in any case, `8b92d66`                        | 5,923 in 342 of 473 tracked files (5,342 lines)      |
+| `ShowPyError` occurrences                                             | 432 in 73 files                                      |
+| Environment variables renamed                                         | 4                                                    |
+| Frozen wire strings                                                   | 3 (`showpy-hash/1`, `$showpy:map`, `showpy.font.v1`) |
+| Bundled font URIs that must not change                                | 5                                                    |
+| `git diff --stat v0.3.0 -- showpy/fonts` at `8b92d66`                 | empty                                                |
+| Fixture occurrences left (READMEs) and rewritten (`expected_v2.json`) | 3 and 3 (measured at `8b92d66`)                      |
+| Occurrences left by design in fonts and the v1 schema                 | 7 and 1 (measured at `8b92d66`)                      |
 
 ## What would change our mind
 
