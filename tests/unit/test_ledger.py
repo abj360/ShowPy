@@ -9,6 +9,7 @@ Contains:
     test_defect_marker_rejects_bad_id: rejects an ID that does not match UP-<section>-<nn>
     test_defect_marker_accepts_strict_xfail_with_matching_reason: accepts a valid ledger test
     test_defect_marker_accepts_three_digit_id: accepts an ID numbered past 99
+    test_defect_marker_accepts_evaluation_section: accepts the E section and rejects other letters
     test_defect_marker_rejects_non_strict_xfail: rejects xfail without strict=True
     test_defect_marker_accepts_parametrized_marks: accepts defect marks inside pytest.param
     test_ledger_counts_only_selected_tests: leaves deselected defect tests out of the count
@@ -133,6 +134,37 @@ def test_defect_marker_accepts_three_digit_id(pytester: pytest.Pytester) -> None
     assert result.ret == 0
     result.assert_outcomes(xfailed=1)
     result.stdout.fnmatch_lines(["Ledger: 1 open"])
+
+
+def test_defect_marker_accepts_evaluation_section(pytester: pytest.Pytester) -> None:
+    """Accepts section E for evaluation findings and rejects any other letter section."""
+    result = run_ledger_case(
+        pytester,
+        """
+        import pytest
+
+        @pytest.mark.defect("UP-E-01")
+        @pytest.mark.xfail(strict=True, reason="UP-E-01")
+        def test_regression_evaluation_defect() -> None:
+            assert False
+        """,
+    )
+    assert result.ret == 0
+    result.assert_outcomes(xfailed=1)
+    for bad_id in ("UP-X-01", "UP-e-01"):
+        rejected = run_ledger_case(
+            pytester,
+            f"""
+            import pytest
+
+            @pytest.mark.defect("{bad_id}")
+            @pytest.mark.xfail(strict=True, reason="{bad_id}")
+            def test_regression_bad_section_{bad_id[3].lower()}() -> None:
+                assert False
+            """,
+        )
+        assert rejected.ret != 0
+        rejected.stderr.fnmatch_lines([f"*{bad_id}*UP-*"])
 
 
 def test_defect_marker_rejects_non_strict_xfail(pytester: pytest.Pytester) -> None:
