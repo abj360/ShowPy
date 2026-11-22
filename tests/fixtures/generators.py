@@ -144,7 +144,7 @@ def _place_forms(rng: np.random.Generator, show: Show, set_id: str, still: str) 
         if key == still or not ids:
             continue
         kind = FORM_KINDS[(int(set_id) + index) % len(FORM_KINDS)]
-        forms.append(_form(rng, kind, f"{key}-{set_id}", ids, set_id))
+        forms.append(_form(rng, kind, f"{key}_{set_id}", ids, set_id))
     placed_set, filled = place(show, set_id, forms)
     return apply_change(with_set(show, placed_set), [FormOp(form=f) for f in filled])
 

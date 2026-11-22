@@ -32,10 +32,14 @@ Contains:
     test_regression_validate_show_reports_degenerate_zones: reports a zone whose polygon has no area
     test_regression_validate_show_reports_selections_naming_unknown_spots: reports a named selection
         holding a spot that does not exist
+    test_regression_validate_show_names_the_selection_and_spot_in_context: puts the selection path
+        and the unknown spot in the issue context
     test_regression_validate_show_reports_infinite_set_counts: reports a set whose counts are
         infinite
     test_regression_validate_show_reports_non_finite_tempo: reports a tempo section whose tempo is
         infinite
+    test_regression_validate_show_names_the_non_finite_field_path: puts the offending field path and
+        value in the issue context
     test_regression_validate_show_reports_non_finite_waypoints: reports a path waypoint with an
         infinite coordinate
     test_regression_validate_show_warns_about_placements_far_off_the_sheet: warns about a placement
@@ -44,6 +48,10 @@ Contains:
         even when no sheet store is passed
     test_regression_validate_show_reports_empty_ids: reports an empty show, note or form ID, each
         alone
+    test_regression_validate_show_accepts_hyphenated_form_and_note_ids: accepts an inner hyphen in
+        form and note IDs
+    test_regression_validate_show_names_the_bad_id_path_in_context: puts the path of the bad ID and
+        its value in the issue context
     test_regression_validate_show_reports_set_ids_that_cannot_be_stored: reports a set ID that no
         workspace path can hold
     test_regression_validate_show_reports_placements_of_inactive_spots: reports an on-field
@@ -56,6 +64,8 @@ Contains:
         coordinate
     test_regression_validate_show_reports_comments_anchored_to_missing_items: reports a comment
         anchored to a set that does not exist
+    test_regression_validate_show_reports_a_show_longer_than_max_counts: reports a show whose set
+        counts add up past MAX_COUNTS
     test_regression_validate_show_warns_about_stale_forms: warns about a form its set no longer
         lists
     test_validate_show_accepts_a_set_whose_forms_are_all_listed: raises no stale-form warning when
@@ -79,6 +89,7 @@ from showpy.choreo.path_models import (
     TransitionSpec,
     Waypoint,
 )
+from showpy.core.caps import MAX_COUNTS
 from showpy.core.ids import FormId, SetId, SpotId, make_tid
 from showpy.core.types import Region
 from showpy.core.validation import ValidationReport
@@ -297,8 +308,6 @@ def test_regression_validate_show_reports_sets_declaring_missing_forms() -> None
     assert _mentions(_edited(sets=_set_two_with(forms=("ghost-form",))), "ghost-form")
 
 
-@pytest.mark.defect("UP-9.7-64")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-64")
 def test_regression_validate_show_reports_form_keys_that_differ_from_ids() -> None:
     """Reports a form stored under a key other than its ID (audit 9.7 validation gaps)."""
     assert _mentions(_formed(key="zz"), "zz")
@@ -393,8 +402,6 @@ def test_regression_validate_show_reports_degenerate_zones() -> None:
     assert _mentions(_edited(zones=(zone,)), "flat")
 
 
-@pytest.mark.defect("UP-9.7-75")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-75")
 def test_regression_validate_show_reports_selections_naming_unknown_spots() -> None:
     """Reports a named selection holding a spot that does not exist (audit 9.7 validation gaps)."""
     cast = two_set_show().cast
@@ -402,15 +409,19 @@ def test_regression_validate_show_reports_selections_naming_unknown_spots() -> N
     assert _mentions(_edited(cast=cast.model_copy(update={"selections": selections})), "ZZ")
 
 
-@pytest.mark.defect("UP-9.7-76")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-76")
+def test_regression_validate_show_names_the_selection_and_spot_in_context() -> None:
+    """Puts the selection path and the unknown spot in the issue context."""
+    cast = two_set_show().cast
+    show = _edited(cast=cast.model_copy(update={"selections": {"front": ("T1", "ZZ")}}))
+    (issue,) = [i for i in validate_show(show).issues if i.code == "UNKNOWN_SPOT"]
+    assert dict(issue.context) == {"path": "cast.selections.front", "spot": "ZZ"}
+
+
 def test_regression_validate_show_reports_infinite_set_counts() -> None:
     """Reports a set whose counts are infinite (audit 9.7 validation gaps)."""
     assert _mentions(_edited(sets=_set_two_with(counts=math.inf)), "inf")
 
 
-@pytest.mark.defect("UP-9.7-77")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-77")
 def test_regression_validate_show_reports_non_finite_tempo() -> None:
     """Reports a tempo section whose tempo is infinite (audit 9.7 validation gaps)."""
     timeline = two_set_show().timeline
@@ -419,8 +430,13 @@ def test_regression_validate_show_reports_non_finite_tempo() -> None:
     assert _mentions(show, "inf")
 
 
-@pytest.mark.defect("UP-9.7-78")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-78")
+def test_regression_validate_show_names_the_non_finite_field_path() -> None:
+    """Puts the offending field path and value in the issue context."""
+    (issue,) = validate_show(_edited(sets=_set_two_with(counts=math.inf))).issues
+    assert issue.code == "NOT_FINITE"
+    assert dict(issue.context) == {"path": "sets[1].counts", "value": "inf"}
+
+
 def test_regression_validate_show_reports_non_finite_waypoints() -> None:
     """Reports a path waypoint with an infinite coordinate (audit 9.7 validation gaps)."""
     waypoint = Waypoint(x=1.0, y=1.0).model_copy(update={"x": math.inf})
@@ -444,8 +460,6 @@ def test_regression_validate_show_reports_unpinned_sheet_without_a_store() -> No
     assert "UNPINNED_SHEET" in _codes(validate_show(_edited(dependencies={})))
 
 
-@pytest.mark.defect("UP-9.7-81")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-81")
 def test_regression_validate_show_reports_empty_ids() -> None:
     """Reports an empty show, note or form ID, each alone (audit 9.7 validation gaps)."""
     empty_form = _formed(key="", form_id="")
@@ -458,8 +472,22 @@ def test_regression_validate_show_reports_empty_ids() -> None:
     assert silent == []
 
 
-@pytest.mark.defect("UP-9.7-82")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-82")
+def test_regression_validate_show_accepts_hyphenated_form_and_note_ids() -> None:
+    """Accepts an inner hyphen in form and note IDs, which the library itself generates."""
+    show = _formed(key="form-1", form_id="form-1")
+    noted = show.model_copy(update={"notes": (_note(note_id="note-1"),)})
+    assert validate_show(noted).issues == ()
+
+
+def test_regression_validate_show_names_the_bad_id_path_in_context() -> None:
+    """Puts the path of the bad ID and its value in the issue context."""
+    show = two_set_show()
+    renamed = show.sets[1].model_copy(update={"id": "a/b"})
+    issues = validate_show(_edited(sets=(show.sets[0], renamed))).issues
+    (issue,) = [i for i in issues if i.code == "BAD_ID"]
+    assert dict(issue.context) == {"path": "sets[1].id", "id": "a/b"}
+
+
 def test_regression_validate_show_reports_set_ids_that_cannot_be_stored() -> None:
     """Reports a set ID that no workspace path can hold (audit 9.7 validation gaps)."""
     show = two_set_show()
@@ -485,8 +513,6 @@ def test_regression_validate_show_reports_a_nonzero_first_set_count() -> None:
     assert _mentions(_edited(sets=(first, show.sets[1])), "3.5")
 
 
-@pytest.mark.defect("UP-9.7-88")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-88")
 def test_regression_validate_show_reports_nan_counts_on_the_first_set() -> None:
     """Reports NaN counts on the first set by name (audit 9.7 validation gaps)."""
     show = two_set_show()
@@ -500,8 +526,6 @@ def test_regression_validate_show_reports_nan_counts_on_the_first_set() -> None:
     )
 
 
-@pytest.mark.defect("UP-9.7-89")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-89")
 def test_regression_validate_show_reports_nan_waypoints() -> None:
     """Reports a path waypoint with a NaN coordinate (audit 9.7 validation gaps)."""
     waypoint = Waypoint(x=1.0, y=1.0).model_copy(update={"y": math.nan})
@@ -518,6 +542,18 @@ def test_regression_validate_show_reports_comments_anchored_to_missing_items() -
     comment = Comment(id="c1", anchor=Anchor.on_set(GHOST), text="check")
     report = validate(two_set_show(), comments=(comment,))
     assert any(GHOST in f"{i.where} {i.message}" for i in report.issues)
+
+
+def test_regression_validate_show_reports_a_show_longer_than_max_counts() -> None:
+    """Reports a show whose set counts add up past MAX_COUNTS, and never raises."""
+    show = two_set_show()
+    long_second = show.sets[1].model_copy(update={"counts": float(MAX_COUNTS)})
+    third = long_second.model_copy(update={"id": "3", "key": None, "counts": 1.0})
+    report = validate_show(_edited(sets=(show.sets[0], long_second, third)))
+    (issue,) = [i for i in report.issues if i.code == "SHOW_TOO_LONG"]
+    assert "MAX_COUNTS" in issue.message
+    assert f"{MAX_COUNTS:,}" in issue.hint
+    assert dict(issue.context) == {"total": MAX_COUNTS + 1.0, "max": MAX_COUNTS}
 
 
 def test_regression_validate_show_warns_about_stale_forms() -> None:

@@ -82,7 +82,7 @@
       "at": "datetime.datetime",
       "id": "str",
       "kind": "EventKind",
-      "payload": "dict[str, Any]",
+      "payload": "EventPayload",
       "revision": "str"
     }
   },
@@ -303,6 +303,7 @@
       "HOLD_NEGATIVE": "'HOLD_NEGATIVE'",
       "HOLD_OVERLAP": "'HOLD_OVERLAP'",
       "IO": "'IO'",
+      "KEY_MISMATCH": "'KEY_MISMATCH'",
       "LOCKED": "'LOCKED'",
       "MARKER_DUPLICATE": "'MARKER_DUPLICATE'",
       "MARKER_RANGE": "'MARKER_RANGE'",
@@ -334,6 +335,7 @@
       "RESERVED_MOTION": "'RESERVED_MOTION'",
       "SCHEMA": "'SCHEMA'",
       "SEGMENT_BOUND": "'SEGMENT_BOUND'",
+      "SHOW_TOO_LONG": "'SHOW_TOO_LONG'",
       "SPACING": "'SPACING'",
       "STAGE": "'STAGE'",
       "STALE_FORM": "'STALE_FORM'",
@@ -536,6 +538,13 @@
       "kind": "Literal['yard', 'hash', 'sideline', 'center', 'edge', 'spike', 'custom']",
       "label": "str",
       "points": "Ring"
+    }
+  },
+  "Highlight": {
+    "model": {
+      "anchor": "showpy.notes.models.Anchor | None",
+      "ttl_s": "float",
+      "zone": "str | None"
     }
   },
   "Hold": {
@@ -1078,9 +1087,9 @@
     "model": {
       "cast": "showpy.cast.models.Cast",
       "coordinates": "showpy.sheet.models.CoordinateSystem",
-      "dependencies": "dict[str, str]",
+      "dependencies": "collections.abc.Mapping[str, str]",
       "facing_overrides": "tuple[showpy.choreo.path_models.FacingOverride, ...]",
-      "forms": "dict[showpy.core.ids.FormId, showpy.choreo.form_models.Form]",
+      "forms": "collections.abc.Mapping[showpy.core.ids.FormId, showpy.choreo.form_models.Form]",
       "id": "str",
       "notes": "tuple[showpy.notes.models.Note, ...]",
       "pack": "str",
@@ -1107,6 +1116,14 @@
       "seconds": "Seconds",
       "set": "showpy.core.ids.SetId",
       "start_count": "Count"
+    }
+  },
+  "ShowLookup": {
+    "model": {
+      "consecutive": "collections.abc.Mapping[showpy.core.ids.TransitionId, showpy.core.ids.TransitionId]",
+      "forms": "collections.abc.Mapping[showpy.core.ids.FormId, showpy.choreo.form_models.Form]",
+      "positions": "collections.abc.Mapping[showpy.core.ids.SetId, int]",
+      "stored": "collections.abc.Mapping[showpy.core.ids.TransitionId, showpy.choreo.path_models.TransitionSpec]"
     }
   },
   "ShowPyError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
@@ -1449,6 +1466,7 @@
   "custom_form": "(form_id: str, members: collections.abc.Sequence[str], points: object, facings: collections.abc.Sequence[Degrees] | None = None, *, set_id: str = '') -> showpy.choreo.form_models.Form",
   "custom_path": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, motion: str, registry: showpy.choreo.motion.MotionRegistry = ..., *, force: bool = False, **params: Any) -> showpy.choreo.path_models.TransitionSpec",
   "customize": "(sheet: showpy.sheet.models.Sheet, **changes: object) -> showpy.sheet.models.Sheet",
+  "decode_event": "(data: collections.abc.Mapping[str, JsonValue], *, report: showpy.show.migrate.ReportBuilder | None = None) -> showpy.show.models.CanvasEvent",
   "default_paths": "(show: 'Show', tid: tuple[str, str]) -> showpy.choreo.path_models.TransitionSpec",
   "define_selection": "(show: 'Show', name: str, sel: Selector) -> 'Show'",
   "delay": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, counts: float, *, keep_end: bool = True, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",

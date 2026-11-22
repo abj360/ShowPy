@@ -3,6 +3,7 @@ collab.py --- live collaboration: change ops, canvas events, pins, proposals, hi
 
 Contains:
     apply_event(): replays one canvas event as a model operation
+    decode_event(): decodes stored event JSON, dropping a v0.2 actor field
     events_since(): derives the canvas events of every revision after a revision
     pins(): lists the designer's locks
     propose(): wraps change ops as a suggestion for the designer
@@ -13,10 +14,8 @@ Contains:
     selection(): returns what the designer has selected
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime
-
-from pydantic import TypeAdapter
 
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import (
@@ -26,18 +25,21 @@ from showpy.core.errors import (
     TimeRangeError,
 )
 from showpy.core.ids import format_tid
+from showpy.core.json_types import JsonValue
 from showpy.core.selection import Selection
-from showpy.core.validation import validate_adapter
 from showpy.notes.models import Anchor
 from showpy.show.changes import apply_change
 from showpy.show.locks import locked_changes
+from showpy.show.migrate import ReportBuilder
 from showpy.show.models import (
     CanvasEvent,
     ChangeOp,
     Comment,
     CountsOp,
     EventKind,
+    EventPayload,
     FormOp,
+    Highlight,
     PathsOp,
     Pin,
     PlacementOp,
@@ -50,7 +52,6 @@ from showpy.show.pinning import pin, pin_key, unpin
 from showpy.show.storage import ROOT_REVISION, Workspace, load_show, save_show
 from showpy.show.structured import COMMENTS_DOC, SELECTION_DOC, decode_comments
 
-OP_ADAPTER: TypeAdapter[ChangeOp] = TypeAdapter(ChangeOp)
 OP_KIND: dict[type, EventKind] = {
     PlacementOp: "move",
     FormOp: "edit_form",
@@ -81,27 +82,47 @@ def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
     >>> from datetime import UTC
     >>> from showpy.examples import two_set_show
     >>> event = CanvasEvent(id="e1", at=datetime(2026, 11, 11, tzinfo=UTC), kind="set_counts",
-    ...                     payload={"op": "counts", "set_id": "2", "counts": 6})
+    ...                     payload=CountsOp(set_id="2", counts=6))
     >>> apply_event(two_set_show(), event).set("2").counts
     6.0
     """
-    if event.kind in ("comment", "highlight"):
+    payload = event.payload
+    if isinstance(payload, Comment | Highlight):
         return show
-    if event.kind in ("pin", "unpin"):
-        held = Pin.model_validate(event.payload)
-        _require_pin_force(show, held, event, force=force)
+    if isinstance(payload, Pin):
+        _require_pin_force(show, payload, event, force=force)
         if event.kind == "pin":
-            return pin(show, held.target, held.id, held.reason, held.by)
-        return unpin(show, held.target, held.id)
-    op = validate_adapter(OP_ADAPTER, event.payload, name="ChangeOp")
-    if OP_KIND[type(op)] != event.kind:
-        raise SchemaError(
-            f"event {event.id} of kind {event.kind} carries a {op.op} op",
-            hint="match the payload op to the kind: move=placement, edit_form=form, "
-            "edit_paths=paths, set_counts=counts",
-            context={"event": event.id},
-        )
-    return apply_change(show, [op], force=force)
+            return pin(show, payload.target, payload.id, payload.reason, payload.by)
+        return unpin(show, payload.target, payload.id)
+    return apply_change(show, [payload], force=force)
+
+
+def decode_event(
+    data: Mapping[str, JsonValue], *, report: ReportBuilder | None = None
+) -> CanvasEvent:
+    """Decodes stored event JSON into a CanvasEvent, dropping the `actor` field v0.2 stored.
+
+    Authorship belongs to the host app, so an `actor` key is removed and, when a `report` is
+    given, recorded as a repair. Any other unknown field raises SchemaError.
+
+    Args:
+        data: Parsed event JSON from v0.3 or v0.2.
+        report: Migration report builder that records the dropped `actor`.
+
+    Returns:
+        event: The decoded event.
+
+    >>> from showpy.examples import two_set_show
+    >>> set_id = two_set_show().set_ids()[1]
+    >>> raw = {"id": "e", "at": "2026-11-11T00:00:00Z", "kind": "set_counts", "actor": "agent",
+    ...        "payload": {"op": "counts", "set_id": set_id, "counts": 6.0}}
+    >>> decode_event(raw).payload.counts
+    6.0
+    """
+    kept = {k: v for k, v in data.items() if k != "actor"}
+    if report is not None and "actor" in data:
+        report.repair(f"dropped actor {data['actor']!r} from event {data.get('id')!r}")
+    return CanvasEvent.model_validate(kept)
 
 
 def _require_pin_force(show: Show, held: Pin, event: CanvasEvent, *, force: bool) -> None:
@@ -116,12 +137,12 @@ def _require_pin_force(show: Show, held: Pin, event: CanvasEvent, *, force: bool
     )
 
 
-def _pin_events(before: Show, after: Show) -> list[tuple[EventKind, dict[str, object]]]:
+def _pin_events(before: Show, after: Show) -> list[tuple[EventKind, EventPayload]]:
     removed = [p for p in before.pins if p not in after.pins]
     added = [p for p in after.pins if p not in before.pins]
     return [
-        *(("unpin", p.model_dump(mode="json")) for p in removed),
-        *(("pin", p.model_dump(mode="json")) for p in added),
+        *(("unpin", p) for p in removed),
+        *(("pin", p) for p in added),
     ]
 
 
@@ -147,9 +168,9 @@ def _edit_ops(before: Show, after: Show) -> list[ChangeOp]:
     return ops
 
 
-def _show_events(before: Show, after: Show) -> list[tuple[EventKind, dict[str, object]]]:
-    edits: list[tuple[EventKind, dict[str, object]]] = [
-        (OP_KIND[type(op)], op.model_dump(mode="json")) for op in _edit_ops(before, after)
+def _show_events(before: Show, after: Show) -> list[tuple[EventKind, EventPayload]]:
+    edits: list[tuple[EventKind, EventPayload]] = [
+        (OP_KIND[type(op)], op) for op in _edit_ops(before, after)
     ]
     return [*_pin_events(before, after), *edits]
 
@@ -159,12 +180,12 @@ def _comments(ws: Workspace, revision: str) -> dict[str, Comment]:
     return {} if raw is None else {c.id: c for c in decode_comments(raw)}
 
 
-def _comment_events(ws: Workspace, r: Revision) -> list[tuple[EventKind, dict[str, object]]]:
+def _comment_events(ws: Workspace, r: Revision) -> list[tuple[EventKind, EventPayload]]:
     if COMMENTS_DOC not in r.changed:
         return []
     old, new = _comments(ws, r.parent), _comments(ws, r.id)
     changed = [c for k, c in new.items() if old.get(k) != c]
-    return [("comment", c.model_dump(mode="json")) for c in changed]
+    return [("comment", c) for c in changed]
 
 
 def _revision_events(ws: Workspace, r: Revision) -> list[CanvasEvent]:
@@ -325,7 +346,7 @@ def highlight(
     >>> from datetime import UTC
     >>> event = highlight(Anchor.on_spots(["T1"]), at=datetime(2026, 11, 11, tzinfo=UTC),
     ...                   event_id="h1")
-    >>> event.kind, event.payload["ttl_s"]
+    >>> event.kind, event.payload.ttl_s
     ('highlight', 30.0)
     """
     if not ttl_s > 0:
@@ -334,12 +355,12 @@ def highlight(
             hint="use ttl_s > 0",
             context={"ttl_s": ttl_s},
         )
-    pointed = (
-        {"anchor": target.model_dump(mode="json")}
+    payload = (
+        Highlight(anchor=target, ttl_s=ttl_s)
         if isinstance(target, Anchor)
-        else {"zone": target}
+        else Highlight(zone=target, ttl_s=ttl_s)
     )
-    return CanvasEvent(id=event_id, at=at, kind="highlight", payload={**pointed, "ttl_s": ttl_s})
+    return CanvasEvent(id=event_id, at=at, kind="highlight", payload=payload)
 
 
 def selection(ws: Workspace) -> Selection:

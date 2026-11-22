@@ -455,8 +455,6 @@ def test_regression_insert_subset_after_a_names_a_subset_of_a() -> None:
     assert new_id.startswith("A")
 
 
-@pytest.mark.defect("UP-9.7-56")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-56")
 def test_regression_form_keys_equal_form_ids_across_a_round_trip() -> None:
     """Rejects a form key that differs from its ID, or keeps keys stable (audit 9.7)."""
     form = Form(id=FormId("f1"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
@@ -468,18 +466,14 @@ def test_regression_form_keys_equal_form_ids_across_a_round_trip() -> None:
     assert set(decode_show(encode_show(show)).forms) == set(show.forms)
 
 
-@pytest.mark.defect("UP-9.7-57")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-57")
 def test_regression_frozen_show_forms_cannot_be_mutated() -> None:
     """Refuses `show.forms[...] = form` on a frozen show (audit 9.7 sets defects)."""
     form = Form(id=FormId("zz"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
     show = two_set_show()
     with pytest.raises(TypeError):
-        show.forms[FormId("zz")] = form
+        show.forms[FormId("zz")] = form  # type: ignore[index]
 
 
-@pytest.mark.defect("UP-9.7-58")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-58")
 def test_regression_frozen_show_is_hashable() -> None:
     """Hashes a frozen show (audit 9.7 sets defects)."""
     assert isinstance(hash(two_set_show()), int)
