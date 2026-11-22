@@ -256,11 +256,20 @@ def test_regression_tempo_at_rejects_nan() -> None:
         tempo_at(_steady(), math.nan)
 
 
-@pytest.mark.defect("UP-9.3-98")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-98")
 def test_regression_describe_count_prints_large_counts_in_full() -> None:
     """Prints 1234567.5 rather than `1.23457e+06` (audit 9.3)."""
     assert "count 1234567.5," in describe_count(_steady(), BIG_COUNT)
+
+
+def test_regression_describe_count_keeps_ordinary_output() -> None:
+    """Prints whole counts, tenths, a measure label and ramp tempo exactly as before."""
+    tl = _steady()
+    assert describe_count(tl, 130.0) == "count 130, 1:05.0, 120 cpm"
+    assert describe_count(tl, 12.25) == "count 12.25, 0:06.1, 120 cpm"
+    assert describe_count(tl, 12.3456789) == "count 12.3457, 0:06.2, 120 cpm"
+    assert describe_count(tl, 0.0) == "count 0, 0:00.0, 120 cpm"
+    measured = set_measures(tl, MeasureSetting(counts_per_measure=4.0))
+    assert describe_count(measured, 9.0) == "count 9 (m. 3), 0:04.5, 120 cpm"
 
 
 def test_regression_timeline_clock_is_fresh_after_replace() -> None:

@@ -18,6 +18,7 @@ from itertools import pairwise
 
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import TimelineError, TimeRangeError
+from showpy.core.numbers import format_number
 from showpy.core.types import Count, CountsPerMinute, Seconds
 from showpy.core.units import round_to
 from showpy.time.measures import count_to_measure
@@ -283,6 +284,12 @@ def _clock_text(s: Seconds) -> str:
     return f"{minutes}:{whole:02d}.{tenth}"
 
 
+def _plain_number(value: float) -> str:
+    """Writes six significant digits, falling back to plain decimals where that is an exponent."""
+    text = f"{value:g}"
+    return format_number(value) if "e" in text else text
+
+
 def describe_count(tl: Timeline, c: Count) -> str:
     """Renders a count as count, measure (when measures are on), m:ss.s and tempo.
 
@@ -293,4 +300,5 @@ def describe_count(tl: Timeline, c: Count) -> str:
     label = count_to_measure(tl, c)
     measure = "" if label is None else f" (m. {label.measure})"
     tempo = round(tempo_at(tl, c), TEMPO_DISPLAY_DIGITS)
-    return f"count {c:g}{measure}, {_clock_text(count_to_seconds(tl, c))}, {tempo:g} cpm"
+    clock = _clock_text(count_to_seconds(tl, c))
+    return f"count {_plain_number(c)}{measure}, {clock}, {_plain_number(tempo)} cpm"
