@@ -29,6 +29,7 @@ import shapely
 
 from showpy.cast.models import Group, LabelScheme, Shape
 from showpy.cast.spots import (
+    GroupPatch,
     _rename_everywhere,
     add_group,
     add_spot,
@@ -45,6 +46,7 @@ from showpy.cast.spots import (
     set_shape,
 )
 from showpy.choreo.path_models import EntityFacing, FacingMode, FixedFacing, PathRow
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import (
     LockedError,
     SchemaError,
@@ -220,9 +222,20 @@ def test_edit_group_changes_fields_but_not_key() -> None:
     show = edit_group(two_set_show(), "trumpets", color="#ff0000", moves=False)
     assert show.cast.groups["trumpets"].color == "#ff0000"
     with pytest.raises(SchemaError):
-        edit_group(two_set_show(), "trumpets", key="x")
+        edit_group(two_set_show(), "trumpets", key="x")  # type: ignore[call-arg]
     with pytest.raises(SchemaError):
-        edit_group(two_set_show(), "trumpets", default_radius="wide")
+        edit_group(two_set_show(), "trumpets", default_radius="wide")  # type: ignore[arg-type]
+
+
+def test_edit_group_rejects_an_unknown_field() -> None:
+    with pytest.raises(SchemaError) as info:
+        edit_group(two_set_show(), "trumpets", colour="#ffffff")  # type: ignore[call-arg]
+    assert "colour" in info.value.message
+    assert "color" in (info.value.hint or "")
+
+
+def test_group_patch_names_every_editable_group_field() -> None:
+    assert GroupPatch.__optional_keys__ == set(Group.model_fields) - {"key"}
 
 
 def test_remove_group_reassigns_members() -> None:
@@ -318,6 +331,20 @@ def test_define_selection_stores_resolved_ids() -> None:
     assert show.cast.selections["ends"] == ("T1", "T4")
     with pytest.raises(SchemaError):
         define_selection(two_set_show(), "bad name", "T1")
+
+
+def test_define_selection_refuses_a_taken_name() -> None:
+    show = define_selection(two_set_show(), "ends", "T1 + T4")
+    with pytest.raises(SchemaError) as info:
+        define_selection(show, "ends", "T2")
+    assert info.value.code == ErrorCode.NAME_TAKEN
+    assert show.cast.selections["ends"] == ("T1", "T4")
+
+
+def test_define_selection_replaces_a_taken_name_when_asked() -> None:
+    show = define_selection(two_set_show(), "ends", "T1 + T4")
+    show = define_selection(show, "ends", "T2", replace=True)
+    assert show.cast.selections["ends"] == ("T2",)
 
 
 def test_set_shape_and_set_claimable() -> None:

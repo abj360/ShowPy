@@ -48,6 +48,7 @@ if TYPE_CHECKING:
         where,
     )
     from showpy.cast.spots import (
+        GroupPatch,
         add_group,
         add_spot,
         add_spots_along,
@@ -884,6 +885,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "GlyphError": ("showpy.core.errors", "GlyphError"),
     "Grid": ("showpy.sheet.models", "Grid"),
     "Group": ("showpy.cast.models", "Group"),
+    "GroupPatch": ("showpy.cast.spots", "GroupPatch"),
     "GuideLine": ("showpy.sheet.models", "GuideLine"),
     "Highlight": ("showpy.show.models", "Highlight"),
     "Hold": ("showpy.time.models", "Hold"),
@@ -1531,6 +1533,7 @@ __all__ = [
     "GlyphError",
     "Grid",
     "Group",
+    "GroupPatch",
     "GuideLine",
     "Highlight",
     "Hold",

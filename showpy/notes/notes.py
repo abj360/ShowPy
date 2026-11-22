@@ -219,6 +219,9 @@ def notes_near(
 def accept_draft(show: "Show", draft: Note) -> "Show":
     """Adds a drafted note to the show and makes it visible.
 
+    A hidden note with the draft's ID already in the show is replaced in place; the text must
+    not be blank.
+
     >>> from datetime import UTC, datetime
     >>> from showpy.examples import two_set_show
     >>> at = datetime(2026, 11, 11, tzinfo=UTC)
@@ -227,4 +230,10 @@ def accept_draft(show: "Show", draft: Note) -> "Show":
     >>> accept_draft(two_set_show(), draft).notes[0].visible
     True
     """
-    return _insert(show, draft.replace(visible=True))
+    accepted = _build_note({**dict(draft), "visible": True})
+    held = next((n for n in show.notes if n.id == accepted.id and not n.visible), None)
+    if held is None:
+        return _insert(show, accepted)
+    _check_anchor(show, accepted.anchor)
+    notes = tuple(accepted if n is held else n for n in show.notes)
+    return show.replace(notes=notes)

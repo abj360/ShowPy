@@ -89,6 +89,8 @@ class ErrorCode(StrEnum):
     """A spot of the cast has no placement in a set."""
     MIXED_OPERATORS = "MIXED_OPERATORS"
     """A selector mixes `&` with `+` or `-` at one parenthesis level without parentheses."""
+    NAME_TAKEN = "NAME_TAKEN"
+    """A named selection is defined under a name that already holds a selection."""
     NAME_TOO_LONG = "NAME_TOO_LONG"
     """A file repository path is longer than the file system allows."""
     NOT_A_MEMBER = "NOT_A_MEMBER"

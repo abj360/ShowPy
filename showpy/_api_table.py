@@ -82,6 +82,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("GlyphError", "showpy.core.errors", "GlyphError"),
     ("Grid", "showpy.sheet.models", "Grid"),
     ("Group", "showpy.cast.models", "Group"),
+    ("GroupPatch", "showpy.cast.spots", "GroupPatch"),
     ("GuideLine", "showpy.sheet.models", "GuideLine"),
     ("Highlight", "showpy.show.models", "Highlight"),
     ("Hold", "showpy.time.models", "Hold"),

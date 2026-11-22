@@ -2,6 +2,7 @@
 spots.py --- draws spots on the sheet and manages groups, labels, named selections and footprints
 
 Contains:
+    GroupPatch: names every field edit_group() may change
     add_spot(): adds one spot at a point, present in every set
     add_spots_along(): adds n spots evenly along a curve
     fill_spots(): fills an area with spots at an interval or a target count
@@ -21,12 +22,14 @@ import math
 import string
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, get_args
+from typing import TYPE_CHECKING, Any, TypedDict, Unpack, get_args
+from typing import ReadOnly as ReadOnlyKey
 
 from showpy.cast.models import Cast, Claimable, Group, LabelScheme, Shape, Spot
 from showpy.cast.rewrite import faces_entity, rewrite_spot_ids
 from showpy.cast.select import label_prefix, select
 from showpy.choreo.models import Placement
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import (
     LockedError,
     SchemaError,
@@ -51,6 +54,29 @@ SELECTION_NAME_CHARS = frozenset(string.ascii_letters + string.digits + "_.-")
 FILL_SEARCH_STEPS = 40
 FILL_BRACKET_STEPS = 30
 FILL_START_FACTOR = 0.5
+
+
+class GroupPatch(TypedDict, total=False):
+    """Names every field of a group that `edit_group` may change; the key is fixed."""
+
+    name: ReadOnlyKey[str]
+    label_prefix: ReadOnlyKey[str]
+    symbol: ReadOnlyKey[str]
+    color: ReadOnlyKey[str]
+    default_radius: ReadOnlyKey[float]
+    limits: ReadOnlyKey[Mapping[str, float]]
+    moves: ReadOnlyKey[bool]
+
+
+class SpotPatch(TypedDict, total=False):
+    """Names every field of a spot that a spot edit may change; the ID and group are fixed."""
+
+    symbol: ReadOnlyKey[str | None]
+    color: ReadOnlyKey[str | None]
+    tags: ReadOnlyKey[Sequence[str]]
+    active: ReadOnlyKey[bool]
+    shape: ReadOnlyKey[Shape]
+    claimable: ReadOnlyKey[Claimable]
 
 
 def _group(cast: Cast, key: str) -> Group:
@@ -414,8 +440,7 @@ def add_group(show: "Show", group: Group) -> "Show":
     return _with_cast(show, groups={**show.cast.groups, group.key: group})
 
 
-# Any: changes are arbitrary Group fields, validated by the rebuilt model.
-def edit_group(show: "Show", key: str, /, **changes: Any) -> "Show":
+def edit_group(show: "Show", key: str, /, **changes: Unpack[GroupPatch]) -> "Show":
     """Changes a group's fields; the key is fixed, and spot labels stay until relabel().
 
     >>> from showpy.examples import two_set_show
@@ -429,12 +454,19 @@ def edit_group(show: "Show", key: str, /, **changes: Any) -> "Show":
             hint="add a new group, regroup the spots, then remove the old group",
             context={"group": key},
         )
+    unknown = sorted(changes.keys() - GroupPatch.__optional_keys__)
+    if unknown:
+        raise SchemaError(
+            f"unknown group field {', '.join(map(repr, unknown))}",
+            hint=f"change only these fields: {', '.join(sorted(GroupPatch.__optional_keys__))}",
+            context={"group": key, "changes": unknown},
+        )
     try:
         edited = Group.model_validate({**current.model_dump(), **changes})
     except SchemaError as error:
         raise SchemaError(
             f"bad change to group {key!r}: {field_errors(error)[0]['msg']}",
-            hint=f"change only these fields: {', '.join(sorted(Group.model_fields))}",
+            hint=f"change only these fields: {', '.join(sorted(GroupPatch.__optional_keys__))}",
             context={"group": key, "changes": sorted(changes)},
         ) from error
     return _with_cast(show, groups={**show.cast.groups, key: edited})
@@ -508,8 +540,14 @@ def relabel(show: "Show", scheme: LabelScheme) -> tuple["Show", dict[SpotId, str
     return _with_cast(_rename_everywhere(show, mapping), label_scheme=scheme), mapping
 
 
-def define_selection(show: "Show", name: str, sel: Selector) -> "Show":
-    """Stores a named selection, usable later as `sel:<name>`; an existing name is replaced.
+def define_selection(show: "Show", name: str, sel: Selector, *, replace: bool = False) -> "Show":
+    """Stores a named selection, usable later as `sel:<name>`.
+
+    Args:
+        show: Show to add the selection to.
+        name: Letters, digits, `_`, `.` and `-` only.
+        sel: Spots to store, resolved to IDs now.
+        replace: Whether an existing selection under `name` may be overwritten.
 
     >>> from showpy.examples import two_set_show
     >>> define_selection(two_set_show(), "ends", "T1 + T4").cast.selections["ends"]
@@ -521,12 +559,18 @@ def define_selection(show: "Show", name: str, sel: Selector) -> "Show":
             hint="use letters, digits, _, . and - only",
             context={"name": name},
         )
+    if name in show.cast.selections and not replace:
+        raise SchemaError(
+            f"selection {name!r} already exists",
+            hint="pass replace=True to overwrite it, or pick another name",
+            context={"name": name},
+            code=ErrorCode.NAME_TAKEN,
+        )
     ids = select(show, sel).ids
     return _with_cast(show, selections={**show.cast.selections, name: ids})
 
 
-# Any: changes are arbitrary Spot fields, validated by the rebuilt model.
-def _edit_spots(show: "Show", sel: Selector, **changes: Any) -> "Show":
+def _edit_spots(show: "Show", sel: Selector, **changes: Unpack[SpotPatch]) -> "Show":
     chosen = set(select(show, sel).ids)
     spots = tuple(
         Spot.model_validate({**dict(s), **changes}) if s.id in chosen else s
