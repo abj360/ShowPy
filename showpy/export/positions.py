@@ -16,6 +16,8 @@ from showpy.cast.models import Cast, Spot
 from showpy.choreo.models import Placement, Set
 from showpy.core.caps import MAX_POINTS, MAX_TEXT_CHARS, require_size
 from showpy.core.errors import SchemaError, ShowValidationError, UnknownRefError
+from showpy.core.ids import check_id
+from showpy.core.numbers import normalize_angle
 from showpy.core.types import Point
 from showpy.core.util import close_matches
 from showpy.show.manage import replace_sets
@@ -51,7 +53,7 @@ def _header_map(fieldnames: Iterable[str], columns: Mapping[str, str] | None) ->
     if missing:
         raise SchemaError(
             f"CSV lacks columns {', '.join(missing)}",
-            hint="give set, counts, entity, x and y columns, or map them with columns=",
+            hint="give set, counts, entity, x, y (and optional facing) columns, or use columns=",
             context={"missing": missing, "header": sorted(present)},
         )
     return {field: name for field, name in mapping.items() if name in present}
@@ -84,7 +86,7 @@ def _parse_row(
         counts=_cell_number(cell("counts"), "counts", line),
         entity=cell("entity"),
         point=(_cell_number(cell("x"), "x", line), _cell_number(cell("y"), "y", line)),
-        facing=_cell_number(facing, "facing", line) if facing else None,
+        facing=normalize_angle(_cell_number(facing, "facing", line)) if facing else None,
     )
 
 
@@ -169,6 +171,17 @@ def _set_order(base: Show, file_ids: list[str]) -> list[str]:
     return order
 
 
+def _checked_entity(entity: str, line: int) -> str:
+    try:
+        return check_id(entity, kind="spot")
+    except SchemaError as error:
+        raise SchemaError(
+            f"line {line}: {error.message}",
+            hint=error.hint,
+            context={**error.context, "line": line},
+        ) from error
+
+
 def _extend_cast(base: Show, rows: list[_PositionRow], group: str) -> Cast:
     if group not in base.cast.groups:
         close = close_matches(group, base.cast.groups)
@@ -178,8 +191,14 @@ def _extend_cast(base: Show, rows: list[_PositionRow], group: str) -> Cast:
             context={"group": group},
         )
     known = set(base.cast.ids())
-    new_ids = [r.entity for r in rows if r.entity not in known]
-    added = tuple(Spot.model_validate({"id": e, "group": group}) for e in dict.fromkeys(new_ids))
+    first_line: dict[str, int] = {}
+    for row in rows:
+        if row.entity not in known:
+            first_line.setdefault(row.entity, row.line)
+    added = tuple(
+        Spot.model_validate({"id": _checked_entity(entity, line), "group": group})
+        for entity, line in first_line.items()
+    )
     return base.cast.replace(spots=base.cast.spots + added)
 
 
@@ -268,7 +287,7 @@ def import_positions(
     r"""Merges CSV rows of set, counts, entity, x, y and optional facing into a show.
 
     Missing sets are created where they fall in file order, keyed like add_set(), and missing
-    spots join `group`.
+    spots join `group`; a new entity ID must be a valid spot ID, and a facing wraps into [0, 360).
     Every spot ends up placed in every set: a spot without a row holds its previous
     placement, and sits off the field at its first position before it first appears. A set inserted
     between two stored sets drops the stored paths of the transition it splits; a locked one
@@ -276,7 +295,7 @@ def import_positions(
 
     Args:
         base: Show to merge into.
-        text: CSV with a header row.
+        text: CSV with a header row; a SchemaError names the line of the first bad row.
         group: Group that new spots join.
         columns: Position field (`set`, `counts`, `entity`, `x`, `y`, `facing`) to the CSV
             column holding it, for files with other headers.

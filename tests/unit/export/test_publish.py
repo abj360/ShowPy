@@ -59,6 +59,10 @@ Contains:
     test_regression_join_link_fails_closed_without_a_digest(): refuses a v0.2.0 publication
     test_regression_join_link_refuses_a_non_https_stored_link(): refuses a stored link that is
         http or javascript
+    test_regression_publish_rejects_a_missing_base_url_with_schema_error(): raises SchemaError for
+        None, not TypeError
+    test_regression_qr_code_accepts_numpy_integer_sizes(): renders for np.int64 and np.uint16
+    test_regression_qr_code_renders_the_largest_size_under_the_pixel_cap(): renders 6,324 px
     test_regression_qr_code_encodes_the_join_link(): encodes the verified joinable link
     test_regression_qr_code_rejects_a_wrong_token(): refuses to encode an unverified token
     test_regression_first_publish_requires_a_join_token(): refuses to publish without a token
@@ -84,6 +88,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Any
 
+import numpy as np
 import pytest
 import segno
 from PIL import Image
@@ -614,6 +619,37 @@ def test_regression_qr_code_rejects_a_size_just_over_the_pixel_cap() -> None:
         qr_code(_published(), JOIN_TOKEN, size=6325)
 
 
+def test_regression_qr_code_renders_the_largest_size_under_the_pixel_cap() -> None:
+    """Renders size 6,324 (39,992,976 pixels), the last size that fits MAX_IMAGE_PIXELS."""
+    png = qr_code(_published(), JOIN_TOKEN, size=6324)
+    assert Image.open(io.BytesIO(png)).size == (6324, 6324)
+
+
+@pytest.mark.parametrize("size", [np.int64(256), np.uint16(256), np.int32(256)])
+def test_regression_qr_code_accepts_numpy_integer_sizes(size: Any) -> None:
+    """Renders for numpy integers, which `isinstance(size, int)` refused."""
+    assert Image.open(io.BytesIO(qr_code(_published(), JOIN_TOKEN, size=size))).size == (256, 256)
+
+
+def test_regression_qr_code_still_rejects_numpy_bools_and_floats() -> None:
+    """Keeps refusing np.bool_ and np.float64 sizes."""
+    for size in (np.True_, np.float64(256.0)):
+        with pytest.raises(SchemaError):
+            qr_code(_published(), JOIN_TOKEN, size=size)  # type: ignore[arg-type]
+
+
+def test_regression_publish_rejects_a_missing_base_url_with_schema_error() -> None:
+    """Raises SchemaError when base_url is None; a TypeError from urlsplit used to leak."""
+    with pytest.raises(SchemaError):
+        publish(
+            two_set_show(),
+            "pub-1",
+            None,  # type: ignore[arg-type]
+            AT,
+            join_token=JOIN_TOKEN,
+        )
+
+
 def test_regression_qr_code_overflow_error_hides_the_join_token() -> None:
     """Keeps the joinable link, and so the join token, out of the overflow message and context."""
     pub = _published().model_copy(update={"link": f"https://eight.example/{OVERLONG_PATH}"})
@@ -654,8 +690,6 @@ def test_regression_republish_from_closed_does_not_go_live() -> None:
         publish(two_set_show(), "pub-1", BASE_URL, LATER, previous=closed, join_token=JOIN_TOKEN)
 
 
-@pytest.mark.defect("UP-9.5-12")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-12")
 def test_regression_claim_spot_rejects_a_naive_time() -> None:
     """Rejects a claim time without a time zone (audit 9.5)."""
     show = two_set_show()
@@ -672,8 +706,6 @@ def test_regression_claim_spot_rejects_a_time_before_publication() -> None:
         claim_spot(_published(show), show, performer("Ada"), "T1", EARLIER)
 
 
-@pytest.mark.defect("UP-9.5-14")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-14")
 def test_regression_reassign_rejects_a_naive_time() -> None:
     """Rejects a reassignment time without a time zone (audit 9.5)."""
     with pytest.raises(SchemaError):

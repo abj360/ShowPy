@@ -3,8 +3,8 @@
 """
 test_data.py --- tests JSON interchange, frame CSV, position import, tables and format plugins
 
-Also holds the audited data and CSV defects (UP-9.5-29 to UP-9.5-34) as strict xfails.
-UP-9.5-35 is fixed; its test below passes.
+Also holds the audited data and CSV defects (UP-9.5-29 to UP-9.5-35). UP-9.5-29, -30, -34 and
+-35 are fixed; UP-9.5-31 to -33 stay strict xfails.
 
 Contains:
     test_regression_chart_csv_neutralizes_formula_names(): quotes a formula-like performer name
@@ -22,6 +22,9 @@ Contains:
     test_regression_to_text_drops_tabs_and_carriage_returns(): drops tab and CR from text cells
     test_regression_to_text_aligns_wide_cjk_characters(): pads wide characters by display width
     test_regression_export_json_include_accepts_a_single_field_name(): treats a string as one field
+    test_regression_csv_writes_every_float_in_plain_decimal(): never writes an exponent, keeps
+        non-finite cells as text
+    test_csv_neutralizes_exactly_the_non_numeric_formula_cells(): property over default cells
     test_regression_import_json_rejects_a_non_mapping_with_schema_error(): raises SchemaError for
         `[1]` (UP-9.5-35; an AttributeError used to leak)
     test_regression_export_json_ignores_hash_seed(): dumps spot tags and selections in one order
@@ -59,8 +62,11 @@ import unicodedata
 import numpy as np
 import pandas as pd
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from showpy.choreo.forms import slots, text_form
+from showpy.core.csv_cells import FORMULA_TRIGGERS, PLAIN_DECIMAL
 from showpy.core.errors import (
     FontError,
     MissingFontError,
@@ -342,19 +348,15 @@ def test_regression_csv_opt_out_leaves_formula_cells_unchanged() -> None:
     assert rows[1] == [FORMULA_NAME]
 
 
-@pytest.mark.defect("UP-9.5-29")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-29")
 def test_regression_csv_writes_large_floats_without_exponent() -> None:
-    """Writes 1234567.0 in full; the `:g` format turns it into 1.23457e+06 (audit 9.5)."""
+    """Writes 1234567.0 in full, not as 1.23457e+06 (audit 9.5)."""
     rows = _csv_rows(to_csv(pd.DataFrame({"count": [1234567.0]})))
     assert float(rows[1][0]) == 1234567.0
     assert "e" not in rows[1][0].lower()
 
 
-@pytest.mark.defect("UP-9.5-30")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-30")
 def test_regression_csv_keeps_cue_seconds_above_one_thousand_exact() -> None:
-    """Keeps the precision of cue seconds past 1,000 s; `:g` keeps six significant digits."""
+    """Keeps the precision of cue seconds past 1,000 s."""
     seconds = 1234.5678
     rows = _csv_rows(to_csv(pd.DataFrame({"seconds": [seconds]})))
     assert approx_equal(float(rows[1][0]), seconds, abs_tol=TOL)
@@ -389,12 +391,41 @@ def test_regression_to_text_aligns_wide_cjk_characters() -> None:
     assert starts[0] == starts[1]
 
 
-@pytest.mark.defect("UP-9.5-34")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-34")
 def test_regression_export_json_include_accepts_a_single_field_name() -> None:
-    """Treats `include="title"` as one field; today it iterates the characters of the string."""
+    """Treats `include="title"` as one field instead of iterating its characters."""
     document = export_json(two_set_show(), include="title")
     assert sorted(document["show"]) == ["id", "title"]
+
+
+@pytest.mark.parametrize(
+    ("value", "text"),
+    [(1e16, "10000000000000000"), (1e-7, "0"), (-0.0, "0"), (0.5, "0.5"), (float("inf"), "inf")],
+)
+def test_regression_csv_writes_every_float_in_plain_decimal(value: float, text: str) -> None:
+    """Writes floats without an exponent; infinity stays text instead of raising."""
+    assert _csv_rows(to_csv(pd.DataFrame({"v": [value]})))[1] == [text]
+
+
+CELL_TEXT = st.text(alphabet=st.characters(exclude_categories=["Cs"]), max_size=12)
+TRIGGER_LED_TEXT = st.builds(
+    lambda trigger, rest: trigger + rest, st.sampled_from(FORMULA_TRIGGERS), CELL_TEXT
+)
+DECIMAL_TEXT = st.from_regex(PLAIN_DECIMAL, fullmatch=True)
+
+
+@settings(max_examples=200, deadline=None)
+@given(cells=st.lists(st.one_of(CELL_TEXT, TRIGGER_LED_TEXT, DECIMAL_TEXT), min_size=1, max_size=8))
+def test_csv_neutralizes_exactly_the_non_numeric_formula_cells(cells: list[str]) -> None:
+    """Prefixes `'` on a cell that starts with a trigger and is no plain decimal; keeps the rest."""
+    text = to_csv(pd.DataFrame({"cells": cells}))
+    written = [row[0] for row in csv.reader(io.StringIO(text, newline=""))][1:]
+    expected = [
+        f"'{cell}"
+        if cell.startswith(FORMULA_TRIGGERS) and PLAIN_DECIMAL.fullmatch(cell) is None
+        else cell
+        for cell in cells
+    ]
+    assert written == expected
 
 
 def test_regression_import_json_rejects_a_non_mapping_with_schema_error() -> None:
