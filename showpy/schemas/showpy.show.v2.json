@@ -877,7 +877,7 @@
     },
     "MeasureSetting": {
       "additionalProperties": false,
-      "description": "Configures measure numbering for designers who talk in measures.\n\nAttributes:\n    counts_per_measure: Measure length from count 0.\n    start_measure: Number of the measure that starts at count 0.\n    changes: (count, new length) pairs; each starts a new measure at its count.",
+      "description": "Configures measure numbering for designers who talk in measures.\n\nAttributes:\n    counts_per_measure: Measure length from count 0; finite and above 0.\n    start_measure: Number of the measure that starts at count 0.\n    changes: (count, new length) pairs; each starts a new measure at its count. Counts are\n        at least 0 and strictly increasing, lengths finite and above 0.",
       "properties": {
         "changes": {
           "default": [],
@@ -886,10 +886,10 @@
             "minItems": 2,
             "prefixItems": [
               {
-                "$ref": "#/$defs/Count"
+                "$ref": "#/$defs/NonNegCount"
               },
               {
-                "type": "number"
+                "$ref": "#/$defs/PositiveFinite"
               }
             ],
             "type": "array"
@@ -898,8 +898,7 @@
           "type": "array"
         },
         "counts_per_measure": {
-          "title": "Counts Per Measure",
-          "type": "number"
+          "$ref": "#/$defs/PositiveFinite"
         },
         "start_measure": {
           "default": 1,
@@ -916,6 +915,11 @@
     "Meters": {
       "maximum": 1000000.0,
       "minimum": -1000000.0,
+      "type": "number"
+    },
+    "NonNegCount": {
+      "maximum": 1000000,
+      "minimum": 0,
       "type": "number"
     },
     "Note": {
@@ -1965,7 +1969,7 @@
     },
     "Timeline": {
       "additionalProperties": false,
-      "description": "Holds the whole show timeline.\n\nAttributes:\n    mode: How the show is timed.\n    tempos: Tempo sections sorted by count; the first starts at count 0.\n    holds: Pauses sorted by count.\n    markers: Named moments sorted by count.\n    measures: Measure numbering, or None when measures are off.\n    cues: Cue-mode moments sorted by order.\n    audio: Playback tracks.\n    total_counts: Length of the show in counts, when known.",
+      "description": "Holds the whole show timeline.\n\nConstruction refuses a timeline the clock could not convert: tempo sections out of order,\ntwo at one count or a first that is not at count 0; two cues with one order; holds out of\norder, two at one count or outside the show; a negative `total_counts`.\n\nAttributes:\n    mode: How the show is timed.\n    tempos: Tempo sections sorted by count; the first starts at count 0.\n    holds: Pauses sorted by count, at most one per count, inside the show.\n    markers: Named moments sorted by count.\n    measures: Measure numbering, or None when measures are off.\n    cues: Cue-mode moments sorted by order.\n    audio: Playback tracks.\n    total_counts: Length of the show in counts, when known.",
       "properties": {
         "audio": {
           "default": [],

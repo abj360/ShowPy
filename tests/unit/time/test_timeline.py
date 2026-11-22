@@ -227,10 +227,13 @@ def test_set_and_clear_measures() -> None:
 
 
 def test_set_measures_rejects_non_positive_length() -> None:
+    with pytest.raises(ShowPyError):
+        MeasureSetting(counts_per_measure=0.0)
+    with pytest.raises(ShowPyError):
+        MeasureSetting(counts_per_measure=4.0, changes=((8.0, -2.0),))
+    unchecked = MeasureSetting.model_construct(counts_per_measure=0.0, start_measure=1, changes=())
     with pytest.raises(TimelineError):
-        set_measures(_counts(), MeasureSetting(counts_per_measure=0.0))
-    with pytest.raises(TimelineError):
-        set_measures(_counts(), MeasureSetting(counts_per_measure=4.0, changes=((8.0, -2.0),)))
+        set_measures(_counts(), unchecked)
 
 
 def test_attach_audio_rejects_duplicate_label_and_remove_works() -> None:
@@ -319,16 +322,12 @@ def test_regression_add_tempo_rejects_negative_ramp_target() -> None:
         )
 
 
-@pytest.mark.defect("UP-9.3-106")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-106")
 def test_regression_add_tempo_rejects_ramp_counts_without_target() -> None:
     """Rejects `ramp_counts` given without `ramp_to` (audit 9.3)."""
     with pytest.raises(REJECTED):
         add_tempo(_steady(), TempoSection(at_count=8.0, counts_per_minute=90.0, ramp_counts=4.0))
 
 
-@pytest.mark.defect("UP-9.3-107")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-107")
 def test_regression_remove_tempo_at_zero_keeps_a_convertible_timeline() -> None:
     """Refuses to drop the count-0 tempo, or leaves a timeline that still converts (audit 9.3)."""
     try:
@@ -338,8 +337,6 @@ def test_regression_remove_tempo_at_zero_keeps_a_convertible_timeline() -> None:
     assert math.isfinite(count_to_seconds(trimmed, 4.0))
 
 
-@pytest.mark.defect("UP-9.3-108")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-108")
 def test_regression_duplicate_cue_order_is_rejected_or_ordered() -> None:
     """Rejects two cues with one order, or starts them at different times (audit 9.3)."""
     try:
