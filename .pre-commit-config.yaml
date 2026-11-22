@@ -45,3 +45,10 @@ repos:
         pass_filenames: false
         types: [python]
         stages: [pre-push]
+      - id: api-changes
+        name: nox api-changes
+        entry: uv run nox -s api-changes
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

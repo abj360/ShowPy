@@ -86,7 +86,7 @@ jobs:
           node-version: "22"
       - run: uv sync --locked
       - run: npm ci
-      - run: uv run nox -s lint types audit
+      - run: uv run nox -s lint types api-changes audit
 
   hashseed:
     needs: changes
