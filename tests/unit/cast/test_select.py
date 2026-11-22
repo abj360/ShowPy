@@ -17,6 +17,18 @@ Contains:
         SchemaError, not RecursionError
     test_regression_mirror_pairs_finds_every_pair_within_tolerance: pairs spots within tolerance
         even when the min-sum plan misses them
+    test_regression_mirror_pairs_keeps_a_pair_the_min_sum_plan_drops: keeps both pairs within
+        tolerance where the shortest full plan uses one far edge
+    test_regression_mirror_pairs_pairs_exactly_mirrored_spots: pairs zero-distance mirrors, even
+        with zero tolerance
+    test_regression_mirror_pairs_breaks_ties_by_spot_order: pairs the n-th left spot with the n-th
+        right spot when pairings tie
+    test_regression_mirror_pairs_without_edges_is_empty: returns no pairs when nothing lies within
+        tolerance
+    test_regression_mirror_pairs_memory_follows_candidate_pairs: pairs 2,000 spots per side within
+        a budget far below one left-by-right distance table
+    test_regression_mirror_pairs_solves_only_candidate_pairs: hands the solver one edge per
+        candidate pair plus one per left spot, not left by right
     test_regression_split_rejects_absurd_part_counts_quickly: rejects an absurd part count instead
         of building 100,000 empty groups
     test_regression_select_rejects_non_string_ids_in_a_set: rejects a set holding a non-string with
@@ -44,6 +56,8 @@ import tracemalloc
 
 import pytest
 import shapely
+from scipy.sparse import csr_array
+from scipy.sparse.csgraph import min_weight_full_bipartite_matching
 
 from showpy.cast.models import Cast, Group, Shape, Spot
 from showpy.cast.select import (
@@ -424,8 +438,6 @@ def test_regression_select_deep_nesting_raises_schema_error() -> None:
         normalize_v1_selector(expression)
 
 
-@pytest.mark.defect("UP-9.3-76")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-76")
 def test_regression_mirror_pairs_finds_every_pair_within_tolerance() -> None:
     """Pairs spots within tolerance even when the min-sum plan misses them (audit 9.3)."""
     placements = (
@@ -436,6 +448,99 @@ def test_regression_mirror_pairs_finds_every_pair_within_tolerance() -> None:
     )
     set_ = Set(id=SetId("1"), counts=0.0, placements=placements)
     assert len(mirror_pairs(set_, "all", tol=MIRROR_TOL_M)) >= 1
+
+
+def mirror_set(*spots: tuple[str, float, float]) -> Set:
+    placements = tuple(Placement(entity=SpotId(name), x=x, y=y) for name, x, y in spots)
+    return Set(id=SetId("1"), counts=0.0, placements=placements)
+
+
+def test_regression_mirror_pairs_keeps_a_pair_the_min_sum_plan_drops() -> None:
+    """Keeps both pairs within tolerance where the shortest full plan uses one far edge."""
+    set_ = mirror_set(("L1", -1.0, 0.0), ("L2", -1.0, 0.08), ("R1", 1.0, 0.08), ("R2", 1.06, 0.15))
+    assert mirror_pairs(set_, "all", tol=MIRROR_TOL_M) == [("L1", "R1"), ("L2", "R2")]
+
+
+def test_regression_mirror_pairs_pairs_exactly_mirrored_spots() -> None:
+    """Pairs spots whose mirror distance is exactly zero, even with zero tolerance."""
+    set_ = mirror_set(("L1", -1.0, 0.0), ("L2", -2.0, 1.0), ("R2", 2.0, 1.0), ("R1", 1.0, 0.0))
+    assert mirror_pairs(set_, "all", tol=0.0) == [("L1", "R1"), ("L2", "R2")]
+    assert mirror_pairs(set_, "all", axis_x=0.5, tol=0.0) == []
+
+
+def test_regression_mirror_pairs_breaks_ties_by_spot_order() -> None:
+    """Pairs the n-th left spot with the n-th right spot when pairings tie."""
+    stacked = mirror_set(
+        ("L1", -1.0, 0.0),
+        ("L2", -1.0, 0.0),
+        ("L3", -1.0, 0.0),
+        ("R1", 1.0, 0.0),
+        ("R2", 1.0, 0.0),
+        ("R3", 1.0, 0.0),
+    )
+    assert mirror_pairs(stacked, "all") == [("L1", "R1"), ("L2", "R2"), ("L3", "R3")]
+    reordered = ["L2", "L1", "L3", "R3", "R1", "R2"]
+    assert mirror_pairs(stacked, reordered) == [("L2", "R3"), ("L1", "R1"), ("L3", "R2")]
+    fork = mirror_set(("L", -1.0, 0.0), ("R1", 1.0, 0.05), ("R2", 1.0, -0.05))
+    assert mirror_pairs(fork, "all") == [("L", "R1")]
+    assert mirror_pairs(fork, ["R2", "L", "R1"]) == [("L", "R2")]
+    spare_left = ["L1", "L2", "L3", "R1", "R2"]
+    assert mirror_pairs(stacked, spare_left) == [("L1", "R1"), ("L2", "R2")]
+
+
+def test_regression_mirror_pairs_without_edges_is_empty() -> None:
+    """Returns no pairs when no right spot lies within tolerance of a mirror image."""
+    set_ = mirror_set(("L1", -1.0, 0.0), ("L2", -3.0, 0.0), ("R1", 1.5, 0.0), ("R2", 3.0, 0.5))
+    assert mirror_pairs(set_, "all", tol=MIRROR_TOL_M) == []
+    assert mirror_pairs(set_, "all", tol=-1.0) == []
+    assert mirror_pairs(set_, ["L1", "L2"]) == []
+
+
+MIRROR_ROWS = 40
+MIRROR_COLUMNS = 50
+MIRROR_SPACING_M = 1.0
+MIRROR_PEAK_BUDGET_BYTES = 8_000_000
+
+
+def mirror_grid() -> Set:
+    return mirror_set(
+        *(
+            (f"{side}{row}-{col}", sign * (col + 1) * MIRROR_SPACING_M, row * MIRROR_SPACING_M)
+            for side, sign in (("L", -1.0), ("R", 1.0))
+            for row in range(MIRROR_ROWS)
+            for col in range(MIRROR_COLUMNS)
+        )
+    )
+
+
+def test_regression_mirror_pairs_memory_follows_candidate_pairs() -> None:
+    """Pairs 2,000 spots per side within a budget far below one left-by-right distance table."""
+    set_ = mirror_grid()
+    tracemalloc.start()
+    try:
+        pairs = mirror_pairs(set_, "all", tol=MIRROR_TOL_M)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert len(pairs) == MIRROR_ROWS * MIRROR_COLUMNS
+    assert all(left[1:] == right[1:] for left, right in pairs)
+    assert peak < MIRROR_PEAK_BUDGET_BYTES
+
+
+def test_regression_mirror_pairs_solves_only_candidate_pairs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hands the solver one edge per candidate pair plus one per left spot, not left by right."""
+    graph_sizes: list[int] = []
+
+    def recording_solve(graph: csr_array) -> object:
+        graph_sizes.append(graph.nnz)
+        return min_weight_full_bipartite_matching(graph)
+
+    monkeypatch.setattr("showpy.cast.select.min_weight_full_bipartite_matching", recording_solve)
+    left_spots = MIRROR_ROWS * MIRROR_COLUMNS
+    assert len(mirror_pairs(mirror_grid(), "all", tol=MIRROR_TOL_M)) == left_spots
+    assert graph_sizes == [2 * left_spots]
 
 
 @fails_after(5)

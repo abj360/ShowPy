@@ -27,8 +27,11 @@ from collections.abc import Callable, Iterable, Sequence
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 import numpy as np
+import numpy.typing as npt
 import shapely
-from scipy.optimize import linear_sum_assignment
+from scipy.sparse import coo_array, csr_array
+from scipy.sparse.csgraph import connected_components, min_weight_full_bipartite_matching
+from scipy.spatial import cKDTree
 
 from showpy.cast.models import Cast
 from showpy.choreo.models import Placement, Set
@@ -66,7 +69,11 @@ KIND_SEPARATOR = ":"
 SHAPE_KINDS = ("circle", "rectangle")
 SPOT_KINDS = ("group", "tag", "shape", "sel")
 AXIS_EPS = 1e-9
+MIRROR_TIE_M = 1e-9
+MIRROR_SEARCH_SLACK = 1e-9
 
+type FloatArray = npt.NDArray[np.float64]
+type IntArray = npt.NDArray[np.intp]
 type OrderBy = Literal["form", "x", "y"] | Curve
 type RegionLike = Area | Region | Points | Sequence[Point]
 
@@ -697,26 +704,90 @@ def mirror_pairs(
 ) -> list[tuple[SpotId, SpotId]]:
     """Pairs on-field spots left of `axis_x` with partners right of it.
 
-    The pairing minimizes the total distance between each left spot's mirror image and its
-    partner (Hungarian method); pairs farther apart than `tol` are dropped. Spots on the axis
-    are their own mirror and never pair. Pairs come as (left, right) in selection order.
+    A left spot may pair with a right spot within `tol` of its mirror image. The result holds
+    as many pairs as possible and, among such pairings, the least total distance between
+    mirror images and partners. Totals within a nanometre count as tied; ties pair the n-th
+    left spot with the n-th right spot in selection order as closely as possible. Spots on the
+    axis are their own mirror and never pair. Pairs come as (left, right) in selection order.
 
     >>> s = Set(id="1", counts=0, placements=(
     ...     Placement(entity="L", x=-1, y=0), Placement(entity="R", x=1, y=0)))
     >>> mirror_pairs(s, "all")
     [('L', 'R')]
     """
-    placed = [p for p in (set_.get(i) for i in select(set_, sel).ids) if p.on_field]
+    by_id = {p.entity: p for p in set_.placements}
+    placed = [p for p in (by_id[i] for i in select(set_, sel).ids) if p.on_field]
     left = [p for p in placed if p.x < axis_x - AXIS_EPS]
     right = [p for p in placed if p.x > axis_x + AXIS_EPS]
-    if not left or not right:
+    if not left or not right or not tol >= 0:
         return []
     mirrored = np.array([(2 * axis_x - p.x, p.y) for p in left])
     targets = np.array([p.point for p in right])
-    cost = np.linalg.norm(mirrored[:, None, :] - targets[None, :, :], axis=2)
-    rows, cols = linear_sum_assignment(cost)
-    return [
-        (left[r].entity, right[c].entity)
-        for r, c in sorted(zip(rows, cols, strict=True))
-        if cost[r, c] <= tol
-    ]
+    rows, cols, dist = _mirror_candidates(mirrored, targets, tol)
+    if not rows.size:
+        return []
+    pairs = _max_min_matching(rows, cols, dist, len(left), len(right))
+    return [(left[r].entity, right[c].entity) for r, c in pairs]
+
+
+def _mirror_candidates(
+    mirrored: FloatArray, targets: FloatArray, tol: float
+) -> tuple[IntArray, IntArray, FloatArray]:
+    """Lists every (left, right, distance) edge within `tol`, found through KD-trees.
+
+    The search radius is widened slightly and each distance recomputed, so the `<= tol` test
+    does not depend on the tree's rounding.
+    """
+    radius = tol * (1 + MIRROR_SEARCH_SLACK)
+    found = cKDTree(mirrored).sparse_distance_matrix(
+        cKDTree(targets), radius, output_type="ndarray"
+    )
+    rows = found["i"].astype(np.intp)
+    cols = found["j"].astype(np.intp)
+    dist = np.linalg.norm(mirrored[rows] - targets[cols], axis=1)
+    keep = dist <= tol
+    return rows[keep], cols[keep], dist[keep]
+
+
+def _max_min_matching(
+    rows: IntArray, cols: IntArray, dist: FloatArray, n_left: int, n_right: int
+) -> list[tuple[int, int]]:
+    """Finds a maximum matching with the least total distance, sorted by left index.
+
+    Each left spot also gets a private dummy partner costing its component's pair limit plus
+    2, while a real edge costs between 1 and 2. So a full matching always exists, and one more
+    real pair always costs less. Real edges never cost 0, because the solver drops explicit
+    zeros. A rank-gap term worth under `MIRROR_TIE_M` per component breaks ties.
+
+    Returns:
+        pairs: (left index, right index) for each real matched edge.
+    """
+    labels = _component_labels(rows, cols, n_left, n_right)
+    left_labels, right_labels = labels[:n_left], labels[n_left:]
+    caps = np.minimum(
+        np.bincount(left_labels, minlength=labels.max() + 1),
+        np.bincount(right_labels, minlength=labels.max() + 1),
+    )
+    gap = ((rows - cols) / max(n_left, n_right)) ** 2
+    weight = dist + MIRROR_TIE_M * gap / caps[left_labels[rows]]
+    cost = 1.0 + weight / (weight.max() + MIRROR_TIE_M)
+    dummy_cost = caps[left_labels] + 2.0
+    left_ids = np.arange(n_left)
+    graph = csr_array(
+        (
+            np.concatenate([cost, dummy_cost]),
+            (np.concatenate([rows, left_ids]), np.concatenate([cols, n_right + left_ids])),
+        ),
+        shape=(n_left, n_right + n_left),
+    )
+    matched_rows, matched_cols = min_weight_full_bipartite_matching(graph)
+    matched = zip(matched_rows.tolist(), matched_cols.tolist(), strict=True)
+    return sorted((r, c) for r, c in matched if c < n_right)
+
+
+def _component_labels(rows: IntArray, cols: IntArray, n_left: int, n_right: int) -> IntArray:
+    """Labels the connected components of the candidate graph, left spots first."""
+    size = n_left + n_right
+    graph = coo_array((np.ones(rows.size), (rows, n_left + cols)), shape=(size, size))
+    _, labels = connected_components(graph, directed=False)
+    return labels.astype(np.intp)
