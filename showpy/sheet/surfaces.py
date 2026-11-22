@@ -20,6 +20,7 @@ Contains:
 
 import math
 
+from showpy.core.deprecation import leaving_call
 from showpy.core.ids import SheetRef, format_ref
 from showpy.core.types import Point, Region, Ring
 from showpy.core.units import convert
@@ -94,10 +95,10 @@ def rect_ring(x0: float, y0: float, x1: float, y1: float) -> Ring:
     return ((x0, y0), (x1, y0), (x1, y1), (x0, y1))
 
 
-def point_landmark(mark_id: str, name: str, p: Point, *aliases: str) -> Landmark:
+def _point_landmark(mark_id: str, name: str, p: Point, *aliases: str) -> Landmark:
     """Builds a point landmark.
 
-    >>> point_landmark("c", "center", (0.0, 0.0), "middle").aliases
+    >>> _point_landmark("c", "center", (0.0, 0.0), "middle").aliases
     ('middle',)
     """
     return Landmark.model_validate(
@@ -105,10 +106,19 @@ def point_landmark(mark_id: str, name: str, p: Point, *aliases: str) -> Landmark
     )
 
 
-def line_landmark(mark_id: str, name: str, a: Point, b: Point, *aliases: str) -> Landmark:
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("Marking", "markings_near"))
+def point_landmark(mark_id: str, name: str, p: Point, *aliases: str) -> Landmark:
+    """Builds a point landmark.
+
+    Deprecated: this name leaves the library in 0.7.0.
+    """
+    return _point_landmark(mark_id, name, p, *aliases)
+
+
+def _line_landmark(mark_id: str, name: str, a: Point, b: Point, *aliases: str) -> Landmark:
     """Builds a straight line landmark from `a` to `b`.
 
-    >>> line_landmark("edge", "front edge", (-1.0, 0.0), (1.0, 0.0)).kind
+    >>> _line_landmark("edge", "front edge", (-1.0, 0.0), (1.0, 0.0)).kind
     'line'
     """
     return Landmark.model_validate(
@@ -116,17 +126,39 @@ def line_landmark(mark_id: str, name: str, a: Point, b: Point, *aliases: str) ->
     )
 
 
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("Marking", "markings_near"))
+def line_landmark(mark_id: str, name: str, a: Point, b: Point, *aliases: str) -> Landmark:
+    """Builds a straight line landmark from `a` to `b`.
+
+    Deprecated: this name leaves the library in 0.7.0.
+    """
+    return _line_landmark(mark_id, name, a, b, *aliases)
+
+
 def _area_landmark(mark_id: str, name: str, ring: Ring) -> Landmark:
     return Landmark.model_validate({"id": mark_id, "name": name, "kind": "area", "geometry": ring})
 
 
-def template_ref(ref_id: str) -> SheetRef:
+def _template_ref(ref_id: str) -> SheetRef:
     """Returns the first-version reference of a built-in sheet.
 
-    >>> template_ref("gym-basketball")
+    >>> _template_ref("gym-basketball")
     'sheet:gym-basketball@1'
     """
     return format_ref(REF_KIND, ref_id, FIRST_VERSION)
+
+
+@leaving_call(
+    since="0.4.0",
+    remove="0.7.0",
+    replacement=("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
+)
+def template_ref(ref_id: str) -> SheetRef:
+    """Returns the first-version reference of a built-in sheet.
+
+    Deprecated: this name leaves the library in 0.7.0.
+    """
+    return _template_ref(ref_id)
 
 
 def _field_edges(half: float, depth: float) -> tuple[GuideLine, ...]:
@@ -168,10 +200,10 @@ def _yard_landmarks(depth: float, hashes: tuple[float, float]) -> tuple[Landmark
     for offset in _yard_offsets():
         key, short, line_name = _yard_names(offset)
         x = convert(offset, "yd", "m")
-        marks.append(line_landmark(f"yard-{key}", line_name, (x, 0.0), (x, depth), short))
+        marks.append(_line_landmark(f"yard-{key}", line_name, (x, 0.0), (x, depth), short))
         for side, home_word, y in (("front", "home", hashes[0]), ("back", "visitor", hashes[1])):
             name, alias = f"{short} {side} hash", f"{short} {home_word} hash"
-            marks.append(point_landmark(f"{side}-hash-{key}", name, (x, y), alias))
+            marks.append(_point_landmark(f"{side}-hash-{key}", name, (x, y), alias))
     return tuple(marks)
 
 
@@ -181,20 +213,20 @@ def _field_landmarks(
     goal = convert(GOAL_LINE_YD, "yd", "m")
     front, back = hashes
     return (
-        point_landmark("center", "center", (0.0, 0.0), "front center", "50 front sideline"),
-        point_landmark("back-center", "back center", (0.0, depth), "50 back sideline"),
-        line_landmark("front-sideline", "front sideline", (-half, 0), (half, 0), "home sideline"),
-        line_landmark(
+        _point_landmark("center", "center", (0.0, 0.0), "front center", "50 front sideline"),
+        _point_landmark("back-center", "back center", (0.0, depth), "50 back sideline"),
+        _line_landmark("front-sideline", "front sideline", (-half, 0), (half, 0), "home sideline"),
+        _line_landmark(
             "back-sideline", "back sideline", (-half, depth), (half, depth), "visitor sideline"
         ),
-        line_landmark("front-hash", "front hash", (-goal, front), (goal, front), "home hash"),
-        line_landmark("back-hash", "back hash", (-goal, back), (goal, back), "visitor hash"),
+        _line_landmark("front-hash", "front hash", (-goal, front), (goal, front), "home hash"),
+        _line_landmark("back-hash", "back hash", (-goal, back), (goal, back), "visitor hash"),
         _area_landmark("end-zone-left", "left end zone", rect_ring(-half, 0.0, -goal, depth)),
         _area_landmark("end-zone-right", "right end zone", rect_ring(goal, 0.0, half, depth)),
     )
 
 
-def football_field(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> Sheet:
+def _football_field(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> Sheet:
     """Builds a 120 yd x 160 ft field: yard lines every 5 yd, hashes, sidelines, end lines.
 
     Landmarks: the center (50 on the front sideline), every yard line, and the front (home)
@@ -205,7 +237,7 @@ def football_field(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> S
         name: Display name.
         hash_ft_in: Distance of each hash row from its sideline, as (feet, inches).
 
-    >>> football_field("f", "Field", NFL_HASH).landmarks[0].name
+    >>> _football_field("f", "Field", NFL_HASH).landmarks[0].name
     'center'
     """
     length = convert(FIELD_LENGTH_YD, "yd", "m")
@@ -221,7 +253,7 @@ def football_field(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> S
     ring = rect_ring(-half, 0.0, half, depth)
     yard = convert(1.0, "yd", "m")
     return Sheet(
-        ref=template_ref(ref_id),
+        ref=_template_ref(ref_id),
         name=name,
         surface_type=SurfaceType.FOOTBALL_FIELD,
         size_m=(length, depth),
@@ -232,6 +264,15 @@ def football_field(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> S
         grid=Grid(spacing=(yard, yard), major_every=FIELD_GRID_MAJOR, unit_name="yd"),
         default_coordinates=CoordinateSystem(kind=CoordinateKind.MARCHING),
     )
+
+
+@leaving_call(since="0.4.0", remove="0.7.0", replacement="field")
+def football_field(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> Sheet:
+    """Builds a 120 yd x 160 ft field: yard lines every 5 yd, hashes, sidelines, end lines.
+
+    Deprecated: this name leaves the library in 0.7.0.
+    """
+    return _football_field(ref_id, name, hash_ft_in)
 
 
 def _spikes(play_half: float) -> tuple[GuideLine, ...]:
@@ -264,37 +305,46 @@ def _wing(zone_id: str, x0: float, x1: float, note: str) -> Zone:
     )
 
 
-def proscenium_stage() -> Sheet:
+def _proscenium_stage() -> Sheet:
     """Builds a 12 x 9 m stage: 1.5 m wings, a center line, spike marks, nine stage areas.
 
-    >>> proscenium_stage().default_coordinates.kind
+    >>> _proscenium_stage().default_coordinates.kind
     <CoordinateKind.STAGE: 'stage'>
     """
     half = STAGE_WIDTH_M / 2
     play_half = half - WING_WIDTH_M
     ring = rect_ring(-half, 0.0, half, STAGE_DEPTH_M)
     areas = tuple(
-        point_landmark(mark_id, name, (column * STAGE_THIRD_X_M, y), *aliases)
+        _point_landmark(mark_id, name, (column * STAGE_THIRD_X_M, y), *aliases)
         for mark_id, name, column, y, aliases in STAGE_AREAS
     )
-    edge = line_landmark(
+    edge = _line_landmark(
         "downstage-edge", "downstage edge", (-half, 0.0), (half, 0.0), "front edge", "apron"
     )
     return Sheet(
-        ref=template_ref("proscenium-stage"),
+        ref=_template_ref("proscenium-stage"),
         name="Proscenium stage 12 x 9 m",
         surface_type=SurfaceType.STAGE,
         size_m=(STAGE_WIDTH_M, STAGE_DEPTH_M),
         outline=ring,
         walkable=Region(exterior=ring),
         guides=_stage_guides(half, play_half),
-        landmarks=(point_landmark("front-center", "front center", (0.0, 0.0)), edge, *areas),
+        landmarks=(_point_landmark("front-center", "front center", (0.0, 0.0)), edge, *areas),
         zones=(
             _wing("wing-sr", -half, -play_half, "stage right wing"),
             _wing("wing-sl", play_half, half, "stage left wing"),
         ),
         default_coordinates=CoordinateSystem(kind=CoordinateKind.STAGE),
     )
+
+
+@leaving_call(since="0.4.0", remove="0.7.0", replacement="floor")
+def proscenium_stage() -> Sheet:
+    """Builds a 12 x 9 m stage: 1.5 m wings, a center line, spike marks, nine stage areas.
+
+    Deprecated: this name leaves the library in 0.7.0.
+    """
+    return _proscenium_stage()
 
 
 def _circle_ring(center: Point, radius: float) -> Ring:
@@ -319,15 +369,15 @@ def _court_marks(side: str, sign: float, half: float, mid: float) -> tuple[Landm
     free_throw = baseline - sign * _ft(FREE_THROW_FROM_BASELINE_FT)
     basket = baseline - sign * convert(BASKET_FROM_BASELINE_IN, "in", "m")
     return (
-        point_landmark(f"free-throw-{side}", f"{side} free throw line", (free_throw, mid)),
-        point_landmark(f"basket-{side}", f"{side} basket", (basket, mid), f"{side} hoop"),
+        _point_landmark(f"free-throw-{side}", f"{side} free throw line", (free_throw, mid)),
+        _point_landmark(f"basket-{side}", f"{side} basket", (basket, mid), f"{side} hoop"),
     )
 
 
-def gym_floor() -> Sheet:
+def _gym_floor() -> Sheet:
     """Builds a 94 x 50 ft basketball court: lines, center circle, lanes, baskets.
 
-    >>> round(gym_floor().size_m[0], 4)
+    >>> round(_gym_floor().size_m[0], 4)
     28.6512
     """
     length, depth = _ft(COURT_LENGTH_FT), _ft(COURT_WIDTH_FT)
@@ -336,7 +386,7 @@ def gym_floor() -> Sheet:
     circle = _closed(_circle_ring((0.0, mid), _ft(CENTER_CIRCLE_RADIUS_FT)))
     ends = (("left", -1.0), ("right", 1.0))
     return Sheet(
-        ref=template_ref("gym-basketball"),
+        ref=_template_ref("gym-basketball"),
         name="Gym floor (basketball court 94 x 50 ft)",
         surface_type=SurfaceType.GYM_FLOOR,
         size_m=(length, depth),
@@ -352,9 +402,18 @@ def gym_floor() -> Sheet:
             *(g for side, sign in ends for g in _court_end(side, sign, half, mid)),
         ),
         landmarks=(
-            point_landmark("center-court", "center court", (0.0, mid), "center", "center circle"),
-            point_landmark("front-center", "front center", (0.0, 0.0)),
+            _point_landmark("center-court", "center court", (0.0, mid), "center", "center circle"),
+            _point_landmark("front-center", "front center", (0.0, 0.0)),
             *(m for side, sign in ends for m in _court_marks(side, sign, half, mid)),
         ),
         default_coordinates=CoordinateSystem(kind=CoordinateKind.DANCE_FLOOR),
     )
+
+
+@leaving_call(since="0.4.0", remove="0.7.0", replacement="floor")
+def gym_floor() -> Sheet:
+    """Builds a 94 x 50 ft basketball court: lines, center circle, lanes, baskets.
+
+    Deprecated: this name leaves the library in 0.7.0.
+    """
+    return _gym_floor()

@@ -127,6 +127,8 @@ from tests.fixtures.motion_shows import with_rows, with_targets
 from tests.fixtures.shows import two_set_show
 from tests.helpers import fails_after
 
+pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+
 BASE_URL = "https://eight.example/p/"
 JOIN_TOKEN = "Zk3Qz9-high-entropy_join-token"
 OTHER_TOKEN = "Qp7Lm2-second_high-entropy-token"

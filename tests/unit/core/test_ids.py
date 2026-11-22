@@ -5,6 +5,8 @@ test_ids.py --- tests reference and transition ID parsing and formatting
 
 Contains:
     test_*(): one behavior of showpy.core.ids each
+    test_regression_parse_ref_accepts_build_metadata: reads `1.0.0+build.5` as a version
+    test_parse_ref_still_refuses_unsafe_versions: refuses `..`, `/`, `all` and bad edges in versions
     test_regression_parse_ref_rejects_path_separators: rejects `..` and `/` in reference IDs, which
         would escape a directory
     test_regression_format_tid_rejects_a_third_element: rejects a three-part transition ID instead
@@ -80,6 +82,8 @@ from showpy.core.ids import (
 )
 from showpy.sheet.templates import sheet_templates
 
+pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+
 ID_CANDIDATES = st.from_regex(ID_PATTERN, fullmatch=True) | st.text(
     alphabet=st.characters(max_codepoint=0x7F) | st.sampled_from("\u00e9\u0663\u212a"),
     max_size=ID_MAX_LENGTH + 2,
@@ -123,6 +127,30 @@ def test_format_tid_uses_arrow() -> None:
 @pytest.mark.parametrize("text", ["sheet:..", "sheet:../etc", "sheet:a/b"])
 def test_regression_parse_ref_rejects_path_separators(text: str) -> None:
     """Rejects `..` and `/` in reference IDs, which would escape a directory (audit 9.3)."""
+    with pytest.raises(SchemaError):
+        parse_ref(text)
+
+
+def test_regression_parse_ref_accepts_build_metadata() -> None:
+    """Reads `1.0.0+build.5` as a reference version instead of refusing the `+`."""
+    assert parse_ref("sheet:gym@1.0.0+build.5") == ("sheet", "gym", "1.0.0+build.5")
+    assert format_ref("sheet", "gym", "2-rc.1+x") == "sheet:gym@2-rc.1+x"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "sheet:a@1..2",
+        "sheet:a@1/2",
+        "sheet:a@all",
+        "sheet:a@con",
+        "sheet:a@+1",
+        "sheet:a@1+",
+        "sheet:a@1_2",
+        "sheet:a@" + "1" * 65,
+    ],
+)
+def test_parse_ref_still_refuses_unsafe_versions(text: str) -> None:
     with pytest.raises(SchemaError):
         parse_ref(text)
 

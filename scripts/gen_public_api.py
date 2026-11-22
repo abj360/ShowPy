@@ -42,7 +42,7 @@ import importlib
 from importlib.metadata import version
 from typing import TYPE_CHECKING
 
-from showpy.core.deprecation import moved
+from showpy.core.deprecation import moved, warn_leaving
 
 __version__: str = version("ShowPy")
 
@@ -54,7 +54,8 @@ def __getattr__(name: str) -> object:
     """Imports a public name on first use, so `import showpy.<module>` stays light.
 
     The resolved object is stored in the module namespace, so later lookups skip this function.
-    Deprecated aliases are never stored: each access must still warn.
+    Deprecated aliases and types that leave the library are never stored: each access must still
+    warn.
     """
     if name in _DEPRECATED:
         target, since, remove = _DEPRECATED[name]
@@ -63,6 +64,10 @@ def __getattr__(name: str) -> object:
         raise AttributeError(f"module 'showpy' has no attribute {name!r}")
     module_name, attribute = _EXPORTS[name]
     value: object = getattr(importlib.import_module(module_name), attribute)
+    if name in _LEAVING_TYPES:
+        replacement, since, remove = _LEAVING_TYPES[name]
+        warn_leaving(f"showpy.{name}", since=since, remove=remove, replacement=replacement)
+        return value
     globals()[name] = value
     return value
 
@@ -89,6 +94,19 @@ def _deprecated() -> tuple[tuple[str, str, str, str], ...]:
     from showpy._api_table import DEPRECATED
 
     return DEPRECATED
+
+
+def _leaving_types() -> tuple[tuple[str, str | tuple[str, ...] | None, str, str], ...]:
+    """Loads the (name, replacement, since, remove) of each leaving type lazily."""
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from showpy._api_table import LEAVING
+
+    return tuple(
+        (name, replacement, since, remove)
+        for name, kind, replacement, since, remove in LEAVING
+        if kind == "type"
+    )
 
 
 def _is_constant(name: str) -> bool:
@@ -144,6 +162,10 @@ def _render_tables() -> str:
         f'    "{name}": ("{target}", "{since}", "{remove}"),'
         for name, target, since, remove in _deprecated()
     ]
+    leaving = [
+        f'    "{name}": ({replacement!r}, "{since}", "{remove}"),'
+        for name, replacement, since, remove in _leaving_types()
+    ]
     return "\n".join(
         [
             "_EXPORTS: dict[str, tuple[str, str]] = {",
@@ -152,6 +174,10 @@ def _render_tables() -> str:
             "",
             "_DEPRECATED: dict[str, tuple[str, str, str]] = {",
             *deprecated,
+            "}",
+            "",
+            "_LEAVING_TYPES: dict[str, tuple[str | tuple[str, ...] | None, str, str]] = {",
+            *leaving,
             "}",
             "",
             "__all__ = [",

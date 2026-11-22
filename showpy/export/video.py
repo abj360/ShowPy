@@ -27,7 +27,7 @@ from showpy.core.extras import require_extra
 from showpy.core.types import Count, Point
 from showpy.core.units import facing_vector
 from showpy.core.validation import require_finite
-from showpy.sheet.render import BACKGROUND, SheetCanvas, draw_sheet
+from showpy.sheet.render import BACKGROUND, SheetCanvas, _draw_sheet
 from showpy.show.models import Show
 from showpy.time.clock import count_to_seconds
 from showpy.time.models import AudioTrack
@@ -122,7 +122,7 @@ def render_frame(show: Show, frame: Frame, canvas: SheetCanvas) -> "Image.Image"
 
     image = Image.new("RGB", canvas.size, BACKGROUND)
     draw = ImageDraw.Draw(image)
-    draw_sheet(draw, canvas, show.sheet)
+    _draw_sheet(draw, canvas, show.sheet)
     for state in frame.states:
         if state.on_field:
             _draw_state(draw, canvas, show, state)

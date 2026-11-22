@@ -318,7 +318,9 @@ def test_regression_public_functions_take_booleans_by_keyword() -> None:
     """Requires no public function or method to accept a bool positionally."""
     offenders: list[str] = []
     for public_name, _module, _attribute in PUBLIC_API:
-        obj = getattr(showpy, public_name)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecatedWarning)
+            obj = getattr(showpy, public_name)
         targets = [obj] if inspect.isfunction(obj) else []
         if inspect.isclass(obj):
             targets = [

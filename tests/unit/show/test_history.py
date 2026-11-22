@@ -54,6 +54,8 @@ from showpy.show.validate import validate_show
 from tests.fixtures.shows import two_set_show
 from tests.helpers import open_session
 
+pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 STEP = timedelta(minutes=1)
 

@@ -22,6 +22,7 @@ import math
 from typing import TYPE_CHECKING, Literal, Self
 from xml.sax.saxutils import escape, quoteattr
 
+from showpy.core.deprecation import leaving_call
 from showpy.core.errors import SchemaError
 from showpy.core.extras import require_extra
 from showpy.core.types import FrozenModel, Point, Ring
@@ -88,8 +89,8 @@ class SheetCanvas(FrozenModel):
     ) -> Self:
         """Builds a canvas that fits everything drawn on the sheet plus a margin.
 
-        >>> from showpy.sheet.templates import blank_sheet
-        >>> SheetCanvas.for_sheet(blank_sheet(10, 6), px_per_m=10, margin_m=1).size
+        >>> from showpy.sheet.templates import _blank_sheet
+        >>> SheetCanvas.for_sheet(_blank_sheet(10, 6), px_per_m=10, margin_m=1).size
         (120, 80)
         """
         if not (px_per_m > 0 and margin_m >= 0):
@@ -183,7 +184,7 @@ def _draw_guides(
             draw.text(_label_at(canvas, guide), guide.label, fill=color, font=font)
 
 
-def draw_sheet(draw: "ImageDraw.ImageDraw", canvas: SheetCanvas, sheet: Sheet) -> None:
+def _draw_sheet(draw: "ImageDraw.ImageDraw", canvas: SheetCanvas, sheet: Sheet) -> None:
     """Paints outline, walkable area, zones, guides and landmarks onto a PIL drawing.
 
     Guides paint over line and area landmarks, which usually trace them; point landmarks go
@@ -191,11 +192,11 @@ def draw_sheet(draw: "ImageDraw.ImageDraw", canvas: SheetCanvas, sheet: Sheet) -
     Needs the `render` extra.
 
     >>> from PIL import Image, ImageDraw
-    >>> from showpy.sheet.templates import blank_sheet
-    >>> sheet = blank_sheet(4, 4)
+    >>> from showpy.sheet.templates import _blank_sheet
+    >>> sheet = _blank_sheet(4, 4)
     >>> canvas = SheetCanvas.for_sheet(sheet)
     >>> image = Image.new("RGB", canvas.size)
-    >>> draw_sheet(ImageDraw.Draw(image), canvas, sheet)
+    >>> _draw_sheet(ImageDraw.Draw(image), canvas, sheet)
     >>> image.getpixel((40, 40))
     (246, 244, 238)
     """
@@ -207,6 +208,15 @@ def draw_sheet(draw: "ImageDraw.ImageDraw", canvas: SheetCanvas, sheet: Sheet) -
     _draw_marks(draw, canvas, sheet, ("line", "area"))
     _draw_guides(draw, canvas, sheet, font)
     _draw_marks(draw, canvas, sheet, ("point",))
+
+
+@leaving_call(since="0.4.0", remove="0.6.0")
+def draw_sheet(draw: "ImageDraw.ImageDraw", canvas: SheetCanvas, sheet: Sheet) -> None:
+    """Paints outline, walkable area, zones, guides and landmarks onto a PIL drawing.
+
+    Deprecated: this name leaves the library in 0.6.0.
+    """
+    return _draw_sheet(draw, canvas, sheet)
 
 
 def _raster(sheet: Sheet, px_per_m: float) -> "Image.Image":
@@ -221,7 +231,7 @@ def _raster(sheet: Sheet, px_per_m: float) -> "Image.Image":
             context={"px_per_m": px_per_m, "size": (width, height)},
         )
     image = Image.new("RGB", canvas.size, BACKGROUND)
-    draw_sheet(ImageDraw.Draw(image), canvas, sheet)
+    _draw_sheet(ImageDraw.Draw(image), canvas, sheet)
     return image
 
 
@@ -307,7 +317,7 @@ def _svg(sheet: Sheet, px_per_m: float) -> bytes:
     return (SVG_HEADER + "\n".join(body) + "\n").encode()
 
 
-def render_sheet(
+def _render_sheet(
     sheet: Sheet, fmt: SheetFormat = "svg", px_per_m: float = DEFAULT_PX_PER_M
 ) -> bytes:
     r"""Renders a printable blank sheet: hand-written SVG, or PNG and PDF through Pillow.
@@ -322,8 +332,8 @@ def render_sheet(
     Returns:
         document: The encoded file.
 
-    >>> from showpy.sheet.templates import blank_sheet
-    >>> render_sheet(blank_sheet(4, 4), fmt="png")[:4]
+    >>> from showpy.sheet.templates import _blank_sheet
+    >>> _render_sheet(_blank_sheet(4, 4), fmt="png")[:4]
     b'\x89PNG'
     """
     if fmt not in FORMATS:
@@ -336,3 +346,14 @@ def render_sheet(
     buffer = io.BytesIO()
     _raster(sheet, px_per_m).save(buffer, format=fmt.upper())
     return buffer.getvalue()
+
+
+@leaving_call(since="0.4.0", remove="0.6.0")
+def render_sheet(
+    sheet: Sheet, fmt: SheetFormat = "svg", px_per_m: float = DEFAULT_PX_PER_M
+) -> bytes:
+    """Renders a printable blank sheet: hand-written SVG, or PNG and PDF through Pillow.
+
+    Deprecated: this name leaves the library in 0.6.0.
+    """
+    return _render_sheet(sheet, fmt, px_per_m)

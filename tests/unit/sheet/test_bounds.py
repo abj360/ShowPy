@@ -35,6 +35,8 @@ from showpy.sheet.models import Landmark, Zone, ZoneKind
 from showpy.sheet.templates import add_landmark, get_sheet
 from tests.fixtures.shows import field_sheet, two_set_show
 
+pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+
 TOL = 1e-9
 HOLE = ((-1.0, 1.0), (1.0, 1.0), (1.0, 2.0), (-1.0, 2.0))
 

@@ -42,6 +42,8 @@ from showpy.show.pinning import pin
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.shows import two_set_show
 
+pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+
 
 def test_faces_entity_only_for_toward_entity_strings() -> None:
     assert faces_entity(FacingMode.TOWARD_ENTITY, "T2") == "T2"

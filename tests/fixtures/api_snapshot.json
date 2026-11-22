@@ -170,7 +170,7 @@
     "model": {
       "audience_side": "Literal['front', 'back', 'left', 'right']",
       "kind": "showpy.sheet.models.CoordinateKind",
-      "labels": "dict[str, str]",
+      "labels": "collections.abc.Mapping[str, str]",
       "origin": "Point | showpy.core.ids.LandmarkId",
       "precision": "float",
       "units": "str"
@@ -1501,6 +1501,245 @@
   "landmark_anchor": "(mark: showpy.sheet.models.Landmark) -> Point",
   "landmark_keys": "(mark: showpy.sheet.models.Landmark) -> tuple[str, ...]",
   "layout_text": "(text: str, fonts: collections.abc.Sequence[str], height: Meters, at: Point, *, rotation: Degrees = 0.0, align: TextAlign = 'left', anchor: TextAnchor = 'baseline', letter_spacing: float = 0.0, line_spacing: float = 1.2, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> tuple[showpy.geo.models.LaidGlyph, ...]",
+  "leaving": {
+    "CoordinateKind": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": "Location",
+      "since": "0.4.0"
+    },
+    "CoordinateSystem": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": "Location",
+      "since": "0.4.0"
+    },
+    "GuideLine": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": "Marking",
+      "since": "0.4.0"
+    },
+    "InMemorySheetStore": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
+      "since": "0.4.0"
+    },
+    "Landmark": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "SheetCanvas": {
+      "kind": "type",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "SheetStore": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
+      "since": "0.4.0"
+    },
+    "Show.coordinates": {
+      "kind": "field",
+      "remove": "0.7.0",
+      "replacement": "Location",
+      "since": "0.4.0"
+    },
+    "Show.zones": {
+      "kind": "field",
+      "remove": "0.7.0",
+      "replacement": "Marking",
+      "since": "0.4.0"
+    },
+    "Zone": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "ZoneKind": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "add_guide": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
+      "since": "0.4.0"
+    },
+    "add_landmark": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "add_zone": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "blank_sheet": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
+      "since": "0.4.0"
+    },
+    "coordinate_presets": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["locate", "at_location", "Location"],
+      "since": "0.4.0"
+    },
+    "customize": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
+      "since": "0.4.0"
+    },
+    "draw_sheet": {
+      "kind": "function",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "football_field": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "field",
+      "since": "0.4.0"
+    },
+    "from_coords": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "at_location",
+      "since": "0.4.0"
+    },
+    "get_sheet": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "sheet",
+      "since": "0.4.0"
+    },
+    "gym_floor": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "floor",
+      "since": "0.4.0"
+    },
+    "landmark": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "landmark_anchor": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "landmark_keys": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "line_landmark": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "nearest_landmarks": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "markings_near",
+      "since": "0.4.0"
+    },
+    "on_surface": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "on_sheet",
+      "since": "0.4.0"
+    },
+    "point_landmark": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "proscenium_stage": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "floor",
+      "since": "0.4.0"
+    },
+    "remove_guide": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
+      "since": "0.4.0"
+    },
+    "remove_landmark": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "remove_zone": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "render_sheet": {
+      "kind": "function",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "save_sheet": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
+      "since": "0.4.0"
+    },
+    "set_coordinates": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["locate", "at_location", "Location"],
+      "since": "0.4.0"
+    },
+    "sheet_templates": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "sheets",
+      "since": "0.4.0"
+    },
+    "template_ref": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
+      "since": "0.4.0"
+    },
+    "to_coords": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "locate",
+      "since": "0.4.0"
+    },
+    "zones_at": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    }
+  },
   "length": "(obj: Points | showpy.geo.curve_base.Curve) -> Meters",
   "line": "(a: Point, b: Point) -> showpy.geo.curves.Segment",
   "line_form": "(form_id: str, members: collections.abc.Sequence[str], a: Point, b: Point, spacing: showpy.choreo.form_models.SpacingSpec | None = None, facing: showpy.choreo.form_models.FacingSpec | None = None, *, set_id: str = '', n: int | None = None) -> showpy.choreo.form_models.Form",

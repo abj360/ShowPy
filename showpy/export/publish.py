@@ -49,7 +49,7 @@ from showpy.export.models import (
     PublicationStatus,
 )
 from showpy.export.print_sheets import OFF_FIELD
-from showpy.sheet.coords import to_coords
+from showpy.sheet.coords import _to_coords
 from showpy.show.models import Show
 
 if TYPE_CHECKING:
@@ -634,7 +634,7 @@ def performer_view(pub: Publication, show: Show, performer: Performer) -> Perfor
     rows = []
     for current in show.sets:
         placement = current.get(claim.spot)
-        text = to_coords(show, placement.point) if placement.on_field else OFF_FIELD
+        text = _to_coords(show, placement.point) if placement.on_field else OFF_FIELD
         rows.append((current.id, text, current.counts))
     link = urlsplit(pub.link)
     root = urlunsplit(link._replace(query="", fragment="")).rstrip("/")
