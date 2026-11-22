@@ -24,7 +24,7 @@ from showpy.choreo.form_text import require_text_members
 from showpy.choreo.forms import check_unlocked, slot_poses
 from showpy.choreo.match_models import MatchResult
 from showpy.choreo.match_solve import BoolArray, FloatArray, crossing_mask
-from showpy.choreo.models import Placement, Set
+from showpy.choreo.models import Placement, PlacementPatch, Set
 from showpy.core.errors import LockedError, MatchError, UnknownRefError
 from showpy.core.ids import FormId, SetId, SpotId, TransitionId
 from showpy.core.ids import format_tid as _format_tid
@@ -36,7 +36,6 @@ from showpy.show.models import Show
 SAME_POSITION_TOL = 1e-9
 GAIN_TOL = 1e-9
 FACING_TOL = 1e-9
-SWAPPED_FIELDS = ("x", "y", "facing", "form", "order", "on_field")
 
 
 def with_set(show: Show, new: Set) -> Show:
@@ -219,11 +218,11 @@ def _slot_updates(dest: Set, targets: dict[SpotId, Placement]) -> dict[SpotId, P
     return updates
 
 
-def _point_updates(dest: Set, result: MatchResult) -> dict[SpotId, dict[str, object]]:
-    updates: dict[SpotId, dict[str, object]] = {}
+def _point_updates(dest: Set, result: MatchResult) -> dict[SpotId, PlacementPatch]:
+    updates: dict[SpotId, PlacementPatch] = {}
     for entity, (x, y) in zip(result.entities, result.targets, strict=True):
         if is_elsewhere(dest.get(entity), x, y):
-            updates[entity] = {"x": x, "y": y, "on_field": True}
+            updates[entity] = PlacementPatch(x=x, y=y, on_field=True)
     return updates
 
 
@@ -276,8 +275,15 @@ def _swap_forms(show: Show, set_id: SetId, a: SpotId, b: SpotId, *, force: bool)
     return show.replace(forms=forms)
 
 
-def _spot_fields(placement: Placement) -> dict[str, object]:
-    return {name: getattr(placement, name) for name in SWAPPED_FIELDS}
+def _spot_fields(placement: Placement) -> PlacementPatch:
+    return PlacementPatch(
+        x=placement.x,
+        y=placement.y,
+        facing=placement.facing,
+        form=placement.form,
+        order=placement.order,
+        on_field=placement.on_field,
+    )
 
 
 def swap(show: Show, set_id: str, a: str, b: str, *, force: bool = False) -> Show:

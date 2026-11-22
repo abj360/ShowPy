@@ -24,6 +24,7 @@ import pytest
 from showpy.choreo.forms import line_form
 from showpy.choreo.match import bottleneck_value, cost_matrix, match, match_by_order
 from showpy.choreo.match_models import MatchOptions
+from showpy.choreo.models import PlacementPatch
 from showpy.core.caps import MAX_COORD_M
 from showpy.core.errors import MatchError, SchemaError, ShowPyError, UnknownRefError
 from showpy.core.ids import SpotId
@@ -91,7 +92,7 @@ def test_result_does_not_depend_on_input_order() -> None:
 
 def test_from_set_uses_on_field_spots_and_facings() -> None:
     src = make_facing_set(("A", 0.0, 0.0, 0.0), ("B", 5.0, 0.0, 0.0))
-    off = src.with_placements({"B": {"on_field": False}})
+    off = src.with_placements({"B": PlacementPatch(on_field=False)})
     result = match(off, [(0.0, 1.0), (5.0, 1.0)])
     assert result.entities == ("A",)
 

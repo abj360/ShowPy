@@ -529,7 +529,7 @@
       "id": "showpy.core.ids.FormId",
       "locked": "bool",
       "members": "tuple[showpy.core.ids.SpotId | None, ...]",
-      "meta": "dict[str, str]",
+      "meta": "collections.abc.Mapping[str, str]",
       "recipe": "Recipe",
       "set": "showpy.core.ids.SetId",
       "spacing": "showpy.choreo.form_models.SpacingSpec"
@@ -947,7 +947,7 @@
   "Placement": {
     "model": {
       "entity": "showpy.core.ids.SpotId",
-      "facing": "Degrees",
+      "facing": "Heading",
       "form": "showpy.core.ids.FormId | None",
       "note": "str | None",
       "on_field": "bool",
@@ -962,6 +962,18 @@
       "op": "Literal['placement']",
       "placement": "showpy.choreo.models.Placement",
       "set_id": "showpy.core.ids.SetId"
+    }
+  },
+  "PlacementPatch": {
+    "model": {
+      "facing": "Heading",
+      "form": "showpy.core.ids.FormId | None",
+      "note": "str | None",
+      "on_field": "bool",
+      "order": "int | None",
+      "pinned": "bool",
+      "x": "Meters",
+      "y": "Meters"
     }
   },
   "PointFacing": {
@@ -1274,7 +1286,7 @@
     "model": {
       "align": "Literal['start', 'end', 'center']",
       "end": "Meters | None",
-      "gaps": "tuple[tuple[int, Meters], ...]",
+      "gaps": "tuple[tuple[int, NonNegMeters], ...]",
       "interval": "Meters | None",
       "mode": "Literal['count', 'interval', 'proportional']",
       "start": "Meters"

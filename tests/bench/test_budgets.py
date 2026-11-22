@@ -23,6 +23,7 @@ from pytest_benchmark.fixture import BenchmarkFixture
 from showpy.choreo.avoid import min_gaps
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.match import match
+from showpy.choreo.models import PlacementPatch
 from showpy.core.ids import TransitionId
 from showpy.core.util import seeded_rng
 from showpy.examples import two_set_show
@@ -99,7 +100,7 @@ def _heavy(benchmark: BenchmarkFixture, tier: BenchTier, fn: Callable[[], Any]) 
 
 def _one_spot_edit(show: Show, x: float) -> Show:
     entity = show.cast.ids()[0]
-    edited = show.sets[1].with_placements({entity: {"x": x}}, force=True)
+    edited = show.sets[1].with_placements({entity: PlacementPatch(x=x)}, force=True)
     return show.model_copy(update={"sets": (show.sets[0], edited, *show.sets[2:])})
 
 

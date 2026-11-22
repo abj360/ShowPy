@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
+from showpy.choreo.models import PlacementPatch
 from showpy.core.errors import GeometryError, SchemaError, ShowPyError, UnknownRefError
 from showpy.core.types import Region
 from showpy.notes.models import Anchor, Note
@@ -130,7 +131,7 @@ def test_notes_near_area_anchor_and_off_field_spots() -> None:
     square = Region(exterior=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)))
     show = add_note(two_set_show(), "zone", Anchor.on_area(square), "a1", AT, "pat")
     assert [n.id for n in notes_near(show, (2.0, 0.5), 1.0)] == ["a1"]
-    off = show.set("1").with_placements({"T1": {"on_field": False}})
+    off = show.set("1").with_placements({"T1": PlacementPatch(on_field=False)})
     show = show.model_copy(update={"sets": (off, show.set("2"))})
     show = add_note(show, "t1", Anchor.on_spots(["T1"]), "s1", AT, "pat")
     assert notes_near(show, (0.0, 5.0), 0.1) == []

@@ -22,9 +22,10 @@ Contains:
     RoseFormParams: holds the parameters of the bundled `rose` generator
 """
 
+from collections.abc import Mapping
 from typing import Annotated, ClassVar, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 
 from showpy.choreo.recipe_models import (
     ArcRecipe,
@@ -41,10 +42,13 @@ from showpy.choreo.recipe_models import (
     SvgRecipe,
     WedgeRecipe,
 )
+from showpy.core.caps import MAX_COORD_M
 from showpy.core.deprecation import renamed_field
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, SpacingError
 from showpy.core.ids import FormId, SetId, SpotId, SpotIdField
+from showpy.core.numbers import normalize_angle
+from showpy.core.readonly import ReadOnly
 from showpy.core.types import (
     Degrees,
     Finite,
@@ -62,6 +66,7 @@ from showpy.geo.text_layout import MAX_LAYOUT_CHARS
 FONT_URI_PATTERN = r"^asset:sha256:[0-9a-f]{64}$"
 # Layout resolves every chain font and measures its cap height, so a stored chain is bounded.
 MAX_TEXT_FONTS = 16
+type NonNegMeters = Annotated[float, Field(ge=0, le=MAX_COORD_M, allow_inf_nan=False)]
 type FontUri = Annotated[str, Field(pattern=FONT_URI_PATTERN)]
 DEFAULT_GENERATOR_CENTER: Point = (0.0, 10.0)
 DEFAULT_SINE_START: Point = (-8.0, 10.0)
@@ -76,7 +81,7 @@ class SpacingSpec(FrozenModel):
         start: Arc length where spacing starts.
         end: Arc length where spacing ends; None means the end of the shape.
         align: `start`, `end` or `center` for interval mode.
-        gaps: Extra meters after member indexes.
+        gaps: Extra meters, at least 0, after member indexes.
     """
 
     mode: Literal["count", "interval", "proportional"] = "count"
@@ -84,7 +89,7 @@ class SpacingSpec(FrozenModel):
     start: Meters = 0.0
     end: Meters | None = None
     align: Literal["start", "end", "center"] = "start"
-    gaps: tuple[tuple[int, Meters], ...] = ()
+    gaps: tuple[tuple[int, NonNegMeters], ...] = ()
 
     @model_validator(mode="after")
     def _interval_needed(self) -> "SpacingSpec":
@@ -98,12 +103,21 @@ class FacingSpec(FrozenModel):
 
     Attributes:
         mode: `fixed`, `audience`, `toward_point`, `along`, `normal` or `outward`.
-        value: Degrees for fixed, a point for toward_point; for along, normal and outward an
-            optional offset in degrees added to the computed facing.
+        value: Heading for fixed, wrapped into [0, 360); a point for toward_point; for along,
+            normal and outward an optional offset in degrees added to the computed facing.
     """
 
     mode: Literal["fixed", "audience", "toward_point", "along", "normal", "outward"] = "audience"
     value: Degrees | Point | None = None
+
+    @field_validator("value")
+    @classmethod
+    def _wrap_fixed_heading(
+        cls, value: float | Point | None, info: ValidationInfo
+    ) -> float | Point | None:
+        if info.data.get("mode") == "fixed" and isinstance(value, float):
+            return normalize_angle(value)
+        return value
 
     @model_validator(mode="after")
     def _value_matches_mode(self) -> "FacingSpec":
@@ -233,7 +247,7 @@ class Form(FrozenModel):
         spacing: How members are spaced on the shape.
         facing: How members face.
         locked: Designer lock; edits need force=True.
-        meta: Free designer metadata.
+        meta: Free designer metadata, read-only once stored.
     """
 
     id: FormId
@@ -243,7 +257,7 @@ class Form(FrozenModel):
     spacing: SpacingSpec = SpacingSpec()
     facing: FacingSpec = FacingSpec()
     locked: bool = False
-    meta: dict[str, str] = {}
+    meta: Annotated[Mapping[str, str], ReadOnly()] = Field(default={}, validate_default=True)
 
     geometry: ClassVar[property] = renamed_field(
         "recipe", since="0.4.0", remove="0.6.0", read=_recipe_json

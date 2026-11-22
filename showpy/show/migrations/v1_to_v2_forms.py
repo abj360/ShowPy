@@ -13,7 +13,8 @@ so a form with open slots had gaps in those orders and a rebuild moved spots. v2
 on it, with distinct orders that are not 0, 1, 2 and so on, the members are laid out at those
 orders and the repair is recorded.
 A geometry that no v2 recipe can hold (an unknown kind, an unknown key, a value out of range,
-a curve its own model refuses such as an arc of zero sweep) is refused with SchemaError naming
+a curve its own model refuses such as an arc of zero sweep, a negative extra gap in the
+spacing) is refused with SchemaError naming
 the document, the field and the value; nothing is guessed.
 
 Contains:
@@ -41,6 +42,7 @@ SVG_V1_CURVE: Final = "curve"
 SVG_V2_CURVES: Final = "curves"
 FORMS_NAME: Final = "forms.json"
 SET_DOC_NAME: Final = "set.json"
+GAP_PAIR_LENGTH: Final = 2
 
 
 def _set_document(forms_path: str) -> str:
@@ -162,6 +164,17 @@ def _with_open_slots(
     return {**form, "members": laid}
 
 
+def _require_gaps_not_negative(document: str, index: int, spacing: JsonValue) -> None:
+    """Refuses a stored spacing with a negative extra gap, which v2 cannot hold."""
+    gaps = spacing.get("gaps") if isinstance(spacing, dict) else None
+    for slot, gap in enumerate(gaps if isinstance(gaps, list) else []):
+        amount = gap[1] if isinstance(gap, list) and len(gap) == GAP_PAIR_LENGTH else None
+        if isinstance(amount, int | float) and amount < 0:
+            raise _refusal(
+                document, f"[{index}].spacing.gaps[{slot}]", gap, "has a negative extra gap"
+            )
+
+
 def _migrated_form(
     document: str,
     index: int,
@@ -174,6 +187,7 @@ def _migrated_form(
     kind, geometry = _v1_parts(document, index, form)
     rest = {key: value for key, value in form.items() if key not in ("kind", "geometry")}
     recipe = _checked_recipe(document, index, kind, geometry)
+    _require_gaps_not_negative(document, index, rest.get("spacing"))
     _require_members_fit(document, index, rest.get("members"), recipe.get("n"))
     stored = _with_open_slots(document, rest, orders, report)
     _require_members_fit(document, index, stored.get("members"), recipe.get("n"))
@@ -214,8 +228,8 @@ def migrate_forms(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[s
         docs: The documents in the v2 shape.
 
     Raises:
-        SchemaError: A form's kind or geometry cannot be stored in v2, or its members outnumber
-            its slots; the context names the document (`path`), the field and the value.
+        SchemaError: A form's kind, geometry or spacing cannot be stored in v2, or its members
+            outnumber its slots; the context names the document (`path`), the field and the value.
 
     >>> from showpy.show.migrate import ReportBuilder
     >>> docs = {"/sets/1/forms.json": [{"id": "f", "kind": "custom",

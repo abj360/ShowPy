@@ -153,6 +153,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("Pin", "showpy.show.models", "Pin"),
     ("Placement", "showpy.choreo.models", "Placement"),
     ("PlacementOp", "showpy.show.models", "PlacementOp"),
+    ("PlacementPatch", "showpy.choreo.models", "PlacementPatch"),
     ("PointFacing", "showpy.choreo.path_models", "PointFacing"),
     ("Polyline", "showpy.geo.curves", "Polyline"),
     ("PolylineRecipe", "showpy.choreo.recipe_models", "PolylineRecipe"),
