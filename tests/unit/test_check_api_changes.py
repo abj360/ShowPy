@@ -15,6 +15,8 @@ Contains:
     test_commits_up_to_the_rule_start_are_not_checked: the range starts at the rule start
     test_merge_commits_are_not_checked: only the commits that made a change are checked
     test_removed_and_deprecated_alias_names_must_be_named: every kind of entry change counts
+    test_regression_deleting_the_snapshot_needs_every_name: a deleted or regenerated snapshot
+        cannot hide drift, since each commit is diffed against its parent's snapshot
     test_run_reports_the_commit_and_the_missing_names: the failure names the commit and names
     test_run_passes_and_counts_the_checked_commits: a clean range exits 0 with a count
     test_regression_unknown_rule_start_fails_closed: a missing rule-start commit is an error
@@ -192,6 +194,21 @@ def test_removed_and_deprecated_alias_names_must_be_named(repo: GitRepo) -> None
     violations = find_violations(repo.path, rule_start=_root(repo))
 
     assert [v.missing for v in violations] == [("alpha",)]
+
+
+def test_regression_deleting_the_snapshot_needs_every_name(repo: GitRepo) -> None:
+    rule_start = _root(repo)
+    repo.git("rm", "-q", "--", SNAPSHOT_PATH)
+    repo.git("commit", "-q", "-m", "chore: drop the snapshot")
+    deleted = repo.git("rev-parse", "HEAD")
+    regenerated = repo.commit("chore: regenerate the snapshot", api=GROWN_API)
+
+    violations = find_violations(repo.path, rule_start=rule_start)
+
+    assert [(v.sha, v.missing) for v in violations] == [
+        (deleted, ("alpha",)),
+        (regenerated, ("alpha", "beta")),
+    ]
 
 
 def test_run_reports_the_commit_and_the_missing_names(

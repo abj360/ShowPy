@@ -4,9 +4,8 @@
 ci_changes.py --- decides whether a CI run needs the code jobs, failing closed to "yes"
 
 Only a pull request whose every changed path sits under docs/ skips the code jobs. README.md
-and CHANGELOG.md are not docs here: the wheel smoke test runs the README example and the API
-snapshot test reads the changelog. Every other event runs the code jobs. Runs on the runner's
-system Python, so it uses the standard library only.
+is not docs here: the wheel smoke test runs the README example. Every other event runs the code
+jobs. Runs on the runner's system Python, so it uses the standard library only.
 
 Contains:
     DOCS_PREFIX: the one folder whose changes alone skip the code jobs
