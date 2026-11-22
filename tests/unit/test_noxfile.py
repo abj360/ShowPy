@@ -32,6 +32,9 @@ Contains:
     test_matrix_job_gates_its_steps_not_itself: the matrix legs always start and expand
     test_lint_types_runs_on_every_change: lint-types waits for nothing and is never skipped
     test_changes_job_runs_the_classifier_on_full_history: the job diffs with the script
+    session_strings(): lists the string literals a nox session's body holds
+    test_slow_session_runs_on_xdist_workers: the slow session passes -n SLOW_WORKERS to pytest
+    test_session_strings_sees_only_the_session: proves the literal scan can fail
 """
 
 import ast
@@ -50,6 +53,9 @@ PYTHON_CLASSIFIER = re.compile(r"^Programming Language :: Python :: (3\.\d+)$")
 FUZZ_SESSION = "fuzz"
 SUCCESS_CODES = "success_codes"
 CORE_SESSION = "core"
+SLOW_SESSION = "slow"
+WORKERS_FLAG = "-n"
+WORKERS_CONSTANT = "SLOW_WORKERS"
 WHEEL_SESSION = "wheel"
 EXTRAS_CONSTANT = "ALL_EXTRAS"
 CHECK_SCRIPT_CONSTANT = "CORE_CHECK_SCRIPT"
@@ -349,3 +355,38 @@ def test_changes_job_runs_the_classifier_on_full_history() -> None:
     assert "code: ${{ steps.classify.outputs.code }}" in job
     assert "run: python3 scripts/ci_changes.py" in job
     assert job_condition(job) is None
+
+
+def session_strings(source: str, session_name: str) -> list[str]:
+    """Lists the string literals a nox session's body holds.
+
+    Args:
+        source: The text of a noxfile.
+        session_name: The function name of the session to inspect.
+
+    Returns:
+        strings: Every str constant inside the session, docstring included.
+    """
+    session = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef) and node.name == session_name
+    )
+    return [
+        node.value
+        for node in ast.walk(session)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    ]
+
+
+def test_slow_session_runs_on_xdist_workers() -> None:
+    source = NOXFILE.read_text()
+    assert WORKERS_FLAG in session_strings(source, SLOW_SESSION)
+    assert WORKERS_CONSTANT in session_names(source, SLOW_SESSION)
+    workers = module_constant(source, WORKERS_CONSTANT)
+    assert workers == "auto" or int(workers) > 1
+
+
+def test_session_strings_sees_only_the_session() -> None:
+    source = "X = '-n'\n\ndef slow(session):\n    run('pytest', '-m', 'slow')\n"
+    assert session_strings(source, "slow") == ["pytest", "-m", "slow"]
