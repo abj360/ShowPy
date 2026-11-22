@@ -327,3 +327,68 @@ suite plus the one slow ID, UP-9.1-72, which `nox -s slow` reports as `Ledger: 1
 
 A retired ID stays a strict xfail until its code is deleted at v0.6.0. It is then deleted with
 that code, in the same change, never earlier.
+
+## Addendum 2026-11-22: no removal before the replacement exists
+
+The maintainer accepted a rule on 2026-11-22: no public name is removed before its replacement
+exists in the library. The timeline above removes several names at v0.6.0 whose replacements it
+marks "added by v0.6.0". Those replacements now arrive in v0.7.0, so each such name keeps its
+`DeprecatedWarning` from v0.4.0 and is removed in v0.7.0, in the release that adds the
+replacement. A name with no replacement ("Nothing: leaves the library") is unaffected, and so are
+the interchange names at their old path. Earlier sections stay as written; where they say
+"added by v0.6.0", read v0.7.0.
+
+Why: a consumer that follows the warning needs something to move to. Removing a name one release
+before its replacement exists leaves a release with neither. At the time of this addendum none of
+`frames`, `locate`, `at_location`, `Location`, `markings_near`, `floor`, `sheets`, `sheet`,
+`field`, `Marking`, `on_sheet`, `coordinate_table` or `describe_transition` is in the library.
+
+Each row was checked against the replacement it names. The rows not listed here are unchanged.
+
+| Names                                       | Count    | Warns from | Gone in (was)     | Why                                                                                         |
+| ------------------------------------------- | -------- | ---------- | ----------------- | ------------------------------------------------------------------------------------------- |
+| Interchange at its old path                 | 4        | `v0.4.0`   | `v0.6.0` (same)   | The replacement is the same name, defined in `showpy/show/`, which exists at v0.4.0         |
+| Publishing                                  | 19       | `v0.4.0`   | `v0.6.0` (same)   | No replacement                                                                              |
+| Print and PDF                               | 10       | `v0.4.0`   | `v0.7.0` (v0.6.0) | Replacement `coordinate_table` and `describe_transition` is not yet in the library          |
+| Tables and the format registry              | 9        | `v0.4.0`   | `v0.7.0` (v0.6.0) | Replacement is arrays from `frames`                                                         |
+| Video                                       | 3        | `v0.4.0`   | `v0.6.0` (same)   | No replacement                                                                              |
+| pandas results                              | 5        | `v0.4.0`   | `v0.6.0` (same)   | The names stay and return arrays; no new name is needed                                     |
+| Coordinate wording                          | 6        | `v0.4.0`   | `v0.7.0` (v0.6.0) | Replacement is `locate`, `at_location`, `Location`                                          |
+| Landmarks and zones                         | 14       | `v0.4.0`   | `v0.7.0` (v0.6.0) | Replacement is sheet markings and `markings_near`                                           |
+| `proscenium_stage`                          | 1        | `v0.4.0`   | `v0.7.0` (v0.6.0) | Replacement is `floor`                                                                      |
+| `SheetCanvas`, `draw_sheet`, `render_sheet` | 3        | `v0.4.0`   | `v0.6.0` (same)   | No replacement: rendering leaves the library                                                |
+| Other sheet names that change shape         | up to 16 | `v0.4.0`   | `v0.7.0` (v0.6.0) | Replacement is `sheets`, `sheet`, `field`, `floor`, `Marking`, `on_sheet`                   |
+| `Show.coordinates`, `Show.zones`            | 2        | `v0.4.0`   | `v0.7.0` (v0.6.0) | `to_coords`, `set_coordinates`, `zones_at` and `add_zone` read and write them until they go |
+| `Spot.claimable`                            | 1        | `v0.4.0`   | `v0.6.0` (same)   | Belongs to publishing, which has no replacement                                             |
+| Notes                                       | 7        | `v0.4.0`   | `1.0.0` (same)    | The `notes.json` document exists from v0.4.0                                                |
+
+Rows that follow from the table:
+
+- `Show.coordinates` and `Show.zones` are stored fields. ADR 0023 drops them at its v3 step at
+  v0.6.0. That step cannot drop them before v0.7.0 without breaking the names above that use
+  them. ADR 0023 needs its own addendum to say which format step drops them; this addendum does
+  not decide it. `Spot.claimable` stays in the v3 step.
+- The extras of ADR 0010 follow the last function that needs them: `qr`, `video` and `render`
+  still go at v0.6.0. `tables` stays until v0.7.0, because `cue_sheet`, `to_pdf`, `to_csv` and
+  `to_text` still accept a pandas table. `all` stays until v0.7.0 with it.
+- The retired ledger IDs of the appendix are deleted with their code: IDs that test publishing,
+  video, rendering and the stored `Spot.claimable` go at v0.6.0; IDs that test print, tables,
+  coordinates, landmarks, zones and sheet templates go at v0.7.0. Until then each stays a strict
+  xfail. The ledger line "(c)" of the appendix is reached only after v0.7.0; the split of the 63
+  IDs by release is recomputed from this table when v0.6.0 is cut.
+- ADR 0018 is still superseded at v0.6.0, because the publishing code it governs still leaves
+  then.
+
+Effect on the "Numbers":
+
+| Measure                                    | Before            | After                         |
+| ------------------------------------------ | ----------------- | ----------------------------- |
+| Names gone at v0.6.0                       | 77, plus up to 16 | 35                            |
+| Names gone at v0.7.0                       | 0                 | 42, plus up to 16 sheet names |
+| Optional extras removed at v0.6.0 / v0.7.0 | 5 / 0             | 3 / 2 (`tables`, `all`)       |
+
+The 35 at v0.6.0 are 4 interchange aliases, 19 publishing, 3 video, 5 pandas, 3 render and 1
+stored field. The 42 at v0.7.0 are 10 print, 9 tables, 6 coordinate wording, 14 landmarks and
+zones, 1 `proscenium_stage` and 2 stored fields. The total stays 77, plus up to 16 sheet names.
+Every name still warns from v0.4.0; the warning period for the v0.7.0 names is three releases
+instead of two.
