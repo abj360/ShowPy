@@ -913,6 +913,11 @@
       "minimum": -1000000.0,
       "type": "number"
     },
+    "NonNegCount": {
+      "maximum": 1000000,
+      "minimum": 0,
+      "type": "number"
+    },
     "Note": {
       "additionalProperties": false,
       "description": "Holds one design note.\n\nAttributes:\n    id: Note ID.\n    text: Note body.\n    kind: goal, idea, todo or warning.\n    anchor: What the note is attached to.\n    author: User name, or \"agent\".\n    created_at: When the note was written; passed in, never read from the clock.\n    visible: Whether the canvas shows it.",
@@ -2052,8 +2057,7 @@
       "description": "Holds every path instruction for one transition.\n\nRows are sparse: a spot without a row moves straight over the full counts.\n\nAttributes:\n    id: (from set, to set).\n    counts: Length of the transition; equals the destination set's counts.\n    rows: Spot ID to path row.\n    routes: Route ID to route.\n    notes: Free text.\n    source_hash: Hash of the script that wrote the paths.",
       "properties": {
         "counts": {
-          "title": "Counts",
-          "type": "number"
+          "$ref": "#/$defs/NonNegCount"
         },
         "id": {
           "$ref": "#/$defs/TransitionId"

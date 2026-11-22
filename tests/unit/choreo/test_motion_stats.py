@@ -8,6 +8,7 @@ Contains:
         custom-registered motion
     test_regression_energy_curve_rejects_negative_resolution: raises a ShowPyError, not numpy
         ValueError, for a negative per_count
+    test_regression_energy_curve_rejects_zero_resolution: raises PathError for a per_count of 0
 """
 
 import math
@@ -29,7 +30,7 @@ from showpy.choreo.motion_stats import (
     speeds,
 )
 from showpy.choreo.path_models import PathRow, PathStyle
-from showpy.core.errors import ShowPyError, TimeRangeError
+from showpy.core.errors import PathError, ShowPyError, TimeRangeError
 from showpy.core.ids import SpotId
 from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
@@ -176,8 +177,13 @@ def test_regression_motion_helpers_accept_a_custom_motion_registry(call: Motions
     assert repr(call(with_rows({"T1": row}), registry)) == repr(plain)
 
 
-@defect("UP-9.2-36")
 def test_regression_energy_curve_rejects_negative_resolution() -> None:
     """Raises a ShowPyError, not numpy ValueError, for a negative per_count (audit 9.2)."""
     with pytest.raises(ShowPyError):
         energy_curve(two_set_show(), per_count=BAD_PER_COUNT)
+
+
+def test_regression_energy_curve_rejects_zero_resolution() -> None:
+    """Raises PathError for a per_count of 0 instead of returning a one-sample curve."""
+    with pytest.raises(PathError):
+        energy_curve(two_set_show(), per_count=0)

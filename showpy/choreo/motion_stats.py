@@ -22,7 +22,7 @@ import numpy as np
 
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import MotionStats
-from showpy.core.errors import TimeRangeError
+from showpy.core.errors import PathError, TimeRangeError
 from showpy.core.extras import require_extra
 from showpy.core.types import Count, Degrees, Points
 from showpy.core.units import vector_facing
@@ -136,6 +136,12 @@ def energy_curve(show: Show, per_count: int = 1) -> "pd.Series":
     require_extra("pandas", extra="tables", needed_by="energy_curve")
     import pandas as pd
 
+    if per_count < 1:
+        raise PathError(
+            f"per_count must be at least 1, got {per_count}",
+            hint="pass how many samples to take per count",
+            context={"per_count": per_count},
+        )
     engine = PathEngine(show)
     total = sum(s.counts for s in show.sets[1:])
     times = np.linspace(0.0, total, round(total * per_count) + 1)

@@ -55,6 +55,12 @@ def closest_approach(
     >>> closest_approach([0, 2], [(0, 0), (2, 0)], [0, 2], [(2, 0), (0, 0)])
     (1.0, 0.0)
     """
+    if len(times_a) == 0 or len(times_b) == 0:
+        raise PathError(
+            "closest approach needs at least one station on each track",
+            hint="pass the times and points of both tracks",
+            context={"stations_a": len(times_a), "stations_b": len(times_b)},
+        )
     t = np.unique(np.concatenate([times_a, times_b]))
     pa, pb = _track(times_a, points_a, t), _track(times_b, points_b, t)
     d0, w = (pa - pb)[:-1], np.diff(pa - pb, axis=0)
@@ -115,6 +121,14 @@ def min_gaps(
     >>> round(min_gaps(two_set_show(), ("1", "2"), top=1)[0].gap, 6)
     1.4
     """
+    if top < 0:
+        raise PathError(
+            f"top must be 0 or more, got {top}",
+            hint="pass how many of the tightest pairs to list",
+            context={"top": top},
+        )
+    if top == 0:
+        return []
     engine = PathEngine(show)
     ids = _on_field_ids(engine, tid, sel)
     boxes = {e: _box(engine, e, tid) for e in ids}

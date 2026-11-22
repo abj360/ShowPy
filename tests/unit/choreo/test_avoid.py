@@ -20,6 +20,7 @@ Contains:
         IndexError, for an empty track
     test_regression_min_gaps_resolves_selector_expressions: reads `sel` as a selector expression,
         and refuses an unknown spot with UnknownRefError
+    test_regression_min_gaps_refuses_negative_top: raises PathError for a negative top
 """
 
 import math
@@ -156,7 +157,6 @@ def test_regression_suggested_waypoint_is_reached_at_its_count_on_eased_rows() -
     assert approx_equal(reached, fix.params["point"], abs_tol=1e-6)
 
 
-@defect("UP-9.2-28")
 def test_regression_min_gaps_with_top_zero_returns_nothing() -> None:
     """Returns an empty list, or a ShowPyError, for top=0 instead of IndexError (audit 9.2)."""
     try:
@@ -220,7 +220,6 @@ def test_regression_avoid_helpers_accept_a_custom_motion_registry(call: MotionsC
     assert repr(call(custom, registry)) == repr(call(crossing_show(), DEFAULT_MOTIONS))
 
 
-@defect("UP-9.2-35")
 def test_regression_closest_approach_of_empty_track_raises_showpy_error() -> None:
     """Raises a ShowPyError, not IndexError, for an empty track (audit 9.2)."""
     with pytest.raises(ShowPyError):
@@ -234,3 +233,9 @@ def test_regression_min_gaps_resolves_selector_expressions() -> None:
     assert {(g.a, g.b) for g in gaps} == {("T1", "T2"), ("T1", "T3"), ("T2", "T3")}
     with pytest.raises(UnknownRefError):
         min_gaps(show, TID, ["T1", "Z9"])
+
+
+def test_regression_min_gaps_refuses_negative_top() -> None:
+    """Raises PathError for a negative top instead of slicing the list from the end."""
+    with pytest.raises(PathError):
+        min_gaps(two_set_show(), TID, top=-1)

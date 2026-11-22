@@ -566,7 +566,6 @@ def test_regression_invalidate_clears_override_selection_cache() -> None:
     assert engine._override_cache == {}
 
 
-@defect("UP-9.2-24")
 def test_regression_spot_query_on_show_without_sets_raises_showpy_error() -> None:
     """Raises a ShowPyError, not IndexError, for a cast spot in a show with no sets (audit 9.2)."""
     engine = PathEngine(two_set_show().model_copy(update={"sets": ()}))

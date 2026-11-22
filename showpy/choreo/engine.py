@@ -161,6 +161,12 @@ class PathEngine:
         return (local, t) if local is not None else self.locate(t)
 
     def _static_set(self, t: Count) -> int:
+        if not self.show.sets:
+            raise PathError(
+                "the show has no sets, so no spot has a position",
+                hint="add a set with add_set before asking for positions",
+                context={"show": self.show.id},
+            )
         return 0 if t <= 0 else len(self.show.sets) - 1
 
     def _known(self, entity: str) -> SpotId:

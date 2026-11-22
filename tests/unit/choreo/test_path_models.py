@@ -14,6 +14,7 @@ Contains:
         under a key that differs from its ID
     test_regression_path_row_rejects_nan_start: rejects a NaN PathRow.start
     test_regression_transition_spec_rejects_negative_counts: rejects negative TransitionSpec.counts
+    test_regression_path_row_rejects_infinite_start: rejects an infinite PathRow.start
     test_builtin_motion_params_reject_unknown_keys: refuses a key no built-in motion reads
     test_regression_motion_params_are_typed_by_motion_fn: validates each built-in's parameters
         into its own model and round-trips them through JSON
@@ -125,16 +126,12 @@ def test_regression_transition_spec_checks_route_keys_against_route_ids() -> Non
         TransitionSpec(id=make_tid("1", "2"), counts=NEIGHBOUR_COUNTS, routes={RouteId("x"): route})
 
 
-@pytest.mark.defect("UP-9.6-34")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-34")
 def test_regression_path_row_rejects_nan_start() -> None:
     """Rejects a NaN PathRow.start (audit 9.6)."""
     with pytest.raises(PathError):
         PathRow(entity=SpotId("A"), start=math.nan)
 
 
-@pytest.mark.defect("UP-9.6-38")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-38")
 def test_regression_transition_spec_rejects_negative_counts() -> None:
     """Rejects negative TransitionSpec.counts (audit 9.6)."""
     with pytest.raises(SchemaError):
@@ -217,3 +214,9 @@ def test_regression_easing_steps_are_capped() -> None:
     assert Easing(kind="steps", strength=MAX_EASING_STEPS).strength == MAX_EASING_STEPS
     with pytest.raises(SchemaError):
         Easing(kind="steps", strength=MAX_EASING_STEPS + 1)
+
+
+def test_regression_path_row_rejects_infinite_start() -> None:
+    """Rejects an infinite PathRow.start with PathError."""
+    with pytest.raises(PathError):
+        PathRow(entity=SpotId("A"), start=math.inf)

@@ -32,13 +32,22 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import Annotated, Any, Final, Literal
 
-from pydantic import AfterValidator, BaseModel, Field, model_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
 
 from showpy.core.errors import PathError, SchemaError
 from showpy.core.ids import RouteId, SpotId, TransitionId
 from showpy.core.readonly import ReadOnlyMap
 from showpy.core.selection import SelectorField
-from showpy.core.types import Count, Degrees, Finite, FrozenModel, JsonObject, Meters, Point
+from showpy.core.types import (
+    Count,
+    Degrees,
+    Finite,
+    FrozenModel,
+    JsonObject,
+    Meters,
+    NonNegCount,
+    Point,
+)
 
 DEFAULT_EASING_STRENGTH = 2.0
 MIN_EASING_STRENGTH = 1.0
@@ -329,6 +338,17 @@ class PathRow(FrozenModel):
         params = _typed_motion_params(data.get("motion_fn"), data.get("motion_params", {}))
         return {**data, "motion_params": params}
 
+    @field_validator("start", mode="before")
+    @classmethod
+    def _finite_start(cls, value: object) -> object:
+        if isinstance(value, int | float) and not math.isfinite(value):
+            raise PathError(
+                f"path start must be a finite count, got {value}",
+                hint="use 0 <= start < end",
+                context={"start": value},
+            )
+        return value
+
     @model_validator(mode="after")
     def _window(self) -> "PathRow":
         if self.start < 0 or (self.end is not None and self.end <= self.start):
@@ -392,7 +412,7 @@ class TransitionSpec(FrozenModel):
     """
 
     id: TransitionId
-    counts: float
+    counts: NonNegCount
     rows: dict[SpotId, PathRow] = {}
     routes: dict[RouteId, Route] = {}
     notes: str = ""
