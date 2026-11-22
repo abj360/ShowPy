@@ -6,7 +6,8 @@ of a `Set` live in `showpy.choreo.set_measure`; the set names kept here are depr
 
 Contains:
     SetSelector: names the selections a set measure or transform accepts
-    SetLike: stands for a `Set` or `Sheet` argument that geo forwards without importing it
+    SET_TYPE, SHEET_TYPE: name the types a forwarded Set or Sheet argument must have
+    wrong_type_error(): builds the error for a Set or Sheet argument of another type
     on_field_ids(): forwards to showpy.choreo.set_measure.on_field_ids, deprecated
     length(): returns the length of a curve or of points read as a polyline
     center(): returns the bounding-box center
@@ -25,7 +26,7 @@ Contains:
 
 import math
 from collections.abc import Sequence
-from typing import Any, Literal
+from typing import Literal
 
 import numpy as np
 import shapely
@@ -34,7 +35,7 @@ from scipy.spatial import cKDTree
 from scipy.spatial.distance import cdist
 
 from showpy.core.deprecation import deprecated_call
-from showpy.core.errors import GeometryError
+from showpy.core.errors import GeometryError, SchemaError
 from showpy.core.ids import SpotId
 from showpy.core.selection import Selection
 from showpy.core.types import Box2, Count, Meters, Point, Points, Polygon
@@ -43,19 +44,42 @@ from showpy.geo.curve_base import Curve
 from showpy.geo.models import FormMetrics, IntervalStats
 
 ALL = "all"
+SET_TYPE = "showpy.choreo.models.Set"
+SHEET_TYPE = "showpy.sheet.models.Sheet"
 CURVE_TOL = 0.001
 DISK_SEGMENTS = 64
 STRAIGHT_TOL = 1e-12
 
 type SetSelector = Literal["all"] | Sequence[str] | Selection
-type SetLike = Any  # geo cannot import Set or Sheet; the choreo twin checks the type
+
+
+def wrong_type_error(function: str, argument: str, value: object, expected: str) -> SchemaError:
+    """Builds the error for an argument that must be a `Set` or `Sheet` but is another type.
+
+    Args:
+        function: Dotted name of the geo function that received the argument.
+        argument: Parameter name.
+        value: The object received.
+        expected: The type that was needed, as `showpy.choreo.models.Set`.
+
+    Returns:
+        error: A SchemaError that names the argument, the type received and the type needed.
+    """
+    return SchemaError(
+        f"`{argument}` must be a {expected}, got {type(value).__name__}",
+        hint=f"pass a {expected}; {function}() takes it only to forward to its choreo twin",
+        context={"function": function, "argument": argument, "got": type(value).__name__},
+    )
 
 
 @deprecated_call("showpy.choreo.set_measure.on_field_ids", since="0.4.0", remove="0.6.0")
-def on_field_ids(s: SetLike, sel: SetSelector = ALL) -> tuple[SpotId, ...]:
+def on_field_ids(s: object, sel: SetSelector = ALL) -> tuple[SpotId, ...]:
     """Returns the selected spots that are on the field; moved to `showpy.choreo.set_measure`."""
+    from showpy.choreo.models import Set
     from showpy.choreo.set_measure import on_field_ids as twin
 
+    if not isinstance(s, Set):
+        raise wrong_type_error("showpy.geo.measure.on_field_ids", "s", s, SET_TYPE)
     return twin(s, sel)
 
 
@@ -172,18 +196,24 @@ def distance_matrix(a: Points, b: Points) -> Points:
 
 
 @deprecated_call("showpy.choreo.set_measure.neighbors", since="0.4.0", remove="0.6.0")
-def neighbors(s: SetLike, entity: str, k: int = 2) -> list[tuple[SpotId, Meters]]:
+def neighbors(s: object, entity: str, k: int = 2) -> list[tuple[SpotId, Meters]]:
     """Returns the k spots closest to `entity`; moved to `showpy.choreo.set_measure`."""
+    from showpy.choreo.models import Set
     from showpy.choreo.set_measure import neighbors as twin
 
+    if not isinstance(s, Set):
+        raise wrong_type_error("showpy.geo.measure.neighbors", "s", s, SET_TYPE)
     return twin(s, entity, k)
 
 
 @deprecated_call("showpy.choreo.set_measure.nearest", since="0.4.0", remove="0.6.0")
-def nearest(s: SetLike, point: Point, k: int = 1) -> list[tuple[SpotId, Meters]]:
+def nearest(s: object, point: Point, k: int = 1) -> list[tuple[SpotId, Meters]]:
     """Returns the k spots closest to a point; moved to `showpy.choreo.set_measure`."""
+    from showpy.choreo.models import Set
     from showpy.choreo.set_measure import nearest as twin
 
+    if not isinstance(s, Set):
+        raise wrong_type_error("showpy.geo.measure.nearest", "s", s, SET_TYPE)
     return twin(s, point, k)
 
 
@@ -266,8 +296,11 @@ def form_metrics(points: Points) -> FormMetrics:
 
 
 @deprecated_call("showpy.choreo.set_measure.symmetry_error", since="0.4.0", remove="0.6.0")
-def symmetry_error(s: SetLike, sel: SetSelector = ALL, axis_x: float = 0.0) -> Meters:
+def symmetry_error(s: object, sel: SetSelector = ALL, axis_x: float = 0.0) -> Meters:
     """Returns the largest mirror mismatch of a set; moved to `showpy.choreo.set_measure`."""
+    from showpy.choreo.models import Set
     from showpy.choreo.set_measure import symmetry_error as twin
 
+    if not isinstance(s, Set):
+        raise wrong_type_error("showpy.geo.measure.symmetry_error", "s", s, SET_TYPE)
     return twin(s, sel, axis_x)

@@ -35,7 +35,7 @@ Contains:
 
 import math
 from collections.abc import Callable, Mapping
-from typing import Literal
+from typing import Literal, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -54,7 +54,7 @@ from showpy.geo.affine import (
 )
 from showpy.geo.checks import pick
 from showpy.geo.curves import CurveModel
-from showpy.geo.measure import ALL, SetLike, SetSelector, bounds, centroid
+from showpy.geo.measure import ALL, SET_TYPE, SetSelector, bounds, centroid, wrong_type_error
 from showpy.geo.snapping import align, distribute, snap, snap_to_guides
 from showpy.geo.transform_base import (
     About,
@@ -131,9 +131,10 @@ def shift[T: (Points, CurveModel)](
     [[1.0, 2.0]]
     """
     if is_set_input(obj):
+        from showpy.choreo.models import Set
         from showpy.choreo.set_transforms import shift as twin
 
-        warn_set_moved(GEO_MODULE, "shift", CHOREO_MODULE)
+        warn_set_moved(GEO_MODULE, "shift", CHOREO_MODULE, obj, Set)
         return twin(obj, dx, dy, sel, force=force)
     return apply_matrix(obj, translation_matrix(dx, dy))
 
@@ -162,9 +163,10 @@ def move_to[T: (Points, CurveModel)](
     [[5.0, 5.0], [7.0, 7.0]]
     """
     if is_set_input(obj):
+        from showpy.choreo.models import Set
         from showpy.choreo.set_transforms import move_to as twin
 
-        warn_set_moved(GEO_MODULE, "move_to", CHOREO_MODULE)
+        warn_set_moved(GEO_MODULE, "move_to", CHOREO_MODULE, obj, Set)
         return twin(obj, anchor, to, sel, force=force)
     here = box_anchor_point(anchor_source(obj), anchor)
     return shift(obj, to[0] - here[0], to[1] - here[1])
@@ -179,9 +181,10 @@ def rotate[T: (Points, CurveModel)](
     [[0.0, 1.0]]
     """
     if is_set_input(obj):
+        from showpy.choreo.models import Set
         from showpy.choreo.set_transforms import rotate as twin
 
-        warn_set_moved(GEO_MODULE, "rotate", CHOREO_MODULE)
+        warn_set_moved(GEO_MODULE, "rotate", CHOREO_MODULE, obj, Set)
         return twin(obj, deg, about, sel, force=force)
     return apply_matrix(obj, rotation_matrix(deg, about_point(obj, about)))
 
@@ -217,9 +220,10 @@ def scale[T: (Points, CurveModel)](
     [[2.0, 2.0]]
     """
     if is_set_input(obj):
+        from showpy.choreo.models import Set
         from showpy.choreo.set_transforms import scale as twin
 
-        warn_set_moved(GEO_MODULE, "scale", CHOREO_MODULE)
+        warn_set_moved(GEO_MODULE, "scale", CHOREO_MODULE, obj, Set)
         return twin(obj, sx, sy, about, sel, force=force)
     return apply_matrix(obj, scale_about(sx, sy, about_point(obj, about)))
 
@@ -282,9 +286,10 @@ def expand[T: (Points, CurveModel)](
     [[3.0, 0.0]]
     """
     if is_set_input(obj):
+        from showpy.choreo.models import Set
         from showpy.choreo.set_transforms import expand as twin
 
-        warn_set_moved(GEO_MODULE, "expand", CHOREO_MODULE)
+        warn_set_moved(GEO_MODULE, "expand", CHOREO_MODULE, obj, Set)
         return twin(obj, d, about, sel, force=force)
     return apply_pointwise(obj, expand_map(about_point(obj, about), d))
 
@@ -298,9 +303,10 @@ def contract[T: (Points, CurveModel)](
     [[2.0, 0.0]]
     """
     if is_set_input(obj):
+        from showpy.choreo.models import Set
         from showpy.choreo.set_transforms import contract as twin
 
-        warn_set_moved(GEO_MODULE, "contract", CHOREO_MODULE)
+        warn_set_moved(GEO_MODULE, "contract", CHOREO_MODULE, obj, Set)
         return twin(obj, d, about, sel, force=force)
     return apply_pointwise(obj, contract_map(about_point(obj, about), d))
 
@@ -372,9 +378,10 @@ def set_interval(
     [[-1.0, 0.0], [1.0, 0.0], [3.0, 0.0]]
     """
     if is_set_input(obj):
+        from showpy.choreo.models import Set
         from showpy.choreo.set_transforms import set_interval as twin
 
-        warn_set_moved(GEO_MODULE, "set_interval", CHOREO_MODULE)
+        warn_set_moved(GEO_MODULE, "set_interval", CHOREO_MODULE, obj, Set)
         return twin(obj, interval, anchor, sel, force=force)
     return apply_pointwise(obj, respace_map(interval, anchor))
 
@@ -429,27 +436,31 @@ def mirror[T: (Points, CurveModel)](
     [[-1.0, 2.0]]
     """
     if is_set_input(obj):
+        from showpy.choreo.models import Set
         from showpy.choreo.set_transforms import mirror as twin
 
-        warn_set_moved(GEO_MODULE, "mirror", CHOREO_MODULE)
+        warn_set_moved(GEO_MODULE, "mirror", CHOREO_MODULE, obj, Set)
         return twin(obj, axis, sel, force=force)
     return apply_matrix(obj, mirror_line(axis, lambda: about_point(obj, "center")))
 
 
 @deprecated_call("showpy.choreo.set_transforms.symmetrize", since="0.4.0", remove="0.6.0")
-def symmetrize(
-    s: SetLike,
+def symmetrize[S](
+    s: S,
     sel: SetSelector = ALL,
     source_side: Literal["left", "right"] = "left",
     pairs: Mapping[str, str] | None = None,
     axis_x: float = 0.0,
     *,
     force: bool = False,
-) -> SetLike:
+) -> S:
     """Copies one side of a set onto its mirror partners; moved to `showpy.choreo`."""
+    from showpy.choreo.models import Set
     from showpy.choreo.set_transforms import symmetrize as twin
 
-    return twin(s, sel, source_side, pairs, axis_x, force=force)
+    if not isinstance(s, Set):
+        raise wrong_type_error("showpy.geo.transforms.symmetrize", "s", s, SET_TYPE)
+    return cast(S, twin(s, sel, source_side, pairs, axis_x, force=force))
 
 
 def skew[T: (Points, CurveModel)](
@@ -467,9 +478,10 @@ def skew[T: (Points, CurveModel)](
     [[1.0, 1.0]]
     """
     if is_set_input(obj):
+        from showpy.choreo.models import Set
         from showpy.choreo.set_transforms import skew as twin
 
-        warn_set_moved(GEO_MODULE, "skew", CHOREO_MODULE)
+        warn_set_moved(GEO_MODULE, "skew", CHOREO_MODULE, obj, Set)
         return twin(obj, deg_x, deg_y, about, sel, force=force)
     return apply_matrix(obj, skew_matrix(deg_x, deg_y, about_point(obj, about)))
 
@@ -505,9 +517,10 @@ def affine[T: (Points, CurveModel)](
     [[3.0, 1.0]]
     """
     if is_set_input(obj):
+        from showpy.choreo.models import Set
         from showpy.choreo.set_transforms import affine as twin
 
-        warn_set_moved(GEO_MODULE, "affine", CHOREO_MODULE)
+        warn_set_moved(GEO_MODULE, "affine", CHOREO_MODULE, obj, Set)
         return twin(obj, matrix, sel, force=force)
     return apply_matrix(obj, affine_matrix(matrix))
 

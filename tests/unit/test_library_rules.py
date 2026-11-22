@@ -424,24 +424,57 @@ def find_geo_foreign_imports(
 
 GEO_FORWARDING_FUNCTIONS = {
     ("transforms.py", "showpy.choreo.set_transforms"): (
-        "shift", "move_to", "rotate", "scale", "expand", "contract", "set_interval", "mirror",
-        "symmetrize", "skew", "affine",
+        "shift",
+        "move_to",
+        "rotate",
+        "scale",
+        "expand",
+        "contract",
+        "set_interval",
+        "mirror",
+        "symmetrize",
+        "skew",
+        "affine",
     ),
     ("snapping.py", "showpy.choreo.set_snapping"): (
-        "snap", "snap_to_guides", "align", "distribute",
+        "snap",
+        "snap_to_guides",
+        "align",
+        "distribute",
     ),
     ("measure.py", "showpy.choreo.set_measure"): (
-        "on_field_ids", "neighbors", "nearest", "symmetry_error",
+        "on_field_ids",
+        "neighbors",
+        "nearest",
+        "symmetry_error",
     ),
     ("analysis.py", "showpy.choreo.set_analysis"): (
-        "density_map", "coverage", "balance", "symmetry_score", "change_amount",
+        "density_map",
+        "coverage",
+        "balance",
+        "symmetry_score",
+        "change_amount",
     ),
-}  # fmt: skip
+}
+SHEET_FORWARDING_FUNCTIONS = ("snap_to_guides", "density_map", "coverage", "balance")
 # Deprecated Set forwarding from geo to choreo; delete this table when v0.6.0 removes the stubs.
 GEO_FORWARDING_IMPORTS = frozenset(
-    (module, target, function)
-    for (module, target), functions in GEO_FORWARDING_FUNCTIONS.items()
-    for function in functions
+    [
+        (module, target, function)
+        for (module, target), functions in GEO_FORWARDING_FUNCTIONS.items()
+        for function in functions
+    ]
+    + [
+        (module, "showpy.choreo.models", function)
+        for (module, _target), functions in GEO_FORWARDING_FUNCTIONS.items()
+        for function in functions
+    ]
+    + [
+        (module, "showpy.sheet.models", function)
+        for (module, _target), functions in GEO_FORWARDING_FUNCTIONS.items()
+        for function in functions
+        if function in SHEET_FORWARDING_FUNCTIONS
+    ]
 )
 
 

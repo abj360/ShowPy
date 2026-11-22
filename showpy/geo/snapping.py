@@ -16,7 +16,7 @@ Contains:
     distribute_map(): builds the point map that evens points out along an axis
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Literal
 
 import numpy as np
@@ -26,7 +26,7 @@ from showpy.core.errors import GeometryError
 from showpy.core.types import Meters, Points
 from showpy.geo.checks import pick
 from showpy.geo.curves import CurveModel
-from showpy.geo.measure import ALL, SetLike, SetSelector
+from showpy.geo.measure import ALL, SHEET_TYPE, SetSelector, wrong_type_error
 from showpy.geo.models import SnapReport
 from showpy.geo.transform_base import PointMap, apply_pointwise, is_set_input, warn_set_moved
 
@@ -103,27 +103,31 @@ def snap[T: (Points, CurveModel)](
     ([[0.5, 1.0]], 1)
     """
     if is_set_input(obj):
+        from showpy.choreo.models import Set
         from showpy.choreo.set_snapping import snap as twin
 
-        warn_set_moved(GEO_MODULE, "snap", CHOREO_MODULE)
+        warn_set_moved(GEO_MODULE, "snap", CHOREO_MODULE, obj, Set)
         return twin(obj, precision, mode, axes, sel, force=force)
     to_grid, read_report = grid_snapper(precision, mode, axes)
     return apply_pointwise(obj, to_grid), read_report()
 
 
 @deprecated_call("showpy.choreo.set_snapping.snap_to_guides", since="0.4.0", remove="0.6.0")
-def snap_to_guides(
-    obj: SetLike,
-    sheet: SetLike,
+def snap_to_guides[T: (Points, CurveModel)](
+    obj: T,
+    sheet: object,
     tol: Meters,
-    kinds: list[str] | None = None,
+    kinds: Sequence[str] | None = None,
     sel: SetSelector = ALL,
     *,
     force: bool = False,
-) -> SetLike:
+) -> T:
     """Projects points onto sheet guide lines; moved to `showpy.choreo.set_snapping`."""
     from showpy.choreo.set_snapping import snap_to_guides as twin
+    from showpy.sheet.models import Sheet
 
+    if not isinstance(sheet, Sheet):
+        raise wrong_type_error("showpy.geo.snapping.snap_to_guides", "sheet", sheet, SHEET_TYPE)
     return twin(obj, sheet, tol, kinds, sel, force=force)
 
 
@@ -165,9 +169,10 @@ def align[T: (Points, CurveModel)](
     [[0.0, 1.0], [2.0, 1.0]]
     """
     if is_set_input(obj):
+        from showpy.choreo.models import Set
         from showpy.choreo.set_snapping import align as twin
 
-        warn_set_moved(GEO_MODULE, "align", CHOREO_MODULE)
+        warn_set_moved(GEO_MODULE, "align", CHOREO_MODULE, obj, Set)
         return twin(obj, axis, value, sel, force=force)
     return apply_pointwise(obj, align_map(axis, value))
 
@@ -210,8 +215,9 @@ def distribute(
     [[4.0, 0.0], [0.0, 0.0], [2.0, 0.0]]
     """
     if is_set_input(obj):
+        from showpy.choreo.models import Set
         from showpy.choreo.set_snapping import distribute as twin
 
-        warn_set_moved(GEO_MODULE, "distribute", CHOREO_MODULE)
+        warn_set_moved(GEO_MODULE, "distribute", CHOREO_MODULE, obj, Set)
         return twin(obj, axis, start, end, sel, force=force)
     return apply_pointwise(obj, distribute_map(axis, start, end))

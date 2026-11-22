@@ -6,6 +6,10 @@ test_set_forwarding.py --- tests that geo functions given a Set warn and match t
 Contains:
     test_geo_set_overloads_warn_and_forward: calls each geo function with a Set, expects a
         DeprecatedWarning at the caller and the choreo twin's result
+    test_regression_geo_set_stubs_reject_other_types_with_a_teaching_error: raises SchemaError for
+        balance(5, 6) and on_field_ids(5) instead of AttributeError
+    test_regression_geo_transform_rejects_a_list_without_a_deprecation_warning: raises SchemaError
+        for shift([[1.0, 2.0]], ...) and never warns that a Set is replaced
 """
 
 import importlib
@@ -17,6 +21,8 @@ import pytest
 
 from showpy.choreo.set_transforms import shift
 from showpy.core.deprecation import DeprecatedWarning
+from showpy.core.errors import SchemaError
+from showpy.geo import analysis, measure, transforms
 from showpy.sheet.models import GuideLine
 from tests.fixtures.shows import field_sheet
 from tests.helpers import make_facing_set
@@ -85,6 +91,21 @@ def test_geo_set_overloads_warn_and_forward(
     twin = _function("choreo", choreo_module, name)
     with pytest.warns(DeprecatedWarning, match=f"geo.{geo_module}.{name}") as caught:
         forwarded = old(*args, **kwargs)
+    assert len(caught) == 1
+    assert caught[0].category is DeprecatedWarning
     assert caught[0].filename == __file__
     assert f"choreo.{choreo_module}.{name}" in str(caught[0].message)
     assert _same(forwarded, twin(*args, **kwargs))
+
+
+def test_regression_geo_set_stubs_reject_other_types_with_a_teaching_error() -> None:
+    with pytest.raises(SchemaError, match="`s` must be"), pytest.warns(DeprecatedWarning):
+        analysis.balance(5, 6)
+    with pytest.raises(SchemaError, match="`s` must be"), pytest.warns(DeprecatedWarning):
+        measure.on_field_ids(5)
+
+
+def test_regression_geo_transform_rejects_a_list_without_a_deprecation_warning() -> None:
+    not_points = cast(np.ndarray, [[1.0, 2.0]])
+    with pytest.raises(SchemaError, match="`obj` must be"):
+        transforms.shift(not_points, 1.0, 1.0)

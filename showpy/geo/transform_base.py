@@ -35,7 +35,7 @@ from showpy.geo.curves import (
     Segment,
     SplineCurve,
 )
-from showpy.geo.measure import center, centroid
+from showpy.geo.measure import SET_TYPE, center, centroid, wrong_type_error
 
 type About = Literal["center", "centroid"] | Point
 type PointMap = Callable[[Points], Points]
@@ -45,17 +45,23 @@ SET_MOVED_SINCE = "0.4.0"
 SET_MOVED_REMOVE = "0.6.0"
 
 
-def warn_set_moved(geo_module: str, name: str, choreo_module: str) -> None:
+def warn_set_moved(
+    geo_module: str, name: str, choreo_module: str, obj: object, set_type: type
+) -> None:
     """Warns, at the caller of the geo function, that handling a `Set` there is deprecated.
 
-    Call it from the geo function itself; the `Set` branch of a function that still takes
-    points and curves uses it before forwarding to the choreo twin.
+    Call it from the geo function itself, in the branch for an argument that is neither points
+    nor a curve. An argument that is not a `Set` either raises SchemaError and never warns.
 
     Args:
         geo_module: Dotted name of the geo module that holds the function.
         name: Name of the function, the same in both modules.
         choreo_module: Dotted name of the choreo module that holds the twin.
+        obj: The argument that is neither points nor a curve.
+        set_type: The `Set` class, imported by the caller because geo cannot import it.
     """
+    if not isinstance(obj, set_type):
+        raise wrong_type_error(f"{geo_module}.{name}", "obj", obj, SET_TYPE)
     warn_deprecated(
         f"{geo_module}.{name}(Set)",
         f"{choreo_module}.{name}",
