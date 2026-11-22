@@ -48,6 +48,10 @@ Contains:
         even when no sheet store is passed
     test_regression_validate_show_reports_empty_ids: reports an empty show, note or form ID, each
         alone
+    test_regression_validate_show_accepts_hyphenated_form_and_note_ids: accepts an inner hyphen in
+        form and note IDs
+    test_regression_validate_show_names_the_bad_id_path_in_context: puts the path of the bad ID and
+        its value in the issue context
     test_regression_validate_show_reports_set_ids_that_cannot_be_stored: reports a set ID that no
         workspace path can hold
     test_regression_validate_show_reports_placements_of_inactive_spots: reports an on-field
@@ -448,8 +452,6 @@ def test_regression_validate_show_reports_unpinned_sheet_without_a_store() -> No
     assert "UNPINNED_SHEET" in _codes(validate_show(_edited(dependencies={})))
 
 
-@pytest.mark.defect("UP-9.7-81")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-81")
 def test_regression_validate_show_reports_empty_ids() -> None:
     """Reports an empty show, note or form ID, each alone (audit 9.7 validation gaps)."""
     empty_form = _formed(key="", form_id="")
@@ -462,8 +464,22 @@ def test_regression_validate_show_reports_empty_ids() -> None:
     assert silent == []
 
 
-@pytest.mark.defect("UP-9.7-82")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-82")
+def test_regression_validate_show_accepts_hyphenated_form_and_note_ids() -> None:
+    """Accepts an inner hyphen in form and note IDs, which the library itself generates."""
+    show = _formed(key="form-1", form_id="form-1")
+    noted = show.model_copy(update={"notes": (_note(note_id="note-1"),)})
+    assert validate_show(noted).issues == ()
+
+
+def test_regression_validate_show_names_the_bad_id_path_in_context() -> None:
+    """Puts the path of the bad ID and its value in the issue context."""
+    show = two_set_show()
+    renamed = show.sets[1].model_copy(update={"id": "a/b"})
+    issues = validate_show(_edited(sets=(show.sets[0], renamed))).issues
+    (issue,) = [i for i in issues if i.code == "BAD_ID"]
+    assert dict(issue.context) == {"path": "sets[1].id", "id": "a/b"}
+
+
 def test_regression_validate_show_reports_set_ids_that_cannot_be_stored() -> None:
     """Reports a set ID that no workspace path can hold (audit 9.7 validation gaps)."""
     show = two_set_show()

@@ -12,7 +12,7 @@ Contains:
 """
 
 import math
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from itertools import islice
 from typing import Literal
 
@@ -23,10 +23,11 @@ from showpy.choreo.match_ops import forms_of_set
 from showpy.choreo.models import Set
 from showpy.choreo.path_models import TransitionSpec
 from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import ContinuityError, ShowPyError
-from showpy.core.ids import format_tid, parse_ref
+from showpy.core.errors import ContinuityError, SchemaError, ShowPyError
+from showpy.core.ids import check_id, check_sheet_id, format_tid, parse_ref
 from showpy.core.validation import ValidationIssue, ValidationReport
 from showpy.sheet.templates import SheetStore, get_sheet
+from showpy.show.document_paths import is_storable_folder
 from showpy.show.models import Show
 from showpy.time.validate import validate_timeline
 
@@ -327,6 +328,52 @@ def _selections(show: Show) -> list[ValidationIssue]:
     ]
 
 
+def _bad_id(kind: str, path: str, value: str, error: ShowPyError) -> ValidationIssue:
+    return ValidationIssue(
+        level=ERROR,
+        code=ErrorCode.BAD_ID,
+        where=f"{kind} {value!r}",
+        message=f"{kind} ID {value!r} cannot be stored",
+        hint=error.hint,
+        context={"path": path, "id": value},
+    )
+
+
+def _checked(
+    kind: str, path: str, value: str, check: Callable[[str], str]
+) -> list[ValidationIssue]:
+    try:
+        check(value)
+    except SchemaError as error:
+        return [_bad_id(kind, path, value, error)]
+    return []
+
+
+def _set_id_issue(index: int, set_id: str) -> list[ValidationIssue]:
+    if is_storable_folder(set_id):
+        return []
+    return _checked("set", f"sets[{index}].id", set_id, lambda text: check_id(text, kind="set"))
+
+
+def _ids(show: Show) -> list[ValidationIssue]:
+    issues = _checked("show", "id", show.id, lambda text: check_sheet_id(text, kind="show"))
+    for index, candidate in enumerate(show.sets):
+        issues += _set_id_issue(index, candidate.id)
+    for index, note in enumerate(show.notes):
+        issues += _checked(
+            "note", f"notes[{index}].id", note.id, lambda t: check_sheet_id(t, kind="note")
+        )
+    for key, form in show.forms.items():
+        issues += _checked(
+            "form", f"forms.{key}.id", form.id, lambda t: check_sheet_id(t, kind="form")
+        )
+        if key != form.id:
+            issues += _checked(
+                "form", f"forms.{key}", key, lambda t: check_sheet_id(t, kind="form")
+            )
+    return issues
+
+
 def _non_finite_values(value: object, path: str) -> Iterator[tuple[str, float]]:
     if isinstance(value, float):
         if not math.isfinite(value):
@@ -385,7 +432,8 @@ def validate_show(show: Show, store: SheetStore | None = None) -> ValidationRepo
     """
     reports = [validate_set(show, s) for s in show.sets]
     reports += _path_reports(show)
-    extra = _sequence(show) + _form_keys(show) + _selections(show) + _non_finite(show)
+    extra = _sequence(show) + _form_keys(show) + _selections(show) + _ids(show)
+    extra += _non_finite(show)
     reports.append(ValidationReport(issues=tuple(extra)))
     reports.append(validate_timeline(show.timeline))
     if store is not None:
