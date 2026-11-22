@@ -47,6 +47,7 @@ from showpy.cast.select import (
     is_label_dependent,
     mirror_pairs,
     near,
+    normalize_v1_selector,
     ordered_along,
     parse_selector,
     select,
@@ -411,6 +412,8 @@ def test_regression_select_deep_nesting_raises_schema_error() -> None:
     expression = "(" * NESTING_DEPTH + "T1" + ")" * NESTING_DEPTH
     with pytest.raises(SchemaError):
         select(_line_cast(), expression)
+    with pytest.raises(SchemaError):
+        normalize_v1_selector(expression)
 
 
 @pytest.mark.defect("UP-9.3-76")
@@ -518,3 +521,32 @@ def test_regression_select_depth_10000_raises_schema_error_not_recursion_error()
     assert (info.value.context["what"], info.value.context["cap"]) == ("nesting depth", MAX_DEPTH)
     with pytest.raises(SchemaError):
         select(_line_cast(), expression)
+
+
+@pytest.mark.parametrize(
+    ("stored", "normalized"),
+    [
+        ("T1 + T2 & T2", "(T1 + T2) & T2"),
+        ("T1+T2&T2", "(T1 + T2) & T2"),
+        ("T1+T2-T10", "T1 + T2-T10"),
+        ("T1 -T2", "T1 - T2"),
+        ("T1 + T2 & T10 - T1", "((T1 + T2) & T10) - T1"),
+        ("(T1)+(T2)&(T2)", "((T1) + (T2)) & (T2)"),
+        ("T* & (T1 + T2 & T10)", "T* & ((T1 + T2) & T10)"),
+        ("tag:soloist&T*", "tag:soloist & T*"),
+    ],
+)
+def test_normalize_v1_selector_keeps_the_v1_reading(stored: str, normalized: str) -> None:
+    assert normalize_v1_selector(stored) == normalized
+    assert parse_selector(normalized).text == normalized
+
+
+@pytest.mark.parametrize("stored", ["T1 + T2", "T1-T10 - T2", "(T1 + T2) & T2", "all", "T1  +  T2"])
+def test_normalize_v1_selector_leaves_v2_text_unchanged(stored: str) -> None:
+    assert normalize_v1_selector(stored) == stored
+
+
+@pytest.mark.parametrize("stored", ["", "T1 +", "(T1", "T1)", "T1 T2", "+ T1", "T1 +-T2", "()"])
+def test_normalize_v1_selector_refuses_text_v1_could_not_parse(stored: str) -> None:
+    with pytest.raises(SchemaError):
+        normalize_v1_selector(stored)

@@ -6,6 +6,7 @@ Contains:
     Selector: re-exports the alias for anything that picks spots
     SelectorAst: holds a parsed selector as a postfix program of words and operators
     parse_selector(): parses selector text, refusing `&` mixed with `+` or `-` at one level
+    normalize_v1_selector(): rewrites stored v1 selector text into v2 grammar, same meaning
     select(): resolves an expression, ID list or Selection against a show, set or cast
     is_label_dependent(): reports whether an expression names spots by their labels
     label_prefix(): returns the part of a label before its trailing number
@@ -20,6 +21,7 @@ Contains:
 
 import math
 import re
+from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
@@ -97,9 +99,13 @@ def _glued(expr: str, position: int) -> bool:
     return any(c and not c.isspace() and c not in "()" for c in neighbours)
 
 
-def _tokenize(expr: str) -> list[_Token]:
+def _tokens(expr: str) -> list[_Token]:
     require_size(len(expr), MAX_TEXT_CHARS, what="expression characters")
-    tokens = [_Token(match[0], match.start()) for match in TOKEN_PATTERN.finditer(expr)]
+    return [_Token(match[0], match.start()) for match in TOKEN_PATTERN.finditer(expr)]
+
+
+def _tokenize(expr: str) -> list[_Token]:
+    tokens = _tokens(expr)
     for token in tokens:
         if token.text in OPERATORS and _glued(expr, token.position):
             raise _bad_token(
@@ -272,20 +278,25 @@ class _Parser:
     """Turns tokens into a postfix program one token at a time, with an explicit level stack.
 
     `+` and `-` combine left to right, `&` chains with itself, and a level that mixes `&` with
-    `+` or `-` is refused.
+    `+` or `-` is refused, or, when `wraps_mixes` is set, parenthesized left to right.
 
     Attributes:
         tokens: Tokens of the expression.
         expr: The original text, for error context.
         program: Postfix program built so far.
         levels: Open parenthesis levels, outermost first.
+        opens: Token indices that get an added `(` before them, one entry per parenthesis.
+        closes: Token indices that get an added `)` before them, one entry per parenthesis.
     """
 
-    def __init__(self, tokens: list[_Token], expr: str) -> None:
+    def __init__(self, tokens: list[_Token], expr: str, *, wraps_mixes: bool = False) -> None:
         self.tokens = tokens
         self.expr = expr
+        self.wraps_mixes = wraps_mixes
         self.program: list[_Token] = []
         self.levels = [_Level(opened=-1)]
+        self.opens: list[int] = []
+        self.closes: list[int] = []
 
     def parse(self) -> SelectorAst:
         """Returns the postfix program of the whole expression, or raises at the first error."""
@@ -329,7 +340,10 @@ class _Parser:
         level = self.levels[-1]
         kind = token.text if token.text == "&" else "+-"
         if level.kind not in (None, kind):
-            raise self._mixed(index, level)
+            if not self.wraps_mixes:
+                raise self._mixed(index, level)
+            self.opens.append(level.first or 0)
+            self.closes.append(index)
         self.levels[-1] = level._replace(kind=kind, pending=token)
         return True
 
@@ -370,6 +384,33 @@ def parse_selector(text: str) -> SelectorAst:
     ['T1', 'T2', '+', 'T3', '&']
     """
     return _Parser(_tokenize(text), text).parse()
+
+
+def normalize_v1_selector(text: str) -> str:
+    """Rewrites selector text stored before format 2 into v2 grammar with the same meaning.
+
+    Stored text could glue `+`, `&` and a leading `-` to words, and its operators combined left
+    to right at one precedence. Glued operators get spaces, and each level that mixes `&` with
+    `+` or `-` gets the parentheses of that left-to-right reading. Text v2 already reads the
+    same way is returned unchanged; text that never parsed raises SchemaError.
+
+    >>> normalize_v1_selector("T1+T2&T2"), normalize_v1_selector("T1 + T2-T4")
+    ('(T1 + T2) & T2', 'T1 + T2-T4')
+    """
+    tokens = _tokens(text)
+    parser = _Parser(tokens, text, wraps_mixes=True)
+    parser.parse()
+    is_glued = any(t.text in OPERATORS and _glued(text, t.position) for t in tokens)
+    if not (is_glued or parser.opens):
+        return text
+    opens, closes = Counter(parser.opens), Counter(parser.closes)
+    pieces = [
+        ")" * closes[index]
+        + "(" * opens[index]
+        + (f" {token.text} " if token.text in OPERATORS else token.text)
+        for index, token in enumerate(tokens)
+    ]
+    return parse_selector("".join(pieces)).text
 
 
 def _evaluate(ast: SelectorAst, universe: _Universe) -> tuple[SpotId, ...]:
