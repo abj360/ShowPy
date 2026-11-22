@@ -548,6 +548,12 @@
   "LegibilityWarning": "(*args)",
   "LinePiece": "(start: Point, end: Point) -> None",
   "LockedError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
+  "MAX_COORD_M": {
+    "constant": "1000000.0"
+  },
+  "MAX_COUNTS": {
+    "constant": "1000000"
+  },
   "MAX_DEPTH": {
     "constant": "64"
   },
@@ -579,6 +585,9 @@
     "constant": "8294400"
   },
   "MIN_LAYOUT_HEIGHT_M": {
+    "constant": "0.001"
+  },
+  "MIN_TEMPO": {
     "constant": "0.001"
   },
   "Marker": {
