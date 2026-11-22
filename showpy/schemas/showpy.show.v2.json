@@ -234,6 +234,7 @@
         "n": {
           "anyOf": [
             {
+              "minimum": 0,
               "type": "integer"
             },
             {
@@ -369,6 +370,7 @@
           "default": "center"
         },
         "cols": {
+          "exclusiveMinimum": 0,
           "title": "Cols",
           "type": "integer"
         },
@@ -388,6 +390,7 @@
         "n": {
           "anyOf": [
             {
+              "minimum": 0,
               "type": "integer"
             },
             {
@@ -407,6 +410,7 @@
           "type": "integer"
         },
         "rows": {
+          "exclusiveMinimum": 0,
           "title": "Rows",
           "type": "integer"
         },
@@ -545,6 +549,7 @@
         "n": {
           "anyOf": [
             {
+              "minimum": 0,
               "type": "integer"
             },
             {
@@ -730,6 +735,7 @@
         "n": {
           "anyOf": [
             {
+              "minimum": 0,
               "type": "integer"
             },
             {
@@ -791,6 +797,7 @@
         "n": {
           "anyOf": [
             {
+              "minimum": 0,
               "type": "integer"
             },
             {
@@ -1094,6 +1101,7 @@
         "n": {
           "anyOf": [
             {
+              "minimum": 0,
               "type": "integer"
             },
             {
@@ -1243,6 +1251,7 @@
         "n": {
           "anyOf": [
             {
+              "minimum": 0,
               "type": "integer"
             },
             {
@@ -1576,6 +1585,7 @@
         "n": {
           "anyOf": [
             {
+              "minimum": 0,
               "type": "integer"
             },
             {
@@ -2100,6 +2110,7 @@
         "n": {
           "anyOf": [
             {
+              "minimum": 0,
               "type": "integer"
             },
             {
@@ -2303,6 +2314,7 @@
         "n": {
           "anyOf": [
             {
+              "minimum": 0,
               "type": "integer"
             },
             {
@@ -3096,6 +3108,7 @@
         "n": {
           "anyOf": [
             {
+              "minimum": 0,
               "type": "integer"
             },
             {
@@ -3239,6 +3252,7 @@
         "n": {
           "anyOf": [
             {
+              "minimum": 0,
               "type": "integer"
             },
             {
@@ -3552,6 +3566,7 @@
         "n": {
           "anyOf": [
             {
+              "minimum": 0,
               "type": "integer"
             },
             {
