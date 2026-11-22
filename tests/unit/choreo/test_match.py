@@ -4,6 +4,8 @@
 test_match.py --- tests spot-to-slot matching: objectives, constraints, penalties and errors
 
 Contains:
+    test_regression_match_reports_moves_longer_than_max_coord: reports a 2e6 m move between legal
+        points at opposite coordinate bounds
     test_regression_match_by_order_rejects_duplicate_spots: rejects a repeated spot instead of
         collapsing it to one
     test_regression_match_wraps_a_failing_cost_fn: raises MatchError when a cost_fn callback raises
@@ -22,6 +24,7 @@ import pytest
 from showpy.choreo.forms import line_form
 from showpy.choreo.match import bottleneck_value, cost_matrix, match, match_by_order
 from showpy.choreo.match_models import MatchOptions
+from showpy.core.caps import MAX_COORD_M
 from showpy.core.errors import MatchError, SchemaError, ShowPyError, UnknownRefError
 from showpy.core.ids import SpotId
 from showpy.core.types import Point
@@ -362,3 +365,10 @@ def test_match_by_order_records_form_slots() -> None:
     form = line_form("f", [], (0, 0), (2, 0), n=2)
     assert match_by_order(["B", "A"], form).slots == {"B": ("f", 0), "A": ("f", 1)}
     assert match_by_order(["B", "A"], np.array([[0.0, 0.0], [1.0, 0.0]])).slots == {}
+
+
+def test_regression_match_reports_moves_longer_than_max_coord() -> None:
+    """Reports the 2e6 m move of a spot crossing the full coordinate range."""
+    result = match([(-MAX_COORD_M, 0.0)], [(MAX_COORD_M, 0.0)])
+    assert result.max_distance == 2 * MAX_COORD_M
+    assert result.total_distance == 2 * MAX_COORD_M

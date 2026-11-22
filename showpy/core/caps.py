@@ -11,6 +11,12 @@ Contains:
     MAX_IMAGE_PIXELS: bounds the pixels of one raster image
     MAX_VIDEO_PIXELS: bounds the pixels of one video frame
     MIN_LAYOUT_HEIGHT_M: sets the smallest cap height text layout accepts, in meters
+    MAX_COORD_M: bounds every stored coordinate and length, in meters; real shows stay within a
+        few hundred meters, and a far larger value overflows geometry to NaN or infinity
+    MAX_COUNTS: bounds every stored count; real shows stay under about 10,000 counts, and above
+        2**23 counts one ulp exceeds the 1e-9-count clock tolerance
+    MIN_TEMPO: sets the slowest stored tempo, in counts per minute; anything slower is not a
+        performance and drives the clock to infinity
     require_size(): rejects a requested size that is negative or over its cap
 """
 
@@ -25,6 +31,9 @@ MAX_TEXT_CHARS = 1_000_000
 MAX_IMAGE_PIXELS = 40_000_000
 MAX_VIDEO_PIXELS = 3840 * 2160
 MIN_LAYOUT_HEIGHT_M = 0.001
+MAX_COORD_M = 1e6
+MAX_COUNTS = 1_000_000
+MIN_TEMPO = 1e-3
 
 
 def require_size(

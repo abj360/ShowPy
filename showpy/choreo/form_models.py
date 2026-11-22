@@ -21,7 +21,7 @@ from pydantic import Field, model_validator
 
 from showpy.core.errors import SchemaError
 from showpy.core.ids import FormId, SetId, SpotId
-from showpy.core.types import Degrees, FrozenModel, Meters, Point, PositiveMeters
+from showpy.core.types import Degrees, Finite, FrozenModel, Meters, Point, PositiveMeters
 from showpy.geo.models import DEFAULT_LINE_SPACING, TextAlign, TextAnchor
 from showpy.geo.text_layout import MAX_LAYOUT_CHARS
 
@@ -146,8 +146,8 @@ class CrowdedStroke(FrozenModel):
     stroke: int = Field(ge=0)
     first_slot: int = Field(ge=0)
     spots: int = Field(ge=1)
-    gap: Meters
-    wanted: Meters
+    gap: Finite
+    wanted: Finite
 
 
 class TextReport(FrozenModel):
