@@ -51,8 +51,6 @@ class ErrorCode(StrEnum):
     """A cue's estimated duration is negative."""
     DEGENERATE = "DEGENERATE"
     """The landmarks of a similarity fit sit on top of each other."""
-    FACING_RANGE = "FACING_RANGE"
-    """A placement's facing lies outside [0, 360) degrees."""
     FONT_HASH_MISMATCH = "FONT_HASH_MISMATCH"
     """Font bytes do not hash to the URI or pinned hash that names them."""
     FONT_NAME_TAKEN = "FONT_NAME_TAKEN"
