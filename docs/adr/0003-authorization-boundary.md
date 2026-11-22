@@ -154,12 +154,12 @@ maintainer will build it there (2026-11-15).
 
 ## Addendum 2026-11-22: permissions stay with the host, and `actor` is not restored
 
-- **The library adds no permission layer, now or later.** The maintainer decided on 2026-11-22
-  that permissions stay in the host app for good, not only until a second host appears. The
-  library will not add sessions, an access error class, an `ACCESS_DENIED` error code, owner
-  columns on workspace documents, or grants that limit who may read names. Reason: decision 1
-  above still holds. Which person or agent may change which document is a product rule, and
-  every such rule in the library would be one a host must either trust or work around.
+- **The library adds no permission layer.** The maintainer decided on 2026-11-22 that
+  permissions stay in the host app. The library will not add sessions, an access error class,
+  an `ACCESS_DENIED` error code, owner columns on workspace documents, or grants that limit who
+  may read names. Reason: decision 1 above still holds. Which person or agent may change which
+  document is a product rule, and every such rule in the library would be one a host must
+  either trust or work around.
 - **What the library gives a host to decide with.** `diff_show(before, after)` reports every
   changed set, spot, form and path; `Revision.changed` lists the stored paths a revision touched;
   a later release adds a report of ID changes, so a host can follow renamed spots and sets in what
