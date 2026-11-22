@@ -21,6 +21,10 @@ Contains:
         the form's last slot
     test_regression_apply_match_reports_a_pinned_spot_before_a_bad_slot: raises LockedError ahead
         of the MatchError a bad slot would raise
+    test_regression_apply_match_reports_a_locked_form_before_a_bad_slot: raises LockedError ahead
+        of the MatchError a bad slot would raise
+    test_regression_apply_match_reports_a_pinned_spot_changing_slot_before_a_bad_slot: raises
+        LockedError for a pinned spot that keeps its position but changes form or order
     test_regression_apply_match_names_a_pinned_row_on_a_matched_slot: raises MatchError naming
         the pinned spot that already stands on the slot
     test_regression_apply_match_names_the_spot_holding_a_slot: raises MatchError naming both spots
@@ -276,6 +280,31 @@ def test_regression_apply_match_reports_a_pinned_spot_before_a_bad_slot() -> Non
     result = match_by_order(["T2"], ring, show.set("1")).replace(
         slots={"T2": ("ring", len(REVERSED_RING))}
     )
+    with pytest.raises(LockedError):
+        apply_match(pinned, TID, result)
+
+
+def test_regression_apply_match_reports_a_locked_form_before_a_bad_slot() -> None:
+    """Raises LockedError for a locked destination form even when a slot does not exist."""
+    show, ring = _ring_show()
+    locked = show.replace(forms={"ring": ring.replace(locked=True)})
+    result = match_by_order(["T2"], ring, show.set("1")).replace(
+        slots={"T1": ("ring", len(REVERSED_RING))}, assignment={"T1": 0}, entities=("T1",)
+    )
+    with pytest.raises(LockedError):
+        apply_match(locked, TID, result)
+
+
+def test_regression_apply_match_reports_a_pinned_spot_changing_slot_before_a_bad_slot() -> None:
+    """Raises LockedError for a pinned spot whose slot changes though its position does not."""
+    show, ring = _ring_show()
+    pinned = pin_spot(show, "2", "T1")
+    result = match_by_order(["T1", "T2"], ring, show.set("1")).replace(
+        slots={"T1": ("ring", 0), "T2": ("ring", len(REVERSED_RING))}
+    )
+    placed = pinned.set("2").get("T1")
+    moved = placed.replace(order=3)
+    pinned = with_set(pinned, pinned.set("2").with_placements({"T1": moved}, force=True))
     with pytest.raises(LockedError):
         apply_match(pinned, TID, result)
 

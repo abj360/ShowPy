@@ -256,12 +256,38 @@ def _point_updates(dest: Set, result: MatchResult) -> dict[SpotId, PlacementPatc
     return updates
 
 
+def _slot_moves(dest: Set, result: MatchResult) -> dict[SpotId, PlacementPatch]:
+    moves = _point_updates(dest, result)
+    for entity, (form_id, slot) in result.slots.items():
+        current = dest.get(entity)
+        if entity not in moves and (current.form, current.order) != (form_id, slot):
+            moves[entity] = PlacementPatch(form=form_id, order=slot)
+    return moves
+
+
+def _changed_forms(show: Show, set_id: SetId, result: MatchResult) -> list[Form]:
+    touched = {form_id for form_id, _ in result.slots.values()}
+    changed = []
+    for form_id, form in forms_of_set(show, set_id).items():
+        if form_id not in touched and not set(form.members) & set(result.slots):
+            continue
+        try:
+            is_changed = _matched_members(form, result) != form.members
+        except MatchError:
+            is_changed = True
+        if is_changed:
+            changed.append(form)
+    return changed
+
+
 def _require_unlocked(
     show: Show, tid: tuple[str, str], dest: Set, result: MatchResult, *, force: bool
 ) -> None:
-    moves = _point_updates(dest, result)
+    moves = _slot_moves(dest, result)
     dest.with_placements(moves, force=force)
-    clear_rows(show, tid, list(moves), force=force)
+    clear_rows(show, tid, list(_point_updates(dest, result)), force=force)
+    for form in _changed_forms(show, dest.id, result):
+        check_unlocked(form, force=force)
 
 
 def apply_match(
