@@ -294,6 +294,7 @@
       "MISSING_FONT": "'MISSING_FONT'",
       "MISSING_GLYPH": "'MISSING_GLYPH'",
       "MISSING_SPOT": "'MISSING_SPOT'",
+      "MIXED_OPERATORS": "'MIXED_OPERATORS'",
       "NAME_TOO_LONG": "'NAME_TOO_LONG'",
       "NOT_A_MEMBER": "'NOT_A_MEMBER'",
       "NOT_A_TEXT_FORM": "'NOT_A_TEXT_FORM'",
@@ -308,6 +309,7 @@
       "RAMP_CUT": "'RAMP_CUT'",
       "RAMP_INCOMPLETE": "'RAMP_INCOMPLETE'",
       "RAMP_LENGTH": "'RAMP_LENGTH'",
+      "RANGE_PADDING": "'RANGE_PADDING'",
       "READ_ONLY": "'READ_ONLY'",
       "REFLECTION": "'REFLECTION'",
       "RESERVED_MOTION": "'RESERVED_MOTION'",
@@ -952,6 +954,8 @@
       "ids": "tuple[showpy.core.ids.SpotId, ...]"
     }
   },
+  "SelectorAst": "(text: str, program: tuple[showpy.cast.select.SelectorToken, ...])",
+  "SelectorToken": "(text: str, position: int)",
   "Set": {
     "model": {
       "counts": "float",
@@ -1542,6 +1546,7 @@
   "parse_path": "(d: str) -> list[showpy.geo.svg.Subpath]",
   "parse_range": "(text: str) -> list[str]",
   "parse_ref": "(text: str) -> tuple[str, str, str | None]",
+  "parse_selector": "(text: str) -> showpy.cast.select.SelectorAst",
   "parse_tid": "(text: str) -> showpy.core.ids.TransitionId",
   "paths_table": "(spec: showpy.choreo.path_models.TransitionSpec) -> 'pd.DataFrame'",
   "pause": "(pub: showpy.export.models.Publication) -> showpy.export.models.Publication",

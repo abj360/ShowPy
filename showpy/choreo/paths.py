@@ -44,7 +44,7 @@ from showpy.choreo.path_models import (
 )
 from showpy.core.errors import LockedError, PathError
 from showpy.core.extras import require_extra
-from showpy.core.selection import Selection
+from showpy.core.selection import Selection, operand_ids
 from showpy.core.types import Degrees, Point
 
 if TYPE_CHECKING:
@@ -72,7 +72,7 @@ def _edit(
     force: bool,
 ) -> TransitionSpec:
     rows = dict(spec.rows)
-    for entity in sel:
+    for entity in operand_ids(sel):
         row = spec.row(entity)
         if row.locked and not force:
             raise LockedError(
@@ -285,7 +285,9 @@ def stagger(
     >>> spec.row("B").start
     2.0
     """
-    order = list(ordered_sel) if direction == "start" else list(ordered_sel)[::-1]
+    order = list(operand_ids(ordered_sel))
+    if direction != "start":
+        order.reverse()
     for i, entity in enumerate(order):
         spec = delay(spec, [entity], i * step, keep_end=keep_end, force=force)
     return spec
@@ -313,7 +315,7 @@ def ripple(
     >>> [spec.row(e).start for e in "ABC"]
     [0.0, 2.0, 4.0]
     """
-    order = list(ordered_sel)
+    order = list(operand_ids(ordered_sel))
     shares = np.linspace(0.0, 1.0, len(order)) if len(order) > 1 else np.zeros(1)
     starts = total * ease(RIPPLE_CURVES[curve], shares)
     for entity, start in zip(order, starts, strict=True):

@@ -17,6 +17,20 @@ Contains:
         SchemaError, not RecursionError
     test_regression_mirror_pairs_finds_every_pair_within_tolerance: pairs spots within tolerance
         even when the min-sum plan misses them
+    test_regression_mirror_pairs_keeps_a_pair_the_min_sum_plan_drops: keeps both pairs within
+        tolerance where the shortest full plan uses one far edge
+    test_regression_mirror_pairs_pairs_exactly_mirrored_spots: pairs zero-distance mirrors, even
+        with zero tolerance
+    test_regression_mirror_pairs_breaks_ties_by_spot_order: pairs the n-th left spot with the n-th
+        right spot when pairings tie
+    test_regression_mirror_pairs_without_edges_is_empty: returns no pairs when nothing lies within
+        tolerance
+    test_regression_mirror_pairs_refuses_a_negative_or_non_finite_tolerance: raises SchemaError
+        naming the tolerance, before looking at any spot
+    test_regression_mirror_pairs_memory_follows_candidate_pairs: pairs 2,000 spots per side within
+        a budget far below one left-by-right distance table
+    test_regression_mirror_pairs_solves_only_candidate_pairs: hands the solver one edge per
+        candidate pair plus one per left spot, not left by right
     test_regression_split_rejects_absurd_part_counts_quickly: rejects an absurd part count instead
         of building 100,000 empty groups
     test_regression_select_rejects_non_string_ids_in_a_set: rejects a set holding a non-string with
@@ -26,14 +40,27 @@ Contains:
     test_select_accepts_nesting_at_the_depth_cap: parses MAX_DEPTH nested parentheses
     test_regression_select_set_input_ignores_hash_seed: returns one order for a Python set under
         every hash seed
+    test_regression_mixed_operators_raise_with_both_readings: refuses & mixed with + or - at one
+        level, naming the second operator kind and both parenthesized readings
+    test_regression_select_depth_10000_raises_schema_error_not_recursion_error: rejects 10,000
+        nested parentheses with SchemaError, never RecursionError
+    test_regression_select_rejects_a_set_of_non_strings_with_schema_error: rejects a set of ints
+        with SchemaError naming the value, before sorting it
+    test_regression_digit_tails_over_64_characters_raise_schema_error: splits a 64-digit tail and
+        refuses a 65-digit one in IDs, labels and range words
+    test_regression_long_operator_chains_cost_only_their_right_operands: evaluates 20,000-term
+        chains on 40,000 spots within the time budget
 """
 
 import contextlib
+import math
 import sys
 import tracemalloc
 
 import pytest
 import shapely
+from scipy.sparse import csr_array
+from scipy.sparse.csgraph import min_weight_full_bipartite_matching
 
 from showpy.cast.models import Cast, Group, Shape, Spot
 from showpy.cast.select import (
@@ -41,9 +68,12 @@ from showpy.cast.select import (
     alternate,
     in_region,
     is_label_dependent,
+    label_prefix,
     mirror_pairs,
     near,
+    normalize_v1_selector,
     ordered_along,
+    parse_selector,
     select,
     split,
     where,
@@ -51,9 +81,11 @@ from showpy.cast.select import (
 from showpy.choreo.form_models import Form
 from showpy.choreo.models import Placement, Set
 from showpy.core.caps import MAX_DEPTH, MAX_TEXT_CHARS
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import GeometryError, SchemaError, ShowPyError, UnknownRefError
-from showpy.core.ids import LEGACY_IDS_KEY, FormId, SetId, SpotId
+from showpy.core.ids import ID_MAX_LENGTH, LEGACY_IDS_KEY, FormId, SetId, SpotId
 from showpy.core.types import Region
+from showpy.core.util import split_id
 from showpy.geo.shapes import line
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
@@ -178,7 +210,11 @@ def test_operators_combine_left_to_right() -> None:
     assert ids(cast, "T* + TB1") == ("T1", "T2", "T10", "TB1")
     assert ids(cast, "all - T*") == ("TB1", "flag-1", "flag-2")
     assert ids(cast, "tag:soloist & T*") == ("T1",)
-    assert ids(cast, "T1 + T2 & T2") == ("T2",)
+    assert ids(cast, "T* - T2 + TB1") == ("T1", "T10", "TB1")
+    assert ids(cast, "T* & tag:soloist & T1") == ("T1",)
+    with pytest.raises(SchemaError) as info:
+        select(cast, "T1 + T2 & T2")
+    assert info.value.code == ErrorCode.MIXED_OPERATORS
 
 
 def test_parentheses_group() -> None:
@@ -186,7 +222,10 @@ def test_parentheses_group() -> None:
 
 
 def test_operators_next_to_parentheses_need_no_spaces() -> None:
-    assert ids(mixed_cast(), "(T1)+(T2)&(T2)") == ("T2",)
+    assert ids(mixed_cast(), "((T1)+(T2))&(T2)") == ("T2",)
+    with pytest.raises(SchemaError) as info:
+        select(mixed_cast(), "(T1)+(T2)&(T2)")
+    assert info.value.code == ErrorCode.MIXED_OPERATORS
     assert ids(mixed_cast(), "(T*)-(T2)") == ("T1", "T10")
 
 
@@ -405,10 +444,10 @@ def test_regression_select_deep_nesting_raises_schema_error() -> None:
     expression = "(" * NESTING_DEPTH + "T1" + ")" * NESTING_DEPTH
     with pytest.raises(SchemaError):
         select(_line_cast(), expression)
+    with pytest.raises(SchemaError):
+        normalize_v1_selector(expression)
 
 
-@pytest.mark.defect("UP-9.3-76")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-76")
 def test_regression_mirror_pairs_finds_every_pair_within_tolerance() -> None:
     """Pairs spots within tolerance even when the min-sum plan misses them (audit 9.3)."""
     placements = (
@@ -419,6 +458,110 @@ def test_regression_mirror_pairs_finds_every_pair_within_tolerance() -> None:
     )
     set_ = Set(id=SetId("1"), counts=0.0, placements=placements)
     assert len(mirror_pairs(set_, "all", tol=MIRROR_TOL_M)) >= 1
+
+
+def mirror_set(*spots: tuple[str, float, float]) -> Set:
+    placements = tuple(Placement(entity=SpotId(name), x=x, y=y) for name, x, y in spots)
+    return Set(id=SetId("1"), counts=0.0, placements=placements)
+
+
+def test_regression_mirror_pairs_keeps_a_pair_the_min_sum_plan_drops() -> None:
+    """Keeps both pairs within tolerance where the shortest full plan uses one far edge."""
+    set_ = mirror_set(("L1", -1.0, 0.0), ("L2", -1.0, 0.08), ("R1", 1.0, 0.08), ("R2", 1.06, 0.15))
+    assert mirror_pairs(set_, "all", tol=MIRROR_TOL_M) == [("L1", "R1"), ("L2", "R2")]
+
+
+def test_regression_mirror_pairs_pairs_exactly_mirrored_spots() -> None:
+    """Pairs spots whose mirror distance is exactly zero, even with zero tolerance."""
+    set_ = mirror_set(("L1", -1.0, 0.0), ("L2", -2.0, 1.0), ("R2", 2.0, 1.0), ("R1", 1.0, 0.0))
+    assert mirror_pairs(set_, "all", tol=0.0) == [("L1", "R1"), ("L2", "R2")]
+    assert mirror_pairs(set_, "all", axis_x=0.5, tol=0.0) == []
+
+
+def test_regression_mirror_pairs_breaks_ties_by_spot_order() -> None:
+    """Pairs the n-th left spot with the n-th right spot when pairings tie."""
+    stacked = mirror_set(
+        ("L1", -1.0, 0.0),
+        ("L2", -1.0, 0.0),
+        ("L3", -1.0, 0.0),
+        ("R1", 1.0, 0.0),
+        ("R2", 1.0, 0.0),
+        ("R3", 1.0, 0.0),
+    )
+    assert mirror_pairs(stacked, "all") == [("L1", "R1"), ("L2", "R2"), ("L3", "R3")]
+    reordered = ["L2", "L1", "L3", "R3", "R1", "R2"]
+    assert mirror_pairs(stacked, reordered) == [("L2", "R3"), ("L1", "R1"), ("L3", "R2")]
+    fork = mirror_set(("L", -1.0, 0.0), ("R1", 1.0, 0.05), ("R2", 1.0, -0.05))
+    assert mirror_pairs(fork, "all") == [("L", "R1")]
+    assert mirror_pairs(fork, ["R2", "L", "R1"]) == [("L", "R2")]
+    spare_left = ["L1", "L2", "L3", "R1", "R2"]
+    assert mirror_pairs(stacked, spare_left) == [("L1", "R1"), ("L2", "R2")]
+
+
+def test_regression_mirror_pairs_without_edges_is_empty() -> None:
+    """Returns no pairs when no right spot lies within tolerance of a mirror image."""
+    set_ = mirror_set(("L1", -1.0, 0.0), ("L2", -3.0, 0.0), ("R1", 1.5, 0.0), ("R2", 3.0, 0.5))
+    assert mirror_pairs(set_, "all", tol=MIRROR_TOL_M) == []
+    assert mirror_pairs(set_, "all", tol=0.0) == []
+    assert mirror_pairs(set_, ["L1", "L2"]) == []
+
+
+@pytest.mark.parametrize("tol", [-1.0, -1e-12, math.nan, math.inf, -math.inf])
+def test_regression_mirror_pairs_refuses_a_negative_or_non_finite_tolerance(tol: float) -> None:
+    """Raises SchemaError naming the tolerance, before looking at any spot."""
+    one_sided = mirror_set(("L1", -1.0, 0.0))
+    for set_ in (mirror_set(("L1", -1.0, 0.0), ("R1", 1.0, 0.0)), one_sided):
+        with pytest.raises(SchemaError) as info:
+            mirror_pairs(set_, "all", tol=tol)
+        assert str(info.value.context["tol"]) == str(tol)
+        assert info.value.hint == "tol is a finite distance in meters, 0 or more"
+
+
+MIRROR_ROWS = 40
+MIRROR_COLUMNS = 50
+MIRROR_SPACING_M = 1.0
+MIRROR_PEAK_BUDGET_BYTES = 8_000_000
+
+
+def mirror_grid() -> Set:
+    return mirror_set(
+        *(
+            (f"{side}{row}-{col}", sign * (col + 1) * MIRROR_SPACING_M, row * MIRROR_SPACING_M)
+            for side, sign in (("L", -1.0), ("R", 1.0))
+            for row in range(MIRROR_ROWS)
+            for col in range(MIRROR_COLUMNS)
+        )
+    )
+
+
+def test_regression_mirror_pairs_memory_follows_candidate_pairs() -> None:
+    """Pairs 2,000 spots per side within a budget far below one left-by-right distance table."""
+    set_ = mirror_grid()
+    tracemalloc.start()
+    try:
+        pairs = mirror_pairs(set_, "all", tol=MIRROR_TOL_M)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert len(pairs) == MIRROR_ROWS * MIRROR_COLUMNS
+    assert all(left[1:] == right[1:] for left, right in pairs)
+    assert peak < MIRROR_PEAK_BUDGET_BYTES
+
+
+def test_regression_mirror_pairs_solves_only_candidate_pairs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hands the solver one edge per candidate pair plus one per left spot, not left by right."""
+    graph_sizes: list[int] = []
+
+    def recording_solve(graph: csr_array) -> object:
+        graph_sizes.append(graph.nnz)
+        return min_weight_full_bipartite_matching(graph)
+
+    monkeypatch.setattr("showpy.cast.select.min_weight_full_bipartite_matching", recording_solve)
+    left_spots = MIRROR_ROWS * MIRROR_COLUMNS
+    assert len(mirror_pairs(mirror_grid(), "all", tol=MIRROR_TOL_M)) == left_spots
+    assert graph_sizes == [2 * left_spots]
 
 
 @fails_after(5)
@@ -465,3 +608,128 @@ def test_regression_split_rejects_more_parts_than_spots() -> None:
     with pytest.raises(SchemaError):
         split(["A", "B"], 3)
     assert [p.ids for p in split([], 1)] == [()]
+
+
+DEEP_NESTING = 10_000
+
+
+@pytest.mark.parametrize(
+    ("expr", "position", "readings"),
+    [
+        ("T1 + T2 & T2", 8, "write (T1 + T2) & T2 or T1 + (T2 & T2)"),
+        ("all - T1 & T2", 9, "write (all - T1) & T2 or all - (T1 & T2)"),
+        ("T2 & T2 + T1", 8, "write (T2 & T2) + T1 or T2 & (T2 + T1)"),
+        ("T* & (T1 + T2 - T10 & T1)", 20, "write (T1 + T2 - T10) & T1 or T1 + T2 - (T10 & T1)"),
+        ("T1 + T2 & (T2 + T1)", 8, "write (T1 + T2) & (T2 + T1) or T1 + (T2 & (T2 + T1))"),
+        ("T1 + T2 &", 8, "write (T1 + T2) & ... or T1 + (T2 & ...)"),
+    ],
+)
+def test_regression_mixed_operators_raise_with_both_readings(
+    expr: str, position: int, readings: str
+) -> None:
+    """Refuses & mixed with + or - at one level, naming the second kind and both readings."""
+    with pytest.raises(SchemaError) as info:
+        select(mixed_cast(), expr)
+    assert info.value.code == ErrorCode.MIXED_OPERATORS
+    assert info.value.context["position"] == position
+    assert info.value.hint == readings
+
+
+def test_parse_selector_lists_words_and_operators_in_postfix_order() -> None:
+    ast = parse_selector("T1 - (T2 + T10) - TB1")
+    assert [token.text for token in ast.program] == ["T1", "T2", "T10", "+", "-", "TB1", "-"]
+    assert ast.text == "T1 - (T2 + T10) - TB1"
+
+
+def test_select_keeps_the_left_order_then_new_right_ids() -> None:
+    assert ids(mixed_cast(), "T10 + T1-T2 + T10") == ("T10", "T1", "T2")
+    assert ids(mixed_cast(), "(T10 + T2 + T1) & T*") == ("T10", "T2", "T1")
+    assert ids(mixed_cast(), "(T10 + T2 + T1) - T2") == ("T10", "T1")
+
+
+def test_regression_select_depth_10000_raises_schema_error_not_recursion_error() -> None:
+    """Rejects 10,000 nested parentheses with SchemaError; the parser keeps no call stack."""
+    expression = "(" * DEEP_NESTING + "T1" + ")" * DEEP_NESTING
+    with pytest.raises(SchemaError) as info:
+        parse_selector(expression)
+    assert (info.value.context["what"], info.value.context["cap"]) == ("nesting depth", MAX_DEPTH)
+    with pytest.raises(SchemaError):
+        select(_line_cast(), expression)
+
+
+@pytest.mark.parametrize(
+    ("stored", "normalized"),
+    [
+        ("T1 + T2 & T2", "(T1 + T2) & T2"),
+        ("T1+T2&T2", "(T1 + T2) & T2"),
+        ("T1+T2-T10", "T1 + T2-T10"),
+        ("T1 -T2", "T1 - T2"),
+        ("T1 + T2 & T10 - T1", "((T1 + T2) & T10) - T1"),
+        ("(T1)+(T2)&(T2)", "((T1) + (T2)) & (T2)"),
+        ("T* & (T1 + T2 & T10)", "T* & ((T1 + T2) & T10)"),
+        ("tag:soloist&T*", "tag:soloist & T*"),
+    ],
+)
+def test_normalize_v1_selector_keeps_the_v1_reading(stored: str, normalized: str) -> None:
+    assert normalize_v1_selector(stored) == normalized
+    assert parse_selector(normalized).text == normalized
+
+
+@pytest.mark.parametrize("stored", ["T1 + T2", "T1-T10 - T2", "(T1 + T2) & T2", "all", "T1  +  T2"])
+def test_normalize_v1_selector_leaves_v2_text_unchanged(stored: str) -> None:
+    assert normalize_v1_selector(stored) == stored
+
+
+@pytest.mark.parametrize("stored", ["", "T1 +", "(T1", "T1)", "T1 T2", "+ T1", "T1 +-T2", "()"])
+def test_normalize_v1_selector_refuses_text_v1_could_not_parse(stored: str) -> None:
+    with pytest.raises(SchemaError):
+        normalize_v1_selector(stored)
+
+
+def test_regression_select_rejects_a_set_of_non_strings_with_schema_error() -> None:
+    """Rejects a set of ints with SchemaError naming the value, before sorting it."""
+    with pytest.raises(SchemaError) as info:
+        select(_line_cast(), {1, 2})  # type: ignore[arg-type]
+    assert info.value.context["value"] in {"1", "2"}
+
+
+def test_regression_digit_tails_over_64_characters_raise_schema_error() -> None:
+    """Splits a 64-digit tail and refuses a 65-digit one in IDs, labels and range words."""
+    fits, too_long = "1" * ID_MAX_LENGTH, "1" * (ID_MAX_LENGTH + 1)
+    assert split_id(f"T{fits}") == ("T", int(fits))
+    assert label_prefix(f"T{fits}") == "T"
+    for call in (lambda: split_id(f"T{too_long}"), lambda: label_prefix(f"T{too_long}")):
+        with pytest.raises(SchemaError) as info:
+            call()
+        assert info.value.context["digits"] == ID_MAX_LENGTH + 1
+    with pytest.raises(SchemaError):
+        select(_line_cast(), f"T1-T{too_long}")
+
+
+LARGE_CAST_SPOTS = 40_000
+LONG_CHAIN_TERMS = 20_000
+LONG_CHAIN_BUDGET_S = 5
+
+
+@pytest.fixture(scope="module")
+def large_cast() -> Cast:
+    return Cast(
+        groups={"g": Group(key="g", label_prefix="T")},
+        spots=tuple(Spot(id=SpotId(f"T{i}"), group="g") for i in range(1, LARGE_CAST_SPOTS + 1)),
+    )
+
+
+@fails_after(LONG_CHAIN_BUDGET_S)
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+def test_regression_long_operator_chains_cost_only_their_right_operands(large_cast: Cast) -> None:
+    """Evaluates 20,000-term `-` and `+` chains on 40,000 spots without copying the left side.
+
+    Copying the left operand per operator made `all - T1 - ... - T20000` take about a minute.
+    """
+    terms = range(1, LONG_CHAIN_TERMS + 1)
+    removed = select(large_cast, "all" + "".join(f" - T{i}" for i in terms))
+    assert removed.ids[0] == f"T{LONG_CHAIN_TERMS + 1}"
+    assert len(removed.ids) == LARGE_CAST_SPOTS - LONG_CHAIN_TERMS
+    added = select(large_cast, " + ".join(f"T{i}" for i in reversed(terms)))
+    assert added.ids[:2] == (f"T{LONG_CHAIN_TERMS}", f"T{LONG_CHAIN_TERMS - 1}")
+    assert len(added.ids) == LONG_CHAIN_TERMS

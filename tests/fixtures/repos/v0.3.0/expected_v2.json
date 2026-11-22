@@ -5587,7 +5587,7 @@
       "zones": [
         {
           "active": null,
-          "applies_to": "T1 + T2 & T2",
+          "applies_to": "(T1 + T2) & T2",
           "id": "front",
           "kind": "custom",
           "note": "",
@@ -8713,6 +8713,8 @@
   "report": {
     "from_version": 1,
     "renamed": {},
-    "repairs": []
+    "repairs": [
+      "/show/sheet.json zones[0].applies_to: rewrote 'T1 + T2 & T2' as '(T1 + T2) & T2'"
+    ]
   }
 }

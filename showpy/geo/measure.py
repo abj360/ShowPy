@@ -34,7 +34,7 @@ from scipy.spatial.distance import cdist
 from showpy.choreo.models import Set
 from showpy.core.errors import GeometryError, SchemaError
 from showpy.core.ids import SpotId
-from showpy.core.selection import Selection
+from showpy.core.selection import Selection, operand_ids
 from showpy.core.types import Box2, Count, Meters, Point, Points, Polygon
 from showpy.core.util import as_points, natural_sort
 from showpy.geo.curve_base import Curve
@@ -64,7 +64,7 @@ def on_field_ids(s: Set, sel: SetSelector = ALL) -> tuple[SpotId, ...]:
             hint='pass "all", a list of spot IDs or a Selection',
             context={"selector": sel},
         )
-    ids = s.entity_ids() if sel == ALL else tuple(dict.fromkeys(sel))
+    ids = s.entity_ids() if sel == ALL else tuple(dict.fromkeys(operand_ids(sel)))
     return tuple(p.entity for p in map(s.get, ids) if p.on_field)
 
 
