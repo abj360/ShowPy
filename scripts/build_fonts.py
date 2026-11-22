@@ -51,7 +51,7 @@ from showpy.geo.svg import (
 )
 from showpy.geo.text import SIMPLEX
 
-REPO_LICENSE = Path(__file__).resolve().parents[1] / "LICENSE"
+MIT_LICENSE = Path(__file__).resolve().parents[1] / "showpy" / "schemas" / "LICENSE-MIT.txt"
 FONT_FORMAT = "showpy.font.v1"
 HERSHEY_UNITS_PER_EM = 32.0
 CLOSE_TOL_EM = 0.005
@@ -606,7 +606,7 @@ def _write_licenses(out: Path, cache: Path) -> None:
     licenses.mkdir(parents=True, exist_ok=True)
     for key, name in (("relief.ofl", "OFL-1.1.txt"), ("hershey.txt", "HERSHEY.txt")):
         (licenses / name).write_bytes(_fetch(SOURCES[key], cache, key))
-    (licenses / "MIT.txt").write_bytes(REPO_LICENSE.read_bytes())
+    (licenses / "MIT.txt").write_bytes(MIT_LICENSE.read_bytes())
 
 
 if __name__ == "__main__":

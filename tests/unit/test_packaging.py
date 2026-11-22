@@ -25,6 +25,12 @@ def test_schema_is_a_package_resource() -> None:
     assert schema_path("showpy.show.v1.json").is_file()
 
 
+def test_schemas_ship_their_mit_notice() -> None:
+    notice = schema_path("LICENSE-MIT.txt").read_text()
+    assert notice.startswith("MIT License\n\nCopyright (c) 2026 abj360\n")
+    assert "Permission is hereby granted, free of charge" in notice
+
+
 def test_distribution_name_is_showpy() -> None:
     assert importlib.metadata.metadata("ShowPy")["Name"] == "ShowPy"
 

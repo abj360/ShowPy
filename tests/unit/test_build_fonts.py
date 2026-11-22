@@ -193,6 +193,6 @@ def test_regression_every_named_license_file_is_written(
     simplex = plans[-1]
     assert simplex.license_file == "licenses/MIT.txt"
     assert (out / simplex.license_file).read_bytes() == (
-        SCRIPT_PATH.parents[1] / "LICENSE"
+        SCRIPT_PATH.parents[1] / "showpy" / "schemas" / "LICENSE-MIT.txt"
     ).read_bytes()
     assert "(licenses/MIT.txt)" in build_fonts._notice_block(simplex, "0")

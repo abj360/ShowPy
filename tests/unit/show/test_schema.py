@@ -15,6 +15,7 @@ Contains:
     test_v2_schema_validates_encoded_documents(): accepts the documents encode_show writes
     test_v2_schema_refuses_a_tree_without_its_header(): refuses a show.json without format
     test_v2_schema_refuses_an_unknown_document(): refuses a path no show document has
+    test_v2_schema_states_its_mit_licence(): checks the schema names its MIT notice
 """
 
 import hashlib
@@ -58,6 +59,7 @@ DRAFT = "https://json-schema.org/draft/2020-12/schema"
 UPDATE_FLAG = "SHOWPY_UPDATE_SCHEMA"
 REF = "#/$defs/{model}"
 SHOW_DOCUMENT = "ShowDocument"
+LICENCE_COMMENT = "Licensed under the MIT License: see LICENSE-MIT.txt beside this file."
 
 
 def _ref(name: str) -> dict[str, str]:
@@ -91,6 +93,7 @@ def stored_schema() -> dict[str, Any]:
     return {
         "$schema": DRAFT,
         "$id": V2_ID,
+        "$comment": LICENCE_COMMENT,
         "title": "ShowPy stored show, format version 2",
         "description": "A stored tree as one object mapping each show-document path to its JSON.",
         "type": "object",
@@ -148,3 +151,8 @@ def test_v2_schema_refuses_an_unknown_document() -> None:
     tree = {**_tree(two_set_show()), "/sets/1/extra.json": {}}
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(tree, _v2_schema())
+
+
+def test_v2_schema_states_its_mit_licence() -> None:
+    assert _v2_schema()["$comment"] == LICENCE_COMMENT
+    assert schema_path("LICENSE-MIT.txt").is_file()
