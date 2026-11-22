@@ -324,16 +324,12 @@ LINE_LENGTH = 30.0
 SPOT_GAP = 6.0
 
 
-@pytest.mark.defect("UP-9.6-11")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-11")
 def test_regression_edit_block_rows_updates_slot_count() -> None:
     """Keeps a block's slot count in step with its edited rows (audit 9.6)."""
     edited = edit(block_form("b", [], (0, 0), 2, 2, 1.0), rows=3)
     assert slot_count(edited) == len(slots(edited))
 
 
-@pytest.mark.defect("UP-9.6-12")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-12")
 def test_regression_edit_custom_points_updates_slot_count() -> None:
     """Keeps a custom form's slot count in step with its edited points (audit 9.6)."""
     edited = edit(
@@ -348,8 +344,6 @@ def test_regression_edit_n_none_clears_slot_count_on_curve_forms() -> None:
     assert slot_count(edit(form, n=None)) == len(form.members)
 
 
-@pytest.mark.defect("UP-9.6-14")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-14")
 def test_regression_edit_rejects_more_members_than_slots() -> None:
     """Rejects members beyond the form's slots instead of accepting them (audit 9.6)."""
     form = line_form("l", ["A"], (0, 0), (4, 0), n=2)

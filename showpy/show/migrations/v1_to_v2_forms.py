@@ -106,7 +106,17 @@ def _migrated_form(document: str, index: int, form: JsonValue) -> dict[str, Json
         raise _refusal(document, f"[{index}]", form, "is not an object")
     kind, geometry = _v1_parts(document, index, form)
     rest = {key: value for key, value in form.items() if key not in ("kind", "geometry")}
-    return {**rest, "recipe": _checked_recipe(document, index, kind, geometry)}
+    recipe = _checked_recipe(document, index, kind, geometry)
+    _require_members_fit(document, index, rest.get("members"), recipe.get("n"))
+    return {**rest, "recipe": recipe}
+
+
+def _require_members_fit(document: str, index: int, members: JsonValue, slots: JsonValue) -> None:
+    """Refuses a form that stores more members than its slot count, which v2 cannot hold."""
+    if isinstance(members, list) and isinstance(slots, int) and len(members) > slots:
+        raise _refusal(
+            document, f"[{index}].members", members, f"holds more members than its {slots} slots"
+        )
 
 
 def _migrated_document(document: str, forms: JsonValue) -> list[JsonValue]:

@@ -41,7 +41,7 @@ from showpy.choreo.recipe_models import (
     WedgeRecipe,
 )
 from showpy.core.deprecation import renamed_field
-from showpy.core.errors import SchemaError
+from showpy.core.errors import SchemaError, SpacingError
 from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.types import (
     Degrees,
@@ -226,7 +226,7 @@ class Form(FrozenModel):
         set: Set the form belongs to.
         recipe: Typed construction recipe the slots are generated from; its `kind` is the
             form's shape family.
-        members: Spots in slot order.
+        members: Spots in slot order; at most `recipe.n` of them when `n` is set.
         spacing: How members are spaced on the shape.
         facing: How members face.
         locked: Designer lock; edits need force=True.
@@ -255,6 +255,17 @@ class Form(FrozenModel):
     def _unique_members(self) -> "Form":
         if len(set(self.members)) != len(self.members):
             raise SchemaError(f"form {self.id} lists a member twice", hint="list each spot once")
+        return self
+
+    @model_validator(mode="after")
+    def _members_fit_slots(self) -> "Form":
+        slots = self.recipe.n
+        if slots is not None and len(self.members) > slots:
+            raise SpacingError(
+                f"form {self.id} has {len(self.members)} members but {slots} slots",
+                hint=f"use at most {slots} members, or raise the slot count n",
+                context={"form": self.id, "n": slots, "members": len(self.members)},
+            )
         return self
 
 

@@ -14,8 +14,8 @@ Contains:
         fields as they were, and never mutates its input
     test_regression_forms_step_refuses_what_v2_cannot_hold: refuses an unknown kind, a bad
         geometry, a reserved key, an unknown key, an out-of-range value (a negative count, a block
-        of no rows) and a curve its own model refuses (an arc of zero sweep), naming the document,
-        the field and the value
+        of no rows), more members than slots and a curve its own model refuses (an arc of zero
+        sweep), naming the document, the field and the value
     test_regression_forms_step_refuses_a_forms_document_that_is_not_a_list: refuses a forms
         document that holds no list
 """
@@ -233,6 +233,11 @@ def test_forms_step_passes_other_documents_and_fields_through() -> None:
             _v1_form("block", {"origin": [0, 0], "rows": 2, "cols": -1, "interval": 1}),
             "[0].geometry.cols",
             "-1",
+        ),
+        (
+            {**_v1_form("custom", {"points": [[0, 0]], "n": 1}), "members": ["A", "B"]},
+            "[0].members",
+            "['A', 'B']",
         ),
         ("not a form", "[0]", "not a form"),
         (_v1_form("arc", ZERO_SWEEP_ARC), "[0].geometry", bounded_repr(ZERO_SWEEP_ARC)),

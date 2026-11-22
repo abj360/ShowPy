@@ -91,6 +91,18 @@ def _allowed_keys(recipe: Recipe) -> frozenset[str]:
     return frozenset(type(recipe).model_fields) - FIXED_RECIPE_KEYS
 
 
+def _derived_count(recipe: RecipeBase, changes: dict[str, Any]) -> dict[str, int]:
+    """Returns the slot count a block or custom edit implies, unless the caller set `n`."""
+    if "n" in changes:
+        return {}
+    if isinstance(recipe, BlockRecipe) and {"rows", "cols"} & changes.keys():
+        rows, cols = changes.get("rows", recipe.rows), changes.get("cols", recipe.cols)
+        return {"n": rows * cols} if isinstance(rows, int) and isinstance(cols, int) else {}
+    if isinstance(recipe, CustomRecipe) and "points" in changes:
+        return {"n": len(changes["points"])}
+    return {}
+
+
 # Any: changes are construction values whose type depends on the key.
 def _edited_recipe(form: Form, changes: dict[str, Any]) -> dict[str, Any]:
     recipe = form.recipe
@@ -105,7 +117,7 @@ def _edited_recipe(form: Form, changes: dict[str, Any]) -> dict[str, Any]:
             )
     stored = recipe.model_dump()
     if not isinstance(recipe, CurveRecipeBase):
-        return {**stored, **changes}
+        return {**stored, **changes, **_derived_count(recipe, changes)}
     n = changes.pop("n", recipe.n)
     curve = curve_from_construction({**recipe.curve.construction(), **changes})
     return {**stored, "curve": curve, "n": n}
@@ -124,7 +136,9 @@ def edit(
 
     The result is validated by regenerating its slots when the slot count is known. A text
     form keeps its count: `n` and `spacing` raise `TEXT_COUNT_EDIT` (use `edit_text_count`),
-    and `members` must keep the count. `fonts` names resolve through `font_registry`.
+    and `members` must keep the count. `fonts` names resolve through `font_registry`. Editing a
+    block's `rows` or `cols`, or a custom form's `points`, moves its `n` to the new slot count
+    unless `n` is passed; more members than `n` raises.
 
     >>> f = circle_form("c", ["A", "B"], (0, 5), 2.0)
     >>> edit(f, radius=3.0).recipe.curve.radius
@@ -137,6 +151,8 @@ def edit(
     fields = {k: v for k, v in changes.items() if k in FORM_FIELDS}
     recipe = {k: v for k, v in changes.items() if k not in FORM_FIELDS}
     edited_recipe = _edited_recipe(form, recipe) if recipe else form.recipe
+    if form.kind == "text" and form.recipe.n is not None and "members" in fields:
+        require_edited_members(form.id, form.recipe.n, len(fields["members"]))
     dumped = form.model_dump()
     edited = Form.model_validate({**dumped, **fields, "recipe": edited_recipe})
     count = slot_count(edited)

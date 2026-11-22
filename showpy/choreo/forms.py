@@ -479,9 +479,9 @@ def text_form(
         line_spacing=line_spacing,
     )
     counted = count_recipe(recipe, n, spacing, font_registry)
+    require_member_count(form_id, stored_count(form_id, counted), len(members))
     form = _form(form_id, counted, members, None, facing, set_id)
     layout(form, font_registry=font_registry)
-    require_member_count(form_id, stored_count(form_id, counted), len(members))
     return form
 
 

@@ -1172,7 +1172,7 @@
     },
     "Form": {
       "additionalProperties": false,
-      "description": "Holds a stored shape construction plus its ordered members.\n\nAttributes:\n    id: Form ID, unique across the show.\n    set: Set the form belongs to.\n    recipe: Typed construction recipe the slots are generated from; its `kind` is the\n        form's shape family.\n    members: Spots in slot order.\n    spacing: How members are spaced on the shape.\n    facing: How members face.\n    locked: Designer lock; edits need force=True.\n    meta: Free designer metadata.",
+      "description": "Holds a stored shape construction plus its ordered members.\n\nAttributes:\n    id: Form ID, unique across the show.\n    set: Set the form belongs to.\n    recipe: Typed construction recipe the slots are generated from; its `kind` is the\n        form's shape family.\n    members: Spots in slot order; at most `recipe.n` of them when `n` is set.\n    spacing: How members are spaced on the shape.\n    facing: How members face.\n    locked: Designer lock; edits need force=True.\n    meta: Free designer metadata.",
       "properties": {
         "facing": {
           "$ref": "#/$defs/FacingSpec",
