@@ -87,7 +87,10 @@ would need a second package that re-exports the first.
      the fixtures' `README.md` files, which name the release that wrote each one. The
      `expected_v2.json` files beside them are generated output: each holds
      `"format": "showpy.show"` once, and the rename regenerates them with `e8.show`;
-   - the font files themselves;
+   - the five font JSON files in `showpy/fonts/`, which stay byte-identical (moved with their
+     folder), including the `"source": "showpy/geo/text.py"` string inside `simplex.json`. The
+     folder's `NOTICE.txt` is not part of any font hash, and the rename rewrites its one
+     occurrence (`source: showpy/geo/text.py`, line 26) to the new path;
    - `CHANGELOG.md` entries and release notes up to and including v0.3.0;
    - the text of ADRs 0001 to 0019. History is not rewritten.
 6. **How to read older ADRs.** In ADRs 0001 to 0019, in older release notes and in older changelog
@@ -128,7 +131,8 @@ would need a second package that re-exports the first.
 | Bundled font URIs that must not change                                | 5                                                    |
 | `git diff --stat v0.3.0 -- showpy/fonts` at `8b92d66`                 | empty                                                |
 | Fixture occurrences left (READMEs) and rewritten (`expected_v2.json`) | 3 and 3 (measured at `8b92d66`)                      |
-| Occurrences left by design in fonts and the v1 schema                 | 7 and 1 (measured at `8b92d66`)                      |
+| Occurrences left by design in the font JSON files and the v1 schema   | 6 and 1 (measured at `8b92d66`)                      |
+| Occurrences rewritten in `showpy/fonts/NOTICE.txt`                    | 1                                                    |
 
 ## What would change our mind
 
