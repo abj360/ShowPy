@@ -30,6 +30,8 @@ Contains:
         level, naming the second operator kind and both parenthesized readings
     test_regression_select_depth_10000_raises_schema_error_not_recursion_error: rejects 10,000
         nested parentheses with SchemaError, never RecursionError
+    test_regression_select_rejects_a_set_of_non_strings_with_schema_error: rejects a set of ints
+        with SchemaError naming the value, before sorting it
 """
 
 import contextlib
@@ -550,3 +552,10 @@ def test_normalize_v1_selector_leaves_v2_text_unchanged(stored: str) -> None:
 def test_normalize_v1_selector_refuses_text_v1_could_not_parse(stored: str) -> None:
     with pytest.raises(SchemaError):
         normalize_v1_selector(stored)
+
+
+def test_regression_select_rejects_a_set_of_non_strings_with_schema_error() -> None:
+    """Rejects a set of ints with SchemaError naming the value, before sorting it."""
+    with pytest.raises(SchemaError) as info:
+        select(_line_cast(), {1, 2})  # type: ignore[arg-type]
+    assert info.value.context["value"] in {"1", "2"}
