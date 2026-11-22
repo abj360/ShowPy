@@ -31,6 +31,7 @@ from showpy.core.ids import format_tid as _format_tid
 from showpy.core.types import Points
 from showpy.core.units import angle_diff
 from showpy.core.util import natural_sort
+from showpy.geo.fonts import FontRegistry
 from showpy.show.models import Show
 
 SAME_POSITION_TOL = 1e-9
@@ -101,7 +102,9 @@ def _neighbour_tids(show: Show, set_id: SetId) -> list[TransitionId]:
     return [tid for tid in show.transition_ids() if set_id in tid]
 
 
-def _form_poses(show: Show, set_id: SetId, form_id: FormId) -> tuple[Points, list[float]]:
+def _form_poses(
+    show: Show, set_id: SetId, form_id: FormId, font_registry: FontRegistry | None
+) -> tuple[Points, list[float]]:
     form = show.forms.get(form_id)
     if form is None:
         raise UnknownRefError(
@@ -121,7 +124,7 @@ def _form_poses(show: Show, set_id: SetId, form_id: FormId) -> tuple[Points, lis
             hint=f"match onto forms set {set_id} lists, or re-place the set with this form",
             context={"form": form_id, "set": set_id, "set_forms": list(show.set(set_id).forms)},
         )
-    return slot_poses(form)
+    return slot_poses(form, font_registry=font_registry)
 
 
 def _check_slot(form_id: FormId, slot: int, slot_count: int) -> None:
@@ -133,12 +136,14 @@ def _check_slot(form_id: FormId, slot: int, slot_count: int) -> None:
         )
 
 
-def _slot_targets(show: Show, set_id: SetId, result: MatchResult) -> dict[SpotId, Placement]:
+def _slot_targets(
+    show: Show, set_id: SetId, result: MatchResult, font_registry: FontRegistry | None
+) -> dict[SpotId, Placement]:
     poses: dict[FormId, tuple[Points, list[float]]] = {}
     targets = {}
     for entity, (form_id, slot) in result.slots.items():
         if form_id not in poses:
-            poses[form_id] = _form_poses(show, set_id, form_id)
+            poses[form_id] = _form_poses(show, set_id, form_id, font_registry)
         points, facings = poses[form_id]
         _check_slot(form_id, slot, len(points))
         x, y = (float(v) for v in points[slot])
@@ -291,7 +296,12 @@ def _require_unlocked(
 
 
 def apply_match(
-    show: Show, tid: tuple[str, str], result: MatchResult, *, force: bool = False
+    show: Show,
+    tid: tuple[str, str],
+    result: MatchResult,
+    *,
+    force: bool = False,
+    font_registry: FontRegistry | None = None,
 ) -> Show:
     """Writes the result's targets into the destination set and resets moved spots' paths.
 
@@ -300,7 +310,8 @@ def apply_match(
     onto forms also writes each spot's facing, form and order from its slot and updates
     `Form.members` like `swap`, so rebuilding a form keeps the match; changing a locked
     form needs force=True, and leaving a text form short of members raises
-    `MEMBER_COUNT_MISMATCH`.
+    `MEMBER_COUNT_MISMATCH`. `font_registry` holds the fonts of text forms the result slots
+    into; None means `bundled_fonts()`.
 
     >>> from showpy.choreo.match import match
     >>> from showpy.examples import two_set_show
@@ -316,7 +327,7 @@ def apply_match(
         updates = _point_updates(dest, result)
         edited = with_set(show, dest.with_placements(updates, force=force))
         return clear_rows(edited, tid, list(updates), force=force)
-    slot_updates = _slot_updates(dest, _slot_targets(show, dest.id, result))
+    slot_updates = _slot_updates(dest, _slot_targets(show, dest.id, result, font_registry))
     forms_edited = _matched_forms(show, dest.id, result, force=force)
     edited = with_set(forms_edited, dest.with_placements(slot_updates, force=force))
     relocated = [e for e, p in slot_updates.items() if is_elsewhere(dest.get(e), p.x, p.y)]
