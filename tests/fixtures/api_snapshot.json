@@ -253,7 +253,7 @@
       "moving": "bool",
       "on_field": "bool",
       "position": "Point",
-      "velocity": "Point"
+      "velocity": "FinitePoint"
     }
   },
   "ErrorCode": {
@@ -375,7 +375,7 @@
     "model": {
       "kind": "Literal['delay', 'waypoint', 'reassign', 'stagger']",
       "max_speed_after": "float",
-      "new_gap": "Meters",
+      "new_gap": "Finite",
       "params": "dict[str, Any]"
     }
   },
@@ -461,7 +461,7 @@
     "model": {
       "a": "showpy.core.ids.SpotId",
       "b": "showpy.core.ids.SpotId",
-      "gap": "Meters",
+      "gap": "Finite",
       "tau": "float"
     }
   },
@@ -669,7 +669,7 @@
   "MotionPiece": {
     "model": {
       "kind": "Literal['hold', 'line', 'arc', 'curve', 'route', 'custom']",
-      "length": "Meters",
+      "length": "Finite",
       "params": "dict[str, float]",
       "t0": "float",
       "t1": "float"

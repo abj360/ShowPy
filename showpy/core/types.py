@@ -7,6 +7,8 @@ Contains:
     NonNegCount, NonNegSeconds, PositiveMeters: range-limited unit aliases
     CountsPerMinute: positive finite tempo alias
     Heading: wraps a stored facing into [0, 360)
+    FinitePoint: a finite (x, y) pair with no coordinate bound, for derived values such as
+        velocities
     JsonValue: the JSON data model, re-exported from json_types
     FrozenJsonValue: the read-only JSON value a JsonObject holds, re-exported from json_types
     JsonObject: a deeply read-only, hashable JSON object for open payloads; dumps plain JSON
@@ -53,6 +55,7 @@ type Heading = Annotated[float, Field(allow_inf_nan=False), AfterValidator(norma
 type JsonObject = Annotated[Mapping[str, JsonValue | FrozenJsonValue], FrozenJson()]
 type Point = tuple[float, float]
 type Point3 = tuple[float, float, float]
+type FinitePoint = tuple[Finite, Finite]
 type Ring = tuple[Point, ...]
 type Points = NDArray[np.float64]
 type Transform = NDArray[np.float64]
