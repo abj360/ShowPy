@@ -46,7 +46,7 @@ from showpy.choreo.match_solve import (
     solve_sum,
 )
 from showpy.choreo.models import Set
-from showpy.core.errors import MatchError
+from showpy.core.errors import MatchError, SchemaError
 from showpy.core.ids import FormId
 from showpy.core.types import Points
 from showpy.core.util import as_points, natural_sort
@@ -158,15 +158,22 @@ def _row_groups(p: MatchProblem) -> IntArray:
 def _improve(
     p: MatchProblem, cost: FloatArray, cols: IntArray, cap: float, options: MatchOptions
 ) -> tuple[IntArray, int]:
-    crossing = options.weights.get("crossing", 0.0)
-    spread = options.weights.get("group_spread", 0.0)
+    crossing = options.weights.crossing
+    spread = options.weights.group_spread
     if options.preserve_order or not (crossing or spread) or len(cols) < 2:
         return cols, 0
     frozen = np.array([e in options.pinned for e in p.entities], dtype=bool)
     score = SwapScore(
-        _objective_cost(cost, options), cost, cap, p.starts, p.slots, crossing, spread,
-        _row_groups(p), frozen,
-    )  # fmt: skip
+        _objective_cost(cost, options),
+        cost,
+        cap,
+        p.starts,
+        p.slots,
+        crossing,
+        spread,
+        _row_groups(p),
+        frozen,
+    )
     return improve_by_swaps(cols, score)
 
 
@@ -285,6 +292,13 @@ def match_by_order(
     """
     slots = form_slots(form) if isinstance(form, Form) else as_points(form)
     ids = tuple(ordered_sel)
+    if len(set(ids)) != len(ids):
+        repeated = sorted({e for e in ids if ids.count(e) > 1})
+        raise SchemaError(
+            f"spot {repeated[0]!r} is listed twice",
+            hint="list each spot once",
+            context={"repeated": repeated},
+        )
     if len(ids) > len(slots):
         raise MatchError(
             f"{len(ids)} spots but only {len(slots)} slots",

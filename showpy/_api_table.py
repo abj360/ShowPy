@@ -129,6 +129,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("MatchError", "showpy.core.errors", "MatchError"),
     ("MatchOptions", "showpy.choreo.match_models", "MatchOptions"),
     ("MatchResult", "showpy.choreo.match_models", "MatchResult"),
+    ("MatchWeights", "showpy.choreo.match_models", "MatchWeights"),
     ("MeasureLabel", "showpy.time.models", "MeasureLabel"),
     ("MeasureSetting", "showpy.time.models", "MeasureSetting"),
     ("MigrationReport", "showpy.show.migrate", "MigrationReport"),
