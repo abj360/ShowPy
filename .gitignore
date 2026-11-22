@@ -14,3 +14,6 @@ build/
 node_modules/
 .nox/
 tests/bench/.results/
+
+# Local agent workspaces; never tracked.
+/.superpowers
