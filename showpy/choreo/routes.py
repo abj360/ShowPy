@@ -352,18 +352,21 @@ def two_part(
 def _require_rows_unlocked(
     show: Show, spec: TransitionSpec, edited: TransitionSpec, *, force: bool
 ) -> None:
-    """Raises LockedError when `edited` changes a locked row of `spec`, unless forced.
+    """Raises LockedError when `edited` changes a locked row, unless forced.
+
+    A row is locked when the transition stored in `show` locks it or the caller's `spec` does,
+    so a copy with the locks cleared cannot bypass the stored ones.
 
     Args:
         show: Show that owns the transition.
-        spec: Transition as it stands before the edit.
+        spec: Transition as the caller holds it before the edit.
         edited: Transition after the edit.
         force: Whether the caller overrides locks and pins.
     """
     others = tuple(t for t in show.transitions if t.id != spec.id)
-    before = show.replace(transitions=(*others, spec))
     after = show.replace(transitions=(*others, edited))
-    require_unlocked(before, after, force=force)
+    require_unlocked(show, after, force=force)
+    require_unlocked(show.replace(transitions=(*others, spec)), after, force=force)
 
 
 def rotate_path(
@@ -398,4 +401,6 @@ def rotate_path(
         pts = show.set(spec.id[0]).positions(ids)
         center = pts.mean(axis=0)
         pivot = (float(center[0]), float(center[1]))
-    return set_style(spec, ids, PathStyle.ROTATE, force=force, pivot=pivot, sweep_deg=deg)
+    edited = set_style(spec, ids, PathStyle.ROTATE, force=force, pivot=pivot, sweep_deg=deg)
+    _require_rows_unlocked(show, spec, edited, force=force)
+    return edited

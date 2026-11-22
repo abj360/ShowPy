@@ -37,6 +37,12 @@ Contains:
         counter-march route unless forced
     test_regression_make_route_offsets_members_that_share_a_start: gives each of two file members
         on one spot its own arc length, so the file stays on the route
+    test_regression_route_builder_reads_stored_locks: refuses to edit a row the stored transition
+        locks, though the caller clears it
+    test_route_builders_accept_a_spec_the_show_does_not_store: edits a spec whose ID matches no
+        stored transition
+    test_route_builders_leave_unselected_locked_rows_alone: edits selected spots while another spot
+        stays locked
 """
 
 import math
@@ -320,3 +326,38 @@ def test_regression_make_route_offsets_members_that_share_a_start() -> None:
     moved = follow_and_set_targets(show, TID, route)
     report = validate_paths(moved, moved.transition(TID))
     assert report.ok, [(i.code, i.message) for i in report.issues if i.level == "error"]
+
+
+def test_regression_route_builder_reads_stored_locks() -> None:
+    """Refuses to edit a row the stored transition locks, though the caller's copy clears it."""
+    show = _locked_show()
+    stored = show.transition(TID)
+    cleared = stored.replace(rows={e: row.replace(locked=False) for e, row in stored.rows.items()})
+    with pytest.raises(LockedError):
+        two_part(show, cleared, ["T1"], "x_first")
+    with pytest.raises(LockedError):
+        rotate_path(show, cleared, ["T1"], (0.0, 0.0), 90.0)
+    forced = two_part(show, cleared, ["T1"], "x_first", force=True)
+    assert forced.row("T1").style == PathStyle.POLYLINE
+
+
+def test_route_builders_accept_a_spec_the_show_does_not_store() -> None:
+    """Edits a spec whose ID matches no stored transition and stores nothing in the show."""
+    show = two_set_show()
+    assert show.transitions == ()
+    spec = TransitionSpec(id=TID, counts=show.set(TID[1]).counts)
+    assert two_part(show, spec, ["T1"], "x_first").row("T1").style == PathStyle.POLYLINE
+    assert rotate_path(show, spec, ["T1"], (0.0, 0.0), 90.0).row("T1").style == PathStyle.ROTATE
+    assert show.transitions == ()
+
+
+def test_route_builders_leave_unselected_locked_rows_alone() -> None:
+    """Edits the selected spots without force while another spot's row stays locked."""
+    show = _locked_show("T2")
+    spec = show.transition(TID)
+    rotated = rotate_path(show, spec, ["T1"], (0.0, 0.0), 90.0)
+    bent = two_part(show, spec, ["T1"], "y_first")
+    for edited, style in ((rotated, PathStyle.ROTATE), (bent, PathStyle.POLYLINE)):
+        assert edited.row("T1").style == style
+        assert edited.row("T2") == spec.row("T2")
+        assert edited.row("T2").locked
