@@ -9,6 +9,8 @@ Contains:
     test_regression_form_geometry_is_immutable: keeps a frozen form's recipe unchanged when the
         caller edits its geometry
     test_regression_form_is_hashable: hashes equal forms to equal values
+    test_regression_form_meta_is_read_only_and_hashes_by_content: stores meta read-only, so it
+        cannot change under a hash, whatever its key order
     test_regression_facing_spec_rejects_nan_point: rejects a toward_point facing whose point is NaN
     test_regression_spacing_spec_rejects_negative_gaps: rejects a negative extra gap in
         SpacingSpec.gaps

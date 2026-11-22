@@ -30,6 +30,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from showpy.choreo.models import PlacementPatch
 from showpy.choreo.path_models import PathRow, TransitionSpec
 from showpy.core.caps import MAX_POINTS, MAX_TEXT_CHARS
 from showpy.core.errors import LockedError, SchemaError, UnknownRefError
@@ -113,7 +114,7 @@ def test_import_positions_refuses_unknown_group_and_mapping() -> None:
 
 def test_import_positions_respects_pins() -> None:
     show = two_set_show()
-    pinned = show.sets[1].with_placements({"T1": {"pinned": True}})
+    pinned = show.sets[1].with_placements({"T1": PlacementPatch(pinned=True)})
     show = show.model_copy(update={"sets": (show.sets[0], pinned)})
     with pytest.raises(LockedError):
         import_positions(show, IMPORT_TEXT, group="trumpets")

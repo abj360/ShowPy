@@ -31,7 +31,7 @@ import numpy as np
 import numpy.typing as npt
 from scipy.optimize import linear_sum_assignment
 
-from showpy.choreo.models import Set
+from showpy.choreo.models import PlacementPatch, Set
 from showpy.choreo.set_measure import on_field_ids
 from showpy.core.errors import SchemaError
 from showpy.core.ids import SpotId
@@ -80,11 +80,13 @@ def about_point(obj: Points | CurveModel | Set, about: About, sel: SetSelector) 
 def _update_set(
     s: Set, ids: Sequence[SpotId], pts: Points, facings: Sequence[Degrees] | None, *, force: bool
 ) -> Set:
-    updates: dict[SpotId, dict[str, float]] = {}
+    updates: dict[SpotId, PlacementPatch] = {}
     for k, entity in enumerate(ids):
-        updates[entity] = {"x": float(pts[k, 0]), "y": float(pts[k, 1])}
-        if facings is not None:
-            updates[entity]["facing"] = facings[k]
+        x, y = float(pts[k, 0]), float(pts[k, 1])
+        if facings is None:
+            updates[entity] = PlacementPatch(x=x, y=y)
+        else:
+            updates[entity] = PlacementPatch(x=x, y=y, facing=facings[k])
     return s.with_placements(updates, force=force)
 
 
@@ -282,14 +284,14 @@ def symmetrize(
         partners = [i for i in ids if side[i] < 0]
         pairs = _pair_by_assignment(s, sources, partners, axis_x)
     matrix = transforms.vertical_mirror(axis_x)
-    updates: dict[SpotId, dict[str, float]] = {}
+    updates: dict[SpotId, PlacementPatch] = {}
     for source, partner in _check_pairs(s, pairs):
         origin = s.get(source)
-        updates[partner] = {
-            "x": 2 * axis_x - origin.x,
-            "y": origin.y,
-            "facing": transform_facing(origin.facing, matrix),
-        }
+        updates[partner] = PlacementPatch(
+            x=2 * axis_x - origin.x,
+            y=origin.y,
+            facing=transform_facing(origin.facing, matrix),
+        )
     return s.with_placements(updates, force=force)
 
 

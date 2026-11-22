@@ -964,6 +964,18 @@
       "set_id": "showpy.core.ids.SetId"
     }
   },
+  "PlacementPatch": {
+    "model": {
+      "facing": "Heading",
+      "form": "showpy.core.ids.FormId | None",
+      "note": "str | None",
+      "on_field": "bool",
+      "order": "int | None",
+      "pinned": "bool",
+      "x": "Meters",
+      "y": "Meters"
+    }
+  },
   "PointFacing": {
     "model": {
       "kind": "Literal['point']",

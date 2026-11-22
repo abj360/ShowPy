@@ -81,7 +81,7 @@ from typing import Any
 import pytest
 
 from showpy.choreo.forms import line_form
-from showpy.choreo.models import Set
+from showpy.choreo.models import PlacementPatch, Set
 from showpy.choreo.path_models import PathRow, TransitionSpec
 from showpy.core.errors import SchemaError, ShowPyError, StorageError
 from showpy.core.ids import SetId, SpotId, make_tid
@@ -548,7 +548,7 @@ def test_regression_stored_legacy_folders_keep_saving() -> None:
     repo = _legacy_repo(_legacy_show("con", "2"))
     ws = open_workspace(repo, SHOW_ID)
     show = load_show(ws)
-    moved = show.set("con").with_placements({"T1": {"x": 3.0}})
+    moved = show.set("con").with_placements({"T1": PlacementPatch(x=3.0)})
     save_show(ws, show.replace(sets=(moved, show.sets[1]), title="edited"), LATER)
     reloaded = repo.get_show(SHOW_ID)
     assert reloaded.set("con").get("T1").x == 3.0

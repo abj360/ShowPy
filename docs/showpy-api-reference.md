@@ -605,13 +605,13 @@ Property: `point → Point`.
 | `source_hash`  | `str`                   | Hash of the script that built it                                                                                           |
 | `state`        | `ApprovalState`         | Collaboration state                                                                                                        |
 
-| Method                                  | Inputs                    | Output                                                                  | Purpose                                   |
-| --------------------------------------- | ------------------------- | ----------------------------------------------------------------------- | ----------------------------------------- |
-| `table()`                               |                           | DataFrame (`entity, x, y, facing, form, order, pinned, on_field, note`) | Readable table                            |
-| `entity_ids()`                          |                           | `tuple[SpotId, ...]`                                                    | Spots in placement order                  |
-| `positions(sel="all")`                  |                           | `Points`                                                                | Coordinates in selection order            |
-| `get(entity)`                           |                           | `Placement`                                                             | One row                                   |
-| `with_placements(updates, force=False)` | `{id: Placement or dict}` | `Set`                                                                   | Edit; raises `LockedError` on pinned rows |
+| Method                                  | Inputs                              | Output                                                                  | Purpose                                   |
+| --------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------- |
+| `table()`                               |                                     | DataFrame (`entity, x, y, facing, form, order, pinned, on_field, note`) | Readable table                            |
+| `entity_ids()`                          |                                     | `tuple[SpotId, ...]`                                                    | Spots in placement order                  |
+| `positions(sel="all")`                  |                                     | `Points`                                                                | Coordinates in selection order            |
+| `get(entity)`                           |                                     | `Placement`                                                             | One row                                   |
+| `with_placements(updates, force=False)` | `{id: Placement or PlacementPatch}` | `Set`                                                                   | Edit; raises `LockedError` on pinned rows |
 
 **Spot counts.** `SpotCount{set_id, on_field: int, off_field: int, changed: bool}` describes one set for the set strip, which warns when the number of spots on the field changes unexpectedly between sets. `showpy.show.counts.spot_counts(show) → list[SpotCount]` computes it.
 

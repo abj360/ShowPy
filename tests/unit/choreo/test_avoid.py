@@ -46,6 +46,7 @@ from showpy.choreo.avoid import (
 )
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import BendFix, DelayFix, Fix, ReassignFix, StaggerFix
+from showpy.choreo.models import PlacementPatch
 from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, MotionRegistry
 from showpy.choreo.path_models import Easing, PathRow, PathStyle
 from showpy.core.errors import PathError, SchemaError, ShowPyError, UnknownRefError
@@ -180,9 +181,11 @@ def test_regression_min_gaps_ignores_spots_before_their_entrance() -> None:
     """Skips the time a spot is parked off the field, so it cannot collide there (audit 9.2)."""
     base = two_set_show()
     first = base.set("1").with_placements(
-        {"T1": {"x": 2.0, "y": 5.0, "on_field": False}, "T2": {"x": 2.0, "y": 1.0}}
+        {"T1": PlacementPatch(x=2.0, y=5.0, on_field=False), "T2": PlacementPatch(x=2.0, y=1.0)}
     )
-    second = base.set("2").with_placements({"T1": {"x": 6.0, "y": 5.0}, "T2": {"x": 2.0, "y": 9.0}})
+    second = base.set("2").with_placements(
+        {"T1": PlacementPatch(x=6.0, y=5.0), "T2": PlacementPatch(x=2.0, y=9.0)}
+    )
     show = with_rows(
         {"T1": PathRow(entity=SpotId("T1"), start=PARKED_UNTIL)},
         show=base.model_copy(update={"sets": (first, second)}),

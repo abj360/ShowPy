@@ -31,6 +31,7 @@ from showpy.cast.models import Group
 from showpy.cast.rewrite import rewrite_spot_ids
 from showpy.cast.spots import add_spot
 from showpy.choreo.form_models import Form
+from showpy.choreo.models import PlacementPatch
 from showpy.choreo.path_models import (
     EntityFacing,
     FacingMode,
@@ -71,13 +72,15 @@ STEP = timedelta(minutes=1)
 
 
 def _moved(show: Show, entity: str, x: float) -> Show:
-    edited = show.sets[1].with_placements({entity: {"x": x}}, force=True)
+    edited = show.sets[1].with_placements({entity: PlacementPatch(x=x)}, force=True)
     return show.model_copy(update={"sets": (show.sets[0], edited, *show.sets[2:])})
 
 
 def test_diff_sets_reports_moves_turns_adds_removes_and_forms() -> None:
     first, second = two_set_show().sets
-    turned = second.with_placements({"T2": {"facing": 90.0}, "T3": {"form": "f", "order": 0}})
+    turned = second.with_placements(
+        {"T2": PlacementPatch(facing=90.0), "T3": PlacementPatch(form=FormId("f"), order=0)}
+    )
     trimmed = turned.model_copy(update={"placements": turned.placements[1:], "forms": ("f",)})
     diff = diff_sets(second, trimmed)
     assert diff.moved == ()
@@ -91,14 +94,16 @@ def test_diff_sets_reports_moves_turns_adds_removes_and_forms() -> None:
 
 def test_diff_sets_tolerance_and_angle_wrap() -> None:
     _, second = two_set_show().sets
-    nudged = second.with_placements({"T1": {"x": 1e-9, "facing": 360.0}})
+    nudged = second.with_placements({"T1": PlacementPatch(x=1e-9, facing=360.0)})
     assert diff_sets(second, nudged).is_empty
     assert diff_sets(second, nudged, tol=1e-12).moved == ("T1",)
 
 
 def test_diff_sets_counts_entrances_as_moves() -> None:
     _, second = two_set_show().sets
-    assert diff_sets(second, second.with_placements({"T4": {"on_field": False}})).moved == ("T4",)
+    assert diff_sets(
+        second, second.with_placements({"T4": PlacementPatch(on_field=False)})
+    ).moved == ("T4",)
 
 
 def test_diff_paths_treats_default_rows_as_missing() -> None:
@@ -399,7 +404,7 @@ def test_regression_diff_show_reports_a_set_label_change() -> None:
 def test_regression_diff_show_reports_a_placement_note_change() -> None:
     """Reports a changed placement note (audit 9.7 history)."""
     base = two_set_show()
-    noted = base.sets[1].with_placements({"T1": {"note": "hold"}}, force=True)
+    noted = base.sets[1].with_placements({"T1": PlacementPatch(note="hold")}, force=True)
     assert diff_show(base, _with_set_two(base, placements=noted.placements))
 
 

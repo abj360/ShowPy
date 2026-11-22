@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from showpy.choreo.form_models import Form
+from showpy.choreo.models import PlacementPatch
 from showpy.choreo.path_models import PathRow, TransitionSpec
 from showpy.core.errors import (
     ConflictError,
@@ -151,7 +152,7 @@ def test_identical_write_is_idempotent(make_repo: RepoFactory) -> None:
 def test_typed_accessors(make_repo: RepoFactory) -> None:
     repo = make_repo()
     rev = _saved(repo)
-    moved = repo.get_set(SHOW_ID, "2").with_placements({"T1": {"x": -5.0}})
+    moved = repo.get_set(SHOW_ID, "2").with_placements({"T1": PlacementPatch(x=-5.0)})
     rev = repo.put_set(SHOW_ID, moved, expected_revision=rev, at=LATER).id
     assert repo.get_set(SHOW_ID, "2").get("T1").x == -5.0
     spec = TransitionSpec(
@@ -348,7 +349,7 @@ def test_save_show_conflict_lists_designer_changes() -> None:
     agent, designer = _workspaces(InMemoryRepository())
     mine = load_show(agent)
     theirs = load_show(designer)
-    moved = theirs.sets[1].with_placements({"T2": {"x": 10.0}})
+    moved = theirs.sets[1].with_placements({"T2": PlacementPatch(x=10.0)})
     landed = save_show(designer, theirs.model_copy(update={"sets": (theirs.sets[0], moved)}), AT)
     with pytest.raises(ConflictError) as info:
         save_show(agent, mine.model_copy(update={"title": "New"}), LATER)
@@ -362,11 +363,11 @@ def test_save_show_conflict_lists_designer_changes() -> None:
 def test_workspace_save_lands_edits_to_pinned_items() -> None:
     agent, designer = _workspaces(InMemoryRepository())
     show = load_show(designer)
-    pinned = show.sets[1].with_placements({"T1": {"pinned": True}})
+    pinned = show.sets[1].with_placements({"T1": PlacementPatch(pinned=True)})
     save_show(designer, show.model_copy(update={"sets": (show.sets[0], pinned)}), AT)
     agent.refresh()
     current = load_show(agent)
-    moved = current.sets[1].with_placements({"T1": {"x": 3.0}}, force=True)
+    moved = current.sets[1].with_placements({"T1": PlacementPatch(x=3.0)}, force=True)
     save_show(agent, current.model_copy(update={"sets": (current.sets[0], moved)}), LATER)
     assert load_show(agent).set("2").get("T1").x == 3.0
 

@@ -14,6 +14,7 @@ import pandas as pd
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from showpy.choreo.models import PlacementPatch
 from showpy.export.data import export_json, import_json, to_csv
 from showpy.export.pdf import ENCODING, REPLACEMENTS, escape_text
 from showpy.export.positions import import_positions
@@ -35,12 +36,12 @@ def edited_shows(draw: st.DrawFn) -> Show:
     sets = tuple(
         s.with_placements(
             {
-                p.entity: {
-                    "x": draw(coordinates),
-                    "y": draw(coordinates),
-                    "facing": draw(facings),
-                    "note": draw(st.none() | st.text(max_size=8)),
-                }
+                p.entity: PlacementPatch(
+                    x=draw(coordinates),
+                    y=draw(coordinates),
+                    facing=draw(facings),
+                    note=draw(st.none() | st.text(max_size=8)),
+                )
                 for p in s.placements
             }
         )

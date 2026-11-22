@@ -7,6 +7,7 @@ test_show_properties.py --- checks set, index, storage and rename invariants on 
 from hypothesis import given
 from hypothesis import strategies as st
 
+from showpy.choreo.models import PlacementPatch
 from showpy.core.util import approx_equal
 from showpy.show.documents import decode_show, encode_show
 from showpy.show.history import rename_entities
@@ -51,7 +52,7 @@ def test_count_is_at_a_set_or_inside_one_transition(extra: list[float], share: f
 @given(st.lists(st.tuples(coordinate, coordinate), min_size=4, max_size=4))
 def test_documents_round_trip(points: list[tuple[float, float]]) -> None:
     show = two_set_show()
-    updates = {f"T{i}": {"x": x, "y": y} for i, (x, y) in enumerate(points, start=1)}
+    updates = {f"T{i}": PlacementPatch(x=x, y=y) for i, (x, y) in enumerate(points, start=1)}
     moved = show.sets[1].with_placements(updates)
     edited = show.model_copy(update={"sets": (show.sets[0], moved)})
     assert decode_show(encode_show(edited)) == edited

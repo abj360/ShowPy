@@ -79,7 +79,7 @@ from datetime import UTC, datetime
 import pytest
 
 from showpy.choreo.form_models import Form
-from showpy.choreo.models import Placement, Set
+from showpy.choreo.models import Placement, PlacementPatch, Set
 from showpy.choreo.path_models import (
     FacingMode,
     FacingOverride,
@@ -131,7 +131,7 @@ def test_set_missing_and_unknown_spots() -> None:
 
 def test_pinned_rows_must_stay_unchanged() -> None:
     show = with_targets({"T1": {"pinned": True}})
-    moved = show.set("2").with_placements({"T1": {"x": 9.0}}, force=True)
+    moved = show.set("2").with_placements({"T1": PlacementPatch(x=9.0)}, force=True)
     assert "PINNED_CHANGED" in _codes(validate_set(show, moved))
 
 
@@ -139,7 +139,9 @@ def test_form_membership_is_checked() -> None:
     show = two_set_show()
     form = Form(id=FormId("f"), set=SetId("1"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     show = show.model_copy(update={"forms": {"f": form}})
-    first = show.set("1").with_placements({"T2": {"form": "f", "order": 0}, "T3": {"form": "zz"}})
+    first = show.set("1").with_placements(
+        {"T2": PlacementPatch(form=FormId("f"), order=0), "T3": PlacementPatch(form=FormId("zz"))}
+    )
     codes = _codes(validate_set(show, first))
     assert {"NOT_IN_FORM", "UNKNOWN_FORM"} <= codes
 
@@ -451,7 +453,11 @@ def test_regression_validate_show_reports_non_finite_waypoints() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.7-79")
 def test_regression_validate_show_warns_about_placements_far_off_the_sheet() -> None:
     """Warns about a placement a million meters off the sheet (audit 9.7 validation gaps)."""
-    moved = two_set_show().sets[1].with_placements({"T1": {"x": FAR_OFF_SHEET_M}}, force=True)
+    moved = (
+        two_set_show()
+        .sets[1]
+        .with_placements({"T1": PlacementPatch(x=FAR_OFF_SHEET_M)}, force=True)
+    )
     assert _mentions(_edited(sets=_set_two_with(placements=moved.placements)), "T1")
 
 
