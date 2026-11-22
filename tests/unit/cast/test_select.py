@@ -25,6 +25,8 @@ Contains:
         right spot when pairings tie
     test_regression_mirror_pairs_without_edges_is_empty: returns no pairs when nothing lies within
         tolerance
+    test_regression_mirror_pairs_refuses_a_negative_or_non_finite_tolerance: raises SchemaError
+        naming the tolerance, before looking at any spot
     test_regression_mirror_pairs_memory_follows_candidate_pairs: pairs 2,000 spots per side within
         a budget far below one left-by-right distance table
     test_regression_mirror_pairs_solves_only_candidate_pairs: hands the solver one edge per
@@ -51,6 +53,7 @@ Contains:
 """
 
 import contextlib
+import math
 import sys
 import tracemalloc
 
@@ -492,8 +495,19 @@ def test_regression_mirror_pairs_without_edges_is_empty() -> None:
     """Returns no pairs when no right spot lies within tolerance of a mirror image."""
     set_ = mirror_set(("L1", -1.0, 0.0), ("L2", -3.0, 0.0), ("R1", 1.5, 0.0), ("R2", 3.0, 0.5))
     assert mirror_pairs(set_, "all", tol=MIRROR_TOL_M) == []
-    assert mirror_pairs(set_, "all", tol=-1.0) == []
+    assert mirror_pairs(set_, "all", tol=0.0) == []
     assert mirror_pairs(set_, ["L1", "L2"]) == []
+
+
+@pytest.mark.parametrize("tol", [-1.0, -1e-12, math.nan, math.inf, -math.inf])
+def test_regression_mirror_pairs_refuses_a_negative_or_non_finite_tolerance(tol: float) -> None:
+    """Raises SchemaError naming the tolerance, before looking at any spot."""
+    one_sided = mirror_set(("L1", -1.0, 0.0))
+    for set_ in (mirror_set(("L1", -1.0, 0.0), ("R1", 1.0, 0.0)), one_sided):
+        with pytest.raises(SchemaError) as info:
+            mirror_pairs(set_, "all", tol=tol)
+        assert str(info.value.context["tol"]) == str(tol)
+        assert info.value.hint == "tol is a finite distance in meters, 0 or more"
 
 
 MIRROR_ROWS = 40

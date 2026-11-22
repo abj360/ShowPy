@@ -709,17 +709,24 @@ def mirror_pairs(
     mirror images and partners. Totals within a nanometre count as tied; ties pair the n-th
     left spot with the n-th right spot in selection order as closely as possible. Spots on the
     axis are their own mirror and never pair. Pairs come as (left, right) in selection order.
+    A negative or non-finite `tol` raises SchemaError.
 
     >>> s = Set(id="1", counts=0, placements=(
     ...     Placement(entity="L", x=-1, y=0), Placement(entity="R", x=1, y=0)))
     >>> mirror_pairs(s, "all")
     [('L', 'R')]
     """
+    if not (math.isfinite(tol) and tol >= 0):
+        raise SchemaError(
+            f"mirror tolerance {tol!r} is not a finite distance of 0 or more",
+            hint="tol is a finite distance in meters, 0 or more",
+            context={"tol": tol},
+        )
     by_id = {p.entity: p for p in set_.placements}
     placed = [p for p in (by_id[i] for i in select(set_, sel).ids) if p.on_field]
     left = [p for p in placed if p.x < axis_x - AXIS_EPS]
     right = [p for p in placed if p.x > axis_x + AXIS_EPS]
-    if not left or not right or not tol >= 0:
+    if not left or not right:
         return []
     mirrored = np.array([(2 * axis_x - p.x, p.y) for p in left])
     targets = np.array([p.point for p in right])
