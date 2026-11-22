@@ -40,10 +40,17 @@ Contains:
         arc of infinite length
     test_regression_substring_of_unknown_curve_kind_raises_geometry_error: raises a GeometryError
         for a curve subclass outside AnyCurve, not a pydantic error
+    test_regression_extreme_svg_path_raises_geometry_error: raises a GeometryError for steps near
+        1e308 instead of returning NaN
+    test_regression_overflowing_curves_raise_geometry_error: raises a GeometryError, never a
+        RuntimeWarning, for finite inputs whose lengths overflow
+    test_regression_unit_tangent_survives_subnormal_intermediates: still evaluates a curve whose
+        intermediate values underflow
 """
 
 import math
 import sys
+from collections.abc import Callable
 from typing import Literal, get_args
 
 import numpy as np
@@ -364,6 +371,63 @@ def test_regression_arc_rejects_infinite_radius() -> None:
     """Rejects an infinite radius instead of building an arc of infinite length (audit 9.1)."""
     with pytest.raises(GeometryError):
         arc((0.0, 0.0), math.inf, 0.0, 90.0).length()
+
+
+EXTREME_SVG_PATHS = [
+    "M0 0 L1e308 0 L-1e308 0",
+    "M0 0 L1e300 1e300 L-1e300 -1e300 L1e300 1e300",
+    "M0 0 C1e200 0 1e200 1e200 0 1e200",
+]
+TINY_M = 1e-200
+
+
+@pytest.mark.parametrize("d", EXTREME_SVG_PATHS)
+def test_regression_extreme_svg_path_raises_geometry_error(d: str) -> None:
+    """Raises a GeometryError for steps near 1e308 instead of returning NaN or infinity."""
+    curve = SvgCurve(d=d)
+    with pytest.raises(GeometryError) as raised:
+        curve.length()
+    assert raised.value.context["kind"] == "svg"
+    assert raised.value.context["operation"] == "length"
+    with pytest.raises(GeometryError):
+        curve.point_at(0.0)
+    with pytest.raises(GeometryError):
+        curve.tangent_at(0.0)
+
+
+HUGE_FLOAT = 1e308
+SPLINE_POINTS = ((0.0, 0.0), (5.0, 0.0), (5.0, 5.0), (0.0, 5.0))
+HUGE_SCALE = ((HUGE_FLOAT, 0.0, 0.0), (0.0, HUGE_FLOAT, 0.0), (0.0, 0.0, 1.0))
+
+
+@pytest.mark.parametrize(
+    ("curve", "operation"),
+    [
+        (SplineCurve(points=SPLINE_POINTS, alpha=HUGE_FLOAT), "length"),
+        (SvgCurve(d="M0 0 L1 0", transform=HUGE_SCALE), "length"),
+        (SplineCurve(points=SPLINE_POINTS, alpha=HUGE_FLOAT), "point_at"),
+        (SvgCurve(d="M0 0 L1 0", transform=HUGE_SCALE), "tangent_at"),
+    ],
+    ids=["spline-length", "svg-scale-length", "spline-point", "svg-scale-tangent"],
+)
+def test_regression_overflowing_curves_raise_geometry_error(
+    curve: AnyCurve, operation: str
+) -> None:
+    """Raises a GeometryError, never a RuntimeWarning, for finite inputs whose results overflow."""
+    calls: dict[str, Callable[[], object]] = {
+        "length": curve.length,
+        "point_at": lambda: curve.point_at(0.5),
+        "tangent_at": lambda: curve.tangent_at(0.5),
+    }
+    with pytest.raises(GeometryError) as raised:
+        calls[operation]()
+    assert raised.value.context["kind"] == curve.kind
+
+
+def test_regression_unit_tangent_survives_subnormal_intermediates() -> None:
+    """Keeps evaluating a curve of tiny extent whose squared terms underflow."""
+    curve = Polyline(points=((0.0, 0.0), (TINY_M, 0.0)))
+    assert curve.length() == pytest.approx(TINY_M)
 
 
 class _UnlistedCurve(CurveModel):
