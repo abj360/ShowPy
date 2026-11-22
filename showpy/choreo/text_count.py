@@ -12,8 +12,7 @@ Contains:
 """
 
 import math
-from collections.abc import Mapping, Sequence
-from typing import Any
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -23,6 +22,7 @@ from showpy.choreo.form_text import (
     min_text_spots,
     require_whole_count,
     stage_strokes,
+    stored_count,
     text_recipe,
     text_strokes,
 )
@@ -95,23 +95,22 @@ def spacing_count(strokes: Sequence[Curve], spacing: Meters) -> int:
     )
 
 
-# Any: recipes are JSON objects whose values depend on the key.
 def count_recipe(
-    geometry: Mapping[str, Any],
+    recipe: TextRecipe,
     n: int | None,
     spacing: Meters | None,
     font_registry: FontRegistry | None,
-) -> dict[str, Any]:
+) -> TextRecipe:
     """Returns a text recipe with `n` set from exactly one of `n` and `spacing`.
 
     Args:
-        geometry: The text form's JSON recipe.
+        recipe: The text form's recipe.
         n: Exact spot count, or None to derive it from `spacing`.
         spacing: Meters between spots, or None when `n` is given.
         font_registry: Registry holding the recipe's fonts; None means `bundled_fonts()`.
 
     Returns:
-        recipe: The geometry with `n` and `spacing` set; `spacing` is None for an exact count.
+        counted: The recipe with `n` and `spacing` set; `spacing` is None for an exact count.
             A spacing is measured along the strokes after any stored `transform`, in stage
             meters.
 
@@ -124,18 +123,18 @@ def count_recipe(
     >>> from showpy.geo.fonts import bundled_fonts
     >>> ell = TextRecipe(text="L", fonts=(bundled_fonts().resolve("simplex"),), height=6.0,
     ...                  at=(0.0, 0.0))
-    >>> count_recipe(ell.model_dump(mode="json"), None, 1.0, None)["n"]
+    >>> count_recipe(ell, None, 1.0, None).n
     11
     """
     if n is not None and spacing is None:
         require_whole_count(n)
-        return {**geometry, "spacing": None, "n": n}
+        return recipe.replace(spacing=None, n=n)
     if spacing is not None and n is None:
-        recipe = text_recipe({**geometry, "spacing": spacing})
-        stored = geometry.get("transform")
+        layout = text_recipe({**recipe.model_dump(mode="json"), "spacing": spacing})
+        stored = recipe.transform
         transform = None if stored is None else np.asarray(stored, dtype=float)
-        strokes = stage_strokes(text_strokes(recipe, font_registry=font_registry), transform)
-        return {**geometry, "spacing": recipe.spacing, "n": spacing_count(strokes, spacing)}
+        strokes = stage_strokes(text_strokes(layout, font_registry=font_registry), transform)
+        return recipe.replace(spacing=layout.spacing, n=spacing_count(strokes, spacing))
     raise SchemaError(
         "a text form takes exactly one of n and spacing",
         hint="pass n= for an exact spot count or spacing= for meters between spots, not both",
@@ -175,7 +174,7 @@ def text_spot_count(
         font_registry: Registry that resolves the fonts; None means `bundled_fonts()`.
 
     Returns:
-        n: The spot count, the same as the form's `geometry["n"]`.
+        n: The spot count, the same as the form's `recipe.n`.
 
     Raises:
         SchemaError: A bad layout field or spacing.
@@ -197,6 +196,4 @@ def text_spot_count(
         letter_spacing=letter_spacing,
         line_spacing=line_spacing,
     )
-    counted = count_recipe(recipe.model_dump(mode="json"), None, spacing, registry)
-    count: int = counted["n"]
-    return count
+    return stored_count("text", count_recipe(recipe, None, spacing, registry))

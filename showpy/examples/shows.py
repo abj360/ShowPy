@@ -18,7 +18,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from showpy.cast.models import Cast, Group, Spot
-from showpy.choreo.models import Placement, Set
+from showpy.choreo.models import Placement, PlacementPatch, Set
 from showpy.choreo.path_models import PathRow, Route, TransitionSpec
 from showpy.core.ids import make_tid
 from showpy.examples.sheets import field_sheet
@@ -78,7 +78,8 @@ def with_targets[K: str](updates: Mapping[K, Mapping[str, Any]], show: Show | No
     3.0
     """
     base = show or two_set_show()
-    second = base.sets[1].with_placements(updates)
+    patches = {entity: PlacementPatch.model_validate(change) for entity, change in updates.items()}
+    second = base.sets[1].with_placements(patches)
     return base.replace(sets=(base.sets[0], second))
 
 
@@ -89,7 +90,9 @@ def crossing_show() -> Show:
     (4.0, 5.0)
     """
     base = two_set_show()
-    first = base.sets[0].with_placements({"T2": {"x": 4.0}, "T3": {"x": 8.0}, "T4": {"x": 12.0}})
+    first = base.sets[0].with_placements(
+        {"T2": PlacementPatch(x=4.0), "T3": PlacementPatch(x=8.0), "T4": PlacementPatch(x=12.0)}
+    )
     show = base.replace(sets=(first, base.sets[1]))
     targets = {
         "T1": {"x": 4.0, "y": 9.0},

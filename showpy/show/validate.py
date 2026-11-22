@@ -32,7 +32,6 @@ from showpy.show.document_paths import is_storable_folder
 from showpy.show.models import Show
 from showpy.time.validate import validate_timeline
 
-FULL_TURN = 360.0
 MAX_NON_FINITE_ISSUES = 100
 
 type Level = Literal["error", "warning"]
@@ -135,22 +134,8 @@ def _stale_forms(show: Show, candidate: Set) -> list[ValidationIssue]:
     ]
 
 
-def _facings(candidate: Set) -> list[ValidationIssue]:
-    return [
-        _issue(
-            WARNING,
-            ErrorCode.FACING_RANGE,
-            f"set {candidate.id} {p.entity}",
-            f"facing {p.facing} is outside [0, 360)",
-            "normalize the facing",
-        )
-        for p in candidate.placements
-        if not 0.0 <= p.facing < FULL_TURN
-    ]
-
-
 def validate_set(show: Show, candidate: Set) -> ValidationReport:
-    """Checks a candidate set: every spot once, known IDs, facing range, forms, pins unchanged.
+    """Checks a candidate set: every spot once, known IDs, forms, pins unchanged.
 
     >>> from showpy.examples import two_set_show
     >>> show = two_set_show()
@@ -158,7 +143,6 @@ def validate_set(show: Show, candidate: Set) -> ValidationReport:
     True
     """
     issues = _membership(show, candidate) + _pins(show, candidate) + _forms(show, candidate)
-    issues += _facings(candidate)
     if candidate.id in show.set_ids():
         issues += _stale_forms(show, candidate)
     return ValidationReport(issues=tuple(issues))

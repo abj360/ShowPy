@@ -8,27 +8,68 @@ Contains:
     SpacingSpec: describes how members are spaced on a form's shape
     FacingSpec: describes how form members face
     TextRecipe: holds the construction recipe of a text form: text, font chain and layout
+    Recipe: the typed construction recipe of any form, tagged by `kind`
     FormKind: names the shape families a form can have
     CrowdedStroke: names a glyph stroke whose spots sit closer than its junction gap
     TextReport: reports how a text form's spots were spread, listing its crowded strokes
     Form: holds a stored shape construction plus its ordered members
+    Form.kind: returns the shape family, the recipe's kind
+    Form.spots: returns the spots on the form in slot order, without open slots
+    Form.geometry: returns the recipe as JSON; deprecated, read `Form.recipe`
     FormFnInfo: describes one registered shape generator
+    SpiralFormParams: holds the parameters of the bundled `spiral` generator
+    SineWaveFormParams: holds the parameters of the bundled `sine_wave` generator
+    RoseFormParams: holds the parameters of the bundled `rose` generator
 """
 
-from typing import Annotated, Any, Literal
+from collections.abc import Mapping
+from typing import Annotated, ClassVar, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 
-from showpy.core.errors import SchemaError
-from showpy.core.ids import FormId, SetId, SpotId
-from showpy.core.types import Degrees, Finite, FrozenModel, Meters, Point, PositiveMeters
+from showpy.choreo.recipe_models import (
+    ArcRecipe,
+    BlockRecipe,
+    CircleRecipe,
+    CurveRecipe,
+    CustomRecipe,
+    FillRecipe,
+    GeneratedRecipe,
+    LineRecipe,
+    PolylineRecipe,
+    RecipeBase,
+    ScatterRecipe,
+    SvgRecipe,
+    WedgeRecipe,
+)
+from showpy.core.caps import MAX_COORD_M
+from showpy.core.deprecation import renamed_field
+from showpy.core.error_codes import ErrorCode
+from showpy.core.errors import SchemaError, SpacingError
+from showpy.core.ids import FormId, SetId, SpotId, SpotIdField
+from showpy.core.numbers import normalize_angle
+from showpy.core.readonly import ReadOnly
+from showpy.core.types import (
+    Degrees,
+    Finite,
+    FrozenModel,
+    JsonValue,
+    Meters,
+    NonNegFinite,
+    Point,
+    PositiveFinite,
+    PositiveMeters,
+)
 from showpy.geo.models import DEFAULT_LINE_SPACING, TextAlign, TextAnchor
 from showpy.geo.text_layout import MAX_LAYOUT_CHARS
 
 FONT_URI_PATTERN = r"^asset:sha256:[0-9a-f]{64}$"
 # Layout resolves every chain font and measures its cap height, so a stored chain is bounded.
 MAX_TEXT_FONTS = 16
+type NonNegMeters = Annotated[float, Field(ge=0, le=MAX_COORD_M, allow_inf_nan=False)]
 type FontUri = Annotated[str, Field(pattern=FONT_URI_PATTERN)]
+DEFAULT_GENERATOR_CENTER: Point = (0.0, 10.0)
+DEFAULT_SINE_START: Point = (-8.0, 10.0)
 
 
 class SpacingSpec(FrozenModel):
@@ -40,7 +81,7 @@ class SpacingSpec(FrozenModel):
         start: Arc length where spacing starts.
         end: Arc length where spacing ends; None means the end of the shape.
         align: `start`, `end` or `center` for interval mode.
-        gaps: Extra meters after member indexes.
+        gaps: Extra meters, at least 0, after member indexes.
     """
 
     mode: Literal["count", "interval", "proportional"] = "count"
@@ -48,7 +89,7 @@ class SpacingSpec(FrozenModel):
     start: Meters = 0.0
     end: Meters | None = None
     align: Literal["start", "end", "center"] = "start"
-    gaps: tuple[tuple[int, Meters], ...] = ()
+    gaps: tuple[tuple[int, NonNegMeters], ...] = ()
 
     @model_validator(mode="after")
     def _interval_needed(self) -> "SpacingSpec":
@@ -62,12 +103,21 @@ class FacingSpec(FrozenModel):
 
     Attributes:
         mode: `fixed`, `audience`, `toward_point`, `along`, `normal` or `outward`.
-        value: Degrees for fixed, a point for toward_point; for along, normal and outward an
-            optional offset in degrees added to the computed facing.
+        value: Heading for fixed, wrapped into [0, 360); a point for toward_point; for along,
+            normal and outward an optional offset in degrees added to the computed facing.
     """
 
     mode: Literal["fixed", "audience", "toward_point", "along", "normal", "outward"] = "audience"
     value: Degrees | Point | None = None
+
+    @field_validator("value")
+    @classmethod
+    def _wrap_fixed_heading(
+        cls, value: float | Point | None, info: ValidationInfo
+    ) -> float | Point | None:
+        if info.data.get("mode") == "fixed" and isinstance(value, float):
+            return normalize_angle(value)
+        return value
 
     @model_validator(mode="after")
     def _value_matches_mode(self) -> "FacingSpec":
@@ -81,10 +131,11 @@ class FacingSpec(FrozenModel):
         return self
 
 
-class TextRecipe(FrozenModel):
+class TextRecipe(RecipeBase):
     r"""Holds the construction recipe of a text form: text, font chain and layout.
 
-    Fonts are stored as URIs, never names, so a recipe always names the exact font bytes.
+    Fonts are stored as URIs, never names, so a recipe always names the exact font bytes. A
+    text form's `n` is always set: it is the exact spot count, one member per slot.
 
     Attributes:
         text: Characters to write, `\n` between lines.
@@ -106,6 +157,7 @@ class TextRecipe(FrozenModel):
     'left'
     """
 
+    kind: Literal["text"] = "text"
     text: str = Field(min_length=1, max_length=MAX_LAYOUT_CHARS)
     fonts: tuple[FontUri, ...] = Field(min_length=1, max_length=MAX_TEXT_FONTS)
     mode: Literal["centerline"] = "centerline"
@@ -118,6 +170,23 @@ class TextRecipe(FrozenModel):
     line_spacing: float = Field(default=DEFAULT_LINE_SPACING, gt=0)
     spacing: PositiveMeters | None = None
 
+
+type Recipe = Annotated[
+    LineRecipe
+    | ArcRecipe
+    | CurveRecipe
+    | CircleRecipe
+    | BlockRecipe
+    | WedgeRecipe
+    | PolylineRecipe
+    | SvgRecipe
+    | FillRecipe
+    | ScatterRecipe
+    | CustomRecipe
+    | GeneratedRecipe
+    | TextRecipe,
+    Field(discriminator="kind"),
+]
 
 type FormKind = Literal[
     "line", "arc", "curve", "circle", "block", "wedge", "polyline", "svg", "fill", "scatter",
@@ -160,36 +229,84 @@ class TextReport(FrozenModel):
     crowded: tuple[CrowdedStroke, ...] = ()
 
 
+def _recipe_json(recipe: RecipeBase) -> dict[str, JsonValue]:
+    dumped: dict[str, JsonValue] = recipe.model_dump(mode="json")
+    return dumped
+
+
 class Form(FrozenModel):
     """Holds a stored shape construction plus its ordered members.
 
     Attributes:
         id: Form ID, unique across the show.
         set: Set the form belongs to.
-        kind: Shape family.
-        geometry: JSON construction recipe the slots are generated from.
-        members: Spots in slot order.
+        recipe: Typed construction recipe the slots are generated from; its `kind` is the
+            form's shape family.
+        members: One entry per slot in slot order: the spot standing on it, or None for an open
+            slot that `place` fills. At most `recipe.n` entries when `n` is set.
         spacing: How members are spaced on the shape.
         facing: How members face.
         locked: Designer lock; edits need force=True.
-        meta: Free designer metadata.
+        meta: Free designer metadata, read-only once stored.
     """
 
     id: FormId
     set: SetId
-    kind: FormKind
-    # Any: construction recipes are JSON objects whose fields depend on the kind.
-    geometry: dict[str, Any]
-    members: tuple[SpotId, ...]
+    recipe: Recipe
+    members: tuple[SpotIdField | None, ...]
     spacing: SpacingSpec = SpacingSpec()
     facing: FacingSpec = FacingSpec()
     locked: bool = False
-    meta: dict[str, str] = {}
+    meta: Annotated[Mapping[str, str], ReadOnly()] = Field(default={}, validate_default=True)
+
+    geometry: ClassVar[property] = renamed_field(
+        "recipe", since="0.4.0", remove="0.6.0", read=_recipe_json
+    )
+
+    @property
+    def kind(self) -> FormKind:
+        """Returns the shape family, the recipe's kind."""
+        return self.recipe.kind
+
+    @property
+    def spots(self) -> tuple[SpotId, ...]:
+        """Returns the spots standing on the form, in slot order, without the open slots.
+
+        >>> Form(id="f", set="1", recipe={"kind": "custom", "points": [], "n": 3},
+        ...     members=("A", None, "B")).spots
+        ('A', 'B')
+        """
+        return tuple(member for member in self.members if member is not None)
 
     @model_validator(mode="after")
     def _unique_members(self) -> "Form":
-        if len(set(self.members)) != len(self.members):
+        spots = [member for member in self.members if member is not None]
+        if len(set(spots)) != len(spots):
             raise SchemaError(f"form {self.id} lists a member twice", hint="list each spot once")
+        return self
+
+    @model_validator(mode="after")
+    def _text_has_no_open_slots(self) -> "Form":
+        slots = self.recipe.n
+        if self.recipe.kind != "text" or slots is None or len(self.spots) == len(self.members):
+            return self
+        raise SpacingError(
+            f"text form {self.id} has {len(self.spots)} spots for {slots} slots",
+            hint="stand a spot on every slot of a text form, or change its count with "
+            "edit_text_count",
+            context={"form": self.id, "n": slots, "members": len(self.spots)},
+            code=ErrorCode.MEMBER_COUNT_MISMATCH,
+        )
+
+    @model_validator(mode="after")
+    def _members_fit_slots(self) -> "Form":
+        slots = self.recipe.n
+        if slots is not None and len(self.members) > slots:
+            raise SpacingError(
+                f"form {self.id} has {len(self.members)} members but {slots} slots",
+                hint=f"use at most {slots} members, or raise the slot count n",
+                context={"form": self.id, "n": slots, "members": len(self.members)},
+            )
         return self
 
 
@@ -203,3 +320,65 @@ class FormFnInfo(FrozenModel):
 
     name: str
     summary: str
+
+
+class SpiralFormParams(FrozenModel):
+    """Holds the parameters of the bundled `spiral` generator.
+
+    Attributes:
+        center: Spiral center.
+        r0: Start radius in meters.
+        r1: End radius in meters.
+        turns: Counter-clockwise turns, above 0.
+        start_deg: Start angle, counter-clockwise from +x.
+
+    >>> SpiralFormParams(turns=1.5).r1
+    5.0
+    """
+
+    center: Point = DEFAULT_GENERATOR_CENTER
+    r0: NonNegFinite = 1.0
+    r1: NonNegFinite = 5.0
+    turns: PositiveFinite = 2.0
+    start_deg: Degrees = 0.0
+
+
+class SineWaveFormParams(FrozenModel):
+    """Holds the parameters of the bundled `sine_wave` generator.
+
+    Attributes:
+        start: Where the wave starts; it runs toward +x.
+        length: Run along x in meters, above 0.
+        amplitude: Peak offset from the center line in meters.
+        wavelength: Meters per full wave, above 0.
+        phase_deg: Phase at the start, in degrees.
+
+    >>> SineWaveFormParams().wavelength
+    8.0
+    """
+
+    start: Point = DEFAULT_SINE_START
+    length: PositiveMeters = 16.0
+    amplitude: Finite = 2.0
+    wavelength: PositiveMeters = 8.0
+    phase_deg: Degrees = 0.0
+
+
+class RoseFormParams(FrozenModel):
+    """Holds the parameters of the bundled `rose` generator.
+
+    Attributes:
+        center: Flower center.
+        radius: Petal tip radius in meters, above 0.
+        petals: Number of petals, above 0.
+        inner: Radius between petals as a share of `radius`, in (0, 1], so petals never meet
+            at the center.
+
+    >>> RoseFormParams(petals=3).inner
+    0.4
+    """
+
+    center: Point = DEFAULT_GENERATOR_CENTER
+    radius: PositiveMeters = 5.0
+    petals: PositiveFinite = 5.0
+    inner: Annotated[float, Field(gt=0, le=1, allow_inf_nan=False)] = 0.4

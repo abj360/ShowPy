@@ -75,8 +75,8 @@ def test_spacing_count_follows_total_stroke_length() -> None:
         "l", spots(L_SPOTS_AT_ONE_METER), "L", fonts=["simplex"], height=LETTER_HEIGHT,
         at=(0, 0), spacing=1.0,
     )  # fmt: skip
-    assert form.geometry["n"] == L_SPOTS_AT_ONE_METER
-    assert form.geometry["spacing"] == 1.0
+    assert form.recipe.model_dump(mode="json")["n"] == L_SPOTS_AT_ONE_METER
+    assert form.recipe.model_dump(mode="json")["spacing"] == 1.0
 
 
 @ignore_legibility
@@ -139,21 +139,20 @@ def test_regression_spacing_never_doubles_a_spot_on_closed_loops(font: str) -> N
 def test_count_recipe_needs_exactly_one_of_n_and_spacing(
     n: int | None, spacing: float | None
 ) -> None:
-    geometry = recipe("L").model_dump(mode="json")
     with pytest.raises(SchemaError) as caught:
-        count_recipe(geometry, n, spacing, None)
+        count_recipe(recipe("L"), n, spacing, None)
     assert caught.value.code == "N_OR_SPACING"
 
 
 def test_count_recipe_with_n_clears_the_spacing() -> None:
-    geometry = {**recipe("L").model_dump(mode="json"), "spacing": 1.0, "n": 11}
-    assert count_recipe(geometry, 12, None, None) == {**geometry, "spacing": None, "n": 12}
+    counted = recipe("L").replace(spacing=1.0, n=11)
+    assert count_recipe(counted, 12, None, None) == counted.replace(spacing=None, n=12)
 
 
 @pytest.mark.parametrize("n", [0, True, "12", MAX_TEXT_SPOTS + 1])
 def test_count_recipe_rejects_a_bad_n(n: object) -> None:
     with pytest.raises(SpacingError):
-        count_recipe(recipe("L").model_dump(mode="json"), n, None, None)  # type: ignore[arg-type]
+        count_recipe(recipe("L"), n, None, None)  # type: ignore[arg-type]
 
 
 def test_regression_spacing_count_follows_a_scaled_text_form() -> None:
@@ -162,7 +161,7 @@ def test_regression_spacing_count_follows_a_scaled_text_form() -> None:
     scaled = transform_form(ell, scale_matrix(SCALE, SCALE, (0.0, 0.0)))
     added = [f"X{i}" for i in range(SCALED_L_SPOTS - L_SPOTS_AT_ONE_METER)]
     edited = edit_text_count(scaled, add=added, spacing=1.0)
-    assert edited.geometry["n"] == SCALED_L_SPOTS
+    assert edited.recipe.model_dump(mode="json")["n"] == SCALED_L_SPOTS
     stem = slots(edited)[: SCALED_L_SPOTS // 2]
     assert math.dist(stem[0], stem[1]) == pytest.approx(1.0)
 
@@ -192,6 +191,6 @@ def test_regression_text_spot_count_gives_the_count_text_form_derives(font: str)
     form = text_form("t", spots(n), text, fonts=[font], height=4.0, at=(3, 9), rotation=30.0,
                      align="center", letter_spacing=0.1, line_spacing=1.5, spacing=0.5,
                      font_registry=registry)  # fmt: skip
-    assert form.geometry["n"] == n
-    strokes = text_strokes(text_recipe(form.geometry), font_registry=registry)
+    assert form.recipe.model_dump(mode="json")["n"] == n
+    strokes = text_strokes(text_recipe(form.recipe.model_dump(mode="json")), font_registry=registry)
     assert n == spacing_count(strokes, 0.5)

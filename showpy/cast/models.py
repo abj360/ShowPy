@@ -8,6 +8,7 @@ Contains:
     LabelScheme: holds the rules that turn group prefixes and numbers into labels
     Cast: holds every group and spot in the show
     Cast.spot(): returns one spot by ID
+    RewriteReport: lists what a spot rename or delete dropped or left unresolved
     HexColor: a `#rrggbb` color string, in either case
     MAX_LABEL_PAD: bounds how wide a label number may be zero-padded
 """
@@ -19,11 +20,13 @@ from typing import Annotated, Literal, get_args
 
 from pydantic import Field, field_validator, model_validator
 
+from showpy.choreo.path_models import FacingOverride
 from showpy.core.errors import GeometryError, SchemaError, UnknownRefError
-from showpy.core.ids import SelectionNameField, SpotId, SpotIdField
+from showpy.core.ids import RouteId, SelectionNameField, SpotId, SpotIdField, TransitionId
 from showpy.core.readonly import ReadOnly, ReadOnlyMap
 from showpy.core.types import Degrees, FrozenModel, Meters, PositiveFinite
 from showpy.core.util import close_matches, natural_sort
+from showpy.notes.models import Note
 
 DEFAULT_RADIUS_M = 0.3
 DEFAULT_SYMBOL = "circle"
@@ -274,3 +277,24 @@ class Cast(FrozenModel):
     def ids(self) -> tuple[SpotId, ...]:
         """Returns every spot ID in creation order."""
         return tuple(spot.id for spot in self.spots)
+
+
+class RewriteReport(FrozenModel):
+    """Lists what rewriting spot IDs renamed, dropped or could not resolve.
+
+    Attributes:
+        renamed: Old ID to new ID for every spot whose ID changed.
+        dropped_routes: Transition and route ID of each route left without members.
+        dropped_facings: Each facing override removed because no spot was left on it or its
+            target spot was dropped.
+        orphaned_notes: Each note removed because every spot it was anchored to was dropped.
+        unresolved_selectors: Stored selectors that no longer resolve and were left as written.
+    """
+
+    renamed: Annotated[Mapping[SpotId, SpotId], ReadOnly()] = Field(
+        default={}, validate_default=True
+    )
+    dropped_routes: tuple[tuple[TransitionId, RouteId], ...] = ()
+    dropped_facings: tuple[FacingOverride, ...] = ()
+    orphaned_notes: tuple[Note, ...] = ()
+    unresolved_selectors: tuple[str, ...] = ()

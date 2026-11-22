@@ -18,6 +18,7 @@ from showpy.choreo.facing import (
 )
 from showpy.choreo.form_models import Form
 from showpy.choreo.path_models import FacingMode, FacingOverride
+from showpy.choreo.recipe_models import BlockRecipe, CircleRecipe, LineRecipe
 from showpy.core.errors import GeometryError, LockedError, TimeRangeError, UnknownRefError
 from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.util import approx_equal
@@ -49,12 +50,10 @@ def test_face_tools_respect_pins() -> None:
 
 
 def _show_with_line_form() -> Show:
-    recipe = {"curve": line((0.0, 5.0), (6.0, 5.0)).construction()}
     form = Form(
         id=FormId("f"),
         set=SetId("1"),
-        kind="line",
-        geometry=recipe,
+        recipe=LineRecipe(curve=line((0.0, 5.0), (6.0, 5.0))),
         members=(SpotId("T1"), SpotId("T2"), SpotId("T3"), SpotId("T4")),
     )
     return two_set_show().model_copy(update={"forms": {"f": form}})
@@ -73,8 +72,7 @@ def test_face_normal_on_circle_outward_and_inward() -> None:
     form = Form(
         id=FormId("c"),
         set=SetId("1"),
-        kind="circle",
-        geometry={"curve": ring.construction()},
+        recipe=CircleRecipe(curve=ring),
         members=(SpotId("T1"),),
     )
     show = show.model_copy(update={"forms": {"c": form}})
@@ -89,8 +87,7 @@ def test_face_along_needs_a_curve_form() -> None:
     form = Form(
         id=FormId("b"),
         set=SetId("1"),
-        kind="block",
-        geometry={"origin": [0, 0]},
+        recipe=BlockRecipe(origin=(0, 0), rows=1, cols=1, interval=1.0),
         members=(SpotId("T1"),),
     )
     show = show.model_copy(update={"forms": {"b": form}})

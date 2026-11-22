@@ -12,6 +12,13 @@ Contains:
     test_regression_frozen_model_replace_revalidates_duplicate_placements: rejects duplicated
         placements through FrozenModel.replace
     test_regression_set_rejects_non_finite_counts: rejects NaN and infinite Set.counts
+    test_with_placements_patch_changes_only_the_fields_it_sets: leaves unset fields alone and
+        clears a field set to None
+    test_placement_patch_validates_like_a_placement: wraps a facing and refuses bad values
+    test_with_placements_refuses_a_dict_patch: raises SchemaError for a plain dict
+    test_regression_set_index_is_fresh_after_replace: looks spots up in the new order after a
+        replace, a patch or a copy
+    test_set_is_hashable_and_equal_sets_hash_alike: hashes equal sets alike, indexed or not
     test_regression_placement_normalizes_facing: wraps a placement facing of 720 degrees into [0,
         360)
 """
@@ -22,10 +29,10 @@ import math
 import pytest
 
 from showpy.choreo import models as choreo_models
-from showpy.choreo.models import ApprovalState, Placement, Set
+from showpy.choreo.models import ApprovalState, Placement, PlacementPatch, Set
 from showpy.core.deprecation import DeprecatedWarning
 from showpy.core.errors import LockedError, SchemaError, UnknownRefError
-from showpy.core.ids import SetId, SpotId
+from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.selection import Selection
 from showpy.core.units import normalize_angle
 from showpy.core.util import approx_equal
@@ -74,15 +81,15 @@ def test_positions_in_selection_order() -> None:
 
 def test_with_placements_updates_without_mutating() -> None:
     s = _set()
-    moved = s.with_placements({"T1": {"x": 5.0}})
+    moved = s.with_placements({"T1": PlacementPatch(x=5.0)})
     assert moved.get("T1").x == 5.0
     assert s.get("T1").x == 0.0
 
 
 def test_with_placements_respects_pins() -> None:
     with pytest.raises(LockedError):
-        _set().with_placements({"T2": {"x": 9.0}})
-    assert _set().with_placements({"T2": {"x": 9.0}}, force=True).get("T2").x == 9.0
+        _set().with_placements({"T2": PlacementPatch(x=9.0)})
+    assert _set().with_placements({"T2": PlacementPatch(x=9.0)}, force=True).get("T2").x == 9.0
 
 
 def test_with_placements_accepts_placement_objects() -> None:
@@ -93,6 +100,57 @@ def test_with_placements_accepts_placement_objects() -> None:
 def test_with_placements_rejects_entity_mismatch() -> None:
     with pytest.raises(SchemaError):
         _set().with_placements({"T1": Placement(entity=SpotId("T9"), x=0, y=0)})
+
+
+def test_with_placements_patch_changes_only_the_fields_it_sets() -> None:
+    noted = _set().with_placements({"T1": PlacementPatch(note="hold", form=FormId("f"), order=0)})
+    cleared = noted.with_placements({"T1": PlacementPatch(note=None, form=None)})
+    assert (cleared.get("T1").note, cleared.get("T1").form, cleared.get("T1").order) == (
+        None,
+        None,
+        0,
+    )
+    assert noted.get("T1").note == "hold"
+    assert PlacementPatch().model_fields_set == set()
+    assert _set().with_placements({"T1": PlacementPatch()}) == _set()
+
+
+def test_placement_patch_validates_like_a_placement() -> None:
+    assert PlacementPatch(facing=TURNS_PAST_FULL).facing == 0.0
+    with pytest.raises(SchemaError):
+        PlacementPatch(x=math.nan)
+    with pytest.raises(SchemaError):
+        PlacementPatch.model_validate({"x": None})
+    with pytest.raises(SchemaError):
+        PlacementPatch.model_validate({"entity": "T1"})
+
+
+def test_with_placements_refuses_a_dict_patch() -> None:
+    with pytest.raises(SchemaError):
+        _set().with_placements({"T1": {"x": 5.0}})  # type: ignore[dict-item]
+
+
+def test_regression_set_index_is_fresh_after_replace() -> None:
+    """Looks spots up in the new placement order after a replace or a copy, never a stale one."""
+    first = _set()
+    assert first.get("T1").x == 0.0
+    reordered = first.replace(placements=tuple(reversed(first.placements)))
+    assert reordered.get("T1").x == 0.0
+    assert reordered.placements[0].entity == "T2"
+    shifted = first.with_placements({"T1": PlacementPatch(x=7.0)})
+    assert shifted.get("T1").x == 7.0
+    assert first.get("T1").x == 0.0
+    copied = first.model_copy(update={"placements": first.placements[:1]})
+    with pytest.raises(UnknownRefError):
+        copied.get("T2")
+    assert copied.get("T1").x == 0.0
+
+
+def test_set_is_hashable_and_equal_sets_hash_alike() -> None:
+    twin = _set()
+    twin.get("T1")
+    assert hash(_set()) == hash(twin)
+    assert _set() == twin
 
 
 def test_table_columns() -> None:
@@ -126,8 +184,6 @@ def test_regression_set_rejects_non_finite_counts(counts: float) -> None:
         Set(id=SetId("1"), counts=counts)
 
 
-@pytest.mark.defect("UP-9.6-40")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-40")
 def test_regression_placement_normalizes_facing() -> None:
     """Wraps a placement facing of 720 degrees into [0, 360) (audit 9.6)."""
     placement = Placement(entity=SpotId("A"), x=0.0, y=0.0, facing=TURNS_PAST_FULL)

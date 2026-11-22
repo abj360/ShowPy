@@ -10,6 +10,7 @@ Contains:
 from collections.abc import Sequence
 
 from showpy.choreo.match_ops import forms_of_set
+from showpy.choreo.models import PlacementPatch
 from showpy.choreo.path_models import PathRow
 from showpy.core.errors import UnknownRefError
 from showpy.core.ids import format_tid, parse_tid
@@ -55,7 +56,7 @@ def _flag_placements(show: Show, held: Sequence[Pin], scope: Pin) -> Show:
     sets = []
     for current in show.sets:
         updates = {
-            p.entity: {"pinned": _covers_placement(held, current.id, p.entity)}
+            p.entity: PlacementPatch(pinned=_covers_placement(held, current.id, p.entity))
             for p in current.placements
             if (scope.target == "entity" and p.entity == scope.id)
             or (scope.target == "set" and current.id == scope.id)

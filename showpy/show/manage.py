@@ -197,9 +197,17 @@ def _new_key(show: Show, set_id: SetId) -> str:
 
 
 def _given_placements(show: Show, placements: Sequence[Placement]) -> dict[SpotId, Placement]:
+    given: dict[SpotId, Placement] = {}
     for placement in placements:
         show.cast.spot(placement.entity)
-    return {p.entity: p for p in placements}
+        if placement.entity in given:
+            raise SchemaError(
+                f"two placements given for {placement.entity}",
+                hint="give one placement per spot",
+                context={"entity": placement.entity},
+            )
+        given[placement.entity] = placement
+    return given
 
 
 def add_set(

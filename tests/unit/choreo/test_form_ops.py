@@ -124,7 +124,7 @@ def test_edit_changes_construction_and_form_fields() -> None:
     bigger = edit(form, radius=3.0, members=("D", "C", "B", "A"))
     assert approx_equal(np.linalg.norm(slots(bigger) - [0, 5], axis=1), [3.0] * 4)
     assert bigger.members == ("D", "C", "B", "A")
-    assert form.geometry["curve"]["radius"] == 2.0
+    assert form.recipe.model_dump(mode="json")["curve"]["radius"] == 2.0
 
 
 def test_edit_block_recipe_and_slot_count() -> None:
@@ -274,14 +274,14 @@ def test_skewed_block_keeps_points_exact() -> None:
     form = block_form("b", MEMBERS, (0, 5), 2, 2, 1.0)
     matrix = skew_matrix(20.0, 0.0, (0.0, 0.0))
     skewed = transform_form(form, matrix)
-    assert "transform" in skewed.geometry
+    assert skewed.recipe.transform is not None
     assert approx_equal(slots(skewed), _expected(form, matrix)[0], abs_tol=TOL)
 
 
 def test_rotated_block_keeps_an_editable_recipe() -> None:
     rotated = transform_form(block_form("b", [], (0, 5), 2, 2, 1.0), rotation_matrix(90, (0, 0)))
-    assert "transform" not in rotated.geometry
-    assert approx_equal(rotated.geometry["origin"], [-5.0, 0.0], abs_tol=TOL)
+    assert rotated.recipe.transform is None
+    assert approx_equal(rotated.recipe.model_dump(mode="json")["origin"], [-5.0, 0.0], abs_tol=TOL)
 
 
 def test_gate_rotates_about_an_end() -> None:
@@ -324,16 +324,12 @@ LINE_LENGTH = 30.0
 SPOT_GAP = 6.0
 
 
-@pytest.mark.defect("UP-9.6-11")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-11")
 def test_regression_edit_block_rows_updates_slot_count() -> None:
     """Keeps a block's slot count in step with its edited rows (audit 9.6)."""
     edited = edit(block_form("b", [], (0, 0), 2, 2, 1.0), rows=3)
     assert slot_count(edited) == len(slots(edited))
 
 
-@pytest.mark.defect("UP-9.6-12")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-12")
 def test_regression_edit_custom_points_updates_slot_count() -> None:
     """Keeps a custom form's slot count in step with its edited points (audit 9.6)."""
     edited = edit(
@@ -342,16 +338,12 @@ def test_regression_edit_custom_points_updates_slot_count() -> None:
     assert slot_count(edited) == len(slots(edited))
 
 
-@pytest.mark.defect("UP-9.6-13")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-13")
 def test_regression_edit_n_none_clears_slot_count_on_curve_forms() -> None:
     """Clears a curve form's n when edit(n=None) asks for it (audit 9.6)."""
     form = line_form("l", ["A", "B"], (0, 0), (4, 0), n=4)
     assert slot_count(edit(form, n=None)) == len(form.members)
 
 
-@pytest.mark.defect("UP-9.6-14")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-14")
 def test_regression_edit_rejects_more_members_than_slots() -> None:
     """Rejects members beyond the form's slots instead of accepting them (audit 9.6)."""
     form = line_form("l", ["A"], (0, 0), (4, 0), n=2)
@@ -398,23 +390,16 @@ def test_regression_transform_form_maps_audience_facings() -> None:
     assert approx_equal(mapped, expected, abs_tol=SLOT_TOL)
 
 
-@pytest.mark.defect("UP-9.6-56")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-56")
 def test_regression_morph_targets_rejects_members_without_slots() -> None:
-    """Raises a ShowPyError, not IndexError, when the target has fewer slots (audit 9.6)."""
-    source = line_form("a", ["A", "B"], (0, 0), (1, 0))
-    target = line_form("b", ["B", "A"], (0, 5), (1, 5), n=1)
+    """Refuses a target form with fewer slots than members, so morph never indexes past it."""
     with pytest.raises(ShowPyError):
-        morph_targets(source, target)
+        line_form("b", ["B", "A"], (0, 5), (1, 5), n=1)
 
 
-@pytest.mark.defect("UP-9.6-57")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-57")
 def test_regression_reorder_by_x_rejects_members_without_slots() -> None:
-    """Raises a ShowPyError, not ValueError, when members outnumber slots (audit 9.6)."""
-    form = line_form("l", ["A", "B", "C"], (0, 0), (4, 0), n=2)
+    """Refuses a form with more members than slots, so reorder never meets one."""
     with pytest.raises(ShowPyError):
-        reorder(form, "by_x")
+        line_form("l", ["A", "B", "C"], (0, 0), (4, 0), n=2)
 
 
 def test_regression_edit_rejects_non_numeric_radius_with_show_py_error() -> None:
@@ -438,9 +423,9 @@ def test_edit_text_keeps_members_in_reading_order() -> None:
     g = edit(f, text="GO TEAM")
     assert g.members == f.members
     assert len(slots(g)) == 60
-    assert g.geometry["n"] == 60
+    assert g.recipe.model_dump(mode="json")["n"] == 60
     first = placements(g)[0]
-    start = text_strokes(text_recipe(g.geometry))[0].point_at(0.0)
+    start = text_strokes(text_recipe(g.recipe.model_dump(mode="json")))[0].point_at(0.0)
     assert first.entity == "S0"
     assert (first.x, first.y) == pytest.approx(tuple(start), abs=1e-9)
     assert not np.allclose(slots(g), slots(f))
@@ -457,19 +442,29 @@ def test_edit_text_too_long_for_the_count_names_the_minimum() -> None:
 
 
 def test_edit_text_keeps_the_derived_count() -> None:
-    strokes = text_strokes(text_recipe(_text().geometry))
+    strokes = text_strokes(text_recipe(_text().recipe.model_dump(mode="json")))
     members = [f"S{i}" for i in range(spacing_count(strokes, 0.5))]
     f = text_form("t", members, "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10),
                   spacing=0.5)  # fmt: skip
     g = edit(f, text="GOGO")
-    assert g.geometry["n"] == f.geometry["n"] == len(members)
-    assert g.geometry["spacing"] == f.geometry["spacing"] == 0.5
+    assert (
+        g.recipe.model_dump(mode="json")["n"]
+        == f.recipe.model_dump(mode="json")["n"]
+        == len(members)
+    )
+    assert (
+        g.recipe.model_dump(mode="json")["spacing"]
+        == f.recipe.model_dump(mode="json")["spacing"]
+        == 0.5
+    )
     assert g.members == f.members
 
 
 def test_edit_text_resolves_font_names() -> None:
     edited = edit(_text(), fonts=["relief-singleline"])
-    assert edited.geometry["fonts"] == [bundled_fonts().resolve("relief-singleline")]
+    assert edited.recipe.model_dump(mode="json")["fonts"] == [
+        bundled_fonts().resolve("relief-singleline")
+    ]
 
 
 def test_edit_text_suggests_the_field_for_a_typo() -> None:
@@ -482,7 +477,7 @@ def test_edit_locked_text_form_needs_force() -> None:
     locked = _text().replace(locked=True)
     with pytest.raises(LockedError):
         edit(locked, text="GA")
-    assert edit(locked, force=True, text="GA").geometry["text"] == "GA"
+    assert edit(locked, force=True, text="GA").recipe.model_dump(mode="json")["text"] == "GA"
 
 
 @pytest.mark.parametrize(("field", "value"), [("n", 30), ("spacing", SpacingSpec(interval=1.0))])
@@ -500,9 +495,9 @@ def test_regression_edit_text_form_rejects_count_changes(field: str, value: Any)
 
 def test_regression_edit_text_form_accepts_text_n_free_edits() -> None:
     f = _text()
-    assert edit(f, text="GA").geometry["text"] == "GA"
-    assert edit(f, height=5.0).geometry["height"] == 5.0
-    assert edit(f, rotation=30.0).geometry["rotation"] == 30.0
+    assert edit(f, text="GA").recipe.model_dump(mode="json")["text"] == "GA"
+    assert edit(f, height=5.0).recipe.model_dump(mode="json")["height"] == 5.0
+    assert edit(f, rotation=30.0).recipe.model_dump(mode="json")["rotation"] == 30.0
     assert edit(f, transform=[[1, 0, 2], [0, 1, 0], [0, 0, 1]]).members == f.members
 
 
@@ -538,8 +533,10 @@ def test_edit_text_fonts_accept_a_user_font_uri_through_the_registry() -> None:
         "t", members, "I", fonts=[uri], height=2.0, at=(1, 1), n=4, font_registry=registry
     )
     swapped = edit(_text(), fonts=[uri], text="I", font_registry=registry)
-    assert swapped.geometry["fonts"] == [uri]
-    assert edit(f, fonts=[uri], font_registry=registry).geometry["fonts"] == [uri]
+    assert swapped.recipe.model_dump(mode="json")["fonts"] == [uri]
+    assert edit(f, fonts=[uri], font_registry=registry).recipe.model_dump(mode="json")["fonts"] == [
+        uri
+    ]
     with pytest.raises(MissingFontError):
         edit(_text(), fonts=[uri])
 
@@ -551,7 +548,7 @@ def test_edit_text_with_a_user_font_takes_the_registry() -> None:
     f = text_form(
         "t", members, "I", fonts=[uri], height=2.0, at=(1, 1), n=4, font_registry=registry
     )
-    assert edit(f, text="II", font_registry=registry).geometry["text"] == "II"
+    assert edit(f, text="II", font_registry=registry).recipe.model_dump(mode="json")["text"] == "II"
     with pytest.raises(MissingFontError):
         edit(f, text="II")
 
