@@ -12,6 +12,8 @@ Contains:
     test_selection_has_no_iter_override: leaves BaseModel iteration yielding the fields
     test_regression_selection_model_copy_keeps_ids_unique: deduplicates IDs on model_copy as the
         constructor does
+    test_regression_selection_description_survives_a_one_shot_iterator: keeps the operand text of
+        a generator operand
     test_regression_selection_equality_ignores_the_description: compares selections by IDs, not by
         how they were described
     test_regression_malformed_ids_are_a_schema_error_not_a_type_error: rejects non-list ids with
@@ -104,3 +106,14 @@ def test_selection_hash_ignores_the_description() -> None:
 
 def test_selection_replace_deduplicates() -> None:
     assert Selection(ids=(SpotId("a"),)).replace(ids=("a", "b", "a")).ids == ("a", "b")
+
+
+@pytest.mark.parametrize(
+    ("combine", "expected"),
+    [(operator.or_, "a+T1,T2"), (operator.and_, "a&T1,T2"), (operator.sub, "a-T1,T2")],
+)
+def test_regression_selection_description_survives_a_one_shot_iterator(
+    combine: Callable[[Selection, object], Selection], expected: str
+) -> None:
+    sel = Selection(ids=(SpotId("T1"), SpotId("T3")), description="a")
+    assert combine(sel, iter(["T1", "T2"])).description == expected

@@ -44,21 +44,24 @@ class Selection(FrozenModel):
     def __or__(self, other: Operand) -> "Selection":
         theirs = operand_ids(other)
         return Selection(
-            ids=self.ids + theirs, description=f"{self.description}+{_describe(other)}"
+            ids=self.ids + theirs,
+            description=f"{self.description}+{_describe(other, theirs)}",
         )
 
     def __and__(self, other: Operand) -> "Selection":
-        keep = set(operand_ids(other))
+        theirs = operand_ids(other)
+        keep = set(theirs)
         return Selection(
             ids=tuple(i for i in self.ids if i in keep),
-            description=f"{self.description}&{_describe(other)}",
+            description=f"{self.description}&{_describe(other, theirs)}",
         )
 
     def __sub__(self, other: Operand) -> "Selection":
-        drop = set(operand_ids(other))
+        theirs = operand_ids(other)
+        drop = set(theirs)
         return Selection(
             ids=tuple(i for i in self.ids if i not in drop),
-            description=f"{self.description}-{_describe(other)}",
+            description=f"{self.description}-{_describe(other, theirs)}",
         )
 
     def __eq__(self, other: object) -> bool:
@@ -110,8 +113,8 @@ def operand_ids(other: Operand) -> tuple[SpotId, ...]:
     return tuple(SpotId(i) for i in other)
 
 
-def _describe(other: Operand) -> str:
-    return other.description if isinstance(other, Selection) else ",".join(operand_ids(other))
+def _describe(other: Operand, ids: tuple[SpotId, ...]) -> str:
+    return other.description if isinstance(other, Selection) else ",".join(ids)
 
 
 type Selector = str | Sequence[str] | Selection
