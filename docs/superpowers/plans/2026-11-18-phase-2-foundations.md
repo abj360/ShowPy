@@ -758,6 +758,12 @@ row 67).
 
 ### Task A4: the migration's ID step (ADR 0007 decision 5)
 
+**Amended:** gate adds the ADR 0003 and 0006 addenda; the ID step also renames a stored ID `props`
+to `props_` (`props` is reserved, ADR 0006 addendum: case-insensitive and whole ID only, so `Props`
+becomes `Props_` and `props.1` stays valid). Step 1 adds
+`test_regression_stored_id_props_gets_a_trailing_underscore` (`props` becomes `props_`, `Props`
+becomes `Props_`, `props.1` is kept).
+
 **Gate:** ADR 0007 accepted, decision 1 answered, D2 merged. **Files:** Fill
 `showpy/show/migrations/v1_to_v2_ids.py`, `showpy/show/migrate.py` (the final validation stops
 passing `legacy_ids`); modify `showpy/show/manage.py` (`renumber` loses its legacy refusal),
@@ -781,6 +787,9 @@ pins, cues) for sets.
 - [ ] **Step 4:** Commit `feat(show)!: rename invalid stored IDs once during migration`.
 
 ### Task A5: split `show/manage.py` (553 lines)
+
+**Deferred (amendment):** a pure module split; ADR 0021 defers it to a later phase, which partitions
+these modules again, and no moved-name deprecation rows are added for it. Do not start in Phase 2.
 
 **Files:** Split `showpy/show/manage.py` into `manage.py` (show-level edits) and
 `set_edits.py` (add, remove, insert, renumber, counts). Deprecation rows for moved names.
@@ -847,6 +856,9 @@ Branch `feat/p2-b-paths`.
       `feat(choreo)!: type routes, facing values and fixes`.
 
 ### Task B3: split oversized modules in lane B, if any
+
+**Deferred (amendment):** a pure module split; ADR 0021 defers it to a later phase, which partitions
+these modules again, and no moved-name deprecation rows are added for it. Do not start in Phase 2.
 
 Run `wc -l showpy/choreo/{engine,paths,routes,avoid}.py` after B1 and B2. Split any file over
 500 lines by responsibility, with moved-name deprecations. Today none is over 500
@@ -970,6 +982,9 @@ Top-level `showpy.<name>` points to a dispatcher that accepts points, curves and
 
 ### Task C5: split `geo/curves.py` (597) and `geo/spacing.py` (507)
 
+**Deferred (amendment):** a pure module split; ADR 0021 defers it to a later phase, which partitions
+these modules again, and no moved-name deprecation rows are added for it. Do not start in Phase 2.
+
 - [ ] **Step 1:** Split `curves.py` into `curves.py` (lines, arcs, circles, polylines) and
       `curves_compound.py` (composite, trimmed, SVG, Bezier); `spacing.py` into `spacing.py`
       (along curves) and `scatter.py` (area fills and scatter). Moved-name deprecations.
@@ -1079,6 +1094,9 @@ entities and reports notes anchored to no spot.
 
 ### Task D3: notes, typed patches and ordered named selections (ADR 0008)
 
+**Amended:** keep typed group and spot patches, `define_selection(replace=)`, aware note times and
+their migration repair; drop `NotePatch` (notes leave `Show`, task N1).
+
 **Gate:** ADR 0008 accepted, decision 3 answered. **Fixes:** UP-9.3-122 to -125. **Files:**
 Modify
 `showpy/notes/models.py`, `showpy/notes/notes.py`, `showpy/cast/spots.py`.
@@ -1102,6 +1120,9 @@ Modify
 - [ ] **Step 5:** Commit `feat(cast,notes)!: typed patches, aware timestamps, guarded selection names`.
 
 ### Task D4: split `cast/spots.py` (586 lines)
+
+**Deferred (amendment):** a pure module split; ADR 0021 defers it to a later phase, which partitions
+these modules again, and no moved-name deprecation rows are added for it. Do not start in Phase 2.
 
 - [ ] Split into `spots.py` (add, delete, duplicate, fill) and `groups.py` (groups, labels,
       named selections); moved-name deprecations. Commit
@@ -1161,6 +1182,9 @@ only).
 
 ### Task S4: `mirror_pairs` by maximum-cardinality matching; split `select.py`
 
+**Amended:** keep the `mirror_pairs` maximum-cardinality matching; the split of `select.py` is
+deferred (ADR 0021), so skip the `select_grammar` file and its `refactor(cast)` commit.
+
 **Fixes:** UP-9.3-76. **Files:** Modify `showpy/cast/select.py`; create
 `showpy/cast/select_grammar.py` (parser) leaving `select.py` (spatial helpers and `select`).
 
@@ -1178,6 +1202,10 @@ only).
 Branch `feat/p2-t-time`. Gate: ADR 0007 accepted, decision 11 answered.
 
 ### Task T1: timeline invariants and a cached clock
+
+**Amended:** its fix round also refuses a tempo or `ramp_to` of 0 or less with a `SchemaError`
+naming document, field and value; the floor `MIN_TEMPO` itself comes from L2 through
+`CountsPerMinute`.
 
 **Fixes:** UP-9.3-95, -96, -97, -105 to -108, -114, -116 to -121. **Files:** Modify
 `showpy/time/{models,clock,timeline,validate}.py`; fill
@@ -1236,6 +1264,10 @@ IDs use the pattern decision 1 sets.
       `fix(sheet)!: validate sheets, zones and coordinate systems at construction`.
 
 ### Task F2: sheet functions refuse typos and render PDFs deterministically
+
+**Dropped (amendment):** the sheet functions it hardens (coordinate wording, landmarks, templates,
+rendering) leave the library (ADR 0021); its 7 ledger IDs retire per ADR 0021's appendix and stay
+strict xfails until their code is deleted at v0.6.0. Do not start.
 
 **Fixes:** UP-9.4-18, -27, -28, -29, -32, -37, -38. **Files:** Modify
 `showpy/sheet/{coords,bounds,templates,render}.py`.
@@ -1379,6 +1411,9 @@ text recipe when every input is a text form with one font chain.
 
 ### Task G6: split `forms.py` (569) and `form_text.py` (565)
 
+**Deferred (amendment):** a pure module split; ADR 0021 defers it to a later phase, which partitions
+these modules again, and no moved-name deprecation rows are added for it. Do not start in Phase 2.
+
 - [ ] Split `forms.py` into `forms.py` (constructors) and `form_slots.py` (slots, poses,
       placements); `form_text.py` into `form_text.py` (constructor and recipe) and
       `text_slots.py` (stroke spreading and the report). Moved-name deprecations. Commit
@@ -1407,6 +1442,9 @@ Branch `feat/p2-e-export`. Gate: ADR 0010 accepted. Skills: `differential-review
 
 ### Task E2: ffmpeg failures and hangs
 
+**Dropped (amendment):** video export leaves the library (ADR 0021); UP-9.5-55 and UP-9.5-56 retire
+per ADR 0021's appendix and stay strict xfails until their code is deleted at v0.6.0. Do not start.
+
 **Fixes:** UP-9.5-55, -56. **Files:** Modify `showpy/export/video.py`.
 
 - [ ] Run both with `--runxfail`; wrap writer start failures in `StorageError` (code `IO`); pass
@@ -1416,6 +1454,10 @@ Branch `feat/p2-e-export`. Gate: ADR 0010 accepted. Skills: `differential-review
       `fix(export): bound ffmpeg and report its failures as ShowPyErrors`.
 
 ### Task E3: split `publish.py` (709) and `data.py` (511)
+
+**Dropped (amendment):** publishing, print and table code leaves the library (ADR 0021), and the
+interchange part of `data.py` moves to `showpy/show/interchange.py` in E4; no ledger IDs. Do not
+start.
 
 - [ ] Split `publish.py` into `publish.py` (publish, links, tokens), `claims.py` (claims,
       reassignments, performer views) and `qr.py`; `data.py` into `data.py` (JSON) and
@@ -1562,6 +1604,11 @@ Branch `chore/p2-exit`.
 
 ### Task X1: the migration scenario
 
+**Amended:** drop "publish and claim 30 spots" from Step 1 (those calls are deprecated). Step 2 also
+asserts: existing notes land in `notes.json` with the same text, author and time, and the show
+document has no `notes` key; the format value is `e8.show`; one revision's show never changes
+another's.
+
 **Files:** Create `tests/scenario/test_phase2_scenario.py` (marked `slow`).
 
 - [ ] **Step 1:** Load the committed 300 x 60 v0.3.0 benchmark show (L0.9 step 7) through a
@@ -1576,6 +1623,17 @@ Branch `chore/p2-exit`.
       `test: add the phase 2 migration scenario`.
 
 ### Task X2: exit checks
+
+**Amended:** the ledger line expectations of the amendment replace `Ledger: 174 open`: the default
+line is 174 plus 10 (E2's 2 and F2's 7 IDs and UP-9.4-45 no longer flip) plus the 4 evaluation IDs
+no Phase 2 task flips (UP-E-02, UP-E-04, UP-E-05, UP-E-06), so `Ledger: 188 open`, and `nox -s slow`
+prints `Ledger: 1 open`; a measured difference is explained ID by ID in the commit body, never
+closed by editing a marker. The Step 1 constant drops the E2 and F2 IDs and UP-9.4-45 and adds
+UP-E-01 and UP-E-03. Add `test_every_leaving_name_is_deprecated` (every name in ADR 0021's timeline
+has a `DEPRECATED` row with its removal version). Set `MAX_SPOTS = 5_000` and `MAX_SETS = 1_000`
+from a re-measurement after A1 and G3, in `showpy/core/caps.py`, with tests at the boundary (5,000
+accepted, 5,001 refused; the same for sets). 0 `type: ignore` in the library and 0 `Any` in a stored
+model field, guarded by the Step 2 tests.
 
 **Files:** Modify `tests/unit/test_ledger.py`, `tests/unit/test_library_rules.py`.
 
@@ -1592,6 +1650,11 @@ Branch `chore/p2-exit`.
 - [ ] **Step 5:** Commit `test: guard the phase 2 exit criteria`.
 
 ### Task X3: release v0.4.0
+
+**Amended:** the release notes add the licence change (ADR 0019; first paragraph: v0.3.0 and earlier
+stay MIT), the rename (ADR 0020), the "leaving the library" table (ADR 0021) and the guide update
+(the public guide is updated at v0.4.0 with the new imports and a wheel labelled with its licence);
+distribution stays one wheel plus an sdist on GitHub releases.
 
 **Files:** `CHANGELOG.md` (generated), `docs/releases/v0.4.0.md`, `docs/HANDOFF.md`,
 `docs/showpy-api-reference.md` (changed names only; Appendix A row 124).
