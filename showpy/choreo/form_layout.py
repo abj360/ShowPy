@@ -2,10 +2,10 @@
 form_layout.py --- turns a form's stored recipe into slot points, travel directions and facings
 
 The recipe contract is documented in `showpy.choreo.forms`. Curve kinds are spaced by arc
-length so exact tangents are known at every slot, an svg outline's subpaths each by their share
-of its length; other kinds use the chord through neighbouring slots as their travel direction.
-A stored `transform` maps the slots of every kind, and the travel directions through its linear
-part.
+length so exact tangents are known at every slot. An svg outline's subpaths share proportional
+slots by length; count and interval spacing walk them one after another. Other kinds use the
+chord through neighbouring slots as their travel direction. A stored `transform` maps the slots
+of every kind, and the travel directions through its linear part.
 
 Contains:
     FormLayout: holds slot points plus the directions facings are computed from
@@ -150,7 +150,12 @@ def curve_stations(curve: AnyCurve, spacing: SpacingSpec, n: int | None) -> Floa
     >>> curve_stations(line((0, 0), (4, 0)), SpacingSpec(), 3).tolist()
     [0.0, 2.0, 4.0]
     """
-    length = curve.length()
+    return _window_stations(curve.length(), spacing, n, closed=curve.closed)
+
+
+def _window_stations(
+    length: float, spacing: SpacingSpec, n: int | None, *, closed: bool
+) -> FloatArray:
     start, stop = spacing.start, length if spacing.end is None else spacing.end
     if not 0 <= start < stop <= length + WINDOW_TOL:
         raise SpacingError(
@@ -162,7 +167,7 @@ def curve_stations(curve: AnyCurve, spacing: SpacingSpec, n: int | None) -> Floa
         return _interval_stations(start, stop, spacing, n)
     if n is None or n < 1:
         raise SpacingError("count spacing needs a slot count", hint="give members or n=")
-    full_loop = curve.closed and math.isclose(stop - start, length)
+    full_loop = closed and math.isclose(stop - start, length)
     return _even_stations(start, stop, n, full_loop=full_loop, gaps=spacing.gaps)
 
 
@@ -184,17 +189,32 @@ def _curve_layout(form: Form, curve: AnyCurve) -> FormLayout:
     return FormLayout(curve.point_at(stations), curve.tangent_at(stations), center)
 
 
+def _run_layout(form: Form, curves: Sequence[AnyCurve]) -> FormLayout:
+    """Spaces slots along curves walked one after another, each starting where the last ended.
+
+    The jump from one curve's end to the next curve's start adds no length, so a station at a
+    joint lands on the start of the next curve.
+    """
+    offsets = np.concatenate([[0.0], np.cumsum([curve.length() for curve in curves])])
+    total = float(offsets[-1])
+    stations = np.clip(
+        _window_stations(total, form.spacing, slot_count(form), closed=False), 0, total
+    )
+    index = np.clip(np.searchsorted(offsets, stations, side="right") - 1, 0, len(curves) - 1)
+    points, tangents = np.empty((len(stations), 2)), np.empty((len(stations), 2))
+    for i in np.unique(index):
+        mask = index == i
+        local = stations[mask] - offsets[i]
+        points[mask], tangents[mask] = curves[i].point_at(local), curves[i].tangent_at(local)
+    return FormLayout(points=points, tangents=tangents)
+
+
 def _svg_layout(form: Form, recipe: SvgRecipe) -> FormLayout:
     if len(recipe.curves) == 1:
         return _curve_layout(form, recipe.curves[0])
-    if form.spacing.mode != "proportional":
-        raise SpacingError(
-            f"svg form {form.id} has {len(recipe.curves)} subpaths; {form.spacing.mode} spacing "
-            "would run across the gaps between them",
-            hint="use proportional spacing (the svg_form default), or one svg form per subpath",
-            context={"form": form.id, "subpaths": len(recipe.curves), "mode": form.spacing.mode},
-        )
-    return _proportional_layout(recipe.curves, _required_count(form))
+    if form.spacing.mode == "proportional":
+        return _proportional_layout(recipe.curves, _required_count(form))
+    return _run_layout(form, recipe.curves)
 
 
 def _block_points(recipe: BlockRecipe) -> Points:

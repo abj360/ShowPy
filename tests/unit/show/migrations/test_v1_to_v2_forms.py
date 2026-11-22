@@ -8,6 +8,8 @@ Contains:
         fixtures where they hold one, into an equal typed recipe
     test_regression_forms_step_splits_a_v1_svg_composite_into_its_subpaths: stores each subpath
         of a v1 multi-subpath svg outline as its own curve
+    test_regression_v1_svg_form_with_subpaths_keeps_its_v0_3_layout: lays a migrated v1 svg form
+        with several subpaths and count or interval spacing out to the v0.3.0 slots and facings
     test_forms_step_passes_other_documents_and_fields_through: leaves other documents and form
         fields as they were, and never mutates its input
     test_regression_forms_step_refuses_what_v2_cannot_hold: refuses an unknown kind, a bad
@@ -25,11 +27,12 @@ from typing import get_args
 import pytest
 
 from showpy.choreo.form_models import Form, FormKind
-from showpy.choreo.forms import curve_form, polyline_form
+from showpy.choreo.forms import curve_form, placements, polyline_form
 from showpy.choreo.recipe_models import SvgRecipe
 from showpy.core.errors import SchemaError
 from showpy.core.json_types import JsonValue
 from showpy.core.types import Box2, Region
+from showpy.core.util import approx_equal
 from showpy.geo.curves import CompositeCurve
 from showpy.geo.shapes import svg_outline
 from showpy.show.migrate import FIRST_VERSION, ReportBuilder
@@ -39,6 +42,7 @@ FIXTURE = Path(__file__).resolve().parents[3] / "fixtures" / "repos" / "v0.3.0" 
 DOC = "/sets/2/forms.json"
 SQUARE = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0))).model_dump(mode="json")
 BOX = Box2(min=(0, 0), max=(4, 4))
+POSE_TOL = 1e-9
 SHARED_DEFAULTS: dict[str, JsonValue] = {"recipe_version": 1, "n": None, "transform": None}
 
 
@@ -126,6 +130,48 @@ def test_regression_forms_step_splits_a_v1_svg_composite_into_its_subpaths() -> 
     recipe_model = Form.model_validate(migrated).recipe
     assert isinstance(recipe_model, SvgRecipe)
     assert not any(isinstance(curve, CompositeCurve) for curve in recipe_model.curves)
+
+
+def _corner_part(d: str) -> dict[str, JsonValue]:
+    flip: list[JsonValue] = [[1.0, 0.0, 0.0], [0.0, -1.0, 2.0], [0.0, 0.0, 1.0]]
+    return {"closed": False, "kind": "svg", "d": d, "transform": flip}
+
+
+# `svg_form("f", ..., "M0 0 L2 0 M3 0 L3 2", Box2((0, 0), (3, 2)), ...)` as v0.3.0 stored it, and
+# the poses (x, y, facing) v0.3.0 (68344ab) laid it out to.
+V1_CORNER_CURVE: dict[str, JsonValue] = {
+    "closed": False,
+    "kind": "composite",
+    "parts": [_corner_part("M0.0 0.0 L2.0 0.0"), _corner_part("M3.0 0.0 L3.0 2.0")],
+}
+V1_CORNER_LAYOUTS = [
+    (
+        {"mode": "count"},
+        list("ABCDE"),
+        [[0.0, 2.0, 90.0], [1.0, 2.0, 90.0], [3.0, 2.0, 0.0], [3.0, 1.0, 0.0], [3.0, 0.0, 0.0]],
+    ),
+    (
+        {"mode": "interval", "interval": 0.75, "align": "center"},
+        list("ABC"),
+        [[1.25, 2.0, 90.0], [3.0, 2.0, 0.0], [3.0, 1.25, 0.0]],
+    ),
+]
+
+
+@pytest.mark.parametrize(("spacing", "members", "poses"), V1_CORNER_LAYOUTS)
+def test_regression_v1_svg_form_with_subpaths_keeps_its_v0_3_layout(
+    spacing: dict[str, JsonValue], members: list[JsonValue], poses: list[list[float]]
+) -> None:
+    v1: dict[str, JsonValue] = {
+        **_v1_form("svg", {"curve": V1_CORNER_CURVE}),
+        "members": members,
+        "spacing": spacing,
+        "facing": {"mode": "along"},
+    }
+    [migrated] = _migrated([v1])
+    form = Form.model_validate(migrated)
+    laid = [[p.x, p.y, p.facing] for p in placements(form)]
+    assert approx_equal(laid, poses, abs_tol=POSE_TOL)
 
 
 def test_forms_step_passes_other_documents_and_fields_through() -> None:

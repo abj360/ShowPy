@@ -3077,7 +3077,7 @@
     },
     "SvgRecipe": {
       "additionalProperties": false,
-      "description": "Holds the fitted picture outline of an svg form, one curve per subpath.\n\nSubpaths stay separate curves, never one curve that jumps the gaps between them, so slots\nare shared among them by length and never spaced across a gap.\n\nAttributes:\n    curves: The outline's subpaths in drawing order, each rebuilt from its construction.\n\n>>> from showpy.geo.shapes import line\n>>> len(SvgRecipe(curves=(line((0, 0), (1, 0)), line((0, 1), (3, 1)))).curves)\n2",
+      "description": "Holds the fitted picture outline of an svg form, one curve per subpath.\n\nSubpaths stay separate curves, never one curve that jumps the gaps between them; layout\nshares slots among them by length, or walks them in order for count and interval spacing.\n\nAttributes:\n    curves: The outline's subpaths in drawing order, each rebuilt from its construction.\n\n>>> from showpy.geo.shapes import line\n>>> len(SvgRecipe(curves=(line((0, 0), (1, 0)), line((0, 1), (3, 1)))).curves)\n2",
       "properties": {
         "curves": {
           "items": {

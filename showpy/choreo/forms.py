@@ -5,8 +5,8 @@ A form stores how to rebuild its shape, never the dots. `Form.recipe` is a typed
 by `kind` (`showpy.choreo.recipe_models` and `TextRecipe`):
 
     line, arc, curve, circle, wedge, polyline: the curve the slots are spaced along
-    svg:       one curve per subpath of the fitted outline; slots are shared among the subpaths
-               by length, and a form with several subpaths takes only proportional spacing
+    svg:       one curve per subpath of the fitted outline; proportional spacing shares slots
+               among the subpaths by length, count and interval spacing walk them in order
     block:     origin, rows, cols, interval, facing, anchor
     fill:      outline area, interval, pattern, angle_deg
     scatter:   region, min_gap, seed
@@ -287,9 +287,9 @@ def svg_form(
 ) -> Form:
     """Builds a form on an SVG outline fitted into `fit`; spots share subpaths by length.
 
-    Each subpath is stored as its own curve. An outline with several subpaths takes only the
-    default proportional spacing; `count` or `interval` spacing would run across the gaps
-    between subpaths, so its slots raise SpacingError.
+    Each subpath is stored as its own curve. `count` and `interval` spacing walk the subpaths
+    one after another, each starting where the last ended, so the jump between subpaths adds
+    no length.
 
     >>> box = Box2(min=(0, 0), max=(4, 4))
     >>> len(slots(svg_form("f", [], "M0 0 L1 0 M0 1 L3 1", box, n=4)))

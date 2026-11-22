@@ -21,8 +21,10 @@ Contains:
     test_regression_form_rejects_fractional_slot_count: rejects n=2.5 instead of truncating it to 2
     test_regression_svg_form_stores_each_subpath_as_its_own_curve: keeps an outline's subpaths
         as separate curves, never one composite that jumps their gaps, and spaces them by length
-    test_regression_svg_form_with_subpaths_refuses_spacing_across_their_gaps: raises SpacingError
-        for count spacing over several subpaths
+    test_regression_svg_form_with_subpaths_keeps_count_spacing_of_v0_3: spaces count slots along
+        the subpaths one after another, as v0.3.0 did, the jump between them counting nothing
+    test_regression_svg_form_with_subpaths_keeps_interval_spacing_of_v0_3: spaces interval slots
+        along the subpaths one after another, as v0.3.0 did
     test_one_subpath_svg_form_keeps_every_spacing_mode: spaces a one-subpath outline
         by interval as any curve form does
     test_regression_svg_form_rejects_empty_svg: raises a ShowPyError, not ValueError, for
@@ -88,6 +90,18 @@ SHARED_RECIPE_KEYS = {"kind", "recipe_version", "n", "transform"}
 TWO_SUBPATHS = "M0 0 L1 0 M0 1 L3 1"
 TWO_SUBPATH_FIT = Box2(min=(0, 0), max=(3, 1))
 TWO_SUBPATH_SLOTS = [[0, 1], [1, 1], [0, 0], [1, 0], [2, 0], [3, 0]]
+CORNER_SUBPATHS = "M0 0 L2 0 M3 0 L3 2"
+CORNER_FIT = Box2(min=(0, 0), max=(3, 2))
+ALONG = FacingSpec(mode="along")
+# Slots and facings v0.3.0 (68344ab) gave these forms, measured when the subpaths stopped
+# being stored as one composite curve.
+CORNER_COUNT_POSES = [
+    (0.0, 2.0, 90.0), (1.0, 2.0, 90.0), (3.0, 2.0, 0.0), (3.0, 1.0, 0.0), (3.0, 0.0, 0.0),
+]  # fmt: skip
+CORNER_INTERVAL_SLOTS = [
+    [0.125, 2.0], [0.875, 2.0], [1.625, 2.0], [3.0, 1.625], [3.0, 0.875], [3.0, 0.125],
+]  # fmt: skip
+CORNER_THREE_POSES = [(1.25, 2.0, 90.0), (3.0, 2.0, 0.0), (3.0, 1.25, 0.0)]
 
 
 def _own_keys(form: Form) -> set[str]:
@@ -210,10 +224,22 @@ def test_regression_svg_form_stores_each_subpath_as_its_own_curve() -> None:
     assert approx_equal(slots(form), TWO_SUBPATH_SLOTS, abs_tol=TOL)
 
 
-def test_regression_svg_form_with_subpaths_refuses_spacing_across_their_gaps() -> None:
-    form = svg_form("f", [], TWO_SUBPATHS, TWO_SUBPATH_FIT, spacing=SpacingSpec(), n=6)
-    with pytest.raises(SpacingError, match="subpaths"):
-        slots(form)
+def _poses(form: Form) -> list[list[float]]:
+    return [[p.x, p.y, p.facing] for p in placements(form)]
+
+
+def test_regression_svg_form_with_subpaths_keeps_count_spacing_of_v0_3() -> None:
+    spacing = SpacingSpec()
+    form = svg_form("f", list("ABCDE"), CORNER_SUBPATHS, CORNER_FIT, spacing=spacing, facing=ALONG)
+    assert approx_equal(_poses(form), CORNER_COUNT_POSES, abs_tol=TOL)
+
+
+def test_regression_svg_form_with_subpaths_keeps_interval_spacing_of_v0_3() -> None:
+    spacing = SpacingSpec(mode="interval", interval=0.75, align="center")
+    form = svg_form("f", [], CORNER_SUBPATHS, CORNER_FIT, spacing=spacing)
+    assert approx_equal(slots(form), CORNER_INTERVAL_SLOTS, abs_tol=TOL)
+    three = svg_form("f", list("ABC"), CORNER_SUBPATHS, CORNER_FIT, spacing=spacing, facing=ALONG)
+    assert approx_equal(_poses(three), CORNER_THREE_POSES, abs_tol=TOL)
 
 
 def test_one_subpath_svg_form_keeps_every_spacing_mode() -> None:

@@ -123,8 +123,8 @@ class PolylineRecipe(CurveRecipeBase):
 class SvgRecipe(RecipeBase):
     """Holds the fitted picture outline of an svg form, one curve per subpath.
 
-    Subpaths stay separate curves, never one curve that jumps the gaps between them, so slots
-    are shared among them by length and never spaced across a gap.
+    Subpaths stay separate curves, never one curve that jumps the gaps between them; layout
+    shares slots among them by length, or walks them in order for count and interval spacing.
 
     Attributes:
         curves: The outline's subpaths in drawing order, each rebuilt from its construction.
