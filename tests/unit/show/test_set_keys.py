@@ -108,7 +108,8 @@ from showpy.show.integrity import (
     require_valid_tree,
 )
 from showpy.show.manage import add_set, insert_subset, remove_set, renumber
-from showpy.show.migrate import format_header, without_header
+from showpy.show.migrate import ReportBuilder, format_header, without_header
+from showpy.show.migrations.v1_to_v2_forms import migrate_forms
 from showpy.show.models import Revision, Show
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.sections import join_sections
@@ -218,7 +219,8 @@ def test_regression_never_renumbered_v020_show_encodes_to_its_stored_documents(
     stored = {p: raw for p, raw in tree.items() if is_show_doc(p)}
     encoded = encode_show(decode_show(tree))
     assert set(encoded) == set(stored)
-    canonical = {p: dump_json(json.loads(raw)) for p, raw in stored.items()}
+    parsed = {p: json.loads(raw) for p, raw in stored.items()}
+    canonical = {p: dump_json(doc) for p, doc in migrate_forms(parsed, ReportBuilder(1)).items()}
     canonical[SHOW_DOC] = dump_show_doc({**format_header(), **json.loads(stored[SHOW_DOC])})
     assert {p: encoded[p] for p in stored} == canonical
     assert not [p for p in encoded if p.endswith("/set.json") and "key" in json.loads(encoded[p])]

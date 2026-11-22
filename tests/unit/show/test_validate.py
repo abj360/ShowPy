@@ -103,6 +103,7 @@ from showpy.show.validate import (
     validate_show,
 )
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
+from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 from tests.helpers import replaced_form_show
 
@@ -136,7 +137,7 @@ def test_pinned_rows_must_stay_unchanged() -> None:
 
 def test_form_membership_is_checked() -> None:
     show = two_set_show()
-    form = Form(id=FormId("f"), set=SetId("1"), kind="line", geometry={}, members=(SpotId("T1"),))
+    form = Form(id=FormId("f"), set=SetId("1"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     show = show.model_copy(update={"forms": {"f": form}})
     first = show.set("1").with_placements({"T2": {"form": "f", "order": 0}, "T3": {"form": "zz"}})
     codes = _codes(validate_set(show, first))
@@ -232,8 +233,7 @@ def _formed(
     form = Form(
         id=FormId(form_id),
         set=SetId(form_set),
-        kind="line",
-        geometry={},
+        recipe=LINE_RECIPE,
         members=tuple(map(SpotId, members)),
     )
     rows = tuple(

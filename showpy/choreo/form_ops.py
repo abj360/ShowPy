@@ -3,8 +3,9 @@ form_ops.py --- edits forms: reshape, reorder, split, merge, morph, gate, pinwhe
 
 Every function returns new forms and refuses locked forms unless force=True. Transforms
 stay exact: curve recipes map through showpy.geo.affine.transform_curve, blocks under
-rotation and uniform scale keep their recipe, and other point recipes gain a composed
-`transform` matrix, so they stay editable.
+rotation and uniform scale keep their recipe, custom points map directly, and other recipes
+(or any recipe that already holds one) gain a composed `transform` matrix, so they stay
+editable.
 
 Contains:
     edit(): returns a form with construction or form fields changed
@@ -24,8 +25,8 @@ from typing import Any, Literal
 import numpy as np
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
-from showpy.choreo.form_layout import CURVE_KINDS, curve_stations, layout, slot_count
-from showpy.choreo.form_models import FacingSpec, Form, TextRecipe
+from showpy.choreo.form_layout import curve_stations, layout, slot_count
+from showpy.choreo.form_models import FacingSpec, Form, Recipe
 from showpy.choreo.form_text import (
     reject_count_change,
     require_edited_members,
@@ -52,6 +53,7 @@ from showpy.choreo.forms import (
 )
 from showpy.choreo.match import match
 from showpy.choreo.models import Set
+from showpy.choreo.recipe_models import BlockRecipe, CurveRecipeBase, CustomRecipe, RecipeBase
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, SpacingError
 from showpy.core.ids import SpotId
@@ -70,31 +72,23 @@ from showpy.geo.curves import TrimmedCurve, curve_from_construction
 from showpy.geo.fonts import FontRegistry
 
 FORM_FIELDS = frozenset({"members", "spacing", "facing", "locked", "meta", "set"})
-SHARED_RECIPE_KEYS = frozenset({"n", "transform"})
-RECIPE_KEYS = {
-    "block": frozenset({"origin", "rows", "cols", "interval", "facing", "anchor"}),
-    "fill": frozenset({"outline", "interval", "pattern", "angle_deg"}),
-    "scatter": frozenset({"region", "min_gap", "seed"}),
-    "custom": frozenset({"points", "facings"}),
-    "generated": frozenset({"fn", "params"}),
-    "text": frozenset(TextRecipe.model_fields),
-}
+FIXED_RECIPE_KEYS = frozenset({"kind", "recipe_version"})
 TRIMMABLE_FACINGS = frozenset({"audience", "fixed", "along", "normal", "toward_point"})
 HALF_TURN = 180.0
 
 type Order = Sequence[str] | Literal["reverse", "by_x", "by_y", "nearest_prev"]
 
 
-def _allowed_keys(form: Form) -> frozenset[str]:
-    if form.kind in CURVE_KINDS:
-        curve_keys = set(form.geometry["curve"]) - {"kind"}
-        return frozenset(curve_keys | {"n"})
-    return RECIPE_KEYS[form.kind] | SHARED_RECIPE_KEYS
+def _allowed_keys(recipe: Recipe) -> frozenset[str]:
+    if isinstance(recipe, CurveRecipeBase):
+        return frozenset((set(type(recipe.curve).model_fields) - {"kind"}) | {"n"})
+    return frozenset(type(recipe).model_fields) - FIXED_RECIPE_KEYS
 
 
-# Any: recipe values are JSON whose type depends on the key.
-def _edited_geometry(form: Form, changes: dict[str, Any]) -> dict[str, Any]:
-    allowed = _allowed_keys(form)
+# Any: changes are construction values whose type depends on the key.
+def _edited_recipe(form: Form, changes: dict[str, Any]) -> dict[str, Any]:
+    recipe = form.recipe
+    allowed = _allowed_keys(recipe)
     for key in changes:
         if key not in allowed:
             close = close_matches(key, sorted(allowed | FORM_FIELDS))
@@ -103,12 +97,12 @@ def _edited_geometry(form: Form, changes: dict[str, Any]) -> dict[str, Any]:
                 hint=f"did you mean {', '.join(close)}?" if close else f"use {sorted(allowed)}",
                 context={"form": form.id, "field": key},
             )
-    if form.kind not in CURVE_KINDS:
-        return {**form.geometry, **changes}
-    n = changes.pop("n", form.geometry.get("n"))
-    curve = curve_from_construction({**form.geometry["curve"], **changes})
-    recipe: dict[str, Any] = {**form.geometry, "curve": curve.construction()}
-    return recipe if n is None else {**recipe, "n": n}
+    stored = recipe.model_dump()
+    if not isinstance(recipe, CurveRecipeBase):
+        return {**stored, **changes}
+    n = changes.pop("n", recipe.n)
+    curve = curve_from_construction({**recipe.curve.construction(), **changes})
+    return {**stored, "curve": curve, "n": n}
 
 
 # Any: changes are construction values or form fields of any type.
@@ -127,7 +121,7 @@ def edit(
     and `members` must keep the count. `fonts` names resolve through `font_registry`.
 
     >>> f = circle_form("c", ["A", "B"], (0, 5), 2.0)
-    >>> edit(f, radius=3.0).geometry["curve"]["radius"]
+    >>> edit(f, radius=3.0).recipe.curve.radius
     3.0
     """
     check_unlocked(form, force=force)
@@ -136,9 +130,9 @@ def edit(
         changes = resolve_edit_fonts(form.id, changes, font_registry)
     fields = {k: v for k, v in changes.items() if k in FORM_FIELDS}
     recipe = {k: v for k, v in changes.items() if k not in FORM_FIELDS}
-    geometry = _edited_geometry(form, recipe) if recipe else form.geometry
+    edited_recipe = _edited_recipe(form, recipe) if recipe else form.recipe
     dumped = form.model_dump()
-    edited = Form.model_validate({**dumped, **fields, "geometry": geometry})
+    edited = Form.model_validate({**dumped, **fields, "recipe": edited_recipe})
     count = slot_count(edited)
     if edited.kind == "text" and count is not None:
         require_edited_members(edited.id, count, len(edited.members))
@@ -245,21 +239,16 @@ def _custom_part(form: Form, part_id: str, lo: int, hi: int, registry: FormFnReg
 def _trimmable(form: Form, lo: int, hi: int) -> bool:
     spacing = form.spacing
     plain = spacing.mode == "count" and not spacing.gaps
-    return (
-        form.kind in CURVE_KINDS
-        and plain
-        and hi - lo >= 2
-        and form.facing.mode in (TRIMMABLE_FACINGS)
-    )
+    return plain and hi - lo >= 2 and form.facing.mode in (TRIMMABLE_FACINGS)
 
 
-def _trimmed_part(form: Form, part_id: str, lo: int, hi: int) -> Form:
-    curve = curve_from_construction(form.geometry["curve"])
+def _trimmed_part(form: Form, recipe: CurveRecipeBase, part_id: str, lo: int, hi: int) -> Form:
+    curve = recipe.curve
     stations = curve_stations(curve, form.spacing, slot_count(form))
     trimmed = TrimmedCurve(base=curve, s0=float(stations[lo]), s1=float(stations[hi - 1]))
     return form.replace(
         id=part_id,
-        geometry={"curve": trimmed.construction()},
+        recipe=recipe.replace(curve=trimmed, n=None),
         members=form.members[lo:hi],
         spacing=form.spacing.replace(start=0.0, end=None),
     )
@@ -287,10 +276,10 @@ def split_form(
     first_id, second_id = ids or (f"{form.id}-1", f"{form.id}-2")
     parts = []
     for part_id, lo, hi in ((first_id, 0, index), (second_id, index, len(form.members))):
-        trimmable = _trimmable(form, lo, hi)
+        recipe = form.recipe
         parts.append(
-            _trimmed_part(form, part_id, lo, hi)
-            if trimmable
+            _trimmed_part(form, recipe, part_id, lo, hi)
+            if isinstance(recipe, CurveRecipeBase) and _trimmable(form, lo, hi)
             else _custom_part(form, part_id, lo, hi, registry)
         )
     return parts[0], parts[1]
@@ -361,33 +350,38 @@ def _proper_similarity(matrix: Matrix) -> bool:
     return is_similarity(matrix) and bool(np.linalg.det(matrix[:2, :2]) > 0)
 
 
-# Any: recipes are JSON objects whose keys depend on the kind.
-def _mapped_block(geometry: dict[str, Any], matrix: Matrix) -> dict[str, Any]:
-    origin = transform_points(np.asarray([geometry["origin"]], dtype=float), matrix)[0]
+def _mapped_block(recipe: BlockRecipe, matrix: Matrix) -> BlockRecipe:
+    origin = transform_points(np.asarray([recipe.origin], dtype=float), matrix)[0]
     scale = float(np.sqrt(np.linalg.det(matrix[:2, :2])))
-    return {
-        **geometry,
-        "origin": [float(origin[0]), float(origin[1])],
-        "interval": float(geometry["interval"]) * scale,
-        "facing": transform_facing(float(geometry.get("facing", 0.0)), matrix),
-    }
+    return recipe.replace(
+        origin=(float(origin[0]), float(origin[1])),
+        interval=recipe.interval * scale,
+        facing=transform_facing(recipe.facing, matrix),
+    )
 
 
-# Any: recipes are JSON objects whose keys depend on the kind.
-def _mapped_geometry(form: Form, matrix: Matrix) -> dict[str, Any]:
-    g = form.geometry
-    if form.kind in CURVE_KINDS:
-        curve = transform_curve(curve_from_construction(g["curve"]), matrix)
-        return {**g, "curve": curve.construction()}
-    if form.kind == "block" and "transform" not in g and _proper_similarity(matrix):
-        return _mapped_block(g, matrix)
-    if form.kind == "custom":
-        pts = transform_points(np.asarray(g["points"], dtype=float).reshape(-1, 2), matrix)
-        facings = g.get("facings")
-        mapped = None if facings is None else [transform_facing(float(f), matrix) for f in facings]
-        return {**g, "points": pts.tolist(), "facings": mapped}
-    composed = matrix @ np.asarray(g.get("transform", np.eye(3)), dtype=float)
-    return {**g, "transform": composed.tolist()}
+def _mapped_custom(recipe: CustomRecipe, matrix: Matrix) -> CustomRecipe:
+    pts = transform_points(np.asarray(recipe.points, dtype=float).reshape(-1, 2), matrix)
+    facings = recipe.facings
+    mapped = None if facings is None else [transform_facing(f, matrix) for f in facings]
+    return recipe.replace(points=[(float(x), float(y)) for x, y in pts], facings=mapped)
+
+
+def _composed(recipe: RecipeBase, matrix: Matrix) -> RecipeBase:
+    stored = np.eye(3) if recipe.transform is None else np.asarray(recipe.transform, dtype=float)
+    return recipe.replace(transform=(matrix @ stored).tolist())
+
+
+def _mapped_recipe(recipe: Recipe, matrix: Matrix) -> RecipeBase:
+    if recipe.transform is not None:
+        return _composed(recipe, matrix)
+    if isinstance(recipe, CurveRecipeBase):
+        return recipe.replace(curve=transform_curve(recipe.curve, matrix))
+    if isinstance(recipe, BlockRecipe) and _proper_similarity(matrix):
+        return _mapped_block(recipe, matrix)
+    if isinstance(recipe, CustomRecipe):
+        return _mapped_custom(recipe, matrix)
+    return _composed(recipe, matrix)
 
 
 def transform_form(form: Form, matrix: Matrix, *, force: bool = False) -> Form:
@@ -401,7 +395,7 @@ def transform_form(form: Form, matrix: Matrix, *, force: bool = False) -> Form:
     """
     check_unlocked(form, force=force)
     return form.replace(
-        geometry=_mapped_geometry(form, matrix), facing=_mapped_facing(form.facing, matrix)
+        recipe=_mapped_recipe(form.recipe, matrix), facing=_mapped_facing(form.facing, matrix)
     )
 
 

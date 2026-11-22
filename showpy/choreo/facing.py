@@ -19,17 +19,21 @@ import itertools
 import math
 from collections.abc import Mapping, Sequence
 
+import numpy as np
+
 from showpy.choreo.form_models import Form
 from showpy.choreo.models import Set
 from showpy.choreo.motion import turn
 from showpy.choreo.path_models import FacingOverride
+from showpy.choreo.recipe_models import CurveRecipeBase
 from showpy.core.errors import GeometryError, TimeRangeError, UnknownRefError
 from showpy.core.ids import FormId, SpotId
 from showpy.core.selection import Selection, operand_ids
 from showpy.core.types import Degrees, Point
 from showpy.core.units import normalize_angle, vector_facing
 from showpy.core.util import close_matches
-from showpy.geo.curves import AnyCurve, curve_from_construction
+from showpy.geo.affine import transform_curve
+from showpy.geo.curves import AnyCurve
 from showpy.show.models import Show
 
 __all__ = [
@@ -118,14 +122,16 @@ def _form(show: Show, form_id: str) -> Form:
 
 
 def _form_curve(form: Form) -> AnyCurve:
-    recipe = form.geometry.get("curve")
-    if not isinstance(recipe, dict):
+    recipe = form.recipe
+    if not isinstance(recipe, CurveRecipeBase):
         raise GeometryError(
             f"form {form.id} ({form.kind}) has no curve to face along",
             hint="use face_direction or face_point for blocks, fills and scatters",
             context={"form": form.id},
         )
-    return curve_from_construction(recipe)
+    if recipe.transform is None:
+        return recipe.curve
+    return transform_curve(recipe.curve, np.asarray(recipe.transform, dtype=float))
 
 
 def _tangent_facings(
@@ -150,8 +156,8 @@ def face_along(
     >>> from showpy.examples import two_set_show
     >>> from showpy.geo.shapes import line
     >>> show = two_set_show()
-    >>> recipe = {"curve": line((0, 5), (6, 5)).construction()}
-    >>> form = Form(id="f", set="1", kind="line", members=("T1",), geometry=recipe)
+    >>> recipe = {"kind": "line", "curve": line((0, 5), (6, 5))}
+    >>> form = Form(id="f", set="1", members=("T1",), recipe=recipe)
     >>> show = show.replace(forms={"f": form})
     >>> round(face_along(show, "1", "f").get("T1").facing)
     90
@@ -170,8 +176,8 @@ def face_normal(
     >>> from showpy.examples import two_set_show
     >>> from showpy.geo.shapes import line
     >>> show = two_set_show()
-    >>> recipe = {"curve": line((0, 5), (6, 5)).construction()}
-    >>> form = Form(id="f", set="1", kind="line", members=("T1",), geometry=recipe)
+    >>> recipe = {"kind": "line", "curve": line((0, 5), (6, 5))}
+    >>> form = Form(id="f", set="1", members=("T1",), recipe=recipe)
     >>> show = show.replace(forms={"f": form})
     >>> round(face_normal(show, "1", "f").get("T1").facing)
     0

@@ -8,26 +8,46 @@ Contains:
     SpacingSpec: describes how members are spaced on a form's shape
     FacingSpec: describes how form members face
     TextRecipe: holds the construction recipe of a text form: text, font chain and layout
+    Recipe: the typed construction recipe of any form, tagged by `kind`
     FormKind: names the shape families a form can have
     CrowdedStroke: names a glyph stroke whose spots sit closer than its junction gap
     TextReport: reports how a text form's spots were spread, listing its crowded strokes
     Form: holds a stored shape construction plus its ordered members
+    Form.kind: returns the shape family, the recipe's kind
+    Form.geometry: returns the recipe as JSON; deprecated, read `Form.recipe`
     FormFnInfo: describes one registered shape generator
     SpiralFormParams: holds the parameters of the bundled `spiral` generator
     SineWaveFormParams: holds the parameters of the bundled `sine_wave` generator
     RoseFormParams: holds the parameters of the bundled `rose` generator
 """
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, ClassVar, Literal
 
 from pydantic import Field, model_validator
 
+from showpy.choreo.recipe_models import (
+    ArcRecipe,
+    BlockRecipe,
+    CircleRecipe,
+    CurveRecipe,
+    CustomRecipe,
+    FillRecipe,
+    GeneratedRecipe,
+    LineRecipe,
+    PolylineRecipe,
+    RecipeBase,
+    ScatterRecipe,
+    SvgRecipe,
+    WedgeRecipe,
+)
+from showpy.core.deprecation import renamed_field
 from showpy.core.errors import SchemaError
 from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.types import (
     Degrees,
     Finite,
     FrozenModel,
+    JsonValue,
     Meters,
     NonNegFinite,
     Point,
@@ -95,10 +115,11 @@ class FacingSpec(FrozenModel):
         return self
 
 
-class TextRecipe(FrozenModel):
+class TextRecipe(RecipeBase):
     r"""Holds the construction recipe of a text form: text, font chain and layout.
 
-    Fonts are stored as URIs, never names, so a recipe always names the exact font bytes.
+    Fonts are stored as URIs, never names, so a recipe always names the exact font bytes. A
+    text form's `n` is always set: it is the exact spot count, one member per slot.
 
     Attributes:
         text: Characters to write, `\n` between lines.
@@ -120,6 +141,7 @@ class TextRecipe(FrozenModel):
     'left'
     """
 
+    kind: Literal["text"] = "text"
     text: str = Field(min_length=1, max_length=MAX_LAYOUT_CHARS)
     fonts: tuple[FontUri, ...] = Field(min_length=1, max_length=MAX_TEXT_FONTS)
     mode: Literal["centerline"] = "centerline"
@@ -132,6 +154,23 @@ class TextRecipe(FrozenModel):
     line_spacing: float = Field(default=DEFAULT_LINE_SPACING, gt=0)
     spacing: PositiveMeters | None = None
 
+
+type Recipe = Annotated[
+    LineRecipe
+    | ArcRecipe
+    | CurveRecipe
+    | CircleRecipe
+    | BlockRecipe
+    | WedgeRecipe
+    | PolylineRecipe
+    | SvgRecipe
+    | FillRecipe
+    | ScatterRecipe
+    | CustomRecipe
+    | GeneratedRecipe
+    | TextRecipe,
+    Field(discriminator="kind"),
+]
 
 type FormKind = Literal[
     "line", "arc", "curve", "circle", "block", "wedge", "polyline", "svg", "fill", "scatter",
@@ -174,14 +213,19 @@ class TextReport(FrozenModel):
     crowded: tuple[CrowdedStroke, ...] = ()
 
 
+def _recipe_json(recipe: RecipeBase) -> dict[str, JsonValue]:
+    dumped: dict[str, JsonValue] = recipe.model_dump(mode="json")
+    return dumped
+
+
 class Form(FrozenModel):
     """Holds a stored shape construction plus its ordered members.
 
     Attributes:
         id: Form ID, unique across the show.
         set: Set the form belongs to.
-        kind: Shape family.
-        geometry: JSON construction recipe the slots are generated from.
+        recipe: Typed construction recipe the slots are generated from; its `kind` is the
+            form's shape family.
         members: Spots in slot order.
         spacing: How members are spaced on the shape.
         facing: How members face.
@@ -191,14 +235,21 @@ class Form(FrozenModel):
 
     id: FormId
     set: SetId
-    kind: FormKind
-    # Any: construction recipes are JSON objects whose fields depend on the kind.
-    geometry: dict[str, Any]
+    recipe: Recipe
     members: tuple[SpotId, ...]
     spacing: SpacingSpec = SpacingSpec()
     facing: FacingSpec = FacingSpec()
     locked: bool = False
     meta: dict[str, str] = {}
+
+    geometry: ClassVar[property] = renamed_field(
+        "recipe", since="0.4.0", remove="0.6.0", read=_recipe_json
+    )
+
+    @property
+    def kind(self) -> FormKind:
+        """Returns the shape family, the recipe's kind."""
+        return self.recipe.kind
 
     @model_validator(mode="after")
     def _unique_members(self) -> "Form":

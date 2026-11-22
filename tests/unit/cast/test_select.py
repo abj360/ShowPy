@@ -88,6 +88,7 @@ from showpy.core.types import Region
 from showpy.core.util import split_id
 from showpy.geo.shapes import line
 from showpy.show.models import Show
+from tests.fixtures.recipes import ARC_RECIPE
 from tests.fixtures.shows import two_set_show
 from tests.helpers import fails_after, outputs_under_hash_seeds
 
@@ -129,8 +130,7 @@ def mixed_show() -> Show:
     arc = Form(
         id=FormId("arc1"),
         set=SetId("1"),
-        kind="arc",
-        geometry={},
+        recipe=ARC_RECIPE,
         members=(SpotId("T10"), SpotId("T2"), SpotId("T1")),
     )
     base = two_set_show()

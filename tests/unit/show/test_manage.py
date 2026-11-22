@@ -80,6 +80,7 @@ from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import load_show, open_workspace, save_show
 from showpy.show.validate import validate_show
 from showpy.time.models import Hold, MeasureSetting
+from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import field_sheet, two_set_show
 from tests.helpers import fails_after
 
@@ -186,7 +187,7 @@ def test_insert_subset_respects_pinned_next_set() -> None:
 
 def test_remove_set_merges_counts_and_drops_forms_and_paths() -> None:
     show = _three_set_show()
-    form = Form(id=FormId("f"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
+    form = Form(id=FormId("f"), set=SetId("2"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     spec = TransitionSpec(
         id=make_tid("2", "3"), counts=4.0, rows={SpotId("T1"): PathRow(entity=SpotId("T1"))}
     )
@@ -265,7 +266,7 @@ def test_set_counts_rules_for_first_and_locked() -> None:
 
 def test_renumber_rewrites_every_reference() -> None:
     show, sub = insert_subset(_three_set_show(), "2", 2.0)
-    form = Form(id=FormId("f"), set=sub, kind="line", geometry={}, members=(SpotId("T1"),))
+    form = Form(id=FormId("f"), set=sub, recipe=LINE_RECIPE, members=(SpotId("T1"),))
     spec = TransitionSpec(id=make_tid("2", sub), counts=2.0)
     notes = (
         Note(id="n1", text="hit", anchor=Anchor.on_set(sub), author="d", created_at=AT),
@@ -457,7 +458,7 @@ def test_regression_insert_subset_after_a_names_a_subset_of_a() -> None:
 
 def test_regression_form_keys_equal_form_ids_across_a_round_trip() -> None:
     """Rejects a form key that differs from its ID, or keeps keys stable (audit 9.7)."""
-    form = Form(id=FormId("f1"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
+    form = Form(id=FormId("f1"), set=SetId("2"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     try:
         show = two_set_show().model_copy(update={"forms": {"zz": form}})
         Show.model_validate(show.model_dump())
@@ -468,7 +469,7 @@ def test_regression_form_keys_equal_form_ids_across_a_round_trip() -> None:
 
 def test_regression_frozen_show_forms_cannot_be_mutated() -> None:
     """Refuses `show.forms[...] = form` on a frozen show (audit 9.7 sets defects)."""
-    form = Form(id=FormId("zz"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
+    form = Form(id=FormId("zz"), set=SetId("2"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     show = two_set_show()
     with pytest.raises(TypeError):
         show.forms[FormId("zz")] = form  # type: ignore[index]
