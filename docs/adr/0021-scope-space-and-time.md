@@ -392,3 +392,13 @@ stored field. The 42 at v0.7.0 are 10 print, 9 tables, 6 coordinate wording, 14 
 zones, 1 `proscenium_stage` and 2 stored fields. The total stays 77, plus up to 16 sheet names.
 Every name still warns from v0.4.0; the warning period for the v0.7.0 names is three releases
 instead of two.
+
+### Correction 2026-11-22: `Spot.claimable` goes at v0.7.0
+
+Format v3 ships at v0.7.0 (ADR 0023, addendum of the same date), and v0.6.0 keeps writing v2.
+`Spot.claimable` is a stored field, and the library has no way to drop it before the v3 step, so
+its removal moves from v0.6.0 to v0.7.0. It warns from v0.4.0 as before. In the addendum above,
+the counts therefore change: 34 names go at v0.6.0 (4 interchange aliases, 19 publishing, 3
+video, 5 pandas and 3 render) and 43 at v0.7.0, plus up to 16 sheet names. The v3 step drops
+`Show.coordinates`, `Show.zones` and `Spot.claimable` together, so the open item about ADR 0023
+is closed.
