@@ -37,7 +37,7 @@ import pytest
 
 import showpy
 import showpy.core.errors
-from showpy._api_table import DEPRECATED, DEPRECATED_KEYWORDS
+from showpy._api_table import DEPRECATED, DEPRECATED_KEYWORDS, LEAVING
 from showpy.core.deprecation import (
     DeprecatedWarning,
     deprecated_call,
@@ -199,7 +199,26 @@ def test_deprecations_are_removed_on_time() -> None:
         major, minor, _patch = remove.split(".")
         if (int(major), int(minor)) <= current:
             overdue.append(f"{function}({old}=) (remove {remove})")
+    overdue += overdue_leaving_rows(LEAVING, current)
     assert not overdue, f"E: deprecated names past their removal version: {', '.join(overdue)}"
+
+
+def overdue_leaving_rows(
+    rows: tuple[tuple[str, str, str, str, str], ...], current: tuple[int, int]
+) -> list[str]:
+    """Lists the leaving names whose removal release is the current release or an earlier one."""
+    overdue = []
+    for name, _kind, _replacement, _since, remove in rows:
+        major, minor, _patch = remove.split(".")
+        if (int(major), int(minor)) <= current:
+            overdue.append(f"{name} (remove {remove})")
+    return overdue
+
+
+def test_leaving_scan_flags_a_type_row_past_its_removal_version() -> None:
+    rows = (("Landmark", "type", "Marking", "0.4.0", "0.7.0"),)
+    assert overdue_leaving_rows(rows, (0, 6)) == []
+    assert overdue_leaving_rows(rows, (0, 7)) == ["Landmark (remove 0.7.0)"]
 
 
 def _accepts_both_aliases(
