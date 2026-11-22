@@ -32,6 +32,8 @@ Contains:
     test_regression_validate_show_reports_degenerate_zones: reports a zone whose polygon has no area
     test_regression_validate_show_reports_selections_naming_unknown_spots: reports a named selection
         holding a spot that does not exist
+    test_regression_validate_show_names_the_selection_and_spot_in_context: puts the selection path
+        and the unknown spot in the issue context
     test_regression_validate_show_reports_infinite_set_counts: reports a set whose counts are
         infinite
     test_regression_validate_show_reports_non_finite_tempo: reports a tempo section whose tempo is
@@ -386,13 +388,19 @@ def test_regression_validate_show_reports_degenerate_zones() -> None:
     assert _mentions(_edited(zones=(zone,)), "flat")
 
 
-@pytest.mark.defect("UP-9.7-75")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-75")
 def test_regression_validate_show_reports_selections_naming_unknown_spots() -> None:
     """Reports a named selection holding a spot that does not exist (audit 9.7 validation gaps)."""
     cast = two_set_show().cast
     selections = {"front": frozenset({"T1", "ZZ"})}
     assert _mentions(_edited(cast=cast.model_copy(update={"selections": selections})), "ZZ")
+
+
+def test_regression_validate_show_names_the_selection_and_spot_in_context() -> None:
+    """Puts the selection path and the unknown spot in the issue context."""
+    cast = two_set_show().cast
+    show = _edited(cast=cast.model_copy(update={"selections": {"front": ("T1", "ZZ")}}))
+    (issue,) = [i for i in validate_show(show).issues if i.code == "UNKNOWN_SPOT"]
+    assert dict(issue.context) == {"path": "cast.selections.front", "spot": "ZZ"}
 
 
 @pytest.mark.defect("UP-9.7-76")

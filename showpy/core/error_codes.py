@@ -168,7 +168,7 @@ class ErrorCode(StrEnum):
     UNKNOWN_SHEET = "UNKNOWN_SHEET"
     """The show's sheet reference does not resolve in the sheet store."""
     UNKNOWN_SPOT = "UNKNOWN_SPOT"
-    """A set, transition or route names a spot that is not in the cast."""
+    """A set, transition, route or named selection names a spot that is not in the cast."""
     UNPINNED_SHEET = "UNPINNED_SHEET"
     """The show's dependencies do not pin its sheet reference."""
     VALIDATION = "VALIDATION"

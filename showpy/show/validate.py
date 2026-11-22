@@ -306,6 +306,23 @@ def _form_keys(show: Show) -> list[ValidationIssue]:
     ]
 
 
+def _selections(show: Show) -> list[ValidationIssue]:
+    cast_ids = set(show.cast.ids())
+    return [
+        ValidationIssue(
+            level=ERROR,
+            code=ErrorCode.UNKNOWN_SPOT,
+            where=f"selection {name}",
+            message=f"{spot} is not in the cast",
+            hint="remove the spot from the selection or add it to the cast",
+            context={"path": f"cast.selections.{name}", "spot": spot},
+        )
+        for name, members in show.cast.selections.items()
+        for spot in sorted(members)
+        if spot not in cast_ids
+    ]
+
+
 def _all(reports: Iterable[ValidationReport]) -> ValidationReport:
     return ValidationReport.merge(*reports)
 
@@ -319,7 +336,9 @@ def validate_show(show: Show, store: SheetStore | None = None) -> ValidationRepo
     """
     reports = [validate_set(show, s) for s in show.sets]
     reports += [validate_paths(show, show.transition(tid)) for tid in show.transition_ids()]
-    reports.append(ValidationReport(issues=tuple(_sequence(show) + _form_keys(show))))
+    reports.append(
+        ValidationReport(issues=tuple(_sequence(show) + _form_keys(show) + _selections(show)))
+    )
     reports.append(validate_timeline(show.timeline))
     if store is not None:
         reports.append(validate_dependencies(show, store))
