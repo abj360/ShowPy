@@ -12,6 +12,7 @@ Contains:
     test_leaving_export_rows_cover_the_decided_names(): checks the 41 names, kinds, removal
         releases and replacements of each group
     test_spot_claimable_warns(): warns on an outside read, not on decoding a stored show
+    test_every_field_row_matches_its_leave_field_call(): matches since, remove and replacement
     test_leave_field_reads_silently_from_inside_the_library(): keeps library reads quiet
 """
 
@@ -27,9 +28,10 @@ from pydantic import BaseModel
 import showpy
 from showpy._api_table import LEAVING, PUBLIC_API
 from showpy.cast.models import Spot
-from showpy.core.deprecation import DeprecatedWarning, leave_field
+from showpy.core.deprecation import DeprecatedWarning, _LeavingField, leave_field
 from showpy.core.ids import SpotId
 from showpy.show.interchange import export_json, import_json
+from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 
 PUBLIC_MODULES = {name: module for name, module, _attribute in PUBLIC_API}
@@ -153,3 +155,21 @@ def test_leave_field_reads_silently_from_inside_the_library() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         assert eval("Toy().going", inside) == "x"
+
+
+@pytest.mark.parametrize(
+    "row", [row for row in LEAVING if row[1] == "field"], ids=lambda row: row[0]
+)
+def test_every_field_row_matches_its_leave_field_call(
+    row: tuple[str, str, object, str, str],
+) -> None:
+    qualified, _kind, replacement, since, remove = row
+    model_name, _, field = qualified.partition(".")
+    descriptor = vars({"Show": Show, "Spot": Spot}[model_name])[field]
+    assert isinstance(descriptor, _LeavingField)
+    assert (descriptor.old, descriptor.since, descriptor.remove, descriptor.replacement) == (
+        f"showpy.{qualified}",
+        since,
+        remove,
+        replacement,
+    )
