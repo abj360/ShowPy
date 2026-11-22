@@ -14,6 +14,8 @@ Contains:
         SpacingSpec.gaps
     test_regression_form_refuses_more_members_than_slots: rejects a form whose members outnumber
         its slot count, and accepts one that fills it
+    test_regression_form_members_may_hold_open_slots: stores a slot with no spot as None, counts
+        it toward the slot count and lists each spot once
     test_regression_facing_spec_normalizes_fixed_value: wraps a fixed facing of 720 degrees into [0,
         360)
 """
@@ -112,3 +114,21 @@ def test_regression_form_refuses_more_members_than_slots() -> None:
         id=FormId("f"), set=SetId("1"), recipe=CustomRecipe(points=(), n=3), members=members
     )
     assert len(full.members) == full.recipe.n
+
+
+def test_regression_form_members_may_hold_open_slots() -> None:
+    recipe = CustomRecipe(points=(), n=4)
+    gapped = Form(
+        id=FormId("f"),
+        set=SetId("1"),
+        recipe=recipe,
+        members=(SpotId("A"), None, None, SpotId("B")),
+    )
+    assert gapped.members == ("A", None, None, "B")
+    assert Form.model_validate_json(gapped.model_dump_json()) == gapped
+    with pytest.raises(SpacingError):
+        Form(id=FormId("f"), set=SetId("1"), recipe=recipe, members=(None,) * 5)
+    with pytest.raises(SchemaError):
+        Form(
+            id=FormId("f"), set=SetId("1"), recipe=recipe, members=(SpotId("A"), None, SpotId("A"))
+        )

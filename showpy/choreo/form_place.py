@@ -31,7 +31,7 @@ type SlotRef = tuple[Form, int]
 def _check_disjoint(forms: Sequence[Form]) -> None:
     seen: dict[SpotId, FormId] = {}
     for form in forms:
-        for member in form.members:
+        for member in form.spots:
             if member in seen:
                 raise SchemaError(
                     f"{member} is in forms {seen[member]} and {form.id}",
@@ -41,6 +41,11 @@ def _check_disjoint(forms: Sequence[Form]) -> None:
             seen[member] = form.id
 
 
+def _open_indexes(form: Form, slot_total: int) -> list[int]:
+    held = len(form.members)
+    return [i for i in range(slot_total) if i >= held or form.members[i] is None]
+
+
 def _open_slots(
     forms: Sequence[Form], registry: FormFnRegistry
 ) -> tuple[list[SlotRef], Points, list[Degrees]]:
@@ -48,7 +53,7 @@ def _open_slots(
     points, facings = [], []
     for form in forms:
         pts, poses = slot_poses(form, registry)
-        for index in range(len(form.members), len(pts)):
+        for index in _open_indexes(form, len(pts)):
             refs.append((form, index))
             points.append(pts[index])
             facings.append(poses[index])
@@ -78,7 +83,7 @@ def _matched(
     registry: FormFnRegistry,
 ) -> list[Placement]:
     refs, points, facings = _open_slots(forms, registry)
-    taken = {m for form in forms for m in form.members}
+    taken = {m for form in forms for m in form.spots}
     pool = [p.entity for p in target.placements if p.entity not in taken and not p.pinned]
     if not refs or not pool:
         return []
@@ -122,8 +127,9 @@ def place(
 ) -> tuple[Set, list[Form]]:
     """Builds a set's placements from forms and returns it with the forms filled.
 
-    Members stand on their form's slots. Slots past a form's last member are open: spots of
-    the set that belong to no given form are matched into them from the previous set.
+    Members stand on their form's slots. A slot with no member, one that holds None or lies past
+    the last member, is open: spots of the set that belong to no given form are matched into
+    them from the previous set.
     Pinned placements stay untouched. Each placement's `form` and `order` record membership.
     The set lists the placed forms plus any form a pinned placement still references; other
     placements that pointed at a form no longer placed lose their `form` and `order`. The
@@ -166,12 +172,11 @@ def place(
 
 
 def filled_forms(placed: Set, forms: Sequence[Form]) -> list[Form]:
-    """Returns forms whose members include every spot placed on them, in slot order.
+    """Returns forms whose members include every spot placed on them, each on its own slot.
 
-    A form's own members keep their place, even a pinned member whose slot stayed open. The
-    other spots placed on the form follow in increasing `order`. Gaps in the orders are
-    compacted, so rebuilding a compacted form may shift spots that took non-lowest open slots,
-    until open slots are typed.
+    A form's own members keep their place, even a pinned member whose slot stayed open. Every
+    other spot placed on the form stands at index `order`; a slot nobody stands on is an open
+    slot, stored as None, so rebuilding the form moves nobody.
 
     Args:
         placed: Set whose placements carry `form` and `order`.
@@ -206,9 +211,20 @@ def _filled(placed: Set, form: Form) -> Form:
             hint="give each spot of a form its own order",
             context={"form": form.id, "orders": orders},
         )
-    kept = set(form.members)
-    members = (*form.members, *(p.entity for p in rows if p.entity not in kept))
-    return form.replace(set=placed.id, members=members)
+    kept = set(form.spots)
+    members = list(form.members)
+    for row in rows:
+        if row.entity in kept or row.order is None:
+            continue
+        members.extend([None] * (row.order + 1 - len(members)))
+        if members[row.order] is not None:
+            raise SchemaError(
+                f"form {form.id} has two spots on slot {row.order}",
+                hint="give each spot of a form its own order",
+                context={"form": form.id, "orders": orders},
+            )
+        members[row.order] = row.entity
+    return form.replace(set=placed.id, members=tuple(members))
 
 
 def _form_of(forms: Mapping[FormId, Form], form_id: str) -> Form:

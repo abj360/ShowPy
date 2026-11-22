@@ -57,10 +57,10 @@ def _repeats[T: str](spots: Sequence[T], taken: set[str]) -> list[T]:
 def _added(form: Form, add: Sequence[str]) -> tuple[SpotId, ...]:
     """Returns the checked, NFC-normalized new spots; none may be a member or repeat."""
     spots = tuple(SpotId(check_id(spot, kind="spot")) for spot in _spot_list(form, "add", add))
-    culprits = _repeats(spots, set(form.members))
+    culprits = _repeats(spots, set(form.spots))
     if not culprits:
         return spots
-    addable = [spot for spot in dict.fromkeys(spots) if spot not in form.members]
+    addable = [spot for spot in dict.fromkeys(spots) if spot not in form.spots]
     listed = f": {_preview(addable)}" if addable else ""
     raise SchemaError(
         f"text form {form.id} already has {', '.join(culprits)}",
@@ -73,15 +73,15 @@ def _added(form: Form, add: Sequence[str]) -> tuple[SpotId, ...]:
 def _kept(form: Form, remove: Sequence[str]) -> tuple[SpotId, ...]:
     """Returns the members left after removing `remove`; each must be a member, once."""
     spots = _spot_list(form, "remove", remove)
-    outsiders = set(spots) - set(form.members)
+    outsiders = set(spots) - set(form.spots)
     culprits = [spot for spot in dict.fromkeys(spots) if spot in outsiders]
     culprits += [spot for spot in _repeats(spots, set()) if spot not in outsiders]
     if not culprits:
         gone = set(spots)
-        return tuple(member for member in form.members if member not in gone)
+        return tuple(member for member in form.spots if member not in gone)
     raise SchemaError(
         f"text form {form.id} has no member {', '.join(culprits)} to remove",
-        hint=f"remove only members of form {form.id}: {_preview(form.members)}",
+        hint=f"remove only members of form {form.id}: {_preview(form.spots)}",
         context={"form": form.id, "spots": culprits},
         code=ErrorCode.NOT_A_MEMBER,
     )

@@ -157,8 +157,9 @@ def _form_slot_error(form: Form, reason: str, slot: int) -> MatchError:
     )
 
 
-def _matched_members(form: Form, result: MatchResult) -> tuple[SpotId, ...]:
-    held: list[SpotId | None] = [m if m not in result.slots else None for m in form.members]
+def _matched_members(form: Form, result: MatchResult) -> tuple[SpotId | None, ...]:
+    vacated = {i for i, m in enumerate(form.members) if m is not None and m in result.slots}
+    held: list[SpotId | None] = [None if i in vacated else m for i, m in enumerate(form.members)]
     for entity, (form_id, slot) in result.slots.items():
         if form_id != form.id:
             continue
@@ -168,10 +169,10 @@ def _matched_members(form: Form, result: MatchResult) -> tuple[SpotId, ...]:
         held[slot] = entity
     while held and held[-1] is None:
         held.pop()
-    for slot, member in enumerate(held):
-        if member is None:
+    for slot in sorted(vacated):
+        if slot < len(held) and held[slot] is None:
             raise _form_slot_error(form, "an empty slot", slot)
-    return tuple(m for m in held if m is not None)
+    return tuple(held)
 
 
 def _matched_forms(show: Show, set_id: SetId, result: MatchResult, *, force: bool) -> Show:
@@ -258,7 +259,9 @@ def apply_match(
     return clear_rows(edited, tid, relocated, force=force)
 
 
-def _swap_members(members: tuple[SpotId, ...], a: SpotId, b: SpotId) -> tuple[SpotId, ...]:
+def _swap_members(
+    members: tuple[SpotId | None, ...], a: SpotId, b: SpotId
+) -> tuple[SpotId | None, ...]:
     return tuple(b if m == a else a if m == b else m for m in members)
 
 

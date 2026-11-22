@@ -180,34 +180,50 @@ def _ranked_slots(pts: Points, axis: int) -> list[int]:
 
 def _ranked_members(form: Form, axis: int, prev_set: Set | None) -> list[SpotId]:
     if prev_set is None:
-        return natural_sort(form.members)
+        return natural_sort(form.spots)
     other = 1 - axis
-    points = {m: prev_set.get(m).point for m in form.members}
-    return sorted(form.members, key=lambda m: (points[m][axis], points[m][other], m))
+    points = {m: prev_set.get(m).point for m in form.spots}
+    return sorted(form.spots, key=lambda m: (points[m][axis], points[m][other], m))
+
+
+def _occupied_slots(form: Form) -> list[int]:
+    return [index for index, member in enumerate(form.members) if member is not None]
+
+
+def _occupied_points(form: Form, registry: FormFnRegistry) -> Points:
+    pts: Points = slots(form, registry)[_occupied_slots(form)]
+    return pts
 
 
 def _by_axis(form: Form, axis: int, prev_set: Set | None, registry: FormFnRegistry) -> list[SpotId]:
-    pts = slots(form, registry)[: len(form.members)]
+    pts = _occupied_points(form, registry)
     ranked = zip(_ranked_slots(pts, axis), _ranked_members(form, axis, prev_set), strict=True)
     by_slot = dict(ranked)
-    return [by_slot[slot] for slot in range(len(form.members))]
+    return [by_slot[slot] for slot in range(len(form.spots))]
 
 
 def _nearest_prev(form: Form, prev_set: Set, registry: FormFnRegistry) -> list[SpotId]:
-    pts = slots(form, registry)[: len(form.members)]
-    result = match(prev_set, pts, entities=form.members)
-    return sorted(form.members, key=lambda m: result.assignment[m])
+    pts = _occupied_points(form, registry)
+    result = match(prev_set, pts, entities=form.spots)
+    return sorted(form.spots, key=lambda m: result.assignment[m])
 
 
 def _explicit(form: Form, order: Sequence[str]) -> list[SpotId]:
-    if sorted(order) != sorted(form.members):
+    if sorted(order) != sorted(form.spots):
         raise SchemaError(
             f"new order for form {form.id} is not a reordering of its members",
             hint="list every current member exactly once",
-            context={"form": form.id, "members": list(form.members)},
+            context={"form": form.id, "members": list(form.spots)},
         )
-    members: dict[str, SpotId] = {member: member for member in form.members}
+    members: dict[str, SpotId] = {member: member for member in form.spots}
     return [members[spot_id] for spot_id in order]
+
+
+def _on_occupied_slots(form: Form, spots: Sequence[SpotId]) -> tuple[SpotId | None, ...]:
+    members = list(form.members)
+    for index, spot in zip(_occupied_slots(form), spots, strict=True):
+        members[index] = spot
+    return tuple(members)
 
 
 def reorder(
@@ -222,23 +238,24 @@ def reorder(
 
     `order` is an explicit member list, "reverse", "by_x"/"by_y" (the leftmost or
     frontmost member in `prev_set`, or the first by ID without one, takes the leftmost or
-    frontmost slot), or "nearest_prev" (optimal match from positions in `prev_set`).
+    frontmost slot), or "nearest_prev" (optimal match from positions in `prev_set`). Open slots
+    stay open: the spots move among the slots that hold one.
 
     >>> reorder(line_form("f", ["A", "B", "C"], (0, 0), (2, 0)), "reverse").members
     ('C', 'B', 'A')
     """
     check_unlocked(form, force=force)
     if order == "reverse":
-        members = list(form.members[::-1])
+        spots = list(form.spots[::-1])
     elif order in ("by_x", "by_y"):
-        members = _by_axis(form, 0 if order == "by_x" else 1, prev_set, registry)
+        spots = _by_axis(form, 0 if order == "by_x" else 1, prev_set, registry)
     elif order == "nearest_prev":
         if prev_set is None:
             raise SchemaError("nearest_prev needs prev_set", hint="pass the previous set")
-        members = _nearest_prev(form, prev_set, registry)
+        spots = _nearest_prev(form, prev_set, registry)
     else:
-        members = _explicit(form, order)
-    return form.replace(members=tuple(members))
+        spots = _explicit(form, order)
+    return form.replace(members=_on_occupied_slots(form, spots))
 
 
 def _split_index(form: Form, at: int | str) -> int:
@@ -344,15 +361,15 @@ def morph_targets(a: Form, b: Form, registry: FormFnRegistry = DEFAULT_FORM_FNS)
     ...     line_form("b", ["B", "A"], (0, 5), (1, 5))).tolist()
     [[1.0, 5.0], [0.0, 5.0]]
     """
-    if set(a.members) != set(b.members):
+    if set(a.spots) != set(b.spots):
         raise SchemaError(
             f"forms {a.id} and {b.id} have different members",
             hint="morph between forms holding the same spots",
-            context={"only_a": sorted(set(a.members) - set(b.members))},
+            context={"only_a": sorted(set(a.spots) - set(b.spots))},
         )
     pts = slots(b, registry)
-    index = {member: i for i, member in enumerate(b.members)}
-    return np.array([pts[index[m]] for m in a.members], dtype=float).reshape(-1, 2)
+    index = {member: i for i, member in enumerate(b.members) if member is not None}
+    return np.array([pts[index[m]] for m in a.spots], dtype=float).reshape(-1, 2)
 
 
 def _mapped_facing(spec: FacingSpec, matrix: Matrix) -> FacingSpec:

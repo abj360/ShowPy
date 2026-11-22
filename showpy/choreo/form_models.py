@@ -14,6 +14,7 @@ Contains:
     TextReport: reports how a text form's spots were spread, listing its crowded strokes
     Form: holds a stored shape construction plus its ordered members
     Form.kind: returns the shape family, the recipe's kind
+    Form.spots: returns the spots on the form in slot order, without open slots
     Form.geometry: returns the recipe as JSON; deprecated, read `Form.recipe`
     FormFnInfo: describes one registered shape generator
     SpiralFormParams: holds the parameters of the bundled `spiral` generator
@@ -41,8 +42,9 @@ from showpy.choreo.recipe_models import (
     WedgeRecipe,
 )
 from showpy.core.deprecation import renamed_field
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, SpacingError
-from showpy.core.ids import FormId, SetId, SpotId
+from showpy.core.ids import FormId, SetId, SpotId, SpotIdField
 from showpy.core.types import (
     Degrees,
     Finite,
@@ -226,7 +228,8 @@ class Form(FrozenModel):
         set: Set the form belongs to.
         recipe: Typed construction recipe the slots are generated from; its `kind` is the
             form's shape family.
-        members: Spots in slot order; at most `recipe.n` of them when `n` is set.
+        members: One entry per slot in slot order: the spot standing on it, or None for an open
+            slot that `place` fills. At most `recipe.n` entries when `n` is set.
         spacing: How members are spaced on the shape.
         facing: How members face.
         locked: Designer lock; edits need force=True.
@@ -236,7 +239,7 @@ class Form(FrozenModel):
     id: FormId
     set: SetId
     recipe: Recipe
-    members: tuple[SpotId, ...]
+    members: tuple[SpotIdField | None, ...]
     spacing: SpacingSpec = SpacingSpec()
     facing: FacingSpec = FacingSpec()
     locked: bool = False
@@ -251,11 +254,35 @@ class Form(FrozenModel):
         """Returns the shape family, the recipe's kind."""
         return self.recipe.kind
 
+    @property
+    def spots(self) -> tuple[SpotId, ...]:
+        """Returns the spots standing on the form, in slot order, without the open slots.
+
+        >>> Form(id="f", set="1", recipe={"kind": "custom", "points": [], "n": 3},
+        ...     members=("A", None, "B")).spots
+        ('A', 'B')
+        """
+        return tuple(member for member in self.members if member is not None)
+
     @model_validator(mode="after")
     def _unique_members(self) -> "Form":
-        if len(set(self.members)) != len(self.members):
+        spots = [member for member in self.members if member is not None]
+        if len(set(spots)) != len(spots):
             raise SchemaError(f"form {self.id} lists a member twice", hint="list each spot once")
         return self
+
+    @model_validator(mode="after")
+    def _text_has_no_open_slots(self) -> "Form":
+        slots = self.recipe.n
+        if self.recipe.kind != "text" or slots is None or len(self.spots) == len(self.members):
+            return self
+        raise SpacingError(
+            f"text form {self.id} has {len(self.spots)} spots for {slots} slots",
+            hint="stand a spot on every slot of a text form, or change its count with "
+            "edit_text_count",
+            context={"form": self.id, "n": slots, "members": len(self.spots)},
+            code=ErrorCode.MEMBER_COUNT_MISMATCH,
+        )
 
     @model_validator(mode="after")
     def _members_fit_slots(self) -> "Form":

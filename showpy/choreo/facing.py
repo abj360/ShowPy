@@ -158,7 +158,7 @@ def _tangent_facings(
     curves = _form_curves(form)
     target = show.set(set_id)
     facings = {}
-    for member in form.members:
+    for member in form.spots:
         base = vector_facing(_tangent_near(curves, target.get(member).point))
         facings[member] = base + turn_by
     return facings
