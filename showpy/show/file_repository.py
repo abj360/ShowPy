@@ -17,7 +17,6 @@ Contains:
 
 import errno
 import functools
-import json
 import os
 import re
 import stat
@@ -29,7 +28,8 @@ from typing import Any, BinaryIO, cast
 
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, StorageError
-from showpy.core.strict_json import require_nesting
+from showpy.core.json_types import JsonValue
+from showpy.core.strict_json import parse_strict_json
 from showpy.show.documents import dump_json
 from showpy.show.integrity import blob_digest
 from showpy.show.models import Revision
@@ -280,13 +280,12 @@ class _FileBackend:
         name = self._checked_id(show_id, revision_id, source)
         return self._dir(show_id) / TREE_DIR / f"{name}.json"
 
-    def _record(self, show_id: str, revision_id: str, source: Path) -> dict[str, object]:
+    def _record(self, show_id: str, revision_id: str, source: Path) -> dict[str, JsonValue]:
         path = self._tree_path(show_id, revision_id, source)
         raw = self._read(show_id, path, "tree record", TREE_MAX_BYTES)
         try:
-            require_nesting(raw, document="tree record")
-            record = json.loads(raw)
-        except (SchemaError, ValueError, RecursionError) as error:
+            record = parse_strict_json(raw, document="tree record")
+        except SchemaError as error:
             raise self._corrupt(
                 show_id, path, "tree file is not valid JSON or too deeply nested"
             ) from error
@@ -335,14 +334,15 @@ class _FileBackend:
     def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
         self._guard_dirs(show_id)
         path = self._tree_path(show_id, revision_id, self._dir(show_id) / TREE_DIR)
-        tree = self._record(show_id, revision_id, path)["tree"]
-        if not isinstance(tree, dict) or not all(
-            isinstance(k, str) and isinstance(v, str) for k, v in tree.items()
-        ):
+        stored = self._record(show_id, revision_id, path)["tree"]
+        if not isinstance(stored, dict):
             raise self._corrupt(show_id, path, "tree is not a mapping of paths to digests")
-        for value in tree.values():
-            self._checked_id(show_id, value, path)
-        return dict(tree)
+        tree: dict[str, str] = {}
+        for key, value in stored.items():
+            if not isinstance(value, str):
+                raise self._corrupt(show_id, path, "tree is not a mapping of paths to digests")
+            tree[key] = self._checked_id(show_id, value, path)
+        return tree
 
     @_guarded
     def blob(self, show_id: str, digest: str) -> bytes:
