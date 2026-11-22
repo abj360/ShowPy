@@ -36,11 +36,13 @@ from showpy.choreo.motion import DEFAULT_MOTIONS, MotionRegistry, ease
 from showpy.choreo.path_models import (
     Easing,
     FacingMode,
+    FacingValue,
     PathRow,
     PathStyle,
     TransitionSpec,
     TurnDirection,
     Waypoint,
+    as_facing_value,
 )
 from showpy.core.errors import LockedError, PathError
 from showpy.core.extras import require_extra
@@ -100,7 +102,7 @@ def default_paths(show: "Show", tid: tuple[str, str]) -> TransitionSpec:
     """Returns straight moves over the full counts for everyone (no stored rows).
 
     >>> from showpy.examples import two_set_show
-    >>> default_paths(two_set_show(), ("1", "2")).rows
+    >>> dict(default_paths(two_set_show(), ("1", "2")).rows)
     {}
     """
     return TransitionSpec.model_validate({"id": tid, "counts": show.set(tid[1]).counts})
@@ -331,7 +333,7 @@ def set_facing(
     spec: TransitionSpec,
     sel: Sel,
     mode: FacingMode,
-    value: Degrees | Point | str | None = None,
+    value: FacingValue | Degrees | Point | str | None = None,
     turn_counts: float = 0.0,
     direction: TurnDirection = TurnDirection.SHORTEST,
     *,
@@ -345,7 +347,7 @@ def set_facing(
     """
     change = {
         "facing_mode": mode,
-        "facing_value": value,
+        "facing_value": as_facing_value(value),
         "turn_counts": turn_counts,
         "turn_direction": direction,
     }

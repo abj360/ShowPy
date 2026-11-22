@@ -20,6 +20,12 @@ Contains:
         IndexError, for an empty track
     test_regression_min_gaps_resolves_selector_expressions: reads `sel` as a selector expression,
         and refuses an unknown spot with UnknownRefError
+    test_regression_min_gaps_refuses_negative_top: raises PathError for a negative top
+    test_regression_fix_params_are_typed_by_kind: builds each kind's parameter model from a dict,
+        refuses another kind's model and unknown keys
+    test_regression_suggested_fixes_carry_typed_params: types the params of delay and waypoint
+        suggestions and round-trips them through JSON
+    test_regression_apply_fix_applies_a_stagger_fix: staggers starts from typed parameters
 """
 
 import math
@@ -39,11 +45,12 @@ from showpy.choreo.avoid import (
     suggest_waypoint,
 )
 from showpy.choreo.engine import PathEngine
-from showpy.choreo.engine_models import Fix
+from showpy.choreo.engine_models import BendFix, DelayFix, Fix, ReassignFix, StaggerFix
 from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, MotionRegistry
 from showpy.choreo.path_models import Easing, PathRow, PathStyle
-from showpy.core.errors import PathError, ShowPyError, UnknownRefError
+from showpy.core.errors import PathError, SchemaError, ShowPyError, UnknownRefError
 from showpy.core.ids import SpotId
+from showpy.core.json_types import JsonValue
 from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
 from showpy.show.models import Show
@@ -94,7 +101,7 @@ def test_suggest_delays_opens_the_gap() -> None:
     assert fixes
     best = fixes[0]
     assert best.kind == "delay"
-    assert best.params == {"entity": "T1", "counts": 4.0}
+    assert best.params == DelayFix(entity=SpotId("T1"), counts=4.0)
     assert approx_equal(best.new_gap, 4.0 / math.sqrt(10.0) - FOOTPRINTS, abs_tol=1e-6)
     assert approx_equal(best.max_speed_after, math.sqrt(2.0), abs_tol=1e-6)
 
@@ -103,9 +110,10 @@ def test_suggest_waypoint_routes_around() -> None:
     fixes = suggest_waypoint(crossing_show(), TID, "T1", "T2", clearance=0.8)
     best = fixes[0]
     assert best.kind == "waypoint"
-    assert approx_equal(best.params["at"], 4.0)
+    assert isinstance(best.params, BendFix)
+    assert approx_equal(best.params.at, 4.0)
     offset = 1.4 / math.sqrt(2.0)
-    assert approx_equal(best.params["point"], (2.0 + offset, 7.0 - offset), abs_tol=1e-6)
+    assert approx_equal(best.params.point, (2.0 + offset, 7.0 - offset), abs_tol=1e-6)
     assert approx_equal(best.new_gap, 0.178385, abs_tol=1e-5)
     assert approx_equal(best.max_speed_after, 0.788987, abs_tol=1e-5)
 
@@ -114,13 +122,14 @@ def test_apply_fix_and_separate_in_time() -> None:
     show = crossing_show()
     fix = suggest_delays(show, TID, ("T1", "T2"))[0]
     spec = apply_fix(show.transition(TID), fix)
-    assert spec.row(str(fix.params["entity"])).start > 0.0
+    assert isinstance(fix.params, DelayFix)
+    assert spec.row(str(fix.params.entity)).start > 0.0
     staggered = separate_in_time(show.transition(TID), ["T1", "T2"], gap_counts=2.0)
     assert staggered.row("T2").start == 2.0
 
 
 def test_apply_reassign_fix_is_refused() -> None:
-    fix = Fix(kind="reassign", params={}, new_gap=1.0, max_speed_after=0.5)
+    fix = Fix(kind="reassign", params=ReassignFix(), new_gap=1.0, max_speed_after=0.5)
     with pytest.raises(PathError):
         apply_fix(crossing_show().transition(TID), fix)
 
@@ -135,7 +144,7 @@ def test_suggest_reassignment_uncrosses_a_swap() -> None:
 
 def test_regression_reassign_hint_names_the_real_module() -> None:
     """Names showpy.choreo.match_ops.apply_match in the hint for a reassign fix."""
-    fix = Fix(kind="reassign", params={}, new_gap=1.0, max_speed_after=0.5)
+    fix = Fix(kind="reassign", params=ReassignFix(), new_gap=1.0, max_speed_after=0.5)
     with pytest.raises(PathError) as info:
         apply_fix(crossing_show().transition(TID), fix)
     assert "showpy.choreo.match_ops.apply_match" in info.value.hint
@@ -150,13 +159,13 @@ def test_regression_suggested_waypoint_is_reached_at_its_count_on_eased_rows() -
     row = PathRow(entity=SpotId("T1"), easing=Easing(kind="ease_in", strength=2.0))
     show = with_rows({"T1": row}, show=crossing_show())
     fix = suggest_waypoint(show, TID, "T1", "T2")[0]
+    assert isinstance(fix.params, BendFix)
     changed = apply_fix(show.transition(TID), fix)
     engine = PathEngine(show.model_copy(update={"transitions": (changed,)}))
-    reached = engine.position("T1", fix.params["at"], local=TID)
-    assert approx_equal(reached, fix.params["point"], abs_tol=1e-6)
+    reached = engine.position("T1", fix.params.at, local=TID)
+    assert approx_equal(reached, fix.params.point, abs_tol=1e-6)
 
 
-@defect("UP-9.2-28")
 def test_regression_min_gaps_with_top_zero_returns_nothing() -> None:
     """Returns an empty list, or a ShowPyError, for top=0 instead of IndexError (audit 9.2)."""
     try:
@@ -220,7 +229,6 @@ def test_regression_avoid_helpers_accept_a_custom_motion_registry(call: MotionsC
     assert repr(call(custom, registry)) == repr(call(crossing_show(), DEFAULT_MOTIONS))
 
 
-@defect("UP-9.2-35")
 def test_regression_closest_approach_of_empty_track_raises_showpy_error() -> None:
     """Raises a ShowPyError, not IndexError, for an empty track (audit 9.2)."""
     with pytest.raises(ShowPyError):
@@ -234,3 +242,47 @@ def test_regression_min_gaps_resolves_selector_expressions() -> None:
     assert {(g.a, g.b) for g in gaps} == {("T1", "T2"), ("T1", "T3"), ("T2", "T3")}
     with pytest.raises(UnknownRefError):
         min_gaps(show, TID, ["T1", "Z9"])
+
+
+def test_regression_min_gaps_refuses_negative_top() -> None:
+    """Raises PathError for a negative top instead of slicing the list from the end."""
+    with pytest.raises(PathError):
+        min_gaps(two_set_show(), TID, top=-1)
+
+
+def _fix_document(kind: str, params: JsonValue) -> dict[str, JsonValue]:
+    return {"kind": kind, "params": params, "new_gap": 1.0, "max_speed_after": 1.0}
+
+
+def test_regression_fix_params_are_typed_by_kind() -> None:
+    """Builds each kind's parameter model from a dict, refusing another kind's model and keys."""
+    delay_fix = Fix.model_validate(_fix_document("delay", {"entity": "T1", "counts": 2.0}))
+    assert delay_fix.params == DelayFix(entity=SpotId("T1"), counts=2.0)
+    stagger = Fix.model_validate(_fix_document("stagger", {"order": ["T1", "T2"], "step": 1.0}))
+    assert stagger.params == StaggerFix(order=(SpotId("T1"), SpotId("T2")), step=1.0)
+    assert Fix.model_validate(_fix_document("reassign", {})).params == ReassignFix()
+    bend = BendFix(entity=SpotId("T1"), point=(1.0, 2.0), at=3.0)
+    with pytest.raises(SchemaError):
+        Fix(kind="delay", params=bend, new_gap=1.0, max_speed_after=1.0)
+    with pytest.raises(SchemaError):
+        Fix.model_validate(_fix_document("delay", {"entity": "T1", "counts": 2.0, "at": 1.0}))
+    with pytest.raises(SchemaError):
+        Fix.model_validate(_fix_document("delay", {"entity": "T1"}))
+
+
+def test_regression_suggested_fixes_carry_typed_params() -> None:
+    """Types the params of delay and waypoint suggestions and round-trips them through JSON."""
+    delays = suggest_delays(crossing_show(), TID, ("T1", "T2"))
+    bends = suggest_waypoint(crossing_show(), TID, "T1", "T2")
+    assert all(isinstance(f.params, DelayFix) for f in delays)
+    assert all(isinstance(f.params, BendFix) for f in bends)
+    for fix in (delays[0], bends[0]):
+        assert Fix.model_validate_json(fix.model_dump_json()) == fix
+
+
+def test_regression_apply_fix_applies_a_stagger_fix() -> None:
+    """Staggers starts from typed parameters, as separate_in_time does."""
+    params = StaggerFix(order=(SpotId("T1"), SpotId("T2")), step=2.0)
+    fix = Fix(kind="stagger", params=params, new_gap=1.0, max_speed_after=1.0)
+    spec = apply_fix(crossing_show().transition(TID), fix)
+    assert (spec.row("T1").start, spec.row("T2").start) == (0.0, 2.0)

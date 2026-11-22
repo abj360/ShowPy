@@ -40,6 +40,8 @@ Contains:
         one spot lacks a placement in the next set
     test_regression_velocity_is_full_speed_near_a_window_kink: reports the moving speed just after a
         window start, not half of it
+    test_segments_of_a_spline_row_are_the_same_in_two_engines: fits the same segments to a spline
+        row in two fresh engines and again in one engine
     test_regression_full_width_move_compiles_and_samples: compiles a 2e6 m move between the
         coordinate bounds in one count and samples its position and velocity
 """
@@ -54,18 +56,28 @@ import pytest
 from showpy.choreo.engine import PROBE_TOL_SHARE, PathEngine
 from showpy.choreo.path_models import (
     Easing,
+    EntityFacing,
     FacingMode,
     FacingOverride,
+    FixedFacing,
     PathRow,
     PathStyle,
+    PointFacing,
     Route,
     Waypoint,
 )
 from showpy.core.caps import MAX_COORD_M
-from showpy.core.errors import ContinuityError, PathError, ShowPyError, UnknownRefError
+from showpy.core.errors import (
+    ContinuityError,
+    PathError,
+    SchemaError,
+    ShowPyError,
+    UnknownRefError,
+)
 from showpy.core.ids import RouteId, SpotId
 from showpy.core.units import vector_facing
 from showpy.core.util import approx_equal
+from showpy.geo.curves import SplineCurve
 from showpy.geo.shapes import line
 from showpy.show.models import Show
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
@@ -181,7 +193,7 @@ def _follow_show() -> PathEngine:
     show = show.model_copy(update={"sets": (first, show.sets[1])})
     route = Route(
         id=RouteId("r"),
-        curve=route_curve.construction(),
+        curve=route_curve,
         members=(SpotId("T1"), SpotId("T2")),
         offsets=(0.0, -2.0),
         travel=4.0,
@@ -205,7 +217,7 @@ def test_follow_on_route_curve() -> None:
     show = show.model_copy(update={"sets": (first, show.sets[1])})
     route = Route(
         id=RouteId("r"),
-        curve=route_curve.construction(),
+        curve=route_curve,
         members=(SpotId("T1"), SpotId("T2")),
         offsets=(2.0, 0.0),
         travel=4.0,
@@ -270,27 +282,35 @@ def test_travel_facing_points_along_motion() -> None:
 def test_toward_point_and_entity_facing() -> None:
     point = _engine(
         T1=PathRow(
-            entity=SpotId("T1"), facing_mode=FacingMode.TOWARD_POINT, facing_value=(10.0, 7.0)
+            entity=SpotId("T1"),
+            facing_mode=FacingMode.TOWARD_POINT,
+            facing_value=PointFacing(point=(10.0, 7.0)),
         )
     )
     assert approx_equal(point.facing_at("T1", 4.0), 90.0)
     entity = _engine(
         T1=PathRow(
-            entity=SpotId("T1"), facing_mode=FacingMode.TOWARD_ENTITY, facing_value=SpotId("T2")
+            entity=SpotId("T1"),
+            facing_mode=FacingMode.TOWARD_ENTITY,
+            facing_value=EntityFacing(entity=SpotId("T2")),
         )
     )
     assert approx_equal(entity.facing_at("T1", 4.0), 90.0)
 
 
 def test_fixed_facing_needs_degrees() -> None:
-    with pytest.raises(PathError):
-        _engine(T1=PathRow(entity=SpotId("T1"), facing_mode=FacingMode.FIXED)).compile(TID)
+    with pytest.raises(SchemaError):
+        PathRow(entity=SpotId("T1"), facing_mode=FacingMode.FIXED)
 
 
 def test_facing_override_wins_inside_its_range() -> None:
     base = with_rows({"T1": PathRow(entity=SpotId("T1"), facing_mode=FacingMode.TRAVEL)})
     override = FacingOverride(
-        entities=(SpotId("T1"),), mode=FacingMode.FIXED, value=270.0, start=2.0, end=4.0
+        entities=(SpotId("T1"),),
+        mode=FacingMode.FIXED,
+        value=FixedFacing(degrees=270.0),
+        start=2.0,
+        end=4.0,
     )
     engine = PathEngine(base.model_copy(update={"facing_overrides": (override,)}))
     assert approx_equal(engine.facing_at("T1", 3.0), 270.0)
@@ -383,7 +403,11 @@ def test_compile_all_and_invalidate() -> None:
 def test_facing_override_resolves_selection_expressions() -> None:
     base = with_rows({"T1": PathRow(entity=SpotId("T1"), facing_mode=FacingMode.TRAVEL)})
     override = FacingOverride(
-        entities="T1-T2", mode=FacingMode.FIXED, value=270.0, start=2.0, end=4.0
+        entities="T1-T2",
+        mode=FacingMode.FIXED,
+        value=FixedFacing(degrees=270.0),
+        start=2.0,
+        end=4.0,
     )
     engine = PathEngine(base.model_copy(update={"facing_overrides": (override,)}))
     assert approx_equal(engine.facing_at("T2", 3.0), 270.0)
@@ -516,7 +540,11 @@ def _override_show(rows: dict[str, PathRow], override: FacingOverride, y_hold: b
 def test_regression_facing_override_applies_to_holding_spot() -> None:
     """Applies a facing override to a spot on a HOLD row (audit 9.2)."""
     override = FacingOverride(
-        entities=(SpotId("T1"),), mode=FacingMode.FIXED, value=90.0, start=2.0, end=6.0
+        entities=(SpotId("T1"),),
+        mode=FacingMode.FIXED,
+        value=FixedFacing(degrees=90.0),
+        start=2.0,
+        end=6.0,
     )
     rows = {"T1": PathRow(entity=SpotId("T1"), style=PathStyle.HOLD)}
     show = _override_show(rows, override, y_hold=True)
@@ -529,7 +557,7 @@ def test_regression_toward_entity_override_uses_query_time_position() -> None:
     override = FacingOverride(
         entities=(SpotId("T1"),),
         mode=FacingMode.TOWARD_ENTITY,
-        value=SpotId("T4"),
+        value=EntityFacing(entity=SpotId("T4")),
         start=0.0,
         end=8.0,
     )
@@ -559,14 +587,15 @@ def test_regression_invalidate_accepts_a_one_shot_iterable() -> None:
 @defect("UP-9.2-23")
 def test_regression_invalidate_clears_override_selection_cache() -> None:
     """Clears the cached facing-override selections when caches are invalidated (audit 9.2)."""
-    override = FacingOverride(entities="all", mode=FacingMode.FIXED, value=90.0, start=0.0, end=4.0)
+    override = FacingOverride(
+        entities="all", mode=FacingMode.FIXED, value=FixedFacing(degrees=90.0), start=0.0, end=4.0
+    )
     engine = PathEngine(two_set_show().model_copy(update={"facing_overrides": (override,)}))
     engine.facing_at("T1", 2.0)
     engine.invalidate(sets=["1", "2"])
     assert engine._override_cache == {}
 
 
-@defect("UP-9.2-24")
 def test_regression_spot_query_on_show_without_sets_raises_showpy_error() -> None:
     """Raises a ShowPyError, not IndexError, for a cast spot in a show with no sets (audit 9.2)."""
     engine = PathEngine(two_set_show().model_copy(update={"sets": ()}))
@@ -616,3 +645,15 @@ def test_regression_full_width_move_compiles_and_samples() -> None:
     state = engine.state_at("T1", 4.0, local=TID)
     assert approx_equal(state.position, (0.0, 5.0), abs_tol=1e-6)
     assert approx_equal(state.velocity[0], 2 * MAX_COORD_M, rel_tol=1e-9)
+
+
+def test_segments_of_a_spline_row_are_the_same_in_two_engines() -> None:
+    """Fits the same segments to a spline row in two fresh engines and again in one engine."""
+    waypoints = (Waypoint(x=3.0, y=6.0), Waypoint(x=-2.0, y=8.0), Waypoint(x=1.0, y=7.5))
+    row = PathRow(entity=SpotId("T1"), style=PathStyle.CURVE, waypoints=waypoints)
+    first, second = _engine(T1=row), _engine(T1=row)
+    assert isinstance(first.compile(TID).plans[SpotId("T1")].curve, SplineCurve)
+    segments = first.segments(TID)
+    assert len(segments) > len(first.compile(TID).plans)
+    assert segments == second.segments(TID)
+    assert segments == first.segments(TID)

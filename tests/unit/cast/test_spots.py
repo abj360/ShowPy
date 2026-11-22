@@ -44,7 +44,7 @@ from showpy.cast.spots import (
     set_claimable,
     set_shape,
 )
-from showpy.choreo.path_models import FacingMode, PathRow
+from showpy.choreo.path_models import EntityFacing, FacingMode, FixedFacing, PathRow
 from showpy.core.errors import (
     LockedError,
     SchemaError,
@@ -264,13 +264,13 @@ def test_rename_everywhere_rewrites_every_reference() -> None:
     spec = show.transition(("1", "2"))
     assert set(spec.rows) == {"A1", "A3", "A4"}
     assert spec.rows[SpotId("A1")].entity == "A1"
-    assert spec.rows[SpotId("A1")].facing_value == "A2"
+    assert spec.rows[SpotId("A1")].facing_value == EntityFacing(entity=SpotId("A2"))
     assert spec.routes[RouteId("r1")].members == ("A3", "A4")
     anchor = show.notes[0].anchor
     assert anchor.spots == ("A2",)
     override = show.facing_overrides[0]
     assert override.entities == ("A1", "A2")
-    assert override.value == "A3"
+    assert override.value == EntityFacing(entity=SpotId("A3"))
     assert show.cast.selections["pair"] == ("A1", "A4")
     assert [z.applies_to for z in show.zones] == [
         ("A1", "A2"),
@@ -282,7 +282,9 @@ def test_rename_everywhere_rewrites_every_reference() -> None:
 def test_rename_everywhere_swaps_simultaneously() -> None:
     show = _rename_everywhere(rich_show(), {SpotId("T1"): "T2", SpotId("T2"): "T1"})
     assert show.cast.ids() == ("T2", "T1", "T3", "T4")
-    assert show.transition(("1", "2")).rows[SpotId("T2")].facing_value == "T1"
+    assert show.transition(("1", "2")).rows[SpotId("T2")].facing_value == EntityFacing(
+        entity=SpotId("T1")
+    )
     assert show.set("1").get("T2").x == 0.0
 
 
@@ -295,14 +297,16 @@ def test_rename_everywhere_rejects_collisions_and_unknown_ids() -> None:
 
 def test_rename_everywhere_leaves_degree_facings_alone() -> None:
     show = rich_show()
-    row = PathRow(entity=SpotId("T2"), facing_mode=FacingMode.FIXED, facing_value=90.0)
+    row = PathRow(
+        entity=SpotId("T2"), facing_mode=FacingMode.FIXED, facing_value=FixedFacing(degrees=90.0)
+    )
     spec = show.transition(("1", "2"))
     rows: dict[SpotId, PathRow] = {**spec.rows, SpotId("T2"): row}
     spec = spec.model_copy(update={"rows": rows})
     show = _rename_everywhere(
         show.model_copy(update={"transitions": (spec,)}), {SpotId("T2"): "X2"}
     )
-    assert show.transition(("1", "2")).rows[SpotId("X2")].facing_value == 90.0
+    assert show.transition(("1", "2")).rows[SpotId("X2")].facing_value == FixedFacing(degrees=90.0)
 
 
 def test_rename_everywhere_with_empty_mapping_is_identity() -> None:

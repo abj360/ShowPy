@@ -10,15 +10,41 @@ Contains:
     Frame: holds every spot's state at one moment
     MotionStats: summarizes how varied the movement of a transition is
     GapInfo: describes the tightest moment between two spots
+    DelayFix: holds the arguments of a delay fix
+    BendFix: holds the arguments of a waypoint fix that bends one spot's path
+    StaggerFix: holds the arguments of a stagger fix
+    ReassignFix: marks a reassignment fix, which carries no path arguments
+    FixParams: names the argument models of the four fix kinds
+    FIX_PARAMS: maps each fix kind to its argument model
     Fix: describes one suggested change that opens a gap
 """
 
-from typing import Any, Literal
+from collections.abc import Mapping
+from typing import Final, Literal
+
+from pydantic import model_validator
 
 from showpy.choreo.models import Placement
-from showpy.choreo.path_models import Easing, FacingMode, PathStyle, TurnDirection
+from showpy.choreo.path_models import (
+    Easing,
+    FacingMode,
+    FacingValue,
+    PathStyle,
+    TurnDirection,
+    check_facing_value,
+)
+from showpy.core.errors import SchemaError
 from showpy.core.ids import SpotId, TransitionId
-from showpy.core.types import Count, Degrees, Finite, FinitePoint, FrozenModel, Point
+from showpy.core.readonly import ReadOnlyMap
+from showpy.core.types import (
+    Count,
+    Degrees,
+    Finite,
+    FinitePoint,
+    FrozenModel,
+    Point,
+    PositiveFinite,
+)
 from showpy.geo.curves import AnyCurve
 
 PieceKind = Literal["hold", "line", "arc", "curve", "route", "custom"]
@@ -57,7 +83,7 @@ class MotionPlan(FrozenModel):
         knots_s: Arc lengths at those knots.
         easing: Easing applied across the window.
         facing_mode: Facing during the window.
-        facing_value: Degrees, point or spot ID for the facing mode.
+        facing_value: Typed value the facing mode reads; None for modes that read none.
         turn_counts: Counts spent blending facings.
         turn_direction: Which way facing turns go.
     """
@@ -73,9 +99,14 @@ class MotionPlan(FrozenModel):
     knots_s: tuple[float, ...]
     easing: Easing = Easing()
     facing_mode: FacingMode = FacingMode.TO_TARGET
-    facing_value: Degrees | Point | SpotId | None = None
+    facing_value: FacingValue | None = None
     turn_counts: float = 0.0
     turn_direction: TurnDirection = TurnDirection.SHORTEST
+
+    @model_validator(mode="after")
+    def _facing_fits_mode(self) -> "MotionPlan":
+        check_facing_value(self.facing_mode, self.facing_value)
+        return self
 
     @property
     def moves(self) -> bool:
@@ -187,18 +218,98 @@ class GapInfo(FrozenModel):
     gap: Finite
 
 
+class DelayFix(FrozenModel):
+    """Holds the arguments of a delay fix.
+
+    >>> DelayFix(entity="T1", counts=2.0).counts
+    2.0
+
+    Attributes:
+        entity: Spot to hold back.
+        counts: Local counts to wait before moving.
+    """
+
+    entity: SpotId
+    counts: PositiveFinite
+
+
+class BendFix(FrozenModel):
+    """Holds the arguments of a waypoint fix that bends one spot's path.
+
+    >>> BendFix(entity="T1", point=(2.0, 3.0), at=4.0).point
+    (2.0, 3.0)
+
+    Attributes:
+        entity: Spot whose path bends.
+        point: Meters the spot passes.
+        at: Local count at which it passes the point.
+    """
+
+    entity: SpotId
+    point: Point
+    at: Finite
+
+
+class StaggerFix(FrozenModel):
+    """Holds the arguments of a stagger fix.
+
+    >>> StaggerFix(order=("T1", "T2"), step=1.0).step
+    1.0
+
+    Attributes:
+        order: Spots in the order they start.
+        step: Local counts between consecutive starts.
+    """
+
+    order: tuple[SpotId, ...]
+    step: Finite
+
+
+class ReassignFix(FrozenModel):
+    """Marks a reassignment fix; the new targets go through `apply_match`, not the paths."""
+
+
+type FixParams = DelayFix | BendFix | StaggerFix | ReassignFix
+FixKind = Literal["delay", "waypoint", "reassign", "stagger"]
+FIX_PARAMS: Final[Mapping[str, type[FixParams]]] = ReadOnlyMap(
+    {"delay": DelayFix, "waypoint": BendFix, "stagger": StaggerFix, "reassign": ReassignFix}
+)
+
+
 class Fix(FrozenModel):
     """Describes one suggested change that opens a gap; advisory, the checker decides.
 
     Attributes:
         kind: delay, waypoint, reassign or stagger.
-        params: Arguments for apply_fix (entity, counts, point, at, order, step).
+        params: Arguments for apply_fix, the model of the fix kind.
         new_gap: Gap between the pair after the change.
         max_speed_after: Fastest instant speed of the changed spot after the change, m/count.
     """
 
-    kind: Literal["delay", "waypoint", "reassign", "stagger"]
-    # Any: parameters differ by fix kind (spot ids, counts, points).
-    params: dict[str, Any]
+    kind: FixKind
+    params: FixParams
     new_gap: Finite
     max_speed_after: float
+
+    # A pydantic discriminator cannot key on a sibling field, so kind picks the model here.
+    @model_validator(mode="before")
+    @classmethod
+    def _params_for_kind(cls, data: object) -> object:
+        if not isinstance(data, dict) or "params" not in data:
+            return data
+        kind = data.get("kind")
+        model = FIX_PARAMS.get(kind) if isinstance(kind, str) else None
+        params = data["params"]
+        if model is None or isinstance(params, model):
+            return data
+        if isinstance(params, FrozenModel):
+            raise _mismatched_fix(kind, params)
+        return {**data, "params": model.model_validate(params)}
+
+
+def _mismatched_fix(kind: object, params: FrozenModel) -> SchemaError:
+    return SchemaError(
+        f"fix kind {kind!r} cannot hold {type(params).__name__} parameters",
+        hint="build the parameters with the model of the fix kind",
+        context={"kind": repr(kind), "params": type(params).__name__},
+    )

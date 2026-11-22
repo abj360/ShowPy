@@ -16,7 +16,13 @@ import numpy as np
 from showpy.choreo.engine_compile import plan_positions, plan_progress
 from showpy.choreo.engine_models import MotionPlan
 from showpy.choreo.motion import ease, turn
-from showpy.choreo.path_models import FacingMode, TurnDirection
+from showpy.choreo.path_models import (
+    EntityFacing,
+    FacingMode,
+    FixedFacing,
+    PointFacing,
+    TurnDirection,
+)
 from showpy.core.errors import PathError
 from showpy.core.types import Count, Degrees, Point
 from showpy.core.units import normalize_angle, vector_facing
@@ -56,33 +62,24 @@ def _travel(plan: MotionPlan, tau: float) -> Degrees:
     return vector_facing((float(tangent[0]), float(tangent[1])))
 
 
-def _require_value(plan: MotionPlan, kind: type) -> None:
-    if not isinstance(plan.facing_value, kind) or isinstance(plan.facing_value, bool):
-        raise PathError(
-            f"facing mode {plan.facing_mode.value} of {plan.entity} needs a value",
-            hint="degrees for fixed, (x, y) for toward_point, a spot id for toward_entity",
-            context={"entity": plan.entity, "value": plan.facing_value},
-        )
-
-
-def validate_facing(plan: MotionPlan) -> None:
-    """Raises PathError when a facing mode lacks the value it needs."""
-    needs = {
-        FacingMode.FIXED: (int, float),
-        FacingMode.TOWARD_POINT: tuple,
-        FacingMode.TOWARD_ENTITY: str,
-    }
-    if plan.facing_mode in needs:
-        _require_value(plan, needs[plan.facing_mode])  # type: ignore[arg-type]
+def _value[T: FixedFacing | PointFacing | EntityFacing](plan: MotionPlan, kind: type[T]) -> T:
+    value = plan.facing_value
+    if isinstance(value, kind):
+        return value
+    raise PathError(
+        f"facing mode {plan.facing_mode.value} of {plan.entity} needs a {kind.__name__} value",
+        hint="give the mode the value kind it reads",
+        context={"entity": plan.entity, "value": repr(value)},
+    )
 
 
 def mode_facing(plan: MotionPlan, tau: float, ctx: FacingContext) -> Degrees:
     """Returns the facing the plan's FacingMode asks for at local count tau."""
-    mode, value = plan.facing_mode, plan.facing_value
+    mode = plan.facing_mode
     here = plan_positions(plan, np.array([tau]))[0]
     point = (float(here[0]), float(here[1]))
     if mode == FacingMode.FIXED:
-        return normalize_angle(float(value))  # type: ignore[arg-type]
+        return _value(plan, FixedFacing).degrees
     if mode == FacingMode.TO_TARGET:
         return plan.end.facing
     if mode == FacingMode.AUDIENCE:
@@ -92,9 +89,9 @@ def mode_facing(plan: MotionPlan, tau: float, ctx: FacingContext) -> Degrees:
     if mode == FacingMode.AGAINST_TRAVEL:
         return normalize_angle(_travel(plan, tau) + HALF_TURN)
     if mode == FacingMode.TOWARD_POINT:
-        return _toward(point, value, plan.start.facing)  # type: ignore[arg-type]
+        return _toward(point, _value(plan, PointFacing).point, plan.start.facing)
     if mode == FacingMode.TOWARD_ENTITY:
-        other = ctx.position_of(str(value), ctx.t_global0 + tau)
+        other = ctx.position_of(_value(plan, EntityFacing).entity, ctx.t_global0 + tau)
         return _toward(point, other, plan.start.facing)
     start, end = plan.window
     share = float(ease(plan.easing, np.array([(tau - start) / (end - start)]))[0])

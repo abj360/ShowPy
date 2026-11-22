@@ -33,7 +33,6 @@ from showpy.geo.curves import (
     Segment,
     SplineCurve,
     TrimmedCurve,
-    curve_from_construction,
 )
 
 type FloatArray = npt.NDArray[np.float64]
@@ -115,7 +114,7 @@ def _route(row: PathRow, spec: TransitionSpec) -> Route:
 
 def _follow_curve(row: PathRow, spec: TransitionSpec, a: Placement) -> AnyCurve:
     route = _route(row, spec)
-    base = curve_from_construction(route.curve)
+    base = route.curve
     s0 = route.offsets[route.members.index(row.entity)]
     s1 = s0 + route.travel
     if not (min(s0, s1) >= -CONTINUITY_TOL and max(s0, s1) <= base.length() + CONTINUITY_TOL):

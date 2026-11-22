@@ -31,7 +31,7 @@ import pytest
 from showpy.cast.models import LabelScheme
 from showpy.cast.rewrite import faces_entity, rewrite_spot_ids
 from showpy.cast.spots import delete_spots, relabel
-from showpy.choreo.path_models import FacingMode
+from showpy.choreo.path_models import EntityFacing, FacingMode, FixedFacing, PointFacing
 from showpy.core.errors import ShowPyError, UnknownRefError
 from showpy.core.ids import FormId, SpotId, ZoneId
 from showpy.core.selection import Selection
@@ -46,9 +46,9 @@ pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWa
 
 
 def test_faces_entity_only_for_toward_entity_strings() -> None:
-    assert faces_entity(FacingMode.TOWARD_ENTITY, "T2") == "T2"
-    assert faces_entity(FacingMode.TOWARD_POINT, (1.0, 2.0)) is None
-    assert faces_entity(FacingMode.FIXED, 90.0) is None
+    assert faces_entity(FacingMode.TOWARD_ENTITY, EntityFacing(entity=SpotId("T2"))) == "T2"
+    assert faces_entity(FacingMode.TOWARD_POINT, PointFacing(point=(1.0, 2.0))) is None
+    assert faces_entity(FacingMode.FIXED, FixedFacing(degrees=90.0)) is None
 
 
 def test_drop_keeps_containers_and_removes_ids() -> None:

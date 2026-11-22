@@ -14,10 +14,16 @@ from showpy.cast.models import Cast
 from showpy.cast.select import is_label_dependent, select
 from showpy.choreo.form_models import Form
 from showpy.choreo.models import Set
-from showpy.choreo.path_models import FacingMode, FacingOverride, Route, TransitionSpec
+from showpy.choreo.path_models import (
+    EntityFacing,
+    FacingMode,
+    FacingOverride,
+    FacingValue,
+    Route,
+    TransitionSpec,
+)
 from showpy.core.ids import SpotId
 from showpy.core.selection import Selection, SelectorField
-from showpy.core.types import Point
 from showpy.notes.models import Note
 from showpy.sheet.models import Sheet, Zone
 
@@ -25,16 +31,19 @@ if TYPE_CHECKING:
     from showpy.show.models import Pin, Show
 
 type Rename = Callable[[SpotId], str | None]
-type FacingValue = float | Point | SpotId | None
 
 
-def faces_entity[T: str](mode: FacingMode, value: float | Point | T | None) -> T | None:
+def faces_entity(mode: FacingMode, value: FacingValue | None) -> SpotId | None:
     """Returns the spot a facing aims at, or None when it aims at an angle or a point.
 
-    >>> faces_entity(FacingMode.TOWARD_ENTITY, "T2"), faces_entity(FacingMode.FIXED, 90.0)
-    ('T2', None)
+    >>> faces_entity(FacingMode.TOWARD_ENTITY, EntityFacing(entity="T2"))
+    'T2'
+    >>> faces_entity(FacingMode.AUDIENCE, None) is None
+    True
     """
-    return value if mode == FacingMode.TOWARD_ENTITY and isinstance(value, str) else None
+    if mode == FacingMode.TOWARD_ENTITY and isinstance(value, EntityFacing):
+        return value.entity
+    return None
 
 
 def _keep(ids: Sequence[SpotId], rename: Rename) -> tuple[str, ...]:
@@ -93,11 +102,16 @@ def _rewrite_route(route: Route, rename: Rename) -> Route:
     return route.replace(members=tuple(m for m, _ in kept), offsets=tuple(o for _, o in kept))
 
 
-def _rewrite_value(
-    mode: FacingMode, value: FacingValue, rename: Rename
-) -> float | Point | str | None:
+def _rewrite_facing(
+    mode: FacingMode, value: FacingValue | None, rename: Rename
+) -> tuple[FacingMode, FacingValue | None]:
     target = faces_entity(mode, value)
-    return value if target is None else rename(target)
+    if target is None:
+        return mode, value
+    new = rename(target)
+    if new is None:
+        return FacingMode.TO_TARGET, None
+    return mode, EntityFacing(entity=SpotId(new))
 
 
 def _rewrite_spec(spec: TransitionSpec, rename: Rename) -> TransitionSpec:
@@ -105,8 +119,8 @@ def _rewrite_spec(spec: TransitionSpec, rename: Rename) -> TransitionSpec:
     for row in spec.rows.values():
         new = rename(row.entity)
         if new is not None:
-            value = _rewrite_value(row.facing_mode, row.facing_value, rename)
-            rows[new] = row.replace(entity=new, facing_value=value)
+            mode, value = _rewrite_facing(row.facing_mode, row.facing_value, rename)
+            rows[new] = row.replace(entity=new, facing_mode=mode, facing_value=value)
     routes = {rid: _rewrite_route(r, rename) for rid, r in spec.routes.items()}
     return spec.replace(rows=rows, routes=routes)
 
@@ -133,8 +147,8 @@ def _rewrite_selector(
 
 def _rewrite_override(show: "Show", override: FacingOverride, rename: Rename) -> FacingOverride:
     entities = _rewrite_selector(show, override.entities, rename)
-    value = _rewrite_value(override.mode, override.value, rename)
-    return override.replace(entities=entities, value=value)
+    mode, value = _rewrite_facing(override.mode, override.value, rename)
+    return override.replace(entities=entities, mode=mode, value=value)
 
 
 def _rewrite_zone(show: "Show", zone: Zone, rename: Rename) -> Zone:

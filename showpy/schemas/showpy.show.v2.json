@@ -85,6 +85,59 @@
       ],
       "type": "string"
     },
+    "AnyCurve": {
+      "discriminator": {
+        "mapping": {
+          "arc": "#/$defs/ArcCurve",
+          "bezier": "#/$defs/BezierCurve",
+          "circle": "#/$defs/CircleCurve",
+          "composite": "#/$defs/CompositeCurve",
+          "ellipse": "#/$defs/EllipseCurve",
+          "polyline": "#/$defs/Polyline",
+          "segment": "#/$defs/Segment",
+          "spiral": "#/$defs/SpiralCurve",
+          "spline": "#/$defs/SplineCurve",
+          "svg": "#/$defs/SvgCurve",
+          "trimmed": "#/$defs/TrimmedCurve"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Segment"
+        },
+        {
+          "$ref": "#/$defs/Polyline"
+        },
+        {
+          "$ref": "#/$defs/ArcCurve"
+        },
+        {
+          "$ref": "#/$defs/CircleCurve"
+        },
+        {
+          "$ref": "#/$defs/EllipseCurve"
+        },
+        {
+          "$ref": "#/$defs/SplineCurve"
+        },
+        {
+          "$ref": "#/$defs/BezierCurve"
+        },
+        {
+          "$ref": "#/$defs/SvgCurve"
+        },
+        {
+          "$ref": "#/$defs/SpiralCurve"
+        },
+        {
+          "$ref": "#/$defs/CompositeCurve"
+        },
+        {
+          "$ref": "#/$defs/TrimmedCurve"
+        }
+      ]
+    },
     "ApprovalState": {
       "description": "Names the collaboration states of a set.",
       "enum": [
@@ -94,6 +147,44 @@
       ],
       "title": "ApprovalState",
       "type": "string"
+    },
+    "ArcCurve": {
+      "additionalProperties": false,
+      "description": "Draws a circular arc.\n\nAttributes:\n    center: Circle center.\n    radius: Radius in meters, above 0.\n    start_deg: Start angle, counter-clockwise from +x.\n    sweep_deg: Signed sweep; positive turns counter-clockwise.",
+      "properties": {
+        "center": {
+          "$ref": "#/$defs/Point"
+        },
+        "closed": {
+          "const": false,
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "arc",
+          "default": "arc",
+          "title": "Kind",
+          "type": "string"
+        },
+        "radius": {
+          "$ref": "#/$defs/Meters"
+        },
+        "start_deg": {
+          "$ref": "#/$defs/Degrees"
+        },
+        "sweep_deg": {
+          "$ref": "#/$defs/Degrees"
+        }
+      },
+      "required": [
+        "center",
+        "radius",
+        "start_deg",
+        "sweep_deg"
+      ],
+      "title": "ArcCurve",
+      "type": "object"
     },
     "AudioTrack": {
       "additionalProperties": false,
@@ -144,6 +235,36 @@
         "label"
       ],
       "title": "AudioTrack",
+      "type": "object"
+    },
+    "BezierCurve": {
+      "additionalProperties": false,
+      "description": "Draws a B\u00e9zier curve of degree len(control) - 1.\n\nAttributes:\n    control: Control points; the curve starts at the first and ends at the last.",
+      "properties": {
+        "closed": {
+          "const": false,
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "control": {
+          "items": {
+            "$ref": "#/$defs/Point"
+          },
+          "title": "Control",
+          "type": "array"
+        },
+        "kind": {
+          "const": "bezier",
+          "default": "bezier",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "control"
+      ],
+      "title": "BezierCurve",
       "type": "object"
     },
     "BuiltInMotionParams": {
@@ -205,6 +326,45 @@
       "title": "Cast",
       "type": "object"
     },
+    "CircleCurve": {
+      "additionalProperties": false,
+      "description": "Draws a full circle, counter-clockwise unless `ccw` is False.\n\nAttributes:\n    center: Circle center.\n    radius: Radius in meters, above 0.\n    start_deg: Angle of the start point, counter-clockwise from +x.\n    ccw: Travel direction; mirroring a circle flips it.",
+      "properties": {
+        "ccw": {
+          "default": true,
+          "title": "Ccw",
+          "type": "boolean"
+        },
+        "center": {
+          "$ref": "#/$defs/Point"
+        },
+        "closed": {
+          "const": true,
+          "default": true,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "circle",
+          "default": "circle",
+          "title": "Kind",
+          "type": "string"
+        },
+        "radius": {
+          "$ref": "#/$defs/Meters"
+        },
+        "start_deg": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        }
+      },
+      "required": [
+        "center",
+        "radius"
+      ],
+      "title": "CircleCurve",
+      "type": "object"
+    },
     "Claimable": {
       "enum": [
         "performer",
@@ -212,6 +372,35 @@
         "none"
       ],
       "type": "string"
+    },
+    "CompositeCurve": {
+      "additionalProperties": false,
+      "description": "Joins curves end to end into one curve.\n\nAttributes:\n    parts: Curves in travel order.\n    closed: Whether the last part ends on the first part's start.",
+      "properties": {
+        "closed": {
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "composite",
+          "default": "composite",
+          "title": "Kind",
+          "type": "string"
+        },
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/AnyCurve"
+          },
+          "title": "Parts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "parts"
+      ],
+      "title": "CompositeCurve",
+      "type": "object"
     },
     "CoordinateKind": {
       "description": "Names the coordinate wording families.",
@@ -362,6 +551,65 @@
       "title": "Easing",
       "type": "object"
     },
+    "EllipseCurve": {
+      "additionalProperties": false,
+      "description": "Draws a counter-clockwise oval.\n\nAttributes:\n    center: Ellipse center.\n    rx: Semi-axis along the rotated x direction.\n    ry: Semi-axis along the rotated y direction.\n    rotation_deg: Counter-clockwise rotation of the axes.",
+      "properties": {
+        "center": {
+          "$ref": "#/$defs/Point"
+        },
+        "closed": {
+          "const": true,
+          "default": true,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "ellipse",
+          "default": "ellipse",
+          "title": "Kind",
+          "type": "string"
+        },
+        "rotation_deg": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        },
+        "rx": {
+          "$ref": "#/$defs/Meters"
+        },
+        "ry": {
+          "$ref": "#/$defs/Meters"
+        }
+      },
+      "required": [
+        "center",
+        "rx",
+        "ry"
+      ],
+      "title": "EllipseCurve",
+      "type": "object"
+    },
+    "EntityFacing": {
+      "additionalProperties": false,
+      "description": "Holds the spot a `toward_entity` facing mode looks at.\n\n>>> EntityFacing(entity=\"T2\").entity\n'T2'\n\nAttributes:\n    kind: Tag that tells the facing values apart in stored documents.\n    entity: Spot ID.",
+      "properties": {
+        "entity": {
+          "title": "Entity",
+          "type": "string"
+        },
+        "kind": {
+          "const": "entity",
+          "default": "entity",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "entity"
+      ],
+      "title": "EntityFacing",
+      "type": "object"
+    },
     "FacingMode": {
       "description": "Names how a spot faces while it moves.",
       "enum": [
@@ -379,7 +627,7 @@
     },
     "FacingOverride": {
       "additionalProperties": false,
-      "description": "Forces a facing on spots over a global count range, regardless of paths.\n\nAttributes:\n    entities: Spots affected.\n    mode: Facing mode during the range.\n    value: Degrees, point or spot ID, depending on the mode.\n    start: Global count where the override starts.\n    end: Global count where it ends.\n    turn_counts: Counts spent turning into and out of the override.",
+      "description": "Forces a facing on spots over a global count range, regardless of paths.\n\nAttributes:\n    entities: Spots affected.\n    mode: Facing mode during the range.\n    value: Typed value the mode reads; None for modes that read none.\n    start: Global count where the override starts.\n    end: Global count where it ends.\n    turn_counts: Counts spent turning into and out of the override.",
       "properties": {
         "end": {
           "$ref": "#/$defs/Count"
@@ -401,20 +649,13 @@
         "value": {
           "anyOf": [
             {
-              "$ref": "#/$defs/Degrees"
-            },
-            {
-              "$ref": "#/$defs/Point"
-            },
-            {
-              "type": "string"
+              "$ref": "#/$defs/FacingValue"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Value"
+          "default": null
         }
       },
       "required": [
@@ -462,6 +703,27 @@
       "title": "FacingSpec",
       "type": "object"
     },
+    "FacingValue": {
+      "discriminator": {
+        "mapping": {
+          "entity": "#/$defs/EntityFacing",
+          "fixed": "#/$defs/FixedFacing",
+          "point": "#/$defs/PointFacing"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/FixedFacing"
+        },
+        {
+          "$ref": "#/$defs/PointFacing"
+        },
+        {
+          "$ref": "#/$defs/EntityFacing"
+        }
+      ]
+    },
     "FigureEightParams": {
       "additionalProperties": false,
       "description": "Holds the parameters of the built-in figure_eight motion.\n\n>>> FigureEightParams().amplitude\n1.0\n\nAttributes:\n    amplitude: Side offset in meters; negative mirrors the loops.",
@@ -476,6 +738,26 @@
     },
     "Finite": {
       "type": "number"
+    },
+    "FixedFacing": {
+      "additionalProperties": false,
+      "description": "Holds the heading a `fixed` facing mode holds.\n\n>>> FixedFacing(degrees=450.0).degrees\n90.0\n\nAttributes:\n    kind: Tag that tells the facing values apart in stored documents.\n    degrees: Heading wrapped to [0, 360); 0 faces the audience, counter-clockwise positive.",
+      "properties": {
+        "degrees": {
+          "$ref": "#/$defs/Heading"
+        },
+        "kind": {
+          "const": "fixed",
+          "default": "fixed",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "degrees"
+      ],
+      "title": "FixedFacing",
+      "type": "object"
     },
     "Form": {
       "additionalProperties": false,
@@ -699,6 +981,9 @@
       ],
       "title": "GuideLine",
       "type": "object"
+    },
+    "Heading": {
+      "type": "number"
     },
     "HexColor": {
       "pattern": "^#[0-9a-fA-F]{6}$",
@@ -976,7 +1261,7 @@
     },
     "PathRow": {
       "additionalProperties": false,
-      "description": "Holds one spot's instructions for one transition; times are local counts.\n\nAttributes:\n    entity: Spot ID.\n    style: Path style.\n    start: Local count the move starts.\n    end: Local count the move ends; None means the end of the transition.\n    waypoints: Points passed on the way, for CURVE and POLYLINE.\n    route: Route followed, for FOLLOW.\n    pivot: Rotation center, for ROTATE.\n    sweep_deg: Signed rotation, for ROTATE; positive is counter-clockwise.\n    facing_mode: How the spot faces during the move.\n    facing_value: Degrees, point or spot ID, depending on the facing mode.\n    turn_counts: Counts spent turning into and out of the move's facing.\n    turn_direction: Which way turns go.\n    pace: Step pace multiplier for step-size reporting; positions ignore it.\n    locked: Designer lock.\n    note: Free text.\n    motion_fn: Registered motion function, for CUSTOM.\n    motion_params: The built-in motion's typed parameters, or a read-only JSON object for a\n        registered custom motion.\n    easing: How progress maps to time across the window.",
+      "description": "Holds one spot's instructions for one transition; times are local counts.\n\nAttributes:\n    entity: Spot ID.\n    style: Path style.\n    start: Local count the move starts.\n    end: Local count the move ends; None means the end of the transition.\n    waypoints: Points passed on the way, for CURVE and POLYLINE.\n    route: Route followed, for FOLLOW.\n    pivot: Rotation center, for ROTATE.\n    sweep_deg: Signed rotation, for ROTATE; positive is counter-clockwise.\n    facing_mode: How the spot faces during the move.\n    facing_value: Typed value the facing mode reads; None for modes that read none.\n    turn_counts: Counts spent turning into and out of the move's facing.\n    turn_direction: Which way turns go.\n    pace: Step pace multiplier for step-size reporting; positions ignore it.\n    locked: Designer lock.\n    note: Free text.\n    motion_fn: Registered motion function, for CUSTOM.\n    motion_params: The built-in motion's typed parameters, or a read-only JSON object for a\n        registered custom motion.\n    easing: How progress maps to time across the window.",
       "properties": {
         "easing": {
           "$ref": "#/$defs/Easing",
@@ -1009,20 +1294,13 @@
         "facing_value": {
           "anyOf": [
             {
-              "$ref": "#/$defs/Degrees"
-            },
-            {
-              "$ref": "#/$defs/Point"
-            },
-            {
-              "type": "string"
+              "$ref": "#/$defs/FacingValue"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Facing Value"
+          "default": null
         },
         "locked": {
           "default": false,
@@ -1274,6 +1552,55 @@
       ],
       "type": "array"
     },
+    "PointFacing": {
+      "additionalProperties": false,
+      "description": "Holds the point a `toward_point` facing mode looks at.\n\n>>> PointFacing(point=(1.0, 2.0)).point\n(1.0, 2.0)\n\nAttributes:\n    kind: Tag that tells the facing values apart in stored documents.\n    point: Meters on the sheet.",
+      "properties": {
+        "kind": {
+          "const": "point",
+          "default": "point",
+          "title": "Kind",
+          "type": "string"
+        },
+        "point": {
+          "$ref": "#/$defs/Point"
+        }
+      },
+      "required": [
+        "point"
+      ],
+      "title": "PointFacing",
+      "type": "object"
+    },
+    "Polyline": {
+      "additionalProperties": false,
+      "description": "Connects points with straight pieces.\n\nAttributes:\n    points: Vertices in order; a closed polyline does not repeat the first one.\n    closed: Whether a final piece returns to the first vertex.",
+      "properties": {
+        "closed": {
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "polyline",
+          "default": "polyline",
+          "title": "Kind",
+          "type": "string"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/Point"
+          },
+          "title": "Points",
+          "type": "array"
+        }
+      },
+      "required": [
+        "points"
+      ],
+      "title": "Polyline",
+      "type": "object"
+    },
     "PositiveFinite": {
       "exclusiveMinimum": 0,
       "type": "number"
@@ -1308,12 +1635,10 @@
     },
     "Route": {
       "additionalProperties": false,
-      "description": "Holds a shared path for follow-the-leader.\n\nMembers start on the route at arc lengths `offsets` and all advance `travel` meters.\n\nAttributes:\n    id: Route ID.\n    curve: JSON construction recipe of the route curve.\n    members: Spots on the route, leader first.\n    offsets: Each member's starting arc length on the route.\n    travel: Meters every member advances.\n    start: Local count the move starts.\n    end: Local count the move ends; None means the end of the transition.",
+      "description": "Holds a shared path for follow-the-leader.\n\nMembers start on the route at arc lengths `offsets` and all advance `travel` meters.\n\nAttributes:\n    id: Route ID.\n    curve: Path the route follows, any curve kind.\n    members: Spots on the route, leader first.\n    offsets: Each member's starting arc length on the route.\n    travel: Meters every member advances.\n    start: Local count the move starts.\n    end: Local count the move ends; None means the end of the transition.",
       "properties": {
         "curve": {
-          "additionalProperties": true,
-          "title": "Curve",
-          "type": "object"
+          "$ref": "#/$defs/AnyCurve"
         },
         "end": {
           "anyOf": [
@@ -1366,6 +1691,36 @@
     },
     "Seconds": {
       "type": "number"
+    },
+    "Segment": {
+      "additionalProperties": false,
+      "description": "Draws a straight line from `a` to `b`.\n\nAttributes:\n    a: Start point.\n    b: End point.",
+      "properties": {
+        "a": {
+          "$ref": "#/$defs/Point"
+        },
+        "b": {
+          "$ref": "#/$defs/Point"
+        },
+        "closed": {
+          "const": false,
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "segment",
+          "default": "segment",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "a",
+        "b"
+      ],
+      "title": "Segment",
+      "type": "object"
     },
     "Selection": {
       "additionalProperties": false,
@@ -1823,6 +2178,48 @@
       "title": "SpacingSpec",
       "type": "object"
     },
+    "SpiralCurve": {
+      "additionalProperties": false,
+      "description": "Draws an Archimedean spiral whose radius changes linearly with angle.\n\nAttributes:\n    center: Spiral center.\n    r0: Start radius.\n    r1: End radius.\n    turns: Number of counter-clockwise turns, above 0.\n    start_deg: Start angle, counter-clockwise from +x.",
+      "properties": {
+        "center": {
+          "$ref": "#/$defs/Point"
+        },
+        "closed": {
+          "const": false,
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "spiral",
+          "default": "spiral",
+          "title": "Kind",
+          "type": "string"
+        },
+        "r0": {
+          "$ref": "#/$defs/Meters"
+        },
+        "r1": {
+          "$ref": "#/$defs/Meters"
+        },
+        "start_deg": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        },
+        "turns": {
+          "$ref": "#/$defs/PositiveFinite"
+        }
+      },
+      "required": [
+        "center",
+        "r0",
+        "r1",
+        "turns"
+      ],
+      "title": "SpiralCurve",
+      "type": "object"
+    },
     "SpiralParams": {
       "additionalProperties": false,
       "description": "Holds the parameters of the built-in spiral motion: half a turn plus whole extra turns.\n\n>>> SpiralParams(turns=2).clockwise\nFalse\n\nAttributes:\n    turns: Extra full turns around the midpoint of the move.\n    clockwise: Turns clockwise instead of counter-clockwise.",
@@ -1841,6 +2238,40 @@
         }
       },
       "title": "SpiralParams",
+      "type": "object"
+    },
+    "SplineCurve": {
+      "additionalProperties": false,
+      "description": "Passes a centripetal Catmull\u2013Rom spline through every point.\n\nAttributes:\n    points: Points the curve passes through, in order.\n    alpha: Knot exponent; 0.5 (centripetal) avoids cusps and self-loops.\n    closed: Whether the spline loops back to the first point.",
+      "properties": {
+        "alpha": {
+          "default": 0.5,
+          "title": "Alpha",
+          "type": "number"
+        },
+        "closed": {
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "spline",
+          "default": "spline",
+          "title": "Kind",
+          "type": "string"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/Point"
+          },
+          "title": "Points",
+          "type": "array"
+        }
+      },
+      "required": [
+        "points"
+      ],
+      "title": "SplineCurve",
       "type": "object"
     },
     "Spot": {
@@ -1925,6 +2356,69 @@
       ],
       "title": "SurfaceType",
       "type": "string"
+    },
+    "SvgCurve": {
+      "additionalProperties": false,
+      "description": "Evaluates one SVG subpath, mapped onto the stage plane by an affine transform.\n\nAttributes:\n    d: Path data for exactly one subpath, in absolute commands.\n    transform: 3x3 affine matrix from SVG units to stage meters.\n    closed: Whether the subpath ends with Z.",
+      "properties": {
+        "closed": {
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "d": {
+          "title": "D",
+          "type": "string"
+        },
+        "kind": {
+          "const": "svg",
+          "default": "svg",
+          "title": "Kind",
+          "type": "string"
+        },
+        "transform": {
+          "default": [
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Transform",
+          "type": "array"
+        }
+      },
+      "required": [
+        "d"
+      ],
+      "title": "SvgCurve",
+      "type": "object"
     },
     "TempoSection": {
       "additionalProperties": false,
@@ -2069,11 +2563,10 @@
     },
     "TransitionSpec": {
       "additionalProperties": false,
-      "description": "Holds every path instruction for one transition.\n\nRows are sparse: a spot without a row moves straight over the full counts.\n\nAttributes:\n    id: (from set, to set).\n    counts: Length of the transition; equals the destination set's counts.\n    rows: Spot ID to path row.\n    routes: Route ID to route.\n    notes: Free text.\n    source_hash: Hash of the script that wrote the paths.",
+      "description": "Holds every path instruction for one transition.\n\nRows are sparse: a spot without a row moves straight over the full counts.\n\nAttributes:\n    id: (from set, to set).\n    counts: Length of the transition; equals the destination set's counts.\n    rows: Spot ID to path row, read-only; every key equals its row's spot.\n    routes: Route ID to route, read-only; every key equals its route's ID.\n    notes: Free text.\n    source_hash: Hash of the script that wrote the paths.",
       "properties": {
         "counts": {
-          "title": "Counts",
-          "type": "number"
+          "$ref": "#/$defs/NonNegCount"
         },
         "id": {
           "$ref": "#/$defs/TransitionId"
@@ -2110,6 +2603,40 @@
         "counts"
       ],
       "title": "TransitionSpec",
+      "type": "object"
+    },
+    "TrimmedCurve": {
+      "additionalProperties": false,
+      "description": "Views the piece of `base` between arc lengths s0 and s1, reversed when s0 > s1.\n\nAttributes:\n    base: Curve being trimmed.\n    s0: Arc length on `base` where this curve starts.\n    s1: Arc length on `base` where this curve ends.",
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/AnyCurve"
+        },
+        "closed": {
+          "const": false,
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "trimmed",
+          "default": "trimmed",
+          "title": "Kind",
+          "type": "string"
+        },
+        "s0": {
+          "$ref": "#/$defs/Meters"
+        },
+        "s1": {
+          "$ref": "#/$defs/Meters"
+        }
+      },
+      "required": [
+        "base",
+        "s0",
+        "s1"
+      ],
+      "title": "TrimmedCurve",
       "type": "object"
     },
     "TurnDirection": {

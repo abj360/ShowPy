@@ -45,6 +45,13 @@
   "BUNDLED_FONTS": {
     "constant": "mappingproxy({'relief-singleline': 'asset:sha256:fd67c5b12e38ab886258f5bc16611b3f61f0bcc2d5711dc5ddf8fd42bc8f4b55', 'hershey-roman': 'asset:sha256:e1969f4711a74be259a5e602da900a65b94c5f45f69c33e32ab4eeb86a2c83cb', 'hershey-script': 'asset:sha256:1f0a661303e872ffd3ac5c8abdd8804519c2174696c1f8f04ac1aaee37c5a9d0', 'hershey-greek': 'asset:sha256:43f6945dde1eea1a5b51295a518f7cb8c1a12fd04d2df536ef4ab37cb2533cd1', 'simplex': 'asset:sha256:7e345d1ae7a55abc2d6414c6b16d121bdaddba1ef1fb5d82dec483e4bac20e3e'})"
   },
+  "BendFix": {
+    "model": {
+      "at": "Finite",
+      "entity": "showpy.core.ids.SpotId",
+      "point": "Point"
+    }
+  },
   "BezierCurve": {
     "model": {
       "closed": "Literal[False]",
@@ -230,6 +237,12 @@
   "DEFAULT_LINE_SPACING": {
     "constant": "1.2"
   },
+  "DelayFix": {
+    "model": {
+      "counts": "PositiveFinite",
+      "entity": "showpy.core.ids.SpotId"
+    }
+  },
   "DeprecatedWarning": "(*args)",
   "DocumentRepository": "(backend: showpy.show.repositories.RepositoryBackend)",
   "Easing": {
@@ -247,6 +260,12 @@
       "rotation_deg": "Degrees",
       "rx": "Meters",
       "ry": "Meters"
+    }
+  },
+  "EntityFacing": {
+    "model": {
+      "entity": "showpy.core.ids.SpotId",
+      "kind": "Literal['entity']"
     }
   },
   "EntityState": {
@@ -367,7 +386,7 @@
       "mode": "showpy.choreo.path_models.FacingMode",
       "start": "Count",
       "turn_counts": "float",
-      "value": "Degrees | Point | showpy.core.ids.SpotId | None"
+      "value": "FacingValue | None"
     }
   },
   "FacingSpec": {
@@ -375,6 +394,9 @@
       "mode": "Literal['fixed', 'audience', 'toward_point', 'along', 'normal', 'outward']",
       "value": "Degrees | Point | None"
     }
+  },
+  "FacingValue": {
+    "constant": "FacingValue"
   },
   "FigureEightParams": {
     "model": {
@@ -387,7 +409,16 @@
       "kind": "Literal['delay', 'waypoint', 'reassign', 'stagger']",
       "max_speed_after": "float",
       "new_gap": "Finite",
-      "params": "dict[str, Any]"
+      "params": "FixParams"
+    }
+  },
+  "FixParams": {
+    "constant": "FixParams"
+  },
+  "FixedFacing": {
+    "model": {
+      "degrees": "Heading",
+      "kind": "Literal['fixed']"
     }
   },
   "Font": {
@@ -702,7 +733,7 @@
       "end": "showpy.choreo.models.Placement",
       "entity": "showpy.core.ids.SpotId",
       "facing_mode": "showpy.choreo.path_models.FacingMode",
-      "facing_value": "Degrees | Point | showpy.core.ids.SpotId | None",
+      "facing_value": "FacingValue | None",
       "knots_s": "tuple[float, ...]",
       "knots_t": "tuple[float, ...]",
       "pieces": "tuple[showpy.choreo.engine_models.MotionPiece, ...]",
@@ -756,7 +787,7 @@
       "end": "float | None",
       "entity": "showpy.core.ids.SpotId",
       "facing_mode": "showpy.choreo.path_models.FacingMode",
-      "facing_value": "Degrees | Point | showpy.core.ids.SpotId | None",
+      "facing_value": "FacingValue | None",
       "locked": "bool",
       "motion_fn": "str | None",
       "motion_params": "JsonObject | BuiltInMotionParams",
@@ -833,6 +864,12 @@
       "set_id": "showpy.core.ids.SetId"
     }
   },
+  "PointFacing": {
+    "model": {
+      "kind": "Literal['point']",
+      "point": "Point"
+    }
+  },
   "Polyline": {
     "model": {
       "closed": "bool",
@@ -875,6 +912,9 @@
   "QuadPiece": "(start: Point, control: Point, end: Point) -> None",
   "RESERVED_IDS": {
     "constant": "frozenset(['all', 'aux', 'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9', 'con', 'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9', 'nul', 'prn'])"
+  },
+  "ReassignFix": {
+    "model": {}
   },
   "Region": {
     "model": {
@@ -927,7 +967,7 @@
   },
   "Route": {
     "model": {
-      "curve": "dict[str, Any]",
+      "curve": "AnyCurve",
       "end": "float | None",
       "id": "showpy.core.ids.RouteId",
       "members": "tuple[showpy.core.ids.SpotId, ...]",
@@ -1142,6 +1182,12 @@
       "set_id": "showpy.core.ids.SetId"
     }
   },
+  "StaggerFix": {
+    "model": {
+      "order": "tuple[showpy.core.ids.SpotId, ...]",
+      "step": "Finite"
+    }
+  },
   "StorageError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "Subpath": "(start: Point, pieces: tuple[Piece, ...], *, closed: bool) -> None",
   "SurfaceError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
@@ -1229,11 +1275,11 @@
   "TransitionId": "(from_set: showpy.core.ids.SetId, to_set: showpy.core.ids.SetId)",
   "TransitionSpec": {
     "model": {
-      "counts": "float",
+      "counts": "NonNegCount",
       "id": "showpy.core.ids.TransitionId",
       "notes": "str",
-      "routes": "dict[showpy.core.ids.RouteId, showpy.choreo.path_models.Route]",
-      "rows": "dict[showpy.core.ids.SpotId, showpy.choreo.path_models.PathRow]",
+      "routes": "collections.abc.Mapping[showpy.core.ids.RouteId, showpy.choreo.path_models.Route]",
+      "rows": "collections.abc.Mapping[showpy.core.ids.SpotId, showpy.choreo.path_models.PathRow]",
       "source_hash": "str"
     }
   },
@@ -1869,7 +1915,7 @@
   "set_coordinates": "(show: 'Show', system: showpy.sheet.models.CoordinateSystem) -> 'Show'",
   "set_counts": "(show: showpy.show.models.Show, set_id: str, counts: float, *, rescale: bool = False, force: bool = False) -> showpy.show.models.Show",
   "set_easing": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, easing: showpy.choreo.path_models.Easing | str, *, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",
-  "set_facing": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, mode: showpy.choreo.path_models.FacingMode, value: Degrees | Point | str | None = None, turn_counts: float = 0.0, direction: showpy.choreo.path_models.TurnDirection = <TurnDirection.SHORTEST: 'shortest'>, *, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",
+  "set_facing": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, mode: showpy.choreo.path_models.FacingMode, value: FacingValue | Degrees | Point | str | None = None, turn_counts: float = 0.0, direction: showpy.choreo.path_models.TurnDirection = <TurnDirection.SHORTEST: 'shortest'>, *, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",
   "set_interval": "(obj: S, interval: Meters, anchor: Literal['start', 'center', 'end'] = 'center', sel: SetSelector = 'all', *, force: bool = False) -> S",
   "set_measures": "(tl: showpy.time.models.Timeline, setting: showpy.time.models.MeasureSetting) -> showpy.time.models.Timeline",
   "set_pace": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, pace: float, *, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",
