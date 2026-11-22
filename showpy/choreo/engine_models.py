@@ -117,8 +117,8 @@ class MotionSegment(FrozenModel):
     tid: TransitionId
     t0: float
     t1: float
-    p0: Point
-    p1: Point
+    p0: FinitePoint
+    p1: FinitePoint
 
 
 class EntityState(FrozenModel):
@@ -134,7 +134,7 @@ class EntityState(FrozenModel):
     """
 
     entity: SpotId
-    position: Point
+    position: FinitePoint
     facing: Degrees
     velocity: FinitePoint
     moving: bool

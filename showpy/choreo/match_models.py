@@ -18,7 +18,7 @@ from pydantic import Field, model_validator
 
 from showpy.core.errors import SchemaError
 from showpy.core.ids import FormId, SpotId
-from showpy.core.types import FrozenModel, Meters, Point, Points
+from showpy.core.types import Finite, FrozenModel, Point, Points
 
 MATCH_WEIGHT_KEYS = ("backward", "crossing", "group_spread", "turn")
 
@@ -99,8 +99,8 @@ class MatchResult(FrozenModel):
     entities: tuple[SpotId, ...] = ()
     assignment: dict[SpotId, int] = {}
     targets: tuple[Point, ...] = ()
-    total_distance: Meters = 0.0
-    max_distance: Meters = 0.0
+    total_distance: Finite = 0.0
+    max_distance: Finite = 0.0
     max_speed: float | None = None
     crossings: int = 0
     unassigned_slots: tuple[int, ...] = ()

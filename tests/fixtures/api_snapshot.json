@@ -186,11 +186,11 @@
       "char": "str",
       "column": "int",
       "first_slot": "int",
-      "gap": "Meters",
+      "gap": "Finite",
       "line": "int",
       "spots": "int",
       "stroke": "int",
-      "wanted": "Meters"
+      "wanted": "Finite"
     }
   },
   "CubicPiece": "(start: Point, c1: Point, c2: Point, end: Point) -> None",
@@ -252,7 +252,7 @@
       "facing": "Degrees",
       "moving": "bool",
       "on_field": "bool",
-      "position": "Point",
+      "position": "FinitePoint",
       "velocity": "FinitePoint"
     }
   },
@@ -435,8 +435,8 @@
     "model": {
       "curvature_range": "tuple[float, float]",
       "intervals": "showpy.geo.models.IntervalStats",
-      "length": "Meters",
-      "symmetry_error": "Meters"
+      "length": "Finite",
+      "symmetry_error": "Finite"
     }
   },
   "FormOp": {
@@ -514,11 +514,11 @@
   "InMemorySheetStore": "() -> None",
   "IntervalStats": {
     "model": {
-      "gaps": "tuple[Meters, ...]",
-      "max": "Meters",
-      "mean": "Meters",
-      "min": "Meters",
-      "std": "Meters"
+      "gaps": "tuple[Finite, ...]",
+      "max": "Finite",
+      "mean": "Finite",
+      "min": "Finite",
+      "std": "Finite"
     }
   },
   "LabelScheme": {
@@ -627,11 +627,11 @@
       "crossings": "int",
       "entities": "tuple[showpy.core.ids.SpotId, ...]",
       "explain": "tuple[str, ...]",
-      "max_distance": "Meters",
+      "max_distance": "Finite",
       "max_speed": "float | None",
       "slots": "dict[showpy.core.ids.SpotId, tuple[showpy.core.ids.FormId, int]]",
       "targets": "tuple[Point, ...]",
-      "total_distance": "Meters",
+      "total_distance": "Finite",
       "unassigned_slots": "tuple[int, ...]"
     }
   },
@@ -697,8 +697,8 @@
   "MotionSegment": {
     "model": {
       "entity": "showpy.core.ids.SpotId",
-      "p0": "Point",
-      "p1": "Point",
+      "p0": "FinitePoint",
+      "p1": "FinitePoint",
       "t0": "float",
       "t1": "float",
       "tid": "showpy.core.ids.TransitionId"
@@ -1051,7 +1051,7 @@
   "ShowValidationError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "SnapReport": {
     "model": {
-      "max_shift": "Meters",
+      "max_shift": "Finite",
       "moved": "int"
     }
   },
@@ -1069,7 +1069,7 @@
   "SpeedStats": {
     "model": {
       "counts": "float",
-      "distance": "Meters",
+      "distance": "Finite",
       "m_per_count": "float",
       "m_per_s": "float",
       "max_instant": "float"
