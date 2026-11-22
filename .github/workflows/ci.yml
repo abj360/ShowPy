@@ -13,29 +13,61 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Answers code=false only for a pull request that changes nothing outside docs/. A failure
+  # here never skips a heavy job: each one runs unless this job succeeded with code=false.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - id: classify
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/ci_changes.py
+
   check:
     name: check (${{ matrix.os }}, py${{ matrix.python }})
+    needs: changes
+    # A matrix job skipped by its own condition reports one unexpanded check name, so the
+    # required per-leg checks would wait forever. The legs always start and gate their steps.
+    if: ${{ !cancelled() }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
       UV_PYTHON: ${{ matrix.python }}
+      RUN_CODE_JOBS: >-
+        ${{ needs.changes.result != 'success' ||
+        needs.changes.outputs.code != 'false' }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-15, windows-2022]
         python: ["3.13", "3.14"]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - if: env.RUN_CODE_JOBS != 'true'
+        run: echo "Skipping code checks, only docs/ changed"
+      - if: env.RUN_CODE_JOBS == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - if: env.RUN_CODE_JOBS == 'true'
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.13.8"
           enable-cache: true
       - name: Check interpreter version
+        if: env.RUN_CODE_JOBS == 'true'
         run: uv run --locked python -c "import sys; v='%d.%d'%sys.version_info[:2]; assert v=='${{ matrix.python }}', v; print(v)"
-      - run: uv run --locked nox -s tests
+      - if: env.RUN_CODE_JOBS == 'true'
+        run: uv run --locked nox -s tests
 
   lint-types:
     runs-on: ubuntu-24.04
@@ -57,6 +89,10 @@ jobs:
       - run: uv run nox -s lint types audit
 
   hashseed:
+    needs: changes
+    if: >-
+      ${{ !cancelled() && (needs.changes.result != 'success' ||
+      needs.changes.outputs.code != 'false') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -72,6 +108,10 @@ jobs:
       - run: uv run nox -s hashseeds
 
   slow:
+    needs: changes
+    if: >-
+      ${{ !cancelled() && (needs.changes.result != 'success' ||
+      needs.changes.outputs.code != 'false') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -88,6 +128,10 @@ jobs:
       - run: uv run --locked nox -s slow
 
   lowest:
+    needs: changes
+    if: >-
+      ${{ !cancelled() && (needs.changes.result != 'success' ||
+      needs.changes.outputs.code != 'false') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -105,6 +149,10 @@ jobs:
       - run: uv run --no-sync nox -s tests
 
   wheel:
+    needs: changes
+    if: >-
+      ${{ !cancelled() && (needs.changes.result != 'success' ||
+      needs.changes.outputs.code != 'false') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -122,6 +170,10 @@ jobs:
       - run: uv run --locked nox -s wheel
 
   core:
+    needs: changes
+    if: >-
+      ${{ !cancelled() && (needs.changes.result != 'success' ||
+      needs.changes.outputs.code != 'false') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -139,6 +191,10 @@ jobs:
       - run: uv run --locked nox -s core
 
   docker:
+    needs: changes
+    if: >-
+      ${{ !cancelled() && (needs.changes.result != 'success' ||
+      needs.changes.outputs.code != 'false') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

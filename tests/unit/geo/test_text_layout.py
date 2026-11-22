@@ -5,6 +5,10 @@ test_text_layout.py --- tests multi-line text layout with a per-character font f
 
 Contains:
     test_*(): one behavior of showpy.geo.text_layout.layout_text each
+    test_regression_layout_refuses_a_height_below_one_millimeter: raises GeometryError below 1 mm
+        and accepts exactly 1 mm
+    test_regression_layout_refuses_an_unknown_align_or_anchor: raises UnknownRefError for a typo
+        instead of leaking KeyError or falling back to the baseline
     test_regression_worst_legal_text_stays_within_its_work_budget(): bounds the curve work of
         the heaviest text the piece caps allow (slow)
 """
@@ -23,6 +27,7 @@ from showpy.core.errors import (
     GlyphError,
     MissingFontError,
     SchemaError,
+    UnknownRefError,
 )
 from showpy.core.readonly import ReadOnlyMap
 from showpy.core.types import Points
@@ -414,3 +419,23 @@ def test_layout_drops_trailing_empty_lines() -> None:
         for text in ("H\n", "H\n\n", "H\r\n"):
             assert layout_text(text, SIMPLEX, 1.0, (0.0, 0.0), anchor=anchor) == plain
     assert [glyph.line for glyph in layout_text("H\n\nH", SIMPLEX, 1.0, (0.0, 0.0))] == [0, 2]
+
+
+MIN_HEIGHT_M = 0.001
+BELOW_MIN_HEIGHT_M = 0.0009
+
+
+def test_regression_layout_refuses_a_height_below_one_millimeter() -> None:
+    """Refuses a 0.9 mm cap height, which overflows later in tangent_at, and accepts 1 mm."""
+    assert layout_text("H", SIMPLEX, MIN_HEIGHT_M, (0.0, 0.0))
+    with pytest.raises(GeometryError):
+        layout_text("H", SIMPLEX, BELOW_MIN_HEIGHT_M, (0.0, 0.0))
+
+
+def test_regression_layout_refuses_an_unknown_align_or_anchor() -> None:
+    """Raises UnknownRefError for align="middle" and anchor="bottom", even for empty text."""
+    for text in ("H", ""):
+        with pytest.raises(UnknownRefError):
+            layout_text(text, SIMPLEX, 1.0, (0.0, 0.0), align="middle")  # type: ignore[arg-type]
+        with pytest.raises(UnknownRefError):
+            layout_text(text, SIMPLEX, 1.0, (0.0, 0.0), anchor="bottom")  # type: ignore[arg-type]

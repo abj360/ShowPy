@@ -183,8 +183,6 @@ def test_regression_offset_honours_clockwise_circles() -> None:
     assert approx_equal(result.radius, CIRCLE_RADIUS_M + OFFSET_M, abs_tol=1e-9)
 
 
-@pytest.mark.defect("UP-9.1-14")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-14")
 def test_regression_offset_rejects_unknown_side() -> None:
     """Raises UnknownRefError for side="up" instead of treating it as "right" (audit 9.1)."""
     with pytest.raises(UnknownRefError):
@@ -262,16 +260,12 @@ def test_text_outline_takes_a_fallback_chain() -> None:
         text_outline("A\u20ac", "simplex", 1.0, (0, 0))
 
 
-@pytest.mark.defect("UP-9.1-60")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-60")
 def test_regression_regular_polygon_rejects_fractional_sides() -> None:
     """Raises a ShowPyError for n=3.5 instead of leaking TypeError (audit 9.1)."""
     with pytest.raises(ShowPyError):
         regular_polygon((0.0, 0.0), 1.0, FRACTIONAL_SIDES)  # type: ignore[arg-type]
 
 
-@pytest.mark.defect("UP-9.1-66")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-66")
 def test_regression_rect_rejects_nan_width() -> None:
     """Rejects a NaN width instead of building a polygon of NaN points (audit 9.1)."""
     with pytest.raises(GeometryError):
