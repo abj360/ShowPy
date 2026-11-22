@@ -39,6 +39,89 @@ Where the audit and the code disagree, this plan follows the code (measured on `
 - ADR 0006 bans `-` in landmark and zone IDs, but 335 of the 339 item IDs in the six bundled
   sheet templates contain `-` (decision 1 below).
 
+## Amendment: scope and format decisions (accepted 2026-11-22)
+
+The maintainer accepted these decisions on 2026-11-22. They are recorded in ADR 0019 (licence),
+ADR 0020 (rename), ADR 0021 (scope, deprecation timeline, retired ledger IDs), ADR 0023 (format
+versions) and the addenda to ADRs 0003 and 0006. Every affected task carries a bold note under
+its heading, and each new task has a full section. The plan text below is kept; where it
+disagrees with this block or a task's note, the amendment wins.
+
+**Dropped (3).** Their code leaves the library (ADR 0021). Their ledger IDs retire per ADR
+0021's appendix and stay strict xfails until the code is deleted at v0.6.0.
+
+| Task | Reason                                                                                         |
+| ---- | ---------------------------------------------------------------------------------------------- |
+| E2   | Video export leaves the library; UP-9.5-55 and UP-9.5-56 retire.                               |
+| E3   | Publishing, print and tables leave the library; the interchange part of `data.py` moves in E4. |
+| F2   | The sheet functions it hardens leave the library; its 7 IDs retire.                            |
+
+**Deferred (5).** A5, B3, C5, D4 and G6 are pure module splits, deferred to a later phase that
+partitions these modules again. No moved-name deprecation rows are added for them. With the
+split part of S4 also deferred, 11 library modules stay over 500 lines, a written exception in
+ADR 0021.
+
+**Modified (6).** Details are in each task's note.
+
+| Task | What changes                                                                                                        |
+| ---- | ------------------------------------------------------------------------------------------------------------------- |
+| A4   | The gate adds the ADR 0003 and 0006 addenda; the ID step also renames a stored ID `props` to `props_`.              |
+| D3   | Keeps typed group and spot patches, `define_selection(replace=)` and aware note times; drops `NotePatch`.           |
+| S4   | Keeps the `mirror_pairs` maximum-cardinality matching; the split of `select.py` is deferred.                        |
+| X1   | Drops publishing and claiming; asserts notes in `notes.json`, the `e8.show` format value and revision independence. |
+| X2   | New ledger line expectations, `test_every_leaving_name_is_deprecated`, `MAX_SPOTS` and `MAX_SETS`.                  |
+| X3   | The release notes add the licence, the rename, the "leaving the library" table and the guide update.                |
+
+T1 also gains an appended note: its fix round refuses a tempo or `ramp_to` of 0 or less. Its
+scope is otherwise unchanged.
+
+**New (11).** Sections: L1, Z1 and L2 under "Transition tasks"; B4, C2b, C7, C8, F3 and E4 in
+their lanes; N1 and R1 under "Serial tail before lane X".
+
+| Task | Lane        | What                                                                   | Gate                                                                | State                                                   |
+| ---- | ----------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------- |
+| L1   | transition  | Relicense under PolyForm Noncommercial 1.0.0                           | ADR 0019 accepted                                                   | implemented on `chore/licence`, awaiting merge          |
+| Z1   | transition  | Six strict-xfail ledger tests, `UP-E-01` to `UP-E-06`                  | none                                                                | implemented on `test/evaluation-ledger`, awaiting merge |
+| L2   | transition  | `MAX_COORD_M`, `MAX_COUNTS` and `MIN_TEMPO` bounds in the core aliases | none                                                                | implemented on `feat/core-bounds`, awaiting merge       |
+| B4   | B           | Cached engine lookups                                                  | A1 and B2 merged                                                    | to do                                                   |
+| C2b  | C           | Composite curves must be continuous (UP-9.1-21)                        | G1 merged                                                           | to do                                                   |
+| C7   | C           | `project()` over the whole curve (UP-E-01)                             | C2 merged                                                           | to do                                                   |
+| C8   | C           | Geometry results are finite or an error (UP-E-03)                      | C7 merged                                                           | to do                                                   |
+| F3   | F           | Deprecation rows for the sheet names that leave                        | F1 merged, ADR 0021 accepted                                        | to do                                                   |
+| E4   | E           | Interchange moves to `showpy/show/interchange.py`; export deprecations | E1 merged, ADR 0021 accepted                                        | to do                                                   |
+| N1   | serial tail | Notes leave `Show` for a `notes.json` document                         | lanes A and D merged, ADR 0021 accepted                             | to do                                                   |
+| R1   | serial tail | The rename to e8Show                                                   | every lane merged, no lane branch open, ADRs 0020 and 0023 accepted | to do                                                   |
+
+**Order.** L1 first, before any lane branch is pushed. Z1 and L2 before the lanes rebase. Then
+as in "Sequencing", plus: C2b after G1; B4 after A1 and B2; C7 after C2; C8 after C7; F3 after
+F1; E4 after E1; N1 after lanes A and D merge; R1 after every lane merges and before lane X; X
+last.
+
+**Ledger coverage changes.** The E2 and F2 rows of "Ledger coverage" no longer flip, and F1 does
+not flip UP-9.4-45; these 10 IDs retire with the other retired IDs. C2b flips UP-9.1-21 (listed
+in C2's row), C7 flips UP-E-01 and C8 flips UP-E-03.
+
+**Exit-criteria changes.** These add to "Phase 2 exit criteria", whose text stays:
+
+- Ledger: ADR 0021 retires 63 IDs, which stay strict xfails until their code is deleted at
+  v0.6.0; 13 IDs in the folders that lose code still flip with E1 and F1; Z1 adds `UP-E-01` to
+  `UP-E-06`, of which C7 flips UP-E-01 and C8 flips UP-E-03. The default suite prints
+  `Ledger: 188 open` (the plan's 174, plus the 10 IDs that no longer flip, plus the 4 open
+  evaluation IDs); `nox -s slow` prints `Ledger: 1 open`.
+- `validate_show` at 300 spots by 60 sets runs under 1 s (A1, G3).
+- A seeded 3,000-spot show builds in under 3 s (A1, G3).
+- With 1,500 holds, a clock call takes under 1 ms (T1).
+- `sample` cost no longer grows with the number of sets (B4).
+- The nightly fuzz run returns no NaN or infinity (C8).
+- `project()` is within tolerance of brute force on spirals and zigzags (C7).
+- Every leaving name has a deprecation row, checked by `test_every_leaving_name_is_deprecated`
+  (X2).
+- `import e8show` works and `import showpy` raises `ModuleNotFoundError` (R1).
+- The wheel's `License-Expression` is
+  `PolyForm-Noncommercial-1.0.0 AND MIT AND OFL-1.1 AND LicenseRef-Hershey-Fonts` (L1).
+- `git diff v0.3.0 -- showpy/fonts` is empty; after R1 moves the folder, every font file shows
+  only as a 100% rename.
+
 ## Decisions needed
 
 **Decided 2026-11-19:** the maintainer accepted ADRs 0007 to 0011 (Python floor 3.13) and all
