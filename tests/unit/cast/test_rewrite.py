@@ -37,7 +37,7 @@ from showpy.cast.models import LabelScheme
 from showpy.cast.rewrite import faces_entity, rewrite_spot_ids, rewrite_spots
 from showpy.cast.spots import delete_spots, relabel, rename_spots
 from showpy.choreo.path_models import EntityFacing, FacingMode, FixedFacing, PointFacing
-from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
+from showpy.core.errors import SchemaError, ShowPyError, ShowValidationError, UnknownRefError
 from showpy.core.ids import FormId, SpotId, ZoneId
 from showpy.core.selection import Selection
 from showpy.core.types import Region
@@ -138,7 +138,7 @@ def test_regression_dropping_all_override_entities_drops_the_override() -> None:
 
 def test_regression_dropping_all_anchored_spots_drops_the_note_anchor() -> None:
     """Drops or flags a note anchored to no spots (audit 9.3)."""
-    show = rewrite_spot_ids(rich_show(), lambda i: None if i == "T2" else i)
+    show = rewrite_spot_ids(rich_show(), lambda i: None if i in {"T1", "T2"} else i)
     assert all(note.anchor.spots != () for note in show.notes)
 
 
@@ -153,7 +153,7 @@ def test_regression_many_to_one_rename_is_reported_with_the_duplicate_target() -
 def test_regression_rewrite_passes_every_entity_pin_to_the_rename() -> None:
     """Applies the rename to every entity pin, including one on a spot outside the cast."""
     pins = tuple(Pin(target="entity", id=spot_id) for spot_id in ("T1", "T2", "Z9"))
-    show = rich_show().model_copy(update={"pins": pins})
+    show = rich_show().model_copy(update={"pins": pins, "transitions": ()})
     renames: dict[str, str | None] = {"T1": "S1", "T2": None, "Z9": "Q9"}
     rewritten = rewrite_spot_ids(show, lambda spot_id: renames.get(spot_id, spot_id))
     assert [p.id for p in rewritten.pins] == ["S1", "Q9"]
@@ -205,7 +205,9 @@ def test_regression_stale_selector_is_reported_not_fatal() -> None:
 
 
 def test_rewrite_spots_reports_dropped_route_and_orphaned_note() -> None:
-    show, report = rewrite_spots(rich_show(), lambda i: None if i in {"T2", "T3", "T4"} else i)
+    show, report = rewrite_spots(
+        rich_show(), lambda i: None if i in {"T1", "T2", "T3", "T4"} else i
+    )
     assert report.dropped_routes == ((("1", "2"), "r1"),)
     assert [note.id for note in report.orphaned_notes] == ["n1"]
     assert show.notes == ()
@@ -215,3 +217,11 @@ def test_regression_override_facing_a_dropped_spot_is_dropped_and_reported() -> 
     show, report = rewrite_spots(rich_show(), lambda i: None if i == "T3" else i)
     assert show.facing_overrides == ()
     assert [o.value for o in report.dropped_facings] == [EntityFacing(entity=SpotId("T3"))]
+
+
+def test_regression_rewrite_refuses_a_row_facing_a_dropped_spot() -> None:
+    """Refuses to reset a path-row facing aimed at a dropped spot to to_target."""
+    with pytest.raises(ShowValidationError) as excinfo:
+        rewrite_spots(rich_show(), lambda i: None if i == "T2" else i)
+    assert "T1 faces T2" in excinfo.value.message
+    assert excinfo.value.context["references"] == ["T1 faces T2 in 1→2"]

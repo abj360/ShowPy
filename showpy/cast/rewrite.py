@@ -24,7 +24,7 @@ from showpy.choreo.path_models import (
     Route,
     TransitionSpec,
 )
-from showpy.core.errors import SchemaError, UnknownRefError
+from showpy.core.errors import SchemaError, ShowValidationError, UnknownRefError
 from showpy.core.ids import RouteId, SpotId, TransitionId
 from showpy.core.selection import Selection, SelectorField
 from showpy.notes.models import Note
@@ -83,6 +83,24 @@ def _renamed_spots(show: "Show", rename: Rename) -> dict[SpotId, SpotId]:
     return {old: SpotId(new) for new, olds in sources.items() for old in olds}
 
 
+def _require_no_dropped_row_facings(show: "Show", rename: Rename) -> None:
+    """Raises ShowValidationError when a kept path row would face a dropped spot."""
+    references = [
+        f"{row.entity} faces {target} in {spec.id}"
+        for spec in show.transitions
+        for row in spec.rows.values()
+        if rename(row.entity) is not None
+        and (target := faces_entity(row.facing_mode, row.facing_value)) is not None
+        and rename(target) is None
+    ]
+    if references:
+        raise ShowValidationError(
+            f"other spots face deleted spots: {'; '.join(references)}",
+            hint="re-aim those facings at another spot or a point first",
+            context={"references": references},
+        )
+
+
 def rewrite_spots(show: "Show", rename: Rename) -> "tuple[Show, RewriteReport]":
     """Applies `rename` to every spot reference in a show and reports what it dropped.
 
@@ -92,7 +110,8 @@ def rewrite_spots(show: "Show", rename: Rename) -> "tuple[Show, RewriteReport]":
     selector that cannot be resolved stays as written and is reported. A route left without
     members, a facing override left without spots or aimed at a dropped spot, and a note
     anchored only to dropped spots are removed and reported.
-    Raises SchemaError when two spots would share one ID.
+    Raises SchemaError when two spots would share one ID, and ShowValidationError when a path
+    row of a kept spot faces a dropped spot.
 
     Returns:
         show: The rewritten show.
@@ -104,6 +123,7 @@ def rewrite_spots(show: "Show", rename: Rename) -> "tuple[Show, RewriteReport]":
     (('S1', 'T2', 'T3', 'T4'), {'T1': 'S1'})
     """
     renamed = _renamed_spots(show, rename)
+    _require_no_dropped_row_facings(show, rename)
     dropped = _Dropped()
     cast = show.cast
     spots = tuple(s.replace(id=renamed[s.id]) for s in cast.spots if s.id in renamed)
@@ -189,9 +209,7 @@ def _rewrite_facing(
     if target is None:
         return mode, value
     new = rename(target)
-    if new is None:
-        return FacingMode.TO_TARGET, None
-    return mode, EntityFacing(entity=SpotId(new))
+    return mode, value if new is None else EntityFacing(entity=SpotId(new))
 
 
 def _rewrite_spec(spec: TransitionSpec, rename: Rename, dropped: _Dropped) -> TransitionSpec:

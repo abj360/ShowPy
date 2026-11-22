@@ -27,14 +27,13 @@ from typing import TYPE_CHECKING, Any, TypedDict, Unpack, get_args
 from typing import ReadOnly as ReadOnlyKey
 
 from showpy.cast.models import Cast, Claimable, Group, LabelScheme, RewriteReport, Shape, Spot
-from showpy.cast.rewrite import faces_entity, rewrite_spot_ids, rewrite_spots
+from showpy.cast.rewrite import rewrite_spot_ids, rewrite_spots
 from showpy.cast.select import label_prefix, select
 from showpy.choreo.models import Placement
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import (
     LockedError,
     SchemaError,
-    ShowValidationError,
     SpacingError,
     UnknownRefError,
     field_errors,
@@ -351,16 +350,6 @@ def _locked_items(show: "Show", ids: frozenset[SpotId]) -> list[str]:
     return pinned + forms + rows
 
 
-def _facing_targets(show: "Show", ids: frozenset[SpotId]) -> list[str]:
-    rows = [
-        f"{row.entity} faces {faces_entity(row.facing_mode, row.facing_value)} in {spec.id}"
-        for spec in show.transitions
-        for row in spec.rows.values()
-        if row.entity not in ids and faces_entity(row.facing_mode, row.facing_value) in ids
-    ]
-    return rows
-
-
 def delete_spots(show: "Show", sel: Selector, *, force: bool = False) -> "Show":
     """Removes spots from the cast, every set, forms, paths, routes, notes and selections.
 
@@ -382,13 +371,6 @@ def delete_spots(show: "Show", sel: Selector, *, force: bool = False) -> "Show":
             f"deleting touches locked items: {', '.join(locked)}",
             hint="unlock them first, or pass force=True as the designer",
             context={"locked": locked},
-        )
-    facing = _facing_targets(show, ids)
-    if facing:
-        raise ShowValidationError(
-            f"other spots face deleted spots: {'; '.join(facing)}",
-            hint="re-aim those facings at another spot or a point first",
-            context={"references": facing},
         )
     return rewrite_spots(show, lambda spot_id: None if spot_id in ids else spot_id)[0]
 
