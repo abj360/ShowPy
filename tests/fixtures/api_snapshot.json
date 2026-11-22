@@ -81,9 +81,9 @@
   },
   "Cast": {
     "model": {
-      "groups": "dict[str, showpy.cast.models.Group]",
+      "groups": "collections.abc.Mapping[str, showpy.cast.models.Group]",
       "label_scheme": "showpy.cast.models.LabelScheme",
-      "selections": "dict[str, tuple[showpy.core.ids.SpotId, ...]]",
+      "selections": "collections.abc.Mapping[SelectionKey, SelectionSpots]",
       "spots": "tuple[showpy.cast.models.Spot, ...]"
     }
   },
@@ -487,11 +487,11 @@
   },
   "Group": {
     "model": {
-      "color": "str",
-      "default_radius": "Meters",
+      "color": "HexColor",
+      "default_radius": "PositiveFinite",
       "key": "str",
       "label_prefix": "str",
-      "limits": "dict[str, float]",
+      "limits": "collections.abc.Mapping[str, PositiveFinite]",
       "moves": "bool",
       "name": "str",
       "symbol": "str"
@@ -533,7 +533,7 @@
   "LabelScheme": {
     "model": {
       "pad": "int",
-      "prefixes": "dict[str, str]",
+      "prefixes": "collections.abc.Mapping[str, str]",
       "start": "int"
     }
   },
@@ -1122,7 +1122,7 @@
     "model": {
       "active": "bool",
       "claimable": "Claimable",
-      "color": "str | None",
+      "color": "HexColor | None",
       "group": "str",
       "id": "showpy.core.ids.SpotId",
       "shape": "showpy.cast.models.Shape",

@@ -52,7 +52,7 @@ from showpy.choreo.form_models import Form
 from showpy.choreo.models import Placement, Set
 from showpy.core.caps import MAX_DEPTH, MAX_TEXT_CHARS
 from showpy.core.errors import GeometryError, SchemaError, ShowPyError, UnknownRefError
-from showpy.core.ids import FormId, SetId, SpotId
+from showpy.core.ids import LEGACY_IDS_KEY, FormId, SetId, SpotId
 from showpy.core.types import Region
 from showpy.geo.shapes import line
 from showpy.show.models import Show
@@ -73,10 +73,17 @@ def mixed_cast() -> Cast:
         Spot(id=SpotId("T2"), group="trumpets"),
         Spot(id=SpotId("T10"), group="trumpets"),
         Spot(id=SpotId("TB1"), group="tubas", shape=RECT),
-        Spot(id=SpotId("flag-1"), group="flags", shape=RECT),
-        Spot(id=SpotId("flag-2"), group="flags", tags=("soloist",)),
+        {"id": "flag-1", "group": "flags", "shape": RECT},
+        {"id": "flag-2", "group": "flags", "tags": ("soloist",)},
     )
-    return Cast(groups=groups, spots=spots, selections={"front": (SpotId("T2"), SpotId("flag-1"))})
+    return Cast.model_validate(
+        {
+            "groups": groups,
+            "spots": spots,
+            "selections": {"front": ("T2", "flag-1")},
+        },
+        context={LEGACY_IDS_KEY: True},
+    )
 
 
 def mixed_show() -> Show:
