@@ -162,6 +162,7 @@ markers = [
     "defect(id): open audited defect; must be xfail(strict=True) with reason equal to the ID",
     "fuzz: hostile-input fuzz targets; run with nox -s fuzz",
     "slow: generated-show properties and the large golden; run with nox -s slow",
+    "timing: asserts on wall-clock time; nox -s slow runs these without pytest-xdist workers",
 ]
 filterwarnings = ["error"]
 # A test still running after this many seconds dumps every thread's stack, so a CI hang

@@ -35,6 +35,15 @@ Contains:
     session_strings(): lists the string literals a nox session's body holds
     test_slow_session_runs_on_xdist_workers: the slow session passes -n SLOW_WORKERS to pytest
     test_session_strings_sees_only_the_session: proves the literal scan can fail
+    pytest_runs(): lists the arguments of every pytest run one nox session makes
+    last_value(): returns the value after the last occurrence of a flag in a run
+    test_slow_session_splits_on_the_timing_mark: runs the non-timing slow tests, then the timing
+        ones
+    test_slow_session_runs_timing_tests_without_workers: the timing run ends with `-n 0`
+    test_slow_session_runs_the_other_slow_tests_on_workers: the other run keeps xdist workers
+    test_serial_sessions_start_no_workers: tests and hashseeds never pass -n, nor does addopts
+    test_pytest_runs_resolves_constants_and_keeps_posargs: proves the run scan resolves names
+    test_last_value_reads_the_last_occurrence: proves the flag lookup obeys the last value
 """
 
 import ast
@@ -56,6 +65,13 @@ CORE_SESSION = "core"
 SLOW_SESSION = "slow"
 WORKERS_FLAG = "-n"
 WORKERS_CONSTANT = "SLOW_WORKERS"
+NO_WORKERS = "0"
+MARK_FLAG = "-m"
+PARALLEL_MARKS = "slow and not timing"
+TIMING_MARKS = "slow and timing"
+SERIAL_SESSIONS = ("tests", "hashseeds")
+UV_RUN = "_uv_run"
+PYTEST = "pytest"
 WHEEL_SESSION = "wheel"
 EXTRAS_CONSTANT = "ALL_EXTRAS"
 CHECK_SCRIPT_CONSTANT = "CORE_CHECK_SCRIPT"
@@ -390,3 +406,93 @@ def test_slow_session_runs_on_xdist_workers() -> None:
 def test_session_strings_sees_only_the_session() -> None:
     source = "X = '-n'\n\ndef slow(session):\n    run('pytest', '-m', 'slow')\n"
     assert session_strings(source, "slow") == ["pytest", "-m", "slow"]
+
+
+def _argument_text(source: str, argument: ast.expr) -> str:
+    """Returns a call argument as a literal, a resolved module constant or `*` plus its source."""
+    if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+        return argument.value
+    if isinstance(argument, ast.Name):
+        return module_constant(source, argument.id)
+    return ast.unparse(argument)
+
+
+def pytest_runs(source: str, session_name: str) -> list[list[str]]:
+    """Lists the arguments of every pytest run one nox session makes through _uv_run.
+
+    Args:
+        source: The text of a noxfile.
+        session_name: The function name of the session to inspect.
+
+    Returns:
+        runs: Per pytest call in source order, its arguments from "pytest" on, with module
+            constants resolved and starred arguments kept as source text.
+    """
+    session = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef) and node.name == session_name
+    )
+    calls = [
+        node
+        for node in ast.walk(session)
+        if isinstance(node, ast.Call) and ast.unparse(node.func) == UV_RUN
+    ]
+    runs = [[_argument_text(source, argument) for argument in call.args[1:]] for call in calls]
+    return [run for run in runs if run[:1] == [PYTEST]]
+
+
+def last_value(run: list[str], flag: str) -> str | None:
+    """Returns the value after the last occurrence of `flag` in a run, the one pytest obeys."""
+    values = [value for option, value in itertools.pairwise(run) if option == flag]
+    return values[-1] if values else None
+
+
+def test_slow_session_splits_on_the_timing_mark() -> None:
+    runs = pytest_runs(NOXFILE.read_text(), SLOW_SESSION)
+    assert [last_value(run, MARK_FLAG) for run in runs] == [PARALLEL_MARKS, TIMING_MARKS]
+
+
+def test_slow_session_runs_timing_tests_without_workers() -> None:
+    """Ends the timing run with `-n 0`, after the posargs, so no posarg can give it workers."""
+    runs = pytest_runs(NOXFILE.read_text(), SLOW_SESSION)
+    timing = [run for run in runs if last_value(run, MARK_FLAG) == TIMING_MARKS]
+    assert timing
+    assert all(run[-2:] == [WORKERS_FLAG, NO_WORKERS] for run in timing)
+
+
+def test_slow_session_runs_the_other_slow_tests_on_workers() -> None:
+    runs = pytest_runs(NOXFILE.read_text(), SLOW_SESSION)
+    parallel = [run for run in runs if last_value(run, MARK_FLAG) == PARALLEL_MARKS]
+    assert parallel
+    for run in parallel:
+        workers = last_value(run, WORKERS_FLAG) or NO_WORKERS
+        assert workers == "auto" or int(workers) > 1
+
+
+def test_serial_sessions_start_no_workers() -> None:
+    """Keeps the timing tests of the default suite in one process in every full-suite gate."""
+    source = NOXFILE.read_text()
+    for name in SERIAL_SESSIONS:
+        runs = pytest_runs(source, name)
+        assert runs, name
+        assert all(WORKERS_FLAG not in run for run in runs), name
+    addopts = tomllib.loads(PYPROJECT.read_text())["tool"]["pytest"]["ini_options"]["addopts"]
+    assert WORKERS_FLAG not in addopts
+
+
+def test_pytest_runs_resolves_constants_and_keeps_posargs() -> None:
+    source = (
+        "MARKS = 'slow and timing'\n\n"
+        "def slow(session):\n"
+        "    _uv_run(session, 'python', '-c', 'pass')\n"
+        "    _uv_run(session, 'pytest', '-m', MARKS, *session.posargs, '-n', '0')\n"
+    )
+    assert pytest_runs(source, "slow") == [
+        ["pytest", "-m", "slow and timing", "*session.posargs", "-n", "0"]
+    ]
+
+
+def test_last_value_reads_the_last_occurrence() -> None:
+    assert last_value(["pytest", "-n", "4", "*args", "-n", "0"], "-n") == "0"
+    assert last_value(["pytest", "-m", "slow"], "-n") is None

@@ -411,6 +411,7 @@ def test_regression_huge_array_context_converts_only_kept_rows() -> None:
     assert _CountingArray.converted == [MAX_CONTEXT_ITEMS]
 
 
+@pytest.mark.timing
 @pytest.mark.parametrize(
     ("value", "smallest"),
     [
@@ -468,6 +469,7 @@ def _frozenset_items(count: int) -> set[frozenset[int]]:
     return {frozenset({n}) for n in range(count)}
 
 
+@pytest.mark.timing
 def test_regression_unorderable_set_at_the_cap_is_ranked(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ranks a set of exactly 1,000 frozensets by bounded JSON text and keeps the 20 first."""
     calls, bounded = _count_bounding_calls(monkeypatch, _frozenset_items(MAX_RANKED_SET_ITEMS))
@@ -479,6 +481,7 @@ def test_regression_unorderable_set_at_the_cap_is_ranked(monkeypatch: pytest.Mon
     assert calls["_bounded_value"] > MAX_RANKED_SET_ITEMS
 
 
+@pytest.mark.timing
 def test_regression_unorderable_set_past_the_cap_is_summarized(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
