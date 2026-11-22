@@ -1568,16 +1568,45 @@
   "landmark_keys": "(mark: showpy.sheet.models.Landmark) -> tuple[str, ...]",
   "layout_text": "(text: str, fonts: collections.abc.Sequence[str], height: Meters, at: Point, *, rotation: Degrees = 0.0, align: TextAlign = 'left', anchor: TextAnchor = 'baseline', letter_spacing: float = 0.0, line_spacing: float = 1.2, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> tuple[showpy.geo.models.LaidGlyph, ...]",
   "leaving": {
+    "Chart": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": ["coordinate_table", "describe_transition"],
+      "since": "0.4.0"
+    },
+    "ChartRow": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": ["coordinate_table", "describe_transition"],
+      "since": "0.4.0"
+    },
+    "Claim": {
+      "kind": "type",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
     "CoordinateKind": {
       "kind": "type",
       "remove": "0.7.0",
       "replacement": "Location",
       "since": "0.4.0"
     },
+    "CoordinateSheet": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": ["coordinate_table", "describe_transition"],
+      "since": "0.4.0"
+    },
     "CoordinateSystem": {
       "kind": "type",
       "remove": "0.7.0",
       "replacement": "Location",
+      "since": "0.4.0"
+    },
+    "FormatRegistry": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": "frames",
       "since": "0.4.0"
     },
     "GuideLine": {
@@ -1598,9 +1627,30 @@
       "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
+    "Performer": {
+      "kind": "type",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "PerformerView": {
+      "kind": "type",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "Publication": {
+      "kind": "type",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
     "SheetCanvas": {
       "kind": "type",
       "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "SheetRow": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": ["coordinate_table", "describe_transition"],
       "since": "0.4.0"
     },
     "SheetStore": {
@@ -1619,6 +1669,17 @@
       "kind": "field",
       "remove": "0.7.0",
       "replacement": "Marking",
+      "since": "0.4.0"
+    },
+    "Spot.claimable": {
+      "kind": "field",
+      "remove": "0.7.0",
+      "since": "0.4.0"
+    },
+    "TextTable": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": "frames",
       "since": "0.4.0"
     },
     "Zone": {
@@ -1651,16 +1712,56 @@
       "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
+    "as_table": {
+      "kind": "export",
+      "remove": "0.7.0",
+      "replacement": "frames",
+      "since": "0.4.0"
+    },
     "blank_sheet": {
       "kind": "function",
       "remove": "0.7.0",
       "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
       "since": "0.4.0"
     },
+    "chart": {
+      "kind": "export",
+      "remove": "0.7.0",
+      "replacement": ["coordinate_table", "describe_transition"],
+      "since": "0.4.0"
+    },
+    "claim_spot": {
+      "kind": "export",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "claims": {
+      "kind": "export",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
     "coordinate_presets": {
       "kind": "function",
       "remove": "0.7.0",
       "replacement": ["locate", "at_location", "Location"],
+      "since": "0.4.0"
+    },
+    "coordinate_sheet": {
+      "kind": "export",
+      "remove": "0.7.0",
+      "replacement": ["coordinate_table", "describe_transition"],
+      "since": "0.4.0"
+    },
+    "coordinate_sheets": {
+      "kind": "export",
+      "remove": "0.7.0",
+      "replacement": ["coordinate_table", "describe_transition"],
+      "since": "0.4.0"
+    },
+    "cue_sheet": {
+      "kind": "export",
+      "remove": "0.7.0",
+      "replacement": ["coordinate_table", "describe_transition"],
       "since": "0.4.0"
     },
     "customize": {
@@ -1674,10 +1775,33 @@
       "remove": "0.6.0",
       "since": "0.4.0"
     },
+    "escape_text": {
+      "kind": "export",
+      "remove": "0.7.0",
+      "replacement": ["coordinate_table", "describe_transition"],
+      "since": "0.4.0"
+    },
+    "export_frames_csv": {
+      "kind": "export",
+      "remove": "0.7.0",
+      "replacement": "frames",
+      "since": "0.4.0"
+    },
+    "export_video": {
+      "kind": "export",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
     "football_field": {
       "kind": "function",
       "remove": "0.7.0",
       "replacement": "field",
+      "since": "0.4.0"
+    },
+    "formats": {
+      "kind": "export",
+      "remove": "0.7.0",
+      "replacement": "frames",
       "since": "0.4.0"
     },
     "from_coords": {
@@ -1696,6 +1820,11 @@
       "kind": "function",
       "remove": "0.7.0",
       "replacement": "floor",
+      "since": "0.4.0"
+    },
+    "join_link": {
+      "kind": "export",
+      "remove": "0.6.0",
       "since": "0.4.0"
     },
     "landmark": {
@@ -1728,10 +1857,25 @@
       "replacement": "markings_near",
       "since": "0.4.0"
     },
+    "notify_changes": {
+      "kind": "export",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
     "on_surface": {
       "kind": "function",
       "remove": "0.7.0",
       "replacement": "on_sheet",
+      "since": "0.4.0"
+    },
+    "pause": {
+      "kind": "export",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "performer_view": {
+      "kind": "export",
+      "remove": "0.6.0",
       "since": "0.4.0"
     },
     "point_landmark": {
@@ -1744,6 +1888,38 @@
       "kind": "function",
       "remove": "0.7.0",
       "replacement": "floor",
+      "since": "0.4.0"
+    },
+    "publish": {
+      "kind": "export",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "qr_code": {
+      "kind": "export",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "reassign": {
+      "kind": "export",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "register_exporter": {
+      "kind": "export",
+      "remove": "0.7.0",
+      "replacement": "frames",
+      "since": "0.4.0"
+    },
+    "register_importer": {
+      "kind": "export",
+      "remove": "0.7.0",
+      "replacement": "frames",
+      "since": "0.4.0"
+    },
+    "release": {
+      "kind": "export",
+      "remove": "0.6.0",
       "since": "0.4.0"
     },
     "remove_guide": {
@@ -1762,6 +1938,11 @@
       "kind": "function",
       "remove": "0.7.0",
       "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "render_frame": {
+      "kind": "export",
+      "remove": "0.6.0",
       "since": "0.4.0"
     },
     "render_sheet": {
@@ -1787,6 +1968,11 @@
       "replacement": "sheets",
       "since": "0.4.0"
     },
+    "swap_claims": {
+      "kind": "export",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
     "template_ref": {
       "kind": "function",
       "remove": "0.7.0",
@@ -1797,6 +1983,49 @@
       "kind": "function",
       "remove": "0.7.0",
       "replacement": "locate",
+      "since": "0.4.0"
+    },
+    "to_csv": {
+      "kind": "export",
+      "remove": "0.7.0",
+      "replacement": "frames",
+      "since": "0.4.0"
+    },
+    "to_pdf": {
+      "kind": "export",
+      "remove": "0.7.0",
+      "replacement": ["coordinate_table", "describe_transition"],
+      "since": "0.4.0"
+    },
+    "to_text": {
+      "kind": "export",
+      "remove": "0.7.0",
+      "replacement": "frames",
+      "since": "0.4.0"
+    },
+    "unclaimed": {
+      "kind": "export",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "unpublish": {
+      "kind": "export",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "verify_join_token": {
+      "kind": "export",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "video_canvas": {
+      "kind": "export",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "who_is_on": {
+      "kind": "export",
+      "remove": "0.6.0",
       "since": "0.4.0"
     },
     "zones_at": {

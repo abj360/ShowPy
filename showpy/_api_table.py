@@ -7,7 +7,9 @@ Edit PUBLIC_API, then run `uv run python scripts/gen_public_api.py` to regenerat
 Contains:
     PUBLIC_API: lists (public name, defining module, attribute) sorted by public name
     DEPRECATED: lists (old name, dotted path of its replacement, since, remove) for each alias
-    LEAVING: lists (name, kind, replacement or replacements, since, remove) per name that leaves
+    LEAVING: lists (name, kind, replacement or replacements, since, remove) per name that leaves;
+        kind is function (warns on each call), type (warns on access), export (a function that
+        warns on access; its code sits in a private module) or field (warns on an outside read)
     DEPRECATED_KEYWORDS: lists (function, old keyword, new keyword, since, remove) per rename
 """
 
@@ -709,8 +711,50 @@ LEAVING: tuple[tuple[str, str, str | tuple[str, ...] | None, str, str], ...] = (
         "0.4.0",
         "0.7.0",
     ),
+    ("Chart", "type", ("coordinate_table", "describe_transition"), "0.4.0", "0.7.0"),
+    ("ChartRow", "type", ("coordinate_table", "describe_transition"), "0.4.0", "0.7.0"),
+    ("Claim", "type", None, "0.4.0", "0.6.0"),
+    ("CoordinateSheet", "type", ("coordinate_table", "describe_transition"), "0.4.0", "0.7.0"),
+    ("FormatRegistry", "type", "frames", "0.4.0", "0.7.0"),
+    ("Performer", "type", None, "0.4.0", "0.6.0"),
+    ("PerformerView", "type", None, "0.4.0", "0.6.0"),
+    ("Publication", "type", None, "0.4.0", "0.6.0"),
+    ("SheetRow", "type", ("coordinate_table", "describe_transition"), "0.4.0", "0.7.0"),
+    ("TextTable", "type", "frames", "0.4.0", "0.7.0"),
+    ("as_table", "export", "frames", "0.4.0", "0.7.0"),
+    ("chart", "export", ("coordinate_table", "describe_transition"), "0.4.0", "0.7.0"),
+    ("claim_spot", "export", None, "0.4.0", "0.6.0"),
+    ("claims", "export", None, "0.4.0", "0.6.0"),
+    ("coordinate_sheet", "export", ("coordinate_table", "describe_transition"), "0.4.0", "0.7.0"),
+    ("coordinate_sheets", "export", ("coordinate_table", "describe_transition"), "0.4.0", "0.7.0"),
+    ("cue_sheet", "export", ("coordinate_table", "describe_transition"), "0.4.0", "0.7.0"),
+    ("escape_text", "export", ("coordinate_table", "describe_transition"), "0.4.0", "0.7.0"),
+    ("export_frames_csv", "export", "frames", "0.4.0", "0.7.0"),
+    ("export_video", "export", None, "0.4.0", "0.6.0"),
+    ("formats", "export", "frames", "0.4.0", "0.7.0"),
+    ("join_link", "export", None, "0.4.0", "0.6.0"),
+    ("notify_changes", "export", None, "0.4.0", "0.6.0"),
+    ("pause", "export", None, "0.4.0", "0.6.0"),
+    ("performer_view", "export", None, "0.4.0", "0.6.0"),
+    ("publish", "export", None, "0.4.0", "0.6.0"),
+    ("qr_code", "export", None, "0.4.0", "0.6.0"),
+    ("reassign", "export", None, "0.4.0", "0.6.0"),
+    ("register_exporter", "export", "frames", "0.4.0", "0.7.0"),
+    ("register_importer", "export", "frames", "0.4.0", "0.7.0"),
+    ("release", "export", None, "0.4.0", "0.6.0"),
+    ("render_frame", "export", None, "0.4.0", "0.6.0"),
+    ("swap_claims", "export", None, "0.4.0", "0.6.0"),
+    ("to_csv", "export", "frames", "0.4.0", "0.7.0"),
+    ("to_pdf", "export", ("coordinate_table", "describe_transition"), "0.4.0", "0.7.0"),
+    ("to_text", "export", "frames", "0.4.0", "0.7.0"),
+    ("unclaimed", "export", None, "0.4.0", "0.6.0"),
+    ("unpublish", "export", None, "0.4.0", "0.6.0"),
+    ("verify_join_token", "export", None, "0.4.0", "0.6.0"),
+    ("video_canvas", "export", None, "0.4.0", "0.6.0"),
+    ("who_is_on", "export", None, "0.4.0", "0.6.0"),
     ("Show.coordinates", "field", "Location", "0.4.0", "0.7.0"),
     ("Show.zones", "field", "Marking", "0.4.0", "0.7.0"),
+    ("Spot.claimable", "field", None, "0.4.0", "0.7.0"),
 )
 
 DEPRECATED_KEYWORDS: tuple[tuple[str, str, str, str, str], ...] = (
