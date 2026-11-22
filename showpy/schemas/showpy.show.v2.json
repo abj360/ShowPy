@@ -148,7 +148,7 @@
     },
     "Cast": {
       "additionalProperties": false,
-      "description": "Holds every group and spot in the show.\n\nAttributes:\n    groups: Group key to group.\n    spots: Every spot, in creation order.\n    selections: Named selections of spot IDs, deduplicated in first-seen order.\n    label_scheme: Labeling rules.",
+      "description": "Holds every group and spot in the show.\n\nAttributes:\n    groups: Group key to group; each key equals its group's `key`.\n    spots: Every spot, in creation order.\n    selections: Named selections of spot IDs of this cast, deduplicated in first-seen order.\n    label_scheme: Labeling rules; its prefixes name groups of this cast.",
       "properties": {
         "groups": {
           "additionalProperties": {
@@ -168,12 +168,12 @@
         },
         "selections": {
           "additionalProperties": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
+            "$ref": "#/$defs/SelectionSpots"
           },
           "default": {},
+          "propertyNames": {
+            "$ref": "#/$defs/SelectionKey"
+          },
           "title": "Selections",
           "type": "object"
         },
@@ -582,15 +582,14 @@
     },
     "Group": {
       "additionalProperties": false,
-      "description": "Holds a designer-made set of spots with shared defaults.\n\nAttributes:\n    key: Stable group key, e.g. `trumpets`.\n    name: Display name; defaults to the key in title case.\n    label_prefix: Prefix for spot labels, e.g. `T` gives T1, T2.\n    symbol: Sheet glyph.\n    color: Hex color.\n    default_radius: Footprint radius for new spots.\n    limits: Per-group limit overrides read by a consumer checker.\n    moves: False for stationary groups such as a pit.",
+      "description": "Holds a designer-made set of spots with shared defaults.\n\nAttributes:\n    key: Stable group key, e.g. `trumpets`.\n    name: Display name; defaults to the key in title case.\n    label_prefix: Prefix for spot labels, e.g. `T` gives T1, T2.\n    symbol: Sheet glyph.\n    color: Hex color, `#rrggbb`.\n    default_radius: Footprint radius for new spots, above 0.\n    limits: Per-group limit overrides read by a consumer checker.\n    moves: False for stationary groups such as a pit.",
       "properties": {
         "color": {
-          "default": "#808080",
-          "title": "Color",
-          "type": "string"
+          "$ref": "#/$defs/HexColor",
+          "default": "#808080"
         },
         "default_radius": {
-          "$ref": "#/$defs/Meters",
+          "$ref": "#/$defs/PositiveFinite",
           "default": 0.3
         },
         "key": {
@@ -603,7 +602,7 @@
         },
         "limits": {
           "additionalProperties": {
-            "type": "number"
+            "$ref": "#/$defs/PositiveFinite"
           },
           "default": {},
           "title": "Limits",
@@ -670,6 +669,10 @@
       "title": "GuideLine",
       "type": "object"
     },
+    "HexColor": {
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "type": "string"
+    },
     "Hold": {
       "additionalProperties": false,
       "description": "Pauses the counts: time reaches `at_count`, waits `seconds`, then continues.\n\nAttributes:\n    at_count: Count where the pause happens.\n    seconds: Length of the pause.\n    note: Designer note such as \"fermata\".",
@@ -702,10 +705,12 @@
     },
     "LabelScheme": {
       "additionalProperties": false,
-      "description": "Holds labeling rules; a group missing from `prefixes` uses its own label_prefix.\n\nAttributes:\n    prefixes: Group key to label prefix overrides.\n    start: First number in each group.\n    pad: Zero-pad numbers to this width.",
+      "description": "Holds labeling rules; a group missing from `prefixes` uses its own label_prefix.\n\nAttributes:\n    prefixes: Group key to label prefix overrides; every key names a group of the cast.\n    start: First number in each group.\n    pad: Zero-pad numbers to this width, 0 to `MAX_LABEL_PAD`.",
       "properties": {
         "pad": {
           "default": 0,
+          "maximum": 8,
+          "minimum": 0,
           "title": "Pad",
           "type": "integer"
         },
@@ -1192,6 +1197,10 @@
       ],
       "type": "array"
     },
+    "PositiveFinite": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
     "Region": {
       "additionalProperties": false,
       "description": "Stores an area on the stage plane as rings, so it survives JSON round-trips.\n\nAttributes:\n    exterior: Outer ring, not repeating the first point.\n    holes: Inner rings cut out of the area.",
@@ -1303,6 +1312,15 @@
       ],
       "title": "Selection",
       "type": "object"
+    },
+    "SelectionKey": {
+      "type": "string"
+    },
+    "SelectionSpots": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
     },
     "SelectorField": {
       "anyOf": [
@@ -1730,7 +1748,7 @@
     },
     "Spot": {
       "additionalProperties": false,
-      "description": "Describes one dot that persists through the whole show.\n\nAttributes:\n    id: Label shown on the sheet, stable all show.\n    group: Key of the owning group.\n    symbol: Sheet glyph; None inherits the group's.\n    color: Hex color; None inherits the group's.\n    tags: Free tags such as `soloist`, deduplicated in first-seen order; a set is sorted.\n    active: False excludes the spot from forms and checks.\n    shape: Footprint on the sheet and for collisions.\n    claimable: Who may claim the spot once the show is published.",
+      "description": "Describes one dot that persists through the whole show.\n\nAttributes:\n    id: Label shown on the sheet, stable all show.\n    group: Key of the owning group.\n    symbol: Sheet glyph; None inherits the group's.\n    color: Hex color, `#rrggbb`; None inherits the group's.\n    tags: Free tags such as `soloist`, deduplicated in first-seen order; a set is sorted.\n    active: False excludes the spot from forms and checks.\n    shape: Footprint on the sheet and for collisions.\n    claimable: Who may claim the spot once the show is published.",
       "properties": {
         "active": {
           "default": true,
@@ -1744,14 +1762,13 @@
         "color": {
           "anyOf": [
             {
-              "type": "string"
+              "$ref": "#/$defs/HexColor"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Color"
+          "default": null
         },
         "group": {
           "title": "Group",

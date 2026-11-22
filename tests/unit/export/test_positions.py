@@ -161,8 +161,6 @@ def test_regression_import_positions_normalizes_facing() -> None:
     assert approx_equal(facing, 0.0, abs_tol=TOL)
 
 
-@pytest.mark.defect("UP-9.5-44")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-44")
 def test_regression_import_positions_rejects_ids_with_spaces() -> None:
     """Rejects an entity ID that contains a space instead of creating a spot with it."""
     with pytest.raises(SchemaError):

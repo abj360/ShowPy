@@ -60,7 +60,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from showpy.cast.rewrite import rewrite_spot_ids
 from showpy.choreo.forms import slots, text_form
 from showpy.core.errors import (
     FontError,
@@ -69,7 +68,7 @@ from showpy.core.errors import (
     UnknownRefError,
     VersionError,
 )
-from showpy.core.ids import FormId, SetId, SpotId
+from showpy.core.ids import LEGACY_IDS_KEY, FormId, SetId, SpotId
 from showpy.core.resources import font_path
 from showpy.core.util import approx_equal, asset_uri
 from showpy.export.data import (
@@ -319,7 +318,8 @@ def test_regression_csv_neutralizes_header_cells() -> None:
 def test_regression_frames_csv_neutralizes_spot_ids() -> None:
     """Prefixes a quote to a formula-like spot ID in the frames CSV."""
     payload = '=HYPERLINK("http://evil","x")'
-    show = rewrite_spot_ids(two_set_show(), lambda spot: payload if spot == "T1" else spot)
+    renamed = two_set_show().model_dump_json().replace('"T1"', json.dumps(payload))
+    show = Show.model_validate_json(renamed, context={LEGACY_IDS_KEY: True})
     rows = _csv_rows(export_frames_csv(show))
     entities = {row[2] for row in rows[1:]}
     assert f"'{payload}" in entities
