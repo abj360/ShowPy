@@ -7,17 +7,28 @@ Contains:
     fuzz_cast(): builds the small fixed cast the selection fuzz target runs against
     expressions(): draws selection expressions from words, ranges, operators, nesting and junk
     test_fuzz_select(): `select` rejects any expression with a ShowPyError or returns
+    reference_select(): evaluates an expression with the recursive left-to-right parser that
+        `select` used before it became iterative; the oracle of the iterative evaluator
+    trees(): draws expression trees of known words joined by +, - and &
+    test_fuzz_iterative_select_matches_the_recursive_reference(): every accepted expression,
+        hostile or drawn from a tree, gives the reference's result
+    test_fuzz_redundant_parentheses_never_change_a_result(): wrapping parts of an accepted
+        expression in extra parentheses keeps its result
     test_fuzz_parse_range(): `parse_range` rejects any text with a ShowPyError or returns
     test_fuzz_natural_sort(): `natural_sort` orders any list of text without raising
     test_fuzz_parse_ref(): `parse_ref` rejects any text with a ShowPyError or returns
     test_fuzz_parse_tid(): `parse_tid` rejects any text with a ShowPyError or returns
 """
 
+import re
+from collections.abc import Callable
+
 from hypothesis import given
 from hypothesis import strategies as st
 
 from showpy.cast.models import Cast, Group, Spot
-from showpy.cast.select import select
+from showpy.cast.select import Selection, select
+from showpy.core.errors import ShowPyError
 from showpy.core.ids import SpotId, parse_ref, parse_tid
 from showpy.core.util import natural_sort, parse_range
 from tests.helpers import only_showpy_errors
@@ -79,6 +90,95 @@ def expressions(draw: st.DrawFn) -> str:
 @given(expressions())
 def test_fuzz_select(expression: str) -> None:
     only_showpy_errors(lambda: select(CAST, expression), expression)
+
+
+REFERENCE_TOKENS = re.compile(r"[+\-&()]|[^\s+&()\-][^\s+&()]*")
+TREE_OPERATORS = ("+", "-", "&")
+MAX_TREE_LEAVES = 12
+
+type Tree = str | tuple["Tree", str, "Tree"]
+type Draw = Callable[[st.SearchStrategy[bool]], bool]
+
+
+def reference_select(expression: str) -> tuple[str, ...]:
+    """Evaluates an expression the way the recursive parser did: words via `select`, operators
+    left to right, a parenthesized group as one term."""
+    tokens = REFERENCE_TOKENS.findall(expression)
+    position = 0
+
+    def term() -> Selection:
+        nonlocal position
+        token = tokens[position]
+        position += 1
+        if token != "(":
+            return select(CAST, token)
+        inner = expr()
+        position += 1
+        return inner
+
+    def expr() -> Selection:
+        nonlocal position
+        result = term()
+        while position < len(tokens) and tokens[position] in TREE_OPERATORS:
+            operator = tokens[position]
+            position += 1
+            right = term()
+            result = {"+": result | right, "-": result - right, "&": result & right}[operator]
+        return result
+
+    return expr().ids
+
+
+def _kind(operator: str) -> str:
+    return "&" if operator == "&" else "+-"
+
+
+def _render(tree: Tree, wraps: Draw | None, parent: str | None = None) -> str:
+    """Prints a tree as text the grammar accepts; with `wraps`, adds drawn redundant parentheses."""
+    if isinstance(tree, str):
+        text = tree
+    else:
+        left, operator, right = tree
+        text = f"{_render(left, wraps, operator)} {operator} {_render(right, wraps, '(')}"
+        if parent is not None and (parent == "(" or _kind(parent) != _kind(operator)):
+            text = f"({text})"
+    if wraps is not None and wraps(st.booleans()):
+        return f"({text})"
+    return text
+
+
+ATOMS = st.one_of(
+    st.sampled_from(CAST.ids()),
+    st.sampled_from([f"{prefix}*" for prefix in GROUPS.values()]),
+    st.sampled_from([f"group:{key}" for key in GROUPS]),
+    st.sampled_from([f"tag:{tag}" for tag in TAGS]),
+    st.just("all"),
+)
+
+
+def trees() -> st.SearchStrategy[Tree]:
+    """Draws expression trees whose leaves are words the fuzz cast knows."""
+    return st.recursive(
+        ATOMS,
+        lambda children: st.tuples(children, st.sampled_from(TREE_OPERATORS), children),
+        max_leaves=MAX_TREE_LEAVES,
+    )
+
+
+@given(st.one_of(expressions(), trees().map(lambda tree: _render(tree, None))))
+def test_fuzz_iterative_select_matches_the_recursive_reference(expression: str) -> None:
+    try:
+        picked = select(CAST, expression)
+    except ShowPyError:
+        return
+    assert picked.ids == reference_select(expression), expression
+
+
+@given(trees(), st.data())
+def test_fuzz_redundant_parentheses_never_change_a_result(tree: Tree, data: st.DataObject) -> None:
+    plain = _render(tree, None)
+    wrapped = _render(tree, data.draw)
+    assert select(CAST, wrapped).ids == select(CAST, plain).ids, (plain, wrapped)
 
 
 @given(st.one_of(st.text(), st.builds("{}-{}".format, DIGITS, DIGITS)))

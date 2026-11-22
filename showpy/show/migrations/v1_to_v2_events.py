@@ -1,13 +1,12 @@
 """
-v1_to_v2_events.py --- the events sub-step of the v1 to v2 format migration (lane A)
+v1_to_v2_events.py --- the events sub-step of the v1 to v2 format migration
 
-Lane A owns this module. Canvas events are derived from revisions, not stored in the show
-documents this step receives, so it stays an identity step unless lane A finds stored event JSON
-among them. A filled step records every repair with `report.repair()` and refuses a stored
-value v2 cannot hold with SchemaError naming the document, the field and the value.
+Canvas events are derived from revisions and never stored in the show documents this step
+receives, so the step leaves the documents as they are. A stored event that still holds the v0.2
+`actor` field is decoded with `decode_event()`, which drops the field and reports it.
 
 Contains:
-    migrate_events(): rewrites any stored event JSON from the v1 shape to the v2 shape
+    migrate_events(): returns the documents unchanged, as they hold no stored events
 """
 
 from typing import TYPE_CHECKING
@@ -19,7 +18,7 @@ if TYPE_CHECKING:
 
 
 def migrate_events(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[str, JsonValue]:
-    """Rewrites any stored event JSON to the v2 shape; the documents hold none so far.
+    """Returns the documents unchanged; they hold no stored events.
 
     Args:
         docs: Stored path to parsed document, without a format header.

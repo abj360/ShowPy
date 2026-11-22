@@ -33,6 +33,8 @@ from showpy.sheet.templates import add_guide, add_landmark, add_zone, blank_shee
 from tests.fixtures.shows import field_sheet
 from tests.helpers import digests_under_hash_seeds
 
+pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+
 TOL = 1e-9
 SVG_NS = "{http://www.w3.org/2000/svg}"
 PX_PER_M = 10.0
@@ -103,7 +105,7 @@ def test_render_is_deterministic() -> None:
 def test_png_render_ignores_hash_seed() -> None:
     """Renders the same PNG twice in one run and under two hash seeds (audit 4.3)."""
     digests = digests_under_hash_seeds(
-        "from showpy.sheet.render import render_sheet", "render_sheet(show.sheet, fmt='png')"
+        "from showpy.sheet.render import _render_sheet", "_render_sheet(show.sheet, fmt='png')"
     )
     assert all(first == second for first, second in digests), digests
     assert len({first for first, _ in digests}) == 1, digests

@@ -45,6 +45,13 @@
   "BUNDLED_FONTS": {
     "constant": "mappingproxy({'relief-singleline': 'asset:sha256:fd67c5b12e38ab886258f5bc16611b3f61f0bcc2d5711dc5ddf8fd42bc8f4b55', 'hershey-roman': 'asset:sha256:e1969f4711a74be259a5e602da900a65b94c5f45f69c33e32ab4eeb86a2c83cb', 'hershey-script': 'asset:sha256:1f0a661303e872ffd3ac5c8abdd8804519c2174696c1f8f04ac1aaee37c5a9d0', 'hershey-greek': 'asset:sha256:43f6945dde1eea1a5b51295a518f7cb8c1a12fd04d2df536ef4ab37cb2533cd1', 'simplex': 'asset:sha256:7e345d1ae7a55abc2d6414c6b16d121bdaddba1ef1fb5d82dec483e4bac20e3e'})"
   },
+  "BendFix": {
+    "model": {
+      "at": "Finite",
+      "entity": "showpy.core.ids.SpotId",
+      "point": "Point"
+    }
+  },
   "BezierCurve": {
     "model": {
       "closed": "Literal[False]",
@@ -75,15 +82,15 @@
       "at": "datetime.datetime",
       "id": "str",
       "kind": "EventKind",
-      "payload": "dict[str, Any]",
+      "payload": "EventPayload",
       "revision": "str"
     }
   },
   "Cast": {
     "model": {
-      "groups": "dict[str, showpy.cast.models.Group]",
+      "groups": "collections.abc.Mapping[str, showpy.cast.models.Group]",
       "label_scheme": "showpy.cast.models.LabelScheme",
-      "selections": "dict[str, tuple[showpy.core.ids.SpotId, ...]]",
+      "selections": "collections.abc.Mapping[SelectionKey, SelectionSpots]",
       "spots": "tuple[showpy.cast.models.Spot, ...]"
     }
   },
@@ -170,7 +177,7 @@
     "model": {
       "audience_side": "Literal['front', 'back', 'left', 'right']",
       "kind": "showpy.sheet.models.CoordinateKind",
-      "labels": "dict[str, str]",
+      "labels": "collections.abc.Mapping[str, str]",
       "origin": "Point | showpy.core.ids.LandmarkId",
       "precision": "float",
       "units": "str"
@@ -230,6 +237,12 @@
   "DEFAULT_LINE_SPACING": {
     "constant": "1.2"
   },
+  "DelayFix": {
+    "model": {
+      "counts": "PositiveFinite",
+      "entity": "showpy.core.ids.SpotId"
+    }
+  },
   "DeprecatedWarning": "(*args)",
   "DocumentRepository": "(backend: showpy.show.repositories.RepositoryBackend)",
   "Easing": {
@@ -247,6 +260,12 @@
       "rotation_deg": "Degrees",
       "rx": "Meters",
       "ry": "Meters"
+    }
+  },
+  "EntityFacing": {
+    "model": {
+      "entity": "showpy.core.ids.SpotId",
+      "kind": "Literal['entity']"
     }
   },
   "EntityState": {
@@ -284,6 +303,7 @@
       "HOLD_NEGATIVE": "'HOLD_NEGATIVE'",
       "HOLD_OVERLAP": "'HOLD_OVERLAP'",
       "IO": "'IO'",
+      "KEY_MISMATCH": "'KEY_MISMATCH'",
       "LOCKED": "'LOCKED'",
       "MARKER_DUPLICATE": "'MARKER_DUPLICATE'",
       "MARKER_RANGE": "'MARKER_RANGE'",
@@ -294,6 +314,7 @@
       "MISSING_FONT": "'MISSING_FONT'",
       "MISSING_GLYPH": "'MISSING_GLYPH'",
       "MISSING_SPOT": "'MISSING_SPOT'",
+      "MIXED_OPERATORS": "'MIXED_OPERATORS'",
       "NAME_TOO_LONG": "'NAME_TOO_LONG'",
       "NOT_A_MEMBER": "'NOT_A_MEMBER'",
       "NOT_A_TEXT_FORM": "'NOT_A_TEXT_FORM'",
@@ -308,11 +329,13 @@
       "RAMP_CUT": "'RAMP_CUT'",
       "RAMP_INCOMPLETE": "'RAMP_INCOMPLETE'",
       "RAMP_LENGTH": "'RAMP_LENGTH'",
+      "RANGE_PADDING": "'RANGE_PADDING'",
       "READ_ONLY": "'READ_ONLY'",
       "REFLECTION": "'REFLECTION'",
       "RESERVED_MOTION": "'RESERVED_MOTION'",
       "SCHEMA": "'SCHEMA'",
       "SEGMENT_BOUND": "'SEGMENT_BOUND'",
+      "SHOW_TOO_LONG": "'SHOW_TOO_LONG'",
       "SPACING": "'SPACING'",
       "STAGE": "'STAGE'",
       "STALE_FORM": "'STALE_FORM'",
@@ -365,7 +388,7 @@
       "mode": "showpy.choreo.path_models.FacingMode",
       "start": "Count",
       "turn_counts": "float",
-      "value": "Degrees | Point | showpy.core.ids.SpotId | None"
+      "value": "FacingValue | None"
     }
   },
   "FacingSpec": {
@@ -373,6 +396,9 @@
       "mode": "Literal['fixed', 'audience', 'toward_point', 'along', 'normal', 'outward']",
       "value": "Degrees | Point | None"
     }
+  },
+  "FacingValue": {
+    "constant": "FacingValue"
   },
   "FigureEightParams": {
     "model": {
@@ -385,7 +411,16 @@
       "kind": "Literal['delay', 'waypoint', 'reassign', 'stagger']",
       "max_speed_after": "float",
       "new_gap": "Finite",
-      "params": "dict[str, Any]"
+      "params": "FixParams"
+    }
+  },
+  "FixParams": {
+    "constant": "FixParams"
+  },
+  "FixedFacing": {
+    "model": {
+      "degrees": "Heading",
+      "kind": "Literal['fixed']"
     }
   },
   "Font": {
@@ -487,11 +522,11 @@
   },
   "Group": {
     "model": {
-      "color": "str",
-      "default_radius": "Meters",
+      "color": "HexColor",
+      "default_radius": "PositiveFinite",
       "key": "str",
       "label_prefix": "str",
-      "limits": "dict[str, float]",
+      "limits": "collections.abc.Mapping[str, PositiveFinite]",
       "moves": "bool",
       "name": "str",
       "symbol": "str"
@@ -503,6 +538,13 @@
       "kind": "Literal['yard', 'hash', 'sideline', 'center', 'edge', 'spike', 'custom']",
       "label": "str",
       "points": "Ring"
+    }
+  },
+  "Highlight": {
+    "model": {
+      "anchor": "showpy.notes.models.Anchor | None",
+      "ttl_s": "float",
+      "zone": "str | None"
     }
   },
   "Hold": {
@@ -533,7 +575,7 @@
   "LabelScheme": {
     "model": {
       "pad": "int",
-      "prefixes": "dict[str, str]",
+      "prefixes": "collections.abc.Mapping[str, str]",
       "start": "int"
     }
   },
@@ -661,8 +703,8 @@
   },
   "MeasureSetting": {
     "model": {
-      "changes": "tuple[tuple[Count, float], ...]",
-      "counts_per_measure": "float",
+      "changes": "tuple[tuple[NonNegCount, PositiveFinite], ...]",
+      "counts_per_measure": "PositiveFinite",
       "start_measure": "int"
     }
   },
@@ -700,7 +742,7 @@
       "end": "showpy.choreo.models.Placement",
       "entity": "showpy.core.ids.SpotId",
       "facing_mode": "showpy.choreo.path_models.FacingMode",
-      "facing_value": "Degrees | Point | showpy.core.ids.SpotId | None",
+      "facing_value": "FacingValue | None",
       "knots_s": "tuple[float, ...]",
       "knots_t": "tuple[float, ...]",
       "pieces": "tuple[showpy.choreo.engine_models.MotionPiece, ...]",
@@ -754,7 +796,7 @@
       "end": "float | None",
       "entity": "showpy.core.ids.SpotId",
       "facing_mode": "showpy.choreo.path_models.FacingMode",
-      "facing_value": "Degrees | Point | showpy.core.ids.SpotId | None",
+      "facing_value": "FacingValue | None",
       "locked": "bool",
       "motion_fn": "str | None",
       "motion_params": "JsonObject | BuiltInMotionParams",
@@ -831,6 +873,12 @@
       "set_id": "showpy.core.ids.SetId"
     }
   },
+  "PointFacing": {
+    "model": {
+      "kind": "Literal['point']",
+      "point": "Point"
+    }
+  },
   "Polyline": {
     "model": {
       "closed": "bool",
@@ -873,6 +921,9 @@
   "QuadPiece": "(start: Point, control: Point, end: Point) -> None",
   "RESERVED_IDS": {
     "constant": "frozenset(['all', 'aux', 'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9', 'con', 'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9', 'nul', 'prn'])"
+  },
+  "ReassignFix": {
+    "model": {}
   },
   "Region": {
     "model": {
@@ -925,7 +976,7 @@
   },
   "Route": {
     "model": {
-      "curve": "dict[str, Any]",
+      "curve": "AnyCurve",
       "end": "float | None",
       "id": "showpy.core.ids.RouteId",
       "members": "tuple[showpy.core.ids.SpotId, ...]",
@@ -952,6 +1003,8 @@
       "ids": "tuple[showpy.core.ids.SpotId, ...]"
     }
   },
+  "SelectorAst": "(text: str, program: tuple[showpy.cast.select.SelectorToken, ...])",
+  "SelectorToken": "(text: str, position: int)",
   "Set": {
     "model": {
       "counts": "float",
@@ -1034,9 +1087,9 @@
     "model": {
       "cast": "showpy.cast.models.Cast",
       "coordinates": "showpy.sheet.models.CoordinateSystem",
-      "dependencies": "dict[str, str]",
+      "dependencies": "collections.abc.Mapping[str, str]",
       "facing_overrides": "tuple[showpy.choreo.path_models.FacingOverride, ...]",
-      "forms": "dict[showpy.core.ids.FormId, showpy.choreo.form_models.Form]",
+      "forms": "collections.abc.Mapping[showpy.core.ids.FormId, showpy.choreo.form_models.Form]",
       "id": "str",
       "notes": "tuple[showpy.notes.models.Note, ...]",
       "pack": "str",
@@ -1063,6 +1116,14 @@
       "seconds": "Seconds",
       "set": "showpy.core.ids.SetId",
       "start_count": "Count"
+    }
+  },
+  "ShowLookup": {
+    "model": {
+      "consecutive": "collections.abc.Mapping[showpy.core.ids.TransitionId, showpy.core.ids.TransitionId]",
+      "forms": "collections.abc.Mapping[showpy.core.ids.FormId, showpy.choreo.form_models.Form]",
+      "positions": "collections.abc.Mapping[showpy.core.ids.SetId, int]",
+      "stored": "collections.abc.Mapping[showpy.core.ids.TransitionId, showpy.choreo.path_models.TransitionSpec]"
     }
   },
   "ShowPyError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
@@ -1122,7 +1183,7 @@
     "model": {
       "active": "bool",
       "claimable": "Claimable",
-      "color": "str | None",
+      "color": "HexColor | None",
       "group": "str",
       "id": "showpy.core.ids.SpotId",
       "shape": "showpy.cast.models.Shape",
@@ -1136,6 +1197,12 @@
       "off_field": "int",
       "on_field": "int",
       "set_id": "showpy.core.ids.SetId"
+    }
+  },
+  "StaggerFix": {
+    "model": {
+      "order": "tuple[showpy.core.ids.SpotId, ...]",
+      "step": "Finite"
     }
   },
   "StorageError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
@@ -1225,11 +1292,11 @@
   "TransitionId": "(from_set: showpy.core.ids.SetId, to_set: showpy.core.ids.SetId)",
   "TransitionSpec": {
     "model": {
-      "counts": "float",
+      "counts": "NonNegCount",
       "id": "showpy.core.ids.TransitionId",
       "notes": "str",
-      "routes": "dict[showpy.core.ids.RouteId, showpy.choreo.path_models.Route]",
-      "rows": "dict[showpy.core.ids.SpotId, showpy.choreo.path_models.PathRow]",
+      "routes": "collections.abc.Mapping[showpy.core.ids.RouteId, showpy.choreo.path_models.Route]",
+      "rows": "collections.abc.Mapping[showpy.core.ids.SpotId, showpy.choreo.path_models.PathRow]",
       "source_hash": "str"
     }
   },
@@ -1399,6 +1466,7 @@
   "custom_form": "(form_id: str, members: collections.abc.Sequence[str], points: object, facings: collections.abc.Sequence[Degrees] | None = None, *, set_id: str = '') -> showpy.choreo.form_models.Form",
   "custom_path": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, motion: str, registry: showpy.choreo.motion.MotionRegistry = ..., *, force: bool = False, **params: Any) -> showpy.choreo.path_models.TransitionSpec",
   "customize": "(sheet: showpy.sheet.models.Sheet, **changes: object) -> showpy.sheet.models.Sheet",
+  "decode_event": "(data: collections.abc.Mapping[str, JsonValue], *, report: showpy.show.migrate.ReportBuilder | None = None) -> showpy.show.models.CanvasEvent",
   "default_paths": "(show: 'Show', tid: tuple[str, str]) -> showpy.choreo.path_models.TransitionSpec",
   "define_selection": "(show: 'Show', name: str, sel: Selector) -> 'Show'",
   "delay": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, counts: float, *, keep_end: bool = True, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",
@@ -1497,6 +1565,245 @@
   "landmark_anchor": "(mark: showpy.sheet.models.Landmark) -> Point",
   "landmark_keys": "(mark: showpy.sheet.models.Landmark) -> tuple[str, ...]",
   "layout_text": "(text: str, fonts: collections.abc.Sequence[str], height: Meters, at: Point, *, rotation: Degrees = 0.0, align: TextAlign = 'left', anchor: TextAnchor = 'baseline', letter_spacing: float = 0.0, line_spacing: float = 1.2, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> tuple[showpy.geo.models.LaidGlyph, ...]",
+  "leaving": {
+    "CoordinateKind": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": "Location",
+      "since": "0.4.0"
+    },
+    "CoordinateSystem": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": "Location",
+      "since": "0.4.0"
+    },
+    "GuideLine": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": "Marking",
+      "since": "0.4.0"
+    },
+    "InMemorySheetStore": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
+      "since": "0.4.0"
+    },
+    "Landmark": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "SheetCanvas": {
+      "kind": "type",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "SheetStore": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
+      "since": "0.4.0"
+    },
+    "Show.coordinates": {
+      "kind": "field",
+      "remove": "0.7.0",
+      "replacement": "Location",
+      "since": "0.4.0"
+    },
+    "Show.zones": {
+      "kind": "field",
+      "remove": "0.7.0",
+      "replacement": "Marking",
+      "since": "0.4.0"
+    },
+    "Zone": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "ZoneKind": {
+      "kind": "type",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "add_guide": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
+      "since": "0.4.0"
+    },
+    "add_landmark": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "add_zone": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "blank_sheet": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
+      "since": "0.4.0"
+    },
+    "coordinate_presets": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["locate", "at_location", "Location"],
+      "since": "0.4.0"
+    },
+    "customize": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
+      "since": "0.4.0"
+    },
+    "draw_sheet": {
+      "kind": "function",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "football_field": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "field",
+      "since": "0.4.0"
+    },
+    "from_coords": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "at_location",
+      "since": "0.4.0"
+    },
+    "get_sheet": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "sheet",
+      "since": "0.4.0"
+    },
+    "gym_floor": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "floor",
+      "since": "0.4.0"
+    },
+    "landmark": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "landmark_anchor": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "landmark_keys": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "line_landmark": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "nearest_landmarks": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "markings_near",
+      "since": "0.4.0"
+    },
+    "on_surface": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "on_sheet",
+      "since": "0.4.0"
+    },
+    "point_landmark": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "proscenium_stage": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "floor",
+      "since": "0.4.0"
+    },
+    "remove_guide": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
+      "since": "0.4.0"
+    },
+    "remove_landmark": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "remove_zone": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "render_sheet": {
+      "kind": "function",
+      "remove": "0.6.0",
+      "since": "0.4.0"
+    },
+    "save_sheet": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
+      "since": "0.4.0"
+    },
+    "set_coordinates": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["locate", "at_location", "Location"],
+      "since": "0.4.0"
+    },
+    "sheet_templates": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "sheets",
+      "since": "0.4.0"
+    },
+    "template_ref": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
+      "since": "0.4.0"
+    },
+    "to_coords": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": "locate",
+      "since": "0.4.0"
+    },
+    "zones_at": {
+      "kind": "function",
+      "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    }
+  },
   "length": "(obj: Points | showpy.geo.curve_base.Curve) -> Meters",
   "line": "(a: Point, b: Point) -> showpy.geo.curves.Segment",
   "line_form": "(form_id: str, members: collections.abc.Sequence[str], a: Point, b: Point, spacing: showpy.choreo.form_models.SpacingSpec | None = None, facing: showpy.choreo.form_models.FacingSpec | None = None, *, set_id: str = '', n: int | None = None) -> showpy.choreo.form_models.Form",
@@ -1542,6 +1849,7 @@
   "parse_path": "(d: str) -> list[showpy.geo.svg.Subpath]",
   "parse_range": "(text: str) -> list[str]",
   "parse_ref": "(text: str) -> tuple[str, str, str | None]",
+  "parse_selector": "(text: str) -> showpy.cast.select.SelectorAst",
   "parse_tid": "(text: str) -> showpy.core.ids.TransitionId",
   "paths_table": "(spec: showpy.choreo.path_models.TransitionSpec) -> 'pd.DataFrame'",
   "pause": "(pub: showpy.export.models.Publication) -> showpy.export.models.Publication",
@@ -1625,7 +1933,7 @@
   "set_coordinates": "(show: 'Show', system: showpy.sheet.models.CoordinateSystem) -> 'Show'",
   "set_counts": "(show: showpy.show.models.Show, set_id: str, counts: float, *, rescale: bool = False, force: bool = False) -> showpy.show.models.Show",
   "set_easing": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, easing: showpy.choreo.path_models.Easing | str, *, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",
-  "set_facing": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, mode: showpy.choreo.path_models.FacingMode, value: Degrees | Point | str | None = None, turn_counts: float = 0.0, direction: showpy.choreo.path_models.TurnDirection = <TurnDirection.SHORTEST: 'shortest'>, *, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",
+  "set_facing": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, mode: showpy.choreo.path_models.FacingMode, value: FacingValue | Degrees | Point | str | None = None, turn_counts: float = 0.0, direction: showpy.choreo.path_models.TurnDirection = <TurnDirection.SHORTEST: 'shortest'>, *, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",
   "set_interval": "(obj: S, interval: Meters, anchor: Literal['start', 'center', 'end'] = 'center', sel: SetSelector = 'all', *, force: bool = False) -> S",
   "set_measures": "(tl: showpy.time.models.Timeline, setting: showpy.time.models.MeasureSetting) -> showpy.time.models.Timeline",
   "set_pace": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, pace: float, *, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",

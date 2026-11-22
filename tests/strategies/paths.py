@@ -231,7 +231,8 @@ def edited_row(draw: st.DrawFn, show: Show, spec: TransitionSpec, entity: str) -
 def path_rows(draw: st.DrawFn, show: Show, tid: TransitionId | None = None) -> PathRow:
     """Draws a path row for one spot of transition `tid` that compiles against `show`.
 
-    The spot's stored row is dropped first. FOLLOW is offered only to members of a route
+    The spot's stored row is dropped first, from the show too, so the route builders read no
+    stored lock for it. FOLLOW is offered only to members of a route
     already stored on the transition (`with_paths` in tests.strategies.show adds routes and
     sets their targets), and HOLD only to spots that stand still.
 
@@ -242,5 +243,5 @@ def path_rows(draw: st.DrawFn, show: Show, tid: TransitionId | None = None) -> P
     """
     tid = tid or draw(st.sampled_from(show.transition_ids()))
     entity = draw(st.sampled_from(show.cast.ids()))
-    spec = clear_rows(show, tid, [entity], force=True).transition(tid)
-    return draw(edited_row(show, spec, entity)).row(entity)
+    cleared = clear_rows(show, tid, [entity], force=True)
+    return draw(edited_row(cleared, cleared.transition(tid), entity)).row(entity)

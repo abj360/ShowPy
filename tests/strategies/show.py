@@ -16,7 +16,7 @@ from hypothesis import strategies as st
 
 from showpy.choreo.facing import add_facing_override
 from showpy.choreo.match_ops import with_set
-from showpy.choreo.path_models import FacingMode, FacingOverride, TransitionSpec
+from showpy.choreo.path_models import FacingMode, FacingOverride, FixedFacing, TransitionSpec
 from showpy.choreo.paths import hold, ripple, stagger
 from showpy.choreo.routes import follow_and_set_targets, make_route
 from showpy.core.errors import PathError
@@ -120,7 +120,7 @@ def _with_override(draw: st.DrawFn, show: Show, total: float) -> Show:
     first = draw(st.integers(0, WAYPOINT_STEPS - 1))
     last = draw(st.integers(first + 1, WAYPOINT_STEPS))
     mode = draw(st.sampled_from(OVERRIDE_MODES))
-    value = OVERRIDE_FIXED_DEG if mode is FacingMode.FIXED else None
+    value = FixedFacing(degrees=OVERRIDE_FIXED_DEG) if mode is FacingMode.FIXED else None
     override = FacingOverride(
         entities=tuple(entities),
         mode=mode,

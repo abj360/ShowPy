@@ -25,7 +25,7 @@ from showpy.choreo.motion import turn
 from showpy.choreo.path_models import FacingOverride
 from showpy.core.errors import GeometryError, TimeRangeError, UnknownRefError
 from showpy.core.ids import FormId, SpotId
-from showpy.core.selection import Selection
+from showpy.core.selection import Selection, operand_ids
 from showpy.core.types import Degrees, Point
 from showpy.core.units import normalize_angle, vector_facing
 from showpy.core.util import close_matches
@@ -63,7 +63,7 @@ def face_direction(target: Set, sel: Sel, deg: Degrees, *, force: bool = False) 
     >>> face_direction(two_set_show().set("1"), ["T1"], 90.0).get("T1").facing
     90.0
     """
-    return _set_facings(target, dict.fromkeys(sel, deg), force=force)
+    return _set_facings(target, dict.fromkeys(operand_ids(sel), deg), force=force)
 
 
 def face_audience(target: Set, sel: Sel, *, force: bool = False) -> Set:
@@ -88,7 +88,9 @@ def face_point(target: Set, sel: Sel, point: Point, *, force: bool = False) -> S
     >>> face_point(two_set_show().set("1"), ["T1"], (5.0, 5.0)).get("T1").facing
     90.0
     """
-    facings = {e: _toward(target.get(e).point, point, target.get(e).facing) for e in sel}
+    facings = {
+        e: _toward(target.get(e).point, point, target.get(e).facing) for e in operand_ids(sel)
+    }
     return _set_facings(target, facings, force=force)
 
 

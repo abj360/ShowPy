@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_analysis.py --- tests density, coverage, balance, symmetry and change design measures
+test_set_analysis.py --- tests density, coverage, balance, symmetry and change design measures
 
 Contains:
     test_regression_density_map_caps_the_grid_size: rejects a 1e-5 m cell (8e12 cells on the field)
@@ -21,9 +21,9 @@ import sys
 
 import pytest
 
+from showpy.choreo.set_analysis import balance, change_amount, coverage, density_map, symmetry_score
 from showpy.core.errors import GeometryError, ShowPyError, UnknownRefError
 from showpy.core.util import approx_equal
-from showpy.geo.analysis import balance, change_amount, coverage, density_map, symmetry_score
 from tests.fixtures.shows import field_sheet, two_set_show
 from tests.helpers import capped_address_space, fails_after, make_set
 

@@ -20,12 +20,19 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Literal
 
 from showpy.core.caps import MAX_COORD_M
+from showpy.core.deprecation import leaving_call
 from showpy.core.errors import SchemaError, UnknownRefError
 from showpy.core.types import Point
 from showpy.core.units import convert, round_to
 from showpy.core.validation import require_finite
-from showpy.sheet.bounds import landmark, landmark_anchor
-from showpy.sheet.models import CoordinateKind, CoordinateSystem, Sheet, SurfaceType
+from showpy.sheet.bounds import _landmark, _landmark_anchor
+from showpy.sheet.models import (
+    CoordinateKind,
+    CoordinateSystem,
+    Sheet,
+    SurfaceType,
+    check_coordinate_system,
+)
 
 if TYPE_CHECKING:
     from showpy.show.models import Show
@@ -76,7 +83,6 @@ OF = " of "
 ROUNDING_HINT = (
     "keep each offset under about 1e27 rounding steps: use a coarser precision or a nearer origin"
 )
-POINT_SIZE = 2
 NUMBER_PREVIEW = 20
 TEXT_PREVIEW = 40
 POINT_BOUND_HINT = (
@@ -85,11 +91,11 @@ POINT_BOUND_HINT = (
 )
 
 
-def coordinate_presets(sheet: Sheet) -> list[CoordinateSystem]:
+def _coordinate_presets(sheet: Sheet) -> list[CoordinateSystem]:
     """Lists coordinate systems that suit a sheet, its default first, without repeats.
 
-    >>> from showpy.sheet.templates import get_sheet
-    >>> [p.kind.value for p in coordinate_presets(get_sheet("sheet:proscenium-stage"))][:2]
+    >>> from showpy.sheet.templates import _get_sheet
+    >>> [p.kind.value for p in _coordinate_presets(_get_sheet("sheet:proscenium-stage"))][:2]
     ['stage', 'grid']
     """
     default = sheet.default_coordinates
@@ -114,53 +120,51 @@ def coordinate_presets(sheet: Sheet) -> list[CoordinateSystem]:
     return unique
 
 
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("locate", "at_location", "Location"))
+def coordinate_presets(sheet: Sheet) -> list[CoordinateSystem]:
+    """Lists coordinate systems that suit a sheet, its default first, without repeats.
+
+    Deprecated: this name leaves the library in 0.7.0.
+    """
+    return _coordinate_presets(sheet)
+
+
 def _origin(sheet: Sheet, system: CoordinateSystem) -> Point:
     if isinstance(system.origin, str):
-        return landmark_anchor(landmark(sheet, system.origin))
-    if len(system.origin) != POINT_SIZE:
-        raise SchemaError(
-            f"origin must hold {POINT_SIZE} numbers, got {len(system.origin)}",
-            hint="give the origin as (x, y) in meters or as a landmark ID",
-            context={"origin": system.origin},
-        )
-    return (
-        require_finite(system.origin[0], name="origin.x"),
-        require_finite(system.origin[1], name="origin.y"),
-    )
+        return _landmark_anchor(_landmark(sheet, system.origin))
+    return system.origin[0], system.origin[1]
 
 
 def _frame(system: CoordinateSystem) -> tuple[Point, Point]:
-    if system.audience_side not in FRAMES:
-        raise SchemaError(
-            f"unknown audience side {system.audience_side!r}",
-            hint=f"use one of {', '.join(FRAMES)}",
-            context={"audience_side": system.audience_side},
-        )
     return FRAMES[system.audience_side]
 
 
-def set_coordinates(show: "Show", system: CoordinateSystem) -> "Show":
+def _set_coordinates(show: "Show", system: CoordinateSystem) -> "Show":
     """Returns the show with a new coordinate system; stored positions never move.
 
     >>> from showpy.examples import two_set_show
-    >>> set_coordinates(two_set_show(), CoordinateSystem(units="ft")).coordinates.units
+    >>> _set_coordinates(two_set_show(), CoordinateSystem(units="ft")).coordinates.units
     'ft'
     """
-    if not system.precision > 0:
-        raise SchemaError(
-            f"precision must be above 0, got {system.precision}",
-            hint="use a rounding step such as 0.01",
-            context={"precision": system.precision},
-        )
+    check_coordinate_system(system)
     convert(1.0, system.units, "m")
     _origin(show.sheet, system)
     return show.replace(coordinates=system)
 
 
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("locate", "at_location", "Location"))
+def set_coordinates(show: "Show", system: CoordinateSystem) -> "Show":
+    """Returns the show with a new coordinate system; stored positions never move.
+
+    Deprecated: this name leaves the library in 0.7.0.
+    """
+    return _set_coordinates(show, system)
+
+
 def _words(sheet: Sheet, system: CoordinateSystem) -> dict[str, str]:
     base = STAGE_WORDS if system.kind == CoordinateKind.STAGE else GENERIC_WORDS
     if isinstance(system.origin, str):
-        name = landmark(sheet, system.origin).name
+        name = _landmark(sheet, system.origin).name
         refs = (name, name)
     elif system.origin == (0.0, 0.0) and system.audience_side == "front":
         refs = DEFAULT_REFS
@@ -208,7 +212,7 @@ def _part(
     return text, negative if shown < 0 else positive
 
 
-def to_coords(show: "Show", p: Point, style: CoordStyle = "long") -> str:
+def _to_coords(show: "Show", p: Point, style: CoordStyle = "long") -> str:
     """Words a point in the show's coordinate system, rounded to its precision.
 
     Args:
@@ -220,11 +224,11 @@ def to_coords(show: "Show", p: Point, style: CoordStyle = "long") -> str:
         text: The worded position; from_coords() reads it back.
 
     >>> from showpy.examples import two_set_show
-    >>> to_coords(two_set_show(), (3.5, 2.0))
+    >>> _to_coords(two_set_show(), (3.5, 2.0))
     '3.50 m right of center, 2.00 m upstage of front edge'
     """
     system = show.coordinates
-    require_finite(system.precision, name="precision", low=0.0, low_open=True)
+    check_coordinate_system(system)
     require_finite(p[0], name="p.x")
     require_finite(p[1], name="p.y")
     words = _words(show.sheet, system)
@@ -236,6 +240,15 @@ def to_coords(show: "Show", p: Point, style: CoordStyle = "long") -> str:
     unit = system.units
     across_text = f"{a_num} {unit} {words[a_dir]} of {words['across_ref']}"
     return f"{across_text}, {d_num} {unit} {words[d_dir]} of {words['depth_ref']}"
+
+
+@leaving_call(since="0.4.0", remove="0.7.0", replacement="locate")
+def to_coords(show: "Show", p: Point, style: CoordStyle = "long") -> str:
+    """Words a point in the show's coordinate system, rounded to its precision.
+
+    Deprecated: this name leaves the library in 0.7.0.
+    """
+    return _to_coords(show, p, style)
 
 
 def _bad(token: str, text: str, hint: str) -> SchemaError:
@@ -290,16 +303,17 @@ def _parts(text: str, words: dict[str, str], unit: str) -> list[tuple[str, tuple
     return [(t, _short_part(t, text, words, unit)) for t in text.split()]
 
 
-def from_coords(show: "Show", text: str) -> Point:
+def _from_coords(show: "Show", text: str) -> Point:
     """Reads worded coordinates (long or short style, either part first) into a point.
 
     Long style may name any registered unit; short style uses the system's unit.
 
     >>> from showpy.examples import two_set_show
-    >>> from_coords(two_set_show(), "L3.50 U2.00")
+    >>> _from_coords(two_set_show(), "L3.50 U2.00")
     (-3.5, 2.0)
     """
     system = show.coordinates
+    check_coordinate_system(system)
     words = _words(show.sheet, system)
     values: dict[Axis, float] = {}
     for token, (axis, value) in _parts(text.strip(), words, system.units):
@@ -318,3 +332,12 @@ def from_coords(show: "Show", text: str) -> Point:
     if not all(math.isfinite(axis) and abs(axis) <= MAX_COORD_M for axis in point):
         raise _bad(text[:TEXT_PREVIEW], text, POINT_BOUND_HINT)
     return point
+
+
+@leaving_call(since="0.4.0", remove="0.7.0", replacement="at_location")
+def from_coords(show: "Show", text: str) -> Point:
+    """Reads worded coordinates (long or short style, either part first) into a point.
+
+    Deprecated: this name leaves the library in 0.7.0.
+    """
+    return _from_coords(show, text)

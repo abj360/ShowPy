@@ -23,7 +23,7 @@ import numpy.typing as npt
 
 from showpy.cast.select import select
 from showpy.choreo.engine import PathEngine
-from showpy.choreo.engine_models import Fix, GapInfo
+from showpy.choreo.engine_models import BendFix, DelayFix, Fix, GapInfo, StaggerFix
 from showpy.choreo.match import match
 from showpy.choreo.match_models import MatchOptions, MatchResult
 from showpy.choreo.path_models import TransitionSpec
@@ -55,6 +55,12 @@ def closest_approach(
     >>> closest_approach([0, 2], [(0, 0), (2, 0)], [0, 2], [(2, 0), (0, 0)])
     (1.0, 0.0)
     """
+    if len(times_a) == 0 or len(times_b) == 0:
+        raise PathError(
+            "closest approach needs at least one station on each track",
+            hint="pass the times and points of both tracks",
+            context={"stations_a": len(times_a), "stations_b": len(times_b)},
+        )
     t = np.unique(np.concatenate([times_a, times_b]))
     pa, pb = _track(times_a, points_a, t), _track(times_b, points_b, t)
     d0, w = (pa - pb)[:-1], np.diff(pa - pb, axis=0)
@@ -115,6 +121,14 @@ def min_gaps(
     >>> round(min_gaps(two_set_show(), ("1", "2"), top=1)[0].gap, 6)
     1.4
     """
+    if top < 0:
+        raise PathError(
+            f"top must be 0 or more, got {top}",
+            hint="pass how many of the tightest pairs to list",
+            context={"top": top},
+        )
+    if top == 0:
+        return []
     engine = PathEngine(show)
     ids = _on_field_ids(engine, tid, sel)
     boxes = {e: _box(engine, e, tid) for e in ids}
@@ -165,7 +179,7 @@ def suggest_delays(
     """
     base_gap = _pair_gap(PathEngine(show), tid, *pair).gap
     spec = show.transition(tid)
-    fixes = []
+    found: list[tuple[DelayFix, Fix]] = []
     for entity in pair:
         for counts in np.arange(DELAY_STEP, max_delay + ZERO_TOL, DELAY_STEP):
             try:
@@ -174,9 +188,11 @@ def suggest_delays(
                 break
             gap, fastest = _evaluate(show, tid, changed, pair, entity)
             if gap > base_gap:
-                params = {"entity": entity, "counts": float(counts)}
-                fixes.append(Fix(kind="delay", params=params, new_gap=gap, max_speed_after=fastest))
-    return sorted(fixes, key=lambda f: (-f.new_gap, f.params["counts"], f.params["entity"]))
+                params = DelayFix(entity=SpotId(entity), counts=float(counts))
+                fix = Fix(kind="delay", params=params, new_gap=gap, max_speed_after=fastest)
+                found.append((params, fix))
+    found.sort(key=lambda item: (-item[1].new_gap, item[0].counts, item[0].entity))
+    return [fix for _, fix in found]
 
 
 def suggest_waypoint(
@@ -203,7 +219,7 @@ def suggest_waypoint(
             show.transition(tid), entity, (float(point[0]), float(point[1])), at=tau
         )
         gap, fastest = _evaluate(show, tid, changed, (entity, around), entity)
-        params = {"entity": entity, "point": (float(point[0]), float(point[1])), "at": tau}
+        params = BendFix(entity=SpotId(entity), point=(float(point[0]), float(point[1])), at=tau)
         fixes.append(Fix(kind="waypoint", params=params, new_gap=gap, max_speed_after=fastest))
     return sorted(fixes, key=lambda f: -f.new_gap)
 
@@ -256,19 +272,18 @@ def apply_fix(spec: TransitionSpec, fix: Fix) -> TransitionSpec:
     """Applies a delay, waypoint or stagger fix; a reassignment must go through apply_match.
 
     >>> from showpy.choreo.path_models import TransitionSpec
-    >>> params = {"entity": "A", "counts": 2.0}
+    >>> params = DelayFix(entity="A", counts=2.0)
     >>> fix = Fix(kind="delay", params=params, new_gap=1.0, max_speed_after=1.0)
     >>> apply_fix(TransitionSpec(id=("1", "2"), counts=8.0), fix).row("A").start
     2.0
     """
-    p = fix.params
-    if fix.kind == "delay":
-        return delay(spec, [p["entity"]], p["counts"])
-    if fix.kind == "waypoint":
-        x, y = p["point"]
-        return add_waypoint(spec, p["entity"], (float(x), float(y)), at=p["at"])
-    if fix.kind == "stagger":
-        return stagger(spec, p["order"], step=p["step"])
+    params = fix.params
+    if isinstance(params, DelayFix):
+        return delay(spec, [params.entity], params.counts)
+    if isinstance(params, BendFix):
+        return add_waypoint(spec, params.entity, params.point, at=params.at)
+    if isinstance(params, StaggerFix):
+        return stagger(spec, params.order, step=params.step)
     raise PathError(
         "a reassignment changes the next set, not the paths",
         hint="apply it with showpy.choreo.match_ops.apply_match(show, tid, result)",

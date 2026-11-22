@@ -14,11 +14,13 @@ Contains:
 """
 
 import importlib.util
+import warnings
 from pathlib import Path
 from types import ModuleType
 
 import showpy
 from showpy._api_table import PUBLIC_API
+from showpy.core.deprecation import DeprecatedWarning
 
 GENERATOR_PATH = Path(__file__).resolve().parents[2] / "scripts" / "gen_public_api.py"
 
@@ -33,7 +35,9 @@ def _load_generator() -> ModuleType:
 
 
 def test_every_exported_name_resolves() -> None:
-    missing = [name for name in showpy.__all__ if not hasattr(showpy, name)]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecatedWarning)
+        missing = [name for name in showpy.__all__ if not hasattr(showpy, name)]
     assert missing == []
 
 

@@ -17,10 +17,11 @@ from typing import TYPE_CHECKING, Literal
 
 import shapely
 
+from showpy.core.deprecation import leaving_call
 from showpy.core.errors import SchemaError, UnknownRefError
 from showpy.core.types import Count, Meters, Point, Region
 from showpy.core.util import close_matches
-from showpy.sheet.models import Landmark, Sheet, Zone
+from showpy.sheet.models import Landmark, Sheet, Zone, normalized_name
 
 if TYPE_CHECKING:
     from showpy.show.models import Show
@@ -32,54 +33,68 @@ def _covers(region: Region, p: Point) -> bool:
     return bool(region.to_shapely().covers(shapely.Point(p)))
 
 
-def on_surface(sheet: Sheet, p: Point) -> bool:
+def _on_surface(sheet: Sheet, p: Point) -> bool:
     """Reports whether `p` lies on the sheet outline or inside it.
 
-    >>> from showpy.sheet.templates import blank_sheet
-    >>> on_surface(blank_sheet(10, 6), (5.0, 6.0)), on_surface(blank_sheet(10, 6), (0.0, -1.0))
+    >>> from showpy.sheet.templates import _blank_sheet
+    >>> _on_surface(_blank_sheet(10, 6), (5.0, 6.0)), _on_surface(_blank_sheet(10, 6), (0.0, -1.0))
     (True, False)
     """
     return _covers(Region(exterior=sheet.outline), p)
 
 
+@leaving_call(since="0.4.0", remove="0.7.0", replacement="on_sheet")
+def on_surface(sheet: Sheet, p: Point) -> bool:
+    """Reports whether `p` lies on the sheet outline or inside it.
+
+    Deprecated: this name leaves the library in 0.7.0.
+    """
+    return _on_surface(sheet, p)
+
+
 def walkable(sheet: Sheet, p: Point) -> bool:
     """Reports whether `p` lies in the walkable area, holes excluded.
 
-    >>> from showpy.sheet.templates import blank_sheet
-    >>> walkable(blank_sheet(10, 6), (1.0, 1.0))
+    >>> from showpy.sheet.templates import _blank_sheet
+    >>> walkable(_blank_sheet(10, 6), (1.0, 1.0))
     True
     """
     return _covers(sheet.walkable, p)
-
-
-def _normalized(text: str) -> str:
-    return " ".join(text.casefold().split())
 
 
 def _names(mark: Landmark) -> tuple[str, ...]:
     return (mark.id, mark.name, *mark.aliases)
 
 
+def _landmark_keys(mark: Landmark) -> tuple[str, ...]:
+    """Returns a landmark's name and aliases, case-folded with spaces collapsed, for matching.
+
+    >>> from showpy.sheet.surfaces import _point_landmark
+    >>> _landmark_keys(_point_landmark("c", "Center  Stage", (0.0, 0.0), "CS"))
+    ('center stage', 'cs')
+    """
+    return tuple(normalized_name(n) for n in (mark.name, *mark.aliases))
+
+
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("Marking", "markings_near"))
 def landmark_keys(mark: Landmark) -> tuple[str, ...]:
     """Returns a landmark's name and aliases, case-folded with spaces collapsed, for matching.
 
-    >>> from showpy.sheet.surfaces import point_landmark
-    >>> landmark_keys(point_landmark("c", "Center  Stage", (0.0, 0.0), "CS"))
-    ('center stage', 'cs')
+    Deprecated: this name leaves the library in 0.7.0.
     """
-    return tuple(_normalized(n) for n in (mark.name, *mark.aliases))
+    return _landmark_keys(mark)
 
 
-def landmark(sheet: Sheet, name: str) -> Landmark:
+def _landmark(sheet: Sheet, name: str) -> Landmark:
     """Finds a landmark by name, ID or alias; case and repeated spaces are ignored.
 
-    >>> from showpy.sheet.templates import get_sheet
-    >>> landmark(get_sheet("sheet:hs-football"), "Home Hash").id
+    >>> from showpy.sheet.templates import _get_sheet
+    >>> _landmark(_get_sheet("sheet:hs-football"), "Home Hash").id
     'front-hash'
     """
-    wanted = _normalized(name)
+    wanted = normalized_name(name)
     for mark in sheet.landmarks:
-        if wanted in (_normalized(n) for n in _names(mark)):
+        if wanted in (normalized_name(n) for n in _names(mark)):
             return mark
     known = [n for mark in sheet.landmarks for n in _names(mark)]
     close = close_matches(name, known)
@@ -90,16 +105,34 @@ def landmark(sheet: Sheet, name: str) -> Landmark:
     )
 
 
-def landmark_anchor(mark: Landmark) -> Point:
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("Marking", "markings_near"))
+def landmark(sheet: Sheet, name: str) -> Landmark:
+    """Finds a landmark by name, ID or alias; case and repeated spaces are ignored.
+
+    Deprecated: this name leaves the library in 0.7.0.
+    """
+    return _landmark(sheet, name)
+
+
+def _landmark_anchor(mark: Landmark) -> Point:
     """Returns the point a landmark stands for: the point itself, else its vertex centroid.
 
-    >>> from showpy.sheet.surfaces import line_landmark
-    >>> landmark_anchor(line_landmark("l", "line", (0.0, 0.0), (4.0, 2.0)))
+    >>> from showpy.sheet.surfaces import _line_landmark
+    >>> _landmark_anchor(_line_landmark("l", "line", (0.0, 0.0), (4.0, 2.0)))
     (2.0, 1.0)
     """
     xs = [p[0] for p in mark.geometry]
     ys = [p[1] for p in mark.geometry]
     return sum(xs) / len(xs), sum(ys) / len(ys)
+
+
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("Marking", "markings_near"))
+def landmark_anchor(mark: Landmark) -> Point:
+    """Returns the point a landmark stands for: the point itself, else its vertex centroid.
+
+    Deprecated: this name leaves the library in 0.7.0.
+    """
+    return _landmark_anchor(mark)
 
 
 def _geometry(mark: Landmark) -> shapely.Geometry:
@@ -110,7 +143,7 @@ def _geometry(mark: Landmark) -> shapely.Geometry:
     return shapely.Polygon(mark.geometry)
 
 
-def nearest_landmarks(
+def _nearest_landmarks(
     sheet: Sheet, p: Point, k: int = 3, kinds: Iterable[LandmarkKind] | None = None
 ) -> list[tuple[Landmark, Meters]]:
     """Lists the k landmarks closest to `p`, nearest first; ties break by landmark ID.
@@ -126,8 +159,8 @@ def nearest_landmarks(
     Returns:
         nearest: (landmark, distance in meters) pairs.
 
-    >>> from showpy.sheet.templates import get_sheet
-    >>> [lm.id for lm, _ in nearest_landmarks(get_sheet("sheet:proscenium-stage"), (0, 4), 1)]
+    >>> from showpy.sheet.templates import _get_sheet
+    >>> [lm.id for lm, _ in _nearest_landmarks(_get_sheet("sheet:proscenium-stage"), (0, 4), 1)]
     ['center-stage']
     """
     if k < 0:
@@ -143,7 +176,18 @@ def nearest_landmarks(
     return measured[:k]
 
 
-def zones_at(show: "Show", p: Point, t: Count | None = None) -> list[Zone]:
+@leaving_call(since="0.4.0", remove="0.7.0", replacement="markings_near")
+def nearest_landmarks(
+    sheet: Sheet, p: Point, k: int = 3, kinds: Iterable[LandmarkKind] | None = None
+) -> list[tuple[Landmark, Meters]]:
+    """Lists the k landmarks closest to `p`, nearest first; ties break by landmark ID.
+
+    Deprecated: this name leaves the library in 0.7.0.
+    """
+    return _nearest_landmarks(sheet, p, k, kinds)
+
+
+def _zones_at(show: "Show", p: Point, t: Count | None = None) -> list[Zone]:
     """Lists the sheet zones, then the show zones, that cover `p`.
 
     Args:
@@ -155,7 +199,7 @@ def zones_at(show: "Show", p: Point, t: Count | None = None) -> list[Zone]:
         zones: Covering zones, sheet zones first, each in stored order.
 
     >>> from showpy.examples import two_set_show
-    >>> [z.id for z in zones_at(two_set_show(), (0.0, -1.0))]
+    >>> [z.id for z in _zones_at(two_set_show(), (0.0, -1.0))]
     ['pit']
     """
     return [
@@ -163,3 +207,12 @@ def zones_at(show: "Show", p: Point, t: Count | None = None) -> list[Zone]:
         for zone in (*show.sheet.zones, *show.zones)
         if (t is None or zone.is_active(t)) and _covers(zone.polygon, p)
     ]
+
+
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("Marking", "markings_near"))
+def zones_at(show: "Show", p: Point, t: Count | None = None) -> list[Zone]:
+    """Lists the sheet zones, then the show zones, that cover `p`.
+
+    Deprecated: this name leaves the library in 0.7.0.
+    """
+    return _zones_at(show, p, t)

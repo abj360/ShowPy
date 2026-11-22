@@ -34,8 +34,8 @@ from showpy.examples import COUNTS, EXAMPLE_TID, two_set_show
 from showpy.export.print_sheets import cue_sheet
 from showpy.export.publish import publish, qr_code
 from showpy.export.video import export_video, render_frame, video_canvas
-from showpy.sheet.render import SheetCanvas, draw_sheet, render_sheet
-from showpy.sheet.templates import blank_sheet
+from showpy.sheet.render import SheetCanvas, _draw_sheet, _render_sheet
+from showpy.sheet.templates import _blank_sheet
 
 if TYPE_CHECKING:
     from PIL import ImageDraw
@@ -68,9 +68,9 @@ def _first_set_table() -> object:
 
 
 def _draw_blank_sheet() -> None:
-    sheet = blank_sheet(SHEET_SIDE_M, SHEET_SIDE_M)
+    sheet = _blank_sheet(SHEET_SIDE_M, SHEET_SIDE_M)
     # A core install cannot build an ImageDraw; the gate fires before the drawing is touched.
-    draw_sheet(cast("ImageDraw.ImageDraw", None), SheetCanvas.for_sheet(sheet), sheet)
+    _draw_sheet(cast("ImageDraw.ImageDraw", None), SheetCanvas.for_sheet(sheet), sheet)
 
 
 def _render_first_frame() -> object:
@@ -104,13 +104,13 @@ GATED_CALLS = (
         "render_sheet(fmt='png')",
         "render",
         ("PIL",),
-        lambda: render_sheet(blank_sheet(SHEET_SIDE_M, SHEET_SIDE_M), fmt="png"),
+        lambda: _render_sheet(_blank_sheet(SHEET_SIDE_M, SHEET_SIDE_M), fmt="png"),
     ),
     GatedCall(
         "render_sheet(fmt='pdf')",
         "render",
         ("PIL",),
-        lambda: render_sheet(blank_sheet(SHEET_SIDE_M, SHEET_SIDE_M), fmt="pdf"),
+        lambda: _render_sheet(_blank_sheet(SHEET_SIDE_M, SHEET_SIDE_M), fmt="pdf"),
     ),
     GatedCall("draw_sheet", "render", ("PIL",), _draw_blank_sheet),
     GatedCall("render_frame", "render", ("PIL",), _render_first_frame),

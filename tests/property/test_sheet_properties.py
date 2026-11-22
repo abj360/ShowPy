@@ -5,6 +5,7 @@ test_sheet_properties.py --- checks coordinate wording round-trips and sheet fit
 """
 
 import numpy as np
+import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
@@ -15,6 +16,8 @@ from showpy.sheet.coords import from_coords, set_coordinates, to_coords
 from showpy.sheet.models import CoordinateKind, CoordinateSystem
 from showpy.sheet.replace import similarity_fit
 from tests.fixtures.shows import two_set_show
+
+pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
 
 FIT_TOL = 1e-6
 SLACK_M = 1e-9

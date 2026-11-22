@@ -24,10 +24,10 @@ from showpy.cast.spots import set_shape
 from showpy.choreo.form_ops import transform_form
 from showpy.choreo.path_models import PathStyle
 from showpy.choreo.paths import default_paths, set_style
+from showpy.choreo.set_transforms import shift
 from showpy.core.errors import ShowPyError
 from showpy.examples import two_set_show
 from showpy.geo.affine import translation_matrix
-from showpy.geo.transforms import shift
 from showpy.notes.models import Anchor
 from showpy.notes.notes import add_note
 from showpy.show.manage import add_set, set_counts

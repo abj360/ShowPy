@@ -30,7 +30,7 @@ from showpy.core.selection import Selection
 from showpy.core.types import Count, Point
 from showpy.core.units import normalize_angle
 from showpy.export.models import Chart, ChartRow, CoordinateSheet, Publication, SheetRow
-from showpy.sheet.coords import CoordStyle, set_coordinates, to_coords
+from showpy.sheet.coords import CoordStyle, _set_coordinates, _to_coords
 from showpy.sheet.models import GuideLine
 from showpy.show.models import Show
 from showpy.time.clock import count_to_seconds, seconds_to_count
@@ -68,7 +68,7 @@ def _counts_text(value: float) -> str:
 def _with_precision(show: Show, precision: float | None) -> Show:
     if precision is None:
         return show
-    return set_coordinates(show, show.coordinates.replace(precision=precision))
+    return _set_coordinates(show, show.coordinates.replace(precision=precision))
 
 
 def _claimed_names(publication: Publication | None) -> dict[SpotId, str]:
@@ -82,7 +82,7 @@ def _set_starts(show: Show) -> list[Count]:
 
 
 def _position_text(show: Show, placement: Placement, style: CoordStyle) -> str:
-    return to_coords(show, placement.point, style) if placement.on_field else OFF_FIELD
+    return _to_coords(show, placement.point, style) if placement.on_field else OFF_FIELD
 
 
 def _move_text(plan: MotionPlan, row: PathRow) -> str:

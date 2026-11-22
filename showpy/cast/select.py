@@ -4,6 +4,10 @@ select.py --- the selection language plus spatial picks, ordering, splitting and
 Contains:
     Selection: re-exports the ordered, duplicate-free ID set from showpy.core.selection
     Selector: re-exports the alias for anything that picks spots
+    SelectorToken: holds one word, operator or parenthesis of selector text with its position
+    SelectorAst: holds a parsed selector as a postfix program of words and operators
+    parse_selector(): parses selector text, refusing `&` mixed with `+` or `-` at one level
+    normalize_v1_selector(): rewrites stored v1 selector text into v2 grammar, same meaning
     select(): resolves an expression, ID list or Selection against a show, set or cast
     is_label_dependent(): reports whether an expression names spots by their labels
     label_prefix(): returns the part of a label before its trailing number
@@ -18,20 +22,26 @@ Contains:
 
 import math
 import re
+from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 import numpy as np
+import numpy.typing as npt
 import shapely
-from scipy.optimize import linear_sum_assignment
+from scipy.sparse import coo_array, csr_array
+from scipy.sparse.csgraph import connected_components, min_weight_full_bipartite_matching
+from scipy.spatial import cKDTree
 
 from showpy.cast.models import Cast
 from showpy.choreo.models import Placement, Set
 from showpy.core.caps import MAX_DEPTH, MAX_RANGE, MAX_TEXT_CHARS, require_size
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import GeometryError, SchemaError, UnknownRefError
 from showpy.core.ids import FormId, SpotId
 from showpy.core.selection import Selection as Selection
 from showpy.core.selection import Selector as Selector
+from showpy.core.selection import operand_ids
 from showpy.core.types import Meters, Point, Points, Region
 from showpy.core.util import (
     RANGE_PATTERN,
@@ -59,17 +69,32 @@ KIND_SEPARATOR = ":"
 SHAPE_KINDS = ("circle", "rectangle")
 SPOT_KINDS = ("group", "tag", "shape", "sel")
 AXIS_EPS = 1e-9
+MIRROR_TIE_M = 1e-9
+MIRROR_SEARCH_SLACK = 1e-9
 
+type FloatArray = npt.NDArray[np.float64]
+type IntArray = npt.NDArray[np.intp]
 type OrderBy = Literal["form", "x", "y"] | Curve
 type RegionLike = Area | Region | Points | Sequence[Point]
 
 
-class _Token(NamedTuple):
+class SelectorToken(NamedTuple):
+    """Holds one word, operator or parenthesis of selector text.
+
+    Attributes:
+        text: The token as written.
+        position: Character offset of the token in the selector text.
+
+    >>> SelectorToken("T1", 0).is_word, SelectorToken("+", 3).is_word
+    (True, False)
+    """
+
     text: str
     position: int
 
     @property
     def is_word(self) -> bool:
+        """Tells whether the token names spots rather than being an operator or parenthesis."""
         return self.text not in (*OPERATORS, "(", ")")
 
 
@@ -80,6 +105,7 @@ class _Universe(NamedTuple):
     source: str
     cast: Cast | None
     forms: dict[str, tuple[SpotId, ...]] | None
+    positions: dict[str, int]
 
 
 def _bad_token(message: str, position: int, expr: str) -> SchemaError:
@@ -93,9 +119,13 @@ def _glued(expr: str, position: int) -> bool:
     return any(c and not c.isspace() and c not in "()" for c in neighbours)
 
 
-def _tokenize(expr: str) -> list[_Token]:
+def _tokens(expr: str) -> list[SelectorToken]:
     require_size(len(expr), MAX_TEXT_CHARS, what="expression characters")
-    tokens = [_Token(match[0], match.start()) for match in TOKEN_PATTERN.finditer(expr)]
+    return [SelectorToken(match[0], match.start()) for match in TOKEN_PATTERN.finditer(expr)]
+
+
+def _tokenize(expr: str) -> list[SelectorToken]:
+    tokens = _tokens(expr)
     for token in tokens:
         if token.text in OPERATORS and _glued(expr, token.position):
             raise _bad_token(
@@ -123,16 +153,25 @@ def _order_key(placement: Placement) -> float:
 
 def _universe(source: "Show | Set | Cast") -> _Universe:
     if isinstance(source, Cast):
-        return _Universe(source.ids(), "cast", source, None)
+        return _universe_of(source.ids(), "cast", source, None)
     if isinstance(source, Set):
-        return _Universe(source.entity_ids(), "set", None, _set_forms(source))
+        return _universe_of(source.entity_ids(), "set", None, _set_forms(source))
     forms: dict[str, tuple[SpotId, ...]] = {
         form_id: form.members for form_id, form in source.forms.items()
     }
-    return _Universe(source.cast.ids(), "show", source.cast, forms)
+    return _universe_of(source.cast.ids(), "show", source.cast, forms)
 
 
-def _unknown(kind: str, name: str, known: Sequence[str], token: _Token) -> UnknownRefError:
+def _universe_of(
+    ids: tuple[SpotId, ...],
+    source: str,
+    cast: Cast | None,
+    forms: dict[str, tuple[SpotId, ...]] | None,
+) -> _Universe:
+    return _Universe(ids, source, cast, forms, {spot_id: i for i, spot_id in enumerate(ids)})
+
+
+def _unknown(kind: str, name: str, known: Sequence[str], token: SelectorToken) -> UnknownRefError:
     close = close_matches(name, known)
     return UnknownRefError(
         f"unknown {kind} {name!r}",
@@ -151,7 +190,7 @@ def label_prefix(spot_id: str) -> str | None:
     return None if number is None else prefix
 
 
-def _resolve_prefix(universe: _Universe, token: _Token) -> tuple[SpotId, ...]:
+def _resolve_prefix(universe: _Universe, token: SelectorToken) -> tuple[SpotId, ...]:
     prefix = token.text[: -len(PREFIX_MARK)]
     found = tuple(i for i in universe.ids if label_prefix(i) == prefix)
     if not found:
@@ -160,16 +199,16 @@ def _resolve_prefix(universe: _Universe, token: _Token) -> tuple[SpotId, ...]:
     return found
 
 
-def _resolve_range(universe: _Universe, token: _Token) -> tuple[SpotId, ...]:
+def _resolve_range(universe: _Universe, token: SelectorToken) -> tuple[SpotId, ...]:
     expanded = parse_range(token.text)
-    present: dict[str, SpotId] = {spot_id: spot_id for spot_id in universe.ids}
+    at = universe.positions
     for endpoint in (expanded[0], expanded[-1]):
-        if endpoint not in present:
+        if endpoint not in at:
             raise _unknown("spot", endpoint, universe.ids, token)
-    return tuple(present[i] for i in expanded if i in present)
+    return tuple(universe.ids[at[i]] for i in expanded if i in at)
 
 
-def _resolve_form(universe: _Universe, name: str, token: _Token) -> tuple[SpotId, ...]:
+def _resolve_form(universe: _Universe, name: str, token: SelectorToken) -> tuple[SpotId, ...]:
     if universe.forms is None:
         raise SchemaError(
             "form: needs a Show or Set",
@@ -181,7 +220,7 @@ def _resolve_form(universe: _Universe, name: str, token: _Token) -> tuple[SpotId
     return universe.forms[name]
 
 
-def _require_cast(universe: _Universe, kind: str, token: _Token) -> Cast:
+def _require_cast(universe: _Universe, kind: str, token: SelectorToken) -> Cast:
     if universe.cast is None:
         raise SchemaError(
             f"{kind}: needs the cast, which a Set does not hold",
@@ -191,7 +230,9 @@ def _require_cast(universe: _Universe, kind: str, token: _Token) -> Cast:
     return universe.cast
 
 
-def _resolve_spot_kind(cast: Cast, kind: str, name: str, token: _Token) -> tuple[SpotId, ...]:
+def _resolve_spot_kind(
+    cast: Cast, kind: str, name: str, token: SelectorToken
+) -> tuple[SpotId, ...]:
     if kind == "group":
         if name not in cast.groups:
             raise _unknown("group", name, list(cast.groups), token)
@@ -215,7 +256,7 @@ def _resolve_spot_kind(cast: Cast, kind: str, name: str, token: _Token) -> tuple
     return tuple(i for i in cast.ids() if i in members)
 
 
-def _resolve_kind(universe: _Universe, token: _Token, expr: str) -> tuple[SpotId, ...]:
+def _resolve_kind(universe: _Universe, token: SelectorToken, expr: str) -> tuple[SpotId, ...]:
     kind, _, name = token.text.partition(KIND_SEPARATOR)
     if kind == "form":
         return _resolve_form(universe, name, token)
@@ -224,7 +265,7 @@ def _resolve_kind(universe: _Universe, token: _Token, expr: str) -> tuple[SpotId
     return _resolve_spot_kind(_require_cast(universe, kind, token), kind, name, token)
 
 
-def _resolve_word(universe: _Universe, token: _Token, expr: str) -> Selection:
+def _resolve_word(universe: _Universe, token: SelectorToken, expr: str) -> tuple[SpotId, ...]:
     text = token.text
     if text == ALL_WORD:
         found = universe.ids
@@ -232,73 +273,216 @@ def _resolve_word(universe: _Universe, token: _Token, expr: str) -> Selection:
         found = _resolve_kind(universe, token, expr)
     elif text.endswith(PREFIX_MARK):
         found = _resolve_prefix(universe, token)
-    elif text in universe.ids:
-        found = (universe.ids[universe.ids.index(text)],)
+    elif text in universe.positions:
+        found = (universe.ids[universe.positions[text]],)
     elif RANGE_PATTERN.match(text):
         found = _resolve_range(universe, token)
     else:
         raise _unknown("spot", text, universe.ids, token)
-    return Selection(ids=found)
+    return found
+
+
+class _Level(NamedTuple):
+    """Tracks one parenthesis level by token index: where it opened and its terms began."""
+
+    opened: int
+    first: int | None = None
+    last: int = 0
+    kind: str | None = None
+    pending: SelectorToken | None = None
+
+
+class SelectorAst(NamedTuple):
+    """Holds a parsed selector as a postfix program that a stack evaluates without recursion.
+
+    Attributes:
+        text: The expression it was parsed from.
+        program: Words and operators in postfix order; an operator combines the two results
+            before it, left operand first.
+    """
+
+    text: str
+    program: tuple[SelectorToken, ...]
 
 
 class _Parser:
-    """Parses `term (op term)*` left to right, where a term is a word or a parenthesized expr.
+    """Turns tokens into a postfix program one token at a time, with an explicit level stack.
+
+    `+` and `-` combine left to right, `&` chains with itself, and a level that mixes `&` with
+    `+` or `-` is refused, or, when `wraps_mixes` is set, parenthesized left to right.
 
     Attributes:
         tokens: Tokens of the expression.
-        universe: What words resolve against.
         expr: The original text, for error context.
-        index: Next token to read.
+        program: Postfix program built so far.
+        levels: Open parenthesis levels, outermost first.
+        opens: Token indices that get an added `(` before them, one entry per parenthesis.
+        closes: Token indices that get an added `)` before them, one entry per parenthesis.
     """
 
-    def __init__(self, tokens: list[_Token], universe: _Universe, expr: str) -> None:
+    def __init__(
+        self, tokens: list[SelectorToken], expr: str, *, wraps_mixes: bool = False
+    ) -> None:
         self.tokens = tokens
-        self.universe = universe
         self.expr = expr
-        self.index = 0
-        self.depth = 0
+        self.wraps_mixes = wraps_mixes
+        self.program: list[SelectorToken] = []
+        self.levels = [_Level(opened=-1)]
+        self.opens: list[int] = []
+        self.closes: list[int] = []
 
-    def _next(self, expected: str) -> _Token:
-        if self.index >= len(self.tokens):
-            raise _bad_token(f"expression ended, expected {expected}", len(self.expr), self.expr)
-        self.index += 1
-        return self.tokens[self.index - 1]
-
-    def parse(self) -> Selection:
-        """Returns the selection the whole expression describes."""
-        result = self._expression()
-        if self.index < len(self.tokens):
-            token = self.tokens[self.index]
-            raise _bad_token(f"expected an operator, got {token.text!r}", token.position, self.expr)
-        return result
-
-    def _expression(self) -> Selection:
-        result = self._term()
-        while self.index < len(self.tokens) and self.tokens[self.index].text in OPERATORS:
-            operator = self._next("an operator").text
-            right = self._term()
-            if operator == "+":
-                result = result | right
-            elif operator == "-":
-                result = result - right
+    def parse(self) -> SelectorAst:
+        """Returns the postfix program of the whole expression, or raises at the first error."""
+        wants_term = True
+        for index, token in enumerate(self.tokens):
+            if wants_term:
+                wants_term = self._term_token(index, token)
             else:
-                result = result & right
-        return result
+                wants_term = self._after_term(index, token)
+        end = len(self.expr)
+        if wants_term:
+            raise _bad_token("expression ended, expected a spot, group or (", end, self.expr)
+        if len(self.levels) > 1:
+            raise _bad_token("expression ended, expected )", end, self.expr)
+        return SelectorAst(self.expr, tuple(self.program))
 
-    def _term(self) -> Selection:
-        token = self._next("a spot, group or (")
+    def _term_token(self, index: int, token: SelectorToken) -> bool:
         if token.is_word:
-            return _resolve_word(self.universe, token, self.expr)
+            self.program.append(token)
+            self._close_term(index)
+            return False
         if token.text != "(":
             raise _bad_token(f"unexpected {token.text!r}", token.position, self.expr)
-        self.depth += 1
-        require_size(self.depth, MAX_DEPTH, what="nesting depth")
-        inner = self._expression()
-        self.depth -= 1
-        if self._next(")").text != ")":
-            closing = self.tokens[self.index - 1]
-            raise _bad_token("expected )", closing.position, self.expr)
-        return inner
+        require_size(len(self.levels), MAX_DEPTH, what="nesting depth")
+        self.levels.append(_Level(opened=index))
+        return True
+
+    def _close_term(self, start: int) -> None:
+        level = self.levels[-1]
+        if level.pending is not None:
+            self.program.append(level.pending)
+        first = start if level.first is None else level.first
+        self.levels[-1] = level._replace(first=first, last=start, pending=None)
+
+    def _after_term(self, index: int, token: SelectorToken) -> bool:
+        if token.text == ")" and len(self.levels) > 1:
+            self._close_term(self.levels.pop().opened)
+            return False
+        if token.text not in OPERATORS:
+            raise _bad_token(f"expected an operator, got {token.text!r}", token.position, self.expr)
+        level = self.levels[-1]
+        kind = token.text if token.text == "&" else "+-"
+        if level.kind not in (None, kind):
+            if not self.wraps_mixes:
+                raise self._mixed(index, level)
+            self.opens.append(level.first or 0)
+            self.closes.append(index)
+        self.levels[-1] = level._replace(kind=kind, pending=token)
+        return True
+
+    def _right_operand(self, index: int) -> str:
+        following = self.tokens[index + 1 :]
+        if not following or not (following[0].is_word or following[0].text == "("):
+            return "..."
+        depth = 0
+        for token in following:
+            depth += (token.text == "(") - (token.text == ")")
+            if depth == 0:
+                return self.expr[following[0].position : token.position + len(token.text)]
+        return self.expr[following[0].position :].rstrip()
+
+    def _mixed(self, index: int, level: _Level) -> SchemaError:
+        operator = self.tokens[index]
+        start, last = (self.tokens[i].position for i in (level.first or 0, level.last))
+        left, tail = (self.expr[i : operator.position].rstrip() for i in (start, last))
+        right = self._right_operand(index)
+        other = "&" if level.kind == "&" else "+ or -"
+        return SchemaError(
+            f"operator {operator.text!r} mixes with {other} at one parenthesis level",
+            hint=f"write ({left}) {operator.text} {right} or"
+            f" {self.expr[start:last]}({tail} {operator.text} {right})",
+            context={"position": operator.position, "expression": self.expr},
+            code=ErrorCode.MIXED_OPERATORS,
+        )
+
+
+def parse_selector(text: str) -> SelectorAst:
+    """Parses selector text into a postfix program, checking its syntax but not its words.
+
+    `+` and `-` share one precedence and combine left to right; `&` chains with itself; mixing
+    `&` with `+` or `-` at one parenthesis level raises SchemaError MIXED_OPERATORS at the
+    second operator kind, with both parenthesized readings in the hint.
+
+    >>> [token.text for token in parse_selector("(T1 + T2) & T3").program]
+    ['T1', 'T2', '+', 'T3', '&']
+    """
+    return _Parser(_tokenize(text), text).parse()
+
+
+def normalize_v1_selector(text: str) -> str:
+    """Rewrites selector text stored before format 2 into v2 grammar with the same meaning.
+
+    Stored text could glue `+`, `&` and a leading `-` to words, and its operators combined left
+    to right at one precedence. Glued operators get spaces, and each level that mixes `&` with
+    `+` or `-` gets the parentheses of that left-to-right reading. Text v2 already reads the
+    same way is returned unchanged; text that never parsed raises SchemaError.
+
+    >>> normalize_v1_selector("T1+T2&T2"), normalize_v1_selector("T1 + T2-T4")
+    ('(T1 + T2) & T2', 'T1 + T2-T4')
+    """
+    tokens = _tokens(text)
+    parser = _Parser(tokens, text, wraps_mixes=True)
+    parser.parse()
+    is_glued = any(t.text in OPERATORS and _glued(text, t.position) for t in tokens)
+    if not (is_glued or parser.opens):
+        return text
+    opens, closes = Counter(parser.opens), Counter(parser.closes)
+    pieces = [
+        ")" * closes[index]
+        + "(" * opens[index]
+        + (f" {token.text} " if token.text in OPERATORS else token.text)
+        for index, token in enumerate(tokens)
+    ]
+    return parse_selector("".join(pieces)).text
+
+
+def _evaluate(ast: SelectorAst, universe: _Universe) -> tuple[SpotId, ...]:
+    """Runs a postfix program on ordered sets of universe indices with one explicit stack.
+
+    A result keeps its left operand's order, then adds new IDs from the right in their order.
+    Every stack entry is a set built for this run alone, so `+` and `-` edit the left operand in
+    place and cost only the size of the right one.
+    """
+    names = list(universe.ids)
+    extra: dict[SpotId, int] = {}
+    stack: list[dict[int, None]] = []
+    for token in ast.program:
+        if token.is_word:
+            found = _resolve_word(universe, token, ast.text)
+            stack.append(dict.fromkeys(_position(universe, extra, names, i) for i in found))
+            continue
+        right = stack.pop()
+        left = stack[-1]
+        if token.text == "+":
+            left.update(right)
+        elif token.text == "-":
+            for i in right:
+                left.pop(i, None)
+        else:
+            stack[-1] = {i: None for i in left if i in right}
+    return tuple(names[i] for i in stack[0])
+
+
+def _position(
+    universe: _Universe, extra: dict[SpotId, int], names: list[SpotId], spot_id: SpotId
+) -> int:
+    """Returns a spot's universe index, numbering IDs outside the universe after it."""
+    if spot_id in universe.positions:
+        return universe.positions[spot_id]
+    if spot_id not in extra:
+        extra[spot_id] = len(names)
+        names.append(spot_id)
+    return extra[spot_id]
 
 
 def _validated(universe: _Universe, ids: Sequence[str]) -> Selection:
@@ -335,7 +519,8 @@ def _id_sequence(expr: object) -> tuple[str, ...]:
 def select(source: "Show | Set | Cast", expr: Selector) -> Selection:
     """Resolves a selector against a show, set or cast.
 
-    Operators apply left to right with equal precedence; use parentheses to group. Ranges
+    `+` and `-` apply left to right; `&` chains with itself but needs parentheses to mix with
+    `+` or `-` (SchemaError MIXED_OPERATORS otherwise). Ranges
     keep range order and skip missing middle labels; other words keep creation order (cast
     order, or placement order for a Set); `form:` keeps member order. `T*` matches labels
     whose prefix before the trailing number is exactly `T`. ID lists and Selections pass
@@ -358,9 +543,7 @@ def select(source: "Show | Set | Cast", expr: Selector) -> Selection:
         return _validated(universe, expr.ids).replace(description=expr.description)
     if not isinstance(expr, str):
         return _validated(universe, _id_sequence(expr))
-    tokens = _tokenize(expr)
-    result = _Parser(tokens, universe, expr).parse()
-    return result.replace(description=expr)
+    return Selection(ids=_evaluate(parse_selector(expr), universe), description=expr)
 
 
 def is_label_dependent(expr: str) -> bool:
@@ -490,7 +673,7 @@ def split(sel: Selection | Sequence[str], k: int) -> list[Selection]:
     >>> [p.ids for p in split(["A", "B", "C"], 2)]
     [('A', 'B'), ('C',)]
     """
-    ids = tuple(sel)
+    ids = operand_ids(sel)
     _require_parts(k, max(len(ids), 1))
     size, extra = divmod(len(ids), k)
     parts, start = [], 0
@@ -509,7 +692,7 @@ def alternate(sel: Selection | Sequence[str], k: int = 2) -> list[Selection]:
     [('A', 'C'), ('B',)]
     """
     _require_parts(k)
-    ids = tuple(sel)
+    ids = operand_ids(sel)
     return [
         Selection.model_validate({"ids": ids[i::k], "description": f"every {k} from {i + 1}"})
         for i in range(k)
@@ -521,26 +704,97 @@ def mirror_pairs(
 ) -> list[tuple[SpotId, SpotId]]:
     """Pairs on-field spots left of `axis_x` with partners right of it.
 
-    The pairing minimizes the total distance between each left spot's mirror image and its
-    partner (Hungarian method); pairs farther apart than `tol` are dropped. Spots on the axis
-    are their own mirror and never pair. Pairs come as (left, right) in selection order.
+    A left spot may pair with a right spot within `tol` of its mirror image. The result holds
+    as many pairs as possible and, among such pairings, the least total distance between
+    mirror images and partners. Totals within a nanometre count as tied; ties pair the n-th
+    left spot with the n-th right spot in selection order as closely as possible. Spots on the
+    axis are their own mirror and never pair. Pairs come as (left, right) in selection order.
+    A negative or non-finite `tol` raises SchemaError.
 
     >>> s = Set(id="1", counts=0, placements=(
     ...     Placement(entity="L", x=-1, y=0), Placement(entity="R", x=1, y=0)))
     >>> mirror_pairs(s, "all")
     [('L', 'R')]
     """
-    placed = [p for p in (set_.get(i) for i in select(set_, sel)) if p.on_field]
+    if not (math.isfinite(tol) and tol >= 0):
+        raise SchemaError(
+            f"mirror tolerance {tol!r} is not a finite distance of 0 or more",
+            hint="tol is a finite distance in meters, 0 or more",
+            context={"tol": tol},
+        )
+    by_id = {p.entity: p for p in set_.placements}
+    placed = [p for p in (by_id[i] for i in select(set_, sel).ids) if p.on_field]
     left = [p for p in placed if p.x < axis_x - AXIS_EPS]
     right = [p for p in placed if p.x > axis_x + AXIS_EPS]
     if not left or not right:
         return []
     mirrored = np.array([(2 * axis_x - p.x, p.y) for p in left])
     targets = np.array([p.point for p in right])
-    cost = np.linalg.norm(mirrored[:, None, :] - targets[None, :, :], axis=2)
-    rows, cols = linear_sum_assignment(cost)
-    return [
-        (left[r].entity, right[c].entity)
-        for r, c in sorted(zip(rows, cols, strict=True))
-        if cost[r, c] <= tol
-    ]
+    rows, cols, dist = _mirror_candidates(mirrored, targets, tol)
+    if not rows.size:
+        return []
+    pairs = _max_min_matching(rows, cols, dist, len(left), len(right))
+    return [(left[r].entity, right[c].entity) for r, c in pairs]
+
+
+def _mirror_candidates(
+    mirrored: FloatArray, targets: FloatArray, tol: float
+) -> tuple[IntArray, IntArray, FloatArray]:
+    """Lists every (left, right, distance) edge within `tol`, found through KD-trees.
+
+    The search radius is widened slightly and each distance recomputed, so the `<= tol` test
+    does not depend on the tree's rounding.
+    """
+    radius = tol * (1 + MIRROR_SEARCH_SLACK)
+    found = cKDTree(mirrored).sparse_distance_matrix(
+        cKDTree(targets), radius, output_type="ndarray"
+    )
+    rows = found["i"].astype(np.intp)
+    cols = found["j"].astype(np.intp)
+    dist = np.linalg.norm(mirrored[rows] - targets[cols], axis=1)
+    keep = dist <= tol
+    return rows[keep], cols[keep], dist[keep]
+
+
+def _max_min_matching(
+    rows: IntArray, cols: IntArray, dist: FloatArray, n_left: int, n_right: int
+) -> list[tuple[int, int]]:
+    """Finds a maximum matching with the least total distance, sorted by left index.
+
+    Each left spot also gets a private dummy partner costing its component's pair limit plus
+    2, while a real edge costs between 1 and 2. So a full matching always exists, and one more
+    real pair always costs less. Real edges never cost 0, because the solver drops explicit
+    zeros. A rank-gap term worth under `MIRROR_TIE_M` per component breaks ties.
+
+    Returns:
+        pairs: (left index, right index) for each real matched edge.
+    """
+    labels = _component_labels(rows, cols, n_left, n_right)
+    left_labels, right_labels = labels[:n_left], labels[n_left:]
+    caps = np.minimum(
+        np.bincount(left_labels, minlength=labels.max() + 1),
+        np.bincount(right_labels, minlength=labels.max() + 1),
+    )
+    gap = ((rows - cols) / max(n_left, n_right)) ** 2
+    weight = dist + MIRROR_TIE_M * gap / caps[left_labels[rows]]
+    cost = 1.0 + weight / (weight.max() + MIRROR_TIE_M)
+    dummy_cost = caps[left_labels] + 2.0
+    left_ids = np.arange(n_left)
+    graph = csr_array(
+        (
+            np.concatenate([cost, dummy_cost]),
+            (np.concatenate([rows, left_ids]), np.concatenate([cols, n_right + left_ids])),
+        ),
+        shape=(n_left, n_right + n_left),
+    )
+    matched_rows, matched_cols = min_weight_full_bipartite_matching(graph)
+    matched = zip(matched_rows.tolist(), matched_cols.tolist(), strict=True)
+    return sorted((r, c) for r, c in matched if c < n_right)
+
+
+def _component_labels(rows: IntArray, cols: IntArray, n_left: int, n_right: int) -> IntArray:
+    """Labels the connected components of the candidate graph, left spots first."""
+    size = n_left + n_right
+    graph = coo_array((np.ones(rows.size), (rows, n_left + cols)), shape=(size, size))
+    _, labels = connected_components(graph, directed=False)
+    return labels.astype(np.intp)

@@ -28,7 +28,7 @@ from showpy.core.deprecation import moved
 from showpy.core.errors import LockedError, SchemaError, UnknownRefError
 from showpy.core.extras import require_extra
 from showpy.core.ids import FormId, SetId, SpotId, check_id
-from showpy.core.selection import Selection
+from showpy.core.selection import Selection, operand_ids
 from showpy.core.types import Degrees, FrozenModel, Meters, Point, Points
 
 if TYPE_CHECKING:
@@ -151,7 +151,7 @@ class Set(FrozenModel):
 
     def positions(self, sel: Literal["all"] | Sequence[str] | Selection = "all") -> Points:
         """Returns coordinates (N, 2) in selection order; "all" uses placement order."""
-        ids = self.entity_ids() if sel == "all" else tuple(sel)
+        ids = self.entity_ids() if sel == "all" else operand_ids(sel)
         if not ids:
             return np.zeros((0, 2))
         return np.array([self.get(i).point for i in ids], dtype=float)

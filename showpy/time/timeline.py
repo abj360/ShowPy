@@ -137,7 +137,7 @@ def add_tempo(tl: Timeline, section: TempoSection) -> Timeline:
 
 
 def remove_tempo(tl: Timeline, at_count: Count) -> Timeline:
-    """Drops the tempo section that starts at `at_count`.
+    """Drops the tempo section stored at exactly `at_count`; the one at count 0 stays.
 
     >>> tl = new_timeline(TimelineMode.COUNTS, 120.0)
     >>> tl = add_tempo(tl, TempoSection(at_count=8.0, counts_per_minute=90.0))
@@ -145,6 +145,12 @@ def remove_tempo(tl: Timeline, at_count: Count) -> Timeline:
     1
     """
     tempos = _drop(tl.tempos, lambda s: s.at_count == at_count, "tempo section", at_count)
+    if at_count == 0.0:
+        raise TimelineError(
+            "the tempo at count 0 cannot be removed",
+            hint="replace it with add_tempo() at count 0; the first section must start at 0",
+            context={"at_count": at_count},
+        )
     return tl.replace(tempos=tempos)
 
 

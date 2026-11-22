@@ -6,6 +6,9 @@ test_files.py --- encodes workspace-file defects and write behavior
 Contains:
     test_regression_structured_check_refuses_nesting_past_the_cap: refuses a .json file nested
         MAX_NESTING + 1 levels, as the strict parser does
+    test_regression_structured_json_refuses_duplicate_keys: refuses a committed JSON file that
+        repeats a key
+    test_regression_structured_json_refuses_nan: refuses a committed JSON file holding NaN
     test_regression_commit_refuses_garbage_show_document: refuses a commit of bytes that are not a
         show document
     test_regression_commit_refuses_unknown_root: refuses a commit under a root no reader can open
@@ -121,6 +124,22 @@ def test_regression_placements_csv_keeps_negative_numbers_unquoted() -> None:
     rows = _rows(agent.read("/sets/1/placements.csv"))
     assert rows[1][rows[0].index("x")] == "-3.5"
     assert rows[1][rows[0].index("note")] == "'=1+1"
+
+
+@pytest.mark.parametrize("raw", [b'{"a": 1, "a": 2}', b'{"a": 1, "a": 1}'])
+def test_regression_structured_json_refuses_duplicate_keys(raw: bytes) -> None:
+    """Refuses a committed JSON file that repeats a key, as the strict parser does."""
+    _, designer = _session()
+    with pytest.raises(SchemaError, match="repeated"):
+        designer.commit({"/exports/x.json": raw}, at=LATER)
+
+
+@pytest.mark.parametrize("raw", [b'{"a": NaN}', b"[Infinity]", b"[-Infinity]"])
+def test_regression_structured_json_refuses_nan(raw: bytes) -> None:
+    """Refuses a committed JSON file holding NaN or infinity, as the strict parser does."""
+    _, designer = _session()
+    with pytest.raises(SchemaError, match="non-standard token"):
+        designer.commit({"/exports/x.json": raw}, at=LATER)
 
 
 def test_regression_commit_refuses_garbage_show_document() -> None:

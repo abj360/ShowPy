@@ -12,22 +12,28 @@ Contains:
 """
 
 import math
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from itertools import islice
 from typing import Literal
+
+from pydantic import BaseModel
 
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.match_ops import forms_of_set
 from showpy.choreo.models import Set
 from showpy.choreo.path_models import TransitionSpec
+from showpy.core.caps import MAX_COUNTS
 from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import ContinuityError, ShowPyError
-from showpy.core.ids import format_tid, parse_ref
+from showpy.core.errors import ContinuityError, SchemaError, ShowPyError
+from showpy.core.ids import check_id, check_sheet_id, format_tid, parse_ref
 from showpy.core.validation import ValidationIssue, ValidationReport
-from showpy.sheet.templates import SheetStore, get_sheet
+from showpy.sheet.templates import SheetStore, _get_sheet
+from showpy.show.document_paths import is_storable_folder
 from showpy.show.models import Show
 from showpy.time.validate import validate_timeline
 
 FULL_TURN = 360.0
+MAX_NON_FINITE_ISSUES = 100
 
 type Level = Literal["error", "warning"]
 ERROR: Level = "error"
@@ -159,6 +165,8 @@ def validate_set(show: Show, candidate: Set) -> ValidationReport:
 
 
 def _with_spec(show: Show, spec: TransitionSpec) -> Show:
+    if show.transition(spec.id) == spec:
+        return show
     others = tuple(t for t in show.transitions if t.id != spec.id)
     return show.replace(transitions=(*others, spec))
 
@@ -256,7 +264,7 @@ def validate_dependencies(show: Show, store: SheetStore | None = None) -> Valida
             )
         )
     try:
-        get_sheet(ref, store)
+        _get_sheet(ref, store)
     except ShowPyError as error:
         issues.append(_issue(ERROR, ErrorCode.UNKNOWN_SHEET, "sheet", error.message, error.hint))
     return ValidationReport(issues=tuple(issues))
@@ -289,6 +297,145 @@ def _sequence(show: Show) -> list[ValidationIssue]:
     return zero_counts + stale
 
 
+def _form_keys(show: Show) -> list[ValidationIssue]:
+    return [
+        ValidationIssue(
+            level=ERROR,
+            code=ErrorCode.KEY_MISMATCH,
+            where=f"form {key}",
+            message=f"form stored under {key!r} has id {form.id!r}",
+            hint="store every form under its own id",
+            context={"key": key, "id": form.id},
+        )
+        for key, form in show.forms.items()
+        if key != form.id
+    ]
+
+
+def _selections(show: Show) -> list[ValidationIssue]:
+    cast_ids = set(show.cast.ids())
+    return [
+        ValidationIssue(
+            level=ERROR,
+            code=ErrorCode.UNKNOWN_SPOT,
+            where=f"selection {name}",
+            message=f"{spot} is not in the cast",
+            hint="remove the spot from the selection or add it to the cast",
+            context={"path": f"cast.selections.{name}", "spot": spot},
+        )
+        for name, members in show.cast.selections.items()
+        for spot in sorted(members)
+        if spot not in cast_ids
+    ]
+
+
+def _bad_id(kind: str, path: str, value: str, error: ShowPyError) -> ValidationIssue:
+    return ValidationIssue(
+        level=ERROR,
+        code=ErrorCode.BAD_ID,
+        where=f"{kind} {value!r}",
+        message=f"{kind} ID {value!r} cannot be stored",
+        hint=error.hint,
+        context={"path": path, "id": value},
+    )
+
+
+def _checked(
+    kind: str, path: str, value: str, check: Callable[[str], str]
+) -> list[ValidationIssue]:
+    try:
+        check(value)
+    except SchemaError as error:
+        return [_bad_id(kind, path, value, error)]
+    return []
+
+
+def _set_id_issue(index: int, set_id: str) -> list[ValidationIssue]:
+    if is_storable_folder(set_id):
+        return []
+    return _checked("set", f"sets[{index}].id", set_id, lambda text: check_id(text, kind="set"))
+
+
+def _ids(show: Show) -> list[ValidationIssue]:
+    issues = _checked("show", "id", show.id, lambda text: check_sheet_id(text, kind="show"))
+    for index, candidate in enumerate(show.sets):
+        issues += _set_id_issue(index, candidate.id)
+    for index, note in enumerate(show.notes):
+        issues += _checked(
+            "note", f"notes[{index}].id", note.id, lambda t: check_sheet_id(t, kind="note")
+        )
+    for key, form in show.forms.items():
+        issues += _checked(
+            "form", f"forms.{key}.id", form.id, lambda t: check_sheet_id(t, kind="form")
+        )
+        if key != form.id:
+            issues += _checked(
+                "form", f"forms.{key}", key, lambda t: check_sheet_id(t, kind="form")
+            )
+    return issues
+
+
+def _non_finite_values(value: object, path: str) -> Iterator[tuple[str, float]]:
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            yield path, value
+    elif isinstance(value, BaseModel):
+        for name in type(value).model_fields:
+            yield from _non_finite_values(getattr(value, name), f"{path}.{name}" if path else name)
+    elif isinstance(value, Mapping):
+        for key, item in value.items():
+            yield from _non_finite_values(item, f"{path}.{key}")
+    elif isinstance(value, tuple | list):
+        for index, item in enumerate(value):
+            yield from _non_finite_values(item, f"{path}[{index}]")
+
+
+def _has_non_finite(value: object) -> bool:
+    return next(_non_finite_values(value, ""), None) is not None
+
+
+def _non_finite(show: Show) -> list[ValidationIssue]:
+    found = islice(_non_finite_values(show, ""), MAX_NON_FINITE_ISSUES)
+    return [
+        ValidationIssue(
+            level=ERROR,
+            code=ErrorCode.NOT_FINITE,
+            where=path,
+            message=f"{path} is {value}",
+            hint="use a finite number",
+            context={"path": path, "value": str(value)},
+        )
+        for path, value in found
+    ]
+
+
+def _too_long(show: Show) -> list[ValidationIssue]:
+    total = math.fsum(s.counts for s in show.sets if math.isfinite(s.counts))
+    if total <= MAX_COUNTS:
+        return []
+    return [
+        ValidationIssue(
+            level=ERROR,
+            code=ErrorCode.SHOW_TOO_LONG,
+            where="sets",
+            message=f"set counts add up to {total:g}, past MAX_COUNTS",
+            hint=f"keep the whole show within MAX_COUNTS ({MAX_COUNTS:,} counts)",
+            context={"total": total, "max": MAX_COUNTS},
+        )
+    ]
+
+
+def _path_reports(show: Show) -> list[ValidationReport]:
+    reports = []
+    for tid in show.transition_ids():
+        stored = show.lookup.stored.get(tid)
+        parts = (show.set(tid.from_set), show.set(tid.to_set), stored)
+        if any(part is not None and _has_non_finite(part) for part in parts):
+            continue
+        reports.append(validate_paths(show, show.transition(tid)))
+    return reports
+
+
 def _all(reports: Iterable[ValidationReport]) -> ValidationReport:
     return ValidationReport.merge(*reports)
 
@@ -301,8 +448,12 @@ def validate_show(show: Show, store: SheetStore | None = None) -> ValidationRepo
     True
     """
     reports = [validate_set(show, s) for s in show.sets]
-    reports += [validate_paths(show, show.transition(tid)) for tid in show.transition_ids()]
-    reports.append(ValidationReport(issues=tuple(_sequence(show))))
+    too_long = _too_long(show)
+    if not too_long:
+        reports += _path_reports(show)
+    extra = too_long + _sequence(show) + _form_keys(show) + _selections(show) + _ids(show)
+    extra += _non_finite(show)
+    reports.append(ValidationReport(issues=tuple(extra)))
     reports.append(validate_timeline(show.timeline))
     if store is not None:
         reports.append(validate_dependencies(show, store))

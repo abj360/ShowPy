@@ -125,10 +125,11 @@ def _use_package(package: str) -> None:
 def _validated[M: BaseModel](model: M, **changes: object) -> M:
     """Returns a copy of `model` with `changes`, run through every validator.
 
-    v0.2.0 has no `FrozenModel.replace`, and `model_copy(update=)` skips validation.
+    v0.2.0 has no `FrozenModel.replace`, and `model_copy(update=)` skips validation. The legacy
+    context lets the current library take the v1 IDs these releases stored; older ones ignore it.
     """
     fields = {name: getattr(model, name) for name in type(model).model_fields}
-    return type(model).model_validate(fields | changes)
+    return type(model).model_validate(fields | changes, context={"legacy_ids": True})
 
 
 def _sorted_sets(value: object) -> object:

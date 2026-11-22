@@ -42,7 +42,7 @@ from showpy.choreo.engine_compile import (
     plan_positions,
     plan_progress,
 )
-from showpy.choreo.engine_facing import FacingContext, plan_facing, validate_facing
+from showpy.choreo.engine_facing import FacingContext, plan_facing
 from showpy.choreo.engine_models import (
     CompiledTransition,
     EntityState,
@@ -128,9 +128,7 @@ class PathEngine:
         """Builds one spot's plan without caching, so callers can report errors per spot."""
         spec = self.show.transition(tid)
         a, b = self.show.set(tid[0]).get(entity), self.show.set(tid[1]).get(entity)
-        plan = compile_plan(spec.row(entity), spec, a, b, self.motions, tol=self.motion_tol)
-        validate_facing(plan)
-        return plan
+        return compile_plan(spec.row(entity), spec, a, b, self.motions, tol=self.motion_tol)
 
     def compile_all(self) -> dict[TransitionId, CompiledTransition]:
         """Builds every transition of the show, in show order."""
@@ -161,6 +159,12 @@ class PathEngine:
         return (local, t) if local is not None else self.locate(t)
 
     def _static_set(self, t: Count) -> int:
+        if not self.show.sets:
+            raise PathError(
+                "the show has no sets, so no spot has a position",
+                hint="add a set with add_set before asking for positions",
+                context={"show": self.show.id},
+            )
         return 0 if t <= 0 else len(self.show.sets) - 1
 
     def _known(self, entity: str) -> SpotId:
@@ -243,7 +247,6 @@ class PathEngine:
             facing_mode=override.mode, facing_value=override.value
         )
         compiled = self.compile(tid)
-        validate_facing(plan)
         ctx = FacingContext(self._point_at, compiled.t_global0, compiled.counts)
         start, end = plan.window
         inside = min(max(tau, start + VELOCITY_STEP), end - VELOCITY_STEP)
@@ -319,14 +322,19 @@ class PathEngine:
         Raises PathError code SEGMENT_BOUND when a spot's motion cannot be brought within
         `tol` before the depth cap.
         """
-        require_finite(tol, name="tol", low=0.0, low_open=True)
-        return [seg for e in self.compile(tid).plans for seg in self.entity_segments(e, tid, tol)]
+        tol = require_finite(tol, name="tol", low=0.0, low_open=True)
+        return [seg for e in self.compile(tid).plans for seg in self._entity_segments(e, tid, tol)]
 
     def entity_segments(
         self, entity: str, tid: tuple[str, str], tol: float = DEFAULT_SEGMENT_TOL
     ) -> list[MotionSegment]:
         """Returns one spot's contiguous time-linear segments in a transition."""
         tol = require_finite(tol, name="tol", low=0.0, low_open=True)
+        return self._entity_segments(entity, tid, tol)
+
+    def _entity_segments(
+        self, entity: str, tid: tuple[str, str], tol: float
+    ) -> list[MotionSegment]:
         plan = self._plan(entity, tid)
         compiled = self.compile(tid)
         stations = _SegmentFit(plan, compiled.id, tol).stations(compiled.counts)

@@ -33,7 +33,7 @@ from showpy.core.types import Point
 from showpy.core.util import seeded_rng
 from showpy.geo.shapes import line
 from showpy.sheet.models import Sheet
-from showpy.sheet.templates import sheet_templates
+from showpy.sheet.templates import _sheet_templates as sheet_templates
 from showpy.show.changes import apply_change, store_paths
 from showpy.show.manage import add_set, new_show
 from showpy.show.models import FormOp, PathsOp, Show
@@ -144,7 +144,7 @@ def _place_forms(rng: np.random.Generator, show: Show, set_id: str, still: str) 
         if key == still or not ids:
             continue
         kind = FORM_KINDS[(int(set_id) + index) % len(FORM_KINDS)]
-        forms.append(_form(rng, kind, f"{key}-{set_id}", ids, set_id))
+        forms.append(_form(rng, kind, f"{key}_{set_id}", ids, set_id))
     placed_set, filled = place(show, set_id, forms)
     return apply_change(with_set(show, placed_set), [FormOp(form=f) for f in filled])
 

@@ -5,7 +5,7 @@ Contains:
     natural_sort(): sorts IDs so T2 comes before T10
     split_id(): splits an ID into its prefix and trailing number
     parse_range(): expands `T1-T8` into IDs
-    format_ranges(): compacts IDs into `T1–T4, T7`
+    format_ranges(): compacts IDs into `T1-T4, T7`
     approx_equal(): compares floats or arrays within absolute and relative tolerances
     seeded_rng(): returns the only allowed random generator
     as_points(): copies point-like inputs into a new (N, 2) float64 array
@@ -36,14 +36,16 @@ import shapely
 from showpy.core.canonical import canonical_value, jcs
 from showpy.core.caps import MAX_POINTS, MAX_RANGE, require_size
 from showpy.core.deprecation import renamed_keyword
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import MAX_ECHOED_INPUT_CHARS, GeometryError, SchemaError
 from showpy.core.ids import ID_MAX_LENGTH
 from showpy.core.types import Points
 
 ASCII_DIGITS = "0123456789"
 NATURAL_CHUNK = re.compile(r"([0-9]+)")
-RANGE_PATTERN = re.compile(r"^([A-Za-z_]+)([0-9]+)-([A-Za-z_]+)([0-9]+)$")
-RANGE_DASH = "–"
+RANGE_PATTERN = re.compile(r"^(?=.*[0-9]$).*[0-9]-")
+RANGE_DASH = "-"
+MISMATCHED_RANGE_PATTERN = re.compile(r"^[A-Za-z_]+[0-9]+-[A-Za-z_]+[0-9]+$")
 LOGGER = logging.getLogger("showpy")
 HASH_PREFIX = "showpy-hash/1"
 # The domain is one line of the hash header, so it may not hold a newline or forge a kind line.
@@ -106,57 +108,127 @@ def _require_digit_run(digits: str, text: str) -> None:
 
 
 def parse_range(text: str) -> list[str]:
-    """Expands an ID range such as `T1-T8`; a single ID returns itself.
+    """Expands an ID range such as `T1-T8` or `P1x1-P1x3`; a single ID returns itself.
+
+    The range splits at the `-` whose two sides each end in digits and share a prefix, so IDs
+    with an inner `-` such as `flag-1-flag-3` expand too. Both endpoints are spelled alike: padded
+    to one width (`T01-T10`) or both unpadded (`T1-T10`).
+
+    Args:
+        text: One ID or one range of IDs.
+
+    Returns:
+        ids: The IDs from the first endpoint to the last, in order.
 
     >>> parse_range("T1-T3")
     ['T1', 'T2', 'T3']
+    >>> parse_range("T08-T10")
+    ['T08', 'T09', 'T10']
     """
     stripped = text.strip()
-    match = RANGE_PATTERN.match(stripped)
-    if match is None:
-        if not stripped or stripped.startswith("-") or stripped.endswith("-"):
-            raise SchemaError(
-                f"bad range {text!r}", hint="write ranges as T1-T8", context={"text": text}
-            )
+    if not stripped or stripped.startswith(RANGE_DASH) or stripped.endswith(RANGE_DASH):
+        raise SchemaError(
+            f"bad range {text!r}", hint="write ranges as T1-T8", context={"text": text}
+        )
+    endpoints = _range_endpoints(stripped)
+    if endpoints is None:
+        if MISMATCHED_RANGE_PATTERN.match(stripped):
+            raise _bad_range(text)
         return [stripped]
-    prefix, first, last_prefix, last = match.groups()
+    prefix, first, last = endpoints
     _require_digit_run(first, text)
     _require_digit_run(last, text)
     low, high = int(first), int(last)
-    if prefix != last_prefix or low > high:
-        raise SchemaError(
-            f"bad range {text!r}",
-            hint="use one prefix and an ascending range, e.g. T1-T8",
-            context={"text": text},
-        )
+    if low > high:
+        raise _bad_range(text)
+    width = _range_width(first, last, text)
     require_size(high - low + 1, MAX_RANGE, what="range IDs")
-    width = len(first) if first.startswith("0") else 0
     return [f"{prefix}{n:0{width}d}" for n in range(low, high + 1)]
 
 
+def _range_endpoints(text: str) -> tuple[str, str, str] | None:
+    for position, char in enumerate(text):
+        if char != RANGE_DASH:
+            continue
+        start = position
+        while start and text[start - 1] in ASCII_DIGITS:
+            start -= 1
+        prefix = text[:start]
+        if start == position or not text.startswith(prefix, position + 1):
+            continue
+        last = text[position + 1 + len(prefix) :]
+        if last and last.isascii() and last.isdigit():
+            return prefix, text[start:position], last
+    return None
+
+
+def _bad_range(text: str) -> SchemaError:
+    return SchemaError(
+        f"bad range {text!r}",
+        hint="use one prefix and an ascending range, e.g. T1-T8",
+        context={"text": text},
+    )
+
+
+def _is_padded(digits: str) -> bool:
+    return len(digits) > 1 and digits.startswith("0")
+
+
+def _range_width(first: str, last: str, text: str) -> int:
+    if not _is_padded(first):
+        if _is_padded(last):
+            raise _mixed_padding(text)
+        return 0
+    width = len(first)
+    if len(last) < width or (_is_padded(last) and len(last) != width):
+        raise _mixed_padding(text)
+    return width
+
+
+def _mixed_padding(text: str) -> SchemaError:
+    return SchemaError(
+        f"range {text!r} mixes zero-padded and unpadded endpoints",
+        hint="spell both endpoints alike: T01-T10 (padded) or T1-T10 (unpadded)",
+        context={"text": text},
+        code=ErrorCode.RANGE_PADDING,
+    )
+
+
 def format_ranges(ids: Iterable[str]) -> str:
-    """Compacts IDs into runs for display.
+    """Compacts IDs into comma-separated runs that `parse_range` reads back, run by run.
+
+    Args:
+        ids: IDs to compact; duplicates collapse and the result is in natural order.
+
+    Returns:
+        text: Runs such as `T1-T3`; a run continues only while each ID is the next number in
+            the spelling of the run's first ID.
 
     >>> format_ranges(["T1", "T2", "T3", "T7"])
-    'T1–T3, T7'
+    'T1-T3, T7'
     """
     runs: list[list[str]] = []
     for spot_id in natural_sort(set(ids)):
-        if runs and _continues(runs[-1][-1], spot_id):
+        if runs and _continues(runs[-1][0], runs[-1][-1], spot_id):
             runs[-1].append(spot_id)
         else:
             runs.append([spot_id])
     return ", ".join(run[0] if len(run) == 1 else f"{run[0]}{RANGE_DASH}{run[-1]}" for run in runs)
 
 
-def _continues(previous: str, current: str) -> bool:
-    (left, left_number), (right, right_number) = split_id(previous), split_id(current)
-    return (
-        left_number is not None
-        and right_number is not None
-        and left == right
-        and right_number == left_number + 1
+def _continues(first: str, previous: str, current: str) -> bool:
+    (head, head_number), (left, left_number), (right, right_number) = (
+        split_id(first),
+        split_id(previous),
+        split_id(current),
     )
+    if head_number is None or left_number is None or right_number is None:
+        return False
+    if not head == left == right or right_number != left_number + 1:
+        return False
+    first_digits = first[len(head) :]
+    width = len(first_digits) if _is_padded(first_digits) else 0
+    return current[len(right) :] == f"{right_number:0{width}d}"
 
 
 def approx_equal(

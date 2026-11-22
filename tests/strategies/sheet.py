@@ -14,7 +14,8 @@ from hypothesis import strategies as st
 
 from showpy.core.types import Point
 from showpy.sheet.models import Sheet
-from showpy.sheet.templates import blank_sheet, sheet_templates
+from showpy.sheet.templates import _blank_sheet as blank_sheet
+from showpy.sheet.templates import _sheet_templates as sheet_templates
 
 MIN_BLANK_M = 12.0
 MAX_BLANK_M = 60.0

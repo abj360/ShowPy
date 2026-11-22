@@ -15,6 +15,12 @@ Contains:
         lets the later one win
     test_regression_fractional_measure_numbers_are_rejected: rejects measure 2.5 instead of
         computing a count for it
+    test_regression_unsorted_measure_changes_are_rejected: refuses changes out of count order
+    test_regression_negative_change_count_and_length_are_rejected: refuses a change before count 0
+        and a change length of 0
+    test_regression_unchecked_setting_raises_a_clean_error: refuses a setting built without
+        validation
+    test_regression_non_integer_measure_numbers_are_rejected: refuses a bool, float or string
 """
 
 import math
@@ -76,8 +82,8 @@ def test_change_mid_measure_starts_a_new_measure() -> None:
     assert approx_equal(measure_to_count(tl, 7, 2.0), 22.0, abs_tol=TOL)
 
 
-def test_unsorted_changes_are_applied_in_count_order() -> None:
-    tl = _measured(MeasureSetting(counts_per_measure=4.0, changes=((14.0, 2.0), (8.0, 3.0))))
+def test_changes_are_applied_in_count_order() -> None:
+    tl = _measured(MeasureSetting(counts_per_measure=4.0, changes=((8.0, 3.0), (14.0, 2.0))))
     assert count_to_measure(tl, 8.0) == MeasureLabel(measure=3, count_in_measure=1.0)
     assert count_to_measure(tl, 14.0) == MeasureLabel(measure=5, count_in_measure=1.0)
     assert count_to_measure(tl, 16.0) == MeasureLabel(measure=6, count_in_measure=1.0)
@@ -132,8 +138,6 @@ def _with_changes(changes: tuple[tuple[float, float], ...]) -> Timeline:
     return _with_measures(MeasureSetting(counts_per_measure=4.0, changes=changes))
 
 
-@pytest.mark.defect("UP-9.3-109")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-109")
 def test_regression_zero_measure_length_is_a_clean_error() -> None:
     """Rejects `counts_per_measure=0` with a ShowPyError, not ZeroDivisionError (audit 9.3)."""
     with pytest.raises(REJECTED):
@@ -146,16 +150,12 @@ def test_regression_nan_measure_length_is_a_clean_error() -> None:
         count_to_measure(_with_measures(MeasureSetting(counts_per_measure=math.nan)), 4.0)
 
 
-@pytest.mark.defect("UP-9.3-111")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-111")
 def test_regression_negative_measure_length_is_rejected() -> None:
     """Rejects a negative measure length instead of labeling measure -1 (audit 9.3)."""
     with pytest.raises(REJECTED):
         count_to_measure(_with_measures(MeasureSetting(counts_per_measure=-4.0)), 4.0)
 
 
-@pytest.mark.defect("UP-9.3-112")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-112")
 def test_regression_duplicate_change_counts_follow_input_order() -> None:
     """Rejects two changes at one count, or lets the later one win (audit 9.3)."""
     probe = 14.0
@@ -177,10 +177,36 @@ def test_regression_duplicate_change_counts_follow_input_order() -> None:
     assert first != second
 
 
-@pytest.mark.defect("UP-9.3-113")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-113")
 def test_regression_fractional_measure_numbers_are_rejected() -> None:
     """Rejects measure 2.5 instead of computing a count for it (audit 9.3)."""
     timeline = _with_measures(MeasureSetting(counts_per_measure=4.0))
     with pytest.raises(ShowPyError):
         measure_to_count(timeline, 2.5)  # type: ignore[arg-type]
+
+
+def test_regression_unsorted_measure_changes_are_rejected() -> None:
+    """Rejects changes out of count order instead of sorting them."""
+    with pytest.raises(REJECTED):
+        MeasureSetting(counts_per_measure=4.0, changes=((8.0, 3.0), (4.0, 5.0)))
+
+
+def test_regression_negative_change_count_and_length_are_rejected() -> None:
+    """Rejects a change before count 0 and a change length of 0."""
+    with pytest.raises(REJECTED):
+        MeasureSetting(counts_per_measure=4.0, changes=((-1.0, 3.0),))
+    with pytest.raises(REJECTED):
+        MeasureSetting(counts_per_measure=4.0, changes=((4.0, 0.0),))
+
+
+def test_regression_unchecked_setting_raises_a_clean_error() -> None:
+    """Refuses a setting built without validation with a ShowPyError, never ZeroDivisionError."""
+    unchecked = MeasureSetting.model_construct(counts_per_measure=0.0, start_measure=1, changes=())
+    with pytest.raises(ShowPyError):
+        count_to_measure(_with_measures(unchecked), 4.0)
+
+
+@pytest.mark.parametrize("measure", [True, 2.0, "2"])
+def test_regression_non_integer_measure_numbers_are_rejected(measure: object) -> None:
+    """Rejects a bool, float or string measure number."""
+    with pytest.raises(ShowPyError):
+        measure_to_count(_with_measures(FOUR), measure)  # type: ignore[arg-type]

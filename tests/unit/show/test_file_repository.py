@@ -21,6 +21,9 @@ Contains:
         on the next commit
     test_regression_losing_commit_leaves_no_orphan_tree: removes the tree file of a commit that lost
         the race
+    test_regression_tree_record_refuses_duplicate_keys: maps a tree record repeating a key to
+        CORRUPT
+    test_regression_tree_record_refuses_nan: maps a tree record holding NaN to CORRUPT
     test_regression_record_id_must_match_its_link: refuses a tree record whose revision id differs
         from the link that named it
     test_regression_record_parent_must_follow_the_chain: refuses a tree record whose parent is not
@@ -278,6 +281,27 @@ def test_regression_tree_record_nested_past_the_cap_is_corrupt(tmp_path: Path) -
     with pytest.raises(StorageError, match="too deeply nested") as caught:
         repo.backend.tree(SHOW_ID, rev)
     assert caught.value.code == CORRUPT
+
+
+def _rewrite_record(base: Path, rev: str, edit: Callable[[str], str]) -> None:
+    path = base / "trees" / f"{rev}.json"
+    path.write_text(edit(path.read_text()))
+
+
+def test_regression_tree_record_refuses_duplicate_keys(tmp_path: Path) -> None:
+    """Maps a tree record that repeats a key to CORRUPT, even when the copies agree."""
+    repo, rev, base = _saved(tmp_path)
+    _rewrite_record(base, rev, lambda text: text.replace('"tree": ', '"tree": {}, "tree": ', 1))
+    _assert_corrupt(lambda: repo.backend.tree(SHOW_ID, rev))
+    _assert_corrupt(lambda: repo.revisions(SHOW_ID))
+
+
+def test_regression_tree_record_refuses_nan(tmp_path: Path) -> None:
+    """Maps a tree record holding NaN to CORRUPT."""
+    repo, rev, base = _saved(tmp_path)
+    _rewrite_record(base, rev, lambda text: text.rstrip()[:-1] + ', "extra": NaN}')
+    _assert_corrupt(lambda: repo.backend.tree(SHOW_ID, rev))
+    _assert_corrupt(lambda: repo.revisions(SHOW_ID))
 
 
 def test_regression_record_id_must_match_its_link(tmp_path: Path) -> None:

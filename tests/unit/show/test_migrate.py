@@ -63,6 +63,7 @@ from showpy.core.resources import schema_path
 from showpy.examples import crossing_show, two_set_show
 from showpy.export.data import export_json, import_json
 from showpy.show.decode_cache import DecodeCache
+from showpy.show.document_reading import decode_show_dump
 from showpy.show.documents import (
     NOTES_DOC,
     SHEET_DOC,
@@ -80,6 +81,7 @@ from showpy.show.integrity import blob_digest
 from showpy.show.migrate import (
     CHECKED_CONTEXT,
     CURRENT_VERSION,
+    FIRST_VERSION,
     FORMAT,
     LEGACY_CONTEXT,
     SHOW_DOC,
@@ -272,7 +274,7 @@ def test_every_fixture_migrates_to_its_expected_v2(tag: str, tmp_path: Path) -> 
 def test_v1_fixtures_decode_to_their_oracle(tag: str, tmp_path: Path) -> None:
     repo, expected = _fixture(tag, tmp_path)
     assert [r.id for r in repo.revisions(expected["show_id"])] == expected["revisions"]
-    oracle = Show.model_validate(expected["show"], context=LEGACY_CONTEXT)
+    oracle = decode_show_dump(expected["show"], FIRST_VERSION)
     assert repo.get_show(expected["show_id"]) == oracle
 
 

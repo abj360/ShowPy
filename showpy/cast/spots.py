@@ -298,7 +298,7 @@ def duplicate_spots(
     (0.0, 6.0)
     """
     source = show.set(set_id)
-    originals = [show.cast.spot(i) for i in select(show, sel)]
+    originals = [show.cast.spot(i) for i in select(show, sel).ids]
     labels = _allocate_labels(show.cast, [spot.group for spot in originals])
     entries = []
     for spot, label in zip(originals, labels, strict=True):
@@ -326,13 +326,13 @@ def _locked_items(show: "Show", ids: frozenset[SpotId]) -> list[str]:
 
 def _facing_targets(show: "Show", ids: frozenset[SpotId]) -> list[str]:
     rows = [
-        f"{row.entity} faces {row.facing_value} in {spec.id}"
+        f"{row.entity} faces {faces_entity(row.facing_mode, row.facing_value)} in {spec.id}"
         for spec in show.transitions
         for row in spec.rows.values()
         if row.entity not in ids and faces_entity(row.facing_mode, row.facing_value) in ids
     ]
     overrides = [
-        f"override at {o.start} faces {o.value}"
+        f"override at {o.start} faces {faces_entity(o.mode, o.value)}"
         for o in show.facing_overrides
         if faces_entity(o.mode, o.value) in ids
     ]
@@ -350,7 +350,7 @@ def delete_spots(show: "Show", sel: Selector, *, force: bool = False) -> "Show":
     >>> delete_spots(two_set_show(), "T2-T3").cast.ids()
     ('T1', 'T4')
     """
-    ids = frozenset(select(show, sel))
+    ids = frozenset(select(show, sel).ids)
     locked = _locked_items(show, ids)
     if locked and not force:
         raise LockedError(
@@ -391,7 +391,7 @@ def regroup(show: "Show", sel: Selector, group: str) -> tuple["Show", dict[SpotI
     {'T4': 'B1'}
     """
     target = _group(show.cast, group)
-    moved = [i for i in select(show, sel) if show.cast.spot(i).group != group]
+    moved = [i for i in select(show, sel).ids if show.cast.spot(i).group != group]
     mapping = _relabel_targets(show.cast, moved, target)
     moved_set = set(moved)
     spots = tuple(s.replace(group=group) if s.id in moved_set else s for s in show.cast.spots)
@@ -527,7 +527,7 @@ def define_selection(show: "Show", name: str, sel: Selector) -> "Show":
 
 # Any: changes are arbitrary Spot fields, validated by the rebuilt model.
 def _edit_spots(show: "Show", sel: Selector, **changes: Any) -> "Show":
-    chosen = set(select(show, sel))
+    chosen = set(select(show, sel).ids)
     spots = tuple(
         Spot.model_validate({**dict(s), **changes}) if s.id in chosen else s
         for s in show.cast.spots

@@ -4,6 +4,7 @@ curve_base.py --- the Curve protocol and the arc-length machinery every curve sh
 Contains:
     Curve: describes the interface every stage-plane curve implements
     CurveBase: implements arc-length sampling, projection and polyline export generically
+    CurveBase.length(): returns the arc length, raising GeometryError on overflow
     CurveBase.model_copy(): returns a validated copy without stale caches
     CurveBase.point_at(): returns points at arc lengths, wrapping closed curves
     CurveBase.tangent_at(): returns unit tangents at arc lengths
@@ -14,10 +15,11 @@ Contains:
     CurveBase.construction(): returns the JSON recipe of the curve
 """
 
+import functools
 import itertools
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from functools import cached_property
-from typing import Any, Protocol, Self, overload, override, runtime_checkable
+from typing import Any, Concatenate, Protocol, Self, overload, override, runtime_checkable
 
 import numpy as np
 import numpy.typing as npt
@@ -85,6 +87,37 @@ class Curve(Protocol):
         ...
 
 
+def _finite_results[**P, R](
+    method: Callable[Concatenate["CurveBase", P], R],
+) -> Callable[Concatenate["CurveBase", P], R]:
+    """Wraps a curve method so overflow or a non-finite result raises a GeometryError.
+
+    Underflow stays silent: a tiny value rounding to zero or a subnormal is a valid result.
+    """
+
+    @functools.wraps(method)
+    def guarded(self: "CurveBase", /, *args: P.args, **kwargs: P.kwargs) -> R:
+        try:
+            with np.errstate(over="raise", invalid="raise", divide="raise", under="ignore"):
+                result = method(self, *args, **kwargs)
+        except FloatingPointError as exc:
+            raise _non_finite_error(self, method.__name__, str(exc)) from exc
+        if not np.all(np.isfinite(np.asarray(result))):
+            raise _non_finite_error(self, method.__name__, "the result is not finite")
+        return result
+
+    return guarded
+
+
+def _non_finite_error(curve: "CurveBase", operation: str, reason: str) -> GeometryError:
+    kind = getattr(curve, "kind", type(curve).__name__)
+    return GeometryError(
+        f"{kind} curve {operation} is not finite: {reason}",
+        hint="use smaller coordinates, scales or exponents so every result stays finite",
+        context={"kind": kind, "operation": operation},
+    )
+
+
 class CurveBase(FrozenModel):
     """Implements the Curve protocol from a native parameterization t in [0, 1].
 
@@ -117,8 +150,16 @@ class CurveBase(FrozenModel):
         s = np.concatenate([[0.0], np.cumsum(np.linalg.norm(np.diff(pts, axis=0), axis=1))])
         return t, s
 
+    @_finite_results
     def length(self) -> Meters:
-        """Returns the arc length in meters."""
+        """Returns the arc length in meters.
+
+        Raises:
+            GeometryError: Evaluation overflows, so the length would not be finite.
+        """
+        return self._length()
+
+    def _length(self) -> Meters:
         return float(self._table[1][-1])
 
     def _points(self, s: FloatArray) -> Points:
@@ -126,17 +167,17 @@ class CurveBase(FrozenModel):
         return self._native(np.interp(s, table_s, t))
 
     def _tangents(self, s: FloatArray) -> Points:
-        total = self.length()
+        total = self._length()
         h = max(DERIVATIVE_STEP * total, DERIVATIVE_STEP)
         lo = self._wrap(s - h) if self.closed else np.clip(s - h, 0.0, total)
         hi = self._wrap(s + h) if self.closed else np.clip(s + h, 0.0, total)
         return _unit(self._points(hi) - self._points(lo))
 
     def _breaks(self) -> FloatArray:
-        return np.array([0.0, self.length()])
+        return np.array([0.0, self._length()])
 
     def _wrap(self, s: FloatArray) -> FloatArray:
-        total = self.length()
+        total = self._length()
         if self.closed and total > 0:
             wrapped: FloatArray = np.mod(s, total)
             return wrapped
@@ -151,6 +192,7 @@ class CurveBase(FrozenModel):
         result: Points = getattr(self, fn)(self._wrap(values.ravel()))
         return result[0] if values.ndim == 0 else result
 
+    @_finite_results
     def point_at(self, s: npt.ArrayLike) -> Points:
         """Returns points at arc lengths: shape (2,) for a scalar, (N, 2) for an array.
 
@@ -162,6 +204,7 @@ class CurveBase(FrozenModel):
         """Returns points at fractions 0..1 of the length."""
         return self.point_at(np.asarray(u, dtype=float) * self.length())
 
+    @_finite_results
     def tangent_at(self, s: npt.ArrayLike) -> Points:
         """Returns unit tangents at arc lengths."""
         return self._vectorized("_tangents", s)
@@ -195,6 +238,7 @@ class CurveBase(FrozenModel):
             lo, hi = (lo, b) if distance(a) < distance(b) else (a, hi)
         return float(self._wrap(np.array([(lo + hi) / 2]))[0])
 
+    @_finite_results
     def to_polyline(self, tol: float = 0.01) -> Points:
         """Returns vertices from start to end whose chords stay within `tol` of the curve.
 
@@ -203,7 +247,7 @@ class CurveBase(FrozenModel):
                 `MAX_POINTS` vertices.
         """
         tol = require_finite_as(GeometryError, tol, name="tol", low=0.0, low_open=True)
-        breaks = np.unique(np.concatenate([self._breaks(), [0.0, self.length()]]))
+        breaks = np.unique(np.concatenate([self._breaks(), [0.0, self._length()]]))
         stations: list[float] = [float(breaks[0])]
         for a, b in itertools.pairwise(breaks):
             for lo, hi in _pairs(np.linspace(a, b, INITIAL_SPLITS + 1)):

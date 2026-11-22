@@ -24,6 +24,8 @@ Contains:
         MAX_COORD_M with a hint naming the bound, and reads one at the bound
     test_regression_unvalidated_audience_side_is_rejected(): rejects an audience side outside the
         four sides with a ShowPyError, not KeyError
+    test_regression_injected_coordinate_parts_raise_schema_error(): rejects wrong-typed parts from
+        set_coordinates, to_coords and from_coords with SchemaError, never TypeError
     test_regression_to_coords_rejects_unknown_style(): rejects an unknown style instead of silently
         using long style
     test_regression_short_label_with_digit_round_trips_or_is_rejected(): round-trips a short
@@ -58,6 +60,8 @@ from showpy.sheet.models import CoordinateKind, CoordinateSystem
 from showpy.sheet.templates import get_sheet
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
+
+pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
 
 TOL = 1e-9
 STAGE = CoordinateSystem(kind=CoordinateKind.STAGE)
@@ -351,3 +355,31 @@ def test_regression_to_coords_rounding_failure_hint_names_precision() -> None:
     with pytest.raises(ShowPyError) as raised:
         to_coords(show, (1.0, 0.0))
     assert "precision" in raised.value.hint
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"origin": 5},
+        {"origin": None},
+        {"origin": (1, "x")},
+        {"labels": None},
+        {"labels": {"left": 3}},
+        {"labels": {1: "x"}},
+        {"audience_side": ["front"]},
+        {"kind": "nonsense"},
+        {"precision": 0},
+        {"precision": None},
+        {"units": None},
+    ],
+)
+def test_regression_injected_coordinate_parts_raise_schema_error(fields: dict[str, Any]) -> None:
+    """Rejects wrong-typed parts of an unvalidated system with SchemaError, never TypeError."""
+    system = CoordinateSystem.model_construct(None, **fields)
+    show = two_set_show().model_copy(update={"coordinates": system})
+    with pytest.raises(SchemaError):
+        set_coordinates(two_set_show(), system)
+    with pytest.raises(SchemaError):
+        to_coords(show, (1.0, 1.0))
+    with pytest.raises(SchemaError):
+        from_coords(show, "R1 U1")
