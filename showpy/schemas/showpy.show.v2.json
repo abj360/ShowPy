@@ -1706,6 +1706,11 @@
       "minimum": 0,
       "type": "number"
     },
+    "NonNegMeters": {
+      "maximum": 1000000.0,
+      "minimum": 0,
+      "type": "number"
+    },
     "Note": {
       "additionalProperties": false,
       "description": "Holds one design note.\n\nAttributes:\n    id: Note ID.\n    text: Note body.\n    kind: goal, idea, todo or warning.\n    anchor: What the note is attached to.\n    author: User name, or \"agent\".\n    created_at: When the note was written, with a time zone; passed in, never read from\n        the clock.\n    visible: Whether the canvas shows it.",
@@ -2782,7 +2787,7 @@
     },
     "SpacingSpec": {
       "additionalProperties": false,
-      "description": "Describes how members are spaced on a form's shape.\n\nAttributes:\n    mode: `count` (even over the window), `interval` (fixed gap) or `proportional`.\n    interval: Gap in meters for interval mode.\n    start: Arc length where spacing starts.\n    end: Arc length where spacing ends; None means the end of the shape.\n    align: `start`, `end` or `center` for interval mode.\n    gaps: Extra meters after member indexes.",
+      "description": "Describes how members are spaced on a form's shape.\n\nAttributes:\n    mode: `count` (even over the window), `interval` (fixed gap) or `proportional`.\n    interval: Gap in meters for interval mode.\n    start: Arc length where spacing starts.\n    end: Arc length where spacing ends; None means the end of the shape.\n    align: `start`, `end` or `center` for interval mode.\n    gaps: Extra meters, at least 0, after member indexes.",
       "properties": {
         "align": {
           "default": "start",
@@ -2815,7 +2820,7 @@
                 "type": "integer"
               },
               {
-                "$ref": "#/$defs/Meters"
+                "$ref": "#/$defs/NonNegMeters"
               }
             ],
             "type": "array"

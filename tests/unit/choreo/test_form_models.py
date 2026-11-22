@@ -101,8 +101,6 @@ def test_regression_facing_spec_rejects_nan_point() -> None:
         FacingSpec(mode="toward_point", value=(math.nan, 0.0))
 
 
-@pytest.mark.defect("UP-9.6-39")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-39")
 def test_regression_spacing_spec_rejects_negative_gaps() -> None:
     """Rejects a negative extra gap in SpacingSpec.gaps (audit 9.6)."""
     with pytest.raises(SchemaError):

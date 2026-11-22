@@ -1274,7 +1274,7 @@
     "model": {
       "align": "Literal['start', 'end', 'center']",
       "end": "Meters | None",
-      "gaps": "tuple[tuple[int, Meters], ...]",
+      "gaps": "tuple[tuple[int, NonNegMeters], ...]",
       "interval": "Meters | None",
       "mode": "Literal['count', 'interval', 'proportional']",
       "start": "Meters"

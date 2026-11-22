@@ -42,6 +42,7 @@ from showpy.choreo.recipe_models import (
     SvgRecipe,
     WedgeRecipe,
 )
+from showpy.core.caps import MAX_COORD_M
 from showpy.core.deprecation import renamed_field
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, SpacingError
@@ -64,6 +65,7 @@ from showpy.geo.text_layout import MAX_LAYOUT_CHARS
 FONT_URI_PATTERN = r"^asset:sha256:[0-9a-f]{64}$"
 # Layout resolves every chain font and measures its cap height, so a stored chain is bounded.
 MAX_TEXT_FONTS = 16
+type NonNegMeters = Annotated[float, Field(ge=0, le=MAX_COORD_M, allow_inf_nan=False)]
 type FontUri = Annotated[str, Field(pattern=FONT_URI_PATTERN)]
 DEFAULT_GENERATOR_CENTER: Point = (0.0, 10.0)
 DEFAULT_SINE_START: Point = (-8.0, 10.0)
@@ -78,7 +80,7 @@ class SpacingSpec(FrozenModel):
         start: Arc length where spacing starts.
         end: Arc length where spacing ends; None means the end of the shape.
         align: `start`, `end` or `center` for interval mode.
-        gaps: Extra meters after member indexes.
+        gaps: Extra meters, at least 0, after member indexes.
     """
 
     mode: Literal["count", "interval", "proportional"] = "count"
@@ -86,7 +88,7 @@ class SpacingSpec(FrozenModel):
     start: Meters = 0.0
     end: Meters | None = None
     align: Literal["start", "end", "center"] = "start"
-    gaps: tuple[tuple[int, Meters], ...] = ()
+    gaps: tuple[tuple[int, NonNegMeters], ...] = ()
 
     @model_validator(mode="after")
     def _interval_needed(self) -> "SpacingSpec":
