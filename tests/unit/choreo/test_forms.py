@@ -378,8 +378,6 @@ def test_regression_form_rejects_fractional_slot_count() -> None:
         slots(line_form("l", [], (0, 0), (4, 0), n=FRACTIONAL_SLOT_COUNT))  # type: ignore[arg-type]
 
 
-@pytest.mark.defect("UP-9.6-58")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-58")
 def test_regression_svg_form_rejects_empty_svg() -> None:
     """Raises a ShowPyError, not ValueError, for svg_form("") (audit 9.6)."""
     with pytest.raises(ShowPyError):
