@@ -7,9 +7,11 @@ It repairs what a v0.3.0 edit function could have written, recording each repair
 count 0 starts at count 0; a ramp with a target but no length, a length but no target, or a
 length of 0 or less becomes a steady tempo; holds out of count order are sorted (stable); a hold
 after the last count is dropped, which changes no count inside the show; cues that share an
-order are renumbered in stored order, each taking the next free order. It refuses any other value
-v2 cannot hold with SchemaError naming the document, the field and the value: two tempo sections
-or two holds at one count, a hold before count 0 and a negative length of the show.
+order are renumbered in stored order, each taking the next free order; measure changes out of
+count order are sorted (v0.3.0 read them in count order). It refuses any other value v2 cannot
+hold with SchemaError naming the document, the field and the value: two tempo sections or two
+holds at one count, a hold before count 0, a negative length of the show, a measure length of 0
+or less and a measure change before count 0 or two at one count.
 
 Contains:
     TIMELINE_DOC: names the stored timeline document, which the step rewrites
@@ -32,6 +34,7 @@ AT_COUNT = "at_count"
 TEMPO = "counts_per_minute"
 RAMP_TO = "ramp_to"
 RAMP_COUNTS = "ramp_counts"
+MEASURE_CHANGE_PARTS = 2
 
 
 def _refuse(field: str, value: JsonValue, why: str) -> SchemaError:
@@ -153,6 +156,53 @@ def _migrate_cues(timeline: Item, report: "ReportBuilder") -> list[Item] | None:
     return renumbered
 
 
+def _pair(change: JsonValue) -> tuple[float, float] | None:
+    if not isinstance(change, list) or len(change) != MEASURE_CHANGE_PARTS:
+        return None
+    first, second = change
+    if isinstance(first, bool) or isinstance(second, bool):
+        return None
+    if not isinstance(first, int | float) or not isinstance(second, int | float):
+        return None
+    return float(first), float(second)
+
+
+def _migrate_measures(timeline: Item, report: "ReportBuilder") -> Item | None:
+    measures = timeline.get("measures")
+    if not isinstance(measures, dict):
+        return None
+    length = _number(measures, "counts_per_measure")
+    if length is not None and length <= 0:
+        raise _refuse("measures.counts_per_measure", length, f"is not above 0: {length:g}")
+    changes = measures.get("changes")
+    if not isinstance(changes, list):
+        return None
+    parsed = [_pair(c) for c in changes]
+    pairs = [p for p in parsed if p is not None]
+    if len(pairs) != len(parsed):
+        return None
+    for at_count, new_length in pairs:
+        if at_count < 0:
+            raise _refuse(
+                "measures.changes", at_count, f"changes length before count 0: {at_count:g}"
+            )
+        if new_length <= 0:
+            raise _refuse(
+                "measures.changes", new_length, f"has a length not above 0: {new_length:g}"
+            )
+    counts = [at_count for at_count, _ in pairs]
+    if len(set(counts)) != len(counts):
+        repeated = next(c for c in counts if counts.count(c) > 1)
+        raise _refuse("measures.changes", repeated, f"holds two changes at count {repeated:g}")
+    if counts == sorted(counts):
+        return None
+    report.repair("sorted the measure changes by count")
+    ordered: list[JsonValue] = [[at_count, length] for at_count, length in sorted(pairs)]
+    reordered: Item = dict(measures)
+    reordered["changes"] = ordered
+    return reordered
+
+
 def _check_total(timeline: Item) -> None:
     end = _number(timeline, "total_counts")
     if end is not None and end < 0:
@@ -182,6 +232,9 @@ def migrate_timeline(docs: dict[str, JsonValue], report: "ReportBuilder") -> dic
     for field, items in changes.items():
         if items is not None:
             repaired[field] = list[JsonValue](items)
+    measures = _migrate_measures(timeline, report)
+    if measures is not None:
+        repaired["measures"] = measures
     migrated = dict(docs)
     migrated[TIMELINE_DOC] = repaired
     return migrated

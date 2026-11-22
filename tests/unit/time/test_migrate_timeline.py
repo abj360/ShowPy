@@ -192,3 +192,50 @@ def test_regression_tempo_at_the_floor_is_kept() -> None:
 def test_a_document_that_is_not_a_timeline_object_is_left_for_validation() -> None:
     docs: dict[str, JsonValue] = {TIMELINE_DOC: ["not", "a", "timeline"]}
     assert migrate_timeline(docs, ReportBuilder(1)) == docs
+
+
+def _measures(*changes: tuple[float, float], length: float = 4.0) -> dict[str, JsonValue]:
+    return {
+        "counts_per_measure": length,
+        "start_measure": 1,
+        "changes": [list(c) for c in changes],
+    }
+
+
+def test_unsorted_measure_changes_are_sorted_and_reported() -> None:
+    docs = _doc(measures=_measures((14.0, 2.0), (8.0, 3.0)))
+    before = copy.deepcopy(docs)
+    timeline, repairs = _run(docs)
+    measures = timeline["measures"]
+    assert isinstance(measures, dict)
+    assert measures["changes"] == [[8.0, 3.0], [14.0, 2.0]]
+    assert len(repairs) == 1
+    assert docs == before
+
+
+def test_sorted_measure_changes_pass_through_unchanged() -> None:
+    docs = _doc(measures=_measures((8.0, 3.0), (14.0, 2.0)))
+    timeline, repairs = _run(docs)
+    assert timeline == docs[TIMELINE_DOC]
+    assert repairs == ()
+
+
+@pytest.mark.parametrize(
+    ("measures", "field", "value"),
+    [
+        (_measures(length=0.0), "measures.counts_per_measure", 0.0),
+        (_measures(length=-4.0), "measures.counts_per_measure", -4.0),
+        (_measures((8.0, 0.0)), "measures.changes", 0.0),
+        (_measures((8.0, -2.0)), "measures.changes", -2.0),
+        (_measures((-1.0, 2.0)), "measures.changes", -1.0),
+        (_measures((8.0, 3.0), (8.0, 5.0)), "measures.changes", 8.0),
+    ],
+)
+def test_measure_values_v2_cannot_hold_are_refused_with_their_location(
+    measures: dict[str, JsonValue], field: str, value: float
+) -> None:
+    with pytest.raises(SchemaError) as info:
+        migrate_timeline(_doc(measures=measures), ReportBuilder(1))
+    assert info.value.context["path"] == TIMELINE_DOC
+    assert info.value.context["field"] == field
+    assert info.value.context["value"] == value
