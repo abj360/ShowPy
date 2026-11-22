@@ -19,13 +19,14 @@ docker compose -f docker/docker-compose.yml up --build
 
 ## Workflow
 
-1. Branch from `main` as `<type>/<short-desc>`, e.g. `feat/arc-spacing`. One logical change per branch.
-2. Read `docs/showpy-api-reference.md` and `docs/adr/` for the area you touch. If the code and the reference disagree, flag it in the PR. Don't silently pick one.
-3. Write an ADR in `docs/adr/` before any architecturally load-bearing code.
-4. Write the failing test first, run it, and watch it fail for the right reason.
-5. Write the smallest change that makes it pass, then refactor while green.
-6. Run every gate locally (see [Pre-merge checklist](#pre-merge-checklist)).
-7. Commit each atomic change as soon as it is complete. Push only with approval.
+1. Before your first pull request, give the maintainer a written grant that lets them relicense your contribution, including under commercial terms. Outside contributions are accepted only with that grant: without it, the first merged outside patch ends the maintainer's sole ownership of the code, and with it the right to offer other licences.
+2. Branch from `main` as `<type>/<short-desc>`, e.g. `feat/arc-spacing`. One logical change per branch.
+3. Read `docs/showpy-api-reference.md` and `docs/adr/` for the area you touch. If the code and the reference disagree, flag it in the PR. Don't silently pick one.
+4. Write an ADR in `docs/adr/` before any architecturally load-bearing code.
+5. Write the failing test first, run it, and watch it fail for the right reason.
+6. Write the smallest change that makes it pass, then refactor while green.
+7. Run every gate locally (see [Pre-merge checklist](#pre-merge-checklist)).
+8. Commit each atomic change as soon as it is complete. Push only with approval.
 
 ## Commit standards
 

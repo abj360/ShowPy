@@ -25,6 +25,8 @@ from types import ModuleType
 
 import pytest
 
+from showpy.core.resources import schema_path
+
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "build_fonts.py"
 
 
@@ -193,6 +195,6 @@ def test_regression_every_named_license_file_is_written(
     simplex = plans[-1]
     assert simplex.license_file == "licenses/MIT.txt"
     assert (out / simplex.license_file).read_bytes() == (
-        SCRIPT_PATH.parents[1] / "LICENSE"
-    ).read_bytes()
+        schema_path("LICENSE-MIT.txt").read_bytes()
+    )
     assert "(licenses/MIT.txt)" in build_fonts._notice_block(simplex, "0")

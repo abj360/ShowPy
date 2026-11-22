@@ -25,8 +25,33 @@ def test_schema_is_a_package_resource() -> None:
     assert schema_path("showpy.show.v1.json").is_file()
 
 
+def test_schemas_ship_their_mit_notice() -> None:
+    notice = schema_path("LICENSE-MIT.txt").read_text()
+    assert notice.startswith("MIT License\n\nCopyright (c) 2026 abj360\n")
+    assert "Permission is hereby granted, free of charge" in notice
+
+
 def test_distribution_name_is_showpy() -> None:
     assert importlib.metadata.metadata("ShowPy")["Name"] == "ShowPy"
+
+
+LICENSE_EXPRESSION = " AND ".join(
+    ("PolyForm-Noncommercial-1.0.0", "MIT", "OFL-1.1", "LicenseRef-Hershey-Fonts")
+)
+LICENSE_FILES = {
+    "LICENSE",
+    "showpy/schemas/LICENSE-MIT.txt",
+    "showpy/fonts/licenses/HERSHEY.txt",
+    "showpy/fonts/licenses/MIT.txt",
+    "showpy/fonts/licenses/OFL-1.1.txt",
+}
+
+
+def test_distribution_states_its_licences() -> None:
+    metadata = importlib.metadata.metadata("ShowPy")
+    assert metadata["License-Expression"] == LICENSE_EXPRESSION
+    assert set(metadata.get_all("License-File") or []) == LICENSE_FILES
+    assert not [c for c in metadata.get_all("Classifier") or [] if c.startswith("License ::")]
 
 
 def test_import_name_is_showpy() -> None:

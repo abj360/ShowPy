@@ -1,4 +1,5 @@
 {
+  "$comment": "Licensed under the MIT License: see LICENSE-MIT.txt beside this file.",
   "$defs": {
     "Anchor": {
       "additionalProperties": false,

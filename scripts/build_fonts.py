@@ -40,6 +40,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
+from showpy.core.resources import schema_path
 from showpy.geo.svg import (
     ArcPiece,
     CubicPiece,
@@ -51,7 +52,7 @@ from showpy.geo.svg import (
 )
 from showpy.geo.text import SIMPLEX
 
-REPO_LICENSE = Path(__file__).resolve().parents[1] / "LICENSE"
+MIT_LICENSE = schema_path("LICENSE-MIT.txt")
 FONT_FORMAT = "showpy.font.v1"
 HERSHEY_UNITS_PER_EM = 32.0
 CLOSE_TOL_EM = 0.005
@@ -606,7 +607,7 @@ def _write_licenses(out: Path, cache: Path) -> None:
     licenses.mkdir(parents=True, exist_ok=True)
     for key, name in (("relief.ofl", "OFL-1.1.txt"), ("hershey.txt", "HERSHEY.txt")):
         (licenses / name).write_bytes(_fetch(SOURCES[key], cache, key))
-    (licenses / "MIT.txt").write_bytes(REPO_LICENSE.read_bytes())
+    (licenses / "MIT.txt").write_bytes(MIT_LICENSE.read_bytes())
 
 
 if __name__ == "__main__":
