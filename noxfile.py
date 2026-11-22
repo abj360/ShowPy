@@ -115,6 +115,7 @@ def _require_same_python(session: nox.Session) -> None:
 @nox.session
 def lint(session: nox.Session) -> None:
     """Checks ruff formatting, ruff lint rules, dependency declarations and Prettier formatting."""
+    session.run("python", "scripts/check_tracked_paths.py", external=True)
     _uv_run(session, "ruff", "format", "--check", ".")
     _uv_run(session, "ruff", "check", ".")
     _uv_run(session, "deptry", ".")
