@@ -93,7 +93,8 @@ want the same print layout or the same publishing flow.
    - ADR 0010's extras leave with the last functions that need them: `qr` (`qr_code`), `video`
      (`export_video`), `render` (`render_sheet`, `draw_sheet`) and `tables` (the five pandas
      results, `cue_sheet`, and `to_csv`, `to_text` and `to_pdf`, which accept a pandas table).
-     All four go at v0.6.0.
+     All four go at v0.6.0, and so does `all`, the fifth extra in `pyproject.toml`, which only
+     combines the other four.
 6. **Phase 2 changes.**
    - Dropped: E2 (video export failures and hangs), E3 (split `export/publish.py` and
      `export/data.py`, which leave) and F2 (hardening of sheet functions that leave).
@@ -128,22 +129,22 @@ want the same print layout or the same publishing flow.
 - The v0.4.0 release notes carry the timeline table above as a "leaving the library" section.
 - Interchange (`export_json`, `import_json`, `import_fonts`, `import_positions`) stays, defined
   in `showpy/show/`; its top-level names do not change.
-- At v0.6.0 the library drops its four optional extras, and the default ledger line falls by the
-  63 retired IDs.
+- At v0.6.0 the library drops all five optional extras (`qr`, `video`, `render`, `tables` and
+  `all`), and the default ledger line falls by the 63 retired IDs.
 
 ## Numbers
 
-| Measure (at `8b92d66` unless stated)                    | Value                                      |
-| ------------------------------------------------------- | ------------------------------------------ |
-| Public names                                            | 577                                        |
-| Names that warn from v0.4.0 and go at v0.6.0            | 77, plus up to 16 sheet names              |
-| Of these, names that move and keep their top-level name | 4 (interchange)                            |
-| Notes names that warn from v0.4.0 and go at 1.0.0       | 7 (`Anchor` moves)                         |
-| Stored fields dropped by the v3 step                    | 3                                          |
-| Optional extras removed at v0.6.0                       | 4 of 4 (`qr`, `video`, `render`, `tables`) |
-| Phase 2 tasks dropped / deferred                        | 3 / 5, and the split part of a sixth       |
-| Library modules over 500 lines left by the exception    | 11                                         |
-| Open ledger IDs retired                                 | 63 of 339 in the default suite             |
+| Measure (at `8b92d66` unless stated)                    | Value                                                                      |
+| ------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Public names                                            | 577                                                                        |
+| Names that warn from v0.4.0 and go at v0.6.0            | 77, plus up to 16 sheet names                                              |
+| Of these, names that move and keep their top-level name | 4 (interchange)                                                            |
+| Notes names that warn from v0.4.0 and go at 1.0.0       | 7 (`Anchor` moves)                                                         |
+| Stored fields dropped by the v3 step                    | 3                                                                          |
+| Optional extras removed at v0.6.0                       | 5 of 5 (`qr`, `video`, `render`, `tables`, and `all`, which combines them) |
+| Phase 2 tasks dropped / deferred                        | 3 / 5, and the split part of a sixth                                       |
+| Library modules over 500 lines left by the exception    | 11                                                                         |
+| Open ledger IDs retired                                 | 63 of 339 in the default suite                                             |
 
 The 77 are 45 `showpy.export` names (the 4 interchange names, which go only from their old
 path), 24 sheet names, 5 pandas results and 3 stored fields.
