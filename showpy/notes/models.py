@@ -12,10 +12,9 @@ Contains:
 """
 
 from collections.abc import Sequence
-from datetime import datetime
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import AwareDatetime, model_validator
 
 from showpy.core.errors import SchemaError
 from showpy.core.ids import SetId, SpotId, TransitionId
@@ -98,7 +97,8 @@ class Note(FrozenModel):
         kind: goal, idea, todo or warning.
         anchor: What the note is attached to.
         author: User name, or "agent".
-        created_at: When the note was written; passed in, never read from the clock.
+        created_at: When the note was written, with a time zone; passed in, never read from
+            the clock.
         visible: Whether the canvas shows it.
     """
 
@@ -107,5 +107,5 @@ class Note(FrozenModel):
     kind: NoteKind = "idea"
     anchor: Anchor
     author: str
-    created_at: datetime
+    created_at: AwareDatetime
     visible: bool = True

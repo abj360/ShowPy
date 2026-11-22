@@ -315,6 +315,7 @@
       "MISSING_GLYPH": "'MISSING_GLYPH'",
       "MISSING_SPOT": "'MISSING_SPOT'",
       "MIXED_OPERATORS": "'MIXED_OPERATORS'",
+      "NAME_TAKEN": "'NAME_TAKEN'",
       "NAME_TOO_LONG": "'NAME_TOO_LONG'",
       "NOT_A_MEMBER": "'NOT_A_MEMBER'",
       "NOT_A_TEXT_FORM": "'NOT_A_TEXT_FORM'",
@@ -532,6 +533,7 @@
       "symbol": "str"
     }
   },
+  "GroupPatch": "(*args)",
   "GuideLine": {
     "model": {
       "id": "str",
@@ -775,7 +777,7 @@
     "model": {
       "anchor": "showpy.notes.models.Anchor",
       "author": "str",
-      "created_at": "datetime.datetime",
+      "created_at": "pydantic.types.AwareDatetime",
       "id": "str",
       "kind": "NoteKind",
       "text": "str",
@@ -1468,7 +1470,7 @@
   "customize": "(sheet: showpy.sheet.models.Sheet, **changes: object) -> showpy.sheet.models.Sheet",
   "decode_event": "(data: collections.abc.Mapping[str, JsonValue], *, report: showpy.show.migrate.ReportBuilder | None = None) -> showpy.show.models.CanvasEvent",
   "default_paths": "(show: 'Show', tid: tuple[str, str]) -> showpy.choreo.path_models.TransitionSpec",
-  "define_selection": "(show: 'Show', name: str, sel: Selector) -> 'Show'",
+  "define_selection": "(show: 'Show', name: str, sel: Selector, *, replace: bool = False) -> 'Show'",
   "delay": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, counts: float, *, keep_end: bool = True, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",
   "delete_spots": "(show: 'Show', sel: Selector, *, force: bool = False) -> 'Show'",
   "density_map": "(s: showpy.choreo.models.Set, sheet: showpy.sheet.models.Sheet, cell: Meters = 1.0) -> NDArray[numpy.int64]",
@@ -1496,7 +1498,7 @@
   "ease": "(easing: showpy.choreo.path_models.Easing, u: FloatArray) -> FloatArray",
   "easing_breaks": "(easing: showpy.choreo.path_models.Easing) -> list[float]",
   "edit": "(form: showpy.choreo.form_models.Form, *, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., font_registry: showpy.geo.fonts.FontRegistry | None = None, **changes: Any) -> showpy.choreo.form_models.Form",
-  "edit_group": "(show: 'Show', key: str, /, **changes: Any) -> 'Show'",
+  "edit_group": "(show: 'Show', key: str, /, **changes: Unpack[showpy.cast.spots.GroupPatch]) -> 'Show'",
   "edit_note": "(show: 'Show', note_id: str, /, **changes: Any) -> 'Show'",
   "edit_params": "(form: showpy.choreo.form_models.Form, *, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., **params: Any) -> showpy.choreo.form_models.Form",
   "edit_text_count": "(form: showpy.choreo.form_models.Form, *, add: collections.abc.Sequence[str] = (), remove: collections.abc.Sequence[str] = (), n: int | None = None, spacing: Meters | None = None, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., font_registry: showpy.geo.fonts.FontRegistry | None = None) -> showpy.choreo.form_models.Form",

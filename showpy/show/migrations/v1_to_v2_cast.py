@@ -9,12 +9,18 @@ with no safe repair (a negative size, a color that is not `#rrggbb`, a pad outsi
 limit or default radius that is not a positive finite number) is refused with SchemaError naming
 the document, the field and the value. ID renames belong to the ids step.
 
+A v2 note time carries a time zone. A stored note time without one is read as UTC and the
+change is recorded with `report.repair()`, one per note; a value that is not a time is left for
+model validation to refuse.
+
 Contains:
-    migrate_cast(): rewrites the cast from the v1 shape to the v2 shape
+    NOTES_DOC: names the stored notes document
+    migrate_cast(): rewrites the cast and the note times from the v1 shape to the v2 shape
 """
 
 import math
 import re
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
 from showpy.cast.models import HEX_COLOR_PATTERN, MAX_LABEL_PAD
@@ -27,6 +33,7 @@ if TYPE_CHECKING:
 # The same path as showpy.show.migrate.SHOW_DOC, which imports this package and so cannot be
 # imported here.
 SHOW_DOC: Final = "/show/show.json"
+NOTES_DOC: Final = "/show/notes.json"
 SHAPE_SIZE_FIELDS: Final = ("radius_m", "width_m", "depth_m")
 
 type JsonObject = dict[str, JsonValue]
@@ -158,16 +165,45 @@ def _drop_unknown_prefixes(cast: JsonObject, report: "ReportBuilder") -> JsonObj
     return {**cast, "label_scheme": {**scheme, "prefixes": kept}}
 
 
+def _naive_time(value: JsonValue | None) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is None else None
+
+
+def _read_note_time_as_utc(note: JsonValue, report: "ReportBuilder") -> JsonValue:
+    fields = _object(note)
+    naive = _naive_time(fields.get("created_at"))
+    if naive is None:
+        return note
+    aware = naive.replace(tzinfo=UTC).isoformat().replace("+00:00", "Z")
+    report.repair(f"Read the time of note {fields.get('id')!r} as UTC: {aware}")
+    return {**fields, "created_at": aware}
+
+
+def _migrate_notes(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[str, JsonValue]:
+    notes = docs.get(NOTES_DOC)
+    if not isinstance(notes, list):
+        return docs
+    return {**docs, NOTES_DOC: [_read_note_time_as_utc(note, report) for note in notes]}
+
+
 def migrate_cast(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[str, JsonValue]:
-    """Rewrites the cast from the v1 shape to the v2 shape.
+    """Rewrites the cast and the note times from the v1 shape to the v2 shape.
 
     Args:
         docs: Stored path to parsed document, without a format header; never mutated.
         report: Collects the repairs the step makes.
 
     Returns:
-        docs: The documents with the repaired cast; a value with no safe repair raises SchemaError.
+        docs: The documents with the repaired cast and aware note times; a value with no safe
+            repair raises SchemaError.
     """
+    docs = _migrate_notes(docs, report)
     show = _object(docs.get(SHOW_DOC))
     cast = show.get("cast")
     if not isinstance(cast, dict):
