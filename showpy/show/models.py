@@ -22,6 +22,7 @@ Contains:
     FormOp: replaces or adds one form
     PathsOp: replaces one transition's stored paths
     CountsOp: retimes one set
+    Highlight: points the designer at spots, an area, a point, a set, a transition or a zone
     CanvasEvent: records one edit or pointer from either side of the canvas
     Proposal: holds an agent suggestion the designer accepts or rejects
     ProposalPreview: holds the ghost placements and paths a proposal would produce
@@ -33,7 +34,7 @@ from collections import Counter
 from collections.abc import Mapping
 from datetime import datetime
 from functools import cached_property
-from typing import Annotated, Any, Literal
+from typing import Annotated, Final, Literal
 
 from pydantic import Field, model_validator
 
@@ -483,26 +484,89 @@ class CountsOp(FrozenModel):
 type ChangeOp = Annotated[PlacementOp | FormOp | PathsOp | CountsOp, Field(discriminator="op")]
 
 
+class Highlight(FrozenModel):
+    """Points the designer at part of the canvas for a while; it changes nothing.
+
+    Attributes:
+        anchor: What is pointed at, when it is spots, an area, a point, a set or a transition.
+        zone: Zone name, when the pointer is a zone.
+        ttl_s: Seconds the pointer stays visible.
+    """
+
+    anchor: Anchor | None = None
+    zone: str | None = None
+    ttl_s: Annotated[float, Field(gt=0)]
+
+    @model_validator(mode="after")
+    def _require_one_target(self) -> "Highlight":
+        if (self.anchor is None) == (self.zone is None):
+            raise SchemaError(
+                "highlight needs exactly one of anchor and zone",
+                hint="set `anchor` for spots, an area, a point, a set or a transition, "
+                "or `zone` for a zone",
+            )
+        return self
+
+
+type EventPayload = PlacementOp | FormOp | PathsOp | CountsOp | Pin | Comment | Highlight
+
+EVENT_PAYLOADS: Final[Mapping[str, type[EventPayload]]] = ReadOnlyMap(
+    {
+        "move": PlacementOp,
+        "edit_form": FormOp,
+        "edit_paths": PathsOp,
+        "set_counts": CountsOp,
+        "pin": Pin,
+        "unpin": Pin,
+        "comment": Comment,
+        "highlight": Highlight,
+    }
+)
+
+
 class CanvasEvent(FrozenModel):
     """Records one edit or pointer from either side of the canvas.
 
-    Edit payloads are dumped ops (`PlacementOp`, `FormOp`, `PathsOp`, `CountsOp`); pin and
-    unpin payloads are dumped `Pin`s; comment payloads are dumped `Comment`s.
+    The payload type follows the kind: `move` carries a `PlacementOp`, `edit_form` a `FormOp`,
+    `edit_paths` a `PathsOp`, `set_counts` a `CountsOp`, `pin` and `unpin` a `Pin`, `comment` a
+    `Comment` and `highlight` a `Highlight`. A payload given as a dict is validated as the
+    model its kind names; a payload of another kind's model is refused.
 
     Attributes:
         id: Event ID.
         at: When it happened.
         kind: What happened.
-        payload: JSON body for the kind.
+        payload: Typed body for the kind.
         revision: Revision that holds the edit; empty for pointers such as highlights.
     """
 
     id: str
     at: datetime
     kind: EventKind
-    # Any: payloads are JSON objects whose fields depend on the kind.
-    payload: dict[str, Any]
+    payload: EventPayload
     revision: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _type_payload(cls, data: object) -> object:
+        if not isinstance(data, Mapping):
+            return data
+        kind, payload = data.get("kind"), data.get("payload")
+        model = EVENT_PAYLOADS.get(kind) if isinstance(kind, str) else None
+        if model is None or not isinstance(payload, Mapping):
+            return data
+        return {**data, "payload": model.model_validate(payload)}
+
+    @model_validator(mode="after")
+    def _require_payload_of_kind(self) -> "CanvasEvent":
+        expected = EVENT_PAYLOADS[self.kind]
+        if type(self.payload) is not expected:
+            raise SchemaError(
+                f"event {self.id} of kind {self.kind} carries a {type(self.payload).__name__}",
+                hint=f"give a {expected.__name__} payload for kind {self.kind}",
+                context={"event": self.id},
+            )
+        return self
 
 
 class Proposal(FrozenModel):

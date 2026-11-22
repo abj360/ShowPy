@@ -53,7 +53,7 @@ from showpy.examples import EXAMPLE_TIME, performer
 from showpy.export.data import export_json, import_json
 from showpy.export.models import Publication
 from showpy.export.publish import claim_spot, join_link, publish, unclaimed, verify_join_token
-from showpy.show.collab import apply_event, events_since
+from showpy.show.collab import apply_event, decode_event, events_since
 from showpy.show.documents import decode_show, encode_show
 from showpy.show.file_repository import FileRepository
 from showpy.show.history import revert
@@ -324,6 +324,14 @@ def test_events_since_replays_to_head(scenario: Scenario) -> None:
         with unchanged(replayed, event):
             replayed = apply_event(replayed, event)
     assert encode_show(replayed) == encode_show(scenario.head)
+
+
+def test_every_emitted_event_round_trips(scenario: Scenario) -> None:
+    assert scenario.events
+    for event in scenario.events:
+        dumped = event.model_dump(mode="json")
+        assert decode_event(dumped) == event
+        assert CanvasEvent.model_validate_json(event.model_dump_json()) == event
 
 
 def test_revert_restores_an_earlier_revision(scenario: Scenario) -> None:

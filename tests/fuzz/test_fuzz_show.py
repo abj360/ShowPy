@@ -224,8 +224,11 @@ OP_PAYLOADS = st.one_of(
 
 @given(EVENT_KINDS, OP_PAYLOADS)
 def test_fuzz_apply_event_payloads(kind: EventKind, payload: dict[str, object]) -> None:
-    event = CanvasEvent(id="e", at=AT, kind=kind, payload=payload)
-    only_showpy_errors(lambda: apply_event(PLAIN, event, force=True), (kind, payload))
+    def replay() -> Show:
+        event = CanvasEvent.model_validate({"id": "e", "at": AT, "kind": kind, "payload": payload})
+        return apply_event(PLAIN, event, force=True)
+
+    only_showpy_errors(replay, (kind, payload))
 
 
 @given(st.one_of(RAW_BYTES, JSON_VALUES.map(_json_bytes)))

@@ -39,12 +39,14 @@ from showpy.core.errors import (
     UnknownRefError,
 )
 from showpy.core.ids import FormId, SetId, SpotId, make_tid
+from showpy.core.json_types import JsonValue
 from showpy.core.selection import Selection
 from showpy.notes.models import Anchor
 from showpy.show.changes import apply_change
 from showpy.show.collab import (
     accept,
     apply_event,
+    decode_event,
     events_since,
     highlight,
     pins,
@@ -55,12 +57,14 @@ from showpy.show.collab import (
 )
 from showpy.show.documents import dump_json
 from showpy.show.manage import add_set, set_counts
+from showpy.show.migrate import ReportBuilder
 from showpy.show.models import (
     CanvasEvent,
     Comment,
     CountsOp,
     EventKind,
     FormOp,
+    Highlight,
     PathsOp,
     Pin,
     PlacementOp,
@@ -209,31 +213,31 @@ def test_events_since_reports_comments() -> None:
     designer.write(COMMENTS_DOC, dump_json([comment.model_dump(mode="python")]), at=AT + STEP)
     (event,) = events_since(agent, start)
     assert event.kind == "comment"
-    assert Comment.model_validate(event.payload) == comment
+    assert event.payload == comment
 
 
 def test_apply_event_rules() -> None:
-    mismatched = CanvasEvent(
-        id="e",
-        at=AT,
-        kind="move",
-        payload={"op": "counts", "set_id": "2", "counts": 4},
-    )
     with pytest.raises(SchemaError):
-        apply_event(two_set_show(), mismatched)
+        CanvasEvent.model_validate(
+            {
+                "id": "e",
+                "at": AT,
+                "kind": "move",
+                "payload": {"op": "counts", "set_id": "2", "counts": 4},
+            }
+        )
+    with pytest.raises(SchemaError):
+        CanvasEvent(id="e", at=AT, kind="move", payload=CountsOp(set_id=SetId("2"), counts=4))
     pinned = pin(two_set_show(), "entity", "T1")
-    note = CanvasEvent(id="e", at=AT, kind="comment", payload={"text": "x"})
+    note = CanvasEvent(
+        id="e", at=AT, kind="comment", payload=Comment(id="c", anchor=Anchor.on_set("2"), text="x")
+    )
     assert apply_event(pinned, note) == pinned
 
 
 def test_canvas_event_needs_explicit_force() -> None:
     pinned = pin(two_set_show(), "entity", "T1")
-    move = CanvasEvent(
-        id="e",
-        at=AT,
-        kind="move",
-        payload=_move("T1", 3.0).model_dump(mode="json"),
-    )
+    move = CanvasEvent(id="e", at=AT, kind="move", payload=_move("T1", 3.0))
     with pytest.raises(LockedError):
         apply_event(pinned, move)
     assert apply_event(pinned, move, force=True).set("2").get("T1").x == 3.0
@@ -241,7 +245,7 @@ def test_canvas_event_needs_explicit_force() -> None:
 
 def _pin_event(kind: EventKind, reason: str = "") -> CanvasEvent:
     held = Pin(target="entity", id="T1", reason=reason)
-    return CanvasEvent(id="e", at=AT, kind=kind, payload=held.model_dump())
+    return CanvasEvent(id="e", at=AT, kind=kind, payload=held)
 
 
 def test_regression_unpin_event_needs_force() -> None:
@@ -270,7 +274,7 @@ def test_regression_unpin_event_of_a_missing_pin_raises_unknown_ref(force: bool)
 
 
 def test_agent_pin_event_applies() -> None:
-    event = CanvasEvent(id="e", at=AT, kind="pin", payload=Pin(target="set", id="1").model_dump())
+    event = CanvasEvent(id="e", at=AT, kind="pin", payload=Pin(target="set", id="1"))
     assert Pin(target="set", id="1") in [
         Pin(target=p.target, id=p.id) for p in apply_event(two_set_show(), event).pins
     ]
@@ -338,11 +342,12 @@ def test_highlight_and_selection() -> None:
     event = highlight("pit", 10.0, at=AT, event_id="h1")
     assert (event.kind, event.payload, event.revision) == (
         "highlight",
-        {"zone": "pit", "ttl_s": 10.0},
+        Highlight(zone="pit", ttl_s=10.0),
         "",
     )
     tid_event = highlight(Anchor.on_transition(("1", "2")), at=AT, event_id="h2")
-    assert tid_event.payload["anchor"]["tid"] == ["1", "2"]
+    assert isinstance(tid_event.payload, Highlight)
+    assert tid_event.payload.anchor == Anchor.on_transition(("1", "2"))
     with pytest.raises(TimeRangeError):
         highlight("pit", 0.0, at=AT, event_id="h3")
     _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
@@ -453,9 +458,8 @@ def test_regression_canvas_event_with_bad_payload_is_a_schema_error(
     payload: dict[str, object],
 ) -> None:
     """Raises SchemaError, not pydantic's ValidationError, for a malformed op payload."""
-    event = CanvasEvent(id="e", at=AT, kind="set_counts", payload=payload)
     with pytest.raises(SchemaError) as info:
-        apply_event(two_set_show(), event)
+        CanvasEvent.model_validate({"id": "e", "at": AT, "kind": "set_counts", "payload": payload})
     assert info.value.context["errors"]
 
 
@@ -464,10 +468,44 @@ def test_regression_transition_pin_events_need_force_in_either_spelling(spelling
     """Refuses replacing or dropping a transition pin whichever way its ID is spelled."""
     pinned = pin(two_set_show(), "transition", "1->2", "keep")
     held = Pin(target="transition", id=spelling, reason="x")
-    replace = CanvasEvent(id="e", at=AT, kind="pin", payload=held.model_dump())
-    drop = CanvasEvent(id="e", at=AT, kind="unpin", payload=held.model_dump())
+    replace = CanvasEvent(id="e", at=AT, kind="pin", payload=held)
+    drop = CanvasEvent(id="e", at=AT, kind="unpin", payload=held)
     for event in (replace, drop):
         with pytest.raises(LockedError):
             apply_event(pinned, event)
     assert [p.reason for p in apply_event(pinned, replace, force=True).pins] == ["x"]
     assert apply_event(pinned, drop, force=True).pins == ()
+
+
+def _event_json(**extra: JsonValue) -> dict[str, JsonValue]:
+    return {
+        "id": "h1",
+        "at": AT.isoformat(),
+        "kind": "highlight",
+        "payload": {"zone": "pit", "ttl_s": 10.0},
+        "revision": "",
+        **extra,
+    }
+
+
+def test_event_payload_rejects_unknown_fields() -> None:
+    """Refuses unknown fields on the event and inside its payload."""
+    with pytest.raises(SchemaError):
+        decode_event(_event_json(author="pat"))
+    raw = _event_json()
+    with pytest.raises(SchemaError):
+        decode_event({**raw, "payload": {"zone": "pit", "ttl_s": 10.0, "colour": "red"}})
+    with pytest.raises(SchemaError):
+        CanvasEvent.model_validate(
+            {"id": "e", "at": AT, "kind": "set_counts", "payload": {"op": "counts", "extra": 1}}
+        )
+
+
+def test_regression_v02_event_with_actor_decodes() -> None:
+    """Decodes a v0.2 event, drops its actor and records the drop in the report."""
+    report = ReportBuilder(from_version=1)
+    event = decode_event(_event_json(actor="agent"), report=report)
+    assert event == highlight("pit", 10.0, at=AT, event_id="h1")
+    assert len(report.build().repairs) == 1
+    assert "agent" in report.build().repairs[0]
+    assert decode_event(_event_json(actor="agent")) == event

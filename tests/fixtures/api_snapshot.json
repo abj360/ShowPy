@@ -72,7 +72,7 @@
       "at": "datetime.datetime",
       "id": "str",
       "kind": "EventKind",
-      "payload": "dict[str, Any]",
+      "payload": "EventPayload",
       "revision": "str"
     }
   },
@@ -496,6 +496,13 @@
       "kind": "Literal['yard', 'hash', 'sideline', 'center', 'edge', 'spike', 'custom']",
       "label": "str",
       "points": "Ring"
+    }
+  },
+  "Highlight": {
+    "model": {
+      "anchor": "showpy.notes.models.Anchor | None",
+      "ttl_s": "float",
+      "zone": "str | None"
     }
   },
   "Hold": {
@@ -1373,6 +1380,7 @@
   "custom_form": "(form_id: str, members: collections.abc.Sequence[str], points: object, facings: collections.abc.Sequence[Degrees] | None = None, *, set_id: str = '') -> showpy.choreo.form_models.Form",
   "custom_path": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, motion: str, registry: showpy.choreo.motion.MotionRegistry = ..., *, force: bool = False, **params: Any) -> showpy.choreo.path_models.TransitionSpec",
   "customize": "(sheet: showpy.sheet.models.Sheet, **changes: object) -> showpy.sheet.models.Sheet",
+  "decode_event": "(data: collections.abc.Mapping[str, JsonValue], *, report: showpy.show.migrate.ReportBuilder | None = None) -> showpy.show.models.CanvasEvent",
   "default_paths": "(show: 'Show', tid: tuple[str, str]) -> showpy.choreo.path_models.TransitionSpec",
   "define_selection": "(show: 'Show', name: str, sel: Selector) -> 'Show'",
   "delay": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, counts: float, *, keep_end: bool = True, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",
