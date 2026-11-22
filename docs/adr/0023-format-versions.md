@@ -30,9 +30,11 @@ No release has ever written or read `"format": "showpy.show"`: the commits that 
 
 1. **v2 ships at v0.4.0 as ADR 0007 scaffolds it**: typed payloads (form recipes, motion
    parameters, route curves, event payloads), IDs renamed once by rule with a report, and tempo
-   sections sorted by count. One change from ADR 0007: v2 holds no notes. The migration moves
-   them to a `notes.json` document with its own header,
-   `{"format": "e8.notes", "version": 1, ...}` (ADR 0021), which adds a tenth sub-step, `notes`.
+   sections sorted by count. Two changes from ADR 0007:
+   - v2 holds no notes. The migration moves them to a `notes.json` document with its own header,
+     `{"format": "e8.notes", "version": 1, ...}` (ADR 0021), which adds a tenth sub-step,
+     `notes`.
+   - The format value is `e8.show`, not `showpy.show` (decision 2).
 2. **The format value is `e8.show`.** v0.4.0 writes `"format": "e8.show"` and `"version": 2` as
    the first two keys of `show.json` and of the `export_json` document. Version 2 under the old
    value `showpy.show` exists only on `main`, never in a tag, so no reader for it is needed and
