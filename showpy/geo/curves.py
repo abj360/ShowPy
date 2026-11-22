@@ -77,12 +77,12 @@ class Segment(CurveModel):
     b: Point
     closed: Literal[False] = False
 
-    def length(self) -> Meters:
+    def _length(self) -> Meters:
         """Returns the distance from a to b."""
         return math.dist(self.a, self.b)
 
     def _points(self, s: FloatArray) -> Points:
-        total = self.length()
+        total = self._length()
         u = s / total if total > 0 else np.zeros_like(s)
         a = np.asarray(self.a)
         return a + np.outer(u, np.asarray(self.b) - a)
@@ -123,7 +123,7 @@ class Polyline(CurveModel):
         pieces = np.linalg.norm(np.diff(self._vertices, axis=0), axis=1)
         return np.concatenate([[0.0], np.cumsum(pieces)])
 
-    def length(self) -> Meters:
+    def _length(self) -> Meters:
         """Returns the summed length of every piece."""
         return float(self._cumulative[-1])
 
@@ -184,12 +184,12 @@ class ArcCurve(CurveModel):
             raise GeometryError("arc sweep is zero", hint="give a non-zero sweep_deg")
         return self
 
-    def length(self) -> Meters:
+    def _length(self) -> Meters:
         """Returns radius times the absolute sweep in radians."""
         return self.radius * math.radians(abs(self.sweep_deg))
 
     def _theta(self, s: FloatArray) -> FloatArray:
-        theta: FloatArray = self.start_deg + self.sweep_deg * s / self.length()
+        theta: FloatArray = self.start_deg + self.sweep_deg * s / self._length()
         return theta
 
     def _points(self, s: FloatArray) -> Points:
@@ -221,7 +221,7 @@ class CircleCurve(CurveModel):
         _require_positive("radius", self.radius)
         return self
 
-    def length(self) -> Meters:
+    def _length(self) -> Meters:
         """Returns the circumference."""
         return 2 * math.pi * self.radius
 
@@ -229,7 +229,7 @@ class CircleCurve(CurveModel):
         return 1.0 if self.ccw else -1.0
 
     def _theta(self, s: FloatArray) -> FloatArray:
-        theta: FloatArray = self.start_deg + self._sign() * 360.0 * s / self.length()
+        theta: FloatArray = self.start_deg + self._sign() * 360.0 * s / self._length()
         return theta
 
     def _points(self, s: FloatArray) -> Points:
@@ -492,7 +492,7 @@ class CompositeCurve(CurveModel):
     def _offsets(self) -> FloatArray:
         return np.concatenate([[0.0], np.cumsum([part.length() for part in self.parts])])
 
-    def length(self) -> Meters:
+    def _length(self) -> Meters:
         """Returns the summed part lengths."""
         return float(self._offsets[-1])
 
@@ -567,7 +567,7 @@ class TrimmedCurve(CurveModel):
                 )
         return self
 
-    def length(self) -> Meters:
+    def _length(self) -> Meters:
         """Returns |s1 - s0|."""
         return abs(self.s1 - self.s0)
 
