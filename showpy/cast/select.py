@@ -4,6 +4,7 @@ select.py --- the selection language plus spatial picks, ordering, splitting and
 Contains:
     Selection: re-exports the ordered, duplicate-free ID set from showpy.core.selection
     Selector: re-exports the alias for anything that picks spots
+    SelectorToken: holds one word, operator or parenthesis of selector text with its position
     SelectorAst: holds a parsed selector as a postfix program of words and operators
     parse_selector(): parses selector text, refusing `&` mixed with `+` or `-` at one level
     normalize_v1_selector(): rewrites stored v1 selector text into v2 grammar, same meaning
@@ -70,12 +71,23 @@ type OrderBy = Literal["form", "x", "y"] | Curve
 type RegionLike = Area | Region | Points | Sequence[Point]
 
 
-class _Token(NamedTuple):
+class SelectorToken(NamedTuple):
+    """Holds one word, operator or parenthesis of selector text.
+
+    Attributes:
+        text: The token as written.
+        position: Character offset of the token in the selector text.
+
+    >>> SelectorToken("T1", 0).is_word, SelectorToken("+", 3).is_word
+    (True, False)
+    """
+
     text: str
     position: int
 
     @property
     def is_word(self) -> bool:
+        """Tells whether the token names spots rather than being an operator or parenthesis."""
         return self.text not in (*OPERATORS, "(", ")")
 
 
@@ -100,12 +112,12 @@ def _glued(expr: str, position: int) -> bool:
     return any(c and not c.isspace() and c not in "()" for c in neighbours)
 
 
-def _tokens(expr: str) -> list[_Token]:
+def _tokens(expr: str) -> list[SelectorToken]:
     require_size(len(expr), MAX_TEXT_CHARS, what="expression characters")
-    return [_Token(match[0], match.start()) for match in TOKEN_PATTERN.finditer(expr)]
+    return [SelectorToken(match[0], match.start()) for match in TOKEN_PATTERN.finditer(expr)]
 
 
-def _tokenize(expr: str) -> list[_Token]:
+def _tokenize(expr: str) -> list[SelectorToken]:
     tokens = _tokens(expr)
     for token in tokens:
         if token.text in OPERATORS and _glued(expr, token.position):
@@ -152,7 +164,7 @@ def _universe_of(
     return _Universe(ids, source, cast, forms, {spot_id: i for i, spot_id in enumerate(ids)})
 
 
-def _unknown(kind: str, name: str, known: Sequence[str], token: _Token) -> UnknownRefError:
+def _unknown(kind: str, name: str, known: Sequence[str], token: SelectorToken) -> UnknownRefError:
     close = close_matches(name, known)
     return UnknownRefError(
         f"unknown {kind} {name!r}",
@@ -171,7 +183,7 @@ def label_prefix(spot_id: str) -> str | None:
     return None if number is None else prefix
 
 
-def _resolve_prefix(universe: _Universe, token: _Token) -> tuple[SpotId, ...]:
+def _resolve_prefix(universe: _Universe, token: SelectorToken) -> tuple[SpotId, ...]:
     prefix = token.text[: -len(PREFIX_MARK)]
     found = tuple(i for i in universe.ids if label_prefix(i) == prefix)
     if not found:
@@ -180,7 +192,7 @@ def _resolve_prefix(universe: _Universe, token: _Token) -> tuple[SpotId, ...]:
     return found
 
 
-def _resolve_range(universe: _Universe, token: _Token) -> tuple[SpotId, ...]:
+def _resolve_range(universe: _Universe, token: SelectorToken) -> tuple[SpotId, ...]:
     expanded = parse_range(token.text)
     at = universe.positions
     for endpoint in (expanded[0], expanded[-1]):
@@ -189,7 +201,7 @@ def _resolve_range(universe: _Universe, token: _Token) -> tuple[SpotId, ...]:
     return tuple(universe.ids[at[i]] for i in expanded if i in at)
 
 
-def _resolve_form(universe: _Universe, name: str, token: _Token) -> tuple[SpotId, ...]:
+def _resolve_form(universe: _Universe, name: str, token: SelectorToken) -> tuple[SpotId, ...]:
     if universe.forms is None:
         raise SchemaError(
             "form: needs a Show or Set",
@@ -201,7 +213,7 @@ def _resolve_form(universe: _Universe, name: str, token: _Token) -> tuple[SpotId
     return universe.forms[name]
 
 
-def _require_cast(universe: _Universe, kind: str, token: _Token) -> Cast:
+def _require_cast(universe: _Universe, kind: str, token: SelectorToken) -> Cast:
     if universe.cast is None:
         raise SchemaError(
             f"{kind}: needs the cast, which a Set does not hold",
@@ -211,7 +223,9 @@ def _require_cast(universe: _Universe, kind: str, token: _Token) -> Cast:
     return universe.cast
 
 
-def _resolve_spot_kind(cast: Cast, kind: str, name: str, token: _Token) -> tuple[SpotId, ...]:
+def _resolve_spot_kind(
+    cast: Cast, kind: str, name: str, token: SelectorToken
+) -> tuple[SpotId, ...]:
     if kind == "group":
         if name not in cast.groups:
             raise _unknown("group", name, list(cast.groups), token)
@@ -235,7 +249,7 @@ def _resolve_spot_kind(cast: Cast, kind: str, name: str, token: _Token) -> tuple
     return tuple(i for i in cast.ids() if i in members)
 
 
-def _resolve_kind(universe: _Universe, token: _Token, expr: str) -> tuple[SpotId, ...]:
+def _resolve_kind(universe: _Universe, token: SelectorToken, expr: str) -> tuple[SpotId, ...]:
     kind, _, name = token.text.partition(KIND_SEPARATOR)
     if kind == "form":
         return _resolve_form(universe, name, token)
@@ -244,7 +258,7 @@ def _resolve_kind(universe: _Universe, token: _Token, expr: str) -> tuple[SpotId
     return _resolve_spot_kind(_require_cast(universe, kind, token), kind, name, token)
 
 
-def _resolve_word(universe: _Universe, token: _Token, expr: str) -> tuple[SpotId, ...]:
+def _resolve_word(universe: _Universe, token: SelectorToken, expr: str) -> tuple[SpotId, ...]:
     text = token.text
     if text == ALL_WORD:
         found = universe.ids
@@ -268,7 +282,7 @@ class _Level(NamedTuple):
     first: int | None = None
     last: int = 0
     kind: str | None = None
-    pending: _Token | None = None
+    pending: SelectorToken | None = None
 
 
 class SelectorAst(NamedTuple):
@@ -281,7 +295,7 @@ class SelectorAst(NamedTuple):
     """
 
     text: str
-    program: tuple[_Token, ...]
+    program: tuple[SelectorToken, ...]
 
 
 class _Parser:
@@ -299,11 +313,13 @@ class _Parser:
         closes: Token indices that get an added `)` before them, one entry per parenthesis.
     """
 
-    def __init__(self, tokens: list[_Token], expr: str, *, wraps_mixes: bool = False) -> None:
+    def __init__(
+        self, tokens: list[SelectorToken], expr: str, *, wraps_mixes: bool = False
+    ) -> None:
         self.tokens = tokens
         self.expr = expr
         self.wraps_mixes = wraps_mixes
-        self.program: list[_Token] = []
+        self.program: list[SelectorToken] = []
         self.levels = [_Level(opened=-1)]
         self.opens: list[int] = []
         self.closes: list[int] = []
@@ -323,7 +339,7 @@ class _Parser:
             raise _bad_token("expression ended, expected )", end, self.expr)
         return SelectorAst(self.expr, tuple(self.program))
 
-    def _term_token(self, index: int, token: _Token) -> bool:
+    def _term_token(self, index: int, token: SelectorToken) -> bool:
         if token.is_word:
             self.program.append(token)
             self._close_term(index)
@@ -341,7 +357,7 @@ class _Parser:
         first = start if level.first is None else level.first
         self.levels[-1] = level._replace(first=first, last=start, pending=None)
 
-    def _after_term(self, index: int, token: _Token) -> bool:
+    def _after_term(self, index: int, token: SelectorToken) -> bool:
         if token.text == ")" and len(self.levels) > 1:
             self._close_term(self.levels.pop().opened)
             return False

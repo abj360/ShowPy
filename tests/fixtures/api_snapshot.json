@@ -935,6 +935,8 @@
       "ids": "tuple[showpy.core.ids.SpotId, ...]"
     }
   },
+  "SelectorAst": "(text: str, program: tuple[showpy.cast.select.SelectorToken, ...])",
+  "SelectorToken": "(text: str, position: int)",
   "Set": {
     "model": {
       "counts": "float",
@@ -1507,6 +1509,7 @@
   "parse_path": "(d: str) -> list[showpy.geo.svg.Subpath]",
   "parse_range": "(text: str) -> list[str]",
   "parse_ref": "(text: str) -> tuple[str, str, str | None]",
+  "parse_selector": "(text: str) -> showpy.cast.select.SelectorAst",
   "parse_tid": "(text: str) -> showpy.core.ids.TransitionId",
   "paths_table": "(spec: showpy.choreo.path_models.TransitionSpec) -> 'pd.DataFrame'",
   "pause": "(pub: showpy.export.models.Publication) -> showpy.export.models.Publication",
