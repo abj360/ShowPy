@@ -19,6 +19,8 @@ Contains:
     test_regression_apply_match_rejects_an_unknown_form: raises UnknownRefError
     test_regression_apply_match_rejects_an_out_of_range_slot: raises MatchError for a slot past
         the form's last slot or below zero
+    test_regression_apply_match_reports_a_pinned_spot_before_a_bad_slot: raises LockedError ahead
+        of the MatchError a bad slot would raise
     test_regression_apply_match_names_a_pinned_row_on_a_matched_slot: raises MatchError naming
         the pinned spot that already stands on the slot
     test_regression_apply_match_names_the_spot_holding_a_slot: raises MatchError naming both spots
@@ -265,6 +267,17 @@ def test_regression_swap_ignores_a_form_the_set_no_longer_places() -> None:
     swapped = swap(show, "2", "T2", "T3")
     assert swapped.forms[FormId("a")] == stale
     assert swapped.forms[FormId("b")].members == ("T3", "T2")
+
+
+def test_regression_apply_match_reports_a_pinned_spot_before_a_bad_slot() -> None:
+    """Raises LockedError for a pinned mover even when the result also names a missing slot."""
+    show, ring = _ring_show()
+    pinned = pin_spot(show, "2", "T2")
+    result = match_by_order(["T2"], ring, show.set("1")).replace(
+        slots={"T2": ("ring", len(REVERSED_RING))}
+    )
+    with pytest.raises(LockedError):
+        apply_match(pinned, TID, result)
 
 
 def test_regression_apply_match_names_a_pinned_row_on_a_matched_slot() -> None:

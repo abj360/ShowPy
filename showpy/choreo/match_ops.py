@@ -252,6 +252,14 @@ def _point_updates(dest: Set, result: MatchResult) -> dict[SpotId, PlacementPatc
     return updates
 
 
+def _require_unlocked(
+    show: Show, tid: tuple[str, str], dest: Set, result: MatchResult, *, force: bool
+) -> None:
+    moves = _point_updates(dest, result)
+    dest.with_placements(moves, force=force)
+    clear_rows(show, tid, list(moves), force=force)
+
+
 def apply_match(
     show: Show, tid: tuple[str, str], result: MatchResult, *, force: bool = False
 ) -> Show:
@@ -273,6 +281,7 @@ def apply_match(
     """
     show.transition(tid)
     dest = show.set(tid[1])
+    _require_unlocked(show, tid, dest, result, force=force)
     if not result.slots:
         updates = _point_updates(dest, result)
         edited = with_set(show, dest.with_placements(updates, force=force))
