@@ -25,7 +25,14 @@ from collections.abc import Callable
 import pytest
 
 from showpy.choreo.engine import PathEngine
-from showpy.choreo.path_models import Easing, FacingMode, PathRow, PathStyle, TransitionSpec
+from showpy.choreo.path_models import (
+    Easing,
+    FacingMode,
+    PathRow,
+    PathStyle,
+    TransitionSpec,
+    WeaveParams,
+)
 from showpy.choreo.paths import (
     add_waypoint,
     arrive_early,
@@ -149,7 +156,9 @@ def test_set_facing_pace_and_easing() -> None:
 
 
 def test_custom_path_checks_registry() -> None:
-    assert custom_path(SPEC, ["T1"], "weave", cycles=1).row("T1").motion_params == {"cycles": 1}
+    assert custom_path(SPEC, ["T1"], "weave", cycles=1).row("T1").motion_params == WeaveParams(
+        cycles=1.0
+    )
     with pytest.raises(UnknownRefError):
         custom_path(SPEC, ["T1"], "nope")
 

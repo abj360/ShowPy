@@ -1,32 +1,136 @@
 """
 v1_to_v2_paths.py --- the paths sub-step of the v1 to v2 format migration (lane B)
 
-Lane B owns this module and fills it when its models change: motion parameters and route curves get
-their typed v2 shape. Until then v1 and v2 share this shape, so the step returns the documents
-unchanged. A filled step records every repair with `report.repair()` and refuses a stored value v2
-cannot hold with SchemaError naming the document, the field and the value.
+v2 types the motion parameters of the four built-in motions and bounds easings. For each path
+row, a key the built-in motion never read in v1 is dropped, and an easing strength below 1 is
+stored as the 1 that v1 used in its place; both are recorded with `report.repair()`. A parameter
+or step count v2 cannot hold, or a `motion_fn` that is neither a string nor null, is refused with
+SchemaError naming the document, the field and the value. Parameters of registered custom
+motions pass through unchanged. Route curves keep their v1 shape until lane B types them.
 
 Contains:
     migrate_paths(): rewrites paths documents from the v1 shape to the v2 shape
 """
 
-from typing import TYPE_CHECKING
+import re
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, Final
 
+from showpy.choreo.path_models import (
+    BUILT_IN_MOTION_PARAMS,
+    MAX_EASING_STEPS,
+    MAX_MOTION_CYCLES,
+    MAX_SPIRAL_TURNS,
+    MIN_EASING_STRENGTH,
+)
+from showpy.core.errors import SchemaError
 from showpy.core.json_types import JsonValue
+from showpy.core.readonly import ReadOnlyMap
 
 if TYPE_CHECKING:
     from showpy.show.migrate import ReportBuilder
 
+ALLOWED_MOTION_FN = "a string or null"
+# Matches stored paths documents; document_paths imports the migration chain, so not used here.
+PATHS_DOC_PATTERN = re.compile(r"/transitions/[^/]+/paths\.json")
+ALLOWED_PARAM_VALUES: Final[Mapping[str, str]] = ReadOnlyMap(
+    {
+        "amplitude": "a finite number of meters",
+        "cycles": f"a multiple of 0.5 above 0, up to {MAX_MOTION_CYCLES}",
+        "turns": f"a whole number from 0 to {MAX_SPIRAL_TURNS}",
+        "clockwise": "true or false",
+    }
+)
+
 
 def migrate_paths(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[str, JsonValue]:
-    """Rewrites paths documents from the v1 shape to the v2 shape, unchanged so far.
+    """Rewrites paths documents from the v1 shape to the v2 shape.
 
     Args:
-        docs: Stored path to parsed document, without a format header.
+        docs: Stored path to parsed document, without a format header; never mutated.
         report: Collects the repairs the step makes.
 
     Returns:
         docs: The documents in the v2 shape.
     """
-    del report
-    return docs
+    migrated = dict(docs)
+    for document, spec in docs.items():
+        if not PATHS_DOC_PATTERN.fullmatch(document) or not isinstance(spec, dict):
+            continue
+        rows = spec.get("rows")
+        if isinstance(rows, dict):
+            new_rows: dict[str, JsonValue] = {
+                key: _migrate_row(document, key, row, report) for key, row in rows.items()
+            }
+            migrated[document] = {**spec, "rows": new_rows}
+    return migrated
+
+
+def _migrate_row(document: str, key: str, row: JsonValue, report: "ReportBuilder") -> JsonValue:
+    if not isinstance(row, dict):
+        return row
+    migrated = dict(row)
+    easing = row.get("easing")
+    if isinstance(easing, dict):
+        migrated["easing"] = _migrate_easing(document, f"rows.{key}.easing", easing, report)
+    motion_fn = row.get("motion_fn")
+    if motion_fn is not None and not isinstance(motion_fn, str):
+        raise _refusal(document, f"rows.{key}.motion_fn", motion_fn, ALLOWED_MOTION_FN)
+    params = row.get("motion_params", {})
+    if (
+        isinstance(motion_fn, str)
+        and motion_fn in BUILT_IN_MOTION_PARAMS
+        and isinstance(params, dict)
+    ):
+        field = f"rows.{key}.motion_params"
+        migrated["motion_params"] = _migrate_params(document, field, motion_fn, params, report)
+    return migrated
+
+
+def _migrate_easing(
+    document: str, field: str, easing: dict[str, JsonValue], report: "ReportBuilder"
+) -> dict[str, JsonValue]:
+    strength = easing.get("strength")
+    if not isinstance(strength, int | float) or isinstance(strength, bool):
+        return easing
+    if easing.get("kind") == "steps" and round(strength) > MAX_EASING_STEPS:
+        raise _refusal(document, f"{field}.strength", strength, f"at most {MAX_EASING_STEPS} steps")
+    if strength >= MIN_EASING_STRENGTH:
+        return easing
+    report.repair(
+        f"{document}: {field}.strength {strength} stored as {MIN_EASING_STRENGTH:g}, the strength"
+        " v1 used for any value below it"
+    )
+    return {**easing, "strength": MIN_EASING_STRENGTH}
+
+
+def _migrate_params(
+    document: str,
+    field: str,
+    motion_fn: str,
+    params: dict[str, JsonValue],
+    report: "ReportBuilder",
+) -> dict[str, JsonValue]:
+    model = BUILT_IN_MOTION_PARAMS[motion_fn]
+    kept: dict[str, JsonValue] = {}
+    for name, value in params.items():
+        if name not in model.model_fields:
+            report.repair(
+                f"{document}: dropped key {name!r} from {field}, which v1's {motion_fn} never read"
+            )
+            continue
+        try:
+            model.model_validate({name: value})
+        except SchemaError as exc:
+            allowed = ALLOWED_PARAM_VALUES[name]
+            raise _refusal(document, f"{field}.{name}", value, allowed) from exc
+        kept[name] = value
+    return kept
+
+
+def _refusal(document: str, field: str, value: JsonValue, allowed: str) -> SchemaError:
+    return SchemaError(
+        f"{document} {field} holds {value!r}, which format v2 cannot hold",
+        hint=f"edit {field} in the v1 show to a value v2 accepts: {allowed}",
+        context={"path": document, "field": field, "value": repr(value)},
+    )

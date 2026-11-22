@@ -20,23 +20,38 @@ Contains:
         to within 1e-6 of a 20,001-point scan on pieces between easing edges
     test_curvature_bound_is_known_only_for_exact_arc_length_curves: bounds lines, arcs, circles,
         trims and composites of them, and leaves table-based curves opaque
+    test_custom_motion_receives_plain_json: passes a custom motion its stored parameters as
+        plain dicts and lists, never read-only containers
+    test_regression_custom_motion_with_ragged_output_raises_path_error: raises PathError for a
+        custom motion whose output is not an array of points
+    test_regression_aliased_motion_is_rejected_at_compile: raises PathError SEGMENT_BOUND for a
+        weave under the cycles cap whose samples alias at the default tolerance
+    test_regression_aliased_user_motion_is_rejected_at_compile: raises PathError SEGMENT_BOUND for
+        a registered motion that oscillates faster than the compile samples resolve
+    test_weave_whose_samples_resolve_it_still_compiles: compiles a 64-cycle weave, whose samples
+        land on its peaks, and ends it on target
+    test_looser_motion_tol_compiles_a_coarsely_sampled_motion: compiles under a looser
+        motion_tol a weave the default tolerance refuses
+    test_path_engine_refuses_a_non_positive_motion_tol: raises SchemaError for a motion_tol of 0
 """
 
 import itertools
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, cast
 
 import numpy as np
 import pytest
 
-from showpy.choreo.engine import PathEngine
+from showpy.choreo.engine import DEFAULT_SEGMENT_TOL, PathEngine
 from showpy.choreo.engine_compile import curvature_bound, easing_chord_error
 from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, ease, easing_breaks
 from showpy.choreo.path_models import Easing, PathRow, PathStyle, TransitionSpec, Waypoint
 from showpy.choreo.paths import add_waypoint, set_style
 from showpy.choreo.routes import follow, make_route
-from showpy.core.errors import ContinuityError, PathError, ShowPyError
+from showpy.core.error_codes import ErrorCode
+from showpy.core.errors import ContinuityError, PathError, SchemaError, ShowPyError
 from showpy.core.ids import SpotId
+from showpy.core.json_types import JsonValue
 from showpy.core.types import Point, Points
 from showpy.core.util import approx_equal
 from showpy.geo.curves import (
@@ -59,6 +74,12 @@ SWEEP_FULL_TURN = 360.0
 NAN_SAMPLE_INDEX = 10
 SCAN_SAMPLES = 20_001
 CHORD_ERROR_TOL = 1e-6
+CUSTOM_PARAMS: dict[str, JsonValue] = {"bend": [1, {"deep": True}], "label": "x"}
+ALIASING_CYCLES = 90.0
+RESOLVED_CYCLES = 64.0
+COARSE_CYCLES = 30.0
+LOOSE_MOTION_TOL = 0.1
+USER_MOTION_CYCLES = 300.0
 PIECE_SHARES = ((0.0, 1.0), (0.0, 0.3), (0.2, 0.9), (0.6, 0.61), (0.97, 1.0))
 CHORD_EASINGS = [
     Easing(kind="linear"),
@@ -152,21 +173,18 @@ def _custom_engine(motion: Callable[..., Points]) -> PathEngine:
     return PathEngine(with_rows({"T1": row}), motions=registry)
 
 
-@defect("UP-9.2-09")
 def test_regression_custom_motion_that_never_leaves_start_is_rejected() -> None:
     """Raises ContinuityError for a custom motion that stays put but has a distant target (9.2)."""
     with pytest.raises(ContinuityError):
         _custom_engine(_stay_at_start).compile(TID)
 
 
-@defect("UP-9.2-10")
 def test_regression_custom_motion_with_wrong_shape_raises_path_error() -> None:
     """Raises PathError for a custom motion that returns the wrong output shape (audit 9.2)."""
     with pytest.raises(PathError):
         _custom_engine(_flat_output).compile(TID)
 
 
-@defect("UP-9.2-11")
 def test_regression_custom_motion_with_nan_samples_is_rejected() -> None:
     """Rejects NaN samples from a custom motion instead of dropping them silently (audit 9.2)."""
     with pytest.raises(ShowPyError):
@@ -226,3 +244,102 @@ def test_curvature_bound_is_known_only_for_exact_arc_length_curves() -> None:
     assert curvature_bound(CompositeCurve(parts=(arc, line))) == 0.25
     assert curvature_bound(spline) is None
     assert curvature_bound(CompositeCurve(parts=(line, spline))) is None
+
+
+def test_custom_motion_receives_plain_json() -> None:
+    """Passes a custom motion its stored parameters as plain dicts and lists, never frozen ones."""
+    seen: list[Mapping[str, JsonValue]] = []
+
+    def recording(
+        u: FloatArray, start: Point, end: Point, params: Mapping[str, JsonValue]
+    ) -> Points:
+        seen.append(params)
+        result: Points = np.linspace(start, end, len(u))
+        return result
+
+    registry = DEFAULT_MOTIONS.with_motion("probe", recording)
+    row = PathRow.model_validate(
+        {"entity": "T1", "style": "custom", "motion_fn": "probe", "motion_params": CUSTOM_PARAMS}
+    )
+    PathEngine(with_rows({"T1": row}), motions=registry).compile(TID)
+    assert seen == [CUSTOM_PARAMS]
+    assert type(seen[0]) is dict
+    bend = seen[0]["bend"]
+    assert isinstance(bend, list)
+    assert type(bend[1]) is dict
+
+
+def _ragged_output(u: FloatArray, start: Point, end: Point, params: object) -> Points:
+    return cast(Points, [[0.0, 0.0], [1.0]])
+
+
+def test_regression_custom_motion_with_ragged_output_raises_path_error() -> None:
+    """Raises PathError for a custom motion whose output is not an array of points."""
+    with pytest.raises(PathError):
+        _custom_engine(_ragged_output).compile(TID)
+
+
+def _weave_show(cycles: float) -> Show:
+    row = PathRow.model_validate(
+        {
+            "entity": "T1",
+            "style": "custom",
+            "motion_fn": "weave",
+            "motion_params": {"cycles": cycles},
+        }
+    )
+    return with_rows({"T1": row})
+
+
+def _fast_wave(u: FloatArray, start: Point, end: Point, params: object) -> Points:
+    base = np.linspace(start, end, len(u))
+    wave = np.sin(2 * np.pi * USER_MOTION_CYCLES * np.asarray(u, dtype=float))
+    result: Points = base + np.outer(wave, (1.0, 0.0))
+    return result
+
+
+def test_regression_aliased_motion_is_rejected_at_compile() -> None:
+    """Raises PathError SEGMENT_BOUND for a weave under the cap that aliases at the default tol."""
+    with pytest.raises(PathError) as caught:
+        PathEngine(_weave_show(ALIASING_CYCLES)).compile(TID)
+    error = caught.value
+    assert error.code == ErrorCode.SEGMENT_BOUND
+    assert error.context["entity"] == "T1"
+    assert error.context["motion"] == "weave"
+    assert error.context["tol"] == DEFAULT_SEGMENT_TOL
+    deviation = error.context["deviation"]
+    assert isinstance(deviation, float)
+    assert deviation > DEFAULT_SEGMENT_TOL
+    assert "fewer cycles or turns" in error.hint
+    assert "motion_tol" in error.hint
+
+
+def test_regression_aliased_user_motion_is_rejected_at_compile() -> None:
+    """Raises PathError SEGMENT_BOUND for a registered motion faster than the samples resolve."""
+    with pytest.raises(PathError) as caught:
+        _custom_engine(_fast_wave).compile(TID)
+    assert caught.value.code == ErrorCode.SEGMENT_BOUND
+    assert caught.value.context["motion"] == "probe"
+
+
+def test_weave_whose_samples_resolve_it_still_compiles() -> None:
+    """Compiles a 64-cycle weave, whose samples land on its peaks, and ends it on target."""
+    show = _weave_show(RESOLVED_CYCLES)
+    engine = PathEngine(show)
+    engine.compile(TID)
+    target = show.set("2").get("T1").point
+    assert approx_equal(engine.position("T1", 8.0, local=TID), target, abs_tol=1e-6)
+
+
+def test_looser_motion_tol_compiles_a_coarsely_sampled_motion() -> None:
+    """Compiles under a looser motion_tol a weave the default tolerance refuses."""
+    show = _weave_show(COARSE_CYCLES)
+    with pytest.raises(PathError):
+        PathEngine(show).compile(TID)
+    PathEngine(show, motion_tol=LOOSE_MOTION_TOL).compile(TID)
+
+
+def test_path_engine_refuses_a_non_positive_motion_tol() -> None:
+    """Raises SchemaError for a motion_tol of 0."""
+    with pytest.raises(SchemaError):
+        PathEngine(two_set_show(), motion_tol=0.0)

@@ -7,7 +7,8 @@ Contains:
     test_every_path_ends_on_its_target: starts and ends every drawn path on its placements
     test_segments_track_positions_within_tolerance: keeps waypoint-path segments within tol
     test_segments_track_periodic_custom_motions_within_tolerance: keeps segments of a weave or
-        zigzag with 1 to 8 cycles within tol at every probe
+        zigzag with 1 to 8 cycles within tol at every probe; a zigzag whose corners fall between
+        the compile samples is refused and recompiles under the motion_tol its refusal names
 """
 
 import numpy as np
@@ -17,8 +18,11 @@ from hypothesis import strategies as st
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_compile import plan_positions
 from showpy.choreo.path_models import Easing, EasingKind, PathRow, PathStyle, Waypoint
+from showpy.core.error_codes import ErrorCode
+from showpy.core.errors import PathError
 from showpy.core.ids import SpotId
 from showpy.core.util import approx_equal
+from showpy.show.models import Show
 from tests.fixtures.motion_shows import TID, with_rows
 
 EASINGS: list[EasingKind] = [
@@ -84,10 +88,31 @@ def periodic_rows(draw: st.DrawFn) -> PathRow:
     )
 
 
+def _refusal(show: Show) -> PathError | None:
+    try:
+        PathEngine(show).compile(TID)
+    except PathError as error:
+        return error
+    return None
+
+
+def _resolving_engine(row: PathRow) -> PathEngine:
+    """Returns an engine that compiles the row, at the motion_tol a refusal names if refused."""
+    show = with_rows({"T1": row})
+    refusal = _refusal(show)
+    if refusal is None:
+        return PathEngine(show)
+    assert refusal.code == ErrorCode.SEGMENT_BOUND
+    assert row.motion_fn == "zigzag"
+    deviation = refusal.context["deviation"]
+    assert isinstance(deviation, float)
+    return PathEngine(show, motion_tol=deviation)
+
+
 @settings(max_examples=40, deadline=None)
 @given(periodic_rows())
 def test_segments_track_periodic_custom_motions_within_tolerance(row: PathRow) -> None:
-    engine = PathEngine(with_rows({"T1": row}))
+    engine = _resolving_engine(row)
     plan = engine.compile(TID).plans[SpotId("T1")]
     for seg in engine.entity_segments("T1", TID, tol=TOL):
         taus = seg.t0 + PROBE_SHARES * (seg.t1 - seg.t0)

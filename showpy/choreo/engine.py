@@ -33,6 +33,7 @@ from collections.abc import Iterable, Iterator, Sequence
 import numpy as np
 
 from showpy.cast.select import select
+from showpy.choreo.engine_compile import DEFAULT_SEGMENT_TOL as DEFAULT_SEGMENT_TOL
 from showpy.choreo.engine_compile import (
     compile_plan,
     curvature_bound,
@@ -64,7 +65,6 @@ from showpy.show.models import Show
 from showpy.time.clock import count_to_seconds, seconds_to_count
 
 DEFAULT_CURVE_TOL = 0.01
-DEFAULT_SEGMENT_TOL = 0.02
 VELOCITY_STEP = 1e-4
 MOVING_SPEED = 1e-9
 MAX_SEGMENT_DEPTH = 20
@@ -81,6 +81,8 @@ class PathEngine:
         show: The show being animated; frozen, so caches never go stale.
         curve_tol: Chord tolerance for drawn paths.
         motions: Registry that resolves custom motion names.
+        motion_tol: Largest distance, in meters, a custom motion may stray from its compiled
+            path between samples.
     """
 
     def __init__(
@@ -90,10 +92,12 @@ class PathEngine:
         *,
         cache: bool = True,
         motions: MotionRegistry = DEFAULT_MOTIONS,
+        motion_tol: float = DEFAULT_SEGMENT_TOL,
     ) -> None:
         self.show = show
         self.curve_tol = curve_tol
         self.motions = motions
+        self.motion_tol = require_finite(motion_tol, name="motion_tol", low=0.0, low_open=True)
         self._use_cache = cache
         self._cache: dict[tuple[str, str], CompiledTransition] = {}
         self._override_cache: dict[int, tuple[SpotId, ...]] = {}
@@ -124,7 +128,7 @@ class PathEngine:
         """Builds one spot's plan without caching, so callers can report errors per spot."""
         spec = self.show.transition(tid)
         a, b = self.show.set(tid[0]).get(entity), self.show.set(tid[1]).get(entity)
-        plan = compile_plan(spec.row(entity), spec, a, b, self.motions)
+        plan = compile_plan(spec.row(entity), spec, a, b, self.motions, tol=self.motion_tol)
         validate_facing(plan)
         return plan
 
