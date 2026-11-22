@@ -190,7 +190,7 @@ def _follow_show() -> PathEngine:
     show = show.model_copy(update={"sets": (first, show.sets[1])})
     route = Route(
         id=RouteId("r"),
-        curve=route_curve.construction(),
+        curve=route_curve,
         members=(SpotId("T1"), SpotId("T2")),
         offsets=(0.0, -2.0),
         travel=4.0,
@@ -214,7 +214,7 @@ def test_follow_on_route_curve() -> None:
     show = show.model_copy(update={"sets": (first, show.sets[1])})
     route = Route(
         id=RouteId("r"),
-        curve=route_curve.construction(),
+        curve=route_curve,
         members=(SpotId("T1"), SpotId("T2")),
         offsets=(2.0, 0.0),
         travel=4.0,

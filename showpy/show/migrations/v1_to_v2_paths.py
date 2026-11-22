@@ -8,6 +8,10 @@ strength below 1 is stored as the 1 that v1 used in its place; both are recorded
 string nor null, is refused with SchemaError naming the document, the field and the value.
 Parameters of registered custom motions pass through unchanged.
 
+A route's v1 `curve` is a JSON construction recipe; v2 stores the curve model, so the step
+validates the recipe and stores the curve's canonical shape. A recipe that is not a curve v2 can
+hold is refused with SchemaError naming the document, the field and the value.
+
 A bare v1 facing value of a path row or a show's facing override becomes the tagged value its
 facing mode reads: a number becomes `fixed` with its degrees wrapped into [0, 360), a pair becomes
 `point` and a string becomes `entity`; a value already tagged for its mode is validated and kept.
@@ -35,9 +39,10 @@ from showpy.choreo.path_models import (
     FixedFacing,
     PointFacing,
 )
-from showpy.core.errors import SchemaError
+from showpy.core.errors import GeometryError, SchemaError
 from showpy.core.json_types import JsonValue
 from showpy.core.readonly import ReadOnlyMap
+from showpy.geo.curves import curve_from_construction
 
 if TYPE_CHECKING:
     from showpy.show.migrate import ReportBuilder
@@ -53,6 +58,7 @@ FACING_MODELS: Final[Mapping[str, type[FixedFacing | PointFacing | EntityFacing]
 FACING_FIELDS: Final[Mapping[str, str]] = ReadOnlyMap(
     {"fixed": "degrees", "point": "point", "entity": "entity"}
 )
+ALLOWED_ROUTE_CURVE = "a curve recipe: an object whose `kind` names a curve and whose fields fit it"
 ALLOWED_FACING_VALUES: Final[Mapping[str, str]] = ReadOnlyMap(
     {
         "fixed": "a finite number of degrees",
@@ -92,7 +98,14 @@ def migrate_paths(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[s
             new_rows: dict[str, JsonValue] = {
                 key: _migrate_row(document, key, row, report) for key, row in rows.items()
             }
-            migrated[document] = {**spec, "rows": new_rows}
+            spec = {**spec, "rows": new_rows}
+            migrated[document] = spec
+        routes = spec.get("routes")
+        if isinstance(routes, dict):
+            new_routes: dict[str, JsonValue] = {
+                key: _migrate_route(document, key, route) for key, route in routes.items()
+            }
+            migrated[document] = {**spec, "routes": new_routes}
     return migrated
 
 
@@ -121,6 +134,20 @@ def _migrate_row(document: str, key: str, row: JsonValue, report: "ReportBuilder
         field = f"rows.{key}.motion_params"
         migrated["motion_params"] = _migrate_params(document, field, motion_fn, params, report)
     return migrated
+
+
+def _migrate_route(document: str, key: str, route: JsonValue) -> JsonValue:
+    if not isinstance(route, dict) or "curve" not in route:
+        return route
+    recipe = route["curve"]
+    field = f"routes.{key}.curve"
+    if not isinstance(recipe, dict):
+        raise _refusal(document, field, recipe, ALLOWED_ROUTE_CURVE)
+    try:
+        curve = curve_from_construction(recipe).construction()
+    except (SchemaError, GeometryError) as exc:
+        raise _refusal(document, field, recipe, ALLOWED_ROUTE_CURVE) from exc
+    return {**route, "curve": curve}
 
 
 def _migrate_overrides(show: dict[str, JsonValue], report: "ReportBuilder") -> dict[str, JsonValue]:

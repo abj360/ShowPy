@@ -59,6 +59,7 @@ from showpy.core.errors import (
 )
 from showpy.core.ids import FormId, RouteId, SetId, SpotId, make_tid
 from showpy.core.util import approx_equal
+from showpy.geo.curves import Segment
 from showpy.notes.models import Anchor, Note
 from showpy.show.documents import decode_show, encode_show
 from showpy.show.manage import (
@@ -226,7 +227,12 @@ def test_set_counts_updates_transition_counts() -> None:
 def test_set_counts_rescales_windows_waypoints_and_routes() -> None:
     row = PathRow(entity=SpotId("T1"), start=2.0, end=6.0, waypoints=(Waypoint(x=0, y=0, at=4.0),))
     route = Route(
-        id=RouteId("r"), curve={}, members=(SpotId("T2"),), offsets=(0.0,), travel=1.0, end=8.0
+        id=RouteId("r"),
+        curve=Segment(a=(0.0, 0.0), b=(10.0, 0.0)),
+        members=(SpotId("T2"),),
+        offsets=(0.0,),
+        travel=1.0,
+        end=8.0,
     )
     spec = TransitionSpec(
         id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): row}, routes={RouteId("r"): route}

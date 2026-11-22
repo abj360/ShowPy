@@ -17,6 +17,10 @@ Contains:
         motion's parameters and every non-paths document unchanged
     test_regression_unhashable_motion_fn_raises_schema_error(): refuses a list or object
         motion_fn with SchemaError naming the document, the field and the value
+    test_regression_v1_route_curve_recipe_becomes_a_typed_curve(): stores the curve model of each
+        recipe kind and keeps the route's other fields
+    test_regression_route_curve_v2_cannot_hold_is_refused(): refuses a recipe that is no curve
+        naming the document, the field and the value
     test_regression_v1_facing_values_are_tagged_by_mode(): tags a number, a pair and a string by
         the facing mode that reads them, in rows and in show.json overrides
     test_regression_tagged_facing_value_passes_through_the_step(): keeps a value that is already
@@ -48,8 +52,9 @@ from showpy.choreo.path_models import (
     ZigzagParams,
 )
 from showpy.core.errors import SchemaError
-from showpy.core.ids import SpotId
+from showpy.core.ids import RouteId, SpotId
 from showpy.core.json_types import JsonValue
+from showpy.geo.curves import ArcCurve, CurveModel, Polyline, Segment
 from showpy.show.documents import SHEET_DOC, paths_doc
 from showpy.show.migrate import SHOW_DOC, ReportBuilder
 from showpy.show.migrations.v1_to_v2_paths import migrate_paths
@@ -257,5 +262,60 @@ def test_regression_facing_value_that_does_not_fit_its_mode_is_refused(
         _migrated(_v1_docs(_facing_row(mode, value)))
     field = "rows.T1.facing_value"
     assert info.value.context == {"path": PATHS, "field": field, "value": repr(value)}
+    assert PATHS in info.value.message
+    assert field in info.value.message
+
+
+def _route_doc(curve: JsonValue) -> dict[str, JsonValue]:
+    route: dict[str, JsonValue] = {
+        "id": "r",
+        "curve": curve,
+        "members": ["T1"],
+        "offsets": [0.0],
+        "travel": 4.0,
+    }
+    spec: dict[str, JsonValue] = {
+        "id": ["1", "2"],
+        "counts": 8.0,
+        "rows": {},
+        "routes": {"r": route},
+    }
+    return {PATHS: spec}
+
+
+ROUTE_CURVES = [
+    Segment(a=(0.0, 0.0), b=(10.0, 0.0)),
+    Polyline(points=((0.0, 0.0), (5.0, 0.0), (5.0, 5.0))),
+    ArcCurve(center=(0.0, 0.0), radius=3.0, start_deg=0.0, sweep_deg=90.0),
+]
+
+
+@pytest.mark.parametrize("curve", ROUTE_CURVES)
+def test_regression_v1_route_curve_recipe_becomes_a_typed_curve(curve: CurveModel) -> None:
+    """Stores the curve model of each recipe kind and keeps the route's other fields."""
+    out, report = _migrated(_route_doc(curve.construction()))
+    route = TransitionSpec.model_validate(out[PATHS]).routes[RouteId("r")]
+    assert route.curve == curve
+    assert (route.members, route.travel) == ((SpotId("T1"),), 4.0)
+    assert report.build().repairs == ()
+
+
+ROUTE_REFUSED: list[JsonValue] = [
+    {},
+    {"kind": "nowhere"},
+    {"kind": "segment", "a": [0.0, 0.0]},
+    {"kind": "polyline", "points": [[0.0, 0.0]]},
+    "segment",
+    None,
+]
+
+
+@pytest.mark.parametrize("recipe", ROUTE_REFUSED)
+def test_regression_route_curve_v2_cannot_hold_is_refused(recipe: JsonValue) -> None:
+    """Refuses a recipe that is no curve, naming the document, the field and the value."""
+    with pytest.raises(SchemaError) as info:
+        _migrated(_route_doc(recipe))
+    field = "routes.r.curve"
+    assert info.value.context == {"path": PATHS, "field": field, "value": repr(recipe)}
     assert PATHS in info.value.message
     assert field in info.value.message

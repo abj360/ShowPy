@@ -43,6 +43,7 @@ from showpy.choreo.path_models import (
 from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
 from showpy.core.ids import FormId, RouteId, SetId, SpotId, ZoneId, make_tid
 from showpy.core.types import Region
+from showpy.geo.curves import Segment
 from showpy.notes.models import Anchor, Note
 from showpy.sheet.models import Zone, ZoneKind
 from showpy.show.history import (
@@ -100,7 +101,13 @@ def test_diff_sets_counts_entrances_as_moves() -> None:
 def test_diff_paths_treats_default_rows_as_missing() -> None:
     plain = TransitionSpec(id=make_tid("1", "2"), counts=8.0)
     explicit = plain.model_copy(update={"rows": {"T1": PathRow(entity=SpotId("T1"))}})
-    route = Route(id=RouteId("r"), curve={}, members=(SpotId("T1"),), offsets=(0.0,), travel=2.0)
+    route = Route(
+        id=RouteId("r"),
+        curve=Segment(a=(0.0, 0.0), b=(10.0, 0.0)),
+        members=(SpotId("T1"),),
+        offsets=(0.0,),
+        travel=2.0,
+    )
     routed = plain.model_copy(update={"routes": {"r": route}})
     assert diff_paths(plain, explicit).is_empty
     assert diff_paths(plain, routed).routes_changed == ("r",)
@@ -179,7 +186,13 @@ def test_rename_entities_rewrites_everything() -> None:
         facing_mode=FacingMode.TOWARD_ENTITY,
         facing_value=EntityFacing(entity=SpotId("T2")),
     )
-    route = Route(id=RouteId("r"), curve={}, members=(SpotId("T2"),), offsets=(0.0,), travel=1.0)
+    route = Route(
+        id=RouteId("r"),
+        curve=Segment(a=(0.0, 0.0), b=(10.0, 0.0)),
+        members=(SpotId("T2"),),
+        offsets=(0.0,),
+        travel=1.0,
+    )
     spec = TransitionSpec(
         id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): row}, routes={RouteId("r"): route}
     )
@@ -230,7 +243,13 @@ def _full_show() -> Show:
         facing_mode=FacingMode.TOWARD_ENTITY,
         facing_value=EntityFacing(entity=SpotId("T2")),
     )
-    route = Route(id=RouteId("r"), curve={}, members=(SpotId("T2"),), offsets=(0.0,), travel=1.0)
+    route = Route(
+        id=RouteId("r"),
+        curve=Segment(a=(0.0, 0.0), b=(10.0, 0.0)),
+        members=(SpotId("T2"),),
+        offsets=(0.0,),
+        travel=1.0,
+    )
     spec = TransitionSpec(
         id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): row}, routes={RouteId("r"): route}
     )

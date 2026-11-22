@@ -946,7 +946,7 @@
   },
   "Route": {
     "model": {
-      "curve": "dict[str, Any]",
+      "curve": "AnyCurve",
       "end": "float | None",
       "id": "showpy.core.ids.RouteId",
       "members": "tuple[showpy.core.ids.SpotId, ...]",
@@ -1249,8 +1249,8 @@
       "counts": "NonNegCount",
       "id": "showpy.core.ids.TransitionId",
       "notes": "str",
-      "routes": "dict[showpy.core.ids.RouteId, showpy.choreo.path_models.Route]",
-      "rows": "dict[showpy.core.ids.SpotId, showpy.choreo.path_models.PathRow]",
+      "routes": "collections.abc.Mapping[showpy.core.ids.RouteId, showpy.choreo.path_models.Route]",
+      "rows": "collections.abc.Mapping[showpy.core.ids.SpotId, showpy.choreo.path_models.PathRow]",
       "source_hash": "str"
     }
   },

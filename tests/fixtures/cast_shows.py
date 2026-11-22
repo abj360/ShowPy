@@ -22,6 +22,7 @@ from showpy.choreo.path_models import (
 from showpy.core.ids import FormId, RouteId, SetId, SpotId, ZoneId, make_tid
 from showpy.core.selection import Selection
 from showpy.core.types import Region
+from showpy.geo.curves import Segment
 from showpy.notes.models import Anchor, Note
 from showpy.sheet.models import Zone, ZoneKind
 from showpy.show.models import Show
@@ -43,7 +44,7 @@ def rich_show() -> Show:
     )
     route = Route(
         id=RouteId("r1"),
-        curve={},
+        curve=Segment(a=(0.0, 0.0), b=(10.0, 0.0)),
         members=(SpotId("T3"), SpotId("T4")),
         offsets=(0.0, 1.0),
         travel=2.0,

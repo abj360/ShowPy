@@ -37,13 +37,13 @@ import itertools
 import math
 from collections.abc import Mapping
 from enum import StrEnum
-from typing import Annotated, Any, Final, Literal
+from typing import Annotated, Final, Literal
 
 from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
 
 from showpy.core.errors import PathError, SchemaError
 from showpy.core.ids import RouteId, SpotId, TransitionId
-from showpy.core.readonly import ReadOnlyMap
+from showpy.core.readonly import ReadOnly, ReadOnlyMap
 from showpy.core.selection import SelectorField
 from showpy.core.types import (
     Count,
@@ -56,6 +56,7 @@ from showpy.core.types import (
     NonNegCount,
     Point,
 )
+from showpy.geo.curves import AnyCurve
 
 DEFAULT_EASING_STRENGTH = 2.0
 MIN_EASING_STRENGTH = 1.0
@@ -510,7 +511,7 @@ class Route(FrozenModel):
 
     Attributes:
         id: Route ID.
-        curve: JSON construction recipe of the route curve.
+        curve: Path the route follows, any curve kind.
         members: Spots on the route, leader first.
         offsets: Each member's starting arc length on the route.
         travel: Meters every member advances.
@@ -519,8 +520,7 @@ class Route(FrozenModel):
     """
 
     id: RouteId
-    # Any: curve recipes are JSON objects whose fields depend on the curve kind.
-    curve: dict[str, Any]
+    curve: AnyCurve
     members: tuple[SpotId, ...]
     offsets: tuple[Meters, ...]
     travel: Meters
@@ -542,16 +542,18 @@ class TransitionSpec(FrozenModel):
     Attributes:
         id: (from set, to set).
         counts: Length of the transition; equals the destination set's counts.
-        rows: Spot ID to path row.
-        routes: Route ID to route.
+        rows: Spot ID to path row, read-only; every key equals its row's spot.
+        routes: Route ID to route, read-only; every key equals its route's ID.
         notes: Free text.
         source_hash: Hash of the script that wrote the paths.
     """
 
     id: TransitionId
     counts: NonNegCount
-    rows: dict[SpotId, PathRow] = {}
-    routes: dict[RouteId, Route] = {}
+    rows: Annotated[Mapping[SpotId, PathRow], ReadOnly()] = Field(default={}, validate_default=True)
+    routes: Annotated[Mapping[RouteId, Route], ReadOnly()] = Field(
+        default={}, validate_default=True
+    )
     notes: str = ""
     source_hash: str = ""
 
@@ -560,6 +562,13 @@ class TransitionSpec(FrozenModel):
         for key, row in self.rows.items():
             if key != row.entity:
                 raise SchemaError(f"row key {key} holds {row.entity}", hint="key rows by entity")
+        for route_key, route in self.routes.items():
+            if route_key != route.id:
+                raise SchemaError(
+                    f"route key {route_key} holds {route.id}",
+                    hint="key routes by their ID",
+                    context={"key": route_key, "id": route.id},
+                )
         return self
 
     def row(self, entity: str) -> PathRow:

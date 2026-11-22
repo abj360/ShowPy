@@ -36,13 +36,20 @@ Contains:
     test_regression_models_refuse_bare_facing_values: refuses a bare number, pair or string
     test_regression_set_facing_wraps_bare_values: wraps the bare values the builder accepts
     test_regression_dropping_the_faced_spot_resets_the_facing: falls back to the target facing
+    test_regression_route_curve_is_a_typed_curve: stores a curve model, round-trips it through
+        JSON and refuses a recipe that is no curve
+    test_regression_spec_rows_and_routes_are_read_only: refuses item assignment and deletion
+    test_regression_spec_holds_no_open_mutable_container: finds no dict, list or set anywhere in a
+        spec with rows, routes, waypoints and every kind of motion parameters
 """
 
 import json
 import math
-from collections.abc import Callable, MutableMapping
+from collections.abc import Callable, Mapping, MutableMapping
+from typing import cast
 
 import pytest
+from pydantic import BaseModel
 
 from showpy.cast.rewrite import rewrite_spot_ids
 from showpy.choreo.path_models import (
@@ -71,6 +78,7 @@ from showpy.core.errors import PathError, SchemaError
 from showpy.core.ids import RouteId, SpotId, make_tid
 from showpy.core.readonly import ReadOnlyMap
 from showpy.core.types import Point
+from showpy.geo.curves import Segment
 from tests.fixtures.cast_shows import rich_show
 
 NEGATIVE_COUNTS = -4.0
@@ -133,11 +141,15 @@ def test_transition_spec_round_trips_json() -> None:
     assert TransitionSpec.model_validate_json(spec.model_dump_json()) == spec
 
 
-@pytest.mark.defect("UP-9.6-26")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-26")
 def test_regression_transition_spec_checks_route_keys_against_route_ids() -> None:
     """Rejects a route stored under a key that differs from its ID (audit 9.6)."""
-    route = Route(id=RouteId("y"), curve={}, members=(), offsets=(), travel=1.0)
+    route = Route(
+        id=RouteId("y"),
+        curve=Segment(a=(0.0, 0.0), b=(10.0, 0.0)),
+        members=(),
+        offsets=(),
+        travel=1.0,
+    )
     with pytest.raises(SchemaError):
         TransitionSpec(id=make_tid("1", "2"), counts=NEIGHBOUR_COUNTS, routes={RouteId("x"): route})
 
@@ -327,3 +339,86 @@ def test_regression_dropping_the_faced_spot_resets_the_facing() -> None:
     override = dropped.facing_overrides[0]
     assert override.mode is FacingMode.TOWARD_ENTITY
     assert override.value == EntityFacing(entity=SpotId("T3"))
+
+
+def _route(route_id: str = "r") -> Route:
+    return Route(
+        id=RouteId(route_id),
+        curve=Segment(a=(0.0, 0.0), b=(10.0, 0.0)),
+        members=(SpotId("A"),),
+        offsets=(0.0,),
+        travel=4.0,
+    )
+
+
+def test_regression_route_curve_is_a_typed_curve() -> None:
+    """Stores a curve model, round-trips it through JSON and refuses a recipe that is no curve."""
+    route = _route()
+    assert isinstance(route.curve, Segment)
+    assert Route.model_validate_json(route.model_dump_json()) == route
+    assert json.loads(route.model_dump_json())["curve"]["kind"] == "segment"
+    for bad in ({}, {"kind": "nowhere"}, {"kind": "segment", "a": (0.0, 0.0)}, "segment"):
+        with pytest.raises(SchemaError):
+            Route.model_validate({**route.model_dump(), "curve": bad})
+
+
+def test_regression_spec_rows_and_routes_are_read_only() -> None:
+    """Refuses item assignment and deletion on the rows and routes of a stored spec."""
+    spec = TransitionSpec(
+        id=make_tid("1", "2"),
+        counts=NEIGHBOUR_COUNTS,
+        rows={SpotId("A"): PathRow(entity=SpotId("A"))},
+        routes={RouteId("r"): _route()},
+    )
+    rows = cast("MutableMapping[SpotId, PathRow]", spec.rows)
+    routes = cast("MutableMapping[RouteId, Route]", spec.routes)
+    with pytest.raises(TypeError):
+        rows[SpotId("B")] = PathRow(entity=SpotId("B"))
+    with pytest.raises(TypeError):
+        del routes[RouteId("r")]
+    with pytest.raises(TypeError):
+        routes[RouteId("r")] = _route()
+    assert isinstance(spec.rows, ReadOnlyMap)
+    assert isinstance(spec.routes, ReadOnlyMap)
+    assert json.loads(spec.model_dump_json())["routes"]["r"]["id"] == "r"
+
+
+def _open_containers(value: object, path: str = "spec") -> list[str]:
+    if isinstance(value, dict | list | set | bytearray):
+        return [path]
+    if isinstance(value, BaseModel):
+        found = []
+        for name in type(value).model_fields:
+            found += _open_containers(getattr(value, name), f"{path}.{name}")
+        return found
+    if isinstance(value, Mapping):
+        return [p for k, v in value.items() for p in _open_containers(v, f"{path}[{k!r}]")]
+    if isinstance(value, tuple):
+        return [p for i, v in enumerate(value) for p in _open_containers(v, f"{path}[{i}]")]
+    return []
+
+
+def test_regression_spec_holds_no_open_mutable_container() -> None:
+    """Finds no dict, list or set in a spec with rows, routes, waypoints and every motion."""
+    rows = {
+        SpotId(name): PathRow.model_validate(
+            {
+                "entity": name,
+                "style": "custom",
+                "motion_fn": fn,
+                "motion_params": params,
+                "waypoints": (Waypoint(x=1, y=1),),
+                "facing_mode": FacingMode.TOWARD_POINT,
+                "facing_value": PointFacing(point=(1.0, 2.0)),
+            }
+        )
+        for name, (fn, params) in {
+            "A": ("weave", {"cycles": 1.5}),
+            "B": ("probe", {"bend": [1, {"deep": True}]}),
+        }.items()
+    }
+    spec = TransitionSpec(
+        id=make_tid("1", "2"), counts=NEIGHBOUR_COUNTS, rows=rows, routes={RouteId("r"): _route()}
+    )
+    assert _open_containers(spec) == []
+    assert _open_containers({"leak": 1}) == ["spec"]

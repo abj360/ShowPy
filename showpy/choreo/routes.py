@@ -38,7 +38,6 @@ from showpy.geo.curves import (
     CompositeCurve,
     Polyline,
     Segment,
-    curve_from_construction,
 )
 from showpy.show.locks import locked_row_changes, require_unlocked
 from showpy.show.models import Show
@@ -120,7 +119,7 @@ def make_route(
     return Route.model_validate(
         {
             "id": route_id,
-            "curve": curve.construction(),
+            "curve": curve,
             "members": tuple(file),
             "offsets": offsets,
             "travel": lengths[-1] - offsets[0],
@@ -194,7 +193,7 @@ def follow_and_set_targets(
     >>> follow_and_set_targets(show, ("1", "2"), route).set("2").get("T4").point
     (6.0, 15.0)
     """
-    curve = curve_from_construction(route.curve)
+    curve = route.curve
     target = show.set(tid[1])
     updates = {}
     for member, offset in zip(route.members, route.offsets, strict=True):
@@ -287,7 +286,7 @@ def counter_march(
     route = Route.model_validate(
         {
             "id": f"counter-march-{file[0]}",
-            "curve": curve.construction(),
+            "curve": curve,
             "members": tuple(file),
             "offsets": tuple(reversed(lengths)),
             "travel": lengths[-1] + turn_length,

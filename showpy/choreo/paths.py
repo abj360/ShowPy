@@ -102,7 +102,7 @@ def default_paths(show: "Show", tid: tuple[str, str]) -> TransitionSpec:
     """Returns straight moves over the full counts for everyone (no stored rows).
 
     >>> from showpy.examples import two_set_show
-    >>> default_paths(two_set_show(), ("1", "2")).rows
+    >>> dict(default_paths(two_set_show(), ("1", "2")).rows)
     {}
     """
     return TransitionSpec.model_validate({"id": tid, "counts": show.set(tid[1]).counts})
