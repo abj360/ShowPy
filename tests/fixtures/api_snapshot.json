@@ -473,7 +473,7 @@
   },
   "FormFnRegistry": {
     "model": {
-      "fns": "dict[str, FormFn]"
+      "fns": "collections.abc.Mapping[str, FormFn]"
     }
   },
   "FormMetrics": {
@@ -976,6 +976,14 @@
       "parent": "str"
     }
   },
+  "RoseFormParams": {
+    "model": {
+      "center": "Point",
+      "inner": "float",
+      "petals": "PositiveFinite",
+      "radius": "PositiveMeters"
+    }
+  },
   "Route": {
     "model": {
       "curve": "AnyCurve",
@@ -1130,6 +1138,15 @@
   },
   "ShowPyError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "ShowValidationError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
+  "SineWaveFormParams": {
+    "model": {
+      "amplitude": "Finite",
+      "length": "PositiveMeters",
+      "phase_deg": "Degrees",
+      "start": "Point",
+      "wavelength": "PositiveMeters"
+    }
+  },
   "SnapReport": {
     "model": {
       "max_shift": "Finite",
@@ -1163,6 +1180,15 @@
       "kind": "Literal['spiral']",
       "r0": "Meters",
       "r1": "Meters",
+      "start_deg": "Degrees",
+      "turns": "PositiveFinite"
+    }
+  },
+  "SpiralFormParams": {
+    "model": {
+      "center": "Point",
+      "r0": "NonNegFinite",
+      "r1": "NonNegFinite",
       "start_deg": "Degrees",
       "turns": "PositiveFinite"
     }

@@ -14,16 +14,20 @@ Contains:
         of dividing by zero
     test_regression_register_form_fn_wraps_probe_crashes: raises SchemaError when the registration
         probe makes the generator crash
+    test_regression_bundled_generators_reject_misspelled_params: raises SchemaError for a
+        parameter name the generator does not know
 """
 
 import contextlib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, MutableMapping
+from typing import cast
 
 import numpy as np
 import pytest
 
 from showpy.choreo.form_fns import (
     DEFAULT_FORM_FNS,
+    FormFn,
     form_fns,
     register_form_fn,
     rose_points,
@@ -107,45 +111,53 @@ def _crashing_generator(_params: Mapping[str, object], _n: int) -> Points:
     raise RuntimeError("generator crashed")
 
 
-@pytest.mark.defect("UP-9.6-20")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-20")
 def test_regression_default_registry_cannot_be_mutated() -> None:
     """Leaves the global registry unchanged when a caller edits its fns (audit 9.6)."""
+    fns = cast("MutableMapping[str, FormFn]", DEFAULT_FORM_FNS.fns)
     try:
         with contextlib.suppress(TypeError):
-            DEFAULT_FORM_FNS.fns[EVIL_NAME] = spiral_points
+            fns[EVIL_NAME] = spiral_points
         assert EVIL_NAME not in DEFAULT_FORM_FNS.fns
     finally:
-        DEFAULT_FORM_FNS.fns.pop(EVIL_NAME, None)
+        with contextlib.suppress(AttributeError):
+            fns.pop(EVIL_NAME, None)
 
 
-@pytest.mark.defect("UP-9.6-51")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-51")
 def test_regression_spiral_rejects_text_turns_with_schema_error() -> None:
     """Raises SchemaError, not ValueError, for turns="x" (audit 9.6)."""
     with pytest.raises(SchemaError):
         spiral_points({"turns": "x"}, PROBE_SPOTS)
 
 
-@pytest.mark.defect("UP-9.6-52")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-52")
 def test_regression_spiral_rejects_none_turns_with_schema_error() -> None:
     """Raises SchemaError, not TypeError, for turns=None (audit 9.6)."""
     with pytest.raises(SchemaError):
         spiral_points({"turns": None}, PROBE_SPOTS)
 
 
-@pytest.mark.defect("UP-9.6-53")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-53")
 def test_regression_sine_wave_rejects_zero_wavelength() -> None:
     """Raises SchemaError for wavelength=0 instead of dividing by zero (audit 9.6)."""
     with pytest.raises(SchemaError):
         sine_wave_points({"wavelength": 0}, PROBE_SPOTS)
 
 
-@pytest.mark.defect("UP-9.6-54")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-54")
 def test_regression_register_form_fn_wraps_probe_crashes() -> None:
     """Raises SchemaError when the registration probe makes the generator crash (audit 9.6)."""
     with pytest.raises(SchemaError):
         register_form_fn(DEFAULT_FORM_FNS, "crashing", _crashing_generator)
+
+
+@pytest.mark.parametrize(
+    ("generator", "params"),
+    [
+        (spiral_points, {"turn": 3.0}),
+        (sine_wave_points, {"wave": 2.0}),
+        (rose_points, {"petal": 4}),
+    ],
+)
+def test_regression_bundled_generators_reject_misspelled_params(
+    generator: Callable[[Mapping[str, object], int], Points], params: dict[str, float]
+) -> None:
+    """Raises SchemaError for a parameter name the generator does not know."""
+    with pytest.raises(SchemaError):
+        generator(params, PROBE_SPOTS)

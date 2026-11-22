@@ -13,6 +13,9 @@ Contains:
     TextReport: reports how a text form's spots were spread, listing its crowded strokes
     Form: holds a stored shape construction plus its ordered members
     FormFnInfo: describes one registered shape generator
+    SpiralFormParams: holds the parameters of the bundled `spiral` generator
+    SineWaveFormParams: holds the parameters of the bundled `sine_wave` generator
+    RoseFormParams: holds the parameters of the bundled `rose` generator
 """
 
 from typing import Annotated, Any, Literal
@@ -21,7 +24,16 @@ from pydantic import Field, model_validator
 
 from showpy.core.errors import SchemaError
 from showpy.core.ids import FormId, SetId, SpotId
-from showpy.core.types import Degrees, Finite, FrozenModel, Meters, Point, PositiveMeters
+from showpy.core.types import (
+    Degrees,
+    Finite,
+    FrozenModel,
+    Meters,
+    NonNegFinite,
+    Point,
+    PositiveFinite,
+    PositiveMeters,
+)
 from showpy.geo.models import DEFAULT_LINE_SPACING, TextAlign, TextAnchor
 from showpy.geo.text_layout import MAX_LAYOUT_CHARS
 
@@ -29,6 +41,8 @@ FONT_URI_PATTERN = r"^asset:sha256:[0-9a-f]{64}$"
 # Layout resolves every chain font and measures its cap height, so a stored chain is bounded.
 MAX_TEXT_FONTS = 16
 type FontUri = Annotated[str, Field(pattern=FONT_URI_PATTERN)]
+DEFAULT_GENERATOR_CENTER: Point = (0.0, 10.0)
+DEFAULT_SINE_START: Point = (-8.0, 10.0)
 
 
 class SpacingSpec(FrozenModel):
@@ -203,3 +217,65 @@ class FormFnInfo(FrozenModel):
 
     name: str
     summary: str
+
+
+class SpiralFormParams(FrozenModel):
+    """Holds the parameters of the bundled `spiral` generator.
+
+    Attributes:
+        center: Spiral center.
+        r0: Start radius in meters.
+        r1: End radius in meters.
+        turns: Counter-clockwise turns, above 0.
+        start_deg: Start angle, counter-clockwise from +x.
+
+    >>> SpiralFormParams(turns=1.5).r1
+    5.0
+    """
+
+    center: Point = DEFAULT_GENERATOR_CENTER
+    r0: NonNegFinite = 1.0
+    r1: NonNegFinite = 5.0
+    turns: PositiveFinite = 2.0
+    start_deg: Degrees = 0.0
+
+
+class SineWaveFormParams(FrozenModel):
+    """Holds the parameters of the bundled `sine_wave` generator.
+
+    Attributes:
+        start: Where the wave starts; it runs toward +x.
+        length: Run along x in meters, above 0.
+        amplitude: Peak offset from the center line in meters.
+        wavelength: Meters per full wave, above 0.
+        phase_deg: Phase at the start, in degrees.
+
+    >>> SineWaveFormParams().wavelength
+    8.0
+    """
+
+    start: Point = DEFAULT_SINE_START
+    length: PositiveMeters = 16.0
+    amplitude: Finite = 2.0
+    wavelength: PositiveMeters = 8.0
+    phase_deg: Degrees = 0.0
+
+
+class RoseFormParams(FrozenModel):
+    """Holds the parameters of the bundled `rose` generator.
+
+    Attributes:
+        center: Flower center.
+        radius: Petal tip radius in meters, above 0.
+        petals: Number of petals, above 0.
+        inner: Radius between petals as a share of `radius`, in (0, 1], so petals never meet
+            at the center.
+
+    >>> RoseFormParams(petals=3).inner
+    0.4
+    """
+
+    center: Point = DEFAULT_GENERATOR_CENTER
+    radius: PositiveMeters = 5.0
+    petals: PositiveFinite = 5.0
+    inner: Annotated[float, Field(gt=0, le=1, allow_inf_nan=False)] = 0.4
