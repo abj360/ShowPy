@@ -25,7 +25,7 @@ from showpy.choreo.form_models import Form
 from showpy.choreo.models import Set
 from showpy.choreo.motion import turn
 from showpy.choreo.path_models import FacingOverride
-from showpy.choreo.recipe_models import CurveRecipeBase
+from showpy.choreo.recipe_models import CurveRecipeBase, SvgRecipe
 from showpy.core.errors import GeometryError, TimeRangeError, UnknownRefError
 from showpy.core.ids import FormId, SpotId
 from showpy.core.selection import Selection, operand_ids
@@ -121,29 +121,45 @@ def _form(show: Show, form_id: str) -> Form:
     return show.forms[FormId(form_id)]
 
 
-def _form_curve(form: Form) -> AnyCurve:
+def _form_curves(form: Form) -> tuple[AnyCurve, ...]:
     recipe = form.recipe
-    if not isinstance(recipe, CurveRecipeBase):
+    if isinstance(recipe, CurveRecipeBase):
+        curves: tuple[AnyCurve, ...] = (recipe.curve,)
+    elif isinstance(recipe, SvgRecipe):
+        curves = recipe.curves
+    else:
         raise GeometryError(
             f"form {form.id} ({form.kind}) has no curve to face along",
             hint="use face_direction or face_point for blocks, fills and scatters",
             context={"form": form.id},
         )
     if recipe.transform is None:
-        return recipe.curve
-    return transform_curve(recipe.curve, np.asarray(recipe.transform, dtype=float))
+        return curves
+    matrix = np.asarray(recipe.transform, dtype=float)
+    return tuple(transform_curve(curve, matrix) for curve in curves)
+
+
+def _tangent_near(curves: tuple[AnyCurve, ...], point: Point) -> tuple[float, float]:
+    """Returns the tangent of the curve nearest to `point`, the first one on a tie."""
+    stations = [curve.project(point) for curve in curves]
+    gaps = [
+        math.dist(point, curve.point_at(s).tolist())
+        for curve, s in zip(curves, stations, strict=True)
+    ]
+    nearest = gaps.index(min(gaps))
+    tangent = curves[nearest].tangent_at(stations[nearest])
+    return float(tangent[0]), float(tangent[1])
 
 
 def _tangent_facings(
     show: Show, set_id: str, form_id: str, turn_by: Degrees
 ) -> dict[SpotId, Degrees]:
     form = _form(show, form_id)
-    curve = _form_curve(form)
+    curves = _form_curves(form)
     target = show.set(set_id)
     facings = {}
     for member in form.members:
-        tangent = curve.tangent_at(curve.project(target.get(member).point))
-        base = vector_facing((float(tangent[0]), float(tangent[1])))
+        base = vector_facing(_tangent_near(curves, target.get(member).point))
         facings[member] = base + turn_by
     return facings
 

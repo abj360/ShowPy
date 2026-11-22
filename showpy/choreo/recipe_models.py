@@ -11,8 +11,9 @@ Contains:
     Affine: a 3x3 affine matrix stored as three rows of three finite numbers
     RecipeBase: holds the fields every recipe shares: version, slot count and transform
     CurveRecipeBase: holds the curve that a curve-kind recipe spaces its slots along
-    LineRecipe, CurveRecipe, CircleRecipe, WedgeRecipe, PolylineRecipe, SvgRecipe: hold the
-        curve of their kind
+    LineRecipe, CurveRecipe, CircleRecipe, WedgeRecipe, PolylineRecipe: hold the curve of
+        their kind
+    SvgRecipe: holds a picture outline as one curve per subpath
     ArcRecipe: holds an arc's curve, refusing a sweep past one full turn
     BlockRecipe: holds a rows x cols block
     FillRecipe: holds an area filled with a lattice
@@ -119,10 +120,22 @@ class PolylineRecipe(CurveRecipeBase):
     kind: Literal["polyline"] = "polyline"
 
 
-class SvgRecipe(CurveRecipeBase):
-    """Holds the fitted picture outline of an svg form."""
+class SvgRecipe(RecipeBase):
+    """Holds the fitted picture outline of an svg form, one curve per subpath.
+
+    Subpaths stay separate curves, never one curve that jumps the gaps between them, so slots
+    are shared among them by length and never spaced across a gap.
+
+    Attributes:
+        curves: The outline's subpaths in drawing order, each rebuilt from its construction.
+
+    >>> from showpy.geo.shapes import line
+    >>> len(SvgRecipe(curves=(line((0, 0), (1, 0)), line((0, 1), (3, 1)))).curves)
+    2
+    """
 
     kind: Literal["svg"] = "svg"
+    curves: tuple[AnyCurve, ...] = Field(min_length=1)
 
 
 class BlockRecipe(RecipeBase):

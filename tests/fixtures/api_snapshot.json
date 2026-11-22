@@ -1372,7 +1372,7 @@
   },
   "SvgRecipe": {
     "model": {
-      "curve": "AnyCurve",
+      "curves": "tuple[AnyCurve, ...]",
       "kind": "Literal['svg']",
       "n": "int | None",
       "recipe_version": "Literal[1]",

@@ -2,9 +2,10 @@
 form_layout.py --- turns a form's stored recipe into slot points, travel directions and facings
 
 The recipe contract is documented in `showpy.choreo.forms`. Curve kinds are spaced by arc
-length so exact tangents are known at every slot; other kinds use the chord through
-neighbouring slots as their travel direction. A stored `transform` maps the slots of every
-kind, and the travel directions through its linear part.
+length so exact tangents are known at every slot, an svg outline's subpaths each by their share
+of its length; other kinds use the chord through neighbouring slots as their travel direction.
+A stored `transform` maps the slots of every kind, and the travel directions through its linear
+part.
 
 Contains:
     FormLayout: holds slot points plus the directions facings are computed from
@@ -15,6 +16,7 @@ Contains:
 """
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -29,6 +31,7 @@ from showpy.choreo.recipe_models import (
     FillRecipe,
     GeneratedRecipe,
     ScatterRecipe,
+    SvgRecipe,
 )
 from showpy.core.errors import SchemaError, SpacingError
 from showpy.core.types import Degrees, JsonValue, Point, Points
@@ -163,23 +166,35 @@ def curve_stations(curve: AnyCurve, spacing: SpacingSpec, n: int | None) -> Floa
     return _even_stations(start, stop, n, full_loop=full_loop, gaps=spacing.gaps)
 
 
-def _proportional_layout(curve: CompositeCurve, n: int) -> FormLayout:
-    counts = [len(pts) for pts in space_proportional(curve.parts, n)]
+def _proportional_layout(parts: Sequence[AnyCurve], n: int) -> FormLayout:
+    counts = [len(pts) for pts in space_proportional(parts, n)]
     points, tangents = [], []
-    for part, count in zip(curve.parts, counts, strict=True):
+    for part, count in zip(parts, counts, strict=True):
         stations = _even_stations(0.0, part.length(), count, full_loop=part.closed, gaps=())
         points.append(part.point_at(stations))
         tangents.append(part.tangent_at(stations))
     return FormLayout(points=np.vstack(points), tangents=np.vstack(tangents))
 
 
-def _curve_layout(form: Form, recipe: CurveRecipeBase) -> FormLayout:
-    curve = recipe.curve
+def _curve_layout(form: Form, curve: AnyCurve) -> FormLayout:
     if form.spacing.mode == "proportional" and isinstance(curve, CompositeCurve):
-        return _proportional_layout(curve, _required_count(form))
+        return _proportional_layout(curve.parts, _required_count(form))
     stations = curve_stations(curve, form.spacing, slot_count(form))
     center = curve.center if isinstance(curve, ArcCurve | CircleCurve) else None
     return FormLayout(curve.point_at(stations), curve.tangent_at(stations), center)
+
+
+def _svg_layout(form: Form, recipe: SvgRecipe) -> FormLayout:
+    if len(recipe.curves) == 1:
+        return _curve_layout(form, recipe.curves[0])
+    if form.spacing.mode != "proportional":
+        raise SpacingError(
+            f"svg form {form.id} has {len(recipe.curves)} subpaths; {form.spacing.mode} spacing "
+            "would run across the gaps between them",
+            hint="use proportional spacing (the svg_form default), or one svg form per subpath",
+            context={"form": form.id, "subpaths": len(recipe.curves), "mode": form.spacing.mode},
+        )
+    return _proportional_layout(recipe.curves, _required_count(form))
 
 
 def _block_points(recipe: BlockRecipe) -> Points:
@@ -272,7 +287,9 @@ def layout(
     recipe = form.recipe
     transform = None if recipe.transform is None else np.asarray(recipe.transform, dtype=float)
     if isinstance(recipe, CurveRecipeBase):
-        lay = _curve_layout(form, recipe)
+        lay = _curve_layout(form, recipe.curve)
+    elif isinstance(recipe, SvgRecipe):
+        lay = _svg_layout(form, recipe)
     elif isinstance(recipe, TextRecipe):
         lay = _text_layout(form, recipe, transform, font_registry)
     else:

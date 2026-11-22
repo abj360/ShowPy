@@ -6,6 +6,8 @@ test_v1_to_v2_forms.py --- tests the forms sub-step of the v1 to v2 format migra
 Contains:
     test_v1_geometry_migrates_to_a_typed_recipe: turns one v1 form of every kind, from the
         fixtures where they hold one, into an equal typed recipe
+    test_regression_forms_step_splits_a_v1_svg_composite_into_its_subpaths: stores each subpath
+        of a v1 multi-subpath svg outline as its own curve
     test_forms_step_passes_other_documents_and_fields_through: leaves other documents and form
         fields as they were, and never mutates its input
     test_regression_forms_step_refuses_what_v2_cannot_hold: refuses an unknown kind, a bad
@@ -23,10 +25,13 @@ from typing import get_args
 import pytest
 
 from showpy.choreo.form_models import Form, FormKind
-from showpy.choreo.forms import curve_form, polyline_form, svg_form
+from showpy.choreo.forms import curve_form, polyline_form
+from showpy.choreo.recipe_models import SvgRecipe
 from showpy.core.errors import SchemaError
 from showpy.core.json_types import JsonValue
 from showpy.core.types import Box2, Region
+from showpy.geo.curves import CompositeCurve
+from showpy.geo.shapes import svg_outline
 from showpy.show.migrate import FIRST_VERSION, ReportBuilder
 from showpy.show.migrations.v1_to_v2_forms import migrate_forms
 
@@ -55,19 +60,28 @@ def _built_forms() -> dict[str, dict[str, JsonValue]]:
     curves = {
         "curve": curve_form("c", [], (0, 0), (2, 2), (4, 0), n=3),
         "polyline": polyline_form("p", [], (0, 0), (2, 0), (2, 2), n=3),
-        "svg": svg_form("s", [], "M0 0 L1 0 L1 1", BOX, n=3),
     }
     geometries: dict[str, dict[str, JsonValue]] = {
         kind: {"curve": form.recipe.model_dump(mode="json")["curve"], "n": 3}
         for kind, form in curves.items()
     }
+    [outline] = svg_outline("M0 0 L1 0 L1 1", BOX)
     geometries |= {
+        "svg": {"curve": outline.construction(), "n": 3},
         "fill": {"outline": SQUARE, "interval": 1.0, "pattern": "hex", "angle_deg": 15.0},
         "scatter": {"region": SQUARE, "min_gap": 1.0, "seed": 3, "n": 4},
         "custom": {"points": [[0.0, 0.0], [1.0, 0.0]], "facings": [0.0, 90.0], "n": 2},
         "generated": {"fn": "spiral", "params": {"turns": 2.0, "center": [0, 5]}},
     }
     return {kind: _v1_form(kind, geometry) for kind, geometry in geometries.items()}
+
+
+def _v2_fields(kind: str, geometry: dict[str, JsonValue]) -> dict[str, JsonValue]:
+    """Returns the recipe fields a v1 geometry must migrate to; svg keeps a list of subpaths."""
+    if kind != "svg":
+        return geometry
+    rest = {key: value for key, value in geometry.items() if key != "curve"}
+    return {**rest, "curves": [geometry["curve"]]}
 
 
 def _migrated(forms: list[JsonValue]) -> list[JsonValue]:
@@ -89,13 +103,29 @@ def test_v1_geometry_migrates_to_a_typed_recipe() -> None:
         geometry = v1["geometry"]
         assert isinstance(geometry, dict)
         assert recipe["kind"] == kind
-        assert {key: recipe[key] for key in geometry} == geometry
+        expected = _v2_fields(kind, geometry)
+        assert {key: recipe[key] for key in expected} == expected
         assert {key: recipe[key] for key in SHARED_DEFAULTS if key not in geometry} == {
             key: value for key, value in SHARED_DEFAULTS.items() if key not in geometry
         }
         form = Form.model_validate(migrated)
         assert form.kind == kind
         assert form.recipe.model_dump(mode="json") == recipe
+
+
+def test_regression_forms_step_splits_a_v1_svg_composite_into_its_subpaths() -> None:
+    outline = svg_outline("M0 0 L1 0 M0 1 L3 1", BOX)
+    parts: list[JsonValue] = [curve.construction() for curve in outline]
+    composite: dict[str, JsonValue] = {"closed": False, "kind": "composite", "parts": parts}
+    [migrated] = _migrated([_v1_form("svg", {"curve": composite, "n": 4})])
+    assert isinstance(migrated, dict)
+    recipe = migrated["recipe"]
+    assert isinstance(recipe, dict)
+    assert recipe["curves"] == parts
+    assert "curve" not in recipe
+    recipe_model = Form.model_validate(migrated).recipe
+    assert isinstance(recipe_model, SvgRecipe)
+    assert not any(isinstance(curve, CompositeCurve) for curve in recipe_model.curves)
 
 
 def test_forms_step_passes_other_documents_and_fields_through() -> None:

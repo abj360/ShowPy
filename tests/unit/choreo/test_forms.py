@@ -19,6 +19,12 @@ Contains:
     test_regression_arc_form_rejects_sweeps_that_overlap_themselves: rejects an arc past 360 degrees
         instead of producing coincident slots
     test_regression_form_rejects_fractional_slot_count: rejects n=2.5 instead of truncating it to 2
+    test_regression_svg_form_stores_each_subpath_as_its_own_curve: keeps an outline's subpaths
+        as separate curves, never one composite that jumps their gaps, and spaces them by length
+    test_regression_svg_form_with_subpaths_refuses_spacing_across_their_gaps: raises SpacingError
+        for count spacing over several subpaths
+    test_one_subpath_svg_form_keeps_every_spacing_mode: spaces a one-subpath outline
+        by interval as any curve form does
     test_regression_svg_form_rejects_empty_svg: raises a ShowPyError, not ValueError, for
         svg_form("")
     test_regression_generated_form_with_numpy_params_serializes_or_is_rejected: serializes numpy
@@ -59,6 +65,7 @@ from showpy.choreo.forms import (
     text_form,
     wedge_form,
 )
+from showpy.choreo.recipe_models import SvgRecipe
 from showpy.core.errors import (
     LockedError,
     MissingFontError,
@@ -70,7 +77,7 @@ from showpy.core.errors import (
 from showpy.core.types import Box2, Points
 from showpy.core.util import approx_equal
 from showpy.geo.affine import rotation_matrix, translation_matrix
-from showpy.geo.curves import curve_from_construction
+from showpy.geo.curves import CompositeCurve, curve_from_construction
 from showpy.geo.fonts import BUNDLED_FONTS, FontRegistry, bundled_fonts, register_font
 from tests.fixtures.fonts import TINY, tiny_bytes
 from tests.helpers import fails_after
@@ -78,6 +85,9 @@ from tests.helpers import fails_after
 TOL = 1e-6
 MEMBERS = ["A", "B", "C", "D", "E"]
 SHARED_RECIPE_KEYS = {"kind", "recipe_version", "n", "transform"}
+TWO_SUBPATHS = "M0 0 L1 0 M0 1 L3 1"
+TWO_SUBPATH_FIT = Box2(min=(0, 0), max=(3, 1))
+TWO_SUBPATH_SLOTS = [[0, 1], [1, 1], [0, 0], [1, 0], [2, 0], [3, 0]]
 
 
 def _own_keys(form: Form) -> set[str]:
@@ -190,6 +200,26 @@ def test_proportional_spacing_shares_svg_subpaths_by_length() -> None:
     assert len(pts) == 6
     lower = pts[:, 1] < 0.5
     assert sorted([int(lower.sum()), int((~lower).sum())]) == [2, 4]
+
+
+def test_regression_svg_form_stores_each_subpath_as_its_own_curve() -> None:
+    form = svg_form("f", [], TWO_SUBPATHS, TWO_SUBPATH_FIT, n=6)
+    assert isinstance(form.recipe, SvgRecipe)
+    assert len(form.recipe.curves) == 2
+    assert not any(isinstance(curve, CompositeCurve) for curve in form.recipe.curves)
+    assert approx_equal(slots(form), TWO_SUBPATH_SLOTS, abs_tol=TOL)
+
+
+def test_regression_svg_form_with_subpaths_refuses_spacing_across_their_gaps() -> None:
+    form = svg_form("f", [], TWO_SUBPATHS, TWO_SUBPATH_FIT, spacing=SpacingSpec(), n=6)
+    with pytest.raises(SpacingError, match="subpaths"):
+        slots(form)
+
+
+def test_one_subpath_svg_form_keeps_every_spacing_mode() -> None:
+    fit = Box2(min=(0, 0), max=(4, 1))
+    form = svg_form("f", [], "M0 0 L4 0", fit, spacing=SpacingSpec(mode="interval", interval=1.0))
+    assert approx_equal(slots(form)[:, 0], [0, 1, 2, 3, 4], abs_tol=TOL)
 
 
 def test_block_and_fill_and_scatter_slots() -> None:

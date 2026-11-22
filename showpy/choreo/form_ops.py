@@ -53,7 +53,13 @@ from showpy.choreo.forms import (
 )
 from showpy.choreo.match import match
 from showpy.choreo.models import Set
-from showpy.choreo.recipe_models import BlockRecipe, CurveRecipeBase, CustomRecipe, RecipeBase
+from showpy.choreo.recipe_models import (
+    BlockRecipe,
+    CurveRecipeBase,
+    CustomRecipe,
+    RecipeBase,
+    SvgRecipe,
+)
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, SpacingError
 from showpy.core.ids import SpotId
@@ -377,6 +383,8 @@ def _mapped_recipe(recipe: Recipe, matrix: Matrix) -> RecipeBase:
         return _composed(recipe, matrix)
     if isinstance(recipe, CurveRecipeBase):
         return recipe.replace(curve=transform_curve(recipe.curve, matrix))
+    if isinstance(recipe, SvgRecipe):
+        return recipe.replace(curves=tuple(transform_curve(c, matrix) for c in recipe.curves))
     if isinstance(recipe, BlockRecipe) and _proper_similarity(matrix):
         return _mapped_block(recipe, matrix)
     if isinstance(recipe, CustomRecipe):

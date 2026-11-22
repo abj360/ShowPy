@@ -21,6 +21,10 @@ Contains:
         transform to its slots and to face_along
     test_regression_transform_form_composes_onto_a_stored_transform: maps a recipe that already
         holds a transform by composing, never by moving its points under it
+    test_regression_face_along_an_svg_form_follows_each_spot_s_nearest_subpath: faces each spot
+        along the subpath it stands nearest to
+    test_regression_transform_form_maps_every_svg_subpath: moves each subpath of an svg form and
+        stores no transform
     test_text_recipe_is_a_member_of_the_union: stores a text form's TextRecipe as its recipe
 """
 
@@ -52,7 +56,7 @@ from showpy.choreo.forms import (
     text_form,
     wedge_form,
 )
-from showpy.choreo.recipe_models import CustomRecipe, GeneratedRecipe, LineRecipe
+from showpy.choreo.recipe_models import CustomRecipe, GeneratedRecipe, LineRecipe, SvgRecipe
 from showpy.core.deprecation import DeprecatedWarning
 from showpy.core.errors import SchemaError
 from showpy.core.ids import FormId, SetId, SpotId
@@ -187,6 +191,31 @@ def test_regression_transform_form_composes_onto_a_stored_transform() -> None:
     moved = transform_form(line_form("l", ["A"], (0, 0), (2, 0)), translation_matrix(0, 1))
     assert moved.recipe.transform is None
     assert approx_equal(slots(moved), [[1.0, 1.0]], abs_tol=TOL)
+
+
+def test_regression_face_along_an_svg_form_follows_each_spot_s_nearest_subpath() -> None:
+    curves = [line((-1.0, 5.0), (1.0, 5.0)), line((4.0, 4.0), (4.0, 6.0))]
+    form = Form.model_validate(
+        {
+            "id": "f",
+            "set": "1",
+            "recipe": {"kind": "svg", "curves": curves},
+            "members": ["T1", "T3"],
+        }
+    )
+    show = two_set_show().model_copy(update={"forms": {FormId("f"): form}})
+    faced = face_along(show, "1", "f")
+    assert approx_equal(faced.get("T1").facing, 90.0, abs_tol=TOL)
+    assert approx_equal(faced.get("T3").facing, 180.0, abs_tol=TOL)
+
+
+def test_regression_transform_form_maps_every_svg_subpath() -> None:
+    form = svg_form("s", MEMBERS, "M0 0 L1 0 M0 1 L3 1", Box2(min=(0, 0), max=(3, 1)), n=3)
+    moved = transform_form(form, translation_matrix(0, 1))
+    assert isinstance(moved.recipe, SvgRecipe)
+    assert moved.recipe.transform is None
+    assert len(moved.recipe.curves) == 2
+    assert approx_equal(slots(moved), slots(form) + np.array([0.0, 1.0]), abs_tol=TOL)
 
 
 def test_text_recipe_is_a_member_of_the_union() -> None:

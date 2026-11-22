@@ -4,7 +4,9 @@ forms.py --- form constructors plus slot and placement generation from stored re
 A form stores how to rebuild its shape, never the dots. `Form.recipe` is a typed recipe tagged
 by `kind` (`showpy.choreo.recipe_models` and `TextRecipe`):
 
-    line, arc, curve, circle, wedge, polyline, svg: the curve the slots are spaced along
+    line, arc, curve, circle, wedge, polyline: the curve the slots are spaced along
+    svg:       one curve per subpath of the fitted outline; slots are shared among the subpaths
+               by length, and a form with several subpaths takes only proportional spacing
     block:     origin, rows, cols, interval, facing, anchor
     fill:      outline area, interval, pattern, angle_deg
     scatter:   region, min_gap, seed
@@ -70,7 +72,6 @@ from showpy.core.errors import LockedError, SchemaError, SpacingError
 from showpy.core.types import Box2, Degrees, Meters, Point, Points, Region
 from showpy.core.util import as_points
 from showpy.geo.curve_base import Curve
-from showpy.geo.curves import AnyCurve, CompositeCurve
 from showpy.geo.fonts import FontRegistry, bundled_fonts
 from showpy.geo.models import DEFAULT_LINE_SPACING, TextAlign, TextAnchor
 from showpy.geo.regions import region
@@ -286,13 +287,15 @@ def svg_form(
 ) -> Form:
     """Builds a form on an SVG outline fitted into `fit`; spots share subpaths by length.
 
+    Each subpath is stored as its own curve. An outline with several subpaths takes only the
+    default proportional spacing; `count` or `interval` spacing would run across the gaps
+    between subpaths, so its slots raise SpacingError.
+
     >>> box = Box2(min=(0, 0), max=(4, 4))
     >>> len(slots(svg_form("f", [], "M0 0 L1 0 M0 1 L3 1", box, n=4)))
     4
     """
-    curves = svg_outline(svg, fit, keep_aspect=keep_aspect)
-    curve: AnyCurve = curves[0] if len(curves) == 1 else CompositeCurve(parts=tuple(curves))
-    recipe = SvgRecipe(curve=curve, n=n)
+    recipe = SvgRecipe(curves=tuple(svg_outline(svg, fit, keep_aspect=keep_aspect)), n=n)
     return _form(form_id, recipe, members, spacing or PROPORTIONAL, facing, set_id)
 
 

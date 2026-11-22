@@ -4,7 +4,9 @@ v1_to_v2_forms.py --- the forms sub-step of the v1 to v2 format migration (lane 
 A v1 form stores its shape family in `kind` and an untyped JSON `geometry` beside it. v2 stores
 one typed `recipe` that carries the kind and `recipe_version: 1`, so this step moves `kind` and
 every geometry key into the recipe, checks the result against the v2 recipe of that kind and
-stores it with every default written out, as a v2 save writes it.
+stores it with every default written out, as a v2 save writes it. An svg outline's `curve`
+becomes `curves`, one curve per subpath: a v1 composite that joined several subpaths across
+their gaps is split into its parts.
 A geometry that no v2 recipe can hold (an unknown kind, an unknown key, a value out of range)
 is refused with SchemaError naming the document, the field and the value; nothing is guessed.
 
@@ -29,6 +31,8 @@ FORMS_DOC: Final = re.compile(r"^/sets/[^/]+/forms\.json$")
 KINDS: Final = frozenset(get_args(FormKind.__value__))
 RECIPE_ADAPTER: Final[TypeAdapter[Recipe]] = TypeAdapter(Recipe)
 V2_ONLY_KEYS: Final = frozenset({"kind", "recipe_version"})
+SVG_V1_CURVE: Final = "curve"
+SVG_V2_CURVES: Final = "curves"
 
 
 def _refusal(document: str, field: str, value: object, problem: str) -> SchemaError:
@@ -49,23 +53,43 @@ def _v1_parts(
         raise _refusal(document, f"{where}.kind", kind, f"is not one of {sorted(KINDS)}")
     if not isinstance(geometry, dict):
         raise _refusal(document, f"{where}.geometry", geometry, "is not an object")
-    taken = sorted(V2_ONLY_KEYS & geometry.keys())
+    reserved = V2_ONLY_KEYS | ({SVG_V2_CURVES} if kind == "svg" else set())
+    taken = sorted(reserved & geometry.keys())
     if taken:
         key = taken[0]
         raise _refusal(document, f"{where}.geometry.{key}", geometry[key], "is reserved in v2")
     return kind, geometry
 
 
+def _svg_fields(geometry: dict[str, JsonValue]) -> dict[str, JsonValue]:
+    """Moves a v1 svg outline into `curves`, one curve per subpath.
+
+    v1 joined several subpaths into one composite curve that jumped the gaps between them; v2
+    stores the composite's parts as separate curves, and a one-subpath outline as a list of one.
+    """
+    if SVG_V1_CURVE not in geometry:
+        return geometry
+    curve = geometry[SVG_V1_CURVE]
+    rest = {key: value for key, value in geometry.items() if key != SVG_V1_CURVE}
+    parts = (
+        curve.get("parts") if isinstance(curve, dict) and curve.get("kind") == "composite" else None
+    )
+    return {**rest, SVG_V2_CURVES: parts if isinstance(parts, list) else [curve]}
+
+
 def _checked_recipe(
     document: str, index: int, kind: str, geometry: dict[str, JsonValue]
 ) -> dict[str, JsonValue]:
     """Builds the v2 recipe of one v1 form, refusing a geometry the recipe cannot hold."""
-    recipe: dict[str, JsonValue] = {"kind": kind, "recipe_version": RECIPE_VERSION, **geometry}
+    fields = _svg_fields(geometry) if kind == "svg" else geometry
+    recipe: dict[str, JsonValue] = {"kind": kind, "recipe_version": RECIPE_VERSION, **fields}
     try:
         checked = RECIPE_ADAPTER.validate_python(recipe)
     except ValidationError as exc:
         error = exc.errors()[0]
         loc = [str(part) for part in error["loc"][1:]]
+        if loc[:1] == [SVG_V2_CURVES]:
+            loc = [SVG_V1_CURVE]
         field = ".".join([f"[{index}].geometry", *loc])
         value = geometry.get(loc[0]) if loc else geometry
         raise _refusal(document, field, value, f"cannot be stored in v2: {error['msg']}") from exc
