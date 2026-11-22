@@ -6,22 +6,28 @@ ledger_plugin.py --- enforces the defect ledger: every defect test is a strict x
 Contains:
     DEFECT_MARKER: the marker name ledger tests carry
     OPEN_COUNT_KEY: config stash key holding the selected defect count
+    WORKER_COUNT_KEY: pytest-xdist worker output key carrying a worker's selected defect count
+    XdistWorker: the part of a pytest-xdist worker node the controller reads
     LEDGER_USAGE: the hint appended to every ledger violation
     DEFECT_ID_PATTERN: the shape a ledger ID must have
     find_problem(): names what is wrong with a defect test's markers
     pytest_configure(): registers the defect marker
     pytest_collection_modifyitems(): rejects rule-breaking defect tests
     pytest_collection_finish(): counts the defect tests still selected
+    pytest_sessionfinish(): sends a pytest-xdist worker's count to the controller
+    pytest_testnodedown(): records a finished pytest-xdist worker's count on the controller
     pytest_terminal_summary(): prints the Ledger: N open line
 """
 
 import re
+from typing import Protocol
 
 import pytest
 
 DEFECT_MARKER = "defect"
 DEFECT_ID_PATTERN = re.compile(r"^UP-(\d+(\.\d+)?|E)-\d{2,3}$")
 OPEN_COUNT_KEY = pytest.StashKey[int]()
+WORKER_COUNT_KEY = "ledger_open_count"
 LEDGER_USAGE = 'use @pytest.mark.defect("UP-<section>-<nn>") with xfail(strict=True, reason=<id>)'
 
 
@@ -62,6 +68,37 @@ def pytest_collection_finish(session: pytest.Session) -> None:
     session.config.stash[OPEN_COUNT_KEY] = sum(
         1 for item in session.items if item.get_closest_marker(DEFECT_MARKER) is not None
     )
+
+
+class XdistWorker(Protocol):
+    """Exposes what a finished pytest-xdist worker sent back to the controller.
+
+    Attributes:
+        config: The controller's pytest configuration.
+        workeroutput: Values the worker stored in its config.workeroutput.
+    """
+
+    config: pytest.Config
+    workeroutput: dict[str, object]
+
+
+def pytest_sessionfinish(session: pytest.Session) -> None:
+    """Sends a pytest-xdist worker's selected defect count to the controller."""
+    workeroutput: dict[str, object] | None = getattr(session.config, "workeroutput", None)
+    if workeroutput is not None:
+        workeroutput[WORKER_COUNT_KEY] = session.config.stash.get(OPEN_COUNT_KEY, 0)
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_testnodedown(node: XdistWorker) -> None:
+    """Records a worker's count on the controller, which collects no tests under pytest-xdist.
+
+    Every worker collects the whole selection, so each one reports the same count.
+    """
+    count = node.workeroutput.get(WORKER_COUNT_KEY)
+    if isinstance(count, int):
+        stash = node.config.stash
+        stash[OPEN_COUNT_KEY] = max(stash.get(OPEN_COUNT_KEY, 0), count)
 
 
 def pytest_terminal_summary(terminalreporter: pytest.TerminalReporter) -> None:
