@@ -1,11 +1,14 @@
 """
 measure.py --- static measures of points, curves and sets: extents, spacing, neighbours, symmetry
 
-Nothing here reads motion over time; positions over time come from the PathEngine.
+Nothing here reads motion over time; positions over time come from the PathEngine. Measures
+of a `Set` live in `showpy.choreo.set_measure`; the set names kept here are deprecated stubs.
 
 Contains:
     SetSelector: names the selections a set measure or transform accepts
-    on_field_ids(): returns the selected spots that are on the field, in selection order
+    SET_TYPE, SHEET_TYPE: name the types a forwarded Set or Sheet argument must have
+    wrong_type_error(): builds the error for a Set or Sheet argument of another type
+    on_field_ids(): forwards to showpy.choreo.set_measure.on_field_ids, deprecated
     length(): returns the length of a curve or of points read as a polyline
     center(): returns the bounding-box center
     centroid(): returns the mean point (length-weighted for curves)
@@ -13,12 +16,12 @@ Contains:
     interval(): summarizes gaps between consecutive or nearest-neighbour spots
     distance(): returns the distance between two points
     distance_matrix(): returns every pairwise distance between two point arrays
-    neighbors(): returns the on-field spots closest to one spot
-    nearest(): returns the on-field spots closest to a point
+    neighbors(): forwards to showpy.choreo.set_measure.neighbors, deprecated
+    nearest(): forwards to showpy.choreo.set_measure.nearest, deprecated
     reachable_region(): returns the disk a spot can reach in a number of counts
     mirror_gaps(): returns how far each mirrored point lands from its nearest point
     form_metrics(): summarizes length, spacing, curvature and symmetry of a form's points
-    symmetry_error(): returns the largest mirror mismatch of selected spots about an axis
+    symmetry_error(): forwards to showpy.choreo.set_measure.symmetry_error, deprecated
 """
 
 import math
@@ -31,16 +34,18 @@ from scipy.optimize import minimize_scalar
 from scipy.spatial import cKDTree
 from scipy.spatial.distance import cdist
 
-from showpy.choreo.models import Set
+from showpy.core.deprecation import deprecated_call
 from showpy.core.errors import GeometryError, SchemaError
 from showpy.core.ids import SpotId
-from showpy.core.selection import Selection, operand_ids
+from showpy.core.selection import Selection
 from showpy.core.types import Box2, Count, Meters, Point, Points, Polygon
-from showpy.core.util import as_points, natural_sort
+from showpy.core.util import as_points
 from showpy.geo.curve_base import Curve
 from showpy.geo.models import FormMetrics, IntervalStats
 
 ALL = "all"
+SET_TYPE = "showpy.choreo.models.Set"
+SHEET_TYPE = "showpy.sheet.models.Sheet"
 CURVE_TOL = 0.001
 DISK_SEGMENTS = 64
 STRAIGHT_TOL = 1e-12
@@ -48,24 +53,34 @@ STRAIGHT_TOL = 1e-12
 type SetSelector = Literal["all"] | Sequence[str] | Selection
 
 
-def on_field_ids(s: Set, sel: SetSelector = ALL) -> tuple[SpotId, ...]:
-    """Returns the selected spots that are on the field, in selection order.
+def wrong_type_error(function: str, argument: str, value: object, expected: str) -> SchemaError:
+    """Builds the error for an argument that must be a `Set` or `Sheet` but is another type.
 
-    A selection naming an unknown spot raises UnknownRefError.
+    Args:
+        function: Dotted name of the geo function that received the argument.
+        argument: Parameter name.
+        value: The object received.
+        expected: The type that was needed, as `showpy.choreo.models.Set`.
 
-    >>> from showpy.choreo.models import Placement
-    >>> s = Set(id="1", counts=0, placements=(Placement(entity="A", x=0, y=0, on_field=False),))
-    >>> on_field_ids(s)
-    ()
+    Returns:
+        error: A SchemaError that names the argument, the type received and the type needed.
     """
-    if isinstance(sel, str) and sel != ALL:
-        raise SchemaError(
-            f"selector {sel!r} is not a list of spot IDs",
-            hint='pass "all", a list of spot IDs or a Selection',
-            context={"selector": sel},
-        )
-    ids = s.entity_ids() if sel == ALL else tuple(dict.fromkeys(operand_ids(sel)))
-    return tuple(p.entity for p in map(s.get, ids) if p.on_field)
+    return SchemaError(
+        f"`{argument}` must be a {expected}, got {type(value).__name__}",
+        hint=f"pass a {expected}; {function}() takes it only to forward to its choreo twin",
+        context={"function": function, "argument": argument, "got": type(value).__name__},
+    )
+
+
+@deprecated_call("showpy.choreo.set_measure.on_field_ids", since="0.4.0", remove="0.6.0")
+def on_field_ids(s: object, sel: SetSelector = ALL) -> tuple[SpotId, ...]:
+    """Returns the selected spots that are on the field; moved to `showpy.choreo.set_measure`."""
+    from showpy.choreo.models import Set
+    from showpy.choreo.set_measure import on_field_ids as twin
+
+    if not isinstance(s, Set):
+        raise wrong_type_error("showpy.geo.measure.on_field_ids", "s", s, SET_TYPE)
+    return twin(s, sel)
 
 
 def _points(obj: Points | Curve) -> Points:
@@ -180,35 +195,26 @@ def distance_matrix(a: Points, b: Points) -> Points:
     return matrix
 
 
-def _closest(s: Set, target: Point, k: int, skip: str | None) -> list[tuple[SpotId, Meters]]:
-    ids = [i for i in on_field_ids(s) if i != skip]
-    rank = {spot: n for n, spot in enumerate(natural_sort(ids))}
-    scored = [(math.dist(target, s.get(i).point), rank[i], i) for i in ids]
-    return [(i, d) for d, _, i in sorted(scored)[:k]]
+@deprecated_call("showpy.choreo.set_measure.neighbors", since="0.4.0", remove="0.6.0")
+def neighbors(s: object, entity: str, k: int = 2) -> list[tuple[SpotId, Meters]]:
+    """Returns the k spots closest to `entity`; moved to `showpy.choreo.set_measure`."""
+    from showpy.choreo.models import Set
+    from showpy.choreo.set_measure import neighbors as twin
+
+    if not isinstance(s, Set):
+        raise wrong_type_error("showpy.geo.measure.neighbors", "s", s, SET_TYPE)
+    return twin(s, entity, k)
 
 
-def neighbors(s: Set, entity: str, k: int = 2) -> list[tuple[SpotId, Meters]]:
-    """Returns the k on-field spots closest to `entity`, nearest first, ties by natural ID.
+@deprecated_call("showpy.choreo.set_measure.nearest", since="0.4.0", remove="0.6.0")
+def nearest(s: object, point: Point, k: int = 1) -> list[tuple[SpotId, Meters]]:
+    """Returns the k spots closest to a point; moved to `showpy.choreo.set_measure`."""
+    from showpy.choreo.models import Set
+    from showpy.choreo.set_measure import nearest as twin
 
-    Off-field spots are never neighbours; the entity itself is measured from where it stands.
-
-    >>> from showpy.choreo.models import Placement
-    >>> rows = tuple(Placement(entity=e, x=x, y=0) for e, x in (("A", 0), ("B", 1), ("C", 3)))
-    >>> neighbors(Set(id="1", counts=0, placements=rows), "A", k=1)
-    [('B', 1.0)]
-    """
-    return _closest(s, s.get(entity).point, k, entity)
-
-
-def nearest(s: Set, point: Point, k: int = 1) -> list[tuple[SpotId, Meters]]:
-    """Returns the k on-field spots closest to a point, nearest first, ties by natural ID.
-
-    >>> from showpy.choreo.models import Placement
-    >>> rows = tuple(Placement(entity=e, x=x, y=0) for e, x in (("A", 0), ("B", 4)))
-    >>> nearest(Set(id="1", counts=0, placements=rows), (3.0, 0.0))
-    [('B', 1.0)]
-    """
-    return _closest(s, point, k, None)
+    if not isinstance(s, Set):
+        raise wrong_type_error("showpy.geo.measure.nearest", "s", s, SET_TYPE)
+    return twin(s, point, k)
 
 
 def reachable_region(start: Point, counts: Count, max_speed: float) -> Polygon:
@@ -289,16 +295,12 @@ def form_metrics(points: Points) -> FormMetrics:
     )
 
 
-def symmetry_error(s: Set, sel: SetSelector = ALL, axis_x: float = 0.0) -> Meters:
-    """Returns the largest distance from a selected spot's mirror image to its nearest partner.
+@deprecated_call("showpy.choreo.set_measure.symmetry_error", since="0.4.0", remove="0.6.0")
+def symmetry_error(s: object, sel: SetSelector = ALL, axis_x: float = 0.0) -> Meters:
+    """Returns the largest mirror mismatch of a set; moved to `showpy.choreo.set_measure`."""
+    from showpy.choreo.models import Set
+    from showpy.choreo.set_measure import symmetry_error as twin
 
-    Only on-field spots count; with none selected the error is 0.
-
-    >>> from showpy.choreo.models import Placement
-    >>> rows = tuple(Placement(entity=e, x=x, y=1) for e, x in (("A", -2), ("B", 2.5)))
-    >>> symmetry_error(Set(id="1", counts=0, placements=rows))
-    0.5
-    """
-    pts = s.positions(on_field_ids(s, sel))
-    gaps = mirror_gaps(pts, axis_x)
-    return float(gaps.max()) if len(gaps) else 0.0
+    if not isinstance(s, Set):
+        raise wrong_type_error("showpy.geo.measure.symmetry_error", "s", s, SET_TYPE)
+    return twin(s, sel, axis_x)
