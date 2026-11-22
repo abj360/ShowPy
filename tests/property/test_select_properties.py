@@ -10,6 +10,8 @@ Contains:
     test_self_difference_is_empty(): `X - X` selects nothing
     test_parentheses_group_right_operand(): `A - (B + C)` equals A minus (B union C)
     test_results_are_unique_known_ids(): every result is duplicate-free and in the cast
+    test_natural_sort_is_a_permutation(): sorting keeps every ID, duplicates included
+    test_natural_sort_is_idempotent(): sorting a sorted list changes nothing
 """
 
 from hypothesis import given
@@ -18,10 +20,13 @@ from hypothesis import strategies as st
 from showpy.cast.models import Cast, Group, Spot
 from showpy.cast.select import select
 from showpy.core.ids import SpotId
+from showpy.core.util import natural_sort
 
 GROUPS = {"trumpets": "T", "tubas": "TB", "flags": "F"}
 TAGS = ("soloist", "leader")
 SPOTS_PER_GROUP = 6
+MAX_SORTED_IDS = 20
+ID_LIKE_PATTERN = r"[A-Za-z_-]{0,3}[0-9]{1,12}([a-z][0-9]{1,3})?"
 
 
 def property_cast() -> Cast:
@@ -93,3 +98,20 @@ def test_results_are_unique_known_ids(words: list[str], operators: list[str]) ->
     result = select(CAST, expr).ids
     assert len(result) == len(set(result))
     assert set(result) <= set(CAST.ids())
+
+
+SORTABLE_IDS = st.lists(
+    st.one_of(st.text(), st.from_regex(ID_LIKE_PATTERN, fullmatch=True)),
+    max_size=MAX_SORTED_IDS,
+)
+
+
+@given(SORTABLE_IDS)
+def test_natural_sort_is_a_permutation(ids: list[str]) -> None:
+    assert sorted(natural_sort(ids)) == sorted(ids)
+
+
+@given(SORTABLE_IDS)
+def test_natural_sort_is_idempotent(ids: list[str]) -> None:
+    once = natural_sort(ids)
+    assert natural_sort(once) == once
