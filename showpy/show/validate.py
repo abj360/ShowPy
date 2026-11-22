@@ -12,8 +12,11 @@ Contains:
 """
 
 import math
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator, Mapping
+from itertools import islice
 from typing import Literal
+
+from pydantic import BaseModel
 
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.match_ops import forms_of_set
@@ -28,6 +31,7 @@ from showpy.show.models import Show
 from showpy.time.validate import validate_timeline
 
 FULL_TURN = 360.0
+MAX_NON_FINITE_ISSUES = 100
 
 type Level = Literal["error", "warning"]
 ERROR: Level = "error"
@@ -323,6 +327,51 @@ def _selections(show: Show) -> list[ValidationIssue]:
     ]
 
 
+def _non_finite_values(value: object, path: str) -> Iterator[tuple[str, float]]:
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            yield path, value
+    elif isinstance(value, BaseModel):
+        for name in type(value).model_fields:
+            yield from _non_finite_values(getattr(value, name), f"{path}.{name}" if path else name)
+    elif isinstance(value, Mapping):
+        for key, item in value.items():
+            yield from _non_finite_values(item, f"{path}.{key}")
+    elif isinstance(value, tuple | list):
+        for index, item in enumerate(value):
+            yield from _non_finite_values(item, f"{path}[{index}]")
+
+
+def _has_non_finite(value: object) -> bool:
+    return next(_non_finite_values(value, ""), None) is not None
+
+
+def _non_finite(show: Show) -> list[ValidationIssue]:
+    found = islice(_non_finite_values(show, ""), MAX_NON_FINITE_ISSUES)
+    return [
+        ValidationIssue(
+            level=ERROR,
+            code=ErrorCode.NOT_FINITE,
+            where=path,
+            message=f"{path} is {value}",
+            hint="use a finite number",
+            context={"path": path, "value": str(value)},
+        )
+        for path, value in found
+    ]
+
+
+def _path_reports(show: Show) -> list[ValidationReport]:
+    reports = []
+    for tid in show.transition_ids():
+        stored = show.lookup.stored.get(tid)
+        parts = (show.set(tid.from_set), show.set(tid.to_set), stored)
+        if any(part is not None and _has_non_finite(part) for part in parts):
+            continue
+        reports.append(validate_paths(show, show.transition(tid)))
+    return reports
+
+
 def _all(reports: Iterable[ValidationReport]) -> ValidationReport:
     return ValidationReport.merge(*reports)
 
@@ -335,10 +384,9 @@ def validate_show(show: Show, store: SheetStore | None = None) -> ValidationRepo
     True
     """
     reports = [validate_set(show, s) for s in show.sets]
-    reports += [validate_paths(show, show.transition(tid)) for tid in show.transition_ids()]
-    reports.append(
-        ValidationReport(issues=tuple(_sequence(show) + _form_keys(show) + _selections(show)))
-    )
+    reports += _path_reports(show)
+    extra = _sequence(show) + _form_keys(show) + _selections(show) + _non_finite(show)
+    reports.append(ValidationReport(issues=tuple(extra)))
     reports.append(validate_timeline(show.timeline))
     if store is not None:
         reports.append(validate_dependencies(show, store))

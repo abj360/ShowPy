@@ -38,6 +38,8 @@ Contains:
         infinite
     test_regression_validate_show_reports_non_finite_tempo: reports a tempo section whose tempo is
         infinite
+    test_regression_validate_show_names_the_non_finite_field_path: puts the offending field path and
+        value in the issue context
     test_regression_validate_show_reports_non_finite_waypoints: reports a path waypoint with an
         infinite coordinate
     test_regression_validate_show_warns_about_placements_far_off_the_sheet: warns about a placement
@@ -403,15 +405,11 @@ def test_regression_validate_show_names_the_selection_and_spot_in_context() -> N
     assert dict(issue.context) == {"path": "cast.selections.front", "spot": "ZZ"}
 
 
-@pytest.mark.defect("UP-9.7-76")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-76")
 def test_regression_validate_show_reports_infinite_set_counts() -> None:
     """Reports a set whose counts are infinite (audit 9.7 validation gaps)."""
     assert _mentions(_edited(sets=_set_two_with(counts=math.inf)), "inf")
 
 
-@pytest.mark.defect("UP-9.7-77")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-77")
 def test_regression_validate_show_reports_non_finite_tempo() -> None:
     """Reports a tempo section whose tempo is infinite (audit 9.7 validation gaps)."""
     timeline = two_set_show().timeline
@@ -420,8 +418,13 @@ def test_regression_validate_show_reports_non_finite_tempo() -> None:
     assert _mentions(show, "inf")
 
 
-@pytest.mark.defect("UP-9.7-78")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-78")
+def test_regression_validate_show_names_the_non_finite_field_path() -> None:
+    """Puts the offending field path and value in the issue context."""
+    (issue,) = validate_show(_edited(sets=_set_two_with(counts=math.inf))).issues
+    assert issue.code == "NOT_FINITE"
+    assert dict(issue.context) == {"path": "sets[1].counts", "value": "inf"}
+
+
 def test_regression_validate_show_reports_non_finite_waypoints() -> None:
     """Reports a path waypoint with an infinite coordinate (audit 9.7 validation gaps)."""
     waypoint = Waypoint(x=1.0, y=1.0).model_copy(update={"x": math.inf})
@@ -486,8 +489,6 @@ def test_regression_validate_show_reports_a_nonzero_first_set_count() -> None:
     assert _mentions(_edited(sets=(first, show.sets[1])), "3.5")
 
 
-@pytest.mark.defect("UP-9.7-88")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-88")
 def test_regression_validate_show_reports_nan_counts_on_the_first_set() -> None:
     """Reports NaN counts on the first set by name (audit 9.7 validation gaps)."""
     show = two_set_show()
@@ -501,8 +502,6 @@ def test_regression_validate_show_reports_nan_counts_on_the_first_set() -> None:
     )
 
 
-@pytest.mark.defect("UP-9.7-89")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-89")
 def test_regression_validate_show_reports_nan_waypoints() -> None:
     """Reports a path waypoint with a NaN coordinate (audit 9.7 validation gaps)."""
     waypoint = Waypoint(x=1.0, y=1.0).model_copy(update={"y": math.nan})

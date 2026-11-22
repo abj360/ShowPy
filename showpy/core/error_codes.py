@@ -94,7 +94,7 @@ class ErrorCode(StrEnum):
     NOT_A_TEXT_FORM = "NOT_A_TEXT_FORM"
     """A text-only operation gets a form of another kind."""
     NOT_FINITE = "NOT_FINITE"
-    """A similarity fit gets or produces coordinates that are not finite."""
+    """A similarity fit or a stored show field holds a NaN or infinite number."""
     NOT_IN_FORM = "NOT_IN_FORM"
     """A placement names a form it is not a member of in that set."""
     NO_HARDLINKS = "NO_HARDLINKS"
