@@ -5,7 +5,9 @@ paths.py --- strategies for path rows of every style, built with the path builde
 
 Every row compiles against the show it was drawn for: styles that pin the target (HOLD) are
 offered only when the spot already stands still, and ROTATE pivots on the perpendicular
-bisector of the move so the arc lands on the target.
+bisector of the move so the arc lands on the target. Custom motions stay within the engine's
+default motion tolerance: a zigzag takes only cycle counts whose corners land on the compile
+samples, and a spiral only the turns whose sample chords stay within it over the move.
 
 Contains:
     ROW_STYLES: the path styles a row can take without a stored route; FOLLOW needs one
@@ -18,6 +20,7 @@ from typing import Literal
 
 from hypothesis import strategies as st
 
+from showpy.choreo.engine_compile import CUSTOM_SAMPLES, DEFAULT_SEGMENT_TOL
 from showpy.choreo.match_ops import clear_rows
 from showpy.choreo.models import Placement
 from showpy.choreo.path_models import (
@@ -60,6 +63,7 @@ MAX_STEPS = 6
 MAX_AMPLITUDE_M = 2.0
 MAX_CYCLES_HALVES = 8
 MAX_SPIRAL_TURNS = 2
+ZIGZAG_SAMPLED_CYCLES = (0.5, 1.0, 2.0, 4.0)
 ROW_STYLES = (
     PathStyle.STRAIGHT, PathStyle.HOLD, PathStyle.CURVE, PathStyle.POLYLINE, PathStyle.ROTATE,
     PathStyle.CUSTOM,
@@ -126,16 +130,30 @@ def _rotated(draw: st.DrawFn, show: Show, spec: TransitionSpec, entity: str) -> 
     return rotate_path(show, spec, [entity], pivot, sweep)
 
 
+def _resolved_spiral_turns(a: Placement, b: Placement) -> int:
+    """Returns the most spiral turns whose sample chords stay within the default tolerance."""
+    radius = math.dist(a.point, b.point) / 2
+    intervals = CUSTOM_SAMPLES - 1
+    for turns in range(MAX_SPIRAL_TURNS, 0, -1):
+        step = math.pi * (1 + 2 * turns) / intervals
+        if radius * (1 - math.cos(step / 2)) <= DEFAULT_SEGMENT_TOL:
+            return turns
+    return 0
+
+
 @st.composite
-def _custom(draw: st.DrawFn, spec: TransitionSpec, entity: str) -> TransitionSpec:
+def _custom(draw: st.DrawFn, show: Show, spec: TransitionSpec, entity: str) -> TransitionSpec:
     motion = draw(st.sampled_from(MOTIONS))
     amplitude = draw(st.floats(min_value=0.0, max_value=MAX_AMPLITUDE_M, allow_nan=False))
     if motion == "spiral":
-        turns = draw(st.integers(0, MAX_SPIRAL_TURNS))
+        turns = draw(st.integers(0, _resolved_spiral_turns(*_ends(show, spec.id, entity))))
         return custom_path(spec, [entity], motion, turns=turns, clockwise=draw(st.booleans()))
     if motion == "figure_eight":
         return custom_path(spec, [entity], motion, amplitude=amplitude)
-    cycles = draw(st.integers(1, MAX_CYCLES_HALVES)) / 2
+    if motion == "zigzag":
+        cycles = draw(st.sampled_from(ZIGZAG_SAMPLED_CYCLES))
+    else:
+        cycles = draw(st.integers(1, MAX_CYCLES_HALVES)) / 2
     return custom_path(spec, [entity], motion, amplitude=amplitude, cycles=cycles)
 
 
@@ -152,7 +170,7 @@ def _styled(draw: st.DrawFn, show: Show, spec: TransitionSpec, entity: str) -> T
     if style is PathStyle.ROTATE:
         return draw(_rotated(show, spec, entity))
     if style is PathStyle.CUSTOM:
-        return draw(_custom(spec, entity))
+        return draw(_custom(show, spec, entity))
     return set_style(spec, [entity], style)
 
 

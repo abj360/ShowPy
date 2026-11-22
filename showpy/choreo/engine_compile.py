@@ -2,7 +2,8 @@
 engine_compile.py --- compiles one path row into a MotionPlan: a curve plus a time map
 
 Contains:
-    compile_plan(): builds a spot's MotionPlan for one transition, checking continuity
+    compile_plan(): builds a spot's MotionPlan for one transition, checking continuity and that
+        custom motions resolve at the compile samples
     plan_positions(): evaluates a plan's positions at local counts
     plan_progress(): returns arc lengths travelled at local counts
     plan_breaks(): returns the local counts where a plan's motion may kink
@@ -19,6 +20,7 @@ from showpy.choreo.engine_models import MotionPiece, MotionPlan, PieceKind
 from showpy.choreo.models import Placement
 from showpy.choreo.motion import MotionRegistry, ease, easing_breaks
 from showpy.choreo.path_models import Easing, PathRow, PathStyle, Route, TransitionSpec
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import ContinuityError, PathError
 from showpy.core.json_types import JsonValue
 from showpy.core.types import Point, Points
@@ -37,6 +39,7 @@ from showpy.geo.curves import (
 type FloatArray = npt.NDArray[np.float64]
 
 CONTINUITY_TOL = 1e-6
+DEFAULT_SEGMENT_TOL = 0.02
 CUSTOM_SAMPLES = 257
 INVERSE_EASE_STEPS = 53
 SMOOTHSTEP_INFLECTION = 0.5
@@ -140,8 +143,8 @@ def _plain_params(row: PathRow) -> dict[str, JsonValue]:
     return plain
 
 
-def _motion_samples(row: PathRow, motion: str, a: Placement, b: Placement, raw: object) -> Points:
-    """Checks a motion's output once: CUSTOM_SAMPLES finite points from start to target."""
+def _motion_points(row: PathRow, motion: str, raw: object, count: int) -> Points:
+    """Checks a motion's output is `count` finite (x, y) rows."""
     try:
         pts = np.asarray(raw, dtype=float)
     except (TypeError, ValueError) as exc:
@@ -150,9 +153,9 @@ def _motion_samples(row: PathRow, motion: str, a: Placement, b: Placement, raw: 
             hint="return a float array of shape (len(u), 2)",
             context={"entity": row.entity, "motion": motion},
         ) from exc
-    if pts.shape != (CUSTOM_SAMPLES, 2):
+    if pts.shape != (count, 2):
         raise PathError(
-            f"motion {motion} returned shape {pts.shape}, not ({CUSTOM_SAMPLES}, 2)",
+            f"motion {motion} returned shape {pts.shape}, not ({count}, 2)",
             hint="return one (x, y) row per progress share in u",
             context={"entity": row.entity, "motion": motion, "shape": list(pts.shape)},
         )
@@ -162,6 +165,10 @@ def _motion_samples(row: PathRow, motion: str, a: Placement, b: Placement, raw: 
             hint="return finite positions for every share in u",
             context={"entity": row.entity, "motion": motion},
         )
+    return pts
+
+
+def _require_ends(row: PathRow, motion: str, a: Placement, b: Placement, pts: Points) -> None:
     for share, point, placement in ((0, pts[0], a), (1, pts[-1], b)):
         if math.dist((float(point[0]), float(point[1])), placement.point) > CONTINUITY_TOL:
             raise ContinuityError(
@@ -169,25 +176,62 @@ def _motion_samples(row: PathRow, motion: str, a: Placement, b: Placement, raw: 
                 hint="return start at u=0 and end at u=1",
                 context={"entity": row.entity, "motion": motion, "u": share},
             )
-    return pts
+
+
+def _chord_gaps(samples: Points, mids: Points) -> FloatArray:
+    """Returns each midpoint's distance from the chord between the samples around it."""
+    starts, chords = samples[:-1], np.diff(samples, axis=0)
+    lengths = np.einsum("ij,ij->i", chords, chords)
+    along = np.einsum("ij,ij->i", mids - starts, chords)
+    shares = np.clip(np.divide(along, lengths, out=np.zeros_like(along), where=lengths > 0), 0, 1)
+    gaps: FloatArray = np.linalg.norm(mids - (starts + shares[:, None] * chords), axis=1)
+    return gaps
+
+
+def _require_resolution(
+    row: PathRow, motion: str, samples: Points, mids: Points, tol: float
+) -> None:
+    """Refuses a motion that strays more than `tol` from its compiled polyline between samples.
+
+    A motion that oscillates near or above half the sample rate aliases: its samples trace a
+    different path, which every later check would then take as the motion.
+    """
+    deviation = float(np.max(_chord_gaps(samples, mids)))
+    if deviation <= tol:
+        return
+    raise PathError(
+        f"motion {motion} of {row.entity} strays {deviation:.3g} m from its {CUSTOM_SAMPLES}-point"
+        f" compiled path, over the {tol:g} m tolerance",
+        hint=f"use fewer cycles or turns, or pass PathEngine a motion_tol above {deviation:.3g} m",
+        context={"entity": row.entity, "motion": motion, "deviation": deviation, "tol": tol},
+        code=ErrorCode.SEGMENT_BOUND,
+    )
 
 
 def _custom_curve(
-    row: PathRow, a: Placement, b: Placement, motions: MotionRegistry
+    row: PathRow, a: Placement, b: Placement, motions: MotionRegistry, tol: float
 ) -> AnyCurve | None:
     if row.motion_fn is None:
         raise PathError(f"custom path of {row.entity} names no motion", hint="set motion_fn")
     fn = motions.get(row.motion_fn)
-    u = np.linspace(0.0, 1.0, CUSTOM_SAMPLES)
+    u = np.linspace(0.0, 1.0, 2 * CUSTOM_SAMPLES - 1)
     raw = fn(u, a.point, b.point, _plain_params(row))
-    pts = _motion_samples(row, row.motion_fn, a, b, raw)
+    evaluated = _motion_points(row, row.motion_fn, raw, len(u))
+    pts, mids = evaluated[::2], evaluated[1::2]
+    _require_ends(row, row.motion_fn, a, b, pts)
+    _require_resolution(row, row.motion_fn, pts, mids, tol)
     keep = np.concatenate([[True], np.linalg.norm(np.diff(pts, axis=0), axis=1) > CONTINUITY_TOL])
     vertices = tuple((float(x), float(y)) for x, y in pts[keep])
     return Polyline(points=vertices) if len(vertices) > 1 else None
 
 
 def _curve_for(
-    row: PathRow, spec: TransitionSpec, a: Placement, b: Placement, motions: MotionRegistry
+    row: PathRow,
+    spec: TransitionSpec,
+    a: Placement,
+    b: Placement,
+    motions: MotionRegistry,
+    tol: float,
 ) -> tuple[AnyCurve | None, list[int]]:
     if row.style in WAYPOINT_STYLES:
         return _waypoint_curve(row, a, b)
@@ -198,7 +242,7 @@ def _curve_for(
         return _rotate_curve(row, a, b), []
     if row.style == PathStyle.FOLLOW:
         return _follow_curve(row, spec, a), []
-    return _custom_curve(row, a, b, motions), []
+    return _custom_curve(row, a, b, motions, tol), []
 
 
 def _window(row: PathRow, spec: TransitionSpec) -> tuple[float, float]:
@@ -256,9 +300,19 @@ def _pieces(
 
 
 def compile_plan(
-    row: PathRow, spec: TransitionSpec, a: Placement, b: Placement, motions: MotionRegistry
+    row: PathRow,
+    spec: TransitionSpec,
+    a: Placement,
+    b: Placement,
+    motions: MotionRegistry,
+    *,
+    tol: float = DEFAULT_SEGMENT_TOL,
 ) -> MotionPlan:
     """Builds a spot's MotionPlan for one transition, raising ContinuityError on a miss.
+
+    A custom motion is sampled at CUSTOM_SAMPLES shares and checked once more halfway between
+    them; a motion that strays more than `tol` meters from its samples' polyline raises
+    PathError code SEGMENT_BOUND.
 
     >>> from showpy.choreo.path_models import TransitionSpec, PathRow
     >>> from showpy.choreo.models import Placement
@@ -269,7 +323,7 @@ def compile_plan(
     4.0
     """
     window = _window(row, spec)
-    curve, index_of = _curve_for(row, spec, a, b, motions)
+    curve, index_of = _curve_for(row, spec, a, b, motions, tol)
     if curve is not None:
         end = curve.point_at(curve.length())
         _require_end(row.entity, (float(end[0]), float(end[1])), b, row.style)

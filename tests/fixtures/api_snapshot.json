@@ -746,7 +746,7 @@
       "routes_changed": "tuple[showpy.core.ids.RouteId, ...]"
     }
   },
-  "PathEngine": "(show: showpy.show.models.Show, curve_tol: float = 0.01, *, cache: bool = True, motions: showpy.choreo.motion.MotionRegistry = ...) -> None",
+  "PathEngine": "(show: showpy.show.models.Show, curve_tol: float = 0.01, *, cache: bool = True, motions: showpy.choreo.motion.MotionRegistry = ..., motion_tol: float = 0.02) -> None",
   "PathError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: showpy.core.error_codes.ErrorCode | None = None) -> None",
   "PathRow": {
     "model": {
