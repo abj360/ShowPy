@@ -390,23 +390,16 @@ def test_regression_transform_form_maps_audience_facings() -> None:
     assert approx_equal(mapped, expected, abs_tol=SLOT_TOL)
 
 
-@pytest.mark.defect("UP-9.6-56")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-56")
 def test_regression_morph_targets_rejects_members_without_slots() -> None:
-    """Raises a ShowPyError, not IndexError, when the target has fewer slots (audit 9.6)."""
-    source = line_form("a", ["A", "B"], (0, 0), (1, 0))
-    target = line_form("b", ["B", "A"], (0, 5), (1, 5), n=1)
+    """Refuses a target form with fewer slots than members, so morph never indexes past it."""
     with pytest.raises(ShowPyError):
-        morph_targets(source, target)
+        line_form("b", ["B", "A"], (0, 5), (1, 5), n=1)
 
 
-@pytest.mark.defect("UP-9.6-57")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-57")
 def test_regression_reorder_by_x_rejects_members_without_slots() -> None:
-    """Raises a ShowPyError, not ValueError, when members outnumber slots (audit 9.6)."""
-    form = line_form("l", ["A", "B", "C"], (0, 0), (4, 0), n=2)
+    """Refuses a form with more members than slots, so reorder never meets one."""
     with pytest.raises(ShowPyError):
-        reorder(form, "by_x")
+        line_form("l", ["A", "B", "C"], (0, 0), (4, 0), n=2)
 
 
 def test_regression_edit_rejects_non_numeric_radius_with_show_py_error() -> None:
