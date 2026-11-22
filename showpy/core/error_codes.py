@@ -115,6 +115,8 @@ class ErrorCode(StrEnum):
     """A tempo ramp sets only one of `ramp_to` and `ramp_counts`."""
     RAMP_LENGTH = "RAMP_LENGTH"
     """A tempo ramp lasts no counts."""
+    RANGE_PADDING = "RANGE_PADDING"
+    """A range's endpoints are spelled with different zero-padding, such as `T1-T010`."""
     READ_ONLY = "READ_ONLY"
     """A write targets a derived workspace file, which is read-only."""
     REFLECTION = "REFLECTION"
