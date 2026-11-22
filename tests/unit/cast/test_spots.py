@@ -45,6 +45,7 @@ from showpy.cast.spots import (
     set_claimable,
     set_shape,
 )
+from showpy.choreo.models import PlacementPatch
 from showpy.choreo.path_models import EntityFacing, FacingMode, FixedFacing, PathRow
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import (
@@ -185,7 +186,7 @@ def test_delete_spots_removes_every_reference() -> None:
 
 def test_delete_spots_refuses_pinned_without_force() -> None:
     show = two_set_show()
-    pinned = show.set("2").with_placements({"T1": {"pinned": True}})
+    pinned = show.set("2").with_placements({"T1": PlacementPatch(pinned=True)})
     show = show.model_copy(update={"sets": (show.set("1"), pinned)})
     with pytest.raises(LockedError):
         delete_spots(show, ["T1"])

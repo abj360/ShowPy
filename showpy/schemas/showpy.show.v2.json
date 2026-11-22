@@ -1006,7 +1006,7 @@
     },
     "FacingSpec": {
       "additionalProperties": false,
-      "description": "Describes how form members face.\n\nAttributes:\n    mode: `fixed`, `audience`, `toward_point`, `along`, `normal` or `outward`.\n    value: Degrees for fixed, a point for toward_point; for along, normal and outward an\n        optional offset in degrees added to the computed facing.",
+      "description": "Describes how form members face.\n\nAttributes:\n    mode: `fixed`, `audience`, `toward_point`, `along`, `normal` or `outward`.\n    value: Heading for fixed, wrapped into [0, 360); a point for toward_point; for along,\n        normal and outward an optional offset in degrees added to the computed facing.",
       "properties": {
         "mode": {
           "default": "audience",
@@ -1172,7 +1172,7 @@
     },
     "Form": {
       "additionalProperties": false,
-      "description": "Holds a stored shape construction plus its ordered members.\n\nAttributes:\n    id: Form ID, unique across the show.\n    set: Set the form belongs to.\n    recipe: Typed construction recipe the slots are generated from; its `kind` is the\n        form's shape family.\n    members: One entry per slot in slot order: the spot standing on it, or None for an open\n        slot that `place` fills. At most `recipe.n` entries when `n` is set.\n    spacing: How members are spaced on the shape.\n    facing: How members face.\n    locked: Designer lock; edits need force=True.\n    meta: Free designer metadata.",
+      "description": "Holds a stored shape construction plus its ordered members.\n\nAttributes:\n    id: Form ID, unique across the show.\n    set: Set the form belongs to.\n    recipe: Typed construction recipe the slots are generated from; its `kind` is the\n        form's shape family.\n    members: One entry per slot in slot order: the spot standing on it, or None for an open\n        slot that `place` fills. At most `recipe.n` entries when `n` is set.\n    spacing: How members are spaced on the shape.\n    facing: How members face.\n    locked: Designer lock; edits need force=True.\n    meta: Free designer metadata, read-only once stored.",
       "properties": {
         "facing": {
           "$ref": "#/$defs/FacingSpec",
@@ -1706,6 +1706,11 @@
       "minimum": 0,
       "type": "number"
     },
+    "NonNegMeters": {
+      "maximum": 1000000.0,
+      "minimum": 0,
+      "type": "number"
+    },
     "Note": {
       "additionalProperties": false,
       "description": "Holds one design note.\n\nAttributes:\n    id: Note ID.\n    text: Note body.\n    kind: goal, idea, todo or warning.\n    anchor: What the note is attached to.\n    author: User name, or \"agent\".\n    created_at: When the note was written, with a time zone; passed in, never read from\n        the clock.\n    visible: Whether the canvas shows it.",
@@ -1968,14 +1973,14 @@
     },
     "Placement": {
       "additionalProperties": false,
-      "description": "Holds one spot's state at one set.\n\nAttributes:\n    entity: Spot ID.\n    x: Meters from the center line, audience-left negative.\n    y: Meters upstage from the front edge.\n    facing: Degrees, 0 toward the audience, counter-clockwise positive.\n    form: Form the spot belongs to in this set.\n    order: Index along that form.\n    pinned: Designer lock; edits need force=True.\n    note: Text printed on sheets.\n    on_field: False before an entrance or after an exit; not drawn or collision-checked.",
+      "description": "Holds one spot's state at one set.\n\nAttributes:\n    entity: Spot ID.\n    x: Meters from the center line, audience-left negative.\n    y: Meters upstage from the front edge.\n    facing: Degrees wrapped into [0, 360), 0 toward the audience, counter-clockwise positive.\n    form: Form the spot belongs to in this set.\n    order: Index along that form.\n    pinned: Designer lock; edits need force=True.\n    note: Text printed on sheets.\n    on_field: False before an entrance or after an exit; not drawn or collision-checked.",
       "properties": {
         "entity": {
           "title": "Entity",
           "type": "string"
         },
         "facing": {
-          "$ref": "#/$defs/Degrees",
+          "$ref": "#/$defs/Heading",
           "default": 0.0
         },
         "form": {
@@ -2782,7 +2787,7 @@
     },
     "SpacingSpec": {
       "additionalProperties": false,
-      "description": "Describes how members are spaced on a form's shape.\n\nAttributes:\n    mode: `count` (even over the window), `interval` (fixed gap) or `proportional`.\n    interval: Gap in meters for interval mode.\n    start: Arc length where spacing starts.\n    end: Arc length where spacing ends; None means the end of the shape.\n    align: `start`, `end` or `center` for interval mode.\n    gaps: Extra meters after member indexes.",
+      "description": "Describes how members are spaced on a form's shape.\n\nAttributes:\n    mode: `count` (even over the window), `interval` (fixed gap) or `proportional`.\n    interval: Gap in meters for interval mode.\n    start: Arc length where spacing starts.\n    end: Arc length where spacing ends; None means the end of the shape.\n    align: `start`, `end` or `center` for interval mode.\n    gaps: Extra meters, at least 0, after member indexes.",
       "properties": {
         "align": {
           "default": "start",
@@ -2815,7 +2820,7 @@
                 "type": "integer"
               },
               {
-                "$ref": "#/$defs/Meters"
+                "$ref": "#/$defs/NonNegMeters"
               }
             ],
             "type": "array"

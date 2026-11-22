@@ -38,7 +38,7 @@ import pytest
 
 from showpy.cast.models import Cast, Group, Spot
 from showpy.choreo.form_models import Form
-from showpy.choreo.models import Placement
+from showpy.choreo.models import Placement, PlacementPatch
 from showpy.choreo.path_models import (
     FacingMode,
     FacingOverride,
@@ -116,7 +116,7 @@ def test_new_show_rejects_unversioned_sheet() -> None:
 
 def test_add_set_copies_previous_positions_without_forms() -> None:
     show = two_set_show()
-    form_set = show.sets[1].with_placements({"T1": {"form": "f", "order": 0}})
+    form_set = show.sets[1].with_placements({"T1": PlacementPatch(form=FormId("f"), order=0)})
     show = show.model_copy(update={"sets": (show.sets[0], form_set)})
     added = add_set(show, "3", 4.0, placements=[Placement(entity=SpotId("T2"), x=-3.0, y=1.0)])
     third = added.set("3")
@@ -206,7 +206,7 @@ def test_remove_set_without_merge_and_first_set() -> None:
 
 def test_remove_set_refuses_pinned_placements_unless_forced() -> None:
     show = two_set_show()
-    pinned = show.sets[1].with_placements({"T1": {"pinned": True}})
+    pinned = show.sets[1].with_placements({"T1": PlacementPatch(pinned=True)})
     show = show.model_copy(update={"sets": (show.sets[0], pinned)})
     with pytest.raises(LockedError):
         remove_set(show, "2")
@@ -429,8 +429,6 @@ def test_regression_remove_last_set_with_merge_counts_keeps_total_time() -> None
     assert approx_equal(sum(s.counts for s in edited.sets), total, abs_tol=1e-9)
 
 
-@pytest.mark.defect("UP-9.7-54")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-54")
 def test_regression_add_set_rejects_two_placements_for_one_spot() -> None:
     """Rejects two placements for one spot instead of keeping the last (audit 9.7)."""
     rows = (

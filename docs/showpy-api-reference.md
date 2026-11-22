@@ -605,13 +605,13 @@ Property: `point → Point`.
 | `source_hash`  | `str`                   | Hash of the script that built it                                                                                           |
 | `state`        | `ApprovalState`         | Collaboration state                                                                                                        |
 
-| Method                                  | Inputs                    | Output                                                                  | Purpose                                   |
-| --------------------------------------- | ------------------------- | ----------------------------------------------------------------------- | ----------------------------------------- |
-| `table()`                               |                           | DataFrame (`entity, x, y, facing, form, order, pinned, on_field, note`) | Readable table                            |
-| `entity_ids()`                          |                           | `tuple[SpotId, ...]`                                                    | Spots in placement order                  |
-| `positions(sel="all")`                  |                           | `Points`                                                                | Coordinates in selection order            |
-| `get(entity)`                           |                           | `Placement`                                                             | One row                                   |
-| `with_placements(updates, force=False)` | `{id: Placement or dict}` | `Set`                                                                   | Edit; raises `LockedError` on pinned rows |
+| Method                                  | Inputs                              | Output                                                                  | Purpose                                   |
+| --------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------- |
+| `table()`                               |                                     | DataFrame (`entity, x, y, facing, form, order, pinned, on_field, note`) | Readable table                            |
+| `entity_ids()`                          |                                     | `tuple[SpotId, ...]`                                                    | Spots in placement order                  |
+| `positions(sel="all")`                  |                                     | `Points`                                                                | Coordinates in selection order            |
+| `get(entity)`                           |                                     | `Placement`                                                             | One row                                   |
+| `with_placements(updates, force=False)` | `{id: Placement or PlacementPatch}` | `Set`                                                                   | Edit; raises `LockedError` on pinned rows |
 
 **Spot counts.** `SpotCount{set_id, on_field: int, off_field: int, changed: bool}` describes one set for the set strip, which warns when the number of spots on the field changes unexpectedly between sets. `showpy.show.counts.spot_counts(show) → list[SpotCount]` computes it.
 
@@ -728,9 +728,11 @@ All are `ShowPyError` subclasses with `code`, `message`, `context` and `hint`.
 | `objective`      | `"sum" \| "sum_squares" \| "bottleneck" \| "bottleneck_then_sum"` | `bottleneck_then_sum`    | Minimize largest move, then total                     |
 | `power`          | `float`                                                           | 1.0                      | Cost exponent for `sum`                               |
 | `preserve_order` | `bool`                                                            | False                    | Keep order along ordered forms                        |
-| `weights`        | `dict[str, float]`                                                | {}                       | Penalties: crossing, backward, turn, group_spread     |
+| `weights`        | `MatchWeights`                                                    | all 0.0                  | Penalties: crossing, backward, turn, group_spread     |
 | `cost_fn`        | `(SpotId, slot, start, slot point) → float` \| None               | None                     | Custom added cost; not stored in JSON                 |
 | `counts`         | `float \| None`                                                   | None (transition counts) | For speed limits                                      |
+
+**`MatchWeights`** — `backward`, `crossing`, `group_spread`, `turn`: each a finite `float` of at least 0 (default 0.0); an unknown name raises `SchemaError`.
 
 **`MatchResult`** — `entities: tuple[SpotId, ...]`, `assignment: dict[SpotId, int]`, `targets: tuple[Point, ...]`, `total_distance: Meters`, `max_distance: Meters`, `max_speed: float | None`, `crossings: int`, `unassigned_slots: tuple[int, ...]`, `explain: tuple[str, ...]`; `target_points() → Points` in entity order.
 

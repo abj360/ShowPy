@@ -63,6 +63,7 @@ import pytest
 
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.match_ops import with_set
+from showpy.choreo.models import PlacementPatch
 from showpy.choreo.path_models import FacingMode, PathStyle, TransitionSpec
 from showpy.choreo.paths import lock
 from showpy.choreo.routes import (
@@ -196,7 +197,7 @@ def test_regression_make_route_with_single_vertex_raises_path_error() -> None:
 
 def _moved(show: Show, spot: str, point: tuple[float, float]) -> Show:
     start = show.set(TID[0])
-    return with_set(show, start.with_placements({spot: {"x": point[0], "y": point[1]}}))
+    return with_set(show, start.with_placements({spot: PlacementPatch(x=point[0], y=point[1])}))
 
 
 def test_regression_make_route_merges_near_coincident_starts_onto_one_offset() -> None:
@@ -335,7 +336,7 @@ def test_regression_make_route_offsets_members_that_share_a_start() -> None:
     T1 stands on T4's spot, so the route passes (6, 5) twice: T1 at arc length 0, T4 at 4.
     """
     show = two_set_show()
-    show = with_set(show, show.set("1").with_placements({"T1": {"x": 6.0, "y": 5.0}}))
+    show = with_set(show, show.set("1").with_placements({"T1": PlacementPatch(x=6.0, y=5.0)}))
     route = make_route(show, TID, "T4", [(6.0, 15.0)], members=["T4", "T3", "T1"])
     assert approx_equal(route.offsets, (4.0, 2.0, 0.0))
     assert approx_equal(route.travel, 10.0)

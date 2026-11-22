@@ -355,7 +355,6 @@
       "CUE_DUPLICATE": "'CUE_DUPLICATE'",
       "CUE_NEGATIVE": "'CUE_NEGATIVE'",
       "DEGENERATE": "'DEGENERATE'",
-      "FACING_RANGE": "'FACING_RANGE'",
       "FONT_HASH_MISMATCH": "'FONT_HASH_MISMATCH'",
       "FONT_NAME_TAKEN": "'FONT_NAME_TAKEN'",
       "GEOMETRY": "'GEOMETRY'",
@@ -529,7 +528,7 @@
       "id": "showpy.core.ids.FormId",
       "locked": "bool",
       "members": "tuple[showpy.core.ids.SpotId | None, ...]",
-      "meta": "dict[str, str]",
+      "meta": "collections.abc.Mapping[str, str]",
       "recipe": "Recipe",
       "set": "showpy.core.ids.SetId",
       "spacing": "showpy.choreo.form_models.SpacingSpec"
@@ -764,12 +763,12 @@
       "group_slots": "dict[str, tuple[int, ...]] | None",
       "keep_groups": "bool",
       "max_speed": "float | None",
-      "no_backward": "bool | float",
+      "no_backward": "bool | NonNegFinite",
       "objective": "MatchObjective",
       "pinned": "dict[showpy.core.ids.SpotId, int]",
       "power": "float",
       "preserve_order": "bool",
-      "weights": "dict[str, float]"
+      "weights": "showpy.choreo.match_models.MatchWeights"
     }
   },
   "MatchResult": {
@@ -784,6 +783,14 @@
       "targets": "tuple[Point, ...]",
       "total_distance": "Finite",
       "unassigned_slots": "tuple[int, ...]"
+    }
+  },
+  "MatchWeights": {
+    "model": {
+      "backward": "NonNegFinite",
+      "crossing": "NonNegFinite",
+      "group_spread": "NonNegFinite",
+      "turn": "NonNegFinite"
     }
   },
   "MeasureLabel": {
@@ -947,7 +954,7 @@
   "Placement": {
     "model": {
       "entity": "showpy.core.ids.SpotId",
-      "facing": "Degrees",
+      "facing": "Heading",
       "form": "showpy.core.ids.FormId | None",
       "note": "str | None",
       "on_field": "bool",
@@ -962,6 +969,18 @@
       "op": "Literal['placement']",
       "placement": "showpy.choreo.models.Placement",
       "set_id": "showpy.core.ids.SetId"
+    }
+  },
+  "PlacementPatch": {
+    "model": {
+      "facing": "Heading",
+      "form": "showpy.core.ids.FormId | None",
+      "note": "str | None",
+      "on_field": "bool",
+      "order": "int | None",
+      "pinned": "bool",
+      "x": "Meters",
+      "y": "Meters"
     }
   },
   "PointFacing": {
@@ -1283,7 +1302,7 @@
     "model": {
       "align": "Literal['start', 'end', 'center']",
       "end": "Meters | None",
-      "gaps": "tuple[tuple[int, Meters], ...]",
+      "gaps": "tuple[tuple[int, NonNegMeters], ...]",
       "interval": "Meters | None",
       "mode": "Literal['count', 'interval', 'proportional']",
       "start": "Meters"

@@ -22,7 +22,7 @@ from collections.abc import Mapping, Sequence
 import numpy as np
 
 from showpy.choreo.form_models import Form
-from showpy.choreo.models import Set
+from showpy.choreo.models import PlacementPatch, Set
 from showpy.choreo.motion import turn
 from showpy.choreo.path_models import FacingOverride
 from showpy.choreo.recipe_models import CurveRecipeBase, SvgRecipe
@@ -56,7 +56,7 @@ type Sel = Sequence[str] | Selection
 
 
 def _set_facings[K: str](target: Set, facings: Mapping[K, Degrees], *, force: bool) -> Set:
-    updates = {e: {"facing": normalize_angle(f)} for e, f in facings.items()}
+    updates = {e: PlacementPatch(facing=normalize_angle(f)) for e, f in facings.items()}
     return target.with_placements(updates, force=force)
 
 

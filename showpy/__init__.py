@@ -175,6 +175,7 @@ if TYPE_CHECKING:
     from showpy.choreo.match_models import (
         MatchOptions,
         MatchResult,
+        MatchWeights,
     )
     from showpy.choreo.match_ops import (
         apply_match,
@@ -186,6 +187,7 @@ if TYPE_CHECKING:
     from showpy.choreo.models import (
         ApprovalState,
         Placement,
+        PlacementPatch,
         Set,
         SpotCount,
     )
@@ -953,6 +955,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "MatchError": ("showpy.core.errors", "MatchError"),
     "MatchOptions": ("showpy.choreo.match_models", "MatchOptions"),
     "MatchResult": ("showpy.choreo.match_models", "MatchResult"),
+    "MatchWeights": ("showpy.choreo.match_models", "MatchWeights"),
     "MeasureLabel": ("showpy.time.models", "MeasureLabel"),
     "MeasureSetting": ("showpy.time.models", "MeasureSetting"),
     "MigrationReport": ("showpy.show.migrate", "MigrationReport"),
@@ -977,6 +980,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Pin": ("showpy.show.models", "Pin"),
     "Placement": ("showpy.choreo.models", "Placement"),
     "PlacementOp": ("showpy.show.models", "PlacementOp"),
+    "PlacementPatch": ("showpy.choreo.models", "PlacementPatch"),
     "PointFacing": ("showpy.choreo.path_models", "PointFacing"),
     "Polyline": ("showpy.geo.curves", "Polyline"),
     "PolylineRecipe": ("showpy.choreo.recipe_models", "PolylineRecipe"),
@@ -1601,6 +1605,7 @@ __all__ = [
     "MatchError",
     "MatchOptions",
     "MatchResult",
+    "MatchWeights",
     "MeasureLabel",
     "MeasureSetting",
     "MigrationReport",
@@ -1625,6 +1630,7 @@ __all__ = [
     "Pin",
     "Placement",
     "PlacementOp",
+    "PlacementPatch",
     "PointFacing",
     "Polyline",
     "PolylineRecipe",

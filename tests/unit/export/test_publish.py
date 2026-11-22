@@ -90,6 +90,7 @@ from PIL import Image
 
 from showpy.cast.models import Spot
 from showpy.cast.rewrite import rewrite_spot_ids
+from showpy.choreo.models import PlacementPatch
 from showpy.choreo.path_models import PathRow
 from showpy.core.errors import (
     LockedError,
@@ -350,7 +351,7 @@ def test_notify_changes_tells_only_affected_performers() -> None:
 def test_notify_changes_reports_removed_spots_and_combines_parts() -> None:
     old = two_set_show()
     pub = _with_claims(old, ("Ada", "T1"), ("Bo", "T2"))
-    edited = [s.with_placements({"T1": {"x": 5.0, "facing": 45.0}}) for s in old.sets]
+    edited = [s.with_placements({"T1": PlacementPatch(x=5.0, facing=45.0)}) for s in old.sets]
     sets = tuple(
         s.model_copy(update={"placements": tuple(p for p in s.placements if p.entity != "T2")})
         for s in edited

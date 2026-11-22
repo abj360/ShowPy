@@ -44,7 +44,7 @@ import pytest
 from showpy.choreo.form_place import place
 from showpy.choreo.forms import line_form
 from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import Placement, Set
+from showpy.choreo.models import Placement, PlacementPatch, Set
 from showpy.choreo.path_models import PathRow, PathStyle, TransitionSpec, Waypoint
 from showpy.core.errors import ShowPyError, bounded_repr
 from showpy.core.ids import SetId, SpotId, make_tid
@@ -138,7 +138,7 @@ def make_facing_set(
 
 def pin_spot(show: Show, set_id: str, entity: str) -> Show:
     """Pins the placement of `entity` in set `set_id`."""
-    return with_set(show, show.set(set_id).with_placements({entity: {"pinned": True}}))
+    return with_set(show, show.set(set_id).with_placements({entity: PlacementPatch(pinned=True)}))
 
 
 def replaced_form_show() -> Show:

@@ -51,6 +51,7 @@ from showpy.choreo.form_place import filled_forms, place, rebuild
 from showpy.choreo.forms import circle_form, line_form, text_form
 from showpy.choreo.match_models import MatchOptions
 from showpy.choreo.match_ops import with_set
+from showpy.choreo.models import PlacementPatch
 from showpy.core.errors import (
     LockedError,
     MatchError,
@@ -240,7 +241,7 @@ def test_regression_filled_forms_compacts_a_pinned_member_and_gapped_matches() -
 def test_filled_forms_rejects_two_spots_on_one_slot() -> None:
     form = line_form("f", [], (0, 12), (6, 12), n=4)
     placed, _ = place(two_set_show(), "2", [form])
-    clash = placed.with_placements({"T2": {"order": placed.get("T1").order}})
+    clash = placed.with_placements({"T2": PlacementPatch(order=placed.get("T1").order)})
     with pytest.raises(SchemaError, match="one slot"):
         filled_forms(clash, [form])
 
@@ -292,7 +293,9 @@ def test_regression_rebuild_regenerates_facing_and_keeps_rows_of_unmoved_members
     """Regenerates facing of members whose position did not change, keeping their rows (G-R11)."""
     base = with_curve_rows(_row_show(), ROW_SPOTS)
     expected = base.set("2").get("T1").facing
-    turned = with_set(base, base.set("2").with_placements({"T1": {"facing": 45.0, "note": "n"}}))
+    turned = with_set(
+        base, base.set("2").with_placements({"T1": PlacementPatch(facing=45.0, note="n")})
+    )
     rebuilt = rebuild(turned, "row")
     assert set(rebuilt.transition(TID).rows) == set(ROW_SPOTS)
     assert rebuilt.set("2").get("T1").facing == expected
@@ -347,7 +350,7 @@ def test_regression_rebuild_keeps_the_note_of_a_forced_move() -> None:
     """Keeps a spot's note when a forced rebuild moves it (plan appendix A row 9)."""
     base = _row_show()
     noted = pin_spot(
-        with_set(base, base.set("2").with_placements({"T1": {"note": "n"}})), "2", "T1"
+        with_set(base, base.set("2").with_placements({"T1": PlacementPatch(note="n")})), "2", "T1"
     )
     moved = line_form("row", ["T1", "T2", "T3", "T4"], (0, UPSTAGE_ROW_Y), (6, UPSTAGE_ROW_Y))
     stored = noted.replace(forms={"row": moved.replace(set="2")})
