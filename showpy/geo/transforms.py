@@ -48,6 +48,7 @@ from showpy.geo.affine import (
     transform_facing,
     translation_matrix,
 )
+from showpy.geo.checks import pick
 from showpy.geo.curves import CurveModel
 from showpy.geo.measure import ALL, SetSelector, bounds, centroid, on_field_ids
 from showpy.geo.snapping import align, distribute, snap, snap_to_guides
@@ -58,7 +59,6 @@ from showpy.geo.transform_base import (
     anchor_source,
     apply_matrix,
     apply_pointwise,
-    pick,
 )
 
 __all__ = [

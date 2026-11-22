@@ -23,6 +23,7 @@ from typing import Literal
 import numpy as np
 import shapely
 import shapely.affinity
+from shapely.errors import GEOSException
 from shapely.prepared import prep
 
 from showpy.core.caps import MAX_POINTS, require_size
@@ -31,7 +32,7 @@ from showpy.core.errors import SpacingError, bounded_repr
 from showpy.core.types import Degrees, Meters, Point, Points
 from showpy.core.units import facing_vector
 from showpy.core.util import as_points, seeded_rng
-from showpy.geo.checks import require_finite_as
+from showpy.geo.checks import pick, require_finite_as
 from showpy.geo.curve_base import Curve
 from showpy.geo.regions import Area
 
@@ -40,6 +41,17 @@ HEX_ROW_FACTOR = math.sqrt(3) / 2
 FIT_EPS = 1e-9
 LATTICE_ROW_PAD = 5
 LATTICE_COL_PAD = 7
+
+INTERVAL_ALIGN_SHARE = {"start": 0.0, "end": 1.0, "center": 0.5}
+BLOCK_ANCHORS = {
+    "center": ("center", "center"),
+    "front-left": ("front", "left"),
+    "front-center": ("front", "center"),
+    "front-right": ("front", "right"),
+    "back-left": ("back", "left"),
+    "back-center": ("back", "center"),
+    "back-right": ("back", "right"),
+}
 
 type FillPattern = Literal["grid", "offset", "hex"]
 type BlockAnchor = Literal[
@@ -119,7 +131,7 @@ def space_by_interval(
     _require_count(count)
     require_size(count, MAX_POINTS, what="spots", error=SpacingError)
     spare = available - (count - 1) * interval
-    shift = {"start": 0.0, "end": spare, "center": spare / 2}[align]
+    shift = spare * pick("align", align, INTERVAL_ALIGN_SHARE)
     return curve.point_at(start + shift + interval * np.arange(count))
 
 
@@ -292,6 +304,32 @@ def _rotate_about(pts: Points, about: Point, degrees: Degrees) -> Points:
     return result
 
 
+def _shrink(area: Area, margin: Meters) -> Area:
+    if area.is_empty:
+        raise SpacingError("the area to fill is empty", hint="pass an area with positive size")
+    if not margin:
+        return area
+    try:
+        return area.buffer(-margin)
+    except GEOSException as exc:
+        raise SpacingError(
+            "margin could not be applied to the area",
+            hint="use a smaller finite margin in meters",
+            context={"margin": margin},
+        ) from exc
+
+
+def _centroid_of(area: Area) -> Point:
+    centroid = area.centroid
+    if centroid.is_empty or not (math.isfinite(centroid.x) and math.isfinite(centroid.y)):
+        raise SpacingError(
+            "the area has no finite centroid to anchor the lattice on",
+            hint="pass anchor=(x, y), or an area of ordinary size",
+            context={"bounds": bounded_repr(area.bounds)},
+        )
+    return (centroid.x, centroid.y)
+
+
 def fill(
     area: Area,
     interval: Meters,
@@ -310,8 +348,13 @@ def fill(
     9
     """
     require_finite_as(SpacingError, interval, name="interval", low=0.0, low_open=True)
-    usable = area.buffer(-margin) if margin else area
-    origin = anchor or (usable.centroid.x, usable.centroid.y)
+    require_finite_as(SpacingError, angle_deg, name="angle_deg")
+    require_finite_as(SpacingError, margin, name="margin")
+    if anchor is not None:
+        require_finite_as(SpacingError, anchor[0], name="anchor.x")
+        require_finite_as(SpacingError, anchor[1], name="anchor.y")
+    usable = _shrink(area, margin)
+    origin = anchor or _centroid_of(usable)
     local_area = shapely.affinity.rotate(usable, -angle_deg, origin=origin)
     minx, miny, maxx, maxy = local_area.bounds
     shifted = (minx - origin[0], miny - origin[1], maxx - origin[0], maxy - origin[1])
@@ -348,15 +391,21 @@ def block(
     >>> block((0, 0), 1, 2, 1.0, anchor="front-left").tolist()
     [[0.0, 0.0], [1.0, 0.0]]
     """
-    if rows < 1 or cols < 1 or interval <= 0:
-        raise SpacingError("block needs rows, cols >= 1 and interval > 0", hint="fix the block")
+    if rows < 1 or cols < 1:
+        raise SpacingError(
+            "block needs rows, cols >= 1",
+            hint="fix the block",
+            context={"rows": rows, "cols": cols},
+        )
+    require_finite_as(SpacingError, interval, name="interval", low=0.0, low_open=True)
+    require_finite_as(SpacingError, facing, name="facing")
+    edge, side = pick("block anchor", anchor, BLOCK_ANCHORS)
     front = np.asarray(facing_vector(facing))
     lateral = np.array([-front[1], front[0]])
     r, c = np.divmod(np.arange(rows * cols), cols)
     depth_extent, width_extent = (rows - 1) * interval, (cols - 1) * interval
     back_off = {"front": 0.0, "center": depth_extent / 2, "back": depth_extent}
     side_off = {"left": 0.0, "center": width_extent / 2, "right": width_extent}
-    edge, _, side = anchor.partition("-") if anchor != "center" else ("center", "", "center")
     lateral_pos = c * interval - side_off[side]
     back_pos = r * interval - back_off[edge]
     return np.asarray(origin) + np.outer(lateral_pos, lateral) - np.outer(back_pos, front)

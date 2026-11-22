@@ -20,7 +20,7 @@ from types import MappingProxyType
 
 import numpy as np
 
-from showpy.core.caps import require_size
+from showpy.core.caps import MIN_LAYOUT_HEIGHT_M, require_size
 from showpy.core.errors import FontError, GeometryError, GlyphError, SchemaError
 from showpy.core.types import Degrees, Meters, Point
 from showpy.geo.affine import (
@@ -30,7 +30,7 @@ from showpy.geo.affine import (
     transform_points,
     translation_matrix,
 )
-from showpy.geo.checks import require_finite_as
+from showpy.geo.checks import pick, require_finite_as
 from showpy.geo.curves import Polyline, SvgCurve
 from showpy.geo.fonts import FontRegistry, bundled_fonts
 from showpy.geo.models import (
@@ -54,9 +54,7 @@ MAX_LAYOUT_PIECES = 512_000
 # legal text to about 4 s. Bundled Relief needs at most 15 per glyph, 15,000 for 1,000 glyphs.
 MAX_LAYOUT_CURVE_PIECES = 60_000
 LINE_BREAKS = (("\r\n", "\n"), ("\r", "\n"))
-ALIGN_SHARE: Mapping[TextAlign, float] = MappingProxyType(
-    {"left": 0.0, "center": 0.5, "right": 1.0}
-)
+ALIGN_SHARE: Mapping[str, float] = MappingProxyType({"left": 0.0, "center": 0.5, "right": 1.0})
 ORIGIN = (0.0, 0.0)
 
 type GlyphKey = tuple[str, str]
@@ -81,7 +79,7 @@ def _check_numbers(
     height: Meters, at: Point, rotation: Degrees, letter_spacing: float, line_spacing: float
 ) -> None:
     require_finite_as(
-        GeometryError, height, name="height", low=0.0, low_open=True, high=MAX_LAYOUT_EXTENT_M
+        GeometryError, height, name="height", low=MIN_LAYOUT_HEIGHT_M, high=MAX_LAYOUT_EXTENT_M
     )
     require_finite_as(GeometryError, line_spacing, name="line_spacing", low=0.0, low_open=True)
     require_finite_as(GeometryError, letter_spacing, name="letter_spacing")
@@ -294,11 +292,8 @@ def _lay_line(
 
 
 def _anchor_shift(anchor: TextAnchor, height: Meters, last_baseline: Meters) -> Meters:
-    if anchor == "top":
-        return -height
-    if anchor == "middle":
-        return -(height + last_baseline) / 2
-    return 0.0
+    shifts = {"baseline": 0.0, "top": -height, "middle": -(height + last_baseline) / 2}
+    return pick("text anchor", anchor, shifts)
 
 
 def layout_text(
@@ -355,6 +350,7 @@ def layout_text(
     em = chain[0].scale * chain[0].font.units_per_em
     lines = _split_lines(text)
     pitch = line_spacing * em
+    align_share = pick("text align", align, ALIGN_SHARE)
     lift = _anchor_shift(anchor, height, -(len(lines) - 1) * pitch)
     turn = translation_matrix(*at) @ rotation_matrix(rotation, ORIGIN)
     laid: list[LaidGlyph] = []
@@ -363,7 +359,7 @@ def layout_text(
             rows = [_place_line(line, chain, fonts, letter_spacing * em) for line in lines]
             parsed = _parse_glyphs(item for placed, _ in rows for item in placed)
             for index, (placed, width) in enumerate(rows):
-                origin = (-ALIGN_SHARE[align] * width, lift - index * pitch)
+                origin = (-align_share * width, lift - index * pitch)
                 laid.extend(_lay_line(placed, index, origin, turn, parsed))
     except FloatingPointError as exc:
         raise GeometryError(

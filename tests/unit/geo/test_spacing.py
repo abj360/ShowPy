@@ -30,6 +30,10 @@ Contains:
         align="middle" instead of leaking KeyError
     test_regression_block_rejects_unknown_anchor: raises UnknownRefError for anchor="middle" instead
         of leaking KeyError
+    test_regression_fill_rejects_a_huge_area_without_an_anchor: raises SpacingError for a 1e308
+        square whose centroid overflows
+    test_regression_space_by_interval_accepts_every_named_align: places the same spots for each
+        of start, center and end as before
     test_regression_space_proportional_rejects_zero_length_curves: raises SpacingError for all-zero
         lengths instead of leaking ZeroDivisionError
     test_regression_fill_rejects_zero_interval: raises SpacingError for interval=0 instead of
@@ -110,6 +114,7 @@ from showpy.geo.spacing import (
 from tests.helpers import capped_address_space, defect, fails_after
 
 SIGNAL_TIMEOUT_S = 5
+HUGE_SIDE_M = 1e308
 SQUARE_SIDE_M = 10.0
 TINY_FILL_INTERVAL_M = 1e-3
 TINY_LINE_INTERVAL_M = 1e-5
@@ -478,20 +483,31 @@ def test_regression_scatter_does_not_crowd_the_edge() -> None:
     assert int(near_edge.sum()) <= MAX_EDGE_SPOTS
 
 
-@pytest.mark.defect("UP-9.1-53")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-53")
 def test_regression_space_by_interval_rejects_unknown_align() -> None:
     """Raises UnknownRefError for align="middle" instead of leaking KeyError (audit 9.1)."""
     with pytest.raises(UnknownRefError):
         space_by_interval(LINE, 1.0, align="middle")  # type: ignore[arg-type]
 
 
-@pytest.mark.defect("UP-9.1-54")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-54")
 def test_regression_block_rejects_unknown_anchor() -> None:
     """Raises UnknownRefError for anchor="middle" instead of leaking KeyError (audit 9.1)."""
     with pytest.raises(UnknownRefError):
         block((0.0, 0.0), 2, 2, 1.0, anchor="middle")  # type: ignore[arg-type]
+
+
+def test_regression_fill_rejects_a_huge_area_without_an_anchor() -> None:
+    """Raises SpacingError for a 1e308 square, whose centroid is not finite, until anchored."""
+    with pytest.raises(SpacingError):
+        fill(_square(side=HUGE_SIDE_M), 1.0)
+
+
+def test_regression_space_by_interval_accepts_every_named_align() -> None:
+    """Shifts a 3-spot run by 0, half and all of the 4 m spare room on a 10 m line."""
+    firsts = {
+        align: float(space_by_interval(LINE, 3.0, n=3, align=align)[0, 0])
+        for align in ("start", "center", "end")
+    }
+    assert firsts == {"start": 0.0, "center": 2.0, "end": 4.0}
 
 
 def test_regression_space_proportional_rejects_zero_length_curves() -> None:
@@ -519,8 +535,6 @@ def test_regression_scatter_rejects_fractional_seed() -> None:
         scatter(_square(), 3, 1.0, seed=FRACTIONAL_SEED)  # type: ignore[arg-type]
 
 
-@pytest.mark.defect("UP-9.1-62")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-62")
 def test_regression_fill_rejects_empty_area() -> None:
     """Raises a ShowPyError for an empty area instead of leaking GEOSException (audit 9.1)."""
     with pytest.raises(ShowPyError):
@@ -651,7 +665,6 @@ def test_regression_space_by_interval_rejects_non_finite_start(start: float) -> 
         space_by_interval(LINE, 1.0, start=start)
 
 
-@defect("UP-9.1-68")
 @pytest.mark.parametrize("angle_deg", NON_FINITE_PARAMETER)
 def test_regression_fill_rejects_non_finite_angle(angle_deg: float) -> None:
     """Raises a SpacingError for a NaN or infinite angle_deg instead of leaking."""
@@ -659,7 +672,6 @@ def test_regression_fill_rejects_non_finite_angle(angle_deg: float) -> None:
         fill(_square(), 1.0, angle_deg=angle_deg)
 
 
-@defect("UP-9.1-69")
 @pytest.mark.parametrize("margin", NON_FINITE_PARAMETER)
 def test_regression_fill_rejects_non_finite_margin(margin: float) -> None:
     """Raises a SpacingError for a NaN or infinite margin instead of leaking."""
@@ -667,7 +679,6 @@ def test_regression_fill_rejects_non_finite_margin(margin: float) -> None:
         fill(_square(), 1.0, margin=margin)
 
 
-@defect("UP-9.1-70")
 @pytest.mark.parametrize("coordinate", NON_FINITE_PARAMETER)
 def test_regression_fill_rejects_non_finite_anchor(coordinate: float) -> None:
     """Raises a SpacingError for a NaN or infinite anchor instead of leaking GEOSException."""
@@ -675,7 +686,6 @@ def test_regression_fill_rejects_non_finite_anchor(coordinate: float) -> None:
         fill(_square(), 1.0, anchor=(coordinate, 0.0))
 
 
-@defect("UP-9.1-71")
 @pytest.mark.parametrize("facing", [math.inf, -math.inf])
 def test_regression_block_rejects_infinite_facing(facing: float) -> None:
     """Raises a SpacingError for an infinite facing instead of leaking ValueError."""
@@ -683,7 +693,6 @@ def test_regression_block_rejects_infinite_facing(facing: float) -> None:
         block((0.0, 0.0), 2, 2, 1.0, facing=facing)
 
 
-@defect("UP-9.1-73")
 def test_regression_block_rejects_nan_facing() -> None:
     """Raises a ShowPyError for a NaN facing instead of returning NaN points."""
     with pytest.raises(ShowPyError):
