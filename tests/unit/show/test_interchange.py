@@ -49,7 +49,7 @@ from showpy.core.ids import FormId, SpotId, make_tid
 from showpy.core.resources import font_path
 from showpy.core.util import approx_equal, asset_uri
 from showpy.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
-from showpy.show import interchange
+from showpy.show import interchange, interchange_positions
 from showpy.show.interchange import (
     FONTS_KEY,
     MAX_IMPORT_FONTS,
@@ -222,7 +222,7 @@ def _refuse_set_ordering(monkeypatch: pytest.MonkeyPatch) -> None:
     def ordered_too_early(*_args: object) -> list[str]:
         raise AssertionError("sets were ordered before the placement cap")
 
-    monkeypatch.setattr(interchange, "_set_order", ordered_too_early)
+    monkeypatch.setattr(interchange_positions, "_set_order", ordered_too_early)
 
 
 @fails_after(HANG_BACKSTOP_SECONDS)
