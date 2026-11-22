@@ -529,7 +529,7 @@
       "id": "showpy.core.ids.FormId",
       "locked": "bool",
       "members": "tuple[showpy.core.ids.SpotId | None, ...]",
-      "meta": "dict[str, str]",
+      "meta": "collections.abc.Mapping[str, str]",
       "recipe": "Recipe",
       "set": "showpy.core.ids.SetId",
       "spacing": "showpy.choreo.form_models.SpacingSpec"

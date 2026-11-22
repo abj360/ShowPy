@@ -22,6 +22,7 @@ Contains:
     RoseFormParams: holds the parameters of the bundled `rose` generator
 """
 
+from collections.abc import Mapping
 from typing import Annotated, ClassVar, Literal
 
 from pydantic import Field, model_validator
@@ -45,6 +46,7 @@ from showpy.core.deprecation import renamed_field
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, SpacingError
 from showpy.core.ids import FormId, SetId, SpotId, SpotIdField
+from showpy.core.readonly import ReadOnly
 from showpy.core.types import (
     Degrees,
     Finite,
@@ -233,7 +235,7 @@ class Form(FrozenModel):
         spacing: How members are spaced on the shape.
         facing: How members face.
         locked: Designer lock; edits need force=True.
-        meta: Free designer metadata.
+        meta: Free designer metadata, read-only once stored.
     """
 
     id: FormId
@@ -243,7 +245,7 @@ class Form(FrozenModel):
     spacing: SpacingSpec = SpacingSpec()
     facing: FacingSpec = FacingSpec()
     locked: bool = False
-    meta: dict[str, str] = {}
+    meta: Annotated[Mapping[str, str], ReadOnly()] = Field(default={}, validate_default=True)
 
     geometry: ClassVar[property] = renamed_field(
         "recipe", since="0.4.0", remove="0.6.0", read=_recipe_json
