@@ -16,7 +16,8 @@ Contains:
         usage example
     core: installs the wheel without extras and checks imports and extra-gated calls fail closed
     bench: runs the budget benchmarks; at tier M fails on a >20% min-time regression
-    changelog: regenerates CHANGELOG.md with git-cliff and formats it with Prettier
+    api_changes: checks that each commit since the last release names the API names it changes
+    changelog: regenerates CHANGELOG.md with git-cliff and formats it with Prettier at release time
     docs: placeholder until the docs build lands
 """
 
@@ -42,6 +43,7 @@ NO_SYNC_ENV = "NOX_UV_NO_SYNC"
 PYTHON_FOR_WHEEL = "3.14"
 ALL_EXTRAS = "[all]"
 CORE_CHECK_SCRIPT = "scripts/check_core_install.py"
+API_CHANGES_SCRIPT = "scripts/check_api_changes.py"
 USAGE_BLOCK = re.compile(r"^## Usage\n.*?```python\n(.*?)```", re.DOTALL | re.MULTILINE)
 LICENSE_EXPRESSION = " AND ".join(
     ("PolyForm-Noncommercial-1.0.0", "MIT", "OFL-1.1", "LicenseRef-Hershey-Fonts")
@@ -306,9 +308,19 @@ def bench(session: nox.Session) -> None:
     _uv_run(session, *args, *session.posargs)
 
 
+@nox.session(name="api-changes")
+def api_changes(session: nox.Session) -> None:
+    """Checks that each commit since the last release tag names the public names it changes.
+
+    A commit that changes the API snapshot must name every added, removed or changed public
+    name in backticks in its subject or a `BREAKING CHANGE:` footer.
+    """
+    _uv_run(session, "python", API_CHANGES_SCRIPT)
+
+
 @nox.session
 def changelog(session: nox.Session) -> None:
-    """Regenerates CHANGELOG.md from Conventional Commits and formats it with Prettier."""
+    """Regenerates CHANGELOG.md from Conventional Commits at release time, then runs Prettier."""
     _uv_run(session, "git-cliff", "--config", "cliff.toml", "--output", "CHANGELOG.md")
     session.run("npx", "--no-install", "prettier", "--write", "CHANGELOG.md", external=True)
 
