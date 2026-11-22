@@ -6,15 +6,17 @@ test_fuzz_svg.py --- fuzzes parse_path with a grammar of SVG path data and junk
 Contains:
     PATH_DATA: draws path data from commands, numbers, packed arc flags, separators and junk
     test_fuzz_parse_path_grammar: raises only ShowPyError for grammar-built path data
-    test_fuzz_parse_path_round_trips: re-parses the written path data into the same subpaths
+    test_fuzz_parse_path_notations_agree: checks packed or implicit notation equals plain text
+    test_fuzz_parse_path_round_trips: re-parses the written path data into the same pieces
     test_fuzz_parse_path_raw_text: raises only ShowPyError for arbitrary text
 """
 
-import numpy as np
+import itertools
+
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.core.errors import ShowPyError
+from showpy.core.util import approx_equal
 from showpy.geo.svg import Subpath, parse_path
 from tests.helpers import only_showpy_errors
 
@@ -53,53 +55,123 @@ def test_fuzz_parse_path_grammar(d: str) -> None:
     only_showpy_errors(lambda: parse_path(d), d)
 
 
-coordinates = st.integers(-50, 50).map(str)
-arc_flags = st.sampled_from(["0", "1"])
+type Token = tuple[str, str]
+type Segment = tuple[str, list[list[str]]]
 
+ARITY = {"M": 2, "L": 2, "H": 1, "V": 1, "C": 6, "S": 4, "Q": 4, "T": 2, "A": 7, "Z": 0}
+FLAG_SLOTS = (3, 4)
+MAX_REPEATS = 3
+MAX_SEGMENTS = 12
+GAP_TEXTS = [" ", ",", " , ", "\n", "\t"]
+GEOMETRY_ABS_TOL = 1e-6
+GEOMETRY_REL_TOL = 1e-9
 
-def _arguments(command: str) -> st.SearchStrategy[str]:
-    if command in "Aa":
-        parts = [coordinates, coordinates, coordinates, arc_flags, arc_flags, coordinates]
-        return st.tuples(*parts, coordinates).map(" ".join)
-    arity = {"M": 2, "L": 2, "H": 1, "V": 1, "C": 6, "S": 4, "Q": 4, "T": 2, "Z": 0}[
-        command.upper()
-    ]
-    return st.lists(coordinates, min_size=arity, max_size=arity).map(" ".join)
-
-
-VALID_SEGMENT = st.sampled_from(list(COMMANDS)).flatmap(
-    lambda command: _arguments(command).map(lambda args: f"{command}{args}")
+coordinate_texts = st.one_of(
+    st.integers(-50, 50).map(str),
+    st.from_regex(r"-?[0-9]{1,2}\.[0-9]{1,3}|-?\.[0-9]{1,3}|-?[0-9]{1,2}\.", fullmatch=True),
+    st.sampled_from(["1e1", "-2E-1", "3e+0", ".5e1", "+4"]),
 )
-VALID_PATH_DATA = st.builds(
-    lambda start, rest: "M" + start + " " + " ".join(rest),
-    _arguments("M"),
-    st.lists(VALID_SEGMENT, max_size=MAX_TOKENS),
+flag_texts = st.sampled_from(["0", "1"])
+
+
+@st.composite
+def segments(draw: st.DrawFn) -> Segment:
+    """Draws one command letter with one or more argument groups of the right arity."""
+    letter = draw(st.sampled_from(COMMANDS))
+    arity = ARITY[letter.upper()]
+    if arity == 0:
+        return letter, []
+    group = st.tuples(*(flag_texts if i in FLAG_SLOTS else coordinate_texts for i in range(arity)))
+    groups = draw(st.lists(group.map(list), min_size=1, max_size=MAX_REPEATS))
+    return letter, groups
+
+
+path_segments = st.tuples(st.sampled_from("Mm"), st.lists(segments(), max_size=MAX_SEGMENTS)).map(
+    lambda parts: [(parts[0], [["0", "0"]]), *parts[1]]
 )
 
 
-def _reparse(d: str) -> tuple[list[Subpath], list[Subpath]] | None:
-    try:
-        first = parse_path(d)
-    except ShowPyError:
-        return None
-    return first, parse_path(" ".join(subpath.to_d() for subpath in first))
+def _implicit_letter(letter: str) -> str:
+    return {"M": "L", "m": "l"}.get(letter, letter)
 
 
-@given(VALID_PATH_DATA)
-def test_fuzz_parse_path_round_trips(d: str) -> None:
-    """Re-parses the absolute path data of every accepted path into the same subpaths."""
-    result = _reparse(d)
-    assert result is not None, d
-    first, second = result
-    assert len(second) == len(first), d
+def _canonical_text(path: list[Segment]) -> str:
+    words: list[str] = []
+    for letter, groups in path:
+        if not groups:
+            words.append(letter)
+        for index, group in enumerate(groups):
+            words.append(letter if index == 0 else _implicit_letter(letter))
+            words.extend(group)
+    return " ".join(words)
+
+
+def _tokens(path: list[Segment]) -> list[Token]:
+    tokens: list[Token] = []
+    for letter, groups in path:
+        tokens.append((letter, "letter"))
+        for group in groups:
+            for slot, text in enumerate(group):
+                is_flag = letter in "Aa" and slot in FLAG_SLOTS
+                tokens.append((text, "flag" if is_flag else "number"))
+    return tokens
+
+
+def _may_pack(previous: Token, following: Token) -> bool:
+    (before, before_kind), (after, after_kind) = previous, following
+    if "letter" in (before_kind, after_kind) or before_kind == "flag":
+        return True
+    if after[0] in "+-":
+        return True
+    return after[0] == "." and ("." in before or "e" in before.lower())
+
+
+@st.composite
+def varied_texts(draw: st.DrawFn, path: list[Segment]) -> str:
+    """Writes the path with one letter per run, packed flags and glued numbers where legal."""
+    tokens = _tokens(path)
+    pieces = [tokens[0][0]]
+    for previous, following in itertools.pairwise(tokens):
+        gaps = [*GAP_TEXTS, ""] if _may_pack(previous, following) else GAP_TEXTS
+        pieces.append(draw(st.sampled_from(gaps)) + following[0])
+    return "".join(pieces)
+
+
+def _flatten(piece: object) -> list[float]:
+    values: list[float] = []
+    for name in vars(piece):
+        value = getattr(piece, name)
+        values.extend(value if isinstance(value, tuple) else [value])
+    return values
+
+
+def _assert_same_geometry(first: list[Subpath], second: list[Subpath], sample: str) -> None:
+    assert len(first) == len(second), sample
     for one, two in zip(first, second, strict=True):
-        assert one.closed == two.closed, d
-        assert [type(p) for p in one.pieces] == [type(p) for p in two.pieces], d
-        assert np.allclose(_end_points(one), _end_points(two), rtol=1e-9, atol=1e-9), d
+        assert one.closed == two.closed, sample
+        assert approx_equal(
+            one.start, two.start, abs_tol=GEOMETRY_ABS_TOL, rel_tol=GEOMETRY_REL_TOL
+        ), sample
+        assert [type(p) for p in one.pieces] == [type(p) for p in two.pieces], sample
+        for left, right in zip(one.pieces, two.pieces, strict=True):
+            assert approx_equal(
+                _flatten(left), _flatten(right), abs_tol=GEOMETRY_ABS_TOL, rel_tol=GEOMETRY_REL_TOL
+            ), sample
 
 
-def _end_points(subpath: Subpath) -> list[tuple[float, float]]:
-    return [subpath.start, *(piece.end for piece in subpath.pieces)]
+@given(path_segments.flatmap(lambda path: st.tuples(st.just(path), varied_texts(path))))
+def test_fuzz_parse_path_notations_agree(case: tuple[list[Segment], str]) -> None:
+    """Parses packed flags, implicit repeats and glued numbers to the same pieces as plain text."""
+    path, varied = case
+    _assert_same_geometry(parse_path(_canonical_text(path)), parse_path(varied), varied)
+
+
+@given(path_segments.flatmap(varied_texts))
+def test_fuzz_parse_path_round_trips(d: str) -> None:
+    """Re-parses the absolute path data of every accepted path into the same pieces."""
+    first = parse_path(d)
+    second = parse_path(" ".join(subpath.to_d() for subpath in first))
+    _assert_same_geometry(first, second, d)
 
 
 @given(st.text(max_size=200))
