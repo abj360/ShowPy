@@ -318,10 +318,10 @@ def _penalties(
     flat = options.no_backward
     if not isinstance(flat, bool) and flat > 0:
         penalty = penalty + flat * (_backward(p, moves) > BACKWARD_TOL)
-    if weights.get("backward", 0.0) > 0:
-        penalty = penalty + weights["backward"] * _backward(p, moves)
-    if weights.get("turn", 0.0) > 0:
-        penalty = penalty + weights["turn"] * _turn(p, moves, d)
+    if weights.backward > 0:
+        penalty = penalty + weights.backward * _backward(p, moves)
+    if weights.turn > 0:
+        penalty = penalty + weights.turn * _turn(p, moves, d)
     return penalty
 
 

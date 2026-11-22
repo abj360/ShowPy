@@ -158,8 +158,8 @@ def _row_groups(p: MatchProblem) -> IntArray:
 def _improve(
     p: MatchProblem, cost: FloatArray, cols: IntArray, cap: float, options: MatchOptions
 ) -> tuple[IntArray, int]:
-    crossing = options.weights.get("crossing", 0.0)
-    spread = options.weights.get("group_spread", 0.0)
+    crossing = options.weights.crossing
+    spread = options.weights.group_spread
     if options.preserve_order or not (crossing or spread) or len(cols) < 2:
         return cols, 0
     frozen = np.array([e in options.pinned for e in p.entities], dtype=bool)

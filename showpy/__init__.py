@@ -173,6 +173,7 @@ if TYPE_CHECKING:
     from showpy.choreo.match_models import (
         MatchOptions,
         MatchResult,
+        MatchWeights,
     )
     from showpy.choreo.match_ops import (
         apply_match,
@@ -952,6 +953,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "MatchError": ("showpy.core.errors", "MatchError"),
     "MatchOptions": ("showpy.choreo.match_models", "MatchOptions"),
     "MatchResult": ("showpy.choreo.match_models", "MatchResult"),
+    "MatchWeights": ("showpy.choreo.match_models", "MatchWeights"),
     "MeasureLabel": ("showpy.time.models", "MeasureLabel"),
     "MeasureSetting": ("showpy.time.models", "MeasureSetting"),
     "MigrationReport": ("showpy.show.migrate", "MigrationReport"),
@@ -1599,6 +1601,7 @@ __all__ = [
     "MatchError",
     "MatchOptions",
     "MatchResult",
+    "MatchWeights",
     "MeasureLabel",
     "MeasureSetting",
     "MigrationReport",

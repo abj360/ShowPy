@@ -764,12 +764,12 @@
       "group_slots": "dict[str, tuple[int, ...]] | None",
       "keep_groups": "bool",
       "max_speed": "float | None",
-      "no_backward": "bool | float",
+      "no_backward": "bool | NonNegFinite",
       "objective": "MatchObjective",
       "pinned": "dict[showpy.core.ids.SpotId, int]",
       "power": "float",
       "preserve_order": "bool",
-      "weights": "dict[str, float]"
+      "weights": "showpy.choreo.match_models.MatchWeights"
     }
   },
   "MatchResult": {
@@ -784,6 +784,14 @@
       "targets": "tuple[Point, ...]",
       "total_distance": "Finite",
       "unassigned_slots": "tuple[int, ...]"
+    }
+  },
+  "MatchWeights": {
+    "model": {
+      "backward": "NonNegFinite",
+      "crossing": "NonNegFinite",
+      "group_spread": "NonNegFinite",
+      "turn": "NonNegFinite"
     }
   },
   "MeasureLabel": {

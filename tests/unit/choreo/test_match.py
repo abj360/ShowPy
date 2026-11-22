@@ -24,7 +24,7 @@ import pytest
 
 from showpy.choreo.forms import line_form
 from showpy.choreo.match import bottleneck_value, cost_matrix, match, match_by_order
-from showpy.choreo.match_models import CostFn, MatchOptions
+from showpy.choreo.match_models import CostFn, MatchOptions, MatchWeights
 from showpy.choreo.models import PlacementPatch
 from showpy.core.caps import MAX_COORD_M
 from showpy.core.errors import MatchError, SchemaError, ShowPyError, UnknownRefError
@@ -169,9 +169,9 @@ def test_no_backward_penalty_adds_meters() -> None:
 
 def test_backward_and_turn_weights() -> None:
     src = make_facing_set(("A", 0.0, 5.0, 0.0))
-    back = cost_matrix(src, [(0.0, 7.0)], MatchOptions(weights={"backward": 1.0}))
+    back = cost_matrix(src, [(0.0, 7.0)], MatchOptions(weights=MatchWeights(backward=1.0)))
     assert approx_equal(back, [[4.0]], abs_tol=TOL)
-    turn = cost_matrix(src, [(2.0, 5.0)], MatchOptions(weights={"turn": 0.01}))
+    turn = cost_matrix(src, [(2.0, 5.0)], MatchOptions(weights=MatchWeights(turn=0.01)))
     assert approx_equal(turn, [[2.9]], abs_tol=TOL)
 
 
@@ -275,7 +275,7 @@ def test_crossing_weight_untangles_a_cheaper_crossing() -> None:
     slots = [(2.0, 2.0), (0.0, 2.0)]
     tangled = match(starts, slots, options=MatchOptions(objective="sum", cost_fn=favour_crossing))
     assert tangled.crossings == 1
-    weights = {"crossing": 10.0}
+    weights = MatchWeights(crossing=10.0)
     options = MatchOptions(objective="sum", cost_fn=favour_crossing, weights=weights)
     untangled = match(starts, slots, options=options)
     assert untangled.crossings == 0
@@ -289,7 +289,7 @@ def test_group_spread_weight_keeps_groups_together() -> None:
     spread = match(
         starts,
         slots,
-        options=MatchOptions(objective="sum", weights={"group_spread": 100.0}),
+        options=MatchOptions(objective="sum", weights=MatchWeights(group_spread=100.0)),
         groups=groups,
     )
     a_slots = sorted(spread.assignment[SpotId(e)] for e in ("0", "2"))
@@ -298,7 +298,7 @@ def test_group_spread_weight_keeps_groups_together() -> None:
 
 def test_unknown_weight_is_rejected() -> None:
     with pytest.raises(SchemaError, match="unknown match weight"):
-        MatchOptions(weights={"crosing": 1.0})
+        MatchOptions.model_validate({"weights": {"crosing": 1.0}})
 
 
 def test_empty_problem_returns_empty_result() -> None:

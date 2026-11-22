@@ -3,6 +3,7 @@ match_models.py --- matching data classes: options, objectives and results
 
 Contains:
     MATCH_WEIGHT_KEYS: lists the penalty names a match accepts
+    MatchWeights: holds the four penalty weights of a match, each a finite number at or above 0
     MatchObjective: names the objectives a match can minimize
     CostFn: types the extra per-pair cost callback
     MatchOptions: holds the constraints, objective and penalties for matching spots to slots
@@ -10,20 +11,54 @@ Contains:
     MatchResult.target_points(): returns targets as an (N, 2) array in entity order
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Literal
 
 import numpy as np
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 
 from showpy.core.errors import SchemaError
 from showpy.core.ids import FormId, SpotId
-from showpy.core.types import Finite, FrozenModel, Point, Points
-
-MATCH_WEIGHT_KEYS = ("backward", "crossing", "group_spread", "turn")
+from showpy.core.types import Finite, FrozenModel, NonNegFinite, Point, Points
 
 type MatchObjective = Literal["sum", "sum_squares", "bottleneck", "bottleneck_then_sum"]
 type CostFn = Callable[[str, int, Point, Point], float]
+
+
+class MatchWeights(FrozenModel):
+    """Holds the penalty weights of a match; each is a finite number at or above 0.
+
+    Attributes:
+        backward: Meters of penalty per meter of travel against the spot's facing.
+        crossing: Meters of penalty per crossing of two straight-line moves.
+        group_spread: Meters of penalty per meter of mean distance from a group's target centroid.
+        turn: Meters of penalty per degree between the facing and the travel direction.
+
+    >>> MatchWeights(turn=0.5).turn
+    0.5
+    """
+
+    backward: NonNegFinite = 0.0
+    crossing: NonNegFinite = 0.0
+    group_spread: NonNegFinite = 0.0
+    turn: NonNegFinite = 0.0
+
+    @model_validator(mode="before")
+    @classmethod
+    def _known_names(cls, data: object) -> object:
+        if not isinstance(data, Mapping):
+            return data
+        unknown = sorted(str(name) for name in data if name not in cls.model_fields)
+        if unknown:
+            raise SchemaError(
+                f"unknown match weight {unknown[0]!r}",
+                hint=f"use weights from {', '.join(cls.model_fields)}",
+                context={"weights": sorted(str(name) for name in data)},
+            )
+        return data
+
+
+MATCH_WEIGHT_KEYS = tuple(MatchWeights.model_fields)
 
 
 class MatchOptions(FrozenModel):
@@ -41,42 +76,31 @@ class MatchOptions(FrozenModel):
         objective: `sum`, `sum_squares`, `bottleneck` or `bottleneck_then_sum`.
         power: Exponent applied to move costs by the `sum` objective.
         preserve_order: Spots, in the order given, take slots in increasing index order.
-        weights: Penalties: `backward` (per meter against facing), `turn` (per degree of turn
-            toward the travel direction), `crossing` (per crossing), `group_spread` (per meter
-            of mean distance from the group's target centroid).
+        weights: Penalties added to a move's length; see `MatchWeights`.
         cost_fn: Extra cost per (spot, slot index, start, target); infinity forbids the pair.
             Not serialized.
         counts: Counts the move takes, for speed limits and reporting.
     """
 
     keep_groups: bool = True
-    group_slots: dict[str, tuple[int, ...]] | None = None
-    pinned: dict[SpotId, int] = {}
-    forbid: tuple[tuple[SpotId, int], ...] = ()
-    no_backward: bool | float = False
+    group_slots: dict[str, tuple[StrictInt, ...]] | None = None
+    pinned: dict[SpotId, StrictInt] = {}
+    forbid: tuple[tuple[SpotId, StrictInt], ...] = ()
+    no_backward: bool | NonNegFinite = False
     max_speed: float | None = None
     objective: MatchObjective = "bottleneck_then_sum"
     power: float = 1.0
     preserve_order: bool = False
-    weights: dict[str, float] = {}
+    weights: MatchWeights = MatchWeights()
     cost_fn: CostFn | None = Field(default=None, exclude=True)
     counts: float | None = None
 
     @model_validator(mode="after")
     def _valid(self) -> "MatchOptions":
-        unknown = sorted(set(self.weights) - set(MATCH_WEIGHT_KEYS))
-        if unknown:
-            raise SchemaError(
-                f"unknown match weight {unknown[0]!r}",
-                hint=f"use weights from {', '.join(MATCH_WEIGHT_KEYS)}",
-                context={"weights": sorted(self.weights)},
-            )
         positive = {"power": self.power, "max_speed": self.max_speed, "counts": self.counts}
         for name, value in positive.items():
             if value is not None and not value > 0:
                 raise SchemaError(f"{name} must be above 0", hint=f"give a positive {name}")
-        if any(w < 0 for w in self.weights.values()):
-            raise SchemaError("match weights must be >= 0", hint="use non-negative weights")
         return self
 
 
