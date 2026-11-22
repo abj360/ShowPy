@@ -156,6 +156,14 @@ def _form_slot_error(form: Form, reason: str, slot: int) -> MatchError:
     )
 
 
+def _slot_collision_error(form: Form, slot: int, holder: SpotId, entity: SpotId) -> MatchError:
+    return MatchError(
+        f"match puts {entity} on slot {slot} of form {form.id}, where {holder} already stands",
+        hint=f"match {holder} too, pick another slot for {entity}, or use place()",
+        context={"form": form.id, "slot": slot, "spot": holder, "entity": entity},
+    )
+
+
 def _matched_members(form: Form, result: MatchResult) -> tuple[SpotId | None, ...]:
     vacated = {i for i, m in enumerate(form.members) if m is not None and m in result.slots}
     held: list[SpotId | None] = [None if i in vacated else m for i, m in enumerate(form.members)]
@@ -163,8 +171,9 @@ def _matched_members(form: Form, result: MatchResult) -> tuple[SpotId | None, ..
         if form_id != form.id:
             continue
         held.extend([None] * (slot + 1 - len(held)))
-        if held[slot] is not None:
-            raise _form_slot_error(form, "two spots", slot)
+        holder = held[slot]
+        if holder is not None:
+            raise _slot_collision_error(form, slot, holder, entity)
         held[slot] = entity
     while held and held[-1] is None:
         held.pop()
@@ -174,7 +183,24 @@ def _matched_members(form: Form, result: MatchResult) -> tuple[SpotId | None, ..
     return tuple(held)
 
 
+def _check_pinned_rows(dest: Set, result: MatchResult) -> None:
+    taken = {(form_id, slot): entity for entity, (form_id, slot) in result.slots.items()}
+    for row in dest.placements:
+        if row.form is None or row.order is None or not row.pinned or row.entity in result.slots:
+            continue
+        entity = taken.get((row.form, row.order))
+        if entity is None:
+            continue
+        raise MatchError(
+            f"match puts {entity} on slot {row.order} of form {row.form}, "
+            f"where pinned {row.entity} stands",
+            hint=f"match {row.entity} too, unpin it, or pick another slot for {entity}",
+            context={"form": row.form, "slot": row.order, "spot": row.entity, "entity": entity},
+        )
+
+
 def _matched_forms(show: Show, set_id: SetId, result: MatchResult, *, force: bool) -> Show:
+    _check_pinned_rows(show.set(set_id), result)
     touched = {form_id for form_id, _ in result.slots.values()}
     forms = dict(show.forms)
     for form_id, form in forms_of_set(show, set_id).items():

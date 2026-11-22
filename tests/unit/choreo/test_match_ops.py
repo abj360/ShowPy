@@ -19,6 +19,9 @@ Contains:
     test_regression_apply_match_rejects_an_unknown_form: raises UnknownRefError
     test_regression_apply_match_rejects_an_out_of_range_slot: raises MatchError for a slot past
         the form's last slot or below zero
+    test_regression_apply_match_names_a_pinned_row_on_a_matched_slot: raises MatchError naming
+        the pinned spot that already stands on the slot
+    test_regression_apply_match_names_the_spot_holding_a_slot: raises MatchError naming both spots
     test_regression_apply_match_ignores_a_form_the_set_no_longer_places: leaves a stale form
         alone and does not refuse the match because of it
     test_regression_apply_match_rejects_slots_of_a_form_the_set_no_longer_places: raises
@@ -262,6 +265,25 @@ def test_regression_swap_ignores_a_form_the_set_no_longer_places() -> None:
     swapped = swap(show, "2", "T2", "T3")
     assert swapped.forms[FormId("a")] == stale
     assert swapped.forms[FormId("b")].members == ("T3", "T2")
+
+
+def test_regression_apply_match_names_a_pinned_row_on_a_matched_slot() -> None:
+    """Names the pinned spot, absent from the form's members, that already stands on the slot."""
+    show, ring = _ring_show()
+    short = ring.replace(members=("T1", "T2", None, None))
+    stored = pin_spot(show.replace(forms={"ring": short}), "2", "T4")
+    result = match_by_order(["T3"], ring, show.set("1")).replace(slots={"T3": ("ring", 3)})
+    with pytest.raises(MatchError, match="T4") as caught:
+        apply_match(stored, TID, result)
+    assert caught.value.context["spot"] == "T4"
+
+
+def test_regression_apply_match_names_the_spot_holding_a_slot() -> None:
+    """Names the member already on the slot and the spot matched onto it."""
+    show, ring = _ring_show()
+    result = match_by_order(["T1"], ring, show.set("1")).replace(slots={"T1": ("ring", 1)})
+    with pytest.raises(MatchError, match=r"puts T1 .* where T2 already"):
+        apply_match(show, TID, result)
 
 
 def test_apply_match_leaves_unchanged_slots_alone() -> None:
