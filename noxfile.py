@@ -8,7 +8,8 @@ Contains:
     types: runs mypy --strict and pyright (basic) over the library, tests and scripts
     tests: runs the full pytest suite under a fixed hash seed with a branch-coverage floor
     hashseeds: runs the full pytest suite under each non-default seed in HASH_SEEDS
-    slow: runs the slow tests under each seed in SLOW_HASH_SEEDS
+    slow: runs the slow tests on SLOW_WORKERS pytest-xdist workers under each seed in
+        SLOW_HASH_SEEDS
     fuzz: runs the fuzz targets under the nightly Hypothesis profile
     audit: scans the locked dependencies for known vulnerabilities
     wheel: builds the wheel, installs it with every extra in a clean venv and runs the README
@@ -31,6 +32,8 @@ import nox
 PRETTIER_GLOB = "**/*.{md,yml,yaml,json}"
 HASH_SEEDS = ("1", "2")
 SLOW_HASH_SEEDS = ("0", "1")
+# One worker per core of the hosted 4-core Linux runner; workers inherit PYTHONHASHSEED.
+SLOW_WORKERS = "4"
 DEFAULT_HASH_SEED = "0"
 FUZZ_PROFILE = "nightly"
 COVERAGE_FLOOR = "96"
@@ -155,12 +158,13 @@ def slow(session: nox.Session) -> None:
     """Runs the slow tests (generated-show properties, the large golden) under two seeds.
 
     They are left out of the per-leg `tests` gate; one extra seed still checks the large golden
-    does not depend on hash order.
+    does not depend on hash order. pytest-xdist spreads them over SLOW_WORKERS processes; pass
+    `-- -n 0` to run them in one process.
     """
     _require_same_python(session)
     for seed in SLOW_HASH_SEEDS:
         session.env["PYTHONHASHSEED"] = seed
-        _uv_run(session, "pytest", "-m", "slow", *session.posargs)
+        _uv_run(session, "pytest", "-m", "slow", "-n", SLOW_WORKERS, *session.posargs)
 
 
 @nox.session

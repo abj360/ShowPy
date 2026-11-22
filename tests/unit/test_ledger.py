@@ -13,6 +13,7 @@ Contains:
     test_defect_marker_rejects_non_strict_xfail: rejects xfail without strict=True
     test_defect_marker_accepts_parametrized_marks: accepts defect marks inside pytest.param
     test_ledger_counts_only_selected_tests: leaves deselected defect tests out of the count
+    test_regression_ledger_counts_open_defects_under_xdist: counts the workers' selection under -n
     test_ledger_prints_zero_open_without_defect_tests: prints Ledger: 0 open when none exist
     find_open_priority_zero_tests(): lists priority 0 tests in a source that carry a defect or xfail
         mark
@@ -220,6 +221,41 @@ def test_ledger_counts_only_selected_tests(pytester: pytest.Pytester) -> None:
         "not slow",
     )
     result.stdout.fnmatch_lines(["Ledger: 0 open"])
+
+
+def test_regression_ledger_counts_open_defects_under_xdist(
+    pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Prints the workers' open count, not the controller's empty collection, under -n."""
+    monkeypatch.setenv("PYTHONPATH", str(PROJECT_ROOT))
+    result = run_ledger_case(
+        pytester,
+        """
+        import pytest
+
+        @pytest.mark.defect("UP-9.1-01")
+        @pytest.mark.xfail(strict=True, reason="UP-9.1-01")
+        def test_regression_first_defect() -> None:
+            assert False
+
+        @pytest.mark.defect("UP-9.1-02")
+        @pytest.mark.xfail(strict=True, reason="UP-9.1-02")
+        def test_regression_second_defect() -> None:
+            assert False
+
+        @pytest.mark.slow
+        @pytest.mark.defect("UP-9.1-03")
+        @pytest.mark.xfail(strict=True, reason="UP-9.1-03")
+        def test_regression_deselected_defect() -> None:
+            assert False
+        """,
+        "-n",
+        "2",
+        "-m",
+        "not slow",
+    )
+    assert result.ret == 0
+    result.stdout.fnmatch_lines(["Ledger: 2 open"])
 
 
 def test_ledger_prints_zero_open_without_defect_tests(pytester: pytest.Pytester) -> None:
