@@ -18,6 +18,7 @@ Contains:
 
 from typing import TYPE_CHECKING
 
+from showpy.core.caps import MIN_TEMPO
 from showpy.core.errors import SchemaError
 from showpy.core.json_types import JsonValue
 
@@ -28,6 +29,7 @@ type Item = dict[str, JsonValue]
 
 TIMELINE_DOC = "/time/timeline.json"
 AT_COUNT = "at_count"
+TEMPO = "counts_per_minute"
 RAMP_TO = "ramp_to"
 RAMP_COUNTS = "ramp_counts"
 
@@ -75,6 +77,14 @@ def _require_distinct_counts(items: list[Item], field: str) -> None:
         seen.add(count)
 
 
+def _require_tempos_at_or_above_floor(tempos: list[Item]) -> None:
+    for section in tempos:
+        for field in (TEMPO, RAMP_TO):
+            value = _number(section, field)
+            if value is not None and value < MIN_TEMPO:
+                raise _refuse(field, value, f"is below the slowest tempo {MIN_TEMPO:g}: {value:g}")
+
+
 def _steady(section: Item, report: "ReportBuilder") -> Item:
     target, length = section.get(RAMP_TO), _number(section, RAMP_COUNTS)
     has_ramp = target is not None or section.get(RAMP_COUNTS) is not None
@@ -93,6 +103,7 @@ def _migrate_tempos(timeline: Item, report: "ReportBuilder") -> list[Item] | Non
         return None
     tempos = _sorted_by_count(tempos, "tempo sections", report)
     _require_distinct_counts(tempos, "tempos")
+    _require_tempos_at_or_above_floor(tempos)
     tempos = [_steady(section, report) for section in tempos]
     if tempos and _number(tempos[0], AT_COUNT) not in (None, 0.0):
         report.repair(f"moved the first tempo from count {tempos[0].get(AT_COUNT)} to count 0")

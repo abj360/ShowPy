@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 
+from showpy.core.caps import MIN_TEMPO
 from showpy.core.errors import SchemaError
 from showpy.core.json_types import JsonValue
 from showpy.show.document_paths import TIMELINE_DOC
@@ -159,6 +160,33 @@ def test_values_no_v0_3_0_edit_could_write_are_refused(
     assert info.value.context["path"] == TIMELINE_DOC
     assert info.value.context["field"] == field
     assert info.value.context["value"] == value
+
+
+@pytest.mark.parametrize(
+    ("section", "field", "value"),
+    [
+        (_tempo(0.0, 0.0), "counts_per_minute", 0.0),
+        (_tempo(0.0, -60.0), "counts_per_minute", -60.0),
+        (_tempo(0.0, 120.0, ramp_to=0.0, ramp_counts=8.0), "ramp_to", 0.0),
+        (_tempo(0.0, 120.0, ramp_to=-30.0, ramp_counts=8.0), "ramp_to", -30.0),
+        (_tempo(0.0, 120.0, ramp_to=0.0), "ramp_to", 0.0),
+    ],
+)
+def test_regression_tempo_below_the_floor_is_refused_with_its_location(
+    section: dict[str, JsonValue], field: str, value: float
+) -> None:
+    with pytest.raises(SchemaError) as info:
+        migrate_timeline(_doc(tempos=[section]), ReportBuilder(1))
+    assert info.value.context["path"] == TIMELINE_DOC
+    assert info.value.context["field"] == field
+    assert info.value.context["value"] == value
+
+
+def test_regression_tempo_at_the_floor_is_kept() -> None:
+    section = _tempo(0.0, MIN_TEMPO, ramp_to=MIN_TEMPO, ramp_counts=8.0)
+    timeline, repairs = _run(_doc(tempos=[section]))
+    assert _entries(timeline, "tempos") == [section]
+    assert repairs == ()
 
 
 def test_a_document_that_is_not_a_timeline_object_is_left_for_validation() -> None:
