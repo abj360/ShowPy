@@ -13,8 +13,8 @@ Contains:
     test_forms_step_passes_other_documents_and_fields_through: leaves other documents and form
         fields as they were, and never mutates its input
     test_regression_forms_step_refuses_what_v2_cannot_hold: refuses an unknown kind, a bad
-        geometry, a reserved key, an unknown key and an out-of-range value, naming the
-        document, the field and the value
+        geometry, a reserved key, an unknown key, an out-of-range value and a curve its own
+        model refuses (an arc of zero sweep), naming the document, the field and the value
     test_regression_forms_step_refuses_a_forms_document_that_is_not_a_list: refuses a forms
         document that holds no list
 """
@@ -29,7 +29,7 @@ import pytest
 from showpy.choreo.form_models import Form, FormKind
 from showpy.choreo.forms import curve_form, placements, polyline_form
 from showpy.choreo.recipe_models import SvgRecipe
-from showpy.core.errors import SchemaError
+from showpy.core.errors import SchemaError, bounded_repr
 from showpy.core.json_types import JsonValue
 from showpy.core.types import Box2, Region
 from showpy.core.util import approx_equal
@@ -43,6 +43,9 @@ DOC = "/sets/2/forms.json"
 SQUARE = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0))).model_dump(mode="json")
 BOX = Box2(min=(0, 0), max=(4, 4))
 POSE_TOL = 1e-9
+ZERO_SWEEP_ARC: dict[str, JsonValue] = {
+    "curve": {"kind": "arc", "center": [0, 0], "radius": 1.0, "start_deg": 0.0, "sweep_deg": 0.0}
+}
 SHARED_DEFAULTS: dict[str, JsonValue] = {"recipe_version": 1, "n": None, "transform": None}
 
 
@@ -220,6 +223,7 @@ def test_forms_step_passes_other_documents_and_fields_through() -> None:
         ),
         (_v1_form("custom", {"points": [], "n": 2.5}), "[0].geometry.n", "2.5"),
         ("not a form", "[0]", "not a form"),
+        (_v1_form("arc", ZERO_SWEEP_ARC), "[0].geometry", bounded_repr(ZERO_SWEEP_ARC)),
     ],
 )
 def test_regression_forms_step_refuses_what_v2_cannot_hold(

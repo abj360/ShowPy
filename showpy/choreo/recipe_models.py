@@ -77,7 +77,8 @@ class LineRecipe(CurveRecipeBase):
 class ArcRecipe(CurveRecipeBase):
     """Holds the curve of an arc form, refusing a sweep past one full turn.
 
-    A sweep past 360 degrees would put slots on top of each other.
+    A sweep past 360 degrees would put slots on top of each other, so a sweep lies in (0, 360]
+    degrees either way; the arc curve itself refuses a zero sweep.
 
     >>> from showpy.geo.shapes import arc
     >>> ArcRecipe(curve=arc((0, 0), 2.0, 0.0, 90.0)).kind

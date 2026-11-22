@@ -27,6 +27,8 @@ Contains:
         along the subpaths one after another, as v0.3.0 did
     test_one_subpath_svg_form_keeps_every_spacing_mode: spaces a one-subpath outline
         by interval as any curve form does
+    test_arc_form_rejects_a_zero_sweep: refuses an arc of 0 degrees, so a sweep lies in (0, 360]
+        either way
     test_regression_svg_form_rejects_empty_svg: raises a ShowPyError, not ValueError, for
         svg_form("")
     test_regression_generated_form_with_numpy_params_serializes_or_is_rejected: serializes numpy
@@ -422,6 +424,11 @@ def test_regression_bad_block_anchor_raises_schema_error() -> None:
     """Raises SchemaError, not KeyError, for an unknown block anchor (audit 9.6)."""
     with pytest.raises(SchemaError):
         slots(block_form("f", [], (0, 0), 1, 2, 1.0, anchor=""))  # type: ignore[arg-type]
+
+
+def test_arc_form_rejects_a_zero_sweep() -> None:
+    with pytest.raises(ShowPyError, match="sweep"):
+        arc_form("a", ["A", "B"], (0, 0), 5.0, 0.0, 0.0)
 
 
 def test_regression_arc_form_rejects_sweeps_that_overlap_themselves() -> None:

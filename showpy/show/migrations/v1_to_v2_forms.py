@@ -7,8 +7,9 @@ every geometry key into the recipe, checks the result against the v2 recipe of t
 stores it with every default written out, as a v2 save writes it. An svg outline's `curve`
 becomes `curves`, one curve per subpath: a v1 composite that joined several subpaths across
 their gaps is split into its parts.
-A geometry that no v2 recipe can hold (an unknown kind, an unknown key, a value out of range)
-is refused with SchemaError naming the document, the field and the value; nothing is guessed.
+A geometry that no v2 recipe can hold (an unknown kind, an unknown key, a value out of range,
+a curve its own model refuses such as an arc of zero sweep) is refused with SchemaError naming
+the document, the field and the value; nothing is guessed.
 
 Contains:
     migrate_forms(): rewrites forms documents from the v1 shape to the v2 shape
@@ -21,7 +22,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from showpy.choreo.form_models import FormKind, Recipe
 from showpy.choreo.recipe_models import RECIPE_VERSION
-from showpy.core.errors import SchemaError, bounded_repr
+from showpy.core.errors import SchemaError, ShowPyError, bounded_repr
 from showpy.core.json_types import JsonValue
 
 if TYPE_CHECKING:
@@ -93,6 +94,9 @@ def _checked_recipe(
         field = ".".join([f"[{index}].geometry", *loc])
         value = geometry.get(loc[0]) if loc else geometry
         raise _refusal(document, field, value, f"cannot be stored in v2: {error['msg']}") from exc
+    except ShowPyError as exc:
+        where = f"[{index}].geometry"
+        raise _refusal(document, where, geometry, f"cannot be stored in v2: {exc.message}") from exc
     stored: dict[str, JsonValue] = RECIPE_ADAPTER.dump_python(checked, mode="json")
     return stored
 
