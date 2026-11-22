@@ -19,7 +19,8 @@ from showpy.show.document_paths import TIMELINE_DOC
 from showpy.show.migrate import ReportBuilder
 from showpy.show.migrations.v1_to_v2_timeline import TIMELINE_DOC as STEP_PATH
 from showpy.show.migrations.v1_to_v2_timeline import migrate_timeline
-from showpy.time.models import Timeline
+from showpy.time.measures import count_to_measure
+from showpy.time.models import MeasureLabel, Timeline
 
 
 def _tempo(at: float, cpm: float = 120.0, **ramp: float) -> dict[str, JsonValue]:
@@ -228,7 +229,6 @@ def test_sorted_measure_changes_pass_through_unchanged() -> None:
         (_measures((8.0, 0.0)), "measures.changes", 0.0),
         (_measures((8.0, -2.0)), "measures.changes", -2.0),
         (_measures((-1.0, 2.0)), "measures.changes", -1.0),
-        (_measures((8.0, 3.0), (8.0, 5.0)), "measures.changes", 8.0),
     ],
 )
 def test_measure_values_v2_cannot_hold_are_refused_with_their_location(
@@ -239,3 +239,19 @@ def test_measure_values_v2_cannot_hold_are_refused_with_their_location(
     assert info.value.context["path"] == TIMELINE_DOC
     assert info.value.context["field"] == field
     assert info.value.context["value"] == value
+
+
+@pytest.mark.parametrize("stored", [[[8.0, 5.0], [8.0, 3.0]], [[8.0, 3.0], [8.0, 5.0]]])
+def test_regression_duplicate_measure_change_counts_keep_the_longest_as_v0_3_0_read_them(
+    stored: list[list[float]],
+) -> None:
+    docs = _doc(measures={"counts_per_measure": 4.0, "start_measure": 1, "changes": stored})
+    before = copy.deepcopy(docs)
+    timeline, repairs = _run(docs)
+    measures = timeline["measures"]
+    assert isinstance(measures, dict)
+    assert measures["changes"] == [[8.0, 5.0]]
+    assert len(repairs) == 1
+    assert docs == before
+    label = count_to_measure(Timeline.model_validate(timeline), 14.0)
+    assert label == MeasureLabel(measure=4, count_in_measure=2.0)

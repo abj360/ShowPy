@@ -8,10 +8,11 @@ count 0 starts at count 0; a ramp with a target but no length, a length but no t
 length of 0 or less becomes a steady tempo; holds out of count order are sorted (stable); a hold
 after the last count is dropped, which changes no count inside the show; cues that share an
 order are renumbered in stored order, each taking the next free order; measure changes out of
-count order are sorted (v0.3.0 read them in count order). It refuses any other value v2 cannot
+count order are sorted and several at one count become the one with the longest length, which
+is how v0.3.0 read them. It refuses any other value v2 cannot
 hold with SchemaError naming the document, the field and the value: two tempo sections or two
 holds at one count, a hold before count 0, a negative length of the show, a measure length of 0
-or less and a measure change before count 0 or two at one count.
+or less and a measure change before count 0.
 
 Contains:
     TIMELINE_DOC: names the stored timeline document, which the step rewrites
@@ -190,14 +191,11 @@ def _migrate_measures(timeline: Item, report: "ReportBuilder") -> Item | None:
             raise _refuse(
                 "measures.changes", new_length, f"has a length not above 0: {new_length:g}"
             )
-    counts = [at_count for at_count, _ in pairs]
-    if len(set(counts)) != len(counts):
-        repeated = next(c for c in counts if counts.count(c) > 1)
-        raise _refuse("measures.changes", repeated, f"holds two changes at count {repeated:g}")
-    if counts == sorted(counts):
+    kept = dict(sorted(pairs))
+    ordered: list[JsonValue] = [[at_count, length] for at_count, length in kept.items()]
+    if ordered == changes:
         return None
-    report.repair("sorted the measure changes by count")
-    ordered: list[JsonValue] = [[at_count, length] for at_count, length in sorted(pairs)]
+    report.repair("sorted the measure changes by count and kept the longest at a shared count")
     reordered: Item = dict(measures)
     reordered["changes"] = ordered
     return reordered
