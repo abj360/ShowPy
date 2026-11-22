@@ -26,7 +26,9 @@ Contains:
     test_public_names_are_cached_after_first_use: requires a resolved name to land in the module
     test_deprecated_alias_warns_on_every_access: requires an alias to warn each time, uncached
     find_geo_foreign_imports(): lists each import in geo source outside showpy.core and showpy.geo
-    test_geo_imports_only_core: fails while geo imports another showpy package
+    GEO_FORWARDING_IMPORTS: lists the function-level imports of the geo stubs, removed in v0.6.0
+    test_geo_imports_only_core: fails when geo imports another showpy package, bar the listed stubs
+    test_geo_layering_scan_allows_only_listed_function_imports: proves an unlisted import is flagged
     test_geo_layering_scan_flags_a_foreign_import: proves the layering scan can fail
     test_geo_layering_scan_resolves_relative_imports: checks `from ..cast import x` against layers
 """
@@ -374,39 +376,105 @@ def _imported_modules(node: ast.Import | ast.ImportFrom, package: str) -> list[s
     return [f"{base}.{alias.name}" for alias in node.names]
 
 
-def find_geo_foreign_imports(source: str, name: str, package: str = GEO_PACKAGE) -> list[str]:
+def _imports_in_functions(
+    node: ast.AST, function: str | None = None
+) -> list[tuple[ast.Import | ast.ImportFrom, str | None]]:
+    """Lists each import under a node with the name of its innermost enclosing function."""
+    found: list[tuple[ast.Import | ast.ImportFrom, str | None]] = []
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, ast.Import | ast.ImportFrom):
+            found.append((child, function))
+        inner = (
+            child.name if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef) else function
+        )
+        found.extend(_imports_in_functions(child, inner))
+    return found
+
+
+def find_geo_foreign_imports(
+    source: str,
+    name: str,
+    package: str = GEO_PACKAGE,
+    allowed: frozenset[tuple[str, str, str]] = frozenset(),
+) -> list[str]:
     """Lists `name:line:module` for each import outside showpy.core and showpy.geo.
 
     Args:
         source: The text of a geo module.
         name: The label to report for the module.
         package: The package the module belongs to, for resolving relative imports.
+        allowed: (module label, imported module, function name) triples that may import upward
+            inside that function; a module-level import is never allowed.
 
     Returns:
         offenders: One entry per offending runtime or TYPE_CHECKING import.
     """
     found: list[str] = []
-    for node in ast.walk(ast.parse(source)):
-        if not isinstance(node, ast.Import | ast.ImportFrom):
-            continue
+    for node, function in _imports_in_functions(ast.parse(source)):
         found.extend(
             f"{name}:{node.lineno}:{module}"
             for module in _imported_modules(node, package)
             if module.split(".")[0] == "showpy"
             and module not in ("showpy.core", "showpy.geo")
             and not module.startswith(("showpy.core.", "showpy.geo."))
+            and (function is None or (name, module, function) not in allowed)
         )
     return sorted(found, key=lambda entry: int(entry.split(":")[1]))
 
 
-@pytest.mark.xfail(strict=True, reason="lane C task C4")
+GEO_FORWARDING_FUNCTIONS = {
+    ("transforms.py", "showpy.choreo.set_transforms"): (
+        "shift", "move_to", "rotate", "scale", "expand", "contract", "set_interval", "mirror",
+        "symmetrize", "skew", "affine",
+    ),
+    ("snapping.py", "showpy.choreo.set_snapping"): (
+        "snap", "snap_to_guides", "align", "distribute",
+    ),
+    ("measure.py", "showpy.choreo.set_measure"): (
+        "on_field_ids", "neighbors", "nearest", "symmetry_error",
+    ),
+    ("analysis.py", "showpy.choreo.set_analysis"): (
+        "density_map", "coverage", "balance", "symmetry_score", "change_amount",
+    ),
+}  # fmt: skip
+# Deprecated Set forwarding from geo to choreo; delete this table when v0.6.0 removes the stubs.
+GEO_FORWARDING_IMPORTS = frozenset(
+    (module, target, function)
+    for (module, target), functions in GEO_FORWARDING_FUNCTIONS.items()
+    for function in functions
+)
+
+
 def test_geo_imports_only_core() -> None:
     offenders = [
         offender
         for path in sorted((LIBRARY_ROOT / "geo").glob("*.py"))
-        for offender in find_geo_foreign_imports(path.read_text(encoding="utf-8"), path.name)
+        for offender in find_geo_foreign_imports(
+            path.read_text(encoding="utf-8"), path.name, allowed=GEO_FORWARDING_IMPORTS
+        )
     ]
     assert offenders == []
+
+
+def test_geo_layering_scan_allows_only_listed_function_imports() -> None:
+    source = (
+        "def shift(obj):\n"
+        "    from showpy.choreo.set_transforms import shift as twin\n"
+        "    return twin(obj)\n"
+        "def stray(obj):\n"
+        "    from showpy.choreo.set_transforms import shift as twin\n"
+        "    return twin(obj)\n"
+        "def shift_other(obj):\n"
+        "    from showpy.choreo.set_snapping import snap as twin\n"
+        "    return twin(obj)\n"
+        "from showpy.choreo.set_transforms import shift\n"
+    )
+    allowed = frozenset({("x.py", "showpy.choreo.set_transforms", "shift")})
+    assert find_geo_foreign_imports(source, "x.py", allowed=allowed) == [
+        "x.py:5:showpy.choreo.set_transforms",
+        "x.py:8:showpy.choreo.set_snapping",
+        "x.py:10:showpy.choreo.set_transforms",
+    ]
 
 
 def test_geo_layering_scan_flags_a_foreign_import() -> None:

@@ -10,12 +10,12 @@ from hypothesis import strategies as st
 from hypothesis.extra.numpy import arrays
 
 from showpy.choreo.models import Placement, Set
+from showpy.choreo.set_transforms import mirror, rotate, scale, shift
 from showpy.core.ids import SetId, SpotId
 from showpy.core.types import Points
 from showpy.core.units import angle_diff, normalize_angle
 from showpy.core.util import approx_equal
 from showpy.geo.shapes import curve_through
-from showpy.geo.transforms import mirror, rotate, scale, shift
 
 TOL = 1e-6
 COORD = 50.0
