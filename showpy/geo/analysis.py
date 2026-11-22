@@ -18,13 +18,13 @@ from typing import Literal
 import numpy as np
 import numpy.typing as npt
 import shapely
+from shapely.errors import GEOSException
 
 from showpy.choreo.models import Set
 from showpy.core.caps import MAX_GRID_CELLS
-from showpy.core.errors import GeometryError, UnknownRefError
+from showpy.core.errors import GeometryError
 from showpy.core.types import Meters, Points
-from showpy.core.util import close_matches
-from showpy.geo.checks import require_finite_as
+from showpy.geo.checks import pick, require_finite_as
 from showpy.geo.measure import mirror_gaps, on_field_ids
 from showpy.sheet.models import Sheet
 
@@ -43,15 +43,6 @@ def _require_grid_size(spans: Points, cell: Meters) -> None:
         hint="pass a larger cell in meters",
         context={"cell": cell, "max_cells": MAX_GRID_CELLS},
     )
-
-
-def _require_positive(name: str, value: float) -> None:
-    if not value > 0:
-        raise GeometryError(
-            f"{name} must be above 0, got {value}",
-            hint=f"pass a positive {name} in meters",
-            context={name: value},
-        )
 
 
 def _on_field_points(s: Set) -> Points:
@@ -107,13 +98,20 @@ def coverage(s: Set, sheet: Sheet, radius: Meters = 1.0) -> float:
     >>> coverage(Set(id="1", counts=0, placements=(Placement(entity="A", x=0, y=0.5),)), sheet, 5)
     1.0
     """
-    _require_positive("radius", radius)
+    require_finite_as(GeometryError, radius, name="radius", low=0.0, low_open=True)
     walkable = sheet.walkable.to_shapely()
     pts = _on_field_points(s)
     if not len(pts) or walkable.area == 0:
         return 0.0
-    disks = shapely.buffer(shapely.points(pts), radius, quad_segs=DISK_SEGMENTS)
-    reached = shapely.intersection(shapely.union_all(disks), walkable)
+    try:
+        disks = shapely.buffer(shapely.points(pts), radius, quad_segs=DISK_SEGMENTS)
+        reached = shapely.intersection(shapely.union_all(disks), walkable)
+    except GEOSException as exc:
+        raise GeometryError(
+            "coverage could not be computed for this radius",
+            hint="use a smaller finite radius in meters",
+            context={"radius": radius},
+        ) from exc
     return float(reached.area / walkable.area)
 
 
@@ -132,13 +130,7 @@ def balance(s: Set, sheet: Sheet, axis: Literal["x", "y"] = "x") -> float:
     >>> balance(Set(id="1", counts=0, placements=(Placement(entity="A", x=1, y=1),)), sheet)
     0.5
     """
-    if axis not in AXIS_INDEX:
-        raise UnknownRefError(
-            f"unknown axis {axis!r}",
-            hint=f"use 'x' or 'y'; did you mean {close_matches(axis, AXIS_INDEX)}?",
-            context={"axis": axis},
-        )
-    column = AXIS_INDEX[axis]
+    column = pick("axis", axis, AXIS_INDEX)
     pts = _on_field_points(s)
     lo, hi = _extent(sheet)
     half = (hi[column] - lo[column]) / 2

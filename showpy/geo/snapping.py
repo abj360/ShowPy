@@ -21,10 +21,11 @@ import shapely
 from showpy.choreo.models import Set
 from showpy.core.errors import GeometryError
 from showpy.core.types import Meters, Points
+from showpy.geo.checks import pick
 from showpy.geo.curves import CurveModel
 from showpy.geo.measure import ALL, SetSelector
 from showpy.geo.models import SnapReport
-from showpy.geo.transform_base import PointMap, apply_pointwise, pick
+from showpy.geo.transform_base import PointMap, apply_pointwise
 from showpy.sheet.models import GuideLine, Sheet
 
 type Axis = Literal["x", "y"]

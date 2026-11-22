@@ -279,7 +279,7 @@ def _smooth_quad(b: _PathBuilder, a: list[float], ox: float, oy: float) -> None:
 def _arc_error(end: Point) -> SchemaError:
     return SchemaError(
         "arc radii or coordinates are too large or too small to evaluate",
-        hint="use smaller arc radii or coordinates",
+        hint="use arc radii and coordinates that keep the arc finite",
         context={"command": "A", "end": end},
     )
 

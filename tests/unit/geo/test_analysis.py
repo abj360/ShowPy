@@ -121,8 +121,6 @@ def test_regression_symmetry_score_matches_spots_one_to_one() -> None:
     assert symmetry_score(lopsided) < MAX_MANY_TO_ONE_SCORE
 
 
-@pytest.mark.defect("UP-9.1-63")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-63")
 def test_regression_coverage_rejects_infinite_radius() -> None:
     """Raises a ShowPyError for radius=inf instead of leaking GEOSException (audit 9.1)."""
     with pytest.raises(ShowPyError):

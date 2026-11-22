@@ -46,6 +46,8 @@ Contains:
         radii instead of returning NaN angles
     test_regression_svg_outline_rejects_arcs_with_non_finite_geometry: raises SchemaError for 1e80
         radii instead of leaking IndexError
+    test_regression_arc_hint_names_only_the_finite_requirement: words the arc error hint around
+        finiteness, not a one-sided size range
     test_regression_svg_outline_rejects_a_path_with_too_many_pieces: raises a ShowPyError for
         50,000 pieces
     test_regression_simplex_tables_are_read_only: refuses item assignment on SIMPLEX and FONTS
@@ -274,6 +276,14 @@ def test_regression_svg_outline_rejects_arcs_with_non_finite_geometry() -> None:
         svg_outline(NAN_ARC_PATH + " L2 0", BOX)
 
 
+def test_regression_arc_hint_names_only_the_finite_requirement() -> None:
+    """Keeps "smaller" out of the hint, since radii that are too small fail the same check."""
+    with pytest.raises(SchemaError) as caught:
+        svg_outline(NAN_ARC_PATH + " L2 0", BOX)
+    assert "finite" in caught.value.hint
+    assert "smaller" not in caught.value.hint
+
+
 def test_regression_svg_outline_rejects_a_path_with_too_many_pieces() -> None:
     """Raises a ShowPyError for 50,000 pieces instead of building a 12.8-million-sample table."""
     with pytest.raises(ShowPyError):
@@ -326,16 +336,12 @@ def test_regression_parse_path_requires_a_leading_move() -> None:
         parse_path("L1 1")
 
 
-@pytest.mark.defect("UP-9.1-55")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-55")
 def test_regression_svg_outline_rejects_empty_data() -> None:
     """Raises a ShowPyError for empty data instead of leaking ValueError (audit 9.1)."""
     with pytest.raises(ShowPyError):
         svg_outline("", BOX)
 
 
-@pytest.mark.defect("UP-9.1-56")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-56")
 def test_regression_svg_outline_rejects_bad_path_index() -> None:
     """Raises a ShowPyError for an out-of-range path_index instead of leaking IndexError."""
     with pytest.raises(ShowPyError):

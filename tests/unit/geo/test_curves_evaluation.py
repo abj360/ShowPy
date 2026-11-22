@@ -10,8 +10,6 @@ Contains:
 
 import math
 
-import pytest
-
 from showpy.core.errors import ShowPyError
 from showpy.geo import shapes
 
@@ -20,8 +18,6 @@ COORDINATE_PERIOD = 7
 COORDINATE_SPAN_M = 10.0
 
 
-@pytest.mark.defect("UP-E-03")
-@pytest.mark.xfail(strict=True, reason="UP-E-03")
 def test_bezier_of_degree_1100_never_returns_a_non_finite_length() -> None:
     """Raises a ShowPyError or returns a finite length; never NaN or infinity."""
     points = [

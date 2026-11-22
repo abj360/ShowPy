@@ -56,6 +56,7 @@ from showpy.core.errors import GeometryError, ShowPyError
 from showpy.core.util import approx_equal
 from showpy.geo.curves import (
     CURVE_TYPES,
+    MAX_BEZIER_DEGREE,
     AnyCurve,
     ArcCurve,
     BezierCurve,
@@ -272,8 +273,6 @@ def test_regression_svg_curve_rejects_a_table_over_the_cap() -> None:
         curve.length()
 
 
-@pytest.mark.defect("UP-9.1-20")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-20")
 def test_regression_trimmed_curve_rejects_out_of_range_arc_lengths() -> None:
     """Rejects s0/s1 outside [0, L] of an open base instead of reporting length 15 (audit 9.1)."""
     with pytest.raises(GeometryError):
@@ -288,8 +287,6 @@ def test_regression_composite_rejects_gapped_parts() -> None:
         CompositeCurve(parts=(line((0.0, 0.0), (1.0, 0.0)), line((5.0, 5.0), (6.0, 5.0))))
 
 
-@pytest.mark.defect("UP-9.1-22")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-22")
 def test_regression_composite_rejects_false_closure() -> None:
     """Rejects closed=True when the last part does not end on the first start (audit 9.1)."""
     open_parts = (line((0.0, 0.0), (1.0, 0.0)), line((1.0, 0.0), (1.0, 1.0)))
@@ -297,28 +294,45 @@ def test_regression_composite_rejects_false_closure() -> None:
         CompositeCurve(parts=open_parts, closed=True)
 
 
-@pytest.mark.defect("UP-9.1-23")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-23")
 def test_regression_svg_curve_rejects_closed_flag_on_open_path() -> None:
     """Rejects closed=True on an open path instead of wrapping it (audit 9.1)."""
     with pytest.raises(GeometryError):
         SvgCurve(d=OPEN_SVG_PATH, closed=True)
 
 
-@pytest.mark.defect("UP-9.1-24")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-24")
 def test_regression_svg_curve_rejects_open_flag_on_closed_path() -> None:
     """Rejects closed=False on a path ending with Z instead of ignoring the Z (audit 9.1)."""
     with pytest.raises(GeometryError):
         SvgCurve(d=CLOSED_SVG_PATH, closed=False)
 
 
-@pytest.mark.defect("UP-9.1-25")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-25")
 def test_regression_svg_curve_rejects_wrong_transform_shape() -> None:
     """Rejects a 1-row transform instead of returning wrong lengths and point shapes (audit 9.1)."""
     with pytest.raises(GeometryError):
         SvgCurve(d="M0 0 L1 0", transform=((1.0, 0.0, 0.0),))
+
+
+def test_composite_accepts_parts_that_meet_and_a_true_closure() -> None:
+    """Builds a closed triangle from three parts whose ends meet."""
+    parts = (
+        line((0.0, 0.0), (1.0, 0.0)),
+        line((1.0, 0.0), (1.0, 1.0)),
+        line((1.0, 1.0), (0.0, 0.0)),
+    )
+    assert CompositeCurve(parts=parts, closed=True).closed
+
+
+def test_trimmed_curve_accepts_reversal_inside_an_open_base() -> None:
+    """Builds the reverse of an open curve, whose s0 > s1 stays inside [0, L]."""
+    assert line((0.0, 0.0), (2.0, 0.0)).reversed().length() == pytest.approx(2.0)
+
+
+def test_bezier_degree_cap_is_inclusive() -> None:
+    """Accepts a curve of exactly MAX_BEZIER_DEGREE and refuses one degree more."""
+    controls = [(float(i), float(i % 3)) for i in range(MAX_BEZIER_DEGREE + 2)]
+    assert bezier(*controls[:-1]).length() > 0
+    with pytest.raises(GeometryError):
+        bezier(*controls)
 
 
 def test_regression_model_copy_update_raises_showpy_error() -> None:
@@ -339,8 +353,6 @@ def test_regression_polyline_with_text_points_raises_showpy_error() -> None:
         Polyline(points="abc")  # pyright: ignore[reportArgumentType] - deliberately invalid input
 
 
-@pytest.mark.defect("UP-9.1-64")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-64")
 def test_regression_bezier_degree_past_overflow_raises_showpy_error() -> None:
     """Rejects a degree-1099 Bezier instead of returning NaN with RuntimeWarnings (audit 9.1)."""
     controls = [(float(i), float(i % 3)) for i in range(BEZIER_DEGREE_PAST_LIMIT)]
@@ -348,8 +360,6 @@ def test_regression_bezier_degree_past_overflow_raises_showpy_error() -> None:
         bezier(*controls).length()
 
 
-@pytest.mark.defect("UP-9.1-65")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-65")
 def test_regression_arc_rejects_infinite_radius() -> None:
     """Rejects an infinite radius instead of building an arc of infinite length (audit 9.1)."""
     with pytest.raises(GeometryError):
