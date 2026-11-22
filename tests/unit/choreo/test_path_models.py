@@ -39,6 +39,9 @@ Contains:
     test_regression_route_curve_is_a_typed_curve: stores a curve model, round-trips it through
         JSON and refuses a recipe that is no curve
     test_regression_spec_rows_and_routes_are_read_only: refuses item assignment and deletion
+    test_regression_typed_values_validate_against_the_current_schema: validates every typed
+        facing value, route curve and motion parameter dump against the current schema file, the
+        one the generated-show property test uses
     test_regression_spec_holds_no_open_mutable_container: finds no dict, list or set anywhere in a
         spec with rows, routes, waypoints and every kind of motion parameters
 """
@@ -49,6 +52,7 @@ from collections.abc import Callable, Mapping, MutableMapping
 from typing import cast
 
 import pytest
+from jsonschema import Draft202012Validator
 from pydantic import BaseModel
 
 from showpy.cast.rewrite import rewrite_spot_ids
@@ -77,9 +81,13 @@ from showpy.choreo.paths import set_facing
 from showpy.core.errors import PathError, SchemaError
 from showpy.core.ids import RouteId, SpotId, make_tid
 from showpy.core.readonly import ReadOnlyMap
+from showpy.core.resources import schema_path
 from showpy.core.types import Point
 from showpy.geo.curves import Segment
+from showpy.show.migrate import CURRENT_VERSION
 from tests.fixtures.cast_shows import rich_show
+from tests.fixtures.shows import two_set_show
+from tests.property.test_generated_shows import SCHEMA_NAME, encoded_tree
 
 NEGATIVE_COUNTS = -4.0
 NEIGHBOUR_COUNTS = 8.0
@@ -422,3 +430,30 @@ def test_regression_spec_holds_no_open_mutable_container() -> None:
     )
     assert _open_containers(spec) == []
     assert _open_containers({"leak": 1}) == ["spec"]
+
+
+def test_regression_typed_values_validate_against_the_current_schema() -> None:
+    """Validates typed facing values, route curves and motion params against the current schema."""
+    row_fields = {"entity": "A", "style": "custom", "motion_fn": "weave"}
+    rows = {
+        SpotId(name): PathRow.model_validate(
+            {**row_fields, "entity": name, "facing_mode": mode, "facing_value": value}
+        )
+        for name, (mode, value) in zip("ABC", KIND_FOR_MODE, strict=True)
+    }
+    override = _override_with(FacingMode.FIXED, FixedFacing(degrees=0.0))
+    show = two_set_show().replace(
+        transitions=(
+            TransitionSpec(
+                id=make_tid("1", "2"),
+                counts=NEIGHBOUR_COUNTS,
+                rows=rows,
+                routes={RouteId("r"): _route()},
+            ),
+        ),
+        facing_overrides=(override,),
+    )
+    assert f"showpy.show.v{CURRENT_VERSION}.json" == SCHEMA_NAME
+    validator = Draft202012Validator(json.loads(schema_path(SCHEMA_NAME).read_text()))
+    errors = [e.message for e in validator.iter_errors(encoded_tree(show))]
+    assert errors == []

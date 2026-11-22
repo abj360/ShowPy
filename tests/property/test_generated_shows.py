@@ -11,9 +11,11 @@ from hypothesis import given
 from hypothesis import strategies as st
 from jsonschema import Draft202012Validator
 
+from showpy.core.json_types import JsonValue
 from showpy.core.resources import schema_path
 from showpy.show.changes import store_paths
 from showpy.show.documents import decode_show, encode_show
+from showpy.show.migrate import CURRENT_VERSION
 from showpy.show.models import PathsOp, Show
 from showpy.show.validate import validate_paths, validate_show
 from tests.strategies.paths import path_rows
@@ -21,7 +23,11 @@ from tests.strategies.show import shows
 
 pytestmark = pytest.mark.slow
 
-SCHEMA_NAME = "showpy.show.v1.json"
+SCHEMA_NAME = f"showpy.show.v{CURRENT_VERSION}.json"
+
+
+def encoded_tree(show: Show) -> dict[str, JsonValue]:
+    return {path: json.loads(raw) for path, raw in encode_show(show).items()}
 
 
 def _schema_validator() -> Draft202012Validator:
@@ -36,7 +42,7 @@ def test_generated_shows_validate(show: Show) -> None:
 
 @given(shows())
 def test_generated_shows_match_schema(show: Show) -> None:
-    errors = sorted(_schema_validator().iter_errors(show.model_dump(mode="json")), key=str)
+    errors = sorted(_schema_validator().iter_errors(encoded_tree(show)), key=str)
     assert errors == [], [e.message for e in errors[:3]]
 
 
