@@ -108,6 +108,19 @@ class MatchResult(FrozenModel):
     slots: dict[SpotId, tuple[FormId, int]] = {}
 
     @model_validator(mode="after")
+    def _slot_indexes_exist(self) -> "MatchResult":
+        indexes = [*self.assignment.values(), *self.unassigned_slots]
+        indexes += [slot for _, slot in self.slots.values()]
+        negative = sorted({i for i in indexes if i < 0})
+        if negative:
+            raise SchemaError(
+                f"match result names slot {negative[0]}, below 0",
+                hint="slot indexes count from 0",
+                context={"slots": negative},
+            )
+        return self
+
+    @model_validator(mode="after")
     def _aligned(self) -> "MatchResult":
         is_misaligned = len(self.entities) != len(self.targets) or set(self.entities) != set(
             self.assignment

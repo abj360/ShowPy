@@ -18,7 +18,7 @@ Contains:
     test_regression_apply_match_rejects_a_form_of_another_set: raises MatchError before writing
     test_regression_apply_match_rejects_an_unknown_form: raises UnknownRefError
     test_regression_apply_match_rejects_an_out_of_range_slot: raises MatchError for a slot past
-        the form's last slot or below zero
+        the form's last slot
     test_regression_apply_match_reports_a_pinned_spot_before_a_bad_slot: raises LockedError ahead
         of the MatchError a bad slot would raise
     test_regression_apply_match_names_a_pinned_row_on_a_matched_slot: raises MatchError naming
@@ -229,7 +229,7 @@ def test_regression_apply_match_rejects_an_unknown_form() -> None:
         apply_match(show, TID, result)
 
 
-@pytest.mark.parametrize("slot", [len(REVERSED_RING), -1])
+@pytest.mark.parametrize("slot", [len(REVERSED_RING)])
 def test_regression_apply_match_rejects_an_out_of_range_slot(slot: int) -> None:
     """Names the form, slot and slot count instead of leaking an IndexError (lane G review)."""
     show, ring = _ring_show()

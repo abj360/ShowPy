@@ -9,6 +9,8 @@ Contains:
         penalty
     test_regression_match_options_rejects_bool_slot_index: rejects True as a pinned slot index
         instead of pinning to slot 1
+    test_regression_match_result_rejects_a_negative_slot_index: rejects a slot index below zero
+        in an assignment, a form slot or the unassigned slots
 """
 
 import math
@@ -102,3 +104,25 @@ def test_regression_match_options_rejects_bool_slot_index() -> None:
     """Rejects True as a pinned slot index instead of pinning to slot 1 (audit 9.6)."""
     with pytest.raises(SchemaError):
         MatchOptions(pinned={SpotId("A"): True})
+
+
+NEGATIVE_SLOT = -1
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"assignment": {SpotId("A"): NEGATIVE_SLOT}},
+        {"slots": {SpotId("A"): (FormId("f"), NEGATIVE_SLOT)}},
+        {"unassigned_slots": (NEGATIVE_SLOT,)},
+    ],
+)
+def test_regression_match_result_rejects_a_negative_slot_index(bad: dict[str, object]) -> None:
+    """Rejects a hand-built result whose slot index is below zero with a SchemaError."""
+    fields: dict[str, object] = {
+        "entities": (SpotId("A"),),
+        "assignment": {SpotId("A"): 0},
+        "targets": ((1.0, 2.0),),
+    }
+    with pytest.raises(SchemaError):
+        MatchResult.model_validate({**fields, **bad})
