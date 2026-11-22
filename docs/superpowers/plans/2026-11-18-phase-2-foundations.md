@@ -277,6 +277,110 @@ The 159 IDs assigned to Phases 3, 4 and 5, with reasons, are in Appendix B.
 
 ---
 
+## Transition tasks (serial, before the lanes rebase)
+
+Added by the amendment of 2026-11-22. L1 merges first, before any lane branch is pushed, so no
+lane commit is published under the old licence. Z1 and L2 merge next, before the lane branches
+rebase onto `main`. All three are implemented on their branches and await merge; each section
+records what its branch does, so the reviewer checks the branch against it.
+
+### Task L1: relicense the library (ADR 0019)
+
+**State:** implemented on `chore/licence`, awaiting merge. **Gate:** ADR 0019 accepted.
+**Fixes:** none. **Files:** Modify `LICENSE`, `pyproject.toml` (`license`, `license-files`, the
+MIT classifier removed), `README.md`, `CONTRIBUTING.md`, `noxfile.py` (`wheel` session),
+`scripts/build_fonts.py`, `showpy/schemas/showpy.show.v2.json` (a `$comment` naming its
+licence), `CHANGELOG.md` (generated). Create `showpy/schemas/LICENSE-MIT.txt` and
+`docs/adr/0019-noncommercial-licence.md`. Test `tests/unit/test_packaging.py`,
+`tests/unit/show/test_schema.py`, `tests/unit/test_build_fonts.py`.
+
+**Interfaces:** the wheel's `License-Expression` is
+`PolyForm-Noncommercial-1.0.0 AND MIT AND OFL-1.1 AND LicenseRef-Hershey-Fonts`: the library
+under PolyForm Noncommercial 1.0.0, the JSON schemas under MIT so any tool may read and validate
+show files, and the bundled fonts under their own OFL-1.1, Hershey and MIT terms, unchanged.
+Releases up to and including v0.3.0 stay under MIT.
+
+- [ ] **Step 1:** Tests: `test_distribution_states_its_licences` (the expression, the five
+      licence files, no `License ::` classifier), `test_schemas_ship_their_mit_notice` and
+      `test_v2_schema_states_its_mit_licence`. Run; expect FAIL.
+- [ ] **Step 2:** Ship `showpy/schemas/LICENSE-MIT.txt` and the schema's `$comment`; the font
+      build script copies the MIT text from there. Commit
+      `chore(schemas): ship an MIT notice with the JSON schemas`.
+- [ ] **Step 3:** Replace `LICENSE` with the PolyForm Noncommercial 1.0.0 text and its required
+      notice; set the expression and licence files in `pyproject.toml` and drop the MIT
+      classifier; `README.md` says v0.3.0 and earlier stay MIT and the non-commercial terms do
+      not cover the font files; `nox -s wheel` asserts the expression and the schema notice in
+      the built wheel. Commit `chore(licence)!: relicense under PolyForm Noncommercial 1.0.0`.
+- [ ] **Step 4:** `CONTRIBUTING.md` accepts outside contributions only with a written grant that
+      lets the maintainer relicense them. Commit
+      `docs(contributing): accept outside contributions only with a relicensing grant`.
+- [ ] **Step 5:** ADR 0019, then `uv run nox -s changelog`. Commits
+      `docs(adr): 0019 license ShowPy under PolyForm Noncommercial 1.0.0` and
+      `docs: regenerate the changelog`.
+
+### Task Z1: six evaluation findings become strict-xfail ledger tests
+
+**State:** implemented on `test/evaluation-ledger`, awaiting merge. **Fixes:** none; adds ledger
+IDs `UP-E-01` to `UP-E-06`. **Files:** Modify `tests/ledger_plugin.py` (accepts section `E`),
+`tests/unit/test_ledger.py`. Create `tests/unit/geo/test_curve_base_evaluation.py`,
+`tests/unit/choreo/test_avoid_evaluation.py`, `tests/unit/geo/test_curves_evaluation.py`,
+`tests/unit/geo/test_spacing_evaluation.py`, `tests/unit/choreo/test_match_solve_evaluation.py`,
+`tests/unit/geo/test_shapes_evaluation.py`.
+
+| ID      | Test                                                                                        | Defect                                                                                | Flipped by    |
+| ------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------- |
+| UP-E-01 | `test_curve_base_evaluation.py::test_project_finds_global_nearest_point_on_a_tight_spiral`  | `project()` searches locally from one sample and can land on the wrong arm of a curve | C7            |
+| UP-E-02 | `test_avoid_evaluation.py::test_min_gaps_measures_rectangle_footprints_as_rectangles`       | gaps between rectangle footprints are not measured as rectangles                      | a later phase |
+| UP-E-03 | `test_curves_evaluation.py::test_bezier_of_degree_1100_never_returns_a_non_finite_length`   | a finite but extreme curve returns a NaN length with no error                         | C8            |
+| UP-E-04 | `test_spacing_evaluation.py::test_scatter_samples_every_component_of_a_split_region`        | scatter misses components of a region made of several parts                           | a later phase |
+| UP-E-05 | `test_match_solve_evaluation.py::test_bottleneck_assignment_does_not_depend_on_slot_order`  | the bottleneck assignment changes with the order of the slots                         | a later phase |
+| UP-E-06 | `test_shapes_evaluation.py::test_arc_through_near_collinear_points_is_a_near_straight_line` | `arc_through` misbehaves on nearly collinear points                                   | a later phase |
+
+- [ ] **Step 1:** The ledger plugin accepts `UP-E-<nn>`, and `test_ledger.py` still refuses a
+      malformed section. Commit `test(ledger): accept evaluation section E in defect IDs`.
+- [ ] **Step 2:** The six tests above, each marked `@pytest.mark.defect("UP-E-0n")` and
+      `@pytest.mark.xfail(strict=True, reason="UP-E-0n")`; each fails today for the reason in the
+      table (checked with `--runxfail`). Commit
+      `test: record six evaluation findings as ledger defects`.
+- [ ] **Step 3:** After the merge the default ledger line rises by 6.
+
+### Task L2: bounds on stored coordinates, counts and tempo
+
+**State:** implemented on `feat/core-bounds`, awaiting merge. **Fixes:** none. **Files:** Modify
+`showpy/core/caps.py`, `showpy/core/types.py`, `showpy/core/errors.py`,
+`showpy/choreo/engine_models.py`, `showpy/_api_table.py`; regenerate `showpy/__init__.py`,
+`tests/fixtures/api_snapshot.json`, `showpy/schemas/showpy.show.v2.json` and `CHANGELOG.md`.
+Test `tests/unit/core/test_caps.py`, `tests/unit/core/test_types.py`,
+`tests/unit/choreo/test_engine.py`.
+
+**Interfaces:**
+
+- `showpy/core/caps.py` adds `MAX_COORD_M = 1e6` (meters), `MAX_COUNTS = 1_000_000` and
+  `MIN_TEMPO = 1e-3` (counts per minute), public names.
+- The core aliases apply them: `Meters` and the coordinate tuples (`Point`, `Point3`, `Ring`)
+  stay within `MAX_COORD_M`, counts within `MAX_COUNTS`, and `CountsPerMinute` is at least
+  `MIN_TEMPO`. A value past its bound raises `SchemaError` whose context names the bound and
+  what is allowed.
+- Derived engine values stay finite but unbounded, so a full-width move still compiles:
+  `MotionPiece.length`, `GapInfo.gap` and `Fix.new_gap` are `Finite`, and
+  `EntityState.velocity` is the new `FinitePoint`.
+
+- [ ] **Step 1:** Add the caps with `test_caps_have_approved_values`. Commit
+      ``feat(core): add the `MAX_COORD_M`, `MAX_COUNTS` and `MIN_TEMPO` caps``.
+- [ ] **Step 2:** `test_regression_full_width_move_compiles_and_samples` (a 2e6 m move from
+      `-MAX_COORD_M` to `MAX_COORD_M` in one count compiles and samples); type the derived
+      values as unbounded. Commit:
+      ``fix(choreo): type `MotionPiece`, `GapInfo`, `Fix` and `EntityState` derived values as unbounded``.
+- [ ] **Step 3:** Tests: `test_regression_placement_rejects_a_huge_coordinate` (2e300 m),
+      `test_regression_box2_rejects_a_huge_corner`,
+      `test_regression_tempo_section_rejects_a_vanishing_tempo` (1e-320 counts per minute),
+      `test_regression_spline_rejects_a_huge_control_point`,
+      `test_bounded_aliases_accept_their_bound` and
+      `test_bounded_aliases_refuse_the_next_float_past_their_bound`. Run; expect FAIL. Apply the
+      bounds in the aliases; regenerate the schema and the API snapshot; commit.
+
+---
+
 ## Lane L0: foundations (serial)
 
 Branch `feat/p2-l0-foundations`.
@@ -748,6 +852,29 @@ Run `wc -l showpy/choreo/{engine,paths,routes,avoid}.py` after B1 and B2. Split 
 500 lines by responsibility, with moved-name deprecations. Today none is over 500
 (`engine.py` 478). Commit `refactor(choreo): ...` only if a split happens.
 
+### Task B4: cached engine lookups
+
+**Gate:** A1 and B2 merged. **Fixes:** none. **Files:** Modify `showpy/choreo/engine.py`. Test
+`tests/unit/choreo/test_engine.py`, `tests/bench/test_budgets.py`.
+
+`PathEngine.locate` and `PathEngine.compile_all` call `show.transition_ids()`, which builds a new
+list on every call (`showpy/show/models.py:159`, `showpy/choreo/engine.py:137`), so sampling a
+show many times costs the number of samples times the number of sets. A1 caches the `Show`
+index and G3 caches `Set.get`; this task makes the engine stop rebuilding its own lookups.
+
+**Interfaces:** `PathEngine` reads transitions through `Show.index` (A1) and computes the start
+count of every transition once per engine; `locate(t)` bisects those start counts and builds no
+list or dictionary per call. Public signatures do not change.
+
+- [ ] **Step 1:** Tests: `test_regression_sampling_builds_the_transition_lookup_once` (a counting
+      spy on the lookup builder: 1,000 `positions` calls on one engine build it at most once) and
+      `test_regression_sample_cost_does_not_grow_with_sets` (the same spy counts equal builds per
+      sample for a 10-set and a 100-set show). Count builds, never wall time. Run; expect FAIL.
+- [ ] **Step 2:** Implement.
+- [ ] **Step 3:** Run `uv run nox -s bench`; tier M stays within 20% of the baseline. Record the
+      before and after numbers in the commit body.
+- [ ] **Step 4:** Commit `perf(choreo): stop rebuilding transition lookups on every engine call`.
+
 ---
 
 ## Lane C: geometry
@@ -786,6 +913,31 @@ Branch `feat/p2-c-geo`.
 - [ ] **Step 3:** Ledger flip procedure; regenerate the v2 schema (curves are stored in routes
       and recipes). **Step 4:** Commit `fix(geo)!: curves refuse inconsistent construction`.
 
+### Task C2b: composite curves must be continuous
+
+**Gate:** G1 merged (G1 stores a multi-subpath SVG outline as separate curves, so no stored
+recipe needs a gapped composite). **Fixes:** UP-9.1-21. **Files:** Modify
+`showpy/geo/curves.py`. Test `tests/unit/geo/test_curves.py`.
+
+C2 held back its composite-continuity validator; this task lands it once G1 no longer builds
+gapped composites.
+
+**Interfaces:** `CompositeCurve` refuses parts that do not meet within `CONTINUITY_TOL_M`, with a
+`SchemaError` whose context names the index of the first part that does not meet and the gap in
+meters.
+
+- [ ] **Step 1:** Run UP-9.1-21 with `--runxfail`; expect a gapped composite to construct.
+- [ ] **Step 2:** Test `test_regression_composite_gap_names_the_part` (a 5 m gap between parts 0
+      and 1 raises `SchemaError` with `context["part"] == 1`). Run; expect FAIL.
+- [ ] **Step 3:** Implement. Run the whole suite: lane B's
+      `tests/unit/choreo/test_engine_compile.py` builds a 5 m gapped composite. Update that
+      fixture only if an accepted ADR names the change; otherwise stop and report it to the
+      controller. If a v1 fixture holds a gapped composite, stop and report too: its repair
+      belongs to the sub-step that owns the stored shape.
+- [ ] **Step 4:** Ledger flip procedure. Commit
+      `fix(geo)!: refuse composite curves whose parts do not meet` with a `BREAKING CHANGE:`
+      footer naming `CompositeCurve`.
+
 ### Task C3: strict SVG path tokens
 
 **Fixes:** UP-9.1-44, -45, -46, -48, -49. **Files:** Modify `showpy/geo/svg.py`; extend
@@ -822,6 +974,63 @@ Top-level `showpy.<name>` points to a dispatcher that accepts points, curves and
       `curves_compound.py` (composite, trimmed, SVG, Bezier); `spacing.py` into `spacing.py`
       (along curves) and `scatter.py` (area fills and scatter). Moved-name deprecations.
 - [ ] **Step 2:** Commit `refactor(geo): split curves and spacing by responsibility`.
+
+### Task C7: `project()` finds the nearest point on the whole curve
+
+**Gate:** C2 merged. **Fixes:** UP-E-01. **Files:** Modify `showpy/geo/curve_base.py`. Test
+`tests/unit/geo/test_curve_base_evaluation.py` (marker lines only),
+`tests/unit/geo/test_curve_base.py`, new `tests/property/test_curve_project.py`.
+
+`CurveBase.project` today refines from the single nearest sample, so on a tight spiral or a
+zigzag it can return a point on the wrong arm.
+
+**Interfaces:** `CurveBase.project(p: Point) -> Meters` keeps its signature. It splits the curve
+into candidate pieces from its arc-length table, drops every piece whose lower distance bound
+exceeds the best distance found so far, and refines each surviving piece with a safeguarded
+Newton step on the squared distance (bisection whenever Newton leaves the piece or fails to
+decrease it). Equal distances resolve to the smaller arc length, so the result is deterministic.
+`PROJECT_TOL_M` is set from the largest excess measured over 10,000 property cases times 10; the
+commit body records the measurement.
+
+- [ ] **Step 1:** Run UP-E-01 with `--runxfail`; expect the projection on the wrong arm.
+- [ ] **Step 2:** Property test `test_project_matches_brute_force` (Hypothesis): spirals of 1 to
+      40 turns and zigzags of 2 to 200 segments, query points in a box around the curve; the
+      distance to `point_at(project(p))` exceeds the brute-force minimum (dense sampling) by at
+      most `PROJECT_TOL_M`. Run; expect FAIL.
+- [ ] **Step 3:** Implement. Check that every curve kind's existing `project` tests still pass.
+- [ ] **Step 4:** Ledger flip procedure. Commit
+      `fix(geo): project onto the nearest point of the whole curve`.
+
+### Task C8: geometry results are finite or an error
+
+**Gate:** C7 merged. **Fixes:** UP-E-03. **Files:** Modify `showpy/geo/*` (the evaluation
+entry points: length, points, tangents and the arc-length table in `curve_base.py` and
+`curves.py`, plus `svg.py` and `spacing.py`). Add a code to `showpy/core/error_codes.py` and
+regenerate `docs/error-codes.md` only if no existing code fits. Test
+`tests/unit/geo/test_curves_evaluation.py` (marker lines only), `tests/unit/geo/test_curves.py`,
+new `tests/fuzz/test_fuzz_finite.py`.
+
+A finite but extreme input can still overflow inside numpy and return NaN or infinity with only a
+`RuntimeWarning`. L2 bounds stored coordinates; this task closes what the bounds cannot, such as
+high-degree curves and long chains of large steps.
+
+**Interfaces:** each public geometry evaluation runs under `np.errstate(all="raise")` and checks
+its result with `np.isfinite`; a `FloatingPointError` or a non-finite result becomes a
+`GeometryError` naming the curve kind and the operation. No result of a public geometry call is
+NaN or infinite.
+
+- [ ] **Step 1:** Run UP-E-03 with `--runxfail`; expect a NaN length and no error.
+- [ ] **Step 2:** Tests: `test_regression_extreme_svg_path_raises_geometry_error` (an SVG path of
+      steps near 1e308 raises a `ShowPyError`, never returns NaN), and in
+      `tests/fuzz/test_fuzz_finite.py` (run nightly by `nox -s fuzz`):
+      `test_fuzz_curve_results_are_finite` (every `curve_from_construction` input either raises
+      a `ShowPyError` or gives a finite length, finite points and finite tangents) and
+      `test_fuzz_clock_results_are_finite` (`count_to_seconds` and its inverse on timelines
+      within L2's bounds). Run; expect FAIL.
+- [ ] **Step 3:** Implement. A non-finite clock result is lane T's: report it, never patch
+      `showpy/time/` here.
+- [ ] **Step 4:** Ledger flip procedure. Commit
+      `fix(geo): raise GeometryError instead of returning NaN or infinity`.
 
 ---
 
@@ -1038,6 +1247,41 @@ IDs use the pattern decision 1 sets.
 - [ ] **Step 3:** Ledger flip procedure. **Step 4:** Commit
       `fix(sheet): refuse unknown options and write PDFs without a clock`.
 
+### Task F3: deprecation rows for the sheet names that leave
+
+**Gate:** F1 merged, ADR 0021 accepted. **Fixes:** none. **Files:** Modify `showpy/sheet/*`
+(warning lines only), `showpy/_api_table.py`; regenerate `showpy/__init__.py` and
+`tests/fixtures/api_snapshot.json`. Test new `tests/unit/sheet/test_deprecations.py`, and the
+sheet test modules that exercise a leaving name.
+
+**Interfaces:** one `DEPRECATED` row per name in ADR 0021's timeline for `showpy.sheet`, each
+with `since="0.4.0"` and `remove="0.6.0"`, and a message that names its replacement or says the
+name "leaves the library":
+
+- coordinate wording (6): `to_coords`, `from_coords`, `coordinate_presets`, `set_coordinates`,
+  `CoordinateSystem`, `CoordinateKind`;
+- landmarks and zones (14): `landmark`, `landmark_anchor`, `landmark_keys`, `nearest_landmarks`,
+  `zones_at`, `line_landmark`, `point_landmark`, `add_landmark`, `remove_landmark`, `add_zone`,
+  `remove_zone`, `Landmark`, `Zone`, `ZoneKind`;
+- proscenium stage and rendering (4): `proscenium_stage`, `SheetCanvas`, `draw_sheet`,
+  `render_sheet`;
+- the names that change shape (up to 16, such as `sheet_templates`, `get_sheet`, `customize`,
+  `GuideLine` and `on_surface`), each with the replacement ADR 0021's table gives; the commit
+  body lists the final set.
+
+Library code that still needs a leaving name calls its private implementation, so only callers
+outside the library warn. The sheet test modules that exercise a leaving name filter
+`DeprecatedWarning` only (a module-level `pytest.mark.filterwarnings`), never all warnings.
+
+- [ ] **Step 1:** Test `test_leaving_sheet_names_warn` (parametrized over the rows: each name
+      warns `DeprecatedWarning` naming v0.6.0 and returns the same object as before). Run; expect
+      FAIL.
+- [ ] **Step 2:** Add the rows and the warning aliases; regenerate `showpy/__init__.py` and the
+      API snapshot; run all gates (warnings are errors, so any internal call to a leaving name
+      fails the suite).
+- [ ] **Step 3:** Commit `feat(sheet): deprecate the sheet names that leave the library`, with
+      every name listed in the body.
+
 ---
 
 ## Lane G: forms and matching
@@ -1177,6 +1421,138 @@ Branch `feat/p2-e-export`. Gate: ADR 0010 accepted. Skills: `differential-review
       reassignments, performer views) and `qr.py`; `data.py` into `data.py` (JSON) and
       `tables.py` (CSV and text). Moved-name deprecations. Commit
       `refactor(export): split publishing, claims and tables`.
+
+### Task E4: interchange moves to `showpy.show`; the other export names are deprecated
+
+**Gate:** E1 merged, ADR 0021 accepted; the pandas step after lanes B and G merge. **Fixes:**
+none (UP-9.5-41 and UP-9.5-42 move with `import_positions`, markers unchanged). **Files:** Modify
+`showpy/export/*`, `showpy/_api_table.py`, and for the five pandas results only their warning
+lines in `showpy/choreo/{motion_stats,paths,models}.py`. Create `showpy/show/interchange.py` and
+`tests/unit/show/test_interchange.py`. Regenerate `showpy/__init__.py` and
+`tests/fixtures/api_snapshot.json`.
+
+**Interfaces:**
+
+- `export_json`, `import_json`, `import_fonts` and `import_positions` are defined in
+  `showpy/show/interchange.py`. Their top-level names do not change; the old
+  `showpy.export.data` and `showpy.export.positions` paths warn through `moved(...)` until
+  v0.6.0. The interchange tests move to `tests/unit/show/test_interchange.py` with their ledger
+  markers unchanged.
+- `import_json` refuses an unknown top-level key with `SchemaError` naming the key, and keeps
+  every key that starts with `x-`, which `export_json` writes back unchanged.
+- One `DEPRECATED` row (`since="0.4.0"`, `remove="0.6.0"`) for every other export name, as ADR
+  0021's timeline groups them: publishing 19, print and PDF 10, tables and the format registry
+  9, video 3. Each message says the name "leaves the library" or names its replacement.
+- The five pandas results (`speeds`, `energy_curve`, `phrase_profile`, `paths_table`,
+  `Set.table`) keep their names and warn that they return arrays from v0.6.0.
+- Library code that still needs a leaving name calls its private implementation; export test
+  modules filter `DeprecatedWarning` only.
+
+- [ ] **Step 1:** Tests: `test_regression_import_json_refuses_an_unknown_top_level_key`,
+      `test_import_json_keeps_x_keys` (an `x-extra` key survives an import and export round
+      trip), `test_interchange_old_paths_warn_and_resolve`,
+      `test_leaving_export_names_warn` (parametrized over the rows) and
+      `test_pandas_results_warn_about_arrays`. Run; expect FAIL.
+- [ ] **Step 2:** Move the interchange code with no behavior change; commit
+      `refactor(show): move JSON and positions interchange into show.interchange`, naming the
+      four functions in the body.
+- [ ] **Step 3:** Refuse unknown top-level keys and keep `x-` keys; commit
+      `fix(show)!: refuse unknown top-level keys in import_json and keep x- keys`.
+- [ ] **Step 4:** Add the export rows and warning aliases; regenerate `showpy/__init__.py` and the
+      API snapshot; commit `feat(export): deprecate the export names that leave the library`,
+      with every name listed in the body.
+- [ ] **Step 5:** After lanes B and G merge, the pandas warnings; commit
+      `feat(choreo): warn that pandas results become arrays in v0.6.0`.
+
+---
+
+## Serial tail before lane X
+
+Added by the amendment of 2026-11-22. N1 runs once lanes A and D merge; R1 runs after every lane
+merges and before X1.
+
+### Task N1: notes leave `Show`
+
+**Gate:** lanes A and D merged, ADR 0021 accepted. **Fixes:** none. **Files:** Modify
+`showpy/notes/*`, `showpy/show/{models,manage,sections,collab}.py`, the integrity roots
+(`KNOWN_ROOTS` in `showpy/show/integrity.py`, and `showpy/show/document_paths.py`),
+`showpy/show/migrate.py` and `showpy/show/migrations/__init__.py` (the order gains `notes`),
+`showpy/cast/rewrite.py` (note anchors), `showpy/show/interchange.py` (after E4), and
+`showpy/_api_table.py`. Create `showpy/show/migrations/v1_to_v2_notes.py`. Test
+`tests/unit/notes/*`, `tests/unit/show/test_migrate.py`, new
+`tests/unit/show/test_notes_document.py`.
+
+Today a repository stores notes as one of the show's own documents, `/show/notes.json`, decoded
+into `Show.notes`. Format v2 holds no notes (ADR 0021 decision 3, ADR 0023).
+
+**Interfaces:**
+
+- `Show` has no `notes` field; a v2 `show.json` has no `notes` key.
+- The notes document is
+  `{"format": "e8.notes", "version": 1, "show": "<id>", "notes": [...]}`. This task picks its v2
+  path under a new known document root, adds the root to `KNOWN_ROOTS`, and says why in the
+  commit body.
+- Migration sub-step `notes` (the tenth, after `ids`) takes the notes out of the v1 documents,
+  rewrites each anchor through the ID renames the same migration recorded, and writes the notes
+  document in the same single revision as the v2 documents. A second save writes nothing. A
+  single-file export returns the notes document beside the show.
+- `Anchor` moves to `showpy/show/models.py`, because comments use it; the old path warns until
+  v0.6.0.
+- The seven leaving `notes` names (`Note`, `add_note`, `edit_note`, `remove_note`, `notes_for`,
+  `notes_near`, `accept_draft`) read and write the notes document instead of `Show.notes` and
+  warn `DeprecatedWarning` until 1.0.0 (`remove="1.0.0"`). Their new signatures go in the commit
+  body.
+- D2's note-anchor rewrite and `RewriteReport.orphaned_notes` apply to the notes document.
+
+- [ ] **Step 1:** Tests: `test_regression_v1_notes_move_to_the_notes_document` (for every
+      fixture, each v1 note is in the notes document with the same text, author and time, and
+      the show document has no `notes` key), `test_note_anchors_follow_the_migration_renames`,
+      `test_first_save_writes_notes_in_the_same_revision_and_the_second_none`,
+      `test_notes_functions_warn_until_1_0_0` and `test_anchor_old_path_warns`. Run; expect FAIL.
+- [ ] **Step 2:** Implement, filling only `v1_to_v2_notes.py` among the sub-step modules.
+- [ ] **Step 3:** Regenerate the v2 schema
+      (`SHOWPY_UPDATE_SCHEMA=1 uv run pytest tests/unit/show/test_schema.py`), the migration
+      expectations (`SHOWPY_UPDATE_MIGRATION=1 uv run pytest tests/unit/show/test_migrate.py`,
+      then review the diff), `showpy/__init__.py` and the API snapshot.
+- [ ] **Step 4:** Run all gates and `uv run nox -s slow`. Commit
+      `feat(show)!: move notes out of Show into a notes document` with a `BREAKING CHANGE:`
+      footer naming `Show.notes`, `Anchor` and the seven deprecated `notes` names.
+
+### Task R1: rename the library to e8Show (ADR 0020)
+
+**Gate:** every lane merged, no lane branch or worktree open, ADRs 0020 and 0023 accepted.
+**Fixes:** none. **Files:** the whole tree, by a script kept outside the repository.
+
+**Interfaces:** the distribution and import name `showpy` becomes `e8show`; `ShowPy` becomes
+`e8Show`; `ShowPyError` becomes `E8ShowError`; `SHOWPY_` becomes `E8SHOW_`. No `showpy` alias or
+shim (ADR 0020). The format value becomes `e8.show` and the v2 schema `e8.show.v2.json` (ADR
+0023).
+
+- [ ] **Step 1:** Write the script outside the repository and rehearse it in a scratch clone:
+      run it, then every gate. Fix the script, never its output, and rehearse again until clean.
+- [ ] **Step 2:** In the worktree, run the script. It moves `showpy/` to `e8show/` and rewrites
+      `ShowPyError` to `E8ShowError` before `ShowPy` to `e8Show`, then `showpy` to `e8show` and
+      `SHOWPY_` to `E8SHOW_`. Derived names follow the same rule.
+- [ ] **Step 3:** The script skips, by path or exact string: the three frozen wire names
+      (`showpy-hash/1`, `$showpy:map` with its `$showpy:` prefix, `showpy.font.v1`); the v1
+      schema `showpy.show.v1.json` and its tag `"schema": "showpy.show.v1"`;
+      `tests/fixtures/repos/`; the font files; `CHANGELOG.md` entries and release notes up to
+      and including v0.3.0; ADRs 0001 to 0019.
+- [ ] **Step 4:** Rename the v2 schema to `e8.show.v2.json` and set the format value to
+      `e8.show`.
+- [ ] **Step 5:** Regenerate every generated file: `e8show/__init__.py`, the API snapshot, the
+      schemas, `CHANGELOG.md`, the fixtures' `expected_v2.json` and `docs/error-codes.md`.
+- [ ] **Step 6:** Scripted replacement also edits `>>>` doctest lines (wanted here), so run the
+      doctests, then every gate, Docker included.
+- [ ] **Step 7:** Prove nothing stored moved: `git diff --stat` is empty for
+      `tests/fixtures/repos/`, and the font files show only as 100% renames
+      (`git diff -M100% --stat v0.3.0 -- showpy/fonts e8show/fonts`). Add
+      `test_bundled_font_uris_equal_their_v030_values` (the five URIs copied from v0.3.0).
+- [ ] **Step 8:** Commit `refactor!: rename the library to e8show` with a `BREAKING CHANGE:`
+      footer naming `showpy`, `ShowPyError` and the `SHOWPY_` variables.
+- [ ] **Step 9:** After the maintainer approves: rename the GitHub repository to
+      `abj360/e8Show`, then update `[project.urls]` in its own commit,
+      `build: point the project URLs at the renamed repository`.
 
 ---
 
