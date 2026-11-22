@@ -1373,16 +1373,20 @@ _DEPRECATED: dict[str, tuple[str, str, str]] = {
     "ValidationError": ("showpy.core.errors.ShowValidationError", "0.4.0", "0.6.0"),
 }
 
-_LEAVING_TYPES: dict[str, tuple[str | None, str, str]] = {
+_LEAVING_TYPES: dict[str, tuple[str | tuple[str, ...] | None, str, str]] = {
     "CoordinateSystem": ("Location", "0.4.0", "0.7.0"),
     "CoordinateKind": ("Location", "0.4.0", "0.7.0"),
-    "Landmark": (None, "0.4.0", "0.7.0"),
-    "Zone": (None, "0.4.0", "0.7.0"),
-    "ZoneKind": (None, "0.4.0", "0.7.0"),
+    "Landmark": (("Marking", "markings_near"), "0.4.0", "0.7.0"),
+    "Zone": (("Marking", "markings_near"), "0.4.0", "0.7.0"),
+    "ZoneKind": (("Marking", "markings_near"), "0.4.0", "0.7.0"),
     "SheetCanvas": (None, "0.4.0", "0.6.0"),
     "GuideLine": ("Marking", "0.4.0", "0.7.0"),
-    "SheetStore": (None, "0.4.0", "0.7.0"),
-    "InMemorySheetStore": (None, "0.4.0", "0.7.0"),
+    "SheetStore": (("sheets", "sheet", "field", "floor", "Marking", "on_sheet"), "0.4.0", "0.7.0"),
+    "InMemorySheetStore": (
+        ("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
+        "0.4.0",
+        "0.7.0",
+    ),
 }
 
 __all__ = [

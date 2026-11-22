@@ -106,7 +106,7 @@ def _point_landmark(mark_id: str, name: str, p: Point, *aliases: str) -> Landmar
     )
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("Marking", "markings_near"))
 def point_landmark(mark_id: str, name: str, p: Point, *aliases: str) -> Landmark:
     """Builds a point landmark.
 
@@ -126,7 +126,7 @@ def _line_landmark(mark_id: str, name: str, a: Point, b: Point, *aliases: str) -
     )
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("Marking", "markings_near"))
 def line_landmark(mark_id: str, name: str, a: Point, b: Point, *aliases: str) -> Landmark:
     """Builds a straight line landmark from `a` to `b`.
 
@@ -148,7 +148,11 @@ def _template_ref(ref_id: str) -> SheetRef:
     return format_ref(REF_KIND, ref_id, FIRST_VERSION)
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(
+    since="0.4.0",
+    remove="0.7.0",
+    replacement=("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
+)
 def template_ref(ref_id: str) -> SheetRef:
     """Returns the first-version reference of a built-in sheet.
 
@@ -262,7 +266,7 @@ def _football_field(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> 
     )
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement="field")
 def football_field(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> Sheet:
     """Builds a 120 yd x 160 ft field: yard lines every 5 yd, hashes, sidelines, end lines.
 
@@ -406,7 +410,7 @@ def _gym_floor() -> Sheet:
     )
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement="floor")
 def gym_floor() -> Sheet:
     """Builds a 94 x 50 ft basketball court: lines, center circle, lanes, baskets.
 

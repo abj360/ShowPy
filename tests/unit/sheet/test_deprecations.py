@@ -12,6 +12,8 @@ Contains:
         since and remove to its row
     test_leaving_rows_name_each_removal_release: pins the removal release of every row
     test_leaving_rows_cover_the_decided_names: counts the rows of each group of names
+    test_every_leaving_row_has_its_expected_message: pins one message ending to each of the rows
+    test_only_the_rendering_names_leave_without_a_replacement: keeps three rows plain
 """
 
 import ast
@@ -46,6 +48,7 @@ PIT = Zone(id=ZoneId("pit"), kind=ZoneKind.PIT, polygon=STAGE.zones[0].polygon)
 TAPE = GuideLine(id="tape", kind="custom", points=((0.0, 1.0), (1.0, 1.0)))
 RENDER_NAMES = {"SheetCanvas", "draw_sheet", "render_sheet"}
 FIELD_NAMES = {"Show.coordinates", "Show.zones"}
+type LeavingRow = tuple[str, str, str | tuple[str, ...] | None, str, str]
 
 
 def _draw_sheet_call(draw_sheet: Callable[..., object]) -> object:
@@ -88,40 +91,94 @@ FUNCTION_ROWS = [row for row in LEAVING if row[1] == "function"]
 TYPE_ROWS = [row for row in LEAVING if row[1] == "type"]
 FIELD_ROWS = [row for row in LEAVING if row[1] == "field"]
 PUBLIC_MODULES = {name: module for name, module, _attribute in PUBLIC_API}
+PLAIN = "."
+COORDINATE_WORDING = (
+    "; its replacements `showpy.locate`, `showpy.at_location` and `showpy.Location` "
+    "arrive in 0.7.0."
+)
+SHEET_MARKINGS = "; its replacements `showpy.Marking` and `showpy.markings_near` arrive in 0.7.0."
+SHEET_SHAPE = (
+    "; its replacements `showpy.sheets`, `showpy.sheet`, `showpy.field`, `showpy.floor`, "
+    "`showpy.Marking` and `showpy.on_sheet` arrive in 0.7.0."
+)
 
 
-def _leaving_text(qualified: str, since: str, remove: str, replacement: str | None) -> str:
-    text = f"`{qualified}` is deprecated since {since} and leaves the library in {remove}"
-    if replacement is None:
-        return f"{text}."
-    return f"{text}; its replacement `showpy.{replacement}` arrives in {remove}."
+def _single(replacement: str) -> str:
+    return f"; its replacement `showpy.{replacement}` arrives in 0.7.0."
+
+
+ENDINGS: dict[str, str] = {
+    "to_coords": _single("locate"),
+    "from_coords": _single("at_location"),
+    "coordinate_presets": COORDINATE_WORDING,
+    "set_coordinates": COORDINATE_WORDING,
+    "CoordinateSystem": _single("Location"),
+    "CoordinateKind": _single("Location"),
+    "landmark": SHEET_MARKINGS,
+    "landmark_anchor": SHEET_MARKINGS,
+    "landmark_keys": SHEET_MARKINGS,
+    "nearest_landmarks": _single("markings_near"),
+    "zones_at": SHEET_MARKINGS,
+    "line_landmark": SHEET_MARKINGS,
+    "point_landmark": SHEET_MARKINGS,
+    "add_landmark": SHEET_MARKINGS,
+    "remove_landmark": SHEET_MARKINGS,
+    "add_zone": SHEET_MARKINGS,
+    "remove_zone": SHEET_MARKINGS,
+    "Landmark": SHEET_MARKINGS,
+    "Zone": SHEET_MARKINGS,
+    "ZoneKind": SHEET_MARKINGS,
+    "proscenium_stage": _single("floor"),
+    "SheetCanvas": PLAIN,
+    "draw_sheet": PLAIN,
+    "render_sheet": PLAIN,
+    "sheet_templates": _single("sheets"),
+    "get_sheet": _single("sheet"),
+    "customize": SHEET_SHAPE,
+    "football_field": _single("field"),
+    "gym_floor": _single("floor"),
+    "GuideLine": _single("Marking"),
+    "on_surface": _single("on_sheet"),
+    "blank_sheet": SHEET_SHAPE,
+    "add_guide": SHEET_SHAPE,
+    "remove_guide": SHEET_SHAPE,
+    "save_sheet": SHEET_SHAPE,
+    "template_ref": SHEET_SHAPE,
+    "SheetStore": SHEET_SHAPE,
+    "InMemorySheetStore": SHEET_SHAPE,
+    "Show.coordinates": _single("Location"),
+    "Show.zones": _single("Marking"),
+}
+
+
+def _leaving_text(qualified: str, name: str, remove: str) -> str:
+    text = f"`{qualified}` is deprecated since 0.4.0 and leaves the library in {remove}"
+    return f"{text}{ENDINGS[name]}"
 
 
 @pytest.mark.parametrize("row", FUNCTION_ROWS, ids=[row[0] for row in FUNCTION_ROWS])
-def test_leaving_sheet_names_warn(row: tuple[str, str, str | None, str, str]) -> None:
-    name, _kind, replacement, since, remove = row
+def test_leaving_sheet_names_warn(row: LeavingRow) -> None:
+    name, _kind, _replacement, _since, remove = row
     module = importlib.import_module(PUBLIC_MODULES[name])
     public, implementation = getattr(module, name), getattr(module, f"_{name}")
     with pytest.warns(DeprecatedWarning) as caught:
         result = CALLS[name](public)
     assert len(caught) == 1
-    assert str(caught[0].message) == _leaving_text(
-        f"{module.__name__}.{name}", since, remove, replacement
-    )
+    assert str(caught[0].message) == _leaving_text(f"{module.__name__}.{name}", name, remove)
     assert caught[0].filename == __file__
     assert result == CALLS[name](implementation)
 
 
 @pytest.mark.parametrize("row", TYPE_ROWS, ids=[row[0] for row in TYPE_ROWS])
 def test_leaving_sheet_types_warn_on_top_level_access(
-    row: tuple[str, str, str | None, str, str],
+    row: LeavingRow,
 ) -> None:
-    name, _kind, replacement, since, remove = row
+    name, _kind, _replacement, _since, remove = row
     module = importlib.import_module(PUBLIC_MODULES[name])
     for _ in range(2):
         with pytest.warns(DeprecatedWarning) as caught:
             resolved = getattr(showpy, name)
-        assert str(caught[0].message) == _leaving_text(f"showpy.{name}", since, remove, replacement)
+        assert str(caught[0].message) == _leaving_text(f"showpy.{name}", name, remove)
         assert caught[0].filename == __file__
         assert resolved is getattr(module, name)
     assert name not in vars(showpy)
@@ -133,12 +190,12 @@ def test_leaving_show_sheet_fields_warn() -> None:
     with pytest.warns(DeprecatedWarning) as coordinates:
         assert SHOW.coordinates == SHOW.coordinates
     assert [str(w.message) for w in coordinates] == [
-        _leaving_text("showpy.Show.coordinates", "0.4.0", "0.7.0", None)
+        _leaving_text("showpy.Show.coordinates", "Show.coordinates", "0.7.0")
     ] * 2
     with pytest.warns(DeprecatedWarning) as zones:
         assert SHOW.zones == SHOW.zones
     assert [str(w.message) for w in zones] == [
-        _leaving_text("showpy.Show.zones", "0.4.0", "0.7.0", None)
+        _leaving_text("showpy.Show.zones", "Show.zones", "0.7.0")
     ] * 2
     assert {row[0] for row in FIELD_ROWS} == FIELD_NAMES
     with warnings.catch_warnings(record=True) as caught:
@@ -155,8 +212,8 @@ def test_leaving_show_fields_stay_silent_inside_the_library() -> None:
     assert importlib.import_module("showpy.sheet.bounds")._zones_at(SHOW, POINT) is not None
 
 
-def _decorated_rows() -> dict[str, tuple[str | None, str, str]]:
-    found: dict[str, tuple[str | None, str, str]] = {}
+def _decorated_rows() -> dict[str, tuple[str | tuple[str, ...] | None, str, str]]:
+    found: dict[str, tuple[str | tuple[str, ...] | None, str, str]] = {}
     for path in sorted(SHEET_SOURCE.glob("*.py")):
         for node in ast.parse(path.read_text()).body:
             if not isinstance(node, ast.FunctionDef):
@@ -198,20 +255,15 @@ def test_leaving_rows_cover_the_decided_names() -> None:
     assert len({name for name, *_rest in LEAVING}) == 40
 
 
-REPLACEMENTS = {
-    "to_coords": "locate",
-    "from_coords": "at_location",
-    "CoordinateSystem": "Location",
-    "CoordinateKind": "Location",
-    "nearest_landmarks": "markings_near",
-    "proscenium_stage": "floor",
-    "sheet_templates": "sheets",
-    "get_sheet": "sheet",
-    "GuideLine": "Marking",
-    "on_surface": "on_sheet",
-}
+def test_every_leaving_row_has_its_expected_message() -> None:
+    assert list(ENDINGS) == [name for name, *_rest in LEAVING]
 
 
-def test_leaving_rows_name_only_the_replacements_the_adr_names() -> None:
-    named = {name: replacement for name, _k, replacement, _s, _r in LEAVING if replacement}
-    assert named == REPLACEMENTS
+def test_only_the_rendering_names_leave_without_a_replacement() -> None:
+    plain = {name for name, _kind, replacement, _since, _remove in LEAVING if replacement is None}
+    assert plain == RENDER_NAMES
+    assert [name for name, ending in ENDINGS.items() if ending == PLAIN] == [
+        "SheetCanvas",
+        "draw_sheet",
+        "render_sheet",
+    ]

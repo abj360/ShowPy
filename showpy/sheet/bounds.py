@@ -76,7 +76,7 @@ def _landmark_keys(mark: Landmark) -> tuple[str, ...]:
     return tuple(normalized_name(n) for n in (mark.name, *mark.aliases))
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("Marking", "markings_near"))
 def landmark_keys(mark: Landmark) -> tuple[str, ...]:
     """Returns a landmark's name and aliases, case-folded with spaces collapsed, for matching.
 
@@ -105,7 +105,7 @@ def _landmark(sheet: Sheet, name: str) -> Landmark:
     )
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("Marking", "markings_near"))
 def landmark(sheet: Sheet, name: str) -> Landmark:
     """Finds a landmark by name, ID or alias; case and repeated spaces are ignored.
 
@@ -126,7 +126,7 @@ def _landmark_anchor(mark: Landmark) -> Point:
     return sum(xs) / len(xs), sum(ys) / len(ys)
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("Marking", "markings_near"))
 def landmark_anchor(mark: Landmark) -> Point:
     """Returns the point a landmark stands for: the point itself, else its vertex centroid.
 
@@ -209,7 +209,7 @@ def _zones_at(show: "Show", p: Point, t: Count | None = None) -> list[Zone]:
     ]
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("Marking", "markings_near"))
 def zones_at(show: "Show", p: Point, t: Count | None = None) -> list[Zone]:
     """Lists the sheet zones, then the show zones, that cover `p`.
 

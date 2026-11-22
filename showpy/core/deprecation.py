@@ -8,7 +8,7 @@ Contains:
     renamed_keyword(): resolves a keyword argument that was renamed, warning on the old name
     warn_deprecated(): warns, at the user's calling line, that one use of an API is deprecated
     deprecated_call(): decorates a superseded function so each call warns, then runs it
-    warn_leaving(): warns that a name leaves the library with no replacement
+    warn_leaving(): warns that a name leaves the library, naming any planned replacements
     leaving_call(): decorates a function that leaves the library so each call warns, then runs it
 """
 
@@ -242,24 +242,38 @@ def deprecated_call[**P, R](
     return decorate
 
 
+def _replacement_clause(replacement: str | tuple[str, ...] | None, remove: str) -> str:
+    """Words the end of a leaving message: a full stop, or the replacements and their release."""
+    names = (replacement,) if isinstance(replacement, str) else (replacement or ())
+    quoted = [f"`showpy.{name}`" for name in names]
+    if not quoted:
+        return "."
+    if len(quoted) == 1:
+        return f"; its replacement {quoted[0]} arrives in {remove}."
+    listed = f"{', '.join(quoted[:-1])} and {quoted[-1]}"
+    return f"; its replacements {listed} arrive in {remove}."
+
+
 def warn_leaving(
     old: str,
     *,
     since: str,
     remove: str,
-    replacement: str | None = None,
+    replacement: str | tuple[str, ...] | None = None,
     extra_frames: int = 0,
 ) -> None:
     """Warns DeprecatedWarning that `old` leaves the library, at the user's calling line.
 
-    The message says when the name was deprecated and when it leaves. With a replacement it adds
-    that the replacement arrives in `remove`, the release that removes the old name.
+    The message says when the name was deprecated and when it leaves. With replacements it lists
+    them in the given order and says they arrive in `remove`, the release that removes the old
+    name.
 
     Args:
         old: Dotted public name that leaves, such as `showpy.sheet.render.render_sheet`.
         since: Release that deprecated the name.
-        remove: Release that removes the name; also the release that adds its replacement.
-        replacement: Public name, without the `showpy.` prefix, that replaces it; None if none.
+        remove: Release that removes the name; also the release that adds its replacements.
+        replacement: Public name, or names, without the `showpy.` prefix, that replace it; None
+            if none.
         extra_frames: Frames between the public name's use and this call, such as a helper.
 
     Example:
@@ -268,26 +282,27 @@ def warn_leaving(
         >>> with warnings.catch_warnings(record=True) as caught:
         ...     warnings.simplefilter("always")
         ...     warn_leaving("showpy.old", since="0.4.0", remove="0.7.0")
+        ...     warn_leaving("showpy.old", since="0.4.0", remove="0.7.0", replacement=("a", "b"))
         >>> str(caught[0].message)
         '`showpy.old` is deprecated since 0.4.0 and leaves the library in 0.7.0.'
+        >>> str(caught[1].message).endswith("`showpy.a` and `showpy.b` arrive in 0.7.0.")
+        True
     """
     message = f"`{old}` is deprecated since {since} and leaves the library in {remove}"
-    if replacement is None:
-        message += "."
-    else:
-        message += f"; its replacement `showpy.{replacement}` arrives in {remove}."
+    message += _replacement_clause(replacement, remove)
     warnings.warn(message, DeprecatedWarning, stacklevel=WARNING_STACK_LEVEL + extra_frames)
 
 
 def leaving_call[**P, R](
-    *, since: str, remove: str, replacement: str | None = None
+    *, since: str, remove: str, replacement: str | tuple[str, ...] | None = None
 ) -> Callable[[Callable[P, R]], Callable[P, R]]:
     """Decorates a function that leaves the library so each call warns, then runs it.
 
     Args:
         since: Release that deprecated the function.
-        remove: Release that removes the function; also the release that adds its replacement.
-        replacement: Public name, without the `showpy.` prefix, that replaces it; None if none.
+        remove: Release that removes the function; also the release that adds its replacements.
+        replacement: Public name, or names, without the `showpy.` prefix, that replace it; None
+            if none.
 
     Returns:
         decorator: Wraps a function so every call warns DeprecatedWarning at the caller.

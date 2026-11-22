@@ -11,6 +11,7 @@ Contains:
     names_missing_from_changelog(): lists changed names the Unreleased section never mentions
     has_released_section(): tells whether a changelog lists any released version
     check_snapshot(): compares the API with the stored snapshot and refreshes it when allowed
+    inline_short_arrays(): puts each JSON array on one line when it fits, as Prettier does
     test_public_api_matches_snapshot: fails on any signature drift and checks the changelog
     test_regression_refresh_refuses_a_change_missing_from_the_changelog: fails and keeps the old
         snapshot when refresh mode meets a changed name that Unreleased never names
@@ -30,6 +31,7 @@ Contains:
     test_snapshot_is_stable_across_python_versions: checks reprs carry no version-only text
     test_regression_snapshot_tells_a_frozenset_constant_from_a_list: renders a set constant with
         its type, so a frozenset turned list shows up as a change
+    test_inline_short_arrays_matches_prettier: inlines an array that fits, keeps a long one
 """
 
 import enum
@@ -64,8 +66,9 @@ RELEASED_HEADING = re.compile(r"^## \[?\d+\.\d+\.\d+", re.MULTILINE)
 DEPRECATED_KEY = "deprecated"
 LEAVING_KEY = "leaving"
 RESTORE_COMMAND = "git checkout -- tests/fixtures/api_snapshot.json"
+PRETTIER_PRINT_WIDTH = 100
 
-JsonValue = str | dict[str, "JsonValue"]
+JsonValue = str | list["JsonValue"] | dict[str, "JsonValue"]
 
 
 class _OpaqueDefault:
@@ -179,12 +182,14 @@ def describe_public_object(obj: object) -> JsonValue:
 
 
 def _leaving_entry(
-    kind: str, replacement: str | None, since: str, remove: str
+    kind: str, replacement: str | tuple[str, ...] | None, since: str, remove: str
 ) -> dict[str, JsonValue]:
     """Describes one leaving name; the replacement key is absent when the name has none."""
     entry: dict[str, JsonValue] = {"kind": kind, "since": since, "remove": remove}
-    if replacement is not None:
+    if isinstance(replacement, str):
         entry["replacement"] = replacement
+    elif replacement is not None:
+        entry["replacement"] = list(replacement)
     return entry
 
 
@@ -254,9 +259,39 @@ def _format_failure(diff: dict[str, list[str]], unlisted: list[str]) -> str:
     return "\n".join(lines)
 
 
+def inline_short_arrays(text: str) -> str:
+    """Puts each array of indented JSON on one line when the line fits, as Prettier formats it.
+
+    Args:
+        text: JSON written by `json.dumps` with an indent.
+
+    Returns:
+        formatted: The same JSON, each array that fits the print width on one line.
+    """
+    lines = text.split("\n")
+    out: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        end = index + 1
+        if line.endswith("["):
+            while not lines[end].strip().startswith("]"):
+                end += 1
+            items = ", ".join(item.strip().rstrip(",") for item in lines[index + 1 : end])
+            joined = f"{line}{items}{lines[end].strip()}"
+            if len(joined) <= PRETTIER_PRINT_WIDTH:
+                out.append(joined)
+                index = end + 1
+                continue
+            end = index + 1
+        out.append(line)
+        index = end
+    return "\n".join(out)
+
+
 def _write_snapshot(snapshot: dict[str, JsonValue], path: Path) -> None:
     """Writes the snapshot as sorted, indented JSON with a trailing newline."""
-    path.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
+    path.write_text(inline_short_arrays(json.dumps(snapshot, indent=2, sort_keys=True)) + "\n")
 
 
 def _bootstrap_snapshot(
@@ -432,3 +467,18 @@ def test_has_released_section_reads_both_heading_styles() -> None:
     assert has_released_section("## Unreleased\n\n## [0.2.0] - 2026-11-15\n")
     assert has_released_section("## Unreleased\n\n## 0.2.0\n")
     assert not has_released_section("## Unreleased\n\n- fixed 1.2.3 parsing\n")
+
+
+def test_inline_short_arrays_matches_prettier() -> None:
+    long_item = "x" * PRETTIER_PRINT_WIDTH
+    text = json.dumps({"a": {"short": ["b", "c"], "long": [long_item]}}, indent=2)
+    assert inline_short_arrays(text).split("\n") == [
+        "{",
+        '  "a": {',
+        '    "short": ["b", "c"],',
+        '    "long": [',
+        f'      "{long_item}"',
+        "    ]",
+        "  }",
+        "}",
+    ]

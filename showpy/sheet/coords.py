@@ -120,7 +120,7 @@ def _coordinate_presets(sheet: Sheet) -> list[CoordinateSystem]:
     return unique
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("locate", "at_location", "Location"))
 def coordinate_presets(sheet: Sheet) -> list[CoordinateSystem]:
     """Lists coordinate systems that suit a sheet, its default first, without repeats.
 
@@ -152,7 +152,7 @@ def _set_coordinates(show: "Show", system: CoordinateSystem) -> "Show":
     return show.replace(coordinates=system)
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("locate", "at_location", "Location"))
 def set_coordinates(show: "Show", system: CoordinateSystem) -> "Show":
     """Returns the show with a new coordinate system; stored positions never move.
 

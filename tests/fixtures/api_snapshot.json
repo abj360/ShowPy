@@ -1483,11 +1483,13 @@
     "InMemorySheetStore": {
       "kind": "type",
       "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
       "since": "0.4.0"
     },
     "Landmark": {
       "kind": "type",
       "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
     "SheetCanvas": {
@@ -1498,56 +1500,67 @@
     "SheetStore": {
       "kind": "type",
       "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
       "since": "0.4.0"
     },
     "Show.coordinates": {
       "kind": "field",
       "remove": "0.7.0",
+      "replacement": "Location",
       "since": "0.4.0"
     },
     "Show.zones": {
       "kind": "field",
       "remove": "0.7.0",
+      "replacement": "Marking",
       "since": "0.4.0"
     },
     "Zone": {
       "kind": "type",
       "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
     "ZoneKind": {
       "kind": "type",
       "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
     "add_guide": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
       "since": "0.4.0"
     },
     "add_landmark": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
     "add_zone": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
     "blank_sheet": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
       "since": "0.4.0"
     },
     "coordinate_presets": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["locate", "at_location", "Location"],
       "since": "0.4.0"
     },
     "customize": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
       "since": "0.4.0"
     },
     "draw_sheet": {
@@ -1558,6 +1571,7 @@
     "football_field": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": "field",
       "since": "0.4.0"
     },
     "from_coords": {
@@ -1575,26 +1589,31 @@
     "gym_floor": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": "floor",
       "since": "0.4.0"
     },
     "landmark": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
     "landmark_anchor": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
     "landmark_keys": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
     "line_landmark": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
     "nearest_landmarks": {
@@ -1612,6 +1631,7 @@
     "point_landmark": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
     "proscenium_stage": {
@@ -1623,16 +1643,19 @@
     "remove_guide": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
       "since": "0.4.0"
     },
     "remove_landmark": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
     "remove_zone": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
     "render_sheet": {
@@ -1643,11 +1666,13 @@
     "save_sheet": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
       "since": "0.4.0"
     },
     "set_coordinates": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["locate", "at_location", "Location"],
       "since": "0.4.0"
     },
     "sheet_templates": {
@@ -1659,6 +1684,7 @@
     "template_ref": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
       "since": "0.4.0"
     },
     "to_coords": {
@@ -1670,6 +1696,7 @@
     "zones_at": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     }
   },

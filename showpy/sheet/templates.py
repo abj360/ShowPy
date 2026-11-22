@@ -231,7 +231,11 @@ def _blank_sheet(
     )
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(
+    since="0.4.0",
+    remove="0.7.0",
+    replacement=("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
+)
 def blank_sheet(
     width_m: float, depth_m: float, grid_spacing: float = 1.0, units: str = "m"
 ) -> Sheet:
@@ -288,7 +292,11 @@ def _customize(sheet: Sheet, **changes: object) -> Sheet:
     return Sheet.model_validate(fields)
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(
+    since="0.4.0",
+    remove="0.7.0",
+    replacement=("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
+)
 def customize(sheet: Sheet, **changes: object) -> Sheet:
     """Changes a sheet's name, grid, or size; resizing applies to blank sheets only.
 
@@ -335,7 +343,7 @@ def _add_zone(sheet: Sheet, item: Zone) -> Sheet:
     return _add(sheet, "zones", item)
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("Marking", "markings_near"))
 def add_zone(sheet: Sheet, item: Zone) -> Sheet:
     """Returns a sheet with one more zone, such as a pit or props area.
 
@@ -354,7 +362,7 @@ def _add_landmark(sheet: Sheet, item: Landmark) -> Sheet:
     return _add(sheet, "landmarks", item)
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("Marking", "markings_near"))
 def add_landmark(sheet: Sheet, item: Landmark) -> Sheet:
     """Returns a sheet with one more landmark.
 
@@ -373,7 +381,11 @@ def _add_guide(sheet: Sheet, item: GuideLine) -> Sheet:
     return _add(sheet, "guides", item)
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(
+    since="0.4.0",
+    remove="0.7.0",
+    replacement=("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
+)
 def add_guide(sheet: Sheet, item: GuideLine) -> Sheet:
     """Returns a sheet with one more guide line.
 
@@ -391,7 +403,7 @@ def _remove_zone(sheet: Sheet, zone_id: str) -> Sheet:
     return _remove(sheet, "zones", zone_id)
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("Marking", "markings_near"))
 def remove_zone(sheet: Sheet, zone_id: str) -> Sheet:
     """Returns a sheet without the zone `zone_id`.
 
@@ -409,7 +421,7 @@ def _remove_landmark(sheet: Sheet, landmark_id: str) -> Sheet:
     return _remove(sheet, "landmarks", landmark_id)
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement=("Marking", "markings_near"))
 def remove_landmark(sheet: Sheet, landmark_id: str) -> Sheet:
     """Returns a sheet without the landmark `landmark_id`.
 
@@ -427,7 +439,11 @@ def _remove_guide(sheet: Sheet, guide_id: str) -> Sheet:
     return _remove(sheet, "guides", guide_id)
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(
+    since="0.4.0",
+    remove="0.7.0",
+    replacement=("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
+)
 def remove_guide(sheet: Sheet, guide_id: str) -> Sheet:
     """Returns a sheet without the guide line `guide_id`.
 
@@ -481,7 +497,11 @@ def _save_sheet(store: SheetStore, sheet: Sheet, scope: SheetScope = "mine") -> 
     )
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(
+    since="0.4.0",
+    remove="0.7.0",
+    replacement=("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
+)
 def save_sheet(store: SheetStore, sheet: Sheet, scope: SheetScope = "mine") -> SheetRef:
     """Saves a sheet under the next free version, recording the version it came from.
 

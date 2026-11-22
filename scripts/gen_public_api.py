@@ -96,7 +96,7 @@ def _deprecated() -> tuple[tuple[str, str, str, str], ...]:
     return DEPRECATED
 
 
-def _leaving_types() -> tuple[tuple[str, str | None, str, str], ...]:
+def _leaving_types() -> tuple[tuple[str, str | tuple[str, ...] | None, str, str], ...]:
     """Loads the (name, replacement, since, remove) of each leaving type lazily."""
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
@@ -176,7 +176,7 @@ def _render_tables() -> str:
             *deprecated,
             "}",
             "",
-            "_LEAVING_TYPES: dict[str, tuple[str | None, str, str]] = {",
+            "_LEAVING_TYPES: dict[str, tuple[str | tuple[str, ...] | None, str, str]] = {",
             *leaving,
             "}",
             "",

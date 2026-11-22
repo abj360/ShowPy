@@ -34,7 +34,9 @@ def read_coordinates(show: object) -> object:
         coordinates: The show's `coordinates` value.
     """
     if not _is_library_caller():
-        warn_leaving("showpy.Show.coordinates", since="0.4.0", remove="0.7.0")
+        warn_leaving(
+            "showpy.Show.coordinates", since="0.4.0", remove="0.7.0", replacement="Location"
+        )
     return vars(show)["coordinates"]
 
 
@@ -48,5 +50,5 @@ def read_zones(show: object) -> object:
         zones: The show's `zones` value.
     """
     if not _is_library_caller():
-        warn_leaving("showpy.Show.zones", since="0.4.0", remove="0.7.0")
+        warn_leaving("showpy.Show.zones", since="0.4.0", remove="0.7.0", replacement="Marking")
     return vars(show)["zones"]

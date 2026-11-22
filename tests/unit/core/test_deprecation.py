@@ -24,6 +24,8 @@ Contains:
     is_scan_skipped(): tells whether the scan skips a module (only the root __init__.py)
     test_deprecation_scan_*(): attribute calls, malformed `remove`, scoped local defs, skips
     test_every_deprecated_keyword_row_names_real_parameters: checks each row's old and new keyword
+    test_warn_leaving_words_any_number_of_replacements: words none, one, two and three names
+    test_leaving_call_names_several_replacements: lists each name in its given order
 """
 
 import ast
@@ -208,7 +210,8 @@ def test_deprecations_are_removed_on_time() -> None:
 
 
 def overdue_leaving_rows(
-    rows: tuple[tuple[str, str, str | None, str, str], ...], current: tuple[int, int]
+    rows: tuple[tuple[str, str, str | tuple[str, ...] | None, str, str], ...],
+    current: tuple[int, int],
 ) -> list[str]:
     """Lists the leaving names whose removal release is the current release or an earlier one."""
     overdue = []
@@ -220,7 +223,7 @@ def overdue_leaving_rows(
 
 
 def test_leaving_scan_flags_a_type_row_past_its_removal_version() -> None:
-    rows = (("Landmark", "type", "Marking", "0.4.0", "0.7.0"),)
+    rows = (("Landmark", "type", ("Marking", "markings_near"), "0.4.0", "0.7.0"),)
     assert overdue_leaving_rows(rows, (0, 6)) == []
     assert overdue_leaving_rows(rows, (0, 7)) == ["Landmark (remove 0.7.0)"]
 
@@ -451,6 +454,56 @@ def test_leaving_call_names_the_replacement_when_there_is_one() -> None:
         f"`{__name__}._leaving_function_with_replacement` is deprecated since 0.4.0 and leaves "
         "the library in 99.0.0; its replacement `showpy.newer` arrives in 99.0.0."
     )
+
+
+TWO_REPLACEMENTS_TEXT = (
+    "`showpy.old` is deprecated since 0.4.0 and leaves the library in 0.7.0; "
+    "its replacements `showpy.Marking` and `showpy.markings_near` arrive in 0.7.0."
+)
+THREE_REPLACEMENTS_TEXT = (
+    "`showpy.old` is deprecated since 0.4.0 and leaves the library in 0.7.0; "
+    "its replacements `showpy.locate`, `showpy.at_location` and `showpy.Location` arrive in 0.7.0."
+)
+
+
+def _use_leaving_name_replaced_by(replacement: str | tuple[str, ...] | None) -> None:
+    warn_leaving("showpy.old", since="0.4.0", remove="0.7.0", replacement=replacement)
+
+
+@pytest.mark.parametrize(
+    ("replacement", "text"),
+    [
+        (None, LEAVING_TEXT),
+        ("new", REPLACEMENT_TEXT),
+        (("new",), REPLACEMENT_TEXT),
+        (("Marking", "markings_near"), TWO_REPLACEMENTS_TEXT),
+        (("locate", "at_location", "Location"), THREE_REPLACEMENTS_TEXT),
+    ],
+    ids=["none", "one", "one-in-a-tuple", "two", "three"],
+)
+def test_warn_leaving_words_any_number_of_replacements(
+    replacement: str | tuple[str, ...] | None, text: str
+) -> None:
+    with pytest.warns(DeprecatedWarning) as caught:
+        _use_leaving_name_replaced_by(replacement)
+    assert str(caught[0].message) == text
+    assert caught[0].filename == __file__
+
+
+@leaving_call(since="0.4.0", remove="99.0.0", replacement=("sheets", "sheet", "field"))
+def _leaving_function_with_replacements() -> str:
+    return "ran"
+
+
+def test_leaving_call_names_several_replacements() -> None:
+    with pytest.warns(DeprecatedWarning) as caught:
+        assert _leaving_function_with_replacements() == "ran"
+    assert str(caught[0].message) == (
+        f"`{__name__}._leaving_function_with_replacements` is deprecated since 0.4.0 and leaves "
+        "the library in 99.0.0; its replacements `showpy.sheets`, `showpy.sheet` and "
+        "`showpy.field` arrive in 99.0.0."
+    )
+    assert caught[0].filename == __file__
 
 
 def test_leaving_call_warns_on_each_call_and_runs_the_function() -> None:
