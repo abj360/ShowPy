@@ -134,3 +134,44 @@ No release has ever written or read `"format": "showpy.show"`: the commits that 
   `Show`).
 - Code: `showpy/show/migrate.py` (`FORMAT`, `CURRENT_VERSION`), `showpy/show/migrations/`,
   `showpy/export/data.py` (`SCHEMA_TAG`), `showpy/schemas/`, `tests/fixtures/repos/`.
+
+## Addendum 2026-11-22: v3 ships at v0.7.0
+
+The maintainer accepted a rule on 2026-11-22: no public name is removed before its replacement
+exists (ADR 0021, addendum of the same date). The replacements for the sheet, coordinate and
+marking names arrive in v0.7.0, and v3 stores their shapes and drops the fields they replace. So
+v3 ships at v0.7.0, not v0.6.0. Earlier sections stay as written; where they say "v3 at v0.6.0",
+read v0.7.0.
+
+- **v0.6.0 keeps writing v2.** It reads v1 and v2 and adds no stored shape. Its single-file form
+  is the v2 form.
+- **One v3 step at v0.7.0.** It carries every v2-to-v3 sub-step: the sheet copy, prop spots, path
+  segments, facing modes, set titles and time anchors. The same step drops `Show.coordinates`,
+  `Show.zones` and `Spot.claimable` and lists them in its report. No number is rewritten.
+- **`Spot.claimable` moves to v0.7.0.** ADR 0021's addendum first kept its removal at v0.6.0,
+  with the other publishing names. A v0.6.0 removal would need a way to drop the field without
+  v3, and v2 documents that carry it would then need a second reading rule. Both ADRs now say
+  v0.7.0: the field warns from v0.4.0, is still written as in v2 until v0.7.0, and the v3 step
+  drops it.
+- **The proscenium stage** migrates to a `floor` in the same step.
+
+Who reads and writes what, corrected (it replaces the v0.6.0 row of the table above and adds the
+later rows):
+
+| Release            | Reads                      | Writes       | Single-file form                 |
+| ------------------ | -------------------------- | ------------ | -------------------------------- |
+| `v0.5.0`, `v0.6.0` | v1, v2; repository layouts | v2; layout 2 | The same, v2 header              |
+| `v0.7.0`           | v1, v2, v3                 | v3           | The same, v3                     |
+| `v1.0.0`           | v1, v2, v3 as JSON; `.e8s` | `.e8s` (v3)  | `.e8s`; plain JSON for debugging |
+
+Effects on the sections above:
+
+- Consequences: shows written by v0.4.0 to v0.6.0 carry version 2; shows written by v0.7.0 carry
+  version 3. A v0.4.0 to v0.6.0 reader refuses version 3 with `VersionError`. The two-step chain
+  (`v1_to_v2`, `v2_to_v3`) exists from v0.7.0. Hosts upgrading from v0.3.0 to v0.7.0 migrate
+  through both steps in one load. The release notes of v0.7.0, not v0.6.0, tell hosts to copy a
+  repository before its first write.
+- Numbers: format versions written from v0.4.0 to v0.7.0 are 2 (v2 from v0.4.0, v3 from
+  v0.7.0). There is still one format version per release.
+- What would change our mind: read "v0.6.0 shape" as "v0.7.0 shape". A shape that slips past
+  v0.7.0 arrives in v4, never by editing the v3 step after a release writes it.
