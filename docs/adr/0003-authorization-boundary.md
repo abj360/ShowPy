@@ -151,3 +151,30 @@ maintainer will build it there (2026-11-15).
   Consequences and Numbers above. Controller ruling L-A5: the plan's 300 ms target applies to
   the steady (warm) path; the cold first-commit cost is a Phase 3 item, solved by decoding per
   document. A host that saves once per process (a CLI) sees about 0.5 s on that save until then.
+
+## Addendum 2026-11-22: permissions stay with the host, and `actor` is not restored
+
+- **The library adds no permission layer, now or later.** The maintainer decided on 2026-11-22
+  that permissions stay in the host app for good, not only until a second host appears. The
+  library will not add sessions, an access error class, an `ACCESS_DENIED` error code, owner
+  columns on workspace documents, or grants that limit who may read names. Reason: decision 1
+  above still holds. Which person or agent may change which document is a product rule, and
+  every such rule in the library would be one a host must either trust or work around.
+- **What the library gives a host to decide with.** `diff_show(before, after)` reports every
+  changed set, spot, form and path; `Revision.changed` lists the stored paths a revision touched;
+  a later release adds a report of ID changes, so a host can follow renamed spots and sets in what
+  it stores outside the library. Locks and pins stay a design rule that every caller meets
+  (decision 4): edit functions raise `LockedError` on pinned or locked items unless the caller
+  passes `force=True`.
+- **`actor` is not restored on revisions.** As shipped in v0.3.0, `Revision` holds `id`,
+  `parent`, `at` and `changed` and nothing else: no `actor`, `message` or `kind`
+  (`showpy/show/models.py:335-349` on `main` at `8b92d66`; lines 317-331 in the `v0.3.0` tag).
+  The only person-naming field left in `showpy/show/models.py` is `Comment.author` (line 367), part
+  of what a comment says. Reason: the three reasons of the second rejected alternative above are
+  unchanged. A fixed label cannot name a person or an agent run, the library cannot verify it,
+  and the host already knows who is acting.
+- **If a host ever needs one.** An optional `actor: str` label on `Revision` is an additive field
+  in a later stored format version. It would be a record the host writes, never a check the
+  library makes.
+- **What would change our mind** is unchanged: a second host that needs the same ownership rules,
+  or sessions served by the library itself over RPC or HTTP.
