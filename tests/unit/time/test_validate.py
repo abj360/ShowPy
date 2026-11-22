@@ -148,7 +148,9 @@ def test_cue_labels_must_be_unique_and_durations_non_negative() -> None:
 
 
 def test_measures_must_have_positive_lengths() -> None:
-    bad = MeasureSetting(counts_per_measure=4.0, changes=((8.0, 0.0),))
+    bad = MeasureSetting.model_construct(
+        counts_per_measure=4.0, start_measure=1, changes=((8.0, 0.0),)
+    )
     assert _codes(_counts(measures=bad)) == ["MEASURE_LENGTH"]
 
 

@@ -8,7 +8,9 @@ Contains:
 
 import math
 from dataclasses import dataclass
+from itertools import pairwise
 
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import TimelineError, TimeRangeError
 from showpy.core.types import Count
 from showpy.time.models import MeasureLabel, MeasureSetting, Timeline
@@ -23,9 +25,25 @@ class _Segment:
     first_measure: int
 
 
+def _require_valid_setting(setting: MeasureSetting) -> None:
+    lengths = [setting.counts_per_measure, *(length for _, length in setting.changes)]
+    counts = [at_count for at_count, _ in setting.changes]
+    is_valid = all(math.isfinite(length) and length > 0 for length in lengths)
+    is_valid = is_valid and all(math.isfinite(at) and at >= 0 for at in counts)
+    is_valid = is_valid and all(after > before for before, after in pairwise(counts))
+    if not is_valid:
+        raise TimelineError(
+            "measure lengths must be above 0 and change counts must increase from 0",
+            hint="give counts_per_measure and every change length above 0, one change per count",
+            code=ErrorCode.MEASURE_LENGTH,
+            context={"counts_per_measure": setting.counts_per_measure, "changes": setting.changes},
+        )
+
+
 def _segments(setting: MeasureSetting) -> list[_Segment]:
+    _require_valid_setting(setting)
     segments = [_Segment(0.0, setting.counts_per_measure, setting.start_measure)]
-    for at_count, length in sorted(setting.changes):
+    for at_count, length in setting.changes:
         previous = segments[-1]
         elapsed = math.ceil((at_count - previous.start) / previous.length - MEASURE_TOL)
         segments.append(_Segment(at_count, length, previous.first_measure + elapsed))
@@ -72,6 +90,12 @@ def measure_to_count(tl: Timeline, measure: int, count_in_measure: float = 1.0) 
         raise TimelineError(
             "measures are off",
             hint="turn them on with set_measures(tl, MeasureSetting(...))",
+            context={"measure": measure},
+        )
+    if isinstance(measure, bool) or not isinstance(measure, int):
+        raise TimeRangeError(
+            f"measure {measure!r} is not a whole number",
+            hint="measures are numbered 1, 2, 3, ...; pass an int",
             context={"measure": measure},
         )
     _require_measure(tl.measures, measure)

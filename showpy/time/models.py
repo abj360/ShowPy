@@ -22,7 +22,14 @@ from typing import TYPE_CHECKING, Self
 
 from pydantic import model_validator
 
-from showpy.core.types import Count, CountsPerMinute, FrozenModel, Seconds
+from showpy.core.types import (
+    Count,
+    CountsPerMinute,
+    FrozenModel,
+    NonNegCount,
+    PositiveFinite,
+    Seconds,
+)
 
 if TYPE_CHECKING:
     from showpy.time.clock import CompiledClock
@@ -100,14 +107,22 @@ class MeasureSetting(FrozenModel):
     """Configures measure numbering for designers who talk in measures.
 
     Attributes:
-        counts_per_measure: Measure length from count 0.
+        counts_per_measure: Measure length from count 0; finite and above 0.
         start_measure: Number of the measure that starts at count 0.
-        changes: (count, new length) pairs; each starts a new measure at its count.
+        changes: (count, new length) pairs; each starts a new measure at its count. Counts are
+            at least 0 and strictly increasing, lengths finite and above 0.
     """
 
-    counts_per_measure: float
+    counts_per_measure: PositiveFinite
     start_measure: int = 1
-    changes: tuple[tuple[Count, float], ...] = ()
+    changes: tuple[tuple[NonNegCount, PositiveFinite], ...] = ()
+
+    @model_validator(mode="after")
+    def _require_increasing_changes(self) -> Self:
+        counts = [at_count for at_count, _ in self.changes]
+        if any(after <= before for before, after in pairwise(counts)):
+            raise ValueError(f"measure change counts {counts} must increase, one change per count")
+        return self
 
 
 class MeasureLabel(FrozenModel):

@@ -803,7 +803,7 @@
     },
     "MeasureSetting": {
       "additionalProperties": false,
-      "description": "Configures measure numbering for designers who talk in measures.\n\nAttributes:\n    counts_per_measure: Measure length from count 0.\n    start_measure: Number of the measure that starts at count 0.\n    changes: (count, new length) pairs; each starts a new measure at its count.",
+      "description": "Configures measure numbering for designers who talk in measures.\n\nAttributes:\n    counts_per_measure: Measure length from count 0; finite and above 0.\n    start_measure: Number of the measure that starts at count 0.\n    changes: (count, new length) pairs; each starts a new measure at its count. Counts are\n        at least 0 and strictly increasing, lengths finite and above 0.",
       "properties": {
         "changes": {
           "default": [],
@@ -812,10 +812,10 @@
             "minItems": 2,
             "prefixItems": [
               {
-                "$ref": "#/$defs/Count"
+                "$ref": "#/$defs/NonNegCount"
               },
               {
-                "type": "number"
+                "$ref": "#/$defs/PositiveFinite"
               }
             ],
             "type": "array"
@@ -824,8 +824,7 @@
           "type": "array"
         },
         "counts_per_measure": {
-          "title": "Counts Per Measure",
-          "type": "number"
+          "$ref": "#/$defs/PositiveFinite"
         },
         "start_measure": {
           "default": 1,
@@ -842,6 +841,11 @@
     "Meters": {
       "maximum": 1000000.0,
       "minimum": -1000000.0,
+      "type": "number"
+    },
+    "NonNegCount": {
+      "maximum": 1000000,
+      "minimum": 0,
       "type": "number"
     },
     "Note": {
@@ -1191,6 +1195,10 @@
         }
       ],
       "type": "array"
+    },
+    "PositiveFinite": {
+      "exclusiveMinimum": 0,
+      "type": "number"
     },
     "Region": {
       "additionalProperties": false,

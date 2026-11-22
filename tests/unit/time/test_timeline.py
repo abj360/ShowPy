@@ -227,10 +227,13 @@ def test_set_and_clear_measures() -> None:
 
 
 def test_set_measures_rejects_non_positive_length() -> None:
+    with pytest.raises(ShowPyError):
+        MeasureSetting(counts_per_measure=0.0)
+    with pytest.raises(ShowPyError):
+        MeasureSetting(counts_per_measure=4.0, changes=((8.0, -2.0),))
+    unchecked = MeasureSetting.model_construct(counts_per_measure=0.0, start_measure=1, changes=())
     with pytest.raises(TimelineError):
-        set_measures(_counts(), MeasureSetting(counts_per_measure=0.0))
-    with pytest.raises(TimelineError):
-        set_measures(_counts(), MeasureSetting(counts_per_measure=4.0, changes=((8.0, -2.0),)))
+        set_measures(_counts(), unchecked)
 
 
 def test_attach_audio_rejects_duplicate_label_and_remove_works() -> None:

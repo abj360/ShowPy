@@ -643,8 +643,8 @@
   },
   "MeasureSetting": {
     "model": {
-      "changes": "tuple[tuple[Count, float], ...]",
-      "counts_per_measure": "float",
+      "changes": "tuple[tuple[NonNegCount, PositiveFinite], ...]",
+      "counts_per_measure": "PositiveFinite",
       "start_measure": "int"
     }
   },
