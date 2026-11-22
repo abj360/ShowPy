@@ -310,6 +310,7 @@
       "REFLECTION": "'REFLECTION'",
       "SCHEMA": "'SCHEMA'",
       "SEGMENT_BOUND": "'SEGMENT_BOUND'",
+      "SHOW_TOO_LONG": "'SHOW_TOO_LONG'",
       "SPACING": "'SPACING'",
       "STAGE": "'STAGE'",
       "STALE_FORM": "'STALE_FORM'",

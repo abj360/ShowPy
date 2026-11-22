@@ -123,6 +123,8 @@ class ErrorCode(StrEnum):
     """Data fails its schema or text format."""
     SEGMENT_BOUND = "SEGMENT_BOUND"
     """A compiled path segment strays further from its motion than the engine allows."""
+    SHOW_TOO_LONG = "SHOW_TOO_LONG"
+    """The show's total counts exceed MAX_COUNTS."""
     SPACING = "SPACING"
     """Items do not fit in the space or count given."""
     STAGE = "STAGE"

@@ -22,6 +22,7 @@ from showpy.choreo.engine import PathEngine
 from showpy.choreo.match_ops import forms_of_set
 from showpy.choreo.models import Set
 from showpy.choreo.path_models import TransitionSpec
+from showpy.core.caps import MAX_COUNTS
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import ContinuityError, SchemaError, ShowPyError
 from showpy.core.ids import check_id, check_sheet_id, format_tid, parse_ref
@@ -408,6 +409,22 @@ def _non_finite(show: Show) -> list[ValidationIssue]:
     ]
 
 
+def _too_long(show: Show) -> list[ValidationIssue]:
+    total = math.fsum(s.counts for s in show.sets if math.isfinite(s.counts))
+    if total <= MAX_COUNTS:
+        return []
+    return [
+        ValidationIssue(
+            level=ERROR,
+            code=ErrorCode.SHOW_TOO_LONG,
+            where="sets",
+            message=f"set counts add up to {total:g}, past MAX_COUNTS",
+            hint=f"keep the whole show within MAX_COUNTS ({MAX_COUNTS:,} counts)",
+            context={"total": total, "max": MAX_COUNTS},
+        )
+    ]
+
+
 def _path_reports(show: Show) -> list[ValidationReport]:
     reports = []
     for tid in show.transition_ids():
@@ -431,8 +448,10 @@ def validate_show(show: Show, store: SheetStore | None = None) -> ValidationRepo
     True
     """
     reports = [validate_set(show, s) for s in show.sets]
-    reports += _path_reports(show)
-    extra = _sequence(show) + _form_keys(show) + _selections(show) + _ids(show)
+    too_long = _too_long(show)
+    if not too_long:
+        reports += _path_reports(show)
+    extra = too_long + _sequence(show) + _form_keys(show) + _selections(show) + _ids(show)
     extra += _non_finite(show)
     reports.append(ValidationReport(issues=tuple(extra)))
     reports.append(validate_timeline(show.timeline))

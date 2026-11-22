@@ -64,6 +64,8 @@ Contains:
         coordinate
     test_regression_validate_show_reports_comments_anchored_to_missing_items: reports a comment
         anchored to a set that does not exist
+    test_regression_validate_show_reports_a_show_longer_than_max_counts: reports a show whose set
+        counts add up past MAX_COUNTS
     test_regression_validate_show_warns_about_stale_forms: warns about a form its set no longer
         lists
     test_validate_show_accepts_a_set_whose_forms_are_all_listed: raises no stale-form warning when
@@ -86,6 +88,7 @@ from showpy.choreo.path_models import (
     TransitionSpec,
     Waypoint,
 )
+from showpy.core.caps import MAX_COUNTS
 from showpy.core.ids import FormId, SetId, SpotId, make_tid
 from showpy.core.types import Region
 from showpy.core.validation import ValidationReport
@@ -534,6 +537,18 @@ def test_regression_validate_show_reports_comments_anchored_to_missing_items() -
     comment = Comment(id="c1", anchor=Anchor.on_set(GHOST), text="check")
     report = validate(two_set_show(), comments=(comment,))
     assert any(GHOST in f"{i.where} {i.message}" for i in report.issues)
+
+
+def test_regression_validate_show_reports_a_show_longer_than_max_counts() -> None:
+    """Reports a show whose set counts add up past MAX_COUNTS, and never raises."""
+    show = two_set_show()
+    long_second = show.sets[1].model_copy(update={"counts": float(MAX_COUNTS)})
+    third = long_second.model_copy(update={"id": "3", "key": None, "counts": 1.0})
+    report = validate_show(_edited(sets=(show.sets[0], long_second, third)))
+    (issue,) = [i for i in report.issues if i.code == "SHOW_TOO_LONG"]
+    assert "MAX_COUNTS" in issue.message
+    assert f"{MAX_COUNTS:,}" in issue.hint
+    assert dict(issue.context) == {"total": MAX_COUNTS + 1.0, "max": MAX_COUNTS}
 
 
 def test_regression_validate_show_warns_about_stale_forms() -> None:
