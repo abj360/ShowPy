@@ -7,8 +7,9 @@ Contains:
     test_fuzz_from_coords_text(): reads arbitrary text, long or short style
     test_fuzz_from_coords_unicode_digits(): reads text built from digits of every script
     test_fuzz_from_coords_long_numbers(): reads digit runs far beyond float range
-    test_fuzz_from_coords_huge_origin(): reads huge numbers from a huge finite origin
-    test_fuzz_to_coords_huge_origin(): words huge points from a huge finite origin
+    test_fuzz_huge_origin_is_refused(): refuses an origin past MAX_COORD_M with SchemaError
+    test_fuzz_from_coords_huge_origin(): reads huge numbers from the largest legal origin
+    test_fuzz_to_coords_huge_origin(): words huge points from the largest legal origin
     test_fuzz_from_coords_systems(): reads text under any coordinate system, valid or not
     test_fuzz_to_coords_floats(): words arbitrary floats, NaN, infinities and huge values included
     test_fuzz_to_coords_systems(): words a point under any coordinate system, valid or not
@@ -22,7 +23,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.core.errors import ShowPyError
+from showpy.core.caps import MAX_COORD_M
+from showpy.core.errors import SchemaError, ShowPyError
 from showpy.examples import two_set_show
 from showpy.sheet.coords import from_coords, to_coords
 from showpy.sheet.models import CoordinateKind, CoordinateSystem
@@ -99,9 +101,16 @@ LONG_NUMBER_TEXT = st.one_of(
 )
 
 
-HUGE_ORIGIN_SHOW = SHOW.model_copy(
-    update={"coordinates": CoordinateSystem(origin=(1.7e308, -1.7e308))}
+HUGE_ORIGIN = (1.7e308, -1.7e308)
+EDGE_ORIGIN_SHOW = SHOW.model_copy(
+    update={"coordinates": CoordinateSystem(origin=(MAX_COORD_M, -MAX_COORD_M))}
 )
+
+
+def test_fuzz_huge_origin_is_refused() -> None:
+    """Refuses the old 1.7e308 origin; the fuzz targets below read from the largest legal one."""
+    with pytest.raises(SchemaError):
+        CoordinateSystem(origin=HUGE_ORIGIN)
 
 
 def _assert_finite_wording(show: Show, point: tuple[float, float], style: str) -> None:
@@ -116,16 +125,16 @@ def _assert_finite_wording(show: Show, point: tuple[float, float], style: str) -
     sign_flip=st.booleans(),
 )
 def test_fuzz_from_coords_huge_origin(digits: int, unit_code: str, sign_flip: bool) -> None:
-    """Reads large numbers from a huge finite origin without returning an infinite point."""
+    """Reads large numbers from the largest legal origin without returning an infinite point."""
     text = f"{unit_code}{'9' * digits} {'U' if unit_code in 'RL' else 'R'}1"
-    show = HUGE_ORIGIN_SHOW if sign_flip else SHOW
+    show = EDGE_ORIGIN_SHOW if sign_flip else SHOW
     _only_errors_or_finite(show, text, text)
 
 
 @given(x=st.sampled_from([1.7e308, -1.7e308, 1e300]), y=st.sampled_from([1.7e308, -1.7e308, 0.0]))
 def test_fuzz_to_coords_huge_origin(x: float, y: float) -> None:
-    """Words huge finite points from a huge finite origin; only ShowPyError may escape."""
-    only_showpy_errors(lambda: _assert_finite_wording(HUGE_ORIGIN_SHOW, (x, y), "long"), (x, y))
+    """Words huge finite points from the largest legal origin; only ShowPyError may escape."""
+    only_showpy_errors(lambda: _assert_finite_wording(EDGE_ORIGIN_SHOW, (x, y), "long"), (x, y))
 
 
 @given(text=st.one_of(st.text(), st.text(min_size=2000, max_size=6000)))

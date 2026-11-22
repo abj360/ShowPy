@@ -17,8 +17,9 @@ Contains:
         float instead of returning an infinite point
     test_regression_unvalidated_origin_is_rejected(): rejects a NaN, infinite or malformed origin
         instead of returning or printing garbage
-    test_regression_from_coords_rejects_overflowing_result(): rejects a point whose sum with a huge
-        origin overflows, instead of returning an infinite point
+    test_regression_from_coords_rejects_overflowing_result(): refuses an origin past MAX_COORD_M,
+        and reads a 308-digit offset from the largest legal origin as a finite point or a
+        ShowPyError, never an infinite point
     test_regression_unvalidated_audience_side_is_rejected(): rejects an audience side outside the
         four sides with a ShowPyError, not KeyError
     test_regression_to_coords_rejects_unknown_style(): rejects an unknown style instead of silently
@@ -36,10 +37,12 @@ Contains:
         space before the unit
 """
 
+import math
 from typing import Any
 
 import pytest
 
+from showpy.core.caps import MAX_COORD_M
 from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
 from showpy.core.ids import LandmarkId
 from showpy.core.util import approx_equal
@@ -296,15 +299,30 @@ def test_regression_unvalidated_audience_side_is_rejected() -> None:
 
 
 def test_regression_from_coords_rejects_overflowing_result() -> None:
-    """Rejects "R999..9 U1" (308 digits) from origin 1.7e308, not (inf, 1.0) (UP-9.4-51)."""
-    show = set_coordinates(two_set_show(), CoordinateSystem(origin=(1.7e308, 0.0)))
-    with pytest.raises(ShowPyError):
-        from_coords(show, "R" + "9" * 308 + " U1")
+    """Never returns (inf, 1.0) for "R999..9 U1" (308 digits) from the farthest origin (UP-9.4-51).
+
+    Origin 1.7e308 overflowed the sum; the coordinate bound now refuses that origin itself, so
+    the read runs from the largest legal origin.
+    """
+    with pytest.raises(SchemaError):
+        CoordinateSystem(origin=(1.7e308, 0.0))
+    show = set_coordinates(two_set_show(), CoordinateSystem(origin=(MAX_COORD_M, 0.0)))
+    try:
+        point = from_coords(show, "R" + "9" * 308 + " U1")
+    except ShowPyError:
+        return
+    assert all(math.isfinite(axis) for axis in point)
 
 
 def test_regression_to_coords_rejects_non_finite_wording() -> None:
-    """Rejects points whose local offset or rounded value is nan or inf (UP-9.4-52)."""
-    shifted = set_coordinates(two_set_show(), CoordinateSystem(origin=(1.7e308, -1.7e308)))
+    """Rejects points whose local offset or rounded value is nan or inf (UP-9.4-52).
+
+    The coordinate bound refuses the old 1.7e308 origin, so the shift runs from the largest legal
+    origin.
+    """
+    with pytest.raises(SchemaError):
+        CoordinateSystem(origin=(1.7e308, -1.7e308))
+    shifted = set_coordinates(two_set_show(), CoordinateSystem(origin=(MAX_COORD_M, -MAX_COORD_M)))
     with pytest.raises(ShowPyError):
         to_coords(shifted, (-1.7e308, 1.7e308))
     coarse = two_set_show().model_copy(update={"coordinates": CoordinateSystem(precision=1e308)})

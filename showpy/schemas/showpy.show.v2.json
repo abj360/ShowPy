@@ -265,10 +265,12 @@
       "type": "object"
     },
     "Count": {
+      "maximum": 1000000,
+      "minimum": -1000000,
       "type": "number"
     },
     "CountsPerMinute": {
-      "exclusiveMinimum": 0,
+      "minimum": 0.001,
       "type": "number"
     },
     "Cue": {
@@ -838,6 +840,8 @@
       "type": "object"
     },
     "Meters": {
+      "maximum": 1000000.0,
+      "minimum": -1000000.0,
       "type": "number"
     },
     "Note": {
@@ -1180,10 +1184,10 @@
       "minItems": 2,
       "prefixItems": [
         {
-          "type": "number"
+          "$ref": "#/$defs/Meters"
         },
         {
-          "type": "number"
+          "$ref": "#/$defs/Meters"
         }
       ],
       "type": "array"

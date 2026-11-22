@@ -10,6 +10,7 @@ Contains:
     VersionError: reports a pinned version that is missing or incompatible
     SchemaError: reports data that fails its schema or text format
     schema_error_from(): converts a pydantic ValidationError into a SchemaError
+    BOUND_KEY, ALLOWED_KEY: name the error-context keys that carry a value's named bound
     field_errors(): returns the per-field errors of a converted SchemaError or re-raises it
     GeometryError: reports a degenerate shape
     ZeroLengthError: reports a request for the direction of a zero vector
@@ -52,6 +53,8 @@ from showpy.core.json_types import JsonValue
 MAX_LISTED_ERRORS = 5
 ROOT_LOC = "(root)"
 SCHEMA_ERROR_HINT = "fix the fields named in context"
+BOUND_KEY = "bound"
+ALLOWED_KEY = "allowed"
 
 
 class ShowPyError(Exception):

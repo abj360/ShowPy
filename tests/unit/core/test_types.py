@@ -39,6 +39,12 @@ Contains:
     test_json_value_is_the_one_shared_alias: exports the JsonValue that canonical encoding uses
     test_json_object_stores_a_read_only_mapping: stores a JSON object as a read-only mapping
     test_json_object_*(): deep freezing, plain JSON dumps and schema, round trips and hashing
+    test_regression_placement_rejects_a_huge_coordinate: refuses a 2e300 m spot coordinate
+    test_regression_box2_rejects_a_huge_corner: refuses a 2e300 m corner in a coordinate tuple
+    test_regression_tempo_section_rejects_a_vanishing_tempo: refuses 1e-320 counts per minute
+    test_regression_spline_rejects_a_huge_control_point: refuses a 2e300 m spline point
+    test_bounded_aliases_accept_their_bound: accepts each bound exactly
+    test_bounded_aliases_refuse_the_next_float_past_their_bound: refuses one ulp past each bound
 """
 
 import inspect
@@ -53,11 +59,12 @@ from pydantic import TypeAdapter
 from pydantic import ValidationError as PydanticValidationError
 
 from showpy.cast.models import Shape
-from showpy.choreo.models import Set
+from showpy.choreo.models import Placement, Set
 from showpy.choreo.path_models import Waypoint
 from showpy.core import canonical, json_types
+from showpy.core.caps import MAX_COORD_M, MAX_COUNTS, MIN_TEMPO
 from showpy.core.errors import SchemaError, ShowPyError, field_errors
-from showpy.core.ids import LandmarkId, SetId
+from showpy.core.ids import LandmarkId, SetId, SpotId
 from showpy.core.readonly import ReadOnlyMap
 from showpy.core.types import (
     Box2,
@@ -72,11 +79,15 @@ from showpy.core.types import (
     NonNegCount,
     NonNegFinite,
     NonNegSeconds,
+    Point,
+    Point3,
     PositiveFinite,
     PositiveMeters,
     Region,
+    Ring,
     Seconds,
 )
+from showpy.geo.curves import curve_from_construction
 from showpy.sheet.models import Landmark
 from showpy.time.models import TempoSection
 
@@ -395,3 +406,86 @@ def test_json_object_models_hash_by_content() -> None:
     first = _JsonHolder(payload={"a": [1, {"b": 2}], "c": None})
     second = _JsonHolder(payload={"c": None, "a": [1, {"b": 2}]})
     assert hash(first) == hash(second)
+
+
+HUGE_COORD_M = 2e300
+VANISHING_TEMPO = 1e-320
+
+
+def test_regression_placement_rejects_a_huge_coordinate() -> None:
+    with pytest.raises(SchemaError):
+        Placement(entity=SpotId("A1"), x=HUGE_COORD_M, y=0.0)
+
+
+def test_regression_box2_rejects_a_huge_corner() -> None:
+    with pytest.raises(SchemaError):
+        Box2(min=(0.0, 0.0), max=(HUGE_COORD_M, 1.0))
+
+
+def test_regression_tempo_section_rejects_a_vanishing_tempo() -> None:
+    with pytest.raises(SchemaError):
+        TempoSection(at_count=0.0, counts_per_minute=VANISHING_TEMPO)
+
+
+def test_regression_spline_rejects_a_huge_control_point() -> None:
+    recipe = {
+        "kind": "spline",
+        "points": [[0, 0], [1, 1], [HUGE_COORD_M, 0], [0, 0]],
+        "alpha": 0.5,
+        "closed": False,
+    }
+    with pytest.raises(SchemaError):
+        curve_from_construction(recipe)
+
+
+class _Bounded(FrozenModel):
+    meters: Meters = 0.0
+    positive_meters: PositiveMeters = 1.0
+    count: Count = 0.0
+    non_neg_count: NonNegCount = 0.0
+    tempo: CountsPerMinute = 120.0
+    point: Point = (0.0, 0.0)
+    point3: Point3 = (0.0, 0.0, 0.0)
+    ring: Ring = ()
+
+
+def _past(bound: float, direction: float) -> float:
+    return math.nextafter(bound, direction)
+
+
+BOUND_CASES: dict[str, tuple[str, object, object]] = {
+    "meters-max": ("meters", MAX_COORD_M, _past(MAX_COORD_M, math.inf)),
+    "meters-min": ("meters", -MAX_COORD_M, _past(-MAX_COORD_M, -math.inf)),
+    "positive-meters-max": ("positive_meters", MAX_COORD_M, _past(MAX_COORD_M, math.inf)),
+    "count-max": ("count", MAX_COUNTS, _past(MAX_COUNTS, math.inf)),
+    "count-min": ("count", -MAX_COUNTS, _past(-MAX_COUNTS, -math.inf)),
+    "non-neg-count-max": ("non_neg_count", MAX_COUNTS, _past(MAX_COUNTS, math.inf)),
+    "tempo-min": ("tempo", MIN_TEMPO, _past(MIN_TEMPO, 0.0)),
+    "point-max": ("point", (MAX_COORD_M, 0.0), (_past(MAX_COORD_M, math.inf), 0.0)),
+    "point-min": ("point", (0.0, -MAX_COORD_M), (0.0, _past(-MAX_COORD_M, -math.inf))),
+    "point3-max": (
+        "point3",
+        (0.0, 0.0, MAX_COORD_M),
+        (0.0, 0.0, _past(MAX_COORD_M, math.inf)),
+    ),
+    "ring-max": ("ring", ((MAX_COORD_M, 0.0),), ((_past(MAX_COORD_M, math.inf), 0.0),)),
+}
+
+
+@pytest.mark.parametrize(
+    ("field", "accepted", "refused"), BOUND_CASES.values(), ids=BOUND_CASES.keys()
+)
+def test_bounded_aliases_accept_their_bound(field: str, accepted: object, refused: object) -> None:
+    del refused
+    assert getattr(_Bounded.model_validate({field: accepted}), field) == accepted
+
+
+@pytest.mark.parametrize(
+    ("field", "accepted", "refused"), BOUND_CASES.values(), ids=BOUND_CASES.keys()
+)
+def test_bounded_aliases_refuse_the_next_float_past_their_bound(
+    field: str, accepted: object, refused: object
+) -> None:
+    del accepted
+    with pytest.raises(SchemaError):
+        _Bounded.model_validate({field: refused})
