@@ -366,3 +366,12 @@ def test_regression_parse_path_rejects_non_ascii_whitespace() -> None:
     """Rejects a no-break space between numbers; SVG separators are ASCII only."""
     with pytest.raises(SchemaError):
         parse_path("M0\u00a00 L1 1")
+
+
+def test_regression_parse_path_numbers_after_close_name_the_token() -> None:
+    """Rejects numbers after Z with a message that names the token, not a missing M."""
+    with pytest.raises(SchemaError) as caught:
+        parse_path("M0 0 L1 1 Z 1 1")
+    assert "start with M" not in caught.value.message
+    assert caught.value.context == {"token": "1", "token_index": 7}
+    assert "command letter" in caught.value.hint

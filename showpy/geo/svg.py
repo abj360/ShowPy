@@ -408,7 +408,11 @@ def parse_path(d: str) -> list[Subpath]:
             command = tokens[index]
             index += 1
         elif not command:
-            raise SchemaError("path data must start with M", hint="begin with M x y")
+            raise SchemaError(
+                f"number {tokens[index]} has no command to apply to",
+                hint="start the numbers with a command letter; Z takes none",
+                context={"token": tokens[index], "token_index": index},
+            )
         arity = COMMAND_ARITY[command.upper()]
         words = tokens[index : index + arity]
         if len(words) < arity or any(t.isalpha() for t in words):
