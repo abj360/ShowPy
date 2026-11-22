@@ -65,8 +65,8 @@ def __getattr__(name: str) -> object:
     module_name, attribute = _EXPORTS[name]
     value: object = getattr(importlib.import_module(module_name), attribute)
     if name in _LEAVING_TYPES:
-        since, remove = _LEAVING_TYPES[name]
-        warn_leaving(f"showpy.{name}", since=since, remove=remove)
+        replacement, since, remove = _LEAVING_TYPES[name]
+        warn_leaving(f"showpy.{name}", since=since, remove=remove, replacement=replacement)
         return value
     globals()[name] = value
     return value
@@ -96,13 +96,17 @@ def _deprecated() -> tuple[tuple[str, str, str, str], ...]:
     return DEPRECATED
 
 
-def _leaving_types() -> tuple[tuple[str, str, str], ...]:
-    """Loads the (name, since, remove) of each leaving type lazily."""
+def _leaving_types() -> tuple[tuple[str, str | None, str, str], ...]:
+    """Loads the (name, replacement, since, remove) of each leaving type lazily."""
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
     from showpy._api_table import LEAVING
 
-    return tuple((name, since, remove) for name, kind, since, remove in LEAVING if kind == "type")
+    return tuple(
+        (name, replacement, since, remove)
+        for name, kind, replacement, since, remove in LEAVING
+        if kind == "type"
+    )
 
 
 def _is_constant(name: str) -> bool:
@@ -159,7 +163,8 @@ def _render_tables() -> str:
         for name, target, since, remove in _deprecated()
     ]
     leaving = [
-        f'    "{name}": ("{since}", "{remove}"),' for name, since, remove in _leaving_types()
+        f'    "{name}": ({replacement!r}, "{since}", "{remove}"),'
+        for name, replacement, since, remove in _leaving_types()
     ]
     return "\n".join(
         [
@@ -171,7 +176,7 @@ def _render_tables() -> str:
             *deprecated,
             "}",
             "",
-            "_LEAVING_TYPES: dict[str, tuple[str, str]] = {",
+            "_LEAVING_TYPES: dict[str, tuple[str | None, str, str]] = {",
             *leaving,
             "}",
             "",

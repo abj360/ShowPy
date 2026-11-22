@@ -242,7 +242,7 @@ def _to_coords(show: "Show", p: Point, style: CoordStyle = "long") -> str:
     return f"{across_text}, {d_num} {unit} {words[d_dir]} of {words['depth_ref']}"
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement="locate")
 def to_coords(show: "Show", p: Point, style: CoordStyle = "long") -> str:
     """Words a point in the show's coordinate system, rounded to its precision.
 
@@ -334,7 +334,7 @@ def _from_coords(show: "Show", text: str) -> Point:
     return point
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement="at_location")
 def from_coords(show: "Show", text: str) -> Point:
     """Reads worded coordinates (long or short style, either part first) into a point.
 

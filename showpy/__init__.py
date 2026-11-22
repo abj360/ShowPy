@@ -1373,16 +1373,16 @@ _DEPRECATED: dict[str, tuple[str, str, str]] = {
     "ValidationError": ("showpy.core.errors.ShowValidationError", "0.4.0", "0.6.0"),
 }
 
-_LEAVING_TYPES: dict[str, tuple[str, str]] = {
-    "CoordinateSystem": ("0.4.0", "0.7.0"),
-    "CoordinateKind": ("0.4.0", "0.7.0"),
-    "Landmark": ("0.4.0", "0.7.0"),
-    "Zone": ("0.4.0", "0.7.0"),
-    "ZoneKind": ("0.4.0", "0.7.0"),
-    "SheetCanvas": ("0.4.0", "0.6.0"),
-    "GuideLine": ("0.4.0", "0.7.0"),
-    "SheetStore": ("0.4.0", "0.7.0"),
-    "InMemorySheetStore": ("0.4.0", "0.7.0"),
+_LEAVING_TYPES: dict[str, tuple[str | None, str, str]] = {
+    "CoordinateSystem": ("Location", "0.4.0", "0.7.0"),
+    "CoordinateKind": ("Location", "0.4.0", "0.7.0"),
+    "Landmark": (None, "0.4.0", "0.7.0"),
+    "Zone": (None, "0.4.0", "0.7.0"),
+    "ZoneKind": (None, "0.4.0", "0.7.0"),
+    "SheetCanvas": (None, "0.4.0", "0.6.0"),
+    "GuideLine": ("Marking", "0.4.0", "0.7.0"),
+    "SheetStore": (None, "0.4.0", "0.7.0"),
+    "InMemorySheetStore": (None, "0.4.0", "0.7.0"),
 }
 
 __all__ = [
@@ -1984,8 +1984,8 @@ def __getattr__(name: str) -> object:
     module_name, attribute = _EXPORTS[name]
     value: object = getattr(importlib.import_module(module_name), attribute)
     if name in _LEAVING_TYPES:
-        since, remove = _LEAVING_TYPES[name]
-        warn_leaving(f"showpy.{name}", since=since, remove=remove)
+        replacement, since, remove = _LEAVING_TYPES[name]
+        warn_leaving(f"showpy.{name}", since=since, remove=remove, replacement=replacement)
         return value
     globals()[name] = value
     return value

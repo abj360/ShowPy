@@ -43,7 +43,7 @@ def _on_surface(sheet: Sheet, p: Point) -> bool:
     return _covers(Region(exterior=sheet.outline), p)
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement="on_sheet")
 def on_surface(sheet: Sheet, p: Point) -> bool:
     """Reports whether `p` lies on the sheet outline or inside it.
 
@@ -176,7 +176,7 @@ def _nearest_landmarks(
     return measured[:k]
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement="markings_near")
 def nearest_landmarks(
     sheet: Sheet, p: Point, k: int = 3, kinds: Iterable[LandmarkKind] | None = None
 ) -> list[tuple[Landmark, Meters]]:

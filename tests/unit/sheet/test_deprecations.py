@@ -90,31 +90,38 @@ FIELD_ROWS = [row for row in LEAVING if row[1] == "field"]
 PUBLIC_MODULES = {name: module for name, module, _attribute in PUBLIC_API}
 
 
-def _leaving_text(qualified: str, since: str, remove: str) -> str:
-    return f"`{qualified}` is deprecated since {since} and leaves the library in {remove}."
+def _leaving_text(qualified: str, since: str, remove: str, replacement: str | None) -> str:
+    text = f"`{qualified}` is deprecated since {since} and leaves the library in {remove}"
+    if replacement is None:
+        return f"{text}."
+    return f"{text}; its replacement `showpy.{replacement}` arrives in {remove}."
 
 
 @pytest.mark.parametrize("row", FUNCTION_ROWS, ids=[row[0] for row in FUNCTION_ROWS])
-def test_leaving_sheet_names_warn(row: tuple[str, str, str, str]) -> None:
-    name, _kind, since, remove = row
+def test_leaving_sheet_names_warn(row: tuple[str, str, str | None, str, str]) -> None:
+    name, _kind, replacement, since, remove = row
     module = importlib.import_module(PUBLIC_MODULES[name])
     public, implementation = getattr(module, name), getattr(module, f"_{name}")
     with pytest.warns(DeprecatedWarning) as caught:
         result = CALLS[name](public)
     assert len(caught) == 1
-    assert str(caught[0].message) == _leaving_text(f"{module.__name__}.{name}", since, remove)
+    assert str(caught[0].message) == _leaving_text(
+        f"{module.__name__}.{name}", since, remove, replacement
+    )
     assert caught[0].filename == __file__
     assert result == CALLS[name](implementation)
 
 
 @pytest.mark.parametrize("row", TYPE_ROWS, ids=[row[0] for row in TYPE_ROWS])
-def test_leaving_sheet_types_warn_on_top_level_access(row: tuple[str, str, str, str]) -> None:
-    name, _kind, since, remove = row
+def test_leaving_sheet_types_warn_on_top_level_access(
+    row: tuple[str, str, str | None, str, str],
+) -> None:
+    name, _kind, replacement, since, remove = row
     module = importlib.import_module(PUBLIC_MODULES[name])
     for _ in range(2):
         with pytest.warns(DeprecatedWarning) as caught:
             resolved = getattr(showpy, name)
-        assert str(caught[0].message) == _leaving_text(f"showpy.{name}", since, remove)
+        assert str(caught[0].message) == _leaving_text(f"showpy.{name}", since, remove, replacement)
         assert caught[0].filename == __file__
         assert resolved is getattr(module, name)
     assert name not in vars(showpy)
@@ -126,12 +133,12 @@ def test_leaving_show_sheet_fields_warn() -> None:
     with pytest.warns(DeprecatedWarning) as coordinates:
         assert SHOW.coordinates == SHOW.coordinates
     assert [str(w.message) for w in coordinates] == [
-        _leaving_text("showpy.Show.coordinates", "0.4.0", "0.7.0")
+        _leaving_text("showpy.Show.coordinates", "0.4.0", "0.7.0", None)
     ] * 2
     with pytest.warns(DeprecatedWarning) as zones:
         assert SHOW.zones == SHOW.zones
     assert [str(w.message) for w in zones] == [
-        _leaving_text("showpy.Show.zones", "0.4.0", "0.7.0")
+        _leaving_text("showpy.Show.zones", "0.4.0", "0.7.0", None)
     ] * 2
     assert {row[0] for row in FIELD_ROWS} == FIELD_NAMES
     with warnings.catch_warnings(record=True) as caught:
@@ -148,8 +155,8 @@ def test_leaving_show_fields_stay_silent_inside_the_library() -> None:
     assert importlib.import_module("showpy.sheet.bounds")._zones_at(SHOW, POINT) is not None
 
 
-def _decorated_rows() -> dict[str, tuple[str, str]]:
-    found: dict[str, tuple[str, str]] = {}
+def _decorated_rows() -> dict[str, tuple[str | None, str, str]]:
+    found: dict[str, tuple[str | None, str, str]] = {}
     for path in sorted(SHEET_SOURCE.glob("*.py")):
         for node in ast.parse(path.read_text()).body:
             if not isinstance(node, ast.FunctionDef):
@@ -160,18 +167,25 @@ def _decorated_rows() -> dict[str, tuple[str, str]]:
                 ):
                     keywords = {kw.arg: ast.literal_eval(kw.value) for kw in decorator.keywords}
                     assert not decorator.args
-                    found[node.name] = (keywords["since"], keywords["remove"])
+                    found[node.name] = (
+                        keywords.get("replacement"),
+                        keywords["since"],
+                        keywords["remove"],
+                    )
     return found
 
 
 def test_leaving_functions_are_decorated_as_their_rows_say() -> None:
     decorated = _decorated_rows()
-    rows = {name: (since, remove) for name, _kind, since, remove in FUNCTION_ROWS}
+    rows = {
+        name: (replacement, since, remove)
+        for name, _kind, replacement, since, remove in FUNCTION_ROWS
+    }
     assert decorated == rows
 
 
 def test_leaving_rows_name_each_removal_release() -> None:
-    removal = {name: remove for name, _kind, _since, remove in LEAVING}
+    removal = {name: remove for name, _kind, _replacement, _since, remove in LEAVING}
     assert {name for name, remove in removal.items() if remove == "0.6.0"} == RENDER_NAMES
     assert set(removal.values()) == {"0.6.0", "0.7.0"}
     assert {since for *_rest, since, _remove in LEAVING} == {"0.4.0"}
@@ -182,3 +196,22 @@ def test_leaving_rows_cover_the_decided_names() -> None:
     assert groups == {"function": 29, "type": 9, "field": 2}
     assert len(LEAVING) == 40
     assert len({name for name, *_rest in LEAVING}) == 40
+
+
+REPLACEMENTS = {
+    "to_coords": "locate",
+    "from_coords": "at_location",
+    "CoordinateSystem": "Location",
+    "CoordinateKind": "Location",
+    "nearest_landmarks": "markings_near",
+    "proscenium_stage": "floor",
+    "sheet_templates": "sheets",
+    "get_sheet": "sheet",
+    "GuideLine": "Marking",
+    "on_surface": "on_sheet",
+}
+
+
+def test_leaving_rows_name_only_the_replacements_the_adr_names() -> None:
+    named = {name: replacement for name, _k, replacement, _s, _r in LEAVING if replacement}
+    assert named == REPLACEMENTS

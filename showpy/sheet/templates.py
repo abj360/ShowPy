@@ -140,7 +140,7 @@ def _sheet_templates(surface_type: SurfaceType | None = None) -> list[Sheet]:
     return [s for s in _built_in() if surface_type is None or s.surface_type == surface_type]
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement="sheets")
 def sheet_templates(surface_type: SurfaceType | None = None) -> list[Sheet]:
     """Lists the built-in sheet templates, optionally only those of one surface type.
 
@@ -179,7 +179,7 @@ def _get_sheet(ref: SheetRef, store: SheetStore | None = None) -> Sheet:
     )
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement="sheet")
 def get_sheet(ref: SheetRef, store: SheetStore | None = None) -> Sheet:
     """Resolves a sheet reference against the templates first, then the store.
 

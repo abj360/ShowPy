@@ -334,7 +334,7 @@ def _proscenium_stage() -> Sheet:
     )
 
 
-@leaving_call(since="0.4.0", remove="0.7.0")
+@leaving_call(since="0.4.0", remove="0.7.0", replacement="floor")
 def proscenium_stage() -> Sheet:
     """Builds a 12 x 9 m stage: 1.5 m wings, a center line, spike marks, nine stage areas.
 

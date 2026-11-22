@@ -208,11 +208,11 @@ def test_deprecations_are_removed_on_time() -> None:
 
 
 def overdue_leaving_rows(
-    rows: tuple[tuple[str, str, str, str], ...], current: tuple[int, int]
+    rows: tuple[tuple[str, str, str | None, str, str], ...], current: tuple[int, int]
 ) -> list[str]:
     """Lists the leaving names whose removal release is the current release or an earlier one."""
     overdue = []
-    for name, _kind, _since, remove in rows:
+    for name, _kind, _replacement, _since, remove in rows:
         major, minor, _patch = remove.split(".")
         if (int(major), int(minor)) <= current:
             overdue.append(f"{name} (remove {remove})")
@@ -220,7 +220,7 @@ def overdue_leaving_rows(
 
 
 def test_leaving_scan_flags_a_type_row_past_its_removal_version() -> None:
-    rows = (("Landmark", "type", "0.4.0", "0.7.0"),)
+    rows = (("Landmark", "type", "Marking", "0.4.0", "0.7.0"),)
     assert overdue_leaving_rows(rows, (0, 6)) == []
     assert overdue_leaving_rows(rows, (0, 7)) == ["Landmark (remove 0.7.0)"]
 
@@ -420,6 +420,37 @@ def test_warn_leaving_words_the_message_without_a_replacement() -> None:
         _use_leaving_name()
     assert str(caught[0].message) == LEAVING_TEXT
     assert caught[0].filename == __file__
+
+
+REPLACEMENT_TEXT = (
+    "`showpy.old` is deprecated since 0.4.0 and leaves the library in 0.7.0; "
+    "its replacement `showpy.new` arrives in 0.7.0."
+)
+
+
+def _use_leaving_name_with_replacement() -> None:
+    warn_leaving("showpy.old", since="0.4.0", remove="0.7.0", replacement="new")
+
+
+def test_warn_leaving_names_the_replacement_when_there_is_one() -> None:
+    with pytest.warns(DeprecatedWarning) as caught:
+        _use_leaving_name_with_replacement()
+    assert str(caught[0].message) == REPLACEMENT_TEXT
+    assert caught[0].filename == __file__
+
+
+@leaving_call(since="0.4.0", remove="99.0.0", replacement="newer")
+def _leaving_function_with_replacement() -> str:
+    return "ran"
+
+
+def test_leaving_call_names_the_replacement_when_there_is_one() -> None:
+    with pytest.warns(DeprecatedWarning) as caught:
+        assert _leaving_function_with_replacement() == "ran"
+    assert str(caught[0].message) == (
+        f"`{__name__}._leaving_function_with_replacement` is deprecated since 0.4.0 and leaves "
+        "the library in 99.0.0; its replacement `showpy.newer` arrives in 99.0.0."
+    )
 
 
 def test_leaving_call_warns_on_each_call_and_runs_the_function() -> None:

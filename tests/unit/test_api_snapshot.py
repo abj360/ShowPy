@@ -178,6 +178,16 @@ def describe_public_object(obj: object) -> JsonValue:
     return {"constant": repr(obj)}
 
 
+def _leaving_entry(
+    kind: str, replacement: str | None, since: str, remove: str
+) -> dict[str, JsonValue]:
+    """Describes one leaving name; the replacement key is absent when the name has none."""
+    entry: dict[str, JsonValue] = {"kind": kind, "since": since, "remove": remove}
+    if replacement is not None:
+        entry["replacement"] = replacement
+    return entry
+
+
 def build_snapshot() -> dict[str, JsonValue]:
     """Builds the snapshot of every public name, plus its deprecated aliases and leaving names."""
     with warnings.catch_warnings():
@@ -190,8 +200,8 @@ def build_snapshot() -> dict[str, JsonValue]:
         for name, target, since, remove in DEPRECATED
     }
     snapshot[LEAVING_KEY] = {
-        name: {"kind": kind, "since": since, "remove": remove}
-        for name, kind, since, remove in LEAVING
+        name: _leaving_entry(kind, replacement, since, remove)
+        for name, kind, replacement, since, remove in LEAVING
     }
     return snapshot
 

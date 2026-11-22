@@ -1465,16 +1465,19 @@
     "CoordinateKind": {
       "kind": "type",
       "remove": "0.7.0",
+      "replacement": "Location",
       "since": "0.4.0"
     },
     "CoordinateSystem": {
       "kind": "type",
       "remove": "0.7.0",
+      "replacement": "Location",
       "since": "0.4.0"
     },
     "GuideLine": {
       "kind": "type",
       "remove": "0.7.0",
+      "replacement": "Marking",
       "since": "0.4.0"
     },
     "InMemorySheetStore": {
@@ -1560,11 +1563,13 @@
     "from_coords": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": "at_location",
       "since": "0.4.0"
     },
     "get_sheet": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": "sheet",
       "since": "0.4.0"
     },
     "gym_floor": {
@@ -1595,11 +1600,13 @@
     "nearest_landmarks": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": "markings_near",
       "since": "0.4.0"
     },
     "on_surface": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": "on_sheet",
       "since": "0.4.0"
     },
     "point_landmark": {
@@ -1610,6 +1617,7 @@
     "proscenium_stage": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": "floor",
       "since": "0.4.0"
     },
     "remove_guide": {
@@ -1645,6 +1653,7 @@
     "sheet_templates": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": "sheets",
       "since": "0.4.0"
     },
     "template_ref": {
@@ -1655,6 +1664,7 @@
     "to_coords": {
       "kind": "function",
       "remove": "0.7.0",
+      "replacement": "locate",
       "since": "0.4.0"
     },
     "zones_at": {
