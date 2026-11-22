@@ -85,6 +85,8 @@ class ErrorCode(StrEnum):
     """No font in the chain has a glyph for a character of the text."""
     MISSING_SPOT = "MISSING_SPOT"
     """A spot of the cast has no placement in a set."""
+    MIXED_OPERATORS = "MIXED_OPERATORS"
+    """A selector mixes `&` with `+` or `-` at one parenthesis level without parentheses."""
     NAME_TOO_LONG = "NAME_TOO_LONG"
     """A file repository path is longer than the file system allows."""
     NOT_A_MEMBER = "NOT_A_MEMBER"

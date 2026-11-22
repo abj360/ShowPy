@@ -4,6 +4,8 @@ select.py --- the selection language plus spatial picks, ordering, splitting and
 Contains:
     Selection: re-exports the ordered, duplicate-free ID set from showpy.core.selection
     Selector: re-exports the alias for anything that picks spots
+    SelectorAst: holds a parsed selector as a postfix program of words and operators
+    parse_selector(): parses selector text, refusing `&` mixed with `+` or `-` at one level
     select(): resolves an expression, ID list or Selection against a show, set or cast
     is_label_dependent(): reports whether an expression names spots by their labels
     label_prefix(): returns the part of a label before its trailing number
@@ -28,6 +30,7 @@ from scipy.optimize import linear_sum_assignment
 from showpy.cast.models import Cast
 from showpy.choreo.models import Placement, Set
 from showpy.core.caps import MAX_DEPTH, MAX_RANGE, MAX_TEXT_CHARS, require_size
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import GeometryError, SchemaError, UnknownRefError
 from showpy.core.ids import FormId, SpotId
 from showpy.core.selection import Selection as Selection
@@ -225,7 +228,7 @@ def _resolve_kind(universe: _Universe, token: _Token, expr: str) -> tuple[SpotId
     return _resolve_spot_kind(_require_cast(universe, kind, token), kind, name, token)
 
 
-def _resolve_word(universe: _Universe, token: _Token, expr: str) -> Selection:
+def _resolve_word(universe: _Universe, token: _Token, expr: str) -> tuple[SpotId, ...]:
     text = token.text
     if text == ALL_WORD:
         found = universe.ids
@@ -239,67 +242,164 @@ def _resolve_word(universe: _Universe, token: _Token, expr: str) -> Selection:
         found = _resolve_range(universe, token)
     else:
         raise _unknown("spot", text, universe.ids, token)
-    return Selection(ids=found)
+    return found
+
+
+class _Level(NamedTuple):
+    """Tracks one parenthesis level by token index: where it opened and its terms began."""
+
+    opened: int
+    first: int | None = None
+    last: int = 0
+    kind: str | None = None
+    pending: _Token | None = None
+
+
+class SelectorAst(NamedTuple):
+    """Holds a parsed selector as a postfix program that a stack evaluates without recursion.
+
+    Attributes:
+        text: The expression it was parsed from.
+        program: Words and operators in postfix order; an operator combines the two results
+            before it, left operand first.
+    """
+
+    text: str
+    program: tuple[_Token, ...]
 
 
 class _Parser:
-    """Parses `term (op term)*` left to right, where a term is a word or a parenthesized expr.
+    """Turns tokens into a postfix program one token at a time, with an explicit level stack.
+
+    `+` and `-` combine left to right, `&` chains with itself, and a level that mixes `&` with
+    `+` or `-` is refused.
 
     Attributes:
         tokens: Tokens of the expression.
-        universe: What words resolve against.
         expr: The original text, for error context.
-        index: Next token to read.
+        program: Postfix program built so far.
+        levels: Open parenthesis levels, outermost first.
     """
 
-    def __init__(self, tokens: list[_Token], universe: _Universe, expr: str) -> None:
+    def __init__(self, tokens: list[_Token], expr: str) -> None:
         self.tokens = tokens
-        self.universe = universe
         self.expr = expr
-        self.index = 0
-        self.depth = 0
+        self.program: list[_Token] = []
+        self.levels = [_Level(opened=-1)]
 
-    def _next(self, expected: str) -> _Token:
-        if self.index >= len(self.tokens):
-            raise _bad_token(f"expression ended, expected {expected}", len(self.expr), self.expr)
-        self.index += 1
-        return self.tokens[self.index - 1]
-
-    def parse(self) -> Selection:
-        """Returns the selection the whole expression describes."""
-        result = self._expression()
-        if self.index < len(self.tokens):
-            token = self.tokens[self.index]
-            raise _bad_token(f"expected an operator, got {token.text!r}", token.position, self.expr)
-        return result
-
-    def _expression(self) -> Selection:
-        result = self._term()
-        while self.index < len(self.tokens) and self.tokens[self.index].text in OPERATORS:
-            operator = self._next("an operator").text
-            right = self._term()
-            if operator == "+":
-                result = result | right
-            elif operator == "-":
-                result = result - right
+    def parse(self) -> SelectorAst:
+        """Returns the postfix program of the whole expression, or raises at the first error."""
+        wants_term = True
+        for index, token in enumerate(self.tokens):
+            if wants_term:
+                wants_term = self._term_token(index, token)
             else:
-                result = result & right
-        return result
+                wants_term = self._after_term(index, token)
+        end = len(self.expr)
+        if wants_term:
+            raise _bad_token("expression ended, expected a spot, group or (", end, self.expr)
+        if len(self.levels) > 1:
+            raise _bad_token("expression ended, expected )", end, self.expr)
+        return SelectorAst(self.expr, tuple(self.program))
 
-    def _term(self) -> Selection:
-        token = self._next("a spot, group or (")
+    def _term_token(self, index: int, token: _Token) -> bool:
         if token.is_word:
-            return _resolve_word(self.universe, token, self.expr)
+            self.program.append(token)
+            self._close_term(index)
+            return False
         if token.text != "(":
             raise _bad_token(f"unexpected {token.text!r}", token.position, self.expr)
-        self.depth += 1
-        require_size(self.depth, MAX_DEPTH, what="nesting depth")
-        inner = self._expression()
-        self.depth -= 1
-        if self._next(")").text != ")":
-            closing = self.tokens[self.index - 1]
-            raise _bad_token("expected )", closing.position, self.expr)
-        return inner
+        require_size(len(self.levels), MAX_DEPTH, what="nesting depth")
+        self.levels.append(_Level(opened=index))
+        return True
+
+    def _close_term(self, start: int) -> None:
+        level = self.levels[-1]
+        if level.pending is not None:
+            self.program.append(level.pending)
+        first = start if level.first is None else level.first
+        self.levels[-1] = level._replace(first=first, last=start, pending=None)
+
+    def _after_term(self, index: int, token: _Token) -> bool:
+        if token.text == ")" and len(self.levels) > 1:
+            self._close_term(self.levels.pop().opened)
+            return False
+        if token.text not in OPERATORS:
+            raise _bad_token(f"expected an operator, got {token.text!r}", token.position, self.expr)
+        level = self.levels[-1]
+        kind = token.text if token.text == "&" else "+-"
+        if level.kind not in (None, kind):
+            raise self._mixed(index, level)
+        self.levels[-1] = level._replace(kind=kind, pending=token)
+        return True
+
+    def _right_operand(self, index: int) -> str:
+        following = self.tokens[index + 1 :]
+        if not following or not (following[0].is_word or following[0].text == "("):
+            return "..."
+        depth = 0
+        for token in following:
+            depth += (token.text == "(") - (token.text == ")")
+            if depth == 0:
+                return self.expr[following[0].position : token.position + len(token.text)]
+        return self.expr[following[0].position :].rstrip()
+
+    def _mixed(self, index: int, level: _Level) -> SchemaError:
+        operator = self.tokens[index]
+        start, last = (self.tokens[i].position for i in (level.first or 0, level.last))
+        left, tail = (self.expr[i : operator.position].rstrip() for i in (start, last))
+        right = self._right_operand(index)
+        other = "&" if level.kind == "&" else "+ or -"
+        return SchemaError(
+            f"operator {operator.text!r} mixes with {other} at one parenthesis level",
+            hint=f"write ({left}) {operator.text} {right} or"
+            f" {self.expr[start:last]}({tail} {operator.text} {right})",
+            context={"position": operator.position, "expression": self.expr},
+            code=ErrorCode.MIXED_OPERATORS,
+        )
+
+
+def parse_selector(text: str) -> SelectorAst:
+    """Parses selector text into a postfix program, checking its syntax but not its words.
+
+    `+` and `-` share one precedence and combine left to right; `&` chains with itself; mixing
+    `&` with `+` or `-` at one parenthesis level raises SchemaError MIXED_OPERATORS at the
+    second operator kind, with both parenthesized readings in the hint.
+
+    >>> [token.text for token in parse_selector("(T1 + T2) & T3").program]
+    ['T1', 'T2', '+', 'T3', '&']
+    """
+    return _Parser(_tokenize(text), text).parse()
+
+
+def _evaluate(ast: SelectorAst, universe: _Universe) -> tuple[SpotId, ...]:
+    """Runs a postfix program on ordered sets of universe indices with one explicit stack.
+
+    A result keeps its left operand's order, then adds new IDs from the right in their order.
+    """
+    names = list(universe.ids)
+    index = {spot_id: i for i, spot_id in enumerate(names)}
+    stack: list[dict[int, None]] = []
+    for token in ast.program:
+        if token.is_word:
+            found = _resolve_word(universe, token, ast.text)
+            stack.append(dict.fromkeys(_interned(index, names, spot_id) for spot_id in found))
+            continue
+        right = stack.pop()
+        left = stack.pop()
+        if token.text == "+":
+            stack.append(left | right)
+        else:
+            keeps = token.text == "&"
+            stack.append({i: None for i in left if (i in right) == keeps})
+    return tuple(names[i] for i in stack[0])
+
+
+def _interned(index: dict[SpotId, int], names: list[SpotId], spot_id: SpotId) -> int:
+    if spot_id not in index:
+        index[spot_id] = len(names)
+        names.append(spot_id)
+    return index[spot_id]
 
 
 def _validated(universe: _Universe, ids: Sequence[str]) -> Selection:
@@ -336,7 +436,8 @@ def _id_sequence(expr: object) -> tuple[str, ...]:
 def select(source: "Show | Set | Cast", expr: Selector) -> Selection:
     """Resolves a selector against a show, set or cast.
 
-    Operators apply left to right with equal precedence; use parentheses to group. Ranges
+    `+` and `-` apply left to right; `&` chains with itself but needs parentheses to mix with
+    `+` or `-` (SchemaError MIXED_OPERATORS otherwise). Ranges
     keep range order and skip missing middle labels; other words keep creation order (cast
     order, or placement order for a Set); `form:` keeps member order. `T*` matches labels
     whose prefix before the trailing number is exactly `T`. ID lists and Selections pass
@@ -359,9 +460,7 @@ def select(source: "Show | Set | Cast", expr: Selector) -> Selection:
         return _validated(universe, expr.ids).replace(description=expr.description)
     if not isinstance(expr, str):
         return _validated(universe, _id_sequence(expr))
-    tokens = _tokenize(expr)
-    result = _Parser(tokens, universe, expr).parse()
-    return result.replace(description=expr)
+    return Selection(ids=_evaluate(parse_selector(expr), universe), description=expr)
 
 
 def is_label_dependent(expr: str) -> bool:

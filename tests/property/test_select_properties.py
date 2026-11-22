@@ -89,7 +89,7 @@ def test_parentheses_group_right_operand(a: str, b: str, c: str) -> None:
 def test_results_are_unique_known_ids(words: list[str], operators: list[str]) -> None:
     expr = words[0]
     for operator, word in zip(operators, words[1:], strict=False):
-        expr = f"{expr} {operator} {word}"
+        expr = f"({expr}) {operator} {word}"
     result = select(CAST, expr).ids
     assert len(result) == len(set(result))
     assert set(result) <= set(CAST.ids())

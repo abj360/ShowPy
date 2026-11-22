@@ -26,6 +26,10 @@ Contains:
     test_select_accepts_nesting_at_the_depth_cap: parses MAX_DEPTH nested parentheses
     test_regression_select_set_input_ignores_hash_seed: returns one order for a Python set under
         every hash seed
+    test_regression_mixed_operators_raise_with_both_readings: refuses & mixed with + or - at one
+        level, naming the second operator kind and both parenthesized readings
+    test_regression_select_depth_10000_raises_schema_error_not_recursion_error: rejects 10,000
+        nested parentheses with SchemaError, never RecursionError
 """
 
 import contextlib
@@ -44,6 +48,7 @@ from showpy.cast.select import (
     mirror_pairs,
     near,
     ordered_along,
+    parse_selector,
     select,
     split,
     where,
@@ -51,6 +56,7 @@ from showpy.cast.select import (
 from showpy.choreo.form_models import Form
 from showpy.choreo.models import Placement, Set
 from showpy.core.caps import MAX_DEPTH, MAX_TEXT_CHARS
+from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import GeometryError, SchemaError, ShowPyError, UnknownRefError
 from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.types import Region
@@ -171,7 +177,11 @@ def test_operators_combine_left_to_right() -> None:
     assert ids(cast, "T* + TB1") == ("T1", "T2", "T10", "TB1")
     assert ids(cast, "all - T*") == ("TB1", "flag-1", "flag-2")
     assert ids(cast, "tag:soloist & T*") == ("T1",)
-    assert ids(cast, "T1 + T2 & T2") == ("T2",)
+    assert ids(cast, "T* - T2 + TB1") == ("T1", "T10", "TB1")
+    assert ids(cast, "T* & tag:soloist & T1") == ("T1",)
+    with pytest.raises(SchemaError) as info:
+        select(cast, "T1 + T2 & T2")
+    assert info.value.code == ErrorCode.MIXED_OPERATORS
 
 
 def test_parentheses_group() -> None:
@@ -179,7 +189,10 @@ def test_parentheses_group() -> None:
 
 
 def test_operators_next_to_parentheses_need_no_spaces() -> None:
-    assert ids(mixed_cast(), "(T1)+(T2)&(T2)") == ("T2",)
+    assert ids(mixed_cast(), "((T1)+(T2))&(T2)") == ("T2",)
+    with pytest.raises(SchemaError) as info:
+        select(mixed_cast(), "(T1)+(T2)&(T2)")
+    assert info.value.code == ErrorCode.MIXED_OPERATORS
     assert ids(mixed_cast(), "(T*)-(T2)") == ("T1", "T10")
 
 
@@ -458,3 +471,50 @@ def test_regression_split_rejects_more_parts_than_spots() -> None:
     with pytest.raises(SchemaError):
         split(["A", "B"], 3)
     assert [p.ids for p in split([], 1)] == [()]
+
+
+DEEP_NESTING = 10_000
+
+
+@pytest.mark.parametrize(
+    ("expr", "position", "readings"),
+    [
+        ("T1 + T2 & T2", 8, "write (T1 + T2) & T2 or T1 + (T2 & T2)"),
+        ("all - T1 & T2", 9, "write (all - T1) & T2 or all - (T1 & T2)"),
+        ("T2 & T2 + T1", 8, "write (T2 & T2) + T1 or T2 & (T2 + T1)"),
+        ("T* & (T1 + T2 - T10 & T1)", 20, "write (T1 + T2 - T10) & T1 or T1 + T2 - (T10 & T1)"),
+        ("T1 + T2 & (T2 + T1)", 8, "write (T1 + T2) & (T2 + T1) or T1 + (T2 & (T2 + T1))"),
+        ("T1 + T2 &", 8, "write (T1 + T2) & ... or T1 + (T2 & ...)"),
+    ],
+)
+def test_regression_mixed_operators_raise_with_both_readings(
+    expr: str, position: int, readings: str
+) -> None:
+    """Refuses & mixed with + or - at one level, naming the second kind and both readings."""
+    with pytest.raises(SchemaError) as info:
+        select(mixed_cast(), expr)
+    assert info.value.code == ErrorCode.MIXED_OPERATORS
+    assert info.value.context["position"] == position
+    assert info.value.hint == readings
+
+
+def test_parse_selector_lists_words_and_operators_in_postfix_order() -> None:
+    ast = parse_selector("T1 - (T2 + T10) - TB1")
+    assert [token.text for token in ast.program] == ["T1", "T2", "T10", "+", "-", "TB1", "-"]
+    assert ast.text == "T1 - (T2 + T10) - TB1"
+
+
+def test_select_keeps_the_left_order_then_new_right_ids() -> None:
+    assert ids(mixed_cast(), "T10 + T1-T2 + T10") == ("T10", "T1", "T2")
+    assert ids(mixed_cast(), "(T10 + T2 + T1) & T*") == ("T10", "T2", "T1")
+    assert ids(mixed_cast(), "(T10 + T2 + T1) - T2") == ("T10", "T1")
+
+
+def test_regression_select_depth_10000_raises_schema_error_not_recursion_error() -> None:
+    """Rejects 10,000 nested parentheses with SchemaError; the parser keeps no call stack."""
+    expression = "(" * DEEP_NESTING + "T1" + ")" * DEEP_NESTING
+    with pytest.raises(SchemaError) as info:
+        parse_selector(expression)
+    assert (info.value.context["what"], info.value.context["cap"]) == ("nesting depth", MAX_DEPTH)
+    with pytest.raises(SchemaError):
+        select(_line_cast(), expression)
