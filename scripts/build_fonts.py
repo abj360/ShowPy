@@ -40,6 +40,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
+from showpy.core.resources import schema_path
 from showpy.geo.svg import (
     ArcPiece,
     CubicPiece,
@@ -51,7 +52,7 @@ from showpy.geo.svg import (
 )
 from showpy.geo.text import SIMPLEX
 
-MIT_LICENSE = Path(__file__).resolve().parents[1] / "showpy" / "schemas" / "LICENSE-MIT.txt"
+MIT_LICENSE = schema_path("LICENSE-MIT.txt")
 FONT_FORMAT = "showpy.font.v1"
 HERSHEY_UNITS_PER_EM = 32.0
 CLOSE_TOL_EM = 0.005
