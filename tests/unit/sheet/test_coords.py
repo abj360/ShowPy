@@ -18,7 +18,10 @@ Contains:
     test_regression_unvalidated_origin_is_rejected(): rejects a NaN, infinite or malformed origin
         instead of returning or printing garbage
     test_regression_from_coords_rejects_overflowing_result(): rejects a point whose sum with a huge
-        origin overflows, instead of returning an infinite point
+        unchecked origin overflows, refuses that origin itself, and rejects the same text from the
+        largest legal origin
+    test_regression_from_coords_refuses_a_point_past_max_coord(): refuses a read point past
+        MAX_COORD_M with a hint naming the bound, and reads one at the bound
     test_regression_unvalidated_audience_side_is_rejected(): rejects an audience side outside the
         four sides with a ShowPyError, not KeyError
     test_regression_to_coords_rejects_unknown_style(): rejects an unknown style instead of silently
@@ -40,6 +43,7 @@ from typing import Any
 
 import pytest
 
+from showpy.core.caps import MAX_COORD_M
 from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
 from showpy.core.ids import LandmarkId
 from showpy.core.util import approx_equal
@@ -258,6 +262,10 @@ def test_regression_from_coords_reads_number_glued_to_unit() -> None:
     assert approx_equal(from_coords(two_set_show(), text), (3.0, 2.0), abs_tol=TOL)
 
 
+HUGE_ORIGIN = (1.7e308, 0.0)
+HUGE_SHIFTED_ORIGIN = (1.7e308, -1.7e308)
+
+
 def _injected(fields: dict[str, Any]) -> Show:  # model_construct takes unchecked values
     system = CoordinateSystem.model_construct(None, **fields)
     return two_set_show().model_copy(update={"coordinates": system})
@@ -296,17 +304,42 @@ def test_regression_unvalidated_audience_side_is_rejected() -> None:
 
 
 def test_regression_from_coords_rejects_overflowing_result() -> None:
-    """Rejects "R999..9 U1" (308 digits) from origin 1.7e308, not (inf, 1.0) (UP-9.4-51)."""
-    show = set_coordinates(two_set_show(), CoordinateSystem(origin=(1.7e308, 0.0)))
+    """Rejects "R999..9 U1" (308 digits) from origin 1.7e308, not (inf, 1.0) (UP-9.4-51).
+
+    The coordinate bound refuses that origin, so the test injects it unchecked to reach the
+    overflow guard; from the largest legal origin the same text lands past MAX_COORD_M.
+    """
+    text = "R" + "9" * 308 + " U1"
+    with pytest.raises(SchemaError):
+        CoordinateSystem(origin=HUGE_ORIGIN)
     with pytest.raises(ShowPyError):
-        from_coords(show, "R" + "9" * 308 + " U1")
+        from_coords(_injected({"origin": HUGE_ORIGIN}), text)
+    edge = set_coordinates(two_set_show(), CoordinateSystem(origin=(MAX_COORD_M, 0.0)))
+    with pytest.raises(ShowPyError):
+        from_coords(edge, text)
+
+
+def test_regression_from_coords_refuses_a_point_past_max_coord() -> None:
+    """Refuses a point one meter past MAX_COORD_M and reads one exactly at the bound."""
+    edge = set_coordinates(two_set_show(), CoordinateSystem(origin=(MAX_COORD_M, 0.0)))
+    assert from_coords(edge, "R0 U0") == (MAX_COORD_M, 0.0)
+    with pytest.raises(SchemaError) as raised:
+        from_coords(edge, "R1 U0")
+    assert "MAX_COORD_M" in raised.value.hint
 
 
 def test_regression_to_coords_rejects_non_finite_wording() -> None:
-    """Rejects points whose local offset or rounded value is nan or inf (UP-9.4-52)."""
-    shifted = set_coordinates(two_set_show(), CoordinateSystem(origin=(1.7e308, -1.7e308)))
-    with pytest.raises(ShowPyError):
-        to_coords(shifted, (-1.7e308, 1.7e308))
+    """Rejects points whose local offset or rounded value is nan or inf (UP-9.4-52).
+
+    The coordinate bound refuses the 1.7e308 origin, so the test injects it unchecked to reach
+    the point-minus-origin overflow, then shifts from the largest legal origin too.
+    """
+    with pytest.raises(SchemaError):
+        CoordinateSystem(origin=HUGE_SHIFTED_ORIGIN)
+    edge = set_coordinates(two_set_show(), CoordinateSystem(origin=(MAX_COORD_M, -MAX_COORD_M)))
+    for shifted in (_injected({"origin": HUGE_SHIFTED_ORIGIN}), edge):
+        with pytest.raises(ShowPyError):
+            to_coords(shifted, (-1.7e308, 1.7e308))
     coarse = two_set_show().model_copy(update={"coordinates": CoordinateSystem(precision=1e308)})
     with pytest.raises(ShowPyError):
         to_coords(coarse, (1.7976931348623157e308, 0.0))

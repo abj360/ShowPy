@@ -18,7 +18,7 @@ from typing import Any, Literal
 from showpy.choreo.models import Placement
 from showpy.choreo.path_models import Easing, FacingMode, PathStyle, TurnDirection
 from showpy.core.ids import SpotId, TransitionId
-from showpy.core.types import Count, Degrees, FrozenModel, Meters, Point
+from showpy.core.types import Count, Degrees, Finite, FinitePoint, FrozenModel, Point
 from showpy.geo.curves import AnyCurve
 
 PieceKind = Literal["hold", "line", "arc", "curve", "route", "custom"]
@@ -39,7 +39,7 @@ class MotionPiece(FrozenModel):
     t1: float
     kind: PieceKind
     params: dict[str, float] = {}
-    length: Meters = 0.0
+    length: Finite = 0.0
 
 
 class MotionPlan(FrozenModel):
@@ -117,8 +117,8 @@ class MotionSegment(FrozenModel):
     tid: TransitionId
     t0: float
     t1: float
-    p0: Point
-    p1: Point
+    p0: FinitePoint
+    p1: FinitePoint
 
 
 class EntityState(FrozenModel):
@@ -134,9 +134,9 @@ class EntityState(FrozenModel):
     """
 
     entity: SpotId
-    position: Point
+    position: FinitePoint
     facing: Degrees
-    velocity: Point
+    velocity: FinitePoint
     moving: bool
     on_field: bool
 
@@ -184,7 +184,7 @@ class GapInfo(FrozenModel):
     a: SpotId
     b: SpotId
     tau: float
-    gap: Meters
+    gap: Finite
 
 
 class Fix(FrozenModel):
@@ -200,5 +200,5 @@ class Fix(FrozenModel):
     kind: Literal["delay", "waypoint", "reassign", "stagger"]
     # Any: parameters differ by fix kind (spot ids, counts, points).
     params: dict[str, Any]
-    new_gap: Meters
+    new_gap: Finite
     max_speed_after: float
