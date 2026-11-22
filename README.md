@@ -181,6 +181,15 @@ Read `CLAUDE.md`, `CONTRIBUTING.md` and the ADRs before changing anything. The P
 
 ## License
 
-MIT. See `LICENSE`.
+- From the licence change on, ShowPy is licensed under the PolyForm Noncommercial License 1.0.0
+  (`LICENSE`).
+- Versions v0.1.0 to v0.3.0, and every commit before the licence change, were released under the
+  MIT License and stay under it.
+- The bundled fonts keep their own licences: the SIL Open Font License 1.1, the Hershey font
+  notice and, for `simplex`, MIT. Their texts are in `showpy/fonts/licenses/`. The non-commercial
+  terms do not cover the font files.
+- The JSON schemas in `showpy/schemas/` stay under the MIT License
+  (`showpy/schemas/LICENSE-MIT.txt`), so any tool may read and validate show files.
+- For a commercial licence, contact the maintainer through <https://github.com/abj360>.
 
 Maintained by abj360.

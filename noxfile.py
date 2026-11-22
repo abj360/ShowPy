@@ -40,9 +40,15 @@ PYTHON_FOR_WHEEL = "3.14"
 ALL_EXTRAS = "[all]"
 CORE_CHECK_SCRIPT = "scripts/check_core_install.py"
 USAGE_BLOCK = re.compile(r"^## Usage\n.*?```python\n(.*?)```", re.DOTALL | re.MULTILINE)
-WHEEL_CHECK = """
+LICENSE_EXPRESSION = " AND ".join(
+    ("PolyForm-Noncommercial-1.0.0", "MIT", "OFL-1.1", "LicenseRef-Hershey-Fonts")
+)
+WHEEL_CHECK = f"""
+import importlib.metadata as metadata
 import importlib.resources as resources
 import showpy
+expression = metadata.metadata("ShowPy")["License-Expression"]
+assert expression == {LICENSE_EXPRESSION!r}, expression
 assert resources.files("showpy").joinpath("py.typed").is_file(), "py.typed missing"
 assert showpy.schema_path("showpy.show.v1.json").is_file(), "schema missing"
 assert showpy.schema_path("LICENSE-MIT.txt").is_file(), "schema licence missing"

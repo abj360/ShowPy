@@ -3,13 +3,12 @@ name = "ShowPy"
 dynamic = ["version"]
 description = "Choreography library: sheets, spots, sets, forms and motion."
 readme = "README.md"
-license = "MIT AND OFL-1.1 AND LicenseRef-Hershey-Fonts"
+license = "PolyForm-Noncommercial-1.0.0 AND MIT AND OFL-1.1 AND LicenseRef-Hershey-Fonts"
 license-files = ["LICENSE", "showpy/schemas/LICENSE-MIT.txt", "showpy/fonts/licenses/*.txt"]
 requires-python = ">=3.13"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",
