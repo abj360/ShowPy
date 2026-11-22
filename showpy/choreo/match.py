@@ -164,9 +164,16 @@ def _improve(
         return cols, 0
     frozen = np.array([e in options.pinned for e in p.entities], dtype=bool)
     score = SwapScore(
-        _objective_cost(cost, options), cost, cap, p.starts, p.slots, crossing, spread,
-        _row_groups(p), frozen,
-    )  # fmt: skip
+        _objective_cost(cost, options),
+        cost,
+        cap,
+        p.starts,
+        p.slots,
+        crossing,
+        spread,
+        _row_groups(p),
+        frozen,
+    )
     return improve_by_swaps(cols, score)
 
 

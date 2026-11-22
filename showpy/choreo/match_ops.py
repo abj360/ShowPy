@@ -238,9 +238,13 @@ def _slot_updates(dest: Set, targets: dict[SpotId, Placement]) -> dict[SpotId, P
         )
         if not (is_same_slot and is_same_pose):
             updates[entity] = current.replace(
-                x=wanted.x, y=wanted.y, facing=wanted.facing, form=wanted.form,
-                order=wanted.order, on_field=True,
-            )  # fmt: skip
+                x=wanted.x,
+                y=wanted.y,
+                facing=wanted.facing,
+                form=wanted.form,
+                order=wanted.order,
+                on_field=True,
+            )
     return updates
 
 
