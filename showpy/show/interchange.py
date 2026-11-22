@@ -8,7 +8,8 @@ Contains:
     POSITION_FIELDS: names the position fields a CSV column can map to
     export_json(): dumps a show to a format-tagged JSON-safe document, embedding the fonts its
         text forms use
-    import_json(): loads a show from a document of any readable format version, migrating it
+    import_json(): loads a show from a document of any readable format version, migrating it;
+        refuses unknown top-level keys, keeps `x-` keys
     import_fonts(): registers the fonts embedded in a document, checking each against its hash
     import_positions(): merges CSV rows into a show, creating missing sets and spots
 """
@@ -75,6 +76,8 @@ MAX_ENCODED_FONT_CHARS = (
     BASE64_BLOCK_CHARS * math.ceil(MAX_FONT_BYTES / BASE64_BYTES_PER_BLOCK) + BASE64_SLACK_CHARS
 )
 ALWAYS_EXPORTED = "id"
+EXTENSION_PREFIX = "x-"
+KNOWN_KEYS = frozenset({SCHEMA_KEY, FORMAT_KEY, VERSION_KEY, SHOW_KEY, FONTS_KEY})
 POSITION_FIELDS = ("set", "counts", "entity", "x", "y", "facing")
 REQUIRED_FIELDS = POSITION_FIELDS[:5]
 
@@ -388,6 +391,7 @@ def export_json(
     include: str | Iterable[str] | None = None,
     *,
     font_registry: FontRegistry | None = None,
+    extensions: Mapping[str, object] | None = None,
 ) -> dict[str, Any]:
     """Dumps a show to a tagged JSON-safe document, embedding the fonts its text forms use.
 
@@ -396,11 +400,13 @@ def export_json(
         include: Top-level show fields to keep, or one field name; None keeps all. The ID is
             always kept.
         font_registry: Registry holding the fonts of the text forms; None means the bundled fonts.
+        extensions: Host-owned top-level keys to write back unchanged. Every key must start with
+            `x-` and every value must be strict JSON; anything else raises SchemaError.
 
     Returns:
         document: `{"format": "showpy.show", "version": 2, "show": {...}}`, plus `"fonts"`
             mapping each font URI to its base64 bytes, sorted by URI, when an exported form is
-            a text form. A font the registry lacks raises MissingFontError.
+            a text form, plus the extensions. A font the registry lacks raises MissingFontError.
 
     >>> from showpy.examples import two_set_show
     >>> sorted(export_json(two_set_show(), include=["title"])["show"])
@@ -423,7 +429,22 @@ def export_json(
     fonts = _embedded_fonts(show, dumped, registry)
     if fonts:
         document[FONTS_KEY] = fonts
-    return document
+    return {**document, **_checked_extensions(extensions)}
+
+
+def _checked_extensions(extensions: Mapping[str, object] | None) -> dict[str, Any]:
+    """Returns the extension keys as strict JSON, refusing a key without the `x-` prefix."""
+    if not extensions:
+        return {}
+    for key in extensions:
+        if not isinstance(key, str) or not key.startswith(EXTENSION_PREFIX):
+            raise SchemaError(
+                f"extension key {key!r} does not start with {EXTENSION_PREFIX!r}",
+                hint=f"name each extension key {EXTENSION_PREFIX}<name>",
+                context={"key": key},
+            )
+    copied = strict_json_copy(dict(extensions), document="extensions")
+    return copied if isinstance(copied, dict) else {}
 
 
 def _embedded_fonts(
@@ -453,7 +474,9 @@ def import_json(d: Mapping[str, Any]) -> Show:
     Returns:
         show: The show in the current format. A wrong or missing tag raises SchemaError, a
             newer version VersionError, and a show that is not strict JSON or does not fit
-            SchemaError.
+            SchemaError. A top-level key other than the tag, header, show and fonts raises
+            SchemaError naming it, unless it starts with `x-`; the show does not keep x- keys,
+            so a host reads them from the document and passes them to `export_json`.
 
     >>> from showpy.examples import two_set_show
     >>> import_json(export_json(two_set_show())).id
@@ -469,6 +492,7 @@ def import_json(d: Mapping[str, Any]) -> Show:
             context={"type": type(d).__name__},
         )
     version = _document_version(d)
+    _refuse_unknown_keys(d)
     body = d.get(SHOW_KEY)
     show = strict_json_copy(dict(body), document=SHOW_KEY) if isinstance(body, Mapping) else None
     if not isinstance(show, dict):
@@ -482,6 +506,24 @@ def import_json(d: Mapping[str, Any]) -> Show:
         if friendly is error:
             raise
         raise friendly from error
+
+
+def _refuse_unknown_keys(d: Mapping[str, object]) -> None:
+    """Raises SchemaError naming the first top-level key that is neither known nor `x-`."""
+    for key in d:
+        if key in KNOWN_KEYS or (isinstance(key, str) and key.startswith(EXTENSION_PREFIX)):
+            continue
+        close = close_matches(str(key), sorted(KNOWN_KEYS))
+        raise SchemaError(
+            f"document has an unknown top-level key {key!r}",
+            hint=(
+                f"did you mean {', '.join(close)}? "
+                if close
+                else f"use {', '.join(sorted(KNOWN_KEYS))}; "
+            )
+            + f"host keys must start with {EXTENSION_PREFIX!r}",
+            context={"key": str(key)},
+        )
 
 
 def _document_version(d: Mapping[str, object]) -> int:
