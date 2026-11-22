@@ -29,34 +29,83 @@ SECONDS_MODE_CPM = 60.0
 TENTHS_PER_SECOND = 10
 TENTHS_PER_MINUTE = 600
 TEMPO_DISPLAY_DIGITS = 1
+LOG1P_RATIO = 0.5
+
+
+def _lerp(a: float, b: float, u: float) -> float:
+    """Mixes two positive tempos; the weighted sum stays positive, unlike a + (b - a) · u."""
+    return a * (1.0 - u) + b * u
+
+
+def _log_ratio(a: CountsPerMinute, b: CountsPerMinute) -> float:
+    """Returns ln(b / a) for positive tempos, through log1p when they are close."""
+    if abs(b - a) < LOG1P_RATIO * a:
+        return math.log1p((b - a) / a)
+    ratio = b / a
+    if 0.0 < ratio < math.inf:
+        return math.log(ratio)
+    return math.log(b) - math.log(a)
+
+
+def _log_mean(a: CountsPerMinute, b: CountsPerMinute) -> CountsPerMinute:
+    """Returns (b - a) / ln(b / a), the mean tempo of a linear ramp from `a` to `b`."""
+    return a if a == b else (b - a) / _log_ratio(a, b)
 
 
 @dataclass(frozen=True)
 class _Piece:
-    """Covers counts [start, end) with tempo changing linearly at `slope` cpm per count."""
+    """Covers counts [start, end); a ramp goes linearly from `tempo` to `end_tempo` in `length`.
+
+    A ramp's `length` is its stored count length, not `end - start`, which rounds in float. Every
+    ramp formula clamps to it, so the ramp ends exactly at `end_tempo` and its own seconds.
+    """
 
     start: Count
     end: Count
     tempo: CountsPerMinute
-    slope: float
+    end_tempo: CountsPerMinute
+    length: Count
+
+    @property
+    def is_ramp(self) -> bool:
+        return self.tempo != self.end_tempo
+
+    def _fraction(self, c: Count) -> float:
+        return min(1.0, (c - self.start) / self.length)
 
     def tempo_in(self, c: Count) -> CountsPerMinute:
-        return self.tempo + self.slope * (c - self.start)
+        if not self.is_ramp:
+            return self.tempo
+        return _lerp(self.tempo, self.end_tempo, self._fraction(c))
 
     def seconds_to(self, c: Count) -> Seconds:
-        """Integrates 60 / tempo(c) from the piece start; a ramp gives 60/k · ln(r(c)/r0)."""
+        """Integrates 60 / tempo(c) from the piece start: counts over the ramp's mean tempo."""
         span = c - self.start
-        if self.slope == 0.0:
+        if not self.is_ramp:
             return SECONDS_PER_MINUTE * span / self.tempo
-        return SECONDS_PER_MINUTE / self.slope * math.log1p(self.slope * span / self.tempo)
+        return SECONDS_PER_MINUTE * min(span, self.length) / _log_mean(self.tempo, self.tempo_in(c))
 
     def count_after(self, s: Seconds) -> Count:
-        """Inverts seconds_to(): r(c) = r0 · exp(k·s/60), so c = start + r0 · expm1(k·s/60) / k."""
-        if self.slope == 0.0:
-            span = s * self.tempo / SECONDS_PER_MINUTE
-        else:
-            span = self.tempo * math.expm1(self.slope * s / SECONDS_PER_MINUTE) / self.slope
-        return min(self.end, self.start + max(0.0, span))
+        """Inverts seconds_to(): `s` seconds into a ramp, its tempo has grown by exp(growth)."""
+        if not self.is_ramp:
+            return min(self.end, self.start + s * self.tempo / SECONDS_PER_MINUTE)
+        a, b = self.tempo, self.end_tempo
+        if s >= SECONDS_PER_MINUTE * self.length / _log_mean(a, b):
+            return self.end
+        growth = (b - a) * (s / (SECONDS_PER_MINUTE * self.length))
+        return min(self.end, self.start + self.length * self._ramp_fraction(growth))
+
+    def _ramp_fraction(self, growth: float) -> float:
+        """Returns the share of the ramp's counts done at `growth`: expm1(growth) / expm1(λ).
+
+        λ = ln(end_tempo / tempo). A speeding ramp rescales by exp(growth - λ), the same value,
+        so a tempo ratio past e**709 never overflows.
+        """
+        a, b = self.tempo, self.end_tempo
+        if b < a:
+            return math.expm1(growth) / ((b - a) / a)
+        rescale = math.exp(growth - _log_ratio(a, b))
+        return rescale * math.expm1(-growth) / ((a - b) / b)
 
 
 def _require_in_range(value: float, what: str) -> None:
@@ -117,21 +166,27 @@ def _section_pieces(section: TempoSection, next_start: Count) -> list[_Piece]:
     _require_valid_section(section)
     start, tempo = section.at_count, section.counts_per_minute
     if section.ramp_to is None or section.ramp_counts is None:
-        return [_Piece(start, next_start, tempo, 0.0)]
-    slope = (section.ramp_to - tempo) / section.ramp_counts
-    ramp_end = min(start + section.ramp_counts, next_start)
-    pieces = [_Piece(start, ramp_end, tempo, slope)]
-    if ramp_end < next_start:
-        pieces.append(_Piece(ramp_end, next_start, section.ramp_to, 0.0))
-    return pieces
+        return [_Piece(start, next_start, tempo, tempo, next_start - start)]
+    ramp_to, ramp_counts = section.ramp_to, section.ramp_counts
+    ramp_end = start + ramp_counts
+    if ramp_end >= next_start:
+        length = min(next_start - start, ramp_counts)
+        reached = _lerp(tempo, ramp_to, length / ramp_counts)
+        return [_Piece(start, next_start, tempo, reached, length)]
+    return [
+        _Piece(start, ramp_end, tempo, ramp_to, ramp_counts),
+        _Piece(ramp_end, next_start, ramp_to, ramp_to, next_start - ramp_end),
+    ]
 
 
 def _split(pieces: list[_Piece], at: Count) -> list[_Piece]:
     result: list[_Piece] = []
     for piece in pieces:
         if piece.start < at < piece.end:
-            result.append(_Piece(piece.start, at, piece.tempo, piece.slope))
-            result.append(_Piece(at, piece.end, piece.tempo_in(at), piece.slope))
+            before = min(at - piece.start, piece.length)
+            reached = piece.tempo_in(at)
+            result.append(_Piece(piece.start, at, piece.tempo, reached, before))
+            result.append(_Piece(at, piece.end, reached, piece.end_tempo, piece.length - before))
         else:
             result.append(piece)
     return result

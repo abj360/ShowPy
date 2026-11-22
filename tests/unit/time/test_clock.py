@@ -17,17 +17,24 @@ Contains:
         value the models reject when it arrives through model_construct
     test_regression_describe_count_prints_large_counts_in_full: prints 1234567.5 rather than
         `1.23457e+06`
+    test_regression_count_to_seconds_at_a_ramp_end_stays_in_domain: gives the analytic seconds
+        past a ramp whose end count rounds up, never a ValueError
+    test_regression_seconds_to_count_at_a_ramp_end_stays_in_domain: inverts the analytic seconds
+        at and past a ramp end, never an OverflowError or infinity
 """
 
 import math
+from collections.abc import Callable
 from typing import Any
 
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
+from showpy.core.caps import MIN_TEMPO
 from showpy.core.errors import ShowPyError, TimelineError, TimeRangeError
 from showpy.core.util import approx_equal
 from showpy.time.clock import (
+    SECONDS_PER_MINUTE,
     count_to_seconds,
     describe_count,
     seconds_per_count,
@@ -346,3 +353,109 @@ def test_conversions_round_trip_across_holds_and_ramps() -> None:
     tl = add_tempo(tl, TempoSection(at_count=24.0, counts_per_minute=90.0))
     for count in (0.0, 3.5, 8.0, 8.5, 16.0, 20.0, 24.0, 30.0):
         assert approx_equal(seconds_to_count(tl, count_to_seconds(tl, count)), count, abs_tol=TOL)
+
+
+SLOW_RAMP_AT = 524288.0
+SLOW_RAMP_FROM = 657737.0
+SLOW_RAMP_TO = 0.001
+SLOW_RAMP_COUNTS = 0.001
+FAST_RAMP_FROM = MIN_TEMPO
+FAST_RAMP_TO = 1e306
+FAST_RAMP_COUNTS = 4.0
+SECONDS_REL_TOL = 1e-14
+COUNT_TOL = 1e-9
+
+
+def _log_mean(a: float, b: float) -> float:
+    return a if a == b else (b - a) / (math.log(b) - math.log(a))
+
+
+def _ramp_seconds(start: float, end: float, counts: float) -> float:
+    """Returns 60 / k · ln(end / start), the seconds a linear ramp takes over `counts`."""
+    return SECONDS_PER_MINUTE * counts / _log_mean(start, end)
+
+
+def _slow_ramp_end() -> Timeline:
+    """Ramps 657737 cpm down to 0.001 cpm in 0.001 counts; start plus length rounds up."""
+    ramp = TempoSection(
+        at_count=SLOW_RAMP_AT,
+        counts_per_minute=SLOW_RAMP_FROM,
+        ramp_to=SLOW_RAMP_TO,
+        ramp_counts=SLOW_RAMP_COUNTS,
+    )
+    first = TempoSection(at_count=0.0, counts_per_minute=1.0)
+    return Timeline(mode=TimelineMode.COUNTS, tempos=(first, ramp))
+
+
+def _slow_ramp_seconds(c: float) -> float:
+    """Returns the analytic seconds at a count past the slow ramp, from its rounded end count."""
+    ramp_end = SLOW_RAMP_AT + SLOW_RAMP_COUNTS
+    before = SECONDS_PER_MINUTE * SLOW_RAMP_AT
+    ramp = _ramp_seconds(SLOW_RAMP_FROM, SLOW_RAMP_TO, SLOW_RAMP_COUNTS)
+    return before + ramp + SECONDS_PER_MINUTE * (c - ramp_end) / SLOW_RAMP_TO
+
+
+def _fast_ramp() -> Timeline:
+    """Ramps from the slowest tempo to 1e306 cpm in 4 counts, a tempo ratio past e**709."""
+    ramp = TempoSection(
+        at_count=0.0,
+        counts_per_minute=FAST_RAMP_FROM,
+        ramp_to=FAST_RAMP_TO,
+        ramp_counts=FAST_RAMP_COUNTS,
+    )
+    return Timeline(mode=TimelineMode.COUNTS, tempos=(ramp,))
+
+
+def _fast_ramp_seconds(c: float) -> float:
+    """Returns the analytic seconds at a count in or past the fast ramp."""
+    span = min(c, FAST_RAMP_COUNTS)
+    reached = FAST_RAMP_FROM + (FAST_RAMP_TO - FAST_RAMP_FROM) * span / FAST_RAMP_COUNTS
+    ramp = SECONDS_PER_MINUTE * span / _log_mean(FAST_RAMP_FROM, reached)
+    return ramp + SECONDS_PER_MINUTE * (c - span) / FAST_RAMP_TO
+
+
+def test_regression_count_to_seconds_at_a_ramp_end_stays_in_domain() -> None:
+    """Gives the analytic seconds past a ramp whose end count rounds up, never a ValueError."""
+    seconds = count_to_seconds(_slow_ramp_end(), SLOW_RAMP_AT + 1.0)
+    assert math.isfinite(seconds)
+    expected = _slow_ramp_seconds(SLOW_RAMP_AT + 1.0)
+    assert approx_equal(seconds, expected, abs_tol=0.0, rel_tol=SECONDS_REL_TOL)
+
+
+RAMP_END_CASES = [
+    pytest.param(_slow_ramp_end, _slow_ramp_seconds, SLOW_RAMP_AT + 0.5, id="slow-past-end"),
+    pytest.param(_slow_ramp_end, _slow_ramp_seconds, SLOW_RAMP_AT + 1.0, id="slow-one-count"),
+    pytest.param(_fast_ramp, _fast_ramp_seconds, 2.0, id="fast-mid-ramp"),
+    pytest.param(_fast_ramp, _fast_ramp_seconds, FAST_RAMP_COUNTS, id="fast-at-end"),
+    pytest.param(_fast_ramp, _fast_ramp_seconds, FAST_RAMP_COUNTS + 1.0, id="fast-past-end"),
+]
+
+
+@pytest.mark.parametrize(("timeline", "analytic", "count"), RAMP_END_CASES)
+def test_regression_seconds_to_count_at_a_ramp_end_stays_in_domain(
+    timeline: Callable[[], Timeline], analytic: Callable[[float], float], count: float
+) -> None:
+    """Inverts the analytic seconds at and past a ramp end, never an OverflowError or infinity."""
+    tl, seconds = timeline(), analytic(count)
+    assert approx_equal(seconds_to_count(tl, seconds), count, abs_tol=COUNT_TOL)
+    assert approx_equal(count_to_seconds(tl, count), seconds, abs_tol=0.0, rel_tol=SECONDS_REL_TOL)
+
+
+def test_nearly_steady_ramp_keeps_the_analytic_seconds() -> None:
+    """Keeps a ramp of one ulp from cancelling: seconds follow the logarithmic mean tempo."""
+    start = 120.0
+    end = math.nextafter(start, math.inf)
+    tl = _ramp(start, end, 16.0)
+    for count in (1.0, 8.0, 16.0):
+        reached = start + (end - start) * count / 16.0
+        expected = SECONDS_PER_MINUTE * count / ((start + reached) / 2.0)
+        seconds = count_to_seconds(tl, count)
+        assert approx_equal(seconds, expected, abs_tol=0.0, rel_tol=SECONDS_REL_TOL)
+        assert approx_equal(seconds_to_count(tl, seconds), count, abs_tol=COUNT_TOL)
+
+
+def test_seconds_to_count_inverts_a_slowing_ramp_from_a_huge_tempo() -> None:
+    """Keeps a slowing ramp on its own branch when its seconds underflow to zero growth."""
+    tl = _ramp(4.49423283715594e307, 0.25, 2.0)
+    count = 2.220446049250313e-16
+    assert approx_equal(seconds_to_count(tl, count_to_seconds(tl, count)), count, abs_tol=COUNT_TOL)
