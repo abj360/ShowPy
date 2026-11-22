@@ -429,8 +429,6 @@ def test_regression_remove_last_set_with_merge_counts_keeps_total_time() -> None
     assert approx_equal(sum(s.counts for s in edited.sets), total, abs_tol=1e-9)
 
 
-@pytest.mark.defect("UP-9.7-54")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-54")
 def test_regression_add_set_rejects_two_placements_for_one_spot() -> None:
     """Rejects two placements for one spot instead of keeping the last (audit 9.7)."""
     rows = (
