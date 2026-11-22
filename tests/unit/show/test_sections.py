@@ -26,7 +26,7 @@ from datetime import UTC, datetime
 import pytest
 
 from showpy.choreo.form_models import Form
-from showpy.choreo.path_models import FacingMode, FacingOverride, TransitionSpec
+from showpy.choreo.path_models import FacingMode, FacingOverride, FixedFacing, TransitionSpec
 from showpy.core.errors import SchemaError, TimelineError
 from showpy.core.ids import FormId, SetId, SpotId, make_tid
 from showpy.core.util import approx_equal
@@ -58,7 +58,11 @@ def _four_sets() -> Show:
         }
     )
     override = FacingOverride(
-        entities=(SpotId("T1"),), mode=FacingMode.FIXED, value=90.0, start=10, end=14
+        entities=(SpotId("T1"),),
+        mode=FacingMode.FIXED,
+        value=FixedFacing(degrees=90.0),
+        start=10,
+        end=14,
     )
     form = Form(id=FormId("f3"), set=SetId("3"), kind="line", geometry={}, members=(SpotId("T1"),))
     notes = (
@@ -200,7 +204,7 @@ def test_regression_join_after_split_keeps_one_facing_override_across_the_split(
     override = FacingOverride(
         entities=(SpotId("T1"),),
         mode=FacingMode.FIXED,
-        value=90.0,
+        value=FixedFacing(degrees=90.0),
         start=WINDOW_ACROSS_SPLIT[0],
         end=WINDOW_ACROSS_SPLIT[1],
     )

@@ -15,10 +15,19 @@ Contains:
 
 from typing import Any, Literal
 
+from pydantic import model_validator
+
 from showpy.choreo.models import Placement
-from showpy.choreo.path_models import Easing, FacingMode, PathStyle, TurnDirection
+from showpy.choreo.path_models import (
+    Easing,
+    FacingMode,
+    FacingValue,
+    PathStyle,
+    TurnDirection,
+    check_facing_value,
+)
 from showpy.core.ids import SpotId, TransitionId
-from showpy.core.types import Count, Degrees, Finite, FinitePoint, FrozenModel, Point
+from showpy.core.types import Count, Degrees, Finite, FinitePoint, FrozenModel
 from showpy.geo.curves import AnyCurve
 
 PieceKind = Literal["hold", "line", "arc", "curve", "route", "custom"]
@@ -57,7 +66,7 @@ class MotionPlan(FrozenModel):
         knots_s: Arc lengths at those knots.
         easing: Easing applied across the window.
         facing_mode: Facing during the window.
-        facing_value: Degrees, point or spot ID for the facing mode.
+        facing_value: Typed value the facing mode reads; None for modes that read none.
         turn_counts: Counts spent blending facings.
         turn_direction: Which way facing turns go.
     """
@@ -73,9 +82,14 @@ class MotionPlan(FrozenModel):
     knots_s: tuple[float, ...]
     easing: Easing = Easing()
     facing_mode: FacingMode = FacingMode.TO_TARGET
-    facing_value: Degrees | Point | SpotId | None = None
+    facing_value: FacingValue | None = None
     turn_counts: float = 0.0
     turn_direction: TurnDirection = TurnDirection.SHORTEST
+
+    @model_validator(mode="after")
+    def _facing_fits_mode(self) -> "MotionPlan":
+        check_facing_value(self.facing_mode, self.facing_value)
+        return self
 
     @property
     def moves(self) -> bool:

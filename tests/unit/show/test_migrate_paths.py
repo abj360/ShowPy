@@ -17,9 +17,20 @@ Contains:
         motion's parameters and every non-paths document unchanged
     test_regression_unhashable_motion_fn_raises_schema_error(): refuses a list or object
         motion_fn with SchemaError naming the document, the field and the value
+    test_regression_v1_facing_values_are_tagged_by_mode(): tags a number, a pair and a string by
+        the facing mode that reads them, in rows and in show.json overrides
+    test_regression_tagged_facing_value_passes_through_the_step(): keeps a value that is already
+        tagged for its mode, without a repair
+    test_regression_v1_fixed_facing_is_wrapped_with_a_repair(): wraps a fixed heading into
+        [0, 360) and records the repair
+    test_regression_unread_v1_facing_value_is_dropped_with_a_repair(): drops a value the mode
+        never read and records the repair
+    test_regression_facing_value_that_does_not_fit_its_mode_is_refused(): refuses a missing,
+        wrongly shaped or non-finite value naming the document, the field and the value
 """
 
 import copy
+import math
 
 import pytest
 
@@ -27,16 +38,20 @@ from showpy.choreo.path_models import (
     MAX_EASING_STEPS,
     MAX_MOTION_CYCLES,
     MAX_SPIRAL_TURNS,
+    EntityFacing,
     FigureEightParams,
+    FixedFacing,
+    PointFacing,
     SpiralParams,
     TransitionSpec,
     WeaveParams,
     ZigzagParams,
 )
 from showpy.core.errors import SchemaError
+from showpy.core.ids import SpotId
 from showpy.core.json_types import JsonValue
 from showpy.show.documents import SHEET_DOC, paths_doc
-from showpy.show.migrate import ReportBuilder
+from showpy.show.migrate import SHOW_DOC, ReportBuilder
 from showpy.show.migrations.v1_to_v2_paths import migrate_paths
 
 PATHS = paths_doc(("1", "2"))
@@ -151,3 +166,96 @@ def test_regression_unhashable_motion_fn_raises_schema_error(motion_fn: JsonValu
     assert info.value.context == {"path": PATHS, "field": field, "value": repr(motion_fn)}
     assert PATHS in info.value.message
     assert "a string or null" in info.value.hint
+
+
+def _facing_row(mode: str, value: JsonValue) -> dict[str, JsonValue]:
+    return {"entity": "T1", "facing_mode": mode, "facing_value": value}
+
+
+def _facing_of(out: dict[str, JsonValue]) -> object:
+    return TransitionSpec.model_validate(out[PATHS]).row("T1").facing_value
+
+
+def test_regression_v1_facing_values_are_tagged_by_mode() -> None:
+    """Tags a number, a pair and a string by the facing mode that reads them."""
+    cases: list[tuple[str, JsonValue, object]] = [
+        ("fixed", 90, FixedFacing(degrees=90.0)),
+        ("toward_point", [1.0, 2.0], PointFacing(point=(1.0, 2.0))),
+        ("toward_entity", "T2", EntityFacing(entity=SpotId("T2"))),
+    ]
+    for mode, value, typed in cases:
+        out, report = _migrated(_v1_docs(_facing_row(mode, value)))
+        assert _facing_of(out) == typed
+        assert report.build().repairs == ()
+    docs: dict[str, JsonValue] = {
+        SHOW_DOC: {"facing_overrides": [{"mode": "toward_entity", "value": "T2", "start": 0}]}
+    }
+    out, _ = _migrated(docs)
+    assert out[SHOW_DOC] == {
+        "facing_overrides": [
+            {"mode": "toward_entity", "value": {"kind": "entity", "entity": "T2"}, "start": 0}
+        ]
+    }
+
+
+def test_regression_tagged_facing_value_passes_through_the_step() -> None:
+    """Keeps a value that is already tagged for its mode, without a repair."""
+    tagged: dict[str, JsonValue] = {"kind": "fixed", "degrees": 270.0}
+    out, report = _migrated(_v1_docs(_facing_row("fixed", tagged)))
+    assert _facing_of(out) == FixedFacing(degrees=270.0)
+    assert report.build().repairs == ()
+
+
+def test_regression_v1_fixed_facing_is_wrapped_with_a_repair() -> None:
+    """Wraps a fixed heading into [0, 360), in rows and overrides, and records the repair."""
+    out, report = _migrated(_v1_docs(_facing_row("fixed", -90.0)))
+    assert _facing_of(out) == FixedFacing(degrees=270.0)
+    (repair,) = report.build().repairs
+    assert PATHS in repair
+    assert "rows.T1.facing_value" in repair
+    docs: dict[str, JsonValue] = {
+        SHOW_DOC: {"facing_overrides": [{"mode": "fixed", "value": 450.0}]}
+    }
+    out, report = _migrated(docs)
+    assert out[SHOW_DOC] == {
+        "facing_overrides": [{"mode": "fixed", "value": {"kind": "fixed", "degrees": 90.0}}]
+    }
+    (repair,) = report.build().repairs
+    assert "facing_overrides[0].value" in repair
+
+
+def test_regression_unread_v1_facing_value_is_dropped_with_a_repair() -> None:
+    """Drops a value a facing mode never read and records the repair."""
+    out, report = _migrated(_v1_docs(_facing_row("travel", 45.0)))
+    assert _facing_of(out) is None
+    (repair,) = report.build().repairs
+    assert "rows.T1.facing_value" in repair
+    assert "travel" in repair
+    out, report = _migrated(_v1_docs(_facing_row("travel", None)))
+    assert report.build().repairs == ()
+
+
+@pytest.mark.parametrize(
+    ("mode", "value"),
+    [
+        ("fixed", None),
+        ("fixed", "T2"),
+        ("fixed", True),
+        ("fixed", math.nan),
+        ("toward_point", 5.0),
+        ("toward_point", [1.0]),
+        ("toward_point", [True, 2.0]),
+        ("toward_entity", [1.0, 2.0]),
+        ("toward_entity", None),
+    ],
+)
+def test_regression_facing_value_that_does_not_fit_its_mode_is_refused(
+    mode: str, value: JsonValue
+) -> None:
+    """Refuses a missing, wrongly shaped or non-finite value, naming document, field and value."""
+    with pytest.raises(SchemaError) as info:
+        _migrated(_v1_docs(_facing_row(mode, value)))
+    field = "rows.T1.facing_value"
+    assert info.value.context == {"path": PATHS, "field": field, "value": repr(value)}
+    assert PATHS in info.value.message
+    assert field in info.value.message

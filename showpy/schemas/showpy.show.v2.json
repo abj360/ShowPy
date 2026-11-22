@@ -363,6 +363,27 @@
       "title": "Easing",
       "type": "object"
     },
+    "EntityFacing": {
+      "additionalProperties": false,
+      "description": "Holds the spot a `toward_entity` facing mode looks at.\n\n>>> EntityFacing(entity=\"T2\").entity\n'T2'\n\nAttributes:\n    kind: Tag that tells the facing values apart in stored documents.\n    entity: Spot ID.",
+      "properties": {
+        "entity": {
+          "title": "Entity",
+          "type": "string"
+        },
+        "kind": {
+          "const": "entity",
+          "default": "entity",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "entity"
+      ],
+      "title": "EntityFacing",
+      "type": "object"
+    },
     "FacingMode": {
       "description": "Names how a spot faces while it moves.",
       "enum": [
@@ -380,7 +401,7 @@
     },
     "FacingOverride": {
       "additionalProperties": false,
-      "description": "Forces a facing on spots over a global count range, regardless of paths.\n\nAttributes:\n    entities: Spots affected.\n    mode: Facing mode during the range.\n    value: Degrees, point or spot ID, depending on the mode.\n    start: Global count where the override starts.\n    end: Global count where it ends.\n    turn_counts: Counts spent turning into and out of the override.",
+      "description": "Forces a facing on spots over a global count range, regardless of paths.\n\nAttributes:\n    entities: Spots affected.\n    mode: Facing mode during the range.\n    value: Typed value the mode reads; None for modes that read none.\n    start: Global count where the override starts.\n    end: Global count where it ends.\n    turn_counts: Counts spent turning into and out of the override.",
       "properties": {
         "end": {
           "$ref": "#/$defs/Count"
@@ -402,20 +423,13 @@
         "value": {
           "anyOf": [
             {
-              "$ref": "#/$defs/Degrees"
-            },
-            {
-              "$ref": "#/$defs/Point"
-            },
-            {
-              "type": "string"
+              "$ref": "#/$defs/FacingValue"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Value"
+          "default": null
         }
       },
       "required": [
@@ -463,6 +477,27 @@
       "title": "FacingSpec",
       "type": "object"
     },
+    "FacingValue": {
+      "discriminator": {
+        "mapping": {
+          "entity": "#/$defs/EntityFacing",
+          "fixed": "#/$defs/FixedFacing",
+          "point": "#/$defs/PointFacing"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/FixedFacing"
+        },
+        {
+          "$ref": "#/$defs/PointFacing"
+        },
+        {
+          "$ref": "#/$defs/EntityFacing"
+        }
+      ]
+    },
     "FigureEightParams": {
       "additionalProperties": false,
       "description": "Holds the parameters of the built-in figure_eight motion.\n\n>>> FigureEightParams().amplitude\n1.0\n\nAttributes:\n    amplitude: Side offset in meters; negative mirrors the loops.",
@@ -477,6 +512,26 @@
     },
     "Finite": {
       "type": "number"
+    },
+    "FixedFacing": {
+      "additionalProperties": false,
+      "description": "Holds the heading a `fixed` facing mode holds.\n\n>>> FixedFacing(degrees=450.0).degrees\n90.0\n\nAttributes:\n    kind: Tag that tells the facing values apart in stored documents.\n    degrees: Heading wrapped to [0, 360); 0 faces the audience, counter-clockwise positive.",
+      "properties": {
+        "degrees": {
+          "$ref": "#/$defs/Heading"
+        },
+        "kind": {
+          "const": "fixed",
+          "default": "fixed",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "degrees"
+      ],
+      "title": "FixedFacing",
+      "type": "object"
     },
     "Form": {
       "additionalProperties": false,
@@ -701,6 +756,9 @@
       ],
       "title": "GuideLine",
       "type": "object"
+    },
+    "Heading": {
+      "type": "number"
     },
     "Hold": {
       "additionalProperties": false,
@@ -973,7 +1031,7 @@
     },
     "PathRow": {
       "additionalProperties": false,
-      "description": "Holds one spot's instructions for one transition; times are local counts.\n\nAttributes:\n    entity: Spot ID.\n    style: Path style.\n    start: Local count the move starts.\n    end: Local count the move ends; None means the end of the transition.\n    waypoints: Points passed on the way, for CURVE and POLYLINE.\n    route: Route followed, for FOLLOW.\n    pivot: Rotation center, for ROTATE.\n    sweep_deg: Signed rotation, for ROTATE; positive is counter-clockwise.\n    facing_mode: How the spot faces during the move.\n    facing_value: Degrees, point or spot ID, depending on the facing mode.\n    turn_counts: Counts spent turning into and out of the move's facing.\n    turn_direction: Which way turns go.\n    pace: Step pace multiplier for step-size reporting; positions ignore it.\n    locked: Designer lock.\n    note: Free text.\n    motion_fn: Registered motion function, for CUSTOM.\n    motion_params: The built-in motion's typed parameters, or a read-only JSON object for a\n        registered custom motion.\n    easing: How progress maps to time across the window.",
+      "description": "Holds one spot's instructions for one transition; times are local counts.\n\nAttributes:\n    entity: Spot ID.\n    style: Path style.\n    start: Local count the move starts.\n    end: Local count the move ends; None means the end of the transition.\n    waypoints: Points passed on the way, for CURVE and POLYLINE.\n    route: Route followed, for FOLLOW.\n    pivot: Rotation center, for ROTATE.\n    sweep_deg: Signed rotation, for ROTATE; positive is counter-clockwise.\n    facing_mode: How the spot faces during the move.\n    facing_value: Typed value the facing mode reads; None for modes that read none.\n    turn_counts: Counts spent turning into and out of the move's facing.\n    turn_direction: Which way turns go.\n    pace: Step pace multiplier for step-size reporting; positions ignore it.\n    locked: Designer lock.\n    note: Free text.\n    motion_fn: Registered motion function, for CUSTOM.\n    motion_params: The built-in motion's typed parameters, or a read-only JSON object for a\n        registered custom motion.\n    easing: How progress maps to time across the window.",
       "properties": {
         "easing": {
           "$ref": "#/$defs/Easing",
@@ -1006,20 +1064,13 @@
         "facing_value": {
           "anyOf": [
             {
-              "$ref": "#/$defs/Degrees"
-            },
-            {
-              "$ref": "#/$defs/Point"
-            },
-            {
-              "type": "string"
+              "$ref": "#/$defs/FacingValue"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Facing Value"
+          "default": null
         },
         "locked": {
           "default": false,
@@ -1270,6 +1321,26 @@
         }
       ],
       "type": "array"
+    },
+    "PointFacing": {
+      "additionalProperties": false,
+      "description": "Holds the point a `toward_point` facing mode looks at.\n\n>>> PointFacing(point=(1.0, 2.0)).point\n(1.0, 2.0)\n\nAttributes:\n    kind: Tag that tells the facing values apart in stored documents.\n    point: Meters on the sheet.",
+      "properties": {
+        "kind": {
+          "const": "point",
+          "default": "point",
+          "title": "Kind",
+          "type": "string"
+        },
+        "point": {
+          "$ref": "#/$defs/Point"
+        }
+      },
+      "required": [
+        "point"
+      ],
+      "title": "PointFacing",
+      "type": "object"
     },
     "Region": {
       "additionalProperties": false,

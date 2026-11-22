@@ -11,6 +11,13 @@ Contains:
     PathStyle: names the built-in path styles
     FacingMode: names how a spot faces while it moves
     TurnDirection: names which way a facing turn goes
+    FixedFacing: holds the heading a fixed facing mode holds
+    PointFacing: holds the point a toward_point facing mode looks at
+    EntityFacing: holds the spot a toward_entity facing mode looks at
+    FacingValue: names the three typed facing values, discriminated by `kind`
+    FACING_VALUE_KINDS: maps each facing mode that reads a value to its value kind
+    as_facing_value(): wraps a bare heading, point or spot ID in its typed facing value
+    check_facing_value(): refuses a facing value whose kind does not fit the facing mode
     FacingOverride: forces a facing on spots over a global count range
     Waypoint: holds a point a path passes through, optionally at a local count
     Easing: maps progress through a move to progress in time
@@ -43,6 +50,7 @@ from showpy.core.types import (
     Degrees,
     Finite,
     FrozenModel,
+    Heading,
     JsonObject,
     Meters,
     NonNegCount,
@@ -58,6 +66,7 @@ MAX_EASING_STEPS = 200
 MAX_MOTION_CYCLES = 100
 # Ten times the most extra spiral turns any example, golden show, doc or test uses (2).
 MAX_SPIRAL_TURNS = 20
+POINT_LENGTH = 2
 DEFAULT_AMPLITUDE_M = 1.0
 DEFAULT_CYCLES = 2.0
 HALF_CYCLE_REL_TOL = 1e-9
@@ -100,13 +109,135 @@ class TurnDirection(StrEnum):
     COUNTERCLOCKWISE = "counterclockwise"
 
 
+class FixedFacing(FrozenModel):
+    """Holds the heading a `fixed` facing mode holds.
+
+    >>> FixedFacing(degrees=450.0).degrees
+    90.0
+
+    Attributes:
+        kind: Tag that tells the facing values apart in stored documents.
+        degrees: Heading wrapped to [0, 360); 0 faces the audience, counter-clockwise positive.
+    """
+
+    kind: Literal["fixed"] = "fixed"
+    degrees: Heading
+
+
+class PointFacing(FrozenModel):
+    """Holds the point a `toward_point` facing mode looks at.
+
+    >>> PointFacing(point=(1.0, 2.0)).point
+    (1.0, 2.0)
+
+    Attributes:
+        kind: Tag that tells the facing values apart in stored documents.
+        point: Meters on the sheet.
+    """
+
+    kind: Literal["point"] = "point"
+    point: Point
+
+
+class EntityFacing(FrozenModel):
+    """Holds the spot a `toward_entity` facing mode looks at.
+
+    >>> EntityFacing(entity="T2").entity
+    'T2'
+
+    Attributes:
+        kind: Tag that tells the facing values apart in stored documents.
+        entity: Spot ID.
+    """
+
+    kind: Literal["entity"] = "entity"
+    entity: SpotId
+
+
+type FacingValue = Annotated[FixedFacing | PointFacing | EntityFacing, Field(discriminator="kind")]
+FACING_VALUE_KINDS: Final[Mapping[FacingMode, str]] = ReadOnlyMap(
+    {
+        FacingMode.FIXED: "fixed",
+        FacingMode.TOWARD_POINT: "point",
+        FacingMode.TOWARD_ENTITY: "entity",
+    }
+)
+
+
+def as_facing_value(value: FacingValue | Degrees | Point | str | None) -> FacingValue | None:
+    """Wraps a bare heading, point or spot ID in its typed facing value.
+
+    A typed value or None passes through. Mismatch with a facing mode is checked by the model
+    that holds the value, not here.
+
+    Args:
+        value: A heading in degrees, an (x, y) point, a spot ID or an already typed value.
+
+    Returns:
+        typed: The typed facing value, or None for None.
+
+    >>> as_facing_value(450.0)
+    FixedFacing(kind='fixed', degrees=90.0)
+    >>> as_facing_value("T2")
+    EntityFacing(kind='entity', entity='T2')
+    """
+    if value is None or isinstance(value, FixedFacing | PointFacing | EntityFacing):
+        return value
+    if isinstance(value, bool):
+        raise _bad_facing_value(value)
+    if isinstance(value, int | float):
+        return FixedFacing(degrees=value)
+    if isinstance(value, str):
+        return EntityFacing(entity=SpotId(value))
+    if isinstance(value, tuple) and len(value) == POINT_LENGTH:
+        return PointFacing(point=value)
+    raise _bad_facing_value(value)
+
+
+def _bad_facing_value(value: object) -> SchemaError:
+    return SchemaError(
+        f"facing value {value!r} is not a heading, a point or a spot ID",
+        hint="pass degrees, an (x, y) point, a spot ID or a FixedFacing, PointFacing or "
+        "EntityFacing",
+        context={"value": repr(value)},
+    )
+
+
+def check_facing_value(mode: FacingMode, value: FacingValue | None) -> None:
+    """Refuses a facing value whose kind does not fit the facing mode.
+
+    Modes that read no value need None; fixed, toward_point and toward_entity need a value of
+    kind fixed, point and entity.
+
+    Args:
+        mode: The facing mode.
+        value: The typed value stored next to it.
+
+    >>> check_facing_value(FacingMode.FIXED, FixedFacing(degrees=90.0))
+    """
+    needed = FACING_VALUE_KINDS.get(mode)
+    held = None if value is None else value.kind
+    if held != needed:
+        raise SchemaError(
+            f"facing mode {mode.value} needs a value of kind {needed}, got {held}",
+            hint=_facing_hint(needed),
+            context={"mode": mode.value, "kind": held, "needed": needed},
+        )
+
+
+def _facing_hint(needed: str | None) -> str:
+    if needed is None:
+        return "leave the facing value empty for this mode"
+    return f"pass a value of kind {needed}: FixedFacing, PointFacing or EntityFacing"
+
+
 class FacingOverride(FrozenModel):
     """Forces a facing on spots over a global count range, regardless of paths.
 
     Attributes:
         entities: Spots affected.
         mode: Facing mode during the range.
-        value: Degrees, point or spot ID, depending on the mode.
+        value: Typed value the mode reads; None for modes that read none.
         start: Global count where the override starts.
         end: Global count where it ends.
         turn_counts: Counts spent turning into and out of the override.
@@ -114,13 +245,14 @@ class FacingOverride(FrozenModel):
 
     entities: SelectorField
     mode: FacingMode
-    value: Degrees | Point | SpotId | None = None
+    value: FacingValue | None = None
     start: Count
     end: Count
     turn_counts: float = 0.0
 
     @model_validator(mode="after")
     def _ordered(self) -> "FacingOverride":
+        check_facing_value(self.mode, self.value)
         if self.end <= self.start:
             raise SchemaError("override end must follow start", hint="use start < end")
         return self
@@ -296,7 +428,7 @@ class PathRow(FrozenModel):
         pivot: Rotation center, for ROTATE.
         sweep_deg: Signed rotation, for ROTATE; positive is counter-clockwise.
         facing_mode: How the spot faces during the move.
-        facing_value: Degrees, point or spot ID, depending on the facing mode.
+        facing_value: Typed value the facing mode reads; None for modes that read none.
         turn_counts: Counts spent turning into and out of the move's facing.
         turn_direction: Which way turns go.
         pace: Step pace multiplier for step-size reporting; positions ignore it.
@@ -317,7 +449,7 @@ class PathRow(FrozenModel):
     pivot: Point | None = None
     sweep_deg: Degrees | None = None
     facing_mode: FacingMode = FacingMode.TO_TARGET
-    facing_value: Degrees | Point | SpotId | None = None
+    facing_value: FacingValue | None = None
     turn_counts: float = 0.0
     turn_direction: TurnDirection = TurnDirection.SHORTEST
     pace: float = 1.0
@@ -348,6 +480,11 @@ class PathRow(FrozenModel):
                 context={"start": value},
             )
         return value
+
+    @model_validator(mode="after")
+    def _facing_fits_mode(self) -> "PathRow":
+        check_facing_value(self.facing_mode, self.facing_value)
+        return self
 
     @model_validator(mode="after")
     def _window(self) -> "PathRow":

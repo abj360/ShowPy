@@ -28,24 +28,37 @@ Contains:
         turns
     test_regression_easing_strength_is_at_least_one: refuses a strength below 1 for every kind
     test_regression_easing_steps_are_capped: accepts the step cap and refuses one step more
+    test_regression_facing_value_kind_must_match_the_mode: refuses a value whose kind its facing
+        mode does not read, in path rows and overrides
+    test_regression_facing_values_round_trip_through_json_with_their_tag: dumps and reloads each
+        typed value
+    test_regression_fixed_facing_wraps_the_heading: stores a heading in [0, 360)
+    test_regression_models_refuse_bare_facing_values: refuses a bare number, pair or string
+    test_regression_set_facing_wraps_bare_values: wraps the bare values the builder accepts
+    test_regression_dropping_the_faced_spot_resets_the_facing: falls back to the target facing
 """
 
 import json
 import math
-from collections.abc import MutableMapping
+from collections.abc import Callable, MutableMapping
 
 import pytest
 
+from showpy.cast.rewrite import rewrite_spot_ids
 from showpy.choreo.path_models import (
     MAX_EASING_STEPS,
     MAX_MOTION_CYCLES,
     MAX_SPIRAL_TURNS,
     Easing,
     EasingKind,
+    EntityFacing,
     FacingMode,
+    FacingOverride,
     FigureEightParams,
+    FixedFacing,
     PathRow,
     PathStyle,
+    PointFacing,
     Route,
     SpiralParams,
     TransitionSpec,
@@ -53,9 +66,12 @@ from showpy.choreo.path_models import (
     WeaveParams,
     ZigzagParams,
 )
+from showpy.choreo.paths import set_facing
 from showpy.core.errors import PathError, SchemaError
 from showpy.core.ids import RouteId, SpotId, make_tid
 from showpy.core.readonly import ReadOnlyMap
+from showpy.core.types import Point
+from tests.fixtures.cast_shows import rich_show
 
 NEGATIVE_COUNTS = -4.0
 NEIGHBOUR_COUNTS = 8.0
@@ -220,3 +236,94 @@ def test_regression_path_row_rejects_infinite_start() -> None:
     """Rejects an infinite PathRow.start with PathError."""
     with pytest.raises(PathError):
         PathRow(entity=SpotId("A"), start=math.inf)
+
+
+KIND_FOR_MODE: list[tuple[FacingMode, FixedFacing | PointFacing | EntityFacing]] = [
+    (FacingMode.FIXED, FixedFacing(degrees=90.0)),
+    (FacingMode.TOWARD_POINT, PointFacing(point=(1.0, 2.0))),
+    (FacingMode.TOWARD_ENTITY, EntityFacing(entity=SpotId("B"))),
+]
+NO_VALUE_MODES = [mode for mode in FacingMode if mode not in {m for m, _ in KIND_FOR_MODE}]
+
+
+def _row_with(mode: FacingMode, value: object) -> PathRow:
+    return PathRow.model_validate({"entity": "A", "facing_mode": mode, "facing_value": value})
+
+
+def _override_with(mode: FacingMode, value: object) -> FacingOverride:
+    return FacingOverride.model_validate(
+        {"entities": "all", "mode": mode, "value": value, "start": 0.0, "end": 4.0}
+    )
+
+
+@pytest.mark.parametrize("build", [_row_with, _override_with])
+def test_regression_facing_value_kind_must_match_the_mode(
+    build: Callable[[FacingMode, object], object],
+) -> None:
+    """Refuses a value whose kind its facing mode does not read, in rows and overrides."""
+    for mode, value in KIND_FOR_MODE:
+        assert build(mode, value) is not None
+        for other_mode, other in KIND_FOR_MODE:
+            if other_mode is not mode:
+                with pytest.raises(SchemaError):
+                    build(mode, other)
+        with pytest.raises(SchemaError):
+            build(mode, None)
+    for mode in NO_VALUE_MODES:
+        assert build(mode, None) is not None
+        for _, value in KIND_FOR_MODE:
+            with pytest.raises(SchemaError):
+                build(mode, value)
+
+
+def test_regression_facing_values_round_trip_through_json_with_their_tag() -> None:
+    """Dumps each typed value with its kind and reloads an equal row."""
+    for mode, value in KIND_FOR_MODE:
+        row = _row_with(mode, value)
+        dumped = json.loads(row.model_dump_json())
+        assert dumped["facing_value"]["kind"] == value.kind
+        assert PathRow.model_validate_json(row.model_dump_json()) == row
+
+
+def test_regression_fixed_facing_wraps_the_heading() -> None:
+    """Stores a heading in [0, 360), so equal facings compare equal."""
+    assert FixedFacing(degrees=-90.0) == FixedFacing(degrees=270.0)
+    assert FixedFacing(degrees=720.0).degrees == 0.0
+    with pytest.raises(SchemaError):
+        FixedFacing(degrees=math.nan)
+
+
+BARE_VALUES = [
+    (FacingMode.FIXED, 90.0),
+    (FacingMode.TOWARD_POINT, (1.0, 2.0)),
+    (FacingMode.TOWARD_ENTITY, "B"),
+]
+
+
+@pytest.mark.parametrize(("mode", "bare"), BARE_VALUES)
+def test_regression_models_refuse_bare_facing_values(mode: FacingMode, bare: object) -> None:
+    """Refuses a bare number, pair or string instead of guessing its kind."""
+    with pytest.raises(SchemaError):
+        _row_with(mode, bare)
+    with pytest.raises(SchemaError):
+        _override_with(mode, bare)
+
+
+@pytest.mark.parametrize(("mode", "bare"), BARE_VALUES)
+def test_regression_set_facing_wraps_bare_values(
+    mode: FacingMode, bare: float | Point | str
+) -> None:
+    """Wraps the bare number, pair or string the builder accepts into the value mode reads."""
+    spec = set_facing(TransitionSpec(id=make_tid("1", "2"), counts=8.0), ["A"], mode, bare)
+    assert spec.row("A").facing_value == dict(KIND_FOR_MODE)[mode]
+
+
+def test_regression_dropping_the_faced_spot_resets_the_facing() -> None:
+    """Falls back to the target facing, not an invalid half-set value, when the faced spot goes."""
+    show = rich_show()
+    dropped = rewrite_spot_ids(show, lambda spot: None if spot == "T2" else spot)
+    row = dropped.transition(("1", "2")).row("T1")
+    assert (row.facing_mode, row.facing_value) == (FacingMode.TO_TARGET, None)
+    override = dropped.facing_overrides[0]
+    assert override.mode is FacingMode.TOWARD_ENTITY
+    assert override.value == EntityFacing(entity=SpotId("T3"))

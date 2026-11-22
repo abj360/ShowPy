@@ -42,7 +42,7 @@ from showpy.choreo.engine_compile import (
     plan_positions,
     plan_progress,
 )
-from showpy.choreo.engine_facing import FacingContext, plan_facing, validate_facing
+from showpy.choreo.engine_facing import FacingContext, plan_facing
 from showpy.choreo.engine_models import (
     CompiledTransition,
     EntityState,
@@ -128,9 +128,7 @@ class PathEngine:
         """Builds one spot's plan without caching, so callers can report errors per spot."""
         spec = self.show.transition(tid)
         a, b = self.show.set(tid[0]).get(entity), self.show.set(tid[1]).get(entity)
-        plan = compile_plan(spec.row(entity), spec, a, b, self.motions, tol=self.motion_tol)
-        validate_facing(plan)
-        return plan
+        return compile_plan(spec.row(entity), spec, a, b, self.motions, tol=self.motion_tol)
 
     def compile_all(self) -> dict[TransitionId, CompiledTransition]:
         """Builds every transition of the show, in show order."""
@@ -249,7 +247,6 @@ class PathEngine:
             facing_mode=override.mode, facing_value=override.value
         )
         compiled = self.compile(tid)
-        validate_facing(plan)
         ctx = FacingContext(self._point_at, compiled.t_global0, compiled.counts)
         start, end = plan.window
         inside = min(max(tau, start + VELOCITY_STEP), end - VELOCITY_STEP)

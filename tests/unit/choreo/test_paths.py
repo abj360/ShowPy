@@ -28,6 +28,7 @@ from showpy.choreo.engine import PathEngine
 from showpy.choreo.path_models import (
     Easing,
     FacingMode,
+    FixedFacing,
     PathRow,
     PathStyle,
     TransitionSpec,
@@ -150,7 +151,7 @@ def test_ripple_spreads_starts_over_total() -> None:
 
 def test_set_facing_pace_and_easing() -> None:
     spec = set_facing(SPEC, ["T1"], FacingMode.FIXED, 90.0, turn_counts=1.0)
-    assert spec.row("T1").facing_value == 90.0
+    assert spec.row("T1").facing_value == FixedFacing(degrees=90.0)
     assert set_pace(SPEC, ["T1"], 2.0).row("T1").pace == 2.0
     assert set_easing(SPEC, ["T1"], "ease_in").row("T1").easing == Easing(kind="ease_in")
 

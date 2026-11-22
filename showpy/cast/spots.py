@@ -326,13 +326,13 @@ def _locked_items(show: "Show", ids: frozenset[SpotId]) -> list[str]:
 
 def _facing_targets(show: "Show", ids: frozenset[SpotId]) -> list[str]:
     rows = [
-        f"{row.entity} faces {row.facing_value} in {spec.id}"
+        f"{row.entity} faces {faces_entity(row.facing_mode, row.facing_value)} in {spec.id}"
         for spec in show.transitions
         for row in spec.rows.values()
         if row.entity not in ids and faces_entity(row.facing_mode, row.facing_value) in ids
     ]
     overrides = [
-        f"override at {o.start} faces {o.value}"
+        f"override at {o.start} faces {faces_entity(o.mode, o.value)}"
         for o in show.facing_overrides
         if faces_entity(o.mode, o.value) in ids
     ]

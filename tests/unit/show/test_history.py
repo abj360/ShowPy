@@ -31,7 +31,15 @@ from showpy.cast.models import Group
 from showpy.cast.rewrite import rewrite_spot_ids
 from showpy.cast.spots import add_spot
 from showpy.choreo.form_models import Form
-from showpy.choreo.path_models import FacingMode, FacingOverride, PathRow, Route, TransitionSpec
+from showpy.choreo.path_models import (
+    EntityFacing,
+    FacingMode,
+    FacingOverride,
+    FixedFacing,
+    PathRow,
+    Route,
+    TransitionSpec,
+)
 from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
 from showpy.core.ids import FormId, RouteId, SetId, SpotId, ZoneId, make_tid
 from showpy.core.types import Region
@@ -167,7 +175,9 @@ def test_rename_entities_rewrites_everything() -> None:
         members=(SpotId("T1"), SpotId("T2")),
     )
     row = PathRow(
-        entity=SpotId("T1"), facing_mode=FacingMode.TOWARD_ENTITY, facing_value=SpotId("T2")
+        entity=SpotId("T1"),
+        facing_mode=FacingMode.TOWARD_ENTITY,
+        facing_value=EntityFacing(entity=SpotId("T2")),
     )
     route = Route(id=RouteId("r"), curve={}, members=(SpotId("T2"),), offsets=(0.0,), travel=1.0)
     spec = TransitionSpec(
@@ -175,7 +185,11 @@ def test_rename_entities_rewrites_everything() -> None:
     )
     note = Note(id="n", text="x", anchor=Anchor.on_spots(["T1"]), author="d", created_at=AT)
     override = FacingOverride(
-        entities=(SpotId("T1"),), mode=FacingMode.FIXED, value=90.0, start=0, end=4
+        entities=(SpotId("T1"),),
+        mode=FacingMode.FIXED,
+        value=FixedFacing(degrees=90.0),
+        start=0,
+        end=4,
     )
     cast = show.cast.model_copy(update={"selections": {"lead": frozenset({"T1"})}})
     show = show.model_copy(
@@ -195,7 +209,7 @@ def test_rename_entities_rewrites_everything() -> None:
     assert renamed.forms[FormId("f")].members == ("S1", "S2")
     new_spec = renamed.transitions[0]
     assert list(new_spec.rows) == ["S1"]
-    assert new_spec.rows[SpotId("S1")].facing_value == "S2"
+    assert new_spec.rows[SpotId("S1")].facing_value == EntityFacing(entity=SpotId("S2"))
     assert new_spec.routes[RouteId("r")].members == ("S2",)
     assert renamed.notes[0].anchor.spots == ("S1",)
     assert renamed.facing_overrides[0].entities == ("S1",)
@@ -212,14 +226,18 @@ def _full_show() -> Show:
         members=(SpotId("T1"), SpotId("T2")),
     )
     row = PathRow(
-        entity=SpotId("T1"), facing_mode=FacingMode.TOWARD_ENTITY, facing_value=SpotId("T2")
+        entity=SpotId("T1"),
+        facing_mode=FacingMode.TOWARD_ENTITY,
+        facing_value=EntityFacing(entity=SpotId("T2")),
     )
     route = Route(id=RouteId("r"), curve={}, members=(SpotId("T2"),), offsets=(0.0,), travel=1.0)
     spec = TransitionSpec(
         id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): row}, routes={RouteId("r"): route}
     )
     note = Note(id="n", text="x", anchor=Anchor.on_spots(["T1"]), author="d", created_at=AT)
-    override = FacingOverride(entities="T1 + T2", mode=FacingMode.FIXED, value=90.0, start=0, end=4)
+    override = FacingOverride(
+        entities="T1 + T2", mode=FacingMode.FIXED, value=FixedFacing(degrees=90.0), start=0, end=4
+    )
     square = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)))
     zone = Zone(
         id=ZoneId("z"),

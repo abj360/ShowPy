@@ -73,6 +73,7 @@ from showpy.choreo.models import Placement, Set
 from showpy.choreo.path_models import (
     FacingMode,
     FacingOverride,
+    FixedFacing,
     PathRow,
     PathStyle,
     TransitionSpec,
@@ -352,7 +353,11 @@ def test_regression_validate_show_reports_duplicate_note_ids() -> None:
 
 def _override(entity: str = "T1", start: float = 1.0, end: float = 2.0) -> FacingOverride:
     return FacingOverride(
-        entities=(SpotId(entity),), mode=FacingMode.FIXED, value=90.0, start=start, end=end
+        entities=(SpotId(entity),),
+        mode=FacingMode.FIXED,
+        value=FixedFacing(degrees=90.0),
+        start=start,
+        end=end,
     )
 
 
