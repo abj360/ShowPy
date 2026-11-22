@@ -17,13 +17,14 @@ Contains:
 """
 
 import math
+from typing import cast
 
 import numpy as np
 import pytest
 
 from showpy.choreo.forms import line_form
 from showpy.choreo.match import bottleneck_value, cost_matrix, match, match_by_order
-from showpy.choreo.match_models import MatchOptions
+from showpy.choreo.match_models import CostFn, MatchOptions
 from showpy.choreo.models import PlacementPatch
 from showpy.core.caps import MAX_COORD_M
 from showpy.core.errors import MatchError, SchemaError, ShowPyError, UnknownRefError
@@ -330,16 +331,39 @@ def test_regression_match_by_order_rejects_duplicate_spots() -> None:
         match_by_order(["A", "A"], np.asarray(PAIR_SLOTS))
 
 
-@pytest.mark.defect("UP-9.6-55")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-55")
 def test_regression_match_wraps_a_failing_cost_fn() -> None:
     """Raises MatchError when a cost_fn callback raises (audit 9.6)."""
     with pytest.raises(MatchError):
         match(PAIR_STARTS, PAIR_SLOTS, options=MatchOptions(cost_fn=_failing_cost))
 
 
-@pytest.mark.defect("UP-9.6-61")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-61")
+def test_regression_match_cost_fn_error_is_chained_and_teaches() -> None:
+    """Chains the callback's own exception and says what cost_fn must return."""
+    with pytest.raises(MatchError, match="cost of 0 for slot 0 failed") as excinfo:
+        match(PAIR_STARTS, PAIR_SLOTS, options=MatchOptions(cost_fn=_failing_cost))
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
+    assert "must return a number" in excinfo.value.hint
+
+
+def test_regression_match_wraps_a_non_numeric_cost_fn_result() -> None:
+    """Reports a cost_fn that returns no number as a MatchError."""
+    returns_text = cast(CostFn, lambda *_: "cheap")
+    with pytest.raises(MatchError, match="cost_fn failed"):
+        match(PAIR_STARTS, PAIR_SLOTS, options=MatchOptions(cost_fn=returns_text))
+
+
+def test_regression_match_names_the_nan_slot() -> None:
+    """Refuses a non-finite slot point and names the slot."""
+    with pytest.raises(SchemaError, match="slot 1 is not finite"):
+        match(PAIR_STARTS, [(0.0, 1.0), (math.nan, 1.0)])
+
+
+def test_regression_match_names_the_spot_with_a_non_finite_start() -> None:
+    """Names the spot whose start point is not finite."""
+    with pytest.raises(SchemaError, match="start of spot '1' is not finite"):
+        match([(0.0, 0.0), (math.inf, 0.0)], PAIR_SLOTS)
+
+
 def test_regression_match_names_the_nan_start() -> None:
     """Raises SchemaError, or a MatchError naming the NaN start, not an empty one (audit 9.6)."""
     with pytest.raises((SchemaError, MatchError)) as excinfo:

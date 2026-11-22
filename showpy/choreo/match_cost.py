@@ -18,12 +18,12 @@ import numpy as np
 
 from showpy.choreo.form_models import Form
 from showpy.choreo.forms import slots as form_slots
-from showpy.choreo.match_models import MatchOptions
+from showpy.choreo.match_models import CostFn, MatchOptions
 from showpy.choreo.match_solve import BoolArray, FloatArray
 from showpy.choreo.models import Set
 from showpy.core.errors import MatchError, SchemaError, UnknownRefError
 from showpy.core.ids import SpotId
-from showpy.core.types import Points
+from showpy.core.types import Point, Points
 from showpy.core.units import angle_diff, facing_vector
 from showpy.core.util import as_points, close_matches
 
@@ -85,7 +85,20 @@ def _source(
             f"{len(ids)} entity ids for {len(starts)} start points",
             hint="give one entity id per start point",
         )
+    _require_finite(starts, [f"start of spot {e!r}" for e in ids])
     return ids, starts, None
+
+
+def _require_finite(points: Points, names: Sequence[str]) -> None:
+    bad = np.flatnonzero(~np.isfinite(points).all(axis=1))
+    if len(bad) == 0:
+        return
+    first = int(bad[0])
+    raise SchemaError(
+        f"{names[first]} is not finite: ({points[first, 0]}, {points[first, 1]})",
+        hint="give every start and slot point finite meter coordinates",
+        context={"index": first, "non_finite": len(bad)},
+    )
 
 
 def _labels(m: int, slot_groups: Sequence[str | None] | None) -> tuple[str | None, ...]:
@@ -114,6 +127,7 @@ def build_problem(
     if len(set(ids)) != len(ids):
         raise SchemaError("an entity is listed twice", hint="list each spot once")
     slots = _slot_points(to_slots)
+    _require_finite(slots, [f"slot {j}" for j in range(len(slots))])
     labels = _labels(len(slots), slot_groups)
     return MatchProblem(ids, starts, facings, slots, dict(groups or {}), labels)
 
@@ -215,6 +229,18 @@ def _turn(p: MatchProblem, moves: FloatArray, distance: FloatArray) -> FloatArra
     return result
 
 
+def _call_cost_fn(fn: CostFn, entity: str, slot: int, start: Point, target: Point) -> float:
+    try:
+        return float(fn(entity, slot, start, target))
+    except Exception as exc:  # the callback is user code: any failure is reported as a MatchError
+        raise MatchError(
+            f"cost_fn failed for spot {entity!r} and slot {slot}: {type(exc).__name__}: {exc}",
+            hint="cost_fn(entity, slot, start, target) must return a number >= 0 "
+            "(infinity forbids the pair)",
+            context={"entity": entity, "slot": slot},
+        ) from exc
+
+
 def _cost_fn_matrix(p: MatchProblem, options: MatchOptions) -> FloatArray:
     fn = options.cost_fn
     n, m = len(p.entities), len(p.slots)
@@ -223,7 +249,7 @@ def _cost_fn_matrix(p: MatchProblem, options: MatchOptions) -> FloatArray:
     extra = np.array(
         [
             [
-                fn(e, j, (float(p.starts[i, 0]), float(p.starts[i, 1])), point_tuple(p.slots[j]))
+                _call_cost_fn(fn, e, j, point_tuple(p.starts[i]), point_tuple(p.slots[j]))
                 for j in range(m)
             ]
             for i, e in enumerate(p.entities)
