@@ -30,7 +30,6 @@ import shapely
 from showpy.cast.models import Group, LabelScheme, Shape
 from showpy.cast.spots import (
     GroupPatch,
-    _rename_everywhere,
     add_group,
     add_spot,
     add_spots_along,
@@ -42,6 +41,7 @@ from showpy.cast.spots import (
     regroup,
     relabel,
     remove_group,
+    rename_spots,
     set_claimable,
     set_shape,
 )
@@ -254,7 +254,7 @@ def test_remove_group_with_members_needs_target() -> None:
 
 def test_relabel_numbers_in_natural_order() -> None:
     show = two_set_show()
-    show = _rename_everywhere(show, {SpotId("T1"): "T10", SpotId("T2"): "T9"})
+    show = rename_spots(show, {SpotId("T1"): "T10", SpotId("T2"): "T9"})[0]
     relabeled, mapping = relabel(show, LabelScheme(prefixes={"trumpets": "Tp"}, start=1))
     assert mapping == {"T3": "Tp1", "T4": "Tp2", "T9": "Tp3", "T10": "Tp4"}
     assert relabeled.cast.label_scheme.prefixes == {"trumpets": "Tp"}
@@ -270,7 +270,7 @@ def test_relabel_rejects_colliding_prefixes() -> None:
 
 def test_rename_everywhere_rewrites_every_reference() -> None:
     mapping = {SpotId(old): f"A{old[1:]}" for old in ("T1", "T2", "T3", "T4")}
-    show = _rename_everywhere(rich_show(), mapping)
+    show = rename_spots(rich_show(), mapping)[0]
     assert show.cast.ids() == ("A1", "A2", "A3", "A4")
     assert all(s.entity_ids() == ("A1", "A2", "A3", "A4") for s in show.sets)
     assert show.forms[FormId("line1")].members == ("A1", "A2", "A3", "A4")
@@ -293,7 +293,7 @@ def test_rename_everywhere_rewrites_every_reference() -> None:
 
 
 def test_rename_everywhere_swaps_simultaneously() -> None:
-    show = _rename_everywhere(rich_show(), {SpotId("T1"): "T2", SpotId("T2"): "T1"})
+    show = rename_spots(rich_show(), {SpotId("T1"): "T2", SpotId("T2"): "T1"})[0]
     assert show.cast.ids() == ("T2", "T1", "T3", "T4")
     assert show.transition(("1", "2")).rows[SpotId("T2")].facing_value == EntityFacing(
         entity=SpotId("T1")
@@ -303,9 +303,9 @@ def test_rename_everywhere_swaps_simultaneously() -> None:
 
 def test_rename_everywhere_rejects_collisions_and_unknown_ids() -> None:
     with pytest.raises(SchemaError):
-        _rename_everywhere(rich_show(), {SpotId("T1"): "T2"})
+        rename_spots(rich_show(), {SpotId("T1"): "T2"})
     with pytest.raises(UnknownRefError):
-        _rename_everywhere(rich_show(), {SpotId("T9"): "T10"})
+        rename_spots(rich_show(), {SpotId("T9"): "T10"})
 
 
 def test_rename_everywhere_leaves_degree_facings_alone() -> None:
@@ -316,14 +316,12 @@ def test_rename_everywhere_leaves_degree_facings_alone() -> None:
     spec = show.transition(("1", "2"))
     rows: dict[SpotId, PathRow] = {**spec.rows, SpotId("T2"): row}
     spec = spec.model_copy(update={"rows": rows})
-    show = _rename_everywhere(
-        show.model_copy(update={"transitions": (spec,)}), {SpotId("T2"): "X2"}
-    )
+    show, _ = rename_spots(show.model_copy(update={"transitions": (spec,)}), {SpotId("T2"): "X2"})
     assert show.transition(("1", "2")).rows[SpotId("X2")].facing_value == FixedFacing(degrees=90.0)
 
 
 def test_rename_everywhere_with_empty_mapping_is_identity() -> None:
-    assert _rename_everywhere(rich_show(), {}) == rich_show()
+    assert rename_spots(rich_show(), {})[0] == rich_show()
 
 
 def test_define_selection_stores_resolved_ids() -> None:

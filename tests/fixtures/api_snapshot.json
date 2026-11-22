@@ -1081,6 +1081,15 @@
       "parent": "str"
     }
   },
+  "RewriteReport": {
+    "model": {
+      "dropped_facings": "tuple[showpy.choreo.path_models.FacingOverride, ...]",
+      "dropped_routes": "tuple[tuple[showpy.core.ids.TransitionId, showpy.core.ids.RouteId], ...]",
+      "orphaned_notes": "tuple[showpy.notes.models.Note, ...]",
+      "renamed": "collections.abc.Mapping[showpy.core.ids.SpotId, showpy.core.ids.SpotId]",
+      "unresolved_selectors": "tuple[str, ...]"
+    }
+  },
   "RoseFormParams": {
     "model": {
       "center": "Point",
@@ -2067,6 +2076,7 @@
   "remove_waypoint": "(spec: showpy.choreo.path_models.TransitionSpec, entity: str, index: int, *, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",
   "remove_zone": "(sheet: showpy.sheet.models.Sheet, zone_id: str) -> showpy.sheet.models.Sheet",
   "rename_entities": "(show: showpy.show.models.Show, mapping: collections.abc.Mapping[str, str]) -> showpy.show.models.Show",
+  "rename_spots": "(show: 'Show', mapping: collections.abc.Mapping[showpy.core.ids.SpotId, str] | collections.abc.Mapping[str, str], *, force: bool = False) -> 'tuple[Show, RewriteReport]'",
   "render_frame": "(show: showpy.show.models.Show, frame: showpy.choreo.engine_models.Frame, canvas: showpy.sheet.render.SheetCanvas) -> 'Image.Image'",
   "render_sheet": "(sheet: showpy.sheet.models.Sheet, fmt: SheetFormat = 'svg', px_per_m: float = 20.0) -> bytes",
   "renumber": "(show: showpy.show.models.Show, scheme: str = 'sequential') -> tuple[showpy.show.models.Show, dict[showpy.core.ids.SetId, showpy.core.ids.SetId]]",

@@ -24,15 +24,20 @@ Contains:
         anchored to no spots
     test_regression_many_to_one_rename_is_reported_with_the_duplicate_target: reports a rename
         mapping two spots to one ID by name, not as UnknownRefError
+    test_rename_spots_*: one behavior of the public `rename_spots` and its `RewriteReport` each
+    test_regression_stale_selector_is_reported_not_fatal: lists a selector that no longer
+        resolves in `unresolved_selectors` and leaves it as written
+    test_regression_override_facing_a_dropped_spot_is_dropped_and_reported: removes a facing
+        override aimed at a deleted spot instead of resetting it
 """
 
 import pytest
 
 from showpy.cast.models import LabelScheme
-from showpy.cast.rewrite import faces_entity, rewrite_spot_ids
-from showpy.cast.spots import delete_spots, relabel
+from showpy.cast.rewrite import faces_entity, rewrite_spot_ids, rewrite_spots
+from showpy.cast.spots import delete_spots, relabel, rename_spots
 from showpy.choreo.path_models import EntityFacing, FacingMode, FixedFacing, PointFacing
-from showpy.core.errors import ShowPyError, UnknownRefError
+from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
 from showpy.core.ids import FormId, SpotId, ZoneId
 from showpy.core.selection import Selection
 from showpy.core.types import Region
@@ -106,16 +111,12 @@ def test_regression_relabel_rewrites_sheet_zones() -> None:
     assert "T1" not in str(relabeled.sheet.zones[0].applies_to)
 
 
-@pytest.mark.defect("UP-9.3-82")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-82")
 def test_regression_stale_selector_does_not_block_unrelated_delete() -> None:
     """Deletes T1 although a zone names the long-gone spot T9 (audit 9.3)."""
     show = two_set_show().model_copy(update={"zones": (_zone("T9"),)})
     assert "T1" not in delete_spots(show, "T1").cast.ids()
 
 
-@pytest.mark.defect("UP-9.3-83")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-83")
 def test_regression_old_glued_selector_does_not_block_relabel() -> None:
     """Relabels a show whose zone still uses the pre-2026-11-12 syntax `T1+T2` (audit 9.3)."""
     show = two_set_show().model_copy(update={"zones": (_zone("T1+T2"),)})
@@ -123,32 +124,24 @@ def test_regression_old_glued_selector_does_not_block_relabel() -> None:
     assert "T1" not in relabeled.cast.ids()
 
 
-@pytest.mark.defect("UP-9.3-84")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-84")
 def test_regression_dropping_all_route_members_drops_the_route() -> None:
     """Drops or flags a route left without members (audit 9.3)."""
     show = rewrite_spot_ids(rich_show(), lambda i: None if i in {"T3", "T4"} else i)
     assert all(route.members for spec in show.transitions for route in spec.routes.values())
 
 
-@pytest.mark.defect("UP-9.3-85")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-85")
 def test_regression_dropping_all_override_entities_drops_the_override() -> None:
     """Drops or flags a facing override left without entities (audit 9.3)."""
     show = rewrite_spot_ids(rich_show(), lambda i: None if i in {"T1", "T2"} else i)
     assert all(len(override.entities) > 0 for override in show.facing_overrides)
 
 
-@pytest.mark.defect("UP-9.3-86")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-86")
 def test_regression_dropping_all_anchored_spots_drops_the_note_anchor() -> None:
     """Drops or flags a note anchored to no spots (audit 9.3)."""
     show = rewrite_spot_ids(rich_show(), lambda i: None if i == "T2" else i)
     assert all(note.anchor.spots != () for note in show.notes)
 
 
-@pytest.mark.defect("UP-9.3-87")
-@pytest.mark.xfail(strict=True, reason="UP-9.3-87")
 def test_regression_many_to_one_rename_is_reported_with_the_duplicate_target() -> None:
     """Reports a rename mapping two spots to one ID by name, not as UnknownRefError (audit 9.3)."""
     with pytest.raises(ShowPyError) as excinfo:
@@ -164,3 +157,61 @@ def test_regression_rewrite_passes_every_entity_pin_to_the_rename() -> None:
     renames: dict[str, str | None] = {"T1": "S1", "T2": None, "Z9": "Q9"}
     rewritten = rewrite_spot_ids(show, lambda spot_id: renames.get(spot_id, spot_id))
     assert [p.id for p in rewritten.pins] == ["S1", "Q9"]
+
+
+def test_rename_spots_reports_only_ids_that_changed() -> None:
+    show, report = rename_spots(rich_show(), {"T1": "S1", "T2": "T2"})
+    assert dict(report.renamed) == {"T1": "S1"}
+    assert show.cast.ids() == ("S1", "T2", "T3", "T4")
+    assert (report.dropped_routes, report.dropped_facings) == ((), ())
+    assert report.orphaned_notes == ()
+
+
+def test_rename_spots_with_an_empty_mapping_returns_the_same_show() -> None:
+    show = rich_show()
+    renamed, report = rename_spots(show, {})
+    assert renamed is show
+    assert report.renamed == {}
+
+
+def test_rename_spots_names_both_sources_of_a_clash() -> None:
+    with pytest.raises(SchemaError) as excinfo:
+        rename_spots(rich_show(), {"T1": "T9", "T2": "T9"})
+    assert "T1 and T2 both become T9" in excinfo.value.message
+    assert excinfo.value.context["sources"] == {"T9": ["T1", "T2"]}
+
+
+def test_rename_spots_refuses_unknown_spots() -> None:
+    with pytest.raises(UnknownRefError):
+        rename_spots(rich_show(), {"Q1": "Q2"})
+
+
+def test_rename_spots_allows_a_swap() -> None:
+    show, report = rename_spots(rich_show(), {"T1": "T2", "T2": "T1"})
+    assert dict(report.renamed) == {"T1": "T2", "T2": "T1"}
+    assert show.forms[FormId("line1")].members == ("T2", "T1", "T3", "T4")
+
+
+def test_rename_spots_follows_a_pin_without_force() -> None:
+    show, _ = rename_spots(_pinned_show(), {"T1": "X1"})
+    assert _pin_ids(show) == ["X1"]
+
+
+def test_regression_stale_selector_is_reported_not_fatal() -> None:
+    show = two_set_show().model_copy(update={"zones": (_zone("T9"),)})
+    renamed, report = rename_spots(show, {"T1": "X1"})
+    assert report.unresolved_selectors == ("T9",)
+    assert renamed.zones[0].applies_to == "T9"
+
+
+def test_rewrite_spots_reports_dropped_route_and_orphaned_note() -> None:
+    show, report = rewrite_spots(rich_show(), lambda i: None if i in {"T2", "T3", "T4"} else i)
+    assert report.dropped_routes == ((("1", "2"), "r1"),)
+    assert [note.id for note in report.orphaned_notes] == ["n1"]
+    assert show.notes == ()
+
+
+def test_regression_override_facing_a_dropped_spot_is_dropped_and_reported() -> None:
+    show, report = rewrite_spots(rich_show(), lambda i: None if i == "T3" else i)
+    assert show.facing_overrides == ()
+    assert [o.value for o in report.dropped_facings] == [EntityFacing(entity=SpotId("T3"))]

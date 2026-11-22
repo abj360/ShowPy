@@ -13,6 +13,7 @@ Contains:
     edit_group(): changes a group's fields
     remove_group(): removes a group, moving its spots to another first
     relabel(): renumbers every group under a label scheme
+    rename_spots(): renames spot IDs everywhere and reports what could not follow
     define_selection(): stores a named selection
     set_shape(): sets the footprint of spots
     set_claimable(): sets who may claim spots once published
@@ -25,8 +26,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, TypedDict, Unpack, get_args
 from typing import ReadOnly as ReadOnlyKey
 
-from showpy.cast.models import Cast, Claimable, Group, LabelScheme, Shape, Spot
-from showpy.cast.rewrite import faces_entity, rewrite_spot_ids
+from showpy.cast.models import Cast, Claimable, Group, LabelScheme, RewriteReport, Shape, Spot
+from showpy.cast.rewrite import faces_entity, rewrite_spot_ids, rewrite_spots
 from showpy.cast.select import label_prefix, select
 from showpy.choreo.models import Placement
 from showpy.core.error_codes import ErrorCode
@@ -391,7 +392,7 @@ def delete_spots(show: "Show", sel: Selector, *, force: bool = False) -> "Show":
             hint="re-aim those facings at another spot or a point first",
             context={"references": facing},
         )
-    return rewrite_spot_ids(show, lambda spot_id: None if spot_id in ids else spot_id)
+    return rewrite_spots(show, lambda spot_id: None if spot_id in ids else spot_id)[0]
 
 
 def _relabel_targets(cast: Cast, moved: Sequence[SpotId], group: Group) -> dict[SpotId, str]:
@@ -421,7 +422,7 @@ def regroup(show: "Show", sel: Selector, group: str) -> tuple["Show", dict[SpotI
     mapping = _relabel_targets(show.cast, moved, target)
     moved_set = set(moved)
     spots = tuple(s.replace(group=group) if s.id in moved_set else s for s in show.cast.spots)
-    return _rename_everywhere(_with_cast(show, spots=spots), mapping), mapping
+    return rename_spots(_with_cast(show, spots=spots), mapping)[0], mapping
 
 
 def add_group(show: "Show", group: Group) -> "Show":
@@ -537,7 +538,7 @@ def relabel(show: "Show", scheme: LabelScheme) -> tuple["Show", dict[SpotId, str
             context={"clashes": clashes},
         )
     mapping = {old: new for old, new in labels.items() if old != new}
-    return _with_cast(_rename_everywhere(show, mapping), label_scheme=scheme), mapping
+    return _with_cast(rename_spots(show, mapping)[0], label_scheme=scheme), mapping
 
 
 def define_selection(show: "Show", name: str, sel: Selector, *, replace: bool = False) -> "Show":
@@ -610,24 +611,37 @@ def _repeated(ids: Iterable[str]) -> list[str]:
     return sorted(spot_id for spot_id, count in Counter(ids).items() if count > 1)
 
 
-def _rename_everywhere(show: "Show", mapping: Mapping[SpotId, str]) -> "Show":
+def rename_spots(
+    show: "Show", mapping: Mapping[SpotId, str] | Mapping[str, str], *, force: bool = False
+) -> "tuple[Show, RewriteReport]":
     """Renames spot IDs simultaneously in every place a show refers to them.
 
     Covers the cast, placements, forms, path rows (keys, entities and entity facings),
-    routes, note anchors, facing overrides, zones and named selections. String selectors
-    that name labels are frozen to the renamed ID list; others stay as written.
+    routes, note anchors, facing overrides, zones, pins and named selections. Swaps are
+    allowed; a new ID that another spot keeps raises SchemaError naming both sources. A
+    selector that names labels is frozen to the renamed ID list; one that no longer resolves
+    stays as written and is listed in the report. Pinned pictures must stay as they are:
+    LockedError unless `force=True`.
+
+    Args:
+        show: The show to rename spots in.
+        mapping: Old ID to new ID; entries that keep the ID are ignored.
+        force: Allows the rename past a pinned picture it would change.
+
+    Returns:
+        show: The renamed show.
+        report: What was renamed and what could not follow the rename.
+
+    >>> from showpy.examples import two_set_show
+    >>> renamed, report = rename_spots(two_set_show(), {"T1": "S1"})
+    >>> renamed.cast.ids(), dict(report.renamed)
+    (('S1', 'T2', 'T3', 'T4'), {'T1': 'S1'})
     """
-    if not mapping:
-        return show
-    known = set(show.cast.ids())
-    for old in mapping:
-        if old not in known:
-            show.cast.spot(old)
-    duplicates = _repeated(mapping.get(i, i) for i in show.cast.ids())
-    if duplicates:
-        raise SchemaError(
-            f"renaming would repeat {', '.join(duplicates)}",
-            hint="map to labels no other spot keeps",
-            context={"duplicates": duplicates},
-        )
-    return rewrite_spot_ids(show, lambda spot_id: mapping.get(spot_id, spot_id))
+    changes = {SpotId(old): new for old, new in mapping.items() if old != new}
+    if not changes:
+        return show, RewriteReport()
+    for old in changes:
+        show.cast.spot(old)
+    renamed, report = rewrite_spots(show, lambda spot_id: changes.get(spot_id, spot_id))
+    _require_pictures_kept(show, renamed, changes, force=force)
+    return renamed, report
