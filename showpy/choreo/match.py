@@ -46,7 +46,7 @@ from showpy.choreo.match_solve import (
     solve_sum,
 )
 from showpy.choreo.models import Set
-from showpy.core.errors import MatchError
+from showpy.core.errors import MatchError, SchemaError
 from showpy.core.ids import FormId
 from showpy.core.types import Points
 from showpy.core.util import as_points, natural_sort
@@ -285,6 +285,13 @@ def match_by_order(
     """
     slots = form_slots(form) if isinstance(form, Form) else as_points(form)
     ids = tuple(ordered_sel)
+    if len(set(ids)) != len(ids):
+        repeated = sorted({e for e in ids if ids.count(e) > 1})
+        raise SchemaError(
+            f"spot {repeated[0]!r} is listed twice",
+            hint="list each spot once",
+            context={"repeated": repeated},
+        )
     if len(ids) > len(slots):
         raise MatchError(
             f"{len(ids)} spots but only {len(slots)} slots",

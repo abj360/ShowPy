@@ -324,8 +324,6 @@ def _failing_cost(entity: str, slot: int, _start: Point, _target: Point) -> floa
     raise RuntimeError(f"cost of {entity} for slot {slot} failed")
 
 
-@pytest.mark.defect("UP-9.6-25")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-25")
 def test_regression_match_by_order_rejects_duplicate_spots() -> None:
     """Rejects a repeated spot instead of collapsing it to one (audit 9.6)."""
     with pytest.raises(ShowPyError):
