@@ -18,6 +18,8 @@ Contains:
     test_regression_svg_curve_rejects_a_table_over_the_cap: rejects a 50,000-piece SVG table
     test_regression_trimmed_curve_rejects_out_of_range_arc_lengths: rejects s0/s1 outside [0, L] of
         an open base instead of reporting length 15
+    test_regression_trimmed_breaks_merge_a_break_within_a_nanometer_of_an_end: drops a base break
+        within 1e-9 m of a trim end instead of keeping a stub piece
     test_regression_composite_rejects_gapped_parts: rejects parts whose ends do not meet instead of
         jumping across the gap
     test_regression_composite_gap_names_the_part: names the first part that does not meet the one
@@ -286,6 +288,40 @@ def test_regression_trimmed_curve_rejects_out_of_range_arc_lengths() -> None:
     """Rejects s0/s1 outside [0, L] of an open base instead of reporting length 15 (audit 9.1)."""
     with pytest.raises(GeometryError):
         TrimmedCurve(base=line((0.0, 0.0), (1.0, 0.0)), s0=-5.0, s1=10.0)
+
+
+VERTEX_ARC_LENGTH_M = 16.0
+NEAR_END_OFFSETS_M = (math.nextafter(VERTEX_ARC_LENGTH_M, math.inf), 16.0000000005)
+
+
+def _two_leg_polyline() -> Polyline:
+    return Polyline(points=((0.0, 0.0), (VERTEX_ARC_LENGTH_M, 0.0), (VERTEX_ARC_LENGTH_M, 10.0)))
+
+
+@pytest.mark.parametrize("end", NEAR_END_OFFSETS_M)
+@pytest.mark.parametrize("before", [True, False])
+def test_regression_trimmed_breaks_merge_a_break_within_a_nanometer_of_an_end(
+    end: float, before: bool
+) -> None:
+    """Drops a base break that sits within 1e-9 m of the trim end instead of keeping a stub."""
+    base = _two_leg_polyline()
+    near = VERTEX_ARC_LENGTH_M - (end - VERTEX_ARC_LENGTH_M) if before else end
+    for trimmed in (
+        TrimmedCurve(base=base, s0=0.0, s1=near),
+        TrimmedCurve(base=base, s0=near, s1=0.0),
+        TrimmedCurve(base=base, s0=near, s1=base.length()),
+        TrimmedCurve(base=base, s0=base.length(), s1=near),
+    ):
+        breaks = trimmed._breaks()
+        assert breaks[0] == 0.0
+        assert breaks[-1] == trimmed.length()
+        assert np.min(np.diff(breaks)) > 1e-9
+
+
+def test_trimmed_breaks_keep_a_break_farther_than_the_tolerance_from_an_end() -> None:
+    """Keeps an inner base break 1e-6 m from the trim end."""
+    trimmed = TrimmedCurve(base=_two_leg_polyline(), s0=0.0, s1=VERTEX_ARC_LENGTH_M + 1e-6)
+    assert list(trimmed._breaks()) == [0.0, VERTEX_ARC_LENGTH_M, VERTEX_ARC_LENGTH_M + 1e-6]
 
 
 def test_regression_composite_rejects_gapped_parts() -> None:
