@@ -4031,17 +4031,6 @@
     },
     "/show/sheet.json": {
       "based_on": null,
-      "default_coordinates": {
-        "audience_side": "front",
-        "kind": "marching",
-        "labels": {},
-        "origin": [
-          0.0,
-          0.0
-        ],
-        "precision": 0.01,
-        "units": "m"
-      },
       "grid": {
         "major_every": 5,
         "origin": [
@@ -4462,1123 +4451,6 @@
           ]
         }
       ],
-      "landmarks": [
-        {
-          "aliases": [
-            "front center",
-            "50 front sideline"
-          ],
-          "geometry": [
-            [
-              0.0,
-              0.0
-            ]
-          ],
-          "id": "center",
-          "kind": "point",
-          "name": "center"
-        },
-        {
-          "aliases": [
-            "50 back sideline"
-          ],
-          "geometry": [
-            [
-              0.0,
-              48.767999999999994
-            ]
-          ],
-          "id": "back-center",
-          "kind": "point",
-          "name": "back center"
-        },
-        {
-          "aliases": [
-            "home sideline"
-          ],
-          "geometry": [
-            [
-              -54.864,
-              0.0
-            ],
-            [
-              54.864,
-              0.0
-            ]
-          ],
-          "id": "front-sideline",
-          "kind": "line",
-          "name": "front sideline"
-        },
-        {
-          "aliases": [
-            "visitor sideline"
-          ],
-          "geometry": [
-            [
-              -54.864,
-              48.767999999999994
-            ],
-            [
-              54.864,
-              48.767999999999994
-            ]
-          ],
-          "id": "back-sideline",
-          "kind": "line",
-          "name": "back sideline"
-        },
-        {
-          "aliases": [
-            "home hash"
-          ],
-          "geometry": [
-            [
-              -45.72,
-              18.287999999999997
-            ],
-            [
-              45.72,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash",
-          "kind": "line",
-          "name": "front hash"
-        },
-        {
-          "aliases": [
-            "visitor hash"
-          ],
-          "geometry": [
-            [
-              -45.72,
-              30.479999999999997
-            ],
-            [
-              45.72,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash",
-          "kind": "line",
-          "name": "back hash"
-        },
-        {
-          "aliases": [],
-          "geometry": [
-            [
-              -54.864,
-              0.0
-            ],
-            [
-              -45.72,
-              0.0
-            ],
-            [
-              -45.72,
-              48.767999999999994
-            ],
-            [
-              -54.864,
-              48.767999999999994
-            ]
-          ],
-          "id": "end-zone-left",
-          "kind": "area",
-          "name": "left end zone"
-        },
-        {
-          "aliases": [],
-          "geometry": [
-            [
-              45.72,
-              0.0
-            ],
-            [
-              54.864,
-              0.0
-            ],
-            [
-              54.864,
-              48.767999999999994
-            ],
-            [
-              45.72,
-              48.767999999999994
-            ]
-          ],
-          "id": "end-zone-right",
-          "kind": "area",
-          "name": "right end zone"
-        },
-        {
-          "aliases": [
-            "left 0"
-          ],
-          "geometry": [
-            [
-              -45.72,
-              0.0
-            ],
-            [
-              -45.72,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-left-0",
-          "kind": "line",
-          "name": "left goal line"
-        },
-        {
-          "aliases": [
-            "left 0 home hash"
-          ],
-          "geometry": [
-            [
-              -45.72,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-left-0",
-          "kind": "point",
-          "name": "left 0 front hash"
-        },
-        {
-          "aliases": [
-            "left 0 visitor hash"
-          ],
-          "geometry": [
-            [
-              -45.72,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-left-0",
-          "kind": "point",
-          "name": "left 0 back hash"
-        },
-        {
-          "aliases": [
-            "left 5"
-          ],
-          "geometry": [
-            [
-              -41.147999999999996,
-              0.0
-            ],
-            [
-              -41.147999999999996,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-left-5",
-          "kind": "line",
-          "name": "left 5 yard line"
-        },
-        {
-          "aliases": [
-            "left 5 home hash"
-          ],
-          "geometry": [
-            [
-              -41.147999999999996,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-left-5",
-          "kind": "point",
-          "name": "left 5 front hash"
-        },
-        {
-          "aliases": [
-            "left 5 visitor hash"
-          ],
-          "geometry": [
-            [
-              -41.147999999999996,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-left-5",
-          "kind": "point",
-          "name": "left 5 back hash"
-        },
-        {
-          "aliases": [
-            "left 10"
-          ],
-          "geometry": [
-            [
-              -36.576,
-              0.0
-            ],
-            [
-              -36.576,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-left-10",
-          "kind": "line",
-          "name": "left 10 yard line"
-        },
-        {
-          "aliases": [
-            "left 10 home hash"
-          ],
-          "geometry": [
-            [
-              -36.576,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-left-10",
-          "kind": "point",
-          "name": "left 10 front hash"
-        },
-        {
-          "aliases": [
-            "left 10 visitor hash"
-          ],
-          "geometry": [
-            [
-              -36.576,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-left-10",
-          "kind": "point",
-          "name": "left 10 back hash"
-        },
-        {
-          "aliases": [
-            "left 15"
-          ],
-          "geometry": [
-            [
-              -32.004,
-              0.0
-            ],
-            [
-              -32.004,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-left-15",
-          "kind": "line",
-          "name": "left 15 yard line"
-        },
-        {
-          "aliases": [
-            "left 15 home hash"
-          ],
-          "geometry": [
-            [
-              -32.004,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-left-15",
-          "kind": "point",
-          "name": "left 15 front hash"
-        },
-        {
-          "aliases": [
-            "left 15 visitor hash"
-          ],
-          "geometry": [
-            [
-              -32.004,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-left-15",
-          "kind": "point",
-          "name": "left 15 back hash"
-        },
-        {
-          "aliases": [
-            "left 20"
-          ],
-          "geometry": [
-            [
-              -27.432,
-              0.0
-            ],
-            [
-              -27.432,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-left-20",
-          "kind": "line",
-          "name": "left 20 yard line"
-        },
-        {
-          "aliases": [
-            "left 20 home hash"
-          ],
-          "geometry": [
-            [
-              -27.432,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-left-20",
-          "kind": "point",
-          "name": "left 20 front hash"
-        },
-        {
-          "aliases": [
-            "left 20 visitor hash"
-          ],
-          "geometry": [
-            [
-              -27.432,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-left-20",
-          "kind": "point",
-          "name": "left 20 back hash"
-        },
-        {
-          "aliases": [
-            "left 25"
-          ],
-          "geometry": [
-            [
-              -22.86,
-              0.0
-            ],
-            [
-              -22.86,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-left-25",
-          "kind": "line",
-          "name": "left 25 yard line"
-        },
-        {
-          "aliases": [
-            "left 25 home hash"
-          ],
-          "geometry": [
-            [
-              -22.86,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-left-25",
-          "kind": "point",
-          "name": "left 25 front hash"
-        },
-        {
-          "aliases": [
-            "left 25 visitor hash"
-          ],
-          "geometry": [
-            [
-              -22.86,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-left-25",
-          "kind": "point",
-          "name": "left 25 back hash"
-        },
-        {
-          "aliases": [
-            "left 30"
-          ],
-          "geometry": [
-            [
-              -18.288,
-              0.0
-            ],
-            [
-              -18.288,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-left-30",
-          "kind": "line",
-          "name": "left 30 yard line"
-        },
-        {
-          "aliases": [
-            "left 30 home hash"
-          ],
-          "geometry": [
-            [
-              -18.288,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-left-30",
-          "kind": "point",
-          "name": "left 30 front hash"
-        },
-        {
-          "aliases": [
-            "left 30 visitor hash"
-          ],
-          "geometry": [
-            [
-              -18.288,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-left-30",
-          "kind": "point",
-          "name": "left 30 back hash"
-        },
-        {
-          "aliases": [
-            "left 35"
-          ],
-          "geometry": [
-            [
-              -13.716,
-              0.0
-            ],
-            [
-              -13.716,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-left-35",
-          "kind": "line",
-          "name": "left 35 yard line"
-        },
-        {
-          "aliases": [
-            "left 35 home hash"
-          ],
-          "geometry": [
-            [
-              -13.716,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-left-35",
-          "kind": "point",
-          "name": "left 35 front hash"
-        },
-        {
-          "aliases": [
-            "left 35 visitor hash"
-          ],
-          "geometry": [
-            [
-              -13.716,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-left-35",
-          "kind": "point",
-          "name": "left 35 back hash"
-        },
-        {
-          "aliases": [
-            "left 40"
-          ],
-          "geometry": [
-            [
-              -9.144,
-              0.0
-            ],
-            [
-              -9.144,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-left-40",
-          "kind": "line",
-          "name": "left 40 yard line"
-        },
-        {
-          "aliases": [
-            "left 40 home hash"
-          ],
-          "geometry": [
-            [
-              -9.144,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-left-40",
-          "kind": "point",
-          "name": "left 40 front hash"
-        },
-        {
-          "aliases": [
-            "left 40 visitor hash"
-          ],
-          "geometry": [
-            [
-              -9.144,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-left-40",
-          "kind": "point",
-          "name": "left 40 back hash"
-        },
-        {
-          "aliases": [
-            "left 45"
-          ],
-          "geometry": [
-            [
-              -4.572,
-              0.0
-            ],
-            [
-              -4.572,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-left-45",
-          "kind": "line",
-          "name": "left 45 yard line"
-        },
-        {
-          "aliases": [
-            "left 45 home hash"
-          ],
-          "geometry": [
-            [
-              -4.572,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-left-45",
-          "kind": "point",
-          "name": "left 45 front hash"
-        },
-        {
-          "aliases": [
-            "left 45 visitor hash"
-          ],
-          "geometry": [
-            [
-              -4.572,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-left-45",
-          "kind": "point",
-          "name": "left 45 back hash"
-        },
-        {
-          "aliases": [
-            "50"
-          ],
-          "geometry": [
-            [
-              0.0,
-              0.0
-            ],
-            [
-              0.0,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-50",
-          "kind": "line",
-          "name": "50 yard line"
-        },
-        {
-          "aliases": [
-            "50 home hash"
-          ],
-          "geometry": [
-            [
-              0.0,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-50",
-          "kind": "point",
-          "name": "50 front hash"
-        },
-        {
-          "aliases": [
-            "50 visitor hash"
-          ],
-          "geometry": [
-            [
-              0.0,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-50",
-          "kind": "point",
-          "name": "50 back hash"
-        },
-        {
-          "aliases": [
-            "right 45"
-          ],
-          "geometry": [
-            [
-              4.572,
-              0.0
-            ],
-            [
-              4.572,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-right-45",
-          "kind": "line",
-          "name": "right 45 yard line"
-        },
-        {
-          "aliases": [
-            "right 45 home hash"
-          ],
-          "geometry": [
-            [
-              4.572,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-right-45",
-          "kind": "point",
-          "name": "right 45 front hash"
-        },
-        {
-          "aliases": [
-            "right 45 visitor hash"
-          ],
-          "geometry": [
-            [
-              4.572,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-right-45",
-          "kind": "point",
-          "name": "right 45 back hash"
-        },
-        {
-          "aliases": [
-            "right 40"
-          ],
-          "geometry": [
-            [
-              9.144,
-              0.0
-            ],
-            [
-              9.144,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-right-40",
-          "kind": "line",
-          "name": "right 40 yard line"
-        },
-        {
-          "aliases": [
-            "right 40 home hash"
-          ],
-          "geometry": [
-            [
-              9.144,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-right-40",
-          "kind": "point",
-          "name": "right 40 front hash"
-        },
-        {
-          "aliases": [
-            "right 40 visitor hash"
-          ],
-          "geometry": [
-            [
-              9.144,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-right-40",
-          "kind": "point",
-          "name": "right 40 back hash"
-        },
-        {
-          "aliases": [
-            "right 35"
-          ],
-          "geometry": [
-            [
-              13.716,
-              0.0
-            ],
-            [
-              13.716,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-right-35",
-          "kind": "line",
-          "name": "right 35 yard line"
-        },
-        {
-          "aliases": [
-            "right 35 home hash"
-          ],
-          "geometry": [
-            [
-              13.716,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-right-35",
-          "kind": "point",
-          "name": "right 35 front hash"
-        },
-        {
-          "aliases": [
-            "right 35 visitor hash"
-          ],
-          "geometry": [
-            [
-              13.716,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-right-35",
-          "kind": "point",
-          "name": "right 35 back hash"
-        },
-        {
-          "aliases": [
-            "right 30"
-          ],
-          "geometry": [
-            [
-              18.288,
-              0.0
-            ],
-            [
-              18.288,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-right-30",
-          "kind": "line",
-          "name": "right 30 yard line"
-        },
-        {
-          "aliases": [
-            "right 30 home hash"
-          ],
-          "geometry": [
-            [
-              18.288,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-right-30",
-          "kind": "point",
-          "name": "right 30 front hash"
-        },
-        {
-          "aliases": [
-            "right 30 visitor hash"
-          ],
-          "geometry": [
-            [
-              18.288,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-right-30",
-          "kind": "point",
-          "name": "right 30 back hash"
-        },
-        {
-          "aliases": [
-            "right 25"
-          ],
-          "geometry": [
-            [
-              22.86,
-              0.0
-            ],
-            [
-              22.86,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-right-25",
-          "kind": "line",
-          "name": "right 25 yard line"
-        },
-        {
-          "aliases": [
-            "right 25 home hash"
-          ],
-          "geometry": [
-            [
-              22.86,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-right-25",
-          "kind": "point",
-          "name": "right 25 front hash"
-        },
-        {
-          "aliases": [
-            "right 25 visitor hash"
-          ],
-          "geometry": [
-            [
-              22.86,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-right-25",
-          "kind": "point",
-          "name": "right 25 back hash"
-        },
-        {
-          "aliases": [
-            "right 20"
-          ],
-          "geometry": [
-            [
-              27.432,
-              0.0
-            ],
-            [
-              27.432,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-right-20",
-          "kind": "line",
-          "name": "right 20 yard line"
-        },
-        {
-          "aliases": [
-            "right 20 home hash"
-          ],
-          "geometry": [
-            [
-              27.432,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-right-20",
-          "kind": "point",
-          "name": "right 20 front hash"
-        },
-        {
-          "aliases": [
-            "right 20 visitor hash"
-          ],
-          "geometry": [
-            [
-              27.432,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-right-20",
-          "kind": "point",
-          "name": "right 20 back hash"
-        },
-        {
-          "aliases": [
-            "right 15"
-          ],
-          "geometry": [
-            [
-              32.004,
-              0.0
-            ],
-            [
-              32.004,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-right-15",
-          "kind": "line",
-          "name": "right 15 yard line"
-        },
-        {
-          "aliases": [
-            "right 15 home hash"
-          ],
-          "geometry": [
-            [
-              32.004,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-right-15",
-          "kind": "point",
-          "name": "right 15 front hash"
-        },
-        {
-          "aliases": [
-            "right 15 visitor hash"
-          ],
-          "geometry": [
-            [
-              32.004,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-right-15",
-          "kind": "point",
-          "name": "right 15 back hash"
-        },
-        {
-          "aliases": [
-            "right 10"
-          ],
-          "geometry": [
-            [
-              36.576,
-              0.0
-            ],
-            [
-              36.576,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-right-10",
-          "kind": "line",
-          "name": "right 10 yard line"
-        },
-        {
-          "aliases": [
-            "right 10 home hash"
-          ],
-          "geometry": [
-            [
-              36.576,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-right-10",
-          "kind": "point",
-          "name": "right 10 front hash"
-        },
-        {
-          "aliases": [
-            "right 10 visitor hash"
-          ],
-          "geometry": [
-            [
-              36.576,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-right-10",
-          "kind": "point",
-          "name": "right 10 back hash"
-        },
-        {
-          "aliases": [
-            "right 5"
-          ],
-          "geometry": [
-            [
-              41.147999999999996,
-              0.0
-            ],
-            [
-              41.147999999999996,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-right-5",
-          "kind": "line",
-          "name": "right 5 yard line"
-        },
-        {
-          "aliases": [
-            "right 5 home hash"
-          ],
-          "geometry": [
-            [
-              41.147999999999996,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-right-5",
-          "kind": "point",
-          "name": "right 5 front hash"
-        },
-        {
-          "aliases": [
-            "right 5 visitor hash"
-          ],
-          "geometry": [
-            [
-              41.147999999999996,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-right-5",
-          "kind": "point",
-          "name": "right 5 back hash"
-        },
-        {
-          "aliases": [
-            "right 0"
-          ],
-          "geometry": [
-            [
-              45.72,
-              0.0
-            ],
-            [
-              45.72,
-              48.767999999999994
-            ]
-          ],
-          "id": "yard-right-0",
-          "kind": "line",
-          "name": "right goal line"
-        },
-        {
-          "aliases": [
-            "right 0 home hash"
-          ],
-          "geometry": [
-            [
-              45.72,
-              18.287999999999997
-            ]
-          ],
-          "id": "front-hash-right-0",
-          "kind": "point",
-          "name": "right 0 front hash"
-        },
-        {
-          "aliases": [
-            "right 0 visitor hash"
-          ],
-          "geometry": [
-            [
-              45.72,
-              30.479999999999997
-            ]
-          ],
-          "id": "back-hash-right-0",
-          "kind": "point",
-          "name": "right 0 back hash"
-        }
-      ],
       "name": "College football field (NCAA)",
       "outline": [
         [
@@ -5626,37 +4498,7 @@
           ]
         ],
         "holes": []
-      },
-      "zones": [
-        {
-          "active": null,
-          "applies_to": "(T1 + T2) & T2",
-          "id": "front",
-          "kind": "custom",
-          "note": "",
-          "polygon": {
-            "exterior": [
-              [
-                -5.0,
-                0.0
-              ],
-              [
-                5.0,
-                0.0
-              ],
-              [
-                5.0,
-                3.0
-              ],
-              [
-                -5.0,
-                3.0
-              ]
-            ],
-            "holes": []
-          }
-        }
-      ]
+      }
     },
     "/show/show.json": {
       "cast": {
@@ -6111,17 +4953,6 @@
           }
         ]
       },
-      "coordinates": {
-        "audience_side": "front",
-        "kind": "marching",
-        "labels": {},
-        "origin": [
-          0.0,
-          0.0
-        ],
-        "precision": 0.01,
-        "units": "m"
-      },
       "dependencies": {
         "sheet:college-football": "1"
       },
@@ -6144,8 +4975,7 @@
         "con_"
       ],
       "title": "Seeded show",
-      "version": 2,
-      "zones": []
+      "version": 2
     },
     "/time/timeline.json": {
       "audio": [],
@@ -8728,7 +7558,1191 @@
     }
   },
   "report": {
-    "dropped": [],
+    "dropped": [
+      {
+        "document": "/show/sheet.json",
+        "fields": {
+          "default_coordinates": {
+            "audience_side": "front",
+            "kind": "marching",
+            "labels": {},
+            "origin": [
+              0.0,
+              0.0
+            ],
+            "precision": 0.01,
+            "units": "m"
+          },
+          "landmarks": [
+            {
+              "aliases": [
+                "front center",
+                "50 front sideline"
+              ],
+              "geometry": [
+                [
+                  0.0,
+                  0.0
+                ]
+              ],
+              "id": "center",
+              "kind": "point",
+              "name": "center"
+            },
+            {
+              "aliases": [
+                "50 back sideline"
+              ],
+              "geometry": [
+                [
+                  0.0,
+                  48.767999999999994
+                ]
+              ],
+              "id": "back-center",
+              "kind": "point",
+              "name": "back center"
+            },
+            {
+              "aliases": [
+                "home sideline"
+              ],
+              "geometry": [
+                [
+                  -54.864,
+                  0.0
+                ],
+                [
+                  54.864,
+                  0.0
+                ]
+              ],
+              "id": "front-sideline",
+              "kind": "line",
+              "name": "front sideline"
+            },
+            {
+              "aliases": [
+                "visitor sideline"
+              ],
+              "geometry": [
+                [
+                  -54.864,
+                  48.767999999999994
+                ],
+                [
+                  54.864,
+                  48.767999999999994
+                ]
+              ],
+              "id": "back-sideline",
+              "kind": "line",
+              "name": "back sideline"
+            },
+            {
+              "aliases": [
+                "home hash"
+              ],
+              "geometry": [
+                [
+                  -45.72,
+                  18.287999999999997
+                ],
+                [
+                  45.72,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash",
+              "kind": "line",
+              "name": "front hash"
+            },
+            {
+              "aliases": [
+                "visitor hash"
+              ],
+              "geometry": [
+                [
+                  -45.72,
+                  30.479999999999997
+                ],
+                [
+                  45.72,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash",
+              "kind": "line",
+              "name": "back hash"
+            },
+            {
+              "aliases": [],
+              "geometry": [
+                [
+                  -54.864,
+                  0.0
+                ],
+                [
+                  -45.72,
+                  0.0
+                ],
+                [
+                  -45.72,
+                  48.767999999999994
+                ],
+                [
+                  -54.864,
+                  48.767999999999994
+                ]
+              ],
+              "id": "end-zone-left",
+              "kind": "area",
+              "name": "left end zone"
+            },
+            {
+              "aliases": [],
+              "geometry": [
+                [
+                  45.72,
+                  0.0
+                ],
+                [
+                  54.864,
+                  0.0
+                ],
+                [
+                  54.864,
+                  48.767999999999994
+                ],
+                [
+                  45.72,
+                  48.767999999999994
+                ]
+              ],
+              "id": "end-zone-right",
+              "kind": "area",
+              "name": "right end zone"
+            },
+            {
+              "aliases": [
+                "left 0"
+              ],
+              "geometry": [
+                [
+                  -45.72,
+                  0.0
+                ],
+                [
+                  -45.72,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-left-0",
+              "kind": "line",
+              "name": "left goal line"
+            },
+            {
+              "aliases": [
+                "left 0 home hash"
+              ],
+              "geometry": [
+                [
+                  -45.72,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-left-0",
+              "kind": "point",
+              "name": "left 0 front hash"
+            },
+            {
+              "aliases": [
+                "left 0 visitor hash"
+              ],
+              "geometry": [
+                [
+                  -45.72,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-left-0",
+              "kind": "point",
+              "name": "left 0 back hash"
+            },
+            {
+              "aliases": [
+                "left 5"
+              ],
+              "geometry": [
+                [
+                  -41.147999999999996,
+                  0.0
+                ],
+                [
+                  -41.147999999999996,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-left-5",
+              "kind": "line",
+              "name": "left 5 yard line"
+            },
+            {
+              "aliases": [
+                "left 5 home hash"
+              ],
+              "geometry": [
+                [
+                  -41.147999999999996,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-left-5",
+              "kind": "point",
+              "name": "left 5 front hash"
+            },
+            {
+              "aliases": [
+                "left 5 visitor hash"
+              ],
+              "geometry": [
+                [
+                  -41.147999999999996,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-left-5",
+              "kind": "point",
+              "name": "left 5 back hash"
+            },
+            {
+              "aliases": [
+                "left 10"
+              ],
+              "geometry": [
+                [
+                  -36.576,
+                  0.0
+                ],
+                [
+                  -36.576,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-left-10",
+              "kind": "line",
+              "name": "left 10 yard line"
+            },
+            {
+              "aliases": [
+                "left 10 home hash"
+              ],
+              "geometry": [
+                [
+                  -36.576,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-left-10",
+              "kind": "point",
+              "name": "left 10 front hash"
+            },
+            {
+              "aliases": [
+                "left 10 visitor hash"
+              ],
+              "geometry": [
+                [
+                  -36.576,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-left-10",
+              "kind": "point",
+              "name": "left 10 back hash"
+            },
+            {
+              "aliases": [
+                "left 15"
+              ],
+              "geometry": [
+                [
+                  -32.004,
+                  0.0
+                ],
+                [
+                  -32.004,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-left-15",
+              "kind": "line",
+              "name": "left 15 yard line"
+            },
+            {
+              "aliases": [
+                "left 15 home hash"
+              ],
+              "geometry": [
+                [
+                  -32.004,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-left-15",
+              "kind": "point",
+              "name": "left 15 front hash"
+            },
+            {
+              "aliases": [
+                "left 15 visitor hash"
+              ],
+              "geometry": [
+                [
+                  -32.004,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-left-15",
+              "kind": "point",
+              "name": "left 15 back hash"
+            },
+            {
+              "aliases": [
+                "left 20"
+              ],
+              "geometry": [
+                [
+                  -27.432,
+                  0.0
+                ],
+                [
+                  -27.432,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-left-20",
+              "kind": "line",
+              "name": "left 20 yard line"
+            },
+            {
+              "aliases": [
+                "left 20 home hash"
+              ],
+              "geometry": [
+                [
+                  -27.432,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-left-20",
+              "kind": "point",
+              "name": "left 20 front hash"
+            },
+            {
+              "aliases": [
+                "left 20 visitor hash"
+              ],
+              "geometry": [
+                [
+                  -27.432,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-left-20",
+              "kind": "point",
+              "name": "left 20 back hash"
+            },
+            {
+              "aliases": [
+                "left 25"
+              ],
+              "geometry": [
+                [
+                  -22.86,
+                  0.0
+                ],
+                [
+                  -22.86,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-left-25",
+              "kind": "line",
+              "name": "left 25 yard line"
+            },
+            {
+              "aliases": [
+                "left 25 home hash"
+              ],
+              "geometry": [
+                [
+                  -22.86,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-left-25",
+              "kind": "point",
+              "name": "left 25 front hash"
+            },
+            {
+              "aliases": [
+                "left 25 visitor hash"
+              ],
+              "geometry": [
+                [
+                  -22.86,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-left-25",
+              "kind": "point",
+              "name": "left 25 back hash"
+            },
+            {
+              "aliases": [
+                "left 30"
+              ],
+              "geometry": [
+                [
+                  -18.288,
+                  0.0
+                ],
+                [
+                  -18.288,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-left-30",
+              "kind": "line",
+              "name": "left 30 yard line"
+            },
+            {
+              "aliases": [
+                "left 30 home hash"
+              ],
+              "geometry": [
+                [
+                  -18.288,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-left-30",
+              "kind": "point",
+              "name": "left 30 front hash"
+            },
+            {
+              "aliases": [
+                "left 30 visitor hash"
+              ],
+              "geometry": [
+                [
+                  -18.288,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-left-30",
+              "kind": "point",
+              "name": "left 30 back hash"
+            },
+            {
+              "aliases": [
+                "left 35"
+              ],
+              "geometry": [
+                [
+                  -13.716,
+                  0.0
+                ],
+                [
+                  -13.716,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-left-35",
+              "kind": "line",
+              "name": "left 35 yard line"
+            },
+            {
+              "aliases": [
+                "left 35 home hash"
+              ],
+              "geometry": [
+                [
+                  -13.716,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-left-35",
+              "kind": "point",
+              "name": "left 35 front hash"
+            },
+            {
+              "aliases": [
+                "left 35 visitor hash"
+              ],
+              "geometry": [
+                [
+                  -13.716,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-left-35",
+              "kind": "point",
+              "name": "left 35 back hash"
+            },
+            {
+              "aliases": [
+                "left 40"
+              ],
+              "geometry": [
+                [
+                  -9.144,
+                  0.0
+                ],
+                [
+                  -9.144,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-left-40",
+              "kind": "line",
+              "name": "left 40 yard line"
+            },
+            {
+              "aliases": [
+                "left 40 home hash"
+              ],
+              "geometry": [
+                [
+                  -9.144,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-left-40",
+              "kind": "point",
+              "name": "left 40 front hash"
+            },
+            {
+              "aliases": [
+                "left 40 visitor hash"
+              ],
+              "geometry": [
+                [
+                  -9.144,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-left-40",
+              "kind": "point",
+              "name": "left 40 back hash"
+            },
+            {
+              "aliases": [
+                "left 45"
+              ],
+              "geometry": [
+                [
+                  -4.572,
+                  0.0
+                ],
+                [
+                  -4.572,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-left-45",
+              "kind": "line",
+              "name": "left 45 yard line"
+            },
+            {
+              "aliases": [
+                "left 45 home hash"
+              ],
+              "geometry": [
+                [
+                  -4.572,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-left-45",
+              "kind": "point",
+              "name": "left 45 front hash"
+            },
+            {
+              "aliases": [
+                "left 45 visitor hash"
+              ],
+              "geometry": [
+                [
+                  -4.572,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-left-45",
+              "kind": "point",
+              "name": "left 45 back hash"
+            },
+            {
+              "aliases": [
+                "50"
+              ],
+              "geometry": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  0.0,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-50",
+              "kind": "line",
+              "name": "50 yard line"
+            },
+            {
+              "aliases": [
+                "50 home hash"
+              ],
+              "geometry": [
+                [
+                  0.0,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-50",
+              "kind": "point",
+              "name": "50 front hash"
+            },
+            {
+              "aliases": [
+                "50 visitor hash"
+              ],
+              "geometry": [
+                [
+                  0.0,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-50",
+              "kind": "point",
+              "name": "50 back hash"
+            },
+            {
+              "aliases": [
+                "right 45"
+              ],
+              "geometry": [
+                [
+                  4.572,
+                  0.0
+                ],
+                [
+                  4.572,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-right-45",
+              "kind": "line",
+              "name": "right 45 yard line"
+            },
+            {
+              "aliases": [
+                "right 45 home hash"
+              ],
+              "geometry": [
+                [
+                  4.572,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-right-45",
+              "kind": "point",
+              "name": "right 45 front hash"
+            },
+            {
+              "aliases": [
+                "right 45 visitor hash"
+              ],
+              "geometry": [
+                [
+                  4.572,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-right-45",
+              "kind": "point",
+              "name": "right 45 back hash"
+            },
+            {
+              "aliases": [
+                "right 40"
+              ],
+              "geometry": [
+                [
+                  9.144,
+                  0.0
+                ],
+                [
+                  9.144,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-right-40",
+              "kind": "line",
+              "name": "right 40 yard line"
+            },
+            {
+              "aliases": [
+                "right 40 home hash"
+              ],
+              "geometry": [
+                [
+                  9.144,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-right-40",
+              "kind": "point",
+              "name": "right 40 front hash"
+            },
+            {
+              "aliases": [
+                "right 40 visitor hash"
+              ],
+              "geometry": [
+                [
+                  9.144,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-right-40",
+              "kind": "point",
+              "name": "right 40 back hash"
+            },
+            {
+              "aliases": [
+                "right 35"
+              ],
+              "geometry": [
+                [
+                  13.716,
+                  0.0
+                ],
+                [
+                  13.716,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-right-35",
+              "kind": "line",
+              "name": "right 35 yard line"
+            },
+            {
+              "aliases": [
+                "right 35 home hash"
+              ],
+              "geometry": [
+                [
+                  13.716,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-right-35",
+              "kind": "point",
+              "name": "right 35 front hash"
+            },
+            {
+              "aliases": [
+                "right 35 visitor hash"
+              ],
+              "geometry": [
+                [
+                  13.716,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-right-35",
+              "kind": "point",
+              "name": "right 35 back hash"
+            },
+            {
+              "aliases": [
+                "right 30"
+              ],
+              "geometry": [
+                [
+                  18.288,
+                  0.0
+                ],
+                [
+                  18.288,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-right-30",
+              "kind": "line",
+              "name": "right 30 yard line"
+            },
+            {
+              "aliases": [
+                "right 30 home hash"
+              ],
+              "geometry": [
+                [
+                  18.288,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-right-30",
+              "kind": "point",
+              "name": "right 30 front hash"
+            },
+            {
+              "aliases": [
+                "right 30 visitor hash"
+              ],
+              "geometry": [
+                [
+                  18.288,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-right-30",
+              "kind": "point",
+              "name": "right 30 back hash"
+            },
+            {
+              "aliases": [
+                "right 25"
+              ],
+              "geometry": [
+                [
+                  22.86,
+                  0.0
+                ],
+                [
+                  22.86,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-right-25",
+              "kind": "line",
+              "name": "right 25 yard line"
+            },
+            {
+              "aliases": [
+                "right 25 home hash"
+              ],
+              "geometry": [
+                [
+                  22.86,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-right-25",
+              "kind": "point",
+              "name": "right 25 front hash"
+            },
+            {
+              "aliases": [
+                "right 25 visitor hash"
+              ],
+              "geometry": [
+                [
+                  22.86,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-right-25",
+              "kind": "point",
+              "name": "right 25 back hash"
+            },
+            {
+              "aliases": [
+                "right 20"
+              ],
+              "geometry": [
+                [
+                  27.432,
+                  0.0
+                ],
+                [
+                  27.432,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-right-20",
+              "kind": "line",
+              "name": "right 20 yard line"
+            },
+            {
+              "aliases": [
+                "right 20 home hash"
+              ],
+              "geometry": [
+                [
+                  27.432,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-right-20",
+              "kind": "point",
+              "name": "right 20 front hash"
+            },
+            {
+              "aliases": [
+                "right 20 visitor hash"
+              ],
+              "geometry": [
+                [
+                  27.432,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-right-20",
+              "kind": "point",
+              "name": "right 20 back hash"
+            },
+            {
+              "aliases": [
+                "right 15"
+              ],
+              "geometry": [
+                [
+                  32.004,
+                  0.0
+                ],
+                [
+                  32.004,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-right-15",
+              "kind": "line",
+              "name": "right 15 yard line"
+            },
+            {
+              "aliases": [
+                "right 15 home hash"
+              ],
+              "geometry": [
+                [
+                  32.004,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-right-15",
+              "kind": "point",
+              "name": "right 15 front hash"
+            },
+            {
+              "aliases": [
+                "right 15 visitor hash"
+              ],
+              "geometry": [
+                [
+                  32.004,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-right-15",
+              "kind": "point",
+              "name": "right 15 back hash"
+            },
+            {
+              "aliases": [
+                "right 10"
+              ],
+              "geometry": [
+                [
+                  36.576,
+                  0.0
+                ],
+                [
+                  36.576,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-right-10",
+              "kind": "line",
+              "name": "right 10 yard line"
+            },
+            {
+              "aliases": [
+                "right 10 home hash"
+              ],
+              "geometry": [
+                [
+                  36.576,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-right-10",
+              "kind": "point",
+              "name": "right 10 front hash"
+            },
+            {
+              "aliases": [
+                "right 10 visitor hash"
+              ],
+              "geometry": [
+                [
+                  36.576,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-right-10",
+              "kind": "point",
+              "name": "right 10 back hash"
+            },
+            {
+              "aliases": [
+                "right 5"
+              ],
+              "geometry": [
+                [
+                  41.147999999999996,
+                  0.0
+                ],
+                [
+                  41.147999999999996,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-right-5",
+              "kind": "line",
+              "name": "right 5 yard line"
+            },
+            {
+              "aliases": [
+                "right 5 home hash"
+              ],
+              "geometry": [
+                [
+                  41.147999999999996,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-right-5",
+              "kind": "point",
+              "name": "right 5 front hash"
+            },
+            {
+              "aliases": [
+                "right 5 visitor hash"
+              ],
+              "geometry": [
+                [
+                  41.147999999999996,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-right-5",
+              "kind": "point",
+              "name": "right 5 back hash"
+            },
+            {
+              "aliases": [
+                "right 0"
+              ],
+              "geometry": [
+                [
+                  45.72,
+                  0.0
+                ],
+                [
+                  45.72,
+                  48.767999999999994
+                ]
+              ],
+              "id": "yard-right-0",
+              "kind": "line",
+              "name": "right goal line"
+            },
+            {
+              "aliases": [
+                "right 0 home hash"
+              ],
+              "geometry": [
+                [
+                  45.72,
+                  18.287999999999997
+                ]
+              ],
+              "id": "front-hash-right-0",
+              "kind": "point",
+              "name": "right 0 front hash"
+            },
+            {
+              "aliases": [
+                "right 0 visitor hash"
+              ],
+              "geometry": [
+                [
+                  45.72,
+                  30.479999999999997
+                ]
+              ],
+              "id": "back-hash-right-0",
+              "kind": "point",
+              "name": "right 0 back hash"
+            }
+          ],
+          "zones": [
+            {
+              "active": null,
+              "applies_to": "T1 + T2 & T2",
+              "id": "front",
+              "kind": "custom",
+              "note": "",
+              "polygon": {
+                "exterior": [
+                  [
+                    -5.0,
+                    0.0
+                  ],
+                  [
+                    5.0,
+                    0.0
+                  ],
+                  [
+                    5.0,
+                    3.0
+                  ],
+                  [
+                    -5.0,
+                    3.0
+                  ]
+                ],
+                "holes": []
+              }
+            }
+          ]
+        },
+        "location": "",
+        "stored_id": null
+      },
+      {
+        "document": "/show/show.json",
+        "fields": {
+          "coordinates": {
+            "audience_side": "front",
+            "kind": "marching",
+            "labels": {},
+            "origin": [
+              0.0,
+              0.0
+            ],
+            "precision": 0.01,
+            "units": "m"
+          }
+        },
+        "location": "",
+        "stored_id": null
+      }
+    ],
     "from_version": 1,
     "renamed": {
       "form": [
@@ -8804,8 +8818,6 @@
         ]
       ]
     },
-    "repairs": [
-      "/show/sheet.json zones[0].applies_to: rewrote 'T1 + T2 & T2' as '(T1 + T2) & T2'"
-    ]
+    "repairs": []
   }
 }

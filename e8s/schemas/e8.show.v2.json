@@ -528,72 +528,6 @@
       "title": "CompositeCurve",
       "type": "object"
     },
-    "CoordinateKind": {
-      "description": "Names the coordinate wording families.",
-      "enum": [
-        "marching",
-        "stage",
-        "dance_floor",
-        "grid"
-      ],
-      "title": "CoordinateKind",
-      "type": "string"
-    },
-    "CoordinateSystem": {
-      "additionalProperties": false,
-      "description": "Describes how positions are labeled and worded; it never moves stored positions.\n\nAttributes:\n    kind: Wording family.\n    origin: Point or landmark ID that reads as zero.\n    audience_side: Edge of the sheet where the audience sits, as drawn.\n    units: Unit positions are written in.\n    precision: Rounding step in `units`.\n    labels: Words used for directions, e.g. {\"left\": \"stage right\"}.",
-      "properties": {
-        "audience_side": {
-          "default": "front",
-          "enum": [
-            "front",
-            "back",
-            "left",
-            "right"
-          ],
-          "title": "Audience Side",
-          "type": "string"
-        },
-        "kind": {
-          "$ref": "#/$defs/CoordinateKind",
-          "default": "grid"
-        },
-        "labels": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "title": "Labels",
-          "type": "object"
-        },
-        "origin": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Point"
-            },
-            {
-              "type": "string"
-            }
-          ],
-          "default": [
-            0.0,
-            0.0
-          ],
-          "title": "Origin"
-        },
-        "precision": {
-          "default": 0.01,
-          "title": "Precision",
-          "type": "number"
-        },
-        "units": {
-          "default": "m",
-          "title": "Units",
-          "type": "string"
-        }
-      },
-      "title": "CoordinateSystem",
-      "type": "object"
-    },
     "Count": {
       "maximum": 1000000,
       "minimum": -1000000,
@@ -1440,48 +1374,6 @@
         }
       },
       "title": "LabelScheme",
-      "type": "object"
-    },
-    "Landmark": {
-      "additionalProperties": false,
-      "description": "Holds a named reference such as \"front hash\" or \"center stage\".\n\nAttributes:\n    id: Landmark ID.\n    name: Display name.\n    kind: point (1 point), line (2+ points) or area (3+ points, a ring).\n    geometry: Points of the landmark.\n    aliases: Other names that resolve to it.",
-      "properties": {
-        "aliases": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "title": "Aliases",
-          "type": "array"
-        },
-        "geometry": {
-          "$ref": "#/$defs/Ring"
-        },
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "kind": {
-          "enum": [
-            "point",
-            "line",
-            "area"
-          ],
-          "title": "Kind",
-          "type": "string"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        }
-      },
-      "required": [
-        "id",
-        "name",
-        "kind",
-        "geometry"
-      ],
-      "title": "Landmark",
       "type": "object"
     },
     "LineRecipe": {
@@ -2421,7 +2313,7 @@
     },
     "Sheet": {
       "additionalProperties": false,
-      "description": "Holds the 2D design surface; (0, 0) is the front-center of the sheet.\n\nAttributes:\n    ref: Sheet reference, `sheet:<id>@<version>`.\n    name: Display name.\n    surface_type: Surface family.\n    size_m: Width and depth in meters.\n    outline: Sheet edge ring.\n    walkable: Area performers may use.\n    guides: Lines drawn on the sheet.\n    landmarks: Named references.\n    zones: Rule-bearing areas.\n    grid: Background grid.\n    default_coordinates: Coordinate system new shows start with.\n    based_on: Template this sheet was customized from.\n    owner: Who saved the sheet.\n    thumbnail: Asset URI of a preview image.",
+      "description": "Holds the 2D design surface; (0, 0) is the front-center of the sheet.\n\nAttributes:\n    ref: Sheet reference, `sheet:<id>@<version>`.\n    name: Display name.\n    surface_type: Surface family.\n    size_m: Width and depth in meters.\n    outline: Sheet edge ring.\n    walkable: Area performers may use.\n    guides: Lines drawn on the sheet.\n    grid: Background grid.\n    based_on: Template this sheet was customized from.\n    owner: Who saved the sheet.\n    thumbnail: Asset URI of a preview image.",
       "properties": {
         "based_on": {
           "anyOf": [
@@ -2433,20 +2325,6 @@
             }
           ],
           "default": null
-        },
-        "default_coordinates": {
-          "$ref": "#/$defs/CoordinateSystem",
-          "default": {
-            "audience_side": "front",
-            "kind": "grid",
-            "labels": {},
-            "origin": [
-              0.0,
-              0.0
-            ],
-            "precision": 0.01,
-            "units": "m"
-          }
         },
         "grid": {
           "$ref": "#/$defs/Grid",
@@ -2470,14 +2348,6 @@
             "$ref": "#/$defs/GuideLine"
           },
           "title": "Guides",
-          "type": "array"
-        },
-        "landmarks": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/Landmark"
-          },
-          "title": "Landmarks",
           "type": "array"
         },
         "name": {
@@ -2519,14 +2389,6 @@
         },
         "walkable": {
           "$ref": "#/$defs/Region"
-        },
-        "zones": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/Zone"
-          },
-          "title": "Zones",
-          "type": "array"
         }
       },
       "required": [
@@ -2557,20 +2419,6 @@
             },
             "selections": {},
             "spots": []
-          }
-        },
-        "coordinates": {
-          "$ref": "#/$defs/CoordinateSystem",
-          "default": {
-            "audience_side": "front",
-            "kind": "grid",
-            "labels": {},
-            "origin": [
-              0.0,
-              0.0
-            ],
-            "precision": 0.01,
-            "units": "m"
           }
         },
         "dependencies": {
@@ -2626,14 +2474,6 @@
         },
         "version": {
           "const": 2
-        },
-        "zones": {
-          "default": [],
-          "items": {
-            "$ref": "#/$defs/Zone"
-          },
-          "title": "Zones",
-          "type": "array"
         }
       },
       "required": [
@@ -3484,77 +3324,6 @@
       },
       "title": "ZigzagParams",
       "type": "object"
-    },
-    "Zone": {
-      "additionalProperties": false,
-      "description": "Holds an area with rules.\n\nAttributes:\n    id: Zone ID.\n    kind: What the area is for.\n    polygon: The area.\n    applies_to: Spots the rules apply to.\n    active: Global count windows when the zone applies; None means always.\n    note: Designer note.",
-      "properties": {
-        "active": {
-          "anyOf": [
-            {
-              "items": {
-                "maxItems": 2,
-                "minItems": 2,
-                "prefixItems": [
-                  {
-                    "$ref": "#/$defs/Count"
-                  },
-                  {
-                    "$ref": "#/$defs/Count"
-                  }
-                ],
-                "type": "array"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Active"
-        },
-        "applies_to": {
-          "$ref": "#/$defs/SelectorField",
-          "default": "all"
-        },
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "kind": {
-          "$ref": "#/$defs/ZoneKind"
-        },
-        "note": {
-          "default": "",
-          "title": "Note",
-          "type": "string"
-        },
-        "polygon": {
-          "$ref": "#/$defs/Region"
-        }
-      },
-      "required": [
-        "id",
-        "kind",
-        "polygon"
-      ],
-      "title": "Zone",
-      "type": "object"
-    },
-    "ZoneKind": {
-      "description": "Names the kinds of rule-bearing area.",
-      "enum": [
-        "restricted",
-        "pit",
-        "wings",
-        "staging",
-        "audience",
-        "safety",
-        "custom"
-      ],
-      "title": "ZoneKind",
-      "type": "string"
     }
   },
   "$id": "e8.show.v2",

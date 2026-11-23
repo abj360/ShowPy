@@ -1,9 +1,9 @@
 """
 extras.py --- imports the optional dependencies of extra-gated functions on first call
 
-pandas and Pillow are installed only by the `tables` and `render` extras. A function that needs
-one asks for it here when called, so importing any e8s module never loads them and a missing
-extra fails with an install command, not an ImportError.
+pandas is installed only by the `tables` extra. A function that needs it asks for it here when
+called, so importing any e8s module never loads it and a missing extra fails with an install
+command, not an ImportError.
 
 Contains:
     MissingExtraError: reports a call to a function whose extra is not installed

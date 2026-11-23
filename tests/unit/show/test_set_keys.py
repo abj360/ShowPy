@@ -97,6 +97,7 @@ from e8s.examples import two_set_show
 from e8s.show.decode_cache import DecodeCache
 from e8s.show.documents import (
     LEGACY_NOTES_DOC,
+    SHEET_DOC,
     SHOW_DOC,
     decode_show,
     dump_json,
@@ -243,10 +244,18 @@ def test_regression_import_positions_new_set_picks_a_free_key() -> None:
 
 
 def _without_dropped_fields(show_doc: dict[str, Any]) -> dict[str, Any]:
-    """Returns a v1 show.json without the fields format v2 drops: each spot's `claimable`."""
+    """Returns a v1 show.json without the fields format v2 drops: each spot's `claimable`, the
+    coordinate system and the show's zones."""
     cast = show_doc["cast"]
     spots = [{k: v for k, v in spot.items() if k != "claimable"} for spot in cast["spots"]]
-    return {**show_doc, "cast": {**cast, "spots": spots}}
+    kept = {k: v for k, v in show_doc.items() if k not in ("coordinates", "zones")}
+    return {**kept, "cast": {**cast, "spots": spots}}
+
+
+def _without_dropped_sheet_fields(sheet_doc: dict[str, Any]) -> dict[str, Any]:
+    """Returns a v1 sheet.json without the fields format v2 drops."""
+    dropped = ("landmarks", "zones", "default_coordinates")
+    return {k: v for k, v in sheet_doc.items() if k not in dropped}
 
 
 def test_regression_never_renumbered_v020_show_encodes_to_its_stored_documents(
@@ -259,6 +268,7 @@ def test_regression_never_renumbered_v020_show_encodes_to_its_stored_documents(
     parsed = {p: json.loads(raw) for p, raw in stored.items()}
     canonical = {p: dump_json(doc) for p, doc in migrate_forms(parsed, ReportBuilder(1)).items()}
     show_doc = _without_dropped_fields(json.loads(stored[SHOW_DOC]))
+    canonical[SHEET_DOC] = dump_json(_without_dropped_sheet_fields(parsed[SHEET_DOC]))
     canonical[SHOW_DOC] = dump_show_doc({**format_header(), **show_doc})
     _, report = migrate_documents(tree)
     renames = [pair for pairs in report.renamed.values() for pair in pairs]

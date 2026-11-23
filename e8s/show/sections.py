@@ -15,7 +15,6 @@ from e8s.choreo.path_models import FacingOverride
 from e8s.core.errors import SchemaError, TimelineError, VersionError
 from e8s.core.ids import FormId, SetId, parse_tid
 from e8s.core.types import Count
-from e8s.sheet.models import Zone
 from e8s.show.manage import index
 from e8s.show.models import Pin, Show
 from e8s.show.set_keys import free_set_key, set_key
@@ -41,18 +40,6 @@ def _clip_overrides(
         window = _clip((item.start, item.end), low, high, shift)
         if window is not None:
             kept.append(item.replace(start=window[0], end=window[1]))
-    return tuple(kept)
-
-
-def _clip_zones(zones: Sequence[Zone], low: Count, high: Count, shift: Count) -> tuple[Zone, ...]:
-    kept = []
-    for zone in zones:
-        if zone.active is None:
-            kept.append(zone)
-            continue
-        windows = tuple(w for w in (_clip(w, low, high, shift) for w in zone.active) if w)
-        if windows:
-            kept.append(zone.replace(active=windows))
     return tuple(kept)
 
 
@@ -147,7 +134,6 @@ def _section(show: Show, sets: Sequence[Set], timeline: Timeline, low: Count, hi
         transitions=tuple(t for t in show.transitions if t.id in pairs),
         pins=tuple(p for p in show.pins if _pin_in(p, ids, forms)),
         facing_overrides=_clip_overrides(show.facing_overrides, low, high, low),
-        zones=_clip_zones(show.zones, low, high, low),
         timeline=timeline,
         revision="",
     )
@@ -156,8 +142,8 @@ def _section(show: Show, sets: Sequence[Set], timeline: Timeline, low: Count, hi
 def split_section(show: Show, at: str) -> tuple[Show, Show]:
     """Splits a show at set `at`; both shows hold `at`, and the second starts its clock there.
 
-    The second show's tempo, holds, markers, measures, audio sync, facing overrides and zone
-    windows shift so its count 0 is `at`. Raises TimelineError when `at` starts mid-measure.
+    The second show's tempo, holds, markers, measures, audio sync and facing overrides shift
+    so its count 0 is `at`. Raises TimelineError when `at` starts mid-measure.
 
     Args:
         show: Show to split.
@@ -301,9 +287,6 @@ def join_sections(a: Show, b: Show) -> Show:
     """
     _require_compatible(a, b)
     offset = index(a).total_counts
-    zones = {z.id: z for z in a.zones}
-    for zone in _clip_zones(b.zones, 0.0, float("inf"), -offset):
-        zones.setdefault(zone.id, zone)
     return a.replace(
         sets=(*a.sets, *_keyed_after(a, _tail_sets(a, b))),
         forms=_merged_forms(a, b),
@@ -313,7 +296,6 @@ def join_sections(a: Show, b: Show) -> Show:
             *a.facing_overrides,
             *_clip_overrides(b.facing_overrides, 0.0, float("inf"), -offset),
         ),
-        zones=tuple(zones.values()),
         dependencies={**a.dependencies, **b.dependencies},
         timeline=_joined_timeline(a.timeline, b.timeline, offset),
         revision="",

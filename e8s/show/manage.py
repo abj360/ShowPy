@@ -183,7 +183,6 @@ def new_show(
         title=title,
         pack=pack,
         sheet=sheet,
-        coordinates=sheet.default_coordinates,
         cast=roster,
         timeline=timeline,
         sets=(first,),

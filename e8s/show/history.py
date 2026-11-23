@@ -26,7 +26,7 @@ from e8s.show.storage import ROOT_REVISION, Workspace
 
 SHORT_ID = 7
 TIME_FORMAT = "%Y-%m-%d %H:%M"
-SHOW_FIELDS = ("sheet", "timeline", "coordinates", "zones", "facing_overrides", "dependencies")
+SHOW_FIELDS = ("sheet", "timeline", "facing_overrides", "dependencies")
 
 
 def _member_key(row: tuple[int | None, SpotId]) -> tuple[bool, int, SpotId]:

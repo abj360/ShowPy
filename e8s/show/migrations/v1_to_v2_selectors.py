@@ -1,13 +1,14 @@
 """
 v1_to_v2_selectors.py --- the selectors sub-step of the v1 to v2 format migration (lane S)
 
-Stored selector text is a zone's `applies_to` (sheet and show zones) or a facing override's
-`entities`. Version 1 text could glue `+`, `&` and a leading `-` to words, and combined `&` with
-`+` and `-` left to right at one precedence; version 2 needs spaced operators and parentheses
-wherever `&` mixes with `+` or `-`. Each such text is rewritten to the v2 text that selects the
-same spots, and each rewrite is recorded with `report.repair()`. Text v2 already reads the same
-way, and selectors stored as ID lists or selections, stay as they are. Text that never parsed is
-refused with SchemaError naming the document, the field and the value.
+Stored selector text is a facing override's `entities`; zones, whose `applies_to` also held
+selector text, are dropped as stored by the sheet sub-step. Version 1 text could glue `+`, `&`
+and a leading `-` to words, and combined `&` with `+` and `-` left to right at one precedence;
+version 2 needs spaced operators and parentheses wherever `&` mixes with `+` or `-`. Each such
+text is rewritten to the v2 text that selects the same spots, and each rewrite is recorded with
+`report.repair()`. Text v2 already reads the same way, and selectors stored as ID lists or
+selections, stay as they are. Text that never parsed is refused with SchemaError naming the
+document, the field and the value.
 
 Contains:
     FIELDS_BY_DOC: maps each document to its stored selector fields as (list field, item key)
@@ -26,11 +27,9 @@ if TYPE_CHECKING:
     from e8s.show.migrate import ReportBuilder
 
 SHOW_DOC: Final = "/show/show.json"
-SHEET_DOC: Final = "/show/sheet.json"
 FIELDS_BY_DOC: Final[Mapping[str, tuple[tuple[str, str], ...]]] = ReadOnlyMap(
     {
-        SHEET_DOC: (("zones", "applies_to"),),
-        SHOW_DOC: (("zones", "applies_to"), ("facing_overrides", "entities")),
+        SHOW_DOC: (("facing_overrides", "entities"),),
     }
 )
 
@@ -88,10 +87,10 @@ def migrate_selectors(docs: dict[str, JsonValue], report: "ReportBuilder") -> di
 
     >>> from e8s.show.migrate import ReportBuilder
     >>> report = ReportBuilder(1)
-    >>> sheet = {"zones": [{"id": "z", "applies_to": "T1+T2&T2"}]}
-    >>> migrate_selectors({"/show/sheet.json": sheet}, report)["/show/sheet.json"]
-    {'zones': [{'id': 'z', 'applies_to': '(T1 + T2) & T2'}]}
+    >>> show = {"facing_overrides": [{"entities": "T1+T2&T2"}]}
+    >>> migrate_selectors({"/show/show.json": show}, report)["/show/show.json"]
+    {'facing_overrides': [{'entities': '(T1 + T2) & T2'}]}
     >>> report.build().repairs
-    ("/show/sheet.json zones[0].applies_to: rewrote 'T1+T2&T2' as '(T1 + T2) & T2'",)
+    ("/show/show.json facing_overrides[0].entities: rewrote 'T1+T2&T2' as '(T1 + T2) & T2'",)
     """
     return {path: _migrated_document(path, document, report) for path, document in docs.items()}

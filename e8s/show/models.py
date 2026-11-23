@@ -4,7 +4,7 @@ models.py --- the Show aggregate, its index, and the storage, history and collab
 Contains:
     Anchor: re-exports the tagged anchor of comments, highlights and notes
     Pin: records one designer lock on a spot, form, set or transition
-    Show: holds a whole show: sheet, cast, timeline, sets, forms, paths and zones
+    Show: holds a whole show: sheet, cast, timeline, sets, forms and paths
     ShowLookup: looks up a show's sets, transitions and forms by ID without scanning
     Show.lookup: returns the show's cached ShowLookup
     Show.set(): returns a set by ID
@@ -52,7 +52,6 @@ from e8s.choreo.form_models import Form
 from e8s.choreo.models import Placement, Set
 from e8s.choreo.path_models import FacingOverride, TransitionSpec
 from e8s.core.caps import MAX_EXTENSION_BYTES
-from e8s.core.deprecation import leave_field
 from e8s.core.errors import SchemaError, TimeRangeError, UnknownRefError
 from e8s.core.ids import (
     LEGACY_IDS_KEY,
@@ -68,7 +67,7 @@ from e8s.core.json_types import FrozenJsonValue, JsonValue
 from e8s.core.readonly import ReadOnly, ReadOnlyMap
 from e8s.core.types import Count, FrozenModel, JsonObject, Seconds
 from e8s.core.util import close_matches
-from e8s.sheet.models import CoordinateSystem, Sheet, Zone
+from e8s.sheet.models import Sheet
 from e8s.show.anchors import Anchor as Anchor
 from e8s.time.models import MeasureLabel, Timeline
 
@@ -167,14 +166,12 @@ class Show(FrozenModel):
         title: Display title.
         pack: Domain pack key; empty when no pack applies.
         sheet: The 2D design surface.
-        coordinates: How positions are labeled; display only.
         cast: Groups and spots.
         timeline: Show clock.
         sets: Sets in show order.
         forms: Form ID to form, across every set.
         transitions: Stored path instructions for consecutive set pairs.
         facing_overrides: Facings forced over global count ranges.
-        zones: Show-specific zones, on top of the sheet's.
         dependencies: Sheet reference (without version) to pinned version.
         pins: Designer locks with their reasons.
         extensions: Host-owned JSON values under keys that start with `x-`; the library keeps them
@@ -187,14 +184,12 @@ class Show(FrozenModel):
     title: str
     pack: str = ""
     sheet: Sheet
-    coordinates: CoordinateSystem = CoordinateSystem()
     cast: Cast = Cast()
     timeline: Timeline
     sets: tuple[Set, ...] = ()
     forms: Annotated[Mapping[FormIdField, Form], ReadOnly()] = Field(default_factory=_no_forms)
     transitions: tuple[TransitionSpec, ...] = ()
     facing_overrides: tuple[FacingOverride, ...] = ()
-    zones: tuple[Zone, ...] = ()
     dependencies: Annotated[Mapping[str, str], ReadOnly()] = Field(default_factory=_no_dependencies)
     pins: tuple[Pin, ...] = ()
     extensions: JsonObject = Field(
@@ -325,10 +320,6 @@ class Show(FrozenModel):
         if spec is not None:
             return spec
         return TransitionSpec(id=known, counts=self.set(known.to_set).counts)
-
-
-leave_field(Show, "coordinates", since="0.4.0", remove="0.7.0", replacement="Location")
-leave_field(Show, "zones", since="0.4.0", remove="0.7.0", replacement="Marking")
 
 
 class ShowIndexEntry(FrozenModel):

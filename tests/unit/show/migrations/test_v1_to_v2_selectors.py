@@ -6,10 +6,8 @@ test_v1_to_v2_selectors.py --- tests the selectors sub-step of the v1 to v2 form
 Contains:
     v1_select(): evaluates selector text the way v1 did: glued `+` and `&` split words, a glued
         `-` stays inside a range word, and every operator combines left to right
-    test_regression_migrated_zone_keeps_its_spots(): the v0.3.0 fixture's zone selects T2 before
-        and after migration
-    test_migrate_selectors_rewrites_every_stored_field(): rewrites sheet zones, show zones and
-        facing overrides, reporting each rewrite in document order
+    test_migrate_selectors_rewrites_every_stored_field(): rewrites facing overrides, reporting each
+        rewrite in document order, and leaves zones to the sheet sub-step, which drops them
     test_migrate_selectors_leaves_v2_text_and_id_lists_alone(): changes and reports nothing for
         text v2 reads the same way, ID lists and stored selections
     test_migrate_selectors_never_mutates_its_input(): leaves the documents it was given unchanged
@@ -21,7 +19,6 @@ Contains:
 
 import copy
 import re
-import shutil
 from pathlib import Path
 
 import pytest
@@ -33,7 +30,6 @@ from e8s.cast.select import Selection, normalize_v1_selector, select
 from e8s.core.errors import E8sError, SchemaError
 from e8s.core.ids import SpotId
 from e8s.core.json_types import JsonValue
-from e8s.show.file_repository import FileRepository
 from e8s.show.migrate import ReportBuilder
 from e8s.show.migrations.v1_to_v2_selectors import migrate_selectors
 
@@ -116,33 +112,18 @@ def _documents() -> dict[str, JsonValue]:
     }
 
 
-def test_regression_migrated_zone_keeps_its_spots(tmp_path: Path) -> None:
-    """Keeps the v0.3.0 fixture's zone `T1 + T2 & T2` on spot T2 through migration."""
-    shutil.copytree(FIXTURES / "v0.3.0" / "repo", tmp_path / "repo")
-    stored = "T1 + T2 & T2"
-    show = FileRepository(tmp_path / "repo").get_show(V030_SHOW)
-    (zone,) = show.sheet.zones
-    assert v1_select(show.cast, stored) == ("T2",)
-    assert zone.applies_to == "(T1 + T2) & T2"
-    assert select(show, zone.applies_to).ids == ("T2",)
-
-
 def test_migrate_selectors_rewrites_every_stored_field() -> None:
     report = ReportBuilder(1)
     migrated = migrate_selectors(_documents(), report)
-    assert migrated[SHEET_DOC] == {
-        "zones": [{"id": "a", "applies_to": "(T1 + T2) & T2"}, {"id": "b"}]
-    }
+    assert migrated[SHEET_DOC] == _documents()[SHEET_DOC]
     show_doc = migrated[SHOW_DOC]
     assert isinstance(show_doc, dict)
-    assert show_doc["zones"] == [{"id": "c", "applies_to": "(all - T1) & T2"}]
+    assert show_doc["zones"] == [{"id": "c", "applies_to": "all - T1 & T2"}]
     assert show_doc["facing_overrides"] == [
         {"entities": ["T1", "T2"], "mode": "fixed"},
         {"entities": "(T1 & T2) + T3", "mode": "fixed"},
     ]
     assert report.build().repairs == (
-        "/show/sheet.json zones[0].applies_to: rewrote 'T1+T2&T2' as '(T1 + T2) & T2'",
-        "/show/show.json zones[0].applies_to: rewrote 'all - T1 & T2' as '(all - T1) & T2'",
         "/show/show.json facing_overrides[1].entities: rewrote 'T1&T2+T3' as '(T1 & T2) + T3'",
     )
 

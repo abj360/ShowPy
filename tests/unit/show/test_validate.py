@@ -26,9 +26,6 @@ Contains:
         override on a spot that does not exist
     test_regression_validate_show_reports_facing_overrides_past_the_show: reports a facing override
         that starts after the show ends
-    test_regression_validate_show_reports_zone_selectors_naming_unknown_spots: reports a zone that
-        applies to a spot that does not exist
-    test_regression_validate_show_reports_degenerate_zones: reports a zone whose polygon has no area
     test_regression_validate_show_reports_selections_naming_unknown_spots: reports a named selection
         holding a spot that does not exist
     test_regression_validate_show_names_the_selection_and_spot_in_context: puts the selection path
@@ -91,7 +88,6 @@ from e8s.choreo.path_models import (
 from e8s.core.caps import MAX_COUNTS
 from e8s.core.errors import SchemaError
 from e8s.core.ids import FormId, NoteId, SetId, SpotId, make_tid
-from e8s.core.types import Region
 from e8s.core.validation import ValidationReport
 from e8s.sheet.templates import InMemorySheetStore
 from e8s.show._notes_document import Note, NotesDocument
@@ -373,23 +369,6 @@ def test_regression_validate_show_reports_facing_overrides_past_the_show() -> No
     """Reports a facing override that starts after the show ends (audit 9.7 validation gaps)."""
     late = _override(start=PAST_SHOW_COUNT, end=PAST_SHOW_COUNT + 1)
     assert _mentions(_edited(facing_overrides=(late,)), "777")
-
-
-@pytest.mark.defect("UP-9.7-73")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-73")
-def test_regression_validate_show_reports_zone_selectors_naming_unknown_spots() -> None:
-    """Reports a zone that applies to a spot that does not exist (audit 9.7 validation gaps)."""
-    zone = two_set_show().sheet.zones[0].model_copy(update={"id": "z", "applies_to": ("ZZ",)})
-    assert _mentions(_edited(zones=(zone,)), "ZZ")
-
-
-@pytest.mark.defect("UP-9.7-74")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-74")
-def test_regression_validate_show_reports_degenerate_zones() -> None:
-    """Reports a zone whose polygon has no area (audit 9.7 validation gaps)."""
-    line = Region(exterior=((0.0, 0.0), (1.0, 0.0), (2.0, 0.0)))
-    zone = two_set_show().sheet.zones[0].model_copy(update={"id": "flat", "polygon": line})
-    assert _mentions(_edited(zones=(zone,)), "flat")
 
 
 def test_regression_validate_show_reports_selections_naming_unknown_spots() -> None:

@@ -80,6 +80,7 @@ TRUMPET_COUNT = 2
 ZONE_ID = "front"
 ZONE_SELECTOR = "T1 + T2 & T2"
 ZONE_RING = ((-5.0, 0.0), (5.0, 0.0), (5.0, 3.0), (-5.0, 3.0))
+ZONES_FIELD = "zones"
 HAND_SET_IDS = ("1a", "1A", "con")
 HAND_SET_SOURCE = "8"
 SHOW_DOC = "/show/show.json"
@@ -211,24 +212,31 @@ def fixture_shows(kind: str = "seeded") -> tuple["Show", "Show", "Show"]:
 
 
 def _with_trumpets_and_zone(show: "Show") -> "Show":
-    """Adds two trumpets and a zone whose selector mixes `+` and `&` without parentheses."""
+    """Adds two trumpets and a zone whose selector mixes `+` and `&` without parentheses.
+
+    Zones exist only in the released libraries this script writes fixtures with, so their names
+    are looked up at run time; with a library that has none, the show gets no zone.
+    """
     from e8s.cast.models import Group
     from e8s.cast.spots import add_group, add_spots_along
     from e8s.core.types import Region
     from e8s.geo.shapes import line
-    from e8s.sheet.models import Zone, ZoneKind
+
+    sheet_models = importlib.import_module("e8s.sheet.models")
 
     show = add_group(show, Group(key=TRUMPETS, label_prefix=TRUMPET_PREFIX))
     show = add_spots_along(show, line(*TRUMPET_LINE), TRUMPET_COUNT, TRUMPETS, NEGATIVE_ZERO_SET)
-    zone = Zone.model_validate(
+    if not hasattr(sheet_models, "Zone"):
+        return show
+    zone = sheet_models.Zone.model_validate(
         {
             "id": ZONE_ID,
-            "kind": ZoneKind.CUSTOM,
+            "kind": sheet_models.ZoneKind.CUSTOM,
             "polygon": Region(exterior=ZONE_RING),
             "applies_to": ZONE_SELECTOR,
         }
     )
-    sheet = _validated(show.sheet, zones=(*show.sheet.zones, zone))
+    sheet = _validated(show.sheet, zones=(*getattr(show.sheet, ZONES_FIELD), zone))
     return _validated(show, sheet=sheet)
 
 

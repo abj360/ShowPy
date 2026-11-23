@@ -17,7 +17,6 @@ Contains:
     test_regression_diff_show_reports_a_selection_change: reports a changed named selection
     test_regression_rename_entities_rewrites_expression_selectors: rewrites spot IDs inside
         expression selectors, as cast.rewrite does
-    test_regression_rename_entities_renames_sheet_zones: rewrites zones stored on the sheet
     test_regression_rename_entities_keeps_selection_order: stores selections as ordered tuples
     test_rename_entities_equals_rewrite_spot_ids: gives the same show as the cast rename
     test_rename_entities_is_deprecated_for_rename_spots: warns naming rename_spots, returns its show
@@ -43,10 +42,8 @@ from e8s.choreo.path_models import (
     TransitionSpec,
 )
 from e8s.core.errors import DeprecatedWarning, E8sError, SchemaError, UnknownRefError
-from e8s.core.ids import FormId, RouteId, SetId, SpotId, ZoneId, make_tid
-from e8s.core.types import Region
+from e8s.core.ids import FormId, RouteId, SetId, SpotId, make_tid
 from e8s.geo.curves import Segment
-from e8s.sheet.models import Zone, ZoneKind
 from e8s.show.history import (
     changelog,
     diff_paths,
@@ -263,13 +260,6 @@ def _full_show() -> Show:
     override = FacingOverride(
         entities="T1 + T2", mode=FacingMode.FIXED, value=FixedFacing(degrees=90.0), start=0, end=4
     )
-    square = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)))
-    zone = Zone(
-        id=ZoneId("z"),
-        kind=ZoneKind.CUSTOM,
-        polygon=square,
-        applies_to=(SpotId("T1"), SpotId("T3")),
-    )
     cast = show.cast.model_copy(update={"selections": {"lead": ("T3", "T1")}})
     return show.model_copy(
         update={
@@ -277,18 +267,9 @@ def _full_show() -> Show:
             "transitions": (spec,),
             "facing_overrides": (override,),
             "pins": (Pin(target="entity", id="T1"),),
-            "zones": (zone,),
-            "sheet": show.sheet.model_copy(update={"zones": (zone,)}),
             "cast": cast,
         }
     )
-
-
-def test_regression_rename_entities_renames_sheet_zones() -> None:
-    """Rewrites `applies_to` of zones stored on the sheet, as rewrite_spot_ids does."""
-    renamed = rename_entities(_full_show(), {"T1": "S1"})
-    assert renamed.sheet.zones[0].applies_to == ("S1", "T3")
-    assert renamed.zones[0].applies_to == ("S1", "T3")
 
 
 def test_regression_rename_entities_keeps_selection_order() -> None:

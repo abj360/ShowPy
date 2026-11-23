@@ -10,12 +10,10 @@ Contains:
         pin on a spot outside the cast exactly as the rename callback says
     test_regression_forced_delete_drops_pins_on_the_spot: leaves no pin naming a spot that
         `delete_spots(force=True)` removed
-    test_regression_relabel_rewrites_sheet_zones: rewrites `applies_to` of zones stored on the sheet
-        when spots are relabeled
-    test_regression_stale_selector_does_not_block_unrelated_delete: deletes T1 although a zone names
-        the long-gone spot T9
-    test_regression_old_glued_selector_does_not_block_relabel: relabels a show whose zone still uses
-        the pre-2026-11-12 syntax `T1+T2`
+    test_regression_stale_selector_does_not_block_unrelated_delete: deletes T1 although a facing
+        override names the long-gone spot T9
+    test_regression_old_glued_selector_does_not_block_relabel: relabels a show whose override still
+        uses the pre-2026-11-12 syntax `T1+T2`
     test_regression_dropping_all_route_members_drops_the_route: drops or flags a route left without
         members
     test_regression_dropping_all_override_entities_drops_the_override: drops or flags a facing
@@ -34,12 +32,16 @@ import pytest
 from e8s.cast.models import LabelScheme
 from e8s.cast.rewrite import faces_entity, rewrite_spot_ids, rewrite_spots
 from e8s.cast.spots import delete_spots, relabel, rename_spots
-from e8s.choreo.path_models import EntityFacing, FacingMode, FixedFacing, PointFacing
+from e8s.choreo.path_models import (
+    EntityFacing,
+    FacingMode,
+    FacingOverride,
+    FixedFacing,
+    PointFacing,
+)
 from e8s.core.errors import E8sError, SchemaError, ShowValidationError, UnknownRefError
-from e8s.core.ids import FormId, SpotId, ZoneId
-from e8s.core.selection import Selection
-from e8s.core.types import Region
-from e8s.sheet.models import Zone, ZoneKind
+from e8s.core.ids import FormId, SpotId
+from e8s.core.selection import Selection, SelectorField
 from e8s.show.models import Pin, Show
 from e8s.show.pinning import pin
 from tests.fixtures.cast_shows import rich_show
@@ -56,15 +58,19 @@ def test_faces_entity_only_for_toward_entity_strings() -> None:
 
 def test_drop_keeps_containers_and_removes_ids() -> None:
     show = rewrite_spot_ids(rich_show(), lambda i: None if i in {"T1", "T2"} else i)
-    assert show.zones[0].applies_to == ()
-    assert show.zones[1].applies_to == "group:trumpets"
-    assert show.zones[2].applies_to == Selection(ids=(SpotId("T4"),))
     assert show.forms[FormId("line1")].members == (None, None, "T3", "T4")
 
 
+def _with_label_overrides(show: Show) -> Show:
+    """Adds overrides whose selectors name spots by label, by group and as a selection."""
+    stored: tuple[SelectorField, ...] = ("T1-T2", "group:trumpets", Selection(ids=(SpotId("T4"),)))
+    overrides = (*show.facing_overrides, *(_override(entities) for entities in stored))
+    return show.model_copy(update={"facing_overrides": overrides})
+
+
 def test_identity_rewrite_freezes_label_expressions_only() -> None:
-    show = rewrite_spot_ids(rich_show(), lambda i: i)
-    assert [z.applies_to for z in show.zones] == [
+    show = rewrite_spot_ids(_with_label_overrides(rich_show()), lambda i: i)
+    assert [o.entities for o in show.facing_overrides[1:]] == [
         ("T1", "T2"),
         "group:trumpets",
         Selection(ids=(SpotId("T4"),)),
@@ -73,12 +79,11 @@ def test_identity_rewrite_freezes_label_expressions_only() -> None:
     assert show.sets == rich_show().sets
 
 
-SQUARE = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)))
 RENAME_T_TO_X = LabelScheme(prefixes={"trumpets": "X"})
 
 
-def _zone(applies_to: str) -> Zone:
-    return Zone(id=ZoneId("z"), kind=ZoneKind.CUSTOM, polygon=SQUARE, applies_to=applies_to)
+def _override(entities: SelectorField) -> FacingOverride:
+    return FacingOverride(entities=entities, mode=FacingMode.AUDIENCE, start=4.0, end=8.0)
 
 
 def _pinned_show() -> Show:
@@ -101,23 +106,15 @@ def test_regression_forced_delete_drops_pins_on_the_spot() -> None:
     assert "T1" not in _pin_ids(remaining)
 
 
-def test_regression_relabel_rewrites_sheet_zones() -> None:
-    """Rewrites `applies_to` of zones stored on the sheet when spots are relabeled (audit 9.3)."""
-    show = two_set_show()
-    sheet = show.sheet.model_copy(update={"zones": (_zone("T1 + T2"),)})
-    relabeled, _ = relabel(show.model_copy(update={"sheet": sheet}), RENAME_T_TO_X)
-    assert "T1" not in str(relabeled.sheet.zones[0].applies_to)
-
-
 def test_regression_stale_selector_does_not_block_unrelated_delete() -> None:
-    """Deletes T1 although a zone names the long-gone spot T9 (audit 9.3)."""
-    show = two_set_show().model_copy(update={"zones": (_zone("T9"),)})
+    """Deletes T1 although a facing override names the long-gone spot T9 (audit 9.3)."""
+    show = two_set_show().model_copy(update={"facing_overrides": (_override("T9"),)})
     assert "T1" not in delete_spots(show, "T1").cast.ids()
 
 
 def test_regression_old_glued_selector_does_not_block_relabel() -> None:
-    """Relabels a show whose zone still uses the pre-2026-11-12 syntax `T1+T2` (audit 9.3)."""
-    show = two_set_show().model_copy(update={"zones": (_zone("T1+T2"),)})
+    """Relabels a show whose override still uses the pre-2026-11-12 syntax `T1+T2` (audit 9.3)."""
+    show = two_set_show().model_copy(update={"facing_overrides": (_override("T1+T2"),)})
     relabeled, _ = relabel(show, RENAME_T_TO_X)
     assert "T1" not in relabeled.cast.ids()
 
@@ -189,10 +186,10 @@ def test_rename_spots_follows_a_pin_without_force() -> None:
 
 
 def test_regression_stale_selector_is_reported_not_fatal() -> None:
-    show = two_set_show().model_copy(update={"zones": (_zone("T9"),)})
+    show = two_set_show().model_copy(update={"facing_overrides": (_override("T9"),)})
     renamed, report = rename_spots(show, {"T1": "X1"})
     assert report.unresolved_selectors == ("T9",)
-    assert renamed.zones[0].applies_to == "T9"
+    assert renamed.facing_overrides[0].entities == "T9"
 
 
 def test_rewrite_spots_reports_dropped_route() -> None:

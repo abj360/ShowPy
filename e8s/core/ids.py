@@ -4,7 +4,6 @@ ids.py --- ID aliases, checked model ID fields, the ID checks, and reference and
 Contains:
     SpotIdField, SetIdField, SetKeyField, FormIdField, RouteIdField, NoteIdField,
         SelectionNameField: model field types that run check_id on validation
-    LandmarkIdField, ZoneIdField: model field types that run check_sheet_id on validation
     ShowIdField: model field type that runs check_sheet_id, because stored show IDs keep an
         inner `-`
     TransitionId: names the transition between two sets; `str()` writes `12→13`
@@ -44,8 +43,6 @@ SetId = NewType("SetId", str)
 SetKey = NewType("SetKey", str)
 FormId = NewType("FormId", str)
 RouteId = NewType("RouteId", str)
-ZoneId = NewType("ZoneId", str)
-LandmarkId = NewType("LandmarkId", str)
 ShowId = NewType("ShowId", str)
 NoteId = NewType("NoteId", str)
 SelectionName = NewType("SelectionName", str)
@@ -256,13 +253,13 @@ def check_sheet_id(text: str, *, kind: str) -> str:
 
     Args:
         text: Candidate ID as typed or stored.
-        kind: What the ID names (`landmark`, `zone`, `reference`), used in the message.
+        kind: What the ID names (`guide`, `reference`), used in the message.
 
     Returns:
         normalized_id: The ID after NFC normalization; store this, not `text`.
 
-    >>> check_sheet_id("end-zone-left", kind="landmark")
-    'end-zone-left'
+    >>> check_sheet_id("yard-left-10", kind="guide")
+    'yard-left-10'
     """
     return _checked_text(text, kind, _SHEET_ID_RULE)
 
@@ -371,8 +368,6 @@ RouteIdField = Annotated[RouteId, AfterValidator(_checked("route", _ID_RULE))]
 ShowIdField = Annotated[ShowId, AfterValidator(_checked("show", _SHEET_ID_RULE))]
 NoteIdField = Annotated[NoteId, AfterValidator(_checked("note", _ID_RULE))]
 SelectionNameField = Annotated[SelectionName, AfterValidator(_checked("selection", _ID_RULE))]
-LandmarkIdField = Annotated[LandmarkId, AfterValidator(_checked("landmark", _SHEET_ID_RULE))]
-ZoneIdField = Annotated[ZoneId, AfterValidator(_checked("zone", _SHEET_ID_RULE))]
 
 
 def find_case_clashes(ids: Iterable[str]) -> list[tuple[str, str]]:

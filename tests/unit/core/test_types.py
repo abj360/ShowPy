@@ -11,7 +11,7 @@ Contains:
     test_regression_region_rejects_nan_points: rejects NaN ring coordinates
     test_regression_region_rejects_self_intersection: rejects a bow-tie ring that crosses itself
     test_regression_frozen_models_reject_non_finite_floats: rejects NaN and infinity in Box2,
-        TempoSection, Waypoint, Shape and Landmark fields
+        TempoSection, Waypoint, Shape and GuideLine fields
     test_regression_nested_model_error_keeps_outer_locs: reports every nested field error under
         the outer model with dotted locs
     test_regression_nested_construction_error_names_the_outermost_model: names the outer model,
@@ -65,7 +65,7 @@ from e8s.choreo.path_models import Waypoint
 from e8s.core import canonical, json_types
 from e8s.core.caps import MAX_COORD_M, MAX_COUNTS, MIN_TEMPO
 from e8s.core.errors import E8sError, SchemaError, field_errors
-from e8s.core.ids import LandmarkId, SetId, SpotId
+from e8s.core.ids import SetId, SpotId
 from e8s.core.readonly import ReadOnlyMap
 from e8s.core.types import (
     Box2,
@@ -89,7 +89,7 @@ from e8s.core.types import (
     Seconds,
 )
 from e8s.geo.curves import curve_from_construction
-from e8s.sheet.models import Landmark
+from e8s.sheet.models import GuideLine
 from e8s.time.models import TempoSection
 
 NON_FINITE_MODELS: dict[str, Callable[[], FrozenModel]] = {
@@ -103,12 +103,8 @@ NON_FINITE_MODELS: dict[str, Callable[[], FrozenModel]] = {
     "waypoint-inf": lambda: Waypoint(x=0.0, y=-math.inf),
     "shape-nan-rotation": lambda: Shape(kind="rectangle", rotation_deg=math.nan),
     "shape-inf-radius": lambda: Shape(radius_m=math.inf),
-    "landmark-nan": lambda: Landmark(
-        id=LandmarkId("a"), name="a", kind="point", geometry=((math.nan, 0.0),)
-    ),
-    "landmark-inf": lambda: Landmark(
-        id=LandmarkId("a"), name="a", kind="point", geometry=((math.inf, 0.0),)
-    ),
+    "guide-nan": lambda: GuideLine(id="a", kind="custom", points=((math.nan, 0.0),)),
+    "guide-inf": lambda: GuideLine(id="a", kind="custom", points=((math.inf, 0.0),)),
 }
 
 

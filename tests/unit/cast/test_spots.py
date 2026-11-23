@@ -55,7 +55,6 @@ from e8s.core.errors import (
     UnknownRefError,
 )
 from e8s.core.ids import FormId, RouteId, SpotId
-from e8s.core.selection import Selection
 from e8s.core.types import Region
 from e8s.core.util import approx_equal
 from e8s.geo.regions import region
@@ -180,7 +179,6 @@ def test_delete_spots_removes_every_reference() -> None:
     assert spec.routes[RouteId("r1")].members == ("T3",)
     assert spec.routes[RouteId("r1")].offsets == (0.0,)
     assert show.cast.selections["pair"] == ("T1",)
-    assert show.zones[2].applies_to == Selection(ids=())
 
 
 def test_delete_spots_refuses_pinned_without_force() -> None:
@@ -296,11 +294,6 @@ def test_rename_everywhere_rewrites_every_reference() -> None:
     assert override.entities == ("A1", "A2")
     assert override.value == EntityFacing(entity=SpotId("A3"))
     assert show.cast.selections["pair"] == ("A1", "A4")
-    assert [z.applies_to for z in show.zones] == [
-        ("A1", "A2"),
-        "group:trumpets",
-        Selection(ids=(SpotId("A4"),)),
-    ]
 
 
 def test_rename_everywhere_swaps_simultaneously() -> None:

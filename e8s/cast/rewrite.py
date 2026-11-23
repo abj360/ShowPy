@@ -27,7 +27,6 @@ from e8s.choreo.path_models import (
 from e8s.core.errors import SchemaError, ShowValidationError, UnknownRefError
 from e8s.core.ids import RouteId, SpotId, TransitionId
 from e8s.core.selection import Selection, SelectorField
-from e8s.sheet.models import Sheet, Zone
 
 if TYPE_CHECKING:
     from e8s.show.models import Pin, Show
@@ -103,7 +102,7 @@ def rewrite_spots(show: "Show", rename: Rename) -> "tuple[Show, RewriteReport]":
     """Applies `rename` to every spot reference in a show and reports what it dropped.
 
     Covers the cast, named selections, placements, forms, path rows (keys, entities and
-    entity facings), routes, facing overrides, entity pins and zones of the show and its sheet.
+    entity facings), routes, facing overrides and entity pins.
     A selector that names labels is frozen to the rewritten ID list; a selector that cannot be
     resolved stays as written and is reported. A route left without members and a facing
     override left without spots or aimed at a dropped spot are removed and reported. Raises
@@ -134,9 +133,7 @@ def rewrite_spots(show: "Show", rename: Rename) -> "tuple[Show, RewriteReport]":
         "forms": {fid: _rewrite_form(f, rename) for fid, f in show.forms.items()},
         "transitions": tuple(_rewrite_spec(spec, rename, dropped) for spec in show.transitions),
         "facing_overrides": _rewrite_overrides(show, rename, dropped),
-        "zones": tuple(_rewrite_zone(show, z, rename, dropped) for z in show.zones),
         "pins": _rewrite_pins(show.pins, rename),
-        "sheet": _rewrite_sheet(show, rename, dropped),
     }
     new_cast = Cast.model_validate({**dict(cast), "spots": spots, "selections": selections})
     report = RewriteReport(
@@ -268,10 +265,6 @@ def _rewrite_overrides(
     return tuple(kept)
 
 
-def _rewrite_zone(show: "Show", zone: Zone, rename: Rename, dropped: _Dropped) -> Zone:
-    return zone.replace(applies_to=_rewrite_selector(show, zone.applies_to, rename, dropped))
-
-
 def _rewrite_pins(pins: "tuple[Pin, ...]", rename: Rename) -> "tuple[Pin, ...]":
     kept = []
     for pin in pins:
@@ -280,8 +273,3 @@ def _rewrite_pins(pins: "tuple[Pin, ...]", rename: Rename) -> "tuple[Pin, ...]":
         elif (new := rename(SpotId(pin.id))) is not None:
             kept.append(pin.replace(id=new))
     return tuple(kept)
-
-
-def _rewrite_sheet(show: "Show", rename: Rename, dropped: _Dropped) -> Sheet:
-    zones = tuple(_rewrite_zone(show, z, rename, dropped) for z in show.sheet.zones)
-    return show.sheet.replace(zones=zones)

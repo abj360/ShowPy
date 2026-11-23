@@ -22,14 +22,12 @@ Contains:
         a non-ASCII letter into `_` after NFC and collapses `..`
     test_regression_rename_rule_splits_a_case_pair_the_replacement_makes: suffixes an ID that
         the replacement makes equal, ignoring case, to an earlier or a kept one
-    test_regression_landmark_and_guide_ids_are_renamed_and_origins_follow: renames sheet
-        landmarks and guides by the sheet-item rule, avoiding landmark names and aliases, and
-        moves a coordinate origin with its landmark
+    test_regression_guide_ids_are_renamed: renames sheet guides by the sheet-item rule
     test_regression_spot_renames_report_each_selector_they_freeze: records a repair for a
         stored pattern selector that the spot renames turn into an ID list
     test_rename_ids_renames_nothing_in_a_valid_show: returns the show and an empty report
     test_regression_every_reference_follows_a_renamed_id: rewrites sets, keys, transitions,
-        forms, routes, zones, selections, pins and selector text, and the result passes every ID
+        forms, routes, selections, pins and selector text, and the result passes every ID
         check; the notes sub-step renames note IDs and points note anchors at the renamed IDs
     test_regression_first_save_moves_the_files_of_renamed_set_folders: moves a set script from
         `/sets/con/` to `/sets/con_/` in one revision, nothing on the next save, for the v0.2.0
@@ -61,11 +59,9 @@ import pytest
 from e8s.cast.spots import define_selection
 from e8s.choreo.path_models import FacingMode, FacingOverride
 from e8s.core.errors import SchemaError, StorageError
-from e8s.core.ids import LEGACY_IDS_KEY, FormId, SetId, ZoneId
+from e8s.core.ids import LEGACY_IDS_KEY, FormId, SetId
 from e8s.core.json_types import JsonValue
-from e8s.core.types import Region
 from e8s.examples import two_set_show
-from e8s.sheet.models import Zone, ZoneKind
 from e8s.show._notes_document import NotesDocument
 from e8s.show.canvas_renames import renamed_canvas
 from e8s.show.documents import (
@@ -97,7 +93,6 @@ FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "repos"
 LEGACY = {LEGACY_IDS_KEY: True}
 AT = datetime(2026, 11, 22, 12, 0, tzinfo=UTC)
 SCRIPT = b"# set script\n"
-SQUARE = Region(exterior=((0.0, 1.0), (1.0, 1.0), (1.0, 2.0), (0.0, 2.0)))
 V020_FORM_RENAMES = 15
 DETERMINISM_SCRIPT = """
 import json, shutil, tempfile
@@ -263,34 +258,20 @@ def test_regression_rename_rule_splits_a_case_pair_the_replacement_makes() -> No
 
 
 def _legacy_sheet_dump() -> dict[str, Any]:
-    """Gives the example show v1 sheet IDs: landmarks `props`, `-edge-` and `x y`, guide
-    `yard 10`, and coordinates in the show and on the sheet that start at landmark `props`."""
+    """Gives the example show the v1 sheet guide ID `yard 10`."""
     dump = two_set_show().model_dump(mode="json")
-    point = {"kind": "point", "geometry": [[0.0, 10.0]], "aliases": []}
-    dump["sheet"]["landmarks"] = [
-        {**point, "id": "props", "name": "Props table"},
-        {**point, "id": "-edge-", "name": "edge"},
-        {**point, "id": "x y", "name": "corner"},
-        {**point, "id": "flag", "name": "flag", "aliases": ["x_y"]},
-    ]
     dump["sheet"]["guides"] = [
         {"id": "yard 10", "kind": "yard", "points": [[0.0, 0.0], [0.0, 5.0]], "label": "10"}
     ]
-    dump["coordinates"]["origin"] = "props"
-    dump["sheet"]["default_coordinates"]["origin"] = "props"
     return dump
 
 
-def test_regression_landmark_and_guide_ids_are_renamed_and_origins_follow() -> None:
+def test_regression_guide_ids_are_renamed() -> None:
     report = ReportBuilder(FIRST_VERSION)
     show = rename_ids(_legacy_show(_legacy_sheet_dump()), report)
     renamed = report.build().renamed
-    assert renamed["landmark"] == (("props", "props_"), ("-edge-", "_edge_"), ("x y", "x_y.2"))
     assert renamed["guide"] == (("yard 10", "yard_10"),)
-    assert [m.id for m in show.sheet.landmarks] == ["props_", "_edge_", "x_y.2", "flag"]
     assert [g.id for g in show.sheet.guides] == ["yard_10"]
-    assert show.model_dump(mode="json")["coordinates"]["origin"] == "props_"
-    assert show.sheet.default_coordinates.origin == "props_"
     assert Show.model_validate(show.model_dump(mode="json")) == show
 
 
@@ -326,9 +307,7 @@ def _rich_show() -> Show:
         )
         for entities in ("sel:sq + form:brass_2", ["B1", "B2"])
     )
-    show = show.replace(facing_overrides=overrides)
-    zone = Zone(id=ZoneId("zz"), kind=ZoneKind.STAGING, polygon=SQUARE, applies_to="sel:sq")
-    return show.replace(sheet=show.sheet.replace(zones=(zone,)))
+    return show.replace(facing_overrides=overrides)
 
 
 RICH_NOTES: tuple[tuple[str, dict[str, JsonValue]], ...] = (
@@ -350,14 +329,13 @@ def _v1_note(note_id: str, anchor: dict[str, JsonValue]) -> JsonValue:
 
 
 def _legacy_rich_dump() -> dict[str, Any]:
-    """Gives the rich show v1 IDs: set `con`, form `brass-2`, route `r-1`, zone `props`."""
+    """Gives the rich show v1 IDs: set `con`, form `brass-2`, route `r-1`."""
     text = json.dumps(_rich_show().model_dump(mode="json"))
     for valid, stored in (
         ("zq", "con"),
         ("brass_2", "brass-2"),
         ('"sq"', '"s-q"'),
         ("sel:sq", "sel:s-q"),
-        ('"zz"', '"props"'),
     ):
         text = text.replace(valid, stored)
     dump: dict[str, Any] = json.loads(text)
@@ -380,7 +358,6 @@ def test_regression_every_reference_follows_a_renamed_id() -> None:
     assert renamed["set"] == (("con", "con_"),)
     assert ("brass-2", "brass_2") in renamed["form"]
     assert set(renamed["route"]) == {("r-1", "r_1")}
-    assert renamed["zone"] == (("props", "props_"),)
     assert renamed["selection"] == (("s-q", "s_q"),)
     assert "note" not in renamed
     assert show.set_ids()[-1] == "con_"
@@ -400,7 +377,6 @@ def test_regression_every_reference_follows_a_renamed_id() -> None:
         row.route in (None, "r_1") for spec in show.transitions for row in spec.rows.values()
     )
     assert [o.entities for o in show.facing_overrides] == ["sel:s_q + form:brass_2", ("B1", "B2")]
-    assert [(z.id, z.applies_to) for z in show.sheet.zones] == [("props_", "sel:s_q")]
     assert list(show.cast.selections) == ["s_q"]
     assert Show.model_validate(show.model_dump(mode="json")) == show
     assert validate_show(show).ok

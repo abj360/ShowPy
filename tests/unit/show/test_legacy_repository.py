@@ -62,6 +62,7 @@ from e8s.show.collab import events_since
 from e8s.show.document_reading import decode_show_dump
 from e8s.show.documents import (
     LEGACY_NOTES_DOC,
+    SHEET_DOC,
     SHOW_DOC,
     dump_json,
     dump_show_doc,
@@ -188,13 +189,14 @@ def _form_reference_paths(tree: Mapping[str, bytes]) -> set[str]:
 
 def _normalized_paths(tree: Mapping[str, bytes]) -> set[str]:
     """Lists what the first save rewrites: `-0.0` documents, forms documents for their v2
-    recipes, set documents for their renamed form IDs, show.json for its v2 header and renamed
-    selection, and the v1 notes document, which it deletes (the fixture holds no notes)."""
+    recipes, set documents for their renamed form IDs, show.json for its v2 header, renamed
+    selection and dropped coordinates, sheet.json for its dropped landmarks and coordinates, and
+    the v1 notes document, which it deletes (the fixture holds no notes)."""
     return (
         _negative_zero_paths(tree)
         | _forms_paths(tree)
         | _form_reference_paths(tree)
-        | {SHOW_DOC, LEGACY_NOTES_DOC}
+        | {SHOW_DOC, SHEET_DOC, LEGACY_NOTES_DOC}
     )
 
 
@@ -324,7 +326,7 @@ def test_regression_workspace_commit_normalizes_first_then_edits(tmp_path: Path)
     log = repo.revisions(expected["show_id"])
     assert [r.id for r in log][:3] == expected["revisions"]
     assert [set(r.changed) for r in log[3:]] == [
-        {"/sets/1/set.json", SHOW_DOC, LEGACY_NOTES_DOC}
+        {"/sets/1/set.json", SHOW_DOC, SHEET_DOC, LEGACY_NOTES_DOC}
         | _forms_paths(ws.tree_at(expected["head"]))
         | _form_reference_paths(ws.tree_at(expected["head"])),
         {"/sets/1/set.json"},
@@ -365,7 +367,8 @@ STALE_DOCS = {"/sets/1/set.json", "/show/sheet.json"}
 
 
 def _two_stale_documents(tmp_path: Path) -> tuple[FileRepository, Workspace, int]:
-    """Copies the fixture and reformats its sheet document, so two documents are non-canonical.
+    """Copies the fixture and reformats its migrated sheet document, so two documents are
+    non-canonical.
 
     The commit also stores show.json, which any commit of a show document needs, and every
     other changed document in its migrated shape, so no stored ID is a v1 ID; the `-0.0` set
@@ -373,8 +376,8 @@ def _two_stale_documents(tmp_path: Path) -> tuple[FileRepository, Workspace, int
     """
     repo, ws, expected = _fixture_workspace(tmp_path)
     tree = ws.tree_at(expected["head"])
-    sheet = json.loads(tree["/show/sheet.json"])
     migrated, _ = migrate_documents(tree)
+    sheet = json.loads(migrated["/show/sheet.json"])
     current: dict[str, bytes | None] = {
         path: raw
         for path, raw in migrated.items()

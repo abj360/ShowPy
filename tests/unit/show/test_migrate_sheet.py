@@ -6,8 +6,10 @@ test_migrate_sheet.py --- tests the sheet sub-step of the v1 to v2 migration
 Contains:
     test_sheet_step_paths_match_the_stored_paths(): names the stored sheet and show documents
     test_sheet_step_returns_valid_documents_unchanged(): keeps a sheet that v2 accepts
-    test_regression_stored_precision_of_zero_is_refused(): refuses a precision of 0 or less in
-        the sheet and in show.json, naming the document, the field and the value
+    test_regression_v1_landmarks_zones_and_coordinates_are_dropped_and_listed(): removes them from
+        the sheet and show.json and lists each that held more than its v1 default, as stored
+    test_regression_v1_fields_at_their_defaults_are_dropped_unlisted(): removes empty landmarks,
+        zones and default coordinate systems without listing them
     test_regression_sheet_breaking_a_v2_rule_is_refused(): refuses a stored sheet that v2 refuses
         instead of repairing it
     test_regression_v1_tree_with_a_bad_sheet_fails_to_load(): refuses the same through
@@ -54,24 +56,6 @@ def test_sheet_step_returns_valid_documents_unchanged() -> None:
     assert _migrate(docs) == docs
 
 
-@pytest.mark.parametrize("precision", [0, 0.0, -0.5])
-def test_regression_stored_precision_of_zero_is_refused(precision: float) -> None:
-    """Refuses a stored precision of 0 or less, naming the document, the field and the value."""
-    sheet_docs = _docs()
-    sheet_docs[SHEET_DOC]["default_coordinates"]["precision"] = precision
-    with pytest.raises(SchemaError) as caught:
-        _migrate(sheet_docs)
-    assert caught.value.context["document"] == SHEET_DOC
-    assert caught.value.context["field"] == "default_coordinates.precision"
-    assert caught.value.context["value"] == repr(precision)
-    show_docs = _docs()
-    show_docs[SHOW_DOC]["coordinates"]["precision"] = precision
-    with pytest.raises(SchemaError) as caught:
-        _migrate(show_docs)
-    assert caught.value.context["document"] == SHOW_DOC
-    assert caught.value.context["field"] == "coordinates.precision"
-
-
 def _break(docs: dict[str, Any], change: str) -> None:
     sheet = docs[SHEET_DOC]
     if change == "size":
@@ -80,31 +64,13 @@ def _break(docs: dict[str, Any], change: str) -> None:
         sheet["outline"] = sheet["outline"][:2]
     elif change == "ref":
         sheet["ref"] = "nonsense"
-    elif change == "landmarks":
-        sheet["landmarks"] = [sheet["landmarks"][0]] * 2
-    elif change == "zones":
-        sheet["zones"] = [sheet["zones"][0]] * 2
     elif change == "guides":
         sheet["guides"] = [GUIDE] * 2
-    elif change == "guide-points":
-        sheet["guides"] = [{**GUIDE, "points": []}]
-    elif change == "labels":
-        sheet["default_coordinates"]["labels"] = {"left": 3}
     else:
-        docs[SHOW_DOC]["coordinates"]["labels"] = {"left": 3}
+        sheet["guides"] = [{**GUIDE, "points": []}]
 
 
-BREAKS = [
-    "size",
-    "outline",
-    "ref",
-    "landmarks",
-    "zones",
-    "guides",
-    "guide-points",
-    "labels",
-    "show-labels",
-]
+BREAKS = ["size", "outline", "ref", "guides", "guide-points"]
 
 
 @pytest.mark.parametrize("change", BREAKS)
@@ -118,10 +84,10 @@ def test_regression_sheet_breaking_a_v2_rule_is_refused(change: str) -> None:
 
 
 def test_regression_v1_tree_with_a_bad_sheet_fails_to_load() -> None:
-    """Refuses a v1 tree whose sheet has a precision of 0 when it is migrated."""
+    """Refuses a v1 tree whose sheet has a width of 0 when it is migrated."""
     raw = encode_show(two_set_show())
     sheet = json.loads(raw[SHEET_DOC])
-    sheet["default_coordinates"]["precision"] = 0
+    sheet["size_m"] = [0.0, 6.0]
     show_doc = without_header(json.loads(raw[SHOW_DOC]))
     docs = {
         **raw,
@@ -137,3 +103,56 @@ def test_sheet_step_never_mutates_its_input() -> None:
     before = copy.deepcopy(docs)
     _migrate(docs)
     assert docs == before
+
+
+LANDMARK = {"id": "c", "name": "center", "kind": "point", "geometry": [[0.0, 10.0]], "aliases": []}
+ZONE = {"id": "pit", "kind": "pit", "polygon": {"exterior": [[0, 0], [1, 0], [1, 1]], "holes": []}}
+FEET = {
+    "kind": "marching",
+    "origin": "c",
+    "audience_side": "front",
+    "units": "ft",
+    "precision": 0.5,
+    "labels": {"left": "SR"},
+}
+METERS = {
+    "kind": "grid",
+    "origin": [0.0, 0.0],
+    "audience_side": "front",
+    "units": "m",
+    "precision": 0.01,
+    "labels": {},
+}
+
+
+def test_regression_v1_landmarks_zones_and_coordinates_are_dropped_and_listed() -> None:
+    """Drops what v2 lacks and lists each non-default value as stored, so a host can keep it."""
+    docs = _docs()
+    expected = copy.deepcopy(docs)
+    docs[SHEET_DOC] |= {"landmarks": [LANDMARK], "zones": [ZONE], "default_coordinates": FEET}
+    docs[SHOW_DOC] |= {"coordinates": FEET, "zones": [ZONE]}
+    report = ReportBuilder(1)
+    assert migrate_sheet(docs, report) == expected
+    dropped = [(d.document, d.location, d.stored_id) for d in report.build().dropped]
+    assert dropped == [(SHEET_DOC, "", None), (SHOW_DOC, "", None)]
+    sheet_fields, show_fields = (d.fields for d in report.build().dropped)
+    assert json.loads(json.dumps(sheet_fields, default=dict)) == {
+        "landmarks": [LANDMARK],
+        "zones": [ZONE],
+        "default_coordinates": FEET,
+    }
+    assert json.loads(json.dumps(show_fields, default=dict)) == {
+        "coordinates": FEET,
+        "zones": [ZONE],
+    }
+
+
+def test_regression_v1_fields_at_their_defaults_are_dropped_unlisted() -> None:
+    """Drops empty landmarks and zones and default coordinate systems without listing them."""
+    docs = _docs()
+    expected = copy.deepcopy(docs)
+    docs[SHEET_DOC] |= {"landmarks": [], "zones": [], "default_coordinates": METERS}
+    docs[SHOW_DOC] |= {"coordinates": METERS, "zones": []}
+    report = ReportBuilder(1)
+    assert migrate_sheet(docs, report) == expected
+    assert report.build().dropped == ()

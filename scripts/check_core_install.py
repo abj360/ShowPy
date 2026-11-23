@@ -22,21 +22,14 @@ import pkgutil
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
 
 import e8s
 from e8s.choreo.motion_stats import energy_curve, phrase_profile, speeds
 from e8s.choreo.paths import paths_table
 from e8s.core.extras import MissingExtraError
 from e8s.examples import COUNTS, EXAMPLE_TID, two_set_show
-from e8s.sheet.render import SheetCanvas, _draw_sheet, _render_sheet
-from e8s.sheet.templates import _blank_sheet
 
-if TYPE_CHECKING:
-    from PIL import ImageDraw
-
-OPTIONAL_MODULES = ("pandas", "PIL")
-SHEET_SIDE_M = 4.0
+OPTIONAL_MODULES = ("pandas",)
 
 
 @dataclass(frozen=True)
@@ -60,12 +53,6 @@ def _first_set_table() -> object:
     return two_set_show().sets[0].table()
 
 
-def _draw_blank_sheet() -> None:
-    sheet = _blank_sheet(SHEET_SIDE_M, SHEET_SIDE_M)
-    # A core install cannot build an ImageDraw; the gate fires before the drawing is touched.
-    _draw_sheet(cast("ImageDraw.ImageDraw", None), SheetCanvas.for_sheet(sheet), sheet)
-
-
 GATED_CALLS = (
     GatedCall("Set.table", "tables", ("pandas",), _first_set_table),
     GatedCall(
@@ -82,19 +69,6 @@ GATED_CALLS = (
         ("pandas",),
         lambda: phrase_profile(two_set_show(), 0.0, COUNTS),
     ),
-    GatedCall(
-        "render_sheet(fmt='png')",
-        "render",
-        ("PIL",),
-        lambda: _render_sheet(_blank_sheet(SHEET_SIDE_M, SHEET_SIDE_M), fmt="png"),
-    ),
-    GatedCall(
-        "render_sheet(fmt='pdf')",
-        "render",
-        ("PIL",),
-        lambda: _render_sheet(_blank_sheet(SHEET_SIDE_M, SHEET_SIDE_M), fmt="pdf"),
-    ),
-    GatedCall("draw_sheet", "render", ("PIL",), _draw_blank_sheet),
 )
 
 

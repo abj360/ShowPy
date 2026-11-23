@@ -497,7 +497,7 @@ def relabel(show: "Show", scheme: LabelScheme) -> tuple["Show", dict[SpotId, str
     """Renumbers every group under `scheme`, in natural order of the current labels.
 
     IDs are rewritten everywhere: cast, placements, forms, path rows, routes, note anchors,
-    facing overrides, zones and named selections.
+    facing overrides and named selections.
 
     Returns:
         show: The relabeled show, carrying `scheme`.
@@ -581,7 +581,7 @@ def rename_spots(
     """Renames spot IDs simultaneously in every place a show refers to them.
 
     Covers the cast, placements, forms, path rows (keys, entities and entity facings),
-    routes, facing overrides, zones, pins and named selections. Swaps are allowed; a new ID
+    routes, facing overrides, pins and named selections. Swaps are allowed; a new ID
     that another spot keeps raises SchemaError naming both sources. A selector that names labels
     is frozen to the renamed ID list; one that no longer resolves stays as written and is listed
     in the report. Pinned pictures must stay as they are: LockedError unless `force=True`.
