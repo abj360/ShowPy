@@ -181,8 +181,8 @@ def test_reorder_by_y_without_previous_set_uses_ids() -> None:
 def test_regression_reorder_by_x_ranks_noise_tied_slots_by_y(direction: float) -> None:
     """Ranks slots whose x differs by 1 ulp by y, as if the x were equal.
 
-    The slots stand on one vertical file; the upper one moved 1 ulp right used to rank second
-    by the noise alone, and the leftmost member took it.
+    The slots stand on one vertical file; the upper one moved 1 ulp left used to rank first by
+    the noise alone, and the leftmost member took it.
     """
     for upper_x in (1.0, math.nextafter(1.0, direction)):
         form = custom_form("f", ["A", "B"], [(upper_x, 2.0), (1.0, 0.0)])
