@@ -196,3 +196,41 @@ message. Every refusal is `SchemaError` code `STRICT_JSON`.
 A parser that tracks offsets (a second scan of the bytes for the token, or a parser other than
 the standard library's) would restore positions; one more pass over every stored document was
 not worth it for errors that name the token or key already.
+
+## Addendum 2026-11-22: the rename rule repairs every v1 ID
+
+Task A4 implemented decision 5; its review and the controller's rulings R-A20 to R-A23 settled
+what the decision left open.
+
+- **Every v1 ID is repaired, none refused (R-A20).** Decision 6 allows a refusal only for values
+  no v0.3.0 edit function could write, and v0.3.0 accepted any non-empty spot, form, note,
+  route and selection ID (`rename_entities`, `add_note`, `define_selection`). So the rule first
+  applies NFC, replaces every character outside the kind's alphabet with `_` (`[A-Za-z0-9_.]`
+  for spot, set, form, route, selection and note IDs, plus an inner `-` for sheet items) and
+  collapses each `..` run to `.`. Then the steps of decision 5 follow: strip edge dots, cut to
+  60 characters, `id` for an empty result, `_` for a reserved word, `.2`, `.3`, ... for a taken
+  name. `DM 1` becomes `DM_1`, `ñ1` becomes `_1`, and `a..b` becomes `a.b`.
+- **Landmark and guide IDs are renamed too (R-A21).** v0.3.0 stored them unchecked, and `props`
+  is reserved from v0.4.0. They follow the sheet-item rule of the ADR 0006 addendum of
+  2026-11-19 (an inner `-` stays; an edge `-` becomes `_`), per sheet, and are reported as kinds
+  `landmark` and `guide`. A renamed landmark is followed in `CoordinateSystem.origin` of the
+  sheet and of the show; no other stored field names one. A new landmark ID also avoids, ignoring
+  case, every landmark name and alias, so no two landmarks answer to one name.
+- **Readings of decision 5.**
+  - A valid ID never yields: valid IDs are kept before repaired ones pick names, so `a-b` beside
+    `a_b` becomes `a_b.2`.
+  - A device name before an extension gets its `_` before the dot: `con.5` becomes `con_.5`,
+    because `con.5_` would still be a device name.
+  - Route IDs are unique per transition and zone, landmark and guide IDs per sheet or show, so
+    the same old ID can map to two new ones; the report lists each pair in show order without
+    the container.
+- **Frozen selectors are reported.** When any spot is renamed, a stored selector that names
+  spots by label (`T*`, `T1-T8`) is stored as its ID list, as `rename_spots` does, and the report
+  records each one as a repair.
+- **Canvas files follow, claims stay with the host (R-A23).** `migrate_documents` rewrites the
+  anchors of `/canvas/comments.json` and the IDs of `/canvas/selection.json` through the
+  renames. `/publish/claims.json` is host-kept, as decision 5 says: the host applies the
+  report's renames to its claims.
+- **Deferred to Phase 3.** Until the first save, a workspace on a v1 tree cannot read a file at
+  the renamed folder of a set (`/sets/con_/set.py`); the repository rewrite of ADR 0015 moves
+  that read through the migration.
