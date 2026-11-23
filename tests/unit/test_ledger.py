@@ -14,6 +14,8 @@ Contains:
     test_defect_marker_accepts_parametrized_marks: accepts defect marks inside pytest.param
     test_ledger_counts_only_selected_tests: leaves deselected defect tests out of the count
     test_regression_ledger_counts_open_defects_under_xdist: counts the workers' selection under -n
+    test_regression_ledger_survives_a_crashed_worker: prints an unknown count when a worker dies
+    test_crashed_worker_between_tests_fails_the_run: fails a run whose worker dies after its tests
     run_split_half(): runs one half of the slow session's timing split over fixed defect tests
     test_ledger_counts_each_half_of_the_timing_split: prints each half's own open count
     test_fixed_defect_fails_the_timing_half: a passing strict xfail fails the half
@@ -259,6 +261,57 @@ def test_regression_ledger_counts_open_defects_under_xdist(
     )
     assert result.ret == 0
     result.stdout.fnmatch_lines(["Ledger: 2 open"])
+
+
+CRASHED_WORKER_SOURCE = """
+import os
+
+import pytest
+
+@pytest.fixture(scope="module")
+def crashing_fixture() -> None:
+    os._exit(1)
+
+@pytest.mark.defect("UP-9.1-01")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-01")
+def test_regression_open_defect() -> None:
+    assert False
+
+def test_crashes_its_worker(crashing_fixture: None) -> None:
+    assert True
+"""
+CRASH_AFTER_TESTS_CONFTEST = """
+import os
+
+def pytest_sessionfinish() -> None:
+    if os.environ.get("PYTEST_XDIST_WORKER") == "gw0":
+        os._exit(1)
+"""
+
+
+def test_regression_ledger_survives_a_crashed_worker(
+    pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Prints an unknown count, not a crash in the plugin, when a worker dies building a fixture."""
+    monkeypatch.setenv("PYTHONPATH", str(PROJECT_ROOT))
+    result = run_ledger_case(pytester, CRASHED_WORKER_SOURCE, "-n", "2", "-p", "no:randomly")
+    assert result.ret == pytest.ExitCode.TESTS_FAILED
+    result.stdout.fnmatch_lines(["Ledger: unknown (worker gw? crashed)"])
+    result.stdout.no_fnmatch_line("Ledger: * open")
+    result.stdout.no_fnmatch_line("*INTERNALERROR*")
+
+
+def test_crashed_worker_between_tests_fails_the_run(
+    pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fails the run when a worker dies after its tests passed, so no test reports the crash."""
+    monkeypatch.setenv("PYTHONPATH", str(PROJECT_ROOT))
+    pytester.makeconftest(CRASH_AFTER_TESTS_CONFTEST)
+    result = run_ledger_case(
+        pytester, "def test_plain() -> None:\n    assert True\n", "-n", "2", "-p", "no:randomly"
+    )
+    assert result.ret == pytest.ExitCode.TESTS_FAILED
+    result.stdout.fnmatch_lines(["Ledger: unknown (worker gw0 crashed)"])
 
 
 SPLIT_RUN_INI = "[pytest]\nmarkers =\n    slow: slow test\n    timing: timing test\n"
