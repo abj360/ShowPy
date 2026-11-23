@@ -32,7 +32,6 @@ from hypothesis import strategies as st
 
 from showpy.core.errors import FontError, SchemaError, ShowPyError
 from showpy.core.util import asset_uri
-from showpy.export.data import FONTS_KEY, import_fonts
 from showpy.geo.fonts import (
     MAX_GLYPH_PIECES,
     MAX_STROKE_PIECES,
@@ -43,6 +42,7 @@ from showpy.geo.fonts import (
 )
 from showpy.geo.models import LaidGlyph
 from showpy.geo.text_layout import MAX_LAYOUT_CHARS, MAX_LAYOUT_PIECES, layout_text
+from showpy.show.interchange import FONTS_KEY, import_fonts
 from tests.fixtures.fonts import tiny_bytes
 from tests.helpers import only_showpy_errors
 

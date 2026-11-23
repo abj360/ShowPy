@@ -363,7 +363,7 @@ def test_set_shape_and_set_claimable() -> None:
     show = set_shape(two_set_show(), "T1-T2", Shape(kind="rectangle"))
     assert [s.shape.kind for s in show.cast.spots] == ["rectangle", "rectangle", "circle", "circle"]
     show = set_claimable(show, ["T3"], "crew")
-    assert show.cast.spot("T3").claimable == "crew"
+    assert show.cast.spot("T3").model_dump()["claimable"] == "crew"
     with pytest.raises(SchemaError):
         set_claimable(show, ["T3"], "audience")  # type: ignore[arg-type]
 

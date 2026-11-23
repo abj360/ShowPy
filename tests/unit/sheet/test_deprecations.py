@@ -27,15 +27,16 @@ import pytest
 from PIL import Image, ImageDraw
 
 import showpy
-from showpy._api_table import LEAVING, PUBLIC_API
+from showpy._api_table import LEAVING as ALL_LEAVING
+from showpy._api_table import PUBLIC_API
 from showpy.core.deprecation import DeprecatedWarning
 from showpy.core.ids import LandmarkId, ZoneId
 from showpy.examples import two_set_show
-from showpy.export.data import export_json, import_json
 from showpy.sheet.models import CoordinateSystem, GuideLine, Landmark, Zone, ZoneKind
 from showpy.sheet.render import SheetCanvas
 from showpy.sheet.surfaces import NFHS_HASH, _proscenium_stage
 from showpy.sheet.templates import InMemorySheetStore, _blank_sheet
+from showpy.show.interchange import export_json, import_json
 from showpy.show.models import Show
 
 SHEET_SOURCE = Path(showpy.__file__).parent / "sheet"
@@ -48,6 +49,10 @@ PIT = Zone(id=ZoneId("pit"), kind=ZoneKind.PIT, polygon=STAGE.zones[0].polygon)
 TAPE = GuideLine(id="tape", kind="custom", points=((0.0, 1.0), (1.0, 1.0)))
 RENDER_NAMES = {"SheetCanvas", "draw_sheet", "render_sheet"}
 FIELD_NAMES = {"Show.coordinates", "Show.zones"}
+EXPORT_NAMES = {name for name, module, _attribute in PUBLIC_API if ".export." in module}
+LEAVING = tuple(
+    row for row in ALL_LEAVING if row[0] not in EXPORT_NAMES and not row[0].startswith("Spot.")
+)
 type LeavingRow = tuple[str, str, str | tuple[str, ...] | None, str, str]
 
 

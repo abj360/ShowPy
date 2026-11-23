@@ -38,7 +38,7 @@ from showpy.choreo.motion_stats import speeds
 from showpy.core.error_codes import ErrorCode
 from showpy.core.extras import MissingExtraError, is_dataframe, require_extra
 from showpy.examples import EXAMPLE_TID, two_set_show
-from showpy.export.print_sheets import chart
+from showpy.export._print_sheets import chart
 
 ROOT = Path(__file__).resolve().parents[2]
 PYPROJECT = ROOT / "pyproject.toml"

@@ -105,10 +105,9 @@ from showpy.core.errors import (
     UnknownRefError,
 )
 from showpy.core.ids import SpotId
-from showpy.export.data import export_json
-from showpy.export.models import Performer, Publication
-from showpy.export.print_sheets import chart, coordinate_sheets
-from showpy.export.publish import (
+from showpy.export._models import Performer, Publication
+from showpy.export._print_sheets import chart, coordinate_sheets
+from showpy.export._publish import (
     claim_spot,
     claims,
     join_link,
@@ -127,6 +126,7 @@ from showpy.export.publish import (
 )
 from showpy.sheet.coords import set_coordinates
 from showpy.sheet.models import CoordinateSystem
+from showpy.show.interchange import export_json
 from showpy.show.models import Show
 from tests.fixtures.export_shows import AT, guided_show, performer
 from tests.fixtures.motion_shows import with_rows, with_targets
