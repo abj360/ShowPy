@@ -146,7 +146,7 @@ class FrozenModel(BaseModel):
 
     # Makes pydantic validate nested models through its core validator, so only the outermost
     # call converts and the error keeps the outer model name and dotted locs.
-    __init__.__pydantic_base_init__ = True  # type: ignore[attr-defined]
+    vars(__init__)["__pydantic_base_init__"] = True
 
     @classmethod
     def model_validate(
