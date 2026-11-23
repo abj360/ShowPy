@@ -16,6 +16,8 @@ Contains:
     JsonObject: a deeply read-only, hashable JSON object for open payloads; dumps plain JSON
     FrozenModel: provides the immutable, strict base that raises SchemaError on bad data
     FrozenModel.replace(): returns a revalidated copy with some fields changed
+    FrozenModel.to_json(): returns the model as a JSON-safe dict
+    FrozenModel.from_json(): validates a JSON-safe dict into the model
     FrozenModel.model_copy(): returns a copy whose cached_property values are dropped
     Box2: bounds stage-plane points and reports size and center
     Box3: bounds world points
@@ -256,6 +258,37 @@ class FrozenModel(BaseModel):
         """
         current = {name: getattr(self, name) for name in type(self).model_fields}
         return type(self).model_validate(current | changes)
+
+    def to_json(self) -> dict[str, JsonValue]:
+        """Returns the model as a JSON-safe dict, the form `from_json` reads back.
+
+        Tuples become lists, enums their values and times ISO text, as in stored show documents.
+
+        >>> from e8s.examples import two_set_show
+        >>> two_set_show().sets[0].to_json()["id"]
+        '1'
+
+        Returns:
+            document: Field names mapped to their JSON values.
+        """
+        return self.model_dump(mode="json")
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, object]) -> Self:
+        """Validates a JSON-safe dict, such as one `to_json` returned, into this model.
+
+        >>> from e8s.examples import two_set_show
+        >>> show = two_set_show()
+        >>> type(show).from_json(show.to_json()) == show
+        True
+
+        Args:
+            data: Field names mapped to JSON values.
+
+        Returns:
+            model: The validated model; data that breaks a field or model rule raises SchemaError.
+        """
+        return cls.model_validate(data)
 
 
 class Box2(FrozenModel):

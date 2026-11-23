@@ -6,7 +6,6 @@ Contains:
     ValidationReport: collects issues, reports ok, renders one line per issue
     ValidationReport.merge(): combines several reports into one
     ValidationReport.raise_for_errors(): raises a ShowValidationError when any issue is an error
-    ValidationReport.to_json(): renders the report as JSON text
     validate_or_schema_error(): validates data against any pydantic model, raising SchemaError
     validate_adapter(): validates a Python value against a TypeAdapter, raising SchemaError
     validate_adapter_json(): validates JSON bytes or text against a TypeAdapter, raising SchemaError
@@ -114,14 +113,6 @@ class ValidationReport(FrozenModel):
             hint=ERRORS_HINT,
             context={"issues": [issue.model_dump(mode="json") for issue in errors]},
         )
-
-    def to_json(self) -> str:
-        """Renders the report as JSON text that `model_validate_json` reads back.
-
-        >>> ValidationReport().to_json()
-        '{"issues":[]}'
-        """
-        return self.model_dump_json()
 
     @classmethod
     def merge(cls, *reports: "ValidationReport") -> "ValidationReport":

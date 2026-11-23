@@ -84,8 +84,8 @@ def test_report_codes_are_ordered_and_unique() -> None:
 
 def test_report_to_json_round_trips() -> None:
     report = ValidationReport(issues=(_issue("error"), _issue("warning")))
-    assert ValidationReport.model_validate_json(report.to_json()) == report
-    assert json.loads(report.to_json())["issues"][0]["code"] == "SCHEMA"
+    assert ValidationReport.from_json(report.to_json()) == report
+    assert json.loads(json.dumps(report.to_json()))["issues"][0]["code"] == "SCHEMA"
 
 
 def test_raise_for_errors_returns_when_only_warnings() -> None:

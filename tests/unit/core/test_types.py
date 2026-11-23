@@ -20,6 +20,10 @@ Contains:
     test_regression_replace_revalidates: rejects a negative Set.counts passed to replace()
     test_replace_returns_a_new_model_with_the_change: keeps the original and applies the change
     test_replace_rejects_an_unknown_field: raises SchemaError for a field the model lacks
+    test_to_json_returns_a_json_safe_dict: dumps tuples as lists, enums as values, text as JSON
+    test_from_json_reads_back_what_to_json_writes: round-trips a whole show
+    test_to_json_matches_the_stored_set_document: dumps a set as its stored document holds it
+    test_regression_from_json_raises_schema_error_on_bad_data: names the failing dotted loc
     test_regression_constrained_number_types_reject_out_of_range: rejects zero, negative, NaN and
         infinity in a positive field
     test_base_number_aliases_reject_non_finite_outside_models: rejects NaN and infinity in the
@@ -88,8 +92,13 @@ from e8s.core.types import (
     Ring,
     Seconds,
 )
+from e8s.examples import two_set_show
 from e8s.geo.curves import curve_from_construction
 from e8s.sheet.models import Landmark
+from e8s.show.document_paths import set_doc
+from e8s.show.documents import encode_show
+from e8s.show.models import Show
+from e8s.show.set_keys import set_key
 from e8s.time.models import TempoSection
 
 NON_FINITE_MODELS: dict[str, Callable[[], FrozenModel]] = {
@@ -210,6 +219,31 @@ def test_replace_returns_a_new_model_with_the_change() -> None:
 def test_replace_rejects_an_unknown_field() -> None:
     with pytest.raises(SchemaError):
         Box2(min=(0.0, 0.0), max=(1.0, 1.0)).replace(centre=(0.0, 0.0))
+
+
+def test_to_json_returns_a_json_safe_dict() -> None:
+    document = Shape(kind="rectangle").to_json()
+    assert document["kind"] == "rectangle"
+    assert Box2(min=(0.0, 0.0), max=(1.0, 2.0)).to_json() == {"min": [0.0, 0.0], "max": [1.0, 2.0]}
+    assert json.loads(json.dumps(document)) == document
+
+
+def test_from_json_reads_back_what_to_json_writes() -> None:
+    show = two_set_show()
+    assert Show.from_json(show.to_json()) == show
+    assert Box2.from_json({"min": [0, 0], "max": [1, 2]}) == Box2(min=(0.0, 0.0), max=(1.0, 2.0))
+
+
+def test_to_json_matches_the_stored_set_document() -> None:
+    show = two_set_show()
+    stored = encode_show(show)[set_doc(set_key(show.sets[0]))]
+    assert show.sets[0].to_json() == json.loads(stored)
+
+
+def test_regression_from_json_raises_schema_error_on_bad_data() -> None:
+    with pytest.raises(SchemaError) as info:
+        Box2.from_json({"min": ["x", 0], "max": [1, 1]})
+    assert field_errors(info.value)[0]["loc"] == "min.0"
 
 
 class _Constrained(FrozenModel):
