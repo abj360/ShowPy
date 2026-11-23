@@ -8,11 +8,12 @@ Contains:
     test_library_never_calls_model_copy_with_update: fails on any such call in e8s/
     test_model_copy_ban_detects_an_offending_call: proves the scan can fail
     test_model_copy_ban_detects_kwargs_aliases_and_getattr: proves the scan sees evasions
-    find_citations(): lists file and line of each ADR, ledger-ID, docs-path or lane citation
+    find_citations(): lists file and line of each ADR, ledger-ID, docs-path, lane, task or
+        phase citation
     test_library_cites_no_adr_docs_or_ledger_ids: fails on any such citation in e8s/
     test_citation_scan_flags_a_docstring_and_a_comment: proves the scan can fail
-    test_regression_citation_scan_flags_lane_names: proves lane names in docstrings and comments
-        are flagged
+    test_regression_citation_scan_flags_lane_names: proves lane, task and phase names in
+        docstrings and comments are flagged
     test_citation_scan_ignores_runtime_strings: proves plain string literals are not flagged
     find_code_spellings(): lists file, line and code of each raised or reported error code
     test_every_raised_code_is_catalogued: fails on a code that is not an ErrorCode member
@@ -52,7 +53,10 @@ from e8s._api_table import PUBLIC_API
 from e8s.core.deprecation import DeprecatedWarning
 from e8s.core.error_codes import ErrorCode
 
-CITATION_PATTERN = re.compile(r"\bADR\b|\bUP-\d+\.\d+-\d+\b|\bdocs/|\b[Ll]anes? [A-Z]\b")
+CITATION_PATTERN = re.compile(
+    r"\bADR\b|\bUP-\d+\.\d+-\d+\b|\bdocs/"
+    r"|\b[Ll]anes? [A-Z]\d*\b|\b[Tt]asks? [A-Z]\d+\b|\b[Pp]hase \d+\b"
+)
 MIN_LIBRARY_FILES = 100
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LIBRARY_ROOT = REPO_ROOT / "e8s"
@@ -137,8 +141,8 @@ def test_model_copy_ban_detects_kwargs_aliases_and_getattr(source: str) -> None:
 
 
 def find_citations(source: str, name: str) -> list[str]:
-    """Lists `name:line` for each ADR, ledger-ID, docs-path or lane citation in a docstring or
-    comment."""
+    """Lists `name:line` for each ADR, ledger-ID, docs-path, lane, task or phase citation in a
+    docstring or comment."""
     hits: list[str] = []
     for node in ast.walk(ast.parse(source)):
         if not isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
@@ -185,15 +189,30 @@ def test_citation_scan_flags_a_docstring_and_a_comment() -> None:
 
 
 def test_regression_citation_scan_flags_lane_names() -> None:
-    """Reports a lane named in a module docstring heading, a docstring sentence and a comment,
-    which stub modules carried after their lanes merged."""
+    """Reports lanes, tasks and plan phases named in docstrings and comments, which stub
+    modules carried after their lanes merged; leaves guide lines, basketball lanes, motion
+    phases and task words without an ID alone."""
     source = (
         '"""\nm.py --- the cast sub-step (lane D)\n\nLane D owns this module.\n"""\n'
         "# lanes A and G share this\n"
         "LANE = 1\n"
         "# a lane-1 guide line and the basketball lanes stay\n"
+        "# lane A1 wrote this\n"
+        "def f() -> None:\n"
+        '    """Waits for task W1, then Phase 2 removes it."""\n'
+        "# the motion phase and each task stay\n"
+        "# see tasks X2 and X3\n"
     )
-    assert find_citations(source, "m.py") == ["m.py:2", "m.py:4", "m.py:6"]
+    assert find_citations(source, "m.py") == sorted(
+        [
+            "m.py:2",
+            "m.py:4",
+            "m.py:6",
+            "m.py:9",
+            "m.py:11",
+            "m.py:13",
+        ]
+    )
 
 
 def test_citation_scan_ignores_runtime_strings() -> None:
