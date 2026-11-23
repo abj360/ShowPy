@@ -54,6 +54,8 @@ Contains:
         ellipse curves, and joins or trims holding one
     test_batch_exact_curves_evaluate_batches_as_singles: returns, at 2,001 fixed arc lengths,
         the same points one at a time as all at once
+    test_every_curve_class_declares_batch_exact: sets BATCH_EXACT in each class's own body,
+        and every class declaring True has a batch-versus-single case
 """
 
 import math
@@ -509,17 +511,24 @@ def test_batch_exact_marks_curves_evaluated_through_matrix_products() -> None:
     assert TrimmedCurve(base=Segment(a=(0.0, 0.0), b=(4.0, 0.0)), s0=1.0, s1=3.0).batch_exact
 
 
-@pytest.mark.parametrize(
-    "curve",
-    [
-        Segment(a=(0.1, 0.3), b=(4.7, -2.9)),
-        Polyline(points=((0.0, 0.0), (1.3, 0.7), (2.9, -0.4), (3.3, 2.2))),
-        ArcCurve(center=(0.3, 0.7), radius=2.9, start_deg=17.0, sweep_deg=-233.0),
-        CircleCurve(center=(1.1, -0.4), radius=1.7, start_deg=41.0),
-        SplineCurve(points=((0.0, 0.0), (1.0, 2.1), (2.7, -0.3), (4.1, 1.9))),
-        SpiralCurve(center=(0.2, 0.1), r0=0.5, r1=3.1, turns=2.3, start_deg=11.0),
-    ],
-)
+BATCH_CASES: list[CurveModel] = [
+    Segment(a=(0.1, 0.3), b=(4.7, -2.9)),
+    Polyline(points=((0.0, 0.0), (1.3, 0.7), (2.9, -0.4), (3.3, 2.2))),
+    ArcCurve(center=(0.3, 0.7), radius=2.9, start_deg=17.0, sweep_deg=-233.0),
+    CircleCurve(center=(1.1, -0.4), radius=1.7, start_deg=41.0),
+    SplineCurve(points=((0.0, 0.0), (1.0, 2.1), (2.7, -0.3), (4.1, 1.9))),
+    SpiralCurve(center=(0.2, 0.1), r0=0.5, r1=3.1, turns=2.3, start_deg=11.0),
+]
+
+
+def test_every_curve_class_declares_batch_exact() -> None:
+    for cls in CURVE_TYPES:
+        assert "BATCH_EXACT" in vars(cls), cls.__name__
+    exact = {cls for cls in CURVE_TYPES if vars(cls)["BATCH_EXACT"]}
+    assert exact == {type(curve) for curve in BATCH_CASES}
+
+
+@pytest.mark.parametrize("curve", BATCH_CASES)
 def test_batch_exact_curves_evaluate_batches_as_singles(curve: CurveModel) -> None:
     assert curve.batch_exact
     lengths = np.linspace(0.0, curve.length(), BATCH_PROBES)

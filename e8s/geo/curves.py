@@ -59,11 +59,11 @@ class CurveModel(CurveBase):
 
     Attributes:
         BATCH_EXACT: Whether the class evaluates every arc length with elementwise operations
-            alone. Matrix products may round differently by batch size, so a class that uses
-            them sets it False.
+            alone. Matrix products may round differently by batch size, so it is False until a
+            class declares it True and a batch-versus-single test covers it.
     """
 
-    BATCH_EXACT: ClassVar[bool] = True
+    BATCH_EXACT: ClassVar[bool] = False
 
     @property
     def batch_exact(self) -> bool:
@@ -91,6 +91,7 @@ class Segment(CurveModel):
         b: End point.
     """
 
+    BATCH_EXACT: ClassVar[bool] = True
     kind: Literal["segment"] = "segment"
     a: Point
     b: Point
@@ -119,6 +120,7 @@ class Polyline(CurveModel):
         closed: Whether a final piece returns to the first vertex.
     """
 
+    BATCH_EXACT: ClassVar[bool] = True
     kind: Literal["polyline"] = "polyline"
     points: tuple[Point, ...]
 
@@ -189,6 +191,7 @@ class ArcCurve(CurveModel):
         sweep_deg: Signed sweep; positive turns counter-clockwise.
     """
 
+    BATCH_EXACT: ClassVar[bool] = True
     kind: Literal["arc"] = "arc"
     center: Point
     radius: Meters
@@ -228,6 +231,7 @@ class CircleCurve(CurveModel):
         ccw: Travel direction; mirroring a circle flips it.
     """
 
+    BATCH_EXACT: ClassVar[bool] = True
     kind: Literal["circle"] = "circle"
     center: Point
     radius: Meters
@@ -298,6 +302,7 @@ class SplineCurve(CurveModel):
         closed: Whether the spline loops back to the first point.
     """
 
+    BATCH_EXACT: ClassVar[bool] = True
     kind: Literal["spline"] = "spline"
     points: tuple[Point, ...]
     alpha: float = 0.5
@@ -455,6 +460,7 @@ class SpiralCurve(CurveModel):
         start_deg: Start angle, counter-clockwise from +x.
     """
 
+    BATCH_EXACT: ClassVar[bool] = True
     kind: Literal["spiral"] = "spiral"
     center: Point
     r0: Meters
@@ -497,6 +503,7 @@ class CompositeCurve(CurveModel):
         closed: Whether the last part ends on the first part's start.
     """
 
+    BATCH_EXACT: ClassVar[bool] = False
     kind: Literal["composite"] = "composite"
     parts: tuple["AnyCurve", ...]
 
@@ -589,6 +596,7 @@ class TrimmedCurve(CurveModel):
         s1: Arc length on `base` where this curve ends.
     """
 
+    BATCH_EXACT: ClassVar[bool] = False
     kind: Literal["trimmed"] = "trimmed"
     base: "AnyCurve"
     s0: Meters
