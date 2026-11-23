@@ -6,7 +6,7 @@ Contains:
     diff_paths(): lists spots and routes whose effective paths differ between transitions
     diff_show(): summarizes every difference between two shows as a JSON-safe dict
     revert(): saves the documents of an earlier revision as a new revision
-    rename_entities(): rewrites spot IDs everywhere in a show
+    rename_entities(): rewrites spot IDs everywhere in a show; deprecated for rename_spots()
     changelog(): lists revisions since a revision as terse lines
 """
 
@@ -14,10 +14,10 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
-from showpy.cast.rewrite import rewrite_spot_ids
+from showpy.cast.spots import rename_spots
 from showpy.choreo.models import Set
 from showpy.choreo.path_models import TransitionSpec
-from showpy.core.errors import SchemaError
+from showpy.core.deprecation import deprecated_call
 from showpy.core.ids import FormId, SpotId, format_tid
 from showpy.core.units import angle_diff
 from showpy.core.util import approx_equal, natural_sort
@@ -191,35 +191,22 @@ def revert(ws: Workspace, revision_id: str, at: datetime) -> Revision:
     return ws._commit_stored({p: old.get(p) for p in sorted(paths)}, at=at)
 
 
-def _require_renamable(show: Show, mapping: Mapping[str, str]) -> None:
-    known = set(show.cast.ids())
-    for old in mapping:
-        show.cast.spot(old)
-    targets = list(mapping.values())
-    kept = known - set(mapping)
-    clashes = sorted({t for t in targets if t in kept or targets.count(t) > 1 or not t})
-    if clashes:
-        raise SchemaError(
-            f"renaming would collide on {', '.join(clashes) or 'an empty id'}",
-            hint="map every spot to a unique, non-empty id that no other spot keeps",
-            context={"collisions": clashes},
-        )
-
-
+@deprecated_call(rename_spots, since="0.4.0", remove="0.6.0")
 def rename_entities(show: Show, mapping: Mapping[str, str]) -> Show:
-    """Rewrites spot IDs everywhere in a show.
+    """Rewrites spot IDs everywhere in a show; superseded by rename_spots(), which also reports.
 
-    Covers cast, selections, placements, forms, paths, routes, notes, facing overrides, zones
-    and pins. Renaming relabels spots without moving them, so pins do not block it. Swaps are
-    allowed; a new ID that another spot keeps raises SchemaError.
+    Behaves as `rename_spots(show, mapping)[0]`: a pinned picture the rename would change raises
+    LockedError, swaps are allowed and a new ID that another spot keeps raises SchemaError.
 
+    >>> import warnings
     >>> from showpy.examples import two_set_show
-    >>> renamed = rename_entities(two_set_show(), {"T1": "S1"})
+    >>> with warnings.catch_warnings():
+    ...     warnings.simplefilter("ignore")
+    ...     renamed = rename_entities(two_set_show(), {"T1": "S1"})
     >>> renamed.cast.ids(), renamed.sets[1].entity_ids()[0]
     (('S1', 'T2', 'T3', 'T4'), 'S1')
     """
-    _require_renamable(show, mapping)
-    return rewrite_spot_ids(show, lambda spot_id: mapping.get(spot_id, spot_id))
+    return rename_spots(show, mapping)[0]
 
 
 def _line(revision: Revision) -> str:
