@@ -16,6 +16,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from showpy.choreo.models import PlacementPatch
 from showpy.core.json_types import JsonValue
 from showpy.core.strict_json import parse_strict_json
 from showpy.show import storage
@@ -39,7 +40,7 @@ PARSER = "showpy.show.document_reading.parse_strict_json"
 
 def _one_spot_edit(show: Show, x: float) -> Show:
     entity = show.cast.ids()[0]
-    edited = show.sets[EDITED_SET].with_placements({entity: {"x": x}}, force=True)
+    edited = show.sets[EDITED_SET].with_placements({entity: PlacementPatch(x=x)}, force=True)
     return show.replace(sets=(*show.sets[:EDITED_SET], edited, *show.sets[EDITED_SET + 1 :]))
 
 

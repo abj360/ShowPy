@@ -54,6 +54,7 @@ import numpy as np
 import pytest
 
 from showpy.choreo.engine import PROBE_TOL_SHARE, PathEngine
+from showpy.choreo.models import PlacementPatch
 from showpy.choreo.path_models import (
     Easing,
     EntityFacing,
@@ -189,7 +190,7 @@ def test_rotate_without_pivot_raises() -> None:
 def _follow_show() -> PathEngine:
     route_curve = line((0.0, 5.0), (0.0, 15.0))
     show = with_targets({"T1": {"x": 0.0, "y": 9.0}, "T2": {"x": 0.0, "y": 7.0}})
-    first = show.sets[0].with_placements({"T2": {"x": 0.0, "y": 3.0}})
+    first = show.sets[0].with_placements({"T2": PlacementPatch(x=0.0, y=3.0)})
     show = show.model_copy(update={"sets": (first, show.sets[1])})
     route = Route(
         id=RouteId("r"),
@@ -213,7 +214,9 @@ def test_follow_member_off_its_route_raises() -> None:
 def test_follow_on_route_curve() -> None:
     route_curve = line((0.0, 3.0), (0.0, 15.0))
     show = with_targets({"T1": {"x": 0.0, "y": 9.0}, "T2": {"x": 0.0, "y": 7.0}})
-    first = show.sets[0].with_placements({"T1": {"x": 0.0, "y": 5.0}, "T2": {"x": 0.0, "y": 3.0}})
+    first = show.sets[0].with_placements(
+        {"T1": PlacementPatch(x=0.0, y=5.0), "T2": PlacementPatch(x=0.0, y=3.0)}
+    )
     show = show.model_copy(update={"sets": (first, show.sets[1])})
     route = Route(
         id=RouteId("r"),
@@ -328,7 +331,7 @@ def test_velocity_and_state() -> None:
 
 def test_entrance_is_on_field_while_walking_on() -> None:
     base = two_set_show()
-    first = base.sets[0].with_placements({"T1": {"on_field": False}})
+    first = base.sets[0].with_placements({"T1": PlacementPatch(on_field=False)})
     engine = PathEngine(base.model_copy(update={"sets": (first, base.sets[1])}))
     assert not engine.state_at("T1", 0.0).on_field
     assert engine.state_at("T1", 4.0).on_field
@@ -633,7 +636,7 @@ def test_regression_velocity_is_full_speed_near_a_window_kink() -> None:
 def test_regression_full_width_move_compiles_and_samples() -> None:
     """Compiles a 2e6 m move from -MAX_COORD_M to MAX_COORD_M in one count and samples it."""
     base = two_set_show()
-    first = base.sets[0].with_placements({"T1": {"x": -MAX_COORD_M, "y": 5.0}})
+    first = base.sets[0].with_placements({"T1": PlacementPatch(x=-MAX_COORD_M, y=5.0)})
     show = with_targets(
         {"T1": {"x": MAX_COORD_M, "y": 5.0}}, show=base.replace(sets=(first, base.sets[1]))
     )

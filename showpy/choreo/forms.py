@@ -1,27 +1,26 @@
 """
 forms.py --- form constructors plus slot and placement generation from stored recipes
 
-A form stores how to rebuild its shape, never the dots. `Form.geometry` is a JSON recipe
-whose keys depend on `Form.kind`:
+A form stores how to rebuild its shape, never the dots. `Form.recipe` is a typed recipe tagged
+by `kind` (`showpy.choreo.recipe_models` and `TextRecipe`):
 
-    line, arc, curve, circle, wedge, polyline, svg:
-        {"curve": <curve construction() dict>}; rebuilt by curve_from_construction()
-    block:     {"origin", "rows", "cols", "interval", "facing", "anchor"}
-    fill:      {"outline": <Region dict>, "interval", "pattern", "angle_deg"}
-    scatter:   {"region": <Region dict>, "min_gap", "seed"}
-    custom:    {"points": [[x, y], ...], "facings": [deg, ...] | null}
-    generated: {"fn": <registered name>, "params": {...}}
-    text:      TextRecipe fields: {"text", "fonts" (URIs), "mode", "height", "at", "rotation",
-               "align", "anchor", "letter_spacing", "line_spacing", "spacing"}; "spacing" is
-               the request that last set the count (meters between spots, or null), and "n"
-               is the stored count, always present; only edit_text_count changes either
+    line, arc, curve, circle, wedge, polyline: the curve the slots are spaced along
+    svg:       one curve per subpath of the fitted outline; proportional spacing shares slots
+               among the subpaths by length, count and interval spacing walk them in order
+    block:     origin, rows, cols, interval, facing, anchor
+    fill:      outline area, interval, pattern, angle_deg
+    scatter:   region, min_gap, seed
+    custom:    points and optional facings
+    generated: registered generator name and its JSON parameters
+    text:      text, font URIs, layout and the spacing that last set the count; `n` is the
+               stored count, always present; only edit_text_count changes either
 
-Every recipe may also hold `"n"`, the slot count; without it a form has one slot per member
-(interval spacing places as many as fit, a block has rows x cols, a custom form one per
-point, a fill every lattice point). Non-curve recipes may hold `"transform"`, a 3x3 affine
-matrix applied to the generated points, which keeps gated or mirrored forms editable.
-Members fill slots in order: member i stands on slot i; slots past the last member are
-open for `place` to fill, except in a text form, which has exactly one member per slot.
+Every recipe holds `n`, the slot count; without it a form has one slot per member (interval
+spacing places as many as fit, a block has rows x cols, a custom form one per point, a fill
+every lattice point), and `transform`, a 3x3 affine matrix applied to the generated slots,
+which keeps gated or mirrored forms editable. Members fill slots in order: member i stands on
+slot i; slots past the last member are open for `place` to fill, except in a text form, which
+has exactly one member per slot.
 
 Contains:
     check_unlocked(): raises LockedError when a form is locked and force is not given
@@ -51,15 +50,28 @@ import shapely
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
 from showpy.choreo.form_layout import layout, member_facings, slot_count
-from showpy.choreo.form_models import FacingSpec, Form, FormKind, SpacingSpec, TextRecipe
-from showpy.choreo.form_text import require_member_count, require_text_members
+from showpy.choreo.form_models import FacingSpec, Form, Recipe, SpacingSpec, TextRecipe
+from showpy.choreo.form_text import require_member_count, require_text_members, stored_count
 from showpy.choreo.models import Placement
+from showpy.choreo.recipe_models import (
+    ArcRecipe,
+    BlockRecipe,
+    CircleRecipe,
+    CurveRecipe,
+    CustomRecipe,
+    FillRecipe,
+    GeneratedRecipe,
+    LineRecipe,
+    PolylineRecipe,
+    ScatterRecipe,
+    SvgRecipe,
+    WedgeRecipe,
+)
 from showpy.choreo.text_count import count_recipe
 from showpy.core.errors import LockedError, SchemaError, SpacingError
 from showpy.core.types import Box2, Degrees, Meters, Point, Points, Region
 from showpy.core.util import as_points
 from showpy.geo.curve_base import Curve
-from showpy.geo.curves import AnyCurve, CompositeCurve
 from showpy.geo.fonts import FontRegistry, bundled_fonts
 from showpy.geo.models import DEFAULT_LINE_SPACING, TextAlign, TextAnchor
 from showpy.geo.regions import region
@@ -73,7 +85,8 @@ OUTWARD = FacingSpec(mode="outward")
 def check_unlocked(form: Form, *, force: bool) -> None:
     """Raises LockedError when the form is locked and the caller did not pass force=True.
 
-    >>> check_unlocked(Form(id="f", set="1", kind="custom", geometry={}, members=()), force=False)
+    >>> custom = Form(id="f", set="1", recipe={"kind": "custom", "points": []}, members=())
+    >>> check_unlocked(custom, force=False)
     """
     if form.locked and not force:
         raise LockedError(
@@ -83,33 +96,24 @@ def check_unlocked(form: Form, *, force: bool) -> None:
         )
 
 
-# Any: recipes are JSON objects whose keys depend on the kind.
 def _form(
     form_id: str,
-    kind: FormKind,
-    geometry: dict[str, Any],
-    members: Sequence[str],
+    recipe: Recipe,
+    members: Sequence[str | None],
     spacing: SpacingSpec | None,
     facing: FacingSpec | None,
     set_id: str,
-    n: int | None,
 ) -> Form:
-    recipe = geometry if n is None else {**geometry, "n": n}
     return Form.model_validate(
         {
             "id": form_id,
             "set": set_id,
-            "kind": kind,
-            "geometry": recipe,
+            "recipe": recipe,
             "members": tuple(members),
             "spacing": spacing or SpacingSpec(),
             "facing": facing or FacingSpec(),
         }
     )
-
-
-def _curve_recipe(curve: AnyCurve) -> dict[str, Any]:
-    return {"curve": curve.construction()}
 
 
 def line_form(
@@ -128,8 +132,8 @@ def line_form(
     >>> slots(line_form("f", ["A", "B", "C"], (0, 0), (4, 0))).tolist()
     [[0.0, 0.0], [2.0, 0.0], [4.0, 0.0]]
     """
-    recipe = _curve_recipe(line(a, b))
-    return _form(form_id, "line", recipe, members, spacing, facing, set_id, n)
+    recipe = LineRecipe(curve=line(a, b), n=n)
+    return _form(form_id, recipe, members, spacing, facing, set_id)
 
 
 def arc_form(
@@ -150,8 +154,8 @@ def arc_form(
     >>> slots(arc_form("f", ["A", "B"], (0, 0), 2.0, 0.0, 90.0)).round(6).tolist()
     [[2.0, 0.0], [0.0, 2.0]]
     """
-    recipe = _curve_recipe(arc(center, radius, start_deg, sweep_deg))
-    return _form(form_id, "arc", recipe, members, spacing, facing, set_id, n)
+    recipe = ArcRecipe(curve=arc(center, radius, start_deg, sweep_deg), n=n)
+    return _form(form_id, recipe, members, spacing, facing, set_id)
 
 
 def curve_form(
@@ -169,8 +173,8 @@ def curve_form(
     >>> slots(curve_form("f", ["A", "B"], (0, 0), (1, 1), (2, 0)))[-1].round(6).tolist()
     [2.0, 0.0]
     """
-    recipe = _curve_recipe(curve_through(*pts, closed=closed))
-    return _form(form_id, "curve", recipe, members, spacing, facing, set_id, n)
+    recipe = CurveRecipe(curve=curve_through(*pts, closed=closed), n=n)
+    return _form(form_id, recipe, members, spacing, facing, set_id)
 
 
 def circle_form(
@@ -190,8 +194,8 @@ def circle_form(
     >>> [p.facing for p in placements(circle_form("f", ["A", "B"], (0, 0), 1.0))]
     [90.0, 270.0]
     """
-    recipe = _curve_recipe(circle(center, radius, start_deg))
-    return _form(form_id, "circle", recipe, members, spacing, facing or OUTWARD, set_id, n)
+    recipe = CircleRecipe(curve=circle(center, radius, start_deg), n=n)
+    return _form(form_id, recipe, members, spacing, facing or OUTWARD, set_id)
 
 
 def block_form(
@@ -212,17 +216,19 @@ def block_form(
     >>> slots(block_form("f", [], (0, 0), 1, 2, 1.0, anchor="front-left")).tolist()
     [[0.0, 0.0], [1.0, 0.0]]
     """
-    recipe = {
-        "origin": [float(origin[0]), float(origin[1])],
-        "rows": rows,
-        "cols": cols,
-        "interval": interval,
-        "facing": direction_deg,
-        "anchor": anchor,
-        "n": rows * cols,
-    }
+    recipe = BlockRecipe.model_validate(
+        {
+            "origin": (float(origin[0]), float(origin[1])),
+            "rows": rows,
+            "cols": cols,
+            "interval": interval,
+            "facing": direction_deg,
+            "anchor": anchor,
+            "n": rows * cols,
+        }
+    )
     default = FacingSpec(mode="fixed", value=float(direction_deg))
-    return _form(form_id, "block", recipe, members, None, facing or default, set_id, None)
+    return _form(form_id, recipe, members, None, facing or default, set_id)
 
 
 def wedge_form(
@@ -243,9 +249,9 @@ def wedge_form(
     >>> slots(wedge_form("f", ["A", "B", "C"], (0, 0), 2.0, 90.0))[1].round(6).tolist()
     [0.0, 0.0]
     """
-    recipe = _curve_recipe(wedge(apex, length, spread_deg, direction_deg))
+    recipe = WedgeRecipe(curve=wedge(apex, length, spread_deg, direction_deg), n=n)
     default = FacingSpec(mode="fixed", value=float(direction_deg))
-    return _form(form_id, "wedge", recipe, members, spacing, facing or default, set_id, n)
+    return _form(form_id, recipe, members, spacing, facing or default, set_id)
 
 
 def polyline_form(
@@ -263,8 +269,8 @@ def polyline_form(
     >>> slots(polyline_form("f", ["A", "B", "C"], (0, 0), (2, 0), (2, 2))).tolist()
     [[0.0, 0.0], [2.0, 0.0], [2.0, 2.0]]
     """
-    recipe = _curve_recipe(polyline(*pts, closed=closed))
-    return _form(form_id, "polyline", recipe, members, spacing, facing, set_id, n)
+    recipe = PolylineRecipe(curve=polyline(*pts, closed=closed), n=n)
+    return _form(form_id, recipe, members, spacing, facing, set_id)
 
 
 def svg_form(
@@ -281,21 +287,23 @@ def svg_form(
 ) -> Form:
     """Builds a form on an SVG outline fitted into `fit`; spots share subpaths by length.
 
+    Each subpath is stored as its own curve. `count` and `interval` spacing walk the subpaths
+    one after another, each starting where the last ended, so the jump between subpaths adds
+    no length.
+
     >>> box = Box2(min=(0, 0), max=(4, 4))
     >>> len(slots(svg_form("f", [], "M0 0 L1 0 M0 1 L3 1", box, n=4)))
     4
     """
-    curves = svg_outline(svg, fit, keep_aspect=keep_aspect)
-    curve: AnyCurve = curves[0] if len(curves) == 1 else CompositeCurve(parts=tuple(curves))
-    recipe = _curve_recipe(curve)
-    return _form(form_id, "svg", recipe, members, spacing or PROPORTIONAL, facing, set_id, n)
+    recipe = SvgRecipe(curves=tuple(svg_outline(svg, fit, keep_aspect=keep_aspect)), n=n)
+    return _form(form_id, recipe, members, spacing or PROPORTIONAL, facing, set_id)
 
 
-def _region_recipe(outline: Region | shapely.Polygon | Curve | object) -> dict[str, Any]:
+def _region(outline: Region | shapely.Polygon | Curve | object) -> Region:
     if isinstance(outline, Region):
-        return outline.model_dump(mode="json")
+        return outline
     polygon = outline if isinstance(outline, shapely.Polygon) else region(outline)
-    return Region.from_shapely(polygon).model_dump(mode="json")
+    return Region.from_shapely(polygon)
 
 
 def fill_form(
@@ -315,13 +323,16 @@ def fill_form(
     >>> len(slots(fill_form("f", [], [(0, 0), (2, 0), (2, 2), (0, 2)], 1.0)))
     9
     """
-    recipe = {
-        "outline": _region_recipe(outline),
-        "interval": interval,
-        "pattern": pattern,
-        "angle_deg": angle_deg,
-    }
-    return _form(form_id, "fill", recipe, members, None, facing, set_id, n)
+    recipe = FillRecipe.model_validate(
+        {
+            "outline": _region(outline),
+            "interval": interval,
+            "pattern": pattern,
+            "angle_deg": angle_deg,
+            "n": n,
+        }
+    )
+    return _form(form_id, recipe, members, None, facing, set_id)
 
 
 def scatter_form(
@@ -340,13 +351,13 @@ def scatter_form(
     >>> len(slots(scatter_form("f", ["A", "B", "C"], [(0, 0), (6, 0), (6, 6), (0, 6)], 1.0)))
     3
     """
-    recipe = {"region": _region_recipe(area), "min_gap": min_gap, "seed": seed}
-    return _form(form_id, "scatter", recipe, members, None, facing, set_id, n)
+    recipe = ScatterRecipe(region=_region(area), min_gap=min_gap, seed=seed, n=n)
+    return _form(form_id, recipe, members, None, facing, set_id)
 
 
 def custom_form(
     form_id: str,
-    members: Sequence[str],
+    members: Sequence[str | None],
     points: object,
     facings: Sequence[Degrees] | None = None,
     *,
@@ -364,12 +375,14 @@ def custom_form(
             hint="give one facing per point, or none",
             context={"form": form_id},
         )
-    recipe = {
-        "points": [[float(x), float(y)] for x, y in pts],
-        "facings": None if facings is None else [float(f) for f in facings],
-        "n": len(pts),
-    }
-    return _form(form_id, "custom", recipe, members, None, None, set_id, None)
+    recipe = CustomRecipe.model_validate(
+        {
+            "points": [(float(x), float(y)) for x, y in pts],
+            "facings": None if facings is None else [float(f) for f in facings],
+            "n": len(pts),
+        }
+    )
+    return _form(form_id, recipe, members, None, None, set_id)
 
 
 # Any: generator parameters are JSON values defined by each generator.
@@ -393,8 +406,8 @@ def generated_form(
     3
     """
     registry.get(fn)
-    recipe = {"fn": fn, "params": dict(params)}
-    form = _form(form_id, "generated", recipe, members, spacing, facing, set_id, n)
+    recipe = GeneratedRecipe(fn=fn, params=params, n=n)
+    form = _form(form_id, recipe, members, spacing, facing, set_id)
     if slot_count(form) is not None:
         layout(form, registry)
     return form
@@ -465,10 +478,10 @@ def text_form(
         letter_spacing=letter_spacing,
         line_spacing=line_spacing,
     )
-    geometry = count_recipe(recipe.model_dump(mode="json"), n, spacing, font_registry)
-    form = _form(form_id, "text", geometry, members, None, facing, set_id, None)
+    counted = count_recipe(recipe, n, spacing, font_registry)
+    require_member_count(form_id, stored_count(form_id, counted), len(members))
+    form = _form(form_id, counted, members, None, facing, set_id)
     layout(form, font_registry=font_registry)
-    require_member_count(form_id, geometry["n"], len(members))
     return form
 
 
@@ -479,18 +492,18 @@ def edit_params(
     """Returns a generated form with some generator parameters changed.
 
     >>> f = generated_form("f", ["A", "B"], "spiral", turns=1.0)
-    >>> edit_params(f, turns=3.0).geometry["params"]["turns"]
+    >>> edit_params(f, turns=3.0).recipe.params["turns"]
     3.0
     """
     check_unlocked(form, force=force)
-    if form.kind != "generated":
+    recipe = form.recipe
+    if not isinstance(recipe, GeneratedRecipe):
         raise SchemaError(
             f"form {form.id} is a {form.kind} form, not generated",
             hint="use edit() for built-in shapes",
             context={"form": form.id, "kind": form.kind},
         )
-    merged = {**form.geometry.get("params", {}), **params}
-    edited = form.replace(geometry={**form.geometry, "params": merged})
+    edited = form.replace(recipe=recipe.replace(params={**recipe.params, **params}))
     if slot_count(edited) is not None:
         layout(edited, registry)
     return edited
@@ -513,9 +526,9 @@ def slots(
 
 
 def _stored_facings(form: Form) -> list[Degrees] | None:
-    if form.kind != "custom" or form.geometry.get("facings") is None:
+    if not isinstance(form.recipe, CustomRecipe) or form.recipe.facings is None:
         return None
-    return [float(f) for f in form.geometry["facings"]]
+    return list(form.recipe.facings)
 
 
 def slot_poses(
@@ -542,7 +555,9 @@ def placements(
     *,
     font_registry: FontRegistry | None = None,
 ) -> list[Placement]:
-    """Regenerates one placement per member from the form's recipe, spacing and facing.
+    """Regenerates one placement per spot from the form's recipe, spacing and facing.
+
+    A spot's `order` is the slot it stands on; open slots get no placement.
 
     `font_registry` holds a text form's fonts; None means `bundled_fonts()`. A text form whose
     members no longer fill its slots raises `MEMBER_COUNT_MISMATCH` before any layout.
@@ -568,4 +583,5 @@ def placements(
             order=i,
         )
         for i, member in enumerate(form.members)
+        if member is not None
     ]

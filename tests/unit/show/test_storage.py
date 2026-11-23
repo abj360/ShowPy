@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from showpy.choreo.form_models import Form
+from showpy.choreo.models import PlacementPatch
 from showpy.choreo.path_models import PathRow, TransitionSpec
 from showpy.core.errors import (
     ConflictError,
@@ -27,6 +28,7 @@ from showpy.show.manage import add_set, remove_set
 from showpy.show.models import Show
 from showpy.show.repositories import InMemoryAssetStore, InMemoryRepository
 from showpy.show.storage import Repository, Workspace, load_show, open_workspace, save_show
+from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 from tests.helpers import context_entries
 
@@ -49,8 +51,7 @@ def _rich_show() -> Show:
     form = Form(
         id=FormId("f1"),
         set=SetId("2"),
-        kind="line",
-        geometry={"a": 1},
+        recipe=LINE_RECIPE,
         members=(SpotId("T1"), SpotId("T2")),
     )
     spec = TransitionSpec(
@@ -151,7 +152,7 @@ def test_identical_write_is_idempotent(make_repo: RepoFactory) -> None:
 def test_typed_accessors(make_repo: RepoFactory) -> None:
     repo = make_repo()
     rev = _saved(repo)
-    moved = repo.get_set(SHOW_ID, "2").with_placements({"T1": {"x": -5.0}})
+    moved = repo.get_set(SHOW_ID, "2").with_placements({"T1": PlacementPatch(x=-5.0)})
     rev = repo.put_set(SHOW_ID, moved, expected_revision=rev, at=LATER).id
     assert repo.get_set(SHOW_ID, "2").get("T1").x == -5.0
     spec = TransitionSpec(
@@ -159,7 +160,7 @@ def test_typed_accessors(make_repo: RepoFactory) -> None:
     )
     rev = repo.put_paths(SHOW_ID, spec, expected_revision=rev, at=LATER).id
     assert repo.get_paths(SHOW_ID, ("1", "2")).counts == 8.0
-    form = Form(id=FormId("f"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
+    form = Form(id=FormId("f"), set=SetId("2"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     rev = repo.put_forms(SHOW_ID, "2", (form,), expected_revision=rev, at=LATER).id
     assert repo.get_forms(SHOW_ID, "2") == (form,)
     with pytest.raises(SchemaError):
@@ -303,7 +304,7 @@ def test_regression_library_leaves_permissions_to_the_host() -> None:
 def test_agent_writes_forms_paths_scripts_and_renders() -> None:
     repo = InMemoryRepository()
     agent, _ = _workspaces(repo)
-    form = Form(id=FormId("f"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
+    form = Form(id=FormId("f"), set=SetId("2"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     agent.write("/sets/2/forms.json", dump_json([form.model_dump(mode="python")]), at=AT)
     spec = TransitionSpec(
         id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): PathRow(entity=SpotId("T1"), end=6)}
@@ -323,7 +324,7 @@ def test_agent_writes_forms_paths_scripts_and_renders() -> None:
 
 def test_workspace_write_validates_content() -> None:
     agent, _ = _workspaces(InMemoryRepository())
-    wrong = Form(id=FormId("f"), set=SetId("1"), kind="line", geometry={}, members=(SpotId("T1"),))
+    wrong = Form(id=FormId("f"), set=SetId("1"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     with pytest.raises(SchemaError):
         agent.write("/sets/2/forms.json", dump_json([wrong.model_dump(mode="python")]), at=AT)
     with pytest.raises(SchemaError):
@@ -348,7 +349,7 @@ def test_save_show_conflict_lists_designer_changes() -> None:
     agent, designer = _workspaces(InMemoryRepository())
     mine = load_show(agent)
     theirs = load_show(designer)
-    moved = theirs.sets[1].with_placements({"T2": {"x": 10.0}})
+    moved = theirs.sets[1].with_placements({"T2": PlacementPatch(x=10.0)})
     landed = save_show(designer, theirs.model_copy(update={"sets": (theirs.sets[0], moved)}), AT)
     with pytest.raises(ConflictError) as info:
         save_show(agent, mine.model_copy(update={"title": "New"}), LATER)
@@ -362,11 +363,11 @@ def test_save_show_conflict_lists_designer_changes() -> None:
 def test_workspace_save_lands_edits_to_pinned_items() -> None:
     agent, designer = _workspaces(InMemoryRepository())
     show = load_show(designer)
-    pinned = show.sets[1].with_placements({"T1": {"pinned": True}})
+    pinned = show.sets[1].with_placements({"T1": PlacementPatch(pinned=True)})
     save_show(designer, show.model_copy(update={"sets": (show.sets[0], pinned)}), AT)
     agent.refresh()
     current = load_show(agent)
-    moved = current.sets[1].with_placements({"T1": {"x": 3.0}}, force=True)
+    moved = current.sets[1].with_placements({"T1": PlacementPatch(x=3.0)}, force=True)
     save_show(agent, current.model_copy(update={"sets": (current.sets[0], moved)}), LATER)
     assert load_show(agent).set("2").get("T1").x == 3.0
 

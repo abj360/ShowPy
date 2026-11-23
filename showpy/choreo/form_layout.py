@@ -2,32 +2,39 @@
 form_layout.py --- turns a form's stored recipe into slot points, travel directions and facings
 
 The recipe contract is documented in `showpy.choreo.forms`. Curve kinds are spaced by arc
-length so exact tangents are known at every slot; other kinds use the chord through
-neighbouring slots as their travel direction.
+length so exact tangents are known at every slot. An svg outline's subpaths share proportional
+slots by length; count and interval spacing walk them one after another. Other kinds use the
+chord through neighbouring slots as their travel direction. A stored `transform` maps the slots
+of every kind, and the travel directions through its linear part.
 
 Contains:
-    CURVE_KINDS: names the form kinds whose recipe holds a curve
     FormLayout: holds slot points plus the directions facings are computed from
     slot_count(): resolves how many slots a form has, when the recipe decides it
-    recipe_value(): reads a required recipe key, raising SchemaError when it is missing
     curve_stations(): returns the arc lengths of a curve form's slots
     layout(): builds a form's slot layout from its recipe
     member_facings(): computes one facing per slot from a FacingSpec
 """
 
 import math
-from collections.abc import Callable
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
 
 import numpy as np
-import shapely
 
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
-from showpy.choreo.form_models import FacingSpec, Form, SpacingSpec
-from showpy.choreo.form_text import text_recipe, text_slots
+from showpy.choreo.form_models import FacingSpec, Form, SpacingSpec, TextRecipe
+from showpy.choreo.form_text import text_slots
+from showpy.choreo.recipe_models import (
+    BlockRecipe,
+    CurveRecipeBase,
+    CustomRecipe,
+    FillRecipe,
+    GeneratedRecipe,
+    ScatterRecipe,
+    SvgRecipe,
+)
 from showpy.core.errors import SchemaError, SpacingError
-from showpy.core.types import Degrees, Point, Points, Region
+from showpy.core.types import Degrees, JsonValue, Point, Points
 from showpy.core.units import normalize_angle, vector_facing
 from showpy.core.util import as_points
 from showpy.geo.affine import transform_points
@@ -37,12 +44,12 @@ from showpy.geo.curves import (
     ArcCurve,
     CircleCurve,
     CompositeCurve,
-    curve_from_construction,
 )
 from showpy.geo.fonts import FontRegistry
 from showpy.geo.spacing import block, fill, scatter, space_proportional
 
-CURVE_KINDS = frozenset({"line", "arc", "curve", "circle", "wedge", "polyline", "svg"})
+type PointRecipe = BlockRecipe | FillRecipe | ScatterRecipe | CustomRecipe | GeneratedRecipe
+
 OFFSET_MODES = frozenset({"along", "normal", "outward"})
 WINDOW_TOL = 1e-9
 FIT_EPS = 1e-9
@@ -68,11 +75,12 @@ class FormLayout:
 def slot_count(form: Form) -> int | None:
     """Resolves the slot count: the recipe's `n`, else the member count, else None.
 
-    >>> slot_count(Form(id="f", set="1", kind="custom", geometry={}, members=("A", "B")))
+    >>> slot_count(Form(id="f", set="1", recipe={"kind": "custom", "points": []},
+    ...     members=("A", "B")))
     2
     """
-    if form.geometry.get("n") is not None:
-        return int(form.geometry["n"])
+    if form.recipe.n is not None:
+        return form.recipe.n
     return len(form.members) or None
 
 
@@ -85,23 +93,6 @@ def _required_count(form: Form) -> int:
             context={"form": form.id},
         )
     return count
-
-
-# Any: recipe values are JSON whose type depends on the key.
-def recipe_value(form: Form, key: str) -> Any:
-    """Reads a required recipe key, raising SchemaError when it is missing.
-
-    >>> recipe_value(Form(id="f", set="1", kind="custom", geometry={"points": []},
-    ...     members=()), "points")
-    []
-    """
-    if key not in form.geometry:
-        raise SchemaError(
-            f"form {form.id} ({form.kind}) recipe lacks {key!r}",
-            hint=f"rebuild the form with its constructor; {form.kind} recipes need {key!r}",
-            context={"form": form.id, "keys": sorted(form.geometry)},
-        )
-    return form.geometry[key]
 
 
 def _extras(gaps: tuple[tuple[int, float], ...], slots: int) -> FloatArray:
@@ -159,7 +150,12 @@ def curve_stations(curve: AnyCurve, spacing: SpacingSpec, n: int | None) -> Floa
     >>> curve_stations(line((0, 0), (4, 0)), SpacingSpec(), 3).tolist()
     [0.0, 2.0, 4.0]
     """
-    length = curve.length()
+    return _window_stations(curve.length(), spacing, n, closed=curve.closed)
+
+
+def _window_stations(
+    length: float, spacing: SpacingSpec, n: int | None, *, closed: bool
+) -> FloatArray:
     start, stop = spacing.start, length if spacing.end is None else spacing.end
     if not 0 <= start < stop <= length + WINDOW_TOL:
         raise SpacingError(
@@ -171,83 +167,96 @@ def curve_stations(curve: AnyCurve, spacing: SpacingSpec, n: int | None) -> Floa
         return _interval_stations(start, stop, spacing, n)
     if n is None or n < 1:
         raise SpacingError("count spacing needs a slot count", hint="give members or n=")
-    full_loop = curve.closed and math.isclose(stop - start, length)
+    full_loop = closed and math.isclose(stop - start, length)
     return _even_stations(start, stop, n, full_loop=full_loop, gaps=spacing.gaps)
 
 
-def _proportional_layout(curve: CompositeCurve, n: int) -> FormLayout:
-    counts = [len(pts) for pts in space_proportional(curve.parts, n)]
+def _proportional_layout(parts: Sequence[AnyCurve], n: int) -> FormLayout:
+    counts = [len(pts) for pts in space_proportional(parts, n)]
     points, tangents = [], []
-    for part, count in zip(curve.parts, counts, strict=True):
+    for part, count in zip(parts, counts, strict=True):
         stations = _even_stations(0.0, part.length(), count, full_loop=part.closed, gaps=())
         points.append(part.point_at(stations))
         tangents.append(part.tangent_at(stations))
     return FormLayout(points=np.vstack(points), tangents=np.vstack(tangents))
 
 
-def _curve_layout(form: Form) -> FormLayout:
-    curve = curve_from_construction(recipe_value(form, "curve"))
+def _curve_layout(form: Form, curve: AnyCurve) -> FormLayout:
     if form.spacing.mode == "proportional" and isinstance(curve, CompositeCurve):
-        return _proportional_layout(curve, _required_count(form))
+        return _proportional_layout(curve.parts, _required_count(form))
     stations = curve_stations(curve, form.spacing, slot_count(form))
     center = curve.center if isinstance(curve, ArcCurve | CircleCurve) else None
     return FormLayout(curve.point_at(stations), curve.tangent_at(stations), center)
 
 
-def _region(form: Form, key: str) -> shapely.Polygon:
-    return Region.model_validate(recipe_value(form, key)).to_shapely()
+def _run_layout(form: Form, curves: Sequence[AnyCurve]) -> FormLayout:
+    """Spaces slots along curves walked one after another, each starting where the last ended.
+
+    The jump from one curve's end to the next curve's start adds no length, so a station at a
+    joint lands on the start of the next curve.
+    """
+    offsets = np.concatenate([[0.0], np.cumsum([curve.length() for curve in curves])])
+    total = float(offsets[-1])
+    stations = np.clip(
+        _window_stations(total, form.spacing, slot_count(form), closed=False), 0, total
+    )
+    index = np.clip(np.searchsorted(offsets, stations, side="right") - 1, 0, len(curves) - 1)
+    points, tangents = np.empty((len(stations), 2)), np.empty((len(stations), 2))
+    for i in np.unique(index):
+        mask = index == i
+        local = stations[mask] - offsets[i]
+        points[mask], tangents[mask] = curves[i].point_at(local), curves[i].tangent_at(local)
+    return FormLayout(points=points, tangents=tangents)
 
 
-def _block_points(form: Form, _registry: FormFnRegistry) -> Points:
-    g = form.geometry
-    origin = as_points(recipe_value(form, "origin"))[0]
+def _svg_layout(form: Form, recipe: SvgRecipe) -> FormLayout:
+    if len(recipe.curves) == 1:
+        return _curve_layout(form, recipe.curves[0])
+    if form.spacing.mode == "proportional":
+        return _proportional_layout(recipe.curves, _required_count(form))
+    return _run_layout(form, recipe.curves)
+
+
+def _block_points(recipe: BlockRecipe) -> Points:
     return block(
-        (float(origin[0]), float(origin[1])),
-        int(recipe_value(form, "rows")),
-        int(recipe_value(form, "cols")),
-        float(recipe_value(form, "interval")),
-        float(g.get("facing", 0.0)),
-        g.get("anchor", "center"),
+        recipe.origin, recipe.rows, recipe.cols, recipe.interval, recipe.facing, recipe.anchor
     )
 
 
-def _fill_points(form: Form, _registry: FormFnRegistry) -> Points:
-    g = form.geometry
-    interval = float(recipe_value(form, "interval"))
-    pattern, angle = g.get("pattern", "grid"), float(g.get("angle_deg", 0.0))
-    return fill(_region(form, "outline"), interval, pattern, angle, n=slot_count(form))
+def _fill_points(form: Form, recipe: FillRecipe) -> Points:
+    outline = recipe.outline.to_shapely()
+    return fill(outline, recipe.interval, recipe.pattern, recipe.angle_deg, n=slot_count(form))
 
 
-def _scatter_points(form: Form, _registry: FormFnRegistry) -> Points:
-    min_gap = float(recipe_value(form, "min_gap"))
-    seed = int(form.geometry.get("seed", 0))
-    return scatter(_region(form, "region"), _required_count(form), min_gap, seed)
+def _scatter_points(form: Form, recipe: ScatterRecipe) -> Points:
+    count = _required_count(form)
+    return scatter(recipe.region.to_shapely(), count, recipe.min_gap, recipe.seed)
 
 
-def _custom_points(form: Form, _registry: FormFnRegistry) -> Points:
-    return as_points(recipe_value(form, "points"))
-
-
-def _generated_points(form: Form, registry: FormFnRegistry) -> Points:
+def _generated_points(form: Form, recipe: GeneratedRecipe, registry: FormFnRegistry) -> Points:
     n = _required_count(form)
-    fn = registry.get(recipe_value(form, "fn"))
-    pts = np.asarray(fn(form.geometry.get("params", {}), n), dtype=float)
+    fn = registry.get(recipe.fn)
+    params: dict[str, JsonValue] = recipe.model_dump(mode="json")["params"]
+    pts = np.asarray(fn(params, n), dtype=float)
     if pts.shape != (n, 2) or not np.all(np.isfinite(pts)):
         raise SchemaError(
-            f"generator {form.geometry['fn']!r} returned shape {pts.shape} for n={n}",
+            f"generator {recipe.fn!r} returned shape {pts.shape} for n={n}",
             hint="the generator must return n finite (x, y) rows",
-            context={"form": form.id, "fn": form.geometry["fn"]},
+            context={"form": form.id, "fn": recipe.fn},
         )
     return pts
 
 
-RAW_POINTS: dict[str, Callable[[Form, FormFnRegistry], Points]] = {
-    "block": _block_points,
-    "fill": _fill_points,
-    "scatter": _scatter_points,
-    "custom": _custom_points,
-    "generated": _generated_points,
-}
+def _raw_points(form: Form, recipe: PointRecipe, registry: FormFnRegistry) -> Points:
+    if isinstance(recipe, BlockRecipe):
+        return _block_points(recipe)
+    if isinstance(recipe, FillRecipe):
+        return _fill_points(form, recipe)
+    if isinstance(recipe, ScatterRecipe):
+        return _scatter_points(form, recipe)
+    if isinstance(recipe, CustomRecipe):
+        return as_points(recipe.points)
+    return _generated_points(form, recipe, registry)
 
 
 def _chord_tangents(pts: Points) -> Points:
@@ -262,20 +271,19 @@ def _transformed(lay: FormLayout, matrix: FloatArray) -> FormLayout:
     turned = lay.tangents @ matrix[:2, :2].T
     lengths = np.linalg.norm(turned, axis=1, keepdims=True)
     unit = np.divide(turned, lengths, out=np.zeros_like(turned), where=lengths > ZERO_DIRECTION)
-    return FormLayout(points=pts, tangents=unit)
+    if lay.center is None:
+        return FormLayout(points=pts, tangents=unit)
+    cx, cy = transform_points(np.asarray([lay.center], dtype=float), matrix)[0]
+    return FormLayout(points=pts, tangents=unit, center=(float(cx), float(cy)))
 
 
-def _text_layout(form: Form, font_registry: FontRegistry | None) -> FormLayout:
-    stored = form.geometry.get("transform")
-    transform = None if stored is None else np.asarray(stored, dtype=float)
+def _text_layout(
+    form: Form, recipe: TextRecipe, transform: FloatArray | None, font_registry: FontRegistry | None
+) -> FormLayout:
     points, tangents = text_slots(
-        text_recipe(form.geometry),
-        _required_count(form),
-        font_registry=font_registry,
-        transform=transform,
+        recipe, _required_count(form), font_registry=font_registry, transform=transform
     )
-    lay = FormLayout(points=points, tangents=tangents)
-    return lay if transform is None else _transformed(lay, transform)
+    return FormLayout(points=points, tangents=tangents)
 
 
 def layout(
@@ -286,24 +294,29 @@ def layout(
 ) -> FormLayout:
     """Builds a form's slot layout from its recipe, applying any stored `transform`.
 
-    A text form's tangents go through the transform's linear part and are re-normalized to
-    unit length, so `along` facings turn with the text. Other kinds ignore `font_registry`.
+    Curve and text tangents go through the transform's linear part and are re-normalized to
+    unit length, so `along` facings turn with the form; other kinds take the chord through
+    their mapped slots. Kinds other than text ignore `font_registry`.
 
     >>> from showpy.geo.shapes import line
-    >>> f = Form(id="f", set="1", kind="line", members=("A", "B"),
-    ...     geometry={"curve": line((0, 0), (2, 0)).construction()})
+    >>> f = Form(id="f", set="1", members=("A", "B"),
+    ...     recipe={"kind": "line", "curve": line((0, 0), (2, 0))})
     >>> layout(f).points.tolist()
     [[0.0, 0.0], [2.0, 0.0]]
     """
-    if form.kind in CURVE_KINDS:
-        return _curve_layout(form)
-    if form.kind == "text":
-        return _text_layout(form, font_registry)
-    pts = RAW_POINTS[form.kind](form, registry)
-    transform = form.geometry.get("transform")
-    if transform is not None:
-        pts = transform_points(pts, np.asarray(transform, dtype=float))
-    return FormLayout(points=pts, tangents=_chord_tangents(pts))
+    recipe = form.recipe
+    transform = None if recipe.transform is None else np.asarray(recipe.transform, dtype=float)
+    if isinstance(recipe, CurveRecipeBase):
+        lay = _curve_layout(form, recipe.curve)
+    elif isinstance(recipe, SvgRecipe):
+        lay = _svg_layout(form, recipe)
+    elif isinstance(recipe, TextRecipe):
+        lay = _text_layout(form, recipe, transform, font_registry)
+    else:
+        pts = _raw_points(form, recipe, registry)
+        pts = pts if transform is None else transform_points(pts, transform)
+        return FormLayout(points=pts, tangents=_chord_tangents(pts))
+    return lay if transform is None else _transformed(lay, transform)
 
 
 def _facing_or_audience(direction: Points) -> Degrees:

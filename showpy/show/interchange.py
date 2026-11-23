@@ -19,7 +19,7 @@ import math
 from collections.abc import Iterable, Mapping
 from typing import Any, Never
 
-from showpy.choreo.form_text import text_recipe
+from showpy.choreo.form_models import TextRecipe
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import (
     ROOT_LOC,
@@ -55,7 +55,6 @@ DOCUMENT_HINT = (
 )
 FONTS_KEY = "fonts"
 FORMS_FIELD = "forms"
-TEXT_KIND = "text"
 # A document with more fonts than the five bundled plus a generous allowance of user fonts is
 # hostile; each entry is also bounded by MAX_FONT_BYTES.
 MAX_IMPORT_FONTS = 64
@@ -140,8 +139,8 @@ def _embedded_fonts(
     uris = {
         uri
         for form in show.forms.values()
-        if form.kind == TEXT_KIND
-        for uri in text_recipe(form.geometry).fonts
+        if isinstance(form.recipe, TextRecipe)
+        for uri in form.recipe.fonts
     }
     return {uri: base64.b64encode(registry.source(uri)).decode("ascii") for uri in sorted(uris)}
 

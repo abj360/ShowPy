@@ -34,6 +34,7 @@ import numpy as np
 import pytest
 
 from showpy.choreo.forms import slots, text_form
+from showpy.choreo.models import PlacementPatch
 from showpy.choreo.path_models import PathRow, TransitionSpec
 from showpy.core.caps import MAX_POINTS, MAX_TEXT_CHARS
 from showpy.core.deprecation import DeprecatedWarning
@@ -46,6 +47,7 @@ from showpy.core.errors import (
     VersionError,
 )
 from showpy.core.ids import FormId, SpotId, make_tid
+from showpy.core.json_types import JsonValue
 from showpy.core.resources import font_path
 from showpy.core.util import approx_equal, asset_uri
 from showpy.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
@@ -145,7 +147,7 @@ def test_import_positions_refuses_unknown_group_and_mapping() -> None:
 
 def test_import_positions_respects_pins() -> None:
     show = two_set_show()
-    pinned = show.sets[1].with_placements({"T1": {"pinned": True}})
+    pinned = show.sets[1].with_placements({"T1": PlacementPatch(pinned=True)})
     show = show.model_copy(update={"sets": (show.sets[0], pinned)})
     with pytest.raises(LockedError):
         import_positions(show, IMPORT_TEXT, group="trumpets")
@@ -333,9 +335,22 @@ def test_export_json_writes_the_format_header_first() -> None:
     assert "schema" not in exported
 
 
+def _v1_form(form: dict[str, JsonValue]) -> dict[str, JsonValue]:
+    """Writes a form dump in the v1 shape: `kind` beside an untyped `geometry`."""
+    recipe = form["recipe"]
+    assert isinstance(recipe, dict)
+    geometry = {
+        key: value for key, value in recipe.items() if key not in ("kind", "recipe_version")
+    }
+    rest = {key: value for key, value in form.items() if key != "recipe"}
+    return {**rest, "kind": recipe["kind"], "geometry": geometry}
+
+
 def test_regression_import_json_reads_a_version_1_document() -> None:
     show = rich_show()
-    document = {"schema": SCHEMA_TAG, "show": json.loads(json.dumps(show.model_dump(mode="json")))}
+    dump = json.loads(json.dumps(show.model_dump(mode="json")))
+    dump["forms"] = {form_id: _v1_form(form) for form_id, form in dump["forms"].items()}
+    document = {"schema": SCHEMA_TAG, "show": dump}
     assert import_json(document) == show
 
 

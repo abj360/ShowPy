@@ -26,6 +26,7 @@ from showpy.choreo.form_models import Form
 from showpy.choreo.form_place import place
 from showpy.choreo.forms import arc_form, block_form, circle_form, line_form, wedge_form
 from showpy.choreo.match_ops import with_set
+from showpy.choreo.models import PlacementPatch
 from showpy.choreo.path_models import PathStyle, TransitionSpec
 from showpy.choreo.paths import curve_path, custom_path, delay, hold, set_easing
 from showpy.choreo.routes import follow_and_set_targets, make_route, rotate_path, two_part
@@ -164,7 +165,7 @@ def _follow_and_hold(show: Show, tid: tuple[str, str], ids: list[str]) -> Show:
 
 
 def _exit(show: Show, set_id: str, leaving: list[str]) -> Show:
-    off = {e: {"on_field": False} for e in leaving}
+    off = {e: PlacementPatch(on_field=False) for e in leaving}
     return with_set(show, show.set(set_id).with_placements(off))
 
 

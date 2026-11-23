@@ -897,21 +897,7 @@
           "mode": "outward",
           "value": null
         },
-        "geometry": {
-          "curve": {
-            "ccw": true,
-            "center": [
-              -11.990022905326473,
-              31.471068907925236
-            ],
-            "closed": true,
-            "kind": "circle",
-            "radius": 4.5,
-            "start_deg": 295.64223061779586
-          }
-        },
         "id": "brass-2",
-        "kind": "circle",
         "locked": false,
         "members": [
           "B1",
@@ -922,6 +908,23 @@
           "B6"
         ],
         "meta": {},
+        "recipe": {
+          "curve": {
+            "ccw": true,
+            "center": [
+              -11.990022905326473,
+              31.471068907925236
+            ],
+            "closed": true,
+            "kind": "circle",
+            "radius": 4.5,
+            "start_deg": 295.64223061779586
+          },
+          "kind": "circle",
+          "n": null,
+          "recipe_version": 1,
+          "transform": null
+        },
         "set": "2",
         "spacing": {
           "align": "start",
@@ -937,7 +940,18 @@
           "mode": "audience",
           "value": null
         },
-        "geometry": {
+        "id": "guard-2",
+        "locked": false,
+        "members": [
+          "G1",
+          "G2",
+          "G3",
+          "G4",
+          "G5",
+          "G6"
+        ],
+        "meta": {},
+        "recipe": {
           "curve": {
             "a": [
               -22.74421081241615,
@@ -949,20 +963,12 @@
             ],
             "closed": false,
             "kind": "segment"
-          }
+          },
+          "kind": "line",
+          "n": null,
+          "recipe_version": 1,
+          "transform": null
         },
-        "id": "guard-2",
-        "kind": "line",
-        "locked": false,
-        "members": [
-          "G1",
-          "G2",
-          "G3",
-          "G4",
-          "G5",
-          "G6"
-        ],
-        "meta": {},
         "set": "2",
         "spacing": {
           "align": "start",
@@ -978,20 +984,7 @@
           "mode": "fixed",
           "value": 100.2332203562784
         },
-        "geometry": {
-          "anchor": "center",
-          "cols": 6,
-          "facing": 100.2332203562784,
-          "interval": 1.5,
-          "n": 6,
-          "origin": [
-            17.824165725122775,
-            23.358699056874414
-          ],
-          "rows": 1
-        },
         "id": "woodwinds-2",
-        "kind": "block",
         "locked": false,
         "members": [
           "W1",
@@ -1002,6 +995,21 @@
           "W6"
         ],
         "meta": {},
+        "recipe": {
+          "anchor": "center",
+          "cols": 6,
+          "facing": 100.2332203562784,
+          "interval": 1.5,
+          "kind": "block",
+          "n": 6,
+          "origin": [
+            17.824165725122775,
+            23.358699056874414
+          ],
+          "recipe_version": 1,
+          "rows": 1,
+          "transform": null
+        },
         "set": "2",
         "spacing": {
           "align": "start",
@@ -1618,20 +1626,7 @@
           "mode": "fixed",
           "value": 212.3970094838197
         },
-        "geometry": {
-          "anchor": "center",
-          "cols": 6,
-          "facing": 212.3970094838197,
-          "interval": 1.5,
-          "n": 6,
-          "origin": [
-            18.98028622914454,
-            21.58892343100625
-          ],
-          "rows": 1
-        },
         "id": "brass-3",
-        "kind": "block",
         "locked": false,
         "members": [
           "B1",
@@ -1642,6 +1637,21 @@
           "B6"
         ],
         "meta": {},
+        "recipe": {
+          "anchor": "center",
+          "cols": 6,
+          "facing": 212.3970094838197,
+          "interval": 1.5,
+          "kind": "block",
+          "n": 6,
+          "origin": [
+            18.98028622914454,
+            21.58892343100625
+          ],
+          "recipe_version": 1,
+          "rows": 1,
+          "transform": null
+        },
         "set": "4",
         "spacing": {
           "align": "start",
@@ -1657,7 +1667,18 @@
           "mode": "audience",
           "value": null
         },
-        "geometry": {
+        "id": "percussion-3",
+        "locked": false,
+        "members": [
+          "P1",
+          "P2",
+          "P3",
+          "P4",
+          "P5",
+          "P6"
+        ],
+        "meta": {},
+        "recipe": {
           "curve": {
             "a": [
               -10.8011783535406,
@@ -1669,20 +1690,12 @@
             ],
             "closed": false,
             "kind": "segment"
-          }
+          },
+          "kind": "line",
+          "n": null,
+          "recipe_version": 1,
+          "transform": null
         },
-        "id": "percussion-3",
-        "kind": "line",
-        "locked": false,
-        "members": [
-          "P1",
-          "P2",
-          "P3",
-          "P4",
-          "P5",
-          "P6"
-        ],
-        "meta": {},
         "set": "4",
         "spacing": {
           "align": "start",
@@ -1698,7 +1711,18 @@
           "mode": "fixed",
           "value": 54.283686900612736
         },
-        "geometry": {
+        "id": "woodwinds-3",
+        "locked": false,
+        "members": [
+          "W1",
+          "W2",
+          "W3",
+          "W4",
+          "W5",
+          "W6"
+        ],
+        "meta": {},
+        "recipe": {
           "curve": {
             "closed": false,
             "kind": "polyline",
@@ -1716,20 +1740,12 @@
                 25.241625263301792
               ]
             ]
-          }
+          },
+          "kind": "wedge",
+          "n": null,
+          "recipe_version": 1,
+          "transform": null
         },
-        "id": "woodwinds-3",
-        "kind": "wedge",
-        "locked": false,
-        "members": [
-          "W1",
-          "W2",
-          "W3",
-          "W4",
-          "W5",
-          "W6"
-        ],
-        "meta": {},
         "set": "4",
         "spacing": {
           "align": "start",
@@ -2049,21 +2065,7 @@
           "mode": "outward",
           "value": null
         },
-        "geometry": {
-          "curve": {
-            "ccw": true,
-            "center": [
-              18.631609819034708,
-              16.73528103085163
-            ],
-            "closed": true,
-            "kind": "circle",
-            "radius": 7.351229207305481,
-            "start_deg": 293.4922600782164
-          }
-        },
         "id": "guard-4",
-        "kind": "circle",
         "locked": false,
         "members": [
           "G1",
@@ -2074,6 +2076,23 @@
           "G6"
         ],
         "meta": {},
+        "recipe": {
+          "curve": {
+            "ccw": true,
+            "center": [
+              18.631609819034708,
+              16.73528103085163
+            ],
+            "closed": true,
+            "kind": "circle",
+            "radius": 7.351229207305481,
+            "start_deg": 293.4922600782164
+          },
+          "kind": "circle",
+          "n": null,
+          "recipe_version": 1,
+          "transform": null
+        },
         "set": "5",
         "spacing": {
           "align": "start",
@@ -2089,21 +2108,7 @@
           "mode": "audience",
           "value": null
         },
-        "geometry": {
-          "curve": {
-            "center": [
-              -20.93626331539107,
-              32.66838784614857
-            ],
-            "closed": false,
-            "kind": "arc",
-            "radius": 4.5,
-            "start_deg": 271.0719012951914,
-            "sweep_deg": 180.0
-          }
-        },
         "id": "percussion-4",
-        "kind": "arc",
         "locked": false,
         "members": [
           "P1",
@@ -2114,6 +2119,23 @@
           "P6"
         ],
         "meta": {},
+        "recipe": {
+          "curve": {
+            "center": [
+              -20.93626331539107,
+              32.66838784614857
+            ],
+            "closed": false,
+            "kind": "arc",
+            "radius": 4.5,
+            "start_deg": 271.0719012951914,
+            "sweep_deg": 180.0
+          },
+          "kind": "arc",
+          "n": null,
+          "recipe_version": 1,
+          "transform": null
+        },
         "set": "5",
         "spacing": {
           "align": "start",
@@ -2129,7 +2151,18 @@
           "mode": "audience",
           "value": null
         },
-        "geometry": {
+        "id": "woodwinds-4",
+        "locked": false,
+        "members": [
+          "W1",
+          "W2",
+          "W3",
+          "W4",
+          "W5",
+          "W6"
+        ],
+        "meta": {},
+        "recipe": {
           "curve": {
             "a": [
               -18.797152444817456,
@@ -2141,20 +2174,12 @@
             ],
             "closed": false,
             "kind": "segment"
-          }
+          },
+          "kind": "line",
+          "n": null,
+          "recipe_version": 1,
+          "transform": null
         },
-        "id": "woodwinds-4",
-        "kind": "line",
-        "locked": false,
-        "members": [
-          "W1",
-          "W2",
-          "W3",
-          "W4",
-          "W5",
-          "W6"
-        ],
-        "meta": {},
         "set": "5",
         "spacing": {
           "align": "start",
@@ -2474,7 +2499,18 @@
           "mode": "audience",
           "value": null
         },
-        "geometry": {
+        "id": "brass-5",
+        "locked": false,
+        "members": [
+          "B1",
+          "B2",
+          "B3",
+          "B4",
+          "B5",
+          "B6"
+        ],
+        "meta": {},
+        "recipe": {
           "curve": {
             "a": [
               -27.946858838746767,
@@ -2486,20 +2522,12 @@
             ],
             "closed": false,
             "kind": "segment"
-          }
+          },
+          "kind": "line",
+          "n": null,
+          "recipe_version": 1,
+          "transform": null
         },
-        "id": "brass-5",
-        "kind": "line",
-        "locked": false,
-        "members": [
-          "B1",
-          "B2",
-          "B3",
-          "B4",
-          "B5",
-          "B6"
-        ],
-        "meta": {},
         "set": "6",
         "spacing": {
           "align": "start",
@@ -2515,20 +2543,7 @@
           "mode": "fixed",
           "value": 226.11630775136646
         },
-        "geometry": {
-          "anchor": "center",
-          "cols": 6,
-          "facing": 226.11630775136646,
-          "interval": 1.5,
-          "n": 6,
-          "origin": [
-            -11.600430546667685,
-            33.22701689472914
-          ],
-          "rows": 1
-        },
         "id": "guard-5",
-        "kind": "block",
         "locked": false,
         "members": [
           "G1",
@@ -2539,6 +2554,21 @@
           "G6"
         ],
         "meta": {},
+        "recipe": {
+          "anchor": "center",
+          "cols": 6,
+          "facing": 226.11630775136646,
+          "interval": 1.5,
+          "kind": "block",
+          "n": 6,
+          "origin": [
+            -11.600430546667685,
+            33.22701689472914
+          ],
+          "recipe_version": 1,
+          "rows": 1,
+          "transform": null
+        },
         "set": "6",
         "spacing": {
           "align": "start",
@@ -2554,21 +2584,7 @@
           "mode": "outward",
           "value": null
         },
-        "geometry": {
-          "curve": {
-            "ccw": true,
-            "center": [
-              6.226741519011924,
-              23.583929897792494
-            ],
-            "closed": true,
-            "kind": "circle",
-            "radius": 8.757478963906228,
-            "start_deg": 237.33900237926278
-          }
-        },
         "id": "percussion-5",
-        "kind": "circle",
         "locked": false,
         "members": [
           "P1",
@@ -2579,6 +2595,23 @@
           "P6"
         ],
         "meta": {},
+        "recipe": {
+          "curve": {
+            "ccw": true,
+            "center": [
+              6.226741519011924,
+              23.583929897792494
+            ],
+            "closed": true,
+            "kind": "circle",
+            "radius": 8.757478963906228,
+            "start_deg": 237.33900237926278
+          },
+          "kind": "circle",
+          "n": null,
+          "recipe_version": 1,
+          "transform": null
+        },
         "set": "6",
         "spacing": {
           "align": "start",
@@ -2898,21 +2931,7 @@
           "mode": "audience",
           "value": null
         },
-        "geometry": {
-          "curve": {
-            "center": [
-              -23.2369804966278,
-              26.53223638656242
-            ],
-            "closed": false,
-            "kind": "arc",
-            "radius": 10.379665402930666,
-            "start_deg": 112.93972992080779,
-            "sweep_deg": 180.0
-          }
-        },
         "id": "brass-6",
-        "kind": "arc",
         "locked": false,
         "members": [
           "B1",
@@ -2923,6 +2942,23 @@
           "B6"
         ],
         "meta": {},
+        "recipe": {
+          "curve": {
+            "center": [
+              -23.2369804966278,
+              26.53223638656242
+            ],
+            "closed": false,
+            "kind": "arc",
+            "radius": 10.379665402930666,
+            "start_deg": 112.93972992080779,
+            "sweep_deg": 180.0
+          },
+          "kind": "arc",
+          "n": null,
+          "recipe_version": 1,
+          "transform": null
+        },
         "set": "7",
         "spacing": {
           "align": "start",
@@ -2938,7 +2974,18 @@
           "mode": "fixed",
           "value": 229.94998776795703
         },
-        "geometry": {
+        "id": "guard-6",
+        "locked": false,
+        "members": [
+          "G1",
+          "G2",
+          "G3",
+          "G4",
+          "G5",
+          "G6"
+        ],
+        "meta": {},
+        "recipe": {
           "curve": {
             "closed": false,
             "kind": "polyline",
@@ -2956,20 +3003,12 @@
                 18.68677433418497
               ]
             ]
-          }
+          },
+          "kind": "wedge",
+          "n": null,
+          "recipe_version": 1,
+          "transform": null
         },
-        "id": "guard-6",
-        "kind": "wedge",
-        "locked": false,
-        "members": [
-          "G1",
-          "G2",
-          "G3",
-          "G4",
-          "G5",
-          "G6"
-        ],
-        "meta": {},
         "set": "7",
         "spacing": {
           "align": "start",
@@ -2985,21 +3024,7 @@
           "mode": "outward",
           "value": null
         },
-        "geometry": {
-          "curve": {
-            "ccw": true,
-            "center": [
-              21.76855409512408,
-              29.942538256922596
-            ],
-            "closed": true,
-            "kind": "circle",
-            "radius": 5.033103531794598,
-            "start_deg": 276.0692964257359
-          }
-        },
         "id": "woodwinds-6",
-        "kind": "circle",
         "locked": false,
         "members": [
           "W1",
@@ -3010,6 +3035,23 @@
           "W6"
         ],
         "meta": {},
+        "recipe": {
+          "curve": {
+            "ccw": true,
+            "center": [
+              21.76855409512408,
+              29.942538256922596
+            ],
+            "closed": true,
+            "kind": "circle",
+            "radius": 5.033103531794598,
+            "start_deg": 276.0692964257359
+          },
+          "kind": "circle",
+          "n": null,
+          "recipe_version": 1,
+          "transform": null
+        },
         "set": "7",
         "spacing": {
           "align": "start",
@@ -3329,27 +3371,7 @@
           "mode": "audience",
           "value": null
         },
-        "geometry": {
-          "align": "left",
-          "anchor": "baseline",
-          "at": [
-            -10.0,
-            20.0
-          ],
-          "fonts": [
-            "asset:sha256:7e345d1ae7a55abc2d6414c6b16d121bdaddba1ef1fb5d82dec483e4bac20e3e"
-          ],
-          "height": 8.0,
-          "letter_spacing": 0.0,
-          "line_spacing": 1.2,
-          "mode": "centerline",
-          "n": 24,
-          "rotation": 0.0,
-          "spacing": null,
-          "text": "GO"
-        },
         "id": "title",
-        "kind": "text",
         "locked": false,
         "members": [
           "B1",
@@ -3378,6 +3400,28 @@
           "G6"
         ],
         "meta": {},
+        "recipe": {
+          "align": "left",
+          "anchor": "baseline",
+          "at": [
+            -10.0,
+            20.0
+          ],
+          "fonts": [
+            "asset:sha256:7e345d1ae7a55abc2d6414c6b16d121bdaddba1ef1fb5d82dec483e4bac20e3e"
+          ],
+          "height": 8.0,
+          "kind": "text",
+          "letter_spacing": 0.0,
+          "line_spacing": 1.2,
+          "mode": "centerline",
+          "n": 24,
+          "recipe_version": 1,
+          "rotation": 0.0,
+          "spacing": null,
+          "text": "GO",
+          "transform": null
+        },
         "set": "8",
         "spacing": {
           "align": "start",

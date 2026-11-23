@@ -9,6 +9,13 @@ Contains:
         penalty
     test_regression_match_options_rejects_bool_slot_index: rejects True as a pinned slot index
         instead of pinning to slot 1
+    test_regression_match_result_rejects_a_negative_slot_index: rejects a slot index below zero
+        in an assignment, a form slot or the unassigned slots
+    test_match_weights_are_typed_and_non_negative: holds the four penalties as finite numbers
+        at or above zero
+    test_regression_match_options_rejects_bool_in_forbid_and_group_slots: rejects True as a slot
+        index in forbid and group_slots
+    test_match_options_accept_weights_as_a_mapping: coerces a dict of weights into MatchWeights
 """
 
 import math
@@ -16,7 +23,7 @@ import math
 import pytest
 
 from showpy.choreo.form_models import FormFnInfo
-from showpy.choreo.match_models import MatchOptions, MatchResult
+from showpy.choreo.match_models import MatchOptions, MatchResult, MatchWeights
 from showpy.core.errors import SchemaError
 from showpy.core.ids import FormId, SpotId
 
@@ -85,20 +92,65 @@ NEGATIVE_PENALTY_M = -1.0
 def test_regression_match_options_rejects_nan_weights() -> None:
     """Rejects a NaN penalty weight (audit 9.6)."""
     with pytest.raises(SchemaError):
-        MatchOptions(weights={"turn": math.nan})
+        MatchOptions.model_validate({"weights": {"turn": math.nan}})
 
 
-@pytest.mark.defect("UP-9.6-37")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-37")
 def test_regression_match_options_rejects_negative_no_backward() -> None:
     """Rejects a negative no_backward penalty (audit 9.6)."""
     with pytest.raises(SchemaError):
         MatchOptions(no_backward=NEGATIVE_PENALTY_M)
 
 
-@pytest.mark.defect("UP-9.6-50")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-50")
 def test_regression_match_options_rejects_bool_slot_index() -> None:
     """Rejects True as a pinned slot index instead of pinning to slot 1 (audit 9.6)."""
     with pytest.raises(SchemaError):
         MatchOptions(pinned={SpotId("A"): True})
+
+
+NEGATIVE_SLOT = -1
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"assignment": {SpotId("A"): NEGATIVE_SLOT}},
+        {"slots": {SpotId("A"): (FormId("f"), NEGATIVE_SLOT)}},
+        {"unassigned_slots": (NEGATIVE_SLOT,)},
+    ],
+)
+def test_regression_match_result_rejects_a_negative_slot_index(bad: dict[str, object]) -> None:
+    """Rejects a hand-built result whose slot index is below zero with a SchemaError."""
+    fields: dict[str, object] = {
+        "entities": (SpotId("A"),),
+        "assignment": {SpotId("A"): 0},
+        "targets": ((1.0, 2.0),),
+    }
+    with pytest.raises(SchemaError):
+        MatchResult.model_validate({**fields, **bad})
+
+
+@pytest.mark.parametrize("name", ["backward", "crossing", "group_spread", "turn"])
+@pytest.mark.parametrize("bad", [-1.0, math.inf, math.nan])
+def test_match_weights_are_typed_and_non_negative(name: str, bad: float) -> None:
+    assert MatchWeights().model_dump() == {
+        "backward": 0.0,
+        "crossing": 0.0,
+        "group_spread": 0.0,
+        "turn": 0.0,
+    }
+    with pytest.raises(SchemaError):
+        MatchWeights.model_validate({name: bad})
+
+
+def test_match_options_accept_weights_as_a_mapping() -> None:
+    options = MatchOptions.model_validate({"weights": {"turn": 0.5}})
+    assert options.weights == MatchWeights(turn=0.5)
+    assert MatchOptions(weights=MatchWeights(crossing=2.0)).weights.crossing == 2.0
+
+
+def test_regression_match_options_rejects_bool_in_forbid_and_group_slots() -> None:
+    """Rejects True as a slot index in `forbid` and `group_slots`, as it does in `pinned`."""
+    with pytest.raises(SchemaError):
+        MatchOptions(forbid=((SpotId("A"), True),))
+    with pytest.raises(SchemaError):
+        MatchOptions(group_slots={"brass": (True,)})

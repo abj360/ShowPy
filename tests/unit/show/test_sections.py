@@ -26,6 +26,7 @@ from datetime import UTC, datetime
 import pytest
 
 from showpy.choreo.form_models import Form
+from showpy.choreo.models import PlacementPatch
 from showpy.choreo.path_models import FacingMode, FacingOverride, FixedFacing, TransitionSpec
 from showpy.core.errors import SchemaError, TimelineError
 from showpy.core.ids import FormId, SetId, SpotId, make_tid
@@ -36,6 +37,7 @@ from showpy.show.models import Pin, Show
 from showpy.show.sections import join_sections, split_section
 from showpy.time.clock import count_to_seconds
 from showpy.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting, TempoSection
+from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 from tests.golden.opener import opener_show
 from tests.helpers import replaced_form_show
@@ -64,7 +66,7 @@ def _four_sets() -> Show:
         start=10,
         end=14,
     )
-    form = Form(id=FormId("f3"), set=SetId("3"), kind="line", geometry={}, members=(SpotId("T1"),))
+    form = Form(id=FormId("f3"), set=SetId("3"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     notes = (
         Note(id="a", text="x", anchor=Anchor.on_set("2"), author="d", created_at=AT),
         Note(id="b", text="y", anchor=Anchor.on_set("4"), author="d", created_at=AT),
@@ -143,7 +145,7 @@ def test_join_disjoint_sections_and_clashes() -> None:
     other_cast = relabelled.model_copy(update={"cast": first.cast.model_copy(update={"spots": ()})})
     with pytest.raises(SchemaError):
         join_sections(first, other_cast)
-    moved = relabelled.sets[0].with_placements({"T1": {"x": 9.0}})
+    moved = relabelled.sets[0].with_placements({"T1": PlacementPatch(x=9.0)})
     bad_boundary = second.model_copy(
         update={
             "sets": (

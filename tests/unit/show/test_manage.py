@@ -38,7 +38,7 @@ import pytest
 
 from showpy.cast.models import Cast, Group, Spot
 from showpy.choreo.form_models import Form
-from showpy.choreo.models import Placement
+from showpy.choreo.models import Placement, PlacementPatch
 from showpy.choreo.path_models import (
     FacingMode,
     FacingOverride,
@@ -80,6 +80,7 @@ from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import load_show, open_workspace, save_show
 from showpy.show.validate import validate_show
 from showpy.time.models import Hold, MeasureSetting
+from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import field_sheet, two_set_show
 from tests.helpers import fails_after
 
@@ -115,7 +116,7 @@ def test_new_show_rejects_unversioned_sheet() -> None:
 
 def test_add_set_copies_previous_positions_without_forms() -> None:
     show = two_set_show()
-    form_set = show.sets[1].with_placements({"T1": {"form": "f", "order": 0}})
+    form_set = show.sets[1].with_placements({"T1": PlacementPatch(form=FormId("f"), order=0)})
     show = show.model_copy(update={"sets": (show.sets[0], form_set)})
     added = add_set(show, "3", 4.0, placements=[Placement(entity=SpotId("T2"), x=-3.0, y=1.0)])
     third = added.set("3")
@@ -186,7 +187,7 @@ def test_insert_subset_respects_pinned_next_set() -> None:
 
 def test_remove_set_merges_counts_and_drops_forms_and_paths() -> None:
     show = _three_set_show()
-    form = Form(id=FormId("f"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
+    form = Form(id=FormId("f"), set=SetId("2"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     spec = TransitionSpec(
         id=make_tid("2", "3"), counts=4.0, rows={SpotId("T1"): PathRow(entity=SpotId("T1"))}
     )
@@ -205,7 +206,7 @@ def test_remove_set_without_merge_and_first_set() -> None:
 
 def test_remove_set_refuses_pinned_placements_unless_forced() -> None:
     show = two_set_show()
-    pinned = show.sets[1].with_placements({"T1": {"pinned": True}})
+    pinned = show.sets[1].with_placements({"T1": PlacementPatch(pinned=True)})
     show = show.model_copy(update={"sets": (show.sets[0], pinned)})
     with pytest.raises(LockedError):
         remove_set(show, "2")
@@ -265,7 +266,7 @@ def test_set_counts_rules_for_first_and_locked() -> None:
 
 def test_renumber_rewrites_every_reference() -> None:
     show, sub = insert_subset(_three_set_show(), "2", 2.0)
-    form = Form(id=FormId("f"), set=sub, kind="line", geometry={}, members=(SpotId("T1"),))
+    form = Form(id=FormId("f"), set=sub, recipe=LINE_RECIPE, members=(SpotId("T1"),))
     spec = TransitionSpec(id=make_tid("2", sub), counts=2.0)
     notes = (
         Note(id="n1", text="hit", anchor=Anchor.on_set(sub), author="d", created_at=AT),
@@ -428,8 +429,6 @@ def test_regression_remove_last_set_with_merge_counts_keeps_total_time() -> None
     assert approx_equal(sum(s.counts for s in edited.sets), total, abs_tol=1e-9)
 
 
-@pytest.mark.defect("UP-9.7-54")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-54")
 def test_regression_add_set_rejects_two_placements_for_one_spot() -> None:
     """Rejects two placements for one spot instead of keeping the last (audit 9.7)."""
     rows = (
@@ -457,7 +456,7 @@ def test_regression_insert_subset_after_a_names_a_subset_of_a() -> None:
 
 def test_regression_form_keys_equal_form_ids_across_a_round_trip() -> None:
     """Rejects a form key that differs from its ID, or keeps keys stable (audit 9.7)."""
-    form = Form(id=FormId("f1"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
+    form = Form(id=FormId("f1"), set=SetId("2"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     try:
         show = two_set_show().model_copy(update={"forms": {"zz": form}})
         Show.model_validate(show.model_dump())
@@ -468,7 +467,7 @@ def test_regression_form_keys_equal_form_ids_across_a_round_trip() -> None:
 
 def test_regression_frozen_show_forms_cannot_be_mutated() -> None:
     """Refuses `show.forms[...] = form` on a frozen show (audit 9.7 sets defects)."""
-    form = Form(id=FormId("zz"), set=SetId("2"), kind="line", geometry={}, members=(SpotId("T1"),))
+    form = Form(id=FormId("zz"), set=SetId("2"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     show = two_set_show()
     with pytest.raises(TypeError):
         show.forms[FormId("zz")] = form  # type: ignore[index]

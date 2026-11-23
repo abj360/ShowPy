@@ -19,7 +19,7 @@ from typing import Literal
 
 import numpy as np
 
-from showpy.choreo.models import Set
+from showpy.choreo.models import PlacementPatch, Set
 from showpy.choreo.path_models import (
     FacingMode,
     PathRow,
@@ -30,7 +30,7 @@ from showpy.choreo.path_models import (
 )
 from showpy.choreo.paths import set_style
 from showpy.core.errors import LockedError, PathError
-from showpy.core.ids import TransitionId, format_tid
+from showpy.core.ids import SpotId, TransitionId, format_tid
 from showpy.core.types import Point
 from showpy.geo.curves import (
     AnyCurve,
@@ -195,10 +195,10 @@ def follow_and_set_targets(
     """
     curve = route.curve
     target = show.set(tid[1])
-    updates = {}
+    updates: dict[SpotId, PlacementPatch] = {}
     for member, offset in zip(route.members, route.offsets, strict=True):
         p = curve.point_at(offset + route.travel)
-        updates[member] = {"x": float(p[0]), "y": float(p[1])}
+        updates[member] = PlacementPatch(x=float(p[0]), y=float(p[1]))
     new_target = target.with_placements(updates, force=force)
     spec = follow(show.transition(tid), route, start, end, force=force)
     return _store(show, spec.id, spec, new_target)

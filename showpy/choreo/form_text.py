@@ -11,7 +11,7 @@ Contains:
     STROKE_MINIMUM_CLOSED: spots a closed stroke needs to read as a loop
     LEGIBLE_SPACING_SHARE: largest spot spacing that still reads, as a share of the cap height
     MAX_TEXT_SPOTS: most spots one text form may have
-    text_recipe(): validates a text form's stored geometry into a TextRecipe
+    text_recipe(): validates a JSON text recipe into a TextRecipe, naming the failing field
     text_strokes(): lays a recipe out and returns its visible strokes in reading order
     stage_strokes(): maps strokes through a form's stored transform into stage meters
     min_text_spots(): counts the spots the strokes need at least
@@ -19,6 +19,7 @@ Contains:
     text_slots(): places exactly n slots on the strokes, with unit tangents
     text_report(): reports the strokes of a text form whose spots crowd another stroke's
     require_text_form(): rejects a form that is not a text form
+    stored_count(): returns a text recipe's stored spot count, refusing a recipe without one
     require_member_count(): rejects a text form whose member count differs from its slot count
     reject_count_change(): rejects an edit of a text form that changes its count
     resolve_edit_fonts(): resolves the font names of a text edit to URIs
@@ -92,11 +93,10 @@ class _StrokePlace:
 
 
 def text_recipe(geometry: Mapping[str, Any]) -> TextRecipe:
-    """Validates a text form's stored geometry into a TextRecipe, ignoring `n` and `transform`.
+    """Validates a JSON text recipe into a TextRecipe of its layout, dropping `n` and `transform`.
 
     Args:
-        geometry: The form's JSON recipe; any key other than the recipe fields and the shared
-            `n` and `transform` is an error.
+        geometry: A JSON text recipe; any key other than the recipe fields is an error.
 
     Returns:
         recipe: The validated recipe.
@@ -117,7 +117,7 @@ def text_recipe(geometry: Mapping[str, Any]) -> TextRecipe:
         errors = field_errors(exc)
         field = str(errors[0]["loc"]).split(".", 1)[0]
         allowed = ", ".join(TextRecipe.model_fields)
-        hint = FIELD_HINTS.get(field, f"use only the keys {allowed}, n and transform")
+        hint = FIELD_HINTS.get(field, f"use only the keys {allowed}")
         raise SchemaError(
             f"bad text recipe field {field}: {errors[0]['msg']}",
             hint=hint,
@@ -376,15 +376,9 @@ def text_report(form: Form, *, font_registry: FontRegistry | None = None) -> Tex
     >>> text_report(go).crowded
     ()
     """
-    require_text_form(form)
-    n = form.geometry.get("n")
-    if n is None:
-        raise SchemaError(
-            f"text form {form.id} stores no spot count",
-            hint="rebuild it with text_form(...)",
-            context={"form": form.id},
-        )
-    _, _, spreads, places = _spread(text_recipe(form.geometry), int(n), font_registry)
+    recipe = require_text_form(form)
+    n = stored_count(form.id, recipe)
+    _, _, spreads, places = _spread(recipe, n, font_registry)
     starts = np.cumsum([0, *(len(spread.points) for spread in spreads)]).tolist()
     return TextReport(
         crowded=tuple(
@@ -404,19 +398,45 @@ def text_report(form: Form, *, font_registry: FontRegistry | None = None) -> Tex
     )
 
 
-def require_text_form(form: Form) -> None:
+def require_text_form(form: Form) -> TextRecipe:
     """Rejects a form that is not a text form.
+
+    Returns:
+        recipe: The form's text recipe.
 
     Raises:
         SchemaError: `NOT_A_TEXT_FORM`; the hint points other kinds at `edit()`.
     """
-    if form.kind != "text":
+    if not isinstance(form.recipe, TextRecipe):
         raise SchemaError(
             f"form {form.id} is a {form.kind} form, not text",
             hint="use edit() for other kinds",
             context={"form": form.id, "kind": form.kind},
             code=ErrorCode.NOT_A_TEXT_FORM,
         )
+    return form.recipe
+
+
+def stored_count(form_id: str, recipe: TextRecipe) -> int:
+    """Returns a text recipe's stored spot count, refusing a recipe without one.
+
+    Args:
+        form_id: ID of the form, named in the error.
+        recipe: The form's text recipe.
+
+    Returns:
+        n: The exact spot count.
+
+    Raises:
+        SchemaError: The recipe stores no count; the hint names `text_form`.
+    """
+    if recipe.n is None:
+        raise SchemaError(
+            f"text form {form_id} stores no spot count",
+            hint="rebuild it with text_form(...)",
+            context={"form": form_id},
+        )
+    return recipe.n
 
 
 def require_member_count(form_id: str, n: int, member_count: int) -> None:
@@ -540,9 +560,9 @@ def require_text_members(form: Form) -> None:
     ...     height=4.0, at=(0, 10), n=24)
     >>> require_text_members(go)
     """
-    count = form.geometry.get("n")
-    if form.kind == "text" and count is not None:
-        require_edited_members(form.id, int(count), len(form.members))
+    recipe = form.recipe
+    if isinstance(recipe, TextRecipe) and recipe.n is not None:
+        require_edited_members(form.id, recipe.n, len(form.members))
 
 
 def too_few_for_edit(exc: SpacingError) -> SpacingError:

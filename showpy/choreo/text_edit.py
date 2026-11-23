@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from showpy.choreo.form_fns import DEFAULT_FORM_FNS, FormFnRegistry
 from showpy.choreo.form_layout import layout
 from showpy.choreo.form_models import Form
-from showpy.choreo.form_text import require_member_count, require_text_form
+from showpy.choreo.form_text import require_member_count, require_text_form, stored_count
 from showpy.choreo.forms import check_unlocked
 from showpy.choreo.text_count import count_recipe
 from showpy.core.error_codes import ErrorCode
@@ -57,10 +57,10 @@ def _repeats[T: str](spots: Sequence[T], taken: set[str]) -> list[T]:
 def _added(form: Form, add: Sequence[str]) -> tuple[SpotId, ...]:
     """Returns the checked, NFC-normalized new spots; none may be a member or repeat."""
     spots = tuple(SpotId(check_id(spot, kind="spot")) for spot in _spot_list(form, "add", add))
-    culprits = _repeats(spots, set(form.members))
+    culprits = _repeats(spots, set(form.spots))
     if not culprits:
         return spots
-    addable = [spot for spot in dict.fromkeys(spots) if spot not in form.members]
+    addable = [spot for spot in dict.fromkeys(spots) if spot not in form.spots]
     listed = f": {_preview(addable)}" if addable else ""
     raise SchemaError(
         f"text form {form.id} already has {', '.join(culprits)}",
@@ -73,15 +73,15 @@ def _added(form: Form, add: Sequence[str]) -> tuple[SpotId, ...]:
 def _kept(form: Form, remove: Sequence[str]) -> tuple[SpotId, ...]:
     """Returns the members left after removing `remove`; each must be a member, once."""
     spots = _spot_list(form, "remove", remove)
-    outsiders = set(spots) - set(form.members)
+    outsiders = set(spots) - set(form.spots)
     culprits = [spot for spot in dict.fromkeys(spots) if spot in outsiders]
     culprits += [spot for spot in _repeats(spots, set()) if spot not in outsiders]
     if not culprits:
         gone = set(spots)
-        return tuple(member for member in form.members if member not in gone)
+        return tuple(member for member in form.spots if member not in gone)
     raise SchemaError(
         f"text form {form.id} has no member {', '.join(culprits)} to remove",
-        hint=f"remove only members of form {form.id}: {_preview(form.members)}",
+        hint=f"remove only members of form {form.id}: {_preview(form.spots)}",
         context={"form": form.id, "spots": culprits},
         code=ErrorCode.NOT_A_MEMBER,
     )
@@ -115,7 +115,7 @@ def edit_text_count(
         font_registry: Registry holding the form's fonts; None means `bundled_fonts()`.
 
     Returns:
-        edited: The new form, with `geometry["n"]` equal to its member count.
+        edited: The new form, with `recipe.n` equal to its member count.
 
     Raises:
         LockedError: The form is locked and `force` is not given.
@@ -128,15 +128,15 @@ def edit_text_count(
     >>> go = text_form("go", [f"S{i}" for i in range(24)], "GO", fonts=["hershey-roman"],
     ...     height=4.0, at=(0, 10), n=24)
     >>> wider = edit_text_count(go, add=["X1", "X2"], n=26)
-    >>> wider.members[-2:], wider.geometry["n"]
+    >>> wider.members[-2:], wider.recipe.n
     (('X1', 'X2'), 26)
     """
     check_unlocked(form, force=force)
-    require_text_form(form)
+    recipe = require_text_form(form)
     members = (*_kept(form, remove), *_added(form, add))
     count = len(members) if n is None and spacing is None else n
-    geometry = count_recipe(form.geometry, count, spacing, font_registry)
-    require_member_count(form.id, geometry["n"], len(members))
-    edited = form.replace(geometry=geometry, members=members)
+    counted = count_recipe(recipe, count, spacing, font_registry)
+    require_member_count(form.id, stored_count(form.id, counted), len(members))
+    edited = form.replace(recipe=counted, members=members)
     layout(edited, registry, font_registry=font_registry)
     return edited

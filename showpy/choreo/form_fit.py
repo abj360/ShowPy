@@ -43,6 +43,8 @@ def fit_line(points: object) -> tuple[Point, Point, float]:
     ((0.0, 0.0), (3.0, 0.0), 0.0)
     """
     pts = as_points(points)
+    if len(pts) == 0:
+        raise SchemaError("a line fit needs 1 or more points", hint="pass at least 1 point")
     center = pts.mean(axis=0)
     _, _, vt = np.linalg.svd(pts - center)
     direction, normal = vt[0], vt[1]

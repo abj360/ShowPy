@@ -30,6 +30,7 @@ import pytest
 from showpy.choreo.form_models import Form
 from showpy.choreo.models import Placement
 from showpy.choreo.path_models import PathRow, TransitionSpec
+from showpy.choreo.recipe_models import LineRecipe
 from showpy.core.errors import (
     ConflictError,
     LockedError,
@@ -41,6 +42,7 @@ from showpy.core.errors import (
 from showpy.core.ids import FormId, SetId, SpotId, make_tid
 from showpy.core.json_types import JsonValue
 from showpy.core.selection import Selection
+from showpy.geo.shapes import line
 from showpy.notes.models import Anchor
 from showpy.show.changes import apply_change
 from showpy.show.collab import (
@@ -81,8 +83,7 @@ STEP = timedelta(minutes=1)
 FORM = Form(
     id=FormId("f1"),
     set=SetId("2"),
-    kind="line",
-    geometry={"len": 6},
+    recipe=LineRecipe(curve=line((0.0, 0.0), (6.0, 0.0))),
     members=(SpotId("T1"), SpotId("T2")),
 )
 
@@ -443,7 +444,7 @@ def test_regression_accepting_a_form_edit_does_not_resurrect_a_deleted_form() ->
     """Refuses, or keeps the form deleted, when accepting an edit of a deleted form (audit 9.7)."""
     with_form = two_set_show().model_copy(update={"forms": {"f1": FORM}})
     _, agent, designer = open_session(with_form, AT)
-    edited_form = FORM.model_copy(update={"geometry": {"len": 9}})
+    edited_form = FORM.model_copy(update={"recipe": LineRecipe(curve=line((0.0, 0.0), (9.0, 0.0)))})
     proposal = propose(load_show(agent), [FormOp(form=edited_form)], "longer", "p1")
     save_show(designer, load_show(designer).model_copy(update={"forms": {}}), AT + STEP)
     try:

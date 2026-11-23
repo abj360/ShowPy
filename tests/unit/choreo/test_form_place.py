@@ -11,7 +11,7 @@ Contains:
     test_regression_place_keeps_forms_that_pinned_placements_reference: keeps a form listed while a
         pinned placement still points at it
     test_regression_filled_forms_compacts_a_pinned_member_and_gapped_matches: keeps a pinned member
-        in place and compacts matched spots after it
+        in place and each matched spot on its own slot, gaps typed as open slots
     test_regression_filled_forms_accepts_matched_spots_in_nearest_open_slots: reads a form back when
         matched spots took non-lowest open slots
     test_regression_place_returns_the_set_and_the_filled_forms: returns the placed set together with
@@ -32,6 +32,12 @@ Contains:
         of pulling spots back onto a form the set dropped
     test_regression_rebuild_after_place_moves_nobody_on_a_sparse_form: keeps every spot where
         place() put it when the filled sparse form is rebuilt
+    test_regression_place_matches_spots_into_the_typed_open_slots_of_a_gapped_form: fills only the
+        open slots of a form whose members hold gaps
+    test_regression_filled_forms_stores_the_slot_each_spot_stands_on: keeps a gapped slot order as
+        open slots instead of compacting it
+    test_regression_rebuild_keeps_the_note_of_a_forced_move: keeps a spot's note when a forced
+        rebuild moves it
     test_regression_place_rejects_a_text_form_with_fewer_members_than_slots: refuses to match
         unrelated spots into the letters of a text form that lost members
     test_regression_rebuild_rejects_a_text_form_left_short_by_delete_spots: raises
@@ -45,6 +51,7 @@ from showpy.choreo.form_place import filled_forms, place, rebuild
 from showpy.choreo.forms import circle_form, line_form, text_form
 from showpy.choreo.match_models import MatchOptions
 from showpy.choreo.match_ops import with_set
+from showpy.choreo.models import PlacementPatch
 from showpy.core.errors import (
     LockedError,
     MatchError,
@@ -115,7 +122,7 @@ def test_place_with_spare_slots_keeps_them_open() -> None:
     orders = sorted(p.order for p in placed.placements if p.order is not None)
     assert len(orders) == 4
     assert orders == [0, 1, 2, 5]
-    assert sorted(filled.members) == ["T1", "T2", "T3", "T4"]
+    assert sorted(filled.spots) == ["T1", "T2", "T3", "T4"]
     assert filled.members[0] == "T1"
 
 
@@ -124,8 +131,8 @@ def test_filled_forms_reads_members_back_in_slot_order() -> None:
     placed, _ = place(two_set_show(), "2", [form])
     (filled,) = filled_forms(placed, [form])
     assert filled.set == "2"
-    assert sorted(filled.members) == ["T1", "T2", "T3", "T4"]
-    assert [placed.get(m).order for m in filled.members] == [0, 1, 2, 3]
+    assert sorted(filled.spots) == ["T1", "T2", "T3", "T4"]
+    assert [placed.get(m).order for m in filled.spots] == [0, 1, 2, 3]
 
 
 def test_rebuild_regenerates_and_drops_neighbouring_rows() -> None:
@@ -219,21 +226,22 @@ def test_regression_place_keeps_forms_that_pinned_placements_reference() -> None
 
 
 def test_regression_filled_forms_compacts_a_pinned_member_and_gapped_matches() -> None:
-    """Keeps a pinned member in place and compacts matched spots after it (G-R4)."""
+    """Keeps a pinned member in place and each matched spot on its slot, gaps typed (G-R4)."""
     show = pin_spot(two_set_show(), "2", "T1")
     form = line_form("f", ["T1", "T2"], (0, 15), (10, 15), n=SPARSE_SLOTS)
     placed, (filled,) = place(show, "2", [form], MatchOptions(pinned={SpotId("T4"): 3}))
     orders = sorted(p.order for p in placed.placements if p.order is not None)
     assert orders != list(range(len(orders)))
     assert filled.members[:2] == ("T1", "T2")
-    assert set(filled.members) == {"T1", "T2", "T3", "T4"}
+    assert {m for m in filled.members if m is not None} == {"T1", "T2", "T3", "T4"}
     assert filled.members[-1] == "T4"
+    assert filled.members.index("T4") == placed.get("T4").order
 
 
 def test_filled_forms_rejects_two_spots_on_one_slot() -> None:
     form = line_form("f", [], (0, 12), (6, 12), n=4)
     placed, _ = place(two_set_show(), "2", [form])
-    clash = placed.with_placements({"T2": {"order": placed.get("T1").order}})
+    clash = placed.with_placements({"T2": PlacementPatch(order=placed.get("T1").order)})
     with pytest.raises(SchemaError, match="one slot"):
         filled_forms(clash, [form])
 
@@ -285,7 +293,9 @@ def test_regression_rebuild_regenerates_facing_and_keeps_rows_of_unmoved_members
     """Regenerates facing of members whose position did not change, keeping their rows (G-R11)."""
     base = with_curve_rows(_row_show(), ROW_SPOTS)
     expected = base.set("2").get("T1").facing
-    turned = with_set(base, base.set("2").with_placements({"T1": {"facing": 45.0, "note": "n"}}))
+    turned = with_set(
+        base, base.set("2").with_placements({"T1": PlacementPatch(facing=45.0, note="n")})
+    )
     rebuilt = rebuild(turned, "row")
     assert set(rebuilt.transition(TID).rows) == set(ROW_SPOTS)
     assert rebuilt.set("2").get("T1").facing == expected
@@ -301,8 +311,6 @@ def test_regression_rebuild_refuses_a_form_the_set_no_longer_places() -> None:
     assert caught.value.context == {"form": "a", "set": "2", "set_forms": ["b"]}
 
 
-@pytest.mark.defect("UP-9.6-62")
-@pytest.mark.xfail(strict=True, reason="UP-9.6-62")
 def test_regression_rebuild_after_place_moves_nobody_on_a_sparse_form() -> None:
     """Keeps every spot in place when a filled sparse form is rebuilt (lane G review; G-R4)."""
     show = two_set_show()
@@ -312,6 +320,44 @@ def test_regression_rebuild_after_place_moves_nobody_on_a_sparse_form() -> None:
     rebuilt = rebuild(stored, "f").set("2")
     for before in placed.placements:
         assert approx_equal(rebuilt.get(before.entity).point, before.point, abs_tol=FORM_COORD_TOL)
+
+
+def test_regression_place_matches_spots_into_the_typed_open_slots_of_a_gapped_form() -> None:
+    """Fills only the open slots of a form whose members hold gaps (lane G)."""
+    form = line_form("f", ["T1", "T2", "T3"], (0, 12), (10, 12), n=SPARSE_SLOTS)
+    gapped = form.replace(members=("T1", None, "T3"))
+    placed, (filled,) = place(two_set_show(), "2", [gapped])
+    assert placed.get("T1").order == 0
+    assert placed.get("T3").order == 2
+    assert placed.get("T2").order in (1, 3, 4, 5)
+    assert placed.get("T4").order in (1, 3, 4, 5)
+    assert filled.members[0] == "T1"
+    assert filled.members[2] == "T3"
+
+
+def test_regression_filled_forms_stores_the_slot_each_spot_stands_on() -> None:
+    """Keeps a gapped slot order as open slots instead of compacting it (lane G)."""
+    form = line_form("f", ["T1"], (0, 12), (10, 12), n=SPARSE_SLOTS)
+    placed, _ = place(two_set_show(), "2", [form], MatchOptions(pinned={SpotId("T4"): 4}))
+    (filled,) = filled_forms(placed, [form])
+    for index, member in enumerate(filled.members):
+        assert member is None or placed.get(member).order == index
+    assert None in filled.members
+    assert filled.members[placed.get("T4").order or 0] == "T4"
+
+
+def test_regression_rebuild_keeps_the_note_of_a_forced_move() -> None:
+    """Keeps a spot's note when a forced rebuild moves it (plan appendix A row 9)."""
+    base = _row_show()
+    noted = pin_spot(
+        with_set(base, base.set("2").with_placements({"T1": PlacementPatch(note="n")})), "2", "T1"
+    )
+    moved = line_form("row", ["T1", "T2", "T3", "T4"], (0, UPSTAGE_ROW_Y), (6, UPSTAGE_ROW_Y))
+    stored = noted.replace(forms={"row": moved.replace(set="2")})
+    rebuilt = rebuild(stored, "row", force=True).set("2")
+    assert approx_equal(rebuilt.get("T1").point, (0.0, UPSTAGE_ROW_Y), abs_tol=FORM_COORD_TOL)
+    assert rebuilt.get("T1").note == "n"
+    assert rebuilt.get("T1").pinned
 
 
 def test_regression_place_rejects_a_text_form_with_fewer_members_than_slots() -> None:

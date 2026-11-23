@@ -18,14 +18,15 @@ import numpy as np
 
 from showpy.choreo.form_models import Form
 from showpy.choreo.forms import slots as form_slots
-from showpy.choreo.match_models import MatchOptions
+from showpy.choreo.match_models import CostFn, MatchOptions
 from showpy.choreo.match_solve import BoolArray, FloatArray
 from showpy.choreo.models import Set
 from showpy.core.errors import MatchError, SchemaError, UnknownRefError
 from showpy.core.ids import SpotId
-from showpy.core.types import Points
+from showpy.core.types import Point, Points
 from showpy.core.units import angle_diff, facing_vector
 from showpy.core.util import as_points, close_matches
+from showpy.geo.fonts import FontRegistry
 
 BACKWARD_TOL = 1e-9
 SPEED_TOL = 1e-9
@@ -61,9 +62,11 @@ class MatchProblem:
         return replace(self, entities=entities, starts=self.starts[order], facings=facings)
 
 
-def _slot_points(to_slots: SlotSource) -> Points:
+def _slot_points(to_slots: SlotSource, font_registry: FontRegistry | None) -> Points:
     if isinstance(to_slots, Sequence) and to_slots and all(isinstance(f, Form) for f in to_slots):
-        return np.vstack([form_slots(f) for f in to_slots if isinstance(f, Form)])
+        return np.vstack(
+            [form_slots(f, font_registry=font_registry) for f in to_slots if isinstance(f, Form)]
+        )
     return as_points(to_slots)
 
 
@@ -85,7 +88,20 @@ def _source(
             f"{len(ids)} entity ids for {len(starts)} start points",
             hint="give one entity id per start point",
         )
+    _require_finite(starts, [f"start of spot {e!r}" for e in ids])
     return ids, starts, None
+
+
+def _require_finite(points: Points, names: Sequence[str]) -> None:
+    bad = np.flatnonzero(~np.isfinite(points).all(axis=1))
+    if len(bad) == 0:
+        return
+    first = int(bad[0])
+    raise SchemaError(
+        f"{names[first]} is not finite: ({points[first, 0]}, {points[first, 1]})",
+        hint="give every start and slot point finite meter coordinates",
+        context={"index": first, "non_finite": len(bad)},
+    )
 
 
 def _labels(m: int, slot_groups: Sequence[str | None] | None) -> tuple[str | None, ...]:
@@ -104,8 +120,12 @@ def build_problem(
     entities: Sequence[str] | None,
     groups: Mapping[str, str] | None,
     slot_groups: Sequence[str | None] | None,
+    *,
+    font_registry: FontRegistry | None = None,
 ) -> MatchProblem:
     """Builds a problem from a Set or start points and slot points or forms.
+
+    `font_registry` holds the fonts of text forms in `to_slots`; None means `bundled_fonts()`.
 
     >>> build_problem([(0, 0)], [(1, 0), (2, 0)], None, None, None).entities
     ('0',)
@@ -113,7 +133,8 @@ def build_problem(
     ids, starts, facings = _source(from_, entities)
     if len(set(ids)) != len(ids):
         raise SchemaError("an entity is listed twice", hint="list each spot once")
-    slots = _slot_points(to_slots)
+    slots = _slot_points(to_slots, font_registry)
+    _require_finite(slots, [f"slot {j}" for j in range(len(slots))])
     labels = _labels(len(slots), slot_groups)
     return MatchProblem(ids, starts, facings, slots, dict(groups or {}), labels)
 
@@ -215,6 +236,18 @@ def _turn(p: MatchProblem, moves: FloatArray, distance: FloatArray) -> FloatArra
     return result
 
 
+def _call_cost_fn(fn: CostFn, entity: str, slot: int, start: Point, target: Point) -> float:
+    try:
+        return float(fn(entity, slot, start, target))
+    except Exception as exc:  # the callback is user code: any failure is reported as a MatchError
+        raise MatchError(
+            f"cost_fn failed for spot {entity!r} and slot {slot}: {type(exc).__name__}: {exc}",
+            hint="cost_fn(entity, slot, start, target) must return a number >= 0 "
+            "(infinity forbids the pair)",
+            context={"entity": entity, "slot": slot},
+        ) from exc
+
+
 def _cost_fn_matrix(p: MatchProblem, options: MatchOptions) -> FloatArray:
     fn = options.cost_fn
     n, m = len(p.entities), len(p.slots)
@@ -223,7 +256,7 @@ def _cost_fn_matrix(p: MatchProblem, options: MatchOptions) -> FloatArray:
     extra = np.array(
         [
             [
-                fn(e, j, (float(p.starts[i, 0]), float(p.starts[i, 1])), point_tuple(p.slots[j]))
+                _call_cost_fn(fn, e, j, point_tuple(p.starts[i]), point_tuple(p.slots[j]))
                 for j in range(m)
             ]
             for i, e in enumerate(p.entities)
@@ -292,10 +325,10 @@ def _penalties(
     flat = options.no_backward
     if not isinstance(flat, bool) and flat > 0:
         penalty = penalty + flat * (_backward(p, moves) > BACKWARD_TOL)
-    if weights.get("backward", 0.0) > 0:
-        penalty = penalty + weights["backward"] * _backward(p, moves)
-    if weights.get("turn", 0.0) > 0:
-        penalty = penalty + weights["turn"] * _turn(p, moves, d)
+    if weights.backward > 0:
+        penalty = penalty + weights.backward * _backward(p, moves)
+    if weights.turn > 0:
+        penalty = penalty + weights.turn * _turn(p, moves, d)
     return penalty
 
 
