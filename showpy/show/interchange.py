@@ -156,9 +156,9 @@ def import_json(d: Mapping[str, Any]) -> Show:
     """Loads a show from a document of any readable format version, migrating older ones.
 
     Version 1 documents carry `"schema": "showpy.show.v1"`; later ones carry `"format"` and
-    `"version"`. The show is checked as strict JSON first, as stored documents are. The notes
-    document beside the show is read by import_notes(), not here; the notes of a version 1 show
-    move there.
+    `"version"`. The show is checked as strict JSON first, as stored documents are. The value
+    under the top-level `notes` key is not read here: import_notes() parses and checks it, and
+    returns the notes of a version 1 show.
 
     Args:
         d: A document from `export_json`, of this or an earlier release.
@@ -411,5 +411,15 @@ def import_notes(d: Mapping[str, object]) -> NotesDocument:
             the show's notes with IDs and anchors renamed as import_json() renames the show; an
             empty notes document when there are none. A document that import_json() refuses,
             or notes that do not fit, raise SchemaError.
+
+    >>> import warnings
+    >>> from showpy.examples import two_set_show
+    >>> from showpy.notes.models import NotesDocument
+    >>> show = two_set_show()
+    >>> document = export_json(show, notes=NotesDocument(show=show.id))
+    >>> with warnings.catch_warnings(action="ignore"):
+    ...     notes = import_notes(document)
+    >>> notes.show, notes.notes
+    ('show-1', ())
     """
     return _import_notes(d)

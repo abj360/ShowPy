@@ -101,16 +101,7 @@ def _add_note(
     author: str,
     kind: NoteKind = "idea",
 ) -> NotesDocument:
-    """Adds a note; the ID and time stamp are explicit, so the result is deterministic.
-
-    >>> from datetime import UTC, datetime
-    >>> from showpy.examples import two_set_show
-    >>> at = datetime(2026, 11, 11, tzinfo=UTC)
-    >>> empty = NotesDocument(show="show-1")
-    >>> added = _add_note(empty, two_set_show(), "go big", Anchor.on_set("2"), "n1", at, "pat")
-    >>> added.notes[0].text
-    'go big'
-    """
+    """Adds a note; the ID and time stamp are explicit, so the result is deterministic."""
     require_notes_of(notes, show.id)
     fields = {"id": note_id, "text": text, "kind": kind, "anchor": anchor}
     note = _build_note({**fields, "author": author, "created_at": at})
@@ -144,6 +135,16 @@ def add_note(
 
     Returns:
         notes: The notes document with the note appended.
+
+    >>> import warnings
+    >>> from datetime import UTC, datetime
+    >>> from showpy.examples import two_set_show
+    >>> show, at = two_set_show(), datetime(2026, 11, 11, tzinfo=UTC)
+    >>> empty = NotesDocument(show=show.id)
+    >>> with warnings.catch_warnings(action="ignore"):
+    ...     notes = add_note(empty, show, "go big", Anchor.on_set("2"), "n1", at, "pat")
+    >>> notes.notes[0].text
+    'go big'
     """
     return _add_note(notes, show, text, anchor, note_id, at, author, kind)
 
@@ -151,17 +152,7 @@ def add_note(
 def _edit_note(
     notes: NotesDocument, show: "Show", note_id: str, /, **changes: object
 ) -> NotesDocument:
-    """Changes a note's fields; the ID is fixed.
-
-    >>> from datetime import UTC, datetime
-    >>> from showpy.examples import two_set_show
-    >>> at = datetime(2026, 11, 11, tzinfo=UTC)
-    >>> show = two_set_show()
-    >>> empty = NotesDocument(show=show.id)
-    >>> notes = _add_note(empty, show, "go", Anchor.on_set("2"), "n1", at, "pat")
-    >>> _edit_note(notes, show, "n1", kind="todo").notes[0].kind
-    'todo'
-    """
+    """Changes a note's fields; the ID is fixed."""
     require_notes_of(notes, show.id)
     index = _note_index(notes, note_id)
     if "id" in changes:
@@ -175,25 +166,39 @@ def _edit_note(
     return notes.replace(notes=(*notes.notes[:index], edited, *notes.notes[index + 1 :]))
 
 
-# Any: changes are arbitrary Note fields, validated by the rebuilt model.
 @leaving_call(since=SINCE, remove=REMOVE)
-def edit_note(notes: NotesDocument, show: "Show", note_id: str, /, **changes: Any) -> NotesDocument:
+def edit_note(
+    notes: NotesDocument, show: "Show", note_id: str, /, **changes: object
+) -> NotesDocument:
     """Changes a note's fields; the ID is fixed, and a new anchor is checked against the show.
 
     Deprecated: this name leaves the library in 1.0.0.
+
+    Args:
+        notes: The show's notes document.
+        show: The show the notes belong to.
+        note_id: ID of the note to change.
+        changes: New values of Note fields other than `id`.
+
+    Returns:
+        notes: The notes document with the note changed in place.
+
+    >>> import warnings
+    >>> from datetime import UTC, datetime
+    >>> from showpy.examples import two_set_show
+    >>> show, at = two_set_show(), datetime(2026, 11, 11, tzinfo=UTC)
+    >>> empty = NotesDocument(show=show.id)
+    >>> with warnings.catch_warnings(action="ignore"):
+    ...     notes = add_note(empty, show, "go", Anchor.on_set("2"), "n1", at, "pat")
+    ...     edited = edit_note(notes, show, "n1", kind="todo")
+    >>> edited.notes[0].kind
+    'todo'
     """
     return _edit_note(notes, show, note_id, **changes)
 
 
 def _remove_note(notes: NotesDocument, note_id: str) -> NotesDocument:
-    """Removes a note.
-
-    >>> from datetime import UTC, datetime
-    >>> at = datetime(2026, 11, 11, tzinfo=UTC)
-    >>> note = Note(id="n1", text="go", anchor=Anchor.on_set("2"), author="pat", created_at=at)
-    >>> _remove_note(NotesDocument(show="show-1", notes=(note,)), "n1").notes
-    ()
-    """
+    """Removes a note."""
     index = _note_index(notes, note_id)
     return notes.replace(notes=(*notes.notes[:index], *notes.notes[index + 1 :]))
 
@@ -203,6 +208,24 @@ def remove_note(notes: NotesDocument, note_id: str) -> NotesDocument:
     """Removes a note from the notes document.
 
     Deprecated: this name leaves the library in 1.0.0.
+
+    Args:
+        notes: The show's notes document.
+        note_id: ID of the note to remove; an unknown ID raises UnknownRefError.
+
+    Returns:
+        notes: The notes document without the note.
+
+    >>> import warnings
+    >>> from datetime import UTC, datetime
+    >>> from showpy.examples import two_set_show
+    >>> show, at = two_set_show(), datetime(2026, 11, 11, tzinfo=UTC)
+    >>> empty = NotesDocument(show=show.id)
+    >>> with warnings.catch_warnings(action="ignore"):
+    ...     notes = add_note(empty, show, "go", Anchor.on_set("2"), "n1", at, "pat")
+    ...     removed = remove_note(notes, "n1")
+    >>> removed.notes
+    ()
     """
     return _remove_note(notes, note_id)
 
@@ -214,17 +237,7 @@ def _notes_for(
     *,
     include_hidden: bool = False,
 ) -> list[Note]:
-    """Returns the notes anchored to a set (an ID) or a transition (a pair), in document order.
-
-    >>> from datetime import UTC, datetime
-    >>> from showpy.examples import two_set_show
-    >>> at = datetime(2026, 11, 11, tzinfo=UTC)
-    >>> show = two_set_show()
-    >>> empty = NotesDocument(show=show.id)
-    >>> notes = _add_note(empty, show, "go", Anchor.on_set("2"), "n1", at, "pat")
-    >>> [n.id for n in _notes_for(notes, show, "2")]
-    ['n1']
-    """
+    """Returns the notes anchored to a set (an ID) or a transition (a pair), in document order."""
     require_notes_of(notes, show.id)
     if isinstance(target, str):
         show.set_index(target)
@@ -243,9 +256,29 @@ def notes_for(
     *,
     include_hidden: bool = False,
 ) -> list[Note]:
-    """Returns the notes anchored to a set or a transition; hidden ones only on request.
+    """Returns the notes anchored to a set (an ID) or a transition (a pair), in document order.
 
     Deprecated: this name leaves the library in 1.0.0.
+
+    Args:
+        notes: The show's notes document.
+        show: The show the notes belong to; the set or transition must exist in it.
+        target: A set ID or a pair of set IDs.
+        include_hidden: Also returns hidden notes, such as unaccepted drafts.
+
+    Returns:
+        found: The matching notes.
+
+    >>> import warnings
+    >>> from datetime import UTC, datetime
+    >>> from showpy.examples import two_set_show
+    >>> show, at = two_set_show(), datetime(2026, 11, 11, tzinfo=UTC)
+    >>> empty = NotesDocument(show=show.id)
+    >>> with warnings.catch_warnings(action="ignore"):
+    ...     notes = add_note(empty, show, "go", Anchor.on_set("2"), "n1", at, "pat")
+    ...     found = notes_for(notes, show, "2")
+    >>> [n.id for n in found]
+    ['n1']
     """
     return _notes_for(notes, show, target, include_hidden=include_hidden)
 
@@ -276,20 +309,7 @@ def _notes_near(
     *,
     include_hidden: bool = False,
 ) -> list[Note]:
-    """Returns notes anchored within `radius` of a point, in document order.
-
-    Point anchors match by distance, area anchors by distance to the area, and spot anchors
-    when any anchored spot's on-field placement in any set (or only in `set_id`) is close.
-
-    >>> from datetime import UTC, datetime
-    >>> from showpy.examples import two_set_show
-    >>> at = datetime(2026, 11, 11, tzinfo=UTC)
-    >>> show = two_set_show()
-    >>> lead = Anchor.on_spots(["T1"])
-    >>> notes = _add_note(NotesDocument(show=show.id), show, "lead", lead, "n1", at, "pat")
-    >>> [n.id for n in _notes_near(notes, show, (0.0, 5.5), 1.0)]
-    ['n1']
-    """
+    """Returns notes anchored within `radius` of a point, in document order."""
     require_notes_of(notes, show.id)
     if radius < 0:
         raise GeometryError(
@@ -314,27 +334,39 @@ def notes_near(
     *,
     include_hidden: bool = False,
 ) -> list[Note]:
-    """Returns the notes anchored within `radius` of a point, by point, area or spot anchors.
+    """Returns the notes anchored within `radius` of a point, in document order.
 
+    Point anchors match by distance, area anchors by distance to the area, and spot anchors
+    when any anchored spot's on-field placement in any set (or only in `set_id`) is close.
     Deprecated: this name leaves the library in 1.0.0.
+
+    Args:
+        notes: The show's notes document.
+        show: The show the notes belong to; spot positions come from it.
+        p: Point on the sheet.
+        radius: Distance in meters; a negative one raises GeometryError.
+        set_id: Set whose placements spot anchors are measured in; None means every set.
+        include_hidden: Also returns hidden notes.
+
+    Returns:
+        found: The matching notes.
+
+    >>> import warnings
+    >>> from datetime import UTC, datetime
+    >>> from showpy.examples import two_set_show
+    >>> show, at = two_set_show(), datetime(2026, 11, 11, tzinfo=UTC)
+    >>> empty = NotesDocument(show=show.id)
+    >>> with warnings.catch_warnings(action="ignore"):
+    ...     notes = add_note(empty, show, "lead", Anchor.on_spots(["T1"]), "n1", at, "pat")
+    ...     found = notes_near(notes, show, (0.0, 5.5), 1.0)
+    >>> [n.id for n in found]
+    ['n1']
     """
     return _notes_near(notes, show, p, radius, set_id, include_hidden=include_hidden)
 
 
 def _accept_draft(notes: NotesDocument, show: "Show", draft: Note) -> NotesDocument:
-    """Adds a drafted note to the notes document and makes it visible.
-
-    A hidden note with the draft's ID already in the document is replaced in place; the text
-    must not be blank.
-
-    >>> from datetime import UTC, datetime
-    >>> from showpy.examples import two_set_show
-    >>> at = datetime(2026, 11, 11, tzinfo=UTC)
-    >>> draft = Note(id="draft_1", text="go", anchor=Anchor.on_set("1"), author="agent",
-    ...              created_at=at, visible=False)
-    >>> _accept_draft(NotesDocument(show="show-1"), two_set_show(), draft).notes[0].visible
-    True
-    """
+    """Adds a drafted note to the notes document and makes it visible."""
     require_notes_of(notes, show.id)
     accepted = _build_note({**dict(draft), "visible": True})
     held = next((n for n in notes.notes if n.id == accepted.id and not n.visible), None)
@@ -346,9 +378,30 @@ def _accept_draft(notes: NotesDocument, show: "Show", draft: Note) -> NotesDocum
 
 @leaving_call(since=SINCE, remove=REMOVE)
 def accept_draft(notes: NotesDocument, show: "Show", draft: Note) -> NotesDocument:
-    """Adds a drafted note to the notes document, visible, replacing a hidden one of its ID.
+    """Adds a drafted note to the notes document, visible.
 
-    Deprecated: this name leaves the library in 1.0.0.
+    A hidden note with the draft's ID already in the document is replaced in place; the text
+    must not be blank. Deprecated: this name leaves the library in 1.0.0.
+
+    Args:
+        notes: The show's notes document.
+        show: The show the notes belong to; the anchor is checked against it.
+        draft: The drafted note.
+
+    Returns:
+        notes: The notes document holding the draft, visible.
+
+    >>> import warnings
+    >>> from datetime import UTC, datetime
+    >>> from showpy.examples import two_set_show
+    >>> show, at = two_set_show(), datetime(2026, 11, 11, tzinfo=UTC)
+    >>> empty = NotesDocument(show=show.id)
+    >>> draft = Note(id="draft_1", text="go", anchor=Anchor.on_set("1"), author="agent",
+    ...              created_at=at, visible=False)
+    >>> with warnings.catch_warnings(action="ignore"):
+    ...     accepted = accept_draft(empty, show, draft)
+    >>> accepted.notes[0].visible
+    True
     """
     return _accept_draft(notes, show, draft)
 
@@ -367,18 +420,7 @@ def _rewrite_note_anchors(
     sets: SetMapping | None = None,
     spots: SpotMapping | None = None,
 ) -> tuple[NotesDocument, tuple[Note, ...]]:
-    """Points note anchors at renamed sets and spots; drops notes on removed sets or spots.
-
-    >>> from datetime import UTC, datetime
-    >>> from showpy.examples import two_set_show
-    >>> show = two_set_show()
-    >>> at = datetime(2026, 11, 11, tzinfo=UTC)
-    >>> empty = NotesDocument(show=show.id)
-    >>> notes = _add_note(empty, show, "go", Anchor.on_set("2"), "n1", at, "pat")
-    >>> followed, orphaned = _rewrite_note_anchors(notes, show, sets={"2": None})
-    >>> followed.notes, [n.id for n in orphaned]
-    ((), ['n1'])
-    """
+    """Points note anchors at renamed sets and spots; drops notes on removed sets or spots."""
     require_notes_of(notes, show.id)
     set_map: dict[str, str | None] = {} if sets is None else {str(k): v for k, v in sets.items()}
     removed = frozenset(old for old, new in set_map.items() if new is None)
@@ -421,5 +463,16 @@ def rewrite_note_anchors(
     Returns:
         notes: The notes document with anchors rewritten.
         orphaned: Each dropped note, in document order, as `RewriteReport.orphaned_notes` holds.
+
+    >>> import warnings
+    >>> from datetime import UTC, datetime
+    >>> from showpy.examples import two_set_show
+    >>> show, at = two_set_show(), datetime(2026, 11, 11, tzinfo=UTC)
+    >>> empty = NotesDocument(show=show.id)
+    >>> with warnings.catch_warnings(action="ignore"):
+    ...     notes = add_note(empty, show, "go", Anchor.on_set("2"), "n1", at, "pat")
+    ...     followed, orphaned = rewrite_note_anchors(notes, show, sets={"2": None})
+    >>> followed.notes, [n.id for n in orphaned]
+    ((), ['n1'])
     """
     return _rewrite_note_anchors(notes, show, sets=sets, spots=spots)
