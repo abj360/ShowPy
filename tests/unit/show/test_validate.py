@@ -20,8 +20,8 @@ Contains:
         whose ID does not parse
     test_regression_validate_show_reports_pins_that_disagree_with_placement_flags: reports a pin
         record whose placements are not flagged pinned
-    test_regression_validate_show_reports_duplicate_note_ids: reports two notes with one ID, now
-        refused by the notes document that holds them
+    test_regression_notes_document_refuses_duplicate_note_ids: refuses two notes with one ID in
+        the notes document, which validate_show reported while notes lived in the show
     test_regression_validate_show_reports_facing_overrides_naming_unknown_spots: reports a facing
         override on a spot that does not exist
     test_regression_validate_show_reports_facing_overrides_past_the_show: reports a facing override
@@ -342,9 +342,9 @@ def _note(note_id: str = "n", set_id: str = "1") -> Note:
     )
 
 
-def test_regression_validate_show_reports_duplicate_note_ids() -> None:
-    """Reports two notes with one ID (audit 9.7 validation gaps); notes left the show, and the
-    notes document that holds them now refuses the pair."""
+def test_regression_notes_document_refuses_duplicate_note_ids() -> None:
+    """Refuses two notes with one ID (audit 9.7 validation gaps). validate_show reported the pair
+    while notes lived in the show; the notes document that holds them now refuses it."""
     with pytest.raises(SchemaError) as caught:
         NotesDocument(show=two_set_show().id, notes=(_note("dup"), _note("dup")))
     assert "dup" in caught.value.message
