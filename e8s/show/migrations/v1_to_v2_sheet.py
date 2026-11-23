@@ -53,7 +53,7 @@ def _check_precision(document: str, field: str, coordinates: JsonValue) -> None:
 def _check_sheet(document: JsonValue) -> None:
     _check_precision(SHEET_DOC, SHEET_COORDINATES_FIELD, _member(document, SHEET_COORDINATES_FIELD))
     try:
-        Sheet.model_validate(document, context=LEGACY_CONTEXT)
+        Sheet._validated(document, context=LEGACY_CONTEXT)
     except E8sError as error:
         raise _refused(SHEET_DOC, "sheet", _member(document, "ref"), error) from error
 
@@ -64,7 +64,7 @@ def _check_show_coordinates(document: JsonValue) -> None:
     if coordinates is None:
         return
     try:
-        CoordinateSystem.model_validate(coordinates, context=LEGACY_CONTEXT)
+        CoordinateSystem._validated(coordinates, context=LEGACY_CONTEXT)
     except E8sError as error:
         raise _refused(SHOW_DOC, SHOW_COORDINATES_FIELD, coordinates, error) from error
 

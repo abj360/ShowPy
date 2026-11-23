@@ -134,9 +134,7 @@ def test_export_video_writes_a_valid_mp4(tmp_path: object) -> None:
 def test_export_video_muxes_audio_from_source(tmp_path: object) -> None:
     show = two_set_show()
     track = AudioTrack(file="asset://music", label="music", sync_offset_s=0.5)
-    show = show.model_copy(
-        update={"timeline": show.timeline.model_copy(update={"audio": (track,)})}
-    )
+    show = show.replace(timeline=show.timeline.replace(audio=(track,)))
     data = export_video(
         show, count_range=(0.0, 4.0), fps=4, px_per_m=8.0, audio={"asset://music": _wav(4.0)}
     )
@@ -151,9 +149,7 @@ def test_export_video_without_audio_has_no_audio_stream(tmp_path: object) -> Non
 def test_export_video_missing_audio_asset_raises() -> None:
     show = two_set_show()
     track = AudioTrack(file="asset://missing", label="music")
-    show = show.model_copy(
-        update={"timeline": show.timeline.model_copy(update={"audio": (track,)})}
-    )
+    show = show.replace(timeline=show.timeline.replace(audio=(track,)))
     with pytest.raises(UnknownRefError):
         export_video(show, count_range=(0.0, 2.0), fps=4, audio={})
 
@@ -168,9 +164,7 @@ def test_export_video_validates_range_and_fps() -> None:
 def _with_track(offset_s: float = 0.0, gain: float = 1.0) -> Show:
     show = two_set_show()
     track = AudioTrack(file=MUSIC, label="music", sync_offset_s=offset_s, gain=gain)
-    return show.model_copy(
-        update={"timeline": show.timeline.model_copy(update={"audio": (track,)})}
-    )
+    return show.replace(timeline=show.timeline.replace(audio=(track,)))
 
 
 def _save(data: bytes, tmp_path: Path) -> Path:
@@ -403,10 +397,8 @@ def test_regression_audio_section_limits_playback(tmp_path: Path) -> None:
     field is ignored and the music plays from the start.
     """
     show = _with_track()
-    track = show.timeline.audio[0].model_copy(update={"section": (SECTION_START_COUNT, 4.0)})
-    show = show.model_copy(
-        update={"timeline": show.timeline.model_copy(update={"audio": (track,)})}
-    )
+    track = show.timeline.audio[0].replace(section=(SECTION_START_COUNT, 4.0))
+    show = show.replace(timeline=show.timeline.replace(audio=(track,)))
     data = export_video(
         show,
         count_range=(0.0, 4.0),

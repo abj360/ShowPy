@@ -139,10 +139,8 @@ def _reject_constant(name: str) -> float:
 def test_regression_encode_never_writes_non_finite_numbers() -> None:
     """Refuses or avoids non-standard `Infinity` in stored JSON (audit 9.7 item 11)."""
     show = two_set_show()
-    broken = show.model_copy(
-        update={
-            "sets": (show.sets[0], show.sets[1].model_copy(update={"counts": math.inf})),
-        }
+    broken = show._copied(
+        update={"sets": (show.sets[0], show.sets[1]._copied(update={"counts": math.inf}))}
     )
     try:
         docs = encode_show(broken)
@@ -154,9 +152,9 @@ def test_regression_encode_never_writes_non_finite_numbers() -> None:
 
 def _with_first_x(show: Show, x: float) -> Show:
     first = show.sets[0]
-    moved = first.placements[0].model_copy(update={"x": x})
-    updated = first.model_copy(update={"placements": (moved, *first.placements[1:])})
-    return show.model_copy(update={"sets": (updated, *show.sets[1:])})
+    moved = first.placements[0].replace(x=x)
+    updated = first.replace(placements=(moved, *first.placements[1:]))
+    return show.replace(sets=(updated, *show.sets[1:]))
 
 
 def test_regression_negative_zero_encodes_like_zero() -> None:

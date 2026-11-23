@@ -74,7 +74,7 @@ class Selection(FrozenModel):
     def __len__(self) -> int:
         return len(self.ids)
 
-    def model_copy(self, *, update: Mapping[str, object] | None = None, deep: bool = False) -> Self:
+    def _copied(self, *, update: Mapping[str, object] | None = None, deep: bool = False) -> Self:
         """Returns a copy whose updated fields run through validation, so `ids` stay unique.
 
         Args:
@@ -84,7 +84,7 @@ class Selection(FrozenModel):
         Returns:
             selection_copy: A new Selection holding the updated fields.
         """
-        duplicate = super().model_copy(deep=deep)
+        duplicate = super()._copied(deep=deep)
         return duplicate if update is None else duplicate.replace(**update)
 
     def __contains__(self, item: object) -> bool:

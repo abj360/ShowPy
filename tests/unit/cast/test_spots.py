@@ -101,7 +101,7 @@ def test_add_spot_fills_the_lowest_gap() -> None:
 def test_add_spot_uses_scheme_prefix_and_padding() -> None:
     show = two_set_show()
     scheme = LabelScheme(prefixes={"trumpets": "Tr"}, start=1, pad=2)
-    show = show.model_copy(update={"cast": show.cast.model_copy(update={"label_scheme": scheme})})
+    show = show.replace(cast=show.cast.replace(label_scheme=scheme))
     assert add_spot(show, (0.0, 0.0), "trumpets", "1").cast.ids()[-1] == "Tr01"
 
 
@@ -187,7 +187,7 @@ def test_delete_spots_removes_every_reference() -> None:
 def test_delete_spots_refuses_pinned_without_force() -> None:
     show = two_set_show()
     pinned = show.set("2").with_placements({"T1": PlacementPatch(pinned=True)})
-    show = show.model_copy(update={"sets": (show.set("1"), pinned)})
+    show = show.replace(sets=(show.set("1"), pinned))
     with pytest.raises(LockedError):
         delete_spots(show, ["T1"])
     assert "T1" not in delete_spots(show, ["T1"], force=True).cast.ids()
@@ -195,8 +195,8 @@ def test_delete_spots_refuses_pinned_without_force() -> None:
 
 def test_delete_spots_refuses_locked_form_without_force() -> None:
     show = rich_show()
-    locked = show.forms[FormId("line1")].model_copy(update={"locked": True})
-    show = show.model_copy(update={"forms": {"line1": locked}})
+    locked = show.forms[FormId("line1")].replace(locked=True)
+    show = show.replace(forms={"line1": locked})
     with pytest.raises(LockedError):
         delete_spots(show, ["T2"])
 
@@ -249,7 +249,7 @@ def test_edit_group_rejects_an_unknown_field() -> None:
 
 
 def test_group_patch_names_every_editable_group_field() -> None:
-    assert GroupPatch.__optional_keys__ == set(Group.model_fields) - {"key"}
+    assert GroupPatch.__optional_keys__ == set(Group._field_names()) - {"key"}
 
 
 def test_remove_group_reassigns_members() -> None:
@@ -329,8 +329,8 @@ def test_rename_everywhere_leaves_degree_facings_alone() -> None:
     )
     spec = show.transition(("1", "2"))
     rows: dict[SpotId, PathRow] = {**spec.rows, SpotId("T2"): row}
-    spec = spec.model_copy(update={"rows": rows})
-    show, _ = rename_spots(show.model_copy(update={"transitions": (spec,)}), {SpotId("T2"): "X2"})
+    spec = spec.replace(rows=rows)
+    show, _ = rename_spots(show.replace(transitions=(spec,)), {SpotId("T2"): "X2"})
     assert show.transition(("1", "2")).rows[SpotId("X2")].facing_value == FixedFacing(degrees=90.0)
 
 
@@ -363,7 +363,7 @@ def test_set_shape_and_set_claimable() -> None:
     show = set_shape(two_set_show(), "T1-T2", Shape(kind="rectangle"))
     assert [s.shape.kind for s in show.cast.spots] == ["rectangle", "rectangle", "circle", "circle"]
     show = set_claimable(show, ["T3"], "crew")
-    assert show.cast.spot("T3").model_dump()["claimable"] == "crew"
+    assert show.cast.spot("T3").to_json()["claimable"] == "crew"
     with pytest.raises(SchemaError):
         set_claimable(show, ["T3"], "audience")  # type: ignore[arg-type]
 

@@ -8,6 +8,17 @@ Contains:
     test_library_never_calls_model_copy_with_update: fails on any such call in e8s/
     test_model_copy_ban_detects_an_offending_call: proves the scan can fail
     test_model_copy_ban_detects_kwargs_aliases_and_getattr: proves the scan sees evasions
+    find_model_method_uses(): lists file and line of each pydantic model method use, doctests too
+    test_library_never_calls_pydantic_model_methods: fails on any such use in e8s/ outside
+        FrozenModel and the two boundary helpers that take any pydantic model
+    test_model_method_scan_flags_calls_lookups_getattr_and_doctests: proves the scan can fail
+    test_model_method_scan_allows_only_the_named_boundary_functions: proves the allowance is
+        per function, not per file
+    find_markdown_model_method_uses(): lists file and line of each such use in a Python code
+        block of a Markdown file
+    test_docs_code_never_calls_pydantic_model_methods: fails on any such use in the code
+        blocks of README.md, CONTRIBUTING.md and docs/**/*.md
+    test_markdown_scan_flags_only_python_code_blocks: proves the Markdown scan can fail
     find_citations(): lists file and line of each ADR, ledger-ID or docs-path citation
     test_library_cites_no_adr_docs_or_ledger_ids: fails on any such citation in e8s/
     test_citation_scan_flags_a_docstring_and_a_comment: proves the scan can fail
@@ -34,6 +45,7 @@ Contains:
 """
 
 import ast
+import doctest
 import importlib.util
 import inspect
 import io
@@ -61,6 +73,34 @@ GEO_PACKAGE = "e8s.geo"
 LITERAL = "literal"
 MODEL_COPY = "model_copy"
 MODEL_COPY_OVERRIDE = Path("core") / "types.py"
+MODEL_METHODS = frozenset(
+    {
+        "model_validate",
+        "model_validate_json",
+        "model_validate_strings",
+        "model_dump",
+        "model_dump_json",
+        "model_copy",
+        "model_fields",
+        "model_fields_set",
+        "model_construct",
+        "model_json_schema",
+    }
+)
+MARKDOWN_PYTHON_BLOCK = re.compile(
+    r"^(?P<fence>```|~~~)py\w*[^\n]*\n(?P<code>.*?)^(?P=fence)", re.MULTILINE | re.DOTALL
+)
+MODEL_METHOD_USE = re.compile(r"\.(" + "|".join(sorted(MODEL_METHODS)) + r")\b")
+DOCS_WITH_CODE = ("README.md", "CONTRIBUTING.md")
+DOCS_ROOT = "docs"
+# Only FrozenModel itself calls pydantic's model methods on an e8s model.
+MODEL_METHOD_OWNER = Path("core") / "types.py"
+# These helpers accept any pydantic model, including a caller's own, which has only pydantic's
+# methods.
+ANY_MODEL_BOUNDARIES = {
+    Path("core") / "canonical.py": frozenset({"_dumped"}),
+    Path("core") / "validation.py": frozenset({"validate_or_schema_error"}),
+}
 pytestmark = pytest.mark.skipif(
     not LIBRARY_ROOT.is_dir(), reason="needs a source checkout; the wheel test has no e8s tree"
 )
@@ -132,6 +172,157 @@ def test_model_copy_ban_detects_an_offending_call() -> None:
 def test_model_copy_ban_detects_kwargs_aliases_and_getattr(source: str) -> None:
     """Reports a spread, an alias, a callback and a getattr lookup of `model_copy`."""
     assert find_model_copy_updates(source, "m.py")
+
+
+def _model_method_lines(tree: ast.AST, allowed: frozenset[str], scope: str = "") -> set[int]:
+    """Lists the lines using a pydantic model method, skipping the bodies of allowed functions."""
+    if isinstance(tree, ast.FunctionDef | ast.AsyncFunctionDef):
+        scope = tree.name
+    hits: set[int] = set()
+    if scope not in allowed:
+        if isinstance(tree, ast.Attribute) and tree.attr in MODEL_METHODS:
+            hits.add(tree.lineno)
+        if (
+            isinstance(tree, ast.Call)
+            and isinstance(tree.func, ast.Name)
+            and tree.func.id == "getattr"
+            and any(isinstance(a, ast.Constant) and a.value in MODEL_METHODS for a in tree.args)
+        ):
+            hits.add(tree.lineno)
+    for child in ast.iter_child_nodes(tree):
+        hits |= _model_method_lines(child, allowed, scope)
+    return hits
+
+
+def _doctest_model_method_lines(tree: ast.Module) -> set[int]:
+    """Lists the lines of docstring examples that use a pydantic model method."""
+    hits: set[int] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        doc = ast.get_docstring(node, clean=False)
+        if doc is None:
+            continue
+        first = node.body[0].lineno
+        for example in doctest.DocTestParser().get_examples(doc):
+            for line in _model_method_lines(ast.parse(example.source), frozenset()):
+                hits.add(first + example.lineno + line - 1)
+    return hits
+
+
+def find_model_method_uses(
+    source: str, name: str, allowed: frozenset[str] = frozenset()
+) -> list[str]:
+    """Lists `name:line` for each use of a pydantic model method in code or a docstring example.
+
+    Flags attribute uses, calls or not, and `getattr` lookups by name. Code inside a function
+    named in `allowed` is skipped; docstring examples never are.
+    """
+    tree = ast.parse(source)
+    lines = _model_method_lines(tree, allowed) | _doctest_model_method_lines(tree)
+    return [f"{name}:{line}" for line in sorted(lines)]
+
+
+def test_library_never_calls_pydantic_model_methods() -> None:
+    """Requires library code to use to_json, from_json, replace or a FrozenModel helper."""
+    offenders = [
+        hit
+        for path in sorted(LIBRARY_ROOT.rglob("*.py"))
+        if path.relative_to(LIBRARY_ROOT) != MODEL_METHOD_OWNER
+        for hit in find_model_method_uses(
+            path.read_text(encoding="utf-8"),
+            str(path.relative_to(LIBRARY_ROOT.parent)),
+            ANY_MODEL_BOUNDARIES.get(path.relative_to(LIBRARY_ROOT), frozenset()),
+        )
+    ]
+    assert not offenders, (
+        "pydantic's model methods are not the model interface; use to_json, from_json, replace "
+        "or a private FrozenModel helper: " + ", ".join(offenders)
+    )
+
+
+def test_model_method_scan_flags_calls_lookups_getattr_and_doctests() -> None:
+    """Reports each kind of use and ignores a longer name that only starts like a banned one."""
+    source = (
+        "a = x.model_dump()\n"
+        "b = X.model_fields\n"
+        "c = getattr(x, 'model_copy')\n"
+        "d = x.model_fields_settled\n"
+        "def f():\n"
+        '    """Builds one.\n'
+        "\n"
+        "    >>> X.model_validate({})\n"
+        '    """\n'
+        "    return run(X.model_validate_json)\n"
+    )
+    assert find_model_method_uses(source, "m.py") == [
+        "m.py:1",
+        "m.py:2",
+        "m.py:3",
+        "m.py:8",
+        "m.py:10",
+    ]
+
+
+def test_model_method_scan_allows_only_the_named_boundary_functions() -> None:
+    """Skips a named function's body but still reports the same call anywhere else."""
+    source = (
+        "def _dumped(m):\n    return m.model_dump()\ndef other(m):\n    return m.model_dump()\n"
+    )
+    assert find_model_method_uses(source, "m.py", frozenset({"_dumped"})) == ["m.py:4"]
+
+
+def find_markdown_model_method_uses(text: str, name: str) -> list[str]:
+    """Lists `name:line` for each pydantic model method use in a Python code block of Markdown.
+
+    Prose, inline code and blocks in other languages are not scanned: they may name the
+    methods to say they are not the interface.
+    """
+    hits: list[str] = []
+    for block in MARKDOWN_PYTHON_BLOCK.finditer(text):
+        first = text.count("\n", 0, block.start("code")) + 1
+        hits.extend(
+            f"{name}:{first + offset}"
+            for offset, line in enumerate(block["code"].splitlines())
+            if MODEL_METHOD_USE.search(line)
+        )
+    return hits
+
+
+def test_docs_code_never_calls_pydantic_model_methods() -> None:
+    """Requires README and docs examples to use the model interface, as library code does."""
+    paths = [REPO_ROOT / name for name in DOCS_WITH_CODE]
+    paths += sorted((REPO_ROOT / DOCS_ROOT).rglob("*.md"))
+    offenders = [
+        hit
+        for path in paths
+        for hit in find_markdown_model_method_uses(
+            path.read_text(encoding="utf-8"), str(path.relative_to(REPO_ROOT))
+        )
+    ]
+    assert not offenders, (
+        "examples use to_json, from_json or replace, not pydantic's model methods: "
+        + ", ".join(offenders)
+    )
+
+
+def test_markdown_scan_flags_only_python_code_blocks() -> None:
+    """Reports a use inside a python block and ignores prose, inline code and bash blocks."""
+    text = (
+        "Callers must not use `model_dump`.\n"
+        "```bash\n"
+        "echo x.model_copy()\n"
+        "```\n"
+        "```python\n"
+        "show = two_set_show()\n"
+        "show = show.model_copy(update={})\n"
+        "fields = show.model_fields_settled\n"
+        "```\n"
+        "~~~pycon\n"
+        ">>> Show.model_json_schema()\n"
+        "~~~\n"
+    )
+    assert find_markdown_model_method_uses(text, "doc.md") == ["doc.md:7", "doc.md:11"]
 
 
 def find_citations(source: str, name: str) -> list[str]:

@@ -138,8 +138,8 @@ def test_spot_claimable_warns() -> None:
         warnings.simplefilter("error")
         decoded = import_json(export_json(show))
         assert decoded == show
-        assert decoded.cast.spots[0].model_dump()["claimable"] == "performer"
-        assert spot.model_copy(update={"claimable": "crew"}) != spot
+        assert decoded.cast.spots[0].to_json()["claimable"] == "performer"
+        assert spot.replace(claimable="crew") != spot
         assert "claimable=" in repr(spot)
     assert ("Spot.claimable", "field", None, "0.4.0", "0.7.0") in LEAVING
 

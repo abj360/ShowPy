@@ -41,6 +41,7 @@ Contains:
         space before the unit
 """
 
+import json
 from typing import Any
 
 import pytest
@@ -168,7 +169,7 @@ def test_presets_start_with_the_sheet_default_and_are_distinct() -> None:
     stage_sheet = get_sheet("sheet:proscenium-stage@1")
     presets = coordinate_presets(stage_sheet)
     assert presets[0] == stage_sheet.default_coordinates
-    assert len(presets) == len({p.model_dump_json() for p in presets})
+    assert len(presets) == len({json.dumps(p.to_json()) for p in presets})
     assert any(p.kind == CoordinateKind.STAGE for p in presets)
     assert any(p.origin == "center-stage" for p in presets)
 
@@ -187,7 +188,7 @@ def _assert_round_trips_or_rejects(system: CoordinateSystem, style: CoordStyle) 
 
 def _word_with_precision(precision: float) -> str:
     system = CoordinateSystem(precision=precision)
-    return to_coords(two_set_show().model_copy(update={"coordinates": system}), (1.0, 1.0))
+    return to_coords(two_set_show().replace(coordinates=system), (1.0, 1.0))
 
 
 def test_regression_zero_precision_is_rejected_not_division_by_zero() -> None:
@@ -272,7 +273,7 @@ HUGE_SHIFTED_ORIGIN = (1.7e308, -1.7e308)
 
 def _injected(fields: dict[str, Any]) -> Show:  # model_construct takes unchecked values
     system = CoordinateSystem.model_construct(None, **fields)
-    return two_set_show().model_copy(update={"coordinates": system})
+    return two_set_show()._copied(update={"coordinates": system})
 
 
 @pytest.mark.parametrize(
@@ -344,14 +345,14 @@ def test_regression_to_coords_rejects_non_finite_wording() -> None:
     for shifted in (_injected({"origin": HUGE_SHIFTED_ORIGIN}), edge):
         with pytest.raises(E8sError):
             to_coords(shifted, (-1.7e308, 1.7e308))
-    coarse = two_set_show().model_copy(update={"coordinates": CoordinateSystem(precision=1e308)})
+    coarse = two_set_show().replace(coordinates=CoordinateSystem(precision=1e308))
     with pytest.raises(E8sError):
         to_coords(coarse, (1.7976931348623157e308, 0.0))
 
 
 def test_regression_to_coords_rounding_failure_hint_names_precision() -> None:
     """Teaches the precision as a possible cause when rounding exceeds Decimal's digits."""
-    show = two_set_show().model_copy(update={"coordinates": CoordinateSystem(precision=1e-300)})
+    show = two_set_show().replace(coordinates=CoordinateSystem(precision=1e-300))
     with pytest.raises(E8sError) as raised:
         to_coords(show, (1.0, 0.0))
     assert "precision" in raised.value.hint
@@ -376,7 +377,7 @@ def test_regression_to_coords_rounding_failure_hint_names_precision() -> None:
 def test_regression_injected_coordinate_parts_raise_schema_error(fields: dict[str, Any]) -> None:
     """Rejects wrong-typed parts of an unvalidated system with SchemaError, never TypeError."""
     system = CoordinateSystem.model_construct(None, **fields)
-    show = two_set_show().model_copy(update={"coordinates": system})
+    show = two_set_show()._copied(update={"coordinates": system})
     with pytest.raises(SchemaError):
         set_coordinates(two_set_show(), system)
     with pytest.raises(SchemaError):

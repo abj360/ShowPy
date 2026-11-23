@@ -180,7 +180,7 @@ def test_edits_never_mutate_input() -> None:
 def test_paths_table_lists_only_non_default_rows() -> None:
     spec = delay(SPEC, ["T1"], 1.0)
     rows: dict[SpotId, PathRow] = {**spec.rows, SpotId("T2"): PathRow(entity=SpotId("T2"))}
-    spec = spec.model_copy(update={"rows": rows})
+    spec = spec.replace(rows=rows)
     table = paths_table(spec)
     assert list(table["entity"]) == ["T1"]
     assert approx_equal(table.iloc[0]["start"], 1.0)
@@ -256,7 +256,7 @@ def test_regression_delay_applies_to_follow_rows(
     shifted = shift(followed)
     start = shifted.row("T1").start
     assert start >= TWO_COUNT_DELAY
-    engine = PathEngine(show.model_copy(update={"transitions": (shifted,)}))
+    engine = PathEngine(show.replace(transitions=(shifted,)))
     assert approx_equal(engine.position("T1", start / 2, local=TID), show.set("1").get("T1").point)
 
 

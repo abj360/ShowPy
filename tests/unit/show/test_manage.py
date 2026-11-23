@@ -88,7 +88,7 @@ def _three_set_show() -> Show:
 
 
 def _with_paths(show: Show, spec: TransitionSpec) -> Show:
-    return show.model_copy(update={"transitions": (spec,)})
+    return show.replace(transitions=(spec,))
 
 
 def test_new_show_pins_version_and_places_every_spot_off_field() -> None:
@@ -104,7 +104,7 @@ def test_new_show_pins_version_and_places_every_spot_off_field() -> None:
 
 
 def test_new_show_rejects_unversioned_sheet() -> None:
-    sheet = field_sheet().model_copy(update={"ref": "sheet:test-field"})
+    sheet = field_sheet()._copied(update={"ref": "sheet:test-field"})
     with pytest.raises(VersionError):
         new_show("s1", "Opener", sheet, two_set_show().timeline)
 
@@ -112,7 +112,7 @@ def test_new_show_rejects_unversioned_sheet() -> None:
 def test_add_set_copies_previous_positions_without_forms() -> None:
     show = two_set_show()
     form_set = show.sets[1].with_placements({"T1": PlacementPatch(form=FormId("f"), order=0)})
-    show = show.model_copy(update={"sets": (show.sets[0], form_set)})
+    show = show.replace(sets=(show.sets[0], form_set))
     added = add_set(show, "3", 4.0, placements=[Placement(entity=SpotId("T2"), x=-3.0, y=1.0)])
     third = added.set("3")
     assert third.get("T1").point == (0.0, 9.0)
@@ -154,7 +154,7 @@ def test_add_set_validates_ids_counts_and_spots() -> None:
 
 
 def test_add_set_copies_entity_pin() -> None:
-    show = two_set_show().model_copy(update={"pins": (Pin(target="entity", id="T1"),)})
+    show = two_set_show().replace(pins=(Pin(target="entity", id="T1"),))
     assert add_set(show, "3", 4.0).set("3").get("T1").pinned
 
 
@@ -175,7 +175,7 @@ def test_insert_subset_raises_when_counts_do_not_fit() -> None:
 
 
 def test_insert_subset_respects_pinned_next_set() -> None:
-    show = two_set_show().model_copy(update={"pins": (Pin(target="set", id="2"),)})
+    show = two_set_show().replace(pins=(Pin(target="set", id="2"),))
     with pytest.raises(LockedError):
         insert_subset(show, "1", 2.0)
 
@@ -186,7 +186,7 @@ def test_remove_set_merges_counts_and_drops_forms_and_paths() -> None:
     spec = TransitionSpec(
         id=make_tid("2", "3"), counts=4.0, rows={SpotId("T1"): PathRow(entity=SpotId("T1"))}
     )
-    show = show.model_copy(update={"forms": {"f": form}, "transitions": (spec,)})
+    show = show.replace(forms={"f": form}, transitions=(spec,))
     removed = remove_set(show, "2")
     assert removed.set_ids() == ["1", "3"]
     assert removed.set("3").counts == 12.0
@@ -202,7 +202,7 @@ def test_remove_set_without_merge_and_first_set() -> None:
 def test_remove_set_refuses_pinned_placements_unless_forced() -> None:
     show = two_set_show()
     pinned = show.sets[1].with_placements({"T1": PlacementPatch(pinned=True)})
-    show = show.model_copy(update={"sets": (show.sets[0], pinned)})
+    show = show.replace(sets=(show.sets[0], pinned))
     with pytest.raises(LockedError):
         remove_set(show, "2")
     assert remove_set(show, "2", force=True).set_ids() == ["1"]
@@ -264,7 +264,7 @@ def test_renumber_rewrites_every_reference() -> None:
     form = Form(id=FormId("f"), set=sub, recipe=LINE_RECIPE, members=(SpotId("T1"),))
     spec = TransitionSpec(id=make_tid("2", sub), counts=2.0)
     pins = (Pin(target="set", id=sub), Pin(target="transition", id=f"2→{sub}"))
-    show = show.model_copy(update={"forms": {"f": form}, "transitions": (spec,), "pins": pins})
+    show = show.replace(forms={"f": form}, transitions=(spec,), pins=pins)
     renamed, mapping = renumber(show)
     assert mapping == {"1": "1", "2": "2", "2A": "3", "3": "4"}
     assert renamed.set_ids() == ["1", "2", "3", "4"]
@@ -284,13 +284,10 @@ def test_transitions_lists_pairs() -> None:
 
 def test_index_counts_measures_seconds_and_holds() -> None:
     show = _three_set_show()
-    timeline = show.timeline.model_copy(
-        update={
-            "measures": MeasureSetting(counts_per_measure=4.0),
-            "holds": (Hold(at_count=8.0, seconds=3.0),),
-        }
+    timeline = show.timeline.replace(
+        measures=MeasureSetting(counts_per_measure=4.0), holds=(Hold(at_count=8.0, seconds=3.0),)
     )
-    show = show.model_copy(update={"timeline": timeline})
+    show = show.replace(timeline=timeline)
     entries = index(show).entries
     assert [e.start_count for e in entries] == [0.0, 8.0, 12.0]
     assert [e.measure.measure for e in entries if e.measure] == [1, 3, 4]
@@ -318,7 +315,7 @@ def test_index_lookups_at_sets_and_inside_transitions() -> None:
 
 
 def test_upgrade_dependency_pins_and_swaps_sheet() -> None:
-    newer = field_sheet().model_copy(update={"ref": "sheet:test-field@2"})
+    newer = field_sheet().replace(ref="sheet:test-field@2")
     show = upgrade_dependency(two_set_show(), "sheet:test-field@1", "2", sheet=newer)
     assert show.dependencies == {"sheet:test-field": "2"}
     assert show.sheet.ref == "sheet:test-field@2"
@@ -330,11 +327,11 @@ def test_upgrade_dependency_pins_and_swaps_sheet() -> None:
 
 def test_edits_never_mutate_input() -> None:
     show = two_set_show()
-    before = show.model_dump()
+    before = show.to_json()
     add_set(show, "3", 4.0)
     set_counts(show, "2", 10.0)
     remove_set(show, "2")
-    assert show.model_dump() == before
+    assert show.to_json() == before
 
 
 def test_new_show_with_empty_cast() -> None:
@@ -405,9 +402,7 @@ def test_regression_add_set_rejects_two_placements_for_one_spot() -> None:
 def test_regression_insert_subset_after_a_names_a_subset_of_a() -> None:
     """Names the subset after set "A" with "A" as its base, not "B" (audit 9.7 sets defects)."""
     base = two_set_show()
-    renamed = base.model_copy(
-        update={"sets": (base.sets[0].model_copy(update={"id": "A"}), base.sets[1])}
-    )
+    renamed = base.replace(sets=(base.sets[0].replace(id="A"), base.sets[1]))
     try:
         _, new_id = insert_subset(renamed, "A", 3.0)
     except SchemaError:
@@ -419,8 +414,8 @@ def test_regression_form_keys_equal_form_ids_across_a_round_trip() -> None:
     """Rejects a form key that differs from its ID, or keeps keys stable (audit 9.7)."""
     form = Form(id=FormId("f1"), set=SetId("2"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     try:
-        show = two_set_show().model_copy(update={"forms": {"zz": form}})
-        Show.model_validate(show.model_dump())
+        show = two_set_show().replace(forms={"zz": form})
+        Show.from_json(show.to_json())
     except E8sError:
         return
     assert set(decode_show(encode_show(show)).forms) == set(show.forms)
@@ -471,8 +466,8 @@ def test_regression_set_counts_rescale_shifts_facing_overrides_and_zone_windows(
     override = FacingOverride(
         entities="all", mode=FacingMode.TO_TARGET, start=LATER_WINDOW[0], end=LATER_WINDOW[1]
     )
-    zone = show.sheet.zones[0].model_copy(update={"id": "late", "active": (LATER_WINDOW,)})
-    show = show.model_copy(update={"facing_overrides": (override,), "zones": (zone,)})
+    zone = show.sheet.zones[0].replace(id="late", active=(LATER_WINDOW,))
+    show = show.replace(facing_overrides=(override,), zones=(zone,))
     edited = set_counts(show, "2", 16.0, rescale=True)
     shifted = (LATER_WINDOW[0] + SHIFT_COUNTS, LATER_WINDOW[1] + SHIFT_COUNTS)
     assert (edited.facing_overrides[0].start, edited.facing_overrides[0].end) == shifted
@@ -487,7 +482,7 @@ def test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair() -> 
     The pin ID `2->3` is non-canonical (canonical is `2→3`), so this overlaps the
     normalization defects 45 and 67; canonical pins are already dropped.
     """
-    show = _three_set_show().model_copy(update={"pins": (Pin(target="transition", id="2->3"),)})
+    show = _three_set_show().replace(pins=(Pin(target="transition", id="2->3"),))
     edited = remove_set(show, "2", force=True)
     assert not edited.pins or not validate_show(edited).ok
 

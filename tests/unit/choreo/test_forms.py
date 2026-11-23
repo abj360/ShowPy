@@ -86,7 +86,7 @@ from e8s.geo.affine import rotation_matrix, translation_matrix
 from e8s.geo.curves import CompositeCurve, curve_from_construction
 from e8s.geo.fonts import BUNDLED_FONTS, FontRegistry, bundled_fonts, register_font
 from tests.fixtures.fonts import TINY, tiny_bytes
-from tests.helpers import fails_after
+from tests.helpers import fails_after, json_doc
 
 TOL = 1e-6
 MEMBERS = ["A", "B", "C", "D", "E"]
@@ -110,7 +110,7 @@ CORNER_THREE_POSES = [(1.25, 2.0, 90.0), (3.0, 2.0, 0.0), (3.0, 1.25, 0.0)]
 
 def _own_keys(form: Form) -> set[str]:
     """Lists the recipe keys of a form's kind, without the keys every recipe shares."""
-    return set(form.recipe.model_dump(mode="json")) - SHARED_RECIPE_KEYS
+    return set(form.recipe.to_json()) - SHARED_RECIPE_KEYS
 
 
 def _facings(form: Form) -> list[float]:
@@ -128,9 +128,9 @@ def test_curve_kinds_store_a_rebuildable_curve_recipe() -> None:
     ]
     for form in forms:
         assert _own_keys(form) == {"curve"}
-        curve_from_construction(form.recipe.model_dump(mode="json")["curve"])
-        assert Form.model_validate_json(form.model_dump_json()) == form
-        json.dumps(form.model_dump(mode="json"))
+        curve_from_construction(json_doc(form.recipe)["curve"])
+        assert Form.from_json(json.loads(json.dumps(form.to_json()))) == form
+        json.dumps(form.to_json())
 
 
 def test_non_curve_recipes_follow_the_contract() -> None:
@@ -145,7 +145,7 @@ def test_non_curve_recipes_follow_the_contract() -> None:
     custom = custom_form("c", [], [(0, 0)])
     assert _own_keys(custom) == {"points", "facings"}
     assert custom.recipe.n == 1
-    generated = generated_form("g", ["A"], "spiral", turns=2.0).recipe.model_dump(mode="json")
+    generated = generated_form("g", ["A"], "spiral", turns=2.0).recipe.to_json()
     assert {key: generated[key] for key in ("fn", "params")} == {
         "fn": "spiral",
         "params": {"turns": 2.0},
@@ -171,9 +171,9 @@ def test_interval_spacing_aligns_and_fits() -> None:
     line = ((0.0, 0.0), (10.0, 0.0))
     start = SpacingSpec(mode="interval", interval=2.0)
     assert approx_equal(slots(line_form("f", ["A", "B"], *line, start))[:, 0], [0, 2])
-    end = start.model_copy(update={"align": "end"})
+    end = start.replace(align="end")
     assert approx_equal(slots(line_form("f", ["A", "B"], *line, end))[:, 0], [8, 10])
-    center = start.model_copy(update={"align": "center"})
+    center = start.replace(align="center")
     assert approx_equal(slots(line_form("f", ["A", "B"], *line, center))[:, 0], [4, 6])
     assert len(slots(line_form("f", [], *line, start))) == 6
     with pytest.raises(SpacingError, match="do not fit"):
@@ -342,7 +342,7 @@ def test_generated_form_uses_registered_generator_and_keeps_params() -> None:
     assert approx_equal(slots(form, registry)[:, 0], [0, 2, 4])
     wider = edit_params(form, registry=registry, step=3.0)
     assert approx_equal(slots(wider, registry)[:, 0], [0, 3, 6])
-    assert form.recipe.model_dump(mode="json")["params"] == {"step": 2.0}
+    assert form.recipe.to_json()["params"] == {"step": 2.0}
 
 
 def test_generated_form_rejects_unknown_generator_with_suggestion() -> None:
@@ -351,20 +351,17 @@ def test_generated_form_rejects_unknown_generator_with_suggestion() -> None:
 
 
 def test_edit_params_respects_lock_and_kind() -> None:
-    form = generated_form("g", ["A"], "spiral").model_copy(update={"locked": True})
+    form = generated_form("g", ["A"], "spiral").replace(locked=True)
     with pytest.raises(LockedError):
         edit_params(form, turns=1.0)
-    assert (
-        edit_params(form, force=True, turns=1.0).recipe.model_dump(mode="json")["params"]["turns"]
-        == 1.0
-    )
+    assert json_doc(edit_params(form, force=True, turns=1.0).recipe)["params"]["turns"] == 1.0
     with pytest.raises(SchemaError, match="not generated"):
         edit_params(line_form("f", ["A"], (0, 0), (1, 0)), turns=1.0)
 
 
 def test_missing_recipe_key_raises_schema_error() -> None:
     with pytest.raises(SchemaError, match="origin"):
-        Form.model_validate(
+        Form.from_json(
             {"id": "b", "set": "1", "recipe": {"kind": "block", "rows": 1}, "members": ["A"]}
         )
 
@@ -417,7 +414,7 @@ def test_regression_misspelled_recipe_key_is_rejected() -> None:
     recipe = {**BLOCK_RECIPE, "anchr": "front-left"}
     with pytest.raises(SchemaError):
         slots(
-            Form.model_validate(
+            Form.from_json(
                 {"id": "f", "set": "1", "recipe": {"kind": "block", **recipe}, "members": []}
             )
         )
@@ -462,7 +459,7 @@ def test_regression_generated_form_with_numpy_params_serializes_or_is_rejected()
     """Serializes numpy generator params, or rejects them with an E8sError (audit 9.6)."""
     center = np.array([0.0, 1.0])
     with contextlib.suppress(E8sError):
-        json.loads(generated_form("g", ["A"], "spiral", center=center).model_dump_json())
+        generated_form("g", ["A"], "spiral", center=center).to_json()
 
 
 TEXT_MEMBERS = [f"S{i}" for i in range(24)]
@@ -485,8 +482,8 @@ def _tiny_form() -> tuple[Form, FontRegistry]:
 
 
 def test_text_form_stores_uris_not_names() -> None:
-    assert _go().recipe.model_dump(mode="json")["fonts"] == [BUNDLED_FONTS["hershey-roman"]]
-    assert _go().recipe.model_dump(mode="json")["n"] == 24
+    assert _go().recipe.to_json()["fonts"] == [BUNDLED_FONTS["hershey-roman"]]
+    assert _go().recipe.to_json()["n"] == 24
 
 
 def test_text_form_placements_follow_reading_order() -> None:
@@ -504,7 +501,7 @@ def test_existing_kinds_ignore_the_font_registry() -> None:
 
 def test_text_form_with_a_user_font_needs_its_registry() -> None:
     form, registry = _tiny_form()
-    uri = form.recipe.model_dump(mode="json")["fonts"][0]
+    uri = json_doc(form.recipe)["fonts"][0]
     assert len(slots(form, font_registry=registry)) == 3
     with pytest.raises(MissingFontError) as caught:
         slots(form)
@@ -541,7 +538,7 @@ def test_text_form_needs_exactly_one_of_n_and_spacing(counts: dict[str, Any]) ->
 
 
 def test_text_form_stores_n_and_no_spacing_for_an_exact_count() -> None:
-    assert _go().recipe.model_dump(mode="json")["spacing"] is None
+    assert _go().recipe.to_json()["spacing"] is None
 
 
 def test_text_form_rejects_too_few_spots() -> None:

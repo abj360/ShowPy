@@ -82,14 +82,12 @@ def rich_show() -> Show:
         ),
     )
     cast = show.cast.replace(selections={"pair": frozenset({"T1", "T4"})})
-    return show.model_copy(
-        update={
-            "cast": cast,
-            "forms": {"line1": form},
-            "transitions": (spec,),
-            "facing_overrides": (override,),
-            "zones": zones,
-        }
+    return show.replace(
+        cast=cast,
+        forms={"line1": form},
+        transitions=(spec,),
+        facing_overrides=(override,),
+        zones=zones,
     )
 
 

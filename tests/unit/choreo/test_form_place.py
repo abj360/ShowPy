@@ -137,7 +137,7 @@ def test_filled_forms_reads_members_back_in_slot_order() -> None:
 
 def test_rebuild_regenerates_and_drops_neighbouring_rows() -> None:
     form = line_form("row", ["T1", "T2", "T3", "T4"], (0, 14), (6, 14), set_id="2")
-    show = with_curve_rows(two_set_show(), ROW_SPOTS).model_copy(update={"forms": {"row": form}})
+    show = with_curve_rows(two_set_show(), ROW_SPOTS).replace(forms={"row": form})
     rebuilt = rebuild(show, "row")
     assert approx_equal([rebuilt.set("2").get(e).y for e in ("T1", "T4")], [14.0, 14.0])
     assert rebuilt.transition(TID).rows == {}
@@ -145,15 +145,13 @@ def test_rebuild_regenerates_and_drops_neighbouring_rows() -> None:
 
 def test_rebuild_respects_pins_and_locked_rows() -> None:
     form = line_form("row", ["T1", "T2", "T3", "T4"], (0, 14), (6, 14), set_id="2")
-    pinned = pin_spot(with_curve_rows(two_set_show(), ROW_SPOTS), "2", "T1").model_copy(
-        update={"forms": {"row": form}}
+    pinned = pin_spot(with_curve_rows(two_set_show(), ROW_SPOTS), "2", "T1").replace(
+        forms={"row": form}
     )
     rebuilt = rebuild(pinned, "row")
     assert rebuilt.set("2").get("T1").point == (0.0, 9.0)
     assert list(rebuilt.transition(TID).rows) == ["T1"]
-    locked = with_curve_rows(two_set_show(), ROW_SPOTS, locked=True).model_copy(
-        update={"forms": {"row": form}}
-    )
+    locked = with_curve_rows(two_set_show(), ROW_SPOTS, locked=True).replace(forms={"row": form})
     with pytest.raises(LockedError):
         rebuild(locked, "row")
     assert rebuild(locked, "row", force=True).transition(TID).rows == {}
@@ -161,7 +159,7 @@ def test_rebuild_respects_pins_and_locked_rows() -> None:
 
 def test_rebuild_unknown_form_suggests_close_id() -> None:
     form = line_form("row", ["T1"], (0, 14), (6, 14), set_id="2")
-    show = two_set_show().model_copy(update={"forms": {"row": form}})
+    show = two_set_show().replace(forms={"row": form})
     with pytest.raises(UnknownRefError) as caught:
         rebuild(show, "rows")
     assert "row" in caught.value.hint
@@ -174,7 +172,7 @@ FORM_COORD_TOL = 1e-6
 
 def _row_show() -> Show:
     row = line_form("row", ["T1", "T2", "T3", "T4"], (0, 9), (6, 9), set_id="2")
-    return two_set_show().model_copy(update={"forms": {"row": row}})
+    return two_set_show().replace(forms={"row": row})
 
 
 def test_regression_place_clears_references_to_forms_no_longer_placed() -> None:
@@ -264,7 +262,7 @@ def test_regression_rebuild_force_moves_pinned_members() -> None:
     """Moves a pinned member when the caller passes force=True (audit 9.6; P0 #13)."""
     show = pin_spot(_row_show(), "2", "T1")
     moved = line_form("row", ["T1", "T2", "T3", "T4"], (0, UPSTAGE_ROW_Y), (6, UPSTAGE_ROW_Y))
-    show = show.model_copy(update={"forms": {"row": moved.model_copy(update={"set": "2"})}})
+    show = show.replace(forms={"row": moved.replace(set="2")})
     placed = rebuild(show, "row", force=True).set("2")
     assert approx_equal(placed.get("T1").point, (0.0, UPSTAGE_ROW_Y), abs_tol=FORM_COORD_TOL)
 

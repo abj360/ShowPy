@@ -12,6 +12,7 @@ Contains:
 """
 
 import contextlib
+import json
 import warnings
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -104,10 +105,10 @@ EDITS: dict[str, Callable[[Show], object]] = {
 
 def assert_edit_is_pure(edit: Callable[[Show], object], show: Show) -> None:
     """Requires `show` to serialize identically after `edit`, even when the edit rejects it."""
-    before = show.model_dump_json()
+    before = json.dumps(show.to_json())
     with contextlib.suppress(E8sError):
         edit(show)
-    assert show.model_dump_json() == before
+    assert json.dumps(show.to_json()) == before
 
 
 def _retitle_in_place(show: Show) -> object:

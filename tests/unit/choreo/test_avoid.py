@@ -34,6 +34,7 @@ Contains:
         T2-T10, not T10-T2
 """
 
+import json
 import math
 from collections.abc import Callable
 from typing import cast
@@ -170,7 +171,7 @@ def test_regression_suggested_waypoint_is_reached_at_its_count_on_eased_rows() -
     fix = suggest_waypoint(show, TID, "T1", "T2")[0]
     assert isinstance(fix.params, BendFix)
     changed = apply_fix(show.transition(TID), fix)
-    engine = PathEngine(show.model_copy(update={"transitions": (changed,)}))
+    engine = PathEngine(show.replace(transitions=(changed,)))
     reached = engine.position("T1", fix.params.at, local=TID)
     assert approx_equal(reached, fix.params.point, abs_tol=1e-6)
 
@@ -196,7 +197,7 @@ def test_regression_min_gaps_ignores_spots_before_their_entrance() -> None:
     )
     show = with_rows(
         {"T1": PathRow(entity=SpotId("T1"), start=PARKED_UNTIL)},
-        show=base.model_copy(update={"sets": (first, second)}),
+        show=base.replace(sets=(first, second)),
     )
     assert min_gaps(show, TID, sel=["T1", "T2"], top=1)[0].gap > 0.0
 
@@ -267,18 +268,18 @@ def _fix_document(kind: str, params: JsonValue) -> dict[str, JsonValue]:
 
 def test_regression_fix_params_are_typed_by_kind() -> None:
     """Builds each kind's parameter model from a dict, refusing another kind's model and keys."""
-    delay_fix = Fix.model_validate(_fix_document("delay", {"entity": "T1", "counts": 2.0}))
+    delay_fix = Fix.from_json(_fix_document("delay", {"entity": "T1", "counts": 2.0}))
     assert delay_fix.params == DelayFix(entity=SpotId("T1"), counts=2.0)
-    stagger = Fix.model_validate(_fix_document("stagger", {"order": ["T1", "T2"], "step": 1.0}))
+    stagger = Fix.from_json(_fix_document("stagger", {"order": ["T1", "T2"], "step": 1.0}))
     assert stagger.params == StaggerFix(order=(SpotId("T1"), SpotId("T2")), step=1.0)
-    assert Fix.model_validate(_fix_document("reassign", {})).params == ReassignFix()
+    assert Fix.from_json(_fix_document("reassign", {})).params == ReassignFix()
     bend = BendFix(entity=SpotId("T1"), point=(1.0, 2.0), at=3.0)
     with pytest.raises(SchemaError):
         Fix(kind="delay", params=bend, new_gap=1.0, max_speed_after=1.0)
     with pytest.raises(SchemaError):
-        Fix.model_validate(_fix_document("delay", {"entity": "T1", "counts": 2.0, "at": 1.0}))
+        Fix.from_json(_fix_document("delay", {"entity": "T1", "counts": 2.0, "at": 1.0}))
     with pytest.raises(SchemaError):
-        Fix.model_validate(_fix_document("delay", {"entity": "T1"}))
+        Fix.from_json(_fix_document("delay", {"entity": "T1"}))
 
 
 def test_regression_suggested_fixes_carry_typed_params() -> None:
@@ -288,7 +289,7 @@ def test_regression_suggested_fixes_carry_typed_params() -> None:
     assert all(isinstance(f.params, DelayFix) for f in delays)
     assert all(isinstance(f.params, BendFix) for f in bends)
     for fix in (delays[0], bends[0]):
-        assert Fix.model_validate_json(fix.model_dump_json()) == fix
+        assert Fix.from_json(json.loads(json.dumps(fix.to_json()))) == fix
 
 
 def test_regression_apply_fix_applies_a_stagger_fix() -> None:

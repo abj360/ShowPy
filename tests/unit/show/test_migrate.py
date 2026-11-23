@@ -103,6 +103,7 @@ from e8s.show.migrations import (
 from e8s.show.migrations.v1_to_v2_ids import KEEPS_LEGACY_IDS
 from e8s.show.models import Show
 from e8s.show.storage import load_show, open_workspace, save_show
+from tests.helpers import json_doc
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "repos"
 TAGS = ["v0.1.1", "v0.2.0", "v0.3.0"]
@@ -187,7 +188,7 @@ def test_report_builder_groups_renames_by_kind_in_order() -> None:
         },
         repairs=("sorted tempo sections by count",),
     )
-    assert json.loads(report.model_dump_json())["renamed"]["set"] == [["con", "con_"]]
+    assert json_doc(report)["renamed"]["set"] == [["con", "con_"]]
 
 
 def test_migration_report_is_read_only() -> None:
@@ -256,7 +257,7 @@ def _record(docs: dict[str, bytes]) -> dict[str, object]:
         for p, raw in sorted(migrated.items())
         if is_show_doc(p) or p == NOTES_DOC
     }
-    return {"documents": documents, "report": report.model_dump(mode="json")}
+    return {"documents": documents, "report": report.to_json()}
 
 
 @pytest.mark.parametrize("tag", TAGS)
@@ -454,13 +455,13 @@ def test_regression_current_trees_validate_with_the_checked_context(
         import_json(json.loads(json.dumps(exported).replace('"T1"', '"T-1"')))
     contexts: list[object] = []
     for model in (Show, Set, Form, TransitionSpec):
-        original = model.model_validate
+        original = model._validated
 
         def spy(obj: object, *, _original: Any = original, **kwargs: Any) -> object:
             contexts.append(kwargs.get("context"))
             return _original(obj, **kwargs)
 
-        monkeypatch.setattr(model, "model_validate", spy)
+        monkeypatch.setattr(model, "_validated", spy)
     assert decode_show(docs) == import_json(exported) == crossing_show()
     assert contexts
     assert all(context == CHECKED_CONTEXT for context in contexts)

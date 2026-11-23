@@ -180,7 +180,7 @@ def test_regression_chart_csv_neutralizes_formula_names() -> None:
     show = guided_show()
     pub = live_publication(show)
     claim = Claim(spot=SpotId("T1"), performer=performer(FORMULA_NAME), claimed_at=AT)
-    pub = pub.model_copy(update={"claims": (claim,)})
+    pub = pub.replace(claims=(claim,))
     rows = _csv_rows(to_csv(chart(show, "1", publication=pub)))
     cells = [cell for row in rows[1:] for cell in row]
     assert f"'{FORMULA_NAME}" in cells
@@ -203,8 +203,8 @@ def test_regression_csv_neutralizes_header_cells() -> None:
 def test_regression_frames_csv_neutralizes_spot_ids() -> None:
     """Prefixes a quote to a formula-like spot ID in the frames CSV."""
     payload = '=HYPERLINK("http://evil","x")'
-    renamed = two_set_show().model_dump_json().replace('"T1"', json.dumps(payload))
-    show = Show.model_validate_json(renamed, context={LEGACY_IDS_KEY: True})
+    renamed = json.dumps(two_set_show().to_json()).replace('"T1"', json.dumps(payload))
+    show = Show._validated(json.loads(renamed), context={LEGACY_IDS_KEY: True})
     rows = _csv_rows(export_frames_csv(show))
     entities = {row[2] for row in rows[1:]}
     assert f"'{payload}" in entities

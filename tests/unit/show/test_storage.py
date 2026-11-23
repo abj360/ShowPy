@@ -58,7 +58,7 @@ def _rich_show() -> Show:
         counts=8.0,
         rows={SpotId("T1"): PathRow(entity=SpotId("T1"), start=2)},
     )
-    return show.model_copy(update={"forms": {"f1": form}, "transitions": (spec,)})
+    return show.replace(forms={"f1": form}, transitions=(spec,))
 
 
 def _saved(repo: Repository, show: Show | None = None) -> str:
@@ -85,9 +85,7 @@ def test_dump_json_is_canonical_for_sets() -> None:
 
 
 def test_encode_refuses_unsafe_set_ids() -> None:
-    bad = two_set_show().model_copy(
-        update={"sets": (two_set_show().sets[0].model_copy(update={"id": "../x"}),)}
-    )
+    bad = two_set_show().replace(sets=(two_set_show().sets[0].replace(id="../x"),))
     with pytest.raises(SchemaError):
         encode_show(bad)
 
@@ -114,7 +112,7 @@ def test_repository_round_trip_and_revision_fields(make_repo: RepoFactory) -> No
     repo = make_repo()
     rev = _saved(repo, _rich_show())
     loaded = repo.get_show(SHOW_ID)
-    assert loaded == _rich_show().model_copy(update={"revision": rev})
+    assert loaded == _rich_show().replace(revision=rev)
     (revision,) = repo.revisions(SHOW_ID)
     assert (revision.parent, revision.at) == ("", AT)
     assert "/show/show.json" in revision.changed
@@ -303,11 +301,11 @@ def test_agent_writes_forms_paths_scripts_and_renders() -> None:
     repo = InMemoryRepository()
     agent, _ = _workspaces(repo)
     form = Form(id=FormId("f"), set=SetId("2"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
-    agent.write("/sets/2/forms.json", dump_json([form.model_dump(mode="python")]), at=AT)
+    agent.write("/sets/2/forms.json", dump_json([form._dumped()]), at=AT)
     spec = TransitionSpec(
         id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): PathRow(entity=SpotId("T1"), end=6)}
     )
-    agent.write("/transitions/1-2/paths.json", spec.model_dump_json(), at=AT)
+    agent.write("/transitions/1-2/paths.json", json.dumps(spec.to_json()), at=AT)
     agent.write("/sets/2/set.py", "def build(ctx):\n    return ctx.prev\n", at=AT)
     agent.write("/renders/set-2.png", b"\x89PNG", at=AT)
     show = load_show(agent)
@@ -324,7 +322,7 @@ def test_workspace_write_validates_content() -> None:
     agent, _ = _workspaces(InMemoryRepository())
     wrong = Form(id=FormId("f"), set=SetId("1"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
     with pytest.raises(SchemaError):
-        agent.write("/sets/2/forms.json", dump_json([wrong.model_dump(mode="python")]), at=AT)
+        agent.write("/sets/2/forms.json", dump_json([wrong._dumped()]), at=AT)
     with pytest.raises(SchemaError):
         agent.write("/show/sheet.json", "{not json", at=AT)
     with pytest.raises(SchemaError):
@@ -348,13 +346,13 @@ def test_save_show_conflict_lists_designer_changes() -> None:
     mine = load_show(agent)
     theirs = load_show(designer)
     moved = theirs.sets[1].with_placements({"T2": PlacementPatch(x=10.0)})
-    landed = save_show(designer, theirs.model_copy(update={"sets": (theirs.sets[0], moved)}), AT)
+    landed = save_show(designer, theirs.replace(sets=(theirs.sets[0], moved)), AT)
     with pytest.raises(ConflictError) as info:
-        save_show(agent, mine.model_copy(update={"title": "New"}), LATER)
+        save_show(agent, mine._copied(update={"title": "New"}), LATER)
     assert context_entries(info.value, "changes")[0]["changed"] == list(landed.changed)
     agent.refresh()
     fresh = load_show(agent)
-    save_show(agent, fresh.model_copy(update={"title": "New"}), LATER)
+    save_show(agent, fresh.replace(title="New"), LATER)
     assert load_show(agent).set("2").get("T2").x == 10.0
 
 
@@ -362,11 +360,11 @@ def test_workspace_save_lands_edits_to_pinned_items() -> None:
     agent, designer = _workspaces(InMemoryRepository())
     show = load_show(designer)
     pinned = show.sets[1].with_placements({"T1": PlacementPatch(pinned=True)})
-    save_show(designer, show.model_copy(update={"sets": (show.sets[0], pinned)}), AT)
+    save_show(designer, show.replace(sets=(show.sets[0], pinned)), AT)
     agent.refresh()
     current = load_show(agent)
     moved = current.sets[1].with_placements({"T1": PlacementPatch(x=3.0)}, force=True)
-    save_show(agent, current.model_copy(update={"sets": (current.sets[0], moved)}), LATER)
+    save_show(agent, current.replace(sets=(current.sets[0], moved)), LATER)
     assert load_show(agent).set("2").get("T1").x == 3.0
 
 

@@ -8,6 +8,7 @@ Contains:
 """
 
 import copy
+import json
 import pickle
 from collections.abc import Mapping
 from typing import Annotated
@@ -54,8 +55,8 @@ def test_read_only_annotation_stores_a_read_only_map_and_dumps_a_dict() -> None:
 
     holder = Holder(table={"a": 1})
     assert isinstance(holder.table, ReadOnlyMap)
-    assert holder.model_dump() == {"table": {"a": 1}}
-    assert Holder.model_validate_json(holder.model_dump_json()) == holder
+    assert holder._dumped() == {"table": {"a": 1}}
+    assert Holder.from_json(json.loads(json.dumps(holder.to_json()))) == holder
 
 
 def test_read_only_map_hashes_equal_maps_alike_in_any_order() -> None:

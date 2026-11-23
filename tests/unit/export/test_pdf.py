@@ -68,7 +68,7 @@ def _long_sheet(rows: int) -> CoordinateSheet:
     )
     return CoordinateSheet(
         entity=SpotId("T1"),
-        rows=tuple(row.model_copy(update={"set": str(i)}) for i in range(rows)),
+        rows=tuple(row.replace(set=str(i)) for i in range(rows)),
     )
 
 

@@ -109,7 +109,7 @@ def mixed_cast() -> Cast:
         {"id": "flag-1", "group": "flags", "shape": RECT},
         {"id": "flag-2", "group": "flags", "tags": ("soloist",)},
     )
-    return Cast.model_validate(
+    return Cast._validated(
         {
             "groups": groups,
             "spots": spots,
@@ -134,15 +134,11 @@ def mixed_show() -> Show:
         members=(SpotId("T10"), SpotId("T2"), SpotId("T1")),
     )
     base = two_set_show()
-    return base.model_copy(
-        update={
-            "cast": cast,
-            "sets": (
-                Set(id=SetId("1"), counts=0.0, placements=placements, forms=(FormId("arc1"),)),
-            ),
-            "forms": {"arc1": arc},
-            "transitions": (),
-        }
+    return base.replace(
+        cast=cast,
+        sets=(Set(id=SetId("1"), counts=0.0, placements=placements, forms=(FormId("arc1"),)),),
+        forms={"arc1": arc},
+        transitions=(),
     )
 
 

@@ -109,7 +109,7 @@ def make_route(
     )
     lengths = curve._breaks()
     offsets = tuple(float(lengths[v]) for v in reversed(vertex_of[: len(file)]))
-    return Route.model_validate(
+    return Route._validated(
         {
             "id": route_id,
             "curve": curve,
@@ -288,7 +288,7 @@ def counter_march(
     start_set = show.set(tid[0])
     file_points = _dedupe([start_set.get(m).point for m in reversed(file)])
     curve, offsets, travel = _u_turn(file_points, (float(turn_at[0]), float(turn_at[1])))
-    route = Route.model_validate(
+    route = Route._validated(
         {
             "id": f"counter-march-{file[0]}",
             "curve": curve,
@@ -346,8 +346,8 @@ def two_part(
             point = corner
         row = spec.row(entity)
         waypoint = Waypoint(x=point[0], y=point[1], at=split)
-        rows[row.entity] = PathRow.model_validate(
-            {**row.model_dump(), "style": PathStyle.POLYLINE, "waypoints": (waypoint,)}
+        rows[row.entity] = PathRow._validated(
+            {**row._dumped(), "style": PathStyle.POLYLINE, "waypoints": (waypoint,)}
         )
     edited = spec.replace(rows=rows)
     _require_rows_unlocked(show, spec, edited, force=force)

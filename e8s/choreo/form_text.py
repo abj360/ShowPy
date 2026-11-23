@@ -112,11 +112,11 @@ def text_recipe(geometry: Mapping[str, Any]) -> TextRecipe:
     """
     fields = {key: value for key, value in geometry.items() if key not in SHARED_KEYS}
     try:
-        return TextRecipe.model_validate(fields)
+        return TextRecipe._validated(fields)
     except SchemaError as exc:
         errors = field_errors(exc)
         field = str(errors[0]["loc"]).split(".", 1)[0]
-        allowed = ", ".join(TextRecipe.model_fields)
+        allowed = ", ".join(TextRecipe._field_names())
         hint = FIELD_HINTS.get(field, f"use only the keys {allowed}")
         raise SchemaError(
             f"bad text recipe field {field}: {errors[0]['msg']}",

@@ -21,7 +21,7 @@ Contains:
 
 import math
 from collections.abc import Callable, Mapping
-from typing import Annotated, Any
+from typing import Annotated, Any, ClassVar
 
 import numpy as np
 
@@ -54,6 +54,7 @@ class FormFnRegistry(FrozenModel):
     """
 
     fns: Annotated[Mapping[str, FormFn], ReadOnly()]
+    _json_refusal: ClassVar[str | None] = "registries are not stored; rebuild with register_form_fn"
 
     def get(self, name: str) -> FormFn:
         """Returns a generator, raising UnknownRefError with close names in the hint."""
@@ -77,7 +78,7 @@ def spiral_points(params: Mapping[str, Any], n: int) -> Points:
     >>> spiral_points({"turns": 1.0}, 3).shape
     (3, 2)
     """
-    p = SpiralFormParams.model_validate(params)
+    p = SpiralFormParams._validated(params)
     curve = spiral(p.center, p.r0, p.r1, p.turns, p.start_deg)
     return space_along(curve, n)
 
@@ -92,7 +93,7 @@ def sine_wave_points(params: Mapping[str, Any], n: int) -> Points:
     >>> sine_wave_points({"amplitude": 0.0}, 3)[:, 0].round(6).tolist()
     [-8.0, 0.0, 8.0]
     """
-    p = SineWaveFormParams.model_validate(params)
+    p = SineWaveFormParams._validated(params)
     x0, y0 = p.start
     x = np.linspace(0.0, p.length, CURVE_SAMPLES)
     y = p.amplitude * np.sin(2 * math.pi * x / p.wavelength + math.radians(p.phase_deg))
@@ -112,7 +113,7 @@ def rose_points(params: Mapping[str, Any], n: int) -> Points:
     >>> len(rose_points({}, 10))
     10
     """
-    p = RoseFormParams.model_validate(params)
+    p = RoseFormParams._validated(params)
     cx, cy = p.center
     theta = np.linspace(0.0, 2 * math.pi, CURVE_SAMPLES)[:-1]
     r = p.radius * (p.inner + (1 - p.inner) * np.abs(np.cos(p.petals * theta / 2)))

@@ -38,8 +38,8 @@ def guided_show() -> Show:
         points=((-HALF_WIDTH, GUIDE_Y), (HALF_WIDTH, GUIDE_Y)),
         label="A",
     )
-    sheet = base.sheet.model_copy(update={"guides": (guide,)})
-    show = with_targets({"T3": {"y": 5.0}}, show=base.model_copy(update={"sheet": sheet}))
+    sheet = base.sheet.replace(guides=(guide,))
+    show = with_targets({"T3": {"y": 5.0}}, show=base.replace(sheet=sheet))
     rows = {
         "T2": PathRow(entity=SpotId("T2"), start=2.0),
         "T3": PathRow(entity=SpotId("T3"), style=PathStyle.HOLD),
