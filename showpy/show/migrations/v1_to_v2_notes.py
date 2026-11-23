@@ -5,8 +5,10 @@ The tenth sub-step; it runs after ids. Format v2 keeps no notes in the show: the
 v1 document `/show/notes.json` to a notes document of their own at `/notes/notes.json`, with its
 own header (`{"format": "e8.notes", "version": 1, "show": ..., "notes": [...]}`), written in the
 same revision as the v2 show documents. Each note ID follows the rename rule of the ids step for
-kind `note`, and each anchor is pointed at the set and spot IDs the ids step renamed, so anchors
-name IDs that exist. A v1 tree without notes gets no notes document.
+kind `note`, planned over the stored ID strings before any note is validated, so an empty or
+otherwise broken v1 note ID is repaired, never refused; each anchor is pointed at the set and
+spot IDs the ids step renamed, so anchors name IDs that exist. A v1 tree without notes gets no
+notes document.
 
 Contains:
     LEGACY_NOTES_DOC: names the v1 document that held the notes among the show's documents
@@ -19,7 +21,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Final
 
 from showpy.core.errors import SchemaError
-from showpy.core.ids import LEGACY_IDS_KEY, SetId, SpotId, TransitionId
+from showpy.core.ids import SetId, SpotId, TransitionId
 from showpy.core.json_types import JsonValue
 from showpy.notes.models import Note, NotesDocument
 from showpy.show.anchors import Anchor
@@ -31,7 +33,6 @@ if TYPE_CHECKING:
 
 LEGACY_NOTES_DOC: Final = "/show/notes.json"
 NOTES_DOC: Final = "/notes/notes.json"
-LEGACY_CONTEXT: Final = {LEGACY_IDS_KEY: True}
 NOTE_KIND: Final = "note"
 SET_KIND: Final = "set"
 SPOT_KIND: Final = "spot"
@@ -61,8 +62,8 @@ def renamed_anchor(anchor: Anchor, sets: Mapping[str, str], spots: Mapping[str, 
     return anchor
 
 
-def _stored_notes(objects: Mapping[str, JsonValue]) -> list[Note]:
-    """Reads the v1 notes array, accepting any non-empty v1 note ID."""
+def _stored_notes(objects: Mapping[str, JsonValue]) -> list[JsonValue]:
+    """Reads the v1 notes array as parsed JSON, refusing a document that is not an array."""
     stored = objects.get(LEGACY_NOTES_DOC, [])
     if not isinstance(stored, list):
         raise SchemaError(
@@ -70,7 +71,13 @@ def _stored_notes(objects: Mapping[str, JsonValue]) -> list[Note]:
             hint="write a JSON array of notes, as showpy 0.3 stored them",
             context={"path": LEGACY_NOTES_DOC},
         )
-    return [Note.model_validate(item, context=LEGACY_CONTEXT) for item in stored]
+    return stored
+
+
+def _stored_id(item: JsonValue) -> str | None:
+    """Returns a stored note's ID text, or None when it holds none, for validation to refuse."""
+    note_id = item.get("id") if isinstance(item, dict) else None
+    return note_id if isinstance(note_id, str) else None
 
 
 def move_notes(
@@ -95,17 +102,21 @@ def move_notes(
     >>> [n["id"] for n in moved[NOTES_DOC]["notes"]]
     ['n_1']
     """
-    notes = _stored_notes(objects)
-    if not notes:
+    stored = _stored_notes(objects)
+    if not stored:
         return {}
-    ids = renames_of([note.id for note in notes], NOTE_KIND)
+    ids = renames_of([i for i in map(_stored_id, stored) if i is not None], NOTE_KIND)
     for old, new in ids.items():
         report.rename(NOTE_KIND, old, new)
+    renamed_ids = [
+        {**item, "id": ids[note_id]} if isinstance(item, dict) and note_id in ids else item
+        for item, note_id in zip(stored, map(_stored_id, stored), strict=True)
+    ]
+    notes = [Note.model_validate(item) for item in renamed_ids]
     sets, spots = report.renames(SET_KIND), report.renames(SPOT_KIND)
     moved = [
         {
             **note.model_dump(mode="json"),
-            "id": ids.get(note.id, note.id),
             "anchor": renamed_anchor(note.anchor, sets, spots).model_dump(mode="json"),
         }
         for note in notes

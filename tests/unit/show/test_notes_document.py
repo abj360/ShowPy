@@ -8,6 +8,8 @@ Contains:
         into the notes document, same text, author and time, and leaves no notes key in show.json
     test_note_anchors_follow_the_migration_renames: renames note IDs by rule and points set and
         transition anchors at the set IDs the same migration renamed
+    test_regression_v1_note_with_an_empty_id_is_renamed: renames an empty v1 note ID to `id` by
+        the rename rule instead of refusing the whole show
     test_v1_spot_renames_reach_note_anchors: points spot anchors of a v1 interchange document at
         the spot IDs its migration renamed
     test_first_save_writes_notes_in_the_same_revision_and_the_second_none: stores the notes
@@ -163,6 +165,21 @@ def test_note_anchors_follow_the_migration_renames(tmp_path: Path) -> None:
     assert document.notes[0].anchor == Anchor.on_set("con_")
     assert document.notes[1].anchor == Anchor.on_transition(("1A.2", "con_"))
     assert document.notes[2].anchor == Anchor.on_spots(["T1"])
+
+
+def test_regression_v1_note_with_an_empty_id_is_renamed(tmp_path: Path) -> None:
+    repo, show_id = _fixture("v0.3.0", tmp_path)
+    notes = [
+        _v1_note("", {"kind": "set", "set_id": "con"}),
+        _v1_note("id", {"kind": "point", "point": [0.0, 0.0]}),
+    ]
+    _commit_v1(repo, show_id, {LEGACY_NOTES_DOC: dump_json(notes)})
+    migrated, report = migrate_documents(dict(repo.documents(show_id)))
+    document = NotesDocument.model_validate_json(migrated[NOTES_DOC])
+    assert [n.id for n in document.notes] == ["id.2", "id"]
+    assert report.renamed["note"] == (("", "id.2"),)
+    assert document.notes[0].anchor == Anchor.on_set("con_")
+    assert repo.get_show(show_id).id == document.show
 
 
 def test_v1_spot_renames_reach_note_anchors() -> None:
