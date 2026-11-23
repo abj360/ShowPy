@@ -22,6 +22,9 @@ Contains:
         a non-ASCII letter into `_` after NFC and collapses `..`
     test_regression_rename_rule_splits_a_case_pair_the_replacement_makes: suffixes an ID that
         the replacement makes equal, ignoring case, to an earlier or a kept one
+    test_regression_landmark_and_guide_ids_are_renamed_and_origins_follow: renames sheet
+        landmarks and guides by the sheet-item rule, avoiding landmark names and aliases, and
+        moves a coordinate origin with its landmark
     test_rename_ids_renames_nothing_in_a_valid_show: returns the show and an empty report
     test_regression_every_reference_follows_a_renamed_id: rewrites sets, keys, transitions,
         forms, routes, zones, selections, notes, pins and selector text, and the result passes
@@ -242,6 +245,38 @@ def test_regression_rename_rule_repairs_characters_outside_the_alphabet(
 def test_regression_rename_rule_splits_a_case_pair_the_replacement_makes() -> None:
     assert _spot_renames("a b", "A-B") == (("a b", "a_b"), ("A-B", "A_B.2"))
     assert _spot_renames("x_1", "X 1") == (("X 1", "X_1.2"),)
+
+
+def _legacy_sheet_dump() -> dict[str, Any]:
+    """Gives the example show v1 sheet IDs: landmarks `props`, `-edge-` and `x y`, guide
+    `yard 10`, and coordinates in the show and on the sheet that start at landmark `props`."""
+    dump = two_set_show().model_dump(mode="json")
+    point = {"kind": "point", "geometry": [[0.0, 10.0]], "aliases": []}
+    dump["sheet"]["landmarks"] = [
+        {**point, "id": "props", "name": "Props table"},
+        {**point, "id": "-edge-", "name": "edge"},
+        {**point, "id": "x y", "name": "corner"},
+        {**point, "id": "flag", "name": "flag", "aliases": ["x_y"]},
+    ]
+    dump["sheet"]["guides"] = [
+        {"id": "yard 10", "kind": "yard", "points": [[0.0, 0.0], [0.0, 5.0]], "label": "10"}
+    ]
+    dump["coordinates"]["origin"] = "props"
+    dump["sheet"]["default_coordinates"]["origin"] = "props"
+    return dump
+
+
+def test_regression_landmark_and_guide_ids_are_renamed_and_origins_follow() -> None:
+    report = ReportBuilder(FIRST_VERSION)
+    show = rename_ids(_legacy_show(_legacy_sheet_dump()), report)
+    renamed = report.build().renamed
+    assert renamed["landmark"] == (("props", "props_"), ("-edge-", "_edge_"), ("x y", "x_y.2"))
+    assert renamed["guide"] == (("yard 10", "yard_10"),)
+    assert [m.id for m in show.sheet.landmarks] == ["props_", "_edge_", "x_y.2", "flag"]
+    assert [g.id for g in show.sheet.guides] == ["yard_10"]
+    assert show.model_dump(mode="json")["coordinates"]["origin"] == "props_"
+    assert show.sheet.default_coordinates.origin == "props_"
+    assert Show.model_validate(show.model_dump(mode="json")) == show
 
 
 def test_rename_ids_renames_nothing_in_a_valid_show() -> None:

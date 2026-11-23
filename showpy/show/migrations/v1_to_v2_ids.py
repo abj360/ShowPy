@@ -1,22 +1,23 @@
 """
 v1_to_v2_ids.py --- the ids sub-step of the v1 to v2 format migration (lane A)
 
-The last sub-step. It runs on the show validated with any non-empty v1 ID accepted and renames,
-once and by rule, every spot, set, form, route, zone, selection and note ID that fails its ID
-check or repeats, ignoring case, an ID of its kind kept earlier in show order. Valid IDs keep
+The last sub-step. It runs on the show validated with any non-empty v1 ID accepted and renames, once
+and by rule, every spot, set, form, route, zone, landmark, guide, selection and note ID that fails
+its ID check or repeats, ignoring case, an ID of its kind kept earlier in show order. Valid IDs keep
 their spelling, and the first of a case pair is the one kept. The rule, in order: NFC; every
-character outside the kind's alphabet (`-`, a space, `*`, a non-ASCII letter) becomes `_`, and
-each `..` run becomes `.`; leading and trailing `.` are stripped, the ID is cut to 60
-characters, an empty result becomes `id`, and a reserved word gets a trailing `_` (a device
-name before an extension gets it before the dot: `con.5` becomes `con_.5`). Zone IDs keep an
-inner `-`, and an edge `-` becomes `_`. A repaired ID that is still taken gets the smallest free
-suffix `.2`, `.3`, ... Every v1 ID is repaired; none is refused.
+character outside the kind's alphabet (`-`, a space, `*`, a non-ASCII letter) becomes `_`, and each
+`..` run becomes `.`; leading and trailing `.` are stripped, the ID is cut to 60 characters, an
+empty result becomes `id`, and a reserved word gets a trailing `_` (a device name before an
+extension gets it before the dot: `con.5` becomes `con_.5`). Sheet items (zone, landmark and guide
+IDs) keep an inner `-`, and an edge `-` becomes `_`; a new landmark ID also avoids every landmark's
+name and aliases. A repaired ID that is still taken gets the smallest free suffix `.2`, `.3`, ...
+Every v1 ID is repaired; none is refused.
 
-Every reference follows a rename. Spots go last, through rename_spots(); a set's key follows
-its renamed ID unless the key was written explicitly. Route IDs are unique per transition and
-zone IDs per sheet or show, so those namespaces are checked apart. Each rename is recorded with
-`report.rename()`, per kind in show order, so a host can follow it in what it keeps outside
-ShowPy.
+Every reference follows a rename. Spots go last, through rename_spots(); a set's key follows its
+renamed ID unless the key was written explicitly, and a coordinate origin follows its renamed
+landmark. Route IDs are unique per transition and sheet items per sheet or show, so those namespaces
+are checked apart. Each rename is recorded with `report.rename()`, per kind in show order, so a host
+can follow it in what it keeps outside ShowPy.
 
 Contains:
     KEEPS_LEGACY_IDS: tells whether validation after this step still accepts any non-empty v1 ID
@@ -53,7 +54,7 @@ from showpy.core.ids import (
 )
 from showpy.core.selection import SelectorField
 from showpy.notes.models import Anchor
-from showpy.sheet.models import Zone
+from showpy.sheet.models import CoordinateSystem, Landmark, Sheet, Zone, normalized_name
 from showpy.show.models import Pin, Show
 
 if TYPE_CHECKING:
@@ -94,6 +95,8 @@ class _Plan(NamedTuple):
         routes: Per transition (by old set IDs), old route ID to new route ID.
         sheet_zones: Old sheet zone ID to new zone ID.
         show_zones: Old show zone ID to new zone ID.
+        landmarks: Old sheet landmark ID to new landmark ID.
+        guides: Old sheet guide ID to new guide ID.
         selections: Old selection name to new selection name.
         notes: Old note ID to new note ID.
         spots: Old spot ID to new spot ID.
@@ -104,6 +107,8 @@ class _Plan(NamedTuple):
     routes: dict[TransitionId, Renames]
     sheet_zones: Renames
     show_zones: Renames
+    landmarks: Renames
+    guides: Renames
     selections: Renames
     notes: Renames
     spots: Renames
@@ -198,9 +203,14 @@ def _renames_of(ids: Sequence[str], kind: str, held: Iterable[str] = ()) -> Rena
     return _renames(ids, _Rule(partial(check_id, kind=kind), ID_BODY_CHARS), held)
 
 
-def _zone_renames(zones: Sequence[Zone]) -> Renames:
-    rule = _Rule(partial(check_sheet_id, kind="zone"), SHEET_ID_BODY_CHARS)
-    return _renames([z.id for z in zones], rule)
+def _sheet_renames(ids: Sequence[str], kind: str, held: Iterable[str] = ()) -> Renames:
+    return _renames(ids, _Rule(partial(check_sheet_id, kind=kind), SHEET_ID_BODY_CHARS), held)
+
+
+def _landmark_renames(landmarks: Sequence[Landmark]) -> Renames:
+    """Renames landmark IDs, a new one also avoiding every landmark's name and aliases."""
+    names = [normalized_name(n) for mark in landmarks for n in (mark.name, *mark.aliases)]
+    return _sheet_renames([mark.id for mark in landmarks], "landmark", names)
 
 
 def _plan(show: Show) -> _Plan:
@@ -210,8 +220,10 @@ def _plan(show: Show) -> _Plan:
         sets=_renames_of(show.set_ids(), "set", explicit_keys),
         forms=_renames_of(list(show.forms), "form"),
         routes={spec.id: _renames_of(list(spec.routes), "route") for spec in show.transitions},
-        sheet_zones=_zone_renames(show.sheet.zones),
-        show_zones=_zone_renames(show.zones),
+        sheet_zones=_sheet_renames([z.id for z in show.sheet.zones], "zone"),
+        show_zones=_sheet_renames([z.id for z in show.zones], "zone"),
+        landmarks=_landmark_renames(show.sheet.landmarks),
+        guides=_sheet_renames([g.id for g in show.sheet.guides], "guide"),
         selections=_renames_of(list(show.cast.selections), "selection"),
         notes=_renames_of([n.id for n in show.notes], "note"),
         spots=_renames_of(list(show.cast.ids()), "spot"),
@@ -219,8 +231,9 @@ def _plan(show: Show) -> _Plan:
 
 
 def _renames_more_than_spots(plan: _Plan) -> bool:
-    others = (plan.sets, plan.forms, plan.sheet_zones, plan.show_zones, plan.selections)
-    return any(others) or bool(plan.notes) or any(plan.routes.values())
+    others = (plan.sets, plan.forms, plan.sheet_zones, plan.show_zones, plan.landmarks)
+    rest = (plan.guides, plan.selections, plan.notes)
+    return any(others) or any(rest) or any(plan.routes.values())
 
 
 def _report(plan: _Plan, report: "ReportBuilder") -> None:
@@ -231,6 +244,8 @@ def _report(plan: _Plan, report: "ReportBuilder") -> None:
         ("form", plan.forms.items()),
         ("route", [pair for routes in plan.routes.values() for pair in routes.items()]),
         ("zone", [*plan.sheet_zones.items(), *plan.show_zones.items()]),
+        ("landmark", plan.landmarks.items()),
+        ("guide", plan.guides.items()),
         ("selection", plan.selections.items()),
         ("note", plan.notes.items()),
     ]
@@ -324,6 +339,30 @@ def _renamed_zones(zones: tuple[Zone, ...], renames: Renames, plan: _Plan) -> tu
     )
 
 
+def _renamed_origin(coordinates: CoordinateSystem, landmarks: Renames) -> CoordinateSystem:
+    origin = coordinates.origin
+    if isinstance(origin, str) and origin in landmarks:
+        return _legacy(coordinates, origin=landmarks[origin])
+    return coordinates
+
+
+def _renamed_sheet(sheet: Sheet, plan: _Plan) -> Sheet:
+    """Renames a sheet's zones, landmarks and guides, and a landmark its coordinates start at."""
+    return _legacy(
+        sheet,
+        zones=_renamed_zones(sheet.zones, plan.sheet_zones, plan),
+        landmarks=tuple(
+            _legacy(mark, id=plan.landmarks[mark.id]) if mark.id in plan.landmarks else mark
+            for mark in sheet.landmarks
+        ),
+        guides=tuple(
+            _legacy(guide, id=plan.guides[guide.id]) if guide.id in plan.guides else guide
+            for guide in sheet.guides
+        ),
+        default_coordinates=_renamed_origin(sheet.default_coordinates, plan.landmarks),
+    )
+
+
 def _apply(show: Show, plan: _Plan) -> Show:
     """Applies every non-spot rename of the plan to the show."""
     selections = {plan.selections.get(k, k): ids for k, ids in show.cast.selections.items()}
@@ -349,7 +388,8 @@ def _apply(show: Show, plan: _Plan) -> Show:
             for note in show.notes
         ),
         pins=tuple(_renamed_pin(p, plan.sets, plan.forms) for p in show.pins),
-        sheet=_legacy(show.sheet, zones=_renamed_zones(show.sheet.zones, plan.sheet_zones, plan)),
+        sheet=_renamed_sheet(show.sheet, plan),
+        coordinates=_renamed_origin(show.coordinates, plan.landmarks),
         zones=_renamed_zones(show.zones, plan.show_zones, plan),
         facing_overrides=tuple(
             _legacy(o, entities=_renamed_selector(o.entities, plan)) for o in show.facing_overrides
