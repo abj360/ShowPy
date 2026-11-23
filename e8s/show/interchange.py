@@ -10,6 +10,8 @@ Contains:
         text forms use and writing the show's extensions as top-level `x-` keys
     import_json(): loads a show from a document of any readable format version, migrating it;
         refuses unknown top-level keys, keeps `x-` keys in `Show.extensions`
+    migrate_json(): loads a show as import_json() does, with the migration report and the notes
+        of a version 1 document
     import_fonts(): registers the fonts embedded in a document, checking each against its hash
     import_positions(): re-exports the CSV positions import
 """
@@ -29,10 +31,11 @@ from e8s.core.errors import (
     UnknownRefError,
     bounded_repr,
 )
+from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import strict_json_copy
 from e8s.core.util import asset_uri, close_matches
 from e8s.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
-from e8s.show.document_reading import decode_show_dump
+from e8s.show.document_reading import migrate_dump
 from e8s.show.interchange_positions import POSITION_FIELDS as POSITION_FIELDS
 from e8s.show.interchange_positions import import_positions as import_positions
 from e8s.show.migrate import (
@@ -42,9 +45,11 @@ from e8s.show.migrate import (
     FORMAT,
     FORMAT_KEY,
     VERSION_KEY,
+    MigrationReport,
     format_header,
     version_of,
 )
+from e8s.show.migrations.v1_to_v2_notes import NOTES_DOC
 from e8s.show.models import Show, require_extension_size
 
 SCHEMA_TAG = "showpy.show.v1"
@@ -141,8 +146,8 @@ def import_json(d: Mapping[str, Any]) -> Show:
 
     Version 1 documents carry `"schema": "showpy.show.v1"`; later ones carry `"format"` and
     `"version"`. The show is checked as strict JSON first, as stored documents are. Data that
-    the current format no longer has, such as the notes of a version 1 show, is not imported;
-    the document itself still holds it.
+    the current format no longer has, such as the notes of a version 1 show, is not part of the
+    show; migrate_json() returns it with the migration report.
 
     Args:
         d: A document from `export_json`, of this or an earlier release.
@@ -163,6 +168,48 @@ def import_json(d: Mapping[str, Any]) -> Show:
     >>> import_json({**export_json(two_set_show()), "x-host": {"n": 1}}).extensions["x-host"]
     ReadOnlyMap({'n': 1})
     """
+    return migrate_json(d)[0]
+
+
+# Any: an imported document holds arbitrarily nested JSON values.
+def migrate_json(d: Mapping[str, Any]) -> tuple[Show, MigrationReport, JsonValue | None]:
+    """Loads a show as import_json() does, and returns what migrating an older document changed.
+
+    Use it to keep what a version 1 document holds that the current format does not: the report
+    lists each renamed ID, each repair and each dropped stored field with its stored value, and
+    the notes of a version 1 show come back as a notes document of plain JSON.
+
+    Args:
+        d: A document from `export_json`, of this or an earlier release.
+
+    Returns:
+        show: The show in the current format; errors are those of import_json().
+        report: What the migration renamed, repaired and dropped; empty for a current document.
+        notes: The version 1 show's notes as a notes document (`{"format": "e8.notes", ...}`),
+            or None when the document is current or held no notes.
+
+    >>> from e8s.examples import two_set_show
+    >>> v1 = {"schema": "showpy.show.v1", "show": two_set_show().model_dump(mode="json")}
+    >>> show, report, notes = migrate_json(v1)
+    >>> show == two_set_show(), report.from_version, report.dropped, notes
+    (True, 1, (), None)
+    """
+    version, show = _show_of(d)
+    try:
+        if version < CURRENT_VERSION:
+            migrated, report, beside = migrate_dump(show, version)
+            return migrated, report, beside.get(NOTES_DOC)
+        current = Show.model_validate(show, context=CHECKED_CONTEXT)
+        return current, MigrationReport(from_version=CURRENT_VERSION), None
+    except SchemaError as error:
+        friendly = _first_field_error(error)
+        if friendly is error:
+            raise
+        raise friendly from error
+
+
+def _show_of(d: Mapping[str, object]) -> tuple[int, dict[str, JsonValue]]:
+    """Checks a document's shape and returns its version and its show, extensions included."""
     if not isinstance(d, Mapping):
         raise SchemaError(
             f"document is a {type(d).__name__}, not an object",
@@ -186,15 +233,7 @@ def import_json(d: Mapping[str, Any]) -> Show:
     extensions = strict_json_copy(hosted, document=EXTENSIONS_KEY)
     if extensions:
         show[EXTENSIONS_FIELD] = extensions
-    try:
-        if version < CURRENT_VERSION:
-            return decode_show_dump(show, version)
-        return Show.model_validate(show, context=CHECKED_CONTEXT)
-    except SchemaError as error:
-        friendly = _first_field_error(error)
-        if friendly is error:
-            raise
-        raise friendly from error
+    return version, show
 
 
 def _require_cap_before_copy(hosted: Mapping[str, object]) -> None:

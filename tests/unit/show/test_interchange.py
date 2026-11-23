@@ -21,6 +21,9 @@ Contains:
     test_import_json_*extension*(): refuses x- values that are not strict JSON or past the cap
     test_show_extensions_*(): refuses non-x- keys and survives stored documents
     test_import_positions_*(): merges CSV rows into sets and spots, refuses bad rows and pins
+    test_regression_v1_interchange_reports_dropped_data(): returns the dropped claimability
+        and zone in the migration report and the v1 notes as a notes document
+    test_migrate_json_of_a_current_document_reports_nothing(): an empty report and no notes
     test_regression_import_positions_*(): covers the audited CSV import defects
 """
 
@@ -29,6 +32,7 @@ import json
 import math
 import sys
 from datetime import UTC, datetime
+from typing import Any
 
 import numpy as np
 import pytest
@@ -60,8 +64,9 @@ from e8s.show.interchange import (
     import_fonts,
     import_json,
     import_positions,
+    migrate_json,
 )
-from e8s.show.migrate import CURRENT_VERSION, FORMAT
+from e8s.show.migrate import CURRENT_VERSION, FORMAT, MigrationReport
 from e8s.show.models import Show
 from e8s.show.pinning import pin
 from e8s.show.repositories import InMemoryRepository
@@ -643,3 +648,50 @@ def test_import_json_checks_the_extension_cap_before_copying_the_values() -> Non
     with pytest.raises(SchemaError) as caught:
         import_json({**export_json(two_set_show()), **big})
     assert str(MAX_EXTENSION_BYTES) in (caught.value.hint or "")
+
+
+V1_ZONE: dict[str, JsonValue] = {
+    "id": "pit",
+    "kind": "pit",
+    "polygon": {"exterior": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]], "holes": []},
+    "applies_to": "all",
+    "active": None,
+    "note": "",
+}
+V1_NOTE: dict[str, JsonValue] = {
+    "id": "n1",
+    "text": "watch the hash",
+    "anchor": {"kind": "set", "set_id": "2"},
+    "author": "designer",
+    "created_at": "2026-11-12T10:00:00+00:00",
+}
+
+
+def test_regression_v1_interchange_reports_dropped_data() -> None:
+    """Returns the notes, claimability and zones a v1 document holds, which the show drops."""
+    legacy: dict[str, Any] = two_set_show().model_dump(mode="json")
+    legacy["cast"]["spots"][0]["claimable"] = "crew"
+    legacy["sheet"]["zones"] = [V1_ZONE]
+    legacy["notes"] = [V1_NOTE]
+    document = {"schema": "showpy.show.v1", "show": legacy}
+    show, report, notes = migrate_json(document)
+    assert show == import_json(document) == two_set_show()
+    dropped = {(d.document, d.location, d.stored_id): d.model_dump(mode="json")["fields"]
+               for d in report.dropped}  # fmt: skip
+    assert dropped == {
+        ("/show/show.json", "cast.spots[0]", "T1"): {"claimable": "crew"},
+        ("/show/sheet.json", "", None): {"zones": [V1_ZONE]},
+    }
+    assert isinstance(notes, dict)
+    assert notes["format"] == "e8.notes"
+    assert notes["show"] == show.id
+    entries = notes["notes"]
+    assert isinstance(entries, list)
+    assert [entry["id"] for entry in entries if isinstance(entry, dict)] == ["n1"]
+
+
+def test_migrate_json_of_a_current_document_reports_nothing() -> None:
+    show, report, notes = migrate_json(export_json(two_set_show()))
+    assert show == two_set_show()
+    assert report == MigrationReport(from_version=CURRENT_VERSION)
+    assert notes is None

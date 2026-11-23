@@ -1591,6 +1591,7 @@
   "measure_to_count": "(tl: e8s.time.models.Timeline, measure: int, count_in_measure: float = 1.0) -> Count",
   "merge_forms": "(a: e8s.choreo.form_models.Form, b: e8s.choreo.form_models.Form, form_id: str, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.form_models.Form",
   "migrate_documents": "(docs: collections.abc.Mapping[str, bytes]) -> tuple[dict[str, bytes], e8s.show.migrate.MigrationReport]",
+  "migrate_json": "(d: collections.abc.Mapping[str, Any]) -> tuple[e8s.show.models.Show, e8s.show.migrate.MigrationReport, JsonValue | None]",
   "min_gaps": "(show: e8s.show.models.Show, tid: tuple[str, str], sel: str | collections.abc.Sequence[str] = 'all', top: int = 10) -> list[e8s.choreo.engine_models.GapInfo]",
   "mirror": "(obj: T, axis: MirrorAxis, sel: SetSelector = 'all', *, force: bool = False) -> T",
   "mirror_gaps": "(points: Points, axis_x: float) -> Points",

@@ -616,6 +616,7 @@ if TYPE_CHECKING:
         import_fonts,
         import_json,
         import_positions,
+        migrate_json,
     )
     from e8s.show.manage import (
         add_set,
@@ -1119,6 +1120,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "measure_to_count": ("e8s.time.measures", "measure_to_count"),
     "merge_forms": ("e8s.choreo.form_ops", "merge_forms"),
     "migrate_documents": ("e8s.show.documents", "migrate_documents"),
+    "migrate_json": ("e8s.show.interchange", "migrate_json"),
     "min_gaps": ("e8s.choreo.avoid", "min_gaps"),
     "mirror": ("e8s.choreo.set_transforms", "mirror"),
     "mirror_gaps": ("e8s.geo.measure", "mirror_gaps"),
@@ -1673,6 +1675,7 @@ __all__ = [
     "measure_to_count",
     "merge_forms",
     "migrate_documents",
+    "migrate_json",
     "min_gaps",
     "mirror",
     "mirror_gaps",

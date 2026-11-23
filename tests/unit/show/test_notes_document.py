@@ -200,7 +200,7 @@ def test_v1_spot_renames_reach_note_anchors() -> None:
     legacy: dict[str, Any] = json.loads(text)
     legacy["notes"] = [_v1_note("n1", {"kind": "spots", "spots": ["T-1", "T2"]})]
     document = {"schema": "showpy.show.v1", "show": legacy}
-    notes = NotesDocument.model_validate(migrate_dump(legacy, 1)[1][NOTES_DOC])
+    notes = NotesDocument.model_validate(migrate_dump(legacy, 1)[2][NOTES_DOC])
     assert import_json(document).cast.ids()[0] == "T_1"
     assert notes.notes[0].anchor == Anchor.on_spots(["T_1", "T2"])
 
