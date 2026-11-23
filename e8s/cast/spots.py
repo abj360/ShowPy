@@ -496,8 +496,8 @@ def _scheme_labels(cast: Cast, scheme: LabelScheme) -> dict[SpotId, str]:
 def relabel(show: "Show", scheme: LabelScheme) -> tuple["Show", dict[SpotId, str]]:
     """Renumbers every group under `scheme`, in natural order of the current labels.
 
-    IDs are rewritten everywhere: cast, placements, forms, path rows, routes, note anchors,
-    facing overrides and named selections.
+    IDs are rewritten everywhere: cast, placements, forms, path rows, routes, facing overrides
+    and named selections.
 
     Returns:
         show: The relabeled show, carrying `scheme`.
