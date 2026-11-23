@@ -4,7 +4,7 @@
 test_models.py --- tests Shape, Group, Spot, LabelScheme and Cast
 
 Contains:
-    test_*(): one behavior of showpy.cast.models each
+    test_*(): one behavior of e8s.cast.models each
     test_regression_spot_tags_serialize_in_a_stable_order: dumps Spot.tags identically under every
         hash seed
     test_regression_cast_selections_serialize_in_a_stable_order: dumps Cast.selections identically
@@ -27,7 +27,7 @@ Contains:
     test_regression_group_rejects_nan_limits: rejects a NaN limit override
     test_regression_shape_rejects_negative_size_on_the_inactive_kind: rejects a negative rectangle
         width on a circle
-    test_regression_label_scheme_rejects_negative_pad: rejects pad=-3 with a ShowPyError, not a bare
+    test_regression_label_scheme_rejects_negative_pad: rejects pad=-3 with an E8sError, not a bare
         ValueError from formatting
     test_regression_label_scheme_rejects_huge_pad: rejects pad=10**7 instead of building 10 MB
         labels
@@ -53,9 +53,9 @@ from typing import cast as typing_cast
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from showpy.cast.models import Cast, Group, LabelScheme, Shape, Spot
-from showpy.core.errors import GeometryError, ShowPyError, UnknownRefError
-from showpy.core.ids import SpotId
+from e8s.cast.models import Cast, Group, LabelScheme, Shape, Spot
+from e8s.core.errors import E8sError, GeometryError, UnknownRefError
+from e8s.core.ids import SpotId
 from tests.helpers import fails_after, outputs_under_hash_seeds
 
 
@@ -124,11 +124,11 @@ def test_cast_round_trips_json() -> None:
     assert Cast.model_validate_json(cast.model_dump_json()) == cast
 
 
-REJECTED = (ShowPyError, PydanticValidationError)
+REJECTED = (E8sError, PydanticValidationError)
 HUGE_PAD = 10**7
 CAST_SCRIPT_HEAD = (
-    "from showpy.cast.models import Cast, Group, Spot\n"
-    "from showpy.core.util import content_hash\n"
+    "from e8s.cast.models import Cast, Group, Spot\n"
+    "from e8s.core.util import content_hash\n"
     "ids = [f'T{i}' for i in range(1, 7)]\n"
     "cast = Cast(\n"
     "    groups={'g': Group(key='g', label_prefix='T')},\n"
@@ -224,28 +224,28 @@ def test_regression_v02_array_documents_still_decode() -> None:
 def test_regression_group_limits_are_immutable() -> None:
     """Refuses in-place edits to Group.limits of a frozen model (audit 9.3)."""
     group = _small_cast().groups["g"]
-    with pytest.raises((TypeError, ShowPyError)):
+    with pytest.raises((TypeError, E8sError)):
         typing_cast(dict[str, float], group.limits)["speed"] = 99.0
 
 
 def test_regression_cast_groups_are_immutable() -> None:
     """Refuses `cast.groups.pop(...)` on a frozen cast (audit 9.3)."""
     cast = _small_cast()
-    with pytest.raises((TypeError, ShowPyError, AttributeError)):
+    with pytest.raises((TypeError, E8sError, AttributeError)):
         typing_cast(dict[str, Group], cast.groups).pop("g")
 
 
 def test_regression_cast_selections_are_immutable() -> None:
     """Refuses in-place edits to Cast.selections (audit 9.3)."""
     cast = _small_cast()
-    with pytest.raises((TypeError, ShowPyError, AttributeError)):
+    with pytest.raises((TypeError, E8sError, AttributeError)):
         typing_cast(dict[str, tuple[str, ...]], cast.selections).pop("s")
 
 
 def test_regression_label_scheme_prefixes_are_immutable() -> None:
     """Refuses in-place edits to LabelScheme.prefixes (audit 9.3)."""
     scheme = _small_cast().label_scheme
-    with pytest.raises((TypeError, ShowPyError)):
+    with pytest.raises((TypeError, E8sError)):
         typing_cast(dict[str, str], scheme.prefixes)["g"] = "Z"
 
 
@@ -274,7 +274,7 @@ def test_regression_shape_rejects_negative_size_on_the_inactive_kind() -> None:
 
 
 def test_regression_label_scheme_rejects_negative_pad() -> None:
-    """Rejects pad=-3 with a ShowPyError, not a bare ValueError from formatting (audit 9.3)."""
+    """Rejects pad=-3 with an E8sError, not a bare ValueError from formatting (audit 9.3)."""
     with pytest.raises(REJECTED):
         LabelScheme(pad=-3).label("T", 1)
 

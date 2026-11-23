@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_build_fonts.py --- tests the one-time font build script that writes showpy/fonts
+test_build_fonts.py --- tests the one-time font build script that writes e8s/fonts
 
 Contains:
     test_parse_jhf_reads_bounds_and_pen_up: checks bounds, numbering and pen lifts of a glyph
@@ -25,7 +25,7 @@ from types import ModuleType
 
 import pytest
 
-from showpy.core.resources import schema_path
+from e8s.core.resources import schema_path
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "build_fonts.py"
 

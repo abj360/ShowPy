@@ -1,4 +1,4 @@
-# Contributing to ShowPy
+# Contributing to e8Show
 
 Thanks for helping make choreography exact, safe and fast to write.
 
@@ -21,7 +21,7 @@ docker compose -f docker/docker-compose.yml up --build
 
 1. Before your first pull request, give the maintainer a written grant that lets them relicense your contribution, including under commercial terms. Outside contributions are accepted only with that grant: without it, the first merged outside patch ends the maintainer's sole ownership of the code, and with it the right to offer other licences.
 2. Branch from `main` as `<type>/<short-desc>`, e.g. `feat/arc-spacing`. One logical change per branch.
-3. Read `docs/showpy-api-reference.md` and `docs/adr/` for the area you touch. If the code and the reference disagree, flag it in the PR. Don't silently pick one.
+3. Read `docs/e8s-api-reference.md` and `docs/adr/` for the area you touch. If the code and the reference disagree, flag it in the PR. Don't silently pick one.
 4. Write an ADR in `docs/adr/` before any architecturally load-bearing code.
 5. Write the failing test first, run it, and watch it fail for the right reason.
 6. Write the smallest change that makes it pass, then refactor while green.
@@ -36,14 +36,14 @@ docker compose -f docker/docker-compose.yml up --build
 
 ## Code standards
 
-- **Units.** Use meters on the stage plane, degrees for facing (0 = facing the audience, counter-clockwise positive) and counts for time. Convert only in `showpy/core/units.py` and `showpy/sheet/coords.py`.
+- **Units.** Use meters on the stage plane, degrees for facing (0 = facing the audience, counter-clockwise positive) and counts for time. Convert only in `e8s/core/units.py` and `e8s/sheet/coords.py`.
 - **Purity.** Data classes are frozen Pydantic models. Edit functions return new objects and raise `LockedError` on pinned or locked items unless the caller passes `force=True`.
-- **Determinism.** Randomness only goes through `showpy.core.util.seeded_rng`. Time stamps are passed in as arguments; the library never reads the clock.
-- **One source of motion.** Anything that needs positions over time calls `showpy.choreo.engine.PathEngine`. Never interpolate motion anywhere else.
+- **Determinism.** Randomness only goes through `e8s.core.util.seeded_rng`. Time stamps are passed in as arguments; the library never reads the clock.
+- **One source of motion.** Anything that needs positions over time calls `e8s.choreo.engine.PathEngine`. Never interpolate motion anywhere else.
 - **Checks are never weakened.** Never weaken a validation check, threshold or default to make a test pass. Limits are user-owned configuration that library code never edits.
-- **Errors.** Raise `ShowPyError` subclasses with `code`, `message`, `context` and a `hint` that says what is allowed.
+- **Errors.** Raise `E8sError` subclasses with `code`, `message`, `context` and a `hint` that says what is allowed.
 - **Style.**
-  - Every file opens with a module docstring: `<file> --- <role>`, then a `Contains:` index. Library modules under `showpy/` have no shebang; scripts and tests open with one.
+  - Every file opens with a module docstring: `<file> --- <role>`, then a `Contains:` index. Library modules under `e8s/` have no shebang; scripts and tests open with one.
   - Every public function has a verb-first docstring and a runnable `>>>` example.
   - Lines are at most 100 characters, with double quotes.
   - Comments only for genuinely non-obvious reasons.
@@ -51,18 +51,18 @@ docker compose -f docker/docker-compose.yml up --build
 
 ## Testing
 
-| Suite                 | Where                                     | Command                        |
-| --------------------- | ----------------------------------------- | ------------------------------ |
-| Unit                  | `tests/unit/<package>/` mirrors `showpy/` | `uv run pytest tests/unit`     |
-| Property (Hypothesis) | `tests/property/`                         | `uv run pytest tests/property` |
-| Golden replays        | `tests/golden/`                           | `uv run pytest -m golden`      |
-| Doctests              | every public function                     | included in `uv run pytest`    |
+| Suite                 | Where                                  | Command                        |
+| --------------------- | -------------------------------------- | ------------------------------ |
+| Unit                  | `tests/unit/<package>/` mirrors `e8s/` | `uv run pytest tests/unit`     |
+| Property (Hypothesis) | `tests/property/`                      | `uv run pytest tests/property` |
+| Golden replays        | `tests/golden/`                        | `uv run pytest -m golden`      |
+| Doctests              | every public function                  | included in `uv run pytest`    |
 
 - Tests assert real behavior and must be able to fail. Mocks must be able to fail too.
 - Every bug fix starts with a failing regression test whose name begins with `test_regression_`. Never delete it.
-- Golden fixtures change only on purpose: `SHOWPY_UPDATE_GOLDEN=1 uv run pytest -m golden`, then a human reviews the diff.
+- Golden fixtures change only on purpose: `E8S_UPDATE_GOLDEN=1 uv run pytest -m golden`, then a human reviews the diff.
 - Warnings are errors.
-- Branch coverage of `showpy` has a floor in `COVERAGE_FLOOR` in `noxfile.py`, enforced by `nox -s tests`: 96% (measured 96.34% on 2026-11-14, rounded down). The floor never decreases: raise it when coverage rises, and add tests instead of lowering it.
+- Branch coverage of `e8s` has a floor in `COVERAGE_FLOOR` in `noxfile.py`, enforced by `nox -s tests`: 96% (measured 96.34% on 2026-11-14, rounded down). The floor never decreases: raise it when coverage rises, and add tests instead of lowering it.
 
 ## Pre-merge checklist
 

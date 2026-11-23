@@ -6,7 +6,7 @@ test_facing.py --- tests set facing tools and timed facing overrides
 
 import pytest
 
-from showpy.choreo.facing import (
+from e8s.choreo.facing import (
     add_facing_override,
     face_along,
     face_audience,
@@ -16,14 +16,14 @@ from showpy.choreo.facing import (
     face_point,
     turn,
 )
-from showpy.choreo.form_models import Form
-from showpy.choreo.path_models import FacingMode, FacingOverride
-from showpy.choreo.recipe_models import BlockRecipe, CircleRecipe, LineRecipe
-from showpy.core.errors import GeometryError, LockedError, TimeRangeError, UnknownRefError
-from showpy.core.ids import FormId, SetId, SpotId
-from showpy.core.util import approx_equal
-from showpy.geo.shapes import circle, line
-from showpy.show.models import Show
+from e8s.choreo.form_models import Form
+from e8s.choreo.path_models import FacingMode, FacingOverride
+from e8s.choreo.recipe_models import BlockRecipe, CircleRecipe, LineRecipe
+from e8s.core.errors import GeometryError, LockedError, TimeRangeError, UnknownRefError
+from e8s.core.ids import FormId, SetId, SpotId
+from e8s.core.util import approx_equal
+from e8s.geo.shapes import circle, line
+from e8s.show.models import Show
 from tests.fixtures.motion_shows import with_targets
 from tests.fixtures.shows import two_set_show
 

@@ -4,7 +4,7 @@
 test_validate.py --- tests that validate_timeline reports each structural problem by code
 
 Contains:
-    test_*(): one behavior of showpy.time.validate each
+    test_*(): one behavior of e8s.time.validate each
     test_regression_validate_flags_negative_total_counts: rejects or reports a negative show length
     test_regression_validate_flags_nan_hold: rejects or reports a hold of NaN seconds
     test_regression_validate_flags_unsorted_holds: rejects or reports holds that are not sorted by
@@ -26,9 +26,9 @@ from typing import Any
 
 from pydantic import ValidationError as PydanticValidationError
 
-from showpy.core.errors import ShowPyError
-from showpy.time.clock import count_to_seconds
-from showpy.time.models import (
+from e8s.core.errors import E8sError
+from e8s.time.clock import count_to_seconds
+from e8s.time.models import (
     AudioTrack,
     Cue,
     Hold,
@@ -38,8 +38,8 @@ from showpy.time.models import (
     Timeline,
     TimelineMode,
 )
-from showpy.time.timeline import new_timeline
-from showpy.time.validate import validate_timeline
+from e8s.time.timeline import new_timeline
+from e8s.time.validate import validate_timeline
 
 
 def _codes(tl: Timeline) -> list[str]:
@@ -160,7 +160,7 @@ def test_issue_location_names_the_item() -> None:
     assert issue.level == "error"
 
 
-REJECTED = (ShowPyError, PydanticValidationError)
+REJECTED = (E8sError, PydanticValidationError)
 BASE_TEMPO = TempoSection(at_count=0.0, counts_per_minute=120.0)
 
 
@@ -233,6 +233,6 @@ def test_regression_overlapping_holds_have_one_policy() -> None:
     clock_accepts = True
     try:
         count_to_seconds(timeline, 8.0)
-    except ShowPyError:
+    except E8sError:
         clock_accepts = False
     assert clock_accepts == validate_timeline(timeline).ok

@@ -43,8 +43,8 @@ from pydantic import BaseModel
 from pydantic_core import to_jsonable_python
 
 if TYPE_CHECKING:
-    from showpy.show.file_repository import FileRepository
-    from showpy.show.models import Revision, Show
+    from e8s.show.file_repository import FileRepository
+    from e8s.show.models import Revision, Show
 
 SEED = 7
 SPOT_COUNT = 24
@@ -62,7 +62,7 @@ PATH_TRANSITION = ("1", "2")
 PATH_WAYPOINT_XY = (1.5, 4.0)
 EXPECTED_FILE = "expected.json"
 REPO_DIR = "repo"
-LIBRARY = "showpy"
+LIBRARY = "e8s"
 SHOW_CHOICES = ("seeded", "example", "v030")
 INSERTED_SET = "2A"
 INSERTED_COUNTS = 8.0
@@ -87,7 +87,7 @@ SET_ORDER_FIELD = "sets"
 
 
 class _AliasFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
-    """Serves `showpy.<name>` as the already-imported module `<package>.<name>`.
+    """Serves `e8s.<name>` as the already-imported module `<package>.<name>`.
 
     Attributes:
         package: Import name of the library in the checkout, such as `stage`.
@@ -102,7 +102,7 @@ class _AliasFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         path: Sequence[str] | None,
         target: ModuleType | None = None,
     ) -> importlib.machinery.ModuleSpec | None:
-        """Claims every module under the `showpy` name."""
+        """Claims every module under the `e8s` name."""
         del path, target
         if fullname != LIBRARY and not fullname.startswith(f"{LIBRARY}."):
             return None
@@ -117,7 +117,7 @@ class _AliasFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
 
 
 def _use_package(package: str) -> None:
-    """Makes `import showpy...` load the checkout's library when its import name differs."""
+    """Makes `import e8s...` load the checkout's library when its import name differs."""
     if package != LIBRARY:
         sys.meta_path.insert(0, _AliasFinder(package))
 
@@ -152,7 +152,7 @@ def oracle_json(show: "Show") -> object:
 def _base_show(kind: str) -> "Show":
     """Builds the seeded show, or the example show where the release has no seeded generator."""
     if kind == "example":
-        from showpy.examples import two_set_show
+        from e8s.examples import two_set_show
 
         return two_set_show()
     from tests.fixtures.generators import seeded_show
@@ -180,9 +180,9 @@ def _edited_show(kind: str) -> "Show":
 def _path_edit(show: "Show") -> "Show":
     """Gives the first spot a curved row on the first transition."""
     try:
-        from showpy.choreo.path_models import PathRow, PathStyle, Waypoint
+        from e8s.choreo.path_models import PathRow, PathStyle, Waypoint
     except ImportError:
-        from showpy.choreo.models import PathRow, PathStyle, Waypoint
+        from e8s.choreo.models import PathRow, PathStyle, Waypoint
 
     spec = show.transition(PATH_TRANSITION)
     entity = show.cast.spots[0].id
@@ -202,7 +202,7 @@ def fixture_shows(kind: str = "seeded") -> tuple["Show", "Show", "Show"]:
     Returns:
         shows: The show of each revision, oldest first.
     """
-    from showpy.show.pinning import pin
+    from e8s.show.pinning import pin
 
     saved = _edited_show(kind)
     edited = _path_edit(saved)
@@ -212,11 +212,11 @@ def fixture_shows(kind: str = "seeded") -> tuple["Show", "Show", "Show"]:
 
 def _with_trumpets_and_zone(show: "Show") -> "Show":
     """Adds two trumpets and a zone whose selector mixes `+` and `&` without parentheses."""
-    from showpy.cast.models import Group
-    from showpy.cast.spots import add_group, add_spots_along
-    from showpy.core.types import Region
-    from showpy.geo.shapes import line
-    from showpy.sheet.models import Zone, ZoneKind
+    from e8s.cast.models import Group
+    from e8s.cast.spots import add_group, add_spots_along
+    from e8s.core.types import Region
+    from e8s.geo.shapes import line
+    from e8s.sheet.models import Zone, ZoneKind
 
     show = add_group(show, Group(key=TRUMPETS, label_prefix=TRUMPET_PREFIX))
     show = add_spots_along(show, line(*TRUMPET_LINE), TRUMPET_COUNT, TRUMPETS, NEGATIVE_ZERO_SET)
@@ -234,12 +234,12 @@ def _with_trumpets_and_zone(show: "Show") -> "Show":
 
 def _with_text_form(show: "Show") -> "Show":
     """Adds a last set holding a text form that writes TEXT with every seeded spot."""
-    from showpy.choreo.form_place import place
-    from showpy.choreo.forms import text_form
-    from showpy.choreo.match_ops import with_set
-    from showpy.show.changes import apply_change
-    from showpy.show.manage import add_set
-    from showpy.show.models import FormOp
+    from e8s.choreo.form_place import place
+    from e8s.choreo.forms import text_form
+    from e8s.choreo.match_ops import with_set
+    from e8s.show.changes import apply_change
+    from e8s.show.manage import add_set
+    from e8s.show.models import FormOp
 
     show = add_set(show, TEXT_SET, TEXT_COUNTS)
     members = [s.id for s in show.cast.spots if s.group != TRUMPETS]
@@ -264,7 +264,7 @@ def v030_show() -> "Show":
         show: The seeded show with set 2A inserted and renumbered, trumpets, a selector zone and
             a last set written as text.
     """
-    from showpy.show.manage import add_set, renumber
+    from e8s.show.manage import add_set, renumber
 
     show = _base_show("seeded")
     show = add_set(show, INSERTED_SET, INSERTED_COUNTS, after=PATH_TRANSITION[1])
@@ -282,8 +282,8 @@ def _authorship(write: Callable[..., Any], actor: str, message: str) -> dict[str
 
 def _save_legacy(repo: "FileRepository", kind: str) -> list["Revision"]:
     """Saves the three legacy revisions: the show with a script, a path edit and a pin."""
-    from showpy.show.documents import script_doc
-    from showpy.show.files import show_changes
+    from e8s.show.documents import script_doc
+    from e8s.show.files import show_changes
 
     saved, edited, pinned = fixture_shows(kind)
     changes = show_changes(saved, {})
@@ -316,7 +316,7 @@ def _save_legacy(repo: "FileRepository", kind: str) -> list["Revision"]:
 
 def _hand_documents(docs: dict[str, bytes]) -> dict[str, bytes]:
     """Writes sets 1a, 1A and con as v0.2 stored them: folders named by ID, no `key` field."""
-    from showpy.show.documents import dump_json, set_doc
+    from e8s.show.documents import dump_json, set_doc
 
     meta = json.loads(docs[SHOW_DOC])
     meta[SET_ORDER_FIELD] = [*meta[SET_ORDER_FIELD], *HAND_SET_IDS]
@@ -332,8 +332,8 @@ def _hand_documents(docs: dict[str, bytes]) -> dict[str, bytes]:
 
 def _save_v030(repo: "FileRepository") -> list["Revision"]:
     """Saves the v0.3.0 show, then commits the hand-written legacy sets past the commit check."""
-    from showpy.show.integrity import blob_digest
-    from showpy.show.models import Revision
+    from e8s.show.integrity import blob_digest
+    from e8s.show.models import Revision
 
     first = repo.put_show(SHOW_ID, v030_show(), expected_revision="", at=STAMP)
     tree = dict(repo.backend.tree(SHOW_ID, first.id))
@@ -355,8 +355,8 @@ def build_fixture(out: Path, kind: str) -> None:
         out: Empty or missing directory that receives the repository and expected.json.
         kind: Content to save, one of SHOW_CHOICES.
     """
-    from showpy.core.util import content_hash
-    from showpy.show.file_repository import FileRepository
+    from e8s.core.util import content_hash
+    from e8s.show.file_repository import FileRepository
 
     repo = FileRepository(out / REPO_DIR)
     revisions = _save_v030(repo) if kind == "v030" else _save_legacy(repo, kind)

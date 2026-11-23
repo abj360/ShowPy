@@ -26,11 +26,11 @@ from hypothesis import strategies as st
 from scipy.sparse import csr_array
 from scipy.sparse.csgraph import maximum_bipartite_matching
 
-from showpy.cast.models import Cast, Group, Spot
-from showpy.cast.select import mirror_pairs, select
-from showpy.choreo.models import Placement, Set
-from showpy.core.ids import SetId, SpotId
-from showpy.core.util import format_ranges, natural_sort, parse_range
+from e8s.cast.models import Cast, Group, Spot
+from e8s.cast.select import mirror_pairs, select
+from e8s.choreo.models import Placement, Set
+from e8s.core.ids import SetId, SpotId
+from e8s.core.util import format_ranges, natural_sort, parse_range
 
 GROUPS = {"trumpets": "T", "tubas": "TB", "flags": "F"}
 TAGS = ("soloist", "leader")

@@ -22,10 +22,10 @@ import sys
 import numpy as np
 import pytest
 
-from showpy.core.errors import GeometryError
-from showpy.geo import curve_base
-from showpy.geo.curve_base import INITIAL_SPLITS, MAX_SUBDIVISION_DEPTH, Curve, CurveBase
-from showpy.geo.shapes import arc, circle, polyline, spiral
+from e8s.core.errors import GeometryError
+from e8s.geo import curve_base
+from e8s.geo.curve_base import INITIAL_SPLITS, MAX_SUBDIVISION_DEPTH, Curve, CurveBase
+from e8s.geo.shapes import arc, circle, polyline, spiral
 from tests.helpers import defect, fails_after
 
 SIGNAL_TIMEOUT_S = 5

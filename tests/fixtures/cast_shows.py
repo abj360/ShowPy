@@ -10,8 +10,8 @@ Contains:
 
 from datetime import UTC, datetime
 
-from showpy.choreo.form_models import Form
-from showpy.choreo.path_models import (
+from e8s.choreo.form_models import Form
+from e8s.choreo.path_models import (
     EntityFacing,
     FacingMode,
     FacingOverride,
@@ -20,13 +20,13 @@ from showpy.choreo.path_models import (
     Route,
     TransitionSpec,
 )
-from showpy.core.ids import FormId, NoteId, RouteId, SetId, SpotId, ZoneId, make_tid
-from showpy.core.selection import Selection
-from showpy.core.types import Region
-from showpy.geo.curves import Segment
-from showpy.notes.models import Note, NotesDocument
-from showpy.sheet.models import Zone, ZoneKind
-from showpy.show.models import Anchor, Show
+from e8s.core.ids import FormId, NoteId, RouteId, SetId, SpotId, ZoneId, make_tid
+from e8s.core.selection import Selection
+from e8s.core.types import Region
+from e8s.geo.curves import Segment
+from e8s.notes.models import Note, NotesDocument
+from e8s.sheet.models import Zone, ZoneKind
+from e8s.show.models import Anchor, Show
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 

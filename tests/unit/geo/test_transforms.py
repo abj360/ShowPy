@@ -13,11 +13,11 @@ import math
 import numpy as np
 import pytest
 
-from showpy.core.errors import GeometryError, UnknownRefError
-from showpy.core.util import approx_equal
-from showpy.geo.curves import ArcCurve, CompositeCurve, Polyline, Segment
-from showpy.geo.shapes import arc, circle, join, line, polyline
-from showpy.geo.transforms import (
+from e8s.core.errors import GeometryError, UnknownRefError
+from e8s.core.util import approx_equal
+from e8s.geo.curves import ArcCurve, CompositeCurve, Polyline, Segment
+from e8s.geo.shapes import arc, circle, join, line, polyline
+from e8s.geo.transforms import (
     affine,
     align,
     contract,

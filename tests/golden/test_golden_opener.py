@@ -3,7 +3,7 @@
 """
 test_golden_opener.py --- replays the golden opener and compares every half-count to its fixture
 
-Set SHOWPY_UPDATE_GOLDEN=1 to rewrite the fixture; the diff then needs human review.
+Set E8S_UPDATE_GOLDEN=1 to rewrite the fixture; the diff then needs human review.
 """
 
 import json
@@ -13,12 +13,12 @@ from typing import Any, TypedDict
 
 import pytest
 
-from showpy.choreo.engine import PathEngine
-from showpy.core.ids import SpotId
+from e8s.choreo.engine import PathEngine
+from e8s.core.ids import SpotId
 from tests.golden.opener import opener_show
 
 FIXTURE = Path(__file__).parent / "fixtures" / "opener_frames.json"
-UPDATE_FLAG = "SHOWPY_UPDATE_GOLDEN"
+UPDATE_FLAG = "E8S_UPDATE_GOLDEN"
 PER_COUNT = 2
 DIGITS = 9
 TOL = 1e-9

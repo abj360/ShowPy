@@ -28,14 +28,14 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.cast.models import Cast, Group, Spot
-from showpy.cast.select import Selection, normalize_v1_selector, select
-from showpy.core.errors import SchemaError, ShowPyError
-from showpy.core.ids import SpotId
-from showpy.core.json_types import JsonValue
-from showpy.show.file_repository import FileRepository
-from showpy.show.migrate import ReportBuilder
-from showpy.show.migrations.v1_to_v2_selectors import migrate_selectors
+from e8s.cast.models import Cast, Group, Spot
+from e8s.cast.select import Selection, normalize_v1_selector, select
+from e8s.core.errors import E8sError, SchemaError
+from e8s.core.ids import SpotId
+from e8s.core.json_types import JsonValue
+from e8s.show.file_repository import FileRepository
+from e8s.show.migrate import ReportBuilder
+from e8s.show.migrations.v1_to_v2_selectors import migrate_selectors
 
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "repos"
 V030_SHOW = "legacy-show"
@@ -192,7 +192,7 @@ def test_normalized_text_selects_what_v1_selected(
         text = f"({text}){join}{word}" if is_grouped else f"{text}{join}{word}"
     try:
         expected = v1_select(CAST, text)
-    except ShowPyError:
+    except E8sError:
         return
     normalized = normalize_v1_selector(text)
     assert select(CAST, normalized).ids == expected, (text, normalized)

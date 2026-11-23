@@ -1,3 +1,3 @@
 tests/fixtures/repos/** -text
-showpy/fonts/** -text
-showpy/schemas/** -text
+e8s/fonts/** -text
+e8s/schemas/** -text

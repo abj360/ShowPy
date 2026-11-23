@@ -4,11 +4,11 @@
 test_measures.py --- tests 1-based measure labels, measure lookups and mid-show length changes
 
 Contains:
-    test_*(): one behavior of showpy.time.measures each
+    test_*(): one behavior of e8s.time.measures each
     test_regression_zero_measure_length_is_a_clean_error: rejects `counts_per_measure=0` with a
-        ShowPyError, not ZeroDivisionError
+        E8sError, not ZeroDivisionError
     test_regression_nan_measure_length_is_a_clean_error: rejects a NaN measure length with a
-        ShowPyError, not ValueError
+        E8sError, not ValueError
     test_regression_negative_measure_length_is_rejected: rejects a negative measure length instead
         of labeling measure -1
     test_regression_duplicate_change_counts_follow_input_order: rejects two changes at one count, or
@@ -28,11 +28,11 @@ import math
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from showpy.core.errors import ShowPyError, TimelineError, TimeRangeError
-from showpy.core.util import approx_equal
-from showpy.time.measures import count_to_measure, measure_to_count
-from showpy.time.models import MeasureLabel, MeasureSetting, Timeline, TimelineMode
-from showpy.time.timeline import new_timeline, set_measures
+from e8s.core.errors import E8sError, TimelineError, TimeRangeError
+from e8s.core.util import approx_equal
+from e8s.time.measures import count_to_measure, measure_to_count
+from e8s.time.models import MeasureLabel, MeasureSetting, Timeline, TimelineMode
+from e8s.time.timeline import new_timeline, set_measures
 
 TOL = 1e-9
 
@@ -127,7 +127,7 @@ def test_count_to_measure_rejects_negative_count() -> None:
         count_to_measure(_measured(FOUR), -1.0)
 
 
-REJECTED = (ShowPyError, PydanticValidationError)
+REJECTED = (E8sError, PydanticValidationError)
 
 
 def _with_measures(setting: MeasureSetting) -> Timeline:
@@ -139,13 +139,13 @@ def _with_changes(changes: tuple[tuple[float, float], ...]) -> Timeline:
 
 
 def test_regression_zero_measure_length_is_a_clean_error() -> None:
-    """Rejects `counts_per_measure=0` with a ShowPyError, not ZeroDivisionError (audit 9.3)."""
+    """Rejects `counts_per_measure=0` with an E8sError, not ZeroDivisionError (audit 9.3)."""
     with pytest.raises(REJECTED):
         count_to_measure(_with_measures(MeasureSetting(counts_per_measure=0.0)), 4.0)
 
 
 def test_regression_nan_measure_length_is_a_clean_error() -> None:
-    """Rejects a NaN measure length with a ShowPyError, not ValueError (audit 9.3)."""
+    """Rejects a NaN measure length with an E8sError, not ValueError (audit 9.3)."""
     with pytest.raises(REJECTED):
         count_to_measure(_with_measures(MeasureSetting(counts_per_measure=math.nan)), 4.0)
 
@@ -180,7 +180,7 @@ def test_regression_duplicate_change_counts_follow_input_order() -> None:
 def test_regression_fractional_measure_numbers_are_rejected() -> None:
     """Rejects measure 2.5 instead of computing a count for it (audit 9.3)."""
     timeline = _with_measures(MeasureSetting(counts_per_measure=4.0))
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         measure_to_count(timeline, 2.5)  # type: ignore[arg-type]
 
 
@@ -199,14 +199,14 @@ def test_regression_negative_change_count_and_length_are_rejected() -> None:
 
 
 def test_regression_unchecked_setting_raises_a_clean_error() -> None:
-    """Refuses a setting built without validation with a ShowPyError, never ZeroDivisionError."""
+    """Refuses a setting built without validation with an E8sError, never ZeroDivisionError."""
     unchecked = MeasureSetting.model_construct(counts_per_measure=0.0, start_measure=1, changes=())
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         count_to_measure(_with_measures(unchecked), 4.0)
 
 
 @pytest.mark.parametrize("measure", [True, 2.0, "2"])
 def test_regression_non_integer_measure_numbers_are_rejected(measure: object) -> None:
     """Rejects a bool, float or string measure number."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         measure_to_count(_with_measures(FOUR), measure)  # type: ignore[arg-type]

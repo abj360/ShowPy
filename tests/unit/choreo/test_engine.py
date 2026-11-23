@@ -32,7 +32,7 @@ Contains:
         they come from a generator
     test_regression_invalidate_clears_override_selection_cache: clears the cached facing-override
         selections when caches are invalidated
-    test_regression_spot_query_on_show_without_sets_raises_showpy_error: raises a ShowPyError, not
+    test_regression_spot_query_on_show_without_sets_raises_e8s_error: raises an E8sError, not
         IndexError, for a cast spot in a show with no sets
     test_regression_zero_count_transition_compiles_to_a_step: compiles and segments a 0-count
         transition instead of raising PathError
@@ -53,9 +53,9 @@ import re
 import numpy as np
 import pytest
 
-from showpy.choreo.engine import PROBE_TOL_SHARE, PathEngine
-from showpy.choreo.models import PlacementPatch
-from showpy.choreo.path_models import (
+from e8s.choreo.engine import PROBE_TOL_SHARE, PathEngine
+from e8s.choreo.models import PlacementPatch
+from e8s.choreo.path_models import (
     Easing,
     EntityFacing,
     FacingMode,
@@ -67,20 +67,20 @@ from showpy.choreo.path_models import (
     Route,
     Waypoint,
 )
-from showpy.core.caps import MAX_COORD_M
-from showpy.core.errors import (
+from e8s.core.caps import MAX_COORD_M
+from e8s.core.errors import (
     ContinuityError,
+    E8sError,
     PathError,
     SchemaError,
-    ShowPyError,
     UnknownRefError,
 )
-from showpy.core.ids import RouteId, SpotId
-from showpy.core.units import vector_facing
-from showpy.core.util import approx_equal
-from showpy.geo.curves import SplineCurve
-from showpy.geo.shapes import line
-from showpy.show.models import Show
+from e8s.core.ids import RouteId, SpotId
+from e8s.core.units import vector_facing
+from e8s.core.util import approx_equal
+from e8s.geo.curves import SplineCurve
+from e8s.geo.shapes import line
+from e8s.show.models import Show
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
 from tests.fixtures.shows import two_set_show
 from tests.helpers import defect
@@ -530,7 +530,7 @@ def test_regression_segment_bound_hint_names_an_accepted_tol() -> None:
 @pytest.mark.parametrize("tol", [0.0, -0.02, math.nan, math.inf])
 def test_regression_segments_reject_a_tolerance_that_is_not_positive(tol: float) -> None:
     """Rejects a zero, negative or non-finite segment tolerance instead of looping on it."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         PathEngine(two_set_show()).segments(TID, tol=tol)
 
 
@@ -599,10 +599,10 @@ def test_regression_invalidate_clears_override_selection_cache() -> None:
     assert engine._override_cache == {}
 
 
-def test_regression_spot_query_on_show_without_sets_raises_showpy_error() -> None:
-    """Raises a ShowPyError, not IndexError, for a cast spot in a show with no sets (audit 9.2)."""
+def test_regression_spot_query_on_show_without_sets_raises_e8s_error() -> None:
+    """Raises an E8sError, not IndexError, for a cast spot in a show with no sets (audit 9.2)."""
     engine = PathEngine(two_set_show().model_copy(update={"sets": ()}))
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         engine.position("T1", 1.0)
 
 

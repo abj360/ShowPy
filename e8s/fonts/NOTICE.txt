@@ -1,0 +1,29 @@
+relief-singleline (Relief SingleLine)
+  source: https://raw.githubusercontent.com/isdat-type/Relief-SingleLine/01dfc5779ec1e9e4b288d96c6c96c23bfccbaf9d/fonts/open_svg/ReliefSingleLineSVG-Regular.svg
+  source sha256: 75f05a5b64ed6039c9816628ee051d98e16c19148a8268c63f5eccf8382479e2
+  license: OFL-1.1 (licenses/OFL-1.1.txt)
+  output sha256: fd67c5b12e38ab886258f5bc16611b3f61f0bcc2d5711dc5ddf8fd42bc8f4b55
+
+hershey-roman (Hershey Roman Simplex)
+  source: https://raw.githubusercontent.com/kamalmostafa/hershey-fonts/1356bf2f83d380fcef68c887e88675eb9d445d86/hershey-fonts/rowmans.jhf
+  source sha256: 8718fb129c0f6bce89c84fe41bc467e39534d215a6f7c3220cc5789a8a7d8618
+  license: LicenseRef-Hershey-Fonts (licenses/HERSHEY.txt)
+  output sha256: e1969f4711a74be259a5e602da900a65b94c5f45f69c33e32ab4eeb86a2c83cb
+
+hershey-script (Hershey Script Simplex)
+  source: https://raw.githubusercontent.com/kamalmostafa/hershey-fonts/1356bf2f83d380fcef68c887e88675eb9d445d86/hershey-fonts/scripts.jhf
+  source sha256: 6b391b2ea3a0771cf18caff0ed111db3d05681fa586d423a740cc0b2b155a873
+  license: LicenseRef-Hershey-Fonts (licenses/HERSHEY.txt)
+  output sha256: 1f0a661303e872ffd3ac5c8abdd8804519c2174696c1f8f04ac1aaee37c5a9d0
+
+hershey-greek (Hershey Greek Simplex)
+  source: https://raw.githubusercontent.com/kamalmostafa/hershey-fonts/1356bf2f83d380fcef68c887e88675eb9d445d86/hershey-fonts/greeks.jhf
+  source sha256: 309298debb0e472047f8329d31f849b14a98108a706d0f4f684e40d1eb023a76
+  license: LicenseRef-Hershey-Fonts (licenses/HERSHEY.txt)
+  output sha256: 43f6945dde1eea1a5b51295a518f7cb8c1a12fd04d2df536ef4ab37cb2533cd1
+
+simplex (Simplex)
+  source: e8s/geo/text.py
+  source sha256: built in
+  license: MIT (licenses/MIT.txt)
+  output sha256: 7e345d1ae7a55abc2d6414c6b16d121bdaddba1ef1fb5d82dec483e4bac20e3e

@@ -13,10 +13,10 @@ from enum import StrEnum
 
 from hypothesis import strategies as st
 
-from showpy.choreo.models import Placement
-from showpy.sheet.models import Sheet
-from showpy.show.manage import add_set
-from showpy.show.models import Show
+from e8s.choreo.models import Placement
+from e8s.sheet.models import Sheet
+from e8s.show.manage import add_set
+from e8s.show.models import Show
 from tests.strategies.sheet import headings, points_on
 
 

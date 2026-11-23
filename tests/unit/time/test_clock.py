@@ -4,13 +4,13 @@
 test_clock.py --- tests tempo lookup, count/seconds conversion with ramps and holds, and labels
 
 Contains:
-    test_*(): one behavior of showpy.time.clock each
+    test_*(): one behavior of e8s.time.clock each
     test_regression_describe_count_rounds_tenths_half_away_from_zero: rounds tenths of a second half
         away from zero, so 7.25 s prints as 0:07.3
     test_regression_unsorted_tempo_sections_are_sorted_or_rejected: converts counts as if sections
         were sorted, or rejects them
     test_regression_seconds_to_count_rejects_nan: rejects NaN seconds instead of returning 0.0
-    test_regression_tempo_at_rejects_nan: rejects a NaN count with a ShowPyError, not an IndexError
+    test_regression_tempo_at_rejects_nan: rejects a NaN count with an E8sError, not an IndexError
     test_regression_timeline_clock_is_fresh_after_replace: drops the cached clock on replace and
         model_copy, so no conversion uses stale pieces
     test_regression_compiled_clock_refuses_what_the_models_refuse: refuses a tempo, ramp or hold
@@ -32,10 +32,10 @@ from typing import Any
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from showpy.core.caps import MIN_TEMPO
-from showpy.core.errors import ShowPyError, TimelineError, TimeRangeError
-from showpy.core.util import approx_equal
-from showpy.time.clock import (
+from e8s.core.caps import MIN_TEMPO
+from e8s.core.errors import E8sError, TimelineError, TimeRangeError
+from e8s.core.util import approx_equal
+from e8s.time.clock import (
     SECONDS_PER_MINUTE,
     _clock_text,
     count_to_seconds,
@@ -44,8 +44,8 @@ from showpy.time.clock import (
     seconds_to_count,
     tempo_at,
 )
-from showpy.time.models import Hold, MeasureSetting, TempoSection, Timeline, TimelineMode
-from showpy.time.timeline import add_hold, add_tempo, new_timeline, set_measures
+from e8s.time.models import Hold, MeasureSetting, TempoSection, Timeline, TimelineMode
+from e8s.time.timeline import add_hold, add_tempo, new_timeline, set_measures
 
 TOL = 1e-9
 LN2 = math.log(2.0)
@@ -221,14 +221,14 @@ def test_describe_count_rounds_ramp_tempo() -> None:
 
 def test_regression_describe_count_rounds_tenths_half_away_from_zero() -> None:
     """Rounds tenths of a second half away from zero, so 7.25 s prints as 0:07.3."""
-    from showpy.time.clock import describe_count
-    from showpy.time.timeline import new_timeline
+    from e8s.time.clock import describe_count
+    from e8s.time.timeline import new_timeline
 
     timeline = new_timeline(TimelineMode.COUNTS, counts_per_minute=240.0)
     assert "0:07.3" in describe_count(timeline, 29.0)
 
 
-REJECTED = (ShowPyError, PydanticValidationError)
+REJECTED = (E8sError, PydanticValidationError)
 SIX_SECONDS = 6.0
 BIG_COUNT = 1234567.5
 
@@ -256,13 +256,13 @@ def test_regression_unsorted_tempo_sections_are_sorted_or_rejected() -> None:
 
 def test_regression_seconds_to_count_rejects_nan() -> None:
     """Rejects NaN seconds instead of returning 0.0 (audit 9.3)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         seconds_to_count(_steady(), math.nan)
 
 
 def test_regression_tempo_at_rejects_nan() -> None:
-    """Rejects a NaN count with a ShowPyError, not an IndexError (audit 9.3)."""
-    with pytest.raises(ShowPyError):
+    """Rejects a NaN count with an E8sError, not an IndexError (audit 9.3)."""
+    with pytest.raises(E8sError):
         tempo_at(_steady(), math.nan)
 
 
@@ -320,16 +320,16 @@ BAD_SECTIONS: list[dict[str, Any]] = [
 
 @pytest.mark.parametrize("fields", BAD_SECTIONS)
 def test_regression_compiled_clock_refuses_what_the_models_refuse(fields: dict[str, Any]) -> None:
-    """Raises ShowPyError, never ZeroDivisionError, NaN or a hang, for a skipped model check."""
+    """Raises E8sError, never ZeroDivisionError, NaN or a hang, for a skipped model check."""
     values: dict[str, Any] = {"at_count": 0.0, "counts_per_minute": 120.0}
     values.update(fields)
     section = TempoSection.model_construct(**values)
     tl = Timeline.model_construct(mode=TimelineMode.COUNTS, tempos=(section,))
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         count_to_seconds(tl, 4.0)
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         seconds_to_count(tl, 4.0)
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         tempo_at(tl, 4.0)
 
 

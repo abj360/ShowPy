@@ -5,7 +5,7 @@ test_types.py --- tests the shared type aliases, JSON-safe Region and Box2, and 
 
 Contains:
     NON_FINITE_MODELS: builders that put NaN or infinity into one float field per model family
-    test_*(): one behavior of showpy.core.types each
+    test_*(): one behavior of e8s.core.types each
     test_regression_region_rejects_fewer_than_three_points: rejects a two-point region, which has no
         area
     test_regression_region_rejects_nan_points: rejects NaN ring coordinates
@@ -59,15 +59,15 @@ import shapely
 from pydantic import TypeAdapter
 from pydantic import ValidationError as PydanticValidationError
 
-from showpy.cast.models import Shape
-from showpy.choreo.models import Placement, Set
-from showpy.choreo.path_models import Waypoint
-from showpy.core import canonical, json_types
-from showpy.core.caps import MAX_COORD_M, MAX_COUNTS, MIN_TEMPO
-from showpy.core.errors import SchemaError, ShowPyError, field_errors
-from showpy.core.ids import LandmarkId, SetId, SpotId
-from showpy.core.readonly import ReadOnlyMap
-from showpy.core.types import (
+from e8s.cast.models import Shape
+from e8s.choreo.models import Placement, Set
+from e8s.choreo.path_models import Waypoint
+from e8s.core import canonical, json_types
+from e8s.core.caps import MAX_COORD_M, MAX_COUNTS, MIN_TEMPO
+from e8s.core.errors import E8sError, SchemaError, field_errors
+from e8s.core.ids import LandmarkId, SetId, SpotId
+from e8s.core.readonly import ReadOnlyMap
+from e8s.core.types import (
     Box2,
     Count,
     CountsPerMinute,
@@ -88,9 +88,9 @@ from showpy.core.types import (
     Ring,
     Seconds,
 )
-from showpy.geo.curves import curve_from_construction
-from showpy.sheet.models import Landmark
-from showpy.time.models import TempoSection
+from e8s.geo.curves import curve_from_construction
+from e8s.sheet.models import Landmark
+from e8s.time.models import TempoSection
 
 NON_FINITE_MODELS: dict[str, Callable[[], FrozenModel]] = {
     "box2-nan": lambda: Box2(min=(math.nan, 0.0), max=(1.0, 1.0)),
@@ -131,19 +131,19 @@ def test_box2_size_and_center() -> None:
 
 def test_regression_region_rejects_fewer_than_three_points() -> None:
     """Rejects a two-point region, which has no area (audit 9.3)."""
-    with pytest.raises((ShowPyError, PydanticValidationError)):
+    with pytest.raises((E8sError, PydanticValidationError)):
         Region(exterior=((0.0, 0.0), (1.0, 1.0)))
 
 
 def test_regression_region_rejects_nan_points() -> None:
     """Rejects NaN coordinates (audit 9.3)."""
-    with pytest.raises((ShowPyError, PydanticValidationError)):
+    with pytest.raises((E8sError, PydanticValidationError)):
         Region(exterior=((0.0, 0.0), (1.0, float("nan")), (1.0, 1.0)))
 
 
 def test_regression_region_rejects_self_intersection() -> None:
     """Rejects a bow-tie ring that crosses itself (audit 9.3)."""
-    with pytest.raises((ShowPyError, PydanticValidationError)):
+    with pytest.raises((E8sError, PydanticValidationError)):
         Region(exterior=((0.0, 0.0), (2.0, 2.0), (2.0, 0.0), (0.0, 2.0)))
 
 
@@ -156,7 +156,7 @@ def test_regression_frozen_models_reject_non_finite_floats(
     The root cause is FrozenModel's config: it lacks allow_inf_nan=False, so each family that
     has no hand-written finiteness check accepts them.
     """
-    with pytest.raises((ShowPyError, PydanticValidationError)):
+    with pytest.raises((E8sError, PydanticValidationError)):
         build()
 
 

@@ -23,11 +23,11 @@ from typing import Any
 
 import pytest
 
-from showpy.core.errors import SchemaError
-from showpy.examples import crossing_show, two_set_show
-from showpy.show.document_reading import decode_show_dump
-from showpy.show.documents import decode_show
-from showpy.show.file_repository import FileRepository
+from e8s.core.errors import SchemaError
+from e8s.examples import crossing_show, two_set_show
+from e8s.show.document_reading import decode_show_dump
+from e8s.show.documents import decode_show
+from e8s.show.file_repository import FileRepository
 
 type Damage = Callable[[dict[str, Any]], None]
 

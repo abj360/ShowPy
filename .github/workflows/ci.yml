@@ -237,4 +237,4 @@ jobs:
         with:
           persist-credentials: false
       - run: cp .env.example .env
-      - run: docker compose -f docker/docker-compose.yml up --build --exit-code-from showpy
+      - run: docker compose -f docker/docker-compose.yml up --build --exit-code-from e8s

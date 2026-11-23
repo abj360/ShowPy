@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_fuzz_show.py --- fuzzes the show decoders and workspace paths; only ShowPyError may escape
+test_fuzz_show.py --- fuzzes the show decoders and workspace paths; only E8sError may escape
 
 Contains:
     test_fuzz_decode_show_bytes(): decodes known documents replaced by arbitrary bytes
@@ -28,17 +28,17 @@ from typing import get_args
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.show.collab import apply_event
-from showpy.show.decode_cache import DecodeCache
-from showpy.show.documents import SHOW_DOC, decode_show, encode_show, split_path
-from showpy.show.files import all_files, staged_changes
-from showpy.show.integrity import blob_digest
-from showpy.show.manage import insert_subset, renumber
-from showpy.show.models import CanvasEvent, EventKind, Show
-from showpy.show.storage import Workspace
-from showpy.show.structured import decode_comments
+from e8s.show.collab import apply_event
+from e8s.show.decode_cache import DecodeCache
+from e8s.show.documents import SHOW_DOC, decode_show, encode_show, split_path
+from e8s.show.files import all_files, staged_changes
+from e8s.show.integrity import blob_digest
+from e8s.show.manage import insert_subset, renumber
+from e8s.show.models import CanvasEvent, EventKind, Show
+from e8s.show.storage import Workspace
+from e8s.show.structured import decode_comments
 from tests.fixtures.shows import two_set_show
-from tests.helpers import HOSTILE_JSON, only_showpy_errors, open_session
+from tests.helpers import HOSTILE_JSON, only_e8s_errors, open_session
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 LATER = datetime(2026, 11, 11, 12, 5, tzinfo=UTC)
@@ -99,23 +99,23 @@ def _json_bytes(value: object) -> bytes:
 
 @given(st.dictionaries(st.sampled_from(STORED_PATHS), RAW_BYTES, max_size=4))
 def test_fuzz_decode_show_bytes(replaced: dict[str, bytes]) -> None:
-    only_showpy_errors(lambda: decode_show({**STORED, **replaced}), replaced)
+    only_e8s_errors(lambda: decode_show({**STORED, **replaced}), replaced)
 
 
 @given(st.dictionaries(st.sampled_from(STORED_PATHS), JSON_VALUES.map(_json_bytes), max_size=4))
 def test_fuzz_decode_show_json_shapes(replaced: dict[str, bytes]) -> None:
-    only_showpy_errors(lambda: decode_show({**STORED, **replaced}), replaced)
+    only_e8s_errors(lambda: decode_show({**STORED, **replaced}), replaced)
 
 
 @given(st.dictionaries(st.sampled_from(sorted(json.loads(STORED[SHOW_DOC]))), JSON_VALUES))
 def test_fuzz_decode_show_field_shapes(fields: dict[str, object]) -> None:
     body = {**json.loads(STORED[SHOW_DOC]), **fields}
-    only_showpy_errors(lambda: decode_show({**STORED, SHOW_DOC: _json_bytes(body)}), fields)
+    only_e8s_errors(lambda: decode_show({**STORED, SHOW_DOC: _json_bytes(body)}), fields)
 
 
 @given(PATH_TEXT)
 def test_fuzz_split_path(path: str) -> None:
-    only_showpy_errors(lambda: split_path(path), path)
+    only_e8s_errors(lambda: split_path(path), path)
 
 
 JSON_DOC_PATHS = [path for path in STORED_PATHS if path.endswith(".json")]
@@ -150,7 +150,7 @@ def _digests(docs: dict[str, bytes]) -> dict[str, str]:
 
 @given(MUTATIONS)
 def test_fuzz_decode_show_mutations(mutation: tuple[str, list[int], object]) -> None:
-    only_showpy_errors(lambda: decode_show(_mutated(*mutation)), mutation)
+    only_e8s_errors(lambda: decode_show(_mutated(*mutation)), mutation)
 
 
 @given(MUTATIONS)
@@ -158,35 +158,35 @@ def test_fuzz_decode_show_cached(mutation: tuple[str, list[int], object]) -> Non
     cache = DecodeCache()
     decode_show(STORED, cache=cache, digests=_digests(STORED))
     docs = _mutated(*mutation)
-    only_showpy_errors(lambda: decode_show(docs, cache=cache, digests=_digests(docs)), mutation)
+    only_e8s_errors(lambda: decode_show(docs, cache=cache, digests=_digests(docs)), mutation)
 
 
 @given(KNOWN_OR_TEXT)
 def test_fuzz_read(path: str) -> None:
-    only_showpy_errors(lambda: READ_ONLY.read(path), path)
+    only_e8s_errors(lambda: READ_ONLY.read(path), path)
 
 
 @given(KNOWN_OR_TEXT)
 def test_fuzz_ls(path: str) -> None:
-    only_showpy_errors(lambda: READ_ONLY.ls(path), path)
+    only_e8s_errors(lambda: READ_ONLY.ls(path), path)
 
 
 @given(st.sampled_from(KNOWN_PATHS), RAW_BYTES, st.booleans())
 def test_fuzz_staged_changes_bytes(path: str, raw: bytes, is_renumbered: bool) -> None:
     show = RENUMBERED if is_renumbered else PLAIN
     stored = STORED if is_renumbered else encode_show(PLAIN)
-    only_showpy_errors(lambda: staged_changes(path, raw, show, stored), (path, raw))
+    only_e8s_errors(lambda: staged_changes(path, raw, show, stored), (path, raw))
 
 
 @given(st.sampled_from(KNOWN_PATHS), JSON_VALUES.map(_json_bytes))
 def test_fuzz_staged_changes_json_shapes(path: str, raw: bytes) -> None:
-    only_showpy_errors(lambda: staged_changes(path, raw, RENUMBERED, STORED), (path, raw))
+    only_e8s_errors(lambda: staged_changes(path, raw, RENUMBERED, STORED), (path, raw))
 
 
 @given(KNOWN_OR_TEXT, st.one_of(RAW_BYTES, JSON_VALUES.map(_json_bytes)))
 def test_fuzz_write_paths(path: str, raw: bytes) -> None:
     workspace = _session_workspace()
-    only_showpy_errors(lambda: workspace.write(path, raw, at=LATER), (path, raw))
+    only_e8s_errors(lambda: workspace.write(path, raw, at=LATER), (path, raw))
 
 
 @given(
@@ -198,7 +198,7 @@ def test_fuzz_write_paths(path: str, raw: bytes) -> None:
 )
 def test_fuzz_commit_paths(changes: dict[str, bytes | None]) -> None:
     workspace = _session_workspace()
-    only_showpy_errors(lambda: workspace.commit(changes, at=LATER), changes)
+    only_e8s_errors(lambda: workspace.commit(changes, at=LATER), changes)
 
 
 @given(st.sampled_from(KNOWN_PATHS), RAW_BYTES)
@@ -209,7 +209,7 @@ def test_fuzz_commit_then_read(path: str, raw: bytes) -> None:
         workspace.commit({path: raw}, at=LATER)
         workspace.read(path)
 
-    only_showpy_errors(commit_and_read, (path, raw))
+    only_e8s_errors(commit_and_read, (path, raw))
 
 
 EVENT_KINDS = st.sampled_from(get_args(EventKind.__value__))
@@ -228,9 +228,9 @@ def test_fuzz_apply_event_payloads(kind: EventKind, payload: dict[str, object]) 
         event = CanvasEvent.model_validate({"id": "e", "at": AT, "kind": kind, "payload": payload})
         return apply_event(PLAIN, event, force=True)
 
-    only_showpy_errors(replay, (kind, payload))
+    only_e8s_errors(replay, (kind, payload))
 
 
 @given(st.one_of(RAW_BYTES, JSON_VALUES.map(_json_bytes)))
 def test_fuzz_decode_comments(raw: bytes) -> None:
-    only_showpy_errors(lambda: decode_comments(raw), raw)
+    only_e8s_errors(lambda: decode_comments(raw), raw)

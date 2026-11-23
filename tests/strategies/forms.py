@@ -16,9 +16,9 @@ from dataclasses import dataclass
 
 from hypothesis import strategies as st
 
-from showpy.choreo.form_models import FacingSpec, Form, FormKind, SpacingSpec
-from showpy.choreo.form_place import place
-from showpy.choreo.forms import (
+from e8s.choreo.form_models import FacingSpec, Form, FormKind, SpacingSpec
+from e8s.choreo.form_place import place
+from e8s.choreo.forms import (
     arc_form,
     block_form,
     circle_form,
@@ -33,13 +33,13 @@ from showpy.choreo.forms import (
     text_form,
     wedge_form,
 )
-from showpy.choreo.match_ops import with_set
-from showpy.core.types import Box2, Point
-from showpy.geo.shapes import rect
-from showpy.geo.spacing import FillPattern
-from showpy.sheet.models import Sheet
-from showpy.show.changes import apply_change
-from showpy.show.models import FormOp, Show
+from e8s.choreo.match_ops import with_set
+from e8s.core.types import Box2, Point
+from e8s.geo.shapes import rect
+from e8s.geo.spacing import FillPattern
+from e8s.sheet.models import Sheet
+from e8s.show.changes import apply_change
+from e8s.show.models import FormOp, Show
 from tests.strategies.sheet import headings, points_on
 
 FORM_MARGIN_M = 4.0

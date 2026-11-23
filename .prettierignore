@@ -1,4 +1,4 @@
-showpy/schemas/
+e8s/schemas/
 tests/golden/fixtures/
 uv.lock
 .venv/
@@ -7,4 +7,4 @@ node_modules/
 .nox/
 .superpowers/
 tests/fixtures/repos/
-showpy/fonts/
+e8s/fonts/

@@ -6,7 +6,7 @@ test_motion_stats.py --- tests speed, travel direction and motion analysis over 
 Contains:
     test_regression_motion_helpers_accept_a_custom_motion_registry: analyses a show that uses a
         custom-registered motion
-    test_regression_energy_curve_rejects_negative_resolution: raises a ShowPyError, not numpy
+    test_regression_energy_curve_rejects_negative_resolution: raises an E8sError, not numpy
         ValueError, for a negative per_count
     test_regression_energy_curve_rejects_zero_resolution: raises PathError for a per_count of 0
 """
@@ -18,9 +18,9 @@ from typing import cast
 import numpy as np
 import pytest
 
-from showpy.choreo.engine import PathEngine
-from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, MotionRegistry
-from showpy.choreo.motion_stats import (
+from e8s.choreo.engine import PathEngine
+from e8s.choreo.motion import DEFAULT_MOTIONS, FloatArray, MotionRegistry
+from e8s.choreo.motion_stats import (
     direction_of_travel,
     energy_curve,
     motion_contrast,
@@ -29,13 +29,13 @@ from showpy.choreo.motion_stats import (
     speed,
     speeds,
 )
-from showpy.choreo.path_models import PathRow, PathStyle
-from showpy.core.errors import PathError, ShowPyError, TimeRangeError
-from showpy.core.ids import SpotId
-from showpy.core.types import Point, Points
-from showpy.core.util import approx_equal
-from showpy.show.models import Show
-from showpy.time.models import Marker, MarkerKind
+from e8s.choreo.path_models import PathRow, PathStyle
+from e8s.core.errors import E8sError, PathError, TimeRangeError
+from e8s.core.ids import SpotId
+from e8s.core.types import Point, Points
+from e8s.core.util import approx_equal
+from e8s.show.models import Show
+from e8s.time.models import Marker, MarkerKind
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
 from tests.fixtures.shows import two_set_show
 from tests.helpers import defect
@@ -178,8 +178,8 @@ def test_regression_motion_helpers_accept_a_custom_motion_registry(call: Motions
 
 
 def test_regression_energy_curve_rejects_negative_resolution() -> None:
-    """Raises a ShowPyError, not numpy ValueError, for a negative per_count (audit 9.2)."""
-    with pytest.raises(ShowPyError):
+    """Raises an E8sError, not numpy ValueError, for a negative per_count (audit 9.2)."""
+    with pytest.raises(E8sError):
         energy_curve(two_set_show(), per_count=BAD_PER_COUNT)
 
 

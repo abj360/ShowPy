@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_fuzz_clock.py --- fuzzes the clock for non-finite results; only ShowPyError may escape
+test_fuzz_clock.py --- fuzzes the clock for non-finite results; only E8sError may escape
 
 Contains:
     TIMELINES: draws timelines of tempo sections, ramps and holds within the stored bounds, one
@@ -14,11 +14,11 @@ import math
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.core.caps import MAX_COUNTS, MIN_TEMPO
-from showpy.core.types import Count, Seconds
-from showpy.time.clock import count_to_seconds, seconds_to_count
-from showpy.time.models import Hold, TempoSection, Timeline, TimelineMode
-from tests.helpers import only_showpy_errors
+from e8s.core.caps import MAX_COUNTS, MIN_TEMPO
+from e8s.core.types import Count, Seconds
+from e8s.time.clock import count_to_seconds, seconds_to_count
+from e8s.time.models import Hold, TempoSection, Timeline, TimelineMode
+from tests.helpers import only_e8s_errors
 
 MAX_TEMPO = 1e6
 MAX_HOLD_S = 1e6
@@ -73,4 +73,4 @@ def _assert_clock_results_are_finite(timeline: Timeline, count: Count) -> None:
 @given(TIMELINES, section_counts)
 def test_fuzz_clock_results_are_finite(timeline: Timeline, count: Count) -> None:
     """Gives finite seconds and a finite count back for every timeline within the bounds."""
-    only_showpy_errors(lambda: _assert_clock_results_are_finite(timeline, count), (timeline, count))
+    only_e8s_errors(lambda: _assert_clock_results_are_finite(timeline, count), (timeline, count))

@@ -1,0 +1,3608 @@
+{
+  "$comment": "Licensed under the MIT License: see LICENSE-MIT.txt beside this file.",
+  "$defs": {
+    "Affine": {
+      "maxItems": 3,
+      "minItems": 3,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/AffineRow"
+        },
+        {
+          "$ref": "#/$defs/AffineRow"
+        },
+        {
+          "$ref": "#/$defs/AffineRow"
+        }
+      ],
+      "type": "array"
+    },
+    "AffineRow": {
+      "maxItems": 3,
+      "minItems": 3,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/Finite"
+        },
+        {
+          "$ref": "#/$defs/Finite"
+        },
+        {
+          "$ref": "#/$defs/Finite"
+        }
+      ],
+      "type": "array"
+    },
+    "AnyCurve": {
+      "discriminator": {
+        "mapping": {
+          "arc": "#/$defs/ArcCurve",
+          "bezier": "#/$defs/BezierCurve",
+          "circle": "#/$defs/CircleCurve",
+          "composite": "#/$defs/CompositeCurve",
+          "ellipse": "#/$defs/EllipseCurve",
+          "polyline": "#/$defs/Polyline",
+          "segment": "#/$defs/Segment",
+          "spiral": "#/$defs/SpiralCurve",
+          "spline": "#/$defs/SplineCurve",
+          "svg": "#/$defs/SvgCurve",
+          "trimmed": "#/$defs/TrimmedCurve"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/Segment"
+        },
+        {
+          "$ref": "#/$defs/Polyline"
+        },
+        {
+          "$ref": "#/$defs/ArcCurve"
+        },
+        {
+          "$ref": "#/$defs/CircleCurve"
+        },
+        {
+          "$ref": "#/$defs/EllipseCurve"
+        },
+        {
+          "$ref": "#/$defs/SplineCurve"
+        },
+        {
+          "$ref": "#/$defs/BezierCurve"
+        },
+        {
+          "$ref": "#/$defs/SvgCurve"
+        },
+        {
+          "$ref": "#/$defs/SpiralCurve"
+        },
+        {
+          "$ref": "#/$defs/CompositeCurve"
+        },
+        {
+          "$ref": "#/$defs/TrimmedCurve"
+        }
+      ]
+    },
+    "ApprovalState": {
+      "description": "Names the collaboration states of a set.",
+      "enum": [
+        "draft",
+        "proposed",
+        "approved"
+      ],
+      "title": "ApprovalState",
+      "type": "string"
+    },
+    "ArcCurve": {
+      "additionalProperties": false,
+      "description": "Draws a circular arc.\n\nAttributes:\n    center: Circle center.\n    radius: Radius in meters, above 0.\n    start_deg: Start angle, counter-clockwise from +x.\n    sweep_deg: Signed sweep; positive turns counter-clockwise.",
+      "properties": {
+        "center": {
+          "$ref": "#/$defs/Point"
+        },
+        "closed": {
+          "const": false,
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "arc",
+          "default": "arc",
+          "title": "Kind",
+          "type": "string"
+        },
+        "radius": {
+          "$ref": "#/$defs/Meters"
+        },
+        "start_deg": {
+          "$ref": "#/$defs/Degrees"
+        },
+        "sweep_deg": {
+          "$ref": "#/$defs/Degrees"
+        }
+      },
+      "required": [
+        "center",
+        "radius",
+        "start_deg",
+        "sweep_deg"
+      ],
+      "title": "ArcCurve",
+      "type": "object"
+    },
+    "ArcRecipe": {
+      "additionalProperties": false,
+      "description": "Holds the curve of an arc form, refusing a sweep past one full turn.\n\nA sweep past 360 degrees would put slots on top of each other, so a sweep lies in (0, 360]\ndegrees either way; the arc curve itself refuses a zero sweep.\n\n>>> from e8s.geo.shapes import arc\n>>> ArcRecipe(curve=arc((0, 0), 2.0, 0.0, 90.0)).kind\n'arc'",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/AnyCurve"
+        },
+        "kind": {
+          "const": "arc",
+          "default": "arc",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "curve"
+      ],
+      "title": "ArcRecipe",
+      "type": "object"
+    },
+    "AudioTrack": {
+      "additionalProperties": false,
+      "description": "Describes music or sound that plays alongside the show.\n\nAttributes:\n    file: Path or URI of the audio asset.\n    label: Unique name of the track.\n    sync_offset_s: Audio time that plays at count 0.\n    gain: Linear playback gain.\n    section: (start, end) counts the track covers, or None for the whole show.",
+      "properties": {
+        "file": {
+          "title": "File",
+          "type": "string"
+        },
+        "gain": {
+          "default": 1.0,
+          "title": "Gain",
+          "type": "number"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/Count"
+                },
+                {
+                  "$ref": "#/$defs/Count"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "sync_offset_s": {
+          "$ref": "#/$defs/Seconds",
+          "default": 0.0
+        }
+      },
+      "required": [
+        "file",
+        "label"
+      ],
+      "title": "AudioTrack",
+      "type": "object"
+    },
+    "BezierCurve": {
+      "additionalProperties": false,
+      "description": "Draws a B\u00e9zier curve of degree len(control) - 1.\n\nAttributes:\n    control: Control points; the curve starts at the first and ends at the last.",
+      "properties": {
+        "closed": {
+          "const": false,
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "control": {
+          "items": {
+            "$ref": "#/$defs/Point"
+          },
+          "title": "Control",
+          "type": "array"
+        },
+        "kind": {
+          "const": "bezier",
+          "default": "bezier",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "control"
+      ],
+      "title": "BezierCurve",
+      "type": "object"
+    },
+    "BlockAnchor": {
+      "enum": [
+        "center",
+        "front-left",
+        "front-center",
+        "front-right",
+        "back-left",
+        "back-center",
+        "back-right"
+      ],
+      "type": "string"
+    },
+    "BlockRecipe": {
+      "additionalProperties": false,
+      "description": "Holds a rows x cols block, front row first.\n\nAttributes:\n    origin: Point the anchor sits on.\n    rows: Rows from front to back.\n    cols: Columns from left to right.\n    interval: Meters between neighbouring slots.\n    facing: Direction the block faces, which turns the rows and columns.\n    anchor: Which slot or edge of the block sits on `origin`.\n\n>>> BlockRecipe(origin=(0, 0), rows=1, cols=2, interval=1.0).anchor\n'center'",
+      "properties": {
+        "anchor": {
+          "$ref": "#/$defs/BlockAnchor",
+          "default": "center"
+        },
+        "cols": {
+          "exclusiveMinimum": 0,
+          "title": "Cols",
+          "type": "integer"
+        },
+        "facing": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        },
+        "interval": {
+          "$ref": "#/$defs/Meters"
+        },
+        "kind": {
+          "const": "block",
+          "default": "block",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "origin": {
+          "$ref": "#/$defs/Point"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "rows": {
+          "exclusiveMinimum": 0,
+          "title": "Rows",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "origin",
+        "rows",
+        "cols",
+        "interval"
+      ],
+      "title": "BlockRecipe",
+      "type": "object"
+    },
+    "BuiltInMotionParams": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WeaveParams"
+        },
+        {
+          "$ref": "#/$defs/ZigzagParams"
+        },
+        {
+          "$ref": "#/$defs/FigureEightParams"
+        },
+        {
+          "$ref": "#/$defs/SpiralParams"
+        }
+      ]
+    },
+    "Cast": {
+      "additionalProperties": false,
+      "description": "Holds every group and spot in the show.\n\nAttributes:\n    groups: Group key to group; each key equals its group's `key`.\n    spots: Every spot, in creation order.\n    selections: Named selections of spot IDs of this cast, deduplicated in first-seen order.\n    label_scheme: Labeling rules; its prefixes name groups of this cast.",
+      "properties": {
+        "groups": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Group"
+          },
+          "default": {},
+          "title": "Groups",
+          "type": "object"
+        },
+        "label_scheme": {
+          "$ref": "#/$defs/LabelScheme",
+          "default": {
+            "pad": 0,
+            "prefixes": {},
+            "start": 1
+          }
+        },
+        "selections": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SelectionSpots"
+          },
+          "default": {},
+          "propertyNames": {
+            "$ref": "#/$defs/SelectionKey"
+          },
+          "title": "Selections",
+          "type": "object"
+        },
+        "spots": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Spot"
+          },
+          "title": "Spots",
+          "type": "array"
+        }
+      },
+      "title": "Cast",
+      "type": "object"
+    },
+    "CircleCurve": {
+      "additionalProperties": false,
+      "description": "Draws a full circle, counter-clockwise unless `ccw` is False.\n\nAttributes:\n    center: Circle center.\n    radius: Radius in meters, above 0.\n    start_deg: Angle of the start point, counter-clockwise from +x.\n    ccw: Travel direction; mirroring a circle flips it.",
+      "properties": {
+        "ccw": {
+          "default": true,
+          "title": "Ccw",
+          "type": "boolean"
+        },
+        "center": {
+          "$ref": "#/$defs/Point"
+        },
+        "closed": {
+          "const": true,
+          "default": true,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "circle",
+          "default": "circle",
+          "title": "Kind",
+          "type": "string"
+        },
+        "radius": {
+          "$ref": "#/$defs/Meters"
+        },
+        "start_deg": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        }
+      },
+      "required": [
+        "center",
+        "radius"
+      ],
+      "title": "CircleCurve",
+      "type": "object"
+    },
+    "CircleRecipe": {
+      "additionalProperties": false,
+      "description": "Holds the curve of a circle form.",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/AnyCurve"
+        },
+        "kind": {
+          "const": "circle",
+          "default": "circle",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "curve"
+      ],
+      "title": "CircleRecipe",
+      "type": "object"
+    },
+    "Claimable": {
+      "enum": [
+        "performer",
+        "crew",
+        "none"
+      ],
+      "type": "string"
+    },
+    "CompositeCurve": {
+      "additionalProperties": false,
+      "description": "Joins curves end to end into one curve.\n\nAttributes:\n    parts: Curves in travel order.\n    closed: Whether the last part ends on the first part's start.",
+      "properties": {
+        "closed": {
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "composite",
+          "default": "composite",
+          "title": "Kind",
+          "type": "string"
+        },
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/AnyCurve"
+          },
+          "title": "Parts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "parts"
+      ],
+      "title": "CompositeCurve",
+      "type": "object"
+    },
+    "CoordinateKind": {
+      "description": "Names the coordinate wording families.",
+      "enum": [
+        "marching",
+        "stage",
+        "dance_floor",
+        "grid"
+      ],
+      "title": "CoordinateKind",
+      "type": "string"
+    },
+    "CoordinateSystem": {
+      "additionalProperties": false,
+      "description": "Describes how positions are labeled and worded; it never moves stored positions.\n\nAttributes:\n    kind: Wording family.\n    origin: Point or landmark ID that reads as zero.\n    audience_side: Edge of the sheet where the audience sits, as drawn.\n    units: Unit positions are written in.\n    precision: Rounding step in `units`.\n    labels: Words used for directions, e.g. {\"left\": \"stage right\"}.",
+      "properties": {
+        "audience_side": {
+          "default": "front",
+          "enum": [
+            "front",
+            "back",
+            "left",
+            "right"
+          ],
+          "title": "Audience Side",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/CoordinateKind",
+          "default": "grid"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Labels",
+          "type": "object"
+        },
+        "origin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Point"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": [
+            0.0,
+            0.0
+          ],
+          "title": "Origin"
+        },
+        "precision": {
+          "default": 0.01,
+          "title": "Precision",
+          "type": "number"
+        },
+        "units": {
+          "default": "m",
+          "title": "Units",
+          "type": "string"
+        }
+      },
+      "title": "CoordinateSystem",
+      "type": "object"
+    },
+    "Count": {
+      "maximum": 1000000,
+      "minimum": -1000000,
+      "type": "number"
+    },
+    "CountsPerMinute": {
+      "minimum": 0.001,
+      "type": "number"
+    },
+    "Cue": {
+      "additionalProperties": false,
+      "description": "Describes one moment in cue mode.\n\nAttributes:\n    label: Unique name of the cue.\n    order: Position in the running order.\n    estimated_seconds: Estimated duration, so previews can play.",
+      "properties": {
+        "estimated_seconds": {
+          "$ref": "#/$defs/Seconds"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "order": {
+          "title": "Order",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "label",
+        "order",
+        "estimated_seconds"
+      ],
+      "title": "Cue",
+      "type": "object"
+    },
+    "CurveRecipe": {
+      "additionalProperties": false,
+      "description": "Holds the smooth curve of a curve form.",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/AnyCurve"
+        },
+        "kind": {
+          "const": "curve",
+          "default": "curve",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "curve"
+      ],
+      "title": "CurveRecipe",
+      "type": "object"
+    },
+    "CustomRecipe": {
+      "additionalProperties": false,
+      "description": "Holds frozen hand-placed points and, optionally, one stored facing per point.\n\nAttributes:\n    points: Slot positions in slot order.\n    facings: One facing per point, which wins over the form's FacingSpec; None for none.\n\n>>> CustomRecipe(points=((1.0, 2.0),), facings=(45.0,)).facings\n(45.0,)",
+      "properties": {
+        "facings": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Degrees"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Facings"
+        },
+        "kind": {
+          "const": "custom",
+          "default": "custom",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/Point"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "points"
+      ],
+      "title": "CustomRecipe",
+      "type": "object"
+    },
+    "Degrees": {
+      "type": "number"
+    },
+    "Easing": {
+      "additionalProperties": false,
+      "description": "Maps progress through a move (time share) to progress along it (distance share).\n\nAttributes:\n    kind: Easing family; `custom` uses `points`.\n    strength: Exponent or step count, depending on the kind.\n    points: Custom curve as (time share, distance share) pairs from (0, 0) to (1, 1).",
+      "properties": {
+        "kind": {
+          "default": "linear",
+          "enum": [
+            "linear",
+            "ease_in",
+            "ease_out",
+            "ease_in_out",
+            "hold_then_burst",
+            "burst_then_settle",
+            "steps",
+            "custom"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "points": {
+          "default": [],
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "strength": {
+          "default": 2.0,
+          "minimum": 1.0,
+          "title": "Strength",
+          "type": "number"
+        }
+      },
+      "title": "Easing",
+      "type": "object"
+    },
+    "EllipseCurve": {
+      "additionalProperties": false,
+      "description": "Draws a counter-clockwise oval.\n\nAttributes:\n    center: Ellipse center.\n    rx: Semi-axis along the rotated x direction.\n    ry: Semi-axis along the rotated y direction.\n    rotation_deg: Counter-clockwise rotation of the axes.",
+      "properties": {
+        "center": {
+          "$ref": "#/$defs/Point"
+        },
+        "closed": {
+          "const": true,
+          "default": true,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "ellipse",
+          "default": "ellipse",
+          "title": "Kind",
+          "type": "string"
+        },
+        "rotation_deg": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        },
+        "rx": {
+          "$ref": "#/$defs/Meters"
+        },
+        "ry": {
+          "$ref": "#/$defs/Meters"
+        }
+      },
+      "required": [
+        "center",
+        "rx",
+        "ry"
+      ],
+      "title": "EllipseCurve",
+      "type": "object"
+    },
+    "EntityFacing": {
+      "additionalProperties": false,
+      "description": "Holds the spot a `toward_entity` facing mode looks at.\n\n>>> EntityFacing(entity=\"T2\").entity\n'T2'\n\nAttributes:\n    kind: Tag that tells the facing values apart in stored documents.\n    entity: Spot ID.",
+      "properties": {
+        "entity": {
+          "title": "Entity",
+          "type": "string"
+        },
+        "kind": {
+          "const": "entity",
+          "default": "entity",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "entity"
+      ],
+      "title": "EntityFacing",
+      "type": "object"
+    },
+    "FacingMode": {
+      "description": "Names how a spot faces while it moves.",
+      "enum": [
+        "fixed",
+        "to_target",
+        "travel",
+        "against_travel",
+        "toward_point",
+        "toward_entity",
+        "audience",
+        "interpolate"
+      ],
+      "title": "FacingMode",
+      "type": "string"
+    },
+    "FacingOverride": {
+      "additionalProperties": false,
+      "description": "Forces a facing on spots over a global count range, regardless of paths.\n\nAttributes:\n    entities: Spots affected.\n    mode: Facing mode during the range.\n    value: Typed value the mode reads; None for modes that read none.\n    start: Global count where the override starts.\n    end: Global count where it ends.\n    turn_counts: Counts spent turning into and out of the override.",
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/Count"
+        },
+        "entities": {
+          "$ref": "#/$defs/SelectorField"
+        },
+        "mode": {
+          "$ref": "#/$defs/FacingMode"
+        },
+        "start": {
+          "$ref": "#/$defs/Count"
+        },
+        "turn_counts": {
+          "default": 0.0,
+          "title": "Turn Counts",
+          "type": "number"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FacingValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "entities",
+        "mode",
+        "start",
+        "end"
+      ],
+      "title": "FacingOverride",
+      "type": "object"
+    },
+    "FacingSpec": {
+      "additionalProperties": false,
+      "description": "Describes how form members face.\n\nAttributes:\n    mode: `fixed`, `audience`, `toward_point`, `along`, `normal` or `outward`.\n    value: Heading for fixed, wrapped into [0, 360); a point for toward_point; for along,\n        normal and outward an optional offset in degrees added to the computed facing.",
+      "properties": {
+        "mode": {
+          "default": "audience",
+          "enum": [
+            "fixed",
+            "audience",
+            "toward_point",
+            "along",
+            "normal",
+            "outward"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Degrees"
+            },
+            {
+              "$ref": "#/$defs/Point"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "title": "FacingSpec",
+      "type": "object"
+    },
+    "FacingValue": {
+      "discriminator": {
+        "mapping": {
+          "entity": "#/$defs/EntityFacing",
+          "fixed": "#/$defs/FixedFacing",
+          "point": "#/$defs/PointFacing"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/FixedFacing"
+        },
+        {
+          "$ref": "#/$defs/PointFacing"
+        },
+        {
+          "$ref": "#/$defs/EntityFacing"
+        }
+      ]
+    },
+    "FigureEightParams": {
+      "additionalProperties": false,
+      "description": "Holds the parameters of the built-in figure_eight motion.\n\n>>> FigureEightParams().amplitude\n1.0\n\nAttributes:\n    amplitude: Side offset in meters; negative mirrors the loops.",
+      "properties": {
+        "amplitude": {
+          "$ref": "#/$defs/Finite",
+          "default": 1.0
+        }
+      },
+      "title": "FigureEightParams",
+      "type": "object"
+    },
+    "FillPattern": {
+      "enum": [
+        "grid",
+        "offset",
+        "hex"
+      ],
+      "type": "string"
+    },
+    "FillRecipe": {
+      "additionalProperties": false,
+      "description": "Holds an area filled with a lattice; with a count, the slots nearest its center are kept.\n\nAttributes:\n    outline: Area to fill.\n    interval: Meters between lattice neighbours.\n    pattern: `grid`, `offset` or `hex`.\n    angle_deg: Lattice rotation, counter-clockwise.",
+      "properties": {
+        "angle_deg": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        },
+        "interval": {
+          "$ref": "#/$defs/Meters"
+        },
+        "kind": {
+          "const": "fill",
+          "default": "fill",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "outline": {
+          "$ref": "#/$defs/Region"
+        },
+        "pattern": {
+          "$ref": "#/$defs/FillPattern",
+          "default": "grid"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "outline",
+        "interval"
+      ],
+      "title": "FillRecipe",
+      "type": "object"
+    },
+    "Finite": {
+      "type": "number"
+    },
+    "FixedFacing": {
+      "additionalProperties": false,
+      "description": "Holds the heading a `fixed` facing mode holds.\n\n>>> FixedFacing(degrees=450.0).degrees\n90.0\n\nAttributes:\n    kind: Tag that tells the facing values apart in stored documents.\n    degrees: Heading wrapped to [0, 360); 0 faces the audience, counter-clockwise positive.",
+      "properties": {
+        "degrees": {
+          "$ref": "#/$defs/Heading"
+        },
+        "kind": {
+          "const": "fixed",
+          "default": "fixed",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "degrees"
+      ],
+      "title": "FixedFacing",
+      "type": "object"
+    },
+    "FontUri": {
+      "pattern": "^asset:sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "Form": {
+      "additionalProperties": false,
+      "description": "Holds a stored shape construction plus its ordered members.\n\nAttributes:\n    id: Form ID, unique across the show.\n    set: Set the form belongs to.\n    recipe: Typed construction recipe the slots are generated from; its `kind` is the\n        form's shape family.\n    members: One entry per slot in slot order: the spot standing on it, or None for an open\n        slot that `place` fills. At most `recipe.n` entries when `n` is set.\n    spacing: How members are spaced on the shape.\n    facing: How members face.\n    locked: Designer lock; edits need force=True.\n    meta: Free designer metadata, read-only once stored.",
+      "properties": {
+        "facing": {
+          "$ref": "#/$defs/FacingSpec",
+          "default": {
+            "mode": "audience",
+            "value": null
+          }
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "locked": {
+          "default": false,
+          "title": "Locked",
+          "type": "boolean"
+        },
+        "members": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Members",
+          "type": "array"
+        },
+        "meta": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "title": "Meta",
+          "type": "object"
+        },
+        "recipe": {
+          "$ref": "#/$defs/Recipe"
+        },
+        "set": {
+          "title": "Set",
+          "type": "string"
+        },
+        "spacing": {
+          "$ref": "#/$defs/SpacingSpec",
+          "default": {
+            "align": "start",
+            "end": null,
+            "gaps": [],
+            "interval": null,
+            "mode": "count",
+            "start": 0.0
+          }
+        }
+      },
+      "required": [
+        "id",
+        "set",
+        "recipe",
+        "members"
+      ],
+      "title": "Form",
+      "type": "object"
+    },
+    "GeneratedRecipe": {
+      "additionalProperties": false,
+      "description": "Holds a registered generator's name and the JSON parameters it is called with.\n\nThe parameters stay an open, read-only JSON object: the generator checks them.\n\nAttributes:\n    fn: Registered generator name.\n    params: Parameters passed to the generator, as plain JSON.\n\n>>> GeneratedRecipe(fn=\"spiral\", params={\"turns\": 2.0}).params[\"turns\"]\n2.0",
+      "properties": {
+        "fn": {
+          "minLength": 1,
+          "title": "Fn",
+          "type": "string"
+        },
+        "kind": {
+          "const": "generated",
+          "default": "generated",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "params": {
+          "$ref": "#/$defs/JsonObject",
+          "default": {}
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "fn"
+      ],
+      "title": "GeneratedRecipe",
+      "type": "object"
+    },
+    "Grid": {
+      "additionalProperties": false,
+      "description": "Describes the background grid.\n\nAttributes:\n    origin: A grid intersection.\n    spacing: Cell size along x and y.\n    major_every: Every n-th line is drawn heavier.\n    rotation_deg: Counter-clockwise grid rotation.\n    unit_name: Unit the grid is labeled in.",
+      "properties": {
+        "major_every": {
+          "default": 5,
+          "title": "Major Every",
+          "type": "integer"
+        },
+        "origin": {
+          "$ref": "#/$defs/Point",
+          "default": [
+            0.0,
+            0.0
+          ]
+        },
+        "rotation_deg": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        },
+        "spacing": {
+          "default": [
+            1.0,
+            1.0
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/Meters"
+            },
+            {
+              "$ref": "#/$defs/Meters"
+            }
+          ],
+          "title": "Spacing",
+          "type": "array"
+        },
+        "unit_name": {
+          "default": "m",
+          "title": "Unit Name",
+          "type": "string"
+        }
+      },
+      "title": "Grid",
+      "type": "object"
+    },
+    "Group": {
+      "additionalProperties": false,
+      "description": "Holds a designer-made set of spots with shared defaults.\n\nAttributes:\n    key: Stable group key, e.g. `trumpets`.\n    name: Display name; defaults to the key in title case.\n    label_prefix: Prefix for spot labels, e.g. `T` gives T1, T2.\n    symbol: Sheet glyph.\n    color: Hex color, `#rrggbb`.\n    default_radius: Footprint radius for new spots, above 0.\n    limits: Per-group limit overrides read by a consumer checker.\n    moves: False for stationary groups such as a pit.",
+      "properties": {
+        "color": {
+          "$ref": "#/$defs/HexColor",
+          "default": "#808080"
+        },
+        "default_radius": {
+          "$ref": "#/$defs/PositiveFinite",
+          "default": 0.3
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "label_prefix": {
+          "title": "Label Prefix",
+          "type": "string"
+        },
+        "limits": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PositiveFinite"
+          },
+          "default": {},
+          "title": "Limits",
+          "type": "object"
+        },
+        "moves": {
+          "default": true,
+          "title": "Moves",
+          "type": "boolean"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "symbol": {
+          "default": "circle",
+          "title": "Symbol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "label_prefix"
+      ],
+      "title": "Group",
+      "type": "object"
+    },
+    "GuideLine": {
+      "additionalProperties": false,
+      "description": "Holds one line drawn on the sheet.\n\nAttributes:\n    id: Guide ID.\n    kind: yard, hash, sideline, center, edge, spike or custom.\n    points: Vertices of the line.\n    label: Text drawn with the line.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "yard",
+            "hash",
+            "sideline",
+            "center",
+            "edge",
+            "spike",
+            "custom"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "default": "",
+          "title": "Label",
+          "type": "string"
+        },
+        "points": {
+          "$ref": "#/$defs/Ring"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "points"
+      ],
+      "title": "GuideLine",
+      "type": "object"
+    },
+    "Heading": {
+      "type": "number"
+    },
+    "HexColor": {
+      "pattern": "^#[0-9a-fA-F]{6}$",
+      "type": "string"
+    },
+    "Hold": {
+      "additionalProperties": false,
+      "description": "Pauses the counts: time reaches `at_count`, waits `seconds`, then continues.\n\nAttributes:\n    at_count: Count where the pause happens.\n    seconds: Length of the pause.\n    note: Designer note such as \"fermata\".",
+      "properties": {
+        "at_count": {
+          "$ref": "#/$defs/Count"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "seconds": {
+          "$ref": "#/$defs/Seconds"
+        }
+      },
+      "required": [
+        "at_count",
+        "seconds"
+      ],
+      "title": "Hold",
+      "type": "object"
+    },
+    "JsonObject": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "type": "object"
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "LabelScheme": {
+      "additionalProperties": false,
+      "description": "Holds labeling rules; a group missing from `prefixes` uses its own label_prefix.\n\nAttributes:\n    prefixes: Group key to label prefix overrides; every key names a group of the cast.\n    start: First number in each group.\n    pad: Zero-pad numbers to this width, 0 to `MAX_LABEL_PAD`.",
+      "properties": {
+        "pad": {
+          "default": 0,
+          "maximum": 8,
+          "minimum": 0,
+          "title": "Pad",
+          "type": "integer"
+        },
+        "prefixes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "title": "Prefixes",
+          "type": "object"
+        },
+        "start": {
+          "default": 1,
+          "title": "Start",
+          "type": "integer"
+        }
+      },
+      "title": "LabelScheme",
+      "type": "object"
+    },
+    "Landmark": {
+      "additionalProperties": false,
+      "description": "Holds a named reference such as \"front hash\" or \"center stage\".\n\nAttributes:\n    id: Landmark ID.\n    name: Display name.\n    kind: point (1 point), line (2+ points) or area (3+ points, a ring).\n    geometry: Points of the landmark.\n    aliases: Other names that resolve to it.",
+      "properties": {
+        "aliases": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "geometry": {
+          "$ref": "#/$defs/Ring"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "point",
+            "line",
+            "area"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "geometry"
+      ],
+      "title": "Landmark",
+      "type": "object"
+    },
+    "LineRecipe": {
+      "additionalProperties": false,
+      "description": "Holds the curve of a line form, a segment unless an edit reshaped it.\n\n>>> from e8s.geo.shapes import line\n>>> LineRecipe(curve=line((0, 0), (4, 0))).kind\n'line'",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/AnyCurve"
+        },
+        "kind": {
+          "const": "line",
+          "default": "line",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "curve"
+      ],
+      "title": "LineRecipe",
+      "type": "object"
+    },
+    "Marker": {
+      "additionalProperties": false,
+      "description": "Names one moment, such as \"the hit\" or \"letter B\".\n\nAttributes:\n    label: Unique name of the moment.\n    at_count: Count where it happens.\n    kind: What the marker is for.",
+      "properties": {
+        "at_count": {
+          "$ref": "#/$defs/Count"
+        },
+        "kind": {
+          "$ref": "#/$defs/MarkerKind",
+          "default": "custom"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "at_count"
+      ],
+      "title": "Marker",
+      "type": "object"
+    },
+    "MarkerKind": {
+      "description": "Classifies a marker.",
+      "enum": [
+        "rehearsal",
+        "cue",
+        "custom"
+      ],
+      "title": "MarkerKind",
+      "type": "string"
+    },
+    "MeasureSetting": {
+      "additionalProperties": false,
+      "description": "Configures measure numbering for designers who talk in measures.\n\nAttributes:\n    counts_per_measure: Measure length from count 0; finite and above 0.\n    start_measure: Number of the measure that starts at count 0.\n    changes: (count, new length) pairs; each starts a new measure at its count. Counts are\n        at least 0 and strictly increasing, lengths finite and above 0.",
+      "properties": {
+        "changes": {
+          "default": [],
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "$ref": "#/$defs/NonNegCount"
+              },
+              {
+                "$ref": "#/$defs/PositiveFinite"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Changes",
+          "type": "array"
+        },
+        "counts_per_measure": {
+          "$ref": "#/$defs/PositiveFinite"
+        },
+        "start_measure": {
+          "default": 1,
+          "title": "Start Measure",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "counts_per_measure"
+      ],
+      "title": "MeasureSetting",
+      "type": "object"
+    },
+    "Meters": {
+      "maximum": 1000000.0,
+      "minimum": -1000000.0,
+      "type": "number"
+    },
+    "NonNegCount": {
+      "maximum": 1000000,
+      "minimum": 0,
+      "type": "number"
+    },
+    "NonNegMeters": {
+      "maximum": 1000000.0,
+      "minimum": 0,
+      "type": "number"
+    },
+    "PathRow": {
+      "additionalProperties": false,
+      "description": "Holds one spot's instructions for one transition; times are local counts.\n\nAttributes:\n    entity: Spot ID.\n    style: Path style.\n    start: Local count the move starts.\n    end: Local count the move ends; None means the end of the transition.\n    waypoints: Points passed on the way, for CURVE and POLYLINE.\n    route: Route followed, for FOLLOW.\n    pivot: Rotation center, for ROTATE.\n    sweep_deg: Signed rotation, for ROTATE; positive is counter-clockwise.\n    facing_mode: How the spot faces during the move.\n    facing_value: Typed value the facing mode reads; None for modes that read none.\n    turn_counts: Counts spent turning into and out of the move's facing.\n    turn_direction: Which way turns go.\n    pace: Step pace multiplier for step-size reporting; positions ignore it.\n    locked: Designer lock.\n    note: Free text.\n    motion_fn: Registered motion function, for CUSTOM.\n    motion_params: The built-in motion's typed parameters, or a read-only JSON object for a\n        registered custom motion.\n    easing: How progress maps to time across the window.",
+      "properties": {
+        "easing": {
+          "$ref": "#/$defs/Easing",
+          "default": {
+            "kind": "linear",
+            "points": [],
+            "strength": 2.0
+          }
+        },
+        "end": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "entity": {
+          "title": "Entity",
+          "type": "string"
+        },
+        "facing_mode": {
+          "$ref": "#/$defs/FacingMode",
+          "default": "to_target"
+        },
+        "facing_value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FacingValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "locked": {
+          "default": false,
+          "title": "Locked",
+          "type": "boolean"
+        },
+        "motion_fn": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Motion Fn"
+        },
+        "motion_params": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JsonObject"
+            },
+            {
+              "$ref": "#/$defs/BuiltInMotionParams"
+            }
+          ],
+          "title": "Motion Params"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "pace": {
+          "default": 1.0,
+          "title": "Pace",
+          "type": "number"
+        },
+        "pivot": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Point"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "route": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Route"
+        },
+        "start": {
+          "default": 0.0,
+          "title": "Start",
+          "type": "number"
+        },
+        "style": {
+          "$ref": "#/$defs/PathStyle",
+          "default": "straight"
+        },
+        "sweep_deg": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Degrees"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "turn_counts": {
+          "default": 0.0,
+          "title": "Turn Counts",
+          "type": "number"
+        },
+        "turn_direction": {
+          "$ref": "#/$defs/TurnDirection",
+          "default": "shortest"
+        },
+        "waypoints": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Waypoint"
+          },
+          "title": "Waypoints",
+          "type": "array"
+        }
+      },
+      "required": [
+        "entity"
+      ],
+      "title": "PathRow",
+      "type": "object"
+    },
+    "PathStyle": {
+      "description": "Names the built-in path styles.",
+      "enum": [
+        "straight",
+        "hold",
+        "curve",
+        "polyline",
+        "follow",
+        "rotate",
+        "custom"
+      ],
+      "title": "PathStyle",
+      "type": "string"
+    },
+    "Pin": {
+      "additionalProperties": false,
+      "description": "Records one designer lock; the flags it sets live on placements, forms and path rows.\n\nAttributes:\n    target: What is locked.\n    id: Spot, form or set ID, or a transition written as `a\u2192b`.\n    by: Who pinned it.\n    reason: Why, shown to the agent when an edit is refused.",
+      "properties": {
+        "by": {
+          "default": "designer",
+          "title": "By",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/PinTarget"
+        }
+      },
+      "required": [
+        "target",
+        "id"
+      ],
+      "title": "Pin",
+      "type": "object"
+    },
+    "PinTarget": {
+      "enum": [
+        "entity",
+        "form",
+        "set",
+        "transition"
+      ],
+      "type": "string"
+    },
+    "Placement": {
+      "additionalProperties": false,
+      "description": "Holds one spot's state at one set.\n\nAttributes:\n    entity: Spot ID.\n    x: Meters from the center line, audience-left negative.\n    y: Meters upstage from the front edge.\n    facing: Degrees wrapped into [0, 360), 0 toward the audience, counter-clockwise positive.\n    form: Form the spot belongs to in this set.\n    order: Index along that form.\n    pinned: Designer lock; edits need force=True.\n    note: Text printed on sheets.\n    on_field: False before an entrance or after an exit; not drawn or collision-checked.",
+      "properties": {
+        "entity": {
+          "title": "Entity",
+          "type": "string"
+        },
+        "facing": {
+          "$ref": "#/$defs/Heading",
+          "default": 0.0
+        },
+        "form": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Form"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "on_field": {
+          "default": true,
+          "title": "On Field",
+          "type": "boolean"
+        },
+        "order": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Order"
+        },
+        "pinned": {
+          "default": false,
+          "title": "Pinned",
+          "type": "boolean"
+        },
+        "x": {
+          "$ref": "#/$defs/Meters"
+        },
+        "y": {
+          "$ref": "#/$defs/Meters"
+        }
+      },
+      "required": [
+        "entity",
+        "x",
+        "y"
+      ],
+      "title": "Placement",
+      "type": "object"
+    },
+    "Point": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/Meters"
+        },
+        {
+          "$ref": "#/$defs/Meters"
+        }
+      ],
+      "type": "array"
+    },
+    "PointFacing": {
+      "additionalProperties": false,
+      "description": "Holds the point a `toward_point` facing mode looks at.\n\n>>> PointFacing(point=(1.0, 2.0)).point\n(1.0, 2.0)\n\nAttributes:\n    kind: Tag that tells the facing values apart in stored documents.\n    point: Meters on the sheet.",
+      "properties": {
+        "kind": {
+          "const": "point",
+          "default": "point",
+          "title": "Kind",
+          "type": "string"
+        },
+        "point": {
+          "$ref": "#/$defs/Point"
+        }
+      },
+      "required": [
+        "point"
+      ],
+      "title": "PointFacing",
+      "type": "object"
+    },
+    "Polyline": {
+      "additionalProperties": false,
+      "description": "Connects points with straight pieces.\n\nAttributes:\n    points: Vertices in order; a closed polyline does not repeat the first one.\n    closed: Whether a final piece returns to the first vertex.",
+      "properties": {
+        "closed": {
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "polyline",
+          "default": "polyline",
+          "title": "Kind",
+          "type": "string"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/Point"
+          },
+          "title": "Points",
+          "type": "array"
+        }
+      },
+      "required": [
+        "points"
+      ],
+      "title": "Polyline",
+      "type": "object"
+    },
+    "PolylineRecipe": {
+      "additionalProperties": false,
+      "description": "Holds the straight-sided curve of a polyline form.",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/AnyCurve"
+        },
+        "kind": {
+          "const": "polyline",
+          "default": "polyline",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "curve"
+      ],
+      "title": "PolylineRecipe",
+      "type": "object"
+    },
+    "PositiveFinite": {
+      "exclusiveMinimum": 0,
+      "type": "number"
+    },
+    "PositiveMeters": {
+      "exclusiveMinimum": 0,
+      "maximum": 1000000.0,
+      "type": "number"
+    },
+    "Recipe": {
+      "discriminator": {
+        "mapping": {
+          "arc": "#/$defs/ArcRecipe",
+          "block": "#/$defs/BlockRecipe",
+          "circle": "#/$defs/CircleRecipe",
+          "curve": "#/$defs/CurveRecipe",
+          "custom": "#/$defs/CustomRecipe",
+          "fill": "#/$defs/FillRecipe",
+          "generated": "#/$defs/GeneratedRecipe",
+          "line": "#/$defs/LineRecipe",
+          "polyline": "#/$defs/PolylineRecipe",
+          "scatter": "#/$defs/ScatterRecipe",
+          "svg": "#/$defs/SvgRecipe",
+          "text": "#/$defs/TextRecipe",
+          "wedge": "#/$defs/WedgeRecipe"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/LineRecipe"
+        },
+        {
+          "$ref": "#/$defs/ArcRecipe"
+        },
+        {
+          "$ref": "#/$defs/CurveRecipe"
+        },
+        {
+          "$ref": "#/$defs/CircleRecipe"
+        },
+        {
+          "$ref": "#/$defs/BlockRecipe"
+        },
+        {
+          "$ref": "#/$defs/WedgeRecipe"
+        },
+        {
+          "$ref": "#/$defs/PolylineRecipe"
+        },
+        {
+          "$ref": "#/$defs/SvgRecipe"
+        },
+        {
+          "$ref": "#/$defs/FillRecipe"
+        },
+        {
+          "$ref": "#/$defs/ScatterRecipe"
+        },
+        {
+          "$ref": "#/$defs/CustomRecipe"
+        },
+        {
+          "$ref": "#/$defs/GeneratedRecipe"
+        },
+        {
+          "$ref": "#/$defs/TextRecipe"
+        }
+      ]
+    },
+    "Region": {
+      "additionalProperties": false,
+      "description": "Stores an area on the stage plane as rings, so it survives JSON round-trips.\n\nAttributes:\n    exterior: Outer ring, not repeating the first point.\n    holes: Inner rings cut out of the area.",
+      "properties": {
+        "exterior": {
+          "$ref": "#/$defs/Ring"
+        },
+        "holes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Ring"
+          },
+          "title": "Holes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "exterior"
+      ],
+      "title": "Region",
+      "type": "object"
+    },
+    "Ring": {
+      "items": {
+        "$ref": "#/$defs/Point"
+      },
+      "type": "array"
+    },
+    "Route": {
+      "additionalProperties": false,
+      "description": "Holds a shared path for follow-the-leader.\n\nMembers start on the route at arc lengths `offsets` and all advance `travel` meters.\n\nAttributes:\n    id: Route ID.\n    curve: Path the route follows, any curve kind.\n    members: Spots on the route, leader first.\n    offsets: Each member's starting arc length on the route.\n    travel: Meters every member advances.\n    start: Local count the move starts.\n    end: Local count the move ends; None means the end of the transition.",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/AnyCurve"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Members",
+          "type": "array"
+        },
+        "offsets": {
+          "items": {
+            "$ref": "#/$defs/Meters"
+          },
+          "title": "Offsets",
+          "type": "array"
+        },
+        "start": {
+          "default": 0.0,
+          "title": "Start",
+          "type": "number"
+        },
+        "travel": {
+          "$ref": "#/$defs/Meters"
+        }
+      },
+      "required": [
+        "id",
+        "curve",
+        "members",
+        "offsets",
+        "travel"
+      ],
+      "title": "Route",
+      "type": "object"
+    },
+    "ScatterRecipe": {
+      "additionalProperties": false,
+      "description": "Holds an area scattered with slots, at least `min_gap` apart.\n\nAttributes:\n    region: Area to scatter in.\n    min_gap: Smallest distance between two slots, in meters.\n    seed: Seed of the scatter, so the same recipe gives the same slots.",
+      "properties": {
+        "kind": {
+          "const": "scatter",
+          "default": "scatter",
+          "title": "Kind",
+          "type": "string"
+        },
+        "min_gap": {
+          "$ref": "#/$defs/Meters"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "region": {
+          "$ref": "#/$defs/Region"
+        },
+        "seed": {
+          "default": 0,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "region",
+        "min_gap"
+      ],
+      "title": "ScatterRecipe",
+      "type": "object"
+    },
+    "Seconds": {
+      "type": "number"
+    },
+    "Segment": {
+      "additionalProperties": false,
+      "description": "Draws a straight line from `a` to `b`.\n\nAttributes:\n    a: Start point.\n    b: End point.",
+      "properties": {
+        "a": {
+          "$ref": "#/$defs/Point"
+        },
+        "b": {
+          "$ref": "#/$defs/Point"
+        },
+        "closed": {
+          "const": false,
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "segment",
+          "default": "segment",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "a",
+        "b"
+      ],
+      "title": "Segment",
+      "type": "object"
+    },
+    "Selection": {
+      "additionalProperties": false,
+      "description": "Holds an ordered, duplicate-free set of spot IDs.\n\nAttributes:\n    ids: Spot IDs in selection order.\n    description: How the selection was made, for display.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ids"
+      ],
+      "title": "Selection",
+      "type": "object"
+    },
+    "SelectionKey": {
+      "type": "string"
+    },
+    "SelectionSpots": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "SelectorField": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "$ref": "#/$defs/Selection"
+        }
+      ]
+    },
+    "Set": {
+      "additionalProperties": false,
+      "description": "Holds a snapshot of every spot's placement at one moment.\n\nAttributes:\n    id: Set ID, e.g. `12` or `12A`.\n    key: Stable storage key, fixed when the set is created; defaults to the ID. Every\n        key must pass check_id, except a defaulted key validated with legacy IDs accepted.\n    counts: Counts since the previous set; 0 for the first.\n    placements: One placement per spot in the cast.\n    forms: Forms present in this set.\n    label: Designer label.\n    cue: Rehearsal mark or cue.\n    source_hash: Hash of the script that built the set.\n    state: Collaboration state.",
+      "properties": {
+        "counts": {
+          "title": "Counts",
+          "type": "number"
+        },
+        "cue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cue"
+        },
+        "forms": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Forms",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "placements": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Placement"
+          },
+          "title": "Placements",
+          "type": "array"
+        },
+        "source_hash": {
+          "default": "",
+          "title": "Source Hash",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/ApprovalState",
+          "default": "draft"
+        }
+      },
+      "required": [
+        "id",
+        "counts"
+      ],
+      "title": "Set",
+      "type": "object"
+    },
+    "Shape": {
+      "additionalProperties": false,
+      "description": "Describes a spot's footprint for display and collisions.\n\nAttributes:\n    kind: `circle` or `rectangle`.\n    radius_m: Circle radius.\n    width_m: Rectangle size across the facing direction.\n    depth_m: Rectangle size along the facing direction.\n    rotation_deg: Extra rotation added to the spot's facing for rectangles.",
+      "properties": {
+        "depth_m": {
+          "$ref": "#/$defs/Meters",
+          "default": 0.6
+        },
+        "kind": {
+          "default": "circle",
+          "enum": [
+            "circle",
+            "rectangle"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "radius_m": {
+          "$ref": "#/$defs/Meters",
+          "default": 0.3
+        },
+        "rotation_deg": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        },
+        "width_m": {
+          "$ref": "#/$defs/Meters",
+          "default": 0.6
+        }
+      },
+      "title": "Shape",
+      "type": "object"
+    },
+    "Sheet": {
+      "additionalProperties": false,
+      "description": "Holds the 2D design surface; (0, 0) is the front-center of the sheet.\n\nAttributes:\n    ref: Sheet reference, `sheet:<id>@<version>`.\n    name: Display name.\n    surface_type: Surface family.\n    size_m: Width and depth in meters.\n    outline: Sheet edge ring.\n    walkable: Area performers may use.\n    guides: Lines drawn on the sheet.\n    landmarks: Named references.\n    zones: Rule-bearing areas.\n    grid: Background grid.\n    default_coordinates: Coordinate system new shows start with.\n    based_on: Template this sheet was customized from.\n    owner: Who saved the sheet.\n    thumbnail: Asset URI of a preview image.",
+      "properties": {
+        "based_on": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SheetRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "default_coordinates": {
+          "$ref": "#/$defs/CoordinateSystem",
+          "default": {
+            "audience_side": "front",
+            "kind": "grid",
+            "labels": {},
+            "origin": [
+              0.0,
+              0.0
+            ],
+            "precision": 0.01,
+            "units": "m"
+          }
+        },
+        "grid": {
+          "$ref": "#/$defs/Grid",
+          "default": {
+            "major_every": 5,
+            "origin": [
+              0.0,
+              0.0
+            ],
+            "rotation_deg": 0.0,
+            "spacing": [
+              1.0,
+              1.0
+            ],
+            "unit_name": "m"
+          }
+        },
+        "guides": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/GuideLine"
+          },
+          "title": "Guides",
+          "type": "array"
+        },
+        "landmarks": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Landmark"
+          },
+          "title": "Landmarks",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "outline": {
+          "$ref": "#/$defs/Ring"
+        },
+        "owner": {
+          "default": "",
+          "title": "Owner",
+          "type": "string"
+        },
+        "ref": {
+          "$ref": "#/$defs/SheetRef"
+        },
+        "size_m": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/Meters"
+            },
+            {
+              "$ref": "#/$defs/Meters"
+            }
+          ],
+          "title": "Size M",
+          "type": "array"
+        },
+        "surface_type": {
+          "$ref": "#/$defs/SurfaceType"
+        },
+        "thumbnail": {
+          "default": "",
+          "title": "Thumbnail",
+          "type": "string"
+        },
+        "walkable": {
+          "$ref": "#/$defs/Region"
+        },
+        "zones": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Zone"
+          },
+          "title": "Zones",
+          "type": "array"
+        }
+      },
+      "required": [
+        "ref",
+        "name",
+        "surface_type",
+        "size_m",
+        "outline",
+        "walkable"
+      ],
+      "title": "Sheet",
+      "type": "object"
+    },
+    "SheetRef": {
+      "type": "string"
+    },
+    "ShowDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "cast": {
+          "$ref": "#/$defs/Cast",
+          "default": {
+            "groups": {},
+            "label_scheme": {
+              "pad": 0,
+              "prefixes": {},
+              "start": 1
+            },
+            "selections": {},
+            "spots": []
+          }
+        },
+        "coordinates": {
+          "$ref": "#/$defs/CoordinateSystem",
+          "default": {
+            "audience_side": "front",
+            "kind": "grid",
+            "labels": {},
+            "origin": [
+              0.0,
+              0.0
+            ],
+            "precision": 0.01,
+            "units": "m"
+          }
+        },
+        "dependencies": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Dependencies",
+          "type": "object"
+        },
+        "extensions": {
+          "$ref": "#/$defs/JsonObject",
+          "propertyNames": {
+            "pattern": "^x-"
+          }
+        },
+        "facing_overrides": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/FacingOverride"
+          },
+          "title": "Facing Overrides",
+          "type": "array"
+        },
+        "format": {
+          "const": "e8.show"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "pack": {
+          "default": "",
+          "title": "Pack",
+          "type": "string"
+        },
+        "pins": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Pin"
+          },
+          "title": "Pins",
+          "type": "array"
+        },
+        "sets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "version": {
+          "const": 2
+        },
+        "zones": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Zone"
+          },
+          "title": "Zones",
+          "type": "array"
+        }
+      },
+      "required": [
+        "format",
+        "version",
+        "id",
+        "title",
+        "sets"
+      ],
+      "title": "ShowDocument",
+      "type": "object"
+    },
+    "SpacingSpec": {
+      "additionalProperties": false,
+      "description": "Describes how members are spaced on a form's shape.\n\nAttributes:\n    mode: `count` (even over the window), `interval` (fixed gap) or `proportional`.\n    interval: Gap in meters for interval mode.\n    start: Arc length where spacing starts.\n    end: Arc length where spacing ends; None means the end of the shape.\n    align: `start`, `end` or `center` for interval mode.\n    gaps: Extra meters, at least 0, after member indexes.",
+      "properties": {
+        "align": {
+          "default": "start",
+          "enum": [
+            "start",
+            "end",
+            "center"
+          ],
+          "title": "Align",
+          "type": "string"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Meters"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "gaps": {
+          "default": [],
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer"
+              },
+              {
+                "$ref": "#/$defs/NonNegMeters"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Gaps",
+          "type": "array"
+        },
+        "interval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Meters"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mode": {
+          "default": "count",
+          "enum": [
+            "count",
+            "interval",
+            "proportional"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "start": {
+          "$ref": "#/$defs/Meters",
+          "default": 0.0
+        }
+      },
+      "title": "SpacingSpec",
+      "type": "object"
+    },
+    "SpiralCurve": {
+      "additionalProperties": false,
+      "description": "Draws an Archimedean spiral whose radius changes linearly with angle.\n\nAttributes:\n    center: Spiral center.\n    r0: Start radius.\n    r1: End radius.\n    turns: Number of counter-clockwise turns, above 0.\n    start_deg: Start angle, counter-clockwise from +x.",
+      "properties": {
+        "center": {
+          "$ref": "#/$defs/Point"
+        },
+        "closed": {
+          "const": false,
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "spiral",
+          "default": "spiral",
+          "title": "Kind",
+          "type": "string"
+        },
+        "r0": {
+          "$ref": "#/$defs/Meters"
+        },
+        "r1": {
+          "$ref": "#/$defs/Meters"
+        },
+        "start_deg": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        },
+        "turns": {
+          "$ref": "#/$defs/PositiveFinite"
+        }
+      },
+      "required": [
+        "center",
+        "r0",
+        "r1",
+        "turns"
+      ],
+      "title": "SpiralCurve",
+      "type": "object"
+    },
+    "SpiralParams": {
+      "additionalProperties": false,
+      "description": "Holds the parameters of the built-in spiral motion: half a turn plus whole extra turns.\n\n>>> SpiralParams(turns=2).clockwise\nFalse\n\nAttributes:\n    turns: Extra full turns around the midpoint of the move.\n    clockwise: Turns clockwise instead of counter-clockwise.",
+      "properties": {
+        "clockwise": {
+          "default": false,
+          "title": "Clockwise",
+          "type": "boolean"
+        },
+        "turns": {
+          "default": 0,
+          "maximum": 20,
+          "minimum": 0,
+          "title": "Turns",
+          "type": "integer"
+        }
+      },
+      "title": "SpiralParams",
+      "type": "object"
+    },
+    "SplineCurve": {
+      "additionalProperties": false,
+      "description": "Passes a centripetal Catmull\u2013Rom spline through every point.\n\nAttributes:\n    points: Points the curve passes through, in order.\n    alpha: Knot exponent; 0.5 (centripetal) avoids cusps and self-loops.\n    closed: Whether the spline loops back to the first point.",
+      "properties": {
+        "alpha": {
+          "default": 0.5,
+          "title": "Alpha",
+          "type": "number"
+        },
+        "closed": {
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "spline",
+          "default": "spline",
+          "title": "Kind",
+          "type": "string"
+        },
+        "points": {
+          "items": {
+            "$ref": "#/$defs/Point"
+          },
+          "title": "Points",
+          "type": "array"
+        }
+      },
+      "required": [
+        "points"
+      ],
+      "title": "SplineCurve",
+      "type": "object"
+    },
+    "Spot": {
+      "additionalProperties": false,
+      "description": "Describes one dot that persists through the whole show.\n\nAttributes:\n    id: Label shown on the sheet, stable all show.\n    group: Key of the owning group.\n    symbol: Sheet glyph; None inherits the group's.\n    color: Hex color, `#rrggbb`; None inherits the group's.\n    tags: Free tags such as `soloist`, deduplicated in first-seen order; a set is sorted.\n    active: False excludes the spot from forms and checks.\n    shape: Footprint on the sheet and for collisions.\n    claimable: Who may claim the spot once the show is published.",
+      "properties": {
+        "active": {
+          "default": true,
+          "title": "Active",
+          "type": "boolean"
+        },
+        "claimable": {
+          "$ref": "#/$defs/Claimable",
+          "default": "performer"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HexColor"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "group": {
+          "title": "Group",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "shape": {
+          "$ref": "#/$defs/Shape",
+          "default": {
+            "depth_m": 0.6,
+            "kind": "circle",
+            "radius_m": 0.3,
+            "rotation_deg": 0.0,
+            "width_m": 0.6
+          }
+        },
+        "symbol": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Symbol"
+        },
+        "tags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "group"
+      ],
+      "title": "Spot",
+      "type": "object"
+    },
+    "SurfaceType": {
+      "description": "Names the kinds of surface a sheet represents.",
+      "enum": [
+        "football_field",
+        "stage",
+        "gym_floor",
+        "arena",
+        "street",
+        "blank"
+      ],
+      "title": "SurfaceType",
+      "type": "string"
+    },
+    "SvgCurve": {
+      "additionalProperties": false,
+      "description": "Evaluates one SVG subpath, mapped onto the stage plane by an affine transform.\n\nAttributes:\n    d: Path data for exactly one subpath, in absolute commands.\n    transform: 3x3 affine matrix from SVG units to stage meters.\n    closed: Whether the subpath ends with Z.",
+      "properties": {
+        "closed": {
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "d": {
+          "title": "D",
+          "type": "string"
+        },
+        "kind": {
+          "const": "svg",
+          "default": "svg",
+          "title": "Kind",
+          "type": "string"
+        },
+        "transform": {
+          "default": [
+            [
+              1.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              1.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              1.0
+            ]
+          ],
+          "items": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Transform",
+          "type": "array"
+        }
+      },
+      "required": [
+        "d"
+      ],
+      "title": "SvgCurve",
+      "type": "object"
+    },
+    "SvgRecipe": {
+      "additionalProperties": false,
+      "description": "Holds the fitted picture outline of an svg form, one curve per subpath.\n\nSubpaths stay separate curves, never one curve that jumps the gaps between them; layout\nshares slots among them by length, or walks them in order for count and interval spacing.\n\nAttributes:\n    curves: The outline's subpaths in drawing order, each rebuilt from its construction.\n\n>>> from e8s.geo.shapes import line\n>>> len(SvgRecipe(curves=(line((0, 0), (1, 0)), line((0, 1), (3, 1)))).curves)\n2",
+      "properties": {
+        "curves": {
+          "items": {
+            "$ref": "#/$defs/AnyCurve"
+          },
+          "minItems": 1,
+          "title": "Curves",
+          "type": "array"
+        },
+        "kind": {
+          "const": "svg",
+          "default": "svg",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "curves"
+      ],
+      "title": "SvgRecipe",
+      "type": "object"
+    },
+    "TempoSection": {
+      "additionalProperties": false,
+      "description": "Sets how fast counts go from a count onward.\n\nAttributes:\n    at_count: Count where the section starts.\n    counts_per_minute: Tempo at the start of the section.\n    ramp_to: Tempo reached at the end of the ramp, or None for a steady tempo.\n    ramp_counts: Counts the ramp takes, changing tempo linearly in counts.",
+      "properties": {
+        "at_count": {
+          "$ref": "#/$defs/Count"
+        },
+        "counts_per_minute": {
+          "$ref": "#/$defs/CountsPerMinute"
+        },
+        "ramp_counts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Count"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ramp_to": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CountsPerMinute"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "at_count",
+        "counts_per_minute"
+      ],
+      "title": "TempoSection",
+      "type": "object"
+    },
+    "TextAlign": {
+      "enum": [
+        "left",
+        "center",
+        "right"
+      ],
+      "type": "string"
+    },
+    "TextAnchor": {
+      "enum": [
+        "baseline",
+        "middle",
+        "top"
+      ],
+      "type": "string"
+    },
+    "TextRecipe": {
+      "additionalProperties": false,
+      "description": "Holds the construction recipe of a text form: text, font chain and layout.\n\nFonts are stored as URIs, never names, so a recipe always names the exact font bytes. A\ntext form's `n` is always set: it is the exact spot count, one member per slot.\n\nAttributes:\n    text: Characters to write, `\\n` between lines.\n    fonts: Fallback chain of 1 to `MAX_TEXT_FONTS` font URIs, `asset:sha256:<64 hex>`.\n    mode: How glyphs become slots; `centerline` puts spots on the strokes.\n    height: Cap height in meters.\n    at: Layout point on the stage plane.\n    rotation: Degrees counter-clockwise about `at`; 0 reads left to right toward +x.\n    align: Where each line sits horizontally on `at`.\n    anchor: Which line of the text block sits vertically on `at`.\n    letter_spacing: Extra gap between glyphs, in ems of the first font.\n    line_spacing: Baseline-to-baseline distance, in ems of the first font.\n    spacing: Meters between spots that last set the form's count, or None when the count\n        was given as `n`; the stored `n` stays the count.\n\n>>> from e8s.geo.fonts import bundled_fonts\n>>> simplex = bundled_fonts().resolve(\"simplex\")\n>>> TextRecipe(text=\"HI\", fonts=(simplex,), height=2.0, at=(0.0, 10.0)).align\n'left'",
+      "properties": {
+        "align": {
+          "$ref": "#/$defs/TextAlign",
+          "default": "left"
+        },
+        "anchor": {
+          "$ref": "#/$defs/TextAnchor",
+          "default": "baseline"
+        },
+        "at": {
+          "$ref": "#/$defs/Point"
+        },
+        "fonts": {
+          "items": {
+            "$ref": "#/$defs/FontUri"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Fonts",
+          "type": "array"
+        },
+        "height": {
+          "$ref": "#/$defs/Meters",
+          "gt": 0
+        },
+        "kind": {
+          "const": "text",
+          "default": "text",
+          "title": "Kind",
+          "type": "string"
+        },
+        "letter_spacing": {
+          "default": 0.0,
+          "title": "Letter Spacing",
+          "type": "number"
+        },
+        "line_spacing": {
+          "default": 1.2,
+          "exclusiveMinimum": 0,
+          "title": "Line Spacing",
+          "type": "number"
+        },
+        "mode": {
+          "const": "centerline",
+          "default": "centerline",
+          "title": "Mode",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "rotation": {
+          "$ref": "#/$defs/Degrees",
+          "default": 0.0
+        },
+        "spacing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PositiveMeters"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "text": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "text",
+        "fonts",
+        "height",
+        "at"
+      ],
+      "title": "TextRecipe",
+      "type": "object"
+    },
+    "Timeline": {
+      "additionalProperties": false,
+      "description": "Holds the whole show timeline.\n\nConstruction refuses a timeline the clock could not convert: tempo sections out of order,\ntwo at one count or a first that is not at count 0; two cues with one order; holds out of\norder, two at one count or outside the show; a negative `total_counts`.\n\nAttributes:\n    mode: How the show is timed.\n    tempos: Tempo sections sorted by count; the first starts at count 0.\n    holds: Pauses sorted by count, at most one per count, inside the show.\n    markers: Named moments sorted by count.\n    measures: Measure numbering, or None when measures are off.\n    cues: Cue-mode moments sorted by order.\n    audio: Playback tracks.\n    total_counts: Length of the show in counts, when known.",
+      "properties": {
+        "audio": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AudioTrack"
+          },
+          "title": "Audio",
+          "type": "array"
+        },
+        "cues": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Cue"
+          },
+          "title": "Cues",
+          "type": "array"
+        },
+        "holds": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Hold"
+          },
+          "title": "Holds",
+          "type": "array"
+        },
+        "markers": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Marker"
+          },
+          "title": "Markers",
+          "type": "array"
+        },
+        "measures": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MeasureSetting"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mode": {
+          "$ref": "#/$defs/TimelineMode"
+        },
+        "tempos": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TempoSection"
+          },
+          "title": "Tempos",
+          "type": "array"
+        },
+        "total_counts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Count"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "Timeline",
+      "type": "object"
+    },
+    "TimelineMode": {
+      "description": "Names how a show is timed.",
+      "enum": [
+        "counts",
+        "seconds",
+        "cues"
+      ],
+      "title": "TimelineMode",
+      "type": "string"
+    },
+    "TransitionId": {
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "title": "From Set",
+          "type": "string"
+        },
+        {
+          "title": "To Set",
+          "type": "string"
+        }
+      ],
+      "type": "array"
+    },
+    "TransitionSpec": {
+      "additionalProperties": false,
+      "description": "Holds every path instruction for one transition.\n\nRows are sparse: a spot without a row moves straight over the full counts.\n\nAttributes:\n    id: (from set, to set).\n    counts: Length of the transition; equals the destination set's counts.\n    rows: Spot ID to path row, read-only; every key equals its row's spot.\n    routes: Route ID to route, read-only; every key equals its route's ID.\n    notes: Free text.\n    source_hash: Hash of the script that wrote the paths.",
+      "properties": {
+        "counts": {
+          "$ref": "#/$defs/NonNegCount"
+        },
+        "id": {
+          "$ref": "#/$defs/TransitionId"
+        },
+        "notes": {
+          "default": "",
+          "title": "Notes",
+          "type": "string"
+        },
+        "routes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Route"
+          },
+          "default": {},
+          "title": "Routes",
+          "type": "object"
+        },
+        "rows": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PathRow"
+          },
+          "default": {},
+          "title": "Rows",
+          "type": "object"
+        },
+        "source_hash": {
+          "default": "",
+          "title": "Source Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "counts"
+      ],
+      "title": "TransitionSpec",
+      "type": "object"
+    },
+    "TrimmedCurve": {
+      "additionalProperties": false,
+      "description": "Views the piece of `base` between arc lengths s0 and s1, reversed when s0 > s1.\n\nAttributes:\n    base: Curve being trimmed.\n    s0: Arc length on `base` where this curve starts.\n    s1: Arc length on `base` where this curve ends.",
+      "properties": {
+        "base": {
+          "$ref": "#/$defs/AnyCurve"
+        },
+        "closed": {
+          "const": false,
+          "default": false,
+          "title": "Closed",
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "trimmed",
+          "default": "trimmed",
+          "title": "Kind",
+          "type": "string"
+        },
+        "s0": {
+          "$ref": "#/$defs/Meters"
+        },
+        "s1": {
+          "$ref": "#/$defs/Meters"
+        }
+      },
+      "required": [
+        "base",
+        "s0",
+        "s1"
+      ],
+      "title": "TrimmedCurve",
+      "type": "object"
+    },
+    "TurnDirection": {
+      "description": "Names which way a facing turn goes.",
+      "enum": [
+        "shortest",
+        "clockwise",
+        "counterclockwise"
+      ],
+      "title": "TurnDirection",
+      "type": "string"
+    },
+    "WaveCycles": {
+      "exclusiveMinimum": 0,
+      "maximum": 100,
+      "type": "number"
+    },
+    "Waypoint": {
+      "additionalProperties": false,
+      "description": "Holds a point a path passes through.\n\nAttributes:\n    x: Meters.\n    y: Meters.\n    at: Local count to pass the point; None keeps constant speed.",
+      "properties": {
+        "at": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "At"
+        },
+        "x": {
+          "$ref": "#/$defs/Meters"
+        },
+        "y": {
+          "$ref": "#/$defs/Meters"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "title": "Waypoint",
+      "type": "object"
+    },
+    "WeaveParams": {
+      "additionalProperties": false,
+      "description": "Holds the parameters of the built-in weave motion: a sinusoidal side-to-side offset.\n\n>>> WeaveParams(cycles=1.5).amplitude\n1.0\n\nAttributes:\n    amplitude: Side offset in meters; negative starts to the other side.\n    cycles: Side-to-side cycles, a positive multiple of 0.5.",
+      "properties": {
+        "amplitude": {
+          "$ref": "#/$defs/Finite",
+          "default": 1.0
+        },
+        "cycles": {
+          "$ref": "#/$defs/WaveCycles",
+          "default": 2.0
+        }
+      },
+      "title": "WeaveParams",
+      "type": "object"
+    },
+    "WedgeRecipe": {
+      "additionalProperties": false,
+      "description": "Holds the two-sided polyline of a wedge form.",
+      "properties": {
+        "curve": {
+          "$ref": "#/$defs/AnyCurve"
+        },
+        "kind": {
+          "const": "wedge",
+          "default": "wedge",
+          "title": "Kind",
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N"
+        },
+        "recipe_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Recipe Version",
+          "type": "integer"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Affine"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "curve"
+      ],
+      "title": "WedgeRecipe",
+      "type": "object"
+    },
+    "ZigzagParams": {
+      "additionalProperties": false,
+      "description": "Holds the parameters of the built-in zigzag motion: a triangle-wave side offset.\n\n>>> ZigzagParams(cycles=1).cycles\n1.0\n\nAttributes:\n    amplitude: Side offset in meters; negative starts to the other side.\n    cycles: Side-to-side cycles, a positive multiple of 0.5.",
+      "properties": {
+        "amplitude": {
+          "$ref": "#/$defs/Finite",
+          "default": 1.0
+        },
+        "cycles": {
+          "$ref": "#/$defs/WaveCycles",
+          "default": 2.0
+        }
+      },
+      "title": "ZigzagParams",
+      "type": "object"
+    },
+    "Zone": {
+      "additionalProperties": false,
+      "description": "Holds an area with rules.\n\nAttributes:\n    id: Zone ID.\n    kind: What the area is for.\n    polygon: The area.\n    applies_to: Spots the rules apply to.\n    active: Global count windows when the zone applies; None means always.\n    note: Designer note.",
+      "properties": {
+        "active": {
+          "anyOf": [
+            {
+              "items": {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "$ref": "#/$defs/Count"
+                  },
+                  {
+                    "$ref": "#/$defs/Count"
+                  }
+                ],
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active"
+        },
+        "applies_to": {
+          "$ref": "#/$defs/SelectorField",
+          "default": "all"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ZoneKind"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        },
+        "polygon": {
+          "$ref": "#/$defs/Region"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "polygon"
+      ],
+      "title": "Zone",
+      "type": "object"
+    },
+    "ZoneKind": {
+      "description": "Names the kinds of rule-bearing area.",
+      "enum": [
+        "restricted",
+        "pit",
+        "wings",
+        "staging",
+        "audience",
+        "safety",
+        "custom"
+      ],
+      "title": "ZoneKind",
+      "type": "string"
+    }
+  },
+  "$id": "e8.show.v2",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "A stored tree as one object mapping each show-document path to its JSON.",
+  "patternProperties": {
+    "^/sets/[A-Za-z0-9_][A-Za-z0-9_.\\-]*/forms\\.json$": {
+      "items": {
+        "$ref": "#/$defs/Form"
+      },
+      "type": "array"
+    },
+    "^/sets/[A-Za-z0-9_][A-Za-z0-9_.\\-]*/set\\.json$": {
+      "$ref": "#/$defs/Set"
+    },
+    "^/transitions/[A-Za-z0-9_][A-Za-z0-9_.\\-]*/paths\\.json$": {
+      "$ref": "#/$defs/TransitionSpec"
+    }
+  },
+  "properties": {
+    "/show/sheet.json": {
+      "$ref": "#/$defs/Sheet"
+    },
+    "/show/show.json": {
+      "$ref": "#/$defs/ShowDocument"
+    },
+    "/time/timeline.json": {
+      "$ref": "#/$defs/Timeline"
+    }
+  },
+  "required": [
+    "/show/show.json",
+    "/show/sheet.json",
+    "/time/timeline.json"
+  ],
+  "title": "e8Show stored show, format version 2",
+  "type": "object"
+}

@@ -1,15 +1,15 @@
-# ShowPy
+# e8Show
 
-ShowPy (import name `showpy`) is a Python choreography library. With it you draw spots on a 2D sheet, build a show set by set from stored shapes, move every performer between sets with one exact motion engine, and publish the result so performers can claim their spot.
+e8Show (import name `e8s`) is a Python choreography library. With it you draw spots on a 2D sheet, build a show set by set from stored shapes, move every performer between sets with one exact motion engine, and publish the result so performers can claim their spot.
 
 ## Why
 
-Drill design is slow because every dot, every move and every check is manual. ShowPy makes the mechanics exact and repeatable, so the designer only makes the creative choices.
+Drill design is slow because every dot, every move and every check is manual. e8Show makes the mechanics exact and repeatable, so the designer only makes the creative choices.
 
 - **One source of motion.** The canvas, the checks, the exports and the video all read positions from one `PathEngine`, so they never disagree. Its collision segments stay within 0.02 m of the true path. A Hypothesis property test probes 9 points per segment across 150 random paths to check this.
 - **Exact and deterministic.** Arc-length curves are exact for lines and arcs. Tempo ramps convert analytically, both ways. Randomness is seeded, and no library code reads the clock.
 - **Verified.** About 1,500 tests (unit, property, golden replay and doctests) pass with warnings as errors, under `mypy --strict`, pyright and ruff. Hundreds more are strict-xfail tests that pin open audited defects; the plugin prints the exact count (`Ledger: 528 open` on 2026-11-13).
-- **Light to import.** `import showpy` takes 2.5 ms; names load lazily.
+- **Light to import.** `import e8s` takes 2.5 ms; names load lazily.
 
 ## Features
 
@@ -47,7 +47,7 @@ Drill design is slow because every dot, every move and every check is manual. Sh
 ## Quickstart (one command, fully dockerized)
 
 ```bash
-# No ports: showpy is a library. The container installs the wheel and runs the full test suite.
+# No ports: e8s is a library. The container installs the wheel and runs the full test suite.
 cp .env.example .env && docker compose -f docker/docker-compose.yml up --build
 ```
 
@@ -60,21 +60,21 @@ uv sync && uv run pytest
 ## Usage
 
 ```python
-import showpy
-from showpy.examples import two_set_show
+import e8s
+from e8s.examples import two_set_show
 
 show = two_set_show()  # 4 trumpets, 8 counts, 120 cpm
-spec = showpy.stagger(show.transition(("1", "2")), ["T1", "T2", "T3", "T4"], step=1.0)
+spec = e8s.stagger(show.transition(("1", "2")), ["T1", "T2", "T3", "T4"], step=1.0)
 show = show.model_copy(update={"transitions": (spec,)})
 
-engine = showpy.PathEngine(show)
+engine = e8s.PathEngine(show)
 engine.position("T4", 6.0)  # array([6. , 7.4]): T4 starts 3 counts late
 engine.speed("T4", ("1", "2")).m_per_s  # 1.6
-showpy.min_gaps(show, ("1", "2"), top=1)[0].gap  # 1.4 m between footprints
-showpy.validate_show(show).ok  # True
+e8s.min_gaps(show, ("1", "2"), top=1)[0].gap  # 1.4 m between footprints
+e8s.validate_show(show).ok  # True
 ```
 
-`pip install showpy` (or `uv add showpy`) installs the core: numpy, scipy, shapely and pydantic. Four extras add the dependencies of a few output functions; without one, those functions raise `MissingExtraError` with the install command.
+`pip install e8s` (or `uv add e8s`) installs the core: numpy, scipy, shapely and pydantic. Four extras add the dependencies of a few output functions; without one, those functions raise `MissingExtraError` with the install command.
 
 | Extra    | Installs               | Unlocks                                                                             |
 | -------- | ---------------------- | ----------------------------------------------------------------------------------- |
@@ -84,7 +84,7 @@ showpy.validate_show(show).ok  # True
 | `video`  | imageio-ffmpeg, Pillow | `export_video`                                                                      |
 | `all`    | every extra above      | everything                                                                          |
 
-Every public function has a runnable `>>>` example in its docstring. The full API is in `docs/showpy-api-reference.md`.
+Every public function has a runnable `>>>` example in its docstring. The full API is in `docs/e8s-api-reference.md`.
 
 ## Architecture
 
@@ -112,18 +112,18 @@ Lower layers never import higher ones. A consumer such as a checker reads shows 
 
 ## Config
 
-| Setting                | Where                      | Default        | Meaning                                              |
-| ---------------------- | -------------------------- | -------------- | ---------------------------------------------------- |
-| `SHOWPY_UPDATE_GOLDEN` | env, tests                 | unset          | `1` rewrites golden fixtures for human review        |
-| `SHOWPY_UPDATE_SCHEMA` | env, tests                 | unset          | `1` regenerates `showpy/schemas/showpy.show.v1.json` |
-| `curve_tol`            | `PathEngine(...)`          | 0.01 m         | Chord error for drawn paths                          |
-| `tol`                  | `PathEngine.segments(...)` | 0.02 m         | Segment error for collision checks                   |
-| `/config/limits.yaml`  | workspace                  | designer-owned | Checker limits; agents cannot write it               |
+| Setting               | Where                      | Default        | Meaning                                           |
+| --------------------- | -------------------------- | -------------- | ------------------------------------------------- |
+| `E8S_UPDATE_GOLDEN`   | env, tests                 | unset          | `1` rewrites golden fixtures for human review     |
+| `E8S_UPDATE_SCHEMA`   | env, tests                 | unset          | `1` regenerates `e8s/schemas/showpy.show.v1.json` |
+| `curve_tol`           | `PathEngine(...)`          | 0.01 m         | Chord error for drawn paths                       |
+| `tol`                 | `PathEngine.segments(...)` | 0.02 m         | Segment error for collision checks                |
+| `/config/limits.yaml` | workspace                  | designer-owned | Checker limits; agents cannot write it            |
 
 ## Structure
 
 ```
-showpy/
+e8s/
   core/     units, ids, errors, types, selection, validation, util
   geo/      curves, shapes, svg, text, regions, spacing, affine, transforms, measure, analysis
   time/     models, timeline, clock, measures, validate
@@ -134,7 +134,7 @@ showpy/
   show/     models, manage, sections, storage, repositories, history, collab, validate
   export/   models, publish, print_sheets, pdf, data, positions, video
   examples/ sheets, shows, publishing (deterministic example shows)
-showpy/schemas/ showpy.show.v1.json
+e8s/schemas/ showpy.show.v1.json
 tests/      unit/ property/ golden/ fixtures/
 docs/       API reference, ADRs, handoff notes
 docker/     Dockerfile, docker-compose.yml
@@ -168,12 +168,12 @@ Read `CLAUDE.md`, `CONTRIBUTING.md` and the ADRs before changing anything. The P
 | Wheel           | `uv run nox -s wheel` (build, install with `[all]` in a clean venv, run the Usage example)         | yes |
 | Core install    | `uv run nox -s core` (wheel without extras: imports, Usage example, every gated call fails closed) | yes |
 | Lowest          | `uv sync --resolution lowest-direct`, then `uv run --no-sync nox -s tests`                         | yes |
-| Docker          | `docker compose -f docker/docker-compose.yml up --build --exit-code-from showpy`                   | yes |
+| Docker          | `docker compose -f docker/docker-compose.yml up --build --exit-code-from e8s`                      | yes |
 
 ## Docs
 
 - `docs/upgrade-plan.md`: the upgrade program, phase by phase
-- `docs/showpy-api-reference.md`: the full API reference
+- `docs/e8s-api-reference.md`: the full API reference
 - `docs/adr/`: architecture decisions (layout and reference fixes; the PathEngine)
 - `docs/HANDOFF.md`: current state and next steps
 - The study guide lives in the public repository <https://github.com/abj360/ShowPy-guide>
@@ -181,15 +181,15 @@ Read `CLAUDE.md`, `CONTRIBUTING.md` and the ADRs before changing anything. The P
 
 ## License
 
-- From the licence change on, ShowPy is licensed under the PolyForm Noncommercial License 1.0.0
+- From the licence change on, e8Show is licensed under the PolyForm Noncommercial License 1.0.0
   (`LICENSE`).
 - Versions v0.1.0 to v0.3.0, and every commit before the licence change, were released under the
   MIT License and stay under it.
 - The bundled fonts keep their own licences: the SIL Open Font License 1.1, the Hershey font
-  notice and, for `simplex`, MIT. Their texts are in `showpy/fonts/licenses/`. The non-commercial
+  notice and, for `simplex`, MIT. Their texts are in `e8s/fonts/licenses/`. The non-commercial
   terms do not cover the font files.
-- The JSON schemas in `showpy/schemas/` stay under the MIT License
-  (`showpy/schemas/LICENSE-MIT.txt`), so any tool may read and validate show files.
+- The JSON schemas in `e8s/schemas/` stay under the MIT License
+  (`e8s/schemas/LICENSE-MIT.txt`), so any tool may read and validate show files.
 - For a commercial licence, contact the maintainer through <https://github.com/abj360>.
 
 Maintained by abj360.

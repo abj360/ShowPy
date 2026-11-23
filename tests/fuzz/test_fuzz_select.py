@@ -6,7 +6,7 @@ test_fuzz_select.py --- feeds hostile text to the selection grammar and the ID p
 Contains:
     fuzz_cast(): builds the small fixed cast the selection fuzz target runs against
     expressions(): draws selection expressions from words, ranges, operators, nesting and junk
-    test_fuzz_select(): `select` rejects any expression with a ShowPyError or returns
+    test_fuzz_select(): `select` rejects any expression with an E8sError or returns
     reference_select(): evaluates an expression with the recursive left-to-right parser that
         `select` used before it became iterative; the oracle of the iterative evaluator
     trees(): draws expression trees of known words joined by +, - and &
@@ -14,10 +14,10 @@ Contains:
         hostile or drawn from a tree, gives the reference's result
     test_fuzz_redundant_parentheses_never_change_a_result(): wrapping parts of an accepted
         expression in extra parentheses keeps its result
-    test_fuzz_parse_range(): `parse_range` rejects any text with a ShowPyError or returns
+    test_fuzz_parse_range(): `parse_range` rejects any text with an E8sError or returns
     test_fuzz_natural_sort(): `natural_sort` orders any list of text without raising
-    test_fuzz_parse_ref(): `parse_ref` rejects any text with a ShowPyError or returns
-    test_fuzz_parse_tid(): `parse_tid` rejects any text with a ShowPyError or returns
+    test_fuzz_parse_ref(): `parse_ref` rejects any text with an E8sError or returns
+    test_fuzz_parse_tid(): `parse_tid` rejects any text with an E8sError or returns
 """
 
 import re
@@ -26,12 +26,12 @@ from collections.abc import Callable
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.cast.models import Cast, Group, Spot
-from showpy.cast.select import Selection, select
-from showpy.core.errors import ShowPyError
-from showpy.core.ids import SpotId, parse_ref, parse_tid
-from showpy.core.util import natural_sort, parse_range
-from tests.helpers import only_showpy_errors
+from e8s.cast.models import Cast, Group, Spot
+from e8s.cast.select import Selection, select
+from e8s.core.errors import E8sError
+from e8s.core.ids import SpotId, parse_ref, parse_tid
+from e8s.core.util import natural_sort, parse_range
+from tests.helpers import only_e8s_errors
 
 GROUPS = {"trumpets": "T", "tubas": "TB", "flags": "F"}
 TAGS = ("soloist", "leader")
@@ -89,7 +89,7 @@ def expressions(draw: st.DrawFn) -> str:
 
 @given(expressions())
 def test_fuzz_select(expression: str) -> None:
-    only_showpy_errors(lambda: select(CAST, expression), expression)
+    only_e8s_errors(lambda: select(CAST, expression), expression)
 
 
 REFERENCE_TOKENS = re.compile(r"[+\-&()]|[^\s+&()\-][^\s+&()]*")
@@ -169,7 +169,7 @@ def trees() -> st.SearchStrategy[Tree]:
 def test_fuzz_iterative_select_matches_the_recursive_reference(expression: str) -> None:
     try:
         picked = select(CAST, expression)
-    except ShowPyError:
+    except E8sError:
         return
     assert picked.ids == reference_select(expression), expression
 
@@ -183,19 +183,19 @@ def test_fuzz_redundant_parentheses_never_change_a_result(tree: Tree, data: st.D
 
 @given(st.one_of(st.text(), st.builds("{}-{}".format, DIGITS, DIGITS)))
 def test_fuzz_parse_range(text: str) -> None:
-    only_showpy_errors(lambda: parse_range(text), text)
+    only_e8s_errors(lambda: parse_range(text), text)
 
 
 @given(st.lists(st.one_of(st.text(), DIGITS), max_size=20))
 def test_fuzz_natural_sort(ids: list[str]) -> None:
-    only_showpy_errors(lambda: natural_sort(ids), ids)
+    only_e8s_errors(lambda: natural_sort(ids), ids)
 
 
 @given(st.text())
 def test_fuzz_parse_ref(text: str) -> None:
-    only_showpy_errors(lambda: parse_ref(text), text)
+    only_e8s_errors(lambda: parse_ref(text), text)
 
 
 @given(st.text())
 def test_fuzz_parse_tid(text: str) -> None:
-    only_showpy_errors(lambda: parse_tid(text), text)
+    only_e8s_errors(lambda: parse_tid(text), text)

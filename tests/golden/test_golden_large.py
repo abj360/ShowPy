@@ -6,7 +6,7 @@ test_golden_large.py --- replays a 240-spot seeded show and compares outputs to 
 The show is seeded_show(7, 240, 24): every path style, plus spots exiting and re-entering.
 Large outputs are stored as exact counts, tolerance-compared sums and evenly spaced samples,
 so the fixtures stay small and survive last-digit float noise across platforms. Set
-SHOWPY_UPDATE_GOLDEN=1 to rewrite tests/golden/fixtures/large/; the diff needs human review.
+E8S_UPDATE_GOLDEN=1 to rewrite tests/golden/fixtures/large/; the diff needs human review.
 """
 
 import csv
@@ -20,21 +20,21 @@ from typing import Any
 
 import pytest
 
-from showpy.choreo.avoid import min_gaps
-from showpy.choreo.engine import PathEngine
-from showpy.choreo.engine_models import MotionSegment
-from showpy.choreo.path_models import PathStyle
-from showpy.export._data import export_frames_csv
-from showpy.export._pdf import to_pdf
-from showpy.export._print_sheets import coordinate_sheet
-from showpy.export._video import render_frame, video_canvas
-from showpy.show.models import Show
+from e8s.choreo.avoid import min_gaps
+from e8s.choreo.engine import PathEngine
+from e8s.choreo.engine_models import MotionSegment
+from e8s.choreo.path_models import PathStyle
+from e8s.export._data import export_frames_csv
+from e8s.export._pdf import to_pdf
+from e8s.export._print_sheets import coordinate_sheet
+from e8s.export._video import render_frame, video_canvas
+from e8s.show.models import Show
 from tests.fixtures.generators import GROUPS, seeded_show
 
 pytestmark = pytest.mark.slow
 
 FIXTURES = Path(__file__).parent / "fixtures" / "large"
-UPDATE_FLAG = "SHOWPY_UPDATE_GOLDEN"
+UPDATE_FLAG = "E8S_UPDATE_GOLDEN"
 SEED, SPOTS, SETS = 7, 240, 24
 SEGMENT_SAMPLE_EVERY = 997
 CSV_SAMPLE_EVERY = 499

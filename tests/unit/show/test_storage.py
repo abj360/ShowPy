@@ -11,22 +11,22 @@ from pathlib import Path
 
 import pytest
 
-from showpy.choreo.form_models import Form
-from showpy.choreo.models import PlacementPatch
-from showpy.choreo.path_models import PathRow, TransitionSpec
-from showpy.core.errors import (
+from e8s.choreo.form_models import Form
+from e8s.choreo.models import PlacementPatch
+from e8s.choreo.path_models import PathRow, TransitionSpec
+from e8s.core.errors import (
     ConflictError,
     SchemaError,
     StorageError,
     UnknownRefError,
 )
-from showpy.core.ids import FormId, SetId, SpotId, make_tid
-from showpy.show.documents import decode_show, dump_json, encode_show, split_path
-from showpy.show.file_repository import FileRepository
-from showpy.show.manage import add_set, remove_set
-from showpy.show.models import Show
-from showpy.show.repositories import InMemoryAssetStore, InMemoryRepository
-from showpy.show.storage import Repository, Workspace, load_show, open_workspace, save_show
+from e8s.core.ids import FormId, SetId, SpotId, make_tid
+from e8s.show.documents import decode_show, dump_json, encode_show, split_path
+from e8s.show.file_repository import FileRepository
+from e8s.show.manage import add_set, remove_set
+from e8s.show.models import Show
+from e8s.show.repositories import InMemoryAssetStore, InMemoryRepository
+from e8s.show.storage import Repository, Workspace, load_show, open_workspace, save_show
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 from tests.helpers import context_entries

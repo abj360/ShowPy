@@ -8,10 +8,10 @@ Contains:
         jumping at the window end
 """
 
-from showpy.choreo.engine import PathEngine
-from showpy.choreo.path_models import FacingMode, PathRow
-from showpy.core.ids import SpotId
-from showpy.core.units import angle_diff
+from e8s.choreo.engine import PathEngine
+from e8s.choreo.path_models import FacingMode, PathRow
+from e8s.core.ids import SpotId
+from e8s.core.units import angle_diff
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
 from tests.helpers import defect
 

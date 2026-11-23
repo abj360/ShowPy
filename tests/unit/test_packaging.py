@@ -12,13 +12,13 @@ import json
 import re
 from importlib.resources import files
 
-import showpy
-from showpy.core.resources import schema_path
-from showpy.geo.fonts import MAX_FONT_BYTES
+import e8s
+from e8s.core.resources import schema_path
+from e8s.geo.fonts import MAX_FONT_BYTES
 
 
 def test_version_is_exported() -> None:
-    assert re.match(r"^\d+\.\d+\.\d+", showpy.__version__)
+    assert re.match(r"^\d+\.\d+\.\d+", e8s.__version__)
 
 
 def test_schema_is_a_package_resource() -> None:
@@ -31,8 +31,8 @@ def test_schemas_ship_their_mit_notice() -> None:
     assert "Permission is hereby granted, free of charge" in notice
 
 
-def test_distribution_name_is_showpy() -> None:
-    assert importlib.metadata.metadata("ShowPy")["Name"] == "ShowPy"
+def test_distribution_name_is_e8s() -> None:
+    assert importlib.metadata.metadata("e8s")["Name"] == "e8s"
 
 
 LICENSE_EXPRESSION = " AND ".join(
@@ -40,22 +40,22 @@ LICENSE_EXPRESSION = " AND ".join(
 )
 LICENSE_FILES = {
     "LICENSE",
-    "showpy/schemas/LICENSE-MIT.txt",
-    "showpy/fonts/licenses/HERSHEY.txt",
-    "showpy/fonts/licenses/MIT.txt",
-    "showpy/fonts/licenses/OFL-1.1.txt",
+    "e8s/schemas/LICENSE-MIT.txt",
+    "e8s/fonts/licenses/HERSHEY.txt",
+    "e8s/fonts/licenses/MIT.txt",
+    "e8s/fonts/licenses/OFL-1.1.txt",
 }
 
 
 def test_distribution_states_its_licences() -> None:
-    metadata = importlib.metadata.metadata("ShowPy")
+    metadata = importlib.metadata.metadata("e8s")
     assert metadata["License-Expression"] == LICENSE_EXPRESSION
     assert set(metadata.get_all("License-File") or []) == LICENSE_FILES
     assert not [c for c in metadata.get_all("Classifier") or [] if c.startswith("License ::")]
 
 
-def test_import_name_is_showpy() -> None:
-    assert importlib.import_module("showpy").__name__ == "showpy"
+def test_import_name_is_e8s() -> None:
+    assert importlib.import_module("e8s").__name__ == "e8s"
     assert importlib.util.find_spec("stage") is None
 
 
@@ -66,7 +66,7 @@ LICENCES = ("licenses/OFL-1.1.txt", "licenses/HERSHEY.txt", "licenses/MIT.txt", 
 
 
 def test_bundled_fonts_ship_with_their_licences() -> None:
-    fonts = files("showpy").joinpath("fonts")
+    fonts = files("e8s").joinpath("fonts")
     for name in BUNDLED:
         data = fonts.joinpath(f"{name}.json").read_bytes()
         assert len(data) < BUNDLED_FONT_BUDGET_BYTES

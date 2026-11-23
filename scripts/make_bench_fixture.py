@@ -22,7 +22,7 @@ import gzip
 import json
 from pathlib import Path
 
-from showpy.show.documents import encode_show
+from e8s.show.documents import encode_show
 from tests.fixtures.generators import seeded_show
 
 SEED = 11

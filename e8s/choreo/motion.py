@@ -1,0 +1,343 @@
+"""
+motion.py --- easing curves, facing turns and the immutable registry of custom motions
+
+Every easing is a monotone map of [0, 1] onto itself with e(0) = 0 and e(1) = 1, so an eased
+move still starts and ends on its placements. Custom motions must return `start` at u = 0 and
+`end` at u = 1; registration checks this on a probe move and compiling checks every output.
+The four built-in names are reserved: a registry never binds them to another function, so their
+stored typed parameters always mean the same motion.
+
+Contains:
+    ease(): maps time shares to distance shares through an Easing
+    easing_breaks(): returns the time shares where an easing has kinks or pauses
+    turn(): interpolates a facing in a chosen turn direction
+    MotionFn: describes a pure custom motion function
+    MotionInfo: describes one registered motion for listings
+    MotionRegistry: holds named motion functions immutably
+    MotionRegistry.fns: returns the read-only map of names to motion functions
+    MotionRegistry.get(): returns a motion by name
+    MotionRegistry.names(): lists registered names
+    MotionRegistry.with_motion(): returns a copy that also holds one motion
+    register_motion(): returns a registry extended with one validated motion
+    motions(): lists registered motions with their summaries
+    weave(): moves with a sinusoidal side-to-side offset
+    zigzag(): moves with a triangle-wave side offset
+    figure_eight(): moves along a figure-eight offset from the straight line
+    spiral(): circles the midpoint of the move, ending on the target
+    DEFAULT_MOTIONS: holds the built-in motions
+"""
+
+import math
+from collections.abc import Mapping
+from typing import Protocol
+
+import numpy as np
+import numpy.typing as npt
+
+from e8s.choreo.path_models import (
+    Easing,
+    FigureEightParams,
+    SpiralParams,
+    TurnDirection,
+    WeaveParams,
+    ZigzagParams,
+)
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import PathError, UnknownRefError
+from e8s.core.json_types import JsonValue
+from e8s.core.readonly import ReadOnlyMap
+from e8s.core.types import Degrees, FrozenModel, Point, Points
+from e8s.core.units import angle_diff, normalize_angle
+from e8s.core.util import close_matches
+
+type FloatArray = npt.NDArray[np.float64]
+
+PROBE_START: Point = (0.0, 0.0)
+PROBE_END: Point = (4.0, 3.0)
+PROBE_SAMPLES = 9
+ENDPOINT_TOL = 1e-6
+
+
+class MotionFn(Protocol):
+    """Describes a pure custom motion: positions at progress u from start to end.
+
+    `params` is plain JSON: the row's stored parameters, with lists and dicts for containers.
+    """
+
+    def __call__(
+        self, u: FloatArray, start: Point, end: Point, params: Mapping[str, JsonValue]
+    ) -> Points:
+        """Returns positions (len(u), 2) at progress shares u."""
+        ...
+
+
+def _smoothstep(x: FloatArray) -> FloatArray:
+    result: FloatArray = x * x * (3.0 - 2.0 * x)
+    return result
+
+
+def ease(easing: Easing, u: FloatArray) -> FloatArray:
+    """Maps time shares u in [0, 1] to distance shares through an Easing.
+
+    `strength` is the exponent for ease kinds, the time-share divisor for hold/burst kinds
+    (hold_then_burst at 2 holds for the first half), and the number of steps for `steps`.
+
+    >>> ease(Easing(kind="ease_in", strength=2.0), np.array([0.5])).tolist()
+    [0.25]
+    """
+    u = np.clip(np.asarray(u, dtype=float), 0.0, 1.0)
+    k = easing.strength
+    kind = easing.kind
+    if kind == "linear":
+        return u
+    if kind == "ease_in":
+        result: FloatArray = u**k
+        return result
+    if kind == "ease_out":
+        return 1.0 - (1.0 - u) ** k
+    if kind == "ease_in_out":
+        return np.where(u < 0.5, 0.5 * (2 * u) ** k, 1.0 - 0.5 * (2 - 2 * u) ** k)
+    if kind == "hold_then_burst":
+        hold = 1.0 - 1.0 / k
+        return np.clip((u - hold) * k, 0.0, 1.0)
+    if kind == "burst_then_settle":
+        return np.clip(u * k, 0.0, 1.0)
+    if kind == "steps":
+        return _steps(u, round(k))
+    times, shares = zip(*easing.points, strict=True)
+    custom: FloatArray = np.interp(u, times, shares)
+    return custom
+
+
+def easing_breaks(easing: Easing) -> list[float]:
+    """Returns the time shares inside (0, 1) where an easing has a kink or a pause.
+
+    Segment sampling splits at these so periodic easings cannot alias the probes.
+
+    >>> easing_breaks(Easing(kind="steps", strength=2.0))
+    [0.5]
+    """
+    k = easing.strength
+    breaks: list[float] = []
+    if easing.kind == "steps":
+        n = round(k)
+        breaks = [i / n for i in range(1, n)]
+    elif easing.kind == "hold_then_burst":
+        breaks = [1.0 - 1.0 / k]
+    elif easing.kind == "burst_then_settle":
+        breaks = [1.0 / k]
+    elif easing.kind == "ease_in_out":
+        breaks = [0.5]
+    elif easing.kind == "custom":
+        breaks = [t for t, _ in easing.points]
+    return [b for b in breaks if 0.0 < b < 1.0]
+
+
+def _steps(u: FloatArray, n: int) -> FloatArray:
+    scaled = u * n
+    whole = np.minimum(np.floor(scaled), n - 1)
+    result: FloatArray = (whole + _smoothstep(scaled - whole)) / n
+    return result
+
+
+def turn(
+    start: Degrees, end: Degrees, u: float, direction: TurnDirection = TurnDirection.SHORTEST
+) -> Degrees:
+    """Interpolates a facing from `start` to `end` at share u, turning the chosen way.
+
+    >>> turn(350.0, 10.0, 0.5)
+    0.0
+    """
+    if direction == TurnDirection.SHORTEST:
+        delta = angle_diff(start, end)
+    elif direction == TurnDirection.COUNTERCLOCKWISE:
+        delta = normalize_angle(end - start)
+    else:
+        delta = -normalize_angle(start - end)
+    return normalize_angle(start + delta * min(max(u, 0.0), 1.0))
+
+
+def _frame(start: Point, end: Point, u: FloatArray) -> tuple[Points, FloatArray]:
+    a, b = np.asarray(start, dtype=float), np.asarray(end, dtype=float)
+    chord = b - a
+    length = float(np.linalg.norm(chord))
+    side = np.array([-chord[1], chord[0]]) / length if length > 0 else np.zeros(2)
+    base: Points = a + np.outer(u, chord)
+    return base, side
+
+
+def weave(u: FloatArray, start: Point, end: Point, params: Mapping[str, JsonValue]) -> Points:
+    """Moves with a sinusoidal side-to-side offset.
+
+    Params, validated as WeaveParams: `amplitude` meters (default 1), `cycles` (positive
+    multiple of 0.5, default 2).
+
+    >>> (weave(np.array([0.0, 1.0]), (0, 0), (4, 0), {}).round(9) + 0.0).tolist()
+    [[0.0, 0.0], [4.0, 0.0]]
+    """
+    typed = WeaveParams.model_validate(dict(params))
+    base, side = _frame(start, end, u)
+    return base + np.outer(typed.amplitude * np.sin(2 * np.pi * typed.cycles * u), side)
+
+
+def zigzag(u: FloatArray, start: Point, end: Point, params: Mapping[str, JsonValue]) -> Points:
+    """Moves with a triangle-wave side offset (sharp corners).
+
+    Params, validated as ZigzagParams: `amplitude` meters (default 1), `cycles` (positive
+    multiple of 0.5, default 2).
+
+    >>> zigzag(np.array([0.125]), (0, 0), (8, 0), {"cycles": 1}).round(9).tolist()
+    [[1.0, 0.5]]
+    """
+    typed = ZigzagParams.model_validate(dict(params))
+    base, side = _frame(start, end, u)
+    phase = typed.cycles * u
+    triangle = 4 * np.abs(phase - np.floor(phase + 0.75) + 0.25) - 1
+    return base + np.outer(typed.amplitude * triangle, side)
+
+
+def figure_eight(
+    u: FloatArray, start: Point, end: Point, params: Mapping[str, JsonValue]
+) -> Points:
+    """Moves along a figure-eight offset from the straight line.
+
+    Params, validated as FigureEightParams: `amplitude` meters of side offset (default 1).
+
+    >>> (figure_eight(np.array([1.0]), (0, 0), (4, 0), {}).round(9) + 0.0).tolist()
+    [[4.0, 0.0]]
+    """
+    amplitude = FigureEightParams.model_validate(dict(params)).amplitude
+    base, side = _frame(start, end, u)
+    chord = np.asarray(end, dtype=float) - np.asarray(start, dtype=float)
+    lateral = amplitude * np.sin(2 * np.pi * u)
+    along = amplitude * np.sin(4 * np.pi * u) / 2
+    unit = chord / max(float(np.linalg.norm(chord)), ENDPOINT_TOL)
+    return base + np.outer(lateral, side) + np.outer(along, unit)
+
+
+def spiral(u: FloatArray, start: Point, end: Point, params: Mapping[str, JsonValue]) -> Points:
+    """Circles the midpoint of the move: half a turn plus `turns` extra full turns.
+
+    Params, validated as SpiralParams: `turns` (whole number >= 0, default 0), `clockwise`
+    (default False).
+
+    >>> (spiral(np.array([0.5]), (-1, 0), (1, 0), {}).round(9) + 0.0).tolist()
+    [[0.0, -1.0]]
+    """
+    typed = SpiralParams.model_validate(dict(params))
+    a, b = np.asarray(start, dtype=float), np.asarray(end, dtype=float)
+    mid = (a + b) / 2
+    radius = float(np.linalg.norm(a - mid))
+    sign = -1.0 if typed.clockwise else 1.0
+    theta0 = math.atan2(a[1] - mid[1], a[0] - mid[0])
+    theta = theta0 + sign * math.pi * (1 + 2 * typed.turns) * u
+    result: Points = mid + radius * np.stack([np.cos(theta), np.sin(theta)], axis=1)
+    return result
+
+
+class MotionInfo(FrozenModel):
+    """Describes one registered motion for listings.
+
+    Attributes:
+        name: Registered name.
+        summary: First docstring line of the motion function.
+    """
+
+    name: str
+    summary: str
+
+
+def _require_unreserved(name: str, fn: MotionFn) -> None:
+    built_in = _BUILT_IN_MOTIONS.get(name)
+    if built_in is not None and fn is not built_in:
+        raise PathError(
+            f"motion name {name!r} belongs to a built-in motion",
+            hint=f"register the motion under another name; reserved: {sorted(_BUILT_IN_MOTIONS)}",
+            context={"motion": name},
+            code=ErrorCode.RESERVED_MOTION,
+        )
+
+
+class MotionRegistry:
+    """Holds named motion functions; registration returns a new registry.
+
+    The constructor copies `fns` into a read-only map and refuses a built-in motion name bound
+    to any function but that built-in.
+    """
+
+    __slots__ = ("_fns",)
+
+    def __init__(self, fns: Mapping[str, MotionFn]) -> None:
+        for name, fn in fns.items():
+            _require_unreserved(name, fn)
+        self._fns: ReadOnlyMap[str, MotionFn] = ReadOnlyMap(fns)
+
+    @property
+    def fns(self) -> ReadOnlyMap[str, MotionFn]:
+        """Returns the read-only map of names to motion functions."""
+        return self._fns
+
+    def get(self, name: str) -> MotionFn:
+        """Returns a motion by name, raising UnknownRefError with suggestions."""
+        if name not in self._fns:
+            close = close_matches(name, self._fns)
+            raise UnknownRefError(
+                f"unknown motion {name!r}",
+                hint=f"did you mean {', '.join(close)}?" if close else f"use {self.names()}",
+                context={"motion": name},
+            )
+        return self._fns[name]
+
+    def names(self) -> list[str]:
+        """Lists registered motion names, sorted."""
+        return sorted(self._fns)
+
+    def with_motion(self, name: str, fn: MotionFn) -> "MotionRegistry":
+        """Returns a copy that also holds `fn` under `name`, unchecked; a built-in name is refused.
+
+        Prefer register_motion, which also probes the motion's endpoints.
+        """
+        return MotionRegistry({**self._fns, name: fn})
+
+
+def register_motion(registry: MotionRegistry, name: str, fn: MotionFn) -> MotionRegistry:
+    """Returns a registry extended with `fn`, after checking it starts and ends on target.
+
+    A built-in motion name (weave, zigzag, figure_eight, spiral) is refused with
+    RESERVED_MOTION.
+
+    >>> "weave" in register_motion(DEFAULT_MOTIONS, "w2", weave).names()
+    True
+    """
+    _require_unreserved(name, fn)
+    u = np.linspace(0.0, 1.0, PROBE_SAMPLES)
+    pts = np.asarray(fn(u, PROBE_START, PROBE_END, {}), dtype=float)
+    ends_ok = pts.shape == (PROBE_SAMPLES, 2) and np.allclose(
+        pts[[0, -1]], [PROBE_START, PROBE_END], atol=ENDPOINT_TOL
+    )
+    if not ends_ok:
+        raise PathError(
+            f"motion {name!r} does not start at start and end at end",
+            hint="return start at u=0 and end at u=1, shape (len(u), 2)",
+            context={"motion": name},
+        )
+    return registry.with_motion(name, fn)
+
+
+def motions(registry: MotionRegistry) -> list[MotionInfo]:
+    """Lists registered motions with the first line of their docstrings.
+
+    >>> [m.name for m in motions(DEFAULT_MOTIONS)][:2]
+    ['figure_eight', 'spiral']
+    """
+    infos = []
+    for name in registry.names():
+        doc = (registry.get(name).__doc__ or "").strip()
+        infos.append(MotionInfo(name=name, summary=doc.splitlines()[0] if doc else ""))
+    return infos
+
+
+_BUILT_IN_MOTIONS: ReadOnlyMap[str, MotionFn] = ReadOnlyMap(
+    {"weave": weave, "zigzag": zigzag, "figure_eight": figure_eight, "spiral": spiral}
+)
+DEFAULT_MOTIONS = MotionRegistry(_BUILT_IN_MOTIONS)

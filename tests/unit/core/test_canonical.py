@@ -33,8 +33,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import BaseModel, ConfigDict, field_serializer
 
-from showpy.core.canonical import JsonValue, canonical_value, jcs
-from showpy.core.errors import SchemaError
+from e8s.core.canonical import JsonValue, canonical_value, jcs
+from e8s.core.errors import SchemaError
 
 RFC_SAFE_INT = 2**53 - 1
 LONG_ARRAY_LENGTH = 2_000

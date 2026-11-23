@@ -39,14 +39,14 @@ from typing import Annotated, Literal, Union, get_args, get_origin
 import pytest
 from pydantic import BaseModel
 
-import showpy
+import e8s
+from e8s._api_table import DEPRECATED, LEAVING, PUBLIC_API
+from e8s.core.deprecation import DeprecatedWarning
 from scripts.check_api_changes import DEPRECATED_KEY, LEAVING_KEY, JsonValue, diff_snapshots
-from showpy._api_table import DEPRECATED, LEAVING, PUBLIC_API
-from showpy.core.deprecation import DeprecatedWarning
 
 ROOT = Path(__file__).resolve().parents[2]
 SNAPSHOT_PATH = ROOT / "tests" / "fixtures" / "api_snapshot.json"
-UPDATE_ENV = "SHOWPY_UPDATE_API"
+UPDATE_ENV = "E8S_UPDATE_API"
 UPDATE_COMMAND = f"{UPDATE_ENV}=1 uv run pytest tests/unit/test_api_snapshot.py"
 NO_SIGNATURE = "(*args)"
 BARE_MODULES = ("builtins", "typing")
@@ -148,7 +148,7 @@ def describe_public_object(obj: object) -> JsonValue:
     """Renders one public name as a Python-version-stable JSON value.
 
     Args:
-        obj: The object re-exported by showpy.
+        obj: The object re-exported by e8s.
 
     Returns:
         description: A signature string, or a dict describing a model, enum, protocol or constant.
@@ -183,9 +183,7 @@ def build_snapshot() -> dict[str, JsonValue]:
     """Builds the snapshot of every public name, plus its deprecated aliases and leaving names."""
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecatedWarning)
-        snapshot = {
-            name: describe_public_object(getattr(showpy, name)) for name, _, _ in PUBLIC_API
-        }
+        snapshot = {name: describe_public_object(getattr(e8s, name)) for name, _, _ in PUBLIC_API}
     snapshot[DEPRECATED_KEY] = {
         name: {"target": target, "since": since, "remove": remove}
         for name, target, since, remove in DEPRECATED
@@ -248,7 +246,7 @@ def check_snapshot(
     Args:
         current: The snapshot of the current code.
         snapshot_path: Where the stored snapshot lives.
-        is_updating: Whether refresh mode (`SHOWPY_UPDATE_API=1`) is on.
+        is_updating: Whether refresh mode (`E8S_UPDATE_API=1`) is on.
 
     Returns:
         failure: The failure message, or None when the API matches or the refresh succeeded.

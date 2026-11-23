@@ -65,7 +65,7 @@ class FakeGit:
         (["docsx/a.md"], False),
         (["Docs/a.md"], False),
         ([".github/workflows/ci.yml"], False),
-        (["showpy/docs/a.md"], False),
+        (["e8s/docs/a.md"], False),
     ],
 )
 def test_docs_only_is_true_only_when_every_path_is_under_docs(
@@ -87,7 +87,7 @@ def test_diff_command_splits_renames_and_uses_the_merge_base() -> None:
 
 
 def test_regression_rename_out_of_docs_counts_as_code() -> None:
-    git = FakeGit(["docs/engine.py", "showpy/choreo/engine.py"])
+    git = FakeGit(["docs/engine.py", "e8s/choreo/engine.py"])
     assert code_output(PULL_REQUEST, BASE_SHA, HEAD_SHA, git) == "true"
 
 

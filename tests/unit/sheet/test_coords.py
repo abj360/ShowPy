@@ -4,13 +4,13 @@
 test_coords.py --- tests coordinate presets, wording, parsing and audience-side handling
 
 Contains:
-    test_*(): one behavior of showpy.sheet.coords each
+    test_*(): one behavior of e8s.sheet.coords each
     test_regression_zero_precision_is_rejected_not_division_by_zero(): rejects precision=0 with a
-        ShowPyError, however the system gets into a show
+        E8sError, however the system gets into a show
     test_regression_to_coords_rejects_infinite_point(): rejects an infinite point with a
-        ShowPyError, not decimal.InvalidOperation
+        E8sError, not decimal.InvalidOperation
     test_regression_to_coords_rejects_unrepresentable_magnitude(): rejects a finite point too
-        large to round with a ShowPyError, not decimal.InvalidOperation
+        large to round with an E8sError, not decimal.InvalidOperation
     test_regression_to_coords_rejects_nan_point(): rejects a NaN point instead of printing "nan m
         right of center"
     test_regression_from_coords_rejects_overflowing_number(): rejects a number too large for a
@@ -23,7 +23,7 @@ Contains:
     test_regression_from_coords_refuses_a_point_past_max_coord(): refuses a read point past
         MAX_COORD_M with a hint naming the bound, and reads one at the bound
     test_regression_unvalidated_audience_side_is_rejected(): rejects an audience side outside the
-        four sides with a ShowPyError, not KeyError
+        four sides with an E8sError, not KeyError
     test_regression_injected_coordinate_parts_raise_schema_error(): rejects wrong-typed parts from
         set_coordinates, to_coords and from_coords with SchemaError, never TypeError
     test_regression_to_coords_rejects_unknown_style(): rejects an unknown style instead of silently
@@ -45,23 +45,23 @@ from typing import Any
 
 import pytest
 
-from showpy.core.caps import MAX_COORD_M
-from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
-from showpy.core.ids import LandmarkId
-from showpy.core.util import approx_equal
-from showpy.sheet.coords import (
+from e8s.core.caps import MAX_COORD_M
+from e8s.core.errors import E8sError, SchemaError, UnknownRefError
+from e8s.core.ids import LandmarkId
+from e8s.core.util import approx_equal
+from e8s.sheet.coords import (
     CoordStyle,
     coordinate_presets,
     from_coords,
     set_coordinates,
     to_coords,
 )
-from showpy.sheet.models import CoordinateKind, CoordinateSystem
-from showpy.sheet.templates import get_sheet
-from showpy.show.models import Show
+from e8s.sheet.models import CoordinateKind, CoordinateSystem
+from e8s.sheet.templates import get_sheet
+from e8s.show.models import Show
 from tests.fixtures.shows import two_set_show
 
-pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 TOL = 1e-9
 STAGE = CoordinateSystem(kind=CoordinateKind.STAGE)
@@ -180,7 +180,7 @@ def _assert_round_trips_or_rejects(system: CoordinateSystem, style: CoordStyle) 
     try:
         show = _with(system)
         text = to_coords(show, ROUND_TRIP_POINT, style)
-    except ShowPyError:
+    except E8sError:
         return
     assert approx_equal(from_coords(show, text), ROUND_TRIP_POINT, abs_tol=TOL)
 
@@ -191,26 +191,26 @@ def _word_with_precision(precision: float) -> str:
 
 
 def test_regression_zero_precision_is_rejected_not_division_by_zero() -> None:
-    """Rejects precision=0 with a ShowPyError, however the system gets into a show (audit 9.4)."""
-    with pytest.raises(ShowPyError):
+    """Rejects precision=0 with an E8sError, however the system gets into a show (audit 9.4)."""
+    with pytest.raises(E8sError):
         _word_with_precision(0.0)
 
 
 def test_regression_to_coords_rejects_infinite_point() -> None:
-    """Rejects an infinite point with a ShowPyError, not decimal.InvalidOperation (audit 9.4)."""
-    with pytest.raises(ShowPyError):
+    """Rejects an infinite point with an E8sError, not decimal.InvalidOperation (audit 9.4)."""
+    with pytest.raises(E8sError):
         to_coords(two_set_show(), (float("inf"), 0.0))
 
 
 def test_regression_to_coords_rejects_unrepresentable_magnitude() -> None:
-    """Rejects the finite point (0.0, 1e26), too large to round, with a ShowPyError (UP-9.4-47)."""
-    with pytest.raises(ShowPyError):
+    """Rejects the finite point (0.0, 1e26), too large to round, with an E8sError (UP-9.4-47)."""
+    with pytest.raises(E8sError):
         to_coords(two_set_show(), (0.0, 1e26))
 
 
 def test_regression_to_coords_rejects_nan_point() -> None:
     """Rejects a NaN point instead of printing "nan m right of center" (audit 9.4)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         to_coords(two_set_show(), (float("nan"), 0.0))
 
 
@@ -284,7 +284,7 @@ def _injected(fields: dict[str, Any]) -> Show:  # model_construct takes unchecke
 )
 def test_regression_from_coords_rejects_overflowing_number(text: str) -> None:
     """Rejects a 400-digit number, not an infinite point (audit 9.4, UP-9.4-48)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         from_coords(two_set_show(), text)
 
 
@@ -292,18 +292,18 @@ def test_regression_from_coords_rejects_overflowing_number(text: str) -> None:
 def test_regression_unvalidated_origin_is_rejected(origin: tuple[float, ...]) -> None:
     """Rejects a NaN, infinite or one-value origin in both directions (audit 9.4, UP-9.4-49)."""
     show = _injected({"origin": origin})
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         from_coords(show, "R1 U1")
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         to_coords(show, (1.0, 1.0))
 
 
 def test_regression_unvalidated_audience_side_is_rejected() -> None:
     """Rejects audience_side="x" in both directions, not KeyError (audit 9.4, UP-9.4-50)."""
     show = _injected({"audience_side": "x"})
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         from_coords(show, "R1 U1")
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         to_coords(show, (1.0, 1.0))
 
 
@@ -316,10 +316,10 @@ def test_regression_from_coords_rejects_overflowing_result() -> None:
     text = "R" + "9" * 308 + " U1"
     with pytest.raises(SchemaError):
         CoordinateSystem(origin=HUGE_ORIGIN)
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         from_coords(_injected({"origin": HUGE_ORIGIN}), text)
     edge = set_coordinates(two_set_show(), CoordinateSystem(origin=(MAX_COORD_M, 0.0)))
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         from_coords(edge, text)
 
 
@@ -342,17 +342,17 @@ def test_regression_to_coords_rejects_non_finite_wording() -> None:
         CoordinateSystem(origin=HUGE_SHIFTED_ORIGIN)
     edge = set_coordinates(two_set_show(), CoordinateSystem(origin=(MAX_COORD_M, -MAX_COORD_M)))
     for shifted in (_injected({"origin": HUGE_SHIFTED_ORIGIN}), edge):
-        with pytest.raises(ShowPyError):
+        with pytest.raises(E8sError):
             to_coords(shifted, (-1.7e308, 1.7e308))
     coarse = two_set_show().model_copy(update={"coordinates": CoordinateSystem(precision=1e308)})
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         to_coords(coarse, (1.7976931348623157e308, 0.0))
 
 
 def test_regression_to_coords_rounding_failure_hint_names_precision() -> None:
     """Teaches the precision as a possible cause when rounding exceeds Decimal's digits."""
     show = two_set_show().model_copy(update={"coordinates": CoordinateSystem(precision=1e-300)})
-    with pytest.raises(ShowPyError) as raised:
+    with pytest.raises(E8sError) as raised:
         to_coords(show, (1.0, 0.0))
     assert "precision" in raised.value.hint
 

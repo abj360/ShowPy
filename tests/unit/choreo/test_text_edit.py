@@ -4,7 +4,7 @@
 test_text_edit.py --- tests edit_text_count, the explicit way to change a text form's count
 
 Contains:
-    test_*(): one behavior of showpy.choreo.text_edit each
+    test_*(): one behavior of e8s.choreo.text_edit each
 """
 
 from typing import Any
@@ -13,12 +13,12 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.choreo.form_models import Form
-from showpy.choreo.form_text import text_recipe, text_strokes
-from showpy.choreo.forms import circle_form, slots, text_form
-from showpy.choreo.text_count import spacing_count
-from showpy.choreo.text_edit import edit_text_count
-from showpy.core.errors import LockedError, SchemaError, SpacingError
+from e8s.choreo.form_models import Form
+from e8s.choreo.form_text import text_recipe, text_strokes
+from e8s.choreo.forms import circle_form, slots, text_form
+from e8s.choreo.text_count import spacing_count
+from e8s.choreo.text_edit import edit_text_count
+from e8s.core.errors import LockedError, SchemaError, SpacingError
 
 FORM_SPOTS = 60
 PROPERTY_SPOTS = 30
@@ -133,7 +133,7 @@ def test_edit_text_count_locked_form_needs_force() -> None:
     assert len(edit_text_count(locked, add=["X1"], n=61, force=True).members) == 61
 
 
-@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+@pytest.mark.filterwarnings("ignore::e8s.core.errors.LegibilityWarning")
 def test_edit_text_count_below_the_minimum_names_it() -> None:
     f = text_form("hi", spots(HI_MINIMUM), "HI", fonts=["simplex"], height=4.0, at=(0, 10),
                   n=HI_MINIMUM)  # fmt: skip

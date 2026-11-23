@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 
 """
-test_library_rules.py --- tests source-level rules that every showpy module must follow
+test_library_rules.py --- tests source-level rules that every e8s module must follow
 
 Contains:
     find_model_copy_updates(): lists file and line of each unvalidated model_copy use
-    test_library_never_calls_model_copy_with_update: fails on any such call in showpy/
+    test_library_never_calls_model_copy_with_update: fails on any such call in e8s/
     test_model_copy_ban_detects_an_offending_call: proves the scan can fail
     test_model_copy_ban_detects_kwargs_aliases_and_getattr: proves the scan sees evasions
     find_citations(): lists file and line of each ADR, ledger-ID or docs-path citation
-    test_library_cites_no_adr_docs_or_ledger_ids: fails on any such citation in showpy/
+    test_library_cites_no_adr_docs_or_ledger_ids: fails on any such citation in e8s/
     test_citation_scan_flags_a_docstring_and_a_comment: proves the scan can fail
     test_citation_scan_ignores_runtime_strings: proves plain string literals are not flagged
     find_code_spellings(): lists file, line and code of each raised or reported error code
@@ -25,9 +25,9 @@ Contains:
     test_positional_boolean_scan_flags_a_definition: proves the scan can fail
     test_public_names_are_cached_after_first_use: requires a resolved name to land in the module
     test_deprecated_alias_warns_on_every_access: requires an alias to warn each time, uncached
-    find_geo_foreign_imports(): lists each import in geo source outside showpy.core and showpy.geo
+    find_geo_foreign_imports(): lists each import in geo source outside e8s.core and e8s.geo
     GEO_FORWARDING_IMPORTS: lists the function-level imports of the geo stubs, removed in v0.6.0
-    test_geo_imports_only_core: fails when geo imports another showpy package, bar the listed stubs
+    test_geo_imports_only_core: fails when geo imports another e8s package, bar the listed stubs
     test_geo_layering_scan_allows_only_listed_function_imports: proves an unlisted import is flagged
     test_geo_layering_scan_flags_a_foreign_import: proves the layering scan can fail
     test_geo_layering_scan_resolves_relative_imports: checks `from ..cast import x` against layers
@@ -45,24 +45,24 @@ from types import ModuleType
 
 import pytest
 
-import showpy
-from showpy._api_table import PUBLIC_API
-from showpy.core.deprecation import DeprecatedWarning
-from showpy.core.error_codes import ErrorCode
+import e8s
+from e8s._api_table import PUBLIC_API
+from e8s.core.deprecation import DeprecatedWarning
+from e8s.core.error_codes import ErrorCode
 
 CITATION_PATTERN = re.compile(r"\bADR\b|\bUP-\d+\.\d+-\d+\b|\bdocs/")
 MIN_LIBRARY_FILES = 100
 REPO_ROOT = Path(__file__).resolve().parents[2]
-LIBRARY_ROOT = REPO_ROOT / "showpy"
+LIBRARY_ROOT = REPO_ROOT / "e8s"
 ERROR_CODES_PATH = LIBRARY_ROOT / "core" / "error_codes.py"
 ERROR_CODE_DOCS_PATH = REPO_ROOT / "docs" / "error-codes.md"
 ERROR_CODE_GENERATOR_PATH = REPO_ROOT / "scripts" / "gen_error_codes.py"
-GEO_PACKAGE = "showpy.geo"
+GEO_PACKAGE = "e8s.geo"
 LITERAL = "literal"
 MODEL_COPY = "model_copy"
 MODEL_COPY_OVERRIDE = Path("core") / "types.py"
 pytestmark = pytest.mark.skipif(
-    not LIBRARY_ROOT.is_dir(), reason="needs a source checkout; the wheel test has no showpy tree"
+    not LIBRARY_ROOT.is_dir(), reason="needs a source checkout; the wheel test has no e8s tree"
 )
 
 
@@ -248,7 +248,7 @@ def test_every_error_code_is_used() -> None:
 def test_code_scan_flags_literals_and_unknown_members() -> None:
     """Reports a literal `code=`, a literal `default_code` and an ErrorCode attribute."""
     source = (
-        "class E(ShowPyError):\n"
+        "class E(E8sError):\n"
         "    default_code = 'OLD'\n"
         "raise E('m', hint='h', code='NOPE')\n"
         "raise E('m', hint='h', code=ErrorCode.MADE_UP)\n"
@@ -306,7 +306,7 @@ def find_positional_booleans(source: str, name: str) -> list[str]:
 
 
 def test_regression_library_has_no_positional_boolean_parameter() -> None:
-    """Requires every bool parameter under showpy/ and scripts/ to be keyword-only."""
+    """Requires every bool parameter under e8s/ and scripts/ to be keyword-only."""
     paths = [*LIBRARY_ROOT.rglob("*.py"), *(REPO_ROOT / "scripts").glob("*.py")]
     offenders = [
         hit
@@ -322,7 +322,7 @@ def test_regression_public_functions_take_booleans_by_keyword() -> None:
     for public_name, _module, _attribute in PUBLIC_API:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecatedWarning)
-            obj = getattr(showpy, public_name)
+            obj = getattr(e8s, public_name)
         targets = [obj] if inspect.isfunction(obj) else []
         if inspect.isclass(obj):
             targets = [
@@ -349,20 +349,20 @@ def test_positional_boolean_scan_flags_a_definition() -> None:
 
 
 def test_public_names_are_cached_after_first_use() -> None:
-    if "Show" in vars(showpy):
-        delattr(showpy, "Show")
-    resolved = showpy.Show
-    assert vars(showpy)["Show"] is resolved
+    if "Show" in vars(e8s):
+        delattr(e8s, "Show")
+    resolved = e8s.Show
+    assert vars(e8s)["Show"] is resolved
 
 
 def test_deprecated_alias_warns_on_every_access() -> None:
-    alias = next(iter(vars(showpy)["_DEPRECATED"]))
+    alias = next(iter(vars(e8s)["_DEPRECATED"]))
     for _ in range(2):
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            getattr(showpy, alias)
+            getattr(e8s, alias)
         assert [w.category for w in caught] == [DeprecatedWarning]
-    assert alias not in vars(showpy)
+    assert alias not in vars(e8s)
 
 
 def _imported_modules(node: ast.Import | ast.ImportFrom, package: str) -> list[str]:
@@ -399,7 +399,7 @@ def find_geo_foreign_imports(
     package: str = GEO_PACKAGE,
     allowed: frozenset[tuple[str, str, str]] = frozenset(),
 ) -> list[str]:
-    """Lists `name:line:module` for each import outside showpy.core and showpy.geo.
+    """Lists `name:line:module` for each import outside e8s.core and e8s.geo.
 
     Args:
         source: The text of a geo module.
@@ -416,16 +416,16 @@ def find_geo_foreign_imports(
         found.extend(
             f"{name}:{node.lineno}:{module}"
             for module in _imported_modules(node, package)
-            if module.split(".")[0] == "showpy"
-            and module not in ("showpy.core", "showpy.geo")
-            and not module.startswith(("showpy.core.", "showpy.geo."))
+            if module.split(".")[0] == "e8s"
+            and module not in ("e8s.core", "e8s.geo")
+            and not module.startswith(("e8s.core.", "e8s.geo."))
             and (function is None or (name, module, function) not in allowed)
         )
     return sorted(found, key=lambda entry: int(entry.split(":")[1]))
 
 
 GEO_FORWARDING_FUNCTIONS = {
-    ("transforms.py", "showpy.choreo.set_transforms"): (
+    ("transforms.py", "e8s.choreo.set_transforms"): (
         "shift",
         "move_to",
         "rotate",
@@ -438,19 +438,19 @@ GEO_FORWARDING_FUNCTIONS = {
         "skew",
         "affine",
     ),
-    ("snapping.py", "showpy.choreo.set_snapping"): (
+    ("snapping.py", "e8s.choreo.set_snapping"): (
         "snap",
         "snap_to_guides",
         "align",
         "distribute",
     ),
-    ("measure.py", "showpy.choreo.set_measure"): (
+    ("measure.py", "e8s.choreo.set_measure"): (
         "on_field_ids",
         "neighbors",
         "nearest",
         "symmetry_error",
     ),
-    ("analysis.py", "showpy.choreo.set_analysis"): (
+    ("analysis.py", "e8s.choreo.set_analysis"): (
         "density_map",
         "coverage",
         "balance",
@@ -467,12 +467,12 @@ GEO_FORWARDING_IMPORTS = frozenset(
         for function in functions
     ]
     + [
-        (module, "showpy.choreo.models", function)
+        (module, "e8s.choreo.models", function)
         for (module, _target), functions in GEO_FORWARDING_FUNCTIONS.items()
         for function in functions
     ]
     + [
-        (module, "showpy.sheet.models", function)
+        (module, "e8s.sheet.models", function)
         for (module, _target), functions in GEO_FORWARDING_FUNCTIONS.items()
         for function in functions
         if function in SHEET_FORWARDING_FUNCTIONS
@@ -494,35 +494,35 @@ def test_geo_imports_only_core() -> None:
 def test_geo_layering_scan_allows_only_listed_function_imports() -> None:
     source = (
         "def shift(obj):\n"
-        "    from showpy.choreo.set_transforms import shift as twin\n"
+        "    from e8s.choreo.set_transforms import shift as twin\n"
         "    return twin(obj)\n"
         "def stray(obj):\n"
-        "    from showpy.choreo.set_transforms import shift as twin\n"
+        "    from e8s.choreo.set_transforms import shift as twin\n"
         "    return twin(obj)\n"
         "def shift_other(obj):\n"
-        "    from showpy.choreo.set_snapping import snap as twin\n"
+        "    from e8s.choreo.set_snapping import snap as twin\n"
         "    return twin(obj)\n"
-        "from showpy.choreo.set_transforms import shift\n"
+        "from e8s.choreo.set_transforms import shift\n"
     )
-    allowed = frozenset({("x.py", "showpy.choreo.set_transforms", "shift")})
+    allowed = frozenset({("x.py", "e8s.choreo.set_transforms", "shift")})
     assert find_geo_foreign_imports(source, "x.py", allowed=allowed) == [
-        "x.py:5:showpy.choreo.set_transforms",
-        "x.py:8:showpy.choreo.set_snapping",
-        "x.py:10:showpy.choreo.set_transforms",
+        "x.py:5:e8s.choreo.set_transforms",
+        "x.py:8:e8s.choreo.set_snapping",
+        "x.py:10:e8s.choreo.set_transforms",
     ]
 
 
 def test_geo_layering_scan_flags_a_foreign_import() -> None:
     source = (
         "from typing import TYPE_CHECKING\n"
-        "from showpy.core.types import Box2\n"
+        "from e8s.core.types import Box2\n"
         "if TYPE_CHECKING:\n"
-        "    from showpy.cast.models import Spot\n"
-        "import showpy.choreo.models\n"
+        "    from e8s.cast.models import Spot\n"
+        "import e8s.choreo.models\n"
     )
     assert find_geo_foreign_imports(source, "x.py") == [
-        "x.py:4:showpy.cast.models",
-        "x.py:5:showpy.choreo.models",
+        "x.py:4:e8s.cast.models",
+        "x.py:5:e8s.choreo.models",
     ]
 
 
@@ -535,6 +535,6 @@ def test_geo_layering_scan_resolves_relative_imports() -> None:
         "from .. import choreo\n"
     )
     assert find_geo_foreign_imports(source, "x.py") == [
-        "x.py:4:showpy.cast.models",
-        "x.py:5:showpy.choreo",
+        "x.py:4:e8s.cast.models",
+        "x.py:5:e8s.choreo",
     ]

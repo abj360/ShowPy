@@ -4,7 +4,7 @@
 test_text_count.py --- tests text spot counts derived from a spacing between spots
 
 Contains:
-    test_*(): one behavior of showpy.choreo.text_count each
+    test_*(): one behavior of e8s.choreo.text_count each
     test_regression_text_spot_count_gives_the_count_text_form_derives(): names the members a
         spacing-built text form needs before it is built
     test_regression_spacing_count_follows_a_scaled_text_form(): counts a scaled form's spots
@@ -19,23 +19,23 @@ import warnings
 import pytest
 from scipy.spatial import cKDTree
 
-from showpy.choreo.form_layout import layout
-from showpy.choreo.form_models import TextRecipe
-from showpy.choreo.form_ops import transform_form
-from showpy.choreo.form_text import (
+from e8s.choreo.form_layout import layout
+from e8s.choreo.form_models import TextRecipe
+from e8s.choreo.form_ops import transform_form
+from e8s.choreo.form_text import (
     MAX_TEXT_SPOTS,
     text_recipe,
     text_slots,
     text_strokes,
 )
-from showpy.choreo.forms import slots, text_form
-from showpy.choreo.text_count import count_recipe, spacing_count, text_spot_count
-from showpy.choreo.text_edit import edit_text_count
-from showpy.choreo.text_spread import COINCIDENT_TOL_M
-from showpy.core.errors import LegibilityWarning, SchemaError, SpacingError
-from showpy.core.types import Points
-from showpy.geo.affine import scale_matrix
-from showpy.geo.fonts import bundled_fonts, register_font
+from e8s.choreo.forms import slots, text_form
+from e8s.choreo.text_count import count_recipe, spacing_count, text_spot_count
+from e8s.choreo.text_edit import edit_text_count
+from e8s.choreo.text_spread import COINCIDENT_TOL_M
+from e8s.core.errors import LegibilityWarning, SchemaError, SpacingError
+from e8s.core.types import Points
+from e8s.geo.affine import scale_matrix
+from e8s.geo.fonts import bundled_fonts, register_font
 from tests.fixtures.fonts import tiny_bytes
 
 LETTER_HEIGHT = 6.0
@@ -50,7 +50,7 @@ DENSE_STROKES = tuple(f"M{x} 0 L{x} 10" for x in range(6))
 DENSE_CHARS = 900
 SCALE = 2.0
 SCALED_L_SPOTS = 21
-ignore_legibility = pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+ignore_legibility = pytest.mark.filterwarnings("ignore::e8s.core.errors.LegibilityWarning")
 
 
 def recipe(text: str, font: str = "simplex", height: float = LETTER_HEIGHT) -> TextRecipe:

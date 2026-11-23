@@ -35,12 +35,12 @@ from datetime import UTC, datetime
 import numpy as np
 import pytest
 
-from showpy.choreo.forms import slots, text_form
-from showpy.choreo.models import PlacementPatch
-from showpy.choreo.path_models import PathRow, TransitionSpec
-from showpy.core.caps import MAX_EXTENSION_BYTES, MAX_POINTS, MAX_TEXT_CHARS
-from showpy.core.deprecation import DeprecatedWarning
-from showpy.core.errors import (
+from e8s.choreo.forms import slots, text_form
+from e8s.choreo.models import PlacementPatch
+from e8s.choreo.path_models import PathRow, TransitionSpec
+from e8s.core.caps import MAX_EXTENSION_BYTES, MAX_POINTS, MAX_TEXT_CHARS
+from e8s.core.deprecation import DeprecatedWarning
+from e8s.core.errors import (
     FontError,
     LockedError,
     MissingFontError,
@@ -48,14 +48,14 @@ from showpy.core.errors import (
     UnknownRefError,
     VersionError,
 )
-from showpy.core.ids import FormId, SpotId, make_tid
-from showpy.core.json_types import JsonValue
-from showpy.core.resources import font_path
-from showpy.core.util import approx_equal, asset_uri
-from showpy.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
-from showpy.show import interchange, interchange_positions
-from showpy.show.documents import decode_show, encode_show
-from showpy.show.interchange import (
+from e8s.core.ids import FormId, SpotId, make_tid
+from e8s.core.json_types import JsonValue
+from e8s.core.resources import font_path
+from e8s.core.util import approx_equal, asset_uri
+from e8s.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
+from e8s.show import interchange, interchange_positions
+from e8s.show.documents import decode_show, encode_show
+from e8s.show.interchange import (
     FONTS_KEY,
     MAX_IMPORT_FONTS,
     SCHEMA_TAG,
@@ -64,10 +64,10 @@ from showpy.show.interchange import (
     import_json,
     import_positions,
 )
-from showpy.show.migrate import CURRENT_VERSION, FORMAT
-from showpy.show.models import Show
-from showpy.show.pinning import pin
-from showpy.show.repositories import InMemoryRepository
+from e8s.show.migrate import CURRENT_VERSION, FORMAT
+from e8s.show.models import Show
+from e8s.show.pinning import pin
+from e8s.show.repositories import InMemoryRepository
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.fonts import tiny_bytes
 from tests.fixtures.shows import two_set_show
@@ -334,7 +334,7 @@ def test_import_json_refuses_wrong_or_missing_schema(document: dict[str, object]
 def test_export_json_writes_the_format_header_first() -> None:
     exported = export_json(two_set_show())
     assert list(exported)[:3] == ["format", "version", "show"]
-    assert (exported["format"], exported["version"]) == ("showpy.show", 2)
+    assert (exported["format"], exported["version"]) == ("e8.show", 2)
     assert "schema" not in exported
 
 
@@ -402,7 +402,7 @@ def test_regression_import_json_rejects_a_non_mapping_with_schema_error() -> Non
 def test_regression_export_json_ignores_hash_seed() -> None:
     """Dumps the same JSON export under every hash seed, spot tags included (audit 4.3; P0 #9)."""
     digests = digests_under_hash_seeds(
-        "from showpy.show.interchange import export_json",
+        "from e8s.show.interchange import export_json",
         "json.dumps(export_json(show), sort_keys=True).encode()",
     )
     assert all(first == second for first, second in digests), digests
@@ -551,15 +551,15 @@ def test_regression_import_fonts_accepts_an_older_font_under_a_taken_name() -> N
 @pytest.mark.parametrize(
     ("old_module", "name"),
     [
-        ("showpy.export.data", "export_json"),
-        ("showpy.export.data", "import_json"),
-        ("showpy.export.data", "import_fonts"),
-        ("showpy.export.positions", "import_positions"),
+        ("e8s.export.data", "export_json"),
+        ("e8s.export.data", "import_json"),
+        ("e8s.export.data", "import_fonts"),
+        ("e8s.export.positions", "import_positions"),
     ],
 )
 def test_interchange_old_paths_warn_and_resolve(old_module: str, name: str) -> None:
     module = importlib.import_module(old_module)
-    with pytest.warns(DeprecatedWarning, match=f"`{name}` moved to `showpy.show.interchange"):
+    with pytest.warns(DeprecatedWarning, match=f"`{name}` moved to `e8s.show.interchange"):
         old = getattr(module, name)
     assert old is getattr(interchange, name)
 

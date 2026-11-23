@@ -11,10 +11,10 @@ import copy
 
 import pytest
 
-from showpy.core.errors import SchemaError
-from showpy.core.json_types import JsonValue
-from showpy.show.migrate import SHOW_DOC, ReportBuilder
-from showpy.show.migrations.v1_to_v2_cast import NOTES_DOC, migrate_cast
+from e8s.core.errors import SchemaError
+from e8s.core.json_types import JsonValue
+from e8s.show.migrate import SHOW_DOC, ReportBuilder
+from e8s.show.migrations.v1_to_v2_cast import NOTES_DOC, migrate_cast
 
 
 def _docs(**cast: JsonValue) -> dict[str, JsonValue]:

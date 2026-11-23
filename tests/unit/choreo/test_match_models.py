@@ -22,10 +22,10 @@ import math
 
 import pytest
 
-from showpy.choreo.form_models import FormFnInfo
-from showpy.choreo.match_models import MatchOptions, MatchResult, MatchWeights
-from showpy.core.errors import SchemaError
-from showpy.core.ids import FormId, SpotId
+from e8s.choreo.form_models import FormFnInfo
+from e8s.choreo.match_models import MatchOptions, MatchResult, MatchWeights
+from e8s.core.errors import SchemaError
+from e8s.core.ids import FormId, SpotId
 
 
 def test_match_options_defaults_follow_the_reference() -> None:

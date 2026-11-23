@@ -17,9 +17,9 @@ import timeit
 import pytest
 from pytest_benchmark.fixture import BenchmarkFixture
 
-from showpy.cast.select import OrderBy, ordered_along
-from showpy.choreo.models import Placement, Set
-from showpy.core.ids import SetId, SpotId
+from e8s.cast.select import OrderBy, ordered_along
+from e8s.choreo.models import Placement, Set
+from e8s.core.ids import SetId, SpotId
 
 pytestmark = pytest.mark.bench
 

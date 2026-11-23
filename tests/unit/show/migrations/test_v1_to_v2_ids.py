@@ -58,17 +58,17 @@ from typing import Any
 
 import pytest
 
-from showpy.cast.spots import define_selection
-from showpy.choreo.path_models import FacingMode, FacingOverride
-from showpy.core.errors import SchemaError, StorageError
-from showpy.core.ids import LEGACY_IDS_KEY, FormId, SetId, ZoneId
-from showpy.core.json_types import JsonValue
-from showpy.core.types import Region
-from showpy.examples import two_set_show
-from showpy.notes.models import NotesDocument
-from showpy.sheet.models import Zone, ZoneKind
-from showpy.show.canvas_renames import renamed_canvas
-from showpy.show.documents import (
+from e8s.cast.spots import define_selection
+from e8s.choreo.path_models import FacingMode, FacingOverride
+from e8s.core.errors import SchemaError, StorageError
+from e8s.core.ids import LEGACY_IDS_KEY, FormId, SetId, ZoneId
+from e8s.core.json_types import JsonValue
+from e8s.core.types import Region
+from e8s.examples import two_set_show
+from e8s.notes.models import NotesDocument
+from e8s.sheet.models import Zone, ZoneKind
+from e8s.show.canvas_renames import renamed_canvas
+from e8s.show.documents import (
     LEGACY_NOTES_DOC,
     NOTES_DOC,
     SHOW_DOC,
@@ -78,18 +78,18 @@ from showpy.show.documents import (
     migrate_documents,
     set_doc,
 )
-from showpy.show.file_repository import FileRepository
-from showpy.show.files import CLAIMS_DOC
-from showpy.show.integrity import blob_digest
-from showpy.show.manage import add_set, renumber
-from showpy.show.migrate import FIRST_VERSION, MigrationReport, ReportBuilder
-from showpy.show.migrations.v1_to_v2_ids import rename_ids
-from showpy.show.migrations.v1_to_v2_notes import move_notes
-from showpy.show.models import Anchor, Comment, Revision, Show
-from showpy.show.pinning import pin
-from showpy.show.storage import load_show, open_workspace, save_show
-from showpy.show.structured import COMMENTS_DOC, SELECTION_DOC
-from showpy.show.validate import validate_show
+from e8s.show.file_repository import FileRepository
+from e8s.show.files import CLAIMS_DOC
+from e8s.show.integrity import blob_digest
+from e8s.show.manage import add_set, renumber
+from e8s.show.migrate import FIRST_VERSION, MigrationReport, ReportBuilder
+from e8s.show.migrations.v1_to_v2_ids import rename_ids
+from e8s.show.migrations.v1_to_v2_notes import move_notes
+from e8s.show.models import Anchor, Comment, Revision, Show
+from e8s.show.pinning import pin
+from e8s.show.storage import load_show, open_workspace, save_show
+from e8s.show.structured import COMMENTS_DOC, SELECTION_DOC
+from e8s.show.validate import validate_show
 from tests.fixtures.generators import seeded_show
 from tests.helpers import TWO_HASH_SEEDS, outputs_under_hash_seeds
 
@@ -102,8 +102,8 @@ V020_FORM_RENAMES = 15
 DETERMINISM_SCRIPT = """
 import json, shutil, tempfile
 from pathlib import Path
-from showpy.show.documents import migrate_documents
-from showpy.show.file_repository import FileRepository
+from e8s.show.documents import migrate_documents
+from e8s.show.file_repository import FileRepository
 copy = Path(tempfile.mkdtemp()) / "repo"
 shutil.copytree({repo!r}, copy)
 docs = dict(FileRepository(copy).documents("legacy-show"))

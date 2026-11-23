@@ -46,20 +46,20 @@ import imageio_ffmpeg
 import numpy as np
 import pytest
 
-from showpy.cast.models import Cast
-from showpy.choreo.engine import PathEngine
-from showpy.core.caps import MAX_VIDEO_PIXELS, require_size
-from showpy.core.errors import (
+from e8s.cast.models import Cast
+from e8s.choreo.engine import PathEngine
+from e8s.core.caps import MAX_VIDEO_PIXELS, require_size
+from e8s.core.errors import (
+    E8sError,
     SchemaError,
-    ShowPyError,
     StorageError,
     TimeRangeError,
     UnknownRefError,
 )
-from showpy.core.util import approx_equal
-from showpy.export._video import export_video, render_frame, video_canvas
-from showpy.show.models import Show
-from showpy.time.models import AudioTrack
+from e8s.core.util import approx_equal
+from e8s.export._video import export_video, render_frame, video_canvas
+from e8s.show.models import Show
+from e8s.time.models import AudioTrack
 from tests.fixtures.shows import two_set_show
 
 SAMPLE_RATE = 8000
@@ -224,7 +224,7 @@ def test_regression_short_audio_does_not_truncate_the_video(tmp_path: Path) -> N
 @pytest.mark.xfail(strict=True, reason="UP-9.5-47")
 def test_regression_sync_offset_past_the_audio_raises() -> None:
     """Raises instead of returning a corrupt file when the offset is past the audio's end."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         export_video(
             _with_track(offset_s=PAST_AUDIO_OFFSET_S),
             count_range=(0.0, 4.0),
@@ -434,6 +434,6 @@ def test_regression_export_video_refuses_an_empty_encoder_output(
     def write_nothing(_show: Show, path: Path, *_rest: object) -> None:
         path.write_bytes(b"")
 
-    monkeypatch.setattr("showpy.export._video._write_frames", write_nothing)
+    monkeypatch.setattr("e8s.export._video._write_frames", write_nothing)
     with pytest.raises(StorageError):
         export_video(two_set_show(), (0.0, 1.0), fps=FPS, px_per_m=SMALL_PX_PER_M)

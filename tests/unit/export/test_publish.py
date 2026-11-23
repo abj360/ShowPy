@@ -30,7 +30,7 @@ Contains:
     test_regression_publish_requires_https_base_url(): rejects an http base URL
     test_regression_publish_does_not_mangle_a_base_url_query(): keeps a base URL query intact
     test_regression_qr_code_caps_the_image_size(): rejects a QR size that needs gigabytes
-    test_regression_qr_code_wraps_an_overlong_link_error(): wraps the QR overflow in a ShowPyError
+    test_regression_qr_code_wraps_an_overlong_link_error(): wraps the QR overflow in an E8sError
     test_regression_qr_code_rejects_a_non_positive_or_non_integer_size(): rejects 0, negative, bool
     test_regression_qr_code_rejects_a_size_just_over_the_pixel_cap(): rejects 6,325 px
     test_regression_qr_code_overflow_error_hides_the_join_token(): keeps the token out of errors
@@ -93,21 +93,21 @@ import pytest
 import segno
 from PIL import Image
 
-from showpy.cast.models import Spot
-from showpy.cast.rewrite import rewrite_spot_ids
-from showpy.choreo.models import PlacementPatch
-from showpy.choreo.path_models import PathRow
-from showpy.core.errors import (
+from e8s.cast.models import Spot
+from e8s.cast.rewrite import rewrite_spot_ids
+from e8s.choreo.models import PlacementPatch
+from e8s.choreo.path_models import PathRow
+from e8s.core.errors import (
+    E8sError,
     LockedError,
     SchemaError,
-    ShowPyError,
     ShowValidationError,
     UnknownRefError,
 )
-from showpy.core.ids import SpotId
-from showpy.export._models import Performer, Publication
-from showpy.export._print_sheets import chart, coordinate_sheets
-from showpy.export._publish import (
+from e8s.core.ids import SpotId
+from e8s.export._models import Performer, Publication
+from e8s.export._print_sheets import chart, coordinate_sheets
+from e8s.export._publish import (
     claim_spot,
     claims,
     join_link,
@@ -124,16 +124,16 @@ from showpy.export._publish import (
     verify_join_token,
     who_is_on,
 )
-from showpy.sheet.coords import set_coordinates
-from showpy.sheet.models import CoordinateSystem
-from showpy.show.interchange import export_json
-from showpy.show.models import Show
+from e8s.sheet.coords import set_coordinates
+from e8s.sheet.models import CoordinateSystem
+from e8s.show.interchange import export_json
+from e8s.show.models import Show
 from tests.fixtures.export_shows import AT, guided_show, performer
 from tests.fixtures.motion_shows import with_rows, with_targets
 from tests.fixtures.shows import two_set_show
 from tests.helpers import fails_after
 
-pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 BASE_URL = "https://eight.example/p/"
 JOIN_TOKEN = "Zk3Qz9-high-entropy_join-token"
@@ -601,9 +601,9 @@ def test_regression_qr_code_caps_the_image_size() -> None:
 
 
 def test_regression_qr_code_wraps_an_overlong_link_error() -> None:
-    """Raises a ShowPyError, not segno.DataOverflowError, for a link too long for a QR code."""
+    """Raises an E8sError, not segno.DataOverflowError, for a link too long for a QR code."""
     pub = _published().model_copy(update={"link": f"https://eight.example/{OVERLONG_PATH}"})
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         qr_code(pub, JOIN_TOKEN)
 
 
@@ -835,7 +835,7 @@ def test_regression_performer_view_after_deletion_gives_a_performer_hint() -> No
     gone = show.model_copy(
         update={"sets": sets, "cast": show.cast.model_copy(update={"spots": spots})}
     )
-    with pytest.raises(ShowPyError) as caught:
+    with pytest.raises(E8sError) as caught:
         performer_view(pub, gone, performer("Ada"))
     hint = caught.value.hint.lower()
     assert hint
@@ -1000,7 +1000,7 @@ def test_regression_publication_repr_omits_the_join_token() -> None:
 def _error_text(error: BaseException) -> str:
     """Spells every part of an error a log or traceback could print, its cause included."""
     parts = [str(error), repr(error), str(error.__cause__), repr(error.__cause__)]
-    if isinstance(error, ShowPyError):
+    if isinstance(error, E8sError):
         parts += [error.hint, repr(error.context)]
     return " ".join(parts)
 
@@ -1021,10 +1021,10 @@ def test_regression_stored_publication_holds_no_join_token() -> None:
     ]
     assert not [text for text in outputs if JOIN_TOKEN in text]
     for presented in (f"{JOIN_TOKEN}x", f"{JOIN_TOKEN}!", JOIN_TOKEN[:-1] + "X"):
-        with pytest.raises(ShowPyError) as caught:
+        with pytest.raises(E8sError) as caught:
             join_link(pub, presented)
         assert JOIN_TOKEN not in _error_text(caught.value)
-    with pytest.raises(ShowPyError) as caught:
+    with pytest.raises(E8sError) as caught:
         join_link(pub.replace(join_token_sha256=None), JOIN_TOKEN)
     assert JOIN_TOKEN not in _error_text(caught.value)
 
@@ -1079,7 +1079,7 @@ def test_regression_qr_code_encodes_the_join_link() -> None:
 @pytest.mark.parametrize("token", [OTHER_TOKEN, "short"])
 def test_regression_qr_code_rejects_a_wrong_token(token: str) -> None:
     """Refuses to encode a token that does not verify against the stored digest."""
-    with pytest.raises(ShowPyError) as caught:
+    with pytest.raises(E8sError) as caught:
         qr_code(_published(), token)
     assert token not in _error_text(caught.value)
 

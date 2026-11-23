@@ -6,11 +6,11 @@ test_models.py --- tests the Show aggregate: set and transition lookup, JSON rou
 
 import pytest
 
-from showpy.choreo.forms import line_form
-from showpy.choreo.path_models import PathRow, TransitionSpec
-from showpy.core.errors import SchemaError, UnknownRefError
-from showpy.core.ids import LEGACY_IDS_KEY, SpotId, make_tid
-from showpy.show.models import Show
+from e8s.choreo.forms import line_form
+from e8s.choreo.path_models import PathRow, TransitionSpec
+from e8s.core.errors import SchemaError, UnknownRefError
+from e8s.core.ids import LEGACY_IDS_KEY, SpotId, make_tid
+from e8s.show.models import Show
 from tests.fixtures.shows import two_set_show
 
 

@@ -4,7 +4,7 @@
 test_form_text.py --- tests the text recipe and exact-count text slots on glyph strokes
 
 Contains:
-    test_*(): one behavior of showpy.choreo.form_text each
+    test_*(): one behavior of e8s.choreo.form_text each
 """
 
 import math
@@ -14,8 +14,8 @@ import numpy as np
 import pytest
 from scipy.spatial import cKDTree
 
-from showpy.choreo.form_models import MAX_TEXT_FONTS, TextRecipe
-from showpy.choreo.form_text import (
+from e8s.choreo.form_models import MAX_TEXT_FONTS, TextRecipe
+from e8s.choreo.form_text import (
     LEGIBLE_SPACING_SHARE,
     MAX_TEXT_SPOTS,
     min_text_spots,
@@ -24,13 +24,13 @@ from showpy.choreo.form_text import (
     text_strokes,
     too_few_for_edit,
 )
-from showpy.choreo.text_spread import COINCIDENT_TOL_M
-from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import GeometryError, LegibilityWarning, SchemaError, SpacingError
-from showpy.core.types import Points
-from showpy.core.util import approx_equal
-from showpy.geo.fonts import FontRegistry, bundled_fonts, register_font
-from showpy.geo.text_layout import MAX_LAYOUT_CHARS
+from e8s.choreo.text_spread import COINCIDENT_TOL_M
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import GeometryError, LegibilityWarning, SchemaError, SpacingError
+from e8s.core.types import Points
+from e8s.core.util import approx_equal
+from e8s.geo.fonts import FontRegistry, bundled_fonts, register_font
+from e8s.geo.text_layout import MAX_LAYOUT_CHARS
 from tests.fixtures.fonts import tiny_bytes
 
 TOL = 1e-9
@@ -44,7 +44,7 @@ SPARSE_WARNING = (
     r"^W: text spots are up to \d+\.\d\d m apart on 2\.00 m letters; raise n, "
     r"or add spots with edit_text_count$"
 )
-ignore_legibility = pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+ignore_legibility = pytest.mark.filterwarnings("ignore::e8s.core.errors.LegibilityWarning")
 
 
 def recipe(text: str, *fonts: str) -> TextRecipe:

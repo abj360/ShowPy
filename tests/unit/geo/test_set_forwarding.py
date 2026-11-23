@@ -19,11 +19,11 @@ from typing import cast
 import numpy as np
 import pytest
 
-from showpy.choreo.set_transforms import shift
-from showpy.core.deprecation import DeprecatedWarning
-from showpy.core.errors import SchemaError
-from showpy.geo import analysis, measure, transforms
-from showpy.sheet.models import GuideLine
+from e8s.choreo.set_transforms import shift
+from e8s.core.deprecation import DeprecatedWarning
+from e8s.core.errors import SchemaError
+from e8s.geo import analysis, measure, transforms
+from e8s.sheet.models import GuideLine
 from tests.fixtures.shows import field_sheet
 from tests.helpers import make_facing_set
 
@@ -78,7 +78,7 @@ def _same(a: object, b: object) -> bool:
 
 
 def _function(package: str, module: str, name: str) -> Callable[..., object]:
-    loaded = importlib.import_module(f"showpy.{package}.{module}")
+    loaded = importlib.import_module(f"e8s.{package}.{module}")
     return cast(Callable[..., object], getattr(loaded, name))
 
 

@@ -1,6 +1,6 @@
-# No ports: showpy is a library; the service runs the test suite against the installed wheel.
+# No ports: e8s is a library; the service runs the test suite against the installed wheel.
 services:
-  showpy:
+  e8s:
     build:
       context: ..
       dockerfile: docker/Dockerfile

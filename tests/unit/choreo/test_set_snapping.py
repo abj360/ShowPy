@@ -12,12 +12,12 @@ Contains:
 import numpy as np
 import pytest
 
-from showpy.choreo.set_snapping import align, distribute, snap, snap_to_guides
-from showpy.core.errors import GeometryError, UnknownRefError
-from showpy.core.util import approx_equal
-from showpy.geo.curves import Segment
-from showpy.geo.shapes import line
-from showpy.sheet.models import GuideLine
+from e8s.choreo.set_snapping import align, distribute, snap, snap_to_guides
+from e8s.core.errors import GeometryError, UnknownRefError
+from e8s.core.util import approx_equal
+from e8s.geo.curves import Segment
+from e8s.geo.shapes import line
+from e8s.sheet.models import GuideLine
 from tests.fixtures.shows import field_sheet
 from tests.helpers import make_facing_set
 

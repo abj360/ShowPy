@@ -23,11 +23,11 @@ import math
 import numpy as np
 import pytest
 
-from showpy.choreo.form_fit import detect_form, fit_circle, fit_line
-from showpy.choreo.forms import slots
-from showpy.core.errors import SchemaError
-from showpy.core.types import Points
-from showpy.core.util import approx_equal, seeded_rng
+from e8s.choreo.form_fit import detect_form, fit_circle, fit_line
+from e8s.choreo.forms import slots
+from e8s.core.errors import SchemaError
+from e8s.core.types import Points
+from e8s.core.util import approx_equal, seeded_rng
 
 TOL = 1e-6
 

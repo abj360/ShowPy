@@ -4,7 +4,7 @@
 test_util.py --- tests ID sorting, ranges, float comparison, hashing and point normalization
 
 Contains:
-    test_*(): one behavior of showpy.core.util each
+    test_*(): one behavior of e8s.core.util each
     test_regression_natural_sort_breaks_numeric_ties_by_original_text: orders T02 and T2 by text
     test_regression_seeded_rng_rejects_non_integer_or_negative_seeds: rejects bad seeds with hint
     test_regression_seeded_rng_keeps_the_default_rng_stream: matches numpy's default_rng stream
@@ -34,12 +34,12 @@ Contains:
         fields, not by a truncated repr
     test_regression_content_hash_rejects_nan: rejects NaN, which has no standard JSON form
     test_regression_content_hash_rejects_lone_surrogate: rejects a lone surrogate with a
-        ShowPyError, not UnicodeEncodeError
+        E8sError, not UnicodeEncodeError
     test_regression_as_points_drops_z_of_3d_linestring: keeps x and y of each 3D vertex instead of
         scrambling the flat coordinates
     test_regression_as_points_accepts_3d_point: reads a 3D Shapely point as one (x, y) row
     test_regression_as_points_multipart_geometry_is_handled: flattens or rejects multi-part geometry
-        with a ShowPyError
+        with an E8sError
     test_regression_as_points_returns_a_copy: returns data the caller can mutate without corrupting
         its own array
     test_regression_natural_sort_survives_unicode_digits: sorts IDs holding non-ASCII digits such as
@@ -63,12 +63,12 @@ Contains:
         naming `T01-T10` and `T1-T10`
     test_split_id_*(): splits IDs into a prefix and a trailing ASCII number
     test_regression_split_id_rejects_digit_runs_no_id_can_hold: rejects a 5,000-digit tail with a
-        ShowPyError
+        E8sError
     test_regression_parse_range_rejects_oversized_ranges: rejects a range over MAX_RANGE before
         expanding it
     test_regression_parse_range_ignores_unicode_digits: treats an Arabic-Indic digit range as one ID
     test_regression_parse_range_rejects_huge_endpoints: rejects a 5,000-digit endpoint with a
-        ShowPyError
+        E8sError
     test_regression_parse_range_reads_ranges_with_digits_in_the_prefix: expands `P1x1-P1x3` whose
         prefix holds a digit
     test_regression_parse_range_reads_ranges_with_dash_prefixes: expands `flag-1-flag-3` the way
@@ -96,13 +96,13 @@ from hypothesis import given
 from hypothesis import strategies as st
 from pydantic import BaseModel, ConfigDict
 
-from showpy.cast.models import Cast, Group, Spot
-from showpy.cast.select import label_prefix, select
-from showpy.core.canonical import jcs
-from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import DeprecatedWarning, GeometryError, SchemaError, ShowPyError
-from showpy.core.ids import SpotId
-from showpy.core.util import (
+from e8s.cast.models import Cast, Group, Spot
+from e8s.cast.select import label_prefix, select
+from e8s.core.canonical import jcs
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import DeprecatedWarning, E8sError, GeometryError, SchemaError
+from e8s.core.ids import SpotId
+from e8s.core.util import (
     approx_equal,
     as_points,
     asset_uri,
@@ -117,7 +117,7 @@ from showpy.core.util import (
     split_id,
     timer,
 )
-from showpy.show.repositories import InMemoryAssetStore
+from e8s.show.repositories import InMemoryAssetStore
 from tests.helpers import digests_under_hash_seeds, fails_after
 
 
@@ -212,7 +212,7 @@ def test_chunk_counts_rejects_zero_parts() -> None:
 
 
 def test_log_emits_structured_record(caplog: pytest.LogCaptureFixture) -> None:
-    caplog.set_level("INFO", logger="showpy")
+    caplog.set_level("INFO", logger="e8s")
     log("built set", set_id="12")
     assert caplog.records[0].getMessage() == "built set set_id=12"
 
@@ -238,7 +238,7 @@ HUGE_RANGE_END = 300_000
 NAN = float("nan")
 SHA256_HEX_LENGTH = 64
 HASH_TIES_SCRIPT = (
-    "from showpy.core.util import format_ranges\n"
+    "from e8s.core.util import format_ranges\n"
     "print(format_ranges({'T02', 'T2', 'T1', 'T01', 'T3'}))\n"
 )
 
@@ -275,7 +275,7 @@ def _big_arrays() -> tuple[np.ndarray, np.ndarray]:
 def _points_or_rejection(obj: object) -> np.ndarray:
     try:
         return as_points(obj)
-    except ShowPyError:
+    except E8sError:
         return np.zeros((0, 2))
 
 
@@ -296,13 +296,13 @@ def test_regression_format_ranges_ties_ignore_hash_seed() -> None:
 
 def test_regression_seeded_rng_rejects_none() -> None:
     """Rejects a missing seed instead of returning an unseeded generator (audit 9.3)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         seeded_rng(None)  # type: ignore[arg-type]
 
 
 def test_regression_seeded_rng_rejects_negative_seed() -> None:
     """Rejects a negative seed instead of leaking numpy's ValueError (audit 9.3)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         seeded_rng(-1)
 
 
@@ -354,7 +354,7 @@ def test_regression_content_hash_mixed_key_types_never_leak_type_error() -> None
     mixed = {1: "a", "b": 2}
     try:
         digest = content_hash(mixed)
-    except ShowPyError:
+    except E8sError:
         return
     assert len(digest) == SHA256_HEX_LENGTH
     assert digest == content_hash({"b": 2, 1: "a"})
@@ -376,13 +376,13 @@ def test_regression_content_hash_hashes_nested_models_by_content() -> None:
 
 def test_regression_content_hash_rejects_nan() -> None:
     """Rejects NaN, which has no standard JSON form (audit 9.3)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         content_hash({"x": NAN})
 
 
 def test_regression_content_hash_rejects_lone_surrogate() -> None:
-    """Rejects a lone surrogate with a ShowPyError, not UnicodeEncodeError (audit 9.3)."""
-    with pytest.raises(ShowPyError):
+    """Rejects a lone surrogate with an E8sError, not UnicodeEncodeError (audit 9.3)."""
+    with pytest.raises(E8sError):
         content_hash("\ud800")
 
 
@@ -398,7 +398,7 @@ def test_regression_as_points_accepts_3d_point() -> None:
 
 
 def test_regression_as_points_multipart_geometry_is_handled() -> None:
-    """Flattens or rejects multi-part geometry with a ShowPyError (audit 9.3)."""
+    """Flattens or rejects multi-part geometry with an E8sError (audit 9.3)."""
     points = _points_or_rejection(shapely.MultiPoint([(0, 0), (1, 1)]))
     assert points.shape in {(0, 2), (2, 2)}
 
@@ -434,7 +434,7 @@ def test_regression_chunk_counts_sum_exactly_to_total() -> None:
 
 def test_regression_chunk_counts_rejects_nan_total() -> None:
     """Rejects a NaN total (audit 9.3)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         chunk_counts(NAN, 4)
 
 
@@ -457,7 +457,7 @@ def test_regression_range_check_happens_before_expansion() -> None:
     )
     tracemalloc.start()
     try:
-        with pytest.raises(ShowPyError):
+        with pytest.raises(E8sError):
             select(cast, f"T1-T{HUGE_RANGE_END}")
         _, peak = tracemalloc.get_traced_memory()
     finally:
@@ -479,7 +479,7 @@ def test_regression_parse_range_does_not_read_unicode_digits_as_ascii() -> None:
     """Does not read the Arabic-Indic digit three as 3 (audit 9.3)."""
     try:
         expanded = parse_range("T٣-T5")
-    except ShowPyError:
+    except E8sError:
         return
     assert "T3" not in expanded
 
@@ -493,7 +493,7 @@ def test_regression_parse_range_honors_padding_of_the_last_endpoint() -> None:
     """Keeps the spelling of the last endpoint or rejects mixed padding (audit 9.3)."""
     try:
         expanded = parse_range("T1-T010")
-    except ShowPyError:
+    except E8sError:
         return
     assert expanded[-1] == "T010"
 
@@ -569,14 +569,14 @@ def test_content_hash_ignores_hash_seed() -> None:
     The helper covers hash seeds 1 and 2; seed 0 disables hash randomization, so it adds nothing.
     """
     digests = digests_under_hash_seeds(
-        "from showpy.core.util import content_hash",
+        "from e8s.core.util import content_hash",
         "content_hash(two_set_show()).encode()",
     )
     assert all(first == second for first, second in digests), digests
     assert len({first for first, _ in digests}) == 1, digests
 
 
-@pytest.mark.parametrize("domain", ["", "a\njson", "Showpy.content", "showpy-content", "a b"])
+@pytest.mark.parametrize("domain", ["", "a\njson", "Showpy.content", "e8s-content", "a b"])
 def test_regression_content_hash_rejects_a_domain_outside_its_alphabet(domain: str) -> None:
     with pytest.raises(SchemaError) as caught:
         content_hash({"a": 1}, domain=domain)
@@ -595,7 +595,7 @@ def test_split_id_ignores_non_ascii_digits() -> None:
 
 
 def test_regression_split_id_rejects_digit_runs_no_id_can_hold() -> None:
-    """Rejects a 5,000-digit tail with a ShowPyError, not ValueError from int()."""
+    """Rejects a 5,000-digit tail with an E8sError, not ValueError from int()."""
     with pytest.raises(SchemaError):
         split_id("T" + "9" * 5000)
 
@@ -613,7 +613,7 @@ def test_regression_parse_range_ignores_unicode_digits() -> None:
 
 
 def test_regression_parse_range_rejects_huge_endpoints() -> None:
-    """Rejects a 5,000-digit endpoint with a ShowPyError, not ValueError from int()."""
+    """Rejects a 5,000-digit endpoint with an E8sError, not ValueError from int()."""
     with pytest.raises(SchemaError):
         parse_range("T1-T" + "9" * 5000)
 

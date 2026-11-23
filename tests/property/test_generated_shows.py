@@ -11,19 +11,19 @@ from hypothesis import given
 from hypothesis import strategies as st
 from jsonschema import Draft202012Validator
 
-from showpy.core.json_types import JsonValue
-from showpy.core.resources import schema_path
-from showpy.show.changes import store_paths
-from showpy.show.documents import decode_show, encode_show
-from showpy.show.migrate import CURRENT_VERSION
-from showpy.show.models import PathsOp, Show
-from showpy.show.validate import validate_paths, validate_show
+from e8s.core.json_types import JsonValue
+from e8s.core.resources import schema_path
+from e8s.show.changes import store_paths
+from e8s.show.documents import decode_show, encode_show
+from e8s.show.migrate import CURRENT_VERSION
+from e8s.show.models import PathsOp, Show
+from e8s.show.validate import validate_paths, validate_show
 from tests.strategies.paths import path_rows
 from tests.strategies.show import shows
 
 pytestmark = pytest.mark.slow
 
-SCHEMA_NAME = f"showpy.show.v{CURRENT_VERSION}.json"
+SCHEMA_NAME = f"e8.show.v{CURRENT_VERSION}.json"
 
 
 def encoded_tree(show: Show) -> dict[str, JsonValue]:

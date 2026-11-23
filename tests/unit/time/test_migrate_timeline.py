@@ -12,15 +12,15 @@ from typing import Any
 
 import pytest
 
-from showpy.core.caps import MIN_TEMPO
-from showpy.core.errors import SchemaError
-from showpy.core.json_types import JsonValue
-from showpy.show.document_paths import TIMELINE_DOC
-from showpy.show.migrate import ReportBuilder
-from showpy.show.migrations.v1_to_v2_timeline import TIMELINE_DOC as STEP_PATH
-from showpy.show.migrations.v1_to_v2_timeline import migrate_timeline
-from showpy.time.measures import count_to_measure
-from showpy.time.models import MeasureLabel, Timeline
+from e8s.core.caps import MIN_TEMPO
+from e8s.core.errors import SchemaError
+from e8s.core.json_types import JsonValue
+from e8s.show.document_paths import TIMELINE_DOC
+from e8s.show.migrate import ReportBuilder
+from e8s.show.migrations.v1_to_v2_timeline import TIMELINE_DOC as STEP_PATH
+from e8s.show.migrations.v1_to_v2_timeline import migrate_timeline
+from e8s.time.measures import count_to_measure
+from e8s.time.models import MeasureLabel, Timeline
 
 
 def _tempo(at: float, cpm: float = 120.0, **ramp: float) -> dict[str, JsonValue]:

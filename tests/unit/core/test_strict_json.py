@@ -25,10 +25,10 @@ import math
 
 import pytest
 
-from showpy.core.canonical import MAX_NESTING
-from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import SchemaError
-from showpy.core.strict_json import json_nesting, parse_strict_json, strict_json_copy
+from e8s.core.canonical import MAX_NESTING
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import SchemaError
+from e8s.core.strict_json import json_nesting, parse_strict_json, strict_json_copy
 
 DOC = "/show/show.json"
 DEEP = 100_000

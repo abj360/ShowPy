@@ -6,7 +6,7 @@ test_motion.py --- tests easing curves, facing turns and the custom motion regis
 Contains:
     test_regression_nan_easing_strength_is_rejected: rejects a NaN easing strength instead of
         producing NaN positions
-    test_regression_infinite_steps_strength_raises_showpy_error: raises a ShowPyError, not
+    test_regression_infinite_steps_strength_raises_e8s_error: raises an E8sError, not
         OverflowError, for infinite step counts
     test_regression_easing_strength_below_one_is_not_clamped_silently: rejects a strength below 1
         instead of clamping it to 1
@@ -28,7 +28,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.choreo.motion import (
+from e8s.choreo.motion import (
     DEFAULT_MOTIONS,
     FloatArray,
     MotionRegistry,
@@ -38,12 +38,12 @@ from showpy.choreo.motion import (
     register_motion,
     turn,
 )
-from showpy.choreo.path_models import BUILT_IN_MOTION_PARAMS, Easing, EasingKind, TurnDirection
-from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import PathError, SchemaError, ShowPyError, UnknownRefError
-from showpy.core.readonly import ReadOnlyMap
-from showpy.core.types import Point, Points
-from showpy.core.util import approx_equal
+from e8s.choreo.path_models import BUILT_IN_MOTION_PARAMS, Easing, EasingKind, TurnDirection
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import E8sError, PathError, SchemaError, UnknownRefError
+from e8s.core.readonly import ReadOnlyMap
+from e8s.core.types import Point, Points
+from e8s.core.util import approx_equal
 
 KINDS: list[EasingKind] = [
     "linear",
@@ -160,25 +160,25 @@ OVERSIZED_STEP_COUNT = 10_000.0
 
 def test_regression_nan_easing_strength_is_rejected() -> None:
     """Rejects a NaN easing strength instead of producing NaN positions (audit 9.2)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         ease(Easing(kind="ease_in", strength=float("nan")), SHARES)
 
 
-def test_regression_infinite_steps_strength_raises_showpy_error() -> None:
-    """Raises a ShowPyError, not OverflowError, for infinite step counts (audit 9.2)."""
-    with pytest.raises(ShowPyError):
+def test_regression_infinite_steps_strength_raises_e8s_error() -> None:
+    """Raises an E8sError, not OverflowError, for infinite step counts (audit 9.2)."""
+    with pytest.raises(E8sError):
         ease(Easing(kind="steps", strength=float("inf")), SHARES)
 
 
 def test_regression_easing_strength_below_one_is_not_clamped_silently() -> None:
     """Rejects a strength below 1 instead of clamping it to 1 (audit 9.2)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         ease(Easing(kind="ease_in", strength=0.5), SHARES)
 
 
 def test_regression_steps_strength_has_a_cap() -> None:
     """Rejects a 10,000-step easing instead of building 9,999 edges (audit 9.2)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         easing_breaks(Easing(kind="steps", strength=OVERSIZED_STEP_COUNT))
 
 

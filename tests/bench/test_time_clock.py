@@ -16,9 +16,9 @@ import timeit
 import pytest
 from pytest_benchmark.fixture import BenchmarkFixture
 
-from showpy.time.clock import count_to_seconds
-from showpy.time.models import Hold, Timeline, TimelineMode
-from showpy.time.timeline import new_timeline
+from e8s.time.clock import count_to_seconds
+from e8s.time.models import Hold, Timeline, TimelineMode
+from e8s.time.timeline import new_timeline
 
 pytestmark = pytest.mark.bench
 

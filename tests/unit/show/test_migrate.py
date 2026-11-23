@@ -20,7 +20,7 @@ Contains:
         legacy-ID context to the last validation exactly while the ids step keeps v1 IDs
     test_require_current_version_refuses_an_older_show_json(): raises OLD_FORMAT for v1
     test_every_fixture_migrates_to_its_expected_v2(): matches expected_v2.json, documents and
-        report, regenerated only under SHOWPY_UPDATE_MIGRATION=1
+        report, regenerated only under E8S_UPDATE_MIGRATION=1
     test_v1_fixtures_decode_to_their_oracle(): decodes each fixture head equal to expected.json
     test_first_save_after_migration_writes_one_revision_and_the_second_none(): saves v2 once
     test_stored_revision_ids_survive_migration(): keeps every stored revision ID and record
@@ -52,18 +52,18 @@ from typing import Any
 import pytest
 from jsonschema.validators import validator_for
 
-from showpy.choreo.form_models import Form
-from showpy.choreo.models import Set
-from showpy.choreo.path_models import TransitionSpec
-from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import SchemaError, StorageError, VersionError
-from showpy.core.ids import LEGACY_IDS_KEY
-from showpy.core.json_types import JsonValue
-from showpy.core.resources import schema_path
-from showpy.examples import crossing_show, two_set_show
-from showpy.show.decode_cache import DecodeCache
-from showpy.show.document_reading import decode_show_dump
-from showpy.show.documents import (
+from e8s.choreo.form_models import Form
+from e8s.choreo.models import Set
+from e8s.choreo.path_models import TransitionSpec
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import SchemaError, StorageError, VersionError
+from e8s.core.ids import LEGACY_IDS_KEY
+from e8s.core.json_types import JsonValue
+from e8s.core.resources import schema_path
+from e8s.examples import crossing_show, two_set_show
+from e8s.show.decode_cache import DecodeCache
+from e8s.show.document_reading import decode_show_dump
+from e8s.show.documents import (
     LEGACY_NOTES_DOC,
     NOTES_DOC,
     SHEET_DOC,
@@ -76,10 +76,10 @@ from showpy.show.documents import (
     paths_doc,
     set_doc,
 )
-from showpy.show.file_repository import FileRepository
-from showpy.show.integrity import blob_digest
-from showpy.show.interchange import export_json, import_json
-from showpy.show.migrate import (
+from e8s.show.file_repository import FileRepository
+from e8s.show.integrity import blob_digest
+from e8s.show.interchange import export_json, import_json
+from e8s.show.migrate import (
     CHECKED_CONTEXT,
     CURRENT_VERSION,
     FIRST_VERSION,
@@ -95,20 +95,20 @@ from showpy.show.migrate import (
     version_of,
     without_header,
 )
-from showpy.show.migrations import (
+from e8s.show.migrations import (
     V1_TO_V2_BESIDE_STEPS,
     V1_TO_V2_JSON_STEPS,
     V1_TO_V2_MODEL_STEPS,
 )
-from showpy.show.migrations.v1_to_v2_ids import KEEPS_LEGACY_IDS
-from showpy.show.models import Show
-from showpy.show.storage import load_show, open_workspace, save_show
+from e8s.show.migrations.v1_to_v2_ids import KEEPS_LEGACY_IDS
+from e8s.show.models import Show
+from e8s.show.storage import load_show, open_workspace, save_show
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "repos"
 TAGS = ["v0.1.1", "v0.2.0", "v0.3.0"]
 TAGGED_TAGS = ["v0.1.1", "v0.2.0"]
 EXPECTED_V2 = "expected_v2.json"
-UPDATE_FLAG = "SHOWPY_UPDATE_MIGRATION"
+UPDATE_FLAG = "E8S_UPDATE_MIGRATION"
 AT = datetime(2026, 11, 19, 12, 0, tzinfo=UTC)
 V1_SCHEMA = "showpy.show.v1.json"
 JSON_STEP_ORDER = [
@@ -168,7 +168,7 @@ def test_read_version_parses_show_json_strictly() -> None:
     with pytest.raises(SchemaError):
         read_version({SHOW_DOC: b"[]"})
     with pytest.raises(SchemaError) as caught:
-        read_version({SHOW_DOC: b'{"format": "showpy.show", "format": "x", "version": 2}'})
+        read_version({SHOW_DOC: b'{"format": "e8.show", "format": "x", "version": 2}'})
     assert caught.value.code == ErrorCode.STRICT_JSON
 
 
@@ -272,7 +272,7 @@ def test_every_fixture_migrates_to_its_expected_v2(tag: str, tmp_path: Path) -> 
         p: raw for p, raw in docs.items() if not is_show_doc(p)
     }
     assert migrated[SHOW_DOC].splitlines()[1:3] == [
-        b'  "format": "showpy.show",',
+        b'  "format": "e8.show",',
         b'  "version": 2,',
     ]
     assert read_version(docs) == 1

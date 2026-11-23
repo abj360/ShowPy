@@ -10,7 +10,7 @@ ENV SETUPTOOLS_SCM_PRETEND_VERSION=${SETUPTOOLS_SCM_PRETEND_VERSION}
 
 WORKDIR /src
 COPY pyproject.toml README.md LICENSE ./
-COPY showpy ./showpy
+COPY e8s ./e8s
 RUN uv build --wheel --out-dir /dist
 
 FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS runtime
@@ -25,7 +25,7 @@ ENV UV_LINK_MODE=copy \
 
 WORKDIR /app
 COPY pyproject.toml uv.lock .python-version README.md LICENSE ./
-# The dev group holds showpy[all], so the locked sync installs every extra's dependencies.
+# The dev group holds e8s[all], so the locked sync installs every extra's dependencies.
 RUN uv sync --locked --no-install-project --group dev
 
 COPY --from=builder /dist /dist
@@ -38,4 +38,4 @@ COPY .github/workflows/ci.yml ./.github/workflows/ci.yml
 RUN chown -R 10001:10001 /app
 USER 10001
 
-CMD ["uv", "run", "--no-sync", "nox", "-s", "tests", "--", "tests", "--pyargs", "showpy"]
+CMD ["uv", "run", "--no-sync", "nox", "-s", "tests", "--", "tests", "--pyargs", "e8s"]

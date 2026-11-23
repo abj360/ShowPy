@@ -1,15 +1,15 @@
-# CLAUDE.md — ShowPy
+# CLAUDE.md — e8Show
 
-ShowPy (import name `showpy`, repo `https://github.com/abj360/ShowPy`) is a Python choreography library for designing shows on a 2D sheet (a field, stage or floor): spots, groups, sets, forms, motion, a count timeline, export and publishing. This repo holds only the library.
+e8Show (import name `e8s`, repo `https://github.com/abj360/e8s`) is a Python choreography library for designing shows on a 2D sheet (a field, stage or floor): spots, groups, sets, forms, motion, a count timeline, export and publishing. This repo holds only the library.
 
-Consumers (apps, agents, checkers) depend on tagged ShowPy releases through the public API only. ShowPy never imports a consumer. A breaking change to a public name needs a version bump and a release-notes entry.
+Consumers (apps, agents, checkers) depend on tagged e8Show releases through the public API only. e8Show never imports a consumer. A breaking change to a public name needs a version bump and a release-notes entry.
 
-Source of truth for the API: the code. _ShowPy Library: API Reference_ (`docs/showpy-api-reference.md`) trails it until the generated docs land in Phase 6. If the two disagree, flag the disagreement; do not silently pick one. Read the handoff notes before continuing work: @docs/HANDOFF.md
+Source of truth for the API: the code. _e8Show Library: API Reference_ (`docs/e8s-api-reference.md`) trails it until the generated docs land in Phase 6. If the two disagree, flag the disagreement; do not silently pick one. Read the handoff notes before continuing work: @docs/HANDOFF.md
 
 ## Commands
 
 ```bash
-uv sync                          # install the showpy package and dev tools
+uv sync                          # install the e8s package and dev tools
 uv run pytest                    # all tests (doctests included, warnings are errors)
 uv run pytest tests/unit/choreo  # one area
 uv run pytest -m golden          # real marchable drill regression
@@ -23,7 +23,7 @@ Run tests, ruff and both type checkers before calling any task done. Prettier fo
 ## Layout
 
 ```
-showpy/
+e8s/
   core/     types, ids, units, errors, util, selection, validation
   geo/      curves, shapes, svg, text, regions, spacing, affine, transforms, measure, analysis
   time/     count timeline: tempo, holds, markers, cues, measures, audio sync
@@ -41,8 +41,8 @@ docs/       API reference, ADRs, handoff notes
 
 The study guide lives in the public repository `https://github.com/abj360/ShowPy-guide`.
 
-Each package: `models.py` holds data classes; other files hold functions. Subpackage `__init__.py` files hold only a docstring; `showpy/__init__.py` re-exports the public API lazily.
-Exception: `showpy/examples/__init__.py` re-exports its names, so `from showpy.examples import two_set_show` stays one import path.
+Each package: `models.py` holds data classes; other files hold functions. Subpackage `__init__.py` files hold only a docstring; `e8s/__init__.py` re-exports the public API lazily.
+Exception: `e8s/examples/__init__.py` re-exports its names, so `from e8s.examples import two_set_show` stays one import path.
 
 ## Core concepts (read before editing)
 
@@ -65,15 +65,15 @@ Exception: `showpy/examples/__init__.py` re-exports its names, so `from showpy.e
    - Limits are user-owned configuration; library code never edits them.
 5. **Single motion source.** Anything needing positions over time calls `PathEngine`. If a feature seems to need its own interpolation, extend the engine instead.
 6. **Respect locks and pins.** Functions that edit sets, forms or paths must raise `LockedError` on pinned items unless `force=True` is passed explicitly by the caller.
-7. **Errors teach.** Raise `ShowPyError` subclasses with `code`, `message`, `context` and a `hint` that says what is allowed. No bare `ValueError` in public APIs.
-8. **Shared domain logic only.** Code specific to one consumer (UI, prompts, agent sandboxes, drafting) stays out of ShowPy.
+7. **Errors teach.** Raise `E8sError` subclasses with `code`, `message`, `context` and a `hint` that says what is allowed. No bare `ValueError` in public APIs.
+8. **Shared domain logic only.** Code specific to one consumer (UI, prompts, agent sandboxes, drafting) stays out of e8Show.
 
 ## Writing code here
 
-- **Module headers** follow the user-level `~/.claude/CLAUDE.md`, except that library modules under `showpy/` have no shebang; scripts and tests keep it (shebang, blank line). The module docstring's first line is `<filename> --- <role>` and its index section is titled `Contains:` (never `Args:`), one verb-first line per exported item.
-- **Public functions** need full type hints and a docstring with a runnable `>>>` example; examples import `showpy.examples`, never the `tests/` folder. Once `showpy.index` exists, they also need `@api(category=..., panel=...)`.
-- **New public names** go in `showpy/_api_table.py`. Run `uv run python scripts/gen_public_api.py` to regenerate `showpy/__init__.py`; never edit that file by hand. Refresh the snapshot with `SHOWPY_UPDATE_API=1 uv run pytest tests/unit/test_api_snapshot.py`. Commit the refreshed snapshot with the change. A commit that changes the snapshot must name each added, removed or changed public name backticked in its subject or a `BREAKING CHANGE:` footer; `uv run nox -s api-changes` checks every commit since the last release tag (CI and pre-push). Never edit `CHANGELOG.md` in a change commit: `nox -s changelog` generates it from commit messages at release time.
-- **New data classes** go in the package's `models.py` and must be JSON-serializable; regenerate `showpy/schemas/` with `SHOWPY_UPDATE_SCHEMA=1 uv run pytest tests/unit/show/test_schema.py` and bump the schema version if a stored model changes incompatibly.
+- **Module headers** follow the user-level `~/.claude/CLAUDE.md`, except that library modules under `e8s/` have no shebang; scripts and tests keep it (shebang, blank line). The module docstring's first line is `<filename> --- <role>` and its index section is titled `Contains:` (never `Args:`), one verb-first line per exported item.
+- **Public functions** need full type hints and a docstring with a runnable `>>>` example; examples import `e8s.examples`, never the `tests/` folder. Once `e8s.index` exists, they also need `@api(category=..., panel=...)`.
+- **New public names** go in `e8s/_api_table.py`. Run `uv run python scripts/gen_public_api.py` to regenerate `e8s/__init__.py`; never edit that file by hand. Refresh the snapshot with `E8S_UPDATE_API=1 uv run pytest tests/unit/test_api_snapshot.py`. Commit the refreshed snapshot with the change. A commit that changes the snapshot must name each added, removed or changed public name backticked in its subject or a `BREAKING CHANGE:` footer; `uv run nox -s api-changes` checks every commit since the last release tag (CI and pre-push). Never edit `CHANGELOG.md` in a change commit: `nox -s changelog` generates it from commit messages at release time.
+- **New data classes** go in the package's `models.py` and must be JSON-serializable; regenerate `e8s/schemas/` with `E8S_UPDATE_SCHEMA=1 uv run pytest tests/unit/show/test_schema.py` and bump the schema version if a stored model changes incompatibly.
 - **Coordinates in field language** (e.g. "2 outside the 35") belong in the pack's `PositionLanguage`, never in core modules.
 - Docstrings and comments never cite ADRs, docs or ledger IDs; state the rule itself.
 - **Prefer extending existing primitives** (curves, spacing, transforms, path styles) over adding parallel ones. Custom movement = register a `MotionFn`; custom shapes = `register_form_fn`.
@@ -82,8 +82,8 @@ Exception: `showpy/examples/__init__.py` re-exports its names, so `from showpy.e
 ## Tests
 
 - Every bug fix starts with a failing test named `test_regression_...`.
-- `tests/unit/` mirrors `showpy/`. `tests/property/` uses Hypothesis for invariants (spacing is even, 360° rotation is identity, paths end on targets, count↔seconds round-trips).
-- `tests/golden/` replays real marchable shows; a diff in output requires a human-reviewed fixture update (`SHOWPY_UPDATE_GOLDEN=1`).
+- `tests/unit/` mirrors `e8s/`. `tests/property/` uses Hypothesis for invariants (spacing is even, 360° rotation is identity, paths end on targets, count↔seconds round-trips).
+- `tests/golden/` replays real marchable shows; a diff in output requires a human-reviewed fixture update (`E8S_UPDATE_GOLDEN=1`).
 - Numeric comparisons use `approx_equal` with explicit tolerances.
 - Run every gate with `set -o pipefail`; piping pytest into `tail` hides failures otherwise.
 

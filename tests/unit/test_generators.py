@@ -14,10 +14,10 @@ Contains:
 
 import pytest
 
-from showpy.choreo.path_models import PathStyle
-from showpy.core.util import seeded_rng
-from showpy.show.documents import encode_show
-from showpy.show.validate import validate_show
+from e8s.choreo.path_models import PathStyle
+from e8s.core.util import seeded_rng
+from e8s.show.documents import encode_show
+from e8s.show.validate import validate_show
 from tests.fixtures import generators
 from tests.fixtures.generators import seeded_show
 

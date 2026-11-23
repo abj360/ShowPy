@@ -4,9 +4,9 @@
 test_notes.py --- tests adding, editing, finding and drafting design notes in the notes document
 
 Contains:
-    test_*(): one behavior of showpy.notes.notes each
+    test_*(): one behavior of e8s.notes.notes each
     test_notes_functions_warn_until_1_0_0: warns DeprecatedWarning on every call of the six
-        leaving functions and on `showpy.Note` and `showpy.NotesDocument`, naming 1.0.0
+        leaving functions and on `e8s.Note` and `e8s.NotesDocument`, naming 1.0.0
     test_notes_functions_refuse_the_notes_of_another_show: raises SchemaError for a notes
         document whose show is not the show passed
     test_regression_renumber_keeps_each_note_on_its_own_set: points notes on `2A` and `3` at `3`
@@ -31,15 +31,15 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-import showpy
-from showpy.cast.spots import delete_spots
-from showpy.choreo.models import PlacementPatch
-from showpy.core.deprecation import DeprecatedWarning
-from showpy.core.errors import GeometryError, SchemaError, ShowPyError, UnknownRefError
-from showpy.core.ids import NoteId
-from showpy.core.types import Region
-from showpy.notes.models import Note, NotesDocument
-from showpy.notes.notes import (
+import e8s
+from e8s.cast.spots import delete_spots
+from e8s.choreo.models import PlacementPatch
+from e8s.core.deprecation import DeprecatedWarning
+from e8s.core.errors import E8sError, GeometryError, SchemaError, UnknownRefError
+from e8s.core.ids import NoteId
+from e8s.core.types import Region
+from e8s.notes.models import Note, NotesDocument
+from e8s.notes.notes import (
     accept_draft,
     add_note,
     edit_note,
@@ -48,8 +48,8 @@ from showpy.notes.notes import (
     remove_note,
     rewrite_note_anchors,
 )
-from showpy.show.manage import add_set, insert_subset, remove_set, renumber
-from showpy.show.models import Anchor
+from e8s.show.manage import add_set, insert_subset, remove_set, renumber
+from e8s.show.models import Anchor
 from tests.fixtures.shows import two_set_show
 
 AT = datetime(2026, 11, 11, 9, 30, tzinfo=UTC)
@@ -57,7 +57,7 @@ SHOW = two_set_show()
 EMPTY = NotesDocument(show=SHOW.id)
 LEAVING_TEXT = "is deprecated since 0.4.0 and leaves the library in 1.0.0."
 
-leaving = pytest.mark.filterwarnings("ignore::showpy.core.deprecation.DeprecatedWarning")
+leaving = pytest.mark.filterwarnings("ignore::e8s.core.deprecation.DeprecatedWarning")
 
 
 def _draft(note_id: str = "draft_1", text: str = "build", set_id: str = "2") -> Note:
@@ -93,11 +93,11 @@ CALLS: dict[str, Callable[[], object]] = {
 def test_notes_functions_warn_until_1_0_0(name: str) -> None:
     with pytest.warns(DeprecatedWarning) as caught:
         CALLS[name]()
-    assert f"`showpy.notes.notes.{name}` {LEAVING_TEXT}" in [str(w.message) for w in caught]
+    assert f"`e8s.notes.notes.{name}` {LEAVING_TEXT}" in [str(w.message) for w in caught]
     with pytest.warns(DeprecatedWarning, match=r"leaves the library in 1\.0\.0"):
-        assert showpy.Note is Note
+        assert e8s.Note is Note
     with pytest.warns(DeprecatedWarning, match=r"leaves the library in 1\.0\.0"):
-        assert showpy.NotesDocument is NotesDocument
+        assert e8s.NotesDocument is NotesDocument
 
 
 @leaving
@@ -220,7 +220,7 @@ def test_accept_draft_adds_it_visible() -> None:
     assert [n.id for n in notes_for(notes, SHOW, "2")] == ["draft_1"]
 
 
-REJECTED = (ShowPyError, PydanticValidationError)
+REJECTED = (E8sError, PydanticValidationError)
 NAIVE_TIME = datetime(2026, 11, 11)  # noqa: DTZ001 - the tests check it is rejected
 
 

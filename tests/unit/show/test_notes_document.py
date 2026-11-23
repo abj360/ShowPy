@@ -41,7 +41,7 @@ Contains:
     test_import_notes_reads_v1_and_v2_documents: returns the notes of a v2 document as given
         and migrates the notes of a v1 document with the show's renames
     test_v1_notes_readers_do_not_depend_on_the_leaving_names: keeps every library module outside
-        showpy.notes free of imports of showpy.notes, so the private v1 notes readers outlive it
+        e8s.notes free of imports of e8s.notes, so the private v1 notes readers outlive it
     test_private_reader_returns_v1_notes_as_plain_json: returns a v1 document's migrated notes
         as JSON from the private reader that import_notes wraps
     test_rewrite_report_notes_warns_until_1_0_0: warns that `RewriteReport.notes` leaves the
@@ -60,16 +60,16 @@ from typing import Any
 
 import pytest
 
-import showpy
-from showpy.cast.rewrite import rewrite_spots
-from showpy.cast.spots import rename_spots
-from showpy.core.deprecation import DeprecatedWarning
-from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import SchemaError, UnknownRefError, VersionError
-from showpy.core.ids import NoteId
-from showpy.examples import two_set_show
-from showpy.notes.models import Note, NotesDocument
-from showpy.show.documents import (
+import e8s
+from e8s.cast.rewrite import rewrite_spots
+from e8s.cast.spots import rename_spots
+from e8s.core.deprecation import DeprecatedWarning
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import SchemaError, UnknownRefError, VersionError
+from e8s.core.ids import NoteId
+from e8s.examples import two_set_show
+from e8s.notes.models import Note, NotesDocument
+from e8s.show.documents import (
     LEGACY_NOTES_DOC,
     NOTES_DOC,
     SHOW_DOC,
@@ -79,19 +79,19 @@ from showpy.show.documents import (
     migrated_view,
     migration_changes,
 )
-from showpy.show.file_repository import FileRepository
-from showpy.show.integrity import blob_digest
-from showpy.show.interchange import _notes_json, export_json, import_json, import_notes
-from showpy.show.models import Anchor, Revision, Show
-from showpy.show.repositories import InMemoryRepository
-from showpy.show.storage import load_show, open_workspace, save_show
+from e8s.show.file_repository import FileRepository
+from e8s.show.integrity import blob_digest
+from e8s.show.interchange import _notes_json, export_json, import_json, import_notes
+from e8s.show.models import Anchor, Revision, Show
+from e8s.show.repositories import InMemoryRepository
+from e8s.show.storage import load_show, open_workspace, save_show
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "repos"
 TAGS = ["v0.1.1", "v0.2.0", "v0.3.0"]
 AT = datetime(2026, 11, 22, 12, 0, tzinfo=UTC)
 WRITTEN = "2026-11-12T10:00:00+00:00"
 
-pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.deprecation.DeprecatedWarning")
+pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.deprecation.DeprecatedWarning")
 
 
 def _fixture(tag: str, tmp_path: Path) -> tuple[FileRepository, str]:
@@ -427,12 +427,12 @@ def test_rename_spots_rewrites_the_notes_document() -> None:
 def test_rewrite_report_notes_warns_until_1_0_0() -> None:
     show = two_set_show()
     _, report = rename_spots(show, {"T1": "S1"}, notes=NotesDocument(show=show.id))
-    with pytest.warns(DeprecatedWarning, match=r"`showpy\.RewriteReport\.notes`.*1\.0\.0"):
+    with pytest.warns(DeprecatedWarning, match=r"`e8s\.RewriteReport\.notes`.*1\.0\.0"):
         assert report.notes == NotesDocument(show=show.id)
 
 
-LIBRARY = Path(showpy.__file__).resolve().parent
-LEAVING_PACKAGE = "showpy.notes"
+LIBRARY = Path(e8s.__file__).resolve().parent
+LEAVING_PACKAGE = "e8s.notes"
 
 
 def _imports(path: Path) -> set[str]:

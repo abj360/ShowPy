@@ -4,7 +4,7 @@
 test_readonly.py --- tests ReadOnlyMap: no writes, dict equality, pickling and copying
 
 Contains:
-    test_*(): one behavior of showpy.core.readonly each
+    test_*(): one behavior of e8s.core.readonly each
 """
 
 import copy
@@ -14,8 +14,8 @@ from typing import Annotated
 
 import pytest
 
-from showpy.core.readonly import ReadOnly, ReadOnlyMap
-from showpy.core.types import FrozenModel
+from e8s.core.readonly import ReadOnly, ReadOnlyMap
+from e8s.core.types import FrozenModel
 
 
 def test_read_only_map_equals_a_dict_and_reads_like_one() -> None:

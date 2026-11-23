@@ -4,7 +4,7 @@
 test_rewrite.py --- tests rewriting and dropping spot IDs across a whole show
 
 Contains:
-    test_*(): one behavior of showpy.cast.rewrite each
+    test_*(): one behavior of e8s.cast.rewrite each
     test_regression_relabel_rewrites_pins: renames the spot a pin names when the spot is relabeled
     test_regression_rewrite_passes_every_entity_pin_to_the_rename: renames, drops or renames a
         pin on a spot outside the cast exactly as the rename callback says
@@ -33,21 +33,21 @@ Contains:
 
 import pytest
 
-from showpy.cast.models import LabelScheme
-from showpy.cast.rewrite import faces_entity, rewrite_spot_ids, rewrite_spots
-from showpy.cast.spots import delete_spots, relabel, rename_spots
-from showpy.choreo.path_models import EntityFacing, FacingMode, FixedFacing, PointFacing
-from showpy.core.errors import SchemaError, ShowPyError, ShowValidationError, UnknownRefError
-from showpy.core.ids import FormId, SpotId, ZoneId
-from showpy.core.selection import Selection
-from showpy.core.types import Region
-from showpy.sheet.models import Zone, ZoneKind
-from showpy.show.models import Pin, Show
-from showpy.show.pinning import pin
+from e8s.cast.models import LabelScheme
+from e8s.cast.rewrite import faces_entity, rewrite_spot_ids, rewrite_spots
+from e8s.cast.spots import delete_spots, relabel, rename_spots
+from e8s.choreo.path_models import EntityFacing, FacingMode, FixedFacing, PointFacing
+from e8s.core.errors import E8sError, SchemaError, ShowValidationError, UnknownRefError
+from e8s.core.ids import FormId, SpotId, ZoneId
+from e8s.core.selection import Selection
+from e8s.core.types import Region
+from e8s.sheet.models import Zone, ZoneKind
+from e8s.show.models import Pin, Show
+from e8s.show.pinning import pin
 from tests.fixtures.cast_shows import rich_notes, rich_show
 from tests.fixtures.shows import two_set_show
 
-pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 
 def test_faces_entity_only_for_toward_entity_strings() -> None:
@@ -147,7 +147,7 @@ def test_regression_dropping_all_anchored_spots_drops_the_note_anchor() -> None:
 
 def test_regression_many_to_one_rename_is_reported_with_the_duplicate_target() -> None:
     """Reports a rename mapping two spots to one ID by name, not as UnknownRefError (audit 9.3)."""
-    with pytest.raises(ShowPyError) as excinfo:
+    with pytest.raises(E8sError) as excinfo:
         rewrite_spot_ids(two_set_show(), lambda i: "T9" if i in {"T1", "T2"} else i)
     assert not isinstance(excinfo.value, UnknownRefError)
     assert "T9" in str(excinfo.value.context)

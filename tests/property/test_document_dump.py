@@ -15,9 +15,9 @@ from collections.abc import Callable
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from showpy.core.canonical import INT_LIMIT, MAX_NESTING
-from showpy.core.errors import SchemaError
-from showpy.show.documents import dump_dumped_json, dump_json
+from e8s.core.canonical import INT_LIMIT, MAX_NESTING
+from e8s.core.errors import SchemaError
+from e8s.show.documents import dump_dumped_json, dump_json
 
 HUGE_INT = 10**700
 CLEAN_EXAMPLES = 300

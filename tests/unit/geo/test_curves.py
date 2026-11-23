@@ -8,7 +8,7 @@ Contains:
         model_copy changes a spiral radius
     test_regression_spiral_rejects_unbounded_turns: rejects 1e7 turns instead of tabulating 1e10
         samples
-    test_regression_spiral_rejects_infinite_turns: rejects infinite turns with a ShowPyError instead
+    test_regression_spiral_rejects_infinite_turns: rejects infinite turns with an E8sError instead
         of leaking OverflowError
     test_regression_spiral_rejects_huge_finite_and_numpy_turns: raises GeometryError for 1e300
         turns and numpy scalars instead of overflowing
@@ -32,13 +32,13 @@ Contains:
         ending with Z instead of ignoring the Z
     test_regression_svg_curve_rejects_wrong_transform_shape: rejects a 1-row transform instead of
         returning wrong lengths and point shapes
-    test_regression_model_copy_update_raises_showpy_error: raises a ShowPyError for an invalid
+    test_regression_model_copy_update_raises_e8s_error: raises an E8sError for an invalid
         model_copy update, not a pydantic error
-    test_regression_construction_with_unknown_kind_raises_showpy_error: raises a ShowPyError for an
+    test_regression_construction_with_unknown_kind_raises_e8s_error: raises an E8sError for an
         unknown curve kind, not a pydantic error
-    test_regression_polyline_with_text_points_raises_showpy_error: raises a ShowPyError for text
+    test_regression_polyline_with_text_points_raises_e8s_error: raises an E8sError for text
         points, not a pydantic error
-    test_regression_bezier_degree_past_overflow_raises_showpy_error: rejects a degree-1099 Bezier
+    test_regression_bezier_degree_past_overflow_raises_e8s_error: rejects a degree-1099 Bezier
         instead of returning NaN with RuntimeWarnings
     test_regression_arc_rejects_infinite_radius: rejects an infinite radius instead of building an
         arc of infinite length
@@ -63,9 +63,9 @@ import shapely
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from showpy.core.errors import GeometryError, ShowPyError
-from showpy.core.util import approx_equal
-from showpy.geo.curves import (
+from e8s.core.errors import E8sError, GeometryError
+from e8s.core.util import approx_equal
+from e8s.geo.curves import (
     CURVE_TYPES,
     MAX_BEZIER_DEGREE,
     AnyCurve,
@@ -83,7 +83,7 @@ from showpy.geo.curves import (
     TrimmedCurve,
     curve_from_construction,
 )
-from showpy.geo.shapes import arc, bezier, circle, line, spiral
+from e8s.geo.shapes import arc, bezier, circle, line, spiral
 from tests.helpers import capped_address_space, fails_after
 
 SIGNAL_TIMEOUT_S = 5
@@ -243,7 +243,7 @@ def test_regression_spiral_rejects_unbounded_turns() -> None:
 
 
 def test_regression_spiral_rejects_infinite_turns() -> None:
-    """Rejects infinite turns with a ShowPyError instead of leaking OverflowError (audit 9.1)."""
+    """Rejects infinite turns with an E8sError instead of leaking OverflowError (audit 9.1)."""
     with pytest.raises(GeometryError):
         spiral((0.0, 0.0), 1.0, 2.0, math.inf).length()
 
@@ -386,25 +386,25 @@ def test_bezier_degree_cap_is_inclusive() -> None:
         bezier(*controls)
 
 
-def test_regression_model_copy_update_raises_showpy_error() -> None:
-    """Raises a ShowPyError for an invalid model_copy update, not a pydantic error (audit 9.1)."""
-    with pytest.raises(ShowPyError):
+def test_regression_model_copy_update_raises_e8s_error() -> None:
+    """Raises an E8sError for an invalid model_copy update, not a pydantic error (audit 9.1)."""
+    with pytest.raises(E8sError):
         circle((0.0, 0.0), 1.0).model_copy(update={"radius": "wide"})
 
 
-def test_regression_construction_with_unknown_kind_raises_showpy_error() -> None:
-    """Raises a ShowPyError for an unknown curve kind, not a pydantic error (audit 9.1)."""
-    with pytest.raises(ShowPyError):
+def test_regression_construction_with_unknown_kind_raises_e8s_error() -> None:
+    """Raises an E8sError for an unknown curve kind, not a pydantic error (audit 9.1)."""
+    with pytest.raises(E8sError):
         curve_from_construction({"kind": "nope"})
 
 
-def test_regression_polyline_with_text_points_raises_showpy_error() -> None:
-    """Raises a ShowPyError for text points, not a pydantic error (audit 9.1)."""
-    with pytest.raises(ShowPyError):
+def test_regression_polyline_with_text_points_raises_e8s_error() -> None:
+    """Raises an E8sError for text points, not a pydantic error (audit 9.1)."""
+    with pytest.raises(E8sError):
         Polyline(points="abc")  # pyright: ignore[reportArgumentType] - deliberately invalid input
 
 
-def test_regression_bezier_degree_past_overflow_raises_showpy_error() -> None:
+def test_regression_bezier_degree_past_overflow_raises_e8s_error() -> None:
     """Rejects a degree-1099 Bezier instead of returning NaN with RuntimeWarnings (audit 9.1)."""
     controls = [(float(i), float(i % 3)) for i in range(BEZIER_DEGREE_PAST_LIMIT)]
     with pytest.raises(GeometryError):

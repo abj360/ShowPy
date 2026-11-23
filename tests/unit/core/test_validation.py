@@ -27,15 +27,15 @@ import numpy as np
 import pytest
 from pydantic import BaseModel, TypeAdapter
 
-from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import (
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import (
     MAX_CONTEXT_ITEMS,
     SchemaError,
     ShowValidationError,
     bounded_repr,
     field_errors,
 )
-from showpy.core.validation import (
+from e8s.core.validation import (
     ValidationIssue,
     ValidationReport,
     require_finite,

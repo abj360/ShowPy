@@ -5,7 +5,7 @@ test_fuzz_finite.py --- fuzzes curve evaluation for non-finite results
 
 Contains:
     CURVE_RECIPES: draws curve recipes with in-bounds points and extreme unchecked numbers
-    test_fuzz_curve_results_are_finite: raises a ShowPyError or gives finite length, points and
+    test_fuzz_curve_results_are_finite: raises an E8sError or gives finite length, points and
         tangents for every curve recipe
 """
 
@@ -15,9 +15,9 @@ import numpy as np
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.core.caps import MAX_COORD_M
-from showpy.geo.curves import curve_from_construction
-from tests.helpers import only_showpy_errors
+from e8s.core.caps import MAX_COORD_M
+from e8s.geo.curves import curve_from_construction
+from tests.helpers import only_e8s_errors
 
 HUGE = 1e308
 SAMPLES = 5
@@ -110,5 +110,5 @@ def _assert_curve_results_are_finite(recipe: dict[str, object]) -> None:
 
 @given(CURVE_RECIPES)
 def test_fuzz_curve_results_are_finite(recipe: dict[str, object]) -> None:
-    """Raises a ShowPyError or gives a finite length, finite points and finite tangents."""
-    only_showpy_errors(lambda: _assert_curve_results_are_finite(recipe), recipe)
+    """Raises an E8sError or gives a finite length, finite points and finite tangents."""
+    only_e8s_errors(lambda: _assert_curve_results_are_finite(recipe), recipe)

@@ -4,7 +4,7 @@
 test_text_layout.py --- tests multi-line text layout with a per-character font fallback chain
 
 Contains:
-    test_*(): one behavior of showpy.geo.text_layout.layout_text each
+    test_*(): one behavior of e8s.geo.text_layout.layout_text each
     test_regression_layout_refuses_a_height_below_one_millimeter: raises GeometryError below 1 mm
         and accepts exactly 1 mm
     test_regression_layout_refuses_an_unknown_align_or_anchor: raises UnknownRefError for a typo
@@ -20,8 +20,8 @@ from collections.abc import Iterable
 import numpy as np
 import pytest
 
-from showpy.choreo.forms import text_form
-from showpy.core.errors import (
+from e8s.choreo.forms import text_form
+from e8s.core.errors import (
     FontError,
     GeometryError,
     GlyphError,
@@ -29,21 +29,21 @@ from showpy.core.errors import (
     SchemaError,
     UnknownRefError,
 )
-from showpy.core.readonly import ReadOnlyMap
-from showpy.core.types import Points
-from showpy.core.util import approx_equal
-from showpy.geo import text_layout
-from showpy.geo.curves import SVG_SAMPLES_PER_PIECE, Polyline, SvgCurve
-from showpy.geo.fonts import (
+from e8s.core.readonly import ReadOnlyMap
+from e8s.core.types import Points
+from e8s.core.util import approx_equal
+from e8s.geo import text_layout
+from e8s.geo.curves import SVG_SAMPLES_PER_PIECE, Polyline, SvgCurve
+from e8s.geo.fonts import (
     MAX_GLYPH_PIECES,
     MAX_STROKE_PIECES,
     FontRegistry,
     bundled_fonts,
     register_font,
 )
-from showpy.geo.models import Font, LaidGlyph, TextAlign, TextAnchor
-from showpy.geo.svg import parse_path
-from showpy.geo.text_layout import (
+from e8s.geo.models import Font, LaidGlyph, TextAlign, TextAnchor
+from e8s.geo.svg import parse_path
+from e8s.geo.text_layout import (
     MAX_LAYOUT_CHARS,
     MAX_LAYOUT_CURVE_PIECES,
     MAX_LAYOUT_EXTENT_M,
@@ -295,7 +295,7 @@ def test_regression_layout_text_caps_the_curved_pieces(monkeypatch: pytest.Monke
 
 @pytest.mark.slow
 @pytest.mark.timing
-@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+@pytest.mark.filterwarnings("ignore::e8s.core.errors.LegibilityWarning")
 def test_regression_worst_legal_text_stays_within_its_work_budget() -> None:
     """Keeps the heaviest text the caps allow to a bounded curve table size and a few seconds.
 
@@ -343,7 +343,7 @@ def test_layout_rejects_a_stroke_with_two_subpaths() -> None:
         )
 
 
-def test_regression_huge_finite_values_raise_showpy_error() -> None:
+def test_regression_huge_finite_values_raise_e8s_error() -> None:
     """Raises GeometryError, never a numpy RuntimeWarning, when finite inputs overflow."""
     huge = (1.7e308, 1.7e308)
     calls = (

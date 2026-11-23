@@ -56,16 +56,16 @@ LICENSE_EXPRESSION = " AND ".join(
 WHEEL_CHECK = f"""
 import importlib.metadata as metadata
 import importlib.resources as resources
-import showpy
-expression = metadata.metadata("ShowPy")["License-Expression"]
+import e8s
+expression = metadata.metadata("e8s")["License-Expression"]
 assert expression == {LICENSE_EXPRESSION!r}, expression
-assert resources.files("showpy").joinpath("py.typed").is_file(), "py.typed missing"
-assert showpy.schema_path("showpy.show.v1.json").is_file(), "schema missing"
-assert showpy.schema_path("LICENSE-MIT.txt").is_file(), "schema licence missing"
+assert resources.files("e8s").joinpath("py.typed").is_file(), "py.typed missing"
+assert e8s.schema_path("showpy.show.v1.json").is_file(), "schema missing"
+assert e8s.schema_path("LICENSE-MIT.txt").is_file(), "schema licence missing"
 for font in ("fonts/relief-singleline.json", "fonts/licenses/OFL-1.1.txt"):
-    assert resources.files("showpy").joinpath(font).is_file(), "fonts missing"
-assert "site-packages" in showpy.__file__, showpy.__file__
-print("Found showpy", showpy.__version__)
+    assert resources.files("e8s").joinpath(font).is_file(), "fonts missing"
+assert "site-packages" in e8s.__file__, e8s.__file__
+print("Found e8s", e8s.__version__)
 """
 
 BENCH_PATH = "tests/bench"
@@ -132,7 +132,7 @@ def lint(session: nox.Session) -> None:
 @nox.session
 def types(session: nox.Session) -> None:
     """Runs mypy --strict and pyright (basic) over the library, tests and scripts."""
-    _uv_run(session, "mypy", "showpy", "tests", "scripts")
+    _uv_run(session, "mypy", "e8s", "tests", "scripts")
     _uv_run(session, "pyright")
 
 
@@ -144,7 +144,7 @@ def tests(session: nox.Session) -> None:
     _uv_run(
         session,
         "pytest",
-        "--cov=showpy",
+        "--cov=e8s",
         "--cov-branch",
         "--cov-report=term:skip-covered",
         *session.posargs,

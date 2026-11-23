@@ -38,9 +38,9 @@ Contains:
         instead of leaking ValueError
     test_regression_parse_path_rejects_arcs_that_overflow: raises SchemaError for an arc with a
         1e300 endpoint instead of leaking OverflowError
-    test_regression_svg_outline_rejects_empty_data: raises a ShowPyError for empty data instead of
+    test_regression_svg_outline_rejects_empty_data: raises an E8sError for empty data instead of
         leaking ValueError
-    test_regression_svg_outline_rejects_bad_path_index: raises a ShowPyError for an out-of-range
+    test_regression_svg_outline_rejects_bad_path_index: raises an E8sError for an out-of-range
         path_index instead of leaking IndexError
     test_regression_parse_path_rejects_arcs_with_non_finite_geometry: raises SchemaError for 1e80
         radii instead of returning NaN angles
@@ -48,7 +48,7 @@ Contains:
         radii instead of leaking IndexError
     test_regression_arc_hint_names_only_the_finite_requirement: words the arc error hint around
         finiteness, not a one-sided size range
-    test_regression_svg_outline_rejects_a_path_with_too_many_pieces: raises a ShowPyError for
+    test_regression_svg_outline_rejects_a_path_with_too_many_pieces: raises an E8sError for
         50,000 pieces
     test_regression_simplex_tables_are_read_only: refuses item assignment on SIMPLEX and FONTS
 """
@@ -61,14 +61,14 @@ import time
 import numpy as np
 import pytest
 
-from showpy.core.caps import MAX_TEXT_CHARS
-from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
-from showpy.core.types import Box2
-from showpy.core.util import approx_equal
-from showpy.geo.curves import SvgCurve
-from showpy.geo.shapes import svg_outline, text_outline
-from showpy.geo.svg import parse_path
-from showpy.geo.text import FONTS, SIMPLEX
+from e8s.core.caps import MAX_TEXT_CHARS
+from e8s.core.errors import E8sError, SchemaError, UnknownRefError
+from e8s.core.types import Box2
+from e8s.core.util import approx_equal
+from e8s.geo.curves import SvgCurve
+from e8s.geo.shapes import svg_outline, text_outline
+from e8s.geo.svg import parse_path
+from e8s.geo.text import FONTS, SIMPLEX
 from tests.helpers import fails_after
 
 BOX = Box2(min=(0.0, 0.0), max=(10.0, 10.0))
@@ -286,8 +286,8 @@ def test_regression_arc_hint_names_only_the_finite_requirement() -> None:
 
 
 def test_regression_svg_outline_rejects_a_path_with_too_many_pieces() -> None:
-    """Raises a ShowPyError for 50,000 pieces instead of building a 12.8-million-sample table."""
-    with pytest.raises(ShowPyError):
+    """Raises an E8sError for 50,000 pieces instead of building a 12.8-million-sample table."""
+    with pytest.raises(E8sError):
         svg_outline("M0 0" + "h1" * 50_000, BOX)
 
 
@@ -328,14 +328,14 @@ def test_regression_parse_path_requires_a_leading_move() -> None:
 
 
 def test_regression_svg_outline_rejects_empty_data() -> None:
-    """Raises a ShowPyError for empty data instead of leaking ValueError (audit 9.1)."""
-    with pytest.raises(ShowPyError):
+    """Raises an E8sError for empty data instead of leaking ValueError (audit 9.1)."""
+    with pytest.raises(E8sError):
         svg_outline("", BOX)
 
 
 def test_regression_svg_outline_rejects_bad_path_index() -> None:
-    """Raises a ShowPyError for an out-of-range path_index instead of leaking IndexError."""
-    with pytest.raises(ShowPyError):
+    """Raises an E8sError for an out-of-range path_index instead of leaking IndexError."""
+    with pytest.raises(E8sError):
         svg_outline("M0 0 L1 1", BOX, path_index=BAD_PATH_INDEX)
 
 

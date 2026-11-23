@@ -8,11 +8,11 @@ Contains:
     test_locked_row_changes_ignores_unlocked_routes: stays quiet about routes no locked row uses
 """
 
-from showpy.choreo.paths import lock
-from showpy.choreo.routes import follow_and_set_targets, make_route
-from showpy.core.ids import format_tid
-from showpy.show.locks import locked_changes, locked_row_changes
-from showpy.show.models import Show
+from e8s.choreo.paths import lock
+from e8s.choreo.routes import follow_and_set_targets, make_route
+from e8s.core.ids import format_tid
+from e8s.show.locks import locked_changes, locked_row_changes
+from e8s.show.models import Show
 from tests.fixtures.motion_shows import TID
 from tests.fixtures.shows import two_set_show
 

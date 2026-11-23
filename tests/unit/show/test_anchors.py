@@ -6,18 +6,18 @@ test_anchors.py --- tests the tagged Anchor and its warned old import path
 Contains:
     test_anchor_constructors_set_one_payload: builds each anchor kind with its one payload
     test_anchor_rejects_missing_or_extra_payload: refuses an anchor with no payload or two
-    test_anchor_old_path_warns: serves Anchor from showpy.notes.models with a warning naming
-        showpy.show.models and the 0.6.0 removal
+    test_anchor_old_path_warns: serves Anchor from e8s.notes.models with a warning naming
+        e8s.show.models and the 0.6.0 removal
 """
 
 import pytest
 
-import showpy
-import showpy.notes.models as old_models
-from showpy.core.deprecation import DeprecatedWarning
-from showpy.core.errors import SchemaError
-from showpy.core.ids import SetId
-from showpy.show.models import Anchor
+import e8s
+import e8s.notes.models as old_models
+from e8s.core.deprecation import DeprecatedWarning
+from e8s.core.errors import SchemaError
+from e8s.core.ids import SetId
+from e8s.show.models import Anchor
 
 
 def test_anchor_constructors_set_one_payload() -> None:
@@ -35,7 +35,7 @@ def test_anchor_rejects_missing_or_extra_payload() -> None:
 
 
 def test_anchor_old_path_warns() -> None:
-    with pytest.warns(DeprecatedWarning, match=r"`showpy\.show\.models\.Anchor`.*0\.6\.0"):
+    with pytest.warns(DeprecatedWarning, match=r"`e8s\.show\.models\.Anchor`.*0\.6\.0"):
         old = old_models.Anchor
     assert old is Anchor
-    assert showpy.Anchor is Anchor
+    assert e8s.Anchor is Anchor

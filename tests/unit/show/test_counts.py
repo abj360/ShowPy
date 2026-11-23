@@ -4,9 +4,9 @@
 test_counts.py --- tests on-field spot counts per set for the set strip
 """
 
-from showpy.choreo.models import PlacementPatch
-from showpy.examples import two_set_show
-from showpy.show.counts import spot_counts
+from e8s.choreo.models import PlacementPatch
+from e8s.examples import two_set_show
+from e8s.show.counts import spot_counts
 
 
 def test_counts_every_set_and_flags_changes() -> None:

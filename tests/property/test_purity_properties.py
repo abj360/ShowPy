@@ -20,22 +20,22 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from showpy.cast.models import Shape
-from showpy.cast.spots import set_shape
-from showpy.choreo.form_ops import transform_form
-from showpy.choreo.path_models import PathStyle
-from showpy.choreo.paths import default_paths, set_style
-from showpy.choreo.set_transforms import shift
-from showpy.core.deprecation import DeprecatedWarning
-from showpy.core.errors import ShowPyError
-from showpy.examples import two_set_show
-from showpy.geo.affine import translation_matrix
-from showpy.notes.models import NotesDocument
-from showpy.notes.notes import add_note
-from showpy.show.manage import add_set, set_counts
-from showpy.show.models import Anchor, Show
-from showpy.time.models import Hold
-from showpy.time.timeline import add_hold
+from e8s.cast.models import Shape
+from e8s.cast.spots import set_shape
+from e8s.choreo.form_ops import transform_form
+from e8s.choreo.path_models import PathStyle
+from e8s.choreo.paths import default_paths, set_style
+from e8s.choreo.set_transforms import shift
+from e8s.core.deprecation import DeprecatedWarning
+from e8s.core.errors import E8sError
+from e8s.examples import two_set_show
+from e8s.geo.affine import translation_matrix
+from e8s.notes.models import NotesDocument
+from e8s.notes.notes import add_note
+from e8s.show.manage import add_set, set_counts
+from e8s.show.models import Anchor, Show
+from e8s.time.models import Hold
+from e8s.time.timeline import add_hold
 from tests.strategies.forms import with_form
 from tests.strategies.show import shows
 
@@ -105,7 +105,7 @@ EDITS: dict[str, Callable[[Show], object]] = {
 def assert_edit_is_pure(edit: Callable[[Show], object], show: Show) -> None:
     """Requires `show` to serialize identically after `edit`, even when the edit rejects it."""
     before = show.model_dump_json()
-    with contextlib.suppress(ShowPyError):
+    with contextlib.suppress(E8sError):
         edit(show)
     assert show.model_dump_json() == before
 

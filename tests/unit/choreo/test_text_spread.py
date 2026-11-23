@@ -24,14 +24,14 @@ from hypothesis import given
 from hypothesis import strategies as st
 from scipy.spatial import cKDTree
 
-from showpy.choreo.form_models import Form, TextRecipe
-from showpy.choreo.form_text import min_text_spots, text_recipe, text_report, text_strokes
-from showpy.choreo.forms import line_form, slots, text_form
-from showpy.choreo.text_spread import COINCIDENT_TOL_M, JUNCTION_GAP_SHARE
-from showpy.core.errors import SchemaError
-from showpy.core.types import Points
-from showpy.geo.fonts import bundled_fonts
-from showpy.geo.spacing import apportion
+from e8s.choreo.form_models import Form, TextRecipe
+from e8s.choreo.form_text import min_text_spots, text_recipe, text_report, text_strokes
+from e8s.choreo.forms import line_form, slots, text_form
+from e8s.choreo.text_spread import COINCIDENT_TOL_M, JUNCTION_GAP_SHARE
+from e8s.core.errors import SchemaError
+from e8s.core.types import Points
+from e8s.geo.fonts import bundled_fonts
+from e8s.geo.spacing import apportion
 
 HEIGHT = 2.0
 AT = (0.0, 10.0)
@@ -47,7 +47,7 @@ CROWDED_GLYPHS = [
     *(("relief-singleline", char) for char in "gæĝğġģπ∏"),
 ]
 SCRIPT_BANG_STROKES = 4
-ignore_legibility = pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+ignore_legibility = pytest.mark.filterwarnings("ignore::e8s.core.errors.LegibilityWarning")
 
 
 def _form(font: str, char: str, n: int) -> Form:

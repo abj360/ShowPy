@@ -6152,7 +6152,7 @@
         "sheet:college-football": "1"
       },
       "facing_overrides": [],
-      "format": "showpy.show",
+      "format": "e8.show",
       "id": "seeded",
       "pack": "",
       "pins": [],

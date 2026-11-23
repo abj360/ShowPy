@@ -32,10 +32,10 @@ from datetime import UTC, datetime
 
 import pytest
 
-from showpy.cast.models import Cast, Group, Spot
-from showpy.choreo.form_models import Form
-from showpy.choreo.models import Placement, PlacementPatch
-from showpy.choreo.path_models import (
+from e8s.cast.models import Cast, Group, Spot
+from e8s.choreo.form_models import Form
+from e8s.choreo.models import Placement, PlacementPatch
+from e8s.choreo.path_models import (
     FacingMode,
     FacingOverride,
     PathRow,
@@ -43,21 +43,21 @@ from showpy.choreo.path_models import (
     TransitionSpec,
     Waypoint,
 )
-from showpy.core.errors import (
+from e8s.core.errors import (
     ConflictError,
+    E8sError,
     LockedError,
     PathError,
     SchemaError,
-    ShowPyError,
     TimeRangeError,
     UnknownRefError,
     VersionError,
 )
-from showpy.core.ids import FormId, RouteId, SetId, SpotId, make_tid
-from showpy.core.util import approx_equal
-from showpy.geo.curves import Segment
-from showpy.show.documents import decode_show, encode_show
-from showpy.show.manage import (
+from e8s.core.ids import FormId, RouteId, SetId, SpotId, make_tid
+from e8s.core.util import approx_equal
+from e8s.geo.curves import Segment
+from e8s.show.documents import decode_show, encode_show
+from e8s.show.manage import (
     add_set,
     index,
     insert_subset,
@@ -70,11 +70,11 @@ from showpy.show.manage import (
     transitions,
     upgrade_dependency,
 )
-from showpy.show.models import Pin, Show
-from showpy.show.repositories import InMemoryRepository
-from showpy.show.storage import load_show, open_workspace, save_show
-from showpy.show.validate import validate_show
-from showpy.time.models import Hold, MeasureSetting
+from e8s.show.models import Pin, Show
+from e8s.show.repositories import InMemoryRepository
+from e8s.show.storage import load_show, open_workspace, save_show
+from e8s.show.validate import validate_show
+from e8s.time.models import Hold, MeasureSetting
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import field_sheet, two_set_show
 from tests.helpers import fails_after
@@ -385,7 +385,7 @@ def test_regression_remove_last_set_with_merge_counts_keeps_total_time() -> None
     total = sum(s.counts for s in show.sets)
     try:
         edited = remove_set(show, "3", merge_counts=True)
-    except ShowPyError:
+    except E8sError:
         return
     assert approx_equal(sum(s.counts for s in edited.sets), total, abs_tol=1e-9)
 
@@ -421,7 +421,7 @@ def test_regression_form_keys_equal_form_ids_across_a_round_trip() -> None:
     try:
         show = two_set_show().model_copy(update={"forms": {"zz": form}})
         Show.model_validate(show.model_dump())
-    except ShowPyError:
+    except E8sError:
         return
     assert set(decode_show(encode_show(show)).forms) == set(show.forms)
 

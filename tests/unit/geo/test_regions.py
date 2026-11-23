@@ -6,10 +6,10 @@ test_regions.py --- tests area construction and boolean operations
 
 import pytest
 
-from showpy.core.errors import GeometryError
-from showpy.core.util import approx_equal
-from showpy.geo.regions import buffer, difference, intersection, region, union
-from showpy.geo.shapes import circle, rect
+from e8s.core.errors import GeometryError
+from e8s.core.util import approx_equal
+from e8s.geo.regions import buffer, difference, intersection, region, union
+from e8s.geo.shapes import circle, rect
 
 
 def test_region_from_closed_curve() -> None:

@@ -77,9 +77,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from showpy.choreo.form_models import Form
-from showpy.choreo.models import Placement, PlacementPatch, Set
-from showpy.choreo.path_models import (
+from e8s.choreo.form_models import Form
+from e8s.choreo.models import Placement, PlacementPatch, Set
+from e8s.choreo.path_models import (
     FacingMode,
     FacingOverride,
     FixedFacing,
@@ -88,15 +88,15 @@ from showpy.choreo.path_models import (
     TransitionSpec,
     Waypoint,
 )
-from showpy.core.caps import MAX_COUNTS
-from showpy.core.errors import SchemaError
-from showpy.core.ids import FormId, NoteId, SetId, SpotId, make_tid
-from showpy.core.types import Region
-from showpy.core.validation import ValidationReport
-from showpy.notes.models import Note, NotesDocument
-from showpy.sheet.templates import InMemorySheetStore
-from showpy.show.models import Anchor, Comment, Pin, Show
-from showpy.show.validate import (
+from e8s.core.caps import MAX_COUNTS
+from e8s.core.errors import SchemaError
+from e8s.core.ids import FormId, NoteId, SetId, SpotId, make_tid
+from e8s.core.types import Region
+from e8s.core.validation import ValidationReport
+from e8s.notes.models import Note, NotesDocument
+from e8s.sheet.templates import InMemorySheetStore
+from e8s.show.models import Anchor, Comment, Pin, Show
+from e8s.show.validate import (
     validate_dependencies,
     validate_paths,
     validate_set,

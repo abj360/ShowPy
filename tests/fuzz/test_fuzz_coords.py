@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_fuzz_coords.py --- fuzzes the coordinate parser and writer; only ShowPyError may escape
+test_fuzz_coords.py --- fuzzes the coordinate parser and writer; only E8sError may escape
 
 Contains:
     test_fuzz_from_coords_text(): reads arbitrary text, long or short style
@@ -25,15 +25,15 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.core.caps import MAX_COORD_M
-from showpy.core.errors import SchemaError, ShowPyError
-from showpy.examples import two_set_show
-from showpy.sheet.coords import from_coords, to_coords
-from showpy.sheet.models import CoordinateKind, CoordinateSystem
-from showpy.show.models import Show
-from tests.helpers import only_showpy_errors
+from e8s.core.caps import MAX_COORD_M
+from e8s.core.errors import E8sError, SchemaError
+from e8s.examples import two_set_show
+from e8s.sheet.coords import from_coords, to_coords
+from e8s.sheet.models import CoordinateKind, CoordinateSystem
+from e8s.show.models import Show
+from tests.helpers import only_e8s_errors
 
-pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 SHOW = two_set_show()
 ROUND_TRIP_TOL = 0.0051
@@ -89,7 +89,7 @@ def _only_errors_or_finite(show: Show, text: str, sample: object) -> None:
         except AssertionError as error:
             pytest.fail(str(error), pytrace=False)
 
-    only_showpy_errors(run, sample)
+    only_e8s_errors(run, sample)
 
 
 DIGIT_RUNS = st.builds(
@@ -144,8 +144,8 @@ def test_fuzz_from_coords_huge_origin(digits: int, unit_code: str, show: Show) -
     show=ORIGIN_SHOWS,
 )
 def test_fuzz_to_coords_huge_origin(x: float, y: float, show: Show) -> None:
-    """Words huge finite points from a huge or edge origin; only ShowPyError may escape."""
-    only_showpy_errors(lambda: _assert_finite_wording(show, (x, y), "long"), (x, y))
+    """Words huge finite points from a huge or edge origin; only E8sError may escape."""
+    only_e8s_errors(lambda: _assert_finite_wording(show, (x, y), "long"), (x, y))
 
 
 @given(text=st.one_of(st.text(), st.text(min_size=2000, max_size=6000)))
@@ -176,7 +176,7 @@ def test_fuzz_from_coords_systems(system: CoordinateSystem, text: str) -> None:
 @given(x=FLOATS, y=FLOATS, style=st.sampled_from(["long", "short"]))
 def test_fuzz_to_coords_floats(x: float, y: float, style: str) -> None:
     """Words arbitrary floats, NaN, infinities and huge values included."""
-    only_showpy_errors(lambda: _assert_finite_wording(SHOW, (x, y), style), (x, y))
+    only_e8s_errors(lambda: _assert_finite_wording(SHOW, (x, y), style), (x, y))
 
 
 @given(system=SYSTEMS, x=FLOATS, y=FLOATS, style=st.sampled_from(["long", "short"]))
@@ -187,7 +187,7 @@ def test_fuzz_to_coords_systems(system: CoordinateSystem, x: float, y: float, st
     def run() -> None:
         _assert_finite_wording(show, (x, y), style)
 
-    only_showpy_errors(run, (system, x, y))
+    only_e8s_errors(run, (system, x, y))
 
 
 @given(
@@ -200,7 +200,7 @@ def test_fuzz_round_trip(x: float, y: float, style: str) -> None:
     try:
         text = to_coords(SHOW, (x, y), style)  # type: ignore[arg-type]
         point = from_coords(SHOW, text)
-    except ShowPyError:
+    except E8sError:
         return
     assert abs(point[0] - x) <= ROUND_TRIP_TOL
     assert abs(point[1] - y) <= ROUND_TRIP_TOL

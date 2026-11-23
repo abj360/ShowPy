@@ -39,11 +39,11 @@ from typing import get_args
 import numpy as np
 import pytest
 
-from showpy.choreo.facing import face_along
-from showpy.choreo.form_fns import DEFAULT_FORM_FNS, register_form_fn
-from showpy.choreo.form_models import Form, FormKind, Recipe, TextRecipe
-from showpy.choreo.form_ops import transform_form
-from showpy.choreo.forms import (
+from e8s.choreo.facing import face_along
+from e8s.choreo.form_fns import DEFAULT_FORM_FNS, register_form_fn
+from e8s.choreo.form_models import Form, FormKind, Recipe, TextRecipe
+from e8s.choreo.form_ops import transform_form
+from e8s.choreo.forms import (
     arc_form,
     block_form,
     circle_form,
@@ -59,22 +59,22 @@ from showpy.choreo.forms import (
     text_form,
     wedge_form,
 )
-from showpy.choreo.recipe_models import (
+from e8s.choreo.recipe_models import (
     BlockRecipe,
     CustomRecipe,
     GeneratedRecipe,
     LineRecipe,
     SvgRecipe,
 )
-from showpy.core.deprecation import DeprecatedWarning
-from showpy.core.errors import SchemaError
-from showpy.core.ids import FormId, SetId, SpotId
-from showpy.core.json_types import JsonValue
-from showpy.core.readonly import ReadOnlyMap
-from showpy.core.types import Box2, Points
-from showpy.core.util import approx_equal
-from showpy.geo.affine import rotation_matrix, translation_matrix
-from showpy.geo.shapes import line
+from e8s.core.deprecation import DeprecatedWarning
+from e8s.core.errors import SchemaError
+from e8s.core.ids import FormId, SetId, SpotId
+from e8s.core.json_types import JsonValue
+from e8s.core.readonly import ReadOnlyMap
+from e8s.core.types import Box2, Points
+from e8s.core.util import approx_equal
+from e8s.geo.affine import rotation_matrix, translation_matrix
+from e8s.geo.shapes import line
 from tests.fixtures.shows import two_set_show
 
 TOL = 1e-9

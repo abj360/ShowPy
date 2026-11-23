@@ -8,8 +8,8 @@ Contains:
     ARC_RECIPE: an arc recipe of a quarter circle
 """
 
-from showpy.choreo.recipe_models import ArcRecipe, LineRecipe
-from showpy.geo.shapes import arc, line
+from e8s.choreo.recipe_models import ArcRecipe, LineRecipe
+from e8s.geo.shapes import arc, line
 
 LINE_RECIPE = LineRecipe(curve=line((0.0, 0.0), (4.0, 0.0)))
 ARC_RECIPE = ArcRecipe(curve=arc((0.0, 0.0), 4.0, 0.0, 90.0))

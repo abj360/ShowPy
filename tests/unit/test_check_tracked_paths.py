@@ -29,7 +29,7 @@ def test_tracked_file_under_a_local_agent_folder_is_refused() -> None:
 
 
 def test_ordinary_files_pass() -> None:
-    entries = [("100644", "showpy/__init__.py"), ("100755", "scripts/ci_changes.py")]
+    entries = [("100644", "e8s/__init__.py"), ("100755", "scripts/ci_changes.py")]
     assert find_violations(entries) == []
 
 

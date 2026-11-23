@@ -4,7 +4,7 @@
 test_fonts.py --- tests the font data classes, load_font and the frozen FontRegistry
 
 Contains:
-    test_*(): one behavior of showpy.geo.fonts each
+    test_*(): one behavior of e8s.geo.fonts each
     test_regression_font_json_nested_past_the_cap_is_a_font_error: refuses it before validation
     test_regression_load_font_refuses_duplicate_keys: refuses a font document that repeats a key
     test_regression_load_font_refuses_non_finite_constants: refuses NaN and infinity tokens
@@ -23,6 +23,8 @@ Contains:
         MAX_STROKE_PIECES path pieces even when its glyph is under MAX_GLYPH_PIECES
     test_regression_register_font_can_keep_a_taken_name: registers a font by URI only when its
         name is bound to other bytes, and the registry still validates from its dump
+    test_bundled_font_uris_equal_their_v030_values: pins each bundled font's URI, and the hash of
+        its file bytes, to the value v0.3.0 shipped
 """
 
 import copy
@@ -32,11 +34,11 @@ from typing import Any
 
 import pytest
 
-from showpy.core.canonical import MAX_NESTING
-from showpy.core.errors import FontError, MissingFontError, SchemaError
-from showpy.core.resources import font_path
-from showpy.core.util import asset_uri
-from showpy.geo.fonts import (
+from e8s.core.canonical import MAX_NESTING
+from e8s.core.errors import FontError, MissingFontError, SchemaError
+from e8s.core.resources import font_path
+from e8s.core.util import asset_uri
+from e8s.geo.fonts import (
     BUNDLED_FONTS,
     MAX_FONT_BYTES,
     MAX_GLYPH_PIECES,
@@ -46,11 +48,27 @@ from showpy.geo.fonts import (
     load_font,
     register_font,
 )
-from showpy.geo.models import Font
-from showpy.show.repositories import InMemoryAssetStore
+from e8s.geo.models import Font
+from e8s.show.repositories import InMemoryAssetStore
 from tests.fixtures.fonts import TINY, tiny_bytes
 
 EMPTY = FontRegistry(fonts={}, sources={}, names={})
+# Copied from BUNDLED_FONTS in the v0.3.0 API snapshot: stored text forms name fonts by these URIs.
+V030_BUNDLED_FONT_URIS = {
+    "relief-singleline": (
+        "asset:sha256:fd67c5b12e38ab886258f5bc16611b3f61f0bcc2d5711dc5ddf8fd42bc8f4b55"
+    ),
+    "hershey-roman": (
+        "asset:sha256:e1969f4711a74be259a5e602da900a65b94c5f45f69c33e32ab4eeb86a2c83cb"
+    ),
+    "hershey-script": (
+        "asset:sha256:1f0a661303e872ffd3ac5c8abdd8804519c2174696c1f8f04ac1aaee37c5a9d0"
+    ),
+    "hershey-greek": (
+        "asset:sha256:43f6945dde1eea1a5b51295a518f7cb8c1a12fd04d2df536ef4ab37cb2533cd1"
+    ),
+    "simplex": "asset:sha256:7e345d1ae7a55abc2d6414c6b16d121bdaddba1ef1fb5d82dec483e4bac20e3e",
+}
 
 
 def _glyphs(**glyphs: Any) -> dict[str, Any]:
@@ -357,3 +375,10 @@ def test_regression_load_font_refuses_non_finite_constants(token: str) -> None:
     assert token in raised.value.message
     assert isinstance(raised.value.__cause__, SchemaError)
     assert raised.value.__cause__.code == "STRICT_JSON"
+
+
+def test_bundled_font_uris_equal_their_v030_values() -> None:
+    """Pins each bundled font's URI, and the hash of its file bytes, to the v0.3.0 value."""
+    assert dict(BUNDLED_FONTS) == V030_BUNDLED_FONT_URIS
+    for name, uri in V030_BUNDLED_FONT_URIS.items():
+        assert asset_uri(font_path(f"{name}.json").read_bytes()) == uri

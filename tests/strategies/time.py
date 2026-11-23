@@ -9,8 +9,8 @@ Contains:
 
 from hypothesis import strategies as st
 
-from showpy.time.models import Hold, TempoSection, Timeline, TimelineMode
-from showpy.time.timeline import add_hold, add_tempo, new_timeline
+from e8s.time.models import Hold, TempoSection, Timeline, TimelineMode
+from e8s.time.timeline import add_hold, add_tempo, new_timeline
 
 MIN_TEMPO = 60.0
 MAX_TEMPO = 200.0

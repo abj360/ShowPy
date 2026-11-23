@@ -65,7 +65,7 @@ Contains:
         held /sets/con/ under its migrated `con_`, and renumbers a legacy show without creating a
         folder
     test_regression_dashed_set_folder_commit_is_refused: refuses a raw commit under /sets/a-b/
-        with a ShowPyError and stores nothing
+        with an E8sError and stores nothing
     test_regression_new_set_key_must_be_nfc: refuses a new folder whose key NFC changes
     test_regression_v020_show_with_set_ids_differing_by_case_loads: decodes stored v0.2 documents
         whose set folders differ only by case as `1a`, `1A.2` and round-trips them
@@ -87,15 +87,15 @@ from typing import Any
 
 import pytest
 
-from showpy.choreo.forms import line_form
-from showpy.choreo.models import PlacementPatch, Set
-from showpy.choreo.path_models import PathRow, TransitionSpec
-from showpy.core.errors import SchemaError, ShowPyError, StorageError
-from showpy.core.ids import LEGACY_IDS_KEY, SetId, SpotId, make_tid
-from showpy.core.util import content_hash
-from showpy.examples import two_set_show
-from showpy.show.decode_cache import DecodeCache
-from showpy.show.documents import (
+from e8s.choreo.forms import line_form
+from e8s.choreo.models import PlacementPatch, Set
+from e8s.choreo.path_models import PathRow, TransitionSpec
+from e8s.core.errors import E8sError, SchemaError, StorageError
+from e8s.core.ids import LEGACY_IDS_KEY, SetId, SpotId, make_tid
+from e8s.core.util import content_hash
+from e8s.examples import two_set_show
+from e8s.show.decode_cache import DecodeCache
+from e8s.show.documents import (
     LEGACY_NOTES_DOC,
     SHOW_DOC,
     decode_show,
@@ -107,24 +107,24 @@ from showpy.show.documents import (
     migrate_documents,
     set_doc,
 )
-from showpy.show.file_repository import FileRepository
-from showpy.show.history import revert
-from showpy.show.integrity import (
+from e8s.show.file_repository import FileRepository
+from e8s.show.history import revert
+from e8s.show.integrity import (
     blob_digest,
     require_new_set_keys,
     require_valid_digests,
     require_valid_tree,
 )
-from showpy.show.interchange import import_positions
-from showpy.show.manage import add_set, insert_subset, remove_set, renumber
-from showpy.show.migrate import ReportBuilder, format_header, without_header
-from showpy.show.migrations.v1_to_v2_forms import migrate_forms
-from showpy.show.models import Revision, Show
-from showpy.show.repositories import InMemoryRepository
-from showpy.show.sections import join_sections
-from showpy.show.set_keys import to_display_path, to_stored_path
-from showpy.show.storage import Workspace, load_show, open_workspace, save_show
-from showpy.show.validate import validate_show
+from e8s.show.interchange import import_positions
+from e8s.show.manage import add_set, insert_subset, remove_set, renumber
+from e8s.show.migrate import ReportBuilder, format_header, without_header
+from e8s.show.migrations.v1_to_v2_forms import migrate_forms
+from e8s.show.models import Revision, Show
+from e8s.show.repositories import InMemoryRepository
+from e8s.show.sections import join_sections
+from e8s.show.set_keys import to_display_path, to_stored_path
+from e8s.show.storage import Workspace, load_show, open_workspace, save_show
+from e8s.show.validate import validate_show
 
 AT = datetime(2026, 11, 16, 9, 0, tzinfo=UTC)
 LEGACY = {LEGACY_IDS_KEY: True}
@@ -414,7 +414,7 @@ def test_regression_workspace_refuses_paths_that_alias_another_sets_key(path: st
     with pytest.raises(StorageError) as caught:
         ws.commit({path: b"# not mine\n"}, at=LATER)
     assert caught.value.code == "AMBIGUOUS_PATH"
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         ws.write(path, "# not mine\n", at=LATER)
     assert {p: repo.read(SHOW_ID, p) for p in repo.paths(SHOW_ID)} == before
 
@@ -601,7 +601,7 @@ def test_regression_dashed_set_folder_commit_is_refused() -> None:
     repo, ws, _ = _saved_renumbered()
     before = {p: repo.read(SHOW_ID, p) for p in repo.paths(SHOW_ID)}
     for path in ("/sets/a-b/set.py", "/sets/a-b/set.json", "/transitions/2-a-b/paths.json"):
-        with pytest.raises(ShowPyError):
+        with pytest.raises(E8sError):
             repo.transaction(SHOW_ID, {path: b"{}"}, expected_revision=ws.revision, at=LATER)
     assert {p: repo.read(SHOW_ID, p) for p in repo.paths(SHOW_ID)} == before
 

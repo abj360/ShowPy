@@ -29,7 +29,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DOCKERFILE = REPO_ROOT / "docker" / "Dockerfile"
-LIBRARY_ROOT = REPO_ROOT / "showpy"
+LIBRARY_ROOT = REPO_ROOT / "e8s"
 DOCKERIGNORE = REPO_ROOT / ".dockerignore"
 NOXFILE_TESTS = REPO_ROOT / "tests" / "unit" / "test_noxfile.py"
 RUNTIME_STAGE = "runtime"
@@ -51,11 +51,11 @@ NOT_IN_IMAGE = {
     "package-lock.json": "Node tooling for lint, outside the image",
     "package.json": "Node tooling for lint, outside the image",
     "SECURITY.md": "policy text; no test reads it",
-    "showpy": "built into the wheel the image installs; tests import it",
+    "e8s": "built into the wheel the image installs; tests import it",
     "typings": "stubs for the types session, outside the image",
 }
 pytestmark = pytest.mark.skipif(
-    not LIBRARY_ROOT.is_dir(), reason="needs a source checkout; the wheel test has no showpy tree"
+    not LIBRARY_ROOT.is_dir(), reason="needs a source checkout; the wheel test has no e8s tree"
 )
 
 
@@ -207,7 +207,7 @@ def test_regression_missing_dockerfile_fails_in_a_source_checkout() -> None:
 def test_docker_path_check_flags_a_missing_and_an_ignored_path() -> None:
     dockerfile = (
         "FROM python AS builder\n"
-        "COPY showpy ./showpy\n"
+        "COPY e8s ./e8s\n"
         "FROM python AS runtime\n"
         "COPY --from=builder /dist /dist\n"
         "COPY noxfile.py ./\n"
@@ -216,7 +216,7 @@ def test_docker_path_check_flags_a_missing_and_an_ignored_path() -> None:
     copied = copied_paths(dockerfile)
     assert copied == ["noxfile.py", "docs"]
     assert is_in_image("noxfile.py", copied, [])
-    assert not is_in_image("showpy/core/types.py", copied, [])
+    assert not is_in_image("e8s/core/types.py", copied, [])
     assert not is_in_image("docs/a.md", copied, ["docs/"])
     assert read_paths('ROOT = Path(".")\nCI = ROOT / ".github" / "ci.yml"\nX = 1\n') == [
         ".github/ci.yml"

@@ -20,15 +20,15 @@ Contains:
         and lock-checks a stored transition pin into a set `con` that migration renames `con_`
 """
 
-from showpy.core.ids import LEGACY_IDS_KEY, FormId
-from showpy.examples import two_set_show
-from showpy.show.locks import require_unlocked
-from showpy.show.manage import add_set
-from showpy.show.migrate import FIRST_VERSION, ReportBuilder
-from showpy.show.migrations.v1_to_v2_ids import rename_ids
-from showpy.show.models import Show
-from showpy.show.pinning import pin, unpin
-from showpy.show.sections import split_section
+from e8s.core.ids import LEGACY_IDS_KEY, FormId
+from e8s.examples import two_set_show
+from e8s.show.locks import require_unlocked
+from e8s.show.manage import add_set
+from e8s.show.migrate import FIRST_VERSION, ReportBuilder
+from e8s.show.migrations.v1_to_v2_ids import rename_ids
+from e8s.show.models import Show
+from e8s.show.pinning import pin, unpin
+from e8s.show.sections import split_section
 from tests.helpers import replaced_form_show
 
 LEGACY_SET = "con"

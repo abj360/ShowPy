@@ -16,15 +16,15 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from showpy.choreo.models import PlacementPatch
-from showpy.core.json_types import JsonValue
-from showpy.core.strict_json import parse_strict_json
-from showpy.show import storage
-from showpy.show.decode_cache import DECODE_CACHE_SIZE
-from showpy.show.documents import decode_show
-from showpy.show.models import Show
-from showpy.show.repositories import InMemoryRepository
-from showpy.show.storage import load_show, open_workspace, save_show
+from e8s.choreo.models import PlacementPatch
+from e8s.core.json_types import JsonValue
+from e8s.core.strict_json import parse_strict_json
+from e8s.show import storage
+from e8s.show.decode_cache import DECODE_CACHE_SIZE
+from e8s.show.documents import decode_show
+from e8s.show.models import Show
+from e8s.show.repositories import InMemoryRepository
+from e8s.show.storage import load_show, open_workspace, save_show
 from tests.fixtures.generators import seeded_show
 
 SHOW_ID = "cached-show"
@@ -35,7 +35,7 @@ SPOTS = 8
 SETS = 10
 EDITS = 5
 EDITED_SET = 1
-PARSER = "showpy.show.document_reading.parse_strict_json"
+PARSER = "e8s.show.document_reading.parse_strict_json"
 
 
 def _one_spot_edit(show: Show, x: float) -> Show:

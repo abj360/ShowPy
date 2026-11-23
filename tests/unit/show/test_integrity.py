@@ -62,13 +62,13 @@ from typing import Any
 
 import pytest
 
-from showpy.cast.models import Shape
-from showpy.cast.spots import set_shape
-from showpy.choreo.forms import line_form
-from showpy.core.errors import LockedError, SchemaError, StorageError
-from showpy.examples import two_set_show
-from showpy.show.decode_cache import DecodeCache
-from showpy.show.documents import (
+from e8s.cast.models import Shape
+from e8s.cast.spots import set_shape
+from e8s.choreo.forms import line_form
+from e8s.core.errors import LockedError, SchemaError, StorageError
+from e8s.examples import two_set_show
+from e8s.show.decode_cache import DecodeCache
+from e8s.show.documents import (
     SHOW_DOC,
     dump_json,
     encode_show,
@@ -77,8 +77,8 @@ from showpy.show.documents import (
     paths_doc,
     set_doc,
 )
-from showpy.show.file_repository import FileRepository
-from showpy.show.integrity import (
+from e8s.show.file_repository import FileRepository
+from e8s.show.integrity import (
     KNOWN_ROOTS,
     LazyBlobs,
     blob_digest,
@@ -86,10 +86,10 @@ from showpy.show.integrity import (
     require_valid_digests,
     require_valid_tree,
 )
-from showpy.show.manage import remove_set
-from showpy.show.models import Show
-from showpy.show.repositories import DocumentRepository, InMemoryRepository
-from showpy.show.storage import load_show, open_workspace, save_show
+from e8s.show.manage import remove_set
+from e8s.show.models import Show
+from e8s.show.repositories import DocumentRepository, InMemoryRepository
+from e8s.show.storage import load_show, open_workspace, save_show
 from tests.fixtures.generators import seeded_show
 from tests.helpers import HOSTILE_JSON
 

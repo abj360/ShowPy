@@ -15,16 +15,16 @@ import math
 
 import pytest
 
-from showpy.choreo.models import Placement, PlacementPatch, Set
-from showpy.choreo.path_models import PathRow, PathStyle
-from showpy.core.errors import SchemaError, UnknownRefError
-from showpy.core.ids import FormId, SetId, SpotId
-from showpy.core.util import approx_equal
-from showpy.export._models import Claim
-from showpy.export._print_sheets import chart, coordinate_sheet, coordinate_sheets, cue_sheet
-from showpy.sheet.models import GuideLine
-from showpy.show.models import Show
-from showpy.time.models import Cue, Marker, MeasureSetting, Timeline, TimelineMode
+from e8s.choreo.models import Placement, PlacementPatch, Set
+from e8s.choreo.path_models import PathRow, PathStyle
+from e8s.core.errors import SchemaError, UnknownRefError
+from e8s.core.ids import FormId, SetId, SpotId
+from e8s.core.util import approx_equal
+from e8s.export._models import Claim
+from e8s.export._print_sheets import chart, coordinate_sheet, coordinate_sheets, cue_sheet
+from e8s.sheet.models import GuideLine
+from e8s.show.models import Show
+from e8s.time.models import Cue, Marker, MeasureSetting, Timeline, TimelineMode
 from tests.fixtures.export_shows import AT, guided_show, live_publication, performer
 from tests.fixtures.motion_shows import with_rows, with_targets
 from tests.fixtures.shows import two_set_show
