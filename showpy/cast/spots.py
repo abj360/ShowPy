@@ -354,6 +354,8 @@ def _locked_items(show: "Show", ids: frozenset[SpotId]) -> list[str]:
 def delete_spots(show: "Show", sel: Selector, *, force: bool = False) -> "Show":
     """Removes spots from the cast, every set, forms, paths, routes and selections.
 
+    The notes document beside the show does not follow; pass each deleted spot mapped to None
+    as `spots=` to rewrite_note_anchors() to drop the notes left without spots.
     Pinned placements, locked forms and locked paths raise LockedError unless `force=True`.
     A forced delete also drops the pins on the deleted spots. A deleted form member leaves an
     open slot, so later members keep their slots; text forms close the gap instead.

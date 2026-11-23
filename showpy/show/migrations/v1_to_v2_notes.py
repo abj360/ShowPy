@@ -13,7 +13,6 @@ notes document.
 Contains:
     LEGACY_NOTES_DOC: names the v1 document that held the notes among the show's documents
     NOTES_DOC: names the notes document stored beside the show's documents
-    renamed_anchor(): returns an anchor whose sets and spots follow a migration's renames
     move_notes(): takes the v1 notes out of the show's documents into the notes document
 """
 
@@ -21,10 +20,9 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Final
 
 from showpy.core.errors import SchemaError
-from showpy.core.ids import SetId, SpotId, TransitionId
 from showpy.core.json_types import JsonValue
 from showpy.notes.models import Note, NotesDocument
-from showpy.show.anchors import Anchor
+from showpy.show.anchors import renamed_anchor
 from showpy.show.migrations.v1_to_v2_ids import renames_of
 from showpy.show.models import Show
 
@@ -36,30 +34,6 @@ NOTES_DOC: Final = "/notes/notes.json"
 NOTE_KIND: Final = "note"
 SET_KIND: Final = "set"
 SPOT_KIND: Final = "spot"
-
-
-def renamed_anchor(anchor: Anchor, sets: Mapping[str, str], spots: Mapping[str, str]) -> Anchor:
-    """Returns an anchor whose set, transition or spots follow a migration's renames.
-
-    Args:
-        anchor: The stored anchor.
-        sets: Old set ID to new set ID.
-        spots: Old spot ID to new spot ID.
-
-    Returns:
-        anchor: The anchor naming the renamed IDs; point and area anchors come back unchanged.
-
-    >>> renamed_anchor(Anchor.on_set("con"), {"con": "con_"}, {}).set_id
-    'con_'
-    """
-    if anchor.set_id is not None:
-        return anchor.replace(set_id=SetId(sets.get(anchor.set_id, anchor.set_id)))
-    if anchor.tid is not None:
-        a, b = anchor.tid
-        return anchor.replace(tid=TransitionId(SetId(sets.get(a, a)), SetId(sets.get(b, b))))
-    if anchor.spots is not None:
-        return anchor.replace(spots=tuple(SpotId(spots.get(s, s)) for s in anchor.spots))
-    return anchor
 
 
 def _stored_notes(objects: Mapping[str, JsonValue]) -> list[JsonValue]:

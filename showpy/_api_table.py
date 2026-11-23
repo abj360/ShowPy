@@ -527,6 +527,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("require_finite", "showpy.core.validation", "require_finite"),
     ("require_size", "showpy.core.caps", "require_size"),
     ("revert", "showpy.show.history", "revert"),
+    ("rewrite_note_anchors", "showpy.notes.notes", "rewrite_note_anchors"),
     ("ripple", "showpy.choreo.paths", "ripple"),
     ("rose_points", "showpy.choreo.form_fns", "rose_points"),
     ("rotate", "showpy.choreo.set_transforms", "rotate"),
@@ -789,6 +790,7 @@ LEAVING: tuple[tuple[str, str, str | tuple[str, ...] | None, str, str], ...] = (
     ("notes_near", "function", None, "0.4.0", "1.0.0"),
     ("accept_draft", "function", None, "0.4.0", "1.0.0"),
     ("import_notes", "function", None, "0.4.0", "1.0.0"),
+    ("rewrite_note_anchors", "function", None, "0.4.0", "1.0.0"),
 )
 
 DEPRECATED_KEYWORDS: tuple[tuple[str, str, str, str, str], ...] = (

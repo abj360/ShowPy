@@ -619,6 +619,7 @@ if TYPE_CHECKING:
         notes_for,
         notes_near,
         remove_note,
+        rewrite_note_anchors,
     )
     from showpy.sheet.bounds import (
         landmark,
@@ -1355,6 +1356,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "require_finite": ("showpy.core.validation", "require_finite"),
     "require_size": ("showpy.core.caps", "require_size"),
     "revert": ("showpy.show.history", "revert"),
+    "rewrite_note_anchors": ("showpy.notes.notes", "rewrite_note_anchors"),
     "ripple": ("showpy.choreo.paths", "ripple"),
     "rose_points": ("showpy.choreo.form_fns", "rose_points"),
     "rotate": ("showpy.choreo.set_transforms", "rotate"),
@@ -2050,6 +2052,7 @@ __all__ = [
     "require_finite",
     "require_size",
     "revert",
+    "rewrite_note_anchors",
     "ripple",
     "rose_points",
     "rotate",

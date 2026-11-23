@@ -17,8 +17,8 @@ from showpy.core.ids import SpotId
 from showpy.core.json_types import JsonValue
 from showpy.core.strict_json import parse_strict_json
 from showpy.core.validation import validate_adapter
+from showpy.show.anchors import renamed_anchor
 from showpy.show.migrate import MigrationReport
-from showpy.show.migrations.v1_to_v2_notes import renamed_anchor
 from showpy.show.structured import (
     COMMENTS_ADAPTER,
     COMMENTS_DOC,

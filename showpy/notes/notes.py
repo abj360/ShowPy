@@ -13,24 +13,31 @@ Contains:
     notes_for(): returns the notes anchored to a set or a transition
     notes_near(): returns the notes anchored at or around a point
     accept_draft(): adds a drafted note to the notes document, visible
+    rewrite_note_anchors(): points note anchors at renamed sets and spots, dropping orphans
 """
 
 import math
+from collections.abc import Mapping
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Final
 
 import shapely
 
+from showpy.cast.rewrite import rewrite_note_spots
 from showpy.cast.select import select
 from showpy.core.deprecation import leaving_call
 from showpy.core.errors import GeometryError, SchemaError, UnknownRefError, field_errors
+from showpy.core.ids import SetId, SpotId
 from showpy.core.types import Meters, Point
 from showpy.core.util import close_matches
 from showpy.notes.models import Note, NoteKind, NotesDocument, require_notes_of
-from showpy.show.anchors import Anchor
+from showpy.show.anchors import Anchor, renamed_anchor
 
 if TYPE_CHECKING:
     from showpy.show.models import Show
+
+type SetMapping = Mapping[SetId, str | None] | Mapping[str, str | None]
+type SpotMapping = Mapping[SpotId, str | None] | Mapping[str, str | None]
 
 SINCE: Final = "0.4.0"
 REMOVE: Final = "1.0.0"
@@ -344,3 +351,75 @@ def accept_draft(notes: NotesDocument, show: "Show", draft: Note) -> NotesDocume
     Deprecated: this name leaves the library in 1.0.0.
     """
     return _accept_draft(notes, show, draft)
+
+
+def _names_a_set(anchor: Anchor, sets: frozenset[str]) -> bool:
+    """Tells whether an anchor names one of `sets`, alone or as an end of its transition."""
+    if anchor.set_id is not None:
+        return anchor.set_id in sets
+    return anchor.tid is not None and bool(set(anchor.tid) & sets)
+
+
+def _rewrite_note_anchors(
+    notes: NotesDocument,
+    show: "Show",
+    *,
+    sets: SetMapping | None = None,
+    spots: SpotMapping | None = None,
+) -> tuple[NotesDocument, tuple[Note, ...]]:
+    """Points note anchors at renamed sets and spots; drops notes on removed sets or spots.
+
+    >>> from datetime import UTC, datetime
+    >>> from showpy.examples import two_set_show
+    >>> show = two_set_show()
+    >>> at = datetime(2026, 11, 11, tzinfo=UTC)
+    >>> empty = NotesDocument(show=show.id)
+    >>> notes = _add_note(empty, show, "go", Anchor.on_set("2"), "n1", at, "pat")
+    >>> followed, orphaned = _rewrite_note_anchors(notes, show, sets={"2": None})
+    >>> followed.notes, [n.id for n in orphaned]
+    ((), ['n1'])
+    """
+    require_notes_of(notes, show.id)
+    set_map: dict[str, str | None] = {} if sets is None else {str(k): v for k, v in sets.items()}
+    removed = frozenset(old for old, new in set_map.items() if new is None)
+    renames = {old: new for old, new in set_map.items() if new is not None}
+    on_removed = tuple(n for n in notes.notes if _names_a_set(n.anchor, removed))
+    kept = [
+        n.replace(anchor=renamed_anchor(n.anchor, renames, {}))
+        for n in notes.notes
+        if n not in on_removed
+    ]
+    spot_map: dict[str, str | None] = {} if spots is None else dict(spots.items())
+    moved, on_dropped = rewrite_note_spots(kept, lambda spot_id: spot_map.get(spot_id, spot_id))
+    orphan_ids = {n.id for n in (*on_removed, *on_dropped)}
+    orphaned = tuple(n for n in notes.notes if n.id in orphan_ids)
+    return notes.replace(notes=moved), orphaned
+
+
+@leaving_call(since=SINCE, remove=REMOVE)
+def rewrite_note_anchors(
+    notes: NotesDocument,
+    show: "Show",
+    *,
+    sets: SetMapping | None = None,
+    spots: SpotMapping | None = None,
+) -> tuple[NotesDocument, tuple[Note, ...]]:
+    """Points note anchors at renamed sets and spots, dropping notes on removed ones.
+
+    The show's own edits (renumber, remove_set, split_section, join_sections, delete_spots)
+    leave the notes document alone; call this with their mapping to keep it in step.
+    Deprecated: this name leaves the library in 1.0.0.
+
+    Args:
+        notes: The show's notes document.
+        show: The show after the edit; the notes document must belong to it.
+        sets: Old set ID to new set ID, or to None for a removed set; a note on a removed set
+            or on a transition into or out of one is dropped.
+        spots: Old spot ID to new spot ID, or to None for a deleted spot; a note whose every
+            spot was deleted is dropped.
+
+    Returns:
+        notes: The notes document with anchors rewritten.
+        orphaned: Each dropped note, in document order, as `RewriteReport.orphaned_notes` holds.
+    """
+    return _rewrite_note_anchors(notes, show, sets=sets, spots=spots)

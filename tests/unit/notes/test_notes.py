@@ -9,6 +9,12 @@ Contains:
         leaving functions and on `showpy.Note` and `showpy.NotesDocument`, naming 1.0.0
     test_notes_functions_refuse_the_notes_of_another_show: raises SchemaError for a notes
         document whose show is not the show passed
+    test_regression_renumber_keeps_each_note_on_its_own_set: points notes on `2A` and `3` at `3`
+        and `4` after renumber, through rewrite_note_anchors and the returned mapping
+    test_regression_delete_spots_orphans_notes_on_deleted_spots: drops and returns a note whose
+        every spot was deleted and keeps the remaining spots of another
+    test_rewrite_note_anchors_orphans_notes_on_a_removed_set: drops and returns notes on a removed
+        set or on a transition into it
     test_regression_degenerate_area_anchor_never_leaks_shapely_errors: rejects a two-point area
         anchor, or finds it without a Shapely ValueError
     test_regression_accept_draft_accepts_a_hidden_draft_already_in_the_show: makes a hidden draft
@@ -26,6 +32,7 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 
 import showpy
+from showpy.cast.spots import delete_spots
 from showpy.choreo.models import PlacementPatch
 from showpy.core.deprecation import DeprecatedWarning
 from showpy.core.errors import GeometryError, SchemaError, ShowPyError, UnknownRefError
@@ -39,7 +46,9 @@ from showpy.notes.notes import (
     notes_for,
     notes_near,
     remove_note,
+    rewrite_note_anchors,
 )
+from showpy.show.manage import add_set, insert_subset, remove_set, renumber
 from showpy.show.models import Anchor
 from tests.fixtures.shows import two_set_show
 
@@ -76,6 +85,7 @@ CALLS: dict[str, Callable[[], object]] = {
     "notes_for": lambda: notes_for(EMPTY, SHOW, "1"),
     "notes_near": lambda: notes_near(EMPTY, SHOW, (0.0, 0.0), 1.0),
     "accept_draft": lambda: accept_draft(EMPTY, SHOW, _draft()),
+    "rewrite_note_anchors": lambda: rewrite_note_anchors(EMPTY, SHOW, sets={"1": "1"}),
 }
 
 
@@ -266,3 +276,44 @@ def test_regression_add_note_keeps_the_anchor_payload_error() -> None:
             "me",
         )
     assert info.value.message == "set anchor needs only set_id"
+
+
+@leaving
+def test_regression_renumber_keeps_each_note_on_its_own_set() -> None:
+    show, sub = insert_subset(add_set(SHOW, "3", 4.0), "2", 2.0)
+    notes = add_note(EMPTY, show, "sub", Anchor.on_set(sub), "n1", AT, "pat")
+    notes = add_note(notes, show, "three", Anchor.on_set("3"), "n2", AT, "pat")
+    notes = add_note(notes, show, "into", Anchor.on_transition((sub, "3")), "n3", AT, "pat")
+    renamed, mapping = renumber(show)
+    assert mapping == {"1": "1", "2": "2", sub: "3", "3": "4"}
+    followed, orphaned = rewrite_note_anchors(notes, renamed, sets=mapping)
+    assert [n.anchor for n in followed.notes] == [
+        Anchor.on_set("3"),
+        Anchor.on_set("4"),
+        Anchor.on_transition(("3", "4")),
+    ]
+    assert orphaned == ()
+
+
+@leaving
+def test_regression_delete_spots_orphans_notes_on_deleted_spots() -> None:
+    notes = add_note(EMPTY, SHOW, "solo", Anchor.on_spots(["T2"]), "n1", AT, "pat")
+    notes = add_note(notes, SHOW, "pair", Anchor.on_spots(["T2", "T3"]), "n2", AT, "pat")
+    edited = delete_spots(SHOW, "T2")
+    followed, orphaned = rewrite_note_anchors(notes, edited, spots={"T2": None})
+    assert [n.id for n in orphaned] == ["n1"]
+    assert [n.anchor for n in followed.notes] == [Anchor.on_spots(["T3"])]
+
+
+@leaving
+def test_rewrite_note_anchors_orphans_notes_on_a_removed_set() -> None:
+    show = add_set(SHOW, "3", 4.0)
+    notes = add_note(EMPTY, show, "two", Anchor.on_set("2"), "n1", AT, "pat")
+    notes = add_note(notes, show, "into", Anchor.on_transition(("1", "2")), "n2", AT, "pat")
+    notes = add_note(notes, show, "three", Anchor.on_set("3"), "n3", AT, "pat")
+    edited = remove_set(show, "2")
+    followed, orphaned = rewrite_note_anchors(notes, edited, sets={"2": None})
+    assert [n.id for n in orphaned] == ["n1", "n2"]
+    assert [n.id for n in followed.notes] == ["n3"]
+    with pytest.raises(SchemaError):
+        rewrite_note_anchors(NotesDocument(show="other"), edited, sets={"2": None})

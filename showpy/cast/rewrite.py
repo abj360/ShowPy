@@ -6,6 +6,7 @@ Contains:
     faces_entity(): returns the spot a facing aims at, if any
     rewrite_spots(): applies a rename to every spot reference and reports what it dropped
     rewrite_spot_ids(): applies a rename to every spot reference in a show
+    rewrite_note_spots(): applies a rename to the spot anchors of notes and lists the orphans
 """
 
 from collections.abc import Callable, Sequence
@@ -147,9 +148,11 @@ def rewrite_spots(
         "sheet": _rewrite_sheet(show, rename, dropped),
     }
     new_cast = Cast.model_validate({**dict(cast), "spots": spots, "selections": selections})
-    rewritten_notes = (
-        None if notes is None else notes.replace(notes=_rewrite_notes(notes.notes, rename, dropped))
-    )
+    rewritten_notes = None
+    if notes is not None:
+        kept_notes, orphaned = rewrite_note_spots(notes.notes, rename)
+        rewritten_notes = notes.replace(notes=kept_notes)
+        dropped.notes.extend(orphaned)
     report = RewriteReport(
         renamed={old: new for old, new in renamed.items() if old != new},
         dropped_routes=tuple(dropped.routes),
@@ -234,8 +237,29 @@ def _rewrite_spec(spec: TransitionSpec, rename: Rename, dropped: _Dropped) -> Tr
     return spec.replace(rows=rows, routes=_rewrite_routes(spec, rename, dropped))
 
 
-def _rewrite_notes(notes: tuple[Note, ...], rename: Rename, dropped: _Dropped) -> tuple[Note, ...]:
-    kept = []
+def rewrite_note_spots(
+    notes: Sequence[Note], rename: Rename
+) -> tuple[tuple[Note, ...], tuple[Note, ...]]:
+    """Applies `rename` to the spot anchors of notes, dropping a note left without spots.
+
+    Args:
+        notes: Notes in document order.
+        rename: Old spot ID to new ID, or None to drop the spot.
+
+    Returns:
+        kept: The notes that still have an anchor, spot anchors rewritten, in order.
+        orphaned: Each note removed because every spot it was anchored to was dropped.
+
+    >>> from datetime import UTC, datetime
+    >>> from showpy.show.anchors import Anchor
+    >>> at = datetime(2026, 11, 11, tzinfo=UTC)
+    >>> note = Note(id="n1", text="solo", anchor=Anchor.on_spots(["T2"]), author="d", created_at=at)
+    >>> kept, orphaned = rewrite_note_spots([note], lambda i: None if i == "T2" else i)
+    >>> kept, [n.id for n in orphaned]
+    ((), ['n1'])
+    """
+    kept: list[Note] = []
+    orphaned: list[Note] = []
     for note in notes:
         spots = note.anchor.spots
         if spots is None:
@@ -243,10 +267,10 @@ def _rewrite_notes(notes: tuple[Note, ...], rename: Rename, dropped: _Dropped) -
             continue
         moved = _keep(spots, rename)
         if spots and not moved:
-            dropped.notes.append(note)
+            orphaned.append(note)
         else:
             kept.append(note.replace(anchor=note.anchor.replace(spots=moved)))
-    return tuple(kept)
+    return tuple(kept), tuple(orphaned)
 
 
 def _rewrite_selector(

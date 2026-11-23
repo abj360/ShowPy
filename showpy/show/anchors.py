@@ -11,9 +11,10 @@ Contains:
     Anchor.at_point(): anchors to a point on the sheet
     Anchor.on_area(): anchors to an area
     Anchor.on_spots(): anchors to spots
+    renamed_anchor(): returns an anchor whose set, transition or spots follow renamed IDs
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Literal
 
 from pydantic import model_validator
@@ -87,3 +88,27 @@ class Anchor(FrozenModel):
     def on_spots(cls, spots: Sequence[str]) -> "Anchor":
         """Anchors to spots, e.g. a sticky note on a soloist or a group."""
         return cls.model_validate({"kind": "spots", "spots": tuple(spots)})
+
+
+def renamed_anchor(anchor: Anchor, sets: Mapping[str, str], spots: Mapping[str, str]) -> Anchor:
+    """Returns an anchor whose set, transition or spots follow renamed IDs.
+
+    Args:
+        anchor: The anchor to rename.
+        sets: Old set ID to new set ID.
+        spots: Old spot ID to new spot ID.
+
+    Returns:
+        anchor: The anchor naming the renamed IDs; point and area anchors come back unchanged.
+
+    >>> renamed_anchor(Anchor.on_set("con"), {"con": "con_"}, {}).set_id
+    'con_'
+    """
+    if anchor.set_id is not None:
+        return anchor.replace(set_id=SetId(sets.get(anchor.set_id, anchor.set_id)))
+    if anchor.tid is not None:
+        a, b = anchor.tid
+        return anchor.replace(tid=TransitionId(SetId(sets.get(a, a)), SetId(sets.get(b, b))))
+    if anchor.spots is not None:
+        return anchor.replace(spots=tuple(SpotId(spots.get(s, s)) for s in anchor.spots))
+    return anchor
