@@ -24,7 +24,6 @@ Contains:
         takes a bool positionally
     test_positional_boolean_scan_flags_a_definition: proves the scan can fail
     test_public_names_are_cached_after_first_use: requires a resolved name to land in the module
-    test_deprecated_alias_warns_on_every_access: requires an alias to warn each time, uncached
     find_geo_foreign_imports(): lists each import in geo source outside e8s.core and e8s.geo
     GEO_FORWARDING_IMPORTS: lists the function-level imports of the geo stubs, removed in v0.6.0
     test_geo_imports_only_core: fails when geo imports another e8s package, bar the listed stubs
@@ -353,16 +352,6 @@ def test_public_names_are_cached_after_first_use() -> None:
         delattr(e8s, "Show")
     resolved = e8s.Show
     assert vars(e8s)["Show"] is resolved
-
-
-def test_deprecated_alias_warns_on_every_access() -> None:
-    alias = next(iter(vars(e8s)["_DEPRECATED"]))
-    for _ in range(2):
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            getattr(e8s, alias)
-        assert [w.category for w in caught] == [DeprecatedWarning]
-    assert alias not in vars(e8s)
 
 
 def _imported_modules(node: ast.Import | ast.ImportFrom, package: str) -> list[str]:

@@ -2,13 +2,10 @@
 measure.py --- static measures of points, curves and sets: extents, spacing, neighbours, symmetry
 
 Nothing here reads motion over time; positions over time come from the PathEngine. Measures
-of a `Set` live in `e8s.choreo.set_measure`; the set names kept here are deprecated stubs.
+of a `Set` live in `e8s.choreo.set_measure`.
 
 Contains:
     SetSelector: names the selections a set measure or transform accepts
-    SET_TYPE, SHEET_TYPE: name the types a forwarded Set or Sheet argument must have
-    wrong_type_error(): builds the error for a Set or Sheet argument of another type
-    on_field_ids(): forwards to e8s.choreo.set_measure.on_field_ids, deprecated
     length(): returns the length of a curve or of points read as a polyline
     center(): returns the bounding-box center
     centroid(): returns the mean point (length-weighted for curves)
@@ -16,12 +13,9 @@ Contains:
     interval(): summarizes gaps between consecutive or nearest-neighbour spots
     distance(): returns the distance between two points
     distance_matrix(): returns every pairwise distance between two point arrays
-    neighbors(): forwards to e8s.choreo.set_measure.neighbors, deprecated
-    nearest(): forwards to e8s.choreo.set_measure.nearest, deprecated
     reachable_region(): returns the disk a spot can reach in a number of counts
     mirror_gaps(): returns how far each mirrored point lands from its nearest point
     form_metrics(): summarizes length, spacing, curvature and symmetry of a form's points
-    symmetry_error(): forwards to e8s.choreo.set_measure.symmetry_error, deprecated
 """
 
 import math
@@ -34,9 +28,7 @@ from scipy.optimize import minimize_scalar
 from scipy.spatial import cKDTree
 from scipy.spatial.distance import cdist
 
-from e8s.core.deprecation import deprecated_call
-from e8s.core.errors import GeometryError, SchemaError
-from e8s.core.ids import SpotId
+from e8s.core.errors import GeometryError
 from e8s.core.selection import Selection
 from e8s.core.types import Box2, Count, Meters, Point, Points, Polygon
 from e8s.core.util import as_points
@@ -44,43 +36,11 @@ from e8s.geo.curve_base import Curve
 from e8s.geo.models import FormMetrics, IntervalStats
 
 ALL = "all"
-SET_TYPE = "e8s.choreo.models.Set"
-SHEET_TYPE = "e8s.sheet.models.Sheet"
 CURVE_TOL = 0.001
 DISK_SEGMENTS = 64
 STRAIGHT_TOL = 1e-12
 
 type SetSelector = Literal["all"] | Sequence[str] | Selection
-
-
-def wrong_type_error(function: str, argument: str, value: object, expected: str) -> SchemaError:
-    """Builds the error for an argument that must be a `Set` or `Sheet` but is another type.
-
-    Args:
-        function: Dotted name of the geo function that received the argument.
-        argument: Parameter name.
-        value: The object received.
-        expected: The type that was needed, as `e8s.choreo.models.Set`.
-
-    Returns:
-        error: A SchemaError that names the argument, the type received and the type needed.
-    """
-    return SchemaError(
-        f"`{argument}` must be a {expected}, got {type(value).__name__}",
-        hint=f"pass a {expected}; {function}() takes it only to forward to its choreo twin",
-        context={"function": function, "argument": argument, "got": type(value).__name__},
-    )
-
-
-@deprecated_call("e8s.choreo.set_measure.on_field_ids", since="0.4.0", remove="0.6.0")
-def on_field_ids(s: object, sel: SetSelector = ALL) -> tuple[SpotId, ...]:
-    """Returns the selected spots that are on the field; moved to `e8s.choreo.set_measure`."""
-    from e8s.choreo.models import Set
-    from e8s.choreo.set_measure import on_field_ids as twin
-
-    if not isinstance(s, Set):
-        raise wrong_type_error("e8s.geo.measure.on_field_ids", "s", s, SET_TYPE)
-    return twin(s, sel)
 
 
 def _points(obj: Points | Curve) -> Points:
@@ -195,28 +155,6 @@ def distance_matrix(a: Points, b: Points) -> Points:
     return matrix
 
 
-@deprecated_call("e8s.choreo.set_measure.neighbors", since="0.4.0", remove="0.6.0")
-def neighbors(s: object, entity: str, k: int = 2) -> list[tuple[SpotId, Meters]]:
-    """Returns the k spots closest to `entity`; moved to `e8s.choreo.set_measure`."""
-    from e8s.choreo.models import Set
-    from e8s.choreo.set_measure import neighbors as twin
-
-    if not isinstance(s, Set):
-        raise wrong_type_error("e8s.geo.measure.neighbors", "s", s, SET_TYPE)
-    return twin(s, entity, k)
-
-
-@deprecated_call("e8s.choreo.set_measure.nearest", since="0.4.0", remove="0.6.0")
-def nearest(s: object, point: Point, k: int = 1) -> list[tuple[SpotId, Meters]]:
-    """Returns the k spots closest to a point; moved to `e8s.choreo.set_measure`."""
-    from e8s.choreo.models import Set
-    from e8s.choreo.set_measure import nearest as twin
-
-    if not isinstance(s, Set):
-        raise wrong_type_error("e8s.geo.measure.nearest", "s", s, SET_TYPE)
-    return twin(s, point, k)
-
-
 def reachable_region(start: Point, counts: Count, max_speed: float) -> Polygon:
     """Returns the disk a spot can reach from `start` in `counts` at `max_speed` m per count.
 
@@ -293,14 +231,3 @@ def form_metrics(points: Points) -> FormMetrics:
         curvature_range=(float(curvature.min()), float(curvature.max())),
         symmetry_error=_best_axis_error(pts),
     )
-
-
-@deprecated_call("e8s.choreo.set_measure.symmetry_error", since="0.4.0", remove="0.6.0")
-def symmetry_error(s: object, sel: SetSelector = ALL, axis_x: float = 0.0) -> Meters:
-    """Returns the largest mirror mismatch of a set; moved to `e8s.choreo.set_measure`."""
-    from e8s.choreo.models import Set
-    from e8s.choreo.set_measure import symmetry_error as twin
-
-    if not isinstance(s, Set):
-        raise wrong_type_error("e8s.geo.measure.symmetry_error", "s", s, SET_TYPE)
-    return twin(s, sel, axis_x)

@@ -3,9 +3,8 @@ transforms.py --- moves, turns, resizes, mirrors and snaps points and curves
 
 Every transform takes `Points` (N, 2) or a curve and returns the same kind; point-wise maps
 (expand, snap, align) move a curve's defining points, or a dense polyline when the curve has
-none. Affine maps come from `e8s.geo.affine`. `sel` and `force` are ignored; they remain so
-that a `Set` still reaches `e8s.choreo.set_transforms`, which warns as deprecated. Grid
-snapping, align and distribute live in `e8s.geo.snapping` and are re-exported here.
+none. Affine maps come from `e8s.geo.affine`; a `Set` moves through `e8s.choreo.set_transforms`.
+Grid snapping, align and distribute live in `e8s.geo.snapping` and are re-exported here.
 
 Contains:
     Anchor: names the box anchors move_to accepts
@@ -29,18 +28,16 @@ Contains:
     vertical_mirror(): builds the matrix that reflects across a vertical line
     mirror_line(): builds the matrix of a named or two-point mirror line
     affine_matrix(): checks a 2x3 or 3x3 matrix and returns it as 3x3
-    symmetrize(): forwards to e8s.choreo.set_transforms.symmetrize, deprecated
-    snap(), snap_to_guides(), align(), distribute(): re-exported from e8s.geo.snapping
+    snap(), align(), distribute(): re-exported from e8s.geo.snapping
 """
 
 import math
-from collections.abc import Callable, Mapping
-from typing import Literal, cast
+from collections.abc import Callable
+from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
 
-from e8s.core.deprecation import deprecated_call
 from e8s.core.errors import GeometryError, SpacingError
 from e8s.core.types import Degrees, Meters, Point, Points
 from e8s.core.util import as_points
@@ -54,8 +51,8 @@ from e8s.geo.affine import (
 )
 from e8s.geo.checks import pick
 from e8s.geo.curves import CurveModel
-from e8s.geo.measure import ALL, SET_TYPE, SetSelector, bounds, centroid, wrong_type_error
-from e8s.geo.snapping import align, distribute, snap, snap_to_guides
+from e8s.geo.measure import bounds, centroid
+from e8s.geo.snapping import align, distribute, snap
 from e8s.geo.transform_base import (
     About,
     PointMap,
@@ -63,8 +60,6 @@ from e8s.geo.transform_base import (
     anchor_source,
     apply_matrix,
     apply_pointwise,
-    is_set_input,
-    warn_set_moved,
 )
 
 __all__ = [
@@ -91,8 +86,6 @@ __all__ = [
     "shift",
     "skew",
     "snap",
-    "snap_to_guides",
-    "symmetrize",
     "vertical_mirror",
 ]
 
@@ -102,8 +95,6 @@ type Anchor = Literal[
 ]  # fmt: skip
 type MirrorAxis = Literal["center", "x", "y"] | tuple[Point, Point]
 
-GEO_MODULE = "e8s.geo.transforms"
-CHOREO_MODULE = "e8s.choreo.set_transforms"
 BOX_ANCHORS: dict[str, tuple[float, float]] = {
     "center": (0.5, 0.5),
     "front-left": (0.0, 0.0),
@@ -122,20 +113,12 @@ SINGULAR_TOL = 1e-12
 AFFINE_ROW = (0.0, 0.0, 1.0)
 
 
-def shift[T: (Points, CurveModel)](
-    obj: T, dx: Meters, dy: Meters, sel: SetSelector = ALL, *, force: bool = False
-) -> T:
+def shift[T: (Points, CurveModel)](obj: T, dx: Meters, dy: Meters) -> T:
     """Translates by (dx, dy).
 
     >>> shift(np.array([[0.0, 0.0]]), 1.0, 2.0).tolist()
     [[1.0, 2.0]]
     """
-    if is_set_input(obj):
-        from e8s.choreo.models import Set
-        from e8s.choreo.set_transforms import shift as twin
-
-        warn_set_moved(GEO_MODULE, "shift", CHOREO_MODULE, obj, Set)
-        return twin(obj, dx, dy, sel, force=force)
     return apply_matrix(obj, translation_matrix(dx, dy))
 
 
@@ -154,38 +137,22 @@ def box_anchor_point(source: Points | CurveModel, anchor: Anchor) -> Point:
     return box.min[0] + fx * box.size[0], box.min[1] + fy * box.size[1]
 
 
-def move_to[T: (Points, CurveModel)](
-    obj: T, anchor: Anchor, to: Point, sel: SetSelector = ALL, *, force: bool = False
-) -> T:
+def move_to[T: (Points, CurveModel)](obj: T, anchor: Anchor, to: Point) -> T:
     """Moves an anchor of the object onto `to`; front is the lowest y, left the lowest x.
 
     >>> move_to(np.array([[0.0, 0.0], [2.0, 2.0]]), "front-left", (5.0, 5.0)).tolist()
     [[5.0, 5.0], [7.0, 7.0]]
     """
-    if is_set_input(obj):
-        from e8s.choreo.models import Set
-        from e8s.choreo.set_transforms import move_to as twin
-
-        warn_set_moved(GEO_MODULE, "move_to", CHOREO_MODULE, obj, Set)
-        return twin(obj, anchor, to, sel, force=force)
     here = box_anchor_point(anchor_source(obj), anchor)
     return shift(obj, to[0] - here[0], to[1] - here[1])
 
 
-def rotate[T: (Points, CurveModel)](
-    obj: T, deg: Degrees, about: About = "center", sel: SetSelector = ALL, *, force: bool = False
-) -> T:
+def rotate[T: (Points, CurveModel)](obj: T, deg: Degrees, about: About = "center") -> T:
     """Rotates counter-clockwise by `deg` about an anchor.
 
     >>> rotate(np.array([[1.0, 0.0]]), 90.0, about=(0.0, 0.0)).round(6).tolist()
     [[0.0, 1.0]]
     """
-    if is_set_input(obj):
-        from e8s.choreo.models import Set
-        from e8s.choreo.set_transforms import rotate as twin
-
-        warn_set_moved(GEO_MODULE, "rotate", CHOREO_MODULE, obj, Set)
-        return twin(obj, deg, about, sel, force=force)
     return apply_matrix(obj, rotation_matrix(deg, about_point(obj, about)))
 
 
@@ -210,21 +177,12 @@ def scale[T: (Points, CurveModel)](
     sx: float,
     sy: float | None = None,
     about: About = "center",
-    sel: SetSelector = ALL,
-    *,
-    force: bool = False,
 ) -> T:
     """Resizes about an anchor; `sy` defaults to `sx`. Factors must be positive.
 
     >>> scale(np.array([[1.0, 1.0]]), 2.0, about=(0.0, 0.0)).tolist()
     [[2.0, 2.0]]
     """
-    if is_set_input(obj):
-        from e8s.choreo.models import Set
-        from e8s.choreo.set_transforms import scale as twin
-
-        warn_set_moved(GEO_MODULE, "scale", CHOREO_MODULE, obj, Set)
-        return twin(obj, sx, sy, about, sel, force=force)
     return apply_matrix(obj, scale_about(sx, sy, about_point(obj, about)))
 
 
@@ -277,37 +235,21 @@ def contract_map(anchor: Point, d: Meters) -> PointMap:
     return _radial(anchor, -d)
 
 
-def expand[T: (Points, CurveModel)](
-    obj: T, d: Meters, about: About = "center", sel: SetSelector = ALL, *, force: bool = False
-) -> T:
+def expand[T: (Points, CurveModel)](obj: T, d: Meters, about: About = "center") -> T:
     """Moves every point d meters away from an anchor along its ray; points on it stay.
 
     >>> expand(np.array([[2.0, 0.0]]), 1.0, about=(0.0, 0.0)).tolist()
     [[3.0, 0.0]]
     """
-    if is_set_input(obj):
-        from e8s.choreo.models import Set
-        from e8s.choreo.set_transforms import expand as twin
-
-        warn_set_moved(GEO_MODULE, "expand", CHOREO_MODULE, obj, Set)
-        return twin(obj, d, about, sel, force=force)
     return apply_pointwise(obj, expand_map(about_point(obj, about), d))
 
 
-def contract[T: (Points, CurveModel)](
-    obj: T, d: Meters, about: About = "center", sel: SetSelector = ALL, *, force: bool = False
-) -> T:
+def contract[T: (Points, CurveModel)](obj: T, d: Meters, about: About = "center") -> T:
     """Moves every point d meters toward an anchor; overshooting the anchor raises.
 
     >>> contract(np.array([[3.0, 0.0]]), 1.0, about=(0.0, 0.0)).tolist()
     [[2.0, 0.0]]
     """
-    if is_set_input(obj):
-        from e8s.choreo.models import Set
-        from e8s.choreo.set_transforms import contract as twin
-
-        warn_set_moved(GEO_MODULE, "contract", CHOREO_MODULE, obj, Set)
-        return twin(obj, d, about, sel, force=force)
     return apply_pointwise(obj, contract_map(about_point(obj, about), d))
 
 
@@ -365,9 +307,6 @@ def set_interval(
     obj: Points,
     interval: Meters,
     anchor: Literal["start", "center", "end"] = "center",
-    sel: SetSelector = ALL,
-    *,
-    force: bool = False,
 ) -> Points:
     """Respaces points `interval` apart along the polyline through them, in order.
 
@@ -377,12 +316,6 @@ def set_interval(
     >>> set_interval(np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]]), 2.0).tolist()
     [[-1.0, 0.0], [1.0, 0.0], [3.0, 0.0]]
     """
-    if is_set_input(obj):
-        from e8s.choreo.models import Set
-        from e8s.choreo.set_transforms import set_interval as twin
-
-        warn_set_moved(GEO_MODULE, "set_interval", CHOREO_MODULE, obj, Set)
-        return twin(obj, interval, anchor, sel, force=force)
     return apply_pointwise(obj, respace_map(interval, anchor))
 
 
@@ -424,9 +357,7 @@ def mirror_line(axis: MirrorAxis, center: Callable[[], Point]) -> Matrix:
     return pick("mirror axis", axis, lines)
 
 
-def mirror[T: (Points, CurveModel)](
-    obj: T, axis: MirrorAxis, sel: SetSelector = ALL, *, force: bool = False
-) -> T:
+def mirror[T: (Points, CurveModel)](obj: T, axis: MirrorAxis) -> T:
     """Reflects across a line.
 
     `center` is the vertical line through the box center, `x` the sheet center line x = 0,
@@ -435,32 +366,7 @@ def mirror[T: (Points, CurveModel)](
     >>> mirror(np.array([[1.0, 2.0]]), "x").tolist()
     [[-1.0, 2.0]]
     """
-    if is_set_input(obj):
-        from e8s.choreo.models import Set
-        from e8s.choreo.set_transforms import mirror as twin
-
-        warn_set_moved(GEO_MODULE, "mirror", CHOREO_MODULE, obj, Set)
-        return twin(obj, axis, sel, force=force)
     return apply_matrix(obj, mirror_line(axis, lambda: about_point(obj, "center")))
-
-
-@deprecated_call("e8s.choreo.set_transforms.symmetrize", since="0.4.0", remove="0.6.0")
-def symmetrize[S](
-    s: S,
-    sel: SetSelector = ALL,
-    source_side: Literal["left", "right"] = "left",
-    pairs: Mapping[str, str] | None = None,
-    axis_x: float = 0.0,
-    *,
-    force: bool = False,
-) -> S:
-    """Copies one side of a set onto its mirror partners; moved to `e8s.choreo`."""
-    from e8s.choreo.models import Set
-    from e8s.choreo.set_transforms import symmetrize as twin
-
-    if not isinstance(s, Set):
-        raise wrong_type_error("e8s.geo.transforms.symmetrize", "s", s, SET_TYPE)
-    return cast(S, twin(s, sel, source_side, pairs, axis_x, force=force))
 
 
 def skew[T: (Points, CurveModel)](
@@ -468,21 +374,12 @@ def skew[T: (Points, CurveModel)](
     deg_x: Degrees = 0.0,
     deg_y: Degrees = 0.0,
     about: About = "center",
-    sel: SetSelector = ALL,
-    *,
-    force: bool = False,
 ) -> T:
     """Shears about an anchor: x shifts by tan(deg_x)·y, y by tan(deg_y)·x.
 
     >>> skew(np.array([[0.0, 1.0]]), deg_x=45.0, about=(0.0, 0.0)).round(6).tolist()
     [[1.0, 1.0]]
     """
-    if is_set_input(obj):
-        from e8s.choreo.models import Set
-        from e8s.choreo.set_transforms import skew as twin
-
-        warn_set_moved(GEO_MODULE, "skew", CHOREO_MODULE, obj, Set)
-        return twin(obj, deg_x, deg_y, about, sel, force=force)
     return apply_matrix(obj, skew_matrix(deg_x, deg_y, about_point(obj, about)))
 
 
@@ -508,20 +405,12 @@ def affine_matrix(matrix: npt.ArrayLike) -> Matrix:
     return m
 
 
-def affine[T: (Points, CurveModel)](
-    obj: T, matrix: npt.ArrayLike, sel: SetSelector = ALL, *, force: bool = False
-) -> T:
+def affine[T: (Points, CurveModel)](obj: T, matrix: npt.ArrayLike) -> T:
     """Applies a 2x3 or 3x3 affine matrix.
 
     >>> affine(np.array([[1.0, 1.0]]), [[2.0, 0.0, 1.0], [0.0, 1.0, 0.0]]).tolist()
     [[3.0, 1.0]]
     """
-    if is_set_input(obj):
-        from e8s.choreo.models import Set
-        from e8s.choreo.set_transforms import affine as twin
-
-        warn_set_moved(GEO_MODULE, "affine", CHOREO_MODULE, obj, Set)
-        return twin(obj, matrix, sel, force=force)
     return apply_matrix(obj, affine_matrix(matrix))
 
 

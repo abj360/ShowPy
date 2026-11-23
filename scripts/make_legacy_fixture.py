@@ -178,17 +178,21 @@ def _edited_show(kind: str) -> "Show":
     return _validated(show, cast=cast, sets=sets)
 
 
+def _path_models() -> ModuleType:
+    """Returns the module that holds the path models: path_models, or models before v0.4."""
+    try:
+        return importlib.import_module("e8s.choreo.path_models")
+    except ImportError:
+        return importlib.import_module("e8s.choreo.models")
+
+
 def _path_edit(show: "Show") -> "Show":
     """Gives the first spot a curved row on the first transition."""
-    try:
-        from e8s.choreo.path_models import PathRow, PathStyle, Waypoint
-    except ImportError:
-        from e8s.choreo.models import PathRow, PathStyle, Waypoint
-
+    paths = _path_models()
     spec = show.transition(PATH_TRANSITION)
     entity = show.cast.spots[0].id
-    waypoint = Waypoint(x=PATH_WAYPOINT_XY[0], y=PATH_WAYPOINT_XY[1])
-    row = PathRow(entity=entity, style=PathStyle.CURVE, waypoints=(waypoint,))
+    waypoint = paths.Waypoint(x=PATH_WAYPOINT_XY[0], y=PATH_WAYPOINT_XY[1])
+    row = paths.PathRow(entity=entity, style=paths.PathStyle.CURVE, waypoints=(waypoint,))
     edited = _validated(spec, rows={**spec.rows, entity: row})
     others = tuple(t for t in show.transitions if t.id != spec.id)
     return _validated(show, transitions=(*others, edited))

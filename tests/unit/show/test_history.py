@@ -15,11 +15,6 @@ Contains:
     test_regression_diff_show_reports_a_set_label_change: reports a changed set label
     test_regression_diff_show_reports_a_placement_note_change: reports a changed placement note
     test_regression_diff_show_reports_a_selection_change: reports a changed named selection
-    test_regression_rename_entities_rewrites_expression_selectors: rewrites spot IDs inside
-        expression selectors, as cast.rewrite does
-    test_regression_rename_entities_keeps_selection_order: stores selections as ordered tuples
-    test_rename_entities_equals_rewrite_spot_ids: gives the same show as the cast rename
-    test_rename_entities_is_deprecated_for_rename_spots: warns naming rename_spots, returns its show
     test_regression_unpin_normalizes_transition_ids_like_pin: accepts `1->2` in unpin as pin does
 """
 
@@ -28,20 +23,15 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from e8s.cast.models import Group
-from e8s.cast.rewrite import rewrite_spot_ids
-from e8s.cast.spots import add_spot, rename_spots
+from e8s.cast.spots import add_spot
 from e8s.choreo.form_models import Form
 from e8s.choreo.models import PlacementPatch
 from e8s.choreo.path_models import (
-    EntityFacing,
-    FacingMode,
-    FacingOverride,
-    FixedFacing,
     PathRow,
     Route,
     TransitionSpec,
 )
-from e8s.core.errors import DeprecatedWarning, E8sError, SchemaError, UnknownRefError
+from e8s.core.errors import E8sError, UnknownRefError
 from e8s.core.ids import FormId, RouteId, SetId, SpotId, make_tid
 from e8s.geo.curves import Segment
 from e8s.show.history import (
@@ -49,7 +39,6 @@ from e8s.show.history import (
     diff_paths,
     diff_sets,
     diff_show,
-    rename_entities,
     revert,
 )
 from e8s.show.manage import add_set
@@ -65,10 +54,6 @@ from tests.helpers import open_session
 pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
-RENAME_ENTITIES_WARNING = (
-    "`e8s.show.history.rename_entities` is replaced by `e8s.cast.spots.rename_spots`;"
-    " the old use is removed in 0.6.0"
-)
 STEP = timedelta(minutes=1)
 
 
@@ -181,130 +166,6 @@ def test_revert_restores_every_file() -> None:
     assert "set.py" not in agent.ls("/sets/1")
 
 
-def test_rename_entities_rewrites_everything() -> None:
-    show = two_set_show()
-    form = Form(
-        id=FormId("f"),
-        set=SetId("2"),
-        recipe=LINE_RECIPE,
-        members=(SpotId("T1"), SpotId("T2")),
-    )
-    row = PathRow(
-        entity=SpotId("T1"),
-        facing_mode=FacingMode.TOWARD_ENTITY,
-        facing_value=EntityFacing(entity=SpotId("T2")),
-    )
-    route = Route(
-        id=RouteId("r"),
-        curve=Segment(a=(0.0, 0.0), b=(10.0, 0.0)),
-        members=(SpotId("T2"),),
-        offsets=(0.0,),
-        travel=1.0,
-    )
-    spec = TransitionSpec(
-        id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): row}, routes={RouteId("r"): route}
-    )
-    override = FacingOverride(
-        entities=(SpotId("T1"),),
-        mode=FacingMode.FIXED,
-        value=FixedFacing(degrees=90.0),
-        start=0,
-        end=4,
-    )
-    cast = show.cast.model_copy(update={"selections": {"lead": frozenset({"T1"})}})
-    show = show.model_copy(
-        update={
-            "forms": {"f": form},
-            "transitions": (spec,),
-            "facing_overrides": (override,),
-            "pins": (Pin(target="entity", id="T1"),),
-            "cast": cast,
-        }
-    )
-    renamed = rename_entities(show, {"T1": "S1", "T2": "S2"})
-    assert renamed.cast.ids()[:2] == ("S1", "S2")
-    assert renamed.cast.selections == {"lead": ("S1",)}
-    assert renamed.sets[0].entity_ids()[:2] == ("S1", "S2")
-    assert renamed.forms[FormId("f")].members == ("S1", "S2")
-    new_spec = renamed.transitions[0]
-    assert list(new_spec.rows) == ["S1"]
-    assert new_spec.rows[SpotId("S1")].facing_value == EntityFacing(entity=SpotId("S2"))
-    assert new_spec.routes[RouteId("r")].members == ("S2",)
-    assert renamed.facing_overrides[0].entities == ("S1",)
-    assert renamed.pins[0].id == "S1"
-
-
-def _full_show() -> Show:
-    show = two_set_show()
-    form = Form(
-        id=FormId("f"),
-        set=SetId("2"),
-        recipe=LINE_RECIPE,
-        members=(SpotId("T1"), SpotId("T2")),
-    )
-    row = PathRow(
-        entity=SpotId("T1"),
-        facing_mode=FacingMode.TOWARD_ENTITY,
-        facing_value=EntityFacing(entity=SpotId("T2")),
-    )
-    route = Route(
-        id=RouteId("r"),
-        curve=Segment(a=(0.0, 0.0), b=(10.0, 0.0)),
-        members=(SpotId("T2"),),
-        offsets=(0.0,),
-        travel=1.0,
-    )
-    spec = TransitionSpec(
-        id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): row}, routes={RouteId("r"): route}
-    )
-    override = FacingOverride(
-        entities="T1 + T2", mode=FacingMode.FIXED, value=FixedFacing(degrees=90.0), start=0, end=4
-    )
-    cast = show.cast.model_copy(update={"selections": {"lead": ("T3", "T1")}})
-    return show.model_copy(
-        update={
-            "forms": {"f": form},
-            "transitions": (spec,),
-            "facing_overrides": (override,),
-            "pins": (Pin(target="entity", id="T1"),),
-            "cast": cast,
-        }
-    )
-
-
-def test_regression_rename_entities_keeps_selection_order() -> None:
-    """Stores renamed selections as ordered tuples, the order lane D keeps."""
-    renamed = rename_entities(_full_show(), {"T1": "S1"})
-    assert renamed.cast.selections == {"lead": ("T3", "S1")}
-
-
-def test_rename_entities_equals_rewrite_spot_ids() -> None:
-    show = _full_show()
-    mapping = {"T1": "S1", "T2": "T4", "T4": "T2"}
-    expected = rewrite_spot_ids(show, lambda spot_id: mapping.get(spot_id, spot_id))
-    assert rename_entities(show, mapping) == expected
-
-
-def test_rename_entities_is_deprecated_for_rename_spots() -> None:
-    show, mapping = _full_show(), {"T1": "S1", "T2": "T4", "T4": "T2"}
-    with pytest.warns(DeprecatedWarning) as caught:
-        renamed = rename_entities(show, mapping)
-    assert [str(w.message) for w in caught] == [RENAME_ENTITIES_WARNING]
-    assert caught[0].filename == __file__
-    assert renamed == rename_spots(show, mapping)[0]
-
-
-def test_rename_entities_swaps_and_collisions() -> None:
-    swapped = rename_entities(two_set_show(), {"T1": "T2", "T2": "T1"})
-    assert swapped.sets[0].get("T2").x == 0.0
-    with pytest.raises(SchemaError):
-        rename_entities(two_set_show(), {"T1": "T2"})
-    with pytest.raises(SchemaError):
-        rename_entities(two_set_show(), {"T1": "X", "T2": "X"})
-    with pytest.raises(UnknownRefError):
-        rename_entities(two_set_show(), {"Z": "Y"})
-
-
 def test_changelog_lines_since_revision() -> None:
     _, agent, _ = open_session(two_set_show(), AT)
     first = agent.revision
@@ -407,16 +268,6 @@ def test_regression_diff_show_reports_a_selection_change() -> None:
         update={"cast": base.cast.model_copy(update={"selections": selections})}
     )
     assert diff_show(base, edited)
-
-
-def test_regression_rename_entities_rewrites_expression_selectors() -> None:
-    """Rewrites spot IDs inside expression selectors, as cast.rewrite does (audit 9.7 history)."""
-    base = two_set_show()
-    override = FacingOverride(entities="T1 + T2", mode=FacingMode.TO_TARGET, start=1.0, end=2.0)
-    renamed = rename_entities(
-        base.model_copy(update={"facing_overrides": (override,)}), {"T1": "S1"}
-    )
-    assert renamed.facing_overrides[0].entities == ("S1", "T2")
 
 
 def test_regression_unpin_normalizes_transition_ids_like_pin() -> None:

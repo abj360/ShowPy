@@ -6,11 +6,9 @@ Edit PUBLIC_API, then run `uv run python scripts/gen_public_api.py` to regenerat
 
 Contains:
     PUBLIC_API: lists (public name, defining module, attribute) sorted by public name
-    DEPRECATED: lists (old name, dotted path of its replacement, since, remove) for each alias
     LEAVING: lists (name, kind, replacement or replacements, since, remove) per name that leaves;
         kind is function (warns on each call), type (warns on access), export (a function that
         warns on access; its code sits in a private module) or field (warns on an outside read)
-    DEPRECATED_KEYWORDS: lists (function, old keyword, new keyword, since, remove) per rename
 """
 
 PUBLIC_API: tuple[tuple[str, str, str], ...] = (
@@ -459,7 +457,6 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("remove_set", "e8s.show.manage", "remove_set"),
     ("remove_tempo", "e8s.time.timeline", "remove_tempo"),
     ("remove_waypoint", "e8s.choreo.paths", "remove_waypoint"),
-    ("rename_entities", "e8s.show.history", "rename_entities"),
     ("rename_spots", "e8s.cast.spots", "rename_spots"),
     ("renumber", "e8s.show.manage", "renumber"),
     ("reorder", "e8s.choreo.form_ops", "reorder"),
@@ -571,10 +568,6 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("zigzag", "e8s.choreo.motion", "zigzag"),
 )
 
-DEPRECATED: tuple[tuple[str, str, str, str], ...] = (
-    ("ValidationError", "e8s.core.errors.ShowValidationError", "0.4.0", "0.6.0"),
-)
-
 LEAVING: tuple[tuple[str, str, str | tuple[str, ...] | None, str, str], ...] = (
     ("sheet_templates", "function", "sheets", "0.4.0", "0.7.0"),
     ("get_sheet", "function", "sheet", "0.4.0", "0.7.0"),
@@ -638,9 +631,4 @@ LEAVING: tuple[tuple[str, str, str | tuple[str, ...] | None, str, str], ...] = (
         "0.4.0",
         "0.7.0",
     ),
-)
-
-DEPRECATED_KEYWORDS: tuple[tuple[str, str, str, str, str], ...] = (
-    ("approx_equal", "tol", "abs_tol", "0.4.0", "0.6.0"),
-    ("round_to", "precision", "step", "0.4.0", "0.6.0"),
 )

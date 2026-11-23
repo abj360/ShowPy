@@ -9,7 +9,7 @@ release.
 
 Contains:
     describe_public_object(): renders one public name as a Python-version-stable JSON value
-    build_snapshot(): builds the snapshot of every public name, deprecated alias and leaving name
+    build_snapshot(): builds the snapshot of every public name and leaving name
     inline_short_arrays(): puts each JSON array on one line when it fits, as Prettier does
     check_snapshot(): compares the API with the stored snapshot and refreshes it when allowed
     test_public_api_matches_snapshot: fails on any signature drift from the stored snapshot
@@ -40,9 +40,9 @@ import pytest
 from pydantic import BaseModel
 
 import e8s
-from e8s._api_table import DEPRECATED, LEAVING, PUBLIC_API
+from e8s._api_table import LEAVING, PUBLIC_API
 from e8s.core.deprecation import DeprecatedWarning
-from scripts.check_api_changes import DEPRECATED_KEY, LEAVING_KEY, JsonValue, diff_snapshots
+from scripts.check_api_changes import LEAVING_KEY, JsonValue, diff_snapshots
 
 ROOT = Path(__file__).resolve().parents[2]
 SNAPSHOT_PATH = ROOT / "tests" / "fixtures" / "api_snapshot.json"
@@ -180,14 +180,10 @@ def _leaving_entry(
 
 
 def build_snapshot() -> dict[str, JsonValue]:
-    """Builds the snapshot of every public name, plus its deprecated aliases and leaving names."""
+    """Builds the snapshot of every public name, plus the names that leave the library."""
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecatedWarning)
         snapshot = {name: describe_public_object(getattr(e8s, name)) for name, _, _ in PUBLIC_API}
-    snapshot[DEPRECATED_KEY] = {
-        name: {"target": target, "since": since, "remove": remove}
-        for name, target, since, remove in DEPRECATED
-    }
     snapshot[LEAVING_KEY] = {
         name: _leaving_entry(kind, replacement, since, remove)
         for name, kind, replacement, since, remove in LEAVING

@@ -1448,7 +1448,7 @@
   "apply_fix": "(spec: e8s.choreo.path_models.TransitionSpec, fix: e8s.choreo.engine_models.Fix) -> e8s.choreo.path_models.TransitionSpec",
   "apply_match": "(show: e8s.show.models.Show, tid: tuple[str, str], result: e8s.choreo.match_models.MatchResult, *, force: bool = False, font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.show.models.Show",
   "apportion": "(lengths: collections.abc.Sequence[float], n: int, minimums: collections.abc.Sequence[int] | None = None) -> list[int]",
-  "approx_equal": "(a: ArrayLike, b: ArrayLike, *, abs_tol: float | None = None, rel_tol: float = 0.0, tol: float | None = None) -> bool",
+  "approx_equal": "(a: ArrayLike, b: ArrayLike, *, abs_tol: float = 1e-06, rel_tol: float = 0.0) -> bool",
   "arc": "(center: Point, radius: Meters, start_deg: Degrees, sweep_deg: Degrees) -> e8s.geo.curves.ArcCurve",
   "arc_form": "(form_id: str, members: collections.abc.Sequence[str], center: Point, radius: Meters, start_deg: Degrees, sweep_deg: Degrees, spacing: e8s.choreo.form_models.SpacingSpec | None = None, facing: e8s.choreo.form_models.FacingSpec | None = None, *, set_id: str = '', n: int | None = None) -> e8s.choreo.form_models.Form",
   "arc_from_chord": "(a: Point, b: Point, bulge: Meters) -> e8s.geo.curves.ArcCurve",
@@ -1507,13 +1507,6 @@
   "delay": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel, counts: float, *, keep_end: bool = True, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "delete_spots": "(show: 'Show', sel: Selector, *, force: bool = False) -> 'Show'",
   "density_map": "(s: e8s.choreo.models.Set, sheet: e8s.sheet.models.Sheet, cell: Meters = 1.0) -> NDArray[numpy.int64]",
-  "deprecated": {
-    "ValidationError": {
-      "remove": "0.6.0",
-      "since": "0.4.0",
-      "target": "e8s.core.errors.ShowValidationError"
-    }
-  },
   "describe_count": "(tl: e8s.time.models.Timeline, c: Count) -> str",
   "detect_form": "(points: object, tol: Meters = 0.1, form_id: str = 'detected', members: collections.abc.Sequence[str] = ()) -> e8s.choreo.form_models.Form",
   "diff_paths": "(a: e8s.choreo.path_models.TransitionSpec, b: e8s.choreo.path_models.TransitionSpec) -> e8s.show.models.PathDiff",
@@ -1754,7 +1747,6 @@
   "remove_set": "(show: e8s.show.models.Show, set_id: str, *, merge_counts: bool = True, force: bool = False) -> e8s.show.models.Show",
   "remove_tempo": "(tl: e8s.time.models.Timeline, at_count: Count) -> e8s.time.models.Timeline",
   "remove_waypoint": "(spec: e8s.choreo.path_models.TransitionSpec, entity: str, index: int, *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
-  "rename_entities": "(show: e8s.show.models.Show, mapping: collections.abc.Mapping[str, str]) -> e8s.show.models.Show",
   "rename_spots": "(show: 'Show', mapping: collections.abc.Mapping[e8s.core.ids.SpotId, str] | collections.abc.Mapping[str, str], *, force: bool = False) -> 'tuple[Show, RewriteReport]'",
   "renumber": "(show: e8s.show.models.Show, scheme: str = 'sequential') -> tuple[e8s.show.models.Show, dict[e8s.core.ids.SetId, e8s.core.ids.SetId]]",
   "reorder": "(form: e8s.choreo.form_models.Form, order: Order, prev_set: e8s.choreo.models.Set | None = None, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.form_models.Form",
@@ -1766,7 +1758,7 @@
   "rotate": "(obj: T, deg: Degrees, about: About = 'center', sel: SetSelector = 'all', *, force: bool = False) -> T",
   "rotate_path": "(show: e8s.show.models.Show, spec: e8s.choreo.path_models.TransitionSpec, sel: collections.abc.Sequence[str], pivot: Point | Literal['center'], deg: float, *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "rotation_matrix": "(deg: Degrees, about: Point) -> Matrix",
-  "round_to": "(value: float, step: float | None = None, *, precision: float | None = None) -> float",
+  "round_to": "(value: float, step: float = 0.01) -> float",
   "save_paths": "(ws: e8s.show.storage.Workspace, spec: e8s.choreo.path_models.TransitionSpec, at: datetime.datetime) -> str",
   "save_sheet": "(store: e8s.sheet.templates.SheetStore, sheet: e8s.sheet.models.Sheet, scope: SheetScope = 'mine') -> SheetRef",
   "save_show": "(ws: e8s.show.storage.Workspace, show: e8s.show.models.Show, at: datetime.datetime) -> e8s.show.models.Revision",

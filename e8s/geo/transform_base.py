@@ -7,8 +7,7 @@ Shared by `e8s.geo.transforms` and `e8s.geo.snapping`. A `Set` is not handled he
 Contains:
     About: names the anchor a rotation, scale or skew turns about
     PointMap: names a function that maps an (N, 2) array to a new (N, 2) array
-    warn_set_moved(): warns that handling a Set through geo is deprecated
-    is_set_input(): tells whether an argument is neither points nor a curve
+    require_points_or_curve(): refuses an argument that is neither points nor a curve
     anchor_source(): returns what anchors are measured on: the points or the curve
     about_point(): resolves "center", "centroid" or a point to coordinates
     apply_matrix(): maps points or a curve through an affine matrix
@@ -21,7 +20,7 @@ from typing import Literal, cast
 
 import numpy as np
 
-from e8s.core.deprecation import warn_deprecated
+from e8s.core.errors import SchemaError
 from e8s.core.types import Point, Points
 from e8s.core.util import as_points
 from e8s.geo.affine import Matrix, transform_curve, transform_points
@@ -35,49 +34,28 @@ from e8s.geo.curves import (
     Segment,
     SplineCurve,
 )
-from e8s.geo.measure import SET_TYPE, center, centroid, wrong_type_error
+from e8s.geo.measure import center, centroid
 
 type About = Literal["center", "centroid"] | Point
 type PointMap = Callable[[Points], Points]
 
 FALLBACK_TOL = 0.001
-SET_MOVED_SINCE = "0.4.0"
-SET_MOVED_REMOVE = "0.6.0"
 
 
-def warn_set_moved(
-    geo_module: str, name: str, choreo_module: str, obj: object, set_type: type
-) -> None:
-    """Warns, at the caller of the geo function, that handling a `Set` there is deprecated.
+def require_points_or_curve(obj: object) -> None:
+    """Refuses an argument that is neither an (N, 2) points array nor a curve, with SchemaError.
 
-    Call it from the geo function itself, in the branch for an argument that is neither points
-    nor a curve. An argument that is not a `Set` either raises SchemaError and never warns.
+    A `Set` moves through `e8s.choreo.set_transforms` and `e8s.choreo.set_snapping`.
 
-    Args:
-        geo_module: Dotted name of the geo module that holds the function.
-        name: Name of the function, the same in both modules.
-        choreo_module: Dotted name of the choreo module that holds the twin.
-        obj: The argument that is neither points nor a curve.
-        set_type: The `Set` class, imported by the caller because geo cannot import it.
+    >>> require_points_or_curve(np.array([[1.0, 2.0]]))
     """
-    if not isinstance(obj, set_type):
-        raise wrong_type_error(f"{geo_module}.{name}", "obj", obj, SET_TYPE)
-    warn_deprecated(
-        f"{geo_module}.{name}(Set)",
-        f"{choreo_module}.{name}",
-        since=SET_MOVED_SINCE,
-        remove=SET_MOVED_REMOVE,
-        extra_frames=1,
+    if isinstance(obj, np.ndarray | CurveModel):
+        return
+    raise SchemaError(
+        f"`obj` must be points or a curve, got {type(obj).__name__}",
+        hint="pass an (N, 2) array or a curve; move a Set with e8s.choreo.set_transforms",
+        context={"got": type(obj).__name__},
     )
-
-
-def is_set_input(obj: object) -> bool:
-    """Tells whether an argument is neither points nor a curve, so a deprecated `Set` call.
-
-    >>> is_set_input(np.array([[1.0, 2.0]]))
-    False
-    """
-    return not isinstance(obj, np.ndarray | CurveModel)
 
 
 def anchor_source(obj: Points | CurveModel) -> Points | CurveModel:
@@ -86,6 +64,7 @@ def anchor_source(obj: Points | CurveModel) -> Points | CurveModel:
     >>> anchor_source(np.array([[1.0, 2.0]])).tolist()
     [[1.0, 2.0]]
     """
+    require_points_or_curve(obj)
     return as_points(obj) if isinstance(obj, np.ndarray) else obj
 
 
@@ -108,6 +87,7 @@ def apply_matrix[T: (Points, CurveModel)](obj: T, matrix: Matrix) -> T:
     >>> apply_matrix(np.array([[0.0, 0.0]]), translation_matrix(1, 0)).tolist()
     [[1.0, 0.0]]
     """
+    require_points_or_curve(obj)
     if isinstance(obj, np.ndarray):
         return transform_points(as_points(obj), matrix)
     return transform_curve(cast(AnyCurve, obj), matrix)
@@ -119,6 +99,7 @@ def apply_pointwise[T: (Points, CurveModel)](obj: T, fn: PointMap) -> T:
     >>> apply_pointwise(np.array([[1.0, 1.0]]), lambda p: p * 2).tolist()
     [[2.0, 2.0]]
     """
+    require_points_or_curve(obj)
     if isinstance(obj, np.ndarray):
         return fn(as_points(obj))
     return map_curve(obj, fn)

@@ -100,7 +100,7 @@ from e8s.cast.models import Cast, Group, Spot
 from e8s.cast.select import label_prefix, select
 from e8s.core.canonical import jcs
 from e8s.core.error_codes import ErrorCode
-from e8s.core.errors import DeprecatedWarning, E8sError, GeometryError, SchemaError
+from e8s.core.errors import E8sError, GeometryError, SchemaError
 from e8s.core.ids import SpotId
 from e8s.core.util import (
     approx_equal,
@@ -681,17 +681,6 @@ def test_regression_chunk_counts_near_float_max() -> None:
     assert len(chunks) == 3
     assert all(math.isfinite(chunk) for chunk in chunks)
     assert math.fsum(chunks) == 1.7e308
-
-
-def test_approx_equal_old_tol_keyword_warns_and_matches() -> None:
-    with pytest.warns(DeprecatedWarning, match="abs_tol"):
-        old = approx_equal(1.0, 1.05, tol=0.1)
-    assert old is approx_equal(1.0, 1.05, abs_tol=0.1) is True
-
-
-def test_approx_equal_rejects_both_tolerance_keywords() -> None:
-    with pytest.raises(SchemaError):
-        approx_equal(1.0, 1.0, tol=0.1, abs_tol=0.1)
 
 
 @pytest.mark.parametrize(
