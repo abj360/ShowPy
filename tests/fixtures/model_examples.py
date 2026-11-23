@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 
 """
-model_examples.py --- one example instance of every public model, for JSON round-trip tests
+model_examples.py --- example instances of every public model, for JSON round-trip tests
 
 Contains:
     ABSTRACT_MODELS: names the public model bases that are never instantiated themselves
     NOT_JSON_MODELS: names the public models that refuse to_json and from_json by design
-    harvested_examples(): collects one instance per model class from the example shows
-    built_examples(): builds one instance per model class the example shows do not hold
-    model_examples(): maps each public model class to one example instance
+    harvested_examples(): collects every model instance the example and seeded shows hold
+    built_examples(): builds instances of the model classes the example shows do not hold
+    model_examples(): maps each model class to its examples, variants included
 """
 
+import warnings
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from functools import cache
 
 import numpy as np
 
+import e8s
 from e8s.cast.spots import rename_spots
 from e8s.choreo.avoid import min_gaps
 from e8s.choreo.engine import PathEngine
@@ -35,7 +37,7 @@ from e8s.choreo.form_models import (
     SpiralFormParams,
 )
 from e8s.choreo.form_text import text_report
-from e8s.choreo.forms import text_form
+from e8s.choreo.forms import line_form, text_form
 from e8s.choreo.match import match
 from e8s.choreo.match_models import MatchOptions, MatchWeights
 from e8s.choreo.models import PlacementPatch
@@ -61,6 +63,7 @@ from e8s.choreo.recipe_models import (
     SvgRecipe,
 )
 from e8s.choreo.set_snapping import snap
+from e8s.core.deprecation import DeprecatedWarning
 from e8s.core.error_codes import ErrorCode
 from e8s.core.ids import NoteId, SetId, SpotId, make_tid
 from e8s.core.selection import Selection
@@ -109,6 +112,7 @@ from e8s.time.measures import count_to_measure
 from e8s.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting
 from e8s.time.timeline import set_measures
 from tests.fixtures.generators import seeded_show
+from tests.fixtures.model_variants import variants
 
 AT = datetime(2026, 11, 23, 12, 0, tzinfo=UTC)
 LINE_POINTS = np.array([[0.0, 0.0], [1.0, 0.0], [2.0, 0.5], [3.0, 1.5]])
@@ -123,10 +127,10 @@ SEEDED_SETS = 6
 TEXT_SPOTS = 40
 
 
-def _collect(value: object, found: dict[type[FrozenModel], FrozenModel]) -> None:
-    """Adds the first instance of each model class reachable from `value`."""
+def _collect(value: object, found: dict[type[FrozenModel], list[FrozenModel]]) -> None:
+    """Adds every model instance reachable from `value`, grouped by class."""
     if isinstance(value, FrozenModel):
-        found.setdefault(type(value), value)
+        found.setdefault(type(value), []).append(value)
         for name in type(value)._field_names():
             _collect(vars(value).get(name), found)
     elif isinstance(value, Mapping):
@@ -137,13 +141,13 @@ def _collect(value: object, found: dict[type[FrozenModel], FrozenModel]) -> None
             _collect(item, found)
 
 
-def harvested_examples() -> dict[type[FrozenModel], FrozenModel]:
-    """Collects one instance per model class from the example and seeded shows.
+def harvested_examples() -> dict[type[FrozenModel], list[FrozenModel]]:
+    """Collects every model instance the example and seeded shows hold.
 
     Returns:
-        examples: Model class mapped to the first instance found in a show's fields.
+        examples: Model class mapped to its instances, in the order the shows hold them.
     """
-    found: dict[type[FrozenModel], FrozenModel] = {}
+    found: dict[type[FrozenModel], list[FrozenModel]] = {}
     seeded = seeded_show(SEEDED_SEED, SEEDED_SPOTS, SEEDED_SETS)
     for show in (two_set_show(), crossing_show(), seeded):
         _collect(show, found)
@@ -225,6 +229,7 @@ def _params_examples() -> list[FrozenModel]:
         MatchOptions(),
         MatchWeights(),
         match([(0.0, 0.0), (10.0, 0.0)], [(10.0, 1.0), (0.0, 1.0)]),
+        match([(0.0, 0.0)], [line_form("f", [], (0.0, 0.0), (2.0, 0.0), n=2)]),
         PlacementPatch(x=1.0, facing=90.0),
     ]
     return examples
@@ -360,24 +365,42 @@ BUILDERS: tuple[Callable[[], list[FrozenModel]], ...] = (
 )
 
 
-def built_examples() -> dict[type[FrozenModel], FrozenModel]:
-    """Builds one instance per model class the example shows do not hold.
+def built_examples() -> dict[type[FrozenModel], list[FrozenModel]]:
+    """Builds instances of the model classes the example shows do not hold.
 
     Returns:
-        examples: Model class mapped to an instance built through the public API.
+        examples: Model class mapped to the instances built through the public API.
     """
-    found: dict[type[FrozenModel], FrozenModel] = {}
+    found: dict[type[FrozenModel], list[FrozenModel]] = {}
     for build in BUILDERS:
         for model in build():
             _collect(model, found)
     return found
 
 
+def _public_model(name: str) -> type[FrozenModel]:
+    model = getattr(e8s, name)
+    assert isinstance(model, type), name
+    assert issubclass(model, FrozenModel), name
+    return model
+
+
 @cache
-def model_examples() -> dict[type[FrozenModel], FrozenModel]:
-    """Maps each model class to one example, preferring instances the example shows hold.
+def model_examples() -> dict[type[FrozenModel], tuple[FrozenModel, ...]]:
+    """Maps each model class to its examples: harvested, built, then the variants.
+
+    The variants move optional fields off their defaults, so a field that to_json drops or
+    from_json ignores changes the round trip.
 
     Returns:
-        examples: Model class mapped to an instance; built once per test session.
+        examples: Model class mapped to its instances; built once per test session.
     """
-    return built_examples() | harvested_examples()
+    found = harvested_examples()
+    for model, built in built_examples().items():
+        found.setdefault(model, []).extend(built)
+    first = {model: instances[0] for model, instances in found.items()}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecatedWarning)
+        for variant in variants(first, _public_model):
+            _collect(variant, found)
+    return {model: tuple(instances) for model, instances in found.items()}
