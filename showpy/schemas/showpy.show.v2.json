@@ -2725,6 +2725,12 @@
           "title": "Dependencies",
           "type": "object"
         },
+        "extensions": {
+          "$ref": "#/$defs/JsonObject",
+          "propertyNames": {
+            "pattern": "^x-"
+          }
+        },
         "facing_overrides": {
           "default": [],
           "items": {

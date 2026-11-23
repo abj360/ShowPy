@@ -30,18 +30,27 @@ Contains:
 
 import bisect
 import itertools
+import json
+import re
 from collections import Counter
 from collections.abc import Mapping
 from datetime import datetime
 from functools import cached_property
 from typing import Annotated, Final, Literal
 
-from pydantic import Field, ValidationInfo, model_validator
+from pydantic import (
+    Field,
+    SerializerFunctionWrapHandler,
+    ValidationInfo,
+    model_serializer,
+    model_validator,
+)
 
 from showpy.cast.models import Cast
 from showpy.choreo.form_models import Form
 from showpy.choreo.models import Placement, Set
 from showpy.choreo.path_models import FacingOverride, TransitionSpec
+from showpy.core.caps import MAX_EXTENSION_BYTES
 from showpy.core.deprecation import leave_field
 from showpy.core.errors import SchemaError, TimeRangeError, UnknownRefError
 from showpy.core.ids import (
@@ -54,14 +63,18 @@ from showpy.core.ids import (
     TransitionId,
 )
 from showpy.core.ids import format_tid as _format_tid
+from showpy.core.json_types import FrozenJsonValue, JsonValue
 from showpy.core.readonly import ReadOnly, ReadOnlyMap
-from showpy.core.types import Count, FrozenModel, Seconds
+from showpy.core.types import Count, FrozenModel, JsonObject, Seconds
 from showpy.core.util import close_matches
 from showpy.notes.models import Anchor, Note
 from showpy.sheet.models import CoordinateSystem, Sheet, Zone
 from showpy.time.models import MeasureLabel, Timeline
 
 INDEX_TOL = 1e-9
+EXTENSION_KEY = re.compile(r"^x-")
+EXTENSION_PREFIX = "x-"
+EXTENSIONS_FIELD = "extensions"
 
 type PinTarget = Literal["entity", "form", "set", "transition"]
 type EventKind = Literal[
@@ -106,6 +119,38 @@ def _no_forms() -> ReadOnlyMap[FormId, Form]:
     return ReadOnlyMap({})
 
 
+def _no_extensions() -> ReadOnlyMap[str, FrozenJsonValue]:
+    return ReadOnlyMap({})
+
+
+def require_extension_size(size: int) -> None:
+    """Raises SchemaError when extension values would take more than MAX_EXTENSION_BYTES."""
+    if size <= MAX_EXTENSION_BYTES:
+        return
+    raise SchemaError(
+        f"extensions take {size} bytes as JSON, over the cap of {MAX_EXTENSION_BYTES}",
+        hint=f"keep host values under {MAX_EXTENSION_BYTES} bytes; store large data as an"
+        " asset and keep its URI here",
+        context={"bytes": size, "max_bytes": MAX_EXTENSION_BYTES},
+    )
+
+
+def _extension_bytes(extensions: Mapping[str, JsonValue | FrozenJsonValue]) -> int:
+    """Measures extension values as UTF-8 JSON; NaN and infinity raise SchemaError."""
+    try:
+        return len(
+            json.dumps(extensions, default=dict, allow_nan=False, ensure_ascii=False).encode(
+                "utf-8"
+            )
+        )
+    except (ValueError, UnicodeEncodeError) as exc:
+        raise SchemaError(
+            f"extensions are not strict JSON: {exc}",
+            hint="use finite numbers and valid Unicode text in extension values",
+            context={"problem": type(exc).__name__},
+        ) from exc
+
+
 def _no_dependencies() -> ReadOnlyMap[str, str]:
     return ReadOnlyMap({})
 
@@ -132,6 +177,9 @@ class Show(FrozenModel):
         zones: Show-specific zones, on top of the sheet's.
         dependencies: Sheet reference (without version) to pinned version.
         pins: Designer locks with their reasons.
+        extensions: Host-owned JSON values under keys that start with `x-`; the library keeps them
+            through every save, load and export and never reads them. Together they take at most
+            `MAX_EXTENSION_BYTES` bytes as JSON.
         revision: Storage revision this show was loaded at.
     """
 
@@ -150,6 +198,10 @@ class Show(FrozenModel):
     zones: tuple[Zone, ...] = ()
     dependencies: Annotated[Mapping[str, str], ReadOnly()] = Field(default_factory=_no_dependencies)
     pins: tuple[Pin, ...] = ()
+    extensions: JsonObject = Field(
+        default_factory=_no_extensions,
+        json_schema_extra={"propertyNames": {"pattern": EXTENSION_KEY.pattern}},
+    )
     revision: str = ""
 
     @model_validator(mode="after")
@@ -162,6 +214,26 @@ class Show(FrozenModel):
                 context={"forms": wrong},
             )
         return self
+
+    @model_validator(mode="after")
+    def _extensions_are_host_keys_within_cap(self) -> "Show":
+        stray = sorted(key for key in self.extensions if not EXTENSION_KEY.match(key))
+        if stray:
+            raise SchemaError(
+                f"extension keys must start with {EXTENSION_PREFIX!r}: {', '.join(stray)}",
+                hint=f"rename the key to {EXTENSION_PREFIX}<name>",
+                context={"keys": stray},
+            )
+        require_extension_size(_extension_bytes(self.extensions))
+        return self
+
+    # The dump omits an empty map, so stored documents of shows without extensions keep their bytes.
+    @model_serializer(mode="wrap")
+    def _omit_empty_extensions(self, handler: SerializerFunctionWrapHandler) -> object:
+        dumped: dict[str, JsonValue] = handler(self)
+        if not self.extensions:
+            dumped.pop(EXTENSIONS_FIELD, None)
+        return dumped
 
     @model_validator(mode="after")
     def _unique_set_ids(self, info: ValidationInfo) -> "Show":

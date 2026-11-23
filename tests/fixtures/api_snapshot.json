@@ -701,6 +701,9 @@
   "MAX_EASING_STEPS": {
     "constant": "200"
   },
+  "MAX_EXTENSION_BYTES": {
+    "constant": "1048576"
+  },
   "MAX_GRID_CELLS": {
     "constant": "4000000"
   },
@@ -1242,6 +1245,7 @@
       "cast": "showpy.cast.models.Cast",
       "coordinates": "showpy.sheet.models.CoordinateSystem",
       "dependencies": "collections.abc.Mapping[str, str]",
+      "extensions": "JsonObject",
       "facing_overrides": "tuple[showpy.choreo.path_models.FacingOverride, ...]",
       "forms": "collections.abc.Mapping[showpy.core.ids.FormId, showpy.choreo.form_models.Form]",
       "id": "str",
