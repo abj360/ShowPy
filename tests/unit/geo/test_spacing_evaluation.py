@@ -10,9 +10,9 @@ Contains:
 import numpy as np
 import pytest
 
-from showpy.geo import shapes
-from showpy.geo.regions import region, union
-from showpy.geo.spacing import scatter
+from e8s.geo import shapes
+from e8s.geo.regions import region, union
+from e8s.geo.spacing import scatter
 
 DISC_RADIUS_M = 5.0
 DISC_CENTRE_DISTANCE_M = 30.0

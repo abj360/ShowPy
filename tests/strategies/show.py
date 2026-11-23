@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-show.py --- the shows() strategy: whole shows built only through public showpy builders
+show.py --- the shows() strategy: whole shows built only through public e8s builders
 
 Contains:
     with_paths(): gives one transition a follow route, held spots, edited rows and a stagger
@@ -14,16 +14,16 @@ from typing import Literal
 from hypothesis import reject
 from hypothesis import strategies as st
 
-from showpy.choreo.facing import add_facing_override
-from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import PlacementPatch
-from showpy.choreo.path_models import FacingMode, FacingOverride, FixedFacing, TransitionSpec
-from showpy.choreo.paths import hold, ripple, stagger
-from showpy.choreo.routes import follow_and_set_targets, make_route
-from showpy.core.errors import PathError
-from showpy.show.changes import store_paths
-from showpy.show.manage import new_show
-from showpy.show.models import PathsOp, Show
+from e8s.choreo.facing import add_facing_override
+from e8s.choreo.match_ops import with_set
+from e8s.choreo.models import PlacementPatch
+from e8s.choreo.path_models import FacingMode, FacingOverride, FixedFacing, TransitionSpec
+from e8s.choreo.paths import hold, ripple, stagger
+from e8s.choreo.routes import follow_and_set_targets, make_route
+from e8s.core.errors import PathError
+from e8s.show.changes import store_paths
+from e8s.show.manage import new_show
+from e8s.show.models import PathsOp, Show
 from tests.strategies.cast import with_cast
 from tests.strategies.forms import with_form
 from tests.strategies.paths import WAYPOINT_STEPS, edited_row

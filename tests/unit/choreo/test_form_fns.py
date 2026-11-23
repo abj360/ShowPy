@@ -25,7 +25,7 @@ from typing import cast
 import numpy as np
 import pytest
 
-from showpy.choreo.form_fns import (
+from e8s.choreo.form_fns import (
     DEFAULT_FORM_FNS,
     FormFn,
     form_fns,
@@ -34,9 +34,9 @@ from showpy.choreo.form_fns import (
     sine_wave_points,
     spiral_points,
 )
-from showpy.core.errors import SchemaError, UnknownRefError
-from showpy.core.types import Points
-from showpy.core.util import approx_equal
+from e8s.core.errors import SchemaError, UnknownRefError
+from e8s.core.types import Points
+from e8s.core.util import approx_equal
 
 TOL = 1e-6
 

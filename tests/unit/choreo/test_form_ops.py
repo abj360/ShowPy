@@ -20,15 +20,15 @@ Contains:
         interval-spaced line under a uniform scale
     test_regression_transform_form_maps_audience_facings: maps audience facings through the matrix
         like fixed ones
-    test_regression_morph_targets_rejects_members_without_slots: raises a ShowPyError, not
+    test_regression_morph_targets_rejects_members_without_slots: raises an E8sError, not
         IndexError, when the target has fewer slots
-    test_regression_reorder_by_x_rejects_members_without_slots: raises a ShowPyError, not
+    test_regression_reorder_by_x_rejects_members_without_slots: raises an E8sError, not
         ValueError, when members outnumber slots
     test_regression_reorder_by_x_ranks_noise_tied_slots_by_y: ranks slots whose x differs by
         1 ulp by y, as if the x were equal
     test_regression_reorder_by_x_ranks_noise_tied_members_by_y: ranks members whose previous x
         differs by 1 ulp by their previous y
-    test_regression_edit_rejects_non_numeric_radius_with_show_py_error: raises a ShowPyError, not a
+    test_regression_edit_rejects_non_numeric_radius_with_e8s_error: raises an E8sError, not a
         pydantic error, for edit(radius="abc")
     test_edit_text_keeps_members_in_reading_order: regenerates the letters on the same members
     test_edit_text_too_long_for_the_count_names_the_minimum: names the minimum count for a long text
@@ -56,9 +56,9 @@ from typing import Any
 import numpy as np
 import pytest
 
-from showpy.choreo.form_layout import slot_count
-from showpy.choreo.form_models import FacingSpec, Form, SpacingSpec
-from showpy.choreo.form_ops import (
+from e8s.choreo.form_layout import slot_count
+from e8s.choreo.form_models import FacingSpec, Form, SpacingSpec
+from e8s.choreo.form_ops import (
     edit,
     form_templates,
     gate,
@@ -69,8 +69,8 @@ from showpy.choreo.form_ops import (
     split_form,
     transform_form,
 )
-from showpy.choreo.form_text import text_recipe, text_strokes
-from showpy.choreo.forms import (
+from e8s.choreo.form_text import text_recipe, text_strokes
+from e8s.choreo.forms import (
     arc_form,
     block_form,
     circle_form,
@@ -84,22 +84,22 @@ from showpy.choreo.forms import (
     slots,
     text_form,
 )
-from showpy.choreo.models import Placement, Set
-from showpy.choreo.text_count import spacing_count
-from showpy.core.errors import (
+from e8s.choreo.models import Placement, Set
+from e8s.choreo.text_count import spacing_count
+from e8s.core.errors import (
+    E8sError,
     LegibilityWarning,
     LockedError,
     MissingFontError,
     SchemaError,
-    ShowPyError,
     SpacingError,
     UnknownRefError,
 )
-from showpy.core.ids import SetId, SpotId, check_id
-from showpy.core.types import Points
-from showpy.core.util import approx_equal
-from showpy.examples import two_set_show
-from showpy.geo.affine import (
+from e8s.core.ids import SetId, SpotId, check_id
+from e8s.core.types import Points
+from e8s.core.util import approx_equal
+from e8s.examples import two_set_show
+from e8s.geo.affine import (
     Matrix,
     mirror_matrix,
     rotation_matrix,
@@ -108,7 +108,7 @@ from showpy.geo.affine import (
     transform_facing,
     transform_points,
 )
-from showpy.geo.fonts import bundled_fonts, register_font
+from e8s.geo.fonts import bundled_fonts, register_font
 from tests.fixtures.fonts import tiny_bytes
 
 TOL = 1e-6
@@ -386,7 +386,7 @@ def test_regression_edit_n_none_clears_slot_count_on_curve_forms() -> None:
 def test_regression_edit_rejects_more_members_than_slots() -> None:
     """Rejects members beyond the form's slots instead of accepting them (audit 9.6)."""
     form = line_form("l", ["A"], (0, 0), (4, 0), n=2)
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         edit(form, members=("A", "B", "C"))
 
 
@@ -431,19 +431,19 @@ def test_regression_transform_form_maps_audience_facings() -> None:
 
 def test_regression_morph_targets_rejects_members_without_slots() -> None:
     """Refuses a target form with fewer slots than members, so morph never indexes past it."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         line_form("b", ["B", "A"], (0, 5), (1, 5), n=1)
 
 
 def test_regression_reorder_by_x_rejects_members_without_slots() -> None:
     """Refuses a form with more members than slots, so reorder never meets one."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         line_form("l", ["A", "B", "C"], (0, 0), (4, 0), n=2)
 
 
-def test_regression_edit_rejects_non_numeric_radius_with_show_py_error() -> None:
-    """Raises a ShowPyError, not a pydantic error, for edit(radius="abc") (audit 9.6)."""
-    with pytest.raises(ShowPyError):
+def test_regression_edit_rejects_non_numeric_radius_with_e8s_error() -> None:
+    """Raises an E8sError, not a pydantic error, for edit(radius="abc") (audit 9.6)."""
+    with pytest.raises(E8sError):
         edit(circle_form("c", ["A", "B"], (0, 5), 2.0), radius="abc")
 
 
@@ -470,7 +470,7 @@ def test_edit_text_keeps_members_in_reading_order() -> None:
     assert not np.allclose(slots(g), slots(f))
 
 
-@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+@pytest.mark.filterwarnings("ignore::e8s.core.errors.LegibilityWarning")
 def test_edit_text_too_long_for_the_count_names_the_minimum() -> None:
     members = [f"S{i}" for i in range(12)]
     f = text_form("t", members, "HI", fonts=["simplex"], height=4.0, at=(0, 10), n=12)
@@ -555,7 +555,7 @@ def test_edit_text_form_allows_reordering_members() -> None:
     assert edit(f, members=f.members[::-1]).members == f.members[::-1]
 
 
-@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+@pytest.mark.filterwarnings("ignore::e8s.core.errors.LegibilityWarning")
 @pytest.mark.parametrize("fonts", ["hershey-roman", 5])
 def test_edit_text_rejects_fonts_that_are_not_a_list(fonts: Any) -> None:
     with pytest.raises(SchemaError) as caught:
@@ -564,7 +564,7 @@ def test_edit_text_rejects_fonts_that_are_not_a_list(fonts: Any) -> None:
     assert caught.value.hint == "pass a list of font names or URIs"
 
 
-@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+@pytest.mark.filterwarnings("ignore::e8s.core.errors.LegibilityWarning")
 def test_edit_text_fonts_accept_a_user_font_uri_through_the_registry() -> None:
     registry, uri = register_font(bundled_fonts(), tiny_bytes())
     members = ["A", "B", "C", "D"]
@@ -580,7 +580,7 @@ def test_edit_text_fonts_accept_a_user_font_uri_through_the_registry() -> None:
         edit(_text(), fonts=[uri])
 
 
-@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+@pytest.mark.filterwarnings("ignore::e8s.core.errors.LegibilityWarning")
 def test_edit_text_with_a_user_font_takes_the_registry() -> None:
     registry, uri = register_font(bundled_fonts(), tiny_bytes())
     members = ["A", "B", "C", "D"]
@@ -592,7 +592,7 @@ def test_edit_text_with_a_user_font_takes_the_registry() -> None:
         edit(f, text="II")
 
 
-@pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
+@pytest.mark.filterwarnings("ignore::e8s.core.errors.LegibilityWarning")
 def test_regression_edit_text_too_few_spots_hint_names_edit_text_count() -> None:
     members = [f"S{i}" for i in range(12)]
     f = text_form("t", members, "HI", fonts=["simplex"], height=4.0, at=(0, 10), n=12)

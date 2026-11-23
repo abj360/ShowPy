@@ -20,10 +20,10 @@ from typing import Literal
 
 from hypothesis import strategies as st
 
-from showpy.choreo.engine_compile import CUSTOM_SAMPLES, DEFAULT_SEGMENT_TOL
-from showpy.choreo.match_ops import clear_rows
-from showpy.choreo.models import Placement
-from showpy.choreo.path_models import (
+from e8s.choreo.engine_compile import CUSTOM_SAMPLES, DEFAULT_SEGMENT_TOL
+from e8s.choreo.match_ops import clear_rows
+from e8s.choreo.models import Placement
+from e8s.choreo.path_models import (
     Easing,
     FacingMode,
     PathRow,
@@ -31,7 +31,7 @@ from showpy.choreo.path_models import (
     TransitionSpec,
     TurnDirection,
 )
-from showpy.choreo.paths import (
+from e8s.choreo.paths import (
     add_waypoint,
     arrive_early,
     curve_path,
@@ -44,9 +44,9 @@ from showpy.choreo.paths import (
     set_style,
     window,
 )
-from showpy.choreo.routes import rotate_path, two_part
-from showpy.core.ids import TransitionId
-from showpy.show.models import Show
+from e8s.choreo.routes import rotate_path, two_part
+from e8s.core.ids import TransitionId
+from e8s.show.models import Show
 from tests.helpers import bisector_rotation
 from tests.strategies.sheet import headings, points_on
 

@@ -54,17 +54,17 @@ from typing import Any, cast
 
 import pytest
 
-from showpy.core.errors import ConflictError, SchemaError, StorageError
-from showpy.core.ids import WINDOWS_DEVICE_NAMES, FormId
-from showpy.core.util import content_hash
-from showpy.show.changes import apply_change
-from showpy.show.documents import script_doc
-from showpy.show.file_repository import FileRepository
-from showpy.show.files import LIMITS_DOC, WAIVERS_DOC
-from showpy.show.integrity import blob_digest
-from showpy.show.models import FormOp, Revision
-from showpy.show.repositories import DocumentRepository, InMemoryRepository, RepositoryBackend
-from showpy.show.storage import Repository, load_show, open_workspace, save_show
+from e8s.core.errors import ConflictError, SchemaError, StorageError
+from e8s.core.ids import WINDOWS_DEVICE_NAMES, FormId
+from e8s.core.util import content_hash
+from e8s.show.changes import apply_change
+from e8s.show.documents import script_doc
+from e8s.show.file_repository import FileRepository
+from e8s.show.files import LIMITS_DOC, WAIVERS_DOC
+from e8s.show.integrity import blob_digest
+from e8s.show.models import FormOp, Revision
+from e8s.show.repositories import DocumentRepository, InMemoryRepository, RepositoryBackend
+from e8s.show.storage import Repository, load_show, open_workspace, save_show
 from tests.fixtures.shows import two_set_show
 from tests.helpers import context_entries, fails_after, replaced_form_show
 

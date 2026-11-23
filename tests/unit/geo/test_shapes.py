@@ -19,7 +19,7 @@ Contains:
     test_text_outline_spells_lowercase_and_punctuation: spells lowercase and punctuation in
         hershey-roman as polylines
     test_text_outline_takes_a_fallback_chain: falls back to the next font for a missing glyph
-    test_regression_regular_polygon_rejects_fractional_sides: raises a ShowPyError for n=3.5 instead
+    test_regression_regular_polygon_rejects_fractional_sides: raises an E8sError for n=3.5 instead
         of leaking TypeError
     test_regression_rect_rejects_nan_width: rejects a NaN width instead of building a polygon of NaN
         points
@@ -30,10 +30,10 @@ import math
 import numpy as np
 import pytest
 
-from showpy.core.errors import GeometryError, GlyphError, ShowPyError, UnknownRefError
-from showpy.core.util import approx_equal
-from showpy.geo.curves import CircleCurve, Polyline
-from showpy.geo.shapes import (
+from e8s.core.errors import E8sError, GeometryError, GlyphError, UnknownRefError
+from e8s.core.util import approx_equal
+from e8s.geo.curves import CircleCurve, Polyline
+from e8s.geo.shapes import (
     arc,
     arc_from_chord,
     arc_through,
@@ -52,7 +52,7 @@ from showpy.geo.shapes import (
     text_outline,
     wedge,
 )
-from showpy.geo.text import SIMPLEX
+from e8s.geo.text import SIMPLEX
 
 OFFSET_M = 1.0
 CIRCLE_RADIUS_M = 2.0
@@ -261,8 +261,8 @@ def test_text_outline_takes_a_fallback_chain() -> None:
 
 
 def test_regression_regular_polygon_rejects_fractional_sides() -> None:
-    """Raises a ShowPyError for n=3.5 instead of leaking TypeError (audit 9.1)."""
-    with pytest.raises(ShowPyError):
+    """Raises an E8sError for n=3.5 instead of leaking TypeError (audit 9.1)."""
+    with pytest.raises(E8sError):
         regular_polygon((0.0, 0.0), 1.0, FRACTIONAL_SIDES)  # type: ignore[arg-type]
 
 

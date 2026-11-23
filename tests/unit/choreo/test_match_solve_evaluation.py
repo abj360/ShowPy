@@ -11,9 +11,9 @@ Contains:
 import numpy as np
 import pytest
 
-from showpy.choreo.match import match
-from showpy.choreo.match_models import MatchOptions
-from showpy.core.util import seeded_rng
+from e8s.choreo.match import match
+from e8s.choreo.match_models import MatchOptions
+from e8s.core.util import seeded_rng
 
 GRID_SIDE = 10
 GRID_PITCH_M = 1.5

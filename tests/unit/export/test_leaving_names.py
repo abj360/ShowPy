@@ -4,8 +4,8 @@
 test_leaving_names.py --- tests that the export names and Spot.claimable warn before they leave
 
 Contains:
-    test_leaving_export_names_warn(): warns with the shared wording on `showpy.<name>` access
-    test_leaving_names_warn_from_their_export_module(): warns from showpy.export.<module> too
+    test_leaving_export_names_warn(): warns with the shared wording on `e8s.<name>` access
+    test_leaving_names_warn_from_their_export_module(): warns from e8s.export.<module> too
     test_from_import_of_a_leaving_name_warns_at_the_import_line(): warns on `from ... import`
     test_an_unknown_name_in_an_export_module_is_an_attribute_error(): refuses unknown names
     test_library_modules_import_without_warning(): imports the private modules silently
@@ -25,13 +25,13 @@ from collections import Counter
 import pytest
 from pydantic import BaseModel
 
-import showpy
-from showpy._api_table import LEAVING, PUBLIC_API
-from showpy.cast.models import RewriteReport, Spot
-from showpy.core.deprecation import DeprecatedWarning, _LeavingField, leave_field
-from showpy.core.ids import SpotId
-from showpy.show.interchange import export_json, import_json
-from showpy.show.models import Show
+import e8s
+from e8s._api_table import LEAVING, PUBLIC_API
+from e8s.cast.models import RewriteReport, Spot
+from e8s.core.deprecation import DeprecatedWarning, _LeavingField, leave_field
+from e8s.core.ids import SpotId
+from e8s.show.interchange import export_json, import_json
+from e8s.show.models import Show
 from tests.fixtures.shows import two_set_show
 
 PUBLIC_MODULES = {name: module for name, module, _attribute in PUBLIC_API}
@@ -54,9 +54,9 @@ PRINT_NAMES = {
 PRINT_REPLACEMENTS = ("coordinate_table", "describe_transition")
 PLAIN_ENDING = "."
 PRINT_ENDING = (
-    "; its replacements `showpy.coordinate_table` and `showpy.describe_transition` arrive in 0.7.0."
+    "; its replacements `e8s.coordinate_table` and `e8s.describe_transition` arrive in 0.7.0."
 )
-TABLE_ENDING = "; its replacement `showpy.frames` arrives in 0.7.0."
+TABLE_ENDING = "; its replacement `e8s.frames` arrives in 0.7.0."
 ENDINGS = {
     **dict.fromkeys(PUBLISHING_NAMES | VIDEO_NAMES, PLAIN_ENDING),
     **dict.fromkeys(PRINT_NAMES, PRINT_ENDING),
@@ -70,13 +70,13 @@ def test_leaving_export_names_warn(row: tuple[str, str, object, str, str]) -> No
     module = importlib.import_module(PUBLIC_MODULES[name])
     for _ in range(2):
         with pytest.warns(DeprecatedWarning) as caught:
-            resolved = getattr(showpy, name)
-        expected = f"`showpy.{name}` is deprecated since {since} and leaves the library in {remove}"
+            resolved = getattr(e8s, name)
+        expected = f"`e8s.{name}` is deprecated since {since} and leaves the library in {remove}"
         assert str(caught[0].message) == expected + ENDINGS[name]
         assert caught[0].filename == __file__
         assert resolved is getattr(module, name)
-    assert name not in vars(showpy)
-    assert name in showpy.__all__
+    assert name not in vars(e8s)
+    assert name in e8s.__all__
 
 
 @pytest.mark.parametrize("row", EXPORT_ROWS, ids=[row[0] for row in EXPORT_ROWS])
@@ -95,21 +95,21 @@ def test_leaving_names_warn_from_their_export_module(
 
 
 def test_from_import_of_a_leaving_name_warns_at_the_import_line() -> None:
-    with pytest.warns(DeprecatedWarning, match="`showpy.export.publish.claim_spot` is") as caught:
-        from showpy.export.publish import claim_spot
+    with pytest.warns(DeprecatedWarning, match="`e8s.export.publish.claim_spot` is") as caught:
+        from e8s.export.publish import claim_spot
     assert caught[0].filename == __file__
-    assert claim_spot.__module__ == "showpy.export._publish"
+    assert claim_spot.__module__ == "e8s.export._publish"
 
 
 def test_an_unknown_name_in_an_export_module_is_an_attribute_error() -> None:
-    module = importlib.import_module("showpy.export.publish")
+    module = importlib.import_module("e8s.export.publish")
     assert not hasattr(module, "nothing")
 
 
 def test_library_modules_import_without_warning() -> None:
     private = ("_publish", "_video", "_data", "_pdf", "_print_sheets", "_models")
-    imports = ", ".join(f"showpy.export.{module}" for module in private)
-    code = f"import {imports}, showpy.examples.publishing"
+    imports = ", ".join(f"e8s.export.{module}" for module in private)
+    code = f"import {imports}, e8s.examples.publishing"
     subprocess.run([sys.executable, "-W", "error", "-c", code], check=True)
 
 
@@ -128,7 +128,7 @@ def test_leaving_export_rows_cover_the_decided_names() -> None:
 
 def test_spot_claimable_warns() -> None:
     spot = Spot(id=SpotId("T1"), group="trumpets")
-    message = "`showpy.Spot.claimable` is deprecated since 0.4.0 and leaves the library in 0.7.0."
+    message = "`e8s.Spot.claimable` is deprecated since 0.4.0 and leaves the library in 0.7.0."
     with pytest.warns(DeprecatedWarning) as caught:
         assert spot.claimable == "performer"
     assert str(caught[0].message) == message
@@ -149,9 +149,9 @@ def test_leave_field_reads_silently_from_inside_the_library() -> None:
         going: str = "x"
 
     leave_field(Toy, "going", since="0.4.0", remove="9.0.0", replacement="newer")
-    with pytest.warns(DeprecatedWarning, match="`showpy.Toy.going` .* `showpy.newer` arrive"):
+    with pytest.warns(DeprecatedWarning, match="`e8s.Toy.going` .* `e8s.newer` arrive"):
         assert Toy().going == "x"
-    inside = {"__name__": "showpy.inside", "Toy": Toy}
+    inside = {"__name__": "e8s.inside", "Toy": Toy}
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         assert eval("Toy().going", inside) == "x"
@@ -169,7 +169,7 @@ def test_every_field_row_matches_its_leave_field_call(
     descriptor = vars(models[model_name])[field]
     assert isinstance(descriptor, _LeavingField)
     assert (descriptor.old, descriptor.since, descriptor.remove, descriptor.replacement) == (
-        f"showpy.{qualified}",
+        f"e8s.{qualified}",
         since,
         remove,
         replacement,

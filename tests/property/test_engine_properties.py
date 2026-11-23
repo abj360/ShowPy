@@ -15,14 +15,14 @@ import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from showpy.choreo.engine import PathEngine
-from showpy.choreo.engine_compile import plan_positions
-from showpy.choreo.path_models import Easing, EasingKind, PathRow, PathStyle, Waypoint
-from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import PathError
-from showpy.core.ids import SpotId
-from showpy.core.util import approx_equal
-from showpy.show.models import Show
+from e8s.choreo.engine import PathEngine
+from e8s.choreo.engine_compile import plan_positions
+from e8s.choreo.path_models import Easing, EasingKind, PathRow, PathStyle, Waypoint
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import PathError
+from e8s.core.ids import SpotId
+from e8s.core.util import approx_equal
+from e8s.show.models import Show
 from tests.fixtures.motion_shows import TID, with_rows
 
 EASINGS: list[EasingKind] = [

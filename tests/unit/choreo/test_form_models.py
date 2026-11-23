@@ -29,13 +29,13 @@ from typing import cast
 
 import pytest
 
-from showpy.choreo.form_models import FacingSpec, Form, SpacingSpec
-from showpy.choreo.recipe_models import CustomRecipe
-from showpy.core.deprecation import DeprecatedWarning
-from showpy.core.errors import SchemaError, SpacingError
-from showpy.core.ids import FormId, SetId, SpotId
-from showpy.core.units import normalize_angle
-from showpy.core.util import approx_equal
+from e8s.choreo.form_models import FacingSpec, Form, SpacingSpec
+from e8s.choreo.recipe_models import CustomRecipe
+from e8s.core.deprecation import DeprecatedWarning
+from e8s.core.errors import SchemaError, SpacingError
+from e8s.core.ids import FormId, SetId, SpotId
+from e8s.core.units import normalize_angle
+from e8s.core.util import approx_equal
 from tests.fixtures.recipes import LINE_RECIPE
 
 TURNS_PAST_FULL = 720.0

@@ -4,7 +4,7 @@
 test_models.py --- tests sheet data classes: landmarks, zones, grids, coordinate systems
 
 Contains:
-    test_*(): one behavior of showpy.sheet.models each
+    test_*(): one behavior of e8s.sheet.models each
     test_regression_sheet_rejects_negative_size(): rejects a negative sheet size at construction
     test_regression_sheet_rejects_one_point_outline(): rejects an outline with fewer than three
         points at construction
@@ -36,15 +36,15 @@ Contains:
 
 import pytest
 
-from showpy.core.errors import GeometryError, SchemaError, ShowPyError, TimeRangeError
-from showpy.core.ids import LandmarkId, ZoneId
-from showpy.core.types import Region
-from showpy.examples import two_set_show
-from showpy.sheet.models import CoordinateSystem, GuideLine, Landmark, Sheet, Zone, ZoneKind
-from showpy.sheet.templates import blank_sheet, sheet_templates
-from showpy.show.models import Show
+from e8s.core.errors import E8sError, GeometryError, SchemaError, TimeRangeError
+from e8s.core.ids import LandmarkId, ZoneId
+from e8s.core.types import Region
+from e8s.examples import two_set_show
+from e8s.sheet.models import CoordinateSystem, GuideLine, Landmark, Sheet, Zone, ZoneKind
+from e8s.sheet.templates import blank_sheet, sheet_templates
+from e8s.show.models import Show
 
-pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 SQUARE = Region(exterior=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)))
 
@@ -108,19 +108,19 @@ def test_regression_sheet_rejects_duplicate_landmark_ids() -> None:
 
 def test_regression_region_rejects_two_point_ring() -> None:
     """Rejects a two-point region ring, which has no area (audit 9.4)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         Region(exterior=((0.0, 0.0), (1.0, 1.0)))
 
 
 def test_regression_region_rejects_bow_tie_ring() -> None:
     """Rejects a self-intersecting bow-tie ring (audit 9.4)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         Region(exterior=((0.0, 0.0), (2.0, 2.0), (2.0, 0.0), (0.0, 2.0)))
 
 
 def test_regression_guide_line_rejects_no_points() -> None:
     """Rejects a guide line with no points at construction (audit 9.4)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         GuideLine(id="empty", kind="custom", points=())
 
 

@@ -16,10 +16,10 @@ from hypothesis import HealthCheck, Phase, find, settings
 from hypothesis import strategies as st
 from hypothesis.errors import NoSuchExample
 
-from showpy.choreo.form_models import FacingSpec, FormKind
-from showpy.choreo.models import Placement
-from showpy.choreo.path_models import Easing, FacingMode, PathRow, PathStyle, TransitionSpec
-from showpy.show.models import Show
+from e8s.choreo.form_models import FacingSpec, FormKind
+from e8s.choreo.models import Placement
+from e8s.choreo.path_models import Easing, FacingMode, PathRow, PathStyle, TransitionSpec
+from e8s.show.models import Show
 from tests.strategies.paths import path_rows
 from tests.strategies.show import shows
 

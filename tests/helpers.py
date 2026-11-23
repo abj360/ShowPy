@@ -14,7 +14,7 @@ Contains:
     defect(): marks a test as an open audited defect, a strict xfail keyed on its ID
     capped_address_space(): caps the address space so a runaway allocation fails fast
     fails_after(): fails a test still running after a deadline, never inside coverage or a hook
-    only_showpy_errors(): runs a fuzz target; only a ShowPyError may escape, within 5 s
+    only_e8s_errors(): runs a fuzz target; only an E8sError may escape, within 5 s
     context_entries(): returns the list of JSON objects under one key of an error's context
     HOSTILE_JSON: names JSON bytes that make json.loads raise RecursionError or ValueError
     EXPECTED_FAILURES: exception names a hash-seed subprocess may end with
@@ -41,19 +41,19 @@ from typing import ParamSpec, TypeVar, cast
 
 import pytest
 
-from showpy.choreo.form_place import place
-from showpy.choreo.forms import line_form
-from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import Placement, PlacementPatch, Set
-from showpy.choreo.path_models import PathRow, PathStyle, TransitionSpec, Waypoint
-from showpy.core.errors import ShowPyError, bounded_repr
-from showpy.core.ids import SetId, SpotId, make_tid
-from showpy.core.json_types import JsonValue
-from showpy.core.types import Point
-from showpy.examples import two_set_show
-from showpy.show.models import Show
-from showpy.show.repositories import InMemoryRepository
-from showpy.show.storage import Workspace, open_workspace, save_show
+from e8s.choreo.form_place import place
+from e8s.choreo.forms import line_form
+from e8s.choreo.match_ops import with_set
+from e8s.choreo.models import Placement, PlacementPatch, Set
+from e8s.choreo.path_models import PathRow, PathStyle, TransitionSpec, Waypoint
+from e8s.core.errors import E8sError, bounded_repr
+from e8s.core.ids import SetId, SpotId, make_tid
+from e8s.core.json_types import JsonValue
+from e8s.core.types import Point
+from e8s.examples import two_set_show
+from e8s.show.models import Show
+from e8s.show.repositories import InMemoryRepository
+from e8s.show.storage import Workspace, open_workspace, save_show
 
 SET_ID = "1"
 FIRST_TRANSITION = ("1", "2")
@@ -78,7 +78,7 @@ NO_ALARM_MODULES = frozenset(
 
 FINALIZER_NAME = "__del__"
 HANG_RETRY_S = 0.05
-EXPECTED_FAILURES = ("ShowValidationError", "SchemaError", "ShowPyError")
+EXPECTED_FAILURES = ("ShowValidationError", "SchemaError", "E8sError")
 HASH_SEEDS = ("1", "2", "3")
 SUBPROCESS_TIMEOUT_S = 20
 STDERR_CHECK_TAIL = 300
@@ -86,10 +86,10 @@ STDERR_KEPT_TAIL = 200
 TWO_HASH_SEEDS = ("1", "2")
 TAGGED_SHOW_SCRIPT = (
     "import hashlib, json\n"
-    "from showpy.cast.models import Cast, Spot\n"
-    "from showpy.cast.spots import define_selection\n"
-    "from showpy.examples import two_set_show\n"
-    "from showpy.show.models import Show\n"
+    "from e8s.cast.models import Cast, Spot\n"
+    "from e8s.cast.spots import define_selection\n"
+    "from e8s.examples import two_set_show\n"
+    "from e8s.show.models import Show\n"
     "tags = ['alpha', 'beta', 'gamma', 'delta', 'epsilon']\n"
     "base = two_set_show()\n"
     "spots = [Spot.model_validate({**s.model_dump(), 'tags': tags}) for s in base.cast.spots]\n"
@@ -373,10 +373,10 @@ def _shortened(sample: object) -> str:
     return bounded_repr(repr(sample) if isinstance(sample, str) else sample)
 
 
-def only_showpy_errors(call: Callable[[], object], sample: object = None) -> None:
-    """Runs `call` under a 5 s hang alarm and fails the test on any non-ShowPyError exception.
+def only_e8s_errors(call: Callable[[], object], sample: object = None) -> None:
+    """Runs `call` under a 5 s hang alarm and fails the test on any non-E8sError exception.
 
-    Meant for fuzz targets: hostile input may be rejected with a ShowPyError, never crash with
+    Meant for fuzz targets: hostile input may be rejected with an E8sError, never crash with
     a builtin error or hang. Skips on Windows, where SIGALRM does not exist.
 
     Args:
@@ -389,7 +389,7 @@ def only_showpy_errors(call: Callable[[], object], sample: object = None) -> Non
     def guarded_call() -> None:
         try:
             call()
-        except ShowPyError:
+        except E8sError:
             return
         except Exception as error:
             pytest.fail(
@@ -401,7 +401,7 @@ def only_showpy_errors(call: Callable[[], object], sample: object = None) -> Non
     _run_under_hang_alarm(FUZZ_BUDGET_S, guarded_call)
 
 
-def context_entries(error: ShowPyError, key: str) -> list[dict[str, JsonValue]]:
+def context_entries(error: E8sError, key: str) -> list[dict[str, JsonValue]]:
     """Returns the JSON objects listed under `key` in an error's context.
 
     Args:

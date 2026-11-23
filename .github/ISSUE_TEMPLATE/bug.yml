@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a defect in ShowPy
+description: Report a defect in e8Show
 labels: [bug]
 body:
   - type: markdown
@@ -22,6 +22,6 @@ body:
     id: versions
     attributes:
       label: Versions
-      description: showpy, Python and OS
+      description: e8s, Python and OS
     validations:
       required: true

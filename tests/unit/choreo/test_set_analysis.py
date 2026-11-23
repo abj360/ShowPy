@@ -12,7 +12,7 @@ Contains:
         under the cap
     test_regression_symmetry_score_matches_spots_one_to_one: scores ten spots on one side against
         one on the other below 0.5, not 0.993
-    test_regression_coverage_rejects_infinite_radius: raises a ShowPyError for radius=inf instead of
+    test_regression_coverage_rejects_infinite_radius: raises an E8sError for radius=inf instead of
         leaking GEOSException
 """
 
@@ -21,9 +21,9 @@ import sys
 
 import pytest
 
-from showpy.choreo.set_analysis import balance, change_amount, coverage, density_map, symmetry_score
-from showpy.core.errors import GeometryError, ShowPyError, UnknownRefError
-from showpy.core.util import approx_equal
+from e8s.choreo.set_analysis import balance, change_amount, coverage, density_map, symmetry_score
+from e8s.core.errors import E8sError, GeometryError, UnknownRefError
+from e8s.core.util import approx_equal
 from tests.fixtures.shows import field_sheet, two_set_show
 from tests.helpers import capped_address_space, fails_after, make_set
 
@@ -122,6 +122,6 @@ def test_regression_symmetry_score_matches_spots_one_to_one() -> None:
 
 
 def test_regression_coverage_rejects_infinite_radius() -> None:
-    """Raises a ShowPyError for radius=inf instead of leaking GEOSException (audit 9.1)."""
-    with pytest.raises(ShowPyError):
+    """Raises an E8sError for radius=inf instead of leaking GEOSException (audit 9.1)."""
+    with pytest.raises(E8sError):
         coverage(make_set(("A", 0, 10)), field_sheet(), radius=math.inf)

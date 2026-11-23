@@ -9,7 +9,7 @@ Contains:
     optional_dependencies(): reads the extras table of pyproject.toml
     test_core_modules_import_no_optional_dependency: imports every module in a fresh interpreter
         and finds no optional dependency loaded
-    test_missing_extra_names_the_install_command: speeds() without pandas names showpy[tables]
+    test_missing_extra_names_the_install_command: speeds() without pandas names e8s[tables]
     test_regression_gated_call_fails_closed_without_its_module: every gated call raises
         MissingExtraError naming its extra when any one of its optional modules is missing
     test_gate_failure_reports_a_call_that_runs_without_its_extra: proves the gate check can fail
@@ -33,17 +33,17 @@ from types import ModuleType
 import pandas as pd
 import pytest
 
+from e8s.choreo.motion_stats import speeds
+from e8s.core.error_codes import ErrorCode
+from e8s.core.extras import MissingExtraError, is_dataframe, require_extra
+from e8s.examples import EXAMPLE_TID, two_set_show
+from e8s.export._print_sheets import chart
 from scripts.check_core_install import GATED_CALLS, OPTIONAL_MODULES, GatedCall, gate_failure
-from showpy.choreo.motion_stats import speeds
-from showpy.core.error_codes import ErrorCode
-from showpy.core.extras import MissingExtraError, is_dataframe, require_extra
-from showpy.examples import EXAMPLE_TID, two_set_show
-from showpy.export._print_sheets import chart
 
 ROOT = Path(__file__).resolve().parents[2]
 PYPROJECT = ROOT / "pyproject.toml"
 ALL_EXTRA = "all"
-# Fewer modules than this means the walk stopped early, not that showpy is small.
+# Fewer modules than this means the walk stopped early, not that e8s is small.
 MIN_MODULES = 100
 OPTIONAL_PACKAGES = ("pandas", "pillow", "segno", "imageio-ffmpeg")
 IMPORT_EVERY_MODULE = """
@@ -53,7 +53,7 @@ print(len(names), ",".join(loaded_optional_modules()))
 """
 DATAFRAME_CHECK = """
 import sys
-from showpy.core.extras import is_dataframe
+from e8s.core.extras import is_dataframe
 print(is_dataframe([("x", 1.0)]), "pandas" in sys.modules)
 """
 GATE_CASES = [
@@ -99,7 +99,7 @@ def test_missing_extra_names_the_install_command(monkeypatch: pytest.MonkeyPatch
     with pytest.raises(MissingExtraError) as caught:
         speeds(two_set_show(), EXAMPLE_TID)
     assert caught.value.code == ErrorCode.MISSING_EXTRA
-    assert "showpy[tables]" in caught.value.hint
+    assert "e8s[tables]" in caught.value.hint
     assert "speeds" in caught.value.message
 
 
@@ -126,9 +126,7 @@ def test_require_extra_chains_the_import_error(monkeypatch: pytest.MonkeyPatch) 
         require_extra("segno", extra="qr", needed_by="qr_code")
     assert isinstance(caught.value.__cause__, ImportError)
     assert caught.value.context["module"] == "segno"
-    assert caught.value.hint == (
-        'install the extra: pip install "showpy[qr]" or uv add "showpy[qr]"'
-    )
+    assert caught.value.hint == ('install the extra: pip install "e8s[qr]" or uv add "e8s[qr]"')
 
 
 def test_is_dataframe_recognizes_a_frame() -> None:

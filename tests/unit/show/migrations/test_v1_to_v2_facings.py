@@ -17,10 +17,10 @@ import copy
 
 import pytest
 
-from showpy.core.errors import SchemaError
-from showpy.core.json_types import JsonValue
-from showpy.show.migrate import FIRST_VERSION, ReportBuilder
-from showpy.show.migrations.v1_to_v2_facings import migrate_facings
+from e8s.core.errors import SchemaError
+from e8s.core.json_types import JsonValue
+from e8s.show.migrate import FIRST_VERSION, ReportBuilder
+from e8s.show.migrations.v1_to_v2_facings import migrate_facings
 
 SET_DOC = "/sets/2/set.json"
 FORMS_DOC = "/sets/2/forms.json"

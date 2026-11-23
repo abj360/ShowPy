@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 
 """
-test_errors.py --- tests the ShowPyError family: fields, codes, hierarchy and rendering
+test_errors.py --- tests the E8sError family: fields, codes, hierarchy and rendering
 
 Contains:
     test_font_errors_carry_their_codes: gives the font errors their codes and parents
-    test_*(): one behavior of showpy.core.errors each
-    test_regression_every_error_survives_pickling: round-trips every ShowPyError subclass through
+    test_*(): one behavior of e8s.core.errors each
+    test_regression_every_error_survives_pickling: round-trips every E8sError subclass through
         pickle
-    test_regression_every_error_survives_deepcopy: deep-copies every ShowPyError subclass
+    test_regression_every_error_survives_deepcopy: deep-copies every E8sError subclass
     test_regression_converted_schema_error_survives_pickling: round-trips a schema_error_from error
     test_regression_model_construction_raises_schema_error: rejects a bad Placement with SchemaError
     test_regression_schema_error_truncates_echoed_input: caps each echoed input at 80 characters
@@ -56,11 +56,11 @@ import numpy as np
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-import showpy.core.error_context as context_module
-from showpy.cast.models import Spot
-from showpy.choreo.models import Placement
-from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import (
+import e8s.core.error_context as context_module
+from e8s.cast.models import Spot
+from e8s.choreo.models import Placement
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import (
     CUT_MARK,
     ECHO_HEAD_CHARS,
     MAX_CONTEXT_ITEMS,
@@ -68,6 +68,7 @@ from showpy.core.errors import (
     MAX_RANKED_SET_ITEMS,
     ConflictError,
     ContinuityError,
+    E8sError,
     FontError,
     GeometryError,
     GlyphError,
@@ -76,7 +77,6 @@ from showpy.core.errors import (
     MissingFontError,
     PathError,
     SchemaError,
-    ShowPyError,
     StorageError,
     UnknownRefError,
     ZeroLengthError,
@@ -84,8 +84,8 @@ from showpy.core.errors import (
     field_errors,
     schema_error_from,
 )
-from showpy.core.json_types import JsonValue
-from showpy.core.types import Box2
+from e8s.core.json_types import JsonValue
+from e8s.core.types import Box2
 from tests.helpers import outputs_under_hash_seeds
 
 HUGE_INT = 10**5000
@@ -104,7 +104,7 @@ CAPPED_BOUND_CALLS = MAX_CONTEXT_ITEMS + 1
 SET_ORDER_SEEDS = ("0", "1", "2")
 SET_ORDER_SCRIPT = (
     "import json\n"
-    "from showpy.core.errors import SchemaError\n"
+    "from e8s.core.errors import SchemaError\n"
     "groups = {frozenset({f's{n}', f't{n}'}) for n in range(40)}\n"
     "mixed = {float('nan'), 3.0, 1.0, *(f'x{n}' for n in range(30))}\n"
     "error = SchemaError('x', hint='y', context={'groups': groups, 'mixed': mixed})\n"
@@ -126,11 +126,11 @@ def test_error_string_includes_code_and_hint() -> None:
 
 
 def test_custom_code_overrides_default() -> None:
-    assert ShowPyError("x", hint="y", code=ErrorCode.CORRUPT).code == ErrorCode.CORRUPT
+    assert E8sError("x", hint="y", code=ErrorCode.CORRUPT).code == ErrorCode.CORRUPT
 
 
 def test_context_defaults_to_empty_dict() -> None:
-    assert ShowPyError("x", hint="y").context == {}
+    assert E8sError("x", hint="y").context == {}
 
 
 @pytest.mark.parametrize(
@@ -139,16 +139,16 @@ def test_context_defaults_to_empty_dict() -> None:
         (ZeroLengthError, GeometryError),
         (ContinuityError, PathError),
         (ConflictError, StorageError),
-        (PathError, ShowPyError),
+        (PathError, E8sError),
     ],
 )
-def test_hierarchy(child: type[ShowPyError], parent: type[ShowPyError]) -> None:
+def test_hierarchy(child: type[E8sError], parent: type[E8sError]) -> None:
     assert issubclass(child, parent)
 
 
-def _every_error_class() -> list[type[ShowPyError]]:
-    found: list[type[ShowPyError]] = []
-    pending = [ShowPyError]
+def _every_error_class() -> list[type[E8sError]]:
+    found: list[type[E8sError]] = []
+    pending = [E8sError]
     while pending:
         current = pending.pop()
         found.append(current)
@@ -156,12 +156,12 @@ def _every_error_class() -> list[type[ShowPyError]]:
     return found
 
 
-def _sample(error_class: type[ShowPyError]) -> ShowPyError:
+def _sample(error_class: type[E8sError]) -> E8sError:
     return error_class("boom", hint="fix it", context={"key": 1}, code=ErrorCode.CORRUPT)
 
 
 def test_regression_every_error_survives_pickling() -> None:
-    """Round-trips every ShowPyError subclass through pickle (audit 9.3)."""
+    """Round-trips every E8sError subclass through pickle (audit 9.3)."""
     for error_class in _every_error_class():
         clone = pickle.loads(pickle.dumps(_sample(error_class)))
         assert type(clone) is error_class
@@ -170,7 +170,7 @@ def test_regression_every_error_survives_pickling() -> None:
 
 
 def test_regression_every_error_survives_deepcopy() -> None:
-    """Deep-copies every ShowPyError subclass (audit 9.3)."""
+    """Deep-copies every E8sError subclass (audit 9.3)."""
     for error_class in _every_error_class():
         clone = copy.deepcopy(_sample(error_class))
         assert (clone.code, clone.message, clone.hint) == (ErrorCode.CORRUPT, "boom", "fix it")

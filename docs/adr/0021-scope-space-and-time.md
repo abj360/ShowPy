@@ -9,13 +9,13 @@
 The library grew outward from its core. Besides positions, motion, the count timeline and the
 show model, it renders sheets and video frames, prints coordinate sheets and PDFs, formats text
 and CSV tables, publishes shows with performer claims and join links, and keeps designer notes.
-Measured on `main` at `8b92d66` from `showpy/_api_table.py` (577 public names):
+Measured on `main` at `8b92d66` from `e8s/_api_table.py` (577 public names):
 
 | Package or part          | Public names | What it does                                                           |
 | ------------------------ | ------------ | ---------------------------------------------------------------------- |
-| `showpy.export`          | 45           | interchange, publishing, print and PDF, tables, video                  |
-| `showpy.sheet`           | 44           | templates, landmarks, zones, coordinate wording, rendering, fitting    |
-| `showpy.notes`           | 8            | designer notes and their anchors                                       |
+| `e8s.export`             | 45           | interchange, publishing, print and PDF, tables, video                  |
+| `e8s.sheet`              | 44           | templates, landmarks, zones, coordinate wording, rendering, fitting    |
+| `e8s.notes`              | 8            | designer notes and their anchors                                       |
 | pandas results elsewhere | 5            | `Set.table`, `paths_table`, `speeds`, `energy_curve`, `phrase_profile` |
 
 Presentation and collaboration features cost the library in three ways. They pull in the four
@@ -31,12 +31,12 @@ want the same print layout or the same publishing flow.
    serve them. Apps render, print, publish and keep notes. Names outside that scope leave the
    library on the timeline below; nothing leaves without warning first.
 2. **Timeline.** Every name below warns with `DeprecatedWarning` from the release in "Warns from"
-   and is gone in the release in "Gone in". Counts are taken from `showpy/_api_table.py` and the
+   and is gone in the release in "Gone in". Counts are taken from `e8s/_api_table.py` and the
    code at `8b92d66`, except where the row says it is an estimate.
 
    | Names                                                                                                                         | Count    | Warns from | Gone in  | Use instead                                                                                                |
    | ----------------------------------------------------------------------------------------------------------------------------- | -------- | ---------- | -------- | ---------------------------------------------------------------------------------------------------------- |
-   | Interchange at its old path: `export_json`, `import_json`, `import_fonts`, `import_positions`                                 | 4        | `v0.4.0`   | `v0.6.0` | The same top-level names, now defined in `showpy/show/`                                                    |
+   | Interchange at its old path: `export_json`, `import_json`, `import_fonts`, `import_positions`                                 | 4        | `v0.4.0`   | `v0.6.0` | The same top-level names, now defined in `e8s/show/`                                                       |
    | Publishing: 15 functions and `Claim`, `Performer`, `PerformerView`, `Publication`                                             | 19       | `v0.4.0`   | `v0.6.0` | Nothing: leaves the library                                                                                |
    | Print and PDF: `chart`, `coordinate_sheet`, `coordinate_sheets`, `cue_sheet`, `to_pdf`, `escape_text` and four models         | 10       | `v0.4.0`   | `v0.6.0` | Position and transition data the app lays out (`coordinate_table`, `describe_transition`, added by v0.6.0) |
    | Tables and the format registry: eight names and `TextTable`                                                                   | 9        | `v0.4.0`   | `v0.6.0` | Arrays from `frames` (added by v0.6.0)                                                                     |
@@ -47,10 +47,10 @@ want the same print layout or the same publishing flow.
    | `proscenium_stage`; `SheetCanvas`, `draw_sheet`, `render_sheet`                                                               | 4        | `v0.4.0`   | `v0.6.0` | `floor` (added by v0.6.0); nothing for rendering                                                           |
    | Other sheet names that change shape (`sheet_templates`, `get_sheet`, `customize`, `GuideLine`, `on_surface`, ...)             | up to 16 | `v0.4.0`   | `v0.6.0` | `sheets`, `sheet`, `field`, `floor`, `Marking`, `on_sheet`; ADR 0022 lists each                            |
    | `Show.coordinates`, `Show.zones`, `Spot.claimable`                                                                            | 3        | `v0.4.0`   | `v0.6.0` | Dropped by the v3 format step (ADR 0023), listed in its report                                             |
-   | Notes: `Note`, `add_note`, `edit_note`, `remove_note`, `notes_for`, `notes_near`, `accept_draft`                              | 7        | `v0.4.0`   | `1.0.0`  | The `notes.json` document, handled by the app; `Anchor` moves to `showpy/show/`                            |
+   | Notes: `Note`, `add_note`, `edit_note`, `remove_note`, `notes_for`, `notes_near`, `accept_draft`                              | 7        | `v0.4.0`   | `1.0.0`  | The `notes.json` document, handled by the app; `Anchor` moves to `e8s/show/`                               |
 
    How each count was taken:
-   - The five `showpy.export` rows add up to its 45 public names (`showpy.export.data` 11,
+   - The five `e8s.export` rows add up to its 45 public names (`e8s.export.data` 11,
      `models` 9, `pdf` 2, `positions` 1, `print_sheets` 4, `publish` 15, `video` 3). The four
      print models are `Chart`, `ChartRow`, `CoordinateSheet` and `SheetRow`; the eight table
      names are `FormatRegistry`, `as_table`, `export_frames_csv`, `formats`,
@@ -58,18 +58,18 @@ want the same print layout or the same publishing flow.
    - The 11 landmark and zone functions are `landmark`, `landmark_anchor`, `landmark_keys`,
      `nearest_landmarks`, `zones_at`, `line_landmark`, `point_landmark`, `add_landmark`,
      `remove_landmark`, `add_zone` and `remove_zone`.
-   - The sheet rows: 6 + 14 + 4 = 24 names leave outright. Of the other 20 public `showpy.sheet`
+   - The sheet rows: 6 + 14 + 4 = 24 names leave outright. Of the other 20 public `e8s.sheet`
      names, up to 16 change shape; that row is an estimate until ADR 0022 lists each name.
    - The pandas row counts the public functions and methods annotated to return a pandas
-     `DataFrame` or `Series` outside `showpy.export` (`git grep -E '"pd\.(DataFrame|Series)"'`).
-   - The notes row counts 7 of the 8 public `showpy.notes` names; the eighth, `Anchor`, stays
-     public and moves, because comments use it (`showpy/show/models.py:364`).
+     `DataFrame` or `Series` outside `e8s.export` (`git grep -E '"pd\.(DataFrame|Series)"'`).
+   - The notes row counts 7 of the 8 public `e8s.notes` names; the eighth, `Anchor`, stays
+     public and moves, because comments use it (`e8s/show/models.py:364`).
    - Names marked "added by v0.6.0" do not exist yet; the release that removes the old name adds
      its replacement first.
 
 3. **Notes leave `Show` at v0.4.0.** Today a repository stores notes as one of the show's own
-   documents, `/show/notes.json` (`showpy/show/document_paths.py:42`), decoded into `Show.notes`
-   (`showpy/show/models.py:103`). From format v2 (ADR 0023), `Show` has no `notes` field. The
+   documents, `/show/notes.json` (`e8s/show/document_paths.py:42`), decoded into `Show.notes`
+   (`e8s/show/models.py:103`). From format v2 (ADR 0023), `Show` has no `notes` field. The
    v1-to-v2 migration writes the notes to a `notes.json` document beside the show, with its own
    header:
 
@@ -85,7 +85,7 @@ want the same print layout or the same publishing flow.
 
 4. **Messages.** Every deprecation message says the name "leaves the library" or names its
    replacement, and names the release that removes it. Each name is a row in `DEPRECATED` in
-   `showpy/_api_table.py`, and a test fails when the package version reaches a row's removal
+   `e8s/_api_table.py`, and a test fails when the package version reaches a row's removal
    version (ADR 0009, decision 5).
 5. **Superseded decisions.**
    - ADR 0018 (stored publications hold no join token) is superseded at v0.6.0, when the
@@ -104,7 +104,7 @@ want the same print layout or the same publishing flow.
      Each would add moved-name deprecation rows to code that a later phase partitions again.
    - A written exception to the project's 500-line module rule follows. At `8b92d66`, 11
      library modules are over 500 lines (`wc -l`, not counting the generated
-     `showpy/__init__.py` and the `_api_table.py` list): `export/publish.py` 720, `geo/curves.py`
+     `e8s/__init__.py` and the `_api_table.py` list): `export/publish.py` 720, `geo/curves.py`
      597, `cast/spots.py` 589, `show/repositories.py` 585, `show/manage.py` 573,
      `export/data.py` 572, `choreo/forms.py` 571, `choreo/form_text.py` 569, `cast/select.py`
      546, `show/storage.py` 530 and `geo/spacing.py` 508. They stay over the limit until their
@@ -128,7 +128,7 @@ want the same print layout or the same publishing flow.
   the app before v0.6.0 (notes before 1.0.0). v0.4.0 and v0.5.0 warn on every such call.
 - The v0.4.0 release notes carry the timeline table above as a "leaving the library" section.
 - Interchange (`export_json`, `import_json`, `import_fonts`, `import_positions`) stays, defined
-  in `showpy/show/`; its top-level names do not change.
+  in `e8s/show/`; its top-level names do not change.
 - At v0.6.0 the library drops all five optional extras (`qr`, `video`, `render`, `tables` and
   `all`), and the default ledger line falls by the 63 retired IDs.
 
@@ -146,7 +146,7 @@ want the same print layout or the same publishing flow.
 | Library modules over 500 lines left by the exception    | 11                                                                         |
 | Open ledger IDs retired                                 | 63 of 339 in the default suite                                             |
 
-The 77 are 45 `showpy.export` names (the 4 interchange names, which go only from their old
+The 77 are 45 `e8s.export` names (the 4 interchange names, which go only from their old
 path), 24 sheet names, 5 pandas results and 3 stored fields.
 
 ## What would change our mind
@@ -163,8 +163,8 @@ path), 24 sheet names, 5 pandas results and 3 stored fields.
   written), ADR 0023 (format versions).
 - Phase 2 plan, `docs/superpowers/plans/2026-11-18-phase-2-foundations.md`: tasks A5, B3, C5,
   D4, E2, E3, F2, G6 and S4, and Appendix B (ledger IDs assigned to later phases).
-- Code: `showpy/_api_table.py`, `showpy/export/`, `showpy/sheet/`, `showpy/notes/`,
-  `showpy/show/models.py`, `showpy/show/document_paths.py`, `showpy/cast/models.py`.
+- Code: `e8s/_api_table.py`, `e8s/export/`, `e8s/sheet/`, `e8s/notes/`,
+  `e8s/show/models.py`, `e8s/show/document_paths.py`, `e8s/cast/models.py`.
 
 ## Appendix: retired ledger IDs
 
@@ -181,41 +181,41 @@ The "phase it was assigned to" column is the phase the Phase 2 plan assigned the
 
 #### Export (33)
 
-| ID        | test node                                                                                                   | leaving name or module                                                             | reason                                               | phase it was assigned to |
-| --------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------ |
-| UP-9.5-10 | `tests/unit/export/test_publish.py::test_regression_pause_cannot_reopen_a_closed_publication`               | `showpy.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
-| UP-9.5-11 | `tests/unit/export/test_publish.py::test_regression_republish_from_closed_does_not_go_live`                 | `showpy.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
-| UP-9.5-13 | `tests/unit/export/test_publish.py::test_regression_claim_spot_rejects_a_time_before_publication`           | `showpy.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
-| UP-9.5-15 | `tests/unit/export/test_publish.py::test_regression_reassign_rejects_a_time_before_publication`             | `showpy.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
-| UP-9.5-16 | `tests/unit/export/test_publish.py::test_regression_reassign_rejects_an_unknown_spot`                       | `showpy.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
-| UP-9.5-17 | `tests/unit/export/test_publish.py::test_regression_reassign_rejects_crew_on_a_performer_spot`              | `showpy.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
-| UP-9.5-18 | `tests/unit/export/test_publish.py::test_regression_reassign_rejects_an_inactive_spot`                      | `showpy.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
-| UP-9.5-19 | `tests/unit/export/test_publish.py::test_regression_republish_after_a_spot_rename_keeps_the_claim`          | `showpy.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
-| UP-9.5-20 | `tests/unit/export/test_publish.py::test_regression_notify_changes_reports_a_deleted_set`                   | `showpy.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
-| UP-9.5-21 | `tests/unit/export/test_publish.py::test_regression_notify_changes_reports_a_new_set`                       | `showpy.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
-| UP-9.5-22 | `tests/unit/export/test_publish.py::test_regression_notify_changes_reports_a_coordinate_system_change`      | `showpy.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
-| UP-9.5-23 | `tests/unit/export/test_publish.py::test_regression_performer_view_needs_a_live_publication`                | `showpy.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
-| UP-9.5-24 | `tests/unit/export/test_publish.py::test_regression_performer_view_checks_the_show_matches_the_publication` | `showpy.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
-| UP-9.5-25 | `tests/unit/export/test_publish.py::test_regression_performer_view_after_deletion_gives_a_performer_hint`   | `showpy.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
-| UP-9.5-26 | `tests/unit/export/test_publish.py::test_regression_publication_version_detects_concurrent_claims`          | `showpy.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
-| UP-9.5-31 | `tests/unit/export/test_data.py::test_regression_coordinate_sheet_csv_names_the_entity_and_performer`       | `showpy.export.data` (`to_text`, `coordinate_sheet`, CSV tables)                   | tests table formatting, which leaves the library     | Phase 5                  |
-| UP-9.5-32 | `tests/unit/export/test_data.py::test_regression_to_text_drops_tabs_and_carriage_returns`                   | `showpy.export.data` (`to_text`, `coordinate_sheet`, CSV tables)                   | tests table formatting, which leaves the library     | Phase 5                  |
-| UP-9.5-33 | `tests/unit/export/test_data.py::test_regression_to_text_aligns_wide_cjk_characters`                        | `showpy.export.data` (`to_text`, `coordinate_sheet`, CSV tables)                   | tests table formatting, which leaves the library     | Phase 5                  |
-| UP-9.5-36 | `tests/unit/export/test_pdf.py::test_regression_wide_table_stays_on_the_page`                               | `showpy.export.pdf`                                                                | tests PDF export, which leaves the library           | Phase 5                  |
-| UP-9.5-37 | `tests/unit/export/test_pdf.py::test_regression_long_title_is_clipped_to_the_page`                          | `showpy.export.pdf`                                                                | tests PDF export, which leaves the library           | Phase 5                  |
-| UP-9.5-38 | `tests/unit/export/test_pdf.py::test_regression_non_latin_names_are_not_replaced_by_question_marks`         | `showpy.export.pdf`                                                                | tests PDF export, which leaves the library           | Phase 5                  |
-| UP-9.5-39 | `tests/unit/export/test_print_sheets.py::test_regression_crossing_labels_tell_both_sides_apart`             | `showpy.export.print_sheets`                                                       | tests print sheets, which leave the library          | Phase 5                  |
-| UP-9.5-40 | `tests/unit/export/test_print_sheets.py::test_regression_out_and_back_crossing_is_reported_twice`           | `showpy.export.print_sheets`                                                       | tests print sheets, which leave the library          | Phase 5                  |
-| UP-9.5-45 | `tests/unit/export/test_video.py::test_regression_short_audio_does_not_truncate_the_video`                  | `showpy.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
-| UP-9.5-46 | `tests/unit/export/test_video.py::test_regression_negative_sync_offset_delays_the_audio`                    | `showpy.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
-| UP-9.5-47 | `tests/unit/export/test_video.py::test_regression_sync_offset_past_the_audio_raises`                        | `showpy.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
-| UP-9.5-48 | `tests/unit/export/test_video.py::test_regression_track_gain_is_applied`                                    | `showpy.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
-| UP-9.5-49 | `tests/unit/export/test_video.py::test_regression_frames_cover_the_half_open_range`                         | `showpy.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
-| UP-9.5-50 | `tests/unit/export/test_video.py::test_regression_adjacent_ranges_do_not_duplicate_the_boundary_frame`      | `showpy.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
-| UP-9.5-51 | `tests/unit/export/test_video.py::test_regression_mp4_is_faststart`                                         | `showpy.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
-| UP-9.5-52 | `tests/unit/export/test_video.py::test_regression_mp4_carries_bt709_colour_tags`                            | `showpy.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
-| UP-9.5-54 | `tests/unit/export/test_video.py::test_regression_frames_do_not_rebuild_the_cast_ids_per_spot`              | `showpy.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
-| UP-9.5-57 | `tests/unit/export/test_video.py::test_regression_audio_section_limits_playback`                            | `showpy.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
+| ID        | test node                                                                                                   | leaving name or module                                                          | reason                                               | phase it was assigned to |
+| --------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------ |
+| UP-9.5-10 | `tests/unit/export/test_publish.py::test_regression_pause_cannot_reopen_a_closed_publication`               | `e8s.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
+| UP-9.5-11 | `tests/unit/export/test_publish.py::test_regression_republish_from_closed_does_not_go_live`                 | `e8s.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
+| UP-9.5-13 | `tests/unit/export/test_publish.py::test_regression_claim_spot_rejects_a_time_before_publication`           | `e8s.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
+| UP-9.5-15 | `tests/unit/export/test_publish.py::test_regression_reassign_rejects_a_time_before_publication`             | `e8s.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
+| UP-9.5-16 | `tests/unit/export/test_publish.py::test_regression_reassign_rejects_an_unknown_spot`                       | `e8s.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
+| UP-9.5-17 | `tests/unit/export/test_publish.py::test_regression_reassign_rejects_crew_on_a_performer_spot`              | `e8s.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
+| UP-9.5-18 | `tests/unit/export/test_publish.py::test_regression_reassign_rejects_an_inactive_spot`                      | `e8s.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
+| UP-9.5-19 | `tests/unit/export/test_publish.py::test_regression_republish_after_a_spot_rename_keeps_the_claim`          | `e8s.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
+| UP-9.5-20 | `tests/unit/export/test_publish.py::test_regression_notify_changes_reports_a_deleted_set`                   | `e8s.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
+| UP-9.5-21 | `tests/unit/export/test_publish.py::test_regression_notify_changes_reports_a_new_set`                       | `e8s.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
+| UP-9.5-22 | `tests/unit/export/test_publish.py::test_regression_notify_changes_reports_a_coordinate_system_change`      | `e8s.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
+| UP-9.5-23 | `tests/unit/export/test_publish.py::test_regression_performer_view_needs_a_live_publication`                | `e8s.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
+| UP-9.5-24 | `tests/unit/export/test_publish.py::test_regression_performer_view_checks_the_show_matches_the_publication` | `e8s.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
+| UP-9.5-25 | `tests/unit/export/test_publish.py::test_regression_performer_view_after_deletion_gives_a_performer_hint`   | `e8s.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
+| UP-9.5-26 | `tests/unit/export/test_publish.py::test_regression_publication_version_detects_concurrent_claims`          | `e8s.export.publish` (publish, claims, pause, reassign, performer view, notify) | tests publishing and claims, which leave the library | Phase 3                  |
+| UP-9.5-31 | `tests/unit/export/test_data.py::test_regression_coordinate_sheet_csv_names_the_entity_and_performer`       | `e8s.export.data` (`to_text`, `coordinate_sheet`, CSV tables)                   | tests table formatting, which leaves the library     | Phase 5                  |
+| UP-9.5-32 | `tests/unit/export/test_data.py::test_regression_to_text_drops_tabs_and_carriage_returns`                   | `e8s.export.data` (`to_text`, `coordinate_sheet`, CSV tables)                   | tests table formatting, which leaves the library     | Phase 5                  |
+| UP-9.5-33 | `tests/unit/export/test_data.py::test_regression_to_text_aligns_wide_cjk_characters`                        | `e8s.export.data` (`to_text`, `coordinate_sheet`, CSV tables)                   | tests table formatting, which leaves the library     | Phase 5                  |
+| UP-9.5-36 | `tests/unit/export/test_pdf.py::test_regression_wide_table_stays_on_the_page`                               | `e8s.export.pdf`                                                                | tests PDF export, which leaves the library           | Phase 5                  |
+| UP-9.5-37 | `tests/unit/export/test_pdf.py::test_regression_long_title_is_clipped_to_the_page`                          | `e8s.export.pdf`                                                                | tests PDF export, which leaves the library           | Phase 5                  |
+| UP-9.5-38 | `tests/unit/export/test_pdf.py::test_regression_non_latin_names_are_not_replaced_by_question_marks`         | `e8s.export.pdf`                                                                | tests PDF export, which leaves the library           | Phase 5                  |
+| UP-9.5-39 | `tests/unit/export/test_print_sheets.py::test_regression_crossing_labels_tell_both_sides_apart`             | `e8s.export.print_sheets`                                                       | tests print sheets, which leave the library          | Phase 5                  |
+| UP-9.5-40 | `tests/unit/export/test_print_sheets.py::test_regression_out_and_back_crossing_is_reported_twice`           | `e8s.export.print_sheets`                                                       | tests print sheets, which leave the library          | Phase 5                  |
+| UP-9.5-45 | `tests/unit/export/test_video.py::test_regression_short_audio_does_not_truncate_the_video`                  | `e8s.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
+| UP-9.5-46 | `tests/unit/export/test_video.py::test_regression_negative_sync_offset_delays_the_audio`                    | `e8s.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
+| UP-9.5-47 | `tests/unit/export/test_video.py::test_regression_sync_offset_past_the_audio_raises`                        | `e8s.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
+| UP-9.5-48 | `tests/unit/export/test_video.py::test_regression_track_gain_is_applied`                                    | `e8s.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
+| UP-9.5-49 | `tests/unit/export/test_video.py::test_regression_frames_cover_the_half_open_range`                         | `e8s.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
+| UP-9.5-50 | `tests/unit/export/test_video.py::test_regression_adjacent_ranges_do_not_duplicate_the_boundary_frame`      | `e8s.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
+| UP-9.5-51 | `tests/unit/export/test_video.py::test_regression_mp4_is_faststart`                                         | `e8s.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
+| UP-9.5-52 | `tests/unit/export/test_video.py::test_regression_mp4_carries_bt709_colour_tags`                            | `e8s.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
+| UP-9.5-54 | `tests/unit/export/test_video.py::test_regression_frames_do_not_rebuild_the_cast_ids_per_spot`              | `e8s.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
+| UP-9.5-57 | `tests/unit/export/test_video.py::test_regression_audio_section_limits_playback`                            | `e8s.export.video`                                                              | tests video export, which leaves the library         | Phase 5                  |
 
 #### Sheet (17)
 
@@ -258,8 +258,8 @@ The "phase it was assigned to" column is the phase the Phase 2 plan assigned the
 | UP-9.4-32 | `tests/unit/sheet/test_templates.py::test_regression_customize_rejects_non_numeric_size`           | `customize`                   | F2: tests `customize`, which the new sheet model replaces                  | Phase 2 (dropped)        |
 | UP-9.4-37 | `tests/unit/sheet/test_templates.py::test_regression_sheet_templates_rejects_unknown_surface_type` | `sheet_templates`             | F2: tests `sheet_templates`, which the new sheet model replaces            | Phase 2 (dropped)        |
 | UP-9.4-38 | `tests/unit/sheet/test_render.py::test_regression_pdf_embeds_no_wall_clock_dates`                  | `sheet/render.py` PDF         | F2: tests sheet PDF rendering, which leaves the library                    | Phase 2 (dropped)        |
-| UP-9.5-55 | `tests/unit/export/test_video.py::test_regression_ffmpeg_start_failure_is_wrapped`                 | `showpy.export.video`         | E2: tests ffmpeg start failure in video export, which leaves the library   | Phase 2 (dropped)        |
-| UP-9.5-56 | `tests/unit/export/test_video.py::test_regression_audio_mux_has_a_timeout`                         | `showpy.export.video`         | E2: tests the ffmpeg mux timeout in video export, which leaves the library | Phase 2 (dropped)        |
+| UP-9.5-55 | `tests/unit/export/test_video.py::test_regression_ffmpeg_start_failure_is_wrapped`                 | `e8s.export.video`            | E2: tests ffmpeg start failure in video export, which leaves the library   | Phase 2 (dropped)        |
+| UP-9.5-56 | `tests/unit/export/test_video.py::test_regression_audio_mux_has_a_timeout`                         | `e8s.export.video`            | E2: tests the ffmpeg mux timeout in video export, which leaves the library | Phase 2 (dropped)        |
 
 #### UP-9.4-45 (1)
 
@@ -305,8 +305,8 @@ These IDs sit in folders that lose code, but test behaviour that stays.
 
 | ID        | test node                                                                                                     | surviving name                         | why                                                                  |
 | --------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------- |
-| UP-9.5-41 | `tests/unit/export/test_positions.py::test_regression_import_positions_reads_a_utf8_bom`                      | `import_positions`                     | survives in `showpy/show/`; BOM handling stays                       |
-| UP-9.5-42 | `tests/unit/export/test_positions.py::test_regression_import_positions_reads_semicolon_delimited_csv`         | `import_positions`                     | survives in `showpy/show/`; delimiter handling stays                 |
+| UP-9.5-41 | `tests/unit/export/test_positions.py::test_regression_import_positions_reads_a_utf8_bom`                      | `import_positions`                     | survives in `e8s/show/`; BOM handling stays                          |
+| UP-9.5-42 | `tests/unit/export/test_positions.py::test_regression_import_positions_reads_semicolon_delimited_csv`         | `import_positions`                     | survives in `e8s/show/`; delimiter handling stays                    |
 | UP-9.7-60 | `tests/unit/show/test_manage.py::test_regression_set_counts_rescale_shifts_facing_overrides_and_zone_windows` | `set_counts` rescale                   | facing-override half survives; split the test when zones are removed |
 | UP-9.3-82 | `tests/unit/cast/test_rewrite.py::test_regression_stale_selector_does_not_block_unrelated_delete`             | selector rewrite in `cast/rewrite.py`  | selector-rewrite logic survives                                      |
 | UP-9.3-83 | `tests/unit/cast/test_rewrite.py::test_regression_old_glued_selector_does_not_block_relabel`                  | selector rewrite in `cast/rewrite.py`  | selector-rewrite logic survives                                      |
@@ -347,7 +347,7 @@ Each row was checked against the replacement it names. The rows not listed here 
 
 | Names                                       | Count    | Warns from | Gone in (was)     | Why                                                                                         |
 | ------------------------------------------- | -------- | ---------- | ----------------- | ------------------------------------------------------------------------------------------- |
-| Interchange at its old path                 | 4        | `v0.4.0`   | `v0.6.0` (same)   | The replacement is the same name, defined in `showpy/show/`, which exists at v0.4.0         |
+| Interchange at its old path                 | 4        | `v0.4.0`   | `v0.6.0` (same)   | The replacement is the same name, defined in `e8s/show/`, which exists at v0.4.0            |
 | Publishing                                  | 19       | `v0.4.0`   | `v0.6.0` (same)   | No replacement                                                                              |
 | Print and PDF                               | 10       | `v0.4.0`   | `v0.7.0` (v0.6.0) | Replacement `coordinate_table` and `describe_transition` is not yet in the library          |
 | Tables and the format registry              | 9        | `v0.4.0`   | `v0.7.0` (v0.6.0) | Replacement is arrays from `frames`                                                         |
@@ -427,15 +427,15 @@ default ledger line falls from `Ledger: 189 open` to `Ledger: 185 open`.
 `Note`, `NotesDocument`, `import_notes` and the other notes names leave in 1.0.0. The readers of
 v1 notes therefore do not depend on them:
 
-- The note models are defined in the private module `showpy/show/_notes_document.py`;
-  `showpy.notes.models` only re-exports them under their public names. No library module
-  outside `showpy/notes/` imports `showpy.notes` (a test checks it).
+- The note models are defined in the private module `e8s/show/_notes_document.py`;
+  `e8s.notes.models` only re-exports them under their public names. No library module
+  outside `e8s/notes/` imports `e8s.notes` (a test checks it).
 - The stored-tree migration writes `/notes/notes.json` with the private models, and
   `migrate_documents` returns it as plain JSON bytes.
-- For interchange documents, the private reader `_notes_json` in `showpy/show/interchange.py`
+- For interchange documents, the private reader `_notes_json` in `e8s/show/interchange.py`
   returns the notes document as plain JSON, migrating a v1 show's notes; `import_notes` wraps it.
 
-At 1.0.0 the public names and `showpy/notes/` are removed; the private models and readers stay
+At 1.0.0 the public names and `e8s/notes/` are removed; the private models and readers stay
 until v1 reading ends at 2.0.0. The release that removes `import_notes` gives hosts the v1
 interchange notes as plain JSON through a path that does not leave, built on `_notes_json`; this
 addendum adds no public name for it.

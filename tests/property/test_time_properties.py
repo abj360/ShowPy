@@ -7,9 +7,9 @@ test_time_properties.py --- checks count/seconds round-trips and monotonicity on
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.core.util import approx_equal
-from showpy.time.clock import count_to_seconds, seconds_to_count
-from showpy.time.models import Hold, TempoSection, Timeline, TimelineMode
+from e8s.core.util import approx_equal
+from e8s.time.clock import count_to_seconds, seconds_to_count
+from e8s.time.models import Hold, TempoSection, Timeline, TimelineMode
 
 ROUND_TRIP_TOL = 1e-6
 MAX_COUNT = 512.0

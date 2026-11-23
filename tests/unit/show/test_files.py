@@ -15,11 +15,11 @@ Contains:
     test_any_valid_write_lands: lands an agent workspace write to the limits file
     test_regression_derived_tables_are_read_only: refuses writes to the derived index and
         placement tables
-    test_regression_reading_root_is_a_library_error: raises a ShowPyError, not IndexError, when
+    test_regression_reading_root_is_a_library_error: raises an E8sError, not IndexError, when
         reading the root path
     test_regression_reading_root_names_a_directory: raises StorageError BAD_PATH for the root
     test_regression_invalid_utf8_text_file_is_a_library_error: maps invalid UTF-8 in a text file to
-        a ShowPyError
+        an E8sError
     test_regression_index_csv_neutralizes_formula_cues: quotes every formula-looking cue cell
     test_regression_index_csv_neutralizes_set_ids: quotes a formula-like set ID
     test_regression_placements_csv_neutralizes_formula_notes: quotes every formula-looking note
@@ -35,14 +35,14 @@ from datetime import UTC, datetime
 
 import pytest
 
-from showpy.choreo.models import PlacementPatch
-from showpy.core.canonical import MAX_NESTING
-from showpy.core.errors import LockedError, SchemaError, ShowPyError, StorageError
-from showpy.show.documents import SHOW_DOC
-from showpy.show.files import _index_csv
-from showpy.show.models import Show
-from showpy.show.storage import Workspace
-from showpy.show.structured import decode_comments, require_structured
+from e8s.choreo.models import PlacementPatch
+from e8s.core.canonical import MAX_NESTING
+from e8s.core.errors import E8sError, LockedError, SchemaError, StorageError
+from e8s.show.documents import SHOW_DOC
+from e8s.show.files import _index_csv
+from e8s.show.models import Show
+from e8s.show.storage import Workspace
+from e8s.show.structured import decode_comments, require_structured
 from tests.fixtures.shows import two_set_show
 from tests.helpers import open_session
 
@@ -146,14 +146,14 @@ def test_regression_structured_json_refuses_nan(raw: bytes) -> None:
 def test_regression_commit_refuses_garbage_show_document() -> None:
     """Refuses a commit of bytes that are not a show document (audit 9.7 item 4; P0 #4)."""
     _, designer = _session()
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         designer.commit({SHOW_DOC: b"garbage"}, at=LATER)
 
 
 def test_regression_commit_refuses_unknown_root() -> None:
     """Refuses a commit under a root no reader can open (audit 9.7 item 4; P0 #4)."""
     _, designer = _session()
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         designer.commit({"/mystery/x.txt": b"1"}, at=LATER)
 
 
@@ -174,9 +174,9 @@ def test_regression_derived_tables_are_read_only(path: str) -> None:
 
 
 def test_regression_reading_root_is_a_library_error() -> None:
-    """Raises a ShowPyError, not IndexError, when reading the root path (audit 9.7 item 9)."""
+    """Raises an E8sError, not IndexError, when reading the root path (audit 9.7 item 9)."""
     agent, _ = _session()
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         agent.read("/")
 
 
@@ -189,9 +189,9 @@ def test_regression_reading_root_names_a_directory() -> None:
 
 
 def test_regression_invalid_utf8_text_file_is_a_library_error() -> None:
-    """Maps invalid UTF-8 in a text file to a ShowPyError (audit 9.7 item 9)."""
+    """Maps invalid UTF-8 in a text file to an E8sError (audit 9.7 item 9)."""
     _, designer = _session()
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         _store_then_read(designer, "/renders/a.txt", INVALID_UTF8)
 
 

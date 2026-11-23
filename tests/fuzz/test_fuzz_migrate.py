@@ -5,7 +5,7 @@ test_fuzz_migrate.py --- fuzzes the v1 and v2 decoders over real stored fixture 
 
 Each released fixture's head tree (v1) and its migration (v2) are mutated deep inside one real
 document, damaged at the byte level, or given a hostile header; decoding, migrating and the
-v1 interchange import may only reject with a ShowPyError, never crash or hang.
+v1 interchange import may only reject with an E8sError, never crash or hang.
 
 Contains:
     test_fuzz_decode_nested_mutations(): decodes v1 and v2 trees with one nested value replaced
@@ -21,10 +21,10 @@ from pathlib import Path
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.show.documents import SHOW_DOC, decode_show, is_show_doc, migrate_documents
-from showpy.show.file_repository import FileRepository
-from showpy.show.interchange import SCHEMA_TAG, import_json
-from tests.helpers import only_showpy_errors
+from e8s.show.documents import SHOW_DOC, decode_show, is_show_doc, migrate_documents
+from e8s.show.file_repository import FileRepository
+from e8s.show.interchange import SCHEMA_TAG, import_json
+from tests.helpers import only_e8s_errors
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "repos"
 TAGS = ("v0.1.1", "v0.2.0", "v0.3.0")
@@ -102,12 +102,12 @@ def damaged_bytes(draw: st.DrawFn) -> dict[str, bytes]:
 
 @given(docs=nested_mutations())
 def test_fuzz_decode_nested_mutations(docs: dict[str, bytes]) -> None:
-    only_showpy_errors(lambda: _decode_both(docs), sorted(docs))
+    only_e8s_errors(lambda: _decode_both(docs), sorted(docs))
 
 
 @given(docs=damaged_bytes())
 def test_fuzz_decode_damaged_bytes(docs: dict[str, bytes]) -> None:
-    only_showpy_errors(lambda: _decode_both(docs), docs.get(SHOW_DOC))
+    only_e8s_errors(lambda: _decode_both(docs), docs.get(SHOW_DOC))
 
 
 @given(
@@ -119,7 +119,7 @@ def test_fuzz_decode_hostile_headers(index: int, header: dict[str, object]) -> N
     meta.pop("format", None)
     meta.pop("version", None)
     docs = {**TREES[index], SHOW_DOC: json.dumps({**header, **meta}).encode()}
-    only_showpy_errors(lambda: _decode_both(docs), header)
+    only_e8s_errors(lambda: _decode_both(docs), header)
 
 
 @given(
@@ -130,4 +130,4 @@ def test_fuzz_decode_hostile_headers(index: int, header: dict[str, object]) -> N
 def test_fuzz_import_mutated_v1_documents(index: int, picks: list[int], value: object) -> None:
     show = _replace_nested(V1_DUMPS[index], picks, value)
     document = {"schema": SCHEMA_TAG, "show": show}
-    only_showpy_errors(lambda: import_json(document), picks)
+    only_e8s_errors(lambda: import_json(document), picks)

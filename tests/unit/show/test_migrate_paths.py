@@ -38,7 +38,7 @@ import math
 
 import pytest
 
-from showpy.choreo.path_models import (
+from e8s.choreo.path_models import (
     MAX_EASING_STEPS,
     MAX_MOTION_CYCLES,
     MAX_SPIRAL_TURNS,
@@ -51,13 +51,13 @@ from showpy.choreo.path_models import (
     WeaveParams,
     ZigzagParams,
 )
-from showpy.core.errors import SchemaError
-from showpy.core.ids import RouteId, SpotId
-from showpy.core.json_types import JsonValue
-from showpy.geo.curves import ArcCurve, CurveModel, Polyline, Segment
-from showpy.show.documents import SHEET_DOC, paths_doc
-from showpy.show.migrate import SHOW_DOC, ReportBuilder
-from showpy.show.migrations.v1_to_v2_paths import migrate_paths
+from e8s.core.errors import SchemaError
+from e8s.core.ids import RouteId, SpotId
+from e8s.core.json_types import JsonValue
+from e8s.geo.curves import ArcCurve, CurveModel, Polyline, Segment
+from e8s.show.documents import SHEET_DOC, paths_doc
+from e8s.show.migrate import SHOW_DOC, ReportBuilder
+from e8s.show.migrations.v1_to_v2_paths import migrate_paths
 
 PATHS = paths_doc(("1", "2"))
 TYPED = [

@@ -4,7 +4,7 @@
 test_spots.py --- tests creating, copying, deleting, regrouping and relabeling spots in a show
 
 Contains:
-    test_*(): one behavior of showpy.cast.spots each
+    test_*(): one behavior of e8s.cast.spots each
     test_regression_add_spot_refuses_a_pinned_set: refuses an unpinned placement in a pinned set
     test_regression_add_spots_along_refuses_a_pinned_set: raises LockedError for a curve fill into a
         pinned set
@@ -27,8 +27,8 @@ from inspect import Parameter, signature
 import pytest
 import shapely
 
-from showpy.cast.models import Group, LabelScheme, Shape
-from showpy.cast.spots import (
+from e8s.cast.models import Group, LabelScheme, Shape
+from e8s.cast.spots import (
     GroupPatch,
     add_group,
     add_spot,
@@ -45,29 +45,29 @@ from showpy.cast.spots import (
     set_claimable,
     set_shape,
 )
-from showpy.choreo.models import PlacementPatch
-from showpy.choreo.path_models import EntityFacing, FacingMode, FixedFacing, PathRow
-from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import (
+from e8s.choreo.models import PlacementPatch
+from e8s.choreo.path_models import EntityFacing, FacingMode, FixedFacing, PathRow
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import (
     LockedError,
     SchemaError,
     ShowValidationError,
     SpacingError,
     UnknownRefError,
 )
-from showpy.core.ids import FormId, RouteId, SpotId
-from showpy.core.selection import Selection
-from showpy.core.types import Region
-from showpy.core.util import approx_equal
-from showpy.geo.regions import region
-from showpy.geo.shapes import line
-from showpy.show.manage import add_set
-from showpy.show.models import Show
-from showpy.show.pinning import pin, unpin
+from e8s.core.ids import FormId, RouteId, SpotId
+from e8s.core.selection import Selection
+from e8s.core.types import Region
+from e8s.core.util import approx_equal
+from e8s.geo.regions import region
+from e8s.geo.shapes import line
+from e8s.show.manage import add_set
+from e8s.show.models import Show
+from e8s.show.pinning import pin, unpin
 from tests.fixtures.cast_shows import rich_notes, rich_show
 from tests.fixtures.shows import two_set_show
 
-pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 SQUARE = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)))

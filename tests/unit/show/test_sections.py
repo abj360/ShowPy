@@ -25,17 +25,17 @@ from datetime import UTC, datetime
 
 import pytest
 
-from showpy.choreo.form_models import Form
-from showpy.choreo.models import PlacementPatch
-from showpy.choreo.path_models import FacingMode, FacingOverride, FixedFacing, TransitionSpec
-from showpy.core.errors import SchemaError, TimelineError
-from showpy.core.ids import FormId, SetId, SpotId, make_tid
-from showpy.core.util import approx_equal
-from showpy.show.manage import add_set, index, renumber
-from showpy.show.models import Pin, Show
-from showpy.show.sections import join_sections, split_section
-from showpy.time.clock import count_to_seconds
-from showpy.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting, TempoSection
+from e8s.choreo.form_models import Form
+from e8s.choreo.models import PlacementPatch
+from e8s.choreo.path_models import FacingMode, FacingOverride, FixedFacing, TransitionSpec
+from e8s.core.errors import SchemaError, TimelineError
+from e8s.core.ids import FormId, SetId, SpotId, make_tid
+from e8s.core.util import approx_equal
+from e8s.show.manage import add_set, index, renumber
+from e8s.show.models import Pin, Show
+from e8s.show.sections import join_sections, split_section
+from e8s.time.clock import count_to_seconds
+from e8s.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting, TempoSection
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 from tests.golden.opener import opener_show

@@ -14,7 +14,7 @@ Contains:
 
 import pytest
 
-from showpy.core.caps import (
+from e8s.core.caps import (
     MAX_COORD_M,
     MAX_COUNTS,
     MAX_DEPTH,
@@ -29,7 +29,7 @@ from showpy.core.caps import (
     MIN_TEMPO,
     require_size,
 )
-from showpy.core.errors import SchemaError, SpacingError
+from e8s.core.errors import SchemaError, SpacingError
 
 
 def test_regression_require_size_rejects_over_cap() -> None:

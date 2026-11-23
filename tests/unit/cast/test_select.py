@@ -4,15 +4,15 @@
 test_select.py --- tests the selection grammar and the spatial, ordering and pairing picks
 
 Contains:
-    test_*(): one behavior of showpy.cast.select each
+    test_*(): one behavior of e8s.cast.select each
     test_regression_glued_operators_raise_instead_of_misparsing: rejects glued +, - and & operators
         at their position instead of misparsing them
     test_regression_select_generator_is_not_silently_empty: selects the IDs a generator yields, or
         rejects it, never returns nothing
-    test_regression_select_rejects_a_non_selector_type: rejects an int selector with a ShowPyError,
+    test_regression_select_rejects_a_non_selector_type: rejects an int selector with an E8sError,
         not a TypeError
     test_regression_select_rejects_non_string_ids_in_a_list: rejects a list holding a non-string
-        with a ShowPyError, not an AttributeError
+        with an E8sError, not an AttributeError
     test_regression_select_deep_nesting_raises_schema_error: rejects 500 nested parentheses with a
         SchemaError, not RecursionError
     test_regression_mirror_pairs_finds_every_pair_within_tolerance: pairs spots within tolerance
@@ -34,7 +34,7 @@ Contains:
     test_regression_split_rejects_absurd_part_counts_quickly: rejects an absurd part count instead
         of building 100,000 empty groups
     test_regression_select_rejects_non_string_ids_in_a_set: rejects a set holding a non-string with
-        a ShowPyError, not a TypeError
+        an E8sError, not a TypeError
     test_regression_select_rejects_over_long_expressions: rejects text over MAX_TEXT_CHARS
     test_regression_split_rejects_more_parts_than_spots: rejects k above the selection size
     test_select_accepts_nesting_at_the_depth_cap: parses MAX_DEPTH nested parentheses
@@ -62,8 +62,8 @@ import shapely
 from scipy.sparse import csr_array
 from scipy.sparse.csgraph import min_weight_full_bipartite_matching
 
-from showpy.cast.models import Cast, Group, Shape, Spot
-from showpy.cast.select import (
+from e8s.cast.models import Cast, Group, Shape, Spot
+from e8s.cast.select import (
     Selection,
     alternate,
     in_region,
@@ -78,16 +78,16 @@ from showpy.cast.select import (
     split,
     where,
 )
-from showpy.choreo.form_models import Form
-from showpy.choreo.models import Placement, Set
-from showpy.core.caps import MAX_DEPTH, MAX_TEXT_CHARS
-from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import GeometryError, SchemaError, ShowPyError, UnknownRefError
-from showpy.core.ids import ID_MAX_LENGTH, LEGACY_IDS_KEY, FormId, SetId, SpotId
-from showpy.core.types import Region
-from showpy.core.util import split_id
-from showpy.geo.shapes import line
-from showpy.show.models import Show
+from e8s.choreo.form_models import Form
+from e8s.choreo.models import Placement, Set
+from e8s.core.caps import MAX_DEPTH, MAX_TEXT_CHARS
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import E8sError, GeometryError, SchemaError, UnknownRefError
+from e8s.core.ids import ID_MAX_LENGTH, LEGACY_IDS_KEY, FormId, SetId, SpotId
+from e8s.core.types import Region
+from e8s.core.util import split_id
+from e8s.geo.shapes import line
+from e8s.show.models import Show
 from tests.fixtures.recipes import ARC_RECIPE
 from tests.fixtures.shows import two_set_show
 from tests.helpers import fails_after, outputs_under_hash_seeds
@@ -399,8 +399,8 @@ HUGE_PARTS = 10**5
 SPLIT_PEAK_BUDGET_BYTES = 5_000_000
 MIRROR_TOL_M = 0.1
 SET_SELECT_SCRIPT = (
-    "from showpy.cast.models import Cast, Group, Spot\n"
-    "from showpy.cast.select import select\n"
+    "from e8s.cast.models import Cast, Group, Spot\n"
+    "from e8s.cast.select import select\n"
     "ids = [f'T{i}' for i in range(1, 7)]\n"
     "cast = Cast(groups={'g': Group(key='g', label_prefix='T')},\n"
     "            spots=tuple(Spot(id=i, group='g') for i in ids))\n"
@@ -422,20 +422,20 @@ def test_regression_select_generator_is_not_silently_empty() -> None:
     """Selects the IDs a generator yields, or rejects it, never returns nothing (audit 9.3)."""
     try:
         picked = select(_line_cast(), (i for i in ["T1", "T2"]))  # type: ignore[arg-type]
-    except ShowPyError:
+    except E8sError:
         return
     assert picked.ids == ("T1", "T2")
 
 
 def test_regression_select_rejects_a_non_selector_type() -> None:
-    """Rejects an int selector with a ShowPyError, not a TypeError (audit 9.3)."""
-    with pytest.raises(ShowPyError):
+    """Rejects an int selector with an E8sError, not a TypeError (audit 9.3)."""
+    with pytest.raises(E8sError):
         select(_line_cast(), 5)  # type: ignore[arg-type]
 
 
 def test_regression_select_rejects_non_string_ids_in_a_list() -> None:
-    """Rejects a list holding a non-string with a ShowPyError, not an AttributeError (audit 9.3)."""
-    with pytest.raises(ShowPyError):
+    """Rejects a list holding a non-string with an E8sError, not an AttributeError (audit 9.3)."""
+    with pytest.raises(E8sError):
         select(_line_cast(), ["T1", 3])  # type: ignore[list-item]
 
 
@@ -558,7 +558,7 @@ def test_regression_mirror_pairs_solves_only_candidate_pairs(
         graph_sizes.append(graph.nnz)
         return min_weight_full_bipartite_matching(graph)
 
-    monkeypatch.setattr("showpy.cast.select.min_weight_full_bipartite_matching", recording_solve)
+    monkeypatch.setattr("e8s.cast.select.min_weight_full_bipartite_matching", recording_solve)
     left_spots = MIRROR_ROWS * MIRROR_COLUMNS
     assert len(mirror_pairs(mirror_grid(), "all", tol=MIRROR_TOL_M)) == left_spots
     assert graph_sizes == [2 * left_spots]
@@ -570,7 +570,7 @@ def test_regression_split_rejects_absurd_part_counts_quickly() -> None:
     """Rejects an absurd part count instead of building 100,000 empty groups (audit 9.3; P0 #8)."""
     tracemalloc.start()
     try:
-        with contextlib.suppress(ShowPyError):
+        with contextlib.suppress(E8sError):
             split(["a"], HUGE_PARTS)
         _, peak = tracemalloc.get_traced_memory()
     finally:
@@ -592,8 +592,8 @@ def test_select_accepts_nesting_at_the_depth_cap() -> None:
 
 
 def test_regression_select_rejects_non_string_ids_in_a_set() -> None:
-    """Rejects a set holding a non-string with a ShowPyError, not a TypeError."""
-    with pytest.raises(ShowPyError):
+    """Rejects a set holding a non-string with an E8sError, not a TypeError."""
+    with pytest.raises(E8sError):
         select(_line_cast(), {"T1", 3})  # type: ignore[arg-type]
 
 

@@ -24,8 +24,8 @@ from collections.abc import Callable
 
 import pytest
 
-from showpy.choreo.engine import PathEngine
-from showpy.choreo.path_models import (
+from e8s.choreo.engine import PathEngine
+from e8s.choreo.path_models import (
     Easing,
     FacingMode,
     FixedFacing,
@@ -34,7 +34,7 @@ from showpy.choreo.path_models import (
     TransitionSpec,
     WeaveParams,
 )
-from showpy.choreo.paths import (
+from e8s.choreo.paths import (
     add_waypoint,
     arrive_early,
     clear_waypoints,
@@ -55,12 +55,12 @@ from showpy.choreo.paths import (
     unlock,
     window,
 )
-from showpy.choreo.routes import follow, make_route
-from showpy.core.errors import LockedError, PathError, UnknownRefError
-from showpy.core.ids import SpotId
-from showpy.core.types import Point
-from showpy.core.util import approx_equal
-from showpy.show.models import Show
+from e8s.choreo.routes import follow, make_route
+from e8s.core.errors import LockedError, PathError, UnknownRefError
+from e8s.core.ids import SpotId
+from e8s.core.types import Point
+from e8s.core.util import approx_equal
+from e8s.show.models import Show
 from tests.fixtures.motion_shows import TID
 from tests.fixtures.shows import two_set_show
 from tests.helpers import defect

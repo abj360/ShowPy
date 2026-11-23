@@ -17,8 +17,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.core.util import approx_equal
-from showpy.geo.affine import (
+from e8s.core.util import approx_equal
+from e8s.geo.affine import (
     is_similarity,
     mirror_matrix,
     rotation_matrix,
@@ -28,8 +28,8 @@ from showpy.geo.affine import (
     transform_points,
     translation_matrix,
 )
-from showpy.geo.curves import ArcCurve, CircleCurve, Polyline, SplineCurve
-from showpy.geo.shapes import arc, bezier, circle, curve_through, ellipse, join, line, spiral
+from e8s.geo.curves import ArcCurve, CircleCurve, Polyline, SplineCurve
+from e8s.geo.shapes import arc, bezier, circle, curve_through, ellipse, join, line, spiral
 
 CURVES = [
     line((0, 0), (4, 1)),

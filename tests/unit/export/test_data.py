@@ -37,14 +37,14 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from showpy.core.csv_cells import FORMULA_TRIGGERS, PLAIN_DECIMAL
-from showpy.core.errors import (
+from e8s.core.csv_cells import FORMULA_TRIGGERS, PLAIN_DECIMAL
+from e8s.core.errors import (
     SchemaError,
     UnknownRefError,
 )
-from showpy.core.ids import LEGACY_IDS_KEY, SetId, SpotId
-from showpy.core.util import approx_equal
-from showpy.export._data import (
+from e8s.core.ids import LEGACY_IDS_KEY, SetId, SpotId
+from e8s.core.util import approx_equal
+from e8s.export._data import (
     DEFAULT_FORMATS,
     as_table,
     export_frames_csv,
@@ -54,10 +54,10 @@ from showpy.export._data import (
     to_csv,
     to_text,
 )
-from showpy.export._models import Chart, ChartRow, Claim, CoordinateSheet, SheetRow
-from showpy.export._print_sheets import chart, coordinate_sheet, cue_sheet
-from showpy.geo.fonts import FontRegistry
-from showpy.show.models import Show
+from e8s.export._models import Chart, ChartRow, Claim, CoordinateSheet, SheetRow
+from e8s.export._print_sheets import chart, coordinate_sheet, cue_sheet
+from e8s.geo.fonts import FontRegistry
+from e8s.show.models import Show
 from tests.fixtures.export_shows import AT, guided_show, live_publication, performer
 from tests.fixtures.shows import two_set_show
 from tests.helpers import digests_under_hash_seeds
@@ -304,7 +304,7 @@ def test_csv_neutralizes_exactly_the_non_numeric_formula_cells(cells: list[str])
 def test_frames_csv_is_byte_identical_across_runs_and_hash_seeds() -> None:
     """Writes the same frames CSV twice in one run and under two hash seeds (audit 4.3)."""
     digests = digests_under_hash_seeds(
-        "from showpy.export._data import export_frames_csv", "export_frames_csv(show).encode()"
+        "from e8s.export._data import export_frames_csv", "export_frames_csv(show).encode()"
     )
     assert all(first == second for first, second in digests), digests
     assert len({first for first, _ in digests}) == 1, digests

@@ -4,14 +4,14 @@
 test_templates.py --- tests built-in sheet templates, lookup, customization, edits and saving
 
 Contains:
-    test_*(): one behavior of showpy.sheet.templates each
+    test_*(): one behavior of e8s.sheet.templates each
     test_regression_blank_sheets_with_different_content_get_different_refs(): gives blank sheets
         that differ in content different refs
     test_regression_blank_sheet_rejects_infinite_width(): rejects an infinite width instead of
         building a sheet
     test_regression_customize_rejects_non_numeric_size(): rejects a non-numeric size with a
-        ShowPyError, not ValueError
-    test_regression_customize_rejects_bad_name_type(): rejects a non-string name with a ShowPyError,
+        E8sError, not ValueError
+    test_regression_customize_rejects_bad_name_type(): rejects a non-string name with an E8sError,
         not a pydantic error
     test_regression_customize_resize_updates_ref_and_name(): refreshes the ref and name of a resized
         sheet instead of keeping stale ones
@@ -27,20 +27,20 @@ Contains:
 
 import pytest
 
-from showpy.core.errors import (
+from e8s.core.errors import (
     ConflictError,
+    E8sError,
     SchemaError,
-    ShowPyError,
     UnknownRefError,
     VersionError,
 )
-from showpy.core.ids import LandmarkId, ZoneId
-from showpy.core.types import Region
-from showpy.core.units import convert
-from showpy.core.util import approx_equal
-from showpy.sheet.bounds import on_surface
-from showpy.sheet.models import Grid, GuideLine, Landmark, SurfaceType, Zone, ZoneKind
-from showpy.sheet.templates import (
+from e8s.core.ids import LandmarkId, ZoneId
+from e8s.core.types import Region
+from e8s.core.units import convert
+from e8s.core.util import approx_equal
+from e8s.sheet.bounds import on_surface
+from e8s.sheet.models import Grid, GuideLine, Landmark, SurfaceType, Zone, ZoneKind
+from e8s.sheet.templates import (
     InMemorySheetStore,
     add_guide,
     add_landmark,
@@ -55,7 +55,7 @@ from showpy.sheet.templates import (
     sheet_templates,
 )
 
-pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 TOL = 1e-9
 HS_REF = "sheet:hs-football@1"
@@ -296,13 +296,13 @@ def test_regression_blank_sheet_rejects_infinite_width() -> None:
 @pytest.mark.defect("UP-9.4-32")
 @pytest.mark.xfail(strict=True, reason="UP-9.4-32")
 def test_regression_customize_rejects_non_numeric_size() -> None:
-    """Rejects a non-numeric size with a ShowPyError, not ValueError (audit 9.4)."""
-    with pytest.raises(ShowPyError):
+    """Rejects a non-numeric size with an E8sError, not ValueError (audit 9.4)."""
+    with pytest.raises(E8sError):
         customize(blank_sheet(10, 6), size=("wide", "deep"))
 
 
 def test_regression_customize_rejects_bad_name_type() -> None:
-    """Rejects a non-string name with a ShowPyError, not a pydantic error (audit 9.4)."""
+    """Rejects a non-string name with an E8sError, not a pydantic error (audit 9.4)."""
     with pytest.raises(SchemaError):
         customize(blank_sheet(10, 6), name=5)
 
@@ -326,7 +326,7 @@ def test_regression_customize_resize_does_not_keep_items_off_the_sheet() -> None
     )
     try:
         resized = customize(sheet, size=RESIZED)
-    except ShowPyError:
+    except E8sError:
         return
     for zone in resized.zones:
         assert all(on_surface(resized, corner) for corner in zone.polygon.exterior)
@@ -348,7 +348,7 @@ def test_regression_get_sheet_without_version_returns_latest_saved() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.4-37")
 def test_regression_sheet_templates_rejects_unknown_surface_type() -> None:
     """Rejects an unknown surface type instead of returning an empty list (audit 9.4)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         sheet_templates("nope")  # type: ignore[arg-type]
 
 
@@ -360,7 +360,7 @@ def test_regression_customize_resize_does_not_keep_landmarks_off_the_sheet() -> 
     sheet = add_landmark(blank_sheet(10, 6), mark)
     try:
         resized = customize(sheet, size=RESIZED)
-    except ShowPyError:
+    except E8sError:
         return
     for kept in resized.landmarks:
         assert all(on_surface(resized, point) for point in kept.geometry)

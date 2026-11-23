@@ -33,17 +33,17 @@ from typing import get_args
 
 import pytest
 
-from showpy.choreo.form_models import Form, FormKind
-from showpy.choreo.forms import curve_form, placements, polyline_form
-from showpy.choreo.recipe_models import SvgRecipe
-from showpy.core.errors import SchemaError, bounded_repr
-from showpy.core.json_types import JsonValue
-from showpy.core.types import Box2, Region
-from showpy.core.util import approx_equal
-from showpy.geo.curves import CompositeCurve
-from showpy.geo.shapes import svg_outline
-from showpy.show.migrate import FIRST_VERSION, ReportBuilder
-from showpy.show.migrations.v1_to_v2_forms import migrate_forms
+from e8s.choreo.form_models import Form, FormKind
+from e8s.choreo.forms import curve_form, placements, polyline_form
+from e8s.choreo.recipe_models import SvgRecipe
+from e8s.core.errors import SchemaError, bounded_repr
+from e8s.core.json_types import JsonValue
+from e8s.core.types import Box2, Region
+from e8s.core.util import approx_equal
+from e8s.geo.curves import CompositeCurve
+from e8s.geo.shapes import svg_outline
+from e8s.show.migrate import FIRST_VERSION, ReportBuilder
+from e8s.show.migrations.v1_to_v2_forms import migrate_forms
 
 FIXTURE = Path(__file__).resolve().parents[3] / "fixtures" / "repos" / "v0.3.0" / "expected.json"
 DOC = "/sets/2/forms.json"

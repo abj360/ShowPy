@@ -1,10 +1,10 @@
 [project]
-name = "ShowPy"
+name = "e8s"
 dynamic = ["version"]
 description = "Choreography library: sheets, spots, sets, forms and motion."
 readme = "README.md"
 license = "PolyForm-Noncommercial-1.0.0 AND MIT AND OFL-1.1 AND LicenseRef-Hershey-Fonts"
-license-files = ["LICENSE", "showpy/schemas/LICENSE-MIT.txt", "showpy/fonts/licenses/*.txt"]
+license-files = ["LICENSE", "e8s/schemas/LICENSE-MIT.txt", "e8s/fonts/licenses/*.txt"]
 requires-python = ">=3.13"
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -60,12 +60,12 @@ exclude = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["showpy"]
+packages = ["e8s"]
 
 # The suite exercises every extra-gated function, so the dev environment installs them all.
 [dependency-groups]
 dev = [
-    "showpy[all]",
+    "e8s[all]",
     "deptry==0.25.1",
     "git-cliff==2.14.2",
     "hypothesis==6.170.15",
@@ -112,12 +112,12 @@ max-complexity = 10
 banned-module-level-imports = ["tests"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
-"tests".msg = "showpy never imports the test folder; use showpy.examples"
+"tests".msg = "e8s never imports the test folder; use e8s.examples"
 
 # RUF012: pydantic copies field defaults per instance, so {} defaults are safe.
 [tool.ruff.lint.per-file-ignores]
-"showpy/**/models.py" = ["RUF012"]
-"showpy/**/*_models.py" = ["RUF012"]
+"e8s/**/models.py" = ["RUF012"]
+"e8s/**/*_models.py" = ["RUF012"]
 "tests/**" = ["D", "EXE001", "FBT001", "FBT002", "TID251", "TID253"]
 "scripts/**" = ["EXE001"]
 # The fixture script runs in a released checkout and takes its seeded show from the test helpers.
@@ -140,13 +140,13 @@ module = ["segno", "segno.*", "imageio", "imageio.*"]
 ignore_missing_imports = true
 
 [tool.pyright]
-include = ["showpy", "tests", "scripts"]
+include = ["e8s", "tests", "scripts"]
 typeCheckingMode = "basic"
 pythonVersion = "3.13"
 stubPath = "typings"
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "showpy"]
+testpaths = ["tests", "e8s"]
 pythonpath = ["."]
 addopts = [
     "--doctest-modules",
@@ -170,7 +170,7 @@ filterwarnings = ["error"]
 faulthandler_timeout = 60
 
 [tool.deptry]
-known_first_party = ["showpy"]
+known_first_party = ["e8s"]
 
 # Pillow installs the PIL module.
 [tool.deptry.package_module_name_map]

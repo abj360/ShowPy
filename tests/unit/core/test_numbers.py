@@ -15,8 +15,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.core.errors import SchemaError
-from showpy.core.numbers import format_number, normalize_angle
+from e8s.core.errors import SchemaError
+from e8s.core.numbers import format_number, normalize_angle
 
 LIMIT = 1e15
 

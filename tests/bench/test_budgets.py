@@ -20,21 +20,21 @@ import numpy as np
 import pytest
 from pytest_benchmark.fixture import BenchmarkFixture
 
-from showpy.choreo.avoid import min_gaps
-from showpy.choreo.engine import PathEngine
-from showpy.choreo.match import match
-from showpy.choreo.models import PlacementPatch
-from showpy.core.ids import TransitionId
-from showpy.core.util import seeded_rng
-from showpy.examples import two_set_show
-from showpy.export._video import export_video
-from showpy.show.collab import events_since
-from showpy.show.manage import index
-from showpy.show.models import Show
-from showpy.show.repositories import InMemoryRepository
-from showpy.show.storage import ROOT_REVISION, Workspace, load_show, open_workspace, save_show
-from showpy.show.validate import validate_show
-from showpy.time.clock import count_to_seconds
+from e8s.choreo.avoid import min_gaps
+from e8s.choreo.engine import PathEngine
+from e8s.choreo.match import match
+from e8s.choreo.models import PlacementPatch
+from e8s.core.ids import TransitionId
+from e8s.core.util import seeded_rng
+from e8s.examples import two_set_show
+from e8s.export._video import export_video
+from e8s.show.collab import events_since
+from e8s.show.manage import index
+from e8s.show.models import Show
+from e8s.show.repositories import InMemoryRepository
+from e8s.show.storage import ROOT_REVISION, Workspace, load_show, open_workspace, save_show
+from e8s.show.validate import validate_show
+from e8s.time.clock import count_to_seconds
 from tests.conftest import BenchTier
 from tests.fixtures.generators import seeded_show
 
@@ -55,7 +55,7 @@ VIDEO_FPS = 30.0
 PX_PER_M_1080P = 17.5
 VIDEO_BUDGET_PER_S = 60.0 / 120.0
 MB = 2**20
-IMPORT_SNIPPET = "import showpy; showpy.PathEngine"
+IMPORT_SNIPPET = "import e8s; e8s.PathEngine"
 BUDGET_S = {
     "min_gaps": 1.0,
     "compile_all": 2.0,

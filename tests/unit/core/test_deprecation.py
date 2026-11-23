@@ -15,11 +15,11 @@ Contains:
     test_warn_deprecated_stays_silent_on_the_valid_path: no warning when no Set is given
     test_deprecated_warning_is_a_deprecation_warning: checks the base class
     test_validation_error_alias_warns_and_is_the_same_class: checks the alias on both paths
-    test_deprecated_names_reach_users_through_showpy: resolves every table row with a warning
+    test_deprecated_names_reach_users_through_e8s: resolves every table row with a warning
     test_deprecated_class_alias_is_visible_to_type_checkers: types check both aliases statically
     test_deprecations_are_removed_on_time: fails when a row outlives its removal version
     test_every_deprecation_call_is_removed_on_time: fails when a moved, renamed_field,
-        renamed_keyword or deprecated_call call in showpy outlives its removal version
+        renamed_keyword or deprecated_call call in e8s outlives its removal version
     test_deprecation_scan_flags_overdue_and_non_literal_calls: proves the scan can fail
     is_scan_skipped(): tells whether the scan skips a module (only the root __init__.py)
     test_deprecation_scan_*(): attribute calls, malformed `remove`, scoped local defs, skips
@@ -37,10 +37,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-import showpy
-import showpy.core.errors
-from showpy._api_table import DEPRECATED, DEPRECATED_KEYWORDS, LEAVING
-from showpy.core.deprecation import (
+import e8s
+import e8s.core.errors
+from e8s._api_table import DEPRECATED, DEPRECATED_KEYWORDS, LEAVING
+from e8s.core.deprecation import (
     DeprecatedWarning,
     deprecated_call,
     leaving_call,
@@ -49,16 +49,16 @@ from showpy.core.deprecation import (
     warn_deprecated,
     warn_leaving,
 )
-from showpy.core.errors import ShowValidationError
-from showpy.core.util import approx_equal
+from e8s.core.errors import ShowValidationError
+from e8s.core.util import approx_equal
 
 if TYPE_CHECKING:
-    from showpy import ValidationError as PackageAlias
-    from showpy.core.errors import ValidationError as ModuleAlias
+    from e8s import ValidationError as PackageAlias
+    from e8s.core.errors import ValidationError as ModuleAlias
 
 VERSION_PREFIX = re.compile(r"^(\d+)\.(\d+)")
 RELEASE_PATTERN = re.compile(r"\d+\.\d+\.\d+")
-SOURCE_ROOT = Path(showpy.__file__).parent
+SOURCE_ROOT = Path(e8s.__file__).parent
 SCAN_SKIPPED = ("__init__.py", "core/deprecation.py")
 TURN_WARNING = r"`turn\(frozenset\)` is replaced by `turn_set`; the old use is removed in 0\.6\.0"
 REQUIRED_KEYWORDS = {
@@ -77,7 +77,7 @@ def _doubled(value: int) -> int:
     return value * 2
 
 
-@deprecated_call("showpy.core.util.approx_equal", since="0.4.0", remove="0.6.0")
+@deprecated_call("e8s.core.util.approx_equal", since="0.4.0", remove="0.6.0")
 def _old_close(a: float, b: float, *, slack: float = 1e-6) -> bool:
     """Compares two numbers the old way."""
     return approx_equal(a, b, abs_tol=slack)
@@ -113,7 +113,7 @@ class _Holder:
 
 def test_moved_name_warns_and_resolves() -> None:
     getter = moved(
-        "pkg.old", {"Old": "showpy.core.errors.ShowValidationError"}, since="0.4.0", remove="0.6.0"
+        "pkg.old", {"Old": "e8s.core.errors.ShowValidationError"}, since="0.4.0", remove="0.6.0"
     )
     with pytest.warns(DeprecatedWarning, match="`Old` moved to .*ShowValidationError.*0.6.0"):
         assert getter("Old") is ShowValidationError
@@ -136,11 +136,11 @@ def test_renamed_field_passes_the_new_value_through_read() -> None:
 
 
 def test_deprecated_call_warns_names_the_replacement_and_forwards() -> None:
-    pattern = r"`.*_old_close` is replaced by `showpy\.core\.util\.approx_equal`.*0\.6\.0"
+    pattern = r"`.*_old_close` is replaced by `e8s\.core\.util\.approx_equal`.*0\.6\.0"
     with pytest.warns(DeprecatedWarning, match=pattern) as caught:
         assert _old_close(1.0, 1.05, slack=0.1) is True
     assert caught[0].filename == __file__
-    with pytest.warns(DeprecatedWarning, match=r"replaced by `showpy\.core\.util\.approx_equal`"):
+    with pytest.warns(DeprecatedWarning, match=r"replaced by `e8s\.core\.util\.approx_equal`"):
         assert _old_close_by_callable(1.0, 2.0) is False
 
 
@@ -171,15 +171,15 @@ def test_deprecated_call_keeps_the_wrapped_signature() -> None:
 
 def test_deprecated_warning_is_a_deprecation_warning() -> None:
     assert issubclass(DeprecatedWarning, DeprecationWarning)
-    assert showpy.DeprecatedWarning is DeprecatedWarning
-    assert showpy.core.errors.DeprecatedWarning is DeprecatedWarning
+    assert e8s.DeprecatedWarning is DeprecatedWarning
+    assert e8s.core.errors.DeprecatedWarning is DeprecatedWarning
 
 
 def test_validation_error_alias_warns_and_is_the_same_class() -> None:
     with pytest.warns(DeprecatedWarning):
-        from_package = showpy.ValidationError
+        from_package = e8s.ValidationError
     with pytest.warns(DeprecatedWarning):
-        from_errors = showpy.core.errors.ValidationError
+        from_errors = e8s.core.errors.ValidationError
     assert from_package is ShowValidationError
     assert from_errors is ShowValidationError
     assert issubclass(ShowValidationError, from_package)
@@ -187,14 +187,14 @@ def test_validation_error_alias_warns_and_is_the_same_class() -> None:
         raise ShowValidationError("bad", hint="fix it")
 
 
-def test_deprecated_names_reach_users_through_showpy() -> None:
+def test_deprecated_names_reach_users_through_e8s() -> None:
     for name, _target, _since, _remove in DEPRECATED:
         with pytest.warns(DeprecatedWarning, match=name):
-            getattr(showpy, name)
+            getattr(e8s, name)
 
 
 def test_deprecations_are_removed_on_time() -> None:
-    match = VERSION_PREFIX.match(showpy.__version__)
+    match = VERSION_PREFIX.match(e8s.__version__)
     assert match is not None
     current = (int(match[1]), int(match[2]))
     overdue = []
@@ -241,7 +241,7 @@ def test_deprecated_class_alias_is_visible_to_type_checkers() -> None:
 
 
 def _current_minor() -> tuple[int, int]:
-    match = VERSION_PREFIX.match(showpy.__version__)
+    match = VERSION_PREFIX.match(e8s.__version__)
     assert match is not None
     return int(match[1]), int(match[2])
 
@@ -337,7 +337,7 @@ def scan_deprecation_calls(source: str, where: str) -> list[str]:
 
 
 def is_scan_skipped(relative: str) -> bool:
-    """Tells whether the scan skips a module, given its path relative to the showpy package."""
+    """Tells whether the scan skips a module, given its path relative to the e8s package."""
     return relative in SCAN_SKIPPED
 
 
@@ -402,12 +402,12 @@ def test_deprecation_scan_skips_only_the_root_init() -> None:
 
 def test_every_deprecated_keyword_row_names_real_parameters() -> None:
     for function, old, new, _since, _remove in DEPRECATED_KEYWORDS:
-        parameters = inspect.signature(getattr(showpy, function)).parameters
+        parameters = inspect.signature(getattr(e8s, function)).parameters
         assert old in parameters, f"{function}() has no keyword {old}"
         assert new in parameters, f"{function}() has no keyword {new}"
 
 
-LEAVING_TEXT = "`showpy.old` is deprecated since 0.4.0 and leaves the library in 0.7.0."
+LEAVING_TEXT = "`e8s.old` is deprecated since 0.4.0 and leaves the library in 0.7.0."
 
 
 @leaving_call(since="0.4.0", remove="99.0.0")
@@ -416,7 +416,7 @@ def _leaving_function() -> str:
 
 
 def _use_leaving_name() -> None:
-    warn_leaving("showpy.old", since="0.4.0", remove="0.7.0")
+    warn_leaving("e8s.old", since="0.4.0", remove="0.7.0")
 
 
 def test_warn_leaving_words_the_message_without_a_replacement() -> None:
@@ -427,13 +427,13 @@ def test_warn_leaving_words_the_message_without_a_replacement() -> None:
 
 
 REPLACEMENT_TEXT = (
-    "`showpy.old` is deprecated since 0.4.0 and leaves the library in 0.7.0; "
-    "its replacement `showpy.new` arrives in 0.7.0."
+    "`e8s.old` is deprecated since 0.4.0 and leaves the library in 0.7.0; "
+    "its replacement `e8s.new` arrives in 0.7.0."
 )
 
 
 def _use_leaving_name_with_replacement() -> None:
-    warn_leaving("showpy.old", since="0.4.0", remove="0.7.0", replacement="new")
+    warn_leaving("e8s.old", since="0.4.0", remove="0.7.0", replacement="new")
 
 
 def test_warn_leaving_names_the_replacement_when_there_is_one() -> None:
@@ -453,22 +453,22 @@ def test_leaving_call_names_the_replacement_when_there_is_one() -> None:
         assert _leaving_function_with_replacement() == "ran"
     assert str(caught[0].message) == (
         f"`{__name__}._leaving_function_with_replacement` is deprecated since 0.4.0 and leaves "
-        "the library in 99.0.0; its replacement `showpy.newer` arrives in 99.0.0."
+        "the library in 99.0.0; its replacement `e8s.newer` arrives in 99.0.0."
     )
 
 
 TWO_REPLACEMENTS_TEXT = (
-    "`showpy.old` is deprecated since 0.4.0 and leaves the library in 0.7.0; "
-    "its replacements `showpy.Marking` and `showpy.markings_near` arrive in 0.7.0."
+    "`e8s.old` is deprecated since 0.4.0 and leaves the library in 0.7.0; "
+    "its replacements `e8s.Marking` and `e8s.markings_near` arrive in 0.7.0."
 )
 THREE_REPLACEMENTS_TEXT = (
-    "`showpy.old` is deprecated since 0.4.0 and leaves the library in 0.7.0; "
-    "its replacements `showpy.locate`, `showpy.at_location` and `showpy.Location` arrive in 0.7.0."
+    "`e8s.old` is deprecated since 0.4.0 and leaves the library in 0.7.0; "
+    "its replacements `e8s.locate`, `e8s.at_location` and `e8s.Location` arrive in 0.7.0."
 )
 
 
 def _use_leaving_name_replaced_by(replacement: str | tuple[str, ...] | None) -> None:
-    warn_leaving("showpy.old", since="0.4.0", remove="0.7.0", replacement=replacement)
+    warn_leaving("e8s.old", since="0.4.0", remove="0.7.0", replacement=replacement)
 
 
 @pytest.mark.parametrize(
@@ -501,8 +501,8 @@ def test_leaving_call_names_several_replacements() -> None:
         assert _leaving_function_with_replacements() == "ran"
     assert str(caught[0].message) == (
         f"`{__name__}._leaving_function_with_replacements` is deprecated since 0.4.0 and leaves "
-        "the library in 99.0.0; its replacements `showpy.sheets`, `showpy.sheet` and "
-        "`showpy.field` arrive in 99.0.0."
+        "the library in 99.0.0; its replacements `e8s.sheets`, `e8s.sheet` and "
+        "`e8s.field` arrive in 99.0.0."
     )
     assert caught[0].filename == __file__
 

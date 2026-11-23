@@ -4,12 +4,12 @@
 test_bounds.py --- tests surface and walkable tests, landmark lookup, nearest landmarks, zones
 
 Contains:
-    test_*(): one behavior of showpy.sheet.bounds each
+    test_*(): one behavior of e8s.sheet.bounds each
     test_regression_landmark_anchor_ignores_repeated_closing_vertex(): counts a repeated closing
         vertex once when anchoring an area
     test_regression_landmark_anchor_is_the_area_centroid(): anchors an area at its centroid, not the
         mean of its vertices
-    test_regression_nearest_landmarks_rejects_fractional_k(): rejects k=1.5 with a ShowPyError, not
+    test_regression_nearest_landmarks_rejects_fractional_k(): rejects k=1.5 with an E8sError, not
         TypeError
     test_regression_nearest_landmarks_rejects_nan_point(): rejects a NaN point instead of returning
         arbitrary distances
@@ -19,11 +19,11 @@ Contains:
 
 import pytest
 
-from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
-from showpy.core.ids import LandmarkId, ZoneId
-from showpy.core.types import Region
-from showpy.core.util import approx_equal
-from showpy.sheet.bounds import (
+from e8s.core.errors import E8sError, SchemaError, UnknownRefError
+from e8s.core.ids import LandmarkId, ZoneId
+from e8s.core.types import Region
+from e8s.core.util import approx_equal
+from e8s.sheet.bounds import (
     landmark,
     landmark_anchor,
     nearest_landmarks,
@@ -31,11 +31,11 @@ from showpy.sheet.bounds import (
     walkable,
     zones_at,
 )
-from showpy.sheet.models import Landmark, Zone, ZoneKind
-from showpy.sheet.templates import add_landmark, get_sheet
+from e8s.sheet.models import Landmark, Zone, ZoneKind
+from e8s.sheet.templates import add_landmark, get_sheet
 from tests.fixtures.shows import field_sheet, two_set_show
 
-pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 TOL = 1e-9
 HOLE = ((-1.0, 1.0), (1.0, 1.0), (1.0, 2.0), (-1.0, 2.0))
@@ -130,7 +130,7 @@ def test_regression_landmark_anchor_is_the_area_centroid() -> None:
 @pytest.mark.defect("UP-9.4-27")
 @pytest.mark.xfail(strict=True, reason="UP-9.4-27")
 def test_regression_nearest_landmarks_rejects_fractional_k() -> None:
-    """Rejects k=1.5 with a ShowPyError, not TypeError (audit 9.4)."""
+    """Rejects k=1.5 with an E8sError, not TypeError (audit 9.4)."""
     with pytest.raises(SchemaError):
         nearest_landmarks(field_sheet(), NEAR_POINT, k=1.5)  # type: ignore[arg-type]
 
@@ -139,7 +139,7 @@ def test_regression_nearest_landmarks_rejects_fractional_k() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.4-28")
 def test_regression_nearest_landmarks_rejects_nan_point() -> None:
     """Rejects a NaN point instead of returning arbitrary distances (audit 9.4)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         nearest_landmarks(field_sheet(), (float("nan"), 0.0))
 
 
@@ -147,5 +147,5 @@ def test_regression_nearest_landmarks_rejects_nan_point() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.4-29")
 def test_regression_nearest_landmarks_rejects_unknown_kind() -> None:
     """Rejects an unknown landmark kind instead of returning an empty list (audit 9.4)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         nearest_landmarks(field_sheet(), NEAR_POINT, kinds=["blob"])  # type: ignore[list-item]

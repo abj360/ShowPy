@@ -11,12 +11,12 @@ Contains:
 
 from hypothesis import strategies as st
 
-from showpy.cast.models import Group, Shape
-from showpy.cast.spots import add_group, add_spots_along, set_shape
-from showpy.geo.curves import Segment
-from showpy.geo.shapes import line
-from showpy.sheet.models import Sheet
-from showpy.show.models import Show
+from e8s.cast.models import Group, Shape
+from e8s.cast.spots import add_group, add_spots_along, set_shape
+from e8s.geo.curves import Segment
+from e8s.geo.shapes import line
+from e8s.sheet.models import Sheet
+from e8s.show.models import Show
 from tests.strategies.sheet import inner_box
 
 GROUP_KEYS = {"brass": "B", "flags": "F", "drums": "D"}

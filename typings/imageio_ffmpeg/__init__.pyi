@@ -1,5 +1,5 @@
 """
-__init__.pyi --- type stub for the parts of imageio-ffmpeg 0.8 that ShowPy and its tests call
+__init__.pyi --- type stub for the parts of imageio-ffmpeg 0.8 that e8Show and its tests call
 
 The package ships no annotations, so checkers inferred `fps: int` from its default of 16
 although write_frames accepts a float or a Fraction.

@@ -20,12 +20,12 @@ from collections.abc import Callable
 import pytest
 from pytest_benchmark.fixture import BenchmarkFixture
 
-from showpy.cast.models import Cast, Group, Spot
-from showpy.cast.select import mirror_pairs
-from showpy.cast.spots import regroup
-from showpy.choreo.models import Placement, Set
-from showpy.core.ids import SetId, SpotId
-from showpy.show.models import Show
+from e8s.cast.models import Cast, Group, Spot
+from e8s.cast.select import mirror_pairs
+from e8s.cast.spots import regroup
+from e8s.choreo.models import Placement, Set
+from e8s.core.ids import SetId, SpotId
+from e8s.show.models import Show
 from tests.fixtures.generators import seeded_show
 
 pytestmark = pytest.mark.bench

@@ -4,7 +4,7 @@
 test_golden_text.py --- compares text form slots to a human-reviewed fixture
 
 Three texts (Latin caps, accented Latin with rotation and centering, Greek) lay out at fixed
-heights and counts; their slots are stored rounded to 9 digits. Set SHOWPY_UPDATE_GOLDEN=1 to
+heights and counts; their slots are stored rounded to 9 digits. Set E8S_UPDATE_GOLDEN=1 to
 rewrite tests/golden/fixtures/text_slots.json; the diff needs human review.
 
 Contains:
@@ -19,12 +19,12 @@ from typing import Any
 import numpy as np
 import pytest
 
-from showpy.choreo.forms import slots, text_form
+from e8s.choreo.forms import slots, text_form
 
 pytestmark = pytest.mark.golden
 
 FIXTURE = Path(__file__).parent / "fixtures" / "text_slots.json"
-UPDATE_FLAG = "SHOWPY_UPDATE_GOLDEN"
+UPDATE_FLAG = "E8S_UPDATE_GOLDEN"
 HEIGHT_M = 4.0
 AT = (0.0, 10.0)
 DIGITS = 9

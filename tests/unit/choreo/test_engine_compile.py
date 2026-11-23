@@ -45,24 +45,24 @@ from typing import Any, cast
 import numpy as np
 import pytest
 
-from showpy.choreo.engine import DEFAULT_SEGMENT_TOL, PathEngine
-from showpy.choreo.engine_compile import (
+from e8s.choreo.engine import DEFAULT_SEGMENT_TOL, PathEngine
+from e8s.choreo.engine_compile import (
     compile_plan,
     curvature_bound,
     easing_chord_error,
     plan_breaks,
 )
-from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, ease, easing_breaks
-from showpy.choreo.path_models import Easing, PathRow, PathStyle, TransitionSpec, Waypoint
-from showpy.choreo.paths import add_waypoint, set_style
-from showpy.choreo.routes import follow, follow_and_set_targets, make_route
-from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import ContinuityError, PathError, SchemaError, ShowPyError
-from showpy.core.ids import SpotId
-from showpy.core.json_types import JsonValue
-from showpy.core.types import Point, Points
-from showpy.core.util import approx_equal
-from showpy.geo.curves import (
+from e8s.choreo.motion import DEFAULT_MOTIONS, FloatArray, ease, easing_breaks
+from e8s.choreo.path_models import Easing, PathRow, PathStyle, TransitionSpec, Waypoint
+from e8s.choreo.paths import add_waypoint, set_style
+from e8s.choreo.routes import follow, follow_and_set_targets, make_route
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import ContinuityError, E8sError, PathError, SchemaError
+from e8s.core.ids import SpotId
+from e8s.core.json_types import JsonValue
+from e8s.core.types import Point, Points
+from e8s.core.util import approx_equal
+from e8s.geo.curves import (
     ArcCurve,
     CircleCurve,
     CompositeCurve,
@@ -71,7 +71,7 @@ from showpy.geo.curves import (
     SplineCurve,
     TrimmedCurve,
 )
-from showpy.show.models import Show
+from e8s.show.models import Show
 from tests.fixtures.motion_shows import TID, with_rows, with_targets
 from tests.fixtures.shows import two_set_show
 from tests.helpers import defect
@@ -143,7 +143,7 @@ def test_regression_timed_waypoint_survives_style_change_without_index_error(
     engine = PathEngine(show)
     try:
         engine.compile(TID)
-    except ShowPyError:
+    except E8sError:
         return
     target = show.set("2").get("T1").point
     assert approx_equal(engine.position("T1", 8.0, local=TID), target)
@@ -158,7 +158,7 @@ def test_regression_engine_and_editors_agree_a_straight_row_has_no_bend() -> Non
     engine = PathEngine(with_rows({"T1": row}))
     try:
         mid = engine.position("T1", 4.0, local=TID)
-    except ShowPyError:
+    except E8sError:
         return
     assert approx_equal(mid, (0.0, 7.0), abs_tol=1e-6)
 
@@ -197,7 +197,7 @@ def test_regression_custom_motion_with_wrong_shape_raises_path_error() -> None:
 
 def test_regression_custom_motion_with_nan_samples_is_rejected() -> None:
     """Rejects NaN samples from a custom motion instead of dropping them silently (audit 9.2)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         _custom_engine(_with_nan_sample).compile(TID)
 
 

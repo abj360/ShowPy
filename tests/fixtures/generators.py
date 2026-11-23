@@ -21,26 +21,26 @@ import itertools
 
 import numpy as np
 
-from showpy.cast.models import Group
-from showpy.cast.spots import add_group, add_spots_along
-from showpy.choreo.form_models import Form
-from showpy.choreo.form_place import place
-from showpy.choreo.forms import arc_form, block_form, circle_form, line_form, wedge_form
-from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import PlacementPatch
-from showpy.choreo.path_models import PathStyle, TransitionSpec
-from showpy.choreo.paths import curve_path, custom_path, delay, hold, set_easing
-from showpy.choreo.routes import follow_and_set_targets, make_route, rotate_path, two_part
-from showpy.core.types import Point
-from showpy.core.util import seeded_rng
-from showpy.geo.shapes import line
-from showpy.sheet.models import Sheet
-from showpy.sheet.templates import _sheet_templates as sheet_templates
-from showpy.show.changes import apply_change, store_paths
-from showpy.show.manage import add_set, new_show
-from showpy.show.models import FormOp, PathsOp, Show
-from showpy.time.models import Hold, TempoSection, Timeline, TimelineMode
-from showpy.time.timeline import add_hold, add_tempo, new_timeline
+from e8s.cast.models import Group
+from e8s.cast.spots import add_group, add_spots_along
+from e8s.choreo.form_models import Form
+from e8s.choreo.form_place import place
+from e8s.choreo.forms import arc_form, block_form, circle_form, line_form, wedge_form
+from e8s.choreo.match_ops import with_set
+from e8s.choreo.models import PlacementPatch
+from e8s.choreo.path_models import PathStyle, TransitionSpec
+from e8s.choreo.paths import curve_path, custom_path, delay, hold, set_easing
+from e8s.choreo.routes import follow_and_set_targets, make_route, rotate_path, two_part
+from e8s.core.types import Point
+from e8s.core.util import seeded_rng
+from e8s.geo.shapes import line
+from e8s.sheet.models import Sheet
+from e8s.sheet.templates import _sheet_templates as sheet_templates
+from e8s.show.changes import apply_change, store_paths
+from e8s.show.manage import add_set, new_show
+from e8s.show.models import FormOp, PathsOp, Show
+from e8s.time.models import Hold, TempoSection, Timeline, TimelineMode
+from e8s.time.timeline import add_hold, add_tempo, new_timeline
 from tests.helpers import bisector_rotation
 
 SHOW_ID = "seeded"

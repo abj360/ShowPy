@@ -28,14 +28,14 @@ import math
 
 import pytest
 
-from showpy.choreo import models as choreo_models
-from showpy.choreo.models import ApprovalState, Placement, PlacementPatch, Set
-from showpy.core.deprecation import DeprecatedWarning
-from showpy.core.errors import LockedError, SchemaError, UnknownRefError
-from showpy.core.ids import FormId, SetId, SpotId
-from showpy.core.selection import Selection
-from showpy.core.units import normalize_angle
-from showpy.core.util import approx_equal
+from e8s.choreo import models as choreo_models
+from e8s.choreo.models import ApprovalState, Placement, PlacementPatch, Set
+from e8s.core.deprecation import DeprecatedWarning
+from e8s.core.errors import LockedError, SchemaError, UnknownRefError
+from e8s.core.ids import FormId, SetId, SpotId
+from e8s.core.selection import Selection
+from e8s.core.units import normalize_angle
+from e8s.core.util import approx_equal
 from tests.helpers import make_facing_set
 
 TURNS_PAST_FULL = 720.0
@@ -213,7 +213,7 @@ def test_moved_model_name_count() -> None:
 
 @pytest.mark.parametrize(("module", "name"), MOVED_CASES)
 def test_moved_choreo_model_names_warn(module: str, name: str) -> None:
-    new_module = importlib.import_module(f"showpy.choreo.{module}")
+    new_module = importlib.import_module(f"e8s.choreo.{module}")
     with pytest.warns(DeprecatedWarning, match=f"`{name}` moved to"):
         old = getattr(choreo_models, name)
     assert old is getattr(new_module, name)

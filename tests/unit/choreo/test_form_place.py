@@ -46,23 +46,23 @@ Contains:
 
 import pytest
 
-from showpy.cast.spots import delete_spots
-from showpy.choreo.form_place import filled_forms, place, rebuild
-from showpy.choreo.forms import circle_form, line_form, text_form
-from showpy.choreo.match_models import MatchOptions
-from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import PlacementPatch
-from showpy.core.errors import (
+from e8s.cast.spots import delete_spots
+from e8s.choreo.form_place import filled_forms, place, rebuild
+from e8s.choreo.forms import circle_form, line_form, text_form
+from e8s.choreo.match_models import MatchOptions
+from e8s.choreo.match_ops import with_set
+from e8s.choreo.models import PlacementPatch
+from e8s.core.errors import (
+    E8sError,
     LockedError,
     MatchError,
     SchemaError,
-    ShowPyError,
     SpacingError,
     UnknownRefError,
 )
-from showpy.core.ids import SpotId
-from showpy.core.util import approx_equal
-from showpy.show.models import Show
+from e8s.core.ids import SpotId
+from e8s.core.util import approx_equal
+from e8s.show.models import Show
 from tests.fixtures.shows import two_set_show
 from tests.helpers import pin_spot, replaced_form_show, with_curve_rows
 
@@ -305,7 +305,7 @@ def test_regression_rebuild_regenerates_facing_and_keeps_rows_of_unmoved_members
 def test_regression_rebuild_refuses_a_form_the_set_no_longer_places() -> None:
     """Refuses to pull spots back onto a form its set dropped (lane G review)."""
     show = replaced_form_show()
-    with pytest.raises(ShowPyError) as caught:
+    with pytest.raises(E8sError) as caught:
         rebuild(show, "a")
     assert caught.value.code == "STALE_FORM"
     assert caught.value.context == {"form": "a", "set": "2", "set_forms": ["b"]}

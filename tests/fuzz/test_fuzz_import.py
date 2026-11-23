@@ -18,9 +18,9 @@ from typing import Any
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.examples import crossing_show, two_set_show
-from showpy.show.interchange import POSITION_FIELDS, export_json, import_json, import_positions
-from tests.helpers import only_showpy_errors
+from e8s.examples import crossing_show, two_set_show
+from e8s.show.interchange import POSITION_FIELDS, export_json, import_json, import_positions
+from tests.helpers import only_e8s_errors
 
 MAX_LEAVES = 20
 HUGE_INT = 10**400
@@ -98,20 +98,20 @@ def mutated_documents(draw: st.DrawFn) -> dict[str, Any]:
 
 @given(value=JSON_VALUES)
 def test_fuzz_import_json_arbitrary_values(value: object) -> None:
-    """Rejects any JSON value, mapping or not, with a ShowPyError."""
-    only_showpy_errors(lambda: import_json(value), value)  # type: ignore[arg-type]
+    """Rejects any JSON value, mapping or not, with an E8sError."""
+    only_e8s_errors(lambda: import_json(value), value)  # type: ignore[arg-type]
 
 
 @given(document=mutated_documents())
 def test_fuzz_import_json_mutated_documents(document: dict[str, Any]) -> None:
-    """Accepts or rejects a valid document with one damaged value, with a ShowPyError at worst."""
-    only_showpy_errors(lambda: import_json(document), document)
+    """Accepts or rejects a valid document with one damaged value, with an E8sError at worst."""
+    only_e8s_errors(lambda: import_json(document), document)
 
 
 @given(raw=st.one_of(st.binary(), st.text()))
 def test_fuzz_import_json_raw_text_and_bytes(raw: bytes | str) -> None:
-    """Rejects raw bytes and strings, which are not documents, with a ShowPyError."""
-    only_showpy_errors(lambda: import_json(raw), raw)  # type: ignore[arg-type]
+    """Rejects raw bytes and strings, which are not documents, with an E8sError."""
+    only_e8s_errors(lambda: import_json(raw), raw)  # type: ignore[arg-type]
 
 
 FIELD_NAMES: list[str] = list(POSITION_FIELDS)
@@ -126,8 +126,8 @@ COLUMN_MAPS: st.SearchStrategy[Mapping[str, str] | None] = st.one_of(
 def test_fuzz_import_positions_arbitrary_text(
     text: str, group: str, columns: Mapping[str, str] | None
 ) -> None:
-    """Rejects arbitrary CSV text, group names and column maps with a ShowPyError."""
-    only_showpy_errors(
+    """Rejects arbitrary CSV text, group names and column maps with an E8sError."""
+    only_e8s_errors(
         lambda: import_positions(BASE_SHOW, text, group, columns), (text, group, columns)
     )
 
@@ -158,6 +158,6 @@ def mutated_csv(draw: st.DrawFn) -> tuple[str, str, Mapping[str, str] | None]:
 
 @given(case=mutated_csv())
 def test_fuzz_import_positions_mutated_csv(case: tuple[str, str, Mapping[str, str] | None]) -> None:
-    """Accepts or rejects damaged position CSV, with a ShowPyError at worst."""
+    """Accepts or rejects damaged position CSV, with an E8sError at worst."""
     text, group, columns = case
-    only_showpy_errors(lambda: import_positions(BASE_SHOW, text, group, columns), case)
+    only_e8s_errors(lambda: import_positions(BASE_SHOW, text, group, columns), case)

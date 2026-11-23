@@ -22,15 +22,15 @@ from typing import cast
 import numpy as np
 import pytest
 
-from showpy.choreo.forms import line_form
-from showpy.choreo.match import bottleneck_value, cost_matrix, match, match_by_order
-from showpy.choreo.match_models import CostFn, MatchOptions, MatchWeights
-from showpy.choreo.models import PlacementPatch
-from showpy.core.caps import MAX_COORD_M
-from showpy.core.errors import MatchError, SchemaError, ShowPyError, UnknownRefError
-from showpy.core.ids import SpotId
-from showpy.core.types import Point
-from showpy.core.util import approx_equal
+from e8s.choreo.forms import line_form
+from e8s.choreo.match import bottleneck_value, cost_matrix, match, match_by_order
+from e8s.choreo.match_models import CostFn, MatchOptions, MatchWeights
+from e8s.choreo.models import PlacementPatch
+from e8s.core.caps import MAX_COORD_M
+from e8s.core.errors import E8sError, MatchError, SchemaError, UnknownRefError
+from e8s.core.ids import SpotId
+from e8s.core.types import Point
+from e8s.core.util import approx_equal
 from tests.helpers import make_facing_set
 
 TOL = 1e-9
@@ -327,7 +327,7 @@ def _failing_cost(entity: str, slot: int, _start: Point, _target: Point) -> floa
 
 def test_regression_match_by_order_rejects_duplicate_spots() -> None:
     """Rejects a repeated spot instead of collapsing it to one (audit 9.6)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         match_by_order(["A", "A"], np.asarray(PAIR_SLOTS))
 
 

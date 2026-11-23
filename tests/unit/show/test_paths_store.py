@@ -6,13 +6,13 @@ test_paths_store.py --- tests saving and loading a transition's paths through th
 
 from datetime import UTC, datetime
 
-from showpy.choreo.path_models import TransitionSpec
-from showpy.choreo.paths import delay
-from showpy.core.ids import make_tid
-from showpy.examples import two_set_show
-from showpy.show.paths_store import load_paths, save_paths
-from showpy.show.repositories import InMemoryRepository
-from showpy.show.storage import open_workspace
+from e8s.choreo.path_models import TransitionSpec
+from e8s.choreo.paths import delay
+from e8s.core.ids import make_tid
+from e8s.examples import two_set_show
+from e8s.show.paths_store import load_paths, save_paths
+from e8s.show.repositories import InMemoryRepository
+from e8s.show.storage import open_workspace
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 SHOW_ID = "show-1"

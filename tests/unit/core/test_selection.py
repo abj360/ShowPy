@@ -4,7 +4,7 @@
 test_selection.py --- tests the Selection set algebra
 
 Contains:
-    test_*(): one behavior of showpy.core.selection each
+    test_*(): one behavior of e8s.core.selection each
     test_regression_selection_rejects_a_bare_string: rejects `ids="T12"` instead of splitting it
         into characters
     test_selection_operators_reject_a_bare_string: rejects a bare string operand of |, & and -
@@ -28,10 +28,10 @@ from collections.abc import Callable, Iterable, Iterator
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from showpy.core.errors import SchemaError, ShowPyError
-from showpy.core.ids import SpotId
-from showpy.core.selection import Selection, operand_ids
-from showpy.core.util import natural_sort
+from e8s.core.errors import E8sError, SchemaError
+from e8s.core.ids import SpotId
+from e8s.core.selection import Selection, operand_ids
+from e8s.core.util import natural_sort
 
 
 def test_selection_dedupes_and_keeps_order() -> None:
@@ -75,7 +75,7 @@ def test_regression_malformed_ids_are_a_schema_error_not_a_type_error(ids: objec
 
 def test_regression_selection_rejects_a_bare_string() -> None:
     """Rejects `ids="T12"` instead of splitting it into characters (audit 9.3)."""
-    with pytest.raises((ShowPyError, PydanticValidationError)):
+    with pytest.raises((E8sError, PydanticValidationError)):
         Selection(ids="T12")  # pyright: ignore[reportArgumentType] - deliberately invalid input
 
 

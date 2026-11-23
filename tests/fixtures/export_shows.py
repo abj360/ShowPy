@@ -10,12 +10,12 @@ Contains:
     live_publication(): returns a live publication of a show with no claims
 """
 
-from showpy.choreo.path_models import PathRow, PathStyle
-from showpy.core.ids import SpotId
-from showpy.examples import EXAMPLE_TIME as AT
-from showpy.examples import live_publication, performer
-from showpy.sheet.models import GuideLine
-from showpy.show.models import Show
+from e8s.choreo.path_models import PathRow, PathStyle
+from e8s.core.ids import SpotId
+from e8s.examples import EXAMPLE_TIME as AT
+from e8s.examples import live_publication, performer
+from e8s.sheet.models import GuideLine
+from e8s.show.models import Show
 from tests.fixtures.motion_shows import with_rows, with_targets
 from tests.fixtures.shows import two_set_show
 

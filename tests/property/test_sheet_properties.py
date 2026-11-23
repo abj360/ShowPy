@@ -9,15 +9,15 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.core.units import convert
-from showpy.core.util import approx_equal
-from showpy.geo.affine import rotation_matrix, scale_matrix, transform_points, translation_matrix
-from showpy.sheet.coords import from_coords, set_coordinates, to_coords
-from showpy.sheet.models import CoordinateKind, CoordinateSystem
-from showpy.sheet.replace import similarity_fit
+from e8s.core.units import convert
+from e8s.core.util import approx_equal
+from e8s.geo.affine import rotation_matrix, scale_matrix, transform_points, translation_matrix
+from e8s.sheet.coords import from_coords, set_coordinates, to_coords
+from e8s.sheet.models import CoordinateKind, CoordinateSystem
+from e8s.sheet.replace import similarity_fit
 from tests.fixtures.shows import two_set_show
 
-pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 FIT_TOL = 1e-6
 SLACK_M = 1e-9

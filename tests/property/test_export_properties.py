@@ -14,11 +14,11 @@ import pandas as pd
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from showpy.choreo.models import PlacementPatch
-from showpy.export._data import to_csv
-from showpy.export._pdf import ENCODING, REPLACEMENTS, escape_text
-from showpy.show.interchange import export_json, import_json, import_positions
-from showpy.show.models import Show
+from e8s.choreo.models import PlacementPatch
+from e8s.export._data import to_csv
+from e8s.export._pdf import ENCODING, REPLACEMENTS, escape_text
+from e8s.show.interchange import export_json, import_json, import_positions
+from e8s.show.models import Show
 from tests.fixtures.shows import two_set_show
 
 SET_COUNTS = {"1": 0.0, "2": 8.0, "3": 4.0, "4": 2.0}

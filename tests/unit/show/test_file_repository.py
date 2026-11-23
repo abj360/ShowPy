@@ -104,18 +104,18 @@ from typing import Any, NoReturn
 
 import pytest
 
-import showpy.show.file_repository as file_repository
-from showpy.core.canonical import MAX_NESTING
-from showpy.core.errors import ConflictError, StorageError, bounded_repr
-from showpy.show.file_repository import (
+import e8s.show.file_repository as file_repository
+from e8s.core.canonical import MAX_NESTING
+from e8s.core.errors import ConflictError, StorageError, bounded_repr
+from e8s.show.file_repository import (
     BLOB_MAX_BYTES,
     LINK_MAX_BYTES,
     TREE_MAX_BYTES,
     FileRepository,
 )
-from showpy.show.models import Revision
-from showpy.show.repositories import digest
-from showpy.show.storage import open_workspace
+from e8s.show.models import Revision
+from e8s.show.repositories import digest
+from e8s.show.storage import open_workspace
 from tests.fixtures.shows import two_set_show
 from tests.helpers import HOSTILE_JSON, capped_address_space, fails_after
 

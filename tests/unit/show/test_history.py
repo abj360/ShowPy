@@ -28,12 +28,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from showpy.cast.models import Group
-from showpy.cast.rewrite import rewrite_spot_ids
-from showpy.cast.spots import add_spot, rename_spots
-from showpy.choreo.form_models import Form
-from showpy.choreo.models import PlacementPatch
-from showpy.choreo.path_models import (
+from e8s.cast.models import Group
+from e8s.cast.rewrite import rewrite_spot_ids
+from e8s.cast.spots import add_spot, rename_spots
+from e8s.choreo.form_models import Form
+from e8s.choreo.models import PlacementPatch
+from e8s.choreo.path_models import (
     EntityFacing,
     FacingMode,
     FacingOverride,
@@ -42,12 +42,12 @@ from showpy.choreo.path_models import (
     Route,
     TransitionSpec,
 )
-from showpy.core.errors import DeprecatedWarning, SchemaError, ShowPyError, UnknownRefError
-from showpy.core.ids import FormId, RouteId, SetId, SpotId, ZoneId, make_tid
-from showpy.core.types import Region
-from showpy.geo.curves import Segment
-from showpy.sheet.models import Zone, ZoneKind
-from showpy.show.history import (
+from e8s.core.errors import DeprecatedWarning, E8sError, SchemaError, UnknownRefError
+from e8s.core.ids import FormId, RouteId, SetId, SpotId, ZoneId, make_tid
+from e8s.core.types import Region
+from e8s.geo.curves import Segment
+from e8s.sheet.models import Zone, ZoneKind
+from e8s.show.history import (
     changelog,
     diff_paths,
     diff_sets,
@@ -55,21 +55,21 @@ from showpy.show.history import (
     rename_entities,
     revert,
 )
-from showpy.show.manage import add_set
-from showpy.show.models import Pin, Show
-from showpy.show.pinning import pin, unpin
-from showpy.show.repositories import InMemoryRepository
-from showpy.show.storage import load_show, open_workspace, save_show
-from showpy.show.validate import validate_show
+from e8s.show.manage import add_set
+from e8s.show.models import Pin, Show
+from e8s.show.pinning import pin, unpin
+from e8s.show.repositories import InMemoryRepository
+from e8s.show.storage import load_show, open_workspace, save_show
+from e8s.show.validate import validate_show
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 from tests.helpers import open_session
 
-pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 RENAME_ENTITIES_WARNING = (
-    "`showpy.show.history.rename_entities` is replaced by `showpy.cast.spots.rename_spots`;"
+    "`e8s.show.history.rename_entities` is replaced by `e8s.cast.spots.rename_spots`;"
     " the old use is removed in 0.6.0"
 )
 STEP = timedelta(minutes=1)
@@ -353,7 +353,7 @@ def test_regression_undo_does_not_leave_a_path_row_for_a_removed_spot() -> None:
     save_show(agent, load_show(agent).model_copy(update={"transitions": (row,)}), AT + 2 * STEP)
     try:
         revert(designer, added.parent, AT + 3 * STEP)
-    except ShowPyError:
+    except E8sError:
         return
     assert validate_show(load_show(designer)).ok
 
@@ -368,7 +368,7 @@ def test_regression_undoing_the_first_save_keeps_a_loadable_show() -> None:
     first = save_show(ws, two_set_show(), AT)
     try:
         revert(ws, first.parent, AT + STEP)
-    except ShowPyError:
+    except E8sError:
         return
     assert load_show(ws).sets
 

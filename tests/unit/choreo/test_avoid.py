@@ -4,11 +4,11 @@
 test_avoid.py --- tests advisory gap finding and fix suggestions
 
 Contains:
-    test_regression_reassign_hint_names_the_real_module: names showpy.choreo.match_ops.apply_match
+    test_regression_reassign_hint_names_the_real_module: names e8s.choreo.match_ops.apply_match
         in the hint for a reassign fix
     test_regression_suggested_waypoint_is_reached_at_its_count_on_eased_rows: puts a suggested bend
         where it says, at the count it names, on an eased row
-    test_regression_min_gaps_with_top_zero_returns_nothing: returns an empty list, or a ShowPyError,
+    test_regression_min_gaps_with_top_zero_returns_nothing: returns an empty list, or an E8sError,
         for top=0 instead of IndexError
     test_regression_min_gaps_ignores_spots_before_their_entrance: skips the time a spot is parked
         off the field, so it cannot collide there
@@ -16,7 +16,7 @@ Contains:
         the pair's gap
     test_regression_avoid_helpers_accept_a_custom_motion_registry: analyses a show that uses a
         custom-registered motion
-    test_regression_closest_approach_of_empty_track_raises_showpy_error: raises a ShowPyError, not
+    test_regression_closest_approach_of_empty_track_raises_e8s_error: raises an E8sError, not
         IndexError, for an empty track
     test_regression_min_gaps_resolves_selector_expressions: reads `sel` as a selector expression,
         and refuses an unknown spot with UnknownRefError
@@ -41,8 +41,8 @@ from typing import cast
 import numpy as np
 import pytest
 
-from showpy.cast.rewrite import rewrite_spot_ids
-from showpy.choreo.avoid import (
+from e8s.cast.rewrite import rewrite_spot_ids
+from e8s.choreo.avoid import (
     apply_fix,
     closest_approach,
     min_gaps,
@@ -51,18 +51,18 @@ from showpy.choreo.avoid import (
     suggest_reassignment,
     suggest_waypoint,
 )
-from showpy.choreo.engine import PathEngine
-from showpy.choreo.engine_models import BendFix, DelayFix, Fix, ReassignFix, StaggerFix
-from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import PlacementPatch
-from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, MotionRegistry
-from showpy.choreo.path_models import Easing, PathRow, PathStyle
-from showpy.core.errors import PathError, SchemaError, ShowPyError, UnknownRefError
-from showpy.core.ids import SpotId
-from showpy.core.json_types import JsonValue
-from showpy.core.types import Point, Points
-from showpy.core.util import approx_equal
-from showpy.show.models import Show
+from e8s.choreo.engine import PathEngine
+from e8s.choreo.engine_models import BendFix, DelayFix, Fix, ReassignFix, StaggerFix
+from e8s.choreo.match_ops import with_set
+from e8s.choreo.models import PlacementPatch
+from e8s.choreo.motion import DEFAULT_MOTIONS, FloatArray, MotionRegistry
+from e8s.choreo.path_models import Easing, PathRow, PathStyle
+from e8s.core.errors import E8sError, PathError, SchemaError, UnknownRefError
+from e8s.core.ids import SpotId
+from e8s.core.json_types import JsonValue
+from e8s.core.types import Point, Points
+from e8s.core.util import approx_equal
+from e8s.show.models import Show
 from tests.fixtures.crossing_shows import crossing_show
 from tests.fixtures.motion_shows import TID, with_rows
 from tests.fixtures.shows import two_set_show
@@ -152,11 +152,11 @@ def test_suggest_reassignment_uncrosses_a_swap() -> None:
 
 
 def test_regression_reassign_hint_names_the_real_module() -> None:
-    """Names showpy.choreo.match_ops.apply_match in the hint for a reassign fix."""
+    """Names e8s.choreo.match_ops.apply_match in the hint for a reassign fix."""
     fix = Fix(kind="reassign", params=ReassignFix(), new_gap=1.0, max_speed_after=0.5)
     with pytest.raises(PathError) as info:
         apply_fix(crossing_show().transition(TID), fix)
-    assert "showpy.choreo.match_ops.apply_match" in info.value.hint
+    assert "e8s.choreo.match_ops.apply_match" in info.value.hint
 
 
 PARKED_UNTIL = 7.0
@@ -176,10 +176,10 @@ def test_regression_suggested_waypoint_is_reached_at_its_count_on_eased_rows() -
 
 
 def test_regression_min_gaps_with_top_zero_returns_nothing() -> None:
-    """Returns an empty list, or a ShowPyError, for top=0 instead of IndexError (audit 9.2)."""
+    """Returns an empty list, or an E8sError, for top=0 instead of IndexError (audit 9.2)."""
     try:
         gaps = min_gaps(two_set_show(), TID, top=0)
-    except ShowPyError:
+    except E8sError:
         return
     assert gaps == []
 
@@ -240,9 +240,9 @@ def test_regression_avoid_helpers_accept_a_custom_motion_registry(call: MotionsC
     assert repr(call(custom, registry)) == repr(call(crossing_show(), DEFAULT_MOTIONS))
 
 
-def test_regression_closest_approach_of_empty_track_raises_showpy_error() -> None:
-    """Raises a ShowPyError, not IndexError, for an empty track (audit 9.2)."""
-    with pytest.raises(ShowPyError):
+def test_regression_closest_approach_of_empty_track_raises_e8s_error() -> None:
+    """Raises an E8sError, not IndexError, for an empty track (audit 9.2)."""
+    with pytest.raises(E8sError):
         closest_approach([], [], [0.0, 1.0], [(0.0, 0.0), (1.0, 1.0)])
 
 

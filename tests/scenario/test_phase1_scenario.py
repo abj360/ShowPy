@@ -40,28 +40,28 @@ import numpy as np
 import pytest
 from pydantic import BaseModel
 
-from showpy.cast.models import LabelScheme
-from showpy.cast.spots import delete_spots, regroup, relabel
-from showpy.choreo.engine import DEFAULT_SEGMENT_TOL, PathEngine
-from showpy.choreo.engine_models import MotionSegment
-from showpy.choreo.models import Set
-from showpy.core.errors import LockedError
-from showpy.core.ids import SetId
-from showpy.core.resources import schema_path
-from showpy.core.util import approx_equal, content_hash
-from showpy.examples import EXAMPLE_TIME, performer
-from showpy.export._models import Publication
-from showpy.export._publish import claim_spot, join_link, publish, unclaimed, verify_join_token
-from showpy.show.collab import apply_event, decode_event, events_since
-from showpy.show.documents import decode_show, encode_show
-from showpy.show.file_repository import FileRepository
-from showpy.show.history import revert
-from showpy.show.interchange import export_json, import_json
-from showpy.show.manage import insert_subset, renumber, set_counts
-from showpy.show.models import CanvasEvent, Show
-from showpy.show.pinning import pin
-from showpy.show.storage import Workspace, load_show, open_workspace, save_show
-from showpy.show.validate import validate_show
+from e8s.cast.models import LabelScheme
+from e8s.cast.spots import delete_spots, regroup, relabel
+from e8s.choreo.engine import DEFAULT_SEGMENT_TOL, PathEngine
+from e8s.choreo.engine_models import MotionSegment
+from e8s.choreo.models import Set
+from e8s.core.errors import LockedError
+from e8s.core.ids import SetId
+from e8s.core.resources import schema_path
+from e8s.core.util import approx_equal, content_hash
+from e8s.examples import EXAMPLE_TIME, performer
+from e8s.export._models import Publication
+from e8s.export._publish import claim_spot, join_link, publish, unclaimed, verify_join_token
+from e8s.show.collab import apply_event, decode_event, events_since
+from e8s.show.documents import decode_show, encode_show
+from e8s.show.file_repository import FileRepository
+from e8s.show.history import revert
+from e8s.show.interchange import export_json, import_json
+from e8s.show.manage import insert_subset, renumber, set_counts
+from e8s.show.models import CanvasEvent, Show
+from e8s.show.pinning import pin
+from e8s.show.storage import Workspace, load_show, open_workspace, save_show
+from e8s.show.validate import validate_show
 from tests.fixtures.generators import seeded_show
 
 pytestmark = pytest.mark.slow
@@ -256,7 +256,7 @@ def test_locked_delete_is_refused_without_force(scenario: Scenario) -> None:
 def test_final_show_validates(scenario: Scenario) -> None:
     with unchanged(scenario.head):
         assert validate_show(scenario.head).ok
-    schema = json.loads(schema_path("showpy.show.v2.json").read_text())
+    schema = json.loads(schema_path("e8.show.v2.json").read_text())
     tree = {path: json.loads(raw) for path, raw in encode_show(scenario.head).items()}
     jsonschema.validate(tree, schema)
 

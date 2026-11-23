@@ -56,11 +56,11 @@ from typing import Any
 
 import pytest
 
-from showpy.core.errors import ConflictError, SchemaError
-from showpy.core.util import content_hash
-from showpy.show.collab import events_since
-from showpy.show.document_reading import decode_show_dump
-from showpy.show.documents import (
+from e8s.core.errors import ConflictError, SchemaError
+from e8s.core.util import content_hash
+from e8s.show.collab import events_since
+from e8s.show.document_reading import decode_show_dump
+from e8s.show.documents import (
     LEGACY_NOTES_DOC,
     SHOW_DOC,
     dump_json,
@@ -68,11 +68,11 @@ from showpy.show.documents import (
     is_show_doc,
     migrate_documents,
 )
-from showpy.show.file_repository import FileRepository
-from showpy.show.history import diff_show
-from showpy.show.migrate import FIRST_VERSION
-from showpy.show.models import CanvasEvent, Revision, Show
-from showpy.show.storage import Workspace, load_show, open_workspace, save_show
+from e8s.show.file_repository import FileRepository
+from e8s.show.history import diff_show
+from e8s.show.migrate import FIRST_VERSION
+from e8s.show.models import CanvasEvent, Revision, Show
+from e8s.show.storage import Workspace, load_show, open_workspace, save_show
 
 FIXTURE = Path(__file__).resolve().parents[2] / "fixtures" / "repos" / "v0.2.0"
 LEGACY_KEYS = {"actor", "message", "kind"}

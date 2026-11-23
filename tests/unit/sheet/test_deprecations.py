@@ -26,20 +26,20 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageDraw
 
-import showpy
-from showpy._api_table import LEAVING as ALL_LEAVING
-from showpy._api_table import PUBLIC_API
-from showpy.core.deprecation import DeprecatedWarning
-from showpy.core.ids import LandmarkId, ZoneId
-from showpy.examples import two_set_show
-from showpy.sheet.models import CoordinateSystem, GuideLine, Landmark, Zone, ZoneKind
-from showpy.sheet.render import SheetCanvas
-from showpy.sheet.surfaces import NFHS_HASH, _proscenium_stage
-from showpy.sheet.templates import InMemorySheetStore, _blank_sheet
-from showpy.show.interchange import export_json, import_json
-from showpy.show.models import Show
+import e8s
+from e8s._api_table import LEAVING as ALL_LEAVING
+from e8s._api_table import PUBLIC_API
+from e8s.core.deprecation import DeprecatedWarning
+from e8s.core.ids import LandmarkId, ZoneId
+from e8s.examples import two_set_show
+from e8s.sheet.models import CoordinateSystem, GuideLine, Landmark, Zone, ZoneKind
+from e8s.sheet.render import SheetCanvas
+from e8s.sheet.surfaces import NFHS_HASH, _proscenium_stage
+from e8s.sheet.templates import InMemorySheetStore, _blank_sheet
+from e8s.show.interchange import export_json, import_json
+from e8s.show.models import Show
 
-SHEET_SOURCE = Path(showpy.__file__).parent / "sheet"
+SHEET_SOURCE = Path(e8s.__file__).parent / "sheet"
 SHEET = _blank_sheet(10.0, 6.0)
 STAGE = _proscenium_stage()
 SHOW = two_set_show()
@@ -102,18 +102,17 @@ FIELD_ROWS = [row for row in LEAVING if row[1] == "field"]
 PUBLIC_MODULES = {name: module for name, module, _attribute in PUBLIC_API}
 PLAIN = "."
 COORDINATE_WORDING = (
-    "; its replacements `showpy.locate`, `showpy.at_location` and `showpy.Location` "
-    "arrive in 0.7.0."
+    "; its replacements `e8s.locate`, `e8s.at_location` and `e8s.Location` arrive in 0.7.0."
 )
-SHEET_MARKINGS = "; its replacements `showpy.Marking` and `showpy.markings_near` arrive in 0.7.0."
+SHEET_MARKINGS = "; its replacements `e8s.Marking` and `e8s.markings_near` arrive in 0.7.0."
 SHEET_SHAPE = (
-    "; its replacements `showpy.sheets`, `showpy.sheet`, `showpy.field`, `showpy.floor`, "
-    "`showpy.Marking` and `showpy.on_sheet` arrive in 0.7.0."
+    "; its replacements `e8s.sheets`, `e8s.sheet`, `e8s.field`, `e8s.floor`, "
+    "`e8s.Marking` and `e8s.on_sheet` arrive in 0.7.0."
 )
 
 
 def _single(replacement: str) -> str:
-    return f"; its replacement `showpy.{replacement}` arrives in 0.7.0."
+    return f"; its replacement `e8s.{replacement}` arrives in 0.7.0."
 
 
 ENDINGS: dict[str, str] = {
@@ -186,11 +185,11 @@ def test_leaving_sheet_types_warn_on_top_level_access(
     module = importlib.import_module(PUBLIC_MODULES[name])
     for _ in range(2):
         with pytest.warns(DeprecatedWarning) as caught:
-            resolved = getattr(showpy, name)
-        assert str(caught[0].message) == _leaving_text(f"showpy.{name}", name, remove)
+            resolved = getattr(e8s, name)
+        assert str(caught[0].message) == _leaving_text(f"e8s.{name}", name, remove)
         assert caught[0].filename == __file__
         assert resolved is getattr(module, name)
-    assert name not in vars(showpy)
+    assert name not in vars(e8s)
 
 
 def test_leaving_show_sheet_fields_warn() -> None:
@@ -199,12 +198,12 @@ def test_leaving_show_sheet_fields_warn() -> None:
     with pytest.warns(DeprecatedWarning) as coordinates:
         assert SHOW.coordinates == SHOW.coordinates
     assert [str(w.message) for w in coordinates] == [
-        _leaving_text("showpy.Show.coordinates", "Show.coordinates", "0.7.0")
+        _leaving_text("e8s.Show.coordinates", "Show.coordinates", "0.7.0")
     ] * 2
     with pytest.warns(DeprecatedWarning) as zones:
         assert SHOW.zones == SHOW.zones
     assert [str(w.message) for w in zones] == [
-        _leaving_text("showpy.Show.zones", "Show.zones", "0.7.0")
+        _leaving_text("e8s.Show.zones", "Show.zones", "0.7.0")
     ] * 2
     assert {row[0] for row in FIELD_ROWS} == FIELD_NAMES
     with warnings.catch_warnings(record=True) as caught:
@@ -217,8 +216,8 @@ def test_leaving_show_sheet_fields_warn() -> None:
 
 
 def test_leaving_show_fields_stay_silent_inside_the_library() -> None:
-    assert importlib.import_module("showpy.sheet.coords")._to_coords(SHOW, POINT)
-    assert importlib.import_module("showpy.sheet.bounds")._zones_at(SHOW, POINT) is not None
+    assert importlib.import_module("e8s.sheet.coords")._to_coords(SHOW, POINT)
+    assert importlib.import_module("e8s.sheet.bounds")._zones_at(SHOW, POINT) is not None
 
 
 def _decorated_rows() -> dict[str, tuple[str | tuple[str, ...] | None, str, str]]:

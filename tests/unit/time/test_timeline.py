@@ -4,7 +4,7 @@
 test_timeline.py --- tests timeline construction, pure edits, lookups and JSON persistence
 
 Contains:
-    test_*(): one behavior of showpy.time.timeline each
+    test_*(): one behavior of e8s.time.timeline each
     test_regression_add_tempo_rejects_nan_count: rejects a tempo section at a NaN count
     test_regression_add_hold_rejects_nan_seconds: rejects a hold of NaN seconds
     test_regression_add_marker_rejects_nan_count: rejects a marker at a NaN count
@@ -29,15 +29,15 @@ from typing import cast
 import pytest
 from pydantic import ValidationError as PydanticValidationError
 
-from showpy.core.errors import (
+from e8s.core.errors import (
+    E8sError,
     SchemaError,
-    ShowPyError,
     TimelineError,
     TimeRangeError,
     UnknownRefError,
 )
-from showpy.time.clock import count_to_seconds
-from showpy.time.models import (
+from e8s.time.clock import count_to_seconds
+from e8s.time.models import (
     AudioTrack,
     Cue,
     Hold,
@@ -48,7 +48,7 @@ from showpy.time.models import (
     Timeline,
     TimelineMode,
 )
-from showpy.time.timeline import (
+from e8s.time.timeline import (
     add_cue,
     add_hold,
     add_marker,
@@ -227,9 +227,9 @@ def test_set_and_clear_measures() -> None:
 
 
 def test_set_measures_rejects_non_positive_length() -> None:
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         MeasureSetting(counts_per_measure=0.0)
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         MeasureSetting(counts_per_measure=4.0, changes=((8.0, -2.0),))
     unchecked = MeasureSetting.model_construct(counts_per_measure=0.0, start_measure=1, changes=())
     with pytest.raises(TimelineError):
@@ -276,7 +276,7 @@ def test_from_json_rejects_bad_payload_with_schema_error() -> None:
     assert "mode" in str(info.value.context)
 
 
-REJECTED = (ShowPyError, PydanticValidationError)
+REJECTED = (E8sError, PydanticValidationError)
 
 
 def _steady() -> Timeline:
@@ -332,7 +332,7 @@ def test_regression_remove_tempo_at_zero_keeps_a_convertible_timeline() -> None:
     """Refuses to drop the count-0 tempo, or leaves a timeline that still converts (audit 9.3)."""
     try:
         trimmed = remove_tempo(_steady(), 0.0)
-    except ShowPyError:
+    except E8sError:
         return
     assert math.isfinite(count_to_seconds(trimmed, 4.0))
 
@@ -368,7 +368,7 @@ def test_regression_set_sync_never_returns_a_timeline_its_validators_reject() ->
     tl = attach_audio(_counts(), AudioTrack(file="a.wav", label="a"))
     try:
         edited = set_sync(tl, "a", math.inf)
-    except ShowPyError:
+    except E8sError:
         return
     Timeline.model_validate(edited.model_dump())
 

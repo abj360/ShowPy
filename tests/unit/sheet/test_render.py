@@ -4,7 +4,7 @@
 test_render.py --- tests the sheet canvas mapping and SVG, PNG and PDF rendering
 
 Contains:
-    test_*(): one behavior of showpy.sheet.render each
+    test_*(): one behavior of e8s.sheet.render each
     test_regression_pdf_embeds_no_wall_clock_dates(): writes no clock-derived CreationDate or
         ModDate into the PDF
     test_regression_svg_is_well_formed_with_control_characters_in_names(): keeps the SVG parseable
@@ -23,17 +23,17 @@ import xml.etree.ElementTree as ET
 import pytest
 from PIL import Image, ImageDraw
 
-from showpy.core.errors import SchemaError
-from showpy.core.ids import LandmarkId, ZoneId
-from showpy.core.types import Region
-from showpy.core.util import approx_equal
-from showpy.sheet.models import GuideLine, Landmark, Sheet, Zone, ZoneKind
-from showpy.sheet.render import SheetCanvas, draw_sheet, render_sheet
-from showpy.sheet.templates import add_guide, add_landmark, add_zone, blank_sheet, get_sheet
+from e8s.core.errors import SchemaError
+from e8s.core.ids import LandmarkId, ZoneId
+from e8s.core.types import Region
+from e8s.core.util import approx_equal
+from e8s.sheet.models import GuideLine, Landmark, Sheet, Zone, ZoneKind
+from e8s.sheet.render import SheetCanvas, draw_sheet, render_sheet
+from e8s.sheet.templates import add_guide, add_landmark, add_zone, blank_sheet, get_sheet
 from tests.fixtures.shows import field_sheet
 from tests.helpers import digests_under_hash_seeds
 
-pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 TOL = 1e-9
 SVG_NS = "{http://www.w3.org/2000/svg}"
@@ -105,7 +105,7 @@ def test_render_is_deterministic() -> None:
 def test_png_render_ignores_hash_seed() -> None:
     """Renders the same PNG twice in one run and under two hash seeds (audit 4.3)."""
     digests = digests_under_hash_seeds(
-        "from showpy.sheet.render import _render_sheet", "_render_sheet(show.sheet, fmt='png')"
+        "from e8s.sheet.render import _render_sheet", "_render_sheet(show.sheet, fmt='png')"
     )
     assert all(first == second for first, second in digests), digests
     assert len({first for first, _ in digests}) == 1, digests

@@ -12,8 +12,8 @@ Contains:
 import numpy as np
 import pytest
 
-from showpy.geo import shapes
-from showpy.geo.curve_base import CurveBase
+from e8s.geo import shapes
+from e8s.geo.curve_base import CurveBase
 
 SPIRAL_TURNS = 40
 COARSE_SAMPLES = 200_000

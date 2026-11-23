@@ -9,13 +9,13 @@ from hypothesis import assume, given
 from hypothesis import strategies as st
 from hypothesis.extra.numpy import arrays
 
-from showpy.choreo.models import Placement, Set
-from showpy.choreo.set_transforms import mirror, rotate, scale, shift
-from showpy.core.ids import SetId, SpotId
-from showpy.core.types import Points
-from showpy.core.units import angle_diff, normalize_angle
-from showpy.core.util import approx_equal
-from showpy.geo.shapes import curve_through
+from e8s.choreo.models import Placement, Set
+from e8s.choreo.set_transforms import mirror, rotate, scale, shift
+from e8s.core.ids import SetId, SpotId
+from e8s.core.types import Points
+from e8s.core.units import angle_diff, normalize_angle
+from e8s.core.util import approx_equal
+from e8s.geo.shapes import curve_through
 
 TOL = 1e-6
 COORD = 50.0

@@ -342,7 +342,7 @@
         "sheet:test-field": "1"
       },
       "facing_overrides": [],
-      "format": "showpy.show",
+      "format": "e8.show",
       "id": "show-1",
       "pack": "",
       "pins": [

@@ -3,7 +3,7 @@
 """
 test_import_time.py --- benchmarks importing the choreography data model in fresh interpreters
 
-Importing showpy.choreo.models must not load pandas or any other extra. Its import time is the
+Importing e8s.choreo.models must not load pandas or any other extra. Its import time is the
 median of 9 fresh interpreters, and at tier M it fails when that median is more than 20% above
 the median stored for this benchmark in the baseline file, the same tolerance `nox -s bench`
 applies to every benchmark's min time.
@@ -30,7 +30,7 @@ from tests.conftest import BenchTier
 pytestmark = pytest.mark.bench
 
 BASELINE = Path(__file__).with_name("baseline-2026-11-13.json")
-IMPORT_COMMAND = (sys.executable, "-c", "import showpy.choreo.models")
+IMPORT_COMMAND = (sys.executable, "-c", "import e8s.choreo.models")
 IMPORT_ROUNDS = 9
 REGRESSION_SHARE = 0.20
 GATED_TIER = "M"

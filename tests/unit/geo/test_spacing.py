@@ -40,9 +40,9 @@ Contains:
         leaking ZeroDivisionError
     test_regression_scatter_rejects_zero_min_gap: raises SpacingError for min_gap=0 instead of
         leaking ZeroDivisionError
-    test_regression_scatter_rejects_fractional_seed: raises a ShowPyError for seed=1.5 instead of
+    test_regression_scatter_rejects_fractional_seed: raises an E8sError for seed=1.5 instead of
         leaking TypeError
-    test_regression_fill_rejects_empty_area: raises a ShowPyError for an empty area instead of
+    test_regression_fill_rejects_empty_area: raises an E8sError for an empty area instead of
         leaking GEOSException
     test_regression_scatter_rejects_n_over_the_cap: rejects n over MAX_POINTS before sampling
     test_regression_scatter_rejects_sample_bound_over_the_cap: rejects a gap whose sample bound is
@@ -65,14 +65,14 @@ Contains:
         generates
     test_regression_fill_refuses_a_lattice_just_over_the_cap: refuses a 1,162,049-point lattice
     test_regression_space_by_interval_rejects_non_finite_start: names a non-finite start
-    test_regression_fill_rejects_non_finite_angle: raises ShowPyError for NaN or inf angle_deg
+    test_regression_fill_rejects_non_finite_angle: raises E8sError for NaN or inf angle_deg
         (UP-9.1-68)
-    test_regression_fill_rejects_non_finite_margin: raises ShowPyError for NaN or inf margin
+    test_regression_fill_rejects_non_finite_margin: raises E8sError for NaN or inf margin
         (UP-9.1-69)
-    test_regression_fill_rejects_non_finite_anchor: raises ShowPyError for a NaN or inf anchor
+    test_regression_fill_rejects_non_finite_anchor: raises E8sError for a NaN or inf anchor
         (UP-9.1-70)
-    test_regression_block_rejects_infinite_facing: raises ShowPyError for an inf facing (UP-9.1-71)
-    test_regression_block_rejects_nan_facing: raises ShowPyError for a NaN facing (UP-9.1-73)
+    test_regression_block_rejects_infinite_facing: raises E8sError for an inf facing (UP-9.1-71)
+    test_regression_block_rejects_nan_facing: raises E8sError for a NaN facing (UP-9.1-73)
     test_regression_scatter_on_a_field_finishes_or_refuses_within_ten_seconds: bounds a field-size
         scatter near the cap to 10 s (UP-9.1-72)
 """
@@ -87,13 +87,13 @@ import shapely
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from showpy.core.caps import MAX_POINTS
-from showpy.core.errors import ShowPyError, SpacingError, UnknownRefError
-from showpy.core.util import approx_equal
-from showpy.geo.curves import Segment
-from showpy.geo.regions import region
-from showpy.geo.shapes import arc, circle, line, rect
-from showpy.geo.spacing import (
+from e8s.core.caps import MAX_POINTS
+from e8s.core.errors import E8sError, SpacingError, UnknownRefError
+from e8s.core.util import approx_equal
+from e8s.geo.curves import Segment
+from e8s.geo.regions import region
+from e8s.geo.shapes import arc, circle, line, rect
+from e8s.geo.spacing import (
     FillPattern,
     _lattice_axes,
     _lattice_estimate,
@@ -530,14 +530,14 @@ def test_regression_scatter_rejects_zero_min_gap() -> None:
 
 
 def test_regression_scatter_rejects_fractional_seed() -> None:
-    """Raises a ShowPyError for seed=1.5 instead of leaking TypeError (audit 9.1)."""
-    with pytest.raises(ShowPyError):
+    """Raises an E8sError for seed=1.5 instead of leaking TypeError (audit 9.1)."""
+    with pytest.raises(E8sError):
         scatter(_square(), 3, 1.0, seed=FRACTIONAL_SEED)  # type: ignore[arg-type]
 
 
 def test_regression_fill_rejects_empty_area() -> None:
-    """Raises a ShowPyError for an empty area instead of leaking GEOSException (audit 9.1)."""
-    with pytest.raises(ShowPyError):
+    """Raises an E8sError for an empty area instead of leaking GEOSException (audit 9.1)."""
+    with pytest.raises(E8sError):
         fill(shapely.Polygon(), 1.0)
 
 
@@ -668,34 +668,34 @@ def test_regression_space_by_interval_rejects_non_finite_start(start: float) -> 
 @pytest.mark.parametrize("angle_deg", NON_FINITE_PARAMETER)
 def test_regression_fill_rejects_non_finite_angle(angle_deg: float) -> None:
     """Raises a SpacingError for a NaN or infinite angle_deg instead of leaking."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         fill(_square(), 1.0, angle_deg=angle_deg)
 
 
 @pytest.mark.parametrize("margin", NON_FINITE_PARAMETER)
 def test_regression_fill_rejects_non_finite_margin(margin: float) -> None:
     """Raises a SpacingError for a NaN or infinite margin instead of leaking."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         fill(_square(), 1.0, margin=margin)
 
 
 @pytest.mark.parametrize("coordinate", NON_FINITE_PARAMETER)
 def test_regression_fill_rejects_non_finite_anchor(coordinate: float) -> None:
     """Raises a SpacingError for a NaN or infinite anchor instead of leaking GEOSException."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         fill(_square(), 1.0, anchor=(coordinate, 0.0))
 
 
 @pytest.mark.parametrize("facing", [math.inf, -math.inf])
 def test_regression_block_rejects_infinite_facing(facing: float) -> None:
     """Raises a SpacingError for an infinite facing instead of leaking ValueError."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         block((0.0, 0.0), 2, 2, 1.0, facing=facing)
 
 
 def test_regression_block_rejects_nan_facing() -> None:
-    """Raises a ShowPyError for a NaN facing instead of returning NaN points."""
-    with pytest.raises(ShowPyError):
+    """Raises an E8sError for a NaN facing instead of returning NaN points."""
+    with pytest.raises(E8sError):
         block((0.0, 0.0), 2, 2, 1.0, facing=math.nan)
 
 

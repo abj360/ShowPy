@@ -4,7 +4,7 @@
 test_ids.py --- tests reference and transition ID parsing and formatting
 
 Contains:
-    test_*(): one behavior of showpy.core.ids each
+    test_*(): one behavior of e8s.core.ids each
     test_regression_parse_ref_accepts_build_metadata: reads `1.0.0+build.5` as a version
     test_parse_ref_still_refuses_unsafe_versions: refuses `..`, `/`, `all` and bad edges in versions
     test_regression_parse_ref_rejects_path_separators: rejects `..` and `/` in reference IDs, which
@@ -54,8 +54,8 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from showpy.core.errors import SchemaError
-from showpy.core.ids import (
+from e8s.core.errors import SchemaError
+from e8s.core.ids import (
     ID_BODY_CHARS,
     ID_MAX_LENGTH,
     ID_PATTERN,
@@ -83,9 +83,9 @@ from showpy.core.ids import (
     parse_ref,
     parse_tid,
 )
-from showpy.sheet.templates import sheet_templates
+from e8s.sheet.templates import sheet_templates
 
-pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
+pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 ID_CANDIDATES = st.from_regex(ID_PATTERN, fullmatch=True) | st.text(
     alphabet=st.characters(max_codepoint=0x7F) | st.sampled_from("\u00e9\u0663\u212a"),

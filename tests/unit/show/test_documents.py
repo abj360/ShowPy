@@ -4,9 +4,9 @@
 test_documents.py --- encodes audited document encode and decode defects as strict xfails
 
 Contains:
-    test_regression_decode_wrong_shape_show_json_is_a_library_error: raises a ShowPyError, not
+    test_regression_decode_wrong_shape_show_json_is_a_library_error: raises an E8sError, not
         TypeError, for a show.json of the wrong shape
-    test_regression_decode_wrong_shape_forms_json_is_a_library_error: raises a ShowPyError, not
+    test_regression_decode_wrong_shape_forms_json_is_a_library_error: raises an E8sError, not
         TypeError, for a forms.json of the wrong shape
     test_regression_decode_rejects_string_set_order: rejects `"sets": "12"` instead of decoding it
         as sets 1 and 2
@@ -42,10 +42,10 @@ import math
 
 import pytest
 
-from showpy.core.canonical import INT_LIMIT
-from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import SchemaError, ShowPyError, VersionError
-from showpy.show.documents import (
+from e8s.core.canonical import INT_LIMIT
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import E8sError, SchemaError, VersionError
+from e8s.show.documents import (
     LEGACY_NOTES_DOC,
     SHOW_DOC,
     decode_show,
@@ -56,8 +56,8 @@ from showpy.show.documents import (
     encode_show,
     forms_doc,
 )
-from showpy.show.migrate import format_header, without_header
-from showpy.show.models import Show
+from e8s.show.migrate import format_header, without_header
+from e8s.show.models import Show
 from tests.fixtures.shows import two_set_show
 from tests.helpers import HOSTILE_JSON
 
@@ -71,21 +71,21 @@ def _docs() -> dict[str, bytes]:
 
 @pytest.mark.parametrize("raw", [b"5", b'"text"'])
 def test_regression_decode_wrong_shape_show_json_is_a_library_error(raw: bytes) -> None:
-    """Raises a ShowPyError, not TypeError, for a show.json of the wrong shape (audit 9.7 #9)."""
-    with pytest.raises(ShowPyError):
+    """Raises an E8sError, not TypeError, for a show.json of the wrong shape (audit 9.7 #9)."""
+    with pytest.raises(E8sError):
         decode_show({**_docs(), SHOW_DOC: raw})
 
 
 def test_regression_decode_wrong_shape_forms_json_is_a_library_error() -> None:
-    """Raises a ShowPyError, not TypeError, for a forms.json of the wrong shape (audit 9.7 #9)."""
-    with pytest.raises(ShowPyError):
+    """Raises an E8sError, not TypeError, for a forms.json of the wrong shape (audit 9.7 #9)."""
+    with pytest.raises(E8sError):
         decode_show({**_docs(), forms_doc("2"): b"5"})
 
 
 def test_regression_decode_rejects_string_set_order() -> None:
     """Rejects `"sets": "12"` instead of decoding it as sets 1 and 2 (audit 9.7 item 9)."""
     body = json.loads(_docs()[SHOW_DOC]) | {"sets": "12"}
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         decode_show({**_docs(), SHOW_DOC: json.dumps(body).encode()})
 
 
@@ -146,7 +146,7 @@ def test_regression_encode_never_writes_non_finite_numbers() -> None:
     )
     try:
         docs = encode_show(broken)
-    except ShowPyError:
+    except E8sError:
         return
     for raw in docs.values():
         json.loads(raw, parse_constant=_reject_constant)

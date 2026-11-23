@@ -25,17 +25,17 @@ Contains:
 import numpy as np
 import pytest
 
-from showpy.choreo.form_models import Form
-from showpy.choreo.form_ops import gate, merge_forms, morph_targets, reorder, split_form
-from showpy.choreo.form_place import place, rebuild
-from showpy.choreo.forms import slot_poses, text_form
-from showpy.choreo.match import cost_matrix, match, match_by_order
-from showpy.choreo.match_cost import build_problem
-from showpy.choreo.match_ops import apply_match, swap, with_set
-from showpy.core.errors import MissingFontError
-from showpy.core.ids import FormId, SpotId
-from showpy.geo.fonts import FontRegistry, bundled_fonts, register_font
-from showpy.show.models import Show
+from e8s.choreo.form_models import Form
+from e8s.choreo.form_ops import gate, merge_forms, morph_targets, reorder, split_form
+from e8s.choreo.form_place import place, rebuild
+from e8s.choreo.forms import slot_poses, text_form
+from e8s.choreo.match import cost_matrix, match, match_by_order
+from e8s.choreo.match_cost import build_problem
+from e8s.choreo.match_ops import apply_match, swap, with_set
+from e8s.core.errors import MissingFontError
+from e8s.core.ids import FormId, SpotId
+from e8s.geo.fonts import FontRegistry, bundled_fonts, register_font
+from e8s.show.models import Show
 from tests.fixtures.fonts import tiny_bytes
 from tests.fixtures.shows import two_set_show
 

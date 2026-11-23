@@ -21,13 +21,13 @@ from typing import Any
 
 import pytest
 
-from showpy.core.errors import SchemaError
-from showpy.examples import two_set_show
-from showpy.show.document_paths import SHEET_DOC
-from showpy.show.documents import encode_show, migrate_documents
-from showpy.show.migrate import SHOW_DOC, ReportBuilder, without_header
-from showpy.show.migrations import v1_to_v2_sheet
-from showpy.show.migrations.v1_to_v2_sheet import migrate_sheet
+from e8s.core.errors import SchemaError
+from e8s.examples import two_set_show
+from e8s.show.document_paths import SHEET_DOC
+from e8s.show.documents import encode_show, migrate_documents
+from e8s.show.migrate import SHOW_DOC, ReportBuilder, without_header
+from e8s.show.migrations import v1_to_v2_sheet
+from e8s.show.migrations.v1_to_v2_sheet import migrate_sheet
 
 GUIDE = {"id": "tape", "kind": "custom", "points": [[0.0, 1.0], [1.0, 1.0]], "label": ""}
 

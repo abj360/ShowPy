@@ -153,3 +153,31 @@ would need a second package that re-exports the first.
   `tests/unit/show/test_schema.py`, `tests/unit/show/test_migrate.py`,
   `tests/golden/test_golden_large.py`, `tests/golden/test_golden_opener.py`,
   `tests/golden/test_golden_text.py`.
+
+## Addendum (2026-11-22): the package is `e8s`; the product stays e8Show
+
+The maintainer chose a shorter package name on 2026-11-22, before the rename step. The table in
+the Decision section is replaced by this one:
+
+| Before                           | After                                           |
+| -------------------------------- | ----------------------------------------------- |
+| distribution and import `showpy` | `e8s`                                           |
+| `ShowPy` in prose                | `e8Show` for the product; `e8s` for the package |
+| `ShowPyError`                    | `E8sError`                                      |
+| `SHOWPY_UPDATE_API`              | `E8S_UPDATE_API`                                |
+| `SHOWPY_UPDATE_GOLDEN`           | `E8S_UPDATE_GOLDEN`                             |
+| `SHOWPY_UPDATE_MIGRATION`        | `E8S_UPDATE_MIGRATION`                          |
+| `SHOWPY_UPDATE_SCHEMA`           | `E8S_UPDATE_SCHEMA`                             |
+| GitHub `abj360/ShowPy`           | `abj360/e8s`; GitHub redirects the old address  |
+
+Derived names follow the same rule (`only_showpy_errors` becomes `only_e8s_errors`). Why: `import e8s`
+is short to type for people and for agents writing scripts, and the package shares its name with
+the `.e8s` file format, the way `json` reads `.json`. Cost: documents must distinguish "an `.e8s`
+file" from "the `e8s` library", and `E8sError` reads less well than `E8ShowError`. Both names were
+free on PyPI and GitHub on 2026-11-22 (`https://pypi.org/pypi/e8s/json` returned 404).
+
+Two more stored strings stay as they are, beside the three frozen wire names: the hash domains
+`showpy.revision` (`REVISION_HASH_DOMAIN`, under which every revision ID is hashed) and
+`showpy.content` (the default `content_hash` domain). Renaming either would change every revision
+ID and content hash, so repositories written before the rename could no longer be read or
+verified.

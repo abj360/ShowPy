@@ -10,11 +10,11 @@ Contains:
 import numpy as np
 import pytest
 
-from showpy.choreo.set_transforms import mirror, rotate, set_interval, shift, symmetrize
-from showpy.core.errors import GeometryError, LockedError, SchemaError
-from showpy.core.util import approx_equal
-from showpy.geo.curves import Segment
-from showpy.geo.shapes import line
+from e8s.choreo.set_transforms import mirror, rotate, set_interval, shift, symmetrize
+from e8s.core.errors import GeometryError, LockedError, SchemaError
+from e8s.core.util import approx_equal
+from e8s.geo.curves import Segment
+from e8s.geo.shapes import line
 from tests.helpers import make_facing_set
 
 TOL = 1e-9

@@ -7,8 +7,8 @@ test_models.py --- tests timeline data class defaults, immutability and JSON saf
 import pydantic
 import pytest
 
-from showpy.core.errors import SchemaError
-from showpy.time.models import (
+from e8s.core.errors import SchemaError
+from e8s.time.models import (
     AudioTrack,
     Cue,
     Hold,

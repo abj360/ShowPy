@@ -31,10 +31,10 @@ Contains:
         by interval as any curve form does
     test_arc_form_rejects_a_zero_sweep: refuses an arc of 0 degrees, so a sweep lies in (0, 360]
         either way
-    test_regression_svg_form_rejects_empty_svg: raises a ShowPyError, not ValueError, for
+    test_regression_svg_form_rejects_empty_svg: raises an E8sError, not ValueError, for
         svg_form("")
     test_regression_generated_form_with_numpy_params_serializes_or_is_rejected: serializes numpy
-        generator params, or rejects them with a ShowPyError
+        generator params, or rejects them with an E8sError
     test_text_form_*: stores font URIs, follows reading order, needs one member per slot, keeps
         user fonts behind their registry and maps slots and facings through transforms
     test_regression_placements_rejects_a_text_form_short_of_members: raises MEMBER_COUNT_MISMATCH
@@ -50,10 +50,10 @@ from typing import Any
 import numpy as np
 import pytest
 
-from showpy.choreo.form_fns import DEFAULT_FORM_FNS, register_form_fn
-from showpy.choreo.form_models import FacingSpec, Form, SpacingSpec
-from showpy.choreo.form_ops import gate, reorder, transform_form
-from showpy.choreo.forms import (
+from e8s.choreo.form_fns import DEFAULT_FORM_FNS, register_form_fn
+from e8s.choreo.form_models import FacingSpec, Form, SpacingSpec
+from e8s.choreo.form_ops import gate, reorder, transform_form
+from e8s.choreo.forms import (
     arc_form,
     block_form,
     circle_form,
@@ -71,20 +71,20 @@ from showpy.choreo.forms import (
     text_form,
     wedge_form,
 )
-from showpy.choreo.recipe_models import SvgRecipe
-from showpy.core.errors import (
+from e8s.choreo.recipe_models import SvgRecipe
+from e8s.core.errors import (
+    E8sError,
     LockedError,
     MissingFontError,
     SchemaError,
-    ShowPyError,
     SpacingError,
     UnknownRefError,
 )
-from showpy.core.types import Box2, Points
-from showpy.core.util import approx_equal
-from showpy.geo.affine import rotation_matrix, translation_matrix
-from showpy.geo.curves import CompositeCurve, curve_from_construction
-from showpy.geo.fonts import BUNDLED_FONTS, FontRegistry, bundled_fonts, register_font
+from e8s.core.types import Box2, Points
+from e8s.core.util import approx_equal
+from e8s.geo.affine import rotation_matrix, translation_matrix
+from e8s.geo.curves import CompositeCurve, curve_from_construction
+from e8s.geo.fonts import BUNDLED_FONTS, FontRegistry, bundled_fonts, register_font
 from tests.fixtures.fonts import TINY, tiny_bytes
 from tests.helpers import fails_after
 
@@ -436,13 +436,13 @@ def test_regression_bad_block_anchor_raises_schema_error() -> None:
 
 
 def test_arc_form_rejects_a_zero_sweep() -> None:
-    with pytest.raises(ShowPyError, match="sweep"):
+    with pytest.raises(E8sError, match="sweep"):
         arc_form("a", ["A", "B"], (0, 0), 5.0, 0.0, 0.0)
 
 
 def test_regression_arc_form_rejects_sweeps_that_overlap_themselves() -> None:
     """Rejects an arc past 360 degrees instead of producing coincident slots (audit 9.6)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         slots(arc_form("a", ["A", "B", "C"], (0, 0), 5.0, 0.0, OVERLAPPING_SWEEP_DEG))
 
 
@@ -453,15 +453,15 @@ def test_regression_form_rejects_fractional_slot_count() -> None:
 
 
 def test_regression_svg_form_rejects_empty_svg() -> None:
-    """Raises a ShowPyError, not ValueError, for svg_form("") (audit 9.6)."""
-    with pytest.raises(ShowPyError):
+    """Raises an E8sError, not ValueError, for svg_form("") (audit 9.6)."""
+    with pytest.raises(E8sError):
         svg_form("f", [], "", Box2(min=(0, 0), max=(1, 1)))
 
 
 def test_regression_generated_form_with_numpy_params_serializes_or_is_rejected() -> None:
-    """Serializes numpy generator params, or rejects them with a ShowPyError (audit 9.6)."""
+    """Serializes numpy generator params, or rejects them with an E8sError (audit 9.6)."""
     center = np.array([0.0, 1.0])
-    with contextlib.suppress(ShowPyError):
+    with contextlib.suppress(E8sError):
         json.loads(generated_form("g", ["A"], "spiral", center=center).model_dump_json())
 
 

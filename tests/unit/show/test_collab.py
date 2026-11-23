@@ -27,24 +27,24 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from showpy.choreo.form_models import Form
-from showpy.choreo.models import Placement
-from showpy.choreo.path_models import PathRow, TransitionSpec
-from showpy.choreo.recipe_models import LineRecipe
-from showpy.core.errors import (
+from e8s.choreo.form_models import Form
+from e8s.choreo.models import Placement
+from e8s.choreo.path_models import PathRow, TransitionSpec
+from e8s.choreo.recipe_models import LineRecipe
+from e8s.core.errors import (
     ConflictError,
+    E8sError,
     LockedError,
     SchemaError,
-    ShowPyError,
     TimeRangeError,
     UnknownRefError,
 )
-from showpy.core.ids import FormId, SetId, SpotId, make_tid
-from showpy.core.json_types import JsonValue
-from showpy.core.selection import Selection
-from showpy.geo.shapes import line
-from showpy.show.changes import apply_change
-from showpy.show.collab import (
+from e8s.core.ids import FormId, SetId, SpotId, make_tid
+from e8s.core.json_types import JsonValue
+from e8s.core.selection import Selection
+from e8s.geo.shapes import line
+from e8s.show.changes import apply_change
+from e8s.show.collab import (
     accept,
     apply_event,
     decode_event,
@@ -56,10 +56,10 @@ from showpy.show.collab import (
     reject,
     selection,
 )
-from showpy.show.documents import dump_json
-from showpy.show.manage import add_set, set_counts
-from showpy.show.migrate import ReportBuilder
-from showpy.show.models import (
+from e8s.show.documents import dump_json
+from e8s.show.manage import add_set, set_counts
+from e8s.show.migrate import ReportBuilder
+from e8s.show.models import (
     Anchor,
     CanvasEvent,
     Comment,
@@ -72,9 +72,9 @@ from showpy.show.models import (
     PlacementOp,
     Show,
 )
-from showpy.show.pinning import pin, unpin
-from showpy.show.storage import Workspace, load_show, save_show
-from showpy.show.structured import COMMENTS_DOC
+from e8s.show.pinning import pin, unpin
+from e8s.show.storage import Workspace, load_show, save_show
+from e8s.show.structured import COMMENTS_DOC
 from tests.fixtures.shows import two_set_show
 from tests.helpers import open_session
 
@@ -408,7 +408,7 @@ def test_regression_accepting_twice_says_the_proposal_was_accepted() -> None:
     _, agent, designer = open_session(two_set_show(), AT)
     proposal = propose(load_show(agent), [_move("T1", -1.0)], "shift", "p1")
     accept(designer, proposal, AT + STEP)
-    with pytest.raises(ShowPyError, match="accepted"):
+    with pytest.raises(E8sError, match="accepted"):
         accept(designer, proposal, AT + 2 * STEP)
 
 
@@ -449,7 +449,7 @@ def test_regression_accepting_a_form_edit_does_not_resurrect_a_deleted_form() ->
     save_show(designer, load_show(designer).model_copy(update={"forms": {}}), AT + STEP)
     try:
         accept(designer, proposal, AT + 2 * STEP)
-    except ShowPyError:
+    except E8sError:
         return
     assert "f1" not in load_show(designer).forms
 

@@ -4,14 +4,14 @@
 test_schema.py --- keeps the stored-format JSON schemas in step with the stored documents
 
 `showpy.show.v1.json` is frozen: it describes what v0.3.0 and earlier wrote, so its bytes never
-change. `showpy.show.v2.json` describes a stored tree of format version 2 as one JSON object
+change. `e8.show.v2.json` describes a stored tree of format version 2 as one JSON object
 that maps each show-document path to its parsed document. A stored-model change regenerates it
-deliberately: run with SHOWPY_UPDATE_SCHEMA=1 and review the diff.
+deliberately: run with E8S_UPDATE_SCHEMA=1 and review the diff.
 
 Contains:
     stored_schema(): builds the format 2 schema of a stored tree from the models
     test_v1_schema_is_frozen(): pins the bytes of showpy.show.v1.json
-    test_committed_v2_schema_matches_the_models(): compares showpy.show.v2.json with the models
+    test_committed_v2_schema_matches_the_models(): compares e8.show.v2.json with the models
     test_v2_schema_validates_encoded_documents(): accepts the documents encode_show writes
     test_v2_schema_refuses_a_tree_without_its_header(): refuses a show.json without format
     test_v2_schema_refuses_an_unknown_document(): refuses a path no show document has
@@ -29,32 +29,32 @@ import pytest
 from pydantic import BaseModel
 from pydantic.json_schema import models_json_schema
 
-from showpy.choreo.form_models import Form
-from showpy.choreo.models import Set
-from showpy.choreo.path_models import TransitionSpec
-from showpy.core.resources import schema_path
-from showpy.examples import crossing_show, two_set_show
-from showpy.sheet.models import Sheet
-from showpy.show.document_paths import (
+from e8s.choreo.form_models import Form
+from e8s.choreo.models import Set
+from e8s.choreo.path_models import TransitionSpec
+from e8s.core.resources import schema_path
+from e8s.examples import crossing_show, two_set_show
+from e8s.sheet.models import Sheet
+from e8s.show.document_paths import (
     SEGMENT,
     SET_ORDER_FIELD,
     SHEET_DOC,
     SPLIT_FIELDS,
     TIMELINE_DOC,
 )
-from showpy.show.documents import encode_show
-from showpy.show.migrate import CURRENT_VERSION, FORMAT, FORMAT_KEY, SHOW_DOC, VERSION_KEY
-from showpy.show.models import Show
-from showpy.time.models import Timeline
+from e8s.show.documents import encode_show
+from e8s.show.migrate import CURRENT_VERSION, FORMAT, FORMAT_KEY, SHOW_DOC, VERSION_KEY
+from e8s.show.models import Show
+from e8s.time.models import Timeline
 from tests.fixtures.cast_shows import rich_show
 
 V1_NAME = "showpy.show.v1.json"
 V1_SHA256 = "dd0467b169c74cbfdea81ac83092f56bb3182c152bc80d6a30bb91ad8ac78f37"
-V2_NAME = "showpy.show.v2.json"
-V2_PATH = Path(__file__).parents[3] / "showpy" / "schemas" / V2_NAME
-V2_ID = "showpy.show.v2"
+V2_NAME = "e8.show.v2.json"
+V2_PATH = Path(__file__).parents[3] / "e8s" / "schemas" / V2_NAME
+V2_ID = "e8.show.v2"
 DRAFT = "https://json-schema.org/draft/2020-12/schema"
-UPDATE_FLAG = "SHOWPY_UPDATE_SCHEMA"
+UPDATE_FLAG = "E8S_UPDATE_SCHEMA"
 REF = "#/$defs/{model}"
 SHOW_DOCUMENT = "ShowDocument"
 LICENCE_COMMENT = "Licensed under the MIT License: see LICENSE-MIT.txt beside this file."
@@ -92,7 +92,7 @@ def stored_schema() -> dict[str, Any]:
         "$schema": DRAFT,
         "$id": V2_ID,
         "$comment": LICENCE_COMMENT,
-        "title": "ShowPy stored show, format version 2",
+        "title": "e8Show stored show, format version 2",
         "description": "A stored tree as one object mapping each show-document path to its JSON.",
         "type": "object",
         "properties": {

@@ -5,10 +5,10 @@ test_fuzz_svg.py --- fuzzes parse_path with a grammar of SVG path data and junk
 
 Contains:
     PATH_DATA: draws path data from commands, numbers, packed arc flags, separators and junk
-    test_fuzz_parse_path_grammar: raises only ShowPyError for grammar-built path data
+    test_fuzz_parse_path_grammar: raises only E8sError for grammar-built path data
     test_fuzz_parse_path_notations_agree: checks packed or implicit notation equals plain text
     test_fuzz_parse_path_round_trips: re-parses the written path data into the same pieces
-    test_fuzz_parse_path_raw_text: raises only ShowPyError for arbitrary text
+    test_fuzz_parse_path_raw_text: raises only E8sError for arbitrary text
 """
 
 import itertools
@@ -16,9 +16,9 @@ import itertools
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.core.util import approx_equal
-from showpy.geo.svg import Subpath, parse_path
-from tests.helpers import only_showpy_errors
+from e8s.core.util import approx_equal
+from e8s.geo.svg import Subpath, parse_path
+from tests.helpers import only_e8s_errors
 
 COMMANDS = "MmLlHhVvCcSsQqTtAaZz"
 JUNK = "xX#%;()[]{}<>é٣ \t\n"
@@ -51,8 +51,8 @@ PATH_DATA = st.lists(st.tuples(tokens, separators), max_size=MAX_TOKENS).map(
 
 @given(PATH_DATA)
 def test_fuzz_parse_path_grammar(d: str) -> None:
-    """Raises only ShowPyError for path data built from the SVG grammar and junk."""
-    only_showpy_errors(lambda: parse_path(d), d)
+    """Raises only E8sError for path data built from the SVG grammar and junk."""
+    only_e8s_errors(lambda: parse_path(d), d)
 
 
 type Token = tuple[str, str]
@@ -176,5 +176,5 @@ def test_fuzz_parse_path_round_trips(d: str) -> None:
 
 @given(st.text(max_size=200))
 def test_fuzz_parse_path_raw_text(d: str) -> None:
-    """Raises only ShowPyError for arbitrary text."""
-    only_showpy_errors(lambda: parse_path(d), d)
+    """Raises only E8sError for arbitrary text."""
+    only_e8s_errors(lambda: parse_path(d), d)

@@ -1838,7 +1838,7 @@ wheels = [
 ]
 
 [[package]]
-name = "showpy"
+name = "e8s"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
@@ -1890,7 +1890,7 @@ dev = [
     { name = "rfc8785" },
     { name = "ruff" },
     { name = "scipy-stubs" },
-    { name = "showpy", extra = ["all"] },
+    { name = "e8s", extra = ["all"] },
     { name = "types-jsonschema" },
     { name = "types-shapely" },
 ]
@@ -1935,7 +1935,7 @@ dev = [
     { name = "rfc8785", specifier = "==0.1.4" },
     { name = "ruff", specifier = "==0.17.5" },
     { name = "scipy-stubs", specifier = "==1.18.1.1" },
-    { name = "showpy", extras = ["all"] },
+    { name = "e8s", extras = ["all"] },
     { name = "types-jsonschema", specifier = "==4.26.0.20261006" },
     { name = "types-shapely", specifier = "==2.1.0.20261030" },
 ]

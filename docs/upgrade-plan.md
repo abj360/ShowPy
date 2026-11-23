@@ -269,9 +269,9 @@ Run with `pytest-benchmark` or `asv` on a fixed runner; fail on a 20% regression
 
 - **Dependency ranges, not pins.** Exact `==` runtime pins break every consumer's resolver. Use
   tested lower bounds and a lowest-direct CI job; keep exact versions only in `uv.lock`.
-- **Extras.** Core: numpy, scipy, shapely, pydantic. `showpy[video]` (imageio-ffmpeg, which bundles
-  a large ffmpeg binary; drop `imageio`, which is unused), `showpy[qr]` (segno), `showpy[render]`
-  (Pillow), `showpy[tables]` (pandas). Missing extras raise a `StageError` naming the extra.
+- **Extras.** Core: numpy, scipy, shapely, pydantic. `e8s[video]` (imageio-ffmpeg, which bundles
+  a large ffmpeg binary; drop `imageio`, which is unused), `e8s[qr]` (segno), `e8s[render]`
+  (Pillow), `e8s[tables]` (pandas). Missing extras raise a `StageError` naming the extra.
 - **Version from the tag** (`hatch-vcs`) and `stage.__version__`. Today `pyproject.toml` says 0.1.0
   while HEAD is tagged v0.1.1.
 - **Distribution name: ShowPy** (decided 2026-11-13). Set `name = "ShowPy"` in `pyproject.toml`
@@ -1483,7 +1483,7 @@ Exit: each capability has a tutorial or how-to page and scenario coverage.
 ### Phase 6: 1.0
 
 Generated, versioned documentation site with the Diátaxis structure; all policies published;
-release workflow with provenance and SBOM; extras finalized; published as ShowPy; the
+release workflow with provenance and SBOM; extras finalized; published as e8s; the
 public API snapshot frozen under semantic versioning.
 
 Exit: section 2 holds in full and is checked by CI.

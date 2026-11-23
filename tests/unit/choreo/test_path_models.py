@@ -55,8 +55,8 @@ import pytest
 from jsonschema import Draft202012Validator
 from pydantic import BaseModel
 
-from showpy.cast.rewrite import rewrite_spot_ids
-from showpy.choreo.path_models import (
+from e8s.cast.rewrite import rewrite_spot_ids
+from e8s.choreo.path_models import (
     MAX_EASING_STEPS,
     MAX_MOTION_CYCLES,
     MAX_SPIRAL_TURNS,
@@ -77,14 +77,14 @@ from showpy.choreo.path_models import (
     WeaveParams,
     ZigzagParams,
 )
-from showpy.choreo.paths import set_facing
-from showpy.core.errors import PathError, SchemaError, ShowValidationError
-from showpy.core.ids import RouteId, SpotId, make_tid
-from showpy.core.readonly import ReadOnlyMap
-from showpy.core.resources import schema_path
-from showpy.core.types import Point
-from showpy.geo.curves import Segment
-from showpy.show.migrate import CURRENT_VERSION
+from e8s.choreo.paths import set_facing
+from e8s.core.errors import PathError, SchemaError, ShowValidationError
+from e8s.core.ids import RouteId, SpotId, make_tid
+from e8s.core.readonly import ReadOnlyMap
+from e8s.core.resources import schema_path
+from e8s.core.types import Point
+from e8s.geo.curves import Segment
+from e8s.show.migrate import CURRENT_VERSION
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.shows import two_set_show
 from tests.property.test_generated_shows import SCHEMA_NAME, encoded_tree
@@ -450,7 +450,7 @@ def test_regression_typed_values_validate_against_the_current_schema() -> None:
         ),
         facing_overrides=(override,),
     )
-    assert f"showpy.show.v{CURRENT_VERSION}.json" == SCHEMA_NAME
+    assert f"e8.show.v{CURRENT_VERSION}.json" == SCHEMA_NAME
     validator = Draft202012Validator(json.loads(schema_path(SCHEMA_NAME).read_text()))
     errors = [e.message for e in validator.iter_errors(encoded_tree(show))]
     assert errors == []

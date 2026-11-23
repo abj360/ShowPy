@@ -65,12 +65,12 @@ import math
 
 import pytest
 
-from showpy.choreo.engine import PathEngine
-from showpy.choreo.match_ops import with_set
-from showpy.choreo.models import PlacementPatch
-from showpy.choreo.path_models import FacingMode, PathStyle, TransitionSpec
-from showpy.choreo.paths import lock
-from showpy.choreo.routes import (
+from e8s.choreo.engine import PathEngine
+from e8s.choreo.match_ops import with_set
+from e8s.choreo.models import PlacementPatch
+from e8s.choreo.path_models import FacingMode, PathStyle, TransitionSpec
+from e8s.choreo.paths import lock
+from e8s.choreo.routes import (
     MIN_GAP,
     counter_march,
     follow,
@@ -79,12 +79,12 @@ from showpy.choreo.routes import (
     rotate_path,
     two_part,
 )
-from showpy.core.errors import LockedError, PathError
-from showpy.core.ids import RouteId, format_tid
-from showpy.core.types import Point
-from showpy.core.util import approx_equal
-from showpy.show.models import Show
-from showpy.show.validate import validate_paths
+from e8s.core.errors import LockedError, PathError
+from e8s.core.ids import RouteId, format_tid
+from e8s.core.types import Point
+from e8s.core.util import approx_equal
+from e8s.show.models import Show
+from e8s.show.validate import validate_paths
 from tests.fixtures.motion_shows import TID, with_targets
 from tests.fixtures.shows import two_set_show
 

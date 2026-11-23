@@ -6,9 +6,9 @@ test_models.py --- tests the Note model
 
 from datetime import UTC, datetime
 
-from showpy.core.ids import NoteId
-from showpy.notes.models import Note
-from showpy.show.models import Anchor
+from e8s.core.ids import NoteId
+from e8s.notes.models import Note
+from e8s.show.models import Anchor
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 

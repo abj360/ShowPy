@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_public_api.py --- tests that the top-level showpy package re-exports a clean public API
+test_public_api.py --- tests that the top-level e8s package re-exports a clean public API
 
 Contains:
     test_every_exported_name_resolves: checks every name in __all__ imports
@@ -18,9 +18,9 @@ import warnings
 from pathlib import Path
 from types import ModuleType
 
-import showpy
-from showpy._api_table import PUBLIC_API
-from showpy.core.deprecation import DeprecatedWarning
+import e8s
+from e8s._api_table import PUBLIC_API
+from e8s.core.deprecation import DeprecatedWarning
 
 GENERATOR_PATH = Path(__file__).resolve().parents[2] / "scripts" / "gen_public_api.py"
 
@@ -37,35 +37,35 @@ def _load_generator() -> ModuleType:
 def test_every_exported_name_resolves() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecatedWarning)
-        missing = [name for name in showpy.__all__ if not hasattr(showpy, name)]
+        missing = [name for name in e8s.__all__ if not hasattr(e8s, name)]
     assert missing == []
 
 
 def test_exports_are_unique_and_sorted_by_module_groups() -> None:
-    assert len(showpy.__all__) == len(set(showpy.__all__))
+    assert len(e8s.__all__) == len(set(e8s.__all__))
 
 
 def test_key_entry_points_are_exported() -> None:
     for name in ("PathEngine", "Show", "select", "match", "new_show", "export_video", "publish"):
-        assert name in showpy.__all__
+        assert name in e8s.__all__
 
 
 def test_clashing_names_are_disambiguated() -> None:
-    assert showpy.spiral.__module__ == "showpy.geo.shapes"
-    assert showpy.spiral_motion.__module__ == "showpy.choreo.motion"
+    assert e8s.spiral.__module__ == "e8s.geo.shapes"
+    assert e8s.spiral_motion.__module__ == "e8s.choreo.motion"
 
 
 def test_package_ships_a_py_typed_marker() -> None:
     from importlib.resources import files
 
-    assert files("showpy").joinpath("py.typed").is_file()
+    assert files("e8s").joinpath("py.typed").is_file()
 
 
 def test_generated_init_matches_table() -> None:
     generator = _load_generator()
-    on_disk = Path(showpy.__file__).read_text()
+    on_disk = Path(e8s.__file__).read_text()
     assert generator.render_init() == on_disk, (
-        "E: showpy/__init__.py differs from showpy/_api_table.py; "
+        "E: e8s/__init__.py differs from e8s/_api_table.py; "
         "run: uv run python scripts/gen_public_api.py"
     )
 

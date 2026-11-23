@@ -10,8 +10,8 @@ Contains:
 
 import pytest
 
-from showpy.core.errors import GeometryError, SchemaError, SpacingError
-from showpy.geo.checks import require_finite_as
+from e8s.core.errors import GeometryError, SchemaError, SpacingError
+from e8s.geo.checks import require_finite_as
 
 
 def test_require_finite_as_returns_a_valid_value() -> None:

@@ -10,8 +10,8 @@ Contains:
 
 import pytest
 
-from showpy.core.util import approx_equal
-from showpy.geo import shapes
+from e8s.core.util import approx_equal
+from e8s.geo import shapes
 
 FLAT_ARC_LENGTH_M = 2.0
 LENGTH_TOL_M = 1e-9

@@ -13,16 +13,16 @@ import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from showpy.choreo.form_models import Form
-from showpy.choreo.form_place import rebuild
-from showpy.choreo.forms import block_form, circle_form, line_form
-from showpy.choreo.match import bottleneck_value, match, match_by_order
-from showpy.choreo.match_models import MatchObjective, MatchOptions, MatchResult
-from showpy.choreo.match_ops import apply_match
-from showpy.choreo.match_solve import FloatArray, count_crossings
-from showpy.core.ids import SpotId
-from showpy.core.types import Points
-from showpy.core.util import approx_equal, seeded_rng
+from e8s.choreo.form_models import Form
+from e8s.choreo.form_place import rebuild
+from e8s.choreo.forms import block_form, circle_form, line_form
+from e8s.choreo.match import bottleneck_value, match, match_by_order
+from e8s.choreo.match_models import MatchObjective, MatchOptions, MatchResult
+from e8s.choreo.match_ops import apply_match
+from e8s.choreo.match_solve import FloatArray, count_crossings
+from e8s.core.ids import SpotId
+from e8s.core.types import Points
+from e8s.core.util import approx_equal, seeded_rng
 from tests.fixtures.shows import two_set_show
 
 TOL = 1e-9

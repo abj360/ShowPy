@@ -18,10 +18,10 @@ import numpy as np
 import pytest
 import shapely
 
-from showpy.core.caps import MAX_COORD_M
-from showpy.core.errors import GeometryError
-from showpy.core.util import approx_equal
-from showpy.geo.measure import (
+from e8s.core.caps import MAX_COORD_M
+from e8s.core.errors import GeometryError
+from e8s.core.util import approx_equal
+from e8s.geo.measure import (
     bounds,
     center,
     centroid,
@@ -33,7 +33,7 @@ from showpy.geo.measure import (
     mirror_gaps,
     reachable_region,
 )
-from showpy.geo.shapes import arc, circle, line
+from e8s.geo.shapes import arc, circle, line
 
 TOL = 1e-6
 LEFT_CLUSTER_SIZE = 10

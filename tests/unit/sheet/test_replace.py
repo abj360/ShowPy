@@ -36,10 +36,10 @@ import warnings
 import numpy as np
 import pytest
 
-import showpy
-import showpy.sheet.replace as sheet_replace
-from showpy.core.errors import GeometryError
-from showpy.sheet.replace import similarity_fit
+import e8s
+import e8s.sheet.replace as sheet_replace
+from e8s.core.errors import GeometryError
+from e8s.sheet.replace import similarity_fit
 
 
 def test_similarity_fit_needs_spread_points() -> None:
@@ -182,6 +182,6 @@ def test_similarity_fit_handles_large_finite_coordinates() -> None:
 @pytest.mark.parametrize("name", ["replace_sheet", "SheetReplaceReport"])
 def test_regression_sheet_replacement_stays_removed(name: str) -> None:
     """Keeps a show on its sheet: neither the package nor its module offers a sheet swap."""
-    assert name not in showpy.__all__
-    assert not hasattr(showpy, name)
+    assert name not in e8s.__all__
+    assert not hasattr(e8s, name)
     assert not hasattr(sheet_replace, name)

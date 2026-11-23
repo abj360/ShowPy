@@ -24,9 +24,9 @@ from pathlib import Path
 import pytest
 from pytest_benchmark.fixture import BenchmarkFixture
 
-from showpy.show.documents import decode_show, migrate_documents
-from showpy.show.migrate import CURRENT_VERSION, read_version
-from showpy.show.models import Show
+from e8s.show.documents import decode_show, migrate_documents
+from e8s.show.migrate import CURRENT_VERSION, read_version
+from e8s.show.models import Show
 from tests.conftest import BenchTier
 
 pytestmark = pytest.mark.bench

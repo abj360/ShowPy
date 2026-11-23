@@ -10,9 +10,9 @@ Contains:
 
 import pytest
 
-from showpy.cast.models import Shape
-from showpy.choreo.avoid import min_gaps
-from showpy.examples import two_set_show
+from e8s.cast.models import Shape
+from e8s.choreo.avoid import min_gaps
+from e8s.examples import two_set_show
 
 RECT_WIDTH_M = 0.6
 RECT_DEPTH_M = 1.2

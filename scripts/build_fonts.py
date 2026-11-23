@@ -40,8 +40,8 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw
 
-from showpy.core.resources import schema_path
-from showpy.geo.svg import (
+from e8s.core.resources import schema_path
+from e8s.geo.svg import (
     ArcPiece,
     CubicPiece,
     LinePiece,
@@ -50,7 +50,7 @@ from showpy.geo.svg import (
     Subpath,
     parse_path,
 )
-from showpy.geo.text import SIMPLEX
+from e8s.geo.text import SIMPLEX
 
 MIT_LICENSE = schema_path("LICENSE-MIT.txt")
 FONT_FORMAT = "showpy.font.v1"
@@ -493,7 +493,7 @@ def _plans() -> list[FontPlan]:
         hershey("hershey-script", "Hershey Script Simplex", "scripts.jhf"),
         hershey("hershey-greek", "Hershey Greek Simplex", "greeks.jhf"),
         FontPlan(
-            FontMeta("simplex", "Simplex", "MIT", "showpy/geo/text.py"), None, "licenses/MIT.txt"
+            FontMeta("simplex", "Simplex", "MIT", "e8s/geo/text.py"), None, "licenses/MIT.txt"
         ),
     ]
 
@@ -575,9 +575,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns:
         status: Process exit status, 0 on success.
     """
-    parser = argparse.ArgumentParser(description="Build the bundled showpy fonts.")
+    parser = argparse.ArgumentParser(description="Build the bundled e8s fonts.")
     parser.add_argument("--cache", type=Path, required=True, help="download cache directory")
-    default_out = Path(__file__).resolve().parents[1] / "showpy" / "fonts"
+    default_out = Path(__file__).resolve().parents[1] / "e8s" / "fonts"
     parser.add_argument("--out", type=Path, default=default_out, help="output directory")
     parser.add_argument("--sheets", type=Path, default=None, help="contact sheet directory")
     args = parser.parse_args(argv)

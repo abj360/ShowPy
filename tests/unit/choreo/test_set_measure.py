@@ -13,9 +13,9 @@ import math
 
 import pytest
 
-from showpy.choreo.set_measure import nearest, neighbors, on_field_ids, symmetry_error
-from showpy.core.errors import UnknownRefError
-from showpy.core.util import approx_equal
+from e8s.choreo.set_measure import nearest, neighbors, on_field_ids, symmetry_error
+from e8s.core.errors import UnknownRefError
+from e8s.core.util import approx_equal
 from tests.helpers import make_set
 
 TOL = 1e-6

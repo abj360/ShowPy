@@ -11,12 +11,12 @@ Contains:
     test_regression_hang_timeout_drops_leaks_it_caused(): hides a file freed after the alarm
     test_hang_timeout_still_reports_leaks_before_the_deadline(): forwards a leak by the test
     test_hang_timeout_lets_a_quick_test_finish(): returns normally and restores the old handler
-    test_only_showpy_errors_rejects_a_builtin_error(): fails a call that raises KeyError
-    test_only_showpy_errors_accepts_a_showpy_error(): lets a ShowPyError and a normal return pass
-    test_only_showpy_errors_names_the_input(): puts the sample input in the failure message
-    test_only_showpy_errors_truncates_a_large_input(): bounds the input shown in the message
-    test_regression_only_showpy_errors_bounds_the_error_text(): bounds a huge error message
-    test_only_showpy_errors_fails_a_hang(): fails a call that outlasts the 5 s budget
+    test_only_e8s_errors_rejects_a_builtin_error(): fails a call that raises KeyError
+    test_only_e8s_errors_accepts_a_e8s_error(): lets an E8sError and a normal return pass
+    test_only_e8s_errors_names_the_input(): puts the sample input in the failure message
+    test_only_e8s_errors_truncates_a_large_input(): bounds the input shown in the message
+    test_regression_only_e8s_errors_bounds_the_error_text(): bounds a huge error message
+    test_only_e8s_errors_fails_a_hang(): fails a call that outlasts the 5 s budget
 """
 
 import signal
@@ -28,8 +28,8 @@ from pathlib import Path
 
 import pytest
 
-from showpy.core.errors import ShowPyError
-from tests.helpers import fails_after, only_showpy_errors
+from e8s.core.errors import E8sError
+from tests.helpers import fails_after, only_e8s_errors
 
 DEADLINE_S = 0.05
 COVERAGE_FRAME_S = 0.3
@@ -241,33 +241,33 @@ def _raise_key_error() -> None:
     raise KeyError("missing")
 
 
-def _raise_showpy_error() -> None:
-    raise ShowPyError("bad input", hint="send good input")
+def _raise_e8s_error() -> None:
+    raise E8sError("bad input", hint="send good input")
 
 
 @posix_only
-def test_only_showpy_errors_rejects_a_builtin_error() -> None:
-    """Fails the test when the call raises an error that is not a ShowPyError."""
+def test_only_e8s_errors_rejects_a_builtin_error() -> None:
+    """Fails the test when the call raises an error that is not an E8sError."""
     with pytest.raises(pytest.fail.Exception, match="KeyError"):
-        only_showpy_errors(_raise_key_error)
+        only_e8s_errors(_raise_key_error)
 
 
 @posix_only
-def test_only_showpy_errors_accepts_a_showpy_error() -> None:
-    """Returns for a call that raises a ShowPyError or finishes normally."""
-    only_showpy_errors(_raise_showpy_error)
-    only_showpy_errors(lambda: None)
+def test_only_e8s_errors_accepts_a_e8s_error() -> None:
+    """Returns for a call that raises an E8sError or finishes normally."""
+    only_e8s_errors(_raise_e8s_error)
+    only_e8s_errors(lambda: None)
 
 
 @posix_only
-def test_only_showpy_errors_names_the_input() -> None:
+def test_only_e8s_errors_names_the_input() -> None:
     """Puts the input that broke the call into the failure message."""
     with pytest.raises(pytest.fail.Exception, match="'odd input'"):
-        only_showpy_errors(_raise_key_error, sample="odd input")
+        only_e8s_errors(_raise_key_error, sample="odd input")
 
 
 @posix_only
-def test_only_showpy_errors_fails_a_hang() -> None:
+def test_only_e8s_errors_fails_a_hang() -> None:
     """Fails a call that runs past the 5 s budget instead of letting it hang."""
 
     def spin() -> None:
@@ -276,24 +276,24 @@ def test_only_showpy_errors_fails_a_hang() -> None:
             pass
 
     with pytest.raises(pytest.fail.Exception, match="Timeout"):
-        only_showpy_errors(spin)
+        only_e8s_errors(spin)
 
 
 @posix_only
-def test_only_showpy_errors_truncates_a_large_input() -> None:
+def test_only_e8s_errors_truncates_a_large_input() -> None:
     """Keeps the failure message short however large the generated input is."""
     with pytest.raises(pytest.fail.Exception) as failure:
-        only_showpy_errors(_raise_key_error, sample="x" * 100_000)
+        only_e8s_errors(_raise_key_error, sample="x" * 100_000)
     assert len(str(failure.value)) < 400
 
 
 @posix_only
-def test_regression_only_showpy_errors_bounds_the_error_text() -> None:
+def test_regression_only_e8s_errors_bounds_the_error_text() -> None:
     """Keeps the failure message short when the escaped error's own text is huge."""
 
     def raise_long_error() -> None:
         raise KeyError("k" * 100_000)
 
     with pytest.raises(pytest.fail.Exception) as failure:
-        only_showpy_errors(raise_long_error, sample="odd input")
+        only_e8s_errors(raise_long_error, sample="odd input")
     assert len(str(failure.value)) < 400

@@ -4,28 +4,28 @@
 test_units.py --- tests unit conversion, unit registries and angle helpers
 
 Contains:
-    test_*(): one behavior of showpy.core.units each
+    test_*(): one behavior of e8s.core.units each
     test_regression_default_units_cannot_be_mutated: refuses in-place edits to the process-wide
         default registry
     test_regression_zero_factor_registry_never_divides_by_zero: rejects a zero unit factor with a
-        ShowPyError
+        E8sError
     test_regression_register_unit_refuses_to_redefine_meters: refuses to redefine the base unit `m`
     test_regression_register_unit_rejects_infinite_size: rejects an infinite unit size
     test_regression_register_unit_rejects_an_empty_name: rejects an empty unit name
     test_regression_register_unit_bad_size_is_not_an_unknown_ref: reports a bad size as a schema
         problem, not an unknown reference
     test_regression_round_to_accepts_numpy_scalars: rounds a numpy float like a Python float
-    test_regression_round_to_rejects_infinity_cleanly: rejects an infinite value with a ShowPyError,
+    test_regression_round_to_rejects_infinity_cleanly: rejects an infinite value with an E8sError,
         not decimal.InvalidOperation
     test_regression_round_to_rejects_zero_precision_cleanly: rejects a zero precision with a
-        ShowPyError, not decimal.InvalidOperation
+        E8sError, not decimal.InvalidOperation
     test_regression_round_to_handles_bools_cleanly: rounds a bool to 1.0 or rejects it, never
         leaking decimal.InvalidOperation
     test_regression_round_to_never_returns_negative_zero: returns 0.0, not -0.0, for a small
         negative value
     test_regression_normalize_angle_never_returns_negative_zero: returns 0.0, not -0.0, for -0.0
     test_regression_normalize_angle_rejects_infinity_cleanly: rejects an infinite angle with a
-        ShowPyError, not ValueError
+        E8sError, not ValueError
     test_regression_normalize_angle_rejects_nan: rejects a NaN angle instead of passing it through
     test_registry_*(), test_register_unit_*(): exact Fraction factors and refused registrations
     test_round_to_*(): too-long quotients, bad steps and non-numbers
@@ -42,9 +42,9 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.core.deprecation import DeprecatedWarning
-from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError, ZeroLengthError
-from showpy.core.units import (
+from e8s.core.deprecation import DeprecatedWarning
+from e8s.core.errors import E8sError, SchemaError, UnknownRefError, ZeroLengthError
+from e8s.core.units import (
     DEFAULT_UNITS,
     UnitRegistry,
     angle_diff,
@@ -56,7 +56,7 @@ from showpy.core.units import (
     units,
     vector_facing,
 )
-from showpy.core.util import approx_equal
+from e8s.core.util import approx_equal
 
 
 def test_convert_feet_to_meters() -> None:
@@ -133,38 +133,38 @@ def test_round_to_half_away_from_zero(value: float, precision: float, expected: 
 
 def test_regression_default_units_cannot_be_mutated() -> None:
     """Refuses in-place edits to the process-wide default registry (audit 9.3)."""
-    with pytest.raises((TypeError, ShowPyError)):
+    with pytest.raises((TypeError, E8sError)):
         DEFAULT_UNITS.meters_per_unit["hack"] = Fraction(9)  # type: ignore[index]
 
 
 def test_regression_zero_factor_registry_never_divides_by_zero() -> None:
-    """Rejects a zero unit factor with a ShowPyError (audit 9.3)."""
+    """Rejects a zero unit factor with an E8sError (audit 9.3)."""
     sizes = {"meters_per_unit": {"m": 1.0, "zero": 0.0}}
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         convert(1.0, "m", "zero", UnitRegistry.model_validate(sizes))
 
 
 def test_regression_register_unit_refuses_to_redefine_meters() -> None:
     """Refuses to redefine the base unit `m` (audit 9.3)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         register_unit(DEFAULT_UNITS, "m", 2.0)
 
 
 def test_regression_register_unit_rejects_infinite_size() -> None:
     """Rejects an infinite unit size (audit 9.3)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         register_unit(DEFAULT_UNITS, "far", math.inf)
 
 
 def test_regression_register_unit_rejects_an_empty_name() -> None:
     """Rejects an empty unit name (audit 9.3)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         register_unit(DEFAULT_UNITS, "", 1.0)
 
 
 def test_regression_register_unit_bad_size_is_not_an_unknown_ref() -> None:
     """Reports a bad size as a schema problem, not an unknown reference (audit 9.3)."""
-    with pytest.raises(ShowPyError) as excinfo:
+    with pytest.raises(E8sError) as excinfo:
         register_unit(DEFAULT_UNITS, "bad", 0.0)
     assert not isinstance(excinfo.value, UnknownRefError)
 
@@ -175,14 +175,14 @@ def test_regression_round_to_accepts_numpy_scalars() -> None:
 
 
 def test_regression_round_to_rejects_infinity_cleanly() -> None:
-    """Rejects an infinite value with a ShowPyError, not decimal.InvalidOperation (audit 9.3)."""
-    with pytest.raises(ShowPyError):
+    """Rejects an infinite value with an E8sError, not decimal.InvalidOperation (audit 9.3)."""
+    with pytest.raises(E8sError):
         round_to(math.inf)
 
 
 def test_regression_round_to_rejects_zero_precision_cleanly() -> None:
-    """Rejects a zero precision with a ShowPyError, not decimal.InvalidOperation (audit 9.3)."""
-    with pytest.raises(ShowPyError):
+    """Rejects a zero precision with an E8sError, not decimal.InvalidOperation (audit 9.3)."""
+    with pytest.raises(E8sError):
         round_to(1.0, 0.0)
 
 
@@ -194,7 +194,7 @@ def test_regression_round_to_handles_bools_cleanly() -> None:
     try:
         truth = True
         rounded = round_to(truth)
-    except ShowPyError:
+    except E8sError:
         return
     assert approx_equal(rounded, 1.0)
 
@@ -210,14 +210,14 @@ def test_regression_normalize_angle_never_returns_negative_zero() -> None:
 
 
 def test_regression_normalize_angle_rejects_infinity_cleanly() -> None:
-    """Rejects an infinite angle with a ShowPyError, not ValueError (audit 9.3)."""
-    with pytest.raises(ShowPyError):
+    """Rejects an infinite angle with an E8sError, not ValueError (audit 9.3)."""
+    with pytest.raises(E8sError):
         normalize_angle(math.inf)
 
 
 def test_regression_normalize_angle_rejects_nan() -> None:
     """Rejects a NaN angle instead of passing it through (audit 9.3)."""
-    with pytest.raises(ShowPyError):
+    with pytest.raises(E8sError):
         normalize_angle(math.nan)
 
 

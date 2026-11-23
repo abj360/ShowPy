@@ -16,7 +16,7 @@ import timeit
 import pytest
 from pytest_benchmark.fixture import BenchmarkFixture
 
-from showpy.core.ids import check_id
+from e8s.core.ids import check_id
 
 pytestmark = pytest.mark.bench
 
