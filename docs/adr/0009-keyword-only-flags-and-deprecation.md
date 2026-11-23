@@ -139,3 +139,9 @@ and is visible to type checkers as a plain alias (`ValidationError = ShowValidat
 `TYPE_CHECKING`). `warnings.deprecated` on an alias would create a subclass, and `except OldName`
 would stop catching the renamed class. Functions and new wrapper classes still use
 `warnings.deprecated`.
+
+## Addendum 2026-11-23: waived for the names that leave the library
+
+The library has no users, so the two-release warning of this ADR is waived for the names on the
+leaving timeline of ADR 0021 and for the deprecated aliases, all of which go in v0.4.0 (ADR 0021,
+addendum 2026-11-23); the rule stands for later releases once there are users.
