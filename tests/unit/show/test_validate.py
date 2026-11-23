@@ -48,7 +48,7 @@ Contains:
         even when no sheet store is passed
     test_regression_validate_show_reports_empty_ids: reports an empty show, note or form ID, each
         alone
-    test_regression_validate_show_accepts_hyphenated_form_and_note_ids: reports an inner hyphen
+    test_regression_validate_show_reports_hyphenated_form_and_note_ids: reports an inner hyphen
         in form and note IDs, which it once accepted
     test_regression_validate_show_names_the_bad_id_path_in_context: puts the path of the bad ID and
         its value in the issue context
@@ -470,9 +470,9 @@ def test_regression_validate_show_reports_empty_ids() -> None:
     assert silent == []
 
 
-def test_regression_validate_show_accepts_hyphenated_form_and_note_ids() -> None:
-    """Reports an inner hyphen in form and note IDs: the library no longer generates one, and
-    migration renames every stored one, so the name records the acceptance this replaced."""
+def test_regression_validate_show_reports_hyphenated_form_and_note_ids() -> None:
+    """Reports an inner hyphen in form and note IDs, which validate_show accepted while the
+    library still made such IDs; migration now renames every stored one."""
     show = _formed(key="form-1", form_id="form-1")
     noted = show.model_copy(update={"notes": (_note(note_id="note-1"),)})
     bad = [dict(i.context) for i in validate_show(noted).issues if i.code == "BAD_ID"]

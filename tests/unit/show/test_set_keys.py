@@ -59,7 +59,8 @@ Contains:
         put_set gets a freshly built set, and refuses a mismatching explicit key
     test_regression_workspace_has_no_public_stored_commit: keeps stored-path commits private
     test_regression_new_set_folder_must_pass_the_id_check: refuses a set whose folder fails
-        check_id, in the model and in a raw commit, leaving the repository unchanged
+        check_id in the model, put_show, save_show and a raw commit, leaving the repository
+        unchanged
     test_regression_stored_legacy_folders_keep_saving: edits, saves and reloads a tree that
         held /sets/con/ under its migrated `con_`, and renumbers a legacy show without creating a
         folder
@@ -70,8 +71,8 @@ Contains:
         whose set folders differ only by case as `1a`, `1A.2` and round-trips them
     test_regression_v020_case_pair_show_adds_a_set_with_a_free_key: adds a set whose ID matches a
         migrated key ignoring case under a free key, then saves and reloads it
-    test_regression_v020_case_pair_show_cannot_be_renumbered: renumbers a migrated v0.2 case pair
-        show, keeping its keys, and saves it; the name records the Phase 1 refusal it replaced
+    test_regression_v020_case_pair_show_renumbers_once_migrated: renumbers a migrated v0.2 case
+        pair show, keeping its keys, and saves it; Phase 1 refused this renumber
     test_regression_new_set_folders_differing_by_case_are_refused: refuses a commit adding a set
         folder that matches another folder ignoring case, storing nothing
 """
@@ -547,8 +548,17 @@ def _with_fresh_set(show: Show, set_id: str) -> Show:
     return show.replace(sets=(*show.sets, fresh))
 
 
+def _with_legacy_set(show: Show, set_id: str) -> Show:
+    """Adds a set whose ID only the legacy context accepts, as a v1 reader would build it."""
+    dumped = show.model_dump(mode="json")
+    fresh = {**dumped["sets"][-1], "id": set_id}
+    fresh.pop("key", None)
+    return Show.model_validate({**dumped, "sets": [*dumped["sets"], fresh]}, context=LEGACY)
+
+
 def test_regression_new_set_folder_must_pass_the_id_check() -> None:
-    """Refuses the show itself now that a set's defaulted key is checked like any other key."""
+    """Refuses a set whose folder fails check_id: in the model, in put_show and save_show of a
+    show built with the legacy context, and in a raw commit; the repository stays unchanged."""
     repo = InMemoryRepository()
     head = repo.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT).id
     before = repo.paths(SHOW_ID)
@@ -556,7 +566,13 @@ def test_regression_new_set_folder_must_pass_the_id_check() -> None:
     for set_id in ("con", LEGACY_LONG_ID):
         with pytest.raises(SchemaError):
             _with_fresh_set(load_show(ws), set_id)
-    with pytest.raises(ShowPyError):
+        with pytest.raises(SchemaError):
+            repo.put_show(
+                SHOW_ID, _with_legacy_set(load_show(ws), set_id), expected_revision=head, at=LATER
+            )
+        with pytest.raises(SchemaError):
+            save_show(ws, _with_legacy_set(load_show(ws), set_id), LATER)
+    with pytest.raises(SchemaError):
         repo.transaction(SHOW_ID, {"/sets/con/set.json": b"{}"}, expected_revision=head, at=LATER)
     assert repo.paths(SHOW_ID) == before
     assert repo.head(SHOW_ID) == head
@@ -641,8 +657,8 @@ def test_regression_v020_case_pair_show_adds_a_set_with_a_free_key() -> None:
     assert not [p for p in repo.paths(SHOW_ID) if p.startswith("/sets/AB/")]
 
 
-def test_regression_v020_case_pair_show_cannot_be_renumbered() -> None:
-    """Keeps its Phase 1 name; since migration splits the case pair, the renumber succeeds."""
+def test_regression_v020_case_pair_show_renumbers_once_migrated() -> None:
+    """Renumbers the case pair migration split, which Phase 1 refused to renumber."""
     repo = _stored_repo(_case_pair_docs("1a", "1A"))
     head = repo.head(SHOW_ID)
     show = repo.get_show(SHOW_ID)
