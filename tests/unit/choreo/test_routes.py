@@ -55,6 +55,10 @@ Contains:
         without locks and round-trips
     test_route_storage_ignores_locks_on_other_routes: adds a new route while a row of another route
         stays locked
+    test_regression_route_offsets_survive_a_one_ulp_start_shift: gives a follower whose start
+        moves by 1 ulp the same segment count, as offsets come from the route curve's arc length
+    test_regression_counter_march_offsets_survive_a_one_ulp_start_shift: gives each counter-march
+        member the same segment count when a follower's start moves by 1 ulp
 """
 
 import math
@@ -77,6 +81,7 @@ from showpy.choreo.routes import (
 )
 from showpy.core.errors import LockedError, PathError
 from showpy.core.ids import RouteId, format_tid
+from showpy.core.types import Point
 from showpy.core.util import approx_equal
 from showpy.show.models import Show
 from showpy.show.validate import validate_paths
@@ -84,6 +89,10 @@ from tests.fixtures.motion_shows import TID, with_targets
 from tests.fixtures.shows import two_set_show
 
 FILE = ["T4", "T3", "T2", "T1"]
+ULP_FILE = ["T3", "T2", "T1"]
+ULP_ROUTE_END: Point = (4.0, 12.0)
+ULP_PROBE_START: Point = (2.066, 5.3)
+ULP_TURN: Point = (4.0, 9.0)
 
 
 def test_make_route_puts_members_on_the_route_behind_the_leader() -> None:
@@ -406,3 +415,34 @@ def test_route_storage_ignores_locks_on_other_routes() -> None:
     assert stored.row("T3").locked
     assert stored.routes[RouteId("r1")] == first
     assert stored.row("T1").route == RouteId("r2")
+
+
+def _follower_segment_count(start: Point) -> int:
+    show = _moved(two_set_show(), "T2", start)
+    route = make_route(show, TID, "T3", [ULP_ROUTE_END], members=ULP_FILE)
+    engine = PathEngine(follow_and_set_targets(show, TID, route))
+    return len(engine.entity_segments("T2", TID))
+
+
+def test_regression_route_offsets_survive_a_one_ulp_start_shift() -> None:
+    """Gives a follower whose start moves by 1 ulp the same segment count.
+
+    A separately summed offset could land 1 ulp short of the curve's own vertex arc length, and
+    the follower then gained a sliver segment at its start.
+    """
+    x, y = ULP_PROBE_START
+    nudged = (math.nextafter(x, math.inf), y)
+    assert _follower_segment_count(nudged) == _follower_segment_count(ULP_PROBE_START)
+
+
+def _counter_march_segment_counts(start: Point) -> list[int]:
+    show = _moved(two_set_show(), "T2", start)
+    engine = PathEngine(counter_march(show, TID, ULP_FILE, turn_at=ULP_TURN))
+    return [len(engine.entity_segments(spot, TID)) for spot in ULP_FILE]
+
+
+def test_regression_counter_march_offsets_survive_a_one_ulp_start_shift() -> None:
+    """Gives each counter-march member the same segment count when a start moves by 1 ulp."""
+    x, y = ULP_PROBE_START
+    nudged = (math.nextafter(x, math.inf), y)
+    assert _counter_march_segment_counts(nudged) == _counter_march_segment_counts(ULP_PROBE_START)

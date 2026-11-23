@@ -2253,6 +2253,7 @@
   "motion_contrast": "(show: showpy.show.models.Show, tid: tuple[str, str]) -> showpy.choreo.engine_models.MotionStats",
   "motions": "(registry: showpy.choreo.motion.MotionRegistry) -> list[showpy.choreo.motion.MotionInfo]",
   "move_to": "(obj: T, anchor: Anchor, to: Point, sel: SetSelector = 'all', *, force: bool = False) -> T",
+  "natural_key": "(text: str) -> tuple[tuple[tuple[int, int, str], ...], str]",
   "natural_sort": "(ids: collections.abc.Iterable[T]) -> list[T]",
   "near": "(set_: showpy.choreo.models.Set, point: Point, radius: Meters) -> showpy.core.selection.Selection",
   "nearest": "(s: showpy.choreo.models.Set, point: Point, k: int = 1) -> list[tuple[showpy.core.ids.SpotId, Meters]]",

@@ -12,7 +12,6 @@ Contains:
     rotate_path(): rotates spots about a pivot point or their center
 """
 
-import itertools
 import math
 from collections.abc import Sequence
 from typing import Literal
@@ -70,13 +69,6 @@ def _dedupe_indexed(points: Sequence[Point]) -> tuple[tuple[Point, ...], list[in
     return tuple(kept), vertex_of
 
 
-def _cumulative(points: Sequence[Point]) -> list[float]:
-    lengths = [0.0]
-    for a, b in itertools.pairwise(points):
-        lengths.append(lengths[-1] + math.dist(a, b))
-    return lengths
-
-
 def make_route(
     show: Show,
     tid: tuple[str, str],
@@ -90,7 +82,8 @@ def make_route(
 
     `members` is the file, leader first; each follower starts on the route at its current
     spot and every member travels the leader's distance, so spacing along the route is kept.
-    Without waypoints the leader heads to its placement in the next set.
+    Each offset is the route curve's own arc length at the member's vertex, so a member starts
+    exactly on that vertex. Without waypoints the leader heads to its placement in the next set.
 
     >>> from showpy.examples import two_set_show
     >>> make_route(two_set_show(), ("1", "2"), "T4", [(6.0, 15.0)], ["T4", "T3"]).travel
@@ -111,18 +104,18 @@ def make_route(
             hint="give a waypoint away from the leader's start",
             context={"leader": leader},
         )
-    lengths = _cumulative(vertices)
-    offsets = tuple(lengths[v] for v in reversed(vertex_of[: len(file)]))
     curve = (
         Polyline(points=vertices) if len(vertices) > 2 else Segment(a=vertices[0], b=vertices[1])
     )
+    lengths = curve._breaks()
+    offsets = tuple(float(lengths[v]) for v in reversed(vertex_of[: len(file)]))
     return Route.model_validate(
         {
             "id": route_id,
             "curve": curve,
             "members": tuple(file),
             "offsets": offsets,
-            "travel": lengths[-1] - offsets[0],
+            "travel": float(lengths[-1]) - offsets[0],
         }
     )
 
@@ -214,7 +207,19 @@ def _pt(v: np.ndarray) -> Point:
     return float(v[0]), float(v[1])
 
 
-def _u_turn(file_points: tuple[Point, ...], turn_at: Point) -> tuple[AnyCurve, float]:
+def _u_turn(
+    file_points: tuple[Point, ...], turn_at: Point
+) -> tuple[AnyCurve, tuple[float, ...], float]:
+    """Builds the counter-march route: along the file, to the turn, round it and back.
+
+    Offsets and travel are read from the route's own pieces, so the rear member starts on its
+    vertex and finishes exactly where the half circle ends.
+
+    Returns:
+        curve: The whole counter-march route.
+        offsets: Arc length of each file point on the route, in `file_points` order.
+        travel: Arc length at the end of the half circle, the distance every member travels.
+    """
     last = file_points[-1]
     leader = np.asarray(last)
     heading = np.asarray(turn_at) - leader
@@ -225,12 +230,12 @@ def _u_turn(file_points: tuple[Point, ...], turn_at: Point) -> tuple[AnyCurve, f
     forward = heading / approach
     left = np.array([-forward[1], forward[0]])
     turn_out = np.asarray(turn_at) + left * 2 * radius
-    back_end = turn_out - forward * (approach + _cumulative(file_points)[-1])
     lead_in = (
         Polyline(points=(*file_points, turn_at))
         if len(file_points) > 1
         else Segment(a=last, b=turn_at)
     )
+    back_end = turn_out - forward * lead_in.length()
     arc = ArcCurve(
         center=_pt(np.asarray(turn_at) + left * radius),
         radius=radius,
@@ -238,7 +243,8 @@ def _u_turn(file_points: tuple[Point, ...], turn_at: Point) -> tuple[AnyCurve, f
         sweep_deg=180.0,
     )
     curve = CompositeCurve(parts=(lead_in, arc, Segment(a=_pt(turn_out), b=_pt(back_end))))
-    return curve, approach + math.pi * radius
+    offsets = tuple(float(v) for v in lead_in._breaks()[: len(file_points)])
+    return curve, offsets, lead_in.length() + arc.length()
 
 
 def counter_march(
@@ -281,15 +287,14 @@ def counter_march(
         )
     start_set = show.set(tid[0])
     file_points = _dedupe([start_set.get(m).point for m in reversed(file)])
-    curve, turn_length = _u_turn(file_points, (float(turn_at[0]), float(turn_at[1])))
-    lengths = _cumulative(file_points)
+    curve, offsets, travel = _u_turn(file_points, (float(turn_at[0]), float(turn_at[1])))
     route = Route.model_validate(
         {
             "id": f"counter-march-{file[0]}",
             "curve": curve,
             "members": tuple(file),
-            "offsets": tuple(reversed(lengths)),
-            "travel": lengths[-1] + turn_length,
+            "offsets": tuple(reversed(offsets)),
+            "travel": travel,
         }
     )
     moved = follow_and_set_targets(show, tid, route, force=force)

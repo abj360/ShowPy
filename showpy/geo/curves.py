@@ -17,6 +17,7 @@ Contains:
     SvgCurve: evaluates one SVG subpath under an affine transform
     SpiralCurve: draws an Archimedean spiral
     CompositeCurve: joins curves end to end
+    BREAK_MERGE_TOL_M: sets how close to a trim end an inner break is merged away
     TrimmedCurve: views a piece of another curve, reversed when s0 > s1
     AnyCurve: discriminates every curve model by its `kind`
     curve_from_construction(): rebuilds a curve from its JSON recipe
@@ -547,6 +548,11 @@ def _require_meeting(end: Point, start: Point, where: str) -> None:
         )
 
 
+# Breaks this close to a trim end are float noise from two arc-length sums; keeping them makes
+# discrete outputs depend on the platform.
+BREAK_MERGE_TOL_M = 1e-9
+
+
 class TrimmedCurve(CurveModel):
     """Views the piece of `base` between arc lengths s0 and s1, reversed when s0 > s1.
 
@@ -592,7 +598,7 @@ class TrimmedCurve(CurveModel):
     def _breaks(self) -> FloatArray:
         lo, hi = sorted((self.s0, self.s1))
         inner = self.base._breaks()
-        inner = inner[(inner > lo) & (inner < hi)]
+        inner = inner[(inner > lo + BREAK_MERGE_TOL_M) & (inner < hi - BREAK_MERGE_TOL_M)]
         return np.sort(np.abs(np.concatenate([[self.s0, self.s1], inner]) - self.s0))
 
 

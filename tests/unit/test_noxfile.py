@@ -29,7 +29,7 @@ Contains:
     test_heavy_jobs_wait_for_the_changes_job: every heavy job needs changes and reads its output
     test_ungated_jobs_sees_a_job_without_the_gate: proves the gate check can fail
     test_single_jobs_skip_only_on_a_successful_docs_only_answer: the fail-closed job condition
-    test_matrix_job_gates_its_steps_not_itself: the matrix legs always start and expand
+    test_matrix_job_gates_its_steps_not_itself: each matrix job's legs always start and expand
     test_lint_types_runs_on_every_change: lint-types waits for nothing and is never skipped
     test_changes_job_runs_the_classifier_on_full_history: the job diffs with the script
     session_strings(): lists the string literals a nox session's body holds
@@ -51,6 +51,8 @@ import itertools
 import re
 import tomllib
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 NOXFILE = ROOT / "noxfile.py"
@@ -84,8 +86,8 @@ ENV_INDENT = 6
 STEP_START = re.compile(r"^      - ", re.MULTILINE)
 CHANGES_JOB = "changes"
 UNGATED_JOB = "lint-types"
-MATRIX_JOB = "check"
-GATED_JOBS = ("check", "hashseed", "slow", "lowest", "wheel", "core", "docker")
+MATRIX_JOBS = ("check", "slow-cross")
+GATED_JOBS = ("check", "hashseed", "slow", "slow-cross", "lowest", "wheel", "core", "docker")
 NEEDS_CHANGES = re.compile(r"^    needs: changes$", re.MULTILINE)
 RUNS_CODE_JOBS = "needs.changes.result != 'success' || needs.changes.outputs.code != 'false'"
 SINGLE_JOB_CONDITION = f"${{{{ !cancelled() && ({RUNS_CODE_JOBS}) }}}}"
@@ -345,12 +347,13 @@ def test_ungated_jobs_sees_a_job_without_the_gate() -> None:
 def test_single_jobs_skip_only_on_a_successful_docs_only_answer() -> None:
     workflow = CI_WORKFLOW.read_text()
     for name in GATED_JOBS:
-        if name != MATRIX_JOB:
+        if name not in MATRIX_JOBS:
             assert job_condition(ci_job(workflow, name)) == SINGLE_JOB_CONDITION, name
 
 
-def test_matrix_job_gates_its_steps_not_itself() -> None:
-    job = ci_job(CI_WORKFLOW.read_text(), MATRIX_JOB)
+@pytest.mark.parametrize("name", MATRIX_JOBS)
+def test_matrix_job_gates_its_steps_not_itself(name: str) -> None:
+    job = ci_job(CI_WORKFLOW.read_text(), name)
     assert job_condition(job) == MATRIX_JOB_CONDITION
     assert job_value(job, "RUN_CODE_JOBS", ENV_INDENT) == MATRIX_STEP_ENV
     steps = STEP_START.split(job)[1:]

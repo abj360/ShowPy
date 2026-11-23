@@ -444,6 +444,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("motion_contrast", "showpy.choreo.motion_stats", "motion_contrast"),
     ("motions", "showpy.choreo.motion", "motions"),
     ("move_to", "showpy.choreo.set_transforms", "move_to"),
+    ("natural_key", "showpy.core.util", "natural_key"),
     ("natural_sort", "showpy.core.util", "natural_sort"),
     ("near", "showpy.cast.select", "near"),
     ("nearest", "showpy.choreo.set_measure", "nearest"),
