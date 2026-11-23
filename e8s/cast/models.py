@@ -11,6 +11,7 @@ Contains:
     RewriteReport: lists what a spot rename or delete dropped or left unresolved
     HexColor: a `#rrggbb` color string, in either case
     MAX_LABEL_PAD: bounds how wide a label number may be zero-padded
+    spot_cap_error(): builds the error for a cast over MAX_SPOTS
     require_spot_count(): refuses a cast size over MAX_SPOTS before anything is allocated
 """
 
@@ -182,6 +183,26 @@ class LabelScheme(FrozenModel):
         return f"{prefix}{number:0{self.pad}d}"
 
 
+def spot_cap_error(count: int, *, at_least: bool = False) -> SchemaError:
+    """Builds the error for a cast over MAX_SPOTS, so every refusal of the cap reads the same.
+
+    Args:
+        count: Number of spots the cast would hold.
+        at_least: Whether `count` is a lower bound, when the edit stopped before counting all.
+
+    >>> spot_cap_error(5001, at_least=True).message
+    'a cast of at least 5001 spots is over MAX_SPOTS (5,000)'
+    """
+    bound = "at least " if at_least else ""
+    return SchemaError(
+        f"a cast of {bound}{count} spots is over MAX_SPOTS ({MAX_SPOTS:,})",
+        hint=f"keep at most {MAX_SPOTS:,} spots in one show; split a larger ensemble into"
+        " several shows",
+        context={"spots": count, "max_spots": MAX_SPOTS},
+        code=ErrorCode.TOO_MANY_SPOTS,
+    )
+
+
 def require_spot_count(count: int) -> None:
     """Refuses a cast of more than MAX_SPOTS spots, before the caller allocates anything.
 
@@ -197,13 +218,7 @@ def require_spot_count(count: int) -> None:
     """
     if count <= MAX_SPOTS:
         return
-    raise SchemaError(
-        f"a cast of {count} spots is over MAX_SPOTS ({MAX_SPOTS:,})",
-        hint=f"keep at most {MAX_SPOTS:,} spots in one show; split a larger ensemble into"
-        " several shows",
-        context={"spots": count, "max_spots": MAX_SPOTS},
-        code=ErrorCode.TOO_MANY_SPOTS,
-    )
+    raise spot_cap_error(count)
 
 
 class Cast(FrozenModel):

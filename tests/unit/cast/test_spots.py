@@ -20,6 +20,8 @@ Contains:
         delete_spots
     test_regression_add_spots_checks_cap_before_allocating: refuses spots past MAX_SPOTS before
         spacing them or building a placement per set, within a time and memory bound
+    test_regression_fill_spots_refuses_the_cap_as_a_schema_error: gives an interval fill past
+        the cap the cast's SchemaError
     test_regression_spot_counts_must_be_whole_numbers: refuses a fractional, text or missing
         count with SchemaError
 """
@@ -561,7 +563,7 @@ def test_regression_add_spots_checks_cap_before_allocating(full_show: Show) -> N
     tracemalloc.start()
     try:
         for call in calls:
-            with pytest.raises((SchemaError, SpacingError)) as caught:
+            with pytest.raises(SchemaError) as caught:
                 call()
             assert caught.value.code == ErrorCode.TOO_MANY_SPOTS
         _, peak = tracemalloc.get_traced_memory()
@@ -575,3 +577,15 @@ def test_regression_spot_counts_must_be_whole_numbers(count: object) -> None:
     """Refuses a count that is not a whole number with SchemaError, before spacing anything."""
     with pytest.raises(SchemaError, match="whole number"):
         add_spots_along(two_set_show(), line((0, 0), (4, 0)), cast(int, count), "trumpets", "1")
+
+
+def test_regression_fill_spots_refuses_the_cap_as_a_schema_error() -> None:
+    """Refuses an interval fill past MAX_SPOTS with the cast's SchemaError, chained to fill's."""
+    square = region([(0, 0), (40, 0), (40, 40), (0, 40)])
+    with pytest.raises(SchemaError) as caught:
+        fill_spots(two_set_show(), square, "trumpets", "1", interval=FINE_INTERVAL_M)
+    assert type(caught.value) is SchemaError
+    assert caught.value.code == ErrorCode.TOO_MANY_SPOTS
+    assert caught.value.context == {"spots": MAX_SPOTS + 1, "max_spots": MAX_SPOTS}
+    assert caught.value.message.startswith("a cast of at least")
+    assert isinstance(caught.value.__cause__, SpacingError)

@@ -36,6 +36,7 @@ from e8s.cast.models import (
     Shape,
     Spot,
     require_spot_count,
+    spot_cap_error,
 )
 from e8s.cast.rewrite import rewrite_spot_ids, rewrite_spots
 from e8s.cast.select import label_prefix, select
@@ -52,7 +53,7 @@ from e8s.core.errors import (
 )
 from e8s.core.ids import SetId, SpotId
 from e8s.core.selection import Selector
-from e8s.core.types import Meters, Point, Region
+from e8s.core.types import Meters, Point, Points, Region
 from e8s.core.util import close_matches, natural_sort
 from e8s.geo.curve_base import Curve
 from e8s.geo.regions import Area
@@ -302,6 +303,17 @@ def _interval_for(area: Area, n: int) -> Meters:
     return lo
 
 
+def _fill_within_cap(show: "Show", area: Area, interval: Meters) -> Points:
+    """Fills an area by interval, refusing as soon as the spots pass the room under MAX_SPOTS."""
+    room = MAX_SPOTS - len(show.cast.spots)
+    try:
+        return fill(area, interval, limit=room)
+    except SpacingError as error:
+        if error.code != ErrorCode.TOO_MANY_SPOTS:
+            raise
+        raise spot_cap_error(MAX_SPOTS + 1, at_least=True) from error
+
+
 def fill_spots(
     show: "Show",
     region: Area | Region,
@@ -316,8 +328,8 @@ def fill_spots(
 
     With only n, bisection finds the largest interval at which at least n spots fit, then
     the n spots nearest the area's centroid are kept. A cast that would pass MAX_SPOTS raises
-    TOO_MANY_SPOTS before the area is filled: SchemaError for a count n, SpacingError as soon
-    as an interval fill passes the room left.
+    SchemaError TOO_MANY_SPOTS: before spacing for a count n, and as soon as an interval fill
+    passes the room left.
 
     Args:
         show: Show to add to.
@@ -339,7 +351,7 @@ def fill_spots(
         require_spot_count(len(show.cast.spots) + n)
     area = region.to_shapely() if isinstance(region, Region) else region
     if interval is not None and n is None:
-        points = fill(area, interval, limit=MAX_SPOTS - len(show.cast.spots))
+        points = _fill_within_cap(show, area, interval)
     elif n is not None and interval is None:
         points = fill(area, _interval_for(area, n), n=n)
     else:
