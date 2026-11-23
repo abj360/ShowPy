@@ -10,6 +10,7 @@ Contains:
 """
 
 from collections.abc import Callable, Iterator, Mapping
+from types import GenericAlias
 from typing import Any, get_args
 
 from pydantic import GetCoreSchemaHandler
@@ -60,7 +61,7 @@ class ReadOnly:
     ) -> CoreSchema:
         """Validates as the plain mapping, wraps the result, and serializes it as a dict."""
         key_type, value_type = get_args(source) or (Any, Any)
-        plain = handler.generate_schema(dict[key_type, value_type])  # type: ignore[valid-type]
+        plain = handler.generate_schema(GenericAlias(dict, (key_type, value_type)))
         return core_schema.no_info_after_validator_function(
             ReadOnlyMap,
             plain,
