@@ -20,28 +20,28 @@ The first build covers every module except the consumer checker (below), `showpy
 - Functions are pure: "edit" functions return a new object, and functions that edit pinned or locked items raise `LockedError` unless the caller passes `force=True`. Storage writes (`DocumentRepository.put_*`, `transaction`) check that the data is valid and never check pins or locks; the edit functions enforce pins and locks for every caller. Builders that take a spec (`two_part`, `set_style`, `rotate_path`) guard the spec they receive; a stored change is re-checked against the stored show when it is committed. ShowPy has no principals: permissions, authorship and commit messages belong to the host application. The library never reads the clock: every time stamp is an explicit `at: datetime` argument. Stores and services (`SheetStore`, `Repository`, `AssetStore`) are injected, and registries are immutable: registering returns a new registry.
 - `Points` = NumPy array of shape (N, 2), float64. `Selector` = selection expression, list of IDs, or `Selection`.
 - `import showpy` re-exports the public API lazily (PEP 562): a name is imported on first use, e.g. `showpy.line`. Internal helper modules (engine compilation, matching cost and solver internals, workspace documents) are not re-exported. One name clashes and is renamed: the motion function `spiral` is `showpy.spiral_motion`; `showpy.spiral` is the geometric spiral curve. Subpackage `__init__` files hold only a docstring, and library code imports from the submodule, e.g. `from showpy.geo.shapes import line`.
-- `showpy.examples` holds small, deterministic example shows for docs, doctests and tests: `field_sheet()`, `two_set_show()`, `with_rows(rows, routes=None, show=None)`, `with_targets(updates, show=None)`, `crossing_show()`, `performer(name, role="performer")`, `live_publication(show)`, plus `EXAMPLE_TIME` and `EXAMPLE_TID`.
+- `showpy.examples` holds small, deterministic example shows for docs, doctests and tests: `field_sheet()`, `two_set_show()`, `with_rows(rows, routes=None, show=None)`, `with_targets(updates, show=None)`, `crossing_show()`, `performer(name, role="performer")`, `live_publication(show)`, plus `EXAMPLE_TIME` and `EXAMPLE_TID`. `performer()` returns a `Performer` and `live_publication()` a `Publication`, deprecated types that leave the library in 0.6.0.
 - `pip install showpy` installs numpy, scipy, shapely and pydantic only. pandas, Pillow, segno and imageio-ffmpeg are the extras `tables`, `render`, `qr` and `video` (`all` holds every one); a function marked "needs the `<name>` extra" raises `MissingExtraError` at call time without it.
-- `→ X` means the function returns X. Optional arguments show their defaults. A `*` in a signature starts the keyword-only arguments; every boolean flag (`force`, `keep_end`, `include_hidden`, ...) is keyword-only.
+- `→ X` means the function returns X. Optional arguments show their defaults. A `*` in a signature starts the keyword-only arguments; every boolean flag (`force`, `keep_end`, `include_hidden`, ...) is keyword-only. Two families leave shared trailing arguments out of their table rows: the transforms of `showpy.choreo.set_transforms` and `showpy.choreo.set_snapping` all end in `sel="all", *, force=False`, and the path editors of `showpy.choreo.paths` (all but `default_paths`, `lock`, `unlock` and `paths_table`) end in `*, force=False`; `curve_path(spec, entity, *control, force=False)` takes it after its control points.
 - **Deprecated** names still work but warn `DeprecatedWarning` on use. A table that mixes current and deprecated names marks the deprecated ones in a **Deprecated** column with the release that removes them and their replacement; a section that is deprecated as a whole says so in a note under its heading. A replacement that is not in the library yet arrives in the release that removes the old name.
 
 **Module map**
 
-| Module             | Panel                | What it holds                                                                                                     |
-| ------------------ | -------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `showpy.core`      | all                  | Units, IDs and types, errors, validation reports, the selection model, utilities                                  |
-| `showpy.cast`      | Show Canvas          | Groups, spots, cast, selection language, spot ID rewriting                                                        |
-| `showpy.sheet`     | Canvas               | The 2D design sheet: templates, customization, coordinate systems, bounds, rendering                              |
-| `showpy.notes`     | Canvas               | Design notes on sets, transitions, points, areas and spots                                                        |
-| `showpy.time`      | Show Canvas, Preview | Count timeline: tempo, holds, markers, cues, measures, audio sync                                                 |
-| `showpy.geo`       | Show Canvas          | Curves, shapes, regions, SVG and text outlines, spacing, affine maps, transforms, static measurement and analysis |
-| `showpy.choreo`    | Show Canvas          | Sets, forms, matching, paths, routes, engine, facing, avoidance, time-based measures                              |
-| `showpy.show`      | Show Canvas          | Show model, set management, sections, storage, collaboration, history, validation                                 |
-| `showpy.export`    | Show Canvas          | Coordinate sheets, charts, PDF, JSON and CSV data, position import, publishing and claims, video                  |
-| `showpy.examples`  | docs, tests          | Deterministic example shows for doctests and tests                                                                |
-| Checker (consumer) | all                  | Limits and checks, a separate package pinned to a ShowPy release; not built yet                                   |
-| `showpy.packs`     | all                  | Domain packs, starting with marching band; not built yet                                                          |
-| `showpy.index`     | agent                | API index and promotion of agent-written code; not built yet                                                      |
+| Module             | Panel                | What it holds                                                                                                                                                                    |
+| ------------------ | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `showpy.core`      | all                  | Units, IDs and types, errors, validation reports, the selection model, utilities                                                                                                 |
+| `showpy.cast`      | Show Canvas          | Groups, spots, cast, selection language, spot ID rewriting                                                                                                                       |
+| `showpy.sheet`     | Canvas               | The 2D design sheet: templates, customization, coordinate systems, bounds, rendering; templates, coordinate systems and rendering are mostly deprecated since 0.4.0              |
+| `showpy.notes`     | Canvas               | Design notes on sets, transitions, points, areas and spots                                                                                                                       |
+| `showpy.time`      | Show Canvas, Preview | Count timeline: tempo, holds, markers, cues, measures, audio sync                                                                                                                |
+| `showpy.geo`       | Show Canvas          | Curves, shapes, regions, SVG and text outlines, spacing, affine maps, transforms, static measurement and analysis                                                                |
+| `showpy.choreo`    | Show Canvas          | Sets, forms, matching, paths, routes, engine, facing, avoidance, time-based measures                                                                                             |
+| `showpy.show`      | Show Canvas          | Show model, set management, sections, storage, stored format and migration, JSON interchange and position import (`showpy.show.interchange`), collaboration, history, validation |
+| `showpy.export`    | Show Canvas          | Coordinate sheets, charts, PDF, CSV data, publishing and claims, video; deprecated since 0.4.0. JSON data and position import moved to `showpy.show.interchange`                 |
+| `showpy.examples`  | docs, tests          | Deterministic example shows for doctests and tests                                                                                                                               |
+| Checker (consumer) | all                  | Limits and checks, a separate package pinned to a ShowPy release; not built yet                                                                                                  |
+| `showpy.packs`     | all                  | Domain packs, starting with marching band; not built yet                                                                                                                         |
+| `showpy.index`     | agent                | API index and promotion of agent-written code; not built yet                                                                                                                     |
 
 ## showpy.core
 
@@ -425,11 +425,11 @@ The `Curve` protocol is in `showpy.geo.curve_base`, the curve models in `showpy.
 | `point_at_u(u)`                  | 0..1                        | `Points`                          | Point at a fraction along it                                                                     |
 | `tangent_at(s)` / `normal_at(s)` |                             | unit `Points`                     | Direction and left normal                                                                        |
 | `project(p)`                     | `Point`                     | `Meters`                          | Arc length of the closest point                                                                  |
-| `substring(s0, s1)`              |                             | `TrimmedCurve`                    | A piece (reversed if s0 > s1)                                                                    |
-| `reversed()`                     |                             | `TrimmedCurve`                    | Opposite direction                                                                               |
 | `to_polyline(tol=0.01)`          | chord error                 | `Points`                          | Approximate as straight pieces                                                                   |
 | `to_shapely(tol=0.01)`           |                             | `LineString`                      | Interop                                                                                          |
 | `construction()`                 |                             | `dict`                            | JSON recipe with a `kind`, stored on forms; `curve_from_construction(recipe)` rebuilds the curve |
+
+`CurveModel` (`showpy.geo.curves`), the base of every curve model, adds `substring(s0, s1) → TrimmedCurve` (a piece, reversed if s0 > s1) and `reversed() → TrimmedCurve` (the opposite direction); they are not part of the protocol.
 
 Every curve model is a frozen Pydantic model with a `kind` discriminator; `AnyCurve` is their union. Curves refuse inconsistent construction with `GeometryError`: radii and widths that are not finite and positive, a trimmed curve outside an open base, composite parts that do not meet, an SVG curve whose `Z` does not match its path data or whose transform is not 3 × 3.
 
@@ -837,7 +837,7 @@ The path models live in `showpy.choreo.path_models`.
 | `rotate_path(show, spec, sel, pivot, deg, *, force=False)`                                 | `Point` or `"center"` (centroid of the starting spots) | Rotation paths about a pivot                                                                                                 |
 | `stagger(spec, ordered_sel, step=1.0, direction="start", *, keep_end=True)`                | `start` or `end`                                       | Staggered starts                                                                                                             |
 | `ripple(spec, ordered_sel, total, curve="linear")`                                         | `linear`, `ease_in`, `ease_out`, `ease_in_out`         | Spread starts over a total                                                                                                   |
-| `set_facing(spec, sel, mode, value=None, turn_counts=0, direction=SHORTEST)`               |                                                        | Facing while moving                                                                                                          |
+| `set_facing(spec, sel, mode, value=None, turn_counts=0, direction=TurnDirection.SHORTEST)` |                                                        | Facing while moving                                                                                                          |
 | `set_pace(spec, sel, pace)`                                                                |                                                        | Double or half time; positions do not change                                                                                 |
 | `lock(spec, sel)` / `unlock(spec, sel)`                                                    |                                                        | Designer locks                                                                                                               |
 | `save_paths(ws, spec, at)`                                                                 |                                                        | → revision `str`; writes `/transitions/<a>-<b>/paths.json`; checks run through the tool hook (`showpy.show.paths_store`)     |
@@ -872,7 +872,7 @@ Motion functions live in `showpy.choreo.motion`.
 | `set_easing(spec, sel, easing, *, force=False)`                                      | `Easing` or kind name        | `TransitionSpec`   | Change pacing within the move; a kind name uses the default strength                                          |
 | `ease(easing, u)`                                                                    | `Easing`, time shares        | distance shares    | Apply an easing                                                                                               |
 | `easing_breaks(easing)`                                                              |                              | `list[float]`      | Time shares where an easing kinks or pauses; segment edges include them                                       |
-| `turn(start, end, u, direction=SHORTEST)`                                            | `Degrees`, `Degrees`, 0..1   | `Degrees`          | Interpolate facing the chosen way                                                                             |
+| `turn(start, end, u, direction=TurnDirection.SHORTEST)`                              | `Degrees`, `Degrees`, 0..1   | `Degrees`          | Interpolate facing the chosen way                                                                             |
 
 Engine rules for these: progress u passes through the easing curve before positions are computed; `CUSTOM` motions are sampled by the engine at 257 points into a polyline, so the checker works unchanged, and checked again halfway between samples: a motion that strays more than the engine's `motion_tol` from that polyline (it aliases) raises `PathError` (`SEGMENT_BOUND`). Height (jumps, lifts, flight) belongs to the 3D layer.
 
@@ -949,7 +949,7 @@ The `face_*` tools edit placements in one `Set` and raise `LockedError` on pinne
 | `face_along(show, set_id, form_id, *, reverse=False, force=False)` |                            | `Set`     | Follow the form's line; on an svg form, each spot follows the subpath nearest it |
 | `face_normal(show, set_id, form_id, *, outward=True, force=False)` |                            | `Set`     | Perpendicular to the form; outward is the right of travel                        |
 | `add_facing_override(show, override)`                              | `FacingOverride`           | `Show`    | Facing over a time range within the show's counts                                |
-| `turn(start, end, u, direction=SHORTEST)`                          | `Degrees`, `Degrees`, 0..1 | `Degrees` | Interpolate facing (from `showpy.choreo.motion`)                                 |
+| `turn(start, end, u, direction=TurnDirection.SHORTEST)`            | `Degrees`, `Degrees`, 0..1 | `Degrees` | Interpolate facing (from `showpy.choreo.motion`)                                 |
 
 ## showpy.choreo (part 4): measures over time
 
