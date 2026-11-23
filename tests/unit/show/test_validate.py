@@ -48,8 +48,8 @@ Contains:
         even when no sheet store is passed
     test_regression_validate_show_reports_empty_ids: reports an empty show, note or form ID, each
         alone
-    test_regression_validate_show_accepts_hyphenated_form_and_note_ids: accepts an inner hyphen in
-        form and note IDs
+    test_regression_validate_show_accepts_hyphenated_form_and_note_ids: reports an inner hyphen
+        in form and note IDs, which it once accepted
     test_regression_validate_show_names_the_bad_id_path_in_context: puts the path of the bad ID and
         its value in the issue context
     test_regression_validate_show_reports_set_ids_that_cannot_be_stored: reports a set ID that no
@@ -471,10 +471,16 @@ def test_regression_validate_show_reports_empty_ids() -> None:
 
 
 def test_regression_validate_show_accepts_hyphenated_form_and_note_ids() -> None:
-    """Accepts an inner hyphen in form and note IDs, which the library itself generates."""
+    """Reports an inner hyphen in form and note IDs: the library no longer generates one, and
+    migration renames every stored one, so the name records the acceptance this replaced."""
     show = _formed(key="form-1", form_id="form-1")
     noted = show.model_copy(update={"notes": (_note(note_id="note-1"),)})
-    assert validate_show(noted).issues == ()
+    bad = [dict(i.context) for i in validate_show(noted).issues if i.code == "BAD_ID"]
+    assert bad == [
+        {"path": "notes[0].id", "id": "note-1"},
+        {"path": "forms.form-1.id", "id": "form-1"},
+    ]
+    assert validate_show(_formed(key="form_1", form_id="form_1")).issues == ()
 
 
 def test_regression_validate_show_names_the_bad_id_path_in_context() -> None:
