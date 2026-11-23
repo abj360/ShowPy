@@ -23,9 +23,9 @@ from showpy.core.ids import FormId, RouteId, SetId, SpotId, ZoneId, make_tid
 from showpy.core.selection import Selection
 from showpy.core.types import Region
 from showpy.geo.curves import Segment
-from showpy.notes.models import Anchor, Note
+from showpy.notes.models import Note
 from showpy.sheet.models import Zone, ZoneKind
-from showpy.show.models import Show
+from showpy.show.models import Anchor, Show
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 

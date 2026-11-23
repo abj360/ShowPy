@@ -28,10 +28,9 @@ from showpy.choreo.set_transforms import shift
 from showpy.core.errors import ShowPyError
 from showpy.examples import two_set_show
 from showpy.geo.affine import translation_matrix
-from showpy.notes.models import Anchor
 from showpy.notes.notes import add_note
 from showpy.show.manage import add_set, set_counts
-from showpy.show.models import Show
+from showpy.show.models import Anchor, Show
 from showpy.time.models import Hold
 from showpy.time.timeline import add_hold
 from tests.strategies.forms import with_form

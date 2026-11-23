@@ -43,8 +43,9 @@ from showpy.core.ids import (
 )
 from showpy.core.types import Count
 from showpy.core.util import close_matches
-from showpy.notes.models import Anchor, Note
+from showpy.notes.models import Note
 from showpy.sheet.models import Sheet
+from showpy.show.anchors import Anchor
 from showpy.show.locks import require_unlocked
 from showpy.show.models import Pin, Show, ShowIndex, ShowIndexEntry
 from showpy.show.set_keys import free_set_key, set_key

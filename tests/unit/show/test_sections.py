@@ -31,9 +31,9 @@ from showpy.choreo.path_models import FacingMode, FacingOverride, FixedFacing, T
 from showpy.core.errors import SchemaError, TimelineError
 from showpy.core.ids import FormId, SetId, SpotId, make_tid
 from showpy.core.util import approx_equal
-from showpy.notes.models import Anchor, Note
+from showpy.notes.models import Note
 from showpy.show.manage import add_set, index, renumber
-from showpy.show.models import Pin, Show
+from showpy.show.models import Anchor, Pin, Show
 from showpy.show.sections import join_sections, split_section
 from showpy.time.clock import count_to_seconds
 from showpy.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting, TempoSection

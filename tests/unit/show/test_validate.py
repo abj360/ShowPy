@@ -93,9 +93,9 @@ from showpy.core.caps import MAX_COUNTS
 from showpy.core.ids import FormId, SetId, SpotId, make_tid
 from showpy.core.types import Region
 from showpy.core.validation import ValidationReport
-from showpy.notes.models import Anchor, Note
+from showpy.notes.models import Note
 from showpy.sheet.templates import InMemorySheetStore
-from showpy.show.models import Comment, Pin, Show
+from showpy.show.models import Anchor, Comment, Pin, Show
 from showpy.show.validate import (
     validate_dependencies,
     validate_paths,

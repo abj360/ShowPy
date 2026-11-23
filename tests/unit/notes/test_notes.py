@@ -24,7 +24,7 @@ from pydantic import ValidationError as PydanticValidationError
 from showpy.choreo.models import PlacementPatch
 from showpy.core.errors import GeometryError, SchemaError, ShowPyError, UnknownRefError
 from showpy.core.types import Region
-from showpy.notes.models import Anchor, Note
+from showpy.notes.models import Note
 from showpy.notes.notes import (
     accept_draft,
     add_note,
@@ -33,7 +33,7 @@ from showpy.notes.notes import (
     notes_near,
     remove_note,
 )
-from showpy.show.models import Show
+from showpy.show.models import Anchor, Show
 from tests.fixtures.shows import two_set_show
 
 AT = datetime(2026, 11, 11, 9, 30, tzinfo=UTC)

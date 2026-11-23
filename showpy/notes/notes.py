@@ -20,7 +20,8 @@ from showpy.cast.select import select
 from showpy.core.errors import GeometryError, SchemaError, UnknownRefError, field_errors
 from showpy.core.types import Meters, Point
 from showpy.core.util import close_matches
-from showpy.notes.models import Anchor, Note, NoteKind
+from showpy.notes.models import Note, NoteKind
+from showpy.show.anchors import Anchor
 
 if TYPE_CHECKING:
     from showpy.show.models import Show

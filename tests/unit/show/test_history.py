@@ -46,7 +46,7 @@ from showpy.core.errors import DeprecatedWarning, SchemaError, ShowPyError, Unkn
 from showpy.core.ids import FormId, RouteId, SetId, SpotId, ZoneId, make_tid
 from showpy.core.types import Region
 from showpy.geo.curves import Segment
-from showpy.notes.models import Anchor, Note
+from showpy.notes.models import Note
 from showpy.sheet.models import Zone, ZoneKind
 from showpy.show.history import (
     changelog,
@@ -57,7 +57,7 @@ from showpy.show.history import (
     revert,
 )
 from showpy.show.manage import add_set
-from showpy.show.models import Pin, Show
+from showpy.show.models import Anchor, Pin, Show
 from showpy.show.pinning import pin, unpin
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import load_show, open_workspace, save_show

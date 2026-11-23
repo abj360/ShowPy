@@ -609,7 +609,6 @@ if TYPE_CHECKING:
         interpolate_forms,
     )
     from showpy.notes.models import (
-        Anchor,
         Note,
     )
     from showpy.notes.notes import (
@@ -737,6 +736,7 @@ if TYPE_CHECKING:
         read_version,
     )
     from showpy.show.models import (
+        Anchor,
         CanvasEvent,
         Comment,
         CountsOp,
@@ -840,7 +840,7 @@ if TYPE_CHECKING:
     ValidationError = ShowValidationError
 
 _EXPORTS: dict[str, tuple[str, str]] = {
-    "Anchor": ("showpy.notes.models", "Anchor"),
+    "Anchor": ("showpy.show.models", "Anchor"),
     "ApprovalState": ("showpy.choreo.models", "ApprovalState"),
     "ArcCurve": ("showpy.geo.curves", "ArcCurve"),
     "ArcPiece": ("showpy.geo.svg", "ArcPiece"),

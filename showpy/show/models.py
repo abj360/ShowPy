@@ -2,6 +2,7 @@
 models.py --- the Show aggregate, its index, and the storage, history and collaboration records
 
 Contains:
+    Anchor: re-exports the tagged anchor of comments, highlights and notes
     Pin: records one designer lock on a spot, form, set or transition
     Show: holds a whole show: sheet, cast, timeline, sets, forms, paths, notes and zones
     ShowLookup: looks up a show's sets, transitions and forms by ID without scanning
@@ -67,8 +68,9 @@ from showpy.core.json_types import FrozenJsonValue, JsonValue
 from showpy.core.readonly import ReadOnly, ReadOnlyMap
 from showpy.core.types import Count, FrozenModel, JsonObject, Seconds
 from showpy.core.util import close_matches
-from showpy.notes.models import Anchor, Note
+from showpy.notes.models import Note
 from showpy.sheet.models import CoordinateSystem, Sheet, Zone
+from showpy.show.anchors import Anchor as Anchor
 from showpy.time.models import MeasureLabel, Timeline
 
 INDEX_TOL = 1e-9

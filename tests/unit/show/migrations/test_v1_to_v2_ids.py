@@ -64,7 +64,6 @@ from showpy.core.errors import SchemaError, StorageError
 from showpy.core.ids import LEGACY_IDS_KEY, FormId, SetId, ZoneId
 from showpy.core.types import Region
 from showpy.examples import two_set_show
-from showpy.notes.models import Anchor
 from showpy.notes.notes import add_note
 from showpy.sheet.models import Zone, ZoneKind
 from showpy.show.canvas_renames import renamed_canvas
@@ -82,7 +81,7 @@ from showpy.show.integrity import blob_digest
 from showpy.show.manage import add_set, renumber
 from showpy.show.migrate import FIRST_VERSION, MigrationReport, ReportBuilder
 from showpy.show.migrations.v1_to_v2_ids import rename_ids
-from showpy.show.models import Comment, Revision, Show
+from showpy.show.models import Anchor, Comment, Revision, Show
 from showpy.show.pinning import pin
 from showpy.show.storage import load_show, open_workspace, save_show
 from showpy.show.structured import COMMENTS_DOC, SELECTION_DOC

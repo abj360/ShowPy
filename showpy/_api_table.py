@@ -14,7 +14,7 @@ Contains:
 """
 
 PUBLIC_API: tuple[tuple[str, str, str], ...] = (
-    ("Anchor", "showpy.notes.models", "Anchor"),
+    ("Anchor", "showpy.show.models", "Anchor"),
     ("ApprovalState", "showpy.choreo.models", "ApprovalState"),
     ("ArcCurve", "showpy.geo.curves", "ArcCurve"),
     ("ArcPiece", "showpy.geo.svg", "ArcPiece"),

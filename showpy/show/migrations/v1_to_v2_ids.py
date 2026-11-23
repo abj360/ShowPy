@@ -55,8 +55,8 @@ from showpy.core.ids import (
     parse_tid,
 )
 from showpy.core.selection import Selection, SelectorField
-from showpy.notes.models import Anchor
 from showpy.sheet.models import CoordinateSystem, Landmark, Sheet, Zone, normalized_name
+from showpy.show.anchors import Anchor
 from showpy.show.models import Pin, Show
 
 if TYPE_CHECKING:

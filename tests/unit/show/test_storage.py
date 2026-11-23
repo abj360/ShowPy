@@ -21,11 +21,11 @@ from showpy.core.errors import (
     UnknownRefError,
 )
 from showpy.core.ids import FormId, SetId, SpotId, make_tid
-from showpy.notes.models import Anchor, Note
+from showpy.notes.models import Note
 from showpy.show.documents import decode_show, dump_json, encode_show, split_path
 from showpy.show.file_repository import FileRepository
 from showpy.show.manage import add_set, remove_set
-from showpy.show.models import Show
+from showpy.show.models import Anchor, Show
 from showpy.show.repositories import InMemoryAssetStore, InMemoryRepository
 from showpy.show.storage import Repository, Workspace, load_show, open_workspace, save_show
 from tests.fixtures.recipes import LINE_RECIPE

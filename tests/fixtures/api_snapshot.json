@@ -165,7 +165,7 @@
   },
   "Comment": {
     "model": {
-      "anchor": "showpy.notes.models.Anchor",
+      "anchor": "showpy.show.anchors.Anchor",
       "author": "str",
       "id": "str",
       "resolved": "bool",
@@ -623,7 +623,7 @@
   },
   "Highlight": {
     "model": {
-      "anchor": "showpy.notes.models.Anchor | None",
+      "anchor": "showpy.show.anchors.Anchor | None",
       "ttl_s": "float",
       "zone": "str | None"
     }
@@ -874,7 +874,7 @@
   },
   "Note": {
     "model": {
-      "anchor": "showpy.notes.models.Anchor",
+      "anchor": "showpy.show.anchors.Anchor",
       "author": "str",
       "created_at": "pydantic.types.AwareDatetime",
       "id": "str",
@@ -1587,7 +1587,7 @@
   "add_hold": "(tl: showpy.time.models.Timeline, hold: showpy.time.models.Hold) -> showpy.time.models.Timeline",
   "add_landmark": "(sheet: showpy.sheet.models.Sheet, item: showpy.sheet.models.Landmark) -> showpy.sheet.models.Sheet",
   "add_marker": "(tl: showpy.time.models.Timeline, marker: showpy.time.models.Marker) -> showpy.time.models.Timeline",
-  "add_note": "(show: 'Show', text: str, anchor: showpy.notes.models.Anchor, note_id: str, at: datetime.datetime, author: str, kind: NoteKind = 'idea') -> 'Show'",
+  "add_note": "(show: 'Show', text: str, anchor: showpy.show.anchors.Anchor, note_id: str, at: datetime.datetime, author: str, kind: NoteKind = 'idea') -> 'Show'",
   "add_set": "(show: showpy.show.models.Show, set_id: str, counts: float, after: str | None = None, placements: collections.abc.Sequence[showpy.choreo.models.Placement] | None = None, *, force: bool = False) -> showpy.show.models.Show",
   "add_spot": "(show: 'Show', point: Point, group: str, set_id: str, *, force: bool = False) -> 'Show'",
   "add_spots_along": "(show: 'Show', curve: showpy.geo.curve_base.Curve, n: int, group: str, set_id: str, *, force: bool = False) -> 'Show'",
@@ -1740,7 +1740,7 @@
   "get_sheet": "(ref: SheetRef, store: showpy.sheet.templates.SheetStore | None = None) -> showpy.sheet.models.Sheet",
   "glyph_strokes": "(char: str, font: str) -> Glyph",
   "gym_floor": "() -> showpy.sheet.models.Sheet",
-  "highlight": "(target: showpy.notes.models.Anchor | str, ttl_s: float = 30.0, *, at: datetime.datetime, event_id: str) -> showpy.show.models.CanvasEvent",
+  "highlight": "(target: showpy.show.anchors.Anchor | str, ttl_s: float = 30.0, *, at: datetime.datetime, event_id: str) -> showpy.show.models.CanvasEvent",
   "hold": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, until: float | None = None, from_: float | None = None, *, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",
   "import_fonts": "(d: collections.abc.Mapping[str, Any], font_registry: showpy.geo.fonts.FontRegistry | None = None) -> showpy.geo.fonts.FontRegistry",
   "import_json": "(d: collections.abc.Mapping[str, Any]) -> showpy.show.models.Show",

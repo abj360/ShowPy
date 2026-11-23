@@ -60,7 +60,7 @@ from showpy.core.errors import (
 from showpy.core.ids import FormId, RouteId, SetId, SpotId, make_tid
 from showpy.core.util import approx_equal
 from showpy.geo.curves import Segment
-from showpy.notes.models import Anchor, Note
+from showpy.notes.models import Note
 from showpy.show.documents import decode_show, encode_show
 from showpy.show.manage import (
     add_set,
@@ -75,7 +75,7 @@ from showpy.show.manage import (
     transitions,
     upgrade_dependency,
 )
-from showpy.show.models import Pin, Show
+from showpy.show.models import Anchor, Pin, Show
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import load_show, open_workspace, save_show
 from showpy.show.validate import validate_show

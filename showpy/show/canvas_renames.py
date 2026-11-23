@@ -17,7 +17,7 @@ from showpy.core.ids import SetId, SpotId, TransitionId
 from showpy.core.json_types import JsonValue
 from showpy.core.strict_json import parse_strict_json
 from showpy.core.validation import validate_adapter
-from showpy.notes.models import Anchor
+from showpy.show.anchors import Anchor
 from showpy.show.migrate import MigrationReport
 from showpy.show.structured import (
     COMMENTS_ADAPTER,

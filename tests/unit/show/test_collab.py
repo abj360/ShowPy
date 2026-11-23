@@ -43,7 +43,6 @@ from showpy.core.ids import FormId, SetId, SpotId, make_tid
 from showpy.core.json_types import JsonValue
 from showpy.core.selection import Selection
 from showpy.geo.shapes import line
-from showpy.notes.models import Anchor
 from showpy.show.changes import apply_change
 from showpy.show.collab import (
     accept,
@@ -61,6 +60,7 @@ from showpy.show.documents import dump_json
 from showpy.show.manage import add_set, set_counts
 from showpy.show.migrate import ReportBuilder
 from showpy.show.models import (
+    Anchor,
     CanvasEvent,
     Comment,
     CountsOp,
