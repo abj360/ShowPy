@@ -9,7 +9,8 @@ Contains:
     tests: runs the full pytest suite under a fixed hash seed with a branch-coverage floor
     hashseeds: runs the full pytest suite under each non-default seed in HASH_SEEDS
     slow: runs the slow tests under each seed in SLOW_HASH_SEEDS, on SLOW_WORKERS pytest-xdist
-        workers except the timing tests, which run in one process
+        workers that each take whole modules, except the timing tests, which run in one
+        process
     fuzz: runs the fuzz targets under the nightly Hypothesis profile
     audit: scans the locked dependencies for known vulnerabilities
     wheel: builds the wheel, installs it with every extra in a clean venv and runs the README
@@ -36,6 +37,9 @@ SLOW_HASH_SEEDS = ("0", "1")
 # One worker per core of the hosted 4-core Linux runner; workers inherit PYTHONHASHSEED.
 SLOW_WORKERS = "4"
 SLOW_PARALLEL_MARKS = "slow and not timing"
+# Under the default `load` split, every worker that runs a test of a module builds that
+# module's fixtures; the scenario fixtures build whole shows, so each module goes to one worker.
+SLOW_DIST = "loadscope"
 # Timing tests compare wall-clock times, which other workers on the same cores distort
 # (main CI, 2026-11-22: a 3.0x scaling bound measured 3.40x on unchanged code).
 SLOW_TIMING_MARKS = "slow and timing"
@@ -166,14 +170,25 @@ def slow(session: nox.Session) -> None:
     """Runs the slow tests (generated-show properties, the large golden) under two seeds.
 
     They are left out of the per-leg `tests` gate; one extra seed still checks the large golden
-    does not depend on hash order. pytest-xdist spreads them over SLOW_WORKERS processes; pass
+    does not depend on hash order. pytest-xdist spreads them over SLOW_WORKERS processes, each
+    module on one worker so its module-scoped fixtures are built once; pass
     `-- -n 0` to run them in one process. The timing tests always run in one process, after
     the others, and no posarg can give them workers.
     """
     _require_same_python(session)
     for seed in SLOW_HASH_SEEDS:
         session.env["PYTHONHASHSEED"] = seed
-        _uv_run(session, "pytest", "-m", SLOW_PARALLEL_MARKS, "-n", SLOW_WORKERS, *session.posargs)
+        _uv_run(
+            session,
+            "pytest",
+            "-m",
+            SLOW_PARALLEL_MARKS,
+            "-n",
+            SLOW_WORKERS,
+            "--dist",
+            SLOW_DIST,
+            *session.posargs,
+        )
         _uv_run(session, "pytest", "-m", SLOW_TIMING_MARKS, *session.posargs, "-n", NO_WORKERS)
 
 
