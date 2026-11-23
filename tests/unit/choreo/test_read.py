@@ -13,6 +13,8 @@ Contains:
     test_regression_frames_reject_a_frame_rate_not_above_zero: raises SchemaError
     test_regression_frames_reject_an_engine_of_another_show: raises SchemaError
     test_regression_frames_cap_the_frame_values: raises SchemaError before allocating
+    test_regression_frames_refuse_a_frame_count_past_the_float_range: raises a taught
+        SchemaError, not OverflowError, when range times fps overflows
     test_regression_frames_model_rejects_mismatched_shapes: raises SchemaError
     test_coordinate_table_equals_positions_at_each_set: matches PathEngine.positions at every
         set's count
@@ -123,6 +125,12 @@ def test_regression_frames_reject_an_engine_of_another_show() -> None:
 def test_regression_frames_cap_the_frame_values() -> None:
     with pytest.raises(SchemaError, match="frame values"):
         frames(two_set_show(), 0.0, 8.0, fps=1e9)
+
+
+def test_regression_frames_refuse_a_frame_count_past_the_float_range() -> None:
+    with pytest.raises(SchemaError, match="too many frames") as caught:
+        frames(two_set_show(), 0.0, 8.0, fps=1e308)
+    assert "lower fps" in caught.value.hint
 
 
 FRAMES_FIELDS = {

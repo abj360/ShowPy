@@ -112,7 +112,14 @@ def _frame_times(
     timeline: Timeline, start: Count, end: Count, fps: float, spots: int
 ) -> tuple[FloatArray, FloatArray]:
     s0, s1 = count_to_seconds(timeline, start), count_to_seconds(timeline, end)
-    n = math.floor((s1 - s0) * fps + FRAME_TOL) + 1
+    intervals = (s1 - s0) * fps
+    if not math.isfinite(intervals):
+        raise SchemaError(
+            f"{s1 - s0:g} s at {fps:g} fps is too many frames to count",
+            hint="use a lower fps or a shorter range",
+            context={"seconds": s1 - s0, "fps": fps},
+        )
+    n = math.floor(intervals + FRAME_TOL) + 1
     require_size(n * max(spots, 1), MAX_FRAME_VALUES, what="frame values")
     seconds = np.minimum(s0 + np.arange(n) / fps, s1)
     counts = np.array([seconds_to_count(timeline, s) for s in seconds.tolist()], dtype=float)
