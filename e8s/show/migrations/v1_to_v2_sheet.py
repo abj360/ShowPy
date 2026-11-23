@@ -16,6 +16,7 @@ Contains:
     migrate_sheet(): drops the sheet and show fields v2 lacks and refuses a sheet v2 cannot hold
 """
 
+import json
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Final
 
@@ -68,10 +69,15 @@ def _without_dropped(
     """Removes the fields v2 lacks from a document, listing each that held more than its default."""
     dropped = {key: document[key] for key in defaults if key in document}
     kept = {key: value for key, value in document.items() if key not in defaults}
-    listed = {key: value for key, value in dropped.items() if value != defaults[key]}
+    listed = {key: value for key, value in dropped.items() if not _same(value, defaults[key])}
     if listed:
         report.drop(name, "", listed)
     return kept
+
+
+def _same(stored: JsonValue, default: JsonValue) -> bool:
+    """Tells whether a stored value is its default exactly: `-0.0`, `0` and `false` all differ."""
+    return json.dumps(stored, sort_keys=True) == json.dumps(default, sort_keys=True)
 
 
 def _check_sheet(document: JsonValue) -> None:

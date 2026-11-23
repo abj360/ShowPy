@@ -10,6 +10,8 @@ Contains:
         the sheet and show.json and lists each that held more than its v1 default, as stored
     test_regression_v1_fields_at_their_defaults_are_dropped_unlisted(): removes empty landmarks,
         zones and default coordinate systems without listing them
+    test_regression_values_equal_to_a_default_only_in_python_are_listed(): lists a stored `-0.0`
+        origin and a `false` zones value, which equal their defaults only under Python's `==`
     test_regression_sheet_breaking_a_v2_rule_is_refused(): refuses a stored sheet that v2 refuses
         instead of repairing it
     test_regression_v1_tree_with_a_bad_sheet_fails_to_load(): refuses the same through
@@ -156,3 +158,18 @@ def test_regression_v1_fields_at_their_defaults_are_dropped_unlisted() -> None:
     report = ReportBuilder(1)
     assert migrate_sheet(docs, report) == expected
     assert report.build().dropped == ()
+
+
+def test_regression_values_equal_to_a_default_only_in_python_are_listed() -> None:
+    """Lists `-0.0` and `false`, which Python's `==` would take for `0.0` and an empty list."""
+    docs = _docs()
+    negative_zero = {**METERS, "origin": [-0.0, 0.0]}
+    docs[SHEET_DOC] |= {"default_coordinates": negative_zero}
+    docs[SHOW_DOC] |= {"zones": False}
+    report = ReportBuilder(1)
+    migrate_sheet(docs, report)
+    listed = [(d.document, dict(d.fields)) for d in report.build().dropped]
+    assert [document for document, _ in listed] == [SHEET_DOC, SHOW_DOC]
+    sheet_fields = report.build().dropped[0].model_dump(mode="json")["fields"]
+    assert json.dumps(sheet_fields["default_coordinates"]["origin"]) == "[-0.0, 0.0]"
+    assert listed[1][1] == {"zones": False}
