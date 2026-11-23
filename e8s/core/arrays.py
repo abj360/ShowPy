@@ -74,7 +74,7 @@ class ReadOnlyArray:
     def _shaped(
         self, array: npt.NDArray[np.generic], info: ValidationInfo
     ) -> npt.NDArray[np.generic]:
-        if array.size or array.ndim == self.ndim or self.columns is None:
+        if array.size or array.ndim != 1 or self.ndim == 1 or self.columns is None:
             return array
         width = info.data.get(self.columns)
         columns = len(width) if isinstance(width, tuple | list) else 0
@@ -128,7 +128,8 @@ class ArrayModel(FrozenModel):
 
     Pydantic compares fields with `==`, which an array answers elementwise, and copies without
     validating, so models that hold `ReadOnlyArray` fields inherit from this class instead of
-    FrozenModel.
+    FrozenModel. A deep copy is the model itself, since nothing in it can change.
+    `model_construct` skips validation, so arrays it is given are neither copied nor frozen.
     """
 
     def __eq__(self, other: object) -> bool:
@@ -145,3 +146,8 @@ class ArrayModel(FrozenModel):
     def model_copy(self, *, update: Mapping[str, object] | None = None, deep: bool = False) -> Self:
         """Returns a validated copy, so an update cannot store a writable or misshapen array."""
         return self.model_validate({**self.model_dump(), **(update or {})})
+
+    @override
+    def __deepcopy__(self, memo: dict[int, object] | None = None) -> Self:
+        """Returns the model itself: its arrays are immutable, so a copy could only loosen them."""
+        return self

@@ -11,11 +11,14 @@ Contains:
     test_array_model_equality_and_hash_compare_values: equal arrays make equal, hash-equal models
     test_regression_signed_zeros_hash_alike: hashes -0.0 and 0.0 alike, as they compare equal
     test_regression_array_model_copies_validate: validates and freezes a copy's updated arrays
+    test_regression_deepcopy_keeps_arrays_read_only: deep-copies to the same immutable model
     test_regression_array_field_rejects_bad_values: raises SchemaError for NaN, the wrong
-        number of dimensions, text, objects and numbers in a boolean field
+        number of dimensions (an empty 3-D input included), text, objects and numbers in a
+        boolean field
     test_array_field_describes_nested_arrays_in_json_schema: names nested number arrays
 """
 
+import copy
 from typing import Annotated
 
 import numpy as np
@@ -89,6 +92,17 @@ def test_regression_array_model_copies_validate() -> None:
         _grid().model_copy(update={"values": [1.0]})
 
 
+def test_regression_deepcopy_keeps_arrays_read_only() -> None:
+    grid = _grid()
+    copied = copy.deepcopy(grid)
+    assert copied == grid
+    assert not copied.values.flags.writeable
+    with pytest.raises(ValueError, match="read-only"):
+        copied.values[0, 0] = 5.0
+    nested = copy.deepcopy({"grid": grid})["grid"]
+    assert not nested.values.flags.writeable
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -100,6 +114,7 @@ def test_regression_array_model_copies_validate() -> None:
         ("values", [[object()]]),
         ("values", [[1.0], [1.0, 2.0]]),
         ("flags", [1, 0]),
+        ("values", [[[]]]),
     ],
 )
 def test_regression_array_field_rejects_bad_values(field: str, value: object) -> None:
