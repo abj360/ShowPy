@@ -1121,11 +1121,13 @@ A separate consumer package, run in its own process and depending on a pinned e8
 | `max_turn_rate`                                 | `Degrees` per count                                                                              | Facing change limit                                                                                   |
 | `interval_tolerance`, `min_interval`            | `Meters`                                                                                         | Form spacing rules                                                                                    |
 | `bounds`                                        | `"surface"`, `"surface+margins"`, `Polygon`                                                      | Allowed area                                                                                          |
-| `zones`                                         | `list[Region]`                                                                                   | Extra restricted areas                                                                                |
+| `zones`                                         | `list[Zone]`                                                                                     | Extra restricted areas                                                                                |
 | `facing_rules`                                  | `list[FacingRule{at: SetId \| Count, entities: Selector, expect: Degrees \| str, tol: Degrees}]` | Required facings                                                                                      |
 | `checks_enabled`                                | `list[CheckName]`                                                                                | Active checks                                                                                         |
 | `severity`                                      | `Mapping[CheckName, Severity]`                                                                   | Error versus warning                                                                                  |
 | `group_overrides`                               | `Mapping[str, dict]`                                                                             | Per-group values for any limit above, e.g. looser steps for the guard; taken from each Group's limits |
+
+`Zone` was removed from the library in v0.4.0.
 
 **`Finding`** — `check: CheckName, severity: Severity, tid: TransitionId \| None, set_id: SetId \| None, entities: tuple[SpotId, ...], at: float \| None, value: float \| None, limit: float \| None, message: str` (rendered as one line). **`CheckReport`** — `findings: list[Finding], summary: dict[CheckName, int], scope: str, revision: str`.
 
@@ -1185,11 +1187,14 @@ Domain packs add a discipline's units, venues, groups, position language, rules 
 
 **`PositionLanguage`** (protocol)
 
-| Member                                                 | Inputs           | Output      | Purpose                                        |
-| ------------------------------------------------------ | ---------------- | ----------- | ---------------------------------------------- |
-| `describe(point, sheet, style="long", precision=None)` | `Point`, `Sheet` | `str`       | Position in the discipline's words             |
-| `parse(text, sheet)`                                   | `str`            | `Point`     | Read a position; raises with the failing token |
-| `styles()`                                             |                  | `list[str]` | Supported wordings                             |
+| Member                                                 | Inputs                | Output           | Purpose                                        |
+| ------------------------------------------------------ | --------------------- | ---------------- | ---------------------------------------------- |
+| `describe(point, sheet, style="long", precision=None)` | `Point`, `Sheet`      | `str`            | Position in the discipline's words             |
+| `parse(text, sheet)`                                   | `str`                 | `Point`          | Read a position; raises with the failing token |
+| `parse_sheet(text, sheet)`                             | coordinate-sheet text | `list[SheetRow]` | Import printed sheets                          |
+| `styles()`                                             |                       | `list[str]`      | Supported wordings                             |
+
+`SheetRow` was removed from the library in v0.4.0.
 
 **`DomainPack`**
 
