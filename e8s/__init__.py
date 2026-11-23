@@ -258,6 +258,12 @@ if TYPE_CHECKING:
         unlock,
         window,
     )
+    from e8s.choreo.read import (
+        frames,
+    )
+    from e8s.choreo.read_models import (
+        Frames,
+    )
     from e8s.choreo.recipe_models import (
         ArcRecipe,
         BlockRecipe,
@@ -915,6 +921,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "FormOp": ("e8s.show.models", "FormOp"),
     "FormatRegistry": ("e8s.export._data", "FormatRegistry"),
     "Frame": ("e8s.choreo.engine_models", "Frame"),
+    "Frames": ("e8s.choreo.read_models", "Frames"),
     "FrozenModel": ("e8s.core.types", "FrozenModel"),
     "GapInfo": ("e8s.choreo.engine_models", "GapInfo"),
     "GeneratedRecipe": ("e8s.choreo.recipe_models", "GeneratedRecipe"),
@@ -1219,6 +1226,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "format_ref": ("e8s.core.ids", "format_ref"),
     "format_tid": ("e8s.core.ids", "format_tid"),
     "formats": ("e8s.export._data", "formats"),
+    "frames": ("e8s.choreo.read", "frames"),
     "from_coords": ("e8s.sheet.coords", "from_coords"),
     "from_json": ("e8s.time.timeline", "from_json"),
     "gate": ("e8s.choreo.form_ops", "gate"),
@@ -1633,6 +1641,7 @@ __all__ = [
     "FormOp",
     "FormatRegistry",
     "Frame",
+    "Frames",
     "FrozenModel",
     "GapInfo",
     "GeneratedRecipe",
@@ -1915,6 +1924,7 @@ __all__ = [
     "format_ref",
     "format_tid",
     "formats",
+    "frames",
     "from_coords",
     "from_json",
     "gate",

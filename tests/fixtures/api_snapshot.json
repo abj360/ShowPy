@@ -569,6 +569,17 @@
       "tid": "e8s.core.ids.TransitionId | None"
     }
   },
+  "Frames": {
+    "model": {
+      "counts": "FloatArray",
+      "facing": "FloatArray",
+      "fps": "float",
+      "seconds": "FloatArray",
+      "spots": "tuple[e8s.core.ids.SpotId, ...]",
+      "x": "FloatArray",
+      "y": "FloatArray"
+    }
+  },
   "FrozenModel": {
     "model": {}
   },
@@ -1741,6 +1752,7 @@
   "format_ref": "(kind: str, ref_id: str, version: str | None = None) -> str",
   "format_tid": "(tid: tuple[str, str]) -> str",
   "formats": "(registry: e8s.export.FormatRegistry) -> dict[str, list[str]]",
+  "frames": "(show: e8s.show.models.Show, start: Count, end: Count, fps: float = 30.0, who: Selector = 'all', *, engine: e8s.choreo.engine.PathEngine | None = None) -> e8s.choreo.read_models.Frames",
   "from_coords": "(show: 'Show', text: str) -> Point",
   "from_json": "(d: dict[str, Any]) -> e8s.time.models.Timeline",
   "gate": "(form: e8s.choreo.form_models.Form, hinge: Literal['start', 'end'] | int, deg: Degrees, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.form_models.Form",
