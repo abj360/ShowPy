@@ -89,7 +89,8 @@ class DroppedFields(FrozenModel):
             the document itself.
         stored_id: The object's ID as stored, before any rename the report lists; None when the
             object has no ID.
-        fields: Each dropped field name mapped to its stored JSON value, unchanged.
+        fields: Each dropped field name mapped to its stored JSON value, unchanged: selector text
+            in v1 grammar and IDs before any rename; `MigrationReport.renamed` maps those IDs.
 
     >>> DroppedFields(document="/show/show.json", location="cast.spots[0]", stored_id="T1",
     ...               fields={"claimable": "crew"}).fields["claimable"]
