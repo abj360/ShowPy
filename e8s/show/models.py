@@ -37,7 +37,7 @@ from collections import Counter
 from collections.abc import Mapping
 from datetime import datetime
 from functools import cached_property
-from typing import Annotated, Final, Literal
+from typing import Annotated, ClassVar, Final, Literal
 
 from pydantic import (
     Field,
@@ -114,6 +114,9 @@ class ShowLookup(FrozenModel):
     consecutive: Annotated[Mapping[TransitionId, TransitionId], ReadOnly()]
     stored: Annotated[Mapping[TransitionId, TransitionSpec], ReadOnly()]
     forms: Annotated[Mapping[FormId, Form], ReadOnly()]
+    _json_refusal: ClassVar[str | None] = (
+        "a lookup is derived from its show; store the Show and read show.lookup after loading it"
+    )
 
 
 def _no_forms() -> ReadOnlyMap[FormId, Form]:

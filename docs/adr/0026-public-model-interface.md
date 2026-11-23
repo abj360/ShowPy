@@ -47,6 +47,12 @@ ADR 0009 sets the deprecation policy for public names: a name deprecated in `0.N
    and decode the way the stored show documents already do: `to_json` is pydantic's JSON-mode
    dump, and `from_json` validates the parsed JSON.
 
+   Models that are never stored have no JSON form. Registries are not serializable:
+   `FormFnRegistry` holds functions. `ShowLookup` is a cache derived from its `Show`. Both refuse
+   `to_json` and `from_json` with `SchemaError` code `NOT_SERIALIZABLE`, whose hint says how to
+   rebuild them (`register_form_fn`, or `show.lookup` after loading the show). Every other public
+   model round-trips: `from_json(model.to_json()) == model`, checked for each one by a test.
+
 2. **pydantic's methods are not part of the interface, and callers must not use them.** That
    covers the seven above and every other pydantic attribute (`model_config`, `model_construct`,
    `model_fields_set`, `model_json_schema` and the rest). They are not public names in the sense

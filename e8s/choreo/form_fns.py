@@ -21,7 +21,7 @@ Contains:
 
 import math
 from collections.abc import Callable, Mapping
-from typing import Annotated, Any
+from typing import Annotated, Any, ClassVar
 
 import numpy as np
 
@@ -54,6 +54,7 @@ class FormFnRegistry(FrozenModel):
     """
 
     fns: Annotated[Mapping[str, FormFn], ReadOnly()]
+    _json_refusal: ClassVar[str | None] = "registries are not stored; rebuild with register_form_fn"
 
     def get(self, name: str) -> FormFn:
         """Returns a generator, raising UnknownRefError with close names in the hint."""

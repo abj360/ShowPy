@@ -2,6 +2,11 @@
 
 """
 test_models.py --- tests the Show aggregate: set and transition lookup, JSON round-trip
+
+Contains:
+    test_*(): one behavior of Show each
+    test_regression_show_lookup_refuses_json: raises a taught SchemaError instead of writing
+        TransitionId keys that from_json cannot read back
 """
 
 import json
@@ -10,9 +15,10 @@ import pytest
 
 from e8s.choreo.forms import line_form
 from e8s.choreo.path_models import PathRow, TransitionSpec
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, UnknownRefError
 from e8s.core.ids import LEGACY_IDS_KEY, SpotId, make_tid
-from e8s.show.models import Show
+from e8s.show.models import Show, ShowLookup
 from tests.fixtures.shows import two_set_show
 
 
@@ -105,3 +111,14 @@ def test_regression_show_form_keys_pass_the_id_check() -> None:
         show.replace(forms={"f-1": form})
     dumped = show.to_json() | {"forms": {"f-1": form.to_json()}}
     assert list(Show._validated(dumped, context={LEGACY_IDS_KEY: True}).forms) == ["f-1"]
+
+
+def test_regression_show_lookup_refuses_json() -> None:
+    """Refuses both directions with NOT_SERIALIZABLE; the lookup is rebuilt from its Show."""
+    with pytest.raises(SchemaError) as dumped:
+        two_set_show().lookup.to_json()
+    assert dumped.value.code is ErrorCode.NOT_SERIALIZABLE
+    assert "show.lookup" in dumped.value.hint
+    with pytest.raises(SchemaError) as loaded:
+        ShowLookup.from_json({"positions": {}, "consecutive": {}, "stored": {}, "forms": {}})
+    assert loaded.value.code is ErrorCode.NOT_SERIALIZABLE

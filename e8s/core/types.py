@@ -28,7 +28,7 @@ Contains:
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, ClassVar, Self
 
 import numpy as np
 import shapely
@@ -48,7 +48,8 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import CoreSchema, core_schema
 
 from e8s.core.caps import MAX_COORD_M, MAX_COUNTS, MIN_TEMPO
-from e8s.core.errors import ALLOWED_KEY, BOUND_KEY, schema_error_from
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import ALLOWED_KEY, BOUND_KEY, SchemaError, schema_error_from
 from e8s.core.json_types import FrozenJsonValue as FrozenJsonValue
 from e8s.core.json_types import JsonValue as JsonValue
 from e8s.core.numbers import normalize_angle
@@ -141,6 +142,8 @@ class FrozenModel(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid", allow_inf_nan=False)
+    # A model that is never stored names how to rebuild it here; to_json and from_json refuse it.
+    _json_refusal: ClassVar[str | None] = None
 
     # Any: pydantic's own keyword signature, forwarded unchanged.
     def __init__(self, /, **data: Any) -> None:
@@ -329,8 +332,10 @@ class FrozenModel(BaseModel):
         '1'
 
         Returns:
-            document: Field names mapped to their JSON values.
+            document: Field names mapped to their JSON values. A model that is never stored, such
+                as a registry of functions, raises SchemaError code NOT_SERIALIZABLE.
         """
+        type(self)._refuse_json()
         return self._json_dumped()
 
     @classmethod
@@ -348,8 +353,22 @@ class FrozenModel(BaseModel):
 
         Returns:
             model: The validated model; data that breaks a field or model rule raises SchemaError.
+                A model that is never stored raises SchemaError code NOT_SERIALIZABLE.
         """
+        cls._refuse_json()
         return cls._validated(data)
+
+    @classmethod
+    def _refuse_json(cls) -> None:
+        """Raises SchemaError code NOT_SERIALIZABLE when this model is never stored as JSON."""
+        if cls._json_refusal is None:
+            return
+        raise SchemaError(
+            f"{cls.__name__} is not stored, so it has no JSON form",
+            hint=cls._json_refusal,
+            context={"model": cls.__name__},
+            code=ErrorCode.NOT_SERIALIZABLE,
+        )
 
 
 class Box2(FrozenModel):
