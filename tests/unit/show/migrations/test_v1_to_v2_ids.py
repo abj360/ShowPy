@@ -25,6 +25,8 @@ Contains:
     test_regression_landmark_and_guide_ids_are_renamed_and_origins_follow: renames sheet
         landmarks and guides by the sheet-item rule, avoiding landmark names and aliases, and
         moves a coordinate origin with its landmark
+    test_regression_spot_renames_report_each_selector_they_freeze: records a repair for a
+        stored pattern selector that the spot renames turn into an ID list
     test_rename_ids_renames_nothing_in_a_valid_show: returns the show and an empty report
     test_regression_every_reference_follows_a_renamed_id: rewrites sets, keys, transitions,
         forms, routes, zones, selections, notes, pins and selector text, and the result passes
@@ -284,6 +286,20 @@ def test_regression_landmark_and_guide_ids_are_renamed_and_origins_follow() -> N
     assert show.model_dump(mode="json")["coordinates"]["origin"] == "props_"
     assert show.sheet.default_coordinates.origin == "props_"
     assert Show.model_validate(show.model_dump(mode="json")) == show
+
+
+def test_regression_spot_renames_report_each_selector_they_freeze() -> None:
+    dump = _with_spot_id("T1", "T-1")
+    override = FacingOverride(entities="T*", mode=FacingMode.AUDIENCE, start=0.0, end=1.0)
+    dump["facing_overrides"] = [override.model_dump(mode="json")]
+    report = ReportBuilder(FIRST_VERSION)
+    show = rename_ids(_legacy_show(dump), report)
+    assert show.facing_overrides[0].entities == ("T2", "T3", "T4")
+    expected = (
+        "facing_overrides[0].entities: selector 'T*' named spots by label; stored as"
+        " ['T2', 'T3', 'T4'] after the spot renames"
+    )
+    assert report.build().repairs == (expected,)
 
 
 def test_rename_ids_renames_nothing_in_a_valid_show() -> None:

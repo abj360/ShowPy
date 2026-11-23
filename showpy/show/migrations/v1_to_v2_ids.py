@@ -15,9 +15,11 @@ Every v1 ID is repaired; none is refused.
 
 Every reference follows a rename. Spots go last, through rename_spots(); a set's key follows its
 renamed ID unless the key was written explicitly, and a coordinate origin follows its renamed
-landmark. Route IDs are unique per transition and sheet items per sheet or show, so those namespaces
-are checked apart. Each rename is recorded with `report.rename()`, per kind in show order, so a host
-can follow it in what it keeps outside ShowPy.
+landmark. A stored selector that names spots by label (`T*`, `T1-T8`) is frozen to its ID list
+whenever spots are renamed, and the report records it as a repair. Route IDs are unique per
+transition and sheet items per sheet or show, so those namespaces are checked apart. Each rename is
+recorded with `report.rename()`, per kind in show order, so a host can follow it in what it keeps
+outside ShowPy.
 
 Contains:
     KEEPS_LEGACY_IDS: tells whether validation after this step still accepts any non-empty v1 ID
@@ -52,7 +54,7 @@ from showpy.core.ids import (
     is_device_name,
     parse_tid,
 )
-from showpy.core.selection import SelectorField
+from showpy.core.selection import Selection, SelectorField
 from showpy.notes.models import Anchor
 from showpy.sheet.models import CoordinateSystem, Landmark, Sheet, Zone, normalized_name
 from showpy.show.models import Pin, Show
@@ -398,6 +400,30 @@ def _apply(show: Show, plan: _Plan) -> Show:
     )
 
 
+def _stored_selectors(show: Show) -> list[tuple[str, SelectorField]]:
+    """Lists each stored selector with the field path it is stored at."""
+    return [
+        *((f"sheet.zones[{i}].applies_to", z.applies_to) for i, z in enumerate(show.sheet.zones)),
+        *((f"zones[{i}].applies_to", z.applies_to) for i, z in enumerate(show.zones)),
+        *(
+            (f"facing_overrides[{i}].entities", o.entities)
+            for i, o in enumerate(show.facing_overrides)
+        ),
+    ]
+
+
+def _report_frozen_selectors(before: Show, after: Show, report: "ReportBuilder") -> None:
+    """Records each pattern selector that the spot renames turned into a list of IDs."""
+    pairs = zip(_stored_selectors(before), _stored_selectors(after), strict=True)
+    for (path, old), (_, new) in pairs:
+        if isinstance(old, str) and not isinstance(new, str):
+            ids = list(new.ids if isinstance(new, Selection) else new)
+            report.repair(
+                f"{path}: selector {old!r} named spots by label; stored as {ids} after the spot"
+                " renames"
+            )
+
+
 def rename_ids(show: Show, report: "ReportBuilder") -> Show:
     """Renames stored IDs that break the ID rules, once and by rule, recording each rename.
 
@@ -418,4 +444,6 @@ def rename_ids(show: Show, report: "ReportBuilder") -> Show:
     plan = _plan(show)
     _report(plan, report)
     renamed = _apply(show, plan) if _renames_more_than_spots(plan) else show
-    return rename_spots(renamed, plan.spots)[0]
+    respotted = rename_spots(renamed, plan.spots)[0]
+    _report_frozen_selectors(renamed, respotted, report)
+    return respotted
