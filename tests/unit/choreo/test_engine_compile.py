@@ -33,9 +33,12 @@ Contains:
     test_looser_motion_tol_compiles_a_coarsely_sampled_motion: compiles under a looser
         motion_tol a weave the default tolerance refuses
     test_path_engine_refuses_a_non_positive_motion_tol: raises SchemaError for a motion_tol of 0
+    test_regression_plan_breaks_merge_a_break_one_ulp_from_a_window_end: keeps a route leader's
+        breaks when its trim moves 1 ulp past the route end or 1 ulp before its start vertex
 """
 
 import itertools
+import math
 from collections.abc import Callable, Mapping
 from typing import Any, cast
 
@@ -43,11 +46,16 @@ import numpy as np
 import pytest
 
 from showpy.choreo.engine import DEFAULT_SEGMENT_TOL, PathEngine
-from showpy.choreo.engine_compile import curvature_bound, easing_chord_error
+from showpy.choreo.engine_compile import (
+    compile_plan,
+    curvature_bound,
+    easing_chord_error,
+    plan_breaks,
+)
 from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, ease, easing_breaks
 from showpy.choreo.path_models import Easing, PathRow, PathStyle, TransitionSpec, Waypoint
 from showpy.choreo.paths import add_waypoint, set_style
-from showpy.choreo.routes import follow, make_route
+from showpy.choreo.routes import follow, follow_and_set_targets, make_route
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import ContinuityError, PathError, SchemaError, ShowPyError
 from showpy.core.ids import SpotId
@@ -79,6 +87,8 @@ ALIASING_CYCLES = 90.0
 RESOLVED_CYCLES = 64.0
 COARSE_CYCLES = 30.0
 LOOSE_MOTION_TOL = 0.1
+ROUTE_WAYPOINT: Point = (6.0, 15.0)
+ROUTE_FILE = ["T4", "T3"]
 USER_MOTION_CYCLES = 300.0
 PIECE_SHARES = ((0.0, 1.0), (0.0, 0.3), (0.2, 0.9), (0.6, 0.61), (0.97, 1.0))
 CHORD_EASINGS = [
@@ -236,7 +246,7 @@ def test_curvature_bound_is_known_only_for_exact_arc_length_curves() -> None:
     arc = ArcCurve(center=(0.0, 0.0), radius=4.0, start_deg=0.0, sweep_deg=720.0)
     circle = CircleCurve(center=(0.0, 0.0), radius=0.5)
     line = Segment(a=(4.0, 0.0), b=(5.0, 0.0))
-    spline = SplineCurve(points=((0.0, 0.0), (1.0, 1.0), (2.0, 0.0)))
+    spline = SplineCurve(points=((5.0, 0.0), (6.0, 1.0), (7.0, 0.0)))
     assert curvature_bound(line) == 0.0
     assert curvature_bound(Polyline(points=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0)))) == 0.0
     assert curvature_bound(arc) == 0.25
@@ -343,3 +353,41 @@ def test_path_engine_refuses_a_non_positive_motion_tol() -> None:
     """Raises SchemaError for a motion_tol of 0."""
     with pytest.raises(SchemaError):
         PathEngine(two_set_show(), motion_tol=0.0)
+
+
+type RouteNudge = Callable[[float, float], tuple[float, float]]
+
+
+def _unchanged(offset: float, travel: float) -> tuple[float, float]:
+    return offset, travel
+
+
+def _end_one_ulp_past_the_route(offset: float, travel: float) -> tuple[float, float]:
+    return offset, math.nextafter(offset + travel, math.inf) - offset
+
+
+def _start_one_ulp_before_its_vertex(offset: float, travel: float) -> tuple[float, float]:
+    return math.nextafter(offset, -math.inf), travel
+
+
+def _leader_breaks(nudge: RouteNudge) -> list[float]:
+    show = two_set_show()
+    route = make_route(show, TID, "T4", [ROUTE_WAYPOINT], members=ROUTE_FILE)
+    moved = follow_and_set_targets(show, TID, route)
+    spec = moved.transition(TID)
+    offset, travel = nudge(route.offsets[0], route.travel)
+    stored = spec.routes[route.id].replace(offsets=(offset, *route.offsets[1:]), travel=travel)
+    nudged = spec.replace(routes={route.id: stored})
+    a, b = moved.set(TID[0]).get("T4"), moved.set(TID[1]).get("T4")
+    plan = compile_plan(nudged.row("T4"), nudged, a, b, DEFAULT_MOTIONS)
+    return [float(v) for v in plan_breaks(plan)]
+
+
+@pytest.mark.parametrize("nudge", [_end_one_ulp_past_the_route, _start_one_ulp_before_its_vertex])
+def test_regression_plan_breaks_merge_a_break_one_ulp_from_a_window_end(nudge: RouteNudge) -> None:
+    """Keeps a route leader's breaks when its trim moves 1 ulp past an end or before a vertex.
+
+    A route vertex 1 ulp inside the trim used to add a break 1 ulp from the window end, and with
+    it a sliver segment whose presence depended on platform float noise.
+    """
+    assert _leader_breaks(nudge) == _leader_breaks(_unchanged)

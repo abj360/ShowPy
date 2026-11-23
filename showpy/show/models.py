@@ -42,6 +42,7 @@ from showpy.cast.models import Cast
 from showpy.choreo.form_models import Form
 from showpy.choreo.models import Placement, Set
 from showpy.choreo.path_models import FacingOverride, TransitionSpec
+from showpy.core.deprecation import leave_field
 from showpy.core.errors import SchemaError, TimeRangeError, UnknownRefError
 from showpy.core.ids import (
     LEGACY_IDS_KEY,
@@ -58,7 +59,6 @@ from showpy.core.types import Count, FrozenModel, Seconds
 from showpy.core.util import close_matches
 from showpy.notes.models import Anchor, Note
 from showpy.sheet.models import CoordinateSystem, Sheet, Zone
-from showpy.show.leaving_fields import read_coordinates, read_zones
 from showpy.time.models import MeasureLabel, Timeline
 
 INDEX_TOL = 1e-9
@@ -256,8 +256,8 @@ class Show(FrozenModel):
         return TransitionSpec(id=known, counts=self.set(known.to_set).counts)
 
 
-for _leaving_field, _warning_read in (("coordinates", read_coordinates), ("zones", read_zones)):
-    setattr(Show, _leaving_field, property(_warning_read))
+leave_field(Show, "coordinates", since="0.4.0", remove="0.7.0", replacement="Location")
+leave_field(Show, "zones", since="0.4.0", remove="0.7.0", replacement="Marking")
 
 
 class ShowIndexEntry(FrozenModel):

@@ -94,7 +94,6 @@ from showpy.core.errors import SchemaError, ShowPyError, StorageError
 from showpy.core.ids import LEGACY_IDS_KEY, SetId, SpotId, make_tid
 from showpy.core.util import content_hash
 from showpy.examples import two_set_show
-from showpy.export.positions import import_positions
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.documents import (
     SHOW_DOC,
@@ -115,6 +114,7 @@ from showpy.show.integrity import (
     require_valid_digests,
     require_valid_tree,
 )
+from showpy.show.interchange import import_positions
 from showpy.show.manage import add_set, insert_subset, remove_set, renumber
 from showpy.show.migrate import ReportBuilder, format_header, without_header
 from showpy.show.migrations.v1_to_v2_forms import migrate_forms

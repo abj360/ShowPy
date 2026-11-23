@@ -8,7 +8,8 @@ except for a file that follows a route. Every EXIT_EVERY-th set, the last EXITIN
 leave the field where they stand; they enter again in the next set, when their group is
 placed into a form. Moving spots cycle through the other path styles, so every transition
 with enough spots uses all seven. Tempo ramps and holds sit on set boundaries. All
-randomness comes from seeded_rng(seed).
+randomness comes from seeded_rng(seed), and floats are scaled in Python so every platform
+draws the same bits.
 
 Contains:
     GROUPS: group keys and label prefixes of seeded shows
@@ -66,6 +67,7 @@ FORM_CENTER_Y = (14.0, 34.0)
 FORM_GAP_M = 1.5
 ARC_SWEEP_DEG = 180.0
 WEDGE_SPREAD_DEG = 90.0
+FULL_TURN_DEG = 360.0
 FOLLOW_FILE = 3
 EXIT_EVERY = 3
 EXITING = 2
@@ -119,10 +121,19 @@ def _members(show: Show) -> dict[str, list[str]]:
     return {key: [s.id for s in show.cast.spots if s.group == key] for key in GROUPS}
 
 
+def _uniform(rng: np.random.Generator, low: float, high: float) -> float:
+    """Draws a float in [low, high) that is bit-identical on every platform.
+
+    `Generator.uniform` is fused into one multiply-add on arm64 builds of numpy and not on
+    x86_64, so its last bit differs between them; Python never fuses `low + scale * u`.
+    """
+    return low + (high - low) * float(rng.random())
+
+
 def _form(rng: np.random.Generator, kind: str, form_id: str, ids: list[str], set_id: str) -> Form:
-    center = (float(rng.uniform(*FORM_CENTER_X)), float(rng.uniform(*FORM_CENTER_Y)))
-    span = max(float(rng.uniform(*FORM_SPAN_M)), len(ids) * FORM_GAP_M / 2)
-    heading = float(rng.uniform(0.0, 360.0))
+    center = (_uniform(rng, *FORM_CENTER_X), _uniform(rng, *FORM_CENTER_Y))
+    span = max(_uniform(rng, *FORM_SPAN_M), len(ids) * FORM_GAP_M / 2)
+    heading = _uniform(rng, 0.0, FULL_TURN_DEG)
     if kind == "line":
         a, b = (center[0] - span, center[1]), (center[0] + span, center[1])
         return line_form(form_id, ids, a, b, set_id=set_id)

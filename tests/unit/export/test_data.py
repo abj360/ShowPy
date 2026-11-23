@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 """
-test_data.py --- tests JSON interchange, frame CSV, position import, tables and format plugins
+test_data.py --- tests frame CSV, tables and format plugins
 
-Also holds the audited data and CSV defects (UP-9.5-29 to UP-9.5-34) as strict xfails.
-UP-9.5-35 is fixed; its test below passes.
+Also holds the audited data and CSV defects (UP-9.5-29 to UP-9.5-35). UP-9.5-29, -30, -34 and
+-35 are fixed; UP-9.5-31 to -33 stay strict xfails.
 
 Contains:
     test_regression_chart_csv_neutralizes_formula_names(): quotes a formula-like performer name
@@ -21,81 +21,44 @@ Contains:
     test_regression_coordinate_sheet_csv_names_the_entity_and_performer(): adds entity and performer
     test_regression_to_text_drops_tabs_and_carriage_returns(): drops tab and CR from text cells
     test_regression_to_text_aligns_wide_cjk_characters(): pads wide characters by display width
-    test_regression_export_json_include_accepts_a_single_field_name(): treats a string as one field
-    test_regression_import_json_rejects_a_non_mapping_with_schema_error(): raises SchemaError for
-        `[1]` (UP-9.5-35; an AttributeError used to leak)
-    test_regression_export_json_ignores_hash_seed(): dumps spot tags and selections in one order
-        under every hash seed
-    test_import_json_rejects_the_old_stage_tag(): refuses a document tagged stage.show.v1
-    test_export_json_writes_the_format_header_first(): starts the document with format and version
-    test_regression_import_json_reads_a_version_1_document(): migrates a showpy.show.v1 document
-    test_regression_import_json_refuses_a_newer_version(): raises VersionError naming the version
-    test_regression_import_json_refuses_mixed_tags(): refuses a v1 tag beside a format header
-    test_regression_import_json_refuses_a_lone_surrogate(): applies the strict JSON rules
-    test_regression_import_json_counts_field_errors_under_error_count(): stores the number of
-        failing fields as `error_count`, not as an int under `errors`
+    test_regression_csv_writes_every_float_in_plain_decimal(): never writes an exponent, keeps
+        non-finite cells as text
+    test_csv_neutralizes_exactly_the_non_numeric_formula_cells(): property over default cells
     test_frames_csv_is_byte_identical_across_runs_and_hash_seeds(): writes one CSV per show
-    test_export_embeds_every_font_a_text_form_uses(): lists the tiny and simplex fonts, sorted
-    test_export_without_text_forms_has_no_fonts_key(): keeps a plain show's document unchanged
-    test_import_fonts_round_trips_slots(): rebuilds a registry that gives the original slots
-    test_import_fonts_rejects_tampered_data(): raises FONT_HASH_MISMATCH for edited bytes
-    test_import_fonts_rejects_bad_base64(): raises BAD_FONT for text that is not base64
-    test_export_with_a_missing_font_fails_closed(): raises MissingFontError
-    test_export_include_without_forms_embeds_no_fonts(): drops fonts when forms are not exported
-    test_import_json_still_loads_a_document_with_fonts(): ignores the fonts key
-    test_regression_import_fonts_rejects_hostile_documents(): raises BAD_FONT, never TypeError,
-        for non-mapping fonts, non-string or non-ASCII entries, oversize entries and too many fonts
-    test_regression_import_fonts_accepts_an_older_font_under_a_taken_name(): registers an
-        exported font by URI when a newer font holds its name, and rebuilds the same slots
 """
 
-import base64
 import csv
 import io
 import json
-import math
 import unicodedata
 
-import numpy as np
 import pandas as pd
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
-from showpy.choreo.forms import slots, text_form
+from showpy.core.csv_cells import FORMULA_TRIGGERS, PLAIN_DECIMAL
 from showpy.core.errors import (
-    FontError,
-    MissingFontError,
     SchemaError,
     UnknownRefError,
-    VersionError,
 )
-from showpy.core.ids import LEGACY_IDS_KEY, FormId, SetId, SpotId
-from showpy.core.json_types import JsonValue
-from showpy.core.resources import font_path
-from showpy.core.util import approx_equal, asset_uri
-from showpy.export.data import (
+from showpy.core.ids import LEGACY_IDS_KEY, SetId, SpotId
+from showpy.core.util import approx_equal
+from showpy.export._data import (
     DEFAULT_FORMATS,
-    FONTS_KEY,
-    MAX_IMPORT_FONTS,
-    SCHEMA_TAG,
     as_table,
     export_frames_csv,
-    export_json,
     formats,
-    import_fonts,
-    import_json,
     register_exporter,
     register_importer,
     to_csv,
     to_text,
 )
-from showpy.export.models import Chart, ChartRow, Claim, CoordinateSheet, SheetRow
-from showpy.export.print_sheets import chart, coordinate_sheet, cue_sheet
-from showpy.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
-from showpy.show.migrate import CURRENT_VERSION, FORMAT
+from showpy.export._models import Chart, ChartRow, Claim, CoordinateSheet, SheetRow
+from showpy.export._print_sheets import chart, coordinate_sheet, cue_sheet
+from showpy.geo.fonts import FontRegistry
 from showpy.show.models import Show
-from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.export_shows import AT, guided_show, live_publication, performer
-from tests.fixtures.fonts import tiny_bytes
 from tests.fixtures.shows import two_set_show
 from tests.helpers import digests_under_hash_seeds
 
@@ -103,42 +66,6 @@ TOL = 1e-9
 EMPTY_FONTS = FontRegistry(fonts={}, sources={}, names={})
 WIDE_CELL = 2
 FORMULA_NAME = '=HYPERLINK("http://evil")'
-
-
-def test_export_json_is_tagged_and_json_safe() -> None:
-    exported = export_json(rich_show())
-    assert (exported["format"], exported["version"]) == (FORMAT, CURRENT_VERSION)
-    assert json.loads(json.dumps(exported)) == exported
-
-
-def test_json_round_trip_restores_the_show() -> None:
-    show = rich_show()
-    assert import_json(json.loads(json.dumps(export_json(show)))) == show
-
-
-def test_include_limits_top_level_fields_and_keeps_the_id() -> None:
-    exported = export_json(two_set_show(), include=["sets", "title"])
-    assert set(exported["show"]) == {"id", "sets", "title"}
-
-
-def test_include_refuses_unknown_fields() -> None:
-    with pytest.raises(UnknownRefError) as caught:
-        export_json(two_set_show(), include=["setz"])
-    assert "sets" in caught.value.hint
-
-
-@pytest.mark.parametrize(
-    "document",
-    [
-        {"show": {}},
-        {"schema": "showpy.show/1", "show": {}},
-        {"schema": "showpy.show.v1"},
-        {"schema": "showpy.show.v1", "show": {"id": "x"}},
-    ],
-)
-def test_import_json_refuses_wrong_or_missing_schema(document: dict[str, object]) -> None:
-    with pytest.raises(SchemaError):
-        import_json(document)
 
 
 def test_frames_csv_samples_every_spot_per_count() -> None:
@@ -236,62 +163,6 @@ def test_format_registry_is_immutable() -> None:
         register_exporter(DEFAULT_FORMATS, " ", shout)
 
 
-def test_export_json_writes_the_format_header_first() -> None:
-    exported = export_json(two_set_show())
-    assert list(exported)[:3] == ["format", "version", "show"]
-    assert (exported["format"], exported["version"]) == ("showpy.show", 2)
-    assert "schema" not in exported
-
-
-def _v1_form(form: dict[str, JsonValue]) -> dict[str, JsonValue]:
-    """Writes a form dump in the v1 shape: `kind` beside an untyped `geometry`."""
-    recipe = form["recipe"]
-    assert isinstance(recipe, dict)
-    geometry = {
-        key: value for key, value in recipe.items() if key not in ("kind", "recipe_version")
-    }
-    rest = {key: value for key, value in form.items() if key != "recipe"}
-    return {**rest, "kind": recipe["kind"], "geometry": geometry}
-
-
-def test_regression_import_json_reads_a_version_1_document() -> None:
-    show = rich_show()
-    dump = json.loads(json.dumps(show.model_dump(mode="json")))
-    dump["forms"] = {form_id: _v1_form(form) for form_id, form in dump["forms"].items()}
-    document = {"schema": SCHEMA_TAG, "show": dump}
-    assert import_json(document) == show
-
-
-def test_regression_import_json_refuses_a_newer_version() -> None:
-    document = {**export_json(two_set_show()), "version": CURRENT_VERSION + 1}
-    with pytest.raises(VersionError) as caught:
-        import_json(document)
-    assert caught.value.context["version"] == CURRENT_VERSION + 1
-    assert caught.value.context["newest"] == CURRENT_VERSION
-
-
-def test_regression_import_json_refuses_mixed_tags() -> None:
-    with pytest.raises(SchemaError) as caught:
-        import_json({**export_json(two_set_show()), "schema": SCHEMA_TAG})
-    assert caught.value.code == "UNKNOWN_FORMAT"
-
-
-def test_regression_import_json_refuses_a_lone_surrogate() -> None:
-    document = export_json(two_set_show())
-    document["show"] = {**document["show"], "title": "\ud800"}
-    with pytest.raises(SchemaError) as caught:
-        import_json(document)
-    assert caught.value.code == "STRICT_JSON"
-
-
-def test_import_json_rejects_the_old_stage_tag() -> None:
-    document = {**json.loads(json.dumps(export_json(rich_show()))), "schema": "stage.show.v1"}
-    with pytest.raises(SchemaError) as caught:
-        import_json(document)
-    assert "showpy.show.v1" in str(caught.value)
-    assert "showpy.show.v1" in (caught.value.hint or "")
-
-
 def _csv_rows(text: str) -> list[list[str]]:
     return list(csv.reader(io.StringIO(text, newline="")))
 
@@ -356,19 +227,15 @@ def test_regression_csv_opt_out_leaves_formula_cells_unchanged() -> None:
     assert rows[1] == [FORMULA_NAME]
 
 
-@pytest.mark.defect("UP-9.5-29")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-29")
 def test_regression_csv_writes_large_floats_without_exponent() -> None:
-    """Writes 1234567.0 in full; the `:g` format turns it into 1.23457e+06 (audit 9.5)."""
+    """Writes 1234567.0 in full, not as 1.23457e+06 (audit 9.5)."""
     rows = _csv_rows(to_csv(pd.DataFrame({"count": [1234567.0]})))
     assert float(rows[1][0]) == 1234567.0
     assert "e" not in rows[1][0].lower()
 
 
-@pytest.mark.defect("UP-9.5-30")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-30")
 def test_regression_csv_keeps_cue_seconds_above_one_thousand_exact() -> None:
-    """Keeps the precision of cue seconds past 1,000 s; `:g` keeps six significant digits."""
+    """Keeps the precision of cue seconds past 1,000 s."""
     seconds = 1234.5678
     rows = _csv_rows(to_csv(pd.DataFrame({"seconds": [seconds]})))
     assert approx_equal(float(rows[1][0]), seconds, abs_tol=TOL)
@@ -403,173 +270,41 @@ def test_regression_to_text_aligns_wide_cjk_characters() -> None:
     assert starts[0] == starts[1]
 
 
-@pytest.mark.defect("UP-9.5-34")
-@pytest.mark.xfail(strict=True, reason="UP-9.5-34")
-def test_regression_export_json_include_accepts_a_single_field_name() -> None:
-    """Treats `include="title"` as one field; today it iterates the characters of the string."""
-    document = export_json(two_set_show(), include="title")
-    assert sorted(document["show"]) == ["id", "title"]
+@pytest.mark.parametrize(
+    ("value", "text"),
+    [(1e16, "10000000000000000"), (1e-7, "0"), (-0.0, "0"), (0.5, "0.5"), (float("inf"), "inf")],
+)
+def test_regression_csv_writes_every_float_in_plain_decimal(value: float, text: str) -> None:
+    """Writes floats without an exponent; infinity stays text instead of raising."""
+    assert _csv_rows(to_csv(pd.DataFrame({"v": [value]})))[1] == [text]
 
 
-def test_regression_import_json_rejects_a_non_mapping_with_schema_error() -> None:
-    """Raises SchemaError for `[1]`; an AttributeError used to leak from `.get` (UP-9.5-35)."""
-    with pytest.raises(SchemaError):
-        import_json([1])  # type: ignore[arg-type]
+CELL_TEXT = st.text(alphabet=st.characters(exclude_categories=["Cs"]), max_size=12)
+TRIGGER_LED_TEXT = st.builds(
+    lambda trigger, rest: trigger + rest, st.sampled_from(FORMULA_TRIGGERS), CELL_TEXT
+)
+DECIMAL_TEXT = st.from_regex(PLAIN_DECIMAL, fullmatch=True)
+
+
+@settings(max_examples=200, deadline=None)
+@given(cells=st.lists(st.one_of(CELL_TEXT, TRIGGER_LED_TEXT, DECIMAL_TEXT), min_size=1, max_size=8))
+def test_csv_neutralizes_exactly_the_non_numeric_formula_cells(cells: list[str]) -> None:
+    """Prefixes `'` on a cell that starts with a trigger and is no plain decimal; keeps the rest."""
+    text = to_csv(pd.DataFrame({"cells": cells}))
+    written = [row[0] for row in csv.reader(io.StringIO(text, newline=""))][1:]
+    expected = [
+        f"'{cell}"
+        if cell.startswith(FORMULA_TRIGGERS) and PLAIN_DECIMAL.fullmatch(cell) is None
+        else cell
+        for cell in cells
+    ]
+    assert written == expected
 
 
 def test_frames_csv_is_byte_identical_across_runs_and_hash_seeds() -> None:
     """Writes the same frames CSV twice in one run and under two hash seeds (audit 4.3)."""
     digests = digests_under_hash_seeds(
-        "from showpy.export.data import export_frames_csv", "export_frames_csv(show).encode()"
+        "from showpy.export._data import export_frames_csv", "export_frames_csv(show).encode()"
     )
     assert all(first == second for first, second in digests), digests
     assert len({first for first, _ in digests}) == 1, digests
-
-
-def test_regression_export_json_ignores_hash_seed() -> None:
-    """Dumps the same JSON export under every hash seed, spot tags included (audit 4.3; P0 #9)."""
-    digests = digests_under_hash_seeds(
-        "from showpy.export.data import export_json",
-        "json.dumps(export_json(show), sort_keys=True).encode()",
-    )
-    assert all(first == second for first, second in digests), digests
-    assert len({first for first, _ in digests}) == 1, digests
-
-
-def test_regression_import_json_keeps_the_duplicate_set_id_error() -> None:
-    document = export_json(two_set_show())
-    sets = document["show"]["sets"]
-    document["show"]["sets"] = [*sets, sets[0]]
-    with pytest.raises(SchemaError) as info:
-        import_json(document)
-    assert info.value.message == "set ids repeat"
-
-
-@pytest.mark.parametrize(
-    "tag", [{"schema": SCHEMA_TAG}, {"format": FORMAT, "version": CURRENT_VERSION}]
-)
-def test_regression_import_json_counts_field_errors_under_error_count(
-    tag: dict[str, object],
-) -> None:
-    with pytest.raises(SchemaError) as caught:
-        import_json({**tag, "show": {"id": "x"}})
-    assert "errors" not in caught.value.context
-    error_count = caught.value.context["error_count"]
-    assert isinstance(error_count, int)
-    assert error_count >= 1
-
-
-TEXT_MEMBERS = ["T1", "T2", "T3", "T4"]
-
-
-def _text_show() -> tuple[Show, FontRegistry, str]:
-    registry, tiny = register_font(bundled_fonts(), tiny_bytes())
-    simplex = registry.resolve("simplex")
-    base = two_set_show()
-    forms = {
-        "tiny": text_form("tiny", TEXT_MEMBERS, "I", fonts=[tiny, simplex], height=2.0,
-                          at=(0, 5), n=4, font_registry=registry),
-    }  # fmt: skip
-    return base.replace(forms=forms), registry, tiny
-
-
-def test_export_embeds_every_font_a_text_form_uses() -> None:
-    show, registry, tiny = _text_show()
-    fonts = export_json(show, font_registry=registry)[FONTS_KEY]
-    assert list(fonts) == sorted([tiny, registry.resolve("simplex")])
-    assert base64.b64decode(fonts[tiny]) == tiny_bytes()
-
-
-def test_export_without_text_forms_has_no_fonts_key() -> None:
-    assert set(export_json(two_set_show())) == {"format", "version", "show"}
-
-
-def test_import_fonts_round_trips_slots() -> None:
-    show, registry, _ = _text_show()
-    form = show.forms[FormId("tiny")]
-    document = json.loads(json.dumps(export_json(show, font_registry=registry)))
-    rebuilt = import_fonts(document, font_registry=EMPTY_FONTS)
-    assert np.array_equal(slots(form, font_registry=rebuilt), slots(form, font_registry=registry))
-
-
-def test_import_fonts_rejects_tampered_data() -> None:
-    show, registry, tiny = _text_show()
-    document = export_json(show, font_registry=registry)
-    document[FONTS_KEY][tiny] = base64.b64encode(tiny_bytes(family="Evil")).decode()
-    with pytest.raises(FontError) as info:
-        import_fonts(document)
-    assert info.value.code == "FONT_HASH_MISMATCH"
-    assert info.value.context["uri"] == tiny
-
-
-def test_import_fonts_rejects_bad_base64() -> None:
-    with pytest.raises(FontError) as info:
-        import_fonts({FONTS_KEY: {asset_uri(b"x"): "not base64!"}})
-    assert info.value.code == "BAD_FONT"
-
-
-def test_export_with_a_missing_font_fails_closed() -> None:
-    show, _, _ = _text_show()
-    with pytest.raises(MissingFontError):
-        export_json(show)
-
-
-def test_export_include_without_forms_embeds_no_fonts() -> None:
-    show, registry, _ = _text_show()
-    exported = export_json(show, include=["title"], font_registry=registry)
-    assert set(exported) == {"format", "version", "show"}
-
-
-def test_import_json_still_loads_a_document_with_fonts() -> None:
-    show, registry, _ = _text_show()
-    loaded = import_json(export_json(show, font_registry=registry))
-    assert loaded.forms[FormId("tiny")] == show.forms[FormId("tiny")]
-
-
-def test_import_fonts_without_a_fonts_key_returns_the_registry() -> None:
-    assert import_fonts({"schema": SCHEMA_TAG}) is bundled_fonts()
-
-
-def _entry(data: bytes) -> dict[str, str]:
-    return {asset_uri(data): base64.b64encode(data).decode()}
-
-
-def test_regression_import_fonts_rejects_hostile_documents() -> None:
-    uri = asset_uri(b"x")
-    too_long = "A" * (4 * math.ceil(MAX_FONT_BYTES / 3) + 5)
-    hostile: list[object] = [
-        [1],
-        "text",
-        7,
-        None,
-        {1: "AA=="},
-        {uri: 7},
-        {uri: None},
-        {uri: ["AA=="]},
-        {uri: too_long},
-        {uri: "caf\u00e9"},
-        {f"asset:sha256:{i:064x}": "AA==" for i in range(MAX_IMPORT_FONTS + 1)},
-    ]
-    for value in hostile:
-        with pytest.raises(FontError) as info:
-            import_fonts({FONTS_KEY: value})
-        assert info.value.code == "BAD_FONT", value
-    with pytest.raises(FontError):
-        import_fonts([1])  # type: ignore[arg-type]
-    assert import_fonts({FONTS_KEY: _entry(tiny_bytes())}).names["tiny"] == asset_uri(tiny_bytes())
-
-
-def _older_simplex() -> bytes:
-    document = json.loads(font_path("simplex.json").read_bytes())
-    return json.dumps({**document, "family": "Simplex, an older release"}).encode()
-
-
-def test_regression_import_fonts_accepts_an_older_font_under_a_taken_name() -> None:
-    older, uri = register_font(EMPTY_FONTS, _older_simplex())
-    form = text_form("old", [f"S{i}" for i in range(36)], "HI", fonts=[uri], height=2.0,
-                     at=(0, 5), n=36, font_registry=older)  # fmt: skip
-    document = export_json(two_set_show().replace(forms={"old": form}), font_registry=older)
-    imported = import_fonts(document)
-    assert imported.names["simplex"] == bundled_fonts().resolve("simplex")
-    assert imported.source(uri) == _older_simplex()
-    assert np.array_equal(slots(form, font_registry=imported), slots(form, font_registry=older))

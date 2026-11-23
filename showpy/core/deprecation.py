@@ -10,15 +10,19 @@ Contains:
     deprecated_call(): decorates a superseded function so each call warns, then runs it
     warn_leaving(): warns that a name leaves the library, naming any planned replacements
     leaving_call(): decorates a function that leaves the library so each call warns, then runs it
+    leave_field(): makes an outside read of a stored model field warn that the field leaves
 """
 
 import functools
 import importlib
+import sys
 import warnings
 from collections.abc import Callable, Mapping
 from typing import Final, Never
 
 WARNING_STACK_LEVEL: Final = 3
+LIBRARY_MODULE_PREFIXES: Final = ("showpy.", "pydantic.")
+READER_FRAME_DEPTH: Final = 1
 
 
 class DeprecatedWarning(DeprecationWarning):
@@ -332,3 +336,76 @@ def leaving_call[**P, R](
         return warn_and_run
 
     return decorate
+
+
+class _LeavingField:
+    """Data descriptor that warns when code outside the library reads a stored field."""
+
+    def __init__(
+        self,
+        old: str,
+        field: str,
+        *,
+        since: str,
+        remove: str,
+        replacement: str | tuple[str, ...] | None,
+    ) -> None:
+        self.old = old
+        self.field = field
+        self.since = since
+        self.remove = remove
+        self.replacement = replacement
+
+    def __get__(self, instance: object, owner: type) -> object:
+        if instance is None:
+            return self
+        module = str(sys._getframe(READER_FRAME_DEPTH).f_globals.get("__name__", ""))
+        if module != "showpy" and not module.startswith(LIBRARY_MODULE_PREFIXES):
+            warn_leaving(
+                self.old, since=self.since, remove=self.remove, replacement=self.replacement
+            )
+        return vars(instance)[self.field]
+
+    def __set__(self, instance: object, value: object) -> Never:
+        raise AttributeError(f"`{self.old}` is read-only")
+
+
+def leave_field(
+    model: type,
+    field: str,
+    *,
+    since: str,
+    remove: str,
+    replacement: str | tuple[str, ...] | None = None,
+) -> None:
+    """Makes an outside read of a stored model field warn that the field leaves the library.
+
+    Decoding, dumping, copying and comparing a model read the stored value directly, and reads
+    from modules inside `showpy` or `pydantic` stay silent. Call it once, right after the class
+    body.
+
+    Args:
+        model: Pydantic model class that holds the field.
+        field: Name of the field that leaves.
+        since: Release that deprecated the field.
+        remove: Release that removes the field; also the release that adds its replacements.
+        replacement: Public name, or names, without the `showpy.` prefix, that replace it; None
+            if none.
+
+    Example:
+        >>> import warnings
+        >>> from pydantic import BaseModel
+        >>> from showpy.core.deprecation import leave_field
+        >>> class Box(BaseModel):
+        ...     size: int = 3
+        >>> leave_field(Box, "size", since="0.4.0", remove="0.7.0")
+        >>> with warnings.catch_warnings(record=True) as caught:
+        ...     warnings.simplefilter("always")
+        ...     eval("Box().size", {"__name__": "app", "Box": Box})
+        3
+        >>> str(caught[0].message)
+        '`showpy.Box.size` is deprecated since 0.4.0 and leaves the library in 0.7.0.'
+    """
+    old = f"showpy.{model.__name__}.{field}"
+    descriptor = _LeavingField(old, field, since=since, remove=remove, replacement=replacement)
+    type.__setattr__(model, field, descriptor)

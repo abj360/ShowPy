@@ -294,6 +294,7 @@ def test_regression_layout_text_caps_the_curved_pieces(monkeypatch: pytest.Monke
 
 
 @pytest.mark.slow
+@pytest.mark.timing
 @pytest.mark.filterwarnings("ignore::showpy.core.errors.LegibilityWarning")
 def test_regression_worst_legal_text_stays_within_its_work_budget() -> None:
     """Keeps the heaviest text the caps allow to a bounded curve table size and a few seconds.

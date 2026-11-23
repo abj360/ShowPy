@@ -139,3 +139,60 @@ to 0.0102 m different), which needs a reviewed fixture update.
 Limitation: the bound is exact against the compiled 257-point polyline of a custom motion,
 not against the motion function. A motion with more than about 64 cycles aliases at compile
 time, before segments exist.
+
+## Addendum 2026-11-22: discrete outputs must match on every platform
+
+The large golden (`seeded_show(7, 240, 24)`) passed on x86_64 Linux and failed on arm64 macOS:
+the 7→8 `segments` count was 4921 against the fixture's 4922, and the 12→13 `min_gaps` list
+started with G14-G15 instead of G10-G4. The maths was right. Each failing value was a discrete
+output decided by 1-ulp noise, and the noise differs between platforms: on identical inputs
+numpy's `sin` and `cos` differed between arm64 and x86_64 macOS on 18% of inputs (up to 2 ulp;
+numpy calls the platform libm), and `Generator.uniform` on 14% of the fixture generator's draws
+(55,889 of 400,000; the arm64 build fuses `low + scale * u` into one multiply-add). `random()`,
+`sqrt`, `linalg.norm`, `cumsum` and `math.dist` matched.
+
+Rule: across platforms, float values may differ within the stated tolerance. Counts, orders and
+top-N membership must be identical. Where a discrete output depends on a float, the library
+decides it on a value rounded to 1e-9 (meters, counts) or merges within 1e-9, and breaks the
+remaining ties by a stable ID, so 1-ulp noise cannot change it. Spot IDs break ties in natural
+order (`natural_key`, the key behind `natural_sort`: G4 before G10), the order designers read:
+
+1. `make_route` and `counter_march` read route offsets from the route curve's own breaks. A
+   second arc-length sum (`math.dist` against `np.linalg.norm` plus `np.cumsum`) disagreed in
+   the last bit on 15% of vertices and left a follower 1 ulp short of its vertex.
+2. `plan_breaks` merges a break within 1e-9 of a window end into that end, and
+   `TrimmedCurve._breaks` merges a base break within 1e-9 m of a trim end. Either guard alone
+   removes the sliver segment behind the 7→8 count.
+3. `min_gaps` ranks gaps rounded to 9 decimals, then by spot IDs in natural order, and prunes
+   on the same rank.
+   At least four 12→13 pairs collide at exactly -0.6 m; their computed gaps came out as -0.6,
+   -0.5999999999999999 and so on.
+4. `reorder(form, "by_x" | "by_y")` ranks slots and previous positions rounded to 9 decimals,
+   then by the other axis, then by index or spot ID.
+5. Test fixtures draw floats as `low + (high - low) * random()` in Python, never through
+   `Generator.uniform`.
+
+Numbers, `seeded_show(7, 240, 24)`, every golden fixture: arm64 macOS and x86_64 macOS
+(Rosetta) write byte-identical output for all seven fixture files after the fixes; before them
+they differed in 31 segment and 20 `min_gaps` values. Against the fixture recorded on x86_64
+Linux, the reviewed refresh drops one sliver row each from 7→8 (4922 to 4921) and 14→15 (4950
+to 4949), and puts the pairs tied at -0.6 m in 1→2 and 12→13 into natural spot ID order (23→24
+already was). Every other value equals the recorded fixture; the frames, PDF text, render
+hashes, opener and text fixtures do not change.
+
+CI runs the slow tests on macos-15 and windows-2022 as well as Linux, so a discrete output that
+follows noise fails before it merges.
+
+Limitations: rounding moves the knife edge, it does not remove it. Two values within 1 ulp of a
+rounding boundary still rank by noise; exact ties, which collisions and symmetric forms make
+common, no longer do. Rosetta runs the macOS x86_64 libm, not glibc, so agreement with Linux
+rests on the CI legs, not on this measurement.
+`linear_sum_assignment` in `match` is unchanged: on an exact tie it follows the cost matrix's
+last bits (moving one slot 2 ulp flipped a symmetric two-spot assignment), and a fix would
+quantize costs before solving.
+
+2026-11-22, after review: `min_gaps` names each pair in natural spot ID order too (G4-G10, not
+G10-G4), so pair names and the order of tied rows follow one rule. The refreshed fixture keeps
+the same pairs, tau and gaps in every transition; only names and the order of rows tied at
+-0.6 m changed. The `slow (macos-15)` and `slow (windows-2022)` checks become required once they
+pass on main.

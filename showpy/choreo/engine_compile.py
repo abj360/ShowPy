@@ -43,6 +43,9 @@ CUSTOM_SAMPLES = 257
 INVERSE_EASE_STEPS = 53
 SMOOTHSTEP_INFLECTION = 0.5
 EASE_IN_OUT_TURN = 0.5
+# A break this close to a window end is last-bit float noise, which differs between platforms
+# (libm, fused multiply-add); merging it into the end keeps segment counts identical everywhere.
+BREAK_MERGE_TOL = 1e-9
 PIECE_KIND: dict[PathStyle, PieceKind] = {
     PathStyle.STRAIGHT: "line",
     PathStyle.POLYLINE: "line",
@@ -409,13 +412,21 @@ def _easing_edges(easing: Easing) -> list[float]:
     return edges
 
 
+def _merge_into_ends(values: FloatArray, lo: float, hi: float) -> FloatArray:
+    """Moves values within BREAK_MERGE_TOL of `lo` or `hi` onto that end."""
+    at_lo = np.where(np.abs(values - lo) <= BREAK_MERGE_TOL, lo, values)
+    merged: FloatArray = np.where(np.abs(at_lo - hi) <= BREAK_MERGE_TOL, hi, at_lo)
+    return merged
+
+
 def plan_breaks(plan: MotionPlan) -> FloatArray:
     """Returns the sorted local counts inside the window where a plan's motion may kink.
 
     Time knots, curve breaks (polyline corners, spline knots, joins) and easing breaks are
     mapped through the inverse time map, so a segment can end exactly on each of them. A
     custom motion's sample vertices are not breaks: they sample a function, they are not
-    corners the designer drew.
+    corners the designer drew. A break within BREAK_MERGE_TOL of an end of the path (meters)
+    or of the window (counts) merges into that end, so float noise never adds a sliver segment.
 
     >>> from showpy.choreo.path_models import TransitionSpec, PathRow, Waypoint
     >>> from showpy.choreo.models import Placement
@@ -429,10 +440,11 @@ def plan_breaks(plan: MotionPlan) -> FloatArray:
     start, end = plan.window
     sampled = plan.curve is None or plan.style == PathStyle.CUSTOM
     breaks = np.array([]) if sampled or plan.curve is None else plan.curve._breaks()
+    breaks = _merge_into_ends(breaks, plan.knots_s[0], plan.knots_s[-1])
     eased = np.concatenate([plan.knots_t, np.interp(breaks, plan.knots_s, plan.knots_t)])
     shares = np.asarray(_easing_edges(plan.easing), dtype=float)
     counts = np.concatenate([_local_counts(plan, eased), start + shares * (end - start)])
-    return np.unique(np.concatenate([[start, end], counts]))
+    return np.unique(np.concatenate([[start, end], _merge_into_ends(counts, start, end)]))
 
 
 def _power_chord_error(k: float, a: float, b: float) -> float:

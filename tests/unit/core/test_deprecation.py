@@ -69,6 +69,7 @@ REQUIRED_KEYWORDS = {
     "warn_deprecated": ("since", "remove"),
     "leaving_call": ("since", "remove"),
     "warn_leaving": ("since", "remove"),
+    "leave_field": ("since", "remove"),
 }
 
 

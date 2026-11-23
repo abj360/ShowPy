@@ -438,6 +438,7 @@ def test_regression_chunk_counts_rejects_nan_total() -> None:
         chunk_counts(NAN, 4)
 
 
+@pytest.mark.timing
 @fails_after(5)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_id_split_is_linear_on_long_ids() -> None:

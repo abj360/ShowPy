@@ -24,10 +24,10 @@ from showpy.choreo.avoid import min_gaps
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import MotionSegment
 from showpy.choreo.path_models import PathStyle
-from showpy.export.data import export_frames_csv
-from showpy.export.pdf import to_pdf
-from showpy.export.print_sheets import coordinate_sheet
-from showpy.export.video import render_frame, video_canvas
+from showpy.export._data import export_frames_csv
+from showpy.export._pdf import to_pdf
+from showpy.export._print_sheets import coordinate_sheet
+from showpy.export._video import render_frame, video_canvas
 from showpy.show.models import Show
 from tests.fixtures.generators import GROUPS, seeded_show
 
