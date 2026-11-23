@@ -190,20 +190,30 @@ def _occupied_slots(form: Form) -> list[int]:
     return [index for index, member in enumerate(form.members) if member is not None]
 
 
-def _occupied_points(form: Form, registry: FormFnRegistry) -> Points:
-    pts: Points = slots(form, registry)[_occupied_slots(form)]
+def _occupied_points(
+    form: Form, registry: FormFnRegistry, font_registry: FontRegistry | None
+) -> Points:
+    pts: Points = slots(form, registry, font_registry=font_registry)[_occupied_slots(form)]
     return pts
 
 
-def _by_axis(form: Form, axis: int, prev_set: Set | None, registry: FormFnRegistry) -> list[SpotId]:
-    pts = _occupied_points(form, registry)
+def _by_axis(
+    form: Form,
+    axis: int,
+    prev_set: Set | None,
+    registry: FormFnRegistry,
+    font_registry: FontRegistry | None,
+) -> list[SpotId]:
+    pts = _occupied_points(form, registry, font_registry)
     ranked = zip(_ranked_slots(pts, axis), _ranked_members(form, axis, prev_set), strict=True)
     by_slot = dict(ranked)
     return [by_slot[slot] for slot in range(len(form.spots))]
 
 
-def _nearest_prev(form: Form, prev_set: Set, registry: FormFnRegistry) -> list[SpotId]:
-    pts = _occupied_points(form, registry)
+def _nearest_prev(
+    form: Form, prev_set: Set, registry: FormFnRegistry, font_registry: FontRegistry | None
+) -> list[SpotId]:
+    pts = _occupied_points(form, registry, font_registry)
     result = match(prev_set, pts, entities=form.spots)
     return sorted(form.spots, key=lambda m: result.assignment[m])
 
@@ -233,13 +243,15 @@ def reorder(
     *,
     force: bool = False,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
+    font_registry: FontRegistry | None = None,
 ) -> Form:
     """Returns a form whose members sit in a new order along it.
 
     `order` is an explicit member list, "reverse", "by_x"/"by_y" (the leftmost or
     frontmost member in `prev_set`, or the first by ID without one, takes the leftmost or
     frontmost slot), or "nearest_prev" (optimal match from positions in `prev_set`). Open slots
-    stay open: the spots move among the slots that hold one.
+    stay open: the spots move among the slots that hold one. `font_registry` holds a text form's
+    fonts; None means `bundled_fonts()`.
 
     >>> reorder(line_form("f", ["A", "B", "C"], (0, 0), (2, 0)), "reverse").members
     ('C', 'B', 'A')
@@ -248,11 +260,11 @@ def reorder(
     if order == "reverse":
         spots = list(form.spots[::-1])
     elif order in ("by_x", "by_y"):
-        spots = _by_axis(form, 0 if order == "by_x" else 1, prev_set, registry)
+        spots = _by_axis(form, 0 if order == "by_x" else 1, prev_set, registry, font_registry)
     elif order == "nearest_prev":
         if prev_set is None:
             raise SchemaError("nearest_prev needs prev_set", hint="pass the previous set")
-        spots = _nearest_prev(form, prev_set, registry)
+        spots = _nearest_prev(form, prev_set, registry, font_registry)
     else:
         spots = _explicit(form, order)
     return form.replace(members=_on_occupied_slots(form, spots))
@@ -269,8 +281,15 @@ def _split_index(form: Form, at: int | str) -> int:
     return index
 
 
-def _custom_part(form: Form, part_id: str, lo: int, hi: int, registry: FormFnRegistry) -> Form:
-    pts, facings = slot_poses(form, registry)
+def _custom_part(
+    form: Form,
+    part_id: str,
+    bounds: tuple[int, int],
+    registry: FormFnRegistry,
+    font_registry: FontRegistry | None,
+) -> Form:
+    lo, hi = bounds
+    pts, facings = slot_poses(form, registry, font_registry=font_registry)
     part = custom_form(part_id, form.members[lo:hi], pts[lo:hi], facings[lo:hi], set_id=form.set)
     return part.replace(meta=dict(form.meta))
 
@@ -300,11 +319,13 @@ def split_form(
     *,
     force: bool = False,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
+    font_registry: FontRegistry | None = None,
 ) -> tuple[Form, Form]:
     """Splits members before index (or member) `at` into two forms; nobody moves.
 
-    Evenly spaced curve forms split into trimmed pieces of the same curve; other forms
-    split into custom forms holding the exact positions and facings.
+    Evenly spaced curve forms split into trimmed pieces of the same curve; other forms,
+    text forms included, split into custom forms holding the exact positions and facings. A
+    text form's fonts resolve through `font_registry`; None means `bundled_fonts()`.
 
     >>> a, b = split_form(line_form("f", list("ABCD"), (0, 0), (3, 0)), "C")
     >>> a.members, slots(b).tolist()
@@ -319,7 +340,7 @@ def split_form(
         parts.append(
             _trimmed_part(form, recipe, part_id, lo, hi)
             if isinstance(recipe, CurveRecipeBase) and _trimmable(form, lo, hi)
-            else _custom_part(form, part_id, lo, hi, registry)
+            else _custom_part(form, part_id, (lo, hi), registry, font_registry)
         )
     return parts[0], parts[1]
 
@@ -331,8 +352,12 @@ def merge_forms(
     *,
     force: bool = False,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
+    font_registry: FontRegistry | None = None,
 ) -> Form:
     """Joins two forms of one set into a custom form: a's members, then b's; nobody moves.
+
+    Text forms merge into a custom form too; their fonts resolve through `font_registry`, and
+    None means `bundled_fonts()`.
 
     >>> merged = merge_forms(line_form("a", ["A"], (0, 0), (1, 0), set_id="1"),
     ...     line_form("b", ["B"], (5, 0), (6, 0), set_id="1"), "ab")
@@ -346,16 +371,24 @@ def merge_forms(
             f"forms {a.id} and {b.id} belong to sets {a.set} and {b.set}",
             hint="merge forms of the same set",
         )
-    pts_a, facings_a = slot_poses(a, registry)
-    pts_b, facings_b = slot_poses(b, registry)
+    pts_a, facings_a = slot_poses(a, registry, font_registry=font_registry)
+    pts_b, facings_b = slot_poses(b, registry, font_registry=font_registry)
     na, nb = len(a.members), len(b.members)
     points = np.vstack([pts_a[:na], pts_b[:nb]])
     facings = [*facings_a[:na], *facings_b[:nb]]
     return custom_form(form_id, (*a.members, *b.members), points, facings, set_id=a.set)
 
 
-def morph_targets(a: Form, b: Form, registry: FormFnRegistry = DEFAULT_FORM_FNS) -> Points:
+def morph_targets(
+    a: Form,
+    b: Form,
+    registry: FormFnRegistry = DEFAULT_FORM_FNS,
+    *,
+    font_registry: FontRegistry | None = None,
+) -> Points:
     """Returns where each member of `a` (in a's order) stands in `b`; members must match.
+
+    `font_registry` holds the fonts of a text form `b`; None means `bundled_fonts()`.
 
     >>> morph_targets(line_form("a", ["A", "B"], (0, 0), (1, 0)),
     ...     line_form("b", ["B", "A"], (0, 5), (1, 5))).tolist()
@@ -367,7 +400,7 @@ def morph_targets(a: Form, b: Form, registry: FormFnRegistry = DEFAULT_FORM_FNS)
             hint="morph between forms holding the same spots",
             context={"only_a": sorted(set(a.spots) - set(b.spots))},
         )
-    pts = slots(b, registry)
+    pts = slots(b, registry, font_registry=font_registry)
     index = {member: i for i, member in enumerate(b.members) if member is not None}
     return np.array([pts[index[m]] for m in a.spots], dtype=float).reshape(-1, 2)
 
@@ -441,9 +474,12 @@ def transform_form(form: Form, matrix: Matrix, *, force: bool = False) -> Form:
 
 
 def _hinge_point(
-    form: Form, hinge: Literal["start", "end"] | int, registry: FormFnRegistry
+    form: Form,
+    hinge: Literal["start", "end"] | int,
+    registry: FormFnRegistry,
+    font_registry: FontRegistry | None,
 ) -> Point:
-    pts = slots(form, registry)
+    pts = slots(form, registry, font_registry=font_registry)
     index = {"start": 0, "end": len(pts) - 1}.get(hinge, hinge) if isinstance(hinge, str) else hinge
     if not isinstance(index, int) or not 0 <= index < len(pts):
         raise SchemaError(
@@ -461,16 +497,18 @@ def gate(
     *,
     force: bool = False,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
+    font_registry: FontRegistry | None = None,
 ) -> Form:
     """Rotates a form counter-clockwise by `deg` about its first slot, last slot or a slot.
+
+    `font_registry` holds a text form's fonts; None means `bundled_fonts()`.
 
     >>> gated = gate(line_form("f", ["A", "B"], (0, 0), (2, 0)), "start", 90.0)
     >>> slots(gated).round(6).tolist()
     [[0.0, 0.0], [0.0, 2.0]]
     """
-    return transform_form(
-        form, rotation_matrix(deg, _hinge_point(form, hinge, registry)), force=force
-    )
+    pivot = _hinge_point(form, hinge, registry, font_registry)
+    return transform_form(form, rotation_matrix(deg, pivot), force=force)
 
 
 def pinwheel(

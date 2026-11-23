@@ -26,6 +26,7 @@ from showpy.core.ids import SpotId
 from showpy.core.types import Point, Points
 from showpy.core.units import angle_diff, facing_vector
 from showpy.core.util import as_points, close_matches
+from showpy.geo.fonts import FontRegistry
 
 BACKWARD_TOL = 1e-9
 SPEED_TOL = 1e-9
@@ -61,9 +62,11 @@ class MatchProblem:
         return replace(self, entities=entities, starts=self.starts[order], facings=facings)
 
 
-def _slot_points(to_slots: SlotSource) -> Points:
+def _slot_points(to_slots: SlotSource, font_registry: FontRegistry | None) -> Points:
     if isinstance(to_slots, Sequence) and to_slots and all(isinstance(f, Form) for f in to_slots):
-        return np.vstack([form_slots(f) for f in to_slots if isinstance(f, Form)])
+        return np.vstack(
+            [form_slots(f, font_registry=font_registry) for f in to_slots if isinstance(f, Form)]
+        )
     return as_points(to_slots)
 
 
@@ -117,8 +120,12 @@ def build_problem(
     entities: Sequence[str] | None,
     groups: Mapping[str, str] | None,
     slot_groups: Sequence[str | None] | None,
+    *,
+    font_registry: FontRegistry | None = None,
 ) -> MatchProblem:
     """Builds a problem from a Set or start points and slot points or forms.
+
+    `font_registry` holds the fonts of text forms in `to_slots`; None means `bundled_fonts()`.
 
     >>> build_problem([(0, 0)], [(1, 0), (2, 0)], None, None, None).entities
     ('0',)
@@ -126,7 +133,7 @@ def build_problem(
     ids, starts, facings = _source(from_, entities)
     if len(set(ids)) != len(ids):
         raise SchemaError("an entity is listed twice", hint="list each spot once")
-    slots = _slot_points(to_slots)
+    slots = _slot_points(to_slots, font_registry)
     _require_finite(slots, [f"slot {j}" for j in range(len(slots))])
     labels = _labels(len(slots), slot_groups)
     return MatchProblem(ids, starts, facings, slots, dict(groups or {}), labels)

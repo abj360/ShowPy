@@ -35,7 +35,7 @@ Contains:
     test_regression_fixed_facing_wraps_the_heading: stores a heading in [0, 360)
     test_regression_models_refuse_bare_facing_values: refuses a bare number, pair or string
     test_regression_set_facing_wraps_bare_values: wraps the bare values the builder accepts
-    test_regression_dropping_the_faced_spot_resets_the_facing: falls back to the target facing
+    test_regression_dropping_the_faced_spot_is_refused: refuses a drop that leaves a row facing it
     test_regression_route_curve_is_a_typed_curve: stores a curve model, round-trips it through
         JSON and refuses a recipe that is no curve
     test_regression_spec_rows_and_routes_are_read_only: refuses item assignment and deletion
@@ -78,7 +78,7 @@ from showpy.choreo.path_models import (
     ZigzagParams,
 )
 from showpy.choreo.paths import set_facing
-from showpy.core.errors import PathError, SchemaError
+from showpy.core.errors import PathError, SchemaError, ShowValidationError
 from showpy.core.ids import RouteId, SpotId, make_tid
 from showpy.core.readonly import ReadOnlyMap
 from showpy.core.resources import schema_path
@@ -338,15 +338,12 @@ def test_regression_set_facing_wraps_bare_values(
     assert spec.row("A").facing_value == dict(KIND_FOR_MODE)[mode]
 
 
-def test_regression_dropping_the_faced_spot_resets_the_facing() -> None:
-    """Falls back to the target facing, not an invalid half-set value, when the faced spot goes."""
-    show = rich_show()
-    dropped = rewrite_spot_ids(show, lambda spot: None if spot == "T2" else spot)
-    row = dropped.transition(("1", "2")).row("T1")
-    assert (row.facing_mode, row.facing_value) == (FacingMode.TO_TARGET, None)
-    override = dropped.facing_overrides[0]
-    assert override.mode is FacingMode.TOWARD_ENTITY
-    assert override.value == EntityFacing(entity=SpotId("T3"))
+def test_regression_dropping_the_faced_spot_is_refused() -> None:
+    """Refuses the drop, not a silent reset, while a path row still faces the dropped spot."""
+    with pytest.raises(ShowValidationError):
+        rewrite_spot_ids(rich_show(), lambda spot: None if spot == "T2" else spot)
+    dropped = rewrite_spot_ids(rich_show(), lambda spot: None if spot in {"T1", "T2"} else spot)
+    assert dropped.facing_overrides == ()
 
 
 def _route(route_id: str = "r") -> Route:

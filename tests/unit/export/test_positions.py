@@ -3,7 +3,7 @@
 """
 test_positions.py --- tests merging CSV positions into a show
 
-Also holds the audited import defects (UP-9.5-41 to UP-9.5-44) as strict xfails.
+Also holds the audited import defects (UP-9.5-41 to UP-9.5-44); UP-9.5-43 and -44 are fixed.
 Also holds UP-9.5-58, found by the importer fuzzers, and UP-9.5-60, found by the final review.
 
 Contains:
@@ -12,6 +12,9 @@ Contains:
     test_regression_import_positions_normalizes_facing(): stores facing 720 as 0 instead of keeping
         it unnormalized
     test_regression_import_positions_rejects_ids_with_spaces(): rejects an entity ID with a space
+    test_regression_import_positions_rejects_ids_with_path_separators_and_names_the_line(): rejects
+        `../x` and names the line
+    test_regression_import_positions_wraps_a_negative_facing(): stores -90 as 270
     test_regression_import_positions_rejects_a_bare_carriage_return_with_schema_error(): wraps a
         csv.Error in SchemaError
     test_regression_import_positions_caps_the_placement_count(): refuses a placement blowup
@@ -164,6 +167,19 @@ def test_regression_import_positions_rejects_ids_with_spaces() -> None:
     """Rejects an entity ID that contains a space instead of creating a spot with it."""
     with pytest.raises(SchemaError):
         import_positions(two_set_show(), "set,counts,entity,x,y\n3,4,T 9,1,1\n", "trumpets")
+
+
+def test_regression_import_positions_rejects_ids_with_path_separators_and_names_the_line() -> None:
+    """Rejects `../x` with a SchemaError that names the line."""
+    with pytest.raises(SchemaError, match="line 2"):
+        import_positions(two_set_show(), "set,counts,entity,x,y\n3,4,../x,1,1\n", "trumpets")
+
+
+def test_regression_import_positions_wraps_a_negative_facing() -> None:
+    """Stores facing -90 as 270."""
+    text = "set,counts,entity,x,y,facing\n3,4,T1,1,1,-90\n"
+    facing = import_positions(two_set_show(), text, group="trumpets").set("3").get("T1").facing
+    assert approx_equal(facing, 270.0, abs_tol=TOL)
 
 
 def test_regression_import_positions_rejects_a_bare_carriage_return_with_schema_error() -> None:
