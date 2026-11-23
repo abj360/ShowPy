@@ -2,6 +2,7 @@
 util.py --- small shared helpers: ID ranges, float comparison, seeded randomness, hashing
 
 Contains:
+    natural_key(): returns the sort key that puts T2 before T10
     natural_sort(): sorts IDs so T2 comes before T10
     split_id(): splits an ID into its prefix and trailing number
     parse_range(): expands `T1-T8` into IDs
@@ -58,7 +59,12 @@ RENAME_REMOVAL = "0.6.0"
 SINGLE_PART_GEOMETRY = frozenset({"Point", "LineString", "LinearRing", "Polygon"})
 
 
-def _natural_key(text: str) -> tuple[tuple[tuple[int, int, str], ...], str]:
+def natural_key(text: str) -> tuple[tuple[tuple[int, int, str], ...], str]:
+    """Returns the sort key that compares embedded numbers numerically, then the text.
+
+    >>> natural_key("T2") < natural_key("T10")
+    True
+    """
     chunks = tuple(
         (0, len(stripped), stripped) if index % 2 else (1, 0, chunk)
         for index, chunk in enumerate(NATURAL_CHUNK.split(text))
@@ -74,7 +80,7 @@ def natural_sort[T: str](ids: Iterable[T]) -> list[T]:
     >>> natural_sort(["T10", "T2"])
     ['T2', 'T10']
     """
-    return sorted(ids, key=_natural_key)
+    return sorted(ids, key=natural_key)
 
 
 def split_id(text: str) -> tuple[str, int | None]:

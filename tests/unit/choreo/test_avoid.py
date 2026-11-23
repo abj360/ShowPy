@@ -28,6 +28,8 @@ Contains:
     test_regression_apply_fix_applies_a_stagger_fix: staggers starts from typed parameters
     test_regression_min_gaps_orders_noise_ties_by_spot_ids: lists pairs whose gaps differ only by
         float noise in spot ID order, so a 1-ulp shift keeps the order and the top pair
+    test_regression_min_gaps_breaks_exact_ties_in_natural_id_order: lists T2-T3 before T10-T2
+        when their gaps tie, as T2 sorts before T10
 """
 
 import math
@@ -37,6 +39,7 @@ from typing import cast
 import numpy as np
 import pytest
 
+from showpy.cast.rewrite import rewrite_spot_ids
 from showpy.choreo.avoid import (
     apply_fix,
     closest_approach,
@@ -313,3 +316,13 @@ def test_regression_min_gaps_orders_noise_ties_by_spot_ids(direction: float) -> 
     for top in (1, 3):
         expected = [(g.a, g.b) for g in min_gaps(two_set_show(), TID, top=top)]
         assert [(g.a, g.b) for g in min_gaps(_t3_nudged(direction), TID, top=top)] == expected
+
+
+def test_regression_min_gaps_breaks_exact_ties_in_natural_id_order() -> None:
+    """Lists pairs whose gaps tie exactly in natural spot ID order, so T2 comes before T10.
+
+    The trumpets stand 2 m apart; with T1 renamed T10, plain string order listed T10-T2 first.
+    """
+    show = rewrite_spot_ids(two_set_show(), lambda spot: "T10" if spot == "T1" else spot)
+    pairs = [(g.a, g.b) for g in min_gaps(show, TID, top=3)]
+    assert pairs == [("T2", "T3"), ("T3", "T4"), ("T10", "T2")]

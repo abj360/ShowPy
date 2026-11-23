@@ -31,6 +31,7 @@ from showpy.choreo.paths import add_waypoint, delay, stagger
 from showpy.core.errors import PathError
 from showpy.core.ids import SpotId
 from showpy.core.types import Point, Points
+from showpy.core.util import natural_key
 from showpy.show.models import Show
 
 type FloatArray = npt.NDArray[np.float64]
@@ -123,8 +124,8 @@ def min_gaps(
     """Lists the `top` tightest pairs of on-field spots in a transition, tightest first.
 
     Gaps are ranked rounded to GAP_RANK_DIGITS decimals, so pairs that tie to within float noise
-    are listed in spot ID order. A bounding-box broadphase skips pairs that cannot beat the
-    current top list.
+    are listed in natural spot ID order (T2 before T10). A bounding-box broadphase skips pairs
+    that cannot beat the current top list.
 
     >>> from showpy.examples import two_set_show
     >>> round(min_gaps(two_set_show(), ("1", "2"), top=1)[0].gap, 6)
@@ -148,7 +149,7 @@ def min_gaps(
         if len(found) >= top and lower > _gap_rank(found[-1].gap):
             continue
         found.append(_pair_gap(engine, tid, a, b))
-        found.sort(key=lambda g: (_gap_rank(g.gap), g.a, g.b))
+        found.sort(key=lambda g: (_gap_rank(g.gap), natural_key(g.a), natural_key(g.b)))
         del found[top:]
     return found
 
