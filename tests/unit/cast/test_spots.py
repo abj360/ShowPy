@@ -18,9 +18,12 @@ Contains:
         relabels it with the pin following
     test_regression_cast_edits_accept_force: gives every cast edit a `force` parameter like
         delete_spots
+    test_regression_add_spots_checks_cap_before_allocating: refuses spots past MAX_SPOTS before
+        spacing them or building a placement per set, within a time and memory bound
 """
 
-from collections.abc import Mapping
+import tracemalloc
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from inspect import Parameter, signature
 
@@ -47,6 +50,7 @@ from e8s.cast.spots import (
 )
 from e8s.choreo.models import PlacementPatch
 from e8s.choreo.path_models import EntityFacing, FacingMode, FixedFacing, PathRow
+from e8s.core.caps import MAX_SPOTS
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import (
     LockedError,
@@ -55,7 +59,7 @@ from e8s.core.errors import (
     SpacingError,
     UnknownRefError,
 )
-from e8s.core.ids import FormId, RouteId, SpotId
+from e8s.core.ids import FormId, RouteId, SetId, SpotId
 from e8s.core.selection import Selection
 from e8s.core.types import Region
 from e8s.core.util import approx_equal
@@ -66,6 +70,7 @@ from e8s.show.models import Show
 from e8s.show.pinning import pin, unpin
 from tests.fixtures.cast_shows import rich_notes, rich_show
 from tests.fixtures.shows import two_set_show
+from tests.helpers import fails_after
 
 pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
@@ -498,3 +503,44 @@ def test_regression_edit_group_keeps_a_validator_schema_error(
     with pytest.raises(SchemaError) as info:
         edit_group(rich_show(), "trumpets", moves=False)
     assert info.value.message == "group rule broken"
+
+
+CAP_CHECK_SETS = 60
+OVER_CAP_SPOTS = 50_000
+CAP_CHECK_BUDGET_S = 2
+CAP_CHECK_PEAK_BYTES = 20 * 2**20
+
+
+def _sixty_set_show() -> Show:
+    show = two_set_show()
+    first, second = show.sets
+    more = (second.replace(id=SetId(str(n)), key=None) for n in range(3, CAP_CHECK_SETS + 1))
+    return show.replace(sets=(first, second, *more))
+
+
+@fails_after(CAP_CHECK_BUDGET_S)
+def test_regression_add_spots_checks_cap_before_allocating() -> None:
+    """Refuses spots past MAX_SPOTS before spacing them or building a placement per set.
+
+    The cap ran in the Cast model, after a placement per spot per set was built: 50,000 spots
+    on 60 sets took 17.7 s and 3.3 GiB before the refusal.
+    """
+    show = _sixty_set_show()
+    square = region([(0, 0), (40, 0), (40, 40), (0, 40)])
+    just_over = MAX_SPOTS - len(show.cast.spots) + 1
+    calls: list[Callable[[], Show]] = [
+        lambda: add_spots_along(show, line((0, 0), (40, 0)), OVER_CAP_SPOTS, "trumpets", "1"),
+        lambda: add_spots_along(show, line((0, 0), (40, 0)), just_over, "trumpets", "1"),
+        lambda: fill_spots(show, square, "trumpets", "1", n=OVER_CAP_SPOTS),
+        lambda: fill_spots(show, square, "trumpets", "1", interval=0.2),
+    ]
+    tracemalloc.start()
+    try:
+        for call in calls:
+            with pytest.raises(SchemaError) as caught:
+                call()
+            assert caught.value.code == ErrorCode.TOO_MANY_SPOTS
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < CAP_CHECK_PEAK_BYTES

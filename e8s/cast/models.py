@@ -11,10 +11,11 @@ Contains:
     RewriteReport: lists what a spot rename or delete dropped or left unresolved
     HexColor: a `#rrggbb` color string, in either case
     MAX_LABEL_PAD: bounds how wide a label number may be zero-padded
+    require_spot_count(): refuses a cast size over MAX_SPOTS before anything is allocated
 """
 
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sized
 from functools import cached_property
 from typing import Annotated, Literal, get_args
 
@@ -181,6 +182,30 @@ class LabelScheme(FrozenModel):
         return f"{prefix}{number:0{self.pad}d}"
 
 
+def require_spot_count(count: int) -> None:
+    """Refuses a cast of more than MAX_SPOTS spots, before the caller allocates anything.
+
+    Args:
+        count: Number of spots the cast holds, or would hold after an edit.
+
+    >>> require_spot_count(MAX_SPOTS)
+    >>> require_spot_count(MAX_SPOTS + 1)
+    Traceback (most recent call last):
+        ...
+    e8s.core.errors.SchemaError: TOO_MANY_SPOTS: a cast of 5001 spots is over MAX_SPOTS \
+(5,000) (hint: keep at most 5,000 spots in one show; split a larger ensemble into several shows)
+    """
+    if count <= MAX_SPOTS:
+        return
+    raise SchemaError(
+        f"a cast of {count} spots is over MAX_SPOTS ({MAX_SPOTS:,})",
+        hint=f"keep at most {MAX_SPOTS:,} spots in one show; split a larger ensemble into"
+        " several shows",
+        context={"spots": count, "max_spots": MAX_SPOTS},
+        code=ErrorCode.TOO_MANY_SPOTS,
+    )
+
+
 class Cast(FrozenModel):
     """Holds every group and spot in the show.
 
@@ -198,18 +223,18 @@ class Cast(FrozenModel):
     )
     label_scheme: LabelScheme = LabelScheme()
 
+    @field_validator("spots", mode="before")
+    @classmethod
+    def _spot_count_within_cap(cls, value: object) -> object:
+        if isinstance(value, Sized):
+            require_spot_count(len(value))
+        return value
+
     @field_validator("spots", mode="after")
     @classmethod
     def _spots_within_cap(cls, value: tuple[Spot, ...]) -> tuple[Spot, ...]:
-        if len(value) <= MAX_SPOTS:
-            return value
-        raise SchemaError(
-            f"the cast holds {len(value)} spots, over MAX_SPOTS ({MAX_SPOTS:,})",
-            hint=f"keep at most {MAX_SPOTS:,} spots in one show; split a larger ensemble into"
-            " several shows",
-            context={"spots": len(value), "max_spots": MAX_SPOTS},
-            code=ErrorCode.TOO_MANY_SPOTS,
-        )
+        require_spot_count(len(value))
+        return value
 
     @field_validator("selections", mode="before")
     @classmethod

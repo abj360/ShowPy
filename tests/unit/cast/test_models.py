@@ -47,6 +47,8 @@ Contains:
     test_cast_accepts_max_spots: accepts a cast of exactly MAX_SPOTS spots
     test_regression_cast_refuses_more_than_max_spots: refuses MAX_SPOTS + 1 spots, built or
         edited, with TOO_MANY_SPOTS
+    test_regression_decoded_cast_checks_the_spot_cap_before_the_spots: refuses an over-cap
+        decoded cast by its length before any spot is checked
 """
 
 import math
@@ -369,3 +371,13 @@ def test_regression_cast_refuses_more_than_max_spots() -> None:
     with pytest.raises(SchemaError) as edited:
         full.replace(spots=(*full.spots, extra))
     assert edited.value.code == ErrorCode.TOO_MANY_SPOTS
+
+
+def test_regression_decoded_cast_checks_the_spot_cap_before_the_spots() -> None:
+    """Refuses a decoded cast of MAX_SPOTS + 1 spots by its length, before checking any spot."""
+    dumped = _cast_of(1).model_dump(mode="json")
+    dumped["spots"] = [{} for _ in range(MAX_SPOTS + 1)]
+    with pytest.raises(SchemaError) as decoded:
+        Cast.model_validate(dumped)
+    assert decoded.value.code == ErrorCode.TOO_MANY_SPOTS
+    assert decoded.value.context == {"spots": MAX_SPOTS + 1, "max_spots": MAX_SPOTS}
