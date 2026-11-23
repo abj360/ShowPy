@@ -97,11 +97,12 @@ def _frame_times(
 ) -> tuple[FloatArray, FloatArray]:
     s0, s1 = count_to_seconds(timeline, start), count_to_seconds(timeline, end)
     intervals = (s1 - s0) * fps
-    if not math.isfinite(intervals):
+    if not intervals < MAX_FRAME_VALUES:
         raise SchemaError(
-            f"{s1 - s0:g} s at {fps:g} fps is too many frames to count",
+            f"{s1 - s0:g} s at {fps:g} fps is too many frames: about {intervals:.3g}, over the"
+            f" cap of {MAX_FRAME_VALUES:,} (MAX_FRAME_VALUES)",
             hint="use a lower fps or a shorter range",
-            context={"seconds": s1 - s0, "fps": fps},
+            context={"seconds": s1 - s0, "fps": fps, "cap": MAX_FRAME_VALUES},
         )
     n = math.floor(intervals + FRAME_TOL) + 1
     require_size(n * max(spots, 1), MAX_FRAME_VALUES, what="frame values")

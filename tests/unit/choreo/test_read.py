@@ -13,8 +13,8 @@ Contains:
     test_regression_frames_reject_a_frame_rate_not_above_zero: raises SchemaError
     test_regression_frames_reject_an_engine_of_another_show: raises SchemaError
     test_regression_frames_cap_the_frame_values: raises SchemaError before allocating
-    test_regression_frames_refuse_a_frame_count_past_the_float_range: raises a taught
-        SchemaError, not OverflowError, when range times fps overflows
+    test_regression_frames_refuse_a_frame_count_past_the_float_range: raises a short, taught
+        SchemaError, not OverflowError or a 300-digit count, when range times fps is huge
     test_regression_frames_model_rejects_mismatched_shapes: raises SchemaError
     test_coordinate_table_equals_positions_at_each_set: matches PathEngine.positions at every
         set's count
@@ -50,6 +50,7 @@ HOLD_COUNT = 4.0
 HOLD_SECONDS = 1.0
 FPS = 8.0
 SECONDS_PER_COUNT = 0.5
+MESSAGE_LIMIT = 200
 
 
 def _held_show() -> Show:
@@ -125,13 +126,15 @@ def test_regression_frames_reject_an_engine_of_another_show() -> None:
 
 def test_regression_frames_cap_the_frame_values() -> None:
     with pytest.raises(SchemaError, match="frame values"):
-        frames(two_set_show(), 0.0, 8.0, fps=1e9)
+        frames(two_set_show(), 0.0, 8.0, fps=2e6)
 
 
-def test_regression_frames_refuse_a_frame_count_past_the_float_range() -> None:
+@pytest.mark.parametrize("fps", [1e308, 1e300, 1e8])
+def test_regression_frames_refuse_a_frame_count_past_the_float_range(fps: float) -> None:
     with pytest.raises(SchemaError, match="too many frames") as caught:
-        frames(two_set_show(), 0.0, 8.0, fps=1e308)
+        frames(two_set_show(), 0.0, 8.0, fps=fps)
     assert "lower fps" in caught.value.hint
+    assert len(caught.value.message) < MESSAGE_LIMIT
 
 
 FRAMES_FIELDS = {
