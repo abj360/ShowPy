@@ -36,14 +36,14 @@ from datetime import datetime
 from functools import cached_property
 from typing import Annotated, Final, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationInfo, model_validator
 
 from showpy.cast.models import Cast
 from showpy.choreo.form_models import Form
 from showpy.choreo.models import Placement, Set
 from showpy.choreo.path_models import FacingOverride, TransitionSpec
 from showpy.core.errors import SchemaError, TimeRangeError, UnknownRefError
-from showpy.core.ids import FormId, RouteId, SetId, SpotId, TransitionId
+from showpy.core.ids import LEGACY_IDS_KEY, FormId, RouteId, SetId, SpotId, TransitionId
 from showpy.core.ids import format_tid as _format_tid
 from showpy.core.readonly import ReadOnly, ReadOnlyMap
 from showpy.core.types import Count, FrozenModel, Seconds
@@ -156,19 +156,15 @@ class Show(FrozenModel):
         return self
 
     @model_validator(mode="after")
-    def _unique_set_ids(self) -> "Show":
+    def _unique_set_ids(self, info: ValidationInfo) -> "Show":
         ids = self.set_ids()
         if len(set(ids)) != len(ids):
             raise SchemaError("set ids repeat", hint="give every set a unique id")
+        if isinstance(info.context, Mapping) and info.context.get(LEGACY_IDS_KEY) is True:
+            return self
         keys = [s.key or s.id for s in self.sets]
         folded = Counter(k.casefold() for k in keys)
-        # v0.2 stored IDs differing only by case; a key equal to its ID is such a stored ID, so
-        # only a group holding a key that differs from its ID is refused. Commits refuse new
-        # folders that repeat ignoring case, and add_set() picks keys free ignoring case.
-        explicit = {s.key.casefold() for s in self.sets if s.key not in (None, s.id)}
-        repeated = sorted(
-            {k for k in keys if folded[k.casefold()] > 1 and k.casefold() in explicit}
-        )
+        repeated = sorted({k for k in keys if folded[k.casefold()] > 1})
         if repeated:
             raise SchemaError(
                 f"set keys repeat ignoring case: {', '.join(repeated)}",

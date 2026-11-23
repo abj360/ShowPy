@@ -9,6 +9,10 @@ Contains:
     test_regression_set_key_must_pass_the_id_check: refuses keys outside the ADR 0006 pattern
     test_regression_show_refuses_set_keys_that_repeat_ignoring_case: refuses two sets whose keys
         differ only by case
+    test_regression_set_without_a_key_must_pass_the_id_check: refuses a set whose ID, its
+        defaulted key, breaks the ID check, unless validated with legacy IDs accepted
+    test_regression_show_refuses_ids_as_keys_that_repeat_ignoring_case: refuses two sets whose
+        defaulted keys differ only by case, unless validated with legacy IDs accepted
     test_renumber_keeps_keys: renames display IDs and leaves every key alone
     test_regression_add_set_after_renumber_picks_a_free_key: gives a new set `2` the key `2.2`
         while a renumbered set still holds key `2`
@@ -48,16 +52,17 @@ Contains:
     test_regression_join_sections_rekeys_a_tail_set_whose_key_clashes: gives a joined set whose
         key the first section holds a free key and keeps every other key
     test_regression_legacy_set_ids_outside_the_id_pattern_load_and_round_trip: loads a tree
-        whose set folders are IDs v0.2 accepted but ADR 0006 refuses, with no loss
+        whose set folders are IDs v0.2 accepted but ADR 0006 refuses, renamed and with no loss
     test_regression_constructors_refuse_a_reserved_key: refuses `con` as a key from add_set and
         insert_subset's rule, and as an explicit key stored in set.json
     test_regression_put_set_keeps_the_stored_key: keeps a renumbered set's folder and script when
         put_set gets a freshly built set, and refuses a mismatching explicit key
     test_regression_workspace_has_no_public_stored_commit: keeps stored-path commits private
-    test_regression_new_set_folder_must_pass_the_id_check: refuses put_show and save_show of a
-        show gaining a set whose folder fails check_id, leaving the repository unchanged
+    test_regression_new_set_folder_must_pass_the_id_check: refuses a set whose folder fails
+        check_id, in the model and in a raw commit, leaving the repository unchanged
     test_regression_stored_legacy_folders_keep_saving: edits, saves and reloads a tree that
-        already holds /sets/con/, and renumbers a legacy show without creating a folder
+        held /sets/con/ under its migrated `con_`, and renumbers a legacy show without creating a
+        folder
     test_regression_dashed_set_folder_commit_is_refused: refuses a raw commit under /sets/a-b/
         with a ShowPyError and stores nothing
     test_regression_new_set_key_must_be_nfc: refuses a new folder whose key NFC changes
@@ -85,7 +90,7 @@ from showpy.choreo.forms import line_form
 from showpy.choreo.models import PlacementPatch, Set
 from showpy.choreo.path_models import PathRow, TransitionSpec
 from showpy.core.errors import SchemaError, ShowPyError, StorageError
-from showpy.core.ids import SetId, SpotId, make_tid
+from showpy.core.ids import LEGACY_IDS_KEY, SetId, SpotId, make_tid
 from showpy.core.util import content_hash
 from showpy.examples import two_set_show
 from showpy.export.positions import import_positions
@@ -120,6 +125,7 @@ from showpy.show.storage import Workspace, load_show, open_workspace, save_show
 from showpy.show.validate import validate_show
 
 AT = datetime(2026, 11, 16, 9, 0, tzinfo=UTC)
+LEGACY = {LEGACY_IDS_KEY: True}
 LATER = datetime(2026, 11, 16, 9, 5, tzinfo=UTC)
 SHOW_ID = "keys"
 SCRIPT_ONE_A = b"# script of 1A\n"
@@ -186,6 +192,25 @@ def test_regression_show_refuses_set_keys_that_repeat_ignoring_case() -> None:
         show.replace(sets=(first.replace(key="a"), second.replace(key="A")))
     with pytest.raises(SchemaError):
         show.replace(sets=(first, second.replace(key="1")))
+
+
+@pytest.mark.parametrize("set_id", ["con", "a-b", "1.", "x" * 65, "Props"])
+def test_regression_set_without_a_key_must_pass_the_id_check(set_id: str) -> None:
+    with pytest.raises(SchemaError):
+        Set(id=SetId(set_id), counts=0.0)
+    legacy = Set.model_validate({"id": set_id, "counts": 0.0}, context=LEGACY)
+    assert legacy.key == set_id
+
+
+def test_regression_show_refuses_ids_as_keys_that_repeat_ignoring_case() -> None:
+    show = two_set_show()
+    first, second = show.sets
+    pair = (first.replace(id="1a", key=None), second.replace(id="1A", key=None))
+    with pytest.raises(SchemaError):
+        show.replace(sets=pair, transitions=())
+    dumped = show.replace(sets=(first, second), transitions=()).model_dump(mode="json")
+    dumped["sets"] = [s.model_dump(mode="json") for s in pair]
+    assert Show.model_validate(dumped, context=LEGACY).set_ids() == ["1a", "1A"]
 
 
 def test_renumber_keeps_keys() -> None:
@@ -455,31 +480,26 @@ def test_regression_join_sections_rekeys_a_tail_set_whose_key_clashes() -> None:
 LEGACY_LONG_ID = "L" * 65
 
 
-def _legacy_show(first_id: str, second_id: str) -> Show:
-    """Builds the example show with set IDs v0.2 stored but ADR 0006 refuses as new keys."""
-    show = two_set_show()
-    renamed = tuple(
-        Set.model_validate({**s.model_dump(), "id": new_id})
-        for s, new_id in zip(show.sets, (first_id, second_id), strict=True)
-    )
-    return show.replace(sets=renamed, transitions=(), forms={})
-
-
-@pytest.mark.parametrize(("first_id", "second_id"), [("con", LEGACY_LONG_ID), ("1.", "aux.txt")])
+@pytest.mark.parametrize(
+    ("first_id", "second_id", "migrated"),
+    [("con", LEGACY_LONG_ID, ["con_", "L" * 60]), ("1.", "aux.txt", ["1", "aux_.txt"])],
+)
 def test_regression_legacy_set_ids_outside_the_id_pattern_load_and_round_trip(
-    first_id: str, second_id: str
+    first_id: str, second_id: str, migrated: list[str]
 ) -> None:
-    show = _legacy_show(first_id, second_id)
-    docs = encode_show(show)
-    assert f"/sets/{first_id}/set.json" in docs
-    assert f"/sets/{second_id}/set.json" in docs
-    assert decode_show(docs) == show
-    repo = _legacy_repo(show)
+    docs = _case_pair_docs(first_id, second_id)
+    show = decode_show(docs)
+    assert show.set_ids() == migrated
+    assert _keys(show) == migrated
+    assert decode_show(encode_show(show)) == show
+    repo = _stored_repo(docs)
     ws = open_workspace(repo, SHOW_ID)
     assert load_show(ws).replace(revision="") == show
-    ws.write(f"/sets/{second_id}/set.py", "# legacy\n", at=LATER)
-    assert repo.read(SHOW_ID, f"/sets/{second_id}/set.py") == b"# legacy\n"
-    assert encode_show(load_show(ws)) == docs
+    ws.write(f"/sets/{migrated[1]}/set.py", "# legacy\n", at=LATER)
+    assert repo.read(SHOW_ID, f"/sets/{migrated[1]}/set.py") == b"# legacy\n"
+    old_folders = (f"/sets/{first_id}/", f"/sets/{second_id}/")
+    assert not [p for p in repo.paths(SHOW_ID) if p.startswith(old_folders)]
+    assert encode_show(load_show(ws)) == encode_show(show)
 
 
 def test_regression_constructors_refuse_a_reserved_key() -> None:
@@ -487,7 +507,7 @@ def test_regression_constructors_refuse_a_reserved_key() -> None:
         add_set(two_set_show(), "con", 4.0)
     with pytest.raises(SchemaError):
         Set(id=SetId("1"), counts=0.0, key="con")
-    docs = encode_show(_legacy_show("con", "2"))
+    docs = _case_pair_docs("con", "2")
     body = json.loads(docs["/sets/con/set.json"]) | {"key": "con"}
     with pytest.raises(SchemaError):
         decode_show({**docs, "/sets/con/set.json": dump_json(body)})
@@ -528,42 +548,32 @@ def _with_fresh_set(show: Show, set_id: str) -> Show:
 
 
 def test_regression_new_set_folder_must_pass_the_id_check() -> None:
+    """Refuses the show itself now that a set's defaulted key is checked like any other key."""
     repo = InMemoryRepository()
     head = repo.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT).id
     before = repo.paths(SHOW_ID)
-    gaining = _with_fresh_set(two_set_show(), "con")
-    with pytest.raises(SchemaError):
-        repo.put_show(SHOW_ID, gaining, expected_revision=head, at=LATER)
     ws = open_workspace(repo, SHOW_ID)
-    with pytest.raises(SchemaError):
-        save_show(ws, _with_fresh_set(load_show(ws), "con"), LATER)
-    with pytest.raises(SchemaError):
-        save_show(ws, _with_fresh_set(load_show(ws), LEGACY_LONG_ID), LATER)
+    for set_id in ("con", LEGACY_LONG_ID):
+        with pytest.raises(SchemaError):
+            _with_fresh_set(load_show(ws), set_id)
+    with pytest.raises(ShowPyError):
+        repo.transaction(SHOW_ID, {"/sets/con/set.json": b"{}"}, expected_revision=head, at=LATER)
     assert repo.paths(SHOW_ID) == before
     assert repo.head(SHOW_ID) == head
 
 
-def _legacy_repo(show: Show) -> InMemoryRepository:
-    """Stores `show` as v0.2 did, through the backend, so no Phase 1 commit check runs."""
-    repo = InMemoryRepository()
-    docs = encode_show(show)
-    tree = {p: blob_digest(raw) for p, raw in docs.items()}
-    revision = Revision(id=content_hash(tree), parent="", at=AT, changed=tuple(sorted(docs)))
-    repo.backend.commit(SHOW_ID, revision, tree, {blob_digest(raw): raw for raw in docs.values()})
-    return repo
-
-
 def test_regression_stored_legacy_folders_keep_saving() -> None:
-    repo = _legacy_repo(_legacy_show("con", "2"))
+    repo = _stored_repo(_case_pair_docs("con", "2"))
     ws = open_workspace(repo, SHOW_ID)
     show = load_show(ws)
-    moved = show.set("con").with_placements({"T1": PlacementPatch(x=3.0)})
+    moved = show.set("con_").with_placements({"T1": PlacementPatch(x=3.0)})
     save_show(ws, show.replace(sets=(moved, show.sets[1]), title="edited"), LATER)
     reloaded = repo.get_show(SHOW_ID)
-    assert reloaded.set("con").get("T1").x == 3.0
+    assert reloaded.set("con_").get("T1").x == 3.0
     assert reloaded.title == "edited"
-    ws.write("/sets/con/set.py", "# legacy\n", at=LATER)
-    legacy = _legacy_repo(_legacy_show("1", "1A"))
+    ws.write("/sets/con_/set.py", "# legacy\n", at=LATER)
+    assert not [p for p in repo.paths(SHOW_ID) if p.startswith("/sets/con/")]
+    legacy = _stored_repo(_case_pair_docs("1", "1A"))
     lws = open_workspace(legacy, SHOW_ID)
     save_show(lws, renumber(load_show(lws))[0], LATER)
     assert [s.key for s in legacy.get_show(SHOW_ID).sets] == ["1", "1A"]
