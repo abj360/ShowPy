@@ -40,6 +40,7 @@ from e8s.cast.models import (
 from e8s.cast.rewrite import rewrite_spot_ids, rewrite_spots
 from e8s.cast.select import label_prefix, select
 from e8s.choreo.models import Placement
+from e8s.core.caps import MAX_SPOTS
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import (
     LockedError,
@@ -315,7 +316,8 @@ def fill_spots(
 
     With only n, bisection finds the largest interval at which at least n spots fit, then
     the n spots nearest the area's centroid are kept. A cast that would pass MAX_SPOTS raises
-    SchemaError TOO_MANY_SPOTS before the area is filled.
+    TOO_MANY_SPOTS before the area is filled: SchemaError for a count n, SpacingError as soon
+    as an interval fill passes the room left.
 
     Args:
         show: Show to add to.
@@ -337,7 +339,7 @@ def fill_spots(
         require_spot_count(len(show.cast.spots) + n)
     area = region.to_shapely() if isinstance(region, Region) else region
     if interval is not None and n is None:
-        points = fill(area, interval)
+        points = fill(area, interval, limit=MAX_SPOTS - len(show.cast.spots))
     elif n is not None and interval is None:
         points = fill(area, _interval_for(area, n), n=n)
     else:

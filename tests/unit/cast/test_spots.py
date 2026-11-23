@@ -514,7 +514,10 @@ OVER_CAP_SPOTS = 50_000
 # A numpy integer, as callers pass one from array arithmetic despite the `int` annotation.
 BIG_NUMPY_COUNT = cast(int, np.int64(5_000_000))
 CAP_CHECK_BUDGET_S = 2
-CAP_CHECK_PEAK_BYTES = 20 * 2**20
+# The 0.045 m lattice over 40 m holds 790,000 candidate points (about 26 MiB at peak); the
+# refused allocations took 3.3 GiB.
+CAP_CHECK_PEAK_BYTES = 64 * 2**20
+FINE_INTERVAL_M = 0.045
 
 
 def _sixty_set_show() -> Show:
@@ -541,12 +544,12 @@ def test_regression_add_spots_checks_cap_before_allocating() -> None:
         lambda: add_spots_along(show, line((0, 0), (40, 0)), BIG_NUMPY_COUNT, "trumpets", "1"),
         lambda: fill_spots(show, square, "trumpets", "1", n=BIG_NUMPY_COUNT),
         lambda: fill_spots(show, square, "trumpets", "1", n=OVER_CAP_SPOTS),
-        lambda: fill_spots(show, square, "trumpets", "1", interval=0.2),
+        lambda: fill_spots(show, square, "trumpets", "1", interval=FINE_INTERVAL_M),
     ]
     tracemalloc.start()
     try:
         for call in calls:
-            with pytest.raises(SchemaError) as caught:
+            with pytest.raises((SchemaError, SpacingError)) as caught:
                 call()
             assert caught.value.code == ErrorCode.TOO_MANY_SPOTS
         _, peak = tracemalloc.get_traced_memory()
