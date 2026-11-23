@@ -55,7 +55,7 @@ from e8s.core.error_codes import ErrorCode
 
 CITATION_PATTERN = re.compile(
     r"\bADR\b|\bUP-\d+\.\d+-\d+\b|\bdocs/"
-    r"|\b[Ll]anes? [A-Z]\d*\b|\b[Tt]asks? [A-Z]\d+\b|\b[Pp]hase \d+\b"
+    r"|\b[Ll]anes? [A-Z]\d*\b|\b[Tt]asks? [A-Z]\d+\b|\bPhase \d+\b"
 )
 MIN_LIBRARY_FILES = 100
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -190,8 +190,8 @@ def test_citation_scan_flags_a_docstring_and_a_comment() -> None:
 
 def test_regression_citation_scan_flags_lane_names() -> None:
     """Reports lanes, tasks and plan phases named in docstrings and comments, which stub
-    modules carried after their lanes merged; leaves guide lines, basketball lanes, motion
-    phases and task words without an ID alone."""
+    modules carried after their lanes merged; leaves guide lines, basketball lanes, a lowercase
+    motion phase number and task words without an ID alone."""
     source = (
         '"""\nm.py --- the cast sub-step (lane D)\n\nLane D owns this module.\n"""\n'
         "# lanes A and G share this\n"
@@ -200,7 +200,7 @@ def test_regression_citation_scan_flags_lane_names() -> None:
         "# lane A1 wrote this\n"
         "def f() -> None:\n"
         '    """Waits for task W1, then Phase 2 removes it."""\n'
-        "# the motion phase and each task stay\n"
+        "# a motion in phase 2 of its cycle, and each task, stay\n"
         "# see tasks X2 and X3\n"
     )
     assert find_citations(source, "m.py") == sorted(
