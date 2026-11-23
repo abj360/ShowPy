@@ -346,16 +346,12 @@ def _ids(show: Show) -> list[ValidationIssue]:
         issues += _set_id_issue(index, candidate.id)
     for index, note in enumerate(show.notes):
         issues += _checked(
-            "note", f"notes[{index}].id", note.id, lambda t: check_sheet_id(t, kind="note")
+            "note", f"notes[{index}].id", note.id, lambda t: check_id(t, kind="note")
         )
     for key, form in show.forms.items():
-        issues += _checked(
-            "form", f"forms.{key}.id", form.id, lambda t: check_sheet_id(t, kind="form")
-        )
+        issues += _checked("form", f"forms.{key}.id", form.id, lambda t: check_id(t, kind="form"))
         if key != form.id:
-            issues += _checked(
-                "form", f"forms.{key}", key, lambda t: check_sheet_id(t, kind="form")
-            )
+            issues += _checked("form", f"forms.{key}", key, lambda t: check_id(t, kind="form"))
     return issues
 
 

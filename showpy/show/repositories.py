@@ -34,7 +34,13 @@ from showpy.core.ids import WINDOWS_DEVICE_NAMES, SetId, is_device_name
 from showpy.core.util import ASSET_PREFIX, asset_uri, close_matches, content_hash
 from showpy.show.changes import require_form_owner
 from showpy.show.decode_cache import DecodeCache
-from showpy.show.documents import decode_show, script_doc, split_path
+from showpy.show.documents import (
+    decode_show,
+    migrated_view,
+    migration_changes,
+    script_doc,
+    split_path,
+)
 from showpy.show.files import LIMITS_DOC, WAIVERS_DOC, show_changes
 from showpy.show.integrity import (
     LazyBlobs,
@@ -392,9 +398,13 @@ class DocumentRepository:
         )
 
     def get_script(self, show_id: str, set_id: str) -> str:
-        """Returns a set's build script, stored in the folder of the set's key."""
+        """Returns a set's build script, stored in the folder of the set's key.
+
+        On a head of an older format version the script is read where the first save stores it,
+        so a set whose key the migration renamed reads its script from the new folder.
+        """
         key = set_key(self.get_set(show_id, set_id))
-        source = self.read(show_id, script_doc(key))
+        source = migrated_view(self.documents(show_id)).get(script_doc(key))
         if source is None:
             raise UnknownRefError(
                 f"set {set_id} has no script",
@@ -414,9 +424,18 @@ class DocumentRepository:
     ) -> Revision:
         """Replaces a set's build script, stored in the folder of the set's key.
 
+        On a head of an older format version the migration lands first, in its own revision,
+        so the set's files, the script being replaced included, move to the renamed folder and
+        stay in history there; the new script follows in the next revision.
         Checks validity only, never pins or locks; edit functions enforce those.
         """
         key = set_key(self.get_show(show_id, expected_revision or None).set(set_id))
+        migration = migration_changes(self.documents(show_id, expected_revision or None))
+        if migration:
+            migrated = self.transaction(
+                show_id, migration, expected_revision=expected_revision, at=at
+            )
+            expected_revision = migrated.id
         return self.transaction(
             show_id,
             {script_doc(key): source.encode()},

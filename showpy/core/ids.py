@@ -18,7 +18,8 @@ Contains:
     SHEET_ID_PATTERN: matches sheet item and sheet reference IDs, which may hold an inner `-`
     VERSION_PATTERN: matches a reference version, which may also hold `+` build metadata
     ID_MAX_LENGTH: bounds the characters of one ID
-    RESERVED_IDS: names no ID may take, compared ignoring case; device names also bar `con.5`
+    RESERVED_IDS: names no ID may take, compared ignoring case (`all`, `props`, device names);
+        device names also bar `con.5`
     check_id(): validates one ID and returns its NFC-normalized text
     check_sheet_id(): validates one sheet item or sheet reference ID the same way
     is_device_name(): tells whether text is a Windows device name, alone or before a dot
@@ -63,6 +64,9 @@ SHEET_ID_PATTERN = re.compile(r"^[A-Za-z0-9_](?:[A-Za-z0-9_.\-]{0,62}[A-Za-z0-9_
 ID_MAX_LENGTH = 64
 DOUBLE_DOT = ".."
 GRAMMAR_KEYWORD = "all"
+# Prop spots share the spot ID namespace, and `props` will select every prop spot as `all`
+# selects every performer spot, so no ID may take the word.
+PROPS_KEYWORD = "props"
 # Microsoft's "Naming Files, Paths, and Namespaces" lists COM1 to COM9 and LPT1 to LPT9, not
 # COM0 or LPT0.
 WINDOWS_DEVICE_NAMES = frozenset(
@@ -70,13 +74,13 @@ WINDOWS_DEVICE_NAMES = frozenset(
     | {f"com{n}" for n in range(1, 10)}
     | {f"lpt{n}" for n in range(1, 10)}
 )
-RESERVED_IDS = frozenset({GRAMMAR_KEYWORD}) | WINDOWS_DEVICE_NAMES
+RESERVED_IDS = frozenset({GRAMMAR_KEYWORD, PROPS_KEYWORD}) | WINDOWS_DEVICE_NAMES
 ID_CONTEXT_TEXT_CHARS = 80
 ID_BODY_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.")
 SHEET_ID_BODY_CHARS = ID_BODY_CHARS | {"-"}
 VERSION_PATTERN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9.+\-]{0,62}[A-Za-z0-9])?$")
 VERSION_BODY_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.+-")
-RESERVED_HINT = "not all or a Windows device name (con, com1, con.txt)"
+RESERVED_HINT = "not all, props or a Windows device name (con, com1, con.txt)"
 ID_HINT = (
     f"use 1 to 64 ASCII letters, digits, _ and . matching {ID_PATTERN.pattern}"
     f" (no leading or trailing . and no ..), {RESERVED_HINT}"

@@ -150,12 +150,12 @@ def shows(draw: st.DrawFn, max_spots: int = 20, max_sets: int = 6, min_sets: int
     show = new_show(SHOW_ID, TITLE, draw(sheets()), draw(timelines(total)))
     show = draw(with_cast(show, max_spots))
     if draw(st.booleans()):
-        show = draw(with_form(show, FIRST_SET, f"form-{FIRST_SET}"))
+        show = draw(with_form(show, FIRST_SET, f"form_{FIRST_SET}"))
     for number, counts in enumerate(moves, start=2):
         set_id = str(number)
         show = draw(with_next_set(show, set_id, counts))
         if draw(st.booleans()):
-            show = draw(with_form(show, set_id, f"form-{set_id}"))
+            show = draw(with_form(show, set_id, f"form_{set_id}"))
         show = draw(with_paths(show, (show.sets[-2].id, set_id)))
     if total > 0 and draw(st.booleans()):
         show = draw(_with_override(show, total))

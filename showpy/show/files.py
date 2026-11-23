@@ -43,6 +43,7 @@ from showpy.show.documents import (
     encode_show,
     forms_doc,
     is_show_doc,
+    migration_changes,
     paths_doc,
     placements_doc,
     script_doc,
@@ -231,23 +232,31 @@ def read_file(path: str, show: Show | None, tree: Mapping[str, bytes]) -> str | 
 def show_changes(show: Show, tree: Mapping[str, bytes]) -> dict[str, bytes | None]:
     """Lists the stored writes and deletes that store `show` over `tree`, with removed sets' files.
 
-    Paths are stored paths: set folders are keys, so a renumbered set keeps its folder.
+    Paths are stored paths: set folders are keys, so a renumbered set keeps its folder. A tree of
+    an older format version is migrated first, so files of a set folder the migration renamed
+    move with it instead of being deleted as stale.
 
     >>> from showpy.examples import two_set_show
     >>> changes = show_changes(two_set_show(), {"/sets/9/set.py": b""})
     >>> changes["/sets/9/set.py"], len(changes)
     (None, 7)
     """
+    migration = migration_changes(tree)
+    paths = [p for p in tree if p not in migration] + [
+        p for p, d in migration.items() if d is not None
+    ]
     docs = encode_show(show)
     kept = tuple(f"/sets/{set_key(s)}/" for s in show.sets)
     stale = [
         p
-        for p in tree
+        for p in paths
         if p not in docs and (is_show_doc(p) or (p.startswith("/sets/") and not p.startswith(kept)))
     ]
-    changes: dict[str, bytes | None] = {p: d for p, d in docs.items() if tree.get(p) != d}
+    changes: dict[str, bytes | None] = {
+        p: d for p, d in docs.items() if (migration[p] if p in migration else tree.get(p)) != d
+    }
     changes.update(dict.fromkeys(stale))
-    return changes
+    return migration | changes
 
 
 def _staged_show_doc(

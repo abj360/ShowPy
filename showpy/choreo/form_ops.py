@@ -337,7 +337,7 @@ def split_form(
     """
     check_unlocked(form, force=force)
     index = _split_index(form, at)
-    first_id, second_id = ids or (f"{form.id}-1", f"{form.id}-2")
+    first_id, second_id = ids or (f"{form.id}_1", f"{form.id}_2")
     parts = []
     for part_id, lo, hi in ((first_id, 0, index), (second_id, index, len(form.members))):
         recipe = form.recipe

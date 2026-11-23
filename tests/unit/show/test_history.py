@@ -20,6 +20,7 @@ Contains:
     test_regression_rename_entities_renames_sheet_zones: rewrites zones stored on the sheet
     test_regression_rename_entities_keeps_selection_order: stores selections as ordered tuples
     test_rename_entities_equals_rewrite_spot_ids: gives the same show as the cast rename
+    test_rename_entities_is_deprecated_for_rename_spots: warns naming rename_spots, returns its show
     test_regression_unpin_normalizes_transition_ids_like_pin: accepts `1->2` in unpin as pin does
 """
 
@@ -29,7 +30,7 @@ import pytest
 
 from showpy.cast.models import Group
 from showpy.cast.rewrite import rewrite_spot_ids
-from showpy.cast.spots import add_spot
+from showpy.cast.spots import add_spot, rename_spots
 from showpy.choreo.form_models import Form
 from showpy.choreo.models import PlacementPatch
 from showpy.choreo.path_models import (
@@ -41,7 +42,7 @@ from showpy.choreo.path_models import (
     Route,
     TransitionSpec,
 )
-from showpy.core.errors import SchemaError, ShowPyError, UnknownRefError
+from showpy.core.errors import DeprecatedWarning, SchemaError, ShowPyError, UnknownRefError
 from showpy.core.ids import FormId, RouteId, SetId, SpotId, ZoneId, make_tid
 from showpy.core.types import Region
 from showpy.geo.curves import Segment
@@ -68,6 +69,10 @@ from tests.helpers import open_session
 pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
+RENAME_ENTITIES_WARNING = (
+    "`showpy.show.history.rename_entities` is replaced by `showpy.cast.spots.rename_spots`;"
+    " the old use is removed in 0.6.0"
+)
 STEP = timedelta(minutes=1)
 
 
@@ -303,6 +308,15 @@ def test_rename_entities_equals_rewrite_spot_ids() -> None:
     mapping = {"T1": "S1", "T2": "T4", "T4": "T2"}
     expected = rewrite_spot_ids(show, lambda spot_id: mapping.get(spot_id, spot_id))
     assert rename_entities(show, mapping) == expected
+
+
+def test_rename_entities_is_deprecated_for_rename_spots() -> None:
+    show, mapping = _full_show(), {"T1": "S1", "T2": "T4", "T4": "T2"}
+    with pytest.warns(DeprecatedWarning) as caught:
+        renamed = rename_entities(show, mapping)
+    assert [str(w.message) for w in caught] == [RENAME_ENTITIES_WARNING]
+    assert caught[0].filename == __file__
+    assert renamed == rename_spots(show, mapping)[0]
 
 
 def test_rename_entities_swaps_and_collisions() -> None:

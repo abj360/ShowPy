@@ -30,7 +30,16 @@ from showpy.core.errors import StorageError, UnknownRefError
 from showpy.core.ids import SetId
 from showpy.core.util import close_matches
 from showpy.show.decode_cache import DecodeCache
-from showpy.show.documents import SHOW_DOC, decode_show, encode_documents, is_show_doc, split_path
+from showpy.show.documents import (
+    SHOW_DOC,
+    decode_show,
+    encode_documents,
+    is_older_tree,
+    is_show_doc,
+    migrated_view,
+    migration_changes,
+    split_path,
+)
 from showpy.show.files import (
     all_files,
     directories,
@@ -242,6 +251,7 @@ class Workspace:
         self.show_id = show_id
         self._revision = revision
         self._trees: dict[str, Mapping[str, bytes]] = {}
+        self._views: dict[str, Mapping[str, bytes]] = {}
         self._shows: dict[str, Show | None] = {}
         # Serves only show_at, which validates with one context, so entries never mix contexts.
         self._decode_cache = DecodeCache(WORKSPACE_DECODE_CACHE_SIZE)
@@ -290,8 +300,17 @@ class Workspace:
     def _tree(self) -> Mapping[str, bytes]:
         return self.tree_at(self._revision)
 
+    def _view(self) -> Mapping[str, bytes]:
+        """Returns the tree at the workspace revision as the first save would store it."""
+        if self._revision not in self._views:
+            self._views = {self._revision: migrated_view(self._tree())}
+        return self._views[self._revision]
+
     def read(self, path: str) -> str | bytes:
         """Returns a file: text for documents, bytes for binary renders and exports.
+
+        At a revision of an older format version, files read where the first save stores them,
+        so a set's files read from the folder its migrated key names.
 
         >>> from showpy.show.repositories import InMemoryRepository
         >>> from showpy.examples import two_set_show
@@ -303,13 +322,13 @@ class Workspace:
         'T1,0.0,9.0,0.0,,,False,True,'
         """
         split_path(path)
-        return read_file(path, self._show(), self._tree())
+        return read_file(path, self._show(), self._view())
 
     def ls(self, path: str = "/") -> list[str]:
         """Lists a directory: files by name, subdirectories with a trailing `/`."""
         segments = split_path(path)
         prefix = "/" + "".join(f"{s}/" for s in segments)
-        show, tree = self._show(), self._tree()
+        show, tree = self._show(), self._view()
         known = directories(show, tree)
         if prefix not in known:
             close = close_matches(prefix, sorted(known))
@@ -392,8 +411,10 @@ class Workspace:
         When any stored show document of the base revision is not canonical, one revision holding
         only those re-encoded documents lands first and the change follows, so the change's own
         revision lists only what it edits and later writes add no second one. If the
-        change then conflicts, the normalizing revision stays; it changes no content. A revision
-        found or made canonical is remembered, so the check runs once per revision.
+        change then conflicts, the normalizing revision stays; it changes no content. A base of
+        an older format version is migrated instead: the normalizing revision holds the whole
+        migration, files of renamed set folders moved. A revision found or made canonical is
+        remembered, so the check runs once per revision.
 
         Args:
             changes: Stored path to new bytes, or None to delete.
@@ -417,7 +438,7 @@ class Workspace:
         normalized = self._commit_stored(normalizing, at=at, expected_revision=base)
         self._canonical_revisions.add(normalized.id)
         stored = self.tree_at(normalized.id)
-        remaining = {p: d for p, d in changes.items() if d is None or stored.get(p) != d}
+        remaining = {p: d for p, d in changes.items() if stored.get(p) != d}
         return self._remembered(
             self._commit_stored(remaining, at=at, expected_revision=normalized.id),
             changes,
@@ -431,6 +452,8 @@ class Workspace:
         if base in self._canonical_revisions:
             return {}
         tree = self.tree_at(base)
+        if is_older_tree(tree):
+            return migration_changes(tree)
         if is_complete:
             paths = [p for p, d in changes.items() if d is not None and p in tree and tree[p] != d]
         else:

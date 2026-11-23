@@ -7,10 +7,10 @@ test_show_properties.py --- checks set, index, storage and rename invariants on 
 from hypothesis import given
 from hypothesis import strategies as st
 
+from showpy.cast.spots import rename_spots
 from showpy.choreo.models import PlacementPatch
 from showpy.core.util import approx_equal
 from showpy.show.documents import decode_show, encode_show
-from showpy.show.history import rename_entities
 from showpy.show.manage import add_set, index, insert_subset, renumber
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
@@ -73,4 +73,5 @@ def test_rename_then_inverse_is_identity(order: list[str]) -> None:
     show = two_set_show()
     mapping = dict(zip(["T1", "T2", "T3", "T4"], order, strict=True))
     inverse = {new: old for old, new in mapping.items()}
-    assert rename_entities(rename_entities(show, mapping), inverse) == show
+    renamed, _ = rename_spots(show, mapping)
+    assert rename_spots(renamed, inverse)[0] == show

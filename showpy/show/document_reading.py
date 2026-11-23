@@ -2,9 +2,9 @@
 document_reading.py --- reads stored show documents of any readable format version into a Show
 
 Every document is parsed as strict JSON. A tree of the current format is assembled directly, reusing
-cached per-document decodes, and validated with CHECKED_CONTEXT: until the ids step renames v1 IDs,
-a tree saved after a migration still holds them and must keep loading. A tree of an older version is
-parsed whole, run through the migration sub-steps, validated with any non-empty v1 ID accepted, run
+cached per-document decodes, and validated with CHECKED_CONTEXT, which checks every ID: the ids step
+renamed every v1 ID before a tree was saved in this format. A tree of an older version is parsed
+whole, run through the migration sub-steps, validated with any non-empty v1 ID accepted, run
 through the model sub-steps and validated again; nothing stored changes. An interchange dump of an
 older version is first split into the documents a stored tree of that version holds.
 

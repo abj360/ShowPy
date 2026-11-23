@@ -69,7 +69,7 @@ from showpy.show.documents import (
 )
 from showpy.show.file_repository import FileRepository
 from showpy.show.history import diff_show
-from showpy.show.migrate import FIRST_VERSION, format_header
+from showpy.show.migrate import FIRST_VERSION
 from showpy.show.models import CanvasEvent, Revision, Show
 from showpy.show.storage import Workspace, load_show, open_workspace, save_show
 
@@ -176,10 +176,22 @@ def _forms_paths(tree: Mapping[str, bytes]) -> set[str]:
     return {p for p in tree if p.endswith("/forms.json")}
 
 
+def _form_reference_paths(tree: Mapping[str, bytes]) -> set[str]:
+    """Lists the set documents whose placements name a form; every v0.2.0 form ID is renamed."""
+    return {
+        p
+        for p, raw in tree.items()
+        if p.endswith("/set.json") and any(row.get("form") for row in json.loads(raw)["placements"])
+    }
+
+
 def _normalized_paths(tree: Mapping[str, bytes]) -> set[str]:
     """Lists what the first save rewrites: `-0.0` documents, forms documents for their v2
-    recipes, and show.json for its v2 header."""
-    return _negative_zero_paths(tree) | _forms_paths(tree) | {SHOW_DOC}
+    recipes, set documents for their renamed form IDs, and show.json for its v2 header and
+    renamed selection."""
+    return (
+        _negative_zero_paths(tree) | _forms_paths(tree) | _form_reference_paths(tree) | {SHOW_DOC}
+    )
 
 
 def _fixture_workspace(tmp_path: Path) -> tuple[FileRepository, Workspace, dict[str, Any]]:
@@ -265,7 +277,7 @@ def test_regression_normalization_keeps_tags_selection_scripts_and_pin(tmp_path:
     saved = save_show(ws, show, COMMITTED_AT)
     for loaded in (show, repo.get_show(expected["show_id"], saved.id)):
         assert [s.tags for s in loaded.cast.spots if s.tags] == [("horn", "lead")]
-        assert loaded.cast.selections == {"front-four": ("B1", "B2", "B3", "B4")}
+        assert loaded.cast.selections == {"front_four": ("B1", "B2", "B3", "B4")}
         assert [(p.id, p.target, p.reason) for p in loaded.pins] == [("B3", "entity", "soloist")]
     after = ws.tree_at(saved.id)
     assert {p: after[p] for p in scripts} == scripts
@@ -308,7 +320,9 @@ def test_regression_workspace_commit_normalizes_first_then_edits(tmp_path: Path)
     log = repo.revisions(expected["show_id"])
     assert [r.id for r in log][:3] == expected["revisions"]
     assert [set(r.changed) for r in log[3:]] == [
-        {"/sets/1/set.json", SHOW_DOC} | _forms_paths(ws.tree_at(expected["head"])),
+        {"/sets/1/set.json", SHOW_DOC}
+        | _forms_paths(ws.tree_at(expected["head"]))
+        | _form_reference_paths(ws.tree_at(expected["head"])),
         {"/sets/1/set.json"},
     ]
     assert log[4].id == edit.id
@@ -349,21 +363,22 @@ STALE_DOCS = {"/sets/1/set.json", "/show/sheet.json"}
 def _two_stale_documents(tmp_path: Path) -> tuple[FileRepository, Workspace, int]:
     """Copies the fixture and reformats its sheet document, so two documents are non-canonical.
 
-    The commit also stores the current show.json, which any commit of a show document needs,
-    and the forms documents in their current shape; the `-0.0` set document and the
-    reformatted sheet stay stale.
+    The commit also stores show.json, which any commit of a show document needs, and every
+    other changed document in its migrated shape, so no stored ID is a v1 ID; the `-0.0` set
+    document and the reformatted sheet stay stale.
     """
     repo, ws, expected = _fixture_workspace(tmp_path)
     tree = ws.tree_at(expected["head"])
     sheet = json.loads(tree["/show/sheet.json"])
     migrated, _ = migrate_documents(tree)
+    current = {
+        path: raw
+        for path, raw in migrated.items()
+        if is_show_doc(path) and path not in STALE_DOCS and tree.get(path) != raw
+    }
     repo.transaction(
         expected["show_id"],
-        {
-            "/show/sheet.json": json.dumps(sheet, indent=4).encode(),
-            SHOW_DOC: dump_show_doc({**format_header(), **json.loads(tree[SHOW_DOC])}),
-            **{path: migrated[path] for path in _forms_paths(tree)},
-        },
+        {**current, "/show/sheet.json": json.dumps(sheet, indent=4).encode()},
         expected_revision=expected["head"],
         at=COMMITTED_AT,
     )

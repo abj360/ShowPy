@@ -22,6 +22,9 @@ Contains:
         Windows opens as the console device
     test_check_id_accepts_names_that_only_start_like_a_device: accepts `cons.5`, `com10` and
         `all.1`
+    test_regression_check_id_reserves_props: rejects `props` ignoring case, the selection word
+        that later selects every prop spot
+    test_check_id_reserves_props_only_as_a_whole_id: accepts `props.1`, `props2` and `props_`
     test_check_id_returns_the_ascii_id_nfc_makes: turns the Kelvin sign into `K`, so callers store
         the returned ID
     test_find_case_clashes_*(): one behavior of the case-clash finder each
@@ -208,9 +211,9 @@ def test_check_id_truncates_text_in_context() -> None:
 
 def test_check_id_constants_agree() -> None:
     assert ID_PATTERN.pattern == r"^[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,62}[A-Za-z0-9_])?$"
-    assert "all" in RESERVED_IDS
+    assert {"all", "props"} <= RESERVED_IDS
     assert {"com1", "com9", "lpt1", "lpt9", "con", "prn", "aux", "nul"} <= RESERVED_IDS
-    assert len(RESERVED_IDS) == 1 + 4 + 9 + 9
+    assert len(RESERVED_IDS) == 2 + 4 + 9 + 9
 
 
 def test_find_case_clashes_pairs_ids_equal_ignoring_case() -> None:
@@ -259,6 +262,19 @@ def test_regression_check_id_rejects_a_device_name_before_an_extension(text: str
 
 @pytest.mark.parametrize("text", ["cons.5", "com10", "com0.1", "all.1", "a.con", "auxiliary"])
 def test_check_id_accepts_names_that_only_start_like_a_device(text: str) -> None:
+    assert check_id(text, kind="spot") == text
+
+
+@pytest.mark.parametrize("text", ["props", "Props", "PROPS"])
+def test_regression_check_id_reserves_props(text: str) -> None:
+    with pytest.raises(SchemaError) as caught:
+        check_id(text, kind="spot")
+    assert caught.value.context["position"] == 0
+    assert "props" in caught.value.hint
+
+
+@pytest.mark.parametrize("text", ["props.1", "props2", "props_", "Props.A", "my_props"])
+def test_check_id_reserves_props_only_as_a_whole_id(text: str) -> None:
     assert check_id(text, kind="spot") == text
 
 

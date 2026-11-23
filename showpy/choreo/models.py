@@ -24,12 +24,17 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
-from pydantic import SerializerFunctionWrapHandler, model_serializer, model_validator
+from pydantic import (
+    SerializerFunctionWrapHandler,
+    ValidationInfo,
+    model_serializer,
+    model_validator,
+)
 
 from showpy.core.deprecation import moved
 from showpy.core.errors import LockedError, SchemaError, UnknownRefError
 from showpy.core.extras import require_extra
-from showpy.core.ids import FormId, SetId, SpotId, check_id
+from showpy.core.ids import LEGACY_IDS_KEY, FormId, SetId, SpotId, check_id
 from showpy.core.selection import Selection, operand_ids
 from showpy.core.types import FrozenModel, Heading, Meters, Point, Points
 
@@ -125,8 +130,8 @@ class Set(FrozenModel):
 
     Attributes:
         id: Set ID, e.g. `12` or `12A`.
-        key: Stable storage key, fixed when the set is created; defaults to the ID.
-            A key that differs from the ID must pass check_id.
+        key: Stable storage key, fixed when the set is created; defaults to the ID. Every
+            key must pass check_id, except a defaulted key validated with legacy IDs accepted.
         counts: Counts since the previous set; 0 for the first.
         placements: One placement per spot in the cast.
         forms: Forms present in this set.
@@ -147,15 +152,16 @@ class Set(FrozenModel):
     state: ApprovalState = ApprovalState.DRAFT
 
     @model_validator(mode="after")
-    def _valid(self) -> "Set":
+    def _valid(self, info: ValidationInfo) -> "Set":
         if self.counts < 0:
             raise SchemaError(f"set {self.id} has negative counts", hint="use counts >= 0")
         entities = [p.entity for p in self.placements]
         if len(set(entities)) != len(entities):
             raise SchemaError(f"set {self.id} places a spot twice", hint="one placement per spot")
-        # A key equal to the ID is a stored ID, left unchecked until stored IDs are migrated;
-        # constructors check new keys through free_set_key().
-        key = self.id if self.key in (None, self.id) else check_id(self.key, kind="set key")
+        key = self.id if self.key is None else self.key
+        is_legacy = isinstance(info.context, Mapping) and info.context.get(LEGACY_IDS_KEY) is True
+        if not (is_legacy and key == self.id):
+            key = check_id(key, kind="set key")
         # The model is frozen; the validator is the one place that fills the defaulted key.
         object.__setattr__(self, "key", key)
         return self
