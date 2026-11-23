@@ -90,9 +90,10 @@ from showpy.core.errors import (
     SpacingError,
     UnknownRefError,
 )
-from showpy.core.ids import SetId, SpotId
+from showpy.core.ids import SetId, SpotId, check_id
 from showpy.core.types import Points
 from showpy.core.util import approx_equal
+from showpy.examples import two_set_show
 from showpy.geo.affine import (
     Matrix,
     mirror_matrix,
@@ -202,6 +203,14 @@ def test_split_line_stays_a_curve_form_and_names_parts() -> None:
     assert (first.id, second.id) == ("x", "y")
     assert first.kind == "line"
     assert second.members == ("C", "D")
+
+
+def test_regression_split_form_default_ids_pass_the_id_check() -> None:
+    first, second = split_form(line_form("f", MEMBERS, (0, 0), (3, 0), set_id="2"), "C")
+    assert (first.id, second.id) == ("f_1", "f_2")
+    assert [check_id(part.id, kind="form") for part in (first, second)] == ["f_1", "f_2"]
+    show = two_set_show()
+    assert set(show.replace(forms={first.id: first, second.id: second}).forms) == {"f_1", "f_2"}
 
 
 def test_split_rejects_bad_index() -> None:
