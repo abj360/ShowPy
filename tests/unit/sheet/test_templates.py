@@ -15,6 +15,8 @@ Contains:
         not a pydantic error
     test_regression_customize_resize_updates_ref_and_name(): refreshes the ref and name of a resized
         sheet instead of keeping stale ones
+    test_regression_resize_drops_guides_off_the_sheet(): rejects or drops a guide line that lies
+        off the sheet after a resize
     test_regression_get_sheet_without_version_returns_latest_saved(): returns the latest saved
         version for a versionless ref, as documented
     test_regression_sheet_templates_rejects_unknown_surface_type(): rejects an unknown surface type
@@ -32,6 +34,7 @@ from e8s.core.errors import (
 )
 from e8s.core.units import convert
 from e8s.core.util import approx_equal
+from e8s.sheet.bounds import on_surface
 from e8s.sheet.models import Grid, GuideLine, SurfaceType
 from e8s.sheet.templates import (
     InMemorySheetStore,
@@ -293,3 +296,17 @@ def test_regression_sheet_templates_rejects_unknown_surface_type() -> None:
     """Rejects an unknown surface type instead of returning an empty list (audit 9.4)."""
     with pytest.raises(E8sError):
         sheet_templates("nope")  # type: ignore[arg-type]
+
+
+@pytest.mark.defect("UP-9.4-53")
+@pytest.mark.xfail(strict=True, reason="UP-9.4-53")
+def test_regression_resize_drops_guides_off_the_sheet() -> None:
+    """Rejects or drops a guide line that lies off the sheet after a resize (audit 9.4)."""
+    tape = GuideLine(id="far", kind="custom", points=((4.5, 1.0), (4.5, 2.0)))
+    sheet = add_guide(blank_sheet(10, 6), tape)
+    try:
+        resized = customize(sheet, size=(4.0, 6.0))
+    except E8sError:
+        return
+    for guide in resized.guides:
+        assert all(on_surface(resized, point) for point in guide.points)
