@@ -8,6 +8,7 @@ Contains:
         forever
     test_regression_fill_caps_the_lattice_size: rejects a 100-million-point fill instead of building
         the lattice
+    test_regression_space_along_caps_the_point_count: rejects more than MAX_POINTS spots
     test_regression_space_by_interval_caps_the_point_count: rejects a 100-million-point spacing
         instead of allocating it
     test_regression_space_by_interval_closed_curve_has_no_seam_duplicate: places L/10 spots on a
@@ -80,6 +81,7 @@ Contains:
 import math
 import sys
 from collections.abc import Callable
+from typing import cast
 
 import numpy as np
 import pytest
@@ -410,6 +412,14 @@ def test_regression_space_by_interval_caps_the_point_count() -> None:
     tiny_interval_line = line((0.0, 0.0), (LONG_LINE_LENGTH_M, 0.0))
     with capped_address_space(), pytest.raises(SpacingError):
         space_by_interval(tiny_interval_line, TINY_LINE_INTERVAL_M)
+
+
+def test_regression_space_along_caps_the_point_count() -> None:
+    """Rejects more than MAX_POINTS spots, a numpy count included, before computing any."""
+    for count in (MAX_POINTS + 1, cast(int, np.int64(MAX_POINTS + 1))):
+        with pytest.raises(SpacingError, match="over the cap"):
+            space_along(LINE, count)
+    assert len(space_along(LINE, 3)) == 3
 
 
 @pytest.mark.defect("UP-9.1-26")

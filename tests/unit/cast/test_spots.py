@@ -20,13 +20,17 @@ Contains:
         delete_spots
     test_regression_add_spots_checks_cap_before_allocating: refuses spots past MAX_SPOTS before
         spacing them or building a placement per set, within a time and memory bound
+    test_regression_spot_counts_must_be_whole_numbers: refuses a fractional, text or missing
+        count with SchemaError
 """
 
 import tracemalloc
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from inspect import Parameter, signature
+from typing import cast
 
+import numpy as np
 import pytest
 import shapely
 
@@ -507,6 +511,8 @@ def test_regression_edit_group_keeps_a_validator_schema_error(
 
 CAP_CHECK_SETS = 60
 OVER_CAP_SPOTS = 50_000
+# A numpy integer, as callers pass one from array arithmetic despite the `int` annotation.
+BIG_NUMPY_COUNT = cast(int, np.int64(5_000_000))
 CAP_CHECK_BUDGET_S = 2
 CAP_CHECK_PEAK_BYTES = 20 * 2**20
 
@@ -523,7 +529,8 @@ def test_regression_add_spots_checks_cap_before_allocating() -> None:
     """Refuses spots past MAX_SPOTS before spacing them or building a placement per set.
 
     The cap ran in the Cast model, after a placement per spot per set was built: 50,000 spots
-    on 60 sets took 17.7 s and 3.3 GiB before the refusal.
+    on 60 sets took 17.7 s and 3.3 GiB before the refusal. A numpy count skipped the early
+    check: np.int64(5_000_000) took 6.4 s and about 3.3 GiB.
     """
     show = _sixty_set_show()
     square = region([(0, 0), (40, 0), (40, 40), (0, 40)])
@@ -531,6 +538,8 @@ def test_regression_add_spots_checks_cap_before_allocating() -> None:
     calls: list[Callable[[], Show]] = [
         lambda: add_spots_along(show, line((0, 0), (40, 0)), OVER_CAP_SPOTS, "trumpets", "1"),
         lambda: add_spots_along(show, line((0, 0), (40, 0)), just_over, "trumpets", "1"),
+        lambda: add_spots_along(show, line((0, 0), (40, 0)), BIG_NUMPY_COUNT, "trumpets", "1"),
+        lambda: fill_spots(show, square, "trumpets", "1", n=BIG_NUMPY_COUNT),
         lambda: fill_spots(show, square, "trumpets", "1", n=OVER_CAP_SPOTS),
         lambda: fill_spots(show, square, "trumpets", "1", interval=0.2),
     ]
@@ -544,3 +553,10 @@ def test_regression_add_spots_checks_cap_before_allocating() -> None:
     finally:
         tracemalloc.stop()
     assert peak < CAP_CHECK_PEAK_BYTES
+
+
+@pytest.mark.parametrize("count", [2.5, "3", None])
+def test_regression_spot_counts_must_be_whole_numbers(count: object) -> None:
+    """Refuses a count that is not a whole number with SchemaError, before spacing anything."""
+    with pytest.raises(SchemaError, match="whole number"):
+        add_spots_along(two_set_show(), line((0, 0), (4, 0)), cast(int, count), "trumpets", "1")

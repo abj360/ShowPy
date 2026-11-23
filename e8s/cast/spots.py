@@ -20,10 +20,11 @@ Contains:
 """
 
 import math
+import operator
 import string
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, TypedDict, Unpack, get_args
+from typing import TYPE_CHECKING, Any, SupportsIndex, TypedDict, Unpack, get_args
 from typing import ReadOnly as ReadOnlyKey
 
 from e8s.cast.models import (
@@ -45,6 +46,7 @@ from e8s.core.errors import (
     SchemaError,
     SpacingError,
     UnknownRefError,
+    bounded_repr,
     field_errors,
 )
 from e8s.core.ids import SetId, SpotId
@@ -192,6 +194,24 @@ def _insert_spots(
     return after
 
 
+def _not_a_count(n: object) -> SchemaError:
+    return SchemaError(
+        f"n must be a whole number of spots, not {type(n).__name__}",
+        hint="pass n as an int, such as 12",
+        context={"n": bounded_repr(n)},
+    )
+
+
+def _spot_count(n: object) -> int:
+    """Reads a requested spot count as an int, numpy integers included; refuses anything else."""
+    if not isinstance(n, SupportsIndex):
+        raise _not_a_count(n)
+    try:
+        return operator.index(n)
+    except TypeError as error:
+        raise _not_a_count(n) from error
+
+
 def _add_points(
     show: "Show", points: Sequence[Point], group: str, set_id: SetId, *, force: bool
 ) -> "Show":
@@ -237,9 +257,9 @@ def add_spots_along(
     >>> len(add_spots_along(two_set_show(), line((0, 0), (4, 0)), 3, "trumpets", "1").cast.spots)
     7
     """
-    if isinstance(n, int):
-        require_spot_count(len(show.cast.spots) + n)
-    points = space_along(curve, n)
+    count = _spot_count(n)
+    require_spot_count(len(show.cast.spots) + count)
+    points = space_along(curve, count)
     target = show.set(set_id).id
     return _add_points(show, [(p[0], p[1]) for p in points.tolist()], group, target, force=force)
 
@@ -312,7 +332,8 @@ def fill_spots(
     >>> len(fill_spots(two_set_show(), square, "trumpets", "1", n=5).cast.spots)
     9
     """
-    if isinstance(n, int):
+    if n is not None:
+        n = _spot_count(n)
         require_spot_count(len(show.cast.spots) + n)
     area = region.to_shapely() if isinstance(region, Region) else region
     if interval is not None and n is None:

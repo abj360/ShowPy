@@ -80,13 +80,15 @@ def space_along(
     """Spaces n spots evenly by arc length between `start` and `end`.
 
     With `endpoints=False`, spots sit at the centers of n equal cells. A closed curve spaced
-    over its full length never repeats the start.
+    over its full length never repeats the start. More than MAX_POINTS spots raise
+    SpacingError before any is computed.
 
     >>> from e8s.geo.shapes import line
     >>> space_along(line((0, 0), (4, 0)), 3).tolist()
     [[0.0, 0.0], [2.0, 0.0], [4.0, 0.0]]
     """
     _require_count(n)
+    require_size(n, MAX_POINTS, what="spots", error=SpacingError)
     stop = curve.length() if end is None else end
     if n == 1:
         return curve.point_at(np.array([(start + stop) / 2]))
