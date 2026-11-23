@@ -5,11 +5,12 @@ Contains:
     TABLE_COLUMNS: lists the columns of a set's placement table
     ApprovalState: names the collaboration states of a set
     Placement: holds one spot's state at one set
+    PlacementPatch: holds the fields of a placement to change, leaving the rest as they are
     Set: holds a snapshot of every spot's placement at one moment
     Set.table(): returns placements as a DataFrame
     Set.positions(): returns coordinates in selection order
     Set.get(): returns one placement
-    Set.with_placements(): returns a set with edited placements, respecting pins
+    Set.with_placements(): returns a set with placements replaced or patched, respecting pins
     SpotCount: counts spots on and off the field in one set
 
 Form, path and match classes live in form_models, path_models and match_models; their old names
@@ -19,6 +20,7 @@ here resolve with a deprecation warning.
 import math
 from collections.abc import Mapping, Sequence
 from enum import StrEnum
+from functools import cached_property
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
@@ -29,7 +31,7 @@ from showpy.core.errors import LockedError, SchemaError, UnknownRefError
 from showpy.core.extras import require_extra
 from showpy.core.ids import FormId, SetId, SpotId, check_id
 from showpy.core.selection import Selection, operand_ids
-from showpy.core.types import Degrees, FrozenModel, Meters, Point, Points
+from showpy.core.types import FrozenModel, Heading, Meters, Point, Points
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -52,7 +54,7 @@ class Placement(FrozenModel):
         entity: Spot ID.
         x: Meters from the center line, audience-left negative.
         y: Meters upstage from the front edge.
-        facing: Degrees, 0 toward the audience, counter-clockwise positive.
+        facing: Degrees wrapped into [0, 360), 0 toward the audience, counter-clockwise positive.
         form: Form the spot belongs to in this set.
         order: Index along that form.
         pinned: Designer lock; edits need force=True.
@@ -63,7 +65,7 @@ class Placement(FrozenModel):
     entity: SpotId
     x: Meters
     y: Meters
-    facing: Degrees = 0.0
+    facing: Heading = 0.0
     form: FormId | None = None
     order: int | None = None
     pinned: bool = False
@@ -84,6 +86,38 @@ class Placement(FrozenModel):
     def point(self) -> Point:
         """Returns (x, y)."""
         return self.x, self.y
+
+
+class PlacementPatch(FrozenModel):
+    """Holds the fields of a placement to change; a field never set is left as it is.
+
+    Setting `form`, `order` or `note` to None clears it. Each field validates like the
+    placement's own.
+
+    Attributes:
+        x: Meters from the center line.
+        y: Meters upstage from the front edge.
+        facing: Degrees, wrapped into [0, 360).
+        form: Form the spot belongs to in this set.
+        order: Index along that form.
+        pinned: Designer lock.
+        note: Text printed on sheets.
+        on_field: False before an entrance or after an exit.
+
+    >>> from showpy.examples import two_set_show
+    >>> moved = two_set_show().set("2").with_placements({"T1": PlacementPatch(x=3.0)})
+    >>> moved.get("T1").x
+    3.0
+    """
+
+    x: Meters = 0.0
+    y: Meters = 0.0
+    facing: Heading = 0.0
+    form: FormId | None = None
+    order: int | None = None
+    pinned: bool = False
+    note: str | None = None
+    on_field: bool = True
 
 
 class Set(FrozenModel):
@@ -134,6 +168,7 @@ class Set(FrozenModel):
             dumped.pop("key", None)
         return dumped
 
+    @cached_property
     def _index(self) -> dict[SpotId, int]:
         return {p.entity: i for i, p in enumerate(self.placements)}
 
@@ -158,7 +193,7 @@ class Set(FrozenModel):
 
     def get(self, entity: str) -> Placement:
         """Returns one placement, raising UnknownRefError when the spot is absent."""
-        index = self._index()
+        index = self._index
         if entity not in index:
             raise UnknownRefError(
                 f"spot {entity!r} is not in set {self.id}",
@@ -167,13 +202,17 @@ class Set(FrozenModel):
             )
         return self.placements[index[SpotId(entity)]]
 
-    # Any: updates may be a Placement or a partial dict of any placement fields.
     def with_placements[K: str](
-        self, updates: Mapping[K, Placement | Mapping[str, Any]], *, force: bool = False
+        self, updates: Mapping[K, Placement | PlacementPatch], *, force: bool = False
     ) -> "Set":
-        """Returns a set with placements replaced or patched; pinned rows need force=True."""
+        """Returns a set with placements replaced or patched; pinned rows need force=True.
+
+        >>> from showpy.examples import two_set_show
+        >>> second = two_set_show().set("2")
+        >>> second.with_placements({"T1": PlacementPatch(note="solo")}).get("T1").note
+        'solo'
+        """
         rows = list(self.placements)
-        index = self._index()
         for entity, change in updates.items():
             current = self.get(entity)
             if current.pinned and not force:
@@ -182,12 +221,11 @@ class Set(FrozenModel):
                     hint="unpin it first, or pass force=True as the designer",
                     context={"set": self.id, "entity": entity},
                 )
-            rows[index[current.entity]] = _apply_change(current, change)
+            rows[self._index[current.entity]] = _apply_change(current, change)
         return self.replace(placements=tuple(rows))
 
 
-# Any: a partial update may touch any placement field.
-def _apply_change(current: Placement, change: Placement | Mapping[str, Any]) -> Placement:
+def _apply_change(current: Placement, change: Placement | PlacementPatch) -> Placement:
     if isinstance(change, Placement):
         if change.entity != current.entity:
             raise SchemaError(
@@ -195,7 +233,12 @@ def _apply_change(current: Placement, change: Placement | Mapping[str, Any]) -> 
                 hint="key updates by the placement's own entity",
             )
         return change
-    return Placement.model_validate({**current.model_dump(), **change})
+    if not isinstance(change, PlacementPatch):
+        raise SchemaError(
+            f"update for {current.entity} is a {type(change).__name__}",
+            hint="pass a Placement or a PlacementPatch",
+        )
+    return current.replace(**{name: getattr(change, name) for name in change.model_fields_set})
 
 
 class SpotCount(FrozenModel):

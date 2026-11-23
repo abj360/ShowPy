@@ -29,6 +29,7 @@ if TYPE_CHECKING:
         Cast,
         Group,
         LabelScheme,
+        RewriteReport,
         Shape,
         Spot,
     )
@@ -60,6 +61,7 @@ if TYPE_CHECKING:
         regroup,
         relabel,
         remove_group,
+        rename_spots,
         set_claimable,
         set_shape,
     )
@@ -173,6 +175,7 @@ if TYPE_CHECKING:
     from showpy.choreo.match_models import (
         MatchOptions,
         MatchResult,
+        MatchWeights,
     )
     from showpy.choreo.match_ops import (
         apply_match,
@@ -184,6 +187,7 @@ if TYPE_CHECKING:
     from showpy.choreo.models import (
         ApprovalState,
         Placement,
+        PlacementPatch,
         Set,
         SpotCount,
     )
@@ -951,6 +955,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "MatchError": ("showpy.core.errors", "MatchError"),
     "MatchOptions": ("showpy.choreo.match_models", "MatchOptions"),
     "MatchResult": ("showpy.choreo.match_models", "MatchResult"),
+    "MatchWeights": ("showpy.choreo.match_models", "MatchWeights"),
     "MeasureLabel": ("showpy.time.models", "MeasureLabel"),
     "MeasureSetting": ("showpy.time.models", "MeasureSetting"),
     "MigrationReport": ("showpy.show.migrate", "MigrationReport"),
@@ -975,6 +980,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Pin": ("showpy.show.models", "Pin"),
     "Placement": ("showpy.choreo.models", "Placement"),
     "PlacementOp": ("showpy.show.models", "PlacementOp"),
+    "PlacementPatch": ("showpy.choreo.models", "PlacementPatch"),
     "PointFacing": ("showpy.choreo.path_models", "PointFacing"),
     "Polyline": ("showpy.geo.curves", "Polyline"),
     "PolylineRecipe": ("showpy.choreo.recipe_models", "PolylineRecipe"),
@@ -989,6 +995,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Repository": ("showpy.show.storage", "Repository"),
     "RepositoryBackend": ("showpy.show.repositories", "RepositoryBackend"),
     "Revision": ("showpy.show.models", "Revision"),
+    "RewriteReport": ("showpy.cast.models", "RewriteReport"),
     "RoseFormParams": ("showpy.choreo.form_models", "RoseFormParams"),
     "Route": ("showpy.choreo.path_models", "Route"),
     "SHEET_ID_PATTERN": ("showpy.core.ids", "SHEET_ID_PATTERN"),
@@ -1332,6 +1339,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "remove_waypoint": ("showpy.choreo.paths", "remove_waypoint"),
     "remove_zone": ("showpy.sheet.templates", "remove_zone"),
     "rename_entities": ("showpy.show.history", "rename_entities"),
+    "rename_spots": ("showpy.cast.spots", "rename_spots"),
     "render_frame": ("showpy.export.video", "render_frame"),
     "render_sheet": ("showpy.sheet.render", "render_sheet"),
     "renumber": ("showpy.show.manage", "renumber"),
@@ -1597,6 +1605,7 @@ __all__ = [
     "MatchError",
     "MatchOptions",
     "MatchResult",
+    "MatchWeights",
     "MeasureLabel",
     "MeasureSetting",
     "MigrationReport",
@@ -1621,6 +1630,7 @@ __all__ = [
     "Pin",
     "Placement",
     "PlacementOp",
+    "PlacementPatch",
     "PointFacing",
     "Polyline",
     "PolylineRecipe",
@@ -1634,6 +1644,7 @@ __all__ = [
     "Repository",
     "RepositoryBackend",
     "Revision",
+    "RewriteReport",
     "RoseFormParams",
     "Route",
     "ScatterRecipe",
@@ -1976,6 +1987,7 @@ __all__ = [
     "remove_waypoint",
     "remove_zone",
     "rename_entities",
+    "rename_spots",
     "render_frame",
     "render_sheet",
     "renumber",

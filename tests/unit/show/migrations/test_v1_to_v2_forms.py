@@ -15,7 +15,7 @@ Contains:
     test_regression_forms_step_refuses_what_v2_cannot_hold: refuses an unknown kind, a bad
         geometry, a reserved key, an unknown key, an out-of-range value (a negative count, a block
         of no rows), more members than slots and a curve its own model refuses (an arc of zero
-        sweep), naming the document, the field and the value
+        sweep) and a negative extra gap in the spacing, naming the document, the field and the value
     test_regression_forms_step_turns_v1_gapped_orders_into_open_slots: stores a v1 form whose
         spots stand on gapped slots with a None at each open slot, and reports the repair
     test_forms_step_leaves_members_alone_when_orders_match_or_are_unknown: changes no members
@@ -246,6 +246,14 @@ def test_forms_step_passes_other_documents_and_fields_through() -> None:
             "['A', 'B']",
         ),
         ("not a form", "[0]", "not a form"),
+        (
+            {
+                **_v1_form("custom", {"points": [], "n": 2}),
+                "spacing": {"gaps": [[0, 1.0], [1, -2.5]]},
+            },
+            "[0].spacing.gaps[1]",
+            "[1, -2.5]",
+        ),
         (_v1_form("arc", ZERO_SWEEP_ARC), "[0].geometry", bounded_repr(ZERO_SWEEP_ARC)),
     ],
 )

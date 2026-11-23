@@ -16,6 +16,7 @@ from hypothesis import strategies as st
 
 from showpy.choreo.facing import add_facing_override
 from showpy.choreo.match_ops import with_set
+from showpy.choreo.models import PlacementPatch
 from showpy.choreo.path_models import FacingMode, FacingOverride, FixedFacing, TransitionSpec
 from showpy.choreo.paths import hold, ripple, stagger
 from showpy.choreo.routes import follow_and_set_targets, make_route
@@ -70,7 +71,7 @@ def _followed(draw: st.DrawFn, show: Show, tid: tuple[str, str], free: Sequence[
 
 def _held(show: Show, tid: tuple[str, str], held: Sequence[str]) -> Show:
     start, target = show.set(tid[0]), show.set(tid[1])
-    still = {e: {"x": start.get(e).x, "y": start.get(e).y} for e in held}
+    still = {e: PlacementPatch(x=start.get(e).x, y=start.get(e).y) for e in held}
     show = with_set(show, target.with_placements(still))
     return store_paths(show, PathsOp(spec=hold(show.transition(tid), held)))
 

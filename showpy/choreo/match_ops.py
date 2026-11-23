@@ -24,19 +24,19 @@ from showpy.choreo.form_text import require_text_members
 from showpy.choreo.forms import check_unlocked, slot_poses
 from showpy.choreo.match_models import MatchResult
 from showpy.choreo.match_solve import BoolArray, FloatArray, crossing_mask
-from showpy.choreo.models import Placement, Set
+from showpy.choreo.models import Placement, PlacementPatch, Set
 from showpy.core.errors import LockedError, MatchError, UnknownRefError
 from showpy.core.ids import FormId, SetId, SpotId, TransitionId
 from showpy.core.ids import format_tid as _format_tid
 from showpy.core.types import Points
 from showpy.core.units import angle_diff
 from showpy.core.util import natural_sort
+from showpy.geo.fonts import FontRegistry
 from showpy.show.models import Show
 
 SAME_POSITION_TOL = 1e-9
 GAIN_TOL = 1e-9
 FACING_TOL = 1e-9
-SWAPPED_FIELDS = ("x", "y", "facing", "form", "order", "on_field")
 
 
 def with_set(show: Show, new: Set) -> Show:
@@ -102,7 +102,9 @@ def _neighbour_tids(show: Show, set_id: SetId) -> list[TransitionId]:
     return [tid for tid in show.transition_ids() if set_id in tid]
 
 
-def _form_poses(show: Show, set_id: SetId, form_id: FormId) -> tuple[Points, list[float]]:
+def _form_poses(
+    show: Show, set_id: SetId, form_id: FormId, font_registry: FontRegistry | None
+) -> tuple[Points, list[float]]:
     form = show.forms.get(form_id)
     if form is None:
         raise UnknownRefError(
@@ -122,7 +124,7 @@ def _form_poses(show: Show, set_id: SetId, form_id: FormId) -> tuple[Points, lis
             hint=f"match onto forms set {set_id} lists, or re-place the set with this form",
             context={"form": form_id, "set": set_id, "set_forms": list(show.set(set_id).forms)},
         )
-    return slot_poses(form)
+    return slot_poses(form, font_registry=font_registry)
 
 
 def _check_slot(form_id: FormId, slot: int, slot_count: int) -> None:
@@ -134,12 +136,14 @@ def _check_slot(form_id: FormId, slot: int, slot_count: int) -> None:
         )
 
 
-def _slot_targets(show: Show, set_id: SetId, result: MatchResult) -> dict[SpotId, Placement]:
+def _slot_targets(
+    show: Show, set_id: SetId, result: MatchResult, font_registry: FontRegistry | None
+) -> dict[SpotId, Placement]:
     poses: dict[FormId, tuple[Points, list[float]]] = {}
     targets = {}
     for entity, (form_id, slot) in result.slots.items():
         if form_id not in poses:
-            poses[form_id] = _form_poses(show, set_id, form_id)
+            poses[form_id] = _form_poses(show, set_id, form_id, font_registry)
         points, facings = poses[form_id]
         _check_slot(form_id, slot, len(points))
         x, y = (float(v) for v in points[slot])
@@ -157,6 +161,14 @@ def _form_slot_error(form: Form, reason: str, slot: int) -> MatchError:
     )
 
 
+def _slot_collision_error(form: Form, slot: int, holder: SpotId, entity: SpotId) -> MatchError:
+    return MatchError(
+        f"match puts {entity} on slot {slot} of form {form.id}, where {holder} already stands",
+        hint=f"match {holder} too, pick another slot for {entity}, or use place()",
+        context={"form": form.id, "slot": slot, "spot": holder, "entity": entity},
+    )
+
+
 def _matched_members(form: Form, result: MatchResult) -> tuple[SpotId | None, ...]:
     vacated = {i for i, m in enumerate(form.members) if m is not None and m in result.slots}
     held: list[SpotId | None] = [None if i in vacated else m for i, m in enumerate(form.members)]
@@ -164,8 +176,9 @@ def _matched_members(form: Form, result: MatchResult) -> tuple[SpotId | None, ..
         if form_id != form.id:
             continue
         held.extend([None] * (slot + 1 - len(held)))
-        if held[slot] is not None:
-            raise _form_slot_error(form, "two spots", slot)
+        holder = held[slot]
+        if holder is not None:
+            raise _slot_collision_error(form, slot, holder, entity)
         held[slot] = entity
     while held and held[-1] is None:
         held.pop()
@@ -175,7 +188,24 @@ def _matched_members(form: Form, result: MatchResult) -> tuple[SpotId | None, ..
     return tuple(held)
 
 
+def _check_pinned_rows(dest: Set, result: MatchResult) -> None:
+    taken = {(form_id, slot): entity for entity, (form_id, slot) in result.slots.items()}
+    for row in dest.placements:
+        if row.form is None or row.order is None or not row.pinned or row.entity in result.slots:
+            continue
+        entity = taken.get((row.form, row.order))
+        if entity is None:
+            continue
+        raise MatchError(
+            f"match puts {entity} on slot {row.order} of form {row.form}, "
+            f"where pinned {row.entity} stands",
+            hint=f"match {row.entity} too, unpin it, or pick another slot for {entity}",
+            context={"form": row.form, "slot": row.order, "spot": row.entity, "entity": entity},
+        )
+
+
 def _matched_forms(show: Show, set_id: SetId, result: MatchResult, *, force: bool) -> Show:
+    _check_pinned_rows(show.set(set_id), result)
     touched = {form_id for form_id, _ in result.slots.values()}
     forms = dict(show.forms)
     for form_id, form in forms_of_set(show, set_id).items():
@@ -213,22 +243,65 @@ def _slot_updates(dest: Set, targets: dict[SpotId, Placement]) -> dict[SpotId, P
         )
         if not (is_same_slot and is_same_pose):
             updates[entity] = current.replace(
-                x=wanted.x, y=wanted.y, facing=wanted.facing, form=wanted.form,
-                order=wanted.order, on_field=True,
-            )  # fmt: skip
+                x=wanted.x,
+                y=wanted.y,
+                facing=wanted.facing,
+                form=wanted.form,
+                order=wanted.order,
+                on_field=True,
+            )
     return updates
 
 
-def _point_updates(dest: Set, result: MatchResult) -> dict[SpotId, dict[str, object]]:
-    updates: dict[SpotId, dict[str, object]] = {}
+def _point_updates(dest: Set, result: MatchResult) -> dict[SpotId, PlacementPatch]:
+    updates: dict[SpotId, PlacementPatch] = {}
     for entity, (x, y) in zip(result.entities, result.targets, strict=True):
         if is_elsewhere(dest.get(entity), x, y):
-            updates[entity] = {"x": x, "y": y, "on_field": True}
+            updates[entity] = PlacementPatch(x=x, y=y, on_field=True)
     return updates
+
+
+def _slot_moves(dest: Set, result: MatchResult) -> dict[SpotId, PlacementPatch]:
+    moves = _point_updates(dest, result)
+    for entity, (form_id, slot) in result.slots.items():
+        current = dest.get(entity)
+        if entity not in moves and (current.form, current.order) != (form_id, slot):
+            moves[entity] = PlacementPatch(form=form_id, order=slot)
+    return moves
+
+
+def _changed_forms(show: Show, set_id: SetId, result: MatchResult) -> list[Form]:
+    touched = {form_id for form_id, _ in result.slots.values()}
+    changed = []
+    for form_id, form in forms_of_set(show, set_id).items():
+        if form_id not in touched and not set(form.members) & set(result.slots):
+            continue
+        try:
+            is_changed = _matched_members(form, result) != form.members
+        except MatchError:
+            is_changed = True
+        if is_changed:
+            changed.append(form)
+    return changed
+
+
+def _require_unlocked(
+    show: Show, tid: tuple[str, str], dest: Set, result: MatchResult, *, force: bool
+) -> None:
+    moves = _slot_moves(dest, result)
+    dest.with_placements(moves, force=force)
+    clear_rows(show, tid, list(_point_updates(dest, result)), force=force)
+    for form in _changed_forms(show, dest.id, result):
+        check_unlocked(form, force=force)
 
 
 def apply_match(
-    show: Show, tid: tuple[str, str], result: MatchResult, *, force: bool = False
+    show: Show,
+    tid: tuple[str, str],
+    result: MatchResult,
+    *,
+    force: bool = False,
+    font_registry: FontRegistry | None = None,
 ) -> Show:
     """Writes the result's targets into the destination set and resets moved spots' paths.
 
@@ -237,7 +310,8 @@ def apply_match(
     onto forms also writes each spot's facing, form and order from its slot and updates
     `Form.members` like `swap`, so rebuilding a form keeps the match; changing a locked
     form needs force=True, and leaving a text form short of members raises
-    `MEMBER_COUNT_MISMATCH`.
+    `MEMBER_COUNT_MISMATCH`. `font_registry` holds the fonts of text forms the result slots
+    into; None means `bundled_fonts()`.
 
     >>> from showpy.choreo.match import match
     >>> from showpy.examples import two_set_show
@@ -248,11 +322,12 @@ def apply_match(
     """
     show.transition(tid)
     dest = show.set(tid[1])
+    _require_unlocked(show, tid, dest, result, force=force)
     if not result.slots:
         updates = _point_updates(dest, result)
         edited = with_set(show, dest.with_placements(updates, force=force))
         return clear_rows(edited, tid, list(updates), force=force)
-    slot_updates = _slot_updates(dest, _slot_targets(show, dest.id, result))
+    slot_updates = _slot_updates(dest, _slot_targets(show, dest.id, result, font_registry))
     forms_edited = _matched_forms(show, dest.id, result, force=force)
     edited = with_set(forms_edited, dest.with_placements(slot_updates, force=force))
     relocated = [e for e, p in slot_updates.items() if is_elsewhere(dest.get(e), p.x, p.y)]
@@ -276,8 +351,15 @@ def _swap_forms(show: Show, set_id: SetId, a: SpotId, b: SpotId, *, force: bool)
     return show.replace(forms=forms)
 
 
-def _spot_fields(placement: Placement) -> dict[str, object]:
-    return {name: getattr(placement, name) for name in SWAPPED_FIELDS}
+def _spot_fields(placement: Placement) -> PlacementPatch:
+    return PlacementPatch(
+        x=placement.x,
+        y=placement.y,
+        facing=placement.facing,
+        form=placement.form,
+        order=placement.order,
+        on_field=placement.on_field,
+    )
 
 
 def swap(show: Show, set_id: str, a: str, b: str, *, force: bool = False) -> Show:

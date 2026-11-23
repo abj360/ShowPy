@@ -26,6 +26,7 @@ from datetime import UTC, datetime
 import pytest
 
 from showpy.choreo.form_models import Form
+from showpy.choreo.models import PlacementPatch
 from showpy.choreo.path_models import FacingMode, FacingOverride, FixedFacing, TransitionSpec
 from showpy.core.errors import SchemaError, TimelineError
 from showpy.core.ids import FormId, SetId, SpotId, make_tid
@@ -144,7 +145,7 @@ def test_join_disjoint_sections_and_clashes() -> None:
     other_cast = relabelled.model_copy(update={"cast": first.cast.model_copy(update={"spots": ()})})
     with pytest.raises(SchemaError):
         join_sections(first, other_cast)
-    moved = relabelled.sets[0].with_placements({"T1": {"x": 9.0}})
+    moved = relabelled.sets[0].with_placements({"T1": PlacementPatch(x=9.0)})
     bad_boundary = second.model_copy(
         update={
             "sets": (

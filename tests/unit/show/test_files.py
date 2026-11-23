@@ -35,6 +35,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from showpy.choreo.models import PlacementPatch
 from showpy.core.canonical import MAX_NESTING
 from showpy.core.errors import LockedError, SchemaError, ShowPyError, StorageError
 from showpy.show.documents import SHOW_DOC
@@ -104,7 +105,7 @@ def test_regression_placements_csv_neutralizes_formula_notes(lead: str) -> None:
     note = f"{lead}cmd|' /C calc'!A0"
     show = two_set_show()
     first = show.sets[0]
-    noted = first.with_placements({first.placements[0].entity: {"note": note}})
+    noted = first.with_placements({first.placements[0].entity: PlacementPatch(note=note)})
     show = show.model_copy(update={"sets": (noted, show.sets[1])})
     _, agent, _ = open_session(show, AT)
     rows = _rows(agent.read("/sets/1/placements.csv"))
@@ -118,7 +119,7 @@ def test_regression_placements_csv_keeps_negative_numbers_unquoted() -> None:
     show = two_set_show()
     first = show.sets[0]
     entity = first.placements[0].entity
-    moved = first.with_placements({entity: {"x": -3.5, "note": "=1+1"}})
+    moved = first.with_placements({entity: PlacementPatch(x=-3.5, note="=1+1")})
     show = show.model_copy(update={"sets": (moved, show.sets[1])})
     _, agent, _ = open_session(show, AT)
     rows = _rows(agent.read("/sets/1/placements.csv"))

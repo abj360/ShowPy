@@ -25,7 +25,7 @@ from showpy.cast.select import select
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import BendFix, DelayFix, Fix, GapInfo, StaggerFix
 from showpy.choreo.match import match
-from showpy.choreo.match_models import MatchOptions, MatchResult
+from showpy.choreo.match_models import MatchOptions, MatchResult, MatchWeights
 from showpy.choreo.path_models import TransitionSpec
 from showpy.choreo.paths import add_waypoint, delay, stagger
 from showpy.core.errors import PathError
@@ -252,7 +252,7 @@ def suggest_reassignment(
     """
     ids = list(sel)
     targets = show.set(tid[1]).positions(ids)
-    options = MatchOptions(keep_groups=False, weights={"crossing": crossing_weight})
+    options = MatchOptions(keep_groups=False, weights=MatchWeights(crossing=crossing_weight))
     return match(show.set(tid[0]), targets, entities=ids, options=options)
 
 

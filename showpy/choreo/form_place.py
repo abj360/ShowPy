@@ -23,6 +23,7 @@ from showpy.core.errors import MatchError, SchemaError, ShowPyError, UnknownRefE
 from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.types import Degrees, Points
 from showpy.core.util import close_matches
+from showpy.geo.fonts import FontRegistry
 from showpy.show.models import Show
 
 type SlotRef = tuple[Form, int]
@@ -47,12 +48,12 @@ def _open_indexes(form: Form, slot_total: int) -> list[int]:
 
 
 def _open_slots(
-    forms: Sequence[Form], registry: FormFnRegistry
+    forms: Sequence[Form], registry: FormFnRegistry, font_registry: FontRegistry | None
 ) -> tuple[list[SlotRef], Points, list[Degrees]]:
     refs: list[SlotRef] = []
     points, facings = [], []
     for form in forms:
-        pts, poses = slot_poses(form, registry)
+        pts, poses = slot_poses(form, registry, font_registry=font_registry)
         for index in _open_indexes(form, len(pts)):
             refs.append((form, index))
             points.append(pts[index])
@@ -81,8 +82,9 @@ def _matched(
     forms: Sequence[Form],
     options: MatchOptions | None,
     registry: FormFnRegistry,
+    font_registry: FontRegistry | None,
 ) -> list[Placement]:
-    refs, points, facings = _open_slots(forms, registry)
+    refs, points, facings = _open_slots(forms, registry, font_registry)
     taken = {m for form in forms for m in form.spots}
     pool = [p.entity for p in target.placements if p.entity not in taken and not p.pinned]
     if not refs or not pool:
@@ -124,6 +126,8 @@ def place(
     forms: Sequence[Form],
     match_options: MatchOptions | None = None,
     registry: FormFnRegistry = DEFAULT_FORM_FNS,
+    *,
+    font_registry: FontRegistry | None = None,
 ) -> tuple[Set, list[Form]]:
     """Builds a set's placements from forms and returns it with the forms filled.
 
@@ -143,6 +147,8 @@ def place(
         forms: Forms to place; each is stamped with `set_id`.
         match_options: Options for matching spots into open slots.
         registry: Form generators that produce the slots.
+        font_registry: Registry holding the fonts of text forms; None means `bundled_fonts()`.
+            A font it lacks raises `MissingFontError`.
 
     Returns:
         placed_and_forms: The placed set, and the forms in the order given with members filled.
@@ -161,8 +167,13 @@ def place(
     stamped = [form.replace(set=set_id) for form in forms]
     _check_disjoint(stamped)
     pinned = {p.entity for p in target.placements if p.pinned}
-    rows = [p for form in stamped for p in placements(form, registry) if p.entity not in pinned]
-    rows += _matched(show, target, stamped, match_options, registry)
+    rows = [
+        p
+        for form in stamped
+        for p in placements(form, registry, font_registry=font_registry)
+        if p.entity not in pinned
+    ]
+    rows += _matched(show, target, stamped, match_options, registry, font_registry)
     updates = {p.entity: _placement(target.get(p.entity), p) for p in rows}
     updates.update(_clear_stale_forms(target, set(updates)))
     pinned_forms = (p.form for p in target.placements if p.pinned and p.form is not None)
@@ -250,7 +261,12 @@ def _check_placed(show: Show, form: Form) -> None:
 
 
 def rebuild(
-    show: Show, form_id: str, *, force: bool = False, registry: FormFnRegistry = DEFAULT_FORM_FNS
+    show: Show,
+    form_id: str,
+    *,
+    force: bool = False,
+    registry: FormFnRegistry = DEFAULT_FORM_FNS,
+    font_registry: FontRegistry | None = None,
 ) -> Show:
     """Regenerates a form's placements in its set and resets its members' neighbouring paths.
 
@@ -261,6 +277,7 @@ def rebuild(
     change does not alter a row's geometry. A locked row of a moved member needs force=True.
     Pinned members stay where they are unless force=True moves them; they keep their pin.
     A form its set no longer lists (the set was re-placed without it) raises STALE_FORM.
+    `font_registry` holds a text form's fonts; None means `bundled_fonts()`.
 
     >>> from showpy.choreo.forms import line_form
     >>> from showpy.examples import two_set_show
@@ -272,7 +289,11 @@ def rebuild(
     form = _form_of(show.forms, form_id)
     _check_placed(show, form)
     target = show.set(form.set)
-    fresh = [p for p in placements(form, registry) if force or not target.get(p.entity).pinned]
+    fresh = [
+        p
+        for p in placements(form, registry, font_registry=font_registry)
+        if force or not target.get(p.entity).pinned
+    ]
     updates = {p.entity: _placement(target.get(p.entity), p) for p in fresh}
     moved = [e for e, p in updates.items() if is_elsewhere(target.get(e), p.x, p.y)]
     edited = with_set(show, target.with_placements(updates, force=force))

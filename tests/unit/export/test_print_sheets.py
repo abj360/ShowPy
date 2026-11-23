@@ -15,10 +15,10 @@ import math
 
 import pytest
 
-from showpy.choreo.models import Placement, Set
+from showpy.choreo.models import Placement, PlacementPatch, Set
 from showpy.choreo.path_models import PathRow, PathStyle
 from showpy.core.errors import SchemaError, UnknownRefError
-from showpy.core.ids import SetId, SpotId
+from showpy.core.ids import FormId, SetId, SpotId
 from showpy.core.util import approx_equal
 from showpy.export.models import Claim
 from showpy.export.print_sheets import chart, coordinate_sheet, coordinate_sheets, cue_sheet
@@ -103,7 +103,7 @@ def test_precision_overrides_the_coordinate_rounding() -> None:
 
 def test_facing_comes_from_the_engine() -> None:
     show = guided_show()
-    turned = show.sets[1].with_placements({"T1": {"facing": 90.0}})
+    turned = show.sets[1].with_placements({"T1": PlacementPatch(facing=90.0)})
     show = show.model_copy(update={"sets": (show.sets[0], turned)})
     rows = coordinate_sheet(show, "T1").rows
     assert approx_equal(rows[0].facing, 0.0, abs_tol=TOL)
@@ -127,7 +127,7 @@ def test_unknown_spot_is_refused_with_suggestions() -> None:
 
 def test_off_field_rows_say_so() -> None:
     show = two_set_show()
-    first = show.sets[0].with_placements({"T1": {"on_field": False}})
+    first = show.sets[0].with_placements({"T1": PlacementPatch(on_field=False)})
     show = show.model_copy(update={"sets": (first, show.sets[1])})
     rows = coordinate_sheet(show, "T1").rows
     assert rows[0].position_text == "off field"
@@ -139,7 +139,9 @@ def test_chart_lists_every_spot_of_one_set() -> None:
     show = show.model_copy(
         update={
             "sets": (
-                show.sets[0].with_placements({"T3": {"note": "solo", "form": "line1"}}),
+                show.sets[0].with_placements(
+                    {"T3": PlacementPatch(note="solo", form=FormId("line1"))}
+                ),
                 show.sets[1],
             )
         }

@@ -16,10 +16,9 @@ Contains:
 
 import re
 from collections.abc import Mapping
-from datetime import datetime
 from typing import Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AwareDatetime, Field, field_validator, model_validator
 
 from showpy.core.errors import SchemaError
 from showpy.core.ids import SetId, SpotId
@@ -153,13 +152,13 @@ class Claim(FrozenModel):
     Attributes:
         spot: Spot claimed.
         performer: Who holds it, without a contact.
-        claimed_at: When the claim was made.
+        claimed_at: When the claim was made; carries a time zone.
         locked: True once claimed; only the designer can move a locked claim.
     """
 
     spot: SpotId
     performer: Performer
-    claimed_at: datetime
+    claimed_at: AwareDatetime
     locked: bool = True
 
     @field_validator("performer")
@@ -193,7 +192,7 @@ class Publication(FrozenModel):
         join_token_sha256: SHA-256 hex digest of the join token; hosts verify a join against it
             with `verify_join_token` instead of comparing raw tokens.
         status: `live`, `paused` or `closed`.
-        published_at: When this revision was published.
+        published_at: When this revision was published; carries a time zone.
         claims: Claims in natural spot order.
     """
 
@@ -203,7 +202,7 @@ class Publication(FrozenModel):
     link: str = Field(repr=False)
     join_token_sha256: str | None = None
     status: PublicationStatus = "live"
-    published_at: datetime
+    published_at: AwareDatetime
     claims: tuple[Claim, ...] = ()
 
     @model_validator(mode="before")

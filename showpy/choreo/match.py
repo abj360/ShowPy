@@ -46,10 +46,11 @@ from showpy.choreo.match_solve import (
     solve_sum,
 )
 from showpy.choreo.models import Set
-from showpy.core.errors import MatchError
+from showpy.core.errors import MatchError, SchemaError
 from showpy.core.ids import FormId
 from showpy.core.types import Points
 from showpy.core.util import as_points, natural_sort
+from showpy.geo.fonts import FontRegistry
 
 BOTTLENECK_OBJECTIVES = frozenset({"bottleneck", "bottleneck_then_sum"})
 
@@ -61,15 +62,18 @@ def cost_matrix(
     entities: Sequence[str] | None = None,
     groups: Mapping[str, str] | None = None,
     slot_groups: Sequence[str | None] | None = None,
+    *,
+    font_registry: FontRegistry | None = None,
 ) -> FloatArray:
     """Returns the (spots x slots) cost: meters plus penalties, infinity where forbidden.
 
     Rows follow `entities` (or the source's order); the objective's power is not applied.
+    `font_registry` holds the fonts of text forms in `to_slots`; None means `bundled_fonts()`.
 
     >>> cost_matrix([(0, 0)], [(3, 4), (0, 1)]).tolist()
     [[5.0, 1.0]]
     """
-    p = build_problem(from_, to_slots, entities, groups, slot_groups)
+    p = build_problem(from_, to_slots, entities, groups, slot_groups, font_registry=font_registry)
     return build_costs(p, options or MatchOptions()).cost
 
 
@@ -158,15 +162,22 @@ def _row_groups(p: MatchProblem) -> IntArray:
 def _improve(
     p: MatchProblem, cost: FloatArray, cols: IntArray, cap: float, options: MatchOptions
 ) -> tuple[IntArray, int]:
-    crossing = options.weights.get("crossing", 0.0)
-    spread = options.weights.get("group_spread", 0.0)
+    crossing = options.weights.crossing
+    spread = options.weights.group_spread
     if options.preserve_order or not (crossing or spread) or len(cols) < 2:
         return cols, 0
     frozen = np.array([e in options.pinned for e in p.entities], dtype=bool)
     score = SwapScore(
-        _objective_cost(cost, options), cost, cap, p.starts, p.slots, crossing, spread,
-        _row_groups(p), frozen,
-    )  # fmt: skip
+        _objective_cost(cost, options),
+        cost,
+        cap,
+        p.starts,
+        p.slots,
+        crossing,
+        spread,
+        _row_groups(p),
+        frozen,
+    )
     return improve_by_swaps(cols, score)
 
 
@@ -182,7 +193,9 @@ def _explain(
     return tuple(lines)
 
 
-def _column_slots(to_slots: SlotSource) -> tuple[tuple[FormId, int], ...]:
+def _column_slots(
+    to_slots: SlotSource, font_registry: FontRegistry | None
+) -> tuple[tuple[FormId, int], ...]:
     if not (isinstance(to_slots, Sequence) and to_slots):
         return ()
     if not all(isinstance(f, Form) for f in to_slots):
@@ -191,7 +204,7 @@ def _column_slots(to_slots: SlotSource) -> tuple[tuple[FormId, int], ...]:
         (form.id, local)
         for form in to_slots
         if isinstance(form, Form)
-        for local in range(len(form_slots(form)))
+        for local in range(len(form_slots(form, font_registry=font_registry)))
     )
 
 
@@ -237,6 +250,8 @@ def match(
     options: MatchOptions | None = None,
     groups: Mapping[str, str] | None = None,
     slot_groups: Sequence[str | None] | None = None,
+    *,
+    font_registry: FontRegistry | None = None,
 ) -> MatchResult:
     """Assigns spots to slots, exactly and deterministically, under the options.
 
@@ -248,6 +263,8 @@ def match(
         options: Constraints, objective and penalties.
         groups: Spot to group key, for `keep_groups`, `group_slots` and `group_spread`.
         slot_groups: Group label per slot (None = open to all), for `keep_groups`.
+        font_registry: Registry holding the fonts of text forms in `to_slots`; None means
+            `bundled_fonts()`. A font it lacks raises `MissingFontError`.
 
     Returns:
         result: Assignment, targets, move statistics and an explanation.
@@ -263,7 +280,7 @@ def match(
     {'0': ('f', 0)}
     """
     opts = options or MatchOptions()
-    p = build_problem(from_, to_slots, entities, groups, slot_groups)
+    p = build_problem(from_, to_slots, entities, groups, slot_groups, font_registry=font_registry)
     if not opts.preserve_order:
         index = {e: i for i, e in enumerate(p.entities)}
         p = p.permuted([index[e] for e in natural_sort(p.entities)])
@@ -271,20 +288,35 @@ def match(
     _require_feasible(p, costs, ordered=opts.preserve_order)
     cols, cap = _solve(costs.cost, opts)
     cols, swaps = _improve(p, costs.cost, cols, cap, opts)
-    return _result(p, costs, cols, opts, swaps, _column_slots(to_slots))
+    return _result(p, costs, cols, opts, swaps, _column_slots(to_slots, font_registry))
 
 
 def match_by_order(
-    ordered_sel: Sequence[str], form: Form | Points, from_: Set | None = None
+    ordered_sel: Sequence[str],
+    form: Form | Points,
+    from_: Set | None = None,
+    *,
+    font_registry: FontRegistry | None = None,
 ) -> MatchResult:
     """Assigns the i-th spot to the i-th slot; distances need the starting set.
+
+    `font_registry` holds the fonts of a text `form`; None means `bundled_fonts()`.
 
     >>> from showpy.choreo.forms import line_form
     >>> match_by_order(["B", "A"], line_form("f", [], (0, 0), (2, 0), n=2)).assignment
     {'B': 0, 'A': 1}
     """
-    slots = form_slots(form) if isinstance(form, Form) else as_points(form)
+    slots = (
+        form_slots(form, font_registry=font_registry) if isinstance(form, Form) else as_points(form)
+    )
     ids = tuple(ordered_sel)
+    if len(set(ids)) != len(ids):
+        repeated = sorted({e for e in ids if ids.count(e) > 1})
+        raise SchemaError(
+            f"spot {repeated[0]!r} is listed twice",
+            hint="list each spot once",
+            context={"repeated": repeated},
+        )
     if len(ids) > len(slots):
         raise MatchError(
             f"{len(ids)} spots but only {len(slots)} slots",
