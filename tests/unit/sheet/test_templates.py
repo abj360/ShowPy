@@ -180,7 +180,7 @@ def test_blank_sheet_rejects_non_positive_size() -> None:
 
 
 def test_customize_resize_regenerates_outline_and_keeps_user_items() -> None:
-    zone = Zone(id=ZoneId("props"), kind=ZoneKind.STAGING, polygon=SQUARE)
+    zone = Zone(id=ZoneId("prop_staging"), kind=ZoneKind.STAGING, polygon=SQUARE)
     sheet = add_zone(blank_sheet(10.0, 6.0), zone)
     resized = customize(sheet, size=(20.0, 8.0), name="Big room")
     assert resized.size_m == (20.0, 8.0)
