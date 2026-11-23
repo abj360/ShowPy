@@ -287,9 +287,9 @@ def _customize(sheet: Sheet, **changes: object) -> Sheet:
             context={"fields": unknown},
         )
     result = _resized(sheet, changes["size"]) if "size" in changes else sheet
-    fields: dict[str, object] = result.model_dump()
+    fields: dict[str, object] = result._dumped()
     fields.update((key, changes[key]) for key in ("name", "grid") if key in changes)
-    return Sheet.model_validate(fields)
+    return Sheet._validated(fields)
 
 
 @leaving_call(

@@ -101,7 +101,7 @@ def _point_landmark(mark_id: str, name: str, p: Point, *aliases: str) -> Landmar
     >>> _point_landmark("c", "center", (0.0, 0.0), "middle").aliases
     ('middle',)
     """
-    return Landmark.model_validate(
+    return Landmark._validated(
         {"id": mark_id, "name": name, "kind": "point", "geometry": (p,), "aliases": aliases}
     )
 
@@ -121,7 +121,7 @@ def _line_landmark(mark_id: str, name: str, a: Point, b: Point, *aliases: str) -
     >>> _line_landmark("edge", "front edge", (-1.0, 0.0), (1.0, 0.0)).kind
     'line'
     """
-    return Landmark.model_validate(
+    return Landmark._validated(
         {"id": mark_id, "name": name, "kind": "line", "geometry": (a, b), "aliases": aliases}
     )
 
@@ -136,7 +136,7 @@ def line_landmark(mark_id: str, name: str, a: Point, b: Point, *aliases: str) ->
 
 
 def _area_landmark(mark_id: str, name: str, ring: Ring) -> Landmark:
-    return Landmark.model_validate({"id": mark_id, "name": name, "kind": "area", "geometry": ring})
+    return Landmark._validated({"id": mark_id, "name": name, "kind": "area", "geometry": ring})
 
 
 def _template_ref(ref_id: str) -> SheetRef:
@@ -300,7 +300,7 @@ def _stage_guides(half: float, play_half: float) -> tuple[GuideLine, ...]:
 
 def _wing(zone_id: str, x0: float, x1: float, note: str) -> Zone:
     ring = rect_ring(x0, 0.0, x1, STAGE_DEPTH_M)
-    return Zone.model_validate(
+    return Zone._validated(
         {"id": zone_id, "kind": ZoneKind.WINGS, "polygon": Region(exterior=ring), "note": note}
     )
 

@@ -452,7 +452,7 @@ class SetDiff(FrozenModel):
     @property
     def is_empty(self) -> bool:
         """Reports whether the sets match."""
-        return not any(self.model_dump().values())
+        return not any(self._dumped().values())
 
 
 class PathDiff(FrozenModel):
@@ -635,7 +635,7 @@ class CanvasEvent(FrozenModel):
         model = EVENT_PAYLOADS.get(kind) if isinstance(kind, str) else None
         if model is None or not isinstance(payload, Mapping):
             return data
-        return {**data, "payload": model.model_validate(payload)}
+        return {**data, "payload": model._validated(payload)}
 
     @model_validator(mode="after")
     def _require_payload_of_kind(self) -> "CanvasEvent":

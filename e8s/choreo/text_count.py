@@ -130,7 +130,7 @@ def count_recipe(
         require_whole_count(n)
         return recipe.replace(spacing=None, n=n)
     if spacing is not None and n is None:
-        layout = text_recipe({**recipe.model_dump(mode="json"), "spacing": spacing})
+        layout = text_recipe({**recipe.to_json(), "spacing": spacing})
         stored = recipe.transform
         transform = None if stored is None else np.asarray(stored, dtype=float)
         strokes = stage_strokes(text_strokes(layout, font_registry=font_registry), transform)

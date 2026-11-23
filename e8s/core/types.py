@@ -233,12 +233,51 @@ class FrozenModel(BaseModel):
         >>> Box2(min=(0.0, 0.0), max=(1.0, 1.0)).model_copy().max
         (1.0, 1.0)
         """
+        return self._copied(update=update, deep=deep)
+
+    def _copied(self, *, update: Mapping[str, object] | None = None, deep: bool = False) -> Self:
+        """Returns an unvalidated copy with no cached_property values; subclasses may validate."""
         duplicate = super().model_copy(update=update, deep=deep)
         for owner in type(self).__mro__:
             for name, attribute in vars(owner).items():
                 if isinstance(attribute, cached_property):
                     vars(duplicate).pop(name, None)
         return duplicate
+
+    @classmethod
+    def _validated(cls, data: object, *, context: Mapping[str, object] | None = None) -> Self:
+        """Validates Python data into this model, under an optional validation context."""
+        return cls.model_validate(data, context=context)
+
+    @classmethod
+    def _validated_json(cls, text: str | bytes | bytearray) -> Self:
+        """Parses and validates JSON text into this model in one pass."""
+        return cls.model_validate_json(text)
+
+    def _dumped(
+        self,
+        *,
+        include: set[str] | None = None,
+        exclude: set[str] | None = None,
+        exclude_defaults: bool = False,
+    ) -> dict[str, object]:
+        """Returns the fields as Python values, nested models as dicts."""
+        return self.model_dump(include=include, exclude=exclude, exclude_defaults=exclude_defaults)
+
+    def _json_dumped(
+        self, *, include: set[str] | None = None, exclude: set[str] | None = None
+    ) -> dict[str, JsonValue]:
+        """Returns some or all fields as the JSON-safe dict `to_json` returns."""
+        return self.model_dump(mode="json", include=include, exclude=exclude)
+
+    def _dumped_json(self) -> str:
+        """Returns the model as compact JSON text."""
+        return self.model_dump_json()
+
+    @classmethod
+    def _field_names(cls) -> tuple[str, ...]:
+        """Lists the model's field names in declaration order."""
+        return tuple(cls.__pydantic_fields__)
 
     def replace(self, **changes: object) -> Self:
         """Returns a copy with `changes` applied, run through every validator.
@@ -256,8 +295,8 @@ class FrozenModel(BaseModel):
         Returns:
             edited_model: A new instance of the same class holding the merged fields.
         """
-        current = {name: getattr(self, name) for name in type(self).model_fields}
-        return type(self).model_validate(current | changes)
+        current = {name: getattr(self, name) for name in type(self)._field_names()}
+        return type(self)._validated(current | changes)
 
     def to_json(self) -> dict[str, JsonValue]:
         """Returns the model as a JSON-safe dict, the form `from_json` reads back.
@@ -271,7 +310,7 @@ class FrozenModel(BaseModel):
         Returns:
             document: Field names mapped to their JSON values.
         """
-        return self.model_dump(mode="json")
+        return self._json_dumped()
 
     @classmethod
     def from_json(cls, data: Mapping[str, object]) -> Self:
@@ -288,7 +327,7 @@ class FrozenModel(BaseModel):
         Returns:
             model: The validated model; data that breaks a field or model rule raises SchemaError.
         """
-        return cls.model_validate(data)
+        return cls._validated(data)
 
 
 class Box2(FrozenModel):

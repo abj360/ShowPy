@@ -48,17 +48,17 @@ class MatchWeights(FrozenModel):
     def _known_names(cls, data: object) -> object:
         if not isinstance(data, Mapping):
             return data
-        unknown = sorted(str(name) for name in data if name not in cls.model_fields)
+        unknown = sorted(str(name) for name in data if name not in cls._field_names())
         if unknown:
             raise SchemaError(
                 f"unknown match weight {unknown[0]!r}",
-                hint=f"use weights from {', '.join(cls.model_fields)}",
+                hint=f"use weights from {', '.join(cls._field_names())}",
                 context={"weights": sorted(str(name) for name in data)},
             )
         return data
 
 
-MATCH_WEIGHT_KEYS = tuple(MatchWeights.model_fields)
+MATCH_WEIGHT_KEYS = tuple(MatchWeights._field_names())
 
 
 class MatchOptions(FrozenModel):

@@ -680,7 +680,7 @@ def split(sel: Selection | Sequence[str], k: int) -> list[Selection]:
     for index in range(k):
         stop = start + size + (1 if index < extra else 0)
         part = {"ids": ids[start:stop], "description": f"part {index + 1}/{k}"}
-        parts.append(Selection.model_validate(part))
+        parts.append(Selection._validated(part))
         start = stop
     return parts
 
@@ -694,7 +694,7 @@ def alternate(sel: Selection | Sequence[str], k: int = 2) -> list[Selection]:
     _require_parts(k)
     ids = operand_ids(sel)
     return [
-        Selection.model_validate({"ids": ids[i::k], "description": f"every {k} from {i + 1}"})
+        Selection._validated({"ids": ids[i::k], "description": f"every {k} from {i + 1}"})
         for i in range(k)
     ]
 

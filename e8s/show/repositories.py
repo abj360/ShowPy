@@ -157,7 +157,7 @@ def conflict_error(show_id: str, expected: str, landed: list[Revision]) -> Confl
         context={
             "expected": expected,
             "head": landed[-1].id if landed else expected,
-            "changes": [r.model_dump(mode="json") for r in landed],
+            "changes": [r.to_json() for r in landed],
         },
     )
 

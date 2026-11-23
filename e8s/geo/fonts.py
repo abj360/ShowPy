@@ -286,7 +286,7 @@ def load_font(data: bytes) -> Font:
     except SchemaError as exc:
         raise _bad_font(exc.message, hint=exc.hint, field="(root)", **exc.context) from exc
     try:
-        font = Font.model_validate(document)
+        font = Font._validated(document)
     except SchemaError as exc:
         first = field_errors(exc)[0] if "errors" in exc.context else {}
         raise _bad_font(

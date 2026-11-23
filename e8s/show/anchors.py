@@ -67,12 +67,12 @@ class Anchor(FrozenModel):
     @classmethod
     def on_set(cls, set_id: str) -> "Anchor":
         """Anchors to a set."""
-        return cls.model_validate({"kind": "set", "set_id": set_id})
+        return cls._validated({"kind": "set", "set_id": set_id})
 
     @classmethod
     def on_transition(cls, tid: tuple[str, str]) -> "Anchor":
         """Anchors to a transition."""
-        return cls.model_validate({"kind": "transition", "tid": tid})
+        return cls._validated({"kind": "transition", "tid": tid})
 
     @classmethod
     def at_point(cls, point: Point) -> "Anchor":
@@ -87,7 +87,7 @@ class Anchor(FrozenModel):
     @classmethod
     def on_spots(cls, spots: Sequence[str]) -> "Anchor":
         """Anchors to spots, e.g. a sticky note on a soloist or a group."""
-        return cls.model_validate({"kind": "spots", "spots": tuple(spots)})
+        return cls._validated({"kind": "spots", "spots": tuple(spots)})
 
 
 def renamed_anchor(anchor: Anchor, sets: Mapping[str, str], spots: Mapping[str, str]) -> Anchor:

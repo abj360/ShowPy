@@ -147,7 +147,7 @@ def rewrite_spots(
         "pins": _rewrite_pins(show.pins, rename),
         "sheet": _rewrite_sheet(show, rename, dropped),
     }
-    new_cast = Cast.model_validate({**dict(cast), "spots": spots, "selections": selections})
+    new_cast = Cast._validated({**dict(cast), "spots": spots, "selections": selections})
     rewritten_notes = None
     if notes is not None:
         kept_notes, orphaned = rewrite_note_spots(notes.notes, rename)

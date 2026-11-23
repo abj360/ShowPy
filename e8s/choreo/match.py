@@ -227,7 +227,7 @@ def _result(
         if column_slots
         else {}
     )
-    return MatchResult.model_validate(
+    return MatchResult._validated(
         {
             "entities": p.entities,
             "assignment": {e: int(c) for e, c in zip(p.entities, cols, strict=True)},

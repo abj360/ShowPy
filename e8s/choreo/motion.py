@@ -175,7 +175,7 @@ def weave(u: FloatArray, start: Point, end: Point, params: Mapping[str, JsonValu
     >>> (weave(np.array([0.0, 1.0]), (0, 0), (4, 0), {}).round(9) + 0.0).tolist()
     [[0.0, 0.0], [4.0, 0.0]]
     """
-    typed = WeaveParams.model_validate(dict(params))
+    typed = WeaveParams._validated(dict(params))
     base, side = _frame(start, end, u)
     return base + np.outer(typed.amplitude * np.sin(2 * np.pi * typed.cycles * u), side)
 
@@ -189,7 +189,7 @@ def zigzag(u: FloatArray, start: Point, end: Point, params: Mapping[str, JsonVal
     >>> zigzag(np.array([0.125]), (0, 0), (8, 0), {"cycles": 1}).round(9).tolist()
     [[1.0, 0.5]]
     """
-    typed = ZigzagParams.model_validate(dict(params))
+    typed = ZigzagParams._validated(dict(params))
     base, side = _frame(start, end, u)
     phase = typed.cycles * u
     triangle = 4 * np.abs(phase - np.floor(phase + 0.75) + 0.25) - 1
@@ -206,7 +206,7 @@ def figure_eight(
     >>> (figure_eight(np.array([1.0]), (0, 0), (4, 0), {}).round(9) + 0.0).tolist()
     [[4.0, 0.0]]
     """
-    amplitude = FigureEightParams.model_validate(dict(params)).amplitude
+    amplitude = FigureEightParams._validated(dict(params)).amplitude
     base, side = _frame(start, end, u)
     chord = np.asarray(end, dtype=float) - np.asarray(start, dtype=float)
     lateral = amplitude * np.sin(2 * np.pi * u)
@@ -224,7 +224,7 @@ def spiral(u: FloatArray, start: Point, end: Point, params: Mapping[str, JsonVal
     >>> (spiral(np.array([0.5]), (-1, 0), (1, 0), {}).round(9) + 0.0).tolist()
     [[0.0, -1.0]]
     """
-    typed = SpiralParams.model_validate(dict(params))
+    typed = SpiralParams._validated(dict(params))
     a, b = np.asarray(start, dtype=float), np.asarray(end, dtype=float)
     mid = (a + b) / 2
     radius = float(np.linalg.norm(a - mid))

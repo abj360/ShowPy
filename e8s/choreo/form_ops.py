@@ -87,8 +87,8 @@ type Order = Sequence[str] | Literal["reverse", "by_x", "by_y", "nearest_prev"]
 
 def _allowed_keys(recipe: Recipe) -> frozenset[str]:
     if isinstance(recipe, CurveRecipeBase):
-        return frozenset((set(type(recipe.curve).model_fields) - {"kind"}) | {"n"})
-    return frozenset(type(recipe).model_fields) - FIXED_RECIPE_KEYS
+        return frozenset((set(type(recipe.curve)._field_names()) - {"kind"}) | {"n"})
+    return frozenset(type(recipe)._field_names()) - FIXED_RECIPE_KEYS
 
 
 def _derived_count(recipe: RecipeBase, changes: dict[str, Any]) -> dict[str, int]:
@@ -115,7 +115,7 @@ def _edited_recipe(form: Form, changes: dict[str, Any]) -> dict[str, Any]:
                 hint=f"did you mean {', '.join(close)}?" if close else f"use {sorted(allowed)}",
                 context={"form": form.id, "field": key},
             )
-    stored = recipe.model_dump()
+    stored = recipe._dumped()
     if not isinstance(recipe, CurveRecipeBase):
         return {**stored, **changes, **_derived_count(recipe, changes)}
     n = changes.pop("n", recipe.n)
@@ -153,8 +153,8 @@ def edit(
     edited_recipe = _edited_recipe(form, recipe) if recipe else form.recipe
     if form.kind == "text" and form.recipe.n is not None and "members" in fields:
         require_edited_members(form.id, form.recipe.n, len(fields["members"]))
-    dumped = form.model_dump()
-    edited = Form.model_validate({**dumped, **fields, "recipe": edited_recipe})
+    dumped = form._dumped()
+    edited = Form._validated({**dumped, **fields, "recipe": edited_recipe})
     count = slot_count(edited)
     if edited.kind == "text" and count is not None:
         require_edited_members(edited.id, count, len(edited.members))

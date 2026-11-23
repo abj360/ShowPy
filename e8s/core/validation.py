@@ -111,7 +111,7 @@ class ValidationReport(FrozenModel):
         raise ShowValidationError(
             f"{len(errors)} validation error(s): {listed}",
             hint=ERRORS_HINT,
-            context={"issues": [issue.model_dump(mode="json") for issue in errors]},
+            context={"issues": [issue.to_json() for issue in errors]},
         )
 
     @classmethod

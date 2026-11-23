@@ -230,7 +230,7 @@ class TextReport(FrozenModel):
 
 
 def _recipe_json(recipe: RecipeBase) -> dict[str, JsonValue]:
-    dumped: dict[str, JsonValue] = recipe.model_dump(mode="json")
+    dumped: dict[str, JsonValue] = recipe.to_json()
     return dumped
 
 

@@ -71,7 +71,7 @@ def speeds(show: Show, tid: tuple[str, str]) -> "pd.DataFrame":
     import pandas as pd
 
     engine = PathEngine(show)
-    rows = [{"entity": e, **engine.speed(e, tid).model_dump()} for e in engine.compile(tid).plans]
+    rows = [{"entity": e, **engine.speed(e, tid)._dumped()} for e in engine.compile(tid).plans]
     table = pd.DataFrame(rows, columns=SPEED_COLUMNS)
     ranked = table.sort_values(
         ["max_instant", "m_per_count", "entity"], ascending=[False, False, True]

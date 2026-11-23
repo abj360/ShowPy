@@ -35,8 +35,6 @@ from collections.abc import Callable, Iterable, Sequence
 from functools import partial
 from typing import TYPE_CHECKING, Final, NamedTuple
 
-from pydantic import BaseModel
-
 from e8s.cast.select import KIND_SEPARATOR, TOKEN_PATTERN
 from e8s.cast.spots import rename_spots
 from e8s.choreo.models import Set
@@ -57,6 +55,7 @@ from e8s.core.ids import (
     parse_tid,
 )
 from e8s.core.selection import Selection, SelectorField
+from e8s.core.types import FrozenModel
 from e8s.sheet.models import CoordinateSystem, Landmark, Sheet, Zone, normalized_name
 from e8s.show.models import Pin, Show
 
@@ -115,14 +114,14 @@ class _Plan(NamedTuple):
     spots: Renames
 
 
-def _legacy[M: BaseModel](model: M, **changes: object) -> M:
+def _legacy[M: FrozenModel](model: M, **changes: object) -> M:
     """Returns a copy with `changes`, validated with any non-empty v1 ID accepted.
 
     `replace` validates without that context, and the show still holds other kinds' v1 IDs
     until their turn comes.
     """
-    fields = {name: getattr(model, name) for name in type(model).model_fields}
-    return type(model).model_validate(fields | changes, context=LEGACY_CONTEXT)
+    fields = {name: getattr(model, name) for name in type(model)._field_names()}
+    return type(model)._validated(fields | changes, context=LEGACY_CONTEXT)
 
 
 def _passing(text: str, check: IdCheck) -> str | None:

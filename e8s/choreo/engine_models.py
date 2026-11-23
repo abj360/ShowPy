@@ -304,7 +304,7 @@ class Fix(FrozenModel):
             return data
         if isinstance(params, FrozenModel):
             raise _mismatched_fix(kind, params)
-        return {**data, "params": model.model_validate(params)}
+        return {**data, "params": model._validated(params)}
 
 
 def _mismatched_fix(kind: object, params: FrozenModel) -> SchemaError:
