@@ -4,7 +4,8 @@
 cast_shows.py --- builds shows whose spot IDs appear in every kind of show reference
 
 Contains:
-    rich_show(): builds the two-set show with forms, paths, routes, notes, overrides and zones
+    rich_show(): builds the two-set show with forms, paths, routes, overrides and zones
+    rich_notes(): builds the notes document of rich_show(), one note anchored to spot T2
 """
 
 from datetime import UTC, datetime
@@ -19,13 +20,13 @@ from showpy.choreo.path_models import (
     Route,
     TransitionSpec,
 )
-from showpy.core.ids import FormId, RouteId, SetId, SpotId, ZoneId, make_tid
+from showpy.core.ids import FormId, NoteId, RouteId, SetId, SpotId, ZoneId, make_tid
 from showpy.core.selection import Selection
 from showpy.core.types import Region
 from showpy.geo.curves import Segment
-from showpy.notes.models import Anchor, Note
+from showpy.notes.models import Note, NotesDocument
 from showpy.sheet.models import Zone, ZoneKind
-from showpy.show.models import Show
+from showpy.show.models import Anchor, Show
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 
@@ -34,7 +35,7 @@ SQUARE = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)))
 
 
 def rich_show() -> Show:
-    """Builds two_set_show() plus a form, paths, a route, a note, an override and zones."""
+    """Builds two_set_show() plus a form, paths, a route, an override and zones."""
     show = two_set_show()
     form = Form(
         id=FormId("line1"),
@@ -61,7 +62,6 @@ def rich_show() -> Show:
     spec = TransitionSpec(
         id=make_tid("1", "2"), counts=8.0, rows=rows, routes={RouteId("r1"): route}
     )
-    note = Note(id="n1", text="solo", anchor=Anchor.on_spots(["T2"]), author="pat", created_at=AT)
     override = FacingOverride(
         entities=(SpotId("T1"), SpotId("T2")),
         mode=FacingMode.TOWARD_ENTITY,
@@ -87,8 +87,15 @@ def rich_show() -> Show:
             "cast": cast,
             "forms": {"line1": form},
             "transitions": (spec,),
-            "notes": (note,),
             "facing_overrides": (override,),
             "zones": zones,
         }
     )
+
+
+def rich_notes() -> NotesDocument:
+    """Builds the notes document of rich_show(): one note anchored to spot T2."""
+    note = Note(
+        id=NoteId("n1"), text="solo", anchor=Anchor.on_spots(["T2"]), author="pat", created_at=AT
+    )
+    return NotesDocument(show=rich_show().id, notes=(note,))

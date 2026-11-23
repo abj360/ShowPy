@@ -15,7 +15,6 @@ from showpy.choreo.path_models import FacingOverride
 from showpy.core.errors import SchemaError, TimelineError, VersionError
 from showpy.core.ids import FormId, SetId, parse_tid
 from showpy.core.types import Count
-from showpy.notes.models import Note
 from showpy.sheet.models import Zone
 from showpy.show.manage import index
 from showpy.show.models import Pin, Show
@@ -128,15 +127,6 @@ def _timeline_from(tl: Timeline, offset: Count) -> Timeline:
     )
 
 
-def _note_in(note: Note, ids: set[SetId]) -> bool:
-    anchor = note.anchor
-    if anchor.kind == "set":
-        return anchor.set_id in ids
-    if anchor.kind == "transition" and anchor.tid is not None:
-        return set(anchor.tid) <= ids
-    return True
-
-
 def _pin_in(item: Pin, ids: set[SetId], forms: Mapping[FormId, Form]) -> bool:
     if item.target == "set":
         return item.id in ids
@@ -155,7 +145,6 @@ def _section(show: Show, sets: Sequence[Set], timeline: Timeline, low: Count, hi
         sets=tuple(sets),
         forms=forms,
         transitions=tuple(t for t in show.transitions if t.id in pairs),
-        notes=tuple(n for n in show.notes if _note_in(n, ids)),
         pins=tuple(p for p in show.pins if _pin_in(p, ids, forms)),
         facing_overrides=_clip_overrides(show.facing_overrides, low, high, low),
         zones=_clip_zones(show.zones, low, high, low),
@@ -166,6 +155,9 @@ def _section(show: Show, sets: Sequence[Set], timeline: Timeline, low: Count, hi
 
 def split_section(show: Show, at: str) -> tuple[Show, Show]:
     """Splits a show at set `at`; both shows hold `at`, and the second starts its clock there.
+
+    The notes document beside the show is not split; for each part, map the sets it lacks to
+    None in rewrite_note_anchors() to keep only the notes on its own sets.
 
     The second show's tempo, holds, markers, measures, audio sync, facing overrides and zone
     windows shift so its count 0 is `at`. Raises TimelineError when `at` starts mid-measure.
@@ -299,6 +291,9 @@ def _joined_timeline(a: Timeline, b: Timeline, offset: Count) -> Timeline:
 def join_sections(a: Show, b: Show) -> Show:
     """Appends show `b` after show `a`; the inverse of split_section() for sets and paths.
 
+    Notes documents are not joined; merge them as the host keeps them, and pass a set that took
+    a new ID to rewrite_note_anchors() as `sets=`.
+
     When `b` starts with `a`'s last set (same ID and placements) they become one set.
     Otherwise set IDs must not repeat, and `b`'s first set keeps its counts (0), so retime it
     with set_counts(). `b`'s tempos, holds, markers and facing overrides shift by `a`'s length.
@@ -319,7 +314,6 @@ def join_sections(a: Show, b: Show) -> Show:
         sets=(*a.sets, *_keyed_after(a, _tail_sets(a, b))),
         forms=_merged_forms(a, b),
         transitions=(*a.transitions, *b.transitions),
-        notes=(*a.notes, *(n for n in b.notes if n not in a.notes)),
         pins=(*a.pins, *(p for p in b.pins if p not in a.pins)),
         facing_overrides=(
             *a.facing_overrides,

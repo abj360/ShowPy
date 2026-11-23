@@ -64,7 +64,7 @@ from showpy.geo.shapes import line
 from showpy.show.manage import add_set
 from showpy.show.models import Show
 from showpy.show.pinning import pin, unpin
-from tests.fixtures.cast_shows import rich_show
+from tests.fixtures.cast_shows import rich_notes, rich_show
 from tests.fixtures.shows import two_set_show
 
 pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
@@ -284,7 +284,7 @@ def test_relabel_rejects_colliding_prefixes() -> None:
 
 def test_rename_everywhere_rewrites_every_reference() -> None:
     mapping = {SpotId(old): f"A{old[1:]}" for old in ("T1", "T2", "T3", "T4")}
-    show = rename_spots(rich_show(), mapping)[0]
+    show, report = rename_spots(rich_show(), mapping, notes=rich_notes())
     assert show.cast.ids() == ("A1", "A2", "A3", "A4")
     assert all(s.entity_ids() == ("A1", "A2", "A3", "A4") for s in show.sets)
     assert show.forms[FormId("line1")].members == ("A1", "A2", "A3", "A4")
@@ -293,8 +293,8 @@ def test_rename_everywhere_rewrites_every_reference() -> None:
     assert spec.rows[SpotId("A1")].entity == "A1"
     assert spec.rows[SpotId("A1")].facing_value == EntityFacing(entity=SpotId("A2"))
     assert spec.routes[RouteId("r1")].members == ("A3", "A4")
-    anchor = show.notes[0].anchor
-    assert anchor.spots == ("A2",)
+    assert report.notes is not None
+    assert report.notes.notes[0].anchor.spots == ("A2",)
     override = show.facing_overrides[0]
     assert override.entities == ("A1", "A2")
     assert override.value == EntityFacing(entity=SpotId("A3"))

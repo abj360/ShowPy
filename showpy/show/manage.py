@@ -43,7 +43,6 @@ from showpy.core.ids import (
 )
 from showpy.core.types import Count
 from showpy.core.util import close_matches
-from showpy.notes.models import Anchor, Note
 from showpy.sheet.models import Sheet
 from showpy.show.locks import require_unlocked
 from showpy.show.models import Pin, Show, ShowIndex, ShowIndexEntry
@@ -327,6 +326,9 @@ def _pins_without_set(show: Show, set_id: str) -> tuple[Pin, ...]:
 def remove_set(show: Show, set_id: str, *, merge_counts: bool = True, force: bool = False) -> Show:
     """Deletes a set, its forms, its pins and the stored paths into and out of it.
 
+    The notes document beside the show does not follow; pass `sets={set_id: None}` to
+    rewrite_note_anchors() to drop the notes on the removed set and its transitions.
+
     Args:
         show: Show to edit.
         set_id: Set to delete.
@@ -427,15 +429,6 @@ def set_counts(
     return replace_sets(show, sets, force=force, transitions=specs)
 
 
-def _renamed_anchor(anchor: Anchor, mapping: Mapping[SetId, SetId]) -> Anchor:
-    if anchor.kind == "set" and anchor.set_id is not None:
-        return Anchor.on_set(mapping.get(anchor.set_id, anchor.set_id))
-    if anchor.kind == "transition" and anchor.tid is not None:
-        a, b = anchor.tid
-        return Anchor.on_transition((mapping.get(a, a), mapping.get(b, b)))
-    return anchor
-
-
 def _renamed_pin(pin: Pin, mapping: Mapping[str, str], tids: Mapping[str, str]) -> Pin:
     if pin.target == "set":
         return pin.replace(id=mapping.get(pin.id, pin.id))
@@ -444,14 +437,12 @@ def _renamed_pin(pin: Pin, mapping: Mapping[str, str], tids: Mapping[str, str]) 
     return pin
 
 
-def _renamed_note(note: Note, mapping: Mapping[SetId, SetId]) -> Note:
-    return note.replace(anchor=_renamed_anchor(note.anchor, mapping))
-
-
 def renumber(show: Show, scheme: str = SEQUENTIAL) -> tuple[Show, dict[SetId, SetId]]:
-    """Renames sets 1..N in show order, rewriting transitions, forms, notes and pins.
+    """Renames sets 1..N in show order, rewriting transitions, forms and pins.
 
-    Keys stay, so stored set folders and their build scripts stay with their sets.
+    Keys stay, so stored set folders and their build scripts stay with their sets. The notes
+    document beside the show does not follow; pass the returned mapping as `sets=` to
+    rewrite_note_anchors() to keep each note on its own set.
 
     Args:
         show: Show to edit.
@@ -484,7 +475,6 @@ def renumber(show: Show, scheme: str = SEQUENTIAL) -> tuple[Show, dict[SetId, Se
         forms={
             f: form.replace(set=mapping.get(form.set, form.set)) for f, form in show.forms.items()
         },
-        notes=tuple(_renamed_note(n, mapping) for n in show.notes),
         pins=tuple(_renamed_pin(p, by_text, tids) for p in show.pins),
     )
     return renamed, mapping

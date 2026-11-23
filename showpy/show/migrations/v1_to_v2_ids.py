@@ -1,8 +1,8 @@
 """
 v1_to_v2_ids.py --- the ids sub-step of the v1 to v2 format migration (lane A)
 
-The last sub-step. It runs on the show validated with any non-empty v1 ID accepted and renames, once
-and by rule, every spot, set, form, route, zone, landmark, guide, selection and note ID that fails
+The model sub-step. It runs on the show validated with any non-empty v1 ID accepted and renames,
+once and by rule, every spot, set, form, route, zone, landmark, guide and selection ID that fails
 its ID check or repeats, ignoring case, an ID of its kind kept earlier in show order. Valid IDs keep
 their spelling, and the first of a case pair is the one kept. The rule, in order: NFC; every
 character outside the kind's alphabet (`-`, a space, `*`, a non-ASCII letter) becomes `_`, and each
@@ -19,11 +19,13 @@ landmark. A stored selector that names spots by label (`T*`, `T1-T8`) is frozen 
 whenever spots are renamed, and the report records it as a repair. Route IDs are unique per
 transition and sheet items per sheet or show, so those namespaces are checked apart. Each rename is
 recorded with `report.rename()`, per kind in show order, so a host can follow it in what it keeps
-outside ShowPy.
+outside ShowPy; the notes sub-step that follows renames note IDs by the same rule and points note
+anchors at the renamed sets and spots.
 
 Contains:
     KEEPS_LEGACY_IDS: tells whether validation after this step still accepts any non-empty v1 ID
     ID_CUT_LENGTH: bounds a repaired ID, leaving room for a collision suffix
+    renames_of(): maps each ID of one kind that must change to its new ID, by the rename rule
     rename_ids(): renames stored IDs that break the ID rules, recording each rename
 """
 
@@ -55,7 +57,6 @@ from showpy.core.ids import (
     parse_tid,
 )
 from showpy.core.selection import Selection, SelectorField
-from showpy.notes.models import Anchor
 from showpy.sheet.models import CoordinateSystem, Landmark, Sheet, Zone, normalized_name
 from showpy.show.models import Pin, Show
 
@@ -100,7 +101,6 @@ class _Plan(NamedTuple):
         landmarks: Old sheet landmark ID to new landmark ID.
         guides: Old sheet guide ID to new guide ID.
         selections: Old selection name to new selection name.
-        notes: Old note ID to new note ID.
         spots: Old spot ID to new spot ID.
     """
 
@@ -112,7 +112,6 @@ class _Plan(NamedTuple):
     landmarks: Renames
     guides: Renames
     selections: Renames
-    notes: Renames
     spots: Renames
 
 
@@ -201,7 +200,20 @@ def _renames(ids: Sequence[str], rule: _Rule, held: Iterable[str] = ()) -> Renam
     return {old: new for old, new in renames.items() if new != old}
 
 
-def _renames_of(ids: Sequence[str], kind: str, held: Iterable[str] = ()) -> Renames:
+def renames_of(ids: Sequence[str], kind: str, held: Iterable[str] = ()) -> Renames:
+    """Maps each ID of one kind that fails its check or repeats ignoring case to its new ID.
+
+    Args:
+        ids: The kind's IDs in show order.
+        kind: The ID kind, such as `note`; its check and alphabet are the plain ID rule's.
+        held: Names a new ID must also avoid, ignoring case.
+
+    Returns:
+        renames: Old ID to new ID, only for IDs that change, in show order.
+
+    >>> renames_of(["n-1", "n1", "N1"], "note")
+    {'n-1': 'n_1', 'N1': 'N1.2'}
+    """
     return _renames(ids, _Rule(partial(check_id, kind=kind), ID_BODY_CHARS), held)
 
 
@@ -219,22 +231,21 @@ def _plan(show: Show) -> _Plan:
     """Works out every rename of a show from its stored IDs, before any is applied."""
     explicit_keys = [s.key for s in show.sets if s.key is not None and s.key != s.id]
     return _Plan(
-        sets=_renames_of(show.set_ids(), "set", explicit_keys),
-        forms=_renames_of(list(show.forms), "form"),
-        routes={spec.id: _renames_of(list(spec.routes), "route") for spec in show.transitions},
+        sets=renames_of(show.set_ids(), "set", explicit_keys),
+        forms=renames_of(list(show.forms), "form"),
+        routes={spec.id: renames_of(list(spec.routes), "route") for spec in show.transitions},
         sheet_zones=_sheet_renames([z.id for z in show.sheet.zones], "zone"),
         show_zones=_sheet_renames([z.id for z in show.zones], "zone"),
         landmarks=_landmark_renames(show.sheet.landmarks),
         guides=_sheet_renames([g.id for g in show.sheet.guides], "guide"),
-        selections=_renames_of(list(show.cast.selections), "selection"),
-        notes=_renames_of([n.id for n in show.notes], "note"),
-        spots=_renames_of(list(show.cast.ids()), "spot"),
+        selections=renames_of(list(show.cast.selections), "selection"),
+        spots=renames_of(list(show.cast.ids()), "spot"),
     )
 
 
 def _renames_more_than_spots(plan: _Plan) -> bool:
     others = (plan.sets, plan.forms, plan.sheet_zones, plan.show_zones, plan.landmarks)
-    rest = (plan.guides, plan.selections, plan.notes)
+    rest = (plan.guides, plan.selections)
     return any(others) or any(rest) or any(plan.routes.values())
 
 
@@ -249,7 +260,6 @@ def _report(plan: _Plan, report: "ReportBuilder") -> None:
         ("landmark", plan.landmarks.items()),
         ("guide", plan.guides.items()),
         ("selection", plan.selections.items()),
-        ("note", plan.notes.items()),
     ]
     for kind, pairs in by_kind:
         for old, new in pairs:
@@ -262,14 +272,6 @@ def _renamed_tid(tid: tuple[str, str], sets: Renames) -> TransitionId:
 
 def _names_renamed_set(tid: tuple[str, str], sets: Renames) -> bool:
     return tid[0] in sets or tid[1] in sets
-
-
-def _renamed_anchor(anchor: Anchor, sets: Renames) -> Anchor:
-    if anchor.set_id is not None and anchor.set_id in sets:
-        return _legacy(anchor, set_id=sets[anchor.set_id])
-    if anchor.tid is not None and _names_renamed_set(anchor.tid, sets):
-        return _legacy(anchor, tid=_renamed_tid(anchor.tid, sets))
-    return anchor
 
 
 def _renamed_pin(pin: Pin, sets: Renames, forms: Renames) -> Pin:
@@ -380,14 +382,6 @@ def _apply(show: Show, plan: _Plan) -> Show:
         transitions=tuple(
             _renamed_routes(spec, plan.sets, plan.routes.get(spec.id, {}))
             for spec in show.transitions
-        ),
-        notes=tuple(
-            _legacy(
-                note,
-                id=plan.notes.get(note.id, note.id),
-                anchor=_renamed_anchor(note.anchor, plan.sets),
-            )
-            for note in show.notes
         ),
         pins=tuple(_renamed_pin(p, plan.sets, plan.forms) for p in show.pins),
         sheet=_renamed_sheet(show.sheet, plan),

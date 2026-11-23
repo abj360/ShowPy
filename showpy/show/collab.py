@@ -27,7 +27,7 @@ from showpy.core.errors import (
 from showpy.core.ids import format_tid
 from showpy.core.json_types import JsonValue
 from showpy.core.selection import Selection
-from showpy.notes.models import Anchor
+from showpy.show.anchors import Anchor
 from showpy.show.changes import apply_change
 from showpy.show.locks import locked_changes
 from showpy.show.migrate import ReportBuilder

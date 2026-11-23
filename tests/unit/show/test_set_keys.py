@@ -96,6 +96,7 @@ from showpy.core.util import content_hash
 from showpy.examples import two_set_show
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.documents import (
+    LEGACY_NOTES_DOC,
     SHOW_DOC,
     decode_show,
     dump_json,
@@ -245,7 +246,7 @@ def test_regression_never_renumbered_v020_show_encodes_to_its_stored_documents(
     tmp_path: Path,
 ) -> None:
     _, _, tree = _fixture_tree(tmp_path)
-    stored = {p: raw for p, raw in tree.items() if is_show_doc(p)}
+    stored = {p: raw for p, raw in tree.items() if is_show_doc(p) and p != LEGACY_NOTES_DOC}
     encoded = encode_show(decode_show(tree))
     assert set(encoded) == set(stored)
     parsed = {p: json.loads(raw) for p, raw in stored.items()}

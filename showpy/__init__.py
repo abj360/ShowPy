@@ -609,8 +609,8 @@ if TYPE_CHECKING:
         interpolate_forms,
     )
     from showpy.notes.models import (
-        Anchor,
         Note,
+        NotesDocument,
     )
     from showpy.notes.notes import (
         accept_draft,
@@ -619,6 +619,7 @@ if TYPE_CHECKING:
         notes_for,
         notes_near,
         remove_note,
+        rewrite_note_anchors,
     )
     from showpy.sheet.bounds import (
         landmark,
@@ -715,6 +716,7 @@ if TYPE_CHECKING:
         export_json,
         import_fonts,
         import_json,
+        import_notes,
         import_positions,
     )
     from showpy.show.manage import (
@@ -737,6 +739,7 @@ if TYPE_CHECKING:
         read_version,
     )
     from showpy.show.models import (
+        Anchor,
         CanvasEvent,
         Comment,
         CountsOp,
@@ -840,7 +843,7 @@ if TYPE_CHECKING:
     ValidationError = ShowValidationError
 
 _EXPORTS: dict[str, tuple[str, str]] = {
-    "Anchor": ("showpy.notes.models", "Anchor"),
+    "Anchor": ("showpy.show.models", "Anchor"),
     "ApprovalState": ("showpy.choreo.models", "ApprovalState"),
     "ArcCurve": ("showpy.geo.curves", "ArcCurve"),
     "ArcPiece": ("showpy.geo.svg", "ArcPiece"),
@@ -972,6 +975,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "MotionSegment": ("showpy.choreo.engine_models", "MotionSegment"),
     "MotionStats": ("showpy.choreo.engine_models", "MotionStats"),
     "Note": ("showpy.notes.models", "Note"),
+    "NotesDocument": ("showpy.notes.models", "NotesDocument"),
     "PathDiff": ("showpy.show.models", "PathDiff"),
     "PathEngine": ("showpy.choreo.engine", "PathEngine"),
     "PathError": ("showpy.core.errors", "PathError"),
@@ -1226,6 +1230,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "hold": ("showpy.choreo.paths", "hold"),
     "import_fonts": ("showpy.show.interchange", "import_fonts"),
     "import_json": ("showpy.show.interchange", "import_json"),
+    "import_notes": ("showpy.show.interchange", "import_notes"),
     "import_positions": ("showpy.show.interchange", "import_positions"),
     "in_region": ("showpy.cast.select", "in_region"),
     "index": ("showpy.show.manage", "index"),
@@ -1351,6 +1356,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "require_finite": ("showpy.core.validation", "require_finite"),
     "require_size": ("showpy.core.caps", "require_size"),
     "revert": ("showpy.show.history", "revert"),
+    "rewrite_note_anchors": ("showpy.notes.notes", "rewrite_note_anchors"),
     "ripple": ("showpy.choreo.paths", "ripple"),
     "rose_points": ("showpy.choreo.form_fns", "rose_points"),
     "rotate": ("showpy.choreo.set_transforms", "rotate"),
@@ -1528,6 +1534,8 @@ _LEAVING_TYPES: dict[str, tuple[str | tuple[str, ...] | None, str, str]] = {
     "verify_join_token": (None, "0.4.0", "0.6.0"),
     "video_canvas": (None, "0.4.0", "0.6.0"),
     "who_is_on": (None, "0.4.0", "0.6.0"),
+    "Note": (None, "0.4.0", "1.0.0"),
+    "NotesDocument": (None, "0.4.0", "1.0.0"),
 }
 
 __all__ = [
@@ -1665,6 +1673,7 @@ __all__ = [
     "MotionSegment",
     "MotionStats",
     "Note",
+    "NotesDocument",
     "PathDiff",
     "PathEngine",
     "PathError",
@@ -1917,6 +1926,7 @@ __all__ = [
     "hold",
     "import_fonts",
     "import_json",
+    "import_notes",
     "import_positions",
     "in_region",
     "index",
@@ -2042,6 +2052,7 @@ __all__ = [
     "require_finite",
     "require_size",
     "revert",
+    "rewrite_note_anchors",
     "ripple",
     "rose_points",
     "rotate",

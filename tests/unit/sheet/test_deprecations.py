@@ -50,8 +50,12 @@ TAPE = GuideLine(id="tape", kind="custom", points=((0.0, 1.0), (1.0, 1.0)))
 RENDER_NAMES = {"SheetCanvas", "draw_sheet", "render_sheet"}
 FIELD_NAMES = {"Show.coordinates", "Show.zones"}
 EXPORT_NAMES = {name for name, module, _attribute in PUBLIC_API if ".export." in module}
+NOTES_NAMES = {name for name, module, _attribute in PUBLIC_API if ".notes." in module}
+OTHER_LANES = EXPORT_NAMES | NOTES_NAMES | {"import_notes"}
 LEAVING = tuple(
-    row for row in ALL_LEAVING if row[0] not in EXPORT_NAMES and not row[0].startswith("Spot.")
+    row
+    for row in ALL_LEAVING
+    if row[0] not in OTHER_LANES and not row[0].startswith(("Spot.", "RewriteReport."))
 )
 type LeavingRow = tuple[str, str, str | tuple[str, ...] | None, str, str]
 

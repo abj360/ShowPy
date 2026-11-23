@@ -27,7 +27,7 @@ from showpy.core.ids import RouteId, SelectionNameField, SpotId, SpotIdField, Tr
 from showpy.core.readonly import ReadOnly, ReadOnlyMap
 from showpy.core.types import Degrees, FrozenModel, Meters, PositiveFinite
 from showpy.core.util import close_matches, natural_sort
-from showpy.notes.models import Note
+from showpy.show._notes_document import Note, NotesDocument
 
 DEFAULT_RADIUS_M = 0.3
 DEFAULT_SYMBOL = "circle"
@@ -291,8 +291,11 @@ class RewriteReport(FrozenModel):
         dropped_routes: Transition and route ID of each route left without members.
         dropped_facings: Each facing override removed because no spot was left on it or its
             target spot was dropped.
-        orphaned_notes: Each note removed because every spot it was anchored to was dropped.
+        orphaned_notes: Each note removed from the notes document passed in, because every spot
+            it was anchored to was dropped.
         unresolved_selectors: Stored selectors that no longer resolve and were left as written.
+        notes: The notes document passed in, with its spot anchors rewritten; None without one.
+            It leaves the library in 1.0.0 with the notes, and an outside read warns.
     """
 
     renamed: Annotated[Mapping[SpotId, SpotId], ReadOnly()] = Field(
@@ -301,4 +304,8 @@ class RewriteReport(FrozenModel):
     dropped_routes: tuple[tuple[TransitionId, RouteId], ...] = ()
     dropped_facings: tuple[FacingOverride, ...] = ()
     orphaned_notes: tuple[Note, ...] = ()
+    notes: NotesDocument | None = None
     unresolved_selectors: tuple[str, ...] = ()
+
+
+leave_field(RewriteReport, "notes", since="0.4.0", remove="1.0.0")

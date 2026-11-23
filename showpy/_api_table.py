@@ -14,7 +14,7 @@ Contains:
 """
 
 PUBLIC_API: tuple[tuple[str, str, str], ...] = (
-    ("Anchor", "showpy.notes.models", "Anchor"),
+    ("Anchor", "showpy.show.models", "Anchor"),
     ("ApprovalState", "showpy.choreo.models", "ApprovalState"),
     ("ArcCurve", "showpy.geo.curves", "ArcCurve"),
     ("ArcPiece", "showpy.geo.svg", "ArcPiece"),
@@ -146,6 +146,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("MotionSegment", "showpy.choreo.engine_models", "MotionSegment"),
     ("MotionStats", "showpy.choreo.engine_models", "MotionStats"),
     ("Note", "showpy.notes.models", "Note"),
+    ("NotesDocument", "showpy.notes.models", "NotesDocument"),
     ("PathDiff", "showpy.show.models", "PathDiff"),
     ("PathEngine", "showpy.choreo.engine", "PathEngine"),
     ("PathError", "showpy.core.errors", "PathError"),
@@ -400,6 +401,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("hold", "showpy.choreo.paths", "hold"),
     ("import_fonts", "showpy.show.interchange", "import_fonts"),
     ("import_json", "showpy.show.interchange", "import_json"),
+    ("import_notes", "showpy.show.interchange", "import_notes"),
     ("import_positions", "showpy.show.interchange", "import_positions"),
     ("in_region", "showpy.cast.select", "in_region"),
     ("index", "showpy.show.manage", "index"),
@@ -525,6 +527,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("require_finite", "showpy.core.validation", "require_finite"),
     ("require_size", "showpy.core.caps", "require_size"),
     ("revert", "showpy.show.history", "revert"),
+    ("rewrite_note_anchors", "showpy.notes.notes", "rewrite_note_anchors"),
     ("ripple", "showpy.choreo.paths", "ripple"),
     ("rose_points", "showpy.choreo.form_fns", "rose_points"),
     ("rotate", "showpy.choreo.set_transforms", "rotate"),
@@ -778,6 +781,17 @@ LEAVING: tuple[tuple[str, str, str | tuple[str, ...] | None, str, str], ...] = (
     ("Show.coordinates", "field", "Location", "0.4.0", "0.7.0"),
     ("Show.zones", "field", "Marking", "0.4.0", "0.7.0"),
     ("Spot.claimable", "field", None, "0.4.0", "0.7.0"),
+    ("Note", "type", None, "0.4.0", "1.0.0"),
+    ("NotesDocument", "type", None, "0.4.0", "1.0.0"),
+    ("add_note", "function", None, "0.4.0", "1.0.0"),
+    ("edit_note", "function", None, "0.4.0", "1.0.0"),
+    ("remove_note", "function", None, "0.4.0", "1.0.0"),
+    ("notes_for", "function", None, "0.4.0", "1.0.0"),
+    ("notes_near", "function", None, "0.4.0", "1.0.0"),
+    ("accept_draft", "function", None, "0.4.0", "1.0.0"),
+    ("import_notes", "function", None, "0.4.0", "1.0.0"),
+    ("rewrite_note_anchors", "function", None, "0.4.0", "1.0.0"),
+    ("RewriteReport.notes", "field", None, "0.4.0", "1.0.0"),
 )
 
 DEPRECATED_KEYWORDS: tuple[tuple[str, str, str, str, str], ...] = (

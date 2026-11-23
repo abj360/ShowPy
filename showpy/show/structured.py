@@ -21,6 +21,8 @@ from showpy.core.errors import SchemaError
 from showpy.core.selection import Selection
 from showpy.core.strict_json import parse_strict_json
 from showpy.core.validation import validate_adapter_json
+from showpy.show._notes_document import NotesDocument
+from showpy.show.migrations.v1_to_v2_notes import NOTES_DOC
 from showpy.show.models import Comment
 
 SELECTION_DOC = "/canvas/selection.json"
@@ -30,6 +32,7 @@ JSON_SUFFIX = ".json"
 BYTE_ORDER_MARK = "\ufeff"
 COMMENTS_ADAPTER = TypeAdapter(list[Comment])
 SELECTION_ADAPTER = TypeAdapter(Selection)
+NOTES_ADAPTER = TypeAdapter(NotesDocument)
 
 
 def decode_text(path: str, raw: bytes) -> str:
@@ -74,6 +77,10 @@ def _check_selection(raw: bytes) -> None:
     validate_adapter_json(SELECTION_ADAPTER, raw, name="Selection")
 
 
+def _check_notes(raw: bytes) -> None:
+    validate_adapter_json(NOTES_ADAPTER, raw, name="NotesDocument")
+
+
 def _check_json(raw: bytes) -> None:
     parse_strict_json(raw, document="JSON")
 
@@ -81,14 +88,15 @@ def _check_json(raw: bytes) -> None:
 EXACT_CHECKS: dict[str, Callable[[bytes], object]] = {
     SELECTION_DOC: _check_selection,
     COMMENTS_DOC: decode_comments,
+    NOTES_DOC: _check_notes,
 }
 
 
 def require_structured(path: str, raw: bytes) -> None:
     r"""Checks a text file decodes as its reader decodes it; other files pass unread.
 
-    Text files must be UTF-8; `.json` files must parse; the selection and comments files must
-    also match their models.
+    Text files must be UTF-8; `.json` files must parse; the selection, comments and notes files
+    must also match their models.
 
     Args:
         path: Workspace or stored path.

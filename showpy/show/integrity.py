@@ -45,6 +45,7 @@ KNOWN_ROOTS = (
     "/sets/",
     "/transitions/",
     "/canvas/",
+    "/notes/",
     "/config/",
     "/publish/",
     "/renders/",

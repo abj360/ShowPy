@@ -44,7 +44,7 @@ from showpy.core.types import Region
 from showpy.sheet.models import Zone, ZoneKind
 from showpy.show.models import Pin, Show
 from showpy.show.pinning import pin
-from tests.fixtures.cast_shows import rich_show
+from tests.fixtures.cast_shows import rich_notes, rich_show
 from tests.fixtures.shows import two_set_show
 
 pytestmark = pytest.mark.filterwarnings("ignore::showpy.core.errors.DeprecatedWarning")
@@ -137,9 +137,12 @@ def test_regression_dropping_all_override_entities_drops_the_override() -> None:
 
 
 def test_regression_dropping_all_anchored_spots_drops_the_note_anchor() -> None:
-    """Drops or flags a note anchored to no spots (audit 9.3)."""
-    show = rewrite_spot_ids(rich_show(), lambda i: None if i in {"T1", "T2"} else i)
-    assert all(note.anchor.spots != () for note in show.notes)
+    """Drops or flags a note anchored to no spots (audit 9.3); notes live in the notes document."""
+    drop = {"T1", "T2"}
+    _, report = rewrite_spots(rich_show(), lambda i: None if i in drop else i, notes=rich_notes())
+    assert report.notes is not None
+    assert all(note.anchor.spots != () for note in report.notes.notes)
+    assert [note.id for note in report.orphaned_notes] == ["n1"]
 
 
 def test_regression_many_to_one_rename_is_reported_with_the_duplicate_target() -> None:
@@ -205,12 +208,13 @@ def test_regression_stale_selector_is_reported_not_fatal() -> None:
 
 
 def test_rewrite_spots_reports_dropped_route_and_orphaned_note() -> None:
-    show, report = rewrite_spots(
-        rich_show(), lambda i: None if i in {"T1", "T2", "T3", "T4"} else i
+    _, report = rewrite_spots(
+        rich_show(), lambda i: None if i in {"T1", "T2", "T3", "T4"} else i, notes=rich_notes()
     )
     assert report.dropped_routes == ((("1", "2"), "r1"),)
     assert [note.id for note in report.orphaned_notes] == ["n1"]
-    assert show.notes == ()
+    assert report.notes is not None
+    assert report.notes.notes == ()
 
 
 def test_regression_override_facing_a_dropped_spot_is_dropped_and_reported() -> None:

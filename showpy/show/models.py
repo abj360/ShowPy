@@ -2,8 +2,9 @@
 models.py --- the Show aggregate, its index, and the storage, history and collaboration records
 
 Contains:
+    Anchor: re-exports the tagged anchor of comments, highlights and notes
     Pin: records one designer lock on a spot, form, set or transition
-    Show: holds a whole show: sheet, cast, timeline, sets, forms, paths, notes and zones
+    Show: holds a whole show: sheet, cast, timeline, sets, forms, paths and zones
     ShowLookup: looks up a show's sets, transitions and forms by ID without scanning
     Show.lookup: returns the show's cached ShowLookup
     Show.set(): returns a set by ID
@@ -67,8 +68,8 @@ from showpy.core.json_types import FrozenJsonValue, JsonValue
 from showpy.core.readonly import ReadOnly, ReadOnlyMap
 from showpy.core.types import Count, FrozenModel, JsonObject, Seconds
 from showpy.core.util import close_matches
-from showpy.notes.models import Anchor, Note
 from showpy.sheet.models import CoordinateSystem, Sheet, Zone
+from showpy.show.anchors import Anchor as Anchor
 from showpy.time.models import MeasureLabel, Timeline
 
 INDEX_TOL = 1e-9
@@ -167,7 +168,6 @@ class Show(FrozenModel):
         pack: Domain pack key; empty when no pack applies.
         sheet: The 2D design surface.
         coordinates: How positions are labeled; display only.
-        notes: Design notes.
         cast: Groups and spots.
         timeline: Show clock.
         sets: Sets in show order.
@@ -188,7 +188,6 @@ class Show(FrozenModel):
     pack: str = ""
     sheet: Sheet
     coordinates: CoordinateSystem = CoordinateSystem()
-    notes: tuple[Note, ...] = ()
     cast: Cast = Cast()
     timeline: Timeline
     sets: tuple[Set, ...] = ()

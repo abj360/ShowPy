@@ -21,7 +21,6 @@ from showpy.core.errors import (
     UnknownRefError,
 )
 from showpy.core.ids import FormId, SetId, SpotId, make_tid
-from showpy.notes.models import Anchor, Note
 from showpy.show.documents import decode_show, dump_json, encode_show, split_path
 from showpy.show.file_repository import FileRepository
 from showpy.show.manage import add_set, remove_set
@@ -59,8 +58,7 @@ def _rich_show() -> Show:
         counts=8.0,
         rows={SpotId("T1"): PathRow(entity=SpotId("T1"), start=2)},
     )
-    note = Note(id="n1", text="hit", anchor=Anchor.on_set("2"), author="d", created_at=AT)
-    return show.model_copy(update={"forms": {"f1": form}, "transitions": (spec,), "notes": (note,)})
+    return show.model_copy(update={"forms": {"f1": form}, "transitions": (spec,)})
 
 
 def _saved(repo: Repository, show: Show | None = None) -> str:

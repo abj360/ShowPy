@@ -13,11 +13,11 @@ Contains:
 
 from collections.abc import Mapping
 
-from showpy.core.ids import SetId, SpotId, TransitionId
+from showpy.core.ids import SpotId
 from showpy.core.json_types import JsonValue
 from showpy.core.strict_json import parse_strict_json
 from showpy.core.validation import validate_adapter
-from showpy.notes.models import Anchor
+from showpy.show.anchors import renamed_anchor
 from showpy.show.migrate import MigrationReport
 from showpy.show.structured import (
     COMMENTS_ADAPTER,
@@ -30,22 +30,11 @@ SET_KIND = "set"
 SPOT_KIND = "spot"
 
 
-def _renamed_anchor(anchor: Anchor, sets: Mapping[str, str], spots: Mapping[str, str]) -> Anchor:
-    if anchor.set_id is not None:
-        return anchor.replace(set_id=SetId(sets.get(anchor.set_id, anchor.set_id)))
-    if anchor.tid is not None:
-        a, b = anchor.tid
-        return anchor.replace(tid=TransitionId(SetId(sets.get(a, a)), SetId(sets.get(b, b))))
-    if anchor.spots is not None:
-        return anchor.replace(spots=tuple(SpotId(spots.get(s, s)) for s in anchor.spots))
-    return anchor
-
-
 def _comments(raw: bytes, sets: Mapping[str, str], spots: Mapping[str, str]) -> JsonValue:
     """Returns the renamed comments as JSON, or None when no anchor changed."""
     parsed = parse_strict_json(raw, document=COMMENTS_DOC)
     comments = validate_adapter(COMMENTS_ADAPTER, parsed, name="Comments")
-    renamed = [c.replace(anchor=_renamed_anchor(c.anchor, sets, spots)) for c in comments]
+    renamed = [c.replace(anchor=renamed_anchor(c.anchor, sets, spots)) for c in comments]
     return None if renamed == comments else [c.model_dump(mode="json") for c in renamed]
 
 

@@ -137,7 +137,7 @@ def diff_show(a: Show, b: Show) -> dict[str, Any]:
     """Summarizes every difference between two shows; keys with no difference are left out.
 
     Keys: `title`, `sets` (added, removed, changed, counts, order_changed), `forms`, `paths`,
-    `cast`, `notes`, `pins` and one flag per changed whole field (`sheet`, `timeline`, ...).
+    `cast`, `pins` and one flag per changed whole field (`sheet`, `timeline`, ...).
 
     >>> from showpy.examples import two_set_show
     >>> diff_show(two_set_show(), two_set_show().replace(title="B"))
@@ -149,7 +149,6 @@ def diff_show(a: Show, b: Show) -> dict[str, Any]:
         "forms": _keyed(a.forms, b.forms),
         "paths": _paths_diff(a, b),
         "cast": _keyed({s.id: s for s in a.cast.spots}, {s.id: s for s in b.cast.spots}),
-        "notes": _keyed({n.id: n for n in a.notes}, {n.id: n for n in b.notes}),
         "pins": _keyed(
             {f"{p.target}:{p.id}": p for p in a.pins}, {f"{p.target}:{p.id}": p for p in b.pins}
         ),

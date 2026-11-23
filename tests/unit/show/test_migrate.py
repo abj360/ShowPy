@@ -64,6 +64,7 @@ from showpy.examples import crossing_show, two_set_show
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.document_reading import decode_show_dump
 from showpy.show.documents import (
+    LEGACY_NOTES_DOC,
     NOTES_DOC,
     SHEET_DOC,
     TIMELINE_DOC,
@@ -94,7 +95,11 @@ from showpy.show.migrate import (
     version_of,
     without_header,
 )
-from showpy.show.migrations import V1_TO_V2_JSON_STEPS, V1_TO_V2_MODEL_STEPS
+from showpy.show.migrations import (
+    V1_TO_V2_BESIDE_STEPS,
+    V1_TO_V2_JSON_STEPS,
+    V1_TO_V2_MODEL_STEPS,
+)
 from showpy.show.migrations.v1_to_v2_ids import KEEPS_LEGACY_IDS
 from showpy.show.models import Show
 from showpy.show.storage import load_show, open_workspace, save_show
@@ -197,6 +202,7 @@ def test_migration_report_is_read_only() -> None:
 def test_sub_steps_run_in_the_fixed_order() -> None:
     assert [step.__name__ for step in V1_TO_V2_JSON_STEPS] == JSON_STEP_ORDER
     assert [step.__name__ for step in V1_TO_V2_MODEL_STEPS] == ["rename_ids"]
+    assert [step.__name__ for step in V1_TO_V2_BESIDE_STEPS] == ["move_notes"]
 
 
 @pytest.mark.parametrize("tag", TAGS)
@@ -242,9 +248,14 @@ def _head(tag: str, tmp_path: Path) -> dict[str, bytes]:
 
 
 def _record(docs: dict[str, bytes]) -> dict[str, object]:
-    """Lists the migrated show documents as JSON and the report, as expected_v2.json holds them."""
+    """Lists the migrated show documents and notes document as JSON and the report, as
+    expected_v2.json holds them."""
     migrated, report = migrate_documents(docs)
-    documents = {p: json.loads(raw) for p, raw in sorted(migrated.items()) if is_show_doc(p)}
+    documents = {
+        p: json.loads(raw)
+        for p, raw in sorted(migrated.items())
+        if is_show_doc(p) or p == NOTES_DOC
+    }
     return {"documents": documents, "report": report.model_dump(mode="json")}
 
 
@@ -257,7 +268,7 @@ def test_every_fixture_migrates_to_its_expected_v2(tag: str, tmp_path: Path) -> 
         path.write_text(json.dumps(record, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
     assert record == json.loads(path.read_text())
     migrated, _ = migrate_documents(docs)
-    assert {p: raw for p, raw in migrated.items() if not is_show_doc(p)} == {
+    assert {p: raw for p, raw in migrated.items() if not is_show_doc(p) and p != NOTES_DOC} == {
         p: raw for p, raw in docs.items() if not is_show_doc(p)
     }
     assert migrated[SHOW_DOC].splitlines()[1:3] == [
@@ -380,7 +391,7 @@ def _assembled_as_v030_did(tree: dict[str, bytes]) -> dict[str, Any]:
     return {
         **meta,
         "sheet": json.loads(tree[SHEET_DOC]),
-        "notes": json.loads(tree.get(NOTES_DOC, b"[]")),
+        "notes": json.loads(tree.get(LEGACY_NOTES_DOC, b"[]")),
         "timeline": json.loads(tree[TIMELINE_DOC]),
         "sets": sets,
         "forms": forms,

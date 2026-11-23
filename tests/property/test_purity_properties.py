@@ -12,6 +12,7 @@ Contains:
 """
 
 import contextlib
+import warnings
 from collections.abc import Callable
 from datetime import UTC, datetime
 
@@ -25,13 +26,14 @@ from showpy.choreo.form_ops import transform_form
 from showpy.choreo.path_models import PathStyle
 from showpy.choreo.paths import default_paths, set_style
 from showpy.choreo.set_transforms import shift
+from showpy.core.deprecation import DeprecatedWarning
 from showpy.core.errors import ShowPyError
 from showpy.examples import two_set_show
 from showpy.geo.affine import translation_matrix
-from showpy.notes.models import Anchor
+from showpy.notes.models import NotesDocument
 from showpy.notes.notes import add_note
 from showpy.show.manage import add_set, set_counts
-from showpy.show.models import Show
+from showpy.show.models import Anchor, Show
 from showpy.time.models import Hold
 from showpy.time.timeline import add_hold
 from tests.strategies.forms import with_form
@@ -44,7 +46,7 @@ MAX_SETS = 3
 MIN_SETS = 2
 PURITY_EXAMPLES = 25
 FORM_ID = "purity_form"
-NOTE_ID = "purity-note"
+NOTE_ID = "purity_note"
 NEW_SET_ID = "99P"
 NEW_SET_COUNTS = 4.0
 RETIMED_COUNTS = 6.0
@@ -78,7 +80,10 @@ def _timeline(show: Show) -> object:
 
 
 def _notes(show: Show) -> object:
-    return add_note(show, "hit", Anchor.on_set(show.sets[-1].id), NOTE_ID, AT, "designer")
+    notes = NotesDocument(show=show.id)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecatedWarning)
+        return add_note(notes, show, "hit", Anchor.on_set(show.sets[-1].id), NOTE_ID, AT, "pat")
 
 
 def _manage(show: Show) -> object:
