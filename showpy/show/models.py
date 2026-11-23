@@ -43,7 +43,15 @@ from showpy.choreo.form_models import Form
 from showpy.choreo.models import Placement, Set
 from showpy.choreo.path_models import FacingOverride, TransitionSpec
 from showpy.core.errors import SchemaError, TimeRangeError, UnknownRefError
-from showpy.core.ids import LEGACY_IDS_KEY, FormId, RouteId, SetId, SpotId, TransitionId
+from showpy.core.ids import (
+    LEGACY_IDS_KEY,
+    FormId,
+    FormIdField,
+    RouteId,
+    SetId,
+    SpotId,
+    TransitionId,
+)
 from showpy.core.ids import format_tid as _format_tid
 from showpy.core.readonly import ReadOnly, ReadOnlyMap
 from showpy.core.types import Count, FrozenModel, Seconds
@@ -136,7 +144,7 @@ class Show(FrozenModel):
     cast: Cast = Cast()
     timeline: Timeline
     sets: tuple[Set, ...] = ()
-    forms: Annotated[Mapping[FormId, Form], ReadOnly()] = Field(default_factory=_no_forms)
+    forms: Annotated[Mapping[FormIdField, Form], ReadOnly()] = Field(default_factory=_no_forms)
     transitions: tuple[TransitionSpec, ...] = ()
     facing_overrides: tuple[FacingOverride, ...] = ()
     zones: tuple[Zone, ...] = ()

@@ -6,9 +6,10 @@ test_models.py --- tests the Show aggregate: set and transition lookup, JSON rou
 
 import pytest
 
+from showpy.choreo.forms import line_form
 from showpy.choreo.path_models import PathRow, TransitionSpec
 from showpy.core.errors import SchemaError, UnknownRefError
-from showpy.core.ids import SpotId, make_tid
+from showpy.core.ids import LEGACY_IDS_KEY, SpotId, make_tid
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 
@@ -93,3 +94,12 @@ def test_show_containers_hash() -> None:
     assert isinstance(hash(show.dependencies), int)
     with pytest.raises(TypeError):
         show.dependencies["x"] = "1"  # type: ignore[index]
+
+
+def test_regression_show_form_keys_pass_the_id_check() -> None:
+    form = line_form("f-1", ["T1", "T2"], (0.0, 0.0), (4.0, 0.0), set_id="2")
+    show = two_set_show()
+    with pytest.raises(SchemaError):
+        show.replace(forms={"f-1": form})
+    dumped = show.model_dump(mode="json") | {"forms": {"f-1": form.model_dump(mode="json")}}
+    assert list(Show.model_validate(dumped, context={LEGACY_IDS_KEY: True}).forms) == ["f-1"]
