@@ -2,6 +2,8 @@
 util.py --- small shared helpers: ID ranges, float comparison, seeded randomness, hashing
 
 Contains:
+    noise_rank(): rounds a float that decides an order so 1-ulp noise ties
+    natural_key():returns the sort key that puts T2 before T10
     natural_sort(): sorts IDs so T2 comes before T10
     split_id(): splits an ID into its prefix and trailing number
     parse_range(): expands `T1-T8` into IDs
@@ -56,9 +58,29 @@ CLOSE_MATCH_CUTOFF = 0.4
 DEFAULT_ABS_TOL = 1e-6
 RENAME_REMOVAL = "0.6.0"
 SINGLE_PART_GEOMETRY = frozenset({"Point", "LineString", "LinearRing", "Polygon"})
+# Floats that decide a count or an order rank at this many decimals (a nanometer, a nanocount):
+# their last bits are float noise that differs between platforms (libm, fused multiply-add).
+NOISE_RANK_DIGITS = 9
 
 
-def _natural_key(text: str) -> tuple[tuple[tuple[int, int, str], ...], str]:
+def noise_rank(value: float) -> float:
+    """Rounds a float that decides an order to NOISE_RANK_DIGITS decimals, so noise ties.
+
+    Uses builtin `round`, never `np.round`: numpy rounds by scaling, which can land 1 ulp off
+    the correctly rounded value and so reintroduce the noise.
+
+    >>> noise_rank(-0.5999999999999999) == noise_rank(-0.6)
+    True
+    """
+    return round(float(value), NOISE_RANK_DIGITS)
+
+
+def natural_key(text: str) -> tuple[tuple[tuple[int, int, str], ...], str]:
+    """Returns the sort key that compares embedded numbers numerically, then the text.
+
+    >>> natural_key("T2") < natural_key("T10")
+    True
+    """
     chunks = tuple(
         (0, len(stripped), stripped) if index % 2 else (1, 0, chunk)
         for index, chunk in enumerate(NATURAL_CHUNK.split(text))
@@ -74,7 +96,7 @@ def natural_sort[T: str](ids: Iterable[T]) -> list[T]:
     >>> natural_sort(["T10", "T2"])
     ['T2', 'T10']
     """
-    return sorted(ids, key=_natural_key)
+    return sorted(ids, key=natural_key)
 
 
 def split_id(text: str) -> tuple[str, int | None]:

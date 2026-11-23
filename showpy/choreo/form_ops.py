@@ -65,7 +65,7 @@ from showpy.core.errors import SchemaError, SpacingError
 from showpy.core.ids import SpotId
 from showpy.core.types import Degrees, Point, Points
 from showpy.core.units import normalize_angle
-from showpy.core.util import close_matches, natural_sort
+from showpy.core.util import close_matches, natural_sort, noise_rank
 from showpy.geo.affine import (
     Matrix,
     is_similarity,
@@ -175,7 +175,9 @@ def _check_layout(form: Form, registry: FormFnRegistry, font_registry: FontRegis
 
 def _ranked_slots(pts: Points, axis: int) -> list[int]:
     other = 1 - axis
-    return sorted(range(len(pts)), key=lambda i: (pts[i, axis], pts[i, other], i))
+    return sorted(
+        range(len(pts)), key=lambda i: (noise_rank(pts[i, axis]), noise_rank(pts[i, other]), i)
+    )
 
 
 def _ranked_members(form: Form, axis: int, prev_set: Set | None) -> list[SpotId]:
@@ -183,7 +185,9 @@ def _ranked_members(form: Form, axis: int, prev_set: Set | None) -> list[SpotId]
         return natural_sort(form.spots)
     other = 1 - axis
     points = {m: prev_set.get(m).point for m in form.spots}
-    return sorted(form.spots, key=lambda m: (points[m][axis], points[m][other], m))
+    return sorted(
+        form.spots, key=lambda m: (noise_rank(points[m][axis]), noise_rank(points[m][other]), m)
+    )
 
 
 def _occupied_slots(form: Form) -> list[int]:

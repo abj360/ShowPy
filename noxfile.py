@@ -8,8 +8,8 @@ Contains:
     types: runs mypy --strict and pyright (basic) over the library, tests and scripts
     tests: runs the full pytest suite under a fixed hash seed with a branch-coverage floor
     hashseeds: runs the full pytest suite under each non-default seed in HASH_SEEDS
-    slow: runs the slow tests on SLOW_WORKERS pytest-xdist workers under each seed in
-        SLOW_HASH_SEEDS
+    slow: runs the slow tests under each seed in SLOW_HASH_SEEDS, on SLOW_WORKERS pytest-xdist
+        workers except the timing tests, which run in one process
     fuzz: runs the fuzz targets under the nightly Hypothesis profile
     audit: scans the locked dependencies for known vulnerabilities
     wheel: builds the wheel, installs it with every extra in a clean venv and runs the README
@@ -35,6 +35,11 @@ HASH_SEEDS = ("1", "2")
 SLOW_HASH_SEEDS = ("0", "1")
 # One worker per core of the hosted 4-core Linux runner; workers inherit PYTHONHASHSEED.
 SLOW_WORKERS = "4"
+SLOW_PARALLEL_MARKS = "slow and not timing"
+# Timing tests compare wall-clock times, which other workers on the same cores distort
+# (main CI, 2026-11-22: a 3.0x scaling bound measured 3.40x on unchanged code).
+SLOW_TIMING_MARKS = "slow and timing"
+NO_WORKERS = "0"
 DEFAULT_HASH_SEED = "0"
 FUZZ_PROFILE = "nightly"
 COVERAGE_FLOOR = "96"
@@ -162,12 +167,14 @@ def slow(session: nox.Session) -> None:
 
     They are left out of the per-leg `tests` gate; one extra seed still checks the large golden
     does not depend on hash order. pytest-xdist spreads them over SLOW_WORKERS processes; pass
-    `-- -n 0` to run them in one process.
+    `-- -n 0` to run them in one process. The timing tests always run in one process, after
+    the others, and no posarg can give them workers.
     """
     _require_same_python(session)
     for seed in SLOW_HASH_SEEDS:
         session.env["PYTHONHASHSEED"] = seed
-        _uv_run(session, "pytest", "-m", "slow", "-n", SLOW_WORKERS, *session.posargs)
+        _uv_run(session, "pytest", "-m", SLOW_PARALLEL_MARKS, "-n", SLOW_WORKERS, *session.posargs)
+        _uv_run(session, "pytest", "-m", SLOW_TIMING_MARKS, *session.posargs, "-n", NO_WORKERS)
 
 
 @nox.session

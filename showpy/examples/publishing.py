@@ -10,7 +10,7 @@ Contains:
 
 from datetime import UTC, datetime
 
-from showpy.export.models import Performer, PerformerRole, Publication
+from showpy.export._models import Performer, PerformerRole, Publication
 from showpy.show.models import Show
 
 EXAMPLE_TIME = datetime(2026, 11, 11, 18, 0, tzinfo=UTC)

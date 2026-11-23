@@ -18,6 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 INIT_PATH = ROOT / "showpy" / "__init__.py"
+LEAVING_ACCESS_KINDS = ("type", "export")
 FIX_COMMAND = "uv run python scripts/gen_public_api.py"
 
 HEADER = '''"""
@@ -97,7 +98,7 @@ def _deprecated() -> tuple[tuple[str, str, str, str], ...]:
 
 
 def _leaving_types() -> tuple[tuple[str, str | tuple[str, ...] | None, str, str], ...]:
-    """Loads the (name, replacement, since, remove) of each leaving type lazily."""
+    """Loads the (name, replacement, since, remove) of each leaving name that warns on access."""
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
     from showpy._api_table import LEAVING
@@ -105,7 +106,7 @@ def _leaving_types() -> tuple[tuple[str, str | tuple[str, ...] | None, str, str]
     return tuple(
         (name, replacement, since, remove)
         for name, kind, replacement, since, remove in LEAVING
-        if kind == "type"
+        if kind in LEAVING_ACCESS_KINDS
     )
 
 

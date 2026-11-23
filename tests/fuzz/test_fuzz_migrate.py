@@ -21,9 +21,9 @@ from pathlib import Path
 from hypothesis import given
 from hypothesis import strategies as st
 
-from showpy.export.data import SCHEMA_TAG, import_json
 from showpy.show.documents import SHOW_DOC, decode_show, is_show_doc, migrate_documents
 from showpy.show.file_repository import FileRepository
+from showpy.show.interchange import SCHEMA_TAG, import_json
 from tests.helpers import only_showpy_errors
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "repos"

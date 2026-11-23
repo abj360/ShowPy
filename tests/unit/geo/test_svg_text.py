@@ -180,6 +180,7 @@ def _median_parse_times(arc_count: int) -> tuple[float, float]:
 
 
 @pytest.mark.slow
+@pytest.mark.timing
 @fails_after(SCALING_TIMEOUT_S)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_parse_path_scales_linearly_with_arc_count() -> None:

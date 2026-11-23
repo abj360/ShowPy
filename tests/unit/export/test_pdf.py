@@ -28,9 +28,9 @@ import pytest
 
 from showpy.core.errors import SchemaError
 from showpy.core.ids import SetId, SpotId
-from showpy.export.models import CoordinateSheet, SheetRow
-from showpy.export.pdf import escape_text, to_pdf
-from showpy.export.print_sheets import chart, coordinate_sheet, coordinate_sheets, cue_sheet
+from showpy.export._models import CoordinateSheet, SheetRow
+from showpy.export._pdf import escape_text, to_pdf
+from showpy.export._print_sheets import chart, coordinate_sheet, coordinate_sheets, cue_sheet
 from tests.fixtures.export_shows import guided_show
 from tests.helpers import digests_under_hash_seeds
 
@@ -142,8 +142,8 @@ def test_output_is_deterministic() -> None:
 def test_coordinate_sheet_pdf_ignores_hash_seed() -> None:
     """Writes the same coordinate-sheet PDF twice in one run and under two hash seeds (4.3)."""
     digests = digests_under_hash_seeds(
-        "from showpy.export.pdf import to_pdf\n"
-        "from showpy.export.print_sheets import coordinate_sheet",
+        "from showpy.export._pdf import to_pdf\n"
+        "from showpy.export._print_sheets import coordinate_sheet",
         "to_pdf(coordinate_sheet(show, 'T1'))",
     )
     assert all(first == second for first, second in digests), digests
@@ -170,8 +170,8 @@ def test_pillow_is_not_needed() -> None:
     script = (
         "import sys\n"
         "sys.modules['PIL'] = None\n"
-        "from showpy.export.models import CoordinateSheet\n"
-        "from showpy.export.pdf import to_pdf\n"
+        "from showpy.export._models import CoordinateSheet\n"
+        "from showpy.export._pdf import to_pdf\n"
         "sys.stdout.write(to_pdf(CoordinateSheet(entity='T1'))[:8].decode())\n"
     )
     result = subprocess.run(

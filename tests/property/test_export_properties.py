@@ -15,9 +15,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from showpy.choreo.models import PlacementPatch
-from showpy.export.data import export_json, import_json, to_csv
-from showpy.export.pdf import ENCODING, REPLACEMENTS, escape_text
-from showpy.export.positions import import_positions
+from showpy.export._data import to_csv
+from showpy.export._pdf import ENCODING, REPLACEMENTS, escape_text
+from showpy.show.interchange import export_json, import_json, import_positions
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 

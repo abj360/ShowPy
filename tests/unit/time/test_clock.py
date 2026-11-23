@@ -21,6 +21,8 @@ Contains:
         past a ramp whose end count rounds up, never a ValueError
     test_regression_seconds_to_count_at_a_ramp_end_stays_in_domain: inverts the analytic seconds
         at and past a ramp end, never an OverflowError or infinity
+    test_regression_clock_text_negative_seconds_keeps_the_sign: prints -3.8 s as -0:03.8, never a
+        floored -1:56.2
 """
 
 import math
@@ -35,6 +37,7 @@ from showpy.core.errors import ShowPyError, TimelineError, TimeRangeError
 from showpy.core.util import approx_equal
 from showpy.time.clock import (
     SECONDS_PER_MINUTE,
+    _clock_text,
     count_to_seconds,
     describe_count,
     seconds_per_count,
@@ -459,3 +462,19 @@ def test_seconds_to_count_inverts_a_slowing_ramp_from_a_huge_tempo() -> None:
     tl = _ramp(4.49423283715594e307, 0.25, 2.0)
     count = 2.220446049250313e-16
     assert approx_equal(seconds_to_count(tl, count_to_seconds(tl, count)), count, abs_tol=COUNT_TOL)
+
+
+@pytest.mark.parametrize(
+    ("seconds", "text"),
+    [
+        (-3.8, "-0:03.8"),
+        (-59.96, "-1:00.0"),
+        (-65.0, "-1:05.0"),
+        (-0.04, "0:00.0"),
+        (3.8, "0:03.8"),
+        (59.96, "1:00.0"),
+    ],
+)
+def test_regression_clock_text_negative_seconds_keeps_the_sign(seconds: float, text: str) -> None:
+    """Prints -3.8 s as -0:03.8, never a floored -1:56.2, and rounds across minutes either way."""
+    assert _clock_text(seconds) == text

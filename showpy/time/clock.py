@@ -333,10 +333,12 @@ def seconds_per_count(tl: Timeline, c: Count) -> Seconds:
 
 
 def _clock_text(s: Seconds) -> str:
+    """Writes seconds as m:ss.s, rounding tenths half away from zero and keeping the sign."""
     tenths = int(round_to(s * TENTHS_PER_SECOND, 1.0))
-    minutes, rest = divmod(tenths, TENTHS_PER_MINUTE)
+    sign = "-" if tenths < 0 else ""
+    minutes, rest = divmod(abs(tenths), TENTHS_PER_MINUTE)
     whole, tenth = divmod(rest, TENTHS_PER_SECOND)
-    return f"{minutes}:{whole:02d}.{tenth}"
+    return f"{sign}{minutes}:{whole:02d}.{tenth}"
 
 
 def _plain_number(value: float) -> str:

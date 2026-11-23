@@ -26,6 +26,12 @@ Contains:
     test_regression_suggested_fixes_carry_typed_params: types the params of delay and waypoint
         suggestions and round-trips them through JSON
     test_regression_apply_fix_applies_a_stagger_fix: staggers starts from typed parameters
+    test_regression_min_gaps_orders_noise_ties_by_spot_ids: lists pairs whose gaps differ only by
+        float noise in spot ID order, so a 1-ulp shift keeps the order and the top pair
+    test_regression_min_gaps_breaks_exact_ties_in_natural_id_order: lists T2-T10 before T3-T4
+        when their gaps tie, as T2 sorts before T3
+    test_regression_min_gaps_names_each_pair_in_natural_order: labels the pair of T2 and T10 as
+        T2-T10, not T10-T2
 """
 
 import math
@@ -35,6 +41,7 @@ from typing import cast
 import numpy as np
 import pytest
 
+from showpy.cast.rewrite import rewrite_spot_ids
 from showpy.choreo.avoid import (
     apply_fix,
     closest_approach,
@@ -46,6 +53,7 @@ from showpy.choreo.avoid import (
 )
 from showpy.choreo.engine import PathEngine
 from showpy.choreo.engine_models import BendFix, DelayFix, Fix, ReassignFix, StaggerFix
+from showpy.choreo.match_ops import with_set
 from showpy.choreo.models import PlacementPatch
 from showpy.choreo.motion import DEFAULT_MOTIONS, FloatArray, MotionRegistry
 from showpy.choreo.path_models import Easing, PathRow, PathStyle
@@ -289,3 +297,44 @@ def test_regression_apply_fix_applies_a_stagger_fix() -> None:
     fix = Fix(kind="stagger", params=params, new_gap=1.0, max_speed_after=1.0)
     spec = apply_fix(crossing_show().transition(TID), fix)
     assert (spec.row("T1").start, spec.row("T2").start) == (0.0, 2.0)
+
+
+def _t3_nudged(direction: float) -> Show:
+    """Moves T3 1 ulp along x, towards `direction`, in both sets."""
+    show = two_set_show()
+    for set_id in TID:
+        x = math.nextafter(show.set(set_id).get("T3").point[0], direction)
+        show = with_set(show, show.set(set_id).with_placements({"T3": PlacementPatch(x=x)}))
+    return show
+
+
+@pytest.mark.parametrize("direction", [-math.inf, math.inf])
+def test_regression_min_gaps_orders_noise_ties_by_spot_ids(direction: float) -> None:
+    """Lists pairs whose gaps differ only by float noise in spot ID order.
+
+    The trumpets stand 2 m apart, so their neighbour gaps tie; moving T3 by 1 ulp used to reorder
+    them by the noise, and with `top=1` change which pair is listed.
+    """
+    for top in (1, 3):
+        expected = [(g.a, g.b) for g in min_gaps(two_set_show(), TID, top=top)]
+        assert [(g.a, g.b) for g in min_gaps(_t3_nudged(direction), TID, top=top)] == expected
+
+
+def test_regression_min_gaps_breaks_exact_ties_in_natural_id_order() -> None:
+    """Lists pairs whose gaps tie exactly in natural spot ID order, so T2 comes before T10.
+
+    The trumpets stand 2 m apart; with T1 renamed T10, plain string order listed T10-T2 first.
+    """
+    pairs = [(g.a, g.b) for g in min_gaps(_t1_renamed_t10(), TID, top=3)]
+    assert pairs == [("T2", "T3"), ("T2", "T10"), ("T3", "T4")]
+
+
+def _t1_renamed_t10() -> Show:
+    return rewrite_spot_ids(two_set_show(), lambda spot: "T10" if spot == "T1" else spot)
+
+
+def test_regression_min_gaps_names_each_pair_in_natural_order() -> None:
+    """Names the pair of T2 and T10 as T2-T10; plain string order named it T10-T2."""
+    pairs = {(g.a, g.b) for g in min_gaps(_t1_renamed_t10(), TID, top=3)}
+    assert ("T2", "T10") in pairs
+    assert ("T10", "T2") not in pairs

@@ -61,7 +61,6 @@ from showpy.core.ids import LEGACY_IDS_KEY
 from showpy.core.json_types import JsonValue
 from showpy.core.resources import schema_path
 from showpy.examples import crossing_show, two_set_show
-from showpy.export.data import export_json, import_json
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.document_reading import decode_show_dump
 from showpy.show.documents import (
@@ -78,6 +77,7 @@ from showpy.show.documents import (
 )
 from showpy.show.file_repository import FileRepository
 from showpy.show.integrity import blob_digest
+from showpy.show.interchange import export_json, import_json
 from showpy.show.migrate import (
     CHECKED_CONTEXT,
     CURRENT_VERSION,

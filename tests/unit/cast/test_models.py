@@ -84,7 +84,7 @@ def test_shape_extent_for_circle_and_rectangle() -> None:
 def test_spot_defaults() -> None:
     spot = Spot(id=SpotId("T1"), group="trumpets")
     assert spot.active
-    assert spot.claimable == "performer"
+    assert spot.model_dump()["claimable"] == "performer"
     assert spot.tags == ()
     assert spot.symbol is None
 

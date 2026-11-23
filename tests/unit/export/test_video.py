@@ -17,6 +17,8 @@ Contains:
     test_regression_mp4_carries_bt709_colour_tags(): tags the stream BT.709 so players do not guess
         the colour matrix
     test_regression_video_canvas_caps_the_pixel_count(): rejects a 42,000 px wide canvas
+    test_regression_video_pixel_cap_accepts_exactly_the_cap_and_refuses_one_more(): passes
+        MAX_VIDEO_PIXELS and rejects MAX_VIDEO_PIXELS + 1 with the video pixel message
     test_regression_video_canvas_rejects_a_bad_scale(): rejects NaN, infinite, zero, or 1e308 scale
     test_regression_export_video_checks_the_size_before_ffmpeg(): fails before ffmpeg starts
     test_regression_frames_do_not_rebuild_the_cast_ids_per_spot(): builds the ID list once a frame
@@ -46,6 +48,7 @@ import pytest
 
 from showpy.cast.models import Cast
 from showpy.choreo.engine import PathEngine
+from showpy.core.caps import MAX_VIDEO_PIXELS, require_size
 from showpy.core.errors import (
     SchemaError,
     ShowPyError,
@@ -54,7 +57,7 @@ from showpy.core.errors import (
     UnknownRefError,
 )
 from showpy.core.util import approx_equal
-from showpy.export.video import export_video, render_frame, video_canvas
+from showpy.export._video import export_video, render_frame, video_canvas
 from showpy.show.models import Show
 from showpy.time.models import AudioTrack
 from tests.fixtures.shows import two_set_show
@@ -290,6 +293,13 @@ def test_regression_video_canvas_caps_the_pixel_count() -> None:
         video_canvas(two_set_show(), HUGE_PX_PER_M)
 
 
+def test_regression_video_pixel_cap_accepts_exactly_the_cap_and_refuses_one_more() -> None:
+    """Passes exactly MAX_VIDEO_PIXELS and rejects one pixel more."""
+    require_size(MAX_VIDEO_PIXELS, MAX_VIDEO_PIXELS, what="video pixels")
+    with pytest.raises(SchemaError, match="video pixels"):
+        require_size(MAX_VIDEO_PIXELS + 1, MAX_VIDEO_PIXELS, what="video pixels")
+
+
 @pytest.mark.parametrize("px_per_m", [math.nan, math.inf, 0.0, -4.0, 1e308, np.float64(1e308)])
 def test_regression_video_canvas_rejects_a_bad_scale(px_per_m: float) -> None:
     """Rejects NaN, infinite, zero and negative px_per_m with SchemaError."""
@@ -424,6 +434,6 @@ def test_regression_export_video_refuses_an_empty_encoder_output(
     def write_nothing(_show: Show, path: Path, *_rest: object) -> None:
         path.write_bytes(b"")
 
-    monkeypatch.setattr("showpy.export.video._write_frames", write_nothing)
+    monkeypatch.setattr("showpy.export._video._write_frames", write_nothing)
     with pytest.raises(StorageError):
         export_video(two_set_show(), (0.0, 1.0), fps=FPS, px_per_m=SMALL_PX_PER_M)

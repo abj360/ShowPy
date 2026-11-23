@@ -21,6 +21,7 @@ from typing import Annotated, Literal, get_args
 from pydantic import Field, field_validator, model_validator
 
 from showpy.choreo.path_models import FacingOverride
+from showpy.core.deprecation import leave_field
 from showpy.core.errors import GeometryError, SchemaError, UnknownRefError
 from showpy.core.ids import RouteId, SelectionNameField, SpotId, SpotIdField, TransitionId
 from showpy.core.readonly import ReadOnly, ReadOnlyMap
@@ -151,6 +152,9 @@ class Spot(FrozenModel):
 
     _ordered_tags = field_validator("tags", mode="before")(_sort_unordered)
     _unique_tags = field_validator("tags", mode="after")(_dedupe_in_order)
+
+
+leave_field(Spot, "claimable", since="0.4.0", remove="0.7.0")
 
 
 class LabelScheme(FrozenModel):

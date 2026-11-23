@@ -127,6 +127,41 @@ jobs:
           enable-cache: true
       - run: uv run --locked nox -s slow
 
+  # The large golden's counts, orders and top-N lists must match on every platform, and float
+  # noise differs between libm builds and CPUs (arm64 macOS, 2026-11-22: 4921 segments where
+  # x86_64 Linux had 4922), so the slow tests run on macOS and Windows too. Like `check`, the
+  # legs always start and gate their steps.
+  slow-cross:
+    name: slow (${{ matrix.os }})
+    needs: changes
+    if: ${{ !cancelled() }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      UV_PYTHON: "3.14"
+      RUN_CODE_JOBS: >-
+        ${{ needs.changes.result != 'success' ||
+        needs.changes.outputs.code != 'false' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2022]
+    steps:
+      - if: env.RUN_CODE_JOBS != 'true'
+        run: echo "Skipping code checks, only docs/ changed"
+      - if: env.RUN_CODE_JOBS == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - if: env.RUN_CODE_JOBS == 'true'
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.8"
+          enable-cache: true
+      - if: env.RUN_CODE_JOBS == 'true'
+        run: uv run --locked nox -s slow
+
   lowest:
     needs: changes
     if: >-
