@@ -190,3 +190,9 @@ rests on the CI legs, not on this measurement.
 `linear_sum_assignment` in `match` is unchanged: on an exact tie it follows the cost matrix's
 last bits (moving one slot 2 ulp flipped a symmetric two-spot assignment), and a fix would
 quantize costs before solving.
+
+2026-11-22, after review: `min_gaps` names each pair in natural spot ID order too (G4-G10, not
+G10-G4), so pair names and the order of tied rows follow one rule. The refreshed fixture keeps
+the same pairs, tau and gaps in every transition; only names and the order of rows tied at
+-0.6 m changed. The `slow (macos-15)` and `slow (windows-2022)` checks become required once they
+pass on main.
