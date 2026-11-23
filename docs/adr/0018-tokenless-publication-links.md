@@ -108,3 +108,8 @@ The maintainer chose on 2026-11-16 to fix this in the release that already break
 Phase 1 task E1 (`publish(..., join_token=)`, `verify_join_token`) shipped in PR #19. The commit
 SHA `5d6fe52` in References predates the lane's rebase, which rewrote it; PR #19 is the stable
 pointer.
+
+## Addendum 2026-11-23: superseded
+
+Superseded now rather than at v0.6.0: the publishing code this ADR governs was deleted in v0.4.0
+(ADR 0021, addendum 2026-11-23).

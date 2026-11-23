@@ -10,9 +10,9 @@ Last updated: 2026-11-23
 | Item          | Value                                                                                                 |
 | ------------- | ----------------------------------------------------------------------------------------------------- |
 | Repository    | `abj360/e8s` (public since 2026-11-15); split into its own repository on 2026-11-12 with full history |
-| Gates         | `nox -s tests`: 2,984 passed, `Ledger: 373 open` (2026-11-18); ruff, mypy `--strict`, pyright clean   |
+| Gates         | `nox -s tests`: 3,951 passed, `Ledger: 128 open` (2026-11-23); ruff, mypy `--strict`, pyright clean   |
 | CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main             |
-| Defect ledger | `Ledger: 373 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-17)               |
+| Defect ledger | `Ledger: 128 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-23)               |
 | Out of scope  | `stagecheck`, `e8s.packs` and `e8s.index`, by the user's decision (2026-11-11)                        |
 | Phase 1       | done; merged as PR #23 (`dae2b33`) and tagged `v0.3.0` on 2026-11-18                                  |
 | Text feature  | stage 1 merged (PR #22, 2026-11-17); stages 2 and 3 not started                                       |
