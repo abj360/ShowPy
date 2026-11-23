@@ -36,6 +36,8 @@ Contains:
         and v0.3.0 fixtures
     test_regression_put_show_keeps_scripts_of_renamed_set_folders: moves a set script with its
         renamed folder when a repository's put_show stores a v1 head, in one revision
+    test_regression_reads_on_a_v1_head_find_the_script_of_a_renamed_set: reads and lists a set
+        script at its migrated folder before the first save, through get_script and a workspace
     test_regression_put_script_on_a_v1_head_writes_the_migrated_folder: stores the migration and
         the new script in one revision, the set's other files moved with its folder
     test_regression_migration_renames_ids_in_canvas_comments_and_selection: rewrites comment
@@ -462,6 +464,20 @@ def test_regression_put_show_keeps_scripts_of_renamed_set_folders(tag: str, tmp_
     again = repo.put_show(show_id, repo.get_show(show_id), expected_revision=first.id, at=AT)
     assert again.id == first.id
     assert [r.id for r in repo.revisions(show_id)] == [*stored, first.id]
+
+
+def test_regression_reads_on_a_v1_head_find_the_script_of_a_renamed_set(tmp_path: Path) -> None:
+    repo, expected = _fixture("v0.3.0", tmp_path)
+    show_id = expected["show_id"]
+    _commit_v1(repo, show_id, {"/sets/con/set.py": SCRIPT})
+    head = repo.head(show_id)
+    assert repo.get_script(show_id, "con_") == SCRIPT.decode()
+    ws = open_workspace(repo, show_id)
+    assert ws.read("/sets/con_/set.py") == SCRIPT.decode()
+    assert "set.py" in ws.ls("/sets/con_/")
+    assert "con/" not in ws.ls("/sets/")
+    assert repo.head(show_id) == head
+    assert repo.read(show_id, "/sets/con/set.py") == SCRIPT
 
 
 def test_regression_put_script_on_a_v1_head_writes_the_migrated_folder(tmp_path: Path) -> None:

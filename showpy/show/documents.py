@@ -19,11 +19,13 @@ Contains:
     migrate_documents(): migrates a stored document set to the current format and reports it
     migration_changes(): lists the writes and deletes that store a migrated document set
     is_older_tree(): tells whether stored documents hold a show of an older format version
+    MigratedView: reads stored documents as the migration would store them, reading blobs lazily
+    migrated_view(): returns stored documents as the migration would store them
 """
 
 import json
 import re
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from functools import partial
 from typing import Any
 
@@ -400,3 +402,49 @@ def is_older_tree(docs: Mapping[str, bytes]) -> bool:
     (False, False)
     """
     return SHOW_DOC in docs and read_version(docs) < CURRENT_VERSION
+
+
+class MigratedView(Mapping[str, bytes]):
+    """Reads stored documents as the migration would store them, reading blobs lazily.
+
+    Attributes:
+        changes: The migration's writes, and None for each path it leaves behind.
+    """
+
+    def __init__(self, docs: Mapping[str, bytes], changes: Mapping[str, bytes | None]) -> None:
+        self._docs = docs
+        self.changes = changes
+
+    def __getitem__(self, path: str) -> bytes:
+        if path not in self.changes:
+            return self._docs[path]
+        written = self.changes[path]
+        if written is None:
+            raise KeyError(path)
+        return written
+
+    def __iter__(self) -> Iterator[str]:
+        yield from (p for p in self._docs if p not in self.changes)
+        yield from (p for p, d in self.changes.items() if d is not None)
+
+    def __len__(self) -> int:
+        return sum(1 for _ in self)
+
+
+def migrated_view(docs: Mapping[str, bytes]) -> Mapping[str, bytes]:
+    """Returns stored documents as the first save would store them, so reads see renamed folders.
+
+    Args:
+        docs: Stored path to document bytes, as a repository tree holds them.
+
+    Returns:
+        view: `docs` itself when it is current; otherwise a MigratedView in which every file of
+            a renamed set folder reads at its new path and nothing reads at the old one.
+
+    >>> from showpy.examples import two_set_show
+    >>> docs = encode_show(two_set_show())
+    >>> migrated_view(docs) is docs
+    True
+    """
+    changes = migration_changes(docs)
+    return MigratedView(docs, changes) if changes else docs
