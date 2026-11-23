@@ -60,6 +60,7 @@ from typing import Any
 
 import pytest
 
+import showpy
 from showpy.cast.rewrite import rewrite_spots
 from showpy.cast.spots import rename_spots
 from showpy.core.deprecation import DeprecatedWarning
@@ -430,7 +431,7 @@ def test_rewrite_report_notes_warns_until_1_0_0() -> None:
         assert report.notes == NotesDocument(show=show.id)
 
 
-LIBRARY = Path(__file__).resolve().parents[3] / "showpy"
+LIBRARY = Path(showpy.__file__).resolve().parent
 LEAVING_PACKAGE = "showpy.notes"
 
 
