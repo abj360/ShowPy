@@ -408,7 +408,6 @@ def find_geo_foreign_imports(
     return sorted(found, key=lambda entry: int(entry.split(":")[1]))
 
 
-# Deprecated Set forwarding from geo to choreo; delete this table when v0.6.0 removes the stubs.
 def test_geo_imports_only_core() -> None:
     offenders = [
         offender

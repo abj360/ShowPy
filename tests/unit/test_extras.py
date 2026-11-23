@@ -17,10 +17,12 @@ Contains:
     test_require_extra_chains_the_import_error: keeps the ImportError as the cause
     test_all_extra_is_the_union_of_the_others: keeps `all` equal to every other extra combined
     test_gated_calls_name_declared_extras: every extra a hint names exists in pyproject.toml
-    test_core_dependencies_hold_no_optional_package: keeps the four packages out of core
+    test_core_dependencies_hold_no_optional_package: keeps every package an extra installs out of
+        core
 """
 
 import importlib
+import re
 import subprocess
 import sys
 import tomllib
@@ -42,7 +44,6 @@ PYPROJECT = ROOT / "pyproject.toml"
 ALL_EXTRA = "all"
 # Fewer modules than this means the walk stopped early, not that e8s is small.
 MIN_MODULES = 100
-OPTIONAL_PACKAGES = ("pandas", "pillow", "segno", "imageio-ffmpeg")
 IMPORT_EVERY_MODULE = """
 from scripts.check_core_install import import_every_module, loaded_optional_modules
 names = import_every_module()
@@ -123,6 +124,11 @@ def test_require_extra_chains_the_import_error(monkeypatch: pytest.MonkeyPatch) 
     )
 
 
+def _package(spec: str) -> str:
+    """Returns the package name of a requirement such as `pandas>=3.1.1`."""
+    return re.split(r"[<>=!~\[; ]", spec, maxsplit=1)[0]
+
+
 def optional_dependencies() -> dict[str, list[str]]:
     """Reads the extras table of pyproject.toml."""
     extras: dict[str, list[str]] = tomllib.loads(PYPROJECT.read_text())["project"][
@@ -144,4 +150,6 @@ def test_gated_calls_name_declared_extras() -> None:
 
 def test_core_dependencies_hold_no_optional_package() -> None:
     core = tomllib.loads(PYPROJECT.read_text())["project"]["dependencies"]
-    assert not [spec for spec in core if spec.startswith(OPTIONAL_PACKAGES)]
+    optional = {_package(spec) for specs in optional_dependencies().values() for spec in specs}
+    assert optional
+    assert not [spec for spec in core if _package(spec) in optional]
