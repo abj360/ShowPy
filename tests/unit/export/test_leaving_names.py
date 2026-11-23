@@ -27,7 +27,7 @@ from pydantic import BaseModel
 
 import showpy
 from showpy._api_table import LEAVING, PUBLIC_API
-from showpy.cast.models import Spot
+from showpy.cast.models import RewriteReport, Spot
 from showpy.core.deprecation import DeprecatedWarning, _LeavingField, leave_field
 from showpy.core.ids import SpotId
 from showpy.show.interchange import export_json, import_json
@@ -165,7 +165,8 @@ def test_every_field_row_matches_its_leave_field_call(
 ) -> None:
     qualified, _kind, replacement, since, remove = row
     model_name, _, field = qualified.partition(".")
-    descriptor = vars({"Show": Show, "Spot": Spot}[model_name])[field]
+    models = {"Show": Show, "Spot": Spot, "RewriteReport": RewriteReport}
+    descriptor = vars(models[model_name])[field]
     assert isinstance(descriptor, _LeavingField)
     assert (descriptor.old, descriptor.since, descriptor.remove, descriptor.replacement) == (
         f"showpy.{qualified}",

@@ -616,7 +616,7 @@ def rename_spots(
         mapping: Old ID to new ID; entries that keep the ID are ignored.
         force: Allows the rename past a pinned picture it would change.
         notes: The notes document stored beside the show, or None; one of another show raises
-            SchemaError.
+            SchemaError. This keyword leaves the library in 1.0.0 with the notes.
 
     Returns:
         show: The renamed show.

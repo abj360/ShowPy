@@ -791,6 +791,7 @@ LEAVING: tuple[tuple[str, str, str | tuple[str, ...] | None, str, str], ...] = (
     ("accept_draft", "function", None, "0.4.0", "1.0.0"),
     ("import_notes", "function", None, "0.4.0", "1.0.0"),
     ("rewrite_note_anchors", "function", None, "0.4.0", "1.0.0"),
+    ("RewriteReport.notes", "field", None, "0.4.0", "1.0.0"),
 )
 
 DEPRECATED_KEYWORDS: tuple[tuple[str, str, str, str, str], ...] = (

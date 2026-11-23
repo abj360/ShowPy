@@ -295,6 +295,7 @@ class RewriteReport(FrozenModel):
             it was anchored to was dropped.
         unresolved_selectors: Stored selectors that no longer resolve and were left as written.
         notes: The notes document passed in, with its spot anchors rewritten; None without one.
+            It leaves the library in 1.0.0 with the notes, and an outside read warns.
     """
 
     renamed: Annotated[Mapping[SpotId, SpotId], ReadOnly()] = Field(
@@ -305,3 +306,6 @@ class RewriteReport(FrozenModel):
     orphaned_notes: tuple[Note, ...] = ()
     notes: NotesDocument | None = None
     unresolved_selectors: tuple[str, ...] = ()
+
+
+leave_field(RewriteReport, "notes", since="0.4.0", remove="1.0.0")

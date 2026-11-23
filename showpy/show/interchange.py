@@ -96,7 +96,8 @@ def export_json(
         include: Top-level show fields to keep, or one field name; None keeps all. The ID is
             always kept. The extensions are written only when `"extensions"` is kept.
         font_registry: Registry holding the fonts of the text forms; None means the bundled fonts.
-        notes: The show's notes document, written beside the show; None writes none.
+        notes: The show's notes document, written beside the show; None writes none. This
+            keyword leaves the library in 1.0.0 with the notes.
 
     Returns:
         document: `{"format": "showpy.show", "version": 2, "show": {...}}`, plus `"fonts"`

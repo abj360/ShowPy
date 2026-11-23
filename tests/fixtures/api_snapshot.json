@@ -1857,6 +1857,11 @@
       "remove": "0.6.0",
       "since": "0.4.0"
     },
+    "RewriteReport.notes": {
+      "kind": "field",
+      "remove": "1.0.0",
+      "since": "0.4.0"
+    },
     "SheetCanvas": {
       "kind": "type",
       "remove": "0.6.0",

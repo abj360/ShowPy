@@ -40,6 +40,8 @@ Contains:
         under `notes` and refuses one of another show
     test_import_notes_reads_v1_and_v2_documents: returns the notes of a v2 document as given
         and migrates the notes of a v1 document with the show's renames
+    test_rewrite_report_notes_warns_until_1_0_0: warns that `RewriteReport.notes` leaves the
+        library in 1.0.0 when read outside the library
     test_rename_spots_rewrites_the_notes_document: follows spot renames in the notes document
         and reports orphaned notes when a rewrite drops every anchored spot
 """
@@ -55,6 +57,7 @@ import pytest
 
 from showpy.cast.rewrite import rewrite_spots
 from showpy.cast.spots import rename_spots
+from showpy.core.deprecation import DeprecatedWarning
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, UnknownRefError, VersionError
 from showpy.core.ids import NoteId
@@ -413,3 +416,10 @@ def test_rename_spots_rewrites_the_notes_document() -> None:
     assert dropped.notes == NotesDocument(show=show.id)
     with pytest.raises(SchemaError):
         rename_spots(show, {"T1": "S1"}, notes=document.model_copy(update={"show": "other"}))
+
+
+def test_rewrite_report_notes_warns_until_1_0_0() -> None:
+    show = two_set_show()
+    _, report = rename_spots(show, {"T1": "S1"}, notes=NotesDocument(show=show.id))
+    with pytest.warns(DeprecatedWarning, match=r"`showpy\.RewriteReport\.notes`.*1\.0\.0"):
+        assert report.notes == NotesDocument(show=show.id)
