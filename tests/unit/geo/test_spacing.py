@@ -701,6 +701,7 @@ def test_regression_block_rejects_nan_facing() -> None:
 
 @defect("UP-9.1-72")
 @pytest.mark.slow
+@pytest.mark.timing
 @fails_after(SCATTER_DEADLINE_S)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_scatter_on_a_field_finishes_or_refuses_within_ten_seconds() -> None:

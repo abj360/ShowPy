@@ -14,6 +14,9 @@ Contains:
     test_defect_marker_accepts_parametrized_marks: accepts defect marks inside pytest.param
     test_ledger_counts_only_selected_tests: leaves deselected defect tests out of the count
     test_regression_ledger_counts_open_defects_under_xdist: counts the workers' selection under -n
+    run_split_half(): runs one half of the slow session's timing split over fixed defect tests
+    test_ledger_counts_each_half_of_the_timing_split: prints each half's own open count
+    test_fixed_defect_fails_the_timing_half: a passing strict xfail fails the half
     test_ledger_prints_zero_open_without_defect_tests: prints Ledger: 0 open when none exist
     find_open_priority_zero_tests(): lists priority 0 tests in a source that carry a defect or xfail
         mark
@@ -256,6 +259,70 @@ def test_regression_ledger_counts_open_defects_under_xdist(
     )
     assert result.ret == 0
     result.stdout.fnmatch_lines(["Ledger: 2 open"])
+
+
+SPLIT_RUN_INI = "[pytest]\nmarkers =\n    slow: slow test\n    timing: timing test\n"
+SPLIT_RUN_SOURCE = """
+import pytest
+
+@pytest.mark.slow
+@pytest.mark.defect("UP-9.1-01")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-01")
+def test_regression_parallel_defect() -> None:
+    assert False
+
+@pytest.mark.slow
+@pytest.mark.defect("UP-9.1-02")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-02")
+def test_regression_second_parallel_defect() -> None:
+    assert False
+
+@pytest.mark.slow
+@pytest.mark.timing
+@pytest.mark.defect("UP-9.1-03")
+@pytest.mark.xfail(strict=True, reason="UP-9.1-03")
+def test_regression_timing_defect() -> None:
+    assert {timing_outcome}
+"""
+
+
+def run_split_half(pytester: pytest.Pytester, timing_outcome: str, *args: str) -> pytest.RunResult:
+    """Runs one half of the slow session's timing split over a fixed set of defect tests.
+
+    Args:
+        pytester: The pytester fixture holding the generated project.
+        timing_outcome: Python expression the timing defect test asserts.
+        args: The half's marker expression and worker flags.
+
+    Returns:
+        result: The pytest run of that half.
+    """
+    pytester.syspathinsert(PROJECT_ROOT)
+    pytester.makeini(SPLIT_RUN_INI)
+    pytester.makepyfile(SPLIT_RUN_SOURCE.format(timing_outcome=timing_outcome))
+    return pytester.runpytest_inprocess(*PLUGIN_ARGS, *args)
+
+
+def test_ledger_counts_each_half_of_the_timing_split(
+    pytester: pytest.Pytester, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Prints each half's own open count: 2 on workers, 1 in the timing half without workers."""
+    monkeypatch.setenv("PYTHONPATH", str(PROJECT_ROOT))
+    parallel = run_split_half(pytester, "False", "-m", "slow and not timing", "-n", "2")
+    assert parallel.ret == 0
+    parallel.stdout.fnmatch_lines(["Ledger: 2 open"])
+    timing = run_split_half(pytester, "False", "-m", "slow and timing", "-n", "0")
+    assert timing.ret == 0
+    timing.assert_outcomes(xfailed=1)
+    timing.stdout.fnmatch_lines(["Ledger: 1 open"])
+
+
+def test_fixed_defect_fails_the_timing_half(pytester: pytest.Pytester) -> None:
+    """Fails the run without workers when a timing defect test passes, as strict xfail requires."""
+    result = run_split_half(pytester, "True", "-m", "slow and timing", "-n", "0")
+    assert result.ret == pytest.ExitCode.TESTS_FAILED
+    result.assert_outcomes(failed=1)
+    result.stdout.fnmatch_lines(["Ledger: 1 open"])
 
 
 def test_ledger_prints_zero_open_without_defect_tests(pytester: pytest.Pytester) -> None:
