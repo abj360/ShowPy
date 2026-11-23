@@ -12,7 +12,7 @@ import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
-from e8s.cast.models import Cast, Spot
+from e8s.cast.models import Cast, Spot, require_spot_count
 from e8s.choreo.models import Placement, Set
 from e8s.core.caps import MAX_POINTS, MAX_TEXT_CHARS, require_size
 from e8s.core.errors import (
@@ -25,7 +25,7 @@ from e8s.core.numbers import normalize_angle
 from e8s.core.types import Point
 from e8s.core.util import close_matches
 from e8s.show.manage import replace_sets
-from e8s.show.models import Show
+from e8s.show.models import Show, require_set_count
 from e8s.show.set_keys import free_set_key, set_key
 
 POSITION_FIELDS = ("set", "counts", "entity", "x", "y", "facing")
@@ -139,10 +139,13 @@ def _set_counts(base: Show, rows: list[_PositionRow]) -> dict[str, float]:
     return counts
 
 
-def _require_placement_cap(base: Show, rows: list[_PositionRow]) -> None:
+def _require_caps(base: Show, rows: list[_PositionRow]) -> None:
+    """Refuses rows that would pass the placement, set or spot cap, before anything is built."""
     set_ids = {*base.set_ids(), *(r.set_id for r in rows)}
     spot_ids = {*base.cast.ids(), *(r.entity for r in rows)}
     require_size(len(set_ids) * len(spot_ids), MAX_POINTS, what="placements")
+    require_set_count(len(set_ids))
+    require_spot_count(len(spot_ids))
 
 
 def _chain(first: str, follower: dict[str, str]) -> list[str]:
@@ -315,7 +318,7 @@ def import_positions(
     """
     require_size(len(text), MAX_TEXT_CHARS, what="positions CSV characters")
     rows = _read_rows(text, columns)
-    _require_placement_cap(base, rows)
+    _require_caps(base, rows)
     counts = _set_counts(base, rows)
     cast = _extend_cast(base, rows, group)
     order = _set_order(base, list(counts))
