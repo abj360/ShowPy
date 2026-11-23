@@ -97,6 +97,8 @@ class ErrorCode(StrEnum):
     """A text-only operation gets a form of another kind."""
     NOT_FINITE = "NOT_FINITE"
     """A similarity fit or a stored show field holds a NaN or infinite number."""
+    NOT_SERIALIZABLE = "NOT_SERIALIZABLE"
+    """A model that is never stored, such as a registry of functions, goes to or from JSON."""
     NOT_IN_FORM = "NOT_IN_FORM"
     """A placement names a form it is not a member of in that set."""
     NO_HARDLINKS = "NO_HARDLINKS"

@@ -114,7 +114,7 @@ def _keyed[K: str](left: Mapping[K, object], right: Mapping[K, object]) -> dict[
 def _sets_diff(a: Show, b: Show) -> dict[str, Any]:
     old, new = {s.id: s for s in a.sets}, {s.id: s for s in b.sets}
     common = [s for s in b.set_ids() if s in old]
-    changed = {s: diff_sets(old[s], new[s]).model_dump(exclude_defaults=True) for s in common}
+    changed = {s: diff_sets(old[s], new[s])._dumped(exclude_defaults=True) for s in common}
     counts = {s: [old[s].counts, new[s].counts] for s in common if old[s].counts != new[s].counts}
     found = {
         **_keyed(old, new),
@@ -129,7 +129,7 @@ def _sets_diff(a: Show, b: Show) -> dict[str, Any]:
 def _paths_diff(a: Show, b: Show) -> dict[str, Any]:
     shared = [t for t in b.transition_ids() if t in a.transition_ids()]
     diffs = {format_tid(t): diff_paths(a.transition(t), b.transition(t)) for t in shared}
-    return {t: d.model_dump(exclude_defaults=True) for t, d in diffs.items() if not d.is_empty}
+    return {t: d._dumped(exclude_defaults=True) for t, d in diffs.items() if not d.is_empty}
 
 
 # Any: diff summaries hold JSON values of mixed types.

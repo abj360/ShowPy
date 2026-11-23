@@ -41,11 +41,11 @@ def _three_set_show() -> Show:
     third = Set(
         id=SetId("3"),
         counts=4.0,
-        placements=tuple(p.model_copy(update={"x": p.x + 1.0}) for p in show.sets[1].placements),
+        placements=tuple(p.replace(x=p.x + 1.0) for p in show.sets[1].placements),
         label="Hit",
         cue="B",
     )
-    return show.model_copy(update={"sets": (*show.sets, third)})
+    return show.replace(sets=(*show.sets, third))
 
 
 def test_sheet_has_one_row_per_set_with_counts_and_positions() -> None:
@@ -61,8 +61,8 @@ def test_sheet_has_one_row_per_set_with_counts_and_positions() -> None:
 
 def test_cumulative_counts_and_measures_accumulate() -> None:
     show = _three_set_show()
-    timeline = show.timeline.model_copy(update={"measures": MeasureSetting(counts_per_measure=4.0)})
-    show = show.model_copy(update={"timeline": timeline})
+    timeline = show.timeline.replace(measures=MeasureSetting(counts_per_measure=4.0))
+    show = show.replace(timeline=timeline)
     rows = coordinate_sheet(show, "T2").rows
     assert [r.cumulative for r in rows] == [0.0, 8.0, 12.0]
     assert [(r.measure.measure, r.measure.count_in_measure) for r in rows if r.measure] == [
@@ -104,7 +104,7 @@ def test_precision_overrides_the_coordinate_rounding() -> None:
 def test_facing_comes_from_the_engine() -> None:
     show = guided_show()
     turned = show.sets[1].with_placements({"T1": PlacementPatch(facing=90.0)})
-    show = show.model_copy(update={"sets": (show.sets[0], turned)})
+    show = show.replace(sets=(show.sets[0], turned))
     rows = coordinate_sheet(show, "T1").rows
     assert approx_equal(rows[0].facing, 0.0, abs_tol=TOL)
     assert approx_equal(rows[1].facing, 90.0, abs_tol=TOL)
@@ -114,7 +114,7 @@ def test_performer_name_appears_once_claimed() -> None:
     show = guided_show()
     pub = live_publication(show)
     claim = Claim(spot=SpotId("T2"), performer=performer("Ada"), claimed_at=AT)
-    pub = pub.model_copy(update={"claims": (claim,)})
+    pub = pub.replace(claims=(claim,))
     sheets = coordinate_sheets(show, "T1-T2", publication=pub)
     assert [(s.entity, s.performer_name) for s in sheets] == [("T1", None), ("T2", "Ada")]
 
@@ -128,7 +128,7 @@ def test_unknown_spot_is_refused_with_suggestions() -> None:
 def test_off_field_rows_say_so() -> None:
     show = two_set_show()
     first = show.sets[0].with_placements({"T1": PlacementPatch(on_field=False)})
-    show = show.model_copy(update={"sets": (first, show.sets[1])})
+    show = show.replace(sets=(first, show.sets[1]))
     rows = coordinate_sheet(show, "T1").rows
     assert rows[0].position_text == "off field"
     assert rows[1].behavior == "enter, move 8"
@@ -136,15 +136,11 @@ def test_off_field_rows_say_so() -> None:
 
 def test_chart_lists_every_spot_of_one_set() -> None:
     show = guided_show()
-    show = show.model_copy(
-        update={
-            "sets": (
-                show.sets[0].with_placements(
-                    {"T3": PlacementPatch(note="solo", form=FormId("line1"))}
-                ),
-                show.sets[1],
-            )
-        }
+    show = show.replace(
+        sets=(
+            show.sets[0].with_placements({"T3": PlacementPatch(note="solo", form=FormId("line1"))}),
+            show.sets[1],
+        )
     )
     result = chart(show, "1")
     assert result.set_id == "1"
@@ -166,13 +162,11 @@ def test_chart_refuses_an_unknown_set() -> None:
 
 def test_cue_sheet_merges_sets_markers_and_cues_in_count_order() -> None:
     show = _three_set_show()
-    timeline = show.timeline.model_copy(
-        update={
-            "markers": (Marker(label="hit", at_count=4.0),),
-            "measures": MeasureSetting(counts_per_measure=4.0),
-        }
+    timeline = show.timeline.replace(
+        markers=(Marker(label="hit", at_count=4.0),),
+        measures=MeasureSetting(counts_per_measure=4.0),
     )
-    table = cue_sheet(show.model_copy(update={"timeline": timeline}))
+    table = cue_sheet(show.replace(timeline=timeline))
     assert list(table.columns) == ["count", "seconds", "measure", "kind", "label", "detail"]
     assert list(table["kind"]) == ["marker", "set"]
     assert list(table["count"]) == [4.0, 12.0]
@@ -191,7 +185,7 @@ def test_cue_sheet_places_cue_mode_cues_by_estimated_time() -> None:
             Cue(label="curtain", order=2, estimated_seconds=5.0),
         ),
     )
-    table = cue_sheet(show.model_copy(update={"timeline": timeline}))
+    table = cue_sheet(show.replace(timeline=timeline))
     assert list(table["label"]) == ["lights", "curtain"]
     assert list(table["seconds"]) == [0.0, 10.0]
     assert all(math.isnan(c) for c in table["count"])
@@ -199,16 +193,16 @@ def test_cue_sheet_places_cue_mode_cues_by_estimated_time() -> None:
 
 def test_sheets_never_mutate_the_show() -> None:
     show = guided_show()
-    before = show.model_dump()
+    before = show.to_json()
     coordinate_sheets(show)
     chart(show, "2")
     cue_sheet(show)
-    assert show.model_dump() == before
+    assert show.to_json() == before
 
 
 def test_single_set_show_has_start_rows_only() -> None:
     show = two_set_show()
-    show = show.model_copy(update={"sets": show.sets[:1]})
+    show = show.replace(sets=show.sets[:1])
     rows = coordinate_sheet(show, "T1").rows
     assert [(r.set, r.behavior, r.crossings) for r in rows] == [("1", "start", ())]
     assert rows[0].xy == Placement(entity=SpotId("T1"), x=0.0, y=5.0).point
@@ -223,7 +217,7 @@ def _twin_guides_show() -> Show:
         )
         for side, x in (("left", -1.0), ("right", 1.0))
     )
-    return show.model_copy(update={"sheet": show.sheet.model_copy(update={"guides": guides})})
+    return show.replace(sheet=show.sheet.replace(guides=guides))
 
 
 @pytest.mark.defect("UP-9.5-39")

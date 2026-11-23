@@ -38,7 +38,6 @@ from pathlib import Path
 import jsonschema
 import numpy as np
 import pytest
-from pydantic import BaseModel
 
 from e8s.cast.models import LabelScheme
 from e8s.cast.spots import delete_spots, regroup, relabel
@@ -48,6 +47,7 @@ from e8s.choreo.models import Set
 from e8s.core.errors import LockedError
 from e8s.core.ids import SetId
 from e8s.core.resources import schema_path
+from e8s.core.types import FrozenModel
 from e8s.core.util import approx_equal, content_hash
 from e8s.examples import EXAMPLE_TIME, performer
 from e8s.export._models import Publication
@@ -116,11 +116,11 @@ class Scenario:
 
 
 @contextmanager
-def unchanged(*models: BaseModel) -> Iterator[None]:
+def unchanged(*models: FrozenModel) -> Iterator[None]:
     """Fails when any given model serializes differently after the block."""
-    before = [m.model_dump_json() for m in models]
+    before = [json.dumps(m.to_json()) for m in models]
     yield
-    assert [m.model_dump_json() for m in models] == before
+    assert [json.dumps(m.to_json()) for m in models] == before
 
 
 def _pinned_show(show: Show) -> tuple[Show, tuple[str, ...]]:
@@ -329,9 +329,9 @@ def test_events_since_replays_to_head(scenario: Scenario) -> None:
 def test_every_emitted_event_round_trips(scenario: Scenario) -> None:
     assert scenario.events
     for event in scenario.events:
-        dumped = event.model_dump(mode="json")
+        dumped = event.to_json()
         assert decode_event(dumped) == event
-        assert CanvasEvent.model_validate_json(event.model_dump_json()) == event
+        assert CanvasEvent.from_json(json.loads(json.dumps(event.to_json()))) == event
 
 
 def test_revert_restores_an_earlier_revision(scenario: Scenario) -> None:

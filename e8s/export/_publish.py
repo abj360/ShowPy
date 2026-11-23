@@ -601,7 +601,7 @@ def reassign(pub: Publication, spot: str, performer: Performer, at: datetime) ->
     """
     _require_open(pub)
     kept = [c for c in pub.claims if c.spot != spot and c.performer.id != performer.id]
-    claim = Claim.model_validate({"spot": spot, "performer": performer, "claimed_at": at})
+    claim = Claim._validated({"spot": spot, "performer": performer, "claimed_at": at})
     return pub.replace(claims=_sorted([*kept, claim]))
 
 

@@ -105,7 +105,7 @@ CHORD_EASINGS = [
 
 
 def _stored(show: Show, spec: TransitionSpec) -> Show:
-    return show.model_copy(update={"transitions": (spec,)})
+    return show.replace(transitions=(spec,))
 
 
 # Any: style parameters are PathRow field values whose types depend on the style.
@@ -268,7 +268,7 @@ def test_custom_motion_receives_plain_json() -> None:
         return result
 
     registry = DEFAULT_MOTIONS.with_motion("probe", recording)
-    row = PathRow.model_validate(
+    row = PathRow.from_json(
         {"entity": "T1", "style": "custom", "motion_fn": "probe", "motion_params": CUSTOM_PARAMS}
     )
     PathEngine(with_rows({"T1": row}), motions=registry).compile(TID)
@@ -290,7 +290,7 @@ def test_regression_custom_motion_with_ragged_output_raises_path_error() -> None
 
 
 def _weave_show(cycles: float) -> Show:
-    row = PathRow.model_validate(
+    row = PathRow.from_json(
         {
             "entity": "T1",
             "style": "custom",

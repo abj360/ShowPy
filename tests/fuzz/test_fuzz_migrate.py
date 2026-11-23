@@ -56,7 +56,7 @@ def _head(tag: str) -> dict[str, bytes]:
 V1_TREES = [_head(tag) for tag in TAGS]
 TREES = V1_TREES + [migrate_documents(tree)[0] for tree in V1_TREES]
 DOC_PATHS = [sorted(p for p in tree if is_show_doc(p)) for tree in TREES]
-V1_DUMPS = [decode_show(tree).model_dump(mode="json") for tree in V1_TREES]
+V1_DUMPS = [decode_show(tree).to_json() for tree in V1_TREES]
 
 
 def _replace_nested(document: object, picks: list[int], value: object) -> object:

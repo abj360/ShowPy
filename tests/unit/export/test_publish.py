@@ -131,7 +131,7 @@ from e8s.show.models import Show
 from tests.fixtures.export_shows import AT, guided_show, performer
 from tests.fixtures.motion_shows import with_rows, with_targets
 from tests.fixtures.shows import two_set_show
-from tests.helpers import fails_after
+from tests.helpers import fails_after, json_doc
 
 pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
@@ -168,11 +168,11 @@ def _crew_show() -> Show:
     show = two_set_show()
     spots = (
         show.cast.spots[0],
-        show.cast.spots[1].model_copy(update={"claimable": "crew"}),
-        show.cast.spots[2].model_copy(update={"claimable": "none"}),
-        show.cast.spots[3].model_copy(update={"active": False}),
+        show.cast.spots[1].replace(claimable="crew"),
+        show.cast.spots[2].replace(claimable="none"),
+        show.cast.spots[3].replace(active=False),
     )
-    return show.model_copy(update={"cast": show.cast.model_copy(update={"spots": spots})})
+    return show.replace(cast=show.cast.replace(spots=spots))
 
 
 def test_publish_builds_a_live_link() -> None:
@@ -183,7 +183,7 @@ def test_publish_builds_a_live_link() -> None:
 
 
 def test_publish_uses_the_stored_revision_and_is_deterministic() -> None:
-    show = two_set_show().model_copy(update={"revision": "rev-9"})
+    show = two_set_show().replace(revision="rev-9")
     assert publish(show, "p", BASE_URL, AT, join_token=JOIN_TOKEN).revision == "rev-9"
     assert _published() == _published()
 
@@ -262,7 +262,7 @@ def test_claims_need_a_live_publication_of_the_same_show() -> None:
         claim_spot(pause(_published(show)), show, performer("Ada"), "T1", AT)
     with pytest.raises(UnknownRefError):
         claim_spot(_published(show), show, performer("Ada"), "T9", AT)
-    other = show.model_copy(update={"id": "show-2"})
+    other = show.replace(id="show-2")
     with pytest.raises(ShowValidationError):
         claim_spot(_published(show), other, performer("Ada"), "T1", AT)
 
@@ -272,19 +272,15 @@ def test_republish_keeps_claims_on_spots_that_still_qualify() -> None:
     pub = _with_claims(show, ("Ada", "T1"), ("Bo", "T2"), ("Cy", "T3"))
     spots = (
         show.cast.spots[0],
-        show.cast.spots[1].model_copy(update={"claimable": "crew"}),
+        show.cast.spots[1].replace(claimable="crew"),
         show.cast.spots[3],
     )
-    edited = show.model_copy(
-        update={
-            "cast": show.cast.model_copy(update={"spots": spots}),
-            "sets": tuple(
-                s.model_copy(
-                    update={"placements": tuple(p for p in s.placements if p.entity != "T3")}
-                )
-                for s in show.sets
-            ),
-        }
+    edited = show.replace(
+        cast=show.cast.replace(spots=spots),
+        sets=tuple(
+            s.replace(placements=tuple(p for p in s.placements if p.entity != "T3"))
+            for s in show.sets
+        ),
     )
     again = publish(edited, "pub-1", BASE_URL, LATER, previous=pub, join_token=JOIN_TOKEN)
     assert [c.spot for c in again.claims] == ["T1"]
@@ -358,13 +354,10 @@ def test_notify_changes_reports_removed_spots_and_combines_parts() -> None:
     pub = _with_claims(old, ("Ada", "T1"), ("Bo", "T2"))
     edited = [s.with_placements({"T1": PlacementPatch(x=5.0, facing=45.0)}) for s in old.sets]
     sets = tuple(
-        s.model_copy(update={"placements": tuple(p for p in s.placements if p.entity != "T2")})
-        for s in edited
+        s.replace(placements=tuple(p for p in s.placements if p.entity != "T2")) for s in edited
     )
     spots = tuple(s for s in old.cast.spots if s.id != "T2")
-    new = old.model_copy(
-        update={"sets": sets, "cast": old.cast.model_copy(update={"spots": spots})}
-    )
+    new = old.replace(sets=sets, cast=old.cast.replace(spots=spots))
     notices = {p.name: text for p, text in notify_changes(pub, old, new)}
     assert notices == {
         "Ada": "moved in sets 1, 2; facing changed in sets 1, 2",
@@ -375,9 +368,7 @@ def test_notify_changes_reports_removed_spots_and_combines_parts() -> None:
 def test_unclaimed_skips_spots_nobody_may_claim() -> None:
     show = two_set_show()
     extra = Spot(id=SpotId("P1"), group="trumpets", claimable="none")
-    show = show.model_copy(
-        update={"cast": show.cast.model_copy(update={"spots": (*show.cast.spots, extra)})}
-    )
+    show = show.replace(cast=show.cast.replace(spots=(*show.cast.spots, extra)))
     assert "P1" not in unclaimed(_published(show), show)
 
 
@@ -417,7 +408,7 @@ def _grid_text(grid: list[list[bool]]) -> str:
 
 def _claimed_with_contact() -> tuple[Show, Publication]:
     show = two_set_show()
-    ada = performer("Ada").model_copy(update={"contact": CONTACT})
+    ada = performer("Ada").replace(contact=CONTACT)
     pub, _ = claim_spot(_published(show), show, ada, "T1", AT)
     return show, pub
 
@@ -450,7 +441,7 @@ def test_regression_publish_link_carries_a_caller_supplied_join_token() -> None:
     token = "k3Qz9-high-entropy-join-token"
     pub = publish(two_set_show(), "pub-1", BASE_URL, AT, join_token=token)
     assert token in join_link(pub, token)
-    stored = pub.model_dump_json()
+    stored = json.dumps(pub.to_json())
     assert token not in stored
     assert hashlib.sha256(token.encode()).hexdigest() in stored
 
@@ -461,7 +452,7 @@ def test_regression_publication_snapshot_excludes_contact_details() -> None:
     `Claim.performer.contact` serializes with the snapshot that is shared with every viewer.
     """
     _, pub = _claimed_with_contact()
-    assert CONTACT not in pub.model_dump_json()
+    assert CONTACT not in json.dumps(pub.to_json())
 
 
 def test_regression_claims_and_notices_return_redacted_performers() -> None:
@@ -482,17 +473,17 @@ def _require_contacts(stored: dict[str, Any]) -> None:
 
 def _legacy_publication() -> tuple[Show, Publication]:
     show, pub = _claimed_with_contact()
-    stored = pub.model_dump(mode="json")
+    stored = json_doc(pub)
     stored["claims"][0]["performer"]["contact"] = CONTACT
     _require_contacts(stored)
-    return show, Publication.model_validate(stored)
+    return show, Publication.from_json(stored)
 
 
 def test_regression_reassign_stores_performers_without_contact() -> None:
     """Drops the contact when the designer moves a performer onto a spot."""
-    ada = performer("Ada").model_copy(update={"contact": CONTACT})
+    ada = performer("Ada").replace(contact=CONTACT)
     pub = reassign(_published(), "T3", ada, AT)
-    assert CONTACT not in pub.model_dump_json()
+    assert CONTACT not in json.dumps(pub.to_json())
 
 
 def test_regression_republish_drops_contacts_held_by_a_legacy_publication() -> None:
@@ -500,14 +491,14 @@ def test_regression_republish_drops_contacts_held_by_a_legacy_publication() -> N
     show, legacy = _legacy_publication()
     pub = publish(show, "pub-1", BASE_URL, LATER, legacy, join_token=JOIN_TOKEN)
     assert [c.spot for c in pub.claims] == ["T1"]
-    assert CONTACT not in pub.model_dump_json()
+    assert CONTACT not in json.dumps(pub.to_json())
 
 
 def test_regression_swap_claims_drops_contacts_held_by_a_legacy_publication() -> None:
     """Strips a v0.2.0 contact from claims rebuilt by a swap."""
     show, legacy = _legacy_publication()
     pub, _ = claim_spot(legacy, show, performer("Bo"), "T2", AT)
-    assert CONTACT not in swap_claims(pub, "T1", "T2").model_dump_json()
+    assert CONTACT not in json.dumps(swap_claims(pub, "T1", "T2").to_json())
 
 
 def test_regression_readers_redact_contacts_of_a_legacy_publication() -> None:
@@ -519,24 +510,24 @@ def test_regression_readers_redact_contacts_of_a_legacy_publication() -> None:
     assert holder.contact is None
     view = performer_view(legacy, show, performer("Ada"))
     assert view.performer.contact is None
-    assert CONTACT not in view.model_dump_json()
+    assert CONTACT not in json.dumps(view.to_json())
     new = with_targets({"T1": {"x": 3.0}}, show=show)
     assert all(who.contact is None for who, _ in notify_changes(legacy, show, new))
 
 
 def _three_claim_legacy() -> tuple[Show, Publication]:
     show = two_set_show()
-    stored = _with_claims(show, ("Ada", "T1"), ("Bo", "T2"), ("Cy", "T3")).model_dump(mode="json")
+    stored = json_doc(_with_claims(show, ("Ada", "T1"), ("Bo", "T2"), ("Cy", "T3")))
     for claim in stored["claims"]:
         claim["performer"]["contact"] = CONTACT
     _require_contacts(stored)
-    return show, Publication.model_validate(stored)
+    return show, Publication.from_json(stored)
 
 
 def test_regression_loading_a_legacy_publication_drops_contacts() -> None:
     """Drops contacts at validation, so a v0.2.0 snapshot is clean as soon as it loads."""
     _, legacy = _three_claim_legacy()
-    assert CONTACT not in legacy.model_dump_json()
+    assert CONTACT not in json.dumps(legacy.to_json())
     assert all(c.performer.contact is None for c in legacy.claims)
 
 
@@ -558,7 +549,7 @@ def test_regression_every_mutator_drops_contacts_of_a_legacy_publication(
 ) -> None:
     """Keeps every untouched legacy claim contact-free whichever edit runs."""
     show, legacy = _three_claim_legacy()
-    assert CONTACT not in edit(show, legacy).model_dump_json()
+    assert CONTACT not in json.dumps(edit(show, legacy).to_json())
 
 
 @pytest.mark.parametrize("base_url", ["javascript:alert(1)", "data:text/html,x"])
@@ -602,7 +593,7 @@ def test_regression_qr_code_caps_the_image_size() -> None:
 
 def test_regression_qr_code_wraps_an_overlong_link_error() -> None:
     """Raises an E8sError, not segno.DataOverflowError, for a link too long for a QR code."""
-    pub = _published().model_copy(update={"link": f"https://eight.example/{OVERLONG_PATH}"})
+    pub = _published().replace(link=f"https://eight.example/{OVERLONG_PATH}")
     with pytest.raises(E8sError):
         qr_code(pub, JOIN_TOKEN)
 
@@ -653,7 +644,7 @@ def test_regression_publish_rejects_a_missing_base_url_with_schema_error() -> No
 
 def test_regression_qr_code_overflow_error_hides_the_join_token() -> None:
     """Keeps the joinable link, and so the join token, out of the overflow message and context."""
-    pub = _published().model_copy(update={"link": f"https://eight.example/{OVERLONG_PATH}"})
+    pub = _published().replace(link=f"https://eight.example/{OVERLONG_PATH}")
     with pytest.raises(SchemaError) as caught:
         qr_code(pub, JOIN_TOKEN)
     assert JOIN_TOKEN not in str(caught.value)
@@ -777,7 +768,7 @@ def test_regression_republish_after_a_spot_rename_keeps_the_claim() -> None:
 def test_regression_notify_changes_reports_a_deleted_set() -> None:
     """Tells a performer when a set they had a position in was deleted (audit 9.5)."""
     old = two_set_show()
-    new = old.model_copy(update={"sets": old.sets[:1]})
+    new = old.replace(sets=old.sets[:1])
     assert _notified(old, new)
 
 
@@ -786,8 +777,8 @@ def test_regression_notify_changes_reports_a_deleted_set() -> None:
 def test_regression_notify_changes_reports_a_new_set() -> None:
     """Tells a performer when a set was added after their publication (audit 9.5)."""
     old = two_set_show()
-    third = old.sets[1].model_copy(update={"id": "3", "counts": 4.0})
-    new = old.model_copy(update={"sets": (*old.sets, third)})
+    third = old.sets[1]._copied(update={"id": "3", "counts": 4.0})
+    new = old._copied(update={"sets": (*old.sets, third)})
     assert _notified(old, new)
 
 
@@ -816,7 +807,7 @@ def test_regression_performer_view_checks_the_show_matches_the_publication() -> 
     """Refuses a view built against a different show than the publication was made from."""
     show = two_set_show()
     pub = _with_claims(show, ("Ada", "T1"))
-    other = show.model_copy(update={"id": "show-2"})
+    other = show.replace(id="show-2")
     with pytest.raises(ShowValidationError):
         performer_view(pub, other, performer("Ada"))
 
@@ -829,12 +820,9 @@ def test_regression_performer_view_after_deletion_gives_a_performer_hint() -> No
     pub = _with_claims(show, ("Ada", "T2"))
     spots = tuple(s for s in show.cast.spots if s.id != "T2")
     sets = tuple(
-        s.model_copy(update={"placements": tuple(p for p in s.placements if p.entity != "T2")})
-        for s in show.sets
+        s.replace(placements=tuple(p for p in s.placements if p.entity != "T2")) for s in show.sets
     )
-    gone = show.model_copy(
-        update={"sets": sets, "cast": show.cast.model_copy(update={"spots": spots})}
-    )
+    gone = show.replace(sets=sets, cast=show.cast.replace(spots=spots))
     with pytest.raises(E8sError) as caught:
         performer_view(pub, gone, performer("Ada"))
     hint = caught.value.hint.lower()
@@ -1010,14 +998,14 @@ def test_regression_stored_publication_holds_no_join_token() -> None:
     show = guided_show()
     pub = _with_claims(show, ("Ada", "T2"))
     outputs = [
-        pub.model_dump_json(),
-        json.dumps(pub.model_dump(mode="json")),
+        json.dumps(pub.to_json()),
+        json.dumps(pub.to_json()),
         repr(pub),
         str(pub),
         json.dumps(export_json(show)),
-        *(sheet.model_dump_json() for sheet in coordinate_sheets(show, publication=pub)),
-        chart(show, "2", pub).model_dump_json(),
-        performer_view(pub, show, performer("Ada")).model_dump_json(),
+        *(json.dumps(sheet.to_json()) for sheet in coordinate_sheets(show, publication=pub)),
+        json.dumps(chart(show, "2", pub).to_json()),
+        json.dumps(performer_view(pub, show, performer("Ada")).to_json()),
     ]
     assert not [text for text in outputs if JOIN_TOKEN in text]
     for presented in (f"{JOIN_TOKEN}x", f"{JOIN_TOKEN}!", JOIN_TOKEN[:-1] + "X"):
@@ -1124,7 +1112,7 @@ def test_regression_republish_without_a_digest_requires_a_token() -> None:
 
 def _e1_stored(link: str) -> dict[str, Any]:
     """Builds a publication record shaped as E1-era code stored it, token in the link."""
-    stored = _published().model_dump(mode="json")
+    stored = _published().to_json()
     stored["link"] = link
     return stored
 
@@ -1134,13 +1122,13 @@ def test_regression_loading_an_e1_publication_strips_the_join_token() -> None:
     stored = _e1_stored(f"{LINK}?t={JOIN_TOKEN}")
     assert JOIN_TOKEN in json.dumps(stored)
     for loaded in (
-        Publication.model_validate(stored),
-        Publication.model_validate_json(json.dumps(stored)),
+        Publication.from_json(stored),
+        Publication.from_json(json.loads(json.dumps(stored))),
         Publication(**stored),
     ):
         assert loaded.link == LINK
         assert loaded.join_token_sha256 == hashlib.sha256(JOIN_TOKEN.encode()).hexdigest()
-        assert JOIN_TOKEN not in f"{loaded.model_dump_json()} {loaded!r}"
+        assert JOIN_TOKEN not in f"{json.dumps(loaded.to_json())} {loaded!r}"
         assert join_link(loaded, JOIN_TOKEN) == f"{LINK}?t={JOIN_TOKEN}"
 
 
@@ -1162,7 +1150,7 @@ def test_regression_loading_an_e1_publication_keeps_other_query_parameters(
     link: str, expected: str
 ) -> None:
     """Strips every `t` parameter from a stored link and keeps the rest of it unchanged."""
-    assert Publication.model_validate(_e1_stored(link)).link == expected
+    assert Publication.from_json(_e1_stored(link)).link == expected
 
 
 def test_regression_invalid_e1_publication_errors_omit_the_join_token() -> None:
@@ -1173,7 +1161,7 @@ def test_regression_invalid_e1_publication_errors_omit_the_join_token() -> None:
     stored = _e1_stored(f"{LINK}?t={JOIN_TOKEN}")
     del stored["published_at"]
     with pytest.raises(SchemaError) as caught:
-        Publication.model_validate(stored)
+        Publication.from_json(stored)
     assert JOIN_TOKEN not in _error_text(caught.value)
 
 
@@ -1212,13 +1200,13 @@ def test_regression_publication_refuses_a_non_text_link_without_echoing_it(kind:
     Pydantic's lax mode turned bytes into text after the token was stripped, and a wrong-type
     link was echoed, token included, in the error's input field.
     """
-    stored = {**_published().model_dump(mode="json"), "link": _legacy_link_as(kind)}
+    stored = {**_published().to_json(), "link": _legacy_link_as(kind)}
     loaders: list[Callable[[], Publication]] = [
-        lambda: Publication.model_validate(stored),
+        lambda: Publication.from_json(stored),
         lambda: Publication(**stored),
     ]
     if kind in ("list", "dict"):
-        loaders.append(lambda: Publication.model_validate_json(json.dumps(stored)))
+        loaders.append(lambda: Publication.from_json(json.loads(json.dumps(stored))))
     for load in loaders:
         with pytest.raises(SchemaError) as caught:
             load()

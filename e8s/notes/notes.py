@@ -68,11 +68,11 @@ def _note_index(notes: NotesDocument, note_id: str) -> int:
 # Any: fields are arbitrary Note fields, validated by the model.
 def _build_note(fields: dict[str, Any]) -> Note:
     try:
-        note = Note.model_validate(fields)
+        note = Note._validated(fields)
     except SchemaError as error:
         raise SchemaError(
             f"bad note: {field_errors(error)[0]['msg']}",
-            hint=f"give only these fields: {', '.join(Note.model_fields)}",
+            hint=f"give only these fields: {', '.join(Note._field_names())}",
             context={"fields": sorted(fields)},
         ) from error
     if not note.text.strip():

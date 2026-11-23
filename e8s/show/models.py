@@ -38,7 +38,7 @@ from collections import Counter
 from collections.abc import Mapping, Sized
 from datetime import datetime
 from functools import cached_property
-from typing import Annotated, Final, Literal
+from typing import Annotated, ClassVar, Final, Literal
 
 from pydantic import (
     Field,
@@ -117,6 +117,9 @@ class ShowLookup(FrozenModel):
     consecutive: Annotated[Mapping[TransitionId, TransitionId], ReadOnly()]
     stored: Annotated[Mapping[TransitionId, TransitionSpec], ReadOnly()]
     forms: Annotated[Mapping[FormId, Form], ReadOnly()]
+    _json_refusal: ClassVar[str | None] = (
+        "a lookup is derived from its show; store the Show and read show.lookup after loading it"
+    )
 
 
 def _no_forms() -> ReadOnlyMap[FormId, Form]:
@@ -306,7 +309,7 @@ class Show(FrozenModel):
         for spec in self.transitions:
             stored.setdefault(spec.id, spec)
         pairs = [TransitionId(a, b) for a, b in itertools.pairwise(ids)]
-        return ShowLookup.model_construct(
+        return ShowLookup._unchecked(
             positions=ReadOnlyMap(positions),
             consecutive=ReadOnlyMap({pair: pair for pair in pairs}),
             stored=ReadOnlyMap(stored),
@@ -491,7 +494,7 @@ class SetDiff(FrozenModel):
     @property
     def is_empty(self) -> bool:
         """Reports whether the sets match."""
-        return not any(self.model_dump().values())
+        return not any(self._dumped().values())
 
 
 class PathDiff(FrozenModel):
@@ -674,7 +677,7 @@ class CanvasEvent(FrozenModel):
         model = EVENT_PAYLOADS.get(kind) if isinstance(kind, str) else None
         if model is None or not isinstance(payload, Mapping):
             return data
-        return {**data, "payload": model.model_validate(payload)}
+        return {**data, "payload": model._validated(payload)}
 
     @model_validator(mode="after")
     def _require_payload_of_kind(self) -> "CanvasEvent":

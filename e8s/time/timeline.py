@@ -358,7 +358,7 @@ def to_json(tl: Timeline) -> dict[str, Any]:
     >>> to_json(new_timeline(TimelineMode.CUES))["mode"]
     'cues'
     """
-    return tl.model_dump(mode="json")
+    return tl.to_json()
 
 
 # Any: a JSON document holds arbitrarily nested JSON values.
@@ -369,7 +369,7 @@ def from_json(d: dict[str, Any]) -> Timeline:
     <TimelineMode.CUES: 'cues'>
     """
     try:
-        return Timeline.model_validate(d)
+        return Timeline._validated(d)
     except SchemaError as exc:
         raise SchemaError(
             "timeline JSON does not match the Timeline schema",

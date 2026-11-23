@@ -75,9 +75,9 @@ def _rows(text: str | bytes) -> list[list[str]]:
 
 def _show_with_cues(cues: list[str]) -> Show:
     show = two_set_show()
-    first = show.sets[0].model_copy(update={"cue": cues[0]})
-    second = show.sets[1].model_copy(update={"cue": cues[1]})
-    return show.model_copy(update={"sets": (first, second)})
+    first = show.sets[0].replace(cue=cues[0])
+    second = show.sets[1].replace(cue=cues[1])
+    return show.replace(sets=(first, second))
 
 
 @pytest.mark.parametrize("lead", FORMULA_LEADS)
@@ -93,8 +93,8 @@ def test_regression_index_csv_neutralizes_formula_cues(lead: str) -> None:
 def test_regression_index_csv_neutralizes_set_ids() -> None:
     """Quotes a formula-like set ID in the derived index table."""
     show = two_set_show()
-    renamed = show.sets[1].model_copy(update={"id": "=1+2"})
-    edited = show.model_copy(update={"sets": (show.sets[0], renamed)})
+    renamed = show.sets[1].replace(id="=1+2")
+    edited = show.replace(sets=(show.sets[0], renamed))
     rows = _rows(_index_csv(edited).decode())
     assert rows[2][0] == "'=1+2"
 
@@ -106,7 +106,7 @@ def test_regression_placements_csv_neutralizes_formula_notes(lead: str) -> None:
     show = two_set_show()
     first = show.sets[0]
     noted = first.with_placements({first.placements[0].entity: PlacementPatch(note=note)})
-    show = show.model_copy(update={"sets": (noted, show.sets[1])})
+    show = show.replace(sets=(noted, show.sets[1]))
     _, agent, _ = open_session(show, AT)
     rows = _rows(agent.read("/sets/1/placements.csv"))
     note_column = rows[0].index("note")
@@ -120,7 +120,7 @@ def test_regression_placements_csv_keeps_negative_numbers_unquoted() -> None:
     first = show.sets[0]
     entity = first.placements[0].entity
     moved = first.with_placements({entity: PlacementPatch(x=-3.5, note="=1+1")})
-    show = show.model_copy(update={"sets": (moved, show.sets[1])})
+    show = show.replace(sets=(moved, show.sets[1]))
     _, agent, _ = open_session(show, AT)
     rows = _rows(agent.read("/sets/1/placements.csv"))
     assert rows[1][rows[0].index("x")] == "-3.5"

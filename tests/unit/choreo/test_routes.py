@@ -61,6 +61,7 @@ Contains:
         member the same segment count when a follower's start moves by 1 ulp
 """
 
+import json
 import math
 
 import pytest
@@ -150,7 +151,7 @@ def test_counter_march_reverses_the_file() -> None:
 def test_two_part_moves_x_first() -> None:
     show = with_targets({"T1": {"x": 4.0, "y": 9.0}})
     spec = two_part(show, show.transition(TID), ["T1"], "x_first", split=4.0)
-    engine = PathEngine(show.model_copy(update={"transitions": (spec,)}))
+    engine = PathEngine(show.replace(transitions=(spec,)))
     assert approx_equal(engine.position("T1", 4.0), (4.0, 5.0))
 
 
@@ -164,7 +165,7 @@ def test_rotate_path_about_center() -> None:
     }
     show = with_targets(rotated)
     spec = rotate_path(show, show.transition(TID), list(first.entity_ids()), "center", 180.0)
-    engine = PathEngine(show.model_copy(update={"transitions": (spec,)}))
+    engine = PathEngine(show.replace(transitions=(spec,)))
     mid = engine.position("T1", 4.0)
     assert approx_equal(math.dist(mid, pivot), 3.0)
 
@@ -401,7 +402,7 @@ def test_route_storage_accepts_valid_routes() -> None:
     replaced = follow(spec, detour)
     assert replaced.routes[RouteId("r1")] == detour
     assert replaced.routes[RouteId("r2")] == second
-    assert TransitionSpec.model_validate_json(replaced.model_dump_json()) == replaced
+    assert TransitionSpec.from_json(json.loads(json.dumps(replaced.to_json()))) == replaced
 
 
 def test_route_storage_ignores_locks_on_other_routes() -> None:

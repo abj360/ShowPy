@@ -51,7 +51,7 @@ def test_on_surface_includes_the_edge() -> None:
 def test_walkable_respects_holes() -> None:
     sheet = field_sheet()
     ring = sheet.outline
-    holed = sheet.model_copy(update={"walkable": Region(exterior=ring, holes=(HOLE,))})
+    holed = sheet.replace(walkable=Region(exterior=ring, holes=(HOLE,)))
     assert walkable(sheet, (0.0, 1.5))
     assert not walkable(holed, (0.0, 1.5))
     assert on_surface(holed, (0.0, 1.5))
@@ -97,7 +97,7 @@ def test_zones_at_merges_show_zones_and_filters_by_count() -> None:
         polygon=Region(exterior=((-1.0, -2.0), (1.0, -2.0), (1.0, -1.0), (-1.0, -1.0))),
         active=((0.0, 4.0),),
     )
-    show = show.model_copy(update={"zones": (timed,)})
+    show = show.replace(zones=(timed,))
     assert [z.id for z in zones_at(show, (0.0, -1.5))] == ["pit", "timed"]
     assert [z.id for z in zones_at(show, (0.0, -1.5), t=8.0)] == ["pit"]
     assert zones_at(show, (10.0, 10.0)) == []

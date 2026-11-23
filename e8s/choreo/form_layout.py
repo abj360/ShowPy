@@ -18,6 +18,7 @@ Contains:
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import cast
 
 import numpy as np
 
@@ -236,7 +237,8 @@ def _scatter_points(form: Form, recipe: ScatterRecipe) -> Points:
 def _generated_points(form: Form, recipe: GeneratedRecipe, registry: FormFnRegistry) -> Points:
     n = _required_count(form)
     fn = registry.get(recipe.fn)
-    params: dict[str, JsonValue] = recipe.model_dump(mode="json")["params"]
+    # The params field is a JSON object, so its JSON dump is a dict.
+    params = cast("dict[str, JsonValue]", recipe.to_json()["params"])
     pts = np.asarray(fn(params, n), dtype=float)
     if pts.shape != (n, 2) or not np.all(np.isfinite(pts)):
         raise SchemaError(

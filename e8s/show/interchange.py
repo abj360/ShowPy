@@ -21,7 +21,7 @@ import base64
 import json
 import math
 from collections.abc import Iterable, Mapping
-from typing import Any, Never
+from typing import Any, Never, cast
 
 from e8s.choreo.form_models import TextRecipe
 from e8s.core.deprecation import leaving_call
@@ -111,8 +111,9 @@ def export_json(
     >>> sorted(export_json(two_set_show(), include=["title"])["show"])
     ['id', 'title']
     """
-    dumped = show.model_dump(mode="json")
-    extensions = dumped.pop(EXTENSIONS_FIELD, {})
+    dumped = show.to_json()
+    # Show.extensions is a JSON object, so its JSON dump is a dict.
+    extensions = cast("dict[str, JsonValue]", dumped.pop(EXTENSIONS_FIELD, {}))
     if include is not None:
         names = [include] if isinstance(include, str) else include
         keep = {ALWAYS_EXPORTED, *names}
@@ -129,7 +130,7 @@ def export_json(
         require_notes_of(notes, show.id)
     document: dict[str, Any] = {**format_header(), SHOW_KEY: dumped}
     if notes is not None:
-        document[NOTES_KEY] = notes.model_dump(mode="json")
+        document[NOTES_KEY] = notes.to_json()
     registry = bundled_fonts() if font_registry is None else font_registry
     fonts = _embedded_fonts(show, dumped, registry)
     if fonts:
@@ -174,7 +175,7 @@ def import_json(d: Mapping[str, Any]) -> Show:
     >>> from e8s.examples import two_set_show
     >>> import_json(export_json(two_set_show())).id
     'show-1'
-    >>> v1 = {"schema": "showpy.show.v1", "show": two_set_show().model_dump(mode="json")}
+    >>> v1 = {"schema": "showpy.show.v1", "show": two_set_show().to_json()}
     >>> import_json(v1) == two_set_show()
     True
     >>> import_json({**export_json(two_set_show()), "x-host": {"n": 1}}).extensions["x-host"]
@@ -206,7 +207,7 @@ def import_json(d: Mapping[str, Any]) -> Show:
     try:
         if version < CURRENT_VERSION:
             return decode_show_dump(show, version)
-        return Show.model_validate(show, context=CHECKED_CONTEXT)
+        return Show._validated(show, context=CHECKED_CONTEXT)
     except SchemaError as error:
         friendly = _first_field_error(error)
         if friendly is error:
@@ -371,7 +372,7 @@ def _notes_json(d: Mapping[str, object]) -> dict[str, JsonValue]:
     >>> _notes_json(export_json(two_set_show()))["notes"]
     []
     """
-    return _notes_document(d).model_dump(mode="json")
+    return _notes_document(d).to_json()
 
 
 def _notes_document(d: Mapping[str, object]) -> NotesDocument:
@@ -396,13 +397,13 @@ def _notes_document(d: Mapping[str, object]) -> NotesDocument:
         moved = beside.get(NOTES_DOC)
         if moved is None:
             return NotesDocument(show=migrated.id)
-        return NotesDocument.model_validate(moved)
+        return NotesDocument._validated(moved)
     show_id = show.get("id")
     if not isinstance(show_id, str):
         raise SchemaError("show object has no string id", hint="export with export_json()")
     if NOTES_KEY not in d:
         return NotesDocument(show=show_id)
-    notes = NotesDocument.model_validate(strict_json_copy(d[NOTES_KEY], document=NOTES_KEY))
+    notes = NotesDocument._validated(strict_json_copy(d[NOTES_KEY], document=NOTES_KEY))
     require_notes_of(notes, show_id)
     return notes
 
@@ -432,4 +433,4 @@ def import_notes(d: Mapping[str, object]) -> NotesDocument:
     >>> notes.show, notes.notes
     ('show-1', ())
     """
-    return NotesDocument.model_validate(_notes_json(d))
+    return NotesDocument._validated(_notes_json(d))

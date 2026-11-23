@@ -77,7 +77,7 @@ EMPTY_LIST = dump_json([])
 DEFAULTS = {
     LIMITS_DOC: b"",
     WAIVERS_DOC: b"",
-    SELECTION_DOC: dump_json(Selection(ids=()).model_dump(mode="json")),
+    SELECTION_DOC: dump_json(Selection(ids=()).to_json()),
     COMMENTS_DOC: EMPTY_LIST,
 }
 
@@ -198,7 +198,7 @@ def _show_file(path: str, segments: list[str], show: Show) -> bytes | None:
             return encode_documents(show, [stored]).get(stored, EMPTY_LIST)
     if segments[0] == "transitions" and len(segments) == 3 and segments[2] == PATHS_NAME:
         tid = _pair(show, segments[1])
-        return dump_json(show.transition(tid).model_dump(mode="json"))
+        return dump_json(show.transition(tid).to_json())
     if path in (SHOW_DOC, SHEET_DOC, TIMELINE_DOC):
         return encode_documents(show, [path])[path]
     return None
@@ -327,5 +327,5 @@ def staged_changes(
         raise _unknown(path, show, tree)
     require_structured(path, raw)
     if path == NOTES_DOC:
-        require_notes_of(NotesDocument.model_validate_json(raw), _require_show(show, path).id)
+        require_notes_of(NotesDocument._validated_json(raw), _require_show(show, path).id)
     return {to_stored_path(path, show): raw}

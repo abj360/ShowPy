@@ -194,7 +194,7 @@ def test_leaving_sheet_types_warn_on_top_level_access(
 
 def test_leaving_show_sheet_fields_warn() -> None:
     document = export_json(SHOW)
-    version_one = {"schema": "showpy.show.v1", "show": SHOW.model_dump(mode="json")}
+    version_one = {"schema": "showpy.show.v1", "show": SHOW.to_json()}
     with pytest.warns(DeprecatedWarning) as coordinates:
         assert SHOW.coordinates == SHOW.coordinates
     assert [str(w.message) for w in coordinates] == [
@@ -210,8 +210,8 @@ def test_leaving_show_sheet_fields_warn() -> None:
         warnings.simplefilter("always")
         assert import_json(document) == SHOW
         assert import_json(version_one) == SHOW
-        assert Show.model_validate(SHOW.model_dump(mode="json")) == SHOW
-        assert SHOW.model_copy(update={"title": "again"}).title == "again"
+        assert Show.from_json(SHOW.to_json()) == SHOW
+        assert SHOW.replace(title="again").title == "again"
     assert caught == []
 
 

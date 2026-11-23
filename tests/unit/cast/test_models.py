@@ -51,6 +51,7 @@ Contains:
         decoded cast by its length before any spot is checked
 """
 
+import json
 import math
 import sys
 from typing import cast as typing_cast
@@ -91,7 +92,7 @@ def test_shape_extent_for_circle_and_rectangle() -> None:
 def test_spot_defaults() -> None:
     spot = Spot(id=SpotId("T1"), group="trumpets")
     assert spot.active
-    assert spot.model_dump()["claimable"] == "performer"
+    assert spot.to_json()["claimable"] == "performer"
     assert spot.tags == ()
     assert spot.symbol is None
 
@@ -128,12 +129,13 @@ def test_cast_round_trips_json() -> None:
     cast = Cast(
         groups={"t": Group(key="t", label_prefix="T")}, spots=(Spot(id=SpotId("T1"), group="t"),)
     )
-    assert Cast.model_validate_json(cast.model_dump_json()) == cast
+    assert Cast.from_json(json.loads(json.dumps(cast.to_json()))) == cast
 
 
 REJECTED = (E8sError, PydanticValidationError)
 HUGE_PAD = 10**7
 CAST_SCRIPT_HEAD = (
+    "import json\n"
     "from e8s.cast.models import Cast, Group, Spot\n"
     "from e8s.core.util import content_hash\n"
     "ids = [f'T{i}' for i in range(1, 7)]\n"
@@ -166,7 +168,7 @@ def test_regression_spot_tags_serialize_in_a_stable_order() -> None:
 
     A fix must store a sorted, deduplicated tuple or reject set input.
     """
-    outputs = _under_seeds("print(cast.spots[0].model_dump_json())\n")
+    outputs = _under_seeds("print(json.dumps(cast.spots[0].to_json()))\n")
     assert len(set(outputs)) == 1, outputs
 
 
@@ -175,7 +177,7 @@ def test_regression_cast_selections_serialize_in_a_stable_order() -> None:
 
     A fix must store a sorted, deduplicated tuple or reject set input.
     """
-    outputs = _under_seeds("print(cast.model_dump_json())\n")
+    outputs = _under_seeds("print(json.dumps(cast.to_json()))\n")
     assert len(set(outputs)) == 1, outputs
 
 
@@ -203,9 +205,9 @@ def test_regression_frozenset_tags_and_selections_store_in_one_order() -> None:
 
 def test_regression_tags_and_selections_dedupe_keeping_first_occurrence() -> None:
     """Drops repeated tags and selection IDs and keeps the order a list was given in."""
-    spot = Spot.model_validate({"id": "T1", "group": "g", "tags": ["z", "a", "z"]})
+    spot = Spot.from_json({"id": "T1", "group": "g", "tags": ["z", "a", "z"]})
     assert spot.tags == ("z", "a")
-    cast = Cast.model_validate(
+    cast = Cast.from_json(
         {
             "groups": {"g": Group(key="g", label_prefix="T")},
             "spots": (spot, Spot(id=SpotId("T2"), group="g")),
@@ -222,10 +224,10 @@ def test_regression_v02_array_documents_still_decode() -> None:
         ' "spots": [{"id": "T1", "group": "g", "tags": ["b", "a"]}],'
         ' "selections": {"s": ["T1"]}}'
     )
-    cast = Cast.model_validate_json(document)
+    cast = Cast.from_json(json.loads(document))
     assert cast.spots[0].tags == ("b", "a")
     assert cast.selections == {"s": ("T1",)}
-    assert Cast.model_validate_json(cast.model_dump_json()) == cast
+    assert Cast.from_json(json.loads(json.dumps(cast.to_json()))) == cast
 
 
 def test_regression_group_limits_are_immutable() -> None:

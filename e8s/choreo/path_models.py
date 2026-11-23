@@ -413,7 +413,7 @@ def _typed_motion_params(motion_fn: object, params: object) -> object:
         return params
     if isinstance(params, BaseModel):
         raise _mismatched_params(motion_fn, params)
-    return model.model_validate(dict(params) if isinstance(params, Mapping) else params)
+    return model._validated(dict(params) if isinstance(params, Mapping) else params)
 
 
 class PathRow(FrozenModel):
@@ -575,4 +575,4 @@ class TransitionSpec(FrozenModel):
         """Returns the spot's row, or a default straight row when it has none."""
         if entity in self.rows:
             return self.rows[SpotId(entity)]
-        return PathRow.model_validate({"entity": entity})
+        return PathRow._validated({"entity": entity})

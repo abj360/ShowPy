@@ -101,10 +101,10 @@ def test_energy_curve_peaks_while_moving() -> None:
 
 def test_phrase_profile_splits_on_markers() -> None:
     show = two_set_show()
-    timeline = show.timeline.model_copy(
-        update={"markers": (Marker(label="B", at_count=4.0, kind=MarkerKind.REHEARSAL),)}
+    timeline = show.timeline.replace(
+        markers=(Marker(label="B", at_count=4.0, kind=MarkerKind.REHEARSAL),)
     )
-    profile = phrase_profile(show.model_copy(update={"timeline": timeline}), 0.0, 8.0)
+    profile = phrase_profile(show.replace(timeline=timeline), 0.0, 8.0)
     assert list(profile["start"]) == [0.0, 4.0]
     assert approx_equal(profile["change"].tolist(), [2.0, 2.0])
     assert approx_equal(profile["energy"].tolist(), [0.5, 0.5])

@@ -9,7 +9,7 @@ mode or form kind without strategy support fails here.
 """
 
 from collections.abc import Callable, Iterator
-from typing import get_args
+from typing import get_args, get_type_hints
 
 import pytest
 from hypothesis import HealthCheck, Phase, find, settings
@@ -32,8 +32,8 @@ SEARCH = settings(
     deadline=None,
     suppress_health_check=[check for check in HealthCheck if isinstance(check, HealthCheck)],
 )
-EASING_KINDS: tuple[str, ...] = get_args(Easing.model_fields["kind"].annotation)
-FORM_FACING_MODES: tuple[str, ...] = get_args(FacingSpec.model_fields["mode"].annotation)
+EASING_KINDS: tuple[str, ...] = get_args(get_type_hints(Easing)["kind"])
+FORM_FACING_MODES: tuple[str, ...] = get_args(get_type_hints(FacingSpec)["mode"])
 FORM_KINDS: tuple[str, ...] = get_args(FormKind.__value__)
 
 

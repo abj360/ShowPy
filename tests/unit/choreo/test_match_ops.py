@@ -101,7 +101,7 @@ def test_clear_rows_keeps_other_rows() -> None:
 def test_swap_exchanges_places_forms_and_drops_rows() -> None:
     show = with_curve_rows(two_set_show(), ROW_SPOTS)
     form = line_form("front", ["T1", "T2", "T3", "T4"], (0, 9), (6, 9), set_id="2")
-    show = show.model_copy(update={"forms": {"front": form}})
+    show = show.replace(forms={"front": form})
     swapped = swap(show, "2", "T1", "T2")
     assert swapped.set("2").get("T1").x == 2.0
     assert swapped.set("2").get("T2").x == 0.0
@@ -110,10 +110,8 @@ def test_swap_exchanges_places_forms_and_drops_rows() -> None:
 
 
 def test_swap_respects_locked_forms_and_pins() -> None:
-    form = line_form("f", ["T1", "T2"], (0, 9), (2, 9), set_id="2").model_copy(
-        update={"locked": True}
-    )
-    show = two_set_show().model_copy(update={"forms": {"f": form}})
+    form = line_form("f", ["T1", "T2"], (0, 9), (2, 9), set_id="2").replace(locked=True)
+    show = two_set_show().replace(forms={"f": form})
     with pytest.raises(LockedError):
         swap(show, "2", "T1", "T2")
     assert swap(show, "2", "T1", "T2", force=True).forms[FormId("f")].members == ("T2", "T1")
@@ -154,7 +152,7 @@ def _ring_show() -> tuple[Show, Form]:
         facing=FacingSpec(mode="outward"),
         set_id="2",
     )
-    show = two_set_show().model_copy(update={"forms": {"ring": ring}})
+    show = two_set_show().replace(forms={"ring": ring})
     return rebuild(show, "ring"), ring
 
 
@@ -352,7 +350,7 @@ def test_regression_clear_rows_keeps_transition_order() -> None:
     """Leaves show.transitions in their original order when rows are cleared (audit 9.6)."""
     show = with_curve_rows(two_set_show(), ROW_SPOTS)
     later = TransitionSpec(id=make_tid("2", "3"), counts=NEXT_TRANSITION_COUNTS)
-    show = show.model_copy(update={"transitions": (show.transitions[0], later)})
+    show = show.replace(transitions=(show.transitions[0], later))
     cleared = clear_rows(show, TID, ROW_SPOTS)
     assert [t.id for t in cleared.transitions] == [t.id for t in show.transitions]
 

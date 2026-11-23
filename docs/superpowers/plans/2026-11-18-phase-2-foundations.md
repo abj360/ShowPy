@@ -1739,6 +1739,13 @@ shim (ADR 0020). The format value becomes `e8.show` and the v2 schema `e8.show.v
 
 ### Task W1: pydantic's own model methods warn (D38)
 
+> **Superseded on 2026-11-23 by ADR 0026.** The maintainer dropped the warnings on
+> 2026-11-23: pydantic's methods are not part of the public model interface, emit no
+> `DeprecatedWarning`, get no shims or `DEPRECATED` rows, and go away whenever the model
+> implementation changes. W1 instead added `to_json` and `from_json`, moved every library and
+> test call onto the interface, and added a library rule test. The task text below is kept as
+> first planned.
+
 **Gate:** R1 merged, ADR 0026 accepted. **Fixes:** none. **Files:** Modify
 `showpy/core/types.py` (`FrozenModel`; `e8show/core/types.py` after R1), `showpy/core/deprecation.py`
 only if the existing helpers need a model-method entry point. Test

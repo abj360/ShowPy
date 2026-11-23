@@ -106,10 +106,10 @@ LONG_NUMBER_TEXT = st.one_of(
 
 
 HUGE_ORIGIN = (1.7e308, -1.7e308)
-HUGE_ORIGIN_SHOW = SHOW.model_copy(  # model_construct skips the bound to reach the guards
+HUGE_ORIGIN_SHOW = SHOW._copied(  # model_construct skips the bound to reach the guards
     update={"coordinates": CoordinateSystem.model_construct(None, origin=HUGE_ORIGIN)}
 )
-EDGE_ORIGIN_SHOW = SHOW.model_copy(
+EDGE_ORIGIN_SHOW = SHOW._copied(
     update={"coordinates": CoordinateSystem(origin=(MAX_COORD_M, -MAX_COORD_M))}
 )
 ORIGIN_SHOWS = st.sampled_from([SHOW, HUGE_ORIGIN_SHOW, EDGE_ORIGIN_SHOW])
@@ -169,7 +169,7 @@ def test_fuzz_from_coords_long_numbers(text: str) -> None:
 @given(system=SYSTEMS, text=st.one_of(st.sampled_from(["R1 U1", "L2.5 D3"]), st.text()))
 def test_fuzz_from_coords_systems(system: CoordinateSystem, text: str) -> None:
     """Reads text under any coordinate system, valid or not."""
-    show = SHOW.model_copy(update={"coordinates": system})
+    show = SHOW._copied(update={"coordinates": system})
     _only_errors_or_finite(show, text, (system, text))
 
 
@@ -182,7 +182,7 @@ def test_fuzz_to_coords_floats(x: float, y: float, style: str) -> None:
 @given(system=SYSTEMS, x=FLOATS, y=FLOATS, style=st.sampled_from(["long", "short"]))
 def test_fuzz_to_coords_systems(system: CoordinateSystem, x: float, y: float, style: str) -> None:
     """Words a point under any coordinate system, valid or not."""
-    show = SHOW.model_copy(update={"coordinates": system})
+    show = SHOW._copied(update={"coordinates": system})
 
     def run() -> None:
         _assert_finite_wording(show, (x, y), style)

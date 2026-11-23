@@ -203,7 +203,7 @@ def _extend_cast(base: Show, rows: list[_PositionRow], group: str) -> Cast:
         if row.entity not in known:
             first_line.setdefault(row.entity, row.line)
     added = tuple(
-        Spot.model_validate({"id": _checked_entity(entity, line), "group": group})
+        Spot._validated({"id": _checked_entity(entity, line), "group": group})
         for entity, line in first_line.items()
     )
     return base.cast.replace(spots=base.cast.spots + added)
@@ -244,7 +244,7 @@ def _carried(merge: _Merge, entity: str, previous: dict[str, Placement]) -> Plac
             context={"entity": entity},
         )
     x, y = merge.first_seen[entity]
-    return Placement.model_validate({"entity": entity, "x": x, "y": y, "on_field": False})
+    return Placement._validated({"entity": entity, "x": x, "y": y, "on_field": False})
 
 
 def _new_keys(base: Show, order: list[str]) -> dict[str, str]:
@@ -262,7 +262,7 @@ def _merged_set(merge: _Merge, set_id: str, previous: dict[str, Placement]) -> S
     current = (
         merge.base.set(set_id)
         if stored
-        else Set.model_validate(
+        else Set._validated(
             {"id": set_id, "key": merge.keys[set_id], "counts": merge.counts[set_id]}
         )
     )

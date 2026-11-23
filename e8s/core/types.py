@@ -15,7 +15,10 @@ Contains:
     FrozenJsonValue: the read-only JSON value a JsonObject holds, re-exported from json_types
     JsonObject: a deeply read-only, hashable JSON object for open payloads; dumps plain JSON
     FrozenModel: provides the immutable, strict base that raises SchemaError on bad data
+    FrozenModel.__eq__(): compares two models of one class by their field values only
     FrozenModel.replace(): returns a revalidated copy with some fields changed
+    FrozenModel.to_json(): returns the model as a JSON-safe dict
+    FrozenModel.from_json(): validates a JSON-safe dict into the model
     FrozenModel.model_copy(): returns a copy whose cached_property values are dropped
     Box2: bounds stage-plane points and reports size and center
     Box3: bounds world points
@@ -25,7 +28,7 @@ Contains:
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, ClassVar, Self
 
 import numpy as np
 import shapely
@@ -45,7 +48,8 @@ from pydantic.json_schema import JsonSchemaValue
 from pydantic_core import CoreSchema, core_schema
 
 from e8s.core.caps import MAX_COORD_M, MAX_COUNTS, MIN_TEMPO
-from e8s.core.errors import ALLOWED_KEY, BOUND_KEY, schema_error_from
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import ALLOWED_KEY, BOUND_KEY, SchemaError, schema_error_from
 from e8s.core.json_types import FrozenJsonValue as FrozenJsonValue
 from e8s.core.json_types import JsonValue as JsonValue
 from e8s.core.numbers import normalize_angle
@@ -53,6 +57,8 @@ from e8s.core.readonly import FrozenJson
 
 MIN_RING_POINTS = 3
 _BOUND_ERROR = "out_of_bounds"
+# Stands in for a field that model_construct left unset, so it equals only another unset one.
+_UNSET = object()
 
 
 @dataclass(frozen=True)
@@ -136,6 +142,8 @@ class FrozenModel(BaseModel):
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid", allow_inf_nan=False)
+    # A model that is never stored names how to rebuild it here; to_json and from_json refuse it.
+    _json_refusal: ClassVar[str | None] = None
 
     # Any: pydantic's own keyword signature, forwarded unchanged.
     def __init__(self, /, **data: Any) -> None:
@@ -146,7 +154,7 @@ class FrozenModel(BaseModel):
 
     # Makes pydantic validate nested models through its core validator, so only the outermost
     # call converts and the error keeps the outer model name and dotted locs.
-    __init__.__pydantic_base_init__ = True  # type: ignore[attr-defined]
+    vars(__init__)["__pydantic_base_init__"] = True
 
     @classmethod
     def model_validate(
@@ -222,6 +230,24 @@ class FrozenModel(BaseModel):
         except ValidationError as exc:
             raise schema_error_from(exc, model=cls.__name__) from exc
 
+    def __eq__(self, other: object) -> bool:
+        """Compares two models of one class by their field values only.
+
+        Values a cached_property stored on the instance, such as sampled numpy arrays, never
+        take part, so equal models compare equal whatever each one has computed.
+
+        >>> from e8s.examples import two_set_show
+        >>> two_set_show() == two_set_show()
+        True
+        """
+        if not isinstance(other, BaseModel):
+            return NotImplemented
+        if type(self) is not type(other):
+            return False
+        mine, theirs = vars(self), vars(other)
+        fields = type(self).__pydantic_fields__
+        return all(mine.get(name, _UNSET) == theirs.get(name, _UNSET) for name in fields)
+
     def model_copy(self, *, update: Mapping[str, object] | None = None, deep: bool = False) -> Self:
         """Returns a copy whose `cached_property` values are dropped, so none goes stale.
 
@@ -231,12 +257,60 @@ class FrozenModel(BaseModel):
         >>> Box2(min=(0.0, 0.0), max=(1.0, 1.0)).model_copy().max
         (1.0, 1.0)
         """
+        return self._copied(update=update, deep=deep)
+
+    def _copied(self, *, update: Mapping[str, object] | None = None, deep: bool = False) -> Self:
+        """Returns an unvalidated copy with no cached_property values; subclasses may validate."""
         duplicate = super().model_copy(update=update, deep=deep)
         for owner in type(self).__mro__:
             for name, attribute in vars(owner).items():
                 if isinstance(attribute, cached_property):
                     vars(duplicate).pop(name, None)
         return duplicate
+
+    @classmethod
+    def _validated(cls, data: object, *, context: Mapping[str, object] | None = None) -> Self:
+        """Validates Python data into this model, under an optional validation context."""
+        return cls.model_validate(data, context=context)
+
+    @classmethod
+    def _validated_json(cls, text: str | bytes | bytearray) -> Self:
+        """Parses and validates JSON text into this model in one pass."""
+        return cls.model_validate_json(text)
+
+    def _dumped(
+        self,
+        *,
+        include: set[str] | None = None,
+        exclude: set[str] | None = None,
+        exclude_defaults: bool = False,
+    ) -> dict[str, object]:
+        """Returns the fields as Python values, nested models as dicts."""
+        return self.model_dump(include=include, exclude=exclude, exclude_defaults=exclude_defaults)
+
+    def _json_dumped(
+        self, *, include: set[str] | None = None, exclude: set[str] | None = None
+    ) -> dict[str, JsonValue]:
+        """Returns some or all fields as the JSON-safe dict `to_json` returns."""
+        return self.model_dump(mode="json", include=include, exclude=exclude)
+
+    def _dumped_json(self) -> str:
+        """Returns the model as compact JSON text."""
+        return self.model_dump_json()
+
+    @classmethod
+    def _field_names(cls) -> tuple[str, ...]:
+        """Lists the model's field names in declaration order."""
+        return tuple(cls.__pydantic_fields__)
+
+    @classmethod
+    def _unchecked(cls, **values: object) -> Self:
+        """Builds a model from already valid values without running any validator."""
+        return super().model_construct(None, **values)
+
+    def _set_fields(self) -> frozenset[str]:
+        """Lists the fields given explicitly when the model was built, not filled by defaults."""
+        return frozenset(self.model_fields_set)
 
     def replace(self, **changes: object) -> Self:
         """Returns a copy with `changes` applied, run through every validator.
@@ -254,8 +328,56 @@ class FrozenModel(BaseModel):
         Returns:
             edited_model: A new instance of the same class holding the merged fields.
         """
-        current = {name: getattr(self, name) for name in type(self).model_fields}
-        return type(self).model_validate(current | changes)
+        current = {name: getattr(self, name) for name in type(self)._field_names()}
+        return type(self)._validated(current | changes)
+
+    def to_json(self) -> dict[str, JsonValue]:
+        """Returns the model as a JSON-safe dict, the form `from_json` reads back.
+
+        Tuples become lists, enums their values and times ISO text, as in stored show documents.
+
+        >>> from e8s.examples import two_set_show
+        >>> two_set_show().sets[0].to_json()["id"]
+        '1'
+
+        Returns:
+            document: Field names mapped to their JSON values. A model that is never stored, such
+                as a registry of functions, raises SchemaError code NOT_SERIALIZABLE.
+        """
+        type(self)._refuse_json()
+        return self._json_dumped()
+
+    @classmethod
+    def from_json(cls, data: object) -> Self:
+        """Validates a JSON-safe dict, such as one `to_json` returned, into this model.
+
+        >>> from e8s.examples import two_set_show
+        >>> show = two_set_show()
+        >>> type(show).from_json(show.to_json()) == show
+        True
+
+        Args:
+            data: Parsed JSON: field names mapped to JSON values. Any other value, such as a list
+                or text, raises SchemaError, so a parsed document needs no narrowing first.
+
+        Returns:
+            model: The validated model; data that breaks a field or model rule raises SchemaError.
+                A model that is never stored raises SchemaError code NOT_SERIALIZABLE.
+        """
+        cls._refuse_json()
+        return cls._validated(data)
+
+    @classmethod
+    def _refuse_json(cls) -> None:
+        """Raises SchemaError code NOT_SERIALIZABLE when this model is never stored as JSON."""
+        if cls._json_refusal is None:
+            return
+        raise SchemaError(
+            f"{cls.__name__} is not stored, so it has no JSON form",
+            hint=cls._json_refusal,
+            context={"model": cls.__name__},
+            code=ErrorCode.NOT_SERIALIZABLE,
+        )
 
 
 class Box2(FrozenModel):

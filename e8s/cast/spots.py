@@ -106,7 +106,7 @@ def _group(cast: Cast, key: str) -> Group:
 
 # Any: changes are arbitrary Cast fields, validated by the rebuilt model.
 def _with_cast(show: "Show", **changes: Any) -> "Show":
-    cast = Cast.model_validate({**dict(show.cast), **changes})
+    cast = Cast._validated({**dict(show.cast), **changes})
     return show.replace(cast=cast)
 
 
@@ -223,7 +223,7 @@ def _add_points(
     labels = _allocate_labels(show.cast, [group] * len(points))
     entries = [
         (
-            Spot.model_validate({"id": label, "group": group, "shape": shape}),
+            Spot._validated({"id": label, "group": group, "shape": shape}),
             (float(p[0]), float(p[1])),
         )
         for label, p in zip(labels, points, strict=True)
@@ -498,7 +498,7 @@ def edit_group(show: "Show", key: str, /, **changes: Unpack[GroupPatch]) -> "Sho
             context={"group": key, "changes": unknown},
         )
     try:
-        edited = Group.model_validate({**current.model_dump(), **changes})
+        edited = Group._validated({**current._dumped(), **changes})
     except SchemaError as error:
         raise SchemaError(
             f"bad change to group {key!r}: {field_errors(error)[0]['msg']}",
@@ -609,8 +609,7 @@ def define_selection(show: "Show", name: str, sel: Selector, *, replace: bool = 
 def _edit_spots(show: "Show", sel: Selector, **changes: Unpack[SpotPatch]) -> "Show":
     chosen = set(select(show, sel).ids)
     spots = tuple(
-        Spot.model_validate({**dict(s), **changes}) if s.id in chosen else s
-        for s in show.cast.spots
+        Spot._validated({**dict(s), **changes}) if s.id in chosen else s for s in show.cast.spots
     )
     return _with_cast(show, spots=spots)
 

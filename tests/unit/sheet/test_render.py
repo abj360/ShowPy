@@ -134,7 +134,7 @@ def test_regression_pdf_embeds_no_wall_clock_dates() -> None:
 @pytest.mark.xfail(strict=True, reason="UP-9.4-39")
 def test_regression_svg_is_well_formed_with_control_characters_in_names() -> None:
     """Keeps the SVG parseable when names and labels hold control characters (audit 9.4)."""
-    sheet = blank_sheet(10, 6).model_copy(update={"name": "bad\x01name"})
+    sheet = blank_sheet(10, 6).replace(name="bad\x01name")
     sheet = add_landmark(
         sheet, Landmark(id=LandmarkId("m"), name="mark\x02", kind="point", geometry=((1.0, 1.0),))
     )

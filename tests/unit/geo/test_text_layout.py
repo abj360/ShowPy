@@ -13,6 +13,7 @@ Contains:
         the heaviest text the piece caps allow (slow)
 """
 
+import json
 import math
 import time
 from collections.abc import Iterable
@@ -76,7 +77,7 @@ def _points(glyphs: Iterable[LaidGlyph]) -> Points:
 
 
 def _unchecked_registry(**changes: object) -> FontRegistry:
-    font = Font.model_validate({**TINY, **changes})
+    font = Font.from_json({**TINY, **changes})
     return FontRegistry.model_construct(
         fonts=ReadOnlyMap({TINY_URI: font}),
         sources=ReadOnlyMap({}),
@@ -324,7 +325,7 @@ def test_regression_worst_legal_text_stays_within_its_work_budget() -> None:
 def test_layout_round_trips_through_json() -> None:
     """Dumps and reloads laid glyphs, keeping each stroke's curve kind."""
     glyphs = layout_text("Oa", RELIEF, 1.0, (0.0, 0.0))
-    assert tuple(LaidGlyph.model_validate_json(g.model_dump_json()) for g in glyphs) == glyphs
+    assert tuple(LaidGlyph.from_json(json.loads(json.dumps(g.to_json()))) for g in glyphs) == glyphs
 
 
 def test_layout_rejects_a_font_without_a_cap_height() -> None:

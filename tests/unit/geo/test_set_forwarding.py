@@ -29,8 +29,8 @@ from tests.helpers import make_facing_set
 
 ROWS = (("A", 0.0, 0.0, 0.0), ("B", 3.0, 1.0, 0.0), ("C", -2.0, 2.0, 0.0))
 SPOTS = make_facing_set(*ROWS)
-SHEET = field_sheet().model_copy(
-    update={"guides": (GuideLine(id="y5", kind="yard", points=((5.0, 0.0), (5.0, 20.0))),)}
+SHEET = field_sheet().replace(
+    guides=(GuideLine(id="y5", kind="yard", points=((5.0, 0.0), (5.0, 20.0))),)
 )
 SHIFTED = shift(SPOTS, 1.0, 0.0)
 AFFINE_MATRIX = [[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]]

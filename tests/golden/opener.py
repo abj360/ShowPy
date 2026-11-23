@@ -58,4 +58,4 @@ def opener_show() -> Show:
     curving = TransitionSpec(id=make_tid("2", "3"), counts=8.0)
     for entity in IDS[:4]:
         curving = curve_path(curving, entity, (show.sets[1].get(entity).x, 9.0))
-    return show.model_copy(update={"transitions": (opening, curving)})
+    return show.replace(transitions=(opening, curving))

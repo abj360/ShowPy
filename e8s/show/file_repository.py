@@ -320,7 +320,7 @@ class _FileBackend:
         stored = self._record(show_id, revision_id, source)["revision"]
         if isinstance(stored, dict):
             stored = {k: v for k, v in stored.items() if k not in LEGACY_REVISION_KEYS}
-        return Revision.model_validate(stored)
+        return Revision._validated(stored)
 
     def _check_revision(
         self, show_id: str, revision: Revision, expected_id: str, parent: str, source: Path
@@ -367,7 +367,7 @@ class _FileBackend:
         changes, so a racing identical commit writes the same bytes. Anything else under the
         name (another tree, a truncated file, a symlink) blocks the commit before it lands.
         """
-        record = dump_json({"revision": revision.model_dump(mode="json"), "tree": tree})
+        record = dump_json({"revision": revision.to_json(), "tree": tree})
         if _link_exclusive(show_id, path, record):
             return
         if self._read(show_id, path, "tree record", TREE_MAX_BYTES) != record:

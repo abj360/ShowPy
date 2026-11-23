@@ -201,7 +201,7 @@ def test_notes_near_area_anchor_and_off_field_spots() -> None:
     notes = add_note(EMPTY, SHOW, "zone", Anchor.on_area(square), "a1", AT, "pat")
     assert [n.id for n in notes_near(notes, SHOW, (2.0, 0.5), 1.0)] == ["a1"]
     off = SHOW.set("1").with_placements({"T1": PlacementPatch(on_field=False)})
-    show = SHOW.model_copy(update={"sets": (off, SHOW.set("2"))})
+    show = SHOW.replace(sets=(off, SHOW.set("2")))
     notes = add_note(EMPTY, show, "t1", Anchor.on_spots(["T1"]), "s1", AT, "pat")
     assert notes_near(notes, show, (0.0, 5.0), 0.1) == []
 
