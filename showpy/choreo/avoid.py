@@ -31,7 +31,7 @@ from showpy.choreo.paths import add_waypoint, delay, stagger
 from showpy.core.errors import PathError
 from showpy.core.ids import SpotId
 from showpy.core.types import Point, Points
-from showpy.core.util import natural_key, noise_rank
+from showpy.core.util import natural_key, natural_sort, noise_rank
 from showpy.show.models import Show
 
 type FloatArray = npt.NDArray[np.float64]
@@ -98,7 +98,7 @@ def _pair_gap(engine: PathEngine, tid: tuple[str, str], a: str, b: str) -> GapIn
     id_a, ta, pa = _stations(engine, a, tid)
     id_b, tb, pb = _stations(engine, b, tid)
     tau, dist = closest_approach(ta, pa, tb, pb)
-    first, second = sorted((id_a, id_b))
+    first, second = natural_sort((id_a, id_b))
     gap = dist - _extent(engine.show, a) - _extent(engine.show, b)
     return GapInfo(a=first, b=second, tau=tau, gap=gap)
 
@@ -116,9 +116,10 @@ def min_gaps(
 ) -> list[GapInfo]:
     """Lists the `top` tightest pairs of on-field spots in a transition, tightest first.
 
-    Gaps are ranked rounded to 9 decimals (`noise_rank`), so pairs that tie to within float noise
-    are listed in natural spot ID order (T2 before T10). A bounding-box broadphase skips pairs
-    that cannot beat the current top list.
+    Each pair names its spots in natural ID order (T2-T10, not T10-T2). Gaps are ranked rounded
+    to 9 decimals (`noise_rank`), so pairs that tie to within float noise are listed in natural
+    order of those names. A bounding-box broadphase skips pairs that cannot beat the current top
+    list.
 
     >>> from showpy.examples import two_set_show
     >>> round(min_gaps(two_set_show(), ("1", "2"), top=1)[0].gap, 6)
