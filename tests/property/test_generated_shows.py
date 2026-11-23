@@ -57,7 +57,7 @@ def test_path_rows_compile_against_their_show(data: st.DataObject) -> None:
     tid = data.draw(st.sampled_from(show.transition_ids()))
     row = data.draw(path_rows(show, tid))
     spec = show.transition(tid)
-    edited = spec.model_copy(update={"rows": {**spec.rows, row.entity: row}})
+    edited = spec.replace(rows={**spec.rows, row.entity: row})
     stored = store_paths(show, PathsOp(spec=edited))
     report = validate_paths(stored, stored.transition(tid))
     assert report.ok, [(i.code, i.message) for i in report.issues if i.level == "error"]

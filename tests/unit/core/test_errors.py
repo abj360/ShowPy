@@ -223,7 +223,7 @@ def test_regression_spot_with_a_huge_int_id_raises_a_printable_schema_error() ->
 
 def test_regression_root_level_schema_error_names_the_root() -> None:
     with pytest.raises(SchemaError) as info:
-        Box2.model_validate("not a box")
+        Box2.from_json("not a box")
     assert field_errors(info.value)[0]["loc"] == "(root)"
     assert "(root):" in info.value.message
 

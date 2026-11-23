@@ -126,7 +126,7 @@ def test_arc_length_endpoints_and_direction() -> None:
     assert approx_equal(QUARTER.length(), math.pi)
     assert approx_equal(QUARTER.point_at(0.0), (2.0, 0.0))
     assert approx_equal(QUARTER.point_at(QUARTER.length()), (0.0, 2.0))
-    clockwise = QUARTER.model_copy(update={"sweep_deg": -90.0})
+    clockwise = QUARTER.replace(sweep_deg=-90.0)
     assert approx_equal(clockwise.point_at(clockwise.length()), (0.0, -2.0))
 
 

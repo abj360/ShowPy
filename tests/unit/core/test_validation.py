@@ -149,14 +149,14 @@ def test_issue_hashes_with_and_without_context() -> None:
         context={"ids": ["a", "b"]},
     )
     assert hash(bare) == hash(_issue("error"))
-    assert hash(nested) == hash(nested.model_copy())
+    assert hash(nested) == hash(nested.replace())
 
 
 def test_regression_issue_refuses_an_uncatalogued_code() -> None:
     fields = {"level": "error", "where": "w", "message": "m", "hint": "h"}
     with pytest.raises(SchemaError):
-        ValidationIssue.model_validate({**fields, "code": "NOT_A_CODE"})
-    assert ValidationIssue.model_validate({**fields, "code": "LOCKED"}).code is ErrorCode.LOCKED
+        ValidationIssue.from_json({**fields, "code": "NOT_A_CODE"})
+    assert ValidationIssue.from_json({**fields, "code": "LOCKED"}).code is ErrorCode.LOCKED
 
 
 def test_merge_concatenates_issues() -> None:

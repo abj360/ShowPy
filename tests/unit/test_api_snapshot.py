@@ -34,14 +34,14 @@ import os
 import types
 import warnings
 from pathlib import Path
-from typing import Annotated, Literal, Union, get_args, get_origin
+from typing import Annotated, Literal, Union, get_args, get_origin, get_type_hints
 
 import pytest
-from pydantic import BaseModel
 
 import e8s
 from e8s._api_table import DEPRECATED, LEAVING, PUBLIC_API
 from e8s.core.deprecation import DeprecatedWarning
+from e8s.core.types import FrozenModel
 from scripts.check_api_changes import DEPRECATED_KEY, LEAVING_KEY, JsonValue, diff_snapshots
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -153,8 +153,9 @@ def describe_public_object(obj: object) -> JsonValue:
     Returns:
         description: A signature string, or a dict describing a model, enum, protocol or constant.
     """
-    if isinstance(obj, type) and issubclass(obj, BaseModel):
-        fields = {name: _annotation_text(f.annotation) for name, f in obj.model_fields.items()}
+    if isinstance(obj, type) and issubclass(obj, FrozenModel):
+        hints = get_type_hints(obj)
+        fields = {name: _annotation_text(hints[name]) for name in obj._field_names()}
         return {"model": dict(sorted(fields.items()))}
     if isinstance(obj, type) and issubclass(obj, enum.Enum):
         return {"enum": {member.name: repr(member.value) for member in obj}}

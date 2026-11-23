@@ -69,7 +69,7 @@ def _run(docs: dict[str, JsonValue]) -> tuple[dict[str, JsonValue], tuple[str, .
     migrated = migrate_timeline(docs, report)
     timeline = migrated[TIMELINE_DOC]
     assert isinstance(timeline, dict)
-    Timeline.model_validate(timeline)
+    Timeline.from_json(timeline)
     return timeline, report.build().repairs
 
 
@@ -253,5 +253,5 @@ def test_regression_duplicate_measure_change_counts_keep_the_longest_as_v0_3_0_r
     assert measures["changes"] == [[8.0, 5.0]]
     assert len(repairs) == 1
     assert docs == before
-    label = count_to_measure(Timeline.model_validate(timeline), 14.0)
+    label = count_to_measure(Timeline.from_json(timeline), 14.0)
     assert label == MeasureLabel(measure=4, count_in_measure=2.0)

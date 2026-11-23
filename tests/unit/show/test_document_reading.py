@@ -36,7 +36,7 @@ V030_REPO = Path(__file__).resolve().parents[2] / "fixtures" / "repos" / "v0.3.0
 
 def _dump() -> dict[str, Any]:
     show = crossing_show()
-    return copy.deepcopy(show.model_dump(mode="json"))
+    return copy.deepcopy(show.to_json())
 
 
 def _set_forms(dump: dict[str, Any], forms: object) -> None:
@@ -56,7 +56,7 @@ def _pair_of_lists(dump: dict[str, Any]) -> None:
 
 
 def _pair_of_non_consecutive_sets(dump: dict[str, Any]) -> None:
-    spec = crossing_show().transition(("1", "2")).model_dump(mode="json")
+    spec = crossing_show().transition(("1", "2")).to_json()
     dump["transitions"] = [{**spec, "id": ["2", "1"]}]
 
 
@@ -74,7 +74,7 @@ def _sets_as_text(dump: dict[str, Any]) -> None:
 
 def test_v1_dump_round_trips_through_the_split() -> None:
     for show in (two_set_show(), crossing_show()):
-        assert decode_show_dump(show.model_dump(mode="json"), 1) == show
+        assert decode_show_dump(show.to_json(), 1) == show
 
 
 @pytest.mark.parametrize(

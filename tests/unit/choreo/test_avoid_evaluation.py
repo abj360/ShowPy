@@ -30,26 +30,21 @@ def test_min_gaps_measures_rectangle_footprints_as_rectangles() -> None:
     show = two_set_show()
     rectangle = Shape(kind="rectangle", width_m=RECT_WIDTH_M, depth_m=RECT_DEPTH_M)
     spots = tuple(
-        spot.model_copy(update={"shape": rectangle}) if spot.id in PAIR else spot
-        for spot in show.cast.spots
+        spot.replace(shape=rectangle) if spot.id in PAIR else spot for spot in show.cast.spots
     )
     sets = tuple(
-        stage.model_copy(
-            update={
-                "placements": tuple(
-                    placement.replace(
-                        x=0.0 if placement.entity == PAIR[0] else CENTRE_SPACING_M, y=placement.y
-                    )
-                    if placement.entity in PAIR
-                    else placement.replace(x=placement.x + FAR_OFFSET_M)
-                    for placement in stage.placements
+        stage.replace(
+            placements=tuple(
+                placement.replace(
+                    x=0.0 if placement.entity == PAIR[0] else CENTRE_SPACING_M, y=placement.y
                 )
-            }
+                if placement.entity in PAIR
+                else placement.replace(x=placement.x + FAR_OFFSET_M)
+                for placement in stage.placements
+            )
         )
         for stage in show.sets
     )
-    placed = show.model_copy(
-        update={"cast": show.cast.model_copy(update={"spots": spots}), "sets": sets}
-    )
+    placed = show.replace(cast=show.cast.replace(spots=spots), sets=sets)
     gap = min_gaps(placed, ("1", "2"), sel=list(PAIR), top=1)[0].gap
     assert abs(gap - TRUE_GAP_M) <= GAP_TOL_M

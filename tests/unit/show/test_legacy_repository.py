@@ -113,7 +113,7 @@ def test_commit_on_v020_repository_gets_a_new_scheme_id(tmp_path: Path) -> None:
     head_show = repo.get_show(show_id)
     revision = repo.put_show(
         show_id,
-        head_show.model_copy(update={"title": f"{head_show.title} v2"}),
+        head_show.replace(title=f"{head_show.title} v2"),
         expected_revision=expected["head"],
         at=COMMITTED_AT,
     )
@@ -142,18 +142,18 @@ def test_regression_v02_revisions_load_without_authorship(tmp_path: Path) -> Non
     revisions = FileRepository(tmp_path / "repo").revisions(expected["show_id"])
     assert [r.id for r in revisions] == expected["revisions"]
     for revision in revisions:
-        assert set(type(revision).model_fields) == REVISION_FIELDS
-        assert set(revision.model_dump()) == REVISION_FIELDS
+        assert set(type(revision)._field_names()) == REVISION_FIELDS
+        assert set(revision.to_json()) == REVISION_FIELDS
     assert {p: p.read_bytes() for p in (tmp_path / "repo").rglob("*") if p.is_file()} == before
 
 
 def test_new_records_carrying_authorship_are_refused() -> None:
     with pytest.raises(SchemaError):
-        Revision.model_validate(
+        Revision.from_json(
             {"id": "a", "parent": "", "at": COMMITTED_AT, "changed": [], "actor": "designer"}
         )
     with pytest.raises(SchemaError):
-        CanvasEvent.model_validate(
+        CanvasEvent.from_json(
             {"id": "e", "at": COMMITTED_AT, "kind": "comment", "payload": {}, "actor": "agent"}
         )
 
@@ -242,7 +242,7 @@ def test_regression_first_save_normalizes_v020_documents_in_one_revision(tmp_pat
 def test_regression_save_with_an_edit_normalizes_first_then_edits(tmp_path: Path) -> None:
     repo, ws, expected = _fixture_workspace(tmp_path)
     show = load_show(ws)
-    saved = save_show(ws, show.model_copy(update={"title": "Renamed"}), COMMITTED_AT)
+    saved = save_show(ws, show.replace(title="Renamed"), COMMITTED_AT)
     log = repo.revisions(expected["show_id"])
     assert [r.id for r in log][:3] == expected["revisions"]
     assert len(log) == 5

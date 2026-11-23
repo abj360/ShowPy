@@ -259,7 +259,7 @@ def test_cost_fn_adds_cost_and_infinity_forbids() -> None:
         [(0.0, 0.0)], [(0.0, 0.0), (3.0, 0.0)], options=MatchOptions(cost_fn=avoid_slot_zero)
     )
     assert result.assignment == {"0": 1}
-    assert "cost_fn" not in MatchOptions(cost_fn=avoid_slot_zero).model_dump()
+    assert "cost_fn" not in MatchOptions(cost_fn=avoid_slot_zero).to_json()
 
 
 def test_cost_fn_rejects_negative_costs() -> None:
@@ -298,7 +298,7 @@ def test_group_spread_weight_keeps_groups_together() -> None:
 
 def test_unknown_weight_is_rejected() -> None:
     with pytest.raises(SchemaError, match="unknown match weight"):
-        MatchOptions.model_validate({"weights": {"crosing": 1.0}})
+        MatchOptions.from_json({"weights": {"crosing": 1.0}})
 
 
 def test_empty_problem_returns_empty_result() -> None:

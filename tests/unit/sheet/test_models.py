@@ -77,7 +77,7 @@ def test_coordinate_system_defaults() -> None:
 
 
 def _sheet_with(**changes: object) -> Sheet:
-    return Sheet.model_validate({**blank_sheet(10, 6).model_dump(), **changes})
+    return Sheet.from_json({**blank_sheet(10, 6).to_json(), **changes})
 
 
 def test_regression_sheet_rejects_negative_size() -> None:
@@ -142,7 +142,7 @@ def test_regression_show_rejects_zone_id_shared_with_sheet() -> None:
     sheet_zone = base.sheet.zones[0]
     clash = Zone(id=sheet_zone.id, kind=ZoneKind.CUSTOM, polygon=SQUARE)
     with pytest.raises(SchemaError):
-        Show.model_validate({**base.model_dump(), "zones": (clash,)})
+        Show.from_json({**base.to_json(), "zones": (clash,)})
 
 
 @pytest.mark.parametrize("size", [(0.0, 6.0), (10.0, 0.0), (float("nan"), 6.0), (10.0, -1.0)])
@@ -222,7 +222,7 @@ def test_regression_coordinate_system_rejects_non_positive_precision(precision: 
 def test_regression_coordinate_labels_are_text_and_read_only() -> None:
     """Refuses a non-text label value and an edit of the stored labels."""
     with pytest.raises(SchemaError):
-        CoordinateSystem.model_validate({"labels": {"left": 3}})
+        CoordinateSystem.from_json({"labels": {"left": 3}})
     system = CoordinateSystem(labels={"left": "SR"})
     assert system.labels["left"] == "SR"
     assert hash(system) == hash(CoordinateSystem(labels={"left": "SR"}))

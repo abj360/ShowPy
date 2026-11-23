@@ -16,6 +16,7 @@ Contains:
     fails_after(): fails a test still running after a deadline, never inside coverage or a hook
     only_e8s_errors(): runs a fuzz target; only an E8sError may escape, within 5 s
     context_entries(): returns the list of JSON objects under one key of an error's context
+    json_doc(): returns a model's to_json() dict, typed for indexing into nested values
     HOSTILE_JSON: names JSON bytes that make json.loads raise RecursionError or ValueError
     EXPECTED_FAILURES: exception names a hash-seed subprocess may end with
     outputs_under_hash_seeds(): runs one script under each hash seed and collects its output
@@ -37,7 +38,7 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from types import FrameType
-from typing import ParamSpec, TypeVar, cast
+from typing import Any, ParamSpec, TypeVar, cast
 
 import pytest
 
@@ -49,7 +50,7 @@ from e8s.choreo.path_models import PathRow, PathStyle, TransitionSpec, Waypoint
 from e8s.core.errors import E8sError, bounded_repr
 from e8s.core.ids import SetId, SpotId, make_tid
 from e8s.core.json_types import JsonValue
-from e8s.core.types import Point
+from e8s.core.types import FrozenModel, Point
 from e8s.examples import two_set_show
 from e8s.show.models import Show
 from e8s.show.repositories import InMemoryRepository
@@ -92,9 +93,9 @@ TAGGED_SHOW_SCRIPT = (
     "from e8s.show.models import Show\n"
     "tags = ['alpha', 'beta', 'gamma', 'delta', 'epsilon']\n"
     "base = two_set_show()\n"
-    "spots = [Spot.model_validate({**s.model_dump(), 'tags': tags}) for s in base.cast.spots]\n"
-    "cast = Cast.model_validate({**base.cast.model_dump(), 'spots': spots})\n"
-    "show = Show.model_validate({**base.model_dump(), 'cast': cast})\n"
+    "spots = [s.replace(tags=tags) for s in base.cast.spots]\n"
+    "cast = base.cast.replace(spots=spots)\n"
+    "show = base.replace(cast=cast)\n"
     "show = define_selection(show, 'pair', ['T1', 'T4'])\n"
     "def digest(data):\n"
     "    return hashlib.sha256(data).hexdigest()\n"
@@ -168,7 +169,7 @@ def with_curve_rows(show: Show, entities: Iterable[str], locked: bool = False) -
         for e in entities
     }
     spec = TransitionSpec(id=make_tid(*FIRST_TRANSITION), counts=CURVE_COUNTS, rows=rows)
-    return show.model_copy(update={"transitions": (spec,)})
+    return show.replace(transitions=(spec,))
 
 
 def open_session(show: Show, at: datetime) -> tuple[InMemoryRepository, Workspace, Workspace]:
@@ -414,6 +415,19 @@ def context_entries(error: E8sError, key: str) -> list[dict[str, JsonValue]]:
     listed = error.context[key]
     assert isinstance(listed, list), f"context[{key!r}] is {type(listed).__name__}, not a list"
     return [entry for entry in listed if isinstance(entry, dict)]
+
+
+# Any: a test indexes into nested JSON whose shape it knows, without narrowing each level.
+def json_doc(model: FrozenModel) -> dict[str, Any]:
+    """Returns `model.to_json()`, typed so a test can index into nested values.
+
+    Args:
+        model: Any e8s model.
+
+    Returns:
+        document: The JSON-safe dict `to_json` returns.
+    """
+    return model.to_json()
 
 
 def outputs_under_hash_seeds(script: str, seeds: Iterable[str] = HASH_SEEDS) -> list[str]:

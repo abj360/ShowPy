@@ -4,6 +4,7 @@
 test_models.py --- tests the Note model
 """
 
+import json
 from datetime import UTC, datetime
 
 from e8s.core.ids import NoteId
@@ -22,4 +23,4 @@ def test_note_round_trips_json() -> None:
         author="me",
         created_at=AT,
     )
-    assert Note.model_validate_json(note.model_dump_json()) == note
+    assert Note.from_json(json.loads(json.dumps(note.to_json()))) == note

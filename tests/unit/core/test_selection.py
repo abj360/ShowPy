@@ -70,7 +70,7 @@ def test_regression_selection_equality_ignores_the_description() -> None:
 def test_regression_malformed_ids_are_a_schema_error_not_a_type_error(ids: object) -> None:
     """Rejects ids that are not a list of strings with SchemaError, never TypeError."""
     with pytest.raises(SchemaError):
-        Selection.model_validate({"ids": ids})
+        Selection.from_json({"ids": ids})
 
 
 def test_regression_selection_rejects_a_bare_string() -> None:

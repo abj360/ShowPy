@@ -75,8 +75,8 @@ def test_spacing_count_follows_total_stroke_length() -> None:
         "l", spots(L_SPOTS_AT_ONE_METER), "L", fonts=["simplex"], height=LETTER_HEIGHT,
         at=(0, 0), spacing=1.0,
     )  # fmt: skip
-    assert form.recipe.model_dump(mode="json")["n"] == L_SPOTS_AT_ONE_METER
-    assert form.recipe.model_dump(mode="json")["spacing"] == 1.0
+    assert form.recipe.to_json()["n"] == L_SPOTS_AT_ONE_METER
+    assert form.recipe.to_json()["spacing"] == 1.0
 
 
 @ignore_legibility
@@ -161,7 +161,7 @@ def test_regression_spacing_count_follows_a_scaled_text_form() -> None:
     scaled = transform_form(ell, scale_matrix(SCALE, SCALE, (0.0, 0.0)))
     added = [f"X{i}" for i in range(SCALED_L_SPOTS - L_SPOTS_AT_ONE_METER)]
     edited = edit_text_count(scaled, add=added, spacing=1.0)
-    assert edited.recipe.model_dump(mode="json")["n"] == SCALED_L_SPOTS
+    assert edited.recipe.to_json()["n"] == SCALED_L_SPOTS
     stem = slots(edited)[: SCALED_L_SPOTS // 2]
     assert math.dist(stem[0], stem[1]) == pytest.approx(1.0)
 
@@ -191,6 +191,6 @@ def test_regression_text_spot_count_gives_the_count_text_form_derives(font: str)
     form = text_form("t", spots(n), text, fonts=[font], height=4.0, at=(3, 9), rotation=30.0,
                      align="center", letter_spacing=0.1, line_spacing=1.5, spacing=0.5,
                      font_registry=registry)  # fmt: skip
-    assert form.recipe.model_dump(mode="json")["n"] == n
-    strokes = text_strokes(text_recipe(form.recipe.model_dump(mode="json")), font_registry=registry)
+    assert form.recipe.to_json()["n"] == n
+    strokes = text_strokes(text_recipe(form.recipe.to_json()), font_registry=registry)
     assert n == spacing_count(strokes, 0.5)

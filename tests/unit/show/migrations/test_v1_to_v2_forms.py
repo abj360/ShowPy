@@ -47,7 +47,7 @@ from e8s.show.migrations.v1_to_v2_forms import migrate_forms
 
 FIXTURE = Path(__file__).resolve().parents[3] / "fixtures" / "repos" / "v0.3.0" / "expected.json"
 DOC = "/sets/2/forms.json"
-SQUARE = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0))).model_dump(mode="json")
+SQUARE = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0))).to_json()
 BOX = Box2(min=(0, 0), max=(4, 4))
 POSE_TOL = 1e-9
 ZERO_SWEEP_ARC: dict[str, JsonValue] = {
@@ -76,8 +76,7 @@ def _built_forms() -> dict[str, dict[str, JsonValue]]:
         "polyline": polyline_form("p", [], (0, 0), (2, 0), (2, 2), n=3),
     }
     geometries: dict[str, dict[str, JsonValue]] = {
-        kind: {"curve": form.recipe.model_dump(mode="json")["curve"], "n": 3}
-        for kind, form in curves.items()
+        kind: {"curve": form.recipe.to_json()["curve"], "n": 3} for kind, form in curves.items()
     }
     [outline] = svg_outline("M0 0 L1 0 L1 1", BOX)
     geometries |= {
@@ -122,9 +121,9 @@ def test_v1_geometry_migrates_to_a_typed_recipe() -> None:
         assert {key: recipe[key] for key in SHARED_DEFAULTS if key not in geometry} == {
             key: value for key, value in SHARED_DEFAULTS.items() if key not in geometry
         }
-        form = Form.model_validate(migrated)
+        form = Form.from_json(migrated)
         assert form.kind == kind
-        assert form.recipe.model_dump(mode="json") == recipe
+        assert form.recipe.to_json() == recipe
 
 
 def test_regression_forms_step_splits_a_v1_svg_composite_into_its_subpaths() -> None:
@@ -137,7 +136,7 @@ def test_regression_forms_step_splits_a_v1_svg_composite_into_its_subpaths() -> 
     assert isinstance(recipe, dict)
     assert recipe["curves"] == parts
     assert "curve" not in recipe
-    recipe_model = Form.model_validate(migrated).recipe
+    recipe_model = Form.from_json(migrated).recipe
     assert isinstance(recipe_model, SvgRecipe)
     assert not any(isinstance(curve, CompositeCurve) for curve in recipe_model.curves)
 
@@ -179,7 +178,7 @@ def test_regression_v1_svg_form_with_subpaths_keeps_its_v0_3_layout(
         "facing": {"mode": "along"},
     }
     [migrated] = _migrated([v1])
-    form = Form.model_validate(migrated)
+    form = Form.from_json(migrated)
     laid = [[p.x, p.y, p.facing] for p in placements(form)]
     assert approx_equal(laid, poses, abs_tol=POSE_TOL)
 
@@ -312,7 +311,7 @@ def test_regression_forms_step_turns_v1_gapped_orders_into_open_slots() -> None:
     assert len(repairs) == 1
     assert "form f" in repairs[0]
     assert "open slots" in repairs[0]
-    assert Form.model_validate(form).members == ("T1", "T2", None, "T4", None, "T3")
+    assert Form.from_json(form).members == ("T1", "T2", None, "T4", None, "T3")
 
 
 def test_forms_step_leaves_members_alone_when_orders_match_or_are_unknown() -> None:

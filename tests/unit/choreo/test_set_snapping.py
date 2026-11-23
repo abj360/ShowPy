@@ -34,13 +34,11 @@ def test_snap_set_and_curve() -> None:
 
 
 def test_snap_to_guides_pulls_close_points_only() -> None:
-    sheet = field_sheet().model_copy(
-        update={
-            "guides": (
-                GuideLine(id="y5", kind="yard", points=((5.0, 0.0), (5.0, 20.0))),
-                GuideLine(id="h", kind="hash", points=((-20.0, 6.0), (20.0, 6.0))),
-            )
-        }
+    sheet = field_sheet().replace(
+        guides=(
+            GuideLine(id="y5", kind="yard", points=((5.0, 0.0), (5.0, 20.0))),
+            GuideLine(id="h", kind="hash", points=((-20.0, 6.0), (20.0, 6.0))),
+        )
     )
     pts = np.array([[4.7, 2.0], [0.0, 5.8], [0.0, 2.0]])
     out = snap_to_guides(pts, sheet, tol=0.5)
