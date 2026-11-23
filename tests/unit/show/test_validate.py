@@ -20,8 +20,6 @@ Contains:
         whose ID does not parse
     test_regression_validate_show_reports_pins_that_disagree_with_placement_flags: reports a pin
         record whose placements are not flagged pinned
-    test_regression_validate_show_reports_notes_anchored_to_missing_items: reports a note anchored
-        to a set that does not exist
     test_regression_validate_show_reports_duplicate_note_ids: reports two notes with one ID, now
         refused by the notes document that holds them
     test_regression_validate_show_reports_facing_overrides_naming_unknown_spots: reports a facing
@@ -342,13 +340,6 @@ def _note(note_id: str = "n", set_id: str = "1") -> Note:
     return Note(
         id=NoteId(note_id), text="t", anchor=Anchor.on_set(set_id), author="d", created_at=NOTE_AT
     )
-
-
-@pytest.mark.defect("UP-9.7-69")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-69")
-def test_regression_validate_show_reports_notes_anchored_to_missing_items() -> None:
-    """Reports a note anchored to a set that does not exist (audit 9.7 validation gaps)."""
-    assert _mentions(_edited(notes=(_note(set_id=GHOST),)), GHOST)
 
 
 def test_regression_validate_show_reports_duplicate_note_ids() -> None:

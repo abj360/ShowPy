@@ -6,10 +6,6 @@ test_manage.py --- tests show creation, set insertion, removal, retiming, renumb
 Contains:
     test_regression_renumber_then_save_keeps_scripts_with_their_sets: moves each set's build script
         with the set across renumber and save
-    test_regression_remove_set_leaves_no_note_on_the_removed_set: drops or reports notes anchored to
-        a removed set
-    test_regression_remove_set_leaves_no_note_on_a_vanished_transition: drops or reports notes
-        anchored to a transition that no longer exists
     test_regression_remove_last_set_with_merge_counts_keeps_total_time: keeps total counts, or
         refuses, when merging the last set's counts
     test_regression_add_set_rejects_two_placements_for_one_spot: rejects two placements for one spot
@@ -57,10 +53,9 @@ from showpy.core.errors import (
     UnknownRefError,
     VersionError,
 )
-from showpy.core.ids import FormId, NoteId, RouteId, SetId, SpotId, make_tid
+from showpy.core.ids import FormId, RouteId, SetId, SpotId, make_tid
 from showpy.core.util import approx_equal
 from showpy.geo.curves import Segment
-from showpy.notes.models import Note
 from showpy.show.documents import decode_show, encode_show
 from showpy.show.manage import (
     add_set,
@@ -75,7 +70,7 @@ from showpy.show.manage import (
     transitions,
     upgrade_dependency,
 )
-from showpy.show.models import Anchor, Pin, Show
+from showpy.show.models import Pin, Show
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import load_show, open_workspace, save_show
 from showpy.show.validate import validate_show
@@ -380,32 +375,6 @@ def test_regression_renumber_then_save_keeps_scripts_with_their_sets() -> None:
     ws.refresh()
     assert ws.read("/sets/2/set.py") == SCRIPT_OLD_ONE_A.decode()
     assert ws.read("/sets/3/set.py") == SCRIPT_OLD_TWO.decode()
-
-
-@pytest.mark.defect("UP-9.7-51")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-51")
-def test_regression_remove_set_leaves_no_note_on_the_removed_set() -> None:
-    """Drops or reports notes anchored to a removed set (audit 9.7 sets defects)."""
-    note = Note(id=NoteId("n"), text="t", anchor=Anchor.on_set("2"), author="d", created_at=AT)
-    show = _three_set_show().model_copy(update={"notes": (note,)})
-    edited = remove_set(show, "2")
-    notes = edited.notes  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue]
-    still_anchored = [n for n in notes if n.anchor.set_id == "2"]
-    assert not still_anchored or not validate_show(edited).ok
-
-
-@pytest.mark.defect("UP-9.7-52")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-52")
-def test_regression_remove_set_leaves_no_note_on_a_vanished_transition() -> None:
-    """Drops or reports notes anchored to a transition that no longer exists (audit 9.7)."""
-    note = Note(
-        id=NoteId("n"), text="t", anchor=Anchor.on_transition(("2", "3")), author="d", created_at=AT
-    )
-    show = _three_set_show().model_copy(update={"notes": (note,)})
-    edited = remove_set(show, "2")
-    notes = edited.notes  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue]
-    stale = [n for n in notes if n.anchor.tid not in (None, *edited.transition_ids())]
-    assert not stale or not validate_show(edited).ok
 
 
 @pytest.mark.defect("UP-9.7-53")

@@ -402,3 +402,23 @@ the counts therefore change: 34 names go at v0.6.0 (4 interchange aliases, 19 pu
 video, 5 pandas and 3 render) and 43 at v0.7.0, plus up to 16 sheet names. The v3 step drops
 `Show.coordinates`, `Show.zones` and `Spot.claimable` together, so the open item about ADR 0023
 is closed.
+
+## Addendum 2026-11-23: notes leave `Show` (task N1)
+
+Task N1 removed `Show.notes` (decision 3). The notes now live in the notes document at
+`/notes/notes.json`, and `rewrite_note_anchors` (leaving in 1.0.0 with the other notes names)
+keeps it in step with set and spot edits when the host calls it.
+
+**Retired ledger IDs.** Three ledger tests built a `Show` holding notes and tested what the show
+or `validate_show` did with them. Their code, `Show.notes`, is deleted, so decision 7 deletes
+the tests with it, in the same change:
+
+| ID        | test node                                                                                                 | reason                                                                                                                                                     |
+| --------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| UP-9.7-51 | `tests/unit/show/test_manage.py::test_regression_remove_set_leaves_no_note_on_the_removed_set`            | `remove_set` holds no notes any more; dropping the notes of a removed set is a separate host call (`rewrite_note_anchors`), not a property of `remove_set` |
+| UP-9.7-52 | `tests/unit/show/test_manage.py::test_regression_remove_set_leaves_no_note_on_a_vanished_transition`      | the same for a note on a transition that `remove_set` removes                                                                                              |
+| UP-9.7-69 | `tests/unit/show/test_validate.py::test_regression_validate_show_reports_notes_anchored_to_missing_items` | `validate_show` checks a show, which holds no notes; the host-kept notes document is checked against a show only by the notes functions                    |
+
+UP-9.7-70 (two notes with one ID) is not retired: its claim holds in the notes document, which
+refuses note IDs that repeat ignoring case, so the test was repointed there and flipped. The
+default ledger line falls from `Ledger: 189 open` to `Ledger: 185 open`.
