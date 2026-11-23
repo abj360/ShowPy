@@ -1194,6 +1194,17 @@
       "kind": "Literal['segment']"
     }
   },
+  "SegmentDescription": {
+    "model": {
+      "counts": "float",
+      "direction": "Degrees | None",
+      "distance": "Meters",
+      "kind": "SegmentKind",
+      "pace": "float",
+      "start": "float",
+      "step_size": "float | None"
+    }
+  },
   "Selection": {
     "model": {
       "description": "str",
@@ -1516,6 +1527,14 @@
     }
   },
   "Timer": "(elapsed_ms: float = 0.0) -> None",
+  "TransitionDescription": {
+    "model": {
+      "counts": "float",
+      "groups": "tuple[tuple[e8s.core.ids.SpotId, ...], ...]",
+      "moves": "collections.abc.Mapping[e8s.core.ids.SpotId, tuple[e8s.choreo.read_models.SegmentDescription, ...]]",
+      "transition": "e8s.core.ids.TransitionId"
+    }
+  },
   "TransitionId": "(from_set: e8s.core.ids.SetId, to_set: e8s.core.ids.SetId)",
   "TransitionSpec": {
     "model": {
@@ -1717,6 +1736,7 @@
     }
   },
   "describe_count": "(tl: e8s.time.models.Timeline, c: Count) -> str",
+  "describe_transition": "(show: e8s.show.models.Show, transition: tuple[str, str], who: Selector = 'all', *, engine: e8s.choreo.engine.PathEngine | None = None) -> e8s.choreo.read_models.TransitionDescription",
   "detect_form": "(points: object, tol: Meters = 0.1, form_id: str = 'detected', members: collections.abc.Sequence[str] = ()) -> e8s.choreo.form_models.Form",
   "diff_paths": "(a: e8s.choreo.path_models.TransitionSpec, b: e8s.choreo.path_models.TransitionSpec) -> e8s.show.models.PathDiff",
   "diff_sets": "(a: e8s.choreo.models.Set, b: e8s.choreo.models.Set, tol: float = 1e-06) -> e8s.show.models.SetDiff",

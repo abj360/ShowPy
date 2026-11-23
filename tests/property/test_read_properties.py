@@ -8,14 +8,20 @@ Contains:
     test_holds_keep_spots_still: frames inside a hold share its count and every spot stands still
     test_coordinate_table_equals_positions_at_each_set: every row equals PathEngine.positions
         at its set's count
+    test_described_segments_tile_the_transition: each spot's segments run back to back from
+        count 0 to the transition's end, and their distances add up to the engine's
 """
+
+import itertools
+import math
 
 import numpy as np
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from e8s.choreo.engine import PathEngine
-from e8s.choreo.read import coordinate_table, frames
+from e8s.choreo.read import coordinate_table, describe_transition, frames
+from e8s.core.util import approx_equal
 from e8s.show.models import Show
 from e8s.time.clock import count_to_seconds
 from tests.strategies.show import shows
@@ -79,3 +85,21 @@ def test_coordinate_table_equals_positions_at_each_set(show: Show) -> None:
         points = engine.positions(count, list(table.spots)).reshape(-1, 2)
         assert table.x[row].tolist() == points[:, 0].tolist()
         assert table.y[row].tolist() == points[:, 1].tolist()
+
+
+@settings(max_examples=40, deadline=None)
+@given(shows(max_spots=MAX_SPOTS, max_sets=MAX_SETS, min_sets=2))
+def test_described_segments_tile_the_transition(show: Show) -> None:
+    engine = PathEngine(show)
+    for tid in show.transition_ids():
+        described = describe_transition(show, tid, engine=engine)
+        for spot, segments in described.moves.items():
+            assert segments[0].start == 0.0
+            for before, after in itertools.pairwise(segments):
+                assert math.isclose(before.start + before.counts, after.start, abs_tol=1e-9)
+            end = segments[-1].start + segments[-1].counts
+            assert math.isclose(end, described.counts, abs_tol=1e-9)
+            plan = engine.compile(tid).plans[spot]
+            travelled = sum(piece.length for piece in plan.pieces)
+            total = sum(segment.distance for segment in segments)
+            assert approx_equal(total, travelled, abs_tol=1e-6)

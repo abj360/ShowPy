@@ -4,25 +4,36 @@ read.py --- the floor readers: motion over time as arrays, all answered by PathE
 Contains:
     frames(): returns every selected spot's position and facing at regular frame times
     coordinate_table(): returns selected spots' positions at sets, in meters and in steps
+    describe_transition(): describes each selected spot's move as segments, alike spots grouped
 """
 
+import bisect
 import itertools
 import math
 from collections.abc import Sequence
+from typing import NamedTuple
 
 import numpy as np
 
 from e8s.cast.select import select
 from e8s.choreo.engine import ALL, PathEngine
 from e8s.choreo.engine_batch import group_counts, track_facings, track_positions
-from e8s.choreo.read_models import CoordinateTable, Frames
+from e8s.choreo.engine_models import MotionPiece, MotionPlan, MotionSegment
+from e8s.choreo.path_models import PathStyle
+from e8s.choreo.read_models import (
+    CoordinateTable,
+    Frames,
+    SegmentDescription,
+    SegmentKind,
+    TransitionDescription,
+)
 from e8s.core.arrays import FloatArray
 from e8s.core.caps import require_size
 from e8s.core.errors import SchemaError, TimeRangeError
-from e8s.core.ids import LandmarkId, SetId, SpotId
+from e8s.core.ids import LandmarkId, SetId, SpotId, TransitionId
 from e8s.core.selection import Selector
-from e8s.core.types import Count
-from e8s.core.units import convert, round_to
+from e8s.core.types import Count, Degrees, Point
+from e8s.core.units import angle_diff, convert, round_to, vector_facing
 from e8s.core.validation import require_finite
 from e8s.sheet.coords import axis_offsets, axis_origin
 from e8s.show.models import Show
@@ -40,6 +51,28 @@ FIVE_YARDS_M = convert(5.0, "yd", "m")
 STEP_M = FIVE_YARDS_M / STEPS_PER_FIVE_YARDS
 RESOLUTIONS = (1.0, 0.5, 0.25, 0.125)
 DEFAULT_RESOLUTION = 0.25
+STILL_M = 1e-9
+DIRECTION_TOL_DEG = 1e-6
+GROUP_DIGITS = 6
+FULL_TURN = 360.0
+SEGMENT_KINDS: dict[PathStyle, SegmentKind] = {
+    PathStyle.STRAIGHT: "straight",
+    PathStyle.POLYLINE: "straight",
+    PathStyle.CURVE: "curve",
+    PathStyle.FOLLOW: "follow",
+    PathStyle.ROTATE: "rotate",
+    PathStyle.CUSTOM: "custom",
+    PathStyle.HOLD: "hold",
+}
+
+
+class _Leg(NamedTuple):
+    t0: float
+    t1: float
+    p0: Point
+    p1: Point
+    distance: float
+    heading: Degrees | None
 
 
 def _engine_for(show: Show, engine: PathEngine | None) -> PathEngine:
@@ -243,4 +276,181 @@ def coordinate_table(
         audience_side=system.audience_side,
         step=STEP_M,
         resolution=rounding,
+    )
+
+
+def _direction(p0: Point, p1: Point) -> Degrees | None:
+    dx, dy = p1[0] - p0[0], p1[1] - p0[1]
+    if math.hypot(dx, dy) <= STILL_M:
+        return None
+    return vector_facing((dx, dy))
+
+
+def _step_size(distance: float, counts: float, pace: float) -> float | None:
+    if distance <= STILL_M:
+        return None
+    return FIVE_YARDS_M * counts * pace / distance
+
+
+def _moving(kind: SegmentKind, leg: _Leg, pace: float) -> SegmentDescription:
+    counts = leg.t1 - leg.t0
+    return SegmentDescription(
+        kind=kind,
+        start=leg.t0,
+        counts=counts,
+        direction=_direction(leg.p0, leg.p1),
+        distance=leg.distance,
+        step_size=_step_size(leg.distance, counts, pace),
+        pace=pace,
+    )
+
+
+def _holding(t0: float, t1: float, pace: float) -> SegmentDescription:
+    return SegmentDescription(
+        kind="hold",
+        start=t0,
+        counts=t1 - t0,
+        direction=None,
+        distance=0.0,
+        step_size=None,
+        pace=pace,
+    )
+
+
+def _bends(heading: Degrees | None, leg: _Leg) -> bool:
+    if heading is None or leg.heading is None:
+        return False
+    return abs(angle_diff(leg.heading, heading)) > DIRECTION_TOL_DEG
+
+
+def _straight_legs(segments: list[MotionSegment]) -> list[_Leg]:
+    legs: list[_Leg] = []
+    for seg in segments:
+        heading = _direction(seg.p0, seg.p1)
+        length = math.dist(seg.p0, seg.p1)
+        if not legs or _bends(heading, legs[-1]):
+            legs.append(_Leg(seg.t0, seg.t1, seg.p0, seg.p1, length, heading))
+            continue
+        last = legs[-1]
+        kept = last.heading if last.heading is not None else heading
+        legs[-1] = _Leg(last.t0, seg.t1, last.p0, seg.p1, last.distance + length, kept)
+    return legs
+
+
+def _by_piece(plan: MotionPlan, segments: list[MotionSegment]) -> list[list[MotionSegment]]:
+    ends = [piece.t1 for piece in plan.pieces]
+    grouped: list[list[MotionSegment]] = [[] for _ in plan.pieces]
+    for seg in segments:
+        index = bisect.bisect_left(ends, (seg.t0 + seg.t1) / 2)
+        grouped[min(index, len(ends) - 1)].append(seg)
+    return grouped
+
+
+def _piece_segments(
+    kind: SegmentKind, piece: MotionPiece, segments: list[MotionSegment], pace: float
+) -> list[SegmentDescription]:
+    if piece.kind == "hold" or not segments:
+        return [_holding(piece.t0, piece.t1, pace)]
+    if kind == "straight":
+        return [_moving(kind, leg, pace) for leg in _straight_legs(segments)]
+    whole = _Leg(piece.t0, piece.t1, segments[0].p0, segments[-1].p1, piece.length, None)
+    return [_moving(kind, whole, pace)]
+
+
+def _merged_holds(segments: list[SegmentDescription]) -> tuple[SegmentDescription, ...]:
+    merged: list[SegmentDescription] = []
+    for seg in segments:
+        if merged and seg.kind == "hold" and merged[-1].kind == "hold":
+            merged[-1] = merged[-1].replace(counts=merged[-1].counts + seg.counts)
+            continue
+        merged.append(seg)
+    return tuple(merged)
+
+
+def _describe_spot(
+    engine: PathEngine, tid: TransitionId, spot: SpotId, pace: float
+) -> tuple[SegmentDescription, ...]:
+    plan = engine.compile(tid).plans[spot]
+    kind = SEGMENT_KINDS[plan.style]
+    grouped = _by_piece(plan, engine.entity_segments(spot, tid))
+    described = [
+        seg
+        for piece, segments in zip(plan.pieces, grouped, strict=True)
+        for seg in _piece_segments(kind, piece, segments, pace)
+    ]
+    return _merged_holds(described)
+
+
+def _rounded_value(value: float | None) -> float | None:
+    return None if value is None else round(value, GROUP_DIGITS) + 0.0
+
+
+def _rounded_direction(value: Degrees | None) -> Degrees | None:
+    return None if value is None else round(value, GROUP_DIGITS) % FULL_TURN + 0.0
+
+
+def _alike_key(segments: tuple[SegmentDescription, ...]) -> tuple[tuple[object, ...], ...]:
+    return tuple(
+        (
+            seg.kind,
+            _rounded_value(seg.start),
+            _rounded_value(seg.counts),
+            _rounded_direction(seg.direction),
+            _rounded_value(seg.distance),
+            _rounded_value(seg.step_size),
+            _rounded_value(seg.pace),
+        )
+        for seg in segments
+    )
+
+
+def describe_transition(
+    show: Show,
+    transition: tuple[str, str],
+    who: Selector = ALL,
+    *,
+    engine: PathEngine | None = None,
+) -> TransitionDescription:
+    """Describes each selected spot's move in a transition as segments, alike spots grouped.
+
+    Segments split where the move's window starts and ends, at timed waypoints and at each
+    corner of a straight path. Each gives its kind, start, counts, direction of travel,
+    distance, step size in steps per 5 yards and pace, all read from PathEngine.
+
+    Args:
+        show: Show to read.
+        transition: Pair of consecutive set IDs, such as `("1", "2")`.
+        who: Spots to describe, as a selection expression, a list of IDs or a Selection.
+        engine: A PathEngine already built for `show`, reused so repeated reads skip compiling.
+
+    Returns:
+        description: Every selected spot's segments, and the groups of spots that move alike.
+
+    Raises:
+        UnknownRefError: The pair is not a transition of the show, or a spot is unknown.
+        SchemaError: `engine` belongs to another show.
+
+    >>> from e8s.examples import two_set_show
+    >>> told = describe_transition(two_set_show(), ("1", "2"))
+    >>> told.groups
+    (('T1', 'T2', 'T3', 'T4'),)
+    >>> move = told.moves["T1"][0]
+    >>> move.kind, move.counts, move.direction, move.distance, round(move.step_size, 3)
+    ('straight', 8.0, 180.0, 4.0, 9.144)
+    """
+    reader = _engine_for(show, engine)
+    tid = show.transition_id(transition)
+    spec = show.transition(tid)
+    moves = {
+        spot: _describe_spot(reader, tid, spot, spec.row(spot).pace)
+        for spot in _spot_ids(show, who)
+    }
+    alike: dict[tuple[tuple[object, ...], ...], list[SpotId]] = {}
+    for spot, segments in moves.items():
+        alike.setdefault(_alike_key(segments), []).append(spot)
+    return TransitionDescription(
+        transition=tid,
+        counts=spec.counts,
+        moves=moves,
+        groups=tuple(tuple(spots) for spots in alike.values()),
     )

@@ -260,11 +260,14 @@ if TYPE_CHECKING:
     )
     from e8s.choreo.read import (
         coordinate_table,
+        describe_transition,
         frames,
     )
     from e8s.choreo.read_models import (
         CoordinateTable,
         Frames,
+        SegmentDescription,
+        TransitionDescription,
     )
     from e8s.choreo.recipe_models import (
         ArcRecipe,
@@ -1020,6 +1023,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "ScatterRecipe": ("e8s.choreo.recipe_models", "ScatterRecipe"),
     "SchemaError": ("e8s.core.errors", "SchemaError"),
     "Segment": ("e8s.geo.curves", "Segment"),
+    "SegmentDescription": ("e8s.choreo.read_models", "SegmentDescription"),
     "Selection": ("e8s.core.selection", "Selection"),
     "SelectorAst": ("e8s.cast.select", "SelectorAst"),
     "SelectorToken": ("e8s.cast.select", "SelectorToken"),
@@ -1064,6 +1068,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "TimelineError": ("e8s.core.errors", "TimelineError"),
     "TimelineMode": ("e8s.time.models", "TimelineMode"),
     "Timer": ("e8s.core.util", "Timer"),
+    "TransitionDescription": ("e8s.choreo.read_models", "TransitionDescription"),
     "TransitionId": ("e8s.core.ids", "TransitionId"),
     "TransitionSpec": ("e8s.choreo.path_models", "TransitionSpec"),
     "TrimmedCurve": ("e8s.geo.curves", "TrimmedCurve"),
@@ -1175,6 +1180,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "delete_spots": ("e8s.cast.spots", "delete_spots"),
     "density_map": ("e8s.choreo.set_analysis", "density_map"),
     "describe_count": ("e8s.time.clock", "describe_count"),
+    "describe_transition": ("e8s.choreo.read", "describe_transition"),
     "detect_form": ("e8s.choreo.form_fit", "detect_form"),
     "diff_paths": ("e8s.show.history", "diff_paths"),
     "diff_sets": ("e8s.show.history", "diff_sets"),
@@ -1720,6 +1726,7 @@ __all__ = [
     "ScatterRecipe",
     "SchemaError",
     "Segment",
+    "SegmentDescription",
     "Selection",
     "SelectorAst",
     "SelectorToken",
@@ -1764,6 +1771,7 @@ __all__ = [
     "TimelineError",
     "TimelineMode",
     "Timer",
+    "TransitionDescription",
     "TransitionId",
     "TransitionSpec",
     "TrimmedCurve",
@@ -1875,6 +1883,7 @@ __all__ = [
     "delete_spots",
     "density_map",
     "describe_count",
+    "describe_transition",
     "detect_form",
     "diff_paths",
     "diff_sets",
