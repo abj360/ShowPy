@@ -482,6 +482,15 @@ class CompositeCurve(CurveModel):
     def _needs_parts(self) -> "CompositeCurve":
         if not self.parts:
             raise GeometryError("a composite curve needs parts", hint="pass one or more curves")
+        for index in range(1, len(self.parts)):
+            gap = math.dist(_end_of(self.parts[index - 1]), _start_of(self.parts[index]))
+            if gap > CONTINUITY_TOL_M:
+                raise GeometryError(
+                    f"part {index} starts {gap} m from where part {index - 1} ends",
+                    hint=f"parts must meet within {CONTINUITY_TOL_M} m: start each part where "
+                    "the previous one ends",
+                    context={"part": index, "gap": gap},
+                )
         if self.closed:
             _require_meeting(
                 _end_of(self.parts[-1]), _start_of(self.parts[0]), "last and first part"

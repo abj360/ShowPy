@@ -94,6 +94,7 @@ def test_regression_to_polyline_cap_hint_says_to_pass_a_larger_tol(
 
 
 @defect("UP-9.1-67")
+@pytest.mark.timing
 @fails_after(TINY_TOL_DEADLINE_S)
 @pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_to_polyline_refuses_a_tiny_tol_quickly() -> None:
