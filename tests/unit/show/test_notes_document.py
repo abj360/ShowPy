@@ -28,6 +28,8 @@ Contains:
         tree whose notes are empty
     test_v2_show_json_has_no_notes_and_show_has_no_notes_field: keeps notes out of `Show`
     test_notes_document_refuses_bad_and_repeated_note_ids: checks note IDs on the document
+    test_regression_newer_notes_document_raises_version_error: refuses a notes document of a
+        newer version with VersionError and an unknown format with SchemaError UNKNOWN_FORMAT
     test_notes_document_header_is_written_first: stores and exports `format` and `version` as the
         first keys of the notes document
     test_workspace_writes_a_checked_notes_document: stores a valid notes document through a
@@ -52,7 +54,7 @@ import pytest
 from showpy.cast.rewrite import rewrite_spots
 from showpy.cast.spots import rename_spots
 from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import SchemaError, UnknownRefError
+from showpy.core.errors import SchemaError, UnknownRefError, VersionError
 from showpy.core.ids import NoteId
 from showpy.examples import two_set_show
 from showpy.notes.models import Note, NotesDocument
@@ -307,6 +309,17 @@ def test_notes_document_refuses_bad_and_repeated_note_ids() -> None:
     with pytest.raises(SchemaError) as repeated:
         NotesDocument(show="show-1", notes=(_note("n1"), _note("N1")))
     assert "N1" in repeated.value.message
+
+
+def test_regression_newer_notes_document_raises_version_error() -> None:
+    with pytest.raises(VersionError) as caught:
+        NotesDocument.model_validate({"format": "e8.notes", "version": 2, "show": "show-1"})
+    assert caught.value.context["version"] == 2
+    with pytest.raises(VersionError):
+        NotesDocument.model_validate_json(b'{"format": "e8.notes", "version": 3, "show": "s"}')
+    with pytest.raises(SchemaError) as unknown:
+        NotesDocument.model_validate({"format": "e8.other", "version": 1, "show": "show-1"})
+    assert unknown.value.code == ErrorCode.UNKNOWN_FORMAT
 
 
 def test_notes_document_header_is_written_first(tmp_path: Path) -> None:

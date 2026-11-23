@@ -20,7 +20,8 @@ from typing import Final, Literal
 from pydantic import AwareDatetime, model_validator
 
 from showpy.core.deprecation import moved
-from showpy.core.errors import SchemaError
+from showpy.core.error_codes import ErrorCode
+from showpy.core.errors import SchemaError, VersionError
 from showpy.core.ids import NoteIdField
 from showpy.core.types import FrozenModel
 from showpy.show import anchors
@@ -71,6 +72,30 @@ class NotesDocument(FrozenModel):
     version: Literal[1] = NOTES_VERSION
     show: str
     notes: tuple[Note, ...] = ()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _readable_header(cls, data: object) -> object:
+        """Refuses another format, and a newer version with VersionError, before the fields."""
+        if not isinstance(data, dict):
+            return data
+        stored_format = data.get("format", NOTES_FORMAT)
+        if stored_format != NOTES_FORMAT:
+            raise SchemaError(
+                f"notes document names format {stored_format!r}, not {NOTES_FORMAT!r}",
+                hint=f'write "format": "{NOTES_FORMAT}" and "version": {NOTES_VERSION}',
+                context={"format": repr(stored_format)},
+                code=ErrorCode.UNKNOWN_FORMAT,
+            )
+        version = data.get("version", NOTES_VERSION)
+        if isinstance(version, int) and not isinstance(version, bool) and version > NOTES_VERSION:
+            raise VersionError(
+                f"notes document is version {version}; this release reads versions up to"
+                f" {NOTES_VERSION}",
+                hint=f"upgrade showpy to a release that reads notes version {version}",
+                context={"version": version, "newest": NOTES_VERSION},
+            )
+        return data
 
     @model_validator(mode="after")
     def _unique_ids(self) -> "NotesDocument":
