@@ -17,7 +17,7 @@ Contains:
     find_markdown_model_method_uses(): lists file and line of each such use in a Python code
         block of a Markdown file
     test_docs_code_never_calls_pydantic_model_methods: fails on any such use in the code
-        blocks of README.md and docs/*.md
+        blocks of README.md, CONTRIBUTING.md and docs/**/*.md
     test_markdown_scan_flags_only_python_code_blocks: proves the Markdown scan can fail
     find_citations(): lists file and line of each ADR, ledger-ID or docs-path citation
     test_library_cites_no_adr_docs_or_ledger_ids: fails on any such citation in e8s/
@@ -87,9 +87,12 @@ MODEL_METHODS = frozenset(
         "model_json_schema",
     }
 )
-MARKDOWN_PYTHON_BLOCK = re.compile(r"^```(?:python|py)\n(.*?)^```", re.MULTILINE | re.DOTALL)
+MARKDOWN_PYTHON_BLOCK = re.compile(
+    r"^(?P<fence>```|~~~)py\w*[^\n]*\n(?P<code>.*?)^(?P=fence)", re.MULTILINE | re.DOTALL
+)
 MODEL_METHOD_USE = re.compile(r"\.(" + "|".join(sorted(MODEL_METHODS)) + r")\b")
-DOCS_WITH_CODE = ("README.md", "docs")
+DOCS_WITH_CODE = ("README.md", "CONTRIBUTING.md")
+DOCS_ROOT = "docs"
 # Only FrozenModel itself calls pydantic's model methods on an e8s model.
 MODEL_METHOD_OWNER = Path("core") / "types.py"
 # These helpers accept any pydantic model, including a caller's own, which has only pydantic's
@@ -277,10 +280,10 @@ def find_markdown_model_method_uses(text: str, name: str) -> list[str]:
     """
     hits: list[str] = []
     for block in MARKDOWN_PYTHON_BLOCK.finditer(text):
-        first = text.count("\n", 0, block.start(1)) + 1
+        first = text.count("\n", 0, block.start("code")) + 1
         hits.extend(
             f"{name}:{first + offset}"
-            for offset, line in enumerate(block[1].splitlines())
+            for offset, line in enumerate(block["code"].splitlines())
             if MODEL_METHOD_USE.search(line)
         )
     return hits
@@ -288,8 +291,8 @@ def find_markdown_model_method_uses(text: str, name: str) -> list[str]:
 
 def test_docs_code_never_calls_pydantic_model_methods() -> None:
     """Requires README and docs examples to use the model interface, as library code does."""
-    readme, docs = (REPO_ROOT / name for name in DOCS_WITH_CODE)
-    paths = [readme, *sorted(docs.glob("*.md"))]
+    paths = [REPO_ROOT / name for name in DOCS_WITH_CODE]
+    paths += sorted((REPO_ROOT / DOCS_ROOT).rglob("*.md"))
     offenders = [
         hit
         for path in paths
@@ -315,8 +318,11 @@ def test_markdown_scan_flags_only_python_code_blocks() -> None:
         "show = show.model_copy(update={})\n"
         "fields = show.model_fields_settled\n"
         "```\n"
+        "~~~pycon\n"
+        ">>> Show.model_json_schema()\n"
+        "~~~\n"
     )
-    assert find_markdown_model_method_uses(text, "doc.md") == ["doc.md:7"]
+    assert find_markdown_model_method_uses(text, "doc.md") == ["doc.md:7", "doc.md:11"]
 
 
 def find_citations(source: str, name: str) -> list[str]:
