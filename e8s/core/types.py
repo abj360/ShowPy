@@ -313,7 +313,7 @@ class FrozenModel(BaseModel):
         return self._json_dumped()
 
     @classmethod
-    def from_json(cls, data: Mapping[str, object]) -> Self:
+    def from_json(cls, data: object) -> Self:
         """Validates a JSON-safe dict, such as one `to_json` returned, into this model.
 
         >>> from e8s.examples import two_set_show
@@ -322,7 +322,8 @@ class FrozenModel(BaseModel):
         True
 
         Args:
-            data: Field names mapped to JSON values.
+            data: Parsed JSON: field names mapped to JSON values. Any other value, such as a list
+                or text, raises SchemaError, so a parsed document needs no narrowing first.
 
         Returns:
             model: The validated model; data that breaks a field or model rule raises SchemaError.
