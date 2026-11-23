@@ -81,6 +81,9 @@ FORM_FIELDS = frozenset({"members", "spacing", "facing", "locked", "meta", "set"
 FIXED_RECIPE_KEYS = frozenset({"kind", "recipe_version"})
 TRIMMABLE_FACINGS = frozenset({"audience", "fixed", "along", "normal", "toward_point"})
 HALF_TURN = 180.0
+# Slot coordinates come from sin and cos, whose last bits differ between platforms; ranking
+# them to a nanometer keeps points on one file tied, so the other axis decides their order.
+AXIS_RANK_DIGITS = 9
 
 type Order = Sequence[str] | Literal["reverse", "by_x", "by_y", "nearest_prev"]
 
@@ -173,9 +176,15 @@ def _check_layout(form: Form, registry: FormFnRegistry, font_registry: FontRegis
         raise
 
 
+def _axis_rank(value: float) -> float:
+    return round(float(value), AXIS_RANK_DIGITS)
+
+
 def _ranked_slots(pts: Points, axis: int) -> list[int]:
     other = 1 - axis
-    return sorted(range(len(pts)), key=lambda i: (pts[i, axis], pts[i, other], i))
+    return sorted(
+        range(len(pts)), key=lambda i: (_axis_rank(pts[i, axis]), _axis_rank(pts[i, other]), i)
+    )
 
 
 def _ranked_members(form: Form, axis: int, prev_set: Set | None) -> list[SpotId]:

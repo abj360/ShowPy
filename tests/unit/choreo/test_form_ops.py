@@ -24,6 +24,8 @@ Contains:
         IndexError, when the target has fewer slots
     test_regression_reorder_by_x_rejects_members_without_slots: raises a ShowPyError, not
         ValueError, when members outnumber slots
+    test_regression_reorder_by_x_ranks_noise_tied_slots_by_y: ranks slots whose x differs by
+        1 ulp by y, as if the x were equal
     test_regression_edit_rejects_non_numeric_radius_with_show_py_error: raises a ShowPyError, not a
         pydantic error, for edit(radius="abc")
     test_edit_text_keeps_members_in_reading_order: regenerates the letters on the same members
@@ -46,6 +48,7 @@ Contains:
         warning at edit_text_count, since edit cannot change n
 """
 
+import math
 from typing import Any
 
 import numpy as np
@@ -170,6 +173,18 @@ def test_reorder_by_y_without_previous_set_uses_ids() -> None:
     reordered = reorder(form, "by_y")
     ys: dict[str, float] = {p.entity: p.y for p in placements(reordered)}
     assert ys["A"] < ys["B"] < ys["C"]
+
+
+@pytest.mark.parametrize("direction", [-math.inf, math.inf])
+def test_regression_reorder_by_x_ranks_noise_tied_slots_by_y(direction: float) -> None:
+    """Ranks slots whose x differs by 1 ulp by y, as if the x were equal.
+
+    The slots stand on one vertical file; the upper one moved 1 ulp right used to rank second
+    by the noise alone, and the leftmost member took it.
+    """
+    for upper_x in (1.0, math.nextafter(1.0, direction)):
+        form = custom_form("f", ["A", "B"], [(upper_x, 2.0), (1.0, 0.0)])
+        assert reorder(form, "by_x").members == ("B", "A")
 
 
 def test_reorder_nearest_prev_minimizes_moves() -> None:
