@@ -15,6 +15,7 @@ Contains:
     FrozenJsonValue: the read-only JSON value a JsonObject holds, re-exported from json_types
     JsonObject: a deeply read-only, hashable JSON object for open payloads; dumps plain JSON
     FrozenModel: provides the immutable, strict base that raises SchemaError on bad data
+    FrozenModel.__eq__(): compares two models of one class by their field values only
     FrozenModel.replace(): returns a revalidated copy with some fields changed
     FrozenModel.to_json(): returns the model as a JSON-safe dict
     FrozenModel.from_json(): validates a JSON-safe dict into the model
@@ -55,6 +56,8 @@ from e8s.core.readonly import FrozenJson
 
 MIN_RING_POINTS = 3
 _BOUND_ERROR = "out_of_bounds"
+# Stands in for a field that model_construct left unset, so it equals only another unset one.
+_UNSET = object()
 
 
 @dataclass(frozen=True)
@@ -223,6 +226,24 @@ class FrozenModel(BaseModel):
             )
         except ValidationError as exc:
             raise schema_error_from(exc, model=cls.__name__) from exc
+
+    def __eq__(self, other: object) -> bool:
+        """Compares two models of one class by their field values only.
+
+        Values a cached_property stored on the instance, such as sampled numpy arrays, never
+        take part, so equal models compare equal whatever each one has computed.
+
+        >>> from e8s.examples import two_set_show
+        >>> two_set_show() == two_set_show()
+        True
+        """
+        if not isinstance(other, BaseModel):
+            return NotImplemented
+        if type(self) is not type(other):
+            return False
+        mine, theirs = vars(self), vars(other)
+        fields = type(self).__pydantic_fields__
+        return all(mine.get(name, _UNSET) == theirs.get(name, _UNSET) for name in fields)
 
     def model_copy(self, *, update: Mapping[str, object] | None = None, deep: bool = False) -> Self:
         """Returns a copy whose `cached_property` values are dropped, so none goes stale.
