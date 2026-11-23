@@ -28,6 +28,7 @@ from showpy.core.errors import LockedError, StorageError, UnknownRefError
 from showpy.core.ids import TransitionId
 from showpy.core.selection import Selection
 from showpy.core.util import close_matches
+from showpy.notes.models import NotesDocument, require_notes_of
 from showpy.show.documents import (
     FORMS_NAME,
     LEGACY_NOTES_DOC,
@@ -302,7 +303,8 @@ def staged_changes(
     """Validates one file write and returns the stored-document changes it makes.
 
     Show documents are re-encoded canonically from the edited show, so a write can also
-    delete documents (writing `[]` to forms.json or `{}` to paths.json clears them).
+    delete documents (writing `[]` to forms.json or `{}` to paths.json clears them). A notes
+    document must name the workspace's show.
 
     >>> staged_changes("/renders/a.png", b"png", None, {})
     {'/renders/a.png': b'png'}
@@ -324,4 +326,6 @@ def staged_changes(
     elif not (path in DEFAULTS or path in (CLAIMS_DOC, NOTES_DOC) or path.startswith(FREE_ROOTS)):
         raise _unknown(path, show, tree)
     require_structured(path, raw)
+    if path == NOTES_DOC:
+        require_notes_of(NotesDocument.model_validate_json(raw), _require_show(show, path).id)
     return {to_stored_path(path, show): raw}

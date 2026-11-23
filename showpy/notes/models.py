@@ -118,7 +118,7 @@ def require_notes_of(notes: NotesDocument, show_id: str) -> None:
     if notes.show != show_id:
         raise SchemaError(
             f"the notes document belongs to show {notes.show!r}, not {show_id!r}",
-            hint="pass the notes document stored beside this show",
+            hint=f'pass the notes document of show {show_id!r}, whose "show" is {show_id!r}',
             context={"notes_show": notes.show, "show": show_id},
         )
 

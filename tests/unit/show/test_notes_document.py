@@ -34,6 +34,8 @@ Contains:
         first keys of the notes document
     test_workspace_writes_a_checked_notes_document: stores a valid notes document through a
         workspace, refuses one that does not match its model and refuses the v1 notes path
+    test_regression_workspace_refuses_the_notes_of_another_show: refuses a notes document whose
+        `show` names another show, with a hint naming the show's ID
     test_export_json_returns_the_notes_document_beside_the_show: embeds the notes document
         under `notes` and refuses one of another show
     test_import_notes_reads_v1_and_v2_documents: returns the notes of a v2 document as given
@@ -348,6 +350,19 @@ def test_workspace_writes_a_checked_notes_document() -> None:
     assert caught.value.context["path"] == NOTES_DOC
     with pytest.raises(UnknownRefError):
         ws.write(LEGACY_NOTES_DOC, b"[]", at=AT)
+
+
+def test_regression_workspace_refuses_the_notes_of_another_show() -> None:
+    show = two_set_show()
+    repo = InMemoryRepository()
+    repo.put_show(show.id, show, expected_revision="", at=AT)
+    ws = open_workspace(repo, show.id)
+    raw = dump_json(NotesDocument(show="other-show").model_dump(mode="json"))
+    with pytest.raises(SchemaError) as caught:
+        ws.write(NOTES_DOC, raw, at=AT)
+    assert caught.value.context["show"] == show.id
+    assert show.id in caught.value.hint
+    assert repo.read(show.id, NOTES_DOC) is None
 
 
 def test_export_json_returns_the_notes_document_beside_the_show() -> None:
