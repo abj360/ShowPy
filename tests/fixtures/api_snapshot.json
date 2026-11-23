@@ -270,6 +270,14 @@
   },
   "DeprecatedWarning": "(*args)",
   "DocumentRepository": "(backend: e8s.show.repositories.RepositoryBackend)",
+  "DroppedFields": {
+    "model": {
+      "document": "str",
+      "fields": "JsonObject",
+      "location": "str",
+      "stored_id": "str | None"
+    }
+  },
   "E8sError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: e8s.core.error_codes.ErrorCode | None = None) -> None",
   "Easing": {
     "model": {
@@ -777,6 +785,7 @@
   },
   "MigrationReport": {
     "model": {
+      "dropped": "tuple[e8s.show.migrate.DroppedFields, ...]",
       "from_version": "int",
       "renamed": "collections.abc.Mapping[str, tuple[tuple[str, str], ...]]",
       "repairs": "tuple[str, ...]"
@@ -1289,7 +1298,6 @@
   "Spot": {
     "model": {
       "active": "bool",
-      "claimable": "Claimable",
       "color": "HexColor | None",
       "group": "str",
       "id": "e8s.core.ids.SpotId",
@@ -1745,11 +1753,6 @@
       "replacement": "Marking",
       "since": "0.4.0"
     },
-    "Spot.claimable": {
-      "kind": "field",
-      "remove": "0.7.0",
-      "since": "0.4.0"
-    },
     "Zone": {
       "kind": "type",
       "remove": "0.7.0",
@@ -2093,7 +2096,6 @@
   "selection": "(ws: e8s.show.storage.Workspace) -> e8s.core.selection.Selection",
   "separate_in_time": "(spec: e8s.choreo.path_models.TransitionSpec, ordered_sel: collections.abc.Sequence[str], gap_counts: float = 1.0) -> e8s.choreo.path_models.TransitionSpec",
   "set_at_count": "(show: e8s.show.models.Show, c: Count) -> e8s.core.ids.SetId | None",
-  "set_claimable": "(show: 'Show', sel: Selector, value: Claimable) -> 'Show'",
   "set_coordinates": "(show: 'Show', system: e8s.sheet.models.CoordinateSystem) -> 'Show'",
   "set_counts": "(show: e8s.show.models.Show, set_id: str, counts: float, *, rescale: bool = False, force: bool = False) -> e8s.show.models.Show",
   "set_easing": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel, easing: e8s.choreo.path_models.Easing | str, *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",

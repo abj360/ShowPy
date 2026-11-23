@@ -42,7 +42,6 @@ from e8s.cast.spots import (
     relabel,
     remove_group,
     rename_spots,
-    set_claimable,
     set_shape,
 )
 from e8s.choreo.models import PlacementPatch
@@ -359,13 +358,9 @@ def test_define_selection_replaces_a_taken_name_when_asked() -> None:
     assert show.cast.selections["ends"] == ("T2",)
 
 
-def test_set_shape_and_set_claimable() -> None:
+def test_set_shape() -> None:
     show = set_shape(two_set_show(), "T1-T2", Shape(kind="rectangle"))
     assert [s.shape.kind for s in show.cast.spots] == ["rectangle", "rectangle", "circle", "circle"]
-    show = set_claimable(show, ["T3"], "crew")
-    assert show.cast.spot("T3").model_dump()["claimable"] == "crew"
-    with pytest.raises(SchemaError):
-        set_claimable(show, ["T3"], "audience")  # type: ignore[arg-type]
 
 
 EDITS_THAT_NEED_FORCE = (add_spot, add_spots_along, fill_spots, duplicate_spots, delete_spots)

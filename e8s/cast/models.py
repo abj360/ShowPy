@@ -35,7 +35,6 @@ DEFAULT_COLOR = "#808080"
 MAX_LABEL_PAD = 8
 HEX_COLOR_PATTERN = r"^#[0-9a-fA-F]{6}$"
 
-type Claimable = Literal["performer", "crew", "none"]
 type HexColor = Annotated[str, Field(pattern=HEX_COLOR_PATTERN)]
 type SelectionKey = Annotated[str, *get_args(SelectionNameField)[1:]]
 type SelectionSpots = tuple[SpotIdField, ...]
@@ -138,7 +137,6 @@ class Spot(FrozenModel):
         tags: Free tags such as `soloist`, deduplicated in first-seen order; a set is sorted.
         active: False excludes the spot from forms and checks.
         shape: Footprint on the sheet and for collisions.
-        claimable: Who may claim the spot once the show is published.
     """
 
     id: SpotIdField
@@ -148,13 +146,9 @@ class Spot(FrozenModel):
     tags: tuple[str, ...] = ()
     active: bool = True
     shape: Shape = Shape()
-    claimable: Claimable = "performer"
 
     _ordered_tags = field_validator("tags", mode="before")(_sort_unordered)
     _unique_tags = field_validator("tags", mode="after")(_dedupe_in_order)
-
-
-leave_field(Spot, "claimable", since="0.4.0", remove="0.7.0")
 
 
 class LabelScheme(FrozenModel):

@@ -9,6 +9,10 @@ with no safe repair (a negative size, a color that is not `#rrggbb`, a pad outsi
 limit or default radius that is not a positive finite number) is refused with SchemaError naming
 the document, the field and the value. ID renames belong to the ids step.
 
+A v2 spot has no `claimable` field: publishing left the library. The step removes it from every
+spot and lists each spot that stored a value other than the v1 default `performer` with
+`report.drop()`, so a host can keep who may claim it.
+
 A v2 note time carries a time zone. A stored note time without one is read as UTC and the
 change is recorded with `report.repair()`, one per note; a value that is not a time is left for
 model validation to refuse.
@@ -35,6 +39,8 @@ if TYPE_CHECKING:
 SHOW_DOC: Final = "/show/show.json"
 NOTES_DOC: Final = "/show/notes.json"
 SHAPE_SIZE_FIELDS: Final = ("radius_m", "width_m", "depth_m")
+CLAIMABLE_FIELD: Final = "claimable"
+V1_DEFAULT_CLAIMABLE: Final = "performer"
 
 type JsonObject = dict[str, JsonValue]
 
@@ -165,6 +171,26 @@ def _drop_unknown_prefixes(cast: JsonObject, report: "ReportBuilder") -> JsonObj
     return {**cast, "label_scheme": {**scheme, "prefixes": kept}}
 
 
+def _drop_claimable(cast: JsonObject, report: "ReportBuilder") -> JsonObject:
+    spots = _list(cast.get("spots"))
+    if not any(CLAIMABLE_FIELD in _object(spot) for spot in spots):
+        return cast
+    kept: list[JsonValue] = []
+    for position, spot in enumerate(spots):
+        fields = _object(spot)
+        value = fields.get(CLAIMABLE_FIELD, V1_DEFAULT_CLAIMABLE)
+        if value != V1_DEFAULT_CLAIMABLE:
+            stored_id = fields.get("id")
+            report.drop(
+                SHOW_DOC,
+                f"cast.spots[{position}]",
+                {CLAIMABLE_FIELD: value},
+                stored_id=stored_id if isinstance(stored_id, str) else None,
+            )
+        kept.append({k: v for k, v in fields.items() if k != CLAIMABLE_FIELD})
+    return {**cast, "spots": kept}
+
+
 def _naive_time(value: JsonValue | None) -> datetime | None:
     if not isinstance(value, str):
         return None
@@ -200,8 +226,8 @@ def migrate_cast(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[st
         report: Collects the repairs the step makes.
 
     Returns:
-        docs: The documents with the repaired cast and aware note times; a value with no safe
-            repair raises SchemaError.
+        docs: The documents with the repaired cast, without spot claimability, and with aware
+            note times; a value with no safe repair raises SchemaError.
     """
     docs = _migrate_notes(docs, report)
     show = _object(docs.get(SHOW_DOC))
@@ -212,4 +238,5 @@ def migrate_cast(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[st
     repaired = _rekey_groups(cast, report)
     repaired = _drop_dangling_selection_ids(repaired, report)
     repaired = _drop_unknown_prefixes(repaired, report)
+    repaired = _drop_claimable(repaired, report)
     return {**docs, SHOW_DOC: {**show, "cast": repaired}}

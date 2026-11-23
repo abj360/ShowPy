@@ -16,17 +16,16 @@ Contains:
     rename_spots(): renames spot IDs everywhere and reports what could not follow
     define_selection(): stores a named selection
     set_shape(): sets the footprint of spots
-    set_claimable(): sets who may claim spots once published
 """
 
 import math
 import string
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, TypedDict, Unpack, get_args
+from typing import TYPE_CHECKING, Any, TypedDict, Unpack
 from typing import ReadOnly as ReadOnlyKey
 
-from e8s.cast.models import Cast, Claimable, Group, LabelScheme, RewriteReport, Shape, Spot
+from e8s.cast.models import Cast, Group, LabelScheme, RewriteReport, Shape, Spot
 from e8s.cast.rewrite import rewrite_spot_ids, rewrite_spots
 from e8s.cast.select import label_prefix, select
 from e8s.choreo.models import Placement
@@ -77,7 +76,6 @@ class SpotPatch(TypedDict, total=False):
     tags: ReadOnlyKey[Sequence[str]]
     active: ReadOnlyKey[bool]
     shape: ReadOnlyKey[Shape]
-    claimable: ReadOnlyKey[Claimable]
 
 
 def _group(cast: Cast, key: str) -> Group:
@@ -317,7 +315,7 @@ def duplicate_spots(
 ) -> "Show":
     """Copies spots, shifted by `offset` from their placement in `set_id`, under new labels.
 
-    Copies keep group, tags, footprint and claimability; they enter the field at `set_id`.
+    Copies keep group, tags and footprint; they enter the field at `set_id`.
     Copies that would stand on-field in a pinned set raise LockedError unless `force=True`.
 
     >>> from e8s.examples import two_set_show
@@ -571,23 +569,6 @@ def set_shape(show: "Show", sel: Selector, shape: Shape) -> "Show":
     'rectangle'
     """
     return _edit_spots(show, sel, shape=shape)
-
-
-def set_claimable(show: "Show", sel: Selector, value: Claimable) -> "Show":
-    """Sets who may claim spots once the show is published: performer, crew or none.
-
-    >>> from e8s.examples import two_set_show
-    >>> set_claimable(two_set_show(), "T1", "crew").cast.spot("T1").claimable
-    'crew'
-    """
-    allowed = get_args(Claimable.__value__)
-    if value not in allowed:
-        raise SchemaError(
-            f"bad claimable value {value!r}",
-            hint=f"use one of {', '.join(allowed)}",
-            context={"value": value},
-        )
-    return _edit_spots(show, sel, claimable=value)
 
 
 def _repeated(ids: Iterable[str]) -> list[str]:

@@ -260,7 +260,6 @@
         "spots": [
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "trumpets",
             "id": "T1",
@@ -276,7 +275,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "trumpets",
             "id": "T2",
@@ -295,7 +293,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "trumpets",
             "id": "T3",
@@ -311,7 +308,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "trumpets",
             "id": "T4",
@@ -422,6 +418,7 @@
     }
   },
   "report": {
+    "dropped": [],
     "from_version": 1,
     "renamed": {
       "selection": [

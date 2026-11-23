@@ -20,9 +20,11 @@ Contains:
     JSON_STEPS: maps each stored version to the JSON sub-steps that lift it one version
     MODEL_STEPS: maps each stored version to the model sub-steps that lift it one version
     BESIDE_STEPS: maps each stored version to the sub-steps that write documents beside the show
-    MigrationReport: lists what a migration renamed and repaired
-    ReportBuilder: collects the renames and repairs of one migration run
+    DroppedFields: holds the stored fields of one object that the current format no longer has
+    MigrationReport: lists what a migration renamed, repaired and dropped
+    ReportBuilder: collects the renames, repairs and dropped fields of one migration run
     ReportBuilder.renames(): returns the renames recorded so far for one ID kind
+    ReportBuilder.drop(): records the stored fields of one object that the format no longer has
     read_version(): reads the format version of a stored document set from its show.json
     require_current_version(): refuses a parsed show.json of another format version
     require_current_show_doc(): refuses show.json bytes that are not in the current format
@@ -45,7 +47,7 @@ from e8s.core.ids import LEGACY_IDS_KEY
 from e8s.core.json_types import JsonValue
 from e8s.core.readonly import ReadOnly, ReadOnlyMap
 from e8s.core.strict_json import parse_strict_json
-from e8s.core.types import FrozenModel
+from e8s.core.types import FrozenModel, JsonObject
 from e8s.show.migrations import (
     V1_TO_V2_BESIDE_STEPS,
     V1_TO_V2_JSON_STEPS,
@@ -76,13 +78,39 @@ BESIDE_STEPS: Final[Mapping[int, tuple[BesideStep, ...]]] = ReadOnlyMap(
 )
 
 
+class DroppedFields(FrozenModel):
+    """Holds the stored fields of one object that the current format no longer has, as stored.
+
+    A host that still needs them keeps them itself; the migrated show does not hold them.
+
+    Attributes:
+        document: Stored path of the document that held the object, such as `/show/show.json`.
+        location: Where the object sits in that document, such as `cast.spots[3]`; empty for
+            the document itself.
+        stored_id: The object's ID as stored, before any rename the report lists; None when the
+            object has no ID.
+        fields: Each dropped field name mapped to its stored JSON value, unchanged.
+
+    >>> DroppedFields(document="/show/show.json", location="cast.spots[0]", stored_id="T1",
+    ...               fields={"claimable": "crew"}).fields["claimable"]
+    'crew'
+    """
+
+    document: str
+    location: str
+    stored_id: str | None = None
+    fields: JsonObject
+
+
 class MigrationReport(FrozenModel):
-    """Lists what one migration renamed and repaired, so a host can update what it keeps outside.
+    """Lists what one migration renamed, repaired and dropped, so a host can update what it keeps.
 
     Attributes:
         from_version: Format version the documents were stored in.
         renamed: Per ID kind (`spot`, `set`, `form`, ...), each (old, new) rename in show order.
         repairs: Each repair a sub-step made, in the order it was made.
+        dropped: Each stored object that lost fields the current format no longer has, with
+            those fields' stored values, in the order the sub-steps dropped them.
 
     >>> MigrationReport(from_version=1).renamed
     ReadOnlyMap({})
@@ -93,10 +121,11 @@ class MigrationReport(FrozenModel):
         default={}, validate_default=True
     )
     repairs: tuple[str, ...] = ()
+    dropped: tuple[DroppedFields, ...] = ()
 
 
 class ReportBuilder:
-    """Collects the renames and repairs of one migration run, then builds its report.
+    """Collects the renames, repairs and dropped fields of one migration run, then its report.
 
     Attributes:
         from_version: Format version the documents were stored in.
@@ -106,6 +135,7 @@ class ReportBuilder:
         self.from_version = from_version
         self._renamed: dict[str, list[tuple[str, str]]] = {}
         self._repairs: list[str] = []
+        self._dropped: list[DroppedFields] = []
 
     def rename(self, kind: str, old: str, new: str) -> None:
         """Records that an ID of one kind was renamed; call it in show order."""
@@ -125,12 +155,27 @@ class ReportBuilder:
         """Records one repair, worded for the designer."""
         self._repairs.append(text)
 
+    def drop(
+        self, document: str, location: str, fields: JsonObject, *, stored_id: str | None = None
+    ) -> None:
+        """Records the stored fields of one object that the current format no longer has.
+
+        >>> report = ReportBuilder(1)
+        >>> report.drop("/show/show.json", "", {"zones": []})
+        >>> report.build().dropped[0].location
+        ''
+        """
+        self._dropped.append(
+            DroppedFields(document=document, location=location, stored_id=stored_id, fields=fields)
+        )
+
     def build(self) -> MigrationReport:
         """Returns the report of everything recorded so far."""
         return MigrationReport(
             from_version=self.from_version,
             renamed={kind: tuple(pairs) for kind, pairs in self._renamed.items()},
             repairs=tuple(self._repairs),
+            dropped=tuple(self._dropped),
         )
 
 

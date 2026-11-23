@@ -62,7 +62,6 @@ if TYPE_CHECKING:
         relabel,
         remove_group,
         rename_spots,
-        set_claimable,
         set_shape,
     )
     from e8s.choreo.avoid import (
@@ -682,6 +681,7 @@ if TYPE_CHECKING:
     from e8s.show.migrate import (
         CURRENT_VERSION,
         FORMAT,
+        DroppedFields,
         MigrationReport,
         read_version,
     )
@@ -830,6 +830,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "DelayFix": ("e8s.choreo.engine_models", "DelayFix"),
     "DeprecatedWarning": ("e8s.core.errors", "DeprecatedWarning"),
     "DocumentRepository": ("e8s.show.repositories", "DocumentRepository"),
+    "DroppedFields": ("e8s.show.migrate", "DroppedFields"),
     "E8sError": ("e8s.core.errors", "E8sError"),
     "Easing": ("e8s.choreo.path_models", "Easing"),
     "EllipseCurve": ("e8s.geo.curves", "EllipseCurve"),
@@ -1293,7 +1294,6 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "selection": ("e8s.show.collab", "selection"),
     "separate_in_time": ("e8s.choreo.avoid", "separate_in_time"),
     "set_at_count": ("e8s.show.manage", "set_at_count"),
-    "set_claimable": ("e8s.cast.spots", "set_claimable"),
     "set_coordinates": ("e8s.sheet.coords", "set_coordinates"),
     "set_counts": ("e8s.show.manage", "set_counts"),
     "set_easing": ("e8s.choreo.paths", "set_easing"),
@@ -1467,6 +1467,7 @@ __all__ = [
     "DelayFix",
     "DeprecatedWarning",
     "DocumentRepository",
+    "DroppedFields",
     "E8sError",
     "Easing",
     "EllipseCurve",
@@ -1907,7 +1908,6 @@ __all__ = [
     "selection",
     "separate_in_time",
     "set_at_count",
-    "set_claimable",
     "set_coordinates",
     "set_counts",
     "set_easing",

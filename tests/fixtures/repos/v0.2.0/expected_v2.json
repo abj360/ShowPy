@@ -3997,7 +3997,6 @@
         "spots": [
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "brass",
             "id": "B1",
@@ -4013,7 +4012,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "brass",
             "id": "B2",
@@ -4032,7 +4030,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "brass",
             "id": "B3",
@@ -4048,7 +4045,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "brass",
             "id": "B4",
@@ -4064,7 +4060,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "brass",
             "id": "B5",
@@ -4080,7 +4075,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "brass",
             "id": "B6",
@@ -4096,7 +4090,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "woodwinds",
             "id": "W1",
@@ -4112,7 +4105,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "woodwinds",
             "id": "W2",
@@ -4128,7 +4120,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "woodwinds",
             "id": "W3",
@@ -4144,7 +4135,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "woodwinds",
             "id": "W4",
@@ -4160,7 +4150,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "woodwinds",
             "id": "W5",
@@ -4176,7 +4165,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "woodwinds",
             "id": "W6",
@@ -4192,7 +4180,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "percussion",
             "id": "P1",
@@ -4208,7 +4195,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "percussion",
             "id": "P2",
@@ -4224,7 +4210,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "percussion",
             "id": "P3",
@@ -4240,7 +4225,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "percussion",
             "id": "P4",
@@ -4256,7 +4240,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "percussion",
             "id": "P5",
@@ -4272,7 +4255,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "percussion",
             "id": "P6",
@@ -4288,7 +4270,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "guard",
             "id": "G1",
@@ -4304,7 +4285,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "guard",
             "id": "G2",
@@ -4320,7 +4300,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "guard",
             "id": "G3",
@@ -4336,7 +4315,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "guard",
             "id": "G4",
@@ -4352,7 +4330,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "guard",
             "id": "G5",
@@ -4368,7 +4345,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "guard",
             "id": "G6",
@@ -7642,6 +7618,7 @@
     }
   },
   "report": {
+    "dropped": [],
     "from_version": 1,
     "renamed": {
       "form": [
