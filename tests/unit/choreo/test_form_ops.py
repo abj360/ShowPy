@@ -26,6 +26,8 @@ Contains:
         ValueError, when members outnumber slots
     test_regression_reorder_by_x_ranks_noise_tied_slots_by_y: ranks slots whose x differs by
         1 ulp by y, as if the x were equal
+    test_regression_reorder_by_x_ranks_noise_tied_members_by_y: ranks members whose previous x
+        differs by 1 ulp by their previous y
     test_regression_edit_rejects_non_numeric_radius_with_show_py_error: raises a ShowPyError, not a
         pydantic error, for edit(radius="abc")
     test_edit_text_keeps_members_in_reading_order: regenerates the letters on the same members
@@ -185,6 +187,19 @@ def test_regression_reorder_by_x_ranks_noise_tied_slots_by_y(direction: float) -
     for upper_x in (1.0, math.nextafter(1.0, direction)):
         form = custom_form("f", ["A", "B"], [(upper_x, 2.0), (1.0, 0.0)])
         assert reorder(form, "by_x").members == ("B", "A")
+
+
+@pytest.mark.parametrize("direction", [-math.inf, math.inf])
+def test_regression_reorder_by_x_ranks_noise_tied_members_by_y(direction: float) -> None:
+    """Ranks members whose previous x differs by 1 ulp by their previous y.
+
+    A and B stood on one vertical file, A upstage; moving A 1 ulp left used to rank it first by
+    the noise alone, so it took the leftmost slot.
+    """
+    form = line_form("f", ("A", "B"), (0, 5), (4, 5))
+    for upper_x in (1.0, math.nextafter(1.0, direction)):
+        prev = _prev(A=(upper_x, 2.0), B=(1.0, 0.0))
+        assert reorder(form, "by_x", prev).members == ("B", "A")
 
 
 def test_reorder_nearest_prev_minimizes_moves() -> None:

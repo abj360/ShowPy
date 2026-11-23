@@ -81,8 +81,8 @@ FORM_FIELDS = frozenset({"members", "spacing", "facing", "locked", "meta", "set"
 FIXED_RECIPE_KEYS = frozenset({"kind", "recipe_version"})
 TRIMMABLE_FACINGS = frozenset({"audience", "fixed", "along", "normal", "toward_point"})
 HALF_TURN = 180.0
-# Slot coordinates come from sin and cos, whose last bits differ between platforms; ranking
-# them to a nanometer keeps points on one file tied, so the other axis decides their order.
+# Slot and spot coordinates come from sin and cos, whose last bits differ between platforms;
+# ranking them to a nanometer keeps points on one file tied, so the other axis decides.
 AXIS_RANK_DIGITS = 9
 
 type Order = Sequence[str] | Literal["reverse", "by_x", "by_y", "nearest_prev"]
@@ -192,7 +192,9 @@ def _ranked_members(form: Form, axis: int, prev_set: Set | None) -> list[SpotId]
         return natural_sort(form.spots)
     other = 1 - axis
     points = {m: prev_set.get(m).point for m in form.spots}
-    return sorted(form.spots, key=lambda m: (points[m][axis], points[m][other], m))
+    return sorted(
+        form.spots, key=lambda m: (_axis_rank(points[m][axis]), _axis_rank(points[m][other]), m)
+    )
 
 
 def _occupied_slots(form: Form) -> list[int]:
