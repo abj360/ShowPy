@@ -25,8 +25,7 @@ Contains:
     test_positional_boolean_scan_flags_a_definition: proves the scan can fail
     test_public_names_are_cached_after_first_use: requires a resolved name to land in the module
     find_geo_foreign_imports(): lists each import in geo source outside e8s.core and e8s.geo
-    GEO_FORWARDING_IMPORTS: lists the function-level imports of the geo stubs, removed in v0.6.0
-    test_geo_imports_only_core: fails when geo imports another e8s package, bar the listed stubs
+    test_geo_imports_only_core: fails when geo imports another e8s package
     test_geo_layering_scan_allows_only_listed_function_imports: proves an unlisted import is flagged
     test_geo_layering_scan_flags_a_foreign_import: proves the layering scan can fail
     test_geo_layering_scan_resolves_relative_imports: checks `from ..cast import x` against layers
@@ -409,68 +408,13 @@ def find_geo_foreign_imports(
     return sorted(found, key=lambda entry: int(entry.split(":")[1]))
 
 
-GEO_FORWARDING_FUNCTIONS = {
-    ("transforms.py", "e8s.choreo.set_transforms"): (
-        "shift",
-        "move_to",
-        "rotate",
-        "scale",
-        "expand",
-        "contract",
-        "set_interval",
-        "mirror",
-        "symmetrize",
-        "skew",
-        "affine",
-    ),
-    ("snapping.py", "e8s.choreo.set_snapping"): (
-        "snap",
-        "snap_to_guides",
-        "align",
-        "distribute",
-    ),
-    ("measure.py", "e8s.choreo.set_measure"): (
-        "on_field_ids",
-        "neighbors",
-        "nearest",
-        "symmetry_error",
-    ),
-    ("analysis.py", "e8s.choreo.set_analysis"): (
-        "density_map",
-        "coverage",
-        "balance",
-        "symmetry_score",
-        "change_amount",
-    ),
-}
-SHEET_FORWARDING_FUNCTIONS = ("snap_to_guides", "density_map", "coverage", "balance")
 # Deprecated Set forwarding from geo to choreo; delete this table when v0.6.0 removes the stubs.
-GEO_FORWARDING_IMPORTS = frozenset(
-    [
-        (module, target, function)
-        for (module, target), functions in GEO_FORWARDING_FUNCTIONS.items()
-        for function in functions
-    ]
-    + [
-        (module, "e8s.choreo.models", function)
-        for (module, _target), functions in GEO_FORWARDING_FUNCTIONS.items()
-        for function in functions
-    ]
-    + [
-        (module, "e8s.sheet.models", function)
-        for (module, _target), functions in GEO_FORWARDING_FUNCTIONS.items()
-        for function in functions
-        if function in SHEET_FORWARDING_FUNCTIONS
-    ]
-)
-
-
 def test_geo_imports_only_core() -> None:
     offenders = [
         offender
         for path in sorted((LIBRARY_ROOT / "geo").glob("*.py"))
         for offender in find_geo_foreign_imports(
-            path.read_text(encoding="utf-8"), path.name, allowed=GEO_FORWARDING_IMPORTS
+            path.read_text(encoding="utf-8"), path.name, allowed=frozenset()
         )
     ]
     assert offenders == []
