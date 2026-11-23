@@ -29,8 +29,8 @@ Contains:
         stored pattern selector that the spot renames turn into an ID list
     test_rename_ids_renames_nothing_in_a_valid_show: returns the show and an empty report
     test_regression_every_reference_follows_a_renamed_id: rewrites sets, keys, transitions,
-        forms, routes, zones, selections, notes, pins and selector text, and the result passes
-        every ID check
+        forms, routes, zones, selections, pins and selector text, and the result passes every ID
+        check; notes follow in the notes sub-step
     test_regression_first_save_moves_the_files_of_renamed_set_folders: moves a set script from
         `/sets/con/` to `/sets/con_/` in one revision, nothing on the next save, for the v0.2.0
         and v0.3.0 fixtures
@@ -64,7 +64,6 @@ from showpy.core.errors import SchemaError, StorageError
 from showpy.core.ids import LEGACY_IDS_KEY, FormId, SetId, ZoneId
 from showpy.core.types import Region
 from showpy.examples import two_set_show
-from showpy.notes.notes import add_note
 from showpy.sheet.models import Zone, ZoneKind
 from showpy.show.canvas_renames import renamed_canvas
 from showpy.show.documents import (
@@ -312,13 +311,10 @@ def test_rename_ids_renames_nothing_in_a_valid_show() -> None:
 
 
 def _rich_show() -> Show:
-    """Builds a valid show that refers to a set, a form, a route, a selection and a note."""
+    """Builds a valid show that refers to a set, a form, a route and a selection."""
     show = add_set(seeded_show(3, 8, 3), "zq", 4.0)
     show = define_selection(show, "sq", ["B1", "B2"])
     show = pin(pin(pin(show, "set", "zq"), "transition", "3→zq"), "form", "brass_2")
-    show = add_note(show, "look", Anchor.on_set("zq"), "nq", AT, "designer")
-    show = add_note(show, "move", Anchor.on_transition(("3", "zq")), "nr", AT, "designer")
-    show = add_note(show, "lead", Anchor.on_spots(["B1"]), "ns", AT, "designer")
     overrides = tuple(
         FacingOverride.model_validate(
             {"entities": entities, "mode": FacingMode.AUDIENCE, "start": 0.0, "end": 1.0}
@@ -338,7 +334,6 @@ def _legacy_rich_dump() -> dict[str, Any]:
         ("brass_2", "brass-2"),
         ('"sq"', '"s-q"'),
         ("sel:sq", "sel:s-q"),
-        ('"nq"', '"n-q"'),
         ('"zz"', '"props"'),
     ):
         text = text.replace(valid, stored)
@@ -364,7 +359,7 @@ def test_regression_every_reference_follows_a_renamed_id() -> None:
     assert set(renamed["route"]) == {("r-1", "r_1")}
     assert renamed["zone"] == (("props", "props_"),)
     assert renamed["selection"] == (("s-q", "s_q"),)
-    assert renamed["note"] == (("n-q", "n_q"),)
+    assert "note" not in renamed
     assert show.set_ids()[-1] == "con_"
     assert show.sets[-1].key == "con_"
     assert show.transition_ids()[-1] == ("3", "con_")
@@ -373,10 +368,6 @@ def test_regression_every_reference_follows_a_renamed_id() -> None:
         ("transition", "3→con_"),
         ("form", "brass_2"),
     }
-    assert [n.id for n in show.notes] == ["n_q", "nr", "ns"]
-    assert show.notes[0].anchor.set_id == "con_"
-    assert show.notes[1].anchor.tid == ("3", "con_")
-    assert show.notes[2].anchor.spots == ("B1",)
     assert show.forms[FormId("brass_2")].id == "brass_2"
     assert "brass_2" in show.set("2").forms
     assert any(p.form == "brass_2" for p in show.set("2").placements)

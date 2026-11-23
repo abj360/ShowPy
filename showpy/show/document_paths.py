@@ -6,11 +6,12 @@ show.json lists the set order as keys; workspaces map display IDs onto them.
 
 Contains:
     SHEET_DOC: names the sheet document
-    NOTES_DOC: names the design-notes document
+    NOTES_DOC: names the notes document stored beside the show's documents, from format v2
+    LEGACY_NOTES_DOC: names the v1 document that held the notes among the show's documents
     TIMELINE_DOC: names the timeline document
     SET_ORDER_FIELD: names the show.json field that lists the set keys in show order
     SHEET_FIELD, NOTES_FIELD, TIMELINE_FIELD, FORMS_FIELD, TRANSITIONS_FIELD, REVISION_FIELD:
-        name the show fields that live outside show.json
+        name the show fields that live outside show.json; NOTES_FIELD only in v1 dumps
     SPLIT_FIELDS: names the show fields stored in documents of their own, not in show.json
     SEGMENT: matches one stored path segment, such as a set key or a transition folder
     SCRIPT_NAME: names a set folder's build script
@@ -23,7 +24,7 @@ Contains:
     forms_doc(): returns the path of a set folder's forms document
     placements_doc(): returns the path of a set folder's derived placements table
     paths_doc(): returns the path of a transition folder's paths document
-    is_show_doc(): reports whether a path is part of the encoded Show
+    is_show_doc(): reports whether a path is part of the encoded Show, v1 notes included
     is_storable_folder(): reports whether a set folder name can be stored
     docs_for_order(): lists the show-document paths of a tree with a given set order
 """
@@ -37,9 +38,10 @@ from showpy.core.errors import SchemaError, StorageError
 from showpy.core.ids import check_id
 from showpy.show.manage import SET_ID_PATTERN
 from showpy.show.migrate import SHOW_DOC
+from showpy.show.migrations.v1_to_v2_notes import LEGACY_NOTES_DOC as LEGACY_NOTES_DOC
+from showpy.show.migrations.v1_to_v2_notes import NOTES_DOC as NOTES_DOC
 
 SHEET_DOC = "/show/sheet.json"
-NOTES_DOC = "/show/notes.json"
 TIMELINE_DOC = "/time/timeline.json"
 SET_ORDER_FIELD = "sets"
 SHEET_FIELD = "sheet"
@@ -126,7 +128,10 @@ def paths_doc(tid: tuple[str, str]) -> str:
 
 
 def is_show_doc(path: str) -> bool:
-    """Reports whether a path is one of the documents encode_show() writes.
+    """Reports whether a path is one of the documents encode_show() writes, or v1 notes.
+
+    The v1 notes document still counts, so the first save deletes it once the notes moved,
+    and a commit that writes it into a current tree is refused as a document of no show field.
 
     >>> is_show_doc("/sets/1/forms.json"), is_show_doc("/sets/1/set.py")
     (True, False)
@@ -158,7 +163,7 @@ def docs_for_order(order: Sequence[str]) -> frozenset[str]:
     >>> sorted(docs_for_order(["1", "2"]))[:3]
     ['/sets/1/forms.json', '/sets/1/set.json', '/sets/2/forms.json']
     """
-    paths = {SHOW_DOC, SHEET_DOC, NOTES_DOC, TIMELINE_DOC}
+    paths = {SHOW_DOC, SHEET_DOC, TIMELINE_DOC}
     paths.update(set_doc(s) for s in order)
     paths.update(forms_doc(s) for s in order)
     paths.update(paths_doc(tid) for tid in itertools.pairwise(order))

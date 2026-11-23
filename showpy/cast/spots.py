@@ -45,6 +45,7 @@ from showpy.core.util import close_matches, natural_sort
 from showpy.geo.curve_base import Curve
 from showpy.geo.regions import Area
 from showpy.geo.spacing import fill, space_along
+from showpy.notes.models import NotesDocument, require_notes_of
 from showpy.show.locks import require_unlocked
 
 if TYPE_CHECKING:
@@ -351,7 +352,7 @@ def _locked_items(show: "Show", ids: frozenset[SpotId]) -> list[str]:
 
 
 def delete_spots(show: "Show", sel: Selector, *, force: bool = False) -> "Show":
-    """Removes spots from the cast, every set, forms, paths, routes, notes and selections.
+    """Removes spots from the cast, every set, forms, paths, routes and selections.
 
     Pinned placements, locked forms and locked paths raise LockedError unless `force=True`.
     A forced delete also drops the pins on the deleted spots. A deleted form member leaves an
@@ -592,12 +593,17 @@ def _repeated(ids: Iterable[str]) -> list[str]:
 
 
 def rename_spots(
-    show: "Show", mapping: Mapping[SpotId, str] | Mapping[str, str], *, force: bool = False
+    show: "Show",
+    mapping: Mapping[SpotId, str] | Mapping[str, str],
+    *,
+    force: bool = False,
+    notes: NotesDocument | None = None,
 ) -> "tuple[Show, RewriteReport]":
     """Renames spot IDs simultaneously in every place a show refers to them.
 
     Covers the cast, placements, forms, path rows (keys, entities and entity facings),
-    routes, note anchors, facing overrides, zones, pins and named selections. Swaps are
+    routes, facing overrides, zones, pins and named selections, and the note anchors of the
+    notes document when one is passed; `report.notes` returns it rewritten. Swaps are
     allowed; a new ID that another spot keeps raises SchemaError naming both sources. A
     selector that names labels is frozen to the renamed ID list; one that no longer resolves
     stays as written and is listed in the report. Pinned pictures must stay as they are:
@@ -607,6 +613,8 @@ def rename_spots(
         show: The show to rename spots in.
         mapping: Old ID to new ID; entries that keep the ID are ignored.
         force: Allows the rename past a pinned picture it would change.
+        notes: The notes document stored beside the show, or None; one of another show raises
+            SchemaError.
 
     Returns:
         show: The renamed show.
@@ -617,11 +625,15 @@ def rename_spots(
     >>> renamed.cast.ids(), dict(report.renamed)
     (('S1', 'T2', 'T3', 'T4'), {'T1': 'S1'})
     """
+    if notes is not None:
+        require_notes_of(notes, show.id)
     changes = {SpotId(old): new for old, new in mapping.items() if old != new}
     if not changes:
-        return show, RewriteReport()
+        return show, RewriteReport(notes=notes)
     for old in changes:
         show.cast.spot(old)
-    renamed, report = rewrite_spots(show, lambda spot_id: changes.get(spot_id, spot_id))
+    renamed, report = rewrite_spots(
+        show, lambda spot_id: changes.get(spot_id, spot_id), notes=notes
+    )
     _require_pictures_kept(show, renamed, changes, force=force)
     return renamed, report

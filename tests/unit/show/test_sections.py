@@ -31,9 +31,8 @@ from showpy.choreo.path_models import FacingMode, FacingOverride, FixedFacing, T
 from showpy.core.errors import SchemaError, TimelineError
 from showpy.core.ids import FormId, SetId, SpotId, make_tid
 from showpy.core.util import approx_equal
-from showpy.notes.models import Note
 from showpy.show.manage import add_set, index, renumber
-from showpy.show.models import Anchor, Pin, Show
+from showpy.show.models import Pin, Show
 from showpy.show.sections import join_sections, split_section
 from showpy.time.clock import count_to_seconds
 from showpy.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting, TempoSection
@@ -67,17 +66,12 @@ def _four_sets() -> Show:
         end=14,
     )
     form = Form(id=FormId("f3"), set=SetId("3"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
-    notes = (
-        Note(id="a", text="x", anchor=Anchor.on_set("2"), author="d", created_at=AT),
-        Note(id="b", text="y", anchor=Anchor.on_set("4"), author="d", created_at=AT),
-    )
     return show.model_copy(
         update={
             "timeline": timeline,
             "facing_overrides": (override,),
             "forms": {"f3": form},
             "transitions": (TransitionSpec(id=make_tid("3", "4"), counts=8.0),),
-            "notes": notes,
             "pins": (Pin(target="set", id="4"), Pin(target="entity", id="T2")),
         }
     )
@@ -91,7 +85,6 @@ def test_split_shares_boundary_and_shifts_clock() -> None:
     assert second.sets[0].counts == 0.0
     assert second.forms == {"f3": show.forms[FormId("f3")]}
     assert second.transitions == show.transitions
-    assert [n.id for n in first.notes] == ["a"]
     assert [p.id for p in second.pins] == ["4", "T2"]
     assert second.facing_overrides[0].start == 0.0
     assert first.facing_overrides[0].end == 12.0
@@ -127,7 +120,6 @@ def test_join_inverts_split() -> None:
     assert joined.sets == show.sets
     assert joined.transitions == show.transitions
     assert joined.forms == show.forms
-    assert sorted(n.id for n in joined.notes) == ["a", "b"]
     assert [e.start_count for e in index(joined).entries] == [0.0, 8.0, 12.0, 20.0]
     assert [h.at_count for h in joined.timeline.holds] == [4.0, 12.0]
 

@@ -46,7 +46,6 @@ from showpy.core.errors import DeprecatedWarning, SchemaError, ShowPyError, Unkn
 from showpy.core.ids import FormId, RouteId, SetId, SpotId, ZoneId, make_tid
 from showpy.core.types import Region
 from showpy.geo.curves import Segment
-from showpy.notes.models import Note
 from showpy.sheet.models import Zone, ZoneKind
 from showpy.show.history import (
     changelog,
@@ -57,7 +56,7 @@ from showpy.show.history import (
     revert,
 )
 from showpy.show.manage import add_set
-from showpy.show.models import Anchor, Pin, Show
+from showpy.show.models import Pin, Show
 from showpy.show.pinning import pin, unpin
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import load_show, open_workspace, save_show
@@ -208,7 +207,6 @@ def test_rename_entities_rewrites_everything() -> None:
     spec = TransitionSpec(
         id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): row}, routes={RouteId("r"): route}
     )
-    note = Note(id="n", text="x", anchor=Anchor.on_spots(["T1"]), author="d", created_at=AT)
     override = FacingOverride(
         entities=(SpotId("T1"),),
         mode=FacingMode.FIXED,
@@ -221,7 +219,6 @@ def test_rename_entities_rewrites_everything() -> None:
         update={
             "forms": {"f": form},
             "transitions": (spec,),
-            "notes": (note,),
             "facing_overrides": (override,),
             "pins": (Pin(target="entity", id="T1"),),
             "cast": cast,
@@ -236,7 +233,6 @@ def test_rename_entities_rewrites_everything() -> None:
     assert list(new_spec.rows) == ["S1"]
     assert new_spec.rows[SpotId("S1")].facing_value == EntityFacing(entity=SpotId("S2"))
     assert new_spec.routes[RouteId("r")].members == ("S2",)
-    assert renamed.notes[0].anchor.spots == ("S1",)
     assert renamed.facing_overrides[0].entities == ("S1",)
     assert renamed.pins[0].id == "S1"
 
@@ -264,7 +260,6 @@ def _full_show() -> Show:
     spec = TransitionSpec(
         id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): row}, routes={RouteId("r"): route}
     )
-    note = Note(id="n", text="x", anchor=Anchor.on_spots(["T1"]), author="d", created_at=AT)
     override = FacingOverride(
         entities="T1 + T2", mode=FacingMode.FIXED, value=FixedFacing(degrees=90.0), start=0, end=4
     )
@@ -280,7 +275,6 @@ def _full_show() -> Show:
         update={
             "forms": {"f": form},
             "transitions": (spec,),
-            "notes": (note,),
             "facing_overrides": (override,),
             "pins": (Pin(target="entity", id="T1"),),
             "zones": (zone,),

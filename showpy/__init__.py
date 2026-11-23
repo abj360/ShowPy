@@ -610,6 +610,7 @@ if TYPE_CHECKING:
     )
     from showpy.notes.models import (
         Note,
+        NotesDocument,
     )
     from showpy.notes.notes import (
         accept_draft,
@@ -714,6 +715,7 @@ if TYPE_CHECKING:
         export_json,
         import_fonts,
         import_json,
+        import_notes,
         import_positions,
     )
     from showpy.show.manage import (
@@ -972,6 +974,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "MotionSegment": ("showpy.choreo.engine_models", "MotionSegment"),
     "MotionStats": ("showpy.choreo.engine_models", "MotionStats"),
     "Note": ("showpy.notes.models", "Note"),
+    "NotesDocument": ("showpy.notes.models", "NotesDocument"),
     "PathDiff": ("showpy.show.models", "PathDiff"),
     "PathEngine": ("showpy.choreo.engine", "PathEngine"),
     "PathError": ("showpy.core.errors", "PathError"),
@@ -1226,6 +1229,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "hold": ("showpy.choreo.paths", "hold"),
     "import_fonts": ("showpy.show.interchange", "import_fonts"),
     "import_json": ("showpy.show.interchange", "import_json"),
+    "import_notes": ("showpy.show.interchange", "import_notes"),
     "import_positions": ("showpy.show.interchange", "import_positions"),
     "in_region": ("showpy.cast.select", "in_region"),
     "index": ("showpy.show.manage", "index"),
@@ -1528,6 +1532,8 @@ _LEAVING_TYPES: dict[str, tuple[str | tuple[str, ...] | None, str, str]] = {
     "verify_join_token": (None, "0.4.0", "0.6.0"),
     "video_canvas": (None, "0.4.0", "0.6.0"),
     "who_is_on": (None, "0.4.0", "0.6.0"),
+    "Note": (None, "0.4.0", "1.0.0"),
+    "NotesDocument": (None, "0.4.0", "1.0.0"),
 }
 
 __all__ = [
@@ -1665,6 +1671,7 @@ __all__ = [
     "MotionSegment",
     "MotionStats",
     "Note",
+    "NotesDocument",
     "PathDiff",
     "PathEngine",
     "PathError",
@@ -1917,6 +1924,7 @@ __all__ = [
     "hold",
     "import_fonts",
     "import_json",
+    "import_notes",
     "import_positions",
     "in_region",
     "index",

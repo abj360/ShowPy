@@ -27,7 +27,7 @@ from showpy.choreo.path_models import (
 from showpy.core.errors import SchemaError, ShowValidationError, UnknownRefError
 from showpy.core.ids import RouteId, SpotId, TransitionId
 from showpy.core.selection import Selection, SelectorField
-from showpy.notes.models import Note
+from showpy.notes.models import Note, NotesDocument, require_notes_of
 from showpy.sheet.models import Sheet, Zone
 
 if TYPE_CHECKING:
@@ -101,27 +101,36 @@ def _require_no_dropped_row_facings(show: "Show", rename: Rename) -> None:
         )
 
 
-def rewrite_spots(show: "Show", rename: Rename) -> "tuple[Show, RewriteReport]":
+def rewrite_spots(
+    show: "Show", rename: Rename, *, notes: NotesDocument | None = None
+) -> "tuple[Show, RewriteReport]":
     """Applies `rename` to every spot reference in a show and reports what it dropped.
 
     Covers the cast, named selections, placements, forms, path rows (keys, entities and
-    entity facings), routes, note anchors, facing overrides, entity pins and zones of the
-    show and its sheet. A selector that names labels is frozen to the rewritten ID list; a
-    selector that cannot be resolved stays as written and is reported. A route left without
-    members, a facing override left without spots or aimed at a dropped spot, and a note
-    anchored only to dropped spots are removed and reported.
-    Raises SchemaError when two spots would share one ID, and ShowValidationError when a path
-    row of a kept spot faces a dropped spot.
+    entity facings), routes, facing overrides, entity pins and zones of the show and its sheet,
+    and the note anchors of the notes document when one is passed. A selector that names labels
+    is frozen to the rewritten ID list; a selector that cannot be resolved stays as written and
+    is reported. A route left without members, a facing override left without spots or aimed at
+    a dropped spot, and a note anchored only to dropped spots are removed and reported.
+    Raises SchemaError when two spots would share one ID or the notes document belongs to
+    another show, and ShowValidationError when a path row of a kept spot faces a dropped spot.
+
+    Args:
+        show: The show to rewrite.
+        rename: Old spot ID to new ID, or None to drop the spot.
+        notes: The notes document stored beside the show, or None.
 
     Returns:
         show: The rewritten show.
-        report: What was renamed, dropped or left unresolved.
+        report: What was renamed, dropped or left unresolved, and the rewritten notes document.
 
     >>> from showpy.examples import two_set_show
     >>> rewritten, report = rewrite_spots(two_set_show(), lambda i: "S1" if i == "T1" else i)
     >>> rewritten.cast.ids(), dict(report.renamed)
     (('S1', 'T2', 'T3', 'T4'), {'T1': 'S1'})
     """
+    if notes is not None:
+        require_notes_of(notes, show.id)
     renamed = _renamed_spots(show, rename)
     _require_no_dropped_row_facings(show, rename)
     dropped = _Dropped()
@@ -132,19 +141,22 @@ def rewrite_spots(show: "Show", rename: Rename) -> "tuple[Show, RewriteReport]":
         "sets": tuple(_rewrite_set(s, rename) for s in show.sets),
         "forms": {fid: _rewrite_form(f, rename) for fid, f in show.forms.items()},
         "transitions": tuple(_rewrite_spec(spec, rename, dropped) for spec in show.transitions),
-        "notes": _rewrite_notes(show.notes, rename, dropped),
         "facing_overrides": _rewrite_overrides(show, rename, dropped),
         "zones": tuple(_rewrite_zone(show, z, rename, dropped) for z in show.zones),
         "pins": _rewrite_pins(show.pins, rename),
         "sheet": _rewrite_sheet(show, rename, dropped),
     }
     new_cast = Cast.model_validate({**dict(cast), "spots": spots, "selections": selections})
+    rewritten_notes = (
+        None if notes is None else notes.replace(notes=_rewrite_notes(notes.notes, rename, dropped))
+    )
     report = RewriteReport(
         renamed={old: new for old, new in renamed.items() if old != new},
         dropped_routes=tuple(dropped.routes),
         dropped_facings=tuple(dropped.facings),
         orphaned_notes=tuple(dropped.notes),
         unresolved_selectors=tuple(dict.fromkeys(dropped.selectors)),
+        notes=rewritten_notes,
     )
     return show.replace(cast=new_cast, **updates), report
 

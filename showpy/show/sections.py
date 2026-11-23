@@ -15,7 +15,6 @@ from showpy.choreo.path_models import FacingOverride
 from showpy.core.errors import SchemaError, TimelineError, VersionError
 from showpy.core.ids import FormId, SetId, parse_tid
 from showpy.core.types import Count
-from showpy.notes.models import Note
 from showpy.sheet.models import Zone
 from showpy.show.manage import index
 from showpy.show.models import Pin, Show
@@ -128,15 +127,6 @@ def _timeline_from(tl: Timeline, offset: Count) -> Timeline:
     )
 
 
-def _note_in(note: Note, ids: set[SetId]) -> bool:
-    anchor = note.anchor
-    if anchor.kind == "set":
-        return anchor.set_id in ids
-    if anchor.kind == "transition" and anchor.tid is not None:
-        return set(anchor.tid) <= ids
-    return True
-
-
 def _pin_in(item: Pin, ids: set[SetId], forms: Mapping[FormId, Form]) -> bool:
     if item.target == "set":
         return item.id in ids
@@ -155,7 +145,6 @@ def _section(show: Show, sets: Sequence[Set], timeline: Timeline, low: Count, hi
         sets=tuple(sets),
         forms=forms,
         transitions=tuple(t for t in show.transitions if t.id in pairs),
-        notes=tuple(n for n in show.notes if _note_in(n, ids)),
         pins=tuple(p for p in show.pins if _pin_in(p, ids, forms)),
         facing_overrides=_clip_overrides(show.facing_overrides, low, high, low),
         zones=_clip_zones(show.zones, low, high, low),
@@ -319,7 +308,6 @@ def join_sections(a: Show, b: Show) -> Show:
         sets=(*a.sets, *_keyed_after(a, _tail_sets(a, b))),
         forms=_merged_forms(a, b),
         transitions=(*a.transitions, *b.transitions),
-        notes=(*a.notes, *(n for n in b.notes if n not in a.notes)),
         pins=(*a.pins, *(p for p in b.pins if p not in a.pins)),
         facing_overrides=(
             *a.facing_overrides,

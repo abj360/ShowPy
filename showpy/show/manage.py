@@ -43,9 +43,7 @@ from showpy.core.ids import (
 )
 from showpy.core.types import Count
 from showpy.core.util import close_matches
-from showpy.notes.models import Note
 from showpy.sheet.models import Sheet
-from showpy.show.anchors import Anchor
 from showpy.show.locks import require_unlocked
 from showpy.show.models import Pin, Show, ShowIndex, ShowIndexEntry
 from showpy.show.set_keys import free_set_key, set_key
@@ -428,15 +426,6 @@ def set_counts(
     return replace_sets(show, sets, force=force, transitions=specs)
 
 
-def _renamed_anchor(anchor: Anchor, mapping: Mapping[SetId, SetId]) -> Anchor:
-    if anchor.kind == "set" and anchor.set_id is not None:
-        return Anchor.on_set(mapping.get(anchor.set_id, anchor.set_id))
-    if anchor.kind == "transition" and anchor.tid is not None:
-        a, b = anchor.tid
-        return Anchor.on_transition((mapping.get(a, a), mapping.get(b, b)))
-    return anchor
-
-
 def _renamed_pin(pin: Pin, mapping: Mapping[str, str], tids: Mapping[str, str]) -> Pin:
     if pin.target == "set":
         return pin.replace(id=mapping.get(pin.id, pin.id))
@@ -445,12 +434,8 @@ def _renamed_pin(pin: Pin, mapping: Mapping[str, str], tids: Mapping[str, str]) 
     return pin
 
 
-def _renamed_note(note: Note, mapping: Mapping[SetId, SetId]) -> Note:
-    return note.replace(anchor=_renamed_anchor(note.anchor, mapping))
-
-
 def renumber(show: Show, scheme: str = SEQUENTIAL) -> tuple[Show, dict[SetId, SetId]]:
-    """Renames sets 1..N in show order, rewriting transitions, forms, notes and pins.
+    """Renames sets 1..N in show order, rewriting transitions, forms and pins.
 
     Keys stay, so stored set folders and their build scripts stay with their sets.
 
@@ -485,7 +470,6 @@ def renumber(show: Show, scheme: str = SEQUENTIAL) -> tuple[Show, dict[SetId, Se
         forms={
             f: form.replace(set=mapping.get(form.set, form.set)) for f, form in show.forms.items()
         },
-        notes=tuple(_renamed_note(n, mapping) for n in show.notes),
         pins=tuple(_renamed_pin(p, by_text, tids) for p in show.pins),
     )
     return renamed, mapping

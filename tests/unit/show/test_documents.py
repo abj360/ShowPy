@@ -12,6 +12,9 @@ Contains:
         as sets 1 and 2
     test_regression_decode_wrong_shape_names_the_document: puts the path of the wrong-shaped
         document in the SchemaError context
+    test_regression_decode_wrong_shape_names_the_v1_notes_document: puts the path of a v1 notes
+        document that is not an array in the SchemaError context, as it did while notes were a
+        show document
     test_regression_show_json_carries_a_format_version: stamps show.json with a format and layout
         version
     test_regression_decode_names_the_minimum_version_for_a_newer_document: raises VersionError for a
@@ -43,6 +46,7 @@ from showpy.core.canonical import INT_LIMIT
 from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError, ShowPyError, VersionError
 from showpy.show.documents import (
+    LEGACY_NOTES_DOC,
     SHOW_DOC,
     decode_show,
     dump_dumped_json,
@@ -52,7 +56,7 @@ from showpy.show.documents import (
     encode_show,
     forms_doc,
 )
-from showpy.show.migrate import format_header
+from showpy.show.migrate import format_header, without_header
 from showpy.show.models import Show
 from tests.fixtures.shows import two_set_show
 from tests.helpers import HOSTILE_JSON
@@ -90,7 +94,6 @@ def test_regression_decode_rejects_string_set_order() -> None:
     [
         (SHOW_DOC, b"[]"),
         ("/show/sheet.json", b"null"),
-        ("/show/notes.json", b"{}"),
         ("/time/timeline.json", b"7"),
         ("/sets/2/set.json", b"[]"),
         (forms_doc("2"), b"{}"),
@@ -102,6 +105,16 @@ def test_regression_decode_wrong_shape_names_the_document(path: str, raw: bytes)
     with pytest.raises(SchemaError) as excinfo:
         decode_show({**_docs(), path: raw})
     assert excinfo.value.context["path"] == path
+
+
+def test_regression_decode_wrong_shape_names_the_v1_notes_document() -> None:
+    """Puts the path of a v1 notes document that is not an array in the SchemaError context."""
+    docs = _docs()
+    v1_show = without_header(json.loads(docs[SHOW_DOC]))
+    v1 = {**docs, SHOW_DOC: json.dumps(v1_show).encode(), LEGACY_NOTES_DOC: b"{}"}
+    with pytest.raises(SchemaError) as excinfo:
+        decode_show(v1)
+    assert excinfo.value.context["path"] == LEGACY_NOTES_DOC
 
 
 def test_regression_show_json_carries_a_format_version() -> None:

@@ -33,90 +33,6 @@
       ],
       "type": "array"
     },
-    "Anchor": {
-      "additionalProperties": false,
-      "description": "Tags what a note or comment is attached to; exactly the field for `kind` is set.\n\nAttributes:\n    kind: What the anchor points at.\n    set_id: Set, for kind `set`.\n    tid: Transition, for kind `transition`.\n    point: Sheet point, for kind `point`.\n    area: Sheet area, for kind `area`.\n    spots: Spot IDs, for kind `spots`.",
-      "properties": {
-        "area": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Region"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "kind": {
-          "$ref": "#/$defs/AnchorKind"
-        },
-        "point": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Point"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "set_id": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Set Id"
-        },
-        "spots": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Spots"
-        },
-        "tid": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TransitionId"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        }
-      },
-      "required": [
-        "kind"
-      ],
-      "title": "Anchor",
-      "type": "object"
-    },
-    "AnchorKind": {
-      "enum": [
-        "set",
-        "transition",
-        "point",
-        "area",
-        "spots"
-      ],
-      "type": "string"
-    },
     "AnyCurve": {
       "discriminator": {
         "mapping": {
@@ -1710,59 +1626,6 @@
       "maximum": 1000000.0,
       "minimum": 0,
       "type": "number"
-    },
-    "Note": {
-      "additionalProperties": false,
-      "description": "Holds one design note.\n\nAttributes:\n    id: Note ID.\n    text: Note body.\n    kind: goal, idea, todo or warning.\n    anchor: What the note is attached to.\n    author: User name, or \"agent\".\n    created_at: When the note was written, with a time zone; passed in, never read from\n        the clock.\n    visible: Whether the canvas shows it.",
-      "properties": {
-        "anchor": {
-          "$ref": "#/$defs/Anchor"
-        },
-        "author": {
-          "title": "Author",
-          "type": "string"
-        },
-        "created_at": {
-          "format": "date-time",
-          "title": "Created At",
-          "type": "string"
-        },
-        "id": {
-          "title": "Id",
-          "type": "string"
-        },
-        "kind": {
-          "$ref": "#/$defs/NoteKind",
-          "default": "idea"
-        },
-        "text": {
-          "title": "Text",
-          "type": "string"
-        },
-        "visible": {
-          "default": true,
-          "title": "Visible",
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "id",
-        "text",
-        "anchor",
-        "author",
-        "created_at"
-      ],
-      "title": "Note",
-      "type": "object"
-    },
-    "NoteKind": {
-      "enum": [
-        "goal",
-        "idea",
-        "todo",
-        "warning"
-      ],
-      "type": "string"
     },
     "PathRow": {
       "additionalProperties": false,
@@ -3725,12 +3588,6 @@
     }
   },
   "properties": {
-    "/show/notes.json": {
-      "items": {
-        "$ref": "#/$defs/Note"
-      },
-      "type": "array"
-    },
     "/show/sheet.json": {
       "$ref": "#/$defs/Sheet"
     },

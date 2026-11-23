@@ -61,6 +61,7 @@ from showpy.core.util import content_hash
 from showpy.show.collab import events_since
 from showpy.show.document_reading import decode_show_dump
 from showpy.show.documents import (
+    LEGACY_NOTES_DOC,
     SHOW_DOC,
     dump_json,
     dump_show_doc,
@@ -187,10 +188,13 @@ def _form_reference_paths(tree: Mapping[str, bytes]) -> set[str]:
 
 def _normalized_paths(tree: Mapping[str, bytes]) -> set[str]:
     """Lists what the first save rewrites: `-0.0` documents, forms documents for their v2
-    recipes, set documents for their renamed form IDs, and show.json for its v2 header and
-    renamed selection."""
+    recipes, set documents for their renamed form IDs, show.json for its v2 header and renamed
+    selection, and the v1 notes document, which it deletes (the fixture holds no notes)."""
     return (
-        _negative_zero_paths(tree) | _forms_paths(tree) | _form_reference_paths(tree) | {SHOW_DOC}
+        _negative_zero_paths(tree)
+        | _forms_paths(tree)
+        | _form_reference_paths(tree)
+        | {SHOW_DOC, LEGACY_NOTES_DOC}
     )
 
 
@@ -229,7 +233,7 @@ def test_regression_first_save_normalizes_v020_documents_in_one_revision(tmp_pat
     assert not _negative_zero_paths(after)
     unchanged = set(before) - set(saved.changed)
     assert {p: after[p] for p in unchanged} == {p: before[p] for p in unchanged}
-    assert set(after) == set(before)
+    assert set(after) == set(before) - {LEGACY_NOTES_DOC}
     scripts = {p for p in before if p.endswith("/set.py")}
     assert scripts
     assert not scripts & set(saved.changed)
@@ -320,7 +324,7 @@ def test_regression_workspace_commit_normalizes_first_then_edits(tmp_path: Path)
     log = repo.revisions(expected["show_id"])
     assert [r.id for r in log][:3] == expected["revisions"]
     assert [set(r.changed) for r in log[3:]] == [
-        {"/sets/1/set.json", SHOW_DOC}
+        {"/sets/1/set.json", SHOW_DOC, LEGACY_NOTES_DOC}
         | _forms_paths(ws.tree_at(expected["head"]))
         | _form_reference_paths(ws.tree_at(expected["head"])),
         {"/sets/1/set.json"},
@@ -371,11 +375,12 @@ def _two_stale_documents(tmp_path: Path) -> tuple[FileRepository, Workspace, int
     tree = ws.tree_at(expected["head"])
     sheet = json.loads(tree["/show/sheet.json"])
     migrated, _ = migrate_documents(tree)
-    current = {
+    current: dict[str, bytes | None] = {
         path: raw
         for path, raw in migrated.items()
         if is_show_doc(path) and path not in STALE_DOCS and tree.get(path) != raw
     }
+    current.update(dict.fromkeys(p for p in tree if is_show_doc(p) and p not in migrated))
     repo.transaction(
         expected["show_id"],
         {**current, "/show/sheet.json": json.dumps(sheet, indent=4).encode()},

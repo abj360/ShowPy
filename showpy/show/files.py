@@ -30,6 +30,7 @@ from showpy.core.selection import Selection
 from showpy.core.util import close_matches
 from showpy.show.documents import (
     FORMS_NAME,
+    LEGACY_NOTES_DOC,
     NOTES_DOC,
     PATHS_NAME,
     PLACEMENTS_NAME,
@@ -98,10 +99,11 @@ def all_files(show: Show | None, tree: Mapping[str, bytes]) -> list[str]:
     """
     files = sorted(DEFAULTS)
     files += [CLAIMS_DOC] if CLAIMS_DOC in tree else []
+    files += [NOTES_DOC] if NOTES_DOC in tree else []
     files += sorted(p for p in tree if p.startswith(FREE_ROOTS))
     if show is None:
         return files
-    files += [SHOW_DOC, INDEX_DOC, SHEET_DOC, NOTES_DOC, TIMELINE_DOC]
+    files += [SHOW_DOC, INDEX_DOC, SHEET_DOC, TIMELINE_DOC]
     files += _set_files(show, tree)
     files += [paths_doc(tid) for tid in show.transition_ids()]
     return files
@@ -196,7 +198,7 @@ def _show_file(path: str, segments: list[str], show: Show) -> bytes | None:
     if segments[0] == "transitions" and len(segments) == 3 and segments[2] == PATHS_NAME:
         tid = _pair(show, segments[1])
         return dump_json(show.transition(tid).model_dump(mode="json"))
-    if path in (SHOW_DOC, SHEET_DOC, NOTES_DOC, TIMELINE_DOC):
+    if path in (SHOW_DOC, SHEET_DOC, TIMELINE_DOC):
         return encode_documents(show, [path])[path]
     return None
 
@@ -223,7 +225,7 @@ def read_file(path: str, show: Show | None, tree: Mapping[str, bytes]) -> str | 
         if found is not None:
             return _text_or_bytes(path, found)
     stored = tree.get(to_stored_path(path, show), DEFAULTS.get(path))
-    is_listed = path in DEFAULTS or path == CLAIMS_DOC or path.startswith(FREE_ROOTS)
+    is_listed = path in DEFAULTS or path in (CLAIMS_DOC, NOTES_DOC) or path.startswith(FREE_ROOTS)
     if stored is None or not (is_listed or path.endswith(f"/{SCRIPT_NAME}")):
         raise _unknown(path, show, tree)
     return _text_or_bytes(path, stored)
@@ -239,7 +241,7 @@ def show_changes(show: Show, tree: Mapping[str, bytes]) -> dict[str, bytes | Non
     >>> from showpy.examples import two_set_show
     >>> changes = show_changes(two_set_show(), {"/sets/9/set.py": b""})
     >>> changes["/sets/9/set.py"], len(changes)
-    (None, 7)
+    (None, 6)
     """
     migration = migration_changes(tree)
     paths = [p for p in tree if p not in migration] + [
@@ -309,11 +311,17 @@ def staged_changes(
     if path.endswith("/"):
         raise _is_directory(path)
     require_writable(path)
+    if path == LEGACY_NOTES_DOC:
+        raise UnknownRefError(
+            f"{path} held the notes of format v1 and is no longer a show document",
+            hint=f"write the notes document to {NOTES_DOC}",
+            context={"path": path},
+        )
     if is_show_doc(path) and not path.endswith("/set.json"):
         return _staged_show_doc(path, raw, _require_show(show, path), tree)
     if segments[0] == "sets" and len(segments) == 3 and segments[2] == SCRIPT_NAME:
         _require_show(show, path).set(segments[1])
-    elif not (path in DEFAULTS or path == CLAIMS_DOC or path.startswith(FREE_ROOTS)):
+    elif not (path in DEFAULTS or path in (CLAIMS_DOC, NOTES_DOC) or path.startswith(FREE_ROOTS)):
         raise _unknown(path, show, tree)
     require_structured(path, raw)
     return {to_stored_path(path, show): raw}

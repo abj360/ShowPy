@@ -5,13 +5,15 @@ Every document is parsed as strict JSON. A tree of the current format is assembl
 cached per-document decodes, and validated with CHECKED_CONTEXT, which checks every ID: the ids step
 renamed every v1 ID before a tree was saved in this format. A tree of an older version is parsed
 whole, run through the migration sub-steps, validated with any non-empty v1 ID accepted, run
-through the model sub-steps and validated again; nothing stored changes. An interchange dump of an
+through the model sub-steps and validated again, then through the sub-steps that write the
+documents beside the show, such as the notes; nothing stored changes. An interchange dump of an
 older version is first split into the documents a stored tree of that version holds.
 
 Contains:
     read_show(): assembles a show from stored documents, migrating an older format in memory
     read_migrated(): migrates stored documents of an older format and returns the report too
     decode_show_dump(): assembles a show from an interchange dump of an older format version
+    migrate_dump(): migrates an older interchange dump to a show and the documents beside it
 """
 
 import itertools
@@ -29,7 +31,7 @@ from showpy.core.strict_json import parse_strict_json
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.document_paths import (
     FORMS_FIELD,
-    NOTES_DOC,
+    LEGACY_NOTES_DOC,
     NOTES_FIELD,
     REVISION_FIELD,
     SET_ORDER_FIELD,
@@ -51,6 +53,7 @@ from showpy.show.migrate import (
     LEGACY_CONTEXT,
     SHOW_DOC,
     ReportBuilder,
+    migrate_beside,
     migrate_model,
     migrate_objects,
     version_of,
@@ -248,7 +251,6 @@ def _assemble(reading: _Reading, meta: JsonObject, revision: str) -> Show:
         {
             **rest,
             "sheet": _load_object(reading.source, SHEET_DOC),
-            "notes": _load_array(reading.source, NOTES_DOC, is_optional=True),
             "timeline": _load_object(reading.source, TIMELINE_DOC),
             "sets": sets,
             "forms": forms,
@@ -259,18 +261,32 @@ def _assemble(reading: _Reading, meta: JsonObject, revision: str) -> Show:
     )
 
 
-def _migrated_show(
-    source: _Source, meta: JsonObject, version: int, revision: str
-) -> tuple[Show, ReportBuilder]:
+class _Migrated(NamedTuple):
+    """Holds what migrating an older tree produced.
+
+    Attributes:
+        show: The migrated show, validated with CHECKED_CONTEXT.
+        report: The renames and repairs the sub-steps recorded.
+        beside: Stored path to the parsed JSON of each document the migration writes beside
+            the show, such as the notes document.
+    """
+
+    show: Show
+    report: ReportBuilder
+    beside: dict[str, JsonValue]
+
+
+def _migrated_show(source: _Source, meta: JsonObject, version: int, revision: str) -> _Migrated:
     """Migrates a tree stored in an older format version to a show, in memory.
 
-    Only the documents the set order names are parsed, as for a current tree. The JSON
-    sub-steps run first, then the show is validated with any non-empty v1 ID accepted, the
-    model sub-steps run, and the result is validated again with CHECKED_CONTEXT.
+    Only the documents the set order names, and the v1 notes, are parsed, as for a current tree.
+    The JSON sub-steps run first, then the show is validated with any non-empty v1 ID accepted,
+    the model sub-steps run, the result is validated again with CHECKED_CONTEXT, and the
+    sub-steps that write documents beside the show run on it and the migrated documents.
     """
     order = _set_order(meta.get(SET_ORDER_FIELD, []))
     objects: dict[str, JsonValue] = {SHOW_DOC: meta}
-    for path in sorted(docs_for_order(order) - {SHOW_DOC}):
+    for path in sorted((docs_for_order(order) | {LEGACY_NOTES_DOC}) - {SHOW_DOC}):
         if source.has(path):
             objects[path] = source.load(path)
     report = ReportBuilder(version)
@@ -279,7 +295,7 @@ def _migrated_show(
     show = _assemble(reading, _load_object(reading.source, SHOW_DOC), revision)
     renamed = migrate_model(show, version, report)
     checked = Show.model_validate(renamed.model_dump(mode="json"), context=CHECKED_CONTEXT)
-    return checked, report
+    return _Migrated(checked, report, migrate_beside(checked, migrated, version, report))
 
 
 def _reraised_for_show(exc: SchemaError) -> SchemaError:
@@ -311,15 +327,35 @@ def decode_show_dump(dump: Mapping[str, JsonValue], version: int) -> Show:
     >>> decode_show_dump(dump, 1) == two_set_show()
     True
     """
+    return migrate_dump(dump, version)[0]
+
+
+def migrate_dump(dump: Mapping[str, JsonValue], version: int) -> tuple[Show, dict[str, JsonValue]]:
+    """Migrates the interchange dump of an older format version to a show and its side documents.
+
+    Args:
+        dump: The `show` object of an interchange document, already strictly parsed.
+        version: Format version of the interchange document.
+
+    Returns:
+        show: The migrated show; a dump that does not fit raises SchemaError.
+        beside: Stored path to the parsed JSON of each document beside the show, such as the
+            notes document at `/notes/notes.json`; empty when the dump held no notes.
+
+    >>> from showpy.examples import two_set_show
+    >>> migrate_dump(two_set_show().model_dump(mode="json"), 1)[1]
+    {}
+    """
     revision = dump.get(REVISION_FIELD, "")
     source = _object_source(_split_dump(dump))
     try:
         meta = _load_object(source, SHOW_DOC)
-        return _migrated_show(source, meta, version, revision if isinstance(revision, str) else "")[
-            0
-        ]
+        migrated = _migrated_show(
+            source, meta, version, revision if isinstance(revision, str) else ""
+        )
     except SchemaError as exc:
         raise _reraised_for_show(exc) from exc
+    return migrated.show, migrated.beside
 
 
 def _dump_list(dump: Mapping[str, JsonValue], field: str) -> list[JsonObject]:
@@ -347,7 +383,7 @@ def _split_dump(dump: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
         )
     objects[SHEET_DOC] = dump[SHEET_FIELD]
     objects[TIMELINE_DOC] = dump[TIMELINE_FIELD]
-    objects[NOTES_DOC] = dump.get(NOTES_FIELD, [])
+    objects[LEGACY_NOTES_DOC] = dump.get(NOTES_FIELD, [])
     objects.update((set_doc(keys[str(s.get("id"))]), s) for s in sets)
     for set_id, forms in _forms_by_set(dump, keys).items():
         objects[forms_doc(keys[set_id])] = forms
@@ -419,14 +455,16 @@ def read_show(
         meta = _load_object(source, SHOW_DOC)
         version = version_of(meta, name=SHOW_DOC)
         if version < CURRENT_VERSION:
-            return _migrated_show(source, meta, version, revision)[0]
+            return _migrated_show(source, meta, version, revision).show
         reading = _Reading(source, CHECKED_CONTEXT, cache, digests or {})
         return _assemble(reading, without_header(meta), revision)
     except SchemaError as exc:
         raise _reraised_for_show(exc) from exc
 
 
-def read_migrated(docs: Mapping[str, bytes]) -> tuple[Show, ReportBuilder]:
+def read_migrated(
+    docs: Mapping[str, bytes],
+) -> tuple[Show, ReportBuilder, dict[str, JsonValue]]:
     """Migrates stored documents of an older format version to a show, collecting the report.
 
     Args:
@@ -435,10 +473,13 @@ def read_migrated(docs: Mapping[str, bytes]) -> tuple[Show, ReportBuilder]:
     Returns:
         show: The migrated show.
         report: What the migration renamed and repaired.
+        beside: Stored path to the parsed JSON of each document the migration writes beside the
+            show, such as the notes document.
     """
     source = _raw_source(docs)
     try:
         meta = _load_object(source, SHOW_DOC)
-        return _migrated_show(source, meta, version_of(meta, name=SHOW_DOC), "")
+        migrated = _migrated_show(source, meta, version_of(meta, name=SHOW_DOC), "")
+        return migrated.show, migrated.report, migrated.beside
     except SchemaError as exc:
         raise _reraised_for_show(exc) from exc

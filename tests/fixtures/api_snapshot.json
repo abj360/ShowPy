@@ -877,10 +877,18 @@
       "anchor": "showpy.show.anchors.Anchor",
       "author": "str",
       "created_at": "pydantic.types.AwareDatetime",
-      "id": "str",
+      "id": "showpy.core.ids.NoteId",
       "kind": "NoteKind",
       "text": "str",
       "visible": "bool"
+    }
+  },
+  "NotesDocument": {
+    "model": {
+      "format": "Literal['e8.notes']",
+      "notes": "tuple[showpy.notes.models.Note, ...]",
+      "show": "str",
+      "version": "Literal[1]"
     }
   },
   "PathDiff": {
@@ -1107,6 +1115,7 @@
     "model": {
       "dropped_facings": "tuple[showpy.choreo.path_models.FacingOverride, ...]",
       "dropped_routes": "tuple[tuple[showpy.core.ids.TransitionId, showpy.core.ids.RouteId], ...]",
+      "notes": "showpy.notes.models.NotesDocument | None",
       "orphaned_notes": "tuple[showpy.notes.models.Note, ...]",
       "renamed": "collections.abc.Mapping[showpy.core.ids.SpotId, showpy.core.ids.SpotId]",
       "unresolved_selectors": "tuple[str, ...]"
@@ -1249,7 +1258,6 @@
       "facing_overrides": "tuple[showpy.choreo.path_models.FacingOverride, ...]",
       "forms": "collections.abc.Mapping[showpy.core.ids.FormId, showpy.choreo.form_models.Form]",
       "id": "str",
-      "notes": "tuple[showpy.notes.models.Note, ...]",
       "pack": "str",
       "pins": "tuple[showpy.show.models.Pin, ...]",
       "revision": "str",
@@ -1579,7 +1587,7 @@
     }
   },
   "accept": "(ws: showpy.show.storage.Workspace, proposal: showpy.show.models.Proposal, at: datetime.datetime) -> showpy.show.models.Revision",
-  "accept_draft": "(show: 'Show', draft: showpy.notes.models.Note) -> 'Show'",
+  "accept_draft": "(notes: showpy.notes.models.NotesDocument, show: 'Show', draft: showpy.notes.models.Note) -> showpy.notes.models.NotesDocument",
   "add_cue": "(tl: showpy.time.models.Timeline, cue: showpy.time.models.Cue) -> showpy.time.models.Timeline",
   "add_facing_override": "(show: showpy.show.models.Show, override: showpy.choreo.path_models.FacingOverride) -> showpy.show.models.Show",
   "add_group": "(show: 'Show', group: showpy.cast.models.Group) -> 'Show'",
@@ -1587,7 +1595,7 @@
   "add_hold": "(tl: showpy.time.models.Timeline, hold: showpy.time.models.Hold) -> showpy.time.models.Timeline",
   "add_landmark": "(sheet: showpy.sheet.models.Sheet, item: showpy.sheet.models.Landmark) -> showpy.sheet.models.Sheet",
   "add_marker": "(tl: showpy.time.models.Timeline, marker: showpy.time.models.Marker) -> showpy.time.models.Timeline",
-  "add_note": "(show: 'Show', text: str, anchor: showpy.show.anchors.Anchor, note_id: str, at: datetime.datetime, author: str, kind: NoteKind = 'idea') -> 'Show'",
+  "add_note": "(notes: showpy.notes.models.NotesDocument, show: 'Show', text: str, anchor: showpy.show.anchors.Anchor, note_id: str, at: datetime.datetime, author: str, kind: NoteKind = 'idea') -> showpy.notes.models.NotesDocument",
   "add_set": "(show: showpy.show.models.Show, set_id: str, counts: float, after: str | None = None, placements: collections.abc.Sequence[showpy.choreo.models.Placement] | None = None, *, force: bool = False) -> showpy.show.models.Show",
   "add_spot": "(show: 'Show', point: Point, group: str, set_id: str, *, force: bool = False) -> 'Show'",
   "add_spots_along": "(show: 'Show', curve: showpy.geo.curve_base.Curve, n: int, group: str, set_id: str, *, force: bool = False) -> 'Show'",
@@ -1695,7 +1703,7 @@
   "easing_breaks": "(easing: showpy.choreo.path_models.Easing) -> list[float]",
   "edit": "(form: showpy.choreo.form_models.Form, *, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., font_registry: showpy.geo.fonts.FontRegistry | None = None, **changes: Any) -> showpy.choreo.form_models.Form",
   "edit_group": "(show: 'Show', key: str, /, **changes: Unpack[showpy.cast.spots.GroupPatch]) -> 'Show'",
-  "edit_note": "(show: 'Show', note_id: str, /, **changes: Any) -> 'Show'",
+  "edit_note": "(notes: showpy.notes.models.NotesDocument, show: 'Show', note_id: str, /, **changes: Any) -> showpy.notes.models.NotesDocument",
   "edit_params": "(form: showpy.choreo.form_models.Form, *, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., **params: Any) -> showpy.choreo.form_models.Form",
   "edit_text_count": "(form: showpy.choreo.form_models.Form, *, add: collections.abc.Sequence[str] = (), remove: collections.abc.Sequence[str] = (), n: int | None = None, spacing: Meters | None = None, force: bool = False, registry: showpy.choreo.form_fns.FormFnRegistry = ..., font_registry: showpy.geo.fonts.FontRegistry | None = None) -> showpy.choreo.form_models.Form",
   "ellipse": "(center: Point, rx: Meters, ry: Meters, rotation_deg: Degrees = 0.0) -> showpy.geo.curves.EllipseCurve",
@@ -1704,7 +1712,7 @@
   "events_since": "(ws: showpy.show.storage.Workspace, revision: str) -> list[showpy.show.models.CanvasEvent]",
   "expand": "(obj: T, d: Meters, about: About = 'center', sel: SetSelector = 'all', *, force: bool = False) -> T",
   "export_frames_csv": "(show: showpy.show.models.Show, per_count: int = 1) -> str",
-  "export_json": "(show: showpy.show.models.Show, include: str | collections.abc.Iterable[str] | None = None, *, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> dict[str, Any]",
+  "export_json": "(show: showpy.show.models.Show, include: str | collections.abc.Iterable[str] | None = None, *, font_registry: showpy.geo.fonts.FontRegistry | None = None, notes: showpy.notes.models.NotesDocument | None = None) -> dict[str, Any]",
   "export_video": "(show: showpy.show.models.Show, count_range: tuple[Count, Count] | None = None, fps: float = 30, audio: collections.abc.Mapping[str, bytes] | None = None, px_per_m: float = 10.0) -> bytes",
   "face_along": "(show: showpy.show.models.Show, set_id: str, form_id: str, *, reverse: bool = False, force: bool = False) -> showpy.choreo.models.Set",
   "face_audience": "(target: showpy.choreo.models.Set, sel: Sel, *, force: bool = False) -> showpy.choreo.models.Set",
@@ -1744,6 +1752,7 @@
   "hold": "(spec: showpy.choreo.path_models.TransitionSpec, sel: Sel, until: float | None = None, from_: float | None = None, *, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",
   "import_fonts": "(d: collections.abc.Mapping[str, Any], font_registry: showpy.geo.fonts.FontRegistry | None = None) -> showpy.geo.fonts.FontRegistry",
   "import_json": "(d: collections.abc.Mapping[str, Any]) -> showpy.show.models.Show",
+  "import_notes": "(d: collections.abc.Mapping[str, object]) -> showpy.notes.models.NotesDocument",
   "import_positions": "(base: showpy.show.models.Show, text: str, group: str, columns: collections.abc.Mapping[str, str] | None = None, *, force: bool = False) -> showpy.show.models.Show",
   "in_region": "(set_: showpy.choreo.models.Set, shape: RegionLike) -> showpy.core.selection.Selection",
   "index": "(show: showpy.show.models.Show) -> showpy.show.models.ShowIndex",
@@ -1823,6 +1832,16 @@
       "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
+    "Note": {
+      "kind": "type",
+      "remove": "1.0.0",
+      "since": "0.4.0"
+    },
+    "NotesDocument": {
+      "kind": "type",
+      "remove": "1.0.0",
+      "since": "0.4.0"
+    },
     "Performer": {
       "kind": "type",
       "remove": "0.6.0",
@@ -1890,6 +1909,11 @@
       "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
+    "accept_draft": {
+      "kind": "function",
+      "remove": "1.0.0",
+      "since": "0.4.0"
+    },
     "add_guide": {
       "kind": "function",
       "remove": "0.7.0",
@@ -1900,6 +1924,11 @@
       "kind": "function",
       "remove": "0.7.0",
       "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "add_note": {
+      "kind": "function",
+      "remove": "1.0.0",
       "since": "0.4.0"
     },
     "add_zone": {
@@ -1971,6 +2000,11 @@
       "remove": "0.6.0",
       "since": "0.4.0"
     },
+    "edit_note": {
+      "kind": "function",
+      "remove": "1.0.0",
+      "since": "0.4.0"
+    },
     "escape_text": {
       "kind": "export",
       "remove": "0.7.0",
@@ -2018,6 +2052,11 @@
       "replacement": "floor",
       "since": "0.4.0"
     },
+    "import_notes": {
+      "kind": "function",
+      "remove": "1.0.0",
+      "since": "0.4.0"
+    },
     "join_link": {
       "kind": "export",
       "remove": "0.6.0",
@@ -2051,6 +2090,16 @@
       "kind": "function",
       "remove": "0.7.0",
       "replacement": "markings_near",
+      "since": "0.4.0"
+    },
+    "notes_for": {
+      "kind": "function",
+      "remove": "1.0.0",
+      "since": "0.4.0"
+    },
+    "notes_near": {
+      "kind": "function",
+      "remove": "1.0.0",
       "since": "0.4.0"
     },
     "notify_changes": {
@@ -2128,6 +2177,11 @@
       "kind": "function",
       "remove": "0.7.0",
       "replacement": ["Marking", "markings_near"],
+      "since": "0.4.0"
+    },
+    "remove_note": {
+      "kind": "function",
+      "remove": "1.0.0",
       "since": "0.4.0"
     },
     "remove_zone": {
@@ -2266,8 +2320,8 @@
   "new_show": "(show_id: str, title: str, sheet: showpy.sheet.models.Sheet, timeline: showpy.time.models.Timeline, cast: showpy.cast.models.Cast | None = None, pack: str = '') -> showpy.show.models.Show",
   "new_timeline": "(mode: showpy.time.models.TimelineMode, counts_per_minute: CountsPerMinute | None = None, total: Count | None = None) -> showpy.time.models.Timeline",
   "normalize_angle": "(deg: float) -> float",
-  "notes_for": "(show: 'Show', target: str | tuple[str, str], *, include_hidden: bool = False) -> list[showpy.notes.models.Note]",
-  "notes_near": "(show: 'Show', p: Point, radius: Meters, set_id: str | None = None, *, include_hidden: bool = False) -> list[showpy.notes.models.Note]",
+  "notes_for": "(notes: showpy.notes.models.NotesDocument, show: 'Show', target: str | tuple[str, str], *, include_hidden: bool = False) -> list[showpy.notes.models.Note]",
+  "notes_near": "(notes: showpy.notes.models.NotesDocument, show: 'Show', p: Point, radius: Meters, set_id: str | None = None, *, include_hidden: bool = False) -> list[showpy.notes.models.Note]",
   "notify_changes": "(pub: showpy.export.Publication, old_show: showpy.show.models.Show, new_show: showpy.show.models.Show) -> list[tuple[showpy.export.Performer, str]]",
   "offset": "(curve: showpy.geo.curve_base.Curve, distance: Meters, side: str = 'left') -> showpy.geo.curve_base.Curve",
   "on_field_ids": "(s: showpy.choreo.models.Set, sel: SetSelector = 'all') -> tuple[showpy.core.ids.SpotId, ...]",
@@ -2323,13 +2377,13 @@
   "remove_hold": "(tl: showpy.time.models.Timeline, at_count: Count) -> showpy.time.models.Timeline",
   "remove_landmark": "(sheet: showpy.sheet.models.Sheet, landmark_id: str) -> showpy.sheet.models.Sheet",
   "remove_marker": "(tl: showpy.time.models.Timeline, label: str) -> showpy.time.models.Timeline",
-  "remove_note": "(show: 'Show', note_id: str) -> 'Show'",
+  "remove_note": "(notes: showpy.notes.models.NotesDocument, note_id: str) -> showpy.notes.models.NotesDocument",
   "remove_set": "(show: showpy.show.models.Show, set_id: str, *, merge_counts: bool = True, force: bool = False) -> showpy.show.models.Show",
   "remove_tempo": "(tl: showpy.time.models.Timeline, at_count: Count) -> showpy.time.models.Timeline",
   "remove_waypoint": "(spec: showpy.choreo.path_models.TransitionSpec, entity: str, index: int, *, force: bool = False) -> showpy.choreo.path_models.TransitionSpec",
   "remove_zone": "(sheet: showpy.sheet.models.Sheet, zone_id: str) -> showpy.sheet.models.Sheet",
   "rename_entities": "(show: showpy.show.models.Show, mapping: collections.abc.Mapping[str, str]) -> showpy.show.models.Show",
-  "rename_spots": "(show: 'Show', mapping: collections.abc.Mapping[showpy.core.ids.SpotId, str] | collections.abc.Mapping[str, str], *, force: bool = False) -> 'tuple[Show, RewriteReport]'",
+  "rename_spots": "(show: 'Show', mapping: collections.abc.Mapping[showpy.core.ids.SpotId, str] | collections.abc.Mapping[str, str], *, force: bool = False, notes: showpy.notes.models.NotesDocument | None = None) -> 'tuple[Show, RewriteReport]'",
   "render_frame": "(show: showpy.show.models.Show, frame: showpy.choreo.engine_models.Frame, canvas: showpy.sheet.render.SheetCanvas) -> 'Image.Image'",
   "render_sheet": "(sheet: showpy.sheet.models.Sheet, fmt: SheetFormat = 'svg', px_per_m: float = 20.0) -> bytes",
   "renumber": "(show: showpy.show.models.Show, scheme: str = 'sequential') -> tuple[showpy.show.models.Show, dict[showpy.core.ids.SetId, showpy.core.ids.SetId]]",

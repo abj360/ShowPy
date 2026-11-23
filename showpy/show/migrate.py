@@ -4,8 +4,9 @@ migrate.py --- reads a stored show's format version and runs the steps that brin
 A stored tree is versioned by its show.json alone: from version 2 on, `"format"` and `"version"`
 are its first two keys, and a show.json without them is version 1. Each version has one step to
 the next, made of named sub-steps that run in a fixed order: first on the parsed JSON documents
-keyed by stored path, then on the show validated with any non-empty v1 ID accepted. Loading
-migrates in memory; nothing stored is rewritten until the next save.
+keyed by stored path, then on the show validated with any non-empty v1 ID accepted, and last on
+the migrated show and documents together, writing documents that sit beside the show, such as
+the notes document. Loading migrates in memory; nothing stored is rewritten until the next save.
 
 Contains:
     FORMAT: names the stored show format, `showpy.show`
@@ -18,8 +19,10 @@ Contains:
     CHECKED_CONTEXT: validation context of the check that follows the model sub-steps
     JSON_STEPS: maps each stored version to the JSON sub-steps that lift it one version
     MODEL_STEPS: maps each stored version to the model sub-steps that lift it one version
+    BESIDE_STEPS: maps each stored version to the sub-steps that write documents beside the show
     MigrationReport: lists what a migration renamed and repaired
     ReportBuilder: collects the renames and repairs of one migration run
+    ReportBuilder.renames(): returns the renames recorded so far for one ID kind
     read_version(): reads the format version of a stored document set from its show.json
     require_current_version(): refuses a parsed show.json of another format version
     require_current_show_doc(): refuses show.json bytes that are not in the current format
@@ -28,6 +31,7 @@ Contains:
     without_header(): returns a parsed document without its header fields
     migrate_objects(): runs the JSON sub-steps from a stored version up to the current one
     migrate_model(): runs the model sub-steps on a show validated with legacy IDs accepted
+    migrate_beside(): runs the sub-steps that move data out of the show into documents beside it
 """
 
 from collections.abc import Mapping
@@ -43,8 +47,10 @@ from showpy.core.readonly import ReadOnly, ReadOnlyMap
 from showpy.core.strict_json import parse_strict_json
 from showpy.core.types import FrozenModel
 from showpy.show.migrations import (
+    V1_TO_V2_BESIDE_STEPS,
     V1_TO_V2_JSON_STEPS,
     V1_TO_V2_MODEL_STEPS,
+    BesideStep,
     JsonStep,
     ModelStep,
 )
@@ -64,6 +70,9 @@ JSON_STEPS: Final[Mapping[int, tuple[JsonStep, ...]]] = ReadOnlyMap(
 )
 MODEL_STEPS: Final[Mapping[int, tuple[ModelStep, ...]]] = ReadOnlyMap(
     {FIRST_VERSION: V1_TO_V2_MODEL_STEPS}
+)
+BESIDE_STEPS: Final[Mapping[int, tuple[BesideStep, ...]]] = ReadOnlyMap(
+    {FIRST_VERSION: V1_TO_V2_BESIDE_STEPS}
 )
 
 
@@ -101,6 +110,16 @@ class ReportBuilder:
     def rename(self, kind: str, old: str, new: str) -> None:
         """Records that an ID of one kind was renamed; call it in show order."""
         self._renamed.setdefault(kind, []).append((old, new))
+
+    def renames(self, kind: str) -> dict[str, str]:
+        """Returns the renames recorded so far for one ID kind, old ID to new ID.
+
+        >>> report = ReportBuilder(1)
+        >>> report.rename("set", "con", "con_")
+        >>> report.renames("set"), report.renames("spot")
+        ({'con': 'con_'}, {})
+        """
+        return dict(self._renamed.get(kind, ()))
 
     def repair(self, text: str) -> None:
         """Records one repair, worded for the designer."""
@@ -293,3 +312,29 @@ def migrate_model(show: Show, version: int, report: ReportBuilder) -> Show:
         for step in MODEL_STEPS[stored_version]:
             show = step(show, report)
     return show
+
+
+def migrate_beside(
+    show: Show, objects: Mapping[str, JsonValue], version: int, report: ReportBuilder
+) -> dict[str, JsonValue]:
+    """Runs the sub-steps that move data out of the show into documents stored beside it.
+
+    Args:
+        show: The migrated show, after the model sub-steps.
+        objects: The documents after the JSON sub-steps, keyed by stored path; never mutated.
+        version: Format version the documents were stored in.
+        report: Holds the renames the earlier sub-steps recorded; collects these steps' own.
+
+    Returns:
+        beside: Stored path to the parsed JSON of each document beside the show; empty when the
+            documents are already current.
+
+    >>> from showpy.examples import two_set_show
+    >>> migrate_beside(two_set_show(), {}, 1, ReportBuilder(1))
+    {}
+    """
+    beside: dict[str, JsonValue] = {}
+    for stored_version in range(version, CURRENT_VERSION):
+        for step in BESIDE_STEPS[stored_version]:
+            beside.update(step(show, objects, report))
+    return beside

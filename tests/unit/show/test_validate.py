@@ -46,10 +46,10 @@ Contains:
         a million meters off the sheet
     test_regression_validate_show_reports_unpinned_sheet_without_a_store: reports an unpinned sheet
         even when no sheet store is passed
-    test_regression_validate_show_reports_empty_ids: reports an empty show, note or form ID, each
-        alone
+    test_regression_validate_show_reports_empty_ids: reports an empty show or form ID, each
+        alone; a note refuses an empty ID when built
     test_regression_validate_show_reports_hyphenated_form_and_note_ids: reports an inner hyphen
-        in form and note IDs, which it once accepted
+        in form IDs, which it once accepted; a note refuses one when built
     test_regression_validate_show_names_the_bad_id_path_in_context: puts the path of the bad ID and
         its value in the issue context
     test_regression_validate_show_reports_set_ids_that_cannot_be_stored: reports a set ID that no
@@ -90,7 +90,8 @@ from showpy.choreo.path_models import (
     Waypoint,
 )
 from showpy.core.caps import MAX_COUNTS
-from showpy.core.ids import FormId, SetId, SpotId, make_tid
+from showpy.core.errors import SchemaError
+from showpy.core.ids import FormId, NoteId, SetId, SpotId, make_tid
 from showpy.core.types import Region
 from showpy.core.validation import ValidationReport
 from showpy.notes.models import Note
@@ -337,7 +338,9 @@ def test_regression_validate_show_reports_pins_that_disagree_with_placement_flag
 
 
 def _note(note_id: str = "n", set_id: str = "1") -> Note:
-    return Note(id=note_id, text="t", anchor=Anchor.on_set(set_id), author="d", created_at=NOTE_AT)
+    return Note(
+        id=NoteId(note_id), text="t", anchor=Anchor.on_set(set_id), author="d", created_at=NOTE_AT
+    )
 
 
 @pytest.mark.defect("UP-9.7-69")
@@ -459,28 +462,28 @@ def test_regression_validate_show_reports_unpinned_sheet_without_a_store() -> No
 
 
 def test_regression_validate_show_reports_empty_ids() -> None:
-    """Reports an empty show, note or form ID, each alone (audit 9.7 validation gaps)."""
+    """Reports an empty show or form ID, each alone; a note refuses an empty ID when built."""
     empty_form = _formed(key="", form_id="")
     variants = {
         "show": _edited(id=""),
-        "note": _edited(notes=(_note(note_id=""),)),
         "form": empty_form,
     }
     silent = [name for name, show in variants.items() if not validate_show(show).issues]
     assert silent == []
+    with pytest.raises(SchemaError, match="note"):
+        _note(note_id="")
 
 
 def test_regression_validate_show_reports_hyphenated_form_and_note_ids() -> None:
-    """Reports an inner hyphen in form and note IDs, which validate_show accepted while the
-    library still made such IDs; migration now renames every stored one."""
+    """Reports an inner hyphen in form IDs, which validate_show accepted while the library still
+    made such IDs; migration now renames every stored one. Notes left the show: a note refuses
+    such an ID when it is built."""
     show = _formed(key="form-1", form_id="form-1")
-    noted = show.model_copy(update={"notes": (_note(note_id="note-1"),)})
-    bad = [dict(i.context) for i in validate_show(noted).issues if i.code == "BAD_ID"]
-    assert bad == [
-        {"path": "notes[0].id", "id": "note-1"},
-        {"path": "forms.form-1.id", "id": "form-1"},
-    ]
+    bad = [dict(i.context) for i in validate_show(show).issues if i.code == "BAD_ID"]
+    assert bad == [{"path": "forms.form-1.id", "id": "form-1"}]
     assert validate_show(_formed(key="form_1", form_id="form_1")).issues == ()
+    with pytest.raises(SchemaError, match="note-1"):
+        _note(note_id="note-1")
 
 
 def test_regression_validate_show_names_the_bad_id_path_in_context() -> None:

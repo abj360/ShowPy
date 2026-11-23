@@ -11,6 +11,7 @@ Contains:
     dump_json(): writes JSON canonically: sorted keys, sorted sets, two-space indent
     dump_dumped_json(): writes the JSON-mode dump of a model canonically, skipping a second walk
     dump_show_doc(): writes a show.json object canonically, the format header first
+    dump_headed_json(): writes a document canonically with its `format` and `version` keys first
     require_storable(): refuses a show whose set IDs, keys, paths or forms cannot be stored
     expected_show_docs(): lists the stored show-document paths decode reads for a show
     encode_show(): splits a show into documents stored by set key, show.json header first
@@ -37,6 +38,7 @@ from showpy.core.json_types import JsonValue
 from showpy.show.canvas_renames import renamed_canvas
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.document_paths import FORMS_NAME as FORMS_NAME
+from showpy.show.document_paths import LEGACY_NOTES_DOC as LEGACY_NOTES_DOC
 from showpy.show.document_paths import NOTES_DOC as NOTES_DOC
 from showpy.show.document_paths import PATHS_NAME as PATHS_NAME
 from showpy.show.document_paths import PLACEMENTS_NAME as PLACEMENTS_NAME
@@ -57,6 +59,8 @@ from showpy.show.document_reading import read_migrated, read_show
 from showpy.show.manage import SET_ID_PATTERN
 from showpy.show.migrate import (
     CURRENT_VERSION,
+    FORMAT_KEY,
+    VERSION_KEY,
     MigrationReport,
     ReportBuilder,
     format_header,
@@ -169,7 +173,7 @@ def encode_show(show: Show) -> dict[str, bytes]:
 
     >>> from showpy.examples import two_set_show
     >>> sorted(encode_show(two_set_show()))[:3]
-    ['/sets/1/set.json', '/sets/2/set.json', '/show/notes.json']
+    ['/sets/1/set.json', '/sets/2/set.json', '/show/sheet.json']
     >>> encode_show(two_set_show())["/show/show.json"].splitlines()[1:3]
     [b'  "format": "showpy.show",', b'  "version": 2,']
     """
@@ -197,7 +201,6 @@ def _encoders(show: Show) -> dict[str, Callable[[], bytes]]:
             {**format_header(), **meta, SET_ORDER_FIELD: list(keys.values())}
         ),
         SHEET_DOC: lambda: dump_dumped_json(show.sheet.model_dump(mode="json")),
-        NOTES_DOC: lambda: dump_dumped_json([n.model_dump(mode="json") for n in show.notes]),
         TIMELINE_DOC: lambda: dump_dumped_json(show.timeline.model_dump(mode="json")),
     }
     for current in show.sets:
@@ -231,7 +234,23 @@ def dump_show_doc(document: Mapping[str, JsonValue]) -> bytes:
     True
     """
     require_current_version(document, name=SHOW_DOC)
-    head = dump_dumped_json(format_header())
+    return dump_headed_json(document)
+
+
+def dump_headed_json(document: Mapping[str, JsonValue]) -> bytes:
+    """Writes a document canonically with its `format` and `version` keys first, then the rest.
+
+    Args:
+        document: Parsed JSON object; keys other than the header are written sorted.
+
+    Returns:
+        raw: Its canonical bytes, header first.
+
+    >>> dump_headed_json({"show": "show-1", "version": 1, "format": "e8.notes"}).splitlines()[1]
+    b'  "format": "e8.notes",'
+    """
+    header = {key: document[key] for key in (FORMAT_KEY, VERSION_KEY) if key in document}
+    head = dump_dumped_json(header)
     body = without_header(document)
     if not body:
         return head
@@ -281,18 +300,19 @@ def migrate_documents(docs: Mapping[str, bytes]) -> tuple[dict[str, bytes], Migr
     """Migrates a stored document set to the current format version and reports what changed.
 
     A host can show the report to the designer, and apply its renames to what it stores outside
-    ShowPy, before the first save writes the new documents. The canvas comments and selection
-    follow the set and spot renames here; `/publish/claims.json` is host-kept, so the host
-    applies the report's spot renames to its claims.
+    ShowPy, before the first save writes the new documents. The notes, the canvas comments and
+    the selection follow the set and spot renames here; `/publish/claims.json` is host-kept, so
+    the host applies the report's spot renames to its claims.
 
     Args:
         docs: Stored path to document bytes, as a repository tree holds them.
 
     Returns:
-        migrated: The show documents re-encoded in the current format, the canvas comments and
-            selection with renamed IDs, plus every other file of `docs`, moved to its set's
-            new folder when the migration renamed the set's key; `docs` itself when it is
-            already current.
+        migrated: The show documents re-encoded in the current format, the notes document beside
+            them when the tree held notes (`/notes/notes.json`, in place of `/show/notes.json`),
+            the canvas comments and selection with renamed IDs, plus every other file of `docs`,
+            moved to its set's new folder when the migration renamed the set's key; `docs`
+            itself when it is already current.
         report: What the migration renamed and repaired, and the version it started from.
 
     >>> from showpy.examples import two_set_show
@@ -312,8 +332,8 @@ def migrate_documents(docs: Mapping[str, bytes]) -> tuple[dict[str, bytes], Migr
 def _migrated_parts(
     docs: Mapping[str, bytes],
 ) -> tuple[dict[str, bytes], dict[str, str], MigrationReport]:
-    """Migrates the show documents and canvas files of an older tree; maps renamed set folders."""
-    show, report = read_migrated(docs)
+    """Migrates an older tree's show documents, notes and canvas files; maps renamed set folders."""
+    show, report, beside = read_migrated(docs)
     order = without_header(json.loads(docs[SHOW_DOC])).get(SET_ORDER_FIELD, [])
     stored_keys = [key for key in order if isinstance(key, str)] if isinstance(order, list) else []
     folders = {
@@ -323,7 +343,13 @@ def _migrated_parts(
     }
     built = report.build()
     canvas = {path: dump_json(value) for path, value in renamed_canvas(docs, built).items()}
-    return encode_show(show) | canvas, folders, built
+    written = {path: _dump_beside(value) for path, value in beside.items()}
+    return encode_show(show) | written | canvas, folders, built
+
+
+def _dump_beside(value: JsonValue) -> bytes:
+    """Writes a document beside the show canonically, its header first when it is an object."""
+    return dump_headed_json(value) if isinstance(value, dict) else dump_json(value)
 
 
 def _set_folder(path: str) -> str | None:

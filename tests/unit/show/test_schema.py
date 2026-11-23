@@ -34,10 +34,8 @@ from showpy.choreo.models import Set
 from showpy.choreo.path_models import TransitionSpec
 from showpy.core.resources import schema_path
 from showpy.examples import crossing_show, two_set_show
-from showpy.notes.models import Note
 from showpy.sheet.models import Sheet
 from showpy.show.document_paths import (
-    NOTES_DOC,
     SEGMENT,
     SET_ORDER_FIELD,
     SHEET_DOC,
@@ -86,7 +84,7 @@ def _show_document(show_schema: dict[str, Any]) -> dict[str, Any]:
 
 def stored_schema() -> dict[str, Any]:
     """Builds the format 2 schema of a stored tree given as {show-document path: document}."""
-    models: list[type[BaseModel]] = [Show, Sheet, Note, Timeline, Set, Form, TransitionSpec]
+    models: list[type[BaseModel]] = [Show, Sheet, Timeline, Set, Form, TransitionSpec]
     _, defs = models_json_schema([(m, "validation") for m in models], ref_template=REF)
     definitions = dict(defs["$defs"])
     definitions[SHOW_DOCUMENT] = _show_document(definitions.pop(Show.__name__))
@@ -100,7 +98,6 @@ def stored_schema() -> dict[str, Any]:
         "properties": {
             SHOW_DOC: _ref(SHOW_DOCUMENT),
             SHEET_DOC: _ref(Sheet.__name__),
-            NOTES_DOC: {"type": "array", "items": _ref(Note.__name__)},
             TIMELINE_DOC: _ref(Timeline.__name__),
         },
         "patternProperties": {
