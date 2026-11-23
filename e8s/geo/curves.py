@@ -6,6 +6,7 @@ turns counter-clockwise. Facings (0° = audience) are a separate convention in c
 
 Contains:
     CurveModel: adds substring() and reversed() to every concrete curve
+    CurveModel.batch_exact: reports whether a batch of arc lengths evaluates as each alone
     Segment: draws a straight line between two points
     Polyline: connects points with straight pieces, optionally closed
     ArcCurve: draws a circular arc; the sweep sign gives the direction
@@ -26,7 +27,7 @@ Contains:
 import math
 from functools import cached_property
 from numbers import Real
-from typing import Annotated, Any, Literal, cast, override
+from typing import Annotated, Any, ClassVar, Literal, cast, override
 
 import numpy as np
 from pydantic import Field, TypeAdapter, field_validator, model_validator
@@ -54,7 +55,24 @@ IDENTITY_3X3 = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 
 
 class CurveModel(CurveBase):
-    """Adds trimming and reversal, which build TrimmedCurve views of the curve."""
+    """Adds trimming and reversal, which build TrimmedCurve views of the curve.
+
+    Attributes:
+        BATCH_EXACT: Whether the class evaluates every arc length with elementwise operations
+            alone. Matrix products may round differently by batch size, so a class that uses
+            them sets it False.
+    """
+
+    BATCH_EXACT: ClassVar[bool] = True
+
+    @property
+    def batch_exact(self) -> bool:
+        """Reports whether points at many arc lengths at once equal each one evaluated alone.
+
+        >>> Segment(a=(0, 0), b=(1, 0)).batch_exact
+        True
+        """
+        return self.BATCH_EXACT
 
     def substring(self, s0: Meters, s1: Meters) -> "TrimmedCurve":
         """Returns the piece between arc lengths s0 and s1, reversed when s0 > s1."""
@@ -250,6 +268,7 @@ class EllipseCurve(CurveModel):
         rotation_deg: Counter-clockwise rotation of the axes.
     """
 
+    BATCH_EXACT: ClassVar[bool] = False
     kind: Literal["ellipse"] = "ellipse"
     center: Point
     rx: Meters
@@ -337,6 +356,7 @@ class BezierCurve(CurveModel):
         control: Control points; the curve starts at the first and ends at the last.
     """
 
+    BATCH_EXACT: ClassVar[bool] = False
     kind: Literal["bezier"] = "bezier"
     control: tuple[Point, ...]
     closed: Literal[False] = False
@@ -367,6 +387,7 @@ class SvgCurve(CurveModel):
         closed: Whether the subpath ends with Z.
     """
 
+    BATCH_EXACT: ClassVar[bool] = False
     kind: Literal["svg"] = "svg"
     d: str
     transform: tuple[tuple[float, float, float], ...] = IDENTITY_3X3
@@ -479,6 +500,12 @@ class CompositeCurve(CurveModel):
     kind: Literal["composite"] = "composite"
     parts: tuple["AnyCurve", ...]
 
+    @property
+    @override
+    def batch_exact(self) -> bool:
+        """Reports whether every part evaluates a batch of arc lengths as each alone."""
+        return all(part.batch_exact for part in self.parts)
+
     @model_validator(mode="after")
     def _needs_parts(self) -> "CompositeCurve":
         if not self.parts:
@@ -567,6 +594,12 @@ class TrimmedCurve(CurveModel):
     s0: Meters
     s1: Meters
     closed: Literal[False] = False
+
+    @property
+    @override
+    def batch_exact(self) -> bool:
+        """Reports whether the trimmed curve evaluates a batch of arc lengths as each alone."""
+        return self.base.batch_exact
 
     @model_validator(mode="after")
     def _inside_open_base(self) -> "TrimmedCurve":
