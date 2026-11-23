@@ -157,7 +157,7 @@
   },
   "Claim": {
     "model": {
-      "claimed_at": "datetime.datetime",
+      "claimed_at": "pydantic.types.AwareDatetime",
       "locked": "bool",
       "performer": "showpy.export.models.Performer",
       "spot": "showpy.core.ids.SpotId"
@@ -1031,7 +1031,7 @@
       "id": "str",
       "join_token_sha256": "str | None",
       "link": "str",
-      "published_at": "datetime.datetime",
+      "published_at": "pydantic.types.AwareDatetime",
       "revision": "str",
       "show_id": "str",
       "status": "PublicationStatus"
@@ -1700,7 +1700,7 @@
   "events_since": "(ws: showpy.show.storage.Workspace, revision: str) -> list[showpy.show.models.CanvasEvent]",
   "expand": "(obj: T, d: Meters, about: About = 'center', sel: SetSelector = 'all', *, force: bool = False) -> T",
   "export_frames_csv": "(show: showpy.show.models.Show, per_count: int = 1) -> str",
-  "export_json": "(show: showpy.show.models.Show, include: collections.abc.Iterable[str] | None = None, *, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> dict[str, Any]",
+  "export_json": "(show: showpy.show.models.Show, include: str | collections.abc.Iterable[str] | None = None, *, font_registry: showpy.geo.fonts.FontRegistry | None = None) -> dict[str, Any]",
   "export_video": "(show: showpy.show.models.Show, count_range: tuple[Count, Count] | None = None, fps: float = 30, audio: collections.abc.Mapping[str, bytes] | None = None, px_per_m: float = 10.0) -> bytes",
   "face_along": "(show: showpy.show.models.Show, set_id: str, form_id: str, *, reverse: bool = False, force: bool = False) -> showpy.choreo.models.Set",
   "face_audience": "(target: showpy.choreo.models.Set, sel: Sel, *, force: bool = False) -> showpy.choreo.models.Set",

@@ -29,6 +29,7 @@ import ipaddress
 import math
 import re
 from datetime import datetime
+from numbers import Integral
 from typing import TYPE_CHECKING
 from urllib.parse import SplitResult, quote, urlsplit, urlunsplit
 
@@ -147,6 +148,8 @@ def _is_valid_host(host: str) -> bool:
 
 
 def _split_base_url(base_url: str) -> SplitResult:
+    if not isinstance(base_url, str):
+        raise _reject_base_url(f"must be text, got {type(base_url).__name__}")
     if PRINTABLE_ASCII.fullmatch(base_url) is None or "\\" in base_url:
         raise _reject_base_url("has whitespace, control, non-ASCII or backslash characters")
     try:
@@ -356,14 +359,16 @@ def pause(pub: Publication) -> Publication:
     return _with_status(pub, "paused")
 
 
-def _require_pixel_size(size: int) -> None:
-    if isinstance(size, bool) or not isinstance(size, int) or size < 1:
+def _require_pixel_size(size: int) -> int:
+    if isinstance(size, bool) or not isinstance(size, Integral) or size < 1:
         raise SchemaError(
             f"QR code size must be a whole number of pixels, at least 1, got {size!r}",
             hint="pass e.g. size=512",
             context={"size": repr(size)},
         )
-    require_size(size * size, MAX_IMAGE_PIXELS, what="QR code pixels")
+    pixels = int(size)
+    require_size(pixels * pixels, MAX_IMAGE_PIXELS, what="QR code pixels")
+    return pixels
 
 
 def _make_code(link: str) -> "segno.QRCode":
@@ -406,7 +411,7 @@ def qr_code(pub: Publication, token: str, size: int = 512) -> bytes:
     from PIL import Image
 
     link = join_link(pub, token)
-    _require_pixel_size(size)
+    size = _require_pixel_size(size)
     code = _make_code(link)
     rows = [
         tuple(bool(m) for m in row) for row in code.matrix_iter(scale=1, border=QR_QUIET_MODULES)

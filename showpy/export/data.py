@@ -38,6 +38,7 @@ from showpy.core.errors import (
     UnknownRefError,
 )
 from showpy.core.extras import is_dataframe
+from showpy.core.numbers import format_number
 from showpy.core.strict_json import strict_json_copy
 from showpy.core.types import Point
 from showpy.core.units import round_to
@@ -57,6 +58,7 @@ from showpy.show.migrate import (
 )
 from showpy.show.models import Show
 from showpy.time.clock import count_to_seconds
+from showpy.time.models import MeasureLabel
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -85,6 +87,7 @@ FRAME_COLUMNS = ("count", "seconds", "entity", "x", "y", "facing", "on_field")
 FRAME_PLACES = 6
 POSITION_PLACES = 3
 FACING_STEP = 0.1
+FACING_PLACES = 1
 FULL_TURN = 360.0
 COLUMN_GAP = "  "
 TITLE_SEPARATOR = " — "
@@ -106,7 +109,7 @@ type Importer = Callable[..., Show]
 # Any: the exported document holds arbitrarily nested JSON values.
 def export_json(
     show: Show,
-    include: Iterable[str] | None = None,
+    include: str | Iterable[str] | None = None,
     *,
     font_registry: FontRegistry | None = None,
 ) -> dict[str, Any]:
@@ -114,7 +117,8 @@ def export_json(
 
     Args:
         show: Show to export.
-        include: Top-level show fields to keep; None keeps all. The ID is always kept.
+        include: Top-level show fields to keep, or one field name; None keeps all. The ID is
+            always kept.
         font_registry: Registry holding the fonts of the text forms; None means the bundled fonts.
 
     Returns:
@@ -128,7 +132,8 @@ def export_json(
     """
     dumped = show.model_dump(mode="json")
     if include is not None:
-        keep = {ALWAYS_EXPORTED, *include}
+        names = [include] if isinstance(include, str) else include
+        keep = {ALWAYS_EXPORTED, *names}
         for name in sorted(keep - set(dumped)):
             close = close_matches(name, dumped)
             raise UnknownRefError(
@@ -362,22 +367,26 @@ def export_frames_csv(show: Show, per_count: int = 1) -> str:
 
 
 def _facing_text(facing: float) -> str:
-    return f"{round_to(facing, FACING_STEP) % FULL_TURN:g}"
+    return format_number(round_to(facing, FACING_STEP) % FULL_TURN, max_decimals=FACING_PLACES)
 
 
 def _point_cells(xy: Point) -> list[str]:
     return [_number(xy[0], POSITION_PLACES), _number(xy[1], POSITION_PLACES)]
 
 
+def _measure_text(label: MeasureLabel) -> str:
+    return f"{label.measure}:{format_number(label.count_in_measure)}"
+
+
 def _sheet_table(sheet: CoordinateSheet) -> TextTable:
     rows = []
     for r in sheet.rows:
-        measure = "" if r.measure is None else f"{r.measure.measure}:{r.measure.count_in_measure:g}"
+        measure = "" if r.measure is None else _measure_text(r.measure)
         rows.append(
             (
                 r.set,
-                f"{r.counts:g}",
-                f"{r.cumulative:g}",
+                format_number(r.counts),
+                format_number(r.cumulative),
                 measure,
                 r.position_text,
                 *_point_cells(r.xy),
@@ -415,7 +424,7 @@ def _cell(value: object) -> str:
     if isinstance(value, bool):
         return _flag(value=value)
     if isinstance(value, float):
-        return f"{value:g}"
+        return format_number(value) if math.isfinite(value) else str(value)
     return str(value)
 
 
