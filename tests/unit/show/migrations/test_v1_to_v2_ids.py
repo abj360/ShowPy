@@ -27,6 +27,8 @@ Contains:
     test_regression_first_save_moves_the_files_of_renamed_set_folders: moves a set script from
         `/sets/con/` to `/sets/con_/` in one revision, nothing on the next save, for the v0.2.0
         and v0.3.0 fixtures
+    test_regression_put_show_keeps_scripts_of_renamed_set_folders: moves a set script with its
+        renamed folder when a repository's put_show stores a v1 head, in one revision
     test_regression_migration_refuses_to_move_a_set_file_over_another: refuses a stored file
         already at the folder a renamed set moves to
 """
@@ -365,6 +367,26 @@ def test_regression_first_save_moves_the_files_of_renamed_set_folders(
     assert again.id == first.id
     assert [r.id for r in repo.revisions(show_id)] == [*stored, first.id]
     assert ws.read("/sets/con_/set.py") == SCRIPT.decode()
+
+
+@pytest.mark.parametrize("tag", ["v0.2.0", "v0.3.0"])
+def test_regression_put_show_keeps_scripts_of_renamed_set_folders(tag: str, tmp_path: Path) -> None:
+    repo, expected = _fixture(tag, tmp_path)
+    show_id = expected["show_id"]
+    docs = dict(repo.documents(show_id))
+    added = {} if set_doc("con") in docs else _hand_set_con(docs)
+    _commit_v1(repo, show_id, {**added, "/sets/con/set.py": SCRIPT})
+    stored = [r.id for r in repo.revisions(show_id)]
+    before = {p for p in repo.documents(show_id) if not is_show_doc(p)}
+    first = repo.put_show(show_id, repo.get_show(show_id), expected_revision=stored[-1], at=AT)
+    after = dict(repo.documents(show_id))
+    assert after["/sets/con_/set.py"] == SCRIPT
+    assert not [p for p in after if p.startswith("/sets/con/")]
+    moved = {p.replace("/sets/con/", "/sets/con_/") for p in before}
+    assert {p for p in after if not is_show_doc(p)} == moved
+    again = repo.put_show(show_id, repo.get_show(show_id), expected_revision=first.id, at=AT)
+    assert again.id == first.id
+    assert [r.id for r in repo.revisions(show_id)] == [*stored, first.id]
 
 
 def test_regression_migration_refuses_to_move_a_set_file_over_another(tmp_path: Path) -> None:

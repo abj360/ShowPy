@@ -18,6 +18,7 @@ Contains:
     decode_show(): assembles a show from documents of any readable format version
     migrate_documents(): migrates a stored document set to the current format and reports it
     migration_changes(): lists the writes and deletes that store a migrated document set
+    is_older_tree(): tells whether stored documents hold a show of an older format version
 """
 
 import json
@@ -297,6 +298,15 @@ def migrate_documents(docs: Mapping[str, bytes]) -> tuple[dict[str, bytes], Migr
     version = read_version(docs)
     if version == CURRENT_VERSION:
         return dict(docs), ReportBuilder(version).build()
+    encoded, folders, report = _migrated_parts(docs)
+    others = {path: raw for path, raw in docs.items() if not is_show_doc(path)}
+    return _moved_set_files(others, folders, set(docs)) | encoded, report
+
+
+def _migrated_parts(
+    docs: Mapping[str, bytes],
+) -> tuple[dict[str, bytes], dict[str, str], MigrationReport]:
+    """Migrates the show documents of an older tree and maps each renamed set folder."""
     show, report = read_migrated(docs)
     order = without_header(json.loads(docs[SHOW_DOC])).get(SET_ORDER_FIELD, [])
     stored_keys = [key for key in order if isinstance(key, str)] if isinstance(order, list) else []
@@ -305,16 +315,26 @@ def migrate_documents(docs: Mapping[str, bytes]) -> tuple[dict[str, bytes], Migr
         for old, new in zip(stored_keys, (set_key(s) for s in show.sets), strict=True)
         if old != new
     }
-    others = {path: raw for path, raw in docs.items() if not is_show_doc(path)}
-    return _moved_set_files(others, folders) | encode_show(show), report.build()
+    return encode_show(show), folders, report.build()
 
 
-def _moved_set_files(files: Mapping[str, bytes], folders: Mapping[str, str]) -> dict[str, bytes]:
+def _set_folder(path: str) -> str | None:
+    """Returns the set folder a stored path lies under, or None outside `/sets/<folder>/`."""
+    segments = path.split("/")
+    if len(segments) > SET_FOLDER_INDEX + 1 and segments[1] == SETS_ROOT:
+        return segments[SET_FOLDER_INDEX]
+    return None
+
+
+def _moved_set_files(
+    files: Mapping[str, bytes], folders: Mapping[str, str], stored: Collection[str]
+) -> dict[str, bytes]:
     """Moves each file under a renamed set folder to the new folder, at the same relative path.
 
     Args:
-        files: Stored path to bytes of the files that are not show documents.
+        files: Stored path to bytes of files that are not show documents.
         folders: Old set folder to new set folder, for each set whose key the migration renamed.
+        stored: Every path the tree stores, so a move never lands on one of them.
 
     Returns:
         files: The same files, those under a renamed folder at their new path. A file already
@@ -322,12 +342,12 @@ def _moved_set_files(files: Mapping[str, bytes], folders: Mapping[str, str]) -> 
     """
     moved: dict[str, bytes] = {}
     for path, raw in files.items():
-        segments = path.split("/")
-        if len(segments) > SET_FOLDER_INDEX + 1 and segments[1] == SETS_ROOT:
-            folder = segments[SET_FOLDER_INDEX]
-            segments[SET_FOLDER_INDEX] = folders.get(folder, folder)
-        target = "/".join(segments)
-        if target != path and target in files:
+        folder = _set_folder(path)
+        target = path
+        if folder is not None and folder in folders:
+            relative = path[len(f"/{SETS_ROOT}/{folder}/") :]
+            target = f"/{SETS_ROOT}/{folders[folder]}/{relative}"
+        if target != path and target in stored:
             raise StorageError(
                 f"{path} moves to {target} with its renamed set, but {target} is already stored",
                 hint=f"remove or rename {target} with showpy 0.3, then load the show again",
@@ -340,6 +360,9 @@ def _moved_set_files(files: Mapping[str, bytes], folders: Mapping[str, str]) -> 
 def migration_changes(docs: Mapping[str, bytes]) -> dict[str, bytes | None]:
     """Lists the writes and deletes that turn a stored document set into its migrated form.
 
+    Only show documents and the files of renamed set folders are read, so large renders and
+    exports stay unread.
+
     Args:
         docs: Stored path to document bytes, as a repository tree holds them.
 
@@ -351,7 +374,22 @@ def migration_changes(docs: Mapping[str, bytes]) -> dict[str, bytes | None]:
     >>> migration_changes(encode_show(two_set_show()))
     {}
     """
-    migrated, _ = migrate_documents(docs)
-    changes: dict[str, bytes | None] = {p: d for p, d in migrated.items() if docs.get(p) != d}
-    changes.update(dict.fromkeys(p for p in docs if p not in migrated))
+    if not is_older_tree(docs):
+        return {}
+    encoded, folders, _ = _migrated_parts(docs)
+    moving = [p for p in docs if not is_show_doc(p) and _set_folder(p) in folders]
+    changes: dict[str, bytes | None] = {p: d for p, d in encoded.items() if docs.get(p) != d}
+    changes.update(_moved_set_files({p: docs[p] for p in moving}, folders, set(docs)))
+    changes.update(dict.fromkeys(p for p in docs if is_show_doc(p) and p not in encoded))
+    changes.update(dict.fromkeys(moving))
     return changes
+
+
+def is_older_tree(docs: Mapping[str, bytes]) -> bool:
+    """Tells whether stored documents hold a show whose format version is older than current.
+
+    >>> from showpy.examples import two_set_show
+    >>> is_older_tree(encode_show(two_set_show())), is_older_tree({})
+    (False, False)
+    """
+    return SHOW_DOC in docs and read_version(docs) < CURRENT_VERSION

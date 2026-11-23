@@ -34,6 +34,7 @@ from showpy.show.documents import (
     SHOW_DOC,
     decode_show,
     encode_documents,
+    is_older_tree,
     is_show_doc,
     migration_changes,
     split_path,
@@ -46,7 +47,6 @@ from showpy.show.files import (
     staged_changes,
 )
 from showpy.show.integrity import LazyBlobs
-from showpy.show.migrate import CURRENT_VERSION, read_version
 from showpy.show.models import Revision, Show
 from showpy.show.set_keys import SetFolders
 from showpy.time.models import Timeline
@@ -441,7 +441,7 @@ class Workspace:
         if base in self._canonical_revisions:
             return {}
         tree = self.tree_at(base)
-        if SHOW_DOC in tree and read_version(tree) < CURRENT_VERSION:
+        if is_older_tree(tree):
             return migration_changes(tree)
         if is_complete:
             paths = [p for p, d in changes.items() if d is not None and p in tree and tree[p] != d]
