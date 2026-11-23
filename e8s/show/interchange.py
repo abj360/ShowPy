@@ -172,7 +172,9 @@ def import_json(d: Mapping[str, Any]) -> Show:
 
 
 # Any: an imported document holds arbitrarily nested JSON values.
-def migrate_json(d: Mapping[str, Any]) -> tuple[Show, MigrationReport, JsonValue | None]:
+def migrate_json(
+    d: Mapping[str, Any],
+) -> tuple[Show, MigrationReport, dict[str, JsonValue] | None]:
     """Loads a show as import_json() does, and returns what migrating an older document changed.
 
     Use it to keep what a version 1 document holds that the current format does not: the report
@@ -198,7 +200,8 @@ def migrate_json(d: Mapping[str, Any]) -> tuple[Show, MigrationReport, JsonValue
     try:
         if version < CURRENT_VERSION:
             migrated, report, beside = migrate_dump(show, version)
-            return migrated, report, beside.get(NOTES_DOC)
+            notes = beside.get(NOTES_DOC)
+            return migrated, report, notes if isinstance(notes, dict) else None
         current = Show.model_validate(show, context=CHECKED_CONTEXT)
         return current, MigrationReport(from_version=CURRENT_VERSION), None
     except SchemaError as error:

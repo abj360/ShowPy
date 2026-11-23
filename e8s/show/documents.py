@@ -313,7 +313,7 @@ def migrate_documents(docs: Mapping[str, bytes]) -> tuple[dict[str, bytes], Migr
             the canvas comments and selection with renamed IDs, plus every other file of `docs`,
             moved to its set's new folder when the migration renamed the set's key; `docs`
             itself when it is already current.
-        report: What the migration renamed and repaired, and the version it started from.
+        report: What the migration renamed, repaired and dropped, and the version it started from.
 
     >>> from e8s.examples import two_set_show
     >>> docs = encode_show(two_set_show())
