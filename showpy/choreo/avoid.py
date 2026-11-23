@@ -31,7 +31,7 @@ from showpy.choreo.paths import add_waypoint, delay, stagger
 from showpy.core.errors import PathError
 from showpy.core.ids import SpotId
 from showpy.core.types import Point, Points
-from showpy.core.util import natural_key
+from showpy.core.util import natural_key, noise_rank
 from showpy.show.models import Show
 
 type FloatArray = npt.NDArray[np.float64]
@@ -39,9 +39,6 @@ type FloatArray = npt.NDArray[np.float64]
 DELAY_STEP = 0.5
 CROSSING_WEIGHT = 10.0
 ZERO_TOL = 1e-12
-# Gaps are ranked at nanometre resolution: their last bits are float noise that differs between
-# platforms (libm, fused multiply-add), so gaps that tie to 9 digits are ordered by spot IDs.
-GAP_RANK_DIGITS = 9
 ALL = "all"
 
 
@@ -114,16 +111,12 @@ def _on_field_ids(
     return [e for e in ids if plans[e].start.on_field or plans[e].end.on_field]
 
 
-def _gap_rank(gap: float) -> float:
-    return round(gap, GAP_RANK_DIGITS)
-
-
 def min_gaps(
     show: Show, tid: tuple[str, str], sel: str | Sequence[str] = ALL, top: int = 10
 ) -> list[GapInfo]:
     """Lists the `top` tightest pairs of on-field spots in a transition, tightest first.
 
-    Gaps are ranked rounded to GAP_RANK_DIGITS decimals, so pairs that tie to within float noise
+    Gaps are ranked rounded to 9 decimals (`noise_rank`), so pairs that tie to within float noise
     are listed in natural spot ID order (T2 before T10). A bounding-box broadphase skips pairs
     that cannot beat the current top list.
 
@@ -145,11 +138,11 @@ def min_gaps(
     found: list[GapInfo] = []
     for a, b in itertools.combinations(ids, 2):
         reach = _extent(show, a) + _extent(show, b)
-        lower = _gap_rank(_box_distance(boxes[a], boxes[b]) - reach)
-        if len(found) >= top and lower > _gap_rank(found[-1].gap):
+        lower = noise_rank(_box_distance(boxes[a], boxes[b]) - reach)
+        if len(found) >= top and lower > noise_rank(found[-1].gap):
             continue
         found.append(_pair_gap(engine, tid, a, b))
-        found.sort(key=lambda g: (_gap_rank(g.gap), natural_key(g.a), natural_key(g.b)))
+        found.sort(key=lambda g: (noise_rank(g.gap), natural_key(g.a), natural_key(g.b)))
         del found[top:]
     return found
 

@@ -2,7 +2,8 @@
 util.py --- small shared helpers: ID ranges, float comparison, seeded randomness, hashing
 
 Contains:
-    natural_key(): returns the sort key that puts T2 before T10
+    noise_rank(): rounds a float that decides an order so 1-ulp noise ties
+    natural_key():returns the sort key that puts T2 before T10
     natural_sort(): sorts IDs so T2 comes before T10
     split_id(): splits an ID into its prefix and trailing number
     parse_range(): expands `T1-T8` into IDs
@@ -57,6 +58,21 @@ CLOSE_MATCH_CUTOFF = 0.4
 DEFAULT_ABS_TOL = 1e-6
 RENAME_REMOVAL = "0.6.0"
 SINGLE_PART_GEOMETRY = frozenset({"Point", "LineString", "LinearRing", "Polygon"})
+# Floats that decide a count or an order rank at this many decimals (a nanometer, a nanocount):
+# their last bits are float noise that differs between platforms (libm, fused multiply-add).
+NOISE_RANK_DIGITS = 9
+
+
+def noise_rank(value: float) -> float:
+    """Rounds a float that decides an order to NOISE_RANK_DIGITS decimals, so noise ties.
+
+    Uses builtin `round`, never `np.round`: numpy rounds by scaling, which can land 1 ulp off
+    the correctly rounded value and so reintroduce the noise.
+
+    >>> noise_rank(-0.5999999999999999) == noise_rank(-0.6)
+    True
+    """
+    return round(float(value), NOISE_RANK_DIGITS)
 
 
 def natural_key(text: str) -> tuple[tuple[tuple[int, int, str], ...], str]:

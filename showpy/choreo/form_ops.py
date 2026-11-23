@@ -65,7 +65,7 @@ from showpy.core.errors import SchemaError, SpacingError
 from showpy.core.ids import SpotId
 from showpy.core.types import Degrees, Point, Points
 from showpy.core.units import normalize_angle
-from showpy.core.util import close_matches, natural_sort
+from showpy.core.util import close_matches, natural_sort, noise_rank
 from showpy.geo.affine import (
     Matrix,
     is_similarity,
@@ -81,9 +81,6 @@ FORM_FIELDS = frozenset({"members", "spacing", "facing", "locked", "meta", "set"
 FIXED_RECIPE_KEYS = frozenset({"kind", "recipe_version"})
 TRIMMABLE_FACINGS = frozenset({"audience", "fixed", "along", "normal", "toward_point"})
 HALF_TURN = 180.0
-# Slot and spot coordinates come from sin and cos, whose last bits differ between platforms;
-# ranking them to a nanometer keeps points on one file tied, so the other axis decides.
-AXIS_RANK_DIGITS = 9
 
 type Order = Sequence[str] | Literal["reverse", "by_x", "by_y", "nearest_prev"]
 
@@ -176,14 +173,10 @@ def _check_layout(form: Form, registry: FormFnRegistry, font_registry: FontRegis
         raise
 
 
-def _axis_rank(value: float) -> float:
-    return round(float(value), AXIS_RANK_DIGITS)
-
-
 def _ranked_slots(pts: Points, axis: int) -> list[int]:
     other = 1 - axis
     return sorted(
-        range(len(pts)), key=lambda i: (_axis_rank(pts[i, axis]), _axis_rank(pts[i, other]), i)
+        range(len(pts)), key=lambda i: (noise_rank(pts[i, axis]), noise_rank(pts[i, other]), i)
     )
 
 
@@ -193,7 +186,7 @@ def _ranked_members(form: Form, axis: int, prev_set: Set | None) -> list[SpotId]
     other = 1 - axis
     points = {m: prev_set.get(m).point for m in form.spots}
     return sorted(
-        form.spots, key=lambda m: (_axis_rank(points[m][axis]), _axis_rank(points[m][other]), m)
+        form.spots, key=lambda m: (noise_rank(points[m][axis]), noise_rank(points[m][other]), m)
     )
 
 
