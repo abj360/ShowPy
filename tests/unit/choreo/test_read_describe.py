@@ -9,14 +9,16 @@ Contains:
     test_describe_straight_window_adds_holds: holds before and after a move's window
     test_describe_polyline_splits_at_corners: gives each straight leg its own direction
     test_describe_merges_adjacent_holds: joins a held window start and a waypoint wait in place
-    test_regression_step_size_of_a_still_segment_is_none: never divides by a zero distance
-    test_describe_eased_straight_stays_one_segment: keeps an eased straight move whole, still
-        moments inside its window included
+    test_regression_curve_style_without_waypoints_is_straight: names the kind from the curve
+    test_regression_still_moments_inside_a_move_are_holds: splits a burst after a wait
+    test_regression_out_and_back_splits_at_its_turn: splits a collinear reversal at the
+        polyline corner, which heading comparison alone would join
+    test_describe_eased_straight_stays_one_segment: keeps an eased straight move whole
     test_describe_curve: describes a spline move as one curve segment of its arc length
     test_describe_rotate: describes a rotation as one rotate segment of its arc length
     test_describe_follow: describes a route move as one follow segment
     test_describe_custom: describes a registered motion as one custom segment
-    test_describe_pace_scales_the_step_size: doubles steps per 5 yards at double time
+    test_describe_pace_shortens_the_stride: halves meters per step at double time
     test_describe_groups_alike_spots: groups spots whose segments agree, in selection order
     test_describe_reuses_a_given_engine: equals the description read with a fresh engine
     test_regression_describe_rejects_an_unknown_transition: raises UnknownRefError with a hint
@@ -29,7 +31,7 @@ import pytest
 
 from e8s.choreo.engine import PathEngine
 from e8s.choreo.path_models import Easing, PathRow, PathStyle, Route, Waypoint
-from e8s.choreo.read import FIVE_YARDS_M, _step_size, describe_transition
+from e8s.choreo.read import describe_transition
 from e8s.choreo.read_models import SegmentDescription, TransitionDescription
 from e8s.core.errors import UnknownRefError
 from e8s.core.ids import RouteId, SpotId
@@ -62,7 +64,7 @@ def test_describe_hold() -> None:
         counts=COUNTS,
         direction=None,
         distance=0.0,
-        step_size=None,
+        stride_m=None,
         pace=1.0,
     )
 
@@ -72,8 +74,7 @@ def test_describe_straight() -> None:
     assert (move.kind, move.start, move.counts) == ("straight", 0.0, COUNTS)
     assert move.direction == UPSTAGE
     assert move.distance == MOVE_M
-    assert move.step_size is not None
-    assert approx_equal(move.step_size, FIVE_YARDS_M * COUNTS / MOVE_M, abs_tol=TOL)
+    assert move.stride_m == MOVE_M / COUNTS
 
 
 def test_describe_straight_window_adds_holds() -> None:
@@ -109,13 +110,9 @@ def test_describe_merges_adjacent_holds() -> None:
     ]
 
 
-def test_regression_step_size_of_a_still_segment_is_none() -> None:
-    assert _step_size(0.0, COUNTS, 1.0) is None
-
-
 @pytest.mark.parametrize(
     "easing",
-    [Easing(kind="ease_in_out", strength=3.0), Easing(kind="hold_then_burst", strength=2.0)],
+    [Easing(kind="ease_in_out", strength=3.0), Easing(kind="steps", strength=4.0)],
 )
 def test_describe_eased_straight_stays_one_segment(easing: Easing) -> None:
     move = _one(with_rows({"T1": PathRow(entity=SpotId("T1"), easing=easing)}))
@@ -160,12 +157,34 @@ def test_describe_custom() -> None:
     assert move.distance > MOVE_M
 
 
-def test_describe_pace_scales_the_step_size() -> None:
+def test_describe_pace_shortens_the_stride() -> None:
     plain = _one(two_set_show())
     doubled = _one(with_rows({"T1": PathRow(entity=SpotId("T1"), pace=2.0)}))
-    assert plain.step_size is not None
-    assert doubled.step_size == 2.0 * plain.step_size
+    assert plain.stride_m is not None
+    assert doubled.stride_m == plain.stride_m / 2.0
     assert doubled.pace == 2.0
+
+
+def test_regression_curve_style_without_waypoints_is_straight() -> None:
+    move = _one(with_rows({"T1": PathRow(entity=SpotId("T1"), style=PathStyle.CURVE)}))
+    assert (move.kind, move.direction, move.distance) == ("straight", UPSTAGE, MOVE_M)
+
+
+def test_regression_still_moments_inside_a_move_are_holds() -> None:
+    easing = Easing(kind="hold_then_burst", strength=2.0)
+    segments = _segments(with_rows({"T1": PathRow(entity=SpotId("T1"), easing=easing)}))
+    assert [(s.kind, s.start, s.counts) for s in segments] == [
+        ("hold", 0.0, 4.0),
+        ("straight", 4.0, 4.0),
+    ]
+    assert segments[1].distance == MOVE_M
+
+
+def test_regression_out_and_back_splits_at_its_turn() -> None:
+    row = PathRow(entity=SpotId("T1"), style=PathStyle.POLYLINE, waypoints=(Waypoint(x=0, y=12),))
+    segments = _segments(with_rows({"T1": row}))
+    assert [(s.kind, s.direction) for s in segments] == [("straight", 180.0), ("straight", 0.0)]
+    assert [round(s.distance, 9) for s in segments] == [7.0, 3.0]
 
 
 def test_describe_groups_alike_spots() -> None:

@@ -267,6 +267,7 @@ if TYPE_CHECKING:
         CoordinateTable,
         Frames,
         SegmentDescription,
+        SegmentKind,
         TransitionDescription,
     )
     from e8s.choreo.recipe_models import (
@@ -1024,6 +1025,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "SchemaError": ("e8s.core.errors", "SchemaError"),
     "Segment": ("e8s.geo.curves", "Segment"),
     "SegmentDescription": ("e8s.choreo.read_models", "SegmentDescription"),
+    "SegmentKind": ("e8s.choreo.read_models", "SegmentKind"),
     "Selection": ("e8s.core.selection", "Selection"),
     "SelectorAst": ("e8s.cast.select", "SelectorAst"),
     "SelectorToken": ("e8s.cast.select", "SelectorToken"),
@@ -1727,6 +1729,7 @@ __all__ = [
     "SchemaError",
     "Segment",
     "SegmentDescription",
+    "SegmentKind",
     "Selection",
     "SelectorAst",
     "SelectorToken",

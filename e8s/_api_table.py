@@ -184,6 +184,7 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("SchemaError", "e8s.core.errors", "SchemaError"),
     ("Segment", "e8s.geo.curves", "Segment"),
     ("SegmentDescription", "e8s.choreo.read_models", "SegmentDescription"),
+    ("SegmentKind", "e8s.choreo.read_models", "SegmentKind"),
     ("Selection", "e8s.core.selection", "Selection"),
     ("SelectorAst", "e8s.cast.select", "SelectorAst"),
     ("SelectorToken", "e8s.cast.select", "SelectorToken"),

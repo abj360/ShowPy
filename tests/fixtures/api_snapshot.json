@@ -1202,8 +1202,11 @@
       "kind": "SegmentKind",
       "pace": "float",
       "start": "float",
-      "step_size": "float | None"
+      "stride_m": "float | None"
     }
+  },
+  "SegmentKind": {
+    "constant": "SegmentKind"
   },
   "Selection": {
     "model": {

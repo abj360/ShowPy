@@ -119,16 +119,15 @@ class SegmentDescription(FrozenModel):
     A straight path bends only between segments, so each straight segment has one direction.
 
     Attributes:
-        kind: What the spot does: hold, or travel straight, on a curve, along a route, around a
-            pivot, or by a custom motion.
+        kind: What the spot does, read from its path's curve: hold, or travel straight, on a
+            curve, along a route, around a pivot, or by a custom motion.
         start: Local count the segment starts at.
         counts: Length of the segment in counts.
         direction: Direction from the segment's start to its end, as a facing (0 toward the
             audience, counter-clockwise positive); None while holding or when it ends where it
             starts.
         distance: Meters travelled along the path.
-        step_size: Mean step size as steps per 5 yards at the segment's pace, 8 for an 8-to-5
-            step; None while holding.
+        stride_m: Mean meters per step, distance / (counts * pace); None while holding.
         pace: Steps per count, as the path row sets it; 2 is double time.
     """
 
@@ -137,7 +136,7 @@ class SegmentDescription(FrozenModel):
     counts: float
     direction: Degrees | None
     distance: Meters
-    step_size: float | None
+    stride_m: float | None
     pace: float
 
 
