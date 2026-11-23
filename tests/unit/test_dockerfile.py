@@ -4,7 +4,10 @@
 test_dockerfile.py --- tests that the Docker test image holds every file the test suite reads
 
 Contains:
+    NOT_IN_IMAGE: names each tracked top-level entry the image leaves out, with the reason
     copied_paths(): lists the build-context paths the runtime stage of a Dockerfile copies
+    tracked_top_level(): lists the first path segment of every file git tracks
+    skipped_entries(): lists the top-level entries the build context holds but the image skips
     read_paths(): lists the repository paths a test module reads through `ROOT / ...` constants
     is_in_image(): tells whether a repository path is copied and not excluded by .dockerignore
     missing_image_paths(): lists the paths a test module reads that a Dockerfile leaves out
@@ -13,9 +16,13 @@ Contains:
     test_regression_missing_dockerfile_fails_in_a_source_checkout: a moved or renamed Dockerfile
         fails the check instead of skipping it
     test_docker_path_check_flags_a_missing_and_an_ignored_path: proves the check can fail
+    test_image_copies_every_tracked_top_level_entry: fails when the image skips a tracked
+        top-level entry that NOT_IN_IMAGE does not name, or NOT_IN_IMAGE names a stale entry
+    test_top_level_check_flags_a_dropped_copy_and_a_new_folder: proves the check can fail
 """
 
 import ast
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -27,6 +34,26 @@ DOCKERIGNORE = REPO_ROOT / ".dockerignore"
 NOXFILE_TESTS = REPO_ROOT / "tests" / "unit" / "test_noxfile.py"
 RUNTIME_STAGE = "runtime"
 ROOT_NAME = "ROOT"
+NOT_IN_IMAGE = {
+    "_typos.toml": "spell-check settings; lint runs outside the image",
+    ".dockerignore": "read by docker build, not by the tests",
+    ".env.example": "compose reads .env from the host",
+    ".gitattributes": "git settings; the image has no .git",
+    ".gitignore": "git settings; the image has no .git",
+    ".pre-commit-config.yaml": "hooks run on the host",
+    ".prettierignore": "Prettier runs in lint, outside the image",
+    ".prettierrc.json": "Prettier runs in lint, outside the image",
+    "CHANGELOG.md": "generated at release time; no test reads it",
+    "CLAUDE.md": "agent instructions; read only by source-checkout tests",
+    "cliff.toml": "the changelog session runs outside the image",
+    "CONTRIBUTING.md": "read only by source-checkout tests",
+    "docker": "builds the image; read only by source-checkout tests",
+    "package-lock.json": "Node tooling for lint, outside the image",
+    "package.json": "Node tooling for lint, outside the image",
+    "SECURITY.md": "policy text; no test reads it",
+    "showpy": "built into the wheel the image installs; tests import it",
+    "typings": "stubs for the types session, outside the image",
+}
 pytestmark = pytest.mark.skipif(
     not LIBRARY_ROOT.is_dir(), reason="needs a source checkout; the wheel test has no showpy tree"
 )
@@ -56,6 +83,37 @@ def copied_paths(dockerfile: str, stage: str = RUNTIME_STAGE) -> list[str]:
                 continue
             sources += [source.removeprefix("./").rstrip("/") for source in arguments[:-1]]
     return sources
+
+
+def tracked_top_level(root: Path) -> set[str]:
+    """Lists the first path segment of every file git tracks in a checkout.
+
+    Args:
+        root: The repository root; git must be installed and the checkout must have .git.
+
+    Returns:
+        entries: Each distinct top-level file or folder name.
+    """
+    listing = subprocess.run(
+        ["git", "ls-files", "-z"], cwd=root, capture_output=True, text=True, check=True
+    ).stdout
+    return {path.split("/")[0] for path in listing.split("\0") if path}
+
+
+def skipped_entries(entries: set[str], copied: list[str], ignored: list[str]) -> set[str]:
+    """Lists the top-level entries the build context holds but the runtime stage never copies.
+
+    Args:
+        entries: Top-level names in the repository.
+        copied: Sources the runtime stage copies.
+        ignored: Patterns from .dockerignore; only plain paths and folder prefixes are understood.
+
+    Returns:
+        skipped: Each entry neither excluded by .dockerignore nor copied, in whole or in part.
+    """
+    excluded = {pattern.rstrip("/") for pattern in ignored if "*" not in pattern}
+    copied_tops = {source.split("/")[0] for source in copied}
+    return entries - excluded - copied_tops
 
 
 def _path_parts(node: ast.expr) -> list[str] | None:
@@ -163,3 +221,21 @@ def test_docker_path_check_flags_a_missing_and_an_ignored_path() -> None:
     assert read_paths('ROOT = Path(".")\nCI = ROOT / ".github" / "ci.yml"\nX = 1\n') == [
         ".github/ci.yml"
     ]
+
+
+def test_image_copies_every_tracked_top_level_entry() -> None:
+    copied = copied_paths(DOCKERFILE.read_text(encoding="utf-8"))
+    ignored = _ignored(DOCKERIGNORE.read_text(encoding="utf-8"))
+    skipped = skipped_entries(tracked_top_level(REPO_ROOT), copied, ignored)
+    unplaced = sorted(skipped - NOT_IN_IMAGE.keys())
+    assert unplaced == [], f"E: docker/Dockerfile does not copy {unplaced}"
+    stale = sorted(NOT_IN_IMAGE.keys() - skipped)
+    assert stale == [], f"E: NOT_IN_IMAGE names {stale}, which the image copies or never sees"
+
+
+def test_top_level_check_flags_a_dropped_copy_and_a_new_folder() -> None:
+    entries = {"scripts", "tests", "docs", ".github"}
+    copied = ["scripts", "tests", ".github/workflows/ci.yml"]
+    assert skipped_entries(entries, copied, ["docs/"]) == set()
+    assert skipped_entries(entries, copied[1:], ["docs/"]) == {"scripts"}
+    assert skipped_entries(entries | {"assets"}, copied, ["docs/"]) == {"assets"}
