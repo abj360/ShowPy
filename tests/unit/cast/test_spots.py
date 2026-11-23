@@ -527,14 +527,24 @@ def _sixty_set_show() -> Show:
     return show.replace(sets=(first, second, *more))
 
 
+@pytest.fixture(scope="module")
+def full_show() -> Show:
+    """Builds a two-set show whose cast holds exactly MAX_SPOTS spots."""
+    show = two_set_show()
+    room = MAX_SPOTS - len(show.cast.spots)
+    return add_spots_along(show, line((0, 0), (40, 0)), room, "trumpets", "1")
+
+
 @fails_after(CAP_CHECK_BUDGET_S)
-def test_regression_add_spots_checks_cap_before_allocating() -> None:
+def test_regression_add_spots_checks_cap_before_allocating(full_show: Show) -> None:
     """Refuses spots past MAX_SPOTS before spacing them or building a placement per set.
 
     The cap ran in the Cast model, after a placement per spot per set was built: 50,000 spots
     on 60 sets took 17.7 s and 3.3 GiB before the refusal. A numpy count skipped the early
-    check: np.int64(5_000_000) took 6.4 s and about 3.3 GiB.
+    check: np.int64(5_000_000) took 6.4 s and about 3.3 GiB. One more spot on a full cast,
+    added or duplicated, is refused too.
     """
+    assert len(full_show.cast.spots) == MAX_SPOTS
     show = _sixty_set_show()
     square = region([(0, 0), (40, 0), (40, 40), (0, 40)])
     just_over = MAX_SPOTS - len(show.cast.spots) + 1
@@ -545,6 +555,8 @@ def test_regression_add_spots_checks_cap_before_allocating() -> None:
         lambda: fill_spots(show, square, "trumpets", "1", n=BIG_NUMPY_COUNT),
         lambda: fill_spots(show, square, "trumpets", "1", n=OVER_CAP_SPOTS),
         lambda: fill_spots(show, square, "trumpets", "1", interval=FINE_INTERVAL_M),
+        lambda: add_spot(full_show, (0.0, 0.0), "trumpets", "1"),
+        lambda: duplicate_spots(full_show, ["T1"], (0.0, 1.0), "1"),
     ]
     tracemalloc.start()
     try:
