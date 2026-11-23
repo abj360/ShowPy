@@ -7,6 +7,8 @@ Contains:
     DEFECT_MARKER: the marker name ledger tests carry
     OPEN_COUNT_KEY: config stash key holding the selected defect count
     WORKER_COUNT_KEY: pytest-xdist worker output key carrying a worker's selected defect count
+    CRASHED_WORKERS_KEY: config stash key holding the workers that died without sending a count
+    XdistGateway: the part of a pytest-xdist gateway that names its worker
     XdistWorker: the part of a pytest-xdist worker node the controller reads
     LEDGER_USAGE: the hint appended to every ledger violation
     DEFECT_ID_PATTERN: the shape a ledger ID must have
@@ -14,9 +16,9 @@ Contains:
     pytest_configure(): registers the defect marker
     pytest_collection_modifyitems(): rejects rule-breaking defect tests
     pytest_collection_finish(): counts the defect tests still selected
-    pytest_sessionfinish(): sends a pytest-xdist worker's count to the controller
-    pytest_testnodedown(): records a finished pytest-xdist worker's count on the controller
-    pytest_terminal_summary(): prints the Ledger: N open line
+    pytest_sessionfinish(): sends a worker's count, and fails the run on a crashed worker
+    pytest_testnodedown(): records a worker's count on the controller, or that it crashed
+    pytest_terminal_summary(): prints the Ledger: N open line, or why the count is unknown
 """
 
 import re
@@ -28,6 +30,7 @@ DEFECT_MARKER = "defect"
 DEFECT_ID_PATTERN = re.compile(r"^UP-(\d+(\.\d+)?|E)-\d{2,3}$")
 OPEN_COUNT_KEY = pytest.StashKey[int]()
 WORKER_COUNT_KEY = "ledger_open_count"
+CRASHED_WORKERS_KEY = pytest.StashKey[tuple[str, ...]]()
 LEDGER_USAGE = 'use @pytest.mark.defect("UP-<section>-<nn>") with xfail(strict=True, reason=<id>)'
 
 
@@ -70,38 +73,68 @@ def pytest_collection_finish(session: pytest.Session) -> None:
     )
 
 
+class XdistGateway(Protocol):
+    """Names the pytest-xdist worker behind a gateway.
+
+    Attributes:
+        id: The worker's ID, such as gw3.
+    """
+
+    id: str
+
+
 class XdistWorker(Protocol):
-    """Exposes what a finished pytest-xdist worker sent back to the controller.
+    """Exposes a pytest-xdist worker node to the controller.
+
+    A worker that died sends nothing back, so its node has no workeroutput attribute.
 
     Attributes:
         config: The controller's pytest configuration.
-        workeroutput: Values the worker stored in its config.workeroutput.
+        gateway: The execnet gateway that ran the worker.
     """
 
     config: pytest.Config
-    workeroutput: dict[str, object]
+    gateway: XdistGateway
 
 
 def pytest_sessionfinish(session: pytest.Session) -> None:
-    """Sends a pytest-xdist worker's selected defect count to the controller."""
+    """Sends a worker's defect count to the controller, and fails the run if a worker crashed.
+
+    A crash between tests fails no test report, so the controller sets the exit status itself.
+    """
     workeroutput: dict[str, object] | None = getattr(session.config, "workeroutput", None)
     if workeroutput is not None:
         workeroutput[WORKER_COUNT_KEY] = session.config.stash.get(OPEN_COUNT_KEY, 0)
+        return
+    if (
+        session.config.stash.get(CRASHED_WORKERS_KEY, ())
+        and session.exitstatus == pytest.ExitCode.OK
+    ):
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
 @pytest.hookimpl(optionalhook=True)
 def pytest_testnodedown(node: XdistWorker) -> None:
     """Records a worker's count on the controller, which collects no tests under pytest-xdist.
 
-    Every worker collects the whole selection, so each one reports the same count.
+    Every worker collects the whole selection, so each one reports the same count. A worker that
+    died sent no count; it is recorded as crashed so the summary never prints a partial count.
     """
-    count = node.workeroutput.get(WORKER_COUNT_KEY)
-    if isinstance(count, int):
-        stash = node.config.stash
-        stash[OPEN_COUNT_KEY] = max(stash.get(OPEN_COUNT_KEY, 0), count)
+    workeroutput: dict[str, object] | None = getattr(node, "workeroutput", None)
+    count = None if workeroutput is None else workeroutput.get(WORKER_COUNT_KEY)
+    stash = node.config.stash
+    if not isinstance(count, int):
+        stash[CRASHED_WORKERS_KEY] = (*stash.get(CRASHED_WORKERS_KEY, ()), node.gateway.id)
+        return
+    stash[OPEN_COUNT_KEY] = max(stash.get(OPEN_COUNT_KEY, 0), count)
 
 
 def pytest_terminal_summary(terminalreporter: pytest.TerminalReporter) -> None:
-    """Prints the Ledger: N open line."""
-    open_count = terminalreporter.config.stash.get(OPEN_COUNT_KEY, 0)
-    terminalreporter.write_line(f"Ledger: {open_count} open")
+    """Prints the Ledger: N open line, or Ledger: unknown when a worker died without a count."""
+    stash = terminalreporter.config.stash
+    crashed_workers = stash.get(CRASHED_WORKERS_KEY, ())
+    if crashed_workers:
+        names = ", ".join(crashed_workers)
+        terminalreporter.write_line(f"Ledger: unknown (worker {names} crashed)", red=True)
+        return
+    terminalreporter.write_line(f"Ledger: {stash.get(OPEN_COUNT_KEY, 0)} open")
