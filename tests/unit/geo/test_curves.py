@@ -20,6 +20,8 @@ Contains:
         an open base instead of reporting length 15
     test_regression_composite_rejects_gapped_parts: rejects parts whose ends do not meet instead of
         jumping across the gap
+    test_regression_composite_gap_names_the_part: names the first part that does not meet the one
+        before it, and the gap in meters
     test_regression_composite_rejects_false_closure: rejects closed=True when the last part does not
         end on the first start
     test_regression_svg_curve_rejects_closed_flag_on_open_path: rejects closed=True on an open path
@@ -286,12 +288,18 @@ def test_regression_trimmed_curve_rejects_out_of_range_arc_lengths() -> None:
         TrimmedCurve(base=line((0.0, 0.0), (1.0, 0.0)), s0=-5.0, s1=10.0)
 
 
-@pytest.mark.defect("UP-9.1-21")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-21")
 def test_regression_composite_rejects_gapped_parts() -> None:
     """Rejects parts whose ends do not meet instead of jumping across the gap (audit 9.1)."""
     with pytest.raises(GeometryError):
         CompositeCurve(parts=(line((0.0, 0.0), (1.0, 0.0)), line((5.0, 5.0), (6.0, 5.0))))
+
+
+def test_regression_composite_gap_names_the_part() -> None:
+    """Names the first part that does not meet the previous one, and the gap in meters."""
+    with pytest.raises(GeometryError) as raised:
+        CompositeCurve(parts=(line((0.0, 0.0), (1.0, 0.0)), line((1.0, 5.0), (2.0, 5.0))))
+    assert raised.value.context["part"] == 1
+    assert raised.value.context["gap"] == pytest.approx(5.0)
 
 
 def test_regression_composite_rejects_false_closure() -> None:
