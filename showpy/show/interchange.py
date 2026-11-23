@@ -9,7 +9,7 @@ Contains:
     export_json(): dumps a show to a format-tagged JSON-safe document, embedding the fonts its
         text forms use
     import_json(): loads a show from a document of any readable format version, migrating it;
-        refuses unknown top-level keys, keeps `x-` keys
+        refuses unknown top-level keys, accepts `x-` keys
     import_fonts(): registers the fonts embedded in a document, checking each against its hash
     import_positions(): re-exports the CSV positions import
 """
@@ -75,7 +75,6 @@ def export_json(
     include: str | Iterable[str] | None = None,
     *,
     font_registry: FontRegistry | None = None,
-    extensions: Mapping[str, object] | None = None,
 ) -> dict[str, Any]:
     """Dumps a show to a tagged JSON-safe document, embedding the fonts its text forms use.
 
@@ -84,13 +83,11 @@ def export_json(
         include: Top-level show fields to keep, or one field name; None keeps all. The ID is
             always kept.
         font_registry: Registry holding the fonts of the text forms; None means the bundled fonts.
-        extensions: Host-owned top-level keys to write back unchanged. Every key must start with
-            `x-` and every value must be strict JSON; anything else raises SchemaError.
 
     Returns:
         document: `{"format": "showpy.show", "version": 2, "show": {...}}`, plus `"fonts"`
             mapping each font URI to its base64 bytes, sorted by URI, when an exported form is
-            a text form, plus the extensions. A font the registry lacks raises MissingFontError.
+            a text form. A font the registry lacks raises MissingFontError.
 
     >>> from showpy.examples import two_set_show
     >>> sorted(export_json(two_set_show(), include=["title"])["show"])
@@ -113,22 +110,7 @@ def export_json(
     fonts = _embedded_fonts(show, dumped, registry)
     if fonts:
         document[FONTS_KEY] = fonts
-    return {**document, **_checked_extensions(extensions)}
-
-
-def _checked_extensions(extensions: Mapping[str, object] | None) -> dict[str, Any]:
-    """Returns the extension keys as strict JSON, refusing a key without the `x-` prefix."""
-    if not extensions:
-        return {}
-    for key in extensions:
-        if not isinstance(key, str) or not key.startswith(EXTENSION_PREFIX):
-            raise SchemaError(
-                f"extension key {key!r} does not start with {EXTENSION_PREFIX!r}",
-                hint=f"name each extension key {EXTENSION_PREFIX}<name>",
-                context={"key": key},
-            )
-    copied = strict_json_copy(dict(extensions), document="extensions")
-    return copied if isinstance(copied, dict) else {}
+    return document
 
 
 def _embedded_fonts(
@@ -159,8 +141,7 @@ def import_json(d: Mapping[str, Any]) -> Show:
         show: The show in the current format. A wrong or missing tag raises SchemaError, a
             newer version VersionError, and a show that is not strict JSON or does not fit
             SchemaError. A top-level key other than the tag, header, show and fonts raises
-            SchemaError naming it, unless it starts with `x-`; the show does not keep x- keys,
-            so a host reads them from the document and passes them to `export_json`.
+            SchemaError naming it, unless it starts with `x-`; the show does not keep x- keys yet.
 
     >>> from showpy.examples import two_set_show
     >>> import_json(export_json(two_set_show())).id

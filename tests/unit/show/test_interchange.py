@@ -16,8 +16,7 @@ Contains:
     test_import_fonts_*(): round-trips, rejects tampered and malformed fonts
     test_regression_import_fonts_*(): rejects hostile documents; accepts an older font by URI
     test_regression_import_json_refuses_an_unknown_top_level_key(): names the key and the rule
-    test_import_json_keeps_x_keys(): accepts x- keys; export writes them back via `extensions`
-    test_export_json_refuses_extensions_that_are_not_x_keys(): fails closed on other names
+    test_import_json_accepts_an_x_key(): loads a document that carries an x- key
     test_interchange_old_paths_warn_and_resolve(): serves the four names from their old modules
     test_import_positions_*(): merges CSV rows into sets and spots, refuses bad rows and pins
     test_regression_import_positions_*(): covers the audited CSV import defects
@@ -570,18 +569,7 @@ def test_regression_import_json_refuses_an_unknown_top_level_key() -> None:
     assert "x-" in (caught.value.hint or "")
 
 
-def test_import_json_keeps_x_keys() -> None:
+def test_import_json_accepts_an_x_key() -> None:
     show = two_set_show()
-    extensions = {"x-extra": {"host": "demo", "n": [1, 2]}}
-    document = json.loads(json.dumps(export_json(show, extensions=extensions)))
-    assert document["x-extra"] == extensions["x-extra"]
-    kept = {key: value for key, value in document.items() if key.startswith("x-")}
+    document = {**export_json(show), "x-extra": {"host": "demo", "n": [1, 2]}}
     assert import_json(document) == show
-    assert export_json(import_json(document), extensions=kept) == document
-
-
-@pytest.mark.parametrize("key", ["extra", "X-extra", "show", "x_extra"])
-def test_export_json_refuses_extensions_that_are_not_x_keys(key: str) -> None:
-    with pytest.raises(SchemaError) as caught:
-        export_json(two_set_show(), extensions={key: 1})
-    assert caught.value.context["key"] == key
