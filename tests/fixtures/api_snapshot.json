@@ -653,9 +653,6 @@
   "MAX_GRID_CELLS": {
     "constant": "4000000"
   },
-  "MAX_IMAGE_PIXELS": {
-    "constant": "40000000"
-  },
   "MAX_LAYOUT_CHARS": {
     "constant": "1000"
   },
@@ -679,9 +676,6 @@
   },
   "MAX_TEXT_CHARS": {
     "constant": "1000000"
-  },
-  "MAX_VIDEO_PIXELS": {
-    "constant": "8294400"
   },
   "MIN_LAYOUT_HEIGHT_M": {
     "constant": "0.001"
