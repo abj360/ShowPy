@@ -15,6 +15,7 @@ Contains:
         few hundred meters, and a far larger value overflows geometry to NaN or infinity
     MAX_COUNTS: bounds every stored count; real shows stay under about 10,000 counts, and above
         2**23 counts one ulp exceeds the 1e-9-count clock tolerance
+    MAX_EXTENSION_BYTES: bounds the UTF-8 JSON size of a show's `x-` extension values
     MIN_TEMPO: sets the slowest stored tempo, in counts per minute; anything slower is not a
         performance and drives the clock to infinity
     require_size(): rejects a requested size that is negative or over its cap
@@ -34,6 +35,9 @@ MIN_LAYOUT_HEIGHT_M = 0.001
 MAX_COORD_M = 1e6
 MAX_COUNTS = 1_000_000
 MIN_TEMPO = 1e-3
+# One mebibyte: host metadata is a few settings or ids; a larger value is a payload that belongs
+# in an asset, and a cap keeps one document from carrying a hostile blob through every save.
+MAX_EXTENSION_BYTES = 1_048_576
 
 
 def require_size(

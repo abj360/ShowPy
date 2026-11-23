@@ -17,6 +17,9 @@ Contains:
     test_regression_import_fonts_*(): rejects hostile documents; accepts an older font by URI
     test_regression_import_json_refuses_an_unknown_top_level_key(): names the key and the rule
     test_import_json_accepts_an_x_key(): loads a document that carries an x- key
+    test_regression_import_export_keeps_x_keys(): keeps top-level x- keys byte for byte
+    test_import_json_*extension*(): refuses x- values that are not strict JSON or past the cap
+    test_show_extensions_*(): refuses non-x- keys and survives stored documents
     test_interchange_old_paths_warn_and_resolve(): serves the four names from their old modules
     test_import_positions_*(): merges CSV rows into sets and spots, refuses bad rows and pins
     test_regression_import_positions_*(): covers the audited CSV import defects
@@ -35,7 +38,7 @@ import pytest
 from showpy.choreo.forms import slots, text_form
 from showpy.choreo.models import PlacementPatch
 from showpy.choreo.path_models import PathRow, TransitionSpec
-from showpy.core.caps import MAX_POINTS, MAX_TEXT_CHARS
+from showpy.core.caps import MAX_EXTENSION_BYTES, MAX_POINTS, MAX_TEXT_CHARS
 from showpy.core.deprecation import DeprecatedWarning
 from showpy.core.errors import (
     FontError,
@@ -51,6 +54,7 @@ from showpy.core.resources import font_path
 from showpy.core.util import approx_equal, asset_uri
 from showpy.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
 from showpy.show import interchange, interchange_positions
+from showpy.show.documents import decode_show, encode_show
 from showpy.show.interchange import (
     FONTS_KEY,
     MAX_IMPORT_FONTS,
@@ -572,4 +576,68 @@ def test_regression_import_json_refuses_an_unknown_top_level_key() -> None:
 def test_import_json_accepts_an_x_key() -> None:
     show = two_set_show()
     document = {**export_json(show), "x-extra": {"host": "demo", "n": [1, 2]}}
-    assert import_json(document) == show
+    loaded = import_json(document)
+    assert loaded.model_dump(mode="json")["extensions"]["x-extra"] == {"host": "demo", "n": [1, 2]}
+    assert loaded.model_copy(update={"extensions": {}}) == show
+
+
+HOST_VALUES = {
+    "x-object": {"b": 1, "a": [1, 2.5, -0.0, 1e300, "é", True, False, None, {"n": []}]},
+    "x-array": [[], {}, [1, [2, [3]]]],
+    "x-number": 12345678901234567890,
+    "x-float": 0.1,
+    "x-string": "plain ✓",
+    "x-true": True,
+    "x-null": None,
+}
+
+
+def test_regression_import_export_keeps_x_keys() -> None:
+    document = {**export_json(two_set_show()), **HOST_VALUES}
+    show = import_json(json.loads(json.dumps(document)))
+    assert set(show.extensions) == set(HOST_VALUES)
+    back = export_json(show)
+    assert {key: back[key] for key in HOST_VALUES} == HOST_VALUES
+    assert json.dumps({key: back[key] for key in HOST_VALUES}) == json.dumps(HOST_VALUES)
+    assert "extensions" not in back["show"]
+
+
+def test_export_json_writes_no_x_key_for_a_show_without_extensions() -> None:
+    assert not [key for key in export_json(two_set_show()) if key.startswith("x-")]
+    assert "extensions" not in two_set_show().model_dump(mode="json")
+
+
+def test_import_json_keeps_x_keys_of_a_version_1_document() -> None:
+    v1 = {
+        "schema": "showpy.show.v1",
+        "show": two_set_show().model_dump(mode="json"),
+        "x-host": {"k": [1]},
+    }
+    assert import_json(v1).model_dump(mode="json")["extensions"] == {"x-host": {"k": [1]}}
+
+
+def test_import_json_refuses_an_extension_that_is_not_strict_json() -> None:
+    document = {**export_json(two_set_show()), "x-bad": {"n": float("nan")}}
+    with pytest.raises(SchemaError) as caught:
+        import_json(document)
+    assert caught.value.code == "STRICT_JSON"
+
+
+def test_import_json_refuses_an_extension_past_the_cap() -> None:
+    document = {**export_json(two_set_show()), "x-big": "a" * MAX_EXTENSION_BYTES}
+    with pytest.raises(SchemaError) as caught:
+        import_json(document)
+    assert str(MAX_EXTENSION_BYTES) in (caught.value.hint or "")
+
+
+def test_show_extensions_refuse_a_key_without_the_prefix() -> None:
+    with pytest.raises(SchemaError) as caught:
+        Show.model_validate({**two_set_show().model_dump(mode="json"), "extensions": {"host": 1}})
+    assert "x-" in (caught.value.hint or "")
+
+
+def test_show_extensions_survive_stored_documents() -> None:
+    show = Show.model_validate(
+        {**two_set_show().model_dump(mode="json"), "extensions": {"x-a": {"k": [1, {"z": None}]}}}
+    )
+    assert decode_show(encode_show(show)).extensions == show.extensions
