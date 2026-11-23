@@ -641,3 +641,9 @@ def test_show_extensions_survive_stored_documents() -> None:
         {**two_set_show().model_dump(mode="json"), "extensions": {"x-a": {"k": [1, {"z": None}]}}}
     )
     assert decode_show(encode_show(show)).extensions == show.extensions
+
+
+def test_regression_import_json_bounds_a_huge_unknown_key_in_its_message() -> None:
+    with pytest.raises(SchemaError) as caught:
+        import_json({**export_json(two_set_show()), "k" * 100_000: 1})
+    assert len(caught.value.message) < 500

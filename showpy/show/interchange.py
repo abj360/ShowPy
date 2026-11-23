@@ -26,6 +26,7 @@ from showpy.core.errors import (
     FontError,
     SchemaError,
     UnknownRefError,
+    bounded_repr,
 )
 from showpy.core.strict_json import strict_json_copy
 from showpy.core.util import asset_uri, close_matches
@@ -194,7 +195,7 @@ def _refuse_unknown_keys(d: Mapping[str, object]) -> None:
             continue
         close = close_matches(str(key), sorted(KNOWN_KEYS))
         raise SchemaError(
-            f"document has an unknown top-level key {key!r}",
+            f"document has an unknown top-level key {bounded_repr(key)}",
             hint=(
                 f"did you mean {', '.join(close)}? "
                 if close
