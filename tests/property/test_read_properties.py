@@ -6,6 +6,8 @@ test_read_properties.py --- property tests: the floor readers agree with PathEng
 Contains:
     test_frames_equal_repeated_sample: every frame equals PathEngine.sample at its count
     test_holds_keep_spots_still: frames inside a hold share its count and every spot stands still
+    test_coordinate_table_equals_positions_at_each_set: every row equals PathEngine.positions
+        at its set's count
 """
 
 import numpy as np
@@ -13,7 +15,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from e8s.choreo.engine import PathEngine
-from e8s.choreo.read import frames
+from e8s.choreo.read import coordinate_table, frames
 from e8s.show.models import Show
 from e8s.time.clock import count_to_seconds
 from tests.strategies.show import shows
@@ -66,3 +68,14 @@ def test_holds_keep_spots_still(show: Show, fps: float) -> None:
         assert np.all(framed.counts[inside] == hold.at_count)
         for values in (framed.x, framed.y, framed.facing):
             assert np.all(values[inside] == values[inside][:1])
+
+
+@settings(max_examples=40, deadline=None)
+@given(shows(max_spots=MAX_SPOTS, max_sets=MAX_SETS))
+def test_coordinate_table_equals_positions_at_each_set(show: Show) -> None:
+    table = coordinate_table(show, "all")
+    engine = PathEngine(show)
+    for row, count in enumerate(table.counts.tolist()):
+        points = engine.positions(count, list(table.spots)).reshape(-1, 2)
+        assert table.x[row].tolist() == points[:, 0].tolist()
+        assert table.y[row].tolist() == points[:, 1].tolist()

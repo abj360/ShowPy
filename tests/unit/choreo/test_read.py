@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_read.py --- tests the floor readers: frames
+test_read.py --- tests the floor readers: frames and coordinate tables
 
 Contains:
     test_frames_equal_sample_at_every_frame: matches PathEngine.sample at each frame's count
@@ -14,17 +14,30 @@ Contains:
     test_regression_frames_reject_an_engine_of_another_show: raises SchemaError
     test_regression_frames_cap_the_frame_values: raises SchemaError before allocating
     test_regression_frames_model_rejects_mismatched_shapes: raises SchemaError
+    test_coordinate_table_equals_positions_at_each_set: matches PathEngine.positions at every
+        set's count
+    test_coordinate_table_counts_steps_from_the_origin: counts 8-to-5 steps along the axes of
+        the show's coordinate system and rounds them half away from zero
+    test_coordinate_table_reads_named_sets_in_order: keeps the order the sets are named in
+    test_coordinate_table_reports_who_is_on_the_field: copies each placement's field state
+    test_regression_coordinate_table_rejects_an_unknown_resolution: raises SchemaError
+    test_regression_coordinate_table_rejects_an_unknown_set: raises UnknownRefError
+    test_regression_coordinate_table_rejects_no_sets: raises SchemaError
+    test_regression_coordinate_table_model_rejects_mismatched_shapes: raises SchemaError
 """
 
 import numpy as np
 import pytest
 
 from e8s.choreo.engine import PathEngine
+from e8s.choreo.models import PlacementPatch
 from e8s.choreo.path_models import FacingMode, PathRow
-from e8s.choreo.read import frames
-from e8s.choreo.read_models import Frames
-from e8s.core.errors import SchemaError, TimeRangeError
-from e8s.core.ids import SpotId
+from e8s.choreo.read import STEP_M, coordinate_table, frames
+from e8s.choreo.read_models import CoordinateTable, Frames
+from e8s.core.errors import SchemaError, TimeRangeError, UnknownRefError
+from e8s.core.ids import LandmarkId, SpotId
+from e8s.core.units import round_to
+from e8s.sheet.models import CoordinateSystem
 from e8s.show.models import Show
 from e8s.time.models import Hold
 from tests.fixtures.motion_shows import with_rows, with_targets
@@ -128,3 +141,68 @@ def test_regression_frames_model_rejects_mismatched_shapes(change: dict[str, obj
     Frames.model_validate(FRAMES_FIELDS)
     with pytest.raises(SchemaError, match=r"shape|counts"):
         Frames.model_validate({**FRAMES_FIELDS, **change})
+
+
+def test_coordinate_table_equals_positions_at_each_set() -> None:
+    show = _turning_show()
+    table = coordinate_table(show, "all")
+    engine = PathEngine(show)
+    for row, count in enumerate(table.counts.tolist()):
+        points = engine.positions(count, list(table.spots))
+        assert table.x[row].tolist() == points[:, 0].tolist()
+        assert table.y[row].tolist() == points[:, 1].tolist()
+
+
+def test_coordinate_table_counts_steps_from_the_origin() -> None:
+    system = CoordinateSystem(origin=LandmarkId("c"), audience_side="back")
+    show = two_set_show().replace(coordinates=system)
+    table = coordinate_table(show, "T2 + T4", resolution=0.125)
+    assert table.origin == (0.0, 10.0)
+    assert table.origin_landmark == "c"
+    assert table.audience_side == "back"
+    assert table.across_exact[0].tolist() == [-2.0 / STEP_M, -6.0 / STEP_M]
+    assert table.depth_exact[:, 0].tolist() == [5.0 / STEP_M, 1.0 / STEP_M]
+    expected = [[round_to(v, 0.125) for v in row] for row in table.depth_exact.tolist()]
+    assert table.depth.tolist() == expected
+    assert table.step == STEP_M
+    assert table.resolution == 0.125
+
+
+def test_coordinate_table_reads_named_sets_in_order() -> None:
+    table = coordinate_table(two_set_show(), ["T1"], sets=["2", "1"])
+    assert table.sets == ("2", "1")
+    assert table.counts.tolist() == [8.0, 0.0]
+    assert table.y[:, 0].tolist() == [9.0, 5.0]
+
+
+def test_coordinate_table_reports_who_is_on_the_field() -> None:
+    base = two_set_show()
+    second = base.sets[1].with_placements({"T3": PlacementPatch(on_field=False)})
+    table = coordinate_table(base.replace(sets=(base.sets[0], second)), "T2 + T3")
+    assert table.on_field.tolist() == [[True, True], [True, False]]
+
+
+@pytest.mark.parametrize("resolution", [0.3, 2.0, 0.0])
+def test_regression_coordinate_table_rejects_an_unknown_resolution(resolution: float) -> None:
+    with pytest.raises(SchemaError, match="resolution") as caught:
+        coordinate_table(two_set_show(), "all", resolution=resolution)
+    assert "0.125" in caught.value.hint
+
+
+def test_regression_coordinate_table_rejects_an_unknown_set() -> None:
+    with pytest.raises(UnknownRefError, match="unknown set"):
+        coordinate_table(two_set_show(), "all", sets=["9"])
+
+
+def test_regression_coordinate_table_rejects_no_sets() -> None:
+    with pytest.raises(SchemaError, match="no sets"):
+        coordinate_table(two_set_show(), "all", sets=[])
+
+
+@pytest.mark.parametrize("change", [{"x": [[0.0]]}, {"counts": [0.0, 8.0, 9.0]}])
+def test_regression_coordinate_table_model_rejects_mismatched_shapes(
+    change: dict[str, object],
+) -> None:
+    fields = coordinate_table(two_set_show(), "T1").model_dump()
+    with pytest.raises(SchemaError, match=r"shape|counts"):
+        CoordinateTable.model_validate({**fields, **change})

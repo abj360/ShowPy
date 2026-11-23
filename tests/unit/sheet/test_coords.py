@@ -43,6 +43,7 @@ Contains:
 
 from typing import Any
 
+import numpy as np
 import pytest
 
 from e8s.core.caps import MAX_COORD_M
@@ -51,6 +52,8 @@ from e8s.core.ids import LandmarkId
 from e8s.core.util import approx_equal
 from e8s.sheet.coords import (
     CoordStyle,
+    axis_offsets,
+    axis_origin,
     coordinate_presets,
     from_coords,
     set_coordinates,
@@ -383,3 +386,21 @@ def test_regression_injected_coordinate_parts_raise_schema_error(fields: dict[st
         to_coords(show, (1.0, 1.0))
     with pytest.raises(SchemaError):
         from_coords(show, "R1 U1")
+
+
+@pytest.mark.parametrize(
+    ("side", "expected"),
+    [("front", (3.5, 2.0)), ("back", (-3.5, -2.0)), ("left", (-2.0, 3.5)), ("right", (2.0, -3.5))],
+)
+def test_axis_offsets_follow_the_audience_side(side: str, expected: tuple[float, float]) -> None:
+    system = CoordinateSystem.model_validate({"audience_side": side})
+    across, depth = axis_offsets(two_set_show().sheet, system, np.array([[3.5, 2.0]]))
+    assert (float(across[0]), float(depth[0])) == expected
+
+
+def test_axis_origin_resolves_a_landmark() -> None:
+    sheet = two_set_show().sheet
+    system = CoordinateSystem(origin=LandmarkId("c"))
+    assert axis_origin(sheet, system) == (0.0, 10.0)
+    across, depth = axis_offsets(sheet, system, np.array([[1.0, 12.0]]))
+    assert (across.tolist(), depth.tolist()) == ([1.0], [2.0])

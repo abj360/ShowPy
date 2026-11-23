@@ -259,9 +259,11 @@ if TYPE_CHECKING:
         window,
     )
     from e8s.choreo.read import (
+        coordinate_table,
         frames,
     )
     from e8s.choreo.read_models import (
+        CoordinateTable,
         Frames,
     )
     from e8s.choreo.recipe_models import (
@@ -879,6 +881,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "CoordinateKind": ("e8s.sheet.models", "CoordinateKind"),
     "CoordinateSheet": ("e8s.export._models", "CoordinateSheet"),
     "CoordinateSystem": ("e8s.sheet.models", "CoordinateSystem"),
+    "CoordinateTable": ("e8s.choreo.read_models", "CoordinateTable"),
     "CountsOp": ("e8s.show.models", "CountsOp"),
     "CrowdedStroke": ("e8s.choreo.form_models", "CrowdedStroke"),
     "CubicPiece": ("e8s.geo.svg", "CubicPiece"),
@@ -1149,6 +1152,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "coordinate_presets": ("e8s.sheet.coords", "coordinate_presets"),
     "coordinate_sheet": ("e8s.export._print_sheets", "coordinate_sheet"),
     "coordinate_sheets": ("e8s.export._print_sheets", "coordinate_sheets"),
+    "coordinate_table": ("e8s.choreo.read", "coordinate_table"),
     "cost_matrix": ("e8s.choreo.match", "cost_matrix"),
     "count_to_measure": ("e8s.time.measures", "count_to_measure"),
     "count_to_seconds": ("e8s.time.clock", "count_to_seconds"),
@@ -1601,6 +1605,7 @@ __all__ = [
     "CoordinateKind",
     "CoordinateSheet",
     "CoordinateSystem",
+    "CoordinateTable",
     "CountsOp",
     "CrowdedStroke",
     "CubicPiece",
@@ -1847,6 +1852,7 @@ __all__ = [
     "coordinate_presets",
     "coordinate_sheet",
     "coordinate_sheets",
+    "coordinate_table",
     "cost_matrix",
     "count_to_measure",
     "count_to_seconds",
