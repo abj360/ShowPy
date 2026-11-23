@@ -22,7 +22,8 @@ Contains:
         record whose placements are not flagged pinned
     test_regression_validate_show_reports_notes_anchored_to_missing_items: reports a note anchored
         to a set that does not exist
-    test_regression_validate_show_reports_duplicate_note_ids: reports two notes with one ID
+    test_regression_validate_show_reports_duplicate_note_ids: reports two notes with one ID, now
+        refused by the notes document that holds them
     test_regression_validate_show_reports_facing_overrides_naming_unknown_spots: reports a facing
         override on a spot that does not exist
     test_regression_validate_show_reports_facing_overrides_past_the_show: reports a facing override
@@ -94,7 +95,7 @@ from showpy.core.errors import SchemaError
 from showpy.core.ids import FormId, NoteId, SetId, SpotId, make_tid
 from showpy.core.types import Region
 from showpy.core.validation import ValidationReport
-from showpy.notes.models import Note
+from showpy.notes.models import Note, NotesDocument
 from showpy.sheet.templates import InMemorySheetStore
 from showpy.show.models import Anchor, Comment, Pin, Show
 from showpy.show.validate import (
@@ -350,11 +351,12 @@ def test_regression_validate_show_reports_notes_anchored_to_missing_items() -> N
     assert _mentions(_edited(notes=(_note(set_id=GHOST),)), GHOST)
 
 
-@pytest.mark.defect("UP-9.7-70")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-70")
 def test_regression_validate_show_reports_duplicate_note_ids() -> None:
-    """Reports two notes with one ID (audit 9.7 validation gaps)."""
-    assert _mentions(_edited(notes=(_note("dup"), _note("dup"))), "dup")
+    """Reports two notes with one ID (audit 9.7 validation gaps); notes left the show, and the
+    notes document that holds them now refuses the pair."""
+    with pytest.raises(SchemaError) as caught:
+        NotesDocument(show=two_set_show().id, notes=(_note("dup"), _note("dup")))
+    assert "dup" in caught.value.message
 
 
 def _override(entity: str = "T1", start: float = 1.0, end: float = 2.0) -> FacingOverride:
