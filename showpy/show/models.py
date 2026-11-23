@@ -123,6 +123,18 @@ def _no_extensions() -> ReadOnlyMap[str, FrozenJsonValue]:
     return ReadOnlyMap({})
 
 
+def require_extension_size(size: int) -> None:
+    """Raises SchemaError when extension values would take more than MAX_EXTENSION_BYTES."""
+    if size <= MAX_EXTENSION_BYTES:
+        return
+    raise SchemaError(
+        f"extensions take {size} bytes as JSON, over the cap of {MAX_EXTENSION_BYTES}",
+        hint=f"keep host values under {MAX_EXTENSION_BYTES} bytes; store large data as an"
+        " asset and keep its URI here",
+        context={"bytes": size, "max_bytes": MAX_EXTENSION_BYTES},
+    )
+
+
 def _extension_bytes(extensions: Mapping[str, JsonValue | FrozenJsonValue]) -> int:
     """Measures extension values as UTF-8 JSON; NaN and infinity raise SchemaError."""
     try:
@@ -212,14 +224,7 @@ class Show(FrozenModel):
                 hint=f"rename the key to {EXTENSION_PREFIX}<name>",
                 context={"keys": stray},
             )
-        size = _extension_bytes(self.extensions)
-        if size > MAX_EXTENSION_BYTES:
-            raise SchemaError(
-                f"extensions take {size} bytes as JSON, over the cap of {MAX_EXTENSION_BYTES}",
-                hint=f"keep host values under {MAX_EXTENSION_BYTES} bytes; store large data as an"
-                " asset and keep its URI here",
-                context={"bytes": size, "max_bytes": MAX_EXTENSION_BYTES},
-            )
+        require_extension_size(_extension_bytes(self.extensions))
         return self
 
     # The dump omits an empty map, so stored documents of shows without extensions keep their bytes.

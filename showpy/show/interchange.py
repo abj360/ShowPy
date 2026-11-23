@@ -15,6 +15,7 @@ Contains:
 """
 
 import base64
+import json
 import math
 from collections.abc import Iterable, Mapping
 from typing import Any, Never
@@ -44,7 +45,7 @@ from showpy.show.migrate import (
     format_header,
     version_of,
 )
-from showpy.show.models import Show
+from showpy.show.models import Show, require_extension_size
 
 SCHEMA_TAG = "showpy.show.v1"
 SCHEMA_KEY = "schema"
@@ -178,9 +179,9 @@ def import_json(d: Mapping[str, Any]) -> Show:
             hint=f"write host keys at the top level of the document as {EXTENSION_PREFIX}<name>",
             context={"field": EXTENSIONS_FIELD},
         )
-    extensions = strict_json_copy(
-        {key: value for key, value in d.items() if _is_extension_key(key)}, document=EXTENSIONS_KEY
-    )
+    hosted = {key: value for key, value in d.items() if _is_extension_key(key)}
+    _require_cap_before_copy(hosted)
+    extensions = strict_json_copy(hosted, document=EXTENSIONS_KEY)
     if extensions:
         show[EXTENSIONS_FIELD] = extensions
     try:
@@ -192,6 +193,15 @@ def import_json(d: Mapping[str, Any]) -> Show:
         if friendly is error:
             raise
         raise friendly from error
+
+
+def _require_cap_before_copy(hosted: Mapping[str, object]) -> None:
+    """Refuses oversized extension values before they are copied; non-JSON values pass on."""
+    try:
+        size = len(json.dumps(hosted, ensure_ascii=False).encode("utf-8"))
+    except (TypeError, ValueError, RecursionError):
+        return
+    require_extension_size(size)
 
 
 def _refuse_unknown_keys(d: Mapping[str, object]) -> None:

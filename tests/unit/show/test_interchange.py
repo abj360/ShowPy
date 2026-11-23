@@ -655,3 +655,10 @@ def test_regression_import_json_refuses_extensions_inside_show() -> None:
     with pytest.raises(SchemaError) as caught:
         import_json(document)
     assert "top level" in (caught.value.hint or "")
+
+
+def test_import_json_checks_the_extension_cap_before_copying_the_values() -> None:
+    big = {"x-big": ["a" * MAX_EXTENSION_BYTES, float("nan")]}
+    with pytest.raises(SchemaError) as caught:
+        import_json({**export_json(two_set_show()), **big})
+    assert str(MAX_EXTENSION_BYTES) in (caught.value.hint or "")
