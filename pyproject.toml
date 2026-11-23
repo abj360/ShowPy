@@ -31,9 +31,9 @@ video = ["imageio-ffmpeg>=0.8.1", "pillow>=13.0.0"]
 all = ["pandas>=3.1.1", "pillow>=13.0.0", "segno>=1.6.6", "imageio-ffmpeg>=0.8.1"]
 
 [project.urls]
-Homepage = "https://github.com/abj360/ShowPy"
-Repository = "https://github.com/abj360/ShowPy"
-Issues = "https://github.com/abj360/ShowPy/issues"
+Homepage = "https://github.com/abj360/e8s"
+Repository = "https://github.com/abj360/e8s"
+Issues = "https://github.com/abj360/e8s/issues"
 
 [build-system]
 requires = ["hatchling==1.33.0", "hatch-vcs==0.5.0"]
