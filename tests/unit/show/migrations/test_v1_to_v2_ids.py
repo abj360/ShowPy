@@ -36,6 +36,10 @@ Contains:
         renamed folder when a repository's put_show stores a v1 head, in one revision
     test_regression_put_script_on_a_v1_head_writes_the_migrated_folder: stores the migration and
         the new script in one revision, the set's other files moved with its folder
+    test_regression_migration_renames_ids_in_canvas_comments_and_selection: rewrites comment
+        anchors on renamed sets in the migration and its first save; claims stay host-kept
+    test_renamed_canvas_follows_spot_renames_and_refuses_a_bad_file: renames spot IDs in
+        comment anchors and the selection, and refuses a canvas file that is not strict JSON
     test_regression_migration_refuses_to_move_a_set_file_over_another: refuses a stored file
         already at the folder a renamed set moves to
 """
@@ -51,13 +55,14 @@ import pytest
 
 from showpy.cast.spots import define_selection
 from showpy.choreo.path_models import FacingMode, FacingOverride
-from showpy.core.errors import StorageError
+from showpy.core.errors import SchemaError, StorageError
 from showpy.core.ids import LEGACY_IDS_KEY, FormId, SetId, ZoneId
 from showpy.core.types import Region
 from showpy.examples import two_set_show
 from showpy.notes.models import Anchor
 from showpy.notes.notes import add_note
 from showpy.sheet.models import Zone, ZoneKind
+from showpy.show.canvas_renames import renamed_canvas
 from showpy.show.documents import (
     SHOW_DOC,
     decode_show,
@@ -67,13 +72,15 @@ from showpy.show.documents import (
     set_doc,
 )
 from showpy.show.file_repository import FileRepository
+from showpy.show.files import CLAIMS_DOC
 from showpy.show.integrity import blob_digest
 from showpy.show.manage import add_set, renumber
-from showpy.show.migrate import FIRST_VERSION, ReportBuilder
+from showpy.show.migrate import FIRST_VERSION, MigrationReport, ReportBuilder
 from showpy.show.migrations.v1_to_v2_ids import rename_ids
-from showpy.show.models import Revision, Show
+from showpy.show.models import Comment, Revision, Show
 from showpy.show.pinning import pin
 from showpy.show.storage import load_show, open_workspace, save_show
+from showpy.show.structured import COMMENTS_DOC, SELECTION_DOC
 from showpy.show.validate import validate_show
 from tests.fixtures.generators import seeded_show
 from tests.helpers import TWO_HASH_SEEDS, outputs_under_hash_seeds
@@ -453,6 +460,61 @@ def test_regression_put_script_on_a_v1_head_writes_the_migrated_folder(tmp_path:
     assert not [p for p in after if p.startswith("/sets/con/")]
     assert [r.id for r in repo.revisions(show_id)] == [*stored, revision.id]
     assert repo.get_script(show_id, "con_") == "# new\n"
+
+
+def _comments(*anchors: Anchor) -> bytes:
+    comments = [Comment(id=f"c{n}", anchor=a, text="look") for n, a in enumerate(anchors)]
+    return dump_json([c.model_dump(mode="json") for c in comments])
+
+
+def test_regression_migration_renames_ids_in_canvas_comments_and_selection(
+    tmp_path: Path,
+) -> None:
+    repo, expected = _fixture("v0.3.0", tmp_path)
+    show_id = expected["show_id"]
+    point = Anchor.at_point((1.0, 2.0))
+    canvas = {
+        COMMENTS_DOC: _comments(Anchor.on_set("con"), Anchor.on_transition(("1A", "con")), point),
+        SELECTION_DOC: dump_json({"ids": ["T1"], "description": "first"}),
+        CLAIMS_DOC: b'{"claims": [{"spot": "T1"}]}',
+    }
+    _commit_v1(repo, show_id, canvas)
+    stored = [r.id for r in repo.revisions(show_id)]
+    migrated, _ = migrate_documents(dict(repo.documents(show_id)))
+    assert migrated[COMMENTS_DOC] == _comments(
+        Anchor.on_set("con_"), Anchor.on_transition(("1A.2", "con_")), point
+    )
+    assert migrated[SELECTION_DOC] == canvas[SELECTION_DOC]
+    assert migrated[CLAIMS_DOC] == canvas[CLAIMS_DOC]
+    ws = open_workspace(repo, show_id)
+    first = save_show(ws, load_show(ws), AT)
+    assert first.parent == stored[-1]
+    assert repo.documents(show_id)[COMMENTS_DOC] == migrated[COMMENTS_DOC]
+
+
+def test_renamed_canvas_follows_spot_renames_and_refuses_a_bad_file() -> None:
+    report = MigrationReport(
+        from_version=FIRST_VERSION, renamed={"spot": (("T-1", "T_1"),), "set": (("con", "con_"),)}
+    )
+    docs = {
+        COMMENTS_DOC: _comments(Anchor.on_spots(["T-1", "T2"])),
+        SELECTION_DOC: dump_json({"ids": ["T2", "T-1"], "description": "pair"}),
+    }
+    assert renamed_canvas(docs, report) == {
+        COMMENTS_DOC: [
+            {
+                "id": "c0",
+                "anchor": Anchor.on_spots(["T_1", "T2"]).model_dump(mode="json"),
+                "text": "look",
+                "resolved": False,
+                "author": "designer",
+            }
+        ],
+        SELECTION_DOC: {"ids": ["T2", "T_1"], "description": "pair"},
+    }
+    assert renamed_canvas(docs, MigrationReport(from_version=FIRST_VERSION)) == {}
+    with pytest.raises(SchemaError):
+        renamed_canvas({SELECTION_DOC: b'{"ids": ["T-1"], "ids": []}'}, report)
 
 
 def test_regression_migration_refuses_to_move_a_set_file_over_another(tmp_path: Path) -> None:

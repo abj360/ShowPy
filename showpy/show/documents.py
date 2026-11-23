@@ -32,6 +32,7 @@ from pydantic import BaseModel
 from showpy.core.canonical import MAX_INT_DIGITS, MAX_NESTING, canonical_value
 from showpy.core.errors import SchemaError, StorageError
 from showpy.core.json_types import JsonValue
+from showpy.show.canvas_renames import renamed_canvas
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.document_paths import FORMS_NAME as FORMS_NAME
 from showpy.show.document_paths import NOTES_DOC as NOTES_DOC
@@ -278,15 +279,18 @@ def migrate_documents(docs: Mapping[str, bytes]) -> tuple[dict[str, bytes], Migr
     """Migrates a stored document set to the current format version and reports what changed.
 
     A host can show the report to the designer, and apply its renames to what it stores outside
-    ShowPy, before the first save writes the new documents.
+    ShowPy, before the first save writes the new documents. The canvas comments and selection
+    follow the set and spot renames here; `/publish/claims.json` is host-kept, so the host
+    applies the report's spot renames to its claims.
 
     Args:
         docs: Stored path to document bytes, as a repository tree holds them.
 
     Returns:
-        migrated: The show documents re-encoded in the current format, plus every other file
-            of `docs`, moved to its set's new folder when the migration renamed the set's key;
-            `docs` itself when it is already current.
+        migrated: The show documents re-encoded in the current format, the canvas comments and
+            selection with renamed IDs, plus every other file of `docs`, moved to its set's
+            new folder when the migration renamed the set's key; `docs` itself when it is
+            already current.
         report: What the migration renamed and repaired, and the version it started from.
 
     >>> from showpy.examples import two_set_show
@@ -306,7 +310,7 @@ def migrate_documents(docs: Mapping[str, bytes]) -> tuple[dict[str, bytes], Migr
 def _migrated_parts(
     docs: Mapping[str, bytes],
 ) -> tuple[dict[str, bytes], dict[str, str], MigrationReport]:
-    """Migrates the show documents of an older tree and maps each renamed set folder."""
+    """Migrates the show documents and canvas files of an older tree; maps renamed set folders."""
     show, report = read_migrated(docs)
     order = without_header(json.loads(docs[SHOW_DOC])).get(SET_ORDER_FIELD, [])
     stored_keys = [key for key in order if isinstance(key, str)] if isinstance(order, list) else []
@@ -315,7 +319,9 @@ def _migrated_parts(
         for old, new in zip(stored_keys, (set_key(s) for s in show.sets), strict=True)
         if old != new
     }
-    return encode_show(show), folders, report.build()
+    built = report.build()
+    canvas = {path: dump_json(value) for path, value in renamed_canvas(docs, built).items()}
+    return encode_show(show) | canvas, folders, built
 
 
 def _set_folder(path: str) -> str | None:
