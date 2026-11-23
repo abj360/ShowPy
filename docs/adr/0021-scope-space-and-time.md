@@ -478,10 +478,16 @@ v0.4.0, except for the sheet names listed below.
 **What stays until its replacement arrives.** The sheet names that change shape
 (`sheet_templates`, `get_sheet`, `customize`, `football_field`, `gym_floor`, `GuideLine`,
 `on_surface`, `blank_sheet`, `add_guide`, `remove_guide`, `save_sheet`, `template_ref`,
-`SheetStore` and `InMemorySheetStore`) are the only way to build or store a sheet, so they stay
-and keep warning that they leave in v0.7.0, when `sheets`, `sheet`, `field`, `floor`, `Marking` and
-`on_sheet` replace them. The `tables` extra stays for the five pandas results, and `all` now holds
-only it.
+`SheetStore` and `InMemorySheetStore`) are the only way to build or store a sheet, so they stay as
+current API and no longer warn. v0.7.0 replaces them directly with `sheets`, `sheet`, `field`,
+`floor`, `Marking` and `on_sheet`, without a warning period. The `tables` extra stays for the five
+pandas results, and `all` now holds only it.
+
+**No deprecation machinery while there are no users.** With nothing left to warn about,
+`DeprecatedWarning`, `warn_leaving`, `leaving_call` and the `LEAVING` and `DEPRECATED` tables are
+deleted, with their tests and the snapshot's `deprecated` and `leaving` sections. Decisions 2 and
+4 of this ADR and decision 5 of ADR 0009 describe machinery the library no longer has; a release
+that has users and needs a warning period brings it back first.
 
 **Capabilities absent until v0.7.0.** The replacements this ADR names (`frames`,
 `coordinate_table`, `describe_transition`, `locate`, `at_location`, `Location`, `Marking`,
@@ -556,10 +562,10 @@ half, as its appendix row planned, and stays open for the facing-override half.
 | UP-9.7-73 | `tests/unit/show/test_validate.py::test_regression_validate_show_reports_zone_selectors_naming_unknown_spots` | tests zone validation, deleted with the zones                |
 | UP-9.7-74 | `tests/unit/show/test_validate.py::test_regression_validate_show_reports_degenerate_zones`                    | tests zone validation, deleted with the zones                |
 
-| Measure (2026-11-23)                      | Value                                           |
-| ----------------------------------------- | ----------------------------------------------- |
-| Public names removed                      | 41 export, 10 notes, 24 sheet, 2 alias, 1 claim |
-| Public names added                        | 1 (`DroppedFields`)                             |
-| Optional extras removed                   | 3 of 5 (`qr`, `video`, `render`)                |
-| Default suite ledger line, before / after | `Ledger: 185 open` / `Ledger: 127 open`         |
-| Ledger IDs retired by this addendum       | 58                                              |
+| Measure (2026-11-23)                      | Value                                                                                                                  |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Public names removed                      | 41 export, 10 notes, 24 sheet, 2 alias, 1 claim, 3 other (`DeprecatedWarning`, `MAX_IMAGE_PIXELS`, `MAX_VIDEO_PIXELS`) |
+| Public names added                        | 1 (`DroppedFields`)                                                                                                    |
+| Optional extras removed                   | 3 of 5 (`qr`, `video`, `render`)                                                                                       |
+| Default suite ledger line, before / after | `Ledger: 185 open` / `Ledger: 127 open`                                                                                |
+| Ledger IDs retired by this addendum       | 58                                                                                                                     |
