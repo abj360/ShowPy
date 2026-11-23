@@ -9,7 +9,7 @@ release.
 
 Contains:
     describe_public_object(): renders one public name as a Python-version-stable JSON value
-    build_snapshot(): builds the snapshot of every public name and leaving name
+    build_snapshot(): builds the snapshot of every public name
     inline_short_arrays(): puts each JSON array on one line when it fits, as Prettier does
     check_snapshot(): compares the API with the stored snapshot and refreshes it when allowed
     test_public_api_matches_snapshot: fails on any signature drift from the stored snapshot
@@ -32,7 +32,6 @@ import inspect
 import json
 import os
 import types
-import warnings
 from pathlib import Path
 from typing import Annotated, Literal, Union, get_args, get_origin
 
@@ -40,9 +39,8 @@ import pytest
 from pydantic import BaseModel
 
 import e8s
-from e8s._api_table import LEAVING, PUBLIC_API
-from e8s.core.deprecation import DeprecatedWarning
-from scripts.check_api_changes import LEAVING_KEY, JsonValue, diff_snapshots
+from e8s._api_table import PUBLIC_API
+from scripts.check_api_changes import JsonValue, diff_snapshots
 
 ROOT = Path(__file__).resolve().parents[2]
 SNAPSHOT_PATH = ROOT / "tests" / "fixtures" / "api_snapshot.json"
@@ -167,28 +165,9 @@ def describe_public_object(obj: object) -> JsonValue:
     return {"constant": repr(obj)}
 
 
-def _leaving_entry(
-    kind: str, replacement: str | tuple[str, ...] | None, since: str, remove: str
-) -> dict[str, JsonValue]:
-    """Describes one leaving name; the replacement key is absent when the name has none."""
-    entry: dict[str, JsonValue] = {"kind": kind, "since": since, "remove": remove}
-    if isinstance(replacement, str):
-        entry["replacement"] = replacement
-    elif replacement is not None:
-        entry["replacement"] = list(replacement)
-    return entry
-
-
 def build_snapshot() -> dict[str, JsonValue]:
-    """Builds the snapshot of every public name, plus the names that leave the library."""
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecatedWarning)
-        snapshot = {name: describe_public_object(getattr(e8s, name)) for name, _, _ in PUBLIC_API}
-    snapshot[LEAVING_KEY] = {
-        name: _leaving_entry(kind, replacement, since, remove)
-        for name, kind, replacement, since, remove in LEAVING
-    }
-    return snapshot
+    """Builds the snapshot of every public name."""
+    return {name: describe_public_object(getattr(e8s, name)) for name, _, _ in PUBLIC_API}
 
 
 def _format_failure(diff: dict[str, list[str]]) -> str:

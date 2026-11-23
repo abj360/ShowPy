@@ -29,7 +29,6 @@ Contains:
     FontError: reports a font file that is invalid, hash-mismatched or whose name is taken
     MissingFontError: reports a font name or URI the registry does not hold
     GlyphError: reports a character the font chain has no glyph for
-    DeprecatedWarning: warns that a deprecated API was used (defined in e8s.core.deprecation)
     LegibilityWarning: warns that text was laid out with fewer spots than it reads well at
 """
 
@@ -38,7 +37,6 @@ from typing import ClassVar
 
 from pydantic import ValidationError as PydanticValidationError
 
-from e8s.core.deprecation import DeprecatedWarning as DeprecatedWarning
 from e8s.core.error_codes import ErrorCode
 from e8s.core.error_context import CUT_MARK as CUT_MARK
 from e8s.core.error_context import ECHO_HEAD_CHARS as ECHO_HEAD_CHARS

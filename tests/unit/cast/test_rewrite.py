@@ -47,8 +47,6 @@ from e8s.show.pinning import pin
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.shows import two_set_show
 
-pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
-
 
 def test_faces_entity_only_for_toward_entity_strings() -> None:
     assert faces_entity(FacingMode.TOWARD_ENTITY, EntityFacing(entity=SpotId("T2"))) == "T2"

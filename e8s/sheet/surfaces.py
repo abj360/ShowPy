@@ -17,7 +17,6 @@ Contains:
 
 import math
 
-from e8s.core.deprecation import leaving_call
 from e8s.core.ids import SheetRef, format_ref
 from e8s.core.types import Point, Region, Ring
 from e8s.core.units import convert
@@ -67,26 +66,13 @@ def rect_ring(x0: float, y0: float, x1: float, y1: float) -> Ring:
     return ((x0, y0), (x1, y0), (x1, y1), (x0, y1))
 
 
-def _template_ref(ref_id: str) -> SheetRef:
-    """Returns the first-version reference of a built-in sheet.
-
-    >>> _template_ref("gym-basketball")
-    'sheet:gym-basketball@1'
-    """
-    return format_ref(REF_KIND, ref_id, FIRST_VERSION)
-
-
-@leaving_call(
-    since="0.4.0",
-    remove="0.7.0",
-    replacement=("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
-)
 def template_ref(ref_id: str) -> SheetRef:
     """Returns the first-version reference of a built-in sheet.
 
-    Deprecated: this name leaves the library in 0.7.0.
+    >>> template_ref("gym-basketball")
+    'sheet:gym-basketball@1'
     """
-    return _template_ref(ref_id)
+    return format_ref(REF_KIND, ref_id, FIRST_VERSION)
 
 
 def _field_edges(half: float, depth: float) -> tuple[GuideLine, ...]:
@@ -121,7 +107,7 @@ def _yard_lines(depth: float) -> tuple[GuideLine, ...]:
     return tuple(guides)
 
 
-def _football_field(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> Sheet:
+def football_field(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> Sheet:
     """Builds a 120 yd x 160 ft field: yard lines every 5 yd, hashes, sidelines, end lines.
 
     Args:
@@ -129,7 +115,7 @@ def _football_field(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> 
         name: Display name.
         hash_ft_in: Distance of each hash row from its sideline, as (feet, inches).
 
-    >>> _football_field("f", "Field", NFL_HASH).guides[0].id
+    >>> football_field("f", "Field", NFL_HASH).guides[0].id
     'sideline-front'
     """
     length = convert(FIELD_LENGTH_YD, "yd", "m")
@@ -145,7 +131,7 @@ def _football_field(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> 
     ring = rect_ring(-half, 0.0, half, depth)
     yard = convert(1.0, "yd", "m")
     return Sheet(
-        ref=_template_ref(ref_id),
+        ref=template_ref(ref_id),
         name=name,
         surface_type=SurfaceType.FOOTBALL_FIELD,
         size_m=(length, depth),
@@ -154,15 +140,6 @@ def _football_field(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> 
         guides=(*_field_edges(half, depth), *_yard_lines(depth), *hash_guides),
         grid=Grid(spacing=(yard, yard), major_every=FIELD_GRID_MAJOR, unit_name="yd"),
     )
-
-
-@leaving_call(since="0.4.0", remove="0.7.0", replacement="field")
-def football_field(ref_id: str, name: str, hash_ft_in: tuple[float, float]) -> Sheet:
-    """Builds a 120 yd x 160 ft field: yard lines every 5 yd, hashes, sidelines, end lines.
-
-    Deprecated: this name leaves the library in 0.7.0.
-    """
-    return _football_field(ref_id, name, hash_ft_in)
 
 
 def _circle_ring(center: Point, radius: float) -> Ring:
@@ -182,10 +159,10 @@ def _court_end(side: str, sign: float, half: float, mid: float) -> tuple[GuideLi
     return (GuideLine(id=f"lane-{side}", kind="custom", points=lane),)
 
 
-def _gym_floor() -> Sheet:
+def gym_floor() -> Sheet:
     """Builds a 94 x 50 ft basketball court: lines, center circle, lanes.
 
-    >>> round(_gym_floor().size_m[0], 4)
+    >>> round(gym_floor().size_m[0], 4)
     28.6512
     """
     length, depth = _ft(COURT_LENGTH_FT), _ft(COURT_WIDTH_FT)
@@ -194,7 +171,7 @@ def _gym_floor() -> Sheet:
     circle = _closed(_circle_ring((0.0, mid), _ft(CENTER_CIRCLE_RADIUS_FT)))
     ends = (("left", -1.0), ("right", 1.0))
     return Sheet(
-        ref=_template_ref("gym-basketball"),
+        ref=template_ref("gym-basketball"),
         name="Gym floor (basketball court 94 x 50 ft)",
         surface_type=SurfaceType.GYM_FLOOR,
         size_m=(length, depth),
@@ -210,12 +187,3 @@ def _gym_floor() -> Sheet:
             *(g for side, sign in ends for g in _court_end(side, sign, half, mid)),
         ),
     )
-
-
-@leaving_call(since="0.4.0", remove="0.7.0", replacement="floor")
-def gym_floor() -> Sheet:
-    """Builds a 94 x 50 ft basketball court: lines, center circle, lanes.
-
-    Deprecated: this name leaves the library in 0.7.0.
-    """
-    return _gym_floor()

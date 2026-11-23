@@ -44,8 +44,6 @@ from e8s.sheet.templates import (
     sheet_templates,
 )
 
-pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
-
 TOL = 1e-9
 HS_REF = "sheet:hs-football@1"
 COLLEGE_REF = "sheet:college-football@1"

@@ -38,7 +38,6 @@ import inspect
 import io
 import re
 import tokenize
-import warnings
 from pathlib import Path
 from types import ModuleType
 
@@ -46,7 +45,6 @@ import pytest
 
 import e8s
 from e8s._api_table import PUBLIC_API
-from e8s.core.deprecation import DeprecatedWarning
 from e8s.core.error_codes import ErrorCode
 
 CITATION_PATTERN = re.compile(r"\bADR\b|\bUP-\d+\.\d+-\d+\b|\bdocs/")
@@ -319,9 +317,7 @@ def test_regression_public_functions_take_booleans_by_keyword() -> None:
     """Requires no public function or method to accept a bool positionally."""
     offenders: list[str] = []
     for public_name, _module, _attribute in PUBLIC_API:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecatedWarning)
-            obj = getattr(e8s, public_name)
+        obj = getattr(e8s, public_name)
         targets = [obj] if inspect.isfunction(obj) else []
         if inspect.isclass(obj):
             targets = [

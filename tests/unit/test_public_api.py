@@ -14,13 +14,11 @@ Contains:
 """
 
 import importlib.util
-import warnings
 from pathlib import Path
 from types import ModuleType
 
 import e8s
 from e8s._api_table import PUBLIC_API
-from e8s.core.deprecation import DeprecatedWarning
 
 GENERATOR_PATH = Path(__file__).resolve().parents[2] / "scripts" / "gen_public_api.py"
 
@@ -35,9 +33,7 @@ def _load_generator() -> ModuleType:
 
 
 def test_every_exported_name_resolves() -> None:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecatedWarning)
-        missing = [name for name in e8s.__all__ if not hasattr(e8s, name)]
+    missing = [name for name in e8s.__all__ if not hasattr(e8s, name)]
     assert missing == []
 
 

@@ -5,15 +5,12 @@ test_sheet_properties.py --- checks sheet fits on random inputs
 """
 
 import numpy as np
-import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
 from e8s.core.util import approx_equal
 from e8s.geo.affine import rotation_matrix, scale_matrix, transform_points, translation_matrix
 from e8s.sheet.replace import similarity_fit
-
-pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 FIT_TOL = 1e-6
 coordinates = st.floats(min_value=-80.0, max_value=80.0, allow_nan=False)

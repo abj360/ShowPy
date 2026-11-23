@@ -250,7 +250,6 @@
       "entity": "e8s.core.ids.SpotId"
     }
   },
-  "DeprecatedWarning": "(*args)",
   "DocumentRepository": "(backend: e8s.show.repositories.RepositoryBackend)",
   "DroppedFields": {
     "model": {
@@ -1582,92 +1581,6 @@
   "join_sections": "(a: e8s.show.models.Show, b: e8s.show.models.Show) -> e8s.show.models.Show",
   "label_prefix": "(spot_id: str) -> str | None",
   "layout_text": "(text: str, fonts: collections.abc.Sequence[str], height: Meters, at: Point, *, rotation: Degrees = 0.0, align: TextAlign = 'left', anchor: TextAnchor = 'baseline', letter_spacing: float = 0.0, line_spacing: float = 1.2, font_registry: e8s.geo.fonts.FontRegistry | None = None) -> tuple[e8s.geo.models.LaidGlyph, ...]",
-  "leaving": {
-    "GuideLine": {
-      "kind": "type",
-      "remove": "0.7.0",
-      "replacement": "Marking",
-      "since": "0.4.0"
-    },
-    "InMemorySheetStore": {
-      "kind": "type",
-      "remove": "0.7.0",
-      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
-      "since": "0.4.0"
-    },
-    "SheetStore": {
-      "kind": "type",
-      "remove": "0.7.0",
-      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
-      "since": "0.4.0"
-    },
-    "add_guide": {
-      "kind": "function",
-      "remove": "0.7.0",
-      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
-      "since": "0.4.0"
-    },
-    "blank_sheet": {
-      "kind": "function",
-      "remove": "0.7.0",
-      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
-      "since": "0.4.0"
-    },
-    "customize": {
-      "kind": "function",
-      "remove": "0.7.0",
-      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
-      "since": "0.4.0"
-    },
-    "football_field": {
-      "kind": "function",
-      "remove": "0.7.0",
-      "replacement": "field",
-      "since": "0.4.0"
-    },
-    "get_sheet": {
-      "kind": "function",
-      "remove": "0.7.0",
-      "replacement": "sheet",
-      "since": "0.4.0"
-    },
-    "gym_floor": {
-      "kind": "function",
-      "remove": "0.7.0",
-      "replacement": "floor",
-      "since": "0.4.0"
-    },
-    "on_surface": {
-      "kind": "function",
-      "remove": "0.7.0",
-      "replacement": "on_sheet",
-      "since": "0.4.0"
-    },
-    "remove_guide": {
-      "kind": "function",
-      "remove": "0.7.0",
-      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
-      "since": "0.4.0"
-    },
-    "save_sheet": {
-      "kind": "function",
-      "remove": "0.7.0",
-      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
-      "since": "0.4.0"
-    },
-    "sheet_templates": {
-      "kind": "function",
-      "remove": "0.7.0",
-      "replacement": "sheets",
-      "since": "0.4.0"
-    },
-    "template_ref": {
-      "kind": "function",
-      "remove": "0.7.0",
-      "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
-      "since": "0.4.0"
-    }
-  },
   "length": "(obj: Points | e8s.geo.curve_base.Curve) -> Meters",
   "line": "(a: Point, b: Point) -> e8s.geo.curves.Segment",
   "line_form": "(form_id: str, members: collections.abc.Sequence[str], a: Point, b: Point, spacing: e8s.choreo.form_models.SpacingSpec | None = None, facing: e8s.choreo.form_models.FacingSpec | None = None, *, set_id: str = '', n: int | None = None) -> e8s.choreo.form_models.Form",

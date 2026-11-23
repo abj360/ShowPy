@@ -30,8 +30,6 @@ from e8s.core.types import Region
 from e8s.sheet.models import GuideLine, Sheet
 from e8s.sheet.templates import blank_sheet, sheet_templates
 
-pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
-
 SQUARE = Region(exterior=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)))
 
 

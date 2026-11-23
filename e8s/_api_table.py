@@ -6,9 +6,6 @@ Edit PUBLIC_API, then run `uv run python scripts/gen_public_api.py` to regenerat
 
 Contains:
     PUBLIC_API: lists (public name, defining module, attribute) sorted by public name
-    LEAVING: lists (name, kind, replacement or replacements, since, remove) per name that leaves;
-        kind is function (warns on each call), type (warns on access), export (a function that
-        warns on access; its code sits in a private module) or field (warns on an outside read)
 """
 
 PUBLIC_API: tuple[tuple[str, str, str], ...] = (
@@ -48,7 +45,6 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("CustomRecipe", "e8s.choreo.recipe_models", "CustomRecipe"),
     ("DEFAULT_LINE_SPACING", "e8s.geo.models", "DEFAULT_LINE_SPACING"),
     ("DelayFix", "e8s.choreo.engine_models", "DelayFix"),
-    ("DeprecatedWarning", "e8s.core.errors", "DeprecatedWarning"),
     ("DocumentRepository", "e8s.show.repositories", "DocumentRepository"),
     ("DroppedFields", "e8s.show.migrate", "DroppedFields"),
     ("E8sError", "e8s.core.errors", "E8sError"),
@@ -566,69 +562,4 @@ PUBLIC_API: tuple[tuple[str, str, str], ...] = (
     ("window", "e8s.choreo.paths", "window"),
     ("with_set", "e8s.choreo.match_ops", "with_set"),
     ("zigzag", "e8s.choreo.motion", "zigzag"),
-)
-
-LEAVING: tuple[tuple[str, str, str | tuple[str, ...] | None, str, str], ...] = (
-    ("sheet_templates", "function", "sheets", "0.4.0", "0.7.0"),
-    ("get_sheet", "function", "sheet", "0.4.0", "0.7.0"),
-    (
-        "customize",
-        "function",
-        ("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
-        "0.4.0",
-        "0.7.0",
-    ),
-    ("football_field", "function", "field", "0.4.0", "0.7.0"),
-    ("gym_floor", "function", "floor", "0.4.0", "0.7.0"),
-    ("GuideLine", "type", "Marking", "0.4.0", "0.7.0"),
-    ("on_surface", "function", "on_sheet", "0.4.0", "0.7.0"),
-    (
-        "blank_sheet",
-        "function",
-        ("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
-        "0.4.0",
-        "0.7.0",
-    ),
-    (
-        "add_guide",
-        "function",
-        ("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
-        "0.4.0",
-        "0.7.0",
-    ),
-    (
-        "remove_guide",
-        "function",
-        ("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
-        "0.4.0",
-        "0.7.0",
-    ),
-    (
-        "save_sheet",
-        "function",
-        ("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
-        "0.4.0",
-        "0.7.0",
-    ),
-    (
-        "template_ref",
-        "function",
-        ("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
-        "0.4.0",
-        "0.7.0",
-    ),
-    (
-        "SheetStore",
-        "type",
-        ("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
-        "0.4.0",
-        "0.7.0",
-    ),
-    (
-        "InMemorySheetStore",
-        "type",
-        ("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
-        "0.4.0",
-        "0.7.0",
-    ),
 )

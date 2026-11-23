@@ -7,13 +7,9 @@ Contains:
     test_*(): one behavior of e8s.sheet.bounds each
 """
 
-import pytest
-
 from e8s.core.types import Region
 from e8s.sheet.bounds import on_surface, walkable
 from tests.fixtures.shows import field_sheet
-
-pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 HOLE = ((-1.0, 1.0), (1.0, 1.0), (1.0, 2.0), (-1.0, 2.0))
 

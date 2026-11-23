@@ -22,7 +22,6 @@ import functools
 from collections.abc import Sequence
 from typing import Literal, Protocol
 
-from e8s.core.deprecation import leaving_call
 from e8s.core.errors import (
     ConflictError,
     SchemaError,
@@ -44,10 +43,10 @@ from e8s.sheet.surfaces import (
     NCAA_HASH,
     NFHS_HASH,
     NFL_HASH,
-    _football_field,
-    _gym_floor,
-    _template_ref,
+    football_field,
+    gym_floor,
     rect_ring,
+    template_ref,
 )
 
 type SheetScope = Literal["mine", "team"]
@@ -112,33 +111,24 @@ class InMemorySheetStore:
 @functools.cache
 def _built_in() -> tuple[Sheet, ...]:
     return (
-        _blank_sheet(*BLANK_SIZE_M),
-        _football_field("hs-football", "High school football field (NFHS)", NFHS_HASH),
-        _football_field("college-football", "College football field (NCAA)", NCAA_HASH),
-        _football_field("nfl-football", "NFL football field", NFL_HASH),
-        _gym_floor(),
+        blank_sheet(*BLANK_SIZE_M),
+        football_field("hs-football", "High school football field (NFHS)", NFHS_HASH),
+        football_field("college-football", "College football field (NCAA)", NCAA_HASH),
+        football_field("nfl-football", "NFL football field", NFL_HASH),
+        gym_floor(),
     )
 
 
-def _sheet_templates(surface_type: SurfaceType | None = None) -> list[Sheet]:
+def sheet_templates(surface_type: SurfaceType | None = None) -> list[Sheet]:
     """Lists the built-in sheet templates, optionally only those of one surface type.
 
-    >>> [s.ref for s in _sheet_templates(SurfaceType.GYM_FLOOR)]
+    >>> [s.ref for s in sheet_templates(SurfaceType.GYM_FLOOR)]
     ['sheet:gym-basketball@1']
     """
     return [s for s in _built_in() if surface_type is None or s.surface_type == surface_type]
 
 
-@leaving_call(since="0.4.0", remove="0.7.0", replacement="sheets")
-def sheet_templates(surface_type: SurfaceType | None = None) -> list[Sheet]:
-    """Lists the built-in sheet templates, optionally only those of one surface type.
-
-    Deprecated: this name leaves the library in 0.7.0.
-    """
-    return _sheet_templates(surface_type)
-
-
-def _get_sheet(ref: SheetRef, store: SheetStore | None = None) -> Sheet:
+def get_sheet(ref: SheetRef, store: SheetStore | None = None) -> Sheet:
     """Resolves a sheet reference against the templates first, then the store.
 
     Args:
@@ -148,7 +138,7 @@ def _get_sheet(ref: SheetRef, store: SheetStore | None = None) -> Sheet:
     Returns:
         sheet: The resolved sheet.
 
-    >>> _get_sheet("sheet:nfl-football").name
+    >>> get_sheet("sheet:nfl-football").name
     'NFL football field'
     """
     kind, ref_id, version = parse_ref(ref)
@@ -168,16 +158,7 @@ def _get_sheet(ref: SheetRef, store: SheetStore | None = None) -> Sheet:
     )
 
 
-@leaving_call(since="0.4.0", remove="0.7.0", replacement="sheet")
-def get_sheet(ref: SheetRef, store: SheetStore | None = None) -> Sheet:
-    """Resolves a sheet reference against the templates first, then the store.
-
-    Deprecated: this name leaves the library in 0.7.0.
-    """
-    return _get_sheet(ref, store)
-
-
-def _blank_sheet(
+def blank_sheet(
     width_m: float, depth_m: float, grid_spacing: float = 1.0, units: str = "m"
 ) -> Sheet:
     """Builds a plain rectangle with a center line, for spaces no template fits.
@@ -188,7 +169,7 @@ def _blank_sheet(
         grid_spacing: Grid cell size, in `units`.
         units: Unit the grid is labeled in.
 
-    >>> _blank_sheet(10.0, 6.0).ref
+    >>> blank_sheet(10.0, 6.0).ref
     'sheet:blank-10x6@1'
     """
     if not (width_m > 0 and depth_m > 0 and grid_spacing > 0):
@@ -201,7 +182,7 @@ def _blank_sheet(
     half = width_m / 2
     ring = rect_ring(-half, 0.0, half, depth_m)
     return Sheet(
-        ref=_template_ref(f"blank-{width_m:g}x{depth_m:g}"),
+        ref=template_ref(f"blank-{width_m:g}x{depth_m:g}"),
         name=f"Blank {width_m:g} x {depth_m:g} m",
         surface_type=SurfaceType.BLANK,
         size_m=(width_m, depth_m),
@@ -213,21 +194,6 @@ def _blank_sheet(
         ),
         grid=Grid(spacing=(spacing, spacing), unit_name=units),
     )
-
-
-@leaving_call(
-    since="0.4.0",
-    remove="0.7.0",
-    replacement=("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
-)
-def blank_sheet(
-    width_m: float, depth_m: float, grid_spacing: float = 1.0, units: str = "m"
-) -> Sheet:
-    """Builds a plain rectangle with a center line, for spaces no template fits.
-
-    Deprecated: this name leaves the library in 0.7.0.
-    """
-    return _blank_sheet(width_m, depth_m, grid_spacing, units)
 
 
 def _merge_built_ins(
@@ -246,7 +212,7 @@ def _resized(sheet: Sheet, size: object) -> Sheet:
         )
     if not (isinstance(size, Sequence) and len(size) == 2):
         raise SchemaError("size must be (width_m, depth_m)", hint="pass size=(20.0, 15.0)")
-    fresh = _blank_sheet(float(size[0]), float(size[1]))
+    fresh = blank_sheet(float(size[0]), float(size[1]))
     return sheet.replace(
         size_m=fresh.size_m,
         outline=fresh.outline,
@@ -255,13 +221,13 @@ def _resized(sheet: Sheet, size: object) -> Sheet:
     )
 
 
-def _customize(sheet: Sheet, **changes: object) -> Sheet:
+def customize(sheet: Sheet, **changes: object) -> Sheet:
     """Changes a sheet's name, grid, or size; resizing applies to blank sheets only.
 
     Resizing regenerates the outline, walkable area and the blank sheet's own guides; guides
     the designer added stay.
 
-    >>> _customize(_blank_sheet(10.0, 6.0), size=(12.0, 6.0)).size_m
+    >>> customize(blank_sheet(10.0, 6.0), size=(12.0, 6.0)).size_m
     (12.0, 6.0)
     """
     unknown = sorted(set(changes) - set(CUSTOMIZABLE))
@@ -275,19 +241,6 @@ def _customize(sheet: Sheet, **changes: object) -> Sheet:
     fields: dict[str, object] = result.model_dump()
     fields.update((key, changes[key]) for key in ("name", "grid") if key in changes)
     return Sheet.model_validate(fields)
-
-
-@leaving_call(
-    since="0.4.0",
-    remove="0.7.0",
-    replacement=("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
-)
-def customize(sheet: Sheet, **changes: object) -> Sheet:
-    """Changes a sheet's name, grid, or size; resizing applies to blank sheets only.
-
-    Deprecated: this name leaves the library in 0.7.0.
-    """
-    return _customize(sheet, **changes)
 
 
 def _ids(items: tuple[GuideLine, ...]) -> list[str]:
@@ -317,49 +270,23 @@ def _remove(sheet: Sheet, field: str, item_id: str) -> Sheet:
     return sheet.replace(**{field: tuple(i for i in items if i.id != item_id)})
 
 
-def _add_guide(sheet: Sheet, item: GuideLine) -> Sheet:
+def add_guide(sheet: Sheet, item: GuideLine) -> Sheet:
     """Returns a sheet with one more guide line.
 
     >>> tape = GuideLine(id="tape", kind="custom", points=((0.0, 1.0), (1.0, 1.0)))
-    >>> _add_guide(_blank_sheet(4, 4), tape).guides[-1].id
+    >>> add_guide(blank_sheet(4, 4), tape).guides[-1].id
     'tape'
     """
     return _add(sheet, "guides", item)
 
 
-@leaving_call(
-    since="0.4.0",
-    remove="0.7.0",
-    replacement=("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
-)
-def add_guide(sheet: Sheet, item: GuideLine) -> Sheet:
-    """Returns a sheet with one more guide line.
-
-    Deprecated: this name leaves the library in 0.7.0.
-    """
-    return _add_guide(sheet, item)
-
-
-def _remove_guide(sheet: Sheet, guide_id: str) -> Sheet:
-    """Returns a sheet without the guide line `guide_id`.
-
-    >>> [g.id for g in _remove_guide(_blank_sheet(4, 4), "edge-front").guides]
-    ['center-line']
-    """
-    return _remove(sheet, "guides", guide_id)
-
-
-@leaving_call(
-    since="0.4.0",
-    remove="0.7.0",
-    replacement=("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
-)
 def remove_guide(sheet: Sheet, guide_id: str) -> Sheet:
     """Returns a sheet without the guide line `guide_id`.
 
-    Deprecated: this name leaves the library in 0.7.0.
+    >>> [g.id for g in remove_guide(blank_sheet(4, 4), "edge-front").guides]
+    ['center-line']
     """
-    return _remove_guide(sheet, guide_id)
+    return _remove(sheet, "guides", guide_id)
 
 
 def _version_number(ref: SheetRef) -> int:
@@ -373,7 +300,7 @@ def _version_number(ref: SheetRef) -> int:
     return int(version)
 
 
-def _save_sheet(store: SheetStore, sheet: Sheet, scope: SheetScope = "mine") -> SheetRef:
+def save_sheet(store: SheetStore, sheet: Sheet, scope: SheetScope = "mine") -> SheetRef:
     """Saves a sheet under the next free version, recording the version it came from.
 
     Saving identical content again returns the existing reference instead of a new one.
@@ -386,7 +313,7 @@ def _save_sheet(store: SheetStore, sheet: Sheet, scope: SheetScope = "mine") -> 
     Returns:
         ref: Reference of the saved version.
 
-    >>> _save_sheet(InMemorySheetStore(), _blank_sheet(4, 4), scope="team")
+    >>> save_sheet(InMemorySheetStore(), blank_sheet(4, 4), scope="team")
     'sheet:blank-4x4@2'
     """
     if scope not in SHEET_SCOPES:
@@ -405,16 +332,3 @@ def _save_sheet(store: SheetStore, sheet: Sheet, scope: SheetScope = "mine") -> 
         hint="save under a new sheet id",
         context={"ref": sheet.ref},
     )
-
-
-@leaving_call(
-    since="0.4.0",
-    remove="0.7.0",
-    replacement=("sheets", "sheet", "field", "floor", "Marking", "on_sheet"),
-)
-def save_sheet(store: SheetStore, sheet: Sheet, scope: SheetScope = "mine") -> SheetRef:
-    """Saves a sheet under the next free version, recording the version it came from.
-
-    Deprecated: this name leaves the library in 0.7.0.
-    """
-    return _save_sheet(store, sheet, scope)
