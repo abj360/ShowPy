@@ -16,7 +16,8 @@ Contains:
         key `1A.2` while key `1A` is live
     test_regression_import_positions_new_set_picks_a_free_key: gives an imported set a free key
     test_regression_never_renumbered_v020_show_encodes_to_its_stored_documents: re-encodes the
-        v0.2.0 fixture head to the same paths and canonical bytes, with no `key` field
+        v0.2.0 fixture head to the same paths and canonical bytes, its 16 v1 IDs renamed, with
+        no `key` field
     test_v020_head_documents_redump_to_their_stored_bytes: re-dumps the fixture head to its stored
         bytes except the documents ADR 0014 normalizes (`-0.0` or unsorted keys), found by scan
     test_encode_after_renumber_addresses_sets_by_key: writes folders, set order and transition
@@ -61,11 +62,11 @@ Contains:
         with a ShowPyError and stores nothing
     test_regression_new_set_key_must_be_nfc: refuses a new folder whose key NFC changes
     test_regression_v020_show_with_set_ids_differing_by_case_loads: decodes stored v0.2 documents
-        whose set folders differ only by case and round-trips them
+        whose set folders differ only by case as `1a`, `1A.2` and round-trips them
     test_regression_v020_case_pair_show_adds_a_set_with_a_free_key: adds a set whose ID matches a
-        stored key ignoring case under a free key, then saves and reloads it
-    test_regression_v020_case_pair_show_cannot_be_renumbered: refuses a renumber that would make
-        the stored keys explicit, leaving the stored show unchanged
+        migrated key ignoring case under a free key, then saves and reloads it
+    test_regression_v020_case_pair_show_cannot_be_renumbered: renumbers a migrated v0.2 case pair
+        show, keeping its keys, and saves it; the name records the Phase 1 refusal it replaced
     test_regression_new_set_folders_differing_by_case_are_refused: refuses a commit adding a set
         folder that matches another folder ignoring case, storing nothing
 """
@@ -97,6 +98,7 @@ from showpy.show.documents import (
     encode_show,
     forms_doc,
     is_show_doc,
+    migrate_documents,
     set_doc,
 )
 from showpy.show.file_repository import FileRepository
@@ -126,6 +128,7 @@ SUBSET_COUNTS = 2.0
 LAST_SET_COUNTS = 6.0
 FIXTURE = Path(__file__).resolve().parents[2] / "fixtures" / "repos" / "v0.2.0"
 FIXTURE_SCRIPT = "/sets/2/set.py"
+V020_ID_RENAMES = 16
 NEGATIVE_ZERO = re.compile(rb"-0\.0\b")
 
 
@@ -222,6 +225,12 @@ def test_regression_never_renumbered_v020_show_encodes_to_its_stored_documents(
     parsed = {p: json.loads(raw) for p, raw in stored.items()}
     canonical = {p: dump_json(doc) for p, doc in migrate_forms(parsed, ReportBuilder(1)).items()}
     canonical[SHOW_DOC] = dump_show_doc({**format_header(), **json.loads(stored[SHOW_DOC])})
+    _, report = migrate_documents(tree)
+    renames = [pair for pairs in report.renamed.values() for pair in pairs]
+    assert len(renames) == V020_ID_RENAMES
+    for old, new in renames:
+        quoted = (json.dumps(old).encode(), json.dumps(new).encode())
+        canonical = {p: raw.replace(*quoted) for p, raw in canonical.items()}
     assert {p: encoded[p] for p in stored} == canonical
     assert not [p for p in encoded if p.endswith("/set.json") and "key" in json.loads(encoded[p])]
 
@@ -600,31 +609,41 @@ def _stored_repo(docs: dict[str, bytes]) -> InMemoryRepository:
 def test_regression_v020_show_with_set_ids_differing_by_case_loads() -> None:
     docs = _case_pair_docs("1a", "1A")
     show = decode_show(docs)
-    assert show.set_ids() == ["1a", "1A"]
-    assert _keys(show) == ["1a", "1A"]
-    v2_meta = dump_show_doc({**format_header(), **json.loads(docs[SHOW_DOC])})
-    assert encode_show(show) == {**docs, SHOW_DOC: v2_meta}
+    assert show.set_ids() == ["1a", "1A.2"]
+    assert _keys(show) == ["1a", "1A.2"]
+    meta = {**format_header(), **json.loads(docs[SHOW_DOC]), "sets": ["1a", "1A.2"]}
+    body = {**json.loads(docs[set_doc("1A")]), "id": "1A.2"}
+    moved = {p: raw for p, raw in docs.items() if p != set_doc("1A")}
+    expected = {**moved, SHOW_DOC: dump_show_doc(meta), set_doc("1A.2"): dump_json(body)}
+    assert encode_show(show) == expected
     assert decode_show(encode_show(show)) == show
-    assert load_show(open_workspace(_stored_repo(docs), SHOW_ID)).set_ids() == ["1a", "1A"]
+    assert load_show(open_workspace(_stored_repo(docs), SHOW_ID)).set_ids() == ["1a", "1A.2"]
 
 
 def test_regression_v020_case_pair_show_adds_a_set_with_a_free_key() -> None:
     repo = _stored_repo(_case_pair_docs("ab", "AB"))
     ws = open_workspace(repo, SHOW_ID)
-    added = add_set(load_show(ws), "Ab", SUBSET_COUNTS, after="AB")
-    assert _keys(added) == ["ab", "AB", "Ab.2"]
+    added = add_set(load_show(ws), "Ab", SUBSET_COUNTS, after="AB.2")
+    assert _keys(added) == ["ab", "AB.2", "Ab.3"]
     save_show(ws, added, LATER)
-    assert _keys(repo.get_show(SHOW_ID)) == ["ab", "AB", "Ab.2"]
-    assert "/sets/Ab.2/set.json" in repo.paths(SHOW_ID)
+    assert _keys(repo.get_show(SHOW_ID)) == ["ab", "AB.2", "Ab.3"]
+    assert "/sets/Ab.3/set.json" in repo.paths(SHOW_ID)
+    assert not [p for p in repo.paths(SHOW_ID) if p.startswith("/sets/AB/")]
 
 
 def test_regression_v020_case_pair_show_cannot_be_renumbered() -> None:
+    """Keeps its Phase 1 name; since migration splits the case pair, the renumber succeeds."""
     repo = _stored_repo(_case_pair_docs("1a", "1A"))
     head = repo.head(SHOW_ID)
     show = repo.get_show(SHOW_ID)
-    with pytest.raises(SchemaError):
-        renumber(show)
+    renumbered, mapping = renumber(show)
+    assert mapping == {"1a": "1", "1A.2": "2"}
+    assert _keys(renumbered) == ["1a", "1A.2"]
     assert repo.head(SHOW_ID) == head
+    ws = open_workspace(repo, SHOW_ID)
+    save_show(ws, renumbered, LATER)
+    assert repo.get_show(SHOW_ID).set_ids() == ["1", "2"]
+    assert _keys(repo.get_show(SHOW_ID)) == ["1a", "1A.2"]
 
 
 def test_regression_new_set_folders_differing_by_case_are_refused() -> None:

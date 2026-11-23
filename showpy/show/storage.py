@@ -30,7 +30,14 @@ from showpy.core.errors import StorageError, UnknownRefError
 from showpy.core.ids import SetId
 from showpy.core.util import close_matches
 from showpy.show.decode_cache import DecodeCache
-from showpy.show.documents import SHOW_DOC, decode_show, encode_documents, is_show_doc, split_path
+from showpy.show.documents import (
+    SHOW_DOC,
+    decode_show,
+    encode_documents,
+    is_show_doc,
+    migration_changes,
+    split_path,
+)
 from showpy.show.files import (
     all_files,
     directories,
@@ -39,6 +46,7 @@ from showpy.show.files import (
     staged_changes,
 )
 from showpy.show.integrity import LazyBlobs
+from showpy.show.migrate import CURRENT_VERSION, read_version
 from showpy.show.models import Revision, Show
 from showpy.show.set_keys import SetFolders
 from showpy.time.models import Timeline
@@ -392,8 +400,10 @@ class Workspace:
         When any stored show document of the base revision is not canonical, one revision holding
         only those re-encoded documents lands first and the change follows, so the change's own
         revision lists only what it edits and later writes add no second one. If the
-        change then conflicts, the normalizing revision stays; it changes no content. A revision
-        found or made canonical is remembered, so the check runs once per revision.
+        change then conflicts, the normalizing revision stays; it changes no content. A base of
+        an older format version is migrated instead: the normalizing revision holds the whole
+        migration, files of renamed set folders moved. A revision found or made canonical is
+        remembered, so the check runs once per revision.
 
         Args:
             changes: Stored path to new bytes, or None to delete.
@@ -417,7 +427,7 @@ class Workspace:
         normalized = self._commit_stored(normalizing, at=at, expected_revision=base)
         self._canonical_revisions.add(normalized.id)
         stored = self.tree_at(normalized.id)
-        remaining = {p: d for p, d in changes.items() if d is None or stored.get(p) != d}
+        remaining = {p: d for p, d in changes.items() if stored.get(p) != d}
         return self._remembered(
             self._commit_stored(remaining, at=at, expected_revision=normalized.id),
             changes,
@@ -431,6 +441,8 @@ class Workspace:
         if base in self._canonical_revisions:
             return {}
         tree = self.tree_at(base)
+        if SHOW_DOC in tree and read_version(tree) < CURRENT_VERSION:
+            return migration_changes(tree)
         if is_complete:
             paths = [p for p, d in changes.items() if d is not None and p in tree and tree[p] != d]
         else:

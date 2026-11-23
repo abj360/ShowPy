@@ -251,7 +251,7 @@
           "start": 1
         },
         "selections": {
-          "front-four": [
+          "front_four": [
             "T1",
             "T2",
             "T3",
@@ -424,7 +424,14 @@
   },
   "report": {
     "from_version": 1,
-    "renamed": {},
+    "renamed": {
+      "selection": [
+        [
+          "front-four",
+          "front_four"
+        ]
+      ]
+    },
     "repairs": []
   }
 }

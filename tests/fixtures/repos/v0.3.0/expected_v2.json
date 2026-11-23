@@ -297,11 +297,11 @@
       "source_hash": "",
       "state": "draft"
     },
-    "/sets/1A/set.json": {
+    "/sets/1A.2/set.json": {
       "counts": 16.0,
       "cue": null,
       "forms": [],
-      "id": "1A",
+      "id": "1A.2",
       "label": null,
       "placements": [
         {
@@ -897,7 +897,7 @@
           "mode": "outward",
           "value": null
         },
-        "id": "brass-2",
+        "id": "brass_2",
         "locked": false,
         "members": [
           "B1",
@@ -940,7 +940,7 @@
           "mode": "audience",
           "value": null
         },
-        "id": "guard-2",
+        "id": "guard_2",
         "locked": false,
         "members": [
           "G1",
@@ -984,7 +984,7 @@
           "mode": "fixed",
           "value": 100.2332203562784
         },
-        "id": "woodwinds-2",
+        "id": "woodwinds_2",
         "locked": false,
         "members": [
           "W1",
@@ -1025,9 +1025,9 @@
       "counts": 16.0,
       "cue": null,
       "forms": [
-        "brass-2",
-        "woodwinds-2",
-        "guard-2"
+        "brass_2",
+        "woodwinds_2",
+        "guard_2"
       ],
       "id": "2",
       "label": null,
@@ -1035,7 +1035,7 @@
         {
           "entity": "B1",
           "facing": 25.64223061779587,
-          "form": "brass-2",
+          "form": "brass_2",
           "note": null,
           "on_field": true,
           "order": 0,
@@ -1046,7 +1046,7 @@
         {
           "entity": "B2",
           "facing": 85.64223061779585,
-          "form": "brass-2",
+          "form": "brass_2",
           "note": null,
           "on_field": true,
           "order": 1,
@@ -1057,7 +1057,7 @@
         {
           "entity": "B3",
           "facing": 145.64223061779586,
-          "form": "brass-2",
+          "form": "brass_2",
           "note": null,
           "on_field": true,
           "order": 2,
@@ -1068,7 +1068,7 @@
         {
           "entity": "B4",
           "facing": 205.64223061779575,
-          "form": "brass-2",
+          "form": "brass_2",
           "note": null,
           "on_field": true,
           "order": 3,
@@ -1079,7 +1079,7 @@
         {
           "entity": "B5",
           "facing": 265.6422306177958,
-          "form": "brass-2",
+          "form": "brass_2",
           "note": null,
           "on_field": true,
           "order": 4,
@@ -1090,7 +1090,7 @@
         {
           "entity": "B6",
           "facing": 325.6422306177958,
-          "form": "brass-2",
+          "form": "brass_2",
           "note": null,
           "on_field": true,
           "order": 5,
@@ -1101,7 +1101,7 @@
         {
           "entity": "W1",
           "facing": 100.2332203562784,
-          "form": "woodwinds-2",
+          "form": "woodwinds_2",
           "note": null,
           "on_field": true,
           "order": 0,
@@ -1112,7 +1112,7 @@
         {
           "entity": "W2",
           "facing": 100.2332203562784,
-          "form": "woodwinds-2",
+          "form": "woodwinds_2",
           "note": null,
           "on_field": true,
           "order": 1,
@@ -1123,7 +1123,7 @@
         {
           "entity": "W3",
           "facing": 100.2332203562784,
-          "form": "woodwinds-2",
+          "form": "woodwinds_2",
           "note": null,
           "on_field": true,
           "order": 2,
@@ -1134,7 +1134,7 @@
         {
           "entity": "W4",
           "facing": 100.2332203562784,
-          "form": "woodwinds-2",
+          "form": "woodwinds_2",
           "note": null,
           "on_field": true,
           "order": 3,
@@ -1145,7 +1145,7 @@
         {
           "entity": "W5",
           "facing": 100.2332203562784,
-          "form": "woodwinds-2",
+          "form": "woodwinds_2",
           "note": null,
           "on_field": true,
           "order": 4,
@@ -1156,7 +1156,7 @@
         {
           "entity": "W6",
           "facing": 100.2332203562784,
-          "form": "woodwinds-2",
+          "form": "woodwinds_2",
           "note": null,
           "on_field": true,
           "order": 5,
@@ -1233,7 +1233,7 @@
         {
           "entity": "G1",
           "facing": 0.0,
-          "form": "guard-2",
+          "form": "guard_2",
           "note": null,
           "on_field": true,
           "order": 0,
@@ -1244,7 +1244,7 @@
         {
           "entity": "G2",
           "facing": 0.0,
-          "form": "guard-2",
+          "form": "guard_2",
           "note": null,
           "on_field": true,
           "order": 1,
@@ -1255,7 +1255,7 @@
         {
           "entity": "G3",
           "facing": 0.0,
-          "form": "guard-2",
+          "form": "guard_2",
           "note": null,
           "on_field": true,
           "order": 2,
@@ -1266,7 +1266,7 @@
         {
           "entity": "G4",
           "facing": 0.0,
-          "form": "guard-2",
+          "form": "guard_2",
           "note": null,
           "on_field": true,
           "order": 3,
@@ -1277,7 +1277,7 @@
         {
           "entity": "G5",
           "facing": 0.0,
-          "form": "guard-2",
+          "form": "guard_2",
           "note": null,
           "on_field": true,
           "order": 4,
@@ -1288,7 +1288,7 @@
         {
           "entity": "G6",
           "facing": 0.0,
-          "form": "guard-2",
+          "form": "guard_2",
           "note": null,
           "on_field": true,
           "order": 5,
@@ -1626,7 +1626,7 @@
           "mode": "fixed",
           "value": 212.3970094838197
         },
-        "id": "brass-3",
+        "id": "brass_3",
         "locked": false,
         "members": [
           "B1",
@@ -1667,7 +1667,7 @@
           "mode": "audience",
           "value": null
         },
-        "id": "percussion-3",
+        "id": "percussion_3",
         "locked": false,
         "members": [
           "P1",
@@ -1711,7 +1711,7 @@
           "mode": "fixed",
           "value": 54.283686900612736
         },
-        "id": "woodwinds-3",
+        "id": "woodwinds_3",
         "locked": false,
         "members": [
           "W1",
@@ -1761,9 +1761,9 @@
       "counts": 12.0,
       "cue": null,
       "forms": [
-        "brass-3",
-        "woodwinds-3",
-        "percussion-3"
+        "brass_3",
+        "woodwinds_3",
+        "percussion_3"
       ],
       "id": "4",
       "key": "3",
@@ -1772,7 +1772,7 @@
         {
           "entity": "B1",
           "facing": 212.3970094838197,
-          "form": "brass-3",
+          "form": "brass_3",
           "note": null,
           "on_field": true,
           "order": 0,
@@ -1783,7 +1783,7 @@
         {
           "entity": "B2",
           "facing": 212.3970094838197,
-          "form": "brass-3",
+          "form": "brass_3",
           "note": null,
           "on_field": true,
           "order": 1,
@@ -1794,7 +1794,7 @@
         {
           "entity": "B3",
           "facing": 212.3970094838197,
-          "form": "brass-3",
+          "form": "brass_3",
           "note": null,
           "on_field": true,
           "order": 2,
@@ -1805,7 +1805,7 @@
         {
           "entity": "B4",
           "facing": 212.3970094838197,
-          "form": "brass-3",
+          "form": "brass_3",
           "note": null,
           "on_field": true,
           "order": 3,
@@ -1816,7 +1816,7 @@
         {
           "entity": "B5",
           "facing": 212.3970094838197,
-          "form": "brass-3",
+          "form": "brass_3",
           "note": null,
           "on_field": true,
           "order": 4,
@@ -1827,7 +1827,7 @@
         {
           "entity": "B6",
           "facing": 212.3970094838197,
-          "form": "brass-3",
+          "form": "brass_3",
           "note": null,
           "on_field": true,
           "order": 5,
@@ -1838,7 +1838,7 @@
         {
           "entity": "W1",
           "facing": 54.283686900612736,
-          "form": "woodwinds-3",
+          "form": "woodwinds_3",
           "note": null,
           "on_field": true,
           "order": 0,
@@ -1849,7 +1849,7 @@
         {
           "entity": "W2",
           "facing": 54.283686900612736,
-          "form": "woodwinds-3",
+          "form": "woodwinds_3",
           "note": null,
           "on_field": true,
           "order": 1,
@@ -1860,7 +1860,7 @@
         {
           "entity": "W3",
           "facing": 54.283686900612736,
-          "form": "woodwinds-3",
+          "form": "woodwinds_3",
           "note": null,
           "on_field": true,
           "order": 2,
@@ -1871,7 +1871,7 @@
         {
           "entity": "W4",
           "facing": 54.283686900612736,
-          "form": "woodwinds-3",
+          "form": "woodwinds_3",
           "note": null,
           "on_field": true,
           "order": 3,
@@ -1882,7 +1882,7 @@
         {
           "entity": "W5",
           "facing": 54.283686900612736,
-          "form": "woodwinds-3",
+          "form": "woodwinds_3",
           "note": null,
           "on_field": true,
           "order": 4,
@@ -1893,7 +1893,7 @@
         {
           "entity": "W6",
           "facing": 54.283686900612736,
-          "form": "woodwinds-3",
+          "form": "woodwinds_3",
           "note": null,
           "on_field": true,
           "order": 5,
@@ -1904,7 +1904,7 @@
         {
           "entity": "P1",
           "facing": 0.0,
-          "form": "percussion-3",
+          "form": "percussion_3",
           "note": null,
           "on_field": true,
           "order": 0,
@@ -1915,7 +1915,7 @@
         {
           "entity": "P2",
           "facing": 0.0,
-          "form": "percussion-3",
+          "form": "percussion_3",
           "note": null,
           "on_field": true,
           "order": 1,
@@ -1926,7 +1926,7 @@
         {
           "entity": "P3",
           "facing": 0.0,
-          "form": "percussion-3",
+          "form": "percussion_3",
           "note": null,
           "on_field": true,
           "order": 2,
@@ -1937,7 +1937,7 @@
         {
           "entity": "P4",
           "facing": 0.0,
-          "form": "percussion-3",
+          "form": "percussion_3",
           "note": null,
           "on_field": true,
           "order": 3,
@@ -1948,7 +1948,7 @@
         {
           "entity": "P5",
           "facing": 0.0,
-          "form": "percussion-3",
+          "form": "percussion_3",
           "note": null,
           "on_field": true,
           "order": 4,
@@ -1959,7 +1959,7 @@
         {
           "entity": "P6",
           "facing": 0.0,
-          "form": "percussion-3",
+          "form": "percussion_3",
           "note": null,
           "on_field": true,
           "order": 5,
@@ -2065,7 +2065,7 @@
           "mode": "outward",
           "value": null
         },
-        "id": "guard-4",
+        "id": "guard_4",
         "locked": false,
         "members": [
           "G1",
@@ -2108,7 +2108,7 @@
           "mode": "audience",
           "value": null
         },
-        "id": "percussion-4",
+        "id": "percussion_4",
         "locked": false,
         "members": [
           "P1",
@@ -2151,7 +2151,7 @@
           "mode": "audience",
           "value": null
         },
-        "id": "woodwinds-4",
+        "id": "woodwinds_4",
         "locked": false,
         "members": [
           "W1",
@@ -2195,9 +2195,9 @@
       "counts": 12.0,
       "cue": null,
       "forms": [
-        "woodwinds-4",
-        "percussion-4",
-        "guard-4"
+        "woodwinds_4",
+        "percussion_4",
+        "guard_4"
       ],
       "id": "5",
       "key": "4",
@@ -2272,7 +2272,7 @@
         {
           "entity": "W1",
           "facing": 0.0,
-          "form": "woodwinds-4",
+          "form": "woodwinds_4",
           "note": null,
           "on_field": true,
           "order": 0,
@@ -2283,7 +2283,7 @@
         {
           "entity": "W2",
           "facing": 0.0,
-          "form": "woodwinds-4",
+          "form": "woodwinds_4",
           "note": null,
           "on_field": true,
           "order": 1,
@@ -2294,7 +2294,7 @@
         {
           "entity": "W3",
           "facing": 0.0,
-          "form": "woodwinds-4",
+          "form": "woodwinds_4",
           "note": null,
           "on_field": true,
           "order": 2,
@@ -2305,7 +2305,7 @@
         {
           "entity": "W4",
           "facing": 0.0,
-          "form": "woodwinds-4",
+          "form": "woodwinds_4",
           "note": null,
           "on_field": true,
           "order": 3,
@@ -2316,7 +2316,7 @@
         {
           "entity": "W5",
           "facing": 0.0,
-          "form": "woodwinds-4",
+          "form": "woodwinds_4",
           "note": null,
           "on_field": true,
           "order": 4,
@@ -2327,7 +2327,7 @@
         {
           "entity": "W6",
           "facing": 0.0,
-          "form": "woodwinds-4",
+          "form": "woodwinds_4",
           "note": null,
           "on_field": true,
           "order": 5,
@@ -2338,7 +2338,7 @@
         {
           "entity": "P1",
           "facing": 0.0,
-          "form": "percussion-4",
+          "form": "percussion_4",
           "note": null,
           "on_field": true,
           "order": 0,
@@ -2349,7 +2349,7 @@
         {
           "entity": "P2",
           "facing": 0.0,
-          "form": "percussion-4",
+          "form": "percussion_4",
           "note": null,
           "on_field": true,
           "order": 1,
@@ -2360,7 +2360,7 @@
         {
           "entity": "P3",
           "facing": 0.0,
-          "form": "percussion-4",
+          "form": "percussion_4",
           "note": null,
           "on_field": true,
           "order": 2,
@@ -2371,7 +2371,7 @@
         {
           "entity": "P4",
           "facing": 0.0,
-          "form": "percussion-4",
+          "form": "percussion_4",
           "note": null,
           "on_field": true,
           "order": 3,
@@ -2382,7 +2382,7 @@
         {
           "entity": "P5",
           "facing": 0.0,
-          "form": "percussion-4",
+          "form": "percussion_4",
           "note": null,
           "on_field": true,
           "order": 4,
@@ -2393,7 +2393,7 @@
         {
           "entity": "P6",
           "facing": 0.0,
-          "form": "percussion-4",
+          "form": "percussion_4",
           "note": null,
           "on_field": true,
           "order": 5,
@@ -2404,7 +2404,7 @@
         {
           "entity": "G1",
           "facing": 23.492260078216443,
-          "form": "guard-4",
+          "form": "guard_4",
           "note": null,
           "on_field": true,
           "order": 0,
@@ -2415,7 +2415,7 @@
         {
           "entity": "G2",
           "facing": 83.49226007821643,
-          "form": "guard-4",
+          "form": "guard_4",
           "note": null,
           "on_field": true,
           "order": 1,
@@ -2426,7 +2426,7 @@
         {
           "entity": "G3",
           "facing": 143.4922600782164,
-          "form": "guard-4",
+          "form": "guard_4",
           "note": null,
           "on_field": true,
           "order": 2,
@@ -2437,7 +2437,7 @@
         {
           "entity": "G4",
           "facing": 203.49226007821636,
-          "form": "guard-4",
+          "form": "guard_4",
           "note": null,
           "on_field": true,
           "order": 3,
@@ -2448,7 +2448,7 @@
         {
           "entity": "G5",
           "facing": 263.4922600782164,
-          "form": "guard-4",
+          "form": "guard_4",
           "note": null,
           "on_field": true,
           "order": 4,
@@ -2459,7 +2459,7 @@
         {
           "entity": "G6",
           "facing": 323.4922600782164,
-          "form": "guard-4",
+          "form": "guard_4",
           "note": null,
           "on_field": true,
           "order": 5,
@@ -2499,7 +2499,7 @@
           "mode": "audience",
           "value": null
         },
-        "id": "brass-5",
+        "id": "brass_5",
         "locked": false,
         "members": [
           "B1",
@@ -2543,7 +2543,7 @@
           "mode": "fixed",
           "value": 226.11630775136646
         },
-        "id": "guard-5",
+        "id": "guard_5",
         "locked": false,
         "members": [
           "G1",
@@ -2584,7 +2584,7 @@
           "mode": "outward",
           "value": null
         },
-        "id": "percussion-5",
+        "id": "percussion_5",
         "locked": false,
         "members": [
           "P1",
@@ -2627,9 +2627,9 @@
       "counts": 16.0,
       "cue": null,
       "forms": [
-        "brass-5",
-        "percussion-5",
-        "guard-5"
+        "brass_5",
+        "percussion_5",
+        "guard_5"
       ],
       "id": "6",
       "key": "5",
@@ -2638,7 +2638,7 @@
         {
           "entity": "B1",
           "facing": 0.0,
-          "form": "brass-5",
+          "form": "brass_5",
           "note": null,
           "on_field": true,
           "order": 0,
@@ -2649,7 +2649,7 @@
         {
           "entity": "B2",
           "facing": 0.0,
-          "form": "brass-5",
+          "form": "brass_5",
           "note": null,
           "on_field": true,
           "order": 1,
@@ -2660,7 +2660,7 @@
         {
           "entity": "B3",
           "facing": 0.0,
-          "form": "brass-5",
+          "form": "brass_5",
           "note": null,
           "on_field": true,
           "order": 2,
@@ -2671,7 +2671,7 @@
         {
           "entity": "B4",
           "facing": 0.0,
-          "form": "brass-5",
+          "form": "brass_5",
           "note": null,
           "on_field": true,
           "order": 3,
@@ -2682,7 +2682,7 @@
         {
           "entity": "B5",
           "facing": 0.0,
-          "form": "brass-5",
+          "form": "brass_5",
           "note": null,
           "on_field": true,
           "order": 4,
@@ -2693,7 +2693,7 @@
         {
           "entity": "B6",
           "facing": 0.0,
-          "form": "brass-5",
+          "form": "brass_5",
           "note": null,
           "on_field": true,
           "order": 5,
@@ -2770,7 +2770,7 @@
         {
           "entity": "P1",
           "facing": 327.3390023792628,
-          "form": "percussion-5",
+          "form": "percussion_5",
           "note": null,
           "on_field": true,
           "order": 0,
@@ -2781,7 +2781,7 @@
         {
           "entity": "P2",
           "facing": 27.339002379262762,
-          "form": "percussion-5",
+          "form": "percussion_5",
           "note": null,
           "on_field": true,
           "order": 1,
@@ -2792,7 +2792,7 @@
         {
           "entity": "P3",
           "facing": 87.33900237926277,
-          "form": "percussion-5",
+          "form": "percussion_5",
           "note": null,
           "on_field": true,
           "order": 2,
@@ -2803,7 +2803,7 @@
         {
           "entity": "P4",
           "facing": 147.33900237926275,
-          "form": "percussion-5",
+          "form": "percussion_5",
           "note": null,
           "on_field": true,
           "order": 3,
@@ -2814,7 +2814,7 @@
         {
           "entity": "P5",
           "facing": 207.33900237926275,
-          "form": "percussion-5",
+          "form": "percussion_5",
           "note": null,
           "on_field": true,
           "order": 4,
@@ -2825,7 +2825,7 @@
         {
           "entity": "P6",
           "facing": 267.33900237926275,
-          "form": "percussion-5",
+          "form": "percussion_5",
           "note": null,
           "on_field": true,
           "order": 5,
@@ -2836,7 +2836,7 @@
         {
           "entity": "G1",
           "facing": 226.11630775136646,
-          "form": "guard-5",
+          "form": "guard_5",
           "note": null,
           "on_field": true,
           "order": 0,
@@ -2847,7 +2847,7 @@
         {
           "entity": "G2",
           "facing": 226.11630775136646,
-          "form": "guard-5",
+          "form": "guard_5",
           "note": null,
           "on_field": true,
           "order": 1,
@@ -2858,7 +2858,7 @@
         {
           "entity": "G3",
           "facing": 226.11630775136646,
-          "form": "guard-5",
+          "form": "guard_5",
           "note": null,
           "on_field": true,
           "order": 2,
@@ -2869,7 +2869,7 @@
         {
           "entity": "G4",
           "facing": 226.11630775136646,
-          "form": "guard-5",
+          "form": "guard_5",
           "note": null,
           "on_field": true,
           "order": 3,
@@ -2880,7 +2880,7 @@
         {
           "entity": "G5",
           "facing": 226.11630775136646,
-          "form": "guard-5",
+          "form": "guard_5",
           "note": null,
           "on_field": true,
           "order": 4,
@@ -2891,7 +2891,7 @@
         {
           "entity": "G6",
           "facing": 226.11630775136646,
-          "form": "guard-5",
+          "form": "guard_5",
           "note": null,
           "on_field": true,
           "order": 5,
@@ -2931,7 +2931,7 @@
           "mode": "audience",
           "value": null
         },
-        "id": "brass-6",
+        "id": "brass_6",
         "locked": false,
         "members": [
           "B1",
@@ -2974,7 +2974,7 @@
           "mode": "fixed",
           "value": 229.94998776795703
         },
-        "id": "guard-6",
+        "id": "guard_6",
         "locked": false,
         "members": [
           "G1",
@@ -3024,7 +3024,7 @@
           "mode": "outward",
           "value": null
         },
-        "id": "woodwinds-6",
+        "id": "woodwinds_6",
         "locked": false,
         "members": [
           "W1",
@@ -3067,9 +3067,9 @@
       "counts": 12.0,
       "cue": null,
       "forms": [
-        "brass-6",
-        "woodwinds-6",
-        "guard-6"
+        "brass_6",
+        "woodwinds_6",
+        "guard_6"
       ],
       "id": "7",
       "key": "6",
@@ -3078,7 +3078,7 @@
         {
           "entity": "B1",
           "facing": 0.0,
-          "form": "brass-6",
+          "form": "brass_6",
           "note": null,
           "on_field": true,
           "order": 0,
@@ -3089,7 +3089,7 @@
         {
           "entity": "B2",
           "facing": 0.0,
-          "form": "brass-6",
+          "form": "brass_6",
           "note": null,
           "on_field": true,
           "order": 1,
@@ -3100,7 +3100,7 @@
         {
           "entity": "B3",
           "facing": 0.0,
-          "form": "brass-6",
+          "form": "brass_6",
           "note": null,
           "on_field": true,
           "order": 2,
@@ -3111,7 +3111,7 @@
         {
           "entity": "B4",
           "facing": 0.0,
-          "form": "brass-6",
+          "form": "brass_6",
           "note": null,
           "on_field": true,
           "order": 3,
@@ -3122,7 +3122,7 @@
         {
           "entity": "B5",
           "facing": 0.0,
-          "form": "brass-6",
+          "form": "brass_6",
           "note": null,
           "on_field": true,
           "order": 4,
@@ -3133,7 +3133,7 @@
         {
           "entity": "B6",
           "facing": 0.0,
-          "form": "brass-6",
+          "form": "brass_6",
           "note": null,
           "on_field": true,
           "order": 5,
@@ -3144,7 +3144,7 @@
         {
           "entity": "W1",
           "facing": 6.06929642573589,
-          "form": "woodwinds-6",
+          "form": "woodwinds_6",
           "note": null,
           "on_field": true,
           "order": 0,
@@ -3155,7 +3155,7 @@
         {
           "entity": "W2",
           "facing": 66.06929642573587,
-          "form": "woodwinds-6",
+          "form": "woodwinds_6",
           "note": null,
           "on_field": true,
           "order": 1,
@@ -3166,7 +3166,7 @@
         {
           "entity": "W3",
           "facing": 126.0692964257359,
-          "form": "woodwinds-6",
+          "form": "woodwinds_6",
           "note": null,
           "on_field": true,
           "order": 2,
@@ -3177,7 +3177,7 @@
         {
           "entity": "W4",
           "facing": 186.06929642573593,
-          "form": "woodwinds-6",
+          "form": "woodwinds_6",
           "note": null,
           "on_field": true,
           "order": 3,
@@ -3188,7 +3188,7 @@
         {
           "entity": "W5",
           "facing": 246.06929642573596,
-          "form": "woodwinds-6",
+          "form": "woodwinds_6",
           "note": null,
           "on_field": true,
           "order": 4,
@@ -3199,7 +3199,7 @@
         {
           "entity": "W6",
           "facing": 306.0692964257359,
-          "form": "woodwinds-6",
+          "form": "woodwinds_6",
           "note": null,
           "on_field": true,
           "order": 5,
@@ -3276,7 +3276,7 @@
         {
           "entity": "G1",
           "facing": 229.94998776795703,
-          "form": "guard-6",
+          "form": "guard_6",
           "note": null,
           "on_field": true,
           "order": 0,
@@ -3287,7 +3287,7 @@
         {
           "entity": "G2",
           "facing": 229.94998776795703,
-          "form": "guard-6",
+          "form": "guard_6",
           "note": null,
           "on_field": true,
           "order": 1,
@@ -3298,7 +3298,7 @@
         {
           "entity": "G3",
           "facing": 229.94998776795703,
-          "form": "guard-6",
+          "form": "guard_6",
           "note": null,
           "on_field": true,
           "order": 2,
@@ -3309,7 +3309,7 @@
         {
           "entity": "G4",
           "facing": 229.94998776795703,
-          "form": "guard-6",
+          "form": "guard_6",
           "note": null,
           "on_field": true,
           "order": 3,
@@ -3320,7 +3320,7 @@
         {
           "entity": "G5",
           "facing": 229.94998776795703,
-          "form": "guard-6",
+          "form": "guard_6",
           "note": null,
           "on_field": true,
           "order": 4,
@@ -3331,7 +3331,7 @@
         {
           "entity": "G6",
           "facing": 229.94998776795703,
-          "form": "guard-6",
+          "form": "guard_6",
           "note": null,
           "on_field": true,
           "order": 5,
@@ -3732,11 +3732,11 @@
       "source_hash": "",
       "state": "draft"
     },
-    "/sets/con/set.json": {
+    "/sets/con_/set.json": {
       "counts": 16.0,
       "cue": null,
       "forms": [],
-      "id": "con",
+      "id": "con_",
       "label": null,
       "placements": [
         {
@@ -6167,8 +6167,8 @@
         "6",
         "8",
         "1a",
-        "1A",
-        "con"
+        "1A.2",
+        "con_"
       ],
       "title": "Seeded show",
       "version": 2,
@@ -8756,7 +8756,80 @@
   },
   "report": {
     "from_version": 1,
-    "renamed": {},
+    "renamed": {
+      "form": [
+        [
+          "brass-2",
+          "brass_2"
+        ],
+        [
+          "guard-2",
+          "guard_2"
+        ],
+        [
+          "woodwinds-2",
+          "woodwinds_2"
+        ],
+        [
+          "brass-3",
+          "brass_3"
+        ],
+        [
+          "percussion-3",
+          "percussion_3"
+        ],
+        [
+          "woodwinds-3",
+          "woodwinds_3"
+        ],
+        [
+          "guard-4",
+          "guard_4"
+        ],
+        [
+          "percussion-4",
+          "percussion_4"
+        ],
+        [
+          "woodwinds-4",
+          "woodwinds_4"
+        ],
+        [
+          "brass-5",
+          "brass_5"
+        ],
+        [
+          "guard-5",
+          "guard_5"
+        ],
+        [
+          "percussion-5",
+          "percussion_5"
+        ],
+        [
+          "brass-6",
+          "brass_6"
+        ],
+        [
+          "guard-6",
+          "guard_6"
+        ],
+        [
+          "woodwinds-6",
+          "woodwinds_6"
+        ]
+      ],
+      "set": [
+        [
+          "1A",
+          "1A.2"
+        ],
+        [
+          "con",
+          "con_"
+        ]
+      ]
+    },
     "repairs": [
       "/show/sheet.json zones[0].applies_to: rewrote 'T1 + T2 & T2' as '(T1 + T2) & T2'"
     ]

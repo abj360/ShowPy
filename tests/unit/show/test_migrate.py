@@ -36,7 +36,7 @@ Contains:
     test_regression_raw_commit_into_a_v1_tree_needs_a_current_show_json(): refuses a commit of
         any show document while show.json stays v1
     test_regression_current_trees_validate_with_the_checked_context(): passes CHECKED_CONTEXT to
-        every model a v2 tree or v2 import builds, so v1 IDs a first save kept still load
+        every model a v2 tree or v2 import builds, and refuses a v2 tree holding a v1 ID
 """
 
 import copy
@@ -326,7 +326,7 @@ def test_regression_migration_keeps_tags_selection_scripts_and_pins(
     first_spots = [s.id for s in decode_show(docs).cast.spots][:4]
     for show in (decode_show(migrated), repo.get_show(expected["show_id"], saved.id)):
         assert [s.tags for s in show.cast.spots if s.tags] == [("horn", "lead")]
-        assert dict(show.cast.selections) == {"front-four": tuple(first_spots)}
+        assert dict(show.cast.selections) == {"front_four": tuple(first_spots)}
         assert [(p.target, p.reason) for p in show.pins] == [("entity", "soloist")]
     scripts = {p: raw for p, raw in docs.items() if p.endswith("/set.py")}
     assert scripts
@@ -431,11 +431,16 @@ def test_regression_current_trees_validate_with_the_checked_context(
 ) -> None:
     """Hands CHECKED_CONTEXT to every model of a v2 decode and a v2 import.
 
-    Until the ids step renames v1 IDs, a first save keeps IDs such as `T-1`; once a model
-    adopts a checked ID field, only this context lets the saved v2 tree load again.
+    The ids step renames every v1 ID, so a v2 tree holding one such as `T-1` was never written by
+    a save and is refused; the checked context lets nothing through.
     """
-    docs = {p: raw.replace(b'"T1"', b'"T-1"') for p, raw in encode_show(crossing_show()).items()}
+    docs = encode_show(crossing_show())
     exported = export_json(decode_show(docs))
+    legacy = {p: raw.replace(b'"T1"', b'"T-1"') for p, raw in docs.items()}
+    with pytest.raises(SchemaError):
+        decode_show(legacy)
+    with pytest.raises(SchemaError):
+        import_json(json.loads(json.dumps(exported).replace('"T1"', '"T-1"')))
     contexts: list[object] = []
     for model in (Show, Set, Form, TransitionSpec):
         original = model.model_validate
@@ -445,8 +450,7 @@ def test_regression_current_trees_validate_with_the_checked_context(
             return _original(obj, **kwargs)
 
         monkeypatch.setattr(model, "model_validate", spy)
-    assert "T-1" in decode_show(docs).cast.ids()
-    assert "T-1" in import_json(exported).cast.ids()
+    assert decode_show(docs) == import_json(exported) == crossing_show()
     assert contexts
     assert all(context == CHECKED_CONTEXT for context in contexts)
 

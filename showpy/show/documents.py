@@ -17,6 +17,7 @@ Contains:
     encode_documents(): encodes only the named stored documents of a show
     decode_show(): assembles a show from documents of any readable format version
     migrate_documents(): migrates a stored document set to the current format and reports it
+    migration_changes(): lists the writes and deletes that store a migrated document set
 """
 
 import json
@@ -28,7 +29,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from showpy.core.canonical import MAX_INT_DIGITS, MAX_NESTING, canonical_value
-from showpy.core.errors import SchemaError
+from showpy.core.errors import SchemaError, StorageError
 from showpy.core.json_types import JsonValue
 from showpy.show.decode_cache import DecodeCache
 from showpy.show.document_paths import FORMS_NAME as FORMS_NAME
@@ -68,6 +69,8 @@ NEGATIVE_ZERO = re.compile(r"-0\.0\b")
 RESERVED_KEY_PREFIX = "$showpy:"
 TOO_DEEP = "\n" + " " * (JSON_INDENT * (MAX_NESTING + 1))
 HEADER_CLOSE = b"\n}\n"
+SETS_ROOT = "sets"
+SET_FOLDER_INDEX = 2
 OPEN_OBJECT = b"{\n"
 
 
@@ -281,7 +284,8 @@ def migrate_documents(docs: Mapping[str, bytes]) -> tuple[dict[str, bytes], Migr
 
     Returns:
         migrated: The show documents re-encoded in the current format, plus every other file
-            of `docs` unchanged; `docs` itself when it is already current.
+            of `docs`, moved to its set's new folder when the migration renamed the set's key;
+            `docs` itself when it is already current.
         report: What the migration renamed and repaired, and the version it started from.
 
     >>> from showpy.examples import two_set_show
@@ -294,5 +298,60 @@ def migrate_documents(docs: Mapping[str, bytes]) -> tuple[dict[str, bytes], Migr
     if version == CURRENT_VERSION:
         return dict(docs), ReportBuilder(version).build()
     show, report = read_migrated(docs)
+    order = without_header(json.loads(docs[SHOW_DOC])).get(SET_ORDER_FIELD, [])
+    stored_keys = [key for key in order if isinstance(key, str)] if isinstance(order, list) else []
+    folders = {
+        old: new
+        for old, new in zip(stored_keys, (set_key(s) for s in show.sets), strict=True)
+        if old != new
+    }
     others = {path: raw for path, raw in docs.items() if not is_show_doc(path)}
-    return others | encode_show(show), report.build()
+    return _moved_set_files(others, folders) | encode_show(show), report.build()
+
+
+def _moved_set_files(files: Mapping[str, bytes], folders: Mapping[str, str]) -> dict[str, bytes]:
+    """Moves each file under a renamed set folder to the new folder, at the same relative path.
+
+    Args:
+        files: Stored path to bytes of the files that are not show documents.
+        folders: Old set folder to new set folder, for each set whose key the migration renamed.
+
+    Returns:
+        files: The same files, those under a renamed folder at their new path. A file already
+            stored at a new path raises StorageError, so nothing is overwritten.
+    """
+    moved: dict[str, bytes] = {}
+    for path, raw in files.items():
+        segments = path.split("/")
+        if len(segments) > SET_FOLDER_INDEX + 1 and segments[1] == SETS_ROOT:
+            folder = segments[SET_FOLDER_INDEX]
+            segments[SET_FOLDER_INDEX] = folders.get(folder, folder)
+        target = "/".join(segments)
+        if target != path and target in files:
+            raise StorageError(
+                f"{path} moves to {target} with its renamed set, but {target} is already stored",
+                hint=f"remove or rename {target} with showpy 0.3, then load the show again",
+                context={"path": path, "target": target},
+            )
+        moved[target] = raw
+    return moved
+
+
+def migration_changes(docs: Mapping[str, bytes]) -> dict[str, bytes | None]:
+    """Lists the writes and deletes that turn a stored document set into its migrated form.
+
+    Args:
+        docs: Stored path to document bytes, as a repository tree holds them.
+
+    Returns:
+        changes: Stored path to new bytes, or None for a path the migration leaves behind
+            (the old folder of a renamed set); empty when `docs` is already current.
+
+    >>> from showpy.examples import two_set_show
+    >>> migration_changes(encode_show(two_set_show()))
+    {}
+    """
+    migrated, _ = migrate_documents(docs)
+    changes: dict[str, bytes | None] = {p: d for p, d in migrated.items() if docs.get(p) != d}
+    changes.update(dict.fromkeys(p for p in docs if p not in migrated))
+    return changes
