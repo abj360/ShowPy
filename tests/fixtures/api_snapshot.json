@@ -413,6 +413,7 @@
       "TOO_FEW_POINTS": "'TOO_FEW_POINTS'",
       "TOO_FEW_SPOTS": "'TOO_FEW_SPOTS'",
       "TOO_LARGE": "'TOO_LARGE'",
+      "TOO_MANY_SETS": "'TOO_MANY_SETS'",
       "TOO_MANY_SPOTS": "'TOO_MANY_SPOTS'",
       "UNKNOWN_FORM": "'UNKNOWN_FORM'",
       "UNKNOWN_FORMAT": "'UNKNOWN_FORMAT'",
@@ -726,8 +727,14 @@
   "MAX_RANGE": {
     "constant": "10000"
   },
+  "MAX_SETS": {
+    "constant": "1000"
+  },
   "MAX_SPIRAL_TURNS": {
     "constant": "20"
+  },
+  "MAX_SPOTS": {
+    "constant": "5000"
   },
   "MAX_TABLE": {
     "constant": "1000000"

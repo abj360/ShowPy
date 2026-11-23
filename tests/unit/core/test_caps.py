@@ -22,6 +22,8 @@ from e8s.core.caps import (
     MAX_IMAGE_PIXELS,
     MAX_POINTS,
     MAX_RANGE,
+    MAX_SETS,
+    MAX_SPOTS,
     MAX_TABLE,
     MAX_TEXT_CHARS,
     MAX_VIDEO_PIXELS,
@@ -63,6 +65,8 @@ def test_caps_have_approved_values() -> None:
     assert MAX_COORD_M == 1e6
     assert MAX_COUNTS == 1_000_000
     assert MIN_TEMPO == 1e-3
+    assert MAX_SPOTS == 5_000
+    assert MAX_SETS == 1_000
 
 
 def test_regression_require_size_rejects_a_negative_request() -> None:

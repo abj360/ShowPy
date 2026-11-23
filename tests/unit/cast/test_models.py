@@ -44,6 +44,9 @@ Contains:
         syntax such as `all`
     test_regression_cast_spot_index_is_fresh_after_replace: finds a spot added through `replace`
         although the old cast already cached its index
+    test_cast_accepts_max_spots: accepts a cast of exactly MAX_SPOTS spots
+    test_regression_cast_refuses_more_than_max_spots: refuses MAX_SPOTS + 1 spots, built or
+        edited, with TOO_MANY_SPOTS
 """
 
 import math
@@ -54,7 +57,9 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 
 from e8s.cast.models import Cast, Group, LabelScheme, Shape, Spot
-from e8s.core.errors import E8sError, GeometryError, UnknownRefError
+from e8s.core.caps import MAX_SPOTS
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import E8sError, GeometryError, SchemaError, UnknownRefError
 from e8s.core.ids import SpotId
 from tests.helpers import fails_after, outputs_under_hash_seeds
 
@@ -340,3 +345,27 @@ def test_regression_cast_spot_index_is_fresh_after_replace() -> None:
     assert grown.spot("T2").id == "T2"
     with pytest.raises(UnknownRefError):
         cast.spot("T2")
+
+
+def _cast_of(count: int) -> Cast:
+    spots = tuple(Spot(id=SpotId(f"T{n}"), group="t") for n in range(1, count + 1))
+    return Cast(groups={"t": Group(key="t", label_prefix="T")}, spots=spots)
+
+
+def test_cast_accepts_max_spots() -> None:
+    """Accepts a cast of exactly MAX_SPOTS spots."""
+    assert len(_cast_of(MAX_SPOTS).spots) == MAX_SPOTS
+
+
+def test_regression_cast_refuses_more_than_max_spots() -> None:
+    """Refuses a cast of MAX_SPOTS + 1 spots with TOO_MANY_SPOTS, built or edited."""
+    with pytest.raises(SchemaError) as caught:
+        _cast_of(MAX_SPOTS + 1)
+    assert caught.value.code == ErrorCode.TOO_MANY_SPOTS
+    assert caught.value.context == {"spots": MAX_SPOTS + 1, "max_spots": MAX_SPOTS}
+    assert f"{MAX_SPOTS:,}" in caught.value.hint
+    full = _cast_of(MAX_SPOTS)
+    extra = Spot(id=SpotId(f"T{MAX_SPOTS + 1}"), group="t")
+    with pytest.raises(SchemaError) as edited:
+        full.replace(spots=(*full.spots, extra))
+    assert edited.value.code == ErrorCode.TOO_MANY_SPOTS

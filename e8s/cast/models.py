@@ -21,7 +21,9 @@ from typing import Annotated, Literal, get_args
 from pydantic import Field, field_validator, model_validator
 
 from e8s.choreo.path_models import FacingOverride
+from e8s.core.caps import MAX_SPOTS
 from e8s.core.deprecation import leave_field
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import GeometryError, SchemaError, UnknownRefError
 from e8s.core.ids import RouteId, SelectionNameField, SpotId, SpotIdField, TransitionId
 from e8s.core.readonly import ReadOnly, ReadOnlyMap
@@ -184,17 +186,30 @@ class Cast(FrozenModel):
 
     Attributes:
         groups: Group key to group; each key equals its group's `key`.
-        spots: Every spot, in creation order.
+        spots: Every spot, in creation order; at most MAX_SPOTS.
         selections: Named selections of spot IDs of this cast, deduplicated in first-seen order.
         label_scheme: Labeling rules; its prefixes name groups of this cast.
     """
 
     groups: Annotated[Mapping[str, Group], ReadOnly()] = Field(default={}, validate_default=True)
-    spots: tuple[Spot, ...] = ()
+    spots: tuple[Spot, ...] = Field(default=(), json_schema_extra={"maxItems": MAX_SPOTS})
     selections: Annotated[Mapping[SelectionKey, SelectionSpots], ReadOnly()] = Field(
         default={}, validate_default=True
     )
     label_scheme: LabelScheme = LabelScheme()
+
+    @field_validator("spots", mode="after")
+    @classmethod
+    def _spots_within_cap(cls, value: tuple[Spot, ...]) -> tuple[Spot, ...]:
+        if len(value) <= MAX_SPOTS:
+            return value
+        raise SchemaError(
+            f"the cast holds {len(value)} spots, over MAX_SPOTS ({MAX_SPOTS:,})",
+            hint=f"keep at most {MAX_SPOTS:,} spots in one show; split a larger ensemble into"
+            " several shows",
+            context={"spots": len(value), "max_spots": MAX_SPOTS},
+            code=ErrorCode.TOO_MANY_SPOTS,
+        )
 
     @field_validator("selections", mode="before")
     @classmethod
