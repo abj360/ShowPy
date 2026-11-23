@@ -10,6 +10,8 @@ Contains:
         transition anchors at the set IDs the same migration renamed
     test_regression_v1_note_with_an_empty_id_is_renamed: renames an empty v1 note ID to `id` by
         the rename rule instead of refusing the whole show
+    test_stored_v1_spot_renames_reach_note_anchors: points spot anchors of a stored v1 tree at the
+        spot IDs its migration renamed
     test_v1_spot_renames_reach_note_anchors: points spot anchors of a v1 interchange document at
         the spot IDs its migration renamed
     test_first_save_writes_notes_in_the_same_revision_and_the_second_none: stores the notes
@@ -180,6 +182,21 @@ def test_regression_v1_note_with_an_empty_id_is_renamed(tmp_path: Path) -> None:
     assert report.renamed["note"] == (("", "id.2"),)
     assert document.notes[0].anchor == Anchor.on_set("con_")
     assert repo.get_show(show_id).id == document.show
+
+
+def test_stored_v1_spot_renames_reach_note_anchors(tmp_path: Path) -> None:
+    repo, show_id = _fixture("v0.3.0", tmp_path)
+    respelled = {
+        path: raw.replace(b'"B1"', b'"brass-2"')
+        for path, raw in repo.documents(show_id).items()
+        if path.endswith(".json") and b'"B1"' in raw
+    }
+    notes = [_v1_note("n1", {"kind": "spots", "spots": ["brass-2", "B2"]})]
+    _commit_v1(repo, show_id, {**respelled, LEGACY_NOTES_DOC: dump_json(notes)})
+    migrated, report = migrate_documents(dict(repo.documents(show_id)))
+    assert ("brass-2", "brass_2") in report.renamed["spot"]
+    document = NotesDocument.model_validate_json(migrated[NOTES_DOC])
+    assert document.notes[0].anchor == Anchor.on_spots(["brass_2", "B2"])
 
 
 def test_v1_spot_renames_reach_note_anchors() -> None:
