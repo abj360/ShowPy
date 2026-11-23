@@ -356,7 +356,8 @@ def _moved_set_files(
         if target != path and target in stored:
             raise StorageError(
                 f"{path} moves to {target} with its renamed set, but {target} is already stored",
-                hint=f"remove or rename {target} with showpy 0.3, then load the show again",
+                hint=f"move or delete {target} with showpy 0.3; the first save under this release"
+                f" moves {path} there",
                 context={"path": path, "target": target},
             )
         moved[target] = raw

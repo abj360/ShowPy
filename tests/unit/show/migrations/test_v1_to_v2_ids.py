@@ -540,3 +540,7 @@ def test_regression_migration_refuses_to_move_a_set_file_over_another(tmp_path: 
         migrate_documents(clashing)
     assert caught.value.context["path"] == "/sets/con/set.py"
     assert caught.value.context["target"] == "/sets/con_/set.py"
+    assert caught.value.hint == (
+        "move or delete /sets/con_/set.py with showpy 0.3; the first save under this release"
+        " moves /sets/con/set.py there"
+    )
