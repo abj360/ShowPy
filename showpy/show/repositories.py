@@ -424,15 +424,21 @@ class DocumentRepository:
     ) -> Revision:
         """Replaces a set's build script, stored in the folder of the set's key.
 
-        On a head of an older format version the migration lands in the same revision, so the
-        set's renamed folder, with its other files, holds the script.
+        On a head of an older format version the migration lands first, in its own revision,
+        so the set's files, the script being replaced included, move to the renamed folder and
+        stay in history there; the new script follows in the next revision.
         Checks validity only, never pins or locks; edit functions enforce those.
         """
         key = set_key(self.get_show(show_id, expected_revision or None).set(set_id))
-        stored = self.documents(show_id, expected_revision or None)
+        migration = migration_changes(self.documents(show_id, expected_revision or None))
+        if migration:
+            migrated = self.transaction(
+                show_id, migration, expected_revision=expected_revision, at=at
+            )
+            expected_revision = migrated.id
         return self.transaction(
             show_id,
-            {**migration_changes(stored), script_doc(key): source.encode()},
+            {script_doc(key): source.encode()},
             expected_revision=expected_revision,
             at=at,
         )

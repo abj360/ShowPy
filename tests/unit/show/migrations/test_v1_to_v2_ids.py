@@ -38,8 +38,9 @@ Contains:
         renamed folder when a repository's put_show stores a v1 head, in one revision
     test_regression_reads_on_a_v1_head_find_the_script_of_a_renamed_set: reads and lists a set
         script at its migrated folder before the first save, through get_script and a workspace
-    test_regression_put_script_on_a_v1_head_writes_the_migrated_folder: stores the migration and
-        the new script in one revision, the set's other files moved with its folder
+    test_regression_put_script_on_a_v1_head_writes_the_migrated_folder: stores the migration in
+        its own revision, the original script and the set's other files moved with its folder,
+        then the new script in the next
     test_regression_migration_renames_ids_in_canvas_comments_and_selection: rewrites comment
         anchors on renamed sets in the migration and its first save; claims stay host-kept
     test_renamed_canvas_follows_spot_renames_and_refuses_a_bad_file: renames spot IDs in
@@ -485,12 +486,16 @@ def test_regression_put_script_on_a_v1_head_writes_the_migrated_folder(tmp_path:
     show_id = expected["show_id"]
     _commit_v1(repo, show_id, {"/sets/con/set.py": SCRIPT, "/sets/con/notes.txt": b"keep\n"})
     stored = [r.id for r in repo.revisions(show_id)]
+    assert repo.get_script(show_id, "con_") == SCRIPT.decode()
     revision = repo.put_script(show_id, "con_", "# new\n", expected_revision=stored[-1], at=AT)
     after = dict(repo.documents(show_id))
     assert after["/sets/con_/set.py"] == b"# new\n"
     assert after["/sets/con_/notes.txt"] == b"keep\n"
     assert not [p for p in after if p.startswith("/sets/con/")]
-    assert [r.id for r in repo.revisions(show_id)] == [*stored, revision.id]
+    log = [r.id for r in repo.revisions(show_id)]
+    assert log == [*stored, log[-2], revision.id]
+    assert repo.read(show_id, "/sets/con_/set.py", log[-2]) == SCRIPT
+    assert repo.revisions(show_id)[-1].changed == ("/sets/con_/set.py",)
     assert repo.get_script(show_id, "con_") == "# new\n"
 
 
