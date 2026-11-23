@@ -6,19 +6,21 @@ test_phase2_scenario.py --- proves the Phase 2 exit criteria on the 300-spot, 60
 Loads the stored documents v0.3.0 wrote for the seeded 300 x 60 benchmark show, adds what the
 seeded show lacks (a spot ID, named selections and notes that the migration must rename), commits
 them as a v1 tree to a `FileRepository`, migrates through the first save, saves again, inserts a
-sub-set and renumbers, edits through a second workspace, replays `events_since` and reverts.
-Then checks the exit invariants: the report lists every rename, the second save writes nothing,
-selections pick the same spots, notes land in the notes document unchanged, the stored format
-is `e8.show`, positions are continuous at every set boundary, segments follow the engine, round
-trips are equal, one revision's show never changes another's, two runs are byte-identical and
-no call mutates its input. Every library call that takes a model is wrapped so a changed input
-fails the run.
+sub-set, renumbers and relabels, edits through a second workspace, replays `events_since` and
+reverts. Then checks the exit invariants: the report lists every rename, the second save writes
+nothing, selections pick the same spots through the relabel, notes land in the notes document
+unchanged, the stored format is `e8.show`, positions are continuous at every set boundary,
+segments follow the engine, round trips are equal, one revision's show never changes another's
+and two runs are byte-identical. Every library call that takes a model runs inside `unchanged`,
+so a call that changes its input fails the run. The module fixture runs the scenario twice, so
+the determinism check costs no run of its own.
 
 Contains:
     Scenario: the documents, shows and revisions one scenario run produces
     unchanged(): fails when a model serializes differently after a block
     v1_documents(): returns the benchmark show's v1 documents with renames and notes added
     run_scenario(): runs every phase of the scenario against a fresh file repository
+    scenario(): runs the scenario twice and keeps the second run for the determinism check
     test_scenario_edits_hit_every_phase(): checks each phase left its mark
     test_report_lists_every_rename(): checks the report against the IDs before and after
     test_second_save_writes_nothing(): checks a save of the loaded migrated show adds no revision
@@ -34,6 +36,7 @@ Contains:
     test_two_runs_are_byte_identical(): checks encode_show and content_hash across two runs
 """
 
+import dataclasses
 import gzip
 import hashlib
 import json
@@ -48,11 +51,13 @@ import numpy as np
 import pytest
 from pydantic import BaseModel
 
+from e8s.cast.models import LabelScheme
 from e8s.cast.select import select
+from e8s.cast.spots import relabel
 from e8s.choreo.engine import DEFAULT_SEGMENT_TOL, PathEngine
 from e8s.choreo.engine_models import MotionSegment
 from e8s.choreo.models import Set
-from e8s.core.ids import SetId
+from e8s.core.ids import SetId, SpotId
 from e8s.core.util import approx_equal, content_hash
 from e8s.show.collab import apply_event, events_since
 from e8s.show.documents import (
@@ -93,7 +98,15 @@ V1_NOTES: list[dict[str, Any]] = [
     {"id": "N3", "text": "mark", "anchor": {"kind": "point", "point": [1.0, 2.0]}},
 ]
 NOTE_AUTHOR = "pat"
-SELECTORS = ("sel:front_line", "sel:pit", "sel:Pit.2", "B2-B10 + G*", "W*")
+LABEL_FREE_SELECTORS = (
+    "sel:front_line",
+    "sel:pit",
+    "sel:Pit.2",
+    "group:guard",
+    "sel:front_line + group:woodwinds - sel:pit",
+)
+LABELLED_SELECTOR = "B2-B10 + G*"
+LABEL_PAD = 3
 SUBSET_AFTER = "5"
 SECOND_WORKSPACE_EDITS = 10
 RETIMED_FIRST_SET = 20
@@ -124,9 +137,11 @@ class Scenario:
         reverted: Show after reverting to `base_revision`.
         events: Canvas events of the second workspace's edits, taken before the revert.
         mapping: Old to new set IDs from the renumber.
+        labels: Old to new spot IDs from the relabel.
         revision_docs: Show documents of every revision read oldest first, encoded after all
             reads.
         reread_docs: The same, read again newest first through the same workspace.
+        rerun: A second run of the whole scenario, or None for the second run itself.
     """
 
     v1: dict[str, bytes]
@@ -142,8 +157,10 @@ class Scenario:
     reverted: Show
     events: list[CanvasEvent]
     mapping: dict[SetId, SetId]
+    labels: dict[SpotId, str]
     revision_docs: dict[str, dict[str, bytes]]
     reread_docs: dict[str, dict[str, bytes]]
+    rerun: "Scenario | None" = None
 
 
 @contextmanager
@@ -185,12 +202,15 @@ def _commit_v1(repo: FileRepository, show_id: str, docs: Mapping[str, bytes]) ->
     return revision_id
 
 
-def _restructured(show: Show) -> tuple[Show, dict[SetId, SetId]]:
+def _restructured(show: Show) -> tuple[Show, dict[SetId, SetId], dict[SpotId, str]]:
     follower = show.set(show.sets[show.set_index(SUBSET_AFTER) + 1].id)
     with unchanged(show):
         edited, _ = insert_subset(show, SUBSET_AFTER, follower.counts / 2)
     with unchanged(edited):
-        return renumber(edited)
+        renumbered, mapping = renumber(edited)
+    with unchanged(renumbered):
+        relabeled, labels = relabel(renumbered, LabelScheme(pad=LABEL_PAD))
+    return relabeled, mapping, labels
 
 
 def _retimed(ws: Workspace, number: int, at: datetime) -> None:
@@ -209,12 +229,13 @@ def _revision_docs(
     first, so the decode cache shares models between them; encodes each only after all reads."""
     ws = open_workspace(repo, show_id)
     revisions = [r.id for r in repo.revisions(show_id)]
-    forward = [(r, ws.show_at(r)) for r in revisions]
-    backward = [(r, ws.show_at(r)) for r in reversed(revisions)]
-    return (
-        {r: encode_show(s) for r, s in forward if s is not None},
-        {r: encode_show(s) for r, s in backward if s is not None},
-    )
+    forward = [(r, s) for r in revisions if (s := ws.show_at(r)) is not None]
+    backward = [(r, s) for r in reversed(revisions) if (s := ws.show_at(r)) is not None]
+    with unchanged(*(s for _, s in forward), *(s for _, s in backward)):
+        return (
+            {r: encode_show(s) for r, s in forward},
+            {r: encode_show(s) for r, s in backward},
+        )
 
 
 def run_scenario(root: Path) -> Scenario:
@@ -229,8 +250,10 @@ def run_scenario(root: Path) -> Scenario:
     with unchanged(migrated):
         first = save_show(ws, migrated, AT + STEP)
     ws.refresh()
-    again = save_show(ws, load_show(ws), AT + STEP * 2)
-    restructured, mapping = _restructured(load_show(ws))
+    reloaded = load_show(ws)
+    with unchanged(reloaded):
+        again = save_show(ws, reloaded, AT + STEP * 2)
+    restructured, mapping, labels = _restructured(load_show(ws))
     with unchanged(restructured):
         base_revision = save_show(ws, restructured, AT + STEP * 3)
     base = load_show(ws)
@@ -255,6 +278,7 @@ def run_scenario(root: Path) -> Scenario:
         reverted=load_show(ws),
         events=events,
         mapping=mapping,
+        labels=labels,
         revision_docs=revision_docs,
         reread_docs=reread_docs,
     )
@@ -262,8 +286,10 @@ def run_scenario(root: Path) -> Scenario:
 
 @pytest.fixture(scope="module")
 def scenario(tmp_path_factory: pytest.TempPathFactory) -> Scenario:
-    """Runs the scenario once for the module's tests."""
-    return run_scenario(tmp_path_factory.mktemp("phase2-scenario"))
+    """Runs the scenario twice in fresh repositories, keeping the second run for comparison."""
+    first = run_scenario(tmp_path_factory.mktemp("phase2-scenario"))
+    rerun = run_scenario(tmp_path_factory.mktemp("phase2-rerun"))
+    return dataclasses.replace(first, rerun=rerun)
 
 
 def _stored(scenario: Scenario, path: str, revision: str | None = None) -> Any:
@@ -293,17 +319,21 @@ def _changed(pairs: Iterator[tuple[str, str]]) -> list[tuple[str, str]]:
 
 
 def test_scenario_edits_hit_every_phase(scenario: Scenario) -> None:
+    """Checks each phase of the run left its mark on the shows and the log."""
     assert scenario.report.from_version == 1
     assert len(scenario.migrated.cast.spots) == SPOTS
     assert len(scenario.migrated.sets) == SETS
     assert [s.id for s in scenario.head.sets] == [str(n) for n in range(1, SETS + 2)]
     assert scenario.mapping[SetId("6")] == "7"
+    assert scenario.labels[SpotId("brass_1")].startswith("B")
+    assert all(len(i) == len("B001") for i in scenario.head.cast.ids())
     log = [r.id for r in scenario.repo.revisions(scenario.head.id)]
     assert log[:2] == [scenario.v1_revision, scenario.migrated_revision]
     assert len(log) == SECOND_WORKSPACE_EDITS + 4
 
 
 def test_report_lists_every_rename(scenario: Scenario) -> None:
+    """Checks the migration report lists every renamed ID, and only those."""
     migrated = scenario.migrated
     v1_cast = _v1_show_doc(scenario)["cast"]
     spots = _changed(zip((s["id"] for s in v1_cast["spots"]), migrated.cast.ids(), strict=True))
@@ -333,6 +363,7 @@ def test_report_lists_every_rename(scenario: Scenario) -> None:
 
 
 def test_second_save_writes_nothing(scenario: Scenario) -> None:
+    """Checks a second save of the loaded migrated show adds no revision."""
     log = [r.id for r in scenario.repo.revisions(scenario.head.id)]
     assert scenario.again_revision == scenario.migrated_revision
     assert log.count(scenario.migrated_revision) == 1
@@ -341,24 +372,35 @@ def test_second_save_writes_nothing(scenario: Scenario) -> None:
 
 def _selected(show: Show) -> dict[str, tuple[str, ...]]:
     with unchanged(show):
-        return {expr: select(show, expr).ids for expr in SELECTORS}
+        return {expr: select(show, expr).ids for expr in LABEL_FREE_SELECTORS}
 
 
 def test_selections_select_the_same_spots(scenario: Scenario) -> None:
+    """Checks named selections and selectors pick the same spots through every edit."""
+    migrated = scenario.migrated
     renamed = dict(scenario.report.renamed["spot"])
-    selections = scenario.migrated.cast.selections
+    selections = migrated.cast.selections
     front_line = tuple(renamed.get(i, i) for i in V1_SELECTIONS["front-line"])
     assert selections["front_line"] == front_line
     assert selections["pit"] == tuple(V1_SELECTIONS["pit"])
     assert selections["Pit.2"] == tuple(V1_SELECTIONS["Pit"])
-    before = _selected(scenario.migrated)
+    guard = tuple(s.id for s in migrated.cast.spots if s.group == "guard")
+    with unchanged(migrated):
+        labelled = select(migrated, LABELLED_SELECTOR).ids
+    assert labelled == (*(f"B{n}" for n in range(2, 11)), *guard)
+    before = _selected(migrated)
     assert all(before.values())
-    assert before == _selected(scenario.base)
-    assert before == _selected(scenario.head)
-    assert before == _selected(scenario.reverted)
+    relabeled = {
+        e: tuple(scenario.labels.get(SpotId(i), i) for i in ids) for e, ids in before.items()
+    }
+    assert relabeled != before
+    assert _selected(scenario.base) == relabeled
+    assert _selected(scenario.head) == relabeled
+    assert _selected(scenario.reverted) == relabeled
 
 
 def test_notes_land_in_the_notes_document(scenario: Scenario) -> None:
+    """Checks the v1 notes are stored in the notes document with text, author and time kept."""
     renamed = dict(scenario.report.renamed["note"])
     for revision in (scenario.migrated_revision, scenario.base_revision):
         document = _stored(scenario, NOTES_DOC, revision)
@@ -377,6 +419,7 @@ def test_notes_land_in_the_notes_document(scenario: Scenario) -> None:
 
 
 def test_format_is_e8_show(scenario: Scenario) -> None:
+    """Checks every stored show document opens with format e8.show and version 2."""
     for revision in (scenario.migrated_revision, scenario.base_revision, None):
         header = list(_stored(scenario, SHOW_DOC, revision).items())[:2]
         assert header == [("format", FORMAT), ("version", 2)]
@@ -402,6 +445,7 @@ def _transition_ends(show: Show) -> Iterator[tuple[str, int, np.ndarray, np.ndar
 
 
 def test_positions_are_continuous_at_every_set_boundary(scenario: Scenario) -> None:
+    """Checks every transition starts and ends on its sets' placements within 1e-6 m."""
     head = scenario.head
     ends: dict[tuple[str, int], np.ndarray] = {}
     with unchanged(head):
@@ -427,11 +471,12 @@ def _probe_gap(engine: PathEngine, piece: MotionSegment) -> float:
 
 
 def test_segments_follow_the_engine(scenario: Scenario) -> None:
+    """Checks sampled segments stay within the engine's segment bound of its positions."""
     head = scenario.head
-    engine = PathEngine(head)
     tids = head.transition_ids()
     sampled = [t for i, t in enumerate(tids) if i % SEGMENT_STRIDE == 0 or i in SUBSET_TRANSITIONS]
     with unchanged(head):
+        engine = PathEngine(head)
         pieces = [piece for tid in sampled for piece in engine.segments(tid)]
         gaps = [_probe_gap(engine, piece) for piece in pieces]
     assert len(pieces) >= len(sampled) * SPOTS
@@ -439,6 +484,7 @@ def test_segments_follow_the_engine(scenario: Scenario) -> None:
 
 
 def test_json_and_document_round_trips_are_equal(scenario: Scenario) -> None:
+    """Checks the head show survives JSON and stored-document round trips unchanged."""
     head = scenario.head
     with unchanged(head):
         assert import_json(export_json(head)) == head
@@ -448,6 +494,7 @@ def test_json_and_document_round_trips_are_equal(scenario: Scenario) -> None:
 
 
 def test_events_since_replays_to_head(scenario: Scenario) -> None:
+    """Checks the second workspace's events replay from the base show to the head."""
     edits = [r.id for r in scenario.repo.revisions(scenario.head.id)][3:-1]
     assert len(edits) == SECOND_WORKSPACE_EDITS
     assert {e.revision for e in scenario.events if e.revision} >= set(edits)
@@ -459,12 +506,14 @@ def test_events_since_replays_to_head(scenario: Scenario) -> None:
 
 
 def test_revert_restores_an_earlier_revision(scenario: Scenario) -> None:
+    """Checks revert writes a new revision holding the base show."""
     assert scenario.reverted.revision != scenario.base_revision
     assert encode_show(scenario.reverted) == encode_show(scenario.base)
     assert scenario.reverted != scenario.head
 
 
 def test_one_revision_never_changes_another(scenario: Scenario) -> None:
+    """Checks every revision's show encodes as a fresh decode after all revisions are read."""
     log = [r.id for r in scenario.repo.revisions(scenario.head.id)]
     assert set(scenario.revision_docs) == set(log)
     assert scenario.reread_docs == scenario.revision_docs
@@ -477,12 +526,17 @@ def test_one_revision_never_changes_another(scenario: Scenario) -> None:
     assert scenario.revision_docs[log[0]] == scenario.revision_docs[scenario.migrated_revision]
 
 
-def test_two_runs_are_byte_identical(scenario: Scenario, tmp_path: Path) -> None:
-    again = run_scenario(tmp_path)
-    assert encode_show(again.head) == encode_show(scenario.head)
-    assert content_hash(again.head) == content_hash(scenario.head)
+def test_two_runs_are_byte_identical(scenario: Scenario) -> None:
+    """Checks a second run gives the same documents, hashes, revisions and report."""
+    again = scenario.rerun
+    assert again is not None
+    with unchanged(again.head, scenario.head, again.base, scenario.base):
+        assert encode_show(again.head) == encode_show(scenario.head)
+        assert content_hash(again.head) == content_hash(scenario.head)
+        assert encode_show(again.base) == encode_show(scenario.base)
+    with unchanged(again.reverted, scenario.reverted):
+        assert encode_show(again.reverted) == encode_show(scenario.reverted)
     assert again.head.revision == scenario.head.revision
     assert again.report == scenario.report
-    assert encode_show(again.base) == encode_show(scenario.base)
-    assert encode_show(again.reverted) == encode_show(scenario.reverted)
+    assert again.labels == scenario.labels
     assert again.revision_docs == scenario.revision_docs
