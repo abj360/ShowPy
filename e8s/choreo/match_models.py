@@ -7,6 +7,7 @@ Contains:
     MatchObjective: names the objectives a match can minimize
     CostFn: types the extra per-pair cost callback
     MatchOptions: holds the constraints, objective and penalties for matching spots to slots
+    MatchOptions.to_json(): returns the options as JSON, refusing a set cost_fn
     MatchResult: holds who goes where, with move statistics and an explanation
     MatchResult.target_points(): returns targets as an (N, 2) array in entity order
 """
@@ -17,8 +18,10 @@ from typing import Literal
 import numpy as np
 from pydantic import Field, StrictInt, model_validator
 
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError
 from e8s.core.ids import FormId, SpotId
+from e8s.core.json_types import JsonValue
 from e8s.core.types import Finite, FrozenModel, NonNegFinite, Point, Points
 
 type MatchObjective = Literal["sum", "sum_squares", "bottleneck", "bottleneck_then_sum"]
@@ -102,6 +105,27 @@ class MatchOptions(FrozenModel):
             if value is not None and not value > 0:
                 raise SchemaError(f"{name} must be above 0", hint=f"give a positive {name}")
         return self
+
+    def to_json(self) -> dict[str, JsonValue]:
+        """Returns the options as a JSON-safe dict; options holding a cost function refuse.
+
+        A function has no JSON form, so writing options with `cost_fn` set raises SchemaError
+        code NOT_SERIALIZABLE instead of dropping the function without a word.
+
+        >>> MatchOptions(power=2.0).to_json()["power"]
+        2.0
+
+        Returns:
+            document: Field names mapped to their JSON values.
+        """
+        if self.cost_fn is not None:
+            raise SchemaError(
+                "MatchOptions with a cost_fn have no JSON form",
+                hint="store the options without cost_fn and pass the function again to match()",
+                context={"model": "MatchOptions"},
+                code=ErrorCode.NOT_SERIALIZABLE,
+            )
+        return super().to_json()
 
 
 class MatchResult(FrozenModel):

@@ -16,6 +16,8 @@ Contains:
     test_regression_match_options_rejects_bool_in_forbid_and_group_slots: rejects True as a slot
         index in forbid and group_slots
     test_match_options_accept_weights_as_a_mapping: coerces a dict of weights into MatchWeights
+    test_regression_match_options_with_a_cost_fn_refuse_json: raises NOT_SERIALIZABLE instead of
+        silently dropping the cost function
 """
 
 import json
@@ -25,6 +27,7 @@ import pytest
 
 from e8s.choreo.form_models import FormFnInfo
 from e8s.choreo.match_models import MatchOptions, MatchResult, MatchWeights
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError
 from e8s.core.ids import FormId, SpotId
 
@@ -50,10 +53,14 @@ def test_match_options_reject_non_positive_values(bad: dict[str, object]) -> Non
         MatchOptions.from_json(bad)
 
 
-def test_cost_fn_is_excluded_from_serialization() -> None:
-    options = MatchOptions(cost_fn=lambda *_: 0.0)
-    assert "cost_fn" not in options.to_json()
-    assert MatchOptions.from_json(json.loads(json.dumps(options.to_json()))).cost_fn is None
+def test_regression_match_options_with_a_cost_fn_refuse_json() -> None:
+    """Refuses to write options holding a cost function instead of silently dropping it."""
+    with pytest.raises(SchemaError) as caught:
+        MatchOptions(cost_fn=lambda *_: 0.0).to_json()
+    assert caught.value.code is ErrorCode.NOT_SERIALIZABLE
+    assert "cost_fn" in caught.value.hint
+    plain = MatchOptions(power=2.0)
+    assert MatchOptions.from_json(json.loads(json.dumps(plain.to_json()))) == plain
 
 
 def test_match_result_round_trips_and_checks_alignment() -> None:

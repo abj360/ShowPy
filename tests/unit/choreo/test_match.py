@@ -259,7 +259,8 @@ def test_cost_fn_adds_cost_and_infinity_forbids() -> None:
         [(0.0, 0.0)], [(0.0, 0.0), (3.0, 0.0)], options=MatchOptions(cost_fn=avoid_slot_zero)
     )
     assert result.assignment == {"0": 1}
-    assert "cost_fn" not in MatchOptions(cost_fn=avoid_slot_zero).to_json()
+    with pytest.raises(SchemaError):
+        MatchOptions(cost_fn=avoid_slot_zero).to_json()
 
 
 def test_cost_fn_rejects_negative_costs() -> None:
