@@ -30,7 +30,7 @@ from showpy.core.errors import GeometryError, SchemaError, UnknownRefError, fiel
 from showpy.core.ids import SetId, SpotId
 from showpy.core.types import Meters, Point
 from showpy.core.util import close_matches
-from showpy.notes.models import Note, NoteKind, NotesDocument, require_notes_of
+from showpy.show._notes_document import Note, NoteKind, NotesDocument, require_notes_of
 from showpy.show.anchors import Anchor, renamed_anchor
 
 if TYPE_CHECKING:

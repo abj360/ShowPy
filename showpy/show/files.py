@@ -28,7 +28,7 @@ from showpy.core.errors import LockedError, StorageError, UnknownRefError
 from showpy.core.ids import TransitionId
 from showpy.core.selection import Selection
 from showpy.core.util import close_matches
-from showpy.notes.models import NotesDocument, require_notes_of
+from showpy.show._notes_document import NotesDocument, require_notes_of
 from showpy.show.documents import (
     FORMS_NAME,
     LEGACY_NOTES_DOC,

@@ -37,7 +37,7 @@ from showpy.core.json_types import JsonValue
 from showpy.core.strict_json import strict_json_copy
 from showpy.core.util import asset_uri, close_matches
 from showpy.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
-from showpy.notes.models import NotesDocument, require_notes_of
+from showpy.show._notes_document import NotesDocument, require_notes_of
 from showpy.show.document_reading import decode_show_dump, migrate_dump
 from showpy.show.interchange_positions import POSITION_FIELDS as POSITION_FIELDS
 from showpy.show.interchange_positions import import_positions as import_positions
@@ -360,13 +360,22 @@ def _show_object(d: Mapping[str, object]) -> dict[str, JsonValue]:
     return show
 
 
-def _import_notes(d: Mapping[str, object]) -> NotesDocument:
-    """Returns the notes document of an interchange document; see import_notes().
+def _notes_json(d: Mapping[str, object]) -> dict[str, JsonValue]:
+    """Returns the notes document of an interchange document as checked plain JSON.
+
+    The private reader that import_notes() wraps. It stays after the public notes names leave
+    the library in 1.0.0, so the notes of a version 1 document are never lost while version 1
+    is read.
 
     >>> from showpy.examples import two_set_show
-    >>> _import_notes(export_json(two_set_show())).notes
-    ()
+    >>> _notes_json(export_json(two_set_show()))["notes"]
+    []
     """
+    return _notes_document(d).model_dump(mode="json")
+
+
+def _notes_document(d: Mapping[str, object]) -> NotesDocument:
+    """Reads and checks the notes document of an interchange document; see import_notes()."""
     if not isinstance(d, Mapping):
         raise SchemaError(
             f"document is a {type(d).__name__}, not an object",
@@ -415,7 +424,7 @@ def import_notes(d: Mapping[str, object]) -> NotesDocument:
 
     >>> import warnings
     >>> from showpy.examples import two_set_show
-    >>> from showpy.notes.models import NotesDocument
+    >>> from showpy.show._notes_document import NotesDocument
     >>> show = two_set_show()
     >>> document = export_json(show, notes=NotesDocument(show=show.id))
     >>> with warnings.catch_warnings(action="ignore"):
@@ -423,4 +432,4 @@ def import_notes(d: Mapping[str, object]) -> NotesDocument:
     >>> notes.show, notes.notes
     ('show-1', ())
     """
-    return _import_notes(d)
+    return NotesDocument.model_validate(_notes_json(d))

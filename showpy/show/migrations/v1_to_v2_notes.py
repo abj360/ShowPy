@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Final
 
 from showpy.core.errors import SchemaError
 from showpy.core.json_types import JsonValue
-from showpy.notes.models import Note, NotesDocument
+from showpy.show._notes_document import Note, NotesDocument
 from showpy.show.anchors import renamed_anchor
 from showpy.show.migrations.v1_to_v2_ids import renames_of
 from showpy.show.models import Show

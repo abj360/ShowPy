@@ -21,7 +21,7 @@ from showpy.core.errors import SchemaError
 from showpy.core.selection import Selection
 from showpy.core.strict_json import parse_strict_json
 from showpy.core.validation import validate_adapter_json
-from showpy.notes.models import NotesDocument
+from showpy.show._notes_document import NotesDocument
 from showpy.show.migrations.v1_to_v2_notes import NOTES_DOC
 from showpy.show.models import Comment
 

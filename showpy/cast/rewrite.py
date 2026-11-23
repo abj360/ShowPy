@@ -28,8 +28,8 @@ from showpy.choreo.path_models import (
 from showpy.core.errors import SchemaError, ShowValidationError, UnknownRefError
 from showpy.core.ids import RouteId, SpotId, TransitionId
 from showpy.core.selection import Selection, SelectorField
-from showpy.notes.models import Note, NotesDocument, require_notes_of
 from showpy.sheet.models import Sheet, Zone
+from showpy.show._notes_document import Note, NotesDocument, require_notes_of
 
 if TYPE_CHECKING:
     from showpy.show.models import Pin, Show

@@ -45,7 +45,7 @@ from showpy.core.util import close_matches, natural_sort
 from showpy.geo.curve_base import Curve
 from showpy.geo.regions import Area
 from showpy.geo.spacing import fill, space_along
-from showpy.notes.models import NotesDocument, require_notes_of
+from showpy.show._notes_document import NotesDocument, require_notes_of
 from showpy.show.locks import require_unlocked
 
 if TYPE_CHECKING:

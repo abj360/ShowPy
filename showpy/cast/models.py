@@ -27,7 +27,7 @@ from showpy.core.ids import RouteId, SelectionNameField, SpotId, SpotIdField, Tr
 from showpy.core.readonly import ReadOnly, ReadOnlyMap
 from showpy.core.types import Degrees, FrozenModel, Meters, PositiveFinite
 from showpy.core.util import close_matches, natural_sort
-from showpy.notes.models import Note, NotesDocument
+from showpy.show._notes_document import Note, NotesDocument
 
 DEFAULT_RADIUS_M = 0.3
 DEFAULT_SYMBOL = "circle"

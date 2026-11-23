@@ -40,12 +40,17 @@ Contains:
         under `notes` and refuses one of another show
     test_import_notes_reads_v1_and_v2_documents: returns the notes of a v2 document as given
         and migrates the notes of a v1 document with the show's renames
+    test_v1_notes_readers_do_not_depend_on_the_leaving_names: keeps every library module outside
+        showpy.notes free of imports of showpy.notes, so the private v1 notes readers outlive it
+    test_private_reader_returns_v1_notes_as_plain_json: returns a v1 document's migrated notes
+        as JSON from the private reader that import_notes wraps
     test_rewrite_report_notes_warns_until_1_0_0: warns that `RewriteReport.notes` leaves the
         library in 1.0.0 when read outside the library
     test_rename_spots_rewrites_the_notes_document: follows spot renames in the notes document
         and reports orphaned notes when a rewrite drops every anchored spot
 """
 
+import ast
 import hashlib
 import json
 import shutil
@@ -75,7 +80,7 @@ from showpy.show.documents import (
 )
 from showpy.show.file_repository import FileRepository
 from showpy.show.integrity import blob_digest
-from showpy.show.interchange import export_json, import_json, import_notes
+from showpy.show.interchange import _notes_json, export_json, import_json, import_notes
 from showpy.show.models import Anchor, Revision, Show
 from showpy.show.repositories import InMemoryRepository
 from showpy.show.storage import load_show, open_workspace, save_show
@@ -423,3 +428,38 @@ def test_rewrite_report_notes_warns_until_1_0_0() -> None:
     _, report = rename_spots(show, {"T1": "S1"}, notes=NotesDocument(show=show.id))
     with pytest.warns(DeprecatedWarning, match=r"`showpy\.RewriteReport\.notes`.*1\.0\.0"):
         assert report.notes == NotesDocument(show=show.id)
+
+
+LIBRARY = Path(__file__).resolve().parents[3] / "showpy"
+LEAVING_PACKAGE = "showpy.notes"
+
+
+def _imports(path: Path) -> set[str]:
+    tree = ast.parse(path.read_text())
+    found = {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
+    found |= {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module}
+    return found
+
+
+def test_v1_notes_readers_do_not_depend_on_the_leaving_names() -> None:
+    outside = [
+        p
+        for p in LIBRARY.rglob("*.py")
+        if "notes" not in p.relative_to(LIBRARY).parts[:1] and p.name != "__init__.py"
+    ]
+    leaning = [
+        str(p.relative_to(LIBRARY))
+        for p in outside
+        if any(m == LEAVING_PACKAGE or m.startswith(f"{LEAVING_PACKAGE}.") for m in _imports(p))
+    ]
+    assert leaning == []
+    assert (LIBRARY / "show" / "_notes_document.py").is_file()
+
+
+def test_private_reader_returns_v1_notes_as_plain_json() -> None:
+    legacy = two_set_show().model_dump(mode="json")
+    legacy["notes"] = [_v1_note("n-1", {"kind": "set", "set_id": "2"})]
+    stored = _notes_json({"schema": "showpy.show.v1", "show": legacy})
+    assert stored["format"] == "e8.notes"
+    assert NotesDocument.model_validate(stored).notes[0].id == "n_1"
+    assert json.loads(json.dumps(stored)) == stored
