@@ -8,9 +8,11 @@ Contains:
     test_library_never_calls_model_copy_with_update: fails on any such call in e8s/
     test_model_copy_ban_detects_an_offending_call: proves the scan can fail
     test_model_copy_ban_detects_kwargs_aliases_and_getattr: proves the scan sees evasions
-    find_citations(): lists file and line of each ADR, ledger-ID or docs-path citation
+    find_citations(): lists file and line of each ADR, ledger-ID, docs-path or lane citation
     test_library_cites_no_adr_docs_or_ledger_ids: fails on any such citation in e8s/
     test_citation_scan_flags_a_docstring_and_a_comment: proves the scan can fail
+    test_regression_citation_scan_flags_lane_names: proves lane names in docstrings and comments
+        are flagged
     test_citation_scan_ignores_runtime_strings: proves plain string literals are not flagged
     find_code_spellings(): lists file, line and code of each raised or reported error code
     test_every_raised_code_is_catalogued: fails on a code that is not an ErrorCode member
@@ -50,7 +52,7 @@ from e8s._api_table import PUBLIC_API
 from e8s.core.deprecation import DeprecatedWarning
 from e8s.core.error_codes import ErrorCode
 
-CITATION_PATTERN = re.compile(r"\bADR\b|\bUP-\d+\.\d+-\d+\b|\bdocs/")
+CITATION_PATTERN = re.compile(r"\bADR\b|\bUP-\d+\.\d+-\d+\b|\bdocs/|\b[Ll]anes? [A-Z]\b")
 MIN_LIBRARY_FILES = 100
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LIBRARY_ROOT = REPO_ROOT / "e8s"
@@ -135,7 +137,8 @@ def test_model_copy_ban_detects_kwargs_aliases_and_getattr(source: str) -> None:
 
 
 def find_citations(source: str, name: str) -> list[str]:
-    """Lists `name:line` for each ADR, ledger-ID or docs-path citation in a docstring or comment."""
+    """Lists `name:line` for each ADR, ledger-ID, docs-path or lane citation in a docstring or
+    comment."""
     hits: list[str] = []
     for node in ast.walk(ast.parse(source)):
         if not isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
@@ -156,7 +159,8 @@ def find_citations(source: str, name: str) -> list[str]:
 
 
 def test_library_cites_no_adr_docs_or_ledger_ids() -> None:
-    """Requires docstrings and comments to state the rule, never point at an ADR or ledger ID."""
+    """Requires docstrings and comments to state the rule, never point at an ADR, a ledger ID
+    or the lane that wrote the code."""
     paths = sorted(LIBRARY_ROOT.rglob("*.py"))
     assert len(paths) >= MIN_LIBRARY_FILES, f"scan found only {len(paths)} library files"
     offenders = [
@@ -178,6 +182,18 @@ def test_citation_scan_flags_a_docstring_and_a_comment() -> None:
         '    """Reads docs/notes.md."""\n'
     )
     assert find_citations(source, "m.py") == ["m.py:3", "m.py:5", "m.py:7"]
+
+
+def test_regression_citation_scan_flags_lane_names() -> None:
+    """Reports a lane named in a module docstring heading, a docstring sentence and a comment,
+    which stub modules carried after their lanes merged."""
+    source = (
+        '"""\nm.py --- the cast sub-step (lane D)\n\nLane D owns this module.\n"""\n'
+        "# lanes A and G share this\n"
+        "LANE = 1\n"
+        "# a lane-1 guide line and the basketball lanes stay\n"
+    )
+    assert find_citations(source, "m.py") == ["m.py:2", "m.py:4", "m.py:6"]
 
 
 def test_citation_scan_ignores_runtime_strings() -> None:

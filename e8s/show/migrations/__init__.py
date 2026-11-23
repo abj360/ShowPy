@@ -1,7 +1,7 @@
 """
 __init__.py --- the sub-steps of each stored-format migration, in the fixed order they run
 
-The order lives here, not in the step modules, so no lane reorders another's step. JSON
+The order lives here, not in the step modules, so no step module reorders another's step. JSON
 sub-steps run on the parsed show documents keyed by stored path (show, sheet, notes, timeline,
 set, forms and paths documents); model sub-steps run after, on the show validated with any
 non-empty v1 ID accepted; beside sub-steps run last, on the migrated show and the migrated

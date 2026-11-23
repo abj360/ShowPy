@@ -1,5 +1,5 @@
 """
-v1_to_v2_forms.py --- the forms sub-step of the v1 to v2 format migration (lane G)
+v1_to_v2_forms.py --- the forms sub-step of the v1 to v2 format migration
 
 A v1 form stores its shape family in `kind` and an untyped JSON `geometry` beside it. v2 stores
 one typed `recipe` that carries the kind and `recipe_version: 1`, so this step moves `kind` and

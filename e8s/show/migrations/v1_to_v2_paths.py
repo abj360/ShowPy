@@ -1,5 +1,5 @@
 """
-v1_to_v2_paths.py --- the paths sub-step of the v1 to v2 format migration (lane B)
+v1_to_v2_paths.py --- the paths sub-step of the v1 to v2 format migration
 
 v2 types the motion parameters of the four built-in motions, bounds easings and tags facing
 values. For each path row, a key the built-in motion never read in v1 is dropped, and an easing
