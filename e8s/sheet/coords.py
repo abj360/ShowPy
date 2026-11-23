@@ -267,7 +267,8 @@ def offsets_in_units(system: CoordinateSystem, offsets_m: FloatArray) -> FloatAr
 def rounded_offsets(system: CoordinateSystem, offsets_m: FloatArray) -> FloatArray:
     """Returns offsets in meters in the system's units, rounded to its precision as worded.
 
-    Each value equals the number `to_coords` writes for it, signed: half away from zero.
+    Each value is the offset converted to the system's units and rounded half away from
+    zero to a multiple of its precision, signed: the same number the worded coordinates use.
 
     Args:
         system: Coordinate system giving the units and the precision.

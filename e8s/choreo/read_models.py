@@ -148,7 +148,7 @@ class TransitionDescription(FrozenModel):
         transition: The transition described.
         counts: Length of the transition in counts.
         moves: Each selected spot's segments in time order, keyed in selection order.
-        groups: Spots whose segments agree in kind, timing, direction, distance, step size and
+        groups: Spots whose segments agree in kind, timing, direction, distance, stride and
             pace, each group in selection order, groups ordered by their first spot.
     """
 
