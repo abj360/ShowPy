@@ -74,9 +74,12 @@ ADR 0009 sets the deprecation policy for public names: a name deprecated in `0.N
    an unvalidated copy. Only `e8s/core/types.py` calls pydantic's model methods on an e8s model;
    two boundary helpers that accept any pydantic model, including a caller's own
    (`canonical_value` and `validate_or_schema_error`), call them on that model. A library rule
-   test scans `e8s/`, docstring examples included, and fails on any other call.
+   test scans `e8s/`, docstring examples included, and fails on any other call; a second one
+   scans the Python code blocks of `README.md` and `docs/*.md`.
 4. **The library's tests follow the same rule.** A test whose subject is not a pydantic method
-   uses the interface, or the private helpers where it tests library internals.
+   uses the interface, or the private helpers where it tests library internals. Review
+   enforces this for tests; no test scans them, because tests of `FrozenModel`'s own
+   overrides and of plain pydantic models must still call pydantic's methods.
 5. **`ValidationReport.to_json()` returns the dict**, like every other model. It returned JSON
    text before; a caller that wants text calls `json.dumps(report.to_json())`.
 
