@@ -5,6 +5,7 @@ These are deterministic so examples print stable output. Tests re-export them fr
 tests/fixtures, so there is one definition of each example.
 
 Contains:
+    EXAMPLE_TIME: fixed time stamp for examples that need one
     EXAMPLE_TID: the transition between the two example sets
     TEMPO: tempo of the example timeline in counts per minute
     COUNTS: length of the example transition in counts
@@ -15,6 +16,7 @@ Contains:
 """
 
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from typing import Any
 
 from e8s.cast.models import Cast, Group, Spot
@@ -25,6 +27,7 @@ from e8s.examples.sheets import field_sheet
 from e8s.show.models import Show
 from e8s.time.models import TempoSection, Timeline, TimelineMode
 
+EXAMPLE_TIME = datetime(2026, 11, 11, 18, 0, tzinfo=UTC)
 EXAMPLE_TID = make_tid("1", "2")
 TEMPO = 120.0
 COUNTS = 8.0

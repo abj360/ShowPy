@@ -117,25 +117,6 @@
       "spots": "tuple[e8s.cast.models.Spot, ...]"
     }
   },
-  "Chart": {
-    "model": {
-      "rows": "tuple[e8s.export.ChartRow, ...]",
-      "set_id": "e8s.core.ids.SetId"
-    }
-  },
-  "ChartRow": {
-    "model": {
-      "entity": "e8s.core.ids.SpotId",
-      "facing": "Degrees",
-      "form": "str | None",
-      "group": "str",
-      "note": "str | None",
-      "on_field": "bool",
-      "performer_name": "str | None",
-      "position_text": "str",
-      "xy": "Point"
-    }
-  },
   "CircleCurve": {
     "model": {
       "ccw": "bool",
@@ -153,14 +134,6 @@
       "n": "int | None",
       "recipe_version": "Literal[1]",
       "transform": "Affine | None"
-    }
-  },
-  "Claim": {
-    "model": {
-      "claimed_at": "pydantic.types.AwareDatetime",
-      "locked": "bool",
-      "performer": "e8s.export.Performer",
-      "spot": "e8s.core.ids.SpotId"
     }
   },
   "Comment": {
@@ -196,13 +169,6 @@
       "GRID": "'grid'",
       "MARCHING": "'marching'",
       "STAGE": "'stage'"
-    }
-  },
-  "CoordinateSheet": {
-    "model": {
-      "entity": "e8s.core.ids.SpotId",
-      "performer_name": "str | None",
-      "rows": "tuple[e8s.export.SheetRow, ...]"
     }
   },
   "CoordinateSystem": {
@@ -560,7 +526,6 @@
       "op": "Literal['form']"
     }
   },
-  "FormatRegistry": "(exporters: collections.abc.Mapping[str, Exporter], importers: collections.abc.Mapping[str, Importer])",
   "Frame": {
     "model": {
       "states": "tuple[e8s.choreo.engine_models.EntityState, ...]",
@@ -939,22 +904,6 @@
       "spec": "e8s.choreo.path_models.TransitionSpec"
     }
   },
-  "Performer": {
-    "model": {
-      "contact": "str | None",
-      "id": "str",
-      "name": "str",
-      "role": "PerformerRole"
-    }
-  },
-  "PerformerView": {
-    "model": {
-      "path_animation_url": "str",
-      "performer": "e8s.export.Performer",
-      "sets": "tuple[tuple[e8s.core.ids.SetId, str, float], ...]",
-      "spot": "e8s.core.ids.SpotId"
-    }
-  },
   "Pin": {
     "model": {
       "by": "str",
@@ -1035,18 +984,6 @@
       "paths": "tuple[e8s.choreo.path_models.TransitionSpec, ...]",
       "placements": "dict[e8s.core.ids.SetId, tuple[e8s.choreo.models.Placement, ...]]",
       "proposal_id": "str"
-    }
-  },
-  "Publication": {
-    "model": {
-      "claims": "tuple[e8s.export.Claim, ...]",
-      "id": "str",
-      "join_token_sha256": "str | None",
-      "link": "str",
-      "published_at": "pydantic.types.AwareDatetime",
-      "revision": "str",
-      "show_id": "str",
-      "status": "PublicationStatus"
     }
   },
   "QuadPiece": "(start: Point, control: Point, end: Point) -> None",
@@ -1228,20 +1165,6 @@
       "min_x": "float",
       "min_y": "float",
       "px_per_m": "float"
-    }
-  },
-  "SheetRow": {
-    "model": {
-      "behavior": "str",
-      "counts": "float",
-      "crossings": "tuple[str, ...]",
-      "cumulative": "Count",
-      "facing": "Degrees",
-      "measure": "e8s.time.models.MeasureLabel | None",
-      "note": "str | None",
-      "position_text": "str",
-      "set": "e8s.core.ids.SetId",
-      "xy": "Point"
     }
   },
   "SheetStore": {
@@ -1457,13 +1380,6 @@
       "crowded": "tuple[e8s.choreo.form_models.CrowdedStroke, ...]"
     }
   },
-  "TextTable": {
-    "model": {
-      "header": "tuple[str, ...]",
-      "rows": "tuple[tuple[str, ...], ...]",
-      "title": "str"
-    }
-  },
   "TimeRangeError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: e8s.core.error_codes.ErrorCode | None = None) -> None",
   "Timeline": {
     "model": {
@@ -1618,7 +1534,6 @@
   "arc_through": "(a: Point, m: Point, b: Point) -> e8s.geo.curves.ArcCurve",
   "arrive_early": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel, counts: float, *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "as_points": "(obj: object) -> Points",
-  "as_table": "(obj: Tabular) -> e8s.export.TextTable",
   "asset_uri": "(data: bytes) -> str",
   "attach_audio": "(tl: e8s.time.models.Timeline, track: e8s.time.models.AudioTrack) -> e8s.time.models.Timeline",
   "balance": "(s: e8s.choreo.models.Set, sheet: e8s.sheet.models.Sheet, axis: Literal['x', 'y'] = 'x') -> float",
@@ -1635,15 +1550,12 @@
   "centroid": "(obj: Points | e8s.geo.curve_base.Curve) -> Point",
   "change_amount": "(a: e8s.choreo.models.Set, b: e8s.choreo.models.Set) -> Meters",
   "changelog": "(ws: e8s.show.storage.Workspace, since: str = '') -> str",
-  "chart": "(show: e8s.show.models.Show, set_id: str, publication: e8s.export.Publication | None = None) -> e8s.export.Chart",
   "check_id": "(text: str, *, kind: str) -> str",
   "check_sheet_id": "(text: str, *, kind: str) -> str",
   "check_unlocked": "(form: e8s.choreo.form_models.Form, *, force: bool) -> None",
   "chunk_counts": "(total: float, parts: int) -> list[float]",
   "circle": "(center: Point, radius: Meters, start_deg: Degrees = 0.0) -> e8s.geo.curves.CircleCurve",
   "circle_form": "(form_id: str, members: collections.abc.Sequence[str], center: Point, radius: Meters, start_deg: Degrees = 0.0, spacing: e8s.choreo.form_models.SpacingSpec | None = None, facing: e8s.choreo.form_models.FacingSpec | None = None, *, set_id: str = '', n: int | None = None) -> e8s.choreo.form_models.Form",
-  "claim_spot": "(pub: e8s.export.Publication, show: e8s.show.models.Show, performer: e8s.export.Performer, spot: str, at: datetime.datetime) -> tuple[e8s.export.Publication, e8s.export.Claim]",
-  "claims": "(pub: e8s.export.Publication) -> list[e8s.export.Claim]",
   "clear_measures": "(tl: e8s.time.models.Timeline) -> e8s.time.models.Timeline",
   "clear_rows": "(show: e8s.show.models.Show, tid: tuple[str, str], entities: collections.abc.Iterable[str], *, force: bool = False) -> e8s.show.models.Show",
   "clear_waypoints": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel, *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
@@ -1655,15 +1567,12 @@
   "contract": "(obj: T, d: Meters, about: About = 'center', sel: SetSelector = 'all', *, force: bool = False) -> T",
   "convert": "(value: float, from_unit: str, to_unit: str, registry: e8s.core.units.UnitRegistry = ...) -> float",
   "coordinate_presets": "(sheet: e8s.sheet.models.Sheet) -> list[e8s.sheet.models.CoordinateSystem]",
-  "coordinate_sheet": "(show: e8s.show.models.Show, entity: str, precision: float | None = None, publication: e8s.export.Publication | None = None) -> e8s.export.CoordinateSheet",
-  "coordinate_sheets": "(show: e8s.show.models.Show, sel: str | collections.abc.Sequence[str] | e8s.core.selection.Selection = 'all', publication: e8s.export.Publication | None = None, precision: float | None = None) -> list[e8s.export.CoordinateSheet]",
   "cost_matrix": "(from_: Source, to_slots: SlotSource, options: e8s.choreo.match_models.MatchOptions | None = None, entities: collections.abc.Sequence[str] | None = None, groups: collections.abc.Mapping[str, str] | None = None, slot_groups: collections.abc.Sequence[str | None] | None = None, *, font_registry: e8s.geo.fonts.FontRegistry | None = None) -> FloatArray",
   "count_to_measure": "(tl: e8s.time.models.Timeline, c: Count) -> e8s.time.models.MeasureLabel | None",
   "count_to_seconds": "(tl: e8s.time.models.Timeline, c: Count) -> Seconds",
   "counter_march": "(show: e8s.show.models.Show, tid: tuple[str, str], sel: collections.abc.Sequence[str], turn_at: Point, counts_per_turn: float = 2.0, *, force: bool = False) -> e8s.show.models.Show",
   "counts_from_markers": "(tl: e8s.time.models.Timeline, labels: collections.abc.Sequence[str]) -> list[Count]",
   "coverage": "(s: e8s.choreo.models.Set, sheet: e8s.sheet.models.Sheet, radius: Meters = 1.0) -> float",
-  "cue_sheet": "(show: e8s.show.models.Show) -> 'pd.DataFrame'",
   "cue_to_seconds": "(tl: e8s.time.models.Timeline, label: str) -> Seconds",
   "curve_form": "(form_id: str, members: collections.abc.Sequence[str], *pts: Point, closed: bool = False, spacing: e8s.choreo.form_models.SpacingSpec | None = None, facing: e8s.choreo.form_models.FacingSpec | None = None, set_id: str = '', n: int | None = None) -> e8s.choreo.form_models.Form",
   "curve_from_construction": "(recipe: dict[str, Any]) -> AnyCurve",
@@ -1708,12 +1617,9 @@
   "edit_text_count": "(form: e8s.choreo.form_models.Form, *, add: collections.abc.Sequence[str] = (), remove: collections.abc.Sequence[str] = (), n: int | None = None, spacing: Meters | None = None, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.form_models.Form",
   "ellipse": "(center: Point, rx: Meters, ry: Meters, rotation_deg: Degrees = 0.0) -> e8s.geo.curves.EllipseCurve",
   "energy_curve": "(show: e8s.show.models.Show, per_count: int = 1) -> 'pd.Series'",
-  "escape_text": "(text: str) -> bytes",
   "events_since": "(ws: e8s.show.storage.Workspace, revision: str) -> list[e8s.show.models.CanvasEvent]",
   "expand": "(obj: T, d: Meters, about: About = 'center', sel: SetSelector = 'all', *, force: bool = False) -> T",
-  "export_frames_csv": "(show: e8s.show.models.Show, per_count: int = 1) -> str",
   "export_json": "(show: e8s.show.models.Show, include: str | collections.abc.Iterable[str] | None = None, *, font_registry: e8s.geo.fonts.FontRegistry | None = None, notes: e8s.show.NotesDocument | None = None) -> dict[str, Any]",
-  "export_video": "(show: e8s.show.models.Show, count_range: tuple[Count, Count] | None = None, fps: float = 30, audio: collections.abc.Mapping[str, bytes] | None = None, px_per_m: float = 10.0) -> bytes",
   "face_along": "(show: e8s.show.models.Show, set_id: str, form_id: str, *, reverse: bool = False, force: bool = False) -> e8s.choreo.models.Set",
   "face_audience": "(target: e8s.choreo.models.Set, sel: Sel, *, force: bool = False) -> e8s.choreo.models.Set",
   "face_direction": "(target: e8s.choreo.models.Set, sel: Sel, deg: Degrees, *, force: bool = False) -> e8s.choreo.models.Set",
@@ -1740,7 +1646,6 @@
   "format_ranges": "(ids: collections.abc.Iterable[str]) -> str",
   "format_ref": "(kind: str, ref_id: str, version: str | None = None) -> str",
   "format_tid": "(tid: tuple[str, str]) -> str",
-  "formats": "(registry: e8s.export.FormatRegistry) -> dict[str, list[str]]",
   "from_coords": "(show: 'Show', text: str) -> Point",
   "from_json": "(d: dict[str, Any]) -> e8s.time.models.Timeline",
   "gate": "(form: e8s.choreo.form_models.Form, hinge: Literal['start', 'end'] | int, deg: Degrees, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.form_models.Form",
@@ -1765,7 +1670,6 @@
   "is_similarity": "(matrix: Matrix) -> bool",
   "jcs": "(obj: object) -> bytes",
   "join": "(*curves: AnyCurve, bridge: bool = False) -> e8s.geo.curves.CompositeCurve",
-  "join_link": "(pub: e8s.export.Publication, token: str) -> str",
   "join_sections": "(a: e8s.show.models.Show, b: e8s.show.models.Show) -> e8s.show.models.Show",
   "label_prefix": "(spot_id: str) -> str | None",
   "landmark": "(sheet: e8s.sheet.models.Sheet, name: str) -> e8s.sheet.models.Landmark",
@@ -1773,45 +1677,16 @@
   "landmark_keys": "(mark: e8s.sheet.models.Landmark) -> tuple[str, ...]",
   "layout_text": "(text: str, fonts: collections.abc.Sequence[str], height: Meters, at: Point, *, rotation: Degrees = 0.0, align: TextAlign = 'left', anchor: TextAnchor = 'baseline', letter_spacing: float = 0.0, line_spacing: float = 1.2, font_registry: e8s.geo.fonts.FontRegistry | None = None) -> tuple[e8s.geo.models.LaidGlyph, ...]",
   "leaving": {
-    "Chart": {
-      "kind": "type",
-      "remove": "0.7.0",
-      "replacement": ["coordinate_table", "describe_transition"],
-      "since": "0.4.0"
-    },
-    "ChartRow": {
-      "kind": "type",
-      "remove": "0.7.0",
-      "replacement": ["coordinate_table", "describe_transition"],
-      "since": "0.4.0"
-    },
-    "Claim": {
-      "kind": "type",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
     "CoordinateKind": {
       "kind": "type",
       "remove": "0.7.0",
       "replacement": "Location",
       "since": "0.4.0"
     },
-    "CoordinateSheet": {
-      "kind": "type",
-      "remove": "0.7.0",
-      "replacement": ["coordinate_table", "describe_transition"],
-      "since": "0.4.0"
-    },
     "CoordinateSystem": {
       "kind": "type",
       "remove": "0.7.0",
       "replacement": "Location",
-      "since": "0.4.0"
-    },
-    "FormatRegistry": {
-      "kind": "type",
-      "remove": "0.7.0",
-      "replacement": "frames",
       "since": "0.4.0"
     },
     "GuideLine": {
@@ -1842,21 +1717,6 @@
       "remove": "1.0.0",
       "since": "0.4.0"
     },
-    "Performer": {
-      "kind": "type",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
-    "PerformerView": {
-      "kind": "type",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
-    "Publication": {
-      "kind": "type",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
     "RewriteReport.notes": {
       "kind": "field",
       "remove": "1.0.0",
@@ -1865,12 +1725,6 @@
     "SheetCanvas": {
       "kind": "type",
       "remove": "0.6.0",
-      "since": "0.4.0"
-    },
-    "SheetRow": {
-      "kind": "type",
-      "remove": "0.7.0",
-      "replacement": ["coordinate_table", "describe_transition"],
       "since": "0.4.0"
     },
     "SheetStore": {
@@ -1894,12 +1748,6 @@
     "Spot.claimable": {
       "kind": "field",
       "remove": "0.7.0",
-      "since": "0.4.0"
-    },
-    "TextTable": {
-      "kind": "type",
-      "remove": "0.7.0",
-      "replacement": "frames",
       "since": "0.4.0"
     },
     "Zone": {
@@ -1942,56 +1790,16 @@
       "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
-    "as_table": {
-      "kind": "export",
-      "remove": "0.7.0",
-      "replacement": "frames",
-      "since": "0.4.0"
-    },
     "blank_sheet": {
       "kind": "function",
       "remove": "0.7.0",
       "replacement": ["sheets", "sheet", "field", "floor", "Marking", "on_sheet"],
       "since": "0.4.0"
     },
-    "chart": {
-      "kind": "export",
-      "remove": "0.7.0",
-      "replacement": ["coordinate_table", "describe_transition"],
-      "since": "0.4.0"
-    },
-    "claim_spot": {
-      "kind": "export",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
-    "claims": {
-      "kind": "export",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
     "coordinate_presets": {
       "kind": "function",
       "remove": "0.7.0",
       "replacement": ["locate", "at_location", "Location"],
-      "since": "0.4.0"
-    },
-    "coordinate_sheet": {
-      "kind": "export",
-      "remove": "0.7.0",
-      "replacement": ["coordinate_table", "describe_transition"],
-      "since": "0.4.0"
-    },
-    "coordinate_sheets": {
-      "kind": "export",
-      "remove": "0.7.0",
-      "replacement": ["coordinate_table", "describe_transition"],
-      "since": "0.4.0"
-    },
-    "cue_sheet": {
-      "kind": "export",
-      "remove": "0.7.0",
-      "replacement": ["coordinate_table", "describe_transition"],
       "since": "0.4.0"
     },
     "customize": {
@@ -2010,33 +1818,10 @@
       "remove": "1.0.0",
       "since": "0.4.0"
     },
-    "escape_text": {
-      "kind": "export",
-      "remove": "0.7.0",
-      "replacement": ["coordinate_table", "describe_transition"],
-      "since": "0.4.0"
-    },
-    "export_frames_csv": {
-      "kind": "export",
-      "remove": "0.7.0",
-      "replacement": "frames",
-      "since": "0.4.0"
-    },
-    "export_video": {
-      "kind": "export",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
     "football_field": {
       "kind": "function",
       "remove": "0.7.0",
       "replacement": "field",
-      "since": "0.4.0"
-    },
-    "formats": {
-      "kind": "export",
-      "remove": "0.7.0",
-      "replacement": "frames",
       "since": "0.4.0"
     },
     "from_coords": {
@@ -2060,11 +1845,6 @@
     "import_notes": {
       "kind": "function",
       "remove": "1.0.0",
-      "since": "0.4.0"
-    },
-    "join_link": {
-      "kind": "export",
-      "remove": "0.6.0",
       "since": "0.4.0"
     },
     "landmark": {
@@ -2107,25 +1887,10 @@
       "remove": "1.0.0",
       "since": "0.4.0"
     },
-    "notify_changes": {
-      "kind": "export",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
     "on_surface": {
       "kind": "function",
       "remove": "0.7.0",
       "replacement": "on_sheet",
-      "since": "0.4.0"
-    },
-    "pause": {
-      "kind": "export",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
-    "performer_view": {
-      "kind": "export",
-      "remove": "0.6.0",
       "since": "0.4.0"
     },
     "point_landmark": {
@@ -2138,38 +1903,6 @@
       "kind": "function",
       "remove": "0.7.0",
       "replacement": "floor",
-      "since": "0.4.0"
-    },
-    "publish": {
-      "kind": "export",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
-    "qr_code": {
-      "kind": "export",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
-    "reassign": {
-      "kind": "export",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
-    "register_exporter": {
-      "kind": "export",
-      "remove": "0.7.0",
-      "replacement": "frames",
-      "since": "0.4.0"
-    },
-    "register_importer": {
-      "kind": "export",
-      "remove": "0.7.0",
-      "replacement": "frames",
-      "since": "0.4.0"
-    },
-    "release": {
-      "kind": "export",
-      "remove": "0.6.0",
       "since": "0.4.0"
     },
     "remove_guide": {
@@ -2193,11 +1926,6 @@
       "kind": "function",
       "remove": "0.7.0",
       "replacement": ["Marking", "markings_near"],
-      "since": "0.4.0"
-    },
-    "render_frame": {
-      "kind": "export",
-      "remove": "0.6.0",
       "since": "0.4.0"
     },
     "render_sheet": {
@@ -2228,11 +1956,6 @@
       "replacement": "sheets",
       "since": "0.4.0"
     },
-    "swap_claims": {
-      "kind": "export",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
     "template_ref": {
       "kind": "function",
       "remove": "0.7.0",
@@ -2243,49 +1966,6 @@
       "kind": "function",
       "remove": "0.7.0",
       "replacement": "locate",
-      "since": "0.4.0"
-    },
-    "to_csv": {
-      "kind": "export",
-      "remove": "0.7.0",
-      "replacement": "frames",
-      "since": "0.4.0"
-    },
-    "to_pdf": {
-      "kind": "export",
-      "remove": "0.7.0",
-      "replacement": ["coordinate_table", "describe_transition"],
-      "since": "0.4.0"
-    },
-    "to_text": {
-      "kind": "export",
-      "remove": "0.7.0",
-      "replacement": "frames",
-      "since": "0.4.0"
-    },
-    "unclaimed": {
-      "kind": "export",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
-    "unpublish": {
-      "kind": "export",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
-    "verify_join_token": {
-      "kind": "export",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
-    "video_canvas": {
-      "kind": "export",
-      "remove": "0.6.0",
-      "since": "0.4.0"
-    },
-    "who_is_on": {
-      "kind": "export",
-      "remove": "0.6.0",
       "since": "0.4.0"
     },
     "zones_at": {
@@ -2332,7 +2012,6 @@
   "normalize_angle": "(deg: float) -> float",
   "notes_for": "(notes: e8s.show.NotesDocument, show: 'Show', target: str | tuple[str, str], *, include_hidden: bool = False) -> list[e8s.show.Note]",
   "notes_near": "(notes: e8s.show.NotesDocument, show: 'Show', p: Point, radius: Meters, set_id: str | None = None, *, include_hidden: bool = False) -> list[e8s.show.Note]",
-  "notify_changes": "(pub: e8s.export.Publication, old_show: e8s.show.models.Show, new_show: e8s.show.models.Show) -> list[tuple[e8s.export.Performer, str]]",
   "offset": "(curve: e8s.geo.curve_base.Curve, distance: Meters, side: str = 'left') -> e8s.geo.curve_base.Curve",
   "on_field_ids": "(s: e8s.choreo.models.Set, sel: SetSelector = 'all') -> tuple[e8s.core.ids.SpotId, ...]",
   "on_surface": "(sheet: e8s.sheet.models.Sheet, p: Point) -> bool",
@@ -2344,8 +2023,6 @@
   "parse_selector": "(text: str) -> e8s.cast.select.SelectorAst",
   "parse_tid": "(text: str) -> e8s.core.ids.TransitionId",
   "paths_table": "(spec: e8s.choreo.path_models.TransitionSpec) -> 'pd.DataFrame'",
-  "pause": "(pub: e8s.export.Publication) -> e8s.export.Publication",
-  "performer_view": "(pub: e8s.export.Publication, show: e8s.show.models.Show, performer: e8s.export.Performer) -> e8s.export.PerformerView",
   "phrase_profile": "(show: e8s.show.models.Show, t0: Count, t1: Count) -> 'pd.DataFrame'",
   "pin": "(show: e8s.show.models.Show, target: PinTarget, pin_id: str, reason: str = '', by: str = 'designer') -> e8s.show.models.Show",
   "pins": "(show: e8s.show.models.Show) -> list[e8s.show.models.Pin]",
@@ -2359,27 +2036,21 @@
   "preview_proposal": "(show: e8s.show.models.Show, proposal: e8s.show.models.Proposal) -> e8s.show.models.ProposalPreview",
   "propose": "(show: e8s.show.models.Show, change: collections.abc.Sequence[ChangeOp], note: str, proposal_id: str) -> e8s.show.models.Proposal",
   "proscenium_stage": "() -> e8s.sheet.models.Sheet",
-  "publish": "(show: e8s.show.models.Show, publication_id: str, base_url: str, at: datetime.datetime, previous: e8s.export.Publication | None = None, *, join_token: str | None = None) -> e8s.export.Publication",
-  "qr_code": "(pub: e8s.export.Publication, token: str, size: int = 512) -> bytes",
   "ranks_and_files": "(points: Points, rows: int, cols: int) -> list[list[int]]",
   "reachable_region": "(start: Point, counts: Count, max_speed: float) -> Polygon",
   "read_version": "(docs: collections.abc.Mapping[str, bytes]) -> int",
-  "reassign": "(pub: e8s.export.Publication, spot: str, performer: e8s.export.Performer, at: datetime.datetime) -> e8s.export.Publication",
   "rebuild": "(show: e8s.show.models.Show, form_id: str, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.show.models.Show",
   "rect": "(center: Point, w: Meters, d: Meters, rotation_deg: Degrees = 0.0) -> e8s.geo.curves.Polyline",
   "rect_ring": "(x0: float, y0: float, x1: float, y1: float) -> Ring",
   "region": "(outline: e8s.geo.curve_base.Curve | object) -> shapely.geometry.polygon.Polygon",
-  "register_exporter": "(registry: e8s.export.FormatRegistry, name: str, fn: Exporter) -> e8s.export.FormatRegistry",
   "register_font": "(registry: e8s.geo.fonts.FontRegistry, data: bytes, *, if_name_taken: NameTaken = 'raise') -> tuple[e8s.geo.fonts.FontRegistry, str]",
   "register_form_fn": "(registry: e8s.choreo.form_fns.FormFnRegistry, name: str, fn: FormFn) -> e8s.choreo.form_fns.FormFnRegistry",
-  "register_importer": "(registry: e8s.export.FormatRegistry, name: str, fn: Importer) -> e8s.export.FormatRegistry",
   "register_motion": "(registry: e8s.choreo.motion.MotionRegistry, name: str, fn: e8s.choreo.motion.MotionFn) -> e8s.choreo.motion.MotionRegistry",
   "register_unit": "(registry: e8s.core.units.UnitRegistry, name: str, meters_per_unit: float) -> e8s.core.units.UnitRegistry",
   "regroup": "(show: 'Show', sel: Selector, group: str) -> tuple['Show', dict[e8s.core.ids.SpotId, str]]",
   "regular_polygon": "(center: Point, radius: Meters, n: int, rotation_deg: Degrees = 0.0) -> e8s.geo.curves.Polyline",
   "reject": "(proposal: e8s.show.models.Proposal, reason: str) -> e8s.show.models.Proposal",
   "relabel": "(show: 'Show', scheme: e8s.cast.models.LabelScheme) -> tuple['Show', dict[e8s.core.ids.SpotId, str]]",
-  "release": "(pub: e8s.export.Publication, spot: str) -> e8s.export.Publication",
   "remove_audio": "(tl: e8s.time.models.Timeline, label: str) -> e8s.time.models.Timeline",
   "remove_cue": "(tl: e8s.time.models.Timeline, label: str) -> e8s.time.models.Timeline",
   "remove_group": "(show: 'Show', key: str, reassign_to: str | None = None) -> tuple['Show', dict[e8s.core.ids.SpotId, str]]",
@@ -2394,7 +2065,6 @@
   "remove_zone": "(sheet: e8s.sheet.models.Sheet, zone_id: str) -> e8s.sheet.models.Sheet",
   "rename_entities": "(show: e8s.show.models.Show, mapping: collections.abc.Mapping[str, str]) -> e8s.show.models.Show",
   "rename_spots": "(show: 'Show', mapping: collections.abc.Mapping[e8s.core.ids.SpotId, str] | collections.abc.Mapping[str, str], *, force: bool = False, notes: e8s.show.NotesDocument | None = None) -> 'tuple[Show, RewriteReport]'",
-  "render_frame": "(show: e8s.show.models.Show, frame: e8s.choreo.engine_models.Frame, canvas: e8s.sheet.render.SheetCanvas) -> 'Image.Image'",
   "render_sheet": "(sheet: e8s.sheet.models.Sheet, fmt: SheetFormat = 'svg', px_per_m: float = 20.0) -> bytes",
   "renumber": "(show: e8s.show.models.Show, scheme: str = 'sequential') -> tuple[e8s.show.models.Show, dict[e8s.core.ids.SetId, e8s.core.ids.SetId]]",
   "reorder": "(form: e8s.choreo.form_models.Form, order: Order, prev_set: e8s.choreo.models.Set | None = None, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.form_models.Form",
@@ -2468,7 +2138,6 @@
   "svg_form": "(form_id: str, members: collections.abc.Sequence[str], svg: str, fit: e8s.core.types.Box2, *, keep_aspect: bool = True, spacing: e8s.choreo.form_models.SpacingSpec | None = None, facing: e8s.choreo.form_models.FacingSpec | None = None, set_id: str = '', n: int | None = None) -> e8s.choreo.form_models.Form",
   "svg_outline": "(svg: str, fit: e8s.core.types.Box2, path_index: int | None = None, *, keep_aspect: bool = True, flip_y: bool = True) -> list[e8s.geo.curves.SvgCurve]",
   "swap": "(show: e8s.show.models.Show, set_id: str, a: str, b: str, *, force: bool = False) -> e8s.show.models.Show",
-  "swap_claims": "(pub: e8s.export.Publication, a: str, b: str) -> e8s.export.Publication",
   "symmetrize": "(s: e8s.choreo.models.Set, sel: SetSelector = 'all', source_side: Literal['left', 'right'] = 'left', pairs: collections.abc.Mapping[str, str] | None = None, axis_x: float = 0.0, *, force: bool = False) -> e8s.choreo.models.Set",
   "symmetry_error": "(s: e8s.choreo.models.Set, sel: SetSelector = 'all', axis_x: float = 0.0) -> Meters",
   "symmetry_score": "(s: e8s.choreo.models.Set, axis_x: float = 0.0) -> float",
@@ -2480,10 +2149,7 @@
   "text_spot_count": "(text: str, *, fonts: collections.abc.Sequence[str], height: Meters, spacing: Meters, rotation: Degrees = 0.0, align: TextAlign = 'left', anchor: TextAnchor = 'baseline', letter_spacing: float = 0.0, line_spacing: float = 1.2, font_registry: e8s.geo.fonts.FontRegistry | None = None) -> int",
   "timer": "() -> collections.abc.Iterator[e8s.core.util.Timer]",
   "to_coords": "(show: 'Show', p: Point, style: CoordStyle = 'long') -> str",
-  "to_csv": "(obj: Tabular, *, neutralize: bool = True) -> str",
   "to_json": "(tl: e8s.time.models.Timeline) -> dict[str, Any]",
-  "to_pdf": "(obj: Printable, layout: Layout = 'sheet') -> bytes",
-  "to_text": "(obj: Tabular) -> str",
   "transform_curve": "(curve: AnyCurve, matrix: Matrix) -> AnyCurve",
   "transform_facing": "(theta: Degrees, matrix: Matrix) -> Degrees",
   "transform_form": "(form: e8s.choreo.form_models.Form, matrix: Matrix, *, force: bool = False) -> e8s.choreo.form_models.Form",
@@ -2493,12 +2159,10 @@
   "translation_matrix": "(dx: float, dy: float) -> Matrix",
   "turn": "(start: Degrees, end: Degrees, u: float, direction: e8s.choreo.path_models.TurnDirection = <TurnDirection.SHORTEST: 'shortest'>) -> Degrees",
   "two_part": "(show: e8s.show.models.Show, spec: e8s.choreo.path_models.TransitionSpec, sel: collections.abc.Sequence[str], corner: Literal['x_first', 'y_first'] | Point, split: float | None = None, *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
-  "unclaimed": "(pub: e8s.export.Publication, show: e8s.show.models.Show) -> list[e8s.core.ids.SpotId]",
   "union": "(*areas: Area) -> Area",
   "units": "() -> dict[str, float]",
   "unlock": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel) -> e8s.choreo.path_models.TransitionSpec",
   "unpin": "(show: e8s.show.models.Show, target: PinTarget, pin_id: str) -> e8s.show.models.Show",
-  "unpublish": "(pub: e8s.export.Publication) -> e8s.export.Publication",
   "upgrade_dependency": "(show: e8s.show.models.Show, ref: str, version: str, sheet: e8s.sheet.models.Sheet | None = None) -> e8s.show.models.Show",
   "validate_dependencies": "(show: e8s.show.models.Show, store: e8s.sheet.templates.SheetStore | None = None) -> e8s.core.validation.ValidationReport",
   "validate_paths": "(show: e8s.show.models.Show, spec: e8s.choreo.path_models.TransitionSpec) -> e8s.core.validation.ValidationReport",
@@ -2506,14 +2170,11 @@
   "validate_show": "(show: e8s.show.models.Show, store: e8s.sheet.templates.SheetStore | None = None) -> e8s.core.validation.ValidationReport",
   "validate_timeline": "(tl: e8s.time.models.Timeline) -> e8s.core.validation.ValidationReport",
   "vector_facing": "(v: Point) -> Degrees",
-  "verify_join_token": "(pub: e8s.export.Publication, token: str) -> bool",
-  "video_canvas": "(show: e8s.show.models.Show, px_per_m: float = 10.0) -> e8s.sheet.render.SheetCanvas",
   "walkable": "(sheet: e8s.sheet.models.Sheet, p: Point) -> bool",
   "weave": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, JsonValue]) -> Points",
   "wedge": "(apex: Point, length: Meters, spread_deg: Degrees, facing_deg: Degrees = 0.0) -> e8s.geo.curves.Polyline",
   "wedge_form": "(form_id: str, members: collections.abc.Sequence[str], apex: Point, length: Meters, spread_deg: Degrees, direction_deg: Degrees = 0.0, spacing: e8s.choreo.form_models.SpacingSpec | None = None, facing: e8s.choreo.form_models.FacingSpec | None = None, *, set_id: str = '', n: int | None = None) -> e8s.choreo.form_models.Form",
   "where": "(set_: e8s.choreo.models.Set, predicate: collections.abc.Callable[[e8s.choreo.models.Placement], bool]) -> e8s.core.selection.Selection",
-  "who_is_on": "(pub: e8s.export.Publication, spot: str) -> e8s.export.Performer | None",
   "window": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel, start: float, end: float, *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "with_set": "(show: e8s.show.models.Show, new: e8s.choreo.models.Set) -> e8s.show.models.Show",
   "zigzag": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, JsonValue]) -> Points",

@@ -20,13 +20,11 @@ Contains:
     test_regression_import_export_keeps_x_keys(): keeps top-level x- keys byte for byte
     test_import_json_*extension*(): refuses x- values that are not strict JSON or past the cap
     test_show_extensions_*(): refuses non-x- keys and survives stored documents
-    test_interchange_old_paths_warn_and_resolve(): serves the four names from their old modules
     test_import_positions_*(): merges CSV rows into sets and spots, refuses bad rows and pins
     test_regression_import_positions_*(): covers the audited CSV import defects
 """
 
 import base64
-import importlib
 import json
 import math
 import sys
@@ -39,7 +37,6 @@ from e8s.choreo.forms import slots, text_form
 from e8s.choreo.models import PlacementPatch
 from e8s.choreo.path_models import PathRow, TransitionSpec
 from e8s.core.caps import MAX_EXTENSION_BYTES, MAX_POINTS, MAX_TEXT_CHARS
-from e8s.core.deprecation import DeprecatedWarning
 from e8s.core.errors import (
     FontError,
     LockedError,
@@ -53,7 +50,7 @@ from e8s.core.json_types import JsonValue
 from e8s.core.resources import font_path
 from e8s.core.util import approx_equal, asset_uri
 from e8s.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
-from e8s.show import interchange, interchange_positions
+from e8s.show import interchange_positions
 from e8s.show.documents import decode_show, encode_show
 from e8s.show.interchange import (
     FONTS_KEY,
@@ -546,22 +543,6 @@ def test_regression_import_fonts_accepts_an_older_font_under_a_taken_name() -> N
     assert imported.names["simplex"] == bundled_fonts().resolve("simplex")
     assert imported.source(uri) == _older_simplex()
     assert np.array_equal(slots(form, font_registry=imported), slots(form, font_registry=older))
-
-
-@pytest.mark.parametrize(
-    ("old_module", "name"),
-    [
-        ("e8s.export.data", "export_json"),
-        ("e8s.export.data", "import_json"),
-        ("e8s.export.data", "import_fonts"),
-        ("e8s.export.positions", "import_positions"),
-    ],
-)
-def test_interchange_old_paths_warn_and_resolve(old_module: str, name: str) -> None:
-    module = importlib.import_module(old_module)
-    with pytest.warns(DeprecatedWarning, match=f"`{name}` moved to `e8s.show.interchange"):
-        old = getattr(module, name)
-    assert old is getattr(interchange, name)
 
 
 def test_regression_import_json_refuses_an_unknown_top_level_key() -> None:

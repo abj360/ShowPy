@@ -15,8 +15,6 @@ Contains:
     test_gate_failure_reports_a_call_that_runs_without_its_extra: proves the gate check can fail
     test_require_extra_returns_the_installed_module: returns the module when it imports
     test_require_extra_chains_the_import_error: keeps the ImportError as the cause
-    test_is_dataframe_recognizes_a_frame: tells a DataFrame from other tabular objects
-    test_regression_is_dataframe_never_imports_pandas: answers False and leaves pandas unloaded
     test_all_extra_is_the_union_of_the_others: keeps `all` equal to every other extra combined
     test_gated_calls_name_declared_extras: every extra a hint names exists in pyproject.toml
     test_core_dependencies_hold_no_optional_package: keeps the four packages out of core
@@ -35,9 +33,8 @@ import pytest
 
 from e8s.choreo.motion_stats import speeds
 from e8s.core.error_codes import ErrorCode
-from e8s.core.extras import MissingExtraError, is_dataframe, require_extra
+from e8s.core.extras import MissingExtraError, require_extra
 from e8s.examples import EXAMPLE_TID, two_set_show
-from e8s.export._print_sheets import chart
 from scripts.check_core_install import GATED_CALLS, OPTIONAL_MODULES, GatedCall, gate_failure
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -50,11 +47,6 @@ IMPORT_EVERY_MODULE = """
 from scripts.check_core_install import import_every_module, loaded_optional_modules
 names = import_every_module()
 print(len(names), ",".join(loaded_optional_modules()))
-"""
-DATAFRAME_CHECK = """
-import sys
-from e8s.core.extras import is_dataframe
-print(is_dataframe([("x", 1.0)]), "pandas" in sys.modules)
 """
 GATE_CASES = [
     pytest.param(gated, module, id=f"{gated.name}-{module}")
@@ -112,8 +104,8 @@ def test_regression_gated_call_fails_closed_without_its_module(
 
 
 def test_gate_failure_reports_a_call_that_runs_without_its_extra() -> None:
-    ungated = GatedCall("chart", "tables", ("pandas",), lambda: chart(two_set_show(), "1"))
-    assert gate_failure(ungated) == "E: chart ran without the tables extra"
+    ungated = GatedCall("two_set_show", "tables", ("pandas",), two_set_show)
+    assert gate_failure(ungated) == "E: two_set_show ran without the tables extra"
 
 
 def test_require_extra_returns_the_installed_module() -> None:
@@ -127,16 +119,6 @@ def test_require_extra_chains_the_import_error(monkeypatch: pytest.MonkeyPatch) 
     assert isinstance(caught.value.__cause__, ImportError)
     assert caught.value.context["module"] == "segno"
     assert caught.value.hint == ('install the extra: pip install "e8s[qr]" or uv add "e8s[qr]"')
-
-
-def test_is_dataframe_recognizes_a_frame() -> None:
-    assert is_dataframe(pd.DataFrame({"x": [1.0]}))
-    assert not is_dataframe(pd.Series([1.0]))
-    assert not is_dataframe(chart(two_set_show(), "1"))
-
-
-def test_regression_is_dataframe_never_imports_pandas() -> None:
-    assert run_fresh(DATAFRAME_CHECK) == "False False"
 
 
 def optional_dependencies() -> dict[str, list[str]]:

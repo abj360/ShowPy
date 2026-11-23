@@ -46,7 +46,7 @@ def test_exports_are_unique_and_sorted_by_module_groups() -> None:
 
 
 def test_key_entry_points_are_exported() -> None:
-    for name in ("PathEngine", "Show", "select", "match", "new_show", "export_video", "publish"):
+    for name in ("PathEngine", "Show", "select", "match", "new_show"):
         assert name in e8s.__all__
 
 

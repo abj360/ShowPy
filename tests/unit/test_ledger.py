@@ -38,8 +38,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TESTS_ROOT = PROJECT_ROOT / "tests"
 PRIORITY_ZERO_CITATION = re.compile(r"P0 #(\d+)")
 PRIORITY_ZERO_ITEMS = frozenset(range(1, 14))
-ITEMS_RESOLVED_BY_DECISION = frozenset({5})  # permissions moved to the host app
-MIN_PRIORITY_ZERO_TESTS = 50
+# 5: permissions moved to the host app. 10: publication tokens and CSV cells left with the
+# publishing and table code, which the library no longer has.
+ITEMS_RESOLVED_BY_DECISION = frozenset({5, 10})
+# The tests of item 10 and the publishing caps of item 8 were deleted with their code.
+MIN_PRIORITY_ZERO_TESTS = 45
 OPEN_MARKS = frozenset({"defect", "xfail"})
 PLUGIN_ARGS = ("-p", "tests.ledger_plugin", "-p", "no:cacheprovider")
 
