@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_recipe_models.py --- tests the typed, versioned form recipes and the deprecated geometry
+test_recipe_models.py --- tests the typed, versioned form recipes
 
 Contains:
     test_every_form_kind_round_trips_its_recipe: rebuilds an equal form of every kind from JSON,

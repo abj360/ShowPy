@@ -23,7 +23,8 @@ Contains:
     FormOp: replaces or adds one form
     PathsOp: replaces one transition's stored paths
     CountsOp: retimes one set
-    Highlight: points the designer at spots, an area, a point, a set, a transition or a zone
+    Highlight: points the designer at spots, an area, a point, a set, a transition or a named
+        area the host defines
     CanvasEvent: records one edit or pointer from either side of the canvas
     Proposal: holds an agent suggestion the designer accepts or rejects
     ProposalPreview: holds the ghost placements and paths a proposal would produce
@@ -560,7 +561,8 @@ class Highlight(FrozenModel):
 
     Attributes:
         anchor: What is pointed at, when it is spots, an area, a point, a set or a transition.
-        zone: Zone name, when the pointer is a zone.
+        zone: Name of an area the host defines, such as a pit or wings, when the pointer is one;
+            the library keeps no zones and passes the name through.
         ttl_s: Seconds the pointer stays visible.
     """
 
@@ -574,7 +576,7 @@ class Highlight(FrozenModel):
             raise SchemaError(
                 "highlight needs exactly one of anchor and zone",
                 hint="set `anchor` for spots, an area, a point, a set or a transition, "
-                "or `zone` for a zone",
+                "or `zone` for the name of an area the host defines",
             )
         return self
 

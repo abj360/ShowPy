@@ -113,12 +113,14 @@ def test_require_extra_returns_the_installed_module() -> None:
 
 
 def test_require_extra_chains_the_import_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    block_modules(monkeypatch, {"segno"})
+    block_modules(monkeypatch, {"pandas"})
     with pytest.raises(MissingExtraError) as caught:
-        require_extra("segno", extra="qr", needed_by="qr_code")
+        require_extra("pandas", extra="tables", needed_by="speeds")
     assert isinstance(caught.value.__cause__, ImportError)
-    assert caught.value.context["module"] == "segno"
-    assert caught.value.hint == ('install the extra: pip install "e8s[qr]" or uv add "e8s[qr]"')
+    assert caught.value.context["module"] == "pandas"
+    assert caught.value.hint == (
+        'install the extra: pip install "e8s[tables]" or uv add "e8s[tables]"'
+    )
 
 
 def optional_dependencies() -> dict[str, list[str]]:
