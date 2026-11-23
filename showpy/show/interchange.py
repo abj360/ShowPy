@@ -172,6 +172,12 @@ def import_json(d: Mapping[str, Any]) -> Show:
     show = strict_json_copy(dict(body), document=SHOW_KEY) if isinstance(body, Mapping) else None
     if not isinstance(show, dict):
         raise SchemaError("document has no show object", hint=f"put the show under {SHOW_KEY!r}")
+    if EXTENSIONS_FIELD in show:
+        raise SchemaError(
+            f"show object holds {EXTENSIONS_FIELD!r}, which documents keep at the top level",
+            hint=f"write host keys at the top level of the document as {EXTENSION_PREFIX}<name>",
+            context={"field": EXTENSIONS_FIELD},
+        )
     extensions = strict_json_copy(
         {key: value for key, value in d.items() if _is_extension_key(key)}, document=EXTENSIONS_KEY
     )

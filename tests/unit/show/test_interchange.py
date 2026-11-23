@@ -647,3 +647,11 @@ def test_regression_import_json_bounds_a_huge_unknown_key_in_its_message() -> No
     with pytest.raises(SchemaError) as caught:
         import_json({**export_json(two_set_show()), "k" * 100_000: 1})
     assert len(caught.value.message) < 500
+
+
+def test_regression_import_json_refuses_extensions_inside_show() -> None:
+    document = export_json(two_set_show())
+    document["show"] = {**document["show"], "extensions": {"x-a": 1}}
+    with pytest.raises(SchemaError) as caught:
+        import_json(document)
+    assert "top level" in (caught.value.hint or "")
