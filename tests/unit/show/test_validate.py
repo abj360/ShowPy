@@ -93,8 +93,8 @@ from e8s.core.errors import SchemaError
 from e8s.core.ids import FormId, NoteId, SetId, SpotId, make_tid
 from e8s.core.types import Region
 from e8s.core.validation import ValidationReport
-from e8s.notes.models import Note, NotesDocument
 from e8s.sheet.templates import InMemorySheetStore
+from e8s.show._notes_document import Note, NotesDocument
 from e8s.show.models import Anchor, Comment, Pin, Show
 from e8s.show.validate import (
     validate_dependencies,

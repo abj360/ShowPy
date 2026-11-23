@@ -5,7 +5,6 @@ cast_shows.py --- builds shows whose spot IDs appear in every kind of show refer
 
 Contains:
     rich_show(): builds the two-set show with forms, paths, routes, overrides and zones
-    rich_notes(): builds the notes document of rich_show(), one note anchored to spot T2
 """
 
 from datetime import UTC, datetime
@@ -20,13 +19,12 @@ from e8s.choreo.path_models import (
     Route,
     TransitionSpec,
 )
-from e8s.core.ids import FormId, NoteId, RouteId, SetId, SpotId, ZoneId, make_tid
+from e8s.core.ids import FormId, RouteId, SetId, SpotId, ZoneId, make_tid
 from e8s.core.selection import Selection
 from e8s.core.types import Region
 from e8s.geo.curves import Segment
-from e8s.notes.models import Note, NotesDocument
 from e8s.sheet.models import Zone, ZoneKind
-from e8s.show.models import Anchor, Show
+from e8s.show.models import Show
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 
@@ -91,11 +89,3 @@ def rich_show() -> Show:
             "zones": zones,
         }
     )
-
-
-def rich_notes() -> NotesDocument:
-    """Builds the notes document of rich_show(): one note anchored to spot T2."""
-    note = Note(
-        id=NoteId("n1"), text="solo", anchor=Anchor.on_spots(["T2"]), author="pat", created_at=AT
-    )
-    return NotesDocument(show=rich_show().id, notes=(note,))

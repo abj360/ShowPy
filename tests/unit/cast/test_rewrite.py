@@ -20,8 +20,6 @@ Contains:
         members
     test_regression_dropping_all_override_entities_drops_the_override: drops or flags a facing
         override left without entities
-    test_regression_dropping_all_anchored_spots_drops_the_note_anchor: drops or flags a note
-        anchored to no spots
     test_regression_many_to_one_rename_is_reported_with_the_duplicate_target: reports a rename
         mapping two spots to one ID by name, not as UnknownRefError
     test_rename_spots_*: one behavior of the public `rename_spots` and its `RewriteReport` each
@@ -44,7 +42,7 @@ from e8s.core.types import Region
 from e8s.sheet.models import Zone, ZoneKind
 from e8s.show.models import Pin, Show
 from e8s.show.pinning import pin
-from tests.fixtures.cast_shows import rich_notes, rich_show
+from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.shows import two_set_show
 
 pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
@@ -136,15 +134,6 @@ def test_regression_dropping_all_override_entities_drops_the_override() -> None:
     assert all(len(override.entities) > 0 for override in show.facing_overrides)
 
 
-def test_regression_dropping_all_anchored_spots_drops_the_note_anchor() -> None:
-    """Drops or flags a note anchored to no spots (audit 9.3); notes live in the notes document."""
-    drop = {"T1", "T2"}
-    _, report = rewrite_spots(rich_show(), lambda i: None if i in drop else i, notes=rich_notes())
-    assert report.notes is not None
-    assert all(note.anchor.spots != () for note in report.notes.notes)
-    assert [note.id for note in report.orphaned_notes] == ["n1"]
-
-
 def test_regression_many_to_one_rename_is_reported_with_the_duplicate_target() -> None:
     """Reports a rename mapping two spots to one ID by name, not as UnknownRefError (audit 9.3)."""
     with pytest.raises(E8sError) as excinfo:
@@ -167,7 +156,6 @@ def test_rename_spots_reports_only_ids_that_changed() -> None:
     assert dict(report.renamed) == {"T1": "S1"}
     assert show.cast.ids() == ("S1", "T2", "T3", "T4")
     assert (report.dropped_routes, report.dropped_facings) == ((), ())
-    assert report.orphaned_notes == ()
 
 
 def test_rename_spots_with_an_empty_mapping_returns_the_same_show() -> None:
@@ -207,14 +195,9 @@ def test_regression_stale_selector_is_reported_not_fatal() -> None:
     assert renamed.zones[0].applies_to == "T9"
 
 
-def test_rewrite_spots_reports_dropped_route_and_orphaned_note() -> None:
-    _, report = rewrite_spots(
-        rich_show(), lambda i: None if i in {"T1", "T2", "T3", "T4"} else i, notes=rich_notes()
-    )
+def test_rewrite_spots_reports_dropped_route() -> None:
+    _, report = rewrite_spots(rich_show(), lambda i: None if i in {"T1", "T2", "T3", "T4"} else i)
     assert report.dropped_routes == ((("1", "2"), "r1"),)
-    assert [note.id for note in report.orphaned_notes] == ["n1"]
-    assert report.notes is not None
-    assert report.notes.notes == ()
 
 
 def test_regression_override_facing_a_dropped_spot_is_dropped_and_reported() -> None:

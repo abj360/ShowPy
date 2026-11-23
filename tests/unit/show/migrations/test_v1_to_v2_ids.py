@@ -65,8 +65,8 @@ from e8s.core.ids import LEGACY_IDS_KEY, FormId, SetId, ZoneId
 from e8s.core.json_types import JsonValue
 from e8s.core.types import Region
 from e8s.examples import two_set_show
-from e8s.notes.models import NotesDocument
 from e8s.sheet.models import Zone, ZoneKind
+from e8s.show._notes_document import NotesDocument
 from e8s.show.canvas_renames import renamed_canvas
 from e8s.show.documents import (
     LEGACY_NOTES_DOC,

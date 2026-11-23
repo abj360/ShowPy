@@ -6,7 +6,6 @@ Contains:
     faces_entity(): returns the spot a facing aims at, if any
     rewrite_spots(): applies a rename to every spot reference and reports what it dropped
     rewrite_spot_ids(): applies a rename to every spot reference in a show
-    rewrite_note_spots(): applies a rename to the spot anchors of notes and lists the orphans
 """
 
 from collections.abc import Callable, Sequence
@@ -29,7 +28,6 @@ from e8s.core.errors import SchemaError, ShowValidationError, UnknownRefError
 from e8s.core.ids import RouteId, SpotId, TransitionId
 from e8s.core.selection import Selection, SelectorField
 from e8s.sheet.models import Sheet, Zone
-from e8s.show._notes_document import Note, NotesDocument, require_notes_of
 
 if TYPE_CHECKING:
     from e8s.show.models import Pin, Show
@@ -43,7 +41,6 @@ class _Dropped:
 
     routes: list[tuple[TransitionId, RouteId]] = field(default_factory=list)
     facings: list[FacingOverride] = field(default_factory=list)
-    notes: list[Note] = field(default_factory=list)
     selectors: list[str] = field(default_factory=list)
 
 
@@ -102,36 +99,30 @@ def _require_no_dropped_row_facings(show: "Show", rename: Rename) -> None:
         )
 
 
-def rewrite_spots(
-    show: "Show", rename: Rename, *, notes: NotesDocument | None = None
-) -> "tuple[Show, RewriteReport]":
+def rewrite_spots(show: "Show", rename: Rename) -> "tuple[Show, RewriteReport]":
     """Applies `rename` to every spot reference in a show and reports what it dropped.
 
     Covers the cast, named selections, placements, forms, path rows (keys, entities and
-    entity facings), routes, facing overrides, entity pins and zones of the show and its sheet,
-    and the note anchors of the notes document when one is passed. A selector that names labels
-    is frozen to the rewritten ID list; a selector that cannot be resolved stays as written and
-    is reported. A route left without members, a facing override left without spots or aimed at
-    a dropped spot, and a note anchored only to dropped spots are removed and reported.
-    Raises SchemaError when two spots would share one ID or the notes document belongs to
-    another show, and ShowValidationError when a path row of a kept spot faces a dropped spot.
+    entity facings), routes, facing overrides, entity pins and zones of the show and its sheet.
+    A selector that names labels is frozen to the rewritten ID list; a selector that cannot be
+    resolved stays as written and is reported. A route left without members and a facing
+    override left without spots or aimed at a dropped spot are removed and reported. Raises
+    SchemaError when two spots would share one ID, and ShowValidationError when a path row of a
+    kept spot faces a dropped spot.
 
     Args:
         show: The show to rewrite.
         rename: Old spot ID to new ID, or None to drop the spot.
-        notes: The notes document stored beside the show, or None.
 
     Returns:
         show: The rewritten show.
-        report: What was renamed, dropped or left unresolved, and the rewritten notes document.
+        report: What was renamed, dropped or left unresolved.
 
     >>> from e8s.examples import two_set_show
     >>> rewritten, report = rewrite_spots(two_set_show(), lambda i: "S1" if i == "T1" else i)
     >>> rewritten.cast.ids(), dict(report.renamed)
     (('S1', 'T2', 'T3', 'T4'), {'T1': 'S1'})
     """
-    if notes is not None:
-        require_notes_of(notes, show.id)
     renamed = _renamed_spots(show, rename)
     _require_no_dropped_row_facings(show, rename)
     dropped = _Dropped()
@@ -148,18 +139,11 @@ def rewrite_spots(
         "sheet": _rewrite_sheet(show, rename, dropped),
     }
     new_cast = Cast.model_validate({**dict(cast), "spots": spots, "selections": selections})
-    rewritten_notes = None
-    if notes is not None:
-        kept_notes, orphaned = rewrite_note_spots(notes.notes, rename)
-        rewritten_notes = notes.replace(notes=kept_notes)
-        dropped.notes.extend(orphaned)
     report = RewriteReport(
         renamed={old: new for old, new in renamed.items() if old != new},
         dropped_routes=tuple(dropped.routes),
         dropped_facings=tuple(dropped.facings),
-        orphaned_notes=tuple(dropped.notes),
         unresolved_selectors=tuple(dict.fromkeys(dropped.selectors)),
-        notes=rewritten_notes,
     )
     return show.replace(cast=new_cast, **updates), report
 
@@ -235,42 +219,6 @@ def _rewrite_spec(spec: TransitionSpec, rename: Rename, dropped: _Dropped) -> Tr
             mode, value = _rewrite_facing(row.facing_mode, row.facing_value, rename)
             rows[new] = row.replace(entity=new, facing_mode=mode, facing_value=value)
     return spec.replace(rows=rows, routes=_rewrite_routes(spec, rename, dropped))
-
-
-def rewrite_note_spots(
-    notes: Sequence[Note], rename: Rename
-) -> tuple[tuple[Note, ...], tuple[Note, ...]]:
-    """Applies `rename` to the spot anchors of notes, dropping a note left without spots.
-
-    Args:
-        notes: Notes in document order.
-        rename: Old spot ID to new ID, or None to drop the spot.
-
-    Returns:
-        kept: The notes that still have an anchor, spot anchors rewritten, in order.
-        orphaned: Each note removed because every spot it was anchored to was dropped.
-
-    >>> from datetime import UTC, datetime
-    >>> from e8s.show.anchors import Anchor
-    >>> at = datetime(2026, 11, 11, tzinfo=UTC)
-    >>> note = Note(id="n1", text="solo", anchor=Anchor.on_spots(["T2"]), author="d", created_at=at)
-    >>> kept, orphaned = rewrite_note_spots([note], lambda i: None if i == "T2" else i)
-    >>> kept, [n.id for n in orphaned]
-    ((), ['n1'])
-    """
-    kept: list[Note] = []
-    orphaned: list[Note] = []
-    for note in notes:
-        spots = note.anchor.spots
-        if spots is None:
-            kept.append(note)
-            continue
-        moved = _keep(spots, rename)
-        if spots and not moved:
-            orphaned.append(note)
-        else:
-            kept.append(note.replace(anchor=note.anchor.replace(spots=moved)))
-    return tuple(kept), tuple(orphaned)
 
 
 def _rewrite_selector(

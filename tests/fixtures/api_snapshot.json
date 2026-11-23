@@ -847,25 +847,6 @@
       "speed_spread": "float"
     }
   },
-  "Note": {
-    "model": {
-      "anchor": "e8s.show.anchors.Anchor",
-      "author": "str",
-      "created_at": "pydantic.types.AwareDatetime",
-      "id": "e8s.core.ids.NoteId",
-      "kind": "NoteKind",
-      "text": "str",
-      "visible": "bool"
-    }
-  },
-  "NotesDocument": {
-    "model": {
-      "format": "Literal['e8.notes']",
-      "notes": "tuple[e8s.show.Note, ...]",
-      "show": "str",
-      "version": "Literal[1]"
-    }
-  },
   "PathDiff": {
     "model": {
       "changed_rows": "tuple[e8s.core.ids.SpotId, ...]",
@@ -1062,8 +1043,6 @@
     "model": {
       "dropped_facings": "tuple[e8s.choreo.path_models.FacingOverride, ...]",
       "dropped_routes": "tuple[tuple[e8s.core.ids.TransitionId, e8s.core.ids.RouteId], ...]",
-      "notes": "e8s.show.NotesDocument | None",
-      "orphaned_notes": "tuple[e8s.show.Note, ...]",
       "renamed": "collections.abc.Mapping[e8s.core.ids.SpotId, e8s.core.ids.SpotId]",
       "unresolved_selectors": "tuple[str, ...]"
     }
@@ -1511,7 +1490,6 @@
     }
   },
   "accept": "(ws: e8s.show.storage.Workspace, proposal: e8s.show.models.Proposal, at: datetime.datetime) -> e8s.show.models.Revision",
-  "accept_draft": "(notes: e8s.show.NotesDocument, show: 'Show', draft: e8s.show.Note) -> e8s.show.NotesDocument",
   "add_cue": "(tl: e8s.time.models.Timeline, cue: e8s.time.models.Cue) -> e8s.time.models.Timeline",
   "add_facing_override": "(show: e8s.show.models.Show, override: e8s.choreo.path_models.FacingOverride) -> e8s.show.models.Show",
   "add_group": "(show: 'Show', group: e8s.cast.models.Group) -> 'Show'",
@@ -1519,7 +1497,6 @@
   "add_hold": "(tl: e8s.time.models.Timeline, hold: e8s.time.models.Hold) -> e8s.time.models.Timeline",
   "add_landmark": "(sheet: e8s.sheet.models.Sheet, item: e8s.sheet.models.Landmark) -> e8s.sheet.models.Sheet",
   "add_marker": "(tl: e8s.time.models.Timeline, marker: e8s.time.models.Marker) -> e8s.time.models.Timeline",
-  "add_note": "(notes: e8s.show.NotesDocument, show: 'Show', text: str, anchor: e8s.show.anchors.Anchor, note_id: str, at: datetime.datetime, author: str, kind: NoteKind = 'idea') -> e8s.show.NotesDocument",
   "add_set": "(show: e8s.show.models.Show, set_id: str, counts: float, after: str | None = None, placements: collections.abc.Sequence[e8s.choreo.models.Placement] | None = None, *, force: bool = False) -> e8s.show.models.Show",
   "add_spot": "(show: 'Show', point: Point, group: str, set_id: str, *, force: bool = False) -> 'Show'",
   "add_spots_along": "(show: 'Show', curve: e8s.geo.curve_base.Curve, n: int, group: str, set_id: str, *, force: bool = False) -> 'Show'",
@@ -1620,14 +1597,13 @@
   "easing_breaks": "(easing: e8s.choreo.path_models.Easing) -> list[float]",
   "edit": "(form: e8s.choreo.form_models.Form, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None, **changes: Any) -> e8s.choreo.form_models.Form",
   "edit_group": "(show: 'Show', key: str, /, **changes: Unpack[e8s.cast.spots.GroupPatch]) -> 'Show'",
-  "edit_note": "(notes: e8s.show.NotesDocument, show: 'Show', note_id: str, /, **changes: object) -> e8s.show.NotesDocument",
   "edit_params": "(form: e8s.choreo.form_models.Form, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., **params: Any) -> e8s.choreo.form_models.Form",
   "edit_text_count": "(form: e8s.choreo.form_models.Form, *, add: collections.abc.Sequence[str] = (), remove: collections.abc.Sequence[str] = (), n: int | None = None, spacing: Meters | None = None, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.form_models.Form",
   "ellipse": "(center: Point, rx: Meters, ry: Meters, rotation_deg: Degrees = 0.0) -> e8s.geo.curves.EllipseCurve",
   "energy_curve": "(show: e8s.show.models.Show, per_count: int = 1) -> 'pd.Series'",
   "events_since": "(ws: e8s.show.storage.Workspace, revision: str) -> list[e8s.show.models.CanvasEvent]",
   "expand": "(obj: T, d: Meters, about: About = 'center', sel: SetSelector = 'all', *, force: bool = False) -> T",
-  "export_json": "(show: e8s.show.models.Show, include: str | collections.abc.Iterable[str] | None = None, *, font_registry: e8s.geo.fonts.FontRegistry | None = None, notes: e8s.show.NotesDocument | None = None) -> dict[str, Any]",
+  "export_json": "(show: e8s.show.models.Show, include: str | collections.abc.Iterable[str] | None = None, *, font_registry: e8s.geo.fonts.FontRegistry | None = None) -> dict[str, Any]",
   "face_along": "(show: e8s.show.models.Show, set_id: str, form_id: str, *, reverse: bool = False, force: bool = False) -> e8s.choreo.models.Set",
   "face_audience": "(target: e8s.choreo.models.Set, sel: Sel, *, force: bool = False) -> e8s.choreo.models.Set",
   "face_direction": "(target: e8s.choreo.models.Set, sel: Sel, deg: Degrees, *, force: bool = False) -> e8s.choreo.models.Set",
@@ -1665,7 +1641,6 @@
   "hold": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel, until: float | None = None, from_: float | None = None, *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "import_fonts": "(d: collections.abc.Mapping[str, Any], font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.geo.fonts.FontRegistry",
   "import_json": "(d: collections.abc.Mapping[str, Any]) -> e8s.show.models.Show",
-  "import_notes": "(d: collections.abc.Mapping[str, object]) -> e8s.show.NotesDocument",
   "import_positions": "(base: e8s.show.models.Show, text: str, group: str, columns: collections.abc.Mapping[str, str] | None = None, *, force: bool = False) -> e8s.show.models.Show",
   "in_region": "(set_: e8s.choreo.models.Set, shape: RegionLike) -> e8s.core.selection.Selection",
   "index": "(show: e8s.show.models.Show) -> e8s.show.models.ShowIndex",
@@ -1715,21 +1690,6 @@
       "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
-    "Note": {
-      "kind": "type",
-      "remove": "1.0.0",
-      "since": "0.4.0"
-    },
-    "NotesDocument": {
-      "kind": "type",
-      "remove": "1.0.0",
-      "since": "0.4.0"
-    },
-    "RewriteReport.notes": {
-      "kind": "field",
-      "remove": "1.0.0",
-      "since": "0.4.0"
-    },
     "SheetCanvas": {
       "kind": "type",
       "remove": "0.6.0",
@@ -1765,11 +1725,6 @@
       "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
-    "accept_draft": {
-      "kind": "function",
-      "remove": "1.0.0",
-      "since": "0.4.0"
-    },
     "add_guide": {
       "kind": "function",
       "remove": "0.7.0",
@@ -1780,11 +1735,6 @@
       "kind": "function",
       "remove": "0.7.0",
       "replacement": ["Marking", "markings_near"],
-      "since": "0.4.0"
-    },
-    "add_note": {
-      "kind": "function",
-      "remove": "1.0.0",
       "since": "0.4.0"
     },
     "add_zone": {
@@ -1816,11 +1766,6 @@
       "remove": "0.6.0",
       "since": "0.4.0"
     },
-    "edit_note": {
-      "kind": "function",
-      "remove": "1.0.0",
-      "since": "0.4.0"
-    },
     "football_field": {
       "kind": "function",
       "remove": "0.7.0",
@@ -1843,11 +1788,6 @@
       "kind": "function",
       "remove": "0.7.0",
       "replacement": "floor",
-      "since": "0.4.0"
-    },
-    "import_notes": {
-      "kind": "function",
-      "remove": "1.0.0",
       "since": "0.4.0"
     },
     "landmark": {
@@ -1880,16 +1820,6 @@
       "replacement": "markings_near",
       "since": "0.4.0"
     },
-    "notes_for": {
-      "kind": "function",
-      "remove": "1.0.0",
-      "since": "0.4.0"
-    },
-    "notes_near": {
-      "kind": "function",
-      "remove": "1.0.0",
-      "since": "0.4.0"
-    },
     "on_surface": {
       "kind": "function",
       "remove": "0.7.0",
@@ -1920,11 +1850,6 @@
       "replacement": ["Marking", "markings_near"],
       "since": "0.4.0"
     },
-    "remove_note": {
-      "kind": "function",
-      "remove": "1.0.0",
-      "since": "0.4.0"
-    },
     "remove_zone": {
       "kind": "function",
       "remove": "0.7.0",
@@ -1934,11 +1859,6 @@
     "render_sheet": {
       "kind": "function",
       "remove": "0.6.0",
-      "since": "0.4.0"
-    },
-    "rewrite_note_anchors": {
-      "kind": "function",
-      "remove": "1.0.0",
       "since": "0.4.0"
     },
     "save_sheet": {
@@ -2013,8 +1933,6 @@
   "new_show": "(show_id: str, title: str, sheet: e8s.sheet.models.Sheet, timeline: e8s.time.models.Timeline, cast: e8s.cast.models.Cast | None = None, pack: str = '') -> e8s.show.models.Show",
   "new_timeline": "(mode: e8s.time.models.TimelineMode, counts_per_minute: CountsPerMinute | None = None, total: Count | None = None) -> e8s.time.models.Timeline",
   "normalize_angle": "(deg: float) -> float",
-  "notes_for": "(notes: e8s.show.NotesDocument, show: 'Show', target: str | tuple[str, str], *, include_hidden: bool = False) -> list[e8s.show.Note]",
-  "notes_near": "(notes: e8s.show.NotesDocument, show: 'Show', p: Point, radius: Meters, set_id: str | None = None, *, include_hidden: bool = False) -> list[e8s.show.Note]",
   "offset": "(curve: e8s.geo.curve_base.Curve, distance: Meters, side: str = 'left') -> e8s.geo.curve_base.Curve",
   "on_field_ids": "(s: e8s.choreo.models.Set, sel: SetSelector = 'all') -> tuple[e8s.core.ids.SpotId, ...]",
   "on_surface": "(sheet: e8s.sheet.models.Sheet, p: Point) -> bool",
@@ -2061,20 +1979,18 @@
   "remove_hold": "(tl: e8s.time.models.Timeline, at_count: Count) -> e8s.time.models.Timeline",
   "remove_landmark": "(sheet: e8s.sheet.models.Sheet, landmark_id: str) -> e8s.sheet.models.Sheet",
   "remove_marker": "(tl: e8s.time.models.Timeline, label: str) -> e8s.time.models.Timeline",
-  "remove_note": "(notes: e8s.show.NotesDocument, note_id: str) -> e8s.show.NotesDocument",
   "remove_set": "(show: e8s.show.models.Show, set_id: str, *, merge_counts: bool = True, force: bool = False) -> e8s.show.models.Show",
   "remove_tempo": "(tl: e8s.time.models.Timeline, at_count: Count) -> e8s.time.models.Timeline",
   "remove_waypoint": "(spec: e8s.choreo.path_models.TransitionSpec, entity: str, index: int, *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "remove_zone": "(sheet: e8s.sheet.models.Sheet, zone_id: str) -> e8s.sheet.models.Sheet",
   "rename_entities": "(show: e8s.show.models.Show, mapping: collections.abc.Mapping[str, str]) -> e8s.show.models.Show",
-  "rename_spots": "(show: 'Show', mapping: collections.abc.Mapping[e8s.core.ids.SpotId, str] | collections.abc.Mapping[str, str], *, force: bool = False, notes: e8s.show.NotesDocument | None = None) -> 'tuple[Show, RewriteReport]'",
+  "rename_spots": "(show: 'Show', mapping: collections.abc.Mapping[e8s.core.ids.SpotId, str] | collections.abc.Mapping[str, str], *, force: bool = False) -> 'tuple[Show, RewriteReport]'",
   "render_sheet": "(sheet: e8s.sheet.models.Sheet, fmt: SheetFormat = 'svg', px_per_m: float = 20.0) -> bytes",
   "renumber": "(show: e8s.show.models.Show, scheme: str = 'sequential') -> tuple[e8s.show.models.Show, dict[e8s.core.ids.SetId, e8s.core.ids.SetId]]",
   "reorder": "(form: e8s.choreo.form_models.Form, order: Order, prev_set: e8s.choreo.models.Set | None = None, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.form_models.Form",
   "require_finite": "(value: SupportsFloat, *, name: str, low: float | None = None, low_open: bool = False, high: float | None = None) -> float",
   "require_size": "(requested: int, cap: int, *, what: str, error: type[e8s.core.errors.E8sError] = ...) -> None",
   "revert": "(ws: e8s.show.storage.Workspace, revision_id: str, at: datetime.datetime) -> e8s.show.models.Revision",
-  "rewrite_note_anchors": "(notes: e8s.show.NotesDocument, show: 'Show', *, sets: SetMapping | None = None, spots: SpotMapping | None = None) -> tuple[e8s.show.NotesDocument, tuple[e8s.show.Note, ...]]",
   "ripple": "(spec: e8s.choreo.path_models.TransitionSpec, ordered_sel: Sel, total: float, curve: Literal['linear', 'ease_in', 'ease_out', 'ease_in_out'] = 'linear', *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "rose_points": "(params: collections.abc.Mapping[str, Any], n: int) -> Points",
   "rotate": "(obj: T, deg: Degrees, about: About = 'center', sel: SetSelector = 'all', *, force: bool = False) -> T",

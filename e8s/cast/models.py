@@ -21,13 +21,11 @@ from typing import Annotated, Literal, get_args
 from pydantic import Field, field_validator, model_validator
 
 from e8s.choreo.path_models import FacingOverride
-from e8s.core.deprecation import leave_field
 from e8s.core.errors import GeometryError, SchemaError, UnknownRefError
 from e8s.core.ids import RouteId, SelectionNameField, SpotId, SpotIdField, TransitionId
 from e8s.core.readonly import ReadOnly, ReadOnlyMap
 from e8s.core.types import Degrees, FrozenModel, Meters, PositiveFinite
 from e8s.core.util import close_matches, natural_sort
-from e8s.show._notes_document import Note, NotesDocument
 
 DEFAULT_RADIUS_M = 0.3
 DEFAULT_SYMBOL = "circle"
@@ -285,11 +283,7 @@ class RewriteReport(FrozenModel):
         dropped_routes: Transition and route ID of each route left without members.
         dropped_facings: Each facing override removed because no spot was left on it or its
             target spot was dropped.
-        orphaned_notes: Each note removed from the notes document passed in, because every spot
-            it was anchored to was dropped.
         unresolved_selectors: Stored selectors that no longer resolve and were left as written.
-        notes: The notes document passed in, with its spot anchors rewritten; None without one.
-            It leaves the library in 1.0.0 with the notes, and an outside read warns.
     """
 
     renamed: Annotated[Mapping[SpotId, SpotId], ReadOnly()] = Field(
@@ -297,9 +291,4 @@ class RewriteReport(FrozenModel):
     )
     dropped_routes: tuple[tuple[TransitionId, RouteId], ...] = ()
     dropped_facings: tuple[FacingOverride, ...] = ()
-    orphaned_notes: tuple[Note, ...] = ()
-    notes: NotesDocument | None = None
     unresolved_selectors: tuple[str, ...] = ()
-
-
-leave_field(RewriteReport, "notes", since="0.4.0", remove="1.0.0")

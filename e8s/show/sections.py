@@ -156,9 +156,6 @@ def _section(show: Show, sets: Sequence[Set], timeline: Timeline, low: Count, hi
 def split_section(show: Show, at: str) -> tuple[Show, Show]:
     """Splits a show at set `at`; both shows hold `at`, and the second starts its clock there.
 
-    The notes document beside the show is not split; for each part, map the sets it lacks to
-    None in rewrite_note_anchors() to keep only the notes on its own sets.
-
     The second show's tempo, holds, markers, measures, audio sync, facing overrides and zone
     windows shift so its count 0 is `at`. Raises TimelineError when `at` starts mid-measure.
 
@@ -290,9 +287,6 @@ def _joined_timeline(a: Timeline, b: Timeline, offset: Count) -> Timeline:
 
 def join_sections(a: Show, b: Show) -> Show:
     """Appends show `b` after show `a`; the inverse of split_section() for sets and paths.
-
-    Notes documents are not joined; merge them as the host keeps them, and pass a set that took
-    a new ID to rewrite_note_anchors() as `sets=`.
 
     When `b` starts with `a`'s last set (same ID and placements) they become one set.
     Otherwise set IDs must not repeat, and `b`'s first set keeps its counts (0), so retime it
