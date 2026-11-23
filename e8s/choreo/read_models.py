@@ -43,9 +43,9 @@ class Frames(ArrayModel):
     fps: float
     seconds: Annotated[FloatArray, ReadOnlyArray(1)]
     counts: Annotated[FloatArray, ReadOnlyArray(1)]
-    x: Annotated[FloatArray, ReadOnlyArray(2)]
-    y: Annotated[FloatArray, ReadOnlyArray(2)]
-    facing: Annotated[FloatArray, ReadOnlyArray(2)]
+    x: Annotated[FloatArray, ReadOnlyArray(2, columns="spots")]
+    y: Annotated[FloatArray, ReadOnlyArray(2, columns="spots")]
+    facing: Annotated[FloatArray, ReadOnlyArray(2, columns="spots")]
 
     @model_validator(mode="after")
     def _shapes_agree(self) -> Self:
@@ -88,13 +88,13 @@ class CoordinateTable(ArrayModel):
     spots: tuple[SpotId, ...]
     sets: tuple[SetId, ...]
     counts: Annotated[FloatArray, ReadOnlyArray(1)]
-    x: Annotated[FloatArray, ReadOnlyArray(2)]
-    y: Annotated[FloatArray, ReadOnlyArray(2)]
-    across: Annotated[FloatArray, ReadOnlyArray(2)]
-    depth: Annotated[FloatArray, ReadOnlyArray(2)]
-    across_exact: Annotated[FloatArray, ReadOnlyArray(2)]
-    depth_exact: Annotated[FloatArray, ReadOnlyArray(2)]
-    on_field: Annotated[BoolArray, ReadOnlyArray(2, np.bool_)]
+    x: Annotated[FloatArray, ReadOnlyArray(2, columns="spots")]
+    y: Annotated[FloatArray, ReadOnlyArray(2, columns="spots")]
+    across: Annotated[FloatArray, ReadOnlyArray(2, columns="spots")]
+    depth: Annotated[FloatArray, ReadOnlyArray(2, columns="spots")]
+    across_exact: Annotated[FloatArray, ReadOnlyArray(2, columns="spots")]
+    depth_exact: Annotated[FloatArray, ReadOnlyArray(2, columns="spots")]
+    on_field: Annotated[BoolArray, ReadOnlyArray(2, np.bool_, columns="spots")]
     origin: Point
     origin_landmark: LandmarkId | None
     audience_side: AudienceSide
