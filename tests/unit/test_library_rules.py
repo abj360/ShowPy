@@ -82,6 +82,9 @@ MODEL_METHODS = frozenset(
         "model_dump_json",
         "model_copy",
         "model_fields",
+        "model_fields_set",
+        "model_construct",
+        "model_json_schema",
     }
 )
 MARKDOWN_PYTHON_BLOCK = re.compile(r"^```(?:python|py)\n(.*?)^```", re.MULTILINE | re.DOTALL)
@@ -236,12 +239,12 @@ def test_library_never_calls_pydantic_model_methods() -> None:
 
 
 def test_model_method_scan_flags_calls_lookups_getattr_and_doctests() -> None:
-    """Reports each kind of use and ignores model_fields_set, which is not banned."""
+    """Reports each kind of use and ignores a longer name that only starts like a banned one."""
     source = (
         "a = x.model_dump()\n"
         "b = X.model_fields\n"
         "c = getattr(x, 'model_copy')\n"
-        "d = x.model_fields_set\n"
+        "d = x.model_fields_settled\n"
         "def f():\n"
         '    """Builds one.\n'
         "\n"
@@ -310,7 +313,7 @@ def test_markdown_scan_flags_only_python_code_blocks() -> None:
         "```python\n"
         "show = two_set_show()\n"
         "show = show.model_copy(update={})\n"
-        "fields = show.model_fields_set\n"
+        "fields = show.model_fields_settled\n"
         "```\n"
     )
     assert find_markdown_model_method_uses(text, "doc.md") == ["doc.md:7"]

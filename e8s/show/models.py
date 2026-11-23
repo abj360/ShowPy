@@ -270,7 +270,7 @@ class Show(FrozenModel):
         for spec in self.transitions:
             stored.setdefault(spec.id, spec)
         pairs = [TransitionId(a, b) for a, b in itertools.pairwise(ids)]
-        return ShowLookup.model_construct(
+        return ShowLookup._unchecked(
             positions=ReadOnlyMap(positions),
             consecutive=ReadOnlyMap({pair: pair for pair in pairs}),
             stored=ReadOnlyMap(stored),

@@ -303,6 +303,15 @@ class FrozenModel(BaseModel):
         """Lists the model's field names in declaration order."""
         return tuple(cls.__pydantic_fields__)
 
+    @classmethod
+    def _unchecked(cls, **values: object) -> Self:
+        """Builds a model from already valid values without running any validator."""
+        return super().model_construct(None, **values)
+
+    def _set_fields(self) -> frozenset[str]:
+        """Lists the fields given explicitly when the model was built, not filled by defaults."""
+        return frozenset(self.model_fields_set)
+
     def replace(self, **changes: object) -> Self:
         """Returns a copy with `changes` applied, run through every validator.
 

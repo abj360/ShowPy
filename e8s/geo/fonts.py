@@ -333,9 +333,9 @@ def register_font(
             code=ErrorCode.FONT_NAME_TAKEN,
         )
     names = registry.names if taken is not None else {**registry.names, font.name: uri}
-    # model_construct skips the consistency validator: this font was just hashed and loaded, and
+    # _unchecked skips the consistency validator: this font was just hashed and loaded, and
     # re-hashing the rest on every call would be quadratic in the registry size.
-    extended = FontRegistry.model_construct(
+    extended = FontRegistry._unchecked(
         fonts=ReadOnlyMap({**registry.fonts, uri: font}),
         sources=ReadOnlyMap({**registry.sources, uri: data}),
         names=ReadOnlyMap(names),
