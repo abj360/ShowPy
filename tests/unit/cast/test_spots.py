@@ -26,6 +26,7 @@ Contains:
         count with SchemaError
 """
 
+import sys
 import tracemalloc
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
@@ -538,6 +539,7 @@ def full_show() -> Show:
 
 
 @fails_after(CAP_CHECK_BUDGET_S)
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_add_spots_checks_cap_before_allocating(full_show: Show) -> None:
     """Refuses spots past MAX_SPOTS before spacing them or building a placement per set.
 

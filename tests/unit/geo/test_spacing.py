@@ -425,6 +425,7 @@ FILL_LIMIT_BUDGET_S = 1
 
 
 @fails_after(FILL_LIMIT_BUDGET_S)
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
 def test_regression_fill_stops_once_it_passes_the_limit() -> None:
     """Refuses a fill past `limit` after limit + 1 spots, not after testing 790,000 lattice
     points, which took 9 s."""
