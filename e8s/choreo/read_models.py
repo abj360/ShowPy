@@ -3,7 +3,7 @@ read_models.py --- data classes returned by the floor readers
 
 Contains:
     Frames: every selected spot's position and facing at regular frame times
-    CoordinateTable: selected spots' positions at sets, in meters and in steps from the origin
+    CoordinateTable: selected spots' positions at sets, in meters and in the show's coordinates
     SegmentKind: names what a spot does in one segment of a move
     SegmentDescription: one segment of a spot's move: a hold or one kind of travel
     TransitionDescription: every selected spot's segments in one transition, alike spots grouped
@@ -60,12 +60,12 @@ class Frames(ArrayModel):
 
 
 class CoordinateTable(ArrayModel):
-    """Holds selected spots' positions at sets, in meters and in steps from the origin.
+    """Holds selected spots' positions at sets, in meters and in the show's coordinates.
 
-    Row `i` of every (sets, spots) array is set `sets[i]`; column `j` is spot `spots[j]`. Steps
-    are counted from the show's coordinate origin along its axes: `across` is positive toward
-    the audience's right, `depth` positive away from the audience, whichever edge of the sheet
-    the audience sits at.
+    Row `i` of every (sets, spots) array is set `sets[i]`; column `j` is spot `spots[j]`.
+    Coordinates are offsets from the coordinate system's origin in its units: `across` is
+    positive toward the audience's right, `depth` positive away from the audience, whichever
+    edge of the sheet the audience sits at.
 
     Attributes:
         spots: Spot IDs in column order.
@@ -73,16 +73,17 @@ class CoordinateTable(ArrayModel):
         counts: Global count of each set; shape (sets,).
         x: Positions across the sheet in meters; shape (sets, spots).
         y: Positions away from the audience in meters; shape (sets, spots).
-        across: Steps across from the origin, rounded half away from zero to `resolution`.
-        depth: Steps away from the audience from the origin, rounded like `across`.
+        across: Offsets across from the origin in `units`, rounded half away from zero to
+            `precision`, as the coordinate wording shows them.
+        depth: Offsets away from the audience from the origin, rounded like `across`.
         across_exact: Unrounded `across`, for callers that round differently.
         depth_exact: Unrounded `depth`.
         on_field: Whether each spot is on the field at each set.
-        origin: Origin of the steps in stage meters.
+        origin: Origin of the offsets in stage meters.
         origin_landmark: Landmark the origin is named by, or None for a plain point.
         audience_side: Edge of the sheet where the audience sits.
-        step: Length of one step in meters.
-        resolution: Rounding of `across` and `depth`, in steps.
+        units: Unit the offsets are in.
+        precision: Rounding step of `across` and `depth`, in `units`.
     """
 
     spots: tuple[SpotId, ...]
@@ -98,8 +99,8 @@ class CoordinateTable(ArrayModel):
     origin: Point
     origin_landmark: LandmarkId | None
     audience_side: AudienceSide
-    step: float
-    resolution: float
+    units: str
+    precision: float
 
     @model_validator(mode="after")
     def _shapes_agree(self) -> Self:

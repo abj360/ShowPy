@@ -3,7 +3,7 @@ read.py --- the floor readers: motion over time as arrays, all answered by PathE
 
 Contains:
     frames(): returns every selected spot's position and facing at regular frame times
-    coordinate_table(): returns selected spots' positions at sets, in meters and in steps
+    coordinate_table(): returns selected spots' positions at sets, in meters and coordinates
     describe_transition(): describes each selected spot's move as segments, alike spots grouped
 """
 
@@ -34,9 +34,9 @@ from e8s.core.errors import SchemaError, TimeRangeError
 from e8s.core.ids import LandmarkId, SetId, SpotId, TransitionId
 from e8s.core.selection import Selector
 from e8s.core.types import Count, Degrees, Point
-from e8s.core.units import convert, round_to, vector_facing
+from e8s.core.units import vector_facing
 from e8s.core.validation import require_finite
-from e8s.sheet.coords import axis_offsets, axis_origin
+from e8s.sheet.coords import axis_offsets, axis_origin, offsets_in_units, rounded_offsets
 from e8s.show.models import Show
 from e8s.time.clock import count_to_seconds, seconds_to_count
 from e8s.time.models import Timeline
@@ -46,12 +46,6 @@ DEFAULT_FPS = 30.0
 # float noise, and a range of exactly 4 s at 30 fps must keep its last frame.
 FRAME_TOL = 1e-9
 MAX_FRAME_VALUES = 20_000_000
-# An 8-to-5 step: eight steps cover five yards.
-STEPS_PER_FIVE_YARDS = 8
-FIVE_YARDS_M = convert(5.0, "yd", "m")
-STEP_M = FIVE_YARDS_M / STEPS_PER_FIVE_YARDS
-RESOLUTIONS = (1.0, 0.5, 0.25, 0.125)
-DEFAULT_RESOLUTION = 0.25
 STILL_M = 1e-9
 GROUP_DIGITS = 6
 FULL_TURN = 360.0
@@ -172,16 +166,6 @@ def frames(
     return Frames(spots=spots, fps=rate, seconds=seconds, counts=counts, x=x, y=y, facing=facing)
 
 
-def _require_resolution(resolution: float) -> float:
-    if resolution in RESOLUTIONS:
-        return float(resolution)
-    raise SchemaError(
-        f"resolution {resolution!r} is not a step size coordinates round to",
-        hint=f"use one of {', '.join(f'{r:g}' for r in RESOLUTIONS)} steps",
-        context={"resolution": repr(resolution)},
-    )
-
-
 def _set_ids(show: Show, sets: Sequence[str] | None) -> tuple[SetId, ...]:
     if sets is None:
         return tuple(s.id for s in show.sets)
@@ -205,48 +189,40 @@ def _set_positions(
     return x, y
 
 
-def _rounded(steps: FloatArray, resolution: float) -> FloatArray:
-    flat = [round_to(value, resolution) for value in steps.ravel().tolist()]
-    return np.array(flat, dtype=float).reshape(steps.shape)
-
-
 def coordinate_table(
     show: Show,
-    who: Selector,
+    who: Selector = ALL,
     sets: Sequence[str] | None = None,
-    resolution: float = DEFAULT_RESOLUTION,
     *,
     engine: PathEngine | None = None,
 ) -> CoordinateTable:
-    """Returns selected spots' positions at sets, in meters and in steps from the origin.
+    """Returns selected spots' positions at sets, in meters and in the show's coordinates.
 
-    Positions are PathEngine positions at each set's count. Steps are 8-to-5 steps (eight to
-    five yards) from the show's coordinate origin, across toward the audience's right and away
-    from the audience, rounded half away from zero to `resolution`.
+    Positions are PathEngine positions at each set's count. Coordinates are offsets from the
+    coordinate system's origin, across toward the audience's right and away from the audience,
+    in the system's units and rounded to its precision as its wording rounds them.
 
     Args:
         show: Show to read.
         who: Spots to read, as a selection expression, a list of IDs or a Selection.
         sets: Set IDs in the order wanted; None reads every set in show order.
-        resolution: Rounding in steps: 1, 0.5, 0.25 or 0.125.
         engine: A PathEngine already built for `show`, reused so repeated reads skip compiling.
 
     Returns:
-        table: (sets, spots) arrays of meters, rounded and exact steps, and field states.
+        table: (sets, spots) arrays of meters, rounded and exact coordinates, and field states.
 
     Raises:
         UnknownRefError: A set or spot is not in the show.
-        SchemaError: `resolution` is not one of the allowed steps, `sets` is empty, or
-            `engine` belongs to another show.
+        SchemaError: `sets` is empty, an offset cannot be rounded, or `engine` belongs to
+            another show.
 
     >>> from e8s.examples import two_set_show
-    >>> table = coordinate_table(two_set_show(), "T2", resolution=0.5)
+    >>> table = coordinate_table(two_set_show(), "T2")
     >>> table.x[:, 0].tolist(), table.y[:, 0].tolist()
     ([2.0, 2.0], [5.0, 9.0])
-    >>> table.across[:, 0].tolist(), table.depth[:, 0].tolist()
-    ([3.5, 3.5], [8.5, 15.5])
+    >>> table.across[:, 0].tolist(), table.depth[:, 0].tolist(), table.units
+    ([2.0, 2.0], [5.0, 9.0], 'm')
     """
-    rounding = _require_resolution(resolution)
     reader = _engine_for(show, engine)
     spots = _spot_ids(show, who)
     set_ids = _set_ids(show, sets)
@@ -255,7 +231,7 @@ def coordinate_table(
     x, y = _set_positions(reader, spots, counts)
     system = show.coordinates
     across_m, depth_m = axis_offsets(show.sheet, system, np.column_stack([x.ravel(), y.ravel()]))
-    across, depth = across_m.reshape(x.shape) / STEP_M, depth_m.reshape(x.shape) / STEP_M
+    across_m, depth_m = across_m.reshape(x.shape), depth_m.reshape(x.shape)
     on_field = [[show.set(set_id).get(spot).on_field for spot in spots] for set_id in set_ids]
     return CoordinateTable(
         spots=spots,
@@ -263,16 +239,16 @@ def coordinate_table(
         counts=counts,
         x=x,
         y=y,
-        across=_rounded(across, rounding),
-        depth=_rounded(depth, rounding),
-        across_exact=across,
-        depth_exact=depth,
+        across=rounded_offsets(system, across_m),
+        depth=rounded_offsets(system, depth_m),
+        across_exact=offsets_in_units(system, across_m),
+        depth_exact=offsets_in_units(system, depth_m),
         on_field=np.array(on_field, dtype=bool).reshape(x.shape),
         origin=axis_origin(show.sheet, system),
         origin_landmark=LandmarkId(system.origin) if isinstance(system.origin, str) else None,
         audience_side=system.audience_side,
-        step=STEP_M,
-        resolution=rounding,
+        units=system.units,
+        precision=system.precision,
     )
 
 

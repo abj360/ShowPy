@@ -18,11 +18,12 @@ Contains:
     test_regression_frames_model_rejects_mismatched_shapes: raises SchemaError
     test_coordinate_table_equals_positions_at_each_set: matches PathEngine.positions at every
         set's count
-    test_coordinate_table_counts_steps_from_the_origin: counts 8-to-5 steps along the axes of
-        the show's coordinate system and rounds them half away from zero
+    test_coordinate_table_offsets_follow_the_coordinate_system: gives offsets from the
+        system's origin along its axes, in its units, rounded to its precision as worded
+    test_coordinate_table_reads_every_spot_by_default: selects "all" when no spots are named
     test_coordinate_table_reads_named_sets_in_order: keeps the order the sets are named in
     test_coordinate_table_reports_who_is_on_the_field: copies each placement's field state
-    test_regression_coordinate_table_rejects_an_unknown_resolution: raises SchemaError
+    test_regression_coordinate_table_refuses_an_offset_it_cannot_round: raises SchemaError
     test_regression_coordinate_table_rejects_an_unknown_set: raises UnknownRefError
     test_regression_coordinate_table_rejects_no_sets: raises SchemaError
     test_regression_coordinate_table_model_rejects_mismatched_shapes: raises SchemaError
@@ -34,11 +35,11 @@ import pytest
 from e8s.choreo.engine import PathEngine
 from e8s.choreo.models import PlacementPatch
 from e8s.choreo.path_models import FacingMode, PathRow
-from e8s.choreo.read import STEP_M, coordinate_table, frames
+from e8s.choreo.read import coordinate_table, frames
 from e8s.choreo.read_models import CoordinateTable, Frames
 from e8s.core.errors import SchemaError, TimeRangeError, UnknownRefError
 from e8s.core.ids import LandmarkId, SpotId
-from e8s.core.units import round_to
+from e8s.core.units import convert, round_to
 from e8s.sheet.models import CoordinateSystem
 from e8s.show.models import Show
 from e8s.time.models import Hold
@@ -161,19 +162,22 @@ def test_coordinate_table_equals_positions_at_each_set() -> None:
         assert table.y[row].tolist() == points[:, 1].tolist()
 
 
-def test_coordinate_table_counts_steps_from_the_origin() -> None:
-    system = CoordinateSystem(origin=LandmarkId("c"), audience_side="back")
-    show = two_set_show().replace(coordinates=system)
-    table = coordinate_table(show, "T2 + T4", resolution=0.125)
-    assert table.origin == (0.0, 10.0)
-    assert table.origin_landmark == "c"
-    assert table.audience_side == "back"
-    assert table.across_exact[0].tolist() == [-2.0 / STEP_M, -6.0 / STEP_M]
-    assert table.depth_exact[:, 0].tolist() == [5.0 / STEP_M, 1.0 / STEP_M]
-    expected = [[round_to(v, 0.125) for v in row] for row in table.depth_exact.tolist()]
-    assert table.depth.tolist() == expected
-    assert table.step == STEP_M
-    assert table.resolution == 0.125
+def test_coordinate_table_offsets_follow_the_coordinate_system() -> None:
+    system = CoordinateSystem(
+        origin=LandmarkId("c"), audience_side="back", units="ft", precision=0.5
+    )
+    table = coordinate_table(two_set_show().replace(coordinates=system), "T2 + T4")
+    feet = convert(1.0, "m", "ft")
+    assert (table.origin, table.origin_landmark, table.audience_side) == ((0.0, 10.0), "c", "back")
+    assert (table.units, table.precision) == ("ft", 0.5)
+    assert table.across_exact[0].tolist() == [-2.0 * feet, -6.0 * feet]
+    assert table.depth_exact[:, 0].tolist() == [5.0 * feet, 1.0 * feet]
+    for exact, rounded in ((table.across_exact, table.across), (table.depth_exact, table.depth)):
+        assert rounded.tolist() == [[round_to(v, 0.5) for v in row] for row in exact.tolist()]
+
+
+def test_coordinate_table_reads_every_spot_by_default() -> None:
+    assert coordinate_table(two_set_show()).spots == ("T1", "T2", "T3", "T4")
 
 
 def test_coordinate_table_reads_named_sets_in_order() -> None:
@@ -190,11 +194,11 @@ def test_coordinate_table_reports_who_is_on_the_field() -> None:
     assert table.on_field.tolist() == [[True, True], [True, False]]
 
 
-@pytest.mark.parametrize("resolution", [0.3, 2.0, 0.0])
-def test_regression_coordinate_table_rejects_an_unknown_resolution(resolution: float) -> None:
-    with pytest.raises(SchemaError, match="resolution") as caught:
-        coordinate_table(two_set_show(), "all", resolution=resolution)
-    assert "0.125" in caught.value.hint
+def test_regression_coordinate_table_refuses_an_offset_it_cannot_round() -> None:
+    show = two_set_show().replace(coordinates=CoordinateSystem(precision=1e-300))
+    with pytest.raises(SchemaError, match="cannot round") as caught:
+        coordinate_table(show)
+    assert "precision" in caught.value.hint
 
 
 def test_regression_coordinate_table_rejects_an_unknown_set() -> None:

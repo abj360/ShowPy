@@ -13,6 +13,8 @@ Contains:
     to_coords(): words a point in the show's coordinate system
     axis_offsets(): returns points' offsets from the origin, across and away from the audience
     axis_origin(): returns the system's origin in stage meters
+    offsets_in_units(): converts offsets in meters to the system's units, unrounded
+    rounded_offsets(): converts offsets to the system's units, rounded to its precision
     from_coords(): reads worded coordinates back into a point
 """
 
@@ -249,6 +251,40 @@ def _rounded(value_m: float, system: CoordinateSystem) -> float:
             context=context,
         )
     return shown
+
+
+def offsets_in_units(system: CoordinateSystem, offsets_m: FloatArray) -> FloatArray:
+    """Returns offsets in meters converted to the system's units, unrounded.
+
+    >>> offsets_in_units(CoordinateSystem(units="ft"), np.array([0.3048, -0.6096])).tolist()
+    [1.0, -2.0]
+    """
+    check_coordinate_system(system)
+    in_units: FloatArray = offsets_m * convert(1.0, "m", system.units)
+    return in_units
+
+
+def rounded_offsets(system: CoordinateSystem, offsets_m: FloatArray) -> FloatArray:
+    """Returns offsets in meters in the system's units, rounded to its precision as worded.
+
+    Each value equals the number `to_coords` writes for it, signed: half away from zero.
+
+    Args:
+        system: Coordinate system giving the units and the precision.
+        offsets_m: Offsets in meters, any shape.
+
+    Returns:
+        rounded: The offsets in the system's units, rounded, in the same shape.
+
+    Raises:
+        SchemaError: An offset cannot be rounded to a finite value at the precision.
+
+    >>> rounded_offsets(CoordinateSystem(precision=0.5), np.array([1.24, -1.25])).tolist()
+    [1.0, -1.5]
+    """
+    check_coordinate_system(system)
+    flat = [_rounded(value, system) for value in offsets_m.ravel().tolist()]
+    return np.array(flat, dtype=float).reshape(offsets_m.shape)
 
 
 def _part(
