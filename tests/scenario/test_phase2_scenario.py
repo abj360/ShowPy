@@ -489,8 +489,10 @@ def test_json_and_document_round_trips_are_equal(scenario: Scenario) -> None:
     with unchanged(head):
         assert import_json(export_json(head)) == head
         documents = encode_show(head)
-        assert decode_show(documents, head.revision) == head
-        assert encode_show(decode_show(documents, head.revision)) == documents
+        decoded = decode_show(documents, head.revision)
+        assert decoded == head
+    with unchanged(decoded):
+        assert encode_show(decoded) == documents
 
 
 def test_events_since_replays_to_head(scenario: Scenario) -> None:
@@ -502,13 +504,15 @@ def test_events_since_replays_to_head(scenario: Scenario) -> None:
     for event in scenario.events:
         with unchanged(replayed, event):
             replayed = apply_event(replayed, event)
-    assert encode_show(replayed) == encode_show(scenario.head)
+    with unchanged(replayed, scenario.head):
+        assert encode_show(replayed) == encode_show(scenario.head)
 
 
 def test_revert_restores_an_earlier_revision(scenario: Scenario) -> None:
     """Checks revert writes a new revision holding the base show."""
     assert scenario.reverted.revision != scenario.base_revision
-    assert encode_show(scenario.reverted) == encode_show(scenario.base)
+    with unchanged(scenario.reverted, scenario.base):
+        assert encode_show(scenario.reverted) == encode_show(scenario.base)
     assert scenario.reverted != scenario.head
 
 
@@ -519,7 +523,8 @@ def test_one_revision_never_changes_another(scenario: Scenario) -> None:
     assert scenario.reread_docs == scenario.revision_docs
     for revision in log:
         fresh = decode_show(scenario.repo.documents(scenario.head.id, revision), revision)
-        assert scenario.revision_docs[revision] == encode_show(fresh), revision
+        with unchanged(fresh):
+            assert scenario.revision_docs[revision] == encode_show(fresh), revision
     distinct = {tuple(sorted(docs.items())) for docs in scenario.revision_docs.values()}
     assert len(distinct) == len(log) - 2
     assert scenario.revision_docs[log[-1]] == scenario.revision_docs[scenario.base_revision]
