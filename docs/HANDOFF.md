@@ -85,8 +85,9 @@ phase's plan was deleted after the tag.
 no users, so the leaving names of ADR 0021 went at once, with no warning period (ADR 0021,
 addendum 2026-11-23): the `e8s.export` package (publishing, claims, print, PDF, tables, video),
 the `e8s.notes` package, `Spot.claimable`, landmarks, zones, coordinate wording, the stage
-template, sheet rendering and every deprecated alias. The sheet names that change shape later (templates, lookup, guides,
-storage) stay and still warn. Reading a v1 show lists each dropped stored field in
+template, sheet rendering and every deprecated alias. The sheet names that change shape later
+(templates, lookup, guides, storage) stay as current API with no warning, and the library keeps no
+deprecation machinery. Reading a v1 show lists each dropped stored field in
 `MigrationReport.dropped`; v1 notes still go to `/notes/notes.json`.
 
 **Next: Phase 2, foundations** (`docs/upgrade-plan.md`, "Phase 2"), the main breaking release

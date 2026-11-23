@@ -23,7 +23,7 @@ The first build covers every module except the consumer checker (below), `e8s.pa
 - `e8s.examples` holds small, deterministic example shows for docs, doctests and tests: `field_sheet()`, `two_set_show()`, `with_rows(rows, routes=None, show=None)`, `with_targets(updates, show=None)`, `crossing_show()`, plus `EXAMPLE_TIME` and `EXAMPLE_TID`. `field_sheet()` is a plain 40 × 20 m blank sheet.
 - `pip install e8s` installs numpy, scipy, shapely and pydantic only. pandas is the extra `tables` (`all` holds it too); a function marked "needs the `<name>` extra" raises `MissingExtraError` at call time without it.
 - `→ X` means the function returns X. Optional arguments show their defaults. A `*` in a signature starts the keyword-only arguments; every boolean flag (`force`, `keep_end`, `include_hidden`, ...) is keyword-only. Two families leave shared trailing arguments out of their table rows: the transforms of `e8s.choreo.set_transforms` and `e8s.choreo.set_snapping` all end in `sel="all", *, force=False`, and the path editors of `e8s.choreo.paths` (all but `default_paths`, `lock`, `unlock` and `paths_table`) end in `*, force=False`; `curve_path(spec, entity, *control, force=False)` takes it after its control points.
-- **Deprecated** names still work but warn `DeprecatedWarning` on use. A table that mixes current and deprecated names marks the deprecated ones in a **Deprecated** column with the release that removes them and their replacement; a section that is deprecated as a whole says so in a note under its heading. A replacement that is not in the library yet arrives in the release that removes the old name.
+- The library has no users yet, so it keeps no deprecation warnings: a name that a later release replaces is current API until then, and the replacing release changes it directly.
 
 **Module map**
 
@@ -31,7 +31,7 @@ The first build covers every module except the consumer checker (below), `e8s.pa
 | ------------------ | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `e8s.core`         | all                  | Units, IDs and types, errors, validation reports, the selection model, utilities                                                                                              |
 | `e8s.cast`         | Show Canvas          | Groups, spots, cast, selection language, spot ID rewriting                                                                                                                    |
-| `e8s.sheet`        | Canvas               | The 2D design sheet: templates, customization, guide lines, bounds, similarity fit; templates, customization, guide lines and sheet stores are deprecated since 0.4.0         |
+| `e8s.sheet`        | Canvas               | The 2D design sheet: templates, customization, guide lines, bounds, similarity fit                                                                                            |
 | `e8s.time`         | Show Canvas, Preview | Count timeline: tempo, holds, markers, cues, measures, audio sync                                                                                                             |
 | `e8s.geo`          | Show Canvas          | Curves, shapes, regions, SVG and text outlines, spacing, affine maps, transforms, static measurement                                                                          |
 | `e8s.choreo`       | Show Canvas          | Sets, forms, matching, paths, routes, engine, facing, avoidance, time-based measures                                                                                          |
@@ -114,27 +114,26 @@ Every error has `code: ErrorCode`, `message: str`, `context: dict`, `hint: str`,
 
 `ErrorCode` (`e8s.core.error_codes`) is a `StrEnum` catalogue of every code the library raises or reports; its values equal its names, and `docs/error-codes.md` lists each code with the classes that raise it.
 
-| Class                 | Parent               | Raised when                                                                                                   |
-| --------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `E8sError`            | `Exception`          | Base of all library errors                                                                                    |
-| `UnknownRefError`     | `E8sError`           | An ID, name or unit does not resolve; hint lists close matches                                                |
-| `VersionError`        | `E8sError`           | A pinned version is missing or incompatible                                                                   |
-| `SchemaError`         | `E8sError`           | Data fails its JSON schema or text format; names the field                                                    |
-| `GeometryError`       | `E8sError`           | Degenerate shape (zero radius, open polygon, collinear arc points)                                            |
-| `ZeroLengthError`     | `GeometryError`      | Direction of a zero vector requested                                                                          |
-| `SpacingError`        | `E8sError`           | Items do not fit; reports the maximum that fits                                                               |
-| `TimeRangeError`      | `E8sError`           | Times outside range or start ≥ end                                                                            |
-| `TimelineError`       | `E8sError`           | Inconsistent tempo, measure or hold data                                                                      |
-| `SurfaceError`        | `E8sError`           | A point is off the sheet                                                                                      |
-| `MatchError`          | `E8sError`           | No feasible assignment; names the blocking constraint                                                         |
-| `PathError`           | `E8sError`           | Invalid path instruction                                                                                      |
-| `ContinuityError`     | `PathError`          | A path does not end on its target placement                                                                   |
-| `LockedError`         | `E8sError`           | Edit touches something the designer locked                                                                    |
-| `StorageError`        | `E8sError`           | Persistence failure                                                                                           |
-| `ConflictError`       | `StorageError`       | A concurrent edit landed first; lists what changed                                                            |
-| `ShowValidationError` | `E8sError`           | Structural integrity failure; `ValidationReport.raise_for_errors()` raises it                                 |
-| `MissingExtraError`   | `E8sError`           | A function needs an extra that is not installed; hint is the install command (`e8s.core.extras`)              |
-| `DeprecatedWarning`   | `DeprecationWarning` | Deprecated API used; names the replacement and the removal release (`e8s.core.deprecation`, re-exported here) |
+| Class                 | Parent          | Raised when                                                                                      |
+| --------------------- | --------------- | ------------------------------------------------------------------------------------------------ |
+| `E8sError`            | `Exception`     | Base of all library errors                                                                       |
+| `UnknownRefError`     | `E8sError`      | An ID, name or unit does not resolve; hint lists close matches                                   |
+| `VersionError`        | `E8sError`      | A pinned version is missing or incompatible                                                      |
+| `SchemaError`         | `E8sError`      | Data fails its JSON schema or text format; names the field                                       |
+| `GeometryError`       | `E8sError`      | Degenerate shape (zero radius, open polygon, collinear arc points)                               |
+| `ZeroLengthError`     | `GeometryError` | Direction of a zero vector requested                                                             |
+| `SpacingError`        | `E8sError`      | Items do not fit; reports the maximum that fits                                                  |
+| `TimeRangeError`      | `E8sError`      | Times outside range or start ≥ end                                                               |
+| `TimelineError`       | `E8sError`      | Inconsistent tempo, measure or hold data                                                         |
+| `SurfaceError`        | `E8sError`      | A point is off the sheet                                                                         |
+| `MatchError`          | `E8sError`      | No feasible assignment; names the blocking constraint                                            |
+| `PathError`           | `E8sError`      | Invalid path instruction                                                                         |
+| `ContinuityError`     | `PathError`     | A path does not end on its target placement                                                      |
+| `LockedError`         | `E8sError`      | Edit touches something the designer locked                                                       |
+| `StorageError`        | `E8sError`      | Persistence failure                                                                              |
+| `ConflictError`       | `StorageError`  | A concurrent edit landed first; lists what changed                                               |
+| `ShowValidationError` | `E8sError`      | Structural integrity failure; `ValidationReport.raise_for_errors()` raises it                    |
+| `MissingExtraError`   | `E8sError`      | A function needs an extra that is not installed; hint is the install command (`e8s.core.extras`) |
 
 ### Error codes beyond each class's own
 
@@ -172,7 +171,7 @@ Models raise `SchemaError`, never pydantic's `ValidationError`: its context list
 
 ### e8s.core.caps
 
-Output sizes are checked before anything is allocated; `require_size(requested, cap, *, what, error=SchemaError)` raises when a size is negative or over its cap. Caps are `MAX_POINTS` (1,000,000), `MAX_TABLE` (1,000,000), `MAX_GRID_CELLS` (4,000,000), `MAX_RANGE` (10,000), `MAX_DEPTH` (64), `MAX_TEXT_CHARS` (1,000,000), `MAX_IMAGE_PIXELS` (40,000,000) and `MAX_VIDEO_PIXELS` (3840 × 2160). Stored values are bounded by `MAX_COORD_M` (1e6 m, for `Meters` and points), `MAX_COUNTS` (1,000,000 counts) and `MIN_TEMPO` (1e-3 counts per minute); a value past them raises `SchemaError` instead of becoming NaN or infinity later. `MIN_LAYOUT_HEIGHT_M` (1e-3 m) is the smallest text height `layout_text` accepts.
+Output sizes are checked before anything is allocated; `require_size(requested, cap, *, what, error=SchemaError)` raises when a size is negative or over its cap. Caps are `MAX_POINTS` (1,000,000), `MAX_TABLE` (1,000,000), `MAX_GRID_CELLS` (4,000,000), `MAX_RANGE` (10,000), `MAX_DEPTH` (64), and `MAX_TEXT_CHARS` (1,000,000). Stored values are bounded by `MAX_COORD_M` (1e6 m, for `Meters` and points), `MAX_COUNTS` (1,000,000 counts) and `MIN_TEMPO` (1e-3 counts per minute); a value past them raises `SchemaError` instead of becoming NaN or infinity later. `MIN_LAYOUT_HEIGHT_M` (1e-3 m) is the smallest text height `layout_text` accepts.
 
 ### e8s.core.validation
 
@@ -294,7 +293,7 @@ Expression grammar for `select`: IDs `T4`, ranges `T1-T8`, prefixes `T*` (labels
 
 Used for the 2D design surface every show is drawn on. There is one standard sheet; a template fills it in (size, outline, walkable area, guide lines, grid).
 
-Most of this module is deprecated since 0.4.0. Staying: `Sheet`, `Grid`, `SurfaceType`, `rect_ring`, `walkable` and `similarity_fit`. Guide lines, templates, customization and sheet stores leave in 0.7.0, when `sheets`, `sheet`, `field`, `floor`, `Marking` and `on_sheet` replace them. Each deprecated function warns on every call and each deprecated type on every `e8s.<name>` access.
+Guide lines, templates, customization and sheet stores are current API until 0.7.0, which replaces them directly with `sheets`, `sheet`, `field`, `floor`, `Marking` and `on_sheet`.
 
 ### e8s.sheet.models
 
@@ -302,29 +301,29 @@ Most of this module is deprecated since 0.4.0. Staying: `Sheet`, `Grid`, `Surfac
 
 Sheet models refuse invalid data at construction: a size that is not finite and positive, an outline under three points or crossing itself, a `ref` or `based_on` that is not `sheet:<name>@<version>`, repeated guide IDs and a guide with no points.
 
-| Data class              | Fields                                                                                                                                                                                                                   | Represents                                        | Deprecated                                                                                                           |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `Grid`                  | `origin: Point = (0, 0), spacing: tuple[Meters, Meters] = (1, 1), major_every: int = 5, rotation_deg: Degrees = 0, unit_name: str = "m"`                                                                                 | Background grid                                   |                                                                                                                      |
-| `GuideLine`             | `id: str, kind: "yard" \| "hash" \| "sideline" \| "center" \| "edge" \| "spike" \| "custom", points: Ring, label: str`                                                                                                   | A line drawn on the sheet                         | leaves in 0.7.0; replaced by `Marking`                                                                               |
-| `Sheet`                 | `ref: SheetRef, name: str, surface_type: SurfaceType, size_m: tuple[Meters, Meters], outline: Ring, walkable: Region, guides: tuple[GuideLine, ...], grid: Grid, based_on: SheetRef \| None, owner: str, thumbnail: str` | The 2D design surface; (0, 0) is its front-center |                                                                                                                      |
-| `SheetStore` (protocol) | `get(ref) → Sheet \| None`, `put(sheet, scope) → SheetRef`; `InMemorySheetStore` implements it                                                                                                                           | Where saved sheets live; injected, never global   | leaves in 0.7.0 with `InMemorySheetStore`; replaced by `sheets`, `sheet`, `field`, `floor`, `Marking` and `on_sheet` |
+| Data class              | Fields                                                                                                                                                                                                                   | Represents                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
+| `Grid`                  | `origin: Point = (0, 0), spacing: tuple[Meters, Meters] = (1, 1), major_every: int = 5, rotation_deg: Degrees = 0, unit_name: str = "m"`                                                                                 | Background grid                                   |
+| `GuideLine`             | `id: str, kind: "yard" \| "hash" \| "sideline" \| "center" \| "edge" \| "spike" \| "custom", points: Ring, label: str`                                                                                                   | A line drawn on the sheet                         |
+| `Sheet`                 | `ref: SheetRef, name: str, surface_type: SurfaceType, size_m: tuple[Meters, Meters], outline: Ring, walkable: Region, guides: tuple[GuideLine, ...], grid: Grid, based_on: SheetRef \| None, owner: str, thumbnail: str` | The 2D design surface; (0, 0) is its front-center |
+| `SheetStore` (protocol) | `get(ref) → Sheet \| None`, `put(sheet, scope) → SheetRef`; `InMemorySheetStore` implements it                                                                                                                           | Where saved sheets live; injected, never global   |
 
 ### e8s.sheet functions
 
 Templates and sheet edits live in `e8s.sheet.templates` (built-in surfaces in `e8s.sheet.surfaces`), bounds tests in `e8s.sheet.bounds` and the similarity fit in `e8s.sheet.replace`. A show keeps the sheet it was created on: there is no `replace_sheet` and no `SheetReplaceReport`; make a new show on the other sheet instead.
 
-| Function                                                     | Inputs                                     | Output        | Purpose                                                                                                                                                          | Deprecated                                                                                 |
-| ------------------------------------------------------------ | ------------------------------------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `sheet_templates(surface_type=None)`                         | `SurfaceType`                              | `list[Sheet]` | Built-in templates: blank 20 × 15 m, NFHS, NCAA and NFL football fields, gym floor (basketball court)                                                            | leaves in 0.7.0; replaced by `sheets`                                                      |
-| `get_sheet(ref, store=None)`                                 | `SheetRef`, `SheetStore`                   | `Sheet`       | Resolve against the templates first, then the injected store                                                                                                     | leaves in 0.7.0; replaced by `sheet`                                                       |
-| `blank_sheet(width_m, depth_m, grid_spacing=1.0, units="m")` |                                            | `Sheet`       | Plain rectangle with a center line, for unusual spaces                                                                                                           | leaves in 0.7.0; replaced by `sheets`, `sheet`, `field`, `floor`, `Marking` and `on_sheet` |
-| `customize(sheet, **changes)`                                | `name`, `grid`, `size` (blank sheets only) | `Sheet`       | Adjust a sheet without replacing it                                                                                                                              | leaves in 0.7.0; replaced by `sheets`, `sheet`, `field`, `floor`, `Marking` and `on_sheet` |
-| `add_guide(sheet, item)`                                     | `GuideLine`                                | `Sheet`       | Draw one more line on the sheet                                                                                                                                  | leaves in 0.7.0; replaced by `sheets`, `sheet`, `field`, `floor`, `Marking` and `on_sheet` |
-| `remove_guide(sheet, guide_id)`                              |                                            | `Sheet`       | Remove a guide line                                                                                                                                              | leaves in 0.7.0; replaced by `sheets`, `sheet`, `field`, `floor`, `Marking` and `on_sheet` |
-| `save_sheet(store, sheet, scope="mine")`                     | `SheetStore`; `"mine"` or `"team"`         | `SheetRef`    | Keep a customized sheet (e.g. "Lincoln HS home field") under the next free version, recording `based_on`                                                         | leaves in 0.7.0; replaced by `sheets`, `sheet`, `field`, `floor`, `Marking` and `on_sheet` |
-| `similarity_fit(src, dst)`                                   | two `Points`                               | 3 × 3 matrix  | Least-squares rotation, uniform scale and translation (Umeyama); raises `GeometryError` for a reflection, fewer than two landmarks, non-finite or stacked points |                                                                                            |
-| `walkable(sheet, p)`                                         | `Point`                                    | `bool`        | Whether a point is in the walkable area                                                                                                                          |                                                                                            |
-| `on_surface(sheet, p)`                                       | `Point`                                    | `bool`        | Bounds tests; the outline counts as on the surface                                                                                                               | leaves in 0.7.0; replaced by `on_sheet`                                                    |
+| Function                                                     | Inputs                                     | Output        | Purpose                                                                                                                                                          |
+| ------------------------------------------------------------ | ------------------------------------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sheet_templates(surface_type=None)`                         | `SurfaceType`                              | `list[Sheet]` | Built-in templates: blank 20 × 15 m, NFHS, NCAA and NFL football fields, gym floor (basketball court)                                                            |
+| `get_sheet(ref, store=None)`                                 | `SheetRef`, `SheetStore`                   | `Sheet`       | Resolve against the templates first, then the injected store                                                                                                     |
+| `blank_sheet(width_m, depth_m, grid_spacing=1.0, units="m")` |                                            | `Sheet`       | Plain rectangle with a center line, for unusual spaces                                                                                                           |
+| `customize(sheet, **changes)`                                | `name`, `grid`, `size` (blank sheets only) | `Sheet`       | Adjust a sheet without replacing it                                                                                                                              |
+| `add_guide(sheet, item)`                                     | `GuideLine`                                | `Sheet`       | Draw one more line on the sheet                                                                                                                                  |
+| `remove_guide(sheet, guide_id)`                              |                                            | `Sheet`       | Remove a guide line                                                                                                                                              |
+| `save_sheet(store, sheet, scope="mine")`                     | `SheetStore`; `"mine"` or `"team"`         | `SheetRef`    | Keep a customized sheet (e.g. "Lincoln HS home field") under the next free version, recording `based_on`                                                         |
+| `similarity_fit(src, dst)`                                   | two `Points`                               | 3 × 3 matrix  | Least-squares rotation, uniform scale and translation (Umeyama); raises `GeometryError` for a reflection, fewer than two landmarks, non-finite or stacked points |
+| `walkable(sheet, p)`                                         | `Point`                                    | `bool`        | Whether a point is in the walkable area                                                                                                                          |
+| `on_surface(sheet, p)`                                       | `Point`                                    | `bool`        | Bounds tests; the outline counts as on the surface                                                                                                               |
 
 ## e8s.time
 
