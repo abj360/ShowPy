@@ -4,12 +4,13 @@ v1_to_v2_ids.py --- the ids sub-step of the v1 to v2 format migration (lane A)
 The last sub-step. It runs on the show validated with any non-empty v1 ID accepted and renames,
 once and by rule, every spot, set, form, route, zone, selection and note ID that fails its ID
 check or repeats, ignoring case, an ID of its kind kept earlier in show order. Valid IDs keep
-their spelling, and the first of a case pair is the one kept. The rule, in order: each `-`
-becomes `_`, leading and trailing `.` are stripped, the ID is cut to 60 characters, an empty
-result becomes `id`, and a reserved word gets a trailing `_` (a device name before an
-extension gets it before the dot: `con.5` becomes `con_.5`). A repaired ID that is still taken
-gets the smallest free suffix `.2`, `.3`, ... An ID the rule cannot repair (one holding a
-space, `*`, `..` or a non-ASCII letter) is refused with SchemaError BAD_ID; nothing is guessed.
+their spelling, and the first of a case pair is the one kept. The rule, in order: NFC; every
+character outside the kind's alphabet (`-`, a space, `*`, a non-ASCII letter) becomes `_`, and
+each `..` run becomes `.`; leading and trailing `.` are stripped, the ID is cut to 60
+characters, an empty result becomes `id`, and a reserved word gets a trailing `_` (a device
+name before an extension gets it before the dot: `con.5` becomes `con_.5`). Zone IDs keep an
+inner `-`, and an edge `-` becomes `_`. A repaired ID that is still taken gets the smallest free
+suffix `.2`, `.3`, ... Every v1 ID is repaired; none is refused.
 
 Every reference follows a rename. Spots go last, through rename_spots(); a set's key follows
 its renamed ID unless the key was written explicitly. Route IDs are unique per transition and
@@ -35,12 +36,13 @@ from showpy.cast.select import KIND_SEPARATOR, TOKEN_PATTERN
 from showpy.cast.spots import rename_spots
 from showpy.choreo.models import Set
 from showpy.choreo.path_models import TransitionSpec
-from showpy.core.error_codes import ErrorCode
 from showpy.core.errors import SchemaError
 from showpy.core.ids import (
+    ID_BODY_CHARS,
     ID_MAX_LENGTH,
     LEGACY_IDS_KEY,
     RESERVED_IDS,
+    SHEET_ID_BODY_CHARS,
     SetId,
     TransitionId,
     check_id,
@@ -61,12 +63,26 @@ KEEPS_LEGACY_IDS: Final = False
 ID_CUT_LENGTH: Final = 60
 EMPTY_ID: Final = "id"
 FIRST_SUFFIX: Final = 2
+FILL: Final = "_"
+DOUBLE_DOTS: Final = re.compile(r"\.{2,}")
 LEGACY_CONTEXT: Final = {LEGACY_IDS_KEY: True}
 FORM_TOKEN: Final = "form"
 SELECTION_TOKEN: Final = "sel"
 
 type IdCheck = Callable[[str], str]
 type Renames = dict[str, str]
+
+
+class _Rule(NamedTuple):
+    """Holds how one ID kind is checked and which characters its IDs may hold.
+
+    Attributes:
+        check: Returns an ID's checked text or raises SchemaError.
+        alphabet: Characters the kind's IDs may hold; the rule turns any other into `_`.
+    """
+
+    check: IdCheck
+    alphabet: frozenset[str]
 
 
 class _Plan(NamedTuple):
@@ -111,17 +127,6 @@ def _passing(text: str, check: IdCheck) -> str | None:
         return None
 
 
-def _refused(kind: str, stored: str, candidate: str) -> SchemaError:
-    return SchemaError(
-        f"stored {kind} id {stored!r} has characters the rename rule cannot repair; it gives"
-        f" {candidate!r}",
-        hint=f"open the show with showpy 0.3, rename the {kind} to 1 to 64 ASCII letters,"
-        " digits, _ and . (no ..), save it, then load it with this release",
-        context={"kind": kind, "id": stored, "candidate": candidate},
-        code=ErrorCode.BAD_ID,
-    )
-
-
 def _without_reserved(text: str) -> str:
     """Gives a reserved word, or a device name before an extension, a trailing `_`."""
     if text.casefold() in RESERVED_IDS:
@@ -132,10 +137,20 @@ def _without_reserved(text: str) -> str:
     return text
 
 
-def _repaired(text: str) -> str:
-    """Applies the rename rule's repairs to an ID that fails its check."""
-    cut = text.replace("-", "_").strip(".")[:ID_CUT_LENGTH].rstrip(".")
-    return _without_reserved(cut or EMPTY_ID)
+def _repaired(text: str, rule: _Rule) -> str:
+    """Applies the rename rule's repairs to an NFC-normalized ID that fails its check.
+
+    Every character outside the kind's alphabet becomes `_` and each `..` run becomes `.`;
+    then edge dots are stripped, the ID is cut to 60 characters, an empty result becomes `id`,
+    an edge `-` becomes `_` and a reserved word gets its `_`.
+    """
+    mapped = "".join(char if char in rule.alphabet else FILL for char in text)
+    cut = DOUBLE_DOTS.sub(".", mapped).strip(".")[:ID_CUT_LENGTH].rstrip(".") or EMPTY_ID
+    if cut.startswith("-"):
+        cut = FILL + cut[1:]
+    if cut.endswith("-"):
+        cut = cut[:-1] + FILL
+    return _without_reserved(cut)
 
 
 def _suffixed(base: str, taken: set[str]) -> str:
@@ -148,13 +163,12 @@ def _suffixed(base: str, taken: set[str]) -> str:
     return next(c for c in candidates if c.casefold() not in taken)
 
 
-def _renames(ids: Sequence[str], kind: str, check: IdCheck, held: Iterable[str] = ()) -> Renames:
+def _renames(ids: Sequence[str], rule: _Rule, held: Iterable[str] = ()) -> Renames:
     """Maps each ID of one kind that must change to its new ID, in show order.
 
     Args:
         ids: The kind's IDs in show order.
-        kind: What the IDs name, used in errors.
-        check: Returns an ID's checked text or raises SchemaError.
+        rule: The kind's ID check and alphabet.
         held: Names a new ID must also avoid, ignoring case, such as other sets' explicit keys.
 
     Returns:
@@ -163,7 +177,7 @@ def _renames(ids: Sequence[str], kind: str, check: IdCheck, held: Iterable[str] 
     kept: Renames = {}
     taken: set[str] = set()
     for old in ids:
-        passed = _passing(old, check)
+        passed = _passing(old, rule.check)
         if passed is not None and passed.casefold() not in taken:
             kept[old] = passed
             taken.add(passed.casefold())
@@ -174,20 +188,19 @@ def _renames(ids: Sequence[str], kind: str, check: IdCheck, held: Iterable[str] 
             renames[old] = kept[old]
             continue
         normalized = unicodedata.normalize("NFC", old)
-        new = _suffixed(_passing(normalized, check) or _repaired(normalized), taken)
-        if _passing(new, check) != new:
-            raise _refused(kind, old, new)
+        new = _suffixed(_passing(normalized, rule.check) or _repaired(normalized, rule), taken)
         taken.add(new.casefold())
         renames[old] = new
     return {old: new for old, new in renames.items() if new != old}
 
 
 def _renames_of(ids: Sequence[str], kind: str, held: Iterable[str] = ()) -> Renames:
-    return _renames(ids, kind, partial(check_id, kind=kind), held)
+    return _renames(ids, _Rule(partial(check_id, kind=kind), ID_BODY_CHARS), held)
 
 
 def _zone_renames(zones: Sequence[Zone]) -> Renames:
-    return _renames([z.id for z in zones], "zone", partial(check_sheet_id, kind="zone"))
+    rule = _Rule(partial(check_sheet_id, kind="zone"), SHEET_ID_BODY_CHARS)
+    return _renames([z.id for z in zones], rule)
 
 
 def _plan(show: Show) -> _Plan:

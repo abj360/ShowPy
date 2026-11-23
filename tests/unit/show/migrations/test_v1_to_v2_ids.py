@@ -18,8 +18,10 @@ Contains:
         60 characters, names an empty result `id` and marks reserved words with `_`
     test_rename_rule_splits_case_pairs_in_show_order: keeps the first of a case pair and gives
         the next the smallest free suffix, never taking a name a valid ID keeps
-    test_regression_rename_rule_refuses_an_id_it_cannot_repair: raises BAD_ID for a stored ID
-        whose characters the rule leaves outside the pattern
+    test_regression_rename_rule_repairs_characters_outside_the_alphabet: turns a space, `*` and
+        a non-ASCII letter into `_` after NFC and collapses `..`
+    test_regression_rename_rule_splits_a_case_pair_the_replacement_makes: suffixes an ID that
+        the replacement makes equal, ignoring case, to an earlier or a kept one
     test_rename_ids_renames_nothing_in_a_valid_show: returns the show and an empty report
     test_regression_every_reference_follows_a_renamed_id: rewrites sets, keys, transitions,
         forms, routes, zones, selections, notes, pins and selector text, and the result passes
@@ -46,8 +48,7 @@ import pytest
 
 from showpy.cast.spots import define_selection
 from showpy.choreo.path_models import FacingMode, FacingOverride
-from showpy.core.error_codes import ErrorCode
-from showpy.core.errors import SchemaError, StorageError
+from showpy.core.errors import StorageError
 from showpy.core.ids import LEGACY_IDS_KEY, FormId, SetId, ZoneId
 from showpy.core.types import Region
 from showpy.examples import two_set_show
@@ -219,14 +220,28 @@ def test_rename_rule_splits_case_pairs_in_show_order() -> None:
     assert _spot_renames(*long_pair) == ((long_pair[1], "m" * 62 + ".2"),)
 
 
-@pytest.mark.parametrize("stored", ["T 1", "T1*", "a..b", "é1"])
-def test_regression_rename_rule_refuses_an_id_it_cannot_repair(stored: str) -> None:
-    with pytest.raises(SchemaError) as caught:
-        _spot_renames(stored)
-    assert caught.value.code == ErrorCode.BAD_ID
-    assert caught.value.context["kind"] == "spot"
-    assert caught.value.context["id"] == stored
-    assert "0.3" in caught.value.hint
+@pytest.mark.parametrize(
+    ("stored", "renamed"),
+    [
+        ("T 1", "T_1"),
+        ("DM 1", "DM_1"),
+        ("T1*", "T1_"),
+        ("a..b", "a.b"),
+        ("a...b..", "a.b"),
+        ("e\u03011", "_1"),
+        ("ñ", "_"),
+        (" ", "_"),
+    ],
+)
+def test_regression_rename_rule_repairs_characters_outside_the_alphabet(
+    stored: str, renamed: str
+) -> None:
+    assert _spot_renames(stored) == ((stored, renamed),)
+
+
+def test_regression_rename_rule_splits_a_case_pair_the_replacement_makes() -> None:
+    assert _spot_renames("a b", "A-B") == (("a b", "a_b"), ("A-B", "A_B.2"))
+    assert _spot_renames("x_1", "X 1") == (("X 1", "X_1.2"),)
 
 
 def test_rename_ids_renames_nothing_in_a_valid_show() -> None:

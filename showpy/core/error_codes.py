@@ -30,7 +30,7 @@ class ErrorCode(StrEnum):
     BAD_FONT = "BAD_FONT"
     """A font file is not a valid font or breaks a font cap."""
     BAD_ID = "BAD_ID"
-    """A repository id is not 64-digit hex, or a stored ID cannot be stored or repaired."""
+    """A repository id is not 64-digit hex, or a show, set, note or form ID cannot be stored."""
     BAD_PATH = "BAD_PATH"
     """A show id or workspace path cannot be stored, or names a directory where a file belongs."""
     BAD_SHAPE = "BAD_SHAPE"
