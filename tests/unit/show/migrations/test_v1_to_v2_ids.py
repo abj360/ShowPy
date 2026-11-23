@@ -29,6 +29,8 @@ Contains:
         and v0.3.0 fixtures
     test_regression_put_show_keeps_scripts_of_renamed_set_folders: moves a set script with its
         renamed folder when a repository's put_show stores a v1 head, in one revision
+    test_regression_put_script_on_a_v1_head_writes_the_migrated_folder: stores the migration and
+        the new script in one revision, the set's other files moved with its folder
     test_regression_migration_refuses_to_move_a_set_file_over_another: refuses a stored file
         already at the folder a renamed set moves to
 """
@@ -387,6 +389,20 @@ def test_regression_put_show_keeps_scripts_of_renamed_set_folders(tag: str, tmp_
     again = repo.put_show(show_id, repo.get_show(show_id), expected_revision=first.id, at=AT)
     assert again.id == first.id
     assert [r.id for r in repo.revisions(show_id)] == [*stored, first.id]
+
+
+def test_regression_put_script_on_a_v1_head_writes_the_migrated_folder(tmp_path: Path) -> None:
+    repo, expected = _fixture("v0.3.0", tmp_path)
+    show_id = expected["show_id"]
+    _commit_v1(repo, show_id, {"/sets/con/set.py": SCRIPT, "/sets/con/notes.txt": b"keep\n"})
+    stored = [r.id for r in repo.revisions(show_id)]
+    revision = repo.put_script(show_id, "con_", "# new\n", expected_revision=stored[-1], at=AT)
+    after = dict(repo.documents(show_id))
+    assert after["/sets/con_/set.py"] == b"# new\n"
+    assert after["/sets/con_/notes.txt"] == b"keep\n"
+    assert not [p for p in after if p.startswith("/sets/con/")]
+    assert [r.id for r in repo.revisions(show_id)] == [*stored, revision.id]
+    assert repo.get_script(show_id, "con_") == "# new\n"
 
 
 def test_regression_migration_refuses_to_move_a_set_file_over_another(tmp_path: Path) -> None:

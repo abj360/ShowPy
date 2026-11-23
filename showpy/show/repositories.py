@@ -34,7 +34,7 @@ from showpy.core.ids import WINDOWS_DEVICE_NAMES, SetId, is_device_name
 from showpy.core.util import ASSET_PREFIX, asset_uri, close_matches, content_hash
 from showpy.show.changes import require_form_owner
 from showpy.show.decode_cache import DecodeCache
-from showpy.show.documents import decode_show, script_doc, split_path
+from showpy.show.documents import decode_show, migration_changes, script_doc, split_path
 from showpy.show.files import LIMITS_DOC, WAIVERS_DOC, show_changes
 from showpy.show.integrity import (
     LazyBlobs,
@@ -414,12 +414,15 @@ class DocumentRepository:
     ) -> Revision:
         """Replaces a set's build script, stored in the folder of the set's key.
 
+        On a head of an older format version the migration lands in the same revision, so the
+        set's renamed folder, with its other files, holds the script.
         Checks validity only, never pins or locks; edit functions enforce those.
         """
         key = set_key(self.get_show(show_id, expected_revision or None).set(set_id))
+        stored = self.documents(show_id, expected_revision or None)
         return self.transaction(
             show_id,
-            {script_doc(key): source.encode()},
+            {**migration_changes(stored), script_doc(key): source.encode()},
             expected_revision=expected_revision,
             at=at,
         )
