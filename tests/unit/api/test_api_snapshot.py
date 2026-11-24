@@ -7,7 +7,11 @@ A commit that changes the snapshot must name each changed name in its subject or
 BREAKING CHANGE footer; `nox -s api-changes` checks that across the commits since the last
 release.
 
+A compiled function of e8s._core is rendered from its stub in e8s/_core/<area>.pyi, not from
+the extension's bare text signature, so a port that keeps a public signature keeps its entry.
+
 Contains:
+    load_stub(): executes one stub file as a module, so its functions carry the stub's types
     describe_public_object(): renders one public name as a Python-version-stable JSON value
     build_snapshot(): builds the snapshot of every public name
     inline_short_arrays(): puts each JSON array on one line when it fits, as Prettier does
@@ -25,9 +29,14 @@ Contains:
     test_regression_snapshot_tells_a_frozenset_constant_from_a_list: renders a set constant with
         its type, so a frozenset turned list shows up as a change
     test_inline_short_arrays_matches_prettier: inlines an array that fits, keeps a long one
+    test_snapshot_renders_a_core_function_from_its_stub: renders a compiled function with the
+        signature its stub declares, so a port that keeps the stub keeps the snapshot
 """
 
 import enum
+import functools
+import importlib.machinery
+import importlib.util
 import inspect
 import json
 import os
@@ -39,6 +48,7 @@ import pytest
 
 import e8s
 from e8s._api_table import PUBLIC_API
+from e8s._core import core
 from e8s.core.types import FrozenModel
 from scripts.check_api_changes import JsonValue, diff_snapshots
 
@@ -51,6 +61,9 @@ BARE_MODULES = ("builtins", "typing")
 OPAQUE_DEFAULT = "..."
 STABLE_DEFAULT_TYPES = (type(None), bool, int, float, str, bytes, tuple, frozenset, enum.Enum)
 PRETTIER_PRINT_WIDTH = 100
+CORE_MODULE_PREFIX = "e8s._core."
+CORE_STUB_ROOT = ROOT / "e8s" / "_core"
+STUB_SUFFIX = ".pyi"
 
 
 class _OpaqueDefault:
@@ -142,15 +155,48 @@ def _protocol_members(cls: type) -> dict[str, JsonValue]:
     }
 
 
-def describe_public_object(obj: object) -> JsonValue:
+@functools.cache
+def load_stub(path: Path) -> types.ModuleType:
+    """Executes one stub file as a module, so its functions carry the stub's annotations.
+
+    Args:
+        path: A `.pyi` file whose statements are valid at runtime (imports and `...` bodies).
+
+    Returns:
+        stub: The executed module, named after the stub file.
+    """
+    loader = importlib.machinery.SourceFileLoader(f"_stub_{path.stem}", str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    assert spec is not None
+    stub = importlib.util.module_from_spec(spec)
+    loader.exec_module(stub)
+    return stub
+
+
+def _core_function(obj: object) -> tuple[str, str] | None:
+    """Returns the submodule and name of a compiled e8s._core function, or None for others."""
+    if not isinstance(obj, types.BuiltinFunctionType):
+        return None
+    module = obj.__module__ or ""
+    if not module.startswith(CORE_MODULE_PREFIX):
+        return None
+    return module.removeprefix(CORE_MODULE_PREFIX), obj.__name__
+
+
+def describe_public_object(obj: object, *, stub_root: Path = CORE_STUB_ROOT) -> JsonValue:
     """Renders one public name as a Python-version-stable JSON value.
 
     Args:
         obj: The object re-exported by e8s.
+        stub_root: The folder holding the stubs of the compiled core's submodules.
 
     Returns:
         description: A signature string, or a dict describing a model, enum, protocol or constant.
     """
+    compiled = _core_function(obj)
+    if compiled is not None:
+        area, name = compiled
+        return _signature_text(getattr(load_stub(stub_root / f"{area}{STUB_SUFFIX}"), name))
     if isinstance(obj, type) and issubclass(obj, FrozenModel):
         hints = get_type_hints(obj)
         fields = {name: _annotation_text(hints[name]) for name in obj._field_names()}
@@ -334,3 +380,14 @@ def test_inline_short_arrays_matches_prettier() -> None:
         "  }",
         "}",
     ]
+
+
+def test_snapshot_renders_a_core_function_from_its_stub(tmp_path: Path) -> None:
+    (tmp_path / "core.pyi").write_text(
+        "from e8s.core.types import Box2\n\n"
+        "def _finite_probe(value: float, *, part: Box2 | None = None) -> float: ...\n"
+    )
+    assert _signature_text(core._finite_probe) == "(value)"
+    assert describe_public_object(core._finite_probe, stub_root=tmp_path) == (
+        "(value: float, *, part: e8s.core.types.Box2 | None = None) -> float"
+    )
