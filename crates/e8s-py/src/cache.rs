@@ -2,7 +2,7 @@
 //!
 //! Contains:
 //!     CacheStats: counts the hits, misses and live entries of one cache
-//!     PartCache: converts each frozen part once and serves the value while the part lives
+//!     PartCache: converts a frozen part on a miss and serves the value while the part lives
 //!     add_probes(): adds the private cache hooks `_cache_probe` and `_cache_stats` to a module
 
 use std::collections::HashMap;
@@ -39,15 +39,22 @@ pub struct CacheStats {
     pub entries: usize,
 }
 
-/// Converts each frozen part once and serves the converted value while the part lives.
+/// Converts a frozen part on a miss and serves the converted value while the part lives.
 ///
 /// Entries are keyed by `id(part)` and verified by a weak reference to the part, so an equal
 /// but distinct object never gets another object's value. The weak reference's callback evicts
-/// the entry when the part is collected, before CPython can reuse its address.
+/// the entry when the part is collected. This identity check is sound because every call holds
+/// the GIL and CPython runs a dead object's weak reference callbacks before it frees the
+/// object, so its address cannot be reused while its entry stands; the abi3 build excludes
+/// free-threaded Python.
 ///
 /// Locking: one `std::sync::Mutex` guards the map, held only for map reads and writes. No Python
 /// code runs under it (conversion, weak reference creation and dropping evicted entries all
 /// happen outside), so a collection that fires a callback mid-call cannot deadlock on it.
+///
+/// Conversion runs without the lock, so two threads that miss the same part at once may both
+/// convert it. The race is benign: both values come from the same frozen part, the later insert
+/// replaces the earlier, each caller gets a correct value, and `misses` counts both.
 pub struct PartCache<T> {
     entries: Arc<Entries<T>>,
     hits: AtomicUsize,
@@ -148,7 +155,8 @@ fn not_referenceable(part: &Bound<'_, PyAny>) -> CoreError {
 }
 
 fn lock<T>(entries: &Entries<T>) -> MutexGuard<'_, HashMap<usize, Entry<T>>> {
-    // No code panics while holding the lock, so a poisoned map is still consistent.
+    // Every section under the lock is a single map read or write, which leaves the map
+    // consistent even if a panic poisoned the lock, so the poisoned guard is used as is.
     entries.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
