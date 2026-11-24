@@ -35,6 +35,10 @@ Contains:
     test_code_scan_flags_literals_and_unknown_members: proves the code scan can fail
     test_every_error_code_has_a_one_line_docstring: fails on a member without a docstring
     test_error_code_docs_are_current: fails when docs/error-codes.md differs from its generator
+    test_rust_error_enums_are_current: fails when the core's Rust error enums differ from their
+        generator
+    test_rust_raiser_scan_reads_each_kind_and_code_pair: proves the core raise-site scan reads
+        a pair split over lines and skips Rust tests
     find_positional_booleans(): lists file, line and parameter of each positional bool parameter
     test_regression_library_has_no_positional_boolean_parameter: fails on any such parameter
     test_regression_public_functions_take_booleans_by_keyword: fails when a public signature
@@ -75,6 +79,7 @@ LIBRARY_ROOT = REPO_ROOT / "e8s"
 ERROR_CODES_PATH = LIBRARY_ROOT / "core" / "error_codes.py"
 ERROR_CODE_DOCS_PATH = REPO_ROOT / "docs" / "error-codes.md"
 ERROR_CODE_GENERATOR_PATH = REPO_ROOT / "scripts" / "gen_error_codes.py"
+RUST_ERROR_CODES_PATH = REPO_ROOT / "crates" / "e8s-core" / "src" / "base" / "error_codes.rs"
 GEO_PACKAGE = "e8s.geo"
 LITERAL = "literal"
 MODEL_COPY = "model_copy"
@@ -545,6 +550,30 @@ def test_error_code_docs_are_current() -> None:
         "E: docs/error-codes.md differs from ErrorCode; "
         "run: uv run python scripts/gen_error_codes.py"
     )
+
+
+def test_rust_error_enums_are_current() -> None:
+    """Requires the core's Rust ErrorCode and ErrorKind enums to be the generator's output."""
+    rendered: str = _load_code_generator().render_rust()
+    assert rendered == RUST_ERROR_CODES_PATH.read_text(encoding="utf-8"), (
+        "E: crates/e8s-core/src/base/error_codes.rs differs from ErrorCode; "
+        "run: uv run python scripts/gen_error_codes.py"
+    )
+
+
+def test_rust_raiser_scan_reads_each_kind_and_code_pair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    generator = _load_code_generator()
+    crate = tmp_path / "e8s-demo"
+    (crate / "src").mkdir(parents=True)
+    (crate / "tests").mkdir()
+    (crate / "src" / "lib.rs").write_text(
+        "CoreError::new(\n    ErrorKind::Schema,\n    ErrorCode::NotFinite,\n    m,\n    h,\n)\n"
+    )
+    (crate / "tests" / "probe.rs").write_text("CoreError::new(ErrorKind::Path, ErrorCode::Path)\n")
+    monkeypatch.setattr(generator, "CRATES_ROOT", tmp_path)
+    assert generator.rust_raisers() == {"NOT_FINITE": ["SchemaError"]}
 
 
 def _is_boolean_annotation(annotation: ast.expr | None) -> bool:
