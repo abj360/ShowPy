@@ -1,0 +1,137 @@
+[
+  {
+    "facing": {
+      "mode": "fixed",
+      "value": 212.3970094838197
+    },
+    "id": "brass_3",
+    "locked": false,
+    "members": [
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "B5",
+      "B6"
+    ],
+    "meta": {},
+    "recipe": {
+      "anchor": "center",
+      "cols": 6,
+      "facing": 212.3970094838197,
+      "interval": 1.5,
+      "kind": "block",
+      "n": 6,
+      "origin": [
+        18.98028622914454,
+        21.58892343100625
+      ],
+      "recipe_version": 1,
+      "rows": 1,
+      "transform": null
+    },
+    "set": "4",
+    "spacing": {
+      "align": "start",
+      "end": null,
+      "gaps": [],
+      "interval": null,
+      "mode": "count",
+      "start": 0.0
+    }
+  },
+  {
+    "facing": {
+      "mode": "audience",
+      "value": null
+    },
+    "id": "percussion_3",
+    "locked": false,
+    "members": [
+      "P1",
+      "P2",
+      "P3",
+      "P4",
+      "P5",
+      "P6"
+    ],
+    "meta": {},
+    "recipe": {
+      "curve": {
+        "a": [
+          -10.8011783535406,
+          18.791279236590466
+        ],
+        "b": [
+          3.6387944161231056,
+          18.791279236590466
+        ],
+        "closed": false,
+        "kind": "segment"
+      },
+      "kind": "line",
+      "n": null,
+      "recipe_version": 1,
+      "transform": null
+    },
+    "set": "4",
+    "spacing": {
+      "align": "start",
+      "end": null,
+      "gaps": [],
+      "interval": null,
+      "mode": "count",
+      "start": 0.0
+    }
+  },
+  {
+    "facing": {
+      "mode": "fixed",
+      "value": 54.283686900612736
+    },
+    "id": "woodwinds_3",
+    "locked": false,
+    "members": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6"
+    ],
+    "meta": {},
+    "recipe": {
+      "curve": {
+        "closed": false,
+        "kind": "polyline",
+        "points": [
+          [
+            4.785068877326224,
+            36.048257465712034
+          ],
+          [
+            6.3033752297910794,
+            26.759931615766646
+          ],
+          [
+            -2.984950620154306,
+            25.241625263301792
+          ]
+        ]
+      },
+      "kind": "wedge",
+      "n": null,
+      "recipe_version": 1,
+      "transform": null
+    },
+    "set": "4",
+    "spacing": {
+      "align": "start",
+      "end": null,
+      "gaps": [],
+      "interval": null,
+      "mode": "count",
+      "start": 0.0
+    }
+  }
+]

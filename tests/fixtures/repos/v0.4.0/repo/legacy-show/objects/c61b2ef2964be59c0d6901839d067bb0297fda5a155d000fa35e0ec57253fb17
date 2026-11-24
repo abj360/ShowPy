@@ -1,0 +1,302 @@
+{
+  "counts": 12.0,
+  "cue": null,
+  "forms": [
+    "brass_6",
+    "woodwinds_6",
+    "guard_6"
+  ],
+  "id": "7",
+  "key": "6",
+  "label": null,
+  "placements": [
+    {
+      "entity": "B1",
+      "facing": 0.0,
+      "form": "brass_6",
+      "note": null,
+      "on_field": true,
+      "order": 0,
+      "pinned": false,
+      "x": -27.282586110090506,
+      "y": 36.09102967322339
+    },
+    {
+      "entity": "B2",
+      "facing": 0.0,
+      "form": "brass_6",
+      "note": null,
+      "on_field": true,
+      "order": 1,
+      "pinned": false,
+      "x": -32.12846191406943,
+      "y": 31.887515285003282
+    },
+    {
+      "entity": "B3",
+      "facing": 0.0,
+      "form": "brass_6",
+      "note": null,
+      "on_field": true,
+      "order": 2,
+      "pinned": true,
+      "x": -33.57809402692375,
+      "y": 25.638466376813863
+    },
+    {
+      "entity": "B4",
+      "facing": 0.0,
+      "form": "brass_6",
+      "note": null,
+      "on_field": true,
+      "order": 3,
+      "pinned": false,
+      "x": -31.077772252726426,
+      "y": 19.730807234223064
+    },
+    {
+      "entity": "B5",
+      "facing": 0.0,
+      "form": "brass_6",
+      "note": null,
+      "on_field": true,
+      "order": 4,
+      "pinned": false,
+      "x": -25.582534526409408,
+      "y": 16.421062855751515
+    },
+    {
+      "entity": "B6",
+      "facing": 0.0,
+      "form": "brass_6",
+      "note": null,
+      "on_field": true,
+      "order": 5,
+      "pinned": false,
+      "x": -19.191374883165096,
+      "y": 16.97344309990145
+    },
+    {
+      "entity": "W1",
+      "facing": 6.06929642573589,
+      "form": "woodwinds_6",
+      "note": null,
+      "on_field": true,
+      "order": 0,
+      "pinned": false,
+      "x": 22.300710230730036,
+      "y": 24.93764654889332
+    },
+    {
+      "entity": "W2",
+      "facing": 66.06929642573587,
+      "form": "woodwinds_6",
+      "note": null,
+      "on_field": true,
+      "order": 1,
+      "pinned": false,
+      "x": 26.3689955252705,
+      "y": 27.90095313512247
+    },
+    {
+      "entity": "W3",
+      "facing": 126.0692964257359,
+      "form": "woodwinds_6",
+      "note": null,
+      "on_field": true,
+      "order": 2,
+      "pinned": false,
+      "x": 25.836839389664544,
+      "y": 32.90584484315175
+    },
+    {
+      "entity": "W4",
+      "facing": 186.06929642573593,
+      "form": "woodwinds_6",
+      "note": null,
+      "on_field": true,
+      "order": 3,
+      "pinned": false,
+      "x": 21.236397959518122,
+      "y": 34.94742996495187
+    },
+    {
+      "entity": "W5",
+      "facing": 246.06929642573596,
+      "form": "woodwinds_6",
+      "note": null,
+      "on_field": true,
+      "order": 4,
+      "pinned": false,
+      "x": 17.16811266497766,
+      "y": 31.984123378722714
+    },
+    {
+      "entity": "W6",
+      "facing": 306.0692964257359,
+      "form": "woodwinds_6",
+      "note": null,
+      "on_field": true,
+      "order": 5,
+      "pinned": false,
+      "x": 17.70026880058362,
+      "y": 26.979231670693444
+    },
+    {
+      "entity": "P1",
+      "facing": 327.3390023792628,
+      "form": null,
+      "note": null,
+      "on_field": true,
+      "order": null,
+      "pinned": false,
+      "x": 5.5006159471300355,
+      "y": 16.211198051179313
+    },
+    {
+      "entity": "P2",
+      "facing": 27.339002379262762,
+      "form": null,
+      "note": null,
+      "on_field": true,
+      "order": null,
+      "pinned": false,
+      "x": 6.252964968220857,
+      "y": 15.990325070153201
+    },
+    {
+      "entity": "P3",
+      "facing": 87.33900237926277,
+      "form": null,
+      "note": null,
+      "on_field": true,
+      "order": null,
+      "pinned": false,
+      "x": 12.816107930652171,
+      "y": 19.809837657162635
+    },
+    {
+      "entity": "P4",
+      "facing": 147.33900237926275,
+      "form": null,
+      "note": null,
+      "on_field": true,
+      "order": null,
+      "pinned": false,
+      "x": 10.952867090893818,
+      "y": 30.95666174440567
+    },
+    {
+      "entity": "P5",
+      "facing": 207.33900237926275,
+      "form": null,
+      "note": null,
+      "on_field": false,
+      "order": null,
+      "pinned": false,
+      "x": 2.2048312304953015,
+      "y": 31.36324062782406
+    },
+    {
+      "entity": "P6",
+      "facing": 267.33900237926275,
+      "form": null,
+      "note": null,
+      "on_field": false,
+      "order": null,
+      "pinned": false,
+      "x": -2.5212943413865894,
+      "y": 23.990508781210877
+    },
+    {
+      "entity": "G1",
+      "facing": 229.94998776795703,
+      "form": "guard_6",
+      "note": null,
+      "on_field": true,
+      "order": 0,
+      "pinned": false,
+      "x": 23.69836613166514,
+      "y": 9.388556021474272
+    },
+    {
+      "entity": "G2",
+      "facing": 229.94998776795703,
+      "form": "guard_6",
+      "note": null,
+      "on_field": true,
+      "order": 1,
+      "pinned": false,
+      "x": 23.40191695664512,
+      "y": 12.811394171538534
+    },
+    {
+      "entity": "G3",
+      "facing": 229.94998776795703,
+      "form": "guard_6",
+      "note": null,
+      "on_field": true,
+      "order": 2,
+      "pinned": false,
+      "x": 23.1054677816251,
+      "y": 16.234232321602796
+    },
+    {
+      "entity": "G4",
+      "facing": 229.94998776795703,
+      "form": "guard_6",
+      "note": null,
+      "on_field": true,
+      "order": 3,
+      "pinned": false,
+      "x": 24.668662269147227,
+      "y": 18.093875984144937
+    },
+    {
+      "entity": "G5",
+      "facing": 229.94998776795703,
+      "form": "guard_6",
+      "note": null,
+      "on_field": true,
+      "order": 4,
+      "pinned": false,
+      "x": 28.09150041921149,
+      "y": 18.390325159164956
+    },
+    {
+      "entity": "G6",
+      "facing": 229.94998776795703,
+      "form": "guard_6",
+      "note": null,
+      "on_field": true,
+      "order": 5,
+      "pinned": false,
+      "x": 31.51433856927575,
+      "y": 18.68677433418497
+    },
+    {
+      "entity": "T1",
+      "facing": 0.0,
+      "form": null,
+      "note": null,
+      "on_field": true,
+      "order": null,
+      "pinned": false,
+      "x": -1.0,
+      "y": 2.0
+    },
+    {
+      "entity": "T2",
+      "facing": 0.0,
+      "form": null,
+      "note": null,
+      "on_field": true,
+      "order": null,
+      "pinned": false,
+      "x": 1.0,
+      "y": 2.0
+    }
+  ],
+  "source_hash": "",
+  "state": "draft"
+}
