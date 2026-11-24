@@ -7,6 +7,8 @@ Contains:
     test_frames_equal_sample_at_every_frame: matches PathEngine.sample at each frame's count
     test_frames_fall_every_frame_interval: spaces frame times by 1/fps from the start count
     test_frames_keep_counts_and_spots_still_during_a_hold: repeats the hold's count and positions
+    test_regression_frames_at_a_hold_a_subnormal_count_in: starts at count 0, equals sample at
+        both edges of a hold at 5e-324 counts, and reads 5e-324 strictly inside it
     test_frames_follow_the_selection_order: orders columns as the selection names the spots
     test_frames_reuse_a_given_engine: equals the frames read with a fresh engine
     test_regression_frames_reject_a_range_outside_the_show: raises TimeRangeError with a hint
@@ -48,6 +50,7 @@ from tests.fixtures.shows import two_set_show
 
 HOLD_COUNT = 4.0
 HOLD_SECONDS = 1.0
+SUBNORMAL_COUNT = 5e-324
 FPS = 8.0
 SECONDS_PER_COUNT = 0.5
 MESSAGE_LIMIT = 200
@@ -93,6 +96,25 @@ def test_frames_keep_counts_and_spots_still_during_a_hold() -> None:
     assert len(held) == HOLD_SECONDS * FPS + 1
     assert np.all(read.y[held] == read.y[held[0]])
     assert np.all(read.x[held] == read.x[held[0]])
+
+
+def test_regression_frames_at_a_hold_a_subnormal_count_in() -> None:
+    show = two_set_show()
+    hold = Hold(at_count=SUBNORMAL_COUNT, seconds=HOLD_SECONDS)
+    show = show.replace(timeline=show.timeline.replace(holds=(hold,)))
+    read = frames(show, 0.0, 8.0, fps=FPS)
+    assert read.counts[0] == 0.0
+    engine = PathEngine(show)
+    edges = np.flatnonzero((read.seconds == 0.0) | (read.seconds == HOLD_SECONDS))
+    assert len(edges) == 2
+    for row in edges.tolist():
+        states = {state.entity: state for state in engine.sample(float(read.counts[row])).states}
+        for column, spot in enumerate(read.spots):
+            assert (read.x[row, column], read.y[row, column]) == states[spot].position
+            assert read.facing[row, column] == states[spot].facing
+    inside = (read.seconds > 0.0) & (read.seconds < HOLD_SECONDS)
+    assert inside.any()
+    assert np.all(read.counts[inside] == SUBNORMAL_COUNT)
 
 
 def test_frames_follow_the_selection_order() -> None:

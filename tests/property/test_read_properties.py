@@ -71,6 +71,10 @@ def test_holds_keep_spots_still(show: Show, fps: float) -> None:
         if not 0.0 <= hold.at_count < total:
             continue
         begins = count_to_seconds(show.timeline, hold.at_count)
+        # Both edges are ambiguous: the clock inverts seconds and counts only within
+        # ROUND_TRIP_TOL (test_time_properties.py), so an edge frame may read the count next to
+        # the hold's. frames still equals sample there, which test_frames_equal_repeated_sample
+        # checks; only frames strictly inside the hold must read its count.
         inside = (framed.seconds > begins) & (framed.seconds < begins + hold.seconds)
         assert np.all(framed.counts[inside] == hold.at_count)
         for values in (framed.x, framed.y, framed.facing):
