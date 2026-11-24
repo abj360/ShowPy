@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 
 """
-test_budgets.py --- one benchmark per performance budget row of docs/upgrade-plan.md section 5.3
+test_budgets.py --- the budget benchmarks: section 5.3 of the upgrade plan, plus two readers
 
-Sizes come from --tier (default M). Each row records its budget in extra_info; the budgets are
-targets, not gates. `nox -s bench` fails only on a >20% regression of the min time against
+Every row but two maps to a budget row of docs/upgrade-plan.md section 5.3. The frames and
+coordinate_table rows are recorded beyond section 5.3 against the reader budgets (50 ms and
+0.2 s), not gated; at tier L coordinate_table takes about 261 ms, over its budget. Sizes come
+from --tier (default M). Each row records its budget in extra_info; the budgets are targets,
+not gates. `nox -s bench` fails only on a >20% regression of the min time against
 tests/bench/baseline-2026-11-13.json, and only at tier M. Heavy rows use fixed rounds
 (HEAVY_ROUNDS) so the M run stays short.
 """
@@ -24,6 +27,7 @@ from e8s.choreo.avoid import min_gaps
 from e8s.choreo.engine import PathEngine
 from e8s.choreo.match import match
 from e8s.choreo.models import PlacementPatch
+from e8s.choreo.read import coordinate_table, frames
 from e8s.core.ids import TransitionId
 from e8s.core.util import seeded_rng
 from e8s.examples import two_set_show
@@ -59,7 +63,11 @@ BUDGET_S = {
     "events_since": 1.0,
     "head": 0.001,
     "import": 0.3,
+    "frames": 0.05,
+    "coordinate_table": 0.2,
 }
+READ_FPS = 30.0
+READ_COUNTS = 8.0
 PEAK_BUDGET_MB = 500.0
 
 
@@ -122,6 +130,31 @@ def test_sample_frames(benchmark: BenchmarkFixture, tier: BenchTier, show: Show)
     _record(benchmark, tier, budget_s=FRAMES / FRAMES_PER_S_BUDGET, frames=FRAMES)
     frames = benchmark(lambda: [engine.sample(t) for t in times])
     assert len(frames) == FRAMES
+
+
+def _eight_count(show: Show) -> TransitionId:
+    tids = [t for t in show.transition_ids() if show.set(t[1]).counts == READ_COUNTS]
+    chosen = tids or show.transition_ids()
+    return chosen[len(chosen) // 2]
+
+
+def test_frames_one_transition(benchmark: BenchmarkFixture, tier: BenchTier, show: Show) -> None:
+    """Reads one 8-count transition at 30 fps with a compiled engine; recorded, not gated."""
+    engine = PathEngine(show)
+    compiled = engine.compile(_eight_count(show))
+    start, end = compiled.t_global0, compiled.t_global0 + compiled.counts
+    _record(benchmark, tier, budget_s=BUDGET_S["frames"], fps=READ_FPS)
+    read = benchmark(lambda: frames(show, start, end, fps=READ_FPS, engine=engine))
+    assert read.x.shape[1] == tier.spots
+
+
+def test_coordinate_table(benchmark: BenchmarkFixture, tier: BenchTier, show: Show) -> None:
+    """Reads every spot at every set with a compiled engine; recorded, not gated."""
+    engine = PathEngine(show)
+    engine.compile_all()
+    _record(benchmark, tier, budget_s=BUDGET_S["coordinate_table"])
+    table = _heavy(benchmark, tier, lambda: coordinate_table(show, engine=engine))
+    assert table.x.shape == (tier.sets, tier.spots)
 
 
 def test_compile_all(benchmark: BenchmarkFixture, tier: BenchTier, show: Show) -> None:
