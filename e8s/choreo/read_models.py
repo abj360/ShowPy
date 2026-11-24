@@ -68,7 +68,9 @@ class CoordinateTable(ArrayModel):
     Attributes:
         spots: Spot IDs in column order.
         sets: Set IDs in row order.
-        unit: Length unit of `x` and `y`.
+        unit: Name of the length unit `x` and `y` are in, recorded from the call that built the
+            table. It is a label: the table is not checked against any unit registry, since
+            the registry the caller converted with may not be the default one.
         counts: Global count of each set; shape (sets,).
         x: Positions toward audience-right; shape (sets, spots).
         y: Positions away from the audience; shape (sets, spots).
