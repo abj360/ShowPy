@@ -619,6 +619,9 @@ if TYPE_CHECKING:
     from e8s.show.counts import (
         spot_counts,
     )
+    from e8s.show.dependencies import (
+        upgrade_dependency,
+    )
     from e8s.show.document_repository import (
         DocumentRepository,
     )
@@ -654,16 +657,10 @@ if TYPE_CHECKING:
     )
     from e8s.show.manage import (
         add_set,
-        index,
         insert_subset,
         new_show,
         remove_set,
-        renumber,
-        set_at_count,
         set_counts,
-        transition_at_count,
-        transitions,
-        upgrade_dependency,
     )
     from e8s.show.memory_backend import (
         InMemoryRepository,
@@ -690,9 +687,18 @@ if TYPE_CHECKING:
         pin,
         unpin,
     )
+    from e8s.show.renumber import (
+        renumber,
+    )
     from e8s.show.sections import (
         join_sections,
         split_section,
+    )
+    from e8s.show.set_queries import (
+        index,
+        set_at_count,
+        transition_at_count,
+        transitions,
     )
     from e8s.show.show_io import (
         load_show,
@@ -1113,7 +1119,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "import_json": ("e8s.show.interchange", "import_json"),
     "import_positions": ("e8s.show.interchange", "import_positions"),
     "in_region": ("e8s.cast.select", "in_region"),
-    "index": ("e8s.show.manage", "index"),
+    "index": ("e8s.show.set_queries", "index"),
     "insert_subset": ("e8s.show.manage", "insert_subset"),
     "interpolate_forms": ("e8s.geo.transforms", "interpolate_forms"),
     "intersection": ("e8s.geo.regions", "intersection"),
@@ -1207,7 +1213,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "remove_tempo": ("e8s.time.timeline", "remove_tempo"),
     "remove_waypoint": ("e8s.choreo.paths", "remove_waypoint"),
     "rename_spots": ("e8s.cast.spots", "rename_spots"),
-    "renumber": ("e8s.show.manage", "renumber"),
+    "renumber": ("e8s.show.renumber", "renumber"),
     "reorder": ("e8s.choreo.form_ops", "reorder"),
     "require_finite": ("e8s.core.validation", "require_finite"),
     "require_size": ("e8s.core.caps", "require_size"),
@@ -1232,7 +1238,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "select": ("e8s.cast.select", "select"),
     "selection": ("e8s.show.collab", "selection"),
     "separate_in_time": ("e8s.choreo.avoid", "separate_in_time"),
-    "set_at_count": ("e8s.show.manage", "set_at_count"),
+    "set_at_count": ("e8s.show.set_queries", "set_at_count"),
     "set_counts": ("e8s.show.manage", "set_counts"),
     "set_easing": ("e8s.choreo.paths", "set_easing"),
     "set_facing": ("e8s.choreo.paths", "set_facing"),
@@ -1291,8 +1297,8 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "transform_facing": ("e8s.geo.affine", "transform_facing"),
     "transform_form": ("e8s.choreo.form_ops", "transform_form"),
     "transform_points": ("e8s.geo.affine", "transform_points"),
-    "transition_at_count": ("e8s.show.manage", "transition_at_count"),
-    "transitions": ("e8s.show.manage", "transitions"),
+    "transition_at_count": ("e8s.show.set_queries", "transition_at_count"),
+    "transitions": ("e8s.show.set_queries", "transitions"),
     "translation_matrix": ("e8s.geo.affine", "translation_matrix"),
     "turn": ("e8s.choreo.motion", "turn"),
     "two_part": ("e8s.choreo.routes", "two_part"),
@@ -1300,7 +1306,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "units": ("e8s.core.units", "units"),
     "unlock": ("e8s.choreo.paths", "unlock"),
     "unpin": ("e8s.show.pinning", "unpin"),
-    "upgrade_dependency": ("e8s.show.manage", "upgrade_dependency"),
+    "upgrade_dependency": ("e8s.show.dependencies", "upgrade_dependency"),
     "validate_dependencies": ("e8s.show.validate", "validate_dependencies"),
     "validate_paths": ("e8s.show.validate", "validate_paths"),
     "validate_set": ("e8s.show.validate", "validate_set"),

@@ -28,9 +28,9 @@ from e8s.core.ids import TransitionId
 from e8s.core.util import seeded_rng
 from e8s.examples import two_set_show
 from e8s.show.events import events_since
-from e8s.show.manage import index
 from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Show
+from e8s.show.set_queries import index
 from e8s.show.show_io import load_show, save_show
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.validate import validate_show

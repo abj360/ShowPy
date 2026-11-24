@@ -56,9 +56,10 @@ from e8s.show.events import apply_event, decode_event, events_since
 from e8s.show.file_repository import FileRepository
 from e8s.show.history import revert
 from e8s.show.interchange import export_json, import_json
-from e8s.show.manage import insert_subset, renumber, set_counts
+from e8s.show.manage import insert_subset, set_counts
 from e8s.show.models import Show
 from e8s.show.pinning import pin
+from e8s.show.renumber import renumber
 from e8s.show.show_io import load_show, save_show
 from e8s.show.validate import validate_show
 from e8s.show.workspace import Workspace, open_workspace

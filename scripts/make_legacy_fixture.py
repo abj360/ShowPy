@@ -300,10 +300,11 @@ def v030_show() -> "Show":
         show: The seeded show with set 2A inserted and renumbered, trumpets, a selector zone and
             a last set written as text.
     """
-    from e8s.show.manage import add_set, renumber
+    from e8s.show.manage import add_set
 
     show = _base_show("seeded")
     show = add_set(show, INSERTED_SET, INSERTED_COUNTS, after=PATH_TRANSITION[1])
+    renumber = _library_attr("renumber", "e8s.show.renumber", "e8s.show.manage")
     show, _ = renumber(show)
     return _with_text_form(_with_trumpets_and_zone(show))
 

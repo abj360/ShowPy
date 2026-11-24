@@ -80,12 +80,13 @@ from e8s.show.file_repository import FileRepository
 from e8s.show.files import CLAIMS_DOC
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
-from e8s.show.manage import add_set, renumber
+from e8s.show.manage import add_set
 from e8s.show.migrate import FIRST_VERSION, MigrationReport, ReportBuilder
 from e8s.show.migrations.v1_to_v2_ids import rename_ids
 from e8s.show.migrations.v1_to_v2_notes import move_notes
 from e8s.show.models import Show
 from e8s.show.pinning import pin
+from e8s.show.renumber import renumber
 from e8s.show.show_io import load_show, save_show
 from e8s.show.structured import COMMENTS_DOC, SELECTION_DOC
 from e8s.show.validate import validate_show

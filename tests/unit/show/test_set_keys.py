@@ -118,11 +118,12 @@ from e8s.show.integrity import (
     require_valid_tree,
 )
 from e8s.show.interchange import import_positions
-from e8s.show.manage import add_set, insert_subset, remove_set, renumber
+from e8s.show.manage import add_set, insert_subset, remove_set
 from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.migrate import ReportBuilder, format_header, without_header
 from e8s.show.migrations.v1_to_v2_forms import migrate_forms
 from e8s.show.models import Show
+from e8s.show.renumber import renumber
 from e8s.show.sections import join_sections
 from e8s.show.set_keys import to_display_path, to_stored_path
 from e8s.show.show_io import load_show, save_show

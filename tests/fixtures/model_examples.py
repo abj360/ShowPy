@@ -99,9 +99,9 @@ from e8s.show.collab_models import (
 from e8s.show.counts import spot_counts
 from e8s.show.history import diff_paths, diff_sets
 from e8s.show.history_models import Revision
-from e8s.show.manage import index
 from e8s.show.migrate import DroppedFields, MigrationReport
 from e8s.show.models import Pin
+from e8s.show.set_queries import index
 from e8s.time.measures import count_to_measure
 from e8s.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting
 from e8s.time.timeline import set_measures

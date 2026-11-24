@@ -75,9 +75,10 @@ from e8s.show.history import revert
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.interchange import export_json, import_json
-from e8s.show.manage import insert_subset, renumber, set_counts
+from e8s.show.manage import insert_subset, set_counts
 from e8s.show.migrate import MigrationReport
 from e8s.show.models import Show
+from e8s.show.renumber import renumber
 from e8s.show.show_io import load_show, save_show
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.workspace import Workspace, open_workspace
