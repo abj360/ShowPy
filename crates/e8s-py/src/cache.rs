@@ -9,11 +9,16 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard, PoisonError, Weak};
 
-use e8s_core::base::{CoreResult, require_finite};
+use e8s_core::base::{CoreError, CoreResult, ErrorCode, ErrorKind, require_finite};
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyCFunction, PyDict, PyTuple, PyWeakrefReference};
 
-use crate::errors::guard;
+use crate::errors::{guard, to_py_err};
+
+/// The hint of the SchemaError for a part that supports no weak reference.
+const WEAKREF_HINT: &str = "cache only frozen model instances, which support weak references";
+const UNNAMED_TYPE: &str = "unnamed";
 
 /// One cached value and the weak reference that proves which object it belongs to.
 struct Entry<T> {
@@ -64,8 +69,8 @@ impl<T: Send + Sync + 'static> PartCache<T> {
     ///
     /// # Errors
     ///
-    /// Returns the error `convert` returns, or the error of creating the weak reference when
-    /// the part does not support one; nothing is cached then.
+    /// Returns a SchemaError when the part supports no weak reference, before `convert` runs,
+    /// or the error `convert` returns; nothing is cached then.
     pub fn get_or_insert_with(
         &self,
         part: &Bound<'_, PyAny>,
@@ -76,10 +81,18 @@ impl<T: Send + Sync + 'static> PartCache<T> {
             self.hits.fetch_add(1, Ordering::Relaxed);
             return Ok(value);
         }
+        let callback = evict_on_collect(part.py(), Arc::downgrade(&self.entries), key)?;
+        let weak = PyWeakrefReference::new_with(part, callback)
+            .map_err(|err| {
+                if err.is_instance_of::<PyTypeError>(part.py()) {
+                    to_py_err(part.py(), &not_referenceable(part))
+                } else {
+                    err
+                }
+            })?
+            .unbind();
         self.misses.fetch_add(1, Ordering::Relaxed);
         let value = Arc::new(convert(part)?);
-        let callback = evict_on_collect(part.py(), Arc::downgrade(&self.entries), key)?;
-        let weak = PyWeakrefReference::new_with(part, callback)?.unbind();
         let replaced = lock(&self.entries).insert(
             key,
             Entry {
@@ -117,6 +130,21 @@ impl<T: Send + Sync + 'static> Default for PartCache<T> {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Describes a part that supports no weak reference, so the cache cannot tell when it dies.
+fn not_referenceable(part: &Bound<'_, PyAny>) -> CoreError {
+    let type_name = part
+        .get_type()
+        .name()
+        .map_or_else(|_| UNNAMED_TYPE.to_owned(), |name| name.to_string());
+    CoreError::new(
+        ErrorKind::Schema,
+        ErrorCode::Schema,
+        format!("cannot cache a {type_name} part: it supports no weak reference"),
+        WEAKREF_HINT,
+    )
+    .with_context("type", type_name)
 }
 
 fn lock<T>(entries: &Entries<T>) -> MutexGuard<'_, HashMap<usize, Entry<T>>> {

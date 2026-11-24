@@ -12,10 +12,13 @@ Contains:
     test_part_cache_hits_for_the_same_object: a second lookup of one part reuses its value
     test_part_cache_misses_for_an_equal_but_distinct_object: an equal copy gets its own value
     test_part_cache_evicts_a_collected_part: a collected part's entry leaves the cache
+    test_part_cache_rejects_a_part_without_weak_references: such a part raises SchemaError
+        before any conversion, and nothing is cached
 """
 
 import gc
 import math
+from typing import cast
 
 import pytest
 
@@ -25,6 +28,7 @@ from e8s.core.errors import E8sError, SchemaError
 from e8s.core.types import Box2
 
 FINITE_HINT = "pass a finite number"
+WEAKREF_HINT = "cache only frozen model instances, which support weak references"
 
 
 def test_core_error_raises_the_e8s_class_with_its_code() -> None:
@@ -83,3 +87,21 @@ def test_part_cache_evicts_a_collected_part() -> None:
     del part
     gc.collect()
     assert cache_delta(before)["entries"] == 0
+
+
+class _Unreferenceable:
+    """Holds nothing and, with empty `__slots__`, supports no weak reference."""
+
+    __slots__ = ()
+
+
+def test_part_cache_rejects_a_part_without_weak_references() -> None:
+    # A Box2 always supports weak references; the cast stands in for hostile input.
+    part = cast("Box2", _Unreferenceable())
+    before = core._cache_stats()
+    with pytest.raises(SchemaError) as raised:
+        core._cache_probe(part)
+    assert raised.value.code is ErrorCode.SCHEMA
+    assert raised.value.hint == WEAKREF_HINT
+    assert raised.value.context == {"type": "_Unreferenceable"}
+    assert cache_delta(before) == {"hits": 0, "misses": 0, "entries": 0}
