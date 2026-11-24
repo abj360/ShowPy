@@ -13,15 +13,19 @@ import pytest
 from e8s.core.errors import SchemaError
 from e8s.core.types import FrozenModel
 from e8s.show.storage_models import (
+    ConformanceReport,
     FsckFinding,
     FsckReport,
     GcReport,
+    UpgradeReport,
 )
 
 MODELS: tuple[FrozenModel, ...] = (
     FsckFinding(code="MISSING_BLOB", path="blobs/ab", message="blob is gone"),
     FsckReport(findings=(FsckFinding(code="X", path="p", message="m"),), ok=False),
     GcReport(removed=("a", "b"), bytes_freed=12, dry_run=True),
+    UpgradeReport(shows=("s",), revisions=3, blobs_linked=2, blobs_copied=1),
+    ConformanceReport(passed=("a",), failed=(("b", "no lock"),)),
 )
 
 
@@ -33,3 +37,5 @@ def test_every_storage_report_round_trips_through_json(model: FrozenModel) -> No
 def test_report_counts_refuse_negative_numbers() -> None:
     with pytest.raises(SchemaError):
         GcReport(bytes_freed=-1)
+    with pytest.raises(SchemaError):
+        UpgradeReport(revisions=-1)

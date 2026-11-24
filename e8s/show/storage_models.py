@@ -5,6 +5,8 @@ Contains:
     FsckFinding: holds one problem a repository check found
     FsckReport: holds every finding of a repository check and whether it passed
     GcReport: holds what a clean-up removed or would remove
+    UpgradeReport: holds what an upgrade of a repository moved
+    ConformanceReport: holds which backend conformance checks passed and which failed
 """
 
 from typing import Annotated
@@ -54,3 +56,31 @@ class GcReport(FrozenModel):
     removed: tuple[str, ...] = ()
     bytes_freed: Count = 0
     dry_run: bool = False
+
+
+class UpgradeReport(FrozenModel):
+    """Holds what an upgrade of a repository to the current layout moved.
+
+    Attributes:
+        shows: IDs of the shows upgraded.
+        revisions: Revisions rewritten.
+        blobs_linked: Blobs linked into the new layout.
+        blobs_copied: Blobs copied into the new layout.
+    """
+
+    shows: tuple[str, ...] = ()
+    revisions: Count = 0
+    blobs_linked: Count = 0
+    blobs_copied: Count = 0
+
+
+class ConformanceReport(FrozenModel):
+    """Holds which backend conformance checks passed and which failed.
+
+    Attributes:
+        passed: Names of the checks that passed.
+        failed: Pairs of check name and why it failed.
+    """
+
+    passed: tuple[str, ...] = ()
+    failed: tuple[tuple[str, str], ...] = ()

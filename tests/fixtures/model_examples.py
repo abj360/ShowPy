@@ -111,9 +111,11 @@ from e8s.show.migrate import DroppedFields, MigrationReport
 from e8s.show.models import Pin
 from e8s.show.set_queries import index
 from e8s.show.storage_models import (
+    ConformanceReport,
     FsckFinding,
     FsckReport,
     GcReport,
+    UpgradeReport,
 )
 from e8s.time.measures import count_to_measure
 from e8s.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting
@@ -319,6 +321,8 @@ def _storage_examples() -> list[FrozenModel]:
         FsckFinding(code="MISSING_BLOB", path="blobs/ab", message="blob is gone"),
         FsckReport(ok=True),
         GcReport(),
+        UpgradeReport(),
+        ConformanceReport(),
     ]
 
 

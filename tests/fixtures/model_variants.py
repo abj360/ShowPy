@@ -287,6 +287,8 @@ def _show() -> dict[str, tuple[Changes, ...]]:
         "IdChanges": ({"sets": (("1", "a"), ("2", "b")), "spots": (("T1", "T9"),)},),
         "FsckReport": ({"findings": (Example("FsckFinding"),), "ok": False},),
         "GcReport": ({"removed": ("a", "b"), "bytes_freed": 12, "dry_run": True},),
+        "UpgradeReport": ({"shows": ("s",), "revisions": 3, "blobs_linked": 2, "blobs_copied": 1},),
+        "ConformanceReport": ({"passed": ("a",), "failed": (("b", "no lock"),)},),
         "Revision": ({"changed": ("/show/show.json",)},),
         "Show": (
             {

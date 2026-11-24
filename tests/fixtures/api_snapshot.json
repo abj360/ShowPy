@@ -170,6 +170,12 @@
     }
   },
   "ConflictError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: e8s.core.error_codes.ErrorCode | None = None) -> None",
+  "ConformanceReport": {
+    "model": {
+      "failed": "tuple[tuple[str, str], ...]",
+      "passed": "tuple[str, ...]"
+    }
+  },
   "ContinuityError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: e8s.core.error_codes.ErrorCode | None = None) -> None",
   "CountsOp": {
     "model": {
@@ -1443,6 +1449,14 @@
     }
   },
   "UnknownRefError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: e8s.core.error_codes.ErrorCode | None = None) -> None",
+  "UpgradeReport": {
+    "model": {
+      "blobs_copied": "Count",
+      "blobs_linked": "Count",
+      "revisions": "Count",
+      "shows": "tuple[str, ...]"
+    }
+  },
   "ValidationIssue": {
     "model": {
       "code": "e8s.core.error_codes.ErrorCode",

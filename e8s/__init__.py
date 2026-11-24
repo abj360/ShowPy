@@ -724,9 +724,11 @@ if TYPE_CHECKING:
         Repository,
     )
     from e8s.show.storage_models import (
+        ConformanceReport,
         FsckFinding,
         FsckReport,
         GcReport,
+        UpgradeReport,
     )
     from e8s.show.validate import (
         validate_dependencies,
@@ -812,6 +814,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "CompiledTransition": ("e8s.choreo.engine_models", "CompiledTransition"),
     "CompositeCurve": ("e8s.geo.curves", "CompositeCurve"),
     "ConflictError": ("e8s.core.errors", "ConflictError"),
+    "ConformanceReport": ("e8s.show.storage_models", "ConformanceReport"),
     "ContinuityError": ("e8s.core.errors", "ContinuityError"),
     "CountsOp": ("e8s.show.collab_models", "CountsOp"),
     "CrowdedStroke": ("e8s.choreo.form_models", "CrowdedStroke"),
@@ -1001,6 +1004,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "TurnDirection": ("e8s.choreo.path_models", "TurnDirection"),
     "UnitRegistry": ("e8s.core.units", "UnitRegistry"),
     "UnknownRefError": ("e8s.core.errors", "UnknownRefError"),
+    "UpgradeReport": ("e8s.show.storage_models", "UpgradeReport"),
     "ValidationIssue": ("e8s.core.validation", "ValidationIssue"),
     "ValidationReport": ("e8s.core.validation", "ValidationReport"),
     "VersionError": ("e8s.core.errors", "VersionError"),
@@ -1409,6 +1413,7 @@ __all__ = [
     "CompiledTransition",
     "CompositeCurve",
     "ConflictError",
+    "ConformanceReport",
     "ContinuityError",
     "CountsOp",
     "CrowdedStroke",
@@ -1572,6 +1577,7 @@ __all__ = [
     "TurnDirection",
     "UnitRegistry",
     "UnknownRefError",
+    "UpgradeReport",
     "ValidationIssue",
     "ValidationReport",
     "VersionError",
