@@ -66,6 +66,8 @@ Contains:
     uv_runs(): lists the arguments of every `_uv_run` call one noxfile function makes
     test_rust_session_checks_crate_licences_and_the_notices: cargo deny, then the notice check
         and the cargo_tools tests
+    test_types_session_checks_the_core_stubs: mypy, pyright, then stubtest on e8s._core with no
+        allowlist
     test_cargo_tools_install_locked_at_pinned_versions_into_the_repository: cargo install
         --locked --root .cargo-tools at exact versions, never into ~/.cargo/bin
     test_fma_check_builds_the_extension_and_runs_the_script: cargo rustc on the fma-check
@@ -193,6 +195,12 @@ LOCKED_FLAG = "--locked"
 CARGO_MANIFEST = ROOT / "Cargo.toml"
 SESSION_RUN = "session.run"
 RUST_SESSION = "rust"
+TYPES_SESSION = "types"
+TYPES_SESSION_RUNS = [
+    ["mypy", "e8s", "tests", "scripts"],
+    ["pyright"],
+    ["python", "-m", "mypy.stubtest", "e8s._core"],
+]
 FMA_STEP = "_check_no_fma"
 FMA_CHECK_SCRIPT = "FMA_CHECK_SCRIPT"
 RUST_SESSION_RUNS = [
@@ -967,6 +975,10 @@ def test_rust_session_checks_crate_licences_and_the_notices() -> None:
         source, RUST_SESSION
     )
     assert uv_runs(source, RUST_SESSION)[-2:] == [NOTICES_CHECK, CARGO_TOOLS_RUN]
+
+
+def test_types_session_checks_the_core_stubs() -> None:
+    assert uv_runs(NOXFILE.read_text(), TYPES_SESSION) == TYPES_SESSION_RUNS
 
 
 def test_cargo_tools_install_locked_at_pinned_versions_into_the_repository() -> None:

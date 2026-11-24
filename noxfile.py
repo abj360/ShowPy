@@ -5,7 +5,8 @@ noxfile.py --- single task runner for every local, hook and CI gate
 
 Contains:
     lint: checks formatting, lint rules, dependency declarations and Prettier formatting
-    types: runs mypy --strict and pyright (basic) over the library, tests and scripts
+    types: runs mypy --strict and pyright (basic) over the library, tests and scripts, then
+        checks the stubs of the compiled core against the extension with stubtest
     tests: runs the full pytest suite under a fixed hash seed with a branch-coverage floor
     hashseeds: runs the full pytest suite under each non-default seed in HASH_SEEDS
     slow: runs the slow tests under each seed in SLOW_HASH_SEEDS, on SLOW_WORKERS pytest-xdist
@@ -85,6 +86,7 @@ assert "site-packages" in e8s._core.__file__, e8s._core.__file__
 """
 ALL_EXTRAS = "[all]"
 CORE_CHECK_SCRIPT = "scripts/check_core_install.py"
+CORE_MODULE = "e8s._core"
 API_CHANGES_SCRIPT = "scripts/check_api_changes.py"
 FMA_CHECK_SCRIPT = "scripts/check_no_fma.py"
 WASM_TARGET = "wasm32-unknown-unknown"
@@ -197,9 +199,13 @@ def lint(session: nox.Session) -> None:
 
 @nox.session
 def types(session: nox.Session) -> None:
-    """Runs mypy --strict and pyright (basic) over the library, tests and scripts."""
+    """Runs mypy --strict and pyright (basic), then stubtest over the compiled core's stubs.
+
+    stubtest runs with no allowlist: every stub in e8s/_core/ must match the built extension.
+    """
     _uv_run(session, "mypy", "e8s", "tests", "scripts")
     _uv_run(session, "pyright")
+    _uv_run(session, "python", "-m", "mypy.stubtest", CORE_MODULE)
 
 
 @nox.session

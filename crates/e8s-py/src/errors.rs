@@ -153,5 +153,5 @@ fn finite_probe(value: f64) -> PyResult<f64> {
 ///
 /// Returns the error of adding the function.
 pub fn add_probes(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(finite_probe, module)?)
+    crate::add_hook(module, wrap_pyfunction!(finite_probe, module)?.as_any())
 }
