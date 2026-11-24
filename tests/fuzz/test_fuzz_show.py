@@ -28,15 +28,17 @@ from typing import get_args
 from hypothesis import given
 from hypothesis import strategies as st
 
-from e8s.show.collab import apply_event
+from e8s.show.collab_models import CanvasEvent, EventKind
 from e8s.show.decode_cache import DecodeCache
 from e8s.show.documents import SHOW_DOC, decode_show, encode_show, split_path
+from e8s.show.events import apply_event
 from e8s.show.files import all_files, staged_changes
 from e8s.show.integrity import blob_digest
-from e8s.show.manage import insert_subset, renumber
-from e8s.show.models import CanvasEvent, EventKind, Show
-from e8s.show.storage import Workspace
+from e8s.show.manage import insert_subset
+from e8s.show.models import Show
+from e8s.show.renumber import renumber
 from e8s.show.structured import decode_comments
+from e8s.show.workspace import Workspace
 from tests.fixtures.shows import two_set_show
 from tests.helpers import HOSTILE_JSON, only_e8s_errors, open_session
 

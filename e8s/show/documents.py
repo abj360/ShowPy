@@ -12,7 +12,7 @@ Contains:
     dump_dumped_json(): writes the JSON-mode dump of a model canonically, skipping a second walk
     dump_show_doc(): writes a show.json object canonically, the format header first
     dump_headed_json(): writes a document canonically with its `format` and `version` keys first
-    require_storable(): refuses a show whose set IDs, keys, paths or forms cannot be stored
+    require_storable(): refuses a show whose set IDs, keys, paths, forms or pins cannot be stored
     expected_show_docs(): lists the stored show-document paths decode reads for a show
     encode_show(): splits a show into documents stored by set key, show.json header first
     encode_documents(): encodes only the named stored documents of a show
@@ -26,6 +26,7 @@ Contains:
 
 import json
 import re
+from collections import Counter
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from functools import partial
 from typing import Any
@@ -136,7 +137,7 @@ def _needs_normalizing(text: str) -> bool:
 
 
 def require_storable(show: Show) -> None:
-    """Refuses a show the stored layout cannot hold: bad set IDs or keys, loose paths or forms.
+    """Refuses a show the stored layout cannot hold: bad IDs or keys, loose paths or forms, repeats.
 
     >>> from e8s.examples import two_set_show
     >>> require_storable(two_set_show())
@@ -152,6 +153,18 @@ def require_storable(show: Show) -> None:
             hint="use set ids of letters, digits, _ and .; store paths only for consecutive "
             "sets; give every form an existing set",
             context={"bad_set_ids": bad, "loose_transitions": loose, "orphan_forms": orphans},
+        )
+    pins = Counter((p.target, p.id) for p in show.pins)
+    specs = Counter(str(spec.id) for spec in show.transitions)
+    repeated_pins = sorted([*key] for key, n in pins.items() if n > 1)
+    repeated_specs = sorted(tid for tid, n in specs.items() if n > 1)
+    if repeated_pins or repeated_specs:
+        raise SchemaError(
+            "show repeats a pin or a stored path spec, which one stored record cannot hold",
+            hint="re-pin a repeated pin with pin(show, target, id), which keeps one pin per target"
+            " and ID; store a repeated pair's paths with store_paths(show, PathsOp(spec=...)),"
+            " which keeps one spec per pair",
+            context={"repeated_pins": repeated_pins, "repeated_transitions": repeated_specs},
         )
 
 

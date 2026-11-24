@@ -1,7 +1,7 @@
 """
 anchors.py --- the tagged Anchor that points a comment, a highlight or a note at the show
 
-The class is public as `e8s.show.models.Anchor`; it lives in this module so the note model,
+The class is public as `e8s.show.anchors.Anchor`; it lives in this module so the note model,
 which the cast's rewrite report holds, can use it without importing the show model.
 
 Contains:
