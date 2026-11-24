@@ -12,7 +12,7 @@ Contains:
     is_in_image(): tells whether a repository path is copied and not excluded by .dockerignore
     missing_image_paths(): lists the paths a test module reads that a Dockerfile leaves out
     test_regression_docker_image_holds_every_path_the_noxfile_tests_read: fails when the image
-        lacks a file that tests/unit/test_noxfile.py reads, such as the CI workflow
+        lacks a file that tests/unit/tooling/test_noxfile.py reads, such as the CI workflow
     test_regression_missing_dockerfile_fails_in_a_source_checkout: a moved or renamed Dockerfile
         fails the check instead of skipping it
     test_docker_path_check_flags_a_missing_and_an_ignored_path: proves the check can fail
@@ -27,11 +27,11 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 DOCKERFILE = REPO_ROOT / "docker" / "Dockerfile"
 LIBRARY_ROOT = REPO_ROOT / "e8s"
 DOCKERIGNORE = REPO_ROOT / ".dockerignore"
-NOXFILE_TESTS = REPO_ROOT / "tests" / "unit" / "test_noxfile.py"
+NOXFILE_TESTS = REPO_ROOT / "tests" / "unit" / "tooling" / "test_noxfile.py"
 RUNTIME_STAGE = "runtime"
 ROOT_NAME = "ROOT"
 NOT_IN_IMAGE = {

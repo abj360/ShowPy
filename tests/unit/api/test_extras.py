@@ -39,7 +39,7 @@ from e8s.core.extras import MissingExtraError, require_extra
 from e8s.examples import EXAMPLE_TID, two_set_show
 from scripts.check_core_install import GATED_CALLS, OPTIONAL_MODULES, GatedCall, gate_failure
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 PYPROJECT = ROOT / "pyproject.toml"
 ALL_EXTRA = "all"
 # Fewer modules than this means the walk stopped early, not that e8s is small.
