@@ -18,6 +18,8 @@ Contains:
     core: installs the wheel without extras and checks imports and extra-gated calls fail closed
     rust: checks Rust formatting, lints and tests, builds the wasm crate and, on arm64 hosts,
         refuses any fused multiply-add outside libm's fma in the extension
+    wheels: builds the sdist and a dist-profile wheel from it, then runs the ported packages'
+        tests against that wheel in fresh venvs on each supported Python
     bench: runs the budget benchmarks; at tier M fails on a >20% min-time regression
     api_changes: checks that each commit since the last release names the API names it changes
     changelog: regenerates CHANGELOG.md with git-cliff and formats it with Prettier at release time
@@ -55,6 +57,30 @@ NO_SYNC_ENV = "NOX_UV_NO_SYNC"
 PYTHON_FOR_WHEEL = "3.14"
 # maturin passes these to cargo, so a build fails on a stale Cargo.lock instead of rewriting it.
 LOCKED_BUILD = {"MATURIN_PEP517_ARGS": "--locked"}
+# Release wheels use the dist profile. A `build-args` config setting would replace these
+# arguments, dropping --locked, so the profile goes here too.
+DIST_BUILD = {"MATURIN_PEP517_ARGS": "--locked --profile dist"}
+WHEEL_TEST_PYTHONS = ("3.13", "3.14")
+# The tests of the packages the compiled core takes over; the parity harness needs the source.
+PORTED_TESTS = (
+    "tests/unit/core",
+    "tests/unit/geo",
+    "tests/unit/time",
+    "tests/unit/sheet",
+    "tests/unit/cast",
+    "tests/unit/choreo",
+    "tests/golden",
+)
+# pyproject.toml holds the pytest settings; the copied suite has no e8s/ source to shadow the wheel.
+SUITE_FILES = ("pyproject.toml",)
+SUITE_FOLDER = "tests"
+SUITE_SKIP = ("__pycache__", ".results")
+WHEEL_TEST_CHECK = """
+import e8s
+import e8s._core
+assert "site-packages" in e8s.__file__, e8s.__file__
+assert "site-packages" in e8s._core.__file__, e8s._core.__file__
+"""
 ALL_EXTRAS = "[all]"
 CORE_CHECK_SCRIPT = "scripts/check_core_install.py"
 API_CHANGES_SCRIPT = "scripts/check_api_changes.py"
@@ -241,6 +267,14 @@ def audit(session: nox.Session) -> None:
     )
 
 
+def _only_file(session: nox.Session, folder: Path, pattern: str) -> Path:
+    """Returns the one file of a folder that matches a glob pattern, failing on none or several."""
+    found = sorted(folder.glob(pattern))
+    if len(found) != 1:
+        session.error(f"expected one {pattern} in {folder}, found {len(found)}")
+    return found[0]
+
+
 def _build_wheel(session: nox.Session, work: Path) -> Path:
     """Builds the one wheel of the project into a fresh folder under work.
 
@@ -254,18 +288,67 @@ def _build_wheel(session: nox.Session, work: Path) -> Path:
     dist = work / "dist"
     shutil.rmtree(dist, ignore_errors=True)
     session.run("uv", "build", "--wheel", "--out-dir", str(dist), external=True, env=LOCKED_BUILD)
-    wheels = sorted(dist.glob("*.whl"))
-    if len(wheels) != 1:
-        session.error(f"expected one wheel in {dist}, found {len(wheels)}")
-    return wheels[0]
+    return _only_file(session, dist, "*.whl")
 
 
-def _fresh_venv(session: nox.Session, venv: Path, *, has_pip: bool) -> Path:
-    """Creates an empty venv on PYTHON_FOR_WHEEL and returns its interpreter."""
+def _build_wheel_from_sdist(session: nox.Session, work: Path) -> Path:
+    """Builds the sdist, then a wheel from that sdist with the dist profile, as releases are.
+
+    Args:
+        session: The running nox session.
+        work: The session's scratch folder.
+
+    Returns:
+        wheel: Path of the wheel built from the sdist.
+    """
+    dist = work / "dist"
+    shutil.rmtree(dist, ignore_errors=True)
+    session.run("uv", "build", "--sdist", "--out-dir", str(dist), external=True, env=LOCKED_BUILD)
+    sdist = _only_file(session, dist, "*.tar.gz")
+    session.run(
+        "uv", "build", "--wheel", "--out-dir", str(dist), str(sdist), external=True, env=DIST_BUILD
+    )
+    return _only_file(session, dist, "*.whl")
+
+
+def _fresh_venv(
+    session: nox.Session, venv: Path, *, has_pip: bool, python: str = PYTHON_FOR_WHEEL
+) -> Path:
+    """Creates an empty venv on `python` (PYTHON_FOR_WHEEL by default); returns its interpreter."""
     shutil.rmtree(venv, ignore_errors=True)
     seed = ["--seed"] if has_pip else []
-    session.run("uv", "venv", *seed, "--python", PYTHON_FOR_WHEEL, str(venv), external=True)
+    session.run("uv", "venv", *seed, "--python", python, str(venv), external=True)
     return venv / "bin" / "python"
+
+
+def _export_test_requirements(session: nox.Session, work: Path) -> Path:
+    """Writes the locked, hashed requirements of the dev group, without the project, under work."""
+    requirements = work / "test-requirements.txt"
+    session.run(
+        "uv",
+        "export",
+        "--format",
+        "requirements-txt",
+        "--only-group",
+        "dev",
+        "--no-emit-project",
+        "--quiet",
+        "--output-file",
+        str(requirements),
+        external=True,
+    )
+    return requirements
+
+
+def _copy_test_suite(root: Path, suite: Path) -> Path:
+    """Copies the tests and their pytest settings to a folder that holds no e8s source."""
+    shutil.rmtree(suite, ignore_errors=True)
+    shutil.copytree(
+        root / SUITE_FOLDER, suite / SUITE_FOLDER, ignore=shutil.ignore_patterns(*SUITE_SKIP)
+    )
+    for name in SUITE_FILES:
+        shutil.copy2(root / name, suite / name)
+    return suite
 
 
 def _write_readme_example(root: Path, work: Path) -> Path:
@@ -314,6 +397,33 @@ def core(session: nox.Session) -> None:
     session.chdir(work)
     session.run(str(python), "-I", str(example), external=True)
     session.run(str(python), "-I", str(check), external=True)
+
+
+@nox.session
+def wheels(session: nox.Session) -> None:
+    """Tests the release wheel: built from the sdist with the dist profile, on each Python.
+
+    Installs the locked dev group and the wheel into a fresh venv per WHEEL_TEST_PYTHONS entry,
+    then runs PORTED_TESTS from a copy of the suite, so the installed wheel, not the source tree,
+    is imported. Not a default session: it builds and creates venvs, so it runs on demand and in
+    CI.
+    """
+    root = Path.cwd()
+    work = Path(session.create_tmp()).resolve()
+    built = _build_wheel_from_sdist(session, work)
+    requirements = _export_test_requirements(session, work)
+    suite = _copy_test_suite(root, work / "suite")
+    session.env["PYTHONHASHSEED"] = DEFAULT_HASH_SEED
+    for version in WHEEL_TEST_PYTHONS:
+        python = _fresh_venv(session, work / f"venv-{version}", has_pip=False, python=version)
+        install = ("uv", "pip", "install", "--quiet", "--python", str(python))
+        session.run(*install, "--require-hashes", "-r", str(requirements), external=True)
+        session.run(*install, "--no-deps", str(built), external=True)
+        session.chdir(suite)
+        session.run(str(python), "-P", "-c", WHEEL_TEST_CHECK, external=True)
+        session.run(
+            str(python), "-P", "-m", "pytest", *PORTED_TESTS, *session.posargs, external=True
+        )
 
 
 def _fma_check_library() -> Path:
