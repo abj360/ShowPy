@@ -39,7 +39,8 @@ Stated limit: facing overrides carry no ID, so all of them are one item, and edi
 different overrides conflict. Finer keys need an override ID, which is a format change.
 
 Contains:
-    ITEM_TABLE: maps each stored (model, field) to the item kind and role that holds its value
+    ITEM_TABLE: maps each stored (model, field) to the item kind and role that holds its value;
+        Show.cast has no row, since it holds only the Cast, whose fields have rows of their own
     items(): splits a show into its items, in key order
     changes(): lists the items two shows differ in, skipping objects the shows share
 """
@@ -93,7 +94,7 @@ def _rows(model: str, kind: ItemKind, role: str | None, fields: str) -> dict[tup
 
 ITEM_TABLE: Mapping[tuple[str, str], tuple[ItemKind, str | None]] = ReadOnlyMap(
     {
-        **_rows("Show", "show", None, "id title pack dependencies extensions cast"),
+        **_rows("Show", "show", None, "id title pack dependencies extensions"),
         **_rows("Show", "set_order", None, "sets"),
         **_rows("Show", "pin_order", None, "pins"),
         **_rows("Show", "facing_override", None, "facing_overrides"),

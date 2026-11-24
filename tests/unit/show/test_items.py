@@ -4,7 +4,8 @@
 test_items.py --- tests the item table, the items of a show and the changes between two shows
 
 Contains:
-    test_every_stored_field_has_an_item_row: walks the v2 schema against ITEM_TABLE
+    test_every_stored_field_has_an_item_row: walks the v2 schema against ITEM_TABLE; the envelope
+        and Show.cast, which holds only the Cast and its own rows, have no row
     test_whole_item_models_map_every_field_to_their_kind: keeps whole items undivided
     test_roles_are_the_design_roles: pins the placement and set roles and their fields
     test_changes_of_a_show_with_itself_is_empty: finds nothing between a show and itself
@@ -52,6 +53,7 @@ SCHEMA = "e8.show.v2.json"
 DEFS = "$defs"
 SHOW_DOCUMENT = "ShowDocument"
 ENVELOPE_FIELDS = frozenset({"format", "version"})
+CONTAINER_FIELDS = {("Show", "cast"): "Cast"}
 CONTAINER_MODELS = frozenset({"Show", "Cast", "Set", "Placement", "TransitionSpec"})
 WHOLE_ITEM_MODELS = {
     "Form": "form",
@@ -105,7 +107,8 @@ def _refs(node: object) -> Iterator[str]:
 def _properties(defs: dict[str, dict[str, dict[str, object]]], model: str) -> dict[str, object]:
     definition = SHOW_DOCUMENT if model == "Show" else model
     found = defs[definition]["properties"]
-    return {k: v for k, v in found.items() if not (model == "Show" and k in ENVELOPE_FIELDS)}
+    kept = {k: v for k, v in found.items() if (model, k) not in CONTAINER_FIELDS}
+    return {k: v for k, v in kept.items() if not (model == "Show" and k in ENVELOPE_FIELDS)}
 
 
 def test_every_stored_field_has_an_item_row() -> None:
@@ -122,6 +125,10 @@ def test_every_stored_field_has_an_item_row() -> None:
         if model in CONTAINER_MODELS:
             reached = set(_refs(fields)) - TABLE_MODELS - VALUE_MODELS
             assert not reached, f"{model} reaches models neither items nor values: {reached}"
+    for (model, field), held in CONTAINER_FIELDS.items():
+        definition = SHOW_DOCUMENT if model == "Show" else model
+        assert list(_refs(defs[definition]["properties"][field])) == [held]
+        assert (model, field) not in ITEM_TABLE
     stale = [row for row in ITEM_TABLE if row[0] not in TABLE_MODELS]
     stale += [row for row in ITEM_TABLE if row[1] not in _properties(defs, row[0])]
     assert not stale, f"ITEM_TABLE rows that name no stored field: {stale}"
