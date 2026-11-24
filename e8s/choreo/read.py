@@ -3,7 +3,7 @@ read.py --- the floor readers: motion over time as arrays, all answered by PathE
 
 Contains:
     frames(): returns every selected spot's position and facing at regular frame times
-    coordinate_table(): returns selected spots' positions at sets, in meters and coordinates
+    coordinate_table(): returns selected spots' positions at each set, in meters or a unit
     describe_transition(): describes each selected spot's move as segments, alike spots grouped
 """
 
@@ -31,12 +31,11 @@ from e8s.choreo.read_models import (
 from e8s.core.arrays import FloatArray
 from e8s.core.caps import require_size
 from e8s.core.errors import SchemaError, TimeRangeError
-from e8s.core.ids import LandmarkId, SetId, SpotId, TransitionId
+from e8s.core.ids import SetId, SpotId, TransitionId
 from e8s.core.selection import Selector
 from e8s.core.types import Count, Degrees, Point
-from e8s.core.units import vector_facing
+from e8s.core.units import convert, vector_facing
 from e8s.core.validation import require_finite
-from e8s.sheet.coords import axis_offsets, axis_origin, offsets_in_units, rounded_offsets
 from e8s.show.models import Show
 from e8s.time.clock import count_to_seconds, seconds_to_count
 from e8s.time.models import Timeline
@@ -46,6 +45,7 @@ DEFAULT_FPS = 30.0
 # float noise, and a range of exactly 4 s at 30 fps must keep its last frame.
 FRAME_TOL = 1e-9
 MAX_FRAME_VALUES = 20_000_000
+DEFAULT_UNIT = "m"
 STILL_M = 1e-9
 GROUP_DIGITS = 6
 FULL_TURN = 360.0
@@ -195,61 +195,53 @@ def coordinate_table(
     who: Selector = ALL,
     sets: Sequence[str] | None = None,
     *,
+    unit: str = DEFAULT_UNIT,
     engine: PathEngine | None = None,
 ) -> CoordinateTable:
-    """Returns selected spots' positions at sets, in meters and in the show's coordinates.
+    """Returns selected spots' positions at each set, unrounded, in meters or another unit.
 
-    Positions are PathEngine positions at each set's count. Coordinates are offsets from the
-    coordinate system's origin, across toward the audience's right and away from the audience,
-    in the system's units and rounded to its precision as its wording rounds them.
+    Positions are PathEngine positions at each set's count, in the library's stage frame: x
+    runs from audience-left to audience-right, y away from the audience, and the origin is the
+    sheet's front-center. `unit` converts them through the unit registry; rounding for display
+    is left to the caller.
 
     Args:
         show: Show to read.
         who: Spots to read, as a selection expression, a list of IDs or a Selection.
         sets: Set IDs in the order wanted; None reads every set in show order.
+        unit: Registered length unit the positions are given in, meters by default.
         engine: A PathEngine already built for `show`, reused so repeated reads skip compiling.
 
     Returns:
-        table: (sets, spots) arrays of meters, rounded and exact coordinates, and field states.
+        table: (sets, spots) arrays of x, y and field states.
 
     Raises:
-        UnknownRefError: A set or spot is not in the show.
-        SchemaError: `sets` is empty, an offset cannot be rounded, or `engine` belongs to
-            another show.
+        UnknownRefError: A set, spot or unit is not known.
+        SchemaError: `sets` is empty, or `engine` belongs to another show.
 
     >>> from e8s.examples import two_set_show
     >>> table = coordinate_table(two_set_show(), "T2")
-    >>> table.x[:, 0].tolist(), table.y[:, 0].tolist()
-    ([2.0, 2.0], [5.0, 9.0])
-    >>> table.across[:, 0].tolist(), table.depth[:, 0].tolist(), table.units
+    >>> table.x[:, 0].tolist(), table.y[:, 0].tolist(), table.unit
     ([2.0, 2.0], [5.0, 9.0], 'm')
+    >>> coordinate_table(two_set_show(), "T2", unit="cm").y[:, 0].tolist()
+    [500.0, 900.0]
     """
+    per_meter = convert(1.0, "m", unit)
     reader = _engine_for(show, engine)
     spots = _spot_ids(show, who)
     set_ids = _set_ids(show, sets)
     starts = _set_starts(show)
     counts = np.array([starts[show.set_index(set_id)] for set_id in set_ids], dtype=float)
     x, y = _set_positions(reader, spots, counts)
-    system = show.coordinates
-    across_m, depth_m = axis_offsets(show.sheet, system, np.column_stack([x.ravel(), y.ravel()]))
-    across_m, depth_m = across_m.reshape(x.shape), depth_m.reshape(x.shape)
     on_field = [[show.set(set_id).get(spot).on_field for spot in spots] for set_id in set_ids]
     return CoordinateTable(
         spots=spots,
         sets=set_ids,
+        unit=unit,
         counts=counts,
-        x=x,
-        y=y,
-        across=rounded_offsets(system, across_m),
-        depth=rounded_offsets(system, depth_m),
-        across_exact=offsets_in_units(system, across_m),
-        depth_exact=offsets_in_units(system, depth_m),
+        x=x * per_meter,
+        y=y * per_meter,
         on_field=np.array(on_field, dtype=bool).reshape(x.shape),
-        origin=axis_origin(show.sheet, system),
-        origin_landmark=LandmarkId(system.origin) if isinstance(system.origin, str) else None,
-        audience_side=system.audience_side,
-        units=system.units,
-        precision=system.precision,
     )
 
 

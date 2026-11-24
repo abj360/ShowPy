@@ -43,22 +43,16 @@ Contains:
 
 from typing import Any
 
-import numpy as np
 import pytest
 
 from e8s.core.caps import MAX_COORD_M
 from e8s.core.errors import E8sError, SchemaError, UnknownRefError
 from e8s.core.ids import LandmarkId
-from e8s.core.units import convert
 from e8s.core.util import approx_equal
 from e8s.sheet.coords import (
     CoordStyle,
-    axis_offsets,
-    axis_origin,
     coordinate_presets,
     from_coords,
-    offsets_in_units,
-    rounded_offsets,
     set_coordinates,
     to_coords,
 )
@@ -389,38 +383,3 @@ def test_regression_injected_coordinate_parts_raise_schema_error(fields: dict[st
         to_coords(show, (1.0, 1.0))
     with pytest.raises(SchemaError):
         from_coords(show, "R1 U1")
-
-
-@pytest.mark.parametrize(
-    ("side", "expected"),
-    [("front", (3.5, 2.0)), ("back", (-3.5, -2.0)), ("left", (-2.0, 3.5)), ("right", (2.0, -3.5))],
-)
-def test_axis_offsets_follow_the_audience_side(side: str, expected: tuple[float, float]) -> None:
-    system = CoordinateSystem.model_validate({"audience_side": side})
-    across, depth = axis_offsets(two_set_show().sheet, system, np.array([[3.5, 2.0]]))
-    assert (float(across[0]), float(depth[0])) == expected
-
-
-def test_axis_origin_resolves_a_landmark() -> None:
-    sheet = two_set_show().sheet
-    system = CoordinateSystem(origin=LandmarkId("c"))
-    assert axis_origin(sheet, system) == (0.0, 10.0)
-    across, depth = axis_offsets(sheet, system, np.array([[1.0, 12.0]]))
-    assert (across.tolist(), depth.tolist()) == ([1.0], [2.0])
-
-
-def test_rounded_offsets_are_the_numbers_to_coords_writes() -> None:
-    system = CoordinateSystem(units="ft", precision=0.5)
-    show = _with(system)
-    points = np.array([[3.1, -2.7], [-0.07, 0.4], [12.345, 6.789]])
-    across, depth = axis_offsets(show.sheet, system, points)
-    rounded = zip(
-        rounded_offsets(system, across).tolist(),
-        rounded_offsets(system, depth).tolist(),
-        strict=True,
-    )
-    for point, (a, d) in zip(points.tolist(), rounded, strict=True):
-        short = to_coords(show, (point[0], point[1]), style="short")
-        assert short == f"{'L' if a < 0 else 'R'}{abs(a):.1f} {'D' if d < 0 else 'U'}{abs(d):.1f}"
-    in_feet = [convert(v, "m", "ft") for v in across.tolist()]
-    assert offsets_in_units(system, across).tolist() == in_feet

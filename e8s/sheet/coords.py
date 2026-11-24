@@ -11,10 +11,6 @@ Contains:
     coordinate_presets(): lists coordinate systems that suit a sheet
     set_coordinates(): returns a show with a new coordinate system; positions never move
     to_coords(): words a point in the show's coordinate system
-    axis_offsets(): returns points' offsets from the origin, across and away from the audience
-    axis_origin(): returns the system's origin in stage meters
-    offsets_in_units(): converts offsets in meters to the system's units, unrounded
-    rounded_offsets(): converts offsets to the system's units, rounded to its precision
     from_coords(): reads worded coordinates back into a point
 """
 
@@ -23,13 +19,10 @@ import re
 from decimal import Decimal
 from typing import TYPE_CHECKING, Literal
 
-import numpy as np
-
-from e8s.core.arrays import FloatArray
 from e8s.core.caps import MAX_COORD_M
 from e8s.core.deprecation import leaving_call
 from e8s.core.errors import SchemaError, UnknownRefError
-from e8s.core.types import Point, Points
+from e8s.core.types import Point
 from e8s.core.units import convert, round_to
 from e8s.core.validation import require_finite
 from e8s.sheet.bounds import _landmark, _landmark_anchor
@@ -185,53 +178,11 @@ def _decimals(precision: float) -> int:
     return max(0, -exponent) if isinstance(exponent, int) else 0
 
 
-def axis_offsets(
-    sheet: Sheet, system: CoordinateSystem, points: Points
-) -> tuple[FloatArray, FloatArray]:
-    """Returns points' offsets from the system's origin, across and away from the audience.
-
-    Across is positive toward the audience's right and depth positive away from the audience,
-    both in meters, whichever edge of the sheet the audience sits at.
-
-    Args:
-        sheet: Sheet whose landmarks a named origin refers to.
-        system: Coordinate system giving the origin and the audience side.
-        points: Stage-plane points in meters, shape (N, 2).
-
-    Returns:
-        offsets: Across and depth offsets, each of shape (N,).
-
-    >>> from e8s.examples import field_sheet
-    >>> system = CoordinateSystem(origin=(1.0, 1.0), audience_side="back")
-    >>> [a.tolist() for a in axis_offsets(field_sheet(), system, np.array([[3.5, 2.0]]))]
-    [[-2.5], [-1.0]]
-    """
-    check_coordinate_system(system)
+def _local(sheet: Sheet, system: CoordinateSystem, p: Point) -> tuple[float, float]:
     ox, oy = _origin(sheet, system)
     right, ahead = _frame(system)
-    # An offset past the float range becomes inf, as Python float arithmetic gives; every
-    # caller refuses a non-finite offset, so numpy's overflow warning would only repeat it.
-    with np.errstate(over="ignore", invalid="ignore"):
-        dx, dy = points[:, 0] - ox, points[:, 1] - oy
-        across: FloatArray = dx * right[0] + dy * right[1]
-        depth: FloatArray = dx * ahead[0] + dy * ahead[1]
-    return across, depth
-
-
-def axis_origin(sheet: Sheet, system: CoordinateSystem) -> Point:
-    """Returns the system's origin in stage meters, resolving a named landmark.
-
-    >>> from e8s.examples import field_sheet
-    >>> axis_origin(field_sheet(), CoordinateSystem(origin=(1.0, 2.0)))
-    (1.0, 2.0)
-    """
-    check_coordinate_system(system)
-    return _origin(sheet, system)
-
-
-def _local(sheet: Sheet, system: CoordinateSystem, p: Point) -> tuple[float, float]:
-    across, depth = axis_offsets(sheet, system, np.array([p], dtype=float))
-    return float(across[0]), float(depth[0])
+    dx, dy = p[0] - ox, p[1] - oy
+    return dx * right[0] + dy * right[1], dx * ahead[0] + dy * ahead[1]
 
 
 def _rounded(value_m: float, system: CoordinateSystem) -> float:
@@ -251,41 +202,6 @@ def _rounded(value_m: float, system: CoordinateSystem) -> float:
             context=context,
         )
     return shown
-
-
-def offsets_in_units(system: CoordinateSystem, offsets_m: FloatArray) -> FloatArray:
-    """Returns offsets in meters converted to the system's units, unrounded.
-
-    >>> offsets_in_units(CoordinateSystem(units="ft"), np.array([0.3048, -0.6096])).tolist()
-    [1.0, -2.0]
-    """
-    check_coordinate_system(system)
-    in_units: FloatArray = offsets_m * convert(1.0, "m", system.units)
-    return in_units
-
-
-def rounded_offsets(system: CoordinateSystem, offsets_m: FloatArray) -> FloatArray:
-    """Returns offsets in meters in the system's units, rounded to its precision as worded.
-
-    Each value is the offset converted to the system's units and rounded half away from
-    zero to a multiple of its precision, signed: the same number the worded coordinates use.
-
-    Args:
-        system: Coordinate system giving the units and the precision.
-        offsets_m: Offsets in meters, any shape.
-
-    Returns:
-        rounded: The offsets in the system's units, rounded, in the same shape.
-
-    Raises:
-        SchemaError: An offset cannot be rounded to a finite value at the precision.
-
-    >>> rounded_offsets(CoordinateSystem(precision=0.5), np.array([1.24, -1.25])).tolist()
-    [1.0, -1.5]
-    """
-    check_coordinate_system(system)
-    flat = [_rounded(value, system) for value in offsets_m.ravel().tolist()]
-    return np.array(flat, dtype=float).reshape(offsets_m.shape)
 
 
 def _part(

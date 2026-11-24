@@ -217,19 +217,11 @@
   },
   "CoordinateTable": {
     "model": {
-      "across": "FloatArray",
-      "across_exact": "FloatArray",
-      "audience_side": "Literal['front', 'back', 'left', 'right']",
       "counts": "FloatArray",
-      "depth": "FloatArray",
-      "depth_exact": "FloatArray",
       "on_field": "BoolArray",
-      "origin": "Point",
-      "origin_landmark": "e8s.core.ids.LandmarkId | None",
-      "precision": "float",
       "sets": "tuple[e8s.core.ids.SetId, ...]",
       "spots": "tuple[e8s.core.ids.SpotId, ...]",
-      "units": "str",
+      "unit": "str",
       "x": "FloatArray",
       "y": "FloatArray"
     }
@@ -1709,7 +1701,7 @@
   "coordinate_presets": "(sheet: e8s.sheet.models.Sheet) -> list[e8s.sheet.models.CoordinateSystem]",
   "coordinate_sheet": "(show: e8s.show.models.Show, entity: str, precision: float | None = None, publication: e8s.export.Publication | None = None) -> e8s.export.CoordinateSheet",
   "coordinate_sheets": "(show: e8s.show.models.Show, sel: str | collections.abc.Sequence[str] | e8s.core.selection.Selection = 'all', publication: e8s.export.Publication | None = None, precision: float | None = None) -> list[e8s.export.CoordinateSheet]",
-  "coordinate_table": "(show: e8s.show.models.Show, who: Selector = 'all', sets: collections.abc.Sequence[str] | None = None, *, engine: e8s.choreo.engine.PathEngine | None = None) -> e8s.choreo.read_models.CoordinateTable",
+  "coordinate_table": "(show: e8s.show.models.Show, who: Selector = 'all', sets: collections.abc.Sequence[str] | None = None, *, unit: str = 'm', engine: e8s.choreo.engine.PathEngine | None = None) -> e8s.choreo.read_models.CoordinateTable",
   "cost_matrix": "(from_: Source, to_slots: SlotSource, options: e8s.choreo.match_models.MatchOptions | None = None, entities: collections.abc.Sequence[str] | None = None, groups: collections.abc.Mapping[str, str] | None = None, slot_groups: collections.abc.Sequence[str | None] | None = None, *, font_registry: e8s.geo.fonts.FontRegistry | None = None) -> FloatArray",
   "count_to_measure": "(tl: e8s.time.models.Timeline, c: Count) -> e8s.time.models.MeasureLabel | None",
   "count_to_seconds": "(tl: e8s.time.models.Timeline, c: Count) -> Seconds",
