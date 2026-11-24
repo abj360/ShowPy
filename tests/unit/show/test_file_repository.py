@@ -46,7 +46,7 @@ Contains:
     test_regression_long_names_are_name_too_long: maps ENAMETOOLONG on writes and reads
     test_regression_losing_commit_race_is_a_conflict: keeps a lost link race a ConflictError
     test_regression_overlong_show_id_reads_raise_name_too_long: refuses reads of a 300-character ID
-    test_regression_other_os_errors_are_io: maps stray OSErrors on read paths and show_ids() to IO
+    test_regression_other_os_errors_are_io: maps stray OSErrors on read paths and shows() to IO
     test_regression_deep_or_huge_tree_record_is_corrupt: maps a tree record nested past the stack
         or holding an overlong int to CORRUPT
     test_regression_oversized_files_are_corrupt_before_reading: refuses a sparse terabyte link,
@@ -104,18 +104,14 @@ from typing import Any, NoReturn
 
 import pytest
 
-import e8s.show.file_repository as file_repository
+import e8s.show.layout1 as layout1
 from e8s.core.canonical import MAX_NESTING
 from e8s.core.errors import ConflictError, StorageError, bounded_repr
-from e8s.show.file_repository import (
-    BLOB_MAX_BYTES,
-    LINK_MAX_BYTES,
-    TREE_MAX_BYTES,
-    FileRepository,
-)
-from e8s.show.models import Revision
-from e8s.show.repositories import digest
-from e8s.show.storage import open_workspace
+from e8s.show.backend import digest
+from e8s.show.file_repository import FileRepository
+from e8s.show.history_models import Revision
+from e8s.show.layout1 import BLOB_MAX_BYTES, LINK_MAX_BYTES, TREE_MAX_BYTES
+from e8s.show.workspace import open_workspace
 from tests.fixtures.shows import two_set_show
 from tests.helpers import HOSTILE_JSON, capped_address_space, fails_after
 
@@ -459,7 +455,7 @@ def test_regression_long_names_are_name_too_long(
 
 
 def test_regression_other_os_errors_are_io(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Maps stray OSErrors on read paths and show_ids() to IO."""
+    """Maps stray OSErrors on read paths and shows() to IO."""
     repo, _, base = _saved(tmp_path)
     shutil.rmtree(base / "trees")
     (base / "trees").write_bytes(b"not a directory")
@@ -687,7 +683,7 @@ def test_regression_oversized_blob_is_refused_before_it_is_written(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Refuses a blob over the read cap at commit; a blob at the cap lands and reads back."""
-    monkeypatch.setattr(file_repository, "BLOB_MAX_BYTES", SMALL_BLOB_CAP)
+    monkeypatch.setattr(layout1, "BLOB_MAX_BYTES", SMALL_BLOB_CAP)
     repo, rev, _ = _saved(tmp_path)
     before = _all_files(tmp_path)
     with pytest.raises(StorageError) as caught:
@@ -899,7 +895,7 @@ def test_regression_blob_landed_by_a_racing_writer_is_kept(
     repo, rev, base = _saved(tmp_path)
     content = b"x"
     target = base / "objects" / digest(content)
-    real_lstat_mode = file_repository._lstat_mode
+    real_lstat_mode = layout1._lstat_mode
 
     def racing_lstat_mode(show_id: str, path: Path) -> int | None:
         mode = real_lstat_mode(show_id, path)
@@ -907,7 +903,7 @@ def test_regression_blob_landed_by_a_racing_writer_is_kept(
             target.write_bytes(content)
         return mode
 
-    monkeypatch.setattr(file_repository, "_lstat_mode", racing_lstat_mode)
+    monkeypatch.setattr(layout1, "_lstat_mode", racing_lstat_mode)
     _refuse_replacing_existing(monkeypatch)
     landed = repo.transaction(SHOW_ID, {"/renders/a.txt": content}, expected_revision=rev, at=AT)
     assert repo.head(SHOW_ID) == landed.id

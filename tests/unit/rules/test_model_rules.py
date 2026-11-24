@@ -22,7 +22,9 @@ from pydantic import BaseModel
 from e8s.core.selection import Selection
 from e8s.geo.models import Font
 from e8s.show._notes_document import NotesDocument
-from e8s.show.models import Comment, Revision, Show
+from e8s.show.collab_models import Comment
+from e8s.show.history_models import Revision
+from e8s.show.models import Show
 
 STORED_MODEL_ROOTS: tuple[type[BaseModel], ...] = (
     Show,

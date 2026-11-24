@@ -278,7 +278,20 @@ def _show() -> dict[str, tuple[Changes, ...]]:
         "Highlight": ({"anchor": None, "zone": "pit"},),
         "CanvasEvent": ({"revision": "r1"},),
         "CountsOp": ({"rescale": True},),
-        "Proposal": ({"state": "rejected", "reason": "too far"},),
+        "Proposal": (
+            {"state": "rejected", "reason": "too far"},
+            {"state": "accepted", "accepted_revision": "r2"},
+        ),
+        "ItemKey": ({"role": "drill"},),
+        "ItemChange": ({"before": {"x": 1.0, "tags": [1, None]}, "after": [True, "moved"]},),
+        "ChangeSet": ({"changes": (Example("ItemChange"),)},),
+        "MergeConflict": ({"base": {"n": 1}, "ours": [1, 2], "theirs": "moved"},),
+        "MergeResult": ({"show": None, "conflicts": (Example("MergeConflict"),)},),
+        "IdChanges": ({"sets": (("1", "a"), ("2", "b")), "spots": (("T1", "T9"),)},),
+        "FsckReport": ({"findings": (Example("FsckFinding"),), "ok": False},),
+        "GcReport": ({"removed": ("a", "b"), "bytes_freed": 12, "dry_run": True},),
+        "UpgradeReport": ({"shows": ("s",), "revisions": 3, "blobs_linked": 2, "blobs_copied": 1},),
+        "ConformanceReport": ({"passed": ("a",), "failed": (("b", "no lock"),)},),
         "Revision": ({"changed": ("/show/show.json",)},),
         "Show": (
             {

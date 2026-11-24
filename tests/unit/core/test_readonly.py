@@ -10,13 +10,14 @@ Contains:
 import copy
 import json
 import pickle
-from collections.abc import Mapping
+from collections.abc import Mapping, MutableMapping
 from typing import Annotated
 
 import pytest
 
+from e8s.core.json_types import JsonValue
 from e8s.core.readonly import ReadOnly, ReadOnlyMap
-from e8s.core.types import FrozenModel
+from e8s.core.types import FrozenModel, JsonAny
 
 
 def test_read_only_map_equals_a_dict_and_reads_like_one() -> None:
@@ -69,3 +70,22 @@ def test_read_only_map_hashes_equal_maps_alike_in_any_order() -> None:
 def test_read_only_map_with_an_unhashable_value_is_unhashable() -> None:
     with pytest.raises(TypeError):
         hash(ReadOnlyMap({"a": ([1],)}))
+
+
+class _AnyJsonHolder(FrozenModel):
+    value: JsonAny = None
+
+
+@pytest.mark.parametrize("value", [None, 3, "text", True, [1, [None]], {"k": [1, {"n": 2.5}]}])
+def test_json_any_field_round_trips_every_json_kind(value: JsonValue) -> None:
+    holder = _AnyJsonHolder(value=value)
+    assert json.loads(json.dumps(holder.to_json())) == {"value": value}
+    assert _AnyJsonHolder.from_json(holder.to_json()) == holder
+    assert hash(holder) == hash(_AnyJsonHolder.from_json(holder.to_json()))
+
+
+def test_json_any_field_stores_containers_read_only() -> None:
+    mapping = _AnyJsonHolder(value={"k": [1, 2]}).value
+    assert isinstance(mapping, Mapping)
+    assert not isinstance(mapping, MutableMapping)
+    assert mapping["k"] == (1, 2)

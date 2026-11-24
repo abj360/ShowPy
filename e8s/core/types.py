@@ -14,6 +14,7 @@ Contains:
     JsonValue: the JSON data model, re-exported from json_types
     FrozenJsonValue: the read-only JSON value a JsonObject holds, re-exported from json_types
     JsonObject: a deeply read-only, hashable JSON object for open payloads; dumps plain JSON
+    JsonAny: the same for any JSON value, scalar or container
     FrozenModel: provides the immutable, strict base that raises SchemaError on bad data
     FrozenModel.__eq__(): compares two models of one class by their field values only
     FrozenModel.replace(): returns a revalidated copy with some fields changed
@@ -53,7 +54,7 @@ from e8s.core.errors import ALLOWED_KEY, BOUND_KEY, SchemaError, schema_error_fr
 from e8s.core.json_types import FrozenJsonValue as FrozenJsonValue
 from e8s.core.json_types import JsonValue as JsonValue
 from e8s.core.numbers import normalize_angle
-from e8s.core.readonly import FrozenJson
+from e8s.core.readonly import FrozenJson, FrozenJsonAny
 
 MIN_RING_POINTS = 3
 _BOUND_ERROR = "out_of_bounds"
@@ -125,6 +126,7 @@ type Heading = Annotated[float, Field(allow_inf_nan=False), AfterValidator(norma
 # Plain JSON in the static type lets callers pass dicts and lists; validation always stores the
 # frozen form, so values read back are tuples and read-only mappings.
 type JsonObject = Annotated[Mapping[str, JsonValue | FrozenJsonValue], FrozenJson()]
+type JsonAny = Annotated[JsonValue | FrozenJsonValue, FrozenJsonAny()]
 type Point = tuple[Meters, Meters]
 type Point3 = tuple[Meters, Meters, Meters]
 type FinitePoint = tuple[Finite, Finite]
