@@ -5,6 +5,7 @@ Contains:
     ReadOnlyMap: wraps a copy of a mapping so no caller can change it; hashes by content
     ReadOnly: annotates a model field so it validates from any mapping and stores a ReadOnlyMap
     FrozenJson: annotates a JSON object field so every nested list and object is read-only too
+    FrozenJsonAny: annotates a field of any JSON value, scalar or container, the same way
     freeze_json(): returns a deep read-only copy of a JSON value
     thaw_json(): returns the plain JSON value of a frozen one
 """
@@ -139,3 +140,28 @@ class FrozenJson:
                 _thaw_object, schema=plain
             ),
         )
+
+
+class FrozenJsonAny:
+    """Annotates a field of any JSON value: plain JSON goes in, a deep read-only copy is stored.
+
+    Like `FrozenJson`, but the value may be a scalar, a list, an object or None. Use as
+    `Annotated[JsonValue | FrozenJsonValue, FrozenJsonAny()]`.
+    """
+
+    def __get_pydantic_core_schema__(
+        self, _source: object, handler: GetCoreSchemaHandler
+    ) -> CoreSchema:
+        """Validates as plain JSON, freezes the result, and serializes it as JSON."""
+        plain = handler.generate_schema(JsonValue)
+        return core_schema.no_info_after_validator_function(
+            freeze_json,
+            plain,
+            serialization=core_schema.wrap_serializer_function_ser_schema(
+                _thaw_value, schema=plain
+            ),
+        )
+
+
+def _thaw_value(value: FrozenJsonValue, serialize: Callable[[object], object]) -> object:
+    return serialize(thaw_json(value))
