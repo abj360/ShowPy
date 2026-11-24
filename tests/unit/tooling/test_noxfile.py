@@ -59,6 +59,13 @@ Contains:
     unlocked_uv_builds(): lists the noxfile functions that run `uv build` without LOCKED_BUILD
     test_wheel_builds_fail_on_a_stale_cargo_lock: every nox build passes cargo's --locked
     test_unlocked_uv_builds_sees_a_build_without_the_lock: proves the lock check can fail
+    session_runs(): lists the arguments of every `session.run` call one noxfile function makes
+    test_rust_session_runs_fmt_clippy_test_and_the_wasm_build: the cargo gates, then the FMA
+        check
+    test_fma_check_builds_the_extension_and_runs_the_script: cargo rustc on the fma-check
+        profile, then scripts/check_no_fma.py on its output
+    test_fma_check_profile_keeps_symbols_and_line_tables: ships the dist codegen, unstripped
+    test_session_runs_keeps_source_order: proves the run scan reads calls in order
 """
 
 import ast
@@ -128,6 +135,41 @@ UV_STEP = re.compile(r"\buv (sync|run)\b")
 TOOLCHAIN_STEP = "rustup toolchain install"
 RUST_CACHE_STEP = re.compile(r"uses: Swatinem/rust-cache@[0-9a-f]{40}\b")
 LOCKED_BUILD = "LOCKED_BUILD"
+CARGO_MANIFEST = ROOT / "Cargo.toml"
+SESSION_RUN = "session.run"
+RUST_SESSION = "rust"
+FMA_STEP = "_check_no_fma"
+FMA_CHECK_SCRIPT = "FMA_CHECK_SCRIPT"
+RUST_SESSION_RUNS = [
+    ["cargo", "fmt", "--all", "--check"],
+    ["cargo", "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"],
+    ["cargo", "test", "--workspace", "--locked"],
+    [
+        "cargo",
+        "build",
+        "-p",
+        "e8s-wasm",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--profile",
+        "dist",
+        "--locked",
+    ],
+]
+FMA_CHECK_BUILD = [
+    "cargo",
+    "rustc",
+    "-p",
+    "e8s-py",
+    "--profile",
+    "fma-check",
+    "--locked",
+    "*config",
+    "*link_args",
+]
+# The checked build has the shipped codegen (fat LTO, one codegen unit) plus symbols and the
+# line tables that record what was inlined where.
+FMA_CHECK_PROFILE = {"inherits": "dist", "strip": "none", "debug": "line-tables-only"}
 SAVE_ON_MAIN_ONLY = re.compile(
     r"^\s+save-if: \$\{\{ github\.ref == 'refs/heads/main' \}\}$", re.MULTILINE
 )
@@ -688,3 +730,60 @@ def test_unlocked_uv_builds_sees_a_build_without_the_lock() -> None:
         "    session.run('uv', 'build', env={})\n"
     )
     assert unlocked_uv_builds(source) == ["bare", "other"]
+
+
+def session_runs(source: str, function_name: str) -> list[list[str]]:
+    """Lists the arguments of every `session.run` call one noxfile function makes.
+
+    Args:
+        source: The text of a noxfile.
+        function_name: The function to inspect.
+
+    Returns:
+        runs: Per call in source order, its positional arguments with module constants
+            resolved and starred arguments kept as source text.
+    """
+    function = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    )
+    calls = sorted(
+        (
+            node
+            for node in ast.walk(function)
+            if isinstance(node, ast.Call) and ast.unparse(node.func) == SESSION_RUN
+        ),
+        key=lambda call: (call.lineno, call.col_offset),
+    )
+    return [[_argument_text(source, argument) for argument in call.args] for call in calls]
+
+
+def test_rust_session_runs_fmt_clippy_test_and_the_wasm_build() -> None:
+    source = NOXFILE.read_text()
+    assert session_runs(source, RUST_SESSION) == RUST_SESSION_RUNS
+    assert FMA_STEP in session_names(source, RUST_SESSION)
+
+
+def test_fma_check_builds_the_extension_and_runs_the_script() -> None:
+    source = NOXFILE.read_text()
+    assert session_runs(source, FMA_STEP) == [FMA_CHECK_BUILD]
+    assert FMA_CHECK_SCRIPT in session_names(source, FMA_STEP)
+    assert (ROOT / module_constant(source, FMA_CHECK_SCRIPT)).is_file()
+
+
+def test_fma_check_profile_keeps_symbols_and_line_tables() -> None:
+    profiles = tomllib.loads(CARGO_MANIFEST.read_text())["profile"]
+    assert profiles.get("fma-check") == FMA_CHECK_PROFILE
+
+
+def test_session_runs_keeps_source_order() -> None:
+    source = (
+        "TARGET = 'wasm'\n\n"
+        "def rust(session):\n"
+        "    if session:\n"
+        "        session.run('cargo', 'test')\n"
+        "    session.run('cargo', 'build', TARGET, *flags)\n"
+        "    other.run('cargo', 'skip')\n"
+    )
+    assert session_runs(source, "rust") == [["cargo", "test"], ["cargo", "build", "wasm", "*flags"]]

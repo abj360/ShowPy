@@ -16,6 +16,8 @@ Contains:
     wheel: builds the wheel, installs it with every extra in a clean venv and runs the README
         usage example
     core: installs the wheel without extras and checks imports and extra-gated calls fail closed
+    rust: checks Rust formatting, lints and tests, builds the wasm crate and, on arm64 hosts,
+        refuses any fused multiply-add outside libm's fma in the extension
     bench: runs the budget benchmarks; at tier M fails on a >20% min-time regression
     api_changes: checks that each commit since the last release names the API names it changes
     changelog: regenerates CHANGELOG.md with git-cliff and formats it with Prettier at release time
@@ -24,6 +26,7 @@ Contains:
 
 import itertools
 import os
+import platform
 import re
 import shutil
 import sys
@@ -55,6 +58,14 @@ LOCKED_BUILD = {"MATURIN_PEP517_ARGS": "--locked"}
 ALL_EXTRAS = "[all]"
 CORE_CHECK_SCRIPT = "scripts/check_core_install.py"
 API_CHANGES_SCRIPT = "scripts/check_api_changes.py"
+FMA_CHECK_SCRIPT = "scripts/check_no_fma.py"
+WASM_TARGET = "wasm32-unknown-unknown"
+FMA_CHECK_PROFILE = "fma-check"
+ARM64_MACHINES = ("arm64", "aarch64")
+# maturin passes these on macOS; a plain cargo link of a Python extension needs them there.
+MACOS_EXTENSION_LINK_ARGS = ("-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup")
+# macOS keeps line tables in a dSYM only when packed; llvm-objdump reads it beside the library.
+MACOS_PACKED_DEBUG_INFO = ("--config", f'profile.{FMA_CHECK_PROFILE}.split-debuginfo="packed"')
 USAGE_BLOCK = re.compile(r"^## Usage\n.*?```python\n(.*?)```", re.DOTALL | re.MULTILINE)
 LICENSE_EXPRESSION = " AND ".join(
     ("PolyForm-Noncommercial-1.0.0", "MIT", "OFL-1.1", "LicenseRef-Hershey-Fonts")
@@ -303,6 +314,74 @@ def core(session: nox.Session) -> None:
     session.chdir(work)
     session.run(str(python), "-I", str(example), external=True)
     session.run(str(python), "-I", str(check), external=True)
+
+
+def _fma_check_library() -> Path:
+    """Returns the path of the extension that the fma-check profile builds on this host."""
+    suffix = ".dylib" if sys.platform == "darwin" else ".so"
+    return Path("target") / FMA_CHECK_PROFILE / f"lib_core{suffix}"
+
+
+def _check_no_fma(session: nox.Session) -> None:
+    """Builds the extension unstripped with line tables and refuses any FMA outside libm's fma.
+
+    Runs on arm64 hosts only: aarch64 has scalar FMA instructions in its base set, so a fused
+    multiply-add shows there first.
+    """
+    machine = platform.machine()
+    if machine not in ARM64_MACHINES:
+        session.log(f"Skipping FMA check: host is {machine}")
+        return
+    darwin = sys.platform == "darwin"
+    config = MACOS_PACKED_DEBUG_INFO if darwin else ()
+    link_args = ("--", *MACOS_EXTENSION_LINK_ARGS) if darwin else ()
+    session.run(
+        "cargo",
+        "rustc",
+        "-p",
+        "e8s-py",
+        "--profile",
+        FMA_CHECK_PROFILE,
+        "--locked",
+        *config,
+        *link_args,
+        external=True,
+    )
+    _uv_run(session, "python", FMA_CHECK_SCRIPT, str(_fma_check_library()))
+
+
+@nox.session
+def rust(session: nox.Session) -> None:
+    """Checks Rust formatting, lints and tests, builds the wasm crate and runs the FMA check.
+
+    Not a default session: it compiles every crate, so it runs on demand and in CI.
+    """
+    session.run("cargo", "fmt", "--all", "--check", external=True)
+    session.run(
+        "cargo",
+        "clippy",
+        "--workspace",
+        "--all-targets",
+        "--locked",
+        "--",
+        "-D",
+        "warnings",
+        external=True,
+    )
+    session.run("cargo", "test", "--workspace", "--locked", external=True)
+    session.run(
+        "cargo",
+        "build",
+        "-p",
+        "e8s-wasm",
+        "--target",
+        WASM_TARGET,
+        "--profile",
+        "dist",
+        "--locked",
+        external=True,
+    )
+    _check_no_fma(session)
 
 
 def _tier(posargs: list[str]) -> str:

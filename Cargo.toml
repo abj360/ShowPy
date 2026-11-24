@@ -34,3 +34,10 @@ lto = "fat"
 codegen-units = 1
 strip = "symbols"
 panic = "unwind"
+
+# The dist codegen, unstripped and with line tables, for the FMA disassembly check: symbols and
+# inlining records name the function each instruction came from.
+[profile.fma-check]
+inherits = "dist"
+strip = "none"
+debug = "line-tables-only"
