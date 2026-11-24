@@ -34,7 +34,7 @@ from e8s.core.errors import SchemaError, TimeRangeError
 from e8s.core.ids import SetId, SpotId, TransitionId
 from e8s.core.selection import Selector
 from e8s.core.types import Count, Degrees, Point
-from e8s.core.units import convert, vector_facing
+from e8s.core.units import DEFAULT_UNITS, UnitRegistry, convert, vector_facing
 from e8s.core.validation import require_finite
 from e8s.show.models import Show
 from e8s.time.clock import count_to_seconds, seconds_to_count
@@ -196,6 +196,7 @@ def coordinate_table(
     sets: Sequence[str] | None = None,
     *,
     unit: str = DEFAULT_UNIT,
+    units: UnitRegistry = DEFAULT_UNITS,
     engine: PathEngine | None = None,
 ) -> CoordinateTable:
     """Returns selected spots' positions at each set, unrounded, in meters or another unit.
@@ -209,14 +210,15 @@ def coordinate_table(
         show: Show to read.
         who: Spots to read, as a selection expression, a list of IDs or a Selection.
         sets: Set IDs in the order wanted; None reads every set in show order.
-        unit: Registered length unit the positions are given in, meters by default.
+        unit: Length unit the positions are given in, meters by default.
+        units: Registry `unit` is looked up in.
         engine: A PathEngine already built for `show`, reused so repeated reads skip compiling.
 
     Returns:
         table: (sets, spots) arrays of x, y and field states.
 
     Raises:
-        UnknownRefError: A set, spot or unit is not known.
+        UnknownRefError: A set or spot is not in the show, or `unit` is not in `units`.
         SchemaError: `sets` is empty, or `engine` belongs to another show.
 
     >>> from e8s.examples import two_set_show
@@ -226,7 +228,7 @@ def coordinate_table(
     >>> coordinate_table(two_set_show(), "T2", unit="cm").y[:, 0].tolist()
     [500.0, 900.0]
     """
-    per_meter = convert(1.0, "m", unit)
+    per_meter = convert(1.0, "m", unit, units)
     reader = _engine_for(show, engine)
     spots = _spot_ids(show, who)
     set_ids = _set_ids(show, sets)

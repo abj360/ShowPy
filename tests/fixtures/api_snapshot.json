@@ -1532,7 +1532,7 @@
   "content_hash": "(obj: object, *, domain: str = 'showpy.content') -> str",
   "contract": "(obj: T, d: Meters, about: About = 'center', sel: SetSelector = 'all', *, force: bool = False) -> T",
   "convert": "(value: float, from_unit: str, to_unit: str, registry: e8s.core.units.UnitRegistry = ...) -> float",
-  "coordinate_table": "(show: e8s.show.models.Show, who: Selector = 'all', sets: collections.abc.Sequence[str] | None = None, *, unit: str = 'm', engine: e8s.choreo.engine.PathEngine | None = None) -> e8s.choreo.read_models.CoordinateTable",
+  "coordinate_table": "(show: e8s.show.models.Show, who: Selector = 'all', sets: collections.abc.Sequence[str] | None = None, *, unit: str = 'm', units: e8s.core.units.UnitRegistry = ..., engine: e8s.choreo.engine.PathEngine | None = None) -> e8s.choreo.read_models.CoordinateTable",
   "cost_matrix": "(from_: Source, to_slots: SlotSource, options: e8s.choreo.match_models.MatchOptions | None = None, entities: collections.abc.Sequence[str] | None = None, groups: collections.abc.Mapping[str, str] | None = None, slot_groups: collections.abc.Sequence[str | None] | None = None, *, font_registry: e8s.geo.fonts.FontRegistry | None = None) -> FloatArray",
   "count_to_measure": "(tl: e8s.time.models.Timeline, c: Count) -> e8s.time.models.MeasureLabel | None",
   "count_to_seconds": "(tl: e8s.time.models.Timeline, c: Count) -> Seconds",

@@ -25,6 +25,7 @@ Contains:
     test_coordinate_table_reads_every_spot_by_default: selects "all" when no spots are named
     test_coordinate_table_reads_named_sets_in_order: keeps the order the sets are named in
     test_coordinate_table_reports_who_is_on_the_field: copies each placement's field state
+    test_coordinate_table_reads_units_from_a_given_registry: converts through a caller's registry
     test_regression_coordinate_table_rejects_an_unknown_unit: raises UnknownRefError naming the
         units it knows
     test_regression_coordinate_table_rejects_an_unknown_set: raises UnknownRefError
@@ -42,7 +43,7 @@ from e8s.choreo.read import coordinate_table, frames
 from e8s.choreo.read_models import CoordinateTable, Frames
 from e8s.core.errors import SchemaError, TimeRangeError, UnknownRefError
 from e8s.core.ids import SpotId
-from e8s.core.units import convert
+from e8s.core.units import DEFAULT_UNITS, convert, register_unit
 from e8s.show.models import Show
 from e8s.time.models import Hold
 from tests.fixtures.motion_shows import with_rows, with_targets
@@ -51,6 +52,7 @@ from tests.fixtures.shows import two_set_show
 HOLD_COUNT = 4.0
 HOLD_SECONDS = 1.0
 SUBNORMAL_COUNT = 5e-324
+STEP85_M = 0.5715
 FPS = 8.0
 SECONDS_PER_COUNT = 0.5
 MESSAGE_LIMIT = 200
@@ -213,6 +215,14 @@ def test_coordinate_table_reports_who_is_on_the_field() -> None:
     second = base.sets[1].with_placements({"T3": PlacementPatch(on_field=False)})
     table = coordinate_table(base.replace(sets=(base.sets[0], second)), "T2 + T3")
     assert table.on_field.tolist() == [[True, True], [True, False]]
+
+
+def test_coordinate_table_reads_units_from_a_given_registry() -> None:
+    registry = register_unit(DEFAULT_UNITS, "step85", STEP85_M)
+    table = coordinate_table(two_set_show(), "T1", unit="step85", units=registry)
+    expected = [convert(v, "m", "step85", registry) for v in (5.0, 9.0)]
+    assert table.y[:, 0].tolist() == expected
+    assert table.unit == "step85"
 
 
 def test_regression_coordinate_table_rejects_an_unknown_unit() -> None:
