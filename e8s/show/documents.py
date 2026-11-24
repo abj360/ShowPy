@@ -297,8 +297,8 @@ def migration_changes(docs: Mapping[str, bytes]) -> dict[str, bytes | None]:
 
     Returns:
         changes: Stored path to new bytes, or None for a path the migration leaves behind
-            (the old folder of a renamed set, a layout-1 document); empty when `docs` is
-            already current and stored as role documents.
+            (the old folder of a renamed set); empty when `docs` is already current and stored
+            as role documents.
 
     >>> from e8s.examples import two_set_show
     >>> migration_changes(encode_show(two_set_show()))
@@ -316,11 +316,13 @@ def migration_changes(docs: Mapping[str, bytes]) -> dict[str, bytes | None]:
 
 
 def _role_changes(docs: Mapping[str, bytes]) -> dict[str, bytes | None]:
-    """Lists the writes and deletes that re-encode a current tree's layout-1 documents as roles."""
+    """Lists the writes that re-encode a current tree's layout-1 documents as roles.
+
+    Each listed set's set.json is rewritten in place beside its new role documents, so nothing
+    is deleted: a document the show does not read stays as it is.
+    """
     encoded = encode_show(read_show(docs))
-    changes: dict[str, bytes | None] = {p: d for p, d in encoded.items() if docs.get(p) != d}
-    changes.update(dict.fromkeys(p for p in docs if is_show_doc(p) and p not in encoded))
-    return changes
+    return {p: d for p, d in encoded.items() if docs.get(p) != d}
 
 
 def needs_rewrite(docs: Mapping[str, bytes]) -> bool:

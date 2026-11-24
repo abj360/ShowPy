@@ -12,6 +12,8 @@ Contains:
         padded, lookalike, non-NFC, reserved or overlong spot ID in the placement order
     test_regression_spot_lists_in_order_errors_are_capped: lists at most 20 spots, each cut short,
         with a total count, for extra role rows and repeated order entries
+    test_regression_role_reencoding_keeps_stray_documents: keeps a set.json and forms.json of an
+        unlisted folder through the revision that re-encodes a layout-1 tree as role documents
 """
 
 import json
@@ -21,8 +23,11 @@ import pytest
 
 from e8s.cast.models import Cast
 from e8s.core.errors import SchemaError
+from e8s.core.util import content_hash
 from e8s.examples import two_set_show
 from e8s.show.documents import SHOW_DOC, decode_show, dump_json, dump_show_doc, encode_show
+from e8s.show.history_models import Revision
+from e8s.show.integrity import blob_digest
 from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import open_workspace
@@ -117,3 +122,28 @@ def test_regression_spot_lists_in_order_errors_are_capped() -> None:
     assert "S19" in str(repeated.value)
     assert "S20" not in str(repeated.value)
     assert f"(+{STRAY_SPOTS - LISTED_SPOTS} more)" in str(repeated.value)
+
+
+def _stored_repo(docs: dict[str, bytes]) -> InMemoryRepository:
+    """Stores documents through the backend, as an older release could, with no commit check."""
+    repo = InMemoryRepository()
+    tree = {p: blob_digest(raw) for p, raw in docs.items()}
+    revision = Revision(id=content_hash(tree), parent="", at=AT, changed=tuple(sorted(docs)))
+    repo.backend.commit(SHOW_ID, revision, tree, {blob_digest(raw): raw for raw in docs.values()})
+    return repo
+
+
+def test_regression_role_reencoding_keeps_stray_documents() -> None:
+    docs = layout1_documents(two_set_show())
+    strays = {"/sets/9/set.json": docs["/sets/1/set.json"], "/sets/9/forms.json": b"[]\n"}
+    repo = _stored_repo({**docs, **strays})
+    ws = open_workspace(repo, SHOW_ID)
+    before = load_show(ws)
+    edit = ws.write("/config/limits.yaml", "{}\n", at=AT)
+    normalizing = repo.revisions(SHOW_ID)[-2]
+    assert edit.parent == normalizing.id
+    assert not set(strays) & set(normalizing.changed)
+    tree = ws.tree_at(edit.id)
+    assert {p: tree[p] for p in strays} == strays
+    assert "/sets/1/drill.json" in tree
+    assert load_show(ws).replace(revision="") == before.replace(revision="")
