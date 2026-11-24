@@ -186,8 +186,6 @@ def test_join_after_split_keeps_a_marker_on_the_boundary_once() -> None:
     assert _round_trip(_three_sets_with(markers=markers)).timeline.markers == markers
 
 
-@pytest.mark.defect("UP-9.7-49")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-49")
 def test_regression_join_after_split_keeps_one_facing_override_across_the_split() -> None:
     """Rejoins a facing override cut by a split into one override (audit 9.7 sections)."""
     show = _three_sets_with()
@@ -200,6 +198,22 @@ def test_regression_join_after_split_keeps_one_facing_override_across_the_split(
     )
     show = show.replace(facing_overrides=(override,))
     assert _round_trip(show).facing_overrides == (override,)
+
+
+def test_join_keeps_adjacent_facing_overrides_that_differ() -> None:
+    """Keeps two overrides apart when one turns to another angle where the first ends."""
+    show = _three_sets_with()
+    overrides = tuple(
+        FacingOverride(
+            entities=(SpotId("T1"),),
+            mode=FacingMode.FIXED,
+            value=FixedFacing(degrees=degrees),
+            start=start,
+            end=end,
+        )
+        for degrees, start, end in ((90.0, 4.0, 12.0), (45.0, 12.0, 16.0))
+    )
+    assert _round_trip(show.replace(facing_overrides=overrides)).facing_overrides == overrides
 
 
 @pytest.mark.defect("UP-9.7-50")

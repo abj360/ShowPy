@@ -280,6 +280,31 @@ def _joined_timeline(a: Timeline, b: Timeline, offset: Count) -> Timeline:
     )
 
 
+def _fusable(first: FacingOverride, second: FacingOverride, offset: Count) -> bool:
+    if abs(first.end - offset) > TOL or abs(second.start - offset) > TOL:
+        return False
+    return (first.entities, first.mode, first.value, first.turn_counts) == (
+        second.entities,
+        second.mode,
+        second.value,
+        second.turn_counts,
+    )
+
+
+def _joined_overrides(
+    a: Sequence[FacingOverride], b: Sequence[FacingOverride], offset: Count
+) -> tuple[FacingOverride, ...]:
+    """Appends `b`'s overrides shifted by `offset`, fusing one that continues an `a` override."""
+    joined = list(a)
+    for item in _clip_overrides(b, 0.0, float("inf"), -offset):
+        match = next((i for i, kept in enumerate(joined) if _fusable(kept, item, offset)), None)
+        if match is None:
+            joined.append(item)
+        else:
+            joined[match] = joined[match].replace(end=item.end)
+    return tuple(joined)
+
+
 def _first_pins(pins: Sequence[Pin]) -> tuple[Pin, ...]:
     kept: dict[tuple[str, str], Pin] = {}
     for record in pins:
@@ -293,6 +318,8 @@ def join_sections(a: Show, b: Show) -> Show:
     When `b` starts with `a`'s last set (same ID and placements) they become one set.
     Otherwise set IDs must not repeat, and `b`'s first set keeps its counts (0), so retime it
     with set_counts(). `b`'s tempos, holds, markers and facing overrides shift by `a`'s length.
+    A facing override that ends where `a` ends and continues unchanged at `b`'s count 0 becomes
+    one override.
     `b`'s sets keep their keys; one whose key `a` already holds gets a free key, as in add_set().
     One pin is kept per target and ID; when both halves pin the same spot, form, set or
     transition, `a`'s pin wins.
@@ -310,10 +337,7 @@ def join_sections(a: Show, b: Show) -> Show:
         forms=_merged_forms(a, b),
         transitions=(*a.transitions, *b.transitions),
         pins=_first_pins((*a.pins, *b.pins)),
-        facing_overrides=(
-            *a.facing_overrides,
-            *_clip_overrides(b.facing_overrides, 0.0, float("inf"), -offset),
-        ),
+        facing_overrides=_joined_overrides(a.facing_overrides, b.facing_overrides, offset),
         dependencies={**a.dependencies, **b.dependencies},
         timeline=_joined_timeline(a.timeline, b.timeline, offset),
         revision="",
