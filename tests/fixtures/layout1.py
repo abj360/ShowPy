@@ -14,11 +14,11 @@ from collections.abc import Mapping
 
 from e8s.show.document_paths import CAST_DOC, CAST_FIELD, is_set_document, set_doc
 from e8s.show.documents import SHOW_DOC, dump_json, dump_show_doc, encode_show
+from e8s.show.items import ENTITY_FIELD
 from e8s.show.models import Show
 from e8s.show.role_documents import PLACEMENT_ORDER_FIELD, PLACEMENTS_FIELD, ROLE_FIELDS
 from e8s.show.set_keys import set_key
 
-ENTITY_FIELD = "entity"
 SET_DOC_SUFFIX = "/set.json"
 
 
