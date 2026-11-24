@@ -11,6 +11,7 @@ Contains:
     FLIPPED_FILE: the flipped cases, compared against their ledger expectation
     REPO_ROOT: the repository root the case modules import from
     AreaRun: one area's reports, speed report and core outputs
+    runner_command(): builds the oracle_runner.py command, writing no bytecode
     run_side(): runs oracle_runner.py for one area under one interpreter
     run_area(): runs both sides of one area and compares every case
     main(): builds the oracle, runs each area, prints the tables and fails on any gate
@@ -64,6 +65,35 @@ class AreaRun:
     core: Mapping[str, Mapping[str, Output]]
 
 
+def runner_command(python: Path, area: str, out: Path, e8s_from: Path) -> list[str]:
+    """Builds the oracle_runner.py command for one area under one interpreter.
+
+    -B keeps the interpreter from writing bytecode, so the oracle venv's digest stays the one
+    its READY records.
+
+    Args:
+        python: The interpreter to run.
+        area: The area whose cases run.
+        out: The folder the runner writes.
+        e8s_from: The folder e8s must be imported from; the runner refuses any other.
+
+    Returns:
+        command: The argument vector.
+    """
+    return [
+        str(python),
+        "-I",
+        "-B",
+        str(RUNNER),
+        area,
+        str(out),
+        "--cases-root",
+        str(REPO_ROOT),
+        "--e8s-from",
+        str(e8s_from),
+    ]
+
+
 def run_side(python: Path, area: str, out: Path, e8s_from: Path) -> None:
     """Runs oracle_runner.py for one area under one interpreter, isolated with -I.
 
@@ -77,9 +107,7 @@ def run_side(python: Path, area: str, out: Path, e8s_from: Path) -> None:
         for stale in out.iterdir():
             stale.unlink()
     out.mkdir(parents=True, exist_ok=True)
-    command = [str(python), "-I", str(RUNNER), area, str(out)]
-    command += ["--cases-root", str(REPO_ROOT), "--e8s-from", str(e8s_from)]
-    result = subprocess.run(command, check=False)
+    result = subprocess.run(runner_command(python, area, out, e8s_from), check=False)
     if result.returncode != 0:
         raise SystemExit(f"E: parity runner for {area} under {python} exited {result.returncode}")
 

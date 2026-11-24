@@ -10,6 +10,8 @@ Contains:
     test_ready_oracle_is_reused_without_any_work: no build when READY matches ref, commit, wheel
     test_regression_ready_oracle_of_another_ref_is_rebuilt: READY of another ref is not reused
     test_is_ready_refuses_a_changed_wheel_commit_ref_or_python: READY must match all of them
+    test_regression_planted_venv_file_forces_a_rebuild: a changed or added venv file is not ready
+    test_venv_digest_reads_contents_names_and_links: every file and link of the venv counts
     test_regression_missing_ref_fails_closed: an absent tag exits with an E: line
     test_regression_moved_pinned_tag_fails_closed: a pinned ref on another commit is refused
     test_default_oracle_is_pinned_to_the_v040_commit: the pin is the commit the tag names
@@ -38,6 +40,7 @@ from scripts.build_oracle import (
     build_oracle,
     interpreter,
     is_ready,
+    venv_digest,
 )
 
 GIT_IDENTITY = (
@@ -105,6 +108,7 @@ def _ready_oracle(out: Path, *, ref: str, commit: str, version: str = RUNNING) -
     python.write_bytes(b"")
     (out / VENV_FOLDER / "pyvenv.cfg").write_text(f"version_info = {version}\n", encoding="utf-8")
     stamp = f"ref {ref}\ncommit {commit}\nwheel-sha256 {hashlib.sha256(b'wheel').hexdigest()}\n"
+    stamp += f"venv-sha256 {venv_digest(out / VENV_FOLDER)}\n"
     (out / READY_FILE).write_text(stamp, encoding="utf-8")
     return python
 
@@ -148,6 +152,36 @@ def test_is_ready_refuses_a_changed_wheel_commit_ref_or_python(tmp_path: Path) -
     other = tmp_path / "other"
     _ready_oracle(other, ref=TAG, commit=COMMIT, version="3.12")
     assert not is_ready(other, TAG, COMMIT)
+
+
+def test_regression_planted_venv_file_forces_a_rebuild(tmp_path: Path) -> None:
+    out = tmp_path / "oracle"
+    python = _ready_oracle(out, ref=TAG, commit=COMMIT)
+    assert is_ready(out, TAG, COMMIT)
+    planted = out / VENV_FOLDER / "lib" / "site-packages" / "sitecustomize.py"
+    planted.parent.mkdir(parents=True)
+    planted.write_text("print('planted')\n", encoding="utf-8")
+    assert not is_ready(out, TAG, COMMIT)
+    planted.unlink()
+    assert is_ready(out, TAG, COMMIT)
+    python.write_bytes(b"changed")
+    assert not is_ready(out, TAG, COMMIT)
+
+
+def test_venv_digest_reads_contents_names_and_links(tmp_path: Path) -> None:
+    venv = tmp_path / "venv"
+    (venv / "lib").mkdir(parents=True)
+    (venv / "lib" / "a.py").write_bytes(b"a")
+    first = venv_digest(venv)
+    (venv / "lib" / "a.py").rename(venv / "lib" / "b.py")
+    renamed = venv_digest(venv)
+    (venv / "lib" / "__pycache__").mkdir()
+    (venv / "lib" / "__pycache__" / "b.cpython-314.pyc").write_bytes(b"pyc")
+    cached = venv_digest(venv)
+    assert len({first, renamed, cached}) == 3
+    if sys.platform != "win32":
+        (venv / "link").symlink_to("lib/b.py")
+        assert venv_digest(venv) != cached
 
 
 @needs_git
