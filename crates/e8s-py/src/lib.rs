@@ -1,6 +1,7 @@
 //! e8s-py --- PyO3 bindings that maturin builds into the extension module `e8s._core`
 //!
 //! Contains:
+//!     cache: one converted core value per frozen part, keyed by the part's identity
 //!     errors: the error boundary that turns core errors and panics into e8s exceptions
 //!     AREAS: names each submodule of `e8s._core` with its docstring
 //!     add_hook(): adds a private hook to a module without listing it in `__all__`
@@ -9,6 +10,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod cache;
 pub mod errors;
 
 use pyo3::intern;
@@ -73,6 +75,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         submodule.setattr("__doc__", doc)?;
         if area == CORE_AREA {
             errors::add_probes(&submodule)?;
+            cache::add_probes(&submodule)?;
         }
         m.add(area, &submodule)?;
         modules.set_item(name, &submodule)?;
