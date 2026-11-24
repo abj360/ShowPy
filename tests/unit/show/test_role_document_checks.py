@@ -8,6 +8,8 @@ Contains:
         is in neither show.json nor /cast/cast.json, on decode and on a commit that deletes it
     test_regression_set_document_of_neither_form_is_refused: refuses a set.json with neither
         placements nor a placement order, and writes an empty set in the role form
+    test_regression_placement_order_spot_ids_are_checked: refuses a traversal, empty, control,
+        padded, lookalike, non-NFC, reserved or overlong spot ID in the placement order
 """
 
 import json
@@ -29,6 +31,7 @@ SHOW_ID = "show-1"
 CAST_DOC = "/cast/cast.json"
 ORDER_FIELD = "placement_order"
 ROLE_NAMES = ("drill.json", "facing.json", "labels.json")
+LONG_ID_CHARS = 10_000
 
 
 def test_regression_role_tree_without_cast_document_is_refused() -> None:
@@ -65,3 +68,26 @@ def test_regression_set_document_of_neither_form_is_refused() -> None:
         )
     with pytest.raises(SchemaError, match=ORDER_FIELD):
         decode_show(bare)
+
+
+def _renamed_spot(docs: dict[str, bytes], old: str, new: str) -> dict[str, bytes]:
+    """Renames one spot in set 2's placement order and role documents, keeping them in step."""
+    renamed = dict(docs)
+    body = json.loads(docs["/sets/2/set.json"])
+    body[ORDER_FIELD] = [new if spot == old else spot for spot in body[ORDER_FIELD]]
+    renamed["/sets/2/set.json"] = dump_json(body)
+    for name in ROLE_NAMES:
+        rows = json.loads(docs[f"/sets/2/{name}"])
+        rows[new] = rows.pop(old)
+        renamed[f"/sets/2/{name}"] = dump_json(rows)
+    return renamed
+
+
+@pytest.mark.parametrize(
+    "spot",
+    ["../x", "", "\x00", "T1 ", "T\uff11", "\u212a1", "con", "x" * LONG_ID_CHARS],
+)
+def test_regression_placement_order_spot_ids_are_checked(spot: str) -> None:
+    docs = _renamed_spot(encode_show(two_set_show()), "T1", spot)
+    with pytest.raises(SchemaError, match=r"/sets/2/set\.json lists the spot ID"):
+        decode_show(docs)

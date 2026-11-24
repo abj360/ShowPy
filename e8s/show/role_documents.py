@@ -28,6 +28,7 @@ from types import MappingProxyType
 
 from e8s.choreo.models import Set
 from e8s.core.errors import SchemaError
+from e8s.core.ids import check_id
 from e8s.core.json_types import JsonValue
 from e8s.show.document_paths import (
     CAST_DOC,
@@ -50,6 +51,7 @@ PLACEMENTS_FIELD = "placements"
 PLACEMENT_ORDER_FIELD = "placement_order"
 SET_FOLDER_SEGMENTS = 4
 FOLDER_INDEX = 2
+SHOWN_ID_CHARS = 40
 DOCUMENT_ROLES = {DRILL_NAME: (DRILL, PIN), FACING_NAME: (FACING,), LABELS_NAME: (LABELS,)}
 
 
@@ -163,6 +165,8 @@ def _placement_order(path: str, raw: JsonObject) -> list[str]:
     spots = [spot for spot in order if isinstance(spot, str)]
     if len(spots) != len(order):
         raise shape_error(path, f"array of spot IDs under {PLACEMENT_ORDER_FIELD!r}", order)
+    for spot in spots:
+        _require_stored_spot_id(path, spot)
     repeated = sorted(spot for spot, n in Counter(spots).items() if n > 1)
     if repeated:
         raise SchemaError(
@@ -171,6 +175,25 @@ def _placement_order(path: str, raw: JsonObject) -> list[str]:
             context={"path": path, "repeated": repeated},
         )
     return spots
+
+
+def _require_stored_spot_id(path: str, spot: str) -> None:
+    """Refuses a spot ID the ID rule rejects, or one that is not stored in its NFC form."""
+    try:
+        is_stored_form = check_id(spot, kind="spot") == spot
+    except SchemaError as exc:
+        raise _bad_spot_id(path, spot, exc.message) from exc
+    if not is_stored_form:
+        raise _bad_spot_id(path, spot, "it is not in NFC form")
+
+
+def _bad_spot_id(path: str, spot: str, reason: str) -> SchemaError:
+    shown = spot[:SHOWN_ID_CHARS]
+    return SchemaError(
+        f"{path} lists the spot ID {shown!r} under {PLACEMENT_ORDER_FIELD}: {reason}",
+        hint="store spot IDs as check_id() returns them: letters, digits, _ and . in NFC",
+        context={"path": path, "spot": shown, "length": len(spot)},
+    )
 
 
 def _role_rows(source: Source, path: str, order: list[str]) -> dict[str, JsonObject]:
