@@ -19,6 +19,7 @@ Contains:
     venv_digest(): returns the SHA-256 over every file's path and contents in a venv
     build_command(): builds the `uv build` command, limited to hashed build requirements
     ready_stamp(): renders the READY text for a ref, its commit, the wheel and the venv digest
+    require_inside_parity(): refuses an oracle folder outside <root>/.parity
     is_ready(): tells whether an oracle folder holds a finished build of a ref's commit
     build_oracle(): builds the oracle of a ref unless it is ready; returns its interpreter
     main(): builds the oracle named on the command line and prints its interpreter
@@ -167,8 +168,13 @@ def _refuse_links(out: Path) -> None:
             raise SystemExit(f"E: {folder} is a symlink; the oracle is built only in a real folder")
 
 
-def _require_inside_parity(out: Path, root: Path) -> None:
-    """Refuses an oracle folder that is not strictly inside <root>/.parity, before any deletion."""
+def require_inside_parity(out: Path, root: Path) -> None:
+    """Refuses an oracle folder that is not strictly inside <root>/.parity, before any deletion.
+
+    Args:
+        out: The oracle folder, relative to root or absolute.
+        root: The repository root.
+    """
     parity = (root / PARITY_FOLDER).resolve()
     resolved = (root / out).resolve()
     if resolved == parity or not resolved.is_relative_to(parity):
@@ -176,6 +182,8 @@ def _require_inside_parity(out: Path, root: Path) -> None:
 
 
 def _resolve_ref(ref: str, root: Path) -> str:
+    if shutil.which("git") is None:
+        raise SystemExit("E: git is not installed; the oracle is built from a git checkout")
     result = subprocess.run(
         ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
         cwd=root,
@@ -285,7 +293,7 @@ def build_oracle(ref: str = DEFAULT_REF, out: Path = DEFAULT_OUT) -> Path:
     """
     root = Path.cwd()
     _refuse_links(out)
-    _require_inside_parity(out, root)
+    require_inside_parity(out, root)
     python = interpreter(out / VENV_FOLDER).absolute()
     commit = _resolve_ref(ref, root)
     if is_ready(out, ref, commit):

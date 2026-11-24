@@ -18,7 +18,9 @@ Contains:
     test_wheel_build_requires_hashed_build_requirements: uv build refuses unhashed ones
     test_regression_missing_ref_fails_closed: an absent tag exits with an E: line
     test_regression_moved_pinned_tag_fails_closed: a pinned ref on another commit is refused
+    test_default_oracle_is_pinned_to_a_full_commit: the pin is a full SHA, without git
     test_default_oracle_is_pinned_to_the_v040_commit: the pin is the commit the tag names
+    test_regression_missing_git_fails_closed: no git binary exits with an E: line
     test_regression_failed_build_removes_the_worktree: no worktree is left on a build failure
     test_refuses_a_symlinked_parity_folder: the oracle is never built through a symlink
     test_regression_refuses_an_oracle_folder_outside_parity: `--out .` deletes nothing
@@ -47,6 +49,7 @@ from scripts.build_oracle import (
     build_oracle,
     interpreter,
     is_ready,
+    require_inside_parity,
     venv_digest,
 )
 
@@ -79,6 +82,9 @@ BUILD_INPUTS = ROOT / "scripts" / "oracle_build.in"
 REQUIREMENT_LINE = re.compile(r"^([a-z0-9][a-z0-9._-]*)==(\S+) \\$")
 HASH_LINE = re.compile(r"^    --hash=sha256:([0-9a-f]{64})(?: \\)?$")
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+# The Docker image has neither git nor the repository's history; these read the v0.4.0 tag.
+IS_GIT_CHECKOUT = shutil.which("git") is not None and (ROOT / ".git").exists()
+needs_checkout = pytest.mark.skipif(not IS_GIT_CHECKOUT, reason="needs a git source checkout")
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -229,16 +235,10 @@ def test_oracle_build_requirements_are_pinned_with_hashes() -> None:
         assert pins[name][0] == version
 
 
+@needs_checkout
 def test_oracle_build_inputs_are_the_v040_build_requires() -> None:
-    shown = subprocess.run(
-        ["git", "show", f"{DEFAULT_COMMIT}:pyproject.toml"],
-        cwd=ROOT,
-        capture_output=True,
-        encoding="utf-8",
-        check=False,
-    )
-    if shown.returncode == 0:
-        assert tomllib.loads(shown.stdout)["build-system"]["requires"] == _inputs()
+    shown = _git(ROOT, "show", f"{DEFAULT_COMMIT}:pyproject.toml")
+    assert tomllib.loads(shown)["build-system"]["requires"] == _inputs()
 
 
 def test_wheel_build_requires_hashed_build_requirements() -> None:
@@ -265,18 +265,26 @@ def test_regression_moved_pinned_tag_fails_closed(
     assert not (repo / ".parity").exists()
 
 
-def test_default_oracle_is_pinned_to_the_v040_commit() -> None:
+def test_default_oracle_is_pinned_to_a_full_commit() -> None:
     assert build_module.PINNED_COMMITS == {DEFAULT_REF: DEFAULT_COMMIT}
     assert re.match(FULL_SHA, DEFAULT_COMMIT)
-    tag = subprocess.run(
-        ["git", "rev-parse", "--verify", "--quiet", f"{DEFAULT_REF}^{{commit}}"],
-        cwd=ROOT,
-        capture_output=True,
-        encoding="utf-8",
-        check=False,
+
+
+@needs_checkout
+def test_default_oracle_is_pinned_to_the_v040_commit() -> None:
+    assert (
+        _git(ROOT, "rev-parse", "--verify", f"{DEFAULT_REF}^{{commit}}").strip() == DEFAULT_COMMIT
     )
-    if tag.returncode == 0:
-        assert tag.stdout.strip() == DEFAULT_COMMIT
+
+
+def test_regression_missing_git_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    with pytest.raises(SystemExit, match=r"^E: git is not installed"):
+        build_oracle(DEFAULT_REF, ORACLE)
+    assert not (tmp_path / ".parity").exists()
 
 
 @needs_git
@@ -311,6 +319,5 @@ def test_regression_refuses_an_oracle_folder_outside_parity(
     with pytest.raises(SystemExit, match=r"^E: the oracle folder .* must be inside .*\.parity"):
         build_oracle("v9.9.9", out)
     assert keep.read_text(encoding="utf-8") == "kept"
-    absolute = tmp_path / ".parity" / "oracle"
-    with pytest.raises(SystemExit, match=r"^E: ref v9\.9\.9"):
-        build_oracle("v9.9.9", absolute)
+    require_inside_parity(tmp_path / ".parity" / "oracle", tmp_path)
+    require_inside_parity(Path(".parity", "oracle"), tmp_path)
