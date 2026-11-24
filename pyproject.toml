@@ -3,8 +3,15 @@ name = "e8s"
 dynamic = ["version"]
 description = "Choreography library: sheets, spots, sets, forms and motion."
 readme = "README.md"
-license = "PolyForm-Noncommercial-1.0.0 AND MIT AND OFL-1.1 AND LicenseRef-Hershey-Fonts"
-license-files = ["LICENSE", "e8s/schemas/LICENSE-MIT.txt", "e8s/fonts/licenses/*.txt"]
+# The project licence, then the bundled fonts and schemas, then the linked Rust crates' licences.
+license = """PolyForm-Noncommercial-1.0.0 AND MIT AND OFL-1.1 AND LicenseRef-Hershey-Fonts \
+    AND BSD-2-Clause AND Unicode-3.0"""
+license-files = [
+    "LICENSE",
+    "e8s/schemas/LICENSE-MIT.txt",
+    "e8s/fonts/licenses/*.txt",
+    "e8s/licenses/THIRD_PARTY_RUST.txt",
+]
 requires-python = ">=3.13"
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -144,7 +151,7 @@ addopts = [
     "--strict-markers",
     "--import-mode=importlib",
     "-m",
-    "not bench and not slow and not fuzz",
+    "not bench and not slow and not fuzz and not cargo_tools",
 ]
 markers = [
     "golden: replays real shows against reviewed fixtures",
@@ -153,6 +160,7 @@ markers = [
     "fuzz: hostile-input fuzz targets; run with nox -s fuzz",
     "slow: generated-show properties and the large golden; run with nox -s slow",
     "timing: asserts on wall-clock time; nox -s slow runs these without pytest-xdist workers",
+    "cargo_tools: needs the cargo tools nox -s rust installs; run with nox -s rust",
 ]
 filterwarnings = ["error"]
 # A test still running after this many seconds dumps every thread's stack, so a CI hang

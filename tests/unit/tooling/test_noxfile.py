@@ -61,8 +61,13 @@ Contains:
     test_wheel_builds_fail_on_a_stale_cargo_lock: every nox build passes cargo's --locked
     test_unlocked_uv_builds_sees_a_build_without_the_lock: proves the lock check can fail
     session_runs(): lists the arguments of every `session.run` call one noxfile function makes
-    test_rust_session_runs_fmt_clippy_test_and_the_wasm_build: the cargo gates, then the FMA
-        check
+    test_rust_session_runs_fmt_clippy_test_and_the_wasm_build: the cargo gates, the FMA check,
+        then cargo deny
+    uv_runs(): lists the arguments of every `_uv_run` call one noxfile function makes
+    test_rust_session_checks_crate_licences_and_the_notices: cargo deny, then the notice check
+        and the cargo_tools tests
+    test_cargo_tools_install_locked_at_pinned_versions_into_the_repository: cargo install
+        --locked --root .cargo-tools at exact versions, never into ~/.cargo/bin
     test_fma_check_builds_the_extension_and_runs_the_script: cargo rustc on the fma-check
         profile, then scripts/check_no_fma.py on its output
     test_fma_check_profile_keeps_symbols_and_line_tables: ships the dist codegen, unstripped
@@ -162,7 +167,13 @@ RUST_SESSION_RUNS = [
         "dist",
         "--locked",
     ],
+    ["_cargo_tool(CARGO_DENY)", "--locked", "check"],
 ]
+NOTICES_CHECK = ["python", "scripts/gen_third_party_notices.py", "--check"]
+CARGO_TOOLS_RUN = ["pytest", "-m", "cargo_tools", "tests/unit/tooling/test_third_party_notices.py"]
+CARGO_TOOLS_ROOT = ".cargo-tools"
+CARGO_INSTALL = {"cargo", "install", "--locked", "--root", "--version"}
+PINNED_VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 FMA_CHECK_BUILD = [
     "cargo",
     "rustc",
@@ -804,6 +815,41 @@ def test_rust_session_runs_fmt_clippy_test_and_the_wasm_build() -> None:
     source = NOXFILE.read_text()
     assert session_runs(source, RUST_SESSION) == RUST_SESSION_RUNS
     assert FMA_STEP in session_names(source, RUST_SESSION)
+
+
+def uv_runs(source: str, function_name: str) -> list[list[str]]:
+    """Lists the arguments of every `_uv_run` call one noxfile function makes, in source order."""
+    function = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    )
+    calls = sorted(
+        (
+            node
+            for node in ast.walk(function)
+            if isinstance(node, ast.Call) and ast.unparse(node.func) == UV_RUN
+        ),
+        key=lambda call: (call.lineno, call.col_offset),
+    )
+    return [[_argument_text(source, argument) for argument in call.args[1:]] for call in calls]
+
+
+def test_rust_session_checks_crate_licences_and_the_notices() -> None:
+    source = NOXFILE.read_text()
+    assert {"_install_cargo_tool", "CARGO_DENY", "CARGO_ABOUT"} <= session_names(
+        source, RUST_SESSION
+    )
+    assert uv_runs(source, RUST_SESSION)[-2:] == [NOTICES_CHECK, CARGO_TOOLS_RUN]
+
+
+def test_cargo_tools_install_locked_at_pinned_versions_into_the_repository() -> None:
+    source = NOXFILE.read_text()
+    assert module_constant(source, "CARGO_TOOLS_ROOT") == CARGO_TOOLS_ROOT
+    for name in ("CARGO_DENY_VERSION", "CARGO_ABOUT_VERSION"):
+        assert PINNED_VERSION.match(module_constant(source, name)), name
+    assert set(session_strings(source, "_install_cargo_tool")) >= CARGO_INSTALL
+    assert "CARGO_TOOLS_ROOT" in session_names(source, "_install_cargo_tool")
 
 
 def test_fma_check_builds_the_extension_and_runs_the_script() -> None:

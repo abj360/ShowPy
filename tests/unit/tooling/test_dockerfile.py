@@ -43,6 +43,9 @@ ROOT_NAME = "ROOT"
 NOT_IN_IMAGE = {
     "_typos.toml": "spell-check settings; lint runs outside the image",
     ".dockerignore": "read by docker build, not by the tests",
+    "about.hbs": "notice template for nox -s rust, outside the image",
+    "about.toml": "notice settings for nox -s rust, outside the image",
+    "deny.toml": "crate policy for nox -s rust; read only by source-checkout tests",
     ".env.example": "compose reads .env from the host",
     ".gitattributes": "git settings; the image has no .git",
     ".gitignore": "git settings; the image has no .git",
