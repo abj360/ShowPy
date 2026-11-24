@@ -7,36 +7,46 @@ strictly and migrates older trees in memory. The stored-path names of document_p
 re-exported here for existing importers.
 
 Contains:
-    SHOW_DOC: names the document holding show metadata, cast, set order and the format header
+    SHOW_DOC: names the document holding show metadata, set order and the format header
     dump_json(): writes JSON canonically: sorted keys, sorted sets, two-space indent
     dump_dumped_json(): writes the JSON-mode dump of a model canonically, skipping a second walk
     dump_show_doc(): writes a show.json object canonically, the format header first
     dump_headed_json(): writes a document canonically with its `format` and `version` keys first
     require_storable(): refuses a show whose set IDs, keys, paths, forms or pins cannot be stored
     expected_show_docs(): lists the stored show-document paths decode reads for a show
-    encode_show(): splits a show into documents stored by set key, show.json header first
+    encode_show(): splits a show into documents stored by set key, show.json header first, each
+        set as set.json and role documents and the cast as /cast/cast.json
     encode_documents(): encodes only the named stored documents of a show
     decode_show(): assembles a show from documents of any readable format version
     migrate_documents(): migrates a stored document set to the current format and reports it
     migration_changes(): lists the writes and deletes that store a migrated document set
     is_older_tree(): tells whether stored documents hold a show of an older format version
+    needs_rewrite(): tells whether stored documents hold an older format or layout-1 documents
     MigratedView: reads stored documents as the migration would store them, reading blobs lazily
     migrated_view(): returns stored documents as the migration would store them
 """
 
+import functools
 import json
 import re
-from collections import Counter
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from functools import partial
 from typing import Any
 
 from e8s.core.canonical import MAX_INT_DIGITS, MAX_NESTING, canonical_value
-from e8s.core.errors import SchemaError, StorageError
+from e8s.core.errors import StorageError
 from e8s.core.json_types import JsonValue
 from e8s.core.types import FrozenModel
 from e8s.show.canvas_renames import renamed_canvas
 from e8s.show.decode_cache import DecodeCache
+from e8s.show.document_paths import (
+    CAST_DOC,
+    CAST_FIELD,
+    ROLE_NAMES,
+    SET_DOC_NAME,
+    SPLIT_FIELDS,
+    docs_for_order,
+)
 from e8s.show.document_paths import FORMS_NAME as FORMS_NAME
 from e8s.show.document_paths import LEGACY_NOTES_DOC as LEGACY_NOTES_DOC
 from e8s.show.document_paths import NOTES_DOC as NOTES_DOC
@@ -45,7 +55,6 @@ from e8s.show.document_paths import PLACEMENTS_NAME as PLACEMENTS_NAME
 from e8s.show.document_paths import SCRIPT_NAME as SCRIPT_NAME
 from e8s.show.document_paths import SET_ORDER_FIELD as SET_ORDER_FIELD
 from e8s.show.document_paths import SHEET_DOC as SHEET_DOC
-from e8s.show.document_paths import SPLIT_FIELDS, docs_for_order
 from e8s.show.document_paths import TIMELINE_DOC as TIMELINE_DOC
 from e8s.show.document_paths import forms_doc as forms_doc
 from e8s.show.document_paths import is_show_doc as is_show_doc
@@ -56,7 +65,6 @@ from e8s.show.document_paths import script_doc as script_doc
 from e8s.show.document_paths import set_doc as set_doc
 from e8s.show.document_paths import split_path as split_path
 from e8s.show.document_reading import read_migrated, read_show
-from e8s.show.manage import SET_ID_PATTERN
 from e8s.show.migrate import (
     CURRENT_VERSION,
     FORMAT_KEY,
@@ -70,7 +78,9 @@ from e8s.show.migrate import (
 )
 from e8s.show.migrate import SHOW_DOC as SHOW_DOC
 from e8s.show.models import Show
+from e8s.show.role_documents import holds_layout1_documents, set_documents
 from e8s.show.set_keys import set_key
+from e8s.show.storable import require_storable as require_storable
 
 JSON_INDENT = 2
 NEGATIVE_ZERO = re.compile(r"-0\.0\b")
@@ -136,38 +146,6 @@ def _needs_normalizing(text: str) -> bool:
     return max(map(len, text.split("\n"))) > MAX_INT_DIGITS
 
 
-def require_storable(show: Show) -> None:
-    """Refuses a show the stored layout cannot hold: bad IDs or keys, loose paths or forms, repeats.
-
-    >>> from e8s.examples import two_set_show
-    >>> require_storable(two_set_show())
-    """
-    bad: list[str] = [s for s in show.set_ids() if not SET_ID_PATTERN.fullmatch(s) or ".." in s]
-    bad += [set_key(s) for s in show.sets if not is_storable_folder(set_key(s))]
-    pairs = set(show.transition_ids())
-    loose = [spec.id for spec in show.transitions if spec.id not in pairs]
-    orphans = [f for f, form in show.forms.items() if form.set not in show.set_ids()]
-    if bad or loose or orphans:
-        raise SchemaError(
-            "show cannot be stored",
-            hint="use set ids of letters, digits, _ and .; store paths only for consecutive "
-            "sets; give every form an existing set",
-            context={"bad_set_ids": bad, "loose_transitions": loose, "orphan_forms": orphans},
-        )
-    pins = Counter((p.target, p.id) for p in show.pins)
-    specs = Counter(str(spec.id) for spec in show.transitions)
-    repeated_pins = sorted([*key] for key, n in pins.items() if n > 1)
-    repeated_specs = sorted(tid for tid, n in specs.items() if n > 1)
-    if repeated_pins or repeated_specs:
-        raise SchemaError(
-            "show repeats a pin or a stored path spec, which one stored record cannot hold",
-            hint="re-pin a repeated pin with pin(show, target, id), which keeps one pin per target"
-            " and ID; store a repeated pair's paths with store_paths(show, PathsOp(spec=...)),"
-            " which keeps one spec per pair",
-            context={"repeated_pins": repeated_pins, "repeated_transitions": repeated_specs},
-        )
-
-
 def expected_show_docs(show: Show) -> frozenset[str]:
     """Returns every stored show-document path decode_show() reads for `show`, by set key.
 
@@ -182,10 +160,12 @@ def encode_show(show: Show) -> dict[str, bytes]:
     """Splits a show into documents under set keys; empty forms and paths are left out.
 
     show.json starts with `"format"` and `"version"`; the rest of every document is canonical.
+    Each set is stored as set.json plus its drill, facing and labels role documents, and the
+    cast as /cast/cast.json, out of show.json.
 
     >>> from e8s.examples import two_set_show
-    >>> sorted(encode_show(two_set_show()))[:3]
-    ['/sets/1/set.json', '/sets/2/set.json', '/show/sheet.json']
+    >>> sorted(encode_show(two_set_show()))[:4]
+    ['/cast/cast.json', '/sets/1/drill.json', '/sets/1/facing.json', '/sets/1/labels.json']
     >>> encode_show(two_set_show())["/show/show.json"].splitlines()[1:3]
     [b'  "format": "e8.show",', b'  "version": 2,']
     """
@@ -207,17 +187,21 @@ def _encoders(show: Show) -> dict[str, Callable[[], bytes]]:
     """Maps each stored document path of a show to a call that encodes it."""
     require_storable(show)
     keys = {s.id: set_key(s) for s in show.sets}
-    meta = show._json_dumped(exclude=set(SPLIT_FIELDS))
+    meta = show._json_dumped(exclude={*SPLIT_FIELDS, CAST_FIELD})
     encoders: dict[str, Callable[[], bytes]] = {
         SHOW_DOC: lambda: dump_show_doc(
             {**format_header(), **meta, SET_ORDER_FIELD: list(keys.values())}
         ),
         SHEET_DOC: lambda: dump_dumped_json(show.sheet.to_json()),
         TIMELINE_DOC: lambda: dump_dumped_json(show.timeline.to_json()),
+        CAST_DOC: lambda: dump_dumped_json(show.cast.to_json()),
     }
     for current in show.sets:
         folder = keys[current.id]
-        encoders[set_doc(folder)] = partial(_dump_model, current)
+        split = functools.cache(partial(set_documents, current))
+        encoders[set_doc(folder)] = partial(_dump_part, split, SET_DOC_NAME)
+        for name in ROLE_NAMES:
+            encoders[f"/sets/{folder}/{name}"] = partial(_dump_part, split, name)
         forms = [f for _, f in sorted(show.forms.items()) if f.set == current.id]
         if forms:
             encoders[forms_doc(folder)] = partial(_dump_models, forms)
@@ -272,6 +256,10 @@ def dump_headed_json(document: Mapping[str, JsonValue]) -> bytes:
 
 def _dump_model(model: FrozenModel) -> bytes:
     return dump_dumped_json(model.to_json())
+
+
+def _dump_part(split: Callable[[], Mapping[str, JsonValue]], name: str) -> bytes:
+    return dump_dumped_json(split()[name])
 
 
 def _dump_models(models: Sequence[FrozenModel]) -> bytes:
@@ -408,21 +396,23 @@ def migration_changes(docs: Mapping[str, bytes]) -> dict[str, bytes | None]:
     """Lists the writes and deletes that turn a stored document set into its migrated form.
 
     Only show documents and the files of renamed set folders are read, so large renders and
-    exports stay unread.
+    exports stay unread. A tree of the current format that still stores a layout-1 set or cast
+    is re-encoded as role documents, which changes no content.
 
     Args:
         docs: Stored path to document bytes, as a repository tree holds them.
 
     Returns:
         changes: Stored path to new bytes, or None for a path the migration leaves behind
-            (the old folder of a renamed set); empty when `docs` is already current.
+            (the old folder of a renamed set, a layout-1 document); empty when `docs` is
+            already current and stored as role documents.
 
     >>> from e8s.examples import two_set_show
     >>> migration_changes(encode_show(two_set_show()))
     {}
     """
     if not is_older_tree(docs):
-        return {}
+        return _role_changes(docs) if holds_layout1_documents(docs) else {}
     encoded, folders, _ = _migrated_parts(docs)
     moving = [p for p in docs if not is_show_doc(p) and _set_folder(p) in folders]
     changes: dict[str, bytes | None] = {p: d for p, d in encoded.items() if docs.get(p) != d}
@@ -430,6 +420,24 @@ def migration_changes(docs: Mapping[str, bytes]) -> dict[str, bytes | None]:
     changes.update(dict.fromkeys(p for p in docs if is_show_doc(p) and p not in encoded))
     changes.update(dict.fromkeys(moving))
     return changes
+
+
+def _role_changes(docs: Mapping[str, bytes]) -> dict[str, bytes | None]:
+    """Lists the writes and deletes that re-encode a current tree's layout-1 documents as roles."""
+    encoded = encode_show(read_show(docs))
+    changes: dict[str, bytes | None] = {p: d for p, d in encoded.items() if docs.get(p) != d}
+    changes.update(dict.fromkeys(p for p in docs if is_show_doc(p) and p not in encoded))
+    return changes
+
+
+def needs_rewrite(docs: Mapping[str, bytes]) -> bool:
+    """Tells whether the first save rewrites stored documents: an older format or layout 1.
+
+    >>> from e8s.examples import two_set_show
+    >>> needs_rewrite(encode_show(two_set_show())), needs_rewrite({})
+    (False, False)
+    """
+    return is_older_tree(docs) or holds_layout1_documents(docs)
 
 
 def is_older_tree(docs: Mapping[str, bytes]) -> bool:

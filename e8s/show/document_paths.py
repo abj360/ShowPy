@@ -9,17 +9,25 @@ Contains:
     NOTES_DOC: names the notes document stored beside the show's documents, from format v2
     LEGACY_NOTES_DOC: names the v1 document that held the notes among the show's documents
     TIMELINE_DOC: names the timeline document
+    CAST_DOC: names the cast document, which holds the cast outside show.json
     SET_ORDER_FIELD: names the show.json field that lists the set keys in show order
     SHEET_FIELD, NOTES_FIELD, TIMELINE_FIELD, FORMS_FIELD, TRANSITIONS_FIELD, REVISION_FIELD:
         name the show fields that live outside show.json; NOTES_FIELD only in v1 dumps
+    CAST_FIELD: names the show field the cast document holds; layout-1 show.json held it
     SPLIT_FIELDS: names the show fields stored in documents of their own, not in show.json
     SEGMENT: matches one stored path segment, such as a set key or a transition folder
     SCRIPT_NAME: names a set folder's build script
     FORMS_NAME: names a set folder's forms document
+    SET_DOC_NAME: names a set folder's set document
+    DRILL_NAME, FACING_NAME, LABELS_NAME: name a set folder's role documents
+    ROLE_NAMES: names every role document of a set folder
     PLACEMENTS_NAME: names a set folder's derived placements table
     PATHS_NAME: names a transition folder's paths document
     split_path(): checks a workspace path and returns its segments, rejecting traversal
-    set_doc(): returns the path of a set folder's placements document
+    set_doc(): returns the path of a set folder's set document
+    role_docs(): returns the paths of a set folder's role documents
+    is_set_document(): reports whether a path is a set or role document, which storage keeps
+        internal
     script_doc(): returns the path of a set folder's build script
     forms_doc(): returns the path of a set folder's forms document
     placements_doc(): returns the path of a set folder's derived placements table
@@ -44,6 +52,7 @@ from e8s.show.migrations.v1_to_v2_notes import NOTES_DOC as NOTES_DOC
 
 SHEET_DOC = "/show/sheet.json"
 TIMELINE_DOC = "/time/timeline.json"
+CAST_DOC = "/cast/cast.json"
 SET_ORDER_FIELD = "sets"
 SHEET_FIELD = "sheet"
 NOTES_FIELD = "notes"
@@ -51,6 +60,7 @@ TIMELINE_FIELD = "timeline"
 FORMS_FIELD = "forms"
 TRANSITIONS_FIELD = "transitions"
 REVISION_FIELD = "revision"
+CAST_FIELD = "cast"
 SPLIT_FIELDS = frozenset(
     {
         SHEET_FIELD,
@@ -67,12 +77,17 @@ SEGMENT_PATTERN = re.compile(SEGMENT)
 SET_DOC_NAME = "set.json"
 SCRIPT_NAME = "set.py"
 FORMS_NAME = "forms.json"
+DRILL_NAME = "drill.json"
+FACING_NAME = "facing.json"
+LABELS_NAME = "labels.json"
+ROLE_NAMES = (DRILL_NAME, FACING_NAME, LABELS_NAME)
 PLACEMENTS_NAME = "placements.csv"
 PATHS_NAME = "paths.json"
 SHOW_DOC_PATTERN = re.compile(
-    rf"/(show/(show|sheet|notes)\.json|time/timeline\.json|sets/{SEGMENT}/(set|forms)\.json"
-    rf"|transitions/{SEGMENT}/paths\.json)"
+    rf"/(show/(show|sheet|notes)\.json|time/timeline\.json|cast/cast\.json"
+    rf"|sets/{SEGMENT}/(set|forms|drill|facing|labels)\.json|transitions/{SEGMENT}/paths\.json)"
 )
+SET_DOCUMENT_PATTERN = re.compile(rf"/sets/{SEGMENT}/(set|drill|facing|labels)\.json")
 
 
 def split_path(path: str) -> list[str]:
@@ -97,11 +112,29 @@ def split_path(path: str) -> list[str]:
 
 
 def set_doc(folder: str) -> str:
-    """Returns the path of a set's placements document, which storage keeps internal.
+    """Returns the path of a set's document, which storage keeps internal.
 
     The folder is the set key in stored paths and the display ID in workspace paths.
     """
     return f"/sets/{folder}/{SET_DOC_NAME}"
+
+
+def role_docs(folder: str) -> tuple[str, ...]:
+    """Returns the paths of a set folder's role documents, in ROLE_NAMES order.
+
+    >>> role_docs("12A")
+    ('/sets/12A/drill.json', '/sets/12A/facing.json', '/sets/12A/labels.json')
+    """
+    return tuple(f"/sets/{folder}/{name}" for name in ROLE_NAMES)
+
+
+def is_set_document(path: str) -> bool:
+    """Reports whether a path is a set's set.json or one of its role documents.
+
+    >>> is_set_document("/sets/1/drill.json"), is_set_document("/sets/1/forms.json")
+    (True, False)
+    """
+    return SET_DOCUMENT_PATTERN.fullmatch(path) is not None
 
 
 def script_doc(folder: str) -> str:
@@ -171,10 +204,11 @@ def docs_for_order(order: Sequence[str]) -> frozenset[str]:
     """Lists the show-document paths of a tree whose show.json lists the set keys `order`.
 
     >>> sorted(docs_for_order(["1", "2"]))[:3]
-    ['/sets/1/forms.json', '/sets/1/set.json', '/sets/2/forms.json']
+    ['/cast/cast.json', '/sets/1/drill.json', '/sets/1/facing.json']
     """
-    paths = {SHOW_DOC, SHEET_DOC, TIMELINE_DOC}
+    paths = {SHOW_DOC, SHEET_DOC, TIMELINE_DOC, CAST_DOC}
     paths.update(set_doc(s) for s in order)
+    paths.update(p for s in order for p in role_docs(s))
     paths.update(forms_doc(s) for s in order)
     paths.update(paths_doc(tid) for tid in itertools.pairwise(order))
     return frozenset(paths)

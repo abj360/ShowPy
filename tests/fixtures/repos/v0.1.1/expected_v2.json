@@ -1,59 +1,235 @@
 {
   "documents": {
+    "/cast/cast.json": {
+      "groups": {
+        "trumpets": {
+          "color": "#808080",
+          "default_radius": 0.3,
+          "key": "trumpets",
+          "label_prefix": "T",
+          "limits": {},
+          "moves": true,
+          "name": "Trumpets",
+          "symbol": "circle"
+        }
+      },
+      "label_scheme": {
+        "pad": 0,
+        "prefixes": {},
+        "start": 1
+      },
+      "selections": {
+        "front_four": [
+          "T1",
+          "T2",
+          "T3",
+          "T4"
+        ]
+      },
+      "spots": [
+        {
+          "active": true,
+          "color": null,
+          "group": "trumpets",
+          "id": "T1",
+          "shape": {
+            "depth_m": 0.6,
+            "kind": "circle",
+            "radius_m": 0.3,
+            "rotation_deg": 0.0,
+            "width_m": 0.6
+          },
+          "symbol": null,
+          "tags": []
+        },
+        {
+          "active": true,
+          "color": null,
+          "group": "trumpets",
+          "id": "T2",
+          "shape": {
+            "depth_m": 0.6,
+            "kind": "circle",
+            "radius_m": 0.3,
+            "rotation_deg": 0.0,
+            "width_m": 0.6
+          },
+          "symbol": null,
+          "tags": [
+            "horn",
+            "lead"
+          ]
+        },
+        {
+          "active": true,
+          "color": null,
+          "group": "trumpets",
+          "id": "T3",
+          "shape": {
+            "depth_m": 0.6,
+            "kind": "circle",
+            "radius_m": 0.3,
+            "rotation_deg": 0.0,
+            "width_m": 0.6
+          },
+          "symbol": null,
+          "tags": []
+        },
+        {
+          "active": true,
+          "color": null,
+          "group": "trumpets",
+          "id": "T4",
+          "shape": {
+            "depth_m": 0.6,
+            "kind": "circle",
+            "radius_m": 0.3,
+            "rotation_deg": 0.0,
+            "width_m": 0.6
+          },
+          "symbol": null,
+          "tags": []
+        }
+      ]
+    },
+    "/sets/1/drill.json": {
+      "T1": {
+        "form": null,
+        "on_field": true,
+        "order": null,
+        "pinned": false,
+        "x": 0.0,
+        "y": 5.0
+      },
+      "T2": {
+        "form": null,
+        "on_field": true,
+        "order": null,
+        "pinned": false,
+        "x": 2.0,
+        "y": 5.0
+      },
+      "T3": {
+        "form": null,
+        "on_field": true,
+        "order": null,
+        "pinned": true,
+        "x": 4.0,
+        "y": 5.0
+      },
+      "T4": {
+        "form": null,
+        "on_field": true,
+        "order": null,
+        "pinned": false,
+        "x": 6.0,
+        "y": 5.0
+      }
+    },
+    "/sets/1/facing.json": {
+      "T1": {
+        "facing": 0.0
+      },
+      "T2": {
+        "facing": 0.0
+      },
+      "T3": {
+        "facing": 0.0
+      },
+      "T4": {
+        "facing": 0.0
+      }
+    },
+    "/sets/1/labels.json": {
+      "T1": {
+        "note": null
+      },
+      "T2": {
+        "note": null
+      },
+      "T3": {
+        "note": null
+      },
+      "T4": {
+        "note": null
+      }
+    },
     "/sets/1/set.json": {
       "counts": 0.0,
       "cue": null,
       "forms": [],
       "id": "1",
       "label": null,
-      "placements": [
-        {
-          "entity": "T1",
-          "facing": 0.0,
-          "form": null,
-          "note": null,
-          "on_field": true,
-          "order": null,
-          "pinned": false,
-          "x": 0.0,
-          "y": 5.0
-        },
-        {
-          "entity": "T2",
-          "facing": 0.0,
-          "form": null,
-          "note": null,
-          "on_field": true,
-          "order": null,
-          "pinned": false,
-          "x": 2.0,
-          "y": 5.0
-        },
-        {
-          "entity": "T3",
-          "facing": 0.0,
-          "form": null,
-          "note": null,
-          "on_field": true,
-          "order": null,
-          "pinned": true,
-          "x": 4.0,
-          "y": 5.0
-        },
-        {
-          "entity": "T4",
-          "facing": 0.0,
-          "form": null,
-          "note": null,
-          "on_field": true,
-          "order": null,
-          "pinned": false,
-          "x": 6.0,
-          "y": 5.0
-        }
+      "placement_order": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
       ],
       "source_hash": "",
       "state": "draft"
+    },
+    "/sets/2/drill.json": {
+      "T1": {
+        "form": null,
+        "on_field": true,
+        "order": null,
+        "pinned": false,
+        "x": 0.0,
+        "y": 9.0
+      },
+      "T2": {
+        "form": null,
+        "on_field": true,
+        "order": null,
+        "pinned": false,
+        "x": 2.0,
+        "y": 9.0
+      },
+      "T3": {
+        "form": null,
+        "on_field": true,
+        "order": null,
+        "pinned": true,
+        "x": 4.0,
+        "y": 9.0
+      },
+      "T4": {
+        "form": null,
+        "on_field": true,
+        "order": null,
+        "pinned": false,
+        "x": 6.0,
+        "y": 9.0
+      }
+    },
+    "/sets/2/facing.json": {
+      "T1": {
+        "facing": 0.0
+      },
+      "T2": {
+        "facing": 0.0
+      },
+      "T3": {
+        "facing": 0.0
+      },
+      "T4": {
+        "facing": 0.0
+      }
+    },
+    "/sets/2/labels.json": {
+      "T1": {
+        "note": null
+      },
+      "T2": {
+        "note": null
+      },
+      "T3": {
+        "note": null
+      },
+      "T4": {
+        "note": null
+      }
     },
     "/sets/2/set.json": {
       "counts": 8.0,
@@ -61,51 +237,11 @@
       "forms": [],
       "id": "2",
       "label": null,
-      "placements": [
-        {
-          "entity": "T1",
-          "facing": 0.0,
-          "form": null,
-          "note": null,
-          "on_field": true,
-          "order": null,
-          "pinned": false,
-          "x": 0.0,
-          "y": 9.0
-        },
-        {
-          "entity": "T2",
-          "facing": 0.0,
-          "form": null,
-          "note": null,
-          "on_field": true,
-          "order": null,
-          "pinned": false,
-          "x": 2.0,
-          "y": 9.0
-        },
-        {
-          "entity": "T3",
-          "facing": 0.0,
-          "form": null,
-          "note": null,
-          "on_field": true,
-          "order": null,
-          "pinned": true,
-          "x": 4.0,
-          "y": 9.0
-        },
-        {
-          "entity": "T4",
-          "facing": 0.0,
-          "form": null,
-          "note": null,
-          "on_field": true,
-          "order": null,
-          "pinned": false,
-          "x": 6.0,
-          "y": 9.0
-        }
+      "placement_order": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
       ],
       "source_hash": "",
       "state": "draft"
@@ -176,98 +312,6 @@
       }
     },
     "/show/show.json": {
-      "cast": {
-        "groups": {
-          "trumpets": {
-            "color": "#808080",
-            "default_radius": 0.3,
-            "key": "trumpets",
-            "label_prefix": "T",
-            "limits": {},
-            "moves": true,
-            "name": "Trumpets",
-            "symbol": "circle"
-          }
-        },
-        "label_scheme": {
-          "pad": 0,
-          "prefixes": {},
-          "start": 1
-        },
-        "selections": {
-          "front_four": [
-            "T1",
-            "T2",
-            "T3",
-            "T4"
-          ]
-        },
-        "spots": [
-          {
-            "active": true,
-            "color": null,
-            "group": "trumpets",
-            "id": "T1",
-            "shape": {
-              "depth_m": 0.6,
-              "kind": "circle",
-              "radius_m": 0.3,
-              "rotation_deg": 0.0,
-              "width_m": 0.6
-            },
-            "symbol": null,
-            "tags": []
-          },
-          {
-            "active": true,
-            "color": null,
-            "group": "trumpets",
-            "id": "T2",
-            "shape": {
-              "depth_m": 0.6,
-              "kind": "circle",
-              "radius_m": 0.3,
-              "rotation_deg": 0.0,
-              "width_m": 0.6
-            },
-            "symbol": null,
-            "tags": [
-              "horn",
-              "lead"
-            ]
-          },
-          {
-            "active": true,
-            "color": null,
-            "group": "trumpets",
-            "id": "T3",
-            "shape": {
-              "depth_m": 0.6,
-              "kind": "circle",
-              "radius_m": 0.3,
-              "rotation_deg": 0.0,
-              "width_m": 0.6
-            },
-            "symbol": null,
-            "tags": []
-          },
-          {
-            "active": true,
-            "color": null,
-            "group": "trumpets",
-            "id": "T4",
-            "shape": {
-              "depth_m": 0.6,
-              "kind": "circle",
-              "radius_m": 0.3,
-              "rotation_deg": 0.0,
-              "width_m": 0.6
-            },
-            "symbol": null,
-            "tags": []
-          }
-        ]
-      },
       "dependencies": {
         "sheet:test-field": "1"
       },

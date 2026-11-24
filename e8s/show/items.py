@@ -62,9 +62,9 @@ from e8s.core.readonly import ReadOnlyMap, thaw_json
 from e8s.sheet.models import Sheet
 from e8s.show.change_models import ChangeSet, ItemChange, ItemKey, ItemKind
 from e8s.show.document_paths import transition_folder
-from e8s.show.documents import require_storable
 from e8s.show.models import Pin, Show
 from e8s.show.set_keys import set_key
+from e8s.show.storable import require_storable
 from e8s.time.models import Timeline
 
 type _Path = tuple[str, ...]
