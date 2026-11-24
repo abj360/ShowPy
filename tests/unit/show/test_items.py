@@ -12,6 +12,7 @@ Contains:
     test_turn_and_note_on_one_spot_are_two_roles: reports a turn and a note as two items
     test_items_cover_every_kind_and_no_notes_or_proposals: lists the kinds a rich show holds
     test_items_key_transitions_by_set_keys: keys paths, rows and routes by the stored folder
+    test_reorders_are_one_order_change_each: reports a spot, pin or placement reorder as one item
     test_renumber_changes_set_identities_only: keeps placement keys through a renumber
     test_added_and_removed_items_have_no_other_side: leaves the missing side None
     test_changes_skip_sets_shared_by_identity: dumps only the changed set's placements, nothing else
@@ -140,6 +141,9 @@ def test_roles_are_the_design_roles() -> None:
         "build": ("source_hash", "state"),
         "forms": ("forms",),
     }
+    assert ITEM_TABLE["Set", "placements"] == ("set", "placements")
+    assert ITEM_TABLE["Cast", "spots"] == ("spot_order", None)
+    assert ITEM_TABLE["Show", "pins"] == ("pin_order", None)
 
 
 @pytest.mark.parametrize("show", [two_set_show(), rich_show()])
@@ -213,6 +217,30 @@ def test_items_key_transitions_by_set_keys() -> None:
     form = found[ItemKey(kind="form", path=("line1",))]
     assert isinstance(form, dict)
     assert form["set"] == "1"
+
+
+def test_reorders_are_one_order_change_each() -> None:
+    show = pin(_pinned_rich_show(), "form", "line1")
+    first = show.sets[0]
+    reorders = [
+        (
+            ItemKey(kind="spot_order", path=()),
+            show.replace(cast=show.cast.replace(spots=tuple(reversed(show.cast.spots)))),
+        ),
+        (ItemKey(kind="pin_order", path=()), show.replace(pins=tuple(reversed(show.pins)))),
+        (
+            ItemKey(kind="set", path=(set_key(first),), role="placements"),
+            show.replace(
+                sets=(first.replace(placements=tuple(reversed(first.placements))), *show.sets[1:])
+            ),
+        ),
+    ]
+    for key, reordered in reorders:
+        assert encode_show(reordered) != encode_show(show)
+        (change,) = changes(show, reordered).changes
+        assert change.key == key
+    assert items(show)[ItemKey(kind="pin_order", path=())] == [["entity", "T1"], ["form", "line1"]]
+    assert items(show)[ItemKey(kind="spot_order", path=())] == ["T1", "T2", "T3", "T4"]
 
 
 def test_renumber_changes_set_identities_only() -> None:

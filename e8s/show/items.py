@@ -10,8 +10,11 @@ Key rules (kind, path: value):
     placement (set key, spot ID), one item per role: `drill` (x, y, on_field, form, order),
         `facing` (facing), `labels` (note) and `pin` (pinned)
     set (set key,): no role holds the display ID, which the path leaves out; roles `timing`
-        (counts), `labels` (label, cue), `build` (source_hash, state) and `forms` (forms)
+        (counts), `labels` (label, cue), `build` (source_hash, state), `forms` (forms) and
+        `placements`, the spot IDs in stored placement order
     set_order (): the set keys in show order
+    spot_order (): the spot IDs in cast order
+    pin_order (): the pin item paths in show order
     form (form ID,): form IDs are unique across the show, so the path needs no set
     transition (transition key,): counts, notes and source_hash; the transition key is the
         stored folder name of the two set keys, such as `1-2`
@@ -69,6 +72,7 @@ PIN = "pin"
 TIMING = "timing"
 BUILD = "build"
 FORMS = "forms"
+PLACEMENTS = "placements"
 ENTITY_FIELD = "entity"
 ID_FIELD = "id"
 KEY_FIELD = "key"
@@ -84,14 +88,14 @@ ITEM_TABLE: Mapping[tuple[str, str], tuple[ItemKind, str | None]] = ReadOnlyMap(
     {
         **_rows("Show", "show", None, "id title pack dependencies extensions cast"),
         **_rows("Show", "set_order", None, "sets"),
-        **_rows("Show", "pin", None, "pins"),
+        **_rows("Show", "pin_order", None, "pins"),
         **_rows("Show", "facing_override", None, "facing_overrides"),
-        **_rows("Cast", "spot", None, "spots"),
+        **_rows("Cast", "spot_order", None, "spots"),
         **_rows("Cast", "group", None, "groups"),
         **_rows("Cast", "selection", None, "selections"),
         **_rows("Cast", "show", None, LABEL_SCHEME_FIELD),
         **_rows("Set", "set", None, "id key"),
-        **_rows("Set", "placement", None, "placements"),
+        **_rows("Set", "set", PLACEMENTS, "placements"),
         **_rows("Set", "set", TIMING, "counts"),
         **_rows("Set", "set", LABELS, "label cue"),
         **_rows("Set", "set", BUILD, "source_hash state"),
@@ -148,7 +152,7 @@ def _roles(model: str, kind: ItemKind) -> tuple[tuple[str, tuple[str, ...]], ...
 
 
 PLACEMENT_ROLES = _roles("Placement", "placement")
-SET_ROLES = _roles("Set", "set")
+SET_ROLES = tuple(role for role in _roles("Set", "set") if role[0] != PLACEMENTS)
 TRANSITION_FIELDS = tuple(
     field
     for (owner, field), (kind, _) in ITEM_TABLE.items()
@@ -214,6 +218,7 @@ def _set_entries(path: _Path, current: Set) -> Iterator[_Entry]:
             yield ("placement", (key, placement.entity), role), _picked(dumped, fields)
     values = _set_values(current)
     yield ("set", path, None), {ID_FIELD: values[ID_FIELD]}
+    yield ("set", path, PLACEMENTS), [placement.entity for placement in current.placements]
     for role, fields in SET_ROLES:
         yield ("set", path, role), _picked(values, fields)
 
@@ -245,6 +250,14 @@ def _selection_entries(path: _Path, spot_ids: tuple[str, ...]) -> Iterator[_Entr
 
 def _pin_entries(path: _Path, record: Pin) -> Iterator[_Entry]:
     yield ("pin", path, None), _without(record.to_json(), TARGET_FIELD, ID_FIELD)
+
+
+def _pin_order_entries(path: _Path, pins: tuple[Pin, ...]) -> Iterator[_Entry]:
+    yield ("pin_order", path, None), [[record.target, record.id] for record in pins]
+
+
+def _spot_order_entries(path: _Path, spots: tuple[Spot, ...]) -> Iterator[_Entry]:
+    yield ("spot_order", path, None), [spot.id for spot in spots]
 
 
 def _override_entries(path: _Path, overrides: tuple[FacingOverride, ...]) -> Iterator[_Entry]:
@@ -334,6 +347,7 @@ AREAS: tuple[_Area, ...] = (
     _Sourced[Spot](
         lambda show: _unique("spot", (((s.id,), s) for s in show.cast.spots)), _spot_entries
     ),
+    _Sourced[tuple[Spot, ...]](lambda show: {(): show.cast.spots}, _spot_order_entries),
     _Sourced[Group](
         lambda show: {(k,): group for k, group in show.cast.groups.items()}, _group_entries
     ),
@@ -343,6 +357,7 @@ AREAS: tuple[_Area, ...] = (
     _Sourced[Pin](
         lambda show: _unique("pin", (((p.target, p.id), p) for p in show.pins)), _pin_entries
     ),
+    _Sourced[tuple[Pin, ...]](lambda show: {(): show.pins}, _pin_order_entries),
     _Sourced[tuple[FacingOverride, ...]](
         lambda show: {(): show.facing_overrides}, _override_entries
     ),
