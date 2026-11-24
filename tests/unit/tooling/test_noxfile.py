@@ -110,6 +110,8 @@ Contains:
     run_toolchain_check(): runs the workflow's toolchain check against a fake rustc
     test_toolchain_check_refuses_a_rustc_other_than_the_pin: passes the pin, refuses another
     test_regression_wheels_never_cancel_a_tag_run: a newer run cancels only non-tag runs
+    test_regression_wheels_upload_before_the_tests_run: the uploaded wheel is the built one,
+        never one the test step could replace
 """
 
 import ast
@@ -299,6 +301,7 @@ WHEEL_TARGETS = [
 MATRIX_ITEM_INDENT = " " * 10
 DIST_BUILD_ARGS = "--profile dist --locked --out dist"
 UPLOAD_STEP = "uses: actions/upload-artifact@"
+PORTED_TEST_STEP = "-P -m pytest $PORTED_TESTS"
 LOCK_UNCHANGED = "run: git diff --exit-code -- Cargo.lock"
 ON_A_TAG = "github.ref_type == 'tag'"
 RELEASE_VERSION_RUN = 'python3 scripts/check_release_version.py "$TAG"'
@@ -1423,3 +1426,17 @@ def test_toolchain_check_refuses_a_rustc_other_than_the_pin(tmp_path: Path) -> N
 def test_regression_wheels_never_cancel_a_tag_run() -> None:
     """A second dispatch or a re-pushed tag must not kill a release build in progress."""
     assert workflow_section(WHEELS_WORKFLOW.read_text(), "concurrency") == WHEELS_CONCURRENCY
+
+
+def test_regression_wheels_upload_before_the_tests_run() -> None:
+    """The tests install packages beside dist/, so the wheel is uploaded before they run."""
+    workflow = WHEELS_WORKFLOW.read_text()
+    for name in WHEEL_JOBS:
+        steps = job_steps(ci_job(workflow, name))
+        build = _first_index(steps, lambda step: "uses: PyO3/maturin-action@" in step)
+        upload = _first_index(steps, lambda step: UPLOAD_STEP in step)
+        tests = _first_index(steps, lambda step: PORTED_TEST_STEP in step)
+        assert build is not None, name
+        assert upload is not None, name
+        assert tests is not None, name
+        assert build < upload < tests, name

@@ -4,6 +4,7 @@
 # 3.14 from a copy of the suite, so the installed wheel, not the source tree, is imported.
 #
 # The version job gates every build: on a tag it refuses one that differs from Cargo.toml.
+# Each job uploads its wheel before the tests run, so nothing the tests install can replace it.
 # Nothing here writes a cache, so a pull request cannot plant build state that a release restores.
 
 name: wheels
@@ -102,6 +103,11 @@ jobs:
           manylinux: ${{ matrix.libc }}
           args: --profile dist --locked --out dist
           before-script-linux: ${{ env.CHECK_PINNED_RUSTC }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wheel-linux-${{ matrix.target }}-${{ matrix.libc }}
+          path: dist/*.whl
+          if-no-files-found: error
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: ${{ env.UV_VERSION }}
@@ -127,11 +133,6 @@ jobs:
                 /venv/bin/python -P -c "$WHEEL_CHECK"
                 /venv/bin/python -P -m pytest $PORTED_TESTS'
           done
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: wheel-linux-${{ matrix.target }}-${{ matrix.libc }}
-          path: dist/*.whl
-          if-no-files-found: error
 
   windows:
     name: windows ${{ matrix.target }}
@@ -176,6 +177,11 @@ jobs:
             --interpreter ${{ steps.python313.outputs.python-path }}
       - name: Check the build used the pinned toolchain
         run: eval "$CHECK_PINNED_RUSTC"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wheel-windows-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: ${{ env.UV_VERSION }}
@@ -202,11 +208,6 @@ jobs:
             ../venv/Scripts/python -P -m pytest $PORTED_TESTS
             cd ..
           done
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: wheel-windows-${{ matrix.target }}
-          path: dist/*.whl
-          if-no-files-found: error
 
   # The Intel job goes when GitHub retires its macOS Intel runners.
   macos:
@@ -245,6 +246,11 @@ jobs:
             --interpreter ${{ steps.python313.outputs.python-path }}
       - name: Check the build used the pinned toolchain
         run: eval "$CHECK_PINNED_RUSTC"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wheel-macos-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: ${{ env.UV_VERSION }}
@@ -271,11 +277,6 @@ jobs:
             ../venv/bin/python -P -m pytest $PORTED_TESTS
             cd ..
           done
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: wheel-macos-${{ matrix.target }}
-          path: dist/*.whl
-          if-no-files-found: error
 
   sdist:
     name: sdist
