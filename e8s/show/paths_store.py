@@ -10,7 +10,8 @@ from datetime import datetime
 
 from e8s.choreo.path_models import TransitionSpec
 from e8s.show.documents import paths_doc
-from e8s.show.storage import Workspace, load_show
+from e8s.show.show_io import load_show
+from e8s.show.workspace import Workspace
 
 
 def save_paths(ws: Workspace, spec: TransitionSpec, at: datetime) -> str:

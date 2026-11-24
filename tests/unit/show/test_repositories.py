@@ -22,12 +22,6 @@ Contains:
         or stores it under a short name
     test_regression_get_forms_omits_forms_the_set_no_longer_lists: leaves a stale form out of a
         set's forms
-    test_put_forms_keeps_stale_forms_of_the_set_in_the_show: keeps a stale form stored when the
-        set's forms are replaced
-    test_regression_put_forms_then_get_forms_returns_the_put_forms: lists newly put forms in the
-        set that listed others
-    test_regression_put_forms_refuses_a_form_id_another_set_holds: refuses a form whose ID is
-        stored under another set, keeping that set's form
     test_regression_put_show_refuses_sets_differing_only_by_case: refuses a show whose defaulted
         set keys collide case-insensitively, leaving head unchanged
     test_regression_form_op_refuses_a_form_id_another_set_holds: refuses a FormOp whose form ID is
@@ -47,24 +41,30 @@ import errno
 import os
 import sys
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
 
+from e8s.choreo.match_ops import forms_of_set
 from e8s.core.errors import ConflictError, SchemaError, StorageError
 from e8s.core.ids import WINDOWS_DEVICE_NAMES, FormId
 from e8s.core.util import content_hash
+from e8s.show.backend import RepositoryBackend
 from e8s.show.changes import apply_change
+from e8s.show.collab_models import FormOp
+from e8s.show.document_repository import DocumentRepository
 from e8s.show.documents import script_doc
 from e8s.show.file_repository import FileRepository
 from e8s.show.files import LIMITS_DOC, WAIVERS_DOC
+from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
-from e8s.show.models import FormOp, Revision
-from e8s.show.repositories import DocumentRepository, InMemoryRepository, RepositoryBackend
-from e8s.show.storage import Repository, load_show, open_workspace, save_show
+from e8s.show.memory_backend import InMemoryRepository
+from e8s.show.show_io import load_show, save_show
+from e8s.show.storage import ROOT_REVISION, Repository
+from e8s.show.workspace import open_workspace
 from tests.fixtures.shows import two_set_show
 from tests.helpers import context_entries, fails_after, replaced_form_show
 
@@ -250,27 +250,7 @@ def test_regression_get_forms_omits_forms_the_set_no_longer_lists() -> None:
     """Leaves a stale form out of a set's forms (ruling L-G3)."""
     repo = InMemoryRepository()
     repo.put_show(SHOW_ID, replaced_form_show(), expected_revision="", at=AT)
-    assert [f.id for f in repo.get_forms(SHOW_ID, "2")] == ["b"]
-
-
-def test_put_forms_keeps_stale_forms_of_the_set_in_the_show() -> None:
-    """Keeps a stale form stored when the set's forms are replaced through put_forms."""
-    repo = InMemoryRepository()
-    revision = repo.put_show(SHOW_ID, replaced_form_show(), expected_revision="", at=AT)
-    current = repo.get_forms(SHOW_ID, "2")
-    repo.put_forms(SHOW_ID, "2", current, expected_revision=revision.id, at=AT)
-    assert sorted(repo.get_show(SHOW_ID).forms) == ["a", "b"]
-
-
-def test_regression_put_forms_then_get_forms_returns_the_put_forms() -> None:
-    """Lists newly put forms in the set that listed others; stale forms stay stored."""
-    repo = InMemoryRepository()
-    show = replaced_form_show()
-    revision = repo.put_show(SHOW_ID, show, expected_revision="", at=AT)
-    fresh = show.forms[FormId("b")].replace(id="c")
-    repo.put_forms(SHOW_ID, "2", (fresh,), expected_revision=revision.id, at=AT)
-    assert [f.id for f in repo.get_forms(SHOW_ID, "2")] == ["c"]
-    assert "a" in repo.get_show(SHOW_ID).forms
+    assert sorted(forms_of_set(repo.get_show(SHOW_ID), "2")) == ["b"]
 
 
 def _tampered(path: str, raw: bytes) -> InMemoryRepository:
@@ -283,23 +263,11 @@ def _tampered(path: str, raw: bytes) -> InMemoryRepository:
     return repo
 
 
-TEXT_GETTERS: dict[str, Callable[[InMemoryRepository], str]] = {
-    script_doc("1"): lambda repo: repo.get_script(SHOW_ID, "1"),
-    LIMITS_DOC: lambda repo: repo.get_limits(SHOW_ID),
-    WAIVERS_DOC: lambda repo: repo.get_waivers(SHOW_ID),
+TEXT_GETTERS: dict[str, Callable[[InMemoryRepository], str | bytes]] = {
+    script_doc("1"): lambda repo: open_workspace(repo, SHOW_ID).read(script_doc("1")),
+    LIMITS_DOC: lambda repo: open_workspace(repo, SHOW_ID).read(LIMITS_DOC),
+    WAIVERS_DOC: lambda repo: open_workspace(repo, SHOW_ID).read(WAIVERS_DOC),
 }
-
-
-def test_regression_put_forms_refuses_a_form_id_another_set_holds() -> None:
-    """Refuses to take over a form that another set lists, and leaves the show unchanged."""
-    repo = InMemoryRepository()
-    show = replaced_form_show()
-    revision = repo.put_show(SHOW_ID, show, expected_revision="", at=AT)
-    takeover = show.forms[FormId("b")].replace(set="1")
-    with pytest.raises(SchemaError):
-        repo.put_forms(SHOW_ID, "1", (takeover,), expected_revision=revision.id, at=AT)
-    assert repo.get_show(SHOW_ID).forms[FormId("b")].set == "2"
-    assert [f.id for f in repo.get_forms(SHOW_ID, "2")] == ["b"]
 
 
 def test_regression_put_show_refuses_sets_differing_only_by_case() -> None:
@@ -346,13 +314,16 @@ class _HookedBackend:
         self.blobs_read: list[str] = []
         self.racer: Callable[[], object] | None = None
 
-    def show_ids(self) -> list[str]:
-        return self.inner.show_ids()
+    def shows(self) -> list[str]:
+        return self.inner.shows()
 
-    def log(self, show_id: str) -> list[Revision]:
-        return self.inner.log(show_id)
+    def head(self, show_id: str) -> str:
+        return self.inner.head(show_id)
 
-    def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
+    def log(self, show_id: str, *, since: str = ROOT_REVISION) -> list[Revision]:
+        return self.inner.log(show_id, since=since)
+
+    def tree(self, show_id: str, revision_id: str) -> Mapping[str, str]:
         return self.inner.tree(show_id, revision_id)
 
     def blob(self, show_id: str, digest: str) -> bytes:
@@ -360,7 +331,11 @@ class _HookedBackend:
         return self.inner.blob(show_id, digest)
 
     def commit(
-        self, show_id: str, revision: Revision, tree: dict[str, str], blobs: dict[str, bytes]
+        self,
+        show_id: str,
+        revision: Revision,
+        tree: Mapping[str, str],
+        blobs: Mapping[str, bytes],
     ) -> None:
         racer, self.racer = self.racer, None
         if racer is not None:

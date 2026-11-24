@@ -10,9 +10,9 @@ from e8s.choreo.path_models import TransitionSpec
 from e8s.choreo.paths import delay
 from e8s.core.ids import make_tid
 from e8s.examples import two_set_show
+from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.paths_store import load_paths, save_paths
-from e8s.show.repositories import InMemoryRepository
-from e8s.show.storage import open_workspace
+from e8s.show.workspace import open_workspace
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 SHOW_ID = "show-1"

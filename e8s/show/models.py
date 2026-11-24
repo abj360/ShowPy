@@ -1,8 +1,7 @@
 """
-models.py --- the Show aggregate, its index, and the storage, history and collaboration records
+models.py --- the Show aggregate and its index
 
 Contains:
-    Anchor: re-exports the tagged anchor of comments, highlights and notes
     Pin: records one designer lock on a spot, form, set or transition
     Show: holds a whole show: sheet, cast, timeline, sets, forms and paths
     ShowLookup: looks up a show's sets, transitions and forms by ID without scanning
@@ -15,19 +14,6 @@ Contains:
     Show.transition(): returns a transition's paths, defaulting to straight moves
     ShowIndexEntry: holds one set's place on the clock: counts, start, measure, seconds, cue
     ShowIndex: looks up sets and transitions by global count
-    SetDiff: lists what differs between two sets
-    PathDiff: lists what differs between two transitions
-    Revision: records one saved state of a show in storage
-    Comment: holds one review comment anchored on the canvas
-    PlacementOp: replaces one spot's placement in one set
-    FormOp: replaces or adds one form
-    PathsOp: replaces one transition's stored paths
-    CountsOp: retimes one set
-    Highlight: points the designer at spots, an area, a point, a set, a transition or a named
-        area the host defines
-    CanvasEvent: records one edit or pointer from either side of the canvas
-    Proposal: holds an agent suggestion the designer accepts or rejects
-    ProposalPreview: holds the ghost placements and paths a proposal would produce
     require_set_count(): refuses a show size over MAX_SETS before anything is allocated
 """
 
@@ -37,9 +23,8 @@ import json
 import re
 from collections import Counter
 from collections.abc import Mapping, Sized
-from datetime import datetime
 from functools import cached_property
-from typing import Annotated, ClassVar, Final, Literal
+from typing import Annotated, ClassVar, Literal
 
 from pydantic import (
     Field,
@@ -52,7 +37,7 @@ from pydantic import (
 
 from e8s.cast.models import Cast
 from e8s.choreo.form_models import Form
-from e8s.choreo.models import Placement, Set
+from e8s.choreo.models import Set
 from e8s.choreo.path_models import FacingOverride, TransitionSpec
 from e8s.core.caps import MAX_EXTENSION_BYTES, MAX_SETS
 from e8s.core.error_codes import ErrorCode
@@ -61,9 +46,7 @@ from e8s.core.ids import (
     LEGACY_IDS_KEY,
     FormId,
     FormIdField,
-    RouteId,
     SetId,
-    SpotId,
     TransitionId,
 )
 from e8s.core.ids import format_tid as _format_tid
@@ -72,7 +55,6 @@ from e8s.core.readonly import ReadOnly, ReadOnlyMap
 from e8s.core.types import Count, FrozenModel, JsonObject, Seconds
 from e8s.core.util import close_matches
 from e8s.sheet.models import Sheet
-from e8s.show.anchors import Anchor as Anchor
 from e8s.time.models import MeasureLabel, Timeline
 
 INDEX_TOL = 1e-9
@@ -80,11 +62,8 @@ EXTENSION_KEY = re.compile(r"^x-")
 EXTENSION_PREFIX = "x-"
 EXTENSIONS_FIELD = "extensions"
 
+
 type PinTarget = Literal["entity", "form", "set", "transition"]
-type EventKind = Literal[
-    "move", "edit_form", "pin", "unpin", "edit_paths", "comment", "set_counts", "highlight"
-]
-type ProposalState = Literal["open", "accepted", "rejected"]
 
 
 class Pin(FrozenModel):
@@ -464,261 +443,3 @@ class ShowIndex(FrozenModel):
         """Returns the set before `set_id`, or None for the first set."""
         position = self._position(set_id) - 1
         return self.entries[position].set if position >= 0 else None
-
-
-class SetDiff(FrozenModel):
-    """Lists what differs between two sets; every field is sorted naturally.
-
-    Attributes:
-        moved: Spots whose position or on-field state changed.
-        facing_changed: Spots whose facing changed.
-        added: Spots placed only in the second set.
-        removed: Spots placed only in the first set.
-        forms_changed: Forms added, removed or re-membered between the sets.
-    """
-
-    moved: tuple[SpotId, ...] = ()
-    facing_changed: tuple[SpotId, ...] = ()
-    added: tuple[SpotId, ...] = ()
-    removed: tuple[SpotId, ...] = ()
-    forms_changed: tuple[FormId, ...] = ()
-
-    @property
-    def is_empty(self) -> bool:
-        """Reports whether the sets match."""
-        return not any(self._dumped().values())
-
-
-class PathDiff(FrozenModel):
-    """Lists what differs between two transitions; a missing row equals a default row.
-
-    Attributes:
-        changed_rows: Spots whose effective path row changed.
-        routes_changed: Routes added, removed or edited.
-    """
-
-    changed_rows: tuple[SpotId, ...] = ()
-    routes_changed: tuple[RouteId, ...] = ()
-
-    @property
-    def is_empty(self) -> bool:
-        """Reports whether the transitions match."""
-        return not (self.changed_rows or self.routes_changed)
-
-
-class Revision(FrozenModel):
-    """Records one saved state of a show: what changed and when, never who or why.
-
-    Attributes:
-        id: Content hash of parent, time and change.
-        parent: Previous revision; empty for the first.
-        at: When it was saved; passed in, never read from the clock.
-        changed: Stored paths written or deleted, sorted; set and transition folders are named
-            by set key, so they can differ from workspace paths after a renumber.
-    """
-
-    id: str
-    parent: str
-    at: datetime
-    changed: tuple[str, ...] = ()
-
-
-class Comment(FrozenModel):
-    """Holds one review comment on the canvas.
-
-    Attributes:
-        id: Comment ID.
-        anchor: What the comment points at.
-        text: Comment body.
-        resolved: Whether the discussion is closed.
-        author: Who wrote it.
-    """
-
-    id: str
-    anchor: Anchor
-    text: str
-    resolved: bool = False
-    author: str = "designer"
-
-
-class PlacementOp(FrozenModel):
-    """Replaces one spot's placement in one set.
-
-    Attributes:
-        op: Tag.
-        set_id: Set edited.
-        placement: New placement; its entity names the spot.
-    """
-
-    op: Literal["placement"] = "placement"
-    set_id: SetId
-    placement: Placement
-
-
-class FormOp(FrozenModel):
-    """Replaces or adds one form.
-
-    Attributes:
-        op: Tag.
-        form: New form; its set must exist.
-    """
-
-    op: Literal["form"] = "form"
-    form: Form
-
-
-class PathsOp(FrozenModel):
-    """Replaces one transition's stored paths.
-
-    Attributes:
-        op: Tag.
-        spec: New paths; counts are taken from the destination set.
-    """
-
-    op: Literal["paths"] = "paths"
-    spec: TransitionSpec
-
-
-class CountsOp(FrozenModel):
-    """Retimes one set.
-
-    Attributes:
-        op: Tag.
-        set_id: Set retimed.
-        counts: New counts.
-        rescale: Whether stored path windows scale with the counts.
-    """
-
-    op: Literal["counts"] = "counts"
-    set_id: SetId
-    counts: float
-    rescale: bool = False
-
-
-type ChangeOp = Annotated[PlacementOp | FormOp | PathsOp | CountsOp, Field(discriminator="op")]
-
-
-class Highlight(FrozenModel):
-    """Points the designer at part of the canvas for a while; it changes nothing.
-
-    Attributes:
-        anchor: What is pointed at, when it is spots, an area, a point, a set or a transition.
-        zone: Name of an area the host defines, such as a pit or wings, when the pointer is one;
-            the library keeps no zones and passes the name through.
-        ttl_s: Seconds the pointer stays visible.
-    """
-
-    anchor: Anchor | None = None
-    zone: str | None = None
-    ttl_s: Annotated[float, Field(gt=0)]
-
-    @model_validator(mode="after")
-    def _require_one_target(self) -> "Highlight":
-        if (self.anchor is None) == (self.zone is None):
-            raise SchemaError(
-                "highlight needs exactly one of anchor and zone",
-                hint="set `anchor` for spots, an area, a point, a set or a transition, "
-                "or `zone` for the name of an area the host defines",
-            )
-        return self
-
-
-type EventPayload = PlacementOp | FormOp | PathsOp | CountsOp | Pin | Comment | Highlight
-
-EVENT_PAYLOADS: Final[Mapping[str, type[EventPayload]]] = ReadOnlyMap(
-    {
-        "move": PlacementOp,
-        "edit_form": FormOp,
-        "edit_paths": PathsOp,
-        "set_counts": CountsOp,
-        "pin": Pin,
-        "unpin": Pin,
-        "comment": Comment,
-        "highlight": Highlight,
-    }
-)
-
-
-class CanvasEvent(FrozenModel):
-    """Records one edit or pointer from either side of the canvas.
-
-    The payload type follows the kind: `move` carries a `PlacementOp`, `edit_form` a `FormOp`,
-    `edit_paths` a `PathsOp`, `set_counts` a `CountsOp`, `pin` and `unpin` a `Pin`, `comment` a
-    `Comment` and `highlight` a `Highlight`. A payload given as a dict is validated as the
-    model its kind names; a payload of another kind's model is refused.
-
-    Attributes:
-        id: Event ID.
-        at: When it happened.
-        kind: What happened.
-        payload: Typed body for the kind.
-        revision: Revision that holds the edit; empty for pointers such as highlights.
-    """
-
-    id: str
-    at: datetime
-    kind: EventKind
-    payload: EventPayload
-    revision: str = ""
-
-    @model_validator(mode="before")
-    @classmethod
-    def _type_payload(cls, data: object) -> object:
-        if not isinstance(data, Mapping):
-            return data
-        kind, payload = data.get("kind"), data.get("payload")
-        model = EVENT_PAYLOADS.get(kind) if isinstance(kind, str) else None
-        if model is None or not isinstance(payload, Mapping):
-            return data
-        return {**data, "payload": model._validated(payload)}
-
-    @model_validator(mode="after")
-    def _require_payload_of_kind(self) -> "CanvasEvent":
-        expected = EVENT_PAYLOADS[self.kind]
-        if type(self.payload) is not expected:
-            raise SchemaError(
-                f"event {self.id} of kind {self.kind} carries a {type(self.payload).__name__}",
-                hint=f"give a {expected.__name__} payload for kind {self.kind}",
-                context={"event": self.id},
-            )
-        return self
-
-
-class Proposal(FrozenModel):
-    """Holds an agent suggestion; the designer accepts or rejects it.
-
-    Attributes:
-        id: Proposal ID.
-        base_revision: Revision the change was made against.
-        change: Ops applied in order when accepted.
-        note: Why the agent suggests it.
-        state: open, accepted or rejected.
-        reason: Why it was rejected.
-    """
-
-    id: str
-    base_revision: str
-    change: tuple[ChangeOp, ...]
-    note: str = ""
-    state: ProposalState = "open"
-    reason: str = ""
-
-
-class ProposalPreview(FrozenModel):
-    """Holds what a proposal would produce, for drawing ghosts on the canvas.
-
-    Attributes:
-        proposal_id: Proposal previewed.
-        placements: Set ID to the placements that would change in that set.
-        paths: Transitions whose effective paths would change, as they would be.
-        counts: Set ID to new counts.
-        forms: Forms that would be added or changed.
-        blocked: Pinned or locked items the proposal touches; accepting it would fail.
-    """
-
-    proposal_id: str
-    placements: dict[SetId, tuple[Placement, ...]] = {}
-    paths: tuple[TransitionSpec, ...] = ()
-    counts: dict[SetId, float] = {}
-    forms: tuple[Form, ...] = ()
-    blocked: tuple[str, ...] = ()

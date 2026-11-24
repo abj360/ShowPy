@@ -41,8 +41,8 @@ from e8s.core.errors import E8sError, LockedError, SchemaError, StorageError
 from e8s.show.documents import SHOW_DOC
 from e8s.show.files import _index_csv
 from e8s.show.models import Show
-from e8s.show.storage import Workspace
 from e8s.show.structured import decode_comments, require_structured
+from e8s.show.workspace import Workspace
 from tests.fixtures.shows import two_set_show
 from tests.helpers import open_session
 
