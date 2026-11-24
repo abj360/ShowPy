@@ -35,6 +35,10 @@ Contains:
         canonical JSON, not a dangling comma
     test_regression_decode_refuses_a_stored_number_that_overflows_a_float: refuses a stored
         `1e400` with SchemaError code SCHEMA naming the field, as model validation does
+    test_regression_storing_refuses_two_pins_of_one_target: refuses a repeated (target, ID) pin,
+        which one stored pin item cannot hold
+    test_regression_storing_refuses_two_path_specs_for_one_pair: refuses a second stored path
+        spec for a set pair, which encoding kept and lookup dropped
 """
 
 import json
@@ -55,9 +59,12 @@ from e8s.show.documents import (
     encode_documents,
     encode_show,
     forms_doc,
+    require_storable,
 )
 from e8s.show.migrate import format_header, without_header
-from e8s.show.models import Show
+from e8s.show.models import Pin, Show
+from e8s.show.pinning import pin
+from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.shows import two_set_show
 from tests.helpers import HOSTILE_JSON
 
@@ -235,3 +242,20 @@ def test_regression_decode_refuses_a_stored_number_that_overflows_a_float() -> N
         "msg": "Input should be a finite number",
         "input": "inf",
     }
+
+
+def test_regression_storing_refuses_two_pins_of_one_target() -> None:
+    show = pin(two_set_show(), "entity", "T1", reason="soloist")
+    twice = show.replace(pins=(*show.pins, Pin(target="entity", id="T1", reason="again")))
+    with pytest.raises(SchemaError, match="pin") as caught:
+        require_storable(twice)
+    assert caught.value.context["repeated_pins"] == [["entity", "T1"]]
+    assert "pin()" in caught.value.hint
+
+
+def test_regression_storing_refuses_two_path_specs_for_one_pair() -> None:
+    show = rich_show()
+    twice = show.replace(transitions=(*show.transitions, *show.transitions))
+    with pytest.raises(SchemaError, match="path") as caught:
+        encode_show(twice)
+    assert caught.value.context["repeated_transitions"] == ["1→2"]

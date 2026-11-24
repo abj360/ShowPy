@@ -252,12 +252,12 @@ def test_changes_skip_sets_shared_by_identity(monkeypatch: pytest.MonkeyPatch) -
 def test_items_refuse_two_pins_of_one_target() -> None:
     show = _pinned_rich_show()
     twice = show.replace(pins=(*show.pins, Pin(target="entity", id="T1", reason="again")))
-    with pytest.raises(SchemaError, match="entity/T1"):
+    with pytest.raises(SchemaError, match="repeats a pin"):
         items(twice)
 
 
 def test_items_refuse_two_paths_for_one_transition() -> None:
     show = rich_show()
     twice = show.replace(transitions=(*show.transitions, *show.transitions))
-    with pytest.raises(SchemaError, match="1-2"):
+    with pytest.raises(SchemaError, match="path spec"):
         changes(two_set_show(), twice)
