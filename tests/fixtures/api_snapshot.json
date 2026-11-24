@@ -120,6 +120,11 @@
       "spots": "tuple[e8s.cast.models.Spot, ...]"
     }
   },
+  "ChangeSet": {
+    "model": {
+      "changes": "tuple[e8s.show.change_models.ItemChange, ...]"
+    }
+  },
   "CircleCurve": {
     "model": {
       "ccw": "bool",
@@ -612,6 +617,23 @@
       "min": "Finite",
       "std": "Finite"
     }
+  },
+  "ItemChange": {
+    "model": {
+      "after": "JsonAny",
+      "before": "JsonAny",
+      "key": "e8s.show.change_models.ItemKey"
+    }
+  },
+  "ItemKey": {
+    "model": {
+      "kind": "ItemKind",
+      "path": "tuple[str, ...]",
+      "role": "str | None"
+    }
+  },
+  "ItemKind": {
+    "constant": "ItemKind"
   },
   "LAYOUT_FILE": {
     "constant": "'layout.json'"

@@ -592,6 +592,12 @@ if TYPE_CHECKING:
         conflict_error,
         digest,
     )
+    from e8s.show.change_models import (
+        ChangeSet,
+        ItemChange,
+        ItemKey,
+        ItemKind,
+    )
     from e8s.show.changes import (
         apply_change,
         store_paths,
@@ -791,6 +797,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "CURRENT_VERSION": ("e8s.show.migrate", "CURRENT_VERSION"),
     "CanvasEvent": ("e8s.show.collab_models", "CanvasEvent"),
     "Cast": ("e8s.cast.models", "Cast"),
+    "ChangeSet": ("e8s.show.change_models", "ChangeSet"),
     "CircleCurve": ("e8s.geo.curves", "CircleCurve"),
     "CircleRecipe": ("e8s.choreo.recipe_models", "CircleRecipe"),
     "Comment": ("e8s.show.collab_models", "Comment"),
@@ -856,6 +863,9 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "InMemoryRepository": ("e8s.show.memory_backend", "InMemoryRepository"),
     "InMemorySheetStore": ("e8s.sheet.templates", "InMemorySheetStore"),
     "IntervalStats": ("e8s.geo.models", "IntervalStats"),
+    "ItemChange": ("e8s.show.change_models", "ItemChange"),
+    "ItemKey": ("e8s.show.change_models", "ItemKey"),
+    "ItemKind": ("e8s.show.change_models", "ItemKind"),
     "LAYOUT_FILE": ("e8s.show.layout", "LAYOUT_FILE"),
     "LAYOUT_FORMAT": ("e8s.show.layout", "LAYOUT_FORMAT"),
     "LabelScheme": ("e8s.cast.models", "LabelScheme"),
@@ -1378,6 +1388,7 @@ __all__ = [
     "BuiltInMotionParams",
     "CanvasEvent",
     "Cast",
+    "ChangeSet",
     "CircleCurve",
     "CircleRecipe",
     "Comment",
@@ -1439,6 +1450,9 @@ __all__ = [
     "InMemoryRepository",
     "InMemorySheetStore",
     "IntervalStats",
+    "ItemChange",
+    "ItemKey",
+    "ItemKind",
     "LabelScheme",
     "LaidGlyph",
     "LegibilityWarning",

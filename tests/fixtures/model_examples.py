@@ -86,6 +86,11 @@ from e8s.geo.measure import form_metrics
 from e8s.geo.text_layout import layout_text
 from e8s.show._notes_document import Note, NotesDocument
 from e8s.show.anchors import Anchor
+from e8s.show.change_models import (
+    ChangeSet,
+    ItemChange,
+    ItemKey,
+)
 from e8s.show.collab import preview_proposal, propose
 from e8s.show.collab_models import (
     CanvasEvent,
@@ -294,6 +299,15 @@ def _collab_examples() -> list[FrozenModel]:
     return examples
 
 
+def _storage_examples() -> list[FrozenModel]:
+    key = ItemKey(kind="placement", path=("2", "T1"))
+    return [
+        key,
+        ItemChange(key=key),
+        ChangeSet(),
+    ]
+
+
 def _report_examples() -> list[FrozenModel]:
     show = two_set_show()
     issue = ValidationIssue(
@@ -335,6 +349,7 @@ BUILDERS: tuple[Callable[[], list[FrozenModel]], ...] = (
     _text_examples,
     _timeline_examples,
     _collab_examples,
+    _storage_examples,
     _report_examples,
 )
 
