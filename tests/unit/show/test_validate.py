@@ -91,7 +91,9 @@ from e8s.core.ids import FormId, NoteId, SetId, SpotId, make_tid
 from e8s.core.validation import ValidationReport
 from e8s.sheet.templates import InMemorySheetStore
 from e8s.show._notes_document import Note, NotesDocument
-from e8s.show.models import Anchor, Comment, Pin, Show
+from e8s.show.anchors import Anchor
+from e8s.show.collab_models import Comment
+from e8s.show.models import Pin, Show
 from e8s.show.validate import (
     validate_dependencies,
     validate_paths,

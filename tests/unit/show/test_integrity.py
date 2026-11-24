@@ -68,6 +68,7 @@ from e8s.choreo.forms import line_form
 from e8s.core.errors import LockedError, SchemaError, StorageError
 from e8s.examples import two_set_show
 from e8s.show.decode_cache import DecodeCache
+from e8s.show.document_repository import DocumentRepository
 from e8s.show.documents import (
     SHOW_DOC,
     dump_json,
@@ -87,9 +88,10 @@ from e8s.show.integrity import (
     require_valid_tree,
 )
 from e8s.show.manage import remove_set
+from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Show
-from e8s.show.repositories import DocumentRepository, InMemoryRepository
-from e8s.show.storage import load_show, open_workspace, save_show
+from e8s.show.show_io import load_show, save_show
+from e8s.show.workspace import open_workspace
 from tests.fixtures.generators import seeded_show
 from tests.helpers import HOSTILE_JSON
 

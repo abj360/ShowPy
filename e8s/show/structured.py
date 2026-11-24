@@ -22,8 +22,8 @@ from e8s.core.selection import Selection
 from e8s.core.strict_json import parse_strict_json
 from e8s.core.validation import validate_adapter_json
 from e8s.show._notes_document import NotesDocument
+from e8s.show.collab_models import Comment
 from e8s.show.migrations.v1_to_v2_notes import NOTES_DOC
-from e8s.show.models import Comment
 
 SELECTION_DOC = "/canvas/selection.json"
 COMMENTS_DOC = "/canvas/comments.json"

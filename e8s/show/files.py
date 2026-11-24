@@ -51,10 +51,10 @@ from e8s.show.documents import (
     script_doc,
     split_path,
 )
-from e8s.show.manage import index
 from e8s.show.migrate import require_current_show_doc
 from e8s.show.models import Show
 from e8s.show.set_keys import SetFolders, set_key, to_stored_path
+from e8s.show.set_queries import index
 from e8s.show.structured import (
     COMMENTS_DOC,
     SELECTION_DOC,

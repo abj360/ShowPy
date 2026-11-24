@@ -1,5 +1,5 @@
 """
-manage.py --- creates shows and adds, removes, retimes, renumbers and indexes their sets
+manage.py --- creates shows and adds, removes and retimes their sets
 
 Contains:
     SET_ID_PATTERN: names the set IDs storage accepts as path segments
@@ -9,17 +9,11 @@ Contains:
     remove_set(): deletes a set with its forms and paths, optionally keeping the total time
     replace_sets(): replaces a show's sets, syncing transitions and refusing locked edits
     set_counts(): retimes a set and the transition into it
-    renumber(): renames sets 1..N in show order and rewrites every reference
-    transitions(): lists consecutive set pairs
-    index(): computes each set's start count, measure and seconds
-    set_at_count(): returns the set reached exactly at a count
-    transition_at_count(): returns the transition a count lies in plus its local count
-    upgrade_dependency(): pins a newer version of a sheet reference
 """
 
 import re
 import string
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 
 from e8s.cast.models import Cast
 from e8s.choreo.models import Placement, Set
@@ -28,27 +22,19 @@ from e8s.core.errors import (
     PathError,
     SchemaError,
     TimeRangeError,
-    UnknownRefError,
     VersionError,
-    bounded_repr,
 )
 from e8s.core.ids import (
     SetId,
     SpotId,
-    TransitionId,
-    check_id,
     format_ref,
     format_tid,
     parse_ref,
 )
-from e8s.core.types import Count
-from e8s.core.util import close_matches
 from e8s.sheet.models import Sheet
 from e8s.show.locks import require_unlocked
-from e8s.show.models import Pin, Show, ShowIndex, ShowIndexEntry
+from e8s.show.models import Pin, Show
 from e8s.show.set_keys import free_set_key, set_key
-from e8s.time.clock import count_to_seconds
-from e8s.time.measures import count_to_measure
 from e8s.time.models import Timeline
 
 SET_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.]*$")
@@ -56,8 +42,6 @@ FIRST_SET_ID = "1"
 # (0, 0) is the sheet's front-centre, the natural wait spot before an entrance.
 OFF_FIELD_POINT = (0.0, 0.0)
 SUBSET_LETTERS = string.ascii_uppercase
-SEQUENTIAL = "sequential"
-SCHEMES = (SEQUENTIAL,)
 
 
 def _checked_set_id(show: Show, set_id: str) -> SetId:
@@ -423,143 +407,3 @@ def set_counts(
         for spec in show.transitions
     )
     return replace_sets(show, sets, force=force, transitions=specs)
-
-
-def _renamed_pin(pin: Pin, mapping: Mapping[str, str], tids: Mapping[str, str]) -> Pin:
-    if pin.target == "set":
-        return pin.replace(id=mapping.get(pin.id, pin.id))
-    if pin.target == "transition":
-        return pin.replace(id=tids.get(pin.id, pin.id))
-    return pin
-
-
-def renumber(show: Show, scheme: str = SEQUENTIAL) -> tuple[Show, dict[SetId, SetId]]:
-    """Renames sets 1..N in show order, rewriting transitions, forms and pins.
-
-    Keys stay, so stored set folders and their build scripts stay with their sets.
-
-    Args:
-        show: Show to edit.
-        scheme: Numbering scheme; only `sequential` exists.
-
-    Returns:
-        result: Edited show and the old-to-new ID mapping for every set.
-
-    >>> from e8s.examples import two_set_show
-    >>> show, _ = insert_subset(two_set_show(), "1", 2.0)
-    >>> renumber(show)[1]
-    {'1': '1', '1A': '2', '2': '3'}
-    """
-    if scheme not in SCHEMES:
-        raise UnknownRefError(
-            f"unknown numbering scheme {bounded_repr(repr(scheme))}",
-            hint=f"use one of {', '.join(SCHEMES)}",
-            context={"scheme": scheme},
-        )
-    mapping = {s.id: SetId(check_id(str(n), kind="set")) for n, s in enumerate(show.sets, start=1)}
-    by_text: dict[str, str] = dict(mapping.items())
-    tids = {
-        format_tid(t): format_tid((mapping[t[0]], mapping[t[1]])) for t in show.transition_ids()
-    }
-    renamed = show.replace(
-        sets=tuple(s.replace(id=mapping[s.id]) for s in show.sets),
-        transitions=tuple(
-            spec.replace(id=(mapping[spec.id[0]], mapping[spec.id[1]])) for spec in show.transitions
-        ),
-        forms={
-            f: form.replace(set=mapping.get(form.set, form.set)) for f, form in show.forms.items()
-        },
-        pins=tuple(_renamed_pin(p, by_text, tids) for p in show.pins),
-    )
-    return renamed, mapping
-
-
-def transitions(show: Show) -> list[TransitionId]:
-    """Lists consecutive set pairs in show order.
-
-    >>> from e8s.examples import two_set_show
-    >>> transitions(two_set_show())
-    [TransitionId(from_set='1', to_set='2')]
-    """
-    return show.transition_ids()
-
-
-def index(show: Show) -> ShowIndex:
-    """Computes each set's start count, measure label and seconds; the first set starts at 0.
-
-    >>> from e8s.examples import two_set_show
-    >>> [(e.set, e.start_count, e.seconds) for e in index(two_set_show()).entries]
-    [('1', 0.0, 0.0), ('2', 8.0, 4.0)]
-    """
-    entries: list[ShowIndexEntry] = []
-    start = 0.0
-    for position, current in enumerate(show.sets):
-        start += current.counts if position > 0 else 0.0
-        entries.append(
-            ShowIndexEntry(
-                set=current.id,
-                counts=current.counts,
-                start_count=start,
-                measure=count_to_measure(show.timeline, start),
-                seconds=count_to_seconds(show.timeline, start),
-                cue=current.cue,
-            )
-        )
-    return ShowIndex(entries=tuple(entries))
-
-
-def set_at_count(show: Show, c: Count) -> SetId | None:
-    """Returns the set reached exactly at count `c`, or None while moving between sets.
-
-    >>> from e8s.examples import two_set_show
-    >>> set_at_count(two_set_show(), 8.0)
-    '2'
-    """
-    return index(show).set_at(c)
-
-
-def transition_at_count(show: Show, c: Count) -> tuple[TransitionId, Count] | None:
-    """Returns the transition count `c` lies in, `start(a) < c < start(b)`, plus local count tau.
-
-    >>> from e8s.examples import two_set_show
-    >>> transition_at_count(two_set_show(), 2.0)
-    (TransitionId(from_set='1', to_set='2'), 2.0)
-    """
-    return index(show).transition_at(c)
-
-
-def upgrade_dependency(show: Show, ref: str, version: str, sheet: Sheet | None = None) -> Show:
-    """Pins a newer version of a sheet reference, swapping in that sheet when it is given.
-
-    Stored positions never change. Without `sheet`, the show keeps its current sheet object
-    until one is loaded, and dependency validation reports the mismatch.
-
-    Args:
-        show: Show to edit.
-        ref: Sheet reference, with or without a version.
-        version: Version to pin.
-        sheet: The sheet at that version, to adopt it now.
-
-    >>> from e8s.examples import two_set_show
-    >>> dict(upgrade_dependency(two_set_show(), "sheet:test-field", "2").dependencies)
-    {'sheet:test-field': '2'}
-    """
-    kind, ref_id, _ = parse_ref(ref)
-    key = format_ref(kind, ref_id)
-    if key not in show.dependencies:
-        close = close_matches(key, show.dependencies)
-        raise UnknownRefError(
-            f"show does not depend on {key}",
-            hint=f"did you mean {', '.join(close)}?" if close else "check show.dependencies",
-            context={"ref": key, "known": sorted(show.dependencies)},
-        )
-    update: dict[str, object] = {"dependencies": {**show.dependencies, key: version}}
-    if sheet is not None:
-        if sheet.ref != format_ref(kind, ref_id, version):
-            raise VersionError(
-                f"sheet {sheet.ref} is not {format_ref(kind, ref_id, version)}",
-                hint="pass the sheet saved at the version being pinned",
-                context={"sheet": sheet.ref, "ref": key, "version": version},
-            )
-        update["sheet"] = sheet
-    return show.replace(**update)
