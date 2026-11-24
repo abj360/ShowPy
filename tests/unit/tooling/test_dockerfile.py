@@ -38,7 +38,7 @@ NOT_IN_IMAGE = {
     "_typos.toml": "spell-check settings; lint runs outside the image",
     ".dockerignore": "read by docker build, not by the tests",
     ".env.example": "compose reads .env from the host",
-    ".gitattributes": "git settings; the image has no .git",
+    ".gitattributes": "git settings; the image has no .git, and only source-checkout tests read it",
     ".gitignore": "git settings; the image has no .git",
     ".pre-commit-config.yaml": "hooks run on the host",
     ".prettierignore": "Prettier runs in lint, outside the image",

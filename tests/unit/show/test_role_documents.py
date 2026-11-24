@@ -8,6 +8,8 @@ Set E8S_UPDATE_GOLDEN=1 to rewrite the interchange goldens; the diff then needs 
 Contains:
     test_export_json_bytes_are_unchanged_by_the_role_split: exports a seeded show and the head of
         the v0.4.0 fixture with the bytes pinned before sets were stored as role documents
+    test_regression_interchange_goldens_check_out_byte_exact: finds the interchange golden folder
+        marked `-text` in .gitattributes, so no checkout rewrites its line endings
     test_reserved_roots_are_refused_until_a_format_defines_them: refuses a path under `/props/`
         or `/tracks/` with BAD_PATH and a hint naming the reserved root
     test_cast_proposals_and_assets_roots_are_known: accepts documents under `/cast/`,
@@ -66,6 +68,9 @@ FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 V040 = FIXTURES / "repos" / "v0.4.0"
 GOLDEN = FIXTURES / "interchange"
 UPDATE_FLAG = "E8S_UPDATE_GOLDEN"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+GITATTRIBUTES = REPO_ROOT / ".gitattributes"
+BYTE_EXACT_GOLDENS = ("tests/fixtures/interchange/**",)
 SEED, SPOTS, SETS = 7, 16, 5
 JSON_INDENT = 1
 LARGE_SPOTS, LARGE_SETS = 300, 60
@@ -102,6 +107,14 @@ def test_export_json_bytes_are_unchanged_by_the_role_split(name: str, tmp_path: 
     if os.environ.get(UPDATE_FLAG) == "1":
         golden.write_bytes(exported)
     assert exported == golden.read_bytes()
+
+
+@pytest.mark.skipif(not GITATTRIBUTES.is_file(), reason="needs a source checkout")
+@pytest.mark.parametrize("pattern", BYTE_EXACT_GOLDENS)
+def test_regression_interchange_goldens_check_out_byte_exact(pattern: str) -> None:
+    rules = [line.split() for line in GITATTRIBUTES.read_text().splitlines()]
+    assert [pattern, "-text"] in rules
+    assert GOLDEN.relative_to(REPO_ROOT).as_posix() == pattern.removesuffix("/**")
 
 
 @pytest.mark.parametrize("path", ["/props/p1.json", "/tracks/state.json", "/props/a/b.json"])

@@ -1,3 +1,4 @@
 tests/fixtures/repos/** -text
 e8s/fonts/** -text
 e8s/schemas/** -text
+tests/fixtures/interchange/** -text
