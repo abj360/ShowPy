@@ -11,12 +11,15 @@ Contains:
     test_regression_ready_oracle_of_another_ref_is_rebuilt: READY of another ref is not reused
     test_is_ready_refuses_a_changed_wheel_commit_ref_or_python: READY must match all of them
     test_regression_missing_ref_fails_closed: an absent tag exits with an E: line
+    test_regression_moved_pinned_tag_fails_closed: a pinned ref on another commit is refused
+    test_default_oracle_is_pinned_to_the_v040_commit: the pin is the commit the tag names
     test_regression_failed_build_removes_the_worktree: no worktree is left on a build failure
     test_refuses_a_symlinked_parity_folder: the oracle is never built through a symlink
 """
 
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -24,7 +27,10 @@ from pathlib import Path
 
 import pytest
 
+import scripts.build_oracle as build_module
 from scripts.build_oracle import (
+    DEFAULT_COMMIT,
+    DEFAULT_REF,
     READY_FILE,
     VENV_FOLDER,
     WHEEL_FOLDER,
@@ -56,6 +62,8 @@ OTHER_REF = "v0.0.0"
 COMMIT = "c" * 40
 RUNNING = f"{sys.version_info.major}.{sys.version_info.minor}"
 ORACLE = Path(".parity", "oracle")
+ROOT = Path(__file__).resolve().parents[3]
+FULL_SHA = r"^[0-9a-f]{40}$"
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
 
 
@@ -146,6 +154,30 @@ def test_regression_missing_ref_fails_closed(repo: Path) -> None:
     with pytest.raises(SystemExit, match=r"^E: ref v9\.9\.9 is not in this repository"):
         build_oracle("v9.9.9", ORACLE)
     assert not (repo / ORACLE / READY_FILE).exists()
+
+
+@needs_git
+def test_regression_moved_pinned_tag_fails_closed(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(build_module, "PINNED_COMMITS", {TAG: COMMIT})
+    with pytest.raises(SystemExit, match=rf"^E: {TAG} resolves to [0-9a-f]{{40}}, not {COMMIT}"):
+        build_oracle(TAG, ORACLE)
+    assert not (repo / ".parity").exists()
+
+
+def test_default_oracle_is_pinned_to_the_v040_commit() -> None:
+    assert build_module.PINNED_COMMITS == {DEFAULT_REF: DEFAULT_COMMIT}
+    assert re.match(FULL_SHA, DEFAULT_COMMIT)
+    tag = subprocess.run(
+        ["git", "rev-parse", "--verify", "--quiet", f"{DEFAULT_REF}^{{commit}}"],
+        cwd=ROOT,
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
+    )
+    if tag.returncode == 0:
+        assert tag.stdout.strip() == DEFAULT_COMMIT
 
 
 @needs_git

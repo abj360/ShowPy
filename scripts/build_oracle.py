@@ -3,7 +3,8 @@
 """
 build_oracle.py --- builds a released e8s into its own venv as the parity harness's oracle
 
-Checks `ref` out into a temporary git worktree under the output's parent (`.parity/`), builds
+Resolves `ref` to its commit, refusing a pinned ref that names another commit, then checks it
+out into a temporary git worktree under the output's parent (`.parity/`), builds
 its wheel with that tree's own build backend, creates a venv on the running Python, installs
 the dependencies locked at `ref` (hashes required) and then the wheel, and writes READY holding
 the ref, its commit and the wheel's SHA-256. The worktree is removed whether the build succeeds
@@ -11,6 +12,7 @@ or fails. An oracle whose READY matches the ref, its commit and its wheel is reu
 building anything.
 
 Contains:
+    PINNED_COMMITS: the commit each pinned ref must resolve to
     interpreter(): returns a venv's interpreter path on this platform
     ready_stamp(): renders the READY text for a ref, its commit and the wheel's SHA-256
     is_ready(): tells whether an oracle folder holds a finished build of a ref's commit
@@ -30,6 +32,9 @@ from collections.abc import Sequence
 from pathlib import Path
 
 DEFAULT_REF = "v0.4.0"
+# The commit v0.4.0 was released from; a tag moved or pushed again elsewhere is refused.
+DEFAULT_COMMIT = "a6ef3caaa5a305a992aab73fccbbc4446670ef63"
+PINNED_COMMITS = {DEFAULT_REF: DEFAULT_COMMIT}
 DEFAULT_OUT = Path(".parity") / "oracle-v0.4.0"
 READY_FILE = "READY"
 WHEEL_FOLDER = "wheel"
@@ -142,7 +147,11 @@ def _resolve_ref(ref: str, root: Path) -> str:
     )
     if result.returncode != 0:
         raise SystemExit(f"E: ref {ref} is not in this repository; run git fetch --tags")
-    return result.stdout.strip()
+    commit = result.stdout.strip()
+    pinned = PINNED_COMMITS.get(ref, commit)
+    if commit != pinned:
+        raise SystemExit(f"E: {ref} resolves to {commit}, not {pinned}; the tag moved")
+    return commit
 
 
 def _remove_worktree(root: Path, worktree: Path) -> None:
