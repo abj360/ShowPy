@@ -28,7 +28,7 @@ from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, StorageError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
-from e8s.show.backend import conflict_error, revisions_after
+from e8s.show.backend import conflict_error, revisions_after, unknown_revision_error
 from e8s.show.documents import dump_json
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
@@ -303,7 +303,11 @@ class _FileBackend:
     @_guarded
     def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
         self._guard_dirs(show_id)
-        path = self._tree_path(show_id, revision_id, self._dir(show_id) / TREE_DIR)
+        folder = self._dir(show_id) / TREE_DIR
+        known_shape = REVISION_ID_PATTERN.fullmatch(revision_id)
+        if not known_shape or _lstat_mode(show_id, folder / f"{revision_id}.json") is None:
+            raise unknown_revision_error(show_id, revision_id, [])
+        path = self._tree_path(show_id, revision_id, folder)
         stored = self._record(show_id, revision_id, path)["tree"]
         if not isinstance(stored, dict):
             raise self._corrupt(show_id, path, "tree is not a mapping of paths to digests")

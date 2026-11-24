@@ -251,3 +251,50 @@ def test_memory_commit_accepts_a_tree_over_stored_and_passed_blobs() -> None:
     _commit(backend, second, tree=tree, blobs={blob_digest(new): new})
     assert backend.tree(SHOW_ID, second.id) == tree
     assert backend.blob(SHOW_ID, blob_digest(new)) == new
+
+
+def test_tree_of_an_unknown_revision_is_unknown_ref(backend_factory: BackendFactory) -> None:
+    backend = backend_factory()
+    ids = _fill(backend, 2)
+    for unknown in (_revision_id(99), "nope"):
+        with pytest.raises(UnknownRefError) as caught:
+            backend.tree(SHOW_ID, unknown)
+        assert caught.value.code == ErrorCode.UNKNOWN_REF
+    with pytest.raises(UnknownRefError):
+        backend.tree("other-show", ids[0])
+    assert backend.tree(SHOW_ID, ids[0]) == {}
+
+
+def _long_history() -> tuple[DocumentRepository, _CountingIndex, str]:
+    repo = InMemoryRepository()
+    backend = cast(_MemoryBackend, repo.backend)
+    head = ROOT_REVISION
+    for position in range(HISTORY):
+        changes = {"/renders/a.txt": str(position).encode()}
+        head = repo.transaction(SHOW_ID, changes, expected_revision=head, at=AT).id
+    index = _CountingIndex(backend._revisions[SHOW_ID])
+    backend._revisions[SHOW_ID] = index
+    return repo, index, head
+
+
+def test_repository_reads_and_writes_at_the_head_touch_a_constant_number_of_revisions() -> None:
+    repo, index, head = _long_history()
+    assert repo.head(SHOW_ID) == head
+    assert repo.paths(SHOW_ID) == ["/renders/a.txt"]
+    assert repo.read(SHOW_ID, "/renders/a.txt") == str(HISTORY - 1).encode()
+    assert repo.documents(SHOW_ID)["/renders/a.txt"] == str(HISTORY - 1).encode()
+    assert index.reads == 0
+    landed = repo.transaction(SHOW_ID, {"/renders/b.txt": b"b"}, expected_revision=head, at=AT)
+    assert index.reads <= 2
+    index.reads = 0
+    assert repo.transaction(SHOW_ID, {"/renders/b.txt": b"b"}, expected_revision=landed.id, at=AT)
+    assert index.reads <= 2
+
+
+def test_repository_conflict_on_a_stale_write_touches_only_the_landed_revisions() -> None:
+    repo, index, head = _long_history()
+    repo.transaction(SHOW_ID, {"/renders/b.txt": b"b"}, expected_revision=head, at=AT)
+    index.reads = 0
+    with pytest.raises(ConflictError):
+        repo.transaction(SHOW_ID, {"/renders/c.txt": b"c"}, expected_revision=head, at=AT)
+    assert index.reads <= 2

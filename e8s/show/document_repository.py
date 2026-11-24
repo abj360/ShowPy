@@ -85,13 +85,14 @@ class DocumentRepository:
     def __init__(self, backend: RepositoryBackend):
         self.backend = backend
         self._decode_cache = DecodeCache()
+        self._heads: dict[str, Revision] = {}
 
     def shows(self) -> list[str]:
         """Returns the IDs of stored shows, sorted."""
         return sorted(self.backend.shows())
 
     def revisions(self, show_id: str) -> list[Revision]:
-        """Returns every revision of a show, oldest first."""
+        """Returns every revision of a show, oldest first; the cost grows with the history."""
         _require_show_id(show_id)
         return self.backend.log(show_id)
 
@@ -101,7 +102,10 @@ class DocumentRepository:
         return self.backend.head(show_id)
 
     def get_revision(self, show_id: str, revision_id: str) -> Revision:
-        """Returns one revision, raising UnknownRefError with close matches."""
+        """Returns one revision, raising UnknownRefError with close matches.
+
+        The cost grows with the history; reads and writes at the head never call this.
+        """
         log = self.revisions(show_id)
         for revision in log:
             if revision.id == revision_id:
@@ -112,7 +116,6 @@ class DocumentRepository:
         rev = self.head(show_id) if revision is None else revision
         if rev == ROOT_REVISION:
             return {}
-        self.get_revision(show_id, rev)
         return self.backend.tree(show_id, rev)
 
     def paths(self, show_id: str, revision: str | None = None) -> list[str]:
@@ -146,6 +149,14 @@ class DocumentRepository:
         if head != expected:
             raise conflict_error(show_id, expected, self.backend.log(show_id, since=expected))
         return head
+
+    def _head_revision(self, show_id: str, head: str) -> Revision:
+        """Returns the head revision from the last one this repository landed or read."""
+        remembered = self._heads.get(show_id)
+        if remembered is None or remembered.id != head:
+            remembered = self.get_revision(show_id, head)
+            self._heads[show_id] = remembered
+        return remembered
 
     def _require_valid_tree(
         self,
@@ -209,7 +220,7 @@ class DocumentRepository:
                     hint="write at least one document",
                     context={"show": show_id},
                 )
-            return self.get_revision(show_id, head)
+            return self._head_revision(show_id, head)
         body = {
             "parent": expected_revision,
             "at": at.isoformat(),
@@ -223,6 +234,7 @@ class DocumentRepository:
         )
         self._require_valid_tree(show_id, old, new, blobs)
         self.backend.commit(show_id, revision, new, blobs)
+        self._heads[show_id] = revision
         return revision
 
     def get_show(self, show_id: str, revision: str | None = None) -> Show:
