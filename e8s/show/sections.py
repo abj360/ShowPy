@@ -94,6 +94,18 @@ def _ramp_until(tl: Timeline, section: TempoSection, offset: Count) -> TempoSect
     return section.replace(ramp_to=tempo_at(tl, offset), ramp_counts=offset - section.at_count)
 
 
+def _audio_until(tl: Timeline, offset: Count) -> tuple[AudioTrack, ...]:
+    tracks = []
+    for track in tl.audio:
+        if track.section is None:
+            tracks.append(track)
+            continue
+        section = _clip(track.section, 0.0, offset, 0.0)
+        if section is not None:
+            tracks.append(track.replace(section=section))
+    return tuple(tracks)
+
+
 def _timeline_until(tl: Timeline, offset: Count) -> Timeline:
     return tl.replace(
         tempos=tuple(
@@ -103,6 +115,7 @@ def _timeline_until(tl: Timeline, offset: Count) -> Timeline:
         ),
         holds=tuple(h for h in tl.holds if h.at_count < offset - TOL),
         markers=tuple(m for m in tl.markers if m.at_count <= offset + TOL),
+        audio=_audio_until(tl, offset),
         total_counts=offset,
     )
 
@@ -157,6 +170,9 @@ def split_section(show: Show, at: str) -> tuple[Show, Show]:
     so its count 0 is `at`. A tempo ramp that runs past `at` ends there in the first
     show, at the tempo the whole show has at `at`. Raises TimelineError when `at` starts
     mid-measure.
+
+    An audio track goes to every show its section overlaps, with the section clipped to it;
+    a track with no section goes to both.
 
     Args:
         show: Show to split.
@@ -269,6 +285,30 @@ def _new_markers(a: Sequence[Marker], b: Sequence[Marker], offset: Count) -> lis
     ]
 
 
+def _joined_audio(a: Timeline, b: Timeline, offset: Count) -> tuple[AudioTrack, ...]:
+    """Rejoins tracks by label: `a`'s track takes its section end from `b`'s copy."""
+    later = {t.label: t for t in b.audio}
+    held = {t.label for t in a.audio}
+    shift_s = count_to_seconds(a, offset)
+    joined = []
+    for track in a.audio:
+        other = later.get(track.label)
+        if track.section is None or other is None or other.section is None:
+            joined.append(track)
+        else:
+            joined.append(track.replace(section=(track.section[0], other.section[1] + offset)))
+    for track in b.audio:
+        if track.label in held:
+            continue
+        section = (
+            None
+            if track.section is None
+            else (track.section[0] + offset, track.section[1] + offset)
+        )
+        joined.append(track.replace(sync_offset_s=track.sync_offset_s - shift_s, section=section))
+    return tuple(joined)
+
+
 def _joined_timeline(a: Timeline, b: Timeline, offset: Count) -> Timeline:
     def moved(count: Count) -> Count:
         return count + offset
@@ -289,6 +329,7 @@ def _joined_timeline(a: Timeline, b: Timeline, offset: Count) -> Timeline:
             *a.markers,
             *_new_markers(a.markers, b.markers, offset),
         ),
+        audio=_joined_audio(a, b, offset),
         total_counts=total,
     )
 

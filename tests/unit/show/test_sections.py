@@ -244,8 +244,6 @@ def test_split_ends_a_ramp_at_the_tempo_reached_on_the_split_count() -> None:
     )
 
 
-@pytest.mark.defect("UP-9.7-86")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-86")
 def test_regression_split_drops_audio_whose_section_starts_after_the_half_ends() -> None:
     """Keeps an audio track out of a half that ends before the track's section (audit 9.7)."""
     late_track = AudioTrack(file="late.wav", label="late", section=(14.0, 20.0))
@@ -253,6 +251,34 @@ def test_regression_split_drops_audio_whose_section_starts_after_the_half_ends()
     length = index(first).total_counts
     stranded = [t.label for t in first.timeline.audio if t.section and t.section[0] >= length]
     assert stranded == []
+
+
+def test_split_gives_an_audio_track_to_every_half_its_section_overlaps() -> None:
+    """Clips a track's section to each half, and leaves a track with no section in both."""
+    across = AudioTrack(file="x.wav", label="across", sync_offset_s=1.0, section=(4.0, 16.0))
+    whole = AudioTrack(file="w.wav", label="whole")
+    show = _three_sets_with(audio=(across, whole))
+    first, second = split_section(show, SPLIT_SET)
+    assert [(t.label, t.section) for t in first.timeline.audio] == [
+        ("across", (4.0, SPLIT_COUNT)),
+        ("whole", None),
+    ]
+    assert [(t.label, t.section) for t in second.timeline.audio] == [
+        ("across", (0.0, 4.0)),
+        ("whole", None),
+    ]
+
+
+@pytest.mark.parametrize(
+    "section", [None, (4.0, 16.0), (14.0, 20.0), (0.0, 6.0), (12.0, 20.0), (2.0, 12.0)]
+)
+def test_regression_join_after_split_restores_audio_tracks(
+    section: tuple[float, float] | None,
+) -> None:
+    """Restores each audio track, section and sync offset, after a split and a join."""
+    track = AudioTrack(file="a.wav", label="music", sync_offset_s=1.0, section=section)
+    show = _three_sets_with(audio=(track,))
+    assert _round_trip(show).timeline.audio == (track,)
 
 
 @pytest.mark.defect("UP-9.7-87")
