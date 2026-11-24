@@ -18,8 +18,10 @@ from e8s.choreo.path_models import TransitionSpec
 from e8s.core.ids import FormId, SpotId, format_tid
 from e8s.core.units import angle_diff
 from e8s.core.util import approx_equal, natural_sort
-from e8s.show.models import PathDiff, Revision, SetDiff, Show
-from e8s.show.storage import ROOT_REVISION, Workspace
+from e8s.show.history_models import PathDiff, Revision, SetDiff
+from e8s.show.models import Show
+from e8s.show.storage import ROOT_REVISION
+from e8s.show.workspace import Workspace
 
 SHORT_ID = 7
 TIME_FORMAT = "%Y-%m-%d %H:%M"
@@ -170,8 +172,9 @@ def revert(ws: Workspace, revision_id: str, at: datetime) -> Revision:
         revision: The new head; the head itself when nothing differs.
 
     >>> from datetime import UTC
-    >>> from e8s.show.repositories import InMemoryRepository
-    >>> from e8s.show.storage import load_show, open_workspace, save_show
+    >>> from e8s.show.memory_backend import InMemoryRepository
+    >>> from e8s.show.show_io import load_show, save_show
+    >>> from e8s.show.workspace import open_workspace
     >>> from e8s.examples import two_set_show
     >>> ws = open_workspace(InMemoryRepository(), "s")
     >>> first = save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC))
@@ -196,8 +199,9 @@ def changelog(ws: Workspace, since: str = ROOT_REVISION) -> str:
     """Lists revisions after `since`, oldest first, as `<short id> <at> (<paths>)` lines.
 
     >>> from datetime import UTC
-    >>> from e8s.show.repositories import InMemoryRepository
-    >>> from e8s.show.storage import open_workspace, save_show
+    >>> from e8s.show.memory_backend import InMemoryRepository
+    >>> from e8s.show.workspace import open_workspace
+    >>> from e8s.show.show_io import save_show
     >>> from e8s.examples import two_set_show
     >>> ws = open_workspace(InMemoryRepository(), "s")
     >>> first = save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC))

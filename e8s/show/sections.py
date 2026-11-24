@@ -15,9 +15,9 @@ from e8s.choreo.path_models import FacingOverride
 from e8s.core.errors import SchemaError, TimelineError, VersionError
 from e8s.core.ids import FormId, SetId, parse_tid
 from e8s.core.types import Count
-from e8s.show.manage import index
 from e8s.show.models import Pin, Show
 from e8s.show.set_keys import free_set_key, set_key
+from e8s.show.set_queries import index
 from e8s.time.clock import count_to_seconds, tempo_at
 from e8s.time.measures import count_to_measure
 from e8s.time.models import AudioTrack, MeasureSetting, TempoSection, Timeline
@@ -271,6 +271,13 @@ def _joined_timeline(a: Timeline, b: Timeline, offset: Count) -> Timeline:
     )
 
 
+def _first_pins(pins: Sequence[Pin]) -> tuple[Pin, ...]:
+    kept: dict[tuple[str, str], Pin] = {}
+    for record in pins:
+        kept.setdefault((record.target, record.id), record)
+    return tuple(kept.values())
+
+
 def join_sections(a: Show, b: Show) -> Show:
     """Appends show `b` after show `a`; the inverse of split_section() for sets and paths.
 
@@ -278,6 +285,8 @@ def join_sections(a: Show, b: Show) -> Show:
     Otherwise set IDs must not repeat, and `b`'s first set keeps its counts (0), so retime it
     with set_counts(). `b`'s tempos, holds, markers and facing overrides shift by `a`'s length.
     `b`'s sets keep their keys; one whose key `a` already holds gets a free key, as in add_set().
+    One pin is kept per target and ID; when both halves pin the same spot, form, set or
+    transition, `a`'s pin wins.
 
     >>> from e8s.examples import two_set_show
     >>> from e8s.show.manage import add_set
@@ -291,7 +300,7 @@ def join_sections(a: Show, b: Show) -> Show:
         sets=(*a.sets, *_keyed_after(a, _tail_sets(a, b))),
         forms=_merged_forms(a, b),
         transitions=(*a.transitions, *b.transitions),
-        pins=(*a.pins, *(p for p in b.pins if p not in a.pins)),
+        pins=_first_pins((*a.pins, *b.pins)),
         facing_overrides=(
             *a.facing_overrides,
             *_clip_overrides(b.facing_overrides, 0.0, float("inf"), -offset),

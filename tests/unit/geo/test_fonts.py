@@ -50,7 +50,7 @@ from e8s.geo.fonts import (
     register_font,
 )
 from e8s.geo.models import Font
-from e8s.show.repositories import InMemoryAssetStore
+from e8s.show.assets import InMemoryAssetStore
 from tests.fixtures.fonts import TINY, tiny_bytes
 from tests.helpers import json_doc
 

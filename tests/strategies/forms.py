@@ -39,7 +39,8 @@ from e8s.geo.shapes import rect
 from e8s.geo.spacing import FillPattern
 from e8s.sheet.models import Sheet
 from e8s.show.changes import apply_change
-from e8s.show.models import FormOp, Show
+from e8s.show.collab_models import FormOp
+from e8s.show.models import Show
 from tests.strategies.sheet import headings, points_on
 
 FORM_MARGIN_M = 4.0

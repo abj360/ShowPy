@@ -19,12 +19,13 @@ import pytest
 from e8s.choreo.models import PlacementPatch
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
-from e8s.show import storage
+from e8s.show import workspace as workspace_module
 from e8s.show.decode_cache import DECODE_CACHE_SIZE
 from e8s.show.documents import decode_show
+from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Show
-from e8s.show.repositories import InMemoryRepository
-from e8s.show.storage import load_show, open_workspace, save_show
+from e8s.show.show_io import load_show, save_show
+from e8s.show.workspace import open_workspace
 from tests.fixtures.generators import seeded_show
 
 SHOW_ID = "cached-show"
@@ -90,10 +91,10 @@ def test_show_at_never_serves_a_changed_document_from_the_cache() -> None:
 
 
 def test_regression_workspace_cache_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert storage.WORKSPACE_DECODE_CACHE_SIZE < DECODE_CACHE_SIZE
+    assert workspace_module.WORKSPACE_DECODE_CACHE_SIZE < DECODE_CACHE_SIZE
     repo = _history()
     bound = 4
-    monkeypatch.setattr(storage, "WORKSPACE_DECODE_CACHE_SIZE", bound)
+    monkeypatch.setattr(workspace_module, "WORKSPACE_DECODE_CACHE_SIZE", bound)
     ws = open_workspace(repo, SHOW_ID)
     for revision in repo.revisions(SHOW_ID):
         ws.show_at(revision.id)
