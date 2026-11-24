@@ -448,6 +448,7 @@
       "amplitude": "Finite"
     }
   },
+  "FileAssetStore": "(root: pathlib.Path) -> None",
   "FileRepository": "(root: str | pathlib.Path)",
   "FillRecipe": {
     "model": {

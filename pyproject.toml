@@ -70,6 +70,7 @@ dev = [
     "git-cliff==2.14.2",
     "hypothesis==6.170.15",
     "jsonschema==4.26.0",
+    "mutmut==3.8.1",
     "mypy==2.4.1",
     "nox==2026.10.20",
     "pandas-stubs==3.1.0.261029",
@@ -167,6 +168,22 @@ filterwarnings = ["error"]
 # A test still running after this many seconds dumps every thread's stack, so a CI hang
 # names its test before the job is cancelled.
 faulthandler_timeout = 60
+
+# nox -s mutants runs only the mutants of the modules that ported packages keep in Python, named
+# by pattern. The tests are those of the ported packages: they read nothing outside e8s/ and
+# tests/, the only folders mutmut copies into mutants/.
+[tool.mutmut]
+source_paths = ["e8s/"]
+pytest_add_cli_args_test_selection = [
+    "tests/unit/core",
+    "tests/unit/geo",
+    "tests/unit/time",
+    "tests/unit/sheet",
+    "tests/unit/cast",
+    "tests/unit/choreo",
+    "tests/property",
+    "tests/golden",
+]
 
 [tool.deptry]
 known_first_party = ["e8s"]
