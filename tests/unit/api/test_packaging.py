@@ -102,10 +102,17 @@ def test_distribution_name_is_e8s() -> None:
 
 
 LICENSE_EXPRESSION = " AND ".join(
-    ("PolyForm-Noncommercial-1.0.0", "MIT", "OFL-1.1", "LicenseRef-Hershey-Fonts")
+    (
+        "PolyForm-Noncommercial-1.0.0",
+        "MIT",
+        "OFL-1.1",
+        "LicenseRef-Hershey-Fonts",
+        "BSD-2-Clause",
+    )
 )
 LICENSE_FILES = {
     "LICENSE",
+    "e8s/licenses/THIRD_PARTY_RUST.txt",
     "e8s/schemas/LICENSE-MIT.txt",
     "e8s/fonts/licenses/HERSHEY.txt",
     "e8s/fonts/licenses/MIT.txt",

@@ -16,8 +16,9 @@ Contains:
     wheel: builds the wheel, installs it with every extra in a clean venv and runs the README
         usage example
     core: installs the wheel without extras and checks imports and extra-gated calls fail closed
-    rust: checks Rust formatting, lints and tests, builds the wasm crate and, on arm64 hosts,
-        refuses any fused multiply-add outside libm's fma in the extension
+    rust: checks Rust formatting, lints and tests, builds the wasm crate, on arm64 hosts refuses
+        any fused multiply-add outside libm's fma in the extension, then checks the crates'
+        licences, bans, advisories and sources and that the Rust notice file is current
     wheels: builds the sdist and a dist-profile wheel from it, then runs the ported packages'
         tests against that wheel in fresh venvs on each supported Python
     bench: runs the budget benchmarks; at tier M fails on a >20% min-time regression
@@ -31,6 +32,7 @@ import os
 import platform
 import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -88,13 +90,31 @@ FMA_CHECK_SCRIPT = "scripts/check_no_fma.py"
 WASM_TARGET = "wasm32-unknown-unknown"
 FMA_CHECK_PROFILE = "fma-check"
 ARM64_MACHINES = ("arm64", "aarch64")
+# Cargo tools install here, at these exact versions, never into ~/.cargo/bin. cargo-deny 0.22.0
+# (rust-version 1.95) and cargo-about 0.9.3 (1.88) are the newest releases; both build on 1.100.0.
+CARGO_TOOLS_ROOT = ".cargo-tools"
+CARGO_DENY = "cargo-deny"
+CARGO_DENY_VERSION = "0.22.0"
+CARGO_ABOUT = "cargo-about"
+CARGO_ABOUT_VERSION = "0.9.3"
+# cargo-about builds its command-line binary only with this feature.
+CARGO_ABOUT_FEATURES = ("--features", "cli")
+NOTICES_SCRIPT = "scripts/gen_third_party_notices.py"
+CARGO_TOOLS_MARK = "cargo_tools"
+CARGO_TOOLS_TESTS = "tests/unit/tooling/test_third_party_notices.py"
 # maturin passes these on macOS; a plain cargo link of a Python extension needs them there.
 MACOS_EXTENSION_LINK_ARGS = ("-C", "link-arg=-undefined", "-C", "link-arg=dynamic_lookup")
 # macOS keeps line tables in a dSYM only when packed; llvm-objdump reads it beside the library.
 MACOS_PACKED_DEBUG_INFO = ("--config", f'profile.{FMA_CHECK_PROFILE}.split-debuginfo="packed"')
 USAGE_BLOCK = re.compile(r"^## Usage\n.*?```python\n(.*?)```", re.DOTALL | re.MULTILINE)
 LICENSE_EXPRESSION = " AND ".join(
-    ("PolyForm-Noncommercial-1.0.0", "MIT", "OFL-1.1", "LicenseRef-Hershey-Fonts")
+    (
+        "PolyForm-Noncommercial-1.0.0",
+        "MIT",
+        "OFL-1.1",
+        "LicenseRef-Hershey-Fonts",
+        "BSD-2-Clause",
+    )
 )
 WHEEL_CHECK = f"""
 import importlib.metadata as metadata
@@ -460,9 +480,47 @@ def _check_no_fma(session: nox.Session) -> None:
     _uv_run(session, "python", FMA_CHECK_SCRIPT, str(_fma_check_library()))
 
 
+def _cargo_tool(name: str) -> str:
+    """Returns the absolute path of one cargo tool installed under CARGO_TOOLS_ROOT."""
+    suffix = ".exe" if sys.platform == "win32" else ""
+    return str(Path(CARGO_TOOLS_ROOT).resolve() / "bin" / f"{name}{suffix}")
+
+
+def _install_cargo_tool(session: nox.Session, name: str, version: str, *features: str) -> None:
+    """Installs one cargo tool, locked, into CARGO_TOOLS_ROOT unless that version is there.
+
+    Args:
+        session: The running nox session.
+        name: The crate that ships the tool, which is also the executable's name.
+        version: The exact version to install.
+        features: Extra `cargo install` arguments that select the crate's features.
+    """
+    tool = _cargo_tool(name)
+    if Path(tool).is_file():
+        installed = subprocess.run([tool, "--version"], capture_output=True, text=True)
+        if installed.stdout.strip() == f"{name} {version}":
+            session.log(f"Found {name} {version}")
+            return
+    session.run(
+        "cargo",
+        "install",
+        "--locked",
+        "--root",
+        CARGO_TOOLS_ROOT,
+        name,
+        "--version",
+        version,
+        *features,
+        external=True,
+    )
+
+
 @nox.session
 def rust(session: nox.Session) -> None:
     """Checks Rust formatting, lints and tests, builds the wasm crate and runs the FMA check.
+
+    Then checks every crate's licence, bans, advisories and source with cargo deny, and that the
+    Rust notice file the wheel ships is current.
 
     Not a default session: it compiles every crate, so it runs on demand and in CI.
     """
@@ -492,6 +550,11 @@ def rust(session: nox.Session) -> None:
         external=True,
     )
     _check_no_fma(session)
+    _install_cargo_tool(session, CARGO_DENY, CARGO_DENY_VERSION)
+    _install_cargo_tool(session, CARGO_ABOUT, CARGO_ABOUT_VERSION, *CARGO_ABOUT_FEATURES)
+    session.run(_cargo_tool(CARGO_DENY), "--locked", "check", external=True)
+    _uv_run(session, "python", NOTICES_SCRIPT, "--check")
+    _uv_run(session, "pytest", "-m", CARGO_TOOLS_MARK, CARGO_TOOLS_TESTS)
 
 
 def _tier(posargs: list[str]) -> str:
