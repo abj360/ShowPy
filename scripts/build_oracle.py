@@ -36,6 +36,7 @@ DEFAULT_REF = "v0.4.0"
 DEFAULT_COMMIT = "a6ef3caaa5a305a992aab73fccbbc4446670ef63"
 PINNED_COMMITS = {DEFAULT_REF: DEFAULT_COMMIT}
 DEFAULT_OUT = Path(".parity") / "oracle-v0.4.0"
+PARITY_FOLDER = ".parity"
 READY_FILE = "READY"
 WHEEL_FOLDER = "wheel"
 VENV_FOLDER = "venv"
@@ -136,6 +137,14 @@ def _refuse_links(out: Path) -> None:
             raise SystemExit(f"E: {folder} is a symlink; the oracle is built only in a real folder")
 
 
+def _require_inside_parity(out: Path, root: Path) -> None:
+    """Refuses an oracle folder that is not strictly inside <root>/.parity, before any deletion."""
+    parity = (root / PARITY_FOLDER).resolve()
+    resolved = (root / out).resolve()
+    if resolved == parity or not resolved.is_relative_to(parity):
+        raise SystemExit(f"E: the oracle folder {out} must be inside {parity}")
+
+
 def _resolve_ref(ref: str, root: Path) -> str:
     result = subprocess.run(
         ["git", "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
@@ -219,13 +228,15 @@ def build_oracle(ref: str = DEFAULT_REF, out: Path = DEFAULT_OUT) -> Path:
 
     Args:
         ref: The git ref to build, a release tag by default.
-        out: The oracle folder, relative to the repository root (the working directory).
+        out: The oracle folder, inside .parity/ of the repository root (the working
+            directory); any other folder is refused before anything is deleted.
 
     Returns:
         python: The absolute path of the oracle venv's interpreter.
     """
     root = Path.cwd()
     _refuse_links(out)
+    _require_inside_parity(out, root)
     python = interpreter(out / VENV_FOLDER).absolute()
     commit = _resolve_ref(ref, root)
     if is_ready(out, ref, commit):

@@ -15,6 +15,7 @@ Contains:
     test_default_oracle_is_pinned_to_the_v040_commit: the pin is the commit the tag names
     test_regression_failed_build_removes_the_worktree: no worktree is left on a build failure
     test_refuses_a_symlinked_parity_folder: the oracle is never built through a symlink
+    test_regression_refuses_an_oracle_folder_outside_parity: `--out .` deletes nothing
 """
 
 import hashlib
@@ -197,3 +198,21 @@ def test_refuses_a_symlinked_parity_folder(tmp_path: Path, monkeypatch: pytest.M
     with pytest.raises(SystemExit, match="symlink"):
         build_oracle("v9.9.9", ORACLE)
     assert list((tmp_path / "elsewhere").iterdir()) == []
+
+
+@pytest.mark.parametrize(
+    "out", [Path(), Path(".parity"), Path("elsewhere"), Path(".parity", "..", "elsewhere")]
+)
+def test_regression_refuses_an_oracle_folder_outside_parity(
+    out: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    keep = tmp_path / "elsewhere" / "keep.txt"
+    keep.parent.mkdir()
+    keep.write_text("kept", encoding="utf-8")
+    with pytest.raises(SystemExit, match=r"^E: the oracle folder .* must be inside .*\.parity"):
+        build_oracle("v9.9.9", out)
+    assert keep.read_text(encoding="utf-8") == "kept"
+    absolute = tmp_path / ".parity" / "oracle"
+    with pytest.raises(SystemExit, match=r"^E: ref v9\.9\.9"):
+        build_oracle("v9.9.9", absolute)
