@@ -9,12 +9,14 @@ tests/unit/rules/ported/*.toml. mutmut reads its settings from the pyproject.tom
 it runs in, so it runs in a staging folder holding copies of the library and the tests and a
 pyproject.toml whose `[tool.mutmut]` table also names those modules in `only_mutate`; no other
 module is mutated. With no kept module, mutmut does not run. Both records go to
-mutants-summary.json. A score never fails the run; a tool that cannot run does.
+mutants-summary.json. A score never fails the run; a tool that cannot run does, and so does
+output that cannot be scored, which is recorded with its reason beside the other tool's record.
 
 Contains:
     SCORED: the status of a tool that ran and was scored
     CANNOT_RUN: the status of a tool that could not run
     NO_KEPT_MODULES: the Python status while no ported package keeps a module
+    UNREADABLE: the errors that mark a tool output as one that cannot be scored
     kept_modules(): lists the library files that ported packages keep in Python
     stage_mutmut(): fills the staging folder mutmut runs in, limited to the kept modules
     rust_score(): reads cargo-mutants' outcome counts into a score record
@@ -31,7 +33,7 @@ import shutil
 import subprocess
 import sys
 import tomllib
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,6 +69,8 @@ PYTHON_COUNTS = (
     "total",
 )
 SCORE_DIGITS = 4
+# What a missing, unreadable, malformed or incomplete tool output raises while it is scored.
+UNREADABLE = (OSError, ValueError, KeyError, TypeError)
 
 type Record = dict[str, str | int | float | None]
 
@@ -158,6 +162,26 @@ def _cannot_run(detail: str) -> Record:
     return {"status": CANNOT_RUN, "detail": detail}
 
 
+def _read_record(
+    folder: Path, output: Path, score: Callable[[Mapping[str, object]], Record]
+) -> Record:
+    """Scores one tool's JSON output, or returns a cannot-run record naming why it could not.
+
+    Args:
+        folder: The folder the tool ran in.
+        output: The output file, relative to that folder.
+        score: The function that turns the parsed output into a score record.
+
+    Returns:
+        record: The score record, or a cannot-run record when the output is missing,
+            unreadable, not JSON, not an object or lacks a whole-number count.
+    """
+    try:
+        return score(json.loads((folder / output).read_text(encoding="utf-8")))
+    except UNREADABLE as error:
+        return _cannot_run(f"cannot score {output.as_posix()}: {error!r}")
+
+
 def run_rust(cargo_mutants: Sequence[str], root: Path) -> Record:
     """Runs cargo-mutants on e8s-core, with a locked Cargo.lock, and returns its record.
 
@@ -166,14 +190,14 @@ def run_rust(cargo_mutants: Sequence[str], root: Path) -> Record:
         root: The repository root, where mutants.out is written.
 
     Returns:
-        record: The score record, or a cannot-run record for any other exit code.
+        record: The score record, or a cannot-run record for any other exit code or an
+            outcomes file that cannot be scored.
     """
     command = [*cargo_mutants, "mutants", "--package", CORE_PACKAGE, "--cargo-arg=--locked"]
     exit_code = subprocess.run(command, cwd=root, check=False).returncode
     if exit_code not in CARGO_MUTANTS_SCORED_EXITS:
         return _cannot_run(f"cargo-mutants exited {exit_code}")
-    outcomes = json.loads((root / CARGO_MUTANTS_OUTCOMES).read_text(encoding="utf-8"))
-    return rust_score(outcomes)
+    return _read_record(root, CARGO_MUTANTS_OUTCOMES, rust_score)
 
 
 def run_python(mutmut: Sequence[str], root: Path, ported_root: Path, stage: Path) -> Record:
@@ -187,21 +211,25 @@ def run_python(mutmut: Sequence[str], root: Path, ported_root: Path, stage: Path
 
     Returns:
         record: The score record; a no-module record when no package keeps a module; a
-            cannot-run record when a mutmut command fails or writes no stats.
+            cannot-run record when the disposition files cannot be read, the stage cannot be
+            filled, a mutmut command fails or its stats cannot be scored.
     """
-    modules = kept_modules(ported_root)
+    try:
+        modules = kept_modules(ported_root)
+    except UNREADABLE as error:
+        return _cannot_run(f"cannot read the disposition files: {error!r}")
     if not modules:
         print(f"Skipping mutmut: {NO_KEPT_MODULES}")
         return {"status": NO_KEPT_MODULES}
-    stage_mutmut(root, stage, modules)
+    try:
+        stage_mutmut(root, stage, modules)
+    except (OSError, ValueError) as error:
+        return _cannot_run(f"cannot stage mutmut: {error!r}")
     for action in ("run", "export-cicd-stats"):
         exit_code = subprocess.run([*mutmut, action], cwd=stage, check=False).returncode
         if exit_code != 0:
             return _cannot_run(f"mutmut {action} exited {exit_code}")
-    stats = stage / MUTMUT_STATS
-    if not stats.is_file():
-        return _cannot_run(f"mutmut wrote no {MUTMUT_STATS.as_posix()}")
-    return python_score(json.loads(stats.read_text(encoding="utf-8")))
+    return _read_record(stage, MUTMUT_STATS, python_score)
 
 
 def record_scores(

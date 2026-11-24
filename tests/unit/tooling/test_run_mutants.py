@@ -15,6 +15,10 @@ Contains:
     test_run_python_scores_the_kept_modules_in_the_stage: runs mutmut in the stage
     test_run_python_reports_a_mutmut_that_cannot_run: a failing mutmut is a cannot-run record
     test_repository_mutmut_settings_name_the_ported_tests: the settings mutmut runs with
+    test_regression_unreadable_cargo_mutants_outcomes_are_cannot_run: a missing, broken or
+        incomplete outcomes file is recorded, the summary is still written and the run fails
+    test_regression_unreadable_mutmut_stats_are_cannot_run: the same for mutmut's stats
+    test_regression_a_malformed_disposition_file_is_cannot_run: no traceback, a record
 """
 
 import json
@@ -26,9 +30,12 @@ import pytest
 
 from scripts.run_mutants import (
     CANNOT_RUN,
+    NO_KEPT_MODULES,
     SCORED,
+    SUMMARY,
     kept_modules,
     python_score,
+    record_scores,
     run_python,
     rust_score,
     stage_mutmut,
@@ -186,3 +193,67 @@ def test_repository_mutmut_settings_name_the_ported_tests() -> None:
     ported = [path for path in PORTED_TESTS if path != "tests/golden"]
     selection = settings["pytest_add_cli_args_test_selection"]
     assert selection == [*ported, *PROPERTY_AND_GOLDEN]
+
+
+FAKE_CARGO_MUTANTS = """
+import pathlib, sys
+out = pathlib.Path("mutants.out")
+out.mkdir()
+if {outcomes!r} is not None:
+    (out / "outcomes.json").write_text({outcomes!r}, encoding="utf-8")
+sys.exit(2)
+"""
+FAKE_MUTMUT_STATS = """
+import pathlib, sys
+if sys.argv[1] == "export-cicd-stats" and {stats!r} is not None:
+    pathlib.Path("mutants").mkdir()
+    pathlib.Path("mutants/mutmut-cicd-stats.json").write_text({stats!r}, encoding="utf-8")
+"""
+GOOD_COUNTS = {"caught": 1, "missed": 1, "timeout": 0, "unviable": 0, "total_mutants": 2}
+UNREADABLE = {
+    "missing": None,
+    "not json": "{",
+    "not an object": "[]",
+    "missing key": json.dumps({"caught": 1}),
+    "bad value": json.dumps({**GOOD_COUNTS, "missed": "many"}),
+    "null value": json.dumps({**GOOD_COUNTS, "missed": None}),
+}
+
+
+@pytest.mark.parametrize("outcomes", UNREADABLE.values(), ids=UNREADABLE.keys())
+def test_regression_unreadable_cargo_mutants_outcomes_are_cannot_run(
+    tmp_path: Path, outcomes: str | None
+) -> None:
+    script = tmp_path / "fake_cargo_mutants.py"
+    script.write_text(FAKE_CARGO_MUTANTS.format(outcomes=outcomes), encoding="utf-8")
+    (tmp_path / "ported").mkdir()
+    exit_code = record_scores(
+        [sys.executable, str(script)], tmp_path, ported_root=tmp_path / "ported"
+    )
+    assert exit_code == 1
+    summary = json.loads((tmp_path / SUMMARY).read_text(encoding="utf-8"))
+    assert summary["rust"]["status"] == CANNOT_RUN
+    assert summary["rust"]["detail"].startswith("cannot score mutants.out/outcomes.json: ")
+    assert summary["python"] == {"status": NO_KEPT_MODULES}
+
+
+@pytest.mark.parametrize("stats", UNREADABLE.values(), ids=UNREADABLE.keys())
+def test_regression_unreadable_mutmut_stats_are_cannot_run(
+    tmp_path: Path, stats: str | None
+) -> None:
+    root = tmp_path / "repo"
+    ported = _repository(root)
+    script = tmp_path / "fake_mutmut.py"
+    script.write_text(FAKE_MUTMUT_STATS.format(stats=stats), encoding="utf-8")
+    record = run_python([sys.executable, str(script)], root, ported, tmp_path / "stage")
+    assert record["status"] == CANNOT_RUN
+    assert str(record["detail"]).startswith("cannot score mutants/mutmut-cicd-stats.json: ")
+
+
+def test_regression_a_malformed_disposition_file_is_cannot_run(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    ported = _repository(root)
+    (ported / "time.toml").write_text("moves = []\n", encoding="utf-8")
+    record = run_python(_fake_mutmut(tmp_path, 0), root, ported, tmp_path / "stage")
+    assert record["status"] == CANNOT_RUN
+    assert str(record["detail"]).startswith("cannot read the disposition files: ")
