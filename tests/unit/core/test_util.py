@@ -117,7 +117,7 @@ from e8s.core.util import (
     split_id,
     timer,
 )
-from e8s.show.repositories import InMemoryAssetStore
+from e8s.show.assets import InMemoryAssetStore
 from tests.helpers import digests_under_hash_seeds, fails_after
 
 

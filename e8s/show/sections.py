@@ -15,9 +15,9 @@ from e8s.choreo.path_models import FacingOverride
 from e8s.core.errors import SchemaError, TimelineError, VersionError
 from e8s.core.ids import FormId, SetId, parse_tid
 from e8s.core.types import Count
-from e8s.show.manage import index
 from e8s.show.models import Pin, Show
 from e8s.show.set_keys import free_set_key, set_key
+from e8s.show.set_queries import index
 from e8s.time.clock import count_to_seconds, tempo_at
 from e8s.time.measures import count_to_measure
 from e8s.time.models import AudioTrack, MeasureSetting, TempoSection, Timeline
