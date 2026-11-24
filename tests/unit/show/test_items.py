@@ -41,6 +41,7 @@ from e8s.core.resources import schema_path
 from e8s.examples import two_set_show
 from e8s.show import items as items_module
 from e8s.show.change_models import ItemKey, ItemKind
+from e8s.show.document_paths import transition_folder
 from e8s.show.documents import decode_show, encode_show
 from e8s.show.items import (
     ITEM_TABLE,
@@ -294,16 +295,6 @@ def test_reorders_are_one_order_change_each() -> None:
     assert items(show)[ItemKey(kind="spot_order", path=())] == ["T1", "T2", "T3", "T4"]
 
 
-def _renumbered_show() -> Show:
-    show = add_set(rich_show(), "9", 4.0)
-    form = Form(id=FormId("f9"), set=SetId("9"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
-    spec = TransitionSpec(
-        id=make_tid("2", "9"), counts=4.0, rows={SpotId("T2"): PathRow(entity=SpotId("T2"))}
-    )
-    show = show.replace(forms={**show.forms, form.id: form}, transitions=(*show.transitions, spec))
-    return pin(pin(pin(show, "set", "9"), "transition", "2→9"), "form", "f9")
-
-
 def test_set_swap_is_one_set_order_change() -> None:
     show = add_set(two_set_show(), "3", 4.0)
     swapped = show.replace(sets=(show.sets[1], show.sets[0], *show.sets[2:]))
@@ -374,17 +365,29 @@ def test_changes_skip_sets_shared_by_identity(monkeypatch: pytest.MonkeyPatch) -
     assert sorted(dumped) == sorted(2 * [p.entity for p in show.sets[SECOND_SET].placements])
 
 
-@pytest.mark.parametrize("show", [two_set_show(), rich_show()])
+def _renumbered_show() -> Show:
+    show = add_set(rich_show(), "9", 4.0)
+    form = Form(id=FormId("f9"), set=SetId("9"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
+    spec = TransitionSpec(
+        id=make_tid("2", "9"), counts=4.0, rows={SpotId("T2"): PathRow(entity=SpotId("T2"))}
+    )
+    show = show.replace(forms={**show.forms, form.id: form}, transitions=(*show.transitions, spec))
+    return pin(pin(pin(show, "set", "9"), "transition", "2→9"), "form", "f9")
+
+
+@pytest.mark.parametrize("show", [two_set_show(), rich_show(), _renumbered_show()])
 def test_set_and_spec_values_match_their_json(show: Show) -> None:
     found = items(show)
+    keys = {current.id: set_key(current) for current in show.sets}
     for current in show.sets:
-        fields = [v for k, v in found.items() if k.kind == "set" and k.path == (current.key,)]
+        fields = [v for k, v in found.items() if k.kind == "set" and k.path == (keys[current.id],)]
         merged = {
             name: value for part in fields if isinstance(part, dict) for name, value in part.items()
         }
         assert merged == _without(current.to_json(), "key", "placements")
     for spec in show.transitions:
-        (value,) = [v for k, v in found.items() if k.kind == "transition"]
+        path = (transition_folder((keys[spec.id[0]], keys[spec.id[1]])),)
+        value = found[ItemKey(kind="transition", path=path)]
         assert value == _without(spec.to_json(), "id", "rows", "routes")
 
 
