@@ -10,9 +10,10 @@ Contains:
     test_commit_with_unknown_parent_reports_every_landed_revision: keeps the memory conflict
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -21,12 +22,14 @@ from e8s.core.errors import (
     ConflictError,
     E8sError,
     SchemaError,
+    StorageError,
     UnknownRefError,
 )
 from e8s.show.backend import RepositoryBackend
 from e8s.show.document_repository import DocumentRepository
 from e8s.show.file_repository import FileRepository
 from e8s.show.history_models import Revision
+from e8s.show.integrity import blob_digest
 from e8s.show.memory_backend import InMemoryRepository, _MemoryBackend
 from e8s.show.storage import ROOT_REVISION
 from tests.helpers import context_entries
@@ -53,12 +56,12 @@ def _fill(backend: RepositoryBackend, count: int) -> list[str]:
     return ids
 
 
-class _CountingIndex(dict[tuple[str, str], Revision]):
+class _CountingIndex(dict[str, Revision]):
     """Counts the revisions read by key."""
 
     reads = 0
 
-    def __getitem__(self, key: tuple[str, str]) -> Revision:
+    def __getitem__(self, key: str) -> Revision:
         self.reads += 1
         return super().__getitem__(key)
 
@@ -66,8 +69,8 @@ class _CountingIndex(dict[tuple[str, str], Revision]):
 def test_memory_head_and_log_since_cost_does_not_grow_with_history() -> None:
     backend = _MemoryBackend()
     ids = _fill(backend, HISTORY)
-    index = _CountingIndex(backend._revisions)
-    backend._revisions = index
+    index = _CountingIndex(backend._revisions[SHOW_ID])
+    backend._revisions[SHOW_ID] = index
     landed = backend.log(SHOW_ID, since=ids[-3])
     assert [r.id for r in landed] == ids[-2:]
     assert index.reads == 2
@@ -150,3 +153,101 @@ def test_commit_with_unknown_parent_reports_every_landed_revision() -> None:
     assert caught.value.context["head"] == ids[-1]
     assert len(context_entries(caught.value, "changes")) == 3
     assert backend.head(SHOW_ID) == ids[-1]
+
+
+def _commit(backend: RepositoryBackend, revision: Revision, **kwargs: object) -> None:
+    tree = cast(Mapping[str, str], kwargs.get("tree", {}))
+    blobs = cast(Mapping[str, bytes], kwargs.get("blobs", {}))
+    backend.commit(SHOW_ID, revision, tree, blobs)
+
+
+def test_regression_memory_commit_refuses_a_revision_that_is_its_own_parent() -> None:
+    backend = _MemoryBackend()
+    ids = _fill(backend, 2)
+    loop = Revision(id=ids[-1], parent=ids[-1], at=AT)
+    with pytest.raises(StorageError) as caught:
+        _commit(backend, loop)
+    assert caught.value.code == ErrorCode.BAD_ID
+    assert [r.id for r in backend.log(SHOW_ID)] == ids
+    assert backend.head(SHOW_ID) == ids[-1]
+
+
+def test_regression_memory_commit_refuses_a_revision_id_already_stored() -> None:
+    backend = _MemoryBackend()
+    ids = _fill(backend, 3)
+    clash = Revision(id=ids[0], parent=ids[-1], at=AT)
+    with pytest.raises(StorageError) as caught:
+        _commit(backend, clash)
+    assert caught.value.code == ErrorCode.BAD_ID
+    assert [r.id for r in backend.log(SHOW_ID)] == ids
+
+
+def test_regression_memory_log_fails_closed_on_a_parent_cycle() -> None:
+    backend = _MemoryBackend()
+    ids = _fill(backend, 3)
+    backend._revisions[SHOW_ID][ids[0]] = Revision(id=ids[0], parent=ids[1], at=AT)
+    with pytest.raises(StorageError) as looped:
+        backend.log(SHOW_ID)
+    assert looped.value.code == ErrorCode.CORRUPT
+
+
+def test_memory_tree_and_blob_fail_closed_on_unknown_ids() -> None:
+    backend = _MemoryBackend()
+    _fill(backend, 1)
+    with pytest.raises(UnknownRefError):
+        backend.tree(SHOW_ID, _revision_id(99))
+    with pytest.raises(UnknownRefError):
+        backend.tree("other-show", _revision_id(1))
+    with pytest.raises(StorageError) as caught:
+        backend.blob(SHOW_ID, blob_digest(b"absent"))
+    assert caught.value.code == ErrorCode.CORRUPT
+
+
+@pytest.mark.parametrize(
+    ("label", "revision", "extra", "code"),
+    [
+        ("short id", Revision(id="abc", parent="", at=AT), {}, ErrorCode.BAD_ID),
+        ("upper id", Revision(id="A" * 64, parent="", at=AT), {}, ErrorCode.BAD_ID),
+        ("bad parent", Revision(id=_revision_id(1), parent="zz", at=AT), {}, ErrorCode.BAD_ID),
+        (
+            "blob key not a digest",
+            Revision(id=_revision_id(1), parent="", at=AT),
+            {"blobs": {"not-hex": b"x"}},
+            ErrorCode.BAD_ID,
+        ),
+        (
+            "blob bytes differ from key",
+            Revision(id=_revision_id(1), parent="", at=AT),
+            {"blobs": {blob_digest(b"x"): b"y"}},
+            ErrorCode.CORRUPT,
+        ),
+        (
+            "tree digest not stored",
+            Revision(id=_revision_id(1), parent="", at=AT),
+            {"tree": {"/a": blob_digest(b"x")}},
+            ErrorCode.CORRUPT,
+        ),
+    ],
+)
+def test_regression_memory_commit_verifies_its_inputs(
+    label: str, revision: Revision, extra: dict[str, object], code: ErrorCode
+) -> None:
+    backend = _MemoryBackend()
+    with pytest.raises(StorageError) as caught:
+        _commit(backend, revision, **extra)
+    assert caught.value.code == code, label
+    assert backend.shows() == []
+    assert backend.head(SHOW_ID) == ROOT_REVISION
+
+
+def test_memory_commit_accepts_a_tree_over_stored_and_passed_blobs() -> None:
+    backend = _MemoryBackend()
+    old = b"old"
+    first = Revision(id=_revision_id(1), parent="", at=AT, changed=("/a",))
+    _commit(backend, first, tree={"/a": blob_digest(old)}, blobs={blob_digest(old): old})
+    new = b"new"
+    second = Revision(id=_revision_id(2), parent=first.id, at=AT, changed=("/b",))
+    tree = {"/a": blob_digest(old), "/b": blob_digest(new)}
+    _commit(backend, second, tree=tree, blobs={blob_digest(new): new})
+    assert backend.tree(SHOW_ID, second.id) == tree
+    assert backend.blob(SHOW_ID, blob_digest(new)) == new
