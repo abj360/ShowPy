@@ -52,6 +52,10 @@ Contains:
     test_every_job_that_syncs_installs_the_pinned_rust_toolchain: each uv job installs the
         rust-toolchain.toml pin, then restores the Rust cache pinned by SHA, before uv builds
     test_unprepared_rust_jobs_sees_a_missing_or_late_step: proves the toolchain check can fail
+    rust_caches_saved_off_main(): lists the jobs whose Rust cache step may save outside main
+    test_rust_cache_saves_only_from_main: a pull request never writes a Rust cache that main
+        later restores and runs
+    test_rust_caches_saved_off_main_sees_a_missing_or_wrong_condition: proves the check can fail
 """
 
 import ast
@@ -120,6 +124,9 @@ RUST_BUILD_INPUTS = frozenset(
 UV_STEP = re.compile(r"\buv (sync|run)\b")
 TOOLCHAIN_STEP = "rustup toolchain install"
 RUST_CACHE_STEP = re.compile(r"uses: Swatinem/rust-cache@[0-9a-f]{40}\b")
+SAVE_ON_MAIN_ONLY = re.compile(
+    r"^\s+save-if: \$\{\{ github\.ref == 'refs/heads/main' \}\}$", re.MULTILINE
+)
 
 
 def tolerated_exit_codes(source: str, session_name: str) -> list[str]:
@@ -592,3 +599,40 @@ def test_unprepared_rust_jobs_sees_a_missing_or_late_step() -> None:
         f"  {name}:\n    steps:\n{steps}" for name, steps in jobs.items()
     )
     assert unprepared_rust_jobs(workflow) == ["late", "untagged", "swapped"]
+
+
+def rust_caches_saved_off_main(workflow: str) -> list[str]:
+    """Lists the jobs with a Rust cache step that may save its cache outside the main branch.
+
+    Args:
+        workflow: The text of a workflow file.
+
+    Returns:
+        leaky: One job name per Swatinem/rust-cache step that lacks the main-only `save-if`.
+    """
+    return [
+        name
+        for name in ci_job_names(workflow)
+        for step in STEP_START.split(ci_job(workflow, name))[1:]
+        if "Swatinem/rust-cache@" in step and not SAVE_ON_MAIN_ONLY.search(step)
+    ]
+
+
+def test_rust_cache_saves_only_from_main() -> None:
+    workflow = CI_WORKFLOW.read_text()
+    assert workflow.count("Swatinem/rust-cache@") >= len(GATED_JOBS)
+    assert rust_caches_saved_off_main(workflow) == []
+
+
+def test_rust_caches_saved_off_main_sees_a_missing_or_wrong_condition() -> None:
+    cache = f"      - uses: Swatinem/rust-cache@{'a' * 40} # v2\n"
+    jobs = {
+        "main-only": cache
+        + "        with:\n          save-if: ${{ github.ref == 'refs/heads/main' }}\n",
+        "always": cache,
+        "any-branch": cache + "        with:\n          save-if: ${{ true }}\n",
+    }
+    workflow = "on: push\njobs:\n" + "".join(
+        f"  {name}:\n    steps:\n{steps}" for name, steps in jobs.items()
+    )
+    assert rust_caches_saved_off_main(workflow) == ["always", "any-branch"]
