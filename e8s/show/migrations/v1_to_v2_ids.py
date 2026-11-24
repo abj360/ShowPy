@@ -1,5 +1,5 @@
 """
-v1_to_v2_ids.py --- the ids sub-step of the v1 to v2 format migration (lane A)
+v1_to_v2_ids.py --- the ids sub-step of the v1 to v2 format migration
 
 The model sub-step. It runs on the show validated with any non-empty v1 ID accepted and renames,
 once and by rule, every spot, set, form, route, zone, landmark, guide and selection ID that fails

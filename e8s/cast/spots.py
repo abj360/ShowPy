@@ -20,27 +20,40 @@ Contains:
 """
 
 import math
+import operator
 import string
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, TypedDict, Unpack, get_args
+from typing import TYPE_CHECKING, Any, SupportsIndex, TypedDict, Unpack, get_args
 from typing import ReadOnly as ReadOnlyKey
 
-from e8s.cast.models import Cast, Claimable, Group, LabelScheme, RewriteReport, Shape, Spot
+from e8s.cast.models import (
+    Cast,
+    Claimable,
+    Group,
+    LabelScheme,
+    RewriteReport,
+    Shape,
+    Spot,
+    require_spot_count,
+    spot_cap_error,
+)
 from e8s.cast.rewrite import rewrite_spot_ids, rewrite_spots
 from e8s.cast.select import label_prefix, select
 from e8s.choreo.models import Placement
+from e8s.core.caps import MAX_SPOTS
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import (
     LockedError,
     SchemaError,
     SpacingError,
     UnknownRefError,
+    bounded_repr,
     field_errors,
 )
 from e8s.core.ids import SetId, SpotId
 from e8s.core.selection import Selector
-from e8s.core.types import Meters, Point, Region
+from e8s.core.types import Meters, Point, Points, Region
 from e8s.core.util import close_matches, natural_sort
 from e8s.geo.curve_base import Curve
 from e8s.geo.regions import Area
@@ -167,6 +180,7 @@ def _require_pictures_kept(
 def _insert_spots(
     show: "Show", entries: Sequence[tuple[Spot, Point]], set_id: SetId, *, force: bool
 ) -> "Show":
+    require_spot_count(len(show.cast.spots) + len(entries))
     created_at = show.set_index(set_id)
     pinned_sets = _pinned_set_ids(show)
     sets = tuple(
@@ -182,9 +196,28 @@ def _insert_spots(
     return after
 
 
+def _not_a_count(n: object) -> SchemaError:
+    return SchemaError(
+        f"n must be a whole number of spots, not {type(n).__name__}",
+        hint="pass n as an int, such as 12",
+        context={"n": bounded_repr(n)},
+    )
+
+
+def _spot_count(n: object) -> int:
+    """Reads a requested spot count as an int, numpy integers included; refuses anything else."""
+    if not isinstance(n, SupportsIndex):
+        raise _not_a_count(n)
+    try:
+        return operator.index(n)
+    except TypeError as error:
+        raise _not_a_count(n) from error
+
+
 def _add_points(
     show: "Show", points: Sequence[Point], group: str, set_id: SetId, *, force: bool
 ) -> "Show":
+    require_spot_count(len(show.cast.spots) + len(points))
     show.set_index(set_id)
     shape = _default_shape(_group(show.cast, group))
     labels = _allocate_labels(show.cast, [group] * len(points))
@@ -218,14 +251,17 @@ def add_spots_along(
 ) -> "Show":
     """Adds n spots spaced evenly by arc length along a curve, in curve order.
 
-    Spots that would stand on-field in a pinned set raise LockedError unless `force=True`.
+    Spots that would stand on-field in a pinned set raise LockedError unless `force=True`. A
+    cast that would pass MAX_SPOTS raises SchemaError TOO_MANY_SPOTS before any spot is spaced.
 
     >>> from e8s.examples import two_set_show
     >>> from e8s.geo.shapes import line
     >>> len(add_spots_along(two_set_show(), line((0, 0), (4, 0)), 3, "trumpets", "1").cast.spots)
     7
     """
-    points = space_along(curve, n)
+    count = _spot_count(n)
+    require_spot_count(len(show.cast.spots) + count)
+    points = space_along(curve, count)
     target = show.set(set_id).id
     return _add_points(show, [(p[0], p[1]) for p in points.tolist()], group, target, force=force)
 
@@ -267,6 +303,17 @@ def _interval_for(area: Area, n: int) -> Meters:
     return lo
 
 
+def _fill_within_cap(show: "Show", area: Area, interval: Meters) -> Points:
+    """Fills an area by interval, refusing as soon as the spots pass the room under MAX_SPOTS."""
+    room = MAX_SPOTS - len(show.cast.spots)
+    try:
+        return fill(area, interval, limit=room)
+    except SpacingError as error:
+        if error.code != ErrorCode.TOO_MANY_SPOTS:
+            raise
+        raise spot_cap_error(MAX_SPOTS + 1, at_least=True) from error
+
+
 def fill_spots(
     show: "Show",
     region: Area | Region,
@@ -280,7 +327,9 @@ def fill_spots(
     """Fills an area with a grid of spots, given either the interval or the count.
 
     With only n, bisection finds the largest interval at which at least n spots fit, then
-    the n spots nearest the area's centroid are kept.
+    the n spots nearest the area's centroid are kept. A cast that would pass MAX_SPOTS raises
+    SchemaError TOO_MANY_SPOTS: before spacing for a count n, and as soon as an interval fill
+    passes the room left.
 
     Args:
         show: Show to add to.
@@ -297,9 +346,12 @@ def fill_spots(
     >>> len(fill_spots(two_set_show(), square, "trumpets", "1", n=5).cast.spots)
     9
     """
+    if n is not None:
+        n = _spot_count(n)
+        require_spot_count(len(show.cast.spots) + n)
     area = region.to_shapely() if isinstance(region, Region) else region
     if interval is not None and n is None:
-        points = fill(area, interval)
+        points = _fill_within_cap(show, area, interval)
     elif n is not None and interval is None:
         points = fill(area, _interval_for(area, n), n=n)
     else:

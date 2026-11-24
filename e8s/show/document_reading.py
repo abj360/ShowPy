@@ -59,7 +59,7 @@ from e8s.show.migrate import (
     version_of,
     without_header,
 )
-from e8s.show.models import Show
+from e8s.show.models import Show, require_set_count
 
 type JsonObject = dict[str, JsonValue]
 type JsonArray = list[JsonValue]
@@ -200,9 +200,10 @@ def _require_paths_for(
 
 
 def _set_order(order: object) -> list[str]:
-    """Checks the set order show.json lists: an array of storable set keys, never text."""
+    """Checks the set order show.json lists: an array of at most MAX_SETS storable set keys."""
     if not isinstance(order, list):
         raise _shape_error(SHOW_DOC, "array under 'sets'", order)
+    require_set_count(len(order))
     bad = [k for k in order if not is_storable_folder(k)]
     if bad:
         raise SchemaError(

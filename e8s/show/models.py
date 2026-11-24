@@ -27,6 +27,7 @@ Contains:
     CanvasEvent: records one edit or pointer from either side of the canvas
     Proposal: holds an agent suggestion the designer accepts or rejects
     ProposalPreview: holds the ghost placements and paths a proposal would produce
+    require_set_count(): refuses a show size over MAX_SETS before anything is allocated
 """
 
 import bisect
@@ -34,7 +35,7 @@ import itertools
 import json
 import re
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Mapping, Sized
 from datetime import datetime
 from functools import cached_property
 from typing import Annotated, ClassVar, Final, Literal
@@ -43,6 +44,7 @@ from pydantic import (
     Field,
     SerializerFunctionWrapHandler,
     ValidationInfo,
+    field_validator,
     model_serializer,
     model_validator,
 )
@@ -51,8 +53,9 @@ from e8s.cast.models import Cast
 from e8s.choreo.form_models import Form
 from e8s.choreo.models import Placement, Set
 from e8s.choreo.path_models import FacingOverride, TransitionSpec
-from e8s.core.caps import MAX_EXTENSION_BYTES
+from e8s.core.caps import MAX_EXTENSION_BYTES, MAX_SETS
 from e8s.core.deprecation import leave_field
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, TimeRangeError, UnknownRefError
 from e8s.core.ids import (
     LEGACY_IDS_KEY,
@@ -159,6 +162,29 @@ def _no_dependencies() -> ReadOnlyMap[str, str]:
     return ReadOnlyMap({})
 
 
+def require_set_count(count: int) -> None:
+    """Refuses a show of more than MAX_SETS sets, before the caller allocates anything.
+
+    Args:
+        count: Number of sets the show holds, or would hold after an edit or a decode.
+
+    >>> require_set_count(MAX_SETS)
+    >>> require_set_count(MAX_SETS + 1)
+    Traceback (most recent call last):
+        ...
+    e8s.core.errors.SchemaError: TOO_MANY_SETS: a show of 1001 sets is over MAX_SETS (1,000) \
+(hint: keep at most 1,000 sets in one show; split a longer show into several shows)
+    """
+    if count <= MAX_SETS:
+        return
+    raise SchemaError(
+        f"a show of {count} sets is over MAX_SETS ({MAX_SETS:,})",
+        hint=f"keep at most {MAX_SETS:,} sets in one show; split a longer show into several shows",
+        context={"sets": count, "max_sets": MAX_SETS},
+        code=ErrorCode.TOO_MANY_SETS,
+    )
+
+
 class Show(FrozenModel):
     """Holds a whole show.
 
@@ -173,7 +199,7 @@ class Show(FrozenModel):
         coordinates: How positions are labeled; display only.
         cast: Groups and spots.
         timeline: Show clock.
-        sets: Sets in show order.
+        sets: Sets in show order; at most MAX_SETS.
         forms: Form ID to form, across every set.
         transitions: Stored path instructions for consecutive set pairs.
         facing_overrides: Facings forced over global count ranges.
@@ -193,7 +219,7 @@ class Show(FrozenModel):
     coordinates: CoordinateSystem = CoordinateSystem()
     cast: Cast = Cast()
     timeline: Timeline
-    sets: tuple[Set, ...] = ()
+    sets: tuple[Set, ...] = Field(default=(), json_schema_extra={"maxItems": MAX_SETS})
     forms: Annotated[Mapping[FormIdField, Form], ReadOnly()] = Field(default_factory=_no_forms)
     transitions: tuple[TransitionSpec, ...] = ()
     facing_overrides: tuple[FacingOverride, ...] = ()
@@ -205,6 +231,19 @@ class Show(FrozenModel):
         json_schema_extra={"propertyNames": {"pattern": EXTENSION_KEY.pattern}},
     )
     revision: str = ""
+
+    @field_validator("sets", mode="before")
+    @classmethod
+    def _set_count_within_cap(cls, value: object) -> object:
+        if isinstance(value, Sized):
+            require_set_count(len(value))
+        return value
+
+    @field_validator("sets", mode="after")
+    @classmethod
+    def _sets_within_cap(cls, value: tuple[Set, ...]) -> tuple[Set, ...]:
+        require_set_count(len(value))
+        return value
 
     @model_validator(mode="after")
     def _form_keys_match_ids(self) -> "Show":

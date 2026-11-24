@@ -1,5 +1,5 @@
 """
-v1_to_v2_facings.py --- the facings sub-step of the v1 to v2 format migration (lane G)
+v1_to_v2_facings.py --- the facings sub-step of the v1 to v2 format migration
 
 A v1 placement facing and fixed form facing could hold any number of degrees; v2 stores them as
 headings wrapped into [0, 360). This step wraps each stored value the same way and records one

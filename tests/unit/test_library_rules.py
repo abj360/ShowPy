@@ -19,10 +19,16 @@ Contains:
     test_docs_code_never_calls_pydantic_model_methods: fails on any such use in the code
         blocks of README.md, CONTRIBUTING.md and docs/**/*.md
     test_markdown_scan_flags_only_python_code_blocks: proves the Markdown scan can fail
-    find_citations(): lists file and line of each ADR, ledger-ID or docs-path citation
+    find_citations(): lists file and line of each ADR, ledger-ID, docs-path, lane, task or
+        phase citation
     test_library_cites_no_adr_docs_or_ledger_ids: fails on any such citation in e8s/
     test_citation_scan_flags_a_docstring_and_a_comment: proves the scan can fail
+    test_regression_citation_scan_flags_lane_names: proves lane, task and phase names in
+        docstrings and comments are flagged
     test_citation_scan_ignores_runtime_strings: proves plain string literals are not flagged
+    find_type_ignores(): lists file and line of each comment that silences mypy or pyright
+    test_library_has_no_type_ignore: fails on any `type: ignore` or `pyright: ignore` in e8s/
+    test_type_ignore_scan_flags_mypy_and_pyright_comments: proves the scan can fail
     find_code_spellings(): lists file, line and code of each raised or reported error code
     test_every_raised_code_is_catalogued: fails on a code that is not an ErrorCode member
     test_every_error_code_is_used: fails on an ErrorCode member no library module uses
@@ -62,7 +68,11 @@ from e8s._api_table import PUBLIC_API
 from e8s.core.deprecation import DeprecatedWarning
 from e8s.core.error_codes import ErrorCode
 
-CITATION_PATTERN = re.compile(r"\bADR\b|\bUP-\d+\.\d+-\d+\b|\bdocs/")
+CITATION_PATTERN = re.compile(
+    r"\bADR\b|\bUP-\d+\.\d+-\d+\b|\bdocs/"
+    r"|\b[Ll]anes? [A-Z]\d*\b|\b[Tt]asks? [A-Z]\d+\b|\bPhase \d+\b"
+)
+TYPE_IGNORE_PATTERN = re.compile(r"\b(?:type|pyright):\s*ignore\b")
 MIN_LIBRARY_FILES = 100
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LIBRARY_ROOT = REPO_ROOT / "e8s"
@@ -326,7 +336,8 @@ def test_markdown_scan_flags_only_python_code_blocks() -> None:
 
 
 def find_citations(source: str, name: str) -> list[str]:
-    """Lists `name:line` for each ADR, ledger-ID or docs-path citation in a docstring or comment."""
+    """Lists `name:line` for each ADR, ledger-ID, docs-path, lane, task or phase citation in a
+    docstring or comment."""
     hits: list[str] = []
     for node in ast.walk(ast.parse(source)):
         if not isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
@@ -347,7 +358,8 @@ def find_citations(source: str, name: str) -> list[str]:
 
 
 def test_library_cites_no_adr_docs_or_ledger_ids() -> None:
-    """Requires docstrings and comments to state the rule, never point at an ADR or ledger ID."""
+    """Requires docstrings and comments to state the rule, never point at an ADR, a ledger ID
+    or the lane that wrote the code."""
     paths = sorted(LIBRARY_ROOT.rglob("*.py"))
     assert len(paths) >= MIN_LIBRARY_FILES, f"scan found only {len(paths)} library files"
     offenders = [
@@ -371,9 +383,73 @@ def test_citation_scan_flags_a_docstring_and_a_comment() -> None:
     assert find_citations(source, "m.py") == ["m.py:3", "m.py:5", "m.py:7"]
 
 
+def test_regression_citation_scan_flags_lane_names() -> None:
+    """Reports lanes, tasks and plan phases named in docstrings and comments, which stub
+    modules carried after their lanes merged; leaves guide lines, basketball lanes, a lowercase
+    motion phase number and task words without an ID alone."""
+    source = (
+        '"""\nm.py --- the cast sub-step (lane D)\n\nLane D owns this module.\n"""\n'
+        "# lanes A and G share this\n"
+        "LANE = 1\n"
+        "# a lane-1 guide line and the basketball lanes stay\n"
+        "# lane A1 wrote this\n"
+        "def f() -> None:\n"
+        '    """Waits for task W1, then Phase 2 removes it."""\n'
+        "# a motion in phase 2 of its cycle, and each task, stay\n"
+        "# see tasks X2 and X3\n"
+    )
+    assert find_citations(source, "m.py") == sorted(
+        [
+            "m.py:2",
+            "m.py:4",
+            "m.py:6",
+            "m.py:9",
+            "m.py:11",
+            "m.py:13",
+        ]
+    )
+
+
 def test_citation_scan_ignores_runtime_strings() -> None:
     """Leaves a plain string literal alone, since only docstrings and comments are scanned."""
     assert find_citations('MESSAGE = "see docs/guide for ADR 5"\n', "m.py") == []
+
+
+def find_type_ignores(source: str, name: str) -> list[str]:
+    """Lists `name:line` for each comment that silences mypy or pyright."""
+    return [
+        f"{name}:{token.start[0]}"
+        for token in tokenize.generate_tokens(io.StringIO(source).readline)
+        if token.type == tokenize.COMMENT and TYPE_IGNORE_PATTERN.search(token.string)
+    ]
+
+
+def test_library_has_no_type_ignore() -> None:
+    """Requires every library line to type-check as written, with no checker silenced."""
+    paths = sorted(LIBRARY_ROOT.rglob("*.py"))
+    assert len(paths) >= MIN_LIBRARY_FILES, f"scan found only {len(paths)} library files"
+    offenders = [
+        hit
+        for path in paths
+        for hit in find_type_ignores(
+            path.read_text(encoding="utf-8"), str(path.relative_to(LIBRARY_ROOT.parent))
+        )
+    ]
+    assert offenders == [], "type the code instead of silencing the checker: " + ", ".join(
+        offenders
+    )
+
+
+def test_type_ignore_scan_flags_mypy_and_pyright_comments() -> None:
+    """Reports mypy and pyright ignores, bare or coded, and leaves strings and prose alone."""
+    source = (
+        "x = f()  # type: ignore\n"
+        "y = g()  # type:ignore[arg-type]\n"
+        "z = h()  # pyright: ignore[reportGeneralTypeIssues]\n"
+        'NOTE = "# type: ignore"\n'
+        "# the type is ignored by nobody\n"
+    )
+    assert find_type_ignores(source, "m.py") == ["m.py:1", "m.py:2", "m.py:3"]
 
 
 def _assigned_code(node: ast.AST) -> ast.expr | None:

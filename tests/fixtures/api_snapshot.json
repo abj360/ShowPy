@@ -414,6 +414,7 @@
       "TOO_FEW_POINTS": "'TOO_FEW_POINTS'",
       "TOO_FEW_SPOTS": "'TOO_FEW_SPOTS'",
       "TOO_LARGE": "'TOO_LARGE'",
+      "TOO_MANY_SETS": "'TOO_MANY_SETS'",
       "TOO_MANY_SPOTS": "'TOO_MANY_SPOTS'",
       "UNKNOWN_FORM": "'UNKNOWN_FORM'",
       "UNKNOWN_FORMAT": "'UNKNOWN_FORMAT'",
@@ -727,8 +728,14 @@
   "MAX_RANGE": {
     "constant": "10000"
   },
+  "MAX_SETS": {
+    "constant": "1000"
+  },
   "MAX_SPIRAL_TURNS": {
     "constant": "20"
+  },
+  "MAX_SPOTS": {
+    "constant": "5000"
   },
   "MAX_TABLE": {
     "constant": "1000000"
@@ -1723,7 +1730,7 @@
   "face_point": "(target: e8s.choreo.models.Set, sel: Sel, point: Point, *, force: bool = False) -> e8s.choreo.models.Set",
   "facing_vector": "(theta: Degrees) -> Point",
   "figure_eight": "(u: FloatArray, start: Point, end: Point, params: collections.abc.Mapping[str, JsonValue]) -> Points",
-  "fill": "(area: Area, interval: Meters, pattern: FillPattern = 'grid', angle_deg: Degrees = 0.0, anchor: Point | None = None, n: int | None = None, margin: Meters = 0.0) -> Points",
+  "fill": "(area: Area, interval: Meters, pattern: FillPattern = 'grid', angle_deg: Degrees = 0.0, anchor: Point | None = None, n: int | None = None, margin: Meters = 0.0, *, limit: int | None = None) -> Points",
   "fill_form": "(form_id: str, members: collections.abc.Sequence[str], outline: e8s.core.types.Region | shapely.geometry.polygon.Polygon | e8s.geo.curve_base.Curve | object, interval: Meters, pattern: FillPattern = 'grid', angle_deg: Degrees = 0.0, facing: e8s.choreo.form_models.FacingSpec | None = None, *, set_id: str = '', n: int | None = None) -> e8s.choreo.form_models.Form",
   "fill_spots": "(show: 'Show', region: Area | e8s.core.types.Region, group: str, set_id: str, interval: Meters | None = None, n: int | None = None, *, force: bool = False) -> 'Show'",
   "filled_forms": "(placed: e8s.choreo.models.Set, forms: collections.abc.Sequence[e8s.choreo.form_models.Form]) -> list[e8s.choreo.form_models.Form]",

@@ -38,8 +38,9 @@ import pytest
 from e8s.choreo.forms import slots, text_form
 from e8s.choreo.models import PlacementPatch
 from e8s.choreo.path_models import PathRow, TransitionSpec
-from e8s.core.caps import MAX_EXTENSION_BYTES, MAX_POINTS, MAX_TEXT_CHARS
+from e8s.core.caps import MAX_EXTENSION_BYTES, MAX_POINTS, MAX_SETS, MAX_SPOTS, MAX_TEXT_CHARS
 from e8s.core.deprecation import DeprecatedWarning
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import (
     FontError,
     LockedError,
@@ -263,6 +264,25 @@ def test_regression_import_positions_caps_placements_before_ordering_sets(
     rows = "".join(f"{FIRST_NEW_SET + i},4,E{i},1,1\n" for i in range(MANY_NEW_SETS))
     with pytest.raises(SchemaError, match="placements"):
         import_positions(two_set_show(), "set,counts,entity,x,y\n" + rows, "trumpets")
+
+
+def test_regression_import_positions_checks_the_set_and_spot_caps_before_ordering_sets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Refuses rows that would pass MAX_SETS or MAX_SPOTS under MAX_POINTS placements, before
+    any set is ordered or any spot built."""
+    _refuse_set_ordering(monkeypatch)
+    show = two_set_show()
+    new_sets = MAX_SETS - len(show.sets) + 1
+    set_rows = "".join(f"{FIRST_NEW_SET + i},4,T1,1,1\n" for i in range(new_sets))
+    with pytest.raises(SchemaError) as too_many_sets:
+        import_positions(show, "set,counts,entity,x,y\n" + set_rows, "trumpets")
+    assert too_many_sets.value.code == ErrorCode.TOO_MANY_SETS
+    new_spots = MAX_SPOTS - len(show.cast.spots) + 1
+    spot_rows = "".join(f"2,8,E{i},1,1\n" for i in range(new_spots))
+    with pytest.raises(SchemaError) as too_many_spots:
+        import_positions(show, "set,counts,entity,x,y\n" + spot_rows, "trumpets")
+    assert too_many_spots.value.code == ErrorCode.TOO_MANY_SPOTS
 
 
 BETWEEN_TEXT = "set,counts,entity,x,y\n1,0,T1,0,0\n1b,4,T1,1,1\n2,8,T1,0,9\n"

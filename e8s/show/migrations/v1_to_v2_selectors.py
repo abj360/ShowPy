@@ -1,5 +1,5 @@
 """
-v1_to_v2_selectors.py --- the selectors sub-step of the v1 to v2 format migration (lane S)
+v1_to_v2_selectors.py --- the selectors sub-step of the v1 to v2 format migration
 
 Stored selector text is a zone's `applies_to` (sheet and show zones) or a facing override's
 `entities`. Version 1 text could glue `+`, `&` and a leading `-` to words, and combined `&` with

@@ -26,11 +26,20 @@ Contains:
     test_priority_zero_scan_reports_a_marked_test: checks the scanner flags each marking style
     test_regression_priority_zero_scan_reports_a_bare_xfail: checks the scanner flags a bare xfail
     test_priority_zero_scan_ignores_unmarked_tests: checks the scanner passes clean tests
+    PHASE_TWO_FIXES: maps each Phase 2 task to the ledger IDs it fixed
+    find_defect_ids(): lists the ID of each defect mark in a test source
+    is_phase_two_defect(): tells whether a ledger ID belongs to Phase 2
+    test_no_phase_two_defect_remains: guards that no Phase 2 ledger ID is still an open defect
+    test_defect_id_scan_reports_every_marking_style: checks the scanner sees decorators,
+        params and pytestmark
+    test_phase_two_check_covers_sections_and_the_table: checks which IDs count as Phase 2
 """
 
 import ast
 import re
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -44,6 +53,61 @@ ITEMS_RESOLVED_BY_DECISION = frozenset({5})  # permissions moved to the host app
 MIN_PRIORITY_ZERO_TESTS = 50
 OPEN_MARKS = frozenset({"defect", "xfail"})
 PLUGIN_ARGS = ("-p", "tests.ledger_plugin", "-p", "no:cacheprovider")
+MIN_DEFECT_MARKS = 50
+DEFECT_MARK = "defect"
+PHASE_TWO_SECTIONS = ("UP-4.", "UP-9.3-")
+# The Phase 2 plan's ledger coverage table, less the IDs of its dropped tasks E2 and F2 and
+# UP-9.4-45 (all retired with the code they test), plus UP-E-03, which C8 fixed. UP-E-01 is
+# absent: its fix was deferred to a later release.
+PHASE_TWO_FIXES: Final[Mapping[str, str]] = {
+    "L0.2": "UP-4.2-01 UP-9.7-59",
+    "L0.5": "UP-9.3-31 UP-9.3-32",
+    "L0.6": (
+        "UP-9.3-13 UP-9.3-14 UP-9.3-15 UP-9.3-16 UP-9.3-19 UP-9.3-20 UP-9.3-21 UP-9.3-36 "
+        "UP-9.3-38 UP-9.3-39 UP-9.3-40 UP-9.3-41 UP-9.3-43 UP-9.3-44 UP-9.3-45 UP-9.3-46 "
+        "UP-9.3-47 UP-9.3-48 UP-9.3-49 UP-9.3-50 UP-9.3-51 UP-9.3-52"
+    ),
+    "L0.9": "UP-9.7-29 UP-9.7-92",
+    "A1": "UP-9.7-56 UP-9.7-57 UP-9.7-58 UP-9.7-64",
+    "A2": "UP-9.7-75 UP-9.7-76 UP-9.7-77 UP-9.7-78 UP-9.7-81 UP-9.7-82 UP-9.7-88 UP-9.7-89",
+    "B1": "UP-9.2-09 UP-9.2-10 UP-9.2-11 UP-9.2-14 UP-9.2-15",
+    "B2": "UP-9.2-24 UP-9.2-28 UP-9.2-35 UP-9.2-36 UP-9.6-26 UP-9.6-34 UP-9.6-38",
+    "C1": (
+        "UP-9.1-14 UP-9.1-53 UP-9.1-54 UP-9.1-55 UP-9.1-56 UP-9.1-60 UP-9.1-62 UP-9.1-63 "
+        "UP-9.1-68 UP-9.1-69 UP-9.1-70 UP-9.1-71 UP-9.1-73"
+    ),
+    "C2": (
+        "UP-9.1-20 UP-9.1-21 UP-9.1-22 UP-9.1-23 UP-9.1-24 UP-9.1-25 UP-9.1-64 UP-9.1-65 UP-9.1-66"
+    ),
+    "C3": "UP-9.1-44 UP-9.1-45 UP-9.1-46 UP-9.1-48 UP-9.1-49",
+    "D1": (
+        "UP-9.3-56 UP-9.3-57 UP-9.3-58 UP-9.3-59 UP-9.3-60 UP-9.3-61 UP-9.3-63 UP-9.3-64 "
+        "UP-9.3-65 UP-9.3-66 UP-9.3-67 UP-9.3-68 UP-9.3-69 UP-9.3-70 UP-9.3-71"
+    ),
+    "D2": "UP-9.3-82 UP-9.3-84 UP-9.3-85 UP-9.3-86 UP-9.3-87",
+    "D3": "UP-9.3-122 UP-9.3-123 UP-9.3-124 UP-9.3-125",
+    "S1": "UP-9.3-34 UP-9.3-35",
+    "S2": "UP-9.3-83",
+    "S3": "UP-9.3-24 UP-9.3-25 UP-9.3-27 UP-9.3-28",
+    "S4": "UP-9.3-76",
+    "T1": (
+        "UP-9.3-95 UP-9.3-96 UP-9.3-97 UP-9.3-105 UP-9.3-106 UP-9.3-107 UP-9.3-108 UP-9.3-114 "
+        "UP-9.3-116 UP-9.3-117 UP-9.3-118 UP-9.3-119 UP-9.3-120 UP-9.3-121"
+    ),
+    "T2": "UP-9.3-109 UP-9.3-111 UP-9.3-112 UP-9.3-113",
+    "T3": "UP-9.3-98",
+    "F1": "UP-9.4-08 UP-9.4-09 UP-9.4-10 UP-9.4-11 UP-9.4-12 UP-9.4-13 UP-9.4-14 UP-9.4-44",
+    "G1": (
+        "UP-9.6-45 UP-9.6-46 UP-9.6-47 UP-9.6-48 UP-9.6-49 UP-9.6-51 UP-9.6-52 UP-9.6-53 "
+        "UP-9.6-54 UP-9.6-58 UP-9.6-60"
+    ),
+    "G2": "UP-9.6-11 UP-9.6-12 UP-9.6-13 UP-9.6-14 UP-9.6-62",
+    "G3": "UP-9.6-19 UP-9.6-20 UP-9.6-21 UP-9.6-39 UP-9.6-40 UP-9.6-41 UP-9.7-54",
+    "G4": "UP-9.6-25 UP-9.6-31 UP-9.6-37 UP-9.6-50 UP-9.6-55 UP-9.6-56 UP-9.6-57 UP-9.6-61",
+    "E1": "UP-9.5-12 UP-9.5-14 UP-9.5-29 UP-9.5-30 UP-9.5-34 UP-9.5-43 UP-9.5-44",
+    "C8": "UP-E-03",
+}
+PHASE_TWO_IDS = frozenset(i for ids in PHASE_TWO_FIXES.values() for i in ids.split())
 
 
 def run_ledger_case(pytester: pytest.Pytester, source: str, *args: str) -> pytest.RunResult:
@@ -478,3 +542,72 @@ def test_priority_zero_scan_ignores_unmarked_tests() -> None:
     """Passes a priority 0 test with no defect marker."""
     source = '''def test_a() -> None:\n    """Does it (P0 #4)."""\n    pass\n'''
     assert find_open_priority_zero_tests(source) == []
+
+
+def _is_defect_mark(func: ast.expr) -> bool:
+    return (isinstance(func, ast.Name) and func.id == DEFECT_MARK) or (
+        isinstance(func, ast.Attribute) and func.attr == DEFECT_MARK
+    )
+
+
+def find_defect_ids(source: str) -> list[str]:
+    """Lists the ID of each defect mark in a test source, in source order.
+
+    A mark is a call of `defect` or `pytest.mark.defect` whose first argument is a string, so
+    decorators, `pytest.param(..., marks=...)` and module `pytestmark` are all seen.
+    """
+    calls = [n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.Call)]
+    return [
+        call.args[0].value
+        for call in sorted(calls, key=lambda c: (c.lineno, c.col_offset))
+        if _is_defect_mark(call.func)
+        and call.args
+        and isinstance(call.args[0], ast.Constant)
+        and isinstance(call.args[0].value, str)
+    ]
+
+
+def is_phase_two_defect(defect_id: str) -> bool:
+    """Tells whether a ledger ID is one Phase 2 was planned to fix."""
+    return defect_id.startswith(PHASE_TWO_SECTIONS) or defect_id in PHASE_TWO_IDS
+
+
+def test_no_phase_two_defect_remains() -> None:
+    """Guards that no ledger ID Phase 2 fixed, or any UP-4 or UP-9.3 ID, is still an open defect."""
+    marks: list[tuple[str, str]] = [
+        (str(path.relative_to(PROJECT_ROOT)), defect_id)
+        for path in sorted(TESTS_ROOT.rglob("*.py"))
+        for defect_id in find_defect_ids(path.read_text(encoding="utf-8"))
+    ]
+    assert len(marks) >= MIN_DEFECT_MARKS
+    assert [f"{path}: {i}" for path, i in marks if is_phase_two_defect(i)] == []
+
+
+def test_defect_id_scan_reports_every_marking_style() -> None:
+    """Sees a helper decorator, a pytest mark, a parametrized mark and a module pytestmark."""
+    source = (
+        'pytestmark = pytest.mark.defect("UP-9.3-13")\n'
+        '@defect("UP-9.7-59")\n'
+        "def test_a() -> None:\n"
+        "    pass\n"
+        '@pytest.mark.defect("UP-4.2-01")\n'
+        '@pytest.mark.parametrize("n", [pytest.param(1, marks=pytest.mark.defect("UP-E-03"))])\n'
+        "def test_b(n: int) -> None:\n"
+        "    pass\n"
+        "def test_c() -> None:\n"
+        '    defect_id = "UP-9.6-11"\n'
+        "    pytest.mark.defect(defect_id)\n"
+    )
+    assert find_defect_ids(source) == ["UP-9.3-13", "UP-9.7-59", "UP-4.2-01", "UP-E-03"]
+
+
+def test_phase_two_check_covers_sections_and_the_table() -> None:
+    """Counts every UP-4 and UP-9.3 ID and the table's IDs, and leaves later phases alone."""
+    assert is_phase_two_defect("UP-4.9-99")
+    assert is_phase_two_defect("UP-9.3-200")
+    assert is_phase_two_defect("UP-9.6-45")
+    assert is_phase_two_defect("UP-E-03")
+    assert not is_phase_two_defect("UP-E-01")
+    assert not is_phase_two_defect("UP-9.5-55")
+    assert not is_phase_two_defect("UP-9.4-45")
+    assert not is_phase_two_defect("UP-9.1-72")
