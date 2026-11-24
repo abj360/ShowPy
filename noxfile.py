@@ -149,7 +149,7 @@ nox.options.default_venv_backend = "none"
 
 def _readme_usage_block(readme: Path) -> str:
     """Extracts the first python code block after the Usage heading of the README."""
-    match = USAGE_BLOCK.search(readme.read_text())
+    match = USAGE_BLOCK.search(readme.read_text(encoding="utf-8"))
     if match is None:
         raise SystemExit("E: README.md has no python block under '## Usage'")
     return match.group(1)
@@ -374,7 +374,7 @@ def _copy_test_suite(root: Path, suite: Path) -> Path:
 def _write_readme_example(root: Path, work: Path) -> Path:
     """Writes the README usage example to a script under work and returns its path."""
     example = work / "readme_usage.py"
-    example.write_text(_readme_usage_block(root / "README.md"))
+    example.write_text(_readme_usage_block(root / "README.md"), encoding="utf-8")
     return example
 
 
@@ -497,7 +497,7 @@ def _install_cargo_tool(session: nox.Session, name: str, version: str, *features
     """
     tool = _cargo_tool(name)
     if Path(tool).is_file():
-        installed = subprocess.run([tool, "--version"], capture_output=True, text=True)
+        installed = subprocess.run([tool, "--version"], capture_output=True, encoding="utf-8")
         if installed.stdout.strip() == f"{name} {version}":
             session.log(f"Found {name} {version}")
             return

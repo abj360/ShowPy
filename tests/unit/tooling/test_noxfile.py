@@ -76,11 +76,54 @@ Contains:
     uv_build_envs(): lists the env= constant of each `uv build` call of one noxfile function
     test_wheels_session_tests_the_wheel_on_313_and_314: builds the sdist, a dist wheel from it,
         and runs the ported packages' tests against that wheel on each supported Python
+    job_steps(): splits one job's text into its steps
+    test_rust_job_runs_the_rust_session: the rust job runs `nox -s rust` on Linux and arm64
+        macOS when the changes job reports a Rust change, its legs always starting
+    cargo_tools_cache_key_problems(): lists what lets the cached cargo tools outlive their pins
+    test_rust_job_caches_the_cargo_tools_by_their_pinned_versions: .cargo-tools is restored by
+        a key naming each pinned version and saved only from main
+    test_cargo_tools_cache_key_problems_sees_a_loose_key: proves the cache check can fail
+    workflow_section(): returns one top-level key of a workflow with its body
+    test_workflow_section_stops_at_the_next_top_level_key: proves the section reader
+    test_wheels_workflow_runs_on_rust_changes_and_tags: the exact triggers of wheels.yml
+    matrix_entries(): reads the block mappings under a job's `include:` matrix key
+    test_matrix_entries_reads_each_block_mapping: proves the matrix reader
+    maturin_steps(): returns the maturin-action steps of one job
+    build_targets(): lists the job, runner and target of every wheel the workflow builds
+    test_wheels_workflow_builds_eight_wheels_and_the_sdist: eight native wheel builds with
+        the dist profile and a locked Cargo.lock, the pinned maturin, and the sdist
+    test_wheels_jobs_wait_for_the_release_version_check: every build needs the version job,
+        which checks the tag against Cargo.toml on a tag
+    test_wheels_test_the_installed_wheel_on_313_and_314: the ported tests run against the
+        installed wheel from a copy of the suite on each supported Python
+    imported_modules(): lists the third-party modules that test files reach
+    test_imported_modules_follows_test_modules: proves the import scan follows `tests` modules
+    requirement_name(): returns the distribution name a requirement starts with
+    test_wheels_install_every_package_the_ported_tests_import: the wheel's dependencies plus
+        WHEEL_TEST_TOOLS are exactly what the ported tests import, all from the dev group
+    unpinned_actions(): lists the `uses:` lines that do not pin a full commit SHA
+    test_every_wheels_action_is_pinned_to_a_sha: every action in wheels.yml is SHA-pinned
+    test_unpinned_actions_sees_a_tag_or_short_sha: proves the pin check can fail
+    test_wheels_workflow_holds_least_privilege_and_writes_no_cache: read-only jobs, no
+        persisted credentials and no cache
+    test_wheel_builds_check_the_pinned_toolchain: each build proves it compiled with the pin
+    run_toolchain_check(): runs the workflow's toolchain check against a fake rustc
+    test_toolchain_check_refuses_a_rustc_other_than_the_pin: passes the pin, refuses another
+    test_regression_wheels_never_cancel_a_tag_run: a newer run cancels only non-tag runs
+    test_regression_wheels_upload_before_the_tests_run: the uploaded wheel is the built one,
+        never one the test step could replace
+    unpinned_images(): lists the python image references that name no digest
+    test_unpinned_images_sees_a_tag_without_a_digest: proves the image check can fail
+    test_regression_wheel_test_images_are_pinned_by_digest: each Linux leg tests in python
+        images pinned to multi-arch index digests, the same per variant
 """
 
 import ast
 import itertools
+import os
 import re
+import subprocess
+import sys
 import tomllib
 from collections.abc import Callable
 from pathlib import Path
@@ -209,6 +252,85 @@ PORTED_TEST_RUN = ["str(python)", "-P", "-m", "pytest", "*PORTED_TESTS", "*sessi
 SAVE_ON_MAIN_ONLY = re.compile(
     r"^\s+save-if: \$\{\{ github\.ref == 'refs/heads/main' \}\}$", re.MULTILINE
 )
+RUST_JOB = "rust"
+RUNS_RUST_JOB = "needs.changes.result != 'success' || needs.changes.outputs.rust != 'false'"
+RUST_STEP_ENV = f"${{{{ {RUNS_RUST_JOB} }}}}"
+RUST_STEP_GATE = re.compile(r"^env\.RUN_RUST_JOB [!=]= 'true'( && .+)?$")
+RUST_JOB_OSES = "[ubuntu-24.04, macos-15]"
+RUST_SESSION_STEP = "run: uv run --locked nox -s rust"
+RUST_OUTPUT = "rust: ${{ steps.classify.outputs.rust }}"
+CACHE_RESTORE_STEP = re.compile(r"uses: actions/cache/restore@[0-9a-f]{40}\b")
+CACHE_SAVE_STEP = re.compile(r"uses: actions/cache/save@[0-9a-f]{40}\b")
+CARGO_TOOLS_PATH = re.compile(r"^\s+path: \.cargo-tools$", re.MULTILINE)
+CARGO_TOOLS_VERSIONS_ID = "pins"
+VERSIONS_GREP = re.compile(r"grep -hE '([^']+)' rust-toolchain\.toml noxfile\.py")
+TOOLCHAIN_FILE = ROOT / "rust-toolchain.toml"
+TOOLCHAIN_PIN = re.compile(r'^channel = "[^"]+"$')
+CARGO_TOOLS_KEY_PARTS = (
+    "${{ runner.os }}",
+    "${{ runner.arch }}",
+    "${{ steps.pins.outputs.versions }}",
+)
+STEP_INDENT = 8
+WITH_INDENT = 10
+SAVE_FROM_MAIN = "github.ref == 'refs/heads/main'"
+INSTALL_CARGO_TOOL = "_install_cargo_tool"
+WHEELS_WORKFLOW = ROOT / ".github" / "workflows" / "wheels.yml"
+WHEELS_TRIGGERS = """on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "pyproject.toml"
+      - ".github/workflows/wheels.yml"
+  push:
+    tags: ["v*"]
+"""
+VERSION_JOB = "version"
+WHEEL_JOBS = ("linux", "windows", "macos")
+SDIST_JOB = "sdist"
+WHEEL_TARGETS = [
+    ("linux", "ubuntu-24.04", "x86_64 2_28"),
+    ("linux", "ubuntu-24.04-arm", "aarch64 2_28"),
+    ("linux", "ubuntu-24.04", "x86_64 musllinux_1_2"),
+    ("linux", "ubuntu-24.04-arm", "aarch64 musllinux_1_2"),
+    ("windows", "windows-2025", "x64"),
+    ("windows", "windows-11-arm", "aarch64"),
+    ("macos", "macos-15", "aarch64"),
+    ("macos", "macos-15-intel", "x86_64"),
+]
+MATRIX_ITEM_INDENT = " " * 10
+DIST_BUILD_ARGS = "--profile dist --locked --out dist"
+UPLOAD_STEP = "uses: actions/upload-artifact@"
+PORTED_TEST_STEP = "-P -m pytest $PORTED_TESTS"
+EXPRESSION = re.compile(r"\$\{\{ ([\w.]+) \}\}")
+IMAGE_REFERENCE = re.compile(r"\bpython:[^\s'\"@]+(?:@[^\s'\"]+)?")
+PINNED_IMAGE = re.compile(r"@(?:sha256:[0-9a-f]{64}|<matrix\.digest_\d+>)$")
+IMAGE_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+IMAGE_LOOP = 'for image in "$IMAGE_313" "$IMAGE_314"; do'
+LOCK_UNCHANGED = "run: git diff --exit-code -- Cargo.lock"
+ON_A_TAG = "github.ref_type == 'tag'"
+RELEASE_VERSION_RUN = 'python3 scripts/check_release_version.py "$TAG"'
+TESTS_FROM_SUITE = "run: mkdir suite && cp -R tests pyproject.toml suite/"
+WHEEL_INSTALL = re.compile(
+    r'--constraint (?:/w/)?constraints\.txt \\\n\s+"\$wheel\[all\]" \$WHEEL_TEST_TOOLS$',
+    re.MULTILINE,
+)
+FIRST_PARTY = "e8s"
+FIRST_PARTY_TESTS = "tests"
+SUITE_ENTRY_FILES = ("tests/conftest.py", "tests/ledger_plugin.py")
+REQUIREMENT_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*")
+PINNED_ACTION = re.compile(r"uses: [\w.-]+/[\w.-]+(?:/[\w.-]+)*@[0-9a-f]{40} # v\d+(?:\.\d+)*$")
+READ_ONLY_JOB = "    permissions:\n      contents: read\n"
+CACHE_ACTIONS = ("actions/cache", "Swatinem/rust-cache")
+CACHE_INPUT = re.compile(r"^\s+cache: ", re.MULTILINE)
+WHEELS_CONCURRENCY = """concurrency:
+  group: wheels-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+"""
 
 
 def tolerated_exit_codes(source: str, session_name: str) -> list[str]:
@@ -236,7 +358,7 @@ def tolerated_exit_codes(source: str, session_name: str) -> list[str]:
 
 
 def test_fuzz_session_accepts_only_exit_code_zero() -> None:
-    assert tolerated_exit_codes(NOXFILE.read_text(), FUZZ_SESSION) == []
+    assert tolerated_exit_codes(NOXFILE.read_text(encoding="utf-8"), FUZZ_SESSION) == []
 
 
 def test_tolerated_exit_codes_sees_an_accepted_code() -> None:
@@ -276,7 +398,7 @@ def default_exit_codes(source: str, function_name: str) -> list[str]:
 
 
 def test_uv_run_default_accepts_only_exit_code_zero() -> None:
-    assert default_exit_codes(NOXFILE.read_text(), "_uv_run") == []
+    assert default_exit_codes(NOXFILE.read_text(encoding="utf-8"), "_uv_run") == []
 
 
 def test_default_exit_codes_sees_an_accepted_default() -> None:
@@ -290,10 +412,10 @@ def minor_of(version: str) -> int:
 
 
 def test_ci_matrix_matches_requires_python() -> None:
-    match = MATRIX_PYTHONS.search(CI_WORKFLOW.read_text())
+    match = MATRIX_PYTHONS.search(CI_WORKFLOW.read_text(encoding="utf-8"))
     assert match is not None, "ci.yml has no python matrix line"
     matrix = {item.strip().strip("\"'") for item in match.group(1).split(",")}
-    project = tomllib.loads(PYPROJECT.read_text())["project"]
+    project = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["project"]
     classified = {
         found.group(1)
         for classifier in project["classifiers"]
@@ -345,21 +467,23 @@ def module_constant(source: str, name: str) -> str:
 
 
 def test_core_session_installs_no_extra() -> None:
-    assert EXTRAS_CONSTANT not in session_names(NOXFILE.read_text(), CORE_SESSION)
+    assert EXTRAS_CONSTANT not in session_names(NOXFILE.read_text(encoding="utf-8"), CORE_SESSION)
 
 
 def test_wheel_session_installs_every_extra() -> None:
-    source = NOXFILE.read_text()
+    source = NOXFILE.read_text(encoding="utf-8")
     assert EXTRAS_CONSTANT in session_names(source, WHEEL_SESSION)
     assert module_constant(source, EXTRAS_CONSTANT) == "[all]"
 
 
 def test_core_check_script_exists() -> None:
-    assert (ROOT / module_constant(NOXFILE.read_text(), CHECK_SCRIPT_CONSTANT)).is_file()
+    assert (
+        ROOT / module_constant(NOXFILE.read_text(encoding="utf-8"), CHECK_SCRIPT_CONSTANT)
+    ).is_file()
 
 
 def test_ci_runs_the_core_session_on_linux() -> None:
-    job = ci_job(CI_WORKFLOW.read_text(), CORE_SESSION)
+    job = ci_job(CI_WORKFLOW.read_text(encoding="utf-8"), CORE_SESSION)
     assert LINUX_RUNNER.search(job)
     assert "nox -s core" in job
 
@@ -426,9 +550,9 @@ def ungated_jobs(workflow: str, jobs: tuple[str, ...]) -> list[str]:
 
 
 def test_ci_jobs_are_changes_lint_types_or_gated() -> None:
-    names = ci_job_names(CI_WORKFLOW.read_text())
+    names = ci_job_names(CI_WORKFLOW.read_text(encoding="utf-8"))
     assert names[0] == CHANGES_JOB
-    assert sorted(names) == sorted([CHANGES_JOB, UNGATED_JOB, *GATED_JOBS])
+    assert sorted(names) == sorted([CHANGES_JOB, UNGATED_JOB, RUST_JOB, *GATED_JOBS])
 
 
 def test_job_value_joins_a_folded_value() -> None:
@@ -444,7 +568,7 @@ def test_ci_job_names_skip_trigger_keys() -> None:
 
 
 def test_heavy_jobs_wait_for_the_changes_job() -> None:
-    assert ungated_jobs(CI_WORKFLOW.read_text(), GATED_JOBS) == []
+    assert ungated_jobs(CI_WORKFLOW.read_text(encoding="utf-8"), GATED_JOBS) == []
 
 
 def test_ungated_jobs_sees_a_job_without_the_gate() -> None:
@@ -458,7 +582,7 @@ def test_ungated_jobs_sees_a_job_without_the_gate() -> None:
 
 
 def test_single_jobs_skip_only_on_a_successful_docs_only_answer() -> None:
-    workflow = CI_WORKFLOW.read_text()
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
     for name in GATED_JOBS:
         if name not in MATRIX_JOBS:
             assert job_condition(ci_job(workflow, name)) == SINGLE_JOB_CONDITION, name
@@ -466,7 +590,7 @@ def test_single_jobs_skip_only_on_a_successful_docs_only_answer() -> None:
 
 @pytest.mark.parametrize("name", MATRIX_JOBS)
 def test_matrix_job_gates_its_steps_not_itself(name: str) -> None:
-    job = ci_job(CI_WORKFLOW.read_text(), name)
+    job = ci_job(CI_WORKFLOW.read_text(encoding="utf-8"), name)
     assert job_condition(job) == MATRIX_JOB_CONDITION
     assert job_value(job, "RUN_CODE_JOBS", ENV_INDENT) == MATRIX_STEP_ENV
     steps = STEP_START.split(job)[1:]
@@ -475,14 +599,14 @@ def test_matrix_job_gates_its_steps_not_itself(name: str) -> None:
 
 
 def test_lint_types_runs_on_every_change() -> None:
-    job = ci_job(CI_WORKFLOW.read_text(), UNGATED_JOB)
+    job = ci_job(CI_WORKFLOW.read_text(encoding="utf-8"), UNGATED_JOB)
     assert job
     assert "    needs:" not in job
     assert job_condition(job) is None
 
 
 def test_changes_job_runs_the_classifier_on_full_history() -> None:
-    job = ci_job(CI_WORKFLOW.read_text(), CHANGES_JOB)
+    job = ci_job(CI_WORKFLOW.read_text(encoding="utf-8"), CHANGES_JOB)
     assert "fetch-depth: 0" in job
     assert "code: ${{ steps.classify.outputs.code }}" in job
     assert "run: python3 scripts/ci_changes.py" in job
@@ -512,7 +636,7 @@ def session_strings(source: str, session_name: str) -> list[str]:
 
 
 def test_slow_session_runs_on_xdist_workers() -> None:
-    source = NOXFILE.read_text()
+    source = NOXFILE.read_text(encoding="utf-8")
     assert WORKERS_FLAG in session_strings(source, SLOW_SESSION)
     assert WORKERS_CONSTANT in session_names(source, SLOW_SESSION)
     workers = module_constant(source, WORKERS_CONSTANT)
@@ -565,20 +689,20 @@ def last_value(run: list[str], flag: str) -> str | None:
 
 
 def test_slow_session_splits_on_the_timing_mark() -> None:
-    runs = pytest_runs(NOXFILE.read_text(), SLOW_SESSION)
+    runs = pytest_runs(NOXFILE.read_text(encoding="utf-8"), SLOW_SESSION)
     assert [last_value(run, MARK_FLAG) for run in runs] == [PARALLEL_MARKS, TIMING_MARKS]
 
 
 def test_slow_session_runs_timing_tests_without_workers() -> None:
     """Ends the timing run with `-n 0`, after the posargs, so no posarg can give it workers."""
-    runs = pytest_runs(NOXFILE.read_text(), SLOW_SESSION)
+    runs = pytest_runs(NOXFILE.read_text(encoding="utf-8"), SLOW_SESSION)
     timing = [run for run in runs if last_value(run, MARK_FLAG) == TIMING_MARKS]
     assert timing
     assert all(run[-2:] == [WORKERS_FLAG, NO_WORKERS] for run in timing)
 
 
 def test_slow_session_runs_the_other_slow_tests_on_workers() -> None:
-    runs = pytest_runs(NOXFILE.read_text(), SLOW_SESSION)
+    runs = pytest_runs(NOXFILE.read_text(encoding="utf-8"), SLOW_SESSION)
     parallel = [run for run in runs if last_value(run, MARK_FLAG) == PARALLEL_MARKS]
     assert parallel
     for run in parallel:
@@ -588,7 +712,7 @@ def test_slow_session_runs_the_other_slow_tests_on_workers() -> None:
 
 def test_slow_session_gives_each_module_to_one_worker() -> None:
     """Passes `--dist loadscope` to the parallel run, so a module fixture is built once."""
-    runs = pytest_runs(NOXFILE.read_text(), SLOW_SESSION)
+    runs = pytest_runs(NOXFILE.read_text(encoding="utf-8"), SLOW_SESSION)
     parallel = [run for run in runs if last_value(run, MARK_FLAG) == PARALLEL_MARKS]
     assert parallel
     assert all(last_value(run, DIST_FLAG) == MODULE_DIST for run in parallel)
@@ -598,12 +722,14 @@ def test_slow_session_gives_each_module_to_one_worker() -> None:
 
 def test_serial_sessions_start_no_workers() -> None:
     """Keeps the timing tests of the default suite in one process in every full-suite gate."""
-    source = NOXFILE.read_text()
+    source = NOXFILE.read_text(encoding="utf-8")
     for name in SERIAL_SESSIONS:
         runs = pytest_runs(source, name)
         assert runs, name
         assert all(WORKERS_FLAG not in run for run in runs), name
-    addopts = tomllib.loads(PYPROJECT.read_text())["tool"]["pytest"]["ini_options"]["addopts"]
+    addopts = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["tool"]["pytest"]["ini_options"][
+        "addopts"
+    ]
     assert WORKERS_FLAG not in addopts
 
 
@@ -625,7 +751,7 @@ def test_last_value_reads_the_last_occurrence() -> None:
 
 
 def test_uv_rebuilds_the_extension_when_rust_sources_change() -> None:
-    keys = tomllib.loads(PYPROJECT.read_text())["tool"]["uv"]["cache-keys"]
+    keys = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["tool"]["uv"]["cache-keys"]
     assert {key["file"] for key in keys if "file" in key} >= RUST_BUILD_INPUTS
 
 
@@ -658,7 +784,7 @@ def unprepared_rust_jobs(workflow: str) -> list[str]:
 
 
 def test_every_job_that_syncs_installs_the_pinned_rust_toolchain() -> None:
-    workflow = CI_WORKFLOW.read_text()
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
     assert unprepared_rust_jobs(workflow) == []
     assert "check" in [
         name for name in ci_job_names(workflow) if UV_STEP.search(ci_job(workflow, name))
@@ -701,7 +827,7 @@ def rust_caches_saved_off_main(workflow: str) -> list[str]:
 
 
 def test_rust_cache_saves_only_from_main() -> None:
-    workflow = CI_WORKFLOW.read_text()
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
     assert workflow.count("Swatinem/rust-cache@") >= len(GATED_JOBS)
     assert rust_caches_saved_off_main(workflow) == []
 
@@ -753,7 +879,7 @@ def unlocked_uv_builds(source: str) -> list[str]:
 
 
 def test_wheel_builds_fail_on_a_stale_cargo_lock() -> None:
-    source = NOXFILE.read_text()
+    source = NOXFILE.read_text(encoding="utf-8")
     tree = ast.parse(source)
     constant = next(
         node.value
@@ -812,7 +938,7 @@ def session_runs(source: str, function_name: str) -> list[list[str]]:
 
 
 def test_rust_session_runs_fmt_clippy_test_and_the_wasm_build() -> None:
-    source = NOXFILE.read_text()
+    source = NOXFILE.read_text(encoding="utf-8")
     assert session_runs(source, RUST_SESSION) == RUST_SESSION_RUNS
     assert FMA_STEP in session_names(source, RUST_SESSION)
 
@@ -836,7 +962,7 @@ def uv_runs(source: str, function_name: str) -> list[list[str]]:
 
 
 def test_rust_session_checks_crate_licences_and_the_notices() -> None:
-    source = NOXFILE.read_text()
+    source = NOXFILE.read_text(encoding="utf-8")
     assert {"_install_cargo_tool", "CARGO_DENY", "CARGO_ABOUT"} <= session_names(
         source, RUST_SESSION
     )
@@ -844,7 +970,7 @@ def test_rust_session_checks_crate_licences_and_the_notices() -> None:
 
 
 def test_cargo_tools_install_locked_at_pinned_versions_into_the_repository() -> None:
-    source = NOXFILE.read_text()
+    source = NOXFILE.read_text(encoding="utf-8")
     assert module_constant(source, "CARGO_TOOLS_ROOT") == CARGO_TOOLS_ROOT
     for name in ("CARGO_DENY_VERSION", "CARGO_ABOUT_VERSION"):
         assert PINNED_VERSION.match(module_constant(source, name)), name
@@ -853,14 +979,14 @@ def test_cargo_tools_install_locked_at_pinned_versions_into_the_repository() -> 
 
 
 def test_fma_check_builds_the_extension_and_runs_the_script() -> None:
-    source = NOXFILE.read_text()
+    source = NOXFILE.read_text(encoding="utf-8")
     assert session_runs(source, FMA_STEP) == [FMA_CHECK_BUILD]
     assert FMA_CHECK_SCRIPT in session_names(source, FMA_STEP)
     assert (ROOT / module_constant(source, FMA_CHECK_SCRIPT)).is_file()
 
 
 def test_fma_check_profile_keeps_symbols_and_line_tables() -> None:
-    profiles = tomllib.loads(CARGO_MANIFEST.read_text())["profile"]
+    profiles = tomllib.loads(CARGO_MANIFEST.read_text(encoding="utf-8"))["profile"]
     assert profiles.get("fma-check") == FMA_CHECK_PROFILE
 
 
@@ -910,8 +1036,8 @@ def uv_build_envs(source: str, function_name: str) -> list[str]:
 
 def test_wheels_session_tests_the_wheel_on_313_and_314() -> None:
     """Tests the wheel a user gets: built from the sdist with the dist profile, cargo locked."""
-    source = NOXFILE.read_text()
-    classifiers = tomllib.loads(PYPROJECT.read_text())["project"]["classifiers"]
+    source = NOXFILE.read_text(encoding="utf-8")
+    classifiers = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["project"]["classifiers"]
     supported = tuple(
         match.group(1) for match in map(PYTHON_CLASSIFIER.match, classifiers) if match
     )
@@ -923,3 +1049,465 @@ def test_wheels_session_tests_the_wheel_on_313_and_314() -> None:
     assert WHEEL_FROM_SDIST in session_names(source, WHEELS_SESSION)
     assert "WHEEL_TEST_PYTHONS" in session_names(source, WHEELS_SESSION)
     assert PORTED_TEST_RUN in session_runs(source, WHEELS_SESSION)
+
+
+def job_steps(job: str) -> list[str]:
+    """Splits one job's text into its steps, each without its leading `      - `."""
+    return STEP_START.split(job)[1:]
+
+
+def step_value(step: str, key: str, indent: int = STEP_INDENT) -> str:
+    """Returns one key's value in a step from job_steps, folded lines joined; empty when absent."""
+    return job_value(" " * STEP_INDENT + step, key, indent) or ""
+
+
+def test_rust_job_runs_the_rust_session() -> None:
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+    job = ci_job(workflow, RUST_JOB)
+    assert NEEDS_CHANGES.search(job)
+    assert job_condition(job) == MATRIX_JOB_CONDITION
+    assert job_value(job, "RUN_RUST_JOB", ENV_INDENT) == RUST_STEP_ENV
+    assert job_value(job, "os", ENV_INDENT + 2) == RUST_JOB_OSES
+    steps = job_steps(job)
+    assert steps
+    assert all(RUST_STEP_GATE.match(step_value(step, "if")) for step in steps)
+    assert sum(RUST_SESSION_STEP in step for step in steps) == 1
+    assert RUST_OUTPUT in ci_job(workflow, CHANGES_JOB)
+
+
+def _pinned_version_lines(source: str) -> list[str]:
+    """Returns the noxfile lines that assign the versions the rust session installs."""
+    session = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef) and node.name == RUST_SESSION
+    )
+    names = {
+        ast.unparse(call.args[2])
+        for call in ast.walk(session)
+        if isinstance(call, ast.Call) and ast.unparse(call.func) == INSTALL_CARGO_TOOL
+    }
+    return [line for line in source.splitlines() if line.split(" = ")[0] in names]
+
+
+def cargo_tools_cache_key_problems(job: str, noxfile: str) -> list[str]:
+    """Lists what lets a job's cached cargo tools outlive the versions the noxfile pins.
+
+    Args:
+        job: The text of the job that runs the rust session.
+        noxfile: The text of the noxfile that pins the cargo tool versions.
+
+    Returns:
+        problems: One line per missing restore, key part, version line, ordering or main-only
+            save; empty when the cache is keyed by every pin and saved only from main.
+    """
+    steps = job_steps(job)
+    found = [
+        _first_index(steps, lambda step: step_value(step, "id") == CARGO_TOOLS_VERSIONS_ID),
+        _first_index(steps, lambda step: CACHE_RESTORE_STEP.search(step) is not None),
+        _first_index(steps, lambda step: RUST_SESSION_STEP in step),
+        _first_index(steps, lambda step: CACHE_SAVE_STEP.search(step) is not None),
+    ]
+    indices = [index for index in found if index is not None]
+    if len(indices) != len(found):
+        return ["missing step"]
+    versions, restore, run, save = indices
+    problems = [] if versions < restore < run < save else ["steps out of order"]
+    key = step_value(steps[restore], "key", WITH_INDENT)
+    problems += [f"key lacks {part}" for part in CARGO_TOOLS_KEY_PARTS if part not in key]
+    problems += [
+        f"{step} does not cache .cargo-tools"
+        for step, index in (("restore", restore), ("save", save))
+        if not CARGO_TOOLS_PATH.search(steps[index])
+    ]
+    grep = VERSIONS_GREP.search(step_value(steps[versions], "run"))
+    pins = [*TOOLCHAIN_FILE.read_text(encoding="utf-8").splitlines(), *noxfile.splitlines()]
+    matched = [line for line in pins if grep and re.search(grep[1], line)]
+    expected = [line for line in pins if TOOLCHAIN_PIN.match(line)]
+    if matched != [*expected[:1], *_pinned_version_lines(noxfile)]:
+        problems.append("versions step does not read exactly the pinned versions")
+    if SAVE_FROM_MAIN not in step_value(steps[save], "if"):
+        problems.append("save is not limited to main")
+    return problems
+
+
+def test_rust_job_caches_the_cargo_tools_by_their_pinned_versions() -> None:
+    noxfile = NOXFILE.read_text(encoding="utf-8")
+    assert len(_pinned_version_lines(noxfile)) == 2
+    job = ci_job(CI_WORKFLOW.read_text(encoding="utf-8"), RUST_JOB)
+    assert cargo_tools_cache_key_problems(job, noxfile) == []
+
+
+def test_cargo_tools_cache_key_problems_sees_a_loose_key() -> None:
+    noxfile = (
+        'CARGO_DENY_VERSION = "1.0.0"\nCARGO_ABOUT_VERSION = "2.0.0"\nOTHER_VERSION = "3"\n'
+        "def rust(session):\n"
+        "    _install_cargo_tool(session, CARGO_DENY, CARGO_DENY_VERSION)\n"
+        "    _install_cargo_tool(session, CARGO_ABOUT, CARGO_ABOUT_VERSION)\n"
+    )
+    versions = (
+        "      - id: pins\n        run: >-\n"
+        "          grep -hE '^(channel|CARGO_[A-Z]+_VERSION) = ' rust-toolchain.toml\n"
+        "          noxfile.py\n"
+    )
+    restore = (
+        f"      - id: restore\n        uses: actions/cache/restore@{'a' * 40} # v6\n"
+        "        with:\n          path: .cargo-tools\n"
+        "          key: tools-${{ runner.os }}-${{ runner.arch }}-"
+        "${{ steps.pins.outputs.versions }}\n"
+    )
+    run = "      - run: uv run --locked nox -s rust\n"
+    save = (
+        f"      - if: env.RUN_RUST_JOB == 'true' && {SAVE_FROM_MAIN}\n"
+        f"        uses: actions/cache/save@{'a' * 40} # v6\n"
+        "        with:\n          path: .cargo-tools\n"
+    )
+    assert cargo_tools_cache_key_problems(versions + restore + run + save, noxfile) == []
+    assert cargo_tools_cache_key_problems(restore + run + save, noxfile) == ["missing step"]
+    assert cargo_tools_cache_key_problems(versions + run + restore + save, noxfile) == [
+        "steps out of order"
+    ]
+    loose = restore.replace("-${{ steps.pins.outputs.versions }}", "")
+    assert cargo_tools_cache_key_problems(versions + loose + run + save, noxfile) == [
+        "key lacks ${{ steps.pins.outputs.versions }}"
+    ]
+    wide = versions.replace("CARGO_[A-Z]+_VERSION", "[A-Z_]+_VERSION")
+    assert cargo_tools_cache_key_problems(wide + restore + run + save, noxfile) == [
+        "versions step does not read exactly the pinned versions"
+    ]
+    anywhere = save.replace(f" && {SAVE_FROM_MAIN}", "")
+    assert anywhere != save
+    assert cargo_tools_cache_key_problems(versions + restore + run + anywhere, noxfile) == [
+        "save is not limited to main"
+    ]
+
+
+def workflow_section(workflow: str, key: str) -> str:
+    """Returns one top-level key of a workflow with its indented body, empty when absent."""
+    found = re.search(rf"^{re.escape(key)}:.*\n(?:(?: .*)?\n)*", workflow, re.MULTILINE)
+    return found[0].rstrip() + "\n" if found else ""
+
+
+def test_workflow_section_stops_at_the_next_top_level_key() -> None:
+    workflow = "name: x\n\non:\n  push:\n\n  pull_request:\n\npermissions: {}\n"
+    assert workflow_section(workflow, "on") == "on:\n  push:\n\n  pull_request:\n"
+    assert workflow_section(workflow, "env") == ""
+
+
+def test_wheels_workflow_runs_on_rust_changes_and_tags() -> None:
+    assert workflow_section(WHEELS_WORKFLOW.read_text(encoding="utf-8"), "on") == WHEELS_TRIGGERS
+
+
+def matrix_entries(job: str) -> list[dict[str, str]]:
+    """Reads the block mappings under a job's `include:` matrix key."""
+    entries: list[dict[str, str]] = []
+    lines = job.split("\n        include:\n", 1)[-1].splitlines() if "include:" in job else []
+    for line in itertools.takewhile(lambda text: text.startswith(MATRIX_ITEM_INDENT), lines):
+        key, value = line.strip().removeprefix("- ").split(": ", 1)
+        if line.lstrip().startswith("- "):
+            entries.append({})
+        entries[-1][key] = value.strip('"')
+    return entries
+
+
+def test_matrix_entries_reads_each_block_mapping() -> None:
+    job = (
+        "  linux:\n    strategy:\n      matrix:\n        include:\n"
+        '          - runner: a\n            libc: "2_28"\n          - runner: b\n'
+        "    steps:\n"
+    )
+    assert matrix_entries(job) == [{"runner": "a", "libc": "2_28"}, {"runner": "b"}]
+    assert matrix_entries("  sdist:\n    steps:\n") == []
+
+
+def maturin_steps(job: str) -> list[str]:
+    """Returns the maturin-action steps of one job."""
+    return [step for step in job_steps(job) if "uses: PyO3/maturin-action@" in step]
+
+
+def build_targets(workflow: str) -> list[tuple[str, str, str]]:
+    """Lists (job, runner, target and libc) for every wheel the workflow builds."""
+    return [
+        (name, entry["runner"], f"{entry['target']} {entry.get('libc', '')}".strip())
+        for name in WHEEL_JOBS
+        for entry in matrix_entries(ci_job(workflow, name))
+    ]
+
+
+def test_wheels_workflow_builds_eight_wheels_and_the_sdist() -> None:
+    workflow = WHEELS_WORKFLOW.read_text(encoding="utf-8")
+    assert ci_job_names(workflow) == [VERSION_JOB, *WHEEL_JOBS, SDIST_JOB]
+    assert sorted(build_targets(workflow)) == sorted(WHEEL_TARGETS)
+    requires = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["build-system"]["requires"]
+    maturin = (job_value(workflow_section(workflow, "env"), "MATURIN_VERSION", 2) or "").strip('"')
+    assert requires == [f"maturin=={maturin}"]
+    for name in WHEEL_JOBS:
+        job = ci_job(workflow, name)
+        (build,) = maturin_steps(job)
+        assert step_value(build, "args", WITH_INDENT).startswith(DIST_BUILD_ARGS), name
+        assert step_value(build, "maturin-version", WITH_INDENT) == "${{ env.MATURIN_VERSION }}"
+        assert sum(UPLOAD_STEP in step for step in job_steps(job)) == 1, name
+    (sdist,) = maturin_steps(ci_job(workflow, SDIST_JOB))
+    assert step_value(sdist, "command", WITH_INDENT) == "sdist"
+    assert LOCK_UNCHANGED in ci_job(workflow, SDIST_JOB)
+    assert workflow.count("if-no-files-found: error") == len(WHEEL_JOBS) + 1
+
+
+def test_wheels_jobs_wait_for_the_release_version_check() -> None:
+    workflow = WHEELS_WORKFLOW.read_text(encoding="utf-8")
+    for name in (*WHEEL_JOBS, SDIST_JOB):
+        assert job_value(ci_job(workflow, name), "needs", JOB_INDENT) == VERSION_JOB, name
+        assert job_condition(ci_job(workflow, name)) is None, name
+    steps = job_steps(ci_job(workflow, VERSION_JOB))
+    assert [step_value(step, "if") for step in steps] == [ON_A_TAG, ON_A_TAG]
+    assert step_value(steps[-1], "run") == RELEASE_VERSION_RUN
+    assert step_value(steps[-1], "TAG", WITH_INDENT) == "${{ github.ref_name }}"
+
+
+def test_wheels_test_the_installed_wheel_on_313_and_314() -> None:
+    workflow = WHEELS_WORKFLOW.read_text(encoding="utf-8")
+    env = workflow_section(workflow, "env")
+    assert tuple((job_value(env, "PORTED_TESTS", 2) or "").split()) == PORTED_TESTS
+    assert job_value(env, "PYTHONHASHSEED", 2) == '"0"'
+    linux = ci_job(workflow, "linux")
+    assert IMAGE_LOOP in linux
+    for name in ("windows", "macos"):
+        job = ci_job(workflow, name)
+        versions = [step_value(step, "python-version", WITH_INDENT) for step in job_steps(job)]
+        assert sorted(version.strip('"') for version in versions if version) == sorted(
+            WHEEL_TEST_PYTHONS
+        )
+        assert 'for python in "$PYTHON_313" "$PYTHON_314"; do' in job
+    for name in WHEEL_JOBS:
+        job = ci_job(workflow, name)
+        assert sum(TESTS_FROM_SUITE in step for step in job_steps(job)) == 1, name
+        assert WHEEL_INSTALL.search(job), name
+        assert '-P -c "$WHEEL_CHECK"' in job, name
+        assert "-P -m pytest $PORTED_TESTS" in job, name
+
+
+def _module_files(root: Path, module: str) -> list[Path]:
+    """Returns the source file of one `tests` module under root, or nothing for a non-module."""
+    base = root.joinpath(*module.split("."))
+    return [path for path in (base.with_suffix(".py"), base / "__init__.py") if path.is_file()]
+
+
+def imported_modules(roots: list[Path], root: Path = ROOT) -> set[str]:
+    """Lists the third-party modules that test files and the `tests` modules they import load.
+
+    Args:
+        roots: Test files and folders to start from.
+        root: The repository root that holds the `tests` package.
+
+    Returns:
+        modules: Top-level names that are neither stdlib, e8s nor tests.
+    """
+    pending = [
+        path for root in roots for path in ([root] if root.is_file() else root.rglob("*.py"))
+    ]
+    seen: set[Path] = set()
+    found: set[str] = set()
+    while pending:
+        path = pending.pop()
+        if path in seen:
+            continue
+        seen.add(path)
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            names = [alias.name for alias in node.names] if isinstance(node, ast.Import) else []
+            if isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                names = [node.module, *(f"{node.module}.{alias.name}" for alias in node.names)]
+            for name in names:
+                top = name.split(".")[0]
+                if top == FIRST_PARTY_TESTS:
+                    pending += _module_files(root, name)
+                elif top not in sys.stdlib_module_names and top != FIRST_PARTY:
+                    found.add(top)
+    return found
+
+
+def test_imported_modules_follows_test_modules(tmp_path: Path) -> None:
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "helpers.py").write_text(
+        "import hypothesis.strategies\n", encoding="utf-8"
+    )
+    test = tmp_path / "test_x.py"
+    test.write_text(
+        "import os\nimport numpy.linalg\nfrom tests import helpers\nimport e8s\n", encoding="utf-8"
+    )
+    assert imported_modules([test], tmp_path) == {"numpy", "hypothesis"}
+
+
+def requirement_name(spec: str) -> str:
+    """Returns the distribution name a requirement string starts with."""
+    found = REQUIREMENT_NAME.match(spec)
+    assert found, spec
+    return found[0]
+
+
+def test_wheels_install_every_package_the_ported_tests_import() -> None:
+    workflow = WHEELS_WORKFLOW.read_text(encoding="utf-8")
+    tools = (job_value(workflow_section(workflow, "env"), "WHEEL_TEST_TOOLS", 2) or "").split()
+    project = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
+    metadata = project["project"]
+    requirements = [*metadata["dependencies"], *metadata["optional-dependencies"]["all"]]
+    runtime = {requirement_name(spec).replace("-", "_") for spec in requirements}
+    roots = [ROOT / path for path in (*PORTED_TESTS, *SUITE_ENTRY_FILES)]
+    assert imported_modules(roots) - runtime == set(tools)
+    dev = {requirement_name(spec) for spec in project["dependency-groups"]["dev"]}
+    assert set(tools) <= dev
+
+
+def unpinned_actions(workflow: str) -> list[str]:
+    """Lists the `uses:` lines of a workflow that do not pin a full commit SHA with its tag."""
+    return [
+        line.strip()
+        for line in workflow.splitlines()
+        if line.strip().removeprefix("- ").startswith("uses:") and not PINNED_ACTION.search(line)
+    ]
+
+
+def test_every_wheels_action_is_pinned_to_a_sha() -> None:
+    workflow = WHEELS_WORKFLOW.read_text(encoding="utf-8")
+    assert workflow.count("uses: ") >= len(WHEEL_JOBS) * 3
+    assert unpinned_actions(workflow) == []
+
+
+def test_unpinned_actions_sees_a_tag_or_short_sha() -> None:
+    workflow = (
+        f"      - uses: actions/checkout@{'a' * 40} # v7.0.1\n"
+        "      - uses: actions/checkout@v7\n"
+        f"        uses: actions/cache/save@{'b' * 39} # v6\n"
+        f"        uses: PyO3/maturin-action@{'c' * 40}\n"
+    )
+    assert unpinned_actions(workflow) == [
+        "- uses: actions/checkout@v7",
+        f"uses: actions/cache/save@{'b' * 39} # v6",
+        f"uses: PyO3/maturin-action@{'c' * 40}",
+    ]
+
+
+def test_wheels_workflow_holds_least_privilege_and_writes_no_cache() -> None:
+    workflow = WHEELS_WORKFLOW.read_text(encoding="utf-8")
+    assert workflow_section(workflow, "permissions") == "permissions: {}\n"
+    for name in ci_job_names(workflow):
+        assert READ_ONLY_JOB in ci_job(workflow, name), name
+    assert workflow.count("permissions:") == len(ci_job_names(workflow)) + 1
+    checkouts = workflow.count("uses: actions/checkout@")
+    assert workflow.count("persist-credentials: false") == checkouts
+    assert not any(cache in workflow for cache in CACHE_ACTIONS)
+    assert workflow.count("enable-cache: false") == workflow.count("uses: astral-sh/setup-uv@")
+    assert not CACHE_INPUT.search(workflow)
+
+
+def test_wheel_builds_check_the_pinned_toolchain() -> None:
+    workflow = WHEELS_WORKFLOW.read_text(encoding="utf-8")
+    (build,) = maturin_steps(ci_job(workflow, "linux"))
+    assert step_value(build, "before-script-linux", WITH_INDENT) == "${{ env.CHECK_PINNED_RUSTC }}"
+    for name in ("windows", "macos"):
+        steps = job_steps(ci_job(workflow, name))
+        build_index = _first_index(steps, lambda step: "uses: PyO3/maturin-action@" in step)
+        assert build_index is not None
+        assert step_value(steps[build_index + 1], "run") == 'eval "$CHECK_PINNED_RUSTC"', name
+
+
+def run_toolchain_check(folder: Path, rustc_version: str) -> subprocess.CompletedProcess[str]:
+    """Runs CHECK_PINNED_RUSTC in folder against a fake rustc that prints one version line."""
+    check = job_value(
+        workflow_section(WHEELS_WORKFLOW.read_text(encoding="utf-8"), "env"),
+        "CHECK_PINNED_RUSTC",
+        2,
+    )
+    assert check
+    toolchain = TOOLCHAIN_FILE.read_text(encoding="utf-8")
+    (folder / "rust-toolchain.toml").write_text(toolchain, encoding="utf-8")
+    bin_folder = folder / "bin"
+    bin_folder.mkdir(exist_ok=True)
+    rustc = bin_folder / "rustc"
+    rustc.write_text(
+        f"#!/bin/sh\necho 'rustc {rustc_version} (0ef1bc386 2026-11-09)'\n", encoding="utf-8"
+    )
+    rustc.chmod(0o755)
+    path = f"{bin_folder}{os.pathsep}{os.environ['PATH']}"
+    return subprocess.run(
+        ["bash", "-c", check],
+        cwd=folder,
+        env={**os.environ, "PATH": path},
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
+    )
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="the fake rustc is a POSIX shell script")
+def test_toolchain_check_refuses_a_rustc_other_than_the_pin(tmp_path: Path) -> None:
+    channel = tomllib.loads(TOOLCHAIN_FILE.read_text(encoding="utf-8"))["toolchain"]["channel"]
+    assert run_toolchain_check(tmp_path, channel).returncode == 0
+    refused = run_toolchain_check(tmp_path, f"{channel}.1")
+    assert refused.returncode == 1
+    assert refused.stdout == f"E: rustc is not the pinned {channel}\n"
+
+
+def test_regression_wheels_never_cancel_a_tag_run() -> None:
+    """A second dispatch or a re-pushed tag must not kill a release build in progress."""
+    assert (
+        workflow_section(WHEELS_WORKFLOW.read_text(encoding="utf-8"), "concurrency")
+        == WHEELS_CONCURRENCY
+    )
+
+
+def test_regression_wheels_upload_before_the_tests_run() -> None:
+    """The tests install packages beside dist/, so the wheel is uploaded before they run."""
+    workflow = WHEELS_WORKFLOW.read_text(encoding="utf-8")
+    for name in WHEEL_JOBS:
+        steps = job_steps(ci_job(workflow, name))
+        build = _first_index(steps, lambda step: "uses: PyO3/maturin-action@" in step)
+        upload = _first_index(steps, lambda step: UPLOAD_STEP in step)
+        tests = _first_index(steps, lambda step: PORTED_TEST_STEP in step)
+        assert build is not None, name
+        assert upload is not None, name
+        assert tests is not None, name
+        assert build < upload < tests, name
+
+
+def unpinned_images(workflow: str) -> list[str]:
+    """Lists the python image references of a workflow that name no digest."""
+    text = EXPRESSION.sub(r"<\1>", workflow)
+    return [ref for ref in IMAGE_REFERENCE.findall(text) if not PINNED_IMAGE.search(ref)]
+
+
+def test_unpinned_images_sees_a_tag_without_a_digest() -> None:
+    digest = f"sha256:{'a' * 64}"
+    workflow = (
+        f"  A: python:3.13-slim@{digest}\n"
+        "  B: python:3.14-${{ matrix.image }}@${{ matrix.digest_314 }}\n"
+        '  C: "python:$python-$IMAGE_VARIANT" sh\n'
+        "  D: python:3.13-alpine\n"
+        f"  E: python:3.13-slim@sha256:{'a' * 63}\n"
+    )
+    assert unpinned_images(workflow) == [
+        "python:$python-$IMAGE_VARIANT",
+        "python:3.13-alpine",
+        f"python:3.13-slim@sha256:{'a' * 63}",
+    ]
+
+
+def test_regression_wheel_test_images_are_pinned_by_digest() -> None:
+    """The Linux tests ran in floating python tags; they run in digest-pinned images now."""
+    workflow = WHEELS_WORKFLOW.read_text(encoding="utf-8")
+    assert unpinned_images(workflow) == []
+    linux = ci_job(workflow, "linux")
+    entries = matrix_entries(linux)
+    assert entries
+    digests: dict[str, tuple[str, str]] = {}
+    for entry in entries:
+        pair = (entry["digest_313"], entry["digest_314"])
+        assert all(IMAGE_DIGEST.match(digest) for digest in pair), entry
+        assert digests.setdefault(entry["image"], pair) == pair, entry
+    (test,) = [step for step in job_steps(linux) if PORTED_TEST_STEP in step]
+    for version in WHEEL_TEST_PYTHONS:
+        name = version.replace(".", "")
+        assert step_value(test, f"IMAGE_{name}", WITH_INDENT) == (
+            f"python:{version}-${{{{ matrix.image }}}}@${{{{ matrix.digest_{name} }}}}"
+        )
+    assert IMAGE_LOOP in test
+    assert '"$image" sh -euc' in test

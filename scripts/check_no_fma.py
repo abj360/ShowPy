@@ -134,7 +134,7 @@ def count_instructions(disassembly: str) -> int:
 def _rustc_print(item: str) -> str:
     """Returns one `rustc --print` value of the toolchain active in the working directory."""
     command = ("rustc", "--print", item)
-    return subprocess.run(command, check=True, capture_output=True, text=True).stdout.strip()
+    return subprocess.run(command, check=True, capture_output=True, encoding="utf-8").stdout.strip()
 
 
 def objdump_path() -> Path:
@@ -163,7 +163,7 @@ def check_no_fma(path: Path) -> list[str]:
     if not path.is_file():
         raise DisassemblyError(f"no library at {path}")
     command = (str(objdump_path()), *OBJDUMP_FLAGS, str(path))
-    result = subprocess.run(command, check=False, capture_output=True, text=True)
+    result = subprocess.run(command, check=False, capture_output=True, encoding="utf-8")
     if result.returncode != 0:
         raise DisassemblyError(f"{OBJDUMP} failed on {path}: {result.stderr.strip()}")
     if count_instructions(result.stdout) == 0:

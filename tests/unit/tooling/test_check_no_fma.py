@@ -73,13 +73,13 @@ def symbol_section(disassembly: str, symbol: str) -> str:
 
 
 def test_flags_an_fma_outside_libm_fma() -> None:
-    assert fma_outside_libm(OPTIMIZED.read_text()) == OUTSIDE_LIBM_OPTIMIZED
-    assert fma_outside_libm(UNOPTIMIZED.read_text()) == OUTSIDE_LIBM_UNOPTIMIZED
+    assert fma_outside_libm(OPTIMIZED.read_text(encoding="utf-8")) == OUTSIDE_LIBM_OPTIMIZED
+    assert fma_outside_libm(UNOPTIMIZED.read_text(encoding="utf-8")) == OUTSIDE_LIBM_UNOPTIMIZED
 
 
 def test_accepts_an_fma_inside_libm_fma() -> None:
-    inlined = symbol_section(OPTIMIZED.read_text(), INLINED_LIBM_FMA)
-    own_symbol = symbol_section(UNOPTIMIZED.read_text(), LIBM_FMA_SYMBOL)
+    inlined = symbol_section(OPTIMIZED.read_text(encoding="utf-8"), INLINED_LIBM_FMA)
+    own_symbol = symbol_section(UNOPTIMIZED.read_text(encoding="utf-8"), LIBM_FMA_SYMBOL)
     for section in (inlined, own_symbol):
         assert "\tfmadd\t" in section
         assert fma_outside_libm(section) == []
@@ -87,14 +87,14 @@ def test_accepts_an_fma_inside_libm_fma() -> None:
 
 def test_inlined_libm_fma_needs_its_inlining_record() -> None:
     """Fails closed when the library has no line tables, rather than trusting the caller."""
-    inlined = symbol_section(OPTIMIZED.read_text(), INLINED_LIBM_FMA)
+    inlined = symbol_section(OPTIMIZED.read_text(encoding="utf-8"), INLINED_LIBM_FMA)
     without_records = "\n".join(line for line in inlined.splitlines() if not line.startswith(";"))
     assert fma_outside_libm(without_records) == ["_exact 410: fmadd d0, d0, d1, d2"]
 
 
 def test_libm_source_alone_does_not_pass_an_fma() -> None:
     """Passes only libm's fma, not any function inlined from libm's sources."""
-    inlined = symbol_section(OPTIMIZED.read_text(), INLINED_LIBM_FMA)
+    inlined = symbol_section(OPTIMIZED.read_text(encoding="utf-8"), INLINED_LIBM_FMA)
     renamed = inlined.replace(": fma inlined into fma", ": sin inlined into fma").replace(
         "end of fma inlined into fma", "end of sin inlined into fma"
     )
@@ -109,9 +109,9 @@ def test_fma_mnemonic_matches_only_fused_multiply_adds(mnemonic: str) -> None:
 
 
 def test_count_instructions_sees_only_instruction_lines() -> None:
-    inlined = symbol_section(OPTIMIZED.read_text(), INLINED_LIBM_FMA)
+    inlined = symbol_section(OPTIMIZED.read_text(encoding="utf-8"), INLINED_LIBM_FMA)
     assert count_instructions(inlined) == 2
-    assert count_instructions(OPTIMIZED.read_text().split("Disassembly")[0]) == 0
+    assert count_instructions(OPTIMIZED.read_text(encoding="utf-8").split("Disassembly")[0]) == 0
 
 
 def test_main_fails_closed_on_a_missing_library(tmp_path: Path) -> None:
