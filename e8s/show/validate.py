@@ -8,13 +8,12 @@ Contains:
     validate_set(): checks a candidate set against the show
     validate_paths(): checks a transition's paths, including continuity through the engine
     validate_dependencies(): checks that the sheet reference resolves and is pinned
-    validate_show(): checks everything plus set sequence, transitions and the timeline
+    validate_show(): checks everything plus set sequence, transitions, references and the timeline
 """
 
 import math
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from itertools import islice
-from typing import Literal
 
 from e8s.choreo.engine import PathEngine
 from e8s.choreo.match_ops import forms_of_set
@@ -29,17 +28,10 @@ from e8s.core.validation import ValidationIssue, ValidationReport
 from e8s.sheet.templates import SheetStore, get_sheet
 from e8s.show.document_paths import is_storable_folder
 from e8s.show.models import Show
+from e8s.show.validate_refs import ERROR, WARNING, make_issue, reference_issues
 from e8s.time.validate import validate_timeline
 
 MAX_NON_FINITE_ISSUES = 100
-
-type Level = Literal["error", "warning"]
-ERROR: Level = "error"
-WARNING: Level = "warning"
-
-
-def _issue(level: Level, code: ErrorCode, where: str, message: str, hint: str) -> ValidationIssue:
-    return ValidationIssue(level=level, code=code, where=where, message=message, hint=hint)
 
 
 def _membership(show: Show, candidate: Set) -> list[ValidationIssue]:
@@ -47,7 +39,7 @@ def _membership(show: Show, candidate: Set) -> list[ValidationIssue]:
     cast_ids = set(show.cast.ids())
     placed = set(candidate.entity_ids())
     issues = [
-        _issue(
+        make_issue(
             ERROR,
             ErrorCode.MISSING_SPOT,
             where,
@@ -58,7 +50,7 @@ def _membership(show: Show, candidate: Set) -> list[ValidationIssue]:
         if e not in placed
     ]
     issues += [
-        _issue(
+        make_issue(
             ERROR,
             ErrorCode.UNKNOWN_SPOT,
             where,
@@ -76,7 +68,7 @@ def _pins(show: Show, candidate: Set) -> list[ValidationIssue]:
         return []
     stored = show.set(candidate.id)
     return [
-        _issue(
+        make_issue(
             ERROR,
             ErrorCode.PINNED_CHANGED,
             f"set {candidate.id} {p.entity}",
@@ -97,7 +89,7 @@ def _forms(show: Show, candidate: Set) -> list[ValidationIssue]:
         form = show.forms.get(p.form)
         if form is None:
             issues.append(
-                _issue(
+                make_issue(
                     ERROR,
                     ErrorCode.UNKNOWN_FORM,
                     where,
@@ -107,7 +99,7 @@ def _forms(show: Show, candidate: Set) -> list[ValidationIssue]:
             )
         elif p.entity not in form.members or form.set != candidate.id:
             issues.append(
-                _issue(
+                make_issue(
                     ERROR,
                     ErrorCode.NOT_IN_FORM,
                     where,
@@ -121,7 +113,7 @@ def _forms(show: Show, candidate: Set) -> list[ValidationIssue]:
 def _stale_forms(show: Show, candidate: Set) -> list[ValidationIssue]:
     listed = forms_of_set(show, candidate.id)
     return [
-        _issue(
+        make_issue(
             WARNING,
             ErrorCode.STALE_FORM,
             f"set {candidate.id} form {form_id}",
@@ -157,7 +149,7 @@ def _with_spec(show: Show, spec: TransitionSpec) -> Show:
 def _path_rows(show: Show, spec: TransitionSpec, where: str) -> list[ValidationIssue]:
     cast_ids = set(show.cast.ids())
     issues = [
-        _issue(
+        make_issue(
             ERROR,
             ErrorCode.UNKNOWN_SPOT,
             f"{where} {e}",
@@ -171,7 +163,7 @@ def _path_rows(show: Show, spec: TransitionSpec, where: str) -> list[ValidationI
         unknown = [m for m in route.members if m not in cast_ids]
         if unknown:
             issues.append(
-                _issue(
+                make_issue(
                     ERROR,
                     ErrorCode.UNKNOWN_SPOT,
                     f"{where} route {route.id}",
@@ -182,9 +174,9 @@ def _path_rows(show: Show, spec: TransitionSpec, where: str) -> list[ValidationI
     return issues
 
 
-def _compile_issue(error: E8sError, where: str) -> ValidationIssue:
+def _compilemake_issue(error: E8sError, where: str) -> ValidationIssue:
     code = ErrorCode.CONTINUITY if isinstance(error, ContinuityError) else error.code
-    return _issue(ERROR, code, where, error.message, error.hint)
+    return make_issue(ERROR, code, where, error.message, error.hint)
 
 
 def _compile_rows(show: Show, spec: TransitionSpec, where: str) -> list[ValidationIssue]:
@@ -198,7 +190,7 @@ def _compile_rows(show: Show, spec: TransitionSpec, where: str) -> list[Validati
         try:
             engine.compile_entity(entity, spec.id)
         except E8sError as error:
-            issues.append(_compile_issue(error, f"{where} {entity}"))
+            issues.append(_compilemake_issue(error, f"{where} {entity}"))
     return issues
 
 
@@ -215,7 +207,7 @@ def validate_paths(show: Show, spec: TransitionSpec) -> ValidationReport:
     expected = show.set(spec.id[1]).counts
     if not math.isclose(spec.counts, expected):
         issues.append(
-            _issue(
+            make_issue(
                 ERROR,
                 ErrorCode.COUNTS_MISMATCH,
                 where,
@@ -238,7 +230,7 @@ def validate_dependencies(show: Show, store: SheetStore | None = None) -> Valida
     issues = []
     if show.dependencies.get(f"{kind}:{ref_id}") != version:
         issues.append(
-            _issue(
+            make_issue(
                 ERROR,
                 ErrorCode.UNPINNED_SHEET,
                 "dependencies",
@@ -249,13 +241,15 @@ def validate_dependencies(show: Show, store: SheetStore | None = None) -> Valida
     try:
         get_sheet(ref, store)
     except E8sError as error:
-        issues.append(_issue(ERROR, ErrorCode.UNKNOWN_SHEET, "sheet", error.message, error.hint))
+        issues.append(
+            make_issue(ERROR, ErrorCode.UNKNOWN_SHEET, "sheet", error.message, error.hint)
+        )
     return ValidationReport(issues=tuple(issues))
 
 
 def _sequence(show: Show) -> list[ValidationIssue]:
     zero_counts = [
-        _issue(
+        make_issue(
             WARNING,
             ErrorCode.ZERO_COUNTS,
             f"set {s.id}",
@@ -267,7 +261,7 @@ def _sequence(show: Show) -> list[ValidationIssue]:
     ]
     valid = set(show.transition_ids())
     stale = [
-        _issue(
+        make_issue(
             ERROR,
             ErrorCode.STALE_TRANSITION,
             format_tid(spec.id),
@@ -333,7 +327,7 @@ def _checked(
     return []
 
 
-def _set_id_issue(index: int, set_id: str) -> list[ValidationIssue]:
+def _set_idmake_issue(index: int, set_id: str) -> list[ValidationIssue]:
     if is_storable_folder(set_id):
         return []
     return _checked("set", f"sets[{index}].id", set_id, lambda text: check_id(text, kind="set"))
@@ -342,7 +336,7 @@ def _set_id_issue(index: int, set_id: str) -> list[ValidationIssue]:
 def _ids(show: Show) -> list[ValidationIssue]:
     issues = _checked("show", "id", show.id, lambda text: check_sheet_id(text, kind="show"))
     for index, candidate in enumerate(show.sets):
-        issues += _set_id_issue(index, candidate.id)
+        issues += _set_idmake_issue(index, candidate.id)
     for key, form in show.forms.items():
         issues += _checked("form", f"forms.{key}.id", form.id, lambda t: check_id(t, kind="form"))
         if key != form.id:
@@ -427,7 +421,7 @@ def validate_show(show: Show, store: SheetStore | None = None) -> ValidationRepo
     if not too_long:
         reports += _path_reports(show)
     extra = too_long + _sequence(show) + _form_keys(show) + _selections(show) + _ids(show)
-    extra += _non_finite(show)
+    extra += _non_finite(show) + reference_issues(show)
     reports.append(ValidationReport(issues=tuple(extra)))
     reports.append(validate_timeline(show.timeline))
     if store is not None:

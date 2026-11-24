@@ -92,6 +92,7 @@ from e8s.core.validation import ValidationReport
 from e8s.sheet.templates import InMemorySheetStore
 from e8s.show._notes_document import Note, NotesDocument
 from e8s.show.anchors import Anchor
+from e8s.show.change_models import ItemKey
 from e8s.show.collab_models import Comment
 from e8s.show.models import Pin, Show
 from e8s.show.validate import (
@@ -273,23 +274,17 @@ def test_valid_validation_fixtures_report_nothing(show: Show) -> None:
     assert validate_show(show).issues == ()
 
 
-@pytest.mark.defect("UP-9.7-61")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-61")
 def test_regression_validate_show_reports_form_members_naming_unknown_spots() -> None:
     """Reports a form member that is not in the cast (audit 9.7 validation gaps)."""
     assert _mentions(_formed(members=("T1", "T2", "ZZ")), "ZZ")
 
 
-@pytest.mark.defect("UP-9.7-62")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-62")
 def test_regression_validate_show_reports_forms_of_a_missing_set() -> None:
     """Reports a form whose set does not exist (audit 9.7 validation gaps)."""
     show = _formed(members=(), form_set=GHOST, declares=False)
     assert _mentions(show, GHOST)
 
 
-@pytest.mark.defect("UP-9.7-63")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-63")
 def test_regression_validate_show_reports_sets_declaring_missing_forms() -> None:
     """Reports a set that lists a form that does not exist (audit 9.7 validation gaps)."""
     assert _mentions(_edited(sets=_set_two_with(forms=("ghost-form",))), "ghost-form")
@@ -300,8 +295,6 @@ def test_regression_validate_show_reports_form_keys_that_differ_from_ids() -> No
     assert _mentions(_formed(key="zz"), "zz")
 
 
-@pytest.mark.defect("UP-9.7-65")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-65")
 def test_regression_validate_show_reports_members_whose_placements_do_not_point_back() -> None:
     """Reports a form member whose placement names no form (audit 9.7 validation gaps)."""
     assert _mentions(_formed(points_back=False), FORM_ID)
@@ -547,3 +540,19 @@ def test_validate_show_accepts_a_set_whose_forms_are_all_listed() -> None:
     show = replaced_form_show()
     clean = show.replace(forms={"b": show.forms[FormId("b")]})
     assert [i for i in validate_show(clean).issues if i.code == "STALE_FORM"] == []
+
+
+def _item_of(show: Show, code: str) -> ItemKey:
+    issue = next(i for i in validate_show(show).issues if i.code == code)
+    return ItemKey.model_validate(issue.context["item"])
+
+
+def test_regression_reference_issues_carry_the_item_key_of_the_item_they_concern() -> None:
+    """Gives each reference issue the item key of its form, set or placement."""
+    form = ItemKey(kind="form", path=(FORM_ID,))
+    assert _item_of(_formed(members=("T1", "T2", "ZZ")), "UNKNOWN_SPOT") == form
+    assert _item_of(_formed(form_set=GHOST, declares=False), "UNKNOWN_SET") == form
+    declared = _edited(sets=_set_two_with(forms=("ghost-form",)))
+    assert _item_of(declared, "UNKNOWN_FORM") == ItemKey(kind="set", path=("2",), role="forms")
+    placed = _item_of(_formed(points_back=False), "MEMBER_MISMATCH")
+    assert (placed.kind, placed.path[0], placed.role) == ("placement", "2", "drill")
