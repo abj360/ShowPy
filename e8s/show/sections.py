@@ -20,7 +20,7 @@ from e8s.show.set_keys import free_set_key, set_key
 from e8s.show.set_queries import index
 from e8s.time.clock import count_to_seconds, tempo_at
 from e8s.time.measures import count_to_measure
-from e8s.time.models import AudioTrack, MeasureSetting, TempoSection, Timeline
+from e8s.time.models import AudioTrack, Marker, MeasureSetting, TempoSection, Timeline
 
 TOL = 1e-9
 
@@ -246,11 +246,20 @@ def _merge_tempos(tempos: tuple[TempoSection, ...]) -> tuple[TempoSection, ...]:
     return tuple(kept)
 
 
+def _new_markers(a: Sequence[Marker], b: Sequence[Marker], offset: Count) -> list[Marker]:
+    """Shifts `b`'s markers by `offset`, skipping one `a` holds at the same count with its label."""
+    moved = (m.replace(at_count=m.at_count + offset) for m in b)
+    return [
+        m
+        for m in moved
+        if not any(k.label == m.label and abs(k.at_count - m.at_count) <= TOL for k in a)
+    ]
+
+
 def _joined_timeline(a: Timeline, b: Timeline, offset: Count) -> Timeline:
     def moved(count: Count) -> Count:
         return count + offset
 
-    labels = {m.label for m in a.markers}
     total = None if a.total_counts is None or b.total_counts is None else offset + b.total_counts
     return a.replace(
         tempos=_merge_tempos(
@@ -265,7 +274,7 @@ def _joined_timeline(a: Timeline, b: Timeline, offset: Count) -> Timeline:
         ),
         markers=(
             *a.markers,
-            *(m.replace(at_count=moved(m.at_count)) for m in b.markers if m.label not in labels),
+            *_new_markers(a.markers, b.markers, offset),
         ),
         total_counts=total,
     )

@@ -173,13 +173,17 @@ def _three_sets_with(**timeline_fields: object) -> Show:
     return show.replace(timeline=show.timeline.replace(**timeline_fields))
 
 
-@pytest.mark.defect("UP-9.7-48")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-48")
 def test_regression_join_after_split_keeps_markers_that_repeat_a_label() -> None:
     """Keeps a marker whose label repeats at another count across split and join (audit 9.7)."""
     markers = (Marker(label="hit", at_count=4.0), Marker(label="hit", at_count=14.0))
     show = _three_sets_with(markers=markers)
     assert _round_trip(show).timeline.markers == markers
+
+
+def test_join_after_split_keeps_a_marker_on_the_boundary_once() -> None:
+    """Keeps a marker that sits on the split count once, not once per half."""
+    markers = (Marker(label="hit", at_count=4.0), Marker(label="hit", at_count=12.0))
+    assert _round_trip(_three_sets_with(markers=markers)).timeline.markers == markers
 
 
 @pytest.mark.defect("UP-9.7-49")
