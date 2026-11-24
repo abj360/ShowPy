@@ -13,9 +13,11 @@ Contains:
     test_items_cover_every_kind_and_no_notes_or_proposals: lists the kinds a rich show holds
     test_items_key_transitions_by_set_keys: keys paths, rows and routes by the stored folder
     test_reorders_are_one_order_change_each: reports a spot, pin or placement reorder as one item
-    test_renumber_changes_set_identities_only: keeps placement keys through a renumber
+    test_renumber_changes_set_identities_only: changes only set identities when forms, paths and
+        pins follow a renumber
     test_added_and_removed_items_have_no_other_side: leaves the missing side None
-    test_changes_skip_sets_shared_by_identity: dumps only the changed set's placements, nothing else
+    test_changes_skip_sets_shared_by_identity: dumps only the changed set's placements, no shared
+        set, form or path row
     test_set_and_spec_values_match_their_json: reads set and path spec fields as to_json writes them
     test_changes_refuse_*: refuses two stored values that claim one item
 """
@@ -26,9 +28,11 @@ from typing import get_args
 
 import pytest
 
+from e8s.choreo.form_models import Form
 from e8s.choreo.models import Placement, PlacementPatch, Set
+from e8s.choreo.path_models import PathRow, TransitionSpec
 from e8s.core.errors import SchemaError
-from e8s.core.ids import SetId
+from e8s.core.ids import FormId, SetId, SpotId, make_tid
 from e8s.core.readonly import freeze_json
 from e8s.core.resources import schema_path
 from e8s.examples import two_set_show
@@ -42,6 +46,7 @@ from e8s.show.pinning import pin
 from e8s.show.renumber import renumber
 from e8s.show.set_keys import set_key
 from tests.fixtures.cast_shows import rich_show
+from tests.fixtures.recipes import LINE_RECIPE
 
 SCHEMA = "e8.show.v2.json"
 DEFS = "$defs"
@@ -243,19 +248,39 @@ def test_reorders_are_one_order_change_each() -> None:
     assert items(show)[ItemKey(kind="spot_order", path=())] == ["T1", "T2", "T3", "T4"]
 
 
+def _renumbered_show() -> Show:
+    show = add_set(rich_show(), "9", 4.0)
+    form = Form(id=FormId("f9"), set=SetId("9"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
+    spec = TransitionSpec(
+        id=make_tid("2", "9"), counts=4.0, rows={SpotId("T2"): PathRow(entity=SpotId("T2"))}
+    )
+    show = show.replace(forms={**show.forms, form.id: form}, transitions=(*show.transitions, spec))
+    return pin(pin(pin(show, "set", "9"), "transition", "2→9"), "form", "f9")
+
+
 def test_renumber_changes_set_identities_only() -> None:
-    show = add_set(two_set_show(), "9", 4.0)
-    show = pin(pin(show, "set", "9"), "transition", "2→9")
+    show = _renumbered_show()
     renamed, mapping = renumber(show)
-    assert [(p.target, p.id) for p in renamed.pins] == [("set", "3"), ("transition", "2→3")]
-    assert items(renamed)[ItemKey(kind="pin_order", path=())] == [
+    assert mapping[SetId("9")] == "3"
+    assert renamed.forms[FormId("f9")].set == "3"
+    assert [str(spec.id) for spec in renamed.transitions] == ["1→2", "2→3"]
+    assert [(p.target, p.id) for p in renamed.pins] == [
+        ("set", "3"),
+        ("transition", "2→3"),
+        ("form", "f9"),
+    ]
+    found = items(renamed)
+    assert found[ItemKey(kind="pin_order", path=())] == [
         ["set", "9"],
         ["transition", "2-9"],
+        ["form", "f9"],
     ]
-    assert mapping[SetId("9")] == "3"
-    found = changes(show, renamed).changes
-    assert [c.key for c in found] == [ItemKey(kind="set", path=("9",))]
-    assert [found[0].before, found[0].after] == [freeze_json({"id": "9"}), freeze_json({"id": "3"})]
+    form = found[ItemKey(kind="form", path=("f9",))]
+    assert isinstance(form, dict)
+    assert form["set"] == "9"
+    (change,) = changes(show, renamed).changes
+    assert change.key == ItemKey(kind="set", path=("9",))
+    assert [change.before, change.after] == [freeze_json({"id": "9"}), freeze_json({"id": "3"})]
 
 
 def test_added_and_removed_items_have_no_other_side() -> None:
@@ -271,7 +296,7 @@ def test_added_and_removed_items_have_no_other_side() -> None:
 
 
 def test_changes_skip_sets_shared_by_identity(monkeypatch: pytest.MonkeyPatch) -> None:
-    show = add_set(two_set_show(), "3", 4.0)
+    show = add_set(rich_show(), "3", 4.0)
     moved = _move(show, SECOND_SET, "T1", PlacementPatch(y=7.0))
     dumped: list[str] = []
     original = Placement.to_json
@@ -284,7 +309,8 @@ def test_changes_skip_sets_shared_by_identity(monkeypatch: pytest.MonkeyPatch) -
         raise AssertionError
 
     monkeypatch.setattr(Placement, "to_json", counting)
-    monkeypatch.setattr(Set, "to_json", refuse)
+    for model in (Set, Form, PathRow):
+        monkeypatch.setattr(model, "to_json", refuse)
     monkeypatch.setattr(items_module, "require_storable", refuse)
     assert len(changes(show, moved).changes) == 1
     assert sorted(dumped) == sorted(2 * [p.entity for p in show.sets[SECOND_SET].placements])

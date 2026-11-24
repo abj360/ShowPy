@@ -27,7 +27,10 @@ Key rules (kind, path: value):
     show (): ID, title, pack, dependencies, extensions and the cast's label scheme, which
         configures the whole show's labels and has no kind of its own
 
-Values are the item's `to_json()` fields without the identity fields its path holds. Notes and
+Values are the item's `to_json()` fields without the identity fields its path holds, with one
+departure: a value that names a set by display ID names it by set key instead, so a renumber
+changes no value either. Only a form's `set` names a set in a value; a set the show does not
+hold keeps its stored ID. Notes and
 proposals are stored beside the show, not in it, so they hold no items. `items` refuses a show the
 stored layout cannot hold; both functions refuse two stored values that claim one item, with
 SchemaError.
@@ -41,6 +44,7 @@ Contains:
     changes(): lists the items two shows differ in, skipping objects the shows share
 """
 
+import operator
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from typing import Protocol, cast
@@ -78,6 +82,7 @@ PLACEMENTS = "placements"
 ENTITY_FIELD = "entity"
 ID_FIELD = "id"
 KEY_FIELD = "key"
+SET_FIELD = "set"
 TARGET_FIELD = "target"
 LABEL_SCHEME_FIELD = "label_scheme"
 
@@ -234,8 +239,18 @@ def _transition_entries(path: _Path, spec: TransitionSpec) -> Iterator[_Entry]:
         yield ("route", (key, route_id), None), _without(route.to_json(), ID_FIELD)
 
 
-def _form_entries(path: _Path, form: Form) -> Iterator[_Entry]:
-    yield ("form", path, None), _without(form.to_json(), ID_FIELD)
+def _form_entries(path: _Path, source: tuple[Form, str]) -> Iterator[_Entry]:
+    form, key = source
+    yield ("form", path, None), {**_without(form.to_json(), ID_FIELD), SET_FIELD: key}
+
+
+def _forms(show: Show) -> dict[_Path, tuple[Form, str]]:
+    keys = _keys(show)
+    return {(i,): (form, keys.get(form.set, form.set)) for i, form in show.forms.items()}
+
+
+def _same_form(was: tuple[Form, str], now: tuple[Form, str]) -> bool:
+    return was[0] is now[0] and was[1] == now[1]
 
 
 def _spot_entries(path: _Path, spot: Spot) -> Iterator[_Entry]:
@@ -338,10 +353,12 @@ class _Sourced[T]:
     Attributes:
         sources: Maps a show to its source objects of this part, by item path.
         expand: Lists the items of one source object.
+        is_same: Reports whether two sources give the same items unread; identity by default.
     """
 
     sources: Callable[[Show], Mapping[_Path, T]]
     expand: Callable[[_Path, T], Iterator[_Entry]]
+    is_same: Callable[[T, T], bool] = operator.is_
 
     def entries(self, show: Show) -> Iterator[_Entry]:
         """Lists the items of this part of a show."""
@@ -353,7 +370,7 @@ class _Sourced[T]:
         old, new = self.sources(before), self.sources(after)
         for path in old.keys() | new.keys():
             was, now = old.get(path), new.get(path)
-            if was is now:
+            if was is not None and now is not None and self.is_same(was, now):
                 continue
             was_items = {} if was is None else dict(self.expand(path, was))
             now_items = {} if now is None else dict(self.expand(path, now))
@@ -369,7 +386,7 @@ AREAS: tuple[_Area, ...] = (
     _Sourced[Set](
         lambda show: _unique("set", (((set_key(s),), s) for s in show.sets)), _set_entries
     ),
-    _Sourced[Form](lambda show: {(i,): form for i, form in show.forms.items()}, _form_entries),
+    _Sourced[tuple[Form, str]](_forms, _form_entries, _same_form),
     _Sourced[TransitionSpec](_transitions, _transition_entries),
     _Sourced[Spot](
         lambda show: _unique("spot", (((s.id,), s) for s in show.cast.spots)), _spot_entries
