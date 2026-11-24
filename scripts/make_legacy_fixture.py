@@ -7,20 +7,23 @@ Run it from a checkout of the tag with that checkout's own environment, so the s
 the ones that release wrote:
 
     PYTHONPATH=. uv run --frozen python <repo>/scripts/make_legacy_fixture.py \
-        --out <repo>/tests/fixtures/repos/<tag> [--package stage] [--show example|v030]
+        --out <repo>/tests/fixtures/repos/<tag> [--package stage] [--show example|v030|v040]
 
 `--package stage` reads the library under its v0.1 import name; `--show` picks the content:
 `seeded` (v0.2.0) and `example` (v0.1.1, which has no seeded generator) save the same three
 revisions of edits, and `v030` saves a renumbered show with a text form and a selector zone,
-then adds legacy set IDs by hand as v0.2 stored them. Library imports happen inside functions,
-after the import name is set up. Models are edited through full validation and expected.json
-lists every set sorted, so the oracle does not depend on PYTHONHASHSEED. Only APIs that exist in
-every supported release are used; calls whose keywords changed go through `Callable[..., R]`.
+then adds legacy set IDs by hand as v0.2 stored them. `v040` starts from a copy of the
+v0.3.0 fixture, then saves, edits a path and pins with the v0.4.0 library. Library imports happen
+inside functions, after the import name is set up. Models are edited through full validation and
+expected.json lists every set sorted, so the oracle does not depend on PYTHONHASHSEED. Only APIs
+that exist in every supported release are used; calls whose keywords changed go through
+`Callable[..., R]`.
 
 Contains:
     oracle_json(): dumps a show as JSON data with every set sorted
     fixture_shows(): builds the shows of the three legacy revisions: the save, a path edit and a pin
     v030_show(): builds the v0.3.0 show: renumbered sets, a text form and a selector zone
+    v040_history(): copies the v0.3.0 repository and adds the v0.4.0 save, a path edit and a pin
     build_fixture(): writes a repository and its expected.json under a directory
     main(): parses the command line and builds the fixture
 """
@@ -32,6 +35,7 @@ import importlib.abc
 import importlib.machinery
 import inspect
 import json
+import shutil
 import sys
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
@@ -63,7 +67,8 @@ PATH_WAYPOINT_XY = (1.5, 4.0)
 EXPECTED_FILE = "expected.json"
 REPO_DIR = "repo"
 LIBRARY = "e8s"
-SHOW_CHOICES = ("seeded", "example", "v030")
+SHOW_CHOICES = ("seeded", "example", "v030", "v040")
+V030_FIXTURE = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "repos" / "v0.3.0"
 INSERTED_SET = "2A"
 INSERTED_COUNTS = 8.0
 TEXT_SET = "8"
@@ -360,6 +365,39 @@ def _save_v030(repo: "FileRepository") -> list["Revision"]:
     return [first, second]
 
 
+def v040_history(source: Path, out: Path) -> list["Revision"]:
+    """Copies the v0.3.0 repository under `out`, then saves, edits a path row and pins a spot.
+
+    The first save normalizes the stored documents and adds the notes document; the edit and the
+    pin each add one more revision.
+
+    Args:
+        source: Root of the v0.3.0 fixture, holding repo/ and expected.json.
+        out: Empty directory that receives the copied repository.
+
+    Returns:
+        revisions: Every revision of the history, oldest first.
+    """
+    from e8s.show.file_repository import FileRepository
+    from e8s.show.pinning import pin
+    from e8s.show.storage import load_show, open_workspace, save_show
+
+    legacy: dict[str, Any] = json.loads((source / EXPECTED_FILE).read_text())
+    shutil.copytree(source / REPO_DIR, out / REPO_DIR)
+    repo = FileRepository(out / REPO_DIR)
+    workspace = open_workspace(repo, SHOW_ID)
+    saved = load_show(workspace)
+    save_show(workspace, saved, STAMP)
+    edited = _path_edit(load_show(workspace))
+    save_show(workspace, edited, STAMP)
+    loaded = load_show(workspace)
+    pinned = pin(loaded, "entity", loaded.cast.spots[PINNED_SPOT_INDEX].id, "soloist")
+    save_show(workspace, pinned, STAMP)
+    revisions = list(repo.revisions(SHOW_ID))
+    assert [r.id for r in revisions[: len(legacy["revisions"])]] == legacy["revisions"]
+    return revisions
+
+
 def build_fixture(out: Path, kind: str) -> None:
     """Writes the repository and expected.json under `out`.
 
@@ -371,7 +409,11 @@ def build_fixture(out: Path, kind: str) -> None:
     from e8s.show.file_repository import FileRepository
 
     repo = FileRepository(out / REPO_DIR)
-    revisions = _save_v030(repo) if kind == "v030" else _save_legacy(repo, kind)
+    if kind == "v040":
+        revisions = v040_history(V030_FIXTURE, out)
+        repo = FileRepository(out / REPO_DIR)
+    else:
+        revisions = _save_v030(repo) if kind == "v030" else _save_legacy(repo, kind)
     head = repo.get_show(SHOW_ID)
     expected = {
         "show_id": SHOW_ID,
@@ -380,6 +422,8 @@ def build_fixture(out: Path, kind: str) -> None:
         "legacy_content_hash": content_hash(head),
         "show": oracle_json(head),
     }
+    if kind == "v040":
+        expected["shows"] = {r.id: oracle_json(repo.get_show(SHOW_ID, r.id)) for r in revisions}
     (out / EXPECTED_FILE).write_text(json.dumps(expected, indent=2, sort_keys=True) + "\n")
 
 

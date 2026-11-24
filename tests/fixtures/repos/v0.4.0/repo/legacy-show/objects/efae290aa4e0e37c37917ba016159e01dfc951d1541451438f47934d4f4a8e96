@@ -1,0 +1,122 @@
+[
+  {
+    "facing": {
+      "mode": "outward",
+      "value": null
+    },
+    "geometry": {
+      "curve": {
+        "ccw": true,
+        "center": [
+          -11.990022905326473,
+          31.471068907925236
+        ],
+        "closed": true,
+        "kind": "circle",
+        "radius": 4.5,
+        "start_deg": 295.64223061779586
+      }
+    },
+    "id": "brass-2",
+    "kind": "circle",
+    "locked": false,
+    "members": [
+      "B1",
+      "B2",
+      "B3",
+      "B4",
+      "B5",
+      "B6"
+    ],
+    "meta": {},
+    "set": "2",
+    "spacing": {
+      "align": "start",
+      "end": null,
+      "gaps": [],
+      "interval": null,
+      "mode": "count",
+      "start": 0.0
+    }
+  },
+  {
+    "facing": {
+      "mode": "audience",
+      "value": null
+    },
+    "geometry": {
+      "curve": {
+        "a": [
+          -22.74421081241615,
+          22.90152611765293
+        ],
+        "b": [
+          -6.671438669088898,
+          22.90152611765293
+        ],
+        "closed": false,
+        "kind": "segment"
+      }
+    },
+    "id": "guard-2",
+    "kind": "line",
+    "locked": false,
+    "members": [
+      "G1",
+      "G2",
+      "G3",
+      "G4",
+      "G5",
+      "G6"
+    ],
+    "meta": {},
+    "set": "2",
+    "spacing": {
+      "align": "start",
+      "end": null,
+      "gaps": [],
+      "interval": null,
+      "mode": "count",
+      "start": 0.0
+    }
+  },
+  {
+    "facing": {
+      "mode": "fixed",
+      "value": 100.2332203562784
+    },
+    "geometry": {
+      "anchor": "center",
+      "cols": 6,
+      "facing": 100.2332203562784,
+      "interval": 1.5,
+      "n": 6,
+      "origin": [
+        17.824165725122775,
+        23.358699056874414
+      ],
+      "rows": 1
+    },
+    "id": "woodwinds-2",
+    "kind": "block",
+    "locked": false,
+    "members": [
+      "W1",
+      "W2",
+      "W3",
+      "W4",
+      "W5",
+      "W6"
+    ],
+    "meta": {},
+    "set": "2",
+    "spacing": {
+      "align": "start",
+      "end": null,
+      "gaps": [],
+      "interval": null,
+      "mode": "count",
+      "start": 0.0
+    }
+  }
+]
