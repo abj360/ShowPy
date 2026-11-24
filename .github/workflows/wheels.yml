@@ -1,0 +1,301 @@
+# Builds one cp313-abi3 wheel per platform target with maturin-action, the dist profile and the
+# locked Cargo.lock, plus the sdist. Each wheel is installed with its dependencies and the test
+# tools, at the versions uv.lock pins, and runs the ported packages' tests on CPython 3.13 and
+# 3.14 from a copy of the suite, so the installed wheel, not the source tree, is imported.
+#
+# The version job gates every build: on a tag it refuses one that differs from Cargo.toml.
+# Nothing here writes a cache, so a pull request cannot plant build state that a release restores.
+
+name: wheels
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "pyproject.toml"
+      - ".github/workflows/wheels.yml"
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+concurrency:
+  group: wheels-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  MATURIN_VERSION: "1.16.0"
+  UV_VERSION: "0.13.8"
+  PYTHONHASHSEED: "0"
+  # The dev group's packages that the ported tests import beside the wheel's own dependencies.
+  WHEEL_TEST_TOOLS: hypothesis jsonschema pytest rfc8785
+  PORTED_TESTS: >-
+    tests/unit/core tests/unit/geo tests/unit/time tests/unit/sheet tests/unit/cast
+    tests/unit/choreo tests/golden
+  WHEEL_CHECK: >-
+    import e8s, e8s._core;
+    assert "site-packages" in e8s.__file__, e8s.__file__;
+    assert "site-packages" in e8s._core.__file__, e8s._core.__file__
+  # maturin-action installs the rust-toolchain.toml pin; each build job proves it compiled with it.
+  CHECK_PINNED_RUSTC: >-
+    pin="$(sed -n 's/^channel = "\([^"]*\)".*/\1/p' rust-toolchain.toml)";
+    rustc --version | grep -q "^rustc $pin " || { echo "E: rustc is not the pinned $pin"; exit 1; }
+
+jobs:
+  version:
+    name: release version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - if: github.ref_type == 'tag'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check the tag names the Cargo.toml version
+        if: github.ref_type == 'tag'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: python3 scripts/check_release_version.py "$TAG"
+
+  linux:
+    name: linux ${{ matrix.target }} ${{ matrix.libc }}
+    needs: version
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64
+            libc: "2_28"
+            image: slim
+          - runner: ubuntu-24.04-arm
+            target: aarch64
+            libc: "2_28"
+            image: slim
+          - runner: ubuntu-24.04
+            target: x86_64
+            libc: musllinux_1_2
+            image: alpine
+          - runner: ubuntu-24.04-arm
+            target: aarch64
+            libc: musllinux_1_2
+            image: alpine
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: ${{ env.MATURIN_VERSION }}
+          target: ${{ matrix.target }}
+          manylinux: ${{ matrix.libc }}
+          args: --profile dist --locked --out dist
+          before-script-linux: ${{ env.CHECK_PINNED_RUSTC }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+      - name: Export the locked test constraints
+        run: >-
+          uv export --locked --format requirements-txt --only-group dev --no-emit-project
+          --no-hashes --quiet --output-file constraints.txt
+      - name: Copy the test suite away from the e8s source
+        run: mkdir suite && cp -R tests pyproject.toml suite/
+      - name: Test the wheel on 3.13 and 3.14
+        env:
+          IMAGE_VARIANT: ${{ matrix.image }}
+        run: |
+          for python in 3.13 3.14; do
+            docker run --rm -v "$PWD:/w" -w /w/suite \
+              -e PYTHONHASHSEED -e WHEEL_TEST_TOOLS -e PORTED_TESTS -e WHEEL_CHECK \
+              "python:$python-$IMAGE_VARIANT" sh -euc '
+                wheel="$(ls /w/dist/*.whl)"
+                python -m venv /venv
+                /venv/bin/python -m pip install --quiet --constraint /w/constraints.txt \
+                  "$wheel[all]" $WHEEL_TEST_TOOLS
+                /venv/bin/python -P -c "$WHEEL_CHECK"
+                /venv/bin/python -P -m pytest $PORTED_TESTS'
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wheel-linux-${{ matrix.target }}-${{ matrix.libc }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  windows:
+    name: windows ${{ matrix.target }}
+    needs: version
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2025
+            target: x64
+            arch: x64
+          - runner: windows-11-arm
+            target: aarch64
+            arch: arm64
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: python314
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+          architecture: ${{ matrix.arch }}
+      - id: python313
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+          architecture: ${{ matrix.arch }}
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: ${{ env.MATURIN_VERSION }}
+          target: ${{ matrix.target }}
+          args: >-
+            --profile dist --locked --out dist
+            --interpreter ${{ steps.python313.outputs.python-path }}
+      - name: Check the build used the pinned toolchain
+        run: eval "$CHECK_PINNED_RUSTC"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+      - name: Export the locked test constraints
+        run: >-
+          uv export --locked --format requirements-txt --only-group dev --no-emit-project
+          --no-hashes --quiet --output-file constraints.txt
+      - name: Copy the test suite away from the e8s source
+        run: mkdir suite && cp -R tests pyproject.toml suite/
+      - name: Test the wheel on 3.13 and 3.14
+        env:
+          PYTHON_313: ${{ steps.python313.outputs.python-path }}
+          PYTHON_314: ${{ steps.python314.outputs.python-path }}
+        run: |
+          wheel="$(ls dist/*.whl)"
+          for python in "$PYTHON_313" "$PYTHON_314"; do
+            rm -rf venv
+            "$python" -m venv venv
+            venv/Scripts/python -m pip install --quiet --constraint constraints.txt \
+              "$wheel[all]" $WHEEL_TEST_TOOLS
+            cd suite
+            ../venv/Scripts/python -P -c "$WHEEL_CHECK"
+            ../venv/Scripts/python -P -m pytest $PORTED_TESTS
+            cd ..
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wheel-windows-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  # The Intel job goes when GitHub retires its macOS Intel runners.
+  macos:
+    name: macos ${{ matrix.target }}
+    needs: version
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64
+          - runner: macos-15-intel
+            target: x86_64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: python314
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - id: python313
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: ${{ env.MATURIN_VERSION }}
+          target: ${{ matrix.target }}
+          args: >-
+            --profile dist --locked --out dist
+            --interpreter ${{ steps.python313.outputs.python-path }}
+      - name: Check the build used the pinned toolchain
+        run: eval "$CHECK_PINNED_RUSTC"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+      - name: Export the locked test constraints
+        run: >-
+          uv export --locked --format requirements-txt --only-group dev --no-emit-project
+          --no-hashes --quiet --output-file constraints.txt
+      - name: Copy the test suite away from the e8s source
+        run: mkdir suite && cp -R tests pyproject.toml suite/
+      - name: Test the wheel on 3.13 and 3.14
+        env:
+          PYTHON_313: ${{ steps.python313.outputs.python-path }}
+          PYTHON_314: ${{ steps.python314.outputs.python-path }}
+        run: |
+          wheel="$(ls dist/*.whl)"
+          for python in "$PYTHON_313" "$PYTHON_314"; do
+            rm -rf venv
+            "$python" -m venv venv
+            venv/bin/python -m pip install --quiet --constraint constraints.txt \
+              "$wheel[all]" $WHEEL_TEST_TOOLS
+            cd suite
+            ../venv/bin/python -P -c "$WHEEL_CHECK"
+            ../venv/bin/python -P -m pytest $PORTED_TESTS
+            cd ..
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wheel-macos-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  sdist:
+    name: sdist
+    needs: version
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          maturin-version: ${{ env.MATURIN_VERSION }}
+          command: sdist
+          args: --out dist
+      - name: Check the sdist kept the locked Cargo.lock
+        run: git diff --exit-code -- Cargo.lock
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
