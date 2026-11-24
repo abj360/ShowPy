@@ -76,6 +76,13 @@ Contains:
     uv_build_envs(): lists the env= constant of each `uv build` call of one noxfile function
     test_wheels_session_tests_the_wheel_on_313_and_314: builds the sdist, a dist wheel from it,
         and runs the ported packages' tests against that wheel on each supported Python
+    job_steps(): splits one job's text into its steps
+    test_rust_job_runs_the_rust_session: the rust job runs `nox -s rust` on Linux and arm64
+        macOS when the changes job reports a Rust change, its legs always starting
+    cargo_tools_cache_key_problems(): lists what lets the cached cargo tools outlive their pins
+    test_rust_job_caches_the_cargo_tools_by_their_pinned_versions: .cargo-tools is restored by
+        a key naming each pinned version and saved only from main
+    test_cargo_tools_cache_key_problems_sees_a_loose_key: proves the cache check can fail
 """
 
 import ast
@@ -209,6 +216,29 @@ PORTED_TEST_RUN = ["str(python)", "-P", "-m", "pytest", "*PORTED_TESTS", "*sessi
 SAVE_ON_MAIN_ONLY = re.compile(
     r"^\s+save-if: \$\{\{ github\.ref == 'refs/heads/main' \}\}$", re.MULTILINE
 )
+RUST_JOB = "rust"
+RUNS_RUST_JOB = "needs.changes.result != 'success' || needs.changes.outputs.rust != 'false'"
+RUST_STEP_ENV = f"${{{{ {RUNS_RUST_JOB} }}}}"
+RUST_STEP_GATE = re.compile(r"^env\.RUN_RUST_JOB [!=]= 'true'( && .+)?$")
+RUST_JOB_OSES = "[ubuntu-24.04, macos-15]"
+RUST_SESSION_STEP = "run: uv run --locked nox -s rust"
+RUST_OUTPUT = "rust: ${{ steps.classify.outputs.rust }}"
+CACHE_RESTORE_STEP = re.compile(r"uses: actions/cache/restore@[0-9a-f]{40}\b")
+CACHE_SAVE_STEP = re.compile(r"uses: actions/cache/save@[0-9a-f]{40}\b")
+CARGO_TOOLS_PATH = re.compile(r"^\s+path: \.cargo-tools$", re.MULTILINE)
+CARGO_TOOLS_VERSIONS_ID = "pins"
+VERSIONS_GREP = re.compile(r"grep -hE '([^']+)' rust-toolchain\.toml noxfile\.py")
+TOOLCHAIN_FILE = ROOT / "rust-toolchain.toml"
+TOOLCHAIN_PIN = re.compile(r'^channel = "[^"]+"$')
+CARGO_TOOLS_KEY_PARTS = (
+    "${{ runner.os }}",
+    "${{ runner.arch }}",
+    "${{ steps.pins.outputs.versions }}",
+)
+STEP_INDENT = 8
+WITH_INDENT = 10
+SAVE_FROM_MAIN = "github.ref == 'refs/heads/main'"
+INSTALL_CARGO_TOOL = "_install_cargo_tool"
 
 
 def tolerated_exit_codes(source: str, session_name: str) -> list[str]:
@@ -428,7 +458,7 @@ def ungated_jobs(workflow: str, jobs: tuple[str, ...]) -> list[str]:
 def test_ci_jobs_are_changes_lint_types_or_gated() -> None:
     names = ci_job_names(CI_WORKFLOW.read_text())
     assert names[0] == CHANGES_JOB
-    assert sorted(names) == sorted([CHANGES_JOB, UNGATED_JOB, *GATED_JOBS])
+    assert sorted(names) == sorted([CHANGES_JOB, UNGATED_JOB, RUST_JOB, *GATED_JOBS])
 
 
 def test_job_value_joins_a_folded_value() -> None:
@@ -923,3 +953,134 @@ def test_wheels_session_tests_the_wheel_on_313_and_314() -> None:
     assert WHEEL_FROM_SDIST in session_names(source, WHEELS_SESSION)
     assert "WHEEL_TEST_PYTHONS" in session_names(source, WHEELS_SESSION)
     assert PORTED_TEST_RUN in session_runs(source, WHEELS_SESSION)
+
+
+def job_steps(job: str) -> list[str]:
+    """Splits one job's text into its steps, each without its leading `      - `."""
+    return STEP_START.split(job)[1:]
+
+
+def step_value(step: str, key: str, indent: int = STEP_INDENT) -> str:
+    """Returns one key's value in a step from job_steps, folded lines joined; empty when absent."""
+    return job_value(" " * STEP_INDENT + step, key, indent) or ""
+
+
+def test_rust_job_runs_the_rust_session() -> None:
+    workflow = CI_WORKFLOW.read_text()
+    job = ci_job(workflow, RUST_JOB)
+    assert NEEDS_CHANGES.search(job)
+    assert job_condition(job) == MATRIX_JOB_CONDITION
+    assert job_value(job, "RUN_RUST_JOB", ENV_INDENT) == RUST_STEP_ENV
+    assert job_value(job, "os", ENV_INDENT + 2) == RUST_JOB_OSES
+    steps = job_steps(job)
+    assert steps
+    assert all(RUST_STEP_GATE.match(step_value(step, "if")) for step in steps)
+    assert sum(RUST_SESSION_STEP in step for step in steps) == 1
+    assert RUST_OUTPUT in ci_job(workflow, CHANGES_JOB)
+
+
+def _pinned_version_lines(source: str) -> list[str]:
+    """Returns the noxfile lines that assign the versions the rust session installs."""
+    session = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef) and node.name == RUST_SESSION
+    )
+    names = {
+        ast.unparse(call.args[2])
+        for call in ast.walk(session)
+        if isinstance(call, ast.Call) and ast.unparse(call.func) == INSTALL_CARGO_TOOL
+    }
+    return [line for line in source.splitlines() if line.split(" = ")[0] in names]
+
+
+def cargo_tools_cache_key_problems(job: str, noxfile: str) -> list[str]:
+    """Lists what lets a job's cached cargo tools outlive the versions the noxfile pins.
+
+    Args:
+        job: The text of the job that runs the rust session.
+        noxfile: The text of the noxfile that pins the cargo tool versions.
+
+    Returns:
+        problems: One line per missing restore, key part, version line, ordering or main-only
+            save; empty when the cache is keyed by every pin and saved only from main.
+    """
+    steps = job_steps(job)
+    found = [
+        _first_index(steps, lambda step: step_value(step, "id") == CARGO_TOOLS_VERSIONS_ID),
+        _first_index(steps, lambda step: CACHE_RESTORE_STEP.search(step) is not None),
+        _first_index(steps, lambda step: RUST_SESSION_STEP in step),
+        _first_index(steps, lambda step: CACHE_SAVE_STEP.search(step) is not None),
+    ]
+    indices = [index for index in found if index is not None]
+    if len(indices) != len(found):
+        return ["missing step"]
+    versions, restore, run, save = indices
+    problems = [] if versions < restore < run < save else ["steps out of order"]
+    key = step_value(steps[restore], "key", WITH_INDENT)
+    problems += [f"key lacks {part}" for part in CARGO_TOOLS_KEY_PARTS if part not in key]
+    problems += [
+        f"{step} does not cache .cargo-tools"
+        for step, index in (("restore", restore), ("save", save))
+        if not CARGO_TOOLS_PATH.search(steps[index])
+    ]
+    grep = VERSIONS_GREP.search(step_value(steps[versions], "run"))
+    pins = [*TOOLCHAIN_FILE.read_text().splitlines(), *noxfile.splitlines()]
+    matched = [line for line in pins if grep and re.search(grep[1], line)]
+    expected = [line for line in pins if TOOLCHAIN_PIN.match(line)]
+    if matched != [*expected[:1], *_pinned_version_lines(noxfile)]:
+        problems.append("versions step does not read exactly the pinned versions")
+    if SAVE_FROM_MAIN not in step_value(steps[save], "if"):
+        problems.append("save is not limited to main")
+    return problems
+
+
+def test_rust_job_caches_the_cargo_tools_by_their_pinned_versions() -> None:
+    noxfile = NOXFILE.read_text()
+    assert len(_pinned_version_lines(noxfile)) == 2
+    job = ci_job(CI_WORKFLOW.read_text(), RUST_JOB)
+    assert cargo_tools_cache_key_problems(job, noxfile) == []
+
+
+def test_cargo_tools_cache_key_problems_sees_a_loose_key() -> None:
+    noxfile = (
+        'CARGO_DENY_VERSION = "1.0.0"\nCARGO_ABOUT_VERSION = "2.0.0"\nOTHER_VERSION = "3"\n'
+        "def rust(session):\n"
+        "    _install_cargo_tool(session, CARGO_DENY, CARGO_DENY_VERSION)\n"
+        "    _install_cargo_tool(session, CARGO_ABOUT, CARGO_ABOUT_VERSION)\n"
+    )
+    versions = (
+        "      - id: pins\n        run: >-\n"
+        "          grep -hE '^(channel|CARGO_[A-Z]+_VERSION) = ' rust-toolchain.toml\n"
+        "          noxfile.py\n"
+    )
+    restore = (
+        f"      - id: restore\n        uses: actions/cache/restore@{'a' * 40} # v6\n"
+        "        with:\n          path: .cargo-tools\n"
+        "          key: tools-${{ runner.os }}-${{ runner.arch }}-"
+        "${{ steps.pins.outputs.versions }}\n"
+    )
+    run = "      - run: uv run --locked nox -s rust\n"
+    save = (
+        f"      - if: env.RUN_RUST_JOB == 'true' && {SAVE_FROM_MAIN}\n"
+        f"        uses: actions/cache/save@{'a' * 40} # v6\n"
+        "        with:\n          path: .cargo-tools\n"
+    )
+    assert cargo_tools_cache_key_problems(versions + restore + run + save, noxfile) == []
+    assert cargo_tools_cache_key_problems(restore + run + save, noxfile) == ["missing step"]
+    assert cargo_tools_cache_key_problems(versions + run + restore + save, noxfile) == [
+        "steps out of order"
+    ]
+    loose = restore.replace("-${{ steps.pins.outputs.versions }}", "")
+    assert cargo_tools_cache_key_problems(versions + loose + run + save, noxfile) == [
+        "key lacks ${{ steps.pins.outputs.versions }}"
+    ]
+    wide = versions.replace("CARGO_[A-Z]+_VERSION", "[A-Z_]+_VERSION")
+    assert cargo_tools_cache_key_problems(wide + restore + run + save, noxfile) == [
+        "versions step does not read exactly the pinned versions"
+    ]
+    anywhere = save.replace(f" && {SAVE_FROM_MAIN}", "")
+    assert anywhere != save
+    assert cargo_tools_cache_key_problems(versions + restore + run + anywhere, noxfile) == [
+        "save is not limited to main"
+    ]
