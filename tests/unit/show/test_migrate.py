@@ -102,7 +102,8 @@ from e8s.show.migrations import (
 )
 from e8s.show.migrations.v1_to_v2_ids import KEEPS_LEGACY_IDS
 from e8s.show.models import Show
-from e8s.show.storage import load_show, open_workspace, save_show
+from e8s.show.show_io import load_show, save_show
+from e8s.show.workspace import open_workspace
 from tests.helpers import json_doc
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "repos"

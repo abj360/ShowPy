@@ -22,8 +22,9 @@ from e8s.choreo.paths import hold, ripple, stagger
 from e8s.choreo.routes import follow_and_set_targets, make_route
 from e8s.core.errors import PathError
 from e8s.show.changes import store_paths
+from e8s.show.collab_models import PathsOp
 from e8s.show.manage import new_show
-from e8s.show.models import PathsOp, Show
+from e8s.show.models import Show
 from tests.strategies.cast import with_cast
 from tests.strategies.forms import with_form
 from tests.strategies.paths import WAYPOINT_STEPS, edited_row

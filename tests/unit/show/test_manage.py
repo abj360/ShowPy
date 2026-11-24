@@ -56,24 +56,16 @@ from e8s.core.errors import (
 from e8s.core.ids import FormId, RouteId, SetId, SpotId, make_tid
 from e8s.core.util import approx_equal
 from e8s.geo.curves import Segment
+from e8s.show.dependencies import upgrade_dependency
 from e8s.show.documents import decode_show, encode_show
-from e8s.show.manage import (
-    add_set,
-    index,
-    insert_subset,
-    new_show,
-    remove_set,
-    renumber,
-    set_at_count,
-    set_counts,
-    transition_at_count,
-    transitions,
-    upgrade_dependency,
-)
+from e8s.show.manage import add_set, insert_subset, new_show, remove_set, set_counts
+from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Pin, Show
-from e8s.show.repositories import InMemoryRepository
-from e8s.show.storage import load_show, open_workspace, save_show
+from e8s.show.renumber import renumber
+from e8s.show.set_queries import index, set_at_count, transition_at_count, transitions
+from e8s.show.show_io import load_show, save_show
 from e8s.show.validate import validate_show
+from e8s.show.workspace import open_workspace
 from e8s.time.models import Hold, MeasureSetting
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import field_sheet, two_set_show

@@ -37,8 +37,9 @@ from e8s.geo.shapes import line
 from e8s.sheet.models import Sheet
 from e8s.sheet.templates import sheet_templates as sheet_templates
 from e8s.show.changes import apply_change, store_paths
+from e8s.show.collab_models import FormOp, PathsOp
 from e8s.show.manage import add_set, new_show
-from e8s.show.models import FormOp, PathsOp, Show
+from e8s.show.models import Show
 from e8s.time.models import Hold, TempoSection, Timeline, TimelineMode
 from e8s.time.timeline import add_hold, add_tempo, new_timeline
 from tests.helpers import bisector_rotation

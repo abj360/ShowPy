@@ -593,15 +593,23 @@ if TYPE_CHECKING:
         save_sheet,
         sheet_templates,
     )
+    from e8s.show.anchors import (
+        Anchor,
+    )
+    from e8s.show.assets import (
+        InMemoryAssetStore,
+    )
+    from e8s.show.backend import (
+        RepositoryBackend,
+        conflict_error,
+        digest,
+    )
     from e8s.show.changes import (
         apply_change,
         store_paths,
     )
     from e8s.show.collab import (
         accept,
-        apply_event,
-        decode_event,
-        events_since,
         highlight,
         pins,
         preview_proposal,
@@ -609,11 +617,33 @@ if TYPE_CHECKING:
         reject,
         selection,
     )
+    from e8s.show.collab_models import (
+        CanvasEvent,
+        Comment,
+        CountsOp,
+        FormOp,
+        Highlight,
+        PathsOp,
+        PlacementOp,
+        Proposal,
+        ProposalPreview,
+    )
     from e8s.show.counts import (
         spot_counts,
     )
+    from e8s.show.dependencies import (
+        upgrade_dependency,
+    )
+    from e8s.show.document_repository import (
+        DocumentRepository,
+    )
     from e8s.show.documents import (
         migrate_documents,
+    )
+    from e8s.show.events import (
+        apply_event,
+        decode_event,
+        events_since,
     )
     from e8s.show.file_repository import (
         FileRepository,
@@ -625,6 +655,11 @@ if TYPE_CHECKING:
         diff_show,
         revert,
     )
+    from e8s.show.history_models import (
+        PathDiff,
+        Revision,
+        SetDiff,
+    )
     from e8s.show.interchange import (
         export_json,
         import_fonts,
@@ -632,18 +667,21 @@ if TYPE_CHECKING:
         import_positions,
         migrate_json,
     )
+    from e8s.show.layout import (
+        CURRENT_LAYOUT,
+        LAYOUT_FILE,
+        LAYOUT_FORMAT,
+        read_layout,
+    )
     from e8s.show.manage import (
         add_set,
-        index,
         insert_subset,
         new_show,
         remove_set,
-        renumber,
-        set_at_count,
         set_counts,
-        transition_at_count,
-        transitions,
-        upgrade_dependency,
+    )
+    from e8s.show.memory_backend import (
+        InMemoryRepository,
     )
     from e8s.show.migrate import (
         CURRENT_VERSION,
@@ -653,20 +691,7 @@ if TYPE_CHECKING:
         read_version,
     )
     from e8s.show.models import (
-        Anchor,
-        CanvasEvent,
-        Comment,
-        CountsOp,
-        FormOp,
-        Highlight,
-        PathDiff,
-        PathsOp,
         Pin,
-        PlacementOp,
-        Proposal,
-        ProposalPreview,
-        Revision,
-        SetDiff,
         Show,
         ShowIndex,
         ShowIndexEntry,
@@ -680,31 +705,36 @@ if TYPE_CHECKING:
         pin,
         unpin,
     )
-    from e8s.show.repositories import (
-        DocumentRepository,
-        InMemoryAssetStore,
-        InMemoryRepository,
-        RepositoryBackend,
-        conflict_error,
-        digest,
+    from e8s.show.renumber import (
+        renumber,
     )
     from e8s.show.sections import (
         join_sections,
         split_section,
     )
+    from e8s.show.set_queries import (
+        index,
+        set_at_count,
+        transition_at_count,
+        transitions,
+    )
+    from e8s.show.show_io import (
+        load_show,
+        save_show,
+    )
     from e8s.show.storage import (
         AssetStore,
         Repository,
-        Workspace,
-        load_show,
-        open_workspace,
-        save_show,
     )
     from e8s.show.validate import (
         validate_dependencies,
         validate_paths,
         validate_set,
         validate_show,
+    )
+    from e8s.show.workspace import (
+        Workspace,
+        open_workspace,
     )
     from e8s.time.clock import (
         count_to_seconds,
@@ -755,7 +785,7 @@ if TYPE_CHECKING:
     )
 
 _EXPORTS: dict[str, tuple[str, str]] = {
-    "Anchor": ("e8s.show.models", "Anchor"),
+    "Anchor": ("e8s.show.anchors", "Anchor"),
     "ApprovalState": ("e8s.choreo.models", "ApprovalState"),
     "ArcCurve": ("e8s.geo.curves", "ArcCurve"),
     "ArcPiece": ("e8s.geo.svg", "ArcPiece"),
@@ -769,18 +799,19 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Box2": ("e8s.core.types", "Box2"),
     "Box3": ("e8s.core.types", "Box3"),
     "BuiltInMotionParams": ("e8s.choreo.path_models", "BuiltInMotionParams"),
+    "CURRENT_LAYOUT": ("e8s.show.layout", "CURRENT_LAYOUT"),
     "CURRENT_VERSION": ("e8s.show.migrate", "CURRENT_VERSION"),
-    "CanvasEvent": ("e8s.show.models", "CanvasEvent"),
+    "CanvasEvent": ("e8s.show.collab_models", "CanvasEvent"),
     "Cast": ("e8s.cast.models", "Cast"),
     "CircleCurve": ("e8s.geo.curves", "CircleCurve"),
     "CircleRecipe": ("e8s.choreo.recipe_models", "CircleRecipe"),
-    "Comment": ("e8s.show.models", "Comment"),
+    "Comment": ("e8s.show.collab_models", "Comment"),
     "CompiledTransition": ("e8s.choreo.engine_models", "CompiledTransition"),
     "CompositeCurve": ("e8s.geo.curves", "CompositeCurve"),
     "ConflictError": ("e8s.core.errors", "ConflictError"),
     "ContinuityError": ("e8s.core.errors", "ContinuityError"),
     "CoordinateTable": ("e8s.choreo.read_models", "CoordinateTable"),
-    "CountsOp": ("e8s.show.models", "CountsOp"),
+    "CountsOp": ("e8s.show.collab_models", "CountsOp"),
     "CrowdedStroke": ("e8s.choreo.form_models", "CrowdedStroke"),
     "CubicPiece": ("e8s.geo.svg", "CubicPiece"),
     "Cue": ("e8s.time.models", "Cue"),
@@ -792,7 +823,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "CustomRecipe": ("e8s.choreo.recipe_models", "CustomRecipe"),
     "DEFAULT_LINE_SPACING": ("e8s.geo.models", "DEFAULT_LINE_SPACING"),
     "DelayFix": ("e8s.choreo.engine_models", "DelayFix"),
-    "DocumentRepository": ("e8s.show.repositories", "DocumentRepository"),
+    "DocumentRepository": ("e8s.show.document_repository", "DocumentRepository"),
     "DroppedFields": ("e8s.show.migrate", "DroppedFields"),
     "E8sError": ("e8s.core.errors", "E8sError"),
     "Easing": ("e8s.choreo.path_models", "Easing"),
@@ -819,7 +850,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "FormFnInfo": ("e8s.choreo.form_models", "FormFnInfo"),
     "FormFnRegistry": ("e8s.choreo.form_fns", "FormFnRegistry"),
     "FormMetrics": ("e8s.geo.models", "FormMetrics"),
-    "FormOp": ("e8s.show.models", "FormOp"),
+    "FormOp": ("e8s.show.collab_models", "FormOp"),
     "Frame": ("e8s.choreo.engine_models", "Frame"),
     "Frames": ("e8s.choreo.read_models", "Frames"),
     "FrozenModel": ("e8s.core.types", "FrozenModel"),
@@ -831,14 +862,16 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Group": ("e8s.cast.models", "Group"),
     "GroupPatch": ("e8s.cast.spots", "GroupPatch"),
     "GuideLine": ("e8s.sheet.models", "GuideLine"),
-    "Highlight": ("e8s.show.models", "Highlight"),
+    "Highlight": ("e8s.show.collab_models", "Highlight"),
     "Hold": ("e8s.time.models", "Hold"),
     "ID_MAX_LENGTH": ("e8s.core.ids", "ID_MAX_LENGTH"),
     "ID_PATTERN": ("e8s.core.ids", "ID_PATTERN"),
-    "InMemoryAssetStore": ("e8s.show.repositories", "InMemoryAssetStore"),
-    "InMemoryRepository": ("e8s.show.repositories", "InMemoryRepository"),
+    "InMemoryAssetStore": ("e8s.show.assets", "InMemoryAssetStore"),
+    "InMemoryRepository": ("e8s.show.memory_backend", "InMemoryRepository"),
     "InMemorySheetStore": ("e8s.sheet.templates", "InMemorySheetStore"),
     "IntervalStats": ("e8s.geo.models", "IntervalStats"),
+    "LAYOUT_FILE": ("e8s.show.layout", "LAYOUT_FILE"),
+    "LAYOUT_FORMAT": ("e8s.show.layout", "LAYOUT_FORMAT"),
     "LabelScheme": ("e8s.cast.models", "LabelScheme"),
     "LaidGlyph": ("e8s.geo.models", "LaidGlyph"),
     "LegibilityWarning": ("e8s.core.errors", "LegibilityWarning"),
@@ -881,29 +914,29 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "MotionRegistry": ("e8s.choreo.motion", "MotionRegistry"),
     "MotionSegment": ("e8s.choreo.engine_models", "MotionSegment"),
     "MotionStats": ("e8s.choreo.engine_models", "MotionStats"),
-    "PathDiff": ("e8s.show.models", "PathDiff"),
+    "PathDiff": ("e8s.show.history_models", "PathDiff"),
     "PathEngine": ("e8s.choreo.engine", "PathEngine"),
     "PathError": ("e8s.core.errors", "PathError"),
     "PathRow": ("e8s.choreo.path_models", "PathRow"),
     "PathStyle": ("e8s.choreo.path_models", "PathStyle"),
-    "PathsOp": ("e8s.show.models", "PathsOp"),
+    "PathsOp": ("e8s.show.collab_models", "PathsOp"),
     "Pin": ("e8s.show.models", "Pin"),
     "Placement": ("e8s.choreo.models", "Placement"),
-    "PlacementOp": ("e8s.show.models", "PlacementOp"),
+    "PlacementOp": ("e8s.show.collab_models", "PlacementOp"),
     "PlacementPatch": ("e8s.choreo.models", "PlacementPatch"),
     "PointFacing": ("e8s.choreo.path_models", "PointFacing"),
     "Polyline": ("e8s.geo.curves", "Polyline"),
     "PolylineRecipe": ("e8s.choreo.recipe_models", "PolylineRecipe"),
-    "Proposal": ("e8s.show.models", "Proposal"),
-    "ProposalPreview": ("e8s.show.models", "ProposalPreview"),
+    "Proposal": ("e8s.show.collab_models", "Proposal"),
+    "ProposalPreview": ("e8s.show.collab_models", "ProposalPreview"),
     "QuadPiece": ("e8s.geo.svg", "QuadPiece"),
     "RESERVED_IDS": ("e8s.core.ids", "RESERVED_IDS"),
     "ReassignFix": ("e8s.choreo.engine_models", "ReassignFix"),
     "RecipeBase": ("e8s.choreo.recipe_models", "RecipeBase"),
     "Region": ("e8s.core.types", "Region"),
     "Repository": ("e8s.show.storage", "Repository"),
-    "RepositoryBackend": ("e8s.show.repositories", "RepositoryBackend"),
-    "Revision": ("e8s.show.models", "Revision"),
+    "RepositoryBackend": ("e8s.show.backend", "RepositoryBackend"),
+    "Revision": ("e8s.show.history_models", "Revision"),
     "RewriteReport": ("e8s.cast.models", "RewriteReport"),
     "RoseFormParams": ("e8s.choreo.form_models", "RoseFormParams"),
     "Route": ("e8s.choreo.path_models", "Route"),
@@ -917,7 +950,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "SelectorAst": ("e8s.cast.select", "SelectorAst"),
     "SelectorToken": ("e8s.cast.select", "SelectorToken"),
     "Set": ("e8s.choreo.models", "Set"),
-    "SetDiff": ("e8s.show.models", "SetDiff"),
+    "SetDiff": ("e8s.show.history_models", "SetDiff"),
     "Shape": ("e8s.cast.models", "Shape"),
     "Sheet": ("e8s.sheet.models", "Sheet"),
     "SheetStore": ("e8s.sheet.templates", "SheetStore"),
@@ -967,7 +1000,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Waypoint": ("e8s.choreo.path_models", "Waypoint"),
     "WeaveParams": ("e8s.choreo.path_models", "WeaveParams"),
     "WedgeRecipe": ("e8s.choreo.recipe_models", "WedgeRecipe"),
-    "Workspace": ("e8s.show.storage", "Workspace"),
+    "Workspace": ("e8s.show.workspace", "Workspace"),
     "ZeroLengthError": ("e8s.core.errors", "ZeroLengthError"),
     "ZigzagParams": ("e8s.choreo.path_models", "ZigzagParams"),
     "accept": ("e8s.show.collab", "accept"),
@@ -987,7 +1020,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "alternate": ("e8s.cast.select", "alternate"),
     "angle_diff": ("e8s.core.units", "angle_diff"),
     "apply_change": ("e8s.show.changes", "apply_change"),
-    "apply_event": ("e8s.show.collab", "apply_event"),
+    "apply_event": ("e8s.show.events", "apply_event"),
     "apply_fix": ("e8s.choreo.avoid", "apply_fix"),
     "apply_match": ("e8s.choreo.match_ops", "apply_match"),
     "apportion": ("e8s.geo.spacing", "apportion"),
@@ -1026,7 +1059,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "close_matches": ("e8s.core.util", "close_matches"),
     "closest_approach": ("e8s.choreo.avoid", "closest_approach"),
     "concentric": ("e8s.geo.spacing", "concentric"),
-    "conflict_error": ("e8s.show.repositories", "conflict_error"),
+    "conflict_error": ("e8s.show.backend", "conflict_error"),
     "content_hash": ("e8s.core.util", "content_hash"),
     "contract": ("e8s.choreo.set_transforms", "contract"),
     "convert": ("e8s.core.units", "convert"),
@@ -1045,7 +1078,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "custom_form": ("e8s.choreo.forms", "custom_form"),
     "custom_path": ("e8s.choreo.paths", "custom_path"),
     "customize": ("e8s.sheet.templates", "customize"),
-    "decode_event": ("e8s.show.collab", "decode_event"),
+    "decode_event": ("e8s.show.events", "decode_event"),
     "default_paths": ("e8s.choreo.paths", "default_paths"),
     "define_selection": ("e8s.cast.spots", "define_selection"),
     "delay": ("e8s.choreo.paths", "delay"),
@@ -1058,7 +1091,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "diff_sets": ("e8s.show.history", "diff_sets"),
     "diff_show": ("e8s.show.history", "diff_show"),
     "difference": ("e8s.geo.regions", "difference"),
-    "digest": ("e8s.show.repositories", "digest"),
+    "digest": ("e8s.show.backend", "digest"),
     "direction_of_travel": ("e8s.choreo.motion_stats", "direction_of_travel"),
     "distance": ("e8s.geo.measure", "distance"),
     "distance_matrix": ("e8s.geo.measure", "distance_matrix"),
@@ -1073,7 +1106,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "edit_text_count": ("e8s.choreo.text_edit", "edit_text_count"),
     "ellipse": ("e8s.geo.shapes", "ellipse"),
     "energy_curve": ("e8s.choreo.motion_stats", "energy_curve"),
-    "events_since": ("e8s.show.collab", "events_since"),
+    "events_since": ("e8s.show.events", "events_since"),
     "expand": ("e8s.choreo.set_transforms", "expand"),
     "export_json": ("e8s.show.interchange", "export_json"),
     "face_along": ("e8s.choreo.facing", "face_along"),
@@ -1115,7 +1148,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "import_json": ("e8s.show.interchange", "import_json"),
     "import_positions": ("e8s.show.interchange", "import_positions"),
     "in_region": ("e8s.cast.select", "in_region"),
-    "index": ("e8s.show.manage", "index"),
+    "index": ("e8s.show.set_queries", "index"),
     "insert_subset": ("e8s.show.manage", "insert_subset"),
     "interpolate_forms": ("e8s.geo.transforms", "interpolate_forms"),
     "intersection": ("e8s.geo.regions", "intersection"),
@@ -1133,7 +1166,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "line_form": ("e8s.choreo.forms", "line_form"),
     "load_font": ("e8s.geo.fonts", "load_font"),
     "load_paths": ("e8s.show.paths_store", "load_paths"),
-    "load_show": ("e8s.show.storage", "load_show"),
+    "load_show": ("e8s.show.show_io", "load_show"),
     "lock": ("e8s.choreo.paths", "lock"),
     "log": ("e8s.core.util", "log"),
     "make_route": ("e8s.choreo.routes", "make_route"),
@@ -1165,7 +1198,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "offset": ("e8s.geo.shapes", "offset"),
     "on_field_ids": ("e8s.choreo.set_measure", "on_field_ids"),
     "on_surface": ("e8s.sheet.bounds", "on_surface"),
-    "open_workspace": ("e8s.show.storage", "open_workspace"),
+    "open_workspace": ("e8s.show.workspace", "open_workspace"),
     "ordered_along": ("e8s.cast.select", "ordered_along"),
     "parse_path": ("e8s.geo.svg", "parse_path"),
     "parse_range": ("e8s.core.util", "parse_range"),
@@ -1186,6 +1219,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "propose": ("e8s.show.collab", "propose"),
     "ranks_and_files": ("e8s.geo.spacing", "ranks_and_files"),
     "reachable_region": ("e8s.geo.measure", "reachable_region"),
+    "read_layout": ("e8s.show.layout", "read_layout"),
     "read_version": ("e8s.show.migrate", "read_version"),
     "rebuild": ("e8s.choreo.form_place", "rebuild"),
     "rect": ("e8s.geo.shapes", "rect"),
@@ -1209,7 +1243,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "remove_tempo": ("e8s.time.timeline", "remove_tempo"),
     "remove_waypoint": ("e8s.choreo.paths", "remove_waypoint"),
     "rename_spots": ("e8s.cast.spots", "rename_spots"),
-    "renumber": ("e8s.show.manage", "renumber"),
+    "renumber": ("e8s.show.renumber", "renumber"),
     "reorder": ("e8s.choreo.form_ops", "reorder"),
     "require_finite": ("e8s.core.validation", "require_finite"),
     "require_size": ("e8s.core.caps", "require_size"),
@@ -1222,7 +1256,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "round_to": ("e8s.core.units", "round_to"),
     "save_paths": ("e8s.show.paths_store", "save_paths"),
     "save_sheet": ("e8s.sheet.templates", "save_sheet"),
-    "save_show": ("e8s.show.storage", "save_show"),
+    "save_show": ("e8s.show.show_io", "save_show"),
     "scale": ("e8s.choreo.set_transforms", "scale"),
     "scale_matrix": ("e8s.geo.affine", "scale_matrix"),
     "scatter": ("e8s.geo.spacing", "scatter"),
@@ -1234,7 +1268,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "select": ("e8s.cast.select", "select"),
     "selection": ("e8s.show.collab", "selection"),
     "separate_in_time": ("e8s.choreo.avoid", "separate_in_time"),
-    "set_at_count": ("e8s.show.manage", "set_at_count"),
+    "set_at_count": ("e8s.show.set_queries", "set_at_count"),
     "set_counts": ("e8s.show.manage", "set_counts"),
     "set_easing": ("e8s.choreo.paths", "set_easing"),
     "set_facing": ("e8s.choreo.paths", "set_facing"),
@@ -1293,8 +1327,8 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "transform_facing": ("e8s.geo.affine", "transform_facing"),
     "transform_form": ("e8s.choreo.form_ops", "transform_form"),
     "transform_points": ("e8s.geo.affine", "transform_points"),
-    "transition_at_count": ("e8s.show.manage", "transition_at_count"),
-    "transitions": ("e8s.show.manage", "transitions"),
+    "transition_at_count": ("e8s.show.set_queries", "transition_at_count"),
+    "transitions": ("e8s.show.set_queries", "transitions"),
     "translation_matrix": ("e8s.geo.affine", "translation_matrix"),
     "turn": ("e8s.choreo.motion", "turn"),
     "two_part": ("e8s.choreo.routes", "two_part"),
@@ -1302,7 +1336,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "units": ("e8s.core.units", "units"),
     "unlock": ("e8s.choreo.paths", "unlock"),
     "unpin": ("e8s.show.pinning", "unpin"),
-    "upgrade_dependency": ("e8s.show.manage", "upgrade_dependency"),
+    "upgrade_dependency": ("e8s.show.dependencies", "upgrade_dependency"),
     "validate_dependencies": ("e8s.show.validate", "validate_dependencies"),
     "validate_paths": ("e8s.show.validate", "validate_paths"),
     "validate_set": ("e8s.show.validate", "validate_set"),
@@ -1321,11 +1355,14 @@ _EXPORTS: dict[str, tuple[str, str]] = {
 
 __all__ = [
     "BUNDLED_FONTS",
+    "CURRENT_LAYOUT",
     "CURRENT_VERSION",
     "DEFAULT_LINE_SPACING",
     "FORMAT",
     "ID_MAX_LENGTH",
     "ID_PATTERN",
+    "LAYOUT_FILE",
+    "LAYOUT_FORMAT",
     "MAX_COORD_M",
     "MAX_COUNTS",
     "MAX_DEPTH",
@@ -1751,6 +1788,7 @@ __all__ = [
     "propose",
     "ranks_and_files",
     "reachable_region",
+    "read_layout",
     "read_version",
     "rebuild",
     "rect",

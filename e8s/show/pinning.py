@@ -16,7 +16,8 @@ from e8s.core.errors import UnknownRefError
 from e8s.core.ids import format_tid, parse_tid
 from e8s.core.util import close_matches
 from e8s.show.changes import store_paths
-from e8s.show.models import PathsOp, Pin, PinTarget, Show
+from e8s.show.collab_models import PathsOp
+from e8s.show.models import Pin, PinTarget, Show
 
 
 def _require_target(show: Show, target: PinTarget, target_id: str) -> None:
