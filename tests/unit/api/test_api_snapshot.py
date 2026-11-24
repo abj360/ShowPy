@@ -385,7 +385,8 @@ def test_inline_short_arrays_matches_prettier() -> None:
 def test_snapshot_renders_a_core_function_from_its_stub(tmp_path: Path) -> None:
     (tmp_path / "core.pyi").write_text(
         "from e8s.core.types import Box2\n\n"
-        "def _finite_probe(value: float, *, part: Box2 | None = None) -> float: ...\n"
+        "def _finite_probe(value: float, *, part: Box2 | None = None) -> float: ...\n",
+        encoding="utf-8",
     )
     assert _signature_text(core._finite_probe) == "(value)"
     assert describe_public_object(core._finite_probe, stub_root=tmp_path) == (

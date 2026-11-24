@@ -978,7 +978,7 @@ def test_rust_session_checks_crate_licences_and_the_notices() -> None:
 
 
 def test_types_session_checks_the_core_stubs() -> None:
-    assert uv_runs(NOXFILE.read_text(), TYPES_SESSION) == TYPES_SESSION_RUNS
+    assert uv_runs(NOXFILE.read_text(encoding="utf-8"), TYPES_SESSION) == TYPES_SESSION_RUNS
 
 
 def test_cargo_tools_install_locked_at_pinned_versions_into_the_repository() -> None:

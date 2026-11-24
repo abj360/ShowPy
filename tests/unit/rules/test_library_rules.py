@@ -571,9 +571,12 @@ def test_rust_raiser_scan_reads_each_kind_and_code_pair(
     (crate / "src").mkdir(parents=True)
     (crate / "tests").mkdir()
     (crate / "src" / "lib.rs").write_text(
-        "CoreError::new(\n    ErrorKind::Schema,\n    ErrorCode::NotFinite,\n    m,\n    h,\n)\n"
+        "CoreError::new(\n    ErrorKind::Schema,\n    ErrorCode::NotFinite,\n    m,\n    h,\n)\n",
+        encoding="utf-8",
     )
-    (crate / "tests" / "probe.rs").write_text("CoreError::new(ErrorKind::Path, ErrorCode::Path)\n")
+    (crate / "tests" / "probe.rs").write_text(
+        "CoreError::new(ErrorKind::Path, ErrorCode::Path)\n", encoding="utf-8"
+    )
     monkeypatch.setattr(generator, "CRATES_ROOT", tmp_path)
     assert generator.rust_raisers() == {"NOT_FINITE": ["SchemaError"]}
 
