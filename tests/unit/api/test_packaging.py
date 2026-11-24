@@ -37,6 +37,20 @@ DIST_INFO_FILES = frozenset({"METADATA", "WHEEL", "RECORD"})
 # maturin records the crates linked into e8s._core as a CycloneDX bill of materials.
 SBOM = "sboms/e8s-py.cyclonedx.json"
 LOCKED_BUILD = {"MATURIN_PEP517_ARGS": "--locked"}
+# The sdist holds the build inputs only: no tests, docs, CI, agent folders or build output.
+SDIST_TOP_LEVEL = frozenset(
+    {
+        "e8s",
+        "crates",
+        "Cargo.toml",
+        "Cargo.lock",
+        "rust-toolchain.toml",
+        "pyproject.toml",
+        "README.md",
+        "LICENSE",
+        "PKG-INFO",
+    }
+)
 
 
 def test_version_is_exported() -> None:
@@ -118,12 +132,17 @@ def test_bundled_font_budget_fits_the_loader_cap() -> None:
     assert BUNDLED_FONT_BUDGET_BYTES <= MAX_FONT_BYTES
 
 
-def tracked_package_files(root: Path) -> set[str]:
-    """Lists every file git tracks under the e8s package folder of a checkout."""
+def tracked_files(root: Path, *paths: str) -> set[str]:
+    """Lists every file git tracks in a checkout, or only under the given paths."""
     listed = subprocess.run(
-        ["git", "ls-files", "-z", "e8s"], cwd=root, capture_output=True, check=True, text=True
+        ["git", "ls-files", "-z", *paths], cwd=root, capture_output=True, check=True, text=True
     )
     return {path for path in listed.stdout.split("\0") if path}
+
+
+def tracked_package_files(root: Path) -> set[str]:
+    """Lists every file git tracks under the e8s package folder of a checkout."""
+    return tracked_files(root, "e8s")
 
 
 def build_distribution(kind: str, out: Path) -> Path:
@@ -171,8 +190,60 @@ def test_wheel_holds_every_tracked_package_file_plus_the_extension(built_wheel: 
     assert others == DIST_INFO_FILES | {SBOM}
 
 
-def test_sdist_carries_the_toolchain_pin(tmp_path: Path) -> None:
-    sdist = build_distribution("--sdist", tmp_path)
+@pytest.fixture(scope="module")
+def sdist_files(tmp_path_factory: pytest.TempPathFactory) -> set[str]:
+    """Builds the sdist of the source checkout and lists its files without the root folder."""
+    sdist = build_distribution("--sdist", tmp_path_factory.mktemp("sdist"))
     with tarfile.open(sdist) as archive:
-        names = {name.split("/", 1)[1] for name in archive.getnames() if "/" in name}
-    assert {"rust-toolchain.toml", "Cargo.toml", "Cargo.lock"} <= names
+        return {
+            member.name.split("/", 1)[1]
+            for member in archive.getmembers()
+            if member.isfile() and "/" in member.name
+        }
+
+
+def unexpected_sdist_files(names: set[str], tracked: set[str]) -> list[str]:
+    """Lists the sdist files that are not a build input the checkout tracks.
+
+    Args:
+        names: The sdist's file paths, relative to its root folder.
+        tracked: The paths git tracks in the checkout.
+
+    Returns:
+        unexpected: Each path outside SDIST_TOP_LEVEL, or under a folder entry but untracked.
+    """
+    return sorted(
+        name
+        for name in names
+        if name.split("/")[0] not in SDIST_TOP_LEVEL or ("/" in name and name not in tracked)
+    )
+
+
+def test_sdist_carries_the_toolchain_pin(sdist_files: set[str]) -> None:
+    assert {"rust-toolchain.toml", "Cargo.toml", "Cargo.lock"} <= sdist_files
+
+
+def test_sdist_holds_only_the_build_inputs(sdist_files: set[str]) -> None:
+    tracked = tracked_files(REPO_ROOT)
+    assert unexpected_sdist_files(sdist_files, tracked) == []
+    assert {name.split("/")[0] for name in sdist_files} == SDIST_TOP_LEVEL
+    assert {name for name in sdist_files if name.startswith("e8s/")} == tracked_package_files(
+        REPO_ROOT
+    )
+
+
+def test_unexpected_sdist_files_sees_a_stray_entry() -> None:
+    tracked = {"e8s/a.py", "crates/x/src/lib.rs", "tests/test_a.py"}
+    names = {
+        "PKG-INFO",
+        "e8s/a.py",
+        "e8s/_core.abi3.so",
+        "crates/x/src/lib.rs",
+        "tests/test_a.py",
+        "target/release/lib.so",
+    }
+    assert unexpected_sdist_files(names, tracked) == [
+        "e8s/_core.abi3.so",
+        "target/release/lib.so",
+        "tests/test_a.py",
+    ]
