@@ -3,14 +3,17 @@
 """
 oracle_runner.py --- runs one area's parity cases under one interpreter and writes their outputs
 
-Runs with `-I`, under the oracle venv's interpreter or the working tree's: it imports e8s first
-and refuses an e8s from anywhere but `--e8s-from`, then appends `--cases-root` to the end of
-sys.path to import the case modules, so the cases never shadow the e8s under test.
+Runs with `-s -P -B`, under the oracle venv's interpreter or the working tree's, and refuses
+`-I` or `-E`, which would drop PYTHONHASHSEED. It imports e8s first and refuses an e8s from
+anywhere but `--e8s-from`, then appends `--cases-root` to the end of sys.path to import the
+case modules, so the cases never shadow the e8s under test. It records the hash seed it saw and
+a string hash in runner.json, so the driver can check that the seed reached it.
 
-Usage: `python -I oracle_runner.py <area> <out> --cases-root <repo> --e8s-from <folder>`
+Usage: `python -s -P -B oracle_runner.py <area> <out> --cases-root <repo> --e8s-from <folder>`
 
 Contains:
     RUNS: the timed runs per timed case; timings.json keeps their minimum
+    hash_probe(): records the hash seed the runner sees and a string hash under it
     import_e8s(): imports e8s and checks where it came from
     minimum_run_s(): returns a case's fastest of RUNS runs, in seconds
     main(): runs every case of the area, writing <case>.parity files and timings.json
@@ -19,6 +22,7 @@ Contains:
 import argparse
 import importlib
 import json
+import os
 import sys
 import time
 from collections.abc import Sequence
@@ -27,7 +31,22 @@ from types import ModuleType
 
 RUNS = 7
 TIMINGS_FILE = "timings.json"
+RUNNER_FILE = "runner.json"
+HASH_SEED = "PYTHONHASHSEED"
+PROBE_TEXT = "e8s parity hash probe"
 CASES_MODULE = "tests.parity.cases"
+
+
+def hash_probe() -> dict[str, object]:
+    """Records the PYTHONHASHSEED the runner sees and the hash of a fixed string under it.
+
+    Returns:
+        probe: `hash_seed` (None when unset) and `hash_probe`, equal across launches under the
+            same fixed seed and different under another.
+    """
+    if sys.flags.ignore_environment:
+        raise SystemExit("E: the parity runner ignores PYTHONHASHSEED under -I or -E; use -s -P")
+    return {"hash_seed": os.environ.get(HASH_SEED), "hash_probe": hash(PROBE_TEXT)}
 
 
 def import_e8s(expected: Path) -> ModuleType:
@@ -70,6 +89,8 @@ def _arguments(argv: Sequence[str] | None) -> argparse.Namespace:
 def main(argv: Sequence[str] | None = None) -> None:
     """Runs every case of one area and writes its outputs and the timed cases' minima."""
     arguments = _arguments(argv)
+    probe = json.dumps(hash_probe(), sort_keys=True)
+    (arguments.out / RUNNER_FILE).write_text(f"{probe}\n", encoding="utf-8")
     e8s = import_e8s(arguments.e8s_from)
     sys.path.append(str(arguments.cases_root.resolve()))
     from tests.parity.cases import load_cases, write_outputs

@@ -11,7 +11,8 @@ Contains:
     FLIPPED_FILE: the flipped cases, compared against their ledger expectation
     REPO_ROOT: the repository root the case modules import from
     AreaRun: one area's reports, speed report and core outputs
-    runner_command(): builds the oracle_runner.py command, writing no bytecode
+    runner_command(): builds the oracle_runner.py command, isolated and writing no bytecode
+    runner_environment(): drops every PYTHON* variable except PYTHONHASHSEED
     run_side(): runs oracle_runner.py for one area under one interpreter
     run_area(): runs both sides of one area and compares every case
     main(): builds the oracle, runs each area, prints the tables and fails on any gate
@@ -19,6 +20,7 @@ Contains:
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
@@ -46,6 +48,12 @@ RUNNER = PARITY_FOLDER / "oracle_runner.py"
 FLIPPED_FILE = PARITY_FOLDER / "flipped.toml"
 RUNS_FOLDER = Path(".parity") / "runs"
 TIMINGS_FILE = "timings.json"
+RUNNER_FILE = "runner.json"
+HASH_SEED = "PYTHONHASHSEED"
+PYTHON_VARIABLES = "PYTHON"
+# -I would also imply -E, which ignores PYTHONHASHSEED; -s and -P keep the rest of its
+# isolation, and runner_environment drops the other PYTHON* variables -E would have ignored.
+RUNNER_FLAGS = ("-s", "-P", "-B")
 CORE_E8S = REPO_ROOT / "e8s"
 LANE_TESTS = "test_parity_{area}.py"
 
@@ -68,8 +76,9 @@ class AreaRun:
 def runner_command(python: Path, area: str, out: Path, e8s_from: Path) -> list[str]:
     """Builds the oracle_runner.py command for one area under one interpreter.
 
-    -B keeps the interpreter from writing bytecode, so the oracle venv's digest stays the one
-    its READY records.
+    -s and -P keep the user site and the script folder off sys.path, and -B keeps the
+    interpreter from writing bytecode, so the oracle venv's digest stays the one its READY
+    records. The command runs with runner_environment, so PYTHONHASHSEED applies.
 
     Args:
         python: The interpreter to run.
@@ -82,8 +91,7 @@ def runner_command(python: Path, area: str, out: Path, e8s_from: Path) -> list[s
     """
     return [
         str(python),
-        "-I",
-        "-B",
+        *RUNNER_FLAGS,
         str(RUNNER),
         area,
         str(out),
@@ -94,8 +102,31 @@ def runner_command(python: Path, area: str, out: Path, e8s_from: Path) -> list[s
     ]
 
 
+def runner_environment(environment: Mapping[str, str]) -> dict[str, str]:
+    """Returns the environment for a runner: no PYTHON* variable except PYTHONHASHSEED.
+
+    Args:
+        environment: The driver's environment.
+
+    Returns:
+        filtered: The same variables without PYTHONPATH, PYTHONHOME, PYTHONSTARTUP and the
+            other PYTHON* variables that could change what the runner imports.
+    """
+    return {
+        name: value
+        for name, value in environment.items()
+        if not name.startswith(PYTHON_VARIABLES) or name == HASH_SEED
+    }
+
+
+def _check_hash_seed(out: Path, area: str) -> None:
+    probe = json.loads((out / RUNNER_FILE).read_text(encoding="utf-8"))
+    if probe.get("hash_seed") != os.environ.get(HASH_SEED):
+        raise SystemExit(f"E: parity runner for {area} ran under hash seed {probe!r}")
+
+
 def run_side(python: Path, area: str, out: Path, e8s_from: Path) -> None:
-    """Runs oracle_runner.py for one area under one interpreter, isolated with -I.
+    """Runs oracle_runner.py for one area under one interpreter, under the driver's hash seed.
 
     Args:
         python: The interpreter to run.
@@ -107,9 +138,11 @@ def run_side(python: Path, area: str, out: Path, e8s_from: Path) -> None:
         for stale in out.iterdir():
             stale.unlink()
     out.mkdir(parents=True, exist_ok=True)
-    result = subprocess.run(runner_command(python, area, out, e8s_from), check=False)
+    command = runner_command(python, area, out, e8s_from)
+    result = subprocess.run(command, env=runner_environment(os.environ), check=False)
     if result.returncode != 0:
         raise SystemExit(f"E: parity runner for {area} under {python} exited {result.returncode}")
+    _check_hash_seed(out, area)
 
 
 def _timings(folder: Path) -> dict[str, float]:
