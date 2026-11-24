@@ -23,7 +23,7 @@ Contains:
     oracle_json(): dumps a show as JSON data with every set sorted
     fixture_shows(): builds the shows of the three legacy revisions: the save, a path edit and a pin
     v030_show(): builds the v0.3.0 show: renumbered sets, a text form and a selector zone
-    v040_history(): copies the v0.3.0 repository and adds the v0.4.0 save, a path edit and a pin
+    v040_history(): copies the v0.3.0 repository, then saves, edits a path, pins and adds a note
     build_fixture(): writes a repository and its expected.json under a directory
     main(): parses the command line and builds the fixture
 """
@@ -89,6 +89,12 @@ ZONES_FIELD = "zones"
 HAND_SET_IDS = ("1a", "1A", "con")
 HAND_SET_SOURCE = "8"
 SHOW_DOC = "/show/show.json"
+NOTES_DOC = "/notes/notes.json"
+NOTE_ID = "note_1"
+NOTE_TEXT = "Hold the horn line through the first set."
+NOTE_KIND = "idea"
+NOTE_SET = "1"
+NOTE_AUTHOR = "designer"
 SET_ORDER_FIELD = "sets"
 
 
@@ -365,11 +371,29 @@ def _save_v030(repo: "FileRepository") -> list["Revision"]:
     return [first, second]
 
 
+def _notes_document(
+    show_id: str,
+) -> Any:  # Any: the notes models are private to the v0.4.0 library.
+    """Builds the notes document of the v0.4.0 fixture: one designer note on a set of `show_id`."""
+    notes_module = importlib.import_module("e8s.show._notes_document")
+    anchors = importlib.import_module("e8s.show.anchors")
+    note = notes_module.Note(
+        id=NOTE_ID,
+        text=NOTE_TEXT,
+        kind=NOTE_KIND,
+        anchor=anchors.Anchor.on_set(NOTE_SET),
+        author=NOTE_AUTHOR,
+        created_at=STAMP,
+    )
+    return notes_module.NotesDocument(show=show_id, notes=(note,))
+
+
 def v040_history(source: Path, out: Path) -> list["Revision"]:
     """Copies the v0.3.0 repository under `out`, then saves, edits a path row and pins a spot.
 
-    The first save normalizes the stored documents and adds the notes document; the edit and the
-    pin each add one more revision.
+    The first save normalizes the stored documents; the edit and the pin each add one revision.
+    v0.4.0 has no notes functions, so the last revision writes one designer note as a notes
+    document through `Workspace.write`, the way a host app stores it.
 
     Args:
         source: Root of the v0.3.0 fixture, holding repo/ and expected.json.
@@ -378,6 +402,7 @@ def v040_history(source: Path, out: Path) -> list["Revision"]:
     Returns:
         revisions: Every revision of the history, oldest first.
     """
+    from e8s.show.documents import dump_json
     from e8s.show.file_repository import FileRepository
     from e8s.show.pinning import pin
     from e8s.show.storage import load_show, open_workspace, save_show
@@ -393,6 +418,7 @@ def v040_history(source: Path, out: Path) -> list["Revision"]:
     loaded = load_show(workspace)
     pinned = pin(loaded, "entity", loaded.cast.spots[PINNED_SPOT_INDEX].id, "soloist")
     save_show(workspace, pinned, STAMP)
+    workspace.write(NOTES_DOC, dump_json(_notes_document(pinned.id).to_json()), at=STAMP)
     revisions = list(repo.revisions(SHOW_ID))
     assert [r.id for r in revisions[: len(legacy["revisions"])]] == legacy["revisions"]
     return revisions
@@ -408,11 +434,11 @@ def build_fixture(out: Path, kind: str) -> None:
     from e8s.core.util import content_hash
     from e8s.show.file_repository import FileRepository
 
-    repo = FileRepository(out / REPO_DIR)
     if kind == "v040":
         revisions = v040_history(V030_FIXTURE, out)
         repo = FileRepository(out / REPO_DIR)
     else:
+        repo = FileRepository(out / REPO_DIR)
         revisions = _save_v030(repo) if kind == "v030" else _save_legacy(repo, kind)
     head = repo.get_show(SHOW_ID)
     expected = {

@@ -1,0 +1,23 @@
+{
+  "format": "e8.notes",
+  "notes": [
+    {
+      "anchor": {
+        "area": null,
+        "kind": "set",
+        "point": null,
+        "set_id": "1",
+        "spots": null,
+        "tid": null
+      },
+      "author": "designer",
+      "created_at": "2026-11-13T12:00:00Z",
+      "id": "note_1",
+      "kind": "idea",
+      "text": "Hold the horn line through the first set.",
+      "visible": true
+    }
+  ],
+  "show": "seeded",
+  "version": 1
+}
