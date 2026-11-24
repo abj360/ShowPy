@@ -17,6 +17,8 @@ Contains:
     test_regression_split_puts_a_cue_in_one_half_only: keeps cue c1 in a single half of a split
     test_split_then_join_keeps_a_stale_form: carries a stale form into its section so a rejoin
         restores the show
+    test_regression_join_keeps_one_pin_per_target: keeps the first half's pin when both halves pin
+        one spot or the shared set, so the joined show can be stored
 """
 
 from datetime import UTC, datetime
@@ -29,9 +31,13 @@ from e8s.choreo.path_models import FacingMode, FacingOverride, FixedFacing, Tran
 from e8s.core.errors import SchemaError, TimelineError
 from e8s.core.ids import FormId, SetId, SpotId, make_tid
 from e8s.core.util import approx_equal
-from e8s.show.manage import add_set, index, renumber
-from e8s.show.models import Pin, Show
+from e8s.show.documents import encode_show
+from e8s.show.manage import add_set
+from e8s.show.models import Pin, PinTarget, Show
+from e8s.show.pinning import pin
+from e8s.show.renumber import renumber
 from e8s.show.sections import join_sections, split_section
+from e8s.show.set_queries import index
 from e8s.time.clock import count_to_seconds
 from e8s.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting, TempoSection
 from tests.fixtures.recipes import LINE_RECIPE
@@ -233,3 +239,12 @@ def test_split_then_join_keeps_a_stale_form() -> None:
     assert "a" in first.forms
     assert "a" in second.forms
     assert join_sections(first, second).forms == show.forms
+
+
+@pytest.mark.parametrize(("target", "pin_id"), [("entity", "T1"), ("set", "2")])
+def test_regression_join_keeps_one_pin_per_target(target: PinTarget, pin_id: str) -> None:
+    whole = pin(add_set(two_set_show(), "3", 4.0), target, pin_id, reason="first")
+    a, b = split_section(whole, "2")
+    joined = join_sections(a, pin(b, target, pin_id, reason="second"))
+    assert [(p.target, p.id, p.reason) for p in joined.pins] == [(target, pin_id, "first")]
+    assert encode_show(joined)

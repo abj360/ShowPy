@@ -52,9 +52,10 @@ from e8s.core.ids import SetId, SpotId, make_tid
 from e8s.core.json_types import JsonValue
 from e8s.core.types import FrozenModel, Point
 from e8s.examples import two_set_show
+from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Show
-from e8s.show.repositories import InMemoryRepository
-from e8s.show.storage import Workspace, open_workspace, save_show
+from e8s.show.show_io import save_show
+from e8s.show.workspace import Workspace, open_workspace
 
 SET_ID = "1"
 FIRST_TRANSITION = ("1", "2")
