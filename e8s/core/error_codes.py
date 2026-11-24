@@ -41,6 +41,8 @@ class ErrorCode(StrEnum):
     """A write was based on a revision that another write has since replaced."""
     CONTINUITY = "CONTINUITY"
     """A path does not end on its target placement."""
+    CORE_PANIC = "CORE_PANIC"
+    """A compiled core function panicked; the panic is a bug in e8s, caught at the boundary."""
     CORRUPT = "CORRUPT"
     """A stored repository is damaged or is missing a blob it refers to."""
     COUNTS_MISMATCH = "COUNTS_MISMATCH"

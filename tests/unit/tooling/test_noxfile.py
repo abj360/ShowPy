@@ -63,9 +63,17 @@ Contains:
     session_runs(): lists the arguments of every `session.run` call one noxfile function makes
     test_rust_session_runs_fmt_clippy_test_and_the_wasm_build: the cargo gates, the FMA check,
         then cargo deny
+    session_env(): lists the `session.env` assignments of one noxfile function, with lines
+    test_regression_rust_session_builds_against_the_project_interpreter: every cargo command
+        runs with PYO3_PYTHON and VIRTUAL_ENV set to nox's own environment, where e8s is
+        installed
     uv_runs(): lists the arguments of every `_uv_run` call one noxfile function makes
     test_rust_session_checks_crate_licences_and_the_notices: cargo deny, then the notice check
         and the cargo_tools tests
+    test_types_session_checks_the_core_stubs: mypy, pyright, then stubtest on e8s._core with no
+        allowlist
+    test_wheel_sessions_refuse_an_rpath_or_libpython_in_the_extension: wheel and wheels run
+        scripts/check_extension_links.py on the wheel they built
     test_cargo_tools_install_locked_at_pinned_versions_into_the_repository: cargo install
         --locked --root .cargo-tools at exact versions, never into ~/.cargo/bin
     test_fma_check_builds_the_extension_and_runs_the_script: cargo rustc on the fma-check
@@ -193,6 +201,14 @@ LOCKED_FLAG = "--locked"
 CARGO_MANIFEST = ROOT / "Cargo.toml"
 SESSION_RUN = "session.run"
 RUST_SESSION = "rust"
+TYPES_SESSION = "types"
+RUST_SESSION_ENV = {"PYO3_PYTHON": "sys.executable", "VIRTUAL_ENV": "sys.prefix"}
+WHEEL_BUILDING_SESSIONS = ("wheel", "wheels")
+TYPES_SESSION_RUNS = [
+    ["mypy", "e8s", "tests", "scripts"],
+    ["pyright"],
+    ["python", "-m", "mypy.stubtest", "e8s._core"],
+]
 FMA_STEP = "_check_no_fma"
 FMA_CHECK_SCRIPT = "FMA_CHECK_SCRIPT"
 RUST_SESSION_RUNS = [
@@ -943,6 +959,54 @@ def test_rust_session_runs_fmt_clippy_test_and_the_wasm_build() -> None:
     assert FMA_STEP in session_names(source, RUST_SESSION)
 
 
+def session_env(source: str, function_name: str) -> dict[str, tuple[str, int]]:
+    """Lists the `session.env[KEY] = value` assignments one noxfile function makes.
+
+    Args:
+        source: The text of a noxfile.
+        function_name: The function to inspect.
+
+    Returns:
+        assignments: Key, with module constants resolved, to the value's source text and line.
+    """
+    function = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    )
+    found: dict[str, tuple[str, int]] = {}
+    for node in ast.walk(function):
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Subscript) and ast.unparse(target.value) == "session.env":
+                key = _argument_text(source, target.slice)
+                found[key] = (ast.unparse(node.value), node.lineno)
+    return found
+
+
+def test_regression_rust_session_builds_against_the_project_interpreter() -> None:
+    """The crate tests embed the interpreter pyo3 builds against; on macOS CI that was a
+    framework Python whose own scheme hid the project's site-packages, so e8s did not import."""
+    source = NOXFILE.read_text(encoding="utf-8")
+    env = session_env(source, RUST_SESSION)
+    assert {key: value for key, (value, _) in env.items()} == RUST_SESSION_ENV
+    rust = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef) and node.name == RUST_SESSION
+    )
+    first_cargo = min(
+        node.lineno
+        for node in ast.walk(rust)
+        if isinstance(node, ast.Call)
+        and ast.unparse(node.func) == SESSION_RUN
+        and node.args
+        and _argument_text(source, node.args[0]) == "cargo"
+    )
+    assert all(line < first_cargo for _, line in env.values())
+
+
 def uv_runs(source: str, function_name: str) -> list[list[str]]:
     """Lists the arguments of every `_uv_run` call one noxfile function makes, in source order."""
     function = next(
@@ -967,6 +1031,18 @@ def test_rust_session_checks_crate_licences_and_the_notices() -> None:
         source, RUST_SESSION
     )
     assert uv_runs(source, RUST_SESSION)[-2:] == [NOTICES_CHECK, CARGO_TOOLS_RUN]
+
+
+def test_types_session_checks_the_core_stubs() -> None:
+    assert uv_runs(NOXFILE.read_text(encoding="utf-8"), TYPES_SESSION) == TYPES_SESSION_RUNS
+
+
+def test_wheel_sessions_refuse_an_rpath_or_libpython_in_the_extension() -> None:
+    source = NOXFILE.read_text(encoding="utf-8")
+    script = module_constant(source, "LINK_CHECK_SCRIPT")
+    assert (ROOT / script).is_file()
+    for session in WHEEL_BUILDING_SESSIONS:
+        assert ["python", script, "str(built)"] in uv_runs(source, session), session
 
 
 def test_cargo_tools_install_locked_at_pinned_versions_into_the_repository() -> None:

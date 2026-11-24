@@ -22,6 +22,7 @@ dependencies = [
  "e8s-core",
  "numpy",
  "pyo3",
+ "pyo3-build-config",
 ]
 
 [[package]]
