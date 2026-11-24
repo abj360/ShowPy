@@ -126,7 +126,10 @@ def test_require_extra_chains_the_import_error(monkeypatch: pytest.MonkeyPatch) 
         require_extra("segno", extra="qr", needed_by="qr_code")
     assert isinstance(caught.value.__cause__, ImportError)
     assert caught.value.context["module"] == "segno"
-    assert caught.value.hint == ('install the extra: pip install "e8s[qr]" or uv add "e8s[qr]"')
+    assert caught.value.hint == (
+        'install e8s with the "qr" extra: '
+        'uv add "e8s[qr] @ git+https://github.com/abj360/e8s@<tag>"'
+    )
 
 
 def test_is_dataframe_recognizes_a_frame() -> None:
