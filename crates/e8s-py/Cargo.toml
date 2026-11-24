@@ -11,9 +11,18 @@ workspace = true
 
 [lib]
 name = "_core"
-crate-type = ["cdylib"]
+# The rlib lets the integration tests call the binding's Rust functions.
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 e8s-core = { path = "../e8s-core" }
-pyo3 = { version = "=0.30.1", features = ["abi3-py313", "extension-module"] }
+# No `extension-module` feature: maturin sets PYO3_BUILD_EXTENSION_MODULE, so the wheel leaves
+# libpython unlinked, while `cargo test` links it and the tests embed an interpreter.
+pyo3 = { version = "=0.30.1", features = ["abi3-py313"] }
 numpy = "=0.30.0"
+
+[dev-dependencies]
+pyo3 = { version = "=0.30.1", features = ["auto-initialize"] }
+
+[build-dependencies]
+pyo3-build-config = "=0.30.1"

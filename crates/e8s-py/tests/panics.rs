@@ -1,0 +1,125 @@
+//! panics --- proves that core errors and panics reach Python as e8s exceptions
+//!
+//! Contains:
+//!     panic_in_a_bound_call_raises_e8s_error: a panic in a guarded call raises CORE_PANIC
+//!     core_error_raises_the_class_of_its_kind: a core error keeps its class and fields
+//!     panic_message_names_no_build_path_and_cuts_a_long_payload: the CORE_PANIC message keeps
+//!         the source file's name and line only, and at most PANIC_DETAIL_CHARS of the payload
+
+#![allow(clippy::panic, reason = "the tests panic on purpose inside the guard")]
+
+use _core::errors::{PANIC_DETAIL_CHARS, PANIC_HINT, guard};
+use e8s_core::base::{CoreError, CoreResult, ErrorCode, ErrorKind};
+use pyo3::panic::PanicException;
+use pyo3::prelude::*;
+use pyo3::types::PyDict;
+
+/// Puts the checkout and its uv environment on `sys.path`, and fails clearly if e8s does not
+/// import.
+///
+/// The embedded interpreter starts from the base Python that pyo3 linked, not the virtual
+/// environment, so it reads the environment's `site-packages` (and its `.pth` files) here. The
+/// path comes from the `venv` scheme: a macOS framework Python's own scheme ignores `base` and
+/// names its framework's folder, where e8s's metadata is not.
+const IMPORT_E8S: &std::ffi::CStr = cr#"
+import importlib.metadata, os, site, sys, sysconfig
+venv = os.environ.get("VIRTUAL_ENV") or os.path.join(root, ".venv")
+site.addsitedir(sysconfig.get_path("purelib", scheme="venv", vars={"base": venv, "platbase": venv}))
+sys.path.insert(0, root)
+try:
+    importlib.metadata.version("e8s")
+    import e8s.core.errors
+except ImportError as error:
+    raise RuntimeError(
+        f"e8s is not importable from the environment {venv} by Python "
+        f"{sys.version.split()[0]} at {sys.base_prefix}: {error!r}; run: uv sync, then run "
+        "cargo test with PYO3_PYTHON and VIRTUAL_ENV set to that environment (nox -s rust does)"
+    ) from error
+"#;
+
+fn import_e8s(py: Python<'_>) -> PyResult<()> {
+    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
+    let locals = PyDict::new(py);
+    locals.set_item("root", root)?;
+    py.run(IMPORT_E8S, None, Some(&locals))
+}
+
+fn error_of<T>(result: PyResult<T>) -> PyResult<PyErr> {
+    match result {
+        Ok(_) => Err(PyErr::new::<pyo3::exceptions::PyAssertionError, _>(
+            "the call succeeded",
+        )),
+        Err(err) => Ok(err),
+    }
+}
+
+#[test]
+fn panic_in_a_bound_call_raises_e8s_error() -> PyResult<()> {
+    Python::attach(|py| {
+        import_e8s(py)?;
+        let err = error_of(guard("probe", || -> CoreResult<()> { panic!("boom") }))?;
+        let e8s_error = py.import("e8s.core.errors")?.getattr("E8sError")?;
+        assert!(!err.is_instance_of::<PanicException>(py));
+        assert!(err.get_type(py).is(&e8s_error));
+        let value = err.value(py);
+        assert_eq!(value.getattr("code")?.str()?.to_str()?, "CORE_PANIC");
+        assert_eq!(value.getattr("hint")?.extract::<String>()?, PANIC_HINT);
+        let context = value.getattr("context")?;
+        assert_eq!(context.len()?, 1);
+        assert_eq!(context.get_item("function")?.extract::<String>()?, "probe");
+        let message = value.getattr("message")?.extract::<String>()?;
+        assert!(
+            message.starts_with("probe panicked: boom at panics.rs:"),
+            "{message}"
+        );
+        Ok(())
+    })
+}
+
+#[test]
+fn core_error_raises_the_class_of_its_kind() -> PyResult<()> {
+    Python::attach(|py| {
+        import_e8s(py)?;
+        let failure = CoreError::new(ErrorKind::Timeline, ErrorCode::TempoOrder, "late", "sort")
+            .with_context("count", 3_i64)
+            .with_context("ramp", true);
+        let err = error_of(guard("probe", move || -> CoreResult<()> { Err(failure) }))?;
+        let timeline_error = py.import("e8s.core.errors")?.getattr("TimelineError")?;
+        assert!(err.get_type(py).is(&timeline_error));
+        let value = err.value(py);
+        assert_eq!(value.getattr("code")?.str()?.to_str()?, "TEMPO_ORDER");
+        assert_eq!(value.getattr("message")?.extract::<String>()?, "late");
+        assert_eq!(value.getattr("hint")?.extract::<String>()?, "sort");
+        let context = value.getattr("context")?;
+        assert_eq!(context.get_item("count")?.extract::<i64>()?, 3);
+        assert!(context.get_item("ramp")?.extract::<bool>()?);
+        Ok(())
+    })
+}
+
+fn panic_message(payload: String) -> PyResult<String> {
+    Python::attach(|py| {
+        import_e8s(py)?;
+        let err = error_of(guard("probe", move || -> CoreResult<()> {
+            panic!("{payload}")
+        }))?;
+        err.value(py).getattr("message")?.extract::<String>()
+    })
+}
+
+#[test]
+fn panic_message_names_no_build_path_and_cuts_a_long_payload() -> PyResult<()> {
+    let short = panic_message("boom".to_owned())?;
+    assert!(!short.contains('/') && !short.contains('\\'), "{short}");
+    let line = short.rsplit(':').next().unwrap_or_default();
+    assert!(line.parse::<u32>().is_ok(), "{short}");
+
+    let long = panic_message("x".repeat(10 * PANIC_DETAIL_CHARS))?;
+    let kept = format!(
+        "probe panicked: {}... at panics.rs:",
+        "x".repeat(PANIC_DETAIL_CHARS)
+    );
+    assert!(long.starts_with(&kept), "{long}");
+    assert!(long.chars().count() < kept.chars().count() + 8, "{long}");
+    Ok(())
+}
