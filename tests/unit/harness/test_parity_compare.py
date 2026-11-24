@@ -19,6 +19,7 @@ Contains:
     test_repository_flipped_file_names_only_loaded_cases: the committed flipped.toml loads
     test_outputs_round_trip_through_their_encoding: arrays and JSON decode to equal values
     test_encoding_rejects_an_unsupported_dtype: a float32 array fails closed
+    test_regression_decode_refuses_a_malformed_or_truncated_record: bounds every header field
     test_load_cases_reads_the_time_self_check: cases_time.py holds the clock self-check
     test_load_cases_rejects_an_unknown_area: an area without a case module fails closed
 """
@@ -213,6 +214,32 @@ def test_encoding_rejects_an_unsupported_dtype() -> None:
     with pytest.raises(SystemExit, match="float32"):
         # cast: the encoder must refuse an array the Output type does not allow.
         encode_outputs({"val:v": cast(Output, np.zeros(2, dtype=np.float32))})
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        b'{"dtype":"json","key":"k","nbytes":2}',
+        b'{"dtype":"json","key":"k","nbytes":-1}\n',
+        b'{"dtype":"json","key":"k","nbytes":3}\n[]',
+        b'{"dtype":"json","key":"k","nbytes":99999999999}\n[]',
+        b'{"dtype":"json","key":"k","nbytes":true}\n[]',
+        b'{"dtype":"json","key":"k","nbytes":2.0}\n[]',
+        b'{"dtype":"json","key":1,"nbytes":2}\n[]',
+        b'{"dtype":"json","key":"k","nbytes":2,"extra":0}\n[]',
+        b'{"dtype":"json","nbytes":2}\n[]',
+        b'["dtype","json"]\n[]',
+        b"not json\n[]",
+        b'{"dtype":"json","key":"k","nbytes":2}\n[!',
+        b'{"dtype":"<f8","key":"k","nbytes":8}\n12345678',
+        b'{"dtype":"<f8","key":"k","nbytes":8,"shape":[2]}\n12345678',
+        b'{"dtype":"<f8","key":"k","nbytes":8,"shape":[-1]}\n12345678',
+        b'{"dtype":"<f4","key":"k","nbytes":8,"shape":[2]}\n12345678',
+    ],
+)
+def test_regression_decode_refuses_a_malformed_or_truncated_record(record: bytes) -> None:
+    with pytest.raises(SystemExit, match=r"^E: "):
+        decode_outputs(record)
 
 
 def test_load_cases_reads_the_time_self_check() -> None:
