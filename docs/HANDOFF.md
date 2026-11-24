@@ -10,11 +10,12 @@ Last updated: 2026-11-23
 | Item          | Value                                                                                                 |
 | ------------- | ----------------------------------------------------------------------------------------------------- |
 | Repository    | `abj360/e8s` (public since 2026-11-15); split into its own repository on 2026-11-12 with full history |
-| Gates         | `nox -s tests`: 3,951 passed, `Ledger: 128 open` (2026-11-23); ruff, mypy `--strict`, pyright clean   |
+| Gates         | `nox -s tests`: 4,002 passed, `Ledger: 128 open` (2026-11-23); ruff, mypy `--strict`, pyright clean   |
 | CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main             |
 | Defect ledger | `Ledger: 128 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-23)               |
 | Out of scope  | `stagecheck`, `e8s.packs` and `e8s.index`, by the user's decision (2026-11-11)                        |
 | Phase 1       | done; merged as PR #23 (`dae2b33`) and tagged `v0.3.0` on 2026-11-18                                  |
+| Phase 2       | done; release notes `docs/releases/v0.4.0.md`; `v0.4.0` tag waits for CI and the maintainer           |
 | Text feature  | stage 1 merged (PR #22, 2026-11-17); stages 2 and 3 not started                                       |
 | Pushing       | needs explicit approval                                                                               |
 
@@ -36,7 +37,7 @@ Use `uv` only, never pip.
 1. `CLAUDE.md` (project) and `~/.claude/CLAUDE.md` (user style: file headers with a `Contains:` section, verb-first docstrings, no AI trailers on commits).
 2. `docs/adr/0001-library-layout-and-reference-fixes.md`: 24 fixes to the reference, the origin convention (front-center), the facing vector `(sin θ, −cos θ)`, and why subpackage `__init__` files are empty.
 3. `docs/adr/0002-path-engine.md`, plus its three addenda: segment probe density, time-based measures living in `e8s.choreo`, and the `min_gaps` hotspot forecast.
-4. `docs/upgrade-plan.md` and `docs/releases/v0.3.0.md`: the upgrade program, and what Phase 1 changed with its ADRs 0003 to 0006, 0014, 0017 and 0018.
+4. `docs/upgrade-plan.md`, `docs/releases/v0.3.0.md` and `docs/releases/v0.4.0.md`: the upgrade program, and what Phases 1 and 2 changed.
 
 ## Module map (what exists)
 
@@ -81,19 +82,17 @@ pin bypass. By the maintainer's decisions of 2026-11-15, permissions, authorship
 and undo moved to the host app (ADR 0003), and sheet replacement was removed (ADR 0017). The
 phase's plan was deleted after the tag.
 
-**Leaving names removed (2026-11-23, branch `refactor/remove-leaving-names`).** The library has
-no users, so the leaving names of ADR 0021 went at once, with no warning period (ADR 0021,
-addendum 2026-11-23): the `e8s.export` package (publishing, claims, print, PDF, tables, video),
-the `e8s.notes` package, `Spot.claimable`, landmarks, zones, coordinate wording, the stage
-template, sheet rendering and every deprecated alias. The sheet names that change shape later
-(templates, lookup, guides, storage) stay as current API with no warning, and the library keeps no
-deprecation machinery. Reading a v1 show lists each dropped stored field in
-`MigrationReport.dropped`; v1 notes still go to `/notes/notes.json`.
+**Phase 2, foundations: done, `v0.4.0` pending its tag** (release notes
+`docs/releases/v0.4.0.md`; ADRs 0007 to 0011, 0019 to 0021, 0023 and 0026). The library is
+`e8s`, licensed PolyForm Noncommercial from v0.4.0; stored format v2 with a v1 migration chain;
+typed, frozen models with the `to_json`/`from_json`/`replace` interface; export, notes and the
+other leaving names deleted, with no warning period; `MAX_SPOTS` 5,000 and `MAX_SETS` 1,000. The
+sheet-building names stay as current API until v0.7.0 replaces them.
 
-**Next: Phase 2, foundations** (`docs/upgrade-plan.md`, "Phase 2"), the main breaking release
-before 1.0, target `v0.4.0`. Plan: `docs/superpowers/plans/2026-11-18-phase-2-foundations.md`;
-decision records: ADRs 0007 to 0011, accepted 2026-11-19 with the plan's twelve "Decisions needed"
-as recommended (Python floor 3.13).
+**Next: Phase 3, storage v2 and collaboration** (`docs/upgrade-plan.md`, "Phase 3"). The v0.5.0
+readers (`frames`, `coordinate_table`, `describe_transition`) merge after the `v0.4.0` tag.
+Phase 3 inputs include the superlinear one-spot save and `validate_show` at the caps (release
+notes, "Known limitations").
 
 `docs/e8s-api-reference.md` was aligned with the code on 2026-11-17; the code stays the source
 of truth until generated docs land in Phase 6.

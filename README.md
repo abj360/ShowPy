@@ -52,6 +52,14 @@ To run locally:
 uv sync && uv run pytest
 ```
 
+To use e8s in a project, install it from a GitHub release; it is not published on PyPI:
+
+```bash
+uv add "e8s @ git+https://github.com/abj360/e8s@v0.4.0"
+# or the wheel attached to the release
+pip install e8s-0.4.0-py3-none-any.whl
+```
+
 ## Usage
 
 ```python
@@ -69,7 +77,7 @@ e8s.min_gaps(show, ("1", "2"), top=1)[0].gap  # 1.4 m between footprints
 e8s.validate_show(show).ok  # True
 ```
 
-`pip install e8s` (or `uv add e8s`) installs the core: numpy, scipy, shapely and pydantic. One extra adds the dependency of the table functions; without it, those functions raise `MissingExtraError` with the install command.
+Installing e8s from a release (see Quickstart) installs the core: numpy, scipy, shapely and pydantic. One extra adds the dependency of the table functions; without it, those functions raise `MissingExtraError` with the install command.
 
 | Extra    | Installs          | Unlocks                                                                |
 | -------- | ----------------- | ---------------------------------------------------------------------- |
