@@ -1,14 +1,12 @@
 """
 snapping.py --- snaps points to a grid, lines them up and evens them out
 
-Re-exported by `e8s.geo.transforms`; the same input kinds apply. A `Set` goes to
-`e8s.choreo.set_snapping`, which warns as deprecated. Snapping to sheet guide lines needs a
-`Sheet` and lives in `e8s.choreo.set_snapping`.
+Re-exported by `e8s.geo.transforms`; the same input kinds apply. A `Set` and snapping to
+sheet guide lines, which needs a `Sheet`, live in `e8s.choreo.set_snapping`.
 
 Contains:
     Axis: names a stage-plane axis
     snap(): snaps points to a grid and reports what moved
-    snap_to_guides(): forwards to e8s.choreo.set_snapping.snap_to_guides, deprecated
     align(): lines points up on one coordinate
     distribute(): evens points out along an axis, keeping their order
     grid_snapper(): builds the point map that snaps to a grid, and a reader of what moved
@@ -16,24 +14,20 @@ Contains:
     distribute_map(): builds the point map that evens points out along an axis
 """
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from typing import Literal
 
 import numpy as np
 
-from e8s.core.deprecation import deprecated_call
 from e8s.core.errors import GeometryError
 from e8s.core.types import Meters, Points
 from e8s.geo.checks import pick
 from e8s.geo.curves import CurveModel
-from e8s.geo.measure import ALL, SHEET_TYPE, SetSelector, wrong_type_error
 from e8s.geo.models import SnapReport
-from e8s.geo.transform_base import PointMap, apply_pointwise, is_set_input, warn_set_moved
+from e8s.geo.transform_base import PointMap, apply_pointwise
 
 type Axis = Literal["x", "y"]
 
-GEO_MODULE = "e8s.geo.snapping"
-CHOREO_MODULE = "e8s.choreo.set_snapping"
 AXIS_INDEX = {"x": 0, "y": 1}
 SNAP_AXES = {"x": (0,), "y": (1,), "xy": (0, 1)}
 ALIGN_STATS: dict[str, Callable[[Points], float]] = {
@@ -92,9 +86,6 @@ def snap[T: (Points, CurveModel)](
     precision: Meters,
     mode: Literal["round", "floor", "ceil"] = "round",
     axes: Literal["x", "y", "xy"] = "xy",
-    sel: SetSelector = ALL,
-    *,
-    force: bool = False,
 ) -> tuple[T, SnapReport]:
     """Snaps points to multiples of `precision`; rounding is half away from zero.
 
@@ -102,33 +93,8 @@ def snap[T: (Points, CurveModel)](
     >>> pts.tolist(), report.moved
     ([[0.5, 1.0]], 1)
     """
-    if is_set_input(obj):
-        from e8s.choreo.models import Set
-        from e8s.choreo.set_snapping import snap as twin
-
-        warn_set_moved(GEO_MODULE, "snap", CHOREO_MODULE, obj, Set)
-        return twin(obj, precision, mode, axes, sel, force=force)
     to_grid, read_report = grid_snapper(precision, mode, axes)
     return apply_pointwise(obj, to_grid), read_report()
-
-
-@deprecated_call("e8s.choreo.set_snapping.snap_to_guides", since="0.4.0", remove="0.6.0")
-def snap_to_guides[T: (Points, CurveModel)](
-    obj: T,
-    sheet: object,
-    tol: Meters,
-    kinds: Sequence[str] | None = None,
-    sel: SetSelector = ALL,
-    *,
-    force: bool = False,
-) -> T:
-    """Projects points onto sheet guide lines; moved to `e8s.choreo.set_snapping`."""
-    from e8s.choreo.set_snapping import snap_to_guides as twin
-    from e8s.sheet.models import Sheet
-
-    if not isinstance(sheet, Sheet):
-        raise wrong_type_error("e8s.geo.snapping.snap_to_guides", "sheet", sheet, SHEET_TYPE)
-    return twin(obj, sheet, tol, kinds, sel, force=force)
 
 
 def _align_target(values: Points, value: float | str) -> float:
@@ -159,21 +125,12 @@ def align[T: (Points, CurveModel)](
     obj: T,
     axis: Axis,
     value: float | Literal["mean", "min", "max"],
-    sel: SetSelector = ALL,
-    *,
-    force: bool = False,
 ) -> T:
     """Sets one coordinate of every point to a number or to the points' mean, min or max.
 
     >>> align(np.array([[0.0, 1.0], [2.0, 3.0]]), "y", "min").tolist()
     [[0.0, 1.0], [2.0, 1.0]]
     """
-    if is_set_input(obj):
-        from e8s.choreo.models import Set
-        from e8s.choreo.set_snapping import align as twin
-
-        warn_set_moved(GEO_MODULE, "align", CHOREO_MODULE, obj, Set)
-        return twin(obj, axis, value, sel, force=force)
     return apply_pointwise(obj, align_map(axis, value))
 
 
@@ -203,9 +160,6 @@ def distribute(
     axis: Axis,
     start: float | None = None,
     end: float | None = None,
-    sel: SetSelector = ALL,
-    *,
-    force: bool = False,
 ) -> Points:
     """Evens points out along an axis from `start` to `end`, keeping their order on it.
 
@@ -214,10 +168,4 @@ def distribute(
     >>> distribute(np.array([[4.0, 0.0], [0.0, 0.0], [1.0, 0.0]]), "x").tolist()
     [[4.0, 0.0], [0.0, 0.0], [2.0, 0.0]]
     """
-    if is_set_input(obj):
-        from e8s.choreo.models import Set
-        from e8s.choreo.set_snapping import distribute as twin
-
-        warn_set_moved(GEO_MODULE, "distribute", CHOREO_MODULE, obj, Set)
-        return twin(obj, axis, start, end, sel, force=force)
     return apply_pointwise(obj, distribute_map(axis, start, end))

@@ -24,14 +24,12 @@ from pydantic import Field, field_validator, model_validator
 
 from e8s.choreo.path_models import FacingOverride
 from e8s.core.caps import MAX_SPOTS
-from e8s.core.deprecation import leave_field
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import GeometryError, SchemaError, UnknownRefError
 from e8s.core.ids import RouteId, SelectionNameField, SpotId, SpotIdField, TransitionId
 from e8s.core.readonly import ReadOnly, ReadOnlyMap
 from e8s.core.types import Degrees, FrozenModel, Meters, PositiveFinite
 from e8s.core.util import close_matches, natural_sort
-from e8s.show._notes_document import Note, NotesDocument
 
 DEFAULT_RADIUS_M = 0.3
 DEFAULT_SYMBOL = "circle"
@@ -39,7 +37,6 @@ DEFAULT_COLOR = "#808080"
 MAX_LABEL_PAD = 8
 HEX_COLOR_PATTERN = r"^#[0-9a-fA-F]{6}$"
 
-type Claimable = Literal["performer", "crew", "none"]
 type HexColor = Annotated[str, Field(pattern=HEX_COLOR_PATTERN)]
 type SelectionKey = Annotated[str, *get_args(SelectionNameField)[1:]]
 type SelectionSpots = tuple[SpotIdField, ...]
@@ -142,7 +139,6 @@ class Spot(FrozenModel):
         tags: Free tags such as `soloist`, deduplicated in first-seen order; a set is sorted.
         active: False excludes the spot from forms and checks.
         shape: Footprint on the sheet and for collisions.
-        claimable: Who may claim the spot once the show is published.
     """
 
     id: SpotIdField
@@ -152,13 +148,9 @@ class Spot(FrozenModel):
     tags: tuple[str, ...] = ()
     active: bool = True
     shape: Shape = Shape()
-    claimable: Claimable = "performer"
 
     _ordered_tags = field_validator("tags", mode="before")(_sort_unordered)
     _unique_tags = field_validator("tags", mode="after")(_dedupe_in_order)
-
-
-leave_field(Spot, "claimable", since="0.4.0", remove="0.7.0")
 
 
 class LabelScheme(FrozenModel):
@@ -346,11 +338,7 @@ class RewriteReport(FrozenModel):
         dropped_routes: Transition and route ID of each route left without members.
         dropped_facings: Each facing override removed because no spot was left on it or its
             target spot was dropped.
-        orphaned_notes: Each note removed from the notes document passed in, because every spot
-            it was anchored to was dropped.
         unresolved_selectors: Stored selectors that no longer resolve and were left as written.
-        notes: The notes document passed in, with its spot anchors rewritten; None without one.
-            It leaves the library in 1.0.0 with the notes, and an outside read warns.
     """
 
     renamed: Annotated[Mapping[SpotId, SpotId], ReadOnly()] = Field(
@@ -358,9 +346,4 @@ class RewriteReport(FrozenModel):
     )
     dropped_routes: tuple[tuple[TransitionId, RouteId], ...] = ()
     dropped_facings: tuple[FacingOverride, ...] = ()
-    orphaned_notes: tuple[Note, ...] = ()
-    notes: NotesDocument | None = None
     unresolved_selectors: tuple[str, ...] = ()
-
-
-leave_field(RewriteReport, "notes", since="0.4.0", remove="1.0.0")

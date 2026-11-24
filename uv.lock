@@ -459,6 +459,89 @@ wheels = [
 ]
 
 [[package]]
+name = "e8s"
+source = { editable = "." }
+dependencies = [
+    { name = "numpy" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "scipy" },
+    { name = "shapely" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "pandas" },
+]
+tables = [
+    { name = "pandas" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "deptry" },
+    { name = "e8s", extra = ["all"] },
+    { name = "git-cliff" },
+    { name = "hypothesis" },
+    { name = "jsonschema" },
+    { name = "mypy" },
+    { name = "nox" },
+    { name = "pandas-stubs" },
+    { name = "pillow" },
+    { name = "pip-audit" },
+    { name = "pre-commit" },
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-benchmark" },
+    { name = "pytest-cov" },
+    { name = "pytest-timeout" },
+    { name = "pytest-xdist" },
+    { name = "rfc8785" },
+    { name = "ruff" },
+    { name = "scipy-stubs" },
+    { name = "types-jsonschema" },
+    { name = "types-shapely" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "numpy", specifier = ">=2.5.4" },
+    { name = "pandas", marker = "extra == 'all'", specifier = ">=3.1.1" },
+    { name = "pandas", marker = "extra == 'tables'", specifier = ">=3.1.1" },
+    { name = "pydantic", specifier = ">=2.14.3" },
+    { name = "pydantic-core", specifier = ">=2.50.4" },
+    { name = "scipy", specifier = ">=1.18.1" },
+    { name = "shapely", specifier = ">=2.2.0" },
+]
+provides-extras = ["all", "tables"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "deptry", specifier = "==0.25.1" },
+    { name = "e8s", extras = ["all"] },
+    { name = "git-cliff", specifier = "==2.14.2" },
+    { name = "hypothesis", specifier = "==6.170.15" },
+    { name = "jsonschema", specifier = "==4.26.0" },
+    { name = "mypy", specifier = "==2.4.1" },
+    { name = "nox", specifier = "==2026.10.20" },
+    { name = "pandas-stubs", specifier = "==3.1.0.261029" },
+    { name = "pillow", specifier = "==13.0.0" },
+    { name = "pip-audit", specifier = "==2.10.1" },
+    { name = "pre-commit", specifier = "==4.7.0" },
+    { name = "pyright", specifier = "==1.1.414" },
+    { name = "pytest", specifier = "==9.2.0" },
+    { name = "pytest-benchmark", specifier = "==5.3.1" },
+    { name = "pytest-cov", specifier = "==7.1.0" },
+    { name = "pytest-timeout", specifier = "==2.4.0" },
+    { name = "pytest-xdist", specifier = "==3.8.0" },
+    { name = "rfc8785", specifier = "==0.1.4" },
+    { name = "ruff", specifier = "==0.17.5" },
+    { name = "scipy-stubs", specifier = "==1.18.1.1" },
+    { name = "types-jsonschema", specifier = "==4.26.0.20261006" },
+    { name = "types-shapely", specifier = "==2.1.0.20261030" },
+]
+
+[[package]]
 name = "execnet"
 version = "2.1.2"
 source = { registry = "https://pypi.org/simple" }
@@ -590,21 +673,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f5/08/8eea9d4b8302028f3abb2c0813953f7aec26d33b7a8960ed760e65ff29fa/idna-3.20.tar.gz", hash = "sha256:a7db850025b95ded1eae8a46181a1a6c56c92c96f0e2b005d9ff8dc0210cab44", size = 216463, upload-time = "2026-09-17T14:11:04.752Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/58/a2/bb081bab032533a855d44de1d56f8e8426114ff1ba5d1f07a438a0a654f8/idna-3.20-py3-none-any.whl", hash = "sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c", size = 69583, upload-time = "2026-09-17T14:11:03.168Z" },
-]
-
-[[package]]
-name = "imageio-ffmpeg"
-version = "0.8.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/58/b9/f5887f8fed3f2c145a01a91580f83671ae6753be28fc55ba753bb8a794fc/imageio_ffmpeg-0.8.1.tar.gz", hash = "sha256:9e5162fa482c3c45a6703b2223947d15c37730e63b048d64937fa80243aa5a0c", size = 27375, upload-time = "2026-11-03T13:34:59.439Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/da/24/2c3a7c69453bfb8374ddbbb5007346bad4a4247bc86882f3521cd615f929/imageio_ffmpeg-0.8.1-py3-none-macosx_10_13_x86_64.whl", hash = "sha256:9538a10e598257263b5de1a1c1b86e7603417bc219245b1e279b452e5e48cc20", size = 26974382, upload-time = "2026-11-03T13:34:33.83Z" },
-    { url = "https://files.pythonhosted.org/packages/2b/47/9f9b654f853598bae0850fa22bba168103e45d31b5a2a893ed474f28d54a/imageio_ffmpeg-0.8.1-py3-none-macosx_12_0_arm64.whl", hash = "sha256:5636d691e36e5274b13fe38182b1f627b2e35dcecc63944012c2470f9484fc45", size = 22625474, upload-time = "2026-11-03T13:34:36.985Z" },
-    { url = "https://files.pythonhosted.org/packages/53/02/e139e53a71f33f728cb2ce6c1124edc29e4c008427923f01a4d37f9a1867/imageio_ffmpeg-0.8.1-py3-none-manylinux_2_28_aarch64.whl", hash = "sha256:fad3176f859b25869e60a8ed79957d4e3ed74a97a95e5f0cdcb91455f6c6d00e", size = 60956631, upload-time = "2026-11-03T13:34:41.501Z" },
-    { url = "https://files.pythonhosted.org/packages/de/0f/49292fbef69ee10ebcf97bb741602521caafcc6966d5fa1a2b868cc15655/imageio_ffmpeg-0.8.1-py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:050d6850601c3b3890bd2b28306f3b842b3daea390a561101174375a1c460bda", size = 67998402, upload-time = "2026-11-03T13:34:46.019Z" },
-    { url = "https://files.pythonhosted.org/packages/9b/4f/737258e8efa9264bcd7eb9615b0be6a58e4ad1d15c259982dbe53b071ce4/imageio_ffmpeg-0.8.1-py3-none-win32.whl", hash = "sha256:4f1213a47d9c3e819d5953671bc45d133a7d3a00c40a2934a9b1356933bee4e9", size = 19652697, upload-time = "2026-11-03T13:34:49.559Z" },
-    { url = "https://files.pythonhosted.org/packages/82/0c/a1d49f3dd2688bd750b4986f8e271ad11f8e729a896070ea25f587b44da8/imageio_ffmpeg-0.8.1-py3-none-win_amd64.whl", hash = "sha256:f27ca4cb85e2d4946deedbce1a81245dfd942a2bcf94b53676fb3956aa95bf1b", size = 38893483, upload-time = "2026-11-03T13:34:52.921Z" },
-    { url = "https://files.pythonhosted.org/packages/ee/39/ab95a2afd202772a69aab1fa5015f13b038f289c8617242cc5eebd0ec0e1/imageio_ffmpeg-0.8.1-py3-none-win_arm64.whl", hash = "sha256:0b7079e63dc34f97e43db5a5b7b9efb85edc1c6623313e0a4a17ebc7c2ce7a51", size = 37499681, upload-time = "2026-11-03T13:34:57.008Z" },
 ]
 
 [[package]]
@@ -1773,15 +1841,6 @@ wheels = [
 ]
 
 [[package]]
-name = "segno"
-version = "1.6.6"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/1c/2e/b396f750c53f570055bf5a9fc1ace09bed2dff013c73b7afec5702a581ba/segno-1.6.6.tar.gz", hash = "sha256:e60933afc4b52137d323a4434c8340e0ce1e58cec71439e46680d4db188f11b3", size = 1628586, upload-time = "2025-03-12T22:12:53.324Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d6/02/12c73fd423eb9577b97fc1924966b929eff7074ae6b2e15dd3d30cb9e4ae/segno-1.6.6-py3-none-any.whl", hash = "sha256:28c7d081ed0cf935e0411293a465efd4d500704072cdb039778a2ab8736190c7", size = 76503, upload-time = "2025-03-12T22:12:48.106Z" },
-]
-
-[[package]]
 name = "shapely"
 version = "2.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1835,109 +1894,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/5b/00/feaeb392e96063717387ec09e6c8e38b29fe4088ddfe976470255c69792e/shapely-2.2.0-cp315-cp315t-win32.whl", hash = "sha256:778421a19085bef1fb38bc0699db1ee9b08fdd0e30a8768788d601a4371f2de0", size = 1675823, upload-time = "2026-10-07T09:17:55.022Z" },
     { url = "https://files.pythonhosted.org/packages/0e/30/0b77618f33fecbc2209c767cecca58bbf83947fc0018571542bf2b859865/shapely-2.2.0-cp315-cp315t-win_amd64.whl", hash = "sha256:287ec7602f7a114b862ae0123880e57160cebe059843a4c7028aaee9e74287f6", size = 1866197, upload-time = "2026-10-07T09:17:56.991Z" },
     { url = "https://files.pythonhosted.org/packages/06/2b/9837e94408335520f778b09067fced0a5d4b2feffa5ebf7119412eb18b00/shapely-2.2.0-cp315-cp315t-win_arm64.whl", hash = "sha256:e414c78bc81aadd76a429111a350f4ef3d05fc13019805617b524951258468e5", size = 1945749, upload-time = "2026-10-07T09:17:59.116Z" },
-]
-
-[[package]]
-name = "e8s"
-source = { editable = "." }
-dependencies = [
-    { name = "numpy" },
-    { name = "pydantic" },
-    { name = "pydantic-core" },
-    { name = "scipy" },
-    { name = "shapely" },
-]
-
-[package.optional-dependencies]
-all = [
-    { name = "imageio-ffmpeg" },
-    { name = "pandas" },
-    { name = "pillow" },
-    { name = "segno" },
-]
-qr = [
-    { name = "pillow" },
-    { name = "segno" },
-]
-render = [
-    { name = "pillow" },
-]
-tables = [
-    { name = "pandas" },
-]
-video = [
-    { name = "imageio-ffmpeg" },
-    { name = "pillow" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "deptry" },
-    { name = "git-cliff" },
-    { name = "hypothesis" },
-    { name = "jsonschema" },
-    { name = "mypy" },
-    { name = "nox" },
-    { name = "pandas-stubs" },
-    { name = "pip-audit" },
-    { name = "pre-commit" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-benchmark" },
-    { name = "pytest-cov" },
-    { name = "pytest-timeout" },
-    { name = "pytest-xdist" },
-    { name = "rfc8785" },
-    { name = "ruff" },
-    { name = "scipy-stubs" },
-    { name = "e8s", extra = ["all"] },
-    { name = "types-jsonschema" },
-    { name = "types-shapely" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "imageio-ffmpeg", marker = "extra == 'all'", specifier = ">=0.8.1" },
-    { name = "imageio-ffmpeg", marker = "extra == 'video'", specifier = ">=0.8.1" },
-    { name = "numpy", specifier = ">=2.5.4" },
-    { name = "pandas", marker = "extra == 'all'", specifier = ">=3.1.1" },
-    { name = "pandas", marker = "extra == 'tables'", specifier = ">=3.1.1" },
-    { name = "pillow", marker = "extra == 'all'", specifier = ">=13.0.0" },
-    { name = "pillow", marker = "extra == 'qr'", specifier = ">=13.0.0" },
-    { name = "pillow", marker = "extra == 'render'", specifier = ">=13.0.0" },
-    { name = "pillow", marker = "extra == 'video'", specifier = ">=13.0.0" },
-    { name = "pydantic", specifier = ">=2.14.3" },
-    { name = "pydantic-core", specifier = ">=2.50.4" },
-    { name = "scipy", specifier = ">=1.18.1" },
-    { name = "segno", marker = "extra == 'all'", specifier = ">=1.6.6" },
-    { name = "segno", marker = "extra == 'qr'", specifier = ">=1.6.6" },
-    { name = "shapely", specifier = ">=2.2.0" },
-]
-provides-extras = ["all", "qr", "render", "tables", "video"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "deptry", specifier = "==0.25.1" },
-    { name = "git-cliff", specifier = "==2.14.2" },
-    { name = "hypothesis", specifier = "==6.170.15" },
-    { name = "jsonschema", specifier = "==4.26.0" },
-    { name = "mypy", specifier = "==2.4.1" },
-    { name = "nox", specifier = "==2026.10.20" },
-    { name = "pandas-stubs", specifier = "==3.1.0.261029" },
-    { name = "pip-audit", specifier = "==2.10.1" },
-    { name = "pre-commit", specifier = "==4.7.0" },
-    { name = "pyright", specifier = "==1.1.414" },
-    { name = "pytest", specifier = "==9.2.0" },
-    { name = "pytest-benchmark", specifier = "==5.3.1" },
-    { name = "pytest-cov", specifier = "==7.1.0" },
-    { name = "pytest-timeout", specifier = "==2.4.0" },
-    { name = "pytest-xdist", specifier = "==3.8.0" },
-    { name = "rfc8785", specifier = "==0.1.4" },
-    { name = "ruff", specifier = "==0.17.5" },
-    { name = "scipy-stubs", specifier = "==1.18.1.1" },
-    { name = "e8s", extras = ["all"] },
-    { name = "types-jsonschema", specifier = "==4.26.0.20261006" },
-    { name = "types-shapely", specifier = "==2.1.0.20261030" },
 ]
 
 [[package]]

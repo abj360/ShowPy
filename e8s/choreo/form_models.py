@@ -15,7 +15,6 @@ Contains:
     Form: holds a stored shape construction plus its ordered members
     Form.kind: returns the shape family, the recipe's kind
     Form.spots: returns the spots on the form in slot order, without open slots
-    Form.geometry: returns the recipe as JSON; deprecated, read `Form.recipe`
     FormFnInfo: describes one registered shape generator
     SpiralFormParams: holds the parameters of the bundled `spiral` generator
     SineWaveFormParams: holds the parameters of the bundled `sine_wave` generator
@@ -23,7 +22,7 @@ Contains:
 """
 
 from collections.abc import Mapping
-from typing import Annotated, ClassVar, Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, ValidationInfo, field_validator, model_validator
 
@@ -43,7 +42,6 @@ from e8s.choreo.recipe_models import (
     WedgeRecipe,
 )
 from e8s.core.caps import MAX_COORD_M
-from e8s.core.deprecation import renamed_field
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, SpacingError
 from e8s.core.ids import FormId, SetId, SpotId, SpotIdField
@@ -53,7 +51,6 @@ from e8s.core.types import (
     Degrees,
     Finite,
     FrozenModel,
-    JsonValue,
     Meters,
     NonNegFinite,
     Point,
@@ -229,11 +226,6 @@ class TextReport(FrozenModel):
     crowded: tuple[CrowdedStroke, ...] = ()
 
 
-def _recipe_json(recipe: RecipeBase) -> dict[str, JsonValue]:
-    dumped: dict[str, JsonValue] = recipe.to_json()
-    return dumped
-
-
 class Form(FrozenModel):
     """Holds a stored shape construction plus its ordered members.
 
@@ -258,10 +250,6 @@ class Form(FrozenModel):
     facing: FacingSpec = FacingSpec()
     locked: bool = False
     meta: Annotated[Mapping[str, str], ReadOnly()] = Field(default={}, validate_default=True)
-
-    geometry: ClassVar[property] = renamed_field(
-        "recipe", since="0.4.0", remove="0.6.0", read=_recipe_json
-    )
 
     @property
     def kind(self) -> FormKind:

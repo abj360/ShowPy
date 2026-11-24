@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_recipe_models.py --- tests the typed, versioned form recipes and the deprecated geometry
+test_recipe_models.py --- tests the typed, versioned form recipes
 
 Contains:
     test_every_form_kind_round_trips_its_recipe: rebuilds an equal form of every kind from JSON,
@@ -9,8 +9,6 @@ Contains:
     test_recipe_union_covers_every_form_kind: names one recipe model per form kind
     test_regression_form_refuses_the_v1_kind_and_geometry_fields: refuses `kind` and `geometry`
         as construction fields
-    test_regression_form_geometry_warns_and_returns_the_recipe_json: warns on the deprecated
-        `geometry` and returns the recipe's JSON dump
     test_regression_recipe_rejects_a_non_affine_transform_shape: refuses a transform that is not
         3x3 finite numbers
     test_regression_custom_recipe_needs_one_facing_per_point: refuses facings that do not match
@@ -67,7 +65,6 @@ from e8s.choreo.recipe_models import (
     LineRecipe,
     SvgRecipe,
 )
-from e8s.core.deprecation import DeprecatedWarning
 from e8s.core.errors import SchemaError
 from e8s.core.ids import FormId, SetId, SpotId
 from e8s.core.json_types import JsonValue
@@ -135,14 +132,6 @@ def test_recipe_union_covers_every_form_kind() -> None:
 def test_regression_form_refuses_the_v1_kind_and_geometry_fields(fields: dict[str, object]) -> None:
     with pytest.raises(SchemaError):
         Form.from_json({"id": "f", "set": "1", "members": [], **fields})
-
-
-def test_regression_form_geometry_warns_and_returns_the_recipe_json() -> None:
-    form = line_form("f", MEMBERS, (0, 0), (4, 0), n=3)
-    with pytest.warns(DeprecatedWarning, match="`geometry` renamed to `recipe`"):
-        geometry = form.geometry
-    assert geometry == form.recipe.to_json()
-    assert geometry["n"] == 3
 
 
 @pytest.mark.parametrize(

@@ -1,6 +1,6 @@
 # CLAUDE.md — e8Show
 
-e8Show (import name `e8s`, repo `https://github.com/abj360/e8s`) is a Python choreography library for designing shows on a 2D sheet (a field, stage or floor): spots, groups, sets, forms, motion, a count timeline, export and publishing. This repo holds only the library.
+e8Show (import name `e8s`, repo `https://github.com/abj360/e8s`) is a Python choreography library for designing shows on a 2D sheet (a field, stage or floor): spots, groups, sets, forms, motion, a count timeline, storage and interchange. Apps render, print, publish and keep notes. This repo holds only the library.
 
 Consumers (apps, agents, checkers) depend on tagged e8Show releases through the public API only. e8Show never imports a consumer. A breaking change to a public name needs a version bump and a release-notes entry.
 
@@ -25,15 +25,14 @@ Run tests, ruff and both type checkers before calling any task done. Prettier fo
 ```
 e8s/
   core/     types, ids, units, errors, util, selection, validation
-  geo/      curves, shapes, svg, text, regions, spacing, affine, transforms, measure, analysis
+  geo/      curves, shapes, svg, text, regions, spacing, affine, transforms, measure
   time/     count timeline: tempo, holds, markers, cues, measures, audio sync
   cast/     Group, Spot, Shape, Cast, spot tools, selection grammar
-  sheet/    Sheet, templates, coordinate systems, bounds, similarity fit, render
-  notes/    design notes
+  sheet/    Sheet, templates, guides, bounds, similarity fit
   choreo/   Placement, Set, forms, match, paths, routes, motion, engine, facing, avoid, motion_stats
-  show/     Show, manage, sections, storage, repositories, history, collab, validate, paths_store
-  export/   publish (claims), print sheets, PDF, data, positions, video (2D)
-  examples/ deterministic example shows for docs and tests: sheets, shows, publishing
+  show/     Show, manage, sections, storage, repositories, history, collab, validate, paths_store,
+            interchange (JSON, CSV positions), migrate
+  examples/ deterministic example shows for docs and tests: sheets, shows
   schemas/  versioned JSON schemas (showpy.show.v1), shipped in the wheel
 tests/      unit/ property/ golden/ fixtures/
 docs/       API reference, ADRs, handoff notes
@@ -46,18 +45,18 @@ Exception: `e8s/examples/__init__.py` re-exports its names, so `from e8s.example
 
 ## Core concepts (read before editing)
 
-- **Spot**: a dot on the sheet that persists through the whole show. Same `SpotId` from first set to last; it has a position in every set (`on_field=False` before its entrance). Performers claim a spot once, for the whole show.
+- **Spot**: a dot on the sheet that persists through the whole show. Same `SpotId` from first set to last; it has a position in every set (`on_field=False` before its entrance). A performer holds one spot for the whole show.
 - **Group**: a designer-made set of spots with shared defaults and optional limit overrides. There are no fixed roles.
 - **Shape**: a spot's footprint, `circle` or `rectangle` (rectangles rotate with facing). Used for display and collisions.
 - **Set**: a snapshot of every spot's placement at one moment. **Transition**: the movement between two sets, described by sparse `PathRow`s (missing row = straight, full counts).
 - **Form**: a stored shape construction plus ordered members. Placements are regenerated from forms; edit the form, not the dots.
 - **PathEngine**: the _only_ code that turns path instructions into positions. Every consumer and every export uses it. Never compute motion anywhere else.
 - **Timeline**: counts are the unit. Tempo sections, holds, markers and cues define timing. Audio is a playback asset with a sync point and **never** changes timing.
-- **Sheet**: the 2D design surface (template + customizations). The coordinate system is a display layer: changing it changes labels, never stored positions.
+- **Sheet**: the 2D design surface (template + customizations).
 
 ## Non-negotiable rules
 
-1. **One internal unit system.** Meters on the stage plane (x audience-left → right, y away from the audience, origin at the sheet's front-center), degrees (0 = facing the audience, counter-clockwise positive), counts for time. Convert only in `core/units.py`, `sheet/coords.py` and pack language modules.
+1. **One internal unit system.** Meters on the stage plane (x audience-left → right, y away from the audience, origin at the sheet's front-center), degrees (0 = facing the audience, counter-clockwise positive), counts for time. Convert only in `core/units.py` and pack language modules.
 2. **Pure functions.** Data classes are frozen Pydantic v2 models. "Edit" functions return new objects; never mutate inputs.
 3. **Determinism.** Same inputs → same outputs. Randomness only through `core.util.seeded_rng(seed)`. No wall-clock reads in library logic; time stamps are explicit `at` arguments.
 4. **Checks are never weakened.**
@@ -105,4 +104,4 @@ Exception: `e8s/examples/__init__.py` re-exports its names, so `from e8s.example
 
 ## Glossary
 
-Spot · Group · Shape · Set · Transition · PathRow · Form · Placement · Sheet · CoordinateSystem · Timeline (counts, tempo, holds, markers, cues) · Pack (domain rules and wording) · Claim (a performer on a spot after publishing) · Finding (a validation result) · Waiver (designer-approved exception)
+Spot · Group · Shape · Set · Transition · PathRow · Form · Placement · Sheet · Timeline (counts, tempo, holds, markers, cues) · Pack (domain rules and wording) · Finding (a validation result) · Waiver (designer-approved exception)

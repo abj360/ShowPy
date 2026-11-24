@@ -27,14 +27,12 @@ from e8s.choreo.models import PlacementPatch
 from e8s.core.ids import TransitionId
 from e8s.core.util import seeded_rng
 from e8s.examples import two_set_show
-from e8s.export._video import export_video
 from e8s.show.collab import events_since
 from e8s.show.manage import index
 from e8s.show.models import Show
 from e8s.show.repositories import InMemoryRepository
 from e8s.show.storage import ROOT_REVISION, Workspace, load_show, open_workspace, save_show
 from e8s.show.validate import validate_show
-from e8s.time.clock import count_to_seconds
 from tests.conftest import BenchTier
 from tests.fixtures.generators import seeded_show
 
@@ -50,10 +48,6 @@ FRAMES = 60
 FRAMES_PER_S_BUDGET = 300
 HISTORY_REVISIONS = 200
 HEAD_REVISIONS = 1000
-VIDEO_COUNTS = 8.0
-VIDEO_FPS = 30.0
-PX_PER_M_1080P = 17.5
-VIDEO_BUDGET_PER_S = 60.0 / 120.0
 MB = 2**20
 IMPORT_SNIPPET = "import e8s; e8s.PathEngine"
 BUDGET_S = {
@@ -174,17 +168,6 @@ def test_head(benchmark: BenchmarkFixture, tier: BenchTier) -> None:
     _record(benchmark, tier, budget_s=BUDGET_S["head"], revisions=HEAD_REVISIONS)
     head = benchmark(ws.repo.head, SHOW_ID)
     assert head == ws.revision
-
-
-def test_video(benchmark: BenchmarkFixture, tier: BenchTier, show: Show) -> None:
-    seconds = count_to_seconds(show.timeline, VIDEO_COUNTS)
-    _record(benchmark, tier, budget_s=seconds * VIDEO_BUDGET_PER_S, video_s=seconds)
-    video = _heavy(
-        benchmark,
-        tier,
-        lambda: export_video(show, (0.0, VIDEO_COUNTS), VIDEO_FPS, px_per_m=PX_PER_M_1080P),
-    )
-    assert video[4:8] == b"ftyp"
 
 
 def test_import_and_first_name(benchmark: BenchmarkFixture, tier: BenchTier) -> None:

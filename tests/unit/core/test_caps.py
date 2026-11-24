@@ -19,14 +19,12 @@ from e8s.core.caps import (
     MAX_COUNTS,
     MAX_DEPTH,
     MAX_GRID_CELLS,
-    MAX_IMAGE_PIXELS,
     MAX_POINTS,
     MAX_RANGE,
     MAX_SETS,
     MAX_SPOTS,
     MAX_TABLE,
     MAX_TEXT_CHARS,
-    MAX_VIDEO_PIXELS,
     MIN_LAYOUT_HEIGHT_M,
     MIN_TEMPO,
     require_size,
@@ -59,8 +57,6 @@ def test_caps_have_approved_values() -> None:
     assert MAX_RANGE == 10_000
     assert MAX_DEPTH == 64
     assert MAX_TEXT_CHARS == 1_000_000
-    assert MAX_IMAGE_PIXELS == 40_000_000
-    assert MAX_VIDEO_PIXELS == 3840 * 2160
     assert MIN_LAYOUT_HEIGHT_M == 0.001
     assert MAX_COORD_M == 1e6
     assert MAX_COUNTS == 1_000_000

@@ -10,7 +10,8 @@ Contains:
     preview_proposal(): computes the ghost placements and paths a proposal would produce
     accept(): applies a proposal to the head show, refusing when the same items moved since
     reject(): closes a proposal with a reason
-    highlight(): points the designer at spots, an area, a set, a transition or a zone
+    highlight(): points the designer at spots, an area, a set, a transition or a host-defined
+        area
     selection(): returns what the designer has selected
 """
 
@@ -339,7 +340,9 @@ def reject(proposal: Proposal, reason: str) -> Proposal:
 def highlight(
     target: Anchor | str, ttl_s: float = DEFAULT_TTL_S, *, at: datetime, event_id: str
 ) -> CanvasEvent:
-    """Points the designer at spots, an area, a point, a set, a transition or a zone.
+    """Points the designer at spots, an area, a point, a set, a transition or a named area.
+
+    A string target is the name of an area the host defines; the library keeps no zones.
 
     Highlights are pointers, not edits: they carry no revision and change nothing.
 

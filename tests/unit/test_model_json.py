@@ -21,7 +21,6 @@ Contains:
 """
 
 import typing
-import warnings
 from collections.abc import Mapping
 
 import pytest
@@ -31,7 +30,6 @@ from pydantic_core import PydanticUndefined
 
 import e8s
 from e8s._api_table import PUBLIC_API
-from e8s.core.deprecation import DeprecatedWarning
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError
 from e8s.core.types import FrozenModel
@@ -51,12 +49,10 @@ def public_models() -> dict[str, type[FrozenModel]]:
         models: Public name mapped to the model class.
     """
     models: dict[str, type[FrozenModel]] = {}
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecatedWarning)
-        for name, _, _ in PUBLIC_API:
-            value = getattr(e8s, name)
-            if isinstance(value, type) and issubclass(value, FrozenModel):
-                models[name] = value
+    for name, _, _ in PUBLIC_API:
+        value = getattr(e8s, name)
+        if isinstance(value, type) and issubclass(value, FrozenModel):
+            models[name] = value
     return models
 
 

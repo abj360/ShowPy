@@ -16,7 +16,6 @@ Contains:
     rename_spots(): renames spot IDs everywhere and reports what could not follow
     define_selection(): stores a named selection
     set_shape(): sets the footprint of spots
-    set_claimable(): sets who may claim spots once published
 """
 
 import math
@@ -24,12 +23,11 @@ import operator
 import string
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, SupportsIndex, TypedDict, Unpack, get_args
+from typing import TYPE_CHECKING, Any, SupportsIndex, TypedDict, Unpack
 from typing import ReadOnly as ReadOnlyKey
 
 from e8s.cast.models import (
     Cast,
-    Claimable,
     Group,
     LabelScheme,
     RewriteReport,
@@ -58,7 +56,6 @@ from e8s.core.util import close_matches, natural_sort
 from e8s.geo.curve_base import Curve
 from e8s.geo.regions import Area
 from e8s.geo.spacing import fill, space_along
-from e8s.show._notes_document import NotesDocument, require_notes_of
 from e8s.show.locks import require_unlocked
 
 if TYPE_CHECKING:
@@ -90,7 +87,6 @@ class SpotPatch(TypedDict, total=False):
     tags: ReadOnlyKey[Sequence[str]]
     active: ReadOnlyKey[bool]
     shape: ReadOnlyKey[Shape]
-    claimable: ReadOnlyKey[Claimable]
 
 
 def _group(cast: Cast, key: str) -> Group:
@@ -369,7 +365,7 @@ def duplicate_spots(
 ) -> "Show":
     """Copies spots, shifted by `offset` from their placement in `set_id`, under new labels.
 
-    Copies keep group, tags, footprint and claimability; they enter the field at `set_id`.
+    Copies keep group, tags and footprint; they enter the field at `set_id`.
     Copies that would stand on-field in a pinned set raise LockedError unless `force=True`.
 
     >>> from e8s.examples import two_set_show
@@ -406,8 +402,6 @@ def _locked_items(show: "Show", ids: frozenset[SpotId]) -> list[str]:
 def delete_spots(show: "Show", sel: Selector, *, force: bool = False) -> "Show":
     """Removes spots from the cast, every set, forms, paths, routes and selections.
 
-    The notes document beside the show does not follow; pass each deleted spot mapped to None
-    as `spots=` to rewrite_note_anchors() to drop the notes left without spots.
     Pinned placements, locked forms and locked paths raise LockedError unless `force=True`.
     A forced delete also drops the pins on the deleted spots. A deleted form member leaves an
     open slot, so later members keep their slots; text forms close the gap instead.
@@ -553,8 +547,8 @@ def _scheme_labels(cast: Cast, scheme: LabelScheme) -> dict[SpotId, str]:
 def relabel(show: "Show", scheme: LabelScheme) -> tuple["Show", dict[SpotId, str]]:
     """Renumbers every group under `scheme`, in natural order of the current labels.
 
-    IDs are rewritten everywhere: cast, placements, forms, path rows, routes, note anchors,
-    facing overrides, zones and named selections.
+    IDs are rewritten everywhere: cast, placements, forms, path rows, routes, facing overrides
+    and named selections.
 
     Returns:
         show: The relabeled show, carrying `scheme`.
@@ -624,23 +618,6 @@ def set_shape(show: "Show", sel: Selector, shape: Shape) -> "Show":
     return _edit_spots(show, sel, shape=shape)
 
 
-def set_claimable(show: "Show", sel: Selector, value: Claimable) -> "Show":
-    """Sets who may claim spots once the show is published: performer, crew or none.
-
-    >>> from e8s.examples import two_set_show
-    >>> set_claimable(two_set_show(), "T1", "crew").cast.spot("T1").claimable
-    'crew'
-    """
-    allowed = get_args(Claimable.__value__)
-    if value not in allowed:
-        raise SchemaError(
-            f"bad claimable value {value!r}",
-            hint=f"use one of {', '.join(allowed)}",
-            context={"value": value},
-        )
-    return _edit_spots(show, sel, claimable=value)
-
-
 def _repeated(ids: Iterable[str]) -> list[str]:
     return sorted(spot_id for spot_id, count in Counter(ids).items() if count > 1)
 
@@ -650,24 +627,19 @@ def rename_spots(
     mapping: Mapping[SpotId, str] | Mapping[str, str],
     *,
     force: bool = False,
-    notes: NotesDocument | None = None,
 ) -> "tuple[Show, RewriteReport]":
     """Renames spot IDs simultaneously in every place a show refers to them.
 
     Covers the cast, placements, forms, path rows (keys, entities and entity facings),
-    routes, facing overrides, zones, pins and named selections, and the note anchors of the
-    notes document when one is passed; `report.notes` returns it rewritten. Swaps are
-    allowed; a new ID that another spot keeps raises SchemaError naming both sources. A
-    selector that names labels is frozen to the renamed ID list; one that no longer resolves
-    stays as written and is listed in the report. Pinned pictures must stay as they are:
-    LockedError unless `force=True`.
+    routes, facing overrides, pins and named selections. Swaps are allowed; a new ID
+    that another spot keeps raises SchemaError naming both sources. A selector that names labels
+    is frozen to the renamed ID list; one that no longer resolves stays as written and is listed
+    in the report. Pinned pictures must stay as they are: LockedError unless `force=True`.
 
     Args:
         show: The show to rename spots in.
         mapping: Old ID to new ID; entries that keep the ID are ignored.
         force: Allows the rename past a pinned picture it would change.
-        notes: The notes document stored beside the show, or None; one of another show raises
-            SchemaError. This keyword leaves the library in 1.0.0 with the notes.
 
     Returns:
         show: The renamed show.
@@ -678,15 +650,11 @@ def rename_spots(
     >>> renamed.cast.ids(), dict(report.renamed)
     (('S1', 'T2', 'T3', 'T4'), {'T1': 'S1'})
     """
-    if notes is not None:
-        require_notes_of(notes, show.id)
     changes = {SpotId(old): new for old, new in mapping.items() if old != new}
     if not changes:
-        return show, RewriteReport(notes=notes)
+        return show, RewriteReport()
     for old in changes:
         show.cast.spot(old)
-    renamed, report = rewrite_spots(
-        show, lambda spot_id: changes.get(spot_id, spot_id), notes=notes
-    )
+    renamed, report = rewrite_spots(show, lambda spot_id: changes.get(spot_id, spot_id))
     _require_pictures_kept(show, renamed, changes, force=force)
     return renamed, report

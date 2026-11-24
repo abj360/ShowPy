@@ -52,7 +52,6 @@ from e8s.cast.spots import (
     relabel,
     remove_group,
     rename_spots,
-    set_claimable,
     set_shape,
 )
 from e8s.choreo.models import PlacementPatch
@@ -67,7 +66,6 @@ from e8s.core.errors import (
     UnknownRefError,
 )
 from e8s.core.ids import FormId, RouteId, SetId, SpotId
-from e8s.core.selection import Selection
 from e8s.core.types import Region
 from e8s.core.util import approx_equal
 from e8s.geo.regions import region
@@ -75,11 +73,9 @@ from e8s.geo.shapes import line
 from e8s.show.manage import add_set
 from e8s.show.models import Show
 from e8s.show.pinning import pin, unpin
-from tests.fixtures.cast_shows import rich_notes, rich_show
+from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.shows import two_set_show
 from tests.helpers import fails_after
-
-pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 SQUARE = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)))
@@ -193,7 +189,6 @@ def test_delete_spots_removes_every_reference() -> None:
     assert spec.routes[RouteId("r1")].members == ("T3",)
     assert spec.routes[RouteId("r1")].offsets == (0.0,)
     assert show.cast.selections["pair"] == ("T1",)
-    assert show.zones[2].applies_to == Selection(ids=())
 
 
 def test_delete_spots_refuses_pinned_without_force() -> None:
@@ -296,7 +291,7 @@ def test_relabel_rejects_colliding_prefixes() -> None:
 
 def test_rename_everywhere_rewrites_every_reference() -> None:
     mapping = {SpotId(old): f"A{old[1:]}" for old in ("T1", "T2", "T3", "T4")}
-    show, report = rename_spots(rich_show(), mapping, notes=rich_notes())
+    show, _ = rename_spots(rich_show(), mapping)
     assert show.cast.ids() == ("A1", "A2", "A3", "A4")
     assert all(s.entity_ids() == ("A1", "A2", "A3", "A4") for s in show.sets)
     assert show.forms[FormId("line1")].members == ("A1", "A2", "A3", "A4")
@@ -305,17 +300,10 @@ def test_rename_everywhere_rewrites_every_reference() -> None:
     assert spec.rows[SpotId("A1")].entity == "A1"
     assert spec.rows[SpotId("A1")].facing_value == EntityFacing(entity=SpotId("A2"))
     assert spec.routes[RouteId("r1")].members == ("A3", "A4")
-    assert report.notes is not None
-    assert report.notes.notes[0].anchor.spots == ("A2",)
     override = show.facing_overrides[0]
     assert override.entities == ("A1", "A2")
     assert override.value == EntityFacing(entity=SpotId("A3"))
     assert show.cast.selections["pair"] == ("A1", "A4")
-    assert [z.applies_to for z in show.zones] == [
-        ("A1", "A2"),
-        "group:trumpets",
-        Selection(ids=(SpotId("A4"),)),
-    ]
 
 
 def test_rename_everywhere_swaps_simultaneously() -> None:
@@ -371,13 +359,9 @@ def test_define_selection_replaces_a_taken_name_when_asked() -> None:
     assert show.cast.selections["ends"] == ("T2",)
 
 
-def test_set_shape_and_set_claimable() -> None:
+def test_set_shape() -> None:
     show = set_shape(two_set_show(), "T1-T2", Shape(kind="rectangle"))
     assert [s.shape.kind for s in show.cast.spots] == ["rectangle", "rectangle", "circle", "circle"]
-    show = set_claimable(show, ["T3"], "crew")
-    assert show.cast.spot("T3").to_json()["claimable"] == "crew"
-    with pytest.raises(SchemaError):
-        set_claimable(show, ["T3"], "audience")  # type: ignore[arg-type]
 
 
 EDITS_THAT_NEED_FORCE = (add_spot, add_spots_along, fill_spots, duplicate_spots, delete_spots)

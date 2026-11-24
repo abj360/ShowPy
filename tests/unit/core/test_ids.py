@@ -33,7 +33,6 @@ Contains:
     test_is_device_name_ignores_names_that_only_start_like_a_device: passes `cons`, `com10`,
         `all` and `show-1`
     test_id_fields_*(): one behavior of the annotated model ID field types each
-    test_sheet_id_fields_*(): landmark and zone fields keep an inner `-`
     test_show_id_field_*(): show IDs keep an inner `-` and follow the rest of the sheet rule
     test_sheet_id_pattern_agrees_with_its_characters_and_edges: keeps `SHEET_ID_PATTERN` equal to
         its characters, length cap and edge rules over 2,000 strings
@@ -62,7 +61,6 @@ from e8s.core.ids import (
     RESERVED_IDS,
     SHEET_ID_PATTERN,
     FormIdField,
-    LandmarkIdField,
     NoteIdField,
     RouteIdField,
     SelectionNameField,
@@ -72,7 +70,6 @@ from e8s.core.ids import (
     ShowIdField,
     SpotIdField,
     TransitionId,
-    ZoneIdField,
     check_id,
     check_sheet_id,
     find_case_clashes,
@@ -84,8 +81,6 @@ from e8s.core.ids import (
     parse_tid,
 )
 from e8s.sheet.templates import sheet_templates
-
-pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.errors.DeprecatedWarning")
 
 ID_CANDIDATES = st.from_regex(ID_PATTERN, fullmatch=True) | st.text(
     alphabet=st.characters(max_codepoint=0x7F) | st.sampled_from("\u00e9\u0663\u212a"),
@@ -307,8 +302,8 @@ SHEET_AGREEMENT_EXAMPLES = 2_000
 SHEET_AGREEMENT_CANDIDATES = (
     st.text(alphabet=AGREEMENT_ALPHABET | st.just("-"), max_size=ID_MAX_LENGTH + 2) | NEAR_CAP_IDS
 )
-BUNDLED_TEMPLATES = 6
-BUNDLED_SHEET_ITEMS = 339
+BUNDLED_TEMPLATES = 5
+BUNDLED_SHEET_ITEMS = 91
 TOY_SPOT_ID = "T1"
 # Any: annotated field types are type forms, which mypy cannot hold as plain values.
 SPOT_ID_FIELDS: list[Any] = [
@@ -328,14 +323,6 @@ class _ToySpot(BaseModel):
 
 class _Outer(BaseModel):
     inner: _ToySpot
-
-
-class _ToyLandmark(BaseModel):
-    id: LandmarkIdField
-
-
-class _ToyZone(BaseModel):
-    id: ZoneIdField
 
 
 class _ToyTransition(BaseModel):
@@ -389,23 +376,6 @@ def test_show_id_field_refuses_ids_outside_the_sheet_rule(text: str) -> None:
     adapter: TypeAdapter[str] = TypeAdapter(ShowIdField)
     with pytest.raises(ValidationError, match="show id"):
         adapter.validate_python(text)
-
-
-@pytest.mark.parametrize("model", [_ToyLandmark, _ToyZone])
-def test_sheet_id_fields_keep_an_inner_hyphen(model: type[BaseModel]) -> None:
-    assert model.model_validate({"id": "end-zone-left"}).model_dump() == {"id": "end-zone-left"}
-
-
-@pytest.mark.parametrize("text", ["-a", "a-", "a b", "", "all", "con", "a..b"])
-@pytest.mark.parametrize("model", [_ToyLandmark, _ToyZone])
-def test_sheet_id_fields_reject_bad_ids(model: type[BaseModel], text: str) -> None:
-    with pytest.raises(ValidationError):
-        model.model_validate({"id": text})
-
-
-def test_sheet_id_fields_accept_legacy_ids_in_context() -> None:
-    toy = _ToyLandmark.model_validate({"id": "-a"}, context={"legacy_ids": True})
-    assert toy.id == "-a"
 
 
 def test_transition_id_is_a_named_tuple() -> None:
@@ -503,8 +473,6 @@ def test_bundled_template_refs_pass_parse_ref() -> None:
 def test_bundled_sheet_items_pass_check_sheet_id() -> None:
     ids: list[str] = []
     for sheet in sheet_templates():
-        ids += [landmark.id for landmark in sheet.landmarks]
-        ids += [zone.id for zone in sheet.zones]
         ids += [guide.id for guide in sheet.guides]
     assert len(ids) == BUNDLED_SHEET_ITEMS
     assert [check_sheet_id(item_id, kind="sheet item") for item_id in ids] == ids

@@ -4,16 +4,15 @@ interchange.py --- JSON documents in and out of a show; re-exports the CSV posit
 Contains:
     SCHEMA_TAG: names the version 1 interchange format, `showpy.show.v1`, which import still reads
     FONTS_KEY: names the document key that holds the embedded fonts
-    NOTES_KEY: names the document key that holds the notes document beside the show
     MAX_IMPORT_FONTS: bounds how many fonts one document may carry
     POSITION_FIELDS: re-exports the position fields a CSV column can map to
     export_json(): dumps a show to a format-tagged JSON-safe document, embedding the fonts its
-        text forms use, writing the show's extensions as top-level `x-` keys and, when given, the
-        notes document under `notes`
+        text forms use and writing the show's extensions as top-level `x-` keys
     import_json(): loads a show from a document of any readable format version, migrating it;
         refuses unknown top-level keys, keeps `x-` keys in `Show.extensions`
+    migrate_json(): loads a show as import_json() does, with the migration report and the notes
+        of a version 1 document
     import_fonts(): registers the fonts embedded in a document, checking each against its hash
-    import_notes(): returns the notes document of a document, migrating a v1 show's notes
     import_positions(): re-exports the CSV positions import
 """
 
@@ -24,7 +23,6 @@ from collections.abc import Iterable, Mapping
 from typing import Any, Never, cast
 
 from e8s.choreo.form_models import TextRecipe
-from e8s.core.deprecation import leaving_call
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import (
     ROOT_LOC,
@@ -37,8 +35,7 @@ from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import strict_json_copy
 from e8s.core.util import asset_uri, close_matches
 from e8s.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
-from e8s.show._notes_document import NotesDocument, require_notes_of
-from e8s.show.document_reading import decode_show_dump, migrate_dump
+from e8s.show.document_reading import migrate_dump
 from e8s.show.interchange_positions import POSITION_FIELDS as POSITION_FIELDS
 from e8s.show.interchange_positions import import_positions as import_positions
 from e8s.show.migrate import (
@@ -48,6 +45,7 @@ from e8s.show.migrate import (
     FORMAT,
     FORMAT_KEY,
     VERSION_KEY,
+    MigrationReport,
     format_header,
     version_of,
 )
@@ -63,7 +61,6 @@ DOCUMENT_HINT = (
     f' "{SHOW_KEY}": {{...}}}}'
 )
 FONTS_KEY = "fonts"
-NOTES_KEY = "notes"
 FORMS_FIELD = "forms"
 # A document with more fonts than the five bundled plus a generous allowance of user fonts is
 # hostile; each entry is also bounded by MAX_FONT_BYTES.
@@ -78,7 +75,7 @@ ALWAYS_EXPORTED = "id"
 EXTENSION_PREFIX = "x-"
 EXTENSIONS_FIELD = "extensions"
 EXTENSIONS_KEY = "extensions"
-KNOWN_KEYS = frozenset({SCHEMA_KEY, FORMAT_KEY, VERSION_KEY, SHOW_KEY, FONTS_KEY, NOTES_KEY})
+KNOWN_KEYS = frozenset({SCHEMA_KEY, FORMAT_KEY, VERSION_KEY, SHOW_KEY, FONTS_KEY})
 
 
 # Any: the exported document holds arbitrarily nested JSON values.
@@ -87,7 +84,6 @@ def export_json(
     include: str | Iterable[str] | None = None,
     *,
     font_registry: FontRegistry | None = None,
-    notes: NotesDocument | None = None,
 ) -> dict[str, Any]:
     """Dumps a show to a tagged JSON-safe document, embedding the fonts its text forms use.
 
@@ -96,16 +92,12 @@ def export_json(
         include: Top-level show fields to keep, or one field name; None keeps all. The ID is
             always kept. The extensions are written only when `"extensions"` is kept.
         font_registry: Registry holding the fonts of the text forms; None means the bundled fonts.
-        notes: The show's notes document, written beside the show; None writes none. This
-            keyword leaves the library in 1.0.0 with the notes.
 
     Returns:
         document: `{"format": "e8.show", "version": 2, "show": {...}}`, plus `"fonts"`
             mapping each font URI to its base64 bytes, sorted by URI, when an exported form is
             a text form. A font the registry lacks raises MissingFontError. Each of the show's
-            extensions is a top-level key of the document, as imported. With `notes`, the key
-            `"notes"` holds the notes document, header first; one of another show raises
-            SchemaError.
+            extensions is a top-level key of the document, as imported.
 
     >>> from e8s.examples import two_set_show
     >>> sorted(export_json(two_set_show(), include=["title"])["show"])
@@ -126,11 +118,7 @@ def export_json(
             )
         dumped = {key: value for key, value in dumped.items() if key in keep}
         extensions = extensions if EXTENSIONS_FIELD in keep else {}
-    if notes is not None:
-        require_notes_of(notes, show.id)
     document: dict[str, Any] = {**format_header(), SHOW_KEY: dumped}
-    if notes is not None:
-        document[NOTES_KEY] = notes.to_json()
     registry = bundled_fonts() if font_registry is None else font_registry
     fonts = _embedded_fonts(show, dumped, registry)
     if fonts:
@@ -158,9 +146,9 @@ def import_json(d: Mapping[str, Any]) -> Show:
     """Loads a show from a document of any readable format version, migrating older ones.
 
     Version 1 documents carry `"schema": "showpy.show.v1"`; later ones carry `"format"` and
-    `"version"`. The show is checked as strict JSON first, as stored documents are. The value
-    under the top-level `notes` key is not read here: import_notes() parses and checks it, and
-    returns the notes of a version 1 show.
+    `"version"`. The show is checked as strict JSON first, as stored documents are. Data that
+    the current format no longer has, such as the notes of a version 1 show, is not part of the
+    show; migrate_json() returns it with the migration report.
 
     Args:
         d: A document from `export_json`, of this or an earlier release.
@@ -168,7 +156,7 @@ def import_json(d: Mapping[str, Any]) -> Show:
     Returns:
         show: The show in the current format. A wrong or missing tag raises SchemaError, a
             newer version VersionError, and a show that is not strict JSON or does not fit
-            SchemaError. A top-level key other than the tag, header, show, fonts and notes raises
+            SchemaError. A top-level key other than the tag, header, show and fonts raises
             SchemaError naming it, unless it starts with `x-`; those are kept in `Show.extensions`,
             which must be strict JSON and at most `MAX_EXTENSION_BYTES` bytes.
 
@@ -181,6 +169,51 @@ def import_json(d: Mapping[str, Any]) -> Show:
     >>> import_json({**export_json(two_set_show()), "x-host": {"n": 1}}).extensions["x-host"]
     ReadOnlyMap({'n': 1})
     """
+    return migrate_json(d)[0]
+
+
+# Any: an imported document holds arbitrarily nested JSON values.
+def migrate_json(
+    d: Mapping[str, Any],
+) -> tuple[Show, MigrationReport, dict[str, JsonValue] | None]:
+    """Loads a show as import_json() does, and returns what migrating an older document changed.
+
+    Use it to keep what a version 1 document holds that the current format does not: the report
+    lists each renamed ID, each repair and each dropped stored field with its stored value, and
+    the notes of a version 1 show come back as a notes document of plain JSON.
+
+    Args:
+        d: A document from `export_json`, of this or an earlier release.
+
+    Returns:
+        show: The show in the current format; errors are those of import_json().
+        report: What the migration renamed, repaired and dropped; empty for a current document.
+        notes: The version 1 show's notes as a notes document (`{"format": "e8.notes", ...}`),
+            or None when the document is current or held no notes.
+
+    >>> from e8s.examples import two_set_show
+    >>> v1 = {"schema": "showpy.show.v1", "show": two_set_show().to_json()}
+    >>> show, report, notes = migrate_json(v1)
+    >>> show == two_set_show(), report.from_version, report.dropped, notes
+    (True, 1, (), None)
+    """
+    version, show = _show_of(d)
+    try:
+        if version < CURRENT_VERSION:
+            migrated, report, beside = migrate_dump(show, version)
+            notes = beside.get(NOTES_DOC)
+            return migrated, report, notes if isinstance(notes, dict) else None
+        current = Show._validated(show, context=CHECKED_CONTEXT)
+        return current, MigrationReport(from_version=CURRENT_VERSION), None
+    except SchemaError as error:
+        friendly = _first_field_error(error)
+        if friendly is error:
+            raise
+        raise friendly from error
+
+
+def _show_of(d: Mapping[str, object]) -> tuple[int, dict[str, JsonValue]]:
+    """Checks a document's shape and returns its version and its show, extensions included."""
     if not isinstance(d, Mapping):
         raise SchemaError(
             f"document is a {type(d).__name__}, not an object",
@@ -204,15 +237,7 @@ def import_json(d: Mapping[str, Any]) -> Show:
     extensions = strict_json_copy(hosted, document=EXTENSIONS_KEY)
     if extensions:
         show[EXTENSIONS_FIELD] = extensions
-    try:
-        if version < CURRENT_VERSION:
-            return decode_show_dump(show, version)
-        return Show._validated(show, context=CHECKED_CONTEXT)
-    except SchemaError as error:
-        friendly = _first_field_error(error)
-        if friendly is error:
-            raise
-        raise friendly from error
+    return version, show
 
 
 def _require_cap_before_copy(hosted: Mapping[str, object]) -> None:
@@ -350,87 +375,3 @@ def import_fonts(d: Mapping[str, Any], font_registry: FontRegistry | None = None
     for uri, encoded in fonts.items():
         registry, _ = register_font(registry, _decode_font(uri, encoded), if_name_taken="keep")
     return registry
-
-
-def _show_object(d: Mapping[str, object]) -> dict[str, JsonValue]:
-    """Returns a strict JSON copy of a document's show object, refusing a document without one."""
-    body = d.get(SHOW_KEY)
-    show = strict_json_copy(dict(body), document=SHOW_KEY) if isinstance(body, Mapping) else None
-    if not isinstance(show, dict):
-        raise SchemaError("document has no show object", hint=f"put the show under {SHOW_KEY!r}")
-    return show
-
-
-def _notes_json(d: Mapping[str, object]) -> dict[str, JsonValue]:
-    """Returns the notes document of an interchange document as checked plain JSON.
-
-    The private reader that import_notes() wraps. It stays after the public notes names leave
-    the library in 1.0.0, so the notes of a version 1 document are never lost while version 1
-    is read.
-
-    >>> from e8s.examples import two_set_show
-    >>> _notes_json(export_json(two_set_show()))["notes"]
-    []
-    """
-    return _notes_document(d).to_json()
-
-
-def _notes_document(d: Mapping[str, object]) -> NotesDocument:
-    """Reads and checks the notes document of an interchange document; see import_notes()."""
-    if not isinstance(d, Mapping):
-        raise SchemaError(
-            f"document is a {type(d).__name__}, not an object",
-            hint=DOCUMENT_HINT,
-            context={"type": type(d).__name__},
-        )
-    version = _document_version(d)
-    _refuse_unknown_keys(d)
-    show = _show_object(d)
-    if version < CURRENT_VERSION:
-        if NOTES_KEY in d:
-            raise SchemaError(
-                f"a version {version} document holds {NOTES_KEY!r} beside the show",
-                hint="version 1 documents keep their notes in the show object",
-                context={"version": version},
-            )
-        migrated, beside = migrate_dump(show, version)
-        moved = beside.get(NOTES_DOC)
-        if moved is None:
-            return NotesDocument(show=migrated.id)
-        return NotesDocument._validated(moved)
-    show_id = show.get("id")
-    if not isinstance(show_id, str):
-        raise SchemaError("show object has no string id", hint="export with export_json()")
-    if NOTES_KEY not in d:
-        return NotesDocument(show=show_id)
-    notes = NotesDocument._validated(strict_json_copy(d[NOTES_KEY], document=NOTES_KEY))
-    require_notes_of(notes, show_id)
-    return notes
-
-
-@leaving_call(since="0.4.0", remove="1.0.0")
-def import_notes(d: Mapping[str, object]) -> NotesDocument:
-    """Returns the notes document of an interchange document, migrating a version 1 show's notes.
-
-    Deprecated: this name leaves the library in 1.0.0.
-
-    Args:
-        d: A document from `export_json`, of this or an earlier release.
-
-    Returns:
-        notes: The document's `notes`, checked against its show ID; for a version 1 document,
-            the show's notes with IDs and anchors renamed as import_json() renames the show; an
-            empty notes document when there are none. A document that import_json() refuses,
-            or notes that do not fit, raise SchemaError.
-
-    >>> import warnings
-    >>> from e8s.examples import two_set_show
-    >>> from e8s.show._notes_document import NotesDocument
-    >>> show = two_set_show()
-    >>> document = export_json(show, notes=NotesDocument(show=show.id))
-    >>> with warnings.catch_warnings(action="ignore"):
-    ...     notes = import_notes(document)
-    >>> notes.show, notes.notes
-    ('show-1', ())
-    """
-    return NotesDocument._validated(_notes_json(d))

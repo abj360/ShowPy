@@ -25,10 +25,7 @@ dependencies = [
 
 [project.optional-dependencies]
 tables = ["pandas>=3.1.1"]
-render = ["pillow>=13.0.0"]
-qr = ["segno>=1.6.6", "pillow>=13.0.0"]
-video = ["imageio-ffmpeg>=0.8.1", "pillow>=13.0.0"]
-all = ["pandas>=3.1.1", "pillow>=13.0.0", "segno>=1.6.6", "imageio-ffmpeg>=0.8.1"]
+all = ["pandas>=3.1.1"]
 
 [project.urls]
 Homepage = "https://github.com/abj360/e8s"
@@ -73,6 +70,7 @@ dev = [
     "mypy==2.4.1",
     "nox==2026.10.20",
     "pandas-stubs==3.1.0.261029",
+    "pillow==13.0.0",
     "pip-audit==2.10.1",
     "pre-commit==4.7.0",
     "pyright==1.1.414",
@@ -135,10 +133,6 @@ plugins = ["pydantic.mypy"]
 explicit_package_bases = true
 mypy_path = "typings"
 
-[[tool.mypy.overrides]]
-module = ["segno", "segno.*", "imageio", "imageio.*"]
-ignore_missing_imports = true
-
 [tool.pyright]
 include = ["e8s", "tests", "scripts"]
 typeCheckingMode = "basic"
@@ -176,6 +170,6 @@ known_first_party = ["e8s"]
 [tool.deptry.package_module_name_map]
 pillow = "PIL"
 
-# noxfile.py is dev tooling, not shipped code.
+# noxfile.py and scripts/build_fonts.py (Pillow) are dev tooling, not shipped code.
 [tool.deptry.per_rule_ignores]
-DEP004 = ["nox"]
+DEP004 = ["nox", "PIL"]
