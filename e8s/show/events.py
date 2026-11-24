@@ -17,8 +17,7 @@ from e8s.core.errors import (
 )
 from e8s.core.json_types import JsonValue
 from e8s.show.changes import apply_change
-from e8s.show.migrate import ReportBuilder
-from e8s.show.models import (
+from e8s.show.collab_models import (
     CanvasEvent,
     ChangeOp,
     Comment,
@@ -28,11 +27,11 @@ from e8s.show.models import (
     FormOp,
     Highlight,
     PathsOp,
-    Pin,
     PlacementOp,
-    Revision,
-    Show,
 )
+from e8s.show.history_models import Revision
+from e8s.show.migrate import ReportBuilder
+from e8s.show.models import Pin, Show
 from e8s.show.pinning import pin, pin_key, unpin
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.structured import COMMENTS_DOC, decode_comments
@@ -65,7 +64,7 @@ def apply_event(show: Show, event: CanvasEvent, *, force: bool = False) -> Show:
 
     >>> from datetime import UTC, datetime
     >>> from e8s.examples import two_set_show
-    >>> from e8s.show.models import CanvasEvent, CountsOp
+    >>> from e8s.show.collab_models import CanvasEvent, CountsOp
     >>> event = CanvasEvent(id="e1", at=datetime(2026, 11, 11, tzinfo=UTC), kind="set_counts",
     ...                     payload=CountsOp(set_id="2", counts=6))
     >>> apply_event(two_set_show(), event).set("2").counts

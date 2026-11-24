@@ -10,7 +10,7 @@ from typing import override
 
 from e8s.show.backend import RepositoryBackend, conflict_error, revisions_since
 from e8s.show.document_repository import DocumentRepository
-from e8s.show.models import Revision
+from e8s.show.history_models import Revision
 from e8s.show.storage import ROOT_REVISION
 
 

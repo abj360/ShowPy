@@ -15,7 +15,8 @@ from e8s.choreo.form_models import Form
 from e8s.choreo.models import Set
 from e8s.choreo.path_models import TransitionSpec
 from e8s.core.ids import SetId
-from e8s.show.models import Revision, Show
+from e8s.show.history_models import Revision
+from e8s.show.models import Show
 from e8s.time.models import Timeline
 
 ROOT_REVISION = ""

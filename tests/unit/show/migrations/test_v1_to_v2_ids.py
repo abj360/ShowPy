@@ -63,7 +63,9 @@ from e8s.core.ids import LEGACY_IDS_KEY, FormId, SetId
 from e8s.core.json_types import JsonValue
 from e8s.examples import two_set_show
 from e8s.show._notes_document import NotesDocument
+from e8s.show.anchors import Anchor
 from e8s.show.canvas_renames import renamed_canvas
+from e8s.show.collab_models import Comment
 from e8s.show.documents import (
     LEGACY_NOTES_DOC,
     NOTES_DOC,
@@ -76,12 +78,13 @@ from e8s.show.documents import (
 )
 from e8s.show.file_repository import FileRepository
 from e8s.show.files import CLAIMS_DOC
+from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.manage import add_set, renumber
 from e8s.show.migrate import FIRST_VERSION, MigrationReport, ReportBuilder
 from e8s.show.migrations.v1_to_v2_ids import rename_ids
 from e8s.show.migrations.v1_to_v2_notes import move_notes
-from e8s.show.models import Anchor, Comment, Revision, Show
+from e8s.show.models import Show
 from e8s.show.pinning import pin
 from e8s.show.show_io import load_show, save_show
 from e8s.show.structured import COMMENTS_DOC, SELECTION_DOC

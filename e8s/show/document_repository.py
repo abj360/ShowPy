@@ -41,12 +41,13 @@ from e8s.show.documents import (
     split_path,
 )
 from e8s.show.files import LIMITS_DOC, WAIVERS_DOC, show_changes
+from e8s.show.history_models import Revision
 from e8s.show.integrity import (
     LazyBlobs,
     require_known_path,
     require_valid_digests,
 )
-from e8s.show.models import Revision, Show
+from e8s.show.models import Show
 from e8s.show.set_keys import set_key
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.structured import decode_text

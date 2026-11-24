@@ -32,8 +32,8 @@ from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
 from e8s.show.backend import conflict_error, revisions_since
 from e8s.show.documents import dump_json
+from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
-from e8s.show.models import Revision
 
 ROOT_LINK = "root"
 TREE_DIR = "trees"

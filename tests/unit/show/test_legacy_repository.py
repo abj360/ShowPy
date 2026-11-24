@@ -58,6 +58,7 @@ import pytest
 
 from e8s.core.errors import ConflictError, SchemaError
 from e8s.core.util import content_hash
+from e8s.show.collab_models import CanvasEvent
 from e8s.show.document_reading import decode_show_dump
 from e8s.show.documents import (
     LEGACY_NOTES_DOC,
@@ -71,8 +72,9 @@ from e8s.show.documents import (
 from e8s.show.events import events_since
 from e8s.show.file_repository import FileRepository
 from e8s.show.history import diff_show
+from e8s.show.history_models import Revision
 from e8s.show.migrate import FIRST_VERSION
-from e8s.show.models import CanvasEvent, Revision, Show
+from e8s.show.models import Show
 from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import Workspace, open_workspace
 

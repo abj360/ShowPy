@@ -13,9 +13,10 @@ from collections.abc import Sequence
 from e8s.choreo.form_models import Form
 from e8s.choreo.path_models import TransitionSpec
 from e8s.core.errors import SchemaError
+from e8s.show.collab_models import ChangeOp, FormOp, PathsOp, PlacementOp
 from e8s.show.locks import require_unlocked
 from e8s.show.manage import set_counts
-from e8s.show.models import ChangeOp, FormOp, PathsOp, PlacementOp, Show
+from e8s.show.models import Show
 
 
 def _replace_set(show: Show, op: PlacementOp) -> Show:

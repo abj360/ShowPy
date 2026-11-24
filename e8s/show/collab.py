@@ -25,21 +25,20 @@ from e8s.core.ids import format_tid
 from e8s.core.selection import Selection
 from e8s.show.anchors import Anchor
 from e8s.show.changes import apply_change
-from e8s.show.events import edit_ops
-from e8s.show.locks import locked_changes
-from e8s.show.models import (
+from e8s.show.collab_models import (
     CanvasEvent,
     ChangeOp,
     FormOp,
     Highlight,
     PathsOp,
-    Pin,
     PlacementOp,
     Proposal,
     ProposalPreview,
-    Revision,
-    Show,
 )
+from e8s.show.events import edit_ops
+from e8s.show.history_models import Revision
+from e8s.show.locks import locked_changes
+from e8s.show.models import Pin, Show
 from e8s.show.show_io import load_show, save_show
 from e8s.show.structured import SELECTION_DOC
 from e8s.show.workspace import Workspace
@@ -57,7 +56,7 @@ def propose(show: Show, change: Sequence[ChangeOp], note: str, proposal_id: str)
     """Wraps change ops as a suggestion against the show's revision; checks they apply.
 
     >>> from e8s.examples import two_set_show
-    >>> from e8s.show.models import CountsOp
+    >>> from e8s.show.collab_models import CountsOp
     >>> propose(two_set_show(), [CountsOp(set_id="2", counts=12)], "slower", "p1").state
     'open'
     """

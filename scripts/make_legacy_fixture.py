@@ -48,7 +48,8 @@ from pydantic_core import to_jsonable_python
 
 if TYPE_CHECKING:
     from e8s.show.file_repository import FileRepository
-    from e8s.show.models import Revision, Show
+    from e8s.show.history_models import Revision
+    from e8s.show.models import Show
 
 SEED = 7
 SPOT_COUNT = 24
@@ -132,6 +133,18 @@ def _use_package(package: str) -> None:
     """Makes `import e8s...` load the checkout's library when its import name differs."""
     if package != LIBRARY:
         sys.meta_path.insert(0, _AliasFinder(package))
+
+
+def _library_attr(name: str, *modules: str) -> Any:  # Any: each release defines its own types
+    """Returns `name` from the first listed module that has it, newest layout first."""
+    for module in modules:
+        try:
+            found = getattr(importlib.import_module(module), name, None)
+        except ModuleNotFoundError:
+            continue
+        if found is not None:
+            return found
+    raise ImportError(f"{name} is in none of {', '.join(modules)}")
 
 
 def _validated[M: BaseModel](model: M, **changes: object) -> M:
@@ -262,7 +275,6 @@ def _with_text_form(show: "Show") -> "Show":
     from e8s.choreo.match_ops import with_set
     from e8s.show.changes import apply_change
     from e8s.show.manage import add_set
-    from e8s.show.models import FormOp
 
     show = add_set(show, TEXT_SET, TEXT_COUNTS)
     members = [s.id for s in show.cast.spots if s.group != TRUMPETS]
@@ -277,7 +289,8 @@ def _with_text_form(show: "Show") -> "Show":
         n=len(members),
     )
     placed, filled = place(show, TEXT_SET, [form])
-    return apply_change(with_set(show, placed), [FormOp(form=f) for f in filled])
+    form_op = _library_attr("FormOp", "e8s.show.collab_models", "e8s.show.models")
+    return apply_change(with_set(show, placed), [form_op(form=f) for f in filled])
 
 
 def v030_show() -> "Show":
@@ -356,7 +369,6 @@ def _hand_documents(docs: dict[str, bytes]) -> dict[str, bytes]:
 def _save_v030(repo: "FileRepository") -> list["Revision"]:
     """Saves the v0.3.0 show, then commits the hand-written legacy sets past the commit check."""
     from e8s.show.integrity import blob_digest
-    from e8s.show.models import Revision
 
     first = repo.put_show(SHOW_ID, v030_show(), expected_revision="", at=STAMP)
     tree = dict(repo.backend.tree(SHOW_ID, first.id))
@@ -365,7 +377,10 @@ def _save_v030(repo: "FileRepository") -> list["Revision"]:
     tree.update({path: blob_digest(raw) for path, raw in changed.items()})
     body = {"parent": first.id, "at": STAMP.isoformat(), "tree": tree}
     revision_id = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
-    second = Revision(id=revision_id, parent=first.id, at=STAMP, changed=tuple(sorted(changed)))
+    revision_type = _library_attr("Revision", "e8s.show.history_models", "e8s.show.models")
+    second = revision_type(
+        id=revision_id, parent=first.id, at=STAMP, changed=tuple(sorted(changed))
+    )
     blobs = {blob_digest(raw): raw for raw in changed.values()}
     repo.backend.commit(SHOW_ID, second, tree, blobs)
     return [first, second]
@@ -406,12 +421,9 @@ def v040_history(source: Path, out: Path) -> list["Revision"]:
     from e8s.show.file_repository import FileRepository
     from e8s.show.pinning import pin
 
-    storage = importlib.import_module("e8s.show.storage")
-    load_show, open_workspace, save_show = (
-        storage.load_show,
-        storage.open_workspace,
-        storage.save_show,
-    )
+    load_show = _library_attr("load_show", "e8s.show.show_io", "e8s.show.storage")
+    open_workspace = _library_attr("open_workspace", "e8s.show.workspace", "e8s.show.storage")
+    save_show = _library_attr("save_show", "e8s.show.show_io", "e8s.show.storage")
     legacy: dict[str, Any] = json.loads((source / EXPECTED_FILE).read_text())
     shutil.copytree(source / REPO_DIR, out / REPO_DIR)
     repo = FileRepository(out / REPO_DIR)

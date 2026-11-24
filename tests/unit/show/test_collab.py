@@ -44,14 +44,10 @@ from e8s.core.ids import FormId, SetId, SpotId, make_tid
 from e8s.core.json_types import JsonValue
 from e8s.core.selection import Selection
 from e8s.geo.shapes import line
+from e8s.show.anchors import Anchor
 from e8s.show.changes import apply_change
 from e8s.show.collab import accept, highlight, pins, preview_proposal, propose, reject, selection
-from e8s.show.documents import dump_json
-from e8s.show.events import apply_event, decode_event, events_since
-from e8s.show.manage import add_set, set_counts
-from e8s.show.migrate import ReportBuilder
-from e8s.show.models import (
-    Anchor,
+from e8s.show.collab_models import (
     CanvasEvent,
     Comment,
     CountsOp,
@@ -59,10 +55,13 @@ from e8s.show.models import (
     FormOp,
     Highlight,
     PathsOp,
-    Pin,
     PlacementOp,
-    Show,
 )
+from e8s.show.documents import dump_json
+from e8s.show.events import apply_event, decode_event, events_since
+from e8s.show.manage import add_set, set_counts
+from e8s.show.migrate import ReportBuilder
+from e8s.show.models import Pin, Show
 from e8s.show.pinning import pin, unpin
 from e8s.show.show_io import load_show, save_show
 from e8s.show.structured import COMMENTS_DOC

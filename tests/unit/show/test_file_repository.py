@@ -109,8 +109,8 @@ from e8s.core.canonical import MAX_NESTING
 from e8s.core.errors import ConflictError, StorageError, bounded_repr
 from e8s.show.backend import digest
 from e8s.show.file_repository import FileRepository
+from e8s.show.history_models import Revision
 from e8s.show.layout1 import BLOB_MAX_BYTES, LINK_MAX_BYTES, TREE_MAX_BYTES
-from e8s.show.models import Revision
 from e8s.show.workspace import open_workspace
 from tests.fixtures.shows import two_set_show
 from tests.helpers import HOSTILE_JSON, capped_address_space, fails_after

@@ -14,7 +14,7 @@ import pytest
 import e8s
 from e8s.core.errors import SchemaError
 from e8s.core.ids import SetId
-from e8s.show.models import Anchor
+from e8s.show.anchors import Anchor
 
 
 def test_anchor_constructors_set_one_payload() -> None:

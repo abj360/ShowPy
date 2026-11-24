@@ -18,7 +18,8 @@ from e8s.choreo.path_models import TransitionSpec
 from e8s.core.ids import FormId, SpotId, format_tid
 from e8s.core.units import angle_diff
 from e8s.core.util import approx_equal, natural_sort
-from e8s.show.models import PathDiff, Revision, SetDiff, Show
+from e8s.show.history_models import PathDiff, Revision, SetDiff
+from e8s.show.models import Show
 from e8s.show.storage import ROOT_REVISION
 from e8s.show.workspace import Workspace
 

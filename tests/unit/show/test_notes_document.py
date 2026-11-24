@@ -52,6 +52,7 @@ from e8s.core.errors import SchemaError, UnknownRefError, VersionError
 from e8s.core.ids import NoteId
 from e8s.examples import two_set_show
 from e8s.show._notes_document import Note, NotesDocument
+from e8s.show.anchors import Anchor
 from e8s.show.document_reading import migrate_dump
 from e8s.show.documents import (
     LEGACY_NOTES_DOC,
@@ -64,10 +65,11 @@ from e8s.show.documents import (
     migration_changes,
 )
 from e8s.show.file_repository import FileRepository
+from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
 from e8s.show.interchange import import_json
 from e8s.show.memory_backend import InMemoryRepository
-from e8s.show.models import Anchor, Revision, Show
+from e8s.show.models import Show
 from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import open_workspace
 

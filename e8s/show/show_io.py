@@ -12,7 +12,8 @@ from e8s.core.errors import StorageError
 from e8s.show.files import (
     show_changes,
 )
-from e8s.show.models import Revision, Show
+from e8s.show.history_models import Revision
+from e8s.show.models import Show
 from e8s.show.workspace import Workspace
 
 

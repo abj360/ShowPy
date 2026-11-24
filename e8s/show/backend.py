@@ -16,10 +16,10 @@ from e8s.core.errors import (
     bounded_repr,
     join_listed,
 )
+from e8s.show.history_models import Revision
 from e8s.show.integrity import (
     blob_digest,
 )
-from e8s.show.models import Revision
 
 SHORT_ID = 7
 

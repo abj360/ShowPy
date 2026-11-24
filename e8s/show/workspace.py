@@ -36,8 +36,9 @@ from e8s.show.files import (
     read_file,
     staged_changes,
 )
+from e8s.show.history_models import Revision
 from e8s.show.integrity import LazyBlobs
-from e8s.show.models import Revision, Show
+from e8s.show.models import Show
 from e8s.show.set_keys import SetFolders
 from e8s.show.storage import ROOT_REVISION, Repository
 
