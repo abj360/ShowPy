@@ -30,10 +30,11 @@ Key rules (kind, path: value):
 Values are the item's `to_json()` fields without the identity fields its path holds, with one
 departure: a value that names a set by display ID names it by set key instead, so a renumber
 changes no value either. Only a form's `set` names a set in a value; a set the show does not
-hold keeps its stored ID. Notes and
-proposals are stored beside the show, not in it, so they hold no items. `items` refuses a show the
-stored layout cannot hold; both functions refuse two stored values that claim one item, with
-SchemaError.
+hold keeps its stored ID.
+
+Notes and proposals are stored beside the show, not in it, so they hold no items. `items`
+refuses a show the stored layout cannot hold; both functions refuse two stored values that claim
+one item, with SchemaError.
 
 Stated limit: facing overrides carry no ID, so all of them are one item, and edits to two
 different overrides conflict. Finer keys need an override ID, which is a format change.
