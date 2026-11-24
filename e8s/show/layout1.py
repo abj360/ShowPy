@@ -21,7 +21,7 @@ import os
 import re
 import stat
 import tempfile
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, BinaryIO, cast
@@ -30,10 +30,11 @@ from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, StorageError
 from e8s.core.json_types import JsonValue
 from e8s.core.strict_json import parse_strict_json
-from e8s.show.backend import conflict_error, revisions_since
+from e8s.show.backend import conflict_error, revisions_after
 from e8s.show.documents import dump_json
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest
+from e8s.show.storage import ROOT_REVISION
 
 ROOT_LINK = "root"
 TREE_DIR = "trees"
@@ -163,7 +164,9 @@ def _lstat_mode(show_id: str, path: Path) -> int | None:
             return None
 
 
-def _require_readable_sizes(show_id: str, tree: dict[str, str], blobs: dict[str, bytes]) -> None:
+def _require_readable_sizes(
+    show_id: str, tree: Mapping[str, str], blobs: Mapping[str, bytes]
+) -> None:
     """Refuses blobs over BLOB_MAX_BYTES before any write, since reads would refuse them."""
     oversized = {d for d, data in blobs.items() if len(data) > BLOB_MAX_BYTES}
     if not oversized:
@@ -190,7 +193,7 @@ class _FileBackend:
     def _dir(self, show_id: str) -> Path:
         return self.root / show_id
 
-    def show_ids(self) -> list[str]:
+    def shows(self) -> list[str]:
         with _mapped_io("", self.root):
             if not self.root.exists():
                 return []
@@ -294,7 +297,15 @@ class _FileBackend:
         return record
 
     @_guarded
-    def log(self, show_id: str) -> list[Revision]:
+    def head(self, show_id: str) -> str:
+        log = self.log(show_id)
+        return log[-1].id if log else ROOT_REVISION
+
+    @_guarded
+    def log(self, show_id: str, *, since: str = ROOT_REVISION) -> list[Revision]:
+        return revisions_after(show_id, self._walk(show_id), since)
+
+    def _walk(self, show_id: str) -> list[Revision]:
         self._guard_dirs(show_id)
         links = self._dir(show_id) / LINK_DIR
         log: list[Revision] = []
@@ -358,7 +369,7 @@ class _FileBackend:
         return data
 
     def _store_record(
-        self, show_id: str, path: Path, revision: Revision, tree: dict[str, str]
+        self, show_id: str, path: Path, revision: Revision, tree: Mapping[str, str]
     ) -> None:
         """Links the tree record into place, or verifies the record already there byte for byte.
 
@@ -375,7 +386,11 @@ class _FileBackend:
 
     @_guarded
     def commit(
-        self, show_id: str, revision: Revision, tree: dict[str, str], blobs: dict[str, bytes]
+        self,
+        show_id: str,
+        revision: Revision,
+        tree: Mapping[str, str],
+        blobs: Mapping[str, bytes],
     ) -> None:
         self._guard_dirs(show_id)
         base = self._dir(show_id)
@@ -393,5 +408,4 @@ class _FileBackend:
         self._store_record(show_id, base / TREE_DIR / f"{tree_name}.json", revision, tree)
         link = base / LINK_DIR / (revision.parent or ROOT_LINK)
         if not _link_exclusive(show_id, link, tree_name.encode()):
-            landed = revisions_since(self.log(show_id), revision.parent)
-            raise conflict_error(show_id, revision.parent, landed)
+            raise conflict_error(show_id, revision.parent, self.log(show_id, since=revision.parent))

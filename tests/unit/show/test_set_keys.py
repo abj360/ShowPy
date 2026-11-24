@@ -55,8 +55,6 @@ Contains:
         whose set folders are IDs v0.2 accepted but ADR 0006 refuses, renamed and with no loss
     test_regression_constructors_refuse_a_reserved_key: refuses `con` as a key from add_set and
         insert_subset's rule, and as an explicit key stored in set.json
-    test_regression_put_set_keeps_the_stored_key: keeps a renumbered set's folder and script when
-        put_set gets a freshly built set, and refuses a mismatching explicit key
     test_regression_workspace_has_no_public_stored_commit: keeps stored-path commits private
     test_regression_new_set_folder_must_pass_the_id_check: refuses a set whose folder fails
         check_id in the model, put_show, save_show and a raw commit, leaving the repository
@@ -127,7 +125,6 @@ from e8s.show.renumber import renumber
 from e8s.show.sections import join_sections
 from e8s.show.set_keys import to_display_path, to_stored_path
 from e8s.show.show_io import load_show, save_show
-from e8s.show.validate import validate_show
 from e8s.show.workspace import Workspace, open_workspace
 from tests.helpers import json_doc
 
@@ -443,8 +440,8 @@ def test_regression_workspace_refuses_paths_that_alias_another_sets_key(path: st
 
 def test_repository_scripts_follow_the_set_key() -> None:
     repo, ws, _ = _saved_renumbered()
-    assert repo.get_script(SHOW_ID, "2") == SCRIPT_ONE_A.decode()
-    repo.put_script(SHOW_ID, "3", "# put 3\n", expected_revision=ws.revision, at=LATER)
+    assert ws.read("/sets/2/set.py") == SCRIPT_ONE_A.decode()
+    ws.write("/sets/3/set.py", "# put 3\n", at=LATER)
     assert repo.read(SHOW_ID, "/sets/2/set.py") == b"# put 3\n"
 
 
@@ -535,31 +532,6 @@ def test_regression_constructors_refuse_a_reserved_key() -> None:
     body = json.loads(docs["/sets/con/set.json"]) | {"key": "con"}
     with pytest.raises(SchemaError):
         decode_show({**docs, "/sets/con/set.json": dump_json(body)})
-
-
-def _put_set_repo() -> tuple[InMemoryRepository, Workspace]:
-    """Saves 1, 1A, 2 with a script on 1A, then removes 1 and renumbers: sets 1, 2 keyed 1A, 2."""
-    repo = InMemoryRepository()
-    ws = open_workspace(repo, SHOW_ID)
-    inserted, _ = insert_subset(two_set_show(), "1", SUBSET_COUNTS)
-    save_show(ws, inserted, AT)
-    ws.commit({"/sets/1A/set.py": SCRIPT_ONE_A}, at=AT)
-    save_show(ws, renumber(remove_set(load_show(ws), "1"))[0], LATER)
-    return repo, ws
-
-
-def test_regression_put_set_keeps_the_stored_key() -> None:
-    repo, ws = _put_set_repo()
-    current = load_show(ws).set("1")
-    assert current.key == "1A"
-    fresh = Set(id=SetId("1"), counts=0.0, placements=current.placements, label="fresh")
-    revision = repo.put_set(SHOW_ID, fresh, expected_revision=ws.revision, at=LATER)
-    assert repo.get_set(SHOW_ID, "1").key == "1A"
-    assert repo.get_set(SHOW_ID, "1").label == "fresh"
-    assert repo.get_script(SHOW_ID, "1") == SCRIPT_ONE_A.decode()
-    assert validate_show(repo.get_show(SHOW_ID)).ok
-    with pytest.raises(SchemaError):
-        repo.put_set(SHOW_ID, fresh.replace(key="zz"), expected_revision=revision.id, at=LATER)
 
 
 def test_regression_workspace_has_no_public_stored_commit() -> None:

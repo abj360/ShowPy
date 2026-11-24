@@ -35,7 +35,7 @@ Contains:
     test_regression_put_show_keeps_scripts_of_renamed_set_folders: moves a set script with its
         renamed folder when a repository's put_show stores a v1 head, in one revision
     test_regression_reads_on_a_v1_head_find_the_script_of_a_renamed_set: reads and lists a set
-        script at its migrated folder before the first save, through get_script and a workspace
+        script at its migrated folder before the first save, through a workspace
     test_regression_put_script_on_a_v1_head_writes_the_migrated_folder: stores the migration in
         its own revision, the original script and the set's other files moved with its folder,
         then the new script in the next
@@ -473,7 +473,6 @@ def test_regression_reads_on_a_v1_head_find_the_script_of_a_renamed_set(tmp_path
     show_id = expected["show_id"]
     _commit_v1(repo, show_id, {"/sets/con/set.py": SCRIPT})
     head = repo.head(show_id)
-    assert repo.get_script(show_id, "con_") == SCRIPT.decode()
     ws = open_workspace(repo, show_id)
     assert ws.read("/sets/con_/set.py") == SCRIPT.decode()
     assert "set.py" in ws.ls("/sets/con_/")
@@ -487,8 +486,9 @@ def test_regression_put_script_on_a_v1_head_writes_the_migrated_folder(tmp_path:
     show_id = expected["show_id"]
     _commit_v1(repo, show_id, {"/sets/con/set.py": SCRIPT, "/sets/con/notes.txt": b"keep\n"})
     stored = [r.id for r in repo.revisions(show_id)]
-    assert repo.get_script(show_id, "con_") == SCRIPT.decode()
-    revision = repo.put_script(show_id, "con_", "# new\n", expected_revision=stored[-1], at=AT)
+    ws = open_workspace(repo, show_id)
+    assert ws.read("/sets/con_/set.py") == SCRIPT.decode()
+    revision = ws.write("/sets/con_/set.py", "# new\n", at=AT)
     after = dict(repo.documents(show_id))
     assert after["/sets/con_/set.py"] == b"# new\n"
     assert after["/sets/con_/notes.txt"] == b"keep\n"
@@ -497,7 +497,7 @@ def test_regression_put_script_on_a_v1_head_writes_the_migrated_folder(tmp_path:
     assert log == [*stored, log[-2], revision.id]
     assert repo.read(show_id, "/sets/con_/set.py", log[-2]) == SCRIPT
     assert repo.revisions(show_id)[-1].changed == ("/sets/con_/set.py",)
-    assert repo.get_script(show_id, "con_") == "# new\n"
+    assert ws.read("/sets/con_/set.py") == "# new\n"
 
 
 def _comments(*anchors: Anchor) -> bytes:

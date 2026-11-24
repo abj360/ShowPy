@@ -131,9 +131,11 @@ def test_revision_ids_are_deterministic(tmp_path: Path) -> None:
 def test_stale_write_raises_conflict_listing_changes(make_repo: RepoFactory) -> None:
     repo = make_repo()
     base = _saved(repo)
-    landed = repo.put_script(SHOW_ID, "1", "x = 1\n", expected_revision=base, at=LATER)
+    landed = repo.transaction(
+        SHOW_ID, {"/sets/1/set.py": b"x = 1\n"}, expected_revision=base, at=LATER
+    )
     with pytest.raises(ConflictError) as info:
-        repo.put_script(SHOW_ID, "2", "y = 2\n", expected_revision=base, at=LATER)
+        repo.transaction(SHOW_ID, {"/sets/2/set.py": b"y = 2\n"}, expected_revision=base, at=LATER)
     changes = context_entries(info.value, "changes")
     assert [c["id"] for c in changes] == [landed.id]
     assert changes[0]["changed"] == ["/sets/1/set.py"]
@@ -148,33 +150,10 @@ def test_identical_write_is_idempotent(make_repo: RepoFactory) -> None:
     assert len(repo.revisions(SHOW_ID)) == 1
 
 
-def test_typed_accessors(make_repo: RepoFactory) -> None:
-    repo = make_repo()
-    rev = _saved(repo)
-    moved = repo.get_set(SHOW_ID, "2").with_placements({"T1": PlacementPatch(x=-5.0)})
-    rev = repo.put_set(SHOW_ID, moved, expected_revision=rev, at=LATER).id
-    assert repo.get_set(SHOW_ID, "2").get("T1").x == -5.0
-    spec = TransitionSpec(
-        id=make_tid("1", "2"), counts=99.0, rows={SpotId("T2"): PathRow(entity=SpotId("T2"), end=4)}
-    )
-    rev = repo.put_paths(SHOW_ID, spec, expected_revision=rev, at=LATER).id
-    assert repo.get_paths(SHOW_ID, ("1", "2")).counts == 8.0
-    form = Form(id=FormId("f"), set=SetId("2"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
-    rev = repo.put_forms(SHOW_ID, "2", (form,), expected_revision=rev, at=LATER).id
-    assert repo.get_forms(SHOW_ID, "2") == (form,)
-    with pytest.raises(SchemaError):
-        repo.put_forms(SHOW_ID, "1", (form,), expected_revision=rev, at=LATER)
-    assert repo.list_sets(SHOW_ID) == ["1", "2"]
-    assert repo.get_timeline(SHOW_ID) == two_set_show().timeline
-    assert (repo.get_limits(SHOW_ID), repo.get_waivers(SHOW_ID)) == ("", "")
-    with pytest.raises(UnknownRefError):
-        repo.get_script(SHOW_ID, "1")
-
-
 def test_put_show_deletes_removed_set_documents(make_repo: RepoFactory) -> None:
     repo = make_repo()
     rev = _saved(repo, add_set(two_set_show(), "3", 4.0))
-    rev = repo.put_script(SHOW_ID, "3", "pass\n", expected_revision=rev, at=AT).id
+    rev = repo.transaction(SHOW_ID, {"/sets/3/set.py": b"pass\n"}, expected_revision=rev, at=AT).id
     repo.put_show(SHOW_ID, two_set_show(), expected_revision=rev, at=LATER)
     assert not [p for p in repo.paths(SHOW_ID) if p.startswith("/sets/3/")]
 
@@ -203,9 +182,9 @@ def test_file_repository_race_lets_only_one_writer_land(tmp_path: Path) -> None:
     root = tmp_path / "repo"
     base = _saved(FileRepository(root))
     one, two = FileRepository(root), FileRepository(root)
-    one.put_script(SHOW_ID, "1", "a\n", expected_revision=base, at=AT)
+    one.transaction(SHOW_ID, {"/sets/1/set.py": b"a\n"}, expected_revision=base, at=AT)
     with pytest.raises(ConflictError):
-        two.put_script(SHOW_ID, "1", "b\n", expected_revision=base, at=AT)
+        two.transaction(SHOW_ID, {"/sets/1/set.py": b"b\n"}, expected_revision=base, at=AT)
     assert len(FileRepository(root).revisions(SHOW_ID)) == 2
 
 
@@ -316,7 +295,7 @@ def test_agent_writes_forms_paths_scripts_and_renders() -> None:
     assert show.transition(("1", "2")) == spec
     assert agent.read("/renders/set-2.png") == b"\x89PNG"
     assert agent.ls("/sets/2") == ["forms.json", "placements.csv", "set.py"]
-    assert repo.get_script(SHOW_ID, "2").startswith("def build")
+    assert str(agent.read("/sets/2/set.py")).startswith("def build")
     agent.write("/sets/2/forms.json", "[]", at=LATER)
     assert load_show(agent).forms == {}
 

@@ -46,7 +46,7 @@ Contains:
     test_regression_long_names_are_name_too_long: maps ENAMETOOLONG on writes and reads
     test_regression_losing_commit_race_is_a_conflict: keeps a lost link race a ConflictError
     test_regression_overlong_show_id_reads_raise_name_too_long: refuses reads of a 300-character ID
-    test_regression_other_os_errors_are_io: maps stray OSErrors on read paths and show_ids() to IO
+    test_regression_other_os_errors_are_io: maps stray OSErrors on read paths and shows() to IO
     test_regression_deep_or_huge_tree_record_is_corrupt: maps a tree record nested past the stack
         or holding an overlong int to CORRUPT
     test_regression_oversized_files_are_corrupt_before_reading: refuses a sparse terabyte link,
@@ -455,7 +455,7 @@ def test_regression_long_names_are_name_too_long(
 
 
 def test_regression_other_os_errors_are_io(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Maps stray OSErrors on read paths and show_ids() to IO."""
+    """Maps stray OSErrors on read paths and shows() to IO."""
     repo, _, base = _saved(tmp_path)
     shutil.rmtree(base / "trees")
     (base / "trees").write_bytes(b"not a directory")

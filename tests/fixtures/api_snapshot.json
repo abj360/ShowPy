@@ -982,22 +982,10 @@
   "Repository": {
     "protocol": {
       "documents": "(self, show_id: str, revision: str | None = None) -> collections.abc.Mapping[str, bytes]",
-      "get_forms": "(self, show_id: str, set_id: str) -> tuple[e8s.choreo.form_models.Form, ...]",
-      "get_limits": "(self, show_id: str) -> str",
-      "get_paths": "(self, show_id: str, tid: tuple[str, str]) -> e8s.choreo.path_models.TransitionSpec",
       "get_revision": "(self, show_id: str, revision_id: str) -> e8s.show.history_models.Revision",
-      "get_script": "(self, show_id: str, set_id: str) -> str",
-      "get_set": "(self, show_id: str, set_id: str) -> e8s.choreo.models.Set",
       "get_show": "(self, show_id: str, revision: str | None = None) -> e8s.show.models.Show",
-      "get_timeline": "(self, show_id: str) -> e8s.time.models.Timeline",
-      "get_waivers": "(self, show_id: str) -> str",
       "head": "(self, show_id: str) -> str",
-      "list_sets": "(self, show_id: str) -> list[e8s.core.ids.SetId]",
       "paths": "(self, show_id: str, revision: str | None = None) -> list[str]",
-      "put_forms": "(self, show_id: str, set_id: str, forms: tuple[e8s.choreo.form_models.Form, ...], *, expected_revision: str, at: datetime.datetime) -> e8s.show.history_models.Revision",
-      "put_paths": "(self, show_id: str, spec: e8s.choreo.path_models.TransitionSpec, *, expected_revision: str, at: datetime.datetime) -> e8s.show.history_models.Revision",
-      "put_script": "(self, show_id: str, set_id: str, source: str, *, expected_revision: str, at: datetime.datetime) -> e8s.show.history_models.Revision",
-      "put_set": "(self, show_id: str, new_set: e8s.choreo.models.Set, *, expected_revision: str, at: datetime.datetime) -> e8s.show.history_models.Revision",
       "put_show": "(self, show_id: str, show: e8s.show.models.Show, *, expected_revision: str, at: datetime.datetime) -> e8s.show.history_models.Revision",
       "read": "(self, show_id: str, path: str, revision: str | None = None) -> bytes | None",
       "revisions": "(self, show_id: str) -> list[e8s.show.history_models.Revision]",
@@ -1008,10 +996,11 @@
   "RepositoryBackend": {
     "protocol": {
       "blob": "(self, show_id: str, digest: str) -> bytes",
-      "commit": "(self, show_id: str, revision: e8s.show.history_models.Revision, tree: dict[str, str], blobs: dict[str, bytes]) -> None",
-      "log": "(self, show_id: str) -> list[e8s.show.history_models.Revision]",
-      "show_ids": "(self) -> list[str]",
-      "tree": "(self, show_id: str, revision_id: str) -> dict[str, str]"
+      "commit": "(self, show_id: str, revision: e8s.show.history_models.Revision, tree: collections.abc.Mapping[str, str], blobs: collections.abc.Mapping[str, bytes]) -> None",
+      "head": "(self, show_id: str) -> str",
+      "log": "(self, show_id: str, *, since: str = '') -> list[e8s.show.history_models.Revision]",
+      "shows": "(self) -> list[str]",
+      "tree": "(self, show_id: str, revision_id: str) -> collections.abc.Mapping[str, str]"
     }
   },
   "Revision": {
@@ -1679,6 +1668,7 @@
   "require_finite": "(value: SupportsFloat, *, name: str, low: float | None = None, low_open: bool = False, high: float | None = None) -> float",
   "require_size": "(requested: int, cap: int, *, what: str, error: type[e8s.core.errors.E8sError] = ...) -> None",
   "revert": "(ws: e8s.show.workspace.Workspace, revision_id: str, at: datetime.datetime) -> e8s.show.history_models.Revision",
+  "revisions_after": "(show_id: str, log: list[e8s.show.history_models.Revision], since: str) -> list[e8s.show.history_models.Revision]",
   "ripple": "(spec: e8s.choreo.path_models.TransitionSpec, ordered_sel: Sel, total: float, curve: Literal['linear', 'ease_in', 'ease_out', 'ease_in_out'] = 'linear', *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "rose_points": "(params: collections.abc.Mapping[str, Any], n: int) -> Points",
   "rotate": "(obj: T, deg: Degrees, about: About = 'center', sel: SetSelector = 'all', *, force: bool = False) -> T",
@@ -1765,6 +1755,7 @@
   "two_part": "(show: e8s.show.models.Show, spec: e8s.choreo.path_models.TransitionSpec, sel: collections.abc.Sequence[str], corner: Literal['x_first', 'y_first'] | Point, split: float | None = None, *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "union": "(*areas: Area) -> Area",
   "units": "() -> dict[str, float]",
+  "unknown_revision_error": "(show_id: str, revision_id: str, known: list[str]) -> e8s.core.errors.UnknownRefError",
   "unlock": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel) -> e8s.choreo.path_models.TransitionSpec",
   "unpin": "(show: e8s.show.models.Show, target: PinTarget, pin_id: str) -> e8s.show.models.Show",
   "upgrade_dependency": "(show: e8s.show.models.Show, ref: str, version: str, sheet: e8s.sheet.models.Sheet | None = None) -> e8s.show.models.Show",

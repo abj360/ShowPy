@@ -19,7 +19,7 @@ Contains:
     test_put_show_writes_notes_in_the_migration_revision: stores the notes document in the
         revision `put_show` writes over a v1 head, and nothing on the next
     test_put_script_writes_notes_in_the_migration_revision: stores the notes document in the
-        migration revision `put_script` writes before the script
+        migration revision a workspace write lands before the script
     test_reads_on_a_v1_head_see_the_notes_document: lists and reads the notes document through
         `migrated_view` and a workspace before the first save, writing nothing
     test_migration_changes_write_the_notes_document_and_drop_the_v1_notes: lists the notes
@@ -243,7 +243,7 @@ def test_put_show_writes_notes_in_the_migration_revision(tmp_path: Path) -> None
 def test_put_script_writes_notes_in_the_migration_revision(tmp_path: Path) -> None:
     repo, show_id, _ = _with_notes("v0.3.0", tmp_path)
     stored = [r.id for r in repo.revisions(show_id)]
-    revision = repo.put_script(show_id, "con_", "# new\n", expected_revision=stored[-1], at=AT)
+    revision = open_workspace(repo, show_id).write("/sets/con_/set.py", "# new\n", at=AT)
     log = repo.revisions(show_id)
     assert [r.id for r in log] == [*stored, log[-2].id, revision.id]
     assert NOTES_DOC in log[-2].changed

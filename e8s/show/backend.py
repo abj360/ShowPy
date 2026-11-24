@@ -5,21 +5,26 @@ Contains:
     SHORT_ID: sets how many characters of a revision ID messages show
     RepositoryBackend: stores revisions, trees and blobs; commits compare-and-swap on the head
     digest(): returns the SHA-256 hex digest blobs and assets are addressed by
-    revisions_since(): lists the revisions of a log that landed after a parent revision
+    revisions_after(): lists the revisions of a log after one revision, failing on an unknown one
+    unknown_revision_error(): builds the UnknownRefError for a revision a show does not hold
     conflict_error(): builds the ConflictError that lists the revisions that landed meanwhile
 """
 
+from collections.abc import Mapping
 from typing import Protocol
 
 from e8s.core.errors import (
     ConflictError,
+    UnknownRefError,
     bounded_repr,
     join_listed,
 )
+from e8s.core.util import close_matches
 from e8s.show.history_models import Revision
 from e8s.show.integrity import (
     blob_digest,
 )
+from e8s.show.storage import ROOT_REVISION
 
 SHORT_ID = 7
 
@@ -30,17 +35,29 @@ def digest(data: bytes) -> str:
 
 
 class RepositoryBackend(Protocol):
-    """Stores revisions, path-to-digest trees and blobs; commit is compare-and-swap on head."""
+    """Stores revisions, path-to-digest trees and blobs; commit is compare-and-swap on head.
 
-    def show_ids(self) -> list[str]:
+    A backend never trusts IDs or paths it reads back from storage, lands a commit only when its
+    parent is the head, and leaves nothing visible when a commit fails.
+    """
+
+    def shows(self) -> list[str]:
         """Returns the IDs of shows with at least one revision."""
         ...
 
-    def log(self, show_id: str) -> list[Revision]:
-        """Returns a show's revisions, oldest first."""
+    def head(self, show_id: str) -> str:
+        """Returns the newest revision ID, or the root revision for an unknown or empty show."""
         ...
 
-    def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
+    def log(self, show_id: str, *, since: str = ROOT_REVISION) -> list[Revision]:
+        """Returns the revisions after `since`, oldest first, excluding `since` itself.
+
+        The root revision returns the whole log. A revision missing from the log raises
+        UnknownRefError.
+        """
+        ...
+
+    def tree(self, show_id: str, revision_id: str) -> Mapping[str, str]:
         """Returns path to blob digest at a revision."""
         ...
 
@@ -49,31 +66,54 @@ class RepositoryBackend(Protocol):
         ...
 
     def commit(
-        self, show_id: str, revision: Revision, tree: dict[str, str], blobs: dict[str, bytes]
+        self,
+        show_id: str,
+        revision: Revision,
+        tree: Mapping[str, str],
+        blobs: Mapping[str, bytes],
     ) -> None:
         """Stores blobs and the tree, then lands the revision only if its parent is the head."""
         ...
 
 
-def revisions_since(log: list[Revision], parent: str) -> list[Revision]:
-    """Lists the revisions of a log that landed after a parent revision.
+def revisions_after(show_id: str, log: list[Revision], since: str) -> list[Revision]:
+    """Lists the revisions of a log that come after one revision, failing on an unknown one.
 
     Args:
+        show_id: Show the log belongs to, named in the error.
         log: A show's revisions, oldest first.
-        parent: Revision a commit was based on; the root revision, or one missing from the log,
-            means every revision landed since.
+        since: Revision to start after; the root revision means the whole log.
 
     Returns:
-        landed: The revisions after the parent, oldest first.
+        landed: The revisions after `since`, oldest first, without `since` itself.
 
     >>> from datetime import UTC, datetime
     >>> at = datetime(2026, 11, 11, tzinfo=UTC)
     >>> log = [Revision(id=i, parent=p, at=at) for i, p in (("a", ""), ("b", "a"), ("c", "b"))]
-    >>> [r.id for r in revisions_since(log, "a")], len(revisions_since(log, ""))
+    >>> [r.id for r in revisions_after("s", log, "a")], len(revisions_after("s", log, ""))
     (['b', 'c'], 3)
     """
-    ids = [r.id for r in log]
-    return log[ids.index(parent) + 1 :] if parent in ids else log
+    if since == ROOT_REVISION:
+        return list(log)
+    for position, revision in enumerate(log):
+        if revision.id == since:
+            return log[position + 1 :]
+    raise unknown_revision_error(show_id, since, [r.id for r in log])
+
+
+def unknown_revision_error(show_id: str, revision_id: str, known: list[str]) -> UnknownRefError:
+    """Builds the UnknownRefError for a revision a show does not hold, with close matches.
+
+    >>> unknown_revision_error("s", "abc", ["abd"]).context["revision"]
+    'abc'
+    """
+    close = [c[:SHORT_ID] for c in close_matches(revision_id, known)]
+    guess = f"did you mean {', '.join(close)}? " if close else ""
+    return UnknownRefError(
+        f"no revision {revision_id[:SHORT_ID] or '(root)'} in show {show_id}",
+        hint=f"{guess}read the head with head() or list revisions with log()",
+        context={"show": show_id, "revision": revision_id},
+    )
 
 
 def conflict_error(show_id: str, expected: str, landed: list[Revision]) -> ConflictError:

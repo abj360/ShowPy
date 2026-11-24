@@ -12,35 +12,25 @@ import re
 from collections.abc import Mapping
 from datetime import datetime
 
-from e8s.choreo.form_models import Form
-from e8s.choreo.match_ops import forms_of_set
-from e8s.choreo.models import Set
-from e8s.choreo.path_models import TransitionSpec
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import (
-    SchemaError,
     StorageError,
     UnknownRefError,
 )
-from e8s.core.ids import WINDOWS_DEVICE_NAMES, SetId, is_device_name
+from e8s.core.ids import WINDOWS_DEVICE_NAMES, is_device_name
 from e8s.core.util import close_matches, content_hash
 from e8s.show.backend import (
-    SHORT_ID,
     RepositoryBackend,
     conflict_error,
     digest,
-    revisions_since,
+    unknown_revision_error,
 )
-from e8s.show.changes import require_form_owner
 from e8s.show.decode_cache import DecodeCache
 from e8s.show.documents import (
     decode_show,
-    migrated_view,
-    migration_changes,
-    script_doc,
     split_path,
 )
-from e8s.show.files import LIMITS_DOC, WAIVERS_DOC, show_changes
+from e8s.show.files import show_changes
 from e8s.show.history_models import Revision
 from e8s.show.integrity import (
     LazyBlobs,
@@ -48,10 +38,7 @@ from e8s.show.integrity import (
     require_valid_digests,
 )
 from e8s.show.models import Show
-from e8s.show.set_keys import set_key
 from e8s.show.storage import ROOT_REVISION
-from e8s.show.structured import decode_text
-from e8s.time.models import Timeline
 
 SHOW_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]*$")
 # Frozen at the old library name: every stored revision ID is hashed under it.
@@ -84,18 +71,6 @@ def _require_new_show_id(show_id: str) -> None:
         )
 
 
-def _with_stored_key(new_set: Set, stored: Set) -> Set:
-    if new_set.key == stored.key:
-        return new_set
-    if "key" not in new_set._set_fields():
-        return new_set.replace(key=stored.key)
-    raise SchemaError(
-        f"set {new_set.id} has key {new_set.key}, but the stored set has key {stored.key}",
-        hint="keys never change; leave key unset or pass the stored key",
-        context={"set": new_set.id, "key": new_set.key, "stored_key": stored.key},
-    )
-
-
 class DocumentRepository:
     """Implements Repository over a backend that stores revisions, trees and blobs.
 
@@ -113,7 +88,7 @@ class DocumentRepository:
 
     def shows(self) -> list[str]:
         """Returns the IDs of stored shows, sorted."""
-        return sorted(self.backend.show_ids())
+        return sorted(self.backend.shows())
 
     def revisions(self, show_id: str) -> list[Revision]:
         """Returns every revision of a show, oldest first."""
@@ -122,8 +97,8 @@ class DocumentRepository:
 
     def head(self, show_id: str) -> str:
         """Returns the head revision ID, or ROOT_REVISION before the first save."""
-        log = self.revisions(show_id)
-        return log[-1].id if log else ROOT_REVISION
+        _require_show_id(show_id)
+        return self.backend.head(show_id)
 
     def get_revision(self, show_id: str, revision_id: str) -> Revision:
         """Returns one revision, raising UnknownRefError with close matches."""
@@ -131,16 +106,9 @@ class DocumentRepository:
         for revision in log:
             if revision.id == revision_id:
                 return revision
-        close = close_matches(revision_id, [r.id for r in log])
-        raise UnknownRefError(
-            f"no revision {revision_id[:SHORT_ID] or '(root)'} in show {show_id}",
-            hint=f"did you mean {', '.join(c[:SHORT_ID] for c in close)}?"
-            if close
-            else "list revisions with repo.revisions(show_id)",
-            context={"show": show_id, "revision": revision_id},
-        )
+        raise unknown_revision_error(show_id, revision_id, [r.id for r in log])
 
-    def _tree(self, show_id: str, revision: str | None) -> dict[str, str]:
+    def _tree(self, show_id: str, revision: str | None) -> Mapping[str, str]:
         rev = self.head(show_id) if revision is None else revision
         if rev == ROOT_REVISION:
             return {}
@@ -173,18 +141,18 @@ class DocumentRepository:
         blob = functools.cache(functools.partial(self.backend.blob, show_id))
         return LazyBlobs(self._tree(show_id, revision), blob)
 
-    def _require_head(self, show_id: str, expected: str) -> list[Revision]:
-        log = self.revisions(show_id)
-        ids = [r.id for r in log]
-        if expected != ROOT_REVISION and expected not in ids:
-            self.get_revision(show_id, expected)
-        landed = revisions_since(log, expected)
-        if landed:
-            raise conflict_error(show_id, expected, landed)
-        return log
+    def _require_head(self, show_id: str, expected: str) -> str:
+        head = self.head(show_id)
+        if head != expected:
+            raise conflict_error(show_id, expected, self.backend.log(show_id, since=expected))
+        return head
 
     def _require_valid_tree(
-        self, show_id: str, old: dict[str, str], new: dict[str, str], added: dict[str, bytes]
+        self,
+        show_id: str,
+        old: Mapping[str, str],
+        new: Mapping[str, str],
+        added: Mapping[str, bytes],
     ) -> None:
         def blob(blob_digest: str) -> bytes:
             return (
@@ -227,7 +195,7 @@ class DocumentRepository:
             require_known_path(path)
         if expected_revision == ROOT_REVISION:
             _require_new_show_id(show_id)
-        log = self._require_head(show_id, expected_revision)
+        head = self._require_head(show_id, expected_revision)
         old = self._tree(show_id, expected_revision)
         blobs = {digest(d): d for d in changes.values() if d is not None}
         new = {**old, **{p: digest(d) for p, d in changes.items() if d is not None}}
@@ -235,13 +203,13 @@ class DocumentRepository:
             new.pop(path, None)
         changed = tuple(sorted(p for p in set(old) | set(new) if old.get(p) != new.get(p)))
         if not changed:
-            if not log:
+            if head == ROOT_REVISION:
                 raise StorageError(
                     f"nothing to save for {show_id}",
                     hint="write at least one document",
                     context={"show": show_id},
                 )
-            return log[-1]
+            return self.get_revision(show_id, head)
         body = {
             "parent": expected_revision,
             "at": at.isoformat(),
@@ -288,166 +256,3 @@ class DocumentRepository:
             expected_revision=expected_revision,
             at=at,
         )
-
-    def list_sets(self, show_id: str) -> list[SetId]:
-        """Returns set IDs in show order."""
-        return self.get_show(show_id).set_ids()
-
-    def get_set(self, show_id: str, set_id: str) -> Set:
-        """Returns one set."""
-        return self.get_show(show_id).set(set_id)
-
-    def put_set(
-        self,
-        show_id: str,
-        new_set: Set,
-        *,
-        expected_revision: str,
-        at: datetime,
-    ) -> Revision:
-        """Replaces one existing set, keeping its stored key; add sets through put_show().
-
-        A set built without a key takes the replaced set's key, so its folder and build script
-        stay; an explicit key that differs from the stored one raises SchemaError.
-        Checks validity only, never pins or locks; edit functions enforce those.
-        """
-        show = self.get_show(show_id, expected_revision or None)
-        position = show.set_index(new_set.id)
-        kept = _with_stored_key(new_set, show.sets[position])
-        sets = (*show.sets[:position], kept, *show.sets[position + 1 :])
-        return self.put_show(
-            show_id,
-            show.replace(sets=sets),
-            expected_revision=expected_revision,
-            at=at,
-        )
-
-    def get_script(self, show_id: str, set_id: str) -> str:
-        """Returns a set's build script, stored in the folder of the set's key.
-
-        On a head of an older format version the script is read where the first save stores it,
-        so a set whose key the migration renamed reads its script from the new folder.
-        """
-        key = set_key(self.get_set(show_id, set_id))
-        source = migrated_view(self.documents(show_id)).get(script_doc(key))
-        if source is None:
-            raise UnknownRefError(
-                f"set {set_id} has no script",
-                hint="write one with put_script()",
-                context={"set": set_id},
-            )
-        return decode_text(script_doc(key), source)
-
-    def put_script(
-        self,
-        show_id: str,
-        set_id: str,
-        source: str,
-        *,
-        expected_revision: str,
-        at: datetime,
-    ) -> Revision:
-        """Replaces a set's build script, stored in the folder of the set's key.
-
-        On a head of an older format version the migration lands first, in its own revision,
-        so the set's files, the script being replaced included, move to the renamed folder and
-        stay in history there; the new script follows in the next revision.
-        Checks validity only, never pins or locks; edit functions enforce those.
-        """
-        key = set_key(self.get_show(show_id, expected_revision or None).set(set_id))
-        migration = migration_changes(self.documents(show_id, expected_revision or None))
-        if migration:
-            migrated = self.transaction(
-                show_id, migration, expected_revision=expected_revision, at=at
-            )
-            expected_revision = migrated.id
-        return self.transaction(
-            show_id,
-            {script_doc(key): source.encode()},
-            expected_revision=expected_revision,
-            at=at,
-        )
-
-    def get_paths(self, show_id: str, tid: tuple[str, str]) -> TransitionSpec:
-        """Returns a transition's paths, defaulting to straight moves."""
-        return self.get_show(show_id).transition(tid)
-
-    def put_paths(
-        self,
-        show_id: str,
-        spec: TransitionSpec,
-        *,
-        expected_revision: str,
-        at: datetime,
-    ) -> Revision:
-        """Replaces a transition's paths; the destination set's counts win.
-
-        Checks validity only, never pins or locks; edit functions enforce those.
-        """
-        show = self.get_show(show_id, expected_revision or None)
-        stored = spec.replace(counts=show.transition(spec.id).counts)
-        specs = (*(s for s in show.transitions if s.id != spec.id), stored)
-        return self.put_show(
-            show_id,
-            show.replace(transitions=specs),
-            expected_revision=expected_revision,
-            at=at,
-        )
-
-    def get_forms(self, show_id: str, set_id: str) -> tuple[Form, ...]:
-        """Returns the forms a set lists, sorted by ID; stale forms stay out."""
-        show = self.get_show(show_id)
-        return tuple(f for _, f in sorted(forms_of_set(show, set_id).items()))
-
-    def put_forms(
-        self,
-        show_id: str,
-        set_id: str,
-        forms: tuple[Form, ...],
-        *,
-        expected_revision: str,
-        at: datetime,
-    ) -> Revision:
-        """Replaces a set's forms; every form must name that set. Stale forms are kept.
-
-        A form ID that is stored under another set raises SchemaError.
-
-        A set that lists forms lists the put forms afterwards, so `get_forms` returns them.
-        Checks validity only, never pins or locks; edit functions enforce those.
-        """
-        wrong = [f.id for f in forms if f.set != set_id]
-        if wrong:
-            raise SchemaError(
-                f"forms {', '.join(wrong)} do not belong to set {set_id}",
-                hint=f"set form.set to {set_id!r}",
-                context={"set": set_id, "forms": wrong},
-            )
-        show = self.get_show(show_id, expected_revision or None)
-        for put in forms:
-            require_form_owner(show, put)
-        replaced = forms_of_set(show, set_id)
-        kept = {k: f for k, f in show.forms.items() if k not in replaced}
-        edited = show.replace(forms={**kept, **{f.id: f for f in forms}})
-        if show.set(set_id).forms and forms:
-            listed = show.set(set_id).replace(forms=tuple(f.id for f in forms))
-            edited = edited.replace(
-                sets=tuple(listed if s.id == set_id else s for s in edited.sets)
-            )
-        return self.put_show(
-            show_id,
-            edited,
-            expected_revision=expected_revision,
-            at=at,
-        )
-
-    def get_timeline(self, show_id: str) -> Timeline:
-        """Returns the show timeline."""
-        return self.get_show(show_id).timeline
-
-    def get_limits(self, show_id: str) -> str:
-        """Returns the designer's limits YAML text; empty when none is stored."""
-        return decode_text(LIMITS_DOC, self.read(show_id, LIMITS_DOC) or b"")
-
-    def get_waivers(self, show_id: str) -> str:
-        """Returns the designer's waivers YAML text; empty when none is stored."""
-        return decode_text(WAIVERS_DOC, self.read(show_id, WAIVERS_DOC) or b"")

@@ -11,13 +11,8 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Protocol
 
-from e8s.choreo.form_models import Form
-from e8s.choreo.models import Set
-from e8s.choreo.path_models import TransitionSpec
-from e8s.core.ids import SetId
 from e8s.show.history_models import Revision
 from e8s.show.models import Show
-from e8s.time.models import Timeline
 
 ROOT_REVISION = ""
 
@@ -90,96 +85,6 @@ class Repository(Protocol):
 
         Checks validity only, never pins or locks; edit functions enforce those.
         """
-        ...
-
-    def list_sets(self, show_id: str) -> list[SetId]:
-        """Returns set IDs in show order."""
-        ...
-
-    def get_set(self, show_id: str, set_id: str) -> Set:
-        """Returns one set."""
-        ...
-
-    def put_set(
-        self,
-        show_id: str,
-        new_set: Set,
-        *,
-        expected_revision: str,
-        at: datetime,
-    ) -> Revision:
-        """Replaces one existing set.
-
-        Checks validity only, never pins or locks; edit functions enforce those.
-        """
-        ...
-
-    def get_script(self, show_id: str, set_id: str) -> str:
-        """Returns a set's build script."""
-        ...
-
-    def put_script(
-        self,
-        show_id: str,
-        set_id: str,
-        source: str,
-        *,
-        expected_revision: str,
-        at: datetime,
-    ) -> Revision:
-        """Replaces a set's build script.
-
-        Checks validity only, never pins or locks; edit functions enforce those.
-        """
-        ...
-
-    def get_paths(self, show_id: str, tid: tuple[str, str]) -> TransitionSpec:
-        """Returns a transition's paths, defaulting to straight moves."""
-        ...
-
-    def put_paths(
-        self,
-        show_id: str,
-        spec: TransitionSpec,
-        *,
-        expected_revision: str,
-        at: datetime,
-    ) -> Revision:
-        """Replaces a transition's paths; counts follow the destination set.
-
-        Checks validity only, never pins or locks; edit functions enforce those.
-        """
-        ...
-
-    def get_forms(self, show_id: str, set_id: str) -> tuple[Form, ...]:
-        """Returns a set's forms sorted by ID."""
-        ...
-
-    def put_forms(
-        self,
-        show_id: str,
-        set_id: str,
-        forms: tuple[Form, ...],
-        *,
-        expected_revision: str,
-        at: datetime,
-    ) -> Revision:
-        """Replaces a set's forms.
-
-        Checks validity only, never pins or locks; edit functions enforce those.
-        """
-        ...
-
-    def get_timeline(self, show_id: str) -> Timeline:
-        """Returns the show timeline."""
-        ...
-
-    def get_limits(self, show_id: str) -> str:
-        """Returns the designer's limits YAML text; empty when none is stored."""
-        ...
-
-    def get_waivers(self, show_id: str) -> str:
-        """Returns the designer's waivers YAML text; empty when none is stored."""
         ...
 
 
