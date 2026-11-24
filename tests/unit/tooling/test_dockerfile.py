@@ -103,7 +103,7 @@ def tracked_top_level(root: Path) -> set[str]:
         entries: Each distinct top-level file or folder name.
     """
     listing = subprocess.run(
-        ["git", "ls-files", "-z"], cwd=root, capture_output=True, text=True, check=True
+        ["git", "ls-files", "-z"], cwd=root, capture_output=True, encoding="utf-8", check=True
     ).stdout
     return {path.split("/")[0] for path in listing.split("\0") if path}
 

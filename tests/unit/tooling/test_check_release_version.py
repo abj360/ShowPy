@@ -31,7 +31,9 @@ VERSION = "0.6.0"
 def write_manifest(folder: Path, package: str) -> Path:
     """Writes a Cargo.toml whose `[workspace.package]` table holds the given lines."""
     manifest = folder / "Cargo.toml"
-    manifest.write_text(f'[workspace]\nmembers = ["crates/*"]\n\n[workspace.package]\n{package}')
+    manifest.write_text(
+        f'[workspace]\nmembers = ["crates/*"]\n\n[workspace.package]\n{package}', encoding="utf-8"
+    )
     return manifest
 
 
@@ -69,7 +71,9 @@ def test_regression_refuses_a_manifest_without_a_workspace_version(
 
 
 def test_main_checks_the_repository_manifest() -> None:
-    version = tomllib.loads(CARGO_TOML.read_text())["workspace"]["package"]["version"]
+    version = tomllib.loads(CARGO_TOML.read_text(encoding="utf-8"))["workspace"]["package"][
+        "version"
+    ]
     assert CARGO_TOML == ROOT / "Cargo.toml"
     main([f"v{version}"])
     with pytest.raises(SystemExit) as stop:
@@ -88,7 +92,7 @@ def test_script_exits_one_on_a_mismatched_tag() -> None:
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "v0.0.0-not-a-release"],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
     )
     assert result.returncode == 1

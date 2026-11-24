@@ -111,7 +111,9 @@ def split_paths(output: str) -> list[str]:
 
 def git_changed_paths(base: str, head: str) -> list[str]:
     """Runs git diff in the current checkout and returns the changed paths."""
-    result = subprocess.run(diff_command(base, head), check=True, capture_output=True, text=True)
+    result = subprocess.run(
+        diff_command(base, head), check=True, capture_output=True, encoding="utf-8"
+    )
     return split_paths(result.stdout)
 
 

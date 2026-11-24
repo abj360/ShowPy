@@ -92,7 +92,7 @@ def test_schema_is_a_package_resource() -> None:
 
 
 def test_schemas_ship_their_mit_notice() -> None:
-    notice = schema_path("LICENSE-MIT.txt").read_text()
+    notice = schema_path("LICENSE-MIT.txt").read_text(encoding="utf-8")
     assert notice.startswith("MIT License\n\nCopyright (c) 2026 abj360\n")
     assert "Permission is hereby granted, free of charge" in notice
 
@@ -156,7 +156,11 @@ def test_bundled_font_budget_fits_the_loader_cap() -> None:
 def tracked_files(root: Path, *paths: str) -> set[str]:
     """Lists every file git tracks in a checkout, or only under the given paths."""
     listed = subprocess.run(
-        ["git", "ls-files", "-z", *paths], cwd=root, capture_output=True, check=True, text=True
+        ["git", "ls-files", "-z", *paths],
+        cwd=root,
+        capture_output=True,
+        check=True,
+        encoding="utf-8",
     )
     return {path for path in listed.stdout.split("\0") if path}
 

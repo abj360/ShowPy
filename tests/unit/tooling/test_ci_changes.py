@@ -138,13 +138,13 @@ def test_regression_malformed_sha_fails_loudly(base: str, head: str) -> None:
 
 def test_main_writes_the_code_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     output = tmp_path / "github_output"
-    output.write_text("earlier=1\n")
+    output.write_text("earlier=1\n", encoding="utf-8")
     monkeypatch.setenv("GITHUB_OUTPUT", str(output))
     monkeypatch.setenv("EVENT_NAME", "push")
     monkeypatch.delenv("BASE_SHA", raising=False)
     monkeypatch.delenv("HEAD_SHA", raising=False)
     main()
-    assert output.read_text() == "earlier=1\ncode=true\nrust=true\n"
+    assert output.read_text(encoding="utf-8") == "earlier=1\ncode=true\nrust=true\n"
 
 
 def test_regression_main_without_github_output_fails_loudly(
@@ -239,4 +239,4 @@ def test_main_writes_the_rust_output(tmp_path: Path, monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("GITHUB_OUTPUT", str(output))
     monkeypatch.setenv("EVENT_NAME", "workflow_dispatch")
     main()
-    assert output.read_text().splitlines() == ["code=true", "rust=true"]
+    assert output.read_text(encoding="utf-8").splitlines() == ["code=true", "rust=true"]
