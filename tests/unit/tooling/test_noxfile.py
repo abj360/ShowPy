@@ -109,6 +109,7 @@ Contains:
     test_wheel_builds_check_the_pinned_toolchain: each build proves it compiled with the pin
     run_toolchain_check(): runs the workflow's toolchain check against a fake rustc
     test_toolchain_check_refuses_a_rustc_other_than_the_pin: passes the pin, refuses another
+    test_regression_wheels_never_cancel_a_tag_run: a newer run cancels only non-tag runs
 """
 
 import ast
@@ -314,6 +315,10 @@ PINNED_ACTION = re.compile(r"uses: [\w.-]+/[\w.-]+(?:/[\w.-]+)*@[0-9a-f]{40} # v
 READ_ONLY_JOB = "    permissions:\n      contents: read\n"
 CACHE_ACTIONS = ("actions/cache", "Swatinem/rust-cache")
 CACHE_INPUT = re.compile(r"^\s+cache: ", re.MULTILINE)
+WHEELS_CONCURRENCY = """concurrency:
+  group: wheels-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+"""
 
 
 def tolerated_exit_codes(source: str, session_name: str) -> list[str]:
@@ -1413,3 +1418,8 @@ def test_toolchain_check_refuses_a_rustc_other_than_the_pin(tmp_path: Path) -> N
     refused = run_toolchain_check(tmp_path, f"{channel}.1")
     assert refused.returncode == 1
     assert refused.stdout == f"E: rustc is not the pinned {channel}\n"
+
+
+def test_regression_wheels_never_cancel_a_tag_run() -> None:
+    """A second dispatch or a re-pushed tag must not kill a release build in progress."""
+    assert workflow_section(WHEELS_WORKFLOW.read_text(), "concurrency") == WHEELS_CONCURRENCY

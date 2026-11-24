@@ -23,9 +23,10 @@ on:
 
 permissions: {}
 
+# A newer run on the same ref cancels an older one, except on a tag: a release build always ends.
 concurrency:
   group: wheels-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 env:
   MATURIN_VERSION: "1.16.0"
