@@ -6,12 +6,14 @@ build_oracle.py --- builds a released e8s into its own venv as the parity harnes
 Checks `ref` out into a temporary git worktree under the output's parent (`.parity/`), builds
 its wheel with that tree's own build backend, creates a venv on the running Python, installs
 the dependencies locked at `ref` (hashes required) and then the wheel, and writes READY holding
-the wheel's SHA-256. The worktree is removed whether the build succeeds or fails. A ready oracle
-is reused without any work.
+the ref, its commit and the wheel's SHA-256. The worktree is removed whether the build succeeds
+or fails. An oracle whose READY matches the ref, its commit and its wheel is reused without
+building anything.
 
 Contains:
     interpreter(): returns a venv's interpreter path on this platform
-    is_ready(): tells whether an oracle folder holds a finished build for the running Python
+    ready_stamp(): renders the READY text for a ref, its commit and the wheel's SHA-256
+    is_ready(): tells whether an oracle folder holds a finished build of a ref's commit
     build_oracle(): builds the oracle of a ref unless it is ready; returns its interpreter
     main(): builds the oracle named on the command line and prints its interpreter
 """
@@ -75,15 +77,23 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def is_ready(out: Path) -> bool:
-    """Tells whether an oracle folder holds a finished build usable by the running Python.
+def ready_stamp(ref: str, commit: str, wheel_sha256: str) -> str:
+    """Renders the READY text: one `<field> <value>` line each for the ref, commit and wheel."""
+    return f"ref {ref}\ncommit {commit}\nwheel-sha256 {wheel_sha256}\n"
+
+
+def is_ready(out: Path, ref: str, commit: str) -> bool:
+    """Tells whether an oracle folder holds a finished build of a ref's commit.
 
     Args:
         out: The oracle folder.
+        ref: The ref asked for.
+        commit: The commit the ref resolves to now.
 
     Returns:
-        ready: True when READY holds the SHA-256 of the one wheel in the folder, and the venv's
-            interpreter exists and runs the running Python's minor version.
+        ready: True when READY names this ref and commit and the SHA-256 of the one wheel in the
+            folder, and the venv's interpreter exists and runs the running Python's minor
+            version.
     """
     ready = out / READY_FILE
     wheels = sorted((out / WHEEL_FOLDER).glob("*.whl"))
@@ -91,7 +101,8 @@ def is_ready(out: Path) -> bool:
         return False
     if _venv_version(out / VENV_FOLDER) != _running_version():
         return False
-    return ready.read_text(encoding="utf-8").strip() == _sha256(wheels[0])
+    expected = ready_stamp(ref, commit, _sha256(wheels[0]))
+    return ready.read_text(encoding="utf-8") == expected
 
 
 def _environment() -> dict[str, str]:
@@ -207,10 +218,10 @@ def build_oracle(ref: str = DEFAULT_REF, out: Path = DEFAULT_OUT) -> Path:
     root = Path.cwd()
     _refuse_links(out)
     python = interpreter(out / VENV_FOLDER).absolute()
-    if is_ready(out):
-        print(f"Found oracle {ref} in {out}", flush=True)
-        return python
     commit = _resolve_ref(ref, root)
+    if is_ready(out, ref, commit):
+        print(f"Found oracle {ref} ({commit[:12]}) in {out}", flush=True)
+        return python
     print(f"Setting up oracle {ref} ({commit[:12]})", flush=True)
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
@@ -222,7 +233,7 @@ def build_oracle(ref: str = DEFAULT_REF, out: Path = DEFAULT_OUT) -> Path:
     finally:
         _remove_worktree(root, worktree)
     _check_version(python, ref, out)
-    (out / READY_FILE).write_text(f"{_sha256(wheel)}\n", encoding="utf-8")
+    (out / READY_FILE).write_text(ready_stamp(ref, commit, _sha256(wheel)), encoding="utf-8")
     return python
 
 

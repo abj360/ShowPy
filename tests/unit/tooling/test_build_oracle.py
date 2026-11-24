@@ -7,8 +7,9 @@ Each test that needs git builds its own repository under tmp_path and points GIT
 
 Contains:
     test_interpreter_follows_the_platform: bin/python on POSIX, Scripts/python.exe on Windows
-    test_ready_oracle_is_reused_without_any_work: no git call when READY matches the wheel
-    test_is_ready_refuses_a_changed_wheel_or_another_python: READY must match both
+    test_ready_oracle_is_reused_without_any_work: no build when READY matches ref, commit, wheel
+    test_regression_ready_oracle_of_another_ref_is_rebuilt: READY of another ref is not reused
+    test_is_ready_refuses_a_changed_wheel_commit_ref_or_python: READY must match all of them
     test_regression_missing_ref_fails_closed: an absent tag exits with an E: line
     test_regression_failed_build_removes_the_worktree: no worktree is left on a build failure
     test_refuses_a_symlinked_parity_folder: the oracle is never built through a symlink
@@ -51,7 +52,10 @@ requires = []
 build-backend = "no_such_backend"
 """
 TAG = "v0.0.1"
+OTHER_REF = "v0.0.0"
+COMMIT = "c" * 40
 RUNNING = f"{sys.version_info.major}.{sys.version_info.minor}"
+ORACLE = Path(".parity", "oracle")
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
 
 
@@ -83,7 +87,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return root
 
 
-def _ready_oracle(out: Path, *, version: str = RUNNING) -> Path:
+def _ready_oracle(out: Path, *, ref: str, commit: str, version: str = RUNNING) -> Path:
     wheel = out / WHEEL_FOLDER / "e8s-0.0.1-py3-none-any.whl"
     wheel.parent.mkdir(parents=True)
     wheel.write_bytes(b"wheel")
@@ -91,7 +95,8 @@ def _ready_oracle(out: Path, *, version: str = RUNNING) -> Path:
     python.parent.mkdir(parents=True)
     python.write_bytes(b"")
     (out / VENV_FOLDER / "pyvenv.cfg").write_text(f"version_info = {version}\n", encoding="utf-8")
-    (out / READY_FILE).write_text(hashlib.sha256(b"wheel").hexdigest() + "\n", encoding="utf-8")
+    stamp = f"ref {ref}\ncommit {commit}\nwheel-sha256 {hashlib.sha256(b'wheel').hexdigest()}\n"
+    (out / READY_FILE).write_text(stamp, encoding="utf-8")
     return python
 
 
@@ -106,39 +111,49 @@ def test_interpreter_follows_the_platform(
     assert interpreter(Path("venv")) == Path("venv", *expected)
 
 
-def test_ready_oracle_is_reused_without_any_work(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("GIT_DIR", str(tmp_path / "no-repository"))
-    python = _ready_oracle(Path(".parity", "oracle"))
-    assert build_oracle("v9.9.9", Path(".parity", "oracle")) == python.absolute()
+@needs_git
+def test_ready_oracle_is_reused_without_any_work(repo: Path) -> None:
+    commit = _git(repo, "rev-parse", f"{TAG}^{{commit}}").strip()
+    python = _ready_oracle(ORACLE, ref=TAG, commit=commit)
+    assert build_oracle(TAG, ORACLE) == python.absolute()
+    assert sorted(path.name for path in (repo / ".parity").iterdir()) == ["oracle"]
 
 
-def test_is_ready_refuses_a_changed_wheel_or_another_python(tmp_path: Path) -> None:
+@needs_git
+def test_regression_ready_oracle_of_another_ref_is_rebuilt(repo: Path) -> None:
+    commit = _git(repo, "rev-parse", f"{TAG}^{{commit}}").strip()
+    _ready_oracle(ORACLE, ref=OTHER_REF, commit=commit)
+    with pytest.raises(SystemExit, match=r"^E: building the wheel failed"):
+        build_oracle(TAG, ORACLE)
+
+
+def test_is_ready_refuses_a_changed_wheel_commit_ref_or_python(tmp_path: Path) -> None:
     out = tmp_path / "oracle"
-    _ready_oracle(out)
-    assert is_ready(out)
-    (out / READY_FILE).write_text("0" * 64 + "\n", encoding="utf-8")
-    assert not is_ready(out)
+    _ready_oracle(out, ref=TAG, commit=COMMIT)
+    assert is_ready(out, TAG, COMMIT)
+    assert not is_ready(out, OTHER_REF, COMMIT)
+    assert not is_ready(out, TAG, "d" * 40)
+    stamp = (out / READY_FILE).read_text(encoding="utf-8")
+    (out / READY_FILE).write_text(stamp.replace("wheel-sha256 ", "wheel-sha256 0"), "utf-8")
+    assert not is_ready(out, TAG, COMMIT)
     other = tmp_path / "other"
-    _ready_oracle(other, version="3.12")
-    assert not is_ready(other)
+    _ready_oracle(other, ref=TAG, commit=COMMIT, version="3.12")
+    assert not is_ready(other, TAG, COMMIT)
 
 
 @needs_git
 def test_regression_missing_ref_fails_closed(repo: Path) -> None:
     with pytest.raises(SystemExit, match=r"^E: ref v9\.9\.9 is not in this repository"):
-        build_oracle("v9.9.9", Path(".parity", "oracle"))
-    assert not (repo / ".parity" / "oracle" / READY_FILE).exists()
+        build_oracle("v9.9.9", ORACLE)
+    assert not (repo / ORACLE / READY_FILE).exists()
 
 
 @needs_git
 def test_regression_failed_build_removes_the_worktree(repo: Path) -> None:
     with pytest.raises(SystemExit, match=r"^E: building the wheel failed"):
-        build_oracle(TAG, Path(".parity", "oracle"))
+        build_oracle(TAG, ORACLE)
     assert sorted(path.name for path in (repo / ".parity").iterdir()) == ["oracle"]
-    assert not (repo / ".parity" / "oracle" / READY_FILE).exists()
+    assert not (repo / ORACLE / READY_FILE).exists()
     assert _git(repo, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
@@ -148,5 +163,5 @@ def test_refuses_a_symlinked_parity_folder(tmp_path: Path, monkeypatch: pytest.M
     (tmp_path / "elsewhere").mkdir()
     (tmp_path / ".parity").symlink_to(tmp_path / "elsewhere")
     with pytest.raises(SystemExit, match="symlink"):
-        build_oracle("v9.9.9", Path(".parity", "oracle"))
+        build_oracle("v9.9.9", ORACLE)
     assert list((tmp_path / "elsewhere").iterdir()) == []
