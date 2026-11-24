@@ -5,7 +5,7 @@ description = "Choreography library: sheets, spots, sets, forms and motion."
 readme = "README.md"
 # The project licence, then the bundled fonts and schemas, then the linked Rust crates' licences.
 license = """PolyForm-Noncommercial-1.0.0 AND MIT AND OFL-1.1 AND LicenseRef-Hershey-Fonts \
-    AND BSD-2-Clause AND Unicode-3.0"""
+    AND BSD-2-Clause"""
 license-files = [
     "LICENSE",
     "e8s/schemas/LICENSE-MIT.txt",

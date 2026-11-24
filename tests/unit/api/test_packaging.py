@@ -108,7 +108,6 @@ LICENSE_EXPRESSION = " AND ".join(
         "OFL-1.1",
         "LicenseRef-Hershey-Fonts",
         "BSD-2-Clause",
-        "Unicode-3.0",
     )
 )
 LICENSE_FILES = {

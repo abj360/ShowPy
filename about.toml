@@ -1,5 +1,5 @@
-# cargo about generate, as scripts/gen_third_party_notices.py runs it. For a crate that offers a
-# choice of licences, the first accepted one in this order is the licence the notice names.
+# cargo about generate --format json, as scripts/gen_third_party_notices.py runs it. For a crate
+# that offers a choice of licences, the first accepted one in this order is the one named.
 accepted = [
     "MIT",
     "Apache-2.0",
@@ -10,7 +10,7 @@ accepted = [
     "Unicode-3.0",
     "Apache-2.0 WITH LLVM-exception",
 ]
-# Build scripts, proc-macro hosts' build dependencies and test-only crates are never linked.
+# Build scripts' and tests' crates are never linked; the script drops proc macros itself.
 ignore-build-dependencies = true
 ignore-dev-dependencies = true
 # Our own crates are unpublished and carry the project licence.
