@@ -14,22 +14,24 @@ Contains:
     test_items_key_transitions_by_set_keys: keys paths, rows and routes by the stored folder
     test_renumber_changes_set_identities_only: keeps placement keys through a renumber
     test_added_and_removed_items_have_no_other_side: leaves the missing side None
-    test_changes_skip_sets_shared_by_identity: dumps only the sets that differ
-    test_items_refuse_*: refuses two stored values that claim one item
+    test_changes_skip_sets_shared_by_identity: dumps only the changed set's placements, nothing else
+    test_set_and_spec_values_match_their_json: reads set and path spec fields as to_json writes them
+    test_changes_refuse_*: refuses two stored values that claim one item
 """
 
 import json
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from typing import get_args
 
 import pytest
 
-from e8s.choreo.models import PlacementPatch, Set
+from e8s.choreo.models import Placement, PlacementPatch, Set
 from e8s.core.errors import SchemaError
 from e8s.core.ids import SetId
 from e8s.core.readonly import freeze_json
 from e8s.core.resources import schema_path
 from e8s.examples import two_set_show
+from e8s.show import items as items_module
 from e8s.show.change_models import ItemKey, ItemKind
 from e8s.show.documents import decode_show, encode_show
 from e8s.show.items import ITEM_TABLE, PLACEMENT_ROLES, SET_ROLES, changes, items
@@ -238,26 +240,53 @@ def test_changes_skip_sets_shared_by_identity(monkeypatch: pytest.MonkeyPatch) -
     show = add_set(two_set_show(), "3", 4.0)
     moved = _move(show, SECOND_SET, "T1", PlacementPatch(y=7.0))
     dumped: list[str] = []
-    original = Set.to_json
+    original = Placement.to_json
 
-    def counting(self: Set) -> dict[str, object]:
-        dumped.append(self.id)
+    def counting(self: Placement) -> dict[str, object]:
+        dumped.append(self.entity)
         return dict(original(self))
 
-    monkeypatch.setattr(Set, "to_json", counting)
+    def refuse(_: object) -> None:
+        raise AssertionError
+
+    monkeypatch.setattr(Placement, "to_json", counting)
+    monkeypatch.setattr(Set, "to_json", refuse)
+    monkeypatch.setattr(items_module, "require_storable", refuse)
     assert len(changes(show, moved).changes) == 1
-    assert sorted(dumped) == ["2", "2"]
+    assert sorted(dumped) == sorted(2 * [p.entity for p in show.sets[SECOND_SET].placements])
 
 
-def test_items_refuse_two_pins_of_one_target() -> None:
+@pytest.mark.parametrize("show", [two_set_show(), rich_show()])
+def test_set_and_spec_values_match_their_json(show: Show) -> None:
+    found = items(show)
+    for current in show.sets:
+        fields = [v for k, v in found.items() if k.kind == "set" and k.path == (current.key,)]
+        merged = {
+            name: value for part in fields if isinstance(part, dict) for name, value in part.items()
+        }
+        assert merged == _without(current.to_json(), "key", "placements")
+    for spec in show.transitions:
+        (value,) = [v for k, v in found.items() if k.kind == "transition"]
+        assert value == _without(spec.to_json(), "id", "rows", "routes")
+
+
+def _without(dumped: Mapping[str, object], *names: str) -> dict[str, object]:
+    return {name: value for name, value in dumped.items() if name not in names}
+
+
+def test_changes_refuse_two_pins_of_one_target() -> None:
     show = _pinned_rich_show()
     twice = show.replace(pins=(*show.pins, Pin(target="entity", id="T1", reason="again")))
     with pytest.raises(SchemaError, match="repeats a pin"):
         items(twice)
+    with pytest.raises(SchemaError, match="entity/T1"):
+        changes(show, twice)
 
 
-def test_items_refuse_two_paths_for_one_transition() -> None:
+def test_changes_refuse_two_paths_for_one_transition() -> None:
     show = rich_show()
     twice = show.replace(transitions=(*show.transitions, *show.transitions))
     with pytest.raises(SchemaError, match="path spec"):
+        items(twice)
+    with pytest.raises(SchemaError, match="1-2"):
         changes(two_set_show(), twice)

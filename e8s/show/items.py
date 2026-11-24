@@ -24,8 +24,9 @@ Key rules (kind, path: value):
         configures the whole show's labels and has no kind of its own
 
 Values are the item's `to_json()` fields without the identity fields its path holds. Notes and
-proposals are stored beside the show, not in it, so they hold no items. A show the stored layout
-cannot hold, or two stored values that claim one item, is refused with SchemaError.
+proposals are stored beside the show, not in it, so they hold no items. `items` refuses a show the
+stored layout cannot hold; both functions refuse two stored values that claim one item, with
+SchemaError.
 
 Stated limit: facing overrides carry no ID, so all of them are one item, and edits to two
 different overrides conflict. Finer keys need an override ID, which is a format change.
@@ -177,21 +178,39 @@ def _unique[T](kind: ItemKind, pairs: Iterable[tuple[_Path, T]]) -> dict[_Path, 
     return found
 
 
+def _set_values(current: Set) -> dict[str, JsonValue]:
+    """Reads a set's own stored fields as their JSON values, leaving its placements unread."""
+    return {
+        ID_FIELD: current.id,
+        "counts": current.counts,
+        "label": current.label,
+        "cue": current.cue,
+        "source_hash": current.source_hash,
+        "state": current.state.value,
+        "forms": list(current.forms),
+    }
+
+
+def _transition_values(spec: TransitionSpec) -> dict[str, JsonValue]:
+    """Reads a path spec's own stored fields as their JSON values, leaving its rows unread."""
+    return {"counts": spec.counts, "notes": spec.notes, "source_hash": spec.source_hash}
+
+
 def _set_entries(path: _Path, current: Set) -> Iterator[_Entry]:
     (key,) = path
     for placement in current.placements:
         dumped = placement.to_json()
         for role, fields in PLACEMENT_ROLES:
             yield ("placement", (key, placement.entity), role), _picked(dumped, fields)
-    dumped = current.to_json()
-    yield ("set", path, None), {ID_FIELD: dumped[ID_FIELD]}
+    values = _set_values(current)
+    yield ("set", path, None), {ID_FIELD: values[ID_FIELD]}
     for role, fields in SET_ROLES:
-        yield ("set", path, role), _picked(dumped, fields)
+        yield ("set", path, role), _picked(values, fields)
 
 
 def _transition_entries(path: _Path, spec: TransitionSpec) -> Iterator[_Entry]:
     (key,) = path
-    yield ("transition", path, None), _picked(spec.to_json(), TRANSITION_FIELDS)
+    yield ("transition", path, None), _picked(_transition_values(spec), TRANSITION_FIELDS)
     for entity, row in spec.rows.items():
         yield ("path_row", (key, entity), None), _without(row.to_json(), ENTITY_FIELD)
     for route_id, route in spec.routes.items():
@@ -249,7 +268,10 @@ def _show_entries(path: _Path, show: Show) -> Iterator[_Entry]:
 
 def _transitions(show: Show) -> dict[_Path, TransitionSpec]:
     keys = {current.id: set_key(current) for current in show.sets}
-    folders = ((transition_folder((keys[s.id[0]], keys[s.id[1]])), s) for s in show.transitions)
+    folders = (
+        (transition_folder((keys.get(s.id[0], s.id[0]), keys.get(s.id[1], s.id[1]))), s)
+        for s in show.transitions
+    )
     return _unique("transition", (((folder,), spec) for folder, spec in folders))
 
 
@@ -355,12 +377,13 @@ def changes(before: Show, after: Show) -> ChangeSet:
     """Lists the items two shows differ in, comparing JSON values item by item.
 
     Sets, forms, transitions and other objects the two shows share by identity are skipped
-    unread, so the cost follows what changed. An added item has no `before`, a removed one no
-    `after`.
+    unread, and no whole-show check runs, so the cost follows what changed. Two stored values
+    that claim one item still raise SchemaError. An added item has no `before`, a removed one
+    no `after`.
 
     Args:
-        before: The older show; it must be storable.
-        after: The newer show; it must be storable.
+        before: The older show.
+        after: The newer show.
 
     Returns:
         change_set: One change per differing item, in key order.
@@ -372,8 +395,6 @@ def changes(before: Show, after: Show) -> ChangeSet:
     >>> [c.key.role for c in changes(show, show.replace(sets=(show.sets[0], moved))).changes]
     ['drill']
     """
-    require_storable(before)
-    require_storable(after)
     found = sorted(
         (diff for area in AREAS for diff in area.differences(before, after)),
         key=lambda diff: _sort_key(diff[0]),
