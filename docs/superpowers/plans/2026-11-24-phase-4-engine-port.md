@@ -102,6 +102,11 @@ measures,validate}`, `e8s.cast.select` and `e8s.choreo.engine`. Recommendation: 
 - **Never slower.** Every case the parity harness times must run no slower in the core than in
   the v0.4.0 oracle (`nox -s parity -- <area> --speed`, minimum of 7 runs each). Compiled
   values (clocks, plans, curve tables) are cached beside their frozen part.
+  - **Note (2026-11-24, controller):** the rule is "not measurably slower". A port fails when
+    its best-of-5 core/oracle ratio exceeds `SPEED_NOISE_RATIO = 1.05`
+    (`tests/parity/compare.py`). The margin comes from the measured spread of the same Python
+    code on both sides: 1.037, 1.008, 1.009, 1.008 and 1.017 from single launches, and 0.990,
+    0.982 and 1.007 as the best of 5 alternating launches. CI runs no `--speed`.
 - **Float rules (ADR 0025 decision 8):** `libm =0.2.16` for every transcendental; no `mul_add`;
   `libm::fma` only as a correctly rounded error-free transform; fixed order, no parallel
   reductions; `u ** 2.0` is `u * u`; `np.interp`'s formula and edge rules, not its arm64 FMA;
@@ -520,11 +525,23 @@ False)`; `Output = npt.NDArray[np.float64] | npt.NDArray[np.int64] | JsonValue`;
 - `nox -s parity -- <area> [--speed] [--digest PATH]`: builds the oracle, runs both sides,
   prints the table, fails on a gate; `--speed` also fails when a timed case's core minimum
   exceeds its oracle minimum; `--digest` writes the SHA-256 of every core output.
+  - **Note (2026-11-24, controller):** `--speed` times each side as the best of 5 alternating
+    launches (minimum of 7 runs each) and fails a case only when the core minimum exceeds the
+    oracle minimum times `SPEED_NOISE_RATIO = 1.05`; see "Never slower".
 - `flipped.toml`: `[[case]] name = "...", ledger = "UP-..."`; such a case is compared against
   the fixed behaviour its ledger test asserts, not against the oracle.
 - CI: `parity` runs on the 6 `check` cells for every pull request that touches `e8s/` or
   Rust, under hash seeds 0, 1 and 2, uploads the digests; `parity-compare` fails unless all 18
   digests are equal.
+  - **Note (2026-11-24, controller):** on PR #92, Windows and Linux digests differed on
+    `time.clock_on_200_seeded_timelines/val:seconds` and `val:counts_back`. Today's Python clock
+    takes its last bits from each platform's C math library, and cross-platform identity is a
+    port exit goal. Each cell still compares its working tree with its own same-platform
+    oracle. `--digest` writes the digests of the areas in `PORTED_AREAS`
+    (`tests/parity/run.py`, empty until lane T adds `time`) to the gated file and every area's
+    to a `.all` file beside it. `parity-compare` runs `scripts/compare_parity_digests.py`: it
+    fails unless 18 files of each kind arrive and the ported digests are equal, and prints the
+    keys that differ in the other areas without failing.
 
 - [ ] **Step 1:** Write `test_parity_compare.py::test_compare_counts_bit_identical_values_and_ulps`,
       `test_compare_flags_a_position_past_the_gate` (1.1e-9 m fails),

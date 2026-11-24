@@ -1,0 +1,5 @@
+# The build requirements of the v0.4.0 oracle wheel: its pyproject.toml's build-system.requires.
+# scripts/oracle_build.txt pins them and their dependencies with hashes; regenerate it with the
+# command in its header.
+hatchling==1.33.0
+hatch-vcs==0.5.0

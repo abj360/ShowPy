@@ -23,6 +23,8 @@ Contains:
     wheels: builds the sdist and a dist-profile wheel from it, refuses an rpath or a linked
         libpython in its extension, then runs the ported packages' tests against that wheel in
         fresh venvs on each supported Python
+    parity: compares the working tree's case outputs with a v0.4.0 oracle built into .parity/,
+        failing on a gate; `--speed` also fails a timed case that is slower than the oracle
     bench: runs the budget benchmarks; at tier M fails on a >20% min-time regression
     api_changes: checks that each commit since the last release names the API names it changes
     changelog: regenerates CHANGELOG.md with git-cliff and formats it with Prettier at release time
@@ -139,6 +141,9 @@ assert "site-packages" in e8s._core.__file__, e8s._core.__file__
 assert e8s._core.__version__ == e8s.__version__, e8s._core.__version__
 print("Found e8s", e8s.__version__)
 """
+
+PARITY_MODULE = "tests.parity.run"
+PARITY_USAGE = "usage: nox -s parity -- <area>|all [--speed] [--digest PATH]"
 
 BENCH_PATH = "tests/bench"
 BENCH_BASELINE = "tests/bench/baseline-2026-11-13.json"
@@ -574,6 +579,23 @@ def rust(session: nox.Session) -> None:
     session.run(_cargo_tool(CARGO_DENY), "--locked", "check", external=True)
     _uv_run(session, "python", NOTICES_SCRIPT, "--check")
     _uv_run(session, "pytest", "-m", CARGO_TOOLS_MARK, CARGO_TOOLS_TESTS)
+
+
+@nox.session
+def parity(session: nox.Session) -> None:
+    """Compares the working tree with the v0.4.0 oracle: `nox -s parity -- <area> [--speed]`.
+
+    Builds the oracle's venv into .parity/ once (reused while its READY stamp matches), runs the
+    area's cases under both interpreters, prints the table and fails on any gate. `--digest
+    PATH` writes the SHA-256 of every core output. Runs under PYTHONHASHSEED 0 unless one is
+    set. Not a default session: the first run builds the oracle.
+    """
+    if not session.posargs:
+        session.error(PARITY_USAGE)
+    _require_same_python(session)
+    if "PYTHONHASHSEED" not in os.environ:
+        session.env["PYTHONHASHSEED"] = DEFAULT_HASH_SEED
+    _uv_run(session, "python", "-m", PARITY_MODULE, *session.posargs)
 
 
 def _tier(posargs: list[str]) -> str:

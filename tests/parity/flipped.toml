@@ -1,0 +1,13 @@
+# Cases whose v0.4.0 output was a ledger defect the working tree fixed. Each is compared with
+# the fixed outputs in `expect` (gated keys hold float lists, other keys JSON values), never
+# with the oracle. Add an entry in the commit that flips the ledger test, and only for a case
+# that a tests/parity/cases_<area>.py defines; the loader refuses any other name.
+#
+# [[case]]
+# name = "<area>.<case>"
+# ledger = "UP-<section>-<nn>"
+# expect = { "<key>" = <value> }
+#
+# UP-9.1-17 and UP-9.1-18 were flipped in L0.4 (commit c56df2b1, `is_similarity` judges with a
+# scale-relative tolerance) before any geo parity case existed. Lane G lists its
+# `is_similarity` cases here with those two ledger IDs.

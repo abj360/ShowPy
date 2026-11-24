@@ -151,7 +151,7 @@ addopts = [
     "--strict-markers",
     "--import-mode=importlib",
     "-m",
-    "not bench and not slow and not fuzz and not cargo_tools",
+    "not bench and not slow and not fuzz and not cargo_tools and not parity",
 ]
 markers = [
     "golden: replays real shows against reviewed fixtures",
@@ -161,6 +161,7 @@ markers = [
     "slow: generated-show properties and the large golden; run with nox -s slow",
     "timing: asserts on wall-clock time; nox -s slow runs these without pytest-xdist workers",
     "cargo_tools: needs the cargo tools nox -s rust installs; run with nox -s rust",
+    "parity: compares the working tree with the v0.4.0 oracle; run with nox -s parity",
 ]
 filterwarnings = ["error"]
 # A test still running after this many seconds dumps every thread's stack, so a CI hang
