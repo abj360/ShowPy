@@ -1,0 +1,78 @@
+name: nightly-core
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Fuzzes every core parser for 10 minutes, then records the Rust and Python mutation scores.
+  # A crash fails the run and its input is uploaded; a mutation score never fails it. Every
+  # cache is saved only from main, where the schedule runs: a dispatch on another branch must
+  # not plant code or tools that main later restores and runs. The cargo tools are cached under
+  # a key naming the toolchain pin and the versions of the tools these sessions install.
+  core:
+    name: fuzz and mutation scores
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Read the pinned cargo tool versions
+        id: pins
+        run: >-
+          echo "versions=$(grep -hE '^(channel|CARGO_(FUZZ|MUTANTS)_VERSION) = '
+          rust-toolchain.toml noxfile.py | cut -d '"' -f 2 | paste -s -d '-' -)" >>
+          "$GITHUB_OUTPUT"
+      - id: restore-cargo-tools
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cargo-tools
+          key: >-
+            nightly-core-cargo-tools-${{ runner.os }}-${{ runner.arch }}-${{
+            steps.pins.outputs.versions }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.8"
+          enable-cache: true
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
+      - name: Fuzz each core parser for 10 minutes
+        run: uv run --locked nox -s rustfuzz -- --seconds 600
+      - name: Record the mutation scores
+        if: ${{ !cancelled() }}
+        run: uv run --locked nox -s mutants
+      - name: Upload the crash inputs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts/
+          if-no-files-found: ignore
+      - name: Upload the mutation summary
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutants-summary
+          path: |
+            mutants-summary.json
+            mutants.out/
+          if-no-files-found: warn
+      - if: >-
+          github.ref == 'refs/heads/main' && steps.restore-cargo-tools.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cargo-tools
+          key: ${{ steps.restore-cargo-tools.outputs.cache-primary-key }}
