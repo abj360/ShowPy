@@ -1,6 +1,6 @@
 # ADR 0015: Repository layout v2
 
-- Status: Proposed
+- Status: Accepted (2026-11-24)
 - Date: 2026-11-24
 - Deciders: the maintainer (abj360)
 
@@ -338,6 +338,8 @@ problem it closes.
     every entry as `fsck` would and refuses a show ID that exists. Decision needed D9.
 
 ### Decisions needed
+
+Accepted by the maintainer on 2026-11-24: D1 to D10 as recommended below.
 
 Each line: the question, the recommendation, and the cost if the recommendation is wrong.
 

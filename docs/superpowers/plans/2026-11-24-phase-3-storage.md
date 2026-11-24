@@ -23,7 +23,7 @@ exit criteria and prepares v0.5.0.
 nox, ruff, mypy `--strict`, pyright basic, pytest, Hypothesis (stateful machines), pytest-xdist,
 pytest-benchmark, HypoFuzz (nightly only), Prettier 3.6.2, GitHub Actions.
 
-**Spec:** ADR 0015 (`docs/adr/0015-repository-layout-v2.md`, Proposed 2026-11-24), with ADRs 0003,
+**Spec:** ADR 0015 (`docs/adr/0015-repository-layout-v2.md`, Accepted 2026-11-24), with ADRs 0003,
 0004, 0006, 0007, 0014, 0016, 0021, 0023 and 0026. Audit `docs/upgrade-plan.md` section 9.7 and
 section 10 "Phase 3" (read only). Phase 2 plan `docs/superpowers/plans/2026-11-18-phase-2-foundations.md`,
 Appendix A (deferred review items) and Appendix B (ledger IDs given to Phase 3).
@@ -44,7 +44,7 @@ Where the audit and the code disagree, this plan follows the code (`main` at `a6
 
 ## Decisions needed
 
-ADR 0015 lists D1 to D10 with recommendations and costs; this plan assumes each recommendation.
+ADR 0015 lists D1 to D10 with recommendations and costs; this plan assumes each recommendation. The maintainer accepted D1 to D10 and P1 to P3 as recommended on 2026-11-24.
 Three more belong to the plan:
 
 - **P1. `add_set(before=)` counts.** Recommendation: `counts` always times the move the insertion
