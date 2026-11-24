@@ -110,6 +110,11 @@ from e8s.show.history_models import Revision
 from e8s.show.migrate import DroppedFields, MigrationReport
 from e8s.show.models import Pin
 from e8s.show.set_queries import index
+from e8s.show.storage_models import (
+    FsckFinding,
+    FsckReport,
+    GcReport,
+)
 from e8s.time.measures import count_to_measure
 from e8s.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting
 from e8s.time.timeline import set_measures
@@ -311,6 +316,9 @@ def _storage_examples() -> list[FrozenModel]:
         MergeConflict(key=key, reason="both moved the spot"),
         MergeResult(show=two_set_show()),
         IdChanges(),
+        FsckFinding(code="MISSING_BLOB", path="blobs/ab", message="blob is gone"),
+        FsckReport(ok=True),
+        GcReport(),
     ]
 
 

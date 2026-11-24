@@ -536,12 +536,32 @@
   "FrozenModel": {
     "model": {}
   },
+  "FsckFinding": {
+    "model": {
+      "code": "str",
+      "message": "str",
+      "path": "str"
+    }
+  },
+  "FsckReport": {
+    "model": {
+      "findings": "tuple[e8s.show.storage_models.FsckFinding, ...]",
+      "ok": "bool"
+    }
+  },
   "GapInfo": {
     "model": {
       "a": "e8s.core.ids.SpotId",
       "b": "e8s.core.ids.SpotId",
       "gap": "Finite",
       "tau": "float"
+    }
+  },
+  "GcReport": {
+    "model": {
+      "bytes_freed": "Count",
+      "dry_run": "bool",
+      "removed": "tuple[str, ...]"
     }
   },
   "GeneratedRecipe": {

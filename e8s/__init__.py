@@ -723,6 +723,11 @@ if TYPE_CHECKING:
         AssetStore,
         Repository,
     )
+    from e8s.show.storage_models import (
+        FsckFinding,
+        FsckReport,
+        GcReport,
+    )
     from e8s.show.validate import (
         validate_dependencies,
         validate_paths,
@@ -850,7 +855,10 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "FormOp": ("e8s.show.collab_models", "FormOp"),
     "Frame": ("e8s.choreo.engine_models", "Frame"),
     "FrozenModel": ("e8s.core.types", "FrozenModel"),
+    "FsckFinding": ("e8s.show.storage_models", "FsckFinding"),
+    "FsckReport": ("e8s.show.storage_models", "FsckReport"),
     "GapInfo": ("e8s.choreo.engine_models", "GapInfo"),
+    "GcReport": ("e8s.show.storage_models", "GcReport"),
     "GeneratedRecipe": ("e8s.choreo.recipe_models", "GeneratedRecipe"),
     "GeometryError": ("e8s.core.errors", "GeometryError"),
     "GlyphError": ("e8s.core.errors", "GlyphError"),
@@ -1442,7 +1450,10 @@ __all__ = [
     "FormOp",
     "Frame",
     "FrozenModel",
+    "FsckFinding",
+    "FsckReport",
     "GapInfo",
+    "GcReport",
     "GeneratedRecipe",
     "GeometryError",
     "GlyphError",
