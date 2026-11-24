@@ -113,10 +113,14 @@ def _create_in_place(path: Path, data: bytes) -> None:
         descriptor = os.open(path, CREATE_FLAGS, ASSET_FILE_MODE)
     except FileExistsError:
         return
-    with os.fdopen(descriptor, "wb") as handle:
-        handle.write(data)
-        handle.flush()
-        os.fsync(handle.fileno())
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except BaseException:
+        path.unlink(missing_ok=True)
+        raise
 
 
 def _lacks_hard_links(error: OSError) -> bool:
@@ -190,6 +194,9 @@ class FileAssetStore:
 
     def put(self, data: bytes) -> str:
         """Stores bytes and returns their URI; equal bytes give the same URI.
+
+        An existing file of the right name is not re-verified: `get` reports a torn one as
+        `CORRUPT`, and its hint says to remove the file and store the asset again.
 
         Args:
             data: Exact bytes of the asset.

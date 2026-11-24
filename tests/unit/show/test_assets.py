@@ -15,6 +15,7 @@ Contains:
     test_put_falls_back_without_hard_links: EPERM from os.link uses an exclusive create
     test_put_maps_os_errors_to_storage_error: an OS failure becomes StorageError with IO
     test_put_refuses_oversized_asset: bytes over the cap raise TOO_LARGE
+    test_regression_failed_in_place_write_leaves_no_torn_file: a failed write is removed
 """
 
 import errno
@@ -122,3 +123,32 @@ def test_put_refuses_oversized_asset(tmp_path: Path, monkeypatch: pytest.MonkeyP
         FileAssetStore(tmp_path).put(b"12345")
     assert raised.value.code == ErrorCode.TOO_LARGE
     assert not (tmp_path / "assets").exists()
+
+
+def test_regression_failed_in_place_write_leaves_no_torn_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse_link(*_args: object, **_kwargs: object) -> None:
+        raise PermissionError(errno.EPERM, "no links")
+
+    real_fsync = os.fsync
+    failures = {"left": 1}
+
+    def failing_fsync(descriptor: int) -> None:
+        if failures["left"] and not (tmp_path / "assets" / blob_digest(b"torn")).exists():
+            real_fsync(descriptor)
+            return
+        if failures["left"]:
+            failures["left"] -= 1
+            raise OSError(errno.ENOSPC, "disk full")
+        real_fsync(descriptor)
+
+    monkeypatch.setattr(os, "link", refuse_link)
+    store = FileAssetStore(tmp_path)
+    monkeypatch.setattr(os, "fsync", failing_fsync)
+    with pytest.raises(StorageError) as raised:
+        store.put(b"torn")
+    assert raised.value.code == ErrorCode.IO
+    assert not (tmp_path / "assets" / blob_digest(b"torn")).exists()
+    uri = store.put(b"torn")
+    assert store.get(uri) == b"torn"
