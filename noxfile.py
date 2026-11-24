@@ -43,9 +43,11 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import nox
+from nox.command import CommandFailed
 
 PRETTIER_GLOB = "**/*.{md,yml,yaml,json}"
 HASH_SEEDS = ("1", "2")
@@ -122,6 +124,8 @@ CARGO_MUTANTS_VERSION = "27.1.0"
 CARGO_MUTANTS_VERSION_ARGS = ("mutants", "--version")
 # cargo-fuzz needs a nightly compiler for its sanitizer flags; a dated one keeps runs repeatable.
 FUZZ_TOOLCHAIN = "nightly-2026-11-20"
+# rustup picks this toolchain over rust-toolchain.toml's pin for every cargo and rustc call.
+FUZZ_ENV = {"RUSTUP_TOOLCHAIN": FUZZ_TOOLCHAIN}
 FUZZ_DIR = "fuzz"
 FUZZ_MANIFEST = "fuzz/Cargo.toml"
 FUZZ_TARGETS = ("refs", "strict_json", "svg_path", "font", "selection", "timeline")
@@ -653,14 +657,44 @@ def _fuzz_plan(posargs: list[str]) -> tuple[tuple[str, ...], str]:
     return (tuple(rest) or FUZZ_TARGETS), seconds
 
 
+def _fuzz_targets(run: Callable[..., object], targets: Sequence[str], seconds: str) -> list[str]:
+    """Runs each fuzz target in turn, going on to the next after one fails.
+
+    Args:
+        run: The session's run, which raises CommandFailed when a command fails.
+        targets: The fuzz targets to run.
+        seconds: How long libFuzzer runs each target.
+
+    Returns:
+        failed: The targets whose run failed, such as on a crash, in run order.
+    """
+    failed: list[str] = []
+    for target in targets:
+        try:
+            run(
+                _cargo_tool(CARGO_FUZZ),
+                "run",
+                target,
+                "--fuzz-dir",
+                FUZZ_DIR,
+                "--",
+                f"-max_total_time={seconds}",
+                external=True,
+                env=FUZZ_ENV,
+            )
+        except CommandFailed:
+            failed.append(target)
+    return failed
+
+
 @nox.session
 def rustfuzz(session: nox.Session) -> None:
     """Fuzzes the core's parsers: `nox -s rustfuzz -- [target] [--seconds N]`.
 
     Installs FUZZ_TOOLCHAIN and cargo-fuzz, refuses a stale fuzz/Cargo.lock, then runs each
-    target, or the one named, for N seconds (FUZZ_SECONDS by default). A crash fails the session
-    and leaves its input under fuzz/artifacts/. Not a default session: it runs on demand and in
-    the nightly core workflow.
+    target, or the one named, for N seconds (FUZZ_SECONDS by default). A crash leaves its input
+    under fuzz/artifacts/ and the next target still runs; the session then fails, naming every
+    failed target. Not a default session: it runs on demand and in the nightly core workflow.
     """
     try:
         targets, seconds = _fuzz_plan(session.posargs)
@@ -670,21 +704,13 @@ def rustfuzz(session: nox.Session) -> None:
         "rustup", "toolchain", "install", FUZZ_TOOLCHAIN, "--profile", "minimal", external=True
     )
     _install_cargo_tool(session, CARGO_FUZZ, CARGO_FUZZ_VERSION)
-    nightly = {"RUSTUP_TOOLCHAIN": FUZZ_TOOLCHAIN}
     session.run(
-        "cargo", "fetch", "--locked", "--manifest-path", FUZZ_MANIFEST, external=True, env=nightly
+        "cargo", "fetch", "--locked", "--manifest-path", FUZZ_MANIFEST, external=True, env=FUZZ_ENV
     )
-    for target in targets:
-        session.run(
-            _cargo_tool(CARGO_FUZZ),
-            "run",
-            target,
-            "--fuzz-dir",
-            FUZZ_DIR,
-            "--",
-            f"-max_total_time={seconds}",
-            external=True,
-            env=nightly,
+    failed = _fuzz_targets(session.run, targets, seconds)
+    if failed:
+        session.error(
+            f"fuzz targets failed: {', '.join(failed)}; inputs under {FUZZ_DIR}/artifacts/"
         )
 
 

@@ -14,6 +14,8 @@ Contains:
     test_regression_rust_session_refuses_a_stale_fuzz_lock: the stable gate fails on a fuzz
         lock that a core change left behind, and checks the fuzz crate's advisories, bans and
         sources but not its licences
+    test_regression_rustfuzz_runs_every_target_after_a_crash: one crashing target never stops
+        the others; the session fails after all ran, naming each failed target
     test_fuzz_plan_reads_a_target_and_the_seconds: every target for FUZZ_SECONDS by default
     test_fuzz_plan_refuses_unknown_arguments: an unknown target or a bad count is refused
     test_mutants_session_reports_without_gating: missed mutants still exit 0 with a summary
@@ -35,8 +37,9 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from nox.command import CommandFailed
 
-from noxfile import _fuzz_plan
+from noxfile import _fuzz_plan, _fuzz_targets
 from scripts.run_mutants import CANNOT_RUN, NO_KEPT_MODULES, SCORED, SUMMARY, record_scores
 from tests.unit.tooling.test_noxfile import (
     CARGO_TOOLS_ROOT,
@@ -78,15 +81,15 @@ RUSTFUZZ_CALLS = [
     ),
     (
         "session.run('cargo', 'fetch', '--locked', '--manifest-path', FUZZ_MANIFEST, "
-        "external=True, env=nightly)"
-    ),
-    (
-        "session.run(_cargo_tool(CARGO_FUZZ), 'run', target, '--fuzz-dir', FUZZ_DIR, '--', "
-        "f'-max_total_time={seconds}', external=True, env=nightly)"
+        "external=True, env=FUZZ_ENV)"
     ),
 ]
-NIGHTLY_ENV = "nightly = {'RUSTUP_TOOLCHAIN': FUZZ_TOOLCHAIN}"
-TARGET_LOOP = "for target in targets:"
+FUZZ_RUN = (
+    "run(_cargo_tool(CARGO_FUZZ), 'run', target, '--fuzz-dir', FUZZ_DIR, '--', "
+    "f'-max_total_time={seconds}', external=True, env=FUZZ_ENV)"
+)
+EVERY_TARGET = "failed = _fuzz_targets(session.run, targets, seconds)"
+CRASHING_TARGETS = ("refs", "font")
 DEFAULT_SESSIONS = "nox.options.sessions"
 NIGHTLY_WORKFLOW = ROOT / ".github" / "workflows" / "nightly-core.yml"
 NIGHTLY_TRIGGERS = 'on:\n  schedule:\n    - cron: "17 4 * * *"\n  workflow_dispatch:\n'
@@ -185,9 +188,25 @@ def test_rustfuzz_session_runs_each_target_on_the_pinned_nightly() -> None:
         source, RUSTFUZZ_SESSION
     )
     assert session_calls(source, RUSTFUZZ_SESSION) == RUSTFUZZ_CALLS
+    assert "FUZZ_ENV = {'RUSTUP_TOOLCHAIN': FUZZ_TOOLCHAIN}" in ast.unparse(ast.parse(source))
+    assert FUZZ_RUN in function_source(source, "_fuzz_targets")
     body = function_source(source, RUSTFUZZ_SESSION)
-    assert NIGHTLY_ENV in body
-    assert TARGET_LOOP in body
+    assert EVERY_TARGET in body
+    assert "session.error(" in body
+
+
+def test_regression_rustfuzz_runs_every_target_after_a_crash() -> None:
+    started: list[str] = []
+
+    def run(*args: str, **kwargs: object) -> None:
+        assert kwargs["env"] == {"RUSTUP_TOOLCHAIN": module_constant(source, "FUZZ_TOOLCHAIN")}
+        started.append(args[2])
+        if args[2] in CRASHING_TARGETS:
+            raise CommandFailed(f"{args[2]} crashed")
+
+    source = NOXFILE.read_text(encoding="utf-8")
+    assert _fuzz_targets(run, FUZZ_TARGETS, "5") == list(CRASHING_TARGETS)
+    assert started == list(FUZZ_TARGETS)
 
 
 def test_regression_rust_session_refuses_a_stale_fuzz_lock() -> None:
