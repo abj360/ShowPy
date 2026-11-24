@@ -216,8 +216,10 @@ class Proposal(FrozenModel):
         change: Ops applied in order when accepted.
         note: Why the agent suggests it.
         state: open, accepted, rejected or withdrawn.
-        reason: Why it was rejected.
-        accepted_revision: Revision that holds the accepted change; empty until accepted.
+        reason: Why it was rejected; empty in every other state.
+        accepted_revision: Head revision the change was applied onto, which is the parent of
+            the revision that accepted it, because a revision cannot name itself; empty unless
+            the state is accepted.
     """
 
     id: str
@@ -227,6 +229,24 @@ class Proposal(FrozenModel):
     state: ProposalState = "open"
     reason: str = ""
     accepted_revision: str = ""
+
+    @model_validator(mode="after")
+    def _require_fields_of_state(self) -> "Proposal":
+        if bool(self.accepted_revision) != (self.state == "accepted"):
+            raise SchemaError(
+                f"proposal {self.id} is {self.state} with accepted_revision "
+                f"{self.accepted_revision!r}",
+                hint="set accepted_revision when the state is accepted and leave it empty "
+                "in every other state",
+                context={"proposal": self.id},
+            )
+        if self.reason and self.state != "rejected":
+            raise SchemaError(
+                f"proposal {self.id} is {self.state} but has a reason",
+                hint="set reason only when the state is rejected",
+                context={"proposal": self.id},
+            )
+        return self
 
 
 class ProposalPreview(FrozenModel):
