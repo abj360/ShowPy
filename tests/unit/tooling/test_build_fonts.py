@@ -27,7 +27,7 @@ import pytest
 
 from e8s.core.resources import schema_path
 
-SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "build_fonts.py"
+SCRIPT_PATH = Path(__file__).resolve().parents[3] / "scripts" / "build_fonts.py"
 
 
 def _load_script() -> ModuleType:

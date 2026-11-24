@@ -71,7 +71,7 @@ Exception: `e8s/examples/__init__.py` re-exports its names, so `from e8s.example
 
 - **Module headers** follow the user-level `~/.claude/CLAUDE.md`, except that library modules under `e8s/` have no shebang; scripts and tests keep it (shebang, blank line). The module docstring's first line is `<filename> --- <role>` and its index section is titled `Contains:` (never `Args:`), one verb-first line per exported item.
 - **Public functions** need full type hints and a docstring with a runnable `>>>` example; examples import `e8s.examples`, never the `tests/` folder. Once `e8s.index` exists, they also need `@api(category=..., panel=...)`.
-- **New public names** go in `e8s/_api_table.py`. Run `uv run python scripts/gen_public_api.py` to regenerate `e8s/__init__.py`; never edit that file by hand. Refresh the snapshot with `E8S_UPDATE_API=1 uv run pytest tests/unit/test_api_snapshot.py`. Commit the refreshed snapshot with the change. A commit that changes the snapshot must name each added, removed or changed public name backticked in its subject or a `BREAKING CHANGE:` footer; `uv run nox -s api-changes` checks every commit since the last release tag (CI and pre-push). Never edit `CHANGELOG.md` in a change commit: `nox -s changelog` generates it from commit messages at release time.
+- **New public names** go in `e8s/_api_table.py`. Run `uv run python scripts/gen_public_api.py` to regenerate `e8s/__init__.py`; never edit that file by hand. Refresh the snapshot with `E8S_UPDATE_API=1 uv run pytest tests/unit/api/test_api_snapshot.py`. Commit the refreshed snapshot with the change. A commit that changes the snapshot must name each added, removed or changed public name backticked in its subject or a `BREAKING CHANGE:` footer; `uv run nox -s api-changes` checks every commit since the last release tag (CI and pre-push). Never edit `CHANGELOG.md` in a change commit: `nox -s changelog` generates it from commit messages at release time.
 - **New data classes** go in the package's `models.py` and must be JSON-serializable; regenerate `e8s/schemas/` with `E8S_UPDATE_SCHEMA=1 uv run pytest tests/unit/show/test_schema.py` and bump the schema version if a stored model changes incompatibly.
 - **Coordinates in field language** (e.g. "2 outside the 35") belong in the pack's `PositionLanguage`, never in core modules.
 - Docstrings and comments never cite ADRs, docs or ledger IDs; state the rule itself.
@@ -81,7 +81,7 @@ Exception: `e8s/examples/__init__.py` re-exports its names, so `from e8s.example
 ## Tests
 
 - Every bug fix starts with a failing test named `test_regression_...`.
-- `tests/unit/` mirrors `e8s/`. `tests/property/` uses Hypothesis for invariants (spacing is even, 360° rotation is identity, paths end on targets, count↔seconds round-trips).
+- `tests/unit/` mirrors `e8s/`; tests that span the library sit in purpose folders: `api/`, `rules/`, `tooling/` (repo scripts and CI) and `harness/` (the suite's own machinery). `tests/property/` uses Hypothesis for invariants (spacing is even, 360° rotation is identity, paths end on targets, count↔seconds round-trips).
 - `tests/golden/` replays real marchable shows; a diff in output requires a human-reviewed fixture update (`E8S_UPDATE_GOLDEN=1`).
 - Numeric comparisons use `approx_equal` with explicit tolerances.
 - Run every gate with `set -o pipefail`; piping pytest into `tail` hides failures otherwise.

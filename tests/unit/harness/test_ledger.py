@@ -45,7 +45,7 @@ import pytest
 
 pytest_plugins = ["pytester"]
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 TESTS_ROOT = PROJECT_ROOT / "tests"
 PRIORITY_ZERO_CITATION = re.compile(r"P0 #(\d+)")
 PRIORITY_ZERO_ITEMS = frozenset(range(1, 14))
