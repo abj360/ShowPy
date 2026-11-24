@@ -13,10 +13,20 @@ Contains:
     test_read_layout_refuses_a_root_that_is_a_file: raises CORRUPT
     test_read_layout_does_not_follow_a_symlinked_layout_file: raises CORRUPT
     test_read_layout_prefers_the_file_over_layout_1_folders: reads layout.json first
+    test_read_layout_requires_the_root_link_of_a_layout_1_show: needs next/root
+    test_read_layout_refuses_folders_without_a_root_link: raises CORRUPT
+    test_read_layout_finds_a_layout_1_show_among_other_entries: ignores stray entries
+    test_read_layout_reads_a_root_that_holds_both_forms_as_the_file: file wins
+    test_read_layout_follows_a_symlinked_root: follows a symlinked root
+    test_read_layout_maps_a_too_long_name_to_io: raises IO
+    test_read_layout_maps_an_unreadable_root_to_io: raises IO
+    test_read_layout_maps_an_unreadable_layout_file_to_io: raises IO
 """
 
 import json
+import os
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -119,3 +129,82 @@ def test_read_layout_prefers_the_file_over_layout_1_folders(tmp_path: Path) -> N
     assert read_layout(tmp_path / "repo") == 1
     _write_layout(tmp_path / "repo", _layout_json(2))
     assert read_layout(tmp_path / "repo") == 2
+
+
+def _legacy_show(root: Path, name: str = "s", *, with_root_link: bool = True) -> None:
+    (root / name / "next").mkdir(parents=True)
+    (root / name / "objects").mkdir()
+    (root / name / "trees").mkdir()
+    if with_root_link:
+        (root / name / "next" / "root").write_text("0" * 64)
+
+
+def test_read_layout_requires_the_root_link_of_a_layout_1_show(tmp_path: Path) -> None:
+    _legacy_show(tmp_path)
+    assert read_layout(tmp_path) == 1
+
+
+@pytest.mark.parametrize("subdirs", [("next",), ("objects",), ("trees",), ("next", "objects")])
+def test_read_layout_refuses_folders_without_a_root_link(
+    tmp_path: Path, subdirs: tuple[str, ...]
+) -> None:
+    for name in subdirs:
+        (tmp_path / "s" / name).mkdir(parents=True)
+    with pytest.raises(StorageError) as caught:
+        read_layout(tmp_path)
+    assert caught.value.code == ErrorCode.CORRUPT
+
+
+def test_read_layout_finds_a_layout_1_show_among_other_entries(tmp_path: Path) -> None:
+    (tmp_path / "stray.txt").write_text("x")
+    (tmp_path / "empty-folder").mkdir()
+    _legacy_show(tmp_path, "s")
+    assert read_layout(tmp_path) == 1
+
+
+def test_read_layout_reads_a_root_that_holds_both_forms_as_the_file(tmp_path: Path) -> None:
+    _legacy_show(tmp_path)
+    _write_layout(tmp_path, _layout_json(2))
+    assert read_layout(tmp_path) == 2
+
+
+def test_read_layout_follows_a_symlinked_root(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    _legacy_show(real)
+    (tmp_path / "link").symlink_to(real, target_is_directory=True)
+    assert read_layout(tmp_path / "link") == 1
+
+
+def test_read_layout_maps_a_too_long_name_to_io(tmp_path: Path) -> None:
+    with pytest.raises(StorageError) as caught:
+        read_layout(tmp_path / ("a" * 300))
+    assert caught.value.code == ErrorCode.IO
+
+
+CANNOT_CHMOD = sys.platform == "win32" or (hasattr(os, "geteuid") and os.geteuid() == 0)
+
+
+@pytest.mark.skipif(CANNOT_CHMOD, reason="needs permission checks that bind this user")
+def test_read_layout_maps_an_unreadable_root_to_io(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "x").write_text("x")
+    root.chmod(0)
+    try:
+        with pytest.raises(StorageError) as caught:
+            read_layout(root)
+    finally:
+        root.chmod(0o700)
+    assert caught.value.code == ErrorCode.IO
+
+
+@pytest.mark.skipif(CANNOT_CHMOD, reason="needs permission checks that bind this user")
+def test_read_layout_maps_an_unreadable_layout_file_to_io(tmp_path: Path) -> None:
+    path = _write_layout(tmp_path, _layout_json(2))
+    path.chmod(0)
+    try:
+        with pytest.raises(StorageError) as caught:
+            read_layout(tmp_path)
+    finally:
+        path.chmod(0o600)
+    assert caught.value.code == ErrorCode.IO

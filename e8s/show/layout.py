@@ -9,12 +9,14 @@ Contains:
     read_layout(): reports the layout version of a repository root
 """
 
+import os
+import stat
 from pathlib import Path
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, StorageError, VersionError
 from e8s.core.strict_json import parse_strict_json
-from e8s.show.layout1 import LINK_DIR, OBJECT_DIR, TREE_DIR
+from e8s.show.layout1 import LINK_DIR, ROOT_LINK
 from e8s.show.safe_read import read_capped
 
 LAYOUT_FILE = "layout.json"
@@ -24,7 +26,6 @@ LEGACY_LAYOUT = 1
 # The file holds two keys, about 40 bytes; the cap only refuses a file that is not one.
 LAYOUT_MAX_BYTES = 1024
 LAYOUT_KEYS = frozenset({"format", "layout"})
-LEGACY_SHOW_DIRS = (LINK_DIR, TREE_DIR, OBJECT_DIR)
 
 
 def _corrupt(root: Path, reason: str) -> StorageError:
@@ -36,19 +37,36 @@ def _corrupt(root: Path, reason: str) -> StorageError:
     )
 
 
-def _is_legacy_show_dir(path: Path) -> bool:
-    if not path.is_dir() or path.is_symlink():
-        return False
-    return any((path / name).is_dir() for name in LEGACY_SHOW_DIRS)
+def _io_error(root: Path, error: OSError) -> StorageError:
+    return StorageError(
+        f"file-system error reading the repository layout at {root}: {error.strerror or error}",
+        hint="check that the repository root exists, is readable and is a directory",
+        context={"root": str(root), "errno": error.errno},
+        code=ErrorCode.IO,
+    )
+
+
+def _is_legacy_show_dir(entry: os.DirEntry[str]) -> bool:
+    """Tells a layout-1 show folder, which holds the next/root link, from any other entry."""
+    return (
+        entry.is_dir(follow_symlinks=False) and (Path(entry.path) / LINK_DIR / ROOT_LINK).exists()
+    )
 
 
 def _unversioned_layout(root: Path) -> int:
-    """Classifies a root without a layout file as layout 1, or as empty, or as corrupt."""
-    entries = list(root.iterdir())
-    if not entries:
+    """Classifies a root without a layout file as layout 1, as empty, or as corrupt."""
+    try:
+        is_folder = stat.S_ISDIR(root.stat().st_mode)
+    except FileNotFoundError:
         return CURRENT_LAYOUT
-    if any(_is_legacy_show_dir(entry) for entry in entries):
-        return LEGACY_LAYOUT
+    if not is_folder:
+        raise _corrupt(root, "the root is not a folder")
+    with os.scandir(root) as entries:
+        first = next(entries, None)
+        if first is None:
+            return CURRENT_LAYOUT
+        if _is_legacy_show_dir(first) or any(_is_legacy_show_dir(entry) for entry in entries):
+            return LEGACY_LAYOUT
     raise _corrupt(root, f"no {LAYOUT_FILE} and no layout-1 show folders")
 
 
@@ -80,9 +98,12 @@ def _declared_layout(root: Path, path: Path) -> int:
 def read_layout(root: Path) -> int:
     """Reports the layout version of a repository root.
 
-    A root with `layout.json` has the layout that file names. A root with show folders that hold
-    `next/` links and no `layout.json` is layout 1. An empty or missing root reports the current
-    layout, because storing the first show creates the file.
+    A root with `layout.json` has the layout that file names, even when it also holds layout-1
+    show folders. A root with show folders that hold a `next/root` link and no `layout.json` is
+    layout 1. An empty or missing root reports the current layout, because storing the first
+    show creates the file. A symlinked root is followed. Any other content raises
+    StorageError CORRUPT, a newer layout raises VersionError, and a file-system failure raises
+    StorageError IO.
 
     Args:
         root: Folder that holds the repository.
@@ -96,11 +117,18 @@ def read_layout(root: Path) -> int:
     ...     read_layout(Path(folder) / "new-repo")
     2
     """
+    try:
+        return _stored_layout(root)
+    except OSError as error:
+        raise _io_error(root, error) from error
+
+
+def _stored_layout(root: Path) -> int:
     path = root / LAYOUT_FILE
     try:
         path.lstat()
     except FileNotFoundError:
-        return _unversioned_layout(root) if root.is_dir() else CURRENT_LAYOUT
+        return _unversioned_layout(root)
     except NotADirectoryError as error:
         raise _corrupt(root, "the root is not a folder") from error
     return _declared_layout(root, path)
