@@ -17,15 +17,18 @@ jobs:
   # the rust-toolchain.toml pin and restores the Rust build cache. Only main saves that cache:
   # target/ holds code that runs, and a pull request must not plant it for main to restore.
   #
-  # Answers code=false only for a pull request that changes nothing outside docs/, and rust=false
-  # only for one that changes no Rust input. A failure here never skips a heavy job: each one
-  # runs unless this job succeeded with code=false (rust=false for the rust job).
+  # Answers code=false only for a pull request that changes nothing outside docs/, rust=false
+  # only for one that changes no Rust input, and parity=false only for one that changes neither
+  # e8s/, a Rust input nor the parity harness. A failure here never skips a heavy job: each one
+  # runs unless this job succeeded with code=false (rust=false for the rust job, parity=false
+  # for the parity jobs).
   changes:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       code: ${{ steps.classify.outputs.code }}
       rust: ${{ steps.classify.outputs.rust }}
+      parity: ${{ steps.classify.outputs.parity }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -348,3 +351,117 @@ jobs:
         with:
           path: .cargo-tools
           key: ${{ steps.restore-cargo-tools.outputs.cache-primary-key }}
+
+  # The working tree against the v0.4.0 oracle on every check cell, under hash seeds 0, 1 and 2.
+  # Each leg uploads the SHA-256 digests of its core outputs; parity-compare fails unless all 18
+  # are equal. The oracle venv is cached by ref, OS, architecture, full Python version, the lock
+  # and its builder; like the Rust build cache, only main saves it. Like `check`, the legs
+  # always start and gate their steps.
+  parity:
+    name: parity (${{ matrix.os }}, py${{ matrix.python }})
+    needs: changes
+    if: ${{ !cancelled() }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      UV_PYTHON: ${{ matrix.python }}
+      RUN_PARITY_JOB: >-
+        ${{ needs.changes.result != 'success' ||
+        needs.changes.outputs.parity != 'false' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+        python: ["3.13", "3.14"]
+    steps:
+      - if: env.RUN_PARITY_JOB != 'true'
+        run: echo "Skipping parity, no library, Rust or harness input changed"
+      - if: env.RUN_PARITY_JOB == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Install the pinned Rust toolchain
+        if: env.RUN_PARITY_JOB == 'true'
+        run: rustup toolchain install
+      - if: env.RUN_PARITY_JOB == 'true'
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - if: env.RUN_PARITY_JOB == 'true'
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.8"
+          enable-cache: true
+      - name: Read the full Python version
+        if: env.RUN_PARITY_JOB == 'true'
+        id: python
+        shell: bash
+        run: >-
+          echo "version=$(uv run --locked python -c
+          'import platform; print(platform.python_version())')" >> "$GITHUB_OUTPUT"
+      - if: env.RUN_PARITY_JOB == 'true'
+        id: restore-oracle
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .parity/oracle-v0.4.0
+          key: >-
+            parity-oracle-v0.4.0-${{ runner.os }}-${{ runner.arch }}-py${{
+            steps.python.outputs.version }}-${{ hashFiles('uv.lock', 'scripts/build_oracle.py') }}
+      - name: Compare under hash seeds 0, 1 and 2
+        if: env.RUN_PARITY_JOB == 'true'
+        shell: bash
+        env:
+          DIGESTS: parity-digests/${{ runner.os }}-py${{ matrix.python }}
+        run: |
+          for seed in 0 1 2; do
+            PYTHONHASHSEED="$seed" uv run --locked nox -s parity -- all \
+              --digest "$DIGESTS-seed$seed.txt"
+          done
+      - if: env.RUN_PARITY_JOB == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: parity-digests-${{ runner.os }}-py${{ matrix.python }}
+          path: parity-digests/
+          if-no-files-found: error
+      - if: >-
+          env.RUN_PARITY_JOB == 'true' && github.ref == 'refs/heads/main' &&
+          steps.restore-oracle.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .parity/oracle-v0.4.0
+          key: ${{ steps.restore-oracle.outputs.cache-primary-key }}
+
+  # Byte-identical core outputs across the 6 cells and 3 hash seeds: all 18 digests must match.
+  parity-compare:
+    needs: [changes, parity]
+    if: >-
+      ${{ !cancelled() && (needs.changes.result != 'success' ||
+      needs.changes.outputs.parity != 'false') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: parity-digests-*
+          path: parity-digests
+          merge-multiple: true
+      - name: Require 18 equal parity digests
+        run: |
+          mapfile -t digests < <(find parity-digests -type f -name '*-seed*.txt' | sort)
+          if [ "${#digests[@]}" -ne 18 ]; then
+            echo "E: expected 18 parity digests, found ${#digests[@]}"
+            exit 1
+          fi
+          if [ ! -s "${digests[0]}" ]; then
+            echo "E: ${digests[0]} is empty"
+            exit 1
+          fi
+          for digest in "${digests[@]}"; do
+            if ! cmp -s "${digests[0]}" "$digest"; then
+              echo "E: $digest differs from ${digests[0]}"
+              diff "${digests[0]}" "$digest" || true
+              exit 1
+            fi
+          done
+          echo "Found 18 equal parity digests"

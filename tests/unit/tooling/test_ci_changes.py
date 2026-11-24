@@ -23,7 +23,12 @@ Contains:
     test_pull_request_without_rust_changes_skips_the_rust_job: answers "false" for Python only
     test_other_events_run_the_rust_job_without_a_diff: push and others never diff
     test_regression_rust_output_rejects_a_malformed_sha: a malformed SHA exits non-zero
-    test_main_writes_the_rust_output: main appends rust=<value> after code=<value>
+    test_main_writes_the_rust_output: main appends rust=<value> after code=<value>, then parity
+    test_parity_change_is_true_for_the_library_rust_and_harness: e8s/, Rust inputs, the harness
+    test_parity_change_is_false_for_other_paths: tests elsewhere, docs and look-alike paths
+    test_pull_request_without_library_changes_skips_the_parity_job: answers by the changed paths
+    test_other_events_run_the_parity_job_without_a_diff: push and others never diff
+    test_regression_parity_output_rejects_a_malformed_sha: a malformed SHA exits non-zero
 """
 
 from collections.abc import Sequence
@@ -35,8 +40,10 @@ from scripts.ci_changes import (
     code_output,
     diff_command,
     is_docs_only,
+    is_parity_change,
     is_rust_change,
     main,
+    parity_output,
     rust_output,
     split_paths,
 )
@@ -144,7 +151,7 @@ def test_main_writes_the_code_output(tmp_path: Path, monkeypatch: pytest.MonkeyP
     monkeypatch.delenv("BASE_SHA", raising=False)
     monkeypatch.delenv("HEAD_SHA", raising=False)
     main()
-    assert output.read_text(encoding="utf-8") == "earlier=1\ncode=true\nrust=true\n"
+    assert output.read_text(encoding="utf-8") == "earlier=1\ncode=true\nrust=true\nparity=true\n"
 
 
 def test_regression_main_without_github_output_fails_loudly(
@@ -239,4 +246,64 @@ def test_main_writes_the_rust_output(tmp_path: Path, monkeypatch: pytest.MonkeyP
     monkeypatch.setenv("GITHUB_OUTPUT", str(output))
     monkeypatch.setenv("EVENT_NAME", "workflow_dispatch")
     main()
-    assert output.read_text(encoding="utf-8").splitlines() == ["code=true", "rust=true"]
+    assert output.read_text(encoding="utf-8").splitlines() == [
+        "code=true",
+        "rust=true",
+        "parity=true",
+    ]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "e8s/time/clock.py",
+        "e8s/_core/time.pyi",
+        "crates/e8s-core/src/time/clock.rs",
+        "Cargo.lock",
+        "tests/parity/cases_time.py",
+        "tests/parity/flipped.toml",
+        "scripts/build_oracle.py",
+        "uv.lock",
+        "noxfile.py",
+        ".github/workflows/ci.yml",
+    ],
+)
+def test_parity_change_is_true_for_the_library_rust_and_harness(path: str) -> None:
+    assert is_parity_change(["docs/HANDOFF.md", path]) is True
+
+
+@pytest.mark.parametrize(
+    "paths",
+    [
+        [],
+        ["docs/adr/0025-core-architecture.md", "README.md"],
+        ["tests/unit/time/test_clock.py"],
+        ["tests/parityx/a.py"],
+        ["scripts/check_api_changes.py"],
+        ["e8s"],
+        ["E8s/time/clock.py"],
+        [".github/workflows/nightly.yml"],
+    ],
+)
+def test_parity_change_is_false_for_other_paths(paths: list[str]) -> None:
+    assert is_parity_change(paths) is False
+
+
+def test_pull_request_without_library_changes_skips_the_parity_job() -> None:
+    git = FakeGit(["tests/unit/time/test_clock.py", "docs/HANDOFF.md"])
+    assert parity_output(PULL_REQUEST, BASE_SHA, HEAD_SHA, git) == "false"
+    library = FakeGit(["e8s/time/clock.py"])
+    assert parity_output(PULL_REQUEST, BASE_SHA, HEAD_SHA, library) == "true"
+    assert library.requests == [(BASE_SHA, HEAD_SHA)]
+
+
+@pytest.mark.parametrize("event", ["push", "workflow_dispatch", ""])
+def test_other_events_run_the_parity_job_without_a_diff(event: str) -> None:
+    git = FakeGit(["docs/HANDOFF.md"])
+    assert parity_output(event, "", "", git) == "true"
+    assert git.requests == []
+
+
+def test_regression_parity_output_rejects_a_malformed_sha() -> None:
+    with pytest.raises(SystemExit, match="E: pull request base SHA"):
+        parity_output(PULL_REQUEST, "main", HEAD_SHA, FakeGit(["e8s/time/clock.py"]))
