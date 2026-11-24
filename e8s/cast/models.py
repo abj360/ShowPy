@@ -11,16 +11,20 @@ Contains:
     RewriteReport: lists what a spot rename or delete dropped or left unresolved
     HexColor: a `#rrggbb` color string, in either case
     MAX_LABEL_PAD: bounds how wide a label number may be zero-padded
+    spot_cap_error(): builds the error for a cast over MAX_SPOTS
+    require_spot_count(): refuses a cast size over MAX_SPOTS before anything is allocated
 """
 
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sized
 from functools import cached_property
 from typing import Annotated, Literal, get_args
 
 from pydantic import Field, field_validator, model_validator
 
 from e8s.choreo.path_models import FacingOverride
+from e8s.core.caps import MAX_SPOTS
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import GeometryError, SchemaError, UnknownRefError
 from e8s.core.ids import RouteId, SelectionNameField, SpotId, SpotIdField, TransitionId
 from e8s.core.readonly import ReadOnly, ReadOnlyMap
@@ -171,22 +175,73 @@ class LabelScheme(FrozenModel):
         return f"{prefix}{number:0{self.pad}d}"
 
 
+def spot_cap_error(count: int, *, at_least: bool = False) -> SchemaError:
+    """Builds the error for a cast over MAX_SPOTS, so every refusal of the cap reads the same.
+
+    Args:
+        count: Number of spots the cast would hold.
+        at_least: Whether `count` is a lower bound, when the edit stopped before counting all.
+
+    >>> spot_cap_error(5001, at_least=True).message
+    'a cast of at least 5001 spots is over MAX_SPOTS (5,000)'
+    """
+    bound = "at least " if at_least else ""
+    return SchemaError(
+        f"a cast of {bound}{count} spots is over MAX_SPOTS ({MAX_SPOTS:,})",
+        hint=f"keep at most {MAX_SPOTS:,} spots in one show; split a larger ensemble into"
+        " several shows",
+        context={"spots": count, "max_spots": MAX_SPOTS},
+        code=ErrorCode.TOO_MANY_SPOTS,
+    )
+
+
+def require_spot_count(count: int) -> None:
+    """Refuses a cast of more than MAX_SPOTS spots, before the caller allocates anything.
+
+    Args:
+        count: Number of spots the cast holds, or would hold after an edit.
+
+    >>> require_spot_count(MAX_SPOTS)
+    >>> require_spot_count(MAX_SPOTS + 1)
+    Traceback (most recent call last):
+        ...
+    e8s.core.errors.SchemaError: TOO_MANY_SPOTS: a cast of 5001 spots is over MAX_SPOTS \
+(5,000) (hint: keep at most 5,000 spots in one show; split a larger ensemble into several shows)
+    """
+    if count <= MAX_SPOTS:
+        return
+    raise spot_cap_error(count)
+
+
 class Cast(FrozenModel):
     """Holds every group and spot in the show.
 
     Attributes:
         groups: Group key to group; each key equals its group's `key`.
-        spots: Every spot, in creation order.
+        spots: Every spot, in creation order; at most MAX_SPOTS.
         selections: Named selections of spot IDs of this cast, deduplicated in first-seen order.
         label_scheme: Labeling rules; its prefixes name groups of this cast.
     """
 
     groups: Annotated[Mapping[str, Group], ReadOnly()] = Field(default={}, validate_default=True)
-    spots: tuple[Spot, ...] = ()
+    spots: tuple[Spot, ...] = Field(default=(), json_schema_extra={"maxItems": MAX_SPOTS})
     selections: Annotated[Mapping[SelectionKey, SelectionSpots], ReadOnly()] = Field(
         default={}, validate_default=True
     )
     label_scheme: LabelScheme = LabelScheme()
+
+    @field_validator("spots", mode="before")
+    @classmethod
+    def _spot_count_within_cap(cls, value: object) -> object:
+        if isinstance(value, Sized):
+            require_spot_count(len(value))
+        return value
+
+    @field_validator("spots", mode="after")
+    @classmethod
+    def _spots_within_cap(cls, value: tuple[Spot, ...]) -> tuple[Spot, ...]:
+        require_spot_count(len(value))
+        return value
 
     @field_validator("selections", mode="before")
     @classmethod

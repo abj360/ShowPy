@@ -82,7 +82,7 @@ def _same(stored: JsonValue, default: JsonValue) -> bool:
 
 def _check_sheet(document: JsonValue) -> None:
     try:
-        Sheet.model_validate(document, context=LEGACY_CONTEXT)
+        Sheet._validated(document, context=LEGACY_CONTEXT)
     except E8sError as error:
         ref = document.get("ref") if isinstance(document, dict) else None
         raise _refused(SHEET_DOC, "sheet", ref, error) from error
@@ -101,7 +101,7 @@ def migrate_sheet(docs: dict[str, JsonValue], report: "ReportBuilder") -> dict[s
     >>> from e8s.show.migrate import ReportBuilder
     >>> report = ReportBuilder(1)
     >>> docs = migrate_sheet({SHOW_DOC: {"id": "s", "zones": [{"id": "pit"}]}}, report)
-    >>> docs[SHOW_DOC], report.build().dropped[0].model_dump(mode="json")["fields"]
+    >>> docs[SHOW_DOC], report.build().dropped[0].to_json()["fields"]
     ({'id': 's'}, {'zones': [{'id': 'pit'}]})
     """
     migrated = dict(docs)

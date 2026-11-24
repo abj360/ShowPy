@@ -8,6 +8,10 @@ Contains:
         forever
     test_regression_fill_caps_the_lattice_size: rejects a 100-million-point fill instead of building
         the lattice
+    test_regression_fill_stops_once_it_passes_the_limit: refuses a fill past `limit` without
+        testing the rest of the lattice
+    test_fill_within_the_limit_matches_an_unlimited_fill: keeps the spots a limit allows
+    test_regression_space_along_caps_the_point_count: rejects more than MAX_POINTS spots
     test_regression_space_by_interval_caps_the_point_count: rejects a 100-million-point spacing
         instead of allocating it
     test_regression_space_by_interval_closed_curve_has_no_seam_duplicate: places L/10 spots on a
@@ -80,6 +84,7 @@ Contains:
 import math
 import sys
 from collections.abc import Callable
+from typing import cast
 
 import numpy as np
 import pytest
@@ -88,6 +93,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from e8s.core.caps import MAX_POINTS
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import E8sError, SpacingError, UnknownRefError
 from e8s.core.util import approx_equal
 from e8s.geo.curves import Segment
@@ -410,6 +416,40 @@ def test_regression_space_by_interval_caps_the_point_count() -> None:
     tiny_interval_line = line((0.0, 0.0), (LONG_LINE_LENGTH_M, 0.0))
     with capped_address_space(), pytest.raises(SpacingError):
         space_by_interval(tiny_interval_line, TINY_LINE_INTERVAL_M)
+
+
+FINE_SQUARE = region([(0, 0), (40, 0), (40, 40), (0, 40)])
+FINE_INTERVAL_M = 0.045
+FILL_LIMIT = 10
+FILL_LIMIT_BUDGET_S = 1
+
+
+@fails_after(FILL_LIMIT_BUDGET_S)
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+def test_regression_fill_stops_once_it_passes_the_limit() -> None:
+    """Refuses a fill past `limit` after limit + 1 spots, not after testing 790,000 lattice
+    points, which took 9 s."""
+    with pytest.raises(SpacingError) as caught:
+        fill(FINE_SQUARE, FINE_INTERVAL_M, limit=FILL_LIMIT)
+    assert caught.value.code == ErrorCode.TOO_MANY_SPOTS
+    assert caught.value.context == {"limit": FILL_LIMIT}
+
+
+def test_fill_within_the_limit_matches_an_unlimited_fill() -> None:
+    """Returns the same spots with a limit the fill stays within, and refuses a bad limit."""
+    square = region([(0, 0), (2, 0), (2, 2), (0, 2)])
+    unlimited = fill(square, 1.0, anchor=(0, 0))
+    assert approx_equal(fill(square, 1.0, anchor=(0, 0), limit=len(unlimited)), unlimited)
+    with pytest.raises(SpacingError, match="limit"):
+        fill(square, 1.0, limit=-1)
+
+
+def test_regression_space_along_caps_the_point_count() -> None:
+    """Rejects more than MAX_POINTS spots, a numpy count included, before computing any."""
+    for count in (MAX_POINTS + 1, cast(int, np.int64(MAX_POINTS + 1))):
+        with pytest.raises(SpacingError, match="over the cap"):
+            space_along(LINE, count)
+    assert len(space_along(LINE, 3)) == 3
 
 
 @pytest.mark.defect("UP-9.1-26")

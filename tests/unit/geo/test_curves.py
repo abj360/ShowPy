@@ -6,6 +6,8 @@ test_curves.py --- tests the Curve implementations: length, sampling, projection
 Contains:
     test_regression_model_copy_drops_cached_arc_length_table: drops the cached arc-length table when
         model_copy changes a spiral radius
+    test_regression_trimmed_and_composite_curves_compare_equal: compares equal curves by their
+        fields after sampling has cached numpy arrays on them
     test_regression_spiral_rejects_unbounded_turns: rejects 1e7 turns instead of tabulating 1e10
         samples
     test_regression_spiral_rejects_infinite_turns: rejects infinite turns with an E8sError instead
@@ -126,7 +128,7 @@ def test_arc_length_endpoints_and_direction() -> None:
     assert approx_equal(QUARTER.length(), math.pi)
     assert approx_equal(QUARTER.point_at(0.0), (2.0, 0.0))
     assert approx_equal(QUARTER.point_at(QUARTER.length()), (0.0, 2.0))
-    clockwise = QUARTER.model_copy(update={"sweep_deg": -90.0})
+    clockwise = QUARTER.replace(sweep_deg=-90.0)
     assert approx_equal(clockwise.point_at(clockwise.length()), (0.0, -2.0))
 
 
@@ -229,6 +231,25 @@ def test_regression_model_copy_drops_cached_arc_length_table() -> None:
     small.length()
     bigger = small.model_copy(update={"r1": 6.0})
     assert bigger.length() > small.length() * 2
+
+
+def _sampled[C: CurveModel](curve: C) -> C:
+    curve.point_at(np.array([0.1, 0.5]))
+    return curve
+
+
+def test_regression_trimmed_and_composite_curves_compare_equal() -> None:
+    """Compares by fields, never by the numpy arrays sampling caches on the instance."""
+    spline = SplineCurve(points=((0.0, 0.0), (1.0, 1.0), (2.0, 0.0), (3.0, 1.0)))
+    trimmed = TrimmedCurve(base=spline, s0=0.5, s1=2.0)
+    parts = (Segment(a=(0.0, 0.0), b=(1.0, 0.0)), Segment(a=(1.0, 0.0), b=(1.0, 1.0)))
+    composite = CompositeCurve(parts=parts)
+    shorter = (trimmed.replace(s1=1.5), composite.replace(parts=parts[:1]))
+    for curve, other in zip((trimmed, composite), shorter, strict=True):
+        twin = curve.replace()
+        assert _sampled(curve) == _sampled(twin)
+        assert curve != _sampled(other)
+        assert hash(curve) == hash(twin)
 
 
 @fails_after(SIGNAL_TIMEOUT_S)

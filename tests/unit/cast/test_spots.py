@@ -18,12 +18,22 @@ Contains:
         relabels it with the pin following
     test_regression_cast_edits_accept_force: gives every cast edit a `force` parameter like
         delete_spots
+    test_regression_add_spots_checks_cap_before_allocating: refuses spots past MAX_SPOTS before
+        spacing them or building a placement per set, within a time and memory bound
+    test_regression_fill_spots_refuses_the_cap_as_a_schema_error: gives an interval fill past
+        the cap the cast's SchemaError
+    test_regression_spot_counts_must_be_whole_numbers: refuses a fractional, text or missing
+        count with SchemaError
 """
 
-from collections.abc import Mapping
+import sys
+import tracemalloc
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from inspect import Parameter, signature
+from typing import cast
 
+import numpy as np
 import pytest
 import shapely
 
@@ -46,6 +56,7 @@ from e8s.cast.spots import (
 )
 from e8s.choreo.models import PlacementPatch
 from e8s.choreo.path_models import EntityFacing, FacingMode, FixedFacing, PathRow
+from e8s.core.caps import MAX_SPOTS
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import (
     LockedError,
@@ -54,7 +65,7 @@ from e8s.core.errors import (
     SpacingError,
     UnknownRefError,
 )
-from e8s.core.ids import FormId, RouteId, SpotId
+from e8s.core.ids import FormId, RouteId, SetId, SpotId
 from e8s.core.types import Region
 from e8s.core.util import approx_equal
 from e8s.geo.regions import region
@@ -64,6 +75,7 @@ from e8s.show.models import Show
 from e8s.show.pinning import pin, unpin
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.shows import two_set_show
+from tests.helpers import fails_after
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
 SQUARE = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)))
@@ -97,7 +109,7 @@ def test_add_spot_fills_the_lowest_gap() -> None:
 def test_add_spot_uses_scheme_prefix_and_padding() -> None:
     show = two_set_show()
     scheme = LabelScheme(prefixes={"trumpets": "Tr"}, start=1, pad=2)
-    show = show.model_copy(update={"cast": show.cast.model_copy(update={"label_scheme": scheme})})
+    show = show.replace(cast=show.cast.replace(label_scheme=scheme))
     assert add_spot(show, (0.0, 0.0), "trumpets", "1").cast.ids()[-1] == "Tr01"
 
 
@@ -182,7 +194,7 @@ def test_delete_spots_removes_every_reference() -> None:
 def test_delete_spots_refuses_pinned_without_force() -> None:
     show = two_set_show()
     pinned = show.set("2").with_placements({"T1": PlacementPatch(pinned=True)})
-    show = show.model_copy(update={"sets": (show.set("1"), pinned)})
+    show = show.replace(sets=(show.set("1"), pinned))
     with pytest.raises(LockedError):
         delete_spots(show, ["T1"])
     assert "T1" not in delete_spots(show, ["T1"], force=True).cast.ids()
@@ -190,8 +202,8 @@ def test_delete_spots_refuses_pinned_without_force() -> None:
 
 def test_delete_spots_refuses_locked_form_without_force() -> None:
     show = rich_show()
-    locked = show.forms[FormId("line1")].model_copy(update={"locked": True})
-    show = show.model_copy(update={"forms": {"line1": locked}})
+    locked = show.forms[FormId("line1")].replace(locked=True)
+    show = show.replace(forms={"line1": locked})
     with pytest.raises(LockedError):
         delete_spots(show, ["T2"])
 
@@ -244,7 +256,7 @@ def test_edit_group_rejects_an_unknown_field() -> None:
 
 
 def test_group_patch_names_every_editable_group_field() -> None:
-    assert GroupPatch.__optional_keys__ == set(Group.model_fields) - {"key"}
+    assert GroupPatch.__optional_keys__ == set(Group._field_names()) - {"key"}
 
 
 def test_remove_group_reassigns_members() -> None:
@@ -317,8 +329,8 @@ def test_rename_everywhere_leaves_degree_facings_alone() -> None:
     )
     spec = show.transition(("1", "2"))
     rows: dict[SpotId, PathRow] = {**spec.rows, SpotId("T2"): row}
-    spec = spec.model_copy(update={"rows": rows})
-    show, _ = rename_spots(show.model_copy(update={"transitions": (spec,)}), {SpotId("T2"): "X2"})
+    spec = spec.replace(rows=rows)
+    show, _ = rename_spots(show.replace(transitions=(spec,)), {SpotId("T2"): "X2"})
     assert show.transition(("1", "2")).rows[SpotId("X2")].facing_value == FixedFacing(degrees=90.0)
 
 
@@ -482,3 +494,84 @@ def test_regression_edit_group_keeps_a_validator_schema_error(
     with pytest.raises(SchemaError) as info:
         edit_group(rich_show(), "trumpets", moves=False)
     assert info.value.message == "group rule broken"
+
+
+CAP_CHECK_SETS = 60
+OVER_CAP_SPOTS = 50_000
+# A numpy integer, as callers pass one from array arithmetic despite the `int` annotation.
+BIG_NUMPY_COUNT = cast(int, np.int64(5_000_000))
+CAP_CHECK_BUDGET_S = 2
+# The 0.045 m lattice over 40 m holds 790,000 candidate points (about 26 MiB at peak); the
+# refused allocations took 3.3 GiB.
+CAP_CHECK_PEAK_BYTES = 64 * 2**20
+FINE_INTERVAL_M = 0.045
+
+
+def _sixty_set_show() -> Show:
+    show = two_set_show()
+    first, second = show.sets
+    more = (second.replace(id=SetId(str(n)), key=None) for n in range(3, CAP_CHECK_SETS + 1))
+    return show.replace(sets=(first, second, *more))
+
+
+@pytest.fixture(scope="module")
+def full_show() -> Show:
+    """Builds a two-set show whose cast holds exactly MAX_SPOTS spots."""
+    show = two_set_show()
+    room = MAX_SPOTS - len(show.cast.spots)
+    return add_spots_along(show, line((0, 0), (40, 0)), room, "trumpets", "1")
+
+
+@fails_after(CAP_CHECK_BUDGET_S)
+@pytest.mark.skipif(sys.platform == "win32", reason="signal timeout")
+def test_regression_add_spots_checks_cap_before_allocating(full_show: Show) -> None:
+    """Refuses spots past MAX_SPOTS before spacing them or building a placement per set.
+
+    The cap ran in the Cast model, after a placement per spot per set was built: 50,000 spots
+    on 60 sets took 17.7 s and 3.3 GiB before the refusal. A numpy count skipped the early
+    check: np.int64(5_000_000) took 6.4 s and about 3.3 GiB. One more spot on a full cast,
+    added or duplicated, is refused too.
+    """
+    assert len(full_show.cast.spots) == MAX_SPOTS
+    show = _sixty_set_show()
+    square = region([(0, 0), (40, 0), (40, 40), (0, 40)])
+    just_over = MAX_SPOTS - len(show.cast.spots) + 1
+    calls: list[Callable[[], Show]] = [
+        lambda: add_spots_along(show, line((0, 0), (40, 0)), OVER_CAP_SPOTS, "trumpets", "1"),
+        lambda: add_spots_along(show, line((0, 0), (40, 0)), just_over, "trumpets", "1"),
+        lambda: add_spots_along(show, line((0, 0), (40, 0)), BIG_NUMPY_COUNT, "trumpets", "1"),
+        lambda: fill_spots(show, square, "trumpets", "1", n=BIG_NUMPY_COUNT),
+        lambda: fill_spots(show, square, "trumpets", "1", n=OVER_CAP_SPOTS),
+        lambda: fill_spots(show, square, "trumpets", "1", interval=FINE_INTERVAL_M),
+        lambda: add_spot(full_show, (0.0, 0.0), "trumpets", "1"),
+        lambda: duplicate_spots(full_show, ["T1"], (0.0, 1.0), "1"),
+    ]
+    tracemalloc.start()
+    try:
+        for call in calls:
+            with pytest.raises(SchemaError) as caught:
+                call()
+            assert caught.value.code == ErrorCode.TOO_MANY_SPOTS
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < CAP_CHECK_PEAK_BYTES
+
+
+@pytest.mark.parametrize("count", [2.5, "3", None])
+def test_regression_spot_counts_must_be_whole_numbers(count: object) -> None:
+    """Refuses a count that is not a whole number with SchemaError, before spacing anything."""
+    with pytest.raises(SchemaError, match="whole number"):
+        add_spots_along(two_set_show(), line((0, 0), (4, 0)), cast(int, count), "trumpets", "1")
+
+
+def test_regression_fill_spots_refuses_the_cap_as_a_schema_error() -> None:
+    """Refuses an interval fill past MAX_SPOTS with the cast's SchemaError, chained to fill's."""
+    square = region([(0, 0), (40, 0), (40, 40), (0, 40)])
+    with pytest.raises(SchemaError) as caught:
+        fill_spots(two_set_show(), square, "trumpets", "1", interval=FINE_INTERVAL_M)
+    assert type(caught.value) is SchemaError
+    assert caught.value.code == ErrorCode.TOO_MANY_SPOTS
+    assert caught.value.context == {"spots": MAX_SPOTS + 1, "max_spots": MAX_SPOTS}
+    assert caught.value.message.startswith("a cast of at least")
+    assert isinstance(caught.value.__cause__, SpacingError)

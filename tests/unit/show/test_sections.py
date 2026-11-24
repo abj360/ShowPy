@@ -45,7 +45,7 @@ TOL = 1e-9
 
 def _four_sets() -> Show:
     show = add_set(add_set(two_set_show(), "3", 4.0), "4", 8.0)
-    timeline = show.timeline.model_copy(
+    timeline = show.timeline._copied(
         update={
             "tempos": (
                 TempoSection(at_count=0.0, counts_per_minute=120.0, ramp_to=60.0, ramp_counts=16.0),
@@ -64,7 +64,7 @@ def _four_sets() -> Show:
         end=14,
     )
     form = Form(id=FormId("f3"), set=SetId("3"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
-    return show.model_copy(
+    return show._copied(
         update={
             "timeline": timeline,
             "facing_overrides": (override,),
@@ -107,9 +107,9 @@ def test_split_keeps_seconds_of_later_counts() -> None:
 
 def test_split_mid_measure_raises() -> None:
     show = add_set(two_set_show(), "3", 3.0)
-    timeline = show.timeline.model_copy(update={"measures": MeasureSetting(counts_per_measure=4.0)})
+    timeline = show.timeline.replace(measures=MeasureSetting(counts_per_measure=4.0))
     with pytest.raises(TimelineError):
-        split_section(show.model_copy(update={"timeline": timeline}), "3")
+        split_section(show._copied(update={"timeline": timeline}), "3")
 
 
 def test_join_inverts_split() -> None:
@@ -127,19 +127,17 @@ def test_join_disjoint_sections_and_clashes() -> None:
     second, _ = renumber(add_set(two_set_show(), "3", 4.0))
     with pytest.raises(SchemaError):
         join_sections(first, second)
-    relabelled = second.model_copy(
-        update={"sets": tuple(s.model_copy(update={"id": f"B{s.id}"}) for s in second.sets)}
-    )
+    relabelled = second.replace(sets=tuple(s.replace(id=f"B{s.id}") for s in second.sets))
     joined = join_sections(first, relabelled)
     assert joined.set_ids() == ["1", "2", "B1", "B2", "B3"]
-    other_cast = relabelled.model_copy(update={"cast": first.cast.model_copy(update={"spots": ()})})
+    other_cast = relabelled.replace(cast=first.cast.replace(spots=()))
     with pytest.raises(SchemaError):
         join_sections(first, other_cast)
     moved = relabelled.sets[0].with_placements({"T1": PlacementPatch(x=9.0)})
-    bad_boundary = second.model_copy(
+    bad_boundary = second._copied(
         update={
             "sets": (
-                second.sets[0].model_copy(update={"id": "2", "placements": moved.placements}),
+                second.sets[0].replace(id="2", placements=moved.placements),
                 *second.sets[1:],
             )
         }
@@ -166,7 +164,7 @@ def _round_trip(show: Show) -> Show:
 
 def _three_sets_with(**timeline_fields: object) -> Show:
     show = add_set(add_set(two_set_show(), "3", 4.0), "4", 8.0)
-    return show.model_copy(update={"timeline": show.timeline.model_copy(update=timeline_fields)})
+    return show.replace(timeline=show.timeline.replace(**timeline_fields))
 
 
 @pytest.mark.defect("UP-9.7-48")
@@ -190,7 +188,7 @@ def test_regression_join_after_split_keeps_one_facing_override_across_the_split(
         start=WINDOW_ACROSS_SPLIT[0],
         end=WINDOW_ACROSS_SPLIT[1],
     )
-    show = show.model_copy(update={"facing_overrides": (override,)})
+    show = show.replace(facing_overrides=(override,))
     assert _round_trip(show).facing_overrides == (override,)
 
 

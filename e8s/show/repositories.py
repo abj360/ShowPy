@@ -157,7 +157,7 @@ def conflict_error(show_id: str, expected: str, landed: list[Revision]) -> Confl
         context={
             "expected": expected,
             "head": landed[-1].id if landed else expected,
-            "changes": [r.model_dump(mode="json") for r in landed],
+            "changes": [r.to_json() for r in landed],
         },
     )
 
@@ -165,7 +165,7 @@ def conflict_error(show_id: str, expected: str, landed: list[Revision]) -> Confl
 def _with_stored_key(new_set: Set, stored: Set) -> Set:
     if new_set.key == stored.key:
         return new_set
-    if "key" not in new_set.model_fields_set:
+    if "key" not in new_set._set_fields():
         return new_set.replace(key=stored.key)
     raise SchemaError(
         f"set {new_set.id} has key {new_set.key}, but the stored set has key {stored.key}",

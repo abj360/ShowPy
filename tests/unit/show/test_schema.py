@@ -32,6 +32,7 @@ from pydantic.json_schema import models_json_schema
 from e8s.choreo.form_models import Form
 from e8s.choreo.models import Set
 from e8s.choreo.path_models import TransitionSpec
+from e8s.core.caps import MAX_SETS
 from e8s.core.resources import schema_path
 from e8s.examples import crossing_show, two_set_show
 from e8s.sheet.models import Sheet
@@ -75,7 +76,7 @@ def _show_document(show_schema: dict[str, Any]) -> dict[str, Any]:
             FORMAT_KEY: {"const": FORMAT},
             VERSION_KEY: {"const": CURRENT_VERSION},
             **kept,
-            SET_ORDER_FIELD: {"type": "array", "items": {"type": "string"}},
+            SET_ORDER_FIELD: {"type": "array", "items": {"type": "string"}, "maxItems": MAX_SETS},
         },
         "required": [FORMAT_KEY, VERSION_KEY, *required, SET_ORDER_FIELD],
         "additionalProperties": False,

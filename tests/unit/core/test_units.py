@@ -138,7 +138,7 @@ def test_regression_zero_factor_registry_never_divides_by_zero() -> None:
     """Rejects a zero unit factor with an E8sError (audit 9.3)."""
     sizes = {"meters_per_unit": {"m": 1.0, "zero": 0.0}}
     with pytest.raises(E8sError):
-        convert(1.0, "m", "zero", UnitRegistry.model_validate(sizes))
+        convert(1.0, "m", "zero", UnitRegistry.from_json(sizes))
 
 
 def test_regression_register_unit_refuses_to_redefine_meters() -> None:

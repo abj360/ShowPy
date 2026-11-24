@@ -317,8 +317,9 @@ def svg_outline(
         subpaths = [subpaths[path_index]]
     raw = [SvgCurve(d=s.to_d(), closed=s.closed) for s in subpaths]
     pts = np.vstack([curve.to_polyline(SVG_FIT_TOL) for curve in raw])
-    bounds = (pts[:, 0].min(), pts[:, 1].min(), pts[:, 0].max(), pts[:, 1].max())
-    matrix = _fit_matrix(tuple(map(float, bounds)), fit, keep_aspect=keep_aspect, flip_y=flip_y)  # type: ignore[arg-type]
+    lows, highs = pts.min(axis=0), pts.max(axis=0)
+    bounds = (float(lows[0]), float(lows[1]), float(highs[0]), float(highs[1]))
+    matrix = _fit_matrix(bounds, fit, keep_aspect=keep_aspect, flip_y=flip_y)
     return [curve.replace(transform=matrix) for curve in raw]
 
 

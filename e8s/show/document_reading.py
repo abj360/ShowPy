@@ -61,7 +61,7 @@ from e8s.show.migrate import (
     version_of,
     without_header,
 )
-from e8s.show.models import Show
+from e8s.show.models import Show, require_set_count
 
 type JsonObject = dict[str, JsonValue]
 type JsonArray = list[JsonValue]
@@ -157,7 +157,7 @@ def _set(reading: _Reading, key: str) -> Set:
         check_id(stored_key, kind="set key")
     if "key" not in raw:
         raw = {**raw, "key": key}
-    loaded = Set.model_validate(raw, context=reading.context)
+    loaded = Set._validated(raw, context=reading.context)
     if loaded.key != key:
         raise SchemaError(
             f"{set_doc(key)} holds the set keyed {loaded.key}",
@@ -169,7 +169,7 @@ def _set(reading: _Reading, key: str) -> Set:
 
 def _forms(reading: _Reading, key: str) -> tuple[Form, ...]:
     stored = _load_array(reading.source, forms_doc(key), is_optional=True)
-    return tuple(Form.model_validate(f, context=reading.context) for f in stored)
+    return tuple(Form._validated(f, context=reading.context) for f in stored)
 
 
 def _require_forms_for(key: str, set_id: SetId, forms: tuple[Form, ...]) -> None:
@@ -186,7 +186,7 @@ def _paths(reading: _Reading, folder: tuple[str, str]) -> tuple[TransitionSpec, 
     raw = _load_object(reading.source, paths_doc(folder), is_optional=True)
     if not raw:
         return ()
-    return (TransitionSpec.model_validate(raw, context=reading.context),)
+    return (TransitionSpec._validated(raw, context=reading.context),)
 
 
 def _require_paths_for(
@@ -202,9 +202,10 @@ def _require_paths_for(
 
 
 def _set_order(order: object) -> list[str]:
-    """Checks the set order show.json lists: an array of storable set keys, never text."""
+    """Checks the set order show.json lists: an array of at most MAX_SETS storable set keys."""
     if not isinstance(order, list):
         raise _shape_error(SHOW_DOC, "array under 'sets'", order)
+    require_set_count(len(order))
     bad = [k for k in order if not is_storable_folder(k)]
     if bad:
         raise SchemaError(
@@ -229,8 +230,8 @@ def _with_counts(
     spec: TransitionSpec, counts: float, context: Mapping[str, bool] | None
 ) -> TransitionSpec:
     """Gives paths the destination set's counts, validated in the decode's ID context."""
-    fields = {name: getattr(spec, name) for name in type(spec).model_fields}
-    return TransitionSpec.model_validate(fields | {"counts": counts}, context=context)
+    fields = {name: getattr(spec, name) for name in type(spec)._field_names()}
+    return TransitionSpec._validated(fields | {"counts": counts}, context=context)
 
 
 def _assemble(reading: _Reading, meta: JsonObject, revision: str) -> Show:
@@ -249,7 +250,7 @@ def _assemble(reading: _Reading, meta: JsonObject, revision: str) -> Show:
         _with_counts(spec, counts[spec.id[1]], reading.context)
         for spec in _transition_specs(reading, stored)
     ]
-    return Show.model_validate(
+    return Show._validated(
         {
             **rest,
             "sheet": _load_object(reading.source, SHEET_DOC),
@@ -296,7 +297,7 @@ def _migrated_show(source: _Source, meta: JsonObject, version: int, revision: st
     reading = _Reading(_object_source(migrated), LEGACY_CONTEXT)
     show = _assemble(reading, _load_object(reading.source, SHOW_DOC), revision)
     renamed = migrate_model(show, version, report)
-    checked = Show.model_validate(renamed.model_dump(mode="json"), context=CHECKED_CONTEXT)
+    checked = Show._validated(renamed.to_json(), context=CHECKED_CONTEXT)
     return _Migrated(checked, report, migrate_beside(checked, migrated, version, report))
 
 
@@ -325,7 +326,7 @@ def decode_show_dump(dump: Mapping[str, JsonValue], version: int) -> Show:
         show: The migrated show; a dump that does not fit raises SchemaError.
 
     >>> from e8s.examples import two_set_show
-    >>> dump = two_set_show().model_dump(mode="json")
+    >>> dump = two_set_show().to_json()
     >>> decode_show_dump(dump, 1) == two_set_show()
     True
     """
@@ -348,7 +349,7 @@ def migrate_dump(
             notes document at `/notes/notes.json`; empty when the dump held no notes.
 
     >>> from e8s.examples import two_set_show
-    >>> migrate_dump(two_set_show().model_dump(mode="json"), 1)[2]
+    >>> migrate_dump(two_set_show().to_json(), 1)[2]
     {}
     """
     revision = dump.get(REVISION_FIELD, "")

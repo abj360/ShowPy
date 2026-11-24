@@ -191,7 +191,7 @@ def _follow_show() -> PathEngine:
     route_curve = line((0.0, 5.0), (0.0, 15.0))
     show = with_targets({"T1": {"x": 0.0, "y": 9.0}, "T2": {"x": 0.0, "y": 7.0}})
     first = show.sets[0].with_placements({"T2": PlacementPatch(x=0.0, y=3.0)})
-    show = show.model_copy(update={"sets": (first, show.sets[1])})
+    show = show.replace(sets=(first, show.sets[1]))
     route = Route(
         id=RouteId("r"),
         curve=route_curve,
@@ -217,7 +217,7 @@ def test_follow_on_route_curve() -> None:
     first = show.sets[0].with_placements(
         {"T1": PlacementPatch(x=0.0, y=5.0), "T2": PlacementPatch(x=0.0, y=3.0)}
     )
-    show = show.model_copy(update={"sets": (first, show.sets[1])})
+    show = show.replace(sets=(first, show.sets[1]))
     route = Route(
         id=RouteId("r"),
         curve=route_curve,
@@ -315,7 +315,7 @@ def test_facing_override_wins_inside_its_range() -> None:
         start=2.0,
         end=4.0,
     )
-    engine = PathEngine(base.model_copy(update={"facing_overrides": (override,)}))
+    engine = PathEngine(base.replace(facing_overrides=(override,)))
     assert approx_equal(engine.facing_at("T1", 3.0), 270.0)
     assert approx_equal(engine.facing_at("T1", 6.0), 180.0)
 
@@ -332,7 +332,7 @@ def test_velocity_and_state() -> None:
 def test_entrance_is_on_field_while_walking_on() -> None:
     base = two_set_show()
     first = base.sets[0].with_placements({"T1": PlacementPatch(on_field=False)})
-    engine = PathEngine(base.model_copy(update={"sets": (first, base.sets[1])}))
+    engine = PathEngine(base.replace(sets=(first, base.sets[1])))
     assert not engine.state_at("T1", 0.0).on_field
     assert engine.state_at("T1", 4.0).on_field
 
@@ -412,7 +412,7 @@ def test_facing_override_resolves_selection_expressions() -> None:
         start=2.0,
         end=4.0,
     )
-    engine = PathEngine(base.model_copy(update={"facing_overrides": (override,)}))
+    engine = PathEngine(base.replace(facing_overrides=(override,)))
     assert approx_equal(engine.facing_at("T2", 3.0), 270.0)
     assert approx_equal(engine.facing_at("T3", 3.0), 0.0)
 
@@ -536,7 +536,7 @@ def test_regression_segments_reject_a_tolerance_that_is_not_positive(tol: float)
 
 def _override_show(rows: dict[str, PathRow], override: FacingOverride, y_hold: bool) -> Show:
     show = with_targets({"T1": {"y": 5.0}} if y_hold else {})
-    return with_rows(rows, show=show).model_copy(update={"facing_overrides": (override,)})
+    return with_rows(rows, show=show).replace(facing_overrides=(override,))
 
 
 @defect("UP-9.2-07")
@@ -574,8 +574,8 @@ def test_regression_toward_entity_override_uses_query_time_position() -> None:
 
 def _three_set_show() -> Show:
     base = two_set_show()
-    third = base.sets[1].model_copy(update={"id": "3"})
-    return base.model_copy(update={"sets": (*base.sets, third)})
+    third = base.sets[1]._copied(update={"id": "3"})
+    return base._copied(update={"sets": (*base.sets, third)})
 
 
 @defect("UP-9.2-22")
@@ -593,7 +593,7 @@ def test_regression_invalidate_clears_override_selection_cache() -> None:
     override = FacingOverride(
         entities="all", mode=FacingMode.FIXED, value=FixedFacing(degrees=90.0), start=0.0, end=4.0
     )
-    engine = PathEngine(two_set_show().model_copy(update={"facing_overrides": (override,)}))
+    engine = PathEngine(two_set_show().replace(facing_overrides=(override,)))
     engine.facing_at("T1", 2.0)
     engine.invalidate(sets=["1", "2"])
     assert engine._override_cache == {}
@@ -601,7 +601,7 @@ def test_regression_invalidate_clears_override_selection_cache() -> None:
 
 def test_regression_spot_query_on_show_without_sets_raises_e8s_error() -> None:
     """Raises an E8sError, not IndexError, for a cast spot in a show with no sets (audit 9.2)."""
-    engine = PathEngine(two_set_show().model_copy(update={"sets": ()}))
+    engine = PathEngine(two_set_show().replace(sets=()))
     with pytest.raises(E8sError):
         engine.position("T1", 1.0)
 
@@ -610,8 +610,8 @@ def test_regression_spot_query_on_show_without_sets_raises_e8s_error() -> None:
 def test_regression_zero_count_transition_compiles_to_a_step() -> None:
     """Compiles and segments a 0-count transition instead of raising PathError (audit 9.2)."""
     base = two_set_show()
-    instant = base.sets[1].model_copy(update={"counts": 0.0})
-    engine = PathEngine(base.model_copy(update={"sets": (base.sets[0], instant)}))
+    instant = base.sets[1].replace(counts=0.0)
+    engine = PathEngine(base.replace(sets=(base.sets[0], instant)))
     assert list(engine.compile_all()) == [TID]
     assert engine.segments(TID) == []
 
@@ -620,8 +620,8 @@ def test_regression_zero_count_transition_compiles_to_a_step() -> None:
 def test_regression_missing_placement_does_not_fail_other_spots() -> None:
     """Keeps other spots queryable when one spot lacks a placement in the next set (audit 9.2)."""
     base = two_set_show()
-    broken = base.sets[1].model_copy(update={"placements": base.sets[1].placements[1:]})
-    engine = PathEngine(base.model_copy(update={"sets": (base.sets[0], broken)}))
+    broken = base.sets[1].replace(placements=base.sets[1].placements[1:])
+    engine = PathEngine(base.replace(sets=(base.sets[0], broken)))
     assert approx_equal(engine.position("T2", 4.0), (2.0, 7.0))
 
 

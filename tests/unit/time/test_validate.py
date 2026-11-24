@@ -53,7 +53,7 @@ def _tempo(at: float, cpm: float = 120.0, **ramp: Any) -> TempoSection:
 
 def _counts(**fields: object) -> Timeline:
     base = new_timeline(TimelineMode.COUNTS, counts_per_minute=120.0, total=64.0)
-    return base.model_copy(update=fields)
+    return base._copied(update=fields)
 
 
 def test_clean_timeline_is_ok_with_no_issues() -> None:
@@ -88,9 +88,9 @@ def test_tempos_must_be_strictly_ordered() -> None:
 
 
 def test_tempos_must_be_positive() -> None:
-    stopped = _tempo(0.0).model_copy(update={"counts_per_minute": 0.0})
+    stopped = _tempo(0.0)._copied(update={"counts_per_minute": 0.0})
     assert _codes(_counts(tempos=(stopped,))) == ["TEMPO_NONPOSITIVE"]
-    backwards = _tempo(0.0, ramp_to=140.0, ramp_counts=4.0).model_copy(update={"ramp_to": -5.0})
+    backwards = _tempo(0.0, ramp_to=140.0, ramp_counts=4.0)._copied(update={"ramp_to": -5.0})
     assert _codes(_counts(tempos=(backwards,))) == ["TEMPO_NONPOSITIVE"]
 
 

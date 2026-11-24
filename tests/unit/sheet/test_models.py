@@ -34,7 +34,7 @@ SQUARE = Region(exterior=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)))
 
 
 def _sheet_with(**changes: object) -> Sheet:
-    return Sheet.model_validate({**blank_sheet(10, 6).model_dump(), **changes})
+    return Sheet.from_json({**blank_sheet(10, 6).to_json(), **changes})
 
 
 def test_regression_sheet_rejects_negative_size() -> None:

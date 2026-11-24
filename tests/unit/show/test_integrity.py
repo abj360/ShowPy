@@ -227,7 +227,7 @@ def test_regression_cache_digest_twin_at_another_path_is_still_validated() -> No
     first, second = show.set_ids()[:2]
     members = [spot.id for spot in show.cast.spots[:2]]
     form = line_form("f", members, (0.0, 0.0), (4.0, 0.0), set_id=first)
-    forms_bytes = dump_json([form.model_dump(mode="python")])
+    forms_bytes = dump_json([form._dumped()])
     docs = {**encode_show(show), forms_doc(first): forms_bytes}
     cache = DecodeCache()
     _validate({}, docs, cache)

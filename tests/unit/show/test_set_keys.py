@@ -126,6 +126,7 @@ from e8s.show.sections import join_sections
 from e8s.show.set_keys import to_display_path, to_stored_path
 from e8s.show.storage import Workspace, load_show, open_workspace, save_show
 from e8s.show.validate import validate_show
+from tests.helpers import json_doc
 
 AT = datetime(2026, 11, 16, 9, 0, tzinfo=UTC)
 LEGACY = {LEGACY_IDS_KEY: True}
@@ -175,11 +176,11 @@ def test_set_key_defaults_to_the_id_and_is_written_only_when_it_differs() -> Non
     fresh = Set(id=SetId("2"), counts=1.0)
     moved = fresh.replace(id="3")
     assert fresh.key == "2"
-    assert "key" not in fresh.model_dump()
+    assert "key" not in fresh.to_json()
     assert moved.key == "2"
-    assert moved.model_dump()["key"] == "2"
-    assert Set.model_validate(moved.model_dump()) == moved
-    assert Set.model_validate(fresh.model_dump()) == fresh
+    assert moved.to_json()["key"] == "2"
+    assert Set.from_json(moved.to_json()) == moved
+    assert Set.from_json(fresh.to_json()) == fresh
 
 
 @pytest.mark.parametrize("key", ["a-b", "con", "x" * 65, "1.", "", "all"])
@@ -201,7 +202,7 @@ def test_regression_show_refuses_set_keys_that_repeat_ignoring_case() -> None:
 def test_regression_set_without_a_key_must_pass_the_id_check(set_id: str) -> None:
     with pytest.raises(SchemaError):
         Set(id=SetId(set_id), counts=0.0)
-    legacy = Set.model_validate({"id": set_id, "counts": 0.0}, context=LEGACY)
+    legacy = Set._validated({"id": set_id, "counts": 0.0}, context=LEGACY)
     assert legacy.key == set_id
 
 
@@ -211,9 +212,9 @@ def test_regression_show_refuses_ids_as_keys_that_repeat_ignoring_case() -> None
     pair = (first.replace(id="1a", key=None), second.replace(id="1A", key=None))
     with pytest.raises(SchemaError):
         show.replace(sets=pair, transitions=())
-    dumped = show.replace(sets=(first, second), transitions=()).model_dump(mode="json")
-    dumped["sets"] = [s.model_dump(mode="json") for s in pair]
-    assert Show.model_validate(dumped, context=LEGACY).set_ids() == ["1a", "1A"]
+    dumped = show.replace(sets=(first, second), transitions=()).to_json()
+    dumped["sets"] = [s.to_json() for s in pair]
+    assert Show._validated(dumped, context=LEGACY).set_ids() == ["1a", "1A"]
 
 
 def test_renumber_keeps_keys() -> None:
@@ -364,7 +365,7 @@ def _validate(
 def test_regression_forms_set_check_runs_outside_the_decode_cache() -> None:
     show = _renumbered()
     form = line_form("f", ["T1", "T2"], (0.0, 0.0), (4.0, 0.0), set_id="2")
-    docs = {**encode_show(show), forms_doc("1A"): dump_json([form.model_dump(mode="python")])}
+    docs = {**encode_show(show), forms_doc("1A"): dump_json([form._dumped()])}
     cache = DecodeCache()
     _validate({}, docs, cache)
     body = json.loads(docs[set_doc("1A")]) | {"id": "9"}
@@ -410,14 +411,14 @@ def test_workspace_writes_and_commits_through_the_key() -> None:
     ws.commit({"/sets/2/set.py": b"# new 2\n"}, at=LATER)
     assert repo.read(SHOW_ID, "/sets/1A/set.py") == b"# new 2\n"
     form = line_form("f", ["T1", "T2"], (0.0, 0.0), (4.0, 0.0), set_id="2")
-    ws.write("/sets/2/forms.json", dump_json([form.model_dump(mode="python")]), at=LATER)
+    ws.write("/sets/2/forms.json", dump_json([form._dumped()]), at=LATER)
     assert repo.read(SHOW_ID, "/sets/1A/forms.json") is not None
     spec = TransitionSpec(
         id=make_tid("2", "3"),
         counts=LAST_SET_COUNTS,
         rows={SpotId("T1"): PathRow(entity=SpotId("T1"), end=4)},
     )
-    ws.write("/transitions/2-3/paths.json", spec.model_dump_json(), at=LATER)
+    ws.write("/transitions/2-3/paths.json", json.dumps(spec.to_json()), at=LATER)
     assert "/transitions/1A-2/paths.json" in repo.paths(SHOW_ID)
     assert load_show(ws).transition(("2", "3")) == spec
     assert json.loads(ws.read("/transitions/2-3/paths.json"))["rows"]["T1"]["end"] == 4
@@ -563,16 +564,16 @@ def test_regression_workspace_has_no_public_stored_commit() -> None:
 
 
 def _with_fresh_set(show: Show, set_id: str) -> Show:
-    fresh = Set.model_validate({**show.sets[-1].model_dump(), "id": set_id})
+    fresh = Set.from_json({**show.sets[-1].to_json(), "id": set_id})
     return show.replace(sets=(*show.sets, fresh))
 
 
 def _with_legacy_set(show: Show, set_id: str) -> Show:
     """Adds a set whose ID only the legacy context accepts, as a v1 reader would build it."""
-    dumped = show.model_dump(mode="json")
+    dumped = json_doc(show)
     fresh = {**dumped["sets"][-1], "id": set_id}
     fresh.pop("key", None)
-    return Show.model_validate({**dumped, "sets": [*dumped["sets"], fresh]}, context=LEGACY)
+    return Show._validated({**dumped, "sets": [*dumped["sets"], fresh]}, context=LEGACY)
 
 
 def test_regression_new_set_folder_must_pass_the_id_check() -> None:

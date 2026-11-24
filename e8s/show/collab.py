@@ -123,7 +123,7 @@ def decode_event(
     kept = {k: v for k, v in data.items() if k != "actor"}
     if report is not None and "actor" in data:
         report.repair(f"dropped actor {data['actor']!r} from event {data.get('id')!r}")
-    return CanvasEvent.model_validate(kept)
+    return CanvasEvent._validated(kept)
 
 
 def _require_pin_force(show: Show, held: Pin, event: CanvasEvent, *, force: bool) -> None:
@@ -368,4 +368,4 @@ def highlight(
 
 def selection(ws: Workspace) -> Selection:
     """Returns what the designer has selected on the canvas; empty when nothing is."""
-    return Selection.model_validate_json(ws.read(SELECTION_DOC))
+    return Selection._validated_json(ws.read(SELECTION_DOC))

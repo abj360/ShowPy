@@ -39,7 +39,7 @@ def two_set_show() -> Show:
     >>> [p.point for p in two_set_show().set("2").placements][:2]
     [(0.0, 9.0), (2.0, 9.0)]
     """
-    spots = tuple(Spot.model_validate({"id": f"T{i}", "group": "trumpets"}) for i in range(1, 5))
+    spots = tuple(Spot._validated({"id": f"T{i}", "group": "trumpets"}) for i in range(1, 5))
     first = tuple(Placement(entity=s.id, x=2.0 * i, y=5.0) for i, s in enumerate(spots))
     second = tuple(p.replace(y=9.0) for p in first)
     return Show(
@@ -51,8 +51,8 @@ def two_set_show() -> Show:
             mode=TimelineMode.COUNTS, tempos=(TempoSection(at_count=0.0, counts_per_minute=TEMPO),)
         ),
         sets=(
-            Set.model_validate({"id": "1", "counts": 0.0, "placements": first}),
-            Set.model_validate({"id": "2", "counts": COUNTS, "placements": second}),
+            Set._validated({"id": "1", "counts": 0.0, "placements": first}),
+            Set._validated({"id": "2", "counts": COUNTS, "placements": second}),
         ),
         dependencies={"sheet:test-field": "1"},
     )
@@ -67,7 +67,7 @@ def with_rows(
     2.0
     """
     base = show or two_set_show()
-    spec = TransitionSpec.model_validate(
+    spec = TransitionSpec._validated(
         {"id": EXAMPLE_TID, "counts": COUNTS, "rows": dict(rows), "routes": dict(routes or {})}
     )
     return base.replace(transitions=(spec,))
@@ -81,7 +81,7 @@ def with_targets[K: str](updates: Mapping[K, Mapping[str, Any]], show: Show | No
     3.0
     """
     base = show or two_set_show()
-    patches = {entity: PlacementPatch.model_validate(change) for entity, change in updates.items()}
+    patches = {entity: PlacementPatch._validated(change) for entity, change in updates.items()}
     second = base.sets[1].with_placements(patches)
     return base.replace(sets=(base.sets[0], second))
 

@@ -213,7 +213,7 @@ def test_save_sheet_rejects_bad_scope_and_version() -> None:
     store = InMemorySheetStore()
     with pytest.raises(SchemaError):
         save_sheet(store, get_sheet(HS_REF), scope="world")  # type: ignore[arg-type]
-    odd = get_sheet(HS_REF).model_copy(update={"ref": "sheet:x@draft"})
+    odd = get_sheet(HS_REF).replace(ref="sheet:x@draft")
     with pytest.raises(VersionError):
         save_sheet(store, odd)
 
@@ -223,7 +223,7 @@ def test_store_put_is_idempotent_and_refuses_overwrites() -> None:
     sheet = blank_sheet(4.0, 4.0)
     assert store.put(sheet, "mine") == store.put(sheet, "mine")
     with pytest.raises(ConflictError):
-        store.put(sheet.model_copy(update={"name": "other"}), "mine")
+        store.put(sheet._copied(update={"name": "other"}), "mine")
 
 
 def test_store_versionless_get_returns_latest() -> None:
@@ -284,7 +284,7 @@ def test_regression_get_sheet_without_version_returns_latest_saved() -> None:
     """Returns the latest saved version for a versionless ref, as documented (audit 9.4)."""
     store = InMemorySheetStore()
     template = get_sheet(HS_ID_REF)
-    saved = save_sheet(store, template.model_copy(update={"name": "my field"}))
+    saved = save_sheet(store, template.replace(name="my field"))
     found = get_sheet(HS_ID_REF, store)
     assert found.ref == saved
     assert found.name == "my field"

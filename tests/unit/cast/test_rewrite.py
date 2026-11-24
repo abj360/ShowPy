@@ -63,7 +63,7 @@ def _with_label_overrides(show: Show) -> Show:
     """Adds overrides whose selectors name spots by label, by group and as a selection."""
     stored: tuple[SelectorField, ...] = ("T1-T2", "group:trumpets", Selection(ids=(SpotId("T4"),)))
     overrides = (*show.facing_overrides, *(_override(entities) for entities in stored))
-    return show.model_copy(update={"facing_overrides": overrides})
+    return show.replace(facing_overrides=overrides)
 
 
 def test_identity_rewrite_freezes_label_expressions_only() -> None:
@@ -106,13 +106,13 @@ def test_regression_forced_delete_drops_pins_on_the_spot() -> None:
 
 def test_regression_stale_selector_does_not_block_unrelated_delete() -> None:
     """Deletes T1 although a facing override names the long-gone spot T9 (audit 9.3)."""
-    show = two_set_show().model_copy(update={"facing_overrides": (_override("T9"),)})
+    show = two_set_show().replace(facing_overrides=(_override("T9"),))
     assert "T1" not in delete_spots(show, "T1").cast.ids()
 
 
 def test_regression_old_glued_selector_does_not_block_relabel() -> None:
     """Relabels a show whose override still uses the pre-2026-11-12 syntax `T1+T2` (audit 9.3)."""
-    show = two_set_show().model_copy(update={"facing_overrides": (_override("T1+T2"),)})
+    show = two_set_show().replace(facing_overrides=(_override("T1+T2"),))
     relabeled, _ = relabel(show, RENAME_T_TO_X)
     assert "T1" not in relabeled.cast.ids()
 
@@ -140,7 +140,7 @@ def test_regression_many_to_one_rename_is_reported_with_the_duplicate_target() -
 def test_regression_rewrite_passes_every_entity_pin_to_the_rename() -> None:
     """Applies the rename to every entity pin, including one on a spot outside the cast."""
     pins = tuple(Pin(target="entity", id=spot_id) for spot_id in ("T1", "T2", "Z9"))
-    show = rich_show().model_copy(update={"pins": pins, "transitions": ()})
+    show = rich_show().replace(pins=pins, transitions=())
     renames: dict[str, str | None] = {"T1": "S1", "T2": None, "Z9": "Q9"}
     rewritten = rewrite_spot_ids(show, lambda spot_id: renames.get(spot_id, spot_id))
     assert [p.id for p in rewritten.pins] == ["S1", "Q9"]
@@ -184,7 +184,7 @@ def test_rename_spots_follows_a_pin_without_force() -> None:
 
 
 def test_regression_stale_selector_is_reported_not_fatal() -> None:
-    show = two_set_show().model_copy(update={"facing_overrides": (_override("T9"),)})
+    show = two_set_show().replace(facing_overrides=(_override("T9"),))
     renamed, report = rename_spots(show, {"T1": "X1"})
     assert report.unresolved_selectors == ("T9",)
     assert renamed.facing_overrides[0].entities == "T9"
@@ -213,7 +213,7 @@ def test_regression_override_with_an_empty_selection_is_not_dropped() -> None:
     """Keeps an override whose selector already resolved to no spots before the rewrite."""
     show = rich_show()
     empty = show.facing_overrides[0].replace(entities="T1 - T1")
-    show = show.model_copy(update={"facing_overrides": (empty,)})
+    show = show.replace(facing_overrides=(empty,))
     rewritten, report = rewrite_spots(show, lambda i: None if i == "T4" else i)
     assert report.dropped_facings == ()
     assert [o.entities for o in rewritten.facing_overrides] == [()]

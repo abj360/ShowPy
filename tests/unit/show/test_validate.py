@@ -20,8 +20,8 @@ Contains:
         whose ID does not parse
     test_regression_validate_show_reports_pins_that_disagree_with_placement_flags: reports a pin
         record whose placements are not flagged pinned
-    test_regression_validate_show_reports_duplicate_note_ids: reports two notes with one ID, now
-        refused by the notes document that holds them
+    test_regression_notes_document_refuses_duplicate_note_ids: refuses two notes with one ID in
+        the notes document, which validate_show reported while notes lived in the show
     test_regression_validate_show_reports_facing_overrides_naming_unknown_spots: reports a facing
         override on a spot that does not exist
     test_regression_validate_show_reports_facing_overrides_past_the_show: reports a facing override
@@ -134,7 +134,7 @@ def test_pinned_rows_must_stay_unchanged() -> None:
 def test_form_membership_is_checked() -> None:
     show = two_set_show()
     form = Form(id=FormId("f"), set=SetId("1"), recipe=LINE_RECIPE, members=(SpotId("T1"),))
-    show = show.model_copy(update={"forms": {"f": form}})
+    show = show.replace(forms={"f": form})
     first = show.set("1").with_placements(
         {"T2": PlacementPatch(form=FormId("f"), order=0), "T3": PlacementPatch(form=FormId("zz"))}
     )
@@ -181,15 +181,15 @@ def test_dependencies_resolve_through_store() -> None:
 
 
 def test_dependency_version_must_be_pinned() -> None:
-    show = two_set_show().model_copy(update={"dependencies": {}})
+    show = two_set_show().replace(dependencies={})
     assert "UNPINNED_SHEET" in _codes(validate_dependencies(show))
 
 
 def test_show_flags_stale_transitions_and_zero_counts() -> None:
     show = two_set_show()
     stale = TransitionSpec(id=make_tid("2", "1"), counts=8.0)
-    zero = show.set("2").model_copy(update={"counts": 0.0})
-    broken = show.model_copy(update={"transitions": (stale,), "sets": (show.sets[0], zero)})
+    zero = show.set("2").replace(counts=0.0)
+    broken = show.replace(transitions=(stale,), sets=(show.sets[0], zero))
     codes = _codes(validate_show(broken))
     assert {"STALE_TRANSITION", "ZERO_COUNTS"} <= codes
 
@@ -203,7 +203,7 @@ GHOST = "GHOST"
 
 
 def _edited(**fields: object) -> Show:
-    return two_set_show().model_copy(update=fields)
+    return two_set_show()._copied(update=fields)
 
 
 def _mentions(show: Show, token: str) -> bool:
@@ -227,40 +227,35 @@ def _formed(
         members=tuple(map(SpotId, members)),
     )
     rows = tuple(
-        p.model_copy(update={"form": key, "order": members.index(p.entity)})
+        p.replace(form=key, order=members.index(p.entity))
         if points_back and p.entity in members
         else p
         for p in show.sets[1].placements
     )
-    second = show.sets[1].model_copy(
-        update={"placements": rows, "forms": (key,) if declares else ()}
-    )
-    return show.model_copy(update={"sets": (show.sets[0], second), "forms": {key: form}})
+    second = show.sets[1].replace(placements=rows, forms=(key,) if declares else ())
+    return show._copied(update={"sets": (show.sets[0], second), "forms": {key: form}})
 
 
 def _pinned_entity(entity: str = "T1", flagged: bool = True) -> Show:
     show = two_set_show()
     pinned = tuple(
-        s.model_copy(
-            update={
-                "placements": tuple(
-                    p.model_copy(update={"pinned": flagged}) if p.entity == entity else p
-                    for p in s.placements
-                )
-            }
+        s.replace(
+            placements=tuple(
+                p.replace(pinned=flagged) if p.entity == entity else p for p in s.placements
+            )
         )
         for s in show.sets
     )
-    return show.model_copy(update={"sets": pinned})
+    return show.replace(sets=pinned)
 
 
 def _with_pin(show: Show, pin: Pin) -> Show:
-    return show.model_copy(update={"pins": (pin,)})
+    return show.replace(pins=(pin,))
 
 
 def _set_two_with(**fields: object) -> tuple[Set, ...]:
     show = two_set_show()
-    return (show.sets[0], show.sets[1].model_copy(update=fields))
+    return (show.sets[0], show.sets[1]._copied(update=fields))
 
 
 @pytest.mark.parametrize(
@@ -338,9 +333,9 @@ def _note(note_id: str = "n", set_id: str = "1") -> Note:
     )
 
 
-def test_regression_validate_show_reports_duplicate_note_ids() -> None:
-    """Reports two notes with one ID (audit 9.7 validation gaps); notes left the show, and the
-    notes document that holds them now refuses the pair."""
+def test_regression_notes_document_refuses_duplicate_note_ids() -> None:
+    """Refuses two notes with one ID (audit 9.7 validation gaps). validate_show reported the pair
+    while notes lived in the show; the notes document that holds them now refuses it."""
     with pytest.raises(SchemaError) as caught:
         NotesDocument(show=two_set_show().id, notes=(_note("dup"), _note("dup")))
     assert "dup" in caught.value.message
@@ -375,13 +370,13 @@ def test_regression_validate_show_reports_selections_naming_unknown_spots() -> N
     """Reports a named selection holding a spot that does not exist (audit 9.7 validation gaps)."""
     cast = two_set_show().cast
     selections = {"front": frozenset({"T1", "ZZ"})}
-    assert _mentions(_edited(cast=cast.model_copy(update={"selections": selections})), "ZZ")
+    assert _mentions(_edited(cast=cast._copied(update={"selections": selections})), "ZZ")
 
 
 def test_regression_validate_show_names_the_selection_and_spot_in_context() -> None:
     """Puts the selection path and the unknown spot in the issue context."""
     cast = two_set_show().cast
-    show = _edited(cast=cast.model_copy(update={"selections": {"front": ("T1", "ZZ")}}))
+    show = _edited(cast=cast._copied(update={"selections": {"front": ("T1", "ZZ")}}))
     (issue,) = [i for i in validate_show(show).issues if i.code == "UNKNOWN_SPOT"]
     assert dict(issue.context) == {"path": "cast.selections.front", "spot": "ZZ"}
 
@@ -394,8 +389,8 @@ def test_regression_validate_show_reports_infinite_set_counts() -> None:
 def test_regression_validate_show_reports_non_finite_tempo() -> None:
     """Reports a tempo section whose tempo is infinite (audit 9.7 validation gaps)."""
     timeline = two_set_show().timeline
-    tempo = timeline.tempos[0].model_copy(update={"counts_per_minute": math.inf})
-    show = _edited(timeline=timeline.model_copy(update={"tempos": (tempo,)}))
+    tempo = timeline.tempos[0]._copied(update={"counts_per_minute": math.inf})
+    show = _edited(timeline=timeline.replace(tempos=(tempo,)))
     assert _mentions(show, "inf")
 
 
@@ -408,8 +403,8 @@ def test_regression_validate_show_names_the_non_finite_field_path() -> None:
 
 def test_regression_validate_show_reports_non_finite_waypoints() -> None:
     """Reports a path waypoint with an infinite coordinate (audit 9.7 validation gaps)."""
-    waypoint = Waypoint(x=1.0, y=1.0).model_copy(update={"x": math.inf})
-    row = PathRow(entity=SpotId("T1")).model_copy(update={"waypoints": (waypoint,)})
+    waypoint = Waypoint(x=1.0, y=1.0)._copied(update={"x": math.inf})
+    row = PathRow(entity=SpotId("T1")).replace(waypoints=(waypoint,))
     spec = TransitionSpec(id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): row})
     assert _mentions(_edited(transitions=(spec,)), "inf")
 
@@ -461,7 +456,7 @@ def test_regression_validate_show_reports_hyphenated_form_and_note_ids() -> None
 def test_regression_validate_show_names_the_bad_id_path_in_context() -> None:
     """Puts the path of the bad ID and its value in the issue context."""
     show = two_set_show()
-    renamed = show.sets[1].model_copy(update={"id": "a/b"})
+    renamed = show.sets[1].replace(id="a/b")
     issues = validate_show(_edited(sets=(show.sets[0], renamed))).issues
     (issue,) = [i for i in issues if i.code == "BAD_ID"]
     assert dict(issue.context) == {"path": "sets[1].id", "id": "a/b"}
@@ -470,7 +465,7 @@ def test_regression_validate_show_names_the_bad_id_path_in_context() -> None:
 def test_regression_validate_show_reports_set_ids_that_cannot_be_stored() -> None:
     """Reports a set ID that no workspace path can hold (audit 9.7 validation gaps)."""
     show = two_set_show()
-    renamed = show.sets[1].model_copy(update={"id": "a/b"})
+    renamed = show.sets[1].replace(id="a/b")
     assert _mentions(_edited(sets=(show.sets[0], renamed)), "a/b")
 
 
@@ -479,8 +474,8 @@ def test_regression_validate_show_reports_set_ids_that_cannot_be_stored() -> Non
 def test_regression_validate_show_reports_placements_of_inactive_spots() -> None:
     """Reports an on-field placement of a spot marked inactive (audit 9.7 validation gaps)."""
     cast = two_set_show().cast
-    spots = (cast.spots[0].model_copy(update={"active": False}), *cast.spots[1:])
-    assert _mentions(_edited(cast=cast.model_copy(update={"spots": spots})), "T1")
+    spots = (cast.spots[0].replace(active=False), *cast.spots[1:])
+    assert _mentions(_edited(cast=cast.replace(spots=spots)), "T1")
 
 
 @pytest.mark.defect("UP-9.7-84")
@@ -488,16 +483,16 @@ def test_regression_validate_show_reports_placements_of_inactive_spots() -> None
 def test_regression_validate_show_reports_a_nonzero_first_set_count() -> None:
     """Reports a first set that has counts (audit 9.7 validation gaps)."""
     show = two_set_show()
-    first = show.sets[0].model_copy(update={"counts": 3.5})
+    first = show.sets[0].replace(counts=3.5)
     assert _mentions(_edited(sets=(first, show.sets[1])), "3.5")
 
 
 def test_regression_validate_show_reports_nan_counts_on_the_first_set() -> None:
     """Reports NaN counts on the first set by name (audit 9.7 validation gaps)."""
     show = two_set_show()
-    first = show.sets[0].model_copy(update={"counts": math.nan})
+    first = show.sets[0]._copied(update={"counts": math.nan})
     report = validate_show(_edited(sets=(first, show.sets[1])))
-    nonzero_first = _edited(sets=(show.sets[0].model_copy(update={"counts": 3.5}), show.sets[1]))
+    nonzero_first = _edited(sets=(show.sets[0].replace(counts=3.5), show.sets[1]))
     known_codes = _codes(validate_show(nonzero_first))
     assert any(
         "nan" in f"{i.message} {i.hint}".lower() and i.code not in known_codes
@@ -507,8 +502,8 @@ def test_regression_validate_show_reports_nan_counts_on_the_first_set() -> None:
 
 def test_regression_validate_show_reports_nan_waypoints() -> None:
     """Reports a path waypoint with a NaN coordinate (audit 9.7 validation gaps)."""
-    waypoint = Waypoint(x=1.0, y=1.0).model_copy(update={"y": math.nan})
-    row = PathRow(entity=SpotId("T1")).model_copy(update={"waypoints": (waypoint,)})
+    waypoint = Waypoint(x=1.0, y=1.0)._copied(update={"y": math.nan})
+    row = PathRow(entity=SpotId("T1")).replace(waypoints=(waypoint,))
     spec = TransitionSpec(id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): row})
     assert _mentions(_edited(transitions=(spec,)), "nan")
 
@@ -526,8 +521,8 @@ def test_regression_validate_show_reports_comments_anchored_to_missing_items() -
 def test_regression_validate_show_reports_a_show_longer_than_max_counts() -> None:
     """Reports a show whose set counts add up past MAX_COUNTS, and never raises."""
     show = two_set_show()
-    long_second = show.sets[1].model_copy(update={"counts": float(MAX_COUNTS)})
-    third = long_second.model_copy(update={"id": "3", "key": None, "counts": 1.0})
+    long_second = show.sets[1].replace(counts=float(MAX_COUNTS))
+    third = long_second.replace(id="3", key=None, counts=1.0)
     report = validate_show(_edited(sets=(show.sets[0], long_second, third)))
     (issue,) = [i for i in report.issues if i.code == "SHOW_TOO_LONG"]
     assert "MAX_COUNTS" in issue.message

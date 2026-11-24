@@ -242,7 +242,7 @@ def _apply_change(current: Placement, change: Placement | PlacementPatch) -> Pla
             f"update for {current.entity} is a {type(change).__name__}",
             hint="pass a Placement or a PlacementPatch",
         )
-    return current.replace(**{name: getattr(change, name) for name in change.model_fields_set})
+    return current.replace(**{name: getattr(change, name) for name in change._set_fields()})
 
 
 class SpotCount(FrozenModel):

@@ -369,7 +369,7 @@
     },
     "Cast": {
       "additionalProperties": false,
-      "description": "Holds every group and spot in the show.\n\nAttributes:\n    groups: Group key to group; each key equals its group's `key`.\n    spots: Every spot, in creation order.\n    selections: Named selections of spot IDs of this cast, deduplicated in first-seen order.\n    label_scheme: Labeling rules; its prefixes name groups of this cast.",
+      "description": "Holds every group and spot in the show.\n\nAttributes:\n    groups: Group key to group; each key equals its group's `key`.\n    spots: Every spot, in creation order; at most MAX_SPOTS.\n    selections: Named selections of spot IDs of this cast, deduplicated in first-seen order.\n    label_scheme: Labeling rules; its prefixes name groups of this cast.",
       "properties": {
         "groups": {
           "additionalProperties": {
@@ -403,6 +403,7 @@
           "items": {
             "$ref": "#/$defs/Spot"
           },
+          "maxItems": 5000,
           "title": "Spots",
           "type": "array"
         }
@@ -2466,6 +2467,7 @@
           "items": {
             "type": "string"
           },
+          "maxItems": 1000,
           "type": "array"
         },
         "title": {

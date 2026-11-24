@@ -35,7 +35,7 @@ def _comments(raw: bytes, sets: Mapping[str, str], spots: Mapping[str, str]) -> 
     parsed = parse_strict_json(raw, document=COMMENTS_DOC)
     comments = validate_adapter(COMMENTS_ADAPTER, parsed, name="Comments")
     renamed = [c.replace(anchor=renamed_anchor(c.anchor, sets, spots)) for c in comments]
-    return None if renamed == comments else [c.model_dump(mode="json") for c in renamed]
+    return None if renamed == comments else [c.to_json() for c in renamed]
 
 
 def _selection(raw: bytes, spots: Mapping[str, str]) -> JsonValue:
@@ -43,7 +43,7 @@ def _selection(raw: bytes, spots: Mapping[str, str]) -> JsonValue:
     parsed = parse_strict_json(raw, document=SELECTION_DOC)
     selection = validate_adapter(SELECTION_ADAPTER, parsed, name="Selection")
     renamed = selection.replace(ids=tuple(SpotId(spots.get(i, i)) for i in selection.ids))
-    return None if renamed == selection else renamed.model_dump(mode="json")
+    return None if renamed == selection else renamed.to_json()
 
 
 def renamed_canvas(docs: Mapping[str, bytes], report: MigrationReport) -> dict[str, JsonValue]:

@@ -286,7 +286,7 @@ def load_font(data: bytes) -> Font:
     except SchemaError as exc:
         raise _bad_font(exc.message, hint=exc.hint, field="(root)", **exc.context) from exc
     try:
-        font = Font.model_validate(document)
+        font = Font._validated(document)
     except SchemaError as exc:
         first = field_errors(exc)[0] if "errors" in exc.context else {}
         raise _bad_font(
@@ -333,9 +333,9 @@ def register_font(
             code=ErrorCode.FONT_NAME_TAKEN,
         )
     names = registry.names if taken is not None else {**registry.names, font.name: uri}
-    # model_construct skips the consistency validator: this font was just hashed and loaded, and
+    # _unchecked skips the consistency validator: this font was just hashed and loaded, and
     # re-hashing the rest on every call would be quadratic in the registry size.
-    extended = FontRegistry.model_construct(
+    extended = FontRegistry._unchecked(
         fonts=ReadOnlyMap({**registry.fonts, uri: font}),
         sources=ReadOnlyMap({**registry.sources, uri: data}),
         names=ReadOnlyMap(names),

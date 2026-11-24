@@ -60,7 +60,7 @@ from e8s.examples import two_set_show
 
 show = two_set_show()  # 4 trumpets, 8 counts, 120 cpm
 spec = e8s.stagger(show.transition(("1", "2")), ["T1", "T2", "T3", "T4"], step=1.0)
-show = show.model_copy(update={"transitions": (spec,)})
+show = show.replace(transitions=(spec,))
 
 engine = e8s.PathEngine(show)
 engine.position("T4", 6.0)  # array([6. , 7.4]): T4 starts 3 counts late

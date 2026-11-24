@@ -170,6 +170,9 @@ def test_regression_values_equal_to_a_default_only_in_python_are_listed() -> Non
     migrate_sheet(docs, report)
     listed = [(d.document, dict(d.fields)) for d in report.build().dropped]
     assert [document for document, _ in listed] == [SHEET_DOC, SHOW_DOC]
-    sheet_fields = report.build().dropped[0].model_dump(mode="json")["fields"]
-    assert json.dumps(sheet_fields["default_coordinates"]["origin"]) == "[-0.0, 0.0]"
+    sheet_fields = report.build().dropped[0].to_json()["fields"]
+    assert isinstance(sheet_fields, dict)
+    coordinates = sheet_fields["default_coordinates"]
+    assert isinstance(coordinates, dict)
+    assert json.dumps(coordinates["origin"]) == "[-0.0, 0.0]"
     assert listed[1][1] == {"zones": False}

@@ -63,7 +63,7 @@ class NotesDocument(FrozenModel):
         show: ID of the show the notes belong to.
         notes: The notes in order; IDs are unique ignoring case.
 
-    >>> NotesDocument(show="show-1").model_dump(mode="json")
+    >>> NotesDocument(show="show-1").to_json()
     {'format': 'e8.notes', 'version': 1, 'show': 'show-1', 'notes': []}
     """
 

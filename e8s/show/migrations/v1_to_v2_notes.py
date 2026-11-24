@@ -86,14 +86,14 @@ def move_notes(
         {**item, "id": ids[note_id]} if isinstance(item, dict) and note_id in ids else item
         for item, note_id in zip(stored, map(_stored_id, stored), strict=True)
     ]
-    notes = [Note.model_validate(item) for item in renamed_ids]
+    notes = [Note._validated(item) for item in renamed_ids]
     sets, spots = report.renames(SET_KIND), report.renames(SPOT_KIND)
     moved = [
         {
-            **note.model_dump(mode="json"),
-            "anchor": renamed_anchor(note.anchor, sets, spots).model_dump(mode="json"),
+            **note.to_json(),
+            "anchor": renamed_anchor(note.anchor, sets, spots).to_json(),
         }
         for note in notes
     ]
-    document = NotesDocument.model_validate({"show": show.id, "notes": moved})
-    return {NOTES_DOC: document.model_dump(mode="json")}
+    document = NotesDocument._validated({"show": show.id, "notes": moved})
+    return {NOTES_DOC: document.to_json()}

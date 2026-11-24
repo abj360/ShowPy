@@ -95,7 +95,7 @@ def _heavy(benchmark: BenchmarkFixture, tier: BenchTier, fn: Callable[[], Any]) 
 def _one_spot_edit(show: Show, x: float) -> Show:
     entity = show.cast.ids()[0]
     edited = show.sets[1].with_placements({entity: PlacementPatch(x=x)}, force=True)
-    return show.model_copy(update={"sets": (show.sets[0], edited, *show.sets[2:])})
+    return show._copied(update={"sets": (show.sets[0], edited, *show.sets[2:])})
 
 
 def _history(base: Show, revisions: int) -> Workspace:

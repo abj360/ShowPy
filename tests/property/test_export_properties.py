@@ -39,7 +39,7 @@ def edited_shows(draw: st.DrawFn) -> Show:
         )
         for s in show.sets
     )
-    return show.model_copy(update={"sets": sets, "title": draw(st.text(max_size=12))})
+    return show.replace(sets=sets, title=draw(st.text(max_size=12)))
 
 
 @settings(max_examples=40)

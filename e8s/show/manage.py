@@ -177,7 +177,7 @@ def new_show(
         )
     roster = cast or Cast()
     placements = tuple(map(_off_field, roster.ids()))
-    first = Set.model_validate({"id": FIRST_SET_ID, "counts": 0.0, "placements": placements})
+    first = Set._validated({"id": FIRST_SET_ID, "counts": 0.0, "placements": placements})
     return Show(
         id=show_id,
         title=title,

@@ -29,7 +29,7 @@ from e8s.show.migrations.v1_to_v2_ids import rename_ids
 from e8s.show.models import Show
 from e8s.show.pinning import pin, unpin
 from e8s.show.sections import split_section
-from tests.helpers import replaced_form_show
+from tests.helpers import json_doc, replaced_form_show
 
 LEGACY_SET = "con"
 LEGACY_TRANSITION = "con→3"
@@ -91,10 +91,10 @@ def test_set_pin_locks_every_form_when_the_set_lists_none() -> None:
 def test_regression_legacy_transition_pin_with_reserved_set_id_still_resolves() -> None:
     """Resolves a stored transition pin into a set `con` once migration renames it (review of
     L0.5); the set ID predates the ID rule, so the v1 show is built with legacy IDs accepted."""
-    dump = pin(add_set(two_set_show(), "3", 4.0), "transition", "2→3").model_dump(mode="json")
+    dump = json_doc(pin(add_set(two_set_show(), "3", 4.0), "transition", "2→3"))
     dump["sets"][1]["id"] = LEGACY_SET
     dump["pins"][0]["id"] = LEGACY_TRANSITION
-    legacy = Show.model_validate({**dump, "transitions": []}, context={LEGACY_IDS_KEY: True})
+    legacy = Show._validated({**dump, "transitions": []}, context={LEGACY_IDS_KEY: True})
     pinned = rename_ids(legacy, ReportBuilder(FIRST_VERSION))
     assert [p.id for p in pinned.pins] == [MIGRATED_TRANSITION]
     require_unlocked(pinned, pinned)

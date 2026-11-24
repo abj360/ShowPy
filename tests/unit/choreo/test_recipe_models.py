@@ -29,10 +29,11 @@ Contains:
     test_text_recipe_is_a_member_of_the_union: stores a text form's TextRecipe as its recipe
 """
 
+import json
 import math
 import warnings
 from collections.abc import Mapping
-from typing import get_args
+from typing import get_args, get_type_hints
 
 import numpy as np
 import pytest
@@ -73,6 +74,7 @@ from e8s.core.util import approx_equal
 from e8s.geo.affine import rotation_matrix, translation_matrix
 from e8s.geo.shapes import line
 from tests.fixtures.shows import two_set_show
+from tests.helpers import json_doc
 
 TOL = 1e-9
 SQUARE = [(0, 0), (4, 0), (4, 4), (0, 4)]
@@ -106,7 +108,7 @@ def test_every_form_kind_round_trips_its_recipe() -> None:
     forms = _every_kind()
     assert sorted(form.kind for form in forms) == sorted(get_args(FormKind.__value__))
     for form in forms:
-        rebuilt = Form.model_validate_json(form.model_dump_json())
+        rebuilt = Form.from_json(json.loads(json.dumps(form.to_json())))
         assert rebuilt == form
         assert rebuilt.kind == form.recipe.kind == form.id
         assert rebuilt.recipe.recipe_version == 1
@@ -116,7 +118,7 @@ def test_every_form_kind_round_trips_its_recipe() -> None:
 
 def test_recipe_union_covers_every_form_kind() -> None:
     union = get_args(get_args(Recipe.__value__)[0])
-    kinds = [model.model_fields["kind"].default for model in union]
+    kinds = [get_args(get_type_hints(model)["kind"])[0] for model in union]
     assert sorted(kinds) == sorted(get_args(FormKind.__value__))
 
 
@@ -129,7 +131,7 @@ def test_recipe_union_covers_every_form_kind() -> None:
 )
 def test_regression_form_refuses_the_v1_kind_and_geometry_fields(fields: dict[str, object]) -> None:
     with pytest.raises(SchemaError):
-        Form.model_validate({"id": "f", "set": "1", "members": [], **fields})
+        Form.from_json({"id": "f", "set": "1", "members": [], **fields})
 
 
 @pytest.mark.parametrize(
@@ -138,7 +140,7 @@ def test_regression_form_refuses_the_v1_kind_and_geometry_fields(fields: dict[st
 )
 def test_regression_recipe_rejects_a_non_affine_transform_shape(transform: object) -> None:
     with pytest.raises(SchemaError):
-        LineRecipe.model_validate({"curve": line((0, 0), (1, 0)), "transform": transform})
+        LineRecipe.from_json({"curve": line((0, 0), (1, 0)), "transform": transform})
 
 
 def test_regression_custom_recipe_needs_one_facing_per_point() -> None:
@@ -175,7 +177,7 @@ def test_regression_generated_params_are_read_only_and_reach_generators_as_plain
     assert isinstance(recipe.params, ReadOnlyMap)
     assert recipe.params["start"] == ((1.0, 2.0),)
     assert slots(form, registry).tolist() == [[1.0, 2.0], [2.0, 2.0], [3.0, 2.0]]
-    dumped: JsonValue = form.model_dump(mode="json")["recipe"]["params"]
+    dumped: JsonValue = json_doc(form)["recipe"]["params"]
     assert dumped == {"start": [[1.0, 2.0]]}
 
 
@@ -185,7 +187,7 @@ def test_regression_curve_recipe_transform_maps_slots_and_facing_curve() -> None
         recipe=plain.recipe.replace(transform=rotation_matrix(90.0, ORIGIN).tolist())
     )
     assert approx_equal(slots(turned), [[-5.0, 0.0], [-5.0, 6.0]], abs_tol=TOL)
-    show = two_set_show().model_copy(update={"forms": {FormId("f"): turned.replace(set="1")}})
+    show = two_set_show().replace(forms={FormId("f"): turned.replace(set="1")})
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         facing = face_along(show, "1", "f").get("T1").facing
@@ -196,7 +198,7 @@ def test_regression_transform_form_composes_onto_a_stored_transform() -> None:
     custom = custom_form("c", ["A"], [(1.0, 0.0)])
     shifted = custom.replace(recipe=custom.recipe.replace(transform=SHIFT))
     turned = transform_form(shifted, rotation_matrix(90.0, ORIGIN))
-    assert turned.recipe.model_dump(mode="json")["points"] == [[1.0, 0.0]]
+    assert turned.recipe.to_json()["points"] == [[1.0, 0.0]]
     assert approx_equal(slots(turned), [[-3.0, 3.0]], abs_tol=TOL)
     moved = transform_form(line_form("l", ["A"], (0, 0), (2, 0)), translation_matrix(0, 1))
     assert moved.recipe.transform is None
@@ -205,7 +207,7 @@ def test_regression_transform_form_composes_onto_a_stored_transform() -> None:
 
 def test_regression_face_along_an_svg_form_follows_each_spot_s_nearest_subpath() -> None:
     curves = [line((-1.0, 5.0), (1.0, 5.0)), line((4.0, 4.0), (4.0, 6.0))]
-    form = Form.model_validate(
+    form = Form.from_json(
         {
             "id": "f",
             "set": "1",
@@ -213,7 +215,7 @@ def test_regression_face_along_an_svg_form_follows_each_spot_s_nearest_subpath()
             "members": ["T1", "T3"],
         }
     )
-    show = two_set_show().model_copy(update={"forms": {FormId("f"): form}})
+    show = two_set_show().replace(forms={FormId("f"): form})
     faced = face_along(show, "1", "f")
     assert approx_equal(faced.get("T1").facing, 90.0, abs_tol=TOL)
     assert approx_equal(faced.get("T3").facing, 180.0, abs_tol=TOL)

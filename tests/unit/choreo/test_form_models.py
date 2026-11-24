@@ -20,6 +20,7 @@ Contains:
         360)
 """
 
+import json
 import math
 from collections.abc import MutableMapping
 from typing import cast
@@ -80,7 +81,7 @@ def test_regression_form_meta_is_read_only_and_hashes_by_content() -> None:
         mutable["a"] = "9"
     assert first == second
     assert hash(first) == hash(second)
-    assert first.model_dump(mode="json")["meta"] == {"a": "1", "b": "2"}
+    assert first.to_json()["meta"] == {"a": "1", "b": "2"}
     assert _custom_form().meta == {}
 
 
@@ -123,7 +124,7 @@ def test_regression_form_members_may_hold_open_slots() -> None:
         members=(SpotId("A"), None, None, SpotId("B")),
     )
     assert gapped.members == ("A", None, None, "B")
-    assert Form.model_validate_json(gapped.model_dump_json()) == gapped
+    assert Form.from_json(json.loads(json.dumps(gapped.to_json()))) == gapped
     with pytest.raises(SpacingError):
         Form(id=FormId("f"), set=SetId("1"), recipe=recipe, members=(None,) * 5)
     with pytest.raises(SchemaError):

@@ -80,13 +80,15 @@ def space_along(
     """Spaces n spots evenly by arc length between `start` and `end`.
 
     With `endpoints=False`, spots sit at the centers of n equal cells. A closed curve spaced
-    over its full length never repeats the start.
+    over its full length never repeats the start. More than MAX_POINTS spots raise
+    SpacingError before any is computed.
 
     >>> from e8s.geo.shapes import line
     >>> space_along(line((0, 0), (4, 0)), 3).tolist()
     [[0.0, 0.0], [2.0, 0.0], [4.0, 0.0]]
     """
     _require_count(n)
+    require_size(n, MAX_POINTS, what="spots", error=SpacingError)
     stop = curve.length() if end is None else end
     if n == 1:
         return curve.point_at(np.array([(start + stop) / 2]))
@@ -330,6 +332,24 @@ def _centroid_of(area: Area) -> Point:
     return (centroid.x, centroid.y)
 
 
+def _inside(lattice: Points, area: Area, limit: int | None) -> Points:
+    """Keeps the lattice points inside an area, refusing more than `limit` once it passes."""
+    inside = prep(area.buffer(FIT_EPS))
+    kept: list[Points] = []
+    for point in lattice:
+        if not inside.contains(shapely.Point(point)):
+            continue
+        kept.append(point)
+        if limit is not None and len(kept) > limit:
+            raise SpacingError(
+                f"more than {limit} spots fit in the area",
+                hint="use a larger interval or a smaller area, or make room for more spots",
+                context={"limit": limit},
+                code=ErrorCode.TOO_MANY_SPOTS,
+            )
+    return np.array(kept).reshape(-1, 2)
+
+
 def fill(
     area: Area,
     interval: Meters,
@@ -338,10 +358,15 @@ def fill(
     anchor: Point | None = None,
     n: int | None = None,
     margin: Meters = 0.0,
+    *,
+    limit: int | None = None,
 ) -> Points:
     """Fills an area with lattice spots `interval` apart, one lattice point on `anchor`.
 
-    With n, keeps the n spots closest to the anchor (ties broken by position order).
+    With n, keeps the n spots closest to the anchor (ties broken by position order). With
+    limit, raises SpacingError TOO_MANY_SPOTS as soon as more than `limit` spots fit, before
+    the rest of the lattice is tested, so a caller with room for only a few spots never pays
+    for a fine lattice.
 
     >>> from e8s.geo.regions import region
     >>> len(fill(region([(0, 0), (2, 0), (2, 2), (0, 2)]), 1.0, anchor=(0, 0)))
@@ -360,8 +385,7 @@ def fill(
     shifted = (minx - origin[0], miny - origin[1], maxx - origin[0], maxy - origin[1])
     _require_lattice_size(shifted, interval, pattern)
     lattice = _lattice(shifted, interval, pattern) + np.asarray(origin)
-    inside = prep(local_area.buffer(FIT_EPS))
-    kept = np.array([p for p in lattice if inside.contains(shapely.Point(p))]).reshape(-1, 2)
+    kept = _inside(lattice, local_area, None if limit is None else _require_whole(limit, "limit"))
     pts = _rotate_about(kept, origin, angle_deg)
     if n is None:
         return pts

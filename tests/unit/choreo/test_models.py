@@ -116,9 +116,9 @@ def test_placement_patch_validates_like_a_placement() -> None:
     with pytest.raises(SchemaError):
         PlacementPatch(x=math.nan)
     with pytest.raises(SchemaError):
-        PlacementPatch.model_validate({"x": None})
+        PlacementPatch.from_json({"x": None})
     with pytest.raises(SchemaError):
-        PlacementPatch.model_validate({"entity": "T1"})
+        PlacementPatch.from_json({"entity": "T1"})
 
 
 def test_with_placements_refuses_a_dict_patch() -> None:
@@ -136,7 +136,7 @@ def test_regression_set_index_is_fresh_after_replace() -> None:
     shifted = first.with_placements({"T1": PlacementPatch(x=7.0)})
     assert shifted.get("T1").x == 7.0
     assert first.get("T1").x == 0.0
-    copied = first.model_copy(update={"placements": first.placements[:1]})
+    copied = first.replace(placements=first.placements[:1])
     with pytest.raises(UnknownRefError):
         copied.get("T2")
     assert copied.get("T1").x == 0.0

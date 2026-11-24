@@ -56,7 +56,7 @@ def _show_with_line_form() -> Show:
         recipe=LineRecipe(curve=line((0.0, 5.0), (6.0, 5.0))),
         members=(SpotId("T1"), SpotId("T2"), SpotId("T3"), SpotId("T4")),
     )
-    return two_set_show().model_copy(update={"forms": {"f": form}})
+    return two_set_show().replace(forms={"f": form})
 
 
 def test_face_along_line_points_down_the_line() -> None:
@@ -75,7 +75,7 @@ def test_face_normal_on_circle_outward_and_inward() -> None:
         recipe=CircleRecipe(curve=ring),
         members=(SpotId("T1"),),
     )
-    show = show.model_copy(update={"forms": {"c": form}})
+    show = show.replace(forms={"c": form})
     assert approx_equal(face_normal(show, "1", "c").get("T1").facing, 270.0, abs_tol=1e-6)
     assert approx_equal(
         face_normal(show, "1", "c", outward=False).get("T1").facing, 90.0, abs_tol=1e-6
@@ -90,7 +90,7 @@ def test_face_along_needs_a_curve_form() -> None:
         recipe=BlockRecipe(origin=(0, 0), rows=1, cols=1, interval=1.0),
         members=(SpotId("T1"),),
     )
-    show = show.model_copy(update={"forms": {"b": form}})
+    show = show.replace(forms={"b": form})
     with pytest.raises(GeometryError):
         face_along(show, "1", "b")
     with pytest.raises(UnknownRefError):

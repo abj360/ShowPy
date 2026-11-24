@@ -1,5 +1,5 @@
 """
-v1_to_v2_paths.py --- the paths sub-step of the v1 to v2 format migration (lane B)
+v1_to_v2_paths.py --- the paths sub-step of the v1 to v2 format migration
 
 v2 types the motion parameters of the four built-in motions, bounds easings and tags facing
 values. For each path row, a key the built-in motion never read in v1 is dropped, and an easing
@@ -189,7 +189,7 @@ def _tag_facing(
     model = FACING_MODELS[kind]
     candidate = value if _is_tagged(kind, value) else {"kind": kind, FACING_FIELDS[kind]: value}
     try:
-        tagged = model.model_validate(candidate).model_dump(mode="json")
+        tagged = model._validated(candidate).to_json()
     except SchemaError as exc:
         raise _refusal(document, field, value, allowed) from exc
     if kind == "fixed" and not isinstance(value, dict) and tagged["degrees"] != value:
@@ -232,13 +232,13 @@ def _migrate_params(
     model = BUILT_IN_MOTION_PARAMS[motion_fn]
     kept: dict[str, JsonValue] = {}
     for name, value in params.items():
-        if name not in model.model_fields:
+        if name not in model._field_names():
             report.repair(
                 f"{document}: dropped key {name!r} from {field}, which v1's {motion_fn} never read"
             )
             continue
         try:
-            model.model_validate({name: value})
+            model._validated({name: value})
         except SchemaError as exc:
             allowed = ALLOWED_PARAM_VALUES[name]
             raise _refusal(document, f"{field}.{name}", value, allowed) from exc

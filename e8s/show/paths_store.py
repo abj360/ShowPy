@@ -15,7 +15,7 @@ from e8s.show.storage import Workspace, load_show
 
 def save_paths(ws: Workspace, spec: TransitionSpec, at: datetime) -> str:
     """Writes `/transitions/<a>-<b>/paths.json`; checks run through the tool hook, not here."""
-    revision = ws.write(paths_doc(spec.id), spec.model_dump_json(), at=at)
+    revision = ws.write(paths_doc(spec.id), spec._dumped_json(), at=at)
     return revision.id
 
 

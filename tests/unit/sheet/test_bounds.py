@@ -24,7 +24,7 @@ def test_on_surface_includes_the_edge() -> None:
 def test_walkable_respects_holes() -> None:
     sheet = field_sheet()
     ring = sheet.outline
-    holed = sheet.model_copy(update={"walkable": Region(exterior=ring, holes=(HOLE,))})
+    holed = sheet.replace(walkable=Region(exterior=ring, holes=(HOLE,)))
     assert walkable(sheet, (0.0, 1.5))
     assert not walkable(holed, (0.0, 1.5))
     assert on_surface(holed, (0.0, 1.5))

@@ -20,7 +20,7 @@ import base64
 import json
 import math
 from collections.abc import Iterable, Mapping
-from typing import Any, Never
+from typing import Any, Never, cast
 
 from e8s.choreo.form_models import TextRecipe
 from e8s.core.error_codes import ErrorCode
@@ -103,8 +103,9 @@ def export_json(
     >>> sorted(export_json(two_set_show(), include=["title"])["show"])
     ['id', 'title']
     """
-    dumped = show.model_dump(mode="json")
-    extensions = dumped.pop(EXTENSIONS_FIELD, {})
+    dumped = show.to_json()
+    # Show.extensions is a JSON object, so its JSON dump is a dict.
+    extensions = cast("dict[str, JsonValue]", dumped.pop(EXTENSIONS_FIELD, {}))
     if include is not None:
         names = [include] if isinstance(include, str) else include
         keep = {ALWAYS_EXPORTED, *names}
@@ -162,7 +163,7 @@ def import_json(d: Mapping[str, Any]) -> Show:
     >>> from e8s.examples import two_set_show
     >>> import_json(export_json(two_set_show())).id
     'show-1'
-    >>> v1 = {"schema": "showpy.show.v1", "show": two_set_show().model_dump(mode="json")}
+    >>> v1 = {"schema": "showpy.show.v1", "show": two_set_show().to_json()}
     >>> import_json(v1) == two_set_show()
     True
     >>> import_json({**export_json(two_set_show()), "x-host": {"n": 1}}).extensions["x-host"]
@@ -191,7 +192,7 @@ def migrate_json(
             or None when the document is current or held no notes.
 
     >>> from e8s.examples import two_set_show
-    >>> v1 = {"schema": "showpy.show.v1", "show": two_set_show().model_dump(mode="json")}
+    >>> v1 = {"schema": "showpy.show.v1", "show": two_set_show().to_json()}
     >>> show, report, notes = migrate_json(v1)
     >>> show == two_set_show(), report.from_version, report.dropped, notes
     (True, 1, (), None)
@@ -202,7 +203,7 @@ def migrate_json(
             migrated, report, beside = migrate_dump(show, version)
             notes = beside.get(NOTES_DOC)
             return migrated, report, notes if isinstance(notes, dict) else None
-        current = Show.model_validate(show, context=CHECKED_CONTEXT)
+        current = Show._validated(show, context=CHECKED_CONTEXT)
         return current, MigrationReport(from_version=CURRENT_VERSION), None
     except SchemaError as error:
         friendly = _first_field_error(error)

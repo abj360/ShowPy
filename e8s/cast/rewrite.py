@@ -135,7 +135,7 @@ def rewrite_spots(show: "Show", rename: Rename) -> "tuple[Show, RewriteReport]":
         "facing_overrides": _rewrite_overrides(show, rename, dropped),
         "pins": _rewrite_pins(show.pins, rename),
     }
-    new_cast = Cast.model_validate({**dict(cast), "spots": spots, "selections": selections})
+    new_cast = Cast._validated({**dict(cast), "spots": spots, "selections": selections})
     report = RewriteReport(
         renamed={old: new for old, new in renamed.items() if old != new},
         dropped_routes=tuple(dropped.routes),

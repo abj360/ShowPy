@@ -1,13 +1,13 @@
 """
-v1_to_v2_cast.py --- the cast sub-step of the v1 to v2 format migration (lane D)
+v1_to_v2_cast.py --- the cast sub-step of the v1 to v2 format migration
 
-Lane D owns this module. A v2 cast refuses a group stored under another key, a selection naming a
-spot the cast lacks and a label prefix naming no group. Those three are repaired, each recorded
-with `report.repair()`: the group takes its own key (its spots and prefix follow it, and a clash
-with an existing key is refused), and the dangling selection IDs and prefixes are dropped. A value
-with no safe repair (a negative size, a color that is not `#rrggbb`, a pad outside its range, a
-limit or default radius that is not a positive finite number) is refused with SchemaError naming
-the document, the field and the value. ID renames belong to the ids step.
+A v2 cast refuses a group stored under another key, a selection naming a spot the cast lacks and
+a label prefix naming no group. Those three are repaired, each recorded with `report.repair()`:
+the group takes its own key (its spots and prefix follow it, and a clash with an existing key is
+refused), and the dangling selection IDs and prefixes are dropped. A value with no safe repair (a
+negative size, a color that is not `#rrggbb`, a pad outside its range, a limit or default radius
+that is not a positive finite number) is refused with SchemaError naming the document, the field
+and the value. ID renames belong to the ids step.
 
 A v2 spot has no `claimable` field: publishing left the library. The step removes it from every
 spot and lists each spot that stored a value other than the v1 default `performer` with

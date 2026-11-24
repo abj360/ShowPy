@@ -16,6 +16,8 @@ Contains:
     MAX_EXTENSION_BYTES: bounds the UTF-8 JSON size of a show's `x-` extension values
     MIN_TEMPO: sets the slowest stored tempo, in counts per minute; anything slower is not a
         performance and drives the clock to infinity
+    MAX_SPOTS: bounds the spots of one cast; a large ensemble has a few hundred
+    MAX_SETS: bounds the sets of one show; a long show has a few hundred
     require_size(): rejects a requested size that is negative or over its cap
 """
 
@@ -31,6 +33,9 @@ MIN_LAYOUT_HEIGHT_M = 0.001
 MAX_COORD_M = 1e6
 MAX_COUNTS = 1_000_000
 MIN_TEMPO = 1e-3
+# Provisional bounds on input size, well past any real show; they promise no speed at the cap.
+MAX_SPOTS = 5_000
+MAX_SETS = 1_000
 # One mebibyte: host metadata is a few settings or ids; a larger value is a payload that belongs
 # in an asset, and a cap keeps one document from carrying a hostile blob through every save.
 MAX_EXTENSION_BYTES = 1_048_576
