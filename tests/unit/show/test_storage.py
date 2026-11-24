@@ -295,7 +295,9 @@ def test_agent_writes_forms_paths_scripts_and_renders() -> None:
     assert show.transition(("1", "2")) == spec
     assert agent.read("/renders/set-2.png") == b"\x89PNG"
     assert agent.ls("/sets/2") == ["forms.json", "placements.csv", "set.py"]
-    assert str(agent.read("/sets/2/set.py")).startswith("def build")
+    script = agent.read("/sets/2/set.py")
+    assert isinstance(script, str)
+    assert script.startswith("def build")
     agent.write("/sets/2/forms.json", "[]", at=LATER)
     assert load_show(agent).forms == {}
 

@@ -6,8 +6,22 @@ test_backend.py --- tests the backend protocol: head, log(since=), the memory in
 Contains:
     test_memory_head_and_log_since_cost_does_not_grow_with_history: reads two entries of 1,000
     test_regression_failed_first_commit_leaves_no_phantom_show: lists no show after a failed commit
+    test_regression_conflicting_first_commit_leaves_no_phantom_show: lists no show after a conflict
     test_head_and_log_since: checks both adapters agree on head and log(since=)
+    test_log_since_an_unknown_revision_fails_closed: raises UnknownRefError
+    test_repository_write_on_an_unknown_expected_revision_is_unknown_ref: keeps the error
     test_commit_with_unknown_parent_reports_every_landed_revision: keeps the memory conflict
+    test_regression_memory_commit_refuses_a_revision_that_is_its_own_parent: refuses a self-parent
+    test_regression_memory_commit_refuses_a_revision_id_already_stored: refuses a repeated ID
+    test_regression_memory_log_fails_closed_on_a_parent_cycle: raises CORRUPT on a cycle
+    test_memory_tree_and_blob_fail_closed_on_unknown_ids: raises on unknown IDs
+    test_regression_memory_commit_verifies_its_inputs: checks IDs, blobs and tree digests
+    test_memory_commit_accepts_a_tree_over_stored_and_passed_blobs: accepts a valid tree
+    test_tree_of_an_unknown_revision_is_unknown_ref: raises UnknownRefError in both adapters
+    test_repository_reads_and_writes_at_the_head_touch_a_constant_number_of_revisions:
+        reads O(1) entries
+    test_repository_conflict_on_a_stale_write_touches_only_the_landed_revisions:
+        reads O(landed) entries
 """
 
 from collections.abc import Callable, Mapping
