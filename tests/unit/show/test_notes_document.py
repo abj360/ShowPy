@@ -66,9 +66,10 @@ from e8s.show.documents import (
 from e8s.show.file_repository import FileRepository
 from e8s.show.integrity import blob_digest
 from e8s.show.interchange import import_json
+from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Anchor, Revision, Show
-from e8s.show.repositories import InMemoryRepository
-from e8s.show.storage import load_show, open_workspace, save_show
+from e8s.show.show_io import load_show, save_show
+from e8s.show.workspace import open_workspace
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "repos"
 TAGS = ["v0.1.1", "v0.2.0", "v0.3.0"]

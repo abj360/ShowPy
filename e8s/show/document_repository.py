@@ -1,21 +1,16 @@
 """
-repositories.py --- the shared repository logic, the in-memory repository and asset store
+document_repository.py --- implements the Repository protocol over a storage backend
 
 Contains:
-    RepositoryBackend: stores revisions, trees and blobs; commits compare-and-swap on the head
-    revisions_since(): lists the revisions of a log that landed after a parent revision
-    conflict_error(): builds the ConflictError that lists the revisions that landed meanwhile
+    SHOW_ID_PATTERN: matches the show IDs a repository can store
+    REVISION_HASH_DOMAIN: names the hash domain every stored revision ID is computed under
     DocumentRepository: implements Repository over a backend of revisions, trees and blobs
-    InMemoryRepository: keeps every revision in process memory
-    InMemoryAssetStore: keeps assets in process memory under content-hash URIs
 """
 
 import functools
 import re
-import threading
 from collections.abc import Mapping
 from datetime import datetime
-from typing import Protocol, override
 
 from e8s.choreo.form_models import Form
 from e8s.choreo.match_ops import forms_of_set
@@ -23,15 +18,19 @@ from e8s.choreo.models import Set
 from e8s.choreo.path_models import TransitionSpec
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import (
-    ConflictError,
     SchemaError,
     StorageError,
     UnknownRefError,
-    bounded_repr,
-    join_listed,
 )
 from e8s.core.ids import WINDOWS_DEVICE_NAMES, SetId, is_device_name
-from e8s.core.util import ASSET_PREFIX, asset_uri, close_matches, content_hash
+from e8s.core.util import close_matches, content_hash
+from e8s.show.backend import (
+    SHORT_ID,
+    RepositoryBackend,
+    conflict_error,
+    digest,
+    revisions_since,
+)
 from e8s.show.changes import require_form_owner
 from e8s.show.decode_cache import DecodeCache
 from e8s.show.documents import (
@@ -44,7 +43,6 @@ from e8s.show.documents import (
 from e8s.show.files import LIMITS_DOC, WAIVERS_DOC, show_changes
 from e8s.show.integrity import (
     LazyBlobs,
-    blob_digest,
     require_known_path,
     require_valid_digests,
 )
@@ -57,7 +55,6 @@ from e8s.time.models import Timeline
 SHOW_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.\-]*$")
 # Frozen at the old library name: every stored revision ID is hashed under it.
 REVISION_HASH_DOMAIN = "showpy.revision"
-SHORT_ID = 7
 
 
 def _require_show_id(show_id: str) -> None:
@@ -84,82 +81,6 @@ def _require_new_show_id(show_id: str) -> None:
             context={"show": show_id},
             code=ErrorCode.BAD_PATH,
         )
-
-
-def digest(data: bytes) -> str:
-    """Returns the SHA-256 hex digest blobs and assets are addressed by."""
-    return blob_digest(data)
-
-
-class RepositoryBackend(Protocol):
-    """Stores revisions, path-to-digest trees and blobs; commit is compare-and-swap on head."""
-
-    def show_ids(self) -> list[str]:
-        """Returns the IDs of shows with at least one revision."""
-        ...
-
-    def log(self, show_id: str) -> list[Revision]:
-        """Returns a show's revisions, oldest first."""
-        ...
-
-    def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
-        """Returns path to blob digest at a revision."""
-        ...
-
-    def blob(self, show_id: str, digest: str) -> bytes:
-        """Returns the bytes of a blob."""
-        ...
-
-    def commit(
-        self, show_id: str, revision: Revision, tree: dict[str, str], blobs: dict[str, bytes]
-    ) -> None:
-        """Stores blobs and the tree, then lands the revision only if its parent is the head."""
-        ...
-
-
-def revisions_since(log: list[Revision], parent: str) -> list[Revision]:
-    """Lists the revisions of a log that landed after a parent revision.
-
-    Args:
-        log: A show's revisions, oldest first.
-        parent: Revision a commit was based on; the root revision, or one missing from the log,
-            means every revision landed since.
-
-    Returns:
-        landed: The revisions after the parent, oldest first.
-
-    >>> from datetime import UTC, datetime
-    >>> at = datetime(2026, 11, 11, tzinfo=UTC)
-    >>> log = [Revision(id=i, parent=p, at=at) for i, p in (("a", ""), ("b", "a"), ("c", "b"))]
-    >>> [r.id for r in revisions_since(log, "a")], len(revisions_since(log, ""))
-    (['b', 'c'], 3)
-    """
-    ids = [r.id for r in log]
-    return log[ids.index(parent) + 1 :] if parent in ids else log
-
-
-def conflict_error(show_id: str, expected: str, landed: list[Revision]) -> ConflictError:
-    """Builds the ConflictError listing the first landed revisions' short ID, time and paths.
-
-    The message lists five revisions, each with its paths cut to 80 characters, and counts the
-    rest, so a long run of landed revisions still gives a short message.
-    """
-    summary = join_listed(
-        [
-            f"{r.id[:SHORT_ID]} {r.at.isoformat()} ({bounded_repr(', '.join(r.changed))})"
-            for r in landed
-        ]
-    )
-    return ConflictError(
-        f"{len(landed)} revision(s) landed on {show_id} since {expected[:SHORT_ID] or 'the start'}:"
-        f" {summary}",
-        hint="re-read at the head revision, reapply the edit and write again",
-        context={
-            "expected": expected,
-            "head": landed[-1].id if landed else expected,
-            "changes": [r.to_json() for r in landed],
-        },
-    )
 
 
 def _with_stored_key(new_set: Set, stored: Set) -> Set:
@@ -240,7 +161,8 @@ class DocumentRepository:
         The revision is resolved once; each blob is read the first time a path holding it is
         looked up, so listing paths or decoding the show never loads renders or exports.
 
-        >>> from datetime import UTC
+        >>> from datetime import UTC, datetime
+        >>> from e8s.show.memory_backend import InMemoryRepository
         >>> repo = InMemoryRepository()
         >>> at = datetime(2026, 11, 11, tzinfo=UTC)
         >>> _ = repo.transaction("s", {"/renders/a.txt": b"hi"}, expected_revision="", at=at)
@@ -291,7 +213,8 @@ class DocumentRepository:
         Returns:
             revision: The new head, or the unchanged head when nothing differs.
 
-        >>> from datetime import UTC
+        >>> from datetime import UTC, datetime
+        >>> from e8s.show.memory_backend import InMemoryRepository
         >>> repo = InMemoryRepository()
         >>> at = datetime(2026, 11, 11, tzinfo=UTC)
         >>> rev = repo.transaction("s", {"/renders/a.txt": b"hi"}, expected_revision="", at=at)
@@ -527,79 +450,3 @@ class DocumentRepository:
     def get_waivers(self, show_id: str) -> str:
         """Returns the designer's waivers YAML text; empty when none is stored."""
         return decode_text(WAIVERS_DOC, self.read(show_id, WAIVERS_DOC) or b"")
-
-
-class _MemoryBackend(RepositoryBackend):
-    def __init__(self) -> None:
-        self._logs: dict[str, list[Revision]] = {}
-        self._trees: dict[tuple[str, str], dict[str, str]] = {}
-        self._blobs: dict[str, bytes] = {}
-        self._lock = threading.Lock()
-
-    def show_ids(self) -> list[str]:
-        with self._lock:
-            return list(self._logs)
-
-    def log(self, show_id: str) -> list[Revision]:
-        with self._lock:
-            return list(self._logs.get(show_id, []))
-
-    def tree(self, show_id: str, revision_id: str) -> dict[str, str]:
-        with self._lock:
-            return dict(self._trees[(show_id, revision_id)])
-
-    @override
-    def blob(self, show_id: str, digest: str) -> bytes:
-        with self._lock:
-            return self._blobs[digest]
-
-    def commit(
-        self, show_id: str, revision: Revision, tree: dict[str, str], blobs: dict[str, bytes]
-    ) -> None:
-        with self._lock:
-            log = self._logs.setdefault(show_id, [])
-            if (log[-1].id if log else ROOT_REVISION) != revision.parent:
-                raise conflict_error(
-                    show_id, revision.parent, revisions_since(log, revision.parent)
-                )
-            self._blobs.update(blobs)
-            self._trees[(show_id, revision.id)] = dict(tree)
-            log.append(revision)
-
-
-class InMemoryRepository(DocumentRepository):
-    """Keeps every revision in process memory; for tests and single-process sessions."""
-
-    def __init__(self) -> None:
-        super().__init__(_MemoryBackend())
-
-
-class InMemoryAssetStore:
-    """Keeps assets in process memory under `asset:sha256:<hex>` URIs."""
-
-    def __init__(self) -> None:
-        self._assets: dict[str, bytes] = {}
-
-    def put(self, data: bytes) -> str:
-        """Stores bytes and returns their URI; equal bytes give the same URI.
-
-        >>> InMemoryAssetStore().put(b"x").startswith(ASSET_PREFIX)
-        True
-        """
-        uri = asset_uri(data)
-        self._assets[uri] = data
-        return uri
-
-    def get(self, uri: str) -> bytes:
-        """Returns the bytes stored under a URI."""
-        if not uri.startswith(ASSET_PREFIX):
-            raise SchemaError(
-                f"{uri!r} is not an asset URI",
-                hint=f"pass a URI returned by put(), starting with {ASSET_PREFIX}",
-                context={"uri": uri},
-            )
-        if uri not in self._assets:
-            raise UnknownRefError(
-                f"no asset {uri}", hint="store it first with put()", context={"uri": uri}
-            )
-        return self._assets[uri]

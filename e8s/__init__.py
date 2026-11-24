@@ -581,15 +581,20 @@ if TYPE_CHECKING:
         save_sheet,
         sheet_templates,
     )
+    from e8s.show.assets import (
+        InMemoryAssetStore,
+    )
+    from e8s.show.backend import (
+        RepositoryBackend,
+        conflict_error,
+        digest,
+    )
     from e8s.show.changes import (
         apply_change,
         store_paths,
     )
     from e8s.show.collab import (
         accept,
-        apply_event,
-        decode_event,
-        events_since,
         highlight,
         pins,
         preview_proposal,
@@ -600,8 +605,16 @@ if TYPE_CHECKING:
     from e8s.show.counts import (
         spot_counts,
     )
+    from e8s.show.document_repository import (
+        DocumentRepository,
+    )
     from e8s.show.documents import (
         migrate_documents,
+    )
+    from e8s.show.events import (
+        apply_event,
+        decode_event,
+        events_since,
     )
     from e8s.show.file_repository import (
         FileRepository,
@@ -632,6 +645,9 @@ if TYPE_CHECKING:
         transition_at_count,
         transitions,
         upgrade_dependency,
+    )
+    from e8s.show.memory_backend import (
+        InMemoryRepository,
     )
     from e8s.show.migrate import (
         CURRENT_VERSION,
@@ -668,31 +684,27 @@ if TYPE_CHECKING:
         pin,
         unpin,
     )
-    from e8s.show.repositories import (
-        DocumentRepository,
-        InMemoryAssetStore,
-        InMemoryRepository,
-        RepositoryBackend,
-        conflict_error,
-        digest,
-    )
     from e8s.show.sections import (
         join_sections,
         split_section,
     )
+    from e8s.show.show_io import (
+        load_show,
+        save_show,
+    )
     from e8s.show.storage import (
         AssetStore,
         Repository,
-        Workspace,
-        load_show,
-        open_workspace,
-        save_show,
     )
     from e8s.show.validate import (
         validate_dependencies,
         validate_paths,
         validate_set,
         validate_show,
+    )
+    from e8s.show.workspace import (
+        Workspace,
+        open_workspace,
     )
     from e8s.time.clock import (
         count_to_seconds,
@@ -779,7 +791,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "CustomRecipe": ("e8s.choreo.recipe_models", "CustomRecipe"),
     "DEFAULT_LINE_SPACING": ("e8s.geo.models", "DEFAULT_LINE_SPACING"),
     "DelayFix": ("e8s.choreo.engine_models", "DelayFix"),
-    "DocumentRepository": ("e8s.show.repositories", "DocumentRepository"),
+    "DocumentRepository": ("e8s.show.document_repository", "DocumentRepository"),
     "DroppedFields": ("e8s.show.migrate", "DroppedFields"),
     "E8sError": ("e8s.core.errors", "E8sError"),
     "Easing": ("e8s.choreo.path_models", "Easing"),
@@ -821,8 +833,8 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Hold": ("e8s.time.models", "Hold"),
     "ID_MAX_LENGTH": ("e8s.core.ids", "ID_MAX_LENGTH"),
     "ID_PATTERN": ("e8s.core.ids", "ID_PATTERN"),
-    "InMemoryAssetStore": ("e8s.show.repositories", "InMemoryAssetStore"),
-    "InMemoryRepository": ("e8s.show.repositories", "InMemoryRepository"),
+    "InMemoryAssetStore": ("e8s.show.assets", "InMemoryAssetStore"),
+    "InMemoryRepository": ("e8s.show.memory_backend", "InMemoryRepository"),
     "InMemorySheetStore": ("e8s.sheet.templates", "InMemorySheetStore"),
     "IntervalStats": ("e8s.geo.models", "IntervalStats"),
     "LabelScheme": ("e8s.cast.models", "LabelScheme"),
@@ -888,7 +900,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "RecipeBase": ("e8s.choreo.recipe_models", "RecipeBase"),
     "Region": ("e8s.core.types", "Region"),
     "Repository": ("e8s.show.storage", "Repository"),
-    "RepositoryBackend": ("e8s.show.repositories", "RepositoryBackend"),
+    "RepositoryBackend": ("e8s.show.backend", "RepositoryBackend"),
     "Revision": ("e8s.show.models", "Revision"),
     "RewriteReport": ("e8s.cast.models", "RewriteReport"),
     "RoseFormParams": ("e8s.choreo.form_models", "RoseFormParams"),
@@ -950,7 +962,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Waypoint": ("e8s.choreo.path_models", "Waypoint"),
     "WeaveParams": ("e8s.choreo.path_models", "WeaveParams"),
     "WedgeRecipe": ("e8s.choreo.recipe_models", "WedgeRecipe"),
-    "Workspace": ("e8s.show.storage", "Workspace"),
+    "Workspace": ("e8s.show.workspace", "Workspace"),
     "ZeroLengthError": ("e8s.core.errors", "ZeroLengthError"),
     "ZigzagParams": ("e8s.choreo.path_models", "ZigzagParams"),
     "accept": ("e8s.show.collab", "accept"),
@@ -970,7 +982,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "alternate": ("e8s.cast.select", "alternate"),
     "angle_diff": ("e8s.core.units", "angle_diff"),
     "apply_change": ("e8s.show.changes", "apply_change"),
-    "apply_event": ("e8s.show.collab", "apply_event"),
+    "apply_event": ("e8s.show.events", "apply_event"),
     "apply_fix": ("e8s.choreo.avoid", "apply_fix"),
     "apply_match": ("e8s.choreo.match_ops", "apply_match"),
     "apportion": ("e8s.geo.spacing", "apportion"),
@@ -1009,7 +1021,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "close_matches": ("e8s.core.util", "close_matches"),
     "closest_approach": ("e8s.choreo.avoid", "closest_approach"),
     "concentric": ("e8s.geo.spacing", "concentric"),
-    "conflict_error": ("e8s.show.repositories", "conflict_error"),
+    "conflict_error": ("e8s.show.backend", "conflict_error"),
     "content_hash": ("e8s.core.util", "content_hash"),
     "contract": ("e8s.choreo.set_transforms", "contract"),
     "convert": ("e8s.core.units", "convert"),
@@ -1027,7 +1039,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "custom_form": ("e8s.choreo.forms", "custom_form"),
     "custom_path": ("e8s.choreo.paths", "custom_path"),
     "customize": ("e8s.sheet.templates", "customize"),
-    "decode_event": ("e8s.show.collab", "decode_event"),
+    "decode_event": ("e8s.show.events", "decode_event"),
     "default_paths": ("e8s.choreo.paths", "default_paths"),
     "define_selection": ("e8s.cast.spots", "define_selection"),
     "delay": ("e8s.choreo.paths", "delay"),
@@ -1039,7 +1051,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "diff_sets": ("e8s.show.history", "diff_sets"),
     "diff_show": ("e8s.show.history", "diff_show"),
     "difference": ("e8s.geo.regions", "difference"),
-    "digest": ("e8s.show.repositories", "digest"),
+    "digest": ("e8s.show.backend", "digest"),
     "direction_of_travel": ("e8s.choreo.motion_stats", "direction_of_travel"),
     "distance": ("e8s.geo.measure", "distance"),
     "distance_matrix": ("e8s.geo.measure", "distance_matrix"),
@@ -1054,7 +1066,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "edit_text_count": ("e8s.choreo.text_edit", "edit_text_count"),
     "ellipse": ("e8s.geo.shapes", "ellipse"),
     "energy_curve": ("e8s.choreo.motion_stats", "energy_curve"),
-    "events_since": ("e8s.show.collab", "events_since"),
+    "events_since": ("e8s.show.events", "events_since"),
     "expand": ("e8s.choreo.set_transforms", "expand"),
     "export_json": ("e8s.show.interchange", "export_json"),
     "face_along": ("e8s.choreo.facing", "face_along"),
@@ -1113,7 +1125,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "line_form": ("e8s.choreo.forms", "line_form"),
     "load_font": ("e8s.geo.fonts", "load_font"),
     "load_paths": ("e8s.show.paths_store", "load_paths"),
-    "load_show": ("e8s.show.storage", "load_show"),
+    "load_show": ("e8s.show.show_io", "load_show"),
     "lock": ("e8s.choreo.paths", "lock"),
     "log": ("e8s.core.util", "log"),
     "make_route": ("e8s.choreo.routes", "make_route"),
@@ -1145,7 +1157,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "offset": ("e8s.geo.shapes", "offset"),
     "on_field_ids": ("e8s.choreo.set_measure", "on_field_ids"),
     "on_surface": ("e8s.sheet.bounds", "on_surface"),
-    "open_workspace": ("e8s.show.storage", "open_workspace"),
+    "open_workspace": ("e8s.show.workspace", "open_workspace"),
     "ordered_along": ("e8s.cast.select", "ordered_along"),
     "parse_path": ("e8s.geo.svg", "parse_path"),
     "parse_range": ("e8s.core.util", "parse_range"),
@@ -1202,7 +1214,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "round_to": ("e8s.core.units", "round_to"),
     "save_paths": ("e8s.show.paths_store", "save_paths"),
     "save_sheet": ("e8s.sheet.templates", "save_sheet"),
-    "save_show": ("e8s.show.storage", "save_show"),
+    "save_show": ("e8s.show.show_io", "save_show"),
     "scale": ("e8s.choreo.set_transforms", "scale"),
     "scale_matrix": ("e8s.geo.affine", "scale_matrix"),
     "scatter": ("e8s.geo.spacing", "scatter"),

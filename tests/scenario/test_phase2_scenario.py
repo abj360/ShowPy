@@ -59,7 +59,6 @@ from e8s.choreo.engine_models import MotionSegment
 from e8s.choreo.models import Set
 from e8s.core.ids import SetId, SpotId
 from e8s.core.util import approx_equal, content_hash
-from e8s.show.collab import apply_event, events_since
 from e8s.show.documents import (
     LEGACY_NOTES_DOC,
     NOTES_DOC,
@@ -69,6 +68,7 @@ from e8s.show.documents import (
     encode_show,
     migrate_documents,
 )
+from e8s.show.events import apply_event, events_since
 from e8s.show.file_repository import FileRepository
 from e8s.show.history import revert
 from e8s.show.integrity import blob_digest
@@ -76,7 +76,9 @@ from e8s.show.interchange import export_json, import_json
 from e8s.show.manage import insert_subset, renumber, set_counts
 from e8s.show.migrate import MigrationReport
 from e8s.show.models import CanvasEvent, Revision, Show
-from e8s.show.storage import ROOT_REVISION, Workspace, load_show, open_workspace, save_show
+from e8s.show.show_io import load_show, save_show
+from e8s.show.storage import ROOT_REVISION
+from e8s.show.workspace import Workspace, open_workspace
 
 pytestmark = pytest.mark.slow
 

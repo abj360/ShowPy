@@ -27,12 +27,14 @@ from e8s.choreo.models import PlacementPatch
 from e8s.core.ids import TransitionId
 from e8s.core.util import seeded_rng
 from e8s.examples import two_set_show
-from e8s.show.collab import events_since
+from e8s.show.events import events_since
 from e8s.show.manage import index
+from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Show
-from e8s.show.repositories import InMemoryRepository
-from e8s.show.storage import ROOT_REVISION, Workspace, load_show, open_workspace, save_show
+from e8s.show.show_io import load_show, save_show
+from e8s.show.storage import ROOT_REVISION
 from e8s.show.validate import validate_show
+from e8s.show.workspace import Workspace, open_workspace
 from tests.conftest import BenchTier
 from tests.fixtures.generators import seeded_show
 

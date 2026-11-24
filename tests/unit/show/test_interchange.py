@@ -67,10 +67,10 @@ from e8s.show.interchange import (
     import_positions,
     migrate_json,
 )
+from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.migrate import CURRENT_VERSION, FORMAT, MigrationReport
 from e8s.show.models import Show
 from e8s.show.pinning import pin
-from e8s.show.repositories import InMemoryRepository
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.fonts import tiny_bytes
 from tests.fixtures.shows import two_set_show

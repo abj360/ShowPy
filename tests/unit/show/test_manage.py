@@ -70,10 +70,11 @@ from e8s.show.manage import (
     transitions,
     upgrade_dependency,
 )
+from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Pin, Show
-from e8s.show.repositories import InMemoryRepository
-from e8s.show.storage import load_show, open_workspace, save_show
+from e8s.show.show_io import load_show, save_show
 from e8s.show.validate import validate_show
+from e8s.show.workspace import open_workspace
 from e8s.time.models import Hold, MeasureSetting
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import field_sheet, two_set_show

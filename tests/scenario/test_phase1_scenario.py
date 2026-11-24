@@ -50,16 +50,17 @@ from e8s.core.resources import schema_path
 from e8s.core.types import FrozenModel
 from e8s.core.util import approx_equal, content_hash
 from e8s.examples import EXAMPLE_TIME
-from e8s.show.collab import apply_event, decode_event, events_since
 from e8s.show.documents import decode_show, encode_show
+from e8s.show.events import apply_event, decode_event, events_since
 from e8s.show.file_repository import FileRepository
 from e8s.show.history import revert
 from e8s.show.interchange import export_json, import_json
 from e8s.show.manage import insert_subset, renumber, set_counts
 from e8s.show.models import CanvasEvent, Show
 from e8s.show.pinning import pin
-from e8s.show.storage import Workspace, load_show, open_workspace, save_show
+from e8s.show.show_io import load_show, save_show
 from e8s.show.validate import validate_show
+from e8s.show.workspace import Workspace, open_workspace
 from tests.fixtures.generators import seeded_show
 
 pytestmark = pytest.mark.slow

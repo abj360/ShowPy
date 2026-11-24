@@ -405,8 +405,13 @@ def v040_history(source: Path, out: Path) -> list["Revision"]:
     from e8s.show.documents import dump_json
     from e8s.show.file_repository import FileRepository
     from e8s.show.pinning import pin
-    from e8s.show.storage import load_show, open_workspace, save_show
 
+    storage = importlib.import_module("e8s.show.storage")
+    load_show, open_workspace, save_show = (
+        storage.load_show,
+        storage.open_workspace,
+        storage.save_show,
+    )
     legacy: dict[str, Any] = json.loads((source / EXPECTED_FILE).read_text())
     shutil.copytree(source / REPO_DIR, out / REPO_DIR)
     repo = FileRepository(out / REPO_DIR)

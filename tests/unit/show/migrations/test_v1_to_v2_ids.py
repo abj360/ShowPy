@@ -83,9 +83,10 @@ from e8s.show.migrations.v1_to_v2_ids import rename_ids
 from e8s.show.migrations.v1_to_v2_notes import move_notes
 from e8s.show.models import Anchor, Comment, Revision, Show
 from e8s.show.pinning import pin
-from e8s.show.storage import load_show, open_workspace, save_show
+from e8s.show.show_io import load_show, save_show
 from e8s.show.structured import COMMENTS_DOC, SELECTION_DOC
 from e8s.show.validate import validate_show
+from e8s.show.workspace import open_workspace
 from tests.fixtures.generators import seeded_show
 from tests.helpers import TWO_HASH_SEEDS, json_doc, outputs_under_hash_seeds
 

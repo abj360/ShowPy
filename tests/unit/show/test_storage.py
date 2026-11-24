@@ -21,12 +21,15 @@ from e8s.core.errors import (
     UnknownRefError,
 )
 from e8s.core.ids import FormId, SetId, SpotId, make_tid
+from e8s.show.assets import InMemoryAssetStore
 from e8s.show.documents import decode_show, dump_json, encode_show, split_path
 from e8s.show.file_repository import FileRepository
 from e8s.show.manage import add_set, remove_set
+from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Show
-from e8s.show.repositories import InMemoryAssetStore, InMemoryRepository
-from e8s.show.storage import Repository, Workspace, load_show, open_workspace, save_show
+from e8s.show.show_io import load_show, save_show
+from e8s.show.storage import Repository
+from e8s.show.workspace import Workspace, open_workspace
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 from tests.helpers import context_entries
