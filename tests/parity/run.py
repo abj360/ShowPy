@@ -13,6 +13,7 @@ Contains:
     AreaRun: one area's reports, speed report and core outputs
     runner_command(): builds the oracle_runner.py command, isolated and writing no bytecode
     runner_environment(): drops every PYTHON* variable except PYTHONHASHSEED
+    require_distinct_sides(): refuses one interpreter or one e8s folder for both sides
     run_side(): runs oracle_runner.py for one area under one interpreter
     run_area(): runs both sides of one area and compares every case
     main(): builds the oracle, runs each area, prints the tables and fails on any gate
@@ -102,6 +103,29 @@ def runner_command(python: Path, area: str, out: Path, e8s_from: Path) -> list[s
     ]
 
 
+def require_distinct_sides(
+    oracle_python: Path, oracle_e8s: Path, core_python: Path, core_e8s: Path
+) -> None:
+    """Refuses to compare the working tree with itself.
+
+    Args:
+        oracle_python: The oracle venv's interpreter.
+        oracle_e8s: The folder the oracle's e8s must come from.
+        core_python: The working tree's interpreter.
+        core_e8s: The working tree's e8s package folder.
+    """
+    oracle_folder, core_folder = oracle_e8s.resolve(), core_e8s.resolve()
+    if (
+        oracle_python.absolute() == core_python.absolute()
+        or oracle_folder.is_relative_to(core_folder)
+        or core_folder.is_relative_to(oracle_folder)
+    ):
+        raise SystemExit(
+            f"E: the oracle and the working tree must differ: {oracle_python} with {oracle_e8s}"
+            f" against {core_python} with {core_e8s}"
+        )
+
+
 def runner_environment(environment: Mapping[str, str]) -> dict[str, str]:
     """Returns the environment for a runner: no PYTHON* variable except PYTHONHASHSEED.
 
@@ -169,9 +193,11 @@ def run_area(area: str, oracle_python: Path, work: Path, flips: Mapping[str, Fli
     Returns:
         run: Each case's report, the speed report and the core outputs.
     """
+    oracle_e8s, core_python = oracle_python.parents[1], Path(sys.executable)
+    require_distinct_sides(oracle_python, oracle_e8s, core_python, CORE_E8S)
     cases = load_cases(area)
-    run_side(oracle_python, area, work / "oracle", oracle_python.parents[1])
-    run_side(Path(sys.executable), area, work / "core", CORE_E8S)
+    run_side(oracle_python, area, work / "oracle", oracle_e8s)
+    run_side(core_python, area, work / "core", CORE_E8S)
     oracle = _side_outputs(work / "oracle", cases)
     core = _side_outputs(work / "core", cases)
     reports = {

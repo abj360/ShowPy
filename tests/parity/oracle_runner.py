@@ -15,6 +15,7 @@ Contains:
     RUNS: the timed runs per timed case; timings.json keeps their minimum
     hash_probe(): records the hash seed the runner sees and a string hash under it
     import_e8s(): imports e8s and checks where it came from
+    check_cases_module(): refuses a case module imported from outside the cases root
     minimum_run_s(): returns a case's fastest of RUNS runs, in seconds
     main(): runs every case of the area, writing <case>.parity files and timings.json
 """
@@ -65,6 +66,18 @@ def import_e8s(expected: Path) -> ModuleType:
     return e8s
 
 
+def check_cases_module(module: object, cases_root: Path) -> None:
+    """Refuses a case module that was not imported from under the cases root.
+
+    Args:
+        module: The imported tests.parity.cases module.
+        cases_root: The repository root the case modules must come from.
+    """
+    location = Path(str(getattr(module, "__file__", ""))).resolve()
+    if not location.is_relative_to(cases_root.resolve()):
+        raise SystemExit(f"E: {CASES_MODULE} imported from {location}, not {cases_root}")
+
+
 def minimum_run_s(run: object, e8s: ModuleType) -> float:
     """Returns the fastest of RUNS calls of a case's run function, in seconds."""
     if not callable(run):
@@ -95,9 +108,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     sys.path.append(str(arguments.cases_root.resolve()))
     from tests.parity.cases import load_cases, write_outputs
 
-    cases_file = Path(str(sys.modules[CASES_MODULE].__file__)).resolve()
-    if not cases_file.is_relative_to(arguments.cases_root.resolve()):
-        raise SystemExit(f"E: {CASES_MODULE} imported from {cases_file}")
+    check_cases_module(sys.modules[CASES_MODULE], arguments.cases_root)
     timings: dict[str, float] = {}
     for case in load_cases(arguments.area):
         write_outputs(arguments.out, case.name, case.run(e8s))
