@@ -12,6 +12,17 @@ publish = false
 [workspace.dependencies]
 libm = "=0.2.16"
 
+# Core functions return errors instead of panicking, and no crate of ours holds unsafe code.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+
 # Local and editable builds: thin LTO keeps a rebuild after one changed file short.
 [profile.release]
 lto = "thin"

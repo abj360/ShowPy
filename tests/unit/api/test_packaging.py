@@ -37,6 +37,11 @@ DIST_INFO_FILES = frozenset({"METADATA", "WHEEL", "RECORD"})
 # maturin records the crates linked into e8s._core as a CycloneDX bill of materials.
 SBOM = "sboms/e8s-py.cyclonedx.json"
 LOCKED_BUILD = {"MATURIN_PEP517_ARGS": "--locked"}
+PANICKING_CALLS = ("unwrap_used", "expect_used", "panic", "todo", "unimplemented")
+WORKSPACE_LINTS = {
+    "rust": {"unsafe_code": "forbid"},
+    "clippy": dict.fromkeys(PANICKING_CALLS, "deny"),
+}
 # The sdist holds the build inputs only: no tests, docs, CI, agent folders or build output.
 SDIST_TOP_LEVEL = frozenset(
     {
@@ -60,6 +65,15 @@ def test_version_is_exported() -> None:
 def test_version_matches_the_cargo_manifest() -> None:
     manifest = tomllib.loads(CARGO_MANIFEST.read_text(encoding="utf-8"))
     assert e8s.__version__ == str(Version(manifest["workspace"]["package"]["version"]))
+
+
+def test_every_crate_inherits_the_workspace_lints() -> None:
+    """Forbids unsafe code and denies panicking calls in every crate of the workspace."""
+    manifest = tomllib.loads(CARGO_MANIFEST.read_text(encoding="utf-8"))
+    assert manifest["workspace"].get("lints") == WORKSPACE_LINTS
+    for member in manifest["workspace"]["members"]:
+        crate = tomllib.loads((REPO_ROOT / member / "Cargo.toml").read_text(encoding="utf-8"))
+        assert crate.get("lints") == {"workspace": True}, member
 
 
 def test_core_extension_imports_with_its_seven_submodules() -> None:
