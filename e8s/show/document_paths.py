@@ -23,6 +23,7 @@ Contains:
     script_doc(): returns the path of a set folder's build script
     forms_doc(): returns the path of a set folder's forms document
     placements_doc(): returns the path of a set folder's derived placements table
+    transition_folder(): returns the stored folder name of a transition between two set folders
     paths_doc(): returns the path of a transition folder's paths document
     is_show_doc(): reports whether a path is part of the encoded Show, v1 notes included
     is_storable_folder(): reports whether a set folder name can be stored
@@ -118,13 +119,22 @@ def placements_doc(folder: str) -> str:
     return f"/sets/{folder}/{PLACEMENTS_NAME}"
 
 
+def transition_folder(tid: tuple[str, str]) -> str:
+    """Returns the folder of the transition between two set folders: keys stored, IDs in workspaces.
+
+    >>> transition_folder(("12", "12A"))
+    '12-12A'
+    """
+    return f"{tid[0]}-{tid[1]}"
+
+
 def paths_doc(tid: tuple[str, str]) -> str:
     """Returns the path of a transition folder's paths document: keys stored, IDs in workspaces.
 
     >>> paths_doc(("12", "12A"))
     '/transitions/12-12A/paths.json'
     """
-    return f"/transitions/{tid[0]}-{tid[1]}/{PATHS_NAME}"
+    return f"/transitions/{transition_folder(tid)}/{PATHS_NAME}"
 
 
 def is_show_doc(path: str) -> bool:

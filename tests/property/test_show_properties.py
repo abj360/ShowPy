@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_show_properties.py --- checks set, index, storage and rename invariants on random shows
+test_show_properties.py --- checks set, index, storage, rename and change invariants on random shows
 """
 
 from hypothesis import given
@@ -9,17 +9,23 @@ from hypothesis import strategies as st
 
 from e8s.cast.spots import rename_spots
 from e8s.choreo.models import PlacementPatch
+from e8s.core.readonly import freeze_json
 from e8s.core.util import approx_equal
 from e8s.show.documents import decode_show, encode_show
+from e8s.show.items import changes, items
 from e8s.show.manage import add_set, insert_subset
 from e8s.show.models import Show
 from e8s.show.renumber import renumber
 from e8s.show.set_queries import index
+from tests.fixtures.generators import seeded_show
 from tests.fixtures.shows import two_set_show
 
 TOL = 1e-9
 counts_strategy = st.floats(min_value=0.5, max_value=32.0, allow_nan=False)
 coordinate = st.floats(min_value=-20.0, max_value=20.0, allow_nan=False)
+seeds = st.integers(min_value=0, max_value=2**16)
+SEEDED_SPOTS = 6
+SEEDED_SETS = 3
 
 
 def _show(extra_counts: list[float]) -> Show:
@@ -77,3 +83,33 @@ def test_rename_then_inverse_is_identity(order: list[str]) -> None:
     inverse = {new: old for old, new in mapping.items()}
     renamed, _ = rename_spots(show, mapping)
     assert rename_spots(renamed, inverse)[0] == show
+
+
+def _edited(show: Show, edit: int, other: int, point: tuple[float, float]) -> Show:
+    position = other % len(show.sets)
+    current = show.sets[position]
+    spot = current.placements[other % len(current.placements)].entity
+    moved = current.with_placements({spot: PlacementPatch(x=point[0], y=point[1])}, force=True)
+    sets = tuple(moved if i == position else s for i, s in enumerate(show.sets))
+    edits = (
+        show,
+        show.replace(sets=sets),
+        show.replace(title=f"{show.title} {other}"),
+        seeded_show(other, SEEDED_SPOTS, SEEDED_SETS),
+    )
+    return edits[edit % len(edits)]
+
+
+@given(seeds, st.integers(min_value=0, max_value=3), seeds, st.tuples(coordinate, coordinate))
+def test_changes_lists_exactly_the_items_that_differ(
+    seed: int, edit: int, other: int, point: tuple[float, float]
+) -> None:
+    before = seeded_show(seed, SEEDED_SPOTS, SEEDED_SETS)
+    after = _edited(before, edit, other, point)
+    old, new = items(before), items(after)
+    keys = [*old, *(key for key in new if key not in old)]
+    differ = [key for key in keys if old.get(key) != new.get(key)]
+    found = changes(before, after).changes
+    assert [c.key for c in found] == sorted(differ, key=lambda key: key.sort_key())
+    assert all(c.before == freeze_json(old.get(c.key)) for c in found)
+    assert all(c.after == freeze_json(new.get(c.key)) for c in found)
