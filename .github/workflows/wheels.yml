@@ -65,6 +65,8 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: python3 scripts/check_release_version.py "$TAG"
 
+  # The test images are pinned to the digests of their multi-arch indexes; refresh both
+  # digests of a variant together. maturin-action picks its own build images by tag.
   linux:
     name: linux ${{ matrix.target }} ${{ matrix.libc }}
     needs: version
@@ -80,18 +82,26 @@ jobs:
             target: x86_64
             libc: "2_28"
             image: slim
+            digest_313: sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
+            digest_314: sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
           - runner: ubuntu-24.04-arm
             target: aarch64
             libc: "2_28"
             image: slim
+            digest_313: sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
+            digest_314: sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
           - runner: ubuntu-24.04
             target: x86_64
             libc: musllinux_1_2
             image: alpine
+            digest_313: sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e
+            digest_314: sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
           - runner: ubuntu-24.04-arm
             target: aarch64
             libc: musllinux_1_2
             image: alpine
+            digest_313: sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e
+            digest_314: sha256:5862d971d1f0ae26b258cefa4e893556b1d3aba81bd2ff30888704ad378bab67
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -120,12 +130,13 @@ jobs:
         run: mkdir suite && cp -R tests pyproject.toml suite/
       - name: Test the wheel on 3.13 and 3.14
         env:
-          IMAGE_VARIANT: ${{ matrix.image }}
+          IMAGE_313: python:3.13-${{ matrix.image }}@${{ matrix.digest_313 }}
+          IMAGE_314: python:3.14-${{ matrix.image }}@${{ matrix.digest_314 }}
         run: |
-          for python in 3.13 3.14; do
+          for image in "$IMAGE_313" "$IMAGE_314"; do
             docker run --rm -v "$PWD:/w" -w /w/suite \
               -e PYTHONHASHSEED -e WHEEL_TEST_TOOLS -e PORTED_TESTS -e WHEEL_CHECK \
-              "python:$python-$IMAGE_VARIANT" sh -euc '
+              "$image" sh -euc '
                 wheel="$(ls /w/dist/*.whl)"
                 python -m venv /venv
                 /venv/bin/python -m pip install --quiet --constraint /w/constraints.txt \

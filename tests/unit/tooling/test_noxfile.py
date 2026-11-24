@@ -112,6 +112,10 @@ Contains:
     test_regression_wheels_never_cancel_a_tag_run: a newer run cancels only non-tag runs
     test_regression_wheels_upload_before_the_tests_run: the uploaded wheel is the built one,
         never one the test step could replace
+    unpinned_images(): lists the python image references that name no digest
+    test_unpinned_images_sees_a_tag_without_a_digest: proves the image check can fail
+    test_regression_wheel_test_images_are_pinned_by_digest: each Linux leg tests in python
+        images pinned to multi-arch index digests, the same per variant
 """
 
 import ast
@@ -302,6 +306,11 @@ MATRIX_ITEM_INDENT = " " * 10
 DIST_BUILD_ARGS = "--profile dist --locked --out dist"
 UPLOAD_STEP = "uses: actions/upload-artifact@"
 PORTED_TEST_STEP = "-P -m pytest $PORTED_TESTS"
+EXPRESSION = re.compile(r"\$\{\{ ([\w.]+) \}\}")
+IMAGE_REFERENCE = re.compile(r"\bpython:[^\s'\"@]+(?:@[^\s'\"]+)?")
+PINNED_IMAGE = re.compile(r"@(?:sha256:[0-9a-f]{64}|<matrix\.digest_\d+>)$")
+IMAGE_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+IMAGE_LOOP = 'for image in "$IMAGE_313" "$IMAGE_314"; do'
 LOCK_UNCHANGED = "run: git diff --exit-code -- Cargo.lock"
 ON_A_TAG = "github.ref_type == 'tag'"
 RELEASE_VERSION_RUN = 'python3 scripts/check_release_version.py "$TAG"'
@@ -1257,7 +1266,7 @@ def test_wheels_test_the_installed_wheel_on_313_and_314() -> None:
     assert tuple((job_value(env, "PORTED_TESTS", 2) or "").split()) == PORTED_TESTS
     assert job_value(env, "PYTHONHASHSEED", 2) == '"0"'
     linux = ci_job(workflow, "linux")
-    assert f"for python in {' '.join(WHEEL_TEST_PYTHONS)}; do" in linux
+    assert IMAGE_LOOP in linux
     for name in ("windows", "macos"):
         job = ci_job(workflow, name)
         versions = [step_value(step, "python-version", WITH_INDENT) for step in job_steps(job)]
@@ -1440,3 +1449,47 @@ def test_regression_wheels_upload_before_the_tests_run() -> None:
         assert upload is not None, name
         assert tests is not None, name
         assert build < upload < tests, name
+
+
+def unpinned_images(workflow: str) -> list[str]:
+    """Lists the python image references of a workflow that name no digest."""
+    text = EXPRESSION.sub(r"<\1>", workflow)
+    return [ref for ref in IMAGE_REFERENCE.findall(text) if not PINNED_IMAGE.search(ref)]
+
+
+def test_unpinned_images_sees_a_tag_without_a_digest() -> None:
+    digest = f"sha256:{'a' * 64}"
+    workflow = (
+        f"  A: python:3.13-slim@{digest}\n"
+        "  B: python:3.14-${{ matrix.image }}@${{ matrix.digest_314 }}\n"
+        '  C: "python:$python-$IMAGE_VARIANT" sh\n'
+        "  D: python:3.13-alpine\n"
+        f"  E: python:3.13-slim@sha256:{'a' * 63}\n"
+    )
+    assert unpinned_images(workflow) == [
+        "python:$python-$IMAGE_VARIANT",
+        "python:3.13-alpine",
+        f"python:3.13-slim@sha256:{'a' * 63}",
+    ]
+
+
+def test_regression_wheel_test_images_are_pinned_by_digest() -> None:
+    """The Linux tests ran in floating python tags; they run in digest-pinned images now."""
+    workflow = WHEELS_WORKFLOW.read_text()
+    assert unpinned_images(workflow) == []
+    linux = ci_job(workflow, "linux")
+    entries = matrix_entries(linux)
+    assert entries
+    digests: dict[str, tuple[str, str]] = {}
+    for entry in entries:
+        pair = (entry["digest_313"], entry["digest_314"])
+        assert all(IMAGE_DIGEST.match(digest) for digest in pair), entry
+        assert digests.setdefault(entry["image"], pair) == pair, entry
+    (test,) = [step for step in job_steps(linux) if PORTED_TEST_STEP in step]
+    for version in WHEEL_TEST_PYTHONS:
+        name = version.replace(".", "")
+        assert step_value(test, f"IMAGE_{name}", WITH_INDENT) == (
+            f"python:{version}-${{{{ matrix.image }}}}@${{{{ matrix.digest_{name} }}}}"
+        )
+    assert IMAGE_LOOP in test
+    assert '"$image" sh -euc' in test
