@@ -3,11 +3,16 @@
 """
 test_role_documents.py --- checks that storing sets and the cast as role documents keeps content
 
-Set E8S_UPDATE_GOLDEN=1 to rewrite the interchange goldens; the diff then needs human review.
+Set E8S_UPDATE_GOLDEN=1 to rewrite the interchange goldens from their stored inputs; the diff then
+needs human review. The seeded golden's input is the seeded show frozen as JSON, so live float math
+never reaches the bytes compared; E8S_REBUILD_GOLDEN_INPUT=1 rebuilds that input from seeded_show
+on the current machine, which can move the last bits of floats, so review its diff too.
 
 Contains:
     test_export_json_bytes_are_unchanged_by_the_role_split: exports a seeded show and the head of
         the v0.4.0 fixture with the bytes pinned before sets were stored as role documents
+    test_regression_seeded_export_golden_reads_frozen_show_data: builds the seeded export golden's
+        show from the stored input file, never from live float math
     test_regression_interchange_goldens_check_out_byte_exact: finds the interchange golden folder
         marked `-text` in .gitattributes, so no checkout rewrites its line endings
     test_reserved_roots_are_refused_until_a_format_defines_them: refuses a path under `/props/`
@@ -43,6 +48,7 @@ import json
 import os
 import re
 import shutil
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -68,6 +74,10 @@ FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 V040 = FIXTURES / "repos" / "v0.4.0"
 GOLDEN = FIXTURES / "interchange"
 UPDATE_FLAG = "E8S_UPDATE_GOLDEN"
+REBUILD_INPUT_FLAG = "E8S_REBUILD_GOLDEN_INPUT"
+SEEDED_EXPORT = "seeded_show_export"
+V040_EXPORT = "v040_head_export"
+SEEDED_INPUT = GOLDEN / "seeded_show_input.json"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 GITATTRIBUTES = REPO_ROOT / ".gitattributes"
 BYTE_EXACT_GOLDENS = ("tests/fixtures/interchange/**",)
@@ -99,14 +109,41 @@ def _export_bytes(show: Show) -> bytes:
     return f"{text}\n".encode()
 
 
-@pytest.mark.parametrize("name", ["seeded_show_export", "v040_head_export"])
+def _seeded_input() -> Show:
+    """Loads the seeded show frozen as JSON; E8S_REBUILD_GOLDEN_INPUT=1 refreezes it first.
+
+    The input keeps insertion order, not sorted keys: export_json writes mappings such as the
+    cast's groups and the forms in insertion order, so sorted keys would change the golden bytes.
+    """
+    if os.environ.get(REBUILD_INPUT_FLAG) == "1":
+        text = json.dumps(seeded_show(SEED, SPOTS, SETS).to_json(), indent=JSON_INDENT)
+        SEEDED_INPUT.write_text(f"{text}\n")
+    return Show.from_json(json.loads(SEEDED_INPUT.read_bytes()))
+
+
+def _golden_show(name: str, tmp_path: Path) -> Show:
+    """Returns the stored show a golden exports: the frozen seeded show or the v0.4.0 head."""
+    return _seeded_input() if name == SEEDED_EXPORT else _v040_head(tmp_path)
+
+
+@pytest.mark.parametrize("name", [SEEDED_EXPORT, V040_EXPORT])
 def test_export_json_bytes_are_unchanged_by_the_role_split(name: str, tmp_path: Path) -> None:
-    show = seeded_show(SEED, SPOTS, SETS) if name == "seeded_show_export" else _v040_head(tmp_path)
     golden = GOLDEN / f"{name}.json"
-    exported = _export_bytes(show)
+    exported = _export_bytes(_golden_show(name, tmp_path))
     if os.environ.get(UPDATE_FLAG) == "1":
         golden.write_bytes(exported)
     assert exported == golden.read_bytes()
+
+
+def test_regression_seeded_export_golden_reads_frozen_show_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def live_math(*_: object) -> Show:
+        raise AssertionError("the golden input must come from stored data")
+
+    monkeypatch.setattr(sys.modules[__name__], "seeded_show", live_math)
+    stored = Show.from_json(json.loads(SEEDED_INPUT.read_bytes()))
+    assert _golden_show(SEEDED_EXPORT, tmp_path) == stored
 
 
 @pytest.mark.skipif(not GITATTRIBUTES.is_file(), reason="needs a source checkout")
