@@ -120,7 +120,8 @@ def test_require_extra_chains_the_import_error(monkeypatch: pytest.MonkeyPatch) 
     assert isinstance(caught.value.__cause__, ImportError)
     assert caught.value.context["module"] == "pandas"
     assert caught.value.hint == (
-        'install the extra: pip install "e8s[tables]" or uv add "e8s[tables]"'
+        'install e8s with the "tables" extra: '
+        'uv add "e8s[tables] @ git+https://github.com/abj360/e8s@<tag>"'
     )
 
 
