@@ -161,8 +161,9 @@ def require_storable(show: Show) -> None:
     if repeated_pins or repeated_specs:
         raise SchemaError(
             "show repeats a pin or a stored path spec, which one stored record cannot hold",
-            hint="keep one pin per target and ID (pin() replaces the old one) and one stored path"
-            " spec per set pair",
+            hint="re-pin a repeated pin with pin(show, target, id), which keeps one pin per target"
+            " and ID; store a repeated pair's paths with store_paths(show, PathsOp(spec=...)),"
+            " which keeps one spec per pair",
             context={"repeated_pins": repeated_pins, "repeated_transitions": repeated_specs},
         )
 

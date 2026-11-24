@@ -386,7 +386,10 @@ def test_changes_refuse_two_pins_of_one_target() -> None:
         items(twice)
     with pytest.raises(SchemaError, match="entity/T1") as caught:
         changes(show, twice)
-    assert caught.value.hint == "keep one pin per target and ID; pin() replaces the old one"
+    assert (
+        caught.value.hint
+        == "re-pin it with pin(show, target, id), which keeps one pin per target and ID"
+    )
 
 
 def test_changes_refuse_two_paths_for_one_transition() -> None:
@@ -396,4 +399,8 @@ def test_changes_refuse_two_paths_for_one_transition() -> None:
         items(twice)
     with pytest.raises(SchemaError, match="1-2") as caught:
         changes(two_set_show(), twice)
-    assert caught.value.hint == "store one path spec per set pair"
+    assert (
+        caught.value.hint
+        == "store its paths with store_paths(show, PathsOp(spec=...)), which keeps one spec per"
+        " pair"
+    )

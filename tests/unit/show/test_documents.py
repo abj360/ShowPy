@@ -39,6 +39,11 @@ Contains:
         which one stored pin item cannot hold
     test_regression_storing_refuses_two_path_specs_for_one_pair: refuses a second stored path
         spec for a set pair, which encoding kept and lookup dropped
+    test_regression_stored_repeated_pins_name_the_call_that_resolves_them: decodes a stored
+        repeated pin unchanged, refuses to save it, and saves after the pin() the hint names
+    test_regression_imported_repeated_path_specs_name_the_call_that_resolves_them: imports a
+        repeated path spec unchanged, refuses to save it, and saves after the store_paths() the
+        hint names
 """
 
 import json
@@ -49,6 +54,8 @@ import pytest
 from e8s.core.canonical import INT_LIMIT
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import E8sError, SchemaError, VersionError
+from e8s.show.changes import store_paths
+from e8s.show.collab_models import PathsOp
 from e8s.show.documents import (
     LEGACY_NOTES_DOC,
     SHOW_DOC,
@@ -61,6 +68,7 @@ from e8s.show.documents import (
     forms_doc,
     require_storable,
 )
+from e8s.show.interchange import export_json, import_json
 from e8s.show.migrate import format_header, without_header
 from e8s.show.models import Pin, Show
 from e8s.show.pinning import pin
@@ -250,7 +258,7 @@ def test_regression_storing_refuses_two_pins_of_one_target() -> None:
     with pytest.raises(SchemaError, match="pin") as caught:
         require_storable(twice)
     assert caught.value.context["repeated_pins"] == [["entity", "T1"]]
-    assert "pin()" in caught.value.hint
+    assert "pin(show, target, id)" in caught.value.hint
 
 
 def test_regression_storing_refuses_two_path_specs_for_one_pair() -> None:
@@ -259,3 +267,29 @@ def test_regression_storing_refuses_two_path_specs_for_one_pair() -> None:
     with pytest.raises(SchemaError, match="path") as caught:
         encode_show(twice)
     assert caught.value.context["repeated_transitions"] == ["1→2"]
+
+
+def test_regression_stored_repeated_pins_name_the_call_that_resolves_them() -> None:
+    docs = encode_show(pin(two_set_show(), "entity", "T1", reason="soloist"))
+    meta = json.loads(docs[SHOW_DOC])
+    meta["pins"] = [*meta["pins"], {**meta["pins"][0], "reason": "again"}]
+    docs[SHOW_DOC] = json.dumps(meta).encode()
+    show = decode_show(docs)
+    assert [p.reason for p in show.pins] == ["soloist", "again"]
+    with pytest.raises(SchemaError) as caught:
+        encode_show(show)
+    assert "pin(show, target, id)" in caught.value.hint
+    resolved = pin(show, "entity", "T1", reason="soloist")
+    assert decode_show(encode_show(resolved)).pins == resolved.pins
+
+
+def test_regression_imported_repeated_path_specs_name_the_call_that_resolves_them() -> None:
+    dumped = export_json(rich_show())
+    dumped["show"]["transitions"] = [*dumped["show"]["transitions"]] * 2
+    show = import_json(dumped)
+    assert len(show.transitions) == 2
+    with pytest.raises(SchemaError) as caught:
+        encode_show(show)
+    assert "store_paths(show, PathsOp(spec=...))" in caught.value.hint
+    resolved = store_paths(show, PathsOp(spec=show.transitions[0]))
+    assert decode_show(encode_show(resolved)).transitions == (show.transitions[0],)

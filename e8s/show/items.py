@@ -189,9 +189,10 @@ def _picked(dumped: Mapping[str, JsonValue], names: Iterable[str]) -> dict[str, 
 DUPLICATE_HINTS: Mapping[ItemKind, str] = ReadOnlyMap(
     {
         "set": "give every set its own key; add_set() picks a free one",
-        "transition": "store one path spec per set pair",
+        "transition": "store its paths with store_paths(show, PathsOp(spec=...)), which keeps"
+        " one spec per pair",
         "spot": "give every spot its own ID",
-        "pin": "keep one pin per target and ID; pin() replaces the old one",
+        "pin": "re-pin it with pin(show, target, id), which keeps one pin per target and ID",
     }
 )
 
