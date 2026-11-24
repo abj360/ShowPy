@@ -1639,7 +1639,7 @@
   "detect_form": "(points: object, tol: Meters = 0.1, form_id: str = 'detected', members: collections.abc.Sequence[str] = ()) -> e8s.choreo.form_models.Form",
   "diff_paths": "(a: e8s.choreo.path_models.TransitionSpec, b: e8s.choreo.path_models.TransitionSpec) -> e8s.show.history_models.PathDiff",
   "diff_sets": "(a: e8s.choreo.models.Set, b: e8s.choreo.models.Set, tol: float = 1e-06) -> e8s.show.history_models.SetDiff",
-  "diff_show": "(a: e8s.show.models.Show, b: e8s.show.models.Show) -> dict[str, Any]",
+  "diff_show": "(a: e8s.show.models.Show, b: e8s.show.models.Show) -> dict[str, JsonValue]",
   "difference": "(a: Area, b: Area) -> Area",
   "digest": "(data: bytes) -> str",
   "direction_of_travel": "(show: e8s.show.models.Show, entity: str, tid: tuple[str, str], tau: float) -> Degrees | None",
