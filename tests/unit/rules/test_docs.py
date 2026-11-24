@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 CONSUMER_NAMES = re.compile(r"\b(Eight|Eight-agent|stagecheck)\b")
 # The Docker image copies pyproject.toml but not the e8s source, so both mark a checkout.
 IS_SOURCE_CHECKOUT = (REPO_ROOT / "pyproject.toml").is_file() and (
