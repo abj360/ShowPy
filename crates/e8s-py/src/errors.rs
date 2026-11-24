@@ -2,6 +2,7 @@
 //!
 //! Contains:
 //!     PANIC_HINT: the hint of every CORE_PANIC error
+//!     PANIC_DETAIL_CHARS: caps the panic payload a CORE_PANIC message repeats
 //!     guard(): runs one core call, raising its error, or a panic it caught, as an e8s exception
 //!     to_py_err(): builds the e8s exception a core error names
 //!     add_probes(): adds the private boundary hook `_finite_probe` to a module
@@ -20,7 +21,10 @@ pub const PANIC_HINT: &str = "This is a bug in e8s; report it with the function 
 const ERRORS_MODULE: &str = "e8s.core.errors";
 const CODES_MODULE: &str = "e8s.core.error_codes";
 const CODE_ENUM: &str = "ErrorCode";
+/// Caps the characters of the panic payload a CORE_PANIC message repeats.
+pub const PANIC_DETAIL_CHARS: usize = 200;
 const UNKNOWN_PAYLOAD: &str = "a panic with no message";
+const CUT_MARK: &str = "...";
 
 thread_local! {
     /// Counts the guarded calls running on this thread, so the hook knows a panic is caught.
@@ -92,7 +96,7 @@ fn panic_error(name: &'static str, payload: &(dyn Any + Send)) -> CoreError {
                 .ok()
                 .and_then(|mut slot| slot.take())
         })
-        .unwrap_or_else(|| payload_text(payload).to_owned());
+        .unwrap_or_else(|| cut(payload_text(payload)));
     CoreError::new(
         ErrorKind::E8s,
         ErrorCode::CorePanic,
@@ -132,12 +136,30 @@ fn install_quiet_hook() {
     });
 }
 
+/// Describes a panic by its payload, cut to PANIC_DETAIL_CHARS, and its source file and line.
+///
+/// Only the file's name is kept: the full path is the build machine's, not the user's.
 fn panic_report(info: &PanicHookInfo<'_>) -> String {
-    let text = payload_text(info.payload());
+    let text = cut(payload_text(info.payload()));
     match info.location() {
-        Some(location) => format!("{text} at {}:{}", location.file(), location.line()),
+        Some(location) => format!(
+            "{text} at {}:{}",
+            file_name(location.file()),
+            location.line()
+        ),
+        None => text,
+    }
+}
+
+fn cut(text: &str) -> String {
+    match text.char_indices().nth(PANIC_DETAIL_CHARS) {
+        Some((end, _)) => format!("{}{CUT_MARK}", &text[..end]),
         None => text.to_owned(),
     }
+}
+
+fn file_name(path: &str) -> &str {
+    path.rsplit(['/', '\\']).next().unwrap_or(path)
 }
 
 /// Returns `value` when it is finite and raises SchemaError otherwise, as every core boundary

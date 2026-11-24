@@ -3,10 +3,12 @@
 //! Contains:
 //!     panic_in_a_bound_call_raises_e8s_error: a panic in a guarded call raises CORE_PANIC
 //!     core_error_raises_the_class_of_its_kind: a core error keeps its class and fields
+//!     panic_message_names_no_build_path_and_cuts_a_long_payload: the CORE_PANIC message keeps
+//!         the source file's name and line only, and at most PANIC_DETAIL_CHARS of the payload
 
 #![allow(clippy::panic, reason = "the tests panic on purpose inside the guard")]
 
-use _core::errors::{PANIC_HINT, guard};
+use _core::errors::{PANIC_DETAIL_CHARS, PANIC_HINT, guard};
 use e8s_core::base::{CoreError, CoreResult, ErrorCode, ErrorKind};
 use pyo3::panic::PanicException;
 use pyo3::prelude::*;
@@ -54,7 +56,10 @@ fn panic_in_a_bound_call_raises_e8s_error() -> PyResult<()> {
         assert_eq!(context.len()?, 1);
         assert_eq!(context.get_item("function")?.extract::<String>()?, "probe");
         let message = value.getattr("message")?.extract::<String>()?;
-        assert!(message.starts_with("probe panicked: boom at "), "{message}");
+        assert!(
+            message.starts_with("probe panicked: boom at panics.rs:"),
+            "{message}"
+        );
         Ok(())
     })
 }
@@ -78,4 +83,31 @@ fn core_error_raises_the_class_of_its_kind() -> PyResult<()> {
         assert!(context.get_item("ramp")?.extract::<bool>()?);
         Ok(())
     })
+}
+
+fn panic_message(payload: String) -> PyResult<String> {
+    Python::attach(|py| {
+        import_e8s(py)?;
+        let err = error_of(guard("probe", move || -> CoreResult<()> {
+            panic!("{payload}")
+        }))?;
+        err.value(py).getattr("message")?.extract::<String>()
+    })
+}
+
+#[test]
+fn panic_message_names_no_build_path_and_cuts_a_long_payload() -> PyResult<()> {
+    let short = panic_message("boom".to_owned())?;
+    assert!(!short.contains('/') && !short.contains('\\'), "{short}");
+    let line = short.rsplit(':').next().unwrap_or_default();
+    assert!(line.parse::<u32>().is_ok(), "{short}");
+
+    let long = panic_message("x".repeat(10 * PANIC_DETAIL_CHARS))?;
+    let kept = format!(
+        "probe panicked: {}... at panics.rs:",
+        "x".repeat(PANIC_DETAIL_CHARS)
+    );
+    assert!(long.starts_with(&kept), "{long}");
+    assert!(long.chars().count() < kept.chars().count() + 8, "{long}");
+    Ok(())
 }
