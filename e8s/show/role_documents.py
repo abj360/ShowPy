@@ -6,11 +6,16 @@ and pin roles, facing.json the facing role and labels.json the placement notes. 
 is a JSON object keyed by spot ID whose values hold that spot's role fields. set.json holds every
 other set field and lists the spot IDs in placement order under `placement_order`, since
 canonical JSON sorts object keys. A set.json holding `placements` is a layout-1 set and is read
-as it is. The cast is stored in its own document, out of show.json. Every mix of the two forms,
-a partial role set and a role row that names other spots than the placement order is refused.
+as it is; one tree may hold sets of both forms, but never both forms of one set. The cast is
+stored in its own document, out of show.json. A set.json of neither form, a partial role set,
+role documents without set.json, a role row that names other spots than the placement order, a
+spot ID the ID rule rejects and a cast stored in both places or, in a current tree, in neither
+are refused.
 
 Contains:
+    PLACEMENTS_FIELD: names the layout-1 set.json field holding the placements
     PLACEMENT_ORDER_FIELD: names the set.json field listing spot IDs in placement order
+    CAST_ROOT: names the root that holds only the cast document
     ROLE_FIELDS: maps each role document name to the placement fields it holds
     set_documents(): splits the JSON of a set into its set.json and role document objects
     read_set_object(): reads a set's documents of either layout as the JSON of one set
