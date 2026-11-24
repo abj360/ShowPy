@@ -39,7 +39,14 @@ from e8s.show.renumber import renumber
 from e8s.show.sections import join_sections, split_section
 from e8s.show.set_queries import index
 from e8s.time.clock import count_to_seconds, tempo_at
-from e8s.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting, TempoSection
+from e8s.time.models import (
+    AudioTrack,
+    Cue,
+    Hold,
+    Marker,
+    MeasureSetting,
+    TempoSection,
+)
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 from tests.golden.opener import opener_show
@@ -281,8 +288,6 @@ def test_regression_join_after_split_restores_audio_tracks(
     assert _round_trip(show).timeline.audio == (track,)
 
 
-@pytest.mark.defect("UP-9.7-87")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-87")
 def test_regression_split_puts_a_cue_in_one_half_only() -> None:
     """Keeps cue c1 in a single half of a split (audit 9.7 sections)."""
     cue = Cue(label="c1", order=1, estimated_seconds=2.0)
@@ -308,3 +313,48 @@ def test_regression_join_keeps_one_pin_per_target(target: PinTarget, pin_id: str
     joined = join_sections(a, pin(b, target, pin_id, reason="second"))
     assert [(p.target, p.id, p.reason) for p in joined.pins] == [(target, pin_id, "first")]
     assert encode_show(joined)
+
+
+def _cue_show(*cues: Cue) -> Show:
+    return _three_sets_with(cues=cues)
+
+
+def _relabelled(show: Show) -> Show:
+    return show.replace(sets=tuple(s.replace(id=f"B{s.id}") for s in show.sets))
+
+
+def test_split_sends_each_cue_to_the_half_its_start_falls_in() -> None:
+    """Splits cues at the boundary time: an early cue stays first, a later one goes second."""
+    early = Cue(label="early", order=1, estimated_seconds=8.0)
+    late = Cue(label="late", order=2, estimated_seconds=2.0)
+    first, second = split_section(_cue_show(early, late), SPLIT_SET)
+    assert [c.label for c in first.timeline.cues] == ["early"]
+    assert [c.label for c in second.timeline.cues] == ["late"]
+    assert second.timeline.cues[0].order == late.order
+
+
+def test_regression_join_after_split_restores_cues() -> None:
+    """Restores every cue once, in order, after a split and a join."""
+    cues = (
+        Cue(label="early", order=1, estimated_seconds=8.0),
+        Cue(label="late", order=2, estimated_seconds=2.0),
+    )
+    assert _round_trip(_cue_show(*cues)).timeline.cues == cues
+
+
+def test_join_moves_cue_orders_after_the_first_section_on_an_order_clash() -> None:
+    """Shifts the second section's cue orders after the first's, keeping their relative order."""
+    one = _cue_show(Cue(label="a", order=1, estimated_seconds=1.0))
+    two = _cue_show(
+        Cue(label="b", order=1, estimated_seconds=1.0),
+        Cue(label="c", order=3, estimated_seconds=1.0),
+    )
+    joined = join_sections(one, _relabelled(two))
+    assert [(c.label, c.order) for c in joined.timeline.cues] == [("a", 1), ("b", 2), ("c", 4)]
+
+
+def test_join_rejects_a_cue_label_both_sections_hold() -> None:
+    """Raises SchemaError when both sections hold a cue with one label."""
+    cue = Cue(label="a", order=1, estimated_seconds=1.0)
+    with pytest.raises(SchemaError):
+        join_sections(_cue_show(cue), _relabelled(_cue_show(cue.replace(order=2))))

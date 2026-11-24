@@ -20,7 +20,8 @@ from e8s.show.set_keys import free_set_key, set_key
 from e8s.show.set_queries import index
 from e8s.time.clock import count_to_seconds, tempo_at
 from e8s.time.measures import count_to_measure
-from e8s.time.models import AudioTrack, Marker, MeasureSetting, TempoSection, Timeline
+from e8s.time.models import AudioTrack, Cue, Marker, MeasureSetting, TempoSection, Timeline
+from e8s.time.timeline import cue_to_seconds
 
 TOL = 1e-9
 
@@ -106,6 +107,13 @@ def _audio_until(tl: Timeline, offset: Count) -> tuple[AudioTrack, ...]:
     return tuple(tracks)
 
 
+def _cues_split(tl: Timeline, offset: Count) -> tuple[tuple[Cue, ...], tuple[Cue, ...]]:
+    """Splits cues by start time: before the boundary go first, the rest second."""
+    boundary = count_to_seconds(tl, offset)
+    before = tuple(c for c in tl.cues if cue_to_seconds(tl, c.label) < boundary - TOL)
+    return before, tuple(c for c in tl.cues if c not in before)
+
+
 def _timeline_until(tl: Timeline, offset: Count) -> Timeline:
     return tl.replace(
         tempos=tuple(
@@ -116,6 +124,7 @@ def _timeline_until(tl: Timeline, offset: Count) -> Timeline:
         holds=tuple(h for h in tl.holds if h.at_count < offset - TOL),
         markers=tuple(m for m in tl.markers if m.at_count <= offset + TOL),
         audio=_audio_until(tl, offset),
+        cues=_cues_split(tl, offset)[0],
         total_counts=offset,
     )
 
@@ -134,6 +143,7 @@ def _timeline_from(tl: Timeline, offset: Count) -> Timeline:
         ),
         measures=_measures_from(tl, offset),
         audio=_audio_from(tl, offset),
+        cues=_cues_split(tl, offset)[1],
         total_counts=total,
     )
 
@@ -171,6 +181,7 @@ def split_section(show: Show, at: str) -> tuple[Show, Show]:
     show, at the tempo the whole show has at `at`. Raises TimelineError when `at` starts
     mid-measure.
 
+    A cue goes to the show its start time falls in.
     An audio track goes to every show its section overlaps, with the section clipped to it;
     a track with no section goes to both.
 
@@ -309,6 +320,21 @@ def _joined_audio(a: Timeline, b: Timeline, offset: Count) -> tuple[AudioTrack, 
     return tuple(joined)
 
 
+def _joined_cues(a: Timeline, b: Timeline) -> tuple[Cue, ...]:
+    """Appends `b`'s cues; on an order clash `b`'s orders move after `a`'s highest order."""
+    labels = sorted({c.label for c in a.cues} & {c.label for c in b.cues})
+    if labels:
+        raise SchemaError(
+            f"cue labels repeat across sections: {', '.join(labels)}",
+            hint="rename the cues in one section",
+            context={"cues": labels},
+        )
+    orders = {c.order for c in a.cues}
+    clash = any(c.order in orders for c in b.cues)
+    gap = max(orders, default=0) + 1 - min((c.order for c in b.cues), default=0) if clash else 0
+    return (*a.cues, *(c.replace(order=c.order + gap) for c in b.cues))
+
+
 def _joined_timeline(a: Timeline, b: Timeline, offset: Count) -> Timeline:
     def moved(count: Count) -> Count:
         return count + offset
@@ -330,6 +356,7 @@ def _joined_timeline(a: Timeline, b: Timeline, offset: Count) -> Timeline:
             *_new_markers(a.markers, b.markers, offset),
         ),
         audio=_joined_audio(a, b, offset),
+        cues=_joined_cues(a, b),
         total_counts=total,
     )
 
