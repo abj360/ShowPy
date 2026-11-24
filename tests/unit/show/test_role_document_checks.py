@@ -16,6 +16,9 @@ Contains:
         unlisted folder through the revision that re-encodes a layout-1 tree as role documents
     test_regression_cast_root_holds_only_the_cast_document: refuses another name under `/cast/`
         on decode and as a stored path
+    test_regression_noncanonical_layout1_tree_normalizes_once: re-encodes a format-2 layout-1 tree
+        holding `-0.0` and a reformatted sheet in one revision before two writes to different
+        documents, and adds nothing on a later save
 """
 
 import json
@@ -43,6 +46,8 @@ CAST_DOC = "/cast/cast.json"
 ORDER_FIELD = "placement_order"
 ROLE_NAMES = ("drill.json", "facing.json", "labels.json")
 LONG_ID_CHARS = 10_000
+NEGATIVE_ZERO = b'"x": -0.0'
+TOTAL_COUNTS = 100.0
 LISTED_SPOTS = 20
 STRAY_SPOTS = 30
 
@@ -162,3 +167,30 @@ def test_regression_cast_root_holds_only_the_cast_document(path: str) -> None:
     assert caught.value.code == ErrorCode.BAD_PATH
     assert CAST_DOC in caught.value.hint
     require_known_path(CAST_DOC)
+
+
+def test_regression_noncanonical_layout1_tree_normalizes_once() -> None:
+    docs = layout1_documents(two_set_show())
+    docs["/sets/1/set.json"] = docs["/sets/1/set.json"].replace(b'"x": 0.0', NEGATIVE_ZERO, 1)
+    assert NEGATIVE_ZERO in docs["/sets/1/set.json"]
+    docs["/show/sheet.json"] = json.dumps(json.loads(docs["/show/sheet.json"]), indent=4).encode()
+    repo = InMemoryRepository()
+    repo.transaction(SHOW_ID, docs, expected_revision="", at=AT)
+    ws = open_workspace(repo, SHOW_ID)
+    count = len(repo.revisions(SHOW_ID))
+    meta = json.loads(ws.read(SHOW_DOC))
+    meta["title"] = "Renamed"
+    ws.write(SHOW_DOC, json.dumps(meta), at=AT)
+    timeline = json.loads(ws.read("/time/timeline.json"))
+    timeline["total_counts"] = TOTAL_COUNTS
+    ws.write("/time/timeline.json", json.dumps(timeline), at=AT)
+    roles = {f"/sets/{key}/{name}" for key in ("1", "2") for name in ("set.json", *ROLE_NAMES)}
+    assert [set(r.changed) for r in repo.revisions(SHOW_ID)[count:]] == [
+        roles | {CAST_DOC, SHOW_DOC, "/show/sheet.json"},
+        {SHOW_DOC},
+        {"/time/timeline.json"},
+    ]
+    save_show(ws, load_show(ws), AT)
+    assert len(repo.revisions(SHOW_ID)) == count + 3
+    tree = ws.tree_at(ws.revision)
+    assert not [p for p, raw in tree.items() if b"-0.0" in raw]
