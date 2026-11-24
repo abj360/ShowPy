@@ -164,6 +164,16 @@ def _picked(dumped: Mapping[str, JsonValue], names: Iterable[str]) -> dict[str, 
     return {name: dumped[name] for name in names}
 
 
+DUPLICATE_HINTS: Mapping[ItemKind, str] = ReadOnlyMap(
+    {
+        "set": "give every set its own key; add_set() picks a free one",
+        "transition": "store one path spec per set pair",
+        "spot": "give every spot its own ID",
+        "pin": "keep one pin per target and ID; pin() replaces the old one",
+    }
+)
+
+
 def _unique[T](kind: ItemKind, pairs: Iterable[tuple[_Path, T]]) -> dict[_Path, T]:
     """Maps each item path to its source object, refusing a path two stored values claim."""
     found: dict[_Path, T] = {}
@@ -171,7 +181,7 @@ def _unique[T](kind: ItemKind, pairs: Iterable[tuple[_Path, T]]) -> dict[_Path, 
         if path in found:
             raise SchemaError(
                 f"two stored values claim the {kind} item {'/'.join(path)}",
-                hint="keep one stored path spec per set pair and one pin per target and ID",
+                hint=DUPLICATE_HINTS[kind],
                 context={"kind": kind, "path": list(path)},
             )
         found[path] = source
@@ -341,11 +351,6 @@ AREAS: tuple[_Area, ...] = (
 )
 
 
-def _sort_key(raw: _RawKey) -> tuple[str, _Path, str]:
-    kind, path, role = raw
-    return kind, path, role or ""
-
-
 def _item_key(raw: _RawKey) -> ItemKey:
     kind, path, role = raw
     return ItemKey(kind=kind, path=path, role=role)
@@ -366,11 +371,8 @@ def items(show: Show) -> dict[ItemKey, JsonValue]:
     {'facing': 0.0}
     """
     require_storable(show)
-    entries = sorted(
-        (entry for area in AREAS for entry in area.entries(show)),
-        key=lambda entry: _sort_key(entry[0]),
-    )
-    return {_item_key(raw): value for raw, value in entries}
+    entries = ((_item_key(raw), value) for area in AREAS for raw, value in area.entries(show))
+    return dict(sorted(entries, key=lambda entry: entry[0].sort_key()))
 
 
 def changes(before: Show, after: Show) -> ChangeSet:
@@ -395,12 +397,9 @@ def changes(before: Show, after: Show) -> ChangeSet:
     >>> [c.key.role for c in changes(show, show.replace(sets=(show.sets[0], moved))).changes]
     ['drill']
     """
-    found = sorted(
-        (diff for area in AREAS for diff in area.differences(before, after)),
-        key=lambda diff: _sort_key(diff[0]),
+    found = (
+        ItemChange(key=_item_key(raw), before=was, after=now)
+        for area in AREAS
+        for raw, was, now in area.differences(before, after)
     )
-    return ChangeSet(
-        changes=tuple(
-            ItemChange(key=_item_key(raw), before=was, after=now) for raw, was, now in found
-        )
-    )
+    return ChangeSet(changes=tuple(sorted(found, key=lambda change: change.key.sort_key())))
