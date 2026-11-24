@@ -655,6 +655,12 @@ if TYPE_CHECKING:
         import_positions,
         migrate_json,
     )
+    from e8s.show.layout import (
+        CURRENT_LAYOUT,
+        LAYOUT_FILE,
+        LAYOUT_FORMAT,
+        read_layout,
+    )
     from e8s.show.manage import (
         add_set,
         insert_subset,
@@ -781,6 +787,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Box2": ("e8s.core.types", "Box2"),
     "Box3": ("e8s.core.types", "Box3"),
     "BuiltInMotionParams": ("e8s.choreo.path_models", "BuiltInMotionParams"),
+    "CURRENT_LAYOUT": ("e8s.show.layout", "CURRENT_LAYOUT"),
     "CURRENT_VERSION": ("e8s.show.migrate", "CURRENT_VERSION"),
     "CanvasEvent": ("e8s.show.collab_models", "CanvasEvent"),
     "Cast": ("e8s.cast.models", "Cast"),
@@ -849,6 +856,8 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "InMemoryRepository": ("e8s.show.memory_backend", "InMemoryRepository"),
     "InMemorySheetStore": ("e8s.sheet.templates", "InMemorySheetStore"),
     "IntervalStats": ("e8s.geo.models", "IntervalStats"),
+    "LAYOUT_FILE": ("e8s.show.layout", "LAYOUT_FILE"),
+    "LAYOUT_FORMAT": ("e8s.show.layout", "LAYOUT_FORMAT"),
     "LabelScheme": ("e8s.cast.models", "LabelScheme"),
     "LaidGlyph": ("e8s.geo.models", "LaidGlyph"),
     "LegibilityWarning": ("e8s.core.errors", "LegibilityWarning"),
@@ -1190,6 +1199,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "propose": ("e8s.show.collab", "propose"),
     "ranks_and_files": ("e8s.geo.spacing", "ranks_and_files"),
     "reachable_region": ("e8s.geo.measure", "reachable_region"),
+    "read_layout": ("e8s.show.layout", "read_layout"),
     "read_version": ("e8s.show.migrate", "read_version"),
     "rebuild": ("e8s.choreo.form_place", "rebuild"),
     "rect": ("e8s.geo.shapes", "rect"),
@@ -1325,11 +1335,14 @@ _EXPORTS: dict[str, tuple[str, str]] = {
 
 __all__ = [
     "BUNDLED_FONTS",
+    "CURRENT_LAYOUT",
     "CURRENT_VERSION",
     "DEFAULT_LINE_SPACING",
     "FORMAT",
     "ID_MAX_LENGTH",
     "ID_PATTERN",
+    "LAYOUT_FILE",
+    "LAYOUT_FORMAT",
     "MAX_COORD_M",
     "MAX_COUNTS",
     "MAX_DEPTH",
@@ -1747,6 +1760,7 @@ __all__ = [
     "propose",
     "ranks_and_files",
     "reachable_region",
+    "read_layout",
     "read_version",
     "rebuild",
     "rect",

@@ -97,6 +97,9 @@
   "BuiltInMotionParams": {
     "constant": "BuiltInMotionParams"
   },
+  "CURRENT_LAYOUT": {
+    "constant": "2"
+  },
   "CURRENT_VERSION": {
     "constant": "2"
   },
@@ -609,6 +612,12 @@
       "min": "Finite",
       "std": "Finite"
     }
+  },
+  "LAYOUT_FILE": {
+    "constant": "'layout.json'"
+  },
+  "LAYOUT_FORMAT": {
+    "constant": "'e8.repository'"
   },
   "LabelScheme": {
     "model": {
@@ -1641,6 +1650,7 @@
   "propose": "(show: e8s.show.models.Show, change: collections.abc.Sequence[ChangeOp], note: str, proposal_id: str) -> e8s.show.collab_models.Proposal",
   "ranks_and_files": "(points: Points, rows: int, cols: int) -> list[list[int]]",
   "reachable_region": "(start: Point, counts: Count, max_speed: float) -> Polygon",
+  "read_layout": "(root: pathlib.Path) -> int",
   "read_version": "(docs: collections.abc.Mapping[str, bytes]) -> int",
   "rebuild": "(show: e8s.show.models.Show, form_id: str, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.show.models.Show",
   "rect": "(center: Point, w: Meters, d: Meters, rotation_deg: Degrees = 0.0) -> e8s.geo.curves.Polyline",
