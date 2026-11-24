@@ -15,6 +15,7 @@ Contains:
     test_items_cover_every_kind_and_no_notes_or_proposals: lists the kinds a rich show holds
     test_items_key_transitions_by_set_keys: keys paths, rows and routes by the stored folder
     test_reorders_are_one_order_change_each: reports a spot, pin or placement reorder as one item
+    test_set_swap_is_one_set_order_change: reports two swapped sets as one set_order change
     test_renumber_changes_set_identities_only: changes only set identities when forms, paths and
         pins follow a renumber
     test_added_and_removed_items_have_no_other_side: leaves the missing side None
@@ -301,6 +302,18 @@ def _renumbered_show() -> Show:
     )
     show = show.replace(forms={**show.forms, form.id: form}, transitions=(*show.transitions, spec))
     return pin(pin(pin(show, "set", "9"), "transition", "2→9"), "form", "f9")
+
+
+def test_set_swap_is_one_set_order_change() -> None:
+    show = add_set(two_set_show(), "3", 4.0)
+    swapped = show.replace(sets=(show.sets[1], show.sets[0], *show.sets[2:]))
+    assert encode_show(swapped) != encode_show(show)
+    (change,) = changes(show, swapped).changes
+    assert change.key == ItemKey(kind="set_order", path=())
+    assert [change.before, change.after] == [
+        freeze_json(["1", "2", "3"]),
+        freeze_json(["2", "1", "3"]),
+    ]
 
 
 def test_renumber_changes_set_identities_only() -> None:
