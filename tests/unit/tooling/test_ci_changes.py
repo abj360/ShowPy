@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_ci_changes.py --- tests the CI rule that only a docs-only pull request skips the code jobs
+test_ci_changes.py --- tests the CI rules that pick the code jobs and the Rust job of a run
 
 Contains:
     FakeGit: records each diff request and answers with fixed paths
@@ -16,6 +16,14 @@ Contains:
     test_regression_malformed_sha_fails_loudly: a missing or malformed SHA exits non-zero
     test_main_writes_the_code_output: main appends code=<value> to GITHUB_OUTPUT
     test_regression_main_without_github_output_fails_loudly: no output file exits non-zero
+    test_rust_change_is_true_for_any_rust_input: crates, Cargo files, the pin, deny and fuzz
+    test_rust_change_is_true_for_the_rust_job_inputs: the files the rust session and job read
+    test_rust_change_is_false_for_other_paths: Python, docs and look-alike paths
+    test_ci_changes_reports_rust_for_a_crate_change: answers rust "true" for a crate change
+    test_pull_request_without_rust_changes_skips_the_rust_job: answers "false" for Python only
+    test_other_events_run_the_rust_job_without_a_diff: push and others never diff
+    test_regression_rust_output_rejects_a_malformed_sha: a malformed SHA exits non-zero
+    test_main_writes_the_rust_output: main appends rust=<value> after code=<value>
 """
 
 from collections.abc import Sequence
@@ -27,7 +35,9 @@ from scripts.ci_changes import (
     code_output,
     diff_command,
     is_docs_only,
+    is_rust_change,
     main,
+    rust_output,
     split_paths,
 )
 
@@ -128,13 +138,13 @@ def test_regression_malformed_sha_fails_loudly(base: str, head: str) -> None:
 
 def test_main_writes_the_code_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     output = tmp_path / "github_output"
-    output.write_text("earlier=1\n")
+    output.write_text("earlier=1\n", encoding="utf-8")
     monkeypatch.setenv("GITHUB_OUTPUT", str(output))
     monkeypatch.setenv("EVENT_NAME", "push")
     monkeypatch.delenv("BASE_SHA", raising=False)
     monkeypatch.delenv("HEAD_SHA", raising=False)
     main()
-    assert output.read_text() == "earlier=1\ncode=true\n"
+    assert output.read_text(encoding="utf-8") == "earlier=1\ncode=true\nrust=true\n"
 
 
 def test_regression_main_without_github_output_fails_loudly(
@@ -144,3 +154,89 @@ def test_regression_main_without_github_output_fails_loudly(
     monkeypatch.setenv("EVENT_NAME", "push")
     with pytest.raises(SystemExit, match="E: GITHUB_OUTPUT"):
         main()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "crates/e8s-core/src/lib.rs",
+        "crates/e8s-py/Cargo.toml",
+        "Cargo.toml",
+        "Cargo.lock",
+        "rust-toolchain.toml",
+        "deny.toml",
+        "fuzz/fuzz_targets/svg_path.rs",
+    ],
+)
+def test_rust_change_is_true_for_any_rust_input(path: str) -> None:
+    assert is_rust_change(["docs/HANDOFF.md", path]) is True
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "noxfile.py",
+        "pyproject.toml",
+        "about.toml",
+        ".github/workflows/ci.yml",
+        "scripts/check_no_fma.py",
+        "scripts/gen_third_party_notices.py",
+        "e8s/licenses/THIRD_PARTY_RUST.txt",
+        "tests/unit/tooling/test_third_party_notices.py",
+    ],
+)
+def test_rust_change_is_true_for_the_rust_job_inputs(path: str) -> None:
+    assert is_rust_change([path]) is True
+
+
+@pytest.mark.parametrize(
+    "paths",
+    [
+        [],
+        ["e8s/choreo/engine.py"],
+        ["docs/adr/0025-core-architecture.md", "README.md"],
+        ["crates"],
+        ["e8s/crates/a.rs"],
+        ["docs/Cargo.toml"],
+        ["fuzzing/a.rs"],
+        ["Cargo"],
+        [".github/workflows/nightly.yml"],
+    ],
+)
+def test_rust_change_is_false_for_other_paths(paths: list[str]) -> None:
+    assert is_rust_change(paths) is False
+
+
+def test_ci_changes_reports_rust_for_a_crate_change() -> None:
+    git = FakeGit(["e8s/time/clock.py", "crates/e8s-core/src/time/clock.rs"])
+    assert rust_output(PULL_REQUEST, BASE_SHA, HEAD_SHA, git) == "true"
+    assert git.requests == [(BASE_SHA, HEAD_SHA)]
+
+
+def test_pull_request_without_rust_changes_skips_the_rust_job() -> None:
+    git = FakeGit(["e8s/time/clock.py", "docs/HANDOFF.md"])
+    assert rust_output(PULL_REQUEST, BASE_SHA, HEAD_SHA, git) == "false"
+
+
+@pytest.mark.parametrize(
+    "event", ["push", "schedule", "workflow_dispatch", "pull_request_target", ""]
+)
+def test_other_events_run_the_rust_job_without_a_diff(event: str) -> None:
+    git = FakeGit(["docs/HANDOFF.md"])
+    assert rust_output(event, "", "", git) == "true"
+    assert git.requests == []
+
+
+def test_regression_rust_output_rejects_a_malformed_sha() -> None:
+    git = FakeGit(["crates/e8s-core/src/lib.rs"])
+    with pytest.raises(SystemExit, match="E: pull request head SHA"):
+        rust_output(PULL_REQUEST, BASE_SHA, "main", git)
+    assert git.requests == []
+
+
+def test_main_writes_the_rust_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    output = tmp_path / "github_output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setenv("EVENT_NAME", "workflow_dispatch")
+    main()
+    assert output.read_text(encoding="utf-8").splitlines() == ["code=true", "rust=true"]

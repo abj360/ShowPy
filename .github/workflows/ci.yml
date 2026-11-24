@@ -13,13 +13,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Answers code=false only for a pull request that changes nothing outside docs/. A failure
-  # here never skips a heavy job: each one runs unless this job succeeded with code=false.
+  # uv builds e8s._core from the Rust crates, so every job that syncs or runs uv first installs
+  # the rust-toolchain.toml pin and restores the Rust build cache. Only main saves that cache:
+  # target/ holds code that runs, and a pull request must not plant it for main to restore.
+  #
+  # Answers code=false only for a pull request that changes nothing outside docs/, and rust=false
+  # only for one that changes no Rust input. A failure here never skips a heavy job: each one
+  # runs unless this job succeeded with code=false (rust=false for the rust job).
   changes:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       code: ${{ steps.classify.outputs.code }}
+      rust: ${{ steps.classify.outputs.rust }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -58,6 +64,13 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - name: Install the pinned Rust toolchain
+        if: env.RUN_CODE_JOBS == 'true'
+        run: rustup toolchain install
+      - if: env.RUN_CODE_JOBS == 'true'
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - if: env.RUN_CODE_JOBS == 'true'
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
@@ -77,6 +90,11 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.13.8"
@@ -100,6 +118,11 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.13.8"
@@ -121,6 +144,11 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.13.8"
@@ -154,6 +182,13 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - name: Install the pinned Rust toolchain
+        if: env.RUN_CODE_JOBS == 'true'
+        run: rustup toolchain install
+      - if: env.RUN_CODE_JOBS == 'true'
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - if: env.RUN_CODE_JOBS == 'true'
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
@@ -176,6 +211,11 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.13.8"
@@ -197,6 +237,11 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.13.8"
@@ -218,6 +263,11 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
         with:
           version: "0.13.8"
@@ -238,3 +288,63 @@ jobs:
           persist-credentials: false
       - run: cp .env.example .env
       - run: docker compose -f docker/docker-compose.yml up --build --exit-code-from e8s
+
+  # The Rust gates, cargo deny and the notice check, on Linux and on arm64 macOS, where the FMA
+  # check runs. The cargo tools build in minutes, so .cargo-tools is cached under a key naming
+  # the toolchain pin and each tool's pinned version; like the Rust build cache, only main saves
+  # it. Like `check`, the legs
+  # always start and gate their steps.
+  rust:
+    name: rust (${{ matrix.os }})
+    needs: changes
+    if: ${{ !cancelled() }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    env:
+      RUN_RUST_JOB: >-
+        ${{ needs.changes.result != 'success' ||
+        needs.changes.outputs.rust != 'false' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    steps:
+      - if: env.RUN_RUST_JOB != 'true'
+        run: echo "Skipping Rust checks, no Rust input changed"
+      - if: env.RUN_RUST_JOB == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned Rust toolchain
+        if: env.RUN_RUST_JOB == 'true'
+        run: rustup toolchain install
+      - if: env.RUN_RUST_JOB == 'true'
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Read the pinned cargo tool versions
+        if: env.RUN_RUST_JOB == 'true'
+        id: pins
+        run: >-
+          echo "versions=$(grep -hE '^(channel|CARGO_[A-Z]+_VERSION) = ' rust-toolchain.toml
+          noxfile.py | cut -d '"' -f 2 | paste -s -d '-' -)" >> "$GITHUB_OUTPUT"
+      - if: env.RUN_RUST_JOB == 'true'
+        id: restore-cargo-tools
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cargo-tools
+          key: cargo-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.pins.outputs.versions }}
+      - if: env.RUN_RUST_JOB == 'true'
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.8"
+          enable-cache: true
+      - if: env.RUN_RUST_JOB == 'true'
+        run: uv run --locked nox -s rust
+      - if: >-
+          env.RUN_RUST_JOB == 'true' && github.ref == 'refs/heads/main' &&
+          steps.restore-cargo-tools.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cargo-tools
+          key: ${{ steps.restore-cargo-tools.outputs.cache-primary-key }}

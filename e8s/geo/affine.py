@@ -42,6 +42,7 @@ from e8s.geo.curves import (
 type Matrix = npt.NDArray[np.float64]
 
 FALLBACK_TOL = 0.001
+# Relative to the squared scale factor, so the test means the same at every scale.
 SIMILARITY_TOL = 1e-9
 
 
@@ -104,12 +105,19 @@ def skew_matrix(deg_x: Degrees, deg_y: Degrees, about: Point) -> Matrix:
 def is_similarity(matrix: Matrix) -> bool:
     """Reports whether the map is a rotation, translation, uniform scale or mirror.
 
+    The linear part L is a similarity when L^T L is s^2 times the identity. Both checks are
+    judged against SIMILARITY_TOL times s^2, so rounding in a large map never rejects it and a
+    small non-uniform scale is never accepted.
+
     >>> is_similarity(scale_matrix(2, 2, (0, 0))), is_similarity(scale_matrix(2, 1, (0, 0)))
     (True, False)
+    >>> is_similarity(scale_matrix(1e5, 1e5, (0, 0)) @ rotation_matrix(30, (0, 0)))
+    True
     """
     linear = matrix[:2, :2]
     gram = linear.T @ linear
-    return bool(abs(gram[0, 1]) < SIMILARITY_TOL and abs(gram[0, 0] - gram[1, 1]) < SIMILARITY_TOL)
+    tolerance = SIMILARITY_TOL * (gram[0, 0] + gram[1, 1]) / 2
+    return bool(abs(gram[0, 1]) <= tolerance and abs(gram[0, 0] - gram[1, 1]) <= tolerance)
 
 
 def transform_points(points: Points, matrix: Matrix) -> Points:

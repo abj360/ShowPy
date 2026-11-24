@@ -19,6 +19,9 @@ Contains:
     test_image_copies_every_tracked_top_level_entry: fails when the image skips a tracked
         top-level entry that NOT_IN_IMAGE does not name, or NOT_IN_IMAGE names a stale entry
     test_top_level_check_flags_a_dropped_copy_and_a_new_folder: proves the check can fail
+    unlocked_builds(): lists the stages that run `uv build` without cargo's --locked
+    test_image_build_fails_on_a_stale_cargo_lock: the builder never rewrites Cargo.lock
+    test_unlocked_builds_sees_a_missing_or_late_lock: proves the lock check can fail
 """
 
 import ast
@@ -33,10 +36,15 @@ LIBRARY_ROOT = REPO_ROOT / "e8s"
 DOCKERIGNORE = REPO_ROOT / ".dockerignore"
 NOXFILE_TESTS = REPO_ROOT / "tests" / "unit" / "tooling" / "test_noxfile.py"
 RUNTIME_STAGE = "runtime"
+BUILDER_STAGE = "builder"
+LOCKED_BUILD_ENV = "MATURIN_PEP517_ARGS=--locked"
+UV_BUILD = "uv build"
 ROOT_NAME = "ROOT"
 NOT_IN_IMAGE = {
     "_typos.toml": "spell-check settings; lint runs outside the image",
     ".dockerignore": "read by docker build, not by the tests",
+    "about.toml": "notice settings for nox -s rust, outside the image",
+    "deny.toml": "crate policy for nox -s rust; read only by source-checkout tests",
     ".env.example": "compose reads .env from the host",
     ".gitattributes": "git settings; the image has no .git",
     ".gitignore": "git settings; the image has no .git",
@@ -95,7 +103,7 @@ def tracked_top_level(root: Path) -> set[str]:
         entries: Each distinct top-level file or folder name.
     """
     listing = subprocess.run(
-        ["git", "ls-files", "-z"], cwd=root, capture_output=True, text=True, check=True
+        ["git", "ls-files", "-z"], cwd=root, capture_output=True, encoding="utf-8", check=True
     ).stdout
     return {path.split("/")[0] for path in listing.split("\0") if path}
 
@@ -239,3 +247,51 @@ def test_top_level_check_flags_a_dropped_copy_and_a_new_folder() -> None:
     assert skipped_entries(entries, copied, ["docs/"]) == set()
     assert skipped_entries(entries, copied[1:], ["docs/"]) == {"scripts"}
     assert skipped_entries(entries | {"assets"}, copied, ["docs/"]) == {"assets"}
+
+
+def unlocked_builds(dockerfile: str) -> list[str]:
+    """Lists the stages that run `uv build` before setting cargo's --locked for maturin.
+
+    Args:
+        dockerfile: The text of a Dockerfile.
+
+    Returns:
+        stages: The `AS` name of each stage, once per `uv build` RUN line that no earlier
+            `ENV MATURIN_PEP517_ARGS=--locked` of the same stage covers.
+    """
+    unlocked: list[str] = []
+    current = ""
+    is_locked = False
+    for line in dockerfile.splitlines():
+        words = line.split()
+        if not words or words[0].startswith("#"):
+            continue
+        keyword = words[0].upper()
+        if keyword == "FROM":
+            current = words[-1] if len(words) >= 4 and words[-2].upper() == "AS" else ""
+            is_locked = False
+        elif keyword == "ENV" and LOCKED_BUILD_ENV in words[1:]:
+            is_locked = True
+        elif keyword == "RUN" and UV_BUILD in line and not is_locked:
+            unlocked.append(current)
+    return unlocked
+
+
+def test_image_build_fails_on_a_stale_cargo_lock() -> None:
+    dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+    assert any(UV_BUILD in line for line in dockerfile.splitlines() if line.startswith("RUN"))
+    assert unlocked_builds(dockerfile) == []
+
+
+def test_unlocked_builds_sees_a_missing_or_late_lock() -> None:
+    dockerfile = (
+        "FROM python AS locked\n"
+        "ENV MATURIN_PEP517_ARGS=--locked\n"
+        "RUN uv build --wheel\n"
+        "FROM python AS late\n"
+        "RUN uv build --wheel\n"
+        "ENV MATURIN_PEP517_ARGS=--locked\n"
+        "FROM python AS other\n"
+        "RUN uv build --sdist\n"
+    )
+    assert unlocked_builds(dockerfile) == ["late", "other"]

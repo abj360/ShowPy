@@ -13,3 +13,8 @@ node_modules/
 .nox
 .superpowers
 tests/bench/.results
+target/
+e8s/*.so
+e8s/*.pyd
+.cargo-tools
+.parity

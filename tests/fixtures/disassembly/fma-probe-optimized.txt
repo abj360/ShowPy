@@ -1,0 +1,78 @@
+
+target/probe/libfma_probe.dylib:	file format mach-o arm64
+
+Disassembly of section __TEXT,__text:
+
+00000000000003c0 <fma_probe::m::fma>:
+; fma_probe::m::fma():
+; /rustc/0ef1bc386059596dada8fb65b50425aab2ea637a/library/core/src/num/f64.rs:2119
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:31:11: mul_add inlined into fma
+; /rustc/0ef1bc386059596dada8fb65b50425aab2ea637a/library/std/src/num/f64.rs:229:9: mul_add inlined into mul_add
+     3c0:      	fmadd	d0, d0, d1, d2
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:31:11: end of mul_add inlined into fma
+; /rustc/0ef1bc386059596dada8fb65b50425aab2ea637a/library/std/src/num/f64.rs:229:9: end of mul_add inlined into mul_add
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:32
+     3c4:      	ret
+
+00000000000003c8 <_calls>:
+; calls():
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:36
+     3c8:      	stp	d11, d10, [sp, #-0x30]!
+     3cc:      	stp	d9, d8, [sp, #0x10]
+     3d0:      	stp	x29, x30, [sp, #0x20]
+     3d4:      	add	x29, sp, #0x20
+     3d8:      	mov.16b	v8, v2
+     3dc:      	mov.16b	v9, v1
+     3e0:      	mov.16b	v10, v0
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:37
+     3e4:      	bl	0x3c0 <fma_probe::m::fma>
+     3e8:      	mov.16b	v11, v0
+     3ec:      	mov.16b	v0, v8
+     3f0:      	mov.16b	v1, v9
+     3f4:      	mov.16b	v2, v10
+     3f8:      	bl	0x3c0 <fma_probe::m::fma>
+     3fc:      	fadd	d0, d11, d0
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:38
+     400:      	ldp	x29, x30, [sp, #0x20]
+     404:      	ldp	d9, d8, [sp, #0x10]
+     408:      	ldp	d11, d10, [sp], #0x30
+     40c:      	ret
+
+0000000000000410 <_exact>:
+; exact():
+; /home/dev/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libm-0.2.16/src/math/arch/aarch64.rs:8
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:6:5: fma inlined into exact
+; /home/dev/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libm-0.2.16/src/math/support/macros.rs:80:38: fma inlined into fma
+     410:      	fmadd	d0, d0, d1, d2
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:6:5: end of fma inlined into exact
+; /home/dev/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libm-0.2.16/src/math/support/macros.rs:80:38: end of fma inlined into fma
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:7
+     414:      	ret
+
+0000000000000418 <_fused>:
+; fused():
+; /rustc/0ef1bc386059596dada8fb65b50425aab2ea637a/library/core/src/num/f64.rs:2119
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:12:7: mul_add inlined into fused
+; /rustc/0ef1bc386059596dada8fb65b50425aab2ea637a/library/std/src/num/f64.rs:229:9: mul_add inlined into mul_add
+     418:      	fmadd	d0, d0, d1, d2
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:12:7: end of mul_add inlined into fused
+; /rustc/0ef1bc386059596dada8fb65b50425aab2ea637a/library/std/src/num/f64.rs:229:9: end of mul_add inlined into mul_add
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:13
+     41c:      	ret
+
+0000000000000420 <_plain>:
+; plain():
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:18
+     420:      	fmul	d0, d0, d1
+     424:      	fadd	d0, d0, d2
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:19
+     428:      	ret
+
+000000000000042c <_vector>:
+; vector():
+; /rustc/0ef1bc386059596dada8fb65b50425aab2ea637a/library/core/src/../../stdarch/crates/core_arch/src/aarch64/neon/generated.rs:8841
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:24:14: vfmaq_f64 inlined into vector
+     42c:      	fmla.2d	v0, v2, v1
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:24:14: end of vfmaq_f64 inlined into vector
+; /home/dev/.cache/showpy-scratch/fma-probe/src/lib.rs:25
+     430:      	ret

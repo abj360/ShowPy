@@ -4,13 +4,36 @@ FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916
 
 COPY --from=uv /uv /usr/local/bin/uv
 
-# No .git inside the build context, so hatch-vcs needs the version stated.
-ARG SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0+docker
-ENV SETUPTOOLS_SCM_PRETEND_VERSION=${SETUPTOOLS_SCM_PRETEND_VERSION}
+ENV RUSTUP_HOME=/opt/rustup \
+    CARGO_HOME=/opt/cargo \
+    PATH=/opt/cargo/bin:${PATH}
+
+# rustup 1.29.3, each rustup-init checked against the SHA-256 that static.rust-lang.org
+# publishes beside it; gcc links the extension.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates curl gcc libc6-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && arch="$(uname -m)" \
+    && case "${arch}" in \
+        x86_64) sha=b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55 ;; \
+        aarch64) sha=9f608c142e0e38a78957d0661ba1dfaf0b6fb37184cfaa4b9a0aa57af6184282 ;; \
+        *) echo "E: no pinned rustup-init for ${arch}" >&2; exit 1 ;; \
+    esac \
+    && curl --proto "=https" --tlsv1.2 --fail --silent --show-error --output /tmp/rustup-init \
+        "https://static.rust-lang.org/rustup/archive/1.29.3/${arch}-unknown-linux-gnu/rustup-init" \
+    && echo "${sha}  /tmp/rustup-init" | sha256sum --check --strict - \
+    && chmod +x /tmp/rustup-init \
+    && /tmp/rustup-init -y --no-modify-path --profile minimal --default-toolchain none \
+    && rm /tmp/rustup-init
 
 WORKDIR /src
-COPY pyproject.toml README.md LICENSE ./
+COPY rust-toolchain.toml ./
+RUN rustup toolchain install
+COPY pyproject.toml README.md LICENSE Cargo.toml Cargo.lock ./
+COPY crates ./crates
 COPY e8s ./e8s
+# cargo fails on a stale Cargo.lock instead of rewriting it.
+ENV MATURIN_PEP517_ARGS=--locked
 RUN uv build --wheel --out-dir /dist
 
 FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS runtime
@@ -31,10 +54,11 @@ RUN uv sync --locked --no-install-project --group dev
 COPY --from=builder /dist /dist
 RUN uv pip install --python /opt/venv/bin/python --no-deps /dist/*.whl
 
-COPY noxfile.py ./
+COPY noxfile.py Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY crates ./crates
 COPY tests ./tests
 COPY scripts ./scripts
-COPY .github/workflows/ci.yml ./.github/workflows/ci.yml
+COPY .github/workflows/ci.yml .github/workflows/wheels.yml ./.github/workflows/
 RUN chown -R 10001:10001 /app
 USER 10001
 
