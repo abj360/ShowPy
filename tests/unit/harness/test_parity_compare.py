@@ -12,7 +12,9 @@ Contains:
     test_compare_flags_a_non_finite_change: NaN against a number fails every gate
     test_compare_flags_a_discrete_mismatch: orders, ints, JSON types and keys must be identical
     test_compare_flags_a_gated_key_that_is_not_a_float_array: a `pos:` list is a mismatch
-    test_compare_flags_a_slower_case: a core minimum above the oracle minimum fails `--speed`
+    test_compare_flags_a_slower_case: a core minimum over 1.05x the oracle's fails `--speed`
+    test_speed_margin_is_the_measured_noise_ratio: 1.05 passes, a hair above fails
+    test_regression_speed_fails_a_missing_timing: a case timed on one side only fails
     test_flipped_case_is_compared_against_its_ledger_expectation: the oracle is ignored
     test_load_flipped_rejects_an_unknown_case: an entry must name a loaded case
     test_load_flipped_rejects_a_malformed_ledger_id: an entry must carry a UP- ledger ID
@@ -40,6 +42,7 @@ from tests.parity.cases import (
     load_cases,
 )
 from tests.parity.compare import (
+    SPEED_NOISE_RATIO,
     Flip,
     compare,
     compare_case,
@@ -149,13 +152,26 @@ def test_compare_flags_a_gated_key_that_is_not_a_float_array() -> None:
     assert shapes.discrete_mismatches == ("pos:p",)
 
 
-def test_compare_flags_a_slower_case() -> None:
-    slower = compare_speed({"time.c": 1.0e-3}, {"time.c": 1.01e-3})
-    assert not slower.passed
-    assert slower.slower == ("time.c",)
-    assert compare_speed({"time.c": 1.0e-3}, {"time.c": 1.0e-3}).passed
-    assert compare_speed({"time.c": 1.0e-3}, {"time.c": 0.5e-3}).passed
+@pytest.mark.parametrize(
+    ("ratio", "passed"), [(0.5, True), (1.0, True), (1.04, True), (1.06, False)]
+)
+def test_compare_flags_a_slower_case(ratio: float, *, passed: bool) -> None:
+    report = compare_speed({"time.c": 1.0e-3}, {"time.c": ratio * 1.0e-3})
+    assert report.passed is passed
+    assert report.slower == (() if passed else ("time.c",))
+
+
+def test_speed_margin_is_the_measured_noise_ratio() -> None:
+    assert SPEED_NOISE_RATIO == 1.05
+    at_margin = compare_speed({"time.c": 1.0}, {"time.c": SPEED_NOISE_RATIO})
+    past_margin = compare_speed({"time.c": 1.0}, {"time.c": SPEED_NOISE_RATIO * (1 + 1e-9)})
+    assert at_margin.passed
+    assert not past_margin.passed
+
+
+def test_regression_speed_fails_a_missing_timing() -> None:
     assert not compare_speed({"time.c": 1.0e-3}, {}).passed
+    assert not compare_speed({}, {"time.c": 1.0e-3}).passed
 
 
 def test_flipped_case_is_compared_against_its_ledger_expectation() -> None:

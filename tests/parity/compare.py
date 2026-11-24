@@ -12,7 +12,8 @@ Contains:
     ParityReport: what one case's comparison found, and whether it passed
     compare(): compares one case's oracle outputs with its core outputs
     SpeedReport: the timed cases' minimum run times and the cases where the core is slower
-    compare_speed(): finds the timed cases whose core minimum exceeds the oracle minimum
+    SPEED_NOISE_RATIO: the core/oracle time ratio past which a timed case is slower
+    compare_speed(): finds the timed cases slower in the core by more than SPEED_NOISE_RATIO
     Flip: a case fixed past v0.4.0, compared against its ledger expectation instead
     load_flipped(): reads flipped.toml, refusing an entry that names no loaded case
     compare_case(): compares a case against the oracle, or a flipped case against its fix
@@ -44,6 +45,11 @@ ANGLE_TOL_DEG = 1e-9
 VALUE_MAX_ULP = 4
 VALUE_ABS_TOL = 1e-12
 SIGN_BIT = np.uint64(1 << 63)
+# "Not measurably slower" (2026-11-24, controller ruling): the same Python code timed on both
+# sides measured core/oracle ratios of 1.037, 1.008, 1.009, 1.008 and 1.017 from single launches
+# and 0.990, 0.982 and 1.007 as the best of 5 alternating launches, so a port fails only past
+# this ratio.
+SPEED_NOISE_RATIO = 1.05
 FLIP_KEYS = frozenset({"name", "ledger", "expect"})
 
 
@@ -196,7 +202,8 @@ class SpeedReport:
 
     Attributes:
         rows: Case name, oracle minimum and core minimum in seconds (NaN when missing).
-        slower: Cases whose core minimum exceeds the oracle minimum, or that lack a timing.
+        slower: Cases whose core minimum exceeds SPEED_NOISE_RATIO times the oracle minimum,
+            or that lack a timing on one side.
     """
 
     rows: tuple[tuple[str, float, float], ...]
@@ -209,20 +216,21 @@ class SpeedReport:
 
 
 def compare_speed(oracle: Mapping[str, float], core: Mapping[str, float]) -> SpeedReport:
-    """Finds the timed cases whose core minimum run time exceeds the oracle's.
+    """Finds the timed cases whose core minimum exceeds the oracle's by more than the noise.
 
     Args:
         oracle: Qualified case name to the oracle's minimum of 7 runs, in seconds.
         core: Qualified case name to the core's minimum of 7 runs, in seconds.
 
     Returns:
-        report: One row per case either side timed; a case missing on one side is slower.
+        report: One row per case either side timed. A case is slower when its core minimum
+            exceeds SPEED_NOISE_RATIO times its oracle minimum, or when one side lacks it.
     """
     rows = tuple(
         (name, oracle.get(name, math.nan), core.get(name, math.nan))
         for name in sorted(set(oracle) | set(core))
     )
-    slower = tuple(name for name, before, after in rows if not after <= before)
+    slower = tuple(name for name, before, after in rows if not after <= before * SPEED_NOISE_RATIO)
     return SpeedReport(rows=rows, slower=slower)
 
 
@@ -333,11 +341,12 @@ def format_table(reports: Mapping[str, ParityReport]) -> str:
 
 
 def format_speed(report: SpeedReport) -> str:
-    """Renders one row per timed case: both minima, their ratio and the result."""
-    lines = [f"{'case':<44} {'oracle min s':>12} {'core min s':>12} {'ratio':>6} {'result':>6}"]
+    """Renders one row per timed case: both minima, their ratio and the result against the limit."""
+    limit = f"<= {SPEED_NOISE_RATIO:.2f}"
+    lines = [f"{'case':<44} {'oracle min s':>12} {'core min s':>12} {'ratio':>6} {limit:>8}"]
     for name, before, after in report.rows:
         result = "FAIL" if name in report.slower else "ok"
         lines.append(
-            f"{name:<44} {before:>12.6f} {after:>12.6f} {after / before:>6.3f} {result:>6}"
+            f"{name:<44} {before:>12.6f} {after:>12.6f} {after / before:>6.3f} {result:>8}"
         )
     return "\n".join(lines)

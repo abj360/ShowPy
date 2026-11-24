@@ -102,6 +102,11 @@ measures,validate}`, `e8s.cast.select` and `e8s.choreo.engine`. Recommendation: 
 - **Never slower.** Every case the parity harness times must run no slower in the core than in
   the v0.4.0 oracle (`nox -s parity -- <area> --speed`, minimum of 7 runs each). Compiled
   values (clocks, plans, curve tables) are cached beside their frozen part.
+  - **Note (2026-11-24, controller):** the rule is "not measurably slower". A port fails when
+    its best-of-5 core/oracle ratio exceeds `SPEED_NOISE_RATIO = 1.05`
+    (`tests/parity/compare.py`). The margin comes from the measured spread of the same Python
+    code on both sides: 1.037, 1.008, 1.009, 1.008 and 1.017 from single launches, and 0.990,
+    0.982 and 1.007 as the best of 5 alternating launches. CI runs no `--speed`.
 - **Float rules (ADR 0025 decision 8):** `libm =0.2.16` for every transcendental; no `mul_add`;
   `libm::fma` only as a correctly rounded error-free transform; fixed order, no parallel
   reductions; `u ** 2.0` is `u * u`; `np.interp`'s formula and edge rules, not its arm64 FMA;
@@ -520,6 +525,9 @@ False)`; `Output = npt.NDArray[np.float64] | npt.NDArray[np.int64] | JsonValue`;
 - `nox -s parity -- <area> [--speed] [--digest PATH]`: builds the oracle, runs both sides,
   prints the table, fails on a gate; `--speed` also fails when a timed case's core minimum
   exceeds its oracle minimum; `--digest` writes the SHA-256 of every core output.
+  - **Note (2026-11-24, controller):** `--speed` times each side as the best of 5 alternating
+    launches (minimum of 7 runs each) and fails a case only when the core minimum exceeds the
+    oracle minimum times `SPEED_NOISE_RATIO = 1.05`; see "Never slower".
 - `flipped.toml`: `[[case]] name = "...", ledger = "UP-..."`; such a case is compared against
   the fixed behaviour its ledger test asserts, not against the oracle.
 - CI: `parity` runs on the 6 `check` cells for every pull request that touches `e8s/` or
