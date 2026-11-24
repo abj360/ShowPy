@@ -34,6 +34,10 @@ Contains:
         racing revision when it lands between the head check and the commit
     test_regression_file_conflict_lists_every_revision_since_the_parent: raises ConflictError naming
         every racing revision when several land before a file-backend commit
+    test_regression_new_show_id_follows_the_id_rule: refuses a new show whose ID fails check_id or
+        differs from its NFC form, in memory or on disk, writing nothing
+    test_stored_show_id_outside_the_id_rule_keeps_committing: extends a show stored under a
+        hyphenated ID before the rule existed
 """
 
 import contextlib
@@ -69,7 +73,7 @@ from tests.fixtures.shows import two_set_show
 from tests.helpers import context_entries, fails_after, replaced_form_show
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
-SHOW_ID = "show-1"
+SHOW_ID = "show_1"
 BARRIER_TIMEOUT_S = 1.0
 THREAD_COUNT = 8
 MAX_SHOW_ID_LENGTH = 300
@@ -231,8 +235,6 @@ def test_existing_device_name_show_keeps_loading_and_committing(tmp_path: Path) 
     assert restarted.value.code == DEVICE_NAME_CODE
 
 
-@pytest.mark.defect("UP-9.7-16")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-16")
 def test_regression_trailing_dot_show_id_is_rejected_or_stored_safely(tmp_path: Path) -> None:
     """Rejects a show ID ending in a dot or stores it under another name (audit 9.7 item 8)."""
     created = _created_folders(FileRepository(tmp_path), "abc.")
@@ -396,3 +398,37 @@ def test_regression_file_conflict_lists_every_revision_since_the_parent(tmp_path
     assert caught.value.context["head"] == landed[-1].id == repo.head(SHOW_ID)
     assert [c["id"] for c in context_entries(caught.value, "changes")] == [r.id for r in landed]
     assert "/renders/a.txt" not in repo.paths(SHOW_ID)
+
+
+NEW_SHOW_IDS_REFUSED = ["show-1", "abc.", "a" * 65, "\u212a"]
+
+
+@pytest.mark.parametrize("show_id", NEW_SHOW_IDS_REFUSED)
+@pytest.mark.parametrize("backend", ["memory", "file"])
+def test_regression_new_show_id_follows_the_id_rule(
+    tmp_path: Path, show_id: str, backend: str
+) -> None:
+    """Refuses a new show ID that fails check_id or is not NFC (Kelvin sign), writing nothing."""
+    repo: InMemoryRepository | FileRepository = (
+        InMemoryRepository() if backend == "memory" else FileRepository(tmp_path)
+    )
+    with pytest.raises(StorageError) as caught:
+        _create(repo, show_id)
+    assert caught.value.code == DEVICE_NAME_CODE
+    assert caught.value.context == {"show": show_id}
+    assert repo.shows() == []
+    assert _folders(tmp_path) == set()
+
+
+def test_stored_show_id_outside_the_id_rule_keeps_committing() -> None:
+    """Extends a show stored under a hyphenated ID, which only new shows are refused."""
+    repo = InMemoryRepository()
+    seed = _create(repo, "seed")
+    tree = dict(repo.backend.tree("seed", seed))
+    revision = Revision(id=content_hash(tree), parent="", at=AT, changed=tuple(sorted(tree)))
+    repo.backend.commit(SHOW_ID, revision, tree, {})
+    landed = repo.transaction(
+        SHOW_ID, {"/renders/a.txt": b"a"}, expected_revision=revision.id, at=AT
+    )
+    assert repo.head(SHOW_ID) == landed.id
+    assert repo.paths(SHOW_ID) == sorted([*tree, "/renders/a.txt"])

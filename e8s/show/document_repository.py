@@ -14,10 +14,11 @@ from datetime import datetime
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import (
+    SchemaError,
     StorageError,
     UnknownRefError,
 )
-from e8s.core.ids import WINDOWS_DEVICE_NAMES, is_device_name
+from e8s.core.ids import WINDOWS_DEVICE_NAMES, check_id, is_device_name
 from e8s.core.util import close_matches, content_hash
 from e8s.show.backend import (
     RepositoryBackend,
@@ -56,16 +57,33 @@ def _require_show_id(show_id: str) -> None:
 
 
 def _require_new_show_id(show_id: str) -> None:
-    """Refuses a Windows device name for a new show before its folder is looked up.
+    """Refuses a new show whose ID is a Windows device name, fails the ID rule or is not NFC.
 
-    On Windows that lookup opens the device itself. Shows already stored under such a name still
-    load and take commits on their head.
+    The device check runs first and touches no path: on Windows a lookup of the folder opens the
+    device itself. Shows already stored under an ID outside these rules still load and take
+    commits on their head.
     """
     if is_device_name(show_id):
         raise StorageError(
             f"show id {show_id!r} is a Windows device name and cannot start a new show",
             hint=f"pick another ID: {', '.join(sorted(WINDOWS_DEVICE_NAMES))}, alone or before a"
             " dot, name devices on Windows",
+            context={"show": show_id},
+            code=ErrorCode.BAD_PATH,
+        )
+    try:
+        normalized = check_id(show_id, kind="show")
+    except SchemaError as error:
+        raise StorageError(
+            f"show id {show_id!r} cannot start a new show",
+            hint=error.hint,
+            context={"show": show_id},
+            code=ErrorCode.BAD_PATH,
+        ) from error
+    if normalized != show_id:
+        raise StorageError(
+            f"show id {show_id!r} is not in NFC form and cannot start a new show",
+            hint=f"use the NFC form {normalized!r}",
             context={"show": show_id},
             code=ErrorCode.BAD_PATH,
         )

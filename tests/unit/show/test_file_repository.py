@@ -116,7 +116,7 @@ from tests.fixtures.shows import two_set_show
 from tests.helpers import HOSTILE_JSON, capped_address_space, fails_after
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
-SHOW_ID = "show-1"
+SHOW_ID = "show_1"
 STALE_AGE_S = 7 * 24 * 3600
 DECOY_NAME = "decoy"
 SHOW_DOC = "/show/show.json"
@@ -438,8 +438,14 @@ def test_regression_long_names_are_name_too_long(
 ) -> None:
     """Maps ENAMETOOLONG on writes and reads."""
     repo, _, _ = _saved(tmp_path)
-    with pytest.raises(StorageError) as written:
-        repo.put_show("a" * 300, two_set_show(), expected_revision="", at=AT)
+
+    def link_too_long(_source: Path, target: Path) -> NoReturn:
+        raise OSError(errno.ENAMETOOLONG, "File name too long", str(target))
+
+    with monkeypatch.context() as patched:
+        patched.setattr(os, "link", link_too_long)
+        with pytest.raises(StorageError) as written:
+            repo.put_show("a" * 64, two_set_show(), expected_revision="", at=AT)
 
     def too_long(_self: Path, **_kwargs: object) -> os.stat_result:
         raise OSError(errno.ENAMETOOLONG, "File name too long")
@@ -830,18 +836,20 @@ def _windows_invalid_name_for(monkeypatch: pytest.MonkeyPatch, component: str) -
 def test_regression_windows_overlong_component_is_name_too_long(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Maps the Windows invalid-name error for a 300-character component to NAME_TOO_LONG."""
+    """Maps the Windows invalid-name error for a 300-character component to NAME_TOO_LONG.
+
+    A new show under that ID is refused by the ID rule before its path is looked up.
+    """
     repo, _, _ = _saved(tmp_path)
     _windows_invalid_name_for(monkeypatch, OVERLONG_ID)
-    for call in (
-        lambda: repo.revisions(OVERLONG_ID),
-        lambda: repo.put_show(OVERLONG_ID, two_set_show(), expected_revision="", at=AT),
-    ):
-        with pytest.raises(StorageError) as caught:
-            call()
-        assert caught.value.code == "NAME_TOO_LONG"
-        assert caught.value.context["errno"] == errno.ENAMETOOLONG
-        assert caught.value.context["winerror"] == ERROR_INVALID_NAME
+    with pytest.raises(StorageError) as refused:
+        repo.put_show(OVERLONG_ID, two_set_show(), expected_revision="", at=AT)
+    assert refused.value.code == "BAD_PATH"
+    with pytest.raises(StorageError) as caught:
+        repo.revisions(OVERLONG_ID)
+    assert caught.value.code == "NAME_TOO_LONG"
+    assert caught.value.context["errno"] == errno.ENAMETOOLONG
+    assert caught.value.context["winerror"] == ERROR_INVALID_NAME
 
 
 def test_regression_windows_invalid_short_name_stays_io(

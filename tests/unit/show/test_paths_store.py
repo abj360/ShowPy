@@ -15,7 +15,7 @@ from e8s.show.paths_store import load_paths, save_paths
 from e8s.show.workspace import open_workspace
 
 AT = datetime(2026, 11, 11, tzinfo=UTC)
-SHOW_ID = "show-1"
+SHOW_ID = "show_1"
 
 
 def test_save_and_load_paths_round_trip() -> None:

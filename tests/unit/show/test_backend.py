@@ -49,7 +49,7 @@ from e8s.show.storage import ROOT_REVISION
 from tests.helpers import context_entries
 
 AT = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
-SHOW_ID = "show-1"
+SHOW_ID = "show_1"
 HISTORY = 1_000
 
 type BackendFactory = Callable[[], RepositoryBackend]
