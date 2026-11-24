@@ -24,10 +24,10 @@ from e8s.show.documents import (
     SHOW_DOC,
     decode_show,
     encode_documents,
-    is_older_tree,
     is_show_doc,
     migrated_view,
     migration_changes,
+    needs_rewrite,
     split_path,
 )
 from e8s.show.files import (
@@ -229,8 +229,9 @@ class Workspace:
         revision lists only what it edits and later writes add no second one. If the
         change then conflicts, the normalizing revision stays; it changes no content. A base of
         an older format version is migrated instead: the normalizing revision holds the whole
-        migration, files of renamed set folders moved. A revision found or made canonical is
-        remembered, so the check runs once per revision.
+        migration, files of renamed set folders moved. A base that still stores layout-1 set or
+        cast documents is re-encoded as role documents the same way. A revision found or made
+        canonical is remembered, so the check runs once per revision.
 
         Args:
             changes: Stored path to new bytes, or None to delete.
@@ -268,7 +269,7 @@ class Workspace:
         if base in self._canonical_revisions:
             return {}
         tree = self.tree_at(base)
-        if is_older_tree(tree):
+        if needs_rewrite(tree):
             return migration_changes(tree)
         if is_complete:
             paths = [p for p, d in changes.items() if d is not None and p in tree and tree[p] != d]

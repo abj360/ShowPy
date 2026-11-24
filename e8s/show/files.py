@@ -29,6 +29,7 @@ from e8s.core.ids import TransitionId
 from e8s.core.selection import Selection
 from e8s.core.util import close_matches
 from e8s.show._notes_document import NotesDocument, require_notes_of
+from e8s.show.document_paths import CAST_DOC, is_set_document
 from e8s.show.documents import (
     FORMS_NAME,
     LEGACY_NOTES_DOC,
@@ -104,7 +105,7 @@ def all_files(show: Show | None, tree: Mapping[str, bytes]) -> list[str]:
     files += sorted(p for p in tree if p.startswith(FREE_ROOTS))
     if show is None:
         return files
-    files += [SHOW_DOC, INDEX_DOC, SHEET_DOC, TIMELINE_DOC]
+    files += [SHOW_DOC, INDEX_DOC, SHEET_DOC, TIMELINE_DOC, CAST_DOC]
     files += _set_files(show, tree)
     files += [paths_doc(tid) for tid in show.transition_ids()]
     return files
@@ -199,7 +200,7 @@ def _show_file(path: str, segments: list[str], show: Show) -> bytes | None:
     if segments[0] == "transitions" and len(segments) == 3 and segments[2] == PATHS_NAME:
         tid = _pair(show, segments[1])
         return dump_json(show.transition(tid).to_json())
-    if path in (SHOW_DOC, SHEET_DOC, TIMELINE_DOC):
+    if path in (SHOW_DOC, SHEET_DOC, TIMELINE_DOC, CAST_DOC):
         return encode_documents(show, [path])[path]
     return None
 
@@ -221,7 +222,7 @@ def read_file(path: str, show: Show | None, tree: Mapping[str, bytes]) -> str | 
     segments = split_path(path)
     if not segments:
         raise _is_directory(path)
-    if segments[0] in ("show", "time", "sets", "transitions"):
+    if segments[0] in ("show", "time", "cast", "sets", "transitions"):
         found = _show_file(path, segments, _require_show(show, path))
         if found is not None:
             return _text_or_bytes(path, found)
@@ -242,7 +243,7 @@ def show_changes(show: Show, tree: Mapping[str, bytes]) -> dict[str, bytes | Non
     >>> from e8s.examples import two_set_show
     >>> changes = show_changes(two_set_show(), {"/sets/9/set.py": b""})
     >>> changes["/sets/9/set.py"], len(changes)
-    (None, 6)
+    (None, 13)
     """
     migration = migration_changes(tree)
     paths = [p for p in tree if p not in migration] + [
@@ -319,7 +320,7 @@ def staged_changes(
             hint=f"write the notes document to {NOTES_DOC}",
             context={"path": path},
         )
-    if is_show_doc(path) and not path.endswith("/set.json"):
+    if is_show_doc(path) and not is_set_document(path):
         return _staged_show_doc(path, raw, _require_show(show, path), tree)
     if segments[0] == "sets" and len(segments) == 3 and segments[2] == SCRIPT_NAME:
         _require_show(show, path).set(segments[1])

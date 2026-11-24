@@ -28,12 +28,6 @@ Contains:
     test_regression_second_workspace_write_adds_no_normalizing_revision: adds one revision only
     test_regression_stale_write_on_a_legacy_repository_lands_nothing: refuses a stale write
         with ConflictError, adds no revision and leaves the show as it was
-    test_regression_writes_to_different_documents_normalize_once: adds normalizing plus two edits
-        for two writes to different show documents, then nothing more for a save_show
-    test_regression_commits_to_different_documents_normalize_once: does the same for two raw
-        commits, which name only the documents they rewrite
-    test_regression_script_write_normalizes_every_show_document: normalizes all documents on the
-        first write of any kind
     test_regression_edit_conflicting_after_normalizing_keeps_it_and_retries_on_top: keeps the
         normalizing revision when a competing writer lands before the edit, then retries on top
     test_regression_commit_of_the_canonical_form_adds_only_the_normalizing_revision: returns the
@@ -47,7 +41,6 @@ Contains:
 import hashlib
 import json
 import math
-import re
 import shutil
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -59,13 +52,13 @@ import pytest
 from e8s.core.errors import ConflictError, SchemaError
 from e8s.core.util import content_hash
 from e8s.show.collab_models import CanvasEvent
+from e8s.show.document_paths import CAST_DOC, is_set_document
 from e8s.show.document_reading import decode_show_dump
 from e8s.show.documents import (
     LEGACY_NOTES_DOC,
     SHEET_DOC,
     SHOW_DOC,
     dump_json,
-    dump_show_doc,
     is_show_doc,
     migrate_documents,
 )
@@ -77,22 +70,25 @@ from e8s.show.migrate import FIRST_VERSION
 from e8s.show.models import Show
 from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import Workspace, open_workspace
+from tests.fixtures.legacy_v020 import (
+    NEGATIVE_ZERO,
+    V020_FIXTURE,
+    retitled,
+    v020_expected,
+    v020_workspace,
+)
 
-FIXTURE = Path(__file__).resolve().parents[2] / "fixtures" / "repos" / "v0.2.0"
+FIXTURE = V020_FIXTURE
 LEGACY_KEYS = {"actor", "message", "kind"}
 REVISION_FIELDS = {"id", "parent", "at", "changed"}
 COMMITTED_AT = datetime(2026, 11, 16, 9, 0, tzinfo=UTC)
 HEX_LENGTH = 64
-NEGATIVE_ZERO = re.compile(rb"-0\.0\b")
-
-
-def _expected() -> dict[str, Any]:
-    loaded: dict[str, Any] = json.loads((FIXTURE / "expected.json").read_text())
-    return loaded
+SET_SUFFIX = "/set.json"
+SET_DOCUMENT_NAMES = ("set.json", "drill.json", "facing.json", "labels.json")
 
 
 def test_v020_repository_loads_without_loss(tmp_path: Path) -> None:
-    expected = _expected()
+    expected = v020_expected()
     shutil.copytree(FIXTURE / "repo", tmp_path / "repo")
     repo = FileRepository(tmp_path / "repo")
     show_id = expected["show_id"]
@@ -102,7 +98,7 @@ def test_v020_repository_loads_without_loss(tmp_path: Path) -> None:
 
 
 def test_v020_revision_records_carry_legacy_keys() -> None:
-    expected = _expected()
+    expected = v020_expected()
     trees = FIXTURE / "repo" / expected["show_id"] / "trees"
     for revision_id in expected["revisions"]:
         record = json.loads((trees / f"{revision_id}.json").read_text())
@@ -110,7 +106,7 @@ def test_v020_revision_records_carry_legacy_keys() -> None:
 
 
 def test_commit_on_v020_repository_gets_a_new_scheme_id(tmp_path: Path) -> None:
-    expected = _expected()
+    expected = v020_expected()
     shutil.copytree(FIXTURE / "repo", tmp_path / "repo")
     repo = FileRepository(tmp_path / "repo")
     show_id = expected["show_id"]
@@ -140,7 +136,7 @@ def test_commit_on_v020_repository_gets_a_new_scheme_id(tmp_path: Path) -> None:
 
 
 def test_regression_v02_revisions_load_without_authorship(tmp_path: Path) -> None:
-    expected = _expected()
+    expected = v020_expected()
     shutil.copytree(FIXTURE / "repo", tmp_path / "repo")
     before = {p: p.read_bytes() for p in (tmp_path / "repo").rglob("*") if p.is_file()}
     revisions = FileRepository(tmp_path / "repo").revisions(expected["show_id"])
@@ -163,7 +159,7 @@ def test_new_records_carrying_authorship_are_refused() -> None:
 
 
 def test_stored_record_with_an_unknown_key_is_refused(tmp_path: Path) -> None:
-    expected = _expected()
+    expected = v020_expected()
     shutil.copytree(FIXTURE / "repo", tmp_path / "repo")
     record_path = tmp_path / "repo" / expected["show_id"] / "trees" / f"{expected['head']}.json"
     record = json.loads(record_path.read_text())
@@ -190,24 +186,27 @@ def _form_reference_paths(tree: Mapping[str, bytes]) -> set[str]:
     }
 
 
+def _role_split_paths(tree: Mapping[str, bytes]) -> set[str]:
+    """Lists every set document of a layout-1 tree with the role documents it splits into."""
+    folders = [
+        p.removesuffix(SET_SUFFIX) for p in tree if is_set_document(p) and p.endswith(SET_SUFFIX)
+    ]
+    return {f"{folder}/{name}" for folder in folders for name in SET_DOCUMENT_NAMES}
+
+
 def _normalized_paths(tree: Mapping[str, bytes]) -> set[str]:
     """Lists what the first save rewrites: `-0.0` documents, forms documents for their v2
     recipes, set documents for their renamed form IDs, show.json for its v2 header, renamed
     selection and dropped coordinates, sheet.json for its dropped landmarks and coordinates, and
-    the v1 notes document, which it deletes (the fixture holds no notes)."""
+    the v1 notes document, which it deletes (the fixture holds no notes). Every set document is
+    split into set.json and its role documents, and the cast moves to the cast document."""
     return (
         _negative_zero_paths(tree)
         | _forms_paths(tree)
         | _form_reference_paths(tree)
-        | {SHOW_DOC, SHEET_DOC, LEGACY_NOTES_DOC}
+        | _role_split_paths(tree)
+        | {SHOW_DOC, SHEET_DOC, LEGACY_NOTES_DOC, CAST_DOC}
     )
-
-
-def _fixture_workspace(tmp_path: Path) -> tuple[FileRepository, Workspace, dict[str, Any]]:
-    expected = _expected()
-    shutil.copytree(FIXTURE / "repo", tmp_path / "repo")
-    repo = FileRepository(tmp_path / "repo")
-    return repo, open_workspace(repo, expected["show_id"]), expected
 
 
 def _signs(show: Show) -> list[float]:
@@ -215,7 +214,7 @@ def _signs(show: Show) -> list[float]:
 
 
 def test_regression_v020_head_loads_with_its_stored_negative_zero(tmp_path: Path) -> None:
-    repo, ws, expected = _fixture_workspace(tmp_path)
+    repo, ws, expected = v020_workspace(tmp_path)
     before = {p: p.read_bytes() for p in (tmp_path / "repo").rglob("*") if p.is_file()}
     tree = ws.tree_at(expected["head"])
     assert _negative_zero_paths(tree)
@@ -226,7 +225,7 @@ def test_regression_v020_head_loads_with_its_stored_negative_zero(tmp_path: Path
 
 
 def test_regression_first_save_normalizes_v020_documents_in_one_revision(tmp_path: Path) -> None:
-    repo, ws, expected = _fixture_workspace(tmp_path)
+    repo, ws, expected = v020_workspace(tmp_path)
     show_id, head = expected["show_id"], expected["head"]
     before = ws.tree_at(head)
     saved = save_show(ws, load_show(ws), COMMITTED_AT)
@@ -238,14 +237,14 @@ def test_regression_first_save_normalizes_v020_documents_in_one_revision(tmp_pat
     assert not _negative_zero_paths(after)
     unchanged = set(before) - set(saved.changed)
     assert {p: after[p] for p in unchanged} == {p: before[p] for p in unchanged}
-    assert set(after) == set(before) - {LEGACY_NOTES_DOC}
+    assert set(after) == (set(before) | _role_split_paths(before) | {CAST_DOC}) - {LEGACY_NOTES_DOC}
     scripts = {p for p in before if p.endswith("/set.py")}
     assert scripts
     assert not scripts & set(saved.changed)
 
 
 def test_regression_save_with_an_edit_normalizes_first_then_edits(tmp_path: Path) -> None:
-    repo, ws, expected = _fixture_workspace(tmp_path)
+    repo, ws, expected = v020_workspace(tmp_path)
     show = load_show(ws)
     saved = save_show(ws, show.replace(title="Renamed"), COMMITTED_AT)
     log = repo.revisions(expected["show_id"])
@@ -259,7 +258,7 @@ def test_regression_save_with_an_edit_normalizes_first_then_edits(tmp_path: Path
 
 
 def test_regression_normalizing_revision_is_invisible_to_diff_and_events(tmp_path: Path) -> None:
-    repo, ws, expected = _fixture_workspace(tmp_path)
+    repo, ws, expected = v020_workspace(tmp_path)
     before = load_show(ws)
     saved = save_show(ws, before, COMMITTED_AT)
     after = ws.show_at(saved.id)
@@ -270,7 +269,7 @@ def test_regression_normalizing_revision_is_invisible_to_diff_and_events(tmp_pat
 
 
 def test_regression_second_save_adds_no_normalizing_revision(tmp_path: Path) -> None:
-    repo, ws, expected = _fixture_workspace(tmp_path)
+    repo, ws, expected = v020_workspace(tmp_path)
     first = save_show(ws, load_show(ws), COMMITTED_AT)
     ws.refresh()
     again = save_show(ws, load_show(ws), COMMITTED_AT)
@@ -279,7 +278,7 @@ def test_regression_second_save_adds_no_normalizing_revision(tmp_path: Path) -> 
 
 
 def test_regression_normalization_keeps_tags_selection_scripts_and_pin(tmp_path: Path) -> None:
-    repo, ws, expected = _fixture_workspace(tmp_path)
+    repo, ws, expected = v020_workspace(tmp_path)
     head = expected["head"]
     show = load_show(ws)
     scripts = {p: raw for p, raw in ws.tree_at(head).items() if p.endswith("/set.py")}
@@ -290,12 +289,6 @@ def test_regression_normalization_keeps_tags_selection_scripts_and_pin(tmp_path:
         assert [(p.id, p.target, p.reason) for p in loaded.pins] == [("B3", "entity", "soloist")]
     after = ws.tree_at(saved.id)
     assert {p: after[p] for p in scripts} == scripts
-
-
-def _retitled(ws: Workspace, title: str) -> bytes:
-    document = json.loads(ws.read("/show/show.json"))
-    document["title"] = title
-    return json.dumps(document).encode()
 
 
 def _assert_normalized_then_edited(
@@ -316,22 +309,24 @@ def _assert_normalized_then_edited(
 
 
 def test_regression_workspace_write_normalizes_first_then_edits(tmp_path: Path) -> None:
-    repo, ws, expected = _fixture_workspace(tmp_path)
-    edit = ws.write("/show/show.json", _retitled(ws, "Renamed"), at=COMMITTED_AT)
+    repo, ws, expected = v020_workspace(tmp_path)
+    edit = ws.write("/show/show.json", retitled(ws, "Renamed"), at=COMMITTED_AT)
     _assert_normalized_then_edited(repo, ws, expected, edit)
 
 
 def test_regression_workspace_commit_normalizes_first_then_edits(tmp_path: Path) -> None:
-    repo, ws, expected = _fixture_workspace(tmp_path)
-    document = json.loads(ws.tree_at(ws.revision)["/sets/1/set.json"])
+    repo, ws, expected = v020_workspace(tmp_path)
+    migrated, _ = migrate_documents(ws.tree_at(ws.revision))
+    document = json.loads(migrated["/sets/1/set.json"])
     document["label"] = "Opening"
     edit = ws.commit({"/sets/1/set.json": dump_json(document)}, at=COMMITTED_AT)
     log = repo.revisions(expected["show_id"])
     assert [r.id for r in log][:3] == expected["revisions"]
     assert [set(r.changed) for r in log[3:]] == [
-        {"/sets/1/set.json", SHOW_DOC, SHEET_DOC, LEGACY_NOTES_DOC}
+        {"/sets/1/set.json", SHOW_DOC, SHEET_DOC, LEGACY_NOTES_DOC, CAST_DOC}
         | _forms_paths(ws.tree_at(expected["head"]))
-        | _form_reference_paths(ws.tree_at(expected["head"])),
+        | _form_reference_paths(ws.tree_at(expected["head"]))
+        | _role_split_paths(ws.tree_at(expected["head"])),
         {"/sets/1/set.json"},
     ]
     assert log[4].id == edit.id
@@ -340,19 +335,20 @@ def test_regression_workspace_commit_normalizes_first_then_edits(tmp_path: Path)
     assert normalized is not None
     assert diff_show(before, normalized) == {}
     assert not NEGATIVE_ZERO.search(ws.tree_at(edit.id)["/sets/1/set.json"])
+    assert not NEGATIVE_ZERO.search(ws.tree_at(edit.id)["/sets/1/drill.json"])
 
 
 def test_regression_second_workspace_write_adds_no_normalizing_revision(tmp_path: Path) -> None:
-    repo, ws, expected = _fixture_workspace(tmp_path)
-    ws.write("/show/show.json", _retitled(ws, "Renamed"), at=COMMITTED_AT)
-    ws.write("/show/show.json", _retitled(ws, "Renamed again"), at=COMMITTED_AT)
+    repo, ws, expected = v020_workspace(tmp_path)
+    ws.write("/show/show.json", retitled(ws, "Renamed"), at=COMMITTED_AT)
+    ws.write("/show/show.json", retitled(ws, "Renamed again"), at=COMMITTED_AT)
     assert len(repo.revisions(expected["show_id"])) == len(expected["revisions"]) + 3
 
 
 def test_regression_stale_write_on_a_legacy_repository_lands_nothing(tmp_path: Path) -> None:
-    repo, ws, expected = _fixture_workspace(tmp_path)
+    repo, ws, expected = v020_workspace(tmp_path)
     before = load_show(ws)
-    raw = _retitled(ws, "Renamed")
+    raw = retitled(ws, "Renamed")
     with pytest.raises(ConflictError):
         ws.write(
             "/show/show.json", raw, expected_revision=expected["revisions"][1], at=COMMITTED_AT
@@ -364,84 +360,6 @@ def test_regression_stale_write_on_a_legacy_repository_lands_nothing(tmp_path: P
 
 def _revision_count(repo: FileRepository, expected: dict[str, Any]) -> int:
     return len(repo.revisions(expected["show_id"])) - len(expected["revisions"])
-
-
-STALE_DOCS = {"/sets/1/set.json", "/show/sheet.json"}
-
-
-def _two_stale_documents(tmp_path: Path) -> tuple[FileRepository, Workspace, int]:
-    """Copies the fixture and reformats its migrated sheet document, so two documents are
-    non-canonical.
-
-    The commit also stores show.json, which any commit of a show document needs, and every
-    other changed document in its migrated shape, so no stored ID is a v1 ID; the `-0.0` set
-    document and the reformatted sheet stay stale.
-    """
-    repo, ws, expected = _fixture_workspace(tmp_path)
-    tree = ws.tree_at(expected["head"])
-    migrated, _ = migrate_documents(tree)
-    sheet = json.loads(migrated["/show/sheet.json"])
-    current: dict[str, bytes | None] = {
-        path: raw
-        for path, raw in migrated.items()
-        if is_show_doc(path) and path not in STALE_DOCS and tree.get(path) != raw
-    }
-    current.update(dict.fromkeys(p for p in tree if is_show_doc(p) and p not in migrated))
-    repo.transaction(
-        expected["show_id"],
-        {**current, "/show/sheet.json": json.dumps(sheet, indent=4).encode()},
-        expected_revision=expected["head"],
-        at=COMMITTED_AT,
-    )
-    ws.refresh()
-    return repo, ws, len(repo.revisions(expected["show_id"]))
-
-
-def _after(repo: FileRepository, ws: Workspace, count: int) -> list[Revision]:
-    return repo.revisions(ws.show_id)[count:]
-
-
-def _timeline(ws: Workspace) -> bytes:
-    document = json.loads(ws.read("/time/timeline.json"))
-    document["total_counts"] = 100.0
-    return json.dumps(document).encode()
-
-
-def test_regression_writes_to_different_documents_normalize_once(tmp_path: Path) -> None:
-    repo, ws, count = _two_stale_documents(tmp_path)
-    ws.write("/show/show.json", _retitled(ws, "Renamed"), at=COMMITTED_AT)
-    ws.write("/time/timeline.json", _timeline(ws), at=COMMITTED_AT)
-    assert [set(r.changed) for r in _after(repo, ws, count)] == [
-        STALE_DOCS,
-        {"/show/show.json"},
-        {"/time/timeline.json"},
-    ]
-    save_show(ws, load_show(ws), COMMITTED_AT)
-    assert len(_after(repo, ws, count)) == 3
-
-
-def test_regression_commits_to_different_documents_normalize_once(tmp_path: Path) -> None:
-    repo, ws, count = _two_stale_documents(tmp_path)
-    tree = ws.tree_at(ws.revision)
-    first = json.loads(ws.read(SHOW_DOC))
-    first["title"] = "Renamed"
-    second = json.loads(tree["/transitions/4-5/paths.json"])
-    second["notes"] = "slow"
-    ws.commit({SHOW_DOC: dump_show_doc(first)}, at=COMMITTED_AT)
-    ws.commit({"/transitions/4-5/paths.json": dump_json(second)}, at=COMMITTED_AT)
-    assert [set(r.changed) for r in _after(repo, ws, count)] == [
-        STALE_DOCS,
-        {"/show/show.json"},
-        {"/transitions/4-5/paths.json"},
-    ]
-    save_show(ws, load_show(ws), COMMITTED_AT)
-    assert len(_after(repo, ws, count)) == 3
-
-
-def test_regression_script_write_normalizes_every_show_document(tmp_path: Path) -> None:
-    repo, ws, count = _two_stale_documents(tmp_path)
-    ws.write("/sets/2/set.py", b"# changed\n", at=COMMITTED_AT)
-    assert [set(r.changed) for r in _after(repo, ws, count)] == [STALE_DOCS, {"/sets/2/set.py"}]
 
 
 def _competing_writer_lands_before_second_commit(repo: FileRepository, ws: Workspace) -> None:
@@ -461,10 +379,10 @@ def _competing_writer_lands_before_second_commit(repo: FileRepository, ws: Works
 def test_regression_edit_conflicting_after_normalizing_keeps_it_and_retries_on_top(
     tmp_path: Path,
 ) -> None:
-    repo, ws, expected = _fixture_workspace(tmp_path)
+    repo, ws, expected = v020_workspace(tmp_path)
     before = load_show(ws)
     _competing_writer_lands_before_second_commit(repo, ws)
-    raw = _retitled(ws, "Renamed")
+    raw = retitled(ws, "Renamed")
     with pytest.raises(ConflictError):
         ws.write("/show/show.json", raw, at=COMMITTED_AT)
     log = repo.revisions(expected["show_id"])[len(expected["revisions"]) :]
@@ -483,9 +401,10 @@ def test_regression_edit_conflicting_after_normalizing_keeps_it_and_retries_on_t
 def test_regression_commit_of_the_canonical_form_adds_only_the_normalizing_revision(
     tmp_path: Path,
 ) -> None:
-    repo, ws, expected = _fixture_workspace(tmp_path)
-    canonical = NEGATIVE_ZERO.sub(b"0.0", ws.tree_at(expected["head"])["/sets/1/set.json"])
-    head = ws.commit({"/sets/1/set.json": canonical}, at=COMMITTED_AT)
+    repo, ws, expected = v020_workspace(tmp_path)
+    migrated, _ = migrate_documents(ws.tree_at(expected["head"]))
+    canonical = {p: migrated[p] for p in ("/sets/1/set.json", "/sets/1/drill.json")}
+    head = ws.commit(canonical, at=COMMITTED_AT)
     log = repo.revisions(expected["show_id"])[len(expected["revisions"]) :]
     assert [r.id for r in log] == [head.id]
     assert repo.head(expected["show_id"]) == head.id

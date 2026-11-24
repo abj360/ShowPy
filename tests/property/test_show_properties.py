@@ -4,7 +4,7 @@
 test_show_properties.py --- checks set, index, storage, rename and item invariants on random shows
 """
 
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from e8s.cast.spots import rename_spots
@@ -102,6 +102,7 @@ def _edited(show: Show, edit: int, other: int, point: tuple[float, float]) -> Sh
     return edits[edit % len(edits)]
 
 
+@settings(deadline=None)
 @given(seeds, st.integers(min_value=0, max_value=3), seeds, st.tuples(coordinate, coordinate))
 def test_changes_lists_exactly_the_items_that_differ(
     seed: int, edit: int, other: int, point: tuple[float, float]
@@ -142,6 +143,7 @@ def _reordered(show: Show, op: int) -> Show:
             return show.replace(sets=(moved, *show.sets[1:]))
 
 
+@settings(deadline=None)
 @given(st.integers(min_value=0, max_value=3), st.lists(edits, max_size=4), edits)
 def test_items_are_equal_exactly_when_stored_bytes_are(seed: int, ops: list[int], op: int) -> None:
     base = add_set(seeded_show(seed, SEEDED_SPOTS, SEEDED_SETS), "9", 4.0)

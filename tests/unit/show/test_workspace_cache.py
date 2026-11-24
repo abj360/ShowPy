@@ -36,7 +36,7 @@ SPOTS = 8
 SETS = 10
 EDITS = 5
 EDITED_SET = 1
-PARSER = "e8s.show.document_reading.parse_strict_json"
+PARSER = "e8s.show.document_sources.parse_strict_json"
 
 
 def _one_spot_edit(show: Show, x: float) -> Show:
