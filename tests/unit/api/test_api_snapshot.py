@@ -42,10 +42,10 @@ from e8s._api_table import PUBLIC_API
 from e8s.core.types import FrozenModel
 from scripts.check_api_changes import JsonValue, diff_snapshots
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 SNAPSHOT_PATH = ROOT / "tests" / "fixtures" / "api_snapshot.json"
 UPDATE_ENV = "E8S_UPDATE_API"
-UPDATE_COMMAND = f"{UPDATE_ENV}=1 uv run pytest tests/unit/test_api_snapshot.py"
+UPDATE_COMMAND = f"{UPDATE_ENV}=1 uv run pytest tests/unit/api/test_api_snapshot.py"
 NO_SIGNATURE = "(*args)"
 BARE_MODULES = ("builtins", "typing")
 OPAQUE_DEFAULT = "..."

@@ -52,6 +52,7 @@ from e8s.choreo.path_models import (
     SpiralParams,
     ZigzagParams,
 )
+from e8s.choreo.read import coordinate_table, describe_transition, frames
 from e8s.choreo.recipe_models import (
     CurveRecipe,
     CustomRecipe,
@@ -160,6 +161,15 @@ def _engine_examples() -> list[FrozenModel]:
         min_gaps(show, tid)[0],
         speed(show, "T1", tid),
         motion_contrast(show, tid),
+    ]
+
+
+def _reader_examples() -> list[FrozenModel]:
+    show = crossing_show()
+    return [
+        frames(show, 0.0, 8.0, fps=1.0),
+        coordinate_table(show, unit="ft"),
+        describe_transition(show, make_tid("1", "2")),
     ]
 
 
@@ -328,6 +338,7 @@ def _report_examples() -> list[FrozenModel]:
 
 BUILDERS: tuple[Callable[[], list[FrozenModel]], ...] = (
     _engine_examples,
+    _reader_examples,
     _fix_examples,
     _curve_examples,
     _recipe_examples,
