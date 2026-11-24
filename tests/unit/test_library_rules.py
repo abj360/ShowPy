@@ -46,6 +46,7 @@ Contains:
     test_geo_layering_scan_allows_only_listed_function_imports: proves an unlisted import is flagged
     test_geo_layering_scan_flags_a_foreign_import: proves the layering scan can fail
     test_geo_layering_scan_resolves_relative_imports: checks `from ..cast import x` against layers
+    test_show_modules_stay_under_500_lines: fails on any e8s/show module over 500 lines
 """
 
 import ast
@@ -70,6 +71,7 @@ CITATION_PATTERN = re.compile(
 )
 TYPE_IGNORE_PATTERN = re.compile(r"\b(?:type|pyright):\s*ignore\b")
 MIN_LIBRARY_FILES = 100
+MAX_SHOW_MODULE_LINES = 500
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LIBRARY_ROOT = REPO_ROOT / "e8s"
 ERROR_CODES_PATH = LIBRARY_ROOT / "core" / "error_codes.py"
@@ -733,3 +735,12 @@ def test_geo_layering_scan_resolves_relative_imports() -> None:
         "x.py:4:e8s.cast.models",
         "x.py:5:e8s.choreo",
     ]
+
+
+def test_show_modules_stay_under_500_lines() -> None:
+    sizes = {
+        path.name: len(path.read_text(encoding="utf-8").splitlines())
+        for path in sorted((LIBRARY_ROOT / "show").glob("*.py"))
+    }
+    assert sizes
+    assert {name: n for name, n in sizes.items() if n > MAX_SHOW_MODULE_LINES} == {}
