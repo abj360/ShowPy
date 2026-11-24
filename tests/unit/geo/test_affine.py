@@ -8,6 +8,8 @@ Contains:
         scaled by 1e5 instead of judging it by absolute error
     test_regression_is_similarity_rejects_small_non_uniform_scales: rejects a 1e-5 by 2e-5 scale
         instead of treating it as uniform
+    test_is_similarity_rejects_slight_shear_or_anisotropy_at_large_scale: the scale-relative
+        tolerance still rejects a 1e-3 degree shear or a 1e-6 anisotropy scaled by 1e5
 """
 
 import math
@@ -23,6 +25,7 @@ from e8s.geo.affine import (
     mirror_matrix,
     rotation_matrix,
     scale_matrix,
+    skew_matrix,
     transform_curve,
     transform_facing,
     transform_points,
@@ -101,8 +104,6 @@ SMALL_SCALE = 1e-5
 ROTATION_DEG = 30.0
 
 
-@pytest.mark.defect("UP-9.1-17")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-17")
 def test_regression_is_similarity_accepts_large_rotations_with_scale() -> None:
     """Accepts a 30 degree rotation scaled by 1e5 instead of judging it by absolute error."""
     c, s = math.cos(math.radians(ROTATION_DEG)), math.sin(math.radians(ROTATION_DEG))
@@ -111,8 +112,20 @@ def test_regression_is_similarity_accepts_large_rotations_with_scale() -> None:
     assert is_similarity(matrix)
 
 
-@pytest.mark.defect("UP-9.1-18")
-@pytest.mark.xfail(strict=True, reason="UP-9.1-18")
 def test_regression_is_similarity_rejects_small_non_uniform_scales() -> None:
     """Rejects a 1e-5 by 2e-5 scale instead of treating it as uniform (audit 9.1)."""
     assert not is_similarity(scale_matrix(SMALL_SCALE, 2 * SMALL_SCALE, (0.0, 0.0)))
+
+
+SLIGHT_SHEAR_DEG = 1e-3
+SLIGHT_ANISOTROPY = 1e-6
+
+
+def test_is_similarity_rejects_slight_shear_or_anisotropy_at_large_scale() -> None:
+    sheared = skew_matrix(SLIGHT_SHEAR_DEG, 0.0, (0.0, 0.0))
+    sheared[:2, :2] *= LARGE_SCALE
+    assert not is_similarity(sheared)
+    stretched = scale_matrix(LARGE_SCALE, LARGE_SCALE * (1 + SLIGHT_ANISOTROPY), (0.0, 0.0))
+    assert not is_similarity(stretched)
+    turned = rotation_matrix(ROTATION_DEG, (0.0, 0.0)) @ stretched
+    assert not is_similarity(turned)
