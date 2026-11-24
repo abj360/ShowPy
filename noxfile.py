@@ -61,6 +61,7 @@ WHEEL_CHECK = f"""
 import importlib.metadata as metadata
 import importlib.resources as resources
 import e8s
+import e8s._core
 expression = metadata.metadata("e8s")["License-Expression"]
 assert expression == {LICENSE_EXPRESSION!r}, expression
 assert resources.files("e8s").joinpath("py.typed").is_file(), "py.typed missing"
@@ -69,6 +70,8 @@ assert e8s.schema_path("LICENSE-MIT.txt").is_file(), "schema licence missing"
 for font in ("fonts/relief-singleline.json", "fonts/licenses/OFL-1.1.txt"):
     assert resources.files("e8s").joinpath(font).is_file(), "fonts missing"
 assert "site-packages" in e8s.__file__, e8s.__file__
+assert "site-packages" in e8s._core.__file__, e8s._core.__file__
+assert e8s._core.__version__ == e8s.__version__, e8s._core.__version__
 print("Found e8s", e8s.__version__)
 """
 

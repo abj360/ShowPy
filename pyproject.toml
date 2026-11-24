@@ -33,31 +33,27 @@ Repository = "https://github.com/abj360/e8s"
 Issues = "https://github.com/abj360/e8s/issues"
 
 [build-system]
-requires = ["hatchling==1.33.0", "hatch-vcs==0.5.0"]
-build-backend = "hatchling.build"
+requires = ["maturin==1.16.0"]
+build-backend = "maturin"
 
-[tool.hatch.version]
-source = "vcs"
+[tool.maturin]
+manifest-path = "crates/e8s-py/Cargo.toml"
+module-name = "e8s._core"
+python-source = "."
+python-packages = ["e8s"]
+# A build from the sdist compiles with the pinned toolchain too.
+include = [{ path = "rust-toolchain.toml", format = "sdist" }]
 
-[tool.hatch.build.targets.sdist]
-exclude = [
-    "docs/",
-    "tests/",
-    ".claude/",
-    "node_modules/",
-    "CLAUDE.md",
-    ".github/",
-    "typings/",
-    "package.json",
-    "package-lock.json",
-    ".superpowers/",
-    "_typos.toml",
-    "cliff.toml",
-    "noxfile.py",
+# uv reinstalls the project, and so rebuilds e8s._core, when any of these files changes.
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "Cargo.lock" },
+    { file = "rust-toolchain.toml" },
+    { file = "crates/**/Cargo.toml" },
+    { file = "crates/**/*.rs" },
 ]
-
-[tool.hatch.build.targets.wheel]
-packages = ["e8s"]
 
 # The suite exercises every extra-gated function, so the dev environment installs them all.
 [dependency-groups]

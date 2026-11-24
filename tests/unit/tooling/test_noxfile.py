@@ -46,12 +46,19 @@ Contains:
     test_serial_sessions_start_no_workers: tests and hashseeds never pass -n, nor does addopts
     test_pytest_runs_resolves_constants_and_keeps_posargs: proves the run scan resolves names
     test_last_value_reads_the_last_occurrence: proves the flag lookup obeys the last value
+    test_uv_rebuilds_the_extension_when_rust_sources_change: the uv cache keys name every
+        Rust build input, so a changed crate rebuilds e8s._core
+    unprepared_rust_jobs(): lists the jobs that reach uv before the pinned toolchain and cache
+    test_every_job_that_syncs_installs_the_pinned_rust_toolchain: each uv job installs the
+        rust-toolchain.toml pin, then restores the Rust cache pinned by SHA, before uv builds
+    test_unprepared_rust_jobs_sees_a_missing_or_late_step: proves the toolchain check can fail
 """
 
 import ast
 import itertools
 import re
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -100,6 +107,19 @@ MATRIX_STEP_ENV = f"${{{{ {RUNS_CODE_JOBS} }}}}"
 MATRIX_STEP_GATE = re.compile(
     r"^(      - |        )if: env\.RUN_CODE_JOBS [!=]= 'true'$", re.MULTILINE
 )
+RUST_BUILD_INPUTS = frozenset(
+    {
+        "pyproject.toml",
+        "Cargo.toml",
+        "Cargo.lock",
+        "rust-toolchain.toml",
+        "crates/**/Cargo.toml",
+        "crates/**/*.rs",
+    }
+)
+UV_STEP = re.compile(r"\buv (sync|run)\b")
+TOOLCHAIN_STEP = "rustup toolchain install"
+RUST_CACHE_STEP = re.compile(r"uses: Swatinem/rust-cache@[0-9a-f]{40}\b")
 
 
 def tolerated_exit_codes(source: str, session_name: str) -> list[str]:
@@ -513,3 +533,62 @@ def test_pytest_runs_resolves_constants_and_keeps_posargs() -> None:
 def test_last_value_reads_the_last_occurrence() -> None:
     assert last_value(["pytest", "-n", "4", "*args", "-n", "0"], "-n") == "0"
     assert last_value(["pytest", "-m", "slow"], "-n") is None
+
+
+def test_uv_rebuilds_the_extension_when_rust_sources_change() -> None:
+    keys = tomllib.loads(PYPROJECT.read_text())["tool"]["uv"]["cache-keys"]
+    assert {key["file"] for key in keys if "file" in key} >= RUST_BUILD_INPUTS
+
+
+def _first_index(steps: list[str], found: Callable[[str], bool]) -> int | None:
+    return next((index for index, step in enumerate(steps) if found(step)), None)
+
+
+def unprepared_rust_jobs(workflow: str) -> list[str]:
+    """Lists the jobs that reach uv before installing the pinned toolchain and the Rust cache.
+
+    Args:
+        workflow: The text of a workflow file.
+
+    Returns:
+        unprepared: The jobs with a `uv sync` or `uv run` step that no earlier
+            `rustup toolchain install` step, followed by a SHA-pinned Swatinem/rust-cache step,
+            prepares.
+    """
+    unprepared = []
+    for name in ci_job_names(workflow):
+        steps = STEP_START.split(ci_job(workflow, name))[1:]
+        uv = _first_index(steps, lambda step: UV_STEP.search(step) is not None)
+        if uv is None:
+            continue
+        toolchain = _first_index(steps, lambda step: TOOLCHAIN_STEP in step)
+        cache = _first_index(steps, lambda step: RUST_CACHE_STEP.search(step) is not None)
+        if toolchain is None or cache is None or not toolchain < cache < uv:
+            unprepared.append(name)
+    return unprepared
+
+
+def test_every_job_that_syncs_installs_the_pinned_rust_toolchain() -> None:
+    workflow = CI_WORKFLOW.read_text()
+    assert unprepared_rust_jobs(workflow) == []
+    assert "check" in [
+        name for name in ci_job_names(workflow) if UV_STEP.search(ci_job(workflow, name))
+    ]
+
+
+def test_unprepared_rust_jobs_sees_a_missing_or_late_step() -> None:
+    toolchain = "      - run: rustup toolchain install\n"
+    cache = f"      - uses: Swatinem/rust-cache@{'a' * 40} # v2\n"
+    tag_cache = "      - uses: Swatinem/rust-cache@v2\n"
+    sync = "      - run: uv sync --locked\n"
+    jobs = {
+        "ready": toolchain + cache + sync,
+        "late": sync + toolchain + cache,
+        "untagged": toolchain + tag_cache + sync,
+        "swapped": cache + toolchain + sync,
+        "docs": "      - run: echo docs\n",
+    }
+    workflow = "on: push\njobs:\n" + "".join(
+        f"  {name}:\n    steps:\n{steps}" for name, steps in jobs.items()
+    )
+    assert unprepared_rust_jobs(workflow) == ["late", "untagged", "swapped"]

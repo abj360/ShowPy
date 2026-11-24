@@ -17,3 +17,14 @@ tests/bench/.results/
 
 # Local agent workspaces; never tracked.
 /.superpowers
+
+# Rust builds, the compiled extension and the Rust tool outputs.
+target/
+e8s/*.so
+e8s/*.pyd
+.parity/
+.cargo-tools/
+fuzz/target/
+fuzz/artifacts/
+fuzz/corpus/
+mutants.out*/
