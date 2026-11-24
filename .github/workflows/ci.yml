@@ -433,7 +433,11 @@ jobs:
           path: .parity/oracle-v0.4.0
           key: ${{ steps.restore-oracle.outputs.cache-primary-key }}
 
-  # Byte-identical core outputs across the 6 cells and 3 hash seeds: all 18 digests must match.
+  # The 18 digests (6 cells, 3 hash seeds) must all arrive. The areas already ported to the core
+  # must give byte-identical outputs in all of them; the other areas still run today's Python,
+  # whose last bits follow each platform's C math library (2026-11-24, controller ruling on PR
+  # #92: Windows and Linux differed on the time clock's val:seconds and val:counts_back), so
+  # their differences are printed and never fail the job.
   parity-compare:
     needs: [changes, parity]
     if: >-
@@ -442,27 +446,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: parity-digests-*
           path: parity-digests
           merge-multiple: true
-      - name: Require 18 equal parity digests
-        run: |
-          mapfile -t digests < <(find parity-digests -type f -name '*-seed*.txt' | sort)
-          if [ "${#digests[@]}" -ne 18 ]; then
-            echo "E: expected 18 parity digests, found ${#digests[@]}"
-            exit 1
-          fi
-          if [ ! -s "${digests[0]}" ]; then
-            echo "E: ${digests[0]} is empty"
-            exit 1
-          fi
-          for digest in "${digests[@]}"; do
-            if ! cmp -s "${digests[0]}" "$digest"; then
-              echo "E: $digest differs from ${digests[0]}"
-              diff "${digests[0]}" "$digest" || true
-              exit 1
-            fi
-          done
-          echo "Found 18 equal parity digests"
+      - name: Compare the parity digests of every cell and seed
+        run: python3 scripts/compare_parity_digests.py parity-digests

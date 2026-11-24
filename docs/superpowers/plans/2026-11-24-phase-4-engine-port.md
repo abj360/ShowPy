@@ -525,6 +525,15 @@ False)`; `Output = npt.NDArray[np.float64] | npt.NDArray[np.int64] | JsonValue`;
 - CI: `parity` runs on the 6 `check` cells for every pull request that touches `e8s/` or
   Rust, under hash seeds 0, 1 and 2, uploads the digests; `parity-compare` fails unless all 18
   digests are equal.
+  - **Note (2026-11-24, controller):** on PR #92, Windows and Linux digests differed on
+    `time.clock_on_200_seeded_timelines/val:seconds` and `val:counts_back`. Today's Python clock
+    takes its last bits from each platform's C math library, and cross-platform identity is a
+    port exit goal. Each cell still compares its working tree with its own same-platform
+    oracle. `--digest` writes the digests of the areas in `PORTED_AREAS`
+    (`tests/parity/run.py`, empty until lane T adds `time`) to the gated file and every area's
+    to a `.all` file beside it. `parity-compare` runs `scripts/compare_parity_digests.py`: it
+    fails unless 18 files of each kind arrive and the ported digests are equal, and prints the
+    keys that differ in the other areas without failing.
 
 - [ ] **Step 1:** Write `test_parity_compare.py::test_compare_counts_bit_identical_values_and_ulps`,
       `test_compare_flags_a_position_past_the_gate` (1.1e-9 m fails),

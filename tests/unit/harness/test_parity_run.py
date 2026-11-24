@@ -16,6 +16,8 @@ Contains:
     test_speed_launches_alternate_and_keep_the_fastest_of_each_side: oracle first, min of mins
     test_speed_needs_at_least_one_launch: zero launches fail closed
     test_speed_runs_a_named_number_of_launches: SPEED_LAUNCHES alternating launches per side
+    test_digests_split_the_ported_areas_from_every_area: the gated file holds ported areas only
+    test_ported_areas_name_only_areas_with_cases: PORTED_AREAS is a set of real areas
 """
 
 import json
@@ -29,9 +31,11 @@ from types import SimpleNamespace
 import pytest
 
 import e8s
+from tests.parity.cases import load_all_cases
 from tests.parity.oracle_runner import check_cases_module, import_e8s
 from tests.parity.run import (
     CORE_E8S,
+    PORTED_AREAS,
     REPO_ROOT,
     RUNNER,
     RUNNER_FILE,
@@ -42,6 +46,7 @@ from tests.parity.run import (
     run_side,
     runner_command,
     runner_environment,
+    write_digests,
 )
 
 PYTHON = Path("venv", "bin", "python")
@@ -169,3 +174,21 @@ def test_speed_needs_at_least_one_launch() -> None:
 def test_speed_runs_a_named_number_of_launches() -> None:
     assert isinstance(SPEED_LAUNCHES, int)
     assert SPEED_LAUNCHES > 1
+
+
+@pytest.mark.parametrize("ported", [frozenset(), frozenset({"time"})])
+def test_digests_split_the_ported_areas_from_every_area(
+    ported: frozenset[str], tmp_path: Path
+) -> None:
+    lines = {"geo": ["g  geo.case/pos:p"], "time": ["t  time.case/val:v", "u  time.case/n"]}
+    digest = tmp_path / "digests" / "Linux-py3.14-seed0.txt"
+    write_digests(digest, lines, ported)
+    expected = "".join(f"{line}\n" for area in sorted(ported) for line in lines[area])
+    assert digest.read_bytes() == expected.encode("utf-8")
+    every = digest.with_suffix(".all").read_bytes()
+    assert every == b"g  geo.case/pos:p\nt  time.case/val:v\nu  time.case/n\n"
+
+
+def test_ported_areas_name_only_areas_with_cases() -> None:
+    assert isinstance(PORTED_AREAS, frozenset)
+    assert {case.area for case in load_all_cases()} >= PORTED_AREAS

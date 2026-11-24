@@ -10,7 +10,7 @@ Contains:
     test_parity_job_runs_every_check_cell_under_three_seeds: 6 cells, seeds 0 to 2, digests
     test_parity_job_reads_its_own_changes_answer: the legs gate on the `parity` output
     test_parity_oracle_cache_is_keyed_by_ref_platform_python_and_lock: and saved from main only
-    test_parity_compare_requires_18_equal_digests: fails on a missing or differing digest
+    test_parity_compare_runs_the_digest_gate_on_every_download: compare_parity_digests.py gates
     test_parity_jobs_pin_every_action_and_keep_no_credentials: SHA pins, no persisted token
 """
 
@@ -56,7 +56,7 @@ CACHE_KEY_PARTS = (
     "steps.python.outputs.version",
     "hashFiles('uv.lock', 'scripts/build_oracle.py', 'scripts/oracle_build.txt')",
 )
-DIGEST_COUNT = "-ne 18"
+COMPARE_RUN = "run: python3 scripts/compare_parity_digests.py parity-digests"
 
 
 def _workflow() -> str:
@@ -123,15 +123,15 @@ def test_parity_oracle_cache_is_keyed_by_ref_platform_python_and_lock() -> None:
     assert steps.index(restore) < steps.index(save)
 
 
-def test_parity_compare_requires_18_equal_digests() -> None:
+def test_parity_compare_runs_the_digest_gate_on_every_download() -> None:
     job = ci_job(_workflow(), COMPARE_JOB)
     assert job_value(job, "needs", 4) == "[changes, parity]"
     assert job_condition(job) == COMPARE_CONDITION
     steps = job_steps(job)
-    assert any("actions/download-artifact@" in step for step in steps)
-    check = next(step for step in steps if DIGEST_COUNT in step)
-    assert "cmp -s" in check
-    assert "exit 1" in check
+    download = next(i for i, step in enumerate(steps) if "actions/download-artifact@" in step)
+    gate = next(i for i, step in enumerate(steps) if COMPARE_RUN in step)
+    assert download < gate
+    assert (ROOT / "scripts" / "compare_parity_digests.py").is_file()
 
 
 def test_parity_jobs_pin_every_action_and_keep_no_credentials() -> None:

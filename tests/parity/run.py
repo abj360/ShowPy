@@ -16,6 +16,8 @@ Contains:
     require_distinct_sides(): refuses one interpreter or one e8s folder for both sides
     run_side(): runs oracle_runner.py for one area under one interpreter
     SPEED_LAUNCHES: the alternating launches per side that `--speed` times
+    PORTED_AREAS: the areas whose core outputs must be identical on every CI cell
+    write_digests(): writes the ported areas' digests, and every area's beside them
     alternate_timings(): launches the sides in turn and keeps each case's fastest time
     run_area(): runs both sides of one area and compares every case
     main(): builds the oracle, runs each area, prints the tables and fails on any gate
@@ -55,6 +57,13 @@ RUNS_FOLDER = Path(".parity") / "runs"
 TIMINGS_FILE = "timings.json"
 # Each side's timing is its fastest launch out of this many, launched oracle, core, oracle, ...
 SPEED_LAUNCHES = 5
+# Areas whose computation runs in the compiled core. Their outputs must be byte-identical on
+# every CI cell and hash seed; the other areas still run today's Python, whose last bits follow
+# each platform's C math library (2026-11-24, controller ruling on PR #92: Windows and Linux
+# differed on time.clock_on_200_seeded_timelines/val:seconds and val:counts_back), so their
+# cross-cell differences are reported, not gated. A lane adds its area when its port lands.
+PORTED_AREAS: frozenset[str] = frozenset()
+EVERY_AREA_SUFFIX = ".all"
 ORACLE_SIDE = "oracle"
 CORE_SIDE = "core"
 RUNNER_FILE = "runner.json"
@@ -254,6 +263,22 @@ def run_area(
     return AreaRun(reports=reports, speed=speed, core=named_core)
 
 
+def write_digests(
+    path: Path, lines_by_area: Mapping[str, Sequence[str]], ported: frozenset[str]
+) -> None:
+    """Writes the ported areas' digest lines to path and every area's to path with `.all`.
+
+    Args:
+        path: The digest file CI gates across cells; its parent folder is created.
+        lines_by_area: Area name to its `<sha256>  <case>/<key>` lines.
+        ported: The areas whose digests are gated.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    for target, areas in ((path, ported), (path.with_suffix(EVERY_AREA_SUFFIX), lines_by_area)):
+        text = "".join(f"{line}\n" for area in sorted(areas) for line in lines_by_area[area])
+        target.write_bytes(text.encode("utf-8"))
+
+
 def _areas(area: str) -> list[str]:
     if area != ALL_AREAS:
         return [area]
@@ -273,7 +298,9 @@ def _arguments(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Compare the working tree with v0.4.0.")
     parser.add_argument("area", help=f"an area with a cases_<area>.py, or {ALL_AREAS!r}")
     parser.add_argument("--speed", action="store_true", help="fail when a core case is slower")
-    parser.add_argument("--digest", type=Path, help="write the SHA-256 of every core output")
+    parser.add_argument(
+        "--digest", type=Path, help="write the ported areas' output SHA-256s; every area's to .all"
+    )
     return parser.parse_args(argv)
 
 
@@ -284,7 +311,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     oracle_python = build_oracle()
     areas = _areas(arguments.area)
     launches = SPEED_LAUNCHES if arguments.speed else 1
-    passed, digests = True, []
+    passed, digests = True, dict[str, list[str]]()
     for area in areas:
         run = run_area(area, oracle_python, RUNS_FOLDER / area, flips, launches=launches)
         print(format_table(run.reports), flush=True)
@@ -293,10 +320,9 @@ def main(argv: Sequence[str] | None = None) -> None:
             print(f"speed: fastest of {RUNS} runs per launch over {launches} alternating launches")
             print(format_speed(run.speed), flush=True)
             passed &= run.speed.passed
-        digests += [line for name, core in run.core.items() for line in digest_lines(name, core)]
+        digests[area] = [line for name, out in run.core.items() for line in digest_lines(name, out)]
     if arguments.digest is not None:
-        arguments.digest.parent.mkdir(parents=True, exist_ok=True)
-        arguments.digest.write_bytes("".join(f"{line}\n" for line in digests).encode("utf-8"))
+        write_digests(arguments.digest, digests, PORTED_AREAS & set(digests))
     passed &= _run_lane_tests(areas)
     if not passed:
         raise SystemExit("E: parity failed")

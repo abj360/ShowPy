@@ -58,7 +58,13 @@ RUST_FILES = frozenset(
 # locked dependencies both sides import.
 PARITY_PREFIXES = ("e8s/", "tests/parity/")
 PARITY_FILES = frozenset(
-    {"scripts/build_oracle.py", "scripts/oracle_build.in", "scripts/oracle_build.txt", "uv.lock"}
+    {
+        "scripts/build_oracle.py",
+        "scripts/compare_parity_digests.py",
+        "scripts/oracle_build.in",
+        "scripts/oracle_build.txt",
+        "uv.lock",
+    }
 )
 PULL_REQUEST_EVENT = "pull_request"
 COMMIT_SHA = re.compile(r"^[0-9a-f]{40}([0-9a-f]{24})?$")
