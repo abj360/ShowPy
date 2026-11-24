@@ -5,7 +5,7 @@ test_budgets.py --- the budget benchmarks: section 5.3 of the upgrade plan, plus
 
 Every row but two maps to a budget row of docs/upgrade-plan.md section 5.3. The frames and
 coordinate_table rows are recorded beyond section 5.3 against the reader budgets (50 ms and
-0.2 s), not gated; at tier L coordinate_table takes about 435 ms, over its budget. Sizes come
+0.2 s), not gated; at tier L coordinate_table takes about 261 ms, over its budget. Sizes come
 from --tier (default M). Each row records its budget in extra_info; the budgets are targets,
 not gates. `nox -s bench` fails only on a >20% regression of the min time against
 tests/bench/baseline-2026-11-13.json, and only at tier M. Heavy rows use fixed rounds
