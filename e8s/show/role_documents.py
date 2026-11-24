@@ -52,6 +52,7 @@ PLACEMENT_ORDER_FIELD = "placement_order"
 SET_FOLDER_SEGMENTS = 4
 FOLDER_INDEX = 2
 SHOWN_ID_CHARS = 40
+LISTED_SPOTS = 20
 DOCUMENT_ROLES = {DRILL_NAME: (DRILL, PIN), FACING_NAME: (FACING,), LABELS_NAME: (LABELS,)}
 
 
@@ -170,11 +171,19 @@ def _placement_order(path: str, raw: JsonObject) -> list[str]:
     repeated = sorted(spot for spot, n in Counter(spots).items() if n > 1)
     if repeated:
         raise SchemaError(
-            f"{path} lists {', '.join(repeated)} twice under {PLACEMENT_ORDER_FIELD}",
+            f"{path} lists {len(repeated)} spots more than once under {PLACEMENT_ORDER_FIELD}:"
+            f" {_listed(repeated)}",
             hint=f"list each spot once under {PLACEMENT_ORDER_FIELD}",
-            context={"path": path, "repeated": repeated},
+            context={"path": path, "repeated": repeated, "repeated_count": len(repeated)},
         )
     return spots
+
+
+def _listed(spots: list[str]) -> str:
+    """Joins the first LISTED_SPOTS spot IDs, each cut to SHOWN_ID_CHARS, and counts the rest."""
+    shown = [spot[:SHOWN_ID_CHARS] for spot in spots[:LISTED_SPOTS]]
+    rest = len(spots) - len(shown)
+    return ", ".join([*shown, f"(+{rest} more)"] if rest else shown)
 
 
 def _require_stored_spot_id(path: str, spot: str) -> None:
@@ -203,9 +212,16 @@ def _role_rows(source: Source, path: str, order: list[str]) -> dict[str, JsonObj
     extra = sorted(document.keys() - set(order))
     if missing or extra:
         raise SchemaError(
-            f"{path} names other spots than its set's {PLACEMENT_ORDER_FIELD}",
+            f"{path} names other spots than its set's {PLACEMENT_ORDER_FIELD}: {len(missing)}"
+            f" missing ({_listed(missing)}), {len(extra)} extra ({_listed(extra)})",
             hint=f"key {path} by exactly the spots {PLACEMENT_ORDER_FIELD} lists",
-            context={"path": path, "missing": missing, "extra": extra},
+            context={
+                "path": path,
+                "missing": missing,
+                "missing_count": len(missing),
+                "extra": extra,
+                "extra_count": len(extra),
+            },
         )
     fields = ROLE_FIELDS[path.rsplit("/", 1)[1]]
     rows: dict[str, JsonObject] = {}

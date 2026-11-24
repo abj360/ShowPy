@@ -10,6 +10,8 @@ Contains:
         placements nor a placement order, and writes an empty set in the role form
     test_regression_placement_order_spot_ids_are_checked: refuses a traversal, empty, control,
         padded, lookalike, non-NFC, reserved or overlong spot ID in the placement order
+    test_regression_spot_lists_in_order_errors_are_capped: lists at most 20 spots, each cut short,
+        with a total count, for extra role rows and repeated order entries
 """
 
 import json
@@ -32,6 +34,8 @@ CAST_DOC = "/cast/cast.json"
 ORDER_FIELD = "placement_order"
 ROLE_NAMES = ("drill.json", "facing.json", "labels.json")
 LONG_ID_CHARS = 10_000
+LISTED_SPOTS = 20
+STRAY_SPOTS = 30
 
 
 def test_regression_role_tree_without_cast_document_is_refused() -> None:
@@ -91,3 +95,25 @@ def test_regression_placement_order_spot_ids_are_checked(spot: str) -> None:
     docs = _renamed_spot(encode_show(two_set_show()), "T1", spot)
     with pytest.raises(SchemaError, match=r"/sets/2/set\.json lists the spot ID"):
         decode_show(docs)
+
+
+def test_regression_spot_lists_in_order_errors_are_capped() -> None:
+    docs = encode_show(two_set_show())
+    facing = json.loads(docs["/sets/2/facing.json"])
+    strays = {f"S{n:02}{'x' * LONG_ID_CHARS}": {"facing": 0.0} for n in range(STRAY_SPOTS)}
+    with pytest.raises(SchemaError) as extra:
+        decode_show({**docs, "/sets/2/facing.json": dump_json({**facing, **strays})})
+    assert extra.value.context["extra_count"] == STRAY_SPOTS
+    listed = extra.value.context["extra"]
+    assert isinstance(listed, list)
+    assert len(listed) <= LISTED_SPOTS + 1
+    assert all(len(str(spot)) < LONG_ID_CHARS for spot in listed)
+    assert str(STRAY_SPOTS) in str(extra.value)
+    body = json.loads(docs["/sets/2/set.json"])
+    body[ORDER_FIELD] = [f"S{n:02}" for n in range(STRAY_SPOTS)] * 2
+    with pytest.raises(SchemaError) as repeated:
+        decode_show({**docs, "/sets/2/set.json": dump_json(body)})
+    assert repeated.value.context["repeated_count"] == STRAY_SPOTS
+    assert "S19" in str(repeated.value)
+    assert "S20" not in str(repeated.value)
+    assert f"(+{STRAY_SPOTS - LISTED_SPOTS} more)" in str(repeated.value)
