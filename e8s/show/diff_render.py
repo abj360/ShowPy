@@ -13,13 +13,11 @@ Contains:
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import cast
 
 from e8s.choreo.models import Set
 from e8s.choreo.path_models import TransitionSpec
 from e8s.core.ids import parse_tid
-from e8s.core.json_types import FrozenJsonValue, JsonValue
-from e8s.core.readonly import thaw_json
+from e8s.core.json_types import JsonValue
 from e8s.core.types import FrozenModel
 from e8s.core.util import natural_sort
 from e8s.show.change_models import ChangeSet
@@ -35,6 +33,7 @@ type _Path = tuple[str, ...]
 ORDER_CHANGED = "order_changed"
 TRANSITION_FIELDS = ("counts", "notes", "source_hash")
 WHOLE_FIELD_FLAGS = ("sheet", "timeline", "facing_overrides")
+REPORTED_ELSEWHERE = ("timing", "labels")
 SET_TARGET = "set"
 TRANSITION_TARGET = "transition"
 
@@ -61,10 +60,6 @@ class _Delta:
         return self.before is not None and self.after is not None
 
 
-def _thawed(value: object) -> JsonValue:
-    return thaw_json(cast("FrozenJsonValue", value))
-
-
 def _fields(value: JsonValue) -> _Obj:
     return value if isinstance(value, dict) else {}
 
@@ -83,7 +78,7 @@ def _compact(found: _Obj) -> _Obj:
 
 
 def _dumped(model: FrozenModel) -> _Obj:
-    return cast("_Obj", model._dumped(exclude_defaults=True))
+    return _compact(model._json_dumped())
 
 
 def _pair(delta: _Delta, field: str) -> list[JsonValue]:
@@ -144,6 +139,10 @@ def _pin_names(show: Show) -> dict[_Path, str]:
     return {_pin_path(keys, record): f"{record.target}:{record.id}" for record in show.pins}
 
 
+def _same_key(key: str) -> Callable[[_Path], bool]:
+    return lambda path: path[0] == key
+
+
 class _Render:
     """Renders one change set between two shows, one method per key of the result.
 
@@ -167,7 +166,8 @@ class _Render:
         self._grouped: dict[str, list[_Delta]] = {}
         for change in found.changes:
             key = change.key
-            delta = _Delta(key.path, key.role, _thawed(change.before), _thawed(change.after))
+            plain = change.to_json()
+            delta = _Delta(key.path, key.role, plain["before"], plain["after"])
             self._grouped.setdefault(key.kind, []).append(delta)
 
     def deltas(self, *kinds: str) -> list[_Delta]:
@@ -208,7 +208,19 @@ class _Render:
                 pinned.append(delta.path[1])
             elif delta.role == "placements" and _is_reordered([delta]):
                 found["reordered"] = True
-        return _compact({**found, "pinned": pinned})
+        found = _compact({**found, "pinned": pinned})
+        items = self._items(_same_key(key), "set", "placement")
+        return found or _compact({"items": items})
+
+    def _items(self, is_wanted: Callable[[_Path], bool], *kinds: str) -> list[JsonValue]:
+        """Names changed items not reported under `counts` or `labels`, as `<id>:<role|kind>`."""
+        found = {
+            ":".join([*delta.path[1:], delta.role or kind])
+            for kind in kinds
+            for delta in self.deltas(kind)
+            if is_wanted(delta.path) and delta.role not in REPORTED_ELSEWHERE
+        }
+        return [*natural_sort(found)]
 
     def labels(self) -> _Obj:
         """Renders changed set labels and cues and changed placement notes."""
@@ -236,10 +248,15 @@ class _Render:
         for key in natural_sort(keys & old_ids.keys() & new_ids.keys()):
             was = self.before.transition(old_ids[key])
             now = self.after.transition(new_ids[key])
-            change = _dumped(self._path_differ(was, now))
+            change: _Obj = _dumped(self._path_differ(was, now))
+            old_json, new_json = was.to_json(), now.to_json()
             for field in TRANSITION_FIELDS:
-                if getattr(was, field) != getattr(now, field):
-                    change[field] = [getattr(was, field), getattr(now, field)]
+                if old_json[field] != new_json[field]:
+                    change[field] = [old_json[field], new_json[field]]
+            if not change:
+                same_key = _same_key(key)
+                items = self._items(same_key, "transition", "path_row", "route")
+                change = _compact({"items": items})
             if change:
                 found[str(self.after.transition_id(new_ids[key]))] = change
         return found

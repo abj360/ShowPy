@@ -23,7 +23,7 @@ Contains:
 
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast, get_args
+from typing import get_args
 
 import pytest
 
@@ -125,13 +125,13 @@ def test_diff_show_summarizes_structure_and_paths() -> None:
     b = add_set(_moved(a, "T1", 5.0), "3", 4.0).replace(
         forms={"f": form}, transitions=(spec,), pins=(Pin(target="set", id="1"),)
     )
-    diff = cast("dict[str, Any]", diff_show(a, b))
-    assert diff["sets"]["added"] == ["3"]
-    assert diff["sets"]["changed"] == {"2": {"moved": ("T1",)}}
-    assert diff["forms"] == {"added": ["f"]}
-    assert diff["paths"] == {"1→2": {"changed_rows": ("T1",)}}
-    assert diff["pins"] == {"added": ["set:1"]}
-    assert "actions" not in diff
+    diff = diff_show(a, b)
+    assert diff == {
+        "sets": {"added": ["3"], "changed": {"2": {"moved": ["T1"]}}},
+        "forms": {"added": ["f"]},
+        "paths": {"1→2": {"changed_rows": ["T1"]}},
+        "pins": {"added": ["set:1"]},
+    }
     assert diff_show(a, a) == {}
 
 
@@ -305,40 +305,52 @@ def _edit_cast(**fields: object) -> Callable[[Show], Show]:
     return lambda show: show.replace(cast=show.cast.replace(**fields))
 
 
-KIND_EDITS: dict[str, tuple[Callable[[Show], Show], Callable[[Show], Show], str]] = {
-    "placement": (lambda s: s, lambda s: _moved(s, "T1", 5.0), "sets"),
-    "set": (lambda s: s, lambda s: _with_set_two(s, counts=9.0), "sets"),
-    "set_order": (lambda s: s, lambda s: s.replace(sets=s.sets[::-1]), "sets"),
-    "spot_order": (lambda s: s, lambda s: _edit_cast(spots=s.cast.spots[::-1])(s), "cast"),
+KIND_EDITS: dict[str, tuple[Callable[[Show], Show], Callable[[Show], Show], tuple[str, ...]]] = {
+    "placement": (lambda s: s, lambda s: _moved(s, "T1", 5.0), ("sets", "changed", "2", "moved")),
+    "set": (lambda s: s, lambda s: _with_set_two(s, counts=9.0), ("sets", "counts", "2")),
+    "set_order": (lambda s: s, lambda s: s.replace(sets=s.sets[::-1]), ("sets", "order_changed")),
+    "spot_order": (
+        lambda s: s,
+        lambda s: _edit_cast(spots=s.cast.spots[::-1])(s),
+        ("cast", "order_changed"),
+    ),
     "form": (
         lambda s: s,
         lambda s: s.replace(forms={"line1": s.forms[FormId("line1")].replace(locked=True)}),
-        "forms",
+        ("forms", "changed"),
     ),
-    "path_row": (lambda s: s, _row_edit, "paths"),
-    "transition": (lambda s: s, lambda s: _with_spec(s, notes="slow"), "paths"),
-    "route": (lambda s: s, _route_edit, "paths"),
-    "spot": (lambda s: s, _spot_edit, "cast"),
+    "path_row": (lambda s: s, _row_edit, ("paths", "1→2", "changed_rows")),
+    "transition": (lambda s: s, lambda s: _with_spec(s, notes="slow"), ("paths", "1→2", "notes")),
+    "route": (lambda s: s, _route_edit, ("paths", "1→2", "routes_changed")),
+    "spot": (lambda s: s, _spot_edit, ("cast", "added")),
     "group": (
         lambda s: s,
         lambda s: _edit_cast(groups={**s.cast.groups, "x": Group(key="x", label_prefix="X")})(s),
-        "groups",
+        ("groups", "added"),
     ),
     "selection": (
         lambda s: s,
         lambda s: _edit_cast(selections={"pair": frozenset({"T1"})})(s),
-        "selections",
+        ("selections", "changed"),
     ),
-    "pin": (lambda s: s, lambda s: s.replace(pins=(s.pins[0].replace(reason="other"),)), "pins"),
-    "pin_order": (_two_pins, _swap_pins, "pins"),
-    "facing_override": (lambda s: s, lambda s: s.replace(facing_overrides=()), "facing_overrides"),
-    "sheet": (lambda s: s, lambda s: s.replace(sheet=s.sheet.replace(name="Other")), "sheet"),
+    "pin": (
+        lambda s: s,
+        lambda s: s.replace(pins=(s.pins[0].replace(reason="other"),)),
+        ("pins", "changed"),
+    ),
+    "pin_order": (_two_pins, _swap_pins, ("pins", "order_changed")),
+    "facing_override": (
+        lambda s: s,
+        lambda s: s.replace(facing_overrides=()),
+        ("facing_overrides",),
+    ),
+    "sheet": (lambda s: s, lambda s: s.replace(sheet=s.sheet.replace(name="Other")), ("sheet",)),
     "timeline": (
         lambda s: s,
         lambda s: s.replace(timeline=s.timeline.replace(total_counts=99.0)),
-        "timeline",
+        ("timeline",),
     ),
-    "show": (lambda s: s, lambda s: s.replace(title="B"), "title"),
+    "show": (lambda s: s, lambda s: s.replace(title="B"), ("title",)),
 }
 
 
@@ -348,11 +360,32 @@ def test_every_item_kind_has_an_edit() -> None:
 
 @pytest.mark.parametrize("kind", sorted(KIND_EDITS))
 def test_diff_show_reports_every_item_kind(kind: str) -> None:
-    prepare, edit, expected_key = KIND_EDITS[kind]
+    prepare, edit, expected = KIND_EDITS[kind]
     before = prepare(_rich())
     after = edit(before)
     assert {c.key.kind for c in changes(before, after).changes} >= {kind}
-    assert expected_key in diff_show(before, after)
+    reached: object = diff_show(before, after)
+    for name in expected:
+        assert isinstance(reached, dict), expected
+        assert name in reached, expected
+        reached = reached[name]
+    assert reached
+
+
+def test_regression_diff_show_reports_a_sub_tolerance_move() -> None:
+    """Reports a drill change the set differ's tolerance hides, so no item change vanishes."""
+    base = two_set_show()
+    nudged = _moved(base, "T1", base.sets[1].get("T1").x + 1e-9)
+    assert diff_sets(base.sets[1], nudged.sets[1]).is_empty
+    assert diff_show(base, nudged) == {"sets": {"changed": {"2": {"items": ["T1:drill"]}}}}
+
+
+def test_diff_show_reports_a_transition_the_path_differ_calls_equal() -> None:
+    base = rich_show()
+    rows = base.transitions[0].rows
+    spec = base.transitions[0].replace(rows={**rows, SpotId("T2"): PathRow(entity=SpotId("T2"))})
+    edited = base.replace(transitions=(spec,))
+    assert diff_show(base, edited) == {"paths": {"1→2": {"items": ["T2:path_row"]}}}
 
 
 def test_diff_show_names_labels_pack_and_sets_by_display_id() -> None:
