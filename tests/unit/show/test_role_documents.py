@@ -8,6 +8,10 @@ Set E8S_UPDATE_GOLDEN=1 to rewrite the interchange goldens; the diff then needs 
 Contains:
     test_export_json_bytes_are_unchanged_by_the_role_split: exports a seeded show and the head of
         the v0.4.0 fixture with the bytes pinned before sets were stored as role documents
+    test_reserved_roots_are_refused_until_a_format_defines_them: refuses a path under `/props/`
+        or `/tracks/` with BAD_PATH and a hint naming the reserved root
+    test_cast_proposals_and_assets_roots_are_known: accepts documents under `/cast/`,
+        `/proposals/` and `/assets/`
 """
 
 import json
@@ -18,7 +22,10 @@ from typing import Any
 
 import pytest
 
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import StorageError
 from e8s.show.file_repository import FileRepository
+from e8s.show.integrity import KNOWN_ROOTS, require_known_path
 from e8s.show.interchange import export_json
 from e8s.show.models import Show
 from tests.fixtures.generators import seeded_show
@@ -52,3 +59,19 @@ def test_export_json_bytes_are_unchanged_by_the_role_split(name: str, tmp_path: 
     if os.environ.get(UPDATE_FLAG) == "1":
         golden.write_bytes(exported)
     assert exported == golden.read_bytes()
+
+
+@pytest.mark.parametrize("path", ["/props/p1.json", "/tracks/state.json", "/props/a/b.json"])
+def test_reserved_roots_are_refused_until_a_format_defines_them(path: str) -> None:
+    with pytest.raises(StorageError) as caught:
+        require_known_path(path)
+    assert caught.value.code == ErrorCode.BAD_PATH
+    root = path[: path.index("/", 1) + 1]
+    assert root in caught.value.message
+    assert "reserved" in caught.value.hint
+    assert root not in KNOWN_ROOTS
+
+
+@pytest.mark.parametrize("path", ["/cast/cast.json", "/proposals/p1.json", "/assets/a.png"])
+def test_cast_proposals_and_assets_roots_are_known(path: str) -> None:
+    require_known_path(path)

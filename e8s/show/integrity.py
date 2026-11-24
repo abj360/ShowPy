@@ -3,8 +3,10 @@ integrity.py --- checks that every commit lands a known path layout and a decoda
 
 Contains:
     KNOWN_ROOTS: the path prefixes a repository accepts documents under
+    RESERVED_ROOTS: the path prefixes kept for documents a later format defines, refused today
     require_structured_files(): checks changed text files decode as their readers decode them
-    require_known_path(): refuses a path outside KNOWN_ROOTS, including look-alike paths
+    require_known_path(): refuses a path outside KNOWN_ROOTS, including look-alike paths and
+        paths under RESERVED_ROOTS
     blob_digest(): returns the SHA-256 hex digest blobs are addressed by
     LazyBlobs: maps paths to blob bytes, reading each blob only when its path is looked up
     LazyBlobs.digests: returns the content digest of each path's blob
@@ -44,14 +46,18 @@ KNOWN_ROOTS = (
     "/time/",
     "/sets/",
     "/transitions/",
+    "/cast/",
     "/canvas/",
     "/notes/",
+    "/proposals/",
+    "/assets/",
     "/config/",
     "/publish/",
     "/renders/",
     "/exports/",
     "/lib/drafts/",
 )
+RESERVED_ROOTS = ("/props/", "/tracks/")
 FORBIDDEN_CHARACTER = "\\"
 CONTROL_CATEGORY = "Cc"
 REQUIRED_DOCS = (SHOW_DOC, SHEET_DOC, TIMELINE_DOC)
@@ -64,6 +70,16 @@ def _bad_path(path: str) -> StorageError:
         f"path {path!r} is not a storable document path",
         hint=f"write files under {', '.join(KNOWN_ROOTS)} with no '.', '..' or empty parts",
         context={"path": path, "roots": list(KNOWN_ROOTS)},
+        code=ErrorCode.BAD_PATH,
+    )
+
+
+def _reserved_path(path: str, root: str) -> StorageError:
+    return StorageError(
+        f"{root} is reserved for documents a later format version defines",
+        hint=f"{root} is reserved, so nothing may be stored there yet; write files under"
+        f" {', '.join(KNOWN_ROOTS)}",
+        context={"path": path, "root": root, "roots": list(KNOWN_ROOTS)},
         code=ErrorCode.BAD_PATH,
     )
 
@@ -85,6 +101,9 @@ def require_known_path(path: str) -> None:
     ...     print(exc.code)
     BAD_PATH
     """
+    reserved = next((r for r in RESERVED_ROOTS if path.startswith(r)), None)
+    if reserved is not None:
+        raise _reserved_path(path, reserved)
     root = next((r for r in KNOWN_ROOTS if path.startswith(r)), None)
     if root is None or any(_is_forbidden(c) for c in path):
         raise _bad_path(path)
