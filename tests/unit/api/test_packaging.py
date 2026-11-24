@@ -30,6 +30,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 LIBRARY_ROOT = REPO_ROOT / "e8s"
 CARGO_MANIFEST = REPO_ROOT / "Cargo.toml"
 CORE_AREAS = ("core", "geo", "time", "sheet", "cast", "engine", "forms")
+# Until the ports add public functions, a submodule holds only these private boundary hooks.
+CORE_HOOKS = {"core": {"_finite_probe"}}
 EXTENSIONS = frozenset({"e8s/_core.abi3.so", "e8s/_core.pyd"})
 DIST_INFO_SUFFIX = ".dist-info"
 LICENSES_FOLDER = "licenses"
@@ -84,7 +86,8 @@ def test_core_extension_imports_with_its_seven_submodules() -> None:
         assert getattr(core, area) is module
         assert module.__name__ == f"e8s._core.{area}"
         assert module.__doc__
-        assert [name for name in vars(module) if not name.startswith("__")] == []
+        names = {name for name in vars(module) if not name.startswith("__")}
+        assert names == CORE_HOOKS.get(area, set()), area
 
 
 def test_schema_is_a_package_resource() -> None:

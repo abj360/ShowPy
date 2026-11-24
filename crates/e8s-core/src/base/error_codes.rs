@@ -32,6 +32,8 @@ pub enum ErrorCode {
     Conflict,
     /// A path does not end on its target placement.
     Continuity,
+    /// A compiled core function panicked; the panic is a bug in e8s, caught at the boundary.
+    CorePanic,
     /// A stored repository is damaged or is missing a blob it refers to.
     Corrupt,
     /// A transition's paths span a different number of counts than its target set.
@@ -200,6 +202,7 @@ impl ErrorCode {
             Self::CoincidentSlots => "COINCIDENT_SLOTS",
             Self::Conflict => "CONFLICT",
             Self::Continuity => "CONTINUITY",
+            Self::CorePanic => "CORE_PANIC",
             Self::Corrupt => "CORRUPT",
             Self::CountsMismatch => "COUNTS_MISMATCH",
             Self::CueDuplicate => "CUE_DUPLICATE",

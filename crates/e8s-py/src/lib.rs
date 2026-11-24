@@ -1,10 +1,14 @@
 //! e8s-py --- PyO3 bindings that maturin builds into the extension module `e8s._core`
 //!
 //! Contains:
+//!     errors: the error boundary that turns core errors and panics into e8s exceptions
 //!     AREAS: names each submodule of `e8s._core` with its docstring
-//!     _core(): initializes `e8s._core` with its version and one submodule per area
+//!     _core(): initializes `e8s._core` with its version, one submodule per area and the
+//!         private hooks of `e8s._core.core`
 
 #![forbid(unsafe_code)]
+
+pub mod errors;
 
 use pyo3::prelude::*;
 // Linked before the first port calls them, so the lock pins the core and the array crate.
@@ -34,7 +38,10 @@ const AREAS: [(&str, &str); 7] = [
     ("forms", "Compiled forms and matching of e8s.choreo."),
 ];
 
-/// Initializes `e8s._core`: its `__version__` and one submodule per area.
+/// The area whose submodule also holds the binding's private hooks.
+const CORE_AREA: &str = "core";
+
+/// Initializes `e8s._core`: its `__version__`, one submodule per area and the private hooks.
 ///
 /// Each submodule goes into `sys.modules` under its dotted name, so `import e8s._core.time`
 /// works although an extension module is not a package.
@@ -47,6 +54,9 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         let name = format!("e8s._core.{area}");
         let submodule = PyModule::new(py, &name)?;
         submodule.setattr("__doc__", doc)?;
+        if area == CORE_AREA {
+            errors::add_probes(&submodule)?;
+        }
         m.add(area, &submodule)?;
         modules.set_item(name, &submodule)?;
     }

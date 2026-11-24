@@ -31,7 +31,8 @@ Contains:
     test_type_ignore_scan_flags_mypy_and_pyright_comments: proves the scan can fail
     find_code_spellings(): lists file, line and code of each raised or reported error code
     test_every_raised_code_is_catalogued: fails on a code that is not an ErrorCode member
-    test_every_error_code_is_used: fails on an ErrorCode member no library module uses
+    test_every_error_code_is_used: fails on an ErrorCode member neither the library nor the core
+        uses
     test_code_scan_flags_literals_and_unknown_members: proves the code scan can fail
     test_every_error_code_has_a_one_line_docstring: fails on a member without a docstring
     test_error_code_docs_are_current: fails when docs/error-codes.md differs from its generator
@@ -507,8 +508,9 @@ def test_every_raised_code_is_catalogued() -> None:
 
 
 def test_every_error_code_is_used() -> None:
-    """Requires every ErrorCode member to be raised or reported somewhere in the library."""
+    """Requires every ErrorCode member to be raised or reported in the library or the core."""
     used = {code for _, _, code in _library_code_spellings()}
+    used |= _load_code_generator().rust_raisers().keys()
     unused = sorted(code.name for code in ErrorCode if code.name not in used)
     assert not unused, "remove codes the library never raises: " + ", ".join(unused)
 
