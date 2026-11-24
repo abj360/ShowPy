@@ -26,7 +26,7 @@ from e8s.core.errors import ContinuityError, E8sError, SchemaError
 from e8s.core.ids import check_id, check_sheet_id, format_tid, parse_ref
 from e8s.core.types import FrozenModel
 from e8s.core.validation import ValidationIssue, ValidationReport
-from e8s.sheet.templates import SheetStore, _get_sheet
+from e8s.sheet.templates import SheetStore, get_sheet
 from e8s.show.document_paths import is_storable_folder
 from e8s.show.models import Show
 from e8s.time.validate import validate_timeline
@@ -247,7 +247,7 @@ def validate_dependencies(show: Show, store: SheetStore | None = None) -> Valida
             )
         )
     try:
-        _get_sheet(ref, store)
+        get_sheet(ref, store)
     except E8sError as error:
         issues.append(_issue(ERROR, ErrorCode.UNKNOWN_SHEET, "sheet", error.message, error.hint))
     return ValidationReport(issues=tuple(issues))

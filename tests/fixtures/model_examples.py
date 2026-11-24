@@ -11,7 +11,6 @@ Contains:
     model_examples(): maps each model class to its examples, variants included
 """
 
-import warnings
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from functools import cache
@@ -63,18 +62,13 @@ from e8s.choreo.recipe_models import (
     SvgRecipe,
 )
 from e8s.choreo.set_snapping import snap
-from e8s.core.deprecation import DeprecatedWarning
 from e8s.core.error_codes import ErrorCode
 from e8s.core.ids import NoteId, SetId, SpotId, make_tid
 from e8s.core.selection import Selection
 from e8s.core.types import Box2, Box3, FrozenModel, Region
 from e8s.core.units import DEFAULT_UNITS
 from e8s.core.validation import ValidationIssue, ValidationReport
-from e8s.examples import crossing_show, live_publication, performer, two_set_show
-from e8s.export._data import as_table
-from e8s.export._print_sheets import chart, coordinate_sheets
-from e8s.export._publish import claim_spot, performer_view
-from e8s.export._video import video_canvas
+from e8s.examples import crossing_show, two_set_show
 from e8s.geo.curves import (
     BezierCurve,
     CircleCurve,
@@ -96,7 +90,7 @@ from e8s.show.collab import preview_proposal, propose
 from e8s.show.counts import spot_counts
 from e8s.show.history import diff_paths, diff_sets
 from e8s.show.manage import index
-from e8s.show.migrate import MigrationReport
+from e8s.show.migrate import DroppedFields, MigrationReport
 from e8s.show.models import (
     CanvasEvent,
     Comment,
@@ -311,6 +305,7 @@ def _report_examples() -> list[FrozenModel]:
         ValidationReport(issues=(issue,)),
         rewrite,
         MigrationReport(from_version=1),
+        DroppedFields(document="/show/show.json", location="", fields={"zones": []}),
         diff_sets(show.sets[0], show.sets[1]),
         diff_paths(
             show.transition(make_tid("1", "2")), crossing_show().transition(make_tid("1", "2"))
@@ -331,26 +326,6 @@ def _report_examples() -> list[FrozenModel]:
     ]
 
 
-def _export_examples() -> list[FrozenModel]:
-    show = two_set_show()
-    ada = performer("Ada")
-    pub, claim = claim_spot(live_publication(show), show, ada, "T1", AT)
-    sheet = coordinate_sheets(show, publication=pub)[0]
-    printed = chart(show, "2", pub)
-    return [
-        ada,
-        pub,
-        claim,
-        performer_view(pub, show, ada),
-        sheet,
-        sheet.rows[0],
-        printed,
-        printed.rows[0],
-        as_table(printed),
-        video_canvas(show),
-    ]
-
-
 BUILDERS: tuple[Callable[[], list[FrozenModel]], ...] = (
     _engine_examples,
     _fix_examples,
@@ -361,7 +336,6 @@ BUILDERS: tuple[Callable[[], list[FrozenModel]], ...] = (
     _timeline_examples,
     _collab_examples,
     _report_examples,
-    _export_examples,
 )
 
 
@@ -399,8 +373,6 @@ def model_examples() -> dict[type[FrozenModel], tuple[FrozenModel, ...]]:
     for model, built in built_examples().items():
         found.setdefault(model, []).extend(built)
     first = {model: instances[0] for model, instances in found.items()}
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecatedWarning)
-        for variant in variants(first, _public_model):
-            _collect(variant, found)
+    for variant in variants(first, _public_model):
+        _collect(variant, found)
     return {model: tuple(instances) for model, instances in found.items()}

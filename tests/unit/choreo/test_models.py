@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 
 """
-test_models.py --- tests Placement, Set editing and locks, and the moved model names
+test_models.py --- tests Placement and Set editing and locks
 
 Contains:
-    test_moved_choreo_model_names_warn: warns and resolves each name that moved out of this module
-    test_moved_model_name_count: pins the number of moved names at 26
     test_unknown_choreo_model_name_raises: raises AttributeError for a name never in the module
     test_regression_frozen_model_replace_revalidates_negative_counts: rejects a negative count
         through FrozenModel.replace
@@ -23,14 +21,12 @@ Contains:
         360)
 """
 
-import importlib
 import math
 
 import pytest
 
 from e8s.choreo import models as choreo_models
 from e8s.choreo.models import ApprovalState, Placement, PlacementPatch, Set
-from e8s.core.deprecation import DeprecatedWarning
 from e8s.core.errors import LockedError, SchemaError, UnknownRefError
 from e8s.core.ids import FormId, SetId, SpotId
 from e8s.core.selection import Selection
@@ -190,33 +186,7 @@ def test_regression_placement_normalizes_facing() -> None:
     assert approx_equal(placement.facing, normalize_angle(TURNS_PAST_FULL), abs_tol=ANGLE_TOL)
 
 
-MOVED_MODEL_NAMES = {
-    "form_models": (
-        "SpacingSpec FacingSpec TextRecipe FormKind CrowdedStroke TextReport Form FormFnInfo "
-        "FONT_URI_PATTERN MAX_TEXT_FONTS FontUri"
-    ),
-    "path_models": (
-        "PathStyle FacingMode TurnDirection FacingOverride Waypoint Easing PathRow Route "
-        "TransitionSpec DEFAULT_EASING_STRENGTH"
-    ),
-    "match_models": "MatchObjective CostFn MatchOptions MatchResult MATCH_WEIGHT_KEYS",
-}
 UNKNOWN_NAME = "NoSuchName"
-MOVED_CASES = [
-    (module, name) for module, names in MOVED_MODEL_NAMES.items() for name in names.split()
-]
-
-
-def test_moved_model_name_count() -> None:
-    assert len(MOVED_CASES) == 26
-
-
-@pytest.mark.parametrize(("module", "name"), MOVED_CASES)
-def test_moved_choreo_model_names_warn(module: str, name: str) -> None:
-    new_module = importlib.import_module(f"e8s.choreo.{module}")
-    with pytest.warns(DeprecatedWarning, match=f"`{name}` moved to"):
-        old = getattr(choreo_models, name)
-    assert old is getattr(new_module, name)
 
 
 def test_unknown_choreo_model_name_raises() -> None:

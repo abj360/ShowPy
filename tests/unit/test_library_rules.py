@@ -41,10 +41,8 @@ Contains:
         takes a bool positionally
     test_positional_boolean_scan_flags_a_definition: proves the scan can fail
     test_public_names_are_cached_after_first_use: requires a resolved name to land in the module
-    test_deprecated_alias_warns_on_every_access: requires an alias to warn each time, uncached
     find_geo_foreign_imports(): lists each import in geo source outside e8s.core and e8s.geo
-    GEO_FORWARDING_IMPORTS: lists the function-level imports of the geo stubs, removed in v0.6.0
-    test_geo_imports_only_core: fails when geo imports another e8s package, bar the listed stubs
+    test_geo_imports_only_core: fails when geo imports another e8s package
     test_geo_layering_scan_allows_only_listed_function_imports: proves an unlisted import is flagged
     test_geo_layering_scan_flags_a_foreign_import: proves the layering scan can fail
     test_geo_layering_scan_resolves_relative_imports: checks `from ..cast import x` against layers
@@ -57,7 +55,6 @@ import inspect
 import io
 import re
 import tokenize
-import warnings
 from pathlib import Path
 from types import ModuleType
 
@@ -65,7 +62,6 @@ import pytest
 
 import e8s
 from e8s._api_table import PUBLIC_API
-from e8s.core.deprecation import DeprecatedWarning
 from e8s.core.error_codes import ErrorCode
 
 CITATION_PATTERN = re.compile(
@@ -587,9 +583,7 @@ def test_regression_public_functions_take_booleans_by_keyword() -> None:
     """Requires no public function or method to accept a bool positionally."""
     offenders: list[str] = []
     for public_name, _module, _attribute in PUBLIC_API:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecatedWarning)
-            obj = getattr(e8s, public_name)
+        obj = getattr(e8s, public_name)
         targets = [obj] if inspect.isfunction(obj) else []
         if inspect.isclass(obj):
             targets = [
@@ -620,16 +614,6 @@ def test_public_names_are_cached_after_first_use() -> None:
         delattr(e8s, "Show")
     resolved = e8s.Show
     assert vars(e8s)["Show"] is resolved
-
-
-def test_deprecated_alias_warns_on_every_access() -> None:
-    alias = next(iter(vars(e8s)["_DEPRECATED"]))
-    for _ in range(2):
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            getattr(e8s, alias)
-        assert [w.category for w in caught] == [DeprecatedWarning]
-    assert alias not in vars(e8s)
 
 
 def _imported_modules(node: ast.Import | ast.ImportFrom, package: str) -> list[str]:
@@ -691,68 +675,12 @@ def find_geo_foreign_imports(
     return sorted(found, key=lambda entry: int(entry.split(":")[1]))
 
 
-GEO_FORWARDING_FUNCTIONS = {
-    ("transforms.py", "e8s.choreo.set_transforms"): (
-        "shift",
-        "move_to",
-        "rotate",
-        "scale",
-        "expand",
-        "contract",
-        "set_interval",
-        "mirror",
-        "symmetrize",
-        "skew",
-        "affine",
-    ),
-    ("snapping.py", "e8s.choreo.set_snapping"): (
-        "snap",
-        "snap_to_guides",
-        "align",
-        "distribute",
-    ),
-    ("measure.py", "e8s.choreo.set_measure"): (
-        "on_field_ids",
-        "neighbors",
-        "nearest",
-        "symmetry_error",
-    ),
-    ("analysis.py", "e8s.choreo.set_analysis"): (
-        "density_map",
-        "coverage",
-        "balance",
-        "symmetry_score",
-        "change_amount",
-    ),
-}
-SHEET_FORWARDING_FUNCTIONS = ("snap_to_guides", "density_map", "coverage", "balance")
-# Deprecated Set forwarding from geo to choreo; delete this table when v0.6.0 removes the stubs.
-GEO_FORWARDING_IMPORTS = frozenset(
-    [
-        (module, target, function)
-        for (module, target), functions in GEO_FORWARDING_FUNCTIONS.items()
-        for function in functions
-    ]
-    + [
-        (module, "e8s.choreo.models", function)
-        for (module, _target), functions in GEO_FORWARDING_FUNCTIONS.items()
-        for function in functions
-    ]
-    + [
-        (module, "e8s.sheet.models", function)
-        for (module, _target), functions in GEO_FORWARDING_FUNCTIONS.items()
-        for function in functions
-        if function in SHEET_FORWARDING_FUNCTIONS
-    ]
-)
-
-
 def test_geo_imports_only_core() -> None:
     offenders = [
         offender
         for path in sorted((LIBRARY_ROOT / "geo").glob("*.py"))
         for offender in find_geo_foreign_imports(
-            path.read_text(encoding="utf-8"), path.name, allowed=GEO_FORWARDING_IMPORTS
+            path.read_text(encoding="utf-8"), path.name, allowed=frozenset()
         )
     ]
     assert offenders == []

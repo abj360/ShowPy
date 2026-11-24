@@ -439,3 +439,133 @@ At 1.0.0 the public names and `e8s/notes/` are removed; the private models and r
 until v1 reading ends at 2.0.0. The release that removes `import_notes` gives hosts the v1
 interchange notes as plain JSON through a path that does not leave, built on `_notes_json`; this
 addendum adds no public name for it.
+
+## Addendum 2026-11-23: no users, so the leaving names go in v0.4.0
+
+The maintainer decided on 2026-11-23 that the library has no users, so every name on the leaving
+timeline above is deleted in v0.4.0, the release that was to start warning about them. The
+two-release warning of ADR 0009 is waived for these names only. ADR 0009's rule stands for every
+later release, once the library has users. Earlier sections and addenda stay as written; where
+they say a name warns from v0.4.0 or leaves in v0.6.0, v0.7.0 or 1.0.0, read that it is gone in
+v0.4.0, except for the sheet names listed below.
+
+**What goes in v0.4.0.**
+
+- The `e8s.export` package, all 41 names: publishing, claims, join links and QR codes; print
+  and coordinate sheets and the PDF writer; text and CSV tables and the format registry; video.
+  The interchange names keep their top-level paths in `e8s.show.interchange`; only their old
+  `e8s.export` paths go. The `qr` and `video` extras go with them.
+- The `e8s.notes` package: `Note`, `NotesDocument`, `add_note`, `edit_note`, `remove_note`,
+  `notes_for`, `notes_near`, `accept_draft` and `rewrite_note_anchors`, plus `import_notes`, the
+  `notes=` keywords of `export_json` and `rename_spots`, and `RewriteReport.notes` and
+  `RewriteReport.orphaned_notes`. Decision 3 and the addendum of the same date otherwise stand:
+  migrating a stored v1 show still writes its notes as plain JSON to `/notes/notes.json`, through
+  the private models in `e8s/show/_notes_document.py`, and hosts read that file themselves.
+  `Anchor` stays public in `e8s.show.models`.
+- Landmarks and zones (14 names), coordinate wording (6), `proscenium_stage`, and sheet rendering
+  (`render_sheet`, `draw_sheet`, `SheetCanvas`). The `render` extra goes with the last code that
+  used Pillow.
+- The stored fields `Spot.claimable`, `Show.coordinates`, `Show.zones`, and `Sheet.landmarks`,
+  `Sheet.zones` and `Sheet.default_coordinates`. Format v2 is not released, so its schema changes
+  in place, and the v3 step of ADR 0023 no longer drops them. Reading a v1 show drops them and
+  lists each one whose stored value differs from its v1 default in `MigrationReport.dropped`
+  (one `DroppedFields` entry per stored object, with the stored values unchanged), so no stored
+  data is lost silently and a host that still needs a value can keep it.
+- Every alias of ADR 0009's kind: `ValidationError`, `rename_entities`, the `tol` and
+  `precision` keywords, `Form.geometry`, the old `e8s.choreo.models` paths, `e8s.geo.analysis`
+  and the geo functions that forwarded a `Set` to `e8s.choreo`.
+
+**What stays until its replacement arrives.** The sheet names that change shape
+(`sheet_templates`, `get_sheet`, `customize`, `football_field`, `gym_floor`, `GuideLine`,
+`on_surface`, `blank_sheet`, `add_guide`, `remove_guide`, `save_sheet`, `template_ref`,
+`SheetStore` and `InMemorySheetStore`) are the only way to build or store a sheet, so they stay as
+current API and no longer warn. v0.7.0 replaces them directly with `sheets`, `sheet`, `field`,
+`floor`, `Marking` and `on_sheet`, without a warning period. The `tables` extra stays for the five
+pandas results, and `all` now holds only it.
+
+**No deprecation machinery while there are no users.** With nothing left to warn about,
+`DeprecatedWarning`, `warn_leaving`, `leaving_call` and the `LEAVING` and `DEPRECATED` tables are
+deleted, with their tests and the snapshot's `deprecated` and `leaving` sections. Decisions 2 and
+4 of this ADR and decision 5 of ADR 0009 describe machinery the library no longer has; a release
+that has users and needs a warning period brings it back first.
+
+**Capabilities absent until v0.7.0.** The replacements this ADR names (`frames`,
+`coordinate_table`, `describe_transition`, `locate`, `at_location`, `Location`, `Marking`,
+`markings_near`, `floor`, `sheets` and the others) still arrive in v0.7.0. Until then the library
+has no coordinate wording, landmarks, zones, stage template, frame tables or print layout. This
+supersedes, for these names only, the addendum of 2026-11-22 that no name is removed before its
+replacement exists. ADR 0018 is superseded now: the publishing code it governs is gone.
+
+**Retired ledger IDs.** 58 of the 63 IDs of the appendix test code that is now deleted, and are
+deleted with it (decision 7). The other five, UP-9.4-30, UP-9.4-32, UP-9.4-34, UP-9.4-36 and
+UP-9.4-37, test the template functions that stay, so they stay open. UP-9.7-60 loses its zone
+half, as its appendix row planned, and stays open for the facing-override half.
+
+| ID        | test node                                                                                                     | reason                                                       |
+| --------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| UP-9.4-18 | `tests/unit/sheet/test_coords.py::test_regression_to_coords_rejects_unknown_style`                            | tests coordinate wording, deleted with e8s/sheet/coords.py   |
+| UP-9.4-19 | `tests/unit/sheet/test_coords.py::test_regression_short_label_with_digit_round_trips_or_is_rejected`          | tests coordinate wording, deleted with e8s/sheet/coords.py   |
+| UP-9.4-20 | `tests/unit/sheet/test_coords.py::test_regression_colliding_direction_labels_round_trip_or_are_rejected`      | tests coordinate wording, deleted with e8s/sheet/coords.py   |
+| UP-9.4-21 | `tests/unit/sheet/test_coords.py::test_regression_from_coords_reads_negative_long_number`                     | tests coordinate wording, deleted with e8s/sheet/coords.py   |
+| UP-9.4-22 | `tests/unit/sheet/test_coords.py::test_regression_from_coords_reads_leading_dot_number`                       | tests coordinate wording, deleted with e8s/sheet/coords.py   |
+| UP-9.4-23 | `tests/unit/sheet/test_coords.py::test_regression_from_coords_reads_exponent_number`                          | tests coordinate wording, deleted with e8s/sheet/coords.py   |
+| UP-9.4-24 | `tests/unit/sheet/test_coords.py::test_regression_from_coords_reads_number_glued_to_unit`                     | tests coordinate wording, deleted with e8s/sheet/coords.py   |
+| UP-9.4-25 | `tests/unit/sheet/test_bounds.py::test_regression_landmark_anchor_ignores_repeated_closing_vertex`            | tests landmark lookup, deleted with the landmarks            |
+| UP-9.4-26 | `tests/unit/sheet/test_bounds.py::test_regression_landmark_anchor_is_the_area_centroid`                       | tests landmark lookup, deleted with the landmarks            |
+| UP-9.4-27 | `tests/unit/sheet/test_bounds.py::test_regression_nearest_landmarks_rejects_fractional_k`                     | tests landmark lookup, deleted with the landmarks            |
+| UP-9.4-28 | `tests/unit/sheet/test_bounds.py::test_regression_nearest_landmarks_rejects_nan_point`                        | tests landmark lookup, deleted with the landmarks            |
+| UP-9.4-29 | `tests/unit/sheet/test_bounds.py::test_regression_nearest_landmarks_rejects_unknown_kind`                     | tests landmark lookup, deleted with the landmarks            |
+| UP-9.4-35 | `tests/unit/sheet/test_templates.py::test_regression_customize_resize_does_not_keep_items_off_the_sheet`      | tests zones or landmarks kept by a resize, deleted with them |
+| UP-9.4-38 | `tests/unit/sheet/test_render.py::test_regression_pdf_embeds_no_wall_clock_dates`                             | tests sheet rendering, deleted with e8s/sheet/render.py      |
+| UP-9.4-39 | `tests/unit/sheet/test_render.py::test_regression_svg_is_well_formed_with_control_characters_in_names`        | tests sheet rendering, deleted with e8s/sheet/render.py      |
+| UP-9.4-40 | `tests/unit/sheet/test_render.py::test_regression_svg_draws_zone_holes`                                       | tests sheet rendering, deleted with e8s/sheet/render.py      |
+| UP-9.4-41 | `tests/unit/sheet/test_render.py::test_regression_png_draws_zone_holes`                                       | tests sheet rendering, deleted with e8s/sheet/render.py      |
+| UP-9.4-42 | `tests/unit/sheet/test_render.py::test_regression_canvas_shows_a_front_ensemble_below_the_sheet`              | tests sheet rendering, deleted with e8s/sheet/render.py      |
+| UP-9.4-45 | `tests/unit/sheet/test_models.py::test_regression_show_rejects_zone_id_shared_with_sheet`                     | tests zone IDs, deleted with the zones                       |
+| UP-9.4-46 | `tests/unit/sheet/test_templates.py::test_regression_customize_resize_does_not_keep_landmarks_off_the_sheet`  | tests zones or landmarks kept by a resize, deleted with them |
+| UP-9.5-10 | `tests/unit/export/test_publish.py::test_regression_pause_cannot_reopen_a_closed_publication`                 | tests publishing and claims, deleted with e8s.export         |
+| UP-9.5-11 | `tests/unit/export/test_publish.py::test_regression_republish_from_closed_does_not_go_live`                   | tests publishing and claims, deleted with e8s.export         |
+| UP-9.5-13 | `tests/unit/export/test_publish.py::test_regression_claim_spot_rejects_a_time_before_publication`             | tests publishing and claims, deleted with e8s.export         |
+| UP-9.5-15 | `tests/unit/export/test_publish.py::test_regression_reassign_rejects_a_time_before_publication`               | tests publishing and claims, deleted with e8s.export         |
+| UP-9.5-16 | `tests/unit/export/test_publish.py::test_regression_reassign_rejects_an_unknown_spot`                         | tests publishing and claims, deleted with e8s.export         |
+| UP-9.5-17 | `tests/unit/export/test_publish.py::test_regression_reassign_rejects_crew_on_a_performer_spot`                | tests publishing and claims, deleted with e8s.export         |
+| UP-9.5-18 | `tests/unit/export/test_publish.py::test_regression_reassign_rejects_an_inactive_spot`                        | tests publishing and claims, deleted with e8s.export         |
+| UP-9.5-19 | `tests/unit/export/test_publish.py::test_regression_republish_after_a_spot_rename_keeps_the_claim`            | tests publishing and claims, deleted with e8s.export         |
+| UP-9.5-20 | `tests/unit/export/test_publish.py::test_regression_notify_changes_reports_a_deleted_set`                     | tests publishing and claims, deleted with e8s.export         |
+| UP-9.5-21 | `tests/unit/export/test_publish.py::test_regression_notify_changes_reports_a_new_set`                         | tests publishing and claims, deleted with e8s.export         |
+| UP-9.5-22 | `tests/unit/export/test_publish.py::test_regression_notify_changes_reports_a_coordinate_system_change`        | tests publishing and claims, deleted with e8s.export         |
+| UP-9.5-23 | `tests/unit/export/test_publish.py::test_regression_performer_view_needs_a_live_publication`                  | tests publishing and claims, deleted with e8s.export         |
+| UP-9.5-24 | `tests/unit/export/test_publish.py::test_regression_performer_view_checks_the_show_matches_the_publication`   | tests publishing and claims, deleted with e8s.export         |
+| UP-9.5-25 | `tests/unit/export/test_publish.py::test_regression_performer_view_after_deletion_gives_a_performer_hint`     | tests publishing and claims, deleted with e8s.export         |
+| UP-9.5-26 | `tests/unit/export/test_publish.py::test_regression_publication_version_detects_concurrent_claims`            | tests publishing and claims, deleted with e8s.export         |
+| UP-9.5-31 | `tests/unit/export/test_data.py::test_regression_coordinate_sheet_csv_names_the_entity_and_performer`         | tests table formatting, deleted with e8s.export              |
+| UP-9.5-32 | `tests/unit/export/test_data.py::test_regression_to_text_drops_tabs_and_carriage_returns`                     | tests table formatting, deleted with e8s.export              |
+| UP-9.5-33 | `tests/unit/export/test_data.py::test_regression_to_text_aligns_wide_cjk_characters`                          | tests table formatting, deleted with e8s.export              |
+| UP-9.5-36 | `tests/unit/export/test_pdf.py::test_regression_wide_table_stays_on_the_page`                                 | tests the PDF writer, deleted with e8s.export                |
+| UP-9.5-37 | `tests/unit/export/test_pdf.py::test_regression_long_title_is_clipped_to_the_page`                            | tests the PDF writer, deleted with e8s.export                |
+| UP-9.5-38 | `tests/unit/export/test_pdf.py::test_regression_non_latin_names_are_not_replaced_by_question_marks`           | tests the PDF writer, deleted with e8s.export                |
+| UP-9.5-39 | `tests/unit/export/test_print_sheets.py::test_regression_crossing_labels_tell_both_sides_apart`               | tests print sheets, deleted with e8s.export                  |
+| UP-9.5-40 | `tests/unit/export/test_print_sheets.py::test_regression_out_and_back_crossing_is_reported_twice`             | tests print sheets, deleted with e8s.export                  |
+| UP-9.5-45 | `tests/unit/export/test_video.py::test_regression_short_audio_does_not_truncate_the_video`                    | tests video export, deleted with e8s.export                  |
+| UP-9.5-46 | `tests/unit/export/test_video.py::test_regression_negative_sync_offset_delays_the_audio`                      | tests video export, deleted with e8s.export                  |
+| UP-9.5-47 | `tests/unit/export/test_video.py::test_regression_sync_offset_past_the_audio_raises`                          | tests video export, deleted with e8s.export                  |
+| UP-9.5-48 | `tests/unit/export/test_video.py::test_regression_track_gain_is_applied`                                      | tests video export, deleted with e8s.export                  |
+| UP-9.5-49 | `tests/unit/export/test_video.py::test_regression_frames_cover_the_half_open_range`                           | tests video export, deleted with e8s.export                  |
+| UP-9.5-50 | `tests/unit/export/test_video.py::test_regression_adjacent_ranges_do_not_duplicate_the_boundary_frame`        | tests video export, deleted with e8s.export                  |
+| UP-9.5-51 | `tests/unit/export/test_video.py::test_regression_mp4_is_faststart`                                           | tests video export, deleted with e8s.export                  |
+| UP-9.5-52 | `tests/unit/export/test_video.py::test_regression_mp4_carries_bt709_colour_tags`                              | tests video export, deleted with e8s.export                  |
+| UP-9.5-54 | `tests/unit/export/test_video.py::test_regression_frames_do_not_rebuild_the_cast_ids_per_spot`                | tests video export, deleted with e8s.export                  |
+| UP-9.5-55 | `tests/unit/export/test_video.py::test_regression_ffmpeg_start_failure_is_wrapped`                            | tests video export, deleted with e8s.export                  |
+| UP-9.5-56 | `tests/unit/export/test_video.py::test_regression_audio_mux_has_a_timeout`                                    | tests video export, deleted with e8s.export                  |
+| UP-9.5-57 | `tests/unit/export/test_video.py::test_regression_audio_section_limits_playback`                              | tests video export, deleted with e8s.export                  |
+| UP-9.7-47 | `tests/unit/show/test_sections.py::test_regression_join_after_split_keeps_a_zone_window_across_the_split`     | tests zone windows across a split, deleted with the zones    |
+| UP-9.7-73 | `tests/unit/show/test_validate.py::test_regression_validate_show_reports_zone_selectors_naming_unknown_spots` | tests zone validation, deleted with the zones                |
+| UP-9.7-74 | `tests/unit/show/test_validate.py::test_regression_validate_show_reports_degenerate_zones`                    | tests zone validation, deleted with the zones                |
+
+| Measure (2026-11-23)                      | Value                                                                                                                  |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Public names removed                      | 41 export, 10 notes, 24 sheet, 2 alias, 1 claim, 3 other (`DeprecatedWarning`, `MAX_IMAGE_PIXELS`, `MAX_VIDEO_PIXELS`) |
+| Public names added                        | 1 (`DroppedFields`)                                                                                                    |
+| Optional extras removed                   | 3 of 5 (`qr`, `video`, `render`)                                                                                       |
+| Default suite ledger line, before / after | `Ledger: 185 open` / `Ledger: 127 open`                                                                                |
+| Ledger IDs retired by this addendum       | 58                                                                                                                     |

@@ -19,8 +19,8 @@ Contains:
     test_regression_frozen_show_is_hashable: hashes a frozen show
     test_regression_stale_save_conflict_message_is_bounded: caps the ConflictError text after many
         landed revisions
-    test_regression_set_counts_rescale_shifts_facing_overrides_and_zone_windows: shifts later facing
-        overrides and zone windows when a set is rescaled
+    test_regression_set_counts_rescale_shifts_facing_overrides: shifts later facing overrides when
+        a set is rescaled
     test_regression_remove_set_leaves_no_transition_pin_on_a_vanished_pair: drops or reports a
         transition pin on a vanished pair
     test_regression_error_messages_truncate_echoed_input: echoes at most about 80 characters of a
@@ -460,18 +460,16 @@ def test_regression_stale_save_conflict_message_is_bounded() -> None:
 
 @pytest.mark.defect("UP-9.7-60")
 @pytest.mark.xfail(strict=True, reason="UP-9.7-60")
-def test_regression_set_counts_rescale_shifts_facing_overrides_and_zone_windows() -> None:
-    """Shifts later facing overrides and zone windows when a set is rescaled (audit 9.7)."""
+def test_regression_set_counts_rescale_shifts_facing_overrides() -> None:
+    """Shifts later facing overrides when a set is rescaled (audit 9.7)."""
     show = _three_set_show()
     override = FacingOverride(
         entities="all", mode=FacingMode.TO_TARGET, start=LATER_WINDOW[0], end=LATER_WINDOW[1]
     )
-    zone = show.sheet.zones[0].replace(id="late", active=(LATER_WINDOW,))
-    show = show.replace(facing_overrides=(override,), zones=(zone,))
+    show = show.replace(facing_overrides=(override,))
     edited = set_counts(show, "2", 16.0, rescale=True)
     shifted = (LATER_WINDOW[0] + SHIFT_COUNTS, LATER_WINDOW[1] + SHIFT_COUNTS)
     assert (edited.facing_overrides[0].start, edited.facing_overrides[0].end) == shifted
-    assert edited.zones[0].active == (shifted,)
 
 
 @pytest.mark.defect("UP-9.7-85")

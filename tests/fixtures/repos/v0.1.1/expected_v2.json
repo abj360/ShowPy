@@ -112,17 +112,6 @@
     },
     "/show/sheet.json": {
       "based_on": null,
-      "default_coordinates": {
-        "audience_side": "front",
-        "kind": "grid",
-        "labels": {},
-        "origin": [
-          0.0,
-          0.0
-        ],
-        "precision": 0.01,
-        "units": "m"
-      },
       "grid": {
         "major_every": 5,
         "origin": [
@@ -137,20 +126,6 @@
         "unit_name": "m"
       },
       "guides": [],
-      "landmarks": [
-        {
-          "aliases": [],
-          "geometry": [
-            [
-              0.0,
-              10.0
-            ]
-          ],
-          "id": "c",
-          "kind": "point",
-          "name": "center"
-        }
-      ],
       "name": "Test field",
       "outline": [
         [
@@ -198,37 +173,7 @@
           ]
         ],
         "holes": []
-      },
-      "zones": [
-        {
-          "active": null,
-          "applies_to": "all",
-          "id": "pit",
-          "kind": "pit",
-          "note": "",
-          "polygon": {
-            "exterior": [
-              [
-                -4.0,
-                -3.0
-              ],
-              [
-                4.0,
-                -3.0
-              ],
-              [
-                4.0,
-                -0.5
-              ],
-              [
-                -4.0,
-                -0.5
-              ]
-            ],
-            "holes": []
-          }
-        }
-      ]
+      }
     },
     "/show/show.json": {
       "cast": {
@@ -260,7 +205,6 @@
         "spots": [
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "trumpets",
             "id": "T1",
@@ -276,7 +220,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "trumpets",
             "id": "T2",
@@ -295,7 +238,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "trumpets",
             "id": "T3",
@@ -311,7 +253,6 @@
           },
           {
             "active": true,
-            "claimable": "performer",
             "color": null,
             "group": "trumpets",
             "id": "T4",
@@ -326,17 +267,6 @@
             "tags": []
           }
         ]
-      },
-      "coordinates": {
-        "audience_side": "front",
-        "kind": "grid",
-        "labels": {},
-        "origin": [
-          0.0,
-          0.0
-        ],
-        "precision": 0.01,
-        "units": "m"
       },
       "dependencies": {
         "sheet:test-field": "1"
@@ -358,8 +288,7 @@
         "2"
       ],
       "title": "Test show",
-      "version": 2,
-      "zones": []
+      "version": 2
     },
     "/time/timeline.json": {
       "audio": [],
@@ -422,6 +351,59 @@
     }
   },
   "report": {
+    "dropped": [
+      {
+        "document": "/show/sheet.json",
+        "fields": {
+          "landmarks": [
+            {
+              "aliases": [],
+              "geometry": [
+                [
+                  0.0,
+                  10.0
+                ]
+              ],
+              "id": "c",
+              "kind": "point",
+              "name": "center"
+            }
+          ],
+          "zones": [
+            {
+              "active": null,
+              "applies_to": "all",
+              "id": "pit",
+              "kind": "pit",
+              "note": "",
+              "polygon": {
+                "exterior": [
+                  [
+                    -4.0,
+                    -3.0
+                  ],
+                  [
+                    4.0,
+                    -3.0
+                  ],
+                  [
+                    4.0,
+                    -0.5
+                  ],
+                  [
+                    -4.0,
+                    -0.5
+                  ]
+                ],
+                "holes": []
+              }
+            }
+          ]
+        },
+        "location": "",
+        "stored_id": null
+      }
+    ],
     "from_version": 1,
     "renamed": {
       "selection": [

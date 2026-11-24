@@ -6,8 +6,6 @@ test_form_models.py --- tests SpacingSpec and FacingSpec validation and Form inv
 Contains:
     test_spacing_and_facing_spec_validation: rejects interval spacing without an interval
     test_form_requires_unique_members: rejects a form that lists a member twice
-    test_regression_form_geometry_is_immutable: keeps a frozen form's recipe unchanged when the
-        caller edits its geometry
     test_regression_form_is_hashable: hashes equal forms to equal values
     test_regression_form_meta_is_read_only_and_hashes_by_content: stores meta read-only, so it
         cannot change under a hash, whatever its key order
@@ -22,7 +20,6 @@ Contains:
         360)
 """
 
-import contextlib
 import json
 import math
 from collections.abc import MutableMapping
@@ -32,7 +29,6 @@ import pytest
 
 from e8s.choreo.form_models import FacingSpec, Form, SpacingSpec
 from e8s.choreo.recipe_models import CustomRecipe
-from e8s.core.deprecation import DeprecatedWarning
 from e8s.core.errors import SchemaError, SpacingError
 from e8s.core.ids import FormId, SetId, SpotId
 from e8s.core.units import normalize_angle
@@ -69,15 +65,6 @@ def _custom_form() -> Form:
         recipe=CustomRecipe(points=(), n=2),
         members=(SpotId("A"),),
     )
-
-
-def test_regression_form_geometry_is_immutable() -> None:
-    """Keeps a frozen form's recipe unchanged when the caller edits its geometry (audit 9.6)."""
-    form = _custom_form()
-    with pytest.warns(DeprecatedWarning), contextlib.suppress(TypeError):
-        form.geometry["n"] = 5
-    with pytest.warns(DeprecatedWarning):
-        assert form.geometry["n"] == 2
 
 
 def test_regression_form_is_hashable() -> None:

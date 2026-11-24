@@ -1,12 +1,12 @@
 # e8Show
 
-e8Show (import name `e8s`) is a Python choreography library. With it you draw spots on a 2D sheet, build a show set by set from stored shapes, move every performer between sets with one exact motion engine, and publish the result so performers can claim their spot.
+e8Show (import name `e8s`) is a Python choreography library. With it you draw spots on a 2D sheet, build a show set by set from stored shapes, move every performer between sets with one exact motion engine, and check the result for collisions and rule breaks.
 
 ## Why
 
 Drill design is slow because every dot, every move and every check is manual. e8Show makes the mechanics exact and repeatable, so the designer only makes the creative choices.
 
-- **One source of motion.** The canvas, the checks, the exports and the video all read positions from one `PathEngine`, so they never disagree. Its collision segments stay within 0.02 m of the true path. A Hypothesis property test probes 9 points per segment across 150 random paths to check this.
+- **One source of motion.** The canvas, the checks and every consumer read positions from one `PathEngine`, so they never disagree. Its collision segments stay within 0.02 m of the true path. A Hypothesis property test probes 9 points per segment across 150 random paths to check this.
 - **Exact and deterministic.** Arc-length curves are exact for lines and arcs. Tempo ramps convert analytically, both ways. Randomness is seeded, and no library code reads the clock.
 - **Verified.** About 1,500 tests (unit, property, golden replay and doctests) pass with warnings as errors, under `mypy --strict`, pyright and ruff. Hundreds more are strict-xfail tests that pin open audited defects; the plugin prints the exact count (`Ledger: 528 open` on 2026-11-13).
 - **Light to import.** `import e8s` takes 2.5 ms; names load lazily.
@@ -14,11 +14,9 @@ Drill design is slow because every dot, every move and every check is manual. e8
 ## Features
 
 - **Sheets:**
-  - NFHS, NCAA and NFL fields, a stage and a gym floor, or a blank sheet.
-  - Add zones, landmarks and guides.
-  - Coordinate wording that never moves stored positions.
-  - Replace the sheet with landmark-fitted re-mapping.
-  - Render to SVG, PNG or PDF.
+  - NFHS, NCAA and NFL fields and a gym floor, or a blank sheet.
+  - Add guide lines.
+  - Fit the similarity between matched points of two sheets.
 - **Cast:**
   - Groups, spots (circle or rectangle footprints) and labeling.
   - A selection language: `T1-T8 + group:guard - tag:soloist`.
@@ -39,10 +37,7 @@ Drill design is slow because every dot, every move and every check is manual. e8
   - Set management and a show index.
   - Validation, versioned storage (in memory or files) and a workspace file view.
   - History with diffs and revert, pins, proposals and canvas events.
-- **Export:**
-  - Publishing with performer claims and QR codes.
-  - Coordinate sheets, charts and cue sheets.
-  - A dependency-free PDF writer, JSON and CSV, and 2D MP4 video with audio.
+  - JSON interchange and CSV position import; v1 shows migrate on load, and the migration report lists what it renamed, repaired and dropped.
 
 ## Quickstart (one command, fully dockerized)
 
@@ -82,15 +77,12 @@ e8s.min_gaps(show, ("1", "2"), top=1)[0].gap  # 1.4 m between footprints
 e8s.validate_show(show).ok  # True
 ```
 
-Installing e8s from a release (see Quickstart) installs the core: numpy, scipy, shapely and pydantic. Four extras add the dependencies of a few output functions; without one, those functions raise `MissingExtraError` with the install command.
+Installing e8s from a release (see Quickstart) installs the core: numpy, scipy, shapely and pydantic. One extra adds the dependency of the table functions; without it, those functions raise `MissingExtraError` with the install command.
 
-| Extra    | Installs               | Unlocks                                                                             |
-| -------- | ---------------------- | ----------------------------------------------------------------------------------- |
-| `tables` | pandas                 | `Set.table`, `paths_table`, `speeds`, `energy_curve`, `phrase_profile`, `cue_sheet` |
-| `render` | Pillow                 | `render_sheet(fmt="png")` and `fmt="pdf"`, `draw_sheet`, `render_frame`             |
-| `qr`     | segno, Pillow          | `qr_code`                                                                           |
-| `video`  | imageio-ffmpeg, Pillow | `export_video`                                                                      |
-| `all`    | every extra above      | everything                                                                          |
+| Extra    | Installs          | Unlocks                                                                |
+| -------- | ----------------- | ---------------------------------------------------------------------- |
+| `tables` | pandas            | `Set.table`, `paths_table`, `speeds`, `energy_curve`, `phrase_profile` |
+| `all`    | every extra above | everything                                                             |
 
 Every public function has a runnable `>>>` example in its docstring. The full API is in `docs/e8s-api-reference.md`.
 
@@ -103,17 +95,15 @@ Every public function has a runnable `>>>` example in its docstring. The full AP
       |                |
      geo              time        curves, spacing, affine | tempo, holds, measures
       |                |
-  +---+-----+-----+----+
-  |         |     |
- cast     sheet  notes            spots, selection | templates, coords | notes
-  |         |     |
-  +----+----+-----+
+  +---+-----+----------+
+  |         |
+ cast     sheet                   spots, selection | templates, guides
+  |         |
+  +----+----+
        |
      choreo                        forms, match, paths, PathEngine, facing, avoid
        |
-      show                         manage, storage, history, collab, validate
-       |
-     export                        publish, print, PDF, data, video
+      show                         manage, storage, history, collab, validate, interchange
 ```
 
 Lower layers never import higher ones. A consumer such as a checker reads shows through storage and the same `PathEngine`.
@@ -133,15 +123,13 @@ Lower layers never import higher ones. A consumer such as a checker reads shows 
 ```
 e8s/
   core/     units, ids, errors, types, selection, validation, util
-  geo/      curves, shapes, svg, text, regions, spacing, affine, transforms, measure, analysis
+  geo/      curves, shapes, svg, text, regions, spacing, affine, transforms, measure
   time/     models, timeline, clock, measures, validate
   cast/     models, spots, select, rewrite
-  sheet/    models, templates, surfaces, coords, bounds, replace, render
-  notes/    models, notes
+  sheet/    models, templates, surfaces, bounds, replace
   choreo/   models, forms*, match*, paths, routes, motion, engine*, facing, avoid, motion_stats
-  show/     models, manage, sections, storage, repositories, history, collab, validate
-  export/   models, publish, print_sheets, pdf, data, positions, video
-  examples/ sheets, shows, publishing (deterministic example shows)
+  show/     models, manage, sections, storage, repositories, history, collab, validate, migrate
+  examples/ sheets, shows (deterministic example shows)
 e8s/schemas/ showpy.show.v1.json
 tests/      unit/ property/ golden/ fixtures/
 docs/       API reference, ADRs, handoff notes

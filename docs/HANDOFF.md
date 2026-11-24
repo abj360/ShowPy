@@ -44,14 +44,12 @@ Use `uv` only, never pip.
 | Package  | Modules                                                                                                                                                                                                                                                                                |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `core`   | errors, ids, types (`FrozenModel`, `Region`, `Box2`), readonly (`ReadOnly`, `ReadOnlyMap`), units (immutable `UnitRegistry`), util (`close_matches`, `content_hash`, `seeded_rng`), selection, validation                                                                              |
-| `geo`    | curve_base, curves (11 kinds, arc-length param), svg, text (`simplex` helpers), fonts, font_strokes, text_layout, shapes, regions, spacing (Bridson scatter, `apportion`), affine, transforms + transform_base + snapping, measure, analysis, models                                   |
+| `geo`    | curve_base, curves (11 kinds, arc-length param), svg, text (`simplex` helpers), fonts, font_strokes, text_layout, shapes, regions, spacing (Bridson scatter, `apportion`), affine, transforms + transform_base + snapping, measure, models                                             |
 | `time`   | models, timeline, clock (ramps and holds, analytic inverse), measures, validate                                                                                                                                                                                                        |
 | `cast`   | models, spots, select (expression grammar), rewrite (renames IDs everywhere)                                                                                                                                                                                                           |
-| `sheet`  | models, templates + surfaces (NFHS, NCAA and NFL fields, stage, gym), coords, bounds, replace (similarity_fit only), render (`SheetCanvas`, `draw_sheet`)                                                                                                                              |
-| `notes`  | models (tagged `Anchor`), notes (add, edit, find, `accept_draft`)                                                                                                                                                                                                                      |
+| `sheet`  | models, templates + surfaces (NFHS, NCAA and NFL fields, gym), bounds, replace (similarity_fit only)                                                                                                                                                                                   |
 | `choreo` | models, motion (easing, `MotionRegistry`), engine, engine_compile, engine_facing, engine_models, paths, routes, facing, avoid, motion_stats, forms, form_fns, form_layout, form_ops, form_text, text_count, text_edit, form_fit, form_place, match, match_cost, match_solve, match_ops |
-| `show`   | models (`Show`, `Pin`, `ShowIndex`, diffs, `Revision`, `CanvasEvent`, `Proposal`), manage, sections, storage, repositories, file_repository, documents, files, history, collab, pinning, changes, locks, validate, paths_store, counts                                                 |
-| `export` | models, data (JSON, CSV, format registry), positions, print_sheets, pdf, publish (claims, QR codes), video                                                                                                                                                                             |
+| `show`   | models (`Show`, `Pin`, `ShowIndex`, diffs, `Revision`, `CanvasEvent`, `Proposal`), manage, sections, storage, repositories, file_repository, documents, files, history, collab, pinning, changes, locks, validate, paths_store, counts, interchange, migrate                           |
 
 ## Upgrade program
 
@@ -88,11 +86,13 @@ phase's plan was deleted after the tag.
 `docs/releases/v0.4.0.md`; ADRs 0007 to 0011, 0019 to 0021, 0023 and 0026). The library is
 `e8s`, licensed PolyForm Noncommercial from v0.4.0; stored format v2 with a v1 migration chain;
 typed, frozen models with the `to_json`/`from_json`/`replace` interface; export, notes and the
-other leaving names deleted; `MAX_SPOTS` 5,000 and `MAX_SETS` 1,000.
+other leaving names deleted, with no warning period; `MAX_SPOTS` 5,000 and `MAX_SETS` 1,000. The
+sheet-building names stay as current API until v0.7.0 replaces them.
 
-**Next: Phase 3, storage v2 and collaboration** (`docs/upgrade-plan.md`, "Phase 3"). The v0.5.0 readers
-(`frames`, `coordinate_table`, `describe_transition`) merge after the `v0.4.0` tag. Phase 3 inputs
-include the superlinear one-spot save and `validate_show` at the caps (release notes, "Known limitations").
+**Next: Phase 3, storage v2 and collaboration** (`docs/upgrade-plan.md`, "Phase 3"). The v0.5.0
+readers (`frames`, `coordinate_table`, `describe_transition`) merge after the `v0.4.0` tag.
+Phase 3 inputs include the superlinear one-spot save and `validate_show` at the caps (release
+notes, "Known limitations").
 
 `docs/e8s-api-reference.md` was aligned with the code on 2026-11-17; the code stays the source
 of truth until generated docs land in Phase 6.
@@ -142,9 +142,6 @@ Stage 1 (bundled single-line fonts, user fonts as `showpy.font.v1` JSON, `center
   - `regroup` and `remove_group` return `(Show, mapping)`.
   - `delete_spots` takes `force`.
   - In the grammar, `-` as an operator needs a space before it, `T*` matches the exact prefix, and `sel:<name>` names a selection.
-- **notes**:
-  - `add_note` needs `note_id`, `at` and `author`.
-  - `accept_draft` was added.
 - **choreo**:
   - Engine timing:
     - Engine models live in `engine_models.py`.
@@ -166,7 +163,7 @@ Stage 1 (bundled single-line fonts, user fonts as `showpy.font.v1` JSON, `center
   - The workspace adds `/canvas/comments.json`.
   - `Show.pins` was added.
   - Events are derived from revisions.
-- **export**: `export_video(show, count_range, fps, audio: Mapping[uri, bytes], px_per_m)`.
+- **interchange** (`e8s.show.interchange`):
   - `export_json(show, include=None, *, font_registry=None)` embeds the fonts of text forms (base64, keyed by URI). `import_json` ignores the `fonts` key; fonts are imported with `import_fonts(d, font_registry=None)`, which verifies each hash and rejects more than `MAX_IMPORT_FONTS = 64`.
 - **choreo, text forms** (`form_text`, `text_count`, `text_edit`; `TextRecipe` in `models`):
   - Text forms never have open slots. `text_form` and every text edit require `len(members) == n`, else `MEMBER_COUNT_MISMATCH` with an add or remove hint. `placements` (so `place` and `rebuild`) and `apply_match` reject a text form short of members (after cast `delete_spots`) and point at `edit_text_count`; `delete_spots` itself still deletes.

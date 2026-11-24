@@ -6,8 +6,6 @@ test_sections.py --- tests splitting shows into movements and joining them back
 Contains:
     test_regression_join_after_split_restores_the_show: restores the show exactly when its two split
         sections are joined again
-    test_regression_join_after_split_keeps_a_zone_window_across_the_split: rejoins a zone window cut
-        by a split into the original window
     test_regression_join_after_split_keeps_markers_that_repeat_a_label: keeps a marker whose label
         repeats at another count across split and join
     test_regression_join_after_split_keeps_one_facing_override_across_the_split: rejoins a facing
@@ -167,16 +165,6 @@ def _round_trip(show: Show) -> Show:
 def _three_sets_with(**timeline_fields: object) -> Show:
     show = add_set(add_set(two_set_show(), "3", 4.0), "4", 8.0)
     return show.replace(timeline=show.timeline.replace(**timeline_fields))
-
-
-@pytest.mark.defect("UP-9.7-47")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-47")
-def test_regression_join_after_split_keeps_a_zone_window_across_the_split() -> None:
-    """Rejoins a zone window cut by a split into the original window (audit 9.7 sections)."""
-    show = _three_sets_with()
-    zone = show.sheet.zones[0].replace(id="late", active=(WINDOW_ACROSS_SPLIT,))
-    show = show.replace(zones=(zone,))
-    assert _round_trip(show).zones[0].active == (WINDOW_ACROSS_SPLIT,)
 
 
 @pytest.mark.defect("UP-9.7-48")

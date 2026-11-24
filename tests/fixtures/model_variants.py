@@ -11,7 +11,6 @@ Contains:
 """
 
 from collections.abc import Callable, Mapping
-from datetime import UTC, datetime
 
 from e8s.cast.models import LabelScheme, Shape
 from e8s.choreo.form_models import CrowdedStroke, SpacingSpec
@@ -23,11 +22,9 @@ from e8s.choreo.path_models import (
     PointFacing,
     TurnDirection,
 )
-from e8s.core.ids import FormId, NoteId, RouteId, SetId, SpotId, make_tid
+from e8s.core.ids import FormId, RouteId, SetId, SpotId, make_tid
 from e8s.core.types import FrozenModel, Region
 from e8s.geo.curves import Segment
-from e8s.show._notes_document import Note
-from e8s.show.anchors import Anchor
 from e8s.show.models import Pin
 from e8s.time.models import AudioTrack, Cue, Hold, Marker, MarkerKind, MeasureLabel, MeasureSetting
 
@@ -65,18 +62,6 @@ class Example:
         self.name = name
 
 
-def _note() -> Note:
-    return Note(
-        id=NoteId("n9"),
-        text="watch spacing",
-        anchor=Anchor.on_set("1"),
-        author="ada",
-        created_at=datetime(2026, 11, 23, tzinfo=UTC),
-        kind="todo",
-        visible=False,
-    )
-
-
 def _shapes_and_people() -> dict[str, tuple[Changes, ...]]:
     return {
         "Shape": (
@@ -90,7 +75,6 @@ def _shapes_and_people() -> dict[str, tuple[Changes, ...]]:
                 "tags": ("lead",),
                 "active": False,
                 "shape": Shape(radius_m=0.5),
-                "claimable": "crew",
             },
         ),
         "Group": (
@@ -109,8 +93,6 @@ def _shapes_and_people() -> dict[str, tuple[Changes, ...]]:
                 "label_scheme": LabelScheme(start=0, pad=2),
             },
         ),
-        "Performer": ({"contact": "ada@example.com", "role": "crew"},),
-        "Claim": ({"locked": False},),
         "Selection": ({"description": "front row"},),
     }
 
@@ -298,22 +280,16 @@ def _show() -> dict[str, tuple[Changes, ...]]:
         "CountsOp": ({"rescale": True},),
         "Proposal": ({"state": "rejected", "reason": "too far"},),
         "Revision": ({"changed": ("/show/show.json",)},),
-        "Note": ({"kind": "warning", "visible": False},),
-        "NotesDocument": ({"notes": (_note(),)},),
         "Show": (
             {
                 "pack": "marching",
                 "pins": (Pin(target="set", id="1"),),
-                "zones": (Example("Zone"),),
                 "facing_overrides": (Example("FacingOverride"),),
                 "extensions": {"x-host": {"n": 1}},
                 "revision": "r1",
             },
         ),
         "ShowIndexEntry": ({"measure": label, "cue": "go"},),
-        "SheetRow": ({"measure": label, "crossings": ("T2",), "note": "watch"},),
-        "ChartRow": ({"form": "f1", "on_field": False, "note": "turn"},),
-        "Publication": ({"join_token_sha256": "0" * 64, "status": "paused"},),
         "ValidationIssue": ({"context": {"set": "2"}},),
         "PathDiff": ({"changed_rows": (SpotId("T1"),), "routes_changed": (RouteId("r"),)},),
         "SetDiff": (
@@ -324,17 +300,21 @@ def _show() -> dict[str, tuple[Changes, ...]]:
                 "forms_changed": (FormId("f1"),),
             },
         ),
-        "MigrationReport": ({"renamed": {"set": (("a", "b"),)}, "repairs": ("sorted tempo",)},),
+        "MigrationReport": (
+            {
+                "renamed": {"set": (("a", "b"),)},
+                "repairs": ("sorted tempo",),
+                "dropped": (Example("DroppedFields"),),
+            },
+        ),
+        "DroppedFields": ({"location": "cast.spots[0]", "stored_id": "T1"},),
         "RewriteReport": (
             {
                 "dropped_routes": ((make_tid("1", "2"), RouteId("r")),),
-                "orphaned_notes": (_note(),),
                 "dropped_facings": (Example("FacingOverride"),),
-                "notes": Example("NotesDocument"),
                 "unresolved_selectors": ("sel:gone",),
             },
         ),
-        "Zone": ({"applies_to": "T1", "active": ((0.0, 4.0),), "note": "pit"},),
         "Grid": ({"origin": (1.0, 1.0), "major_every": 4, "rotation_deg": 15.0},),
         "Sheet": ({"based_on": "sheet:gym@1", "owner": "ada", "thumbnail": "thumb.png"},),
         "ProposalPreview": (
@@ -344,15 +324,6 @@ def _show() -> dict[str, tuple[Changes, ...]]:
                 "paths": (Example("TransitionSpec"),),
                 "forms": (Example("Form"),),
                 "blocked": ("set 1 is pinned",),
-            },
-        ),
-        "CoordinateSystem": (
-            {
-                "origin": (1.0, 2.0),
-                "audience_side": "back",
-                "units": "yd",
-                "precision": 0.5,
-                "labels": {"x": "side"},
             },
         ),
     }

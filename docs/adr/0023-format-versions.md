@@ -175,3 +175,10 @@ Effects on the sections above:
   v0.7.0). There is still one format version per release.
 - What would change our mind: read "v0.6.0 shape" as "v0.7.0 shape". A shape that slips past
   v0.7.0 arrives in v4, never by editing the v3 step after a release writes it.
+
+## Addendum 2026-11-23: v2 drops the leaving stored fields
+
+The library has no users, so the stored fields decision 3 gave to the v3 step (`Show.coordinates`,
+`Show.zones`, `Spot.claimable`, and the sheet's landmarks, zones and default coordinates) are
+dropped by v2 instead, which is not yet released, and listed in `MigrationReport.dropped` (ADR
+0021, addendum 2026-11-23).

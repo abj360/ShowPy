@@ -13,7 +13,8 @@ Contains:
     read_show(): assembles a show from stored documents, migrating an older format in memory
     read_migrated(): migrates stored documents of an older format and returns the report too
     decode_show_dump(): assembles a show from an interchange dump of an older format version
-    migrate_dump(): migrates an older interchange dump to a show and the documents beside it
+    migrate_dump(): migrates an older interchange dump to a show, its report and the documents
+        beside it
 """
 
 import itertools
@@ -52,6 +53,7 @@ from e8s.show.migrate import (
     CURRENT_VERSION,
     LEGACY_CONTEXT,
     SHOW_DOC,
+    MigrationReport,
     ReportBuilder,
     migrate_beside,
     migrate_model,
@@ -331,8 +333,10 @@ def decode_show_dump(dump: Mapping[str, JsonValue], version: int) -> Show:
     return migrate_dump(dump, version)[0]
 
 
-def migrate_dump(dump: Mapping[str, JsonValue], version: int) -> tuple[Show, dict[str, JsonValue]]:
-    """Migrates the interchange dump of an older format version to a show and its side documents.
+def migrate_dump(
+    dump: Mapping[str, JsonValue], version: int
+) -> tuple[Show, MigrationReport, dict[str, JsonValue]]:
+    """Migrates an older interchange dump to a show, its migration report and its side documents.
 
     Args:
         dump: The `show` object of an interchange document, already strictly parsed.
@@ -340,11 +344,12 @@ def migrate_dump(dump: Mapping[str, JsonValue], version: int) -> tuple[Show, dic
 
     Returns:
         show: The migrated show; a dump that does not fit raises SchemaError.
+        report: What the migration renamed, repaired and dropped.
         beside: Stored path to the parsed JSON of each document beside the show, such as the
             notes document at `/notes/notes.json`; empty when the dump held no notes.
 
     >>> from e8s.examples import two_set_show
-    >>> migrate_dump(two_set_show().to_json(), 1)[1]
+    >>> migrate_dump(two_set_show().to_json(), 1)[2]
     {}
     """
     revision = dump.get(REVISION_FIELD, "")
@@ -356,7 +361,7 @@ def migrate_dump(dump: Mapping[str, JsonValue], version: int) -> tuple[Show, dic
         )
     except SchemaError as exc:
         raise _reraised_for_show(exc) from exc
-    return migrated.show, migrated.beside
+    return migrated.show, migrated.report.build(), migrated.beside
 
 
 def _dump_list(dump: Mapping[str, JsonValue], field: str) -> list[JsonObject]:

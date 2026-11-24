@@ -37,7 +37,6 @@ import shapely
 
 from e8s.core.canonical import canonical_value, jcs
 from e8s.core.caps import MAX_POINTS, MAX_RANGE, require_size
-from e8s.core.deprecation import renamed_keyword
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import MAX_ECHOED_INPUT_CHARS, GeometryError, SchemaError
 from e8s.core.ids import ID_MAX_LENGTH
@@ -56,7 +55,6 @@ ASSET_PREFIX = "asset:sha256:"
 CLOSE_MATCH_COUNT = 3
 CLOSE_MATCH_CUTOFF = 0.4
 DEFAULT_ABS_TOL = 1e-6
-RENAME_REMOVAL = "0.6.0"
 SINGLE_PART_GEOMETRY = frozenset({"Point", "LineString", "LinearRing", "Polygon"})
 # Floats that decide a count or an order rank at this many decimals (a nanometer, a nanocount):
 # their last bits are float noise that differs between platforms (libm, fused multiply-add).
@@ -257,9 +255,8 @@ def approx_equal(
     a: npt.ArrayLike,
     b: npt.ArrayLike,
     *,
-    abs_tol: float | None = None,
+    abs_tol: float = DEFAULT_ABS_TOL,
     rel_tol: float = 0.0,
-    tol: float | None = None,
 ) -> bool:
     """Compares numbers or arrays within `abs_tol` plus `rel_tol` of `b`; shapes must match.
 
@@ -271,7 +268,6 @@ def approx_equal(
         b: Second number or array.
         abs_tol: Absolute tolerance; 1e-6 when omitted.
         rel_tol: Tolerance relative to the magnitude of `b`.
-        tol: Deprecated name of `abs_tol`.
 
     Returns:
         is_close: Whether every element of `a` is within tolerance of its element of `b`.
@@ -279,16 +275,13 @@ def approx_equal(
     >>> approx_equal(0.1 + 0.2, 0.3)
     True
     """
-    limit = renamed_keyword(
-        "tol", tol, "abs_tol", abs_tol, default=DEFAULT_ABS_TOL, remove=RENAME_REMOVAL
-    )
-    _require_tolerance("abs_tol", limit)
+    _require_tolerance("abs_tol", abs_tol)
     _require_tolerance("rel_tol", rel_tol)
     left, right = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
     if left.shape != right.shape:
         return False
     with np.errstate(invalid="ignore", over="ignore"):
-        close = np.abs(left - right) <= limit + rel_tol * np.abs(right)
+        close = np.abs(left - right) <= abs_tol + rel_tol * np.abs(right)
     return bool(np.all(close | (left == right)))
 
 

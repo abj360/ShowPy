@@ -8,8 +8,6 @@ Contains:
     MAX_RANGE: bounds the IDs one range expands to
     MAX_DEPTH: bounds the nesting of a selection expression
     MAX_TEXT_CHARS: bounds the characters of one parser input
-    MAX_IMAGE_PIXELS: bounds the pixels of one raster image
-    MAX_VIDEO_PIXELS: bounds the pixels of one video frame
     MIN_LAYOUT_HEIGHT_M: sets the smallest cap height text layout accepts, in meters
     MAX_COORD_M: bounds every stored coordinate and length, in meters; real shows stay within a
         few hundred meters, and a far larger value overflows geometry to NaN or infinity
@@ -31,8 +29,6 @@ MAX_GRID_CELLS = 4_000_000
 MAX_RANGE = 10_000
 MAX_DEPTH = 64
 MAX_TEXT_CHARS = 1_000_000
-MAX_IMAGE_PIXELS = 40_000_000
-MAX_VIDEO_PIXELS = 3840 * 2160
 MIN_LAYOUT_HEIGHT_M = 0.001
 MAX_COORD_M = 1e6
 MAX_COUNTS = 1_000_000
