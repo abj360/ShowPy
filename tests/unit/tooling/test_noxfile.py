@@ -68,6 +68,8 @@ Contains:
         and the cargo_tools tests
     test_types_session_checks_the_core_stubs: mypy, pyright, then stubtest on e8s._core with no
         allowlist
+    test_wheel_sessions_refuse_an_rpath_or_libpython_in_the_extension: wheel and wheels run
+        scripts/check_extension_links.py on the wheel they built
     test_cargo_tools_install_locked_at_pinned_versions_into_the_repository: cargo install
         --locked --root .cargo-tools at exact versions, never into ~/.cargo/bin
     test_fma_check_builds_the_extension_and_runs_the_script: cargo rustc on the fma-check
@@ -196,6 +198,7 @@ CARGO_MANIFEST = ROOT / "Cargo.toml"
 SESSION_RUN = "session.run"
 RUST_SESSION = "rust"
 TYPES_SESSION = "types"
+WHEEL_BUILDING_SESSIONS = ("wheel", "wheels")
 TYPES_SESSION_RUNS = [
     ["mypy", "e8s", "tests", "scripts"],
     ["pyright"],
@@ -979,6 +982,14 @@ def test_rust_session_checks_crate_licences_and_the_notices() -> None:
 
 def test_types_session_checks_the_core_stubs() -> None:
     assert uv_runs(NOXFILE.read_text(encoding="utf-8"), TYPES_SESSION) == TYPES_SESSION_RUNS
+
+
+def test_wheel_sessions_refuse_an_rpath_or_libpython_in_the_extension() -> None:
+    source = NOXFILE.read_text(encoding="utf-8")
+    script = module_constant(source, "LINK_CHECK_SCRIPT")
+    assert (ROOT / script).is_file()
+    for session in WHEEL_BUILDING_SESSIONS:
+        assert ["python", script, "str(built)"] in uv_runs(source, session), session
 
 
 def test_cargo_tools_install_locked_at_pinned_versions_into_the_repository() -> None:

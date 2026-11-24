@@ -14,14 +14,15 @@ Contains:
         process
     fuzz: runs the fuzz targets under the nightly Hypothesis profile
     audit: scans the locked dependencies for known vulnerabilities
-    wheel: builds the wheel, installs it with every extra in a clean venv and runs the README
-        usage example
+    wheel: builds the wheel, refuses an rpath or a linked libpython in its extension, installs
+        it with every extra in a clean venv and runs the README usage example
     core: installs the wheel without extras and checks imports and extra-gated calls fail closed
     rust: checks Rust formatting, lints and tests, builds the wasm crate, on arm64 hosts refuses
         any fused multiply-add outside libm's fma in the extension, then checks the crates'
         licences, bans, advisories and sources and that the Rust notice file is current
-    wheels: builds the sdist and a dist-profile wheel from it, then runs the ported packages'
-        tests against that wheel in fresh venvs on each supported Python
+    wheels: builds the sdist and a dist-profile wheel from it, refuses an rpath or a linked
+        libpython in its extension, then runs the ported packages' tests against that wheel in
+        fresh venvs on each supported Python
     bench: runs the budget benchmarks; at tier M fails on a >20% min-time regression
     api_changes: checks that each commit since the last release names the API names it changes
     changelog: regenerates CHANGELOG.md with git-cliff and formats it with Prettier at release time
@@ -89,6 +90,7 @@ CORE_CHECK_SCRIPT = "scripts/check_core_install.py"
 CORE_MODULE = "e8s._core"
 API_CHANGES_SCRIPT = "scripts/check_api_changes.py"
 FMA_CHECK_SCRIPT = "scripts/check_no_fma.py"
+LINK_CHECK_SCRIPT = "scripts/check_extension_links.py"
 WASM_TARGET = "wasm32-unknown-unknown"
 FMA_CHECK_PROFILE = "fma-check"
 ARM64_MACHINES = ("arm64", "aarch64")
@@ -388,11 +390,13 @@ def _write_readme_example(root: Path, work: Path) -> Path:
 def wheel(session: nox.Session) -> None:
     """Builds the wheel, installs it with every extra in a clean venv and runs the README example.
 
-    Not a default session: it builds and creates a venv, so it runs on demand and in CI.
+    First refuses an rpath or a linked libpython in the wheel's extension. Not a default
+    session: it builds and creates a venv, so it runs on demand and in CI.
     """
     root = Path.cwd()
     work = Path(session.create_tmp()).resolve()
     built = _build_wheel(session, work)
+    _uv_run(session, "python", LINK_CHECK_SCRIPT, str(built))
     python = _fresh_venv(session, work / "venv", has_pip=True)
     session.run(
         str(python), "-m", "pip", "install", "--quiet", f"{built}{ALL_EXTRAS}", external=True
@@ -429,7 +433,8 @@ def core(session: nox.Session) -> None:
 def wheels(session: nox.Session) -> None:
     """Tests the release wheel: built from the sdist with the dist profile, on each Python.
 
-    Installs the locked dev group and the wheel into a fresh venv per WHEEL_TEST_PYTHONS entry,
+    Refuses an rpath or a linked libpython in the wheel's extension first. Then installs the
+    locked dev group and the wheel into a fresh venv per WHEEL_TEST_PYTHONS entry,
     then runs PORTED_TESTS from a copy of the suite, so the installed wheel, not the source tree,
     is imported. Not a default session: it builds and creates venvs, so it runs on demand and in
     CI.
@@ -437,6 +442,7 @@ def wheels(session: nox.Session) -> None:
     root = Path.cwd()
     work = Path(session.create_tmp()).resolve()
     built = _build_wheel_from_sdist(session, work)
+    _uv_run(session, "python", LINK_CHECK_SCRIPT, str(built))
     requirements = _export_test_requirements(session, work)
     suite = _copy_test_suite(root, work / "suite")
     session.env["PYTHONHASHSEED"] = DEFAULT_HASH_SEED
