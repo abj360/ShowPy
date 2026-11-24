@@ -24,8 +24,10 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 from pydantic import (
+    Field,
     SerializerFunctionWrapHandler,
     ValidationInfo,
+    field_validator,
     model_serializer,
     model_validator,
 )
@@ -123,6 +125,11 @@ class PlacementPatch(FrozenModel):
     on_field: bool = True
 
 
+def _is_legacy(info: ValidationInfo) -> bool:
+    """Tells whether validation runs with legacy IDs accepted."""
+    return isinstance(info.context, Mapping) and info.context.get(LEGACY_IDS_KEY) is True
+
+
 class Set(FrozenModel):
     """Holds a snapshot of every spot's placement at one moment.
 
@@ -140,7 +147,7 @@ class Set(FrozenModel):
     """
 
     id: SetId
-    key: str | None = None
+    key: str | None = Field(default=None, validate_default=True)
     counts: float
     placements: tuple[Placement, ...] = ()
     forms: tuple[FormId, ...] = ()
@@ -148,6 +155,24 @@ class Set(FrozenModel):
     cue: str | None = None
     source_hash: str = ""
     state: ApprovalState = ApprovalState.DRAFT
+
+    @field_validator("key", mode="after")
+    @classmethod
+    def _filled_key(cls, key: str | None, info: ValidationInfo) -> str | None:
+        """Fills a defaulted key with the set ID and stores a valid key in normalized form.
+
+        A key that fails check_id is kept as given: `_valid` raises its error after the counts
+        and placement checks, so a set with several faults reports the same one as before.
+        """
+        set_id = info.data.get("id")
+        if key is None:
+            key = set_id
+        if key is None or (_is_legacy(info) and key == set_id):
+            return key
+        try:
+            return check_id(key, kind="set key")
+        except SchemaError:
+            return key
 
     @model_validator(mode="after")
     def _valid(self, info: ValidationInfo) -> "Set":
@@ -157,11 +182,8 @@ class Set(FrozenModel):
         if len(set(entities)) != len(entities):
             raise SchemaError(f"set {self.id} places a spot twice", hint="one placement per spot")
         key = self.id if self.key is None else self.key
-        is_legacy = isinstance(info.context, Mapping) and info.context.get(LEGACY_IDS_KEY) is True
-        if not (is_legacy and key == self.id):
-            key = check_id(key, kind="set key")
-        # The model is frozen; the validator is the one place that fills the defaulted key.
-        object.__setattr__(self, "key", key)
+        if not (_is_legacy(info) and key == self.id):
+            check_id(key, kind="set key")
         return self
 
     # Any: the dump is the JSON-like mapping pydantic built for this model.
