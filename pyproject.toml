@@ -3,8 +3,15 @@ name = "e8s"
 dynamic = ["version"]
 description = "Choreography library: sheets, spots, sets, forms and motion."
 readme = "README.md"
-license = "PolyForm-Noncommercial-1.0.0 AND MIT AND OFL-1.1 AND LicenseRef-Hershey-Fonts"
-license-files = ["LICENSE", "e8s/schemas/LICENSE-MIT.txt", "e8s/fonts/licenses/*.txt"]
+# The project licence, then the bundled fonts and schemas, then the linked Rust crates' licences.
+license = """PolyForm-Noncommercial-1.0.0 AND MIT AND OFL-1.1 AND LicenseRef-Hershey-Fonts \
+    AND BSD-2-Clause"""
+license-files = [
+    "LICENSE",
+    "e8s/schemas/LICENSE-MIT.txt",
+    "e8s/fonts/licenses/*.txt",
+    "e8s/licenses/THIRD_PARTY_RUST.txt",
+]
 requires-python = ">=3.13"
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -33,31 +40,27 @@ Repository = "https://github.com/abj360/e8s"
 Issues = "https://github.com/abj360/e8s/issues"
 
 [build-system]
-requires = ["hatchling==1.33.0", "hatch-vcs==0.5.0"]
-build-backend = "hatchling.build"
+requires = ["maturin==1.16.0"]
+build-backend = "maturin"
 
-[tool.hatch.version]
-source = "vcs"
+[tool.maturin]
+manifest-path = "crates/e8s-py/Cargo.toml"
+module-name = "e8s._core"
+python-source = "."
+python-packages = ["e8s"]
+# A build from the sdist compiles with the pinned toolchain too.
+include = [{ path = "rust-toolchain.toml", format = "sdist" }]
 
-[tool.hatch.build.targets.sdist]
-exclude = [
-    "docs/",
-    "tests/",
-    ".claude/",
-    "node_modules/",
-    "CLAUDE.md",
-    ".github/",
-    "typings/",
-    "package.json",
-    "package-lock.json",
-    ".superpowers/",
-    "_typos.toml",
-    "cliff.toml",
-    "noxfile.py",
+# uv reinstalls the project, and so rebuilds e8s._core, when any of these files changes.
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "Cargo.lock" },
+    { file = "rust-toolchain.toml" },
+    { file = "crates/**/Cargo.toml" },
+    { file = "crates/**/*.rs" },
 ]
-
-[tool.hatch.build.targets.wheel]
-packages = ["e8s"]
 
 # The suite exercises every extra-gated function, so the dev environment installs them all.
 [dependency-groups]
@@ -148,7 +151,7 @@ addopts = [
     "--strict-markers",
     "--import-mode=importlib",
     "-m",
-    "not bench and not slow and not fuzz",
+    "not bench and not slow and not fuzz and not cargo_tools",
 ]
 markers = [
     "golden: replays real shows against reviewed fixtures",
@@ -157,6 +160,7 @@ markers = [
     "fuzz: hostile-input fuzz targets; run with nox -s fuzz",
     "slow: generated-show properties and the large golden; run with nox -s slow",
     "timing: asserts on wall-clock time; nox -s slow runs these without pytest-xdist workers",
+    "cargo_tools: needs the cargo tools nox -s rust installs; run with nox -s rust",
 ]
 filterwarnings = ["error"]
 # A test still running after this many seconds dumps every thread's stack, so a CI hang
