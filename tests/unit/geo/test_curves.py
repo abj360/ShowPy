@@ -52,6 +52,12 @@ Contains:
         RuntimeWarning, for finite inputs whose lengths overflow
     test_regression_unit_tangent_survives_subnormal_intermediates: still evaluates a curve whose
         intermediate values underflow
+    test_batch_exact_marks_curves_evaluated_through_matrix_products: flags Bézier, SVG and
+        ellipse curves, and joins or trims holding one
+    test_batch_exact_curves_evaluate_batches_as_singles: returns, at 2,001 fixed arc lengths,
+        the same points one at a time as all at once
+    test_every_curve_class_declares_batch_exact: sets BATCH_EXACT in each class's own body,
+        and every class declaring True has a batch-versus-single case
 """
 
 import math
@@ -509,3 +515,44 @@ def test_regression_substring_of_unknown_curve_kind_raises_geometry_error() -> N
 def test_curve_types_list_every_member_of_any_curve() -> None:
     union, _ = get_args(AnyCurve.__value__)
     assert set(get_args(union)) == set(CURVE_TYPES)
+
+
+BATCH_BEZIER = BezierCurve(control=((0.0, 0.0), (1.0, 2.0), (3.0, -1.0), (4.0, 0.0)))
+BATCH_PROBES = 2_001
+
+
+def test_batch_exact_marks_curves_evaluated_through_matrix_products() -> None:
+    assert not BATCH_BEZIER.batch_exact
+    assert not EllipseCurve(center=(0.0, 0.0), rx=2.0, ry=1.0).batch_exact
+    assert not SvgCurve(d="M0 0 L1 1").batch_exact
+    assert Segment(a=(0.0, 0.0), b=(4.0, 0.0)).batch_exact
+    joined = CompositeCurve(parts=(Segment(a=(-1.0, 0.0), b=(0.0, 0.0)), BATCH_BEZIER))
+    assert not joined.batch_exact
+    assert not TrimmedCurve(base=BATCH_BEZIER, s0=0.0, s1=1.0).batch_exact
+    assert TrimmedCurve(base=Segment(a=(0.0, 0.0), b=(4.0, 0.0)), s0=1.0, s1=3.0).batch_exact
+
+
+BATCH_CASES: list[CurveModel] = [
+    Segment(a=(0.1, 0.3), b=(4.7, -2.9)),
+    Polyline(points=((0.0, 0.0), (1.3, 0.7), (2.9, -0.4), (3.3, 2.2))),
+    ArcCurve(center=(0.3, 0.7), radius=2.9, start_deg=17.0, sweep_deg=-233.0),
+    CircleCurve(center=(1.1, -0.4), radius=1.7, start_deg=41.0),
+    SplineCurve(points=((0.0, 0.0), (1.0, 2.1), (2.7, -0.3), (4.1, 1.9))),
+    SpiralCurve(center=(0.2, 0.1), r0=0.5, r1=3.1, turns=2.3, start_deg=11.0),
+]
+
+
+def test_every_curve_class_declares_batch_exact() -> None:
+    for cls in CURVE_TYPES:
+        assert "BATCH_EXACT" in vars(cls), cls.__name__
+    exact = {cls for cls in CURVE_TYPES if vars(cls)["BATCH_EXACT"]}
+    assert exact == {type(curve) for curve in BATCH_CASES}
+
+
+@pytest.mark.parametrize("curve", BATCH_CASES)
+def test_batch_exact_curves_evaluate_batches_as_singles(curve: CurveModel) -> None:
+    assert curve.batch_exact
+    lengths = np.linspace(0.0, curve.length(), BATCH_PROBES)
+    batch = curve.point_at(lengths)
+    single = np.array([curve.point_at(np.array([s]))[0] for s in lengths.tolist()])
+    assert batch.tolist() == single.tolist()
