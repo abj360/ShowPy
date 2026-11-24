@@ -245,7 +245,13 @@ def test_reorders_are_one_order_change_each() -> None:
 
 def test_renumber_changes_set_identities_only() -> None:
     show = add_set(two_set_show(), "9", 4.0)
+    show = pin(pin(show, "set", "9"), "transition", "2→9")
     renamed, mapping = renumber(show)
+    assert [(p.target, p.id) for p in renamed.pins] == [("set", "3"), ("transition", "2→3")]
+    assert items(renamed)[ItemKey(kind="pin_order", path=())] == [
+        ["set", "9"],
+        ["transition", "2-9"],
+    ]
     assert mapping[SetId("9")] == "3"
     found = changes(show, renamed).changes
     assert [c.key for c in found] == [ItemKey(kind="set", path=("9",))]

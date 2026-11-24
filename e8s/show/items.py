@@ -20,7 +20,8 @@ Key rules (kind, path: value):
         stored folder name of the two set keys, such as `1-2`
     path_row (transition key, spot ID) and route (transition key, route ID)
     spot (spot ID,), group (group key,) and selection (selection name,): the spot IDs listed
-    pin (pin target, pin ID): one ID can be pinned both as a spot and as a form
+    pin (pin target, pin ID): one ID can be pinned both as a spot and as a form; a set pin
+        names its set key and a transition pin its transition key, so a renumber moves no pin
     facing_override (): every override in one item, in show order
     sheet (), timeline ()
     show (): ID, title, pack, dependencies, extensions and the cast's label scheme, which
@@ -49,6 +50,7 @@ from e8s.choreo.form_models import Form
 from e8s.choreo.models import Set
 from e8s.choreo.path_models import FacingOverride, TransitionSpec
 from e8s.core.errors import SchemaError
+from e8s.core.ids import parse_tid
 from e8s.core.json_types import FrozenJsonValue, JsonValue
 from e8s.core.readonly import ReadOnlyMap, thaw_json
 from e8s.sheet.models import Sheet
@@ -252,8 +254,8 @@ def _pin_entries(path: _Path, record: Pin) -> Iterator[_Entry]:
     yield ("pin", path, None), _without(record.to_json(), TARGET_FIELD, ID_FIELD)
 
 
-def _pin_order_entries(path: _Path, pins: tuple[Pin, ...]) -> Iterator[_Entry]:
-    yield ("pin_order", path, None), [[record.target, record.id] for record in pins]
+def _pin_order_entries(path: _Path, pin_paths: tuple[_Path, ...]) -> Iterator[_Entry]:
+    yield ("pin_order", path, None), [list(pin_path) for pin_path in pin_paths]
 
 
 def _spot_order_entries(path: _Path, spots: tuple[Spot, ...]) -> Iterator[_Entry]:
@@ -289,13 +291,38 @@ def _show_entries(path: _Path, show: Show) -> Iterator[_Entry]:
     yield ("show", path, None), meta
 
 
+def _keys(show: Show) -> dict[str, str]:
+    return {current.id: set_key(current) for current in show.sets}
+
+
+def _transition_key(keys: Mapping[str, str], tid: tuple[str, str]) -> str:
+    """Returns a transition's item key: the stored folder of its set keys; an unknown ID stays."""
+    return transition_folder((keys.get(tid[0], tid[0]), keys.get(tid[1], tid[1])))
+
+
+def _pin_path(keys: Mapping[str, str], record: Pin) -> _Path:
+    """Returns a pin's item path, naming a set or transition by set keys, as stored folders do."""
+    if record.target == "set":
+        return record.target, keys.get(record.id, record.id)
+    if record.target == "transition":
+        return record.target, _transition_key(keys, parse_tid(record.id))
+    return record.target, record.id
+
+
 def _transitions(show: Show) -> dict[_Path, TransitionSpec]:
-    keys = {current.id: set_key(current) for current in show.sets}
-    folders = (
-        (transition_folder((keys.get(s.id[0], s.id[0]), keys.get(s.id[1], s.id[1]))), s)
-        for s in show.transitions
-    )
-    return _unique("transition", (((folder,), spec) for folder, spec in folders))
+    keys = _keys(show)
+    found = (((_transition_key(keys, spec.id),), spec) for spec in show.transitions)
+    return _unique("transition", found)
+
+
+def _pins(show: Show) -> dict[_Path, Pin]:
+    keys = _keys(show)
+    return _unique("pin", ((_pin_path(keys, record), record) for record in show.pins))
+
+
+def _pin_paths(show: Show) -> dict[_Path, tuple[_Path, ...]]:
+    keys = _keys(show)
+    return {(): tuple(_pin_path(keys, record) for record in show.pins)}
 
 
 class _Area(Protocol):
@@ -354,10 +381,8 @@ AREAS: tuple[_Area, ...] = (
     _Sourced[tuple[str, ...]](
         lambda show: {(k,): ids for k, ids in show.cast.selections.items()}, _selection_entries
     ),
-    _Sourced[Pin](
-        lambda show: _unique("pin", (((p.target, p.id), p) for p in show.pins)), _pin_entries
-    ),
-    _Sourced[tuple[Pin, ...]](lambda show: {(): show.pins}, _pin_order_entries),
+    _Sourced[Pin](_pins, _pin_entries),
+    _Sourced[tuple[_Path, ...]](_pin_paths, _pin_order_entries),
     _Sourced[tuple[FacingOverride, ...]](
         lambda show: {(): show.facing_overrides}, _override_entries
     ),
