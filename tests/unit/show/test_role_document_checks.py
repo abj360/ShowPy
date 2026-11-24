@@ -19,6 +19,8 @@ Contains:
     test_regression_noncanonical_layout1_tree_normalizes_once: re-encodes a format-2 layout-1 tree
         holding `-0.0` and a reformatted sheet in one revision before two writes to different
         documents, and adds nothing on a later save
+    test_regression_decode_cache_sees_a_rewritten_role_document: decodes the new positions when
+        only drill.json changes under a shared DecodeCache
 """
 
 import json
@@ -32,6 +34,7 @@ from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, StorageError
 from e8s.core.util import content_hash
 from e8s.examples import two_set_show
+from e8s.show.decode_cache import DecodeCache
 from e8s.show.documents import SHOW_DOC, decode_show, dump_json, dump_show_doc, encode_show
 from e8s.show.history_models import Revision
 from e8s.show.integrity import blob_digest, require_known_path
@@ -48,6 +51,7 @@ ROLE_NAMES = ("drill.json", "facing.json", "labels.json")
 LONG_ID_CHARS = 10_000
 NEGATIVE_ZERO = b'"x": -0.0'
 TOTAL_COUNTS = 100.0
+MOVED_X = 7.5
 LISTED_SPOTS = 20
 STRAY_SPOTS = 30
 
@@ -194,3 +198,17 @@ def test_regression_noncanonical_layout1_tree_normalizes_once() -> None:
     assert len(repo.revisions(SHOW_ID)) == count + 3
     tree = ws.tree_at(ws.revision)
     assert not [p for p, raw in tree.items() if b"-0.0" in raw]
+
+
+def test_regression_decode_cache_sees_a_rewritten_role_document() -> None:
+    docs = encode_show(two_set_show())
+    cache = DecodeCache()
+    digests = {p: blob_digest(raw) for p, raw in docs.items()}
+    assert decode_show(docs, cache=cache, digests=digests) == two_set_show()
+    drill = json.loads(docs["/sets/2/drill.json"])
+    drill["T1"]["x"] = MOVED_X
+    moved = {**docs, "/sets/2/drill.json": dump_json(drill)}
+    moved_digests = {p: blob_digest(raw) for p, raw in moved.items()}
+    decoded = decode_show(moved, cache=cache, digests=moved_digests)
+    assert decoded.set("2").get("T1").x == MOVED_X
+    assert decoded.set("2").get("T2") == two_set_show().set("2").get("T2")
