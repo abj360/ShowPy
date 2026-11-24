@@ -57,11 +57,12 @@ def test_every_change_model_round_trips_through_json(model: FrozenModel) -> None
     assert type(model).from_json(model.to_json()) == model
 
 
-def test_item_kind_lists_the_fifteen_kinds_in_order() -> None:
+def test_item_kind_lists_the_seventeen_kinds_in_order() -> None:
     assert ItemKind.__value__.__args__ == (
         "placement",
         "set",
         "set_order",
+        "spot_order",
         "form",
         "path_row",
         "transition",
@@ -70,6 +71,7 @@ def test_item_kind_lists_the_fifteen_kinds_in_order() -> None:
         "group",
         "selection",
         "pin",
+        "pin_order",
         "facing_override",
         "sheet",
         "timeline",
