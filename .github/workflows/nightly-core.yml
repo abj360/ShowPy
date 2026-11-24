@@ -8,9 +8,10 @@ on:
 permissions:
   contents: read
 
+# A dispatch waits for a running scheduled run instead of cancelling it.
 concurrency:
   group: nightly-core-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   # Fuzzes every core parser for 10 minutes, then records the Rust and Python mutation scores.
@@ -70,8 +71,10 @@ jobs:
             mutants-summary.json
             mutants.out/
           if-no-files-found: warn
+      # Saved after a crash or a tool that cannot run too, so the tools are not rebuilt nightly.
       - if: >-
-          github.ref == 'refs/heads/main' && steps.restore-cargo-tools.outputs.cache-hit != 'true'
+          !cancelled() && github.ref == 'refs/heads/main' &&
+          steps.restore-cargo-tools.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .cargo-tools

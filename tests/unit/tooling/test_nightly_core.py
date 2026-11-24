@@ -27,6 +27,9 @@ Contains:
     test_nightly_core_keeps_the_workflow_conventions: SHA pins, no persisted credentials,
         read-only permissions, the pinned toolchain and Rust cache before uv
     test_nightly_core_saves_caches_only_from_main: the Rust, uv and cargo tool caches
+    test_regression_nightly_core_saves_tools_after_a_failure_and_never_cancels: a crash or a
+        tool that cannot run still saves the cargo tools, and a dispatch never cancels the
+        scheduled run
 """
 
 import ast
@@ -95,6 +98,10 @@ NIGHTLY_WORKFLOW = ROOT / ".github" / "workflows" / "nightly-core.yml"
 NIGHTLY_TRIGGERS = 'on:\n  schedule:\n    - cron: "17 4 * * *"\n  workflow_dispatch:\n'
 NIGHTLY_PERMISSIONS = "permissions:\n  contents: read\n"
 NIGHTLY_JOB = "core"
+NIGHTLY_CONCURRENCY = (
+    "concurrency:\n  group: nightly-core-${{ github.ref }}\n  cancel-in-progress: false\n"
+)
+CACHE_SAVE_STEP = "uses: actions/cache/save@"
 FUZZ_STEP = "run: uv run --locked nox -s rustfuzz -- --seconds 600"
 MUTANTS_STEP = "run: uv run --locked nox -s mutants"
 NOT_CANCELLED = "${{ !cancelled() }}"
@@ -335,3 +342,11 @@ def test_nightly_core_saves_caches_only_from_main() -> None:
     assert len(setup_uv) == 1
     assert UV_CACHE_SAVE in setup_uv[0]
     assert "uses: actions/cache@" not in job
+
+
+def test_regression_nightly_core_saves_tools_after_a_failure_and_never_cancels() -> None:
+    workflow = _nightly()
+    assert workflow_section(workflow, "concurrency") == NIGHTLY_CONCURRENCY
+    steps = job_steps(ci_job(workflow, NIGHTLY_JOB))
+    save = next(step for step in steps if CACHE_SAVE_STEP in step)
+    assert step_value(save, "if").startswith("!cancelled() && ")
