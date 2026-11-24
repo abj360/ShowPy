@@ -6,6 +6,9 @@ Contains:
     ItemKey: identifies one show item by kind, path and role
     ItemChange: holds one item's value before and after
     ChangeSet: holds the changes between two shows in key order
+    MergeConflict: holds one item that both sides changed differently
+    MergeResult: holds a merged show or the conflicts that stop it
+    IdChanges: holds the set and spot ID renames between two shows
 """
 
 import itertools
@@ -15,7 +18,9 @@ from typing import Literal, Protocol, Self
 from pydantic import model_validator
 
 from e8s.core.errors import SchemaError
+from e8s.core.ids import SetId, SpotId
 from e8s.core.types import FrozenModel, JsonAny
+from e8s.show.models import Show
 
 type ItemKind = Literal[
     "placement",
@@ -121,4 +126,63 @@ class ChangeSet(FrozenModel):
             what="changes",
             hint="sort the changes by ItemKey.sort_key() and give each item one change",
         )
+        return self
+
+
+class MergeConflict(FrozenModel):
+    """Holds one item that both sides changed in different ways.
+
+    Attributes:
+        key: The item.
+        base: Its JSON value in the common ancestor; None when absent.
+        ours: Its JSON value on our side; None when absent.
+        theirs: Its JSON value on their side; None when absent.
+        reason: Why the two changes cannot combine.
+    """
+
+    key: ItemKey
+    base: JsonAny = None
+    ours: JsonAny = None
+    theirs: JsonAny = None
+    reason: str
+
+
+class MergeResult(FrozenModel):
+    """Holds the outcome of a merge: a merged show, or the conflicts that stop it.
+
+    Attributes:
+        show: The merged show; None when conflicts remain.
+        conflicts: Items both sides changed differently; empty when the merge is clean.
+    """
+
+    show: Show | None = None
+    conflicts: tuple[MergeConflict, ...] = ()
+
+    @model_validator(mode="after")
+    def _require_one_outcome(self) -> Self:
+        if (self.show is None) == (not self.conflicts):
+            raise SchemaError(
+                "a merge result holds a show or conflicts, never both and never neither",
+                hint="give `show` with no conflicts for a clean merge, or `conflicts` alone",
+            )
+        return self
+
+
+class IdChanges(FrozenModel):
+    """Holds the set and spot ID renames between two shows, as (old, new) pairs.
+
+    Attributes:
+        sets: Renamed sets, sorted and unique.
+        spots: Renamed spots, sorted and unique.
+    """
+
+    sets: tuple[tuple[SetId, SetId], ...] = ()
+    spots: tuple[tuple[SpotId, SpotId], ...] = ()
+
+    @model_validator(mode="after")
+    def _require_sorted_unique(self) -> Self:
+        for what, pairs in (("set renames", self.sets), ("spot renames", self.spots)):
+            _require_strictly_increasing(
+                pairs, lambda pair: pair, what=what, hint="sort the (old, new) pairs, one each"
+            )
         return self

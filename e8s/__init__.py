@@ -594,9 +594,12 @@ if TYPE_CHECKING:
     )
     from e8s.show.change_models import (
         ChangeSet,
+        IdChanges,
         ItemChange,
         ItemKey,
         ItemKind,
+        MergeConflict,
+        MergeResult,
     )
     from e8s.show.changes import (
         apply_change,
@@ -859,6 +862,7 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "Hold": ("e8s.time.models", "Hold"),
     "ID_MAX_LENGTH": ("e8s.core.ids", "ID_MAX_LENGTH"),
     "ID_PATTERN": ("e8s.core.ids", "ID_PATTERN"),
+    "IdChanges": ("e8s.show.change_models", "IdChanges"),
     "InMemoryAssetStore": ("e8s.show.assets", "InMemoryAssetStore"),
     "InMemoryRepository": ("e8s.show.memory_backend", "InMemoryRepository"),
     "InMemorySheetStore": ("e8s.sheet.templates", "InMemorySheetStore"),
@@ -900,6 +904,8 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "MatchWeights": ("e8s.choreo.match_models", "MatchWeights"),
     "MeasureLabel": ("e8s.time.models", "MeasureLabel"),
     "MeasureSetting": ("e8s.time.models", "MeasureSetting"),
+    "MergeConflict": ("e8s.show.change_models", "MergeConflict"),
+    "MergeResult": ("e8s.show.change_models", "MergeResult"),
     "MigrationReport": ("e8s.show.migrate", "MigrationReport"),
     "MissingExtraError": ("e8s.core.extras", "MissingExtraError"),
     "MissingFontError": ("e8s.core.errors", "MissingFontError"),
@@ -1446,6 +1452,7 @@ __all__ = [
     "GuideLine",
     "Highlight",
     "Hold",
+    "IdChanges",
     "InMemoryAssetStore",
     "InMemoryRepository",
     "InMemorySheetStore",
@@ -1467,6 +1474,8 @@ __all__ = [
     "MatchWeights",
     "MeasureLabel",
     "MeasureSetting",
+    "MergeConflict",
+    "MergeResult",
     "MigrationReport",
     "MissingExtraError",
     "MissingFontError",

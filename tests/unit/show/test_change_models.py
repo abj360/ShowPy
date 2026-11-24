@@ -8,26 +8,47 @@ Contains:
     test_item_kind_*: lists the kinds a change can point at
     test_item_key_*: orders keys and refuses an empty role
     test_change_set_refuses_*: refuses changes that are unsorted or hold one item twice
+    test_id_changes_refuse_*: refuses pairs that are unsorted or repeated
+    test_merge_result_refuses_*: refuses a result that holds both outcomes or neither
 """
 
 import pytest
 
 from e8s.core.errors import SchemaError
+from e8s.core.ids import SetId, SpotId
 from e8s.core.types import FrozenModel
+from e8s.examples import two_set_show
 from e8s.show.change_models import (
     ChangeSet,
+    IdChanges,
     ItemChange,
     ItemKey,
     ItemKind,
+    MergeConflict,
+    MergeResult,
 )
 
 PLACEMENT_KEY = ItemKey(kind="placement", path=("2", "T1"), role="drill")
 SET_KEY = ItemKey(kind="set", path=("2",))
 CHANGE = ItemChange(key=PLACEMENT_KEY, before=None, after={"x": 1.5, "tags": ["a", [True]]})
+CONFLICT = MergeConflict(
+    key=PLACEMENT_KEY,
+    base={"x": 1.0, "tags": [1, None]},
+    ours=[1, 2],
+    theirs="moved",
+    reason="both moved the spot",
+)
 MODELS: tuple[FrozenModel, ...] = (
     PLACEMENT_KEY,
     CHANGE,
     ChangeSet(changes=(CHANGE, ItemChange(key=SET_KEY, before=3, after=None))),
+    CONFLICT,
+    MergeResult(show=two_set_show()),
+    MergeResult(conflicts=(CONFLICT,)),
+    IdChanges(
+        sets=((SetId("1"), SetId("a")), (SetId("2"), SetId("b"))),
+        spots=((SpotId("T1"), SpotId("T9")),),
+    ),
 )
 
 
@@ -76,3 +97,23 @@ def test_change_set_refuses_unsorted_changes() -> None:
 def test_change_set_refuses_one_item_twice() -> None:
     with pytest.raises(SchemaError):
         ChangeSet(changes=(CHANGE, CHANGE))
+
+
+@pytest.mark.parametrize(
+    "pairs", [(("2", "b"), ("1", "a")), (("1", "a"), ("1", "a"))], ids=["unsorted", "repeated"]
+)
+def test_id_changes_refuse_unsorted_or_repeated_pairs(pairs: tuple[tuple[str, str], ...]) -> None:
+    with pytest.raises(SchemaError):
+        IdChanges(sets=tuple((SetId(old), SetId(new)) for old, new in pairs))
+    with pytest.raises(SchemaError):
+        IdChanges(spots=tuple((SpotId(old), SpotId(new)) for old, new in pairs))
+
+
+def test_merge_result_refuses_both_outcomes() -> None:
+    with pytest.raises(SchemaError):
+        MergeResult(show=two_set_show(), conflicts=(CONFLICT,))
+
+
+def test_merge_result_refuses_neither_outcome() -> None:
+    with pytest.raises(SchemaError):
+        MergeResult()

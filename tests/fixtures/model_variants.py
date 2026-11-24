@@ -282,6 +282,9 @@ def _show() -> dict[str, tuple[Changes, ...]]:
         "ItemKey": ({"role": "drill"},),
         "ItemChange": ({"before": {"x": 1.0, "tags": [1, None]}, "after": [True, "moved"]},),
         "ChangeSet": ({"changes": (Example("ItemChange"),)},),
+        "MergeConflict": ({"base": {"n": 1}, "ours": [1, 2], "theirs": "moved"},),
+        "MergeResult": ({"show": None, "conflicts": (Example("MergeConflict"),)},),
+        "IdChanges": ({"sets": (("1", "a"), ("2", "b")), "spots": (("T1", "T9"),)},),
         "Revision": ({"changed": ("/show/show.json",)},),
         "Show": (
             {

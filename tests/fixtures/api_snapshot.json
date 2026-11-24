@@ -606,6 +606,12 @@
   "ID_PATTERN": {
     "constant": "re.compile('^[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,62}[A-Za-z0-9_])?$')"
   },
+  "IdChanges": {
+    "model": {
+      "sets": "tuple[tuple[e8s.core.ids.SetId, e8s.core.ids.SetId], ...]",
+      "spots": "tuple[tuple[e8s.core.ids.SpotId, e8s.core.ids.SpotId], ...]"
+    }
+  },
   "InMemoryAssetStore": "() -> None",
   "InMemoryRepository": "() -> None",
   "InMemorySheetStore": "() -> None",
@@ -786,6 +792,21 @@
       "changes": "tuple[tuple[NonNegCount, PositiveFinite], ...]",
       "counts_per_measure": "PositiveFinite",
       "start_measure": "int"
+    }
+  },
+  "MergeConflict": {
+    "model": {
+      "base": "JsonAny",
+      "key": "e8s.show.change_models.ItemKey",
+      "ours": "JsonAny",
+      "reason": "str",
+      "theirs": "JsonAny"
+    }
+  },
+  "MergeResult": {
+    "model": {
+      "conflicts": "tuple[e8s.show.change_models.MergeConflict, ...]",
+      "show": "e8s.show.models.Show | None"
     }
   },
   "MigrationReport": {
