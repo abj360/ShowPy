@@ -46,7 +46,7 @@ NOT_IN_IMAGE = {
     "about.toml": "notice settings for nox -s rust, outside the image",
     "deny.toml": "crate policy for nox -s rust; read only by source-checkout tests",
     ".env.example": "compose reads .env from the host",
-    ".gitattributes": "git settings; the image has no .git",
+    ".gitattributes": "git settings; the image has no .git, and only source-checkout tests read it",
     ".gitignore": "git settings; the image has no .git",
     ".pre-commit-config.yaml": "hooks run on the host",
     ".prettierignore": "Prettier runs in lint, outside the image",
