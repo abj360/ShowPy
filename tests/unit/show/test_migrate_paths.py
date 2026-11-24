@@ -95,7 +95,7 @@ def _migrated(docs: dict[str, JsonValue]) -> tuple[dict[str, JsonValue], ReportB
 
 
 def _row(out: dict[str, JsonValue]) -> object:
-    spec = TransitionSpec.model_validate(out[PATHS])
+    spec = TransitionSpec.from_json(out[PATHS])
     return spec.row("T1").motion_params
 
 
@@ -138,7 +138,7 @@ def test_regression_easing_strength_below_one_is_raised_with_a_repair() -> None:
         "easing": {"kind": "ease_in", "strength": LOW_STRENGTH},
     }
     out, report = _migrated(_v1_docs(row))
-    assert TransitionSpec.model_validate(out[PATHS]).row("T1").easing.strength == 1.0
+    assert TransitionSpec.from_json(out[PATHS]).row("T1").easing.strength == 1.0
     (repair,) = report.build().repairs
     assert "rows.T1.easing.strength" in repair
 
@@ -178,7 +178,7 @@ def _facing_row(mode: str, value: JsonValue) -> dict[str, JsonValue]:
 
 
 def _facing_of(out: dict[str, JsonValue]) -> object:
-    return TransitionSpec.model_validate(out[PATHS]).row("T1").facing_value
+    return TransitionSpec.from_json(out[PATHS]).row("T1").facing_value
 
 
 def test_regression_v1_facing_values_are_tagged_by_mode() -> None:
@@ -294,7 +294,7 @@ ROUTE_CURVES = [
 def test_regression_v1_route_curve_recipe_becomes_a_typed_curve(curve: CurveModel) -> None:
     """Stores the curve model of each recipe kind and keeps the route's other fields."""
     out, report = _migrated(_route_doc(curve.construction()))
-    route = TransitionSpec.model_validate(out[PATHS]).routes[RouteId("r")]
+    route = TransitionSpec.from_json(out[PATHS]).routes[RouteId("r")]
     assert route.curve == curve
     assert (route.members, route.travel) == ((SpotId("T1"),), 4.0)
     assert report.build().repairs == ()

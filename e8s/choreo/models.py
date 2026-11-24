@@ -13,8 +13,7 @@ Contains:
     Set.with_placements(): returns a set with placements replaced or patched, respecting pins
     SpotCount: counts spots on and off the field in one set
 
-Form, path and match classes live in form_models, path_models and match_models; their old names
-here resolve with a deprecation warning.
+Form, path and match classes live in form_models, path_models and match_models.
 """
 
 import math
@@ -31,7 +30,6 @@ from pydantic import (
     model_validator,
 )
 
-from e8s.core.deprecation import moved
 from e8s.core.errors import LockedError, SchemaError, UnknownRefError
 from e8s.core.extras import require_extra
 from e8s.core.ids import LEGACY_IDS_KEY, FormId, SetId, SpotId, check_id
@@ -244,7 +242,7 @@ def _apply_change(current: Placement, change: Placement | PlacementPatch) -> Pla
             f"update for {current.entity} is a {type(change).__name__}",
             hint="pass a Placement or a PlacementPatch",
         )
-    return current.replace(**{name: getattr(change, name) for name in change.model_fields_set})
+    return current.replace(**{name: getattr(change, name) for name in change._set_fields()})
 
 
 class SpotCount(FrozenModel):
@@ -261,118 +259,3 @@ class SpotCount(FrozenModel):
     on_field: int
     off_field: int
     changed: bool
-
-
-__getattr__ = moved(
-    __name__,
-    {
-        "SpacingSpec": "e8s.choreo.form_models.SpacingSpec",
-        "FacingSpec": "e8s.choreo.form_models.FacingSpec",
-        "TextRecipe": "e8s.choreo.form_models.TextRecipe",
-        "FormKind": "e8s.choreo.form_models.FormKind",
-        "CrowdedStroke": "e8s.choreo.form_models.CrowdedStroke",
-        "TextReport": "e8s.choreo.form_models.TextReport",
-        "Form": "e8s.choreo.form_models.Form",
-        "FormFnInfo": "e8s.choreo.form_models.FormFnInfo",
-        "FONT_URI_PATTERN": "e8s.choreo.form_models.FONT_URI_PATTERN",
-        "MAX_TEXT_FONTS": "e8s.choreo.form_models.MAX_TEXT_FONTS",
-        "FontUri": "e8s.choreo.form_models.FontUri",
-        "PathStyle": "e8s.choreo.path_models.PathStyle",
-        "FacingMode": "e8s.choreo.path_models.FacingMode",
-        "TurnDirection": "e8s.choreo.path_models.TurnDirection",
-        "FacingOverride": "e8s.choreo.path_models.FacingOverride",
-        "Waypoint": "e8s.choreo.path_models.Waypoint",
-        "Easing": "e8s.choreo.path_models.Easing",
-        "PathRow": "e8s.choreo.path_models.PathRow",
-        "Route": "e8s.choreo.path_models.Route",
-        "TransitionSpec": "e8s.choreo.path_models.TransitionSpec",
-        "DEFAULT_EASING_STRENGTH": "e8s.choreo.path_models.DEFAULT_EASING_STRENGTH",
-        "MatchObjective": "e8s.choreo.match_models.MatchObjective",
-        "CostFn": "e8s.choreo.match_models.CostFn",
-        "MatchOptions": "e8s.choreo.match_models.MatchOptions",
-        "MatchResult": "e8s.choreo.match_models.MatchResult",
-        "MATCH_WEIGHT_KEYS": "e8s.choreo.match_models.MATCH_WEIGHT_KEYS",
-    },
-    since="0.4.0",
-    remove="0.6.0",
-)
-
-if TYPE_CHECKING:
-    from e8s.choreo.form_models import (
-        FONT_URI_PATTERN as FONT_URI_PATTERN,
-    )
-    from e8s.choreo.form_models import (
-        MAX_TEXT_FONTS as MAX_TEXT_FONTS,
-    )
-    from e8s.choreo.form_models import (
-        CrowdedStroke as CrowdedStroke,
-    )
-    from e8s.choreo.form_models import (
-        FacingSpec as FacingSpec,
-    )
-    from e8s.choreo.form_models import (
-        FontUri as FontUri,
-    )
-    from e8s.choreo.form_models import (
-        Form as Form,
-    )
-    from e8s.choreo.form_models import (
-        FormFnInfo as FormFnInfo,
-    )
-    from e8s.choreo.form_models import (
-        FormKind as FormKind,
-    )
-    from e8s.choreo.form_models import (
-        SpacingSpec as SpacingSpec,
-    )
-    from e8s.choreo.form_models import (
-        TextRecipe as TextRecipe,
-    )
-    from e8s.choreo.form_models import (
-        TextReport as TextReport,
-    )
-    from e8s.choreo.match_models import (
-        MATCH_WEIGHT_KEYS as MATCH_WEIGHT_KEYS,
-    )
-    from e8s.choreo.match_models import (
-        CostFn as CostFn,
-    )
-    from e8s.choreo.match_models import (
-        MatchObjective as MatchObjective,
-    )
-    from e8s.choreo.match_models import (
-        MatchOptions as MatchOptions,
-    )
-    from e8s.choreo.match_models import (
-        MatchResult as MatchResult,
-    )
-    from e8s.choreo.path_models import (
-        DEFAULT_EASING_STRENGTH as DEFAULT_EASING_STRENGTH,
-    )
-    from e8s.choreo.path_models import (
-        Easing as Easing,
-    )
-    from e8s.choreo.path_models import (
-        FacingMode as FacingMode,
-    )
-    from e8s.choreo.path_models import (
-        FacingOverride as FacingOverride,
-    )
-    from e8s.choreo.path_models import (
-        PathRow as PathRow,
-    )
-    from e8s.choreo.path_models import (
-        PathStyle as PathStyle,
-    )
-    from e8s.choreo.path_models import (
-        Route as Route,
-    )
-    from e8s.choreo.path_models import (
-        TransitionSpec as TransitionSpec,
-    )
-    from e8s.choreo.path_models import (
-        TurnDirection as TurnDirection,
-    )
-    from e8s.choreo.path_models import (
-        Waypoint as Waypoint,
-    )

@@ -1,10 +1,10 @@
 """
 _notes_document.py --- the private note models that read and write the notes document
 
-From format v2 a show holds no notes. They live in a notes document of their own, stored at
-`/notes/notes.json` beside the show's documents. The v1 migration reads v1 notes into it with
-these models, and keeps doing so after the public notes names leave the library in 1.0.0, until
-v1 reading ends; `e8s.notes.models` re-exports them under their public names until then.
+From format v2 a show holds no notes, and the library has no notes functions: the host keeps
+notes. Migrating a v1 show writes its notes, as plain JSON, to a notes document of their own,
+stored at `/notes/notes.json` beside the show's documents; these models shape and check that
+document, so the notes of a v1 show are never lost.
 
 Contains:
     NOTES_FORMAT: names the notes document format, `e8.notes`
@@ -63,7 +63,7 @@ class NotesDocument(FrozenModel):
         show: ID of the show the notes belong to.
         notes: The notes in order; IDs are unique ignoring case.
 
-    >>> NotesDocument(show="show-1").model_dump(mode="json")
+    >>> NotesDocument(show="show-1").to_json()
     {'format': 'e8.notes', 'version': 1, 'show': 'show-1', 'notes': []}
     """
 

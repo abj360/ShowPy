@@ -4,6 +4,8 @@
 test_models.py --- tests timeline data class defaults, immutability and JSON safety
 """
 
+import json
+
 import pydantic
 import pytest
 
@@ -59,13 +61,13 @@ def test_models_are_frozen() -> None:
 
 def test_measure_changes_round_trip_through_json() -> None:
     setting = MeasureSetting(counts_per_measure=4.0, changes=((16.0, 3.0),))
-    restored = MeasureSetting.model_validate_json(setting.model_dump_json())
+    restored = MeasureSetting.from_json(json.loads(json.dumps(setting.to_json())))
     assert restored == setting
 
 
 def test_unknown_fields_are_rejected() -> None:
     with pytest.raises(SchemaError):
-        Hold.model_validate({"at_count": 1.0, "seconds": 1.0, "colour": "red"})
+        Hold.from_json({"at_count": 1.0, "seconds": 1.0, "colour": "red"})
 
 
 def _counts(holds: tuple[Hold, ...] = (), total_counts: float | None = None) -> Timeline:

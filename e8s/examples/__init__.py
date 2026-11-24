@@ -7,14 +7,13 @@ Unlike other subpackages, this `__init__.py` re-exports its names so that
 Contains:
     sheets: the example sheet
     shows: the example shows and their variants
-    publishing: example performers and publications
 """
 
-from e8s.examples.publishing import EXAMPLE_LINK, EXAMPLE_TIME, live_publication, performer
 from e8s.examples.sheets import DEPTH, WIDTH, field_sheet
 from e8s.examples.shows import (
     COUNTS,
     EXAMPLE_TID,
+    EXAMPLE_TIME,
     TEMPO,
     crossing_show,
     two_set_show,
@@ -25,15 +24,12 @@ from e8s.examples.shows import (
 __all__ = [
     "COUNTS",
     "DEPTH",
-    "EXAMPLE_LINK",
     "EXAMPLE_TID",
     "EXAMPLE_TIME",
     "TEMPO",
     "WIDTH",
     "crossing_show",
     "field_sheet",
-    "live_publication",
-    "performer",
     "two_set_show",
     "with_rows",
     "with_targets",

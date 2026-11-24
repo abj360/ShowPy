@@ -128,24 +128,24 @@ class ArrayModel(FrozenModel):
 
     Pydantic compares fields with `==`, which an array answers elementwise, and copies without
     validating, so models that hold `ReadOnlyArray` fields inherit from this class instead of
-    FrozenModel. A deep copy is the model itself, since nothing in it can change.
-    `model_construct` skips validation, so arrays it is given are neither copied nor frozen.
+    FrozenModel. A deep copy is the model itself, since nothing in it can change. Building a
+    model without validation skips the copy, so arrays given that way are not frozen.
     """
 
     def __eq__(self, other: object) -> bool:
         if type(other) is not type(self):
             return NotImplemented
         return all(
-            _same(getattr(self, name), getattr(other, name)) for name in type(self).model_fields
+            _same(getattr(self, name), getattr(other, name)) for name in type(self)._field_names()
         )
 
     def __hash__(self) -> int:
-        return hash(tuple(_hashable(getattr(self, name)) for name in type(self).model_fields))
+        return hash(tuple(_hashable(getattr(self, name)) for name in type(self)._field_names()))
 
     @override
-    def model_copy(self, *, update: Mapping[str, object] | None = None, deep: bool = False) -> Self:
+    def _copied(self, *, update: Mapping[str, object] | None = None, deep: bool = False) -> Self:
         """Returns a validated copy, so an update cannot store a writable or misshapen array."""
-        return self.model_validate({**self.model_dump(), **(update or {})})
+        return self._validated({**self._dumped(), **(update or {})})
 
     @override
     def __deepcopy__(self, memo: dict[int, object] | None = None) -> Self:

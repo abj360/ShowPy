@@ -41,6 +41,8 @@ Contains:
         ones
     test_slow_session_runs_timing_tests_without_workers: the timing run ends with `-n 0`
     test_slow_session_runs_the_other_slow_tests_on_workers: the other run keeps xdist workers
+    test_slow_session_gives_each_module_to_one_worker: the parallel run passes --dist
+        loadscope, so a module-scoped fixture is built once
     test_serial_sessions_start_no_workers: tests and hashseeds never pass -n, nor does addopts
     test_pytest_runs_resolves_constants_and_keeps_posargs: proves the run scan resolves names
     test_last_value_reads_the_last_occurrence: proves the flag lookup obeys the last value
@@ -71,6 +73,8 @@ NO_WORKERS = "0"
 MARK_FLAG = "-m"
 PARALLEL_MARKS = "slow and not timing"
 TIMING_MARKS = "slow and timing"
+DIST_FLAG = "--dist"
+MODULE_DIST = "loadscope"
 SERIAL_SESSIONS = ("tests", "hashseeds")
 UV_RUN = "_uv_run"
 PYTEST = "pytest"
@@ -471,6 +475,16 @@ def test_slow_session_runs_the_other_slow_tests_on_workers() -> None:
     for run in parallel:
         workers = last_value(run, WORKERS_FLAG) or NO_WORKERS
         assert workers == "auto" or int(workers) > 1
+
+
+def test_slow_session_gives_each_module_to_one_worker() -> None:
+    """Passes `--dist loadscope` to the parallel run, so a module fixture is built once."""
+    runs = pytest_runs(NOXFILE.read_text(), SLOW_SESSION)
+    parallel = [run for run in runs if last_value(run, MARK_FLAG) == PARALLEL_MARKS]
+    assert parallel
+    assert all(last_value(run, DIST_FLAG) == MODULE_DIST for run in parallel)
+    timing = [run for run in runs if last_value(run, MARK_FLAG) == TIMING_MARKS]
+    assert all(DIST_FLAG not in run for run in timing)
 
 
 def test_serial_sessions_start_no_workers() -> None:

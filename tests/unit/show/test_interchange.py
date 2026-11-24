@@ -20,17 +20,19 @@ Contains:
     test_regression_import_export_keeps_x_keys(): keeps top-level x- keys byte for byte
     test_import_json_*extension*(): refuses x- values that are not strict JSON or past the cap
     test_show_extensions_*(): refuses non-x- keys and survives stored documents
-    test_interchange_old_paths_warn_and_resolve(): serves the four names from their old modules
     test_import_positions_*(): merges CSV rows into sets and spots, refuses bad rows and pins
+    test_regression_v1_interchange_reports_dropped_data(): returns the dropped claimability
+        and zone in the migration report and the v1 notes as a notes document
+    test_migrate_json_of_a_current_document_reports_nothing(): an empty report and no notes
     test_regression_import_positions_*(): covers the audited CSV import defects
 """
 
 import base64
-import importlib
 import json
 import math
 import sys
 from datetime import UTC, datetime
+from typing import Any
 
 import numpy as np
 import pytest
@@ -38,8 +40,8 @@ import pytest
 from e8s.choreo.forms import slots, text_form
 from e8s.choreo.models import PlacementPatch
 from e8s.choreo.path_models import PathRow, TransitionSpec
-from e8s.core.caps import MAX_EXTENSION_BYTES, MAX_POINTS, MAX_TEXT_CHARS
-from e8s.core.deprecation import DeprecatedWarning
+from e8s.core.caps import MAX_EXTENSION_BYTES, MAX_POINTS, MAX_SETS, MAX_SPOTS, MAX_TEXT_CHARS
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import (
     FontError,
     LockedError,
@@ -53,7 +55,7 @@ from e8s.core.json_types import JsonValue
 from e8s.core.resources import font_path
 from e8s.core.util import approx_equal, asset_uri
 from e8s.geo.fonts import MAX_FONT_BYTES, FontRegistry, bundled_fonts, register_font
-from e8s.show import interchange, interchange_positions
+from e8s.show import interchange_positions
 from e8s.show.documents import decode_show, encode_show
 from e8s.show.interchange import (
     FONTS_KEY,
@@ -63,15 +65,16 @@ from e8s.show.interchange import (
     import_fonts,
     import_json,
     import_positions,
+    migrate_json,
 )
-from e8s.show.migrate import CURRENT_VERSION, FORMAT
+from e8s.show.migrate import CURRENT_VERSION, FORMAT, MigrationReport
 from e8s.show.models import Show
 from e8s.show.pinning import pin
 from e8s.show.repositories import InMemoryRepository
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.fonts import tiny_bytes
 from tests.fixtures.shows import two_set_show
-from tests.helpers import digests_under_hash_seeds, fails_after
+from tests.helpers import digests_under_hash_seeds, fails_after, json_doc
 
 TOL = 1e-9
 EMPTY_FONTS = FontRegistry(fonts={}, sources={}, names={})
@@ -151,7 +154,7 @@ def test_import_positions_refuses_unknown_group_and_mapping() -> None:
 def test_import_positions_respects_pins() -> None:
     show = two_set_show()
     pinned = show.sets[1].with_placements({"T1": PlacementPatch(pinned=True)})
-    show = show.model_copy(update={"sets": (show.sets[0], pinned)})
+    show = show.replace(sets=(show.sets[0], pinned))
     with pytest.raises(LockedError):
         import_positions(show, IMPORT_TEXT, group="trumpets")
     forced = import_positions(show, IMPORT_TEXT, group="trumpets", force=True)
@@ -265,6 +268,25 @@ def test_regression_import_positions_caps_placements_before_ordering_sets(
         import_positions(two_set_show(), "set,counts,entity,x,y\n" + rows, "trumpets")
 
 
+def test_regression_import_positions_checks_the_set_and_spot_caps_before_ordering_sets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Refuses rows that would pass MAX_SETS or MAX_SPOTS under MAX_POINTS placements, before
+    any set is ordered or any spot built."""
+    _refuse_set_ordering(monkeypatch)
+    show = two_set_show()
+    new_sets = MAX_SETS - len(show.sets) + 1
+    set_rows = "".join(f"{FIRST_NEW_SET + i},4,T1,1,1\n" for i in range(new_sets))
+    with pytest.raises(SchemaError) as too_many_sets:
+        import_positions(show, "set,counts,entity,x,y\n" + set_rows, "trumpets")
+    assert too_many_sets.value.code == ErrorCode.TOO_MANY_SETS
+    new_spots = MAX_SPOTS - len(show.cast.spots) + 1
+    spot_rows = "".join(f"2,8,E{i},1,1\n" for i in range(new_spots))
+    with pytest.raises(SchemaError) as too_many_spots:
+        import_positions(show, "set,counts,entity,x,y\n" + spot_rows, "trumpets")
+    assert too_many_spots.value.code == ErrorCode.TOO_MANY_SPOTS
+
+
 BETWEEN_TEXT = "set,counts,entity,x,y\n1,0,T1,0,0\n1b,4,T1,1,1\n2,8,T1,0,9\n"
 SAVED_AT = datetime(2026, 11, 17, 12, 0, tzinfo=UTC)
 
@@ -289,7 +311,7 @@ def test_regression_import_positions_drops_paths_between_sets_it_separates() -> 
     spec = TransitionSpec(
         id=make_tid("1", "2"), counts=8.0, rows={SpotId("T1"): PathRow(entity=SpotId("T1"), end=2)}
     )
-    stored = base.model_copy(update={"transitions": (spec,)})
+    stored = base.replace(transitions=(spec,))
     merged = import_positions(stored, BETWEEN_TEXT, "trumpets")
     assert merged.transitions == ()
     _saves(merged)
@@ -351,7 +373,7 @@ def _v1_form(form: dict[str, JsonValue]) -> dict[str, JsonValue]:
 
 def test_regression_import_json_reads_a_version_1_document() -> None:
     show = rich_show()
-    dump = json.loads(json.dumps(show.model_dump(mode="json")))
+    dump = json.loads(json.dumps(show.to_json()))
     dump["forms"] = {form_id: _v1_form(form) for form_id, form in dump["forms"].items()}
     document = {"schema": SCHEMA_TAG, "show": dump}
     assert import_json(document) == show
@@ -548,22 +570,6 @@ def test_regression_import_fonts_accepts_an_older_font_under_a_taken_name() -> N
     assert np.array_equal(slots(form, font_registry=imported), slots(form, font_registry=older))
 
 
-@pytest.mark.parametrize(
-    ("old_module", "name"),
-    [
-        ("e8s.export.data", "export_json"),
-        ("e8s.export.data", "import_json"),
-        ("e8s.export.data", "import_fonts"),
-        ("e8s.export.positions", "import_positions"),
-    ],
-)
-def test_interchange_old_paths_warn_and_resolve(old_module: str, name: str) -> None:
-    module = importlib.import_module(old_module)
-    with pytest.warns(DeprecatedWarning, match=f"`{name}` moved to `e8s.show.interchange"):
-        old = getattr(module, name)
-    assert old is getattr(interchange, name)
-
-
 def test_regression_import_json_refuses_an_unknown_top_level_key() -> None:
     document = {**export_json(two_set_show()), "titel": "typo"}
     with pytest.raises(SchemaError) as caught:
@@ -577,8 +583,8 @@ def test_import_json_accepts_an_x_key() -> None:
     show = two_set_show()
     document = {**export_json(show), "x-extra": {"host": "demo", "n": [1, 2]}}
     loaded = import_json(document)
-    assert loaded.model_dump(mode="json")["extensions"]["x-extra"] == {"host": "demo", "n": [1, 2]}
-    assert loaded.model_copy(update={"extensions": {}}) == show
+    assert json_doc(loaded)["extensions"]["x-extra"] == {"host": "demo", "n": [1, 2]}
+    assert loaded.replace(extensions={}) == show
 
 
 HOST_VALUES = {
@@ -604,16 +610,16 @@ def test_regression_import_export_keeps_x_keys() -> None:
 
 def test_export_json_writes_no_x_key_for_a_show_without_extensions() -> None:
     assert not [key for key in export_json(two_set_show()) if key.startswith("x-")]
-    assert "extensions" not in two_set_show().model_dump(mode="json")
+    assert "extensions" not in two_set_show().to_json()
 
 
 def test_import_json_keeps_x_keys_of_a_version_1_document() -> None:
     v1 = {
         "schema": "showpy.show.v1",
-        "show": two_set_show().model_dump(mode="json"),
+        "show": two_set_show().to_json(),
         "x-host": {"k": [1]},
     }
-    assert import_json(v1).model_dump(mode="json")["extensions"] == {"x-host": {"k": [1]}}
+    assert import_json(v1).to_json()["extensions"] == {"x-host": {"k": [1]}}
 
 
 def test_import_json_refuses_an_extension_that_is_not_strict_json() -> None:
@@ -632,13 +638,13 @@ def test_import_json_refuses_an_extension_past_the_cap() -> None:
 
 def test_show_extensions_refuse_a_key_without_the_prefix() -> None:
     with pytest.raises(SchemaError) as caught:
-        Show.model_validate({**two_set_show().model_dump(mode="json"), "extensions": {"host": 1}})
+        Show.from_json({**two_set_show().to_json(), "extensions": {"host": 1}})
     assert "x-" in (caught.value.hint or "")
 
 
 def test_show_extensions_survive_stored_documents() -> None:
-    show = Show.model_validate(
-        {**two_set_show().model_dump(mode="json"), "extensions": {"x-a": {"k": [1, {"z": None}]}}}
+    show = Show.from_json(
+        {**json_doc(two_set_show()), "extensions": {"x-a": {"k": [1, {"z": None}]}}}
     )
     assert decode_show(encode_show(show)).extensions == show.extensions
 
@@ -662,3 +668,50 @@ def test_import_json_checks_the_extension_cap_before_copying_the_values() -> Non
     with pytest.raises(SchemaError) as caught:
         import_json({**export_json(two_set_show()), **big})
     assert str(MAX_EXTENSION_BYTES) in (caught.value.hint or "")
+
+
+V1_ZONE: dict[str, JsonValue] = {
+    "id": "pit",
+    "kind": "pit",
+    "polygon": {"exterior": [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]], "holes": []},
+    "applies_to": "all",
+    "active": None,
+    "note": "",
+}
+V1_NOTE: dict[str, JsonValue] = {
+    "id": "n1",
+    "text": "watch the hash",
+    "anchor": {"kind": "set", "set_id": "2"},
+    "author": "designer",
+    "created_at": "2026-11-12T10:00:00+00:00",
+}
+
+
+def test_regression_v1_interchange_reports_dropped_data() -> None:
+    """Returns the notes, claimability and zones a v1 document holds, which the show drops."""
+    legacy: dict[str, Any] = two_set_show().to_json()
+    legacy["cast"]["spots"][0]["claimable"] = "crew"
+    legacy["sheet"]["zones"] = [V1_ZONE]
+    legacy["notes"] = [V1_NOTE]
+    document = {"schema": "showpy.show.v1", "show": legacy}
+    show, report, notes = migrate_json(document)
+    assert show == import_json(document) == two_set_show()
+    dropped = {(d.document, d.location, d.stored_id): d.to_json()["fields"]
+               for d in report.dropped}  # fmt: skip
+    assert dropped == {
+        ("/show/show.json", "cast.spots[0]", "T1"): {"claimable": "crew"},
+        ("/show/sheet.json", "", None): {"zones": [V1_ZONE]},
+    }
+    assert isinstance(notes, dict)
+    assert notes["format"] == "e8.notes"
+    assert notes["show"] == show.id
+    entries = notes["notes"]
+    assert isinstance(entries, list)
+    assert [entry["id"] for entry in entries if isinstance(entry, dict)] == ["n1"]
+
+
+def test_migrate_json_of_a_current_document_reports_nothing() -> None:
+    show, report, notes = migrate_json(export_json(two_set_show()))
+    assert show == two_set_show()
+    assert report == MigrationReport(from_version=CURRENT_VERSION)
+    assert notes is None

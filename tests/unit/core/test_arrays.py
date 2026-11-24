@@ -19,6 +19,7 @@ Contains:
 """
 
 import copy
+import json
 from typing import Annotated
 
 import numpy as np
@@ -35,7 +36,7 @@ class _Grid(ArrayModel):
 
 
 def _grid(scale: float = 1.0) -> _Grid:
-    return _Grid.model_validate(
+    return _Grid.from_json(
         {"names": ["a", "b"], "values": [[1.0 * scale, 2.0], [3.0, 4.0]], "flags": [True, False]}
     )
 
@@ -58,14 +59,14 @@ def test_regression_array_field_cannot_be_made_writeable() -> None:
 
 def test_array_model_round_trips_through_json() -> None:
     grid = _grid()
-    text = grid.model_dump_json()
-    assert '"values":[[1.0,2.0],[3.0,4.0]]' in text
-    assert _Grid.model_validate_json(text) == grid
+    data = json.loads(json.dumps(grid.to_json()))
+    assert data["values"] == [[1.0, 2.0], [3.0, 4.0]]
+    assert _Grid.from_json(data) == grid
 
 
 def test_regression_zero_row_arrays_keep_their_columns_through_json() -> None:
     empty = _Grid(names=("a", "b", "c"), values=np.empty((0, 3)), flags=np.array([], dtype=bool))
-    read = _Grid.model_validate_json(empty.model_dump_json())
+    read = _Grid.from_json(json.loads(json.dumps(empty.to_json())))
     assert read.values.shape == (0, 3)
     assert read == empty
 
@@ -120,7 +121,7 @@ def test_regression_deepcopy_keeps_arrays_read_only() -> None:
 def test_regression_array_field_rejects_bad_values(field: str, value: object) -> None:
     fields = {"names": ["a"], "values": [[1.0]], "flags": [True], field: value}
     with pytest.raises(SchemaError):
-        _Grid.model_validate(fields)
+        _Grid.from_json(fields)
 
 
 def test_array_field_describes_nested_arrays_in_json_schema() -> None:

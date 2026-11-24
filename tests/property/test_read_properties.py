@@ -5,7 +5,8 @@ test_read_properties.py --- property tests: the floor readers agree with PathEng
 
 Contains:
     test_frames_equal_repeated_sample: every frame equals PathEngine.sample at its count
-    test_holds_keep_spots_still: frames inside a hold share its count and every spot stands still
+    test_holds_keep_spots_still: frames strictly inside a hold share its count and every spot
+        stands still
     test_coordinate_table_equals_positions_at_each_set: every row equals PathEngine.positions
         at its set's count
     test_described_segments_tile_the_transition: each spot's segments run back to back from
@@ -70,7 +71,7 @@ def test_holds_keep_spots_still(show: Show, fps: float) -> None:
         if not 0.0 <= hold.at_count < total:
             continue
         begins = count_to_seconds(show.timeline, hold.at_count)
-        inside = (framed.seconds >= begins) & (framed.seconds <= begins + hold.seconds)
+        inside = (framed.seconds > begins) & (framed.seconds < begins + hold.seconds)
         assert np.all(framed.counts[inside] == hold.at_count)
         for values in (framed.x, framed.y, framed.facing):
             assert np.all(values[inside] == values[inside][:1])

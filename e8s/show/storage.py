@@ -509,7 +509,21 @@ def open_workspace(repo: Repository, show_id: str) -> Workspace:
 
 
 def load_show(ws: Workspace) -> Show:
-    """Reads the whole show at the workspace revision; `show.revision` records it."""
+    """Reads the whole show at the workspace revision; `show.revision` records it.
+
+    A revision stored in an older format is migrated in memory and the show comes back in the
+    current format, without the migration report; the next save normalizes the stored documents.
+    migrate_documents() returns that report, with every renamed ID and dropped stored field, and
+    the repository history keeps the older revision's bytes.
+
+    >>> from datetime import UTC, datetime
+    >>> from e8s.examples import two_set_show
+    >>> from e8s.show.repositories import InMemoryRepository
+    >>> ws = open_workspace(InMemoryRepository(), "show-1")
+    >>> _ = save_show(ws, two_set_show(), datetime(2026, 11, 11, tzinfo=UTC))
+    >>> load_show(ws).id
+    'show-1'
+    """
     show = ws.show_at(ws.revision)
     if show is None:
         raise StorageError(

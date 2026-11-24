@@ -370,7 +370,7 @@ def test_regression_set_sync_never_returns_a_timeline_its_validators_reject() ->
         edited = set_sync(tl, "a", math.inf)
     except E8sError:
         return
-    Timeline.model_validate(edited.model_dump())
+    Timeline.from_json(edited.to_json())
 
 
 def test_regression_from_json_keeps_a_validator_schema_error(

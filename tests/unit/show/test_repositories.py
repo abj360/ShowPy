@@ -307,9 +307,9 @@ def test_regression_put_show_refuses_sets_differing_only_by_case() -> None:
     repo = InMemoryRepository()
     revision = repo.put_show(SHOW_ID, two_set_show(), expected_revision="", at=AT)
     base = two_set_show()
-    lower = base.sets[0].model_copy(update={"id": "a", "key": None})
-    upper = base.sets[1].model_copy(update={"id": "A", "key": None})
-    clash = base.model_copy(update={"sets": (lower, upper)})
+    lower = base.sets[0].replace(id="a", key=None)
+    upper = base.sets[1].replace(id="A", key=None)
+    clash = base._copied(update={"sets": (lower, upper)})
     with pytest.raises(SchemaError):
         repo.put_show(SHOW_ID, clash, expected_revision=revision.id, at=AT)
     assert repo.head(SHOW_ID) == revision.id

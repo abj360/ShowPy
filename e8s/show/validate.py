@@ -16,8 +16,6 @@ from collections.abc import Callable, Iterable, Iterator, Mapping
 from itertools import islice
 from typing import Literal
 
-from pydantic import BaseModel
-
 from e8s.choreo.engine import PathEngine
 from e8s.choreo.match_ops import forms_of_set
 from e8s.choreo.models import Set
@@ -26,8 +24,9 @@ from e8s.core.caps import MAX_COUNTS
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import ContinuityError, E8sError, SchemaError
 from e8s.core.ids import check_id, check_sheet_id, format_tid, parse_ref
+from e8s.core.types import FrozenModel
 from e8s.core.validation import ValidationIssue, ValidationReport
-from e8s.sheet.templates import SheetStore, _get_sheet
+from e8s.sheet.templates import SheetStore, get_sheet
 from e8s.show.document_paths import is_storable_folder
 from e8s.show.models import Show
 from e8s.time.validate import validate_timeline
@@ -248,7 +247,7 @@ def validate_dependencies(show: Show, store: SheetStore | None = None) -> Valida
             )
         )
     try:
-        _get_sheet(ref, store)
+        get_sheet(ref, store)
     except E8sError as error:
         issues.append(_issue(ERROR, ErrorCode.UNKNOWN_SHEET, "sheet", error.message, error.hint))
     return ValidationReport(issues=tuple(issues))
@@ -355,8 +354,8 @@ def _non_finite_values(value: object, path: str) -> Iterator[tuple[str, float]]:
     if isinstance(value, float):
         if not math.isfinite(value):
             yield path, value
-    elif isinstance(value, BaseModel):
-        for name in type(value).model_fields:
+    elif isinstance(value, FrozenModel):
+        for name in type(value)._field_names():
             yield from _non_finite_values(getattr(value, name), f"{path}.{name}" if path else name)
     elif isinstance(value, Mapping):
         for key, item in value.items():

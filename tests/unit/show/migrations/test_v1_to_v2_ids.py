@@ -22,14 +22,12 @@ Contains:
         a non-ASCII letter into `_` after NFC and collapses `..`
     test_regression_rename_rule_splits_a_case_pair_the_replacement_makes: suffixes an ID that
         the replacement makes equal, ignoring case, to an earlier or a kept one
-    test_regression_landmark_and_guide_ids_are_renamed_and_origins_follow: renames sheet
-        landmarks and guides by the sheet-item rule, avoiding landmark names and aliases, and
-        moves a coordinate origin with its landmark
+    test_regression_guide_ids_are_renamed: renames sheet guides by the sheet-item rule
     test_regression_spot_renames_report_each_selector_they_freeze: records a repair for a
         stored pattern selector that the spot renames turn into an ID list
     test_rename_ids_renames_nothing_in_a_valid_show: returns the show and an empty report
     test_regression_every_reference_follows_a_renamed_id: rewrites sets, keys, transitions,
-        forms, routes, zones, selections, pins and selector text, and the result passes every ID
+        forms, routes, selections, pins and selector text, and the result passes every ID
         check; the notes sub-step renames note IDs and points note anchors at the renamed IDs
     test_regression_first_save_moves_the_files_of_renamed_set_folders: moves a set script from
         `/sets/con/` to `/sets/con_/` in one revision, nothing on the next save, for the v0.2.0
@@ -61,12 +59,10 @@ import pytest
 from e8s.cast.spots import define_selection
 from e8s.choreo.path_models import FacingMode, FacingOverride
 from e8s.core.errors import SchemaError, StorageError
-from e8s.core.ids import LEGACY_IDS_KEY, FormId, SetId, ZoneId
+from e8s.core.ids import LEGACY_IDS_KEY, FormId, SetId
 from e8s.core.json_types import JsonValue
-from e8s.core.types import Region
 from e8s.examples import two_set_show
-from e8s.notes.models import NotesDocument
-from e8s.sheet.models import Zone, ZoneKind
+from e8s.show._notes_document import NotesDocument
 from e8s.show.canvas_renames import renamed_canvas
 from e8s.show.documents import (
     LEGACY_NOTES_DOC,
@@ -91,13 +87,12 @@ from e8s.show.storage import load_show, open_workspace, save_show
 from e8s.show.structured import COMMENTS_DOC, SELECTION_DOC
 from e8s.show.validate import validate_show
 from tests.fixtures.generators import seeded_show
-from tests.helpers import TWO_HASH_SEEDS, outputs_under_hash_seeds
+from tests.helpers import TWO_HASH_SEEDS, json_doc, outputs_under_hash_seeds
 
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "repos"
 LEGACY = {LEGACY_IDS_KEY: True}
 AT = datetime(2026, 11, 22, 12, 0, tzinfo=UTC)
 SCRIPT = b"# set script\n"
-SQUARE = Region(exterior=((0.0, 1.0), (1.0, 1.0), (1.0, 2.0), (0.0, 2.0)))
 V020_FORM_RENAMES = 15
 DETERMINISM_SCRIPT = """
 import json, shutil, tempfile
@@ -108,7 +103,7 @@ copy = Path(tempfile.mkdtemp()) / "repo"
 shutil.copytree({repo!r}, copy)
 docs = dict(FileRepository(copy).documents("legacy-show"))
 migrated, report = migrate_documents(docs)
-print(json.dumps(report.model_dump(mode="json"), sort_keys=True))
+print(json.dumps(report.to_json(), sort_keys=True))
 print(sorted(migrated))
 """
 
@@ -127,19 +122,19 @@ def _head(tag: str, tmp_path: Path) -> dict[str, bytes]:
 
 def _legacy_show(dump: dict[str, Any]) -> Show:
     """Validates a show dump the way migration does before its ids step: any v1 ID accepted."""
-    return Show.model_validate(dump, context=LEGACY)
+    return Show._validated(dump, context=LEGACY)
 
 
 def _with_spot_id(old: str, new: str) -> dict[str, Any]:
     """Returns the example show's dump with one spot ID replaced everywhere it appears."""
-    text = json.dumps(two_set_show().model_dump(mode="json"))
+    text = json.dumps(two_set_show().to_json())
     dumped: dict[str, Any] = json.loads(text.replace(f'"{old}"', json.dumps(new)))
     return dumped
 
 
 def _spot_renames(*ids: str) -> tuple[tuple[str, str], ...]:
     """Renames the example show's spots T1, T2, ... to `ids` and returns the spot renames."""
-    dump = two_set_show().model_dump(mode="json")
+    dump = json_doc(two_set_show())
     text = json.dumps(dump)
     for number, new in enumerate(ids, start=1):
         text = text.replace(f'"T{number}"', json.dumps(new))
@@ -263,41 +258,27 @@ def test_regression_rename_rule_splits_a_case_pair_the_replacement_makes() -> No
 
 
 def _legacy_sheet_dump() -> dict[str, Any]:
-    """Gives the example show v1 sheet IDs: landmarks `props`, `-edge-` and `x y`, guide
-    `yard 10`, and coordinates in the show and on the sheet that start at landmark `props`."""
-    dump = two_set_show().model_dump(mode="json")
-    point = {"kind": "point", "geometry": [[0.0, 10.0]], "aliases": []}
-    dump["sheet"]["landmarks"] = [
-        {**point, "id": "props", "name": "Props table"},
-        {**point, "id": "-edge-", "name": "edge"},
-        {**point, "id": "x y", "name": "corner"},
-        {**point, "id": "flag", "name": "flag", "aliases": ["x_y"]},
-    ]
+    """Gives the example show the v1 sheet guide ID `yard 10`."""
+    dump = json_doc(two_set_show())
     dump["sheet"]["guides"] = [
         {"id": "yard 10", "kind": "yard", "points": [[0.0, 0.0], [0.0, 5.0]], "label": "10"}
     ]
-    dump["coordinates"]["origin"] = "props"
-    dump["sheet"]["default_coordinates"]["origin"] = "props"
     return dump
 
 
-def test_regression_landmark_and_guide_ids_are_renamed_and_origins_follow() -> None:
+def test_regression_guide_ids_are_renamed() -> None:
     report = ReportBuilder(FIRST_VERSION)
     show = rename_ids(_legacy_show(_legacy_sheet_dump()), report)
     renamed = report.build().renamed
-    assert renamed["landmark"] == (("props", "props_"), ("-edge-", "_edge_"), ("x y", "x_y.2"))
     assert renamed["guide"] == (("yard 10", "yard_10"),)
-    assert [m.id for m in show.sheet.landmarks] == ["props_", "_edge_", "x_y.2", "flag"]
     assert [g.id for g in show.sheet.guides] == ["yard_10"]
-    assert show.model_dump(mode="json")["coordinates"]["origin"] == "props_"
-    assert show.sheet.default_coordinates.origin == "props_"
-    assert Show.model_validate(show.model_dump(mode="json")) == show
+    assert Show.from_json(show.to_json()) == show
 
 
 def test_regression_spot_renames_report_each_selector_they_freeze() -> None:
     dump = _with_spot_id("T1", "T-1")
     override = FacingOverride(entities="T*", mode=FacingMode.AUDIENCE, start=0.0, end=1.0)
-    dump["facing_overrides"] = [override.model_dump(mode="json")]
+    dump["facing_overrides"] = [override.to_json()]
     report = ReportBuilder(FIRST_VERSION)
     show = rename_ids(_legacy_show(dump), report)
     assert show.facing_overrides[0].entities == ("T2", "T3", "T4")
@@ -321,14 +302,12 @@ def _rich_show() -> Show:
     show = define_selection(show, "sq", ["B1", "B2"])
     show = pin(pin(pin(show, "set", "zq"), "transition", "3→zq"), "form", "brass_2")
     overrides = tuple(
-        FacingOverride.model_validate(
+        FacingOverride.from_json(
             {"entities": entities, "mode": FacingMode.AUDIENCE, "start": 0.0, "end": 1.0}
         )
         for entities in ("sel:sq + form:brass_2", ["B1", "B2"])
     )
-    show = show.replace(facing_overrides=overrides)
-    zone = Zone(id=ZoneId("zz"), kind=ZoneKind.STAGING, polygon=SQUARE, applies_to="sel:sq")
-    return show.replace(sheet=show.sheet.replace(zones=(zone,)))
+    return show.replace(facing_overrides=overrides)
 
 
 RICH_NOTES: tuple[tuple[str, dict[str, JsonValue]], ...] = (
@@ -350,14 +329,13 @@ def _v1_note(note_id: str, anchor: dict[str, JsonValue]) -> JsonValue:
 
 
 def _legacy_rich_dump() -> dict[str, Any]:
-    """Gives the rich show v1 IDs: set `con`, form `brass-2`, route `r-1`, zone `props`."""
-    text = json.dumps(_rich_show().model_dump(mode="json"))
+    """Gives the rich show v1 IDs: set `con`, form `brass-2`, route `r-1`."""
+    text = json.dumps(_rich_show().to_json())
     for valid, stored in (
         ("zq", "con"),
         ("brass_2", "brass-2"),
         ('"sq"', '"s-q"'),
         ("sel:sq", "sel:s-q"),
-        ('"zz"', '"props"'),
     ):
         text = text.replace(valid, stored)
     dump: dict[str, Any] = json.loads(text)
@@ -380,7 +358,6 @@ def test_regression_every_reference_follows_a_renamed_id() -> None:
     assert renamed["set"] == (("con", "con_"),)
     assert ("brass-2", "brass_2") in renamed["form"]
     assert set(renamed["route"]) == {("r-1", "r_1")}
-    assert renamed["zone"] == (("props", "props_"),)
     assert renamed["selection"] == (("s-q", "s_q"),)
     assert "note" not in renamed
     assert show.set_ids()[-1] == "con_"
@@ -400,12 +377,11 @@ def test_regression_every_reference_follows_a_renamed_id() -> None:
         row.route in (None, "r_1") for spec in show.transitions for row in spec.rows.values()
     )
     assert [o.entities for o in show.facing_overrides] == ["sel:s_q + form:brass_2", ("B1", "B2")]
-    assert [(z.id, z.applies_to) for z in show.sheet.zones] == [("props_", "sel:s_q")]
     assert list(show.cast.selections) == ["s_q"]
-    assert Show.model_validate(show.model_dump(mode="json")) == show
+    assert Show.from_json(show.to_json()) == show
     assert validate_show(show).ok
     stored: dict[str, JsonValue] = {LEGACY_NOTES_DOC: [_v1_note(*note) for note in RICH_NOTES]}
-    moved = NotesDocument.model_validate(move_notes(show, stored, report)[NOTES_DOC])
+    moved = NotesDocument.from_json(move_notes(show, stored, report)[NOTES_DOC])
     assert report.build().renamed["note"] == (("n-q", "n_q"),)
     assert [n.id for n in moved.notes] == ["n_q", "nr", "ns"]
     assert moved.notes[0].anchor.set_id == "con_"
@@ -521,7 +497,7 @@ def test_regression_put_script_on_a_v1_head_writes_the_migrated_folder(tmp_path:
 
 def _comments(*anchors: Anchor) -> bytes:
     comments = [Comment(id=f"c{n}", anchor=a, text="look") for n, a in enumerate(anchors)]
-    return dump_json([c.model_dump(mode="json") for c in comments])
+    return dump_json([c.to_json() for c in comments])
 
 
 def test_regression_migration_renames_ids_in_canvas_comments_and_selection(
@@ -561,7 +537,7 @@ def test_renamed_canvas_follows_spot_renames_and_refuses_a_bad_file() -> None:
         COMMENTS_DOC: [
             {
                 "id": "c0",
-                "anchor": Anchor.on_spots(["T_1", "T2"]).model_dump(mode="json"),
+                "anchor": Anchor.on_spots(["T_1", "T2"]).to_json(),
                 "text": "look",
                 "resolved": False,
                 "author": "designer",

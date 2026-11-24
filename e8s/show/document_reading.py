@@ -13,7 +13,8 @@ Contains:
     read_show(): assembles a show from stored documents, migrating an older format in memory
     read_migrated(): migrates stored documents of an older format and returns the report too
     decode_show_dump(): assembles a show from an interchange dump of an older format version
-    migrate_dump(): migrates an older interchange dump to a show and the documents beside it
+    migrate_dump(): migrates an older interchange dump to a show, its report and the documents
+        beside it
 """
 
 import itertools
@@ -52,6 +53,7 @@ from e8s.show.migrate import (
     CURRENT_VERSION,
     LEGACY_CONTEXT,
     SHOW_DOC,
+    MigrationReport,
     ReportBuilder,
     migrate_beside,
     migrate_model,
@@ -59,7 +61,7 @@ from e8s.show.migrate import (
     version_of,
     without_header,
 )
-from e8s.show.models import Show
+from e8s.show.models import Show, require_set_count
 
 type JsonObject = dict[str, JsonValue]
 type JsonArray = list[JsonValue]
@@ -155,7 +157,7 @@ def _set(reading: _Reading, key: str) -> Set:
         check_id(stored_key, kind="set key")
     if "key" not in raw:
         raw = {**raw, "key": key}
-    loaded = Set.model_validate(raw, context=reading.context)
+    loaded = Set._validated(raw, context=reading.context)
     if loaded.key != key:
         raise SchemaError(
             f"{set_doc(key)} holds the set keyed {loaded.key}",
@@ -167,7 +169,7 @@ def _set(reading: _Reading, key: str) -> Set:
 
 def _forms(reading: _Reading, key: str) -> tuple[Form, ...]:
     stored = _load_array(reading.source, forms_doc(key), is_optional=True)
-    return tuple(Form.model_validate(f, context=reading.context) for f in stored)
+    return tuple(Form._validated(f, context=reading.context) for f in stored)
 
 
 def _require_forms_for(key: str, set_id: SetId, forms: tuple[Form, ...]) -> None:
@@ -184,7 +186,7 @@ def _paths(reading: _Reading, folder: tuple[str, str]) -> tuple[TransitionSpec, 
     raw = _load_object(reading.source, paths_doc(folder), is_optional=True)
     if not raw:
         return ()
-    return (TransitionSpec.model_validate(raw, context=reading.context),)
+    return (TransitionSpec._validated(raw, context=reading.context),)
 
 
 def _require_paths_for(
@@ -200,9 +202,10 @@ def _require_paths_for(
 
 
 def _set_order(order: object) -> list[str]:
-    """Checks the set order show.json lists: an array of storable set keys, never text."""
+    """Checks the set order show.json lists: an array of at most MAX_SETS storable set keys."""
     if not isinstance(order, list):
         raise _shape_error(SHOW_DOC, "array under 'sets'", order)
+    require_set_count(len(order))
     bad = [k for k in order if not is_storable_folder(k)]
     if bad:
         raise SchemaError(
@@ -227,8 +230,8 @@ def _with_counts(
     spec: TransitionSpec, counts: float, context: Mapping[str, bool] | None
 ) -> TransitionSpec:
     """Gives paths the destination set's counts, validated in the decode's ID context."""
-    fields = {name: getattr(spec, name) for name in type(spec).model_fields}
-    return TransitionSpec.model_validate(fields | {"counts": counts}, context=context)
+    fields = {name: getattr(spec, name) for name in type(spec)._field_names()}
+    return TransitionSpec._validated(fields | {"counts": counts}, context=context)
 
 
 def _assemble(reading: _Reading, meta: JsonObject, revision: str) -> Show:
@@ -247,7 +250,7 @@ def _assemble(reading: _Reading, meta: JsonObject, revision: str) -> Show:
         _with_counts(spec, counts[spec.id[1]], reading.context)
         for spec in _transition_specs(reading, stored)
     ]
-    return Show.model_validate(
+    return Show._validated(
         {
             **rest,
             "sheet": _load_object(reading.source, SHEET_DOC),
@@ -294,7 +297,7 @@ def _migrated_show(source: _Source, meta: JsonObject, version: int, revision: st
     reading = _Reading(_object_source(migrated), LEGACY_CONTEXT)
     show = _assemble(reading, _load_object(reading.source, SHOW_DOC), revision)
     renamed = migrate_model(show, version, report)
-    checked = Show.model_validate(renamed.model_dump(mode="json"), context=CHECKED_CONTEXT)
+    checked = Show._validated(renamed.to_json(), context=CHECKED_CONTEXT)
     return _Migrated(checked, report, migrate_beside(checked, migrated, version, report))
 
 
@@ -323,15 +326,17 @@ def decode_show_dump(dump: Mapping[str, JsonValue], version: int) -> Show:
         show: The migrated show; a dump that does not fit raises SchemaError.
 
     >>> from e8s.examples import two_set_show
-    >>> dump = two_set_show().model_dump(mode="json")
+    >>> dump = two_set_show().to_json()
     >>> decode_show_dump(dump, 1) == two_set_show()
     True
     """
     return migrate_dump(dump, version)[0]
 
 
-def migrate_dump(dump: Mapping[str, JsonValue], version: int) -> tuple[Show, dict[str, JsonValue]]:
-    """Migrates the interchange dump of an older format version to a show and its side documents.
+def migrate_dump(
+    dump: Mapping[str, JsonValue], version: int
+) -> tuple[Show, MigrationReport, dict[str, JsonValue]]:
+    """Migrates an older interchange dump to a show, its migration report and its side documents.
 
     Args:
         dump: The `show` object of an interchange document, already strictly parsed.
@@ -339,11 +344,12 @@ def migrate_dump(dump: Mapping[str, JsonValue], version: int) -> tuple[Show, dic
 
     Returns:
         show: The migrated show; a dump that does not fit raises SchemaError.
+        report: What the migration renamed, repaired and dropped.
         beside: Stored path to the parsed JSON of each document beside the show, such as the
             notes document at `/notes/notes.json`; empty when the dump held no notes.
 
     >>> from e8s.examples import two_set_show
-    >>> migrate_dump(two_set_show().model_dump(mode="json"), 1)[1]
+    >>> migrate_dump(two_set_show().to_json(), 1)[2]
     {}
     """
     revision = dump.get(REVISION_FIELD, "")
@@ -355,7 +361,7 @@ def migrate_dump(dump: Mapping[str, JsonValue], version: int) -> tuple[Show, dic
         )
     except SchemaError as exc:
         raise _reraised_for_show(exc) from exc
-    return migrated.show, migrated.beside
+    return migrated.show, migrated.report.build(), migrated.beside
 
 
 def _dump_list(dump: Mapping[str, JsonValue], field: str) -> list[JsonObject]:

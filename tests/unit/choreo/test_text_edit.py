@@ -42,8 +42,8 @@ FORM = go_form()
 def test_edit_text_count_adds_named_spots() -> None:
     g = edit_text_count(FORM, add=["X1", "X2"], n=62)
     assert g.members == (*FORM.members, "X1", "X2")
-    assert g.recipe.model_dump(mode="json")["n"] == 62
-    assert g.recipe.model_dump(mode="json")["spacing"] is None
+    assert g.recipe.to_json()["n"] == 62
+    assert g.recipe.to_json()["spacing"] is None
     assert len(slots(g)) == 62
     assert go_form() == FORM
 
@@ -59,12 +59,12 @@ def test_edit_text_count_swaps_spots_at_the_same_count() -> None:
     assert g.members[-1] == "X1"
     assert "S0" not in g.members
     implicit = edit_text_count(FORM, add=["X1"], remove=["S0"])
-    assert implicit.recipe.model_dump(mode="json")["n"] == FORM_SPOTS
+    assert implicit.recipe.to_json()["n"] == FORM_SPOTS
     assert implicit.members == g.members
 
 
 def test_edit_text_count_from_spacing_needs_matching_members() -> None:
-    derived = spacing_count(text_strokes(text_recipe(FORM.recipe.model_dump(mode="json"))), 1.0)
+    derived = spacing_count(text_strokes(text_recipe(FORM.recipe.to_json())), 1.0)
     gap = derived - FORM_SPOTS
     with pytest.raises(SpacingError) as caught:
         edit_text_count(FORM, spacing=1.0)
@@ -76,8 +76,8 @@ def test_edit_text_count_from_spacing_needs_matching_members() -> None:
         {"add": [f"X{i}" for i in range(gap)]} if gap > 0 else {"remove": spots(-gap)}
     )
     g = edit_text_count(FORM, spacing=1.0, **change)
-    assert g.recipe.model_dump(mode="json")["spacing"] == 1.0
-    assert g.recipe.model_dump(mode="json")["n"] == derived == len(g.members)
+    assert g.recipe.to_json()["spacing"] == 1.0
+    assert g.recipe.to_json()["n"] == derived == len(g.members)
 
 
 def test_edit_text_count_wrong_number_of_spots_says_how_many() -> None:
@@ -178,5 +178,5 @@ def test_regression_edit_text_count_matches_slots_and_members(
         assert caught.value.code == "MEMBER_COUNT_MISMATCH"
         return
     g = edit_text_count(f, add=add, remove=removed, n=n)
-    assert len(g.members) == g.recipe.model_dump(mode="json")["n"] == len(slots(g)) == member_count
+    assert len(g.members) == g.recipe.to_json()["n"] == len(slots(g)) == member_count
     assert f == go_form(PROPERTY_SPOTS)

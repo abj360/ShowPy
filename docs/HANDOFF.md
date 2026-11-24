@@ -3,16 +3,16 @@
 Audience: the next agent or engineer continuing this repository. Scope: state of work, what is
 left, and the traps already hit.
 
-Last updated: 2026-11-18
+Last updated: 2026-11-23
 
 ## Where things stand
 
 | Item          | Value                                                                                                 |
 | ------------- | ----------------------------------------------------------------------------------------------------- |
 | Repository    | `abj360/e8s` (public since 2026-11-15); split into its own repository on 2026-11-12 with full history |
-| Gates         | `nox -s tests`: 2,984 passed, `Ledger: 373 open` (2026-11-18); ruff, mypy `--strict`, pyright clean   |
+| Gates         | `nox -s tests`: 3,951 passed, `Ledger: 128 open` (2026-11-23); ruff, mypy `--strict`, pyright clean   |
 | CI            | lint, types, tests, dependency scan, docker build, on every pull request and push to main             |
-| Defect ledger | `Ledger: 373 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-17)               |
+| Defect ledger | `Ledger: 128 open` in the default suite, `Ledger: 1 open` in `nox -s slow` (2026-11-23)               |
 | Out of scope  | `stagecheck`, `e8s.packs` and `e8s.index`, by the user's decision (2026-11-11)                        |
 | Phase 1       | done; merged as PR #23 (`dae2b33`) and tagged `v0.3.0` on 2026-11-18                                  |
 | Text feature  | stage 1 merged (PR #22, 2026-11-17); stages 2 and 3 not started                                       |
@@ -43,14 +43,12 @@ Use `uv` only, never pip.
 | Package  | Modules                                                                                                                                                                                                                                                                                |
 | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `core`   | errors, ids, types (`FrozenModel`, `Region`, `Box2`), readonly (`ReadOnly`, `ReadOnlyMap`), units (immutable `UnitRegistry`), util (`close_matches`, `content_hash`, `seeded_rng`), selection, validation                                                                              |
-| `geo`    | curve_base, curves (11 kinds, arc-length param), svg, text (`simplex` helpers), fonts, font_strokes, text_layout, shapes, regions, spacing (Bridson scatter, `apportion`), affine, transforms + transform_base + snapping, measure, analysis, models                                   |
+| `geo`    | curve_base, curves (11 kinds, arc-length param), svg, text (`simplex` helpers), fonts, font_strokes, text_layout, shapes, regions, spacing (Bridson scatter, `apportion`), affine, transforms + transform_base + snapping, measure, models                                             |
 | `time`   | models, timeline, clock (ramps and holds, analytic inverse), measures, validate                                                                                                                                                                                                        |
 | `cast`   | models, spots, select (expression grammar), rewrite (renames IDs everywhere)                                                                                                                                                                                                           |
-| `sheet`  | models, templates + surfaces (NFHS, NCAA and NFL fields, stage, gym), coords, bounds, replace (similarity_fit only), render (`SheetCanvas`, `draw_sheet`)                                                                                                                              |
-| `notes`  | models (tagged `Anchor`), notes (add, edit, find, `accept_draft`)                                                                                                                                                                                                                      |
+| `sheet`  | models, templates + surfaces (NFHS, NCAA and NFL fields, gym), bounds, replace (similarity_fit only)                                                                                                                                                                                   |
 | `choreo` | models, motion (easing, `MotionRegistry`), engine, engine_compile, engine_facing, engine_models, paths, routes, facing, avoid, motion_stats, forms, form_fns, form_layout, form_ops, form_text, text_count, text_edit, form_fit, form_place, match, match_cost, match_solve, match_ops |
-| `show`   | models (`Show`, `Pin`, `ShowIndex`, diffs, `Revision`, `CanvasEvent`, `Proposal`), manage, sections, storage, repositories, file_repository, documents, files, history, collab, pinning, changes, locks, validate, paths_store, counts                                                 |
-| `export` | models, data (JSON, CSV, format registry), positions, print_sheets, pdf, publish (claims, QR codes), video                                                                                                                                                                             |
+| `show`   | models (`Show`, `Pin`, `ShowIndex`, diffs, `Revision`, `CanvasEvent`, `Proposal`), manage, sections, storage, repositories, file_repository, documents, files, history, collab, pinning, changes, locks, validate, paths_store, counts, interchange, migrate                           |
 
 ## Upgrade program
 
@@ -82,6 +80,15 @@ hash-seed determinism, publication tokens, form consistency after matching, and 
 pin bypass. By the maintainer's decisions of 2026-11-15, permissions, authorship, commit messages
 and undo moved to the host app (ADR 0003), and sheet replacement was removed (ADR 0017). The
 phase's plan was deleted after the tag.
+
+**Leaving names removed (2026-11-23, branch `refactor/remove-leaving-names`).** The library has
+no users, so the leaving names of ADR 0021 went at once, with no warning period (ADR 0021,
+addendum 2026-11-23): the `e8s.export` package (publishing, claims, print, PDF, tables, video),
+the `e8s.notes` package, `Spot.claimable`, landmarks, zones, coordinate wording, the stage
+template, sheet rendering and every deprecated alias. The sheet names that change shape later
+(templates, lookup, guides, storage) stay as current API with no warning, and the library keeps no
+deprecation machinery. Reading a v1 show lists each dropped stored field in
+`MigrationReport.dropped`; v1 notes still go to `/notes/notes.json`.
 
 **Next: Phase 2, foundations** (`docs/upgrade-plan.md`, "Phase 2"), the main breaking release
 before 1.0, target `v0.4.0`. Plan: `docs/superpowers/plans/2026-11-18-phase-2-foundations.md`;
@@ -121,7 +128,7 @@ Stage 1 (bundled single-line fonts, user fonts as `showpy.font.v1` JSON, `center
     - `simplex` is its own bundled font, not a Hershey alias. Bundled: `relief-singleline`, `hershey-roman`, `hershey-script`, `hershey-greek`, `simplex`. Hershey Cyrillic is deferred.
     - `text_outline(text, font, height, at, *, font_registry=None)` takes a font chain and returns `list[Polyline | SvgCurve]`. Loops close without a repeated start point (closes UP-9.1-28). `\n` starts a new line (it used to raise). Non-finite `height` or `at` is rejected. A missing glyph or font raises `GlyphError` or `MissingFontError` (both `UnknownRefError`).
     - Caps: `MAX_LAYOUT_CHARS = 1_000` raw characters, `MAX_LAYOUT_EXTENT_M = 1e6` m laid extent, `MAX_FONT_BYTES` 8 MiB, `MAX_GLYPH_PIECES = 512` path pieces per glyph and `MAX_STROKE_PIECES = 384` per stroke (in `load_font`), and `MAX_LAYOUT_PIECES = 512_000` per laid text, about 10 times the bundled maxima (hershey-script `8`, 51 pieces; hershey-script `Z`, 38 in one stroke). `MAX_LAYOUT_CURVE_PIECES = 60_000` bounds the pieces of curved strokes, which cost about 60 µs each against about 1 µs for straight ones; the worst legal text builds a text form in about 3 s. `layout_text` drops trailing empty lines and parses each distinct glyph once.
-    - Font names are a convenience; URIs are identity. `register_font(..., if_name_taken="keep")` registers a font by URI when its name points at other bytes, and `import_fonts` uses it, so documents with an older release of a bundled font still import. `register_font` alone still raises `FONT_NAME_TAKEN`. `FontRegistry.model_validate` loads every font from its bytes and rejects one that differs (`FONT_HASH_MISMATCH`).
+    - Font names are a convenience; URIs are identity. `register_font(..., if_name_taken="keep")` registers a font by URI when its name points at other bytes, and `import_fonts` uses it, so documents with an older release of a bundled font still import. `register_font` alone still raises `FONT_NAME_TAKEN`. `FontRegistry.from_json` loads every font from its bytes and rejects one that differs (`FONT_HASH_MISMATCH`).
     - `core/readonly.py` adds `ReadOnly` and `ReadOnlyMap`: read-only, JSON-serializable mappings that keep the cached `bundled_fonts()` registry immutable. `Font.glyphs` and `FontRegistry.fonts`, `sources` and `names` are such mappings.
     - `apportion` is public and uses exact integer arithmetic. `space_proportional` rejects all-zero lengths (closes UP-9.1-57), and `n` below the curve count now has code `TOO_FEW_SPOTS`.
   - `density_map`, `coverage` and `balance` take `sheet`.
@@ -136,9 +143,6 @@ Stage 1 (bundled single-line fonts, user fonts as `showpy.font.v1` JSON, `center
   - `regroup` and `remove_group` return `(Show, mapping)`.
   - `delete_spots` takes `force`.
   - In the grammar, `-` as an operator needs a space before it, `T*` matches the exact prefix, and `sel:<name>` names a selection.
-- **notes**:
-  - `add_note` needs `note_id`, `at` and `author`.
-  - `accept_draft` was added.
 - **choreo**:
   - Engine timing:
     - Engine models live in `engine_models.py`.
@@ -160,7 +164,7 @@ Stage 1 (bundled single-line fonts, user fonts as `showpy.font.v1` JSON, `center
   - The workspace adds `/canvas/comments.json`.
   - `Show.pins` was added.
   - Events are derived from revisions.
-- **export**: `export_video(show, count_range, fps, audio: Mapping[uri, bytes], px_per_m)`.
+- **interchange** (`e8s.show.interchange`):
   - `export_json(show, include=None, *, font_registry=None)` embeds the fonts of text forms (base64, keyed by URI). `import_json` ignores the `fonts` key; fonts are imported with `import_fonts(d, font_registry=None)`, which verifies each hash and rejects more than `MAX_IMPORT_FONTS = 64`.
 - **choreo, text forms** (`form_text`, `text_count`, `text_edit`; `TextRecipe` in `models`):
   - Text forms never have open slots. `text_form` and every text edit require `len(members) == n`, else `MEMBER_COUNT_MISMATCH` with an add or remove hint. `placements` (so `place` and `rebuild`) and `apply_match` reject a text form short of members (after cast `delete_spots`) and point at `edit_text_count`; `delete_spots` itself still deletes.
@@ -175,7 +179,7 @@ Stage 1 (bundled single-line fonts, user fonts as `showpy.font.v1` JSON, `center
 ## Traps already hit (each has a regression test)
 
 - **Hidden test failures.** `cmd | tail` hides pytest failures. Run every gate with `set -o pipefail`. It already let one bad commit through (fixed in `7c29193`).
-- **Stale curve caches.** `model_copy` on a curve kept a stale `cached_property` table. `CurveBase.model_copy` now revalidates. Never bypass it.
+- **Stale curve caches.** `model_copy` on a curve kept a stale `cached_property` table. `CurveBase._copied`, which `model_copy` and every library copy go through, now revalidates. Never bypass it.
 - **Segment aliasing.** Probes landing exactly on periodic easings (`steps`) aliased the segments. Segment edges now include `easing_breaks`. Keep the property test at 9 points per segment.
 - **Mangled doctests.** Bulk `str.replace` on import lines also edits `>>>` doctest lines, so check doctests after scripted edits.
 - **Doctests import the test folder.** Fixed 2026-11-11: library doctests import `e8s.examples`, and `tests/fixtures` re-exports it.

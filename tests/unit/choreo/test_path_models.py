@@ -53,7 +53,6 @@ from typing import cast
 
 import pytest
 from jsonschema import Draft202012Validator
-from pydantic import BaseModel
 
 from e8s.cast.rewrite import rewrite_spot_ids
 from e8s.choreo.path_models import (
@@ -82,11 +81,12 @@ from e8s.core.errors import PathError, SchemaError, ShowValidationError
 from e8s.core.ids import RouteId, SpotId, make_tid
 from e8s.core.readonly import ReadOnlyMap
 from e8s.core.resources import schema_path
-from e8s.core.types import Point
+from e8s.core.types import FrozenModel, Point
 from e8s.geo.curves import Segment
 from e8s.show.migrate import CURRENT_VERSION
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.shows import two_set_show
+from tests.helpers import json_doc
 from tests.property.test_generated_shows import SCHEMA_NAME, encoded_tree
 
 NEGATIVE_COUNTS = -4.0
@@ -112,7 +112,7 @@ CUSTOM_POINTS = ((0.0, 0.0), (1.0, 1.0))
 
 
 def _custom_row(motion_fn: str | None, params: object) -> PathRow:
-    return PathRow.model_validate(
+    return PathRow.from_json(
         {"entity": "T1", "style": "custom", "motion_fn": motion_fn, "motion_params": params}
     )
 
@@ -146,7 +146,7 @@ def test_transition_spec_round_trips_json() -> None:
         counts=8.0,
         rows={SpotId("T1"): PathRow(entity=SpotId("T1"), waypoints=(Waypoint(x=1, y=1),))},
     )
-    assert TransitionSpec.model_validate_json(spec.model_dump_json()) == spec
+    assert TransitionSpec.from_json(json.loads(json.dumps(spec.to_json()))) == spec
 
 
 def test_regression_transition_spec_checks_route_keys_against_route_ids() -> None:
@@ -187,8 +187,8 @@ def test_regression_motion_params_are_typed_by_motion_fn(
 ) -> None:
     """Validates each built-in's parameters into its own model and round-trips them via JSON."""
     row = _custom_row(name, params)
-    assert row.motion_params == BUILT_INS[name].model_validate(params)
-    assert PathRow.model_validate_json(row.model_dump_json()) == row
+    assert row.motion_params == BUILT_INS[name].from_json(params)
+    assert PathRow.from_json(json.loads(json.dumps(row.to_json()))) == row
 
 
 def test_regression_custom_motion_params_are_deeply_read_only() -> None:
@@ -199,9 +199,7 @@ def test_regression_custom_motion_params_are_deeply_read_only() -> None:
     bend = params["bend"]
     assert isinstance(bend, tuple)
     assert isinstance(bend[1], ReadOnlyMap)
-    assert json.loads(_custom_row("probe", CUSTOM_PARAMS).model_dump_json())["motion_params"] == (
-        CUSTOM_PARAMS
-    )
+    assert _custom_row("probe", CUSTOM_PARAMS).to_json()["motion_params"] == (CUSTOM_PARAMS)
     assert isinstance(PathRow(entity=SpotId("T1")).motion_params, ReadOnlyMap)
 
 
@@ -233,7 +231,7 @@ def test_regression_spiral_turns_are_whole_and_capped(turns: float) -> None:
     """Refuses negative, fractional and over-cap spiral turns."""
     assert SpiralParams(turns=MAX_SPIRAL_TURNS).turns == MAX_SPIRAL_TURNS
     with pytest.raises(SchemaError):
-        SpiralParams.model_validate({"turns": turns})
+        SpiralParams.from_json({"turns": turns})
 
 
 @pytest.mark.parametrize("kind", ALL_KINDS)
@@ -267,11 +265,11 @@ NO_VALUE_MODES = [mode for mode in FacingMode if mode not in {m for m, _ in KIND
 
 
 def _row_with(mode: FacingMode, value: object) -> PathRow:
-    return PathRow.model_validate({"entity": "A", "facing_mode": mode, "facing_value": value})
+    return PathRow.from_json({"entity": "A", "facing_mode": mode, "facing_value": value})
 
 
 def _override_with(mode: FacingMode, value: object) -> FacingOverride:
-    return FacingOverride.model_validate(
+    return FacingOverride.from_json(
         {"entities": "all", "mode": mode, "value": value, "start": 0.0, "end": 4.0}
     )
 
@@ -300,9 +298,9 @@ def test_regression_facing_values_round_trip_through_json_with_their_tag() -> No
     """Dumps each typed value with its kind and reloads an equal row."""
     for mode, value in KIND_FOR_MODE:
         row = _row_with(mode, value)
-        dumped = json.loads(row.model_dump_json())
+        dumped = json_doc(row)
         assert dumped["facing_value"]["kind"] == value.kind
-        assert PathRow.model_validate_json(row.model_dump_json()) == row
+        assert PathRow.from_json(json.loads(json.dumps(row.to_json()))) == row
 
 
 def test_regression_fixed_facing_wraps_the_heading() -> None:
@@ -360,11 +358,11 @@ def test_regression_route_curve_is_a_typed_curve() -> None:
     """Stores a curve model, round-trips it through JSON and refuses a recipe that is no curve."""
     route = _route()
     assert isinstance(route.curve, Segment)
-    assert Route.model_validate_json(route.model_dump_json()) == route
-    assert json.loads(route.model_dump_json())["curve"]["kind"] == "segment"
+    assert Route.from_json(json.loads(json.dumps(route.to_json()))) == route
+    assert json_doc(route)["curve"]["kind"] == "segment"
     for bad in ({}, {"kind": "nowhere"}, {"kind": "segment", "a": (0.0, 0.0)}, "segment"):
         with pytest.raises(SchemaError):
-            Route.model_validate({**route.model_dump(), "curve": bad})
+            Route.from_json({**route.to_json(), "curve": bad})
 
 
 def test_regression_spec_rows_and_routes_are_read_only() -> None:
@@ -385,15 +383,15 @@ def test_regression_spec_rows_and_routes_are_read_only() -> None:
         routes[RouteId("r")] = _route()
     assert isinstance(spec.rows, ReadOnlyMap)
     assert isinstance(spec.routes, ReadOnlyMap)
-    assert json.loads(spec.model_dump_json())["routes"]["r"]["id"] == "r"
+    assert json_doc(spec)["routes"]["r"]["id"] == "r"
 
 
 def _open_containers(value: object, path: str = "spec") -> list[str]:
     if isinstance(value, dict | list | set | bytearray):
         return [path]
-    if isinstance(value, BaseModel):
+    if isinstance(value, FrozenModel):
         found = []
-        for name in type(value).model_fields:
+        for name in type(value)._field_names():
             found += _open_containers(getattr(value, name), f"{path}.{name}")
         return found
     if isinstance(value, Mapping):
@@ -406,7 +404,7 @@ def _open_containers(value: object, path: str = "spec") -> list[str]:
 def test_regression_spec_holds_no_open_mutable_container() -> None:
     """Finds no dict, list or set in a spec with rows, routes, waypoints and every motion."""
     rows = {
-        SpotId(name): PathRow.model_validate(
+        SpotId(name): PathRow.from_json(
             {
                 "entity": name,
                 "style": "custom",
@@ -433,7 +431,7 @@ def test_regression_typed_values_validate_against_the_current_schema() -> None:
     """Validates typed facing values, route curves and motion params against the current schema."""
     row_fields = {"entity": "A", "style": "custom", "motion_fn": "weave"}
     rows = {
-        SpotId(name): PathRow.model_validate(
+        SpotId(name): PathRow.from_json(
             {**row_fields, "entity": name, "facing_mode": mode, "facing_value": value}
         )
         for name, (mode, value) in zip("ABC", KIND_FOR_MODE, strict=True)

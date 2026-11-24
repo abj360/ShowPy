@@ -1,26 +1,24 @@
 """
-v1_to_v2_ids.py --- the ids sub-step of the v1 to v2 format migration (lane A)
+v1_to_v2_ids.py --- the ids sub-step of the v1 to v2 format migration
 
 The model sub-step. It runs on the show validated with any non-empty v1 ID accepted and renames,
-once and by rule, every spot, set, form, route, zone, landmark, guide and selection ID that fails
-its ID check or repeats, ignoring case, an ID of its kind kept earlier in show order. Valid IDs keep
-their spelling, and the first of a case pair is the one kept. The rule, in order: NFC; every
-character outside the kind's alphabet (`-`, a space, `*`, a non-ASCII letter) becomes `_`, and each
-`..` run becomes `.`; leading and trailing `.` are stripped, the ID is cut to 60 characters, an
-empty result becomes `id`, and a reserved word gets a trailing `_` (a device name before an
-extension gets it before the dot: `con.5` becomes `con_.5`). Sheet items (zone, landmark and guide
-IDs) keep an inner `-`, and an edge `-` becomes `_`; a new landmark ID also avoids every landmark's
-name and aliases. A repaired ID that is still taken gets the smallest free suffix `.2`, `.3`, ...
+once and by rule, every spot, set, form, route, guide and selection ID that fails its ID check or
+repeats, ignoring case, an ID of its kind kept earlier in show order. Valid IDs keep their
+spelling, and the first of a case pair is the one kept. The rule, in order: NFC; every character
+outside the kind's alphabet (`-`, a space, `*`, a non-ASCII letter) becomes `_`, and each `..` run
+becomes `.`; leading and trailing `.` are stripped, the ID is cut to 60 characters, an empty
+result becomes `id`, and a reserved word gets a trailing `_` (a device name before an extension
+gets it before the dot: `con.5` becomes `con_.5`). Guide IDs keep an inner `-`, and an edge `-`
+becomes `_`. A repaired ID that is still taken gets the smallest free suffix `.2`, `.3`, ...
 Every v1 ID is repaired; none is refused.
 
 Every reference follows a rename. Spots go last, through rename_spots(); a set's key follows its
-renamed ID unless the key was written explicitly, and a coordinate origin follows its renamed
-landmark. A stored selector that names spots by label (`T*`, `T1-T8`) is frozen to its ID list
-whenever spots are renamed, and the report records it as a repair. Route IDs are unique per
-transition and sheet items per sheet or show, so those namespaces are checked apart. Each rename is
-recorded with `report.rename()`, per kind in show order, so a host can follow it in what it keeps
-outside e8Show; the notes sub-step that follows renames note IDs by the same rule and points note
-anchors at the renamed sets and spots.
+renamed ID unless the key was written explicitly. A stored selector that names spots by label
+(`T*`, `T1-T8`) is frozen to its ID list whenever spots are renamed, and the report records it as
+a repair. Route IDs are unique per transition and guides per sheet, so those namespaces are
+checked apart. Each rename is recorded with `report.rename()`, per kind in show order, so a host
+can follow it in what it keeps outside e8Show; the notes sub-step that follows renames note IDs
+by the same rule and points note anchors at the renamed sets and spots.
 
 Contains:
     KEEPS_LEGACY_IDS: tells whether validation after this step still accepts any non-empty v1 ID
@@ -34,8 +32,6 @@ import unicodedata
 from collections.abc import Callable, Iterable, Sequence
 from functools import partial
 from typing import TYPE_CHECKING, Final, NamedTuple
-
-from pydantic import BaseModel
 
 from e8s.cast.select import KIND_SEPARATOR, TOKEN_PATTERN
 from e8s.cast.spots import rename_spots
@@ -57,7 +53,8 @@ from e8s.core.ids import (
     parse_tid,
 )
 from e8s.core.selection import Selection, SelectorField
-from e8s.sheet.models import CoordinateSystem, Landmark, Sheet, Zone, normalized_name
+from e8s.core.types import FrozenModel
+from e8s.sheet.models import Sheet
 from e8s.show.models import Pin, Show
 
 if TYPE_CHECKING:
@@ -96,9 +93,6 @@ class _Plan(NamedTuple):
         sets: Old set ID to new set ID.
         forms: Old form ID to new form ID.
         routes: Per transition (by old set IDs), old route ID to new route ID.
-        sheet_zones: Old sheet zone ID to new zone ID.
-        show_zones: Old show zone ID to new zone ID.
-        landmarks: Old sheet landmark ID to new landmark ID.
         guides: Old sheet guide ID to new guide ID.
         selections: Old selection name to new selection name.
         spots: Old spot ID to new spot ID.
@@ -107,22 +101,19 @@ class _Plan(NamedTuple):
     sets: Renames
     forms: Renames
     routes: dict[TransitionId, Renames]
-    sheet_zones: Renames
-    show_zones: Renames
-    landmarks: Renames
     guides: Renames
     selections: Renames
     spots: Renames
 
 
-def _legacy[M: BaseModel](model: M, **changes: object) -> M:
+def _legacy[M: FrozenModel](model: M, **changes: object) -> M:
     """Returns a copy with `changes`, validated with any non-empty v1 ID accepted.
 
     `replace` validates without that context, and the show still holds other kinds' v1 IDs
     until their turn comes.
     """
-    fields = {name: getattr(model, name) for name in type(model).model_fields}
-    return type(model).model_validate(fields | changes, context=LEGACY_CONTEXT)
+    fields = {name: getattr(model, name) for name in type(model)._field_names()}
+    return type(model)._validated(fields | changes, context=LEGACY_CONTEXT)
 
 
 def _passing(text: str, check: IdCheck) -> str | None:
@@ -221,12 +212,6 @@ def _sheet_renames(ids: Sequence[str], kind: str, held: Iterable[str] = ()) -> R
     return _renames(ids, _Rule(partial(check_sheet_id, kind=kind), SHEET_ID_BODY_CHARS), held)
 
 
-def _landmark_renames(landmarks: Sequence[Landmark]) -> Renames:
-    """Renames landmark IDs, a new one also avoiding every landmark's name and aliases."""
-    names = [normalized_name(n) for mark in landmarks for n in (mark.name, *mark.aliases)]
-    return _sheet_renames([mark.id for mark in landmarks], "landmark", names)
-
-
 def _plan(show: Show) -> _Plan:
     """Works out every rename of a show from its stored IDs, before any is applied."""
     explicit_keys = [s.key for s in show.sets if s.key is not None and s.key != s.id]
@@ -234,9 +219,6 @@ def _plan(show: Show) -> _Plan:
         sets=renames_of(show.set_ids(), "set", explicit_keys),
         forms=renames_of(list(show.forms), "form"),
         routes={spec.id: renames_of(list(spec.routes), "route") for spec in show.transitions},
-        sheet_zones=_sheet_renames([z.id for z in show.sheet.zones], "zone"),
-        show_zones=_sheet_renames([z.id for z in show.zones], "zone"),
-        landmarks=_landmark_renames(show.sheet.landmarks),
         guides=_sheet_renames([g.id for g in show.sheet.guides], "guide"),
         selections=renames_of(list(show.cast.selections), "selection"),
         spots=renames_of(list(show.cast.ids()), "spot"),
@@ -244,9 +226,8 @@ def _plan(show: Show) -> _Plan:
 
 
 def _renames_more_than_spots(plan: _Plan) -> bool:
-    others = (plan.sets, plan.forms, plan.sheet_zones, plan.show_zones, plan.landmarks)
-    rest = (plan.guides, plan.selections)
-    return any(others) or any(rest) or any(plan.routes.values())
+    others = (plan.sets, plan.forms, plan.guides, plan.selections)
+    return any(others) or any(plan.routes.values())
 
 
 def _report(plan: _Plan, report: "ReportBuilder") -> None:
@@ -256,8 +237,6 @@ def _report(plan: _Plan, report: "ReportBuilder") -> None:
         ("set", plan.sets.items()),
         ("form", plan.forms.items()),
         ("route", [pair for routes in plan.routes.values() for pair in routes.items()]),
-        ("zone", [*plan.sheet_zones.items(), *plan.show_zones.items()]),
-        ("landmark", plan.landmarks.items()),
         ("guide", plan.guides.items()),
         ("selection", plan.selections.items()),
     ]
@@ -332,38 +311,14 @@ def _renamed_selector(selector: SelectorField, plan: _Plan) -> SelectorField:
     return TOKEN_PATTERN.sub(renamed_token, selector)
 
 
-def _renamed_zones(zones: tuple[Zone, ...], renames: Renames, plan: _Plan) -> tuple[Zone, ...]:
-    return tuple(
-        _legacy(
-            zone,
-            id=renames.get(zone.id, zone.id),
-            applies_to=_renamed_selector(zone.applies_to, plan),
-        )
-        for zone in zones
-    )
-
-
-def _renamed_origin(coordinates: CoordinateSystem, landmarks: Renames) -> CoordinateSystem:
-    origin = coordinates.origin
-    if isinstance(origin, str) and origin in landmarks:
-        return _legacy(coordinates, origin=landmarks[origin])
-    return coordinates
-
-
 def _renamed_sheet(sheet: Sheet, plan: _Plan) -> Sheet:
-    """Renames a sheet's zones, landmarks and guides, and a landmark its coordinates start at."""
+    """Renames a sheet's guides."""
     return _legacy(
         sheet,
-        zones=_renamed_zones(sheet.zones, plan.sheet_zones, plan),
-        landmarks=tuple(
-            _legacy(mark, id=plan.landmarks[mark.id]) if mark.id in plan.landmarks else mark
-            for mark in sheet.landmarks
-        ),
         guides=tuple(
             _legacy(guide, id=plan.guides[guide.id]) if guide.id in plan.guides else guide
             for guide in sheet.guides
         ),
-        default_coordinates=_renamed_origin(sheet.default_coordinates, plan.landmarks),
     )
 
 
@@ -385,8 +340,6 @@ def _apply(show: Show, plan: _Plan) -> Show:
         ),
         pins=tuple(_renamed_pin(p, plan.sets, plan.forms) for p in show.pins),
         sheet=_renamed_sheet(show.sheet, plan),
-        coordinates=_renamed_origin(show.coordinates, plan.landmarks),
-        zones=_renamed_zones(show.zones, plan.show_zones, plan),
         facing_overrides=tuple(
             _legacy(o, entities=_renamed_selector(o.entities, plan)) for o in show.facing_overrides
         ),
@@ -397,8 +350,6 @@ def _apply(show: Show, plan: _Plan) -> Show:
 def _stored_selectors(show: Show) -> list[tuple[str, SelectorField]]:
     """Lists each stored selector with the field path it is stored at."""
     return [
-        *((f"sheet.zones[{i}].applies_to", z.applies_to) for i, z in enumerate(show.sheet.zones)),
-        *((f"zones[{i}].applies_to", z.applies_to) for i, z in enumerate(show.zones)),
         *(
             (f"facing_overrides[{i}].entities", o.entities)
             for i, o in enumerate(show.facing_overrides)

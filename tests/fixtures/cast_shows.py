@@ -4,8 +4,7 @@
 cast_shows.py --- builds shows whose spot IDs appear in every kind of show reference
 
 Contains:
-    rich_show(): builds the two-set show with forms, paths, routes, overrides and zones
-    rich_notes(): builds the notes document of rich_show(), one note anchored to spot T2
+    rich_show(): builds the two-set show with forms, paths, routes and an override
 """
 
 from datetime import UTC, datetime
@@ -20,13 +19,10 @@ from e8s.choreo.path_models import (
     Route,
     TransitionSpec,
 )
-from e8s.core.ids import FormId, NoteId, RouteId, SetId, SpotId, ZoneId, make_tid
-from e8s.core.selection import Selection
+from e8s.core.ids import FormId, RouteId, SetId, SpotId, make_tid
 from e8s.core.types import Region
 from e8s.geo.curves import Segment
-from e8s.notes.models import Note, NotesDocument
-from e8s.sheet.models import Zone, ZoneKind
-from e8s.show.models import Anchor, Show
+from e8s.show.models import Show
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 
@@ -35,7 +31,7 @@ SQUARE = Region(exterior=((0.0, 0.0), (4.0, 0.0), (4.0, 4.0), (0.0, 4.0)))
 
 
 def rich_show() -> Show:
-    """Builds two_set_show() plus a form, paths, a route, an override and zones."""
+    """Builds two_set_show() plus a form, paths, a route and an override."""
     show = two_set_show()
     form = Form(
         id=FormId("line1"),
@@ -69,33 +65,10 @@ def rich_show() -> Show:
         start=0.0,
         end=4.0,
     )
-    zones = (
-        Zone(id=ZoneId("z-ids"), kind=ZoneKind.CUSTOM, polygon=SQUARE, applies_to="T1-T2"),
-        Zone(
-            id=ZoneId("z-group"), kind=ZoneKind.CUSTOM, polygon=SQUARE, applies_to="group:trumpets"
-        ),
-        Zone(
-            id=ZoneId("z-sel"),
-            kind=ZoneKind.CUSTOM,
-            polygon=SQUARE,
-            applies_to=Selection(ids=(SpotId("T4"),)),
-        ),
-    )
     cast = show.cast.replace(selections={"pair": frozenset({"T1", "T4"})})
-    return show.model_copy(
-        update={
-            "cast": cast,
-            "forms": {"line1": form},
-            "transitions": (spec,),
-            "facing_overrides": (override,),
-            "zones": zones,
-        }
+    return show.replace(
+        cast=cast,
+        forms={"line1": form},
+        transitions=(spec,),
+        facing_overrides=(override,),
     )
-
-
-def rich_notes() -> NotesDocument:
-    """Builds the notes document of rich_show(): one note anchored to spot T2."""
-    note = Note(
-        id=NoteId("n1"), text="solo", anchor=Anchor.on_spots(["T2"]), author="pat", created_at=AT
-    )
-    return NotesDocument(show=rich_show().id, notes=(note,))

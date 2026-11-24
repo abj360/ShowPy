@@ -104,7 +104,7 @@ def _form(
     facing: FacingSpec | None,
     set_id: str,
 ) -> Form:
-    return Form.model_validate(
+    return Form._validated(
         {
             "id": form_id,
             "set": set_id,
@@ -216,7 +216,7 @@ def block_form(
     >>> slots(block_form("f", [], (0, 0), 1, 2, 1.0, anchor="front-left")).tolist()
     [[0.0, 0.0], [1.0, 0.0]]
     """
-    recipe = BlockRecipe.model_validate(
+    recipe = BlockRecipe._validated(
         {
             "origin": (float(origin[0]), float(origin[1])),
             "rows": rows,
@@ -323,7 +323,7 @@ def fill_form(
     >>> len(slots(fill_form("f", [], [(0, 0), (2, 0), (2, 2), (0, 2)], 1.0)))
     9
     """
-    recipe = FillRecipe.model_validate(
+    recipe = FillRecipe._validated(
         {
             "outline": _region(outline),
             "interval": interval,
@@ -375,7 +375,7 @@ def custom_form(
             hint="give one facing per point, or none",
             context={"form": form_id},
         )
-    recipe = CustomRecipe.model_validate(
+    recipe = CustomRecipe._validated(
         {
             "points": [(float(x), float(y)) for x, y in pts],
             "facings": None if facings is None else [float(f) for f in facings],

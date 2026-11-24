@@ -225,7 +225,7 @@ OP_PAYLOADS = st.one_of(
 @given(EVENT_KINDS, OP_PAYLOADS)
 def test_fuzz_apply_event_payloads(kind: EventKind, payload: dict[str, object]) -> None:
     def replay() -> Show:
-        event = CanvasEvent.model_validate({"id": "e", "at": AT, "kind": kind, "payload": payload})
+        event = CanvasEvent.from_json({"id": "e", "at": AT, "kind": kind, "payload": payload})
         return apply_event(PLAIN, event, force=True)
 
     only_e8s_errors(replay, (kind, payload))

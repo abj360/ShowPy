@@ -44,8 +44,14 @@ Contains:
         syntax such as `all`
     test_regression_cast_spot_index_is_fresh_after_replace: finds a spot added through `replace`
         although the old cast already cached its index
+    test_cast_accepts_max_spots: accepts a cast of exactly MAX_SPOTS spots
+    test_regression_cast_refuses_more_than_max_spots: refuses MAX_SPOTS + 1 spots, built or
+        edited, with TOO_MANY_SPOTS
+    test_regression_decoded_cast_checks_the_spot_cap_before_the_spots: refuses an over-cap
+        decoded cast by its length before any spot is checked
 """
 
+import json
 import math
 import sys
 from typing import cast as typing_cast
@@ -54,7 +60,9 @@ import pytest
 from pydantic import ValidationError as PydanticValidationError
 
 from e8s.cast.models import Cast, Group, LabelScheme, Shape, Spot
-from e8s.core.errors import E8sError, GeometryError, UnknownRefError
+from e8s.core.caps import MAX_SPOTS
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import E8sError, GeometryError, SchemaError, UnknownRefError
 from e8s.core.ids import SpotId
 from tests.helpers import fails_after, outputs_under_hash_seeds
 
@@ -84,7 +92,6 @@ def test_shape_extent_for_circle_and_rectangle() -> None:
 def test_spot_defaults() -> None:
     spot = Spot(id=SpotId("T1"), group="trumpets")
     assert spot.active
-    assert spot.model_dump()["claimable"] == "performer"
     assert spot.tags == ()
     assert spot.symbol is None
 
@@ -121,12 +128,13 @@ def test_cast_round_trips_json() -> None:
     cast = Cast(
         groups={"t": Group(key="t", label_prefix="T")}, spots=(Spot(id=SpotId("T1"), group="t"),)
     )
-    assert Cast.model_validate_json(cast.model_dump_json()) == cast
+    assert Cast.from_json(json.loads(json.dumps(cast.to_json()))) == cast
 
 
 REJECTED = (E8sError, PydanticValidationError)
 HUGE_PAD = 10**7
 CAST_SCRIPT_HEAD = (
+    "import json\n"
     "from e8s.cast.models import Cast, Group, Spot\n"
     "from e8s.core.util import content_hash\n"
     "ids = [f'T{i}' for i in range(1, 7)]\n"
@@ -159,7 +167,7 @@ def test_regression_spot_tags_serialize_in_a_stable_order() -> None:
 
     A fix must store a sorted, deduplicated tuple or reject set input.
     """
-    outputs = _under_seeds("print(cast.spots[0].model_dump_json())\n")
+    outputs = _under_seeds("print(json.dumps(cast.spots[0].to_json()))\n")
     assert len(set(outputs)) == 1, outputs
 
 
@@ -168,7 +176,7 @@ def test_regression_cast_selections_serialize_in_a_stable_order() -> None:
 
     A fix must store a sorted, deduplicated tuple or reject set input.
     """
-    outputs = _under_seeds("print(cast.model_dump_json())\n")
+    outputs = _under_seeds("print(json.dumps(cast.to_json()))\n")
     assert len(set(outputs)) == 1, outputs
 
 
@@ -196,9 +204,9 @@ def test_regression_frozenset_tags_and_selections_store_in_one_order() -> None:
 
 def test_regression_tags_and_selections_dedupe_keeping_first_occurrence() -> None:
     """Drops repeated tags and selection IDs and keeps the order a list was given in."""
-    spot = Spot.model_validate({"id": "T1", "group": "g", "tags": ["z", "a", "z"]})
+    spot = Spot.from_json({"id": "T1", "group": "g", "tags": ["z", "a", "z"]})
     assert spot.tags == ("z", "a")
-    cast = Cast.model_validate(
+    cast = Cast.from_json(
         {
             "groups": {"g": Group(key="g", label_prefix="T")},
             "spots": (spot, Spot(id=SpotId("T2"), group="g")),
@@ -215,10 +223,10 @@ def test_regression_v02_array_documents_still_decode() -> None:
         ' "spots": [{"id": "T1", "group": "g", "tags": ["b", "a"]}],'
         ' "selections": {"s": ["T1"]}}'
     )
-    cast = Cast.model_validate_json(document)
+    cast = Cast.from_json(json.loads(document))
     assert cast.spots[0].tags == ("b", "a")
     assert cast.selections == {"s": ("T1",)}
-    assert Cast.model_validate_json(cast.model_dump_json()) == cast
+    assert Cast.from_json(json.loads(json.dumps(cast.to_json()))) == cast
 
 
 def test_regression_group_limits_are_immutable() -> None:
@@ -340,3 +348,37 @@ def test_regression_cast_spot_index_is_fresh_after_replace() -> None:
     assert grown.spot("T2").id == "T2"
     with pytest.raises(UnknownRefError):
         cast.spot("T2")
+
+
+def _cast_of(count: int) -> Cast:
+    spots = tuple(Spot(id=SpotId(f"T{n}"), group="t") for n in range(1, count + 1))
+    return Cast(groups={"t": Group(key="t", label_prefix="T")}, spots=spots)
+
+
+def test_cast_accepts_max_spots() -> None:
+    """Accepts a cast of exactly MAX_SPOTS spots."""
+    assert len(_cast_of(MAX_SPOTS).spots) == MAX_SPOTS
+
+
+def test_regression_cast_refuses_more_than_max_spots() -> None:
+    """Refuses a cast of MAX_SPOTS + 1 spots with TOO_MANY_SPOTS, built or edited."""
+    with pytest.raises(SchemaError) as caught:
+        _cast_of(MAX_SPOTS + 1)
+    assert caught.value.code == ErrorCode.TOO_MANY_SPOTS
+    assert caught.value.context == {"spots": MAX_SPOTS + 1, "max_spots": MAX_SPOTS}
+    assert f"{MAX_SPOTS:,}" in caught.value.hint
+    full = _cast_of(MAX_SPOTS)
+    extra = Spot(id=SpotId(f"T{MAX_SPOTS + 1}"), group="t")
+    with pytest.raises(SchemaError) as edited:
+        full.replace(spots=(*full.spots, extra))
+    assert edited.value.code == ErrorCode.TOO_MANY_SPOTS
+
+
+def test_regression_decoded_cast_checks_the_spot_cap_before_the_spots() -> None:
+    """Refuses a decoded cast of MAX_SPOTS + 1 spots by its length, before checking any spot."""
+    dumped = _cast_of(1).model_dump(mode="json")
+    dumped["spots"] = [{} for _ in range(MAX_SPOTS + 1)]
+    with pytest.raises(SchemaError) as decoded:
+        Cast.model_validate(dumped)
+    assert decoded.value.code == ErrorCode.TOO_MANY_SPOTS
+    assert decoded.value.context == {"spots": MAX_SPOTS + 1, "max_spots": MAX_SPOTS}

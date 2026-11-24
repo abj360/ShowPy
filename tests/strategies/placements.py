@@ -39,7 +39,7 @@ def placement_for(draw: st.DrawFn, previous: Placement, sheet: Sheet) -> Placeme
     """
     change = draw(st.sampled_from(SpotChange))
     if change is SpotChange.STAY:
-        return previous.model_copy(update={"form": None, "order": None})
+        return previous.replace(form=None, order=None)
     x, y = draw(points_on(sheet))
     on_field = not previous.on_field if change is SpotChange.TOGGLE else previous.on_field
     return Placement(entity=previous.entity, x=x, y=y, facing=draw(headings()), on_field=on_field)

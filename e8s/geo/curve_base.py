@@ -5,7 +5,6 @@ Contains:
     Curve: describes the interface every stage-plane curve implements
     CurveBase: implements arc-length sampling, projection and polyline export generically
     CurveBase.length(): returns the arc length, raising GeometryError on overflow
-    CurveBase.model_copy(): returns a validated copy without stale caches
     CurveBase.point_at(): returns points at arc lengths, wrapping closed curves
     CurveBase.tangent_at(): returns unit tangents at arc lengths
     CurveBase.normal_at(): returns unit left normals at arc lengths
@@ -130,11 +129,10 @@ class CurveBase(FrozenModel):
 
     closed: bool = False
 
-    # Any: update values are arbitrary field values, validated by the rebuilt model.
     @override
-    def model_copy(self, *, update: Mapping[str, Any] | None = None, deep: bool = False) -> Self:
+    def _copied(self, *, update: Mapping[str, object] | None = None, deep: bool = False) -> Self:
         """Returns a validated copy; cached arc-length tables never leak into the copy."""
-        return self.model_validate({**self.model_dump(), **(update or {})})
+        return self._validated({**self._dumped(), **(update or {})})
 
     def _native(self, t: FloatArray) -> Points:
         raise NotImplementedError
@@ -280,7 +278,7 @@ class CurveBase(FrozenModel):
     # Any: construction recipes are JSON objects whose values depend on the curve kind.
     def construction(self) -> dict[str, Any]:
         """Returns the JSON recipe that rebuilds this curve."""
-        return self.model_dump(mode="json")
+        return self.to_json()
 
 
 def _require_polyline_size(count: int) -> None:

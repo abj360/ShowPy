@@ -23,6 +23,7 @@ Contains:
         without force
 """
 
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -203,7 +204,7 @@ def test_events_since_replay_reproduces_head() -> None:
     for event in events:
         replayed = apply_event(replayed, event, force=True)
     head = load_show(designer)
-    assert replayed.model_copy(update={"revision": head.revision}) == head
+    assert replayed.replace(revision=head.revision) == head
     assert events_since(agent, designer.revision) == []
 
 
@@ -211,7 +212,7 @@ def test_events_since_reports_comments() -> None:
     _, agent, designer = open_session(add_set(two_set_show(), "3", 4.0), AT)
     start = designer.revision
     comment = Comment(id="c1", anchor=Anchor.on_set("2"), text="tighten the line")
-    designer.write(COMMENTS_DOC, dump_json([comment.model_dump(mode="python")]), at=AT + STEP)
+    designer.write(COMMENTS_DOC, dump_json([comment._dumped()]), at=AT + STEP)
     (event,) = events_since(agent, start)
     assert event.kind == "comment"
     assert event.payload == comment
@@ -219,7 +220,7 @@ def test_events_since_reports_comments() -> None:
 
 def test_apply_event_rules() -> None:
     with pytest.raises(SchemaError):
-        CanvasEvent.model_validate(
+        CanvasEvent.from_json(
             {
                 "id": "e",
                 "at": AT,
@@ -355,7 +356,7 @@ def test_highlight_and_selection() -> None:
     assert selection(agent).ids == ()
     designer.write(
         "/canvas/selection.json",
-        Selection(ids=(SpotId("T2"), SpotId("T1"))).model_dump_json(),
+        json.dumps(Selection(ids=(SpotId("T2"), SpotId("T1"))).to_json()),
         at=AT,
     )
     agent.refresh()
@@ -370,7 +371,7 @@ RESCALED_COUNTS = 16.0
 
 
 def _with_path_row(show: Show) -> Show:
-    return show.model_copy(update={"transitions": (STRAIGHT_ROW,)})
+    return show.replace(transitions=(STRAIGHT_ROW,))
 
 
 @pytest.mark.defect("UP-9.7-32")
@@ -390,11 +391,11 @@ def test_regression_counts_only_change_is_not_reported_as_a_paths_edit() -> None
 @pytest.mark.xfail(strict=True, reason="UP-9.7-33")
 def test_regression_events_since_replay_reproduces_a_form_deletion() -> None:
     """Replays a form deletion so the replayed show equals head (audit 9.7 collab)."""
-    with_form = two_set_show().model_copy(update={"forms": {"f1": FORM}})
+    with_form = two_set_show().replace(forms={"f1": FORM})
     _, agent, designer = open_session(with_form, AT)
     base_revision = designer.revision
     base = load_show(designer)
-    save_show(designer, base.model_copy(update={"forms": {}}), AT + STEP)
+    save_show(designer, base.replace(forms={}), AT + STEP)
     replayed = base
     for event in events_since(agent, base_revision):
         replayed = apply_event(replayed, event, force=True)
@@ -431,8 +432,8 @@ def test_regression_rescale_proposal_conflicts_with_a_newer_row_of_the_same_tran
     _, agent, designer = open_session(_with_path_row(two_set_show()), AT)
     rescale = CountsOp(set_id=SetId("2"), counts=RESCALED_COUNTS, rescale=True)
     proposal = propose(load_show(agent), [rescale], "", "p1")
-    newer = STRAIGHT_ROW.model_copy(update={"rows": {"T1": PathRow(entity=SpotId("T1"), start=4)}})
-    designer_show = load_show(designer).model_copy(update={"transitions": (newer,)})
+    newer = STRAIGHT_ROW.replace(rows={"T1": PathRow(entity=SpotId("T1"), start=4)})
+    designer_show = load_show(designer).replace(transitions=(newer,))
     save_show(designer, designer_show, AT + STEP)
     with pytest.raises(ConflictError):
         accept(designer, proposal, AT + 2 * STEP)
@@ -442,11 +443,11 @@ def test_regression_rescale_proposal_conflicts_with_a_newer_row_of_the_same_tran
 @pytest.mark.xfail(strict=True, reason="UP-9.7-91")
 def test_regression_accepting_a_form_edit_does_not_resurrect_a_deleted_form() -> None:
     """Refuses, or keeps the form deleted, when accepting an edit of a deleted form (audit 9.7)."""
-    with_form = two_set_show().model_copy(update={"forms": {"f1": FORM}})
+    with_form = two_set_show().replace(forms={"f1": FORM})
     _, agent, designer = open_session(with_form, AT)
-    edited_form = FORM.model_copy(update={"recipe": LineRecipe(curve=line((0.0, 0.0), (9.0, 0.0)))})
+    edited_form = FORM.replace(recipe=LineRecipe(curve=line((0.0, 0.0), (9.0, 0.0))))
     proposal = propose(load_show(agent), [FormOp(form=edited_form)], "longer", "p1")
-    save_show(designer, load_show(designer).model_copy(update={"forms": {}}), AT + STEP)
+    save_show(designer, load_show(designer).replace(forms={}), AT + STEP)
     try:
         accept(designer, proposal, AT + 2 * STEP)
     except E8sError:
@@ -460,7 +461,7 @@ def test_regression_canvas_event_with_bad_payload_is_a_schema_error(
 ) -> None:
     """Raises SchemaError, not pydantic's ValidationError, for a malformed op payload."""
     with pytest.raises(SchemaError) as info:
-        CanvasEvent.model_validate({"id": "e", "at": AT, "kind": "set_counts", "payload": payload})
+        CanvasEvent.from_json({"id": "e", "at": AT, "kind": "set_counts", "payload": payload})
     assert info.value.context["errors"]
 
 
@@ -497,7 +498,7 @@ def test_event_payload_rejects_unknown_fields() -> None:
     with pytest.raises(SchemaError):
         decode_event({**raw, "payload": {"zone": "pit", "ttl_s": 10.0, "colour": "red"}})
     with pytest.raises(SchemaError):
-        CanvasEvent.model_validate(
+        CanvasEvent.from_json(
             {"id": "e", "at": AT, "kind": "set_counts", "payload": {"op": "counts", "extra": 1}}
         )
 

@@ -12,8 +12,8 @@ Contains:
         the rename rule instead of refusing the whole show
     test_stored_v1_spot_renames_reach_note_anchors: points spot anchors of a stored v1 tree at the
         spot IDs its migration renamed
-    test_v1_spot_renames_reach_note_anchors: points spot anchors of a v1 interchange document at
-        the spot IDs its migration renamed
+    test_v1_spot_renames_reach_note_anchors: points spot anchors of a v1 interchange dump's notes
+        document at the spot IDs its migration renamed
     test_first_save_writes_notes_in_the_same_revision_and_the_second_none: stores the notes
         document with the v2 documents in one workspace revision and nothing on the next save
     test_put_show_writes_notes_in_the_migration_revision: stores the notes document in the
@@ -30,27 +30,14 @@ Contains:
     test_notes_document_refuses_bad_and_repeated_note_ids: checks note IDs on the document
     test_regression_newer_notes_document_raises_version_error: refuses a notes document of a
         newer version with VersionError and an unknown format with SchemaError UNKNOWN_FORMAT
-    test_notes_document_header_is_written_first: stores and exports `format` and `version` as the
-        first keys of the notes document
+    test_notes_document_header_is_written_first: stores `format` and `version` as the first keys
+        of the notes document
     test_workspace_writes_a_checked_notes_document: stores a valid notes document through a
         workspace, refuses one that does not match its model and refuses the v1 notes path
     test_regression_workspace_refuses_the_notes_of_another_show: refuses a notes document whose
         `show` names another show, with a hint naming the show's ID
-    test_export_json_returns_the_notes_document_beside_the_show: embeds the notes document
-        under `notes` and refuses one of another show
-    test_import_notes_reads_v1_and_v2_documents: returns the notes of a v2 document as given
-        and migrates the notes of a v1 document with the show's renames
-    test_v1_notes_readers_do_not_depend_on_the_leaving_names: keeps every library module outside
-        e8s.notes free of imports of e8s.notes, so the private v1 notes readers outlive it
-    test_private_reader_returns_v1_notes_as_plain_json: returns a v1 document's migrated notes
-        as JSON from the private reader that import_notes wraps
-    test_rewrite_report_notes_warns_until_1_0_0: warns that `RewriteReport.notes` leaves the
-        library in 1.0.0 when read outside the library
-    test_rename_spots_rewrites_the_notes_document: follows spot renames in the notes document
-        and reports orphaned notes when a rewrite drops every anchored spot
 """
 
-import ast
 import hashlib
 import json
 import shutil
@@ -60,15 +47,12 @@ from typing import Any
 
 import pytest
 
-import e8s
-from e8s.cast.rewrite import rewrite_spots
-from e8s.cast.spots import rename_spots
-from e8s.core.deprecation import DeprecatedWarning
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, UnknownRefError, VersionError
 from e8s.core.ids import NoteId
 from e8s.examples import two_set_show
-from e8s.notes.models import Note, NotesDocument
+from e8s.show._notes_document import Note, NotesDocument
+from e8s.show.document_reading import migrate_dump
 from e8s.show.documents import (
     LEGACY_NOTES_DOC,
     NOTES_DOC,
@@ -81,7 +65,7 @@ from e8s.show.documents import (
 )
 from e8s.show.file_repository import FileRepository
 from e8s.show.integrity import blob_digest
-from e8s.show.interchange import _notes_json, export_json, import_json, import_notes
+from e8s.show.interchange import import_json
 from e8s.show.models import Anchor, Revision, Show
 from e8s.show.repositories import InMemoryRepository
 from e8s.show.storage import load_show, open_workspace, save_show
@@ -90,8 +74,6 @@ FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "repos"
 TAGS = ["v0.1.1", "v0.2.0", "v0.3.0"]
 AT = datetime(2026, 11, 22, 12, 0, tzinfo=UTC)
 WRITTEN = "2026-11-12T10:00:00+00:00"
-
-pytestmark = pytest.mark.filterwarnings("ignore::e8s.core.deprecation.DeprecatedWarning")
 
 
 def _fixture(tag: str, tmp_path: Path) -> tuple[FileRepository, str]:
@@ -174,7 +156,7 @@ def test_note_anchors_follow_the_migration_renames(tmp_path: Path) -> None:
     ]
     _commit_v1(repo, show_id, {LEGACY_NOTES_DOC: dump_json(notes)})
     migrated, report = migrate_documents(dict(repo.documents(show_id)))
-    document = NotesDocument.model_validate_json(migrated[NOTES_DOC])
+    document = NotesDocument.from_json(json.loads(migrated[NOTES_DOC]))
     assert [n.id for n in document.notes] == ["n_1", "n2", "N_1.2"]
     assert report.renamed["note"] == (("n-1", "n_1"), ("N-1", "N_1.2"))
     assert document.notes[0].anchor == Anchor.on_set("con_")
@@ -190,7 +172,7 @@ def test_regression_v1_note_with_an_empty_id_is_renamed(tmp_path: Path) -> None:
     ]
     _commit_v1(repo, show_id, {LEGACY_NOTES_DOC: dump_json(notes)})
     migrated, report = migrate_documents(dict(repo.documents(show_id)))
-    document = NotesDocument.model_validate_json(migrated[NOTES_DOC])
+    document = NotesDocument.from_json(json.loads(migrated[NOTES_DOC]))
     assert [n.id for n in document.notes] == ["id.2", "id"]
     assert report.renamed["note"] == (("", "id.2"),)
     assert document.notes[0].anchor == Anchor.on_set("con_")
@@ -208,17 +190,17 @@ def test_stored_v1_spot_renames_reach_note_anchors(tmp_path: Path) -> None:
     _commit_v1(repo, show_id, {**respelled, LEGACY_NOTES_DOC: dump_json(notes)})
     migrated, report = migrate_documents(dict(repo.documents(show_id)))
     assert ("brass-2", "brass_2") in report.renamed["spot"]
-    document = NotesDocument.model_validate_json(migrated[NOTES_DOC])
+    document = NotesDocument.from_json(json.loads(migrated[NOTES_DOC]))
     assert document.notes[0].anchor == Anchor.on_spots(["brass_2", "B2"])
 
 
 def test_v1_spot_renames_reach_note_anchors() -> None:
-    dump = two_set_show().model_dump(mode="json")
+    dump = two_set_show().to_json()
     text = json.dumps(dump).replace('"T1"', '"T-1"')
     legacy: dict[str, Any] = json.loads(text)
     legacy["notes"] = [_v1_note("n1", {"kind": "spots", "spots": ["T-1", "T2"]})]
     document = {"schema": "showpy.show.v1", "show": legacy}
-    notes = import_notes(document)
+    notes = NotesDocument.from_json(migrate_dump(legacy, 1)[2][NOTES_DOC])
     assert import_json(document).cast.ids()[0] == "T_1"
     assert notes.notes[0].anchor == Anchor.on_spots(["T_1", "T2"])
 
@@ -275,7 +257,7 @@ def test_reads_on_a_v1_head_see_the_notes_document(tmp_path: Path) -> None:
     ws = open_workspace(repo, show_id)
     read = ws.read(NOTES_DOC)
     assert isinstance(read, str)
-    assert [n.id for n in NotesDocument.model_validate_json(read).notes] == ["n1", "n2"]
+    assert [n.id for n in NotesDocument.from_json(json.loads(read)).notes] == ["n1", "n2"]
     assert "notes.json" in ws.ls("/notes/")
     assert repo.head(show_id) == head
 
@@ -288,7 +270,7 @@ def test_migration_changes_write_the_notes_document_and_drop_the_v1_notes(
     assert changes[LEGACY_NOTES_DOC] is None
     written = changes[NOTES_DOC]
     assert written is not None
-    assert NotesDocument.model_validate_json(written).show == repo.get_show(show_id).id
+    assert NotesDocument.from_json(json.loads(written)).show == repo.get_show(show_id).id
 
 
 @pytest.mark.parametrize("tag", TAGS)
@@ -300,11 +282,11 @@ def test_a_v1_tree_without_notes_gets_no_notes_document(tag: str, tmp_path: Path
 
 
 def test_v2_show_json_has_no_notes_and_show_has_no_notes_field() -> None:
-    assert "notes" not in Show.model_fields
+    assert "notes" not in Show._field_names()
     assert "notes" not in json.loads(encode_show(two_set_show())[SHOW_DOC])
     assert LEGACY_NOTES_DOC not in encode_show(two_set_show())
     with pytest.raises(SchemaError):
-        Show.model_validate({**two_set_show().model_dump(mode="json"), "notes": []})
+        Show.from_json({**two_set_show().to_json(), "notes": []})
 
 
 def _note(note_id: str) -> Note:
@@ -324,12 +306,12 @@ def test_notes_document_refuses_bad_and_repeated_note_ids() -> None:
 
 def test_regression_newer_notes_document_raises_version_error() -> None:
     with pytest.raises(VersionError) as caught:
-        NotesDocument.model_validate({"format": "e8.notes", "version": 2, "show": "show-1"})
+        NotesDocument.from_json({"format": "e8.notes", "version": 2, "show": "show-1"})
     assert caught.value.context["version"] == 2
     with pytest.raises(VersionError):
-        NotesDocument.model_validate_json(b'{"format": "e8.notes", "version": 3, "show": "s"}')
+        NotesDocument.from_json(json.loads(b'{"format": "e8.notes", "version": 3, "show": "s"}'))
     with pytest.raises(SchemaError) as unknown:
-        NotesDocument.model_validate({"format": "e8.other", "version": 1, "show": "show-1"})
+        NotesDocument.from_json({"format": "e8.other", "version": 1, "show": "show-1"})
     assert unknown.value.code == ErrorCode.UNKNOWN_FORMAT
 
 
@@ -341,8 +323,6 @@ def test_notes_document_header_is_written_first(tmp_path: Path) -> None:
         b'  "format": "e8.notes",',
         b'  "version": 1,',
     ]
-    exported = export_json(two_set_show(), notes=NotesDocument(show=two_set_show().id))
-    assert list(exported["notes"])[:2] == ["format", "version"]
 
 
 def test_workspace_writes_a_checked_notes_document() -> None:
@@ -350,7 +330,7 @@ def test_workspace_writes_a_checked_notes_document() -> None:
     repo = InMemoryRepository()
     repo.put_show(show.id, show, expected_revision="", at=AT)
     ws = open_workspace(repo, show.id)
-    raw = dump_json(NotesDocument(show=show.id, notes=(_note("n1"),)).model_dump(mode="json"))
+    raw = dump_json(NotesDocument(show=show.id, notes=(_note("n1"),)).to_json())
     ws.write(NOTES_DOC, raw, at=AT)
     assert repo.read(show.id, NOTES_DOC) == raw
     assert "notes.json" in ws.ls("/notes/")
@@ -366,101 +346,9 @@ def test_regression_workspace_refuses_the_notes_of_another_show() -> None:
     repo = InMemoryRepository()
     repo.put_show(show.id, show, expected_revision="", at=AT)
     ws = open_workspace(repo, show.id)
-    raw = dump_json(NotesDocument(show="other-show").model_dump(mode="json"))
+    raw = dump_json(NotesDocument(show="other-show").to_json())
     with pytest.raises(SchemaError) as caught:
         ws.write(NOTES_DOC, raw, at=AT)
     assert caught.value.context["show"] == show.id
     assert show.id in caught.value.hint
     assert repo.read(show.id, NOTES_DOC) is None
-
-
-def test_export_json_returns_the_notes_document_beside_the_show() -> None:
-    show = two_set_show()
-    document = NotesDocument(show=show.id, notes=(_note("n1"),))
-    exported = export_json(show, notes=document)
-    assert exported["notes"] == {
-        "format": "e8.notes",
-        "version": 1,
-        "show": show.id,
-        "notes": [note.model_dump(mode="json") for note in document.notes],
-    }
-    assert "notes" not in exported["show"]
-    assert import_json(exported) == show
-    assert import_notes(exported) == document
-    with pytest.raises(SchemaError):
-        export_json(show, notes=document.model_copy(update={"show": "other"}))
-
-
-def test_import_notes_reads_v1_and_v2_documents() -> None:
-    show = two_set_show()
-    assert import_notes(export_json(show)) == NotesDocument(show=show.id)
-    legacy = show.model_dump(mode="json")
-    legacy["notes"] = [_v1_note("n-1", {"kind": "set", "set_id": "2"})]
-    notes = import_notes({"schema": "showpy.show.v1", "show": legacy})
-    assert [n.id for n in notes.notes] == ["n_1"]
-    with pytest.raises(SchemaError) as caught:
-        import_notes({**export_json(show), "notes": {"format": "e8.notes", "version": 1}})
-    assert caught.value.code == ErrorCode.SCHEMA
-
-
-def test_rename_spots_rewrites_the_notes_document() -> None:
-    show = two_set_show()
-    document = NotesDocument(
-        show=show.id,
-        notes=(
-            Note(
-                id=NoteId("n1"), text="t", anchor=Anchor.on_spots(["T1"]), author="d", created_at=AT
-            ),
-        ),
-    )
-    renamed, report = rename_spots(show, {"T1": "S1"}, notes=document)
-    assert renamed.cast.ids()[0] == "S1"
-    assert report.notes is not None
-    assert report.notes.notes[0].anchor == Anchor.on_spots(["S1"])
-    _, dropped = rewrite_spots(show, lambda i: None if i == "T1" else i, notes=document)
-    assert [n.id for n in dropped.orphaned_notes] == ["n1"]
-    assert dropped.notes == NotesDocument(show=show.id)
-    with pytest.raises(SchemaError):
-        rename_spots(show, {"T1": "S1"}, notes=document.model_copy(update={"show": "other"}))
-
-
-def test_rewrite_report_notes_warns_until_1_0_0() -> None:
-    show = two_set_show()
-    _, report = rename_spots(show, {"T1": "S1"}, notes=NotesDocument(show=show.id))
-    with pytest.warns(DeprecatedWarning, match=r"`e8s\.RewriteReport\.notes`.*1\.0\.0"):
-        assert report.notes == NotesDocument(show=show.id)
-
-
-LIBRARY = Path(e8s.__file__).resolve().parent
-LEAVING_PACKAGE = "e8s.notes"
-
-
-def _imports(path: Path) -> set[str]:
-    tree = ast.parse(path.read_text())
-    found = {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
-    found |= {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom) and n.module}
-    return found
-
-
-def test_v1_notes_readers_do_not_depend_on_the_leaving_names() -> None:
-    outside = [
-        p
-        for p in LIBRARY.rglob("*.py")
-        if "notes" not in p.relative_to(LIBRARY).parts[:1] and p.name != "__init__.py"
-    ]
-    leaning = [
-        str(p.relative_to(LIBRARY))
-        for p in outside
-        if any(m == LEAVING_PACKAGE or m.startswith(f"{LEAVING_PACKAGE}.") for m in _imports(p))
-    ]
-    assert leaning == []
-    assert (LIBRARY / "show" / "_notes_document.py").is_file()
-
-
-def test_private_reader_returns_v1_notes_as_plain_json() -> None:
-    legacy = two_set_show().model_dump(mode="json")
-    legacy["notes"] = [_v1_note("n-1", {"kind": "set", "set_id": "2"})]
-    stored = _notes_json({"schema": "showpy.show.v1", "show": legacy})
-    assert stored["format"] == "e8.notes"
-    assert NotesDocument.model_validate(stored).notes[0].id == "n_1"
-    assert json.loads(json.dumps(stored)) == stored

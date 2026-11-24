@@ -6,7 +6,6 @@ Contains:
     diff_paths(): lists spots and routes whose effective paths differ between transitions
     diff_show(): summarizes every difference between two shows as a JSON-safe dict
     revert(): saves the documents of an earlier revision as a new revision
-    rename_entities(): rewrites spot IDs everywhere in a show; deprecated for rename_spots()
     changelog(): lists revisions since a revision as terse lines
 """
 
@@ -14,10 +13,8 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
-from e8s.cast.spots import rename_spots
 from e8s.choreo.models import Set
 from e8s.choreo.path_models import TransitionSpec
-from e8s.core.deprecation import deprecated_call
 from e8s.core.ids import FormId, SpotId, format_tid
 from e8s.core.units import angle_diff
 from e8s.core.util import approx_equal, natural_sort
@@ -26,7 +23,7 @@ from e8s.show.storage import ROOT_REVISION, Workspace
 
 SHORT_ID = 7
 TIME_FORMAT = "%Y-%m-%d %H:%M"
-SHOW_FIELDS = ("sheet", "timeline", "coordinates", "zones", "facing_overrides", "dependencies")
+SHOW_FIELDS = ("sheet", "timeline", "facing_overrides", "dependencies")
 
 
 def _member_key(row: tuple[int | None, SpotId]) -> tuple[bool, int, SpotId]:
@@ -114,7 +111,7 @@ def _keyed[K: str](left: Mapping[K, object], right: Mapping[K, object]) -> dict[
 def _sets_diff(a: Show, b: Show) -> dict[str, Any]:
     old, new = {s.id: s for s in a.sets}, {s.id: s for s in b.sets}
     common = [s for s in b.set_ids() if s in old]
-    changed = {s: diff_sets(old[s], new[s]).model_dump(exclude_defaults=True) for s in common}
+    changed = {s: diff_sets(old[s], new[s])._dumped(exclude_defaults=True) for s in common}
     counts = {s: [old[s].counts, new[s].counts] for s in common if old[s].counts != new[s].counts}
     found = {
         **_keyed(old, new),
@@ -129,7 +126,7 @@ def _sets_diff(a: Show, b: Show) -> dict[str, Any]:
 def _paths_diff(a: Show, b: Show) -> dict[str, Any]:
     shared = [t for t in b.transition_ids() if t in a.transition_ids()]
     diffs = {format_tid(t): diff_paths(a.transition(t), b.transition(t)) for t in shared}
-    return {t: d.model_dump(exclude_defaults=True) for t, d in diffs.items() if not d.is_empty}
+    return {t: d._dumped(exclude_defaults=True) for t, d in diffs.items() if not d.is_empty}
 
 
 # Any: diff summaries hold JSON values of mixed types.
@@ -188,24 +185,6 @@ def revert(ws: Workspace, revision_id: str, at: datetime) -> Revision:
     old, head = ws.tree_at(target.id), ws.tree_at(ws.revision)
     paths = {p for p in set(old) | set(head) if old.get(p) != head.get(p)}
     return ws._commit_stored({p: old.get(p) for p in sorted(paths)}, at=at)
-
-
-@deprecated_call(rename_spots, since="0.4.0", remove="0.6.0")
-def rename_entities(show: Show, mapping: Mapping[str, str]) -> Show:
-    """Rewrites spot IDs everywhere in a show; superseded by rename_spots(), which also reports.
-
-    Behaves as `rename_spots(show, mapping)[0]`: a pinned picture the rename would change raises
-    LockedError, swaps are allowed and a new ID that another spot keeps raises SchemaError.
-
-    >>> import warnings
-    >>> from e8s.examples import two_set_show
-    >>> with warnings.catch_warnings():
-    ...     warnings.simplefilter("ignore")
-    ...     renamed = rename_entities(two_set_show(), {"T1": "S1"})
-    >>> renamed.cast.ids(), renamed.sets[1].entity_ids()[0]
-    (('S1', 'T2', 'T3', 'T4'), 'S1')
-    """
-    return rename_spots(show, mapping)[0]
 
 
 def _line(revision: Revision) -> str:

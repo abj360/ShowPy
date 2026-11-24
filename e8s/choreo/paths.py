@@ -82,7 +82,7 @@ def _edit(
                 hint="unlock it first, or pass force=True as the designer",
                 context={"entity": entity},
             )
-        updated = PathRow.model_validate({**row.model_dump(), **change(row)})
+        updated = PathRow._validated({**row._dumped(), **change(row)})
         _require_fits(updated, spec.counts)
         rows[updated.entity] = updated
     return spec.replace(rows=rows)
@@ -105,7 +105,7 @@ def default_paths(show: "Show", tid: tuple[str, str]) -> TransitionSpec:
     >>> dict(default_paths(two_set_show(), ("1", "2")).rows)
     {}
     """
-    return TransitionSpec.model_validate({"id": tid, "counts": show.set(tid[1]).counts})
+    return TransitionSpec._validated({"id": tid, "counts": show.set(tid[1]).counts})
 
 
 # Any: style parameters are PathRow field values whose types depend on the style.
@@ -392,7 +392,7 @@ def set_easing(
     >>> set_easing(spec, ["A"], "ease_out").row("A").easing.kind
     'ease_out'
     """
-    chosen = easing if isinstance(easing, Easing) else Easing.model_validate({"kind": easing})
+    chosen = easing if isinstance(easing, Easing) else Easing._validated({"kind": easing})
     return _edit(spec, sel, lambda _row: {"easing": chosen}, force=force)
 
 

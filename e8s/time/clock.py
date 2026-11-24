@@ -158,7 +158,7 @@ def _require_valid_section(section: TempoSection) -> None:
             f"tempo section at count {section.at_count} is malformed",
             hint="tempos must be positive and finite; give both ramp_to and ramp_counts (> 0, "
             "finite) or neither",
-            context={"section": section.model_dump()},
+            context={"section": section._dumped()},
         )
 
 

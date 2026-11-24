@@ -28,6 +28,7 @@ from e8s.choreo.forms import slots
 from e8s.core.errors import SchemaError
 from e8s.core.types import Points
 from e8s.core.util import approx_equal, seeded_rng
+from tests.helpers import json_doc
 
 TOL = 1e-6
 
@@ -91,7 +92,7 @@ def test_detects_arc_from_angular_coverage() -> None:
     pts = _ring((0.0, 0.0), 5.0, [30, 60, 90, 120])
     form = detect_form(pts)
     assert form.kind == "arc"
-    curve = form.recipe.model_dump(mode="json")["curve"]
+    curve = json_doc(form.recipe)["curve"]
     assert approx_equal(curve["sweep_deg"], 90.0, abs_tol=TOL)
     assert approx_equal(slots(form), pts, abs_tol=TOL)
 
@@ -160,7 +161,7 @@ def test_regression_detect_form_tolerates_one_outlier_on_a_clean_circle() -> Non
     pts = _ring((0.0, 0.0), RING_RADIUS, [i * 360 / RING_SPOTS for i in range(RING_SPOTS)])
     form = detect_form(np.vstack([pts, OUTLIER]), tol=FIT_TOL)
     assert form.kind == "circle"
-    curve = form.recipe.model_dump(mode="json")["curve"]
+    curve = json_doc(form.recipe)["curve"]
     assert approx_equal(curve["center"], (0.0, 0.0), abs_tol=FIT_TOL)
     assert approx_equal(curve["radius"], RING_RADIUS, abs_tol=FIT_TOL)
 

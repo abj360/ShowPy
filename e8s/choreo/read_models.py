@@ -13,11 +13,11 @@ from collections.abc import Mapping
 from typing import Annotated, Literal, Self
 
 import numpy as np
-from pydantic import Field, model_validator
+from pydantic import model_validator
 
 from e8s.core.arrays import ArrayModel, BoolArray, FloatArray, ReadOnlyArray
 from e8s.core.ids import SetId, SpotId, TransitionId
-from e8s.core.readonly import ReadOnly, ReadOnlyMap
+from e8s.core.readonly import ReadOnly
 from e8s.core.types import Degrees, FrozenModel, Meters
 
 type SegmentKind = Literal["hold", "straight", "curve", "follow", "rotate", "custom"]
@@ -135,7 +135,5 @@ class TransitionDescription(FrozenModel):
 
     transition: TransitionId
     counts: float
-    moves: Annotated[Mapping[SpotId, tuple[SegmentDescription, ...]], ReadOnly()] = Field(
-        default_factory=lambda: ReadOnlyMap({})
-    )
-    groups: tuple[tuple[SpotId, ...], ...] = ()
+    moves: Annotated[Mapping[SpotId, tuple[SegmentDescription, ...]], ReadOnly()]
+    groups: tuple[tuple[SpotId, ...], ...]

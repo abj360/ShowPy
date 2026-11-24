@@ -84,8 +84,8 @@ def test_report_codes_are_ordered_and_unique() -> None:
 
 def test_report_to_json_round_trips() -> None:
     report = ValidationReport(issues=(_issue("error"), _issue("warning")))
-    assert ValidationReport.model_validate_json(report.to_json()) == report
-    assert json.loads(report.to_json())["issues"][0]["code"] == "SCHEMA"
+    assert ValidationReport.from_json(report.to_json()) == report
+    assert json.loads(json.dumps(report.to_json()))["issues"][0]["code"] == "SCHEMA"
 
 
 def test_raise_for_errors_returns_when_only_warnings() -> None:
@@ -149,14 +149,14 @@ def test_issue_hashes_with_and_without_context() -> None:
         context={"ids": ["a", "b"]},
     )
     assert hash(bare) == hash(_issue("error"))
-    assert hash(nested) == hash(nested.model_copy())
+    assert hash(nested) == hash(nested.replace())
 
 
 def test_regression_issue_refuses_an_uncatalogued_code() -> None:
     fields = {"level": "error", "where": "w", "message": "m", "hint": "h"}
     with pytest.raises(SchemaError):
-        ValidationIssue.model_validate({**fields, "code": "NOT_A_CODE"})
-    assert ValidationIssue.model_validate({**fields, "code": "LOCKED"}).code is ErrorCode.LOCKED
+        ValidationIssue.from_json({**fields, "code": "NOT_A_CODE"})
+    assert ValidationIssue.from_json({**fields, "code": "LOCKED"}).code is ErrorCode.LOCKED
 
 
 def test_merge_concatenates_issues() -> None:

@@ -110,6 +110,7 @@ from e8s.geo.affine import (
 )
 from e8s.geo.fonts import bundled_fonts, register_font
 from tests.fixtures.fonts import tiny_bytes
+from tests.helpers import json_doc
 
 TOL = 1e-6
 MEMBERS = ("A", "B", "C", "D")
@@ -117,7 +118,7 @@ SQUARE = [(0, 0), (4, 0), (4, 4), (0, 4)]
 
 
 def _locked(form: Form) -> Form:
-    return form.model_copy(update={"locked": True})
+    return form.replace(locked=True)
 
 
 def _prev(**points: tuple[float, float]) -> Set:
@@ -130,7 +131,7 @@ def test_edit_changes_construction_and_form_fields() -> None:
     bigger = edit(form, radius=3.0, members=("D", "C", "B", "A"))
     assert approx_equal(np.linalg.norm(slots(bigger) - [0, 5], axis=1), [3.0] * 4)
     assert bigger.members == ("D", "C", "B", "A")
-    assert form.recipe.model_dump(mode="json")["curve"]["radius"] == 2.0
+    assert json_doc(form.recipe)["curve"]["radius"] == 2.0
 
 
 def test_edit_block_recipe_and_slot_count() -> None:
@@ -257,7 +258,7 @@ def test_merge_keeps_positions() -> None:
     assert approx_equal([p.point for p in placements(merged)], before, abs_tol=TOL)
     assert [p.facing for p in placements(merged)][2:] == [p.facing for p in placements(b)]
     with pytest.raises(SchemaError):
-        merge_forms(a, b.model_copy(update={"set": "2"}), "ab")
+        merge_forms(a, b._copied(update={"set": "2"}), "ab")
 
 
 def test_morph_targets_follow_members() -> None:
@@ -320,7 +321,7 @@ def test_skewed_block_keeps_points_exact() -> None:
 def test_rotated_block_keeps_an_editable_recipe() -> None:
     rotated = transform_form(block_form("b", [], (0, 5), 2, 2, 1.0), rotation_matrix(90, (0, 0)))
     assert rotated.recipe.transform is None
-    assert approx_equal(rotated.recipe.model_dump(mode="json")["origin"], [-5.0, 0.0], abs_tol=TOL)
+    assert approx_equal(json_doc(rotated.recipe)["origin"], [-5.0, 0.0], abs_tol=TOL)
 
 
 def test_gate_rotates_about_an_end() -> None:
@@ -462,9 +463,9 @@ def test_edit_text_keeps_members_in_reading_order() -> None:
     g = edit(f, text="GO TEAM")
     assert g.members == f.members
     assert len(slots(g)) == 60
-    assert g.recipe.model_dump(mode="json")["n"] == 60
+    assert g.recipe.to_json()["n"] == 60
     first = placements(g)[0]
-    start = text_strokes(text_recipe(g.recipe.model_dump(mode="json")))[0].point_at(0.0)
+    start = text_strokes(text_recipe(g.recipe.to_json()))[0].point_at(0.0)
     assert first.entity == "S0"
     assert (first.x, first.y) == pytest.approx(tuple(start), abs=1e-9)
     assert not np.allclose(slots(g), slots(f))
@@ -481,29 +482,19 @@ def test_edit_text_too_long_for_the_count_names_the_minimum() -> None:
 
 
 def test_edit_text_keeps_the_derived_count() -> None:
-    strokes = text_strokes(text_recipe(_text().recipe.model_dump(mode="json")))
+    strokes = text_strokes(text_recipe(_text().recipe.to_json()))
     members = [f"S{i}" for i in range(spacing_count(strokes, 0.5))]
     f = text_form("t", members, "GO", fonts=["hershey-roman"], height=4.0, at=(0, 10),
                   spacing=0.5)  # fmt: skip
     g = edit(f, text="GOGO")
-    assert (
-        g.recipe.model_dump(mode="json")["n"]
-        == f.recipe.model_dump(mode="json")["n"]
-        == len(members)
-    )
-    assert (
-        g.recipe.model_dump(mode="json")["spacing"]
-        == f.recipe.model_dump(mode="json")["spacing"]
-        == 0.5
-    )
+    assert g.recipe.to_json()["n"] == f.recipe.to_json()["n"] == len(members)
+    assert g.recipe.to_json()["spacing"] == f.recipe.to_json()["spacing"] == 0.5
     assert g.members == f.members
 
 
 def test_edit_text_resolves_font_names() -> None:
     edited = edit(_text(), fonts=["relief-singleline"])
-    assert edited.recipe.model_dump(mode="json")["fonts"] == [
-        bundled_fonts().resolve("relief-singleline")
-    ]
+    assert edited.recipe.to_json()["fonts"] == [bundled_fonts().resolve("relief-singleline")]
 
 
 def test_edit_text_suggests_the_field_for_a_typo() -> None:
@@ -516,7 +507,7 @@ def test_edit_locked_text_form_needs_force() -> None:
     locked = _text().replace(locked=True)
     with pytest.raises(LockedError):
         edit(locked, text="GA")
-    assert edit(locked, force=True, text="GA").recipe.model_dump(mode="json")["text"] == "GA"
+    assert edit(locked, force=True, text="GA").recipe.to_json()["text"] == "GA"
 
 
 @pytest.mark.parametrize(("field", "value"), [("n", 30), ("spacing", SpacingSpec(interval=1.0))])
@@ -534,9 +525,9 @@ def test_regression_edit_text_form_rejects_count_changes(field: str, value: Any)
 
 def test_regression_edit_text_form_accepts_text_n_free_edits() -> None:
     f = _text()
-    assert edit(f, text="GA").recipe.model_dump(mode="json")["text"] == "GA"
-    assert edit(f, height=5.0).recipe.model_dump(mode="json")["height"] == 5.0
-    assert edit(f, rotation=30.0).recipe.model_dump(mode="json")["rotation"] == 30.0
+    assert edit(f, text="GA").recipe.to_json()["text"] == "GA"
+    assert edit(f, height=5.0).recipe.to_json()["height"] == 5.0
+    assert edit(f, rotation=30.0).recipe.to_json()["rotation"] == 30.0
     assert edit(f, transform=[[1, 0, 2], [0, 1, 0], [0, 0, 1]]).members == f.members
 
 
@@ -572,10 +563,8 @@ def test_edit_text_fonts_accept_a_user_font_uri_through_the_registry() -> None:
         "t", members, "I", fonts=[uri], height=2.0, at=(1, 1), n=4, font_registry=registry
     )
     swapped = edit(_text(), fonts=[uri], text="I", font_registry=registry)
-    assert swapped.recipe.model_dump(mode="json")["fonts"] == [uri]
-    assert edit(f, fonts=[uri], font_registry=registry).recipe.model_dump(mode="json")["fonts"] == [
-        uri
-    ]
+    assert swapped.recipe.to_json()["fonts"] == [uri]
+    assert edit(f, fonts=[uri], font_registry=registry).recipe.to_json()["fonts"] == [uri]
     with pytest.raises(MissingFontError):
         edit(_text(), fonts=[uri])
 
@@ -587,7 +576,7 @@ def test_edit_text_with_a_user_font_takes_the_registry() -> None:
     f = text_form(
         "t", members, "I", fonts=[uri], height=2.0, at=(1, 1), n=4, font_registry=registry
     )
-    assert edit(f, text="II", font_registry=registry).recipe.model_dump(mode="json")["text"] == "II"
+    assert edit(f, text="II", font_registry=registry).recipe.to_json()["text"] == "II"
     with pytest.raises(MissingFontError):
         edit(f, text="II")
 

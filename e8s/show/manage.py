@@ -177,13 +177,12 @@ def new_show(
         )
     roster = cast or Cast()
     placements = tuple(map(_off_field, roster.ids()))
-    first = Set.model_validate({"id": FIRST_SET_ID, "counts": 0.0, "placements": placements})
+    first = Set._validated({"id": FIRST_SET_ID, "counts": 0.0, "placements": placements})
     return Show(
         id=show_id,
         title=title,
         pack=pack,
         sheet=sheet,
-        coordinates=sheet.default_coordinates,
         cast=roster,
         timeline=timeline,
         sets=(first,),
@@ -326,9 +325,6 @@ def _pins_without_set(show: Show, set_id: str) -> tuple[Pin, ...]:
 def remove_set(show: Show, set_id: str, *, merge_counts: bool = True, force: bool = False) -> Show:
     """Deletes a set, its forms, its pins and the stored paths into and out of it.
 
-    The notes document beside the show does not follow; pass `sets={set_id: None}` to
-    rewrite_note_anchors() to drop the notes on the removed set and its transitions.
-
     Args:
         show: Show to edit.
         set_id: Set to delete.
@@ -440,9 +436,7 @@ def _renamed_pin(pin: Pin, mapping: Mapping[str, str], tids: Mapping[str, str]) 
 def renumber(show: Show, scheme: str = SEQUENTIAL) -> tuple[Show, dict[SetId, SetId]]:
     """Renames sets 1..N in show order, rewriting transitions, forms and pins.
 
-    Keys stay, so stored set folders and their build scripts stay with their sets. The notes
-    document beside the show does not follow; pass the returned mapping as `sets=` to
-    rewrite_note_anchors() to keep each note on its own set.
+    Keys stay, so stored set folders and their build scripts stay with their sets.
 
     Args:
         show: Show to edit.

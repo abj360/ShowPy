@@ -16,6 +16,8 @@ Contains:
         probe makes the generator crash
     test_regression_bundled_generators_reject_misspelled_params: raises SchemaError for a
         parameter name the generator does not know
+    test_regression_form_fn_registry_refuses_json: raises a taught SchemaError instead of
+        pydantic's serialization error, since a registry holds functions
 """
 
 import contextlib
@@ -28,12 +30,14 @@ import pytest
 from e8s.choreo.form_fns import (
     DEFAULT_FORM_FNS,
     FormFn,
+    FormFnRegistry,
     form_fns,
     register_form_fn,
     rose_points,
     sine_wave_points,
     spiral_points,
 )
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, UnknownRefError
 from e8s.core.types import Points
 from e8s.core.util import approx_equal
@@ -161,3 +165,14 @@ def test_regression_bundled_generators_reject_misspelled_params(
     """Raises SchemaError for a parameter name the generator does not know."""
     with pytest.raises(SchemaError):
         generator(params, PROBE_SPOTS)
+
+
+def test_regression_form_fn_registry_refuses_json() -> None:
+    """Refuses both directions with NOT_SERIALIZABLE and says how to rebuild a registry."""
+    with pytest.raises(SchemaError) as dumped:
+        DEFAULT_FORM_FNS.to_json()
+    assert dumped.value.code is ErrorCode.NOT_SERIALIZABLE
+    assert "register_form_fn" in dumped.value.hint
+    with pytest.raises(SchemaError) as loaded:
+        FormFnRegistry.from_json({"fns": {}})
+    assert loaded.value.code is ErrorCode.NOT_SERIALIZABLE

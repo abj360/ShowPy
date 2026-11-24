@@ -166,3 +166,33 @@ def test_regression_a_note_time_that_is_not_a_time_is_left_for_validation() -> N
 
 def test_regression_a_show_without_notes_migrates_without_a_notes_document() -> None:
     assert NOTES_DOC not in migrate_cast(_docs(), ReportBuilder(1))
+
+
+def test_regression_claimable_is_dropped_and_each_non_default_value_is_listed() -> None:
+    docs = _docs(
+        spots=[
+            {"id": "T1", "group": "g", "claimable": "performer"},
+            {"id": "T2", "group": "g", "claimable": "crew"},
+            {"id": "T3", "group": "g"},
+        ]
+    )
+    before = copy.deepcopy(docs)
+    report = ReportBuilder(1)
+    cast = _cast(migrate_cast(docs, report))
+    assert cast["spots"] == [
+        {"id": "T1", "group": "g"},
+        {"id": "T2", "group": "g"},
+        {"id": "T3", "group": "g"},
+    ]
+    assert docs == before
+    dropped = report.build().dropped
+    assert [(d.document, d.location, d.stored_id) for d in dropped] == [
+        (SHOW_DOC, "cast.spots[1]", "T2")
+    ]
+    assert dict(dropped[0].fields) == {"claimable": "crew"}
+
+
+def test_regression_a_cast_without_claimable_lists_nothing_dropped() -> None:
+    report = ReportBuilder(1)
+    migrate_cast(_docs(), report)
+    assert report.build().dropped == ()

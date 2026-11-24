@@ -54,7 +54,7 @@ def test_documents_round_trip(points: list[tuple[float, float]]) -> None:
     show = two_set_show()
     updates = {f"T{i}": PlacementPatch(x=x, y=y) for i, (x, y) in enumerate(points, start=1)}
     moved = show.sets[1].with_placements(updates)
-    edited = show.model_copy(update={"sets": (show.sets[0], moved)})
+    edited = show.replace(sets=(show.sets[0], moved))
     assert decode_show(encode_show(edited)) == edited
 
 

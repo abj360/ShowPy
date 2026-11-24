@@ -11,7 +11,7 @@ Contains:
     test_regression_region_rejects_nan_points: rejects NaN ring coordinates
     test_regression_region_rejects_self_intersection: rejects a bow-tie ring that crosses itself
     test_regression_frozen_models_reject_non_finite_floats: rejects NaN and infinity in Box2,
-        TempoSection, Waypoint, Shape and Landmark fields
+        TempoSection, Waypoint, Shape and GuideLine fields
     test_regression_nested_model_error_keeps_outer_locs: reports every nested field error under
         the outer model with dotted locs
     test_regression_nested_construction_error_names_the_outermost_model: names the outer model,
@@ -20,6 +20,10 @@ Contains:
     test_regression_replace_revalidates: rejects a negative Set.counts passed to replace()
     test_replace_returns_a_new_model_with_the_change: keeps the original and applies the change
     test_replace_rejects_an_unknown_field: raises SchemaError for a field the model lacks
+    test_to_json_returns_a_json_safe_dict: dumps tuples as lists, enums as values, text as JSON
+    test_from_json_reads_back_what_to_json_writes: round-trips a whole show
+    test_to_json_matches_the_stored_set_document: dumps a set as its stored document holds it
+    test_regression_from_json_raises_schema_error_on_bad_data: names the failing dotted loc
     test_regression_constrained_number_types_reject_out_of_range: rejects zero, negative, NaN and
         infinity in a positive field
     test_base_number_aliases_reject_non_finite_outside_models: rejects NaN and infinity in the
@@ -53,6 +57,7 @@ import json
 import math
 from collections.abc import Callable
 from functools import cached_property
+from typing import Any
 
 import pytest
 import shapely
@@ -65,7 +70,7 @@ from e8s.choreo.path_models import Waypoint
 from e8s.core import canonical, json_types
 from e8s.core.caps import MAX_COORD_M, MAX_COUNTS, MIN_TEMPO
 from e8s.core.errors import E8sError, SchemaError, field_errors
-from e8s.core.ids import LandmarkId, SetId, SpotId
+from e8s.core.ids import SetId, SpotId
 from e8s.core.readonly import ReadOnlyMap
 from e8s.core.types import (
     Box2,
@@ -88,8 +93,13 @@ from e8s.core.types import (
     Ring,
     Seconds,
 )
+from e8s.examples import two_set_show
 from e8s.geo.curves import curve_from_construction
-from e8s.sheet.models import Landmark
+from e8s.sheet.models import GuideLine
+from e8s.show.document_paths import set_doc
+from e8s.show.documents import encode_show
+from e8s.show.models import Show
+from e8s.show.set_keys import set_key
 from e8s.time.models import TempoSection
 
 NON_FINITE_MODELS: dict[str, Callable[[], FrozenModel]] = {
@@ -103,12 +113,8 @@ NON_FINITE_MODELS: dict[str, Callable[[], FrozenModel]] = {
     "waypoint-inf": lambda: Waypoint(x=0.0, y=-math.inf),
     "shape-nan-rotation": lambda: Shape(kind="rectangle", rotation_deg=math.nan),
     "shape-inf-radius": lambda: Shape(radius_m=math.inf),
-    "landmark-nan": lambda: Landmark(
-        id=LandmarkId("a"), name="a", kind="point", geometry=((math.nan, 0.0),)
-    ),
-    "landmark-inf": lambda: Landmark(
-        id=LandmarkId("a"), name="a", kind="point", geometry=((math.inf, 0.0),)
-    ),
+    "guide-nan": lambda: GuideLine(id="a", kind="custom", points=((math.nan, 0.0),)),
+    "guide-inf": lambda: GuideLine(id="a", kind="custom", points=((math.inf, 0.0),)),
 }
 
 
@@ -120,7 +126,7 @@ def test_region_round_trips_through_shapely() -> None:
 
 def test_region_round_trips_through_json() -> None:
     region = Region(exterior=((0.0, 0.0), (1.0, 0.0), (1.0, 1.0)))
-    assert Region.model_validate_json(region.model_dump_json()) == region
+    assert Region.from_json(json.loads(json.dumps(region.to_json()))) == region
 
 
 def test_box2_size_and_center() -> None:
@@ -172,7 +178,7 @@ class _Outer(FrozenModel):
 
 def test_regression_nested_model_error_keeps_outer_locs() -> None:
     with pytest.raises(SchemaError) as info:
-        _Outer.model_validate({"inner": {"a": "x", "b": "y"}, "n": "z"})
+        _Outer.from_json({"inner": {"a": "x", "b": "y"}, "n": "z"})
     assert info.value.context["model"] == "_Outer"
     assert [e["loc"] for e in field_errors(info.value)] == ["inner.a", "inner.b", "n"]
 
@@ -186,7 +192,7 @@ def test_regression_nested_construction_error_names_the_outermost_model() -> Non
 
 def test_regression_library_model_reports_dotted_loc() -> None:
     with pytest.raises(SchemaError) as info:
-        Box2.model_validate({"min": ("x", 0), "max": (1, 1)})
+        Box2.from_json({"min": ("x", 0), "max": (1, 1)})
     assert field_errors(info.value)[0]["loc"] == "min.0"
 
 
@@ -210,6 +216,31 @@ def test_replace_returns_a_new_model_with_the_change() -> None:
 def test_replace_rejects_an_unknown_field() -> None:
     with pytest.raises(SchemaError):
         Box2(min=(0.0, 0.0), max=(1.0, 1.0)).replace(centre=(0.0, 0.0))
+
+
+def test_to_json_returns_a_json_safe_dict() -> None:
+    document = Shape(kind="rectangle").to_json()
+    assert document["kind"] == "rectangle"
+    assert Box2(min=(0.0, 0.0), max=(1.0, 2.0)).to_json() == {"min": [0.0, 0.0], "max": [1.0, 2.0]}
+    assert json.loads(json.dumps(document)) == document
+
+
+def test_from_json_reads_back_what_to_json_writes() -> None:
+    show = two_set_show()
+    assert Show.from_json(show.to_json()) == show
+    assert Box2.from_json({"min": [0, 0], "max": [1, 2]}) == Box2(min=(0.0, 0.0), max=(1.0, 2.0))
+
+
+def test_to_json_matches_the_stored_set_document() -> None:
+    show = two_set_show()
+    stored = encode_show(show)[set_doc(set_key(show.sets[0]))]
+    assert show.sets[0].to_json() == json.loads(stored)
+
+
+def test_regression_from_json_raises_schema_error_on_bad_data() -> None:
+    with pytest.raises(SchemaError) as info:
+        Box2.from_json({"min": ["x", 0], "max": [1, 1]})
+    assert field_errors(info.value)[0]["loc"] == "min.0"
 
 
 class _Constrained(FrozenModel):
@@ -359,7 +390,7 @@ def test_json_object_stores_a_read_only_mapping() -> None:
 
     holder = Holder(payload={"a": [1, {"b": None}]})
     assert holder.payload == Holder(payload={"a": (1, {"b": None})}).payload
-    assert holder.model_dump() == {"payload": {"a": [1, {"b": None}]}}
+    assert holder._dumped() == {"payload": {"a": [1, {"b": None}]}}
     with pytest.raises(TypeError):
         holder.payload["c"] = 1  # type: ignore[index]
 
@@ -376,19 +407,19 @@ def test_json_object_freezes_nested_values() -> None:
     assert isinstance(inner, ReadOnlyMap)
     with pytest.raises(TypeError):
         inner["n"] = 2  # type: ignore[index]
-    assert holder.model_dump()["payload"]["k"] == [1, 2]
+    assert holder._dumped() == {"payload": {"k": [1, 2], "inner": {"n": [{"m": 1}]}}}
 
 
 def test_json_object_dumps_plain_json_and_round_trips() -> None:
     holder = _JsonHolder(payload={"k": [1, {"n": [True, None]}], "s": "x"})
-    dumped = holder.model_dump()
+    dumped: dict[str, Any] = holder._dumped()
     assert dumped == {"payload": {"k": [1, {"n": [True, None]}], "s": "x"}}
     assert type(dumped["payload"]) is dict
     assert type(dumped["payload"]["k"]) is list
     assert type(dumped["payload"]["k"][1]) is dict
-    assert json.loads(holder.model_dump_json()) == dumped
-    assert _JsonHolder.model_validate(dumped) == holder
-    assert _JsonHolder.model_validate_json(holder.model_dump_json()) == holder
+    assert holder.to_json() == dumped
+    assert _JsonHolder.from_json(dumped) == holder
+    assert _JsonHolder.from_json(json.loads(json.dumps(holder.to_json()))) == holder
 
 
 def test_json_object_schema_is_a_plain_json_object() -> None:
@@ -478,7 +509,7 @@ BOUND_CASES: dict[str, tuple[str, object, object]] = {
 )
 def test_bounded_aliases_accept_their_bound(field: str, accepted: object, refused: object) -> None:
     del refused
-    assert getattr(_Bounded.model_validate({field: accepted}), field) == accepted
+    assert getattr(_Bounded.from_json({field: accepted}), field) == accepted
 
 
 @pytest.mark.parametrize(
@@ -489,7 +520,7 @@ def test_bounded_aliases_refuse_the_next_float_past_their_bound(
 ) -> None:
     del accepted
     with pytest.raises(SchemaError):
-        _Bounded.model_validate({field: refused})
+        _Bounded.from_json({field: refused})
 
 
 BOUND_HINTS: dict[str, tuple[str, float, str]] = {
@@ -504,6 +535,6 @@ BOUND_HINTS: dict[str, tuple[str, float, str]] = {
 @pytest.mark.parametrize(("field", "bad", "allowed"), BOUND_HINTS.values(), ids=BOUND_HINTS.keys())
 def test_regression_bound_error_hint_names_the_bound(field: str, bad: float, allowed: str) -> None:
     with pytest.raises(SchemaError) as caught:
-        _Bounded.model_validate({field: bad})
+        _Bounded.from_json({field: bad})
     assert allowed in caught.value.hint
     assert allowed in caught.value.message

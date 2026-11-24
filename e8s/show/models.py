@@ -4,7 +4,7 @@ models.py --- the Show aggregate, its index, and the storage, history and collab
 Contains:
     Anchor: re-exports the tagged anchor of comments, highlights and notes
     Pin: records one designer lock on a spot, form, set or transition
-    Show: holds a whole show: sheet, cast, timeline, sets, forms, paths and zones
+    Show: holds a whole show: sheet, cast, timeline, sets, forms and paths
     ShowLookup: looks up a show's sets, transitions and forms by ID without scanning
     Show.lookup: returns the show's cached ShowLookup
     Show.set(): returns a set by ID
@@ -23,10 +23,12 @@ Contains:
     FormOp: replaces or adds one form
     PathsOp: replaces one transition's stored paths
     CountsOp: retimes one set
-    Highlight: points the designer at spots, an area, a point, a set, a transition or a zone
+    Highlight: points the designer at spots, an area, a point, a set, a transition or a named
+        area the host defines
     CanvasEvent: records one edit or pointer from either side of the canvas
     Proposal: holds an agent suggestion the designer accepts or rejects
     ProposalPreview: holds the ghost placements and paths a proposal would produce
+    require_set_count(): refuses a show size over MAX_SETS before anything is allocated
 """
 
 import bisect
@@ -34,15 +36,16 @@ import itertools
 import json
 import re
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Mapping, Sized
 from datetime import datetime
 from functools import cached_property
-from typing import Annotated, Final, Literal
+from typing import Annotated, ClassVar, Final, Literal
 
 from pydantic import (
     Field,
     SerializerFunctionWrapHandler,
     ValidationInfo,
+    field_validator,
     model_serializer,
     model_validator,
 )
@@ -51,8 +54,8 @@ from e8s.cast.models import Cast
 from e8s.choreo.form_models import Form
 from e8s.choreo.models import Placement, Set
 from e8s.choreo.path_models import FacingOverride, TransitionSpec
-from e8s.core.caps import MAX_EXTENSION_BYTES
-from e8s.core.deprecation import leave_field
+from e8s.core.caps import MAX_EXTENSION_BYTES, MAX_SETS
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, TimeRangeError, UnknownRefError
 from e8s.core.ids import (
     LEGACY_IDS_KEY,
@@ -68,7 +71,7 @@ from e8s.core.json_types import FrozenJsonValue, JsonValue
 from e8s.core.readonly import ReadOnly, ReadOnlyMap
 from e8s.core.types import Count, FrozenModel, JsonObject, Seconds
 from e8s.core.util import close_matches
-from e8s.sheet.models import CoordinateSystem, Sheet, Zone
+from e8s.sheet.models import Sheet
 from e8s.show.anchors import Anchor as Anchor
 from e8s.time.models import MeasureLabel, Timeline
 
@@ -114,6 +117,9 @@ class ShowLookup(FrozenModel):
     consecutive: Annotated[Mapping[TransitionId, TransitionId], ReadOnly()]
     stored: Annotated[Mapping[TransitionId, TransitionSpec], ReadOnly()]
     forms: Annotated[Mapping[FormId, Form], ReadOnly()]
+    _json_refusal: ClassVar[str | None] = (
+        "a lookup is derived from its show; store the Show and read show.lookup after loading it"
+    )
 
 
 def _no_forms() -> ReadOnlyMap[FormId, Form]:
@@ -156,6 +162,29 @@ def _no_dependencies() -> ReadOnlyMap[str, str]:
     return ReadOnlyMap({})
 
 
+def require_set_count(count: int) -> None:
+    """Refuses a show of more than MAX_SETS sets, before the caller allocates anything.
+
+    Args:
+        count: Number of sets the show holds, or would hold after an edit or a decode.
+
+    >>> require_set_count(MAX_SETS)
+    >>> require_set_count(MAX_SETS + 1)
+    Traceback (most recent call last):
+        ...
+    e8s.core.errors.SchemaError: TOO_MANY_SETS: a show of 1001 sets is over MAX_SETS (1,000) \
+(hint: keep at most 1,000 sets in one show; split a longer show into several shows)
+    """
+    if count <= MAX_SETS:
+        return
+    raise SchemaError(
+        f"a show of {count} sets is over MAX_SETS ({MAX_SETS:,})",
+        hint=f"keep at most {MAX_SETS:,} sets in one show; split a longer show into several shows",
+        context={"sets": count, "max_sets": MAX_SETS},
+        code=ErrorCode.TOO_MANY_SETS,
+    )
+
+
 class Show(FrozenModel):
     """Holds a whole show.
 
@@ -167,14 +196,12 @@ class Show(FrozenModel):
         title: Display title.
         pack: Domain pack key; empty when no pack applies.
         sheet: The 2D design surface.
-        coordinates: How positions are labeled; display only.
         cast: Groups and spots.
         timeline: Show clock.
-        sets: Sets in show order.
+        sets: Sets in show order; at most MAX_SETS.
         forms: Form ID to form, across every set.
         transitions: Stored path instructions for consecutive set pairs.
         facing_overrides: Facings forced over global count ranges.
-        zones: Show-specific zones, on top of the sheet's.
         dependencies: Sheet reference (without version) to pinned version.
         pins: Designer locks with their reasons.
         extensions: Host-owned JSON values under keys that start with `x-`; the library keeps them
@@ -187,14 +214,12 @@ class Show(FrozenModel):
     title: str
     pack: str = ""
     sheet: Sheet
-    coordinates: CoordinateSystem = CoordinateSystem()
     cast: Cast = Cast()
     timeline: Timeline
-    sets: tuple[Set, ...] = ()
+    sets: tuple[Set, ...] = Field(default=(), json_schema_extra={"maxItems": MAX_SETS})
     forms: Annotated[Mapping[FormIdField, Form], ReadOnly()] = Field(default_factory=_no_forms)
     transitions: tuple[TransitionSpec, ...] = ()
     facing_overrides: tuple[FacingOverride, ...] = ()
-    zones: tuple[Zone, ...] = ()
     dependencies: Annotated[Mapping[str, str], ReadOnly()] = Field(default_factory=_no_dependencies)
     pins: tuple[Pin, ...] = ()
     extensions: JsonObject = Field(
@@ -202,6 +227,19 @@ class Show(FrozenModel):
         json_schema_extra={"propertyNames": {"pattern": EXTENSION_KEY.pattern}},
     )
     revision: str = ""
+
+    @field_validator("sets", mode="before")
+    @classmethod
+    def _set_count_within_cap(cls, value: object) -> object:
+        if isinstance(value, Sized):
+            require_set_count(len(value))
+        return value
+
+    @field_validator("sets", mode="after")
+    @classmethod
+    def _sets_within_cap(cls, value: tuple[Set, ...]) -> tuple[Set, ...]:
+        require_set_count(len(value))
+        return value
 
     @model_validator(mode="after")
     def _form_keys_match_ids(self) -> "Show":
@@ -267,7 +305,7 @@ class Show(FrozenModel):
         for spec in self.transitions:
             stored.setdefault(spec.id, spec)
         pairs = [TransitionId(a, b) for a, b in itertools.pairwise(ids)]
-        return ShowLookup.model_construct(
+        return ShowLookup._unchecked(
             positions=ReadOnlyMap(positions),
             consecutive=ReadOnlyMap({pair: pair for pair in pairs}),
             stored=ReadOnlyMap(stored),
@@ -325,10 +363,6 @@ class Show(FrozenModel):
         if spec is not None:
             return spec
         return TransitionSpec(id=known, counts=self.set(known.to_set).counts)
-
-
-leave_field(Show, "coordinates", since="0.4.0", remove="0.7.0", replacement="Location")
-leave_field(Show, "zones", since="0.4.0", remove="0.7.0", replacement="Marking")
 
 
 class ShowIndexEntry(FrozenModel):
@@ -452,7 +486,7 @@ class SetDiff(FrozenModel):
     @property
     def is_empty(self) -> bool:
         """Reports whether the sets match."""
-        return not any(self.model_dump().values())
+        return not any(self._dumped().values())
 
 
 class PathDiff(FrozenModel):
@@ -569,7 +603,8 @@ class Highlight(FrozenModel):
 
     Attributes:
         anchor: What is pointed at, when it is spots, an area, a point, a set or a transition.
-        zone: Zone name, when the pointer is a zone.
+        zone: Name of an area the host defines, such as a pit or wings, when the pointer is one;
+            the library keeps no zones and passes the name through.
         ttl_s: Seconds the pointer stays visible.
     """
 
@@ -583,7 +618,7 @@ class Highlight(FrozenModel):
             raise SchemaError(
                 "highlight needs exactly one of anchor and zone",
                 hint="set `anchor` for spots, an area, a point, a set or a transition, "
-                "or `zone` for a zone",
+                "or `zone` for the name of an area the host defines",
             )
         return self
 
@@ -635,7 +670,7 @@ class CanvasEvent(FrozenModel):
         model = EVENT_PAYLOADS.get(kind) if isinstance(kind, str) else None
         if model is None or not isinstance(payload, Mapping):
             return data
-        return {**data, "payload": model.model_validate(payload)}
+        return {**data, "payload": model._validated(payload)}
 
     @model_validator(mode="after")
     def _require_payload_of_kind(self) -> "CanvasEvent":

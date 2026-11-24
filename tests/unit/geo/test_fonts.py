@@ -28,6 +28,7 @@ Contains:
 """
 
 import copy
+import json
 import pickle
 import warnings
 from typing import Any
@@ -51,6 +52,7 @@ from e8s.geo.fonts import (
 from e8s.geo.models import Font
 from e8s.show.repositories import InMemoryAssetStore
 from tests.fixtures.fonts import TINY, tiny_bytes
+from tests.helpers import json_doc
 
 EMPTY = FontRegistry(fonts={}, sources={}, names={})
 # Copied from BUNDLED_FONTS in the v0.3.0 API snapshot: stored text forms name fonts by these URIs.
@@ -208,11 +210,11 @@ def test_font_registry_survives_pickling() -> None:
 
 def test_regression_font_cap_falls_back_to_h_then_ascender() -> None:
     glyphs = {"H": {"advance": 5, "strokes": ["M0 1 L0 8", "M4 1 L4 8"]}}
-    with_cap = Font.model_validate({**TINY, "cap_height": 7, "glyphs": glyphs})
+    with_cap = Font.from_json({**TINY, "cap_height": 7, "glyphs": glyphs})
     assert with_cap.cap() == 7
-    ink = Font.model_validate({**TINY, "cap_height": None, "glyphs": glyphs})
+    ink = Font.from_json({**TINY, "cap_height": None, "glyphs": glyphs})
     assert ink.cap() == pytest.approx(7.0)
-    bare = Font.model_validate({**TINY, "cap_height": None, "ascender": 9})
+    bare = Font.from_json({**TINY, "cap_height": None, "ascender": 9})
     assert bare.cap() == 9
 
 
@@ -232,18 +234,18 @@ def test_regression_font_dumps_to_json() -> None:
     font = load_font(tiny_bytes())
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        dumped = font.model_dump()
-        text = font.model_dump_json()
+        dumped = json_doc(font)
+        text = json.dumps(font.to_json())
         registry, uri = register_font(EMPTY, tiny_bytes())
-        registry_dump = registry.model_dump()
-        registry_text = registry.model_dump_json()
+        registry_dump = json_doc(registry)
+        registry_text = json.dumps(registry.to_json())
     assert dumped["glyphs"]["I"]["advance"] == 4
-    assert Font.model_validate_json(text) == font
+    assert Font.from_json(json.loads(text)) == font
     assert registry_dump["fonts"][uri]["name"] == "tiny"
-    assert FontRegistry.model_validate_json(registry_text) == registry
-    assert FontRegistry.model_validate(registry_dump) == registry
+    assert FontRegistry.from_json(json.loads(registry_text)) == registry
+    assert FontRegistry.from_json(registry_dump) == registry
     with pytest.raises(TypeError):
-        Font.model_validate_json(text).glyphs["x"] = None  # type: ignore[index]
+        Font.from_json(json.loads(text)).glyphs["x"] = None  # type: ignore[index]
 
 
 def test_font_registry_survives_deepcopy() -> None:
@@ -260,7 +262,7 @@ def test_regression_font_registry_rejects_mismatched_sources() -> None:
     uri, font, data = _tiny_parts()
     other_uri = asset_uri(b"other")
     with pytest.raises(FontError) as swapped:
-        FontRegistry.model_validate({"fonts": {uri: font}, "sources": {uri: b"x"}, "names": {}})
+        FontRegistry.from_json({"fonts": {uri: font}, "sources": {uri: b"x"}, "names": {}})
     assert swapped.value.code == "FONT_HASH_MISMATCH"
     assert swapped.value.context["uri"] == uri
     cases = [
@@ -271,10 +273,10 @@ def test_regression_font_registry_rejects_mismatched_sources() -> None:
     ]
     for case in cases:
         with pytest.raises(FontError) as info:
-            FontRegistry.model_validate(case)
+            FontRegistry.from_json(case)
         assert info.value.code == "BAD_FONT", case
     good = {"fonts": {uri: font}, "sources": {uri: data}, "names": {"tiny": uri}}
-    assert FontRegistry.model_validate(good).get(uri) == font
+    assert FontRegistry.from_json(good).get(uri) == font
     assert FontRegistry(**good).source(uri) == data
 
 
@@ -284,7 +286,7 @@ def test_regression_register_font_can_keep_a_taken_name() -> None:
     kept, other_uri = register_font(once, other, if_name_taken="keep")
     assert kept.names == {"tiny": uri}
     assert kept.get(other_uri).family == "Tiny, another release"
-    assert FontRegistry.model_validate(kept.model_dump()) == kept
+    assert FontRegistry.from_json(kept.to_json()) == kept
     assert register_font(EMPTY, other, if_name_taken="keep")[0].names == {"tiny": other_uri}
     with pytest.raises(FontError) as raised:
         register_font(once, other)
@@ -301,10 +303,10 @@ def test_regression_font_registry_rejects_fonts_that_differ_from_their_bytes() -
         "names": {"simplex": simplex},
     }
     with pytest.raises(FontError) as info:
-        FontRegistry.model_validate(forged)
+        FontRegistry.from_json(forged)
     assert info.value.code == "FONT_HASH_MISMATCH"
     assert info.value.context["uri"] == simplex
-    assert FontRegistry.model_validate(bundled.model_dump()) == bundled
+    assert FontRegistry.from_json(bundled.to_json()) == bundled
 
 
 def _zigzag(pieces: int) -> str:

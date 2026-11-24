@@ -35,7 +35,7 @@ from e8s.core.types import Point
 from e8s.core.util import seeded_rng
 from e8s.geo.shapes import line
 from e8s.sheet.models import Sheet
-from e8s.sheet.templates import _sheet_templates as sheet_templates
+from e8s.sheet.templates import sheet_templates as sheet_templates
 from e8s.show.changes import apply_change, store_paths
 from e8s.show.manage import add_set, new_show
 from e8s.show.models import FormOp, PathsOp, Show

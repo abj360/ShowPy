@@ -12,6 +12,7 @@ Contains:
 """
 
 import math
+from typing import cast
 
 import numpy as np
 import numpy.typing as npt
@@ -139,10 +140,9 @@ def _follow_curve(row: PathRow, spec: TransitionSpec, a: Placement) -> AnyCurve:
 
 def _plain_params(row: PathRow) -> dict[str, JsonValue]:
     """Returns a row's motion parameters as plain JSON, as every motion function receives them."""
-    plain: dict[str, JsonValue] = row.model_dump(mode="json", include={"motion_params"})[
-        "motion_params"
-    ]
-    return plain
+    # Built-in parameter models and JSON objects both dump to a JSON object.
+    plain = row._json_dumped(include={"motion_params"})["motion_params"]
+    return cast("dict[str, JsonValue]", plain)
 
 
 def _motion_points(row: PathRow, motion: str, raw: object, count: int) -> Points:

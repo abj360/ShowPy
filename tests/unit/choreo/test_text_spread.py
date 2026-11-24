@@ -32,6 +32,7 @@ from e8s.core.errors import SchemaError
 from e8s.core.types import Points
 from e8s.geo.fonts import bundled_fonts
 from e8s.geo.spacing import apportion
+from tests.helpers import json_doc
 
 HEIGHT = 2.0
 AT = (0.0, 10.0)
@@ -63,10 +64,10 @@ def _least(font: str, char: str) -> int:
 
 def _spacings(form: Form) -> np.ndarray:
     """Returns each slot's stroke spacing: its stroke's length over its gaps between spots."""
-    strokes = text_strokes(text_recipe(form.recipe.model_dump(mode="json")))
+    strokes = text_strokes(text_recipe(form.recipe.to_json()))
     minimums = [CLOSED_MINIMUM if stroke.closed else OPEN_MINIMUM for stroke in strokes]
     counts = apportion(
-        [stroke.length() for stroke in strokes], form.recipe.model_dump(mode="json")["n"], minimums
+        [stroke.length() for stroke in strokes], json_doc(form.recipe)["n"], minimums
     )
     return np.concatenate(
         [

@@ -30,11 +30,10 @@ from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from functools import partial
 from typing import Any
 
-from pydantic import BaseModel
-
 from e8s.core.canonical import MAX_INT_DIGITS, MAX_NESTING, canonical_value
 from e8s.core.errors import SchemaError, StorageError
 from e8s.core.json_types import JsonValue
+from e8s.core.types import FrozenModel
 from e8s.show.canvas_renames import renamed_canvas
 from e8s.show.decode_cache import DecodeCache
 from e8s.show.document_paths import FORMS_NAME as FORMS_NAME
@@ -195,13 +194,13 @@ def _encoders(show: Show) -> dict[str, Callable[[], bytes]]:
     """Maps each stored document path of a show to a call that encodes it."""
     require_storable(show)
     keys = {s.id: set_key(s) for s in show.sets}
-    meta = show.model_dump(mode="json", exclude=set(SPLIT_FIELDS))
+    meta = show._json_dumped(exclude=set(SPLIT_FIELDS))
     encoders: dict[str, Callable[[], bytes]] = {
         SHOW_DOC: lambda: dump_show_doc(
             {**format_header(), **meta, SET_ORDER_FIELD: list(keys.values())}
         ),
-        SHEET_DOC: lambda: dump_dumped_json(show.sheet.model_dump(mode="json")),
-        TIMELINE_DOC: lambda: dump_dumped_json(show.timeline.model_dump(mode="json")),
+        SHEET_DOC: lambda: dump_dumped_json(show.sheet.to_json()),
+        TIMELINE_DOC: lambda: dump_dumped_json(show.timeline.to_json()),
     }
     for current in show.sets:
         folder = keys[current.id]
@@ -258,12 +257,12 @@ def dump_headed_json(document: Mapping[str, JsonValue]) -> bytes:
     return head.removesuffix(HEADER_CLOSE) + b",\n" + rest
 
 
-def _dump_model(model: BaseModel) -> bytes:
-    return dump_dumped_json(model.model_dump(mode="json"))
+def _dump_model(model: FrozenModel) -> bytes:
+    return dump_dumped_json(model.to_json())
 
 
-def _dump_models(models: Sequence[BaseModel]) -> bytes:
-    return dump_dumped_json([m.model_dump(mode="json") for m in models])
+def _dump_models(models: Sequence[FrozenModel]) -> bytes:
+    return dump_dumped_json([m.to_json() for m in models])
 
 
 def decode_show(
@@ -313,7 +312,7 @@ def migrate_documents(docs: Mapping[str, bytes]) -> tuple[dict[str, bytes], Migr
             the canvas comments and selection with renamed IDs, plus every other file of `docs`,
             moved to its set's new folder when the migration renamed the set's key; `docs`
             itself when it is already current.
-        report: What the migration renamed and repaired, and the version it started from.
+        report: What the migration renamed, repaired and dropped, and the version it started from.
 
     >>> from e8s.examples import two_set_show
     >>> docs = encode_show(two_set_show())

@@ -288,7 +288,7 @@ def test_regression_timeline_clock_is_fresh_after_replace() -> None:
     assert count_to_seconds(base, 8.0) == 4.0
     slower = TempoSection(at_count=0.0, counts_per_minute=60.0)
     assert count_to_seconds(base.replace(tempos=(slower,)), 8.0) == 8.0
-    assert count_to_seconds(base.model_copy(update={"tempos": (slower,)}), 8.0) == 8.0
+    assert count_to_seconds(base.replace(tempos=(slower,)), 8.0) == 8.0
     held = add_hold(base, Hold(at_count=4.0, seconds=1.0))
     assert count_to_seconds(held, 8.0) == 5.0
     assert count_to_seconds(base, 8.0) == 4.0

@@ -4,17 +4,17 @@
 test_phase1_scenario.py --- proves the Phase 1 exit criteria on a 300-spot, 60-set show
 
 Builds seeded_show(11, 300, 60), pins, inserts a sub-set, renumbers, regroups, relabels, saves
-through file-backed workspaces, edits through a second workspace, publishes and claims, then
-checks the exit invariants: continuity at set boundaries, the collision segment bound, JSON and
-document round trips, events replaying to head, revert, determinism and no input mutation. The
-whole scenario runs twice for the determinism check.
+through file-backed workspaces and edits through a second workspace, then checks the exit
+invariants: continuity at set boundaries, the collision segment bound, JSON and document round
+trips, events replaying to head, revert, determinism and no input mutation. The whole scenario
+runs twice for the determinism check.
 Every library call that takes a model is wrapped so a changed input fails the run. The path
 checks sample deterministically: every SEGMENT_STRIDE-th transition, plus the two around the
 inserted sub-set (indices 4 and 5), gets the nine-probe segment check; every set boundary of every
 spot is checked for continuity.
 
 Contains:
-    Scenario: the shows, revisions and publication one scenario run produces
+    Scenario: the shows and revisions one scenario run produces
     unchanged(): fails when a model serializes differently after a block
     run_scenario(): runs every phase of the scenario against a fresh repository
     test_scenario_edits_hit_every_phase(): checks each phase left its mark
@@ -38,7 +38,6 @@ from pathlib import Path
 import jsonschema
 import numpy as np
 import pytest
-from pydantic import BaseModel
 
 from e8s.cast.models import LabelScheme
 from e8s.cast.spots import delete_spots, regroup, relabel
@@ -48,10 +47,9 @@ from e8s.choreo.models import Set
 from e8s.core.errors import LockedError
 from e8s.core.ids import SetId
 from e8s.core.resources import schema_path
+from e8s.core.types import FrozenModel
 from e8s.core.util import approx_equal, content_hash
-from e8s.examples import EXAMPLE_TIME, performer
-from e8s.export._models import Publication
-from e8s.export._publish import claim_spot, join_link, publish, unclaimed, verify_join_token
+from e8s.examples import EXAMPLE_TIME
 from e8s.show.collab import apply_event, decode_event, events_since
 from e8s.show.documents import decode_show, encode_show
 from e8s.show.file_repository import FileRepository
@@ -75,10 +73,6 @@ SECOND_WORKSPACE_EDITS = 10
 RETIMED_FIRST_SET = 20
 LABEL_PAD = 3
 COUNT_BUMP = 0.5
-CLAIMS = 30
-JOIN_TOKEN = "scenario-join-token-0123456789"
-BASE_URL = "https://shows.example"
-PUBLICATION_ID = "scenario"
 POSITION_TOL = 1e-6
 SEGMENT_PROBES = 9
 SEGMENT_STRIDE = 6
@@ -96,7 +90,6 @@ class Scenario:
         base: Show saved at `base_revision`.
         head: Show at the head before the revert.
         reverted: Show after reverting to `base_revision`.
-        publication: Publication of `head` with its claims.
         events: Canvas events of the second workspace's edits, taken before the revert.
         mapping: Old to new set IDs from the renumber.
         pinned: IDs of the pinned spots, as relabeled.
@@ -108,7 +101,6 @@ class Scenario:
     base: Show
     head: Show
     reverted: Show
-    publication: Publication
     events: list[CanvasEvent]
     mapping: dict[SetId, SetId]
     pinned: tuple[str, ...]
@@ -116,11 +108,11 @@ class Scenario:
 
 
 @contextmanager
-def unchanged(*models: BaseModel) -> Iterator[None]:
+def unchanged(*models: FrozenModel) -> Iterator[None]:
     """Fails when any given model serializes differently after the block."""
-    before = [m.model_dump_json() for m in models]
+    before = [json.dumps(m.to_json()) for m in models]
     yield
-    assert [m.model_dump_json() for m in models] == before
+    assert [json.dumps(m.to_json()) for m in models] == before
 
 
 def _pinned_show(show: Show) -> tuple[Show, tuple[str, ...]]:
@@ -159,20 +151,6 @@ def _retimed(ws: Workspace, number: int, at: datetime) -> None:
         save_show(ws, edited, at)
 
 
-def _published(show: Show, at: datetime) -> Publication:
-    with unchanged(show):
-        pub = publish(show, PUBLICATION_ID, BASE_URL, at, join_token=JOIN_TOKEN)
-    with unchanged(pub):
-        assert verify_join_token(pub, JOIN_TOKEN)
-        assert join_link(pub, JOIN_TOKEN).startswith(pub.link)
-    with unchanged(pub, show):
-        open_spots = unclaimed(pub, show)
-    for number, spot in enumerate(open_spots[:CLAIMS]):
-        with unchanged(pub, show):
-            pub, _ = claim_spot(pub, show, performer(f"P{number:02d}"), spot, at)
-    return pub
-
-
 def run_scenario(root: Path) -> Scenario:
     """Runs every phase of the scenario against a file repository under `root`."""
     initial = seeded_show(SEED, SPOTS, SETS)
@@ -189,7 +167,6 @@ def run_scenario(root: Path) -> Scenario:
         _retimed(second, number, EXAMPLE_TIME + STEP * (number + 1))
     head = load_show(second)
     events = events_since(second, first.id)
-    pub = _published(head, EXAMPLE_TIME + STEP * 20)
     revert(ws, first.id, EXAMPLE_TIME + STEP * 30)
     return Scenario(
         ws=ws,
@@ -197,7 +174,6 @@ def run_scenario(root: Path) -> Scenario:
         base=base,
         head=head,
         reverted=load_show(ws),
-        publication=pub,
         events=events,
         mapping=mapping,
         pinned=tuple(p.id for p in final_edit.pins if p.target == "entity"),
@@ -237,8 +213,6 @@ def test_scenario_edits_hit_every_phase(scenario: Scenario) -> None:
     assert scenario.mapping[PINNED_SET] == str(int(PINNED_SET) + 1)
     assert [p.id for p in scenario.head.pins if p.target == "set"] == [scenario.mapping[PINNED_SET]]
     assert len(scenario.pinned) == PINNED_SPOTS
-    assert len(scenario.publication.claims) == CLAIMS
-    assert len(unclaimed(scenario.publication, scenario.head)) == SPOTS - CLAIMS
     assert len(scenario.ws.repo.revisions(scenario.head.id)) == SECOND_WORKSPACE_EDITS + 2
     assert scenario.head.cast.ids()[0] == "B001"
 
@@ -329,9 +303,9 @@ def test_events_since_replays_to_head(scenario: Scenario) -> None:
 def test_every_emitted_event_round_trips(scenario: Scenario) -> None:
     assert scenario.events
     for event in scenario.events:
-        dumped = event.model_dump(mode="json")
+        dumped = event.to_json()
         assert decode_event(dumped) == event
-        assert CanvasEvent.model_validate_json(event.model_dump_json()) == event
+        assert CanvasEvent.from_json(json.loads(json.dumps(event.to_json()))) == event
 
 
 def test_revert_restores_an_earlier_revision(scenario: Scenario) -> None:
@@ -345,6 +319,5 @@ def test_two_runs_are_byte_identical(scenario: Scenario, tmp_path: Path) -> None
     assert encode_show(again.head) == encode_show(scenario.head)
     assert content_hash(again.head) == content_hash(scenario.head)
     assert again.head.revision == scenario.head.revision
-    assert again.publication == scenario.publication
     assert encode_show(again.base) == encode_show(scenario.base)
     assert encode_show(again.reverted) == encode_show(scenario.reverted)

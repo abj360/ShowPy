@@ -12,9 +12,8 @@ Contains:
 """
 
 import contextlib
-import warnings
+import json
 from collections.abc import Callable
-from datetime import UTC, datetime
 
 import pytest
 from hypothesis import given, settings
@@ -26,14 +25,11 @@ from e8s.choreo.form_ops import transform_form
 from e8s.choreo.path_models import PathStyle
 from e8s.choreo.paths import default_paths, set_style
 from e8s.choreo.set_transforms import shift
-from e8s.core.deprecation import DeprecatedWarning
 from e8s.core.errors import E8sError
 from e8s.examples import two_set_show
 from e8s.geo.affine import translation_matrix
-from e8s.notes.models import NotesDocument
-from e8s.notes.notes import add_note
 from e8s.show.manage import add_set, set_counts
-from e8s.show.models import Anchor, Show
+from e8s.show.models import Show
 from e8s.time.models import Hold
 from e8s.time.timeline import add_hold
 from tests.strategies.forms import with_form
@@ -46,13 +42,11 @@ MAX_SETS = 3
 MIN_SETS = 2
 PURITY_EXAMPLES = 25
 FORM_ID = "purity_form"
-NOTE_ID = "purity_note"
 NEW_SET_ID = "99P"
 NEW_SET_COUNTS = 4.0
 RETIMED_COUNTS = 6.0
 SHIFT_M = 0.5
 HOLD_SECONDS = 1.5
-AT = datetime(2026, 11, 13, tzinfo=UTC)
 
 
 def _spots(show: Show) -> object:
@@ -79,13 +73,6 @@ def _timeline(show: Show) -> object:
     return add_hold(show.timeline, Hold(at_count=show.sets[-1].counts, seconds=HOLD_SECONDS))
 
 
-def _notes(show: Show) -> object:
-    notes = NotesDocument(show=show.id)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecatedWarning)
-        return add_note(notes, show, "hit", Anchor.on_set(show.sets[-1].id), NOTE_ID, AT, "pat")
-
-
 def _manage(show: Show) -> object:
     grown = add_set(show, NEW_SET_ID, NEW_SET_COUNTS, force=True)
     return grown, set_counts(show, show.sets[-1].id, RETIMED_COUNTS, rescale=True, force=True)
@@ -97,17 +84,16 @@ EDITS: dict[str, Callable[[Show], object]] = {
     "forms": _forms,
     "paths": _paths,
     "timeline": _timeline,
-    "notes": _notes,
     "manage": _manage,
 }
 
 
 def assert_edit_is_pure(edit: Callable[[Show], object], show: Show) -> None:
     """Requires `show` to serialize identically after `edit`, even when the edit rejects it."""
-    before = show.model_dump_json()
+    before = json.dumps(show.to_json())
     with contextlib.suppress(E8sError):
         edit(show)
-    assert show.model_dump_json() == before
+    assert json.dumps(show.to_json()) == before
 
 
 def _retitle_in_place(show: Show) -> object:

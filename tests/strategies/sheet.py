@@ -14,8 +14,8 @@ from hypothesis import strategies as st
 
 from e8s.core.types import Point
 from e8s.sheet.models import Sheet
-from e8s.sheet.templates import _blank_sheet as blank_sheet
-from e8s.sheet.templates import _sheet_templates as sheet_templates
+from e8s.sheet.templates import blank_sheet as blank_sheet
+from e8s.sheet.templates import sheet_templates as sheet_templates
 
 MIN_BLANK_M = 12.0
 MAX_BLANK_M = 60.0

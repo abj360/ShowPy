@@ -150,9 +150,9 @@ FRAMES_FIELDS = {
 
 @pytest.mark.parametrize("change", [{"x": [[0.0]]}, {"counts": [0.0]}])
 def test_regression_frames_model_rejects_mismatched_shapes(change: dict[str, object]) -> None:
-    Frames.model_validate(FRAMES_FIELDS)
+    Frames.from_json(FRAMES_FIELDS)
     with pytest.raises(SchemaError, match=r"shape|counts"):
-        Frames.model_validate({**FRAMES_FIELDS, **change})
+        Frames.from_json({**FRAMES_FIELDS, **change})
 
 
 def test_coordinate_table_equals_positions_at_each_set() -> None:
@@ -213,6 +213,6 @@ def test_regression_coordinate_table_rejects_no_sets() -> None:
 def test_regression_coordinate_table_model_rejects_mismatched_shapes(
     change: dict[str, object],
 ) -> None:
-    fields = coordinate_table(two_set_show(), "T1").model_dump()
+    fields = coordinate_table(two_set_show(), "T1").to_json()
     with pytest.raises(SchemaError, match=r"shape|counts"):
-        CoordinateTable.model_validate({**fields, **change})
+        CoordinateTable.from_json({**fields, **change})
