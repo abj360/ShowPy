@@ -42,6 +42,9 @@ Where the transition plan and the code disagree, this plan follows the code (`ma
 
 ## Decisions needed
 
+Answered by the maintainer on 2026-11-24: P1 to P6 as recommended below; for P3, the
+shapely-typed public names are removed.
+
 The maintainer accepted ADR 0025 on 2026-11-24. Six decisions belong to this plan; each task
 that depends on one names it. A decision answered against its recommendation re-plans those
 tasks first.
