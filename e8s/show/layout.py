@@ -6,6 +6,7 @@ Contains:
     LAYOUT_FORMAT: names the format string that file holds
     CURRENT_LAYOUT: numbers the newest layout this release reads
     LAYOUT_MAX_BYTES: caps the size of the layout file read
+    HOUSEKEEPING_NAMES: lists the entries operating systems add to a folder, which a root skips
     read_layout(): reports the layout version of a repository root
 """
 
@@ -26,6 +27,22 @@ LEGACY_LAYOUT = 1
 # The file holds two keys, about 40 bytes; the cap only refuses a file that is not one.
 LAYOUT_MAX_BYTES = 1024
 LAYOUT_KEYS = frozenset({"format", "layout"})
+# Operating systems add these to a folder on their own: macOS Finder, Spotlight, the trash and the
+# file-system event log; fsck on ext file systems; Windows Explorer, the recycle bin and system
+# restore. They are skipped wherever a repository lists its entries; anything else fails closed.
+HOUSEKEEPING_NAMES = frozenset(
+    {
+        ".DS_Store",
+        "lost+found",
+        "Thumbs.db",
+        "desktop.ini",
+        ".Spotlight-V100",
+        ".Trashes",
+        ".fseventsd",
+        "$RECYCLE.BIN",
+        "System Volume Information",
+    }
+)
 
 
 def _corrupt(root: Path, reason: str) -> StorageError:
@@ -54,7 +71,11 @@ def _is_legacy_show_dir(entry: os.DirEntry[str]) -> bool:
 
 
 def _unversioned_layout(root: Path) -> int:
-    """Classifies a root without a layout file as layout 1, as empty, or as corrupt."""
+    """Classifies a root without a layout file as layout 1, as empty, or as corrupt.
+
+    Housekeeping entries are skipped before anything is looked up under them, so an unreadable
+    `lost+found` never fails the read.
+    """
     try:
         is_folder = stat.S_ISDIR(root.stat().st_mode)
     except FileNotFoundError:
@@ -62,10 +83,10 @@ def _unversioned_layout(root: Path) -> int:
     if not is_folder:
         raise _corrupt(root, "the root is not a folder")
     with os.scandir(root) as entries:
-        first = next(entries, None)
-        if first is None:
+        stored = [entry for entry in entries if entry.name not in HOUSEKEEPING_NAMES]
+        if not stored:
             return CURRENT_LAYOUT
-        if _is_legacy_show_dir(first) or any(_is_legacy_show_dir(entry) for entry in entries):
+        if any(_is_legacy_show_dir(entry) for entry in stored):
             return LEGACY_LAYOUT
     raise _corrupt(root, f"no {LAYOUT_FILE} and no layout-1 show folders")
 
@@ -101,9 +122,9 @@ def read_layout(root: Path) -> int:
     A root with `layout.json` has the layout that file names, even when it also holds layout-1
     show folders. A root with show folders that hold a `next/root` link and no `layout.json` is
     layout 1. An empty or missing root reports the current layout, because storing the first
-    show creates the file. A symlinked root is followed. Any other content raises
-    StorageError CORRUPT, a newer layout raises VersionError, and a file-system failure raises
-    StorageError IO.
+    show creates the file; entries the operating system adds, such as `.DS_Store`, do not count.
+    A symlinked root is followed. Any other content raises StorageError CORRUPT, a newer layout
+    raises VersionError, and a file-system failure raises StorageError IO.
 
     Args:
         root: Folder that holds the repository.

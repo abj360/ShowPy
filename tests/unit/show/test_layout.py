@@ -21,6 +21,11 @@ Contains:
     test_read_layout_maps_a_too_long_name_to_io: raises IO
     test_read_layout_maps_an_unreadable_root_to_io: raises IO
     test_read_layout_maps_an_unreadable_layout_file_to_io: raises IO
+    test_regression_root_holding_only_ds_store_is_empty: reads a root holding only .DS_Store as an
+        empty root of the current layout
+    test_regression_unreadable_lost_and_found_is_skipped: reads past a lost+found it cannot open
+    test_read_layout_skips_housekeeping_names_only: skips every housekeeping name beside a layout-1
+        show, and still refuses any other stray entry
 """
 
 import json
@@ -33,7 +38,13 @@ import pytest
 
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import StorageError, VersionError
-from e8s.show.layout import CURRENT_LAYOUT, LAYOUT_FILE, LAYOUT_FORMAT, read_layout
+from e8s.show.layout import (
+    CURRENT_LAYOUT,
+    HOUSEKEEPING_NAMES,
+    LAYOUT_FILE,
+    LAYOUT_FORMAT,
+    read_layout,
+)
 
 FIXTURE_REPO = Path(__file__).resolve().parents[2] / "fixtures" / "repos" / "v0.4.0" / "repo"
 
@@ -208,3 +219,34 @@ def test_read_layout_maps_an_unreadable_layout_file_to_io(tmp_path: Path) -> Non
     finally:
         path.chmod(0o600)
     assert caught.value.code == ErrorCode.IO
+
+
+def test_regression_root_holding_only_ds_store_is_empty(tmp_path: Path) -> None:
+    """Reads a root that holds only Finder's .DS_Store as an empty root, not as corrupt."""
+    (tmp_path / ".DS_Store").write_bytes(b"\x00\x00\x00\x01Bud1")
+    assert read_layout(tmp_path) == CURRENT_LAYOUT
+
+
+@pytest.mark.skipif(CANNOT_CHMOD, reason="needs permission checks that bind this user")
+def test_regression_unreadable_lost_and_found_is_skipped(tmp_path: Path) -> None:
+    """Reads past a lost+found folder it cannot open, alone or beside a layout-1 show."""
+    lost = tmp_path / "lost+found"
+    lost.mkdir()
+    (lost / "next").mkdir()
+    lost.chmod(0)
+    try:
+        assert read_layout(tmp_path) == CURRENT_LAYOUT
+        _legacy_show(tmp_path)
+        assert read_layout(tmp_path) == 1
+    finally:
+        lost.chmod(0o700)
+
+
+def test_read_layout_skips_housekeeping_names_only(tmp_path: Path) -> None:
+    for name in sorted(HOUSEKEEPING_NAMES):
+        (tmp_path / name).mkdir()
+    assert read_layout(tmp_path) == CURRENT_LAYOUT
+    (tmp_path / ".DS_Store_old").write_text("x")
+    with pytest.raises(StorageError) as caught:
+        read_layout(tmp_path)
+    assert caught.value.code == ErrorCode.CORRUPT
