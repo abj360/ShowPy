@@ -87,9 +87,20 @@ def _audio_from(tl: Timeline, offset: Count) -> tuple[AudioTrack, ...]:
     return tuple(tracks)
 
 
+def _ramp_until(tl: Timeline, section: TempoSection, offset: Count) -> TempoSection:
+    ramp_end = section.at_count + (section.ramp_counts or 0.0)
+    if section.ramp_to is None or ramp_end - offset <= TOL:
+        return section
+    return section.replace(ramp_to=tempo_at(tl, offset), ramp_counts=offset - section.at_count)
+
+
 def _timeline_until(tl: Timeline, offset: Count) -> Timeline:
     return tl.replace(
-        tempos=tuple(t for t in tl.tempos if t.at_count < offset - TOL or t.at_count == 0),
+        tempos=tuple(
+            _ramp_until(tl, t, offset)
+            for t in tl.tempos
+            if t.at_count < offset - TOL or t.at_count == 0
+        ),
         holds=tuple(h for h in tl.holds if h.at_count < offset - TOL),
         markers=tuple(m for m in tl.markers if m.at_count <= offset + TOL),
         total_counts=offset,
@@ -143,7 +154,9 @@ def split_section(show: Show, at: str) -> tuple[Show, Show]:
     """Splits a show at set `at`; both shows hold `at`, and the second starts its clock there.
 
     The second show's tempo, holds, markers, measures, audio sync and facing overrides shift
-    so its count 0 is `at`. Raises TimelineError when `at` starts mid-measure.
+    so its count 0 is `at`. A tempo ramp that runs past `at` ends there in the first
+    show, at the tempo the whole show has at `at`. Raises TimelineError when `at` starts
+    mid-measure.
 
     Args:
         show: Show to split.

@@ -38,7 +38,7 @@ from e8s.show.pinning import pin
 from e8s.show.renumber import renumber
 from e8s.show.sections import join_sections, split_section
 from e8s.show.set_queries import index
-from e8s.time.clock import count_to_seconds
+from e8s.time.clock import count_to_seconds, tempo_at
 from e8s.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting, TempoSection
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
@@ -160,6 +160,7 @@ def test_regression_join_after_split_restores_the_show() -> None:
 
 
 SPLIT_SET = "3"
+SPLIT_COUNT = 12.0
 WINDOW_ACROSS_SPLIT = (4.0, 16.0)
 RAMP_COUNTS = 16.0
 
@@ -216,8 +217,6 @@ def test_join_keeps_adjacent_facing_overrides_that_differ() -> None:
     assert _round_trip(show.replace(facing_overrides=overrides)).facing_overrides == overrides
 
 
-@pytest.mark.defect("UP-9.7-50")
-@pytest.mark.xfail(strict=True, reason="UP-9.7-50")
 def test_regression_split_does_not_leave_a_ramp_longer_than_its_section() -> None:
     """Clips a tempo ramp to the length of the section it ends up in (audit 9.7 sections)."""
     ramp = TempoSection(
@@ -226,6 +225,23 @@ def test_regression_split_does_not_leave_a_ramp_longer_than_its_section() -> Non
     first, _ = split_section(_three_sets_with(tempos=(ramp,)), SPLIT_SET)
     longest = max(t.at_count + (t.ramp_counts or 0.0) for t in first.timeline.tempos)
     assert longest <= index(first).total_counts + TOL
+
+
+def test_split_ends_a_ramp_at_the_tempo_reached_on_the_split_count() -> None:
+    """Ends the first half's ramp at the split with the tempo the whole show has there."""
+    ramp = TempoSection(
+        at_count=0.0, counts_per_minute=120.0, ramp_to=60.0, ramp_counts=RAMP_COUNTS
+    )
+    show = _three_sets_with(tempos=(ramp,))
+    first, _ = split_section(show, SPLIT_SET)
+    clipped = first.timeline.tempos[0]
+    assert clipped.ramp_counts == index(first).total_counts
+    assert approx_equal(clipped.ramp_to or 0.0, tempo_at(show.timeline, SPLIT_COUNT), abs_tol=TOL)
+    assert approx_equal(
+        count_to_seconds(first.timeline, SPLIT_COUNT),
+        count_to_seconds(show.timeline, SPLIT_COUNT),
+        abs_tol=TOL,
+    )
 
 
 @pytest.mark.defect("UP-9.7-86")
