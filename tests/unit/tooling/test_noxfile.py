@@ -229,6 +229,17 @@ RUST_SESSION_RUNS = [
         "--locked",
     ],
     ["_cargo_tool(CARGO_DENY)", "--locked", "check"],
+    ["cargo", "fetch", "--locked", "--manifest-path", "fuzz/Cargo.toml"],
+    [
+        "_cargo_tool(CARGO_DENY)",
+        "--manifest-path",
+        "fuzz/Cargo.toml",
+        "--locked",
+        "check",
+        "advisories",
+        "bans",
+        "sources",
+    ],
 ]
 NOTICES_CHECK = ["python", "scripts/gen_third_party_notices.py", "--check"]
 CARGO_TOOLS_RUN = ["pytest", "-m", "cargo_tools", "tests/unit/tooling/test_third_party_notices.py"]

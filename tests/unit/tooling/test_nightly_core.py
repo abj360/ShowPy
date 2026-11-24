@@ -11,6 +11,9 @@ Contains:
     session_calls(): lists the source of every `session.run` call one noxfile function makes
     test_rustfuzz_session_runs_each_target_on_the_pinned_nightly: a dated nightly, a locked
         fuzz build and one libFuzzer run per target
+    test_regression_rust_session_refuses_a_stale_fuzz_lock: the stable gate fails on a fuzz
+        lock that a core change left behind, and checks the fuzz crate's advisories, bans and
+        sources but not its licences
     test_fuzz_plan_reads_a_target_and_the_seconds: every target for FUZZ_SECONDS by default
     test_fuzz_plan_refuses_unknown_arguments: an unknown target or a bad count is refused
     test_mutants_session_reports_without_gating: missed mutants still exit 0 with a summary
@@ -40,6 +43,7 @@ from tests.unit.tooling.test_noxfile import (
     NOXFILE,
     PINNED_VERSION,
     ROOT,
+    RUST_SESSION,
     SAVE_FROM_MAIN,
     WITH_INDENT,
     cargo_tools_cache_key_problems,
@@ -51,6 +55,7 @@ from tests.unit.tooling.test_noxfile import (
     pinned_version_lines,
     rust_caches_saved_off_main,
     session_names,
+    session_runs,
     step_value,
     unpinned_actions,
     unprepared_rust_jobs,
@@ -104,6 +109,17 @@ counts = {{"caught": 4, "missed": 6, "timeout": 0, "unviable": 20, "total_mutant
 sys.exit({exit_code})
 """
 MISSED_MUTANTS = 2
+FUZZ_LOCK_CHECK = ["cargo", "fetch", "--locked", "--manifest-path", "fuzz/Cargo.toml"]
+FUZZ_DENY_CHECK = [
+    "_cargo_tool(CARGO_DENY)",
+    "--manifest-path",
+    "fuzz/Cargo.toml",
+    "--locked",
+    "check",
+    "advisories",
+    "bans",
+    "sources",
+]
 BASELINE_FAILED = 4
 
 
@@ -172,6 +188,14 @@ def test_rustfuzz_session_runs_each_target_on_the_pinned_nightly() -> None:
     body = function_source(source, RUSTFUZZ_SESSION)
     assert NIGHTLY_ENV in body
     assert TARGET_LOOP in body
+
+
+def test_regression_rust_session_refuses_a_stale_fuzz_lock() -> None:
+    runs = session_runs(NOXFILE.read_text(encoding="utf-8"), RUST_SESSION)
+    assert FUZZ_LOCK_CHECK in runs
+    assert FUZZ_DENY_CHECK in runs
+    assert runs.index(FUZZ_LOCK_CHECK) < runs.index(FUZZ_DENY_CHECK)
+    assert not any("licenses" in run for run in runs)
 
 
 def test_fuzz_plan_reads_a_target_and_the_seconds() -> None:

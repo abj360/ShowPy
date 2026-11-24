@@ -19,7 +19,8 @@ Contains:
     core: installs the wheel without extras and checks imports and extra-gated calls fail closed
     rust: checks Rust formatting, lints and tests, builds the wasm crate, on arm64 hosts refuses
         any fused multiply-add outside libm's fma in the extension, then checks the crates'
-        licences, bans, advisories and sources and that the Rust notice file is current
+        licences, bans, advisories and sources, refuses a stale fuzz lock, checks the fuzz
+        crate's supply chain and that the Rust notice file is current
     wheels: builds the sdist and a dist-profile wheel from it, refuses an rpath or a linked
         libpython in its extension, then runs the ported packages' tests against that wheel in
         fresh venvs on each supported Python
@@ -566,8 +567,9 @@ def _install_cargo_tool(
 def rust(session: nox.Session) -> None:
     """Checks Rust formatting, lints and tests, builds the wasm crate and runs the FMA check.
 
-    Then checks every crate's licence, bans, advisories and source with cargo deny, and that the
-    Rust notice file the wheel ships is current.
+    Then checks every crate's licence, bans, advisories and source with cargo deny, refuses a
+    stale fuzz/Cargo.lock, checks the fuzz crate's advisories, bans and sources, and checks that
+    the Rust notice file the wheel ships is current.
 
     Every cargo command builds pyo3 against nox's own interpreter and environment, the project
     environment where e8s is installed: the crate tests embed that interpreter and import e8s.
@@ -605,6 +607,21 @@ def rust(session: nox.Session) -> None:
     _install_cargo_tool(session, CARGO_DENY, CARGO_DENY_VERSION)
     _install_cargo_tool(session, CARGO_ABOUT, CARGO_ABOUT_VERSION, *CARGO_ABOUT_FEATURES)
     session.run(_cargo_tool(CARGO_DENY), "--locked", "check", external=True)
+    # The fuzz crate keeps its own lock, which a core version or dependency change leaves stale;
+    # only the nightly builds it, so the stable gate refuses that lock here. It never ships, so
+    # cargo deny skips its licences (libfuzzer-sys carries NCSA) but checks what CI executes.
+    session.run("cargo", "fetch", "--locked", "--manifest-path", FUZZ_MANIFEST, external=True)
+    session.run(
+        _cargo_tool(CARGO_DENY),
+        "--manifest-path",
+        FUZZ_MANIFEST,
+        "--locked",
+        "check",
+        "advisories",
+        "bans",
+        "sources",
+        external=True,
+    )
     _uv_run(session, "python", NOTICES_SCRIPT, "--check")
     _uv_run(session, "pytest", "-m", CARGO_TOOLS_MARK, CARGO_TOOLS_TESTS)
 
