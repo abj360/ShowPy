@@ -43,7 +43,7 @@ from e8s.show.models import Pin
 type EventKind = Literal[
     "move", "edit_form", "pin", "unpin", "edit_paths", "comment", "set_counts", "highlight"
 ]
-type ProposalState = Literal["open", "accepted", "rejected"]
+type ProposalState = Literal["open", "accepted", "rejected", "withdrawn"]
 
 
 class Comment(FrozenModel):
@@ -215,8 +215,9 @@ class Proposal(FrozenModel):
         base_revision: Revision the change was made against.
         change: Ops applied in order when accepted.
         note: Why the agent suggests it.
-        state: open, accepted or rejected.
+        state: open, accepted, rejected or withdrawn.
         reason: Why it was rejected.
+        accepted_revision: Revision that holds the accepted change; empty until accepted.
     """
 
     id: str
@@ -225,6 +226,7 @@ class Proposal(FrozenModel):
     note: str = ""
     state: ProposalState = "open"
     reason: str = ""
+    accepted_revision: str = ""
 
 
 class ProposalPreview(FrozenModel):

@@ -1010,6 +1010,7 @@
   },
   "Proposal": {
     "model": {
+      "accepted_revision": "str",
       "base_revision": "str",
       "change": "tuple[ChangeOp, ...]",
       "id": "str",

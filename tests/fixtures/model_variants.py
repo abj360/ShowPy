@@ -278,7 +278,10 @@ def _show() -> dict[str, tuple[Changes, ...]]:
         "Highlight": ({"anchor": None, "zone": "pit"},),
         "CanvasEvent": ({"revision": "r1"},),
         "CountsOp": ({"rescale": True},),
-        "Proposal": ({"state": "rejected", "reason": "too far"},),
+        "Proposal": (
+            {"state": "rejected", "reason": "too far"},
+            {"state": "accepted", "accepted_revision": "r2"},
+        ),
         "ItemKey": ({"role": "drill"},),
         "ItemChange": ({"before": {"x": 1.0, "tags": [1, None]}, "after": [True, "moved"]},),
         "ChangeSet": ({"changes": (Example("ItemChange"),)},),
