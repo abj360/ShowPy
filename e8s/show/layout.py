@@ -14,7 +14,8 @@ from pathlib import Path
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, StorageError, VersionError
 from e8s.core.strict_json import parse_strict_json
-from e8s.show.layout1 import LINK_DIR, OBJECT_DIR, TREE_DIR, _FileBackend
+from e8s.show.layout1 import LINK_DIR, OBJECT_DIR, TREE_DIR
+from e8s.show.safe_read import read_capped
 
 LAYOUT_FILE = "layout.json"
 LAYOUT_FORMAT = "e8.repository"
@@ -52,7 +53,9 @@ def _unversioned_layout(root: Path) -> int:
 
 
 def _declared_layout(root: Path, path: Path) -> int:
-    raw = _FileBackend(root)._read(str(root), path, "layout file", LAYOUT_MAX_BYTES)
+    raw = read_capped(
+        path, "layout file", LAYOUT_MAX_BYTES, lambda _, reason: _corrupt(root, reason)
+    )
     try:
         document = parse_strict_json(raw, document="layout file")
     except SchemaError as error:
