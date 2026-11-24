@@ -120,6 +120,11 @@
       "spots": "tuple[e8s.cast.models.Spot, ...]"
     }
   },
+  "ChangeSet": {
+    "model": {
+      "changes": "tuple[e8s.show.change_models.ItemChange, ...]"
+    }
+  },
   "CircleCurve": {
     "model": {
       "ccw": "bool",
@@ -165,6 +170,12 @@
     }
   },
   "ConflictError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: e8s.core.error_codes.ErrorCode | None = None) -> None",
+  "ConformanceReport": {
+    "model": {
+      "failed": "tuple[tuple[str, str], ...]",
+      "passed": "tuple[str, ...]"
+    }
+  },
   "ContinuityError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: e8s.core.error_codes.ErrorCode | None = None) -> None",
   "CoordinateTable": {
     "model": {
@@ -553,12 +564,32 @@
   "FrozenModel": {
     "model": {}
   },
+  "FsckFinding": {
+    "model": {
+      "code": "str",
+      "message": "str",
+      "path": "str"
+    }
+  },
+  "FsckReport": {
+    "model": {
+      "findings": "tuple[e8s.show.storage_models.FsckFinding, ...]",
+      "ok": "bool"
+    }
+  },
   "GapInfo": {
     "model": {
       "a": "e8s.core.ids.SpotId",
       "b": "e8s.core.ids.SpotId",
       "gap": "Finite",
       "tau": "float"
+    }
+  },
+  "GcReport": {
+    "model": {
+      "bytes_freed": "Count",
+      "dry_run": "bool",
+      "removed": "tuple[str, ...]"
     }
   },
   "GeneratedRecipe": {
@@ -623,6 +654,12 @@
   "ID_PATTERN": {
     "constant": "re.compile('^[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,62}[A-Za-z0-9_])?$')"
   },
+  "IdChanges": {
+    "model": {
+      "sets": "tuple[tuple[e8s.core.ids.SetId, e8s.core.ids.SetId], ...]",
+      "spots": "tuple[tuple[e8s.core.ids.SpotId, e8s.core.ids.SpotId], ...]"
+    }
+  },
   "InMemoryAssetStore": "() -> None",
   "InMemoryRepository": "() -> None",
   "InMemorySheetStore": "() -> None",
@@ -634,6 +671,23 @@
       "min": "Finite",
       "std": "Finite"
     }
+  },
+  "ItemChange": {
+    "model": {
+      "after": "JsonAny",
+      "before": "JsonAny",
+      "key": "e8s.show.change_models.ItemKey"
+    }
+  },
+  "ItemKey": {
+    "model": {
+      "kind": "ItemKind",
+      "path": "tuple[str, ...]",
+      "role": "str | None"
+    }
+  },
+  "ItemKind": {
+    "constant": "ItemKind"
   },
   "LAYOUT_FILE": {
     "constant": "'layout.json'"
@@ -786,6 +840,21 @@
       "changes": "tuple[tuple[NonNegCount, PositiveFinite], ...]",
       "counts_per_measure": "PositiveFinite",
       "start_measure": "int"
+    }
+  },
+  "MergeConflict": {
+    "model": {
+      "base": "JsonAny",
+      "key": "e8s.show.change_models.ItemKey",
+      "ours": "JsonAny",
+      "reason": "str",
+      "theirs": "JsonAny"
+    }
+  },
+  "MergeResult": {
+    "model": {
+      "conflicts": "tuple[e8s.show.change_models.MergeConflict, ...]",
+      "show": "e8s.show.models.Show | None"
     }
   },
   "MigrationReport": {
@@ -963,6 +1032,7 @@
   },
   "Proposal": {
     "model": {
+      "accepted_revision": "str",
       "base_revision": "str",
       "change": "tuple[ChangeOp, ...]",
       "id": "str",
@@ -1424,6 +1494,14 @@
     }
   },
   "UnknownRefError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: e8s.core.error_codes.ErrorCode | None = None) -> None",
+  "UpgradeReport": {
+    "model": {
+      "blobs_copied": "Count",
+      "blobs_linked": "Count",
+      "revisions": "Count",
+      "shows": "tuple[str, ...]"
+    }
+  },
   "ValidationIssue": {
     "model": {
       "code": "e8s.core.error_codes.ErrorCode",
