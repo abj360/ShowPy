@@ -54,7 +54,7 @@ CACHE_KEY_PARTS = (
     "${{ runner.os }}",
     "${{ runner.arch }}",
     "steps.python.outputs.version",
-    "hashFiles('uv.lock', 'scripts/build_oracle.py')",
+    "hashFiles('uv.lock', 'scripts/build_oracle.py', 'scripts/oracle_build.txt')",
 )
 DIGEST_COUNT = "-ne 18"
 

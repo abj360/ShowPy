@@ -263,6 +263,8 @@ def test_main_writes_the_rust_output(tmp_path: Path, monkeypatch: pytest.MonkeyP
         "tests/parity/cases_time.py",
         "tests/parity/flipped.toml",
         "scripts/build_oracle.py",
+        "scripts/oracle_build.in",
+        "scripts/oracle_build.txt",
         "uv.lock",
         "noxfile.py",
         ".github/workflows/ci.yml",

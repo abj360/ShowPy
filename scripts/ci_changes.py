@@ -57,7 +57,9 @@ RUST_FILES = frozenset(
 # The library and its compiled core, then the harness: its cases, the oracle builder and the
 # locked dependencies both sides import.
 PARITY_PREFIXES = ("e8s/", "tests/parity/")
-PARITY_FILES = frozenset({"scripts/build_oracle.py", "uv.lock"})
+PARITY_FILES = frozenset(
+    {"scripts/build_oracle.py", "scripts/oracle_build.in", "scripts/oracle_build.txt", "uv.lock"}
+)
 PULL_REQUEST_EVENT = "pull_request"
 COMMIT_SHA = re.compile(r"^[0-9a-f]{40}([0-9a-f]{24})?$")
 OUTPUT_ENV = "GITHUB_OUTPUT"

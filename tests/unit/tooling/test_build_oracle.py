@@ -12,6 +12,10 @@ Contains:
     test_is_ready_refuses_a_changed_wheel_commit_ref_or_python: READY must match all of them
     test_regression_planted_venv_file_forces_a_rebuild: a changed or added venv file is not ready
     test_venv_digest_reads_contents_names_and_links: every file and link of the venv counts
+    pinned_requirements(): reads name, version and hashes from a hashed requirements file
+    test_oracle_build_requirements_are_pinned_with_hashes: every build requirement has hashes
+    test_oracle_build_inputs_are_the_v040_build_requires: the inputs are the tag's own pins
+    test_wheel_build_requires_hashed_build_requirements: uv build refuses unhashed ones
     test_regression_missing_ref_fails_closed: an absent tag exits with an E: line
     test_regression_moved_pinned_tag_fails_closed: a pinned ref on another commit is refused
     test_default_oracle_is_pinned_to_the_v040_commit: the pin is the commit the tag names
@@ -26,17 +30,20 @@ import re
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
 
 import scripts.build_oracle as build_module
 from scripts.build_oracle import (
+    BUILD_REQUIREMENTS,
     DEFAULT_COMMIT,
     DEFAULT_REF,
     READY_FILE,
     VENV_FOLDER,
     WHEEL_FOLDER,
+    build_command,
     build_oracle,
     interpreter,
     is_ready,
@@ -68,6 +75,9 @@ RUNNING = f"{sys.version_info.major}.{sys.version_info.minor}"
 ORACLE = Path(".parity", "oracle")
 ROOT = Path(__file__).resolve().parents[3]
 FULL_SHA = r"^[0-9a-f]{40}$"
+BUILD_INPUTS = ROOT / "scripts" / "oracle_build.in"
+REQUIREMENT_LINE = re.compile(r"^([a-z0-9][a-z0-9._-]*)==(\S+) \\$")
+HASH_LINE = re.compile(r"^    --hash=sha256:([0-9a-f]{64})(?: \\)?$")
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
 
 
@@ -182,6 +192,60 @@ def test_venv_digest_reads_contents_names_and_links(tmp_path: Path) -> None:
     if sys.platform != "win32":
         (venv / "link").symlink_to("lib/b.py")
         assert venv_digest(venv) != cached
+
+
+def pinned_requirements(text: str) -> dict[str, tuple[str, list[str]]]:
+    """Reads each `name==version` requirement of a hashed requirements file with its hashes.
+
+    Args:
+        text: The text uv pip compile --generate-hashes wrote.
+
+    Returns:
+        pins: Requirement name to its version and its SHA-256 hashes, in file order.
+    """
+    pins: dict[str, tuple[str, list[str]]] = {}
+    name = ""
+    for line in text.splitlines():
+        requirement, digest = REQUIREMENT_LINE.match(line), HASH_LINE.match(line)
+        if requirement:
+            name = requirement[1]
+            pins[name] = (requirement[2], [])
+        elif digest:
+            pins[name][1].append(digest[1])
+    return pins
+
+
+def _inputs() -> list[str]:
+    lines = BUILD_INPUTS.read_text(encoding="utf-8").splitlines()
+    return [line for line in lines if line and not line.startswith("#")]
+
+
+def test_oracle_build_requirements_are_pinned_with_hashes() -> None:
+    pins = pinned_requirements(BUILD_REQUIREMENTS.read_text(encoding="utf-8"))
+    assert {"hatchling", "hatch-vcs", "packaging", "pluggy"} <= set(pins)
+    assert all(hashes for _, hashes in pins.values())
+    for line in _inputs():
+        name, version = line.split("==")
+        assert pins[name][0] == version
+
+
+def test_oracle_build_inputs_are_the_v040_build_requires() -> None:
+    shown = subprocess.run(
+        ["git", "show", f"{DEFAULT_COMMIT}:pyproject.toml"],
+        cwd=ROOT,
+        capture_output=True,
+        encoding="utf-8",
+        check=False,
+    )
+    if shown.returncode == 0:
+        assert tomllib.loads(shown.stdout)["build-system"]["requires"] == _inputs()
+
+
+def test_wheel_build_requires_hashed_build_requirements() -> None:
+    command = [str(part) for part in build_command(Path("wheels"))]
+    at = command.index("--build-constraints")
+    assert command[at + 1] == str(BUILD_REQUIREMENTS)
+    assert "--require-hashes" in command
 
 
 @needs_git

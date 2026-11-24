@@ -354,9 +354,9 @@ jobs:
 
   # The working tree against the v0.4.0 oracle on every check cell, under hash seeds 0, 1 and 2.
   # Each leg uploads the SHA-256 digests of its core outputs; parity-compare fails unless all 18
-  # are equal. The oracle venv is cached by ref, OS, architecture, full Python version, the lock
-  # and its builder; like the Rust build cache, only main saves it. Like `check`, the legs
-  # always start and gate their steps.
+  # are equal. The oracle venv is cached by ref, OS, architecture, full Python version, the lock,
+  # its builder and its hashed build requirements; like the Rust build cache, only main saves
+  # it. Like `check`, the legs always start and gate their steps.
   parity:
     name: parity (${{ matrix.os }}, py${{ matrix.python }})
     needs: changes
@@ -407,7 +407,8 @@ jobs:
           path: .parity/oracle-v0.4.0
           key: >-
             parity-oracle-v0.4.0-${{ runner.os }}-${{ runner.arch }}-py${{
-            steps.python.outputs.version }}-${{ hashFiles('uv.lock', 'scripts/build_oracle.py') }}
+            steps.python.outputs.version }}-${{ hashFiles('uv.lock', 'scripts/build_oracle.py',
+            'scripts/oracle_build.txt') }}
       - name: Compare under hash seeds 0, 1 and 2
         if: env.RUN_PARITY_JOB == 'true'
         shell: bash

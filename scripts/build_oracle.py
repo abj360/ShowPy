@@ -3,19 +3,21 @@
 """
 build_oracle.py --- builds a released e8s into its own venv as the parity harness's oracle
 
-Resolves `ref` to its commit, refusing a pinned ref that names another commit, then checks it
-out into a temporary git worktree under the output's parent (`.parity/`), builds
-its wheel with that tree's own build backend, creates a venv on the running Python, installs
-the dependencies locked at `ref` (hashes required) and then the wheel, and writes READY holding
-the ref, its commit, the wheel's SHA-256 and a digest of every file in the venv. The worktree is
-removed whether the build succeeds or fails. An oracle whose READY matches all four is reused
-without building anything; the oracle interpreter always runs with -B, so it writes no bytecode
-that would change the venv digest.
+Resolves `ref` to its commit, refusing a pinned ref that names another commit. Checks that
+commit out into a temporary git worktree under `.parity/` and builds its wheel with the tree's
+own build backend, installed only from hashed, pinned requirements. Creates a venv on the
+running Python, installs the dependencies locked at `ref` (hashes required), then the wheel.
+Writes READY holding the ref, its commit, the wheel's SHA-256 and a digest of every file in the
+venv. The worktree is removed whether the build succeeds or fails. An oracle whose READY
+matches all four is reused without building anything; the oracle interpreter always runs with
+-B, so it writes no bytecode that would change the venv digest.
 
 Contains:
     PINNED_COMMITS: the commit each pinned ref must resolve to
+    BUILD_REQUIREMENTS: the hashed requirements the oracle's build backend is installed from
     interpreter(): returns a venv's interpreter path on this platform
     venv_digest(): returns the SHA-256 over every file's path and contents in a venv
+    build_command(): builds the `uv build` command, limited to hashed build requirements
     ready_stamp(): renders the READY text for a ref, its commit, the wheel and the venv digest
     is_ready(): tells whether an oracle folder holds a finished build of a ref's commit
     build_oracle(): builds the oracle of a ref unless it is ready; returns its interpreter
@@ -37,6 +39,7 @@ DEFAULT_REF = "v0.4.0"
 # The commit v0.4.0 was released from; a tag moved or pushed again elsewhere is refused.
 DEFAULT_COMMIT = "a6ef3caaa5a305a992aab73fccbbc4446670ef63"
 PINNED_COMMITS = {DEFAULT_REF: DEFAULT_COMMIT}
+BUILD_REQUIREMENTS = Path(__file__).resolve().with_name("oracle_build.txt")
 DEFAULT_OUT = Path(".parity") / "oracle-v0.4.0"
 PARITY_FOLDER = ".parity"
 READY_FILE = "READY"
@@ -202,19 +205,37 @@ def _remove_worktree(root: Path, worktree: Path) -> None:
     _run(["git", "worktree", "prune"], cwd=root, what="git worktree prune")
 
 
-def _build_wheel(worktree: Path, out: Path) -> Path:
-    wheels = (out / WHEEL_FOLDER).absolute()
-    command: list[str | Path] = [
+def build_command(wheels: Path) -> list[str | Path]:
+    """Builds the `uv build` command for the checked-out tree, run from inside that tree.
+
+    The tree's own build backend runs in an isolated environment that uv fills only from
+    BUILD_REQUIREMENTS, each requirement pinned with its hashes; anything unpinned or unhashed
+    fails the build.
+
+    Args:
+        wheels: The folder the wheel is written to.
+
+    Returns:
+        command: The argument vector.
+    """
+    return [
         "uv",
         "build",
         "--wheel",
         "--python",
         sys.executable,
+        "--build-constraints",
+        BUILD_REQUIREMENTS,
+        "--require-hashes",
         "--out-dir",
         wheels,
         ".",
     ]
-    _run(command, cwd=worktree, what="building the wheel")
+
+
+def _build_wheel(worktree: Path, out: Path) -> Path:
+    wheels = (out / WHEEL_FOLDER).absolute()
+    _run(build_command(wheels), cwd=worktree, what="building the wheel")
     found = sorted(wheels.glob("*.whl"))
     if len(found) != 1:
         raise SystemExit(f"E: building the wheel left {len(found)} wheels in {wheels}")
