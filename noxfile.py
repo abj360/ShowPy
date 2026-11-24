@@ -96,6 +96,8 @@ LINK_CHECK_SCRIPT = "scripts/check_extension_links.py"
 WASM_TARGET = "wasm32-unknown-unknown"
 FMA_CHECK_PROFILE = "fma-check"
 ARM64_MACHINES = ("arm64", "aarch64")
+PYO3_PYTHON_ENV = "PYO3_PYTHON"
+VIRTUAL_ENV_VAR = "VIRTUAL_ENV"
 # Cargo tools install here, at these exact versions, never into ~/.cargo/bin. cargo-deny 0.22.0
 # (rust-version 1.95) and cargo-about 0.9.3 (1.88) are the newest releases; both build on 1.100.0.
 CARGO_TOOLS_ROOT = ".cargo-tools"
@@ -539,8 +541,13 @@ def rust(session: nox.Session) -> None:
     Then checks every crate's licence, bans, advisories and source with cargo deny, and that the
     Rust notice file the wheel ships is current.
 
+    Every cargo command builds pyo3 against nox's own interpreter and environment, the project
+    environment where e8s is installed: the crate tests embed that interpreter and import e8s.
+
     Not a default session: it compiles every crate, so it runs on demand and in CI.
     """
+    session.env[PYO3_PYTHON_ENV] = sys.executable
+    session.env[VIRTUAL_ENV_VAR] = sys.prefix
     session.run("cargo", "fmt", "--all", "--check", external=True)
     session.run(
         "cargo",

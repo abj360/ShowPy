@@ -14,15 +14,27 @@ use pyo3::panic::PanicException;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
-/// Puts the checkout and its uv environment on `sys.path`, so `e8s.core.errors` imports.
+/// Puts the checkout and its uv environment on `sys.path`, and fails clearly if e8s does not
+/// import.
 ///
 /// The embedded interpreter starts from the base Python that pyo3 linked, not the virtual
-/// environment, so it reads the environment's `site-packages` (and its `.pth` files) here.
+/// environment, so it reads the environment's `site-packages` (and its `.pth` files) here. The
+/// path comes from the `venv` scheme: a macOS framework Python's own scheme ignores `base` and
+/// names its framework's folder, where e8s's metadata is not.
 const IMPORT_E8S: &std::ffi::CStr = cr#"
-import os, site, sys, sysconfig
+import importlib.metadata, os, site, sys, sysconfig
 venv = os.environ.get("VIRTUAL_ENV") or os.path.join(root, ".venv")
-site.addsitedir(sysconfig.get_path("purelib", vars={"base": venv, "platbase": venv}))
+site.addsitedir(sysconfig.get_path("purelib", scheme="venv", vars={"base": venv, "platbase": venv}))
 sys.path.insert(0, root)
+try:
+    importlib.metadata.version("e8s")
+    import e8s.core.errors
+except ImportError as error:
+    raise RuntimeError(
+        f"e8s is not importable from the environment {venv} by Python "
+        f"{sys.version.split()[0]} at {sys.base_prefix}: {error!r}; run: uv sync, then run "
+        "cargo test with PYO3_PYTHON and VIRTUAL_ENV set to that environment (nox -s rust does)"
+    ) from error
 "#;
 
 fn import_e8s(py: Python<'_>) -> PyResult<()> {
