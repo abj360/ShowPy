@@ -1,0 +1,39 @@
+
+target/unopt/libfma_probe.dylib:	file format mach-o arm64
+
+Disassembly of section __TEXT,__text:
+
+00000000000008c0 <<f64>::mul_add>:
+; <f64>::mul_add():
+; /rustc/0ef1bc386059596dada8fb65b50425aab2ea637a/library/core/src/num/f64.rs:2119
+; /rustc/0ef1bc386059596dada8fb65b50425aab2ea637a/library/std/src/num/f64.rs:229:9: mul_add inlined into mul_add
+     8c0:      	fmadd	d0, d0, d1, d2
+; /rustc/0ef1bc386059596dada8fb65b50425aab2ea637a/library/std/src/num/f64.rs:229:9: end of mul_add inlined into mul_add
+; /rustc/0ef1bc386059596dada8fb65b50425aab2ea637a/library/std/src/num/f64.rs:230
+     8c4:      	ret
+
+0000000000000a08 <libm::math::fma::fma>:
+; libm::math::fma::fma():
+; /home/dev/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libm-0.2.16/src/math/fma.rs:36
+     a08:      	stp	x29, x30, [sp, #-0x10]!
+     a0c:      	mov	x29, sp
+; /home/dev/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libm-0.2.16/src/math/support/macros.rs:80
+     a10:      	bl	0xa1c <libm::math::arch::aarch64::fma>
+; /home/dev/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libm-0.2.16/src/math/fma.rs:47
+     a14:      	ldp	x29, x30, [sp], #0x10
+     a18:      	ret
+
+0000000000000a1c <libm::math::arch::aarch64::fma>:
+; libm::math::arch::aarch64::fma():
+; /home/dev/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libm-0.2.16/src/math/arch/aarch64.rs:5
+     a1c:      	sub	sp, sp, #0x10
+     a20:      	str	d0, [sp, #0x8]
+; /home/dev/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libm-0.2.16/src/math/arch/aarch64.rs:8
+     a24:      	ldr	d0, [sp, #0x8]
+     a28:      	fmadd	d0, d0, d1, d2
+     a2c:      	str	d0, [sp, #0x8]
+; /home/dev/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libm-0.2.16/src/math/arch/aarch64.rs:16
+     a30:      	ldr	d0, [sp, #0x8]
+; /home/dev/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libm-0.2.16/src/math/arch/aarch64.rs:17
+     a34:      	add	sp, sp, #0x10
+     a38:      	ret

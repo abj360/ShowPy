@@ -56,9 +56,21 @@ Contains:
     test_rust_cache_saves_only_from_main: a pull request never writes a Rust cache that main
         later restores and runs
     test_rust_caches_saved_off_main_sees_a_missing_or_wrong_condition: proves the check can fail
-    unlocked_uv_builds(): lists the noxfile functions that run `uv build` without LOCKED_BUILD
+    unlocked_uv_builds(): lists the noxfile functions that run `uv build` without cargo's
+        --locked in the build environment
     test_wheel_builds_fail_on_a_stale_cargo_lock: every nox build passes cargo's --locked
     test_unlocked_uv_builds_sees_a_build_without_the_lock: proves the lock check can fail
+    session_runs(): lists the arguments of every `session.run` call one noxfile function makes
+    test_rust_session_runs_fmt_clippy_test_and_the_wasm_build: the cargo gates, then the FMA
+        check
+    test_fma_check_builds_the_extension_and_runs_the_script: cargo rustc on the fma-check
+        profile, then scripts/check_no_fma.py on its output
+    test_fma_check_profile_keeps_symbols_and_line_tables: ships the dist codegen, unstripped
+    test_session_runs_keeps_source_order: proves the run scan reads calls in order
+    module_literal(): returns the literal value of one module-level noxfile constant
+    uv_build_envs(): lists the env= constant of each `uv build` call of one noxfile function
+    test_wheels_session_tests_the_wheel_on_313_and_314: builds the sdist, a dist wheel from it,
+        and runs the ported packages' tests against that wheel on each supported Python
 """
 
 import ast
@@ -128,6 +140,61 @@ UV_STEP = re.compile(r"\buv (sync|run)\b")
 TOOLCHAIN_STEP = "rustup toolchain install"
 RUST_CACHE_STEP = re.compile(r"uses: Swatinem/rust-cache@[0-9a-f]{40}\b")
 LOCKED_BUILD = "LOCKED_BUILD"
+BUILD_ARGS = "MATURIN_PEP517_ARGS"
+LOCKED_FLAG = "--locked"
+CARGO_MANIFEST = ROOT / "Cargo.toml"
+SESSION_RUN = "session.run"
+RUST_SESSION = "rust"
+FMA_STEP = "_check_no_fma"
+FMA_CHECK_SCRIPT = "FMA_CHECK_SCRIPT"
+RUST_SESSION_RUNS = [
+    ["cargo", "fmt", "--all", "--check"],
+    ["cargo", "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"],
+    ["cargo", "test", "--workspace", "--locked"],
+    [
+        "cargo",
+        "build",
+        "-p",
+        "e8s-wasm",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--profile",
+        "dist",
+        "--locked",
+    ],
+]
+FMA_CHECK_BUILD = [
+    "cargo",
+    "rustc",
+    "-p",
+    "e8s-py",
+    "--profile",
+    "fma-check",
+    "--locked",
+    "*config",
+    "*link_args",
+]
+# The checked build has the shipped codegen (fat LTO, one codegen unit) plus symbols and the
+# line tables that record what was inlined where.
+FMA_CHECK_PROFILE = {"inherits": "dist", "strip": "none", "debug": "line-tables-only"}
+WHEELS_SESSION = "wheels"
+WHEEL_FROM_SDIST = "_build_wheel_from_sdist"
+WHEEL_TEST_PYTHONS = ("3.13", "3.14")
+PORTED_TESTS = (
+    "tests/unit/core",
+    "tests/unit/geo",
+    "tests/unit/time",
+    "tests/unit/sheet",
+    "tests/unit/cast",
+    "tests/unit/choreo",
+    "tests/golden",
+)
+DIST_BUILD = {BUILD_ARGS: "--locked --profile dist"}
+SDIST_THEN_WHEEL = [
+    ["uv", "build", "--sdist", "--out-dir", "str(dist)"],
+    ["uv", "build", "--wheel", "--out-dir", "str(dist)", "str(sdist)"],
+]
+PORTED_TEST_RUN = ["str(python)", "-P", "-m", "pytest", "*PORTED_TESTS", "*session.posargs"]
 SAVE_ON_MAIN_ONLY = re.compile(
     r"^\s+save-if: \$\{\{ github\.ref == 'refs/heads/main' \}\}$", re.MULTILINE
 )
@@ -642,14 +709,23 @@ def test_rust_caches_saved_off_main_sees_a_missing_or_wrong_condition() -> None:
     assert rust_caches_saved_off_main(workflow) == ["always", "any-branch"]
 
 
+def _is_locked_env(source: str, value: ast.expr) -> bool:
+    """Tells whether a build's env= names a module constant that passes cargo's --locked."""
+    if not isinstance(value, ast.Name):
+        return False
+    environment = module_literal(source, value.id)
+    return isinstance(environment, dict) and LOCKED_FLAG in environment[BUILD_ARGS].split()
+
+
 def unlocked_uv_builds(source: str) -> list[str]:
-    """Lists the noxfile functions that run `uv build` without passing env=LOCKED_BUILD.
+    """Lists the noxfile functions that run `uv build` without cargo's --locked in its env.
 
     Args:
         source: The text of a noxfile.
 
     Returns:
-        functions: One function name per `uv build` call that lacks the locked environment.
+        functions: One function name per `uv build` call whose env= is not a module constant
+            holding --locked in MATURIN_PEP517_ARGS.
     """
     return [
         function.name
@@ -659,7 +735,7 @@ def unlocked_uv_builds(source: str) -> list[str]:
         if isinstance(call, ast.Call)
         and [ast.unparse(arg) for arg in call.args[:2]] == ["'uv'", "'build'"]
         and not any(
-            keyword.arg == "env" and ast.unparse(keyword.value) == LOCKED_BUILD
+            keyword.arg == "env" and _is_locked_env(source, keyword.value)
             for keyword in call.keywords
         )
     ]
@@ -680,11 +756,124 @@ def test_wheel_builds_fail_on_a_stale_cargo_lock() -> None:
 
 def test_unlocked_uv_builds_sees_a_build_without_the_lock() -> None:
     source = (
+        "LOCKED_BUILD = {'MATURIN_PEP517_ARGS': '--locked'}\n"
+        "DIST_BUILD = {'MATURIN_PEP517_ARGS': '--locked --profile dist'}\n"
+        "LOOSE_BUILD = {'MATURIN_PEP517_ARGS': '--profile dist'}\n"
         "def locked(session):\n"
         "    session.run('uv', 'build', '--wheel', env=LOCKED_BUILD)\n"
+        "def dist(session):\n"
+        "    session.run('uv', 'build', '--wheel', env=DIST_BUILD)\n"
         "def bare(session):\n"
         "    session.run('uv', 'build', '--sdist')\n"
         "def other(session):\n"
         "    session.run('uv', 'build', env={})\n"
+        "def loose(session):\n"
+        "    session.run('uv', 'build', env=LOOSE_BUILD)\n"
     )
-    assert unlocked_uv_builds(source) == ["bare", "other"]
+    assert unlocked_uv_builds(source) == ["bare", "other", "loose"]
+
+
+def session_runs(source: str, function_name: str) -> list[list[str]]:
+    """Lists the arguments of every `session.run` call one noxfile function makes.
+
+    Args:
+        source: The text of a noxfile.
+        function_name: The function to inspect.
+
+    Returns:
+        runs: Per call in source order, its positional arguments with module constants
+            resolved and starred arguments kept as source text.
+    """
+    function = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    )
+    calls = sorted(
+        (
+            node
+            for node in ast.walk(function)
+            if isinstance(node, ast.Call) and ast.unparse(node.func) == SESSION_RUN
+        ),
+        key=lambda call: (call.lineno, call.col_offset),
+    )
+    return [[_argument_text(source, argument) for argument in call.args] for call in calls]
+
+
+def test_rust_session_runs_fmt_clippy_test_and_the_wasm_build() -> None:
+    source = NOXFILE.read_text()
+    assert session_runs(source, RUST_SESSION) == RUST_SESSION_RUNS
+    assert FMA_STEP in session_names(source, RUST_SESSION)
+
+
+def test_fma_check_builds_the_extension_and_runs_the_script() -> None:
+    source = NOXFILE.read_text()
+    assert session_runs(source, FMA_STEP) == [FMA_CHECK_BUILD]
+    assert FMA_CHECK_SCRIPT in session_names(source, FMA_STEP)
+    assert (ROOT / module_constant(source, FMA_CHECK_SCRIPT)).is_file()
+
+
+def test_fma_check_profile_keeps_symbols_and_line_tables() -> None:
+    profiles = tomllib.loads(CARGO_MANIFEST.read_text())["profile"]
+    assert profiles.get("fma-check") == FMA_CHECK_PROFILE
+
+
+def test_session_runs_keeps_source_order() -> None:
+    source = (
+        "TARGET = 'wasm'\n\n"
+        "def rust(session):\n"
+        "    if session:\n"
+        "        session.run('cargo', 'test')\n"
+        "    session.run('cargo', 'build', TARGET, *flags)\n"
+        "    other.run('cargo', 'skip')\n"
+    )
+    assert session_runs(source, "rust") == [["cargo", "test"], ["cargo", "build", "wasm", "*flags"]]
+
+
+def module_literal(source: str, name: str) -> object:
+    """Returns the literal value of one module-level constant of a noxfile."""
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.Assign) and ast.unparse(node.targets[0]) == name:
+            return ast.literal_eval(node.value)
+    raise AssertionError(f"noxfile defines no {name}")
+
+
+def uv_build_envs(source: str, function_name: str) -> list[str]:
+    """Lists the env= argument of each `uv build` call of one noxfile function, in source order."""
+    function = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    )
+    calls = sorted(
+        (
+            node
+            for node in ast.walk(function)
+            if isinstance(node, ast.Call)
+            and [ast.unparse(arg) for arg in node.args[:2]] == ["'uv'", "'build'"]
+        ),
+        key=lambda call: (call.lineno, call.col_offset),
+    )
+    return [
+        ast.unparse(keyword.value)
+        for call in calls
+        for keyword in call.keywords
+        if keyword.arg == "env"
+    ]
+
+
+def test_wheels_session_tests_the_wheel_on_313_and_314() -> None:
+    """Tests the wheel a user gets: built from the sdist with the dist profile, cargo locked."""
+    source = NOXFILE.read_text()
+    classifiers = tomllib.loads(PYPROJECT.read_text())["project"]["classifiers"]
+    supported = tuple(
+        match.group(1) for match in map(PYTHON_CLASSIFIER.match, classifiers) if match
+    )
+    assert module_literal(source, "WHEEL_TEST_PYTHONS") == WHEEL_TEST_PYTHONS == supported
+    assert module_literal(source, "PORTED_TESTS") == PORTED_TESTS
+    assert module_literal(source, "DIST_BUILD") == DIST_BUILD
+    assert session_runs(source, WHEEL_FROM_SDIST) == SDIST_THEN_WHEEL
+    assert uv_build_envs(source, WHEEL_FROM_SDIST) == [LOCKED_BUILD, "DIST_BUILD"]
+    assert WHEEL_FROM_SDIST in session_names(source, WHEELS_SESSION)
+    assert "WHEEL_TEST_PYTHONS" in session_names(source, WHEELS_SESSION)
+    assert PORTED_TEST_RUN in session_runs(source, WHEELS_SESSION)
