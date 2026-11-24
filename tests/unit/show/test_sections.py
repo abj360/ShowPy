@@ -29,9 +29,11 @@ from e8s.choreo.path_models import FacingMode, FacingOverride, FixedFacing, Tran
 from e8s.core.errors import SchemaError, TimelineError
 from e8s.core.ids import FormId, SetId, SpotId, make_tid
 from e8s.core.util import approx_equal
-from e8s.show.manage import add_set, index, renumber
+from e8s.show.manage import add_set
 from e8s.show.models import Pin, Show
+from e8s.show.renumber import renumber
 from e8s.show.sections import join_sections, split_section
+from e8s.show.set_queries import index
 from e8s.time.clock import count_to_seconds
 from e8s.time.models import AudioTrack, Cue, Hold, Marker, MeasureSetting, TempoSection
 from tests.fixtures.recipes import LINE_RECIPE

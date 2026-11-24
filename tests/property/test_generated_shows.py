@@ -14,9 +14,10 @@ from jsonschema import Draft202012Validator
 from e8s.core.json_types import JsonValue
 from e8s.core.resources import schema_path
 from e8s.show.changes import store_paths
+from e8s.show.collab_models import PathsOp
 from e8s.show.documents import decode_show, encode_show
 from e8s.show.migrate import CURRENT_VERSION
-from e8s.show.models import PathsOp, Show
+from e8s.show.models import Show
 from e8s.show.validate import validate_paths, validate_show
 from tests.strategies.paths import path_rows
 from tests.strategies.show import shows

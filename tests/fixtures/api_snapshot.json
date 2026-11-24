@@ -97,6 +97,9 @@
   "BuiltInMotionParams": {
     "constant": "BuiltInMotionParams"
   },
+  "CURRENT_LAYOUT": {
+    "constant": "2"
+  },
   "CURRENT_VERSION": {
     "constant": "2"
   },
@@ -115,6 +118,11 @@
       "label_scheme": "e8s.cast.models.LabelScheme",
       "selections": "collections.abc.Mapping[SelectionKey, SelectionSpots]",
       "spots": "tuple[e8s.cast.models.Spot, ...]"
+    }
+  },
+  "ChangeSet": {
+    "model": {
+      "changes": "tuple[e8s.show.change_models.ItemChange, ...]"
     }
   },
   "CircleCurve": {
@@ -162,6 +170,12 @@
     }
   },
   "ConflictError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: e8s.core.error_codes.ErrorCode | None = None) -> None",
+  "ConformanceReport": {
+    "model": {
+      "failed": "tuple[tuple[str, str], ...]",
+      "passed": "tuple[str, ...]"
+    }
+  },
   "ContinuityError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: e8s.core.error_codes.ErrorCode | None = None) -> None",
   "CoordinateTable": {
     "model": {
@@ -261,7 +275,7 @@
       "entity": "e8s.core.ids.SpotId"
     }
   },
-  "DocumentRepository": "(backend: e8s.show.repositories.RepositoryBackend)",
+  "DocumentRepository": "(backend: e8s.show.backend.RepositoryBackend)",
   "DroppedFields": {
     "model": {
       "document": "str",
@@ -550,12 +564,32 @@
   "FrozenModel": {
     "model": {}
   },
+  "FsckFinding": {
+    "model": {
+      "code": "str",
+      "message": "str",
+      "path": "str"
+    }
+  },
+  "FsckReport": {
+    "model": {
+      "findings": "tuple[e8s.show.storage_models.FsckFinding, ...]",
+      "ok": "bool"
+    }
+  },
   "GapInfo": {
     "model": {
       "a": "e8s.core.ids.SpotId",
       "b": "e8s.core.ids.SpotId",
       "gap": "Finite",
       "tau": "float"
+    }
+  },
+  "GcReport": {
+    "model": {
+      "bytes_freed": "Count",
+      "dry_run": "bool",
+      "removed": "tuple[str, ...]"
     }
   },
   "GeneratedRecipe": {
@@ -620,6 +654,12 @@
   "ID_PATTERN": {
     "constant": "re.compile('^[A-Za-z0-9_](?:[A-Za-z0-9_.]{0,62}[A-Za-z0-9_])?$')"
   },
+  "IdChanges": {
+    "model": {
+      "sets": "tuple[tuple[e8s.core.ids.SetId, e8s.core.ids.SetId], ...]",
+      "spots": "tuple[tuple[e8s.core.ids.SpotId, e8s.core.ids.SpotId], ...]"
+    }
+  },
   "InMemoryAssetStore": "() -> None",
   "InMemoryRepository": "() -> None",
   "InMemorySheetStore": "() -> None",
@@ -631,6 +671,29 @@
       "min": "Finite",
       "std": "Finite"
     }
+  },
+  "ItemChange": {
+    "model": {
+      "after": "JsonAny",
+      "before": "JsonAny",
+      "key": "e8s.show.change_models.ItemKey"
+    }
+  },
+  "ItemKey": {
+    "model": {
+      "kind": "ItemKind",
+      "path": "tuple[str, ...]",
+      "role": "str | None"
+    }
+  },
+  "ItemKind": {
+    "constant": "ItemKind"
+  },
+  "LAYOUT_FILE": {
+    "constant": "'layout.json'"
+  },
+  "LAYOUT_FORMAT": {
+    "constant": "'e8.repository'"
   },
   "LabelScheme": {
     "model": {
@@ -777,6 +840,21 @@
       "changes": "tuple[tuple[NonNegCount, PositiveFinite], ...]",
       "counts_per_measure": "PositiveFinite",
       "start_measure": "int"
+    }
+  },
+  "MergeConflict": {
+    "model": {
+      "base": "JsonAny",
+      "key": "e8s.show.change_models.ItemKey",
+      "ours": "JsonAny",
+      "reason": "str",
+      "theirs": "JsonAny"
+    }
+  },
+  "MergeResult": {
+    "model": {
+      "conflicts": "tuple[e8s.show.change_models.MergeConflict, ...]",
+      "show": "e8s.show.models.Show | None"
     }
   },
   "MigrationReport": {
@@ -954,6 +1032,7 @@
   },
   "Proposal": {
     "model": {
+      "accepted_revision": "str",
       "base_revision": "str",
       "change": "tuple[ChangeOp, ...]",
       "id": "str",
@@ -995,36 +1074,25 @@
   "Repository": {
     "protocol": {
       "documents": "(self, show_id: str, revision: str | None = None) -> collections.abc.Mapping[str, bytes]",
-      "get_forms": "(self, show_id: str, set_id: str) -> tuple[e8s.choreo.form_models.Form, ...]",
-      "get_limits": "(self, show_id: str) -> str",
-      "get_paths": "(self, show_id: str, tid: tuple[str, str]) -> e8s.choreo.path_models.TransitionSpec",
-      "get_revision": "(self, show_id: str, revision_id: str) -> e8s.show.models.Revision",
-      "get_script": "(self, show_id: str, set_id: str) -> str",
-      "get_set": "(self, show_id: str, set_id: str) -> e8s.choreo.models.Set",
+      "get_revision": "(self, show_id: str, revision_id: str) -> e8s.show.history_models.Revision",
       "get_show": "(self, show_id: str, revision: str | None = None) -> e8s.show.models.Show",
-      "get_timeline": "(self, show_id: str) -> e8s.time.models.Timeline",
-      "get_waivers": "(self, show_id: str) -> str",
       "head": "(self, show_id: str) -> str",
-      "list_sets": "(self, show_id: str) -> list[e8s.core.ids.SetId]",
       "paths": "(self, show_id: str, revision: str | None = None) -> list[str]",
-      "put_forms": "(self, show_id: str, set_id: str, forms: tuple[e8s.choreo.form_models.Form, ...], *, expected_revision: str, at: datetime.datetime) -> e8s.show.models.Revision",
-      "put_paths": "(self, show_id: str, spec: e8s.choreo.path_models.TransitionSpec, *, expected_revision: str, at: datetime.datetime) -> e8s.show.models.Revision",
-      "put_script": "(self, show_id: str, set_id: str, source: str, *, expected_revision: str, at: datetime.datetime) -> e8s.show.models.Revision",
-      "put_set": "(self, show_id: str, new_set: e8s.choreo.models.Set, *, expected_revision: str, at: datetime.datetime) -> e8s.show.models.Revision",
-      "put_show": "(self, show_id: str, show: e8s.show.models.Show, *, expected_revision: str, at: datetime.datetime) -> e8s.show.models.Revision",
+      "put_show": "(self, show_id: str, show: e8s.show.models.Show, *, expected_revision: str, at: datetime.datetime) -> e8s.show.history_models.Revision",
       "read": "(self, show_id: str, path: str, revision: str | None = None) -> bytes | None",
-      "revisions": "(self, show_id: str) -> list[e8s.show.models.Revision]",
+      "revisions": "(self, show_id: str) -> list[e8s.show.history_models.Revision]",
       "shows": "(self) -> list[str]",
-      "transaction": "(self, show_id: str, changes: collections.abc.Mapping[str, bytes | None], *, expected_revision: str, at: datetime.datetime) -> e8s.show.models.Revision"
+      "transaction": "(self, show_id: str, changes: collections.abc.Mapping[str, bytes | None], *, expected_revision: str, at: datetime.datetime) -> e8s.show.history_models.Revision"
     }
   },
   "RepositoryBackend": {
     "protocol": {
       "blob": "(self, show_id: str, digest: str) -> bytes",
-      "commit": "(self, show_id: str, revision: e8s.show.models.Revision, tree: dict[str, str], blobs: dict[str, bytes]) -> None",
-      "log": "(self, show_id: str) -> list[e8s.show.models.Revision]",
-      "show_ids": "(self) -> list[str]",
-      "tree": "(self, show_id: str, revision_id: str) -> dict[str, str]"
+      "commit": "(self, show_id: str, revision: e8s.show.history_models.Revision, tree: collections.abc.Mapping[str, str], blobs: collections.abc.Mapping[str, bytes]) -> None",
+      "head": "(self, show_id: str) -> str",
+      "log": "(self, show_id: str, *, since: str = '') -> list[e8s.show.history_models.Revision]",
+      "shows": "(self) -> list[str]",
+      "tree": "(self, show_id: str, revision_id: str) -> collections.abc.Mapping[str, str]"
     }
   },
   "Revision": {
@@ -1426,6 +1494,14 @@
     }
   },
   "UnknownRefError": "(message: str, *, hint: str, context: collections.abc.Mapping[str, object] | None = None, code: e8s.core.error_codes.ErrorCode | None = None) -> None",
+  "UpgradeReport": {
+    "model": {
+      "blobs_copied": "Count",
+      "blobs_linked": "Count",
+      "revisions": "Count",
+      "shows": "tuple[str, ...]"
+    }
+  },
   "ValidationIssue": {
     "model": {
       "code": "e8s.core.error_codes.ErrorCode",
@@ -1472,7 +1548,7 @@
       "cycles": "WaveCycles"
     }
   },
-  "accept": "(ws: e8s.show.storage.Workspace, proposal: e8s.show.models.Proposal, at: datetime.datetime) -> e8s.show.models.Revision",
+  "accept": "(ws: e8s.show.workspace.Workspace, proposal: e8s.show.collab_models.Proposal, at: datetime.datetime) -> e8s.show.history_models.Revision",
   "add_cue": "(tl: e8s.time.models.Timeline, cue: e8s.time.models.Cue) -> e8s.time.models.Timeline",
   "add_facing_override": "(show: e8s.show.models.Show, override: e8s.choreo.path_models.FacingOverride) -> e8s.show.models.Show",
   "add_group": "(show: 'Show', group: e8s.cast.models.Group) -> 'Show'",
@@ -1489,7 +1565,7 @@
   "alternate": "(sel: e8s.core.selection.Selection | collections.abc.Sequence[str], k: int = 2) -> list[e8s.core.selection.Selection]",
   "angle_diff": "(a: Degrees, b: Degrees) -> Degrees",
   "apply_change": "(show: e8s.show.models.Show, change: collections.abc.Sequence[ChangeOp], *, force: bool = False) -> e8s.show.models.Show",
-  "apply_event": "(show: e8s.show.models.Show, event: e8s.show.models.CanvasEvent, *, force: bool = False) -> e8s.show.models.Show",
+  "apply_event": "(show: e8s.show.models.Show, event: e8s.show.collab_models.CanvasEvent, *, force: bool = False) -> e8s.show.models.Show",
   "apply_fix": "(spec: e8s.choreo.path_models.TransitionSpec, fix: e8s.choreo.engine_models.Fix) -> e8s.choreo.path_models.TransitionSpec",
   "apply_match": "(show: e8s.show.models.Show, tid: tuple[str, str], result: e8s.choreo.match_models.MatchResult, *, force: bool = False, font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.show.models.Show",
   "apportion": "(lengths: collections.abc.Sequence[float], n: int, minimums: collections.abc.Sequence[int] | None = None) -> list[int]",
@@ -1515,7 +1591,7 @@
   "center": "(obj: Points | e8s.geo.curve_base.Curve) -> Point",
   "centroid": "(obj: Points | e8s.geo.curve_base.Curve) -> Point",
   "change_amount": "(a: e8s.choreo.models.Set, b: e8s.choreo.models.Set) -> Meters",
-  "changelog": "(ws: e8s.show.storage.Workspace, since: str = '') -> str",
+  "changelog": "(ws: e8s.show.workspace.Workspace, since: str = '') -> str",
   "check_id": "(text: str, *, kind: str) -> str",
   "check_sheet_id": "(text: str, *, kind: str) -> str",
   "check_unlocked": "(form: e8s.choreo.form_models.Form, *, force: bool) -> None",
@@ -1528,7 +1604,7 @@
   "close_matches": "(name: str, candidates: collections.abc.Iterable[str]) -> list[str]",
   "closest_approach": "(times_a: collections.abc.Sequence[float], points_a: collections.abc.Sequence[Point] | Points, times_b: collections.abc.Sequence[float], points_b: collections.abc.Sequence[Point] | Points) -> tuple[float, float]",
   "concentric": "(center: Point, radii: collections.abc.Sequence[Meters], counts: collections.abc.Sequence[int], start_deg: Degrees = 0.0) -> list[Points]",
-  "conflict_error": "(show_id: str, expected: str, landed: list[e8s.show.models.Revision]) -> e8s.core.errors.ConflictError",
+  "conflict_error": "(show_id: str, expected: str, landed: list[e8s.show.history_models.Revision]) -> e8s.core.errors.ConflictError",
   "content_hash": "(obj: object, *, domain: str = 'showpy.content') -> str",
   "contract": "(obj: T, d: Meters, about: About = 'center', sel: SetSelector = 'all', *, force: bool = False) -> T",
   "convert": "(value: float, from_unit: str, to_unit: str, registry: e8s.core.units.UnitRegistry = ...) -> float",
@@ -1547,7 +1623,7 @@
   "custom_form": "(form_id: str, members: collections.abc.Sequence[str | None], points: object, facings: collections.abc.Sequence[Degrees] | None = None, *, set_id: str = '') -> e8s.choreo.form_models.Form",
   "custom_path": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel, motion: str, registry: e8s.choreo.motion.MotionRegistry = ..., *, force: bool = False, **params: Any) -> e8s.choreo.path_models.TransitionSpec",
   "customize": "(sheet: e8s.sheet.models.Sheet, **changes: object) -> e8s.sheet.models.Sheet",
-  "decode_event": "(data: collections.abc.Mapping[str, JsonValue], *, report: e8s.show.migrate.ReportBuilder | None = None) -> e8s.show.models.CanvasEvent",
+  "decode_event": "(data: collections.abc.Mapping[str, JsonValue], *, report: e8s.show.migrate.ReportBuilder | None = None) -> e8s.show.collab_models.CanvasEvent",
   "default_paths": "(show: 'Show', tid: tuple[str, str]) -> e8s.choreo.path_models.TransitionSpec",
   "define_selection": "(show: 'Show', name: str, sel: Selector, *, replace: bool = False) -> 'Show'",
   "delay": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel, counts: float, *, keep_end: bool = True, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
@@ -1556,8 +1632,8 @@
   "describe_count": "(tl: e8s.time.models.Timeline, c: Count) -> str",
   "describe_transition": "(show: e8s.show.models.Show, transition: tuple[str, str], who: Selector = 'all', *, engine: e8s.choreo.engine.PathEngine | None = None) -> e8s.choreo.read_models.TransitionDescription",
   "detect_form": "(points: object, tol: Meters = 0.1, form_id: str = 'detected', members: collections.abc.Sequence[str] = ()) -> e8s.choreo.form_models.Form",
-  "diff_paths": "(a: e8s.choreo.path_models.TransitionSpec, b: e8s.choreo.path_models.TransitionSpec) -> e8s.show.models.PathDiff",
-  "diff_sets": "(a: e8s.choreo.models.Set, b: e8s.choreo.models.Set, tol: float = 1e-06) -> e8s.show.models.SetDiff",
+  "diff_paths": "(a: e8s.choreo.path_models.TransitionSpec, b: e8s.choreo.path_models.TransitionSpec) -> e8s.show.history_models.PathDiff",
+  "diff_sets": "(a: e8s.choreo.models.Set, b: e8s.choreo.models.Set, tol: float = 1e-06) -> e8s.show.history_models.SetDiff",
   "diff_show": "(a: e8s.show.models.Show, b: e8s.show.models.Show) -> dict[str, Any]",
   "difference": "(a: Area, b: Area) -> Area",
   "digest": "(data: bytes) -> str",
@@ -1575,7 +1651,7 @@
   "edit_text_count": "(form: e8s.choreo.form_models.Form, *, add: collections.abc.Sequence[str] = (), remove: collections.abc.Sequence[str] = (), n: int | None = None, spacing: Meters | None = None, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.form_models.Form",
   "ellipse": "(center: Point, rx: Meters, ry: Meters, rotation_deg: Degrees = 0.0) -> e8s.geo.curves.EllipseCurve",
   "energy_curve": "(show: e8s.show.models.Show, per_count: int = 1) -> 'pd.Series'",
-  "events_since": "(ws: e8s.show.storage.Workspace, revision: str) -> list[e8s.show.models.CanvasEvent]",
+  "events_since": "(ws: e8s.show.workspace.Workspace, revision: str) -> list[e8s.show.collab_models.CanvasEvent]",
   "expand": "(obj: T, d: Meters, about: About = 'center', sel: SetSelector = 'all', *, force: bool = False) -> T",
   "export_json": "(show: e8s.show.models.Show, include: str | collections.abc.Iterable[str] | None = None, *, font_registry: e8s.geo.fonts.FontRegistry | None = None) -> dict[str, Any]",
   "face_along": "(show: e8s.show.models.Show, set_id: str, form_id: str, *, reverse: bool = False, force: bool = False) -> e8s.choreo.models.Set",
@@ -1611,7 +1687,7 @@
   "get_sheet": "(ref: SheetRef, store: e8s.sheet.templates.SheetStore | None = None) -> e8s.sheet.models.Sheet",
   "glyph_strokes": "(char: str, font: str) -> Glyph",
   "gym_floor": "() -> e8s.sheet.models.Sheet",
-  "highlight": "(target: e8s.show.anchors.Anchor | str, ttl_s: float = 30.0, *, at: datetime.datetime, event_id: str) -> e8s.show.models.CanvasEvent",
+  "highlight": "(target: e8s.show.anchors.Anchor | str, ttl_s: float = 30.0, *, at: datetime.datetime, event_id: str) -> e8s.show.collab_models.CanvasEvent",
   "hold": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel, until: float | None = None, from_: float | None = None, *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "import_fonts": "(d: collections.abc.Mapping[str, Any], font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.geo.fonts.FontRegistry",
   "import_json": "(d: collections.abc.Mapping[str, Any]) -> e8s.show.models.Show",
@@ -1634,8 +1710,8 @@
   "line": "(a: Point, b: Point) -> e8s.geo.curves.Segment",
   "line_form": "(form_id: str, members: collections.abc.Sequence[str], a: Point, b: Point, spacing: e8s.choreo.form_models.SpacingSpec | None = None, facing: e8s.choreo.form_models.FacingSpec | None = None, *, set_id: str = '', n: int | None = None) -> e8s.choreo.form_models.Form",
   "load_font": "(data: bytes) -> e8s.geo.models.Font",
-  "load_paths": "(ws: e8s.show.storage.Workspace, tid: tuple[str, str]) -> e8s.choreo.path_models.TransitionSpec",
-  "load_show": "(ws: e8s.show.storage.Workspace) -> e8s.show.models.Show",
+  "load_paths": "(ws: e8s.show.workspace.Workspace, tid: tuple[str, str]) -> e8s.choreo.path_models.TransitionSpec",
+  "load_show": "(ws: e8s.show.workspace.Workspace) -> e8s.show.models.Show",
   "lock": "(spec: e8s.choreo.path_models.TransitionSpec, sel: Sel) -> e8s.choreo.path_models.TransitionSpec",
   "log": "(msg: str, **fields: object) -> None",
   "make_route": "(show: e8s.show.models.Show, tid: tuple[str, str], leader: str, waypoints: collections.abc.Sequence[Point], members: collections.abc.Sequence[str] | None = None, spacing: Literal['keep'] = 'keep', route_id: str = 'route') -> e8s.choreo.path_models.Route",
@@ -1667,7 +1743,7 @@
   "offset": "(curve: e8s.geo.curve_base.Curve, distance: Meters, side: str = 'left') -> e8s.geo.curve_base.Curve",
   "on_field_ids": "(s: e8s.choreo.models.Set, sel: SetSelector = 'all') -> tuple[e8s.core.ids.SpotId, ...]",
   "on_surface": "(sheet: e8s.sheet.models.Sheet, p: Point) -> bool",
-  "open_workspace": "(repo: e8s.show.storage.Repository, show_id: str) -> e8s.show.storage.Workspace",
+  "open_workspace": "(repo: e8s.show.storage.Repository, show_id: str) -> e8s.show.workspace.Workspace",
   "ordered_along": "(set_: e8s.choreo.models.Set, sel: Selector, by: OrderBy = 'form') -> e8s.core.selection.Selection",
   "parse_path": "(d: str) -> list[e8s.geo.svg.Subpath]",
   "parse_range": "(text: str) -> list[str]",
@@ -1684,10 +1760,11 @@
   "polyline": "(*pts: Point, closed: bool = False) -> e8s.geo.curves.Polyline",
   "polyline_form": "(form_id: str, members: collections.abc.Sequence[str], *pts: Point, closed: bool = False, spacing: e8s.choreo.form_models.SpacingSpec | None = None, facing: e8s.choreo.form_models.FacingSpec | None = None, set_id: str = '', n: int | None = None) -> e8s.choreo.form_models.Form",
   "position_at": "(show: e8s.show.models.Show, entity: str, t: Count) -> Points",
-  "preview_proposal": "(show: e8s.show.models.Show, proposal: e8s.show.models.Proposal) -> e8s.show.models.ProposalPreview",
-  "propose": "(show: e8s.show.models.Show, change: collections.abc.Sequence[ChangeOp], note: str, proposal_id: str) -> e8s.show.models.Proposal",
+  "preview_proposal": "(show: e8s.show.models.Show, proposal: e8s.show.collab_models.Proposal) -> e8s.show.collab_models.ProposalPreview",
+  "propose": "(show: e8s.show.models.Show, change: collections.abc.Sequence[ChangeOp], note: str, proposal_id: str) -> e8s.show.collab_models.Proposal",
   "ranks_and_files": "(points: Points, rows: int, cols: int) -> list[list[int]]",
   "reachable_region": "(start: Point, counts: Count, max_speed: float) -> Polygon",
+  "read_layout": "(root: pathlib.Path) -> int",
   "read_version": "(docs: collections.abc.Mapping[str, bytes]) -> int",
   "rebuild": "(show: e8s.show.models.Show, form_id: str, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.show.models.Show",
   "rect": "(center: Point, w: Meters, d: Meters, rotation_deg: Degrees = 0.0) -> e8s.geo.curves.Polyline",
@@ -1699,7 +1776,7 @@
   "register_unit": "(registry: e8s.core.units.UnitRegistry, name: str, meters_per_unit: float) -> e8s.core.units.UnitRegistry",
   "regroup": "(show: 'Show', sel: Selector, group: str) -> tuple['Show', dict[e8s.core.ids.SpotId, str]]",
   "regular_polygon": "(center: Point, radius: Meters, n: int, rotation_deg: Degrees = 0.0) -> e8s.geo.curves.Polyline",
-  "reject": "(proposal: e8s.show.models.Proposal, reason: str) -> e8s.show.models.Proposal",
+  "reject": "(proposal: e8s.show.collab_models.Proposal, reason: str) -> e8s.show.collab_models.Proposal",
   "relabel": "(show: 'Show', scheme: e8s.cast.models.LabelScheme) -> tuple['Show', dict[e8s.core.ids.SpotId, str]]",
   "remove_audio": "(tl: e8s.time.models.Timeline, label: str) -> e8s.time.models.Timeline",
   "remove_cue": "(tl: e8s.time.models.Timeline, label: str) -> e8s.time.models.Timeline",
@@ -1715,16 +1792,16 @@
   "reorder": "(form: e8s.choreo.form_models.Form, order: Order, prev_set: e8s.choreo.models.Set | None = None, *, force: bool = False, registry: e8s.choreo.form_fns.FormFnRegistry = ..., font_registry: e8s.geo.fonts.FontRegistry | None = None) -> e8s.choreo.form_models.Form",
   "require_finite": "(value: SupportsFloat, *, name: str, low: float | None = None, low_open: bool = False, high: float | None = None) -> float",
   "require_size": "(requested: int, cap: int, *, what: str, error: type[e8s.core.errors.E8sError] = ...) -> None",
-  "revert": "(ws: e8s.show.storage.Workspace, revision_id: str, at: datetime.datetime) -> e8s.show.models.Revision",
+  "revert": "(ws: e8s.show.workspace.Workspace, revision_id: str, at: datetime.datetime) -> e8s.show.history_models.Revision",
   "ripple": "(spec: e8s.choreo.path_models.TransitionSpec, ordered_sel: Sel, total: float, curve: Literal['linear', 'ease_in', 'ease_out', 'ease_in_out'] = 'linear', *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "rose_points": "(params: collections.abc.Mapping[str, Any], n: int) -> Points",
   "rotate": "(obj: T, deg: Degrees, about: About = 'center', sel: SetSelector = 'all', *, force: bool = False) -> T",
   "rotate_path": "(show: e8s.show.models.Show, spec: e8s.choreo.path_models.TransitionSpec, sel: collections.abc.Sequence[str], pivot: Point | Literal['center'], deg: float, *, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "rotation_matrix": "(deg: Degrees, about: Point) -> Matrix",
   "round_to": "(value: float, step: float = 0.01) -> float",
-  "save_paths": "(ws: e8s.show.storage.Workspace, spec: e8s.choreo.path_models.TransitionSpec, at: datetime.datetime) -> str",
+  "save_paths": "(ws: e8s.show.workspace.Workspace, spec: e8s.choreo.path_models.TransitionSpec, at: datetime.datetime) -> str",
   "save_sheet": "(store: e8s.sheet.templates.SheetStore, sheet: e8s.sheet.models.Sheet, scope: SheetScope = 'mine') -> SheetRef",
-  "save_show": "(ws: e8s.show.storage.Workspace, show: e8s.show.models.Show, at: datetime.datetime) -> e8s.show.models.Revision",
+  "save_show": "(ws: e8s.show.workspace.Workspace, show: e8s.show.models.Show, at: datetime.datetime) -> e8s.show.history_models.Revision",
   "scale": "(obj: T, sx: float, sy: float | None = None, about: About = 'center', sel: SetSelector = 'all', *, force: bool = False) -> T",
   "scale_matrix": "(sx: float, sy: float, about: Point) -> Matrix",
   "scatter": "(area: Area, n: int, min_gap: Meters, seed: int = 0) -> Points",
@@ -1734,7 +1811,7 @@
   "seconds_to_count": "(tl: e8s.time.models.Timeline, s: Seconds) -> Count",
   "seeded_rng": "(seed: int) -> numpy.random.Generator",
   "select": "(source: 'Show | Set | Cast', expr: Selector) -> e8s.core.selection.Selection",
-  "selection": "(ws: e8s.show.storage.Workspace) -> e8s.core.selection.Selection",
+  "selection": "(ws: e8s.show.workspace.Workspace) -> e8s.core.selection.Selection",
   "separate_in_time": "(spec: e8s.choreo.path_models.TransitionSpec, ordered_sel: collections.abc.Sequence[str], gap_counts: float = 1.0) -> e8s.choreo.path_models.TransitionSpec",
   "set_at_count": "(show: e8s.show.models.Show, c: Count) -> e8s.core.ids.SetId | None",
   "set_counts": "(show: e8s.show.models.Show, set_id: str, counts: float, *, rescale: bool = False, force: bool = False) -> e8s.show.models.Show",
@@ -1772,7 +1849,7 @@
   "spot_counts": "(show: e8s.show.models.Show) -> list[e8s.choreo.models.SpotCount]",
   "stagger": "(spec: e8s.choreo.path_models.TransitionSpec, ordered_sel: Sel, step: float = 1.0, direction: Literal['start', 'end'] = 'start', *, keep_end: bool = True, force: bool = False) -> e8s.choreo.path_models.TransitionSpec",
   "star": "(center: Point, r_outer: Meters, r_inner: Meters, n: int, rotation_deg: Degrees = 0.0) -> e8s.geo.curves.Polyline",
-  "store_paths": "(show: e8s.show.models.Show, op: e8s.show.models.PathsOp) -> e8s.show.models.Show",
+  "store_paths": "(show: e8s.show.models.Show, op: e8s.show.collab_models.PathsOp) -> e8s.show.models.Show",
   "suggest_delays": "(show: e8s.show.models.Show, tid: tuple[str, str], pair: tuple[str, str], max_delay: float = 4.0) -> list[e8s.choreo.engine_models.Fix]",
   "suggest_reassignment": "(show: e8s.show.models.Show, tid: tuple[str, str], sel: collections.abc.Sequence[str], crossing_weight: float = 10.0) -> e8s.choreo.match_models.MatchResult",
   "suggest_swaps": "(show: e8s.show.models.Show, tid: tuple[str, str], k: int = 5, *, same_group: bool = True) -> list[tuple[e8s.core.ids.SpotId, e8s.core.ids.SpotId, float]]",

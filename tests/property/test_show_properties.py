@@ -11,8 +11,10 @@ from e8s.cast.spots import rename_spots
 from e8s.choreo.models import PlacementPatch
 from e8s.core.util import approx_equal
 from e8s.show.documents import decode_show, encode_show
-from e8s.show.manage import add_set, index, insert_subset, renumber
+from e8s.show.manage import add_set, insert_subset
 from e8s.show.models import Show
+from e8s.show.renumber import renumber
+from e8s.show.set_queries import index
 from tests.fixtures.shows import two_set_show
 
 TOL = 1e-9

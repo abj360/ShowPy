@@ -42,11 +42,12 @@ from e8s.show.history import (
     revert,
 )
 from e8s.show.manage import add_set
+from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.models import Pin, Show
 from e8s.show.pinning import pin, unpin
-from e8s.show.repositories import InMemoryRepository
-from e8s.show.storage import load_show, open_workspace, save_show
+from e8s.show.show_io import load_show, save_show
 from e8s.show.validate import validate_show
+from e8s.show.workspace import open_workspace
 from tests.fixtures.recipes import LINE_RECIPE
 from tests.fixtures.shows import two_set_show
 from tests.helpers import open_session
