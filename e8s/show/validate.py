@@ -174,7 +174,7 @@ def _path_rows(show: Show, spec: TransitionSpec, where: str) -> list[ValidationI
     return issues
 
 
-def _compilemake_issue(error: E8sError, where: str) -> ValidationIssue:
+def _compile_issue(error: E8sError, where: str) -> ValidationIssue:
     code = ErrorCode.CONTINUITY if isinstance(error, ContinuityError) else error.code
     return make_issue(ERROR, code, where, error.message, error.hint)
 
@@ -190,7 +190,7 @@ def _compile_rows(show: Show, spec: TransitionSpec, where: str) -> list[Validati
         try:
             engine.compile_entity(entity, spec.id)
         except E8sError as error:
-            issues.append(_compilemake_issue(error, f"{where} {entity}"))
+            issues.append(_compile_issue(error, f"{where} {entity}"))
     return issues
 
 
@@ -327,7 +327,7 @@ def _checked(
     return []
 
 
-def _set_idmake_issue(index: int, set_id: str) -> list[ValidationIssue]:
+def _set_id_issue(index: int, set_id: str) -> list[ValidationIssue]:
     if is_storable_folder(set_id):
         return []
     return _checked("set", f"sets[{index}].id", set_id, lambda text: check_id(text, kind="set"))
@@ -336,7 +336,7 @@ def _set_idmake_issue(index: int, set_id: str) -> list[ValidationIssue]:
 def _ids(show: Show) -> list[ValidationIssue]:
     issues = _checked("show", "id", show.id, lambda text: check_sheet_id(text, kind="show"))
     for index, candidate in enumerate(show.sets):
-        issues += _set_idmake_issue(index, candidate.id)
+        issues += _set_id_issue(index, candidate.id)
     for key, form in show.forms.items():
         issues += _checked("form", f"forms.{key}.id", form.id, lambda t: check_id(t, kind="form"))
         if key != form.id:

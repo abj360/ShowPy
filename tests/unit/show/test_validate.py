@@ -556,3 +556,32 @@ def test_regression_reference_issues_carry_the_item_key_of_the_item_they_concern
     assert _item_of(declared, "UNKNOWN_FORM") == ItemKey(kind="set", path=("2",), role="forms")
     placed = _item_of(_formed(points_back=False), "MEMBER_MISMATCH")
     assert (placed.kind, placed.path[0], placed.role) == ("placement", "2", "drill")
+
+
+def _renumbered(show: Show) -> Show:
+    second = show.sets[1].replace(key="9")
+    return show._copied(update={"sets": (show.sets[0], second)})
+
+
+def test_regression_reference_item_paths_use_set_keys_not_display_ids() -> None:
+    """Names the set key, not the display ID, in set and placement item paths."""
+    declared = _renumbered(_edited(sets=_set_two_with(forms=("ghost-form",))))
+    assert _item_of(declared, "UNKNOWN_FORM") == ItemKey(kind="set", path=("9",), role="forms")
+    placed = _item_of(_renumbered(_formed(points_back=False)), "MEMBER_MISMATCH")
+    assert placed.path[0] == "9"
+
+
+def test_regression_reference_issue_names_the_unknown_member() -> None:
+    """Puts the unknown spot ID in the issue context."""
+    issue = next(
+        i
+        for i in validate_show(_formed(members=("T1", "T2", "ZZ"))).issues
+        if i.code == "UNKNOWN_SPOT"
+    )
+    assert issue.context["spot"] == "ZZ"
+
+
+def test_regression_member_check_runs_for_forms_keyed_apart_from_their_id() -> None:
+    """Reports a mismatched member of a form stored under a key other than its ID."""
+    codes = [i.code for i in validate_show(_formed(key="zz")).issues]
+    assert "MEMBER_MISMATCH" in codes

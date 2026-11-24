@@ -41,7 +41,19 @@ def make_issue(
     hint: str,
     context: dict[str, JsonValue] | None = None,
 ) -> ValidationIssue:
-    """Builds a validation issue from its parts; context defaults to empty."""
+    """Builds a validation issue from its parts.
+
+    Args:
+        level: Whether the issue blocks or only informs.
+        code: Stable issue code.
+        where: Location of the problem.
+        message: What is wrong.
+        hint: What would make it valid.
+        context: JSON values that help debug the issue; empty when None.
+
+    Returns:
+        issue: The validation issue.
+    """
     return ValidationIssue(
         level=level,
         code=code,
@@ -105,7 +117,7 @@ def _form_issues(show: Show, key: str, form: Form) -> Iterator[ValidationIssue]:
         yield _unknown_set(key, form)
         return
     owner = show.set(form.set)
-    if form.id not in forms_of_set(show, owner.id):
+    if key not in forms_of_set(show, owner.id):
         return
     placed = set(owner.entity_ids())
     for spot in members:
