@@ -161,11 +161,20 @@ def _roles(model: str, kind: ItemKind) -> tuple[tuple[str, tuple[str, ...]], ...
 
 PLACEMENT_ROLES = _roles("Placement", "placement")
 SET_ROLES = tuple(role for role in _roles("Set", "set") if role[0] != PLACEMENTS)
-TRANSITION_FIELDS = tuple(
-    field
-    for (owner, field), (kind, _) in ITEM_TABLE.items()
-    if owner == "TransitionSpec" and kind == "transition" and field != ID_FIELD
-)
+
+
+def _role_less(owners: tuple[str, ...], kind: ItemKind, path: str | None) -> tuple[str, ...]:
+    """Lists the fields that land in an item with no role, leaving out the one its path holds."""
+    return tuple(
+        field
+        for (owner, field), (item_kind, role) in ITEM_TABLE.items()
+        if owner in owners and item_kind == kind and role is None and field != path
+    )
+
+
+SHOW_FIELDS = _role_less(("Show", "Cast"), "show", None)
+SET_IDENTITY_FIELDS = _role_less(("Set",), "set", KEY_FIELD)
+TRANSITION_FIELDS = _role_less(("TransitionSpec",), "transition", ID_FIELD)
 
 
 def _without(dumped: dict[str, JsonValue], *names: str) -> dict[str, JsonValue]:
@@ -225,7 +234,7 @@ def _set_entries(path: _Path, current: Set) -> Iterator[_Entry]:
         for role, fields in PLACEMENT_ROLES:
             yield ("placement", (key, placement.entity), role), _picked(dumped, fields)
     values = _set_values(current)
-    yield ("set", path, None), {ID_FIELD: values[ID_FIELD]}
+    yield ("set", path, None), _picked(values, SET_IDENTITY_FIELDS)
     yield ("set", path, PLACEMENTS), [placement.entity for placement in current.placements]
     for role, fields in SET_ROLES:
         yield ("set", path, role), _picked(values, fields)
@@ -294,8 +303,9 @@ def _order_entries(path: _Path, sets: tuple[Set, ...]) -> Iterator[_Entry]:
     yield ("set_order", path, None), [set_key(current) for current in sets]
 
 
-def _show_entries(path: _Path, show: Show) -> Iterator[_Entry]:
-    meta: dict[str, JsonValue] = {
+def _show_values(show: Show) -> dict[str, JsonValue]:
+    """Reads the show's metadata fields and the cast's label scheme as their JSON values."""
+    return {
         ID_FIELD: show.id,
         "title": show.title,
         "pack": show.pack,
@@ -304,7 +314,10 @@ def _show_entries(path: _Path, show: Show) -> Iterator[_Entry]:
         "extensions": thaw_json(cast("FrozenJsonValue", show.extensions)),
         LABEL_SCHEME_FIELD: show.cast.label_scheme.to_json(),
     }
-    yield ("show", path, None), meta
+
+
+def _show_entries(path: _Path, show: Show) -> Iterator[_Entry]:
+    yield ("show", path, None), _picked(_show_values(show), SHOW_FIELDS)
 
 
 def _keys(show: Show) -> dict[str, str]:

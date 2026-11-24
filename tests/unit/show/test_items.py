@@ -6,8 +6,9 @@ test_items.py --- tests the item table, the items of a show and the changes betw
 Contains:
     test_every_stored_field_has_an_item_row: walks the v2 schema against ITEM_TABLE; the envelope
         and Show.cast, which holds only the Cast and its own rows, have no row
+    test_every_value_row_lands_in_its_item: finds each container row's field in its item's value
     test_whole_item_models_map_every_field_to_their_kind: keeps whole items undivided
-    test_roles_are_the_design_roles: pins the placement and set roles and their fields
+    test_roles_are_the_design_roles: pins the roles and the role-less fields the table derives
     test_changes_of_a_show_with_itself_is_empty: finds nothing between a show and itself
     test_one_spot_move_is_one_drill_change: reports a move as one placement drill item
     test_turn_and_note_on_one_spot_are_two_roles: reports a turn and a note as two items
@@ -40,7 +41,16 @@ from e8s.examples import two_set_show
 from e8s.show import items as items_module
 from e8s.show.change_models import ItemKey, ItemKind
 from e8s.show.documents import decode_show, encode_show
-from e8s.show.items import ITEM_TABLE, PLACEMENT_ROLES, SET_ROLES, changes, items
+from e8s.show.items import (
+    ITEM_TABLE,
+    PLACEMENT_ROLES,
+    SET_IDENTITY_FIELDS,
+    SET_ROLES,
+    SHOW_FIELDS,
+    TRANSITION_FIELDS,
+    changes,
+    items,
+)
 from e8s.show.manage import add_set
 from e8s.show.models import Pin, Show
 from e8s.show.pinning import pin
@@ -81,6 +91,14 @@ VALUE_MODELS = frozenset(
     }
 )
 SECOND_SET = 1
+VALUE_ITEMS = {
+    "Show": ItemKey(kind="show", path=()),
+    "Cast": ItemKey(kind="show", path=()),
+    "Set": ItemKey(kind="set", path=("1",)),
+    "Placement": ItemKey(kind="placement", path=("1", "T1")),
+    "TransitionSpec": ItemKey(kind="transition", path=("1-2",)),
+}
+PATH_FIELDS = frozenset({("Set", "key"), ("Placement", "entity"), ("TransitionSpec", "id")})
 
 
 def _schema() -> dict[str, object]:
@@ -134,6 +152,23 @@ def test_every_stored_field_has_an_item_row() -> None:
     assert not stale, f"ITEM_TABLE rows that name no stored field: {stale}"
 
 
+def test_every_value_row_lands_in_its_item() -> None:
+    found = items(_pinned_rich_show())
+    checked = []
+    for (model, field), (kind, role) in ITEM_TABLE.items():
+        target = VALUE_ITEMS.get(model)
+        if target is None or target.kind != kind or (model, field) in PATH_FIELDS:
+            continue
+        value = found[ItemKey(kind=kind, path=target.path, role=role)]
+        if role == "placements":
+            assert isinstance(value, list)
+            continue
+        assert isinstance(value, dict)
+        assert field in value, (model, field)
+        checked.append((model, field))
+    assert {model for model, _ in checked} == set(VALUE_ITEMS)
+
+
 def test_whole_item_models_map_every_field_to_their_kind() -> None:
     for (model, field), (kind, role) in ITEM_TABLE.items():
         if model in WHOLE_ITEM_MODELS:
@@ -153,6 +188,9 @@ def test_roles_are_the_design_roles() -> None:
         "build": ("source_hash", "state"),
         "forms": ("forms",),
     }
+    assert SHOW_FIELDS == ("id", "title", "pack", "dependencies", "extensions", "label_scheme")
+    assert SET_IDENTITY_FIELDS == ("id",)
+    assert TRANSITION_FIELDS == ("counts", "notes", "source_hash")
     assert ITEM_TABLE["Set", "placements"] == ("set", "placements")
     assert ITEM_TABLE["Cast", "spots"] == ("spot_order", None)
     assert ITEM_TABLE["Show", "pins"] == ("pin_order", None)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-test_show_properties.py --- checks set, index, storage, rename and change invariants on random shows
+test_show_properties.py --- checks set, index, storage, rename and item invariants on random shows
 """
 
 from hypothesis import given
@@ -15,6 +15,7 @@ from e8s.show.documents import decode_show, encode_show
 from e8s.show.items import changes, items
 from e8s.show.manage import add_set, insert_subset
 from e8s.show.models import Show
+from e8s.show.pinning import pin
 from e8s.show.renumber import renumber
 from e8s.show.set_queries import index
 from tests.fixtures.generators import seeded_show
@@ -26,6 +27,7 @@ coordinate = st.floats(min_value=-20.0, max_value=20.0, allow_nan=False)
 seeds = st.integers(min_value=0, max_value=2**16)
 SEEDED_SPOTS = 6
 SEEDED_SETS = 3
+edits = st.integers(min_value=0, max_value=7)
 
 
 def _show(extra_counts: list[float]) -> Show:
@@ -113,3 +115,38 @@ def test_changes_lists_exactly_the_items_that_differ(
     assert [c.key for c in found] == sorted(differ, key=lambda key: key.sort_key())
     assert all(c.before == freeze_json(old.get(c.key)) for c in found)
     assert all(c.after == freeze_json(new.get(c.key)) for c in found)
+
+
+def _reordered(show: Show, op: int) -> Show:
+    first = show.sets[0]
+    match op:
+        case 0:
+            return show.replace(cast=show.cast.replace(spots=tuple(reversed(show.cast.spots))))
+        case 1:
+            return show.replace(pins=tuple(reversed(show.pins)))
+        case 2:
+            flipped = first.replace(placements=tuple(reversed(first.placements)))
+            return show.replace(sets=(flipped, *show.sets[1:]))
+        case 3:
+            return renumber(show)[0]
+        case 4:
+            return pin(show, "entity", show.cast.spots[0].id)
+        case 5:
+            return pin(show, "set", show.sets[-1].id)
+        case 6:
+            return pin(show, "form", min(show.forms))
+        case _:
+            moved = first.with_placements(
+                {first.placements[0].entity: PlacementPatch(x=1.0)}, force=True
+            )
+            return show.replace(sets=(moved, *show.sets[1:]))
+
+
+@given(st.integers(min_value=0, max_value=3), st.lists(edits, max_size=4), edits)
+def test_items_are_equal_exactly_when_stored_bytes_are(seed: int, ops: list[int], op: int) -> None:
+    base = add_set(seeded_show(seed, SEEDED_SPOTS, SEEDED_SETS), "9", 4.0)
+    before = _reordered(_reordered(base, 4), 5)
+    for earlier in ops:
+        before = _reordered(before, earlier)
+    after = _reordered(before, op)
+    assert (items(before) == items(after)) == (encode_show(before) == encode_show(after))
