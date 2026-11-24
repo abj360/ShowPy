@@ -23,8 +23,6 @@ Contains:
         role documents in one revision whose `changes()` is empty
     test_regression_tree_with_both_set_forms_is_refused: refuses a set.json with placements beside
         role documents, and a show.json cast beside the cast document
-    test_regression_layout1_set_without_placements_decodes_empty: reads a set.json with neither
-        placements nor a placement order, and no role documents, as a layout-1 set of no spots
     test_regression_role_documents_without_set_json_are_refused: refuses drill, facing and labels
         documents of a set with no set.json
     test_regression_partial_role_set_is_refused: refuses a role-split set missing a role document
@@ -49,7 +47,6 @@ from typing import Any
 
 import pytest
 
-from e8s.cast.models import Cast
 from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, StorageError, UnknownRefError
 from e8s.examples import two_set_show
@@ -211,20 +208,6 @@ def test_regression_tree_with_both_set_forms_is_refused() -> None:
         decode_show(_edited(SHOW_DOC, lambda meta: {**meta, "cast": show.cast.to_json()}))
     with pytest.raises(SchemaError, match=ORDER_FIELD):
         decode_show(_edited(SET_DOC, lambda doc: {**doc, "placements": []}))
-
-
-def test_regression_layout1_set_without_placements_decodes_empty() -> None:
-    show = two_set_show()
-    empty = show.replace(
-        cast=Cast(), sets=tuple(s.replace(placements=()) for s in show.sets), transitions=()
-    )
-    docs = {p: raw for p, raw in encode_show(empty).items() if not p.endswith(ROLE_SUFFIXES)}
-    for current in empty.sets:
-        path = f"/sets/{current.key}/set.json"
-        body = json.loads(docs[path])
-        del body[ORDER_FIELD]
-        docs[path] = dump_json(body)
-    assert decode_show(docs) == empty
 
 
 def test_regression_role_documents_without_set_json_are_refused() -> None:

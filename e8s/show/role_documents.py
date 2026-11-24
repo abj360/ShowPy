@@ -104,9 +104,9 @@ def read_set_object(source: Source, key: str) -> JsonObject:
 
     Returns:
         raw: The set's JSON with its placements in placement order. A set.json that holds
-            `placements` beside role documents or a placement order, role documents without
-            set.json, a partial role set or role rows that do not match the placement order
-            raise SchemaError.
+            `placements` beside role documents or a placement order, or neither `placements` nor
+            a placement order, role documents without set.json, a partial role set or role rows
+            that do not match the placement order raise SchemaError.
     """
     path = set_doc(key)
     present = [p for p in role_docs(key) if source.has(p)]
@@ -121,8 +121,13 @@ def read_set_object(source: Source, key: str) -> JsonObject:
         if present or PLACEMENT_ORDER_FIELD in raw:
             raise _both_forms(path, present)
         return raw
-    if not present and PLACEMENT_ORDER_FIELD not in raw:
-        return raw
+    if PLACEMENT_ORDER_FIELD not in raw:
+        raise SchemaError(
+            f"{path} holds neither `{PLACEMENTS_FIELD}` nor `{PLACEMENT_ORDER_FIELD}`",
+            hint=f"store the set's spots under `{PLACEMENT_ORDER_FIELD}`, `[]` for none, beside"
+            f" {', '.join(ROLE_NAMES)}, as save_show() does",
+            context={"path": path, "role_documents": present},
+        )
     missing = [p for p in role_docs(key) if p not in present]
     if missing:
         raise SchemaError(
