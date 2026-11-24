@@ -58,7 +58,7 @@ class RepositoryBackend(Protocol):
         ...
 
     def tree(self, show_id: str, revision_id: str) -> Mapping[str, str]:
-        """Returns path to blob digest at a revision."""
+        """Returns path to blob digest at a revision; an unknown revision raises UnknownRefError."""
         ...
 
     def blob(self, show_id: str, digest: str) -> bytes:
