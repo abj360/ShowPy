@@ -1,24 +1,76 @@
 #!/usr/bin/env python3
 
 """
-test_packaging.py --- tests that the installed distribution exposes its name, version, schema
-and bundled fonts
+test_packaging.py --- tests that the installed distribution exposes its name, version, schema,
+bundled fonts and compiled core, and that its wheel holds the package files and nothing else
 """
 
 import importlib
 import importlib.metadata
 import importlib.util
 import json
+import os
 import re
+import shutil
+import subprocess
+import tarfile
+import tomllib
+import zipfile
 from importlib.resources import files
+from pathlib import Path
+
+import pytest
+from packaging.version import Version
 
 import e8s
 from e8s.core.resources import schema_path
 from e8s.geo.fonts import MAX_FONT_BYTES
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+LIBRARY_ROOT = REPO_ROOT / "e8s"
+CARGO_MANIFEST = REPO_ROOT / "Cargo.toml"
+CORE_AREAS = ("core", "geo", "time", "sheet", "cast", "engine", "forms")
+EXTENSIONS = frozenset({"e8s/_core.abi3.so", "e8s/_core.pyd"})
+DIST_INFO_SUFFIX = ".dist-info"
+LICENSES_FOLDER = "licenses"
+DIST_INFO_FILES = frozenset({"METADATA", "WHEEL", "RECORD"})
+# maturin records the crates linked into e8s._core as a CycloneDX bill of materials.
+SBOM = "sboms/e8s-py.cyclonedx.json"
+LOCKED_BUILD = {"MATURIN_PEP517_ARGS": "--locked"}
+# The sdist holds the build inputs only: no tests, docs, CI, agent folders or build output.
+SDIST_TOP_LEVEL = frozenset(
+    {
+        "e8s",
+        "crates",
+        "Cargo.toml",
+        "Cargo.lock",
+        "rust-toolchain.toml",
+        "pyproject.toml",
+        "README.md",
+        "LICENSE",
+        "PKG-INFO",
+    }
+)
+
 
 def test_version_is_exported() -> None:
     assert re.match(r"^\d+\.\d+\.\d+", e8s.__version__)
+
+
+def test_version_matches_the_cargo_manifest() -> None:
+    manifest = tomllib.loads(CARGO_MANIFEST.read_text(encoding="utf-8"))
+    assert e8s.__version__ == str(Version(manifest["workspace"]["package"]["version"]))
+
+
+def test_core_extension_imports_with_its_seven_submodules() -> None:
+    core = importlib.import_module("e8s._core")
+    assert core.__version__ == e8s.__version__
+    for area in CORE_AREAS:
+        module = importlib.import_module(f"e8s._core.{area}")
+        assert getattr(core, area) is module
+        assert module.__name__ == f"e8s._core.{area}"
+        assert module.__doc__
+        assert [name for name in vars(module) if not name.startswith("__")] == []
 
 
 def test_schema_is_a_package_resource() -> None:
@@ -78,3 +130,120 @@ def test_bundled_fonts_ship_with_their_licences() -> None:
 
 def test_bundled_font_budget_fits_the_loader_cap() -> None:
     assert BUNDLED_FONT_BUDGET_BYTES <= MAX_FONT_BYTES
+
+
+def tracked_files(root: Path, *paths: str) -> set[str]:
+    """Lists every file git tracks in a checkout, or only under the given paths."""
+    listed = subprocess.run(
+        ["git", "ls-files", "-z", *paths], cwd=root, capture_output=True, check=True, text=True
+    )
+    return {path for path in listed.stdout.split("\0") if path}
+
+
+def tracked_package_files(root: Path) -> set[str]:
+    """Lists every file git tracks under the e8s package folder of a checkout."""
+    return tracked_files(root, "e8s")
+
+
+def build_distribution(kind: str, out: Path) -> Path:
+    """Builds one distribution of the source checkout with uv and returns its path.
+
+    Args:
+        kind: The uv build flag that picks the distribution, `--wheel` or `--sdist`.
+        out: The empty folder the distribution is written to.
+
+    Returns:
+        built: Path of the single file uv wrote to out.
+    """
+    if not LIBRARY_ROOT.is_dir():
+        pytest.skip("needs a source checkout; the installed wheel has no e8s tree")
+    uv = shutil.which("uv")
+    assert uv is not None, "E: uv is not on PATH; the distribution checks build with it"
+    subprocess.run(
+        [uv, "build", kind, "--out-dir", str(out), str(REPO_ROOT)],
+        capture_output=True,
+        check=True,
+        env=os.environ | LOCKED_BUILD,
+    )
+    (built,) = (path for path in out.iterdir() if path.name != ".gitignore")
+    return built
+
+
+@pytest.fixture(scope="module")
+def built_wheel(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Builds the wheel of the source checkout into a fresh folder and returns its path."""
+    return build_distribution("--wheel", tmp_path_factory.mktemp("wheel"))
+
+
+def test_wheel_holds_every_tracked_package_file_plus_the_extension(built_wheel: Path) -> None:
+    with zipfile.ZipFile(built_wheel) as archive:
+        names = {name for name in archive.namelist() if not name.endswith("/")}
+    metadata = {name for name in names if name.split("/")[0].endswith(DIST_INFO_SUFFIX)}
+    package = names - metadata
+    extension = package & EXTENSIONS
+    assert len(extension) == 1, sorted(extension)
+    assert package - extension == tracked_package_files(REPO_ROOT)
+    inside = [name.split("/", 1)[1] for name in metadata]
+    licences = {name.split("/", 1)[1] for name in inside if name.startswith(f"{LICENSES_FOLDER}/")}
+    assert licences == LICENSE_FILES
+    others = {name for name in inside if not name.startswith(f"{LICENSES_FOLDER}/")}
+    assert others == DIST_INFO_FILES | {SBOM}
+
+
+@pytest.fixture(scope="module")
+def sdist_files(tmp_path_factory: pytest.TempPathFactory) -> set[str]:
+    """Builds the sdist of the source checkout and lists its files without the root folder."""
+    sdist = build_distribution("--sdist", tmp_path_factory.mktemp("sdist"))
+    with tarfile.open(sdist) as archive:
+        return {
+            member.name.split("/", 1)[1]
+            for member in archive.getmembers()
+            if member.isfile() and "/" in member.name
+        }
+
+
+def unexpected_sdist_files(names: set[str], tracked: set[str]) -> list[str]:
+    """Lists the sdist files that are not a build input the checkout tracks.
+
+    Args:
+        names: The sdist's file paths, relative to its root folder.
+        tracked: The paths git tracks in the checkout.
+
+    Returns:
+        unexpected: Each path outside SDIST_TOP_LEVEL, or under a folder entry but untracked.
+    """
+    return sorted(
+        name
+        for name in names
+        if name.split("/")[0] not in SDIST_TOP_LEVEL or ("/" in name and name not in tracked)
+    )
+
+
+def test_sdist_carries_the_toolchain_pin(sdist_files: set[str]) -> None:
+    assert {"rust-toolchain.toml", "Cargo.toml", "Cargo.lock"} <= sdist_files
+
+
+def test_sdist_holds_only_the_build_inputs(sdist_files: set[str]) -> None:
+    tracked = tracked_files(REPO_ROOT)
+    assert unexpected_sdist_files(sdist_files, tracked) == []
+    assert {name.split("/")[0] for name in sdist_files} == SDIST_TOP_LEVEL
+    assert {name for name in sdist_files if name.startswith("e8s/")} == tracked_package_files(
+        REPO_ROOT
+    )
+
+
+def test_unexpected_sdist_files_sees_a_stray_entry() -> None:
+    tracked = {"e8s/a.py", "crates/x/src/lib.rs", "tests/test_a.py"}
+    names = {
+        "PKG-INFO",
+        "e8s/a.py",
+        "e8s/_core.abi3.so",
+        "crates/x/src/lib.rs",
+        "tests/test_a.py",
+        "target/release/lib.so",
+    }
+    assert unexpected_sdist_files(names, tracked) == [
+        "e8s/_core.abi3.so",
+        "target/release/lib.so",
+        "tests/test_a.py",
+    ]

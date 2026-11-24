@@ -50,6 +50,8 @@ COVERAGE_FLOOR = "96"
 NO_SYNC_ENV = "NOX_UV_NO_SYNC"
 
 PYTHON_FOR_WHEEL = "3.14"
+# maturin passes these to cargo, so a build fails on a stale Cargo.lock instead of rewriting it.
+LOCKED_BUILD = {"MATURIN_PEP517_ARGS": "--locked"}
 ALL_EXTRAS = "[all]"
 CORE_CHECK_SCRIPT = "scripts/check_core_install.py"
 API_CHANGES_SCRIPT = "scripts/check_api_changes.py"
@@ -61,6 +63,7 @@ WHEEL_CHECK = f"""
 import importlib.metadata as metadata
 import importlib.resources as resources
 import e8s
+import e8s._core
 expression = metadata.metadata("e8s")["License-Expression"]
 assert expression == {LICENSE_EXPRESSION!r}, expression
 assert resources.files("e8s").joinpath("py.typed").is_file(), "py.typed missing"
@@ -69,6 +72,8 @@ assert e8s.schema_path("LICENSE-MIT.txt").is_file(), "schema licence missing"
 for font in ("fonts/relief-singleline.json", "fonts/licenses/OFL-1.1.txt"):
     assert resources.files("e8s").joinpath(font).is_file(), "fonts missing"
 assert "site-packages" in e8s.__file__, e8s.__file__
+assert "site-packages" in e8s._core.__file__, e8s._core.__file__
+assert e8s._core.__version__ == e8s.__version__, e8s._core.__version__
 print("Found e8s", e8s.__version__)
 """
 
@@ -237,7 +242,7 @@ def _build_wheel(session: nox.Session, work: Path) -> Path:
     """
     dist = work / "dist"
     shutil.rmtree(dist, ignore_errors=True)
-    session.run("uv", "build", "--wheel", "--out-dir", str(dist), external=True)
+    session.run("uv", "build", "--wheel", "--out-dir", str(dist), external=True, env=LOCKED_BUILD)
     wheels = sorted(dist.glob("*.whl"))
     if len(wheels) != 1:
         session.error(f"expected one wheel in {dist}, found {len(wheels)}")

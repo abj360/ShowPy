@@ -46,12 +46,26 @@ Contains:
     test_serial_sessions_start_no_workers: tests and hashseeds never pass -n, nor does addopts
     test_pytest_runs_resolves_constants_and_keeps_posargs: proves the run scan resolves names
     test_last_value_reads_the_last_occurrence: proves the flag lookup obeys the last value
+    test_uv_rebuilds_the_extension_when_rust_sources_change: the uv cache keys name every
+        Rust build input, so a changed crate rebuilds e8s._core
+    unprepared_rust_jobs(): lists the jobs that reach uv before the pinned toolchain and cache
+    test_every_job_that_syncs_installs_the_pinned_rust_toolchain: each uv job installs the
+        rust-toolchain.toml pin, then restores the Rust cache pinned by SHA, before uv builds
+    test_unprepared_rust_jobs_sees_a_missing_or_late_step: proves the toolchain check can fail
+    rust_caches_saved_off_main(): lists the jobs whose Rust cache step may save outside main
+    test_rust_cache_saves_only_from_main: a pull request never writes a Rust cache that main
+        later restores and runs
+    test_rust_caches_saved_off_main_sees_a_missing_or_wrong_condition: proves the check can fail
+    unlocked_uv_builds(): lists the noxfile functions that run `uv build` without LOCKED_BUILD
+    test_wheel_builds_fail_on_a_stale_cargo_lock: every nox build passes cargo's --locked
+    test_unlocked_uv_builds_sees_a_build_without_the_lock: proves the lock check can fail
 """
 
 import ast
 import itertools
 import re
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -99,6 +113,23 @@ MATRIX_JOB_CONDITION = "${{ !cancelled() }}"
 MATRIX_STEP_ENV = f"${{{{ {RUNS_CODE_JOBS} }}}}"
 MATRIX_STEP_GATE = re.compile(
     r"^(      - |        )if: env\.RUN_CODE_JOBS [!=]= 'true'$", re.MULTILINE
+)
+RUST_BUILD_INPUTS = frozenset(
+    {
+        "pyproject.toml",
+        "Cargo.toml",
+        "Cargo.lock",
+        "rust-toolchain.toml",
+        "crates/**/Cargo.toml",
+        "crates/**/*.rs",
+    }
+)
+UV_STEP = re.compile(r"\buv (sync|run)\b")
+TOOLCHAIN_STEP = "rustup toolchain install"
+RUST_CACHE_STEP = re.compile(r"uses: Swatinem/rust-cache@[0-9a-f]{40}\b")
+LOCKED_BUILD = "LOCKED_BUILD"
+SAVE_ON_MAIN_ONLY = re.compile(
+    r"^\s+save-if: \$\{\{ github\.ref == 'refs/heads/main' \}\}$", re.MULTILINE
 )
 
 
@@ -513,3 +544,147 @@ def test_pytest_runs_resolves_constants_and_keeps_posargs() -> None:
 def test_last_value_reads_the_last_occurrence() -> None:
     assert last_value(["pytest", "-n", "4", "*args", "-n", "0"], "-n") == "0"
     assert last_value(["pytest", "-m", "slow"], "-n") is None
+
+
+def test_uv_rebuilds_the_extension_when_rust_sources_change() -> None:
+    keys = tomllib.loads(PYPROJECT.read_text())["tool"]["uv"]["cache-keys"]
+    assert {key["file"] for key in keys if "file" in key} >= RUST_BUILD_INPUTS
+
+
+def _first_index(steps: list[str], found: Callable[[str], bool]) -> int | None:
+    return next((index for index, step in enumerate(steps) if found(step)), None)
+
+
+def unprepared_rust_jobs(workflow: str) -> list[str]:
+    """Lists the jobs that reach uv before installing the pinned toolchain and the Rust cache.
+
+    Args:
+        workflow: The text of a workflow file.
+
+    Returns:
+        unprepared: The jobs with a `uv sync` or `uv run` step that no earlier
+            `rustup toolchain install` step, followed by a SHA-pinned Swatinem/rust-cache step,
+            prepares.
+    """
+    unprepared = []
+    for name in ci_job_names(workflow):
+        steps = STEP_START.split(ci_job(workflow, name))[1:]
+        uv = _first_index(steps, lambda step: UV_STEP.search(step) is not None)
+        if uv is None:
+            continue
+        toolchain = _first_index(steps, lambda step: TOOLCHAIN_STEP in step)
+        cache = _first_index(steps, lambda step: RUST_CACHE_STEP.search(step) is not None)
+        if toolchain is None or cache is None or not toolchain < cache < uv:
+            unprepared.append(name)
+    return unprepared
+
+
+def test_every_job_that_syncs_installs_the_pinned_rust_toolchain() -> None:
+    workflow = CI_WORKFLOW.read_text()
+    assert unprepared_rust_jobs(workflow) == []
+    assert "check" in [
+        name for name in ci_job_names(workflow) if UV_STEP.search(ci_job(workflow, name))
+    ]
+
+
+def test_unprepared_rust_jobs_sees_a_missing_or_late_step() -> None:
+    toolchain = "      - run: rustup toolchain install\n"
+    cache = f"      - uses: Swatinem/rust-cache@{'a' * 40} # v2\n"
+    tag_cache = "      - uses: Swatinem/rust-cache@v2\n"
+    sync = "      - run: uv sync --locked\n"
+    jobs = {
+        "ready": toolchain + cache + sync,
+        "late": sync + toolchain + cache,
+        "untagged": toolchain + tag_cache + sync,
+        "swapped": cache + toolchain + sync,
+        "docs": "      - run: echo docs\n",
+    }
+    workflow = "on: push\njobs:\n" + "".join(
+        f"  {name}:\n    steps:\n{steps}" for name, steps in jobs.items()
+    )
+    assert unprepared_rust_jobs(workflow) == ["late", "untagged", "swapped"]
+
+
+def rust_caches_saved_off_main(workflow: str) -> list[str]:
+    """Lists the jobs with a Rust cache step that may save its cache outside the main branch.
+
+    Args:
+        workflow: The text of a workflow file.
+
+    Returns:
+        leaky: One job name per Swatinem/rust-cache step that lacks the main-only `save-if`.
+    """
+    return [
+        name
+        for name in ci_job_names(workflow)
+        for step in STEP_START.split(ci_job(workflow, name))[1:]
+        if "Swatinem/rust-cache@" in step and not SAVE_ON_MAIN_ONLY.search(step)
+    ]
+
+
+def test_rust_cache_saves_only_from_main() -> None:
+    workflow = CI_WORKFLOW.read_text()
+    assert workflow.count("Swatinem/rust-cache@") >= len(GATED_JOBS)
+    assert rust_caches_saved_off_main(workflow) == []
+
+
+def test_rust_caches_saved_off_main_sees_a_missing_or_wrong_condition() -> None:
+    cache = f"      - uses: Swatinem/rust-cache@{'a' * 40} # v2\n"
+    jobs = {
+        "main-only": cache
+        + "        with:\n          save-if: ${{ github.ref == 'refs/heads/main' }}\n",
+        "always": cache,
+        "any-branch": cache + "        with:\n          save-if: ${{ true }}\n",
+    }
+    workflow = "on: push\njobs:\n" + "".join(
+        f"  {name}:\n    steps:\n{steps}" for name, steps in jobs.items()
+    )
+    assert rust_caches_saved_off_main(workflow) == ["always", "any-branch"]
+
+
+def unlocked_uv_builds(source: str) -> list[str]:
+    """Lists the noxfile functions that run `uv build` without passing env=LOCKED_BUILD.
+
+    Args:
+        source: The text of a noxfile.
+
+    Returns:
+        functions: One function name per `uv build` call that lacks the locked environment.
+    """
+    return [
+        function.name
+        for function in ast.walk(ast.parse(source))
+        if isinstance(function, ast.FunctionDef)
+        for call in ast.walk(function)
+        if isinstance(call, ast.Call)
+        and [ast.unparse(arg) for arg in call.args[:2]] == ["'uv'", "'build'"]
+        and not any(
+            keyword.arg == "env" and ast.unparse(keyword.value) == LOCKED_BUILD
+            for keyword in call.keywords
+        )
+    ]
+
+
+def test_wheel_builds_fail_on_a_stale_cargo_lock() -> None:
+    source = NOXFILE.read_text()
+    tree = ast.parse(source)
+    constant = next(
+        node.value
+        for node in tree.body
+        if isinstance(node, ast.Assign) and ast.unparse(node.targets[0]) == LOCKED_BUILD
+    )
+    assert ast.literal_eval(constant) == {"MATURIN_PEP517_ARGS": "--locked"}
+    assert "'uv', 'build'" in ast.unparse(tree)
+    assert unlocked_uv_builds(source) == []
+
+
+def test_unlocked_uv_builds_sees_a_build_without_the_lock() -> None:
+    source = (
+        "def locked(session):\n"
+        "    session.run('uv', 'build', '--wheel', env=LOCKED_BUILD)\n"
+        "def bare(session):\n"
+        "    session.run('uv', 'build', '--sdist')\n"
+        "def other(session):\n"
+        "    session.run('uv', 'build', env={})\n"
+    )
+    assert unlocked_uv_builds(source) == ["bare", "other"]
