@@ -358,3 +358,19 @@ def test_join_rejects_a_cue_label_both_sections_hold() -> None:
     cue = Cue(label="a", order=1, estimated_seconds=1.0)
     with pytest.raises(SchemaError):
         join_sections(_cue_show(cue), _relabelled(_cue_show(cue.replace(order=2))))
+
+
+def test_regression_join_after_split_restores_second_half_audio_within_tolerance() -> None:
+    """Restores a track only the second half holds within 1e-9, other fields exactly."""
+    ramp = TempoSection(at_count=0.0, counts_per_minute=123.0, ramp_to=71.0, ramp_counts=18.0)
+    track = AudioTrack(
+        file="late.wav", label="late", sync_offset_s=0.1, gain=0.3, section=(14.3, 19.7)
+    )
+    show = _three_sets_with(tempos=(ramp,), audio=(track,))
+    (restored,) = _round_trip(show).timeline.audio
+    assert (restored.file, restored.label, restored.gain) == (track.file, track.label, 0.3)
+    assert approx_equal(restored.sync_offset_s, track.sync_offset_s, abs_tol=TOL)
+    assert track.section is not None
+    assert restored.section is not None
+    assert approx_equal(restored.section[0], track.section[0], abs_tol=TOL)
+    assert approx_equal(restored.section[1], track.section[1], abs_tol=TOL)

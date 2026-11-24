@@ -402,6 +402,9 @@ def join_sections(a: Show, b: Show) -> Show:
     A facing override that ends where `a` ends and continues unchanged at `b`'s count 0 becomes
     one override.
     `b`'s sets keep their keys; one whose key `a` already holds gets a free key, as in add_set().
+    An audio track both halves hold keeps the first half's values, its section ending where the
+    second half's ends. A track only the second half holds returns within 1e-9 seconds of its
+    sync offset and 1e-9 counts of its section, since the shift out and back is float arithmetic.
     One pin is kept per target and ID; when both halves pin the same spot, form, set or
     transition, `a`'s pin wins.
 
