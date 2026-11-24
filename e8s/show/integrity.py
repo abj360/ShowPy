@@ -38,6 +38,7 @@ from e8s.show.documents import (
 from e8s.show.files import require_writable
 from e8s.show.migrate import require_current_show_doc
 from e8s.show.models import Show
+from e8s.show.role_documents import require_cast_beside_roles
 from e8s.show.set_keys import PAIR_SEPARATOR, SETS_ROOT, TRANSITIONS_ROOT
 from e8s.show.structured import TEXT_SUFFIXES, require_structured
 
@@ -308,6 +309,7 @@ def require_valid_digests(
     if SHOW_DOC in after:
         require_current_show_doc(blob(after[SHOW_DOC]))
     _require_required_docs(after)
+    require_cast_beside_roles(after)
     show = decode_show(LazyBlobs(after, blob), cache=cache, digests=after)
     require_storable(show)
     _require_no_orphans(show, [p for p in changed if p in after])

@@ -192,11 +192,16 @@ def _with_counts(
     return TransitionSpec._validated(fields | {"counts": counts}, context=context)
 
 
-def _assemble(reading: _Reading, meta: JsonObject, revision: str) -> Show:
-    """Builds the show from a header-free show.json object and the other documents."""
+def _assemble(reading: _Reading, meta: JsonObject, revision: str, *, is_current: bool) -> Show:
+    """Builds the show from a header-free show.json object and the other documents.
+
+    A tree of the current format (`is_current`) must store its cast; a migrated older tree may
+    leave it to the Show default.
+    """
     order = _set_order(meta.get(SET_ORDER_FIELD, []))
     require_listed_role_folders(reading.source.paths(), order)
-    rest = with_cast(reading.source, {k: v for k, v in meta.items() if k != SET_ORDER_FIELD})
+    kept = {k: v for k, v in meta.items() if k != SET_ORDER_FIELD}
+    rest = with_cast(reading.source, kept, is_required=is_current)
     stored = [
         (k, reading.cached(set_doc(k), partial(_set, reading, k), also=role_docs(k))) for k in order
     ]
@@ -257,7 +262,7 @@ def _migrated_show(source: Source, meta: JsonObject, version: int, revision: str
     report = ReportBuilder(version)
     migrated = migrate_objects(objects, version, report)
     reading = _Reading(object_source(migrated), LEGACY_CONTEXT)
-    show = _assemble(reading, load_object(reading.source, SHOW_DOC), revision)
+    show = _assemble(reading, load_object(reading.source, SHOW_DOC), revision, is_current=False)
     renamed = migrate_model(show, version, report)
     checked = Show._validated(renamed.to_json(), context=CHECKED_CONTEXT)
     return _Migrated(checked, report, migrate_beside(checked, migrated, version, report))
@@ -425,7 +430,7 @@ def read_show(
         if version < CURRENT_VERSION:
             return _migrated_show(source, meta, version, revision).show
         reading = _Reading(source, CHECKED_CONTEXT, cache, digests or {})
-        return _assemble(reading, without_header(meta), revision)
+        return _assemble(reading, without_header(meta), revision, is_current=True)
     except SchemaError as exc:
         raise _reraised_for_show(exc) from exc
 

@@ -14,7 +14,9 @@ Contains:
     ROLE_FIELDS: maps each role document name to the placement fields it holds
     set_documents(): splits the JSON of a set into its set.json and role document objects
     read_set_object(): reads a set's documents of either layout as the JSON of one set
-    with_cast(): adds the cast document's object to a show.json object, refusing both forms
+    with_cast(): adds the cast document's object to a show.json object, refusing both forms and
+        a required cast stored in neither
+    require_cast_beside_roles(): refuses a tree that stores role documents but no cast document
     require_listed_role_folders(): refuses role documents of a set folder show.json does not list
     require_no_role_documents(): refuses role or cast documents in a tree of an older format
     holds_layout1_documents(): tells whether a tree still stores a layout-1 set or cast
@@ -193,18 +195,26 @@ def _role_rows(source: Source, path: str, order: list[str]) -> dict[str, JsonObj
     return rows
 
 
-def with_cast(source: Source, meta: JsonObject) -> JsonObject:
+def with_cast(source: Source, meta: JsonObject, *, is_required: bool) -> JsonObject:
     """Adds the cast document's object to a show.json object; layout-1 show.json holds its own.
 
     Args:
         source: The stored tree's documents.
         meta: The header-free show.json object.
+        is_required: Whether the tree must store a cast, as every format-2 tree does.
 
     Returns:
-        meta: `meta` with the cast of the cast document, or `meta` itself when the tree has
-            none. A show.json that holds a cast beside the cast document raises SchemaError.
+        meta: `meta` with the cast of the cast document, or `meta` itself when show.json holds
+            the cast. A show.json that holds a cast beside the cast document, or a required cast
+            stored in neither, raises SchemaError.
     """
     if not source.has(CAST_DOC):
+        if is_required and CAST_FIELD not in meta:
+            raise SchemaError(
+                f"the tree stores no cast: {CAST_DOC} is missing and {SHOW_DOC} holds none",
+                hint=f"store the cast in {CAST_DOC}, as save_show() does",
+                context={"path": CAST_DOC},
+            )
         return meta
     if CAST_FIELD in meta:
         raise SchemaError(
@@ -217,6 +227,20 @@ def with_cast(source: Source, meta: JsonObject) -> JsonObject:
 
 def _folder(path: str) -> str:
     return path.split("/")[FOLDER_INDEX]
+
+
+def require_cast_beside_roles(paths: Collection[str]) -> None:
+    """Refuses a tree that stores role documents but no cast document.
+
+    >>> require_cast_beside_roles(["/show/show.json", "/sets/1/set.json"])
+    """
+    if CAST_DOC in paths or not any(_is_role(p) for p in paths):
+        return
+    raise SchemaError(
+        f"the tree stores role documents but no {CAST_DOC}",
+        hint=f"keep {CAST_DOC} beside the role documents; save_show() writes both",
+        context={"path": CAST_DOC},
+    )
 
 
 def require_listed_role_folders(paths: Iterable[str], order: Collection[str]) -> None:
