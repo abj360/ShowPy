@@ -15,16 +15,19 @@ Contains:
     runner_environment(): drops every PYTHON* variable except PYTHONHASHSEED
     require_distinct_sides(): refuses one interpreter or one e8s folder for both sides
     run_side(): runs oracle_runner.py for one area under one interpreter
+    SPEED_LAUNCHES: the alternating launches per side that `--speed` times
+    alternate_timings(): launches the sides in turn and keeps each case's fastest time
     run_area(): runs both sides of one area and compares every case
     main(): builds the oracle, runs each area, prints the tables and fails on any gate
 """
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -41,6 +44,7 @@ from tests.parity.compare import (
     format_table,
     load_flipped,
 )
+from tests.parity.oracle_runner import RUNS
 
 ALL_AREAS = "all"
 PARITY_FOLDER = Path(__file__).resolve().parent
@@ -49,6 +53,10 @@ RUNNER = PARITY_FOLDER / "oracle_runner.py"
 FLIPPED_FILE = PARITY_FOLDER / "flipped.toml"
 RUNS_FOLDER = Path(".parity") / "runs"
 TIMINGS_FILE = "timings.json"
+# Each side's timing is its fastest launch out of this many, launched oracle, core, oracle, ...
+SPEED_LAUNCHES = 5
+ORACLE_SIDE = "oracle"
+CORE_SIDE = "core"
 RUNNER_FILE = "runner.json"
 HASH_SEED = "PYTHONHASHSEED"
 PYTHON_VARIABLES = "PYTHON"
@@ -181,7 +189,35 @@ def _side_outputs(folder: Path, cases: Sequence[Case]) -> dict[str, dict[str, Ou
     return outputs
 
 
-def run_area(area: str, oracle_python: Path, work: Path, flips: Mapping[str, Flip]) -> AreaRun:
+def alternate_timings(
+    launch: Callable[[str], Mapping[str, float]], launches: int
+) -> tuple[dict[str, float], dict[str, float]]:
+    """Launches the oracle and the core in turn and keeps each timed case's fastest launch.
+
+    One launch per side is dominated by machine noise, so the sides alternate (oracle, core,
+    oracle, core, ...) and each case keeps the minimum over its launches of the per-launch
+    minimum of 7 runs.
+
+    Args:
+        launch: Runs one side ("oracle" or "core") once and returns its timings.
+        launches: The launches per side, at least 1.
+
+    Returns:
+        timings: The oracle's and the core's fastest time per qualified case name.
+    """
+    if launches < 1:
+        raise SystemExit(f"E: parity needs at least one launch per side, not {launches}")
+    fastest: dict[str, dict[str, float]] = {ORACLE_SIDE: {}, CORE_SIDE: {}}
+    for _ in range(launches):
+        for side in (ORACLE_SIDE, CORE_SIDE):
+            for name, seconds in launch(side).items():
+                fastest[side][name] = min(seconds, fastest[side].get(name, math.inf))
+    return fastest[ORACLE_SIDE], fastest[CORE_SIDE]
+
+
+def run_area(
+    area: str, oracle_python: Path, work: Path, flips: Mapping[str, Flip], *, launches: int = 1
+) -> AreaRun:
     """Runs one area's cases under the oracle and the working tree, then compares them.
 
     Args:
@@ -189,6 +225,7 @@ def run_area(area: str, oracle_python: Path, work: Path, flips: Mapping[str, Fli
         oracle_python: The oracle venv's interpreter, from build_oracle.
         work: The folder both sides write under.
         flips: The flipped cases by qualified name.
+        launches: Alternating launches per side; the outputs come from the last one.
 
     Returns:
         run: Each case's report, the speed report and the core outputs.
@@ -196,17 +233,23 @@ def run_area(area: str, oracle_python: Path, work: Path, flips: Mapping[str, Fli
     oracle_e8s, core_python = oracle_python.parents[1], Path(sys.executable)
     require_distinct_sides(oracle_python, oracle_e8s, core_python, CORE_E8S)
     cases = load_cases(area)
-    run_side(oracle_python, area, work / "oracle", oracle_e8s)
-    run_side(core_python, area, work / "core", CORE_E8S)
-    oracle = _side_outputs(work / "oracle", cases)
-    core = _side_outputs(work / "core", cases)
+    sides = {ORACLE_SIDE: (oracle_python, oracle_e8s), CORE_SIDE: (core_python, CORE_E8S)}
+
+    def launch(side: str) -> Mapping[str, float]:
+        python, e8s_from = sides[side]
+        run_side(python, area, work / side, e8s_from)
+        return _timings(work / side)
+
+    oracle_timings, core_timings = alternate_timings(launch, launches)
+    oracle = _side_outputs(work / ORACLE_SIDE, cases)
+    core = _side_outputs(work / CORE_SIDE, cases)
     reports = {
         case.qualified_name: compare_case(
             case.qualified_name, oracle[case.name], core[case.name], flips
         )
         for case in cases
     }
-    speed = compare_speed(_timings(work / "oracle"), _timings(work / "core"))
+    speed = compare_speed(oracle_timings, core_timings)
     named_core = {case.qualified_name: core[case.name] for case in cases}
     return AreaRun(reports=reports, speed=speed, core=named_core)
 
@@ -240,12 +283,14 @@ def main(argv: Sequence[str] | None = None) -> None:
     flips = load_flipped(FLIPPED_FILE, load_all_cases())
     oracle_python = build_oracle()
     areas = _areas(arguments.area)
+    launches = SPEED_LAUNCHES if arguments.speed else 1
     passed, digests = True, []
     for area in areas:
-        run = run_area(area, oracle_python, RUNS_FOLDER / area, flips)
+        run = run_area(area, oracle_python, RUNS_FOLDER / area, flips, launches=launches)
         print(format_table(run.reports), flush=True)
         passed &= all(report.passed for report in run.reports.values())
         if arguments.speed:
+            print(f"speed: fastest of {RUNS} runs per launch over {launches} alternating launches")
             print(format_speed(run.speed), flush=True)
             passed &= run.speed.passed
         digests += [line for name, core in run.core.items() for line in digest_lines(name, core)]

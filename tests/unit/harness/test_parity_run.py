@@ -13,12 +13,16 @@ Contains:
     test_cases_module_must_come_from_the_cases_root: a case module from elsewhere is refused
     test_sides_must_differ_in_interpreter_and_e8s: one interpreter or e8s for both is refused
     test_run_area_refuses_the_working_tree_as_its_own_oracle: nothing launches
+    test_speed_launches_alternate_and_keep_the_fastest_of_each_side: oracle first, min of mins
+    test_speed_needs_at_least_one_launch: zero launches fail closed
+    test_speed_runs_a_named_number_of_launches: SPEED_LAUNCHES alternating launches per side
 """
 
 import json
 import os
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -31,6 +35,8 @@ from tests.parity.run import (
     REPO_ROOT,
     RUNNER,
     RUNNER_FILE,
+    SPEED_LAUNCHES,
+    alternate_timings,
     require_distinct_sides,
     run_area,
     run_side,
@@ -136,3 +142,30 @@ def test_run_area_refuses_the_working_tree_as_its_own_oracle(tmp_path: Path) -> 
     with pytest.raises(SystemExit, match=r"^E: the oracle and the working tree"):
         run_area("time", Path(sys.executable), tmp_path / "work", {})
     assert not (tmp_path / "work").exists()
+
+
+def test_speed_launches_alternate_and_keep_the_fastest_of_each_side() -> None:
+    timings = {
+        "oracle": [{"time.a": 3.0, "time.b": 1.0}, {"time.a": 2.0, "time.b": 4.0}],
+        "core": [{"time.a": 5.0, "time.b": 0.5}, {"time.a": 1.5, "time.b": 0.7}],
+    }
+    order: list[str] = []
+
+    def launch(side: str) -> Mapping[str, float]:
+        order.append(side)
+        return timings[side][order.count(side) - 1]
+
+    oracle, core = alternate_timings(launch, 2)
+    assert order == ["oracle", "core", "oracle", "core"]
+    assert oracle == {"time.a": 2.0, "time.b": 1.0}
+    assert core == {"time.a": 1.5, "time.b": 0.5}
+
+
+def test_speed_needs_at_least_one_launch() -> None:
+    with pytest.raises(SystemExit, match=r"^E: "):
+        alternate_timings(lambda _side: {}, 0)
+
+
+def test_speed_runs_a_named_number_of_launches() -> None:
+    assert isinstance(SPEED_LAUNCHES, int)
+    assert SPEED_LAUNCHES > 1
