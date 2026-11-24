@@ -1,26 +1,31 @@
 #!/usr/bin/env python3
 
 """
-ci_changes.py --- decides whether a CI run needs the code jobs and the Rust job, failing closed
+ci_changes.py --- decides whether a CI run needs the code, Rust and parity jobs, failing closed
 
 Only a pull request whose every changed path sits under docs/ skips the code jobs. README.md
 is not docs here: the wheel smoke test runs the README example. Only a pull request that changes
-no Rust input skips the Rust job. Every other event runs both. Runs on the runner's system
-Python, so it uses the standard library only.
+no Rust input skips the Rust job, and only one that changes neither the library, a Rust input
+nor the parity harness skips the parity jobs. Every other event runs all three. Runs on the
+runner's system Python, so it uses the standard library only.
 
 Contains:
     DOCS_PREFIX: the one folder whose changes alone skip the code jobs
     RUST_PREFIXES: the folders whose changes run the Rust job
     RUST_FILES: the files whose changes run the Rust job
+    PARITY_PREFIXES: the folders whose changes, besides the Rust inputs, run the parity jobs
+    PARITY_FILES: the files whose changes, besides the Rust inputs, run the parity jobs
     is_docs_only(): tells whether a non-empty change list lies entirely under DOCS_PREFIX
     is_rust_change(): tells whether any changed path is a Rust input or a Rust job input
+    is_parity_change(): tells whether any changed path is a library, Rust or harness input
     diff_command(): builds the git command that lists a pull request's changed paths
     split_paths(): parses NUL-separated git output into paths
     git_changed_paths(): runs diff_command and returns the changed paths
     pull_request_paths(): checks a pull request's SHAs and lists its changed paths
     code_output(): returns "true" or "false" for the `code` output of one event
     rust_output(): returns "true" or "false" for the `rust` output of one event
-    main(): writes code=<value> and rust=<value> to GITHUB_OUTPUT, exiting non-zero on any error
+    parity_output(): returns "true" or "false" for the `parity` output of one event
+    main(): writes code=, rust= and parity= to GITHUB_OUTPUT, exiting non-zero on any error
 """
 
 import os
@@ -47,6 +52,18 @@ RUST_FILES = frozenset(
         "about.toml",
         "e8s/licenses/THIRD_PARTY_RUST.txt",
         "tests/unit/tooling/test_third_party_notices.py",
+    }
+)
+# The library and its compiled core, then the harness: its cases, the oracle builder and the
+# locked dependencies both sides import.
+PARITY_PREFIXES = ("e8s/", "tests/parity/")
+PARITY_FILES = frozenset(
+    {
+        "scripts/build_oracle.py",
+        "scripts/compare_parity_digests.py",
+        "scripts/oracle_build.in",
+        "scripts/oracle_build.txt",
+        "uv.lock",
     }
 )
 PULL_REQUEST_EVENT = "pull_request"
@@ -85,6 +102,21 @@ def is_rust_change(paths: Sequence[str]) -> bool:
         or (path.startswith(CARGO_PREFIX) and "/" not in path)
         or path in RUST_FILES
         for path in paths
+    )
+
+
+def is_parity_change(paths: Sequence[str]) -> bool:
+    """Tells whether any changed path is a library file, a Rust input or a parity harness input.
+
+    Args:
+        paths: Repository-relative paths as git prints them.
+
+    Returns:
+        parity_change: True when a path is a Rust input, is under PARITY_PREFIXES or is one of
+            PARITY_FILES.
+    """
+    return is_rust_change(paths) or any(
+        path.startswith(PARITY_PREFIXES) or path in PARITY_FILES for path in paths
     )
 
 
@@ -175,8 +207,26 @@ def rust_output(event_name: str, base: str, head: str, list_changes: ChangeListe
     return RUN_JOBS
 
 
+def parity_output(event_name: str, base: str, head: str, list_changes: ChangeLister) -> str:
+    """Returns "false" only for a pull request that changes no library, Rust or harness input.
+
+    Args:
+        event_name: The GitHub event that started the workflow.
+        base: Commit SHA of the pull request's base, ignored for other events.
+        head: Commit SHA of the pull request's head, ignored for other events.
+        list_changes: Lists the paths changed between two commits.
+
+    Returns:
+        parity: "true" when the parity jobs must run, else "false".
+    """
+    paths = pull_request_paths(event_name, base, head, list_changes)
+    if paths is not None and not is_parity_change(paths):
+        return SKIP_JOBS
+    return RUN_JOBS
+
+
 def main() -> None:
-    """Writes code= and rust= to GITHUB_OUTPUT; any error exits non-zero and fails the job."""
+    """Writes code=, rust= and parity= to GITHUB_OUTPUT; any error exits non-zero."""
     output = os.environ.get(OUTPUT_ENV)
     if not output:
         raise SystemExit(f"E: {OUTPUT_ENV} is not set")
@@ -188,6 +238,7 @@ def main() -> None:
     lines = [
         f"code={code_output(*event, git_changed_paths)}",
         f"rust={rust_output(*event, git_changed_paths)}",
+        f"parity={parity_output(*event, git_changed_paths)}",
     ]
     with Path(output).open("a", encoding="utf-8") as stream:
         stream.writelines(f"{line}\n" for line in lines)

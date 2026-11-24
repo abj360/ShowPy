@@ -269,6 +269,7 @@ SAVE_ON_MAIN_ONLY = re.compile(
     r"^\s+save-if: \$\{\{ github\.ref == 'refs/heads/main' \}\}$", re.MULTILINE
 )
 RUST_JOB = "rust"
+PARITY_JOBS = ("parity", "parity-compare")
 RUNS_RUST_JOB = "needs.changes.result != 'success' || needs.changes.outputs.rust != 'false'"
 RUST_STEP_ENV = f"${{{{ {RUNS_RUST_JOB} }}}}"
 RUST_STEP_GATE = re.compile(r"^env\.RUN_RUST_JOB [!=]= 'true'( && .+)?$")
@@ -568,7 +569,7 @@ def ungated_jobs(workflow: str, jobs: tuple[str, ...]) -> list[str]:
 def test_ci_jobs_are_changes_lint_types_or_gated() -> None:
     names = ci_job_names(CI_WORKFLOW.read_text(encoding="utf-8"))
     assert names[0] == CHANGES_JOB
-    assert sorted(names) == sorted([CHANGES_JOB, UNGATED_JOB, RUST_JOB, *GATED_JOBS])
+    assert sorted(names) == sorted([CHANGES_JOB, UNGATED_JOB, RUST_JOB, *PARITY_JOBS, *GATED_JOBS])
 
 
 def test_job_value_joins_a_folded_value() -> None:
