@@ -4,8 +4,9 @@
 test_items.py --- tests the item table, the items of a show and the changes between two shows
 
 Contains:
-    test_every_stored_field_has_an_item_row: walks the v2 schema against ITEM_TABLE; the envelope
-        and Show.cast, which holds only the Cast and its own rows, have no row
+    test_every_stored_field_has_an_item_row: walks the v2 schema against ITEM_TABLE, reading the
+        set and role documents as the models whose fields they store; the envelope and Show.cast,
+        which holds only the Cast and its own rows, have no row
     test_every_value_row_lands_in_its_item: finds each container row's field in its item's value
     test_whole_item_models_map_every_field_to_their_kind: keeps whole items undivided
     test_roles_are_the_design_roles: pins the roles and the role-less fields the table derives
@@ -57,6 +58,7 @@ from e8s.show.manage import add_set
 from e8s.show.models import Pin, Show
 from e8s.show.pinning import pin
 from e8s.show.renumber import renumber
+from e8s.show.role_documents import PLACEMENT_ORDER_FIELD
 from e8s.show.set_keys import set_key
 from tests.fixtures.cast_shows import rich_show
 from tests.fixtures.recipes import LINE_RECIPE
@@ -64,6 +66,13 @@ from tests.fixtures.recipes import LINE_RECIPE
 SCHEMA = "e8.show.v2.json"
 DEFS = "$defs"
 SHOW_DOCUMENT = "ShowDocument"
+DOCUMENT_MODELS = {
+    SHOW_DOCUMENT: "Show",
+    "SetDocument": "Set",
+    "DrillDocument": "Placement",
+    "FacingDocument": "Placement",
+    "LabelsDocument": "Placement",
+}
 ENVELOPE_FIELDS = frozenset({"format", "version"})
 CONTAINER_FIELDS = {("Show", "cast"): "Cast"}
 CONTAINER_MODELS = frozenset({"Show", "Cast", "Set", "Placement", "TransitionSpec"})
@@ -109,7 +118,7 @@ def _schema() -> dict[str, object]:
 
 
 def _model_name(definition: str) -> str:
-    return "Show" if definition == SHOW_DOCUMENT else definition
+    return DOCUMENT_MODELS.get(definition, definition)
 
 
 def _refs(node: object) -> Iterator[str]:
@@ -122,6 +131,14 @@ def _refs(node: object) -> Iterator[str]:
     elif isinstance(node, list):
         for value in node:
             yield from _refs(value)
+
+
+def _document_fields(definition: dict[str, object]) -> dict[str, object]:
+    """Returns the fields a document definition stores, reading role documents' spot rows."""
+    rows = definition.get("additionalProperties")
+    held = rows.get("properties") if isinstance(rows, dict) else definition.get("properties")
+    assert isinstance(held, dict)
+    return held
 
 
 def _properties(defs: dict[str, dict[str, dict[str, object]]], model: str) -> dict[str, object]:
@@ -149,6 +166,12 @@ def test_every_stored_field_has_an_item_row() -> None:
         definition = SHOW_DOCUMENT if model == "Show" else model
         assert list(_refs(defs[definition]["properties"][field])) == [held]
         assert (model, field) not in ITEM_TABLE
+    for document, model in DOCUMENT_MODELS.items():
+        stored = set(_document_fields(defs[document])) - ENVELOPE_FIELDS - {PLACEMENT_ORDER_FIELD}
+        assert stored <= {
+            *_properties(defs, model),
+            *(f for m, f in CONTAINER_FIELDS if m == model),
+        }
     stale = [row for row in ITEM_TABLE if row[0] not in TABLE_MODELS]
     stale += [row for row in ITEM_TABLE if row[1] not in _properties(defs, row[0])]
     assert not stale, f"ITEM_TABLE rows that name no stored field: {stale}"

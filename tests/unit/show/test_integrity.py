@@ -159,8 +159,8 @@ def test_regression_unknown_root_names_the_roots_in_the_hint() -> None:
 
 @pytest.mark.parametrize("root", KNOWN_ROOTS)
 def test_every_known_root_accepts_a_document(root: str) -> None:
-    """Accepts a plain document under each known root."""
-    require_known_path(f"{root}a.txt")
+    """Accepts a plain document under each known root; `/cast/` holds only cast.json."""
+    require_known_path(f"{root}{'cast.json' if root == '/cast/' else 'a.txt'}")
 
 
 def test_regression_garbage_show_document_is_a_schema_error() -> None:

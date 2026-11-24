@@ -8,3 +8,4 @@ node_modules/
 .superpowers/
 tests/fixtures/repos/
 e8s/fonts/
+tests/fixtures/interchange/

@@ -220,8 +220,8 @@ def test_workspace_reads_documents_and_derived_tables() -> None:
 def test_workspace_ls() -> None:
     agent, _ = _workspaces(InMemoryRepository())
     assert agent.ls("/") == [
-        "canvas/", "config/", "exports/", "lib/", "publish/", "renders/", "sets/", "show/",
-        "time/", "transitions/",
+        "canvas/", "cast/", "config/", "exports/", "lib/", "publish/", "renders/", "sets/",
+        "show/", "time/", "transitions/",
     ]  # fmt: skip
     assert agent.ls("/sets") == ["1/", "2/"]
     assert agent.ls("/sets/1/") == ["forms.json", "placements.csv"]

@@ -684,6 +684,60 @@
     "Degrees": {
       "type": "number"
     },
+    "DrillDocument": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "form": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Form"
+          },
+          "on_field": {
+            "default": true,
+            "title": "On Field",
+            "type": "boolean"
+          },
+          "order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Order"
+          },
+          "pinned": {
+            "default": false,
+            "title": "Pinned",
+            "type": "boolean"
+          },
+          "x": {
+            "$ref": "#/$defs/Meters"
+          },
+          "y": {
+            "$ref": "#/$defs/Meters"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "type": "object"
+      },
+      "title": "DrillDocument",
+      "type": "object"
+    },
     "Easing": {
       "additionalProperties": false,
       "description": "Maps progress through a move (time share) to progress along it (distance share).\n\nAttributes:\n    kind: Easing family; `custom` uses `points`.\n    strength: Exponent or step count, depending on the kind.\n    points: Custom curve as (time share, distance share) pairs from (0, 0) to (1, 1).",
@@ -788,6 +842,21 @@
         "entity"
       ],
       "title": "EntityFacing",
+      "type": "object"
+    },
+    "FacingDocument": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "facing": {
+            "$ref": "#/$defs/Heading",
+            "default": 0.0
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "title": "FacingDocument",
       "type": "object"
     },
     "FacingMode": {
@@ -1375,6 +1444,29 @@
         }
       },
       "title": "LabelScheme",
+      "type": "object"
+    },
+    "LabelsDocument": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Note"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "title": "LabelsDocument",
       "type": "object"
     },
     "LineRecipe": {
@@ -2277,6 +2369,86 @@
         "counts"
       ],
       "title": "Set",
+      "type": "object"
+    },
+    "SetDocument": {
+      "additionalProperties": false,
+      "properties": {
+        "counts": {
+          "title": "Counts",
+          "type": "number"
+        },
+        "cue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cue"
+        },
+        "forms": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Forms",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "placement_order": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "source_hash": {
+          "default": "",
+          "title": "Source Hash",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/ApprovalState",
+          "default": "draft"
+        }
+      },
+      "required": [
+        "id",
+        "counts",
+        "placement_order"
+      ],
+      "title": "SetDocument",
       "type": "object"
     },
     "Shape": {
@@ -3333,20 +3505,39 @@
   "additionalProperties": false,
   "description": "A stored tree as one object mapping each show-document path to its JSON.",
   "patternProperties": {
+    "^/sets/[A-Za-z0-9_][A-Za-z0-9_.\\-]*/drill\\.json$": {
+      "$ref": "#/$defs/DrillDocument"
+    },
+    "^/sets/[A-Za-z0-9_][A-Za-z0-9_.\\-]*/facing\\.json$": {
+      "$ref": "#/$defs/FacingDocument"
+    },
     "^/sets/[A-Za-z0-9_][A-Za-z0-9_.\\-]*/forms\\.json$": {
       "items": {
         "$ref": "#/$defs/Form"
       },
       "type": "array"
     },
+    "^/sets/[A-Za-z0-9_][A-Za-z0-9_.\\-]*/labels\\.json$": {
+      "$ref": "#/$defs/LabelsDocument"
+    },
     "^/sets/[A-Za-z0-9_][A-Za-z0-9_.\\-]*/set\\.json$": {
-      "$ref": "#/$defs/Set"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Set"
+        },
+        {
+          "$ref": "#/$defs/SetDocument"
+        }
+      ]
     },
     "^/transitions/[A-Za-z0-9_][A-Za-z0-9_.\\-]*/paths\\.json$": {
       "$ref": "#/$defs/TransitionSpec"
     }
   },
   "properties": {
+    "/cast/cast.json": {
+      "$ref": "#/$defs/Cast"
+    },
     "/show/sheet.json": {
       "$ref": "#/$defs/Sheet"
     },

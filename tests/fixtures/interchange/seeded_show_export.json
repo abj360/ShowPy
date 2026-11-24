@@ -1,0 +1,4037 @@
+{
+ "format": "e8.show",
+ "version": 2,
+ "show": {
+  "id": "seeded",
+  "title": "Seeded show",
+  "pack": "",
+  "sheet": {
+   "ref": "sheet:college-football@1",
+   "name": "College football field (NCAA)",
+   "surface_type": "football_field",
+   "size_m": [
+    109.728,
+    48.768
+   ],
+   "outline": [
+    [
+     -54.864,
+     0.0
+    ],
+    [
+     54.864,
+     0.0
+    ],
+    [
+     54.864,
+     48.768
+    ],
+    [
+     -54.864,
+     48.768
+    ]
+   ],
+   "walkable": {
+    "exterior": [
+     [
+      -54.864,
+      0.0
+     ],
+     [
+      54.864,
+      0.0
+     ],
+     [
+      54.864,
+      48.768
+     ],
+     [
+      -54.864,
+      48.768
+     ]
+    ],
+    "holes": []
+   },
+   "guides": [
+    {
+     "id": "sideline-front",
+     "kind": "sideline",
+     "points": [
+      [
+       -54.864,
+       0.0
+      ],
+      [
+       54.864,
+       0.0
+      ]
+     ],
+     "label": ""
+    },
+    {
+     "id": "sideline-back",
+     "kind": "sideline",
+     "points": [
+      [
+       -54.864,
+       48.768
+      ],
+      [
+       54.864,
+       48.768
+      ]
+     ],
+     "label": ""
+    },
+    {
+     "id": "end-line-left",
+     "kind": "edge",
+     "points": [
+      [
+       -54.864,
+       0.0
+      ],
+      [
+       -54.864,
+       48.768
+      ]
+     ],
+     "label": ""
+    },
+    {
+     "id": "end-line-right",
+     "kind": "edge",
+     "points": [
+      [
+       54.864,
+       0.0
+      ],
+      [
+       54.864,
+       48.768
+      ]
+     ],
+     "label": ""
+    },
+    {
+     "id": "yard-left-0",
+     "kind": "yard",
+     "points": [
+      [
+       -45.72,
+       0.0
+      ],
+      [
+       -45.72,
+       48.768
+      ]
+     ],
+     "label": "G"
+    },
+    {
+     "id": "yard-left-5",
+     "kind": "yard",
+     "points": [
+      [
+       -41.147999999999996,
+       0.0
+      ],
+      [
+       -41.147999999999996,
+       48.768
+      ]
+     ],
+     "label": "5"
+    },
+    {
+     "id": "yard-left-10",
+     "kind": "yard",
+     "points": [
+      [
+       -36.576,
+       0.0
+      ],
+      [
+       -36.576,
+       48.768
+      ]
+     ],
+     "label": "10"
+    },
+    {
+     "id": "yard-left-15",
+     "kind": "yard",
+     "points": [
+      [
+       -32.004,
+       0.0
+      ],
+      [
+       -32.004,
+       48.768
+      ]
+     ],
+     "label": "15"
+    },
+    {
+     "id": "yard-left-20",
+     "kind": "yard",
+     "points": [
+      [
+       -27.432,
+       0.0
+      ],
+      [
+       -27.432,
+       48.768
+      ]
+     ],
+     "label": "20"
+    },
+    {
+     "id": "yard-left-25",
+     "kind": "yard",
+     "points": [
+      [
+       -22.86,
+       0.0
+      ],
+      [
+       -22.86,
+       48.768
+      ]
+     ],
+     "label": "25"
+    },
+    {
+     "id": "yard-left-30",
+     "kind": "yard",
+     "points": [
+      [
+       -18.288,
+       0.0
+      ],
+      [
+       -18.288,
+       48.768
+      ]
+     ],
+     "label": "30"
+    },
+    {
+     "id": "yard-left-35",
+     "kind": "yard",
+     "points": [
+      [
+       -13.716,
+       0.0
+      ],
+      [
+       -13.716,
+       48.768
+      ]
+     ],
+     "label": "35"
+    },
+    {
+     "id": "yard-left-40",
+     "kind": "yard",
+     "points": [
+      [
+       -9.144,
+       0.0
+      ],
+      [
+       -9.144,
+       48.768
+      ]
+     ],
+     "label": "40"
+    },
+    {
+     "id": "yard-left-45",
+     "kind": "yard",
+     "points": [
+      [
+       -4.572,
+       0.0
+      ],
+      [
+       -4.572,
+       48.768
+      ]
+     ],
+     "label": "45"
+    },
+    {
+     "id": "yard-50",
+     "kind": "yard",
+     "points": [
+      [
+       0.0,
+       0.0
+      ],
+      [
+       0.0,
+       48.768
+      ]
+     ],
+     "label": "50"
+    },
+    {
+     "id": "yard-right-45",
+     "kind": "yard",
+     "points": [
+      [
+       4.572,
+       0.0
+      ],
+      [
+       4.572,
+       48.768
+      ]
+     ],
+     "label": "45"
+    },
+    {
+     "id": "yard-right-40",
+     "kind": "yard",
+     "points": [
+      [
+       9.144,
+       0.0
+      ],
+      [
+       9.144,
+       48.768
+      ]
+     ],
+     "label": "40"
+    },
+    {
+     "id": "yard-right-35",
+     "kind": "yard",
+     "points": [
+      [
+       13.716,
+       0.0
+      ],
+      [
+       13.716,
+       48.768
+      ]
+     ],
+     "label": "35"
+    },
+    {
+     "id": "yard-right-30",
+     "kind": "yard",
+     "points": [
+      [
+       18.288,
+       0.0
+      ],
+      [
+       18.288,
+       48.768
+      ]
+     ],
+     "label": "30"
+    },
+    {
+     "id": "yard-right-25",
+     "kind": "yard",
+     "points": [
+      [
+       22.86,
+       0.0
+      ],
+      [
+       22.86,
+       48.768
+      ]
+     ],
+     "label": "25"
+    },
+    {
+     "id": "yard-right-20",
+     "kind": "yard",
+     "points": [
+      [
+       27.432,
+       0.0
+      ],
+      [
+       27.432,
+       48.768
+      ]
+     ],
+     "label": "20"
+    },
+    {
+     "id": "yard-right-15",
+     "kind": "yard",
+     "points": [
+      [
+       32.004,
+       0.0
+      ],
+      [
+       32.004,
+       48.768
+      ]
+     ],
+     "label": "15"
+    },
+    {
+     "id": "yard-right-10",
+     "kind": "yard",
+     "points": [
+      [
+       36.576,
+       0.0
+      ],
+      [
+       36.576,
+       48.768
+      ]
+     ],
+     "label": "10"
+    },
+    {
+     "id": "yard-right-5",
+     "kind": "yard",
+     "points": [
+      [
+       41.147999999999996,
+       0.0
+      ],
+      [
+       41.147999999999996,
+       48.768
+      ]
+     ],
+     "label": "5"
+    },
+    {
+     "id": "yard-right-0",
+     "kind": "yard",
+     "points": [
+      [
+       45.72,
+       0.0
+      ],
+      [
+       45.72,
+       48.768
+      ]
+     ],
+     "label": "G"
+    },
+    {
+     "id": "hash-front",
+     "kind": "hash",
+     "points": [
+      [
+       -45.72,
+       18.288
+      ],
+      [
+       45.72,
+       18.288
+      ]
+     ],
+     "label": ""
+    },
+    {
+     "id": "hash-back",
+     "kind": "hash",
+     "points": [
+      [
+       -45.72,
+       30.48
+      ],
+      [
+       45.72,
+       30.48
+      ]
+     ],
+     "label": ""
+    }
+   ],
+   "grid": {
+    "origin": [
+     0.0,
+     0.0
+    ],
+    "spacing": [
+     0.9144,
+     0.9144
+    ],
+    "major_every": 5,
+    "rotation_deg": 0.0,
+    "unit_name": "yd"
+   },
+   "based_on": null,
+   "owner": "",
+   "thumbnail": ""
+  },
+  "cast": {
+   "groups": {
+    "brass": {
+     "key": "brass",
+     "name": "Brass",
+     "label_prefix": "B",
+     "symbol": "circle",
+     "color": "#808080",
+     "default_radius": 0.3,
+     "limits": {},
+     "moves": true
+    },
+    "woodwinds": {
+     "key": "woodwinds",
+     "name": "Woodwinds",
+     "label_prefix": "W",
+     "symbol": "circle",
+     "color": "#808080",
+     "default_radius": 0.3,
+     "limits": {},
+     "moves": true
+    },
+    "percussion": {
+     "key": "percussion",
+     "name": "Percussion",
+     "label_prefix": "P",
+     "symbol": "circle",
+     "color": "#808080",
+     "default_radius": 0.3,
+     "limits": {},
+     "moves": true
+    },
+    "guard": {
+     "key": "guard",
+     "name": "Guard",
+     "label_prefix": "G",
+     "symbol": "circle",
+     "color": "#808080",
+     "default_radius": 0.3,
+     "limits": {},
+     "moves": true
+    }
+   },
+   "spots": [
+    {
+     "id": "B1",
+     "group": "brass",
+     "symbol": null,
+     "color": null,
+     "tags": [],
+     "active": true,
+     "shape": {
+      "kind": "circle",
+      "radius_m": 0.3,
+      "width_m": 0.6,
+      "depth_m": 0.6,
+      "rotation_deg": 0.0
+     }
+    },
+    {
+     "id": "B2",
+     "group": "brass",
+     "symbol": null,
+     "color": null,
+     "tags": [],
+     "active": true,
+     "shape": {
+      "kind": "circle",
+      "radius_m": 0.3,
+      "width_m": 0.6,
+      "depth_m": 0.6,
+      "rotation_deg": 0.0
+     }
+    },
+    {
+     "id": "B3",
+     "group": "brass",
+     "symbol": null,
+     "color": null,
+     "tags": [],
+     "active": true,
+     "shape": {
+      "kind": "circle",
+      "radius_m": 0.3,
+      "width_m": 0.6,
+      "depth_m": 0.6,
+      "rotation_deg": 0.0
+     }
+    },
+    {
+     "id": "B4",
+     "group": "brass",
+     "symbol": null,
+     "color": null,
+     "tags": [],
+     "active": true,
+     "shape": {
+      "kind": "circle",
+      "radius_m": 0.3,
+      "width_m": 0.6,
+      "depth_m": 0.6,
+      "rotation_deg": 0.0
+     }
+    },
+    {
+     "id": "W1",
+     "group": "woodwinds",
+     "symbol": null,
+     "color": null,
+     "tags": [],
+     "active": true,
+     "shape": {
+      "kind": "circle",
+      "radius_m": 0.3,
+      "width_m": 0.6,
+      "depth_m": 0.6,
+      "rotation_deg": 0.0
+     }
+    },
+    {
+     "id": "W2",
+     "group": "woodwinds",
+     "symbol": null,
+     "color": null,
+     "tags": [],
+     "active": true,
+     "shape": {
+      "kind": "circle",
+      "radius_m": 0.3,
+      "width_m": 0.6,
+      "depth_m": 0.6,
+      "rotation_deg": 0.0
+     }
+    },
+    {
+     "id": "W3",
+     "group": "woodwinds",
+     "symbol": null,
+     "color": null,
+     "tags": [],
+     "active": true,
+     "shape": {
+      "kind": "circle",
+      "radius_m": 0.3,
+      "width_m": 0.6,
+      "depth_m": 0.6,
+      "rotation_deg": 0.0
+     }
+    },
+    {
+     "id": "W4",
+     "group": "woodwinds",
+     "symbol": null,
+     "color": null,
+     "tags": [],
+     "active": true,
+     "shape": {
+      "kind": "circle",
+      "radius_m": 0.3,
+      "width_m": 0.6,
+      "depth_m": 0.6,
+      "rotation_deg": 0.0
+     }
+    },
+    {
+     "id": "P1",
+     "group": "percussion",
+     "symbol": null,
+     "color": null,
+     "tags": [],
+     "active": true,
+     "shape": {
+      "kind": "circle",
+      "radius_m": 0.3,
+      "width_m": 0.6,
+      "depth_m": 0.6,
+      "rotation_deg": 0.0
+     }
+    },
+    {
+     "id": "P2",
+     "group": "percussion",
+     "symbol": null,
+     "color": null,
+     "tags": [],
+     "active": true,
+     "shape": {
+      "kind": "circle",
+      "radius_m": 0.3,
+      "width_m": 0.6,
+      "depth_m": 0.6,
+      "rotation_deg": 0.0
+     }
+    },
+    {
+     "id": "P3",
+     "group": "percussion",
+     "symbol": null,
+     "color": null,
+     "tags": [],
+     "active": true,
+     "shape": {
+      "kind": "circle",
+      "radius_m": 0.3,
+      "width_m": 0.6,
+      "depth_m": 0.6,
+      "rotation_deg": 0.0
+     }
+    },
+    {
+     "id": "P4",
+     "group": "percussion",
+     "symbol": null,
+     "color": null,
+     "tags": [],
+     "active": true,
+     "shape": {
+      "kind": "circle",
+      "radius_m": 0.3,
+      "width_m": 0.6,
+      "depth_m": 0.6,
+      "rotation_deg": 0.0
+     }
+    },
+    {
+     "id": "G1",
+     "group": "guard",
+     "symbol": null,
+     "color": null,
+     "tags": [],
+     "active": true,
+     "shape": {
+      "kind": "circle",
+      "radius_m": 0.3,
+      "width_m": 0.6,
+      "depth_m": 0.6,
+      "rotation_deg": 0.0
+     }
+    },
+    {
+     "id": "G2",
+     "group": "guard",
+     "symbol": null,
+     "color": null,
+     "tags": [],
+     "active": true,
+     "shape": {
+      "kind": "circle",
+      "radius_m": 0.3,
+      "width_m": 0.6,
+      "depth_m": 0.6,
+      "rotation_deg": 0.0
+     }
+    },
+    {
+     "id": "G3",
+     "group": "guard",
+     "symbol": null,
+     "color": null,
+     "tags": [],
+     "active": true,
+     "shape": {
+      "kind": "circle",
+      "radius_m": 0.3,
+      "width_m": 0.6,
+      "depth_m": 0.6,
+      "rotation_deg": 0.0
+     }
+    },
+    {
+     "id": "G4",
+     "group": "guard",
+     "symbol": null,
+     "color": null,
+     "tags": [],
+     "active": true,
+     "shape": {
+      "kind": "circle",
+      "radius_m": 0.3,
+      "width_m": 0.6,
+      "depth_m": 0.6,
+      "rotation_deg": 0.0
+     }
+    }
+   ],
+   "selections": {},
+   "label_scheme": {
+    "prefixes": {},
+    "start": 1,
+    "pad": 0
+   }
+  },
+  "timeline": {
+   "mode": "counts",
+   "tempos": [
+    {
+     "at_count": 0.0,
+     "counts_per_minute": 144.0,
+     "ramp_to": null,
+     "ramp_counts": null
+    }
+   ],
+   "holds": [],
+   "markers": [],
+   "measures": null,
+   "cues": [],
+   "audio": [],
+   "total_counts": null
+  },
+  "sets": [
+   {
+    "id": "1",
+    "counts": 0.0,
+    "placements": [
+     {
+      "entity": "B1",
+      "x": -2.25,
+      "y": 4.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "B2",
+      "x": -0.75,
+      "y": 4.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "B3",
+      "x": 0.75,
+      "y": 4.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "B4",
+      "x": 2.25,
+      "y": 4.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W1",
+      "x": -2.25,
+      "y": 6.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W2",
+      "x": -0.75,
+      "y": 6.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W3",
+      "x": 0.75,
+      "y": 6.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W4",
+      "x": 2.25,
+      "y": 6.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P1",
+      "x": -2.25,
+      "y": 8.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P2",
+      "x": -0.75,
+      "y": 8.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P3",
+      "x": 0.75,
+      "y": 8.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P4",
+      "x": 2.25,
+      "y": 8.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G1",
+      "x": -2.25,
+      "y": 10.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G2",
+      "x": -0.75,
+      "y": 10.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G3",
+      "x": 0.75,
+      "y": 10.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G4",
+      "x": 2.25,
+      "y": 10.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     }
+    ],
+    "forms": [],
+    "label": null,
+    "cue": null,
+    "source_hash": "",
+    "state": "draft"
+   },
+   {
+    "id": "2",
+    "counts": 16.0,
+    "placements": [
+     {
+      "entity": "B1",
+      "x": 21.02623853371965,
+      "y": 13.93676674316124,
+      "facing": 44.4792403426543,
+      "form": "brass_2",
+      "order": 0,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "B2",
+      "x": 21.108518471362206,
+      "y": 22.989240918819874,
+      "facing": 134.47924034265432,
+      "form": "brass_2",
+      "order": 1,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "B3",
+      "x": 12.056044295703575,
+      "y": 23.071520856462435,
+      "facing": 224.47924034265426,
+      "form": "brass_2",
+      "order": 2,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "B4",
+      "x": 11.97376435806101,
+      "y": 14.0190466808038,
+      "facing": 314.47924034265424,
+      "form": "brass_2",
+      "order": 3,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W1",
+      "x": -27.47959169213309,
+      "y": 29.97431989148621,
+      "facing": 168.45658302373948,
+      "form": "woodwinds_2",
+      "order": 0,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W2",
+      "x": -28.94925171475471,
+      "y": 30.27448554226562,
+      "facing": 168.45658302373948,
+      "form": "woodwinds_2",
+      "order": 1,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W3",
+      "x": -30.418911737376327,
+      "y": 30.57465119304503,
+      "facing": 168.45658302373948,
+      "form": "woodwinds_2",
+      "order": 2,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W4",
+      "x": -31.888571759997944,
+      "y": 30.87481684382444,
+      "facing": 168.45658302373948,
+      "form": "woodwinds_2",
+      "order": 3,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P1",
+      "x": 1.75,
+      "y": 8.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P2",
+      "x": 0.25,
+      "y": 8.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P3",
+      "x": -1.25,
+      "y": 8.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P4",
+      "x": 2.25,
+      "y": 8.0,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G1",
+      "x": -17.857011092074185,
+      "y": 19.568512242015466,
+      "facing": 0.0,
+      "form": "guard_2",
+      "order": 0,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G2",
+      "x": -13.831039957918854,
+      "y": 19.568512242015466,
+      "facing": 0.0,
+      "form": "guard_2",
+      "order": 1,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G3",
+      "x": -9.805068823763522,
+      "y": 19.568512242015466,
+      "facing": 0.0,
+      "form": "guard_2",
+      "order": 2,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G4",
+      "x": -5.779097689608189,
+      "y": 19.568512242015466,
+      "facing": 0.0,
+      "form": "guard_2",
+      "order": 3,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     }
+    ],
+    "forms": [
+     "brass_2",
+     "woodwinds_2",
+     "guard_2"
+    ],
+    "label": null,
+    "cue": null,
+    "source_hash": "",
+    "state": "draft"
+   },
+   {
+    "id": "3",
+    "counts": 12.0,
+    "placements": [
+     {
+      "entity": "B1",
+      "x": 24.257211814469,
+      "y": 25.926919544318384,
+      "facing": 230.29818009930943,
+      "form": "brass_3",
+      "order": 0,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "B2",
+      "x": 23.299023430722812,
+      "y": 24.77285064635177,
+      "facing": 230.29818009930943,
+      "form": "brass_3",
+      "order": 1,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "B3",
+      "x": 22.340835046976622,
+      "y": 23.61878174838516,
+      "facing": 230.29818009930943,
+      "form": "brass_3",
+      "order": 2,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "B4",
+      "x": 21.382646663230435,
+      "y": 22.464712850418547,
+      "facing": 230.29818009930943,
+      "form": "brass_3",
+      "order": 3,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W1",
+      "x": 8.911180077617143,
+      "y": 9.659833881458486,
+      "facing": 182.79800506812597,
+      "form": "woodwinds_3",
+      "order": 0,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W2",
+      "x": 12.64123125368,
+      "y": 13.77321936132677,
+      "facing": 182.79800506812597,
+      "form": "woodwinds_3",
+      "order": 1,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W3",
+      "x": 16.56294958164557,
+      "y": 13.964886513229485,
+      "facing": 182.79800506812597,
+      "form": "woodwinds_3",
+      "order": 2,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W4",
+      "x": 20.676335061513853,
+      "y": 10.23483533716663,
+      "facing": 182.79800506812597,
+      "form": "woodwinds_3",
+      "order": 3,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P1",
+      "x": 13.494890063915136,
+      "y": 21.22528118028315,
+      "facing": 0.0,
+      "form": "percussion_3",
+      "order": 0,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P2",
+      "x": 19.35187175568694,
+      "y": 21.22528118028315,
+      "facing": 0.0,
+      "form": "percussion_3",
+      "order": 1,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P3",
+      "x": 25.208853447458743,
+      "y": 21.22528118028315,
+      "facing": 0.0,
+      "form": "percussion_3",
+      "order": 2,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P4",
+      "x": 31.065835139230543,
+      "y": 21.22528118028315,
+      "facing": 0.0,
+      "form": "percussion_3",
+      "order": 3,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G1",
+      "x": -13.857011092074185,
+      "y": 19.568512242015466,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G2",
+      "x": -17.831039957918854,
+      "y": 19.568512242015466,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G3",
+      "x": -13.805068823763522,
+      "y": 19.568512242015466,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G4",
+      "x": -5.779097689608189,
+      "y": 19.568512242015466,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": false
+     }
+    ],
+    "forms": [
+     "brass_3",
+     "woodwinds_3",
+     "percussion_3"
+    ],
+    "label": null,
+    "cue": null,
+    "source_hash": "",
+    "state": "draft"
+   },
+   {
+    "id": "4",
+    "counts": 12.0,
+    "placements": [
+     {
+      "entity": "B1",
+      "x": 28.257211814469,
+      "y": 25.926919544318384,
+      "facing": 230.29818009930943,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "B2",
+      "x": 26.757211814469,
+      "y": 25.926919544318384,
+      "facing": 230.29818009930943,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "B3",
+      "x": 25.257211814468995,
+      "y": 25.926919544318384,
+      "facing": 230.29818009930943,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "B4",
+      "x": 21.382646663230435,
+      "y": 22.464712850418547,
+      "facing": 230.29818009930943,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W1",
+      "x": -26.870802203238167,
+      "y": 32.55811369489049,
+      "facing": 0.0,
+      "form": "woodwinds_4",
+      "order": 0,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W2",
+      "x": -21.25839426901276,
+      "y": 32.55811369489049,
+      "facing": 0.0,
+      "form": "woodwinds_4",
+      "order": 1,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W3",
+      "x": -15.645986334787354,
+      "y": 32.55811369489049,
+      "facing": 0.0,
+      "form": "woodwinds_4",
+      "order": 2,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W4",
+      "x": -10.033578400561947,
+      "y": 32.55811369489049,
+      "facing": 0.0,
+      "form": "woodwinds_4",
+      "order": 3,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P1",
+      "x": 16.943543881258957,
+      "y": 32.833377339475625,
+      "facing": 0.0,
+      "form": "percussion_4",
+      "order": 0,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P2",
+      "x": 14.795643452918897,
+      "y": 24.54976354090754,
+      "facing": 0.0,
+      "form": "percussion_4",
+      "order": 1,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P3",
+      "x": 20.89551322344814,
+      "y": 18.54782030588153,
+      "facing": 0.0,
+      "form": "percussion_4",
+      "order": 2,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P4",
+      "x": 29.143283422317438,
+      "y": 20.8294908694236,
+      "facing": 0.0,
+      "form": "percussion_4",
+      "order": 3,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G1",
+      "x": -2.2757521630869313,
+      "y": 15.769470361100232,
+      "facing": 45.43877091933759,
+      "form": "guard_4",
+      "order": 0,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G2",
+      "x": -2.322369178035547,
+      "y": 21.856715161122175,
+      "facing": 135.4387709193376,
+      "form": "guard_4",
+      "order": 1,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G3",
+      "x": -8.409613978057486,
+      "y": 21.810098146173562,
+      "facing": 225.43877091933751,
+      "form": "guard_4",
+      "order": 2,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G4",
+      "x": -8.362996963108866,
+      "y": 15.72285334615161,
+      "facing": 315.43877091933774,
+      "form": "guard_4",
+      "order": 3,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     }
+    ],
+    "forms": [
+     "woodwinds_4",
+     "percussion_4",
+     "guard_4"
+    ],
+    "label": null,
+    "cue": null,
+    "source_hash": "",
+    "state": "draft"
+   },
+   {
+    "id": "5",
+    "counts": 16.0,
+    "placements": [
+     {
+      "entity": "B1",
+      "x": 9.887681096772413,
+      "y": 14.285423793692212,
+      "facing": 0.0,
+      "form": "brass_5",
+      "order": 0,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "B2",
+      "x": 15.906144818725965,
+      "y": 14.285423793692212,
+      "facing": 0.0,
+      "form": "brass_5",
+      "order": 1,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "B3",
+      "x": 21.924608540679515,
+      "y": 14.285423793692212,
+      "facing": 0.0,
+      "form": "brass_5",
+      "order": 2,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "B4",
+      "x": 27.943072262633066,
+      "y": 14.285423793692212,
+      "facing": 0.0,
+      "form": "brass_5",
+      "order": 3,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W1",
+      "x": -22.870802203238167,
+      "y": 32.55811369489049,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W2",
+      "x": -25.25839426901276,
+      "y": 32.55811369489049,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W3",
+      "x": -19.645986334787352,
+      "y": 32.55811369489049,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "W4",
+      "x": -10.033578400561947,
+      "y": 32.55811369489049,
+      "facing": 0.0,
+      "form": null,
+      "order": null,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P1",
+      "x": 2.627310266515746,
+      "y": 34.027021790304474,
+      "facing": 161.46761327736223,
+      "form": "percussion_5",
+      "order": 0,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P2",
+      "x": -4.729818409950219,
+      "y": 30.36408370820498,
+      "facing": 251.4676132773622,
+      "form": "percussion_5",
+      "order": 1,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P3",
+      "x": -1.06688032785073,
+      "y": 23.006955031739015,
+      "facing": 341.4676132773622,
+      "form": "percussion_5",
+      "order": 2,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "P4",
+      "x": 6.2902483486152345,
+      "y": 26.669893113838498,
+      "facing": 71.46761327736213,
+      "form": "percussion_5",
+      "order": 3,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G1",
+      "x": -10.343916401323725,
+      "y": 18.308582360372508,
+      "facing": 341.3246621078933,
+      "form": "guard_5",
+      "order": 0,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G2",
+      "x": -8.922894111760511,
+      "y": 17.828274487686123,
+      "facing": 341.3246621078933,
+      "form": "guard_5",
+      "order": 1,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G3",
+      "x": -7.501871822197296,
+      "y": 17.34796661499974,
+      "facing": 341.3246621078933,
+      "form": "guard_5",
+      "order": 2,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     },
+     {
+      "entity": "G4",
+      "x": -6.080849532634083,
+      "y": 16.867658742313356,
+      "facing": 341.3246621078933,
+      "form": "guard_5",
+      "order": 3,
+      "pinned": false,
+      "note": null,
+      "on_field": true
+     }
+    ],
+    "forms": [
+     "brass_5",
+     "percussion_5",
+     "guard_5"
+    ],
+    "label": null,
+    "cue": null,
+    "source_hash": "",
+    "state": "draft"
+   }
+  ],
+  "forms": {
+   "brass_2": {
+    "id": "brass_2",
+    "set": "2",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": true,
+      "kind": "circle",
+      "center": [
+       16.54114141471161,
+       18.504143799811835
+      ],
+      "radius": 6.4013302792898035,
+      "start_deg": 314.4792403426543,
+      "ccw": true
+     },
+     "kind": "circle"
+    },
+    "members": [
+     "B1",
+     "B2",
+     "B3",
+     "B4"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "outward",
+     "value": null
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "woodwinds_2": {
+    "id": "woodwinds_2",
+    "set": "2",
+    "recipe": {
+     "recipe_version": 1,
+     "n": 4,
+     "transform": null,
+     "kind": "block",
+     "origin": [
+      -29.684081726065518,
+      30.424568367655326
+     ],
+     "rows": 1,
+     "cols": 4,
+     "interval": 1.5,
+     "facing": 168.45658302373948,
+     "anchor": "center"
+    },
+    "members": [
+     "W1",
+     "W2",
+     "W3",
+     "W4"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "fixed",
+     "value": 168.45658302373948
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "guard_2": {
+    "id": "guard_2",
+    "set": "2",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": false,
+      "kind": "segment",
+      "a": [
+       -17.857011092074185,
+       19.568512242015466
+      ],
+      "b": [
+       -5.77909768960819,
+       19.568512242015466
+      ]
+     },
+     "kind": "line"
+    },
+    "members": [
+     "G1",
+     "G2",
+     "G3",
+     "G4"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "audience",
+     "value": null
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "brass_3": {
+    "id": "brass_3",
+    "set": "3",
+    "recipe": {
+     "recipe_version": 1,
+     "n": 4,
+     "transform": null,
+     "kind": "block",
+     "origin": [
+      22.819929238849717,
+      24.195816197368465
+     ],
+     "rows": 1,
+     "cols": 4,
+     "interval": 1.5,
+     "facing": 230.29818009930943,
+     "anchor": "center"
+    },
+    "members": [
+     "B1",
+     "B2",
+     "B3",
+     "B4"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "fixed",
+     "value": 230.29818009930943
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "woodwinds_3": {
+    "id": "woodwinds_3",
+    "set": "3",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": false,
+      "kind": "polyline",
+      "points": [
+       [
+        8.911180077617143,
+        9.659833881458486
+       ],
+       [
+        14.506256841711426,
+        15.829912101260913
+       ],
+       [
+        20.676335061513853,
+        10.23483533716663
+       ]
+      ]
+     },
+     "kind": "wedge"
+    },
+    "members": [
+     "W1",
+     "W2",
+     "W3",
+     "W4"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "fixed",
+     "value": 182.79800506812597
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "percussion_3": {
+    "id": "percussion_3",
+    "set": "3",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": false,
+      "kind": "segment",
+      "a": [
+       13.494890063915136,
+       21.22528118028315
+      ],
+      "b": [
+       31.065835139230543,
+       21.22528118028315
+      ]
+     },
+     "kind": "line"
+    },
+    "members": [
+     "P1",
+     "P2",
+     "P3",
+     "P4"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "audience",
+     "value": null
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "woodwinds_4": {
+    "id": "woodwinds_4",
+    "set": "4",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": false,
+      "kind": "segment",
+      "a": [
+       -26.870802203238167,
+       32.55811369489049
+      ],
+      "b": [
+       -10.033578400561947,
+       32.55811369489049
+      ]
+     },
+     "kind": "line"
+    },
+    "members": [
+     "W1",
+     "W2",
+     "W3",
+     "W4"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "audience",
+     "value": null
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "percussion_4": {
+    "id": "percussion_4",
+    "set": "4",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": false,
+      "kind": "arc",
+      "center": [
+       23.0434136517882,
+       26.831434104449613
+      ],
+      "radius": 8.557554195790463,
+      "start_deg": 135.46362100677123,
+      "sweep_deg": 180.0
+     },
+     "kind": "arc"
+    },
+    "members": [
+     "P1",
+     "P2",
+     "P3",
+     "P4"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "audience",
+     "value": null
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "guard_4": {
+    "id": "guard_4",
+    "set": "4",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": true,
+      "kind": "circle",
+      "center": [
+       -5.34268307057221,
+       18.789784253636896
+      ],
+      "radius": 4.304458293529913,
+      "start_deg": 315.43877091933757,
+      "ccw": true
+     },
+     "kind": "circle"
+    },
+    "members": [
+     "G1",
+     "G2",
+     "G3",
+     "G4"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "outward",
+     "value": null
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "brass_5": {
+    "id": "brass_5",
+    "set": "5",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": false,
+      "kind": "segment",
+      "a": [
+       9.887681096772413,
+       14.285423793692212
+      ],
+      "b": [
+       27.943072262633066,
+       14.285423793692212
+      ]
+     },
+     "kind": "line"
+    },
+    "members": [
+     "B1",
+     "B2",
+     "B3",
+     "B4"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "audience",
+     "value": null
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "percussion_5": {
+    "id": "percussion_5",
+    "set": "5",
+    "recipe": {
+     "recipe_version": 1,
+     "n": null,
+     "transform": null,
+     "curve": {
+      "closed": true,
+      "kind": "circle",
+      "center": [
+       0.7802149693325084,
+       28.516988411021742
+      ],
+      "radius": 5.811387861577153,
+      "start_deg": 71.46761327736222,
+      "ccw": true
+     },
+     "kind": "circle"
+    },
+    "members": [
+     "P1",
+     "P2",
+     "P3",
+     "P4"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "outward",
+     "value": null
+    },
+    "locked": false,
+    "meta": {}
+   },
+   "guard_5": {
+    "id": "guard_5",
+    "set": "5",
+    "recipe": {
+     "recipe_version": 1,
+     "n": 4,
+     "transform": null,
+     "kind": "block",
+     "origin": [
+      -8.212382966978904,
+      17.588120551342932
+     ],
+     "rows": 1,
+     "cols": 4,
+     "interval": 1.5,
+     "facing": 341.3246621078933,
+     "anchor": "center"
+    },
+    "members": [
+     "G1",
+     "G2",
+     "G3",
+     "G4"
+    ],
+    "spacing": {
+     "mode": "count",
+     "interval": null,
+     "start": 0.0,
+     "end": null,
+     "align": "start",
+     "gaps": []
+    },
+    "facing": {
+     "mode": "fixed",
+     "value": 341.3246621078933
+    },
+    "locked": false,
+    "meta": {}
+   }
+  },
+  "transitions": [
+   {
+    "id": [
+     "1",
+     "2"
+    ],
+    "counts": 16.0,
+    "rows": {
+     "P1": {
+      "entity": "P1",
+      "style": "follow",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": "route",
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P2": {
+      "entity": "P2",
+      "style": "follow",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": "route",
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P3": {
+      "entity": "P3",
+      "style": "follow",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": "route",
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P4": {
+      "entity": "P4",
+      "style": "hold",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W1": {
+      "entity": "W1",
+      "style": "curve",
+      "start": 4.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": -12.864795846066546,
+        "y": 15.987159945743105,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "ease_in_out",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G2": {
+      "entity": "G2",
+      "style": "curve",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": -9.290519978959427,
+        "y": 16.784256121007733,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B1": {
+      "entity": "B1",
+      "style": "polyline",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 21.02623853371965,
+        "y": 4.0,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W2": {
+      "entity": "W2",
+      "style": "polyline",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": -28.94925171475471,
+        "y": 6.0,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G3": {
+      "entity": "G3",
+      "style": "polyline",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": -9.805068823763522,
+        "y": 10.0,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "ease_in_out",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B2": {
+      "entity": "B2",
+      "style": "rotate",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": [
+       8.211795100263892,
+       15.759368762389101
+      ],
+      "sweep_deg": 156.58584958688164,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W3": {
+      "entity": "W3",
+      "style": "rotate",
+      "start": 4.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": [
+       -16.69188046511636,
+       15.93148734473536
+      ],
+      "sweep_deg": 162.80782911405527,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "ease_in_out",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G4": {
+      "entity": "G4",
+      "style": "rotate",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": [
+       -4.062662944918036,
+       12.855870375660738
+      ],
+      "sweep_deg": 128.68546080871454,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B3": {
+      "entity": "B3",
+      "style": "custom",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "ease_in_out",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W4": {
+      "entity": "W4",
+      "style": "custom",
+      "start": 4.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B4": {
+      "entity": "B4",
+      "style": "straight",
+      "start": 4.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "ease_in_out",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G1": {
+      "entity": "G1",
+      "style": "straight",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "ease_in_out",
+       "strength": 2.0,
+       "points": []
+      }
+     }
+    },
+    "routes": {
+     "route": {
+      "id": "route",
+      "curve": {
+       "closed": false,
+       "kind": "polyline",
+       "points": [
+        [
+         0.75,
+         8.0
+        ],
+        [
+         -0.75,
+         8.0
+        ],
+        [
+         -2.25,
+         8.0
+        ],
+        [
+         1.75,
+         8.0
+        ]
+       ]
+      },
+      "members": [
+       "P1",
+       "P2",
+       "P3"
+      ],
+      "offsets": [
+       3.0,
+       1.5,
+       0.0
+      ],
+      "travel": 4.0,
+      "start": 0.0,
+      "end": null
+     }
+    },
+    "notes": "",
+    "source_hash": ""
+   },
+   {
+    "id": [
+     "2",
+     "3"
+    ],
+    "counts": 12.0,
+    "rows": {
+     "G1": {
+      "entity": "G1",
+      "style": "follow",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": "route",
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G2": {
+      "entity": "G2",
+      "style": "follow",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": "route",
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G3": {
+      "entity": "G3",
+      "style": "follow",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": "route",
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G4": {
+      "entity": "G4",
+      "style": "hold",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B4": {
+      "entity": "B4",
+      "style": "curve",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 14.678205510645721,
+        "y": 20.241879765611174,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P1": {
+      "entity": "P1",
+      "style": "curve",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 9.622445031957568,
+        "y": 12.612640590141575,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W1": {
+      "entity": "W1",
+      "style": "polyline",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 8.911180077617143,
+        "y": 29.97431989148621,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P2": {
+      "entity": "P2",
+      "style": "polyline",
+      "start": 3.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 19.35187175568694,
+        "y": 8.0,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B1": {
+      "entity": "B1",
+      "style": "rotate",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": [
+       19.74505112998048,
+       20.71240671075864
+      ],
+      "sweep_deg": 128.42260913378368,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W2": {
+      "entity": "W2",
+      "style": "rotate",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": [
+       -9.260379167695257,
+       19.2353138067543
+      ],
+      "sweep_deg": -164.72496181944794,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P3": {
+      "entity": "P3",
+      "style": "rotate",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": [
+       13.320731147776748,
+       11.92919086226685
+      ],
+      "sweep_deg": -157.06744334332734,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B2": {
+      "entity": "B2",
+      "style": "custom",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "ease_in",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W3": {
+      "entity": "W3",
+      "style": "custom",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "ease_in",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P4": {
+      "entity": "P4",
+      "style": "custom",
+      "start": 3.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "ease_in",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W4": {
+      "entity": "W4",
+      "style": "straight",
+      "start": 3.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     }
+    },
+    "routes": {
+     "route": {
+      "id": "route",
+      "curve": {
+       "closed": false,
+       "kind": "polyline",
+       "points": [
+        [
+         -9.805068823763522,
+         19.568512242015466
+        ],
+        [
+         -13.831039957918854,
+         19.568512242015466
+        ],
+        [
+         -17.857011092074185,
+         19.568512242015466
+        ],
+        [
+         -13.857011092074185,
+         19.568512242015466
+        ]
+       ]
+      },
+      "members": [
+       "G1",
+       "G2",
+       "G3"
+      ],
+      "offsets": [
+       8.051942268310663,
+       4.025971134155332,
+       0.0
+      ],
+      "travel": 4.0,
+      "start": 0.0,
+      "end": null
+     }
+    },
+    "notes": "",
+    "source_hash": ""
+   },
+   {
+    "id": [
+     "3",
+     "4"
+    ],
+    "counts": 12.0,
+    "rows": {
+     "B1": {
+      "entity": "B1",
+      "style": "follow",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": "route",
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B2": {
+      "entity": "B2",
+      "style": "follow",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": "route",
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B3": {
+      "entity": "B3",
+      "style": "follow",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": "route",
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B4": {
+      "entity": "B4",
+      "style": "hold",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W3": {
+      "entity": "W3",
+      "style": "curve",
+      "start": 3.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": -1.5415183765708926,
+        "y": 25.261500104059987,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P4": {
+      "entity": "P4",
+      "style": "curve",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 32.10455928077399,
+        "y": 19.027386024853378,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W4": {
+      "entity": "W4",
+      "style": "polyline",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": -10.033578400561947,
+        "y": 10.23483533716663,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G1": {
+      "entity": "G1",
+      "style": "polyline",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": -2.2757521630869313,
+        "y": 19.568512242015466,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "ease_in_out",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P1": {
+      "entity": "P1",
+      "style": "rotate",
+      "start": 3.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": [
+       12.343445424075188,
+       27.883693351335545
+      ],
+      "sweep_deg": 127.28529783978428,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G2": {
+      "entity": "G2",
+      "style": "rotate",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": [
+       -10.514594375753324,
+       23.680483731783383
+      ],
+      "sweep_deg": 138.11261819580966,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W1": {
+      "entity": "W1",
+      "style": "custom",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P2": {
+      "entity": "P2",
+      "style": "custom",
+      "start": 3.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G3": {
+      "entity": "G3",
+      "style": "custom",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P3": {
+      "entity": "P3",
+      "style": "straight",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "ease_in_out",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G4": {
+      "entity": "G4",
+      "style": "straight",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "ease_in_out",
+       "strength": 2.0,
+       "points": []
+      }
+     }
+    },
+    "routes": {
+     "route": {
+      "id": "route",
+      "curve": {
+       "closed": false,
+       "kind": "polyline",
+       "points": [
+        [
+         22.340835046976622,
+         23.61878174838516
+        ],
+        [
+         23.299023430722812,
+         24.77285064635177
+        ],
+        [
+         24.257211814469,
+         25.926919544318384
+        ],
+        [
+         28.257211814469,
+         25.926919544318384
+        ]
+       ]
+      },
+      "members": [
+       "B1",
+       "B2",
+       "B3"
+      ],
+      "offsets": [
+       3.0000000000000018,
+       1.5000000000000007,
+       0.0
+      ],
+      "travel": 4.0,
+      "start": 0.0,
+      "end": null
+     }
+    },
+    "notes": "",
+    "source_hash": ""
+   },
+   {
+    "id": [
+     "4",
+     "5"
+    ],
+    "counts": 16.0,
+    "rows": {
+     "W1": {
+      "entity": "W1",
+      "style": "follow",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": "route",
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W2": {
+      "entity": "W2",
+      "style": "follow",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": "route",
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W3": {
+      "entity": "W3",
+      "style": "follow",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": "route",
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "W4": {
+      "entity": "W4",
+      "style": "hold",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B2": {
+      "entity": "B2",
+      "style": "curve",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 23.331678316597483,
+        "y": 18.1061716690053,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "ease_out",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P3": {
+      "entity": "P3",
+      "style": "curve",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 7.914316447798706,
+        "y": 22.77738766881027,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G4": {
+      "entity": "G4",
+      "style": "curve",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": -9.221923247871475,
+        "y": 18.29525604423248,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B3": {
+      "entity": "B3",
+      "style": "polyline",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 21.924608540679515,
+        "y": 25.926919544318384,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P4": {
+      "entity": "P4",
+      "style": "polyline",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [
+       {
+        "x": 6.2902483486152345,
+        "y": 20.8294908694236,
+        "at": null
+       }
+      ],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "B4": {
+      "entity": "B4",
+      "style": "rotate",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": [
+       27.003092126500416,
+       20.252116824456508
+      ],
+      "sweep_deg": 120.44070583660618,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G1": {
+      "entity": "G1",
+      "style": "rotate",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": [
+       -5.409256000099682,
+       19.900662039469715
+      ],
+      "sweep_deg": -109.29890759671129,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": null,
+      "motion_params": {},
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "P1": {
+      "entity": "P1",
+      "style": "custom",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     },
+     "G2": {
+      "entity": "G2",
+      "style": "custom",
+      "start": 0.0,
+      "end": null,
+      "waypoints": [],
+      "route": null,
+      "pivot": null,
+      "sweep_deg": null,
+      "facing_mode": "to_target",
+      "facing_value": null,
+      "turn_counts": 0.0,
+      "turn_direction": "shortest",
+      "pace": 1.0,
+      "locked": false,
+      "note": null,
+      "motion_fn": "weave",
+      "motion_params": {
+       "amplitude": 0.5,
+       "cycles": 2.0
+      },
+      "easing": {
+       "kind": "linear",
+       "strength": 2.0,
+       "points": []
+      }
+     }
+    },
+    "routes": {
+     "route": {
+      "id": "route",
+      "curve": {
+       "closed": false,
+       "kind": "polyline",
+       "points": [
+        [
+         -15.645986334787354,
+         32.55811369489049
+        ],
+        [
+         -21.25839426901276,
+         32.55811369489049
+        ],
+        [
+         -26.870802203238167,
+         32.55811369489049
+        ],
+        [
+         -22.870802203238167,
+         32.55811369489049
+        ]
+       ]
+      },
+      "members": [
+       "W1",
+       "W2",
+       "W3"
+      ],
+      "offsets": [
+       11.224815868450813,
+       5.612407934225407,
+       0.0
+      ],
+      "travel": 4.0,
+      "start": 0.0,
+      "end": null
+     }
+    },
+    "notes": "",
+    "source_hash": ""
+   }
+  ],
+  "facing_overrides": [],
+  "dependencies": {
+   "sheet:college-football": "1"
+  },
+  "pins": [],
+  "revision": ""
+ }
+}

@@ -3,8 +3,10 @@ integrity.py --- checks that every commit lands a known path layout and a decoda
 
 Contains:
     KNOWN_ROOTS: the path prefixes a repository accepts documents under
+    RESERVED_ROOTS: the path prefixes kept for documents a later format defines, refused today
     require_structured_files(): checks changed text files decode as their readers decode them
-    require_known_path(): refuses a path outside KNOWN_ROOTS, including look-alike paths
+    require_known_path(): refuses a path outside KNOWN_ROOTS, including look-alike paths, paths
+        under RESERVED_ROOTS and any name under `/cast/` but cast.json
     blob_digest(): returns the SHA-256 hex digest blobs are addressed by
     LazyBlobs: maps paths to blob bytes, reading each blob only when its path is looked up
     LazyBlobs.digests: returns the content digest of each path's blob
@@ -24,6 +26,7 @@ from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import SchemaError, StorageError
 from e8s.core.ids import check_id
 from e8s.show.decode_cache import DecodeCache
+from e8s.show.document_paths import CAST_DOC
 from e8s.show.documents import (
     SHEET_DOC,
     SHOW_DOC,
@@ -36,6 +39,7 @@ from e8s.show.documents import (
 from e8s.show.files import require_writable
 from e8s.show.migrate import require_current_show_doc
 from e8s.show.models import Show
+from e8s.show.role_documents import CAST_ROOT, require_cast_beside_roles
 from e8s.show.set_keys import PAIR_SEPARATOR, SETS_ROOT, TRANSITIONS_ROOT
 from e8s.show.structured import TEXT_SUFFIXES, require_structured
 
@@ -44,14 +48,18 @@ KNOWN_ROOTS = (
     "/time/",
     "/sets/",
     "/transitions/",
+    CAST_ROOT,
     "/canvas/",
     "/notes/",
+    "/proposals/",
+    "/assets/",
     "/config/",
     "/publish/",
     "/renders/",
     "/exports/",
     "/lib/drafts/",
 )
+RESERVED_ROOTS = ("/props/", "/tracks/")
 FORBIDDEN_CHARACTER = "\\"
 CONTROL_CATEGORY = "Cc"
 REQUIRED_DOCS = (SHOW_DOC, SHEET_DOC, TIMELINE_DOC)
@@ -64,6 +72,16 @@ def _bad_path(path: str) -> StorageError:
         f"path {path!r} is not a storable document path",
         hint=f"write files under {', '.join(KNOWN_ROOTS)} with no '.', '..' or empty parts",
         context={"path": path, "roots": list(KNOWN_ROOTS)},
+        code=ErrorCode.BAD_PATH,
+    )
+
+
+def _reserved_path(path: str, root: str) -> StorageError:
+    return StorageError(
+        f"{root} is reserved for documents a later format version defines",
+        hint=f"{root} is reserved, so nothing may be stored there yet; write files under"
+        f" {', '.join(KNOWN_ROOTS)}",
+        context={"path": path, "root": root, "roots": list(KNOWN_ROOTS)},
         code=ErrorCode.BAD_PATH,
     )
 
@@ -85,11 +103,21 @@ def require_known_path(path: str) -> None:
     ...     print(exc.code)
     BAD_PATH
     """
+    reserved = next((r for r in RESERVED_ROOTS if path.startswith(r)), None)
+    if reserved is not None:
+        raise _reserved_path(path, reserved)
     root = next((r for r in KNOWN_ROOTS if path.startswith(r)), None)
     if root is None or any(_is_forbidden(c) for c in path):
         raise _bad_path(path)
     if any(segment in DOT_SEGMENTS for segment in path[len(root) :].split("/")):
         raise _bad_path(path)
+    if root == CAST_ROOT and path != CAST_DOC:
+        raise StorageError(
+            f"{path} is not a cast document: {CAST_ROOT} holds only {CAST_DOC}",
+            hint=f"store the cast in {CAST_DOC}; no format defines another name there",
+            context={"path": path, "allowed": [CAST_DOC]},
+            code=ErrorCode.BAD_PATH,
+        )
 
 
 def blob_digest(data: bytes) -> str:
@@ -289,6 +317,7 @@ def require_valid_digests(
     if SHOW_DOC in after:
         require_current_show_doc(blob(after[SHOW_DOC]))
     _require_required_docs(after)
+    require_cast_beside_roles(after)
     show = decode_show(LazyBlobs(after, blob), cache=cache, digests=after)
     require_storable(show)
     _require_no_orphans(show, [p for p in changed if p in after])

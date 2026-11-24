@@ -126,6 +126,7 @@ from e8s.show.sections import join_sections
 from e8s.show.set_keys import to_display_path, to_stored_path
 from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import Workspace, open_workspace
+from tests.fixtures.layout1 import layout1_documents, role_split_documents
 from tests.helpers import json_doc
 
 AT = datetime(2026, 11, 16, 9, 0, tzinfo=UTC)
@@ -265,7 +266,6 @@ def test_regression_never_renumbered_v020_show_encodes_to_its_stored_documents(
     _, _, tree = _fixture_tree(tmp_path)
     stored = {p: raw for p, raw in tree.items() if is_show_doc(p) and p != LEGACY_NOTES_DOC}
     encoded = encode_show(decode_show(tree))
-    assert set(encoded) == set(stored)
     parsed = {p: json.loads(raw) for p, raw in stored.items()}
     canonical = {p: dump_json(doc) for p, doc in migrate_forms(parsed, ReportBuilder(1)).items()}
     show_doc = _without_dropped_fields(json.loads(stored[SHOW_DOC]))
@@ -277,7 +277,7 @@ def test_regression_never_renumbered_v020_show_encodes_to_its_stored_documents(
     for old, new in renames:
         quoted = (json.dumps(old).encode(), json.dumps(new).encode())
         canonical = {p: raw.replace(*quoted) for p, raw in canonical.items()}
-    assert {p: encoded[p] for p in stored} == canonical
+    assert encoded == role_split_documents(canonical)
     assert not [p for p in encoded if p.endswith("/set.json") and "key" in json.loads(encoded[p])]
 
 
@@ -324,9 +324,9 @@ def test_encode_after_renumber_addresses_sets_by_key() -> None:
     docs = encode_show(show)
     assert json.loads(docs[SHOW_DOC])["sets"] == ["1", "1A", "2"]
     assert {p for p in docs if p.startswith("/sets/")} == {
-        "/sets/1/set.json",
-        "/sets/1A/set.json",
-        "/sets/2/set.json",
+        f"/sets/{key}/{name}"
+        for key in ("1", "1A", "2")
+        for name in ("set.json", "drill.json", "facing.json", "labels.json")
     }
     assert "/transitions/1A-2/paths.json" in docs
     assert json.loads(docs["/sets/1A/set.json"])["key"] == "1A"
@@ -607,7 +607,7 @@ def test_regression_new_set_key_must_be_nfc() -> None:
 
 def _case_pair_docs(first_id: str, second_id: str) -> dict[str, bytes]:
     """Writes the example show as v0.2 stored it, under set folders named by the given IDs."""
-    docs = encode_show(two_set_show())
+    docs = layout1_documents(two_set_show())
     meta = without_header(json.loads(docs[SHOW_DOC]))
     meta["sets"] = [first_id, second_id]
     docs[SHOW_DOC] = dump_json(meta)
@@ -636,7 +636,7 @@ def test_regression_v020_show_with_set_ids_differing_by_case_loads() -> None:
     body = {**json.loads(docs[set_doc("1A")]), "id": "1A.2"}
     moved = {p: raw for p, raw in docs.items() if p != set_doc("1A")}
     expected = {**moved, SHOW_DOC: dump_show_doc(meta), set_doc("1A.2"): dump_json(body)}
-    assert encode_show(show) == expected
+    assert encode_show(show) == role_split_documents(expected)
     assert decode_show(encode_show(show)) == show
     assert load_show(open_workspace(_stored_repo(docs), SHOW_ID)).set_ids() == ["1a", "1A.2"]
 

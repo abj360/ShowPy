@@ -22,7 +22,8 @@ Contains:
     test_replace_rejects_an_unknown_field: raises SchemaError for a field the model lacks
     test_to_json_returns_a_json_safe_dict: dumps tuples as lists, enums as values, text as JSON
     test_from_json_reads_back_what_to_json_writes: round-trips a whole show
-    test_to_json_matches_the_stored_set_document: dumps a set as its stored document holds it
+    test_to_json_matches_the_stored_set_document: dumps a set as its stored set and role
+        documents hold it together
     test_regression_from_json_raises_schema_error_on_bad_data: names the failing dotted loc
     test_regression_constrained_number_types_reject_out_of_range: rejects zero, negative, NaN and
         infinity in a positive field
@@ -96,7 +97,7 @@ from e8s.core.types import (
 from e8s.examples import two_set_show
 from e8s.geo.curves import curve_from_construction
 from e8s.sheet.models import GuideLine
-from e8s.show.document_paths import set_doc
+from e8s.show.document_paths import role_docs, set_doc
 from e8s.show.documents import encode_show
 from e8s.show.models import Show
 from e8s.show.set_keys import set_key
@@ -233,8 +234,14 @@ def test_from_json_reads_back_what_to_json_writes() -> None:
 
 def test_to_json_matches_the_stored_set_document() -> None:
     show = two_set_show()
-    stored = encode_show(show)[set_doc(set_key(show.sets[0]))]
-    assert show.sets[0].to_json() == json.loads(stored)
+    docs, folder = encode_show(show), set_key(show.sets[0])
+    stored = json.loads(docs[set_doc(folder)])
+    order = stored.pop("placement_order")
+    roles = [json.loads(docs[path]) for path in role_docs(folder)]
+    placements = [
+        {"entity": s, **{k: v for row in roles for k, v in row[s].items()}} for s in order
+    ]
+    assert show.sets[0].to_json() == {**stored, "placements": placements}
 
 
 def test_regression_from_json_raises_schema_error_on_bad_data() -> None:

@@ -146,7 +146,7 @@ def test_revert_restores_an_earlier_show() -> None:
     restored = revert(ws, first.id, AT + 3 * STEP)
     assert restored.parent == second.id
     assert restored.id not in (first.id, second.id)
-    assert restored.changed == ("/sets/2/set.json",)
+    assert restored.changed == ("/sets/2/drill.json",)
     assert set(restored.to_json()) == {"id", "parent", "at", "changed"}
     assert load_show(ws).replace(revision="") == first_show.replace(revision="")
 

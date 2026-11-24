@@ -18,17 +18,16 @@ Contains:
 """
 
 import itertools
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from functools import partial
 from typing import NamedTuple
 
 from e8s.choreo.form_models import Form
 from e8s.choreo.models import Set
 from e8s.choreo.path_models import TransitionSpec
-from e8s.core.errors import SchemaError, StorageError, field_errors
+from e8s.core.errors import SchemaError, field_errors
 from e8s.core.ids import SetId, TransitionId, check_id
 from e8s.core.json_types import JsonValue
-from e8s.core.strict_json import parse_strict_json
 from e8s.show.decode_cache import DecodeCache
 from e8s.show.document_paths import (
     FORMS_FIELD,
@@ -46,7 +45,17 @@ from e8s.show.document_paths import (
     forms_doc,
     is_storable_folder,
     paths_doc,
+    role_docs,
     set_doc,
+)
+from e8s.show.document_sources import (
+    JsonObject,
+    Source,
+    load_array,
+    load_object,
+    object_source,
+    raw_source,
+    shape_error,
 )
 from e8s.show.migrate import (
     CHECKED_CONTEXT,
@@ -62,69 +71,13 @@ from e8s.show.migrate import (
     without_header,
 )
 from e8s.show.models import Show, require_set_count
-
-type JsonObject = dict[str, JsonValue]
-type JsonArray = list[JsonValue]
-
-
-class _Source(NamedTuple):
-    """Reads the show documents of one stored tree as parsed JSON, by stored path.
-
-    Attributes:
-        has: Tells whether the tree holds a document.
-        load: Returns the parsed JSON of a document the tree holds.
-    """
-
-    has: Callable[[str], bool]
-    load: Callable[[str], JsonValue]
-
-
-def _raw_source(docs: Mapping[str, bytes]) -> _Source:
-    """Reads stored bytes, parsing each document strictly when it is first asked for."""
-    return _Source(docs.__contains__, lambda path: parse_strict_json(docs[path], document=path))
-
-
-def _object_source(objects: Mapping[str, JsonValue]) -> _Source:
-    """Reads documents that are already parsed, such as migrated ones."""
-    return _Source(objects.__contains__, objects.__getitem__)
-
-
-def _load_json(source: _Source, path: str) -> JsonValue:
-    if not source.has(path):
-        raise StorageError(
-            f"document {path} is missing",
-            hint="write the whole show with save_show() first",
-            context={"path": path},
-        )
-    return source.load(path)
-
-
-def _shape_error(path: str, name: str, value: object) -> SchemaError:
-    return SchemaError(
-        f"{path} must hold a JSON {name}, not {type(value).__name__}",
-        hint=f"write a JSON {name}, as save_show() does",
-        context={"path": path},
-    )
-
-
-def _load_object(source: _Source, path: str, *, is_optional: bool = False) -> JsonObject:
-    """Parses a document that must hold a JSON object; an absent optional one reads as `{}`."""
-    if is_optional and not source.has(path):
-        return {}
-    value = _load_json(source, path)
-    if not isinstance(value, dict):
-        raise _shape_error(path, "object", value)
-    return value
-
-
-def _load_array(source: _Source, path: str, *, is_optional: bool = False) -> JsonArray:
-    """Parses a document that must hold a JSON array; an absent optional one reads as `[]`."""
-    if is_optional and not source.has(path):
-        return []
-    value = _load_json(source, path)
-    if not isinstance(value, list):
-        raise _shape_error(path, "array", value)
-    return value
+from e8s.show.role_documents import (
+    read_set_object,
+    require_known_cast_documents,
+    require_listed_role_folders,
+    require_no_role_documents,
+    with_cast,
+)
 
 
 class _Reading(NamedTuple):
@@ -137,21 +90,27 @@ class _Reading(NamedTuple):
         digests: Path to blob digest, naming the cache entries.
     """
 
-    source: _Source
+    source: Source
     context: Mapping[str, bool] | None = None
     cache: DecodeCache | None = None
     digests: Mapping[str, str] = {}
 
-    def cached[T](self, path: str, decode: Callable[[], T]) -> T:
-        """Returns a cached decode of a document, or decodes it and caches the result."""
+    def cached[T](self, path: str, decode: Callable[[], T], also: Sequence[str] = ()) -> T:
+        """Returns a cached decode of a document and the `also` documents it reads, or decodes it.
+
+        The cache key joins the digests of the documents present, so a change to any of them,
+        or one appearing or going, misses the cache.
+        """
         digest = self.digests.get(path)
-        if self.cache is None or digest is None:
+        present = [p for p in also if self.source.has(p)]
+        if self.cache is None or digest is None or any(p not in self.digests for p in present):
             return decode()
-        return self.cache.get_or_decode(path, digest, decode)
+        key = " ".join([digest, *(f"{p}={self.digests[p]}" for p in present)])
+        return self.cache.get_or_decode(path, key, decode)
 
 
 def _set(reading: _Reading, key: str) -> Set:
-    raw = _load_object(reading.source, set_doc(key))
+    raw = read_set_object(reading.source, key)
     stored_key = raw.get("key")
     if isinstance(stored_key, str):
         check_id(stored_key, kind="set key")
@@ -168,7 +127,7 @@ def _set(reading: _Reading, key: str) -> Set:
 
 
 def _forms(reading: _Reading, key: str) -> tuple[Form, ...]:
-    stored = _load_array(reading.source, forms_doc(key), is_optional=True)
+    stored = load_array(reading.source, forms_doc(key), is_optional=True)
     return tuple(Form._validated(f, context=reading.context) for f in stored)
 
 
@@ -183,7 +142,7 @@ def _require_forms_for(key: str, set_id: SetId, forms: tuple[Form, ...]) -> None
 
 
 def _paths(reading: _Reading, folder: tuple[str, str]) -> tuple[TransitionSpec, ...]:
-    raw = _load_object(reading.source, paths_doc(folder), is_optional=True)
+    raw = load_object(reading.source, paths_doc(folder), is_optional=True)
     if not raw:
         return ()
     return (TransitionSpec._validated(raw, context=reading.context),)
@@ -204,7 +163,7 @@ def _require_paths_for(
 def _set_order(order: object) -> list[str]:
     """Checks the set order show.json lists: an array of at most MAX_SETS storable set keys."""
     if not isinstance(order, list):
-        raise _shape_error(SHOW_DOC, "array under 'sets'", order)
+        raise shape_error(SHOW_DOC, "array under 'sets'", order)
     require_set_count(len(order))
     bad = [k for k in order if not is_storable_folder(k)]
     if bad:
@@ -234,11 +193,20 @@ def _with_counts(
     return TransitionSpec._validated(fields | {"counts": counts}, context=context)
 
 
-def _assemble(reading: _Reading, meta: JsonObject, revision: str) -> Show:
-    """Builds the show from a header-free show.json object and the other documents."""
+def _assemble(reading: _Reading, meta: JsonObject, revision: str, *, is_current: bool) -> Show:
+    """Builds the show from a header-free show.json object and the other documents.
+
+    A tree of the current format (`is_current`) must store its cast; a migrated older tree may
+    leave it to the Show default.
+    """
     order = _set_order(meta.get(SET_ORDER_FIELD, []))
-    rest = {key: value for key, value in meta.items() if key != SET_ORDER_FIELD}
-    stored = [(k, reading.cached(set_doc(k), partial(_set, reading, k))) for k in order]
+    require_listed_role_folders(reading.source.paths(), order)
+    require_known_cast_documents(reading.source.paths())
+    kept = {k: v for k, v in meta.items() if k != SET_ORDER_FIELD}
+    rest = with_cast(reading.source, kept, is_required=is_current)
+    stored = [
+        (k, reading.cached(set_doc(k), partial(_set, reading, k), also=role_docs(k))) for k in order
+    ]
     forms: dict[str, Form] = {}
     for key, current in stored:
         found = reading.cached(forms_doc(key), partial(_forms, reading, key))
@@ -253,8 +221,8 @@ def _assemble(reading: _Reading, meta: JsonObject, revision: str) -> Show:
     return Show._validated(
         {
             **rest,
-            "sheet": _load_object(reading.source, SHEET_DOC),
-            "timeline": _load_object(reading.source, TIMELINE_DOC),
+            "sheet": load_object(reading.source, SHEET_DOC),
+            "timeline": load_object(reading.source, TIMELINE_DOC),
             "sets": sets,
             "forms": forms,
             "transitions": specs,
@@ -279,7 +247,7 @@ class _Migrated(NamedTuple):
     beside: dict[str, JsonValue]
 
 
-def _migrated_show(source: _Source, meta: JsonObject, version: int, revision: str) -> _Migrated:
+def _migrated_show(source: Source, meta: JsonObject, version: int, revision: str) -> _Migrated:
     """Migrates a tree stored in an older format version to a show, in memory.
 
     Only the documents the set order names, and the v1 notes, are parsed, as for a current tree.
@@ -288,14 +256,15 @@ def _migrated_show(source: _Source, meta: JsonObject, version: int, revision: st
     sub-steps that write documents beside the show run on it and the migrated documents.
     """
     order = _set_order(meta.get(SET_ORDER_FIELD, []))
+    require_no_role_documents(source.paths(), version)
     objects: dict[str, JsonValue] = {SHOW_DOC: meta}
     for path in sorted((docs_for_order(order) | {LEGACY_NOTES_DOC}) - {SHOW_DOC}):
         if source.has(path):
             objects[path] = source.load(path)
     report = ReportBuilder(version)
     migrated = migrate_objects(objects, version, report)
-    reading = _Reading(_object_source(migrated), LEGACY_CONTEXT)
-    show = _assemble(reading, _load_object(reading.source, SHOW_DOC), revision)
+    reading = _Reading(object_source(migrated), LEGACY_CONTEXT)
+    show = _assemble(reading, load_object(reading.source, SHOW_DOC), revision, is_current=False)
     renamed = migrate_model(show, version, report)
     checked = Show._validated(renamed.to_json(), context=CHECKED_CONTEXT)
     return _Migrated(checked, report, migrate_beside(checked, migrated, version, report))
@@ -353,9 +322,9 @@ def migrate_dump(
     {}
     """
     revision = dump.get(REVISION_FIELD, "")
-    source = _object_source(_split_dump(dump))
+    source = object_source(_split_dump(dump))
     try:
-        meta = _load_object(source, SHOW_DOC)
+        meta = load_object(source, SHOW_DOC)
         migrated = _migrated_show(
             source, meta, version, revision if isinstance(revision, str) else ""
         )
@@ -368,7 +337,7 @@ def _dump_list(dump: Mapping[str, JsonValue], field: str) -> list[JsonObject]:
     """Returns a list field of a show dump whose items must be objects; absent reads as `[]`."""
     value = dump.get(field, [])
     if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
-        raise _shape_error(f"show field {field}", "array of objects", value)
+        raise shape_error(f"show field {field}", "array of objects", value)
     return [item for item in value if isinstance(item, dict)]
 
 
@@ -377,7 +346,7 @@ def _split_dump(dump: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
     sets = _dump_list(dump, SET_ORDER_FIELD)
     keys = {str(s.get("id")): str(s.get("key") or s.get("id")) for s in sets}
     if len(set(keys.values())) != len(sets):
-        raise _shape_error(f"show field {SET_ORDER_FIELD}", "array of distinct sets", sets)
+        raise shape_error(f"show field {SET_ORDER_FIELD}", "array of distinct sets", sets)
     meta = {key: value for key, value in dump.items() if key not in SPLIT_FIELDS}
     objects: dict[str, JsonValue] = {SHOW_DOC: {**meta, SET_ORDER_FIELD: list(keys.values())}}
     missing = [field for field in (SHEET_FIELD, TIMELINE_FIELD) if field not in dump]
@@ -419,7 +388,7 @@ def _paths_by_pair(dump: Mapping[str, JsonValue], keys: Mapping[str, str]) -> Js
         first, second = ids
         path = paths_doc((keys[first], keys[second]))
         if path in found:
-            raise _shape_error(f"show field {TRANSITIONS_FIELD}", "one entry per pair", pair)
+            raise shape_error(f"show field {TRANSITIONS_FIELD}", "one entry per pair", pair)
         found[path] = spec
     return found
 
@@ -430,12 +399,12 @@ def _forms_by_set(
     """Groups the forms of a show dump by set ID, refusing a form of no set."""
     forms = dump.get(FORMS_FIELD, {})
     if not isinstance(forms, dict):
-        raise _shape_error(f"show field {FORMS_FIELD}", "object", forms)
+        raise shape_error(f"show field {FORMS_FIELD}", "object", forms)
     grouped: dict[str, list[JsonValue]] = {}
     for form in forms.values():
         set_id = form.get("set") if isinstance(form, dict) else None
         if not isinstance(set_id, str) or set_id not in keys:
-            raise _shape_error(f"show field {FORMS_FIELD}", "form of an existing set", form)
+            raise shape_error(f"show field {FORMS_FIELD}", "form of an existing set", form)
         grouped.setdefault(set_id, []).append(form)
     return grouped
 
@@ -456,14 +425,14 @@ def read_show(
     >>> read_show(encode_show(two_set_show())) == two_set_show()
     True
     """
-    source = _raw_source(docs)
+    source = raw_source(docs)
     try:
-        meta = _load_object(source, SHOW_DOC)
+        meta = load_object(source, SHOW_DOC)
         version = version_of(meta, name=SHOW_DOC)
         if version < CURRENT_VERSION:
             return _migrated_show(source, meta, version, revision).show
         reading = _Reading(source, CHECKED_CONTEXT, cache, digests or {})
-        return _assemble(reading, without_header(meta), revision)
+        return _assemble(reading, without_header(meta), revision, is_current=True)
     except SchemaError as exc:
         raise _reraised_for_show(exc) from exc
 
@@ -482,9 +451,9 @@ def read_migrated(
         beside: Stored path to the parsed JSON of each document the migration writes beside the
             show, such as the notes document.
     """
-    source = _raw_source(docs)
+    source = raw_source(docs)
     try:
-        meta = _load_object(source, SHOW_DOC)
+        meta = load_object(source, SHOW_DOC)
         migrated = _migrated_show(source, meta, version_of(meta, name=SHOW_DOC), "")
         return migrated.show, migrated.report, migrated.beside
     except SchemaError as exc:

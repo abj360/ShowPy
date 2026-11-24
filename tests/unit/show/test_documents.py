@@ -73,6 +73,7 @@ from e8s.show.migrate import format_header, without_header
 from e8s.show.models import Pin, Show
 from e8s.show.pinning import pin
 from tests.fixtures.cast_shows import rich_show
+from tests.fixtures.layout1 import layout1_documents
 from tests.fixtures.shows import two_set_show
 from tests.helpers import HOSTILE_JSON
 
@@ -124,7 +125,7 @@ def test_regression_decode_wrong_shape_names_the_document(path: str, raw: bytes)
 
 def test_regression_decode_wrong_shape_names_the_v1_notes_document() -> None:
     """Puts the path of a v1 notes document that is not an array in the SchemaError context."""
-    docs = _docs()
+    docs = layout1_documents(two_set_show())
     v1_show = without_header(json.loads(docs[SHOW_DOC]))
     v1 = {**docs, SHOW_DOC: json.dumps(v1_show).encode(), LEGACY_NOTES_DOC: b"{}"}
     with pytest.raises(SchemaError) as excinfo:
@@ -237,7 +238,7 @@ def test_regression_dump_show_doc_of_a_bare_header_is_valid_json() -> None:
 
 def test_regression_decode_refuses_a_stored_number_that_overflows_a_float() -> None:
     docs = encode_show(two_set_show())
-    path = "/sets/1/set.json"
+    path = "/sets/1/drill.json"
     assert b'"x": 0.0' in docs[path]
     docs[path] = docs[path].replace(b'"x": 0.0', b'"x": 1e400', 1)
     with pytest.raises(SchemaError) as caught:

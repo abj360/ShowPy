@@ -480,3 +480,15 @@ Targets are the phase plan's exit criteria, measured with the same script on the
   assets), ADR 0021 (scope; notes leave the show), ADR 0023 (format versions), ADR 0026 (the
   public model interface).
 - Plan: `docs/superpowers/plans/2026-11-24-phase-3-storage.md`.
+
+## Addenda
+
+### Addendum 2026-11-24: the v2 tree schema accepts both layouts
+
+The maintainer decided on 2026-11-24 that `e8s/schemas/e8.show.v2.json`, which describes a stored
+tree as a map from document path to document, is widened with no version bump. Until layout 1
+retires at 2.0.0, it accepts the layout-1 documents (`set.json` holding `placements`, `cast` in
+`show.json`) and the role documents (`set.json` with `placement_order`, `drill.json`,
+`facing.json`, `labels.json` and `/cast/cast.json`), so older trees still validate. A tree that
+holds both forms of one set still fails to decode. Model and interchange shapes are unchanged:
+the schema's model definitions stay as they are, and `export_json` writes the same bytes.
