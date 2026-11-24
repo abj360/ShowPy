@@ -17,6 +17,7 @@ Contains:
     with_cast(): adds the cast document's object to a show.json object, refusing both forms and
         a required cast stored in neither
     require_cast_beside_roles(): refuses a tree that stores role documents but no cast document
+    require_known_cast_documents(): refuses a document under `/cast/` other than the cast document
     require_listed_role_folders(): refuses role documents of a set folder show.json does not list
     require_no_role_documents(): refuses role or cast documents in a tree of an older format
     holds_layout1_documents(): tells whether a tree still stores a layout-1 set or cast
@@ -53,6 +54,7 @@ SET_FOLDER_SEGMENTS = 4
 FOLDER_INDEX = 2
 SHOWN_ID_CHARS = 40
 LISTED_SPOTS = 20
+CAST_ROOT = "/cast/"
 DOCUMENT_ROLES = {DRILL_NAME: (DRILL, PIN), FACING_NAME: (FACING,), LABELS_NAME: (LABELS,)}
 
 
@@ -285,6 +287,21 @@ def require_cast_beside_roles(paths: Collection[str]) -> None:
         hint=f"keep {CAST_DOC} beside the role documents; save_show() writes both",
         context={"path": CAST_DOC},
     )
+
+
+def require_known_cast_documents(paths: Iterable[str]) -> None:
+    """Refuses a document under `/cast/` other than the cast document, which no format defines.
+
+    >>> require_known_cast_documents(["/cast/cast.json", "/show/show.json"])
+    """
+    unknown = sorted(p for p in paths if p.startswith(CAST_ROOT) and p != CAST_DOC)
+    if unknown:
+        raise SchemaError(
+            f"{len(unknown)} documents lie under {CAST_ROOT}, which holds only {CAST_DOC}:"
+            f" {', '.join(unknown[:LISTED_SPOTS])}",
+            hint=f"delete them; the format stores only {CAST_DOC} under {CAST_ROOT}",
+            context={"documents": unknown, "count": len(unknown)},
+        )
 
 
 def require_listed_role_folders(paths: Iterable[str], order: Collection[str]) -> None:

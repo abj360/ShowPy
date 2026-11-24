@@ -73,6 +73,7 @@ from e8s.show.migrate import (
 from e8s.show.models import Show, require_set_count
 from e8s.show.role_documents import (
     read_set_object,
+    require_known_cast_documents,
     require_listed_role_folders,
     require_no_role_documents,
     with_cast,
@@ -200,6 +201,7 @@ def _assemble(reading: _Reading, meta: JsonObject, revision: str, *, is_current:
     """
     order = _set_order(meta.get(SET_ORDER_FIELD, []))
     require_listed_role_folders(reading.source.paths(), order)
+    require_known_cast_documents(reading.source.paths())
     kept = {k: v for k, v in meta.items() if k != SET_ORDER_FIELD}
     rest = with_cast(reading.source, kept, is_required=is_current)
     stored = [

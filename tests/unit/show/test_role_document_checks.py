@@ -14,20 +14,24 @@ Contains:
         with a total count, for extra role rows and repeated order entries
     test_regression_role_reencoding_keeps_stray_documents: keeps a set.json and forms.json of an
         unlisted folder through the revision that re-encodes a layout-1 tree as role documents
+    test_regression_cast_root_holds_only_the_cast_document: refuses another name under `/cast/`
+        on decode and as a stored path
 """
 
 import json
+import re
 from datetime import UTC, datetime
 
 import pytest
 
 from e8s.cast.models import Cast
-from e8s.core.errors import SchemaError
+from e8s.core.error_codes import ErrorCode
+from e8s.core.errors import SchemaError, StorageError
 from e8s.core.util import content_hash
 from e8s.examples import two_set_show
 from e8s.show.documents import SHOW_DOC, decode_show, dump_json, dump_show_doc, encode_show
 from e8s.show.history_models import Revision
-from e8s.show.integrity import blob_digest
+from e8s.show.integrity import blob_digest, require_known_path
 from e8s.show.memory_backend import InMemoryRepository
 from e8s.show.show_io import load_show, save_show
 from e8s.show.workspace import open_workspace
@@ -147,3 +151,14 @@ def test_regression_role_reencoding_keeps_stray_documents() -> None:
     assert {p: tree[p] for p in strays} == strays
     assert "/sets/1/drill.json" in tree
     assert load_show(ws).replace(revision="") == before.replace(revision="")
+
+
+@pytest.mark.parametrize("path", ["/cast/x.json", "/cast/cast.yaml", "/cast/sub/cast.json"])
+def test_regression_cast_root_holds_only_the_cast_document(path: str) -> None:
+    with pytest.raises(SchemaError, match=re.escape(path)):
+        decode_show({**encode_show(two_set_show()), path: b"{}\n"})
+    with pytest.raises(StorageError) as caught:
+        require_known_path(path)
+    assert caught.value.code == ErrorCode.BAD_PATH
+    assert CAST_DOC in caught.value.hint
+    require_known_path(CAST_DOC)
