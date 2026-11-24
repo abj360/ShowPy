@@ -20,7 +20,7 @@ from types import ModuleType
 import e8s
 from e8s._api_table import PUBLIC_API
 
-GENERATOR_PATH = Path(__file__).resolve().parents[2] / "scripts" / "gen_public_api.py"
+GENERATOR_PATH = Path(__file__).resolve().parents[3] / "scripts" / "gen_public_api.py"
 
 
 def _load_generator() -> ModuleType:

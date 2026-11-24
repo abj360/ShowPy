@@ -569,3 +569,36 @@ half, as its appendix row planned, and stays open for the facing-override half.
 | Optional extras removed                   | 3 of 5 (`qr`, `video`, `render`)                                                                                       |
 | Default suite ledger line, before / after | `Ledger: 185 open` / `Ledger: 127 open`                                                                                |
 | Ledger IDs retired by this addendum       | 58                                                                                                                     |
+
+## Addendum 2026-11-23: the floor readers arrive in v0.5.0
+
+The maintainer decided on 2026-11-23 that `frames`, `coordinate_table` and
+`describe_transition`, the replacements the decision and the addendum of 2026-11-22 place by
+v0.6.0 and then v0.7.0, arrive in v0.5.0. Earlier sections and addenda stay as written; where
+they say these three are added by v0.6.0 or v0.7.0, read v0.5.0. `locate`, `at_location`,
+`Location` and the other sheet names keep their own timeline.
+
+They come in a narrower shape than the 1.0 specification describes, because the library now
+holds only space and time:
+
+- `frames(show, start, end, fps=30, who="all")` returns `Frames`: frame times every 1/fps
+  seconds of show time, their counts (still during a hold), and x, y and facing arrays shaped
+  (frames, spots). Each frame equals `PathEngine.sample` at its count, bit for bit.
+- `coordinate_table(show, who="all", sets=None, *, unit="m")` returns `CoordinateTable`: each
+  spot's PathEngine position at each set in the stage frame (x from audience-left to
+  audience-right, y away from the audience, origin at the sheet's front-center), converted
+  only through `convert` and never rounded. Rounding and wording for display belong to
+  callers, as the coordinate wording deleted in v0.4.0 did.
+- `describe_transition(show, transition, who="all")` returns `TransitionDescription`: each
+  spot's segments with kind, start, counts, direction of travel, distance, stride in meters
+  per step and pace, alike spots grouped. Step style, hold style and route scripts have no
+  source in the model yet, so the description leaves them out; N-to-5 step wording belongs to
+  a pack.
+
+All three take an optional `engine=` so a caller reading many times compiles once.
+
+| Measure (2026-11-23, Apple silicon, compiled engine) | Value                 |
+| ---------------------------------------------------- | --------------------- |
+| Public names added                                   | 8                     |
+| `frames`, one 8-count transition at 30 fps, tier L   | 15 ms (budget 50 ms)  |
+| `coordinate_table`, every spot and set, tier L       | 261 ms (budget 0.2 s) |

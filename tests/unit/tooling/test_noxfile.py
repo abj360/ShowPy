@@ -56,7 +56,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 NOXFILE = ROOT / "noxfile.py"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 PYPROJECT = ROOT / "pyproject.toml"

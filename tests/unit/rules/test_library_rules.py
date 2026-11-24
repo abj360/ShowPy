@@ -70,7 +70,7 @@ CITATION_PATTERN = re.compile(
 )
 TYPE_IGNORE_PATTERN = re.compile(r"\b(?:type|pyright):\s*ignore\b")
 MIN_LIBRARY_FILES = 100
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 LIBRARY_ROOT = REPO_ROOT / "e8s"
 ERROR_CODES_PATH = LIBRARY_ROOT / "core" / "error_codes.py"
 ERROR_CODE_DOCS_PATH = REPO_ROOT / "docs" / "error-codes.md"
