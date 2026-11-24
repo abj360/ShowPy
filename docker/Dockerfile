@@ -32,6 +32,8 @@ RUN rustup toolchain install
 COPY pyproject.toml README.md LICENSE Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY e8s ./e8s
+# cargo fails on a stale Cargo.lock instead of rewriting it.
+ENV MATURIN_PEP517_ARGS=--locked
 RUN uv build --wheel --out-dir /dist
 
 FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f AS runtime

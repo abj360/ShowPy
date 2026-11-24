@@ -9,6 +9,7 @@ import importlib
 import importlib.metadata
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -35,6 +36,7 @@ LICENSES_FOLDER = "licenses"
 DIST_INFO_FILES = frozenset({"METADATA", "WHEEL", "RECORD"})
 # maturin records the crates linked into e8s._core as a CycloneDX bill of materials.
 SBOM = "sboms/e8s-py.cyclonedx.json"
+LOCKED_BUILD = {"MATURIN_PEP517_ARGS": "--locked"}
 
 
 def test_version_is_exported() -> None:
@@ -139,7 +141,10 @@ def build_distribution(kind: str, out: Path) -> Path:
     uv = shutil.which("uv")
     assert uv is not None, "E: uv is not on PATH; the distribution checks build with it"
     subprocess.run(
-        [uv, "build", kind, "--out-dir", str(out), str(REPO_ROOT)], capture_output=True, check=True
+        [uv, "build", kind, "--out-dir", str(out), str(REPO_ROOT)],
+        capture_output=True,
+        check=True,
+        env=os.environ | LOCKED_BUILD,
     )
     (built,) = (path for path in out.iterdir() if path.name != ".gitignore")
     return built

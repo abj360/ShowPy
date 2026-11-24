@@ -56,6 +56,9 @@ Contains:
     test_rust_cache_saves_only_from_main: a pull request never writes a Rust cache that main
         later restores and runs
     test_rust_caches_saved_off_main_sees_a_missing_or_wrong_condition: proves the check can fail
+    unlocked_uv_builds(): lists the noxfile functions that run `uv build` without LOCKED_BUILD
+    test_wheel_builds_fail_on_a_stale_cargo_lock: every nox build passes cargo's --locked
+    test_unlocked_uv_builds_sees_a_build_without_the_lock: proves the lock check can fail
 """
 
 import ast
@@ -124,6 +127,7 @@ RUST_BUILD_INPUTS = frozenset(
 UV_STEP = re.compile(r"\buv (sync|run)\b")
 TOOLCHAIN_STEP = "rustup toolchain install"
 RUST_CACHE_STEP = re.compile(r"uses: Swatinem/rust-cache@[0-9a-f]{40}\b")
+LOCKED_BUILD = "LOCKED_BUILD"
 SAVE_ON_MAIN_ONLY = re.compile(
     r"^\s+save-if: \$\{\{ github\.ref == 'refs/heads/main' \}\}$", re.MULTILINE
 )
@@ -636,3 +640,51 @@ def test_rust_caches_saved_off_main_sees_a_missing_or_wrong_condition() -> None:
         f"  {name}:\n    steps:\n{steps}" for name, steps in jobs.items()
     )
     assert rust_caches_saved_off_main(workflow) == ["always", "any-branch"]
+
+
+def unlocked_uv_builds(source: str) -> list[str]:
+    """Lists the noxfile functions that run `uv build` without passing env=LOCKED_BUILD.
+
+    Args:
+        source: The text of a noxfile.
+
+    Returns:
+        functions: One function name per `uv build` call that lacks the locked environment.
+    """
+    return [
+        function.name
+        for function in ast.walk(ast.parse(source))
+        if isinstance(function, ast.FunctionDef)
+        for call in ast.walk(function)
+        if isinstance(call, ast.Call)
+        and [ast.unparse(arg) for arg in call.args[:2]] == ["'uv'", "'build'"]
+        and not any(
+            keyword.arg == "env" and ast.unparse(keyword.value) == LOCKED_BUILD
+            for keyword in call.keywords
+        )
+    ]
+
+
+def test_wheel_builds_fail_on_a_stale_cargo_lock() -> None:
+    source = NOXFILE.read_text()
+    tree = ast.parse(source)
+    constant = next(
+        node.value
+        for node in tree.body
+        if isinstance(node, ast.Assign) and ast.unparse(node.targets[0]) == LOCKED_BUILD
+    )
+    assert ast.literal_eval(constant) == {"MATURIN_PEP517_ARGS": "--locked"}
+    assert "'uv', 'build'" in ast.unparse(tree)
+    assert unlocked_uv_builds(source) == []
+
+
+def test_unlocked_uv_builds_sees_a_build_without_the_lock() -> None:
+    source = (
+        "def locked(session):\n"
+        "    session.run('uv', 'build', '--wheel', env=LOCKED_BUILD)\n"
+        "def bare(session):\n"
+        "    session.run('uv', 'build', '--sdist')\n"
+        "def other(session):\n"
+        "    session.run('uv', 'build', env={})\n"
+    )
+    assert unlocked_uv_builds(source) == ["bare", "other"]

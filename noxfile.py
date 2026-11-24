@@ -50,6 +50,8 @@ COVERAGE_FLOOR = "96"
 NO_SYNC_ENV = "NOX_UV_NO_SYNC"
 
 PYTHON_FOR_WHEEL = "3.14"
+# maturin passes these to cargo, so a build fails on a stale Cargo.lock instead of rewriting it.
+LOCKED_BUILD = {"MATURIN_PEP517_ARGS": "--locked"}
 ALL_EXTRAS = "[all]"
 CORE_CHECK_SCRIPT = "scripts/check_core_install.py"
 API_CHANGES_SCRIPT = "scripts/check_api_changes.py"
@@ -240,7 +242,7 @@ def _build_wheel(session: nox.Session, work: Path) -> Path:
     """
     dist = work / "dist"
     shutil.rmtree(dist, ignore_errors=True)
-    session.run("uv", "build", "--wheel", "--out-dir", str(dist), external=True)
+    session.run("uv", "build", "--wheel", "--out-dir", str(dist), external=True, env=LOCKED_BUILD)
     wheels = sorted(dist.glob("*.whl"))
     if len(wheels) != 1:
         session.error(f"expected one wheel in {dist}, found {len(wheels)}")
