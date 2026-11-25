@@ -53,10 +53,13 @@ Contains:
         when the backend has no blob for a path in the tree
     test_regression_cast_path_error_cuts_the_path: cuts an overlong path under `/cast/` in the
         refusal message
+    test_regression_stored_json_is_parsed_strictly_everywhere: refuses a repeated key in every
+        structured file, and keeps loose JSON parsing out of the show layer's source
+    test_regression_notes_write_parses_strictly: refuses a notes document with a repeated key
 """
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
@@ -67,8 +70,14 @@ import pytest
 from e8s.cast.models import Shape
 from e8s.cast.spots import set_shape
 from e8s.choreo.forms import line_form
+from e8s.core.error_codes import ErrorCode
 from e8s.core.errors import LockedError, SchemaError, StorageError
+from e8s.core.ids import SpotId
+from e8s.core.selection import Selection
 from e8s.examples import two_set_show
+from e8s.show._notes_document import NotesDocument
+from e8s.show.anchors import Anchor
+from e8s.show.collab_models import Comment
 from e8s.show.decode_cache import DecodeCache
 from e8s.show.document_repository import DocumentRepository
 from e8s.show.documents import (
@@ -91,8 +100,10 @@ from e8s.show.integrity import (
 )
 from e8s.show.manage import remove_set
 from e8s.show.memory_backend import InMemoryRepository
+from e8s.show.migrations.v1_to_v2_notes import NOTES_DOC
 from e8s.show.models import Show
 from e8s.show.show_io import load_show, save_show
+from e8s.show.structured import COMMENTS_DOC, SELECTION_DOC, require_structured
 from e8s.show.workspace import open_workspace
 from tests.fixtures.generators import seeded_show
 from tests.helpers import HOSTILE_JSON
@@ -101,6 +112,15 @@ AT = datetime(2026, 11, 11, tzinfo=UTC)
 SHOW_ID = "integrity"
 LONG_PATH_CHARS = 10_000
 MAX_MESSAGE_CHARS = 400
+SHOW_LAYER = Path(__file__).parents[3] / "e8s" / "show"
+DOCTEST_PROMPT = ">>>"
+LOOSE_JSON_CALLS = (
+    "json.loads(",
+    "validate_json(",
+    "_validated_json(",
+    "model_validate_json(",
+    "validate_adapter_json(",
+)
 
 
 def _repo() -> tuple[InMemoryRepository, str]:
@@ -525,3 +545,42 @@ def test_regression_cast_path_error_cuts_the_path() -> None:
         require_known_path(path)
     assert len(caught.value.message) < MAX_MESSAGE_CHARS
     assert caught.value.message.startswith("/cast/")
+
+
+def _repeated_first_key(document: Mapping[str, object]) -> str:
+    """Writes a JSON object whose first key appears twice, as a loose parser would accept."""
+    key, value = next(iter(document.items()))
+    return "{" + f"{json.dumps(key)}: {json.dumps(value)}, " + json.dumps(document)[1:]
+
+
+def _structured_with_repeated_key(path: str) -> bytes:
+    if path == COMMENTS_DOC:
+        comment = Comment(id="c1", anchor=Anchor.on_set("2"), text="tighten").to_json()
+        return f"[{_repeated_first_key(comment)}]".encode()
+    if path == SELECTION_DOC:
+        return _repeated_first_key(Selection(ids=(SpotId("T1"),)).to_json()).encode()
+    return _repeated_first_key(NotesDocument(show=SHOW_ID).to_json()).encode()
+
+
+@pytest.mark.parametrize("path", [COMMENTS_DOC, SELECTION_DOC, NOTES_DOC])
+def test_regression_stored_json_is_parsed_strictly_everywhere(path: str) -> None:
+    raw = _structured_with_repeated_key(path)
+    with pytest.raises(SchemaError) as caught:
+        require_structured(path, raw)
+    assert caught.value.code == ErrorCode.STRICT_JSON
+    loose = {
+        f"{module.name}: {call}"
+        for module in SHOW_LAYER.rglob("*.py")
+        for call in LOOSE_JSON_CALLS
+        for line in module.read_text(encoding="utf-8").splitlines()
+        if call in line and not line.lstrip().startswith(DOCTEST_PROMPT)
+    }
+    assert loose == set()
+
+
+def test_regression_notes_write_parses_strictly() -> None:
+    ws = open_workspace(InMemoryRepository(), SHOW_ID)
+    save_show(ws, two_set_show(), AT)
+    with pytest.raises(SchemaError) as caught:
+        ws.write(NOTES_DOC, _structured_with_repeated_key(NOTES_DOC), at=AT)
+    assert caught.value.code == ErrorCode.STRICT_JSON

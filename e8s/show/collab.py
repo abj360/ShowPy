@@ -40,7 +40,7 @@ from e8s.show.history_models import Revision
 from e8s.show.locks import locked_changes
 from e8s.show.models import Pin, Show
 from e8s.show.show_io import load_show, save_show
-from e8s.show.structured import SELECTION_DOC
+from e8s.show.structured import SELECTION_DOC, decode_selection
 from e8s.show.workspace import Workspace
 
 DEFAULT_TTL_S = 30.0
@@ -196,4 +196,4 @@ def highlight(
 
 def selection(ws: Workspace) -> Selection:
     """Returns what the designer has selected on the canvas; empty when nothing is."""
-    return Selection._validated_json(ws.read(SELECTION_DOC))
+    return decode_selection(ws.read(SELECTION_DOC))
