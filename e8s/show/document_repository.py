@@ -5,6 +5,7 @@ Contains:
     SHOW_ID_PATTERN: matches the show IDs a repository can store
     REVISION_HASH_DOMAIN: names the hash domain every stored revision ID is computed under
     DocumentRepository: implements Repository over a backend of revisions, trees and blobs
+    encode_cache_of(): returns the encode cache a repository shares across its saves
 """
 
 import functools
@@ -30,6 +31,7 @@ from e8s.show.documents import (
     decode_show,
     split_path,
 )
+from e8s.show.encode_cache import EncodeCache
 from e8s.show.files import show_changes
 from e8s.show.history_models import Revision
 from e8s.show.integrity import (
@@ -85,6 +87,7 @@ class DocumentRepository:
     def __init__(self, backend: RepositoryBackend):
         self.backend = backend
         self._decode_cache = DecodeCache()
+        self._encode_cache = EncodeCache()
         self._heads: dict[str, Revision] = {}
 
     def shows(self) -> list[str]:
@@ -264,7 +267,19 @@ class DocumentRepository:
         """
         return self.transaction(
             show_id,
-            show_changes(show, self.documents(show_id, expected_revision)),
+            show_changes(
+                show, self.documents(show_id, expected_revision), cache=self._encode_cache
+            ),
             expected_revision=expected_revision,
             at=at,
         )
+
+
+def encode_cache_of(repo: object) -> EncodeCache | None:
+    """Returns the encode cache every save through a DocumentRepository shares, else None.
+
+    >>> from e8s.show.memory_backend import InMemoryRepository
+    >>> encode_cache_of(InMemoryRepository()) is not None, encode_cache_of(object())
+    (True, None)
+    """
+    return repo._encode_cache if isinstance(repo, DocumentRepository) else None
