@@ -30,6 +30,7 @@ from e8s.show.set_keys import free_set_key, set_key
 
 POSITION_FIELDS = ("set", "counts", "entity", "x", "y", "facing")
 REQUIRED_FIELDS = POSITION_FIELDS[:5]
+BYTE_ORDER_MARK = "\ufeff"
 
 
 @dataclass(frozen=True)
@@ -94,8 +95,15 @@ def _parse_row(
     )
 
 
+def _delimiter(text: str) -> str:
+    """Picks `;` when the header line holds more semicolons than commas, else `,`."""
+    header = text.partition("\n")[0]
+    return ";" if header.count(";") > header.count(",") else ","
+
+
 def _read_rows(text: str, columns: Mapping[str, str] | None) -> list[_PositionRow]:
-    reader = csv.DictReader(io.StringIO(text))
+    text = text.removeprefix(BYTE_ORDER_MARK)
+    reader = csv.DictReader(io.StringIO(text), delimiter=_delimiter(text))
     try:
         return _collect_rows(reader, _header_map(reader.fieldnames or (), columns))
     except csv.Error as error:
